@@ -113,6 +113,7 @@ interface RuntimePlaybackState {
   activeGroupId: string | null;
   processing: boolean;
   generation: number;
+  nativeChunks: Set<string>;
 }
 
 interface CueState {
@@ -208,6 +209,7 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
     activeGroupId: null,
     processing: false,
     generation: 0,
+    nativeChunks: new Set(),
   };
   const cue: CueState = {
     active: false,
@@ -296,6 +298,7 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
   function resetPlaybackState(): void {
     playback.generation += 1;
     playback.groups.clear();
+    playback.nativeChunks.clear();
     playback.orderedGroupIds = [];
     playback.activeGroupId = null;
     playback.processing = false;
@@ -336,6 +339,36 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
       return;
     }
     await activeSession.adapter.audioPlayed(chunkId);
+  }
+
+  function playNativeChunk(serverId: string, payload: AudioOutputPayload): void {
+    if (playback.nativeChunks.has(payload.id)) return;
+    const generation = playback.generation;
+    if (playback.nativeChunks.size === 0) api.onAssistantAudioStarted(serverId);
+    playback.nativeChunks.add(payload.id);
+    const source = toPlaybackSource(decodeAudioChunk(payload.audio), payload.format);
+    // Native PCM packets form one continuous stream, even across group IDs.
+    // Enqueue immediately so the device can schedule ahead of ended callbacks.
+    void deps.engine
+      .play(source)
+      .then(
+        () => {
+          if (generation !== playback.generation) return;
+          void acknowledgeChunk(payload.id).catch((error) => {
+            console.warn("[VoiceRuntime] Failed to confirm audio playback:", error);
+          });
+        },
+        (error: unknown) => {
+          if (generation !== playback.generation) return;
+          console.error("[VoiceRuntime] Native audio playback failed:", error);
+          void api.stopVoice();
+        },
+      )
+      .finally(() => {
+        if (generation !== playback.generation) return;
+        playback.nativeChunks.delete(payload.id);
+        if (playback.nativeChunks.size === 0) api.onAssistantAudioFinished(serverId);
+      });
   }
 
   async function processPlaybackQueue(serverId: string): Promise<void> {
@@ -694,6 +727,11 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
         return;
       }
 
+      if (state.nativeRealtime) {
+        playNativeChunk(serverId, payload);
+        return;
+      }
+
       const groupId = payload.groupId ?? payload.id;
       const chunkIndex = payload.chunkIndex ?? 0;
       const decoded = decodeAudioChunk(payload.audio);
@@ -942,7 +980,9 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
       state.serverSpeechStartedAt = isSpeaking ? (state.serverSpeechStartedAt ?? Date.now()) : null;
       if (isSpeaking) {
         const shouldInterruptPlayback =
-          state.snapshot.phase === "playing" || playback.groups.size > 0;
+          state.snapshot.phase === "playing" ||
+          playback.groups.size > 0 ||
+          playback.nativeChunks.size > 0;
         const hadCue = cue.active || cue.timeout !== null || cue.playing;
         resetPlaybackState();
         stopCue();

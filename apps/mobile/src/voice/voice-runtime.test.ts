@@ -283,6 +283,75 @@ describe("voice runtime", () => {
     });
   });
 
+  it("queues native packets ahead but acknowledges only consumed audio and cancels stale completions", async () => {
+    const adapter = createSessionAdapter();
+    const engine = createAudioEngineMock();
+    const finish: ((duration: number) => void)[] = [];
+    vi.mocked(engine.play).mockImplementation(() => new Promise((resolve) => finish.push(resolve)));
+    const { runtime } = createRuntime({ engine, supportsRealtimeVoice: () => true });
+    runtime.registerSession(adapter);
+    await runtime.startVoice("server-1", "agent-1");
+    const send = (id: string) =>
+      runtime.handleAudioOutput(
+        "server-1",
+        createAudioPayload({
+          id,
+          groupId: id,
+          chunkIndex: 0,
+          isLastChunk: true,
+        }),
+      );
+    send("first");
+    send("second");
+    send("second");
+    expect(engine.play).toHaveBeenCalledTimes(2);
+    expect(adapter.audioPlayed).not.toHaveBeenCalled();
+    expect(adapter.setAssistantAudioPlaying).toHaveBeenCalledTimes(1);
+    finish[0](0.08);
+    await vi.waitFor(() => expect(adapter.audioPlayed).toHaveBeenCalledWith("first"));
+    expect(runtime.getSnapshot().phase).toBe("playing");
+
+    runtime.onServerSpeechStateChanged("server-1", true);
+    expect(engine.stop).toHaveBeenCalled();
+    send("new-response");
+    finish[1](0.08);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(adapter.audioPlayed).not.toHaveBeenCalledWith("second");
+    expect(runtime.getSnapshot().phase).toBe("playing");
+    finish[2](0.08);
+    await vi.waitFor(() => expect(adapter.audioPlayed).toHaveBeenCalledWith("new-response"));
+    expect(runtime.getSnapshot().phase).toBe("listening");
+    await runtime.destroy();
+  });
+
+  it("stops native voice on a playback failure without acknowledging unplayed audio", async () => {
+    const adapter = createSessionAdapter();
+    const engine = createAudioEngineMock();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.mocked(engine.play).mockRejectedValue(new Error("Playback unavailable"));
+    const { runtime } = createRuntime({ engine, supportsRealtimeVoice: () => true });
+    runtime.registerSession(adapter);
+    try {
+      await runtime.startVoice("server-1", "agent-1");
+      runtime.handleAudioOutput(
+        "server-1",
+        createAudioPayload({
+          id: "failed",
+          groupId: "failed",
+          chunkIndex: 0,
+          isLastChunk: true,
+        }),
+      );
+      await vi.waitFor(() => expect(runtime.getSnapshot().isVoiceMode).toBe(false));
+      expect(adapter.audioPlayed).not.toHaveBeenCalled();
+      expect(adapter.setVoiceMode).toHaveBeenCalledWith(false);
+      expect(engine.stop).toHaveBeenCalled();
+    } finally {
+      errors.mockRestore();
+      await runtime.destroy();
+    }
+  });
+
   it("leaves playback phase unchanged after assistant playback while the turn is still active", async () => {
     const adapter = createSessionAdapter();
     const { runtime, engine } = createRuntime();
