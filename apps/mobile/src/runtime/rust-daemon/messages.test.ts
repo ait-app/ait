@@ -395,15 +395,15 @@ describe("Rust provider snapshots", () => {
   });
 });
 
-it("preserves native voice SDP and recognizes terminal realtime events", () => {
+it("uses daemon voice readiness without upstream SDP and recognizes terminal realtime events", () => {
   const response = responseMessage(
     "voice.mode.set.response",
     "voice",
-    { accepted: true, enabled: true, agentId: "agent", error: null, sdp: "native-answer" },
+    { accepted: true, enabled: true, agentId: "agent", error: null },
     {},
   );
   expect(validateWSOutboundMessage(response).success).toBe(true);
-  expect(object(object(response.message).payload).sdp).toBe("native-answer");
+  expect(object(object(response.message).payload)).not.toHaveProperty("sdp");
   for (const [method, params] of [
     ["voice.session.closed", {}],
     [

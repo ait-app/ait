@@ -298,3 +298,50 @@ async fn closed_socket_write_stops_owned_forwarding_and_reports_a_transport_cate
     assert!(!capture.text().contains("private fixture"));
     server.await.unwrap();
 }
+
+#[tokio::test]
+async fn realtime_voice_controls_pcm_and_close_traverse_the_online_bridge() {
+    timeout(Duration::from_secs(5), async {
+        let remote_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let local_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let session = Uuid::new_v4();
+        let local = Arc::new(Local {
+            visits: Arc::new(tokio::sync::Semaphore::new(16)),
+            dialer: crate::transport::Dialer::default(),
+            url: format!("ws://{}", local_listener.local_addr().unwrap()),
+            token: "fixture".into(), server_id: "server".into(), instance_id: "instance".into(),
+        });
+        let bridge = tokio::spawn(data(
+            format!("ws://{}", remote_listener.local_addr().unwrap()), "fixture".into(), local, session,
+        ));
+        let (tcp, _) = remote_listener.accept().await.unwrap();
+        let mut client = accept_async(tcp).await.unwrap();
+        client.send(Message::Text(serde_json::json!({"type":"relay.ready","relay_session_id":session}).to_string().into())).await.unwrap();
+        let hello = Message::Text(serde_json::json!({"type":"hello","client_id":"voice-client"}).to_string().into());
+        client.send(hello.clone()).await.unwrap();
+        let (tcp, _) = local_listener.accept().await.unwrap();
+        let mut daemon = accept_async(tcp).await.unwrap();
+        assert_eq!(daemon.next().await.unwrap().unwrap(), hello);
+        for params in [
+            serde_json::json!({"type":"request","request_id":"start","method":"voice.mode.set.request","params":{"enabled":true,"agentId":"codex"}}),
+            serde_json::json!({"type":"event","method":"voice.audio.chunk","params":{"audio":"AAgACA==","format":"pcm;rate=16000","isLast":false}}),
+            serde_json::json!({"type":"event","method":"voice.audio.played","params":{"id":"audio-1"}}),
+        ] {
+            let frame = Message::Text(params.to_string().into());
+            client.send(frame.clone()).await.unwrap();
+            assert_eq!(daemon.next().await.unwrap().unwrap(), frame);
+        }
+        for params in [
+            serde_json::json!({"type":"response","request_id":"start","result":{"accepted":true,"enabled":true,"agentId":"codex"}}),
+            serde_json::json!({"type":"event","method":"voice.audio.output","params":{"id":"audio-1","audio":"AAgACA==","format":"audio/pcm;rate=24000;bits=16;channels=1","isVoiceMode":true,"isLastChunk":true}}),
+            serde_json::json!({"type":"event","method":"voice.session.closed","params":{}}),
+        ] {
+            let frame = Message::Text(params.to_string().into());
+            daemon.send(frame.clone()).await.unwrap();
+            assert_eq!(client.next().await.unwrap().unwrap(), frame);
+        }
+        client.close(None).await.unwrap();
+        assert!(matches!(daemon.next().await, Some(Ok(Message::Close(_))) | None));
+        bridge.await.unwrap().unwrap();
+    }).await.unwrap();
+}

@@ -58,7 +58,10 @@ fn defaults_are_isolated_and_secrets_are_redacted() {
         config.data_dir,
         PathBuf::from("/unused-home-for-config-test/.ait-server")
     );
-    assert_eq!(config.listen, "127.0.0.1:7316".parse().unwrap());
+    assert_eq!(
+        config.listen,
+        "127.0.0.1:7316".parse::<SocketAddr>().unwrap()
+    );
     assert!(config.web_origins.is_empty());
     assert!(!format!("{config:?}").contains(TOKEN));
     assert!(load(Cli::parse_from(["server"]), |_| None).is_err());
@@ -124,7 +127,7 @@ fn cli_overrides_environment_which_overrides_file() {
         "error",
     ];
     let cli = load(Cli::parse_from(args), env).unwrap();
-    assert_eq!(cli.listen, "[::1]:0".parse().unwrap());
+    assert_eq!(cli.listen, "[::1]:0".parse::<SocketAddr>().unwrap());
     assert_eq!(cli.log_level, tracing::level_filters::LevelFilter::ERROR);
 }
 
@@ -211,7 +214,7 @@ fn invalid_configuration_fails_without_creating_state() {
 fn supports_explicit_network_listeners_without_changing_loopback_default() {
     for listen in ["0.0.0.0:7316", "[::]:0", "192.168.1.2:7316"] {
         let config = load(Cli::parse_from(["server", "--listen", listen]), environment).unwrap();
-        assert_eq!(config.listen, listen.parse().unwrap());
+        assert_eq!(config.listen, listen.parse::<SocketAddr>().unwrap());
     }
 }
 

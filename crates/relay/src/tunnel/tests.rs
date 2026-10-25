@@ -69,7 +69,7 @@ async fn echo_local(listener: TcpListener) {
 }
 
 #[tokio::test]
-async fn one_wss_serves_one_hundred_visits_and_preserves_large_binary_messages() {
+async fn one_wss_serves_one_hundred_visits_and_preserves_binary_and_voice_frames() {
     let center = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let local = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let connector = Connector::new(
@@ -139,6 +139,7 @@ async fn one_wss_serves_one_hundred_visits_and_preserves_large_binary_messages()
                 (wire::TEXT, hello.to_vec())
             );
             if index == 0 {
+                voice_roundtrip(&mut stream).await;
                 let body = vec![197; wire::MAX_BODY];
                 wire::write(&mut stream, wire::BINARY, &body).await.unwrap();
                 assert_eq!(wire::read(&mut stream).await.unwrap(), (wire::BINARY, body));
@@ -210,4 +211,18 @@ async fn rejected_tunnel_does_not_close_control_or_change_online_state() {
             .is_err()
     );
     connector.stop().await;
+}
+
+async fn voice_roundtrip(stream: &mut yamux::Stream) {
+    for frame in [
+        json!({"type":"request","request_id":"start","method":"voice.mode.set.request","params":{"enabled":true,"agentId":"codex"}}),
+        json!({"type":"event","method":"voice.audio.chunk","params":{"audio":"AAgACA==","format":"pcm;rate=16000","isLast":false}}),
+        json!({"type":"event","method":"voice.audio.output","params":{"id":"audio-1","audio":"AAgACA==","format":"audio/pcm;rate=24000;bits=16;channels=1","isVoiceMode":true,"isLastChunk":true}}),
+        json!({"type":"event","method":"voice.audio.played","params":{"id":"audio-1"}}),
+        json!({"type":"event","method":"voice.session.closed","params":{}}),
+    ] {
+        let bytes = serde_json::to_vec(&frame).unwrap();
+        wire::write(stream, wire::TEXT, &bytes).await.unwrap();
+        assert_eq!(wire::read(stream).await.unwrap(), (wire::TEXT, bytes));
+    }
 }

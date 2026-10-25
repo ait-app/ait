@@ -1,6 +1,6 @@
 //! Bounded, connection-owned audio transport between speech and a native Agent provider.
 
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 /// Mono signed PCM16 little-endian audio. Adapters validate rate and byte budgets.
@@ -15,8 +15,6 @@ pub struct Audio {
 /// Provider-normalized realtime output, independent of native protocol names.
 #[derive(Debug)]
 pub enum Event {
-    /// Native WebRTC answer; audio then travels through the peer connection.
-    Sdp(String),
     /// Incremental assistant audio.
     Audio(Audio),
     /// A completed user transcript; this is display-only, never a new text turn.
@@ -32,6 +30,8 @@ pub enum Event {
 /// Speech-side handle. Dropping it always cancels native recording and delivery.
 #[derive(Debug)]
 pub struct Session {
+    /// Completes once the provider's upstream audio transport is ready.
+    pub ready: oneshot::Receiver<()>,
     /// Bounded live microphone input.
     pub input: mpsc::Sender<Audio>,
     /// Bounded native output.
@@ -48,8 +48,8 @@ impl Drop for Session {
 /// Provider-side handle, retained by the native session owner.
 #[derive(Debug)]
 pub struct Endpoint {
-    /// Optional WebRTC offer. Absent selects native PCM over WebSocket.
-    pub offer: Option<String>,
+    /// Signal readiness only after the provider's upstream media transport connects.
+    pub ready: oneshot::Sender<()>,
     /// Input from the owning physical connection.
     pub input: mpsc::Receiver<Audio>,
     /// Output delivered only to that connection.
@@ -64,14 +64,16 @@ pub fn channel(cancel: &CancellationToken) -> (Session, Endpoint) {
     let cancel = cancel.child_token();
     let (input, input_receiver) = mpsc::channel(16);
     let (output, output_receiver) = mpsc::channel(32);
+    let (ready, readiness) = oneshot::channel();
     (
         Session {
+            ready: readiness,
             input,
             output: output_receiver,
             cancel: cancel.clone(),
         },
         Endpoint {
-            offer: None,
+            ready,
             input: input_receiver,
             output,
             cancel,

@@ -1066,10 +1066,6 @@ export const WorkspaceRecoveryRestoreRequestSchema = z.object({
 
 export const SetVoiceModeMessageSchema = z.object({
   type: z.literal("voice.mode.set.request"),
-  sdp: z
-    .string()
-    .max(128 * 1024)
-    .optional(),
   enabled: z.boolean(),
   agentId: z.string().optional(),
   requestId: z.string().optional(),
@@ -2018,7 +2014,6 @@ export const WorkspaceRecoveryRestoreResponseSchema = z.object({
 export const SetVoiceModeResponseMessageSchema = z.object({
   type: z.literal("voice.mode.set.response"),
   payload: z.object({
-    sdp: z.string().optional(),
     requestId: z.string(),
     enabled: z.boolean(),
     agentId: z.string().nullable(),

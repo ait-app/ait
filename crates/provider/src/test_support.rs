@@ -44,7 +44,7 @@ impl Fixture {
     }
 
     pub(crate) fn client(&self) -> CodexClient {
-        CodexClient::new(self.program.clone())
+        CodexClient::new(self.program.clone()).with_fixture_media()
     }
 
     pub(crate) fn mode(&self, mode: &str) {

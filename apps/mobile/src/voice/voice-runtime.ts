@@ -47,7 +47,7 @@ export interface VoiceRuntimeTelemetrySnapshot {
 
 export interface VoiceSessionAdapter {
   serverId: string;
-  setVoiceMode(enabled: boolean, agentId?: string, sdp?: string): Promise<{ sdp?: string } | void>;
+  setVoiceMode(enabled: boolean, agentId?: string): Promise<unknown>;
   sendVoiceAudioChunk(audioData: string, mimeType: string): Promise<void>;
   audioPlayed(chunkId: string): Promise<void>;
   abortRequest(): Promise<void>;
@@ -790,20 +790,10 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
         await deps.engine.initialize();
         if (state.generation !== generation) return;
         const native = deps.supportsRealtimeVoice?.(serverId, agentId) === true;
-        const offer = native ? await deps.engine.createRealtimeOffer?.() : undefined;
-        if (state.generation !== generation) return;
-        const response = offer
-          ? await session.adapter.setVoiceMode(true, agentId, offer)
-          : await session.adapter.setVoiceMode(true, agentId);
+        await session.adapter.setVoiceMode(true, agentId);
         if (state.generation !== generation) return;
         state.nativeRealtime = native;
         enabledCurrentVoiceMode = true;
-        if (offer) {
-          if (!response?.sdp || !deps.engine.acceptRealtimeAnswer)
-            throw new Error("Provider did not return a realtime audio answer");
-          await deps.engine.acceptRealtimeAnswer(response.sdp);
-        }
-        if (state.generation !== generation) return;
         await deps.engine.startCapture();
         if (state.generation !== generation) {
           return;

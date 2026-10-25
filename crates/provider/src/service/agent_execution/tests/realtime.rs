@@ -33,7 +33,7 @@ async fn realtime_canonical_transcripts_promotions_and_final_stop_items_survive_
     let created = create(&execution, &fixture).await;
     let id = created["agentId"].as_str().unwrap();
     let mut session = execution
-        .start_realtime(id, CancellationToken::new(), None)
+        .start_realtime(id, CancellationToken::new())
         .await
         .unwrap()
         .unwrap();
@@ -118,13 +118,13 @@ async fn realtime_on_an_empty_agent_streams_audio_without_a_text_turn_and_stops_
         true
     );
     let mut session = execution
-        .start_realtime(id, CancellationToken::new(), None)
+        .start_realtime(id, CancellationToken::new())
         .await
         .unwrap()
         .unwrap();
     assert!(
         execution
-            .start_realtime(id, CancellationToken::new(), None)
+            .start_realtime(id, CancellationToken::new())
             .await
             .is_err()
     );
@@ -155,7 +155,7 @@ async fn realtime_on_an_empty_agent_streams_audio_without_a_text_turn_and_stops_
         .find(|request| request["method"] == "thread/realtime/start")
         .unwrap();
     assert_eq!(start["params"]["outputModality"], "audio");
-    assert_eq!(start["params"]["transport"]["type"], "websocket");
+    assert_eq!(start["params"]["transport"]["type"], "webrtc");
     assert_eq!(
         requests
             .iter()
@@ -166,7 +166,7 @@ async fn realtime_on_an_empty_agent_streams_audio_without_a_text_turn_and_stops_
     drop(session);
     stopped(&fixture).await;
     let mut next = execution
-        .start_realtime(id, CancellationToken::new(), None)
+        .start_realtime(id, CancellationToken::new())
         .await
         .unwrap()
         .unwrap();
@@ -195,7 +195,6 @@ async fn realtime_start_rejection_never_falls_back_to_a_text_turn() {
             .start_realtime(
                 created["agentId"].as_str().unwrap(),
                 CancellationToken::new(),
-                None,
             )
             .await
             .is_err()
@@ -217,11 +216,8 @@ async fn abandoned_realtime_start_cancels_after_native_admission() {
     let created = create(&execution, &fixture).await;
     let id = created["agentId"].as_str().unwrap().to_owned();
     let worker = execution.clone();
-    let pending = tokio::spawn(async move {
-        worker
-            .start_realtime(&id, CancellationToken::new(), None)
-            .await
-    });
+    let pending =
+        tokio::spawn(async move { worker.start_realtime(&id, CancellationToken::new()).await });
     tokio::time::timeout(Duration::from_secs(3), async {
         while !fixture.cwd.join("realtime-started").exists() {
             tokio::time::sleep(Duration::from_millis(5)).await;
@@ -237,21 +233,20 @@ async fn abandoned_realtime_start_cancels_after_native_admission() {
 }
 
 #[tokio::test]
-async fn realtime_webrtc_negotiates_sdp_through_the_same_native_thread() {
+async fn realtime_provider_negotiates_media_without_exposing_sdp_to_the_client() {
     let fixture = Fixture::new();
     let (execution, _) = worker(&fixture);
     let created = create(&execution, &fixture).await;
     let id = created["agentId"].as_str().unwrap();
     let mut session = execution
-        .start_realtime(
-            id,
-            CancellationToken::new(),
-            Some("fixture-offer".to_owned()),
-        )
+        .start_realtime(id, CancellationToken::new())
         .await
         .unwrap()
         .unwrap();
-    assert!(matches!(event(&mut session).await, Event::Sdp(sdp) if sdp == "fixture-answer"));
+    tokio::time::timeout(Duration::from_secs(3), &mut session.ready)
+        .await
+        .unwrap()
+        .unwrap();
     let requests = fixture.requests();
     let start = requests
         .iter()

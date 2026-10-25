@@ -1,6 +1,9 @@
-use base64::{Engine, engine::general_purpose::STANDARD};
+pub(super) mod media;
+
 use model::realtime::{Audio, Endpoint, Event};
 use serde_json::{Value, json};
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 use super::{AgentSessionError, CodexSession};
 
@@ -8,9 +11,10 @@ const MAX_AUDIO_BYTES: usize = 512 * 1024;
 
 #[derive(Debug)]
 pub(super) struct Realtime {
-    endpoint: Endpoint,
+    media: media::Media,
+    output: mpsc::Sender<Event>,
+    cancel: CancellationToken,
     user_speaking: bool,
-    resampler: Resampler,
     session_id: Option<String>,
 }
 
@@ -26,28 +30,21 @@ impl CodexSession {
         {
             return Err(AgentSessionError::Rejected);
         }
-        let transport = if let Some(sdp) = &endpoint.offer {
-            if sdp.is_empty() || sdp.len() > 128 * 1024 {
-                return Err(AgentSessionError::Rejected);
-            }
-            json!({"type":"webrtc","sdp":sdp})
-        } else {
-            json!({"type":"websocket"})
-        };
-        let mut params = json!({"threadId":self.id,"outputModality":"audio","transport":transport});
-        if endpoint.offer.is_some() {
-            // AVAS uses the v3 handshake; the native WebRTC default is still legacy v1.
-            params["version"] = json!("v3");
-        }
+        let output = endpoint.output.clone();
+        let cancel = endpoint.cancel.clone();
+        let media = (self.client.realtime_media)(endpoint).await?;
+        let params = json!({"threadId":self.id,"outputModality":"audio","version":"v3",
+            "transport":{"type":"webrtc","sdp":media.offer}});
         self.transport
             .as_mut()
             .ok_or(AgentSessionError::Failed)?
             .request("thread/realtime/start", params)
             .await?;
         self.realtime = Some(Realtime {
-            endpoint,
+            media,
+            output,
+            cancel,
             user_speaking: false,
-            resampler: Resampler::default(),
             session_id: None,
         });
         self.drive_realtime().await
@@ -58,40 +55,8 @@ impl CodexSession {
         let Some(realtime) = &mut self.realtime else {
             return Ok(());
         };
-        if realtime.endpoint.cancel.is_cancelled() || realtime.endpoint.output.is_closed() {
+        if realtime.cancel.is_cancelled() || realtime.output.is_closed() {
             return self.stop_realtime().await;
-        }
-        // Keep native writes bounded so text events and approvals continue to drain.
-        for _ in 0..8 {
-            let Ok(audio) = realtime.endpoint.input.try_recv() else {
-                break;
-            };
-            if realtime.endpoint.offer.is_some() || !valid_audio(&audio) {
-                let _ = realtime.endpoint.output.try_send(Event::Failed);
-                return self.stop_realtime().await;
-            }
-            let Some(samples) = realtime.resampler.convert(&audio) else {
-                let _ = realtime.endpoint.output.try_send(Event::Failed);
-                return self.stop_realtime().await;
-            };
-            if samples.is_empty() {
-                continue;
-            }
-            let result = self
-                .transport
-                .as_mut()
-                .ok_or(AgentSessionError::Failed)?
-                .request(
-                    "thread/realtime/appendAudio",
-                    json!({"threadId":self.id,"audio":{"data":STANDARD.encode(&samples),
-                    "sampleRate":24_000,"numChannels":1,
-                    "samplesPerChannel":samples.len()/2,"itemId":null}}),
-                )
-                .await;
-            if result.is_err() {
-                let _ = realtime.endpoint.output.try_send(Event::Failed);
-                return self.stop_realtime().await;
-            }
         }
         Ok(())
     }
@@ -153,13 +118,13 @@ impl CodexSession {
                     .as_str()
                     .filter(|sdp| !sdp.is_empty() && sdp.len() <= 128 * 1024)
                 else {
-                    realtime.endpoint.cancel.cancel();
+                    realtime.cancel.cancel();
                     return Ok(());
                 };
-                Event::Sdp(sdp.to_owned())
-            }
-            "thread/realtime/outputAudio/delta" => {
-                decode_audio(&params["audio"]).map_or(Event::Failed, Event::Audio)
+                if realtime.media.answer(sdp.to_owned()).is_err() {
+                    realtime.cancel.cancel();
+                }
+                return Ok(());
             }
             "thread/realtime/transcript/delta" if params["role"] == "user" => {
                 if realtime.user_speaking || params["delta"].as_str().is_none_or(str::is_empty) {
@@ -180,15 +145,19 @@ impl CodexSession {
             }
             "thread/realtime/error" => Event::Failed,
             "thread/realtime/closed" => {
-                let _ = realtime.endpoint.output.try_send(Event::Closed);
+                let _ = realtime.output.try_send(Event::Closed);
                 self.realtime = None;
                 return Ok(());
             }
+            // Audio arrives through the provider-owned peer, never through outputAudio/delta.
             _ => return Ok(()),
         };
+        if matches!(event, Event::Interrupted | Event::Transcript(_)) {
+            realtime.media.speaking(realtime.user_speaking);
+        }
         let failed = matches!(event, Event::Failed);
-        if realtime.endpoint.output.try_send(event).is_err() || failed {
-            realtime.endpoint.cancel.cancel();
+        if realtime.output.try_send(event).is_err() || failed {
+            realtime.cancel.cancel();
         }
         Ok(())
     }
@@ -247,26 +216,6 @@ fn valid_audio(audio: &Audio) -> bool {
     ) && !audio.bytes.is_empty()
         && audio.bytes.len() <= MAX_AUDIO_BYTES
         && audio.bytes.len().is_multiple_of(2)
-}
-
-fn decode_audio(value: &Value) -> Option<Audio> {
-    if value["numChannels"] != 1 {
-        return None;
-    }
-    let data = value["data"].as_str()?;
-    if data.len() > MAX_AUDIO_BYTES.div_ceil(3) * 4 {
-        return None;
-    }
-    let audio = Audio {
-        bytes: STANDARD.decode(data).ok()?,
-        sample_rate: value["sampleRate"].as_u64()?.try_into().ok()?,
-    };
-    if let Some(samples) = value["samplesPerChannel"].as_u64()
-        && samples != (audio.bytes.len() / 2) as u64
-    {
-        return None;
-    }
-    valid_audio(&audio).then_some(audio)
 }
 
 #[derive(Debug, Default)]

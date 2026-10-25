@@ -39,6 +39,7 @@ use crate::ports::agent_session::{
 #[derive(Debug, Clone)]
 pub(crate) struct CodexClient {
     program: PathBuf,
+    realtime_media: realtime::media::Factory,
     deadline: Duration,
     capabilities: std::sync::Arc<std::sync::atomic::AtomicU8>,
     images: super::images::ImageStore,
@@ -69,12 +70,20 @@ impl CodexClient {
     pub(crate) fn new(program: PathBuf) -> Self {
         Self {
             program,
+            realtime_media: realtime::media::open,
             deadline: Duration::from_secs(20),
             capabilities: std::sync::Arc::default(),
             images: super::images::ImageStore::default(),
             environment: crate::ports::environment::AgentEnvironment::default(),
             speed_catalog: std::sync::Arc::default(),
         }
+    }
+
+    /// Replace only upstream media with the offline native protocol fixture.
+    #[cfg(test)]
+    pub(crate) fn with_fixture_media(mut self) -> Self {
+        self.realtime_media = realtime::media::tests::fixture;
+        self
     }
 
     /// Store decoded native image output in a private, persistent directory.

@@ -349,11 +349,11 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   useEffect(() => {
     const unregister = voiceRuntime?.registerSession({
       serverId,
-      setVoiceMode: async (enabled, agentId, sdp) => {
+      setVoiceMode: async (enabled, agentId) => {
         if (!client) {
           throw new Error(t("common.errors.daemonUnavailable"));
         }
-        return await client.setVoiceMode(enabled, agentId, sdp);
+        return await client.setVoiceMode(enabled, agentId);
       },
       sendVoiceAudioChunk: async (audioData, mimeType) => {
         if (!client) {

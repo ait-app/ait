@@ -28,7 +28,6 @@ pub(super) struct Voice {
     pub(super) target: Option<Arc<Target>>,
     pub(super) native: Option<model::realtime::Session>,
     native_only: bool,
-    sdp: Option<String>,
     bytes: Vec<u8>,
     format: Option<Format>,
     speaking: bool,
@@ -55,7 +54,6 @@ impl Voice {
 
     pub(super) fn abort(&mut self) {
         self.native = None;
-        self.sdp = None;
         self.cancel.cancel();
         self.generation = Uuid::new_v4().to_string();
         self.running = false;
@@ -110,7 +108,10 @@ impl Voice {
         let Some(playback) = self.playback.front_mut() else {
             return Ok(());
         };
-        if self.acknowledgments.len() >= 4 {
+        // Native PCM arrives in small (~80 ms) blocks; keep a bounded window large enough
+        // for relay round trips without throttling audio below its playback rate.
+        let window = if self.native_only { 16 } else { 4 };
+        if self.acknowledgments.len() >= window {
             return Ok(());
         }
         let end = (playback.offset + 24_000).min(playback.audio.bytes.len());
@@ -154,13 +155,6 @@ impl Connection {
             }
             "voice.mode.set.request" => {
                 let request: protocol::Mode = protocol::decode(params)?;
-                if request
-                    .sdp
-                    .as_ref()
-                    .is_some_and(|sdp| sdp.is_empty() || sdp.len() > 128 * 1024 || !request.enabled)
-                {
-                    return Err(Error::Invalid);
-                }
                 if request.enabled {
                     let id = request
                         .agent_id
@@ -188,10 +182,7 @@ impl Connection {
                             Ok(target) => target,
                             Err(error) => return Ok(mode_result(&self.voice, Some(error))),
                         };
-                        let (native, sdp) = match self
-                            .prepare_native(agents.as_ref(), &target.id, request.sdp)
-                            .await
-                        {
+                        let native = match self.prepare_native(agents.as_ref(), &target.id).await {
                             Ok(prepared) => prepared,
                             Err(error) => return Ok(mode_result(&self.voice, Some(error))),
                         };
@@ -214,7 +205,6 @@ impl Connection {
                         self.voice.abort();
                         self.voice.native_only = native.is_some();
                         self.voice.native = native;
-                        self.voice.sdp = sdp;
                         self.voice.target = Some(target);
                     }
                 } else {
@@ -324,9 +314,6 @@ impl Connection {
 
 fn mode_result(voice: &Voice, error: Option<Error>) -> Value {
     let mut result = json!({"enabled":voice.target.is_some(),"agentId":voice.target.as_ref().map(|target| &target.id),"accepted":error.is_none(),"error":error.map(|error| error.to_string())});
-    if let Some(sdp) = &voice.sdp {
-        result["sdp"] = json!(sdp);
-    }
     if let Some(error) = error {
         result["reasonCode"] = json!(error.reason());
         result["retryable"] = json!(error.retryable());

@@ -2,8 +2,9 @@ use super::{AgentExecution, CancellationToken, ErrorCode, ExecutionState, Value,
 
 impl AgentExecution {
     /// Open native realtime audio for an Agent when its provider declares support.
-    /// `agent` selects the target, `cancel` bounds its lifetime, and `offer` optionally selects
-    /// WebRTC instead of PCM. Returns `None` only when the provider declares no native support.
+    /// `agent` selects the target and `cancel` bounds its lifetime. Audio is always PCM at
+    /// this boundary; the provider owns upstream negotiation and media transport.
+    /// Returns `None` only when the provider declares no native support.
     /// The returned handle cancels native audio when dropped, including abandoned startup.
     /// # Errors
     /// Returns safe admission, identity or native errors; supported providers never fall back.
@@ -11,10 +12,8 @@ impl AgentExecution {
         &self,
         agent: &str,
         cancel: CancellationToken,
-        offer: Option<String>,
     ) -> Result<Option<model::realtime::Session>, ErrorCode> {
-        let (session, mut endpoint) = model::realtime::channel(&cancel);
-        endpoint.offer = offer;
+        let (session, endpoint) = model::realtime::channel(&cancel);
         let result = self
             .call_with_realtime(
                 "internal.realtime.start",

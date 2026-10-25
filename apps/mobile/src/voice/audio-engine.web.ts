@@ -1,4 +1,3 @@
-import { createRealtimeAudio } from "./realtime-audio.web";
 import { isElectronRuntime } from "@/desktop/host";
 import type {
   AudioEngine,
@@ -90,7 +89,6 @@ export function createAudioEngine(
   callbacks: AudioEngineCallbacks,
   _options?: { traceLabel?: string },
 ): AudioEngine {
-  const realtime = createRealtimeAudio(callbacks);
   const refs: {
     playbackContext: AudioContext | null;
     captureContext: AudioContext | null;
@@ -99,9 +97,11 @@ export function createAudioEngine(
     processor: ScriptProcessorNode | null;
     gain: GainNode | null;
     started: boolean;
+    captureGeneration: number;
     muted: boolean;
     queue: QueuedAudio[];
     processingQueue: boolean;
+    playbackGeneration: number;
     activePlayback: {
       source: AudioBufferSourceNode;
       resolve: (duration: number) => void;
@@ -116,9 +116,11 @@ export function createAudioEngine(
     processor: null,
     gain: null,
     started: false,
+    captureGeneration: 0,
     muted: false,
     queue: [],
     processingQueue: false,
+    playbackGeneration: 0,
     activePlayback: null,
   };
 
@@ -136,10 +138,10 @@ export function createAudioEngine(
     }
 
     const context = new AudioContextCtor();
+    refs.playbackContext = context;
     if (context.state === "suspended") {
       await context.resume().catch(() => undefined);
     }
-    refs.playbackContext = context;
     return context;
   }
 
@@ -157,14 +159,15 @@ export function createAudioEngine(
     }
 
     const context = new AudioContextCtor();
+    refs.captureContext = context;
     if (context.state === "suspended") {
       await context.resume().catch(() => undefined);
     }
-    refs.captureContext = context;
     return context;
   }
 
   async function playAudio(audio: AudioPlaybackSource): Promise<number> {
+    const generation = refs.playbackGeneration;
     const context = await ensurePlaybackContext();
     const arrayBuffer = await audio.arrayBuffer();
     const type = (audio.type || "").toLowerCase();
@@ -176,6 +179,7 @@ export function createAudioEngine(
         )
       : await decodeAudioData(context, arrayBuffer);
 
+    if (generation !== refs.playbackGeneration) throw new Error("Playback stopped");
     const durationSec = audioBuffer.duration;
     const source = context.createBufferSource();
     source.buffer = audioBuffer;
@@ -225,7 +229,7 @@ export function createAudioEngine(
   }
 
   async function stopCapture(): Promise<void> {
-    realtime.stop();
+    refs.captureGeneration += 1;
     refs.started = false;
 
     try {
@@ -239,6 +243,7 @@ export function createAudioEngine(
     if (refs.stream) {
       for (const track of refs.stream.getTracks()) {
         try {
+          track.onended = null;
           track.stop();
         } catch {
           // Ignore best-effort teardown errors.
@@ -277,11 +282,7 @@ export function createAudioEngine(
       }
     },
 
-    createRealtimeOffer: () => realtime.offer(),
-    acceptRealtimeAnswer: (sdp) => realtime.answer(sdp),
-
     async startCapture() {
-      if (realtime.isActive()) return;
       if (refs.started) {
         return;
       }
@@ -307,8 +308,11 @@ export function createAudioEngine(
         );
       }
 
+      const generation = ++refs.captureGeneration;
+      refs.started = true;
       try {
         const context = await ensureCaptureContext();
+        if (generation !== refs.captureGeneration) return;
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             channelCount: 1,
@@ -317,8 +321,20 @@ export function createAudioEngine(
             autoGainControl: true,
           },
         });
+        if (generation !== refs.captureGeneration) {
+          for (const track of stream.getTracks()) track.stop();
+          return;
+        }
+        refs.stream = stream;
+        for (const track of stream.getAudioTracks()) {
+          track.onended = () => {
+            if (generation !== refs.captureGeneration) return;
+            void stopCapture();
+            callbacks.onInterruption?.();
+          };
+        }
         const source = context.createMediaStreamSource(stream);
-        const processor = context.createScriptProcessor(4096, 1, 1);
+        const processor = context.createScriptProcessor(2048, 1, 1);
         const gain = context.createGain();
         gain.gain.value = 0;
 
@@ -354,6 +370,7 @@ export function createAudioEngine(
         refs.processor = processor;
         refs.gain = gain;
       } catch (error) {
+        if (generation !== refs.captureGeneration) return;
         await stopCapture();
         const wrapped = error instanceof Error ? error : new Error(String(error));
         callbacks.onError?.(wrapped);
@@ -366,7 +383,6 @@ export function createAudioEngine(
     },
 
     toggleMute() {
-      if (realtime.isActive()) return realtime.toggleMute();
       refs.muted = !refs.muted;
       if (refs.muted) {
         callbacks.onVolumeLevel(0);
@@ -375,7 +391,6 @@ export function createAudioEngine(
     },
 
     isMuted() {
-      if (realtime.isActive()) return realtime.isMuted();
       return refs.muted;
     },
 
@@ -389,6 +404,7 @@ export function createAudioEngine(
     },
 
     stop() {
+      refs.playbackGeneration += 1;
       if (refs.activePlayback) {
         const active = refs.activePlayback;
         refs.activePlayback = null;
@@ -408,7 +424,6 @@ export function createAudioEngine(
       while (refs.queue.length > 0) {
         refs.queue.shift()!.reject(new Error("Playback stopped"));
       }
-      refs.processingQueue = false;
     },
 
     isPlaying() {

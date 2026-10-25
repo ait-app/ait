@@ -52,7 +52,6 @@ pub trait Agents: Send + Sync + std::fmt::Debug {
         &'a self,
         _agent: &'a str,
         _cancel: CancellationToken,
-        _offer: Option<String>,
     ) -> Operation<'a, Option<model::realtime::Session>> {
         Box::pin(async { Ok(None) })
     }

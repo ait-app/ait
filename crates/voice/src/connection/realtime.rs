@@ -50,7 +50,6 @@ impl Voice {
                 Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => Event::Failed,
             };
             match event {
-                Event::Sdp(_) => {}
                 Event::Audio(audio) => self.output(Audio {
                     bytes: audio.bytes,
                     format: Format::Pcm(audio.sample_rate),
@@ -88,21 +87,14 @@ impl super::Connection {
         &self,
         agents: &dyn crate::ports::Agents,
         target: &str,
-        offer: Option<String>,
-    ) -> Result<(Option<model::realtime::Session>, Option<String>), Error> {
-        let webrtc = offer.is_some();
-        let mut native = agents.realtime(target, self.cancel.clone(), offer).await?;
-        let answer = if webrtc {
-            let session = native.as_mut().ok_or(Error::Unavailable)?;
-            match tokio::time::timeout(std::time::Duration::from_secs(25), session.output.recv())
+    ) -> Result<Option<model::realtime::Session>, Error> {
+        let mut native = agents.realtime(target, self.cancel.clone()).await?;
+        if let Some(session) = native.as_mut() {
+            tokio::time::timeout(std::time::Duration::from_secs(25), &mut session.ready)
                 .await
-            {
-                Ok(Some(Event::Sdp(sdp))) => Some(sdp),
-                _ => return Err(Error::Realtime),
-            }
-        } else {
-            None
-        };
-        Ok((native, answer))
+                .map_err(|_| Error::Realtime)?
+                .map_err(|_| Error::Realtime)?;
+        }
+        Ok(native)
     }
 }

@@ -534,34 +534,30 @@ describe("provider-native voice", () => {
   });
 });
 
-it("negotiates browser audio with the provider and closes it on disconnect", async () => {
+it("uses daemon PCM transport for native voice and closes capture on disconnect", async () => {
   const engine = createAudioEngineMock();
-  engine.createRealtimeOffer = vi.fn().mockResolvedValue("browser-offer");
-  engine.acceptRealtimeAnswer = vi.fn().mockResolvedValue(undefined);
   const { runtime } = createRuntime({ engine, supportsRealtimeVoice: () => true });
   const adapter = createSessionAdapter();
-  vi.mocked(adapter.setVoiceMode).mockResolvedValue({ sdp: "provider-answer" });
   runtime.registerSession(adapter);
   await runtime.startVoice("server-1", "agent-1");
-  expect(adapter.setVoiceMode).toHaveBeenCalledWith(true, "agent-1", "browser-offer");
-  expect(engine.acceptRealtimeAnswer).toHaveBeenCalledWith("provider-answer");
+  expect(adapter.setVoiceMode).toHaveBeenCalledWith(true, "agent-1");
+  expect(engine.startCapture).toHaveBeenCalledOnce();
+  runtime.handleCapturePcm(new Uint8Array(6400));
+  await vi.waitFor(() => expect(adapter.sendVoiceAudioChunk).toHaveBeenCalled());
   runtime.updateSessionConnection("server-1", false);
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   expect(engine.stopCapture).toHaveBeenCalled();
   expect(runtime.getSnapshot().isVoiceMode).toBe(false);
 });
 
-it("releases a native peer before switching to generic speech", async () => {
+it("releases native capture before switching to generic speech", async () => {
   const engine = createAudioEngineMock();
-  engine.createRealtimeOffer = vi.fn().mockResolvedValue("offer");
-  engine.acceptRealtimeAnswer = vi.fn().mockResolvedValue(undefined);
   const { runtime } = createRuntime({ engine, supportsRealtimeVoice: (_, id) => id === "codex" });
   const adapter = createSessionAdapter();
-  vi.mocked(adapter.setVoiceMode).mockResolvedValue({ sdp: "answer" });
   runtime.registerSession(adapter);
   await runtime.startVoice("server-1", "codex");
   await runtime.startVoice("server-1", "codex");
-  expect(engine.createRealtimeOffer).toHaveBeenCalledTimes(1);
+  expect(engine.startCapture).toHaveBeenCalledTimes(1);
   await runtime.startVoice("server-1", "other");
   expect(engine.stopCapture).toHaveBeenCalledTimes(1);
   expect(engine.startCapture).toHaveBeenCalledTimes(2);
@@ -569,21 +565,19 @@ it("releases a native peer before switching to generic speech", async () => {
   await runtime.stopVoice();
 });
 
-it("does not resume capture when Codex closes during WebRTC startup", async () => {
+it("does not resume capture when Codex closes during daemon startup", async () => {
   const engine = createAudioEngineMock();
-  engine.createRealtimeOffer = vi.fn().mockResolvedValue("offer");
   let finishAnswer!: () => void;
-  engine.acceptRealtimeAnswer = vi.fn().mockReturnValue(
+  const adapter = createSessionAdapter();
+  vi.mocked(adapter.setVoiceMode).mockReturnValue(
     new Promise<void>((resolve) => {
       finishAnswer = resolve;
     }),
   );
   const { runtime } = createRuntime({ engine, supportsRealtimeVoice: () => true });
-  const adapter = createSessionAdapter();
-  vi.mocked(adapter.setVoiceMode).mockResolvedValue({ sdp: "answer" });
   runtime.registerSession(adapter);
   const starting = runtime.startVoice("server-1", "agent-1");
-  await vi.waitFor(() => expect(engine.acceptRealtimeAnswer).toHaveBeenCalled());
+  await vi.waitFor(() => expect(adapter.setVoiceMode).toHaveBeenCalled());
 
   runtime.onSessionClosed("server-1");
   expect(engine.stopCapture).toHaveBeenCalledOnce();

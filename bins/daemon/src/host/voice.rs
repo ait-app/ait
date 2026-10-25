@@ -32,11 +32,10 @@ impl Agents for NativeAgents {
         &'a self,
         agent: &'a str,
         cancel: CancellationToken,
-        offer: Option<String>,
     ) -> Operation<'a, Option<model::realtime::Session>> {
         Box::pin(async move {
             self.0
-                .start_realtime(agent, cancel, offer)
+                .start_realtime(agent, cancel)
                 .await
                 .map_err(|_| Error::Realtime)
         })

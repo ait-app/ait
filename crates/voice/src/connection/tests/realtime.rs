@@ -16,7 +16,6 @@ impl Agents for Native {
         &'a self,
         _agent: &'a str,
         _cancel: CancellationToken,
-        _offer: Option<String>,
     ) -> Operation<'a, Option<Session>> {
         Box::pin(async move {
             if self.reject {
@@ -37,6 +36,15 @@ impl Agents for Native {
 }
 
 fn native(fixture: &mut Fixture, reject: bool) -> Endpoint {
+    let mut endpoint = pending_native(fixture, reject);
+    let (ready, _) = tokio::sync::oneshot::channel();
+    std::mem::replace(&mut endpoint.ready, ready)
+        .send(())
+        .unwrap();
+    endpoint
+}
+
+fn pending_native(fixture: &mut Fixture, reject: bool) -> Endpoint {
     let (session, endpoint) = model::realtime::channel(&CancellationToken::new());
     fixture.service.agents = Some(Arc::new(Native {
         session: Mutex::new(Some(session)),
@@ -146,46 +154,81 @@ async fn native_abort_cancels_audio_and_does_not_enable_generic_fallback() {
 }
 
 #[tokio::test]
-async fn native_webrtc_answer_is_returned_before_voice_is_enabled() {
+async fn upstream_sdp_is_rejected_at_the_client_boundary() {
     let mut fixture = Fixture::new();
-    let endpoint = native(&mut fixture, false);
-    fixture.service.stt = None;
-    fixture.service.tts = None;
-    endpoint
-        .output
-        .try_send(Event::Sdp("fixture-answer".to_owned()))
-        .unwrap();
-    let response = fixture
-        .connection
-        .request(
-            "voice.mode.set.request",
-            json!({"enabled":true,"agentId":"agent","sdp":"fixture-offer"}),
-            &fixture.service,
-        )
-        .await
-        .unwrap();
-    assert_eq!(response["accepted"], true);
-    assert_eq!(response["sdp"], "fixture-answer");
-    fixture.mode(false).await;
-    assert!(endpoint.cancel.is_cancelled());
+    let _endpoint = native(&mut fixture, false);
+    assert!(
+        fixture
+            .connection
+            .request(
+                "voice.mode.set.request",
+                json!({"enabled":true,"agentId":"agent","sdp":"client-offer"}),
+                &fixture.service
+            )
+            .await
+            .is_err()
+    );
+    assert!(fixture.connection.is_empty());
 }
 
 #[tokio::test]
-async fn native_webrtc_error_before_sdp_never_enables_or_falls_back() {
+async fn failed_or_expired_media_start_releases_the_native_session() {
+    for expired in [false, true] {
+        let mut fixture = Fixture::new();
+        let endpoint = pending_native(&mut fixture, false);
+        let Endpoint { ready, cancel, .. } = endpoint;
+        let mut ready = Some(ready);
+        if !expired {
+            ready.take();
+        }
+        if expired {
+            tokio::time::pause();
+        }
+        let response = fixture.mode(true).await;
+        assert_eq!(response["accepted"], false);
+        assert_eq!(response["reasonCode"], "native_realtime_failed");
+        assert!(cancel.is_cancelled());
+        assert!(fixture.connection.is_empty());
+        drop(ready);
+        if expired {
+            tokio::time::resume();
+        }
+    }
+}
+
+#[tokio::test]
+async fn native_pcm_window_tolerates_relay_latency_and_remains_acknowledgment_bounded() {
     let mut fixture = Fixture::new();
     let endpoint = native(&mut fixture, false);
-    endpoint.output.try_send(Event::Failed).unwrap();
-    let response = fixture
-        .connection
-        .request(
-            "voice.mode.set.request",
-            json!({"enabled":true,"agentId":"agent","sdp":"fixture-offer"}),
-            &fixture.service,
-        )
-        .await
-        .unwrap();
-    assert_eq!(response["accepted"], false);
-    assert_eq!(response["reasonCode"], "native_realtime_failed");
-    assert!(fixture.connection.is_empty());
-    assert!(endpoint.cancel.is_cancelled());
+    fixture.mode(true).await;
+    for _ in 0..20 {
+        endpoint
+            .output
+            .try_send(Event::Audio(model::realtime::Audio {
+                bytes: vec![0; 3840],
+                sample_rate: 24_000,
+            }))
+            .unwrap();
+    }
+    for _ in 0..10 {
+        fixture.poll();
+    }
+    let audio: Vec<_> = fixture
+        .events
+        .iter()
+        .filter(|event| event["method"] == "voice.audio.output")
+        .collect();
+    assert_eq!(audio.len(), 16);
+    let first = audio[0]["params"]["id"].as_str().unwrap().to_owned();
+    fixture.connection.voice.played(&first);
+    fixture.events.clear();
+    fixture.poll();
+    assert_eq!(
+        fixture
+            .events
+            .iter()
+            .filter(|event| event["method"] == "voice.audio.output")
+            .count(),
+        1
+    );
 }

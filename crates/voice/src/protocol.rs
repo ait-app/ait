@@ -8,8 +8,6 @@ use serde::Deserialize;
 pub(crate) struct Mode {
     /// Desired mode.
     pub(crate) enabled: bool,
-    /// WebRTC offer for providers that negotiate native browser audio.
-    pub(crate) sdp: Option<String>,
     /// Required when enabling; resolved to one canonical Agent ID.
     pub(crate) agent_id: Option<String>,
 }

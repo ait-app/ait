@@ -12,13 +12,15 @@ Codex app-server 已提供 `thread/realtime/*`，其音频、认证、原生工�
 ## 决策
 
 - Codex adapter 声明 `supportsRealtimeVoice`，通过 Provider 目录和 Agent capability 快照发布。客户端统一按该能力决定草稿和已有 Agent 的语音入口及快捷键是否可用；能力未声明或为 false 时不提供入口，不推断 Provider 名称。创建回调和消息是否为空均不是能力来源。
-- 音频和文本复用同一个 Codex thread 与 app-server transport。独立音频事件在前台 turn 过滤前处理；原生产生的工具轮次与审批继续使用既有 provider 管线。
-- `model::realtime` 定义有界音频队列、SDP 与生命周期事件。`provider` 拥有 native endpoint；`voice` 拥有连接侧 session；daemon 仅桥接端口，两项能力互不依赖。
-- 桌面/Web 浏览器录音与播放使用 WebRTC，SDP 由 Codex `thread/realtime/start` / `thread/realtime/sdp` 协商。显式使用 realtime v3；Codex 0.163.0 的默认 WebRTC v1 会被 AVAS 拒绝。认证始终留在 Codex。
-- 无 WebRTC 引擎的客户端使用 Codex 原生 WebSocket PCM 通道。Codex 当前要求此通道具有 API key 认证。Provider 将输入连续重采样为 24 kHz，并验证输出格式、大小与通道数。
+- 音频会话和文本复用同一个 Codex thread，信令及工具事件复用 app-server transport。实时会话事件在前台 turn 过滤前处理；原生产生的工具轮次与审批继续使用既有 provider 管线。
+- `model::realtime` 定义有界 PCM 音频队列、媒体就绪信号与生命周期事件。`provider` 拥有 native endpoint；`voice` 拥有连接侧 session；daemon 仅桥接端口，两项能力互不依赖。
+- 所有客户端只与 daemon 交互：麦克风通过 `voice.audio.chunk` 上传单声道 PCM16，播放通过 `voice.audio.output` 与确认窗口下发。直连与 online relay 使用相同协议；客户端不持有 OpenAI SDP、地址或认证，也不创建上游 WebRTC peer。
+- daemon 内的 Codex adapter 拥有 WebRTC peer、ICE/DTLS/SRTP、Opus 编解码与连续 24 kHz 重采样。offer 经已有 Codex app-server 的 `thread/realtime/start` 发送，`thread/realtime/sdp` 的 answer 仅在 provider 内使用。显式使用 realtime v3，保留 Codex 登录认证，不改走要求 API key 的原生 WebSocket 音频入口。
+- 只有上游媒体连接就绪后才接受语音启动；连接超时、启动被放弃、媒体错误与原生关闭均取消 peer 和对应会话。输入按 20 ms 编码，输出按约 80 ms 合并 PCM，乱序、丢包补偿与所有音频缓存均有界。
+- online relay 透明中继控制、PCM、播放确认和关闭事件；不新增上游地址配置或旁路媒体连接。relay 断开使物理 daemon 连接关闭，并沿 Session 生命周期释放上游媒体。
 - Native 启动错误直接返回，不回退到 Ait STT/TTS。Native 不依赖离线语音模型准备状态。未声明能力的 Provider 不显示实时语音入口。旧客户端请求的通用语音协议及听写保持兼容。
 - Session drop、显式停止与连接断开都会取消对应原生会话。停止确认前按原顺序保留普通消息、审批和 canonical speech 事件，仅排空旧音频、SDP 和传输关闭通知。已结束会话的记录仍进入 Timeline，但不能改变新音频会话的录音或播放状态。
-- 队列满时结束原生音频，不无限缓存。PCM 播放仍有四片确认窗口与超时；WebRTC 的媒体传输由浏览器和 Codex 协商的服务端负责。
+- 队列满时结束原生音频，不无限缓存。小块原生 PCM 播放采用 16 片确认窗口以覆盖 relay 往返延迟，通用语音保持四片；两者均有超时。WebRTC 媒体传输由 daemon provider 和 Codex 协商的服务端负责。
 - Codex adapter 将完整 `realtime_delegation` 包装解析为用户消息上的可选 `voiceTranscript` 展示字段，按 `user` / `assistant` 保留语音片段顺序与换行；截断后角色不明的开头保持为 `unknown`，不猜测发言者。解析限制 64 KiB、256 段，普通文本、引用示例和无法识别的格式保持原样。实时完成与原生历史刷新使用相同投影，保留原始消息和轮次身份，不改写 Codex 的上下文。
 - 客户端按通用语音片段渲染用户气泡和助手正文，并在消息流与本地缓存保留这些片段。片段附属于一次交接，不伪造额外的文本轮次、消息 ID 或回退操作；已有转写时不重复渲染 `input`。
 - Canonical 语音通过 `thread/realtime/item/started`、`item/transcript/delta`、`item/completed` 投影为通用 `voice` Timeline 条目。条目包含原生片段 ID、语音会话 ID、双方角色、完整文本快照或开始/结束边界；无普通文本 turn 身份，不进入消息提交、审批和回退管线。流式快照按同一身份替换，完成文本允许修正转写，不要求它以增量文本为前缀。该协议扩展由配套客户端、SDK 与 daemon 一起发布。
@@ -28,10 +30,10 @@ Codex app-server 已提供 `thread/realtime/*`，其音频、认证、原生工�
 
 ## 后果
 
-空 Agent 通过独立创建操作启动，仍校验 Provider、模型、目录和连接；普通消息提交需要正文或附件，两者不通过 `allowEmptyText` 开关混用，也不伪造首条消息。Provider 负责能力与认证差异，客户端只负责通用的媒体设备和 SDP。
-SDP 请求字段和能力声明保持可选，没有 WebRTC 引擎的配套客户端仍可使用原生 PCM；新增 canonical voice 条目需要配套客户端支持，原生协议升级需更新 Codex adapter。
+空 Agent 通过独立创建操作启动，仍校验 Provider、模型、目录和连接；普通消息提交需要正文或附件，两者不通过 `allowEmptyText` 开关混用，也不伪造首条消息。Provider 负责能力与认证差异，客户端只负责通用媒体设备与 daemon 的 PCM 协议。
+移除客户端协议中的 SDP 字段；前期直连 WebRTC 测试客户端需与 daemon 一起更新。移动端也复用 provider 的 WebRTC 认证，不再受原生 WebSocket 音频入口的 API key 限制。新增 canonical voice 条目需要配套客户端支持，原生协议升级需更新 Codex adapter。
 `appendText`、`appendSpeech`、音色选择与手动 handoff 不属于本次时间线扩展。`flushTranscriptTailOnSessionEnd` 保持原生默认值，挂断不额外触发 Codex 文本任务；最终语音记录的持久化由 canonical Timeline 完成。
-移动端当前没有 WebRTC 引擎，使用 PCM 原生通道时仍受 Codex API key 要求限制，不能将桌面/Web 的登录兼容性等同于移动端。
+构建 daemon 需要 CMake 与 C/C++ 工具链；Opus 由 bundled libopus 静态链接，无运行时系统库要求。daemon 所在网络须能访问 Codex 实时服务并建立媒体连接；online relay 只解决客户端至 daemon 的可达性。
 
 协议依据为安装的 Codex 0.163.0 `app-server generate-ts --experimental`，以及 [Codex 原生实时会话实现](https://github.com/openai/codex/blob/main/codex-rs/core/src/realtime_conversation.rs)。
 语音交接包装与转义规则依据 [Codex RealtimeDelegation](https://github.com/openai/codex/blob/main/codex-rs/core/src/context/realtime_delegation.rs)。
