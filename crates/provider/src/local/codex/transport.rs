@@ -244,6 +244,16 @@ impl Transport {
                         } else {
                             self.observe_error(error, diagnostics::native(error, "rpc"), method);
                         }
+                        if method == "thread/resume"
+                            && error["code"] == -32600
+                            && let Some(thread) = request["params"]["threadId"].as_str()
+                            && error["message"].as_str().and_then(|message| {
+                                message.strip_prefix("thread ")?
+                                    .strip_suffix(" already has an active writer")
+                            }) == Some(thread)
+                        {
+                            return Err(AgentSessionError::Busy);
+                        }
                         return Err(
                             if method != "turn/steer" || super::streaming::steer_rejected(error) {
                                 AgentSessionError::Rejected
@@ -275,6 +285,8 @@ impl Transport {
             Err(AgentSessionError::Rejected)
         } else if matches!(result, Ok(Err(AgentSessionError::Unavailable))) {
             Err(AgentSessionError::Unavailable)
+        } else if matches!(result, Ok(Err(AgentSessionError::Busy))) {
+            Err(AgentSessionError::Busy)
         } else {
             let category = if result.is_err() {
                 Category::Timeout

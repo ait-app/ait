@@ -29,10 +29,13 @@ impl AgentManager {
         if endpoint.cancel.is_cancelled() {
             return Err(ErrorCode::AgentIo);
         }
-        self.resume(id).await.map_err(|_| ErrorCode::AgentIo)?;
+        self.resume(id).await.map_err(|error| match error {
+            super::AgentManagerError::Busy => ErrorCode::CatalogBusy,
+            _ => ErrorCode::AgentIo,
+        })?;
         let agent = self.live.get_mut(id).ok_or(ErrorCode::AgentIo)?;
         if agent.turn.is_some() || agent.pending.is_some() || agent.session.realtime_active() {
-            return Err(ErrorCode::AgentIo);
+            return Err(ErrorCode::CatalogBusy);
         }
         agent
             .session

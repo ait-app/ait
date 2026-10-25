@@ -279,7 +279,8 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
     format: string,
   ): { arrayBuffer(): Promise<ArrayBuffer>; size: number; type: string } {
     let mimeType: string;
-    if (format === "pcm") mimeType = "audio/pcm;rate=24000;bits=16";
+    if (format.startsWith("audio/")) mimeType = format;
+    else if (format === "pcm") mimeType = "audio/pcm;rate=24000;bits=16";
     else if (format === "mp3") mimeType = "audio/mpeg";
     else mimeType = `audio/${format}`;
 

@@ -1,6 +1,34 @@
 use super::*;
 use model::realtime::{Audio, Event};
 
+#[tokio::test]
+async fn realtime_resume_reports_an_external_writer_and_can_retry_after_release() {
+    let fixture = Fixture::new();
+    let (execution, _) = worker(&fixture);
+    let created = create(&execution, &fixture).await;
+    let id = created["agentId"].as_str().unwrap();
+    execution.shutdown().await.unwrap();
+    fixture.mode("realtime-writer-busy");
+    let (execution, _) = worker(&fixture);
+    let result = execution.start_realtime(id, CancellationToken::new()).await;
+    assert!(matches!(result, Err(ErrorCode::CatalogBusy)), "{result:?}");
+    assert!(!fixture.requests().iter().any(|request| {
+        matches!(
+            request["method"].as_str(),
+            Some("turn/start" | "thread/realtime/start")
+        )
+    }));
+    fixture.mode("normal");
+    let mut session = execution
+        .start_realtime(id, CancellationToken::new())
+        .await
+        .unwrap()
+        .unwrap();
+    (&mut session.ready).await.unwrap();
+    drop(session);
+    execution.shutdown().await.unwrap();
+}
+
 async fn event(session: &mut model::realtime::Session) -> Event {
     tokio::time::timeout(Duration::from_secs(3), session.output.recv())
         .await

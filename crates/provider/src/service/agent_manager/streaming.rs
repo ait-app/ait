@@ -419,7 +419,9 @@ impl AgentManager {
                 agent.pending_input_at = Some(now_timestamp());
                 Ok(())
             }
-            Err(AgentSessionError::Rejected) => Err(AgentManagerError::Busy),
+            Err(AgentSessionError::Rejected | AgentSessionError::Busy) => {
+                Err(AgentManagerError::Busy)
+            }
             Err(AgentSessionError::Failed | AgentSessionError::Unavailable) => {
                 agent.pending = Some(AgentTurnEvent::Failed);
                 self.poll().await?;

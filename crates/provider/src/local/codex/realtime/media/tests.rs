@@ -22,7 +22,8 @@ pub(in crate::local::codex) fn fixture(
             tokio::select! {
                 () = cancel.cancelled() => {}
                 result = async {
-                    assert_eq!(answer_rx.await.unwrap(), "fixture-answer");
+                    let Ok(answer) = answer_rx.await else { return; };
+                    assert_eq!(answer, "fixture-answer");
                     let _ = ready.send(());
                     while let Some(audio) = input.recv().await {
                         let bytes = super::super::Resampler::default().convert(&audio).unwrap();

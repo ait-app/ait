@@ -37,7 +37,10 @@ impl Agents for NativeAgents {
             self.0
                 .start_realtime(agent, cancel)
                 .await
-                .map_err(|_| Error::Realtime)
+                .map_err(|error| match error {
+                    provider::rpc::ErrorCode::CatalogBusy => Error::AgentBusy,
+                    _ => Error::Realtime,
+                })
         })
     }
 

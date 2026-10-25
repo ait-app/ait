@@ -1150,6 +1150,7 @@ const fn map_registry(
 
 const fn map_session(error: AgentSessionError) -> AgentManagerError {
     match error {
+        AgentSessionError::Busy => AgentManagerError::Busy,
         AgentSessionError::Rejected => AgentManagerError::SessionRejected,
         AgentSessionError::Unavailable | AgentSessionError::Failed => AgentManagerError::Session,
     }

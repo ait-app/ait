@@ -27,6 +27,9 @@ pub(crate) enum AgentSessionError {
     /// The provider rejected a request while the transport remains usable.
     #[error("provider rejected the session operation")]
     Rejected,
+    /// The native session is already owned by another interactive writer.
+    #[error("provider session is in use")]
+    Busy,
 }
 
 /// Provider-independent inputs required to construct or resume a native session.

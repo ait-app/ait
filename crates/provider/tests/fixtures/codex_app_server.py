@@ -141,6 +141,9 @@ for line in sys.stdin:
         result = {"data":[{"name":"Plan","mode":"plan","model":"offline-model","reasoning_effort":"high"},
             {"name":"Default","mode":"default","model":"offline-model"}]} if mode == "workflows" else {"data":[]}
     elif method in ("thread/start", "thread/resume", "thread/read"):
+        if method == "thread/resume" and mode == "realtime-writer-busy":
+            emit({"id": request["id"], "error": {"code": -32600, "message": "thread " + params["threadId"] + " already has an active writer"}})
+            continue
         if method == "thread/resume" and mode == "delayed-resume":
             (root / "resume-started").write_text("ready")
             while not (root / "release-resume").exists():

@@ -40,9 +40,14 @@ pub enum Error {
     Cancelled,
     /// The selected provider's native realtime session could not be used.
     #[error(
-        "Native realtime voice failed. Check the selected provider version and its voice authentication support"
+        "Native realtime voice failed. Check the provider connection and daemon diagnostics, then try again"
     )]
     Realtime,
+    /// The Agent is running a turn or held by another native client.
+    #[error(
+        "This thread is busy or in use by another client. Wait for its current operation or release it in the other client, then try again"
+    )]
+    AgentBusy,
     /// Native Agent operation failed.
     #[error("Voice Agent operation failed")]
     Agent,
@@ -63,6 +68,7 @@ impl Error {
             Self::Cancelled => "speech_cancelled",
             Self::Agent => "voice_agent_failed",
             Self::Realtime => "native_realtime_failed",
+            Self::AgentBusy => "voice_agent_busy",
         }
     }
 
@@ -71,7 +77,12 @@ impl Error {
     fn retryable(self) -> bool {
         matches!(
             self,
-            Self::Capacity | Self::Timeout | Self::Provider | Self::Preparing | Self::ModelDownload
+            Self::Capacity
+                | Self::Timeout
+                | Self::Provider
+                | Self::Preparing
+                | Self::ModelDownload
+                | Self::AgentBusy
         )
     }
 }
@@ -82,6 +93,7 @@ impl From<Error> for model::ErrorCode {
             Error::Invalid => Self::InvalidMessage,
             Error::Capacity => Self::ResourceExhausted,
             Error::Agent | Error::Realtime => Self::AgentIo,
+            Error::AgentBusy => Self::CatalogBusy,
             Error::Unavailable
             | Error::Timeout
             | Error::Provider

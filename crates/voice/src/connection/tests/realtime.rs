@@ -4,7 +4,7 @@ use model::realtime::{Endpoint, Event, Session};
 #[derive(Debug)]
 struct Native {
     session: Mutex<Option<Session>>,
-    reject: bool,
+    rejection: Option<Error>,
 }
 
 impl Agents for Native {
@@ -18,8 +18,8 @@ impl Agents for Native {
         _cancel: CancellationToken,
     ) -> Operation<'a, Option<Session>> {
         Box::pin(async move {
-            if self.reject {
-                return Err(Error::Realtime);
+            if let Some(error) = self.rejection {
+                return Err(error);
             }
             Ok(self.session.lock().unwrap().take())
         })
@@ -48,9 +48,30 @@ fn pending_native(fixture: &mut Fixture, reject: bool) -> Endpoint {
     let (session, endpoint) = model::realtime::channel(&CancellationToken::new());
     fixture.service.agents = Some(Arc::new(Native {
         session: Mutex::new(Some(session)),
-        reject,
+        rejection: reject.then_some(Error::Realtime),
     }));
     endpoint
+}
+
+#[tokio::test]
+async fn native_busy_is_actionable_retryable_and_does_not_start_capture_or_fallback() {
+    let mut fixture = Fixture::new();
+    fixture.service.agents = Some(Arc::new(Native {
+        session: Mutex::new(None),
+        rejection: Some(Error::AgentBusy),
+    }));
+    let response = fixture.mode(true).await;
+    assert_eq!(response["accepted"], false);
+    assert_eq!(response["reasonCode"], "voice_agent_busy");
+    assert!(
+        response["error"]
+            .as_str()
+            .unwrap()
+            .contains("another client")
+    );
+    assert_eq!(response["retryable"], true);
+    assert!(fixture.connection.is_empty());
+    assert_eq!(fixture.engine.calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
