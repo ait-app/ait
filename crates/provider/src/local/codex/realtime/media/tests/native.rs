@@ -46,6 +46,7 @@ async fn speak(native: &mut dyn AgentSession, pcm: &[u8]) {
     let mut offset = 0;
     let mut next_input = tokio::time::Instant::now();
     let mut user_transcribed = false;
+    let mut user_turn_completed = false;
     let mut completed = None;
     let mut audible_samples = 0;
     loop {
@@ -54,8 +55,16 @@ async fn speak(native: &mut dyn AgentSession, pcm: &[u8]) {
             match event {
                 AgentTurnEvent::Timeline(entry)
                     if entry.item["type"] == "voice"
-                        && entry.item["role"] == "assistant"
+                        && entry.item["role"] == "user"
                         && entry.item["status"] == "completed" =>
+                {
+                    user_turn_completed = true;
+                }
+                AgentTurnEvent::Timeline(entry)
+                    if entry.item["type"] == "voice"
+                        && entry.item["role"] == "assistant"
+                        && entry.item["status"] == "completed"
+                        && user_turn_completed =>
                 {
                     completed = Some(tokio::time::Instant::now());
                 }

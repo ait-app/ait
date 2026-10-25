@@ -155,6 +155,13 @@ impl Decoder {
             sample_rate: RATE,
         }))
     }
+
+    /// Discard buffered playback on interruption while preserving the continuous Opus state.
+    pub(super) fn discard(&mut self) -> Result<(), AgentSessionError> {
+        self.drain(true)?;
+        self.samples.clear();
+        Ok(())
+    }
 }
 
 #[cfg(test)]

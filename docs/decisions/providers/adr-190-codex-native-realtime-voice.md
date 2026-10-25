@@ -17,6 +17,7 @@ Codex app-server 已提供 `thread/realtime/*`，其音频、认证、原生工�
 - 所有客户端只与 daemon 交互：麦克风通过 `voice.audio.chunk` 上传单声道 PCM16，播放通过 `voice.audio.output` 与确认窗口下发。直连与 online relay 使用相同协议；客户端不持有 OpenAI SDP、地址或认证，也不创建上游 WebRTC peer。
 - daemon 内的 Codex adapter 拥有 WebRTC peer、ICE/DTLS/SRTP、Opus 编解码与连续 24 kHz 重采样。offer 经已有 Codex app-server 的 `thread/realtime/start` 发送，`thread/realtime/sdp` 的 answer 仅在 provider 内使用。显式使用 realtime v3，保留 Codex 登录认证，不改走要求 API key 的原生 WebSocket 音频入口。
 - 只有上游媒体连接就绪后才接受语音启动；连接超时、启动被放弃、媒体错误与原生关闭均取消 peer 和对应会话。输入按 20 ms 编码，输出按约 80 ms 合并 PCM，乱序、丢包补偿与所有音频缓存均有界。
+- 转写完成不是音频播放边界：助手 RTP 可以先于用户 `transcript/done` 到达。插话只一次性清理已缓冲的旧播放，保留连续 Opus 解码状态；后续 RTP 正常解码下发，不等待转写完成、不用转写状态持续静音。转写完成也不重置解码器。
 - online relay 透明中继控制、PCM、播放确认和关闭事件；不新增上游地址配置或旁路媒体连接。relay 断开使物理 daemon 连接关闭，并沿 Session 生命周期释放上游媒体。
 - Native 启动错误直接返回，不回退到 Ait STT/TTS。Native 不依赖离线语音模型准备状态。未声明能力的 Provider 不显示实时语音入口。旧客户端请求的通用语音协议及听写保持兼容。
 - Session drop、显式停止与连接断开都会取消对应原生会话。停止确认前按原顺序保留普通消息、审批和 canonical speech 事件，仅排空旧音频、SDP 和传输关闭通知。已结束会话的记录仍进入 Timeline，但不能改变新音频会话的录音或播放状态。

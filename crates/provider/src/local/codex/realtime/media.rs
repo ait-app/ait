@@ -41,7 +41,7 @@ pub(in crate::local::codex) struct Media {
     pub(super) offer: String,
     answer: Option<oneshot::Sender<String>>,
     cancel: CancellationToken,
-    speaking: watch::Sender<bool>,
+    interruptions: watch::Sender<()>,
 }
 
 impl Drop for Media {
@@ -51,9 +51,9 @@ impl Drop for Media {
 }
 
 impl Media {
-    /// Discard pending playback while native VAD reports user speech.
-    pub(super) fn speaking(&self, speaking: bool) {
-        self.speaking.send_replace(speaking);
+    /// Discard buffered playback once on interruption, without gating subsequent reply audio.
+    pub(super) fn interrupt(&self) {
+        self.interruptions.send_replace(());
     }
 
     /// Apply the single native SDP answer, failing if startup was cancelled or already answered.
@@ -137,12 +137,12 @@ async fn prepare(endpoint: Endpoint) -> Result<Media, AgentSessionError> {
     )
     .await?;
     let (answer, answer_rx) = oneshot::channel();
-    let (speaking, speech) = watch::channel(false);
+    let (interruptions, interrupt) = watch::channel(());
     let mut media = Media {
         offer: String::new(),
         answer: Some(answer),
         cancel: endpoint.cancel.clone(),
-        speaking,
+        interruptions,
     };
     let (track, ssrc) = microphone(codec)?;
     peer.add_track(track.clone())
@@ -180,7 +180,7 @@ async fn prepare(endpoint: Endpoint) -> Result<Media, AgentSessionError> {
                 track,
                 ssrc,
                 incoming,
-                speech,
+                interruptions: interrupt,
             },
         );
         tokio::select! {
@@ -269,7 +269,7 @@ struct MediaIo {
     track: Arc<TrackLocalStaticSample>,
     ssrc: u32,
     incoming: mpsc::Receiver<Arc<dyn TrackRemote>>,
-    speech: watch::Receiver<bool>,
+    interruptions: watch::Receiver<()>,
 }
 
 async fn run(
@@ -292,7 +292,7 @@ async fn run(
         track,
         ssrc,
         incoming,
-        speech,
+        interruptions,
     } = io;
     let Endpoint {
         ready,
@@ -303,7 +303,7 @@ async fn run(
     ready.send(()).map_err(|()| AgentSessionError::Failed)?;
     tokio::select! {
         result = send_audio(input, track, ssrc) => result,
-        result = receive_audio(incoming, output, speech) => result,
+        result = receive_audio(incoming, output, interruptions) => result,
     }
 }
 
@@ -329,7 +329,7 @@ async fn send_audio(
 async fn receive_audio(
     mut tracks: mpsc::Receiver<Arc<dyn TrackRemote>>,
     output: mpsc::Sender<Event>,
-    mut speech: watch::Receiver<bool>,
+    mut interruptions: watch::Receiver<()>,
 ) -> Result<(), AgentSessionError> {
     let track = tracks.recv().await.ok_or(AgentSessionError::Failed)?;
     if track.kind().await != RtpCodecKind::Audio {
@@ -341,15 +341,13 @@ async fn receive_audio(
     loop {
         tokio::select! {
             biased;
-            changed = speech.changed() => {
+            changed = interruptions.changed() => {
                 changed.map_err(|_| AgentSessionError::Failed)?;
-                decoder = codec::Decoder::new()?;
+                decoder.discard()?;
             }
             event = track.poll() => match event {
                 Some(TrackRemoteEvent::OnRtpPacket(packet)) => {
-                    if !*speech.borrow() {
-                        decoder.push(packet.header.sequence_number, packet.payload.to_vec())?;
-                    }
+                    decoder.push(packet.header.sequence_number, packet.payload.to_vec())?;
                 }
                 Some(TrackRemoteEvent::OnError | TrackRemoteEvent::OnEnding | TrackRemoteEvent::OnEnded) | None => return Err(AgentSessionError::Failed),
                 Some(_) => {}

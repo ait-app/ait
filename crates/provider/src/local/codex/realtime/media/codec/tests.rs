@@ -1,6 +1,40 @@
 use super::*;
 
 #[test]
+fn interruption_discards_old_audio_without_resetting_the_next_reply_decoder() {
+    let mut encoder = Encoder::new().unwrap();
+    encoder
+        .push(&Audio {
+            bytes: (0..1920)
+                .flat_map(|i| (if i % 40 < 20 { 12_000_i16 } else { -12_000_i16 }).to_le_bytes())
+                .collect(),
+            sample_rate: RATE,
+        })
+        .unwrap();
+    let mut reference = Decoder::new().unwrap();
+    let mut interrupted = Decoder::new().unwrap();
+    let packets: Vec<_> = (0..4).map(|_| encoder.frame().unwrap()).collect();
+    // The second packet remains in the reorder buffer until flush/discard resolves the gap.
+    for index in [0, 2] {
+        reference
+            .push(index, packets[usize::from(index)].clone())
+            .unwrap();
+        interrupted
+            .push(index, packets[usize::from(index)].clone())
+            .unwrap();
+    }
+    reference.flush().unwrap();
+    interrupted.discard().unwrap();
+    assert!(interrupted.flush().unwrap().is_none());
+    reference.push(3, packets[3].clone()).unwrap();
+    interrupted.push(3, packets[3].clone()).unwrap();
+    assert_eq!(
+        interrupted.flush().unwrap().unwrap().bytes,
+        reference.flush().unwrap().unwrap().bytes
+    );
+}
+
+#[test]
 fn opus_round_trip_preserves_rate_duration_and_signal_after_fragmented_capture() {
     let samples: Vec<u8> = (0..1600)
         .flat_map(|i| {

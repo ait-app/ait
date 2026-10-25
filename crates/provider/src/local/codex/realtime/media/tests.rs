@@ -10,7 +10,7 @@ pub(in crate::local::codex) fn fixture(
             offer: "fixture-offer".to_owned(),
             answer: Some(answer),
             cancel: endpoint.cancel.clone(),
-            speaking: watch::channel(false).0,
+            interruptions: watch::channel(()).0,
         };
         tokio::spawn(async move {
             let Endpoint {
@@ -141,7 +141,7 @@ async fn answer_peer(
     mpsc::Receiver<Arc<dyn TrackRemote>>,
 ) {
     let (gathered, mut gathering) = mpsc::channel(1);
-    let (connected, _connection) = mpsc::channel(1);
+    let (connected, mut connection) = mpsc::channel(1);
     let (tracks, incoming) = mpsc::channel(1);
     let codec = RTCRtpCodec {
         mime_type: "audio/opus".to_owned(),
@@ -205,6 +205,7 @@ async fn answer_peer(
     media
         .answer(peer.local_description().await.unwrap().sdp)
         .unwrap();
+    connection.recv().await.unwrap();
     (Arc::new(peer), track, incoming)
 }
 
@@ -230,25 +231,47 @@ async fn speak(track: &TrackLocalStaticSample, encoder: &mut codec::Encoder) {
 mod native;
 
 #[tokio::test]
-async fn native_interruption_discards_media_until_the_user_finishes_speaking() {
-    tokio::time::timeout(Duration::from_secs(15), async {
+async fn reply_head_survives_a_late_user_transcript_completion() {
+    tokio::time::timeout(Duration::from_secs(10), async {
         let (mut session, endpoint) = model::realtime::channel(&CancellationToken::new());
         let mut media = open(endpoint).await.unwrap();
         let (peer, track, _incoming) = answer_peer(&mut media).await;
         (&mut session.ready).await.unwrap();
         let mut encoder = codec::Encoder::new().unwrap();
-        media.speaking(true);
+        let samples: Vec<u8> = (0..4800)
+            .flat_map(|i| (if i % 40 < 20 { 12_000_i16 } else { -12_000_i16 }).to_le_bytes())
+            .collect();
+        encoder
+            .push(&model::realtime::Audio {
+                bytes: samples,
+                sample_rate: 24_000,
+            })
+            .unwrap();
+        // Replays the real trace: RTP for the reply precedes user transcript/done.
+        media.interrupt();
         speak(&track, &mut encoder).await;
-        assert!(
-            tokio::time::timeout(Duration::from_millis(150), session.output.recv())
-                .await
-                .is_err()
-        );
-        media.speaking(false);
-        speak(&track, &mut encoder).await;
-        assert!(matches!(session.output.recv().await, Some(Event::Audio(_))));
+        let mut bytes = Vec::new();
+        let result = tokio::time::timeout(Duration::from_secs(2), async {
+            while bytes.len() < 9600 {
+                let Some(Event::Audio(audio)) = session.output.recv().await else {
+                    panic!("expected the reply audio before transcript completion")
+                };
+                bytes.extend(audio.bytes);
+            }
+        })
+        .await;
         drop(session);
         peer.close().await.unwrap();
+        assert!(
+            result.is_ok(),
+            "reply head incomplete before transcript completion: {} of 9600 bytes",
+            bytes.len()
+        );
+        assert_eq!(bytes.len(), 9600);
+        assert!(audible(&model::realtime::Audio {
+            bytes,
+            sample_rate: 24_000
+        }));
     })
     .await
     .unwrap();

@@ -152,8 +152,8 @@ impl CodexSession {
             // Audio arrives through the provider-owned peer, never through outputAudio/delta.
             _ => return Ok(()),
         };
-        if matches!(event, Event::Interrupted | Event::Transcript(_)) {
-            realtime.media.speaking(realtime.user_speaking);
+        if matches!(event, Event::Interrupted) {
+            realtime.media.interrupt();
         }
         let failed = matches!(event, Event::Failed);
         if realtime.output.try_send(event).is_err() || failed {
