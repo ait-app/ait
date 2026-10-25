@@ -4024,6 +4024,74 @@ describe("processAgentStreamEvent", () => {
 });
 
 describe("processAgentStreamEvents", () => {
+  it.each(["cold", "painted"] as const)(
+    "coalesces reasoning across flushes while the %s timeline awaits its baseline",
+    (state) => {
+      const currentTail = state === "painted" ? [makeAssistantItem("painted replica")] : [];
+      let currentHead: StreamItem[] = [];
+      let thoughtId: string | undefined;
+
+      for (let batch = 0; batch < 2; batch += 1) {
+        const result = processAgentStreamEvents({
+          events: Array.from({ length: 64 }, (_, index) =>
+            makeStreamReducerEvent(
+              makeTimelineEvent("think ", "reasoning"),
+              batch * 64 + index + 1,
+            ),
+          ),
+          currentTail,
+          currentHead,
+          currentCursor: undefined,
+          hasAuthoritativeBaseline: false,
+        });
+
+        expect(result.tail).toBe(currentTail);
+        expect(result.changedTail).toBe(false);
+        expect(result.head).toHaveLength(1);
+        expect(result.head[0]).toMatchObject({
+          kind: "thought",
+          text: "think ".repeat((batch + 1) * 64),
+          status: "loading",
+          timelineCursor: { epoch: "epoch-1", seq: (batch + 1) * 64 },
+        });
+        if (thoughtId) expect(result.head[0]?.id).toBe(thoughtId);
+        thoughtId = result.head[0]?.id;
+        expect(result.cursorChanged).toBe(false);
+        expect(result.cursor).toBeNull();
+        expect(result.sideEffects).toEqual([]);
+        currentHead = result.head;
+      }
+    },
+  );
+
+  it("keeps tool and assistant boundaries between reasoning runs before the baseline", () => {
+    const result = processAgentStreamEvents({
+      events: [
+        makeStreamReducerEvent(makeTimelineEvent("First ", "reasoning"), 1),
+        makeStreamReducerEvent(makeTimelineEvent("thought", "reasoning"), 2),
+        makeStreamReducerEvent(makeToolCallTimelineEvent("tool-1"), 3),
+        makeStreamReducerEvent(makeTimelineEvent("Second ", "reasoning"), 4),
+        makeStreamReducerEvent(makeTimelineEvent("thought", "reasoning"), 5),
+        makeStreamReducerEvent(makeAssistantTimelineEvent("Answer", "reply-1"), 6),
+        makeStreamReducerEvent(makeTimelineEvent("Last thought", "reasoning"), 7),
+        makeStreamReducerEvent({ type: "turn_completed", provider: "claude" }, 8),
+      ],
+      currentTail: [],
+      currentHead: [],
+      currentCursor: undefined,
+      hasAuthoritativeBaseline: false,
+    });
+
+    expect(result.tail).toEqual([]);
+    expect(result.head).toMatchObject([
+      { kind: "thought", text: "First thought", status: "ready" },
+      { kind: "tool_call" },
+      { kind: "thought", text: "Second thought", status: "ready" },
+      { kind: "assistant_message", text: "Answer", messageId: "reply-1" },
+      { kind: "thought", text: "Last thought", status: "ready" },
+    ]);
+  });
+
   it("coalesces contiguous assistant stream events into one head update and final cursor", () => {
     const result = processAgentStreamEvents({
       events: [

@@ -27,7 +27,10 @@ function streamHarness() {
   };
 }
 
-function assistant(text: string, messageId = "message-1"): AgentStreamEventPayload {
+function assistant(
+  text: string,
+  messageId = "message-1",
+): Extract<AgentStreamEventPayload, { type: "timeline" }> {
   return {
     type: "timeline",
     provider: "claude",
@@ -141,9 +144,13 @@ describe.each(["overview", "detailed"] as const)(
         thought("fifth", "Fifth"),
       ];
       const projected = createStreamPresentation()({ ...options, tail: items, head: [] });
-      expect(rows(projected).filter((item) => item.kind === "thought")).toEqual(
-        items.filter((item) => item.kind === "thought"),
-      );
+      expect(rows(projected).filter((item) => item.kind === "thought")).toMatchObject([
+        { id: "first", text: "First" },
+        { id: "second", text: "Second" },
+        { id: "thinking:turn:turn-1", text: "Third" },
+        { id: "thinking:turn:turn-2", text: "Fourth" },
+        { id: "fifth", text: "Fifth" },
+      ]);
     });
 
     it.each([0, 1, 2, 3, 4])(
@@ -166,11 +173,11 @@ describe.each(["overview", "detailed"] as const)(
 
         expect(rows(projected)).toEqual([
           legacy,
-          { ...first, text: "Turn A starts\n\nTurn A ends" },
-          last,
+          { ...first, id: "thinking:turn:turn-a", text: "Turn A starts\n\nTurn A ends" },
+          { ...last, id: "thinking:turn:turn-b" },
         ]);
         expect(rows(projected)[0]).toBe(legacy);
-        expect(rows(projected)[2]).toBe(last);
+        expect(rows(projected)[2]).toMatchObject({ ...last, id: "thinking:turn:turn-b" });
         const committed = present({ ...options, tail: items, head: [], isTurnActive: false });
         expect(rows(committed)).toEqual(rows(projected));
       },
@@ -190,7 +197,11 @@ describe.each(["overview", "detailed"] as const)(
           head: items.slice(historyLength),
         });
 
-        expect(rows(projected)).toEqual(items);
+        expect(rows(projected)).toEqual([
+          { ...items[0], id: "thinking:turn:turn-a" },
+          items[1],
+          { ...items[2], id: "thinking:turn:turn-b" },
+        ]);
       },
     );
 
@@ -210,6 +221,63 @@ describe.each(["overview", "detailed"] as const)(
 );
 
 describe("native stream presentation", () => {
+  it.each(["overview", "detailed"] as const)(
+    "shows one stable Thinking row per turn across tools, streaming and reload in %s mode",
+    (level) => {
+      const present = createStreamPresentation();
+      let state: { tail: StreamItem[]; head: StreamItem[] } = { tail: [], head: [] };
+      const send = (event: AgentStreamEventPayload) => {
+        state = applyStreamEvent({ ...state, event, timestamp: new Date(1000) });
+        return rows(present({ ...presentationOptions, level, ...state }));
+      };
+      const reasoning = (text: string, turnId = "turn-1"): AgentStreamEventPayload => ({
+        type: "timeline",
+        provider: "claude",
+        turnId,
+        item: { type: "reasoning", text },
+      });
+      const first = send(reasoning("Before tool"));
+      const firstThought = first.find((item) => item.kind === "thought")!;
+      send({
+        type: "timeline",
+        provider: "claude",
+        turnId: "turn-1",
+        item: {
+          type: "tool_call",
+          callId: "tool-1",
+          name: "Read",
+          status: "completed",
+          detail: { type: "read", filePath: "file.rs" },
+          error: null,
+        },
+      });
+      const growing = send(reasoning("After tool"));
+      expect(growing.filter((item) => item.kind === "thought")).toMatchObject([
+        { id: firstThought.id, text: "Before tool\n\nAfter tool", status: "loading" },
+      ]);
+      expect(growing.some((item) => item.kind === "tool_call")).toBe(true);
+      send({ ...assistant("Final answer"), turnId: "turn-1" });
+      const completed = send({ type: "turn_completed", provider: "claude" });
+      const restored = rows(
+        createStreamPresentation()({
+          ...presentationOptions,
+          level,
+          ...state,
+          isTurnActive: false,
+        }),
+      );
+      expect(restored).toEqual(completed);
+      expect(restored.filter((item) => item.kind === "thought")).toMatchObject([
+        { id: firstThought.id, text: "Before tool\n\nAfter tool", status: "ready" },
+      ]);
+      expect([...state.tail, ...state.head].filter((item) => item.kind === "thought")).toHaveLength(
+        2,
+      );
+      const next = send(reasoning("Next turn", "turn-2"));
+      expect(next.filter((item) => item.kind === "thought")).toHaveLength(2);
+    },
+  );
+
   it("keeps completed native blocks stable while the last block grows and finishes", () => {
     const harness = streamHarness();
     const first = harness.send(assistant("Intro\n\n![Image](image.png)"));

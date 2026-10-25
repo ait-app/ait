@@ -1652,19 +1652,17 @@ export function processAgentStreamEvent(
         unmatchedUserMessageInsert: "head",
       });
     } else {
-      const overlay = applyStreamEvent({
-        tail: currentHead,
-        head: [],
-        event,
-        timestamp,
+      // The overlay is one ordered lane until history supplies its baseline.
+      // Splitting it into tail/head for each delta would start a new thought row.
+      const overlay = reduceStreamUpdate(currentHead, event, timestamp, {
         source: "live",
         timelineCursor,
       });
       streamResult = {
         tail: currentTail,
-        head: [...overlay.tail, ...overlay.head],
+        head: overlay,
         changedTail: false,
-        changedHead: overlay.changedTail || overlay.changedHead,
+        changedHead: overlay !== currentHead,
       };
     }
   } else {
