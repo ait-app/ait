@@ -219,6 +219,12 @@ export const ja: TranslationResources = {
       select: "思考オプションを選択",
       selectWithValue: "思考オプションを選択（{{value}}）",
     },
+    speed: {
+      title: "速度",
+      normal: "標準",
+      fast: "高速",
+      withValue: "速度：{{value}}",
+    },
     model: {
       unknown: "不明なモデル",
     },
@@ -1713,6 +1719,17 @@ export const ja: TranslationResources = {
     nativeReadFailed: "ネイティブアカウントの使用量を読み取れません",
     nativePlanUnavailable:
       "このログイン方法ではプランの使用量を取得できません。プロバイダーの CLI でログインしてください。",
+    nativeText: {
+      claudePlanSignIn: "プラン使用量を確認するには claude /login でログインしてください。",
+      claudePlanUnavailable:
+        "このログイン方法ではプラン使用量を取得できません。claude /login でログインしてください。",
+      deepseekTotalBalance: "DeepSeek 合計残高",
+      deepseekRechargeBalance: "DeepSeek チャージ残高",
+      deepseekBonusBalance: "DeepSeek ボーナス残高",
+      deepseekApiCalls: "DeepSeek API 呼び出し",
+      balanceAvailable: "利用可能な残高あり",
+      insufficientBalance: "残高不足",
+    },
     error: "エラー",
     unavailable: "利用不可",
     updated: "{{time}}に更新",

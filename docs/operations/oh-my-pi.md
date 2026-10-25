@@ -1,12 +1,12 @@
 # Oh My Pi
 
-Oh My Pi 是独立 Provider `omp`，由独立的 Rust 适配器运行 `omp --mode rpc-ui`。
+Oh My Pi 是独立 Provider `omp`，固定通过 Ait 的 Rust ACP 桥接层运行官方 `omp --mode rpc-ui`。
 它的安装、配置、权限、工具和会话均由 OMP 管理，不依赖 Ait 的 Pi 适配器。
 
 ## 安装与配置
 
 按 [OMP 官方说明](https://github.com/can1357/oh-my-pi)安装并登录，
-在运行 daemon 的主机确认 `omp --version` 可用。当前适配对照 `18.12.5` RPC v2。
+在运行 daemon 的主机确认 `omp --version` 可用。兼容基线为官方 `18.12.6` RPC v2，无需定制构建或源码补丁。
 在 Ait 中选择 Oh My Pi；非默认路径在启动 daemon 前设置：
 
 ```sh
@@ -50,3 +50,27 @@ ready 后协商 v2，校验并重组 stdout 分块，支持大于 1 MiB 的原�
 
 决策见 [ADR-180](../decisions/providers/adr-180-omp-native-rpc-provider.md)，
 验证结果见 [报告](../reports/providers/omp-native-provider.md)。
+
+## ACP 桥接与插件
+
+ACP 是固定入口，没有 Protocol 控件；恢复同样经过 Ait 的桥接层。
+旧 `transport: rpc/acp` 选择仅做兼容，实际句柄标明 `transport: acp`、`nativeTransport: rpc`。
+桥接层负责 ACP→官方 RPC 转换，对话、控制、子 Agent 和后台任务由同一个原生实例持有。
+无需定制 OMP、源码补丁或插件配合；这与直连 OMP 自带 ACP 不同。
+
+OMP 中已安装的插件继续按官方规则加载。命令、工具、问答、自定义消息与原生额外帧
+采用通用接口处理，不按插件名称、路径或命令写分支。具体能力和 TUI 限制见
+[架构与兼容表](../architecture/omp-acp-bridge.md)。
+
+外部 ACP 客户端可使用同一桥接引擎：
+
+```sh
+daemon omp-acp --omp-bin /absolute/path/to/omp
+```
+
+不传 `--omp-bin` 时使用 `AIT_SERVER_OMP_BIN` 或 PATH 中的 `omp`。
+该子命令仅服务 stdin/stdout JSONL，不启动 HTTP daemon、不要求 Host 登录或创建 API token。
+Ait 内部已使用同一引擎，不需要另外启动这个进程。
+
+决策见 [ADR-190](../decisions/providers/adr-190-omp-acp-settlement.md)，
+当前官方 CLI 与插件验证见[报告](../reports/providers/omp-acp-settlement-2026-10-25.md)。

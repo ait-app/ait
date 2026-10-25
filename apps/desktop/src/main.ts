@@ -1,3 +1,4 @@
+import { displayAppVersion } from "./app-version.js";
 import { protectConsoleStreams } from "./diagnostics/console-streams.js";
 protectConsoleStreams();
 
@@ -177,7 +178,7 @@ configureDesktopProfile(app, {
 });
 
 log.info("[desktop] app startup", {
-  version: app.getVersion(),
+  version: displayAppVersion(),
   platform: process.platform,
   arch: process.arch,
   isPackaged: app.isPackaged,
@@ -1077,7 +1078,7 @@ const quitLifecycle = createQuitLifecycle({
   installAppUpdateOnQuit: async (signal) => {
     const settings = await getDesktopSettingsStore().get();
     return installAppUpdateOnQuit({
-      currentVersion: app.getVersion(),
+      currentVersion: displayAppVersion(),
       releaseChannel: settings.releaseChannel,
       signal,
     });
@@ -1093,7 +1094,7 @@ const quitLifecycle = createQuitLifecycle({
 
 // electron-updater forwards this event through Electron's built-in autoUpdater.
 electronAutoUpdater.on("before-quit-for-update", () => {
-  log.info("[auto-updater] before-quit-for-update", { currentVersion: app.getVersion() });
+  log.info("[auto-updater] before-quit-for-update", { currentVersion: displayAppVersion() });
   quitLifecycle.handleBeforeQuitForUpdate();
 });
 app.on("before-quit", quitLifecycle.handleBeforeQuit);

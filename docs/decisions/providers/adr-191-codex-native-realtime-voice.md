@@ -1,4 +1,4 @@
-# ADR-190：Codex Provider 拥有原生实时语音
+# ADR-191：Codex Provider 拥有原生实时语音
 
 - 状态：Accepted
 - 日期：2026-10-25

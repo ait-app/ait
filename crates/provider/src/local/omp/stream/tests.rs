@@ -1,6 +1,45 @@
 use super::*;
 
 #[test]
+fn projection_errors_describe_the_cause_without_native_payloads() {
+    let mut stream = Stream::new("session".to_owned(), ImageStore::default());
+    for (message, expected) in [
+        (
+            json!({"role":"assistant","content":[]}),
+            "message.timestamp",
+        ),
+        (
+            json!({"role":"assistant","timestamp":1000,"content":[{"type":"toolCall","id":""}]}),
+            "toolCall.id",
+        ),
+        (
+            json!({"role":"assistant","timestamp":1000,"content":[{"type":"text","text":null}]}),
+            "message.content.text/thinking",
+        ),
+        (
+            json!({"role":"toolResult","timestamp":1000,"toolCallId":"unknown","content":"api_key=fixture-secret"}),
+            "without a matching tool call",
+        ),
+        (
+            json!({"role":"assistant","timestamp":1000,"content":[],"usage":{"input":1,"output":1,"cost":{"total":-1}}}),
+            "invalid token usage or cost",
+        ),
+    ] {
+        let error = stream.message(&message).unwrap_err().to_string();
+        assert!(error.contains(expected), "{error}");
+        assert!(!error.contains("fixture-secret"));
+    }
+    assert!(matches!(
+        stream.text(&json!([{"type":"image","data":"invalid"}])),
+        Err(Error::Image)
+    ));
+    stream.tools = (0..4096)
+        .map(|index| (index.to_string(), json!({})))
+        .collect();
+    assert!(matches!(stream.message(&json!({"role":"assistant","timestamp":1000,"content":[{"type":"toolCall","id":"overflow"}]})), Err(Error::ToolLimit)));
+}
+
+#[test]
 fn streaming_and_replay_use_the_same_keys_and_preserve_equal_timestamps() {
     let mut stream = Stream::new("session".to_owned(), ImageStore::default());
     let message = json!({"role":"assistant","timestamp":1000,"content":[{"type":"thinking","thinking":"Plan"},{"type":"text","text":"Hello"}],"stopReason":"stop"});
@@ -57,4 +96,90 @@ fn tool_failures_usage_images_and_invalid_native_messages_are_bounded() {
             .unwrap()
             .contains("Image")
     );
+}
+
+#[test]
+fn persisted_blob_images_match_inline_rendering_and_reject_corrupt_references() {
+    let root = tempfile::tempdir().unwrap();
+    let blobs = root.path().join("blobs");
+    std::fs::create_dir(&blobs).unwrap();
+    let bytes = b"fixture-image";
+    let hash = format!("{:x}", Sha256::digest(bytes));
+    std::fs::write(blobs.join(&hash), bytes).unwrap();
+    let stream = Stream::new(
+        "session".to_owned(),
+        ImageStore::new(root.path().join("images")),
+    )
+    .with_blobs(blobs.clone());
+    let inline = json!({"type":"image","mimeType":"image/png","data":base64::engine::general_purpose::STANDARD.encode(bytes)});
+    let blob = json!({"type":"image","mimeType":"image/png","data":format!("blob:sha256:{hash}")});
+    assert_eq!(stream.image(&blob).unwrap(), stream.image(&inline).unwrap());
+    std::fs::write(blobs.join(hash), b"tampered").unwrap();
+    assert!(matches!(stream.image(&blob), Err(Error::Image)));
+    assert!(matches!(
+        stream.image(&json!({"data":"blob:sha256:../outside"})),
+        Err(Error::Image)
+    ));
+}
+
+#[test]
+fn arbitrary_extension_messages_share_projection_without_plugin_name_rules() {
+    let mut stream = Stream::new("plugins".to_owned(), ImageStore::default());
+    for (index, custom_type) in ["example.extension.alpha", "another-vendor-output"]
+        .iter()
+        .enumerate()
+    {
+        let message = json!({"role":"custom","customType":custom_type,"display":true,
+            "content":[{"type":"text","text":format!("output {index}")}],"timestamp":1000+index});
+        stream
+            .consume(&json!({"type":"message_start","message":message}))
+            .unwrap();
+        stream
+            .consume(&json!({"type":"message_end","message":message}))
+            .unwrap();
+    }
+    let events = stream.events.drain(..).collect::<Vec<_>>();
+    assert_eq!(events.len(), 2);
+    for (index, event) in events.iter().enumerate() {
+        let AgentTurnEvent::Timeline(entry) = event else {
+            panic!("expected custom timeline")
+        };
+        assert_eq!(entry.item["text"], format!("output {index}"));
+        assert_eq!(entry.item["metadata"]["nativeRole"], "custom");
+    }
+    stream.message(&json!({"role":"custom","display":false,"content":"hidden private context","timestamp":2000})).unwrap();
+    assert!(stream.events.is_empty());
+}
+
+#[test]
+fn native_command_output_and_plugin_notifications_are_visible_without_history_messages() {
+    let mut stream = Stream::new("session".to_owned(), ImageStore::default());
+    stream.begin("turn".to_owned());
+    for frame in [
+        json!({"type":"command_output","text":"Native command result"}),
+        json!({"type":"extension_ui_request","method":"notify","message":"Plugin notification","notifyType":"warning"}),
+    ] {
+        stream.consume(&frame).unwrap();
+        let AgentTurnEvent::Timeline(entry) = stream.events.pop_back().unwrap() else {
+            panic!("expected visible native output");
+        };
+        assert_eq!(entry.turn_id.as_deref(), Some("turn"));
+        assert_eq!(entry.item["metadata"]["transient"], true);
+        assert_eq!(entry.item["metadata"]["nativeType"], frame["type"]);
+        assert_eq!(
+            entry.item["text"],
+            frame.get("text").unwrap_or(&frame["message"]).clone()
+        );
+    }
+    assert_eq!(stream.last_text.as_deref(), Some("Plugin notification"));
+    assert!(
+        stream
+            .consume(&json!({"type":"command_output","text":null}))
+            .is_err()
+    );
+    let count = stream.events.len();
+    stream
+        .consume(&json!({"type":"command_output","text":""}))
+        .unwrap();
+    assert_eq!(stream.events.len(), count);
 }

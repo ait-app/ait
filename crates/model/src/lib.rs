@@ -1,5 +1,8 @@
 //! Shared collaboration ports, server transport definitions and runtime resources.
 
+/// Build identity used by the daemon and its public protocols.
+pub const BUILD_VERSION: &str = env!("AIT_BUILD_VERSION");
+
 pub mod bot;
 pub mod changes;
 mod context;

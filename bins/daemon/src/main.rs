@@ -44,11 +44,25 @@ async fn main() -> ExitCode {
 }
 
 async fn run(mut cli: config::Cli) -> anyhow::Result<()> {
+    if let Some(config::Command::OmpAcp { omp_bin }) = cli
+        .command
+        .take_if(|command| matches!(command, config::Command::OmpAcp { .. }))
+    {
+        let program = omp_bin
+            .or_else(|| std::env::var_os("AIT_SERVER_OMP_BIN").map(Into::into))
+            .unwrap_or_else(|| "omp".into());
+        return provider::omp_acp::serve(program)
+            .await
+            .context("serve OMP ACP bridge");
+    }
     let directory = config::data_directory(&cli, |name| std::env::var_os(name))?;
     match cli.command.take() {
         Some(config::Command::Login(options)) => return device::login(&directory, options).await,
         Some(config::Command::Logout) => return device::logout(&directory).await,
         Some(config::Command::Status { json }) => return device::status(&directory, json),
+        Some(config::Command::OmpAcp { .. }) => {
+            unreachable!("OMP ACP handled before daemon configuration")
+        }
         command @ (Some(config::Command::Run { .. }) | None) => cli.command = command,
     }
 

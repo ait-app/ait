@@ -15,7 +15,7 @@ max_glibcxx=3.4.25
 docker run --rm \
   -v "$PWD:/src" -w /src \
   -e PACKAGE="$package" -e BINARY="$binary" -e TARGET="$target" -e RUSTUP_TOOLCHAIN="$toolchain" \
-  -e CARGO_TERM_COLOR \
+  -e CARGO_TERM_COLOR -e AIT_BUILD_VERSION -e RELEASE_TAG \
   "$image" bash -euo pipefail -c '
     curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs |
       sh -s -- -y --no-modify-path --profile minimal --default-toolchain "$RUSTUP_TOOLCHAIN" --target "$TARGET"

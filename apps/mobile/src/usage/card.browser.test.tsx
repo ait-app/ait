@@ -82,13 +82,27 @@ describe("native usage card in Chromium", () => {
           { id: "recharge-cny", label: "DeepSeek recharge balance", remaining: 9.33, unit: "cny" },
           { id: "bonus-cny", label: "DeepSeek bonus balance", remaining: 2.67, unit: "cny" },
         ],
+        details: [{ id: "api-available", label: "DeepSeek API calls", value: "Balance available" }],
       },
     });
     expect(node.textContent).toContain("剩余 ¥12.01");
     expect(node.textContent).toContain("剩余 ¥9.33");
     expect(node.textContent).toContain("剩余 ¥2.67");
+    expect(node.textContent).toContain("DeepSeek 总余额");
+    expect(node.textContent).toContain("DeepSeek 充值余额");
+    expect(node.textContent).toContain("DeepSeek 赠送余额");
+    expect(node.textContent).toContain("DeepSeek API 调用");
+    expect(node.textContent).toContain("余额充足");
     expect(node.textContent).not.toContain("%");
     expect(node.querySelector('[data-testid="usage-login-error"]')).toBeNull();
+    await act(async () => {
+      await i18n.changeLanguage("en");
+    });
+    expect(node.textContent).toContain("DeepSeek total balance");
+    expect(node.textContent).toContain("DeepSeek recharge balance");
+    expect(node.textContent).toContain("DeepSeek bonus balance");
+    expect(node.textContent).toContain("DeepSeek API calls");
+    expect(node.textContent).toContain("Balance available");
   });
   it("updates displayed percentages and login messages when the language changes", async () => {
     const node = render(entry, { ...display, displayAs: "remaining" });

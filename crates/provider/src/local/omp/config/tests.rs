@@ -32,7 +32,7 @@ fn validates_opaque_model_routes_and_rejects_unsupported_controls() {
     );
     assert!(
         validate(&StoredAgentConfig {
-            thinking_option_id: Some("invalid".to_owned()),
+            thinking_option_id: Some("invalid\nlevel".to_owned()),
             ..StoredAgentConfig::default()
         })
         .is_err()
@@ -122,4 +122,20 @@ fn tier_toggles_require_each_native_capability_and_preserve_selected_values() {
         );
         assert_eq!(toggles[2]["value"], true);
     }
+}
+
+#[test]
+fn native_model_thinking_metadata_is_not_restricted_to_compiled_provider_or_plugin_names() {
+    assert!(
+        validate(&StoredAgentConfig {
+            thinking_option_id: Some("vendor-defined-effort".to_owned()),
+            ..StoredAgentConfig::default()
+        })
+        .is_ok()
+    );
+    let options = model_thinking_options(
+        &json!({"reasoning":true,"thinking":{"efforts":["vendor-defined-effort","max"]}}),
+    )
+    .unwrap();
+    assert_eq!(options[1]["id"], "vendor-defined-effort");
 }

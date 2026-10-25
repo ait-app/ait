@@ -50,7 +50,7 @@ async fn login_with_center(data: &Path, options: Login, center: HttpCenter) -> a
         server_id: instance.server_id,
         display_name: name,
         platform: PLATFORM.to_owned(),
-        app_version: env!("CARGO_PKG_VERSION").to_owned(),
+        app_version: model::BUILD_VERSION.to_owned(),
     };
     let mut state = match previous {
         Some(mut state) => {

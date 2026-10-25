@@ -42,6 +42,7 @@ const FEATURE_LABEL_KEYS = new Map([
   ["autoRetry", "agentControls.features.autoRetry"],
   ["fastMode", "agentControls.features.fastMode"],
   ["slowMode", "agentControls.features.slowMode"],
+  ["service_tier", "agentControls.speed.title"],
 ]);
 
 function sentenceCase(value: string): string {

@@ -217,6 +217,12 @@ export const ko: TranslationResources = {
       select: "사고 옵션 선택",
       selectWithValue: "사고 옵션 선택 ({{value}})",
     },
+    speed: {
+      title: "속도",
+      normal: "일반",
+      fast: "빠름",
+      withValue: "속도: {{value}}",
+    },
     model: {
       unknown: "알 수 없는 모델",
     },
@@ -1706,6 +1712,17 @@ export const ko: TranslationResources = {
     nativeReadFailed: "네이티브 계정 사용량을 읽을 수 없습니다",
     nativePlanUnavailable:
       "이 로그인 방식은 요금제 사용량을 제공하지 않습니다. 제공업체 CLI로 로그인하세요.",
+    nativeText: {
+      claudePlanSignIn: "요금제 사용량을 확인하려면 claude /login으로 로그인하세요.",
+      claudePlanUnavailable:
+        "이 로그인 방식은 요금제 사용량을 제공하지 않습니다. claude /login으로 로그인하세요.",
+      deepseekTotalBalance: "DeepSeek 총 잔액",
+      deepseekRechargeBalance: "DeepSeek 충전 잔액",
+      deepseekBonusBalance: "DeepSeek 보너스 잔액",
+      deepseekApiCalls: "DeepSeek API 호출",
+      balanceAvailable: "잔액 있음",
+      insufficientBalance: "잔액 부족",
+    },
     error: "오류",
     unavailable: "사용 불가",
     updated: "{{time}} 업데이트",

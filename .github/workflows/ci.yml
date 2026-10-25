@@ -297,6 +297,11 @@ jobs:
           if [ -f /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
+      - name: Set nightly runtime version
+        run: |
+          version=$(node --input-type=module -e 'import { nightlyDisplayVersion } from "./scripts/nightly-build.mjs"; console.log(nightlyDisplayVersion(process.env.NIGHTLY_BUILD_LABEL))')
+          echo "AIT_BUILD_VERSION=$version" >> "$GITHUB_ENV"
+          echo "EXPO_PUBLIC_AIT_BUILD_VERSION=$version" >> "$GITHUB_ENV"
       - name: Build daemon
         if: matrix.platform == 'mac'
         run: cargo build --locked --release -p daemon --bin daemon --target "${{ matrix.rust_target }}"
@@ -423,11 +428,12 @@ jobs:
       - name: Verify assets and record source
         run: |
           version=$(node -p 'require("./package.json").version')
-          node <<'NODE'
-          const { writeFileSync } = require('node:fs');
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          import { nightlyPackagedVersion } from './scripts/nightly-build.mjs';
           const info = {
             version: process.env.NIGHTLY_BUILD_LABEL,
-            packagedVersion: require('./package.json').version,
+            packagedVersion: nightlyPackagedVersion(process.env.NIGHTLY_BUILD_LABEL),
             releaseTag: 'nightly',
             sourceCommit: process.env.GITHUB_SHA,
             workflowCommit: process.env.GITHUB_SHA,

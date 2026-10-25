@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
@@ -11,7 +11,17 @@ use super::{
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec, AgentTurnEvent,
 };
+use crate::ports::diagnostics::{Category, Diagnostic};
 use crate::protocol::prompt::AgentPrompt;
+
+#[derive(Debug, Default)]
+struct NativeBridge {
+    enabled: bool,
+    controls: BTreeSet<String>,
+    events: std::collections::VecDeque<Value>,
+    callbacks: BTreeMap<String, String>,
+    buffered_bytes: usize,
+}
 
 #[derive(Debug)]
 pub(super) struct Session {
@@ -31,6 +41,7 @@ pub(super) struct Session {
     awaiting_settlement: bool,
     submitted: bool,
     created_at: String,
+    native_bridge: NativeBridge,
 }
 
 /// Start a disposable native capability reader for `model` in `cwd`.
@@ -134,6 +145,7 @@ pub(super) async fn open(
         (Some(journal), Some(handle)) if persisted => journal.project(client, handle)?.1,
         _ => Stream::new(id.to_owned(), client.images.clone()),
     };
+    stream = stream.with_blobs(history::root(client)?.with_file_name("blobs"));
     stream.set_context(&state);
     Ok(Session {
         client: client.clone(),
@@ -146,26 +158,64 @@ pub(super) async fn open(
         dialogs: Dialogs::default(),
         active: None,
         closed: false,
-        children: super::subagents::Children::default(),
+        children: super::subagents::Children::default()
+            .with_blobs(history::root(client)?.with_file_name("blobs")),
         prompt_id: None,
         awaiting_settlement: false,
         submitted: false,
         created_at,
+        native_bridge: NativeBridge::default(),
     })
 }
 
+fn validate_native_control(kind: &str) -> Result<(), AgentSessionError> {
+    if matches!(
+        kind,
+        "prompt"
+            | "steer"
+            | "follow_up"
+            | "abort"
+            | "abort_and_prompt"
+            | "abort_and_restore_queue"
+            | "new_session"
+            | "switch_session"
+            | "open_session"
+            | "branch"
+            | "fork"
+            | "handoff"
+            | "negotiate_protocol"
+    ) {
+        return Err(AgentSessionError::Rejected);
+    }
+    Ok(())
+}
+
 impl Session {
-    async fn start(
+    /// Apply native settings while idle, retaining the persisted session when reopening.
+    /// Invalid settings or an active turn reject before any native mutation.
+    pub(super) async fn configure(
         &mut self,
-        prompt: &AgentPrompt,
         config: &StoredAgentConfig,
-    ) -> Result<String, AgentSessionError> {
-        prompt.validate()?;
+    ) -> Result<(), AgentSessionError> {
         config::validate(config)?;
-        if self.closed || self.active.is_some() || prompt.output_schema.is_some() {
+        if self.closed || self.active.is_some() {
             return Err(AgentSessionError::Rejected);
         }
-        if self.config != *config {
+        if self.config == *config {
+            return Ok(());
+        }
+        if self.config.mode_id == config.mode_id
+            && self.config.system_prompt == config.system_prompt
+        {
+            self.state = config::apply(&mut self.transport, config).await?;
+            let runtime = config::runtime(&self.state)?;
+            self.service_tiers = self
+                .client
+                .service_tiers(&self.cwd, runtime.model.as_deref())
+                .await?;
+            self.stream.set_context(&self.state);
+            self.config.clone_from(config);
+        } else {
             self.transport.close().await?;
             let path = config::text(&self.state, "sessionFile")?.to_owned();
             let spec = AgentSessionSpec {
@@ -183,7 +233,8 @@ impl Session {
                 self.stream = Stream::new(
                     config::text(&state, "sessionId")?.to_owned(),
                     self.client.images.clone(),
-                );
+                )
+                .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
             }
             self.transport = transport;
             self.state = state;
@@ -191,6 +242,88 @@ impl Session {
             self.stream.set_context(&self.state);
             self.config.clone_from(config);
         }
+        Ok(())
+    }
+
+    /// Forward a native control command without permitting a second conversation owner.
+    /// Lifecycle commands must use the ACP methods that maintain turn correlation.
+    pub(super) async fn native_request(
+        &mut self,
+        kind: &str,
+        fields: Value,
+    ) -> Result<Value, AgentSessionError> {
+        validate_native_control(kind)?;
+        self.transport.request(kind, fields).await
+    }
+
+    /// Submit a native extension control without blocking callback delivery or polling.
+    /// Correlation and pending count are bounded; lifecycle commands remain owned by ACP.
+    pub(super) async fn begin_native_control(
+        &mut self,
+        kind: &str,
+        fields: Value,
+    ) -> Result<String, AgentSessionError> {
+        validate_native_control(kind)?;
+        if !self.native_bridge.enabled || self.native_bridge.controls.len() >= 128 {
+            return Err(AgentSessionError::Rejected);
+        }
+        let id = self.transport.begin(kind, fields).await?;
+        self.native_bridge.controls.insert(id.clone());
+        Ok(id)
+    }
+
+    /// Enable a negotiated native event channel without changing OMP or its plugin loading.
+    pub(super) fn forward_native_events(&mut self, enabled: bool) {
+        self.native_bridge.enabled = enabled;
+    }
+
+    /// Answer a currently owned native callback, preserving all plugin-defined payload fields.
+    /// Rejects stale identities and conversation commands; partial host tool updates stay pending.
+    pub(super) async fn native_response(&mut self, frame: &Value) -> Result<(), AgentSessionError> {
+        let id = config::text(frame, "id")?;
+        let kind = config::text(frame, "type")?;
+        let owner = self
+            .native_bridge
+            .callbacks
+            .get(id)
+            .ok_or(AgentSessionError::Rejected)?;
+        let allowed = match owner.as_str() {
+            "host_tool_call" => matches!(kind, "host_tool_update" | "host_tool_result"),
+            "host_uri_request" => kind == "host_uri_result",
+            "extension_ui_request" => kind == "extension_ui_response",
+            _ => false,
+        };
+        if !allowed {
+            return Err(AgentSessionError::Rejected);
+        }
+        self.transport.send(frame).await?;
+        if kind != "host_tool_update" {
+            self.native_bridge.callbacks.remove(id);
+            self.dialogs.remove(id);
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::PermissionResolved(id.to_owned()));
+        }
+        Ok(())
+    }
+
+    /// Drain bounded, uninterpreted native extension UI frames for negotiated ACP clients.
+    pub(super) fn extension_frames(&mut self) -> Vec<Value> {
+        self.native_bridge.buffered_bytes = 0;
+        self.native_bridge.events.drain(..).collect()
+    }
+
+    async fn start(
+        &mut self,
+        prompt: &AgentPrompt,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        prompt.validate()?;
+        config::validate(config)?;
+        if self.closed || self.active.is_some() || prompt.output_schema.is_some() {
+            return Err(AgentSessionError::Rejected);
+        }
+        self.configure(config).await?;
         let blocks = prompt.blocks()?;
         let text = blocks
             .iter()
@@ -205,35 +338,106 @@ impl Session {
         self.stream
             .pending_inputs
             .push_back(prompt.client_message_id.clone());
-        let response = self
+        let prompt_id = match self
             .transport
-            .request("prompt", json!({"message":text,"images":images}))
-            .await;
-        self.prompt_id = Some(self.transport.last_request_id());
-        let response = match response {
-            Ok(response) => response,
+            .begin("prompt", json!({"message":text,"images":images}))
+            .await
+        {
+            Ok(id) => id,
             Err(error) => {
                 self.stream.pending_inputs.pop_back();
                 return Err(error);
             }
         };
         let turn = Uuid::new_v4().to_string();
-        self.submitted |= response["agentInvoked"] != false;
         self.stream.begin(turn.clone());
         self.active = Some(turn.clone());
+        self.prompt_id = Some(prompt_id);
         self.awaiting_settlement = false;
-        if response["agentInvoked"] == false {
-            self.stream.pending_inputs.pop_back();
-            self.active = None;
-            self.prompt_id = None;
-            self.stream
-                .events
-                .push_back(AgentTurnEvent::Completed(None));
-        }
         Ok(turn)
     }
 
+    fn observe_native_event(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        if self.native_bridge.enabled {
+            if self.native_bridge.events.len() >= 128 {
+                return Err(AgentSessionError::Failed);
+            }
+            self.native_bridge.buffered_bytes = self
+                .native_bridge
+                .buffered_bytes
+                .saturating_add(event.to_string().len());
+            if self.native_bridge.buffered_bytes > 64 * 1024 * 1024 {
+                return Err(AgentSessionError::Failed);
+            }
+            self.native_bridge
+                .events
+                .push_back(super::bridge::redact_event(event));
+            if matches!(
+                event["type"].as_str(),
+                Some("host_tool_call" | "host_uri_request")
+            ) || (event["type"] == "extension_ui_request"
+                && !matches!(
+                    event["method"].as_str(),
+                    Some(
+                        "notify"
+                            | "setStatus"
+                            | "setWidget"
+                            | "setTitle"
+                            | "set_editor_text"
+                            | "cancel"
+                    )
+                ))
+            {
+                if self.native_bridge.callbacks.len() >= 128 {
+                    return Err(AgentSessionError::Failed);
+                }
+                self.native_bridge.callbacks.insert(
+                    config::text(event, "id")?.to_owned(),
+                    config::text(event, "type")?.to_owned(),
+                );
+            }
+            if matches!(
+                event["type"].as_str(),
+                Some("host_tool_cancel" | "host_uri_cancel")
+            ) || (event["type"] == "extension_ui_request" && event["method"] == "cancel")
+            {
+                self.native_bridge
+                    .callbacks
+                    .remove(event["targetId"].as_str().unwrap_or_default());
+            }
+        }
+        Ok(())
+    }
+
+    fn prompt_admitted(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        if event["command"] != "prompt" {
+            return Err(AgentSessionError::Failed);
+        }
+        if event["success"] == false {
+            self.stream.pending_inputs.pop_back();
+            self.transport
+                .diagnostics
+                .observe_native(&event["error"], "rpc", "prompt");
+            self.stream.failed = true;
+            self.finish();
+        } else if event["success"] == true {
+            if event["data"]["agentInvoked"] == false {
+                self.stream.pending_inputs.pop_back();
+                self.finish();
+            }
+        } else {
+            return Err(AgentSessionError::Failed);
+        }
+        Ok(())
+    }
+
     fn consume(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        self.observe_native_event(event)?;
+        if event["type"] == "message_end"
+            && matches!(event["message"]["role"].as_str(), Some("assistant"))
+        {
+            self.submitted = true;
+        }
         if event["type"] == "message_end" && event["message"]["role"] == "assistant" {
             if event["message"]["stopReason"] == "error" {
                 self.transport.diagnostics.observe_native(
@@ -246,7 +450,13 @@ impl Session {
             }
         }
         match event["type"].as_str() {
-            Some("extension_ui_request") => self.stream.events.extend(self.dialogs.capture(event)?),
+            Some("extension_ui_request") => {
+                let events = self.dialogs.capture(event)?;
+                if events.is_empty() {
+                    self.project(event)?;
+                }
+                self.stream.events.extend(events);
+            }
             Some("agent_start") if self.active.is_none() => {
                 let turn = Uuid::new_v4().to_string();
                 self.stream.begin(turn.clone());
@@ -262,6 +472,9 @@ impl Session {
                     &self.client.images,
                 )?);
             }
+            Some("response") if self.prompt_id.as_deref() == event["id"].as_str() => {
+                self.prompt_admitted(event)?;
+            }
             Some("prompt_result") if self.prompt_id.as_deref() == event["id"].as_str() => {
                 self.stream.failed = event["status"] == "error";
                 if self.stream.failed {
@@ -276,23 +489,56 @@ impl Session {
                 }
             }
             Some("session_settled") if self.awaiting_settlement => self.finish(),
-            Some("rpc_frame_error" | "host_tool_call" | "host_uri_request") => {
+            Some("rpc_frame_error") => {
+                let error = if event["error"].is_object() {
+                    &event["error"]
+                } else {
+                    event
+                };
+                self.transport
+                    .diagnostics
+                    .observe_native(error, "rpc_frame_error", "turn");
                 return Err(AgentSessionError::Failed);
             }
+            Some("host_tool_call" | "host_uri_request") if self.native_bridge.enabled => {}
+            Some("host_tool_call" | "host_uri_request") => {
+                self.transport.diagnostics.observe_failure(
+                    Diagnostic::new(Category::Protocol, "host_request"),
+                    "OMP requested a host tool or URI handler that Ait did not register.",
+                    "turn",
+                );
+                return Err(AgentSessionError::Failed);
+            }
+            Some("response")
+                if event["id"]
+                    .as_str()
+                    .is_some_and(|id| self.native_bridge.controls.remove(id)) => {}
             Some("response") if event["success"] == false => {
                 self.transport
                     .diagnostics
                     .observe_native(&event["error"], "rpc", "turn");
                 return Err(AgentSessionError::Failed);
             }
-            _ => self.stream.consume(event)?,
+            _ => self.project(event)?,
         }
         Ok(())
+    }
+
+    fn project(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        self.stream.consume(event).map_err(|error| {
+            self.transport.diagnostics.observe_failure(
+                Diagnostic::new(Category::Protocol, "event"),
+                &error.to_string(),
+                "project",
+            );
+            AgentSessionError::Failed
+        })
     }
 
     fn finish(&mut self) {
         if self.active.take().is_some() {
             self.prompt_id = None;
+            self.native_bridge.callbacks.clear();
             self.awaiting_settlement = false;
             self.stream.events.extend(self.dialogs.clear());
             self.stream.events.push_back(if self.stream.aborted {
@@ -307,6 +553,10 @@ impl Session {
 }
 
 impl AgentSession for Session {
+    fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+        config::validate(config)?;
+        Ok(())
+    }
     fn control_settings(&self, config: &StoredAgentConfig) -> Option<Value> {
         let tiers = if config.model == self.config.model {
             self.service_tiers
@@ -316,12 +566,25 @@ impl AgentSession for Session {
         Some(json!({"availableModes":config::modes(),"features":config::features(config, tiers)}))
     }
 
-    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+    fn failure_diagnostic(&self) -> Option<Diagnostic> {
         self.transport.diagnostics.failure()
     }
 
     fn failure_message(&self) -> Option<Cow<'_, str>> {
-        self.transport.diagnostics.message().map(Cow::Owned)
+        if let Some(message) = self.transport.diagnostics.message() {
+            return Some(Cow::Owned(message));
+        }
+        let diagnostic = self.transport.diagnostics.failure()?;
+        let reason = match diagnostic.source {
+            "frame_limit" => "OMP stdout exceeded the 1 MiB frame limit.",
+            "incomplete_frame" => "OMP stdout ended in an incomplete JSON frame.",
+            "invalid_json" => "OMP stdout contained invalid JSON.",
+            "missing_frame_type" => "OMP stdout contained a frame without a string type.",
+            "invalid_chunks" => "OMP returned invalid or out-of-order RPC chunks.",
+            "stdout_read" => "Ait could not read OMP stdout.",
+            _ => diagnostic.category.message(),
+        };
+        Some(Cow::Owned(format!("Oh My Pi: {reason}")))
     }
 
     fn provider(&self) -> &'static str {
@@ -331,7 +594,19 @@ impl AgentSession for Session {
         Box::pin(async {
             let state = self.transport.request("get_state", json!({})).await?;
             if state["sessionId"] != self.state["sessionId"] {
-                return Err(AgentSessionError::Failed);
+                let id = config::text(&state, "sessionId")?;
+                Uuid::parse_str(id).map_err(|_| AgentSessionError::Failed)?;
+                let events = std::mem::take(&mut self.stream.events);
+                self.stream = Stream::new(id.to_owned(), self.client.images.clone())
+                    .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
+                self.stream.events = events;
+                if let Some(turn) = &self.active {
+                    self.stream.begin(turn.clone());
+                }
+                self.children = super::subagents::Children::default()
+                    .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
+                self.created_at = chrono::Utc::now().to_rfc3339();
+                self.submitted = false;
             }
             self.state = state;
             self.stream.set_context(&self.state);
@@ -355,7 +630,7 @@ impl AgentSession for Session {
                 ("inputIds".to_owned(), json!(self.stream.input_ids)),
                 (
                     "empty".to_owned(),
-                    json!(!self.submitted && self.stream.is_empty()),
+                    json!(!self.submitted && !std::path::Path::new(file).is_file()),
                 ),
                 ("createdAt".to_owned(), json!(self.created_at)),
             ])),
@@ -447,7 +722,22 @@ impl AgentSession for Session {
             let Some(event) = self.transport.poll()? else {
                 return Ok(None);
             };
-            self.consume(&event)?;
+            self.consume(&event).inspect_err(|_| {
+                if self.transport.diagnostics.failure().is_none() {
+                    let message = match event["type"].as_str() {
+                        Some("extension_ui_request") => "Ait could not process an OMP question.",
+                        Some("subagent_lifecycle" | "subagent_progress" | "subagent_event") => {
+                            "Ait could not process an OMP subagent event."
+                        }
+                        _ => "Ait could not process an OMP session event.",
+                    };
+                    self.transport.diagnostics.observe_failure(
+                        Diagnostic::new(Category::Protocol, "event"),
+                        message,
+                        "consume",
+                    );
+                }
+            })?;
             if let Some(event) = self.stream.events.pop_front() {
                 return Ok(Some(event));
             }

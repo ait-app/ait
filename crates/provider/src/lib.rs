@@ -13,6 +13,7 @@ mod composition;
 pub mod diagnostics;
 pub mod dispatch;
 mod local;
+pub mod omp_acp;
 pub mod ports;
 pub(crate) mod protocol;
 pub mod rpc;

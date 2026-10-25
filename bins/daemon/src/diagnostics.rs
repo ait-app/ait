@@ -305,7 +305,7 @@ fn capture(
     let mut report = format!(
         "\nAit incident evidence v1\nIncident ID: {}\nCollected at: {end}\nIncident at: {at}\nUTC window: {start} through {end}\nNaive native timestamps are interpreted as UTC; untimestamped records are omitted.\nDaemon version: {}\nOS: {} / {}\nRetention: 7 days, 20 incidents, 5 MiB; automatic capture at most once per 30 seconds\nDropped capture jobs: {}\n",
         uuid::Uuid::new_v4(),
-        env!("CARGO_PKG_VERSION"),
+        model::BUILD_VERSION,
         std::env::consts::OS,
         std::env::consts::ARCH,
         dropped.load(Ordering::Relaxed)

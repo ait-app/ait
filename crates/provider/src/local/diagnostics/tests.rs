@@ -2,6 +2,30 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn native_reason_overrides_an_earlier_transport_fallback() {
+    let diagnostics = Diagnostics::new("Oh My Pi");
+    diagnostics.observe(Diagnostic::new(Category::Closed, "stdout"), "read");
+    diagnostics.observe_native(
+        &json!({"message":"Upstream shard unavailable api_key=fixture-secret","statusCode":503}),
+        "result",
+        "turn",
+    );
+    diagnostics.observe_failure(
+        Diagnostic::new(Category::Protocol, "event"),
+        "Invalid or missing OMP field: message.timestamp.",
+        "project",
+    );
+    diagnostics.observe(Diagnostic::new(Category::Closed, "stdout"), "read");
+
+    let message = diagnostics.message().unwrap();
+    assert!(message.contains("Upstream shard unavailable"));
+    assert!(message.contains("HTTP 503"));
+    assert!(!message.contains("fixture-secret"));
+    assert!(!message.contains("message.timestamp"));
+    assert!(!format!("{diagnostics:?}").contains("Upstream shard"));
+}
+
+#[test]
 fn classifies_common_failures_without_retaining_native_text() {
     for (text, expected) in [
         ("invalid_api_key secret", Category::Authentication),
