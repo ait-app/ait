@@ -188,6 +188,7 @@ jobs:
           src/timeline src/types/stream.test.ts src/runtime/replica-cache
           src/runtime/directory-sync src/screens/workspace/workspace-route-state.test.ts
           src/utils/tool-call-parsers.test.ts src/utils/diff-highlight.test.ts
+          src/voice/audio-engine.native.test.ts src/voice/audio-engine.web.test.ts src/voice/voice-runtime.test.ts
 
   # ADR-188: the hosted browser client ships as a static image at the site root.
   web-client:
