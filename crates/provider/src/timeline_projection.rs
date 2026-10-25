@@ -137,6 +137,11 @@ pub(crate) fn project(rows: &[Row]) -> Vec<Entry> {
 /// Return the lifecycle identity of `item`, or `None` for independent/text source rows.
 pub(crate) fn identity(item: &Value) -> Option<String> {
     match item["type"].as_str()? {
+        "voice" => Some(format!(
+            "voice:{}/{}",
+            item["sessionId"].as_str()?,
+            item["id"].as_str()?
+        )),
         "tool_call" => item["callId"].as_str().map(str::to_owned),
         "plugin" => Some(format!(
             "{}/{}",
@@ -158,7 +163,7 @@ pub(crate) fn merge_identity(previous: &mut Entry, incoming: &Entry) -> bool {
             previous.seq_end = previous.seq_end.max(incoming.seq_end);
             Collapse::ToolLifecycle
         }
-        Some("plugin") if previous.item["type"] == "plugin" => {
+        Some("plugin" | "voice") if previous.item["type"] == incoming.item["type"] => {
             previous.item = incoming.item.clone();
             previous.turn_id.clone_from(&incoming.turn_id);
             previous.provider.clone_from(&incoming.provider);

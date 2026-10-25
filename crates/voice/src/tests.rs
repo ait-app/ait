@@ -17,6 +17,8 @@ fn errors_have_safe_stable_codes_and_methods_follow_service_installation() {
         Error::Provider,
         Error::Cancelled,
         Error::Agent,
+        Error::AgentBusy,
+        Error::Realtime,
     ] {
         assert!(!error.reason().is_empty());
         assert!(!error.to_string().contains('/'));
@@ -31,6 +33,7 @@ fn errors_have_safe_stable_codes_and_methods_follow_service_installation() {
                     | Error::Provider
                     | Error::Preparing
                     | Error::ModelDownload
+                    | Error::AgentBusy
             )
         );
     }

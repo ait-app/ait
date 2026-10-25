@@ -20,6 +20,7 @@ export interface AudioEngine {
   toggleMute(): boolean;
   isMuted(): boolean;
 
+  /** Enqueue in arrival order; resolve with duration only after playback is consumed. */
   play(audio: AudioPlaybackSource): Promise<number>;
   stop(): void;
   clearQueue(): void;

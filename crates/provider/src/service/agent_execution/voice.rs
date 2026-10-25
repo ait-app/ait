@@ -1,6 +1,30 @@
 use super::{AgentExecution, CancellationToken, ErrorCode, ExecutionState, Value, json, oneshot};
 
 impl AgentExecution {
+    /// Open native realtime audio for an Agent when its provider declares support.
+    /// `agent` selects the target and `cancel` bounds its lifetime. Audio is always PCM at
+    /// this boundary; the provider owns upstream negotiation and media transport.
+    /// Returns `None` only when the provider declares no native support.
+    /// The returned handle cancels native audio when dropped, including abandoned startup.
+    /// # Errors
+    /// Returns safe admission, identity or native errors; supported providers never fall back.
+    pub async fn start_realtime(
+        &self,
+        agent: &str,
+        cancel: CancellationToken,
+    ) -> Result<Option<model::realtime::Session>, ErrorCode> {
+        let (session, endpoint) = model::realtime::channel(&cancel);
+        let result = self
+            .call_with_realtime(
+                "internal.realtime.start",
+                json!({"agentId":agent}),
+                Some(cancel),
+                Some(endpoint),
+            )
+            .await?;
+        Ok((result["supported"] == true).then_some(session))
+    }
+
     /// Admit a voice-owned turn while preserving cancellation across the worker queue.
     ///
     /// `agent` identifies the target, `text` is its prompt, and `cancel` belongs to the voice
@@ -29,15 +53,21 @@ pub(super) async fn dispatch(
     state: &mut ExecutionState,
     method: &str,
     params: Value,
-    context: (Reply, Option<CancellationToken>),
+    context: (
+        Reply,
+        Option<CancellationToken>,
+        Option<model::realtime::Endpoint>,
+    ),
 ) {
-    let (reply, cancel) = context;
+    let (reply, cancel, realtime) = context;
     let abandoned = || {
         cancel.as_ref().is_some_and(CancellationToken::is_cancelled)
             || cancel.is_some() && reply.is_closed()
     };
     let result = if abandoned() {
         Err(ErrorCode::AgentIo)
+    } else if let Some(endpoint) = realtime {
+        state.start_realtime(params, endpoint).await
     } else {
         state.execute(method, params).await
     };

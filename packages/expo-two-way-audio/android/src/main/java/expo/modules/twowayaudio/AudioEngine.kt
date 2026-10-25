@@ -15,9 +15,9 @@ import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import androidx.annotation.RequiresApi
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
 import expo.modules.twowayaudio.pcm16VolumeLevel
+import expo.modules.twowayaudio.PcmPlaybackQueue
 
 
 class AudioEngine (context: Context) {
@@ -30,7 +30,21 @@ class AudioEngine (context: Context) {
     private lateinit var audioTrack: AudioTrack
     private var audioFocusRequest: AudioFocusRequest? = null
     private var audioDeviceCallback: AudioDeviceCallback? = null
-    private val audioSampleQueue = ConcurrentLinkedQueue<ByteArray>()
+    private var playbackWorkerRunning = false
+    private val playbackQueue = PcmPlaybackQueue(
+        write = { data, offset, length ->
+            audioTrack.write(data, offset, length, AudioTrack.WRITE_NON_BLOCKING).also { written ->
+                if (written > 0) {
+                    playbackWrites += 1
+                    playbackWriteBytes += written
+                    onOutputVolumeCallback?.invoke(pcm16VolumeLevel(data))
+                    flushBridgeStats("write")
+                }
+            }
+        },
+        position = { audioTrack.playbackHeadPosition },
+        complete = { id, error -> onPlaybackComplete?.invoke(id, error) },
+    )
     private var echoCanceler: AcousticEchoCanceler? = null
     private var noiseSuppressor: NoiseSuppressor? = null
     private val executorServiceMicrophone = Executors.newFixedThreadPool(1)
@@ -51,6 +65,7 @@ class AudioEngine (context: Context) {
     @Volatile var isPlaying = false
 
     // Callbacks
+    var onPlaybackComplete: ((String, String?) -> Unit)? = null
     var onMicDataCallback: ((ByteArray) -> Unit)? = null
     var onInputVolumeCallback: ((Float) -> Unit)? = null
     var onOutputVolumeCallback: ((Float) -> Unit)? = null
@@ -223,12 +238,8 @@ class AudioEngine (context: Context) {
      * A null [audioFocusRequest] is what "we released" looks like, so it is the guard against
      * re-requesting focus mid-turn.
      *
-     * Focus is best effort here, and deliberately not fatal. `playPCMData` is fire-and-forget
-     * from JS — `playAudio()` settles on a duration timer, not on a native ack — so refusing to
-     * queue would report a chunk as played that nobody heard. Playing unfocused is what this
-     * path did before the session was ever released, and it is the better failure. Leaving the
-     * request outstanding instead of abandoning it is also what lets a delayed grant arrive
-     * later through the listener, which is the point of `setAcceptsDelayedFocusGain(true)`.
+     * Playback completion follows AudioTrack's frame counter. A delayed focus grant never
+     * turns queued bytes into a premature played acknowledgement.
      */
     @SuppressLint("NewApi")
     private fun acquireAudioSessionIfNeeded() {
@@ -301,8 +312,7 @@ class AudioEngine (context: Context) {
             audioTrack.pause()
         }
         releaseCommunicationRoute()
-        audioSampleQueue.clear()
-        isPlaying = false
+        stopPlayback()
         isRecordingBeforePause = false
         onOutputVolumeCallback?.invoke(0.0F)
         onAudioInterruptionCallback?.let { it("blocked") }
@@ -413,57 +423,50 @@ class AudioEngine (context: Context) {
 
     @SuppressLint("NewApi")
     @Synchronized
-    fun playPCMData(data: ByteArray) {
-        if (destroyed) return
+    fun playPCMData(data: ByteArray, id: String? = null): Boolean {
+        if (destroyed || !playbackQueue.enqueue(data, id)) return false
         acquireAudioSessionIfNeeded()
-        audioSampleQueue.add(data)
         playbackEvents += 1
-        playbackQueuedBytes += data.size.toLong()
-        Log.d(
-            "AudioEngine",
-            "playPCMData queued bytes=${data.size} queueSize=${audioSampleQueue.size} " +
-                "head=${data.take(12).joinToString(" ") { byte -> "%02x".format(byte.toInt() and 0xff) }}"
-        )
+        playbackQueuedBytes += data.size
         flushBridgeStats("queue")
-        if (!isPlaying) {
-            playAudioFromSampleQueue()
+        isPlaying = true
+        if (!playbackWorkerRunning) {
+            playbackWorkerRunning = true
+            executorServicePlayback.execute { pumpPlayback() }
         }
+        return true
     }
 
-    private fun playAudioFromSampleQueue() {
-        executorServicePlayback.execute{
-            isPlaying = true
-            try {
-                while (audioSampleQueue.isNotEmpty()){
-                    val data = audioSampleQueue.poll()
-                    if (data != null){
-                        playSample(data)
-                        val audioVolume = pcm16VolumeLevel(data)
-                        onOutputVolumeCallback?.invoke(audioVolume)
-                    }else{
-                        break
+    private fun pumpPlayback() {
+        try {
+            while (true) {
+                synchronized(this) {
+                    if (destroyed) {
+                        playbackWorkerRunning = false
+                        return
+                    }
+                    if (!playbackQueue.pump()) stopPlayback()
+                    isPlaying = playbackQueue.isNotEmpty
+                    if (!isPlaying) {
+                        playbackWorkerRunning = false
+                        onOutputVolumeCallback?.invoke(0.0F)
+                        return
                     }
                 }
-            }catch (e: Exception){
-                Log.e("AudioEngine", "Error playing audio", e)
-                e.printStackTrace()
-            }finally {
-                isPlaying = false
-                onOutputVolumeCallback?.invoke(0.0F)
+                // Poll the native device counter, including the tail after all bytes were
+                // written. Audio continues independently of the JS event loop.
+                Thread.sleep(5)
             }
+        } catch (_: InterruptedException) {
+            synchronized(this) { playbackWorkerRunning = false }
+        } catch (error: Exception) {
+            synchronized(this) {
+                playbackWorkerRunning = false
+                stopPlayback()
+                onAudioInterruptionCallback?.invoke("blocked")
+            }
+            Log.e("AudioEngine", "Audio playback failed", error)
         }
-    }
-
-    private fun playSample(data: ByteArray) {
-        val written = audioTrack.write(data, 0, data.size)
-        playbackWrites += 1
-        playbackWriteBytes += written.coerceAtLeast(0).toLong()
-        Log.d(
-            "AudioEngine",
-            "playSample wrote=$written requested=${data.size} playState=${audioTrack.playState} " +
-                "queueSize=${audioSampleQueue.size}"
-        )
-        flushBridgeStats("write")
     }
 
     fun bypassVoiceProcessing(bypass: Boolean) {
@@ -505,10 +508,13 @@ class AudioEngine (context: Context) {
         audioTrack.play()
     }
 
+    @Synchronized
     fun stopPlayback() {
-        audioSampleQueue.clear()
-        audioTrack.pause()
-        audioTrack.flush()
+        playbackQueue.clear()
+        if (::audioTrack.isInitialized) {
+            audioTrack.pause()
+            audioTrack.flush()
+        }
         isPlaying = false
         onOutputVolumeCallback?.invoke(0.0F)
         Log.d("AudioEngine", "Playback stopped")
@@ -541,7 +547,7 @@ class AudioEngine (context: Context) {
             audioFocusRequest = null
             executorServiceMicrophone.shutdownNow()
             executorServicePlayback.shutdownNow()
-            audioSampleQueue.clear()
+            playbackQueue.clear()
             isPlaying = false
             echoCanceler?.release()
             echoCanceler = null

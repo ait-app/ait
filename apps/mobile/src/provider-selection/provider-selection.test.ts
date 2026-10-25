@@ -10,7 +10,7 @@ import {
   filterAndRankModelRows,
   matchesModelSearch,
   resolveSelectedModelLabel,
-  resolveSubmissionReadiness,
+  resolveAgentCreationReadiness,
 } from "./provider-selection";
 
 describe("combined model selector data", () => {
@@ -373,11 +373,9 @@ describe("combined model selector data", () => {
     ).toBe("Error");
   });
 
-  it("returns observable submission readiness reasons", () => {
+  it("returns observable Agent creation readiness reasons", () => {
     expect(
-      resolveSubmissionReadiness({
-        text: "hello",
-        allowsEmptyAutoSubmit: false,
+      resolveAgentCreationReadiness({
         providerCount: 1,
         selection: {
           provider: "codex",
@@ -395,9 +393,7 @@ describe("combined model selector data", () => {
     });
 
     expect(
-      resolveSubmissionReadiness({
-        text: "hello",
-        allowsEmptyAutoSubmit: false,
+      resolveAgentCreationReadiness({
         providerCount: 1,
         selection: {
           provider: "codewhale",
@@ -434,9 +430,7 @@ describe("combined model selector data", () => {
         message: "未知错误",
       });
       expect(
-        resolveSubmissionReadiness({
-          text: "",
-          allowsEmptyAutoSubmit: false,
+        resolveAgentCreationReadiness({
           providerCount: 1,
           selection: {
             provider: "codex",
@@ -445,10 +439,13 @@ describe("combined model selector data", () => {
             isModelLoading: false,
           },
           autoSubmitConfig: null,
-          workspaceDirectory: "/repo",
+          workspaceDirectory: null,
           hasClient: true,
         }),
-      ).toEqual({ ok: false, reason: "初始提示词必填" });
+      ).toEqual({
+        ok: false,
+        reason: "工作区目录未找到",
+      });
     } finally {
       await i18n.changeLanguage("en");
     }

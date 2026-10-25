@@ -9,6 +9,12 @@ export function playPCMData(audioData: Uint8Array) {
   return ExpoTwoWayAudioModule.playPCMData(audioData);
 }
 
+/** Queue PCM16 at 16 kHz; onPlaybackComplete identifies actual device consumption. */
+export function enqueuePCMData(audioData: Uint8Array, id: string): boolean {
+  if (typeof ExpoTwoWayAudioModule.enqueuePCMData !== "function") return false;
+  return ExpoTwoWayAudioModule.enqueuePCMData(audioData, id);
+}
+
 export function bypassVoiceProcessing(bypass: boolean) {
   return ExpoTwoWayAudioModule.bypassVoiceProcessing(bypass);
 }

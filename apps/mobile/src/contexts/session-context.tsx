@@ -353,7 +353,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         if (!client) {
           throw new Error(t("common.errors.daemonUnavailable"));
         }
-        await client.setVoiceMode(enabled, agentId);
+        return await client.setVoiceMode(enabled, agentId);
       },
       sendVoiceAudioChunk: async (audioData, mimeType) => {
         if (!client) {
@@ -737,6 +737,17 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       voiceRuntime?.onTranscriptionResult(serverId, transcriptText);
     });
 
+    const unsubVoiceClosed = client.on("voice.session.closed", () => {
+      voiceRuntime?.onSessionClosed(serverId);
+    });
+    const unsubVoiceError = client.on("voice.error", (message) => {
+      if (message.type !== "voice.error") return;
+      toast.error(message.payload.error);
+      if (message.payload.reasonCode === "native_realtime_failed") {
+        voiceRuntime?.onSessionClosed(serverId);
+      }
+    });
+
     const unsubVoiceInputState = client.on("voice.input.state", (message) => {
       if (message.type !== "voice.input.state") return;
       voiceRuntime?.onServerSpeechStateChanged(serverId, message.payload.isSpeaking);
@@ -800,6 +811,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       unsubActivity();
       unsubTranscription();
       unsubVoiceInputState();
+      unsubVoiceClosed();
+      unsubVoiceError();
       unsubTerminalAttention();
     };
   }, [

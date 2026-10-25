@@ -394,3 +394,23 @@ describe("Rust provider snapshots", () => {
     });
   });
 });
+
+it("uses daemon voice readiness without upstream SDP and recognizes terminal realtime events", () => {
+  const response = responseMessage(
+    "voice.mode.set.response",
+    "voice",
+    { accepted: true, enabled: true, agentId: "agent", error: null },
+    {},
+  );
+  expect(validateWSOutboundMessage(response).success).toBe(true);
+  expect(object(object(response.message).payload)).not.toHaveProperty("sdp");
+  for (const [method, params] of [
+    ["voice.session.closed", {}],
+    [
+      "voice.error",
+      { error: "native voice unavailable", reasonCode: "native_realtime_failed", retryable: false },
+    ],
+  ] as const) {
+    expect(validateWSOutboundMessage(eventMessage(method, params)).success).toBe(true);
+  }
+});

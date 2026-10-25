@@ -18,6 +18,8 @@ import {
   AgentTimelineItemPayloadSchema,
   CompactionTimelineItemPayloadSchema,
   WorkspaceGitHubRuntimePayloadSchema,
+  VoiceTranscriptSchema,
+  VoiceTimelineItemSchema,
 } from "@ait/protocol/messages";
 import { AgentProviderSchema } from "@ait/protocol/provider-manifest";
 import { z } from "zod";
@@ -115,7 +117,13 @@ const TaskActivitySchema = z.discriminatedUnion("type", [
 const StoredTimelineItemSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     ...TimelineItemBaseShape,
+    kind: z.literal("voice"),
+    payload: VoiceTimelineItemSchema,
+  }),
+  z.strictObject({
+    ...TimelineItemBaseShape,
     kind: z.literal("user_message"),
+    voiceTranscript: VoiceTranscriptSchema.optional(),
     clientMessageId: z.string().optional(),
     messageId: z.string().optional(),
     text: z.string(),
@@ -173,6 +181,7 @@ const StoredTimelineItemSchema = z.discriminatedUnion("kind", [
 ]);
 
 const AgentCapabilitiesSchema = z.strictObject({
+  supportsRealtimeVoice: z.boolean().optional(),
   supportsStreaming: z.boolean(),
   supportsSessionPersistence: z.boolean(),
   supportsSessionListing: z.boolean().optional(),
@@ -444,6 +453,8 @@ function serializeAgentToolCall(data: AgentToolCallData): StoredToolCall {
 function serializeTimelineItem(item: StreamItem): StoredTimelineItem | null {
   const base = timelineBase(item);
   switch (item.kind) {
+    case "voice":
+      return { ...base, kind: item.kind, payload: item.payload };
     case "user_message":
       return {
         ...base,
@@ -451,6 +462,7 @@ function serializeTimelineItem(item: StreamItem): StoredTimelineItem | null {
         ...(item.clientMessageId ? { clientMessageId: item.clientMessageId } : {}),
         ...(item.messageId ? { messageId: item.messageId } : {}),
         text: item.text,
+        ...(item.voiceTranscript?.length ? { voiceTranscript: item.voiceTranscript } : {}),
       };
     case "assistant_message":
       return {
@@ -535,6 +547,8 @@ function deserializeBuiltinTimelineItem(
     timestamp: new Date(item.timestamp),
   };
   switch (item.kind) {
+    case "voice":
+      return { ...base, kind: item.kind, payload: item.payload };
     case "user_message":
       return {
         ...base,
@@ -542,6 +556,7 @@ function deserializeBuiltinTimelineItem(
         ...(item.clientMessageId ? { clientMessageId: item.clientMessageId } : {}),
         ...(item.messageId ? { messageId: item.messageId } : {}),
         text: item.text,
+        ...(item.voiceTranscript?.length ? { voiceTranscript: item.voiceTranscript } : {}),
       };
     case "assistant_message":
       return {
@@ -636,6 +651,9 @@ function serializeAgent(agent: Agent): StoredAgent {
         }
       : {}),
     capabilities: {
+      ...(agent.capabilities.supportsRealtimeVoice !== undefined
+        ? { supportsRealtimeVoice: agent.capabilities.supportsRealtimeVoice }
+        : {}),
       supportsStreaming: agent.capabilities.supportsStreaming,
       supportsSessionPersistence: agent.capabilities.supportsSessionPersistence,
       ...(agent.capabilities.supportsSessionListing !== undefined

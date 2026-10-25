@@ -42,6 +42,7 @@ impl Router {
             mut params,
             reply,
             cancel,
+            realtime,
             permit,
             queued,
         } = command
@@ -76,6 +77,7 @@ impl Router {
             params,
             reply,
             cancel,
+            realtime,
             permit,
             queued,
         };

@@ -5,6 +5,8 @@ import type {
   CompactionTimelineItem,
   JsonValue,
   ToolCallDetail,
+  VoiceTranscriptEntry,
+  VoiceTimelineItem,
 } from "@ait/protocol/agent-types";
 import type { AgentAttachment, AgentStreamEventPayload } from "@ait/protocol/messages";
 import { timelineItemIdentity } from "@ait/protocol/timeline-identity";
@@ -79,6 +81,7 @@ function createAssistantItemId(
 }
 
 export type StreamItem =
+  | VoiceItem
   | UserMessageItem
   | AssistantMessageItem
   | ThoughtItem
@@ -87,6 +90,15 @@ export type StreamItem =
   | NotificationItem
   | CompactionItem
   | PluginTimelineStreamItem;
+
+export interface VoiceItem {
+  kind: "voice";
+  id: string;
+  timestamp: Date;
+  timelineCursor?: TimelinePosition;
+  turnId?: string;
+  payload: VoiceTimelineItem;
+}
 
 export type UserMessageImageAttachment = AttachmentMetadata;
 
@@ -101,6 +113,7 @@ export interface UserMessageItem {
   timestamp: Date;
   images?: UserMessageImageAttachment[];
   imageSources?: string[];
+  voiceTranscript?: VoiceTranscriptEntry[];
   attachments?: AgentAttachment[];
 }
 
@@ -114,6 +127,7 @@ export interface UserMessageInput {
   timestamp: Date;
   images?: UserMessageImageAttachment[];
   imageSources?: string[];
+  voiceTranscript?: VoiceTranscriptEntry[];
   attachments?: AgentAttachment[];
 }
 
@@ -133,6 +147,7 @@ export function createUserMessage(input: UserMessageInput): UserMessageItem {
     timestamp: input.timestamp,
     ...(input.images && input.images.length > 0 ? { images: input.images } : {}),
     ...(input.imageSources?.length ? { imageSources: input.imageSources } : {}),
+    ...(input.voiceTranscript?.length ? { voiceTranscript: input.voiceTranscript } : {}),
     ...(input.attachments && input.attachments.length > 0
       ? { attachments: input.attachments }
       : {}),
@@ -260,6 +275,7 @@ function produceUserMessage(
   }
   const useIncoming =
     presentationPolicy === "incoming" ||
+    Boolean(incoming.voiceTranscript?.length) ||
     (Boolean(incoming.imageSources?.length) &&
       !existing.images?.length &&
       !existing.attachments?.length);
@@ -279,6 +295,7 @@ function produceUserMessage(
     existing.timestamp === merged.timestamp &&
     existing.images === merged.images &&
     existing.imageSources === merged.imageSources &&
+    existing.voiceTranscript === merged.voiceTranscript &&
     existing.attachments === merged.attachments
   ) {
     return { items, index, message: existing, matched: true };
@@ -451,7 +468,7 @@ function removeUserMessageAt(items: UserMessageItem[], index: number): UserMessa
 }
 
 function mergeRetainedLifecycleItem(tail: StreamItem[], retained: StreamItem): StreamItem[] | null {
-  if (retained.kind === "plugin") {
+  if (retained.kind === "plugin" || retained.kind === "voice") {
     return replaceTimelineIdentityItem(tail, retained);
   }
   if (!retained.timelineCursor) {
@@ -518,13 +535,13 @@ function mergeRetainedLifecycleItem(tail: StreamItem[], retained: StreamItem): S
 
 function replaceTimelineIdentityItem(
   items: StreamItem[],
-  retained: PluginTimelineStreamItem,
+  retained: PluginTimelineStreamItem | VoiceItem,
 ): StreamItem[] | null {
   const identity = streamTimelineItemIdentity(retained);
   if (identity === null) return null;
   const index = findExistingTimelineIdentityIndex(items, identity);
   const existing = items[index];
-  if (index < 0 || !existing || existing.kind !== "plugin") return null;
+  if (index < 0 || !existing || existing.kind !== retained.kind) return null;
   const next = [...items];
   next[index] = retained;
   return next;
@@ -701,7 +718,15 @@ export function replaceWithCanonicalStream(
       retainedTailMessages.push(local);
     }
   }
-  nextHead = [...retainedTailMessages, ...nextHead];
+  const retainedVoice = input.preserveContinuity
+    ? input.previousTail.filter(
+        (item) =>
+          item.kind === "voice" &&
+          item.timelineCursor &&
+          isAfterCanonicalCoverage(item.timelineCursor, input.canonicalCoverage),
+      )
+    : [];
+  nextHead = [...retainedTailMessages, ...retainedVoice, ...nextHead];
 
   const replacement = preserveReplacementHead(
     nextTail,
@@ -905,9 +930,10 @@ function appendUserMessage(
   timelineCursor?: TimelinePosition,
   turnId?: string,
   imageSources?: string[],
+  voiceTranscript?: VoiceTranscriptEntry[],
 ): StreamItem[] {
   const { chunk, hasContent } = normalizeChunk(text);
-  if (!hasContent && !imageSources?.length) {
+  if (!hasContent && !imageSources?.length && !voiceTranscript?.length) {
     return state;
   }
 
@@ -920,6 +946,7 @@ function appendUserMessage(
     turnId,
     text: chunk,
     imageSources,
+    voiceTranscript,
     timestamp,
   });
   return upsertUserMessage(state, nextItem);
@@ -1042,6 +1069,7 @@ function finalizeActiveThoughts(state: StreamItem[]): StreamItem[] {
 }
 
 export function streamTimelineItemIdentity(item: StreamItem): string | null {
+  if (item.kind === "voice") return timelineItemIdentity(item.payload);
   if (item.kind === "plugin") {
     return timelineItemIdentity({
       type: "plugin",
@@ -1532,6 +1560,30 @@ function reduceTimelineEvent(
 ): StreamItem[] {
   const item = event.item;
   switch (item.type) {
+    case "voice": {
+      const id = timelineItemIdentity(item)!;
+      const index = state.findIndex((entry) => entry.kind === "voice" && entry.id === id);
+      const previous = index >= 0 ? state[index] : undefined;
+      if (
+        previous?.kind === "voice" &&
+        previous.payload.kind === "transcript" &&
+        previous.payload.status === "completed" &&
+        item.kind === "transcript" &&
+        item.status === "streaming"
+      )
+        return state;
+      const next: VoiceItem = {
+        kind: "voice",
+        id,
+        payload: item,
+        timestamp: previous?.timestamp ?? timestamp,
+        timelineCursor,
+      };
+      if (index < 0) return [...state, next];
+      const result = [...state];
+      result[index] = next;
+      return result;
+    }
     case "user_message":
       return finalizeActiveThoughts(
         appendUserMessage(
@@ -1544,6 +1596,7 @@ function reduceTimelineEvent(
           timelineCursor,
           event.turnId,
           item.imageSources,
+          item.voiceTranscript,
         ),
       );
     case "assistant_message":
@@ -1759,6 +1812,8 @@ function getEventItemKind(event: AgentStreamEventPayload): StreamItem["kind"] | 
     return null;
   }
   switch (event.item.type) {
+    case "voice":
+      return "voice";
     case "user_message":
       return "user_message";
     case "assistant_message":
@@ -1927,6 +1982,7 @@ function applyCanonicalUserMessageEvent(params: {
     timelineCursor,
     text: normalized.chunk,
     imageSources: event.item.imageSources,
+    voiceTranscript: event.item.voiceTranscript,
     timestamp,
   });
   if (unmatchedInsert === "head") {
@@ -1934,7 +1990,10 @@ function applyCanonicalUserMessageEvent(params: {
       tail,
       head,
       message: canonical,
-      insert: normalized.hasContent || canonical.imageSources?.length ? "head" : "none",
+      insert:
+        normalized.hasContent || canonical.imageSources?.length || canonical.voiceTranscript?.length
+          ? "head"
+          : "none",
       presentation: "existing",
     });
     const reconciledTail = canonical.clientMessageId
@@ -1965,7 +2024,8 @@ function applyCanonicalUserMessageEvent(params: {
   const reconciled = placeCanonicalUserMessageAtTail(
     flushedTail,
     canonical,
-    normalized.hasContent || Boolean(canonical.imageSources?.length),
+    normalized.hasContent ||
+      Boolean(canonical.imageSources?.length || canonical.voiceTranscript?.length),
   );
   const reconciledTail = canonical.clientMessageId
     ? reconcileCanonicalUserTurnMembership(

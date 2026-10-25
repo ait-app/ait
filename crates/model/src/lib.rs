@@ -14,6 +14,7 @@ pub mod methods;
 pub mod outbound;
 pub mod pagination;
 pub mod polling;
+pub mod realtime;
 pub mod rpc;
 pub mod runtime;
 pub mod server;

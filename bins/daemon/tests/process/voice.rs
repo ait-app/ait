@@ -2,7 +2,7 @@ use super::transport::method_names;
 
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
 use axum::{Json, Router, extract::State, routing::post};
@@ -12,7 +12,7 @@ use tokio_tungstenite::tungstenite::Message;
 
 use super::{
     Command, Process, Stdio, TOKEN, ready, terminate,
-    transport::{connect, receive, request},
+    transport::{Socket, connect, receive, request},
 };
 
 #[test]
@@ -38,11 +38,11 @@ fn speech_worker_rejects_empty_and_malformed_input_without_starting_a_host() {
 }
 
 async fn transcription(State(hang): State<Arc<AtomicBool>>) -> Json<Value> {
-    Json(json!({"text":if hang.load(Ordering::SeqCst) { "hang" } else { "hello voice" }}))
+    Json(json!({"text":if hang.load(Ordering::SeqCst) { "hold" } else { "hello voice" }}))
 }
 
 async fn speech(Json(payload): Json<Value>) -> Vec<u8> {
-    assert_eq!(payload["input"], "Echo: hello voice");
+    assert_eq!(payload["input"], "Claude: hello voice");
     assert_eq!(payload["response_format"], "pcm");
     vec![0, 0, 1, 0]
 }
@@ -54,11 +54,14 @@ fn start_server(
 ) -> (Process, std::path::PathBuf) {
     let log = root.join("server.log");
     let child = Command::new(env!("CARGO_BIN_EXE_daemon"))
+        .current_dir(root)
         .arg("--data-dir")
         .arg(root.join("state"))
         .args(["--listen", "127.0.0.1:0"])
         .env("AIT_SERVER_TOKEN", TOKEN)
         .env("PATH", path)
+        .env("AIT_SERVER_CLAUDE_BIN", root.join("claude"))
+        .env("CLAUDE_CONFIG_DIR", root.join("claude-config"))
         .env("AIT_SPEECH_PROVIDER", "openai")
         .env("AIT_SPEECH_BASE_URL", endpoint)
         .env("AIT_SPEECH_API_KEY", "offline-voice-secret")
@@ -74,8 +77,15 @@ fn start_server(
 }
 
 #[tokio::test]
-async fn production_voice_calls_speech_and_native_agent_then_disconnect_interrupts_owned_turn() {
+async fn legacy_voice_calls_speech_and_non_realtime_provider_then_disconnect_interrupts_owned_turn()
+{
     let super::native::NativeFixture { root, cwd, path } = super::native::NativeFixture::new();
+    std::os::unix::fs::symlink(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../crates/provider/tests/fixtures/claude_code.py"),
+        root.path().join("claude"),
+    )
+    .unwrap();
     let hang = Arc::new(AtomicBool::new(false));
     let app = Router::new()
         .route("/v1/audio/transcriptions", post(transcription))
@@ -88,27 +98,7 @@ async fn production_voice_calls_speech_and_native_agent_then_disconnect_interrup
     });
     let (mut process, log) = start_server(root.path(), &path, &endpoint);
     let address = ready(&mut process, &log).await;
-    let mut control = connect(
-        &address,
-        &[
-            "workspace.open.request",
-            "agent.create.request",
-            "agent.get.request",
-            "agent.finish.wait.request",
-        ],
-    )
-    .await;
-    assert_eq!(
-        request(&mut control, "workspace.open.request", json!({"cwd":cwd})).await["type"],
-        "response"
-    );
-    let agent = request(
-        &mut control,
-        "agent.create.request",
-        json!({"config":{"provider":"codex","cwd":cwd}}),
-    )
-    .await;
-    let id = agent["result"]["agentId"].as_str().unwrap().to_owned();
+    let (mut control, id) = create_agent(&address, &cwd, "claude").await;
     let mut client = connect(&address, &method_names(voice::connection::METHODS)).await;
     let mode = request(
         &mut client,
@@ -171,4 +161,115 @@ async fn production_voice_calls_speech_and_native_agent_then_disconnect_interrup
             .contains("offline-voice-secret")
     );
     http.abort();
+}
+
+async fn create_agent(address: &str, cwd: &std::path::Path, provider: &str) -> (Socket, String) {
+    let mut control = connect(
+        address,
+        &[
+            "workspace.open.request",
+            "agent.create.request",
+            "agent.get.request",
+            "agent.finish.wait.request",
+        ],
+    )
+    .await;
+    assert_eq!(
+        request(&mut control, "workspace.open.request", json!({"cwd":cwd})).await["type"],
+        "response"
+    );
+    let agent = request(
+        &mut control,
+        "agent.create.request",
+        json!({"config":{"provider":provider,"cwd":cwd}}),
+    )
+    .await;
+    let id = agent["result"]["agentId"].as_str().unwrap().to_owned();
+    assert_eq!(
+        agent["result"]["agent"]["capabilities"]["supportsRealtimeVoice"] == true,
+        provider == "codex",
+    );
+    (control, id)
+}
+
+async fn unexpected_speech(State(calls): State<Arc<AtomicUsize>>) -> Json<Value> {
+    calls.fetch_add(1, Ordering::SeqCst);
+    Json(json!({"text":"unexpected generic speech request"}))
+}
+
+#[tokio::test]
+async fn native_media_start_failure_is_reported_without_speech_fallback_and_releases_session() {
+    let super::native::NativeFixture { root, cwd, path } = super::native::NativeFixture::new();
+    let speech_calls = Arc::new(AtomicUsize::new(0));
+    let app = Router::new()
+        .route("/v1/audio/transcriptions", post(unexpected_speech))
+        .route("/v1/audio/speech", post(unexpected_speech))
+        .with_state(speech_calls.clone());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}/v1", listener.local_addr().unwrap());
+    let http = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let (mut process, log) = start_server(root.path(), &path, &endpoint);
+    let address = ready(&mut process, &log).await;
+    let (_control, id) = create_agent(&address, &cwd, "codex").await;
+    let mut client = connect(&address, &method_names(voice::connection::METHODS)).await;
+    let mode = request(
+        &mut client,
+        "voice.mode.set.request",
+        json!({"enabled":true,"agentId":id}),
+    )
+    .await;
+    // The protocol fixture returns an invalid SDP. Real media success belongs to the provider's
+    // paired-peer tests; the daemon must propagate rejection and clean up without speech fallback.
+    assert_eq!(mode["result"]["accepted"], false, "{mode}");
+    assert_eq!(mode["result"]["enabled"], false);
+    assert_eq!(mode["result"]["reasonCode"], "native_realtime_failed");
+    let requests = wait_native_stop(&cwd).await;
+    client
+        .send(Message::Text(
+            json!({
+                "type":"event","method":"voice.audio.chunk",
+                "params":{"audio":"AAgACA==","format":"audio/pcm;rate=24000","isLast":true}
+            })
+            .to_string()
+            .into(),
+        ))
+        .await
+        .unwrap();
+    client.close(None).await.unwrap();
+    assert!(
+        requests
+            .iter()
+            .any(|request| request["method"] == "thread/realtime/start")
+    );
+    assert!(
+        !requests
+            .iter()
+            .any(|request| request["method"] == "turn/start")
+    );
+    assert_eq!(speech_calls.load(Ordering::SeqCst), 0);
+    terminate(&mut process).await;
+    http.abort();
+}
+
+async fn wait_native_stop(cwd: &std::path::Path) -> Vec<Value> {
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let requests: Vec<Value> = std::fs::read_to_string(cwd.join("native-requests.jsonl"))
+                .unwrap()
+                .lines()
+                .map(|line| serde_json::from_str(line).unwrap())
+                .collect();
+            if requests
+                .iter()
+                .any(|request| request["method"] == "thread/realtime/stop")
+            {
+                return requests;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("failed media startup must stop the native realtime session")
 }

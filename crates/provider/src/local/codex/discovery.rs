@@ -264,6 +264,7 @@ pub(super) fn timeline_item(
             if let Some(client) = native["clientId"].as_str() {
                 item["clientMessageId"] = json!(client);
             }
+            super::voice_transcript::project(&mut item);
             item
         }
         "agentMessage" if native["delivery"] == "async" => {

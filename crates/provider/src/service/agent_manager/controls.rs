@@ -128,6 +128,7 @@ impl AgentManager {
             .await
             .map_err(|error| match error {
                 AgentSessionError::Unavailable => ErrorCode::UnsupportedCapability,
+                AgentSessionError::Busy => ErrorCode::CatalogBusy,
                 AgentSessionError::Rejected => ErrorCode::InvalidMessage,
                 AgentSessionError::Failed => ErrorCode::AgentIo,
             })

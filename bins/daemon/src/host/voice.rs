@@ -28,6 +28,22 @@ pub(super) fn compose(
 }
 
 impl Agents for NativeAgents {
+    fn realtime<'a>(
+        &'a self,
+        agent: &'a str,
+        cancel: CancellationToken,
+    ) -> Operation<'a, Option<model::realtime::Session>> {
+        Box::pin(async move {
+            self.0
+                .start_realtime(agent, cancel)
+                .await
+                .map_err(|error| match error {
+                    provider::rpc::ErrorCode::CatalogBusy => Error::AgentBusy,
+                    _ => Error::Realtime,
+                })
+        })
+    }
+
     fn resolve<'a>(&'a self, identifier: &'a str) -> Operation<'a, String> {
         Box::pin(async move {
             let result = self

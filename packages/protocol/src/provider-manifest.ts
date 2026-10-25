@@ -22,6 +22,7 @@ export type AgentProviderModeDefinition = Omit<AgentMode, "icon" | "colorTier"> 
 // own modes at runtime via session/new. We should fetch modes from the provider
 // as source of truth and enrich with UI metadata (icons, colorTier) on top.
 export interface AgentProviderDefinition {
+  supportsRealtimeVoice?: boolean;
   id: string;
   label: string;
   description: string;

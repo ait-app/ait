@@ -52,7 +52,7 @@ Android 和 iOS 作为客户端连接电脑，不在手机上运行 daemon。
 
 没有桌面环境的服务器或需要长期在线的工作电脑，可以单独运行 daemon。先在这台机器上安装并认证需要使用的编程 Agent。
 
-在仓库根目录使用 [rust-toolchain.toml](rust-toolchain.toml) 指定的 Rust 工具链及系统 C/C++ 构建工具编译：
+在仓库根目录使用 [rust-toolchain.toml](rust-toolchain.toml) 指定的 Rust 工具链、CMake 及系统 C/C++ 构建工具编译：
 
 ```sh
 cargo build --locked --release -p daemon --bin daemon
@@ -74,7 +74,7 @@ cargo build --locked --release -p daemon --bin daemon
 
 ## 本地开发
 
-准备 Git、Node.js 24、npm，以及 [rust-toolchain.toml](rust-toolchain.toml) 指定的 Rust 工具链。
+准备 Git、Node.js 24、npm、CMake、系统 C/C++ 构建工具，以及 [rust-toolchain.toml](rust-toolchain.toml) 指定的 Rust 工具链。
 仓库提供可选的 Nix 开发环境，运行 `nix develop` 可进入包含 Rust、Node.js 和构建工具的环境。
 
 在仓库根目录运行：

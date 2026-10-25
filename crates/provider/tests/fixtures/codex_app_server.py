@@ -25,6 +25,14 @@ turn_content = []
 history_lock = threading.Lock()
 stream_items = []
 steered_inputs = []
+voice_history = []
+
+def voice_item(item, completed=True):
+    item = {"realtimeSessionId":"realtime-fixture", **item}
+    if completed:
+        voice_history.append({"type":"realtime","position":len(voice_history),"item":item})
+        (root / "timeline-pages.json").write_text(json.dumps({"first":{"data":voice_history,"nextCursor":None,"activeRealtimeSessionAtPageStart":None}}))
+    emit({"method":"thread/realtime/item/" + ("completed" if completed else "started"),"params":{"threadId":thread_id,"item":item}})
 
 def emit(value):
     with output_lock:
@@ -105,13 +113,37 @@ for line in sys.stdin:
     if mode == "error" or (mode == "reject-first-input" and method == "turn/start"):
         emit({"id": request["id"], "error": {"message": "sensitive native error"}})
         continue
+    if method == "thread/realtime/start" and mode == "realtime-rejected":
+        emit({"id":request["id"],"error":{"code":-32600,"message":"native realtime requires authentication"}})
+        continue
+    if method == "thread/realtime/start" and mode == "realtime-delayed":
+        (root / "realtime-started").write_text("ready")
+        while not (root / "release-realtime").exists():
+            time.sleep(0.01)
     result = {}
+    if method == "thread/timeline/list":
+        error_file = root / "timeline-error.json"
+        if error_file.exists():
+            emit({"id": request["id"], "error": json.loads(error_file.read_text())})
+            continue
+        pages_file = root / "timeline-pages.json"
+        if not pages_file.exists():
+            emit({"id": request["id"], "error": {"code": -32601, "message": "Method not found"}})
+            continue
+        pages = json.loads(pages_file.read_text())
+        emit({"id": request["id"], "result": pages[params.get("cursor") or "first"]})
+        continue
     if method == "initialize":
         result = {"userAgent":"codex_cli_rs/0.153.4"} if mode == "workflows" else {}
+    elif method == "thread/items/read" and mode == "realtime-canonical":
+        result = {"data":[{"turnId":"delegated","item":{"type":"agentMessage","id":"rich","text":"**Structured response**"},"startedAtMs":None,"completedAtMs":None}]}
     elif method == "collaborationMode/list":
         result = {"data":[{"name":"Plan","mode":"plan","model":"offline-model","reasoning_effort":"high"},
             {"name":"Default","mode":"default","model":"offline-model"}]} if mode == "workflows" else {"data":[]}
     elif method in ("thread/start", "thread/resume", "thread/read"):
+        if method == "thread/resume" and mode == "realtime-writer-busy":
+            emit({"id": request["id"], "error": {"code": -32600, "message": "thread " + params["threadId"] + " already has an active writer"}})
+            continue
         if method == "thread/resume" and mode == "delayed-resume":
             (root / "resume-started").write_text("ready")
             while not (root / "release-resume").exists():
@@ -205,6 +237,34 @@ for line in sys.stdin:
             sys.exit(0)
         result = {"turnId": "wrong-turn" if mode == "steer-wrong-id" else pending}
     emit({"id": request["id"], "result": result})
+    if method == "thread/realtime/start" and params.get("transport", {}).get("type") == "webrtc":
+        emit({"method":"thread/realtime/sdp","params":{"threadId":thread_id,"sdp":"fixture-answer"}})
+    if method == "thread/realtime/start":
+        emit({"method":"thread/realtime/started","params":{"threadId":thread_id,"realtimeSessionId":"realtime-fixture","version":"v2"}})
+        if mode == "realtime-canonical":
+            voice_item({"type":"realtimeSessionStarted","id":"start"})
+            voice_item({"type":"transcriptSegment","id":"user","role":"user","text":""}, False)
+            emit({"method":"thread/realtime/item/transcript/delta","params":{"threadId":thread_id,"itemId":"user","delta":"hello"}})
+            voice_item({"type":"transcriptSegment","id":"user","role":"user","text":"Hello!"})
+            voice_item({"type":"transcriptSegment","id":"assistant","role":"assistant","text":""}, False)
+            emit({"method":"thread/realtime/item/transcript/delta","params":{"threadId":thread_id,"itemId":"assistant","delta":"I can hear"}})
+            voice_history.append({"type":"item","position":len(voice_history),"turnId":"delegated","item":{"type":"agentMessage","id":"rich","text":"**Structured response**"}})
+            voice_item({"type":"bemItemPromoted","id":"promotion","turnId":"delegated","itemId":"rich","presentation":{"type":"inlineMarkdown"}})
+    if method == "thread/realtime/appendAudio":
+        # A different thread's audio must never reach this connection.
+        emit({"method":"thread/realtime/outputAudio/delta","params":{"threadId":"unrelated","audio":params["audio"]}})
+        emit({"method":"thread/realtime/transcript/delta","params":{"threadId":thread_id,"role":"user","delta":"hello"}})
+        emit({"method":"thread/realtime/transcript/done","params":{"threadId":thread_id,"role":"user","text":"hello"}})
+        emit({"method":"thread/realtime/outputAudio/delta","params":{"threadId":thread_id,"audio":params["audio"]}})
+        if mode == "realtime-closed":
+            emit({"method":"thread/realtime/closed","params":{"threadId":thread_id,"reason":"finished"}})
+        if mode == "realtime-error":
+            emit({"method":"thread/realtime/error","params":{"threadId":thread_id,"message":"private upstream diagnostic"}})
+    if method == "thread/realtime/stop":
+        if mode == "realtime-canonical":
+            voice_item({"type":"transcriptSegment","id":"assistant","role":"assistant","text":"I can hear you."})
+            voice_item({"type":"realtimeSessionClosed","id":"end","outcome":"ended"})
+        emit({"method":"thread/realtime/closed","params":{"threadId":thread_id,"reason":"stopped"}})
     if method == "thread/compact/start":
         compact_turn = pending or str(uuid.uuid4())
         if pending is None:

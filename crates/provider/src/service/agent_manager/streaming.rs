@@ -89,6 +89,11 @@ pub(super) async fn drain(
     id: &str,
     agent: &mut super::LiveAgent,
 ) -> Result<(), AgentManagerError> {
+    agent
+        .session
+        .service_realtime()
+        .await
+        .map_err(super::map_session)?;
     persist_handle(registry, id, agent)?;
     persist_input(registry, id, agent)?;
     for _ in 0..128 {
@@ -414,7 +419,9 @@ impl AgentManager {
                 agent.pending_input_at = Some(now_timestamp());
                 Ok(())
             }
-            Err(AgentSessionError::Rejected) => Err(AgentManagerError::Busy),
+            Err(AgentSessionError::Rejected | AgentSessionError::Busy) => {
+                Err(AgentManagerError::Busy)
+            }
             Err(AgentSessionError::Failed | AgentSessionError::Unavailable) => {
                 agent.pending = Some(AgentTurnEvent::Failed);
                 self.poll().await?;

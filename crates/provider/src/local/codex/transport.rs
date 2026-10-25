@@ -227,6 +227,14 @@ impl Transport {
                         return Err(AgentSessionError::Failed);
                     }
                     if let Some(error) = message.get("error") {
+                        if method == "thread/timeline/list"
+                            && (error["code"] == -32601 || (error["code"] == -32600
+                                && error["message"].as_str().is_some_and(|message| message.starts_with(
+                                    "Invalid request: unknown variant `thread/timeline/list`, expected "
+                                ))))
+                        {
+                            return Err(AgentSessionError::Unavailable);
+                        }
                         if method == "turn/steer" && super::streaming::steer_rejected(error) {
                             tracing::debug!(
                                 provider = "codex",
@@ -235,6 +243,16 @@ impl Transport {
                             );
                         } else {
                             self.observe_error(error, diagnostics::native(error, "rpc"), method);
+                        }
+                        if method == "thread/resume"
+                            && error["code"] == -32600
+                            && let Some(thread) = request["params"]["threadId"].as_str()
+                            && error["message"].as_str().and_then(|message| {
+                                message.strip_prefix("thread ")?
+                                    .strip_suffix(" already has an active writer")
+                            }) == Some(thread)
+                        {
+                            return Err(AgentSessionError::Busy);
                         }
                         return Err(
                             if method != "turn/steer" || super::streaming::steer_rejected(error) {
@@ -265,6 +283,10 @@ impl Transport {
             Ok(value)
         } else if matches!(result, Ok(Err(AgentSessionError::Rejected))) {
             Err(AgentSessionError::Rejected)
+        } else if matches!(result, Ok(Err(AgentSessionError::Unavailable))) {
+            Err(AgentSessionError::Unavailable)
+        } else if matches!(result, Ok(Err(AgentSessionError::Busy))) {
+            Err(AgentSessionError::Busy)
         } else {
             let category = if result.is_err() {
                 Category::Timeout
@@ -355,6 +377,64 @@ impl Transport {
         }
     }
 
+    /// Drain the old audio generation before the same thread can start another one.
+    /// Preserve ordinary text, approvals and canonical speech records in their original order.
+    /// Only media/transport notifications are discarded; they must not reach the next call.
+    pub(super) async fn wait_realtime_closed(
+        &mut self,
+        thread: &str,
+    ) -> Result<(), AgentSessionError> {
+        let mut retained = VecDeque::new();
+        let result = tokio::time::timeout(self.deadline, async {
+            loop {
+                let message = match self.events.pop_front() {
+                    Some(message) => message,
+                    None => self
+                        .messages
+                        .recv()
+                        .await
+                        .ok_or(AgentSessionError::Failed)?,
+                };
+                if message["params"]["threadId"] == thread
+                    && message["method"]
+                        .as_str()
+                        .is_some_and(|method| method.starts_with("thread/realtime/"))
+                {
+                    if message["method"] == "thread/realtime/closed" {
+                        return Ok(());
+                    }
+                    if matches!(
+                        message["method"].as_str(),
+                        Some(
+                            "thread/realtime/item/started"
+                                | "thread/realtime/item/transcript/delta"
+                                | "thread/realtime/item/completed"
+                        )
+                    ) {
+                        if retained.len() >= MAX_EVENTS {
+                            return Err(AgentSessionError::Failed);
+                        }
+                        retained.push_back(message);
+                    }
+                } else {
+                    if retained.len() >= MAX_EVENTS {
+                        return Err(AgentSessionError::Failed);
+                    }
+                    retained.push_back(message);
+                }
+            }
+        })
+        .await;
+        retained.append(&mut self.events);
+        self.events = retained;
+        if matches!(result, Ok(Ok(()))) {
+            Ok(())
+        } else {
+            let _ = self.close().await;
+            Err(AgentSessionError::Failed)
+        }
+    }
+
     pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {
         self.diagnostics.flush();
         self.closed = true;
@@ -428,24 +508,25 @@ async fn write(input: &Mutex<ChildStdin>, value: &Value) -> Result<(), AgentSess
 mod tests;
 
 fn retained(method: Option<&str>) -> bool {
-    matches!(
-        method,
-        Some(
-            "error"
-                | "turn/completed"
-                | "thread/started"
-                | "turn/plan/updated"
-                | "thread/goal/updated"
-                | "thread/goal/cleared"
-                | "turn/started"
-                | "thread/tokenUsage/updated"
-                | "serverRequest/resolved"
-                | "item/completed"
-                | "item/started"
-                | "item/agentMessage/delta"
-                | "item/reasoning/summaryTextDelta"
-                | "item/commandExecution/outputDelta"
-                | "item/fileChange/outputDelta"
+    method.is_some_and(|method| method.starts_with("thread/realtime/"))
+        || matches!(
+            method,
+            Some(
+                "error"
+                    | "turn/completed"
+                    | "thread/started"
+                    | "turn/plan/updated"
+                    | "thread/goal/updated"
+                    | "thread/goal/cleared"
+                    | "turn/started"
+                    | "thread/tokenUsage/updated"
+                    | "serverRequest/resolved"
+                    | "item/completed"
+                    | "item/started"
+                    | "item/agentMessage/delta"
+                    | "item/reasoning/summaryTextDelta"
+                    | "item/commandExecution/outputDelta"
+                    | "item/fileChange/outputDelta"
+            )
         )
-    )
 }

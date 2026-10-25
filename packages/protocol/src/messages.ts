@@ -297,6 +297,7 @@ const AgentModelDefinitionSchema = z.object({
 }) satisfies z.ZodType<AgentModelDefinition>;
 
 export const ProviderSnapshotEntrySchema = z.object({
+  supportsRealtimeVoice: z.boolean().optional(),
   supportsSessionImport: z.boolean().optional(),
   provider: AgentProviderSchema,
   status: ProviderStatusSchema,
@@ -340,6 +341,7 @@ const AgentCapabilityFlagsSchema: z.ZodType<AgentCapabilityFlags> = z
     supportsStreaming: z.boolean(),
     supportsSessionPersistence: z.boolean(),
     supportsSessionListing: z.boolean().optional(),
+    supportsRealtimeVoice: z.boolean().optional(),
     supportsDynamicModes: z.boolean(),
     supportsMcpServers: z.boolean(),
     supportsReasoningStream: z.boolean(),
@@ -641,15 +643,34 @@ export const CompactionTimelineItemPayloadSchema = z.object({
 
 export type CompactionTimelineItemPayload = z.infer<typeof CompactionTimelineItemPayloadSchema>;
 
+export const VoiceTranscriptSchema = z
+  .array(z.object({ role: z.enum(["user", "assistant", "unknown"]), text: z.string() }))
+  .max(256);
+
+export const VoiceTimelineItemSchema = z.intersection(
+  z.object({ type: z.literal("voice"), id: z.string(), sessionId: z.string() }),
+  z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("transcript"),
+      role: z.enum(["user", "assistant"]),
+      text: z.string(),
+      status: z.enum(["streaming", "completed"]),
+    }),
+    z.object({ kind: z.literal("session"), status: z.enum(["started", "ended", "failed"]) }),
+  ]),
+);
+
 // zod-aot 0.20.4 miscompiles this as a nested discriminated union by omitting
 // the inner tool_call branch from the generated outer dispatch.
 export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknown> = z.union([
+  VoiceTimelineItemSchema,
   z.object({
     type: z.literal("user_message"),
     text: z.string(),
     messageId: z.string().optional(),
     clientMessageId: z.string().optional(),
     imageSources: z.array(z.string()).optional(),
+    voiceTranscript: VoiceTranscriptSchema.optional(),
   }),
   z.object({
     type: z.literal("assistant_message"),
@@ -3201,6 +3222,16 @@ export const TranscriptionResultMessageSchema = z.object({
     format: z.string().optional(),
     debugRecordingPath: z.string().optional(),
   }),
+});
+
+export const VoiceSessionClosedMessageSchema = z.object({
+  type: z.literal("voice.session.closed"),
+  payload: z.object({}),
+});
+
+export const VoiceErrorMessageSchema = z.object({
+  type: z.literal("voice.error"),
+  payload: z.object({ error: z.string(), reasonCode: z.string(), retryable: z.boolean() }),
 });
 
 export const VoiceInputStateMessageSchema = z.object({
@@ -6321,6 +6352,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AudioOutputMessageSchema,
   TranscriptionResultMessageSchema,
   VoiceInputStateMessageSchema,
+  VoiceSessionClosedMessageSchema,
+  VoiceErrorMessageSchema,
   DictationStreamAckMessageSchema,
   DictationStreamFinishAcceptedMessageSchema,
   DictationStreamPartialMessageSchema,

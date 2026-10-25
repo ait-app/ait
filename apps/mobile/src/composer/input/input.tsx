@@ -156,6 +156,7 @@ export interface MessageInputProps {
   activeActionContent?: React.ReactNode;
   voiceServerId?: string;
   voiceAgentId?: string;
+  onStartRealtimeVoice?: () => void;
   /** When true and there's sendable content, calls onQueue instead of onSubmit */
   isAgentRunning?: boolean;
   /** Controls what the default send action (Enter, send button, dictation) does when the agent is
@@ -865,6 +866,7 @@ interface ToggleRealtimeVoiceContext {
   disabled: boolean;
   isAgentRunning: boolean;
   handleStopRealtimeVoice: () => Promise<unknown> | void;
+  onStartRealtimeVoice?: () => void;
   toast: { error: (msg: string) => void };
   interruptBeforeVoiceMessage: string;
   exitFullscreen: () => void;
@@ -884,6 +886,10 @@ function toggleRealtimeVoiceImpl(ctx: ToggleRealtimeVoiceContext): void {
     return;
   }
   ctx.exitFullscreen();
+  if (ctx.onStartRealtimeVoice) {
+    ctx.onStartRealtimeVoice();
+    return;
+  }
   void ctx.voice.startVoice(ctx.voiceServerId, ctx.voiceAgentId).catch((error) => {
     console.error("[MessageInput] Failed to start realtime voice", error);
     const message = extractErrorMessage(error);
@@ -1102,6 +1108,7 @@ interface ResolvedMessageInputProps {
   activeActionContent: React.ReactNode;
   voiceServerId: string | undefined;
   voiceAgentId: string | undefined;
+  onStartRealtimeVoice: (() => void) | undefined;
   isAgentRunning: boolean;
   defaultSendBehavior: "interrupt" | "steer" | "queue";
   onQueue: ((payload: MessagePayload) => void) | undefined;
@@ -1149,6 +1156,7 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     activeActionContent: props.activeActionContent,
     voiceServerId: props.voiceServerId,
     voiceAgentId: props.voiceAgentId,
+    onStartRealtimeVoice: props.onStartRealtimeVoice,
     isAgentRunning: props.isAgentRunning ?? false,
     defaultSendBehavior: props.defaultSendBehavior,
     onQueue: props.onQueue,
@@ -1226,6 +1234,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       activeActionContent,
       voiceServerId,
       voiceAgentId,
+      onStartRealtimeVoice,
       isAgentRunning,
       defaultSendBehavior,
       onQueue,
@@ -1616,6 +1625,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         disabled,
         isAgentRunning,
         handleStopRealtimeVoice,
+        onStartRealtimeVoice,
         toast,
         interruptBeforeVoiceMessage: t("composer.voice.interruptBeforeVoice"),
         exitFullscreen,
@@ -1623,6 +1633,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     }, [
       disabled,
       handleStopRealtimeVoice,
+      onStartRealtimeVoice,
       exitFullscreen,
       isAgentRunning,
       isConnected,

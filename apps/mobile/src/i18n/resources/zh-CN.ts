@@ -2,6 +2,7 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const zhCN: TranslationResources = {
+  voiceTimeline: { started: "语音对话已开始", ended: "语音对话已结束", failed: "语音对话已中断" },
   bots: {
     title: "Bot",
     browse: "工作区的 Bot",

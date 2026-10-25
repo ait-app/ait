@@ -47,7 +47,7 @@ export interface VoiceRuntimeTelemetrySnapshot {
 
 export interface VoiceSessionAdapter {
   serverId: string;
-  setVoiceMode(enabled: boolean, agentId?: string): Promise<void>;
+  setVoiceMode(enabled: boolean, agentId?: string): Promise<unknown>;
   sendVoiceAudioChunk(audioData: string, mimeType: string): Promise<void>;
   audioPlayed(chunkId: string): Promise<void>;
   abortRequest(): Promise<void>;
@@ -57,6 +57,7 @@ export interface VoiceSessionAdapter {
 export interface VoiceRuntimeDeps {
   engine: AudioEngine;
   getServerInfo(serverId: string): DaemonServerInfo | null;
+  supportsRealtimeVoice?(serverId: string, agentId: string): boolean;
   activateKeepAwake(tag: string): Promise<void>;
   deactivateKeepAwake(tag: string): Promise<void>;
 }
@@ -75,6 +76,7 @@ interface RuntimeState {
   snapshot: VoiceRuntimeSnapshot;
   telemetry: VoiceRuntimeTelemetrySnapshot;
   turnInProgress: boolean;
+  nativeRealtime: boolean;
   serverSpeechDetected: boolean;
   transportReady: boolean;
   generation: number;
@@ -111,6 +113,7 @@ interface RuntimePlaybackState {
   activeGroupId: string | null;
   processing: boolean;
   generation: number;
+  nativeChunks: Set<string>;
 }
 
 interface CueState {
@@ -171,6 +174,7 @@ export interface VoiceRuntime {
   handleAudioOutput(serverId: string, payload: AudioOutputPayload): void;
   startVoice(serverId: string, agentId: string): Promise<void>;
   stopVoice(): Promise<void>;
+  onSessionClosed(serverId: string): void;
   destroy(): Promise<void>;
   toggleMute(): void;
   isVoiceModeForAgent(serverId: string, agentId: string): boolean;
@@ -191,6 +195,7 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
     snapshot: INITIAL_SNAPSHOT,
     telemetry: INITIAL_TELEMETRY,
     turnInProgress: false,
+    nativeRealtime: false,
     serverSpeechDetected: false,
     transportReady: false,
     generation: 0,
@@ -204,6 +209,7 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
     activeGroupId: null,
     processing: false,
     generation: 0,
+    nativeChunks: new Set(),
   };
   const cue: CueState = {
     active: false,
@@ -275,7 +281,8 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
     format: string,
   ): { arrayBuffer(): Promise<ArrayBuffer>; size: number; type: string } {
     let mimeType: string;
-    if (format === "pcm") mimeType = "audio/pcm;rate=24000;bits=16";
+    if (format.startsWith("audio/")) mimeType = format;
+    else if (format === "pcm") mimeType = "audio/pcm;rate=24000;bits=16";
     else if (format === "mp3") mimeType = "audio/mpeg";
     else mimeType = `audio/${format}`;
 
@@ -291,6 +298,7 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
   function resetPlaybackState(): void {
     playback.generation += 1;
     playback.groups.clear();
+    playback.nativeChunks.clear();
     playback.orderedGroupIds = [];
     playback.activeGroupId = null;
     playback.processing = false;
@@ -331,6 +339,36 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
       return;
     }
     await activeSession.adapter.audioPlayed(chunkId);
+  }
+
+  function playNativeChunk(serverId: string, payload: AudioOutputPayload): void {
+    if (playback.nativeChunks.has(payload.id)) return;
+    const generation = playback.generation;
+    if (playback.nativeChunks.size === 0) api.onAssistantAudioStarted(serverId);
+    playback.nativeChunks.add(payload.id);
+    const source = toPlaybackSource(decodeAudioChunk(payload.audio), payload.format);
+    // Native PCM packets form one continuous stream, even across group IDs.
+    // Enqueue immediately so the device can schedule ahead of ended callbacks.
+    void deps.engine
+      .play(source)
+      .then(
+        () => {
+          if (generation !== playback.generation) return;
+          void acknowledgeChunk(payload.id).catch((error) => {
+            console.warn("[VoiceRuntime] Failed to confirm audio playback:", error);
+          });
+        },
+        (error: unknown) => {
+          if (generation !== playback.generation) return;
+          console.error("[VoiceRuntime] Native audio playback failed:", error);
+          void api.stopVoice();
+        },
+      )
+      .finally(() => {
+        if (generation !== playback.generation) return;
+        playback.nativeChunks.delete(payload.id);
+        if (playback.nativeChunks.size === 0) api.onAssistantAudioFinished(serverId);
+      });
   }
 
   async function processPlaybackQueue(serverId: string): Promise<void> {
@@ -459,6 +497,10 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
   }
 
   function reconcileCue(): void {
+    if (state.nativeRealtime) {
+      stopCue();
+      return;
+    }
     if (!canPlayCue()) {
       stopCue();
       return;
@@ -520,6 +562,7 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
   };
 
   function resetToDisabledState(): void {
+    state.nativeRealtime = false;
     state.transportReady = false;
     state.turnInProgress = false;
     state.serverSpeechDetected = false;
@@ -552,15 +595,18 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
   }
 
   async function performLocalStop(): Promise<void> {
+    const generation = state.generation;
+    patchSnapshot((prev) => ({ ...prev, isVoiceSwitching: true, phase: "stopping" }));
     stopCue();
     uploader.reset();
+    state.transportReady = false;
     resetPlaybackState();
     deps.engine.stop();
     deps.engine.clearQueue();
+    getActiveSession()?.adapter.setAssistantAudioPlaying(false);
     await deps.engine.stopCapture().catch(() => undefined);
     await deps.deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => undefined);
-    getActiveSession()?.adapter.setAssistantAudioPlaying(false);
-    resetToDisabledState();
+    if (state.generation === generation) resetToDisabledState();
   }
 
   async function resyncVoiceMode(serverId: string): Promise<void> {
@@ -635,6 +681,10 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
       }
       if (!connected) {
         state.transportReady = false;
+        if (state.nativeRealtime) {
+          state.generation += 1;
+          void performLocalStop();
+        }
         return;
       }
       void resyncVoiceMode(serverId);
@@ -677,6 +727,11 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
         return;
       }
 
+      if (state.nativeRealtime) {
+        playNativeChunk(serverId, payload);
+        return;
+      }
+
       const groupId = payload.groupId ?? payload.id;
       const chunkIndex = payload.chunkIndex ?? 0;
       const decoded = decodeAudioChunk(payload.audio);
@@ -713,6 +768,12 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
     },
 
     async startVoice(serverId, agentId) {
+      if (
+        state.snapshot.isVoiceMode &&
+        state.snapshot.activeServerId === serverId &&
+        state.snapshot.activeAgentId === agentId
+      )
+        return;
       const session = sessions.get(serverId);
       if (!session) {
         throw new Error(`Voice runtime is not ready for host ${serverId}`);
@@ -726,7 +787,7 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
         serverInfo,
         mode: "voice",
       });
-      if (unavailableMessage) {
+      if (unavailableMessage && !deps.supportsRealtimeVoice?.(serverId, agentId)) {
         throw new Error(unavailableMessage);
       }
 
@@ -755,16 +816,36 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
             previousSession.adapter.setAssistantAudioPlaying(false);
             await previousSession.adapter.setVoiceMode(false);
           }
+          await deps.engine.stopCapture();
+          resetPlaybackState();
+          deps.engine.stop();
+          deps.engine.clearQueue();
         }
 
         await deps.activateKeepAwake(KEEP_AWAKE_TAG).catch((error) => {
           console.warn("[VoiceRuntime] Failed to activate keep-awake:", error);
         });
+        if (state.generation !== generation) {
+          if (state.snapshot.phase === "disabled") {
+            await deps.deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => undefined);
+          }
+          return;
+        }
 
         await deps.engine.initialize();
+        if (state.generation !== generation) return;
+        const native = deps.supportsRealtimeVoice?.(serverId, agentId) === true;
+        state.nativeRealtime = native;
+        // Native media starts as soon as the daemon accepts. Resolve microphone permission
+        // first so incoming PCM cannot fill its acknowledgment window while capture is pending.
+        if (native) {
+          await deps.engine.startCapture();
+          if (state.generation !== generation) return;
+        }
         await session.adapter.setVoiceMode(true, agentId);
+        if (state.generation !== generation) return;
         enabledCurrentVoiceMode = true;
-        await deps.engine.startCapture();
+        if (!native) await deps.engine.startCapture();
         if (state.generation !== generation) {
           return;
         }
@@ -784,39 +865,29 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
         if (enabledCurrentVoiceMode) {
           await session.adapter.setVoiceMode(false).catch(() => undefined);
         }
-        await performLocalStop();
+        if (state.generation === generation) await performLocalStop();
         throw error;
       }
     },
 
     async stopVoice() {
       const activeSession = getActiveSession();
-      const generation = state.generation + 1;
-      state.generation = generation;
-      patchSnapshot((prev) => ({
-        ...prev,
-        isVoiceSwitching: true,
-        phase: "stopping",
-      }));
-
+      state.generation += 1;
+      // Release local audio even when the host cannot acknowledge the stop request.
+      const localStop = performLocalStop();
       try {
-        stopCue();
-        uploader.reset();
-        state.transportReady = false;
-        resetPlaybackState();
-        deps.engine.stop();
-        deps.engine.clearQueue();
-        activeSession?.adapter.setAssistantAudioPlaying(false);
         if (activeSession) {
           await activeSession.adapter.setVoiceMode(false);
         }
-        await deps.engine.stopCapture();
-        await deps.deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => undefined);
       } finally {
-        if (state.generation === generation) {
-          resetToDisabledState();
-        }
+        await localStop;
       }
+    },
+
+    onSessionClosed(serverId) {
+      if (state.snapshot.activeServerId !== serverId) return;
+      state.generation += 1;
+      void performLocalStop();
     },
 
     async destroy() {
@@ -894,7 +965,7 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
         return;
       }
 
-      if (text.trim()) {
+      if (text.trim() && !state.nativeRealtime) {
         state.turnInProgress = true;
         patchSnapshot((prev) => ({ ...prev, phase: "waiting" }));
         reconcileCue();
@@ -915,7 +986,9 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
       state.serverSpeechStartedAt = isSpeaking ? (state.serverSpeechStartedAt ?? Date.now()) : null;
       if (isSpeaking) {
         const shouldInterruptPlayback =
-          state.snapshot.phase === "playing" || playback.groups.size > 0;
+          state.snapshot.phase === "playing" ||
+          playback.groups.size > 0 ||
+          playback.nativeChunks.size > 0;
         const hadCue = cue.active || cue.timeout !== null || cue.playing;
         resetPlaybackState();
         stopCue();

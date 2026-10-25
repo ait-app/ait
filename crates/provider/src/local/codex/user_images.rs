@@ -51,6 +51,7 @@ pub(super) fn project(native: &Value, images: &ImageStore) -> Result<Value, Agen
     if !sources.is_empty() {
         item["imageSources"] = json!(sources);
     }
+    super::voice_transcript::project(&mut item);
     Ok(item)
 }
 

@@ -14,6 +14,7 @@ class ExpoTwoWayAudioModule : Module() {
         private const val ON_OUTPUT_VOLUME_LEVEL_EVENT = "onOutputVolumeLevelData"
         private const val ON_RECORDING_CHANGE_EVENT = "onRecordingChange"
         private const val ON_AUDIO_INTERRUPTION_EVENT = "onAudioInterruption"
+        private const val ON_PLAYBACK_COMPLETE_EVENT = "onPlaybackComplete"
         var audioEngine: AudioEngine? = null
     }
 
@@ -67,6 +68,10 @@ class ExpoTwoWayAudioModule : Module() {
              audioEngine?.playPCMData(data)
          }
 
+         Function("enqueuePCMData") { data: kotlin.ByteArray, id: String ->
+             audioEngine?.playPCMData(data, id) ?: false
+         }
+
          Function("bypassVoiceProcessing") { bypass: Boolean ->
              audioEngine?.bypassVoiceProcessing(bypass)
          }
@@ -117,12 +122,20 @@ class ExpoTwoWayAudioModule : Module() {
             ON_INPUT_VOLUME_LEVEL_EVENT,
             ON_OUTPUT_VOLUME_LEVEL_EVENT,
             ON_RECORDING_CHANGE_EVENT,
-            ON_AUDIO_INTERRUPTION_EVENT
+            ON_AUDIO_INTERRUPTION_EVENT,
+            ON_PLAYBACK_COMPLETE_EVENT
         )
     }
 
     private fun setupCallbacks() {
         audioEngine?.apply {
+            onPlaybackComplete = { id, error ->
+                sendEvent(ON_PLAYBACK_COMPLETE_EVENT, if (error == null) {
+                    bundleOf("id" to id)
+                } else {
+                    bundleOf("id" to id, "error" to error)
+                })
+            }
             onMicDataCallback = { data ->
                 sendEvent(ON_MIC_DATA_EVENT, bundleOf("data" to data))
             }

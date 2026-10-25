@@ -7,7 +7,7 @@ use super::{MAX_ENTRY_BYTES, NativeItem, Row, Timeline, epoch, io};
 
 impl Timeline {
     /// Persist and publish one retry-stable incremental item in the same cursor space as history.
-    /// Text items are additive deltas; tool items are bounded running snapshots.
+    /// Text items are additive deltas; tool and voice items are bounded running snapshots.
     /// # Errors
     /// Returns changed replay, already completed item, oversized data or storage failures.
     pub(crate) fn progress(
@@ -19,7 +19,7 @@ impl Timeline {
     ) -> Result<(), ErrorCode> {
         if !matches!(
             entry.item["type"].as_str(),
-            Some("assistant_message" | "reasoning" | "tool_call")
+            Some("assistant_message" | "reasoning" | "tool_call" | "voice")
         ) || !entry.key.starts_with("native:")
             || observation.is_empty()
         {

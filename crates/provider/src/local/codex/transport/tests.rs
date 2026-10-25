@@ -7,6 +7,51 @@ struct Fixture {
     transport: Transport,
 }
 
+#[tokio::test]
+async fn resume_writer_conflict_is_precise_and_keeps_transport_usable() {
+    for (method, code, message, expected) in [
+        (
+            "thread/resume",
+            -32600,
+            "thread fixture already has an active writer",
+            AgentSessionError::Busy,
+        ),
+        (
+            "thread/resume",
+            -32600,
+            "thread another already has an active writer",
+            AgentSessionError::Rejected,
+        ),
+        (
+            "thread/resume",
+            -32603,
+            "thread fixture already has an active writer",
+            AgentSessionError::Rejected,
+        ),
+        (
+            "thread/read",
+            -32600,
+            "thread fixture already has an active writer",
+            AgentSessionError::Rejected,
+        ),
+    ] {
+        let error = json!({"code":code,"message":message});
+        let mut fixture = Fixture::new(&format!(
+            "request = receive()\nsend({{'id':request['id'],'error':{error}}})\n\
+             request = receive()\nsend({{'id':request['id'],'result':{{}}}})\nreceive()"
+        ));
+        assert_eq!(
+            fixture
+                .transport
+                .request(method, json!({"threadId":"fixture"}))
+                .await,
+            Err(expected)
+        );
+        fixture.request().await.unwrap();
+        fixture.transport.close().await.unwrap();
+    }
+}
+
 impl Fixture {
     fn new(body: &str) -> Self {
         let root = tempfile::tempdir().unwrap();

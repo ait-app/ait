@@ -27,6 +27,9 @@ pub(crate) enum AgentSessionError {
     /// The provider rejected a request while the transport remains usable.
     #[error("provider rejected the session operation")]
     Rejected,
+    /// The native session is already owned by another interactive writer.
+    #[error("provider session is in use")]
+    Busy,
 }
 
 /// Provider-independent inputs required to construct or resume a native session.
@@ -85,6 +88,24 @@ pub(crate) enum AgentTurnEvent {
 
 /// Live provider session. Closing releases resources without deleting native history.
 pub(crate) trait AgentSession: Debug + Send {
+    /// Attach a connection-owned native audio stream. Unsupported adapters reject it.
+    fn start_realtime(
+        &mut self,
+        _endpoint: model::realtime::Endpoint,
+    ) -> AgentSessionFuture<'_, ()> {
+        Box::pin(async { Err(AgentSessionError::Unavailable) })
+    }
+
+    /// Whether native audio requires low-latency polling even without a text turn.
+    fn realtime_active(&self) -> bool {
+        false
+    }
+
+    /// Drain bounded microphone input and perform native cancellation before observing events.
+    fn service_realtime(&mut self) -> AgentSessionFuture<'_, ()> {
+        Box::pin(async { Ok(()) })
+    }
+
     /// Resolve the session's account before deciding whether a quota read can reuse history.
     /// # Errors
     /// Returns native authentication inspection failures, without exposing credentials.

@@ -37,6 +37,8 @@ class AudioEngine {
     /// first spoken response. Decremented from the scheduling completion handler, which runs on an
     /// AVAudioEngine-internal thread, so all access goes through `playbackCountLock`.
     private var pendingPlaybackBuffers = 0
+    private var pendingPlaybackBytes = 0
+    private var playbackGeneration = 0
     private let playbackCountLock = NSLock()
 
     private var hasPendingPlayback: Bool {
@@ -237,8 +239,13 @@ class AudioEngine {
         }
     }
     
-    func playPCMData(_ pcmData: Data) {
+    @discardableResult
+    func playPCMData(_ pcmData: Data, completion: (() -> Void)? = nil) -> Bool {
+        guard !pcmData.isEmpty, pcmData.count % 2 == 0, pcmData.count <= 512 * 1024 else {
+            return false
+        }
         activateAudioSessionIfNeeded()
+        guard avAudioEngine.isRunning else { return false }
 
         // Looks like we don't get a proper AEC for the very first chunks of audio that we play.
         // To work around this, we will discard microphone input for the first few milliseconds.
@@ -255,23 +262,34 @@ class AudioEngine {
         
         guard let buffer = createBuffer(from: pcmData) else {
             print("Failed to create audio buffer")
-            return
+            return false
         }
         playbackCountLock.lock()
+        guard pendingPlaybackBuffers < 32, pendingPlaybackBytes + pcmData.count <= 1024 * 1024 else {
+            playbackCountLock.unlock()
+            return false
+        }
+        let generation = playbackGeneration
         pendingPlaybackBuffers += 1
+        pendingPlaybackBytes += pcmData.count
         playbackCountLock.unlock()
         speechPlayer.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
             guard let self = self else { return }
             self.playbackCountLock.lock()
-            if self.pendingPlaybackBuffers > 0 {
-                self.pendingPlaybackBuffers -= 1
+            guard generation == self.playbackGeneration else {
+                self.playbackCountLock.unlock()
+                return
             }
+            self.pendingPlaybackBuffers -= 1
+            self.pendingPlaybackBytes -= pcmData.count
             self.playbackCountLock.unlock()
+            completion?()
         }
 
         if !speechPlayer.isPlaying {
             speechPlayer.play()
         }
+        return true
     }
 
     
@@ -324,8 +342,8 @@ class AudioEngine {
     
     func stopRecordingAndPlayer(){
         toggleRecording(false)
-        speechPlayer.stop()
         resetPendingPlayback()
+        speechPlayer.stop()
         updateOutputVolume()
         releaseAudioSession()
     }
@@ -334,7 +352,9 @@ class AudioEngine {
     /// it. Leaving it non-zero would block every later release.
     private func resetPendingPlayback() {
         playbackCountLock.lock()
+        playbackGeneration += 1
         pendingPlaybackBuffers = 0
+        pendingPlaybackBytes = 0
         playbackCountLock.unlock()
     }
 
@@ -355,8 +375,8 @@ class AudioEngine {
     }
 
     func stopPlayback() {
-        speechPlayer.stop()
         resetPendingPlayback()
+        speechPlayer.stop()
         // Clear any scheduled buffers
         outputBuffer = [Float](repeating: 0, count: 2048)
         updateOutputVolume()
@@ -369,6 +389,8 @@ class AudioEngine {
     }
 
     func resumePlayback() {
+        activateAudioSessionIfNeeded()
+        guard avAudioEngine.isRunning else { return }
         if !speechPlayer.isPlaying {
             speechPlayer.play()
             print("Playback resumed")
@@ -396,19 +418,12 @@ class AudioEngine {
             self.stopRecordingAndPlayer()
             onAudioInterruptionCallback?("began")
         case .ended:
-            if let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt {
-                let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
-                if options.contains(.shouldResume) {
-                    // Interruption ended. Resume playback.
-                    self.resumeRecordingAndPlayer()
-                    onAudioInterruptionCallback?("ended")
-                } else {
-                    // Interruption ends. Don't resume playback.
-                    onAudioInterruptionCallback?("blocked")
-                }
-            }
+            // The owning call was cancelled on began. Only a new explicit start may
+            // reacquire the microphone; shouldResume is permission, not user intent.
+            onAudioInterruptionCallback?("ended")
         @unknown default:
-            fatalError("Unknown type: \(type)")
+            self.stopRecordingAndPlayer()
+            onAudioInterruptionCallback?("blocked")
         }
     }
     

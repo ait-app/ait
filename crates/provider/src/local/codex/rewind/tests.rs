@@ -1,5 +1,38 @@
 use super::*;
 
+#[tokio::test]
+async fn rewind_retains_canonical_speech_from_the_fork_without_targeting_it() {
+    let fixture = crate::test_support::Fixture::new();
+    let user = json!({"id":"u1","type":"userMessage","content":[{"type":"text","text":"first"}]});
+    let original = json!([
+        {"id":"t1","status":"completed","items":[user]},
+        {"id":"t2","status":"completed","items":[{"id":"u2","type":"userMessage","content":[{"type":"text","text":"second"}]}]}
+    ]);
+    std::fs::write(
+        fixture.cwd.join("native-history-source.json"),
+        original.to_string(),
+    )
+    .unwrap();
+    std::fs::write(fixture.cwd.join("timeline-pages.json"), json!({"first":{"data":[
+        {"type":"realtime","position":0,"item":{"type":"transcriptSegment","id":"speech","realtimeSessionId":"call","role":"user","text":"retained voice"}},
+        {"type":"item","position":1,"turnId":"t1","item":user}
+    ],"nextCursor":null,"activeRealtimeSessionAtPageStart":null}}).to_string()).unwrap();
+    let history = fixture
+        .client()
+        .native_rewind("source", &fixture.spec(), "u2")
+        .await
+        .unwrap();
+    assert_eq!(history.entries.len(), 2);
+    assert_eq!(history.entries[0].item["text"], "retained voice");
+    assert_eq!(history.entries[1].key, "native:t1:u1");
+    let request = fixture.requests().pop().unwrap();
+    assert_eq!(request["method"], "thread/timeline/list");
+    assert_eq!(
+        request["params"]["threadId"],
+        history.descriptor.provider_handle_id
+    );
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn first_interrupted_turn_rewinds_when_rollback_is_removed_or_fork_is_legacy() {

@@ -139,6 +139,9 @@ export function VoiceProvider({ children }: VoiceProviderProps) {
       engine,
       getServerInfo: (serverId) =>
         useSessionStore.getState().getSession(serverId)?.serverInfo ?? null,
+      supportsRealtimeVoice: (serverId, agentId) =>
+        useSessionStore.getState().getSession(serverId)?.agents.get(agentId)?.capabilities
+          .supportsRealtimeVoice === true,
       activateKeepAwake: async (tag) => {
         await activateKeepAwakeAsync(tag);
       },

@@ -7,6 +7,11 @@ publish.workspace = true
 [dependencies]
 model.workspace = true
 domain.workspace = true
+# Codex owns the upstream peer and converts its Opus media to connection-local PCM.
+webrtc.workspace = true
+rtc.workspace = true
+opus2.workspace = true
+async-trait.workspace = true
 
 # Consume bounded native event streams and concurrent session previews.
 futures-util.workspace = true

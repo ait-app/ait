@@ -19,6 +19,7 @@ import {
   type InlinePathTarget,
 } from "@/components/message";
 import { PlanCard } from "@/components/plan-card";
+import { VoiceTimelineEntry } from "@/components/voice-timeline-entry";
 import { QuestionFormCard } from "@/components/question-form-card";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import type { ToastApi } from "@/components/toast-host";
@@ -694,6 +695,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             message={item.text}
             images={item.images}
             imageSources={item.imageSources}
+            voiceTranscript={item.voiceTranscript}
             attachments={item.attachments}
             timestamp={item.timestamp.getTime()}
             capabilities={context.capabilities}
@@ -859,6 +861,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       (layoutItem: StreamLayoutItem) => {
         const item = layoutItem.item;
         switch (item.kind) {
+          case "voice":
+            return <VoiceTimelineEntry item={item.payload} />;
           case "user_message":
             return renderUserMessageItem(layoutItem, item);
 

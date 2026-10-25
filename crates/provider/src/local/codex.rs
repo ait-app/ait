@@ -10,12 +10,16 @@ mod native_sessions;
 mod permissions;
 mod plans;
 mod prompts;
+mod realtime;
+mod realtime_history;
+mod realtime_timeline;
 mod rewind;
 mod speed;
 mod streaming;
 mod subagents;
 mod transport;
 mod user_images;
+mod voice_transcript;
 mod workflows;
 
 use std::borrow::Cow;
@@ -35,6 +39,7 @@ use crate::ports::agent_session::{
 #[derive(Debug, Clone)]
 pub(crate) struct CodexClient {
     program: PathBuf,
+    realtime_media: realtime::media::Factory,
     deadline: Duration,
     capabilities: std::sync::Arc<std::sync::atomic::AtomicU8>,
     images: super::images::ImageStore,
@@ -65,12 +70,20 @@ impl CodexClient {
     pub(crate) fn new(program: PathBuf) -> Self {
         Self {
             program,
+            realtime_media: realtime::media::open,
             deadline: Duration::from_secs(20),
             capabilities: std::sync::Arc::default(),
             images: super::images::ImageStore::default(),
             environment: crate::ports::environment::AgentEnvironment::default(),
             speed_catalog: std::sync::Arc::default(),
         }
+    }
+
+    /// Replace only upstream media with the offline native protocol fixture.
+    #[cfg(test)]
+    pub(crate) fn with_fixture_media(mut self) -> Self {
+        self.realtime_media = realtime::media::tests::fixture;
+        self
     }
 
     /// Store decoded native image output in a private, persistent directory.
@@ -162,6 +175,8 @@ impl CodexClient {
                     transport: (!history).then_some(transport),
                     id: id.clone(),
                     info,
+                    realtime: None,
+                    voice_timeline: realtime_timeline::Timeline::default(),
                     active_turn: None,
                     last_message: None,
                     last_failure: None,
@@ -259,7 +274,7 @@ impl AgentClient for CodexClient {
     fn settings(&self, config: &StoredAgentConfig) -> Value {
         json!({"availableModes":self.modes(),"features":self.features(config),
             "capabilities":{"supportsDynamicModes":true,"supportsRewindConversation":true,"supportsMcpServers":true,
-                "supportsStreaming":true,"supportsReasoningStream":true,"supportsSessionListing":true}})
+                "supportsRealtimeVoice":true,"supportsStreaming":true,"supportsReasoningStream":true,"supportsSessionListing":true}})
     }
 
     fn draft_features<'a>(
@@ -498,6 +513,8 @@ struct CodexSession {
     transport: Option<Transport>,
     id: String,
     info: StoredAgentRuntimeInfo,
+    realtime: Option<realtime::Realtime>,
+    voice_timeline: realtime_timeline::Timeline,
     active_turn: Option<String>,
     last_message: Option<String>,
     last_failure: Option<String>,
@@ -584,6 +601,9 @@ impl CodexSession {
             self.last_message = item["text"].as_str().map(str::to_owned);
         }
         self.observe_interaction(item, turn)?;
+        if self.realtime.is_some() || !self.voice_timeline.promoted.is_empty() {
+            self.voice_timeline.ordinary(turn, item)?;
+        }
         let entries =
             discovery::timeline_items(item, turn, &discovery::timestamp(), &self.client.images)?;
         if let Some(entry) = entries.last() {
@@ -591,7 +611,11 @@ impl CodexSession {
         }
         self.stream
             .events
-            .extend(entries.into_iter().map(AgentTurnEvent::Timeline));
+            .extend(entries.into_iter().filter_map(|mut entry| {
+                self.voice_timeline
+                    .retain_handoff(&mut entry)
+                    .then_some(AgentTurnEvent::Timeline(entry))
+            }));
         Ok(())
     }
 
@@ -607,6 +631,9 @@ impl CodexSession {
                 == crate::local::configuration::codex_computer_use_auto_approval(config)
         {
             return Ok(());
+        }
+        if self.realtime.is_some() {
+            return Err(AgentSessionError::Rejected);
         }
         if let Some(mut transport) = self.transport.take() {
             transport.close().await?;
@@ -645,6 +672,21 @@ impl CodexSession {
 }
 
 impl AgentSession for CodexSession {
+    fn start_realtime(
+        &mut self,
+        endpoint: model::realtime::Endpoint,
+    ) -> AgentSessionFuture<'_, ()> {
+        Box::pin(self.open_realtime(endpoint))
+    }
+
+    fn realtime_active(&self) -> bool {
+        self.realtime.is_some()
+    }
+
+    fn service_realtime(&mut self) -> AgentSessionFuture<'_, ()> {
+        Box::pin(self.drive_realtime())
+    }
+
     fn failure_message(&self) -> Option<Cow<'_, str>> {
         self.transport
             .as_ref()
@@ -983,6 +1025,10 @@ impl AgentSession for CodexSession {
             if params.get("threadId").and_then(Value::as_str) != Some(&self.id) {
                 continue;
             }
+            if method.starts_with("thread/realtime/") {
+                self.observe_realtime(method, params)?;
+                continue;
+            }
             if let Some(event) = self.control_event(method, params)? {
                 return Ok(Some(event));
             }
@@ -1034,6 +1080,7 @@ impl AgentSession for CodexSession {
                 transport.close().await?;
             }
             self.transport = None;
+            self.realtime = None;
             self.active_turn = None;
             self.permissions.clear();
             self.children.stopped();

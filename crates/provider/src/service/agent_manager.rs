@@ -7,6 +7,7 @@ mod execution;
 mod generated_titles;
 pub(crate) mod native_sessions;
 pub(crate) mod ownership;
+mod realtime;
 mod recovery;
 mod resume;
 mod streaming;
@@ -1149,6 +1150,7 @@ const fn map_registry(
 
 const fn map_session(error: AgentSessionError) -> AgentManagerError {
     match error {
+        AgentSessionError::Busy => AgentManagerError::Busy,
         AgentSessionError::Rejected => AgentManagerError::SessionRejected,
         AgentSessionError::Unavailable | AgentSessionError::Failed => AgentManagerError::Session,
     }
