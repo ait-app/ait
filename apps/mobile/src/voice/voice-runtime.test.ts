@@ -88,6 +88,37 @@ describe("voice runtime", () => {
     vi.useRealTimers();
   });
 
+  it("does not initialize audio after stopping during keep-awake activation", async () => {
+    const engine = createAudioEngineMock();
+    let activate!: () => void;
+    const activateKeepAwake = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          activate = resolve;
+        }),
+    );
+    const deactivateKeepAwake = vi.fn(async () => {});
+    const runtime = createVoiceRuntime({
+      engine,
+      getServerInfo: () => createServerInfo(),
+      supportsRealtimeVoice: () => true,
+      activateKeepAwake,
+      deactivateKeepAwake,
+    });
+    const adapter = createSessionAdapter();
+    runtime.registerSession(adapter);
+    const starting = runtime.startVoice("server-1", "agent-1");
+    expect(activateKeepAwake).toHaveBeenCalledOnce();
+    await runtime.stopVoice();
+    deactivateKeepAwake.mockClear();
+    activate();
+    await starting;
+    expect(engine.initialize).not.toHaveBeenCalled();
+    expect(engine.startCapture).not.toHaveBeenCalled();
+    expect(adapter.setVoiceMode).not.toHaveBeenCalledWith(true, "agent-1");
+    expect(deactivateKeepAwake).toHaveBeenCalledOnce();
+  });
+
   it("starts voice when adapter is ready", async () => {
     const adapter = createSessionAdapter();
     const { runtime, engine } = createRuntime();

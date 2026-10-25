@@ -3,9 +3,10 @@ import type {
   AudioEngineCallbacks,
   AudioPlaybackSource,
 } from "@/voice/audio-engine-types";
+import * as native from "@ait/expo-two-way-audio";
 
-interface QueuedAudio {
-  audio: AudioPlaybackSource;
+interface PendingAudio {
+  duration: number;
   resolve: (duration: number) => void;
   reject: (error: Error) => void;
 }
@@ -66,285 +67,232 @@ function resamplePcm16(pcm: Uint8Array, fromRate: number, toRate: number): Uint8
   return out;
 }
 
+let nextEngineId = 0;
+
 export function createAudioEngine(
   callbacks: AudioEngineCallbacks,
   _options?: AudioEngineTraceOptions,
 ): AudioEngine {
-  const native = require("@ait/expo-two-way-audio");
+  const engineId = ++nextEngineId;
+  let nextPlaybackId = 0;
+  let initialized = false;
+  let initializing: Promise<void> | null = null;
+  let destroyed = false;
+  let captureActive = false;
+  let captureGeneration = 0;
+  let captureAttempt: number | null = null;
+  let muted = false;
+  let playbackGeneration = 0;
+  let decoding = Promise.resolve();
+  const pending = new Map<string, PendingAudio>();
 
-  const refs: {
-    initialized: boolean;
-    captureActive: boolean;
-    muted: boolean;
-    queue: QueuedAudio[];
-    processingQueue: boolean;
-    playbackTimeout: ReturnType<typeof setTimeout> | null;
-    activePlayback: {
-      resolve: (duration: number) => void;
-      reject: (error: Error) => void;
-      settled: boolean;
-    } | null;
-    destroyed: boolean;
-  } = {
-    initialized: false,
-    captureActive: false,
-    muted: false,
-    queue: [],
-    processingQueue: false,
-    playbackTimeout: null,
-    activePlayback: null,
-    destroyed: false,
-  };
+  function releaseSessionIfIdle(): void {
+    if (
+      initialized &&
+      !destroyed &&
+      !captureActive &&
+      captureAttempt === null &&
+      pending.size === 0
+    ) {
+      native.releaseAudioSession();
+    }
+  }
+
+  async function ensureInitialized(): Promise<void> {
+    if (destroyed) throw new Error("Audio engine destroyed");
+    if (initialized) return;
+    if (!initializing) {
+      const capture = captureGeneration;
+      const playback = playbackGeneration;
+      initializing = native
+        .initialize()
+        .then((success: boolean) => {
+          if (!success) throw new Error("Audio engine initialization failed");
+          if (destroyed) {
+            native.tearDown();
+            throw new Error("Audio engine destroyed");
+          }
+          initialized = true;
+          // initialize() is also called directly by the runtime, before startCapture().
+          // A stop during that wait must release the session even if no media follows.
+          if (capture !== captureGeneration || playback !== playbackGeneration) {
+            releaseSessionIfIdle();
+          }
+        })
+        .finally(() => {
+          initializing = null;
+        });
+    }
+    await initializing;
+  }
+
+  function stopPlayback(): void {
+    playbackGeneration += 1;
+    decoding = Promise.resolve();
+    native.stopPlayback();
+    for (const item of pending.values()) item.reject(new Error("Playback stopped"));
+    pending.clear();
+    releaseSessionIfIdle();
+  }
 
   const microphoneSubscription = native.addExpoTwoWayAudioEventListener(
     "onMicrophoneData",
-    (event: { data: Uint8Array }) => {
-      if (!refs.captureActive || refs.muted) {
-        return;
-      }
-      const pcm = event.data;
-      callbacks.onCaptureData(pcm);
+    (event) => {
+      if (captureActive && !muted) callbacks.onCaptureData(event.data);
     },
   );
   const volumeSubscription = native.addExpoTwoWayAudioEventListener(
     "onInputVolumeLevelData",
-    (event: { data: number }) => {
-      if (!refs.captureActive) {
-        return;
-      }
-      const level = refs.muted ? 0 : event.data;
-      callbacks.onVolumeLevel(level);
+    (event) => {
+      if (captureActive) callbacks.onVolumeLevel(muted ? 0 : event.data);
     },
   );
   const interruptionSubscription = native.addExpoTwoWayAudioEventListener(
     "onAudioInterruption",
-    (event: { data: string }) => {
-      if (event.data !== "blocked") {
-        return;
-      }
-      const wasCaptureActive = refs.captureActive;
-      refs.captureActive = false;
-      refs.muted = false;
+    (event) => {
+      if (event.data !== "blocked" && event.data !== "began") return;
+      captureGeneration += 1;
+      const wasInUse =
+        captureActive || captureAttempt !== null || initializing !== null || pending.size > 0;
+      captureAttempt = null;
+      captureActive = false;
+      muted = false;
+      stopPlayback();
       callbacks.onVolumeLevel(0);
-      if (wasCaptureActive) {
-        callbacks.onInterruption?.();
-      }
+      if (wasInUse) callbacks.onInterruption?.();
+    },
+  );
+  const playbackSubscription = native.addExpoTwoWayAudioEventListener(
+    "onPlaybackComplete",
+    (event) => {
+      const item = pending.get(event.id);
+      if (!item) return;
+      pending.delete(event.id);
+      if (event.error) item.reject(new Error(event.error));
+      else item.resolve(item.duration);
+      releaseSessionIfIdle();
     },
   );
 
-  async function ensureInitialized(): Promise<void> {
-    if (refs.initialized) {
-      return;
-    }
-    const success = await native.initialize();
-    if (!success) {
-      throw new Error("expo-two-way-audio: native initialize() returned false");
-    }
-    refs.initialized = true;
-  }
-
-  /**
-   * Release the OS audio session as soon as we are neither capturing nor playing.
-   * Holding it keeps the user's background music paused — on iOS the non-mixing
-   * `.playAndRecord` category survives backgrounding and is re-asserted on every
-   * foreground, so an unreleased session means their music never comes back.
-   */
-  function releaseSessionIfIdle(): void {
-    if (!refs.initialized || refs.destroyed) {
-      return;
-    }
-    if (refs.captureActive || refs.activePlayback || refs.queue.length > 0) {
-      return;
-    }
-    // The wrapper no-ops on binaries whose native module predates this function.
-    native.releaseAudioSession();
-  }
-
-  async function ensureMicrophonePermission(): Promise<void> {
-    let permission = await native.getMicrophonePermissionsAsync().catch(() => null);
-    if (!permission?.granted) {
-      permission = await native.requestMicrophonePermissionsAsync().catch(() => null);
-    }
-    if (!permission?.granted) {
-      throw new Error(
-        "Microphone permission is required to capture audio. Please enable microphone access in system settings.",
-      );
-    }
-  }
-
-  function clearPlaybackTimeout(): void {
-    if (refs.playbackTimeout) {
-      clearTimeout(refs.playbackTimeout);
-      refs.playbackTimeout = null;
-    }
-  }
-
-  async function playAudio(audio: AudioPlaybackSource): Promise<number> {
+  async function queueAudio(id: string, audio: AudioPlaybackSource, generation: number) {
+    if (generation !== playbackGeneration || destroyed) return;
     await ensureInitialized();
-
-    return await new Promise<number>((resolve, reject) => {
-      refs.activePlayback = { resolve, reject, settled: false };
-
-      audio
-        .arrayBuffer()
-        .then((arrayBuffer) => {
-          const pcm = new Uint8Array(arrayBuffer);
-          const inputRate = parsePcmSampleRate(audio.type || "") ?? 24000;
-
-          // Native AudioEngine expects 16kHz PCM16
-          const pcm16k = resamplePcm16(pcm, inputRate, 16000);
-          const durationSec = pcm16k.length / 2 / 16000;
-
-          native.resumePlayback();
-          native.playPCMData(pcm16k);
-
-          clearPlaybackTimeout();
-          refs.playbackTimeout = setTimeout(() => {
-            clearPlaybackTimeout();
-            const active = refs.activePlayback;
-            if (!active || active.settled) {
-              return;
-            }
-            active.settled = true;
-            refs.activePlayback = null;
-            resolve(durationSec);
-          }, durationSec * 1000);
-          return undefined;
-        })
-        .catch((error: unknown) => {
-          clearPlaybackTimeout();
-          const active = refs.activePlayback;
-          if (active && !active.settled) {
-            active.settled = true;
-            refs.activePlayback = null;
-            reject(error instanceof Error ? error : new Error(String(error)));
-          }
-        });
-    });
-  }
-
-  async function processQueue(): Promise<void> {
-    if (refs.processingQueue || refs.queue.length === 0) {
+    if (generation !== playbackGeneration || destroyed) {
+      releaseSessionIfIdle();
       return;
     }
-
-    refs.processingQueue = true;
-    while (refs.queue.length > 0) {
-      const item = refs.queue.shift()!;
-      try {
-        const duration = await playAudio(item.audio);
-        item.resolve(duration);
-      } catch (error) {
-        item.reject(error instanceof Error ? error : new Error(String(error)));
-      }
+    const buffer = await audio.arrayBuffer();
+    if (generation !== playbackGeneration || destroyed) return;
+    if (!buffer.byteLength || buffer.byteLength % 2 || buffer.byteLength > 512 * 1024) {
+      throw new Error("Invalid PCM audio length");
     }
-    refs.processingQueue = false;
-    releaseSessionIfIdle();
+    const inputRate = parsePcmSampleRate(audio.type || "") ?? 24000;
+    if (![8000, 16000, 22050, 24000, 44100, 48000].includes(inputRate)) {
+      throw new Error("Unsupported PCM sample rate");
+    }
+    const pcm = resamplePcm16(new Uint8Array(buffer), inputRate, 16000);
+    const item = pending.get(id);
+    if (!item) return;
+    item.duration = pcm.length / 2 / 16000;
+    native.resumePlayback();
+    if (!native.enqueuePCMData(pcm, id)) throw new Error("Audio playback unavailable");
   }
 
   return {
-    async initialize() {
-      await ensureInitialized();
-    },
+    initialize: ensureInitialized,
 
     async destroy() {
-      if (refs.destroyed) {
-        return;
-      }
-      refs.destroyed = true;
-      this.stop();
-      this.clearQueue();
-      if (refs.captureActive) {
-        native.toggleRecording(false);
-        refs.captureActive = false;
-      }
-      clearPlaybackTimeout();
-      refs.muted = false;
+      if (destroyed) return;
+      destroyed = true;
+      captureGeneration += 1;
+      captureAttempt = null;
+      stopPlayback();
+      if (captureActive) native.toggleRecording(false);
+      captureActive = false;
+      muted = false;
       callbacks.onVolumeLevel(0);
-      if (refs.initialized) {
-        native.tearDown();
-        refs.initialized = false;
-      }
+      if (initialized) native.tearDown();
+      initialized = false;
       microphoneSubscription.remove();
       volumeSubscription.remove();
       interruptionSubscription.remove();
+      playbackSubscription.remove();
     },
 
     async startCapture() {
-      if (refs.captureActive) {
-        return;
-      }
-
+      if (destroyed || captureActive) return;
+      const generation = ++captureGeneration;
+      captureAttempt = generation;
       try {
-        await ensureMicrophonePermission();
-        await ensureInitialized();
-        const isRecording = native.toggleRecording(true);
-        if (!isRecording) {
-          throw new Error(
-            "Microphone capture could not start because Android audio focus is unavailable.",
-          );
+        let permission = await native.getMicrophonePermissionsAsync().catch(() => null);
+        if (generation !== captureGeneration || destroyed) return;
+        if (!permission?.granted) {
+          permission = await native.requestMicrophonePermissionsAsync().catch(() => null);
         }
-        refs.captureActive = true;
+        if (generation !== captureGeneration || destroyed) return;
+        if (!permission?.granted)
+          throw new Error("Microphone permission is required to capture audio.");
+        await ensureInitialized();
+        if (generation !== captureGeneration || destroyed) {
+          releaseSessionIfIdle();
+          return;
+        }
+        if (!native.toggleRecording(true)) throw new Error("Microphone capture could not start.");
+        captureActive = true;
       } catch (error) {
+        if (generation !== captureGeneration || destroyed) return;
+        releaseSessionIfIdle();
         const wrapped = error instanceof Error ? error : new Error(String(error));
         callbacks.onError?.(wrapped);
         throw wrapped;
+      } finally {
+        if (captureAttempt === generation) {
+          captureAttempt = null;
+          releaseSessionIfIdle();
+        }
       }
     },
 
     async stopCapture() {
-      if (refs.captureActive) {
-        native.toggleRecording(false);
-      }
-      refs.captureActive = false;
-      refs.muted = false;
+      captureGeneration += 1;
+      captureAttempt = null;
+      if (captureActive) native.toggleRecording(false);
+      captureActive = false;
+      muted = false;
       callbacks.onVolumeLevel(0);
       releaseSessionIfIdle();
     },
 
     toggleMute() {
-      refs.muted = !refs.muted;
-      if (refs.muted) {
-        callbacks.onVolumeLevel(0);
-      }
-      return refs.muted;
+      muted = !muted;
+      if (muted) callbacks.onVolumeLevel(0);
+      return muted;
     },
+    isMuted: () => muted,
 
-    isMuted() {
-      return refs.muted;
-    },
-
-    async play(audio: AudioPlaybackSource) {
-      return await new Promise<number>((resolve, reject) => {
-        refs.queue.push({ audio, resolve, reject });
-        if (!refs.processingQueue) {
-          void processQueue();
-        }
+    play(audio) {
+      if (destroyed || pending.size >= 32)
+        return Promise.reject(new Error("Audio playback unavailable"));
+      const id = `${engineId}:${++nextPlaybackId}`;
+      const generation = playbackGeneration;
+      const result = new Promise<number>((resolve, reject) => {
+        pending.set(id, { duration: 0, resolve, reject });
       });
+      // Serialize decoding/submission only. Completion is driven by the device, never
+      // a JS timer or a prerequisite for scheduling the next PCM block.
+      decoding = decoding
+        .then(() => queueAudio(id, audio, generation))
+        .catch((error: unknown) => {
+          const item = pending.get(id);
+          if (!item) return;
+          pending.delete(id);
+          item.reject(error instanceof Error ? error : new Error(String(error)));
+          releaseSessionIfIdle();
+        });
+      return result;
     },
-
-    stop() {
-      native.stopPlayback();
-      clearPlaybackTimeout();
-      const active = refs.activePlayback;
-      refs.activePlayback = null;
-      if (active && !active.settled) {
-        active.settled = true;
-        active.reject(new Error("Playback stopped"));
-      }
-      releaseSessionIfIdle();
-    },
-
-    clearQueue() {
-      while (refs.queue.length > 0) {
-        refs.queue.shift()!.reject(new Error("Playback stopped"));
-      }
-      refs.processingQueue = false;
-      releaseSessionIfIdle();
-    },
-
-    isPlaying() {
-      return refs.activePlayback !== null;
-    },
+    stop: stopPlayback,
+    clearQueue: stopPlayback,
+    isPlaying: () => pending.size > 0,
   };
 }

@@ -37,10 +37,8 @@ impl Voice {
     }
 
     pub(super) fn poll_native(&mut self, outbound: &Outbound) -> Result<(), QueueError> {
+        let mut overflowed = false;
         for _ in 0..32 {
-            if self.playback.len() >= 32 {
-                break;
-            }
             let Some(native) = &mut self.native else {
                 break;
             };
@@ -50,10 +48,18 @@ impl Voice {
                 Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => Event::Failed,
             };
             match event {
-                Event::Audio(audio) => self.output(Audio {
-                    bytes: audio.bytes,
-                    format: Format::Pcm(audio.sample_rate),
-                }),
+                Event::Audio(audio) => {
+                    if self.playback.len() >= 32 {
+                        // Still read this bounded batch: a following interruption can retire
+                        // the old audio. Never let playback backpressure hide lifecycle events.
+                        overflowed = true;
+                    } else {
+                        self.output(Audio {
+                            bytes: audio.bytes,
+                            format: Format::Pcm(audio.sample_rate),
+                        });
+                    }
+                }
                 Event::Transcript(text) => {
                     emit(outbound, "voice.input.state", json!({"isSpeaking":false}))?;
                     emit(
@@ -63,22 +69,29 @@ impl Voice {
                     )?;
                 }
                 Event::Interrupted => {
+                    overflowed = false;
                     self.playback.clear();
                     self.acknowledgments.clear();
                     emit(outbound, "voice.input.state", json!({"isSpeaking":true}))?;
                 }
                 Event::Closed | Event::Failed => {
-                    self.abort();
-                    self.target = None;
-                    if matches!(event, Event::Failed) {
-                        voice_error(outbound, Error::Realtime)?;
-                    }
-                    emit(outbound, "voice.session.closed", json!({}))?;
-                    break;
+                    return self.close_native(outbound, matches!(event, Event::Failed));
                 }
             }
         }
+        if overflowed {
+            return self.close_native(outbound, true);
+        }
         Ok(())
+    }
+
+    fn close_native(&mut self, outbound: &Outbound, failed: bool) -> Result<(), QueueError> {
+        self.abort();
+        self.target = None;
+        if failed {
+            voice_error(outbound, Error::Realtime)?;
+        }
+        emit(outbound, "voice.session.closed", json!({}))
     }
 }
 

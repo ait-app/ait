@@ -231,6 +231,41 @@ async fn speak(track: &TrackLocalStaticSample, encoder: &mut codec::Encoder) {
 mod native;
 
 #[tokio::test]
+async fn downstream_overflow_cancels_media_and_a_new_session_can_connect() {
+    tokio::time::timeout(Duration::from_secs(15), async {
+        let (mut session, endpoint) = model::realtime::channel(&CancellationToken::new());
+        for _ in 0..32 {
+            endpoint
+                .output
+                .try_send(Event::Audio(model::realtime::Audio {
+                    bytes: vec![0; 3840],
+                    sample_rate: 24_000,
+                }))
+                .unwrap();
+        }
+        let mut media = open(endpoint).await.unwrap();
+        let (peer, track, _incoming) = answer_peer(&mut media).await;
+        (&mut session.ready).await.unwrap();
+        let mut encoder = codec::Encoder::new().unwrap();
+        speak(&track, &mut encoder).await;
+        media.cancel.cancelled().await;
+        session.input.closed().await;
+        // The terminal event itself cannot fit: dropping all output senders must also
+        // notify the consumer, with no further audio or an unbounded shutdown wait.
+        for _ in 0..32 {
+            assert!(matches!(session.output.recv().await, Some(Event::Audio(_))));
+        }
+        assert!(session.output.recv().await.is_none());
+        peer.close().await.unwrap();
+        drop(media);
+        drop(session);
+        duplex().await;
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
 async fn reply_head_survives_a_late_user_transcript_completion() {
     tokio::time::timeout(Duration::from_secs(10), async {
         let (mut session, endpoint) = model::realtime::channel(&CancellationToken::new());

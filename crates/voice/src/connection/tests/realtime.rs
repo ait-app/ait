@@ -253,3 +253,145 @@ async fn native_pcm_window_tolerates_relay_latency_and_remains_acknowledgment_bo
         1
     );
 }
+
+fn queued_audio(byte: u8) -> Event {
+    Event::Audio(model::realtime::Audio {
+        bytes: vec![byte; 3840],
+        sample_rate: 24_000,
+    })
+}
+
+async fn saturated_playback() -> (Fixture, Endpoint) {
+    let mut fixture = Fixture::new();
+    let endpoint = native(&mut fixture, false);
+    assert_eq!(fixture.mode(true).await["accepted"], true);
+    for count in [16, 32] {
+        for _ in 0..count {
+            endpoint.output.try_send(queued_audio(1)).unwrap();
+        }
+        for _ in 0..4 {
+            fixture.poll();
+        }
+    }
+    assert_eq!(fixture.connection.voice.acknowledgments.len(), 16);
+    assert_eq!(fixture.connection.voice.playback.len(), 32);
+    fixture.events.clear();
+    (fixture, endpoint)
+}
+
+#[tokio::test]
+async fn saturated_playback_still_processes_interruption_and_preserves_the_new_reply() {
+    let (mut fixture, endpoint) = saturated_playback().await;
+    endpoint.output.try_send(queued_audio(1)).unwrap();
+    endpoint.output.try_send(Event::Interrupted).unwrap();
+    endpoint.output.try_send(queued_audio(2)).unwrap();
+    fixture.poll();
+    assert!(!endpoint.cancel.is_cancelled());
+    assert!(fixture.events.iter().any(|event| {
+        event["method"] == "voice.input.state" && event["params"]["isSpeaking"] == true
+    }));
+    let audio: Vec<_> = fixture
+        .events
+        .iter()
+        .filter(|event| event["method"] == "voice.audio.output")
+        .collect();
+    assert_eq!(audio.len(), 1);
+    assert_eq!(audio[0]["params"]["audio"], STANDARD.encode(vec![2; 3840]));
+    assert_eq!(fixture.connection.voice.acknowledgments.len(), 1);
+}
+
+#[tokio::test]
+async fn saturated_playback_observes_close_failure_and_disconnection_without_waiting_for_ack() {
+    for event in [Some(Event::Closed), Some(Event::Failed), None] {
+        let (mut fixture, endpoint) = saturated_playback().await;
+        let cancel = endpoint.cancel.clone();
+        if let Some(event) = event {
+            endpoint.output.try_send(event).unwrap();
+        }
+        drop(endpoint);
+        fixture.poll();
+        assert!(fixture.connection.is_empty());
+        assert!(cancel.is_cancelled());
+        assert!(
+            fixture
+                .events
+                .iter()
+                .any(|event| event["method"] == "voice.session.closed")
+        );
+        assert_eq!(fixture.engine.calls.load(Ordering::SeqCst), 0);
+        let _next = native(&mut fixture, false);
+        assert_eq!(fixture.mode(true).await["accepted"], true);
+    }
+}
+
+#[tokio::test]
+async fn saturated_playback_without_interruption_fails_and_releases_the_target() {
+    let (mut fixture, endpoint) = saturated_playback().await;
+    endpoint.output.try_send(queued_audio(1)).unwrap();
+    fixture.poll();
+    assert!(endpoint.cancel.is_cancelled());
+    assert!(fixture.connection.is_empty());
+    assert!(
+        fixture
+            .events
+            .iter()
+            .any(|event| event["method"] == "voice.session.closed")
+    );
+    assert!(fixture.events.iter().any(|event| {
+        event["method"] == "voice.error"
+            && event["params"]["reasonCode"] == "native_realtime_failed"
+    }));
+    let _next = native(&mut fixture, false);
+    assert_eq!(fixture.mode(true).await["accepted"], true);
+}
+
+#[tokio::test]
+async fn saturated_native_input_cancels_without_fallback_and_allows_restart() {
+    let mut fixture = Fixture::new();
+    let endpoint = native(&mut fixture, false);
+    fixture.mode(true).await;
+    for _ in 0..17 {
+        fixture.event(
+            "voice.audio.chunk",
+            json!({
+                "audio":"AAgACA==", "format":"pcm;rate=16000", "isLast":false
+            }),
+        );
+    }
+    assert!(endpoint.cancel.is_cancelled());
+    assert!(fixture.connection.is_empty());
+    assert_eq!(
+        fixture.until("voice.error").await["reasonCode"],
+        "native_realtime_failed"
+    );
+    assert_eq!(fixture.engine.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(fixture.engine.synthesis_calls.load(Ordering::SeqCst), 0);
+    let _next = native(&mut fixture, false);
+    assert_eq!(fixture.mode(true).await["accepted"], true);
+}
+
+#[tokio::test(start_paused = true)]
+async fn native_ack_timeout_closes_cancels_and_allows_restart_without_fallback() {
+    let mut fixture = Fixture::new();
+    let endpoint = native(&mut fixture, false);
+    fixture.mode(true).await;
+    endpoint.output.try_send(queued_audio(1)).unwrap();
+    fixture.poll();
+    tokio::time::advance(Duration::from_secs(31)).await;
+    fixture.poll();
+    assert!(endpoint.cancel.is_cancelled());
+    assert!(fixture.connection.is_empty());
+    assert!(
+        fixture
+            .events
+            .iter()
+            .any(|event| event["method"] == "voice.session.closed")
+    );
+    assert_eq!(
+        fixture.until("voice.error").await["reasonCode"],
+        "speech_timeout"
+    );
+    assert_eq!(fixture.engine.calls.load(Ordering::SeqCst), 0);
+    let _next = native(&mut fixture, false);
+    assert_eq!(fixture.mode(true).await["accepted"], true);
+}

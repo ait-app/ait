@@ -825,6 +825,12 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
         await deps.activateKeepAwake(KEEP_AWAKE_TAG).catch((error) => {
           console.warn("[VoiceRuntime] Failed to activate keep-awake:", error);
         });
+        if (state.generation !== generation) {
+          if (state.snapshot.phase === "disabled") {
+            await deps.deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => undefined);
+          }
+          return;
+        }
 
         await deps.engine.initialize();
         if (state.generation !== generation) return;

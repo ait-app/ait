@@ -225,5 +225,5 @@ daemon 连接 metadata/provider，在已有 Workspace 内选择或创建 Agent�
 保留在主进程。普通资源详情与操作继续连接对应 Host。见 [ADR-182](../decisions/clients/adr-182-hub-account-client.md)。
 
 原生实时语音通过 `model::realtime` 的有界通道连接 `voice` 与 `provider`，由 daemon 桥接端口。
-`provider` 负责原生 thread、SDP、音频协议和认证；`voice` 负责物理连接所有权及 PCM 播放确认；浏览器负责 WebRTC 媒体设备。
+`provider` 负责原生 thread、SDP、上游 WebRTC、音频协议和认证；`voice` 负责物理连接所有权及 PCM 播放确认；客户端负责麦克风采集与 PCM 播放。
 见 [ADR-190](../decisions/providers/adr-190-codex-native-realtime-voice.md)。
