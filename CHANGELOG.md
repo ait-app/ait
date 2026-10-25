@@ -1,5 +1,13 @@
 # Ait changelog
 
+## 0.1.18 - 2026-10-25
+
+- Relay Codex native realtime voice through the daemon and keep voice transcripts, turn membership and restored session history consistent.
+- Start voice sessions from new-workspace drafts and handle audio interruption, playback and capability selection across clients.
+- Bridge the official Oh My Pi ACP interface and generic plugins, including session configuration, permissions, history and subagent events.
+- Unify the online-service settings layout and improve translated speed, Host and usage controls.
+- Give nightly and local/AUR source builds date-and-commit identities while keeping stable release versions unchanged.
+
 ## 0.1.17 - 2026-10-24
 
 - Merge consecutive Thinking blocks into a single presentation group.

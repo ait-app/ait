@@ -1,0 +1,166 @@
+{
+  "sourceCommit": "555eebad4694213229827ddbb97d495a9734da72",
+  "sourceState": "release preparation worktree; version and documentation changes only",
+  "date": "2026-10-25",
+  "nodeVersion": "v22.23.3",
+  "measurement": {
+    "language": "JavaScript",
+    "scope": [
+      "scripts/release-version.mjs",
+      "scripts/release-assets.mjs",
+      "scripts/release-layout.mjs",
+      "scripts/source-version.cjs"
+    ],
+    "command": [
+      "node",
+      "--experimental-test-coverage",
+      "--test-coverage-include=scripts/release-version.mjs",
+      "--test-coverage-include=scripts/release-assets.mjs",
+      "--test-coverage-include=scripts/release-layout.mjs",
+      "--test-coverage-include=scripts/source-version.cjs",
+      "--test",
+      "scripts/source-version.test.cjs",
+      "scripts/nightly-workflow.test.mjs",
+      "scripts/release-assets.test.mjs",
+      "scripts/release-layout.test.mjs",
+      "scripts/release-workflow.test.mjs",
+      "scripts/prepare-desktop-daemon.test.mjs",
+      "scripts/verify-packaged-resources.test.cjs",
+      "scripts/edit-windows-executable.test.cjs"
+    ],
+    "cwd": "repository root",
+    "totals": {
+      "totalLineCount": 353,
+      "totalBranchCount": 114,
+      "totalFunctionCount": 26,
+      "coveredLineCount": 326,
+      "coveredBranchCount": 109,
+      "coveredFunctionCount": 25,
+      "coveredLinePercent": 92.3512747875354,
+      "coveredBranchPercent": 95.6140350877193,
+      "coveredFunctionPercent": 96.15384615384616
+    },
+    "files": [
+      {
+        "totalLineCount": 287,
+        "totalBranchCount": 89,
+        "totalFunctionCount": 20,
+        "coveredLineCount": 269,
+        "coveredBranchCount": 85,
+        "coveredFunctionCount": 20,
+        "coveredLinePercent": 93.72822299651567,
+        "coveredBranchPercent": 95.50561797752809,
+        "coveredFunctionPercent": 100,
+        "path": "scripts/release-assets.mjs"
+      },
+      {
+        "totalLineCount": 28,
+        "totalBranchCount": 5,
+        "totalFunctionCount": 2,
+        "coveredLineCount": 19,
+        "coveredBranchCount": 4,
+        "coveredFunctionCount": 1,
+        "coveredLinePercent": 67.85714285714286,
+        "coveredBranchPercent": 80,
+        "coveredFunctionPercent": 50,
+        "path": "scripts/release-layout.mjs"
+      },
+      {
+        "totalLineCount": 10,
+        "totalBranchCount": 7,
+        "totalFunctionCount": 1,
+        "coveredLineCount": 10,
+        "coveredBranchCount": 7,
+        "coveredFunctionCount": 1,
+        "coveredLinePercent": 100,
+        "coveredBranchPercent": 100,
+        "coveredFunctionPercent": 100,
+        "path": "scripts/release-version.mjs"
+      },
+      {
+        "totalLineCount": 28,
+        "totalBranchCount": 13,
+        "totalFunctionCount": 3,
+        "coveredLineCount": 28,
+        "coveredBranchCount": 13,
+        "coveredFunctionCount": 3,
+        "coveredLinePercent": 100,
+        "coveredBranchPercent": 100,
+        "coveredFunctionPercent": 100,
+        "path": "scripts/source-version.cjs"
+      }
+    ],
+    "tests": {
+      "passed": 75,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "sourceSha256": {
+    "scripts/release-version.mjs": "bf16c70eadcdbc78febba671be55d6edc504fe538e4ba83c8a72c09ca2a9108a",
+    "scripts/release-assets.mjs": "f7349400cf833b45ae5178931c74a03c4d27cf5fb2e5bd68bdca2d328d6ed111",
+    "scripts/release-layout.mjs": "803edb71f1c64537d5d70dda41fe37094319bc1c778764879581231f5079afff",
+    "scripts/source-version.cjs": "176a6b4339d8628990f0b34f6fefba65ffc94d2e7bd55cb00adb2d7eb46fdc8f",
+    "scripts/source-version.test.cjs": "86bede08d779a25f0a9a8206bc2bb749586a238b25532b8f4f581f616ff9fdae",
+    "scripts/nightly-workflow.test.mjs": "b6b859857e5f9d6015fd566f2ac0a6d87bb76eb57105f553f67d9473d57d8276",
+    "scripts/release-assets.test.mjs": "344b815ac63e7866c6b538a61afea4ae9acc567cb3b22d1e5aef518b374dffc9",
+    "scripts/release-layout.test.mjs": "783aec3a404134d2ee3b6274a26962310887201908336bccc76a44e3f6071091",
+    "scripts/release-workflow.test.mjs": "2d7df111b61ce36cb5a34a0029df72108583e444e09b2dc9b686a55f1b2c7271",
+    "scripts/prepare-desktop-daemon.test.mjs": "eaa0728945ec40e346611d493946883bdadfc5e8f8b74bd1d520fb2cd01a405c",
+    "scripts/verify-packaged-resources.test.cjs": "2f996484201df6a5245fd64c0e686d62038261056758e020c67964f20a5ed38d",
+    "scripts/edit-windows-executable.test.cjs": "0df1f39990f1fc5e6999545f68b18062b67b65d6a53c2728340b9dda6abdf84d",
+    ".github/workflows/release.yml": "d3a3e8281e071eba21662fada4fdaf2b58a6003ea0785e53de2ef5ed444f4bcb",
+    ".github/workflows/windows-desktop.yml": "6c719bb57eb300e3b7036484c1c5e93e944f8262797fd45b65375b809519d3cb",
+    "package-lock.json": "b7856a731a48446b4c65286aab1137c1b3987e58541ef4a0cdaea7c72d5e7a6c",
+    "apps/mobile/ios/Ait/Info.plist": "14e8876638150dc274f89c3074498cc741127a669d7a6bd8235b0cb0bbb8f295",
+    "apps/mobile/ios/Podfile.lock": "5bd0f2afc3ff3d7cc05a49ff381297e4e507c83fe10c9bee5d89505c881ae277",
+    "apps/mobile/web-console/Dockerfile": "838de1b203a62a13ebf2fc9e3bfac314e8825759c3526ee59776412890f5cb97",
+    "apps/mobile/web-console/check-routes.sh": "9d0d1ad11fd69022fadc58a30b03c4c24268f470f4e8c973a91b200d8f0583d6",
+    "apps/desktop/scripts/build-version.cjs": "2449d5c4d47ff1f5f59a728a4b367f96b5845d6ce2f74dec2719de30b863a5e3",
+    "apps/desktop/electron-builder.yml": "fc6e8588eecb15cd6c79641387931119900ee261b32c8f965757c65eb937cd89"
+  },
+  "comparison": {
+    "version": "0.1.17",
+    "previousScope": [
+      "scripts/release-version.mjs",
+      "scripts/release-assets.mjs",
+      "scripts/release-layout.mjs"
+    ],
+    "previousTotals": {
+      "totalLineCount": 312,
+      "totalBranchCount": 96,
+      "totalFunctionCount": 23,
+      "coveredLineCount": 285,
+      "coveredBranchCount": 91,
+      "coveredFunctionCount": 22,
+      "coveredLinePercent": 91.34615384615384,
+      "coveredBranchPercent": 94.79166666666666,
+      "coveredFunctionPercent": 95.65217391304348
+    },
+    "scopeExpanded": true,
+    "samePreviousTargetSourceFingerprints": false,
+    "limits": "The scope now includes source-version.cjs and release-assets.mjs has changed. Aggregate percentages are not directly comparable."
+  },
+  "additionalChecks": {
+    "buildDesktopMain": "passed",
+    "desktopAndSharedUiTypecheck": "passed",
+    "versionMetadataTests": {
+      "passed": 35,
+      "failed": 0
+    },
+    "nativeVersionSync": {
+      "version": "0.1.18",
+      "iosBuildNumber": "1018999",
+      "cocoaPods": "1.16.2",
+      "bundler": "4.0.21",
+      "podDeploymentMode": "passed"
+    }
+  },
+  "limits": [
+    "Coverage measures four JavaScript version/release tools, not Rust, TypeScript or the whole product.",
+    "No Rust implementation was changed by version preparation; local Rust tests and coverage skipped per AGENTS.md.",
+    "No real Codex realtime speech/model, production ACP plugin integration, iOS/Android binary or device acceptance test was performed.",
+    "Windows artifacts are unsigned and require a remote Host; browser-client image publication is separate from production deployment."
+  ],
+  "measuredAt": "2026-10-25T08:28:58.897039+00:00"
+}
