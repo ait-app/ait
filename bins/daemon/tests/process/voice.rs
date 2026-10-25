@@ -198,7 +198,7 @@ async fn unexpected_speech(State(calls): State<Arc<AtomicUsize>>) -> Json<Value>
 }
 
 #[tokio::test]
-async fn native_voice_routes_audio_without_speech_and_disconnect_stops_the_provider_session() {
+async fn native_media_start_failure_is_reported_without_speech_fallback_and_releases_session() {
     let super::native::NativeFixture { root, cwd, path } = super::native::NativeFixture::new();
     let speech_calls = Arc::new(AtomicUsize::new(0));
     let app = Router::new()
@@ -220,7 +220,12 @@ async fn native_voice_routes_audio_without_speech_and_disconnect_stops_the_provi
         json!({"enabled":true,"agentId":id}),
     )
     .await;
-    assert_eq!(mode["result"]["accepted"], true, "{mode}");
+    // The protocol fixture returns an invalid SDP. Real media success belongs to the provider's
+    // paired-peer tests; the daemon must propagate rejection and clean up without speech fallback.
+    assert_eq!(mode["result"]["accepted"], false, "{mode}");
+    assert_eq!(mode["result"]["enabled"], false);
+    assert_eq!(mode["result"]["reasonCode"], "native_realtime_failed");
+    let requests = wait_native_stop(&cwd).await;
     client
         .send(Message::Text(
             json!({
@@ -232,29 +237,7 @@ async fn native_voice_routes_audio_without_speech_and_disconnect_stops_the_provi
         ))
         .await
         .unwrap();
-    let mut transcript_seen = false;
-    loop {
-        let event = receive(&mut client).await;
-        match event["method"].as_str() {
-            Some("voice.transcription.result") => {
-                assert_eq!(event["params"]["text"], "hello");
-                transcript_seen = true;
-            }
-            Some("voice.audio.output") => {
-                assert!(transcript_seen);
-                assert_eq!(event["params"]["audio"], "AAgACA==");
-                assert_eq!(
-                    event["params"]["format"],
-                    "audio/pcm;rate=24000;bits=16;channels=1"
-                );
-                break;
-            }
-            Some("voice.input.state") => {}
-            _ => panic!("unexpected native voice event: {event}"),
-        }
-    }
     client.close(None).await.unwrap();
-    let requests = wait_native_stop(&cwd).await;
     assert!(
         requests
             .iter()
@@ -288,5 +271,5 @@ async fn wait_native_stop(cwd: &std::path::Path) -> Vec<Value> {
         }
     })
     .await
-    .expect("disconnect must stop the native realtime session")
+    .expect("failed media startup must stop the native realtime session")
 }
