@@ -1,10 +1,13 @@
 //! Authenticated loopback Host RPC; launch tokens and cookies never enter persistence.
+use std::error::Error;
+use std::time::Duration;
+
 use futures_util::StreamExt;
 use reqwest::{Client, Url, header};
 use serde_json::{Value, json};
-use std::time::Duration;
 
 use crate::ports::agent_session::AgentSessionError;
+use crate::ports::diagnostics::{Category, Diagnostic};
 
 pub(super) const MAX_FRAME: usize = 2 * 1024 * 1024;
 
@@ -87,10 +90,7 @@ impl Api {
         args: Value,
     ) -> Result<Value, AgentSessionError> {
         self.optional_call(endpoint, args).await?.ok_or_else(|| {
-            let mut diagnostic = crate::ports::diagnostics::Diagnostic::new(
-                crate::ports::diagnostics::Category::Unknown,
-                "http",
-            );
+            let mut diagnostic = Diagnostic::new(Category::Unknown, "http");
             diagnostic.http_status = Some(404);
             self.diagnostics.observe(diagnostic, endpoint);
             AgentSessionError::Failed
@@ -121,18 +121,7 @@ impl Api {
             .json(&body)
             .send()
             .await
-            .map_err(|error| {
-                let category = if error.is_timeout() {
-                    crate::ports::diagnostics::Category::Timeout
-                } else {
-                    crate::ports::diagnostics::Category::Network
-                };
-                self.diagnostics.observe(
-                    crate::ports::diagnostics::Diagnostic::new(category, "http"),
-                    endpoint,
-                );
-                AgentSessionError::Failed
-            })?;
+            .map_err(|error| self.transport_error(&error, endpoint, "http_send"))?;
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
         }
@@ -162,7 +151,8 @@ impl Api {
         let mut chunks = response.bytes_stream();
         let mut bytes = Vec::new();
         while let Some(chunk) = chunks.next().await {
-            let chunk = chunk.map_err(|_| AgentSessionError::Failed)?;
+            let chunk =
+                chunk.map_err(|error| self.transport_error(&error, endpoint, "http_body"))?;
             if bytes.len().saturating_add(chunk.len()) > MAX_FRAME {
                 return Err(AgentSessionError::Failed);
             }
@@ -188,6 +178,38 @@ impl Api {
             }
             None => Err(AgentSessionError::Failed),
         }
+    }
+
+    fn transport_error(
+        &self,
+        error: &reqwest::Error,
+        endpoint: &str,
+        stage: &'static str,
+    ) -> AgentSessionError {
+        let source = if error.is_connect() {
+            "http_connect"
+        } else {
+            stage
+        };
+        let category = if error.is_timeout() {
+            Category::Timeout
+        } else {
+            Category::Network
+        };
+        let io_error = std::iter::successors(error.source(), |cause| (*cause).source())
+            .find_map(|cause| cause.downcast_ref::<std::io::Error>());
+        // reqwest's Display/Debug can contain authenticated URLs; retain only OS facts.
+        tracing::warn!(
+            provider = super::super::PROVIDER,
+            operation = endpoint,
+            source,
+            error_kind = ?io_error.map(std::io::Error::kind),
+            os_error = io_error.and_then(std::io::Error::raw_os_error),
+            "Native Host HTTP transport failed"
+        );
+        self.diagnostics
+            .observe(Diagnostic::new(category, source), endpoint);
+        AgentSessionError::Failed
     }
 }
 

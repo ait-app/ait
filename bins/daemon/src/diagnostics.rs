@@ -270,6 +270,14 @@ impl Visit for Fields {
                 | "reason"
                 | "operation"
                 | "agent_id"
+                | "source"
+                | "category"
+                | "native_code"
+                | "http_status"
+                | "will_retry"
+                | "suppressed"
+                | "error_kind"
+                | "os_error"
         ) {
             let mut bounded = LimitedText(String::new());
             if write!(bounded, "{value:?}").is_err() {
