@@ -164,6 +164,7 @@
 
 ## 客户端、连接与品牌
 
+- [Pi 导入与图片附件浏览器验收](clients/pi-import-image-e2e-2026-10-21.md)
 - [Web tooltip DOM 触发元素定位验证](clients/web-tooltip-dom-triggers-2026-10-21.md)
 - [iPhone / iPad 原生功能验收（0.1.12）](clients/ios-iphone-ipad-functional-2026-10-20.md)
 - [Paseo 0.12.0 增量借鉴清单](clients/paseo-upstream-opportunities-2026-10-19.md)
