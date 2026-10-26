@@ -52,6 +52,31 @@ impl Voice {
         self.target.is_none() && self.bytes.is_empty() && !self.running && self.playback.is_empty()
     }
 
+    /// Log `reason` and safe ownership/queue counters before active resources are released.
+    /// Idle connections produce no event; no audio or transcript content is inspected.
+    pub(super) fn log_release(&self, reason: &'static str) {
+        if self.is_empty() && self.native.is_none() {
+            return;
+        }
+        let oldest_ack = self
+            .acknowledgments
+            .values()
+            .map(Instant::elapsed)
+            .max()
+            .unwrap_or_default();
+        tracing::info!(
+            reason,
+            agent_id = self.target.as_ref().map_or("", |target| target.id.as_str()),
+            voice_id = %self.generation,
+            native = self.native_only,
+            playback_queue = self.playback.len(),
+            pending_acknowledgments = self.acknowledgments.len(),
+            oldest_ack_ms = ?oldest_ack.as_millis(),
+            input_idle_ms = ?self.updated.map(|updated| updated.elapsed().as_millis()),
+            "Voice resources released"
+        );
+    }
+
     pub(super) fn abort(&mut self) {
         self.native = None;
         self.cancel.cancel();
@@ -80,14 +105,20 @@ impl Voice {
     }
 
     pub(super) fn poll(&mut self, outbound: &Outbound) -> Result<(), QueueError> {
-        if self
+        let input_expired = self
             .updated
-            .is_some_and(|updated| updated.elapsed() >= Duration::from_secs(60))
+            .is_some_and(|updated| updated.elapsed() >= Duration::from_secs(60));
+        if input_expired
             || self
                 .acknowledgments
                 .values()
                 .any(|time| time.elapsed() > Duration::from_secs(30))
         {
+            self.log_release(if input_expired {
+                "input_timeout"
+            } else {
+                "playback_ack_timeout"
+            });
             if self.native_only {
                 self.target = None;
                 emit(outbound, "voice.session.closed", json!({}))?;
@@ -147,6 +178,7 @@ impl Connection {
                 if params != json!({}) {
                     return Err(Error::Invalid);
                 }
+                self.voice.log_release("client_abort");
                 if self.voice.native.is_some() {
                     self.voice.target = None;
                 }
@@ -202,12 +234,14 @@ impl Connection {
                                 return Ok(mode_result(&self.voice, Some(error)));
                             }
                         }
+                        self.voice.log_release("target_replaced");
                         self.voice.abort();
                         self.voice.native_only = native.is_some();
                         self.voice.native = native;
                         self.voice.target = Some(target);
                     }
                 } else {
+                    self.voice.log_release("client_stop");
                     self.voice.abort();
                     self.voice.target = None;
                 }

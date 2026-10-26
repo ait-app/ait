@@ -1,6 +1,8 @@
 use super::*;
 use model::realtime::{Endpoint, Event, Session};
 
+mod diagnostics;
+
 #[derive(Debug)]
 struct Native {
     session: Mutex<Option<Session>>,

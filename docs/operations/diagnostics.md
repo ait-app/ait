@@ -50,6 +50,33 @@ Codex 模型目录刷新失败标记 `source=model_catalog`、`operation=model/l
 没有时区的时间按 UTC 解释。无时间戳的续行、会话 JSONL、符号链接不会被收集。
 日志采用其他格式或本地无时区时间时，报告可能没有匹配记录，不能据此认定没有发生错误。
 
+## 原生语音退出
+
+daemon 日志中的 `Voice resources released` 在取消和清理之前记录关闭来源。通过
+`agent_id`、`voice_id` 和时间关联同一次语音；`native` 标识原生语音，
+`playback_queue`、`pending_acknowledgments`、`oldest_ack_ms` 和 `input_idle_ms`
+保留关闭前的队列及等待状态。
+
+| `reason`                                                   | 关闭入口                              |
+| ---------------------------------------------------------- | ------------------------------------- |
+| `client_stop` / `client_abort`                             | 客户端关闭语音模式或提交中止请求      |
+| `connection_dropped`                                       | 所属物理连接被释放                    |
+| `target_replaced`                                          | 语音切换到另一个 Agent                |
+| `input_timeout` / `playback_ack_timeout`                   | 输入等待或播放确认超时                |
+| `native_input_queue_full` / `native_input_closed`          | 麦克风输入队列已满或被关闭            |
+| `playback_queue_full`                                      | 下行播放队列溢出                      |
+| `native_closed` / `native_failed` / `native_output_closed` | Provider 报告结束、失败或关闭输出通道 |
+
+Codex Provider 另外记录 `Codex realtime media stopped`，区分 `caller_cancelled`、
+`peer_ended`、`data_channel_closed`、`data_channel_closing`、`data_channel_error`、
+`data_channel_stream_ended` 和 `media_io_failed`。媒体后台任务保留 Agent 和原生会话的
+span；`Codex realtime audio I/O stopped` 的 `stage` 区分麦克风和下行播放。
+`Codex realtime stop requested` 记录随后向原生会话发送停止请求的清理步骤。
+
+排查时先找最早的关闭来源，再看后续清理日志；原生时间线中的 `ended` 只表示最终状态。
+这些日志不记录音频、转写文本、SDP 或任意原生错误包。语音错误以固定的 `reason` 和
+`retryable` 字段记录为 WARN，正常停止记录为 INFO；自动证据沿用现有 WARN/ERROR 采集规则。
+
 ## 分享与排查
 
 报告会删除常见凭据／提示词字段所在行、隐藏 URL、邮箱和常见用户目录；桌面日志在客户端

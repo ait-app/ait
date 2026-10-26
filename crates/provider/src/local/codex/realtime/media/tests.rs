@@ -1,5 +1,7 @@
 use super::*;
 
+mod diagnostics;
+
 /// Offline media boundary for native app-server lifecycle tests.
 pub(in crate::local::codex) fn fixture(
     endpoint: Endpoint,
