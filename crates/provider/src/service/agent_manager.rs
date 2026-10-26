@@ -296,8 +296,7 @@ impl AgentManager {
                 .inspect_native(handle, &record.cwd)
                 .await
                 .map_err(|_| AgentManagerError::Session)?;
-            self.verify_history(&record, &generation)
-                .map_err(|_| AgentManagerError::Session)?;
+            self.verify_history(&record, &generation)?;
             self.finish_replacement(agent_id, &history)
                 .map_err(|_| AgentManagerError::Registry)?;
             self.mark_history_loaded(agent_id);
@@ -323,8 +322,7 @@ impl AgentManager {
         )
         .await
         .map_err(map_session)?;
-        self.verify_history(&record, &generation)
-            .map_err(|_| AgentManagerError::Session)?;
+        self.verify_history(&record, &generation)?;
         timeline
             .reconcile(agent_id, &record.provider, &entries)
             .map_err(|_| AgentManagerError::Registry)?;
