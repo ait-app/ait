@@ -284,13 +284,22 @@ pub(super) fn timeline_item(
         "reasoning" => {
             let text = native["summary"]
                 .as_array()
-                .or_else(|| native["content"].as_array())
                 .map(|values| {
                     values
                         .iter()
                         .filter_map(Value::as_str)
                         .collect::<Vec<_>>()
                         .join("\n")
+                })
+                .filter(|summary| !summary.is_empty())
+                .or_else(|| {
+                    native["content"].as_array().map(|values| {
+                        values
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    })
                 })
                 .unwrap_or_default();
             json!({"type":"reasoning","text":text})
@@ -306,7 +315,14 @@ pub(super) fn timeline_item(
             }
             let failed = native["status"] == "failed" || native["status"] == "declined";
             let error = crate::local::tool_detail::codex_error(native, failed);
-            json!({"type":"tool_call","callId":id,"name":crate::local::tool_detail::codex_name(native),"status":if failed {"failed"} else {"completed"},
+            let status = if failed {
+                "failed"
+            } else if kind == "subAgentActivity" && native["kind"] == "interrupted" {
+                "canceled"
+            } else {
+                "completed"
+            };
+            json!({"type":"tool_call","callId":id,"name":crate::local::tool_detail::codex_name(native),"status":status,
                 "error":error,"detail":crate::local::tool_detail::codex(native)})
         }
     };

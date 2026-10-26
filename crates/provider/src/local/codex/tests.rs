@@ -8,6 +8,126 @@ mod persistence;
 mod progress;
 
 #[tokio::test]
+async fn async_questions_preserve_the_completed_assistant_answer() {
+    let fixture = Fixture::new();
+    let client = fixture.client();
+    let spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("async-question-after-answer", &spec.config)
+        .await
+        .unwrap();
+    assert!(matches!(
+        terminal(session.as_mut()).await.unwrap(),
+        AgentTurnEvent::PermissionRequested(_)
+    ));
+    assert_eq!(
+        terminal(session.as_mut()).await.unwrap(),
+        AgentTurnEvent::Completed(Some("Final answer".into()))
+    );
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn native_default_model_remains_known_after_starting_a_turn() {
+    let fixture = Fixture::new();
+    let client = fixture.client();
+    let spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    let model = session.runtime_info().await.unwrap().model;
+    assert_eq!(model.as_deref(), Some("offline-model"));
+    session.start_turn("hello", &spec.config).await.unwrap();
+    terminal(session.as_mut()).await.unwrap();
+    assert_eq!(session.runtime_info().await.unwrap().model, model);
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn custom_prompt_invocation_uses_the_session_codex_home() {
+    let fixture = Fixture::new();
+    let home = fixture.root.path().join("private-codex-home");
+    std::fs::create_dir_all(home.join("prompts")).unwrap();
+    std::fs::write(home.join("prompts/isolated.md"), "Agent-specific $1").unwrap();
+    let environment = serde_json::from_value(json!({"CODEX_HOME":home})).unwrap();
+    let client = fixture.client();
+    let spec = fixture.spec();
+    let mut session = client
+        .create_session_with_environment(&spec, &environment)
+        .await
+        .unwrap();
+    session
+        .start_turn("/prompts:isolated value", &spec.config)
+        .await
+        .unwrap();
+    assert_eq!(
+        terminal(session.as_mut()).await.unwrap(),
+        AgentTurnEvent::Completed(Some("Echo: Agent-specific value".into()))
+    );
+    session
+        .start_turn("/prompts:missing remains text", &spec.config)
+        .await
+        .unwrap();
+    assert_eq!(
+        terminal(session.as_mut()).await.unwrap(),
+        AgentTurnEvent::Completed(Some("Echo: /prompts:missing remains text".into()))
+    );
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn legacy_user_input_requests_can_be_answered_without_terminating_the_turn() {
+    let fixture = Fixture::new();
+    fixture.mode("legacy-question");
+    let client = fixture.client();
+    let spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("permit-question", &spec.config)
+        .await
+        .unwrap();
+    let AgentTurnEvent::PermissionRequested(request) = terminal(session.as_mut()).await.unwrap()
+    else {
+        panic!("expected a native question");
+    };
+    session
+        .respond_permission(
+            request["id"].as_str().unwrap(),
+            &json!({"behavior":"allow","updatedInput":{"answers":{"choice":"first"}}}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        terminal(session.as_mut()).await.unwrap(),
+        AgentTurnEvent::Completed(Some("Echo: approved".into()))
+    );
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn unknown_slash_text_and_root_paths_reach_codex_unchanged() {
+    let fixture = Fixture::new();
+    let client = fixture.client();
+    let spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    for text in ["/unknown explain this", "/tmp is a directory"] {
+        session.start_turn(text, &spec.config).await.unwrap();
+        assert_eq!(
+            terminal(session.as_mut()).await.unwrap(),
+            AgentTurnEvent::Completed(Some(format!("Echo: {text}")))
+        );
+    }
+    session.close().await.unwrap();
+    let sent: Vec<_> = fixture
+        .requests()
+        .into_iter()
+        .filter(|request| request["method"] == "turn/start")
+        .map(|request| request["params"]["input"].clone())
+        .collect();
+    assert_eq!(sent[0][0]["text"], "/unknown explain this");
+    assert_eq!(sent[1][0]["text"], "/tmp is a directory");
+}
+
+#[tokio::test]
 async fn cancelling_a_pending_goal_pauses_native_work_once_and_releases_admission() {
     let fixture = Fixture::new();
     fixture.mode("workflows");
@@ -387,10 +507,8 @@ async fn completion_racing_interruption_keeps_the_native_connection_usable() {
         .start_turn("hang", &fixture.spec().config)
         .await
         .unwrap();
-    assert_eq!(
-        session.cancel_turn(&turn).await,
-        Err(AgentSessionError::Rejected)
-    );
+    session.cancel_turn(&turn).await.unwrap();
+    assert!(session.failure_diagnostic().is_none());
     assert_eq!(
         terminal(session.as_mut()).await.unwrap(),
         AgentTurnEvent::Completed(Some("Echo: raced".to_owned()))

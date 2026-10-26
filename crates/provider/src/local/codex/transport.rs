@@ -1,7 +1,7 @@
-use std::collections::VecDeque;
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
+use std::task::Poll;
 use std::time::Duration;
 
 use futures_util::FutureExt;
@@ -19,17 +19,20 @@ use tokio_util::task::AbortOnDropHandle;
 const MAX_OUTBOUND_FRAME: usize = 64 * 1024 * 1024;
 const MAX_EVENTS: usize = 128;
 
+mod events;
+
 #[derive(Debug)]
 pub(super) struct Transport {
     child: Child,
     pub(super) diagnostics: Diagnostics,
     pub(super) failure: diagnostics::failure::Failure,
+    pub(super) rpc_error: Option<secrecy::SecretString>,
     _stderr: AbortOnDropHandle<()>,
     input: Arc<Mutex<ChildStdin>>,
     messages: mpsc::Receiver<Value>,
     reader: JoinHandle<()>,
     pending_response: Option<AbortOnDropHandle<Result<(), AgentSessionError>>>,
-    events: VecDeque<Value>,
+    events: events::Queue,
     sequence: u64,
     deadline: Duration,
     closed: bool,
@@ -67,20 +70,7 @@ impl Transport {
         goals: bool,
         environment: &crate::ports::environment::AgentEnvironment,
     ) -> Result<Self, AgentSessionError> {
-        let mut command = Command::new(program);
-        command.envs(environment.entries());
-        if goals {
-            command.args(["--enable", "goals"]);
-        }
-        command.arg("app-server")
-            .current_dir(cwd)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            // Native diagnostics may contain prompts, paths or authentication data.
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
-        #[cfg(unix)]
-        command.process_group(0);
+        let mut command = process(program, cwd, goals, environment);
         let diagnostics = Diagnostics::new("codex");
         let mut child = command
             .spawn()
@@ -162,12 +152,13 @@ impl Transport {
             child,
             diagnostics: diagnostics.clone(),
             failure: diagnostics::failure::Failure::default(),
+            rpc_error: None,
             _stderr: AbortOnDropHandle::new(tokio::spawn(diagnostics.drain(stderr))),
             input,
             messages,
             reader,
             pending_response: None,
-            events: VecDeque::new(),
+            events: events::Queue::default(),
             sequence: 0,
             deadline,
             closed: false,
@@ -210,6 +201,7 @@ impl Transport {
         if self.closed {
             return Err(AgentSessionError::Failed);
         }
+        self.rpc_error = None;
         self.sequence += 1;
         let request = json!({"id":self.sequence,"method":method,"params":params});
         let result = tokio::time::timeout(self.deadline, async {
@@ -235,22 +227,34 @@ impl Transport {
                         {
                             return Err(AgentSessionError::Unavailable);
                         }
-                        if method == "turn/steer" && super::streaming::steer_rejected(error) {
+                        let message = error["message"].as_str().unwrap_or_default();
+                        self.rpc_error = (!message.is_empty() && message.len() <= 8192)
+                            .then(|| message.to_owned().into());
+                        // Completion can win the race with an interrupt. Its ordered
+                        // terminal notification still owns settlement of the turn.
+                        if method == "turn/interrupt"
+                            && error["code"] == -32600
+                            && error["message"] == "no active turn to interrupt"
+                        {
+                            return Ok(json!({}));
+                        }
+                        let thread = request["params"]["threadId"].as_str().unwrap_or_default();
+                        if method == "turn/steer" && super::streaming::steer_rejected(error)
+                            || method == "thread/resume"
+                                && super::native_sessions::archived(message, thread)
+                            || method == "thread/unarchive"
+                                && super::native_sessions::already_unarchived(message, thread)
+                        {
                             tracing::debug!(
                                 provider = "codex",
                                 operation = method,
-                                "Native provider rejected steering"
+                                "Native provider rejected a recoverable control request"
                             );
                         } else {
                             self.observe_error(error, diagnostics::native(error, "rpc"), method);
                         }
                         if method == "thread/resume"
-                            && error["code"] == -32600
-                            && let Some(thread) = request["params"]["threadId"].as_str()
-                            && error["message"].as_str().and_then(|message| {
-                                message.strip_prefix("thread ")?
-                                    .strip_suffix(" already has an active writer")
-                            }) == Some(thread)
+                            && writer_conflict(error, request["params"]["threadId"].as_str())
                         {
                             return Err(AgentSessionError::Busy);
                         }
@@ -267,38 +271,30 @@ impl Transport {
                         .and_then(|message| message.remove("result"))
                         .ok_or(AgentSessionError::Failed);
                 }
-                if self.events.len() >= MAX_EVENTS {
-                    tracing::warn!(
-                        queued_events = self.events.len(),
-                        limit_events = MAX_EVENTS,
-                        "Codex app-server pending event limit reached"
-                    );
-                    return Err(AgentSessionError::Failed);
-                }
-                self.events.push_back(message);
+                self.events.push(message).await?;
             }
         })
         .await;
-        if let Ok(Ok(value)) = result {
-            Ok(value)
-        } else if matches!(result, Ok(Err(AgentSessionError::Rejected))) {
-            Err(AgentSessionError::Rejected)
-        } else if matches!(result, Ok(Err(AgentSessionError::Unavailable))) {
-            Err(AgentSessionError::Unavailable)
-        } else if matches!(result, Ok(Err(AgentSessionError::Busy))) {
-            Err(AgentSessionError::Busy)
-        } else {
-            let category = if result.is_err() {
-                Category::Timeout
-            } else {
-                Category::Network
-            };
-            if self.diagnostics.failure().is_none() {
-                self.diagnostics
-                    .observe(Diagnostic::new(category, "transport"), method);
+        match result {
+            Ok(Ok(value)) => Ok(value),
+            Ok(Err(
+                error @ (AgentSessionError::Rejected
+                | AgentSessionError::Unavailable
+                | AgentSessionError::Busy),
+            )) => Err(error),
+            failure => {
+                let category = if failure.is_err() {
+                    Category::Timeout
+                } else {
+                    Category::Network
+                };
+                if self.diagnostics.failure().is_none() {
+                    self.diagnostics
+                        .observe(Diagnostic::new(category, "transport"), method);
+                }
+                let _ = self.close().await;
+                Err(AgentSessionError::Failed)
             }
-            let _ = self.close().await;
-            Err(AgentSessionError::Failed)
         }
     }
 
@@ -367,13 +363,28 @@ impl Transport {
                 return Err(AgentSessionError::Failed);
             }
         }
-        if let Some(event) = self.events.pop_front() {
-            return Ok(Some(event));
+        match self.events.poll() {
+            Ok(Poll::Ready(Some(event))) => return Ok(Some(event)),
+            Ok(Poll::Pending) => return Ok(None),
+            Ok(Poll::Ready(None)) => {}
+            Err(error) => {
+                self.closed = true;
+                self.diagnostics
+                    .observe(Diagnostic::new(Category::Protocol, "transport"), "replay");
+                return Err(error);
+            }
         }
         match self.messages.try_recv() {
             Ok(message) if message.get("method").is_some() => Ok(Some(message)),
             Err(mpsc::error::TryRecvError::Empty) if !self.closed => Ok(None),
-            Ok(_) | Err(_) => Err(AgentSessionError::Failed),
+            Ok(_) | Err(_) => {
+                self.closed = true;
+                if self.diagnostics.failure().is_none() {
+                    self.diagnostics
+                        .observe(Diagnostic::new(Category::Protocol, "transport"), "poll");
+                }
+                Err(AgentSessionError::Failed)
+            }
         }
     }
 
@@ -384,10 +395,10 @@ impl Transport {
         &mut self,
         thread: &str,
     ) -> Result<(), AgentSessionError> {
-        let mut retained = VecDeque::new();
+        let mut retained = events::Queue::default();
         let result = tokio::time::timeout(self.deadline, async {
             loop {
-                let message = match self.events.pop_front() {
+                let message = match self.events.next().await? {
                     Some(message) => message,
                     None => self
                         .messages
@@ -401,7 +412,7 @@ impl Transport {
                         .is_some_and(|method| method.starts_with("thread/realtime/"))
                 {
                     if message["method"] == "thread/realtime/closed" {
-                        return Ok(());
+                        break;
                     }
                     if matches!(
                         message["method"].as_str(),
@@ -411,21 +422,18 @@ impl Transport {
                                 | "thread/realtime/item/completed"
                         )
                     ) {
-                        if retained.len() >= MAX_EVENTS {
-                            return Err(AgentSessionError::Failed);
-                        }
-                        retained.push_back(message);
+                        retained.push(message).await?;
                     }
                 } else {
-                    if retained.len() >= MAX_EVENTS {
-                        return Err(AgentSessionError::Failed);
-                    }
-                    retained.push_back(message);
+                    retained.push(message).await?;
                 }
             }
+            while let Some(message) = self.events.next().await? {
+                retained.push(message).await?;
+            }
+            Ok::<_, AgentSessionError>(())
         })
         .await;
-        retained.append(&mut self.events);
         self.events = retained;
         if matches!(result, Ok(Ok(()))) {
             Ok(())
@@ -439,6 +447,7 @@ impl Transport {
         self.diagnostics.flush();
         self.closed = true;
         self.pending_response = None;
+        self.events = events::Queue::default();
         self.reader.abort();
         #[cfg(unix)]
         if let Some(id) = self.child.id() {
@@ -458,6 +467,39 @@ impl Transport {
             .map_err(|_| AgentSessionError::Failed)?;
         Ok(())
     }
+}
+
+fn writer_conflict(error: &Value, thread: Option<&str>) -> bool {
+    error["code"] == -32600
+        && thread.is_some()
+        && error["message"].as_str().and_then(|message| {
+            message
+                .strip_prefix("thread ")?
+                .strip_suffix(" already has an active writer")
+        }) == thread
+}
+
+fn process(
+    program: &Path,
+    cwd: &str,
+    goals: bool,
+    environment: &crate::ports::environment::AgentEnvironment,
+) -> Command {
+    let mut command = Command::new(program);
+    command.envs(environment.entries());
+    if goals {
+        command.args(["--enable", "goals"]);
+    }
+    command.arg("app-server")
+        .current_dir(cwd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        // Native diagnostics may contain prompts, paths or authentication data.
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    #[cfg(unix)]
+    command.process_group(0);
+    command
 }
 
 async fn write_response(
@@ -520,12 +562,14 @@ fn retained(method: Option<&str>) -> bool {
                     | "thread/goal/cleared"
                     | "turn/started"
                     | "thread/tokenUsage/updated"
+                    | "thread/compacted"
                     | "serverRequest/resolved"
                     | "item/completed"
                     | "item/started"
                     | "item/agentMessage/delta"
                     | "item/reasoning/summaryTextDelta"
                     | "item/commandExecution/outputDelta"
+                    | "item/commandExecution/terminalInteraction"
                     | "item/fileChange/outputDelta"
             )
         )

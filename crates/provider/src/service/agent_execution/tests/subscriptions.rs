@@ -311,6 +311,15 @@ async fn failed_subscription_response_delivery_does_not_activate_the_observer() 
 
 #[tokio::test]
 async fn provider_children_publish_to_parent_observers_but_keep_separate_durable_timelines() {
+    assert_provider_children_publish("live-subagent").await;
+}
+
+#[tokio::test]
+async fn modern_provider_children_publish_live_output_and_preserve_it_after_restart() {
+    assert_provider_children_publish("modern-subagent").await;
+}
+
+async fn assert_provider_children_publish(prompt: &str) {
     let fixture = Fixture::new();
     let (execution, _) = worker(&fixture);
     let created = create(&execution, &fixture).await;
@@ -320,7 +329,7 @@ async fn provider_children_publish_to_parent_observers_but_keep_separate_durable
     execution
         .execute(
             "agent.message.send.request",
-            json!({"agentId":id,"text":"live-subagent"}),
+            json!({"agentId":id,"text":prompt}),
         )
         .await
         .unwrap();
@@ -373,12 +382,22 @@ async fn provider_children_publish_to_parent_observers_but_keep_separate_durable
     );
     let (_, parent) = execution.timeline().read(id).unwrap();
     assert!(
+        parent
+            .iter()
+            .any(|row| row.entry.item["detail"]["type"] == "sub_agent"
+                && row.entry.item["detail"]["childSessionId"] == child)
+    );
+    assert!(
         !parent
             .iter()
             .any(|row| row.entry.item["text"] == "Independent child answer")
     );
     execution.shutdown().await.unwrap();
-    let (execution, _) = worker(&fixture);
+    assert_child_restart(&fixture, id, child).await;
+}
+
+async fn assert_child_restart(fixture: &Fixture, id: &str, child: &str) {
+    let (execution, _) = worker(fixture);
     let children = execution
         .execute(
             "agent.provider_subagents.list.request",

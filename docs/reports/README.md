@@ -99,6 +99,7 @@
 ## Provider、Agent 与会话
 
 - [Pi 模式移除验证](providers/pi-mode-removal-2026-10-24.md)
+- [Codex / Paseo 原生兼容验证](providers/codex-paseo-compatibility-2026-10-27.md)
 
 - [OMP 本机六模型实测与兼容修补](providers/omp-local-model-audit-2026-10-24.md)
 

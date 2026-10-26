@@ -6,6 +6,16 @@ mod user_images;
 mod voice_transcript;
 
 #[test]
+fn reasoning_history_falls_back_to_content_when_summary_is_empty() {
+    for summary in [json!([]), json!([""]), Value::Null] {
+        let native = json!({"id":"reasoning","type":"reasoning", "summary":summary,
+            "content":["Preserved reasoning", "Second part"]});
+        let entry = timeline_item(&native, "turn", "time").unwrap().unwrap();
+        assert_eq!(entry.item["text"], "Preserved reasoning\nSecond part");
+    }
+}
+
+#[test]
 fn oversized_mcp_structured_result_has_a_durable_replayable_preview() {
     let native = json!({"id":"call","type":"mcpToolCall","server":"codex_apps",
         "tool":"github.fetch","status":"completed","arguments":{"url":"https://example.test/compare"},

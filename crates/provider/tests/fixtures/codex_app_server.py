@@ -95,9 +95,24 @@ for line in sys.stdin:
     if method == "initialized" or method is None:
         continue
     params = request.get("params", {})
+    archived_path = root / ("native-archived-" + params.get("threadId", "none"))
+    if method == "thread/resume" and archived_path.exists():
+        identifier = params["threadId"]
+        emit({"id": request["id"], "error": {"code": -32600,
+              "message": f"session {identifier} is archived. Run `codex unarchive {identifier}` to unarchive it first."}})
+        continue
+    if method == "thread/unarchive":
+        if mode == "unarchive-denied":
+            emit({"id":request["id"], "error":{"code":-32600,"message":"Access denied"}})
+            continue
+        archived_path.unlink(missing_ok=True)
+        if mode == "unarchive-raced":
+            emit({"id":request["id"], "error":{"code":-32600,
+                "message":f"no archived rollout found for thread id {params['threadId']}"}})
+            continue
     if mode == "interrupt-completed" and method == "turn/interrupt":
         complete(params["turnId"], "raced")
-        emit({"id": request["id"], "error": {"message": "turn already completed"}})
+        emit({"id": request["id"], "error": {"code": -32600, "message": "no active turn to interrupt"}})
         continue
     if mode == "timeout":
         time.sleep(60)
@@ -120,6 +135,9 @@ for line in sys.stdin:
         (root / "realtime-started").write_text("ready")
         while not (root / "release-realtime").exists():
             time.sleep(0.01)
+    if method == "turn/start" and any(item.get("text") == "reject-before-admission" for item in params.get("input", [])):
+        emit({"id":request["id"],"error":{"code":-32600,"message":"Offline input rejected before admission"}})
+        continue
     result = {}
     if method == "thread/timeline/list":
         error_file = root / "timeline-error.json"
@@ -147,6 +165,9 @@ for line in sys.stdin:
         result = {"userAgent":"codex_cli_rs/0.153.4"} if mode == "workflows" else {}
     elif method == "thread/items/read" and mode == "realtime-canonical":
         result = {"data":[{"turnId":"delegated","item":{"type":"agentMessage","id":"rich","text":"**Structured response**"},"startedAtMs":None,"completedAtMs":None}]}
+    elif method == "config/read":
+        config_path = root / "native-config.json"
+        result = {"config": json.loads(config_path.read_text()) if config_path.exists() else {}}
     elif method == "collaborationMode/list":
         result = {"data":[{"name":"Plan","mode":"plan","model":"offline-model","reasoning_effort":"high"},
             {"name":"Default","mode":"default","model":"offline-model"}]} if mode == "workflows" else {"data":[]}
@@ -174,13 +195,16 @@ for line in sys.stdin:
         if method == "thread/start" and not ephemeral:
             (root / ("native-session-" + thread_id + ".json")).write_text(json.dumps(metadata))
         result = {"thread": {**metadata, "turns": load_history() if params.get("includeTurns") else []}, "model": "offline-model"}
+        sandbox_path = root / "native-sandbox.json"
+        if method != "thread/read" and sandbox_path.exists():
+            result["sandbox"] = json.loads(sandbox_path.read_text())[params.get("sandbox", "read-only")]
         if mode == "missing-thread":
             result = {}
     elif method == "thread/fork":
         source = params["threadId"]
         turns_path = root / ("native-history-" + source + ".json")
         turns = json.loads(turns_path.read_text()) if turns_path.exists() else []
-        if "lastTurnId" in params:
+        if "lastTurnId" in params and mode != "rollback-removed":
             turns = turns[:next(index + 1 for index, turn in enumerate(turns) if turn["id"] == params["lastTurnId"])]
         if "beforeTurnId" in params and mode != "legacy-fork":
             turns = turns[:next(index for index, turn in enumerate(turns) if turn["id"] == params["beforeTurnId"])]
@@ -276,6 +300,9 @@ for line in sys.stdin:
             voice_item({"type":"realtimeSessionClosed","id":"end","outcome":"ended"})
         emit({"method":"thread/realtime/closed","params":{"threadId":thread_id,"reason":"stopped"}})
     if method == "thread/compact/start":
+        if mode == "legacy-compaction":
+            emit({"method":"thread/compacted","params":{"threadId":thread_id,"turnId":None}})
+            continue
         compact_turn = pending or str(uuid.uuid4())
         if pending is None:
             emit({"method":"turn/started","params":{"threadId":thread_id,"turn":{"id":compact_turn}}})
@@ -293,6 +320,10 @@ for line in sys.stdin:
         complete(pending, "Goal completed")
     if method == "turn/start" and ephemeral and (root / "metadata-response.json").exists():
         response = (root / "metadata-response.json").read_text()
+        if mode == "metadata-retry":
+            for error_turn, retry in [(pending, True), ("old-turn", False)]:
+                emit({"method":"error", "params":{"threadId":thread_id,"turnId":error_turn,
+                    "willRetry":retry,"error":{"message":"Transient failure"}}})
         if (root / "metadata-tool.json").exists():
             emit({"method":"item/started","params":{"threadId":thread_id,"turnId":pending,
                 "item":json.loads((root / "metadata-tool.json").read_text())}})
@@ -343,6 +374,16 @@ for line in sys.stdin:
             continue
         if text == "exit":
             sys.exit(0)
+        if text == "terminal-input":
+            tool = {"id":"interactive-command", "type":"commandExecution", "command":"interactive", "processId":"42", "status":"inProgress"}
+            emit({"method":"item/started", "params":{"threadId":thread_id,"turnId":pending,"item":tool}})
+            emit({"method":"item/commandExecution/terminalInteraction", "params":{
+                "threadId":thread_id, "turnId":pending, "itemId":"interactive-command", "processId":"42", "stdin":"confirm\n"}})
+            tool = {**tool, "status":"completed", "aggregatedOutput":"Confirmed"}
+            stream_items.append(tool)
+            emit({"method":"item/completed", "params":{"threadId":thread_id,"turnId":pending,"item":tool}})
+            complete(pending, text)
+            continue
         if text == "large-generated-image":
             image = {"type": "imageGeneration", "id": pending + "-image", "status": "completed",
                      "result": "a" * (3 * 1024 * 1024), "savedPath": str(root / "generated.png")}
@@ -380,23 +421,38 @@ for line in sys.stdin:
         if text == "auto-compaction":
             item = {"type":"contextCompaction","id":"compact-" + pending}
             stream_items.append(item)
-            for method_name in ("item/started", "item/completed"):
+            methods = ("item/started",) if mode == "compaction-without-final-item" else ("item/started", "item/completed")
+            for method_name in methods:
                 emit({"method":method_name,"params":{"threadId":thread_id,"turnId":pending,"item":item}})
             complete(pending, "Compaction finished")
             continue
-        if text in ("async-question", "async-question-running"):
+        if text in ("async-question", "async-question-running", "async-question-after-answer"):
+            if text == "async-question-after-answer":
+                answer = {"type": "agentMessage", "id": pending + "-answer", "text": "Final answer"}
+                stream_items.append(answer)
+                emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending, "item": answer}})
             question = {"type": "agentMessage", "id": pending + "-question", "delivery": "async",
                 "questions": [{"title": "Which runtime?", "options": ["Rust", "Python"]}]}
             stream_items.append(question)
             emit({"method": "item/completed", "params": {"threadId": thread_id, "turnId": pending, "item": question}})
             if text == "async-question":
                 complete(pending, "Work continued")
+            elif text == "async-question-after-answer":
+                save_turn(pending, None, "completed")
+                emit({"method": "turn/completed", "params": {
+                    "threadId": thread_id, "turn": {"id": pending, "status": "completed"}}})
+                pending = None
             continue
-        if text == "live-subagent":
+        if text in ("live-subagent", "modern-subagent"):
             child = "child-" + thread_id
             spawn = {"type":"collabAgentToolCall", "id":"spawn-child", "senderThreadId":thread_id,
                 "receiverThreadIds":[child], "tool":"spawnAgent", "status":"completed", "prompt":"inspect",
                 "agentsStates":{child:{"status":"running"}}}
+            if text == "modern-subagent":
+                spawn = {"type":"subAgentActivity", "id":"spawn-child", "kind":"started",
+                    "agentThreadId":child, "agentPath":"/root/code_reviewer",
+                    "model":"offline-model", "reasoningEffort":"high"}
+                emit({"method":"item/started", "params":{"threadId":thread_id,"turnId":pending,"item":spawn}})
             stream_items.append(spawn)
             emit({"method":"item/completed", "params":{"threadId":thread_id,"turnId":pending,"item":spawn}})
             (root / ("native-session-" + child + ".json")).write_text(json.dumps({"parentThreadId":thread_id}))
@@ -428,6 +484,8 @@ for line in sys.stdin:
             approval = {"threadId": thread_id, "turnId": pending, "itemId": "approval-item", "command": "offline command", "cwd": str(root)}
             if text == "permit-question":
                 approval["questions"] = [{"id": "choice", "header": "Choice", "question": "Select one", "options": [{"label": "first", "description": "First choice"}]}]
+                if mode == "legacy-question":
+                    approval_method = "tool/requestUserInput"
             elif text == "permit-cua":
                 approval = {"threadId": thread_id, "turnId": pending, "itemId": "cua-call",
                     "isBlocking": True, "autoResolutionMs": None, "questions": [{

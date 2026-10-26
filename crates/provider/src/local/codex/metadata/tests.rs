@@ -3,6 +3,31 @@ use crate::ports::agent_session::AgentClient;
 use crate::test_support::Fixture;
 
 #[tokio::test]
+async fn auxiliary_generation_survives_native_retries_and_ignores_old_turn_errors() {
+    let fixture = Fixture::new();
+    fixture.mode("metadata-retry");
+    std::fs::write(
+        fixture.cwd.join("metadata-response.json"),
+        r#"{"title":"Recovered"}"#,
+    )
+    .unwrap();
+    let response = fixture
+        .client()
+        .generate_summary(&fixture.spec(), "source", &json!({}))
+        .await
+        .unwrap();
+    assert_eq!(response, r#"{"title":"Recovered"}"#);
+    assert_eq!(
+        fixture
+            .requests()
+            .iter()
+            .filter(|request| request["method"] == "turn/start")
+            .count(),
+        1
+    );
+}
+
+#[tokio::test]
 async fn auxiliary_codex_request_is_ephemeral_tool_restricted_and_schema_constrained() {
     let fixture = Fixture::new();
     std::fs::write(

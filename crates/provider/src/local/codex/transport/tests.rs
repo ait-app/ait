@@ -211,6 +211,16 @@ async fn queued_approval_reply_is_written_before_polling_subsequent_events() {
 }
 
 #[tokio::test]
+async fn exhausted_stdout_marks_the_transport_closed() {
+    let mut fixture = Fixture::new("pass");
+    fixture.transport.child.wait().await.unwrap();
+    assert_eq!(fixture.event().await, Err(AgentSessionError::Failed));
+    assert!(fixture.transport.closed);
+    assert!(fixture.transport.diagnostics.failure().is_some());
+    fixture.transport.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn queued_approval_write_failure_is_reported_by_poll() {
     let mut fixture = Fixture::new("time.sleep(60)");
     fixture.transport.child.kill().await.unwrap();
@@ -251,6 +261,7 @@ async fn rejected_request_preserves_native_reason_and_http_status_for_display() 
     assert!(message.contains("RPC -32000"));
     assert!(message.contains("request body too large"));
     assert!(!message.contains("private-value"));
+    assert!(!format!("{:?}", fixture.transport).contains("private-value"));
     fixture.transport.close().await.unwrap();
 }
 
@@ -397,14 +408,42 @@ async fn notification_queue_accepts_its_exact_capacity_before_acknowledgment() {
 }
 
 #[tokio::test]
-async fn notification_queue_overflow_fails_instead_of_dropping_output() {
+async fn realtime_close_preserves_spilled_text_and_canonical_speech_in_order() {
     let mut fixture = Fixture::new(
         "request = receive()\n\
-         for index in range(129): send({'method': 'item/agentMessage/delta', 'params': {'index': index}})\n\
-         send({'id': request['id'], 'result': {}})",
+         for index in range(512): send({'method':'item/agentMessage/delta','params':{'index':index}})\n\
+         send({'method':'thread/realtime/item/completed','params':{'threadId':'voice','index':512}})\n\
+         send({'method':'thread/realtime/outputAudio/delta','params':{'threadId':'voice'}})\n\
+         send({'method':'thread/realtime/closed','params':{'threadId':'voice'}})\n\
+         send({'method':'item/completed','params':{'index':513}})\n\
+         send({'id':request['id'],'result':{}})\nreceive()",
     );
-    assert_eq!(fixture.request().await, Err(AgentSessionError::Failed));
-    assert!(fixture.transport.closed);
+    fixture.request().await.unwrap();
+    fixture
+        .transport
+        .wait_realtime_closed("voice")
+        .await
+        .unwrap();
+    for expected in 0..514 {
+        assert_eq!(fixture.event().await.unwrap()["params"]["index"], expected);
+    }
+    fixture.transport.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn notification_burst_before_ack_preserves_output_and_connection() {
+    let mut fixture = Fixture::new(
+        "request = receive()\n\
+         for index in range(1024): send({'method': 'item/agentMessage/delta', 'params': {'index': index}})\n\
+         send({'id': request['id'], 'result': {}})\n\
+         followup = receive()\nsend({'id': followup['id'], 'result': {'usable': True}})\nreceive()",
+    );
+    fixture.request().await.unwrap();
+    for index in 0..1024 {
+        assert_eq!(fixture.event().await.unwrap()["params"]["index"], index);
+    }
+    assert_eq!(fixture.request().await.unwrap()["usable"], true);
+    fixture.transport.close().await.unwrap();
 }
 
 #[tokio::test]
