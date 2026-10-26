@@ -77,12 +77,18 @@ export function useProvidersSnapshot(
 
   const queryKey = useMemo(() => providersSnapshotQueryKey(serverId, cwd), [cwd, serverId]);
 
-  const snapshotQuery = useReplicaQuery({
+  const snapshotQuery = useReplicaQuery<Awaited<ReturnType<typeof fetchProvidersSnapshot>>>({
     queryKey,
     // The content-hash cache already owns catalog and model identity.
     structuralSharing: false,
     enabled: Boolean(enabled && supportsSnapshot && serverId && client && isConnected),
     pushEvent: "provider.snapshot.update",
+    // Lazy discovery must converge even if its completion push was missed.
+    refetchInterval: (query) =>
+      query.state.data?.refreshing?.length ||
+      query.state.data?.entries.some((entry) => entry.status === "loading")
+        ? 1_000
+        : false,
     queryFn: async ({ signal }) => {
       if (!client || !serverId) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
