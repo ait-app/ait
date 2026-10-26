@@ -215,7 +215,7 @@ impl Transport {
         let result = tokio::time::timeout(self.deadline, async {
             write(&self.input, &request).await?;
             loop {
-                let message = self
+                let mut message = self
                     .messages
                     .recv()
                     .await
@@ -263,8 +263,8 @@ impl Transport {
                         );
                     }
                     return message
-                        .get("result")
-                        .cloned()
+                        .as_object_mut()
+                        .and_then(|message| message.remove("result"))
                         .ok_or(AgentSessionError::Failed);
                 }
                 if self.events.len() >= MAX_EVENTS {

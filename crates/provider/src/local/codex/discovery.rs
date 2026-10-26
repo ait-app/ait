@@ -217,7 +217,15 @@ pub(super) fn timeline_items(
             .collect());
     }
     let (result, rendered) = images.split(&native["result"])?;
-    let mut sanitized = native.clone();
+    let mut sanitized = Value::Object(
+        native
+            .as_object()
+            .ok_or(AgentSessionError::Failed)?
+            .iter()
+            .filter(|(key, _)| key.as_str() != "result")
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect(),
+    );
     sanitized["result"] = result;
     let mut entries: Vec<_> = timeline_item(&sanitized, turn, timestamp)?
         .into_iter()

@@ -40,7 +40,7 @@ impl CodexClient {
         let result = async {
             transport.initialize().await?;
             let response = transport
-                .request("thread/read", json!({"threadId":id,"includeTurns":true}))
+                .request("thread/read", json!({"threadId":id,"includeTurns":false}))
                 .await?;
             let mut history = history_with_images(&response["thread"], &self.images)?;
             if let Some(entries) =
@@ -48,6 +48,11 @@ impl CodexClient {
                     .await?
             {
                 history.entries = entries;
+            } else {
+                let response = transport
+                    .request("thread/read", json!({"threadId":id,"includeTurns":true}))
+                    .await?;
+                history = history_with_images(&response["thread"], &self.images)?;
             }
             if history.descriptor.provider_handle_id != id
                 || Path::new(&history.descriptor.cwd).canonicalize().ok()

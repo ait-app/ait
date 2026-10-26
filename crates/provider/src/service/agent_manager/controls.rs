@@ -130,7 +130,7 @@ impl AgentManager {
                 AgentSessionError::Unavailable => ErrorCode::UnsupportedCapability,
                 AgentSessionError::Busy => ErrorCode::CatalogBusy,
                 AgentSessionError::Rejected => ErrorCode::InvalidMessage,
-                AgentSessionError::Failed => ErrorCode::AgentIo,
+                AgentSessionError::Failed | AgentSessionError::History(_) => ErrorCode::AgentIo,
             })
     }
 
