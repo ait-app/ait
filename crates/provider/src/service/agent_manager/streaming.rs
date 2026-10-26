@@ -422,10 +422,14 @@ impl AgentManager {
             Err(AgentSessionError::Rejected | AgentSessionError::Busy) => {
                 Err(AgentManagerError::Busy)
             }
-            Err(AgentSessionError::Failed | AgentSessionError::Unavailable) => {
+            Err(
+                error @ (AgentSessionError::Failed
+                | AgentSessionError::Unavailable
+                | AgentSessionError::History(_)),
+            ) => {
                 agent.pending = Some(AgentTurnEvent::Failed);
                 self.poll().await?;
-                Err(AgentManagerError::Session)
+                Err(super::map_session(error))
             }
         }
     }

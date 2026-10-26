@@ -30,6 +30,9 @@ pub(crate) enum AgentSessionError {
     /// The native session is already owned by another interactive writer.
     #[error("provider session is in use")]
     Busy,
+    /// A native history read failed with payload-free page and budget context.
+    #[error(transparent)]
+    History(super::native_history::HistoryError),
 }
 
 /// Provider-independent inputs required to construct or resume a native session.

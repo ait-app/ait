@@ -131,7 +131,17 @@ for line in sys.stdin:
             emit({"id": request["id"], "error": {"code": -32601, "message": "Method not found"}})
             continue
         pages = json.loads(pages_file.read_text())
-        emit({"id": request["id"], "result": pages[params.get("cursor") or "first"]})
+        page = pages[params.get("cursor") or "first"]
+        projection_check = root / "timeline-projection-check.json"
+        if params.get("cursor") and projection_check.exists():
+            directory = Path(json.loads(projection_check.read_text())["directory"])
+            if not directory.exists() or not any(directory.iterdir()):
+                emit({"id": request["id"], "error": {"code": -32603, "message": "Previous page images were not projected"}})
+                continue
+        if isinstance(page, dict) and "rpcError" in page:
+            emit({"id": request["id"], "error": page["rpcError"]})
+        else:
+            emit({"id": request["id"], "result": page})
         continue
     if method == "initialize":
         result = {"userAgent":"codex_cli_rs/0.153.4"} if mode == "workflows" else {}
