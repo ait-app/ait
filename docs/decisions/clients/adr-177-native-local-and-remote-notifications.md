@@ -10,6 +10,11 @@
 
 现有 `push.register` 字符串字段和租约文件格式保持兼容，新客户端将 provider、原生 token、APNs Bundle ID 与真实签名环境序列化为安装描述符。旧 Expo token 不会继续投递并会被清理。确认设备失效后，清除租约及连接 token 所有权，旧心跳不能复活它；显式重新登记可以恢复。
 
+2026-10-26 修订：取得原生 token 后，如果 Expo 无法从内嵌 profile 读取环境，仅对
+`ApplicationReleaseType.APP_STORE` 使用 production，以兼容 App Store 移除 profile 的分发行为。
+其余安装类型保留环境校验。`expo-notifications@0.32.16` 的补丁在请求失败后释放共享 Promise，
+避免一次失败使后续 30 秒重试永久复用拒绝结果；并发调用仍共享同一次原生请求。
+
 队列最多保留 64 个事件，每个事件最多并行投递 6 个设备。可重试错误最多尝试 3 次，429 尊重有界的 Retry-After。通知为尽力投递，队列和重试不跨 daemon 重启持久化，不承诺设备已展示或恰好一次。凭据由受信任的投递主机通过环境指定的私有文件读取，不打包进客户端。没有 provider 凭据时仍提供本地通知。
 
 移动端设置显示系统权限并支持授权、打开系统设置及本地测试。授权不再依赖 token 缓存读取成功；回前台、重连及原生 token 轮换可恢复登记。配置和验收见[移动端通知](../../operations/mobile-notifications.md)。
