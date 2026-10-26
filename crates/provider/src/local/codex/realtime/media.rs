@@ -17,6 +17,7 @@ use rtc::{
 };
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
 use webrtc::{
     data_channel::{DataChannel, DataChannelEvent},
     media_stream::{
@@ -101,13 +102,24 @@ impl PeerConnectionEventHandler for Handler {
             RTCPeerConnectionState::Connected => {
                 let _ = self.connected.try_send(());
             }
-            RTCPeerConnectionState::Failed | RTCPeerConnectionState::Closed => self.ended.cancel(),
+            RTCPeerConnectionState::Failed => {
+                tracing::warn!(reason = "peer_failed", "Codex realtime peer ended");
+                self.ended.cancel();
+            }
+            RTCPeerConnectionState::Closed => {
+                tracing::info!(reason = "peer_closed", "Codex realtime peer ended");
+                self.ended.cancel();
+            }
             _ => {}
         }
     }
 
     async fn on_track(&self, track: Arc<dyn TrackRemote>) {
         if self.tracks.try_send(track).is_err() {
+            tracing::warn!(
+                reason = "remote_track_queue_unavailable",
+                "Codex realtime peer ended"
+            );
             self.ended.cancel();
         }
     }
@@ -168,32 +180,47 @@ async fn prepare(endpoint: Endpoint) -> Result<Media, AgentSessionError> {
     if media.offer.is_empty() || media.offer.len() > 128 * 1024 {
         return Err(AgentSessionError::Failed);
     }
-    tokio::spawn(async move {
-        let output = endpoint.output.clone();
-        let cancel = endpoint.cancel.clone();
-        let running = run(
-            peer,
-            answer_rx,
-            connection,
-            MediaIo {
-                endpoint,
-                track,
-                ssrc,
-                incoming,
-                interruptions: interrupt,
-            },
-        );
-        tokio::select! {
-            biased;
-            () = cancel.cancelled() => {}
-            () = ended.cancelled() => { let _ = output.try_send(Event::Failed); }
-            () = drain_data(data) => { let _ = output.try_send(Event::Closed); }
-            result = running => {
-                if result.is_err() { let _ = output.try_send(Event::Failed); }
+    tokio::spawn(
+        async move {
+            let output = endpoint.output.clone();
+            let cancel = endpoint.cancel.clone();
+            let running = run(
+                peer,
+                answer_rx,
+                connection,
+                MediaIo {
+                    endpoint,
+                    track,
+                    ssrc,
+                    incoming,
+                    interruptions: interrupt,
+                },
+            );
+            let (reason, event) = tokio::select! {
+                biased;
+                () = cancel.cancelled() => ("caller_cancelled", None),
+                () = ended.cancelled() => ("peer_ended", Some(Event::Failed)),
+                reason = drain_data(data) => (reason, Some(Event::Closed)),
+                result = running => {
+                    if result.is_err() {
+                        ("media_io_failed", Some(Event::Failed))
+                    } else {
+                        ("media_io_ended", None)
+                    }
+                }
+            };
+            if matches!(&event, Some(Event::Failed)) || reason == "data_channel_error" {
+                tracing::warn!(reason, "Codex realtime media stopped");
+            } else {
+                tracing::info!(reason, "Codex realtime media stopped");
             }
+            if let Some(event) = event {
+                let _ = output.try_send(event);
+            }
+            cancel.cancel();
         }
-        cancel.cancel();
-    });
+        .in_current_span(),
+    );
     Ok(media)
 }
 
@@ -301,10 +328,14 @@ async fn run(
         ..
     } = endpoint;
     ready.send(()).map_err(|()| AgentSessionError::Failed)?;
-    tokio::select! {
-        result = send_audio(input, track, ssrc) => result,
-        result = receive_audio(incoming, output, interruptions) => result,
+    let (stage, result) = tokio::select! {
+        result = send_audio(input, track, ssrc) => ("microphone", result),
+        result = receive_audio(incoming, output, interruptions) => ("playback", result),
+    };
+    if result.is_err() {
+        tracing::warn!(stage, "Codex realtime audio I/O stopped");
     }
+    result
 }
 
 async fn send_audio(
@@ -365,16 +396,17 @@ async fn receive_audio(
     }
 }
 
-async fn drain_data(data: Arc<dyn DataChannel>) {
+async fn drain_data(data: Arc<dyn DataChannel>) -> &'static str {
     // Native app-server owns transcripts, tools and approvals; only observe transport closure here.
     while let Some(event) = data.poll().await {
-        if matches!(
-            event,
-            DataChannelEvent::OnClose | DataChannelEvent::OnClosing | DataChannelEvent::OnError
-        ) {
-            break;
+        match event {
+            DataChannelEvent::OnClose => return "data_channel_closed",
+            DataChannelEvent::OnClosing => return "data_channel_closing",
+            DataChannelEvent::OnError => return "data_channel_error",
+            _ => {}
         }
     }
+    "data_channel_stream_ended"
 }
 
 #[cfg(test)]
