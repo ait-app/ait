@@ -151,6 +151,7 @@ import type { HostBadgeModel } from "@/hosts/appearance";
 import { useHostBadges } from "@/hosts/use-host-badges";
 import { useSidebarRowItems } from "@/components/sidebar/display-preferences/model";
 import { PullRequestStateIcon } from "@/git/pull-request-state-icon";
+import { useSidebarRowHover } from "@/components/sidebar/use-sidebar-row-hover";
 
 const workspaceKeyExtractor = (workspace: SidebarWorkspacePlacement) => workspace.workspaceKey;
 
@@ -869,10 +870,11 @@ function ProjectHeaderRow({
   removeProjectStatus = "idle",
   dragHandleProps,
 }: ProjectHeaderRowProps) {
-  const [isHovered, setIsHovered] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const isMobileBreakpoint = useIsCompactFormFactor();
+  const showSelection = selected && !isMobileBreakpoint;
+  const { isHovered, hoverHandlers } = useSidebarRowHover(contextMenuOpen || isDragging);
   const localDaemonServerId = useLocalDaemonServerId();
   const projectPath = resolveSidebarProjectLocalPath(project, localDaemonServerId);
   const settingsTarget = project.hosts[0] ?? null;
@@ -909,14 +911,6 @@ function ProjectHeaderRow({
     onPress();
   }, [interaction.didLongPressRef, onPress]);
 
-  const handlePointerEnter = useCallback(() => {
-    if (!contextMenuOpen) setIsHovered(true);
-  }, [contextMenuOpen]);
-  const handlePointerLeave = useCallback(() => setIsHovered(false), []);
-  const handleContextMenuOpenChange = useCallback((open: boolean) => {
-    setContextMenuOpen(open);
-    if (open) setIsHovered(false);
-  }, []);
   const handleProjectPressIn = useCallback(
     (event: GestureResponderEvent) => {
       setIsPressed(true);
@@ -929,15 +923,15 @@ function ProjectHeaderRow({
     interaction.handlePressOut();
   }, [interaction]);
 
-  const projectRowStyle = useCallback(
-    ({ pressed }: PressableStateCallbackType) => [
+  const projectRowStyle = useMemo(
+    () => [
       styles.projectRow,
-      isDragging && styles.projectRowDragging,
-      selected && styles.sidebarRowSelected,
       isHovered && styles.projectRowHovered,
-      pressed && styles.projectRowPressed,
+      showSelection && styles.sidebarRowSelected,
+      isDragging && styles.projectRowDragging,
+      isPressed && styles.projectRowPressed,
     ],
-    [isDragging, selected, isHovered],
+    [isDragging, showSelection, isHovered, isPressed],
   );
 
   const rowChildren = (
@@ -948,7 +942,12 @@ function ProjectHeaderRow({
           iconDataUri={iconDataUri}
           statusBucket={statusBucket}
           projectViewKey={project.viewKey}
-          backdrop={getSidebarRowBackdrop({ isDragging, isPressed, selected, isHovered })}
+          backdrop={getSidebarRowBackdrop({
+            isDragging,
+            isPressed,
+            selected: showSelection,
+            isHovered,
+          })}
           chevron={chevron}
           showChevron={isHovered && chevron !== null}
           isArchiving={isArchiving}
@@ -987,8 +986,7 @@ function ProjectHeaderRow({
         {...dragAttributes}
         {...dragHandleProps?.listeners}
         ref={dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
+        {...hoverHandlers}
       >
         <PressHighlight
           accessibilityRole="button"
@@ -1007,13 +1005,12 @@ function ProjectHeaderRow({
   }
 
   return (
-    <ContextMenu open={contextMenuOpen} onOpenChange={handleContextMenuOpenChange}>
+    <ContextMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
       <View
         {...dragAttributes}
         {...dragHandleProps?.listeners}
         ref={dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
+        {...hoverHandlers}
       >
         <ContextMenuTrigger
           enabledOnMobile={false}
@@ -1077,6 +1074,7 @@ function WorkspaceRowInner({
   reserveIdleStatusIndicatorSpace = true,
 }: WorkspaceRowInnerProps) {
   const isCompact = useIsCompactFormFactor();
+  const showSelection = selected && !isCompact;
   const [isPressed, setIsPressed] = useState(false);
   const isTouchPlatform = platformIsNative || isCompact;
   const interaction = useLongPressDragInteraction({
@@ -1119,10 +1117,15 @@ function WorkspaceRowInner({
         const workspaceRowStyle = getProjectWorkspaceRowStyle({
           isDragging,
           isPressed,
-          selected,
+          selected: showSelection,
           isHovered,
         });
-        const backdrop = getSidebarRowBackdrop({ isDragging, isPressed, selected, isHovered });
+        const backdrop = getSidebarRowBackdrop({
+          isDragging,
+          isPressed,
+          selected: showSelection,
+          isHovered,
+        });
         return (
           <View
             {...dragAttributes}
