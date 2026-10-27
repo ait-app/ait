@@ -1,5 +1,14 @@
 # Ait changelog
 
+## 0.1.20 - 2026-10-27
+
+- Preserve Codex native protocol behavior across session configuration, approvals, commands, background events, subagents, terminal state and rewind.
+- Fix OpenCode cancellation blocking and reconcile stale OpenCode/OMP running states; normalize OMP output and group thinking by turn.
+- Improve Antigravity native-session resume and history projection, including tool, subagent and interrupted-turn handling.
+- Restore provider model-discovery snapshots and clear stale workspace-sidebar highlights.
+- Keep workspace.list metadata within the relay record limit and retain useful DeepSeek Host transport-failure evidence.
+- Fix iOS background notification registration and notification-center delivery in source; mobile binaries are not included in this desktop release.
+
 ## 0.1.19 - 2026-10-26
 
 - Project large Codex native histories incrementally page by page, preserving load errors and preventing failed or cancelled history loads from admitting new messages.
