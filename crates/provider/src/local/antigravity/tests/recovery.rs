@@ -58,6 +58,10 @@ async fn assert_failed_cancellation(scenario: &str) {
         event(session.as_mut()).await.unwrap(),
         AgentTurnEvent::RuntimeInfo(_)
     ));
+    assert!(
+        matches!(event(session.as_mut()).await.unwrap(), AgentTurnEvent::Timeline(entry)
+        if entry.item["type"] == "user_message" && entry.item["text"] == "wait")
+    );
     assert_eq!(
         event(session.as_mut()).await.unwrap(),
         AgentTurnEvent::Failed

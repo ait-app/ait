@@ -8,6 +8,8 @@ use super::*;
 use crate::ports::agent_session::AgentTurnEvent;
 use crate::protocol::prompt::{AgentPrompt, PromptImage};
 
+mod image_input;
+mod input_history;
 mod recovery;
 
 fn fixture() -> (TempDir, AntigravityClient, AgentSessionSpec) {
@@ -16,7 +18,7 @@ fn fixture() -> (TempDir, AntigravityClient, AgentSessionSpec) {
     // An immutable executable avoids ETXTBSY when concurrent forks inherit writable handles.
     let program = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("src/local/antigravity/tests/fixtures/agy.py");
-    let mut client = AntigravityClient::new(program);
+    let mut client = AntigravityClient::new(program).with_image_directory(cwd.join("images"));
     client.environment = AgentEnvironment::try_from(BTreeMap::from([(
         "AGY_FIXTURE_LOG".to_owned(),
         cwd.join("requests.jsonl").to_str().unwrap().to_owned(),
@@ -147,9 +149,11 @@ async fn streams_multiple_turns_resumes_and_restarts_for_config_changes() {
             _ => None,
         })
         .collect();
-    assert_eq!(timeline.len(), 3);
-    assert_eq!(timeline[0].item["type"], "tool_call");
-    assert_eq!(timeline[1].item["text"], "Hello world");
+    assert_eq!(timeline.len(), 4);
+    assert_eq!(timeline[0].item["type"], "user_message");
+    assert_eq!(timeline[0].item["clientMessageId"], "client-id");
+    assert_eq!(timeline[1].item["type"], "tool_call");
+    assert_eq!(timeline[2].item["text"], "Hello world");
     session.start_turn("second", &spec.config).await.unwrap();
     let second = completed(session.as_mut()).await;
     assert!(
@@ -192,7 +196,7 @@ async fn streams_multiple_turns_resumes_and_restarts_for_config_changes() {
 }
 
 #[tokio::test]
-async fn rejects_foreign_handles_models_and_unsupported_images_before_admission() {
+async fn rejects_foreign_handles_models_and_invalid_images_before_admission() {
     let (directory, client, mut spec) = fixture();
     spec.config.model = Some("missing-model".to_owned());
     assert_eq!(
@@ -232,7 +236,7 @@ async fn rejects_foreign_handles_models_and_unsupported_images_before_admission(
     let image = AgentPrompt {
         text: "image".to_owned(),
         images: vec![PromptImage {
-            data: "aGVsbG8=".to_owned(),
+            data: "invalid base64".to_owned(),
             mime_type: "image/png".to_owned(),
         }],
         ..Default::default()
@@ -334,6 +338,9 @@ async fn crashes_foreign_events_and_error_results_do_not_complete_successfully()
         loop {
             match event(session.as_mut()).await {
                 Ok(AgentTurnEvent::RuntimeInfo(_) | AgentTurnEvent::Usage(_)) => {}
+                Ok(AgentTurnEvent::Timeline(entry)) if entry.item["type"] == "user_message" => {
+                    assert_eq!(entry.item["text"], "hello");
+                }
                 Ok(AgentTurnEvent::Failed) | Err(AgentSessionError::Failed) => break,
                 unexpected => panic!("unexpected {unexpected:?}"),
             }

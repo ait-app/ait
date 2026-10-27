@@ -66,7 +66,7 @@ AGY 的 stderr 会持续、有界地读取，仅公开权限、登录、额度�
 原始诊断不进入 Ait 日志或快照。更详细的原生日志位于 `~/.gemini/antigravity-cli/log/`。
 
 模型选择保留 CLI 返回的完整 slug，包括模型的 effort 变体。
-会话支持多轮文本、工具进度、累计 token 用量与 conversation ID 恢复；
+会话支持多轮文本和图片、工具进度、累计 token 用量与 conversation ID 恢复；
 模型或模式修改在下轮开始前通过同一 conversation ID 重启原生连接。
 读写、编辑和子代理步骤使用对应的工具卡片；子代理保留原生 child conversation ID 和日志 URI，
 不导入子代理 transcript。原生没有返回写入内容或 diff 时，卡片只展示文件路径。
@@ -106,9 +106,15 @@ Ait 使用同一个 AGY 安装的 `agy --print /usage --output-format json` 读�
 
 ## 当前接口范围
 
-文本和文本附件支持；图片、单轮 JSON schema、system prompt、Ait 会话级 MCP 配置、
+文本、文本附件和 PNG/JPEG/GIF/WebP 图片支持。AGY 的流式输入只接受文本块，
+Ait 将图片保存到 daemon 数据目录的私有 `agents/provider-images`，通过文件路径交给
+原生读图工具；不把图片写到工作区，也不更改原生权限。历史消息保留图片预览，
+关闭会话后图片仍可用于历史和恢复。实际读图仍受所选模型能力和 AGY 原生工具权限约束。
+
+单轮 JSON schema、system prompt、Ait 会话级 MCP 配置、
 运行中 steer、完整原生历史导入/列举与 rewind 尚未接入。
-不支持的输入与配置在发送前拒绝。AGY 自身已配置的工具与 MCP 仍由原生 CLI 加载。
+不支持的输入与配置在发送前拒绝，保留具体输入错误原因；图片无法保存时提示检查磁盘空间和目录权限。
+AGY 自身已配置的工具与 MCP 仍由原生 CLI 加载。
 
 设计见 [ADR-087](../decisions/providers/adr-087-antigravity-cli-provider.md)，
 验证见 [报告](../reports/providers/antigravity-cli.md)。

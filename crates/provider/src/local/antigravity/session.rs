@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{
-    AntigravityClient, PROVIDER, config, diagnostics::Failure, discovery, streaming::Stream,
+    AntigravityClient, PROVIDER, config, diagnostics::Failure, discovery, input, streaming::Stream,
     transport::Transport,
 };
 use crate::ports::agent_session::{
@@ -25,6 +25,7 @@ pub(super) struct Session {
     init: Value,
     active: Option<String>,
     stream: Stream,
+    input_error: Option<&'static str>,
     closed: bool,
 }
 
@@ -57,6 +58,7 @@ pub(super) async fn open(
         init,
         active: None,
         stream: Stream::default(),
+        input_error: None,
         closed: false,
     })
 }
@@ -115,16 +117,25 @@ impl Session {
         prompt: &AgentPrompt,
         config: &StoredAgentConfig,
     ) -> Result<String, AgentSessionError> {
-        prompt.validate()?;
-        config::validate(config)?;
-        if self.closed
-            || self.active.is_some()
-            || !prompt.images.is_empty()
-            || prompt.output_schema.is_some()
-        {
+        if self.closed || self.active.is_some() {
             return Err(AgentSessionError::Rejected);
         }
-        let blocks = prompt.blocks()?;
+        self.input_error = None;
+        config::validate(config).inspect_err(|_| {
+            self.input_error = Some("AGY does not support the requested session configuration.");
+        })?;
+        if prompt.output_schema.is_some() {
+            self.input_error = Some(
+                "AGY does not support JSON schema output constraints. Remove the output schema and retry.",
+            );
+            return Err(AgentSessionError::Rejected);
+        }
+        let blocks = prompt.blocks().inspect_err(|_| {
+            self.input_error = Some("AGY input is empty, invalid or too large. Check the text and image attachments before retrying.");
+        })?;
+        let input = input::prepare(blocks, &self.client.images).inspect_err(|_| {
+            self.input_error = Some("Ait could not save AGY image attachments. Check disk space and provider image directory permissions before retrying.");
+        })?;
         self.stream.failure = None;
         self.stream.explanation.clear();
         if self.transport.is_none() || self.config != *config {
@@ -147,7 +158,7 @@ impl Session {
             .transport
             .as_mut()
             .ok_or(AgentSessionError::Failed)?
-            .send(&json!({"event":"user","message":{"content":blocks}}))
+            .send(&json!({"event":"user","message":{"content":input.content}}))
             .await;
         if let Err(error) = sent {
             self.stream.failure = Some(
@@ -169,6 +180,11 @@ impl Session {
                 &self.config,
                 &self.init,
             )));
+        self.stream.submitted(
+            &input.text,
+            &input.sources,
+            prompt.client_message_id.as_deref(),
+        );
         Ok(turn)
     }
 
@@ -204,6 +220,9 @@ impl AgentSession for Session {
 
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
         use crate::ports::diagnostics::{Category, Diagnostic};
+        if self.input_error.is_some() {
+            return Some(Diagnostic::new(Category::Unknown, "input"));
+        }
         let failure = self
             .stream
             .failure
@@ -223,6 +242,9 @@ impl AgentSession for Session {
     }
 
     fn failure_message(&self) -> Option<Cow<'_, str>> {
+        if let Some(message) = self.input_error {
+            return Some(Cow::Borrowed(message));
+        }
         if self.stream.failure != Some(Failure::Permission)
             && let Some(message) = self.stream.explanation.message()
         {

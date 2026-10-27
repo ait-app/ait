@@ -3,6 +3,45 @@ use super::*;
 mod native;
 
 #[test]
+fn submitted_text_is_bounded_lossless_and_reconciles_the_client_only_once() {
+    let mut stream = stream();
+    let text = format!("{}{}", "\u{0001}".repeat(96 * 1024 - 1), "界".repeat(1024));
+    stream.submitted(&text, &["/private/image.png".to_owned()], Some("client"));
+    let entries: Vec<_> = stream
+        .events
+        .iter()
+        .map(|event| {
+            let AgentTurnEvent::Timeline(entry) = event else {
+                panic!("input")
+            };
+            entry
+        })
+        .collect();
+    assert_eq!(entries.len(), 2);
+    assert_ne!(entries[0].key, entries[1].key);
+    assert_eq!(entries[0].item["clientMessageId"], "client");
+    assert!(entries[1].item.get("clientMessageId").is_none());
+    assert_eq!(
+        entries[0].item["imageSources"],
+        json!(["/private/image.png"])
+    );
+    assert!(entries[1].item.get("imageSources").is_none());
+    assert_eq!(
+        entries
+            .iter()
+            .map(|entry| entry.item["text"].as_str().unwrap())
+            .collect::<String>(),
+        text
+    );
+    assert!(
+        entries
+            .iter()
+            .all(|entry| serde_json::to_vec(entry).unwrap().len()
+                < crate::storage::timeline::MAX_ENTRY_BYTES)
+    );
+}
+
+#[test]
 fn tool_details_match_shared_client_schema_fixtures() {
     let cases: Vec<Value> = serde_json::from_str(include_str!(
         "../../../../tests/fixtures/antigravity_tool_cards.json"
