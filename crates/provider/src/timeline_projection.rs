@@ -39,6 +39,7 @@ enum Collapse {
 pub(crate) struct Entry {
     provider: String,
     /// Final projected native item.
+    #[serde(deserialize_with = "deserialize_item")]
     pub(crate) item: Value,
     timestamp: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -56,7 +57,7 @@ impl From<&Row> for Entry {
     fn from(row: &Row) -> Self {
         Self {
             provider: row.provider.clone(),
-            item: row.entry.item.clone(),
+            item: normalize_item(row.entry.item.clone()),
             timestamp: row.entry.timestamp.clone(),
             turn_id: row.entry.turn_id.clone().filter(|turn| !turn.is_empty()),
             seq_start: row.seq,
@@ -68,6 +69,26 @@ impl From<&Row> for Entry {
             collapsed: Vec::new(),
         }
     }
+}
+
+fn deserialize_item<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Value, D::Error> {
+    Value::deserialize(deserializer).map(normalize_item)
+}
+
+fn normalize_item(mut item: Value) -> Value {
+    // Older AGY projections persisted null for absent shell fields. Omit them on both
+    // cached and rebuilt display reads without rewriting canonical history or its cursors.
+    if item["type"] == "tool_call"
+        && item["detail"]["type"] == "shell"
+        && let Some(detail) = item["detail"].as_object_mut()
+    {
+        for field in ["output", "cwd"] {
+            if detail.get(field).is_some_and(Value::is_null) {
+                detail.remove(field);
+            }
+        }
+    }
+    item
 }
 
 /// Merge one adjacent text source row into its existing display group.

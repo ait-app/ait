@@ -33,6 +33,65 @@ fn compare(timeline: &Timeline) {
 }
 
 #[test]
+fn legacy_antigravity_null_shell_fields_are_omitted_from_cached_and_rebuilt_pages() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("timeline.sqlite");
+    let timeline = Timeline::open(&path).unwrap();
+    let legacy = item(
+        1,
+        json!({"type":"tool_call","callId":"command","name":"run_command",
+            "status":"failed","error":{"message":"Permission denied"},
+            "detail":{"type":"shell","command":"pwd","cwd":null,"output":null}}),
+    );
+    timeline
+        .append("agent", "antigravity", std::slice::from_ref(&legacy))
+        .unwrap();
+    // Seed the exact pre-fix derived page, even once new projections omit these null fields.
+    {
+        let database = timeline.database.lock().unwrap();
+        let encoded: String = database
+            .query_row(
+                "SELECT entry FROM display_entries WHERE agent='agent'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let mut cached: Value = serde_json::from_str(&encoded).unwrap();
+        cached["item"] = legacy.item.clone();
+        let encoded = serde_json::to_string(&cached).unwrap();
+        database
+            .execute(
+                "UPDATE display_entries SET entry=?,bytes=? WHERE agent='agent'",
+                params![encoded, encoded.len()],
+            )
+            .unwrap();
+    }
+    drop(timeline);
+    let timeline = Timeline::open(&path).unwrap();
+    let epoch = timeline.generation("agent").unwrap();
+    for rebuild in [false, true] {
+        if rebuild {
+            clear(&timeline.database.lock().unwrap(), "agent").unwrap();
+        }
+        for direction in ["tail", "after", "before"] {
+            let cursor = if direction == "before" { 2 } else { 0 };
+            let request: FetchRequest = serde_json::from_value(json!({"agentId":"agent",
+                "direction":direction,"cursor":{"epoch":epoch,"seq":cursor},"limit":20}))
+            .unwrap();
+            let page =
+                fetch_stored(&request, &timeline, "agent", &Value::Null, Some(false)).unwrap();
+            assert_eq!(page["entries"].as_array().unwrap().len(), 1);
+            let projected = &page["entries"][0]["item"];
+            assert_eq!(projected["detail"], json!({"type":"shell","command":"pwd"}));
+            assert_eq!(projected["status"], legacy.item["status"]);
+            assert_eq!(projected["error"], legacy.item["error"]);
+        }
+    }
+    assert_eq!(timeline.read("agent").unwrap().1[0].entry, legacy);
+    assert_eq!(timeline.generation("agent").unwrap(), epoch);
+}
+
+#[test]
 fn incremental_groups_match_the_reference_through_progress_completion_and_replacement() {
     let timeline = Timeline::memory().unwrap();
     assert!(!timeline.has_entries("agent").unwrap());

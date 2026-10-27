@@ -377,11 +377,16 @@ fn preview(value: &Value) -> (Value, usize) {
 fn tool_detail(tool: &Value) -> Value {
     let parameters = &tool["parameters"];
     match tool["name"].as_str() {
-        Some("run_command") if parameters["CommandLine"].is_string() => {
-            let mut detail = json!({"type":"shell","command":parameters["CommandLine"],
-                "output":tool["output"]});
-            if let Some(cwd) = parameters.get("Cwd") {
-                detail["cwd"] = cwd.clone();
+        Some("run_command")
+            if parameters["CommandLine"].is_string()
+                && (tool["output"].is_null() || tool["output"].is_string()) =>
+        {
+            let mut detail = json!({"type":"shell","command":parameters["CommandLine"]});
+            if let Some(output) = tool["output"].as_str() {
+                detail["output"] = json!(output);
+            }
+            if let Some(cwd) = parameters["Cwd"].as_str() {
+                detail["cwd"] = json!(cwd);
             }
             detail
         }
