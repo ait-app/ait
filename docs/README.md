@@ -37,6 +37,8 @@
 
 ## 架构决策
 
+- [ADR-196：Provider 输出分类与每轮 Thinking 展示](decisions/providers/adr-196-provider-output-semantics.md)：原生后台结果与通知的语义投影、实时/历史一致及按 turnId 归并推理。
+
 - [ADR-190：Ait ACP 桥接官方 OMP 与通用插件接口](decisions/providers/adr-190-omp-acp-settlement.md)：单一官方 RPC 所有者、通用插件与原生事件透传；[架构与兼容表](architecture/omp-acp-bridge.md)、[验证报告](reports/providers/omp-acp-settlement-2026-10-25.md)。
 
 - [ADR-189：Pi 不暴露 Host 模式](decisions/providers/adr-189-pi-without-host-mode.md)：移除合成的 Native Tools／`default` 模式；Pi 继续直接拥有工具与设置，旧记录仅保留输入兼容；[验证报告](reports/providers/pi-mode-removal-2026-10-24.md)。

@@ -64,10 +64,21 @@ impl Projection {
             }
             Some("tool_call") => {
                 let first = self.tools.insert(entry.key.clone());
+                let status = match item["status"].as_str() {
+                    Some("running") => "in_progress",
+                    Some("completed") => "completed",
+                    _ => "failed",
+                };
                 json!({"sessionUpdate":if first {"tool_call"} else {"tool_call_update"},
                     "toolCallId":item["callId"],"title":item["name"],"kind":"other",
-                    "status":if item["status"]=="running" {"in_progress"} else {item["status"].as_str().unwrap_or("failed")},
+                    "status":status,
                     "rawInput":item["detail"]["input"],"rawOutput":item["detail"]["output"]})
+            }
+            Some("notification") => {
+                let message = item["message"].as_str().ok_or(AgentSessionError::Failed)?;
+                json!({"sessionUpdate":"tool_call","toolCallId":entry.key,
+                    "title":"Provider notification","kind":"other","status":"completed",
+                    "rawOutput":message,"_meta":{"level":item["level"]}})
             }
             _ => return Ok(Vec::new()),
         };

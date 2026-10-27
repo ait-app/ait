@@ -3,6 +3,49 @@ use crate::ports::agent_session::{AgentClient, AgentResumePurpose};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream, ReadHalf, WriteHalf};
 use tokio_util::task::AbortOnDropHandle;
 
+#[test]
+fn standard_acp_retains_provider_notifications_without_assistant_text() {
+    let event = AgentTurnEvent::Timeline(crate::protocol::timeline::NativeItem {
+        key: "native:omp:session:notice:one".to_owned(),
+        turn_id: Some("turn".to_owned()),
+        timestamp: "2026-10-25T00:00:00Z".to_owned(),
+        item: json!({"type":"notification","level":"warning","message":"Plugin warning"}),
+    });
+    let updates = mapping::Projection::default()
+        .update("session", &event)
+        .unwrap();
+
+    assert_eq!(updates.len(), 1);
+    let update = &updates[0]["params"]["update"];
+    assert_eq!(update["sessionUpdate"], "tool_call");
+    assert_eq!(update["toolCallId"], "native:omp:session:notice:one");
+    assert_eq!(update["rawOutput"], "Plugin warning");
+    assert_eq!(update["_meta"]["level"], "warning");
+}
+
+#[test]
+fn standard_acp_tool_states_include_canceled_background_results() {
+    for (native, expected) in [
+        ("running", "in_progress"),
+        ("completed", "completed"),
+        ("failed", "failed"),
+        ("canceled", "failed"),
+    ] {
+        let event = AgentTurnEvent::Timeline(crate::protocol::timeline::NativeItem {
+            key: "native:omp:session:result".to_owned(),
+            turn_id: Some("turn".to_owned()),
+            timestamp: "2026-10-25T00:00:00Z".to_owned(),
+            item: json!({"type":"tool_call","callId":"background:bg_4",
+                "name":"Background job","status":native,
+                "detail":{"type":"unknown","input":"build","output":"job output"}}),
+        });
+        let updates = mapping::Projection::default()
+            .update("session", &event)
+            .unwrap();
+        assert_eq!(updates[0]["params"]["update"]["status"], expected);
+    }
+}
+
 struct Peer {
     input: WriteHalf<DuplexStream>,
     output: BufReader<ReadHalf<DuplexStream>>,

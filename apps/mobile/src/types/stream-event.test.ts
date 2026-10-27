@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AgentStreamEventPayload } from "@ait/protocol/messages";
 import type { ThoughtItem } from "@/types/stream";
-import { applyStreamEvent } from "@/types/stream";
+import { applyStreamEvent, reduceStreamUpdate } from "@/types/stream";
 
 const baseTimestamp = new Date(0);
 
@@ -48,7 +48,7 @@ const permissionEvent = (): AgentStreamEventPayload => ({
   },
 });
 
-const reasoningChunk = (text: string): AgentStreamEventPayload => ({
+const reasoningChunk = (text: string): Extract<AgentStreamEventPayload, { type: "timeline" }> => ({
   type: "timeline",
   provider: "claude",
   item: {
@@ -91,6 +91,45 @@ describe("applyStreamEvent", () => {
     expect(result.head).toHaveLength(1);
     expect((result.head[0] as ThoughtItem).text).toBe("Let me think...");
   });
+
+  it("keeps consecutive reasoning from distinct canonical turns separate", () => {
+    const first = applyStreamEvent({
+      tail: [],
+      head: [],
+      event: { ...reasoningChunk("First"), turnId: "turn-1" },
+      timestamp: baseTimestamp,
+    });
+    const next = applyStreamEvent({
+      tail: first.tail,
+      head: first.head,
+      event: { ...reasoningChunk("Second"), turnId: "turn-2" },
+      timestamp: baseTimestamp,
+    });
+
+    expect([...next.tail, ...next.head]).toMatchObject([
+      { kind: "thought", text: "First", turnId: "turn-1" },
+      { kind: "thought", text: "Second", turnId: "turn-2" },
+    ]);
+  });
+
+  it.each(["", " \n"])(
+    "does not reassign the previous turn for an empty reasoning fragment: %j",
+    (text) => {
+      const first = reduceStreamUpdate(
+        [],
+        { ...reasoningChunk("First"), turnId: "turn-1" },
+        baseTimestamp,
+      );
+      const next = reduceStreamUpdate(
+        first,
+        { ...reasoningChunk(text), turnId: "turn-2" },
+        baseTimestamp,
+      );
+
+      expect(next).toBe(first);
+      expect(next[0]).toMatchObject({ text: "First", turnId: "turn-1" });
+    },
+  );
 
   it("flushes reasoning to tail when tool call arrives", () => {
     let result = applyStreamEvent({

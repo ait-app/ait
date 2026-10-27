@@ -4,13 +4,9 @@ import {
   type PreparedToolCallHistory,
   type ToolCallDetailLevel,
 } from "@/tool-calls/detail-level/projection";
-import type {
-  AssistantMessageItem,
-  StreamItem,
-  ThoughtItem,
-  UserMessageItem,
-} from "@/types/stream";
+import type { AssistantMessageItem, StreamItem, UserMessageItem } from "@/types/stream";
 import { splitMarkdownBlocks } from "@/utils/split-markdown-blocks";
+import { createTurnThinkingProjection } from "./thinking-by-turn";
 
 interface PresentationInput {
   tail: StreamItem[];
@@ -23,70 +19,6 @@ function retainItems(previous: StreamItem[], next: StreamItem[]): StreamItem[] {
   return previous.length === next.length && previous.every((item, index) => item === next[index])
     ? previous
     : next;
-}
-
-function createThoughtProjection() {
-  const rowsBySource = new WeakMap<StreamItem[], StreamItem[]>();
-  const mergedByFirst = new WeakMap<ThoughtItem, WeakMap<ThoughtItem, ThoughtItem>>();
-
-  function merge(first: ThoughtItem, next: ThoughtItem): ThoughtItem {
-    let mergedByNext = mergedByFirst.get(first);
-    if (!mergedByNext) {
-      mergedByNext = new WeakMap();
-      mergedByFirst.set(first, mergedByNext);
-    }
-    const cached = mergedByNext.get(next);
-    if (cached) return cached;
-    // Keep the first row's identity and reading position while exposing every fragment.
-    const merged = {
-      ...first,
-      text: [first.text, next.text].filter(Boolean).join("\n\n"),
-      status: next.status,
-      timestamp: next.timestamp,
-    };
-    mergedByNext.set(next, merged);
-    return merged;
-  }
-
-  function coalesce(items: StreamItem[]): StreamItem[] {
-    const cached = rowsBySource.get(items);
-    if (cached) return cached;
-    const rows: StreamItem[] = [];
-    for (const item of items) {
-      const previous = rows.at(-1);
-      // Missing turn IDs only match other missing IDs; legacy rows cannot bridge canonical turns.
-      if (
-        previous?.kind === "thought" &&
-        item.kind === "thought" &&
-        previous.turnId === item.turnId
-      ) {
-        rows[rows.length - 1] = merge(previous, item);
-      } else {
-        rows.push(item);
-      }
-    }
-    const result = rows.length === items.length ? items : rows;
-    rowsBySource.set(items, result);
-    return result;
-  }
-
-  return (tail: StreamItem[], head: StreamItem[]) => {
-    const history = coalesce(tail);
-    const live = coalesce(head);
-    const previous = history.at(-1);
-    const next = live[0];
-    if (
-      previous?.kind === "thought" &&
-      next?.kind === "thought" &&
-      previous.turnId === next.turnId
-    ) {
-      return {
-        tail: [...history.slice(0, -1), merge(previous, next)],
-        head: live.slice(1),
-      };
-    }
-    return { tail: history, head: live };
-  };
 }
 
 /**
@@ -116,7 +48,7 @@ function isReusableBlock(block: AssistantMessageItem, source: AssistantMessageIt
 
 /** Project native messages into Markdown blocks and tool-call groups. */
 export function createStreamPresentation() {
-  const projectThoughts = createThoughtProjection();
+  const projectThinking = createTurnThinkingProjection();
   const userMessageCache = new WeakMap<UserMessageItem, UserMessageItem>();
 
   function presentUserMessage(item: UserMessageItem): UserMessageItem {
@@ -208,7 +140,8 @@ export function createStreamPresentation() {
     return blocks;
   }
 
-  return (input: PresentationInput) => {
+  return (source: PresentationInput) => {
+    const input = { ...source, ...projectThinking(source) };
     // Retained history is not reprojected or regrouped on each live text update.
     if (historySource !== input.tail) {
       historyRows = input.tail.flatMap<StreamItem>(nativeBlocks);
@@ -240,13 +173,12 @@ export function createStreamPresentation() {
       preparedTail = displayTail;
       preparedLevel = input.level;
     }
-    const projected = projectToolCallDetailLevel({
+    return projectToolCallDetailLevel({
       level: input.level,
       tail: displayTail,
       head,
       preparedHistory,
       isTurnActive: input.isTurnActive,
     });
-    return { ...projected, ...projectThoughts(projected.tail, projected.head) };
   };
 }

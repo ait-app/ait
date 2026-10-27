@@ -167,11 +167,15 @@ fn native_command_output_and_plugin_notifications_are_visible_without_history_me
         assert_eq!(entry.item["metadata"]["transient"], true);
         assert_eq!(entry.item["metadata"]["nativeType"], frame["type"]);
         assert_eq!(
-            entry.item["text"],
-            frame.get("text").unwrap_or(&frame["message"]).clone()
+            entry.item.get("text").unwrap_or(&entry.item["message"]),
+            frame.get("text").unwrap_or(&frame["message"])
         );
+        if frame["type"] == "extension_ui_request" {
+            assert_eq!(entry.item["type"], "notification");
+            assert_eq!(entry.item["level"], "warning");
+        }
     }
-    assert_eq!(stream.last_text.as_deref(), Some("Plugin notification"));
+    assert_eq!(stream.last_text.as_deref(), Some("Native command result"));
     assert!(
         stream
             .consume(&json!({"type":"command_output","text":null}))
@@ -182,4 +186,57 @@ fn native_command_output_and_plugin_notifications_are_visible_without_history_me
         .consume(&json!({"type":"command_output","text":""}))
         .unwrap();
     assert_eq!(stream.events.len(), count);
+}
+
+#[test]
+fn background_results_are_expandable_tools_with_native_job_identity_and_status() {
+    for (status, expected) in [
+        ("running", "running"),
+        ("completed", "completed"),
+        ("failed", "failed"),
+        ("cancelled", "canceled"),
+    ] {
+        let mut stream = Stream::new("session".to_owned(), ImageStore::default());
+        stream.last_text = Some("Assistant reply".to_owned());
+        let message = json!({"role":"custom","customType":"async-result","display":true,
+            "timestamp":1000,"content":"Background job bg_4 has completed. Resume your work.\nraw output",
+            "details":{"jobs":[{"jobId":"bg_4","type":"bash","status":status,"label":"build"}]}});
+        stream.message(&message).unwrap();
+        let AgentTurnEvent::Timeline(entry) = stream.events.pop_front().unwrap() else {
+            panic!("expected background tool result");
+        };
+        assert_eq!(entry.item["type"], "tool_call");
+        assert_eq!(entry.item["callId"], "background:bg_4");
+        assert_eq!(entry.item["status"], expected);
+        assert_eq!(entry.item["detail"]["type"], "unknown");
+        assert_eq!(entry.item["detail"]["input"], "build");
+        assert_eq!(entry.item["metadata"]["jobId"], "bg_4");
+        assert_eq!(entry.item["detail"]["output"], message["content"]);
+        assert!(entry.item.get("text").is_none());
+        assert_eq!(stream.last_text.as_deref(), Some("Assistant reply"));
+        assert!(!stream.failed);
+        assert!(!stream.aborted);
+    }
+}
+
+#[test]
+fn background_batches_and_missing_job_metadata_keep_one_bounded_result_card() {
+    let mut stream = Stream::new("session".to_owned(), ImageStore::default());
+    for jobs in [json!(null), json!([]), json!([{"jobId":"a"},{"jobId":"b"}])] {
+        let message = json!({"role":"custom","customType":"async-result","display":true,
+            "timestamp":1000,"content":"x".repeat(200_000),"details":{"jobs":jobs}});
+        stream.message(&message).unwrap();
+        let AgentTurnEvent::Timeline(entry) = stream.events.pop_front().unwrap() else {
+            panic!("expected background result");
+        };
+        assert_eq!(entry.item["type"], "tool_call");
+        assert!(
+            entry.item["callId"]
+                .as_str()
+                .unwrap()
+                .ends_with(":background")
+        );
+        assert!(entry.item["detail"]["output"].as_str().unwrap().len() < 150_000);
+    }
+    assert!(stream.events.is_empty());
 }

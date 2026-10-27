@@ -195,9 +195,7 @@ impl Stream {
         }
         let key = self.message_key(message)?;
         if role == "custom" {
-            let item = json!({"type":"assistant_message","messageId":key,
-                "text":self.text(&message["content"])?,
-                "metadata":{"nativeRole":"custom","customType":message["customType"]}});
+            let item = self.custom_item(&key, message)?;
             self.events
                 .push_back(AgentTurnEvent::Timeline(Self::item(key, message, item)?));
         } else if role == "user" {
@@ -341,20 +339,90 @@ impl Stream {
         Ok(())
     }
 
+    fn custom_item(&self, key: &str, message: &Value) -> Result<Value, Error> {
+        let text = self.text(&message["content"])?;
+        let mut metadata = json!({"nativeRole":"custom","customType":message["customType"]});
+        if message["customType"] != "async-result" {
+            return Ok(json!({"type":"assistant_message","messageId":key,
+                "text":text,"metadata":metadata}));
+        }
+        let jobs = message["details"]["jobs"].as_array();
+        let single = jobs.filter(|jobs| jobs.len() == 1).map(|jobs| &jobs[0]);
+        let job_id = single
+            .and_then(|job| job["jobId"].as_str())
+            .filter(|id| !id.is_empty() && id.len() <= 256);
+        let call_id = job_id.map_or_else(
+            || format!("{key}:background"),
+            |id| format!("background:{id}"),
+        );
+        let status = if jobs.is_some_and(|jobs| {
+            jobs.iter()
+                .any(|job| matches!(job["status"].as_str(), Some("failed" | "error")))
+        }) {
+            "failed"
+        } else if jobs.is_some_and(|jobs| {
+            jobs.iter()
+                .any(|job| matches!(job["status"].as_str(), Some("pending" | "running")))
+        }) {
+            "running"
+        } else if jobs.is_some_and(|jobs| {
+            !jobs.is_empty()
+                && jobs.iter().all(|job| {
+                    matches!(
+                        job["status"].as_str(),
+                        Some("cancelled" | "canceled" | "aborted")
+                    )
+                })
+        }) {
+            "canceled"
+        } else {
+            "completed"
+        };
+        let input = single
+            .and_then(|job| job["label"].as_str())
+            .or(job_id)
+            .map_or_else(
+                || {
+                    jobs.filter(|jobs| !jobs.is_empty())
+                        .map_or_else(String::new, |jobs| format!("{} jobs", jobs.len()))
+                },
+                preview,
+            );
+        if let Some(id) = job_id {
+            metadata["jobId"] = json!(id);
+        }
+        Ok(json!({"type":"tool_call","callId":call_id,
+            "name":if jobs.is_some_and(|jobs| jobs.len() > 1) {"Background jobs"} else {"Background job"},
+            "status":status,"error":if status == "failed" {json!("Background job failed")} else {Value::Null},
+            "detail":{"type":"unknown","input":input,"output":text},"metadata":metadata}))
+    }
+
     fn notice(&mut self, event: &Value, field: &'static str) -> Result<(), Error> {
         let text = event[field].as_str().ok_or(Error::Field(field))?;
         if text.is_empty() {
             return Ok(());
         }
         let text = preview(text);
-        self.last_text = Some(text.clone());
+        if event["type"] != "extension_ui_request" || self.last_text.is_none() {
+            self.last_text = Some(text.clone());
+        }
         let key = format!(
             "native:omp:{}:notice:{}",
             self.session,
             uuid::Uuid::new_v4()
         );
-        let item = json!({"type":"assistant_message","messageId":key,"text":text,
-            "metadata":{"nativeType":event["type"],"notificationType":event["notifyType"],"transient":true}});
+        let mut item = if event["type"] == "extension_ui_request" {
+            let level = match event["notifyType"].as_str() {
+                Some("warning") => "warning",
+                Some("error") => "error",
+                _ => "info",
+            };
+            json!({"type":"notification","level":level,"message":text})
+        } else {
+            json!({"type":"assistant_message","messageId":key,"text":text})
+        };
+        item["metadata"] = json!({"nativeType":event["type"],
+            "notificationType":event["notifyType"],"transient":true});
         self.events.push_back(AgentTurnEvent::Timeline(NativeItem {
             key,
             turn_id: self.turn.clone(),

@@ -75,3 +75,49 @@ fn incomplete_records_and_invalid_headers_fail_closed() {
     std::fs::write(&path, "{\"type\":\"session\",\"version\":2}\n").unwrap();
     assert!(read(path).is_err());
 }
+
+#[test]
+fn background_results_have_the_same_tool_identity_in_live_output_and_history() {
+    let root = tempfile::tempdir().unwrap();
+    let result = json!({"type":"custom_message","id":"background","parentId":"user",
+        "timestamp":"2026-10-21T00:00:01Z","customType":"async-result","display":true,
+        "content":"Background job bg_4 has completed. Resume your work.\ncommand output",
+        "details":{"jobs":[{"jobId":"bg_4","status":"completed","type":"bash"}]}});
+    let journal = Journal {
+        path: root.path().join("history.jsonl"),
+        header: json!({"id":"id","cwd":"/tmp","timestamp":"2026-10-21T00:00:00Z"}),
+        records: vec![record("user", None, "request"), result.clone()],
+    };
+    let handle = AgentPersistenceHandle {
+        provider: "omp".into(),
+        session_id: "id".into(),
+        native_handle: None,
+        metadata: None,
+    };
+    let (history, _) = journal
+        .project(&OmpClient::new("missing".into()), &handle)
+        .unwrap();
+    let mut live = Stream::new("id".into(), crate::local::images::ImageStore::default());
+    live.message(&record_message(&result).unwrap()).unwrap();
+    let AgentTurnEvent::Timeline(entry) = live.events.pop_front().unwrap() else {
+        panic!("expected background result");
+    };
+    assert_eq!(history.entries.len(), 2);
+    assert_eq!(history.entries[1], entry);
+    assert_eq!(entry.item["type"], "tool_call");
+    assert_eq!(entry.item["callId"], "background:bg_4");
+    assert!(entry.item.get("text").is_none());
+
+    let timeline =
+        crate::storage::timeline::Timeline::open(&root.path().join("timeline.sqlite")).unwrap();
+    let mut legacy = history.entries.clone();
+    legacy[1].item = json!({"type":"assistant_message","messageId":entry.key,
+        "text":result["content"],"metadata":{"nativeRole":"custom","customType":"async-result"}});
+    let (old_epoch, _) = timeline.append("agent", "omp", &legacy).unwrap();
+    let replacement = timeline
+        .reconcile("agent", "omp", &history.entries)
+        .unwrap();
+    assert_ne!(replacement, old_epoch);
+    let (_, restored) = timeline.read("agent").unwrap();
+    assert_eq!(restored[1].entry.item, entry.item);
+}

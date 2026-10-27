@@ -1021,6 +1021,7 @@ function appendThought(
   text: string,
   timestamp: Date,
   timelineCursor?: TimelinePosition,
+  turnId?: string,
 ): StreamItem[] {
   const { chunk, hasContent } = normalizeChunk(text);
   if (!chunk) {
@@ -1028,7 +1029,10 @@ function appendThought(
   }
 
   const last = state[state.length - 1];
-  if (last && last.kind === "thought") {
+  if (
+    last?.kind === "thought" &&
+    (turnId === undefined || last.turnId === undefined || last.turnId === turnId)
+  ) {
     const updated: ThoughtItem = {
       ...last,
       ...(timelineCursor ? { timelineCursor } : {}),
@@ -1052,7 +1056,7 @@ function appendThought(
     timestamp,
     status: "loading",
   };
-  return [...state, item];
+  return [...(last?.kind === "thought" ? finalizeActiveThoughts(state) : state), item];
 }
 
 function finalizeActiveThoughts(state: StreamItem[]): StreamItem[] {
@@ -1612,7 +1616,7 @@ function reduceTimelineEvent(
         ),
       );
     case "reasoning":
-      return appendThought(state, item.text, timestamp, timelineCursor);
+      return appendThought(state, item.text, timestamp, timelineCursor, event.turnId);
     case "tool_call":
       return finalizeActiveThoughts(
         reduceTimelineToolCall(state, event, item, timestamp, timelineCursor),
@@ -1677,18 +1681,18 @@ export function reduceStreamUpdate(
 ): StreamItem[] {
   const source = options?.source ?? "live";
   switch (event.type) {
-    case "timeline":
-      return applyTimelineTurnId(
-        reduceTimelineEvent(
-          state,
-          event,
-          timestamp,
-          source,
-          options?.reservedItemIds,
-          options?.timelineCursor,
-        ),
+    case "timeline": {
+      const reduced = reduceTimelineEvent(
+        state,
         event,
+        timestamp,
+        source,
+        options?.reservedItemIds,
+        options?.timelineCursor,
       );
+      if (event.item.type === "reasoning" && reduced === state) return state;
+      return applyTimelineTurnId(reduced, event);
+    }
     case "thread_started":
     case "turn_started":
       return finalizeActiveThoughts(state);
