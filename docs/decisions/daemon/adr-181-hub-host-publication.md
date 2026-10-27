@@ -63,9 +63,12 @@ Agent 通知入队与发送前都检查当前记录，已经读过、归档、�
 
 ## 分阶段切换原生通知
 
-事件和目录发布在中心声明能力后自动启用。原生投递默认继续使用旧 daemon 注册，
+事件和目录发布在中心声明能力后自动启用。独立 daemon 的原生投递默认继续使用旧 daemon 注册，
 仅在设置 `AIT_SERVER_HUB_NOTIFICATIONS=true`（或 `1`）时接管中心原生通知；`false` / `0`
 关闭该模式，其他值导致启动失败。设置应用于新入队的事件，已有 journal 事件保留原投递决策。
+
+2026-10-26 修订：[ADR-182](../clients/adr-182-hub-account-client.md) 的桌面内置 daemon
+默认传入开启值，并保留显式关闭选项；本 ADR 的独立 daemon 默认值不变。
 
 开启前，客户端必须在 Hub access 链路实现 `push.register`、`session.heartbeat` 和事件订阅；
 中心必须配置 APNs / FCM。仅部署新中心或新 daemon 不会迁移旧 token。

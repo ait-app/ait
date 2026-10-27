@@ -1,6 +1,70 @@
 use super::*;
 
 #[tokio::test]
+async fn native_sandbox_settings_survive_turns_and_permission_mode_changes() {
+    let fixture = Fixture::new();
+    std::fs::write(
+        fixture.cwd.join("native-config.json"),
+        json!({"sandbox_workspace_write":{
+        "writable_roots":["/native/shared"], "network_access":true,
+        "exclude_slash_tmp":true, "exclude_tmpdir_env_var":true}})
+        .to_string(),
+    )
+    .unwrap();
+    let effective = json!({"type":"workspaceWrite", "networkAccess":true,
+        "writableRoots":["/native/shared", "/native/resolved"],
+        "excludeSlashTmp":true, "excludeTmpdirEnvVar":true});
+    std::fs::write(
+        fixture.cwd.join("native-sandbox.json"),
+        json!({
+        "workspace-write":effective, "danger-full-access":{"type":"dangerFullAccess"},
+        "read-only":{"type":"readOnly", "networkAccess":true}})
+        .to_string(),
+    )
+    .unwrap();
+    let client = fixture.client();
+    let mut spec = fixture.spec();
+    spec.config.mode_id = Some("auto".into());
+    let mut session = client.create_session(&spec).await.unwrap();
+    for mode in ["auto", "full-access", "auto", "read-only"] {
+        spec.config.mode_id = Some(mode.into());
+        session
+            .start_turn("configured", &spec.config)
+            .await
+            .unwrap();
+        assert!(matches!(
+            terminal(session.as_mut()).await.unwrap(),
+            AgentTurnEvent::Completed(_)
+        ));
+    }
+    session.close().await.unwrap();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("read-only", &spec.config).await.unwrap();
+    assert!(matches!(
+        terminal(session.as_mut()).await.unwrap(),
+        AgentTurnEvent::Completed(_)
+    ));
+    session.close().await.unwrap();
+    let policies: Vec<_> = fixture
+        .requests()
+        .into_iter()
+        .filter(|request| request["method"] == "turn/start")
+        .map(|request| request["params"]["sandboxPolicy"].clone())
+        .collect();
+    assert_eq!(policies[0], effective);
+    assert_eq!(policies[1], json!({"type":"dangerFullAccess"}));
+    assert_eq!(policies[2], effective);
+    assert_eq!(
+        policies[3],
+        json!({"type":"readOnly", "networkAccess":false})
+    );
+    assert_eq!(
+        policies[4],
+        json!({"type":"readOnly", "networkAccess":true})
+    );
+}
+
+#[tokio::test]
 async fn computer_use_approval_is_automatic_in_auto_review_and_full_access() {
     for mode in ["auto-review", "full-access"] {
         let fixture = Fixture::new();

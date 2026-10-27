@@ -13,6 +13,7 @@ use crate::ports::controls::{NativeSubagent, SubagentEvent};
 struct Child {
     descriptor: NativeSubagent,
     stream: streaming::Stream,
+    terminal: super::terminal::Terminal,
     turn: Option<String>,
     finished: BTreeSet<String>,
 }
@@ -26,6 +27,47 @@ pub(super) struct Live {
 }
 
 impl Live {
+    fn activity(
+        &mut self,
+        params: &Value,
+        context: (&str, &str),
+        events: &mut Vec<AgentTurnEvent>,
+    ) -> Result<(), AgentSessionError> {
+        let item = &params["item"];
+        let sender = super::native_sessions::text(params, "threadId")?;
+        let receiver = super::native_sessions::text(item, "agentThreadId")?;
+        let id = super::native_sessions::text(item, "id")?;
+        let kind = item["kind"].as_str().ok_or(AgentSessionError::Failed)?;
+        if receiver == context.0
+            || receiver == sender
+            || !matches!(kind, "started" | "interacted" | "interrupted")
+        {
+            return Err(AgentSessionError::Failed);
+        }
+        let detail = crate::local::tool_detail::codex(item);
+        if detail["type"] != "sub_agent" {
+            return Err(AgentSessionError::Failed);
+        }
+        self.collab(&json!({"id":id,"tool":"spawnAgent","senderThreadId":sender,
+            "receiverThreadIds":[receiver],"model":item["model"],"reasoningEffort":item["reasoningEffort"],
+            "prompt":detail["description"]}), sender, context.1, events)?;
+        let child = self
+            .children
+            .get_mut(receiver)
+            .ok_or(AgentSessionError::Failed)?;
+        if child.descriptor.descriptor["title"].is_null() {
+            child.descriptor.descriptor["title"] = detail["subAgentType"].clone();
+        }
+        if child.descriptor.descriptor["toolCallId"].is_null() {
+            child.descriptor.descriptor["toolCallId"] = json!(id);
+        }
+        events.push(upsert(child));
+        if kind == "interrupted" {
+            set_status(child, "canceled", events);
+        }
+        Ok(())
+    }
+
     fn buffer(&mut self, method: &str, params: &Value) -> Result<(), AgentSessionError> {
         let size = serde_json::to_vec(params)
             .map_err(|_| AgentSessionError::Failed)?
@@ -90,6 +132,7 @@ impl Live {
                     Child {
                         descriptor,
                         stream: streaming::Stream::default(),
+                        terminal: super::terminal::Terminal::default(),
                         turn: None,
                         finished: BTreeSet::new(),
                     },
@@ -146,6 +189,11 @@ impl Live {
             return Ok(events);
         }
         if matches!(method, "item/started" | "item/completed")
+            && params["item"]["type"] == "subAgentActivity"
+        {
+            self.activity(params, context, &mut events)?;
+        }
+        if matches!(method, "item/started" | "item/completed")
             && params["item"]["type"] == "collabAgentToolCall"
         {
             let item = &params["item"];
@@ -168,60 +216,11 @@ impl Live {
         if thread == root {
             return Ok(events);
         }
-        let Some(turn) = params["turnId"]
-            .as_str()
-            .or_else(|| params["turn"]["id"].as_str())
-        else {
-            return Ok(events);
-        };
         let child = self
             .children
             .get_mut(thread)
             .ok_or(AgentSessionError::Failed)?;
-        if child.finished.contains(turn) {
-            return Ok(events);
-        }
-        if child.turn.as_deref() != Some(turn) {
-            if child.turn.is_some() || child.finished.len() >= 256 {
-                return Err(AgentSessionError::Failed);
-            }
-            child.turn = Some(turn.to_owned());
-            child.stream = streaming::Stream::default();
-            set_status(child, "running", &mut events);
-        }
-        let progress = child.stream.progress(method, params)?;
-        for event in progress.into_iter().chain(child.stream.events.drain(..)) {
-            if let AgentTurnEvent::Progress { observation, entry } = event {
-                events.push(AgentTurnEvent::Subagent(SubagentEvent::Progress {
-                    id: thread.to_owned(),
-                    observation,
-                    entry,
-                }));
-            }
-        }
-        if method == "item/completed" && child.stream.complete(&params["item"])? {
-            for entry in
-                discovery::timeline_items(&params["item"], turn, &discovery::timestamp(), images)?
-            {
-                events.push(AgentTurnEvent::Subagent(SubagentEvent::Timeline {
-                    id: thread.to_owned(),
-                    entry,
-                }));
-            }
-        }
-        if method == "turn/completed" {
-            set_status(
-                child,
-                match params["turn"]["status"].as_str() {
-                    Some("completed") => "completed",
-                    Some("interrupted") => "canceled",
-                    _ => "failed",
-                },
-                &mut events,
-            );
-            child.turn = None;
-            child.finished.insert(turn.to_owned());
-        }
+        events.extend(observe_child(child, method, params, images)?);
         Ok(events)
     }
 
@@ -264,6 +263,7 @@ impl Live {
                         "createdAt":now,"updatedAt":now,"toolCallId":item["id"],"cwd":cwd,"subtitle":subtitle}),
                     },
                     stream: streaming::Stream::default(),
+                    terminal: super::terminal::Terminal::default(),
                     turn: None,
                     finished: BTreeSet::new(),
                 };
@@ -284,6 +284,88 @@ impl Live {
         }
         Ok(())
     }
+}
+
+fn observe_child(
+    child: &mut Child,
+    method: &str,
+    params: &Value,
+    images: &ImageStore,
+) -> Result<Vec<AgentTurnEvent>, AgentSessionError> {
+    let mut events = Vec::new();
+    let thread = params["threadId"]
+        .as_str()
+        .ok_or(AgentSessionError::Failed)?;
+    let compaction_turn = if method == "thread/compacted" {
+        child.turn.clone()
+    } else {
+        None
+    };
+    let Some(turn) = params["turnId"]
+        .as_str()
+        .or_else(|| params["turn"]["id"].as_str())
+        .or(compaction_turn.as_deref())
+    else {
+        return Ok(events);
+    };
+    if child.finished.contains(turn) {
+        return Ok(events);
+    }
+    if child.turn.as_deref() != Some(turn) {
+        if child.turn.is_some() || child.finished.len() >= 256 {
+            return Err(AgentSessionError::Failed);
+        }
+        child.turn = Some(turn.to_owned());
+        child.stream = streaming::Stream::default();
+        set_status(child, "running", &mut events);
+    }
+    if method == "turn/completed" {
+        child.stream.finish_compactions(turn)?;
+    }
+    let terminal = if method == "thread/compacted" {
+        child.stream.compacted(Some(turn))?
+    } else {
+        child.terminal.observe(method, params)?
+    };
+    let progress = terminal.or(child.stream.progress(method, params)?);
+    for event in progress.into_iter().chain(child.stream.events.drain(..)) {
+        if let AgentTurnEvent::Progress { observation, entry } = event {
+            events.push(AgentTurnEvent::Subagent(SubagentEvent::Progress {
+                id: thread.to_owned(),
+                observation,
+                entry,
+            }));
+        } else if let AgentTurnEvent::Timeline(entry) = event {
+            events.push(AgentTurnEvent::Subagent(SubagentEvent::Timeline {
+                id: thread.to_owned(),
+                entry,
+            }));
+        }
+    }
+    if method == "item/completed" && child.stream.complete(&params["item"])? {
+        for entry in
+            discovery::timeline_items(&params["item"], turn, &discovery::timestamp(), images)?
+        {
+            events.push(AgentTurnEvent::Subagent(SubagentEvent::Timeline {
+                id: thread.to_owned(),
+                entry,
+            }));
+        }
+    }
+    if method == "turn/completed" {
+        set_status(
+            child,
+            match params["turn"]["status"].as_str() {
+                Some("completed") => "completed",
+                Some("interrupted") => "canceled",
+                _ => "failed",
+            },
+            &mut events,
+        );
+        child.turn = None;
+        child.finished.insert(turn.to_owned());
+    }
+    Ok(events)
 }
 
 fn upsert(child: &Child) -> AgentTurnEvent {

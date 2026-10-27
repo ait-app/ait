@@ -1,6 +1,16 @@
 use super::*;
 
 #[test]
+fn one_invalid_prompt_does_not_hide_valid_commands() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("large.md"), "x".repeat(65537)).unwrap();
+    std::fs::write(root.path().join("valid.md"), "Valid command").unwrap();
+    let commands = list(root.path()).unwrap();
+    assert_eq!(commands.len(), 1);
+    assert_eq!(commands[0]["name"], "prompts:valid");
+}
+
+#[test]
 fn custom_prompts_keep_frontmatter_quoted_arguments_and_literal_dollars() {
     let root = tempfile::tempdir().unwrap();
     std::fs::write(root.path().join("review.md"), "---\ndescription: 'Review changes'\nargument-hint: [FILE]\n---\n$1 | $2 | $FILE | $FILE_MORE | $$FILE | $ARGUMENTS").unwrap();

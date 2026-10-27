@@ -77,6 +77,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 ## Provider、Agent 与会话
 
 - [ADR-194：OMP 原生空闲状态核对与有界取消](providers/adr-194-omp-settlement-reconciliation.md)
+- [ADR-193：Codex 原生策略、事件与恢复兼容](providers/adr-193-codex-native-protocol-compatibility.md)
 - [ADR-192：Codex 历史按页投影后计算展示预算](providers/adr-192-codex-incremental-history-projection.md)
 - [ADR-191：Codex Provider 拥有原生实时语音](providers/adr-191-codex-native-realtime-voice.md)
 - [ADR-190：Ait ACP 桥接官方 OMP 与通用插件接口](providers/adr-190-omp-acp-settlement.md)

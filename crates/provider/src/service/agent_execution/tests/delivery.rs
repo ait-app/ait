@@ -51,6 +51,43 @@ async fn queued_admission_loads_canonical_history_from_newest_to_oldest_pages() 
 }
 
 #[tokio::test]
+async fn completion_racing_interrupt_accepts_replacement_without_a_false_failure() {
+    let fixture = Fixture::new();
+    fixture.mode("interrupt-completed");
+    let (execution, _) = worker(&fixture);
+    let created = create(&execution, &fixture).await;
+    let id = created["agentId"].as_str().unwrap();
+    execution
+        .execute(
+            "agent.message.send.request",
+            json!({"agentId":id,"text":"hang","messageId":"first"}),
+        )
+        .await
+        .unwrap();
+    let replacement = execution
+        .execute(
+            "agent.message.send.request",
+            json!({"agentId":id,"text":"replacement","messageId":"second"}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(replacement["accepted"], true);
+    let finished = execution
+        .execute("agent.finish.wait.request", json!({"agentId":id}))
+        .await
+        .unwrap();
+    assert_eq!(finished["lastMessage"], "Echo: replacement");
+    let entries = execution.timeline().read(id).unwrap().1;
+    assert!(
+        entries
+            .iter()
+            .any(|row| row.entry.item["text"] == "Echo: raced")
+    );
+    assert!(!entries.iter().any(|row| row.entry.item["type"] == "error"));
+    execution.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn interrupt_delivery_drains_new_work_and_retries_are_durable_and_payload_bound() {
     let fixture = Fixture::new();
     let (execution, _) = worker(&fixture);
@@ -366,8 +403,8 @@ async fn failed_queued_admission_does_not_block_an_independent_agent() {
     timeline
         .reserve_input(
             first,
-            "invalid-command",
-            &AgentPrompt::text("/missing-native-command"),
+            "rejected-input",
+            &AgentPrompt::text("reject-before-admission"),
             "interrupt",
         )
         .unwrap();

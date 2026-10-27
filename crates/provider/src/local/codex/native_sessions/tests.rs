@@ -2,6 +2,41 @@ use super::*;
 
 mod paseo;
 
+#[test]
+fn archived_recovery_matches_only_the_requested_thread_and_known_rejections() {
+    assert!(archived(
+        "session a is archived. Run `codex unarchive a` to unarchive it first.",
+        "a"
+    ));
+    assert!(!archived(
+        "session a is archived. Run `codex unarchive a` to unarchive it first.",
+        "b"
+    ));
+    assert!(!archived("Permission denied", "a"));
+    assert!(already_unarchived(
+        "error: no archived rollout found for thread id a",
+        "a"
+    ));
+    assert!(!already_unarchived(
+        "no archived rollout found for thread id another",
+        "a"
+    ));
+    assert!(!already_unarchived(
+        "no archived rollout found for thread id ",
+        ""
+    ));
+}
+
+#[test]
+fn system_error_threads_keep_their_completed_history_available() {
+    let mut native = thread();
+    native["status"]["type"] = json!("systemError");
+    native["turns"][0]["status"] = json!("failed");
+    let parsed = history(&native).unwrap();
+    assert!(!parsed.active);
+    assert_eq!(parsed.entries[0].item["text"], "hello");
+}
+
 fn thread() -> Value {
     json!({"id":"native","cwd":"/tmp","createdAt":1_700_000_000,"updatedAt":1_700_000_010,
         "status":{"type":"idle"},"model":"offline-model","reasoningEffort":"high",
@@ -22,7 +57,7 @@ fn native_history_validates_complete_identity_and_preserves_configuration() {
         ("/cwd", json!("relative")),
         ("/createdAt", json!("bad")),
         ("/updatedAt", json!(i64::MAX)),
-        ("/status/type", json!("systemError")),
+        ("/status/type", json!("unknown")),
         ("/turns/0/status", json!("unknown")),
         ("/turns/0/items", json!(null)),
         ("/turns/0/id", json!("bad\nidentity")),

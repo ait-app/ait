@@ -48,7 +48,7 @@ impl AgentEnvironment {
         self.0.is_empty()
     }
 
-    /// Expose values only while configuring a child process; callers must not log them.
+    /// Expose values only at native integration boundaries; callers must not log them.
     pub(crate) fn entries(&self) -> impl Iterator<Item = (&str, &str)> {
         self.0
             .iter()

@@ -35,6 +35,41 @@ async fn rewind_retains_canonical_speech_from_the_fork_without_targeting_it() {
 
 #[cfg(unix)]
 #[tokio::test]
+async fn nonfirst_turn_rewind_uses_current_exclusive_fork_and_preserves_configuration() {
+    for mode in ["rollback-removed", "legacy-fork"] {
+        let fixture = crate::test_support::Fixture::new();
+        fixture.mode(mode);
+        let original = json!([
+            {"id":"t1","status":"completed","items":[{"id":"u1","type":"userMessage","content":[{"type":"text","text":"first"}]}]},
+            {"id":"t2","status":"completed","items":[{"id":"u2","type":"userMessage","content":[{"type":"text","text":"second"}]}]}
+        ]);
+        let path = fixture.cwd.join("native-history-source.json");
+        std::fs::write(&path, original.to_string()).unwrap();
+        let mut spec = fixture.spec();
+        spec.config.provider_options = Some(std::collections::BTreeMap::from([(
+            "web_search".into(),
+            json!("disabled"),
+        )]));
+        let history = fixture
+            .client()
+            .native_rewind("source", &spec, "u2")
+            .await
+            .unwrap();
+        assert_eq!(history.entries.len(), 1);
+        assert_eq!(history.entries[0].item["text"], "first");
+        assert_eq!(std::fs::read_to_string(path).unwrap(), original.to_string());
+        let requests = fixture.requests();
+        let fork = requests
+            .iter()
+            .find(|request| request["method"] == "thread/fork")
+            .unwrap();
+        assert_eq!(fork["params"]["beforeTurnId"], "t2");
+        assert_eq!(fork["params"]["config"]["web_search"], "disabled");
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn first_interrupted_turn_rewinds_when_rollback_is_removed_or_fork_is_legacy() {
     for mode in ["rollback-removed", "legacy-fork"] {
         let fixture = crate::test_support::Fixture::new();
