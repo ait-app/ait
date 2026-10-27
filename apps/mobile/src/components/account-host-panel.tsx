@@ -2,7 +2,7 @@ import { supportsBrowserAccount } from "@/runtime/browser-account";
 import React, { useRef, useState, type ReactNode } from "react";
 import { Keyboard, Pressable, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { ChevronDown, ChevronRight, ExternalLink, RefreshCw } from "lucide-react-native";
+import { ChevronDown, ChevronRight, ExternalLink, RotateCw } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { StatusBadge } from "./ui/status-badge";
@@ -136,23 +136,43 @@ export function AccountHostPanel({
         </>
       ) : (
         <>
-          <View style={styles.accountSummary}>
-            <Text selectable style={styles.title}>
-              {account.name}
-            </Text>
-            <StatusBadge
-              label={t(
-                account.status === "online"
-                  ? "common.connectionStatus.online"
-                  : "common.connectionStatus.connecting",
-              )}
-              variant={account.status === "online" ? "success" : "muted"}
-              leading={
-                <View
-                  style={[styles.statusDot, account.status === "online" ? styles.onlineDot : null]}
-                />
+          <View style={styles.accountHeader}>
+            <View style={styles.accountSummary}>
+              <Text selectable numberOfLines={1} style={styles.title}>
+                {account.name}
+              </Text>
+              <StatusBadge
+                label={t(
+                  account.status === "online"
+                    ? "common.connectionStatus.online"
+                    : "common.connectionStatus.connecting",
+                )}
+                variant={account.status === "online" ? "success" : "muted"}
+                leading={
+                  <View
+                    style={[
+                      styles.statusDot,
+                      account.status === "online" ? styles.onlineDot : null,
+                    ]}
+                  />
+                }
+              />
+            </View>
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<RotateCw size={theme.iconSize.md} color={theme.colors.foregroundMuted} />}
+              disabled={busy}
+              accessibilityLabel={t("onlineService.refresh")}
+              onPress={() =>
+                void runAccountAction(async () => {
+                  await accountCommand("account_refresh");
+                  onRefresh?.();
+                })
               }
-            />
+            >
+              {t("onlineService.refresh")}
+            </Button>
           </View>
           {children ?? (
             <SettingsSection title={t("onlineService.accountInfo")} flush>
@@ -178,20 +198,6 @@ export function AccountHostPanel({
             <Button
               variant="outline"
               size="sm"
-              leftIcon={RefreshCw}
-              disabled={busy}
-              onPress={() =>
-                void runAccountAction(async () => {
-                  await accountCommand("account_refresh");
-                  onRefresh?.();
-                })
-              }
-            >
-              {t("onlineService.refresh")}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
               disabled={busy}
               onPress={() => void runAccountAction(() => accountCommand("account_logout"))}
             >
@@ -214,6 +220,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[6],
   },
   title: {
+    flexShrink: 1,
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.foreground,
@@ -247,7 +254,19 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
     color: theme.colors.foreground,
   },
-  accountSummary: { alignItems: "flex-start", gap: theme.spacing[4] },
+  accountHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[2],
+  },
+  accountSummary: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
   statusDot: {
     width: 6,
     height: 6,
