@@ -8,6 +8,7 @@ import { Button } from "./ui/button";
 import { StatusBadge } from "./ui/status-badge";
 import { AdaptiveTextInput } from "./adaptive-text-input";
 import { accountCommand, useAccountState } from "@/runtime/account-state";
+import { confirmDialog } from "@/utils/confirm-dialog";
 import { SettingsCard, SettingsRow, SettingsSection } from "./settings";
 
 export function AccountHostPanel({
@@ -24,6 +25,9 @@ export function AccountHostPanel({
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const account = useAccountState();
+  const accountIdentity = JSON.stringify([account.center, account.accountId, account.name]);
+  const currentAccountIdentity = useRef(accountIdentity);
+  currentAccountIdentity.current = accountIdentity;
   // Follow the account snapshot until the user edits the optional override.
   const [centerOverride, setCenterOverride] = useState<string | null>(null);
   const center = centerOverride ?? account.center;
@@ -195,6 +199,27 @@ export function AccountHostPanel({
             </SettingsSection>
           )}
           <View style={styles.actions}>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={busy}
+              testID="account-delete"
+              onPress={() =>
+                void runAccountAction(async () => {
+                  const confirmed = await confirmDialog({
+                    title: t("onlineService.deleteAccountTitle"),
+                    message: t("onlineService.deleteAccountMessage"),
+                    confirmLabel: t("onlineService.deleteAccount"),
+                    cancelLabel: t("common.actions.cancel"),
+                    destructive: true,
+                  });
+                  if (confirmed && currentAccountIdentity.current === accountIdentity)
+                    await accountCommand("account_delete");
+                })
+              }
+            >
+              {t("onlineService.deleteAccount")}
+            </Button>
             <Button
               variant="outline"
               size="sm"

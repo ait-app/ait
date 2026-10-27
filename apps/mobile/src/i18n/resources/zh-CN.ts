@@ -71,6 +71,9 @@ export const zhCN: TranslationResources = {
     browserWaiting: "等待浏览器完成登录…",
     expiresAt: "账户有效期至：{{date}}",
     signOut: "退出登录",
+    deleteAccount: "删除账户",
+    deleteAccountTitle: "确认删除账户？",
+    deleteAccountMessage: "删除后将退出登录，已连接的主机将失去在线服务访问权限。此操作无法撤销。",
     signOutHint:
       "退出登录只解除本客户端与绑定守护进程的租约，其他主机继续同步，需在对应主机中主动停止。",
     refresh: "刷新",

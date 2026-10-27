@@ -12,6 +12,122 @@ import { hubFixture } from "../test/hub.js";
 
 afterEach(() => vi.useRealTimers());
 
+describe("account deletion", () => {
+  it("deletes the signed-in account before clearing credentials, connections and daemon leases", async () => {
+    const f = fixture();
+    await f.login();
+    await f.manager.publishHost({
+      serverId: "remote",
+      instanceId: "instance",
+      name: "Remote",
+      platform: "linux",
+    });
+    f.http.mockClear();
+    vi.mocked(f.deps.save).mockClear();
+    vi.mocked(f.deps.closeTransports).mockClear();
+    let finish!: (response: Response) => void;
+    f.http.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const pending = f.manager.deleteAccount();
+    expect(f.http).toHaveBeenCalledExactlyOnceWith(
+      "https://aitapp.cn/api/v1/me",
+      expect.objectContaining({
+        method: "DELETE",
+        headers: expect.objectContaining({ Authorization: "Bearer private-jwt" }),
+      }),
+    );
+    expect(f.http.mock.calls[0]?.[1]?.body).toBeUndefined();
+    expect(f.deps.save).not.toHaveBeenCalled();
+    expect(f.deps.closeTransports).not.toHaveBeenCalled();
+    expect(f.manager.snapshot().status).toBe("online");
+    finish(new Response(null, { status: 204 }));
+    await pending;
+    expect(f.deps.save).toHaveBeenLastCalledWith(null);
+    expect(f.deps.closeTransports).toHaveBeenCalledOnce();
+    expect(f.manager.snapshot()).toMatchObject({
+      status: "logged_out",
+      hosts: [],
+      selected: null,
+      synchronizedHosts: [],
+    });
+    f.http.mockClear();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(f.http).not.toHaveBeenCalled();
+  });
+
+  it("uses the signed-in custom service address", async () => {
+    const f = fixture();
+    await f.manager.restore({
+      center: "https://custom.test/api",
+      token: "saved-jwt",
+      name: "Me",
+      expiresAt: Date.now() + 60_000,
+    });
+    await f.manager.deleteAccount();
+    expect(f.http).toHaveBeenCalledExactlyOnceWith(
+      "https://custom.test/api/v1/me",
+      expect.objectContaining({
+        method: "DELETE",
+        headers: expect.objectContaining({ Authorization: "Bearer saved-jwt" }),
+      }),
+    );
+  });
+
+  it.each(["server", "network"])("preserves the session after a %s failure", async (failure) => {
+    const f = fixture();
+    await f.login();
+    const snapshot = f.manager.snapshot();
+    vi.mocked(f.deps.save).mockClear();
+    vi.mocked(f.deps.closeTransports).mockClear();
+    if (failure === "server")
+      f.http.mockResolvedValueOnce(
+        Response.json(
+          { error: { code: "unavailable", message: "Try again later" } },
+          { status: 503 },
+        ),
+      );
+    else f.http.mockRejectedValueOnce(new Error("Network unavailable"));
+    await expect(f.manager.deleteAccount()).rejects.toThrow(
+      failure === "server" ? "Try again later" : "Network unavailable",
+    );
+    expect(f.manager.snapshot()).toEqual(snapshot);
+    expect(f.deps.save).not.toHaveBeenCalled();
+    expect(f.deps.closeTransports).not.toHaveBeenCalled();
+    await f.manager.logout();
+  });
+
+  it("requires a signed-in account and ignores a delayed response after an account switch", async () => {
+    const f = fixture();
+    await expect(f.manager.deleteAccount()).rejects.toThrow("Sign in first");
+    expect(f.http).not.toHaveBeenCalled();
+    await f.login();
+    let finish!: (response: Response) => void;
+    f.http.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const pending = f.manager.deleteAccount();
+    await f.manager.logout();
+    await f.manager.restore({
+      center: "https://other.test/api",
+      token: "other-jwt",
+      name: "Other",
+      expiresAt: Date.now() + 60_000,
+    });
+    const rejected = expect(pending).rejects.toThrow("The account changed");
+    finish(new Response(null, { status: 204 }));
+    await rejected;
+    expect(f.manager.snapshot()).toMatchObject({ status: "connecting", name: "Other" });
+    await f.manager.logout();
+  });
+});
+
 describe("account information", () => {
   it("reads the login identity and account expiry without exposing credentials", async () => {
     const f = fixture();
