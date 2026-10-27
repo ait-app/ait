@@ -8,10 +8,19 @@ use serde_json::{Value, json};
 
 use crate::ports::agent_session::AgentSessionError;
 
-pub(super) fn directory() -> Result<PathBuf, AgentSessionError> {
-    std::env::var_os("CODEX_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".codex")))
+/// Resolve prompt files using the same environment inherited by this native session.
+pub(super) fn directory(
+    environment: &crate::ports::environment::AgentEnvironment,
+) -> Result<PathBuf, AgentSessionError> {
+    let lookup = |key| {
+        environment
+            .entries()
+            .find(|(name, _)| *name == key)
+            .map(|(_, value)| PathBuf::from(value))
+            .or_else(|| std::env::var_os(key).map(PathBuf::from))
+    };
+    lookup("CODEX_HOME")
+        .or_else(|| lookup("HOME").map(|home| home.join(".codex")))
         .filter(|home| home.is_absolute())
         .map(|home| home.join("prompts"))
         .ok_or(AgentSessionError::Unavailable)
@@ -40,7 +49,9 @@ pub(super) fn list(directory: &Path) -> Result<Vec<Value>, AgentSessionError> {
         else {
             continue;
         };
-        let (metadata, _) = read(&entry.path())?;
+        let Ok((metadata, _)) = read(&entry.path()) else {
+            continue;
+        };
         commands.push(json!({"name":format!("prompts:{name}"),"description":metadata.get("description").map_or("Custom prompt",String::as_str),
             "argumentHint":metadata.get("argument-hint").or_else(|| metadata.get("argument_hint")).map_or("",String::as_str),"kind":"command"}));
     }

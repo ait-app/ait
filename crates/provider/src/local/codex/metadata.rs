@@ -96,7 +96,11 @@ async fn collect(
                     Err(AgentSessionError::Failed)
                 };
             }
-            Some("error") => return Err(AgentSessionError::Failed),
+            Some("error")
+                if event["params"]["turnId"] == turn && event["params"]["willRetry"] != true =>
+            {
+                return Err(AgentSessionError::Failed);
+            }
             _ => {}
         }
     }

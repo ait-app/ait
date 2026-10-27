@@ -24,11 +24,14 @@ impl Voice {
             return Err(Error::Invalid);
         }
         let native = self.native.as_ref().ok_or(Error::Realtime)?;
-        if native
+        if let Err(error) = native
             .input
             .try_send(model::realtime::Audio { bytes, sample_rate })
-            .is_err()
         {
+            self.log_release(match error {
+                tokio::sync::mpsc::error::TrySendError::Full(_) => "native_input_queue_full",
+                tokio::sync::mpsc::error::TrySendError::Closed(_) => "native_input_closed",
+            });
             self.abort();
             self.target = None;
             return Err(Error::Realtime);
@@ -45,7 +48,9 @@ impl Voice {
             let event = match native.output.try_recv() {
                 Ok(event) => event,
                 Err(tokio::sync::mpsc::error::TryRecvError::Empty) => break,
-                Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => Event::Failed,
+                Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                    return self.close_native(outbound, true, "native_output_closed");
+                }
             };
             match event {
                 Event::Audio(audio) => {
@@ -74,18 +79,27 @@ impl Voice {
                     self.acknowledgments.clear();
                     emit(outbound, "voice.input.state", json!({"isSpeaking":true}))?;
                 }
-                Event::Closed | Event::Failed => {
-                    return self.close_native(outbound, matches!(event, Event::Failed));
+                Event::Closed => {
+                    return self.close_native(outbound, false, "native_closed");
+                }
+                Event::Failed => {
+                    return self.close_native(outbound, true, "native_failed");
                 }
             }
         }
         if overflowed {
-            return self.close_native(outbound, true);
+            return self.close_native(outbound, true, "playback_queue_full");
         }
         Ok(())
     }
 
-    fn close_native(&mut self, outbound: &Outbound, failed: bool) -> Result<(), QueueError> {
+    fn close_native(
+        &mut self,
+        outbound: &Outbound,
+        failed: bool,
+        reason: &'static str,
+    ) -> Result<(), QueueError> {
+        self.log_release(reason);
         self.abort();
         self.target = None;
         if failed {

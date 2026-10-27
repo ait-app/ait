@@ -26,6 +26,12 @@ Provider 的错误回报进入 daemon 日志。`Native provider diagnostic` 记�
 相同诊断每个原生连接最多每 30 秒记录一次，重复次数通过 `suppressed` 汇总。
 日志和界面使用安全分类文案，不写入任意原生错误包或 stderr 原文。
 
+导出的 incident 同样保留上述分类、来源、状态码和重试／重复次数，以及可用的
+`error_kind`、`os_error` 系统错误信息。DeepSeek Harness 的本机 HTTP 失败进一步标记
+`source=http_connect`（建立连接）、`http_send`（发送请求／等待响应头）或
+`http_body`（读取响应正文）。这些请求连接 daemon 本机的回环 Host，不能仅凭
+“Check your network” 文案判断手机网络故障；认证 URL、cookie 和响应正文不会被记录。
+
 最终失败会在聊天中保留错误通知，与 `lastError` 和失败事件使用相同文案。
 原生正在重试的错误只记录诊断，不误报为最终失败；取消和正常操作拒绝不会生成失败通知。
 Codex 模型目录刷新失败标记 `source=model_catalog`、`operation=model/list`，
@@ -49,6 +55,33 @@ Codex 模型目录刷新失败标记 `source=model_catalog`、`operation=model/l
 64 KiB。仅保留故障前 5 分钟到采集时刻之间的 ISO 时间戳行，时区偏移被统一为 UTC；
 没有时区的时间按 UTC 解释。无时间戳的续行、会话 JSONL、符号链接不会被收集。
 日志采用其他格式或本地无时区时间时，报告可能没有匹配记录，不能据此认定没有发生错误。
+
+## 原生语音退出
+
+daemon 日志中的 `Voice resources released` 在取消和清理之前记录关闭来源。通过
+`agent_id`、`voice_id` 和时间关联同一次语音；`native` 标识原生语音，
+`playback_queue`、`pending_acknowledgments`、`oldest_ack_ms` 和 `input_idle_ms`
+保留关闭前的队列及等待状态。
+
+| `reason`                                                   | 关闭入口                              |
+| ---------------------------------------------------------- | ------------------------------------- |
+| `client_stop` / `client_abort`                             | 客户端关闭语音模式或提交中止请求      |
+| `connection_dropped`                                       | 所属物理连接被释放                    |
+| `target_replaced`                                          | 语音切换到另一个 Agent                |
+| `input_timeout` / `playback_ack_timeout`                   | 输入等待或播放确认超时                |
+| `native_input_queue_full` / `native_input_closed`          | 麦克风输入队列已满或被关闭            |
+| `playback_queue_full`                                      | 下行播放队列溢出                      |
+| `native_closed` / `native_failed` / `native_output_closed` | Provider 报告结束、失败或关闭输出通道 |
+
+Codex Provider 另外记录 `Codex realtime media stopped`，区分 `caller_cancelled`、
+`peer_ended`、`data_channel_closed`、`data_channel_closing`、`data_channel_error`、
+`data_channel_stream_ended` 和 `media_io_failed`。媒体后台任务保留 Agent 和原生会话的
+span；`Codex realtime audio I/O stopped` 的 `stage` 区分麦克风和下行播放。
+`Codex realtime stop requested` 记录随后向原生会话发送停止请求的清理步骤。
+
+排查时先找最早的关闭来源，再看后续清理日志；原生时间线中的 `ended` 只表示最终状态。
+这些日志不记录音频、转写文本、SDP 或任意原生错误包。语音错误以固定的 `reason` 和
+`retryable` 字段记录为 WARN，正常停止记录为 INFO；自动证据沿用现有 WARN/ERROR 采集规则。
 
 ## 分享与排查
 

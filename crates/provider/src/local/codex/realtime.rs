@@ -4,6 +4,7 @@ use model::realtime::{Audio, Endpoint, Event};
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
 
 use super::{AgentSessionError, CodexSession};
 
@@ -32,7 +33,9 @@ impl CodexSession {
         }
         let output = endpoint.output.clone();
         let cancel = endpoint.cancel.clone();
-        let media = (self.client.realtime_media)(endpoint).await?;
+        let media = (self.client.realtime_media)(endpoint)
+            .instrument(tracing::info_span!("codex_voice", native_session_id = %self.id))
+            .await?;
         let params = json!({"threadId":self.id,"outputModality":"audio","version":"v3",
             "transport":{"type":"webrtc","sdp":media.offer}});
         self.transport
@@ -56,6 +59,11 @@ impl CodexSession {
             return Ok(());
         };
         if realtime.cancel.is_cancelled() || realtime.output.is_closed() {
+            tracing::info!(
+                native_session_id = %self.id,
+                reason = if realtime.output.is_closed() { "output_closed" } else { "cancelled" },
+                "Codex realtime stop requested"
+            );
             return self.stop_realtime().await;
         }
         Ok(())
@@ -145,6 +153,11 @@ impl CodexSession {
             }
             "thread/realtime/error" => Event::Failed,
             "thread/realtime/closed" => {
+                tracing::info!(
+                    native_session_id = %self.id,
+                    reason = "native_closed",
+                    "Codex realtime control session ended"
+                );
                 let _ = realtime.output.try_send(Event::Closed);
                 self.realtime = None;
                 return Ok(());

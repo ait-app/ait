@@ -79,7 +79,7 @@ Electron 使用 `npm run dev:desktop`，由主进程负责 Rust 服务启动及 
 
 ## 验证与构建
 
-通知在前台使用本地提醒，后台由 daemon 直接投递至 Apple APNs／Google FCM。App 通知设置支持系统授权和本地测试；凭据配置及真机验收见[移动端通知](../../docs/operations/mobile-notifications.md)。更新此能力需要重新构建原生安装包和 daemon。
+通知在前台使用本地提醒；后台由桌面内置 daemon 默认交给 Hub 投递至 Apple APNs／Google FCM，独立 daemon 可显式启用 Hub 或使用本机凭据直发。App 通知设置支持系统授权和本地测试；凭据配置、iOS Bundle ID 白名单及真机验收见[移动端通知](../../docs/operations/mobile-notifications.md)。更新此能力需要重新构建安装包并重启对应运行时。
 
 iPhone 构建从仓库根运行 `npm run build:ios`（未签名真机归档）、
 `npm run build:ios:simulator`（Release 模拟器 App）或 `npm run build:ios:ipa`（签名 IPA）。

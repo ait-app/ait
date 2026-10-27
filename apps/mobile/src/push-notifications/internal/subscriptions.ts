@@ -43,7 +43,16 @@ async function resolveToken(
     if (!deviceToken) return cached;
     let token: string;
     if (Platform.OS === "ios") {
-      const environment = await Application.getIosPushNotificationServiceEnvironmentAsync();
+      let environment = await Application.getIosPushNotificationServiceEnvironmentAsync();
+      // Expo reads embedded.mobileprovision, which App Store distribution removes. The native
+      // token above confirms APNs registration; an App Store token uses the production service.
+      if (
+        !environment &&
+        (await Application.getIosApplicationReleaseTypeAsync()) ===
+          Application.ApplicationReleaseType.APP_STORE
+      ) {
+        environment = "production";
+      }
       if (!Application.applicationId || !environment) {
         console.warn("[PushNotifications] APNs entitlement or application ID is unavailable");
         return null;

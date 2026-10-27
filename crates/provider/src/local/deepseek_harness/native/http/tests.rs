@@ -8,6 +8,8 @@ use axum::{
 
 use super::*;
 
+mod transport;
+
 async fn response(Path(mode): Path<String>, Json(body): Json<Value>) -> axum::response::Response {
     match mode.as_str() {
         "quota-json" => (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error":{"type":"insufficient_quota","message":"insufficient balance token=private-key"},"request":{"prompt":"private prompt"}}))).into_response(),
@@ -82,10 +84,7 @@ async fn native_http_distinguishes_absent_capabilities_rejections_and_invalid_en
     assert!(message.contains("insufficient balance"));
     assert!(!message.contains("private-key"));
     assert!(!message.contains("private prompt"));
-    assert_eq!(
-        api.diagnostics.failure().unwrap().category,
-        crate::ports::diagnostics::Category::Quota
-    );
+    assert_eq!(api.diagnostics.failure().unwrap().category, Category::Quota);
     for mode in [
         "unauthorized",
         "forbidden",

@@ -2,6 +2,93 @@ use super::*;
 use std::collections::BTreeMap;
 
 #[tokio::test]
+async fn unarchive_failure_does_not_retry_resume_or_submit_a_turn() {
+    let fixture = Fixture::new();
+    fixture.mode("unarchive-denied");
+    let client = fixture.client();
+    let spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    std::fs::write(
+        fixture
+            .cwd
+            .join(format!("native-archived-{}", handle.session_id)),
+        "archived",
+    )
+    .unwrap();
+    assert!(matches!(
+        client
+            .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+            .await,
+        Err(AgentSessionError::Rejected)
+    ));
+    let requests = fixture.requests();
+    assert_eq!(
+        requests
+            .iter()
+            .filter(|request| request["method"] == "thread/resume")
+            .count(),
+        1
+    );
+    assert!(
+        !requests
+            .iter()
+            .any(|request| request["method"] == "turn/start")
+    );
+}
+
+#[tokio::test]
+async fn archived_native_threads_resume_interactively_and_history_never_unarchives() {
+    for mode in ["normal", "unarchive-raced"] {
+        let fixture = Fixture::new();
+        fixture.mode(mode);
+        let client = fixture.client();
+        let spec = fixture.spec();
+        let mut session = client.create_session(&spec).await.unwrap();
+        let handle = session.persistence().unwrap();
+        session.close().await.unwrap();
+        let marker = fixture
+            .cwd
+            .join(format!("native-archived-{}", handle.session_id));
+        std::fs::write(&marker, "archived").unwrap();
+        let mut history = client
+            .resume_session(&handle, &spec, AgentResumePurpose::History)
+            .await
+            .unwrap();
+        history.close().await.unwrap();
+        assert!(marker.exists());
+        assert!(
+            !fixture
+                .requests()
+                .iter()
+                .any(|request| request["method"] == "thread/unarchive")
+        );
+        let mut resumed = client
+            .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+            .await
+            .unwrap();
+        assert_eq!(resumed.persistence(), Some(handle));
+        resumed.start_turn("restored", &spec.config).await.unwrap();
+        assert_eq!(
+            terminal(resumed.as_mut()).await.unwrap(),
+            AgentTurnEvent::Completed(Some("Echo: restored".into()))
+        );
+        assert!(resumed.failure_diagnostic().is_none());
+        resumed.close().await.unwrap();
+        assert!(!marker.exists());
+        assert_eq!(
+            fixture
+                .requests()
+                .iter()
+                .filter(|request| request["method"] == "thread/unarchive")
+                .count(),
+            1
+        );
+    }
+}
+
+#[tokio::test]
 async fn history_and_inspection_restore_answers_inside_the_original_turn() {
     let fixture = Fixture::new();
     let client = fixture.client();

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
+import type { HubAccountConnection } from "@ait/client/internal/hub";
 import { startPushNotifications } from "../index.native";
+import { startAccountPushNotifications, revokeAccountPushNotifications } from "./account";
 import { refreshPushRegistrations } from "./subscriptions";
 
 const mocks = vi.hoisted(() => ({
@@ -15,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   channel: vi.fn(),
   tokenListener: vi.fn(),
   environment: vi.fn(),
+  releaseType: vi.fn(),
 }));
 
 vi.mock("react-native", () => ({ Platform: mocks.platform, AppState: mocks.appState }));
@@ -24,6 +27,8 @@ vi.mock("@react-native-async-storage/async-storage", () => ({
 vi.mock("expo-application", () => ({
   applicationId: "dev.ait.mobile",
   getIosPushNotificationServiceEnvironmentAsync: mocks.environment,
+  getIosApplicationReleaseTypeAsync: mocks.releaseType,
+  ApplicationReleaseType: { UNKNOWN: 0, SIMULATOR: 1, DEVELOPMENT: 3, APP_STORE: 5 },
 }));
 vi.mock("expo-notifications", () => ({
   PermissionStatus: { GRANTED: "granted" },
@@ -72,6 +77,7 @@ describe("native push registration", () => {
     mocks.request.mockResolvedValue(granted);
     mocks.deviceToken.mockResolvedValue({ type: "ios", data: "native-device" });
     mocks.environment.mockResolvedValue("production");
+    mocks.releaseType.mockResolvedValue(0);
     mocks.channel.mockResolvedValue(null);
     vi.spyOn(console, "warn").mockImplementation(() => {});
   });
@@ -108,6 +114,37 @@ describe("native push registration", () => {
       token: "native-device",
     });
     expect(mocks.environment).not.toHaveBeenCalled();
+  });
+
+  it("registers an App Store APNs token without an embedded provisioning profile", async () => {
+    mocks.environment.mockResolvedValue(null);
+    mocks.releaseType.mockResolvedValue(5);
+    const host = start();
+    await vi.waitFor(() => expect(host.registerPushToken).toHaveBeenCalledOnce());
+    expect(JSON.parse(host.registerPushToken.mock.calls[0][0])).toMatchObject({
+      provider: "apns",
+      environment: "production",
+    });
+  });
+
+  it("preserves the provisioning profile's development APNs environment", async () => {
+    mocks.environment.mockResolvedValue("development");
+    const host = start();
+    await vi.waitFor(() => expect(host.registerPushToken).toHaveBeenCalledOnce());
+    expect(JSON.parse(host.registerPushToken.mock.calls[0][0]).environment).toBe("development");
+    expect(mocks.releaseType).not.toHaveBeenCalled();
+  });
+
+  it.each([0, 1, 3])("does not guess an APNs environment for release type %s", async (type) => {
+    mocks.environment.mockResolvedValue(null);
+    mocks.releaseType.mockResolvedValue(type);
+    const host = start();
+    await vi.waitFor(() =>
+      expect(console.warn).toHaveBeenCalledWith(
+        "[PushNotifications] APNs entitlement or application ID is unavailable",
+      ),
+    );
+    expect(host.registerPushToken).not.toHaveBeenCalled();
   });
 
   it("waits until foreground to request permission and recovers when returning from system settings", async () => {
@@ -170,9 +207,6 @@ describe("native push registration", () => {
 });
 
 // Account registration uses the same native token/permission lifecycle, once for all Hosts.
-import { startAccountPushNotifications, revokeAccountPushNotifications } from "./account";
-import type { HubAccountConnection } from "@ait/client/internal/hub";
-
 describe("account push registration", () => {
   it("registers without a daemon connection and revokes before account logout", async () => {
     vi.clearAllMocks();

@@ -30,6 +30,19 @@ providers/codex/app-server-transport.ts. Rust changes use a bounded worker, read
 sessions, explicit unsupported options, terminal-result polling and process-group cleanup.
 Scope and differences: docs/decisions/providers/adr-032-daemon-native-provider-execution.md.
 
+Codex protocol compatibility updates in crates/provider/src/local/codex*,
+crates/provider/src/local/tool_detail/subagent*, and their provider-owned tests also
+reference getpaseo/paseo commit 4f9d9d6de2236486ecc2ad886a2c37f4b92271e0:
+packages/server/src/server/agent/providers/codex-app-server-agent.ts
+packages/server/src/server/agent/providers/codex/app-server-transport.ts
+packages/server/src/server/agent/providers/codex/tool-call-mapper.ts
+packages/server/src/server/agent/providers/codex/rewind.ts
+Modifications: Rust-owned bounded-memory event spooling, effective permission
+preservation, terminal and sub-agent projections, native recovery and exclusive
+fork compatibility. Scope and validation:
+docs/decisions/providers/adr-193-codex-native-protocol-compatibility.md
+docs/reports/providers/codex-paseo-compatibility-2026-10-27.md
+
 Agent next-turn configuration and connection session event/presence behavior also reference
 getpaseo/paseo commit 2c8e8a826810337492cc5a38bb0bbd705b6fb632:
 packages/server/src/server/session/agent-config/agent-config-session.ts

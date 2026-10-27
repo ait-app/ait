@@ -2,11 +2,60 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use chrono::DateTime;
+use secrecy::ExposeSecret;
 use serde_json::{Value, json};
 
 use super::{CodexClient, Transport, discovery, validate_config};
 use crate::ports::agent_session::AgentSessionError;
 use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
+
+/// Recognize only the native archived-thread rejection for the requested identity.
+pub(super) fn archived(message: &str, thread: &str) -> bool {
+    !thread.is_empty()
+        && message
+            == format!(
+                "session {thread} is archived. Run `codex unarchive {thread}` to unarchive it first."
+            )
+}
+
+/// Recognize the harmless race where another client already unarchived this thread.
+pub(super) fn already_unarchived(message: &str, thread: &str) -> bool {
+    !thread.is_empty()
+        && message.ends_with(&format!("no archived rollout found for thread id {thread}"))
+}
+
+/// Resume an interactive thread, unarchiving only after its exact native rejection.
+/// Returns unrelated RPC errors without retrying the resume or submitting inference.
+pub(super) async fn resume(
+    transport: &mut Transport,
+    params: Value,
+) -> Result<Value, AgentSessionError> {
+    let response = transport.request("thread/resume", params.clone()).await;
+    let thread = params["threadId"]
+        .as_str()
+        .ok_or(AgentSessionError::Rejected)?;
+    if response != Err(AgentSessionError::Rejected)
+        || !transport
+            .rpc_error
+            .as_ref()
+            .is_some_and(|error| archived(error.expose_secret(), thread))
+    {
+        return response;
+    }
+    match transport
+        .request("thread/unarchive", json!({"threadId":thread}))
+        .await
+    {
+        Ok(_) => {}
+        Err(AgentSessionError::Rejected)
+            if transport
+                .rpc_error
+                .as_ref()
+                .is_some_and(|error| already_unarchived(error.expose_secret(), thread)) => {}
+        Err(error) => return Err(error),
+    }
+    transport.request("thread/resume", params).await
+}
 
 impl CodexClient {
     pub(super) async fn list_native(
@@ -40,7 +89,7 @@ impl CodexClient {
         let result = async {
             transport.initialize().await?;
             let response = transport
-                .request("thread/read", json!({"threadId":id,"includeTurns":true}))
+                .request("thread/read", json!({"threadId":id,"includeTurns":false}))
                 .await?;
             let mut history = history_with_images(&response["thread"], &self.images)?;
             if let Some(entries) =
@@ -48,6 +97,11 @@ impl CodexClient {
                     .await?
             {
                 history.entries = entries;
+            } else {
+                let response = transport
+                    .request("thread/read", json!({"threadId":id,"includeTurns":true}))
+                    .await?;
+                history = history_with_images(&response["thread"], &self.images)?;
             }
             if history.descriptor.provider_handle_id != id
                 || Path::new(&history.descriptor.cwd).canonicalize().ok()
@@ -144,7 +198,7 @@ pub(super) fn history_with_images(
     };
     validate_config(&config)?;
     let mut active = match thread.pointer("/status/type").and_then(Value::as_str) {
-        Some("idle" | "notLoaded") => false,
+        Some("idle" | "notLoaded" | "systemError") => false,
         Some("active") => true,
         _ => return Err(AgentSessionError::Failed),
     };

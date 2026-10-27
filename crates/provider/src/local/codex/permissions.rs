@@ -27,6 +27,7 @@ pub(super) fn supported(method: &str) -> bool {
         "item/commandExecution/requestApproval"
             | "item/fileChange/requestApproval"
             | "item/tool/requestUserInput"
+            | "tool/requestUserInput"
             | "mcpServer/elicitation/request"
     )
 }
@@ -107,7 +108,7 @@ impl CodexSession {
             }
             Some("item/fileChange/requestApproval") => (Kind::File, "fileChange", "tool"),
             Some("mcpServer/elicitation/request") => (Kind::Mcp, "McpElicitation", "tool"),
-            Some("item/tool/requestUserInput") if params["isBlocking"] != false => {
+            Some("item/tool/requestUserInput" | "tool/requestUserInput") => {
                 (Kind::Question, "request_user_input", "question")
             }
             _ => return Err(AgentSessionError::Unavailable),

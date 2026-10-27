@@ -37,7 +37,7 @@ Google 的 Antigravity CLI 使用 `agy` 命令。官方脚本与 Homebrew cask �
    工具输出显示预览有界；原生完整输出仍归 AGY。
 6. persistence handle 只保存 conversation ID 与 cwd。认证和原生会话由 AGY 保存。
    官方协议没有完整只读 transcript/list API，adapter 不宣称 history replay；daemon 保留已存时间线。
-   Unix 中断发送 SIGINT，只有收到原生 `CANCELED` / `INTERRUPTED` 才确认成功。
+   Unix 中断发送 SIGINT，只有收到原生 `CANCELED` / `INTERRUPTED` 或 `ERROR` + `error: interrupted` 才确认成功。
    之后关闭旧进程，下轮按 conversation ID 重连；Windows 不宣称支持原生取消。
    关闭和 Drop 回收 writer、reader 与 Unix 进程组。
 7. 官方 stream input 不支持控制/审批消息和非文本块。

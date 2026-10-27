@@ -53,6 +53,30 @@ struct Peer {
     sequence: u64,
 }
 
+#[tokio::test]
+async fn standard_acp_recovers_a_missing_native_settlement_notification() {
+    let (_root, client, spec) = super::super::tests::fixture();
+    let mut peer = Peer::new(client);
+    let session = peer.open(&spec.cwd, false).await;
+    let result = peer
+        .request(
+            "session/prompt",
+            json!({"sessionId":session,
+        "prompt":[{"type":"text","text":"lost-settlement"}]}),
+        )
+        .await;
+    assert_eq!(result["result"]["stopReason"], "end_turn");
+    let result = peer
+        .request(
+            "session/prompt",
+            json!({"sessionId":session,
+        "prompt":[{"type":"text","text":"next"}]}),
+        )
+        .await;
+    assert_eq!(result["result"]["stopReason"], "end_turn");
+    peer.finish(&session).await;
+}
+
 impl Peer {
     fn new(client: OmpClient) -> Self {
         let (client_io, server_io) = tokio::io::duplex(64 * 1024);

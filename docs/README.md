@@ -1,5 +1,12 @@
 # Ait 文档
 
+- [ADR-195：OpenCode 独立取消信号与确认期限](decisions/providers/adr-195-opencode-independent-cancellation.md)：消除输出背压和历史回放对停止的阻塞，限制原生终态丢失后的停止等待。
+
+- [ADR-194：OMP 原生空闲状态核对与有界取消](decisions/providers/adr-194-omp-settlement-reconciliation.md)：补齐遗漏终态、同一执行进程的状态核对和停止确认期限。
+
+- [ADR-193：Codex 原生策略、事件与恢复兼容](decisions/providers/adr-193-codex-native-protocol-compatibility.md)：有效 sandbox、事件暂存、完成竞态、子会话、压缩与回退兼容；[定向验证](reports/providers/codex-paseo-compatibility-2026-10-27.md)。
+- [ADR-192：Codex 历史按页投影后计算展示预算](decisions/providers/adr-192-codex-incremental-history-projection.md)：大图片历史、原始页释放、语音顺序与可诊断的历史失败。
+
 - [ADR-191：Codex Provider 拥有原生实时语音（daemon 中继 PCM 与 WebRTC）](decisions/providers/adr-191-codex-native-realtime-voice.md)：Provider 能力驱动入口、空会话创建、设备就绪与 WebRTC/PCM、各端连续播放与设备消费确认、积压时的关闭与插话、转写边界、统一语音历史、结构化消息关联与连接清理边界。
 
 - [ADR-154：账号状态通过共享客户端 Channel 推送](decisions/clients/adr-154-account-status-channel.md)：完整 Host 快照、Host 可连接状态事件、应用心跳与各端票据认证。
@@ -30,7 +37,7 @@
 
 ## 架构决策
 
-- [ADR-192：Provider 输出分类与每轮 Thinking 展示](decisions/providers/adr-192-provider-output-semantics.md)：原生后台结果与通知的语义投影、实时/历史一致及按 turnId 归并推理。
+- [ADR-196：Provider 输出分类与每轮 Thinking 展示](decisions/providers/adr-196-provider-output-semantics.md)：原生后台结果与通知的语义投影、实时/历史一致及按 turnId 归并推理。
 
 - [ADR-190：Ait ACP 桥接官方 OMP 与通用插件接口](decisions/providers/adr-190-omp-acp-settlement.md)：单一官方 RPC 所有者、通用插件与原生事件透传；[架构与兼容表](architecture/omp-acp-bridge.md)、[验证报告](reports/providers/omp-acp-settlement-2026-10-25.md)。
 
@@ -48,7 +55,7 @@
 
 - [ADR-183：iOS CI 使用 Xcode Cloud 归档与内部分发](decisions/clients/adr-183-ios-xcode-cloud-release.md)：手动 Cloud 构建、Apple 签名与构建号、TestFlight 内部测试，取代 EAS 发布入口。
 
-- [ADR-182：客户端接入 Hub 账号服务](decisions/clients/adr-182-hub-account-client.md)：桌面与浏览器 Hub 优先、账号设备注册与心跳、游标订阅和内部通知摘要；[客户端验证](reports/clients/hub-account-client-2026-10-22.md)、[daemon/desktop 运行与真实 Hub 联调](reports/clients/daemon-desktop-runtime-2026-10-22.md)。
+- [ADR-182：客户端接入 Hub 账号服务](decisions/clients/adr-182-hub-account-client.md)：桌面与浏览器 Hub 优先、桌面内置 daemon 默认中心通知、账号设备注册与心跳、游标订阅和内部通知摘要；[客户端验证](reports/clients/hub-account-client-2026-10-22.md)、[daemon/desktop 运行与真实 Hub 联调](reports/clients/daemon-desktop-runtime-2026-10-22.md)。
 
 - [ADR-180：Oh My Pi 原生 RPC Provider](decisions/providers/adr-180-omp-native-rpc-provider.md)：独立 `omp` 适配器、v2 分块传输、审批模式映射、结构化 ask、子 Agent 与回合级 settled 关联；Pi 是另一个独立 Provider（ADR-156）。
 - [ADR-181：Host 向 Hub 发布事件与目录摘要](decisions/daemon/adr-181-hub-host-publication.md)：中心调用、持久化发布队列、通知路由、轻量 Timeline / creation 更新和目录快照；[验证报告](reports/daemon/hub-host-publication-2026-10-22.md)。

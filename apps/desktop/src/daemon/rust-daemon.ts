@@ -473,6 +473,9 @@ export class RustDaemonManager {
     const env = Object.fromEntries(
       Object.entries(process.env).filter(([key]) => !key.startsWith("AIT_SERVER_")),
     );
+    // Desktop's account lifecycle supplies the Hub connection and mobile device registrations.
+    // Keep this explicit override while isolating unrelated daemon settings and credentials.
+    env.AIT_SERVER_HUB_NOTIFICATIONS = process.env.AIT_SERVER_HUB_NOTIFICATIONS ?? "true";
     // The daemon writes its log file directly and runs in its own process group, so it can
     // outlive this Desktop session when the user keeps it running after quit.
     const logOffset = statSync(this.logPath, { throwIfNoEntry: false })?.size ?? 0;

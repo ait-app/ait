@@ -1,11 +1,12 @@
 use std::collections::VecDeque;
 use std::process::Stdio;
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio_util::task::AbortOnDropHandle;
 
@@ -23,7 +24,8 @@ pub(super) struct Transport {
     pub(super) diagnostics: Diagnostics,
     _stderr: AbortOnDropHandle<()>,
     group: Option<u32>,
-    input: Option<ChildStdin>,
+    input: Option<Arc<Mutex<ChildStdin>>>,
+    background_write: Option<AbortOnDropHandle<()>>,
     messages: mpsc::Receiver<Value>,
     reader: JoinHandle<()>,
     events: VecDeque<Value>,
@@ -112,7 +114,8 @@ impl Transport {
             child,
             diagnostics,
             _stderr: stderr_task,
-            input: Some(input),
+            input: Some(Arc::new(Mutex::new(input))),
+            background_write: None,
             messages,
             reader,
             events: VecDeque::new(),
@@ -145,24 +148,42 @@ impl Transport {
     }
 
     pub(super) async fn send(&mut self, message: &Value) -> Result<(), AgentSessionError> {
-        let mut bytes = serde_json::to_vec(message).map_err(|_| AgentSessionError::Rejected)?;
-        if bytes.len() >= MAX_FRAME {
-            return Err(AgentSessionError::Rejected);
-        }
-        bytes.push(b'\n');
-        let input = self.input.as_mut().ok_or(AgentSessionError::Failed)?;
-        if matches!(
-            tokio::time::timeout(self.deadline, async {
-                input.write_all(&bytes).await?;
-                input.flush().await
-            })
-            .await,
-            Ok(Ok(()))
-        ) {
-            return Ok(());
+        let input = self.input.as_ref().ok_or(AgentSessionError::Failed)?;
+        match write(input, message, self.deadline).await {
+            Ok(()) => return Ok(()),
+            Err(AgentSessionError::Rejected) => return Err(AgentSessionError::Rejected),
+            Err(_) => {}
         }
         let _ = self.close().await;
         Err(AgentSessionError::Failed)
+    }
+
+    /// Queue one read-only state request without blocking native event or cancellation polling.
+    /// Returns its correlation and write acknowledgement; a busy writer is not queued twice.
+    pub(super) fn check_state(
+        &mut self,
+    ) -> Result<(String, oneshot::Receiver<Result<(), AgentSessionError>>), AgentSessionError> {
+        if self
+            .background_write
+            .as_ref()
+            .is_some_and(|task| !task.is_finished())
+        {
+            return Err(AgentSessionError::Busy);
+        }
+        let input = self
+            .input
+            .as_ref()
+            .ok_or(AgentSessionError::Failed)?
+            .clone();
+        self.sequence += 1;
+        let id = format!("ait-omp-{}", self.sequence);
+        let message = json!({"type":"get_state","id":id});
+        let deadline = self.deadline;
+        let (written, acknowledgement) = oneshot::channel();
+        self.background_write = Some(AbortOnDropHandle::new(tokio::spawn(async move {
+            let _ = written.send(write(&input, &message, deadline).await);
+        })));
+        Ok((id, acknowledgement))
     }
 
     /// Send a correlated command without waiting for hooks or extension interactions.
@@ -255,6 +276,7 @@ impl Transport {
         }
         self.closed = true;
         self.diagnostics.flush();
+        self.background_write.take();
         self.input.take();
         let drained = tokio::time::timeout(Duration::from_secs(2), async {
             loop {
@@ -288,6 +310,31 @@ impl Transport {
                 .stderr(Stdio::null())
                 .status();
         }
+    }
+}
+
+async fn write(
+    input: &Mutex<ChildStdin>,
+    message: &Value,
+    deadline: Duration,
+) -> Result<(), AgentSessionError> {
+    let mut bytes = serde_json::to_vec(message).map_err(|_| AgentSessionError::Rejected)?;
+    if bytes.len() >= MAX_FRAME {
+        return Err(AgentSessionError::Rejected);
+    }
+    bytes.push(b'\n');
+    if matches!(
+        tokio::time::timeout(deadline, async {
+            let mut input = input.lock().await;
+            input.write_all(&bytes).await?;
+            input.flush().await
+        })
+        .await,
+        Ok(Ok(()))
+    ) {
+        Ok(())
+    } else {
+        Err(AgentSessionError::Failed)
     }
 }
 

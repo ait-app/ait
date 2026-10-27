@@ -1,5 +1,6 @@
 use crate::rpc::ErrorCode;
 use model::realtime::Endpoint;
+use tracing::Instrument;
 
 use super::AgentManager;
 
@@ -40,6 +41,11 @@ impl AgentManager {
         agent
             .session
             .start_realtime(endpoint)
+            .instrument(tracing::info_span!(
+                "native_voice",
+                agent_id = id,
+                provider = record.provider.as_str()
+            ))
             .await
             .map_err(|_| ErrorCode::AgentIo)?;
         Ok(true)

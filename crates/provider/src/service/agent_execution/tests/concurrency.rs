@@ -82,6 +82,16 @@ impl AgentClient for GatedClient {
             self.native.history(handle, cwd).await
         })
     }
+    fn inspect_session<'a>(
+        &'a self,
+        handle: &'a AgentPersistenceHandle,
+        cwd: &'a str,
+    ) -> AgentSessionFuture<'a, crate::ports::native_history::SessionHistory> {
+        Box::pin(async move {
+            self.gate.hold(Operation::History).await;
+            self.native.inspect_session(handle, cwd).await
+        })
+    }
     fn create_session<'a>(
         &'a self,
         spec: &'a AgentSessionSpec,
@@ -536,34 +546,55 @@ async fn automatic_archive_fences_a_child_factory_and_waits_for_all_related_writ
 
 #[tokio::test]
 async fn late_history_cannot_recreate_a_deleted_agent() {
-    let fixture = Fixture::new();
-    let (original, _) = worker(&fixture);
-    let agent = create(&original, &fixture).await;
-    original.shutdown().await.unwrap();
-    let gate = Gate::new(Operation::History);
-    let execution = gated(&fixture, &gate);
-    let history = {
-        let execution = execution.clone();
-        let id = agent["agentId"].clone();
-        tokio::spawn(async move {
-            execution
-                .execute("agent.timeline.get.request", json!({"agentId":id}))
-                .await
-        })
-    };
-    entered(&gate).await;
-    execution
-        .0
-        .registry
-        .remove(agent["agentId"].as_str().unwrap())
-        .unwrap();
-    gate.release.add_permits(1);
-    assert_eq!(history.await.unwrap(), Err(ErrorCode::AgentNotFound));
-    assert_eq!(
-        execution.0.registry.list().unwrap(),
-        [] as [domain::agent_runtime::PersistedAgentRuntimeRecord; 0]
-    );
-    execution.shutdown().await.unwrap();
+    for replacement in [false, true] {
+        let fixture = Fixture::new();
+        let (original, registry) = worker(&fixture);
+        let agent = create(&original, &fixture).await;
+        original.shutdown().await.unwrap();
+        if replacement {
+            registry
+                .update(agent["agentId"].as_str().unwrap(), &|record| {
+                    let mut record = record.clone();
+                    record
+                        .persistence
+                        .as_mut()
+                        .unwrap()
+                        .metadata
+                        .get_or_insert_default()
+                        .insert("aitTimelineReplacement".to_owned(), json!(true));
+                    record
+                })
+                .unwrap();
+        }
+        let gate = Gate::new(Operation::History);
+        let execution = gated(&fixture, &gate);
+        let history = {
+            let execution = execution.clone();
+            let id = agent["agentId"].clone();
+            tokio::spawn(async move {
+                execution
+                    .execute("agent.timeline.get.request", json!({"agentId":id}))
+                    .await
+            })
+        };
+        entered(&gate).await;
+        execution
+            .0
+            .registry
+            .remove(agent["agentId"].as_str().unwrap())
+            .unwrap();
+        gate.release.add_permits(1);
+        assert_eq!(
+            history.await.unwrap(),
+            Err(ErrorCode::AgentNotFound),
+            "replacement={replacement}"
+        );
+        assert_eq!(
+            execution.0.registry.list().unwrap(),
+            [] as [domain::agent_runtime::PersistedAgentRuntimeRecord; 0]
+        );
+        execution.shutdown().await.unwrap();
+    }
 }
 
 #[tokio::test]

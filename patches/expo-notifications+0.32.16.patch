@@ -1,0 +1,33 @@
+diff --git a/node_modules/expo-notifications/build/getDevicePushTokenAsync.js b/node_modules/expo-notifications/build/getDevicePushTokenAsync.js
+--- a/node_modules/expo-notifications/build/getDevicePushTokenAsync.js
++++ b/node_modules/expo-notifications/build/getDevicePushTokenAsync.js
+@@ -20,8 +20,12 @@ export default async function getDevicePushTokenAsync() {
+     else {
+         // Create a new Promise and clear it afterwards
+         nativeTokenPromise = PushTokenManager.getDevicePushTokenAsync();
+-        devicePushToken = await nativeTokenPromise;
+-        nativeTokenPromise = null;
++        try {
++            devicePushToken = await nativeTokenPromise;
++        }
++        finally {
++            nativeTokenPromise = null;
++        }
+     }
+     // @ts-ignore: TS thinks Platform.OS could be anything and can't decide what type is it
+     return { type: Platform.OS, data: devicePushToken };
+diff --git a/node_modules/expo-notifications/src/getDevicePushTokenAsync.ts b/node_modules/expo-notifications/src/getDevicePushTokenAsync.ts
+--- a/node_modules/expo-notifications/src/getDevicePushTokenAsync.ts
++++ b/node_modules/expo-notifications/src/getDevicePushTokenAsync.ts
+@@ -24,6 +24,9 @@ export default async function getDevicePushTokenAsync(): Promise<DevicePushToken> {
+   } else {
+     // Create a new Promise and clear it afterwards
+     nativeTokenPromise = PushTokenManager.getDevicePushTokenAsync();
+-    devicePushToken = await nativeTokenPromise;
+-    nativeTokenPromise = null;
++    try {
++      devicePushToken = await nativeTokenPromise;
++    } finally {
++      nativeTokenPromise = null;
++    }
+   }

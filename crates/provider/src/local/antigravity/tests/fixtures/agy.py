@@ -85,8 +85,12 @@ def terminal(status, response, **fields):
             'output_tokens': turns * 10, 'cache_read_tokens': turns * 50}, **fields}})
 
 def interrupted(signum, frame):
-    terminal('INTERRUPTED', '')
-    sys.exit(0)
+    if scenario == 'cancel-timeout':
+        return
+    if scenario == 'cancel-exit':
+        sys.exit(1)
+    terminal('ERROR', '', error='interrupted')
+    sys.exit(1)
 
 signal.signal(signal.SIGINT, interrupted)
 # Install cancellation handling before advertising that the process is ready.
@@ -102,6 +106,14 @@ for line in sys.stdin:
     text = content if isinstance(content, str) else ''.join(block['text'] for block in content)
     if text == 'wait':
         time.sleep(600)
+    if text == 'fail-once':
+        terminal('ERROR', '', error='native failure')
+        sys.exit(1)
+    if text == 'malformed-once':
+        print('{', flush=True)
+        continue
+    if text == 'crash-once':
+        sys.exit(1)
     if scenario == 'foreign':
         emit({'event': 'step_update', 'step_update': {'conversation_id': 'foreign',
             'state': 'DONE', 'step_type': 'agent_response', 'step_index': step_index}})

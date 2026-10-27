@@ -1,5 +1,7 @@
 use super::*;
 
+mod offline;
+
 #[tokio::test]
 #[ignore = "requires installed Codex authentication and makes one small model request"]
 async fn installed_codex_completes_a_native_turn_and_reopens_history() {

@@ -1,5 +1,40 @@
 use super::*;
 
+#[test]
+fn compaction_pairs_legacy_and_item_completions_in_both_orders() {
+    let native = json!({"type":"contextCompaction","id":"compact"});
+    for notification_first in [true, false] {
+        let mut stream = Stream::default();
+        stream
+            .progress("item/started", &json!({"turnId":"turn","item":native}))
+            .unwrap();
+        if notification_first {
+            assert!(stream.compacted(Some("turn")).unwrap().is_some());
+            assert!(!stream.complete(&native).unwrap());
+        } else {
+            assert!(stream.complete(&native).unwrap());
+            assert!(stream.compacted(Some("turn")).unwrap().is_none());
+        }
+        assert!(!stream.complete(&native).unwrap());
+        stream.finish_compactions("turn").unwrap();
+        assert!(stream.events.is_empty());
+    }
+}
+
+#[test]
+fn compaction_legacy_only_then_modern_start_does_not_underflow_or_stay_loading() {
+    let mut stream = Stream::default();
+    assert!(stream.compacted(None).unwrap().is_some());
+    let native = json!({"type":"contextCompaction","id":"next"});
+    stream
+        .progress("item/started", &json!({"turnId":"turn","item":native}))
+        .unwrap();
+    assert!(stream.compacted(Some("turn")).unwrap().is_some());
+    assert!(!stream.complete(&native).unwrap());
+    stream.finish_compactions("turn").unwrap();
+    assert!(stream.events.is_empty());
+}
+
 mod command_actions;
 mod file_changes;
 mod paseo;

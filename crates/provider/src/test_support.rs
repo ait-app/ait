@@ -15,6 +15,8 @@ use crate::service::agent_execution::{AgentExecution, ExecutionDependencies};
 use crate::service::agent_manager::AgentManager;
 use crate::service::agent_runtime::AgentRuntimeDirectory;
 
+pub(crate) mod codex_history;
+
 pub(crate) struct Fixture {
     pub(crate) root: tempfile::TempDir,
     pub(crate) program: PathBuf,

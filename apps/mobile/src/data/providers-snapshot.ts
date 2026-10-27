@@ -1,6 +1,7 @@
 import { CancelledError, type QueryClient } from "@tanstack/react-query";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import type { GetProvidersSnapshotResponseMessage } from "@ait/protocol/messages";
+import { compactProviderSnapshot } from "@ait/protocol/provider-snapshot-codec";
 import {
   providerSnapshotCache,
   ProviderSnapshotCacheMissError,
@@ -49,6 +50,12 @@ export function isProvidersSnapshotHomeScope(cwd?: string | null): boolean {
 type Snapshot = GetProvidersSnapshotResponseMessage["payload"];
 type SnapshotClient = Pick<DaemonClient, "getProvidersSnapshot">;
 
+function withSnapshotBody(snapshot: Snapshot): Snapshot {
+  if (!snapshot.snapshotHash || snapshot.compactSnapshot || snapshot.notModified) return snapshot;
+  // A full Rust daemon response carries entries and a hash without a compact body.
+  return { ...snapshot, compactSnapshot: compactProviderSnapshot(snapshot.entries) };
+}
+
 export async function fetchProvidersSnapshot(input: {
   client: SnapshotClient;
   serverId: string;
@@ -62,11 +69,15 @@ export async function fetchProvidersSnapshot(input: {
   const queryClient = input.queryClient ?? singletonQueryClient;
   const queryKey = providersSnapshotQueryKey(input.serverId, input.cwd);
   const cached = input.snapshot ? null : await cache.read(input.serverId, input.cwd);
-  let snapshot =
+  const response =
     input.snapshot ??
     (await input.client.getProvidersSnapshot(
       providersSnapshotRequestOptions({ cwd: input.cwd, ifNoneMatch: cached?.hash }),
     ));
+  // Empty push entries may announce a body reference; an unconditional GET is a full body,
+  // including when the host has no providers. A not-modified GET still requires its cached body.
+  let snapshot =
+    !input.snapshot || response.entries.length > 0 ? withSnapshotBody(response) : response;
   if (snapshot.snapshotHash && !snapshot.compactSnapshot) {
     const known =
       cached?.hash === snapshot.snapshotHash
@@ -88,7 +99,7 @@ export async function fetchProvidersSnapshot(input: {
           );
           // Materialize before settling so simultaneous directory announcements share
           // both the transfer and decoded body through the existing query deduplication.
-          return cache.materialize(input.serverId, response);
+          return cache.materialize(input.serverId, withSnapshotBody(response));
         },
       });
       if (body.snapshotHash === hash) {
@@ -96,8 +107,10 @@ export async function fetchProvidersSnapshot(input: {
       } else if (normalizeProvidersSnapshotCwd(body.cwd) === input.cwd) {
         snapshot = body;
       } else {
-        snapshot = await input.client.getProvidersSnapshot(
-          providersSnapshotRequestOptions({ cwd: input.cwd }),
+        snapshot = withSnapshotBody(
+          await input.client.getProvidersSnapshot(
+            providersSnapshotRequestOptions({ cwd: input.cwd }),
+          ),
         );
       }
     }

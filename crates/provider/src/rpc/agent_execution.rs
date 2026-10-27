@@ -639,7 +639,9 @@ const fn map_manager(error: &AgentManagerError) -> ErrorCode {
         AgentManagerError::InvalidRequest
         | AgentManagerError::AlreadyExists(_)
         | AgentManagerError::SessionRejected => ErrorCode::InvalidMessage,
-        AgentManagerError::Session | AgentManagerError::Registry => ErrorCode::AgentIo,
+        AgentManagerError::Session
+        | AgentManagerError::History(_)
+        | AgentManagerError::Registry => ErrorCode::AgentIo,
     }
 }
 

@@ -42,6 +42,8 @@ active = False
 prompt_id = None
 pending_plugin = None
 pending_control = None
+pending_async = False
+current_prompt = None
 
 def emit(value):
     data = json.dumps(value, ensure_ascii=False).encode()
@@ -103,9 +105,20 @@ for line in sys.stdin:
     if kind == 'negotiate_protocol':
         response(command, {'protocolVersion':2})
     elif kind == 'get_state':
-        response(command, {'sessionId': session_id, 'sessionFile': str(file), 'model': model,
+        if pending_async and (root / 'release-settlement').exists():
+            pending_async = False
+            emit({'type': 'agent_start'})
+            message('assistant', [{'type': 'text', 'text': 'Background finished'}],
+                    provider='test', model='model', stopReason='stop')
+            emit({'type': 'agent_end', 'messages': [], 'isTerminal': True, 'yielded': True})
+        state = {'sessionId': session_id, 'sessionFile': str(file), 'model': model,
                           'thinkingLevel': level, 'isStreaming': active, 'isCompacting': False,
-                          'slowModeSupported': model['provider'] == 'test'})
+                          'isSettled': not active and not pending_async,
+                          'hasPendingAsyncWork': pending_async, 'queuedMessageCount': 0,
+                          'slowModeSupported': model['provider'] == 'test'}
+        if current_prompt == 'missing-settlement-fact':
+            state.pop('isSettled')
+        response(command, state)
     elif kind == 'fixture_new_context':
         session_id=str(uuid.uuid4())
         file=root/'sessions'/'workspace'/('2026-10-25_'+session_id+'.jsonl')
@@ -142,6 +155,7 @@ for line in sys.stdin:
         finish()
     elif kind == 'prompt':
         text = command['message']
+        current_prompt = text
         prompt_id = command.get('id')
         plugins = json.loads((root/'plugins.json').read_text()) if (root/'plugins.json').exists() else []
         plugin = next((entry for entry in plugins if text == '/'+entry['name']), None)
@@ -213,7 +227,17 @@ for line in sys.stdin:
         if text == 'malformed':
             print('{broken', flush=True)
             break
-        if text == 'wait':
+        if text in ('lost-settlement', 'lost-result', 'busy-after-yield', 'missing-settlement-fact'):
+            message('assistant', [{'type': 'text', 'text': 'Hello world'}],
+                    provider='test', model='model', stopReason='stop')
+            emit({'type': 'agent_end', 'messages': [], 'isTerminal': True, 'yielded': True})
+            active = False
+            pending_async = text == 'busy-after-yield'
+            if text != 'lost-result':
+                emit({'type': 'prompt_result', 'id': prompt_id, 'agentInvoked': True,
+                      'status': 'completed', 'sessionSettled': False})
+            continue
+        if text in ('wait', 'wait-slow-abort', 'wait-lost-abort', 'wait-stuck-abort'):
             emit({'type': 'agent_end', 'messages': []})
             emit({'type': 'auto_retry_start', 'attempt': 1})
             continue
@@ -265,6 +289,20 @@ for line in sys.stdin:
         message('user', command['message'])
         finish()
     elif kind == 'abort_and_restore_queue':
+        if current_prompt == 'wait-slow-abort':
+            (root / 'abort-entered').touch()
+            while not (root / 'release-abort').exists():
+                time.sleep(0.01)
+        if current_prompt == 'wait-stuck-abort':
+            continue
+        if current_prompt == 'wait-lost-abort':
+            message('assistant', [{'type': 'text', 'text': 'Stopped'}],
+                    provider='test', model='model', stopReason='aborted')
+            active = False
+            emit({'type': 'agent_end', 'messages': [], 'isTerminal': True, 'yielded': True})
+            emit({'type': 'prompt_result', 'id': prompt_id, 'agentInvoked': True,
+                  'status': 'aborted', 'sessionSettled': False})
+            continue
         finish(aborted=True)
         response(command)
     elif kind == 'extension_ui_response':

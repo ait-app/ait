@@ -57,6 +57,7 @@ impl Default for Connection {
 
 impl Drop for Connection {
     fn drop(&mut self) {
+        self.voice.log_release("connection_dropped");
         self.cancel.cancel();
     }
 }
@@ -201,6 +202,11 @@ fn protocol_error(outbound: &Outbound, code: model::ErrorCode) -> Result<(), Que
 }
 
 fn voice_error(outbound: &Outbound, error: Error) -> Result<(), QueueError> {
+    tracing::warn!(
+        reason = error.reason(),
+        retryable = error.retryable(),
+        "Voice operation failed"
+    );
     emit(
         outbound,
         "voice.error",

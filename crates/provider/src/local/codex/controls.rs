@@ -7,6 +7,14 @@ use super::{CodexClient, Transport, native_sessions};
 use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 use crate::ports::controls::NativeSubagent;
 
+/// Native configuration keys paired with their turn-policy wire names.
+pub(super) const WORKSPACE_FIELDS: [(&str, &str); 4] = [
+    ("writable_roots", "writableRoots"),
+    ("network_access", "networkAccess"),
+    ("exclude_slash_tmp", "excludeSlashTmp"),
+    ("exclude_tmpdir_env_var", "excludeTmpdirEnvVar"),
+];
+
 impl CodexClient {
     pub(super) async fn query(
         &self,
@@ -71,7 +79,7 @@ impl CodexClient {
             let mut commands: Vec<_> = skills(&response,cwd)?.into_iter().map(|skill|json!({"name":skill.name,"description":skill.description,"argumentHint":"","kind":"skill"})).collect();
             commands.push(json!({"name":"compact","description":"Summarize the native conversation context","argumentHint":"","kind":"command"}));
             if self.goals() { commands.push(json!({"name":"goal","description":"Set, pause, resume or clear the native goal","argumentHint":"[<objective>|pause|resume|clear]","kind":"command"})); }
-            commands.extend(super::prompts::list(&super::prompts::directory()?)?);
+            commands.extend(super::prompts::list(&super::prompts::directory(&self.environment)?)?);
             commands.sort_by(|a,b| a["name"].as_str().cmp(&b["name"].as_str()));
             Ok(commands)
         }.await;
@@ -241,12 +249,7 @@ pub(super) fn policy(config: &StoredAgentConfig) -> (Value, &str, Value) {
     if sandbox == "workspace-write"
         && let Some(settings) = options.and_then(|options| options.get("sandbox_workspace_write"))
     {
-        for (source, target) in [
-            ("writable_roots", "writableRoots"),
-            ("network_access", "networkAccess"),
-            ("exclude_slash_tmp", "excludeSlashTmp"),
-            ("exclude_tmpdir_env_var", "excludeTmpdirEnvVar"),
-        ] {
+        for (source, target) in WORKSPACE_FIELDS {
             if let Some(value) = settings.get(source) {
                 policy[target] = value.clone();
             }

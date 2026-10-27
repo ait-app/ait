@@ -12,22 +12,23 @@ impl AgentManager {
         &self,
         expected: &domain::agent_runtime::PersistedAgentRuntimeRecord,
         generation: &str,
-    ) -> Result<(), ErrorCode> {
+    ) -> Result<(), AgentManagerError> {
         let current = self
             .registry
             .get(&expected.id)
-            .map_err(|_| ErrorCode::AgentIo)?
-            .ok_or(ErrorCode::AgentNotFound)?;
+            .map_err(super::map_registry)?
+            .ok_or_else(|| AgentManagerError::NotFound(expected.id.clone()))?;
         if current.persistence != expected.persistence
             || current.archived_at != expected.archived_at
             || self
                 .timeline
                 .as_ref()
-                .ok_or(ErrorCode::UnsupportedCapability)?
-                .generation(&expected.id)?
+                .ok_or_else(|| AgentManagerError::ProviderUnavailable("timeline".to_owned()))?
+                .generation(&expected.id)
+                .map_err(|_| AgentManagerError::Registry)?
                 != generation
         {
-            return Err(ErrorCode::AgentIo);
+            return Err(AgentManagerError::Session);
         }
         Ok(())
     }

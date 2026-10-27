@@ -59,6 +59,8 @@ Google 的 headless 接口没有交互审批回传。需要运行特定命令时
 且工具完成事件不带 `error`。Ait 根据拒绝列表将对应工具显示为失败；没有响应的拒绝轮次
 也显示失败，并在会话错误和活动日志中提示配置 `permissions.allow` 或选择 Full Access。
 已有响应且原生成功的轮次保留响应，对被拒绝工具仍显示失败。
+AGY 1.2.13 的工具 `ERROR` 步骤也会保留原生错误。`denied_actions` 是进程级累计列表，
+Ait 只将新增拒绝用于本轮判断；重连后重新计数，避免旧拒绝让后续成功工具显示失败。
 
 AGY 的 stderr 会持续、有界地读取，仅公开权限、登录、额度、模型/API 或协议失败的分类说明；
 原始诊断不进入 Ait 日志或快照。更详细的原生日志位于 `~/.gemini/antigravity-cli/log/`。
@@ -66,6 +68,8 @@ AGY 的 stderr 会持续、有界地读取，仅公开权限、登录、额度�
 模型选择保留 CLI 返回的完整 slug，包括模型的 effort 变体。
 会话支持多轮文本、工具进度、累计 token 用量与 conversation ID 恢复；
 模型或模式修改在下轮开始前通过同一 conversation ID 重启原生连接。
+读写、编辑和子代理步骤使用对应的工具卡片；子代理保留原生 child conversation ID 和日志 URI，
+不导入子代理 transcript。原生没有返回写入内容或 diff 时，卡片只展示文件路径。
 
 Ait 关闭或重启不会删除原生 conversation，已存 Ait 时间线也会保留。
 需要在终端继续时使用会话页面的恢复命令：
@@ -75,7 +79,13 @@ agy --conversation <conversation-id>
 ```
 
 Unix 取消等待原生中断确认；确认后下一轮重新连接同一 conversation。
+支持 `ERROR` / `interrupted` 形式的原生确认。取消超时或进程提前退出时显示失败并清理活动轮次，
+下一条用户消息仍可重连。原生错误、协议错误和进程崩溃同样会回收连接，避免重复结束事件；
+发送失败的消息不会自动重发。
 当前 Windows adapter 不支持取消。关闭仍会回收拥有的原生进程。
+
+协议回归样本对照 [Paseo `dc07efe937c3`](https://github.com/getpaseo/paseo/tree/dc07efe937c3160e8fe83d02dc972c8a0b014957/plugins/antigravity-provider)
+（2026-10-27 检查的最新 main），涵盖其 AGY 1.2.13 原始录制与 Ait 的 1.3.0 合成场景。
 
 ## 账号额度
 

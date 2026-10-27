@@ -1,8 +1,10 @@
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Duration;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
+use tokio::{sync::oneshot, time::Instant};
 use uuid::Uuid;
 
 use super::{
@@ -13,6 +15,25 @@ use crate::ports::agent_session::{
 };
 use crate::ports::diagnostics::{Category, Diagnostic};
 use crate::protocol::prompt::AgentPrompt;
+
+const STATE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
+const CANCEL_GRACE: Duration = Duration::from_secs(5);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TurnPhase {
+    Idle,
+    AwaitingAdmission,
+    Running,
+    AwaitingSettlement,
+}
+
+#[derive(Debug)]
+struct StateCheck {
+    id: String,
+    // New work relinquishes ownership while retaining correlation for the delayed reply.
+    turn: Option<String>,
+    written: Option<oneshot::Receiver<Result<(), AgentSessionError>>>,
+}
 
 #[derive(Debug, Default)]
 struct NativeBridge {
@@ -38,7 +59,12 @@ pub(super) struct Session {
     children: super::subagents::Children,
     prompt_id: Option<String>,
     // An earlier prompt's uncorrelated session_settled can follow the next admission.
-    awaiting_settlement: bool,
+    phase: TurnPhase,
+    state_check: Option<StateCheck>,
+    next_state_check: Instant,
+    idle_without_outcome: Option<Instant>,
+    cancellation_started: Option<Instant>,
+    cancel_requests: BTreeMap<String, String>,
     submitted: bool,
     created_at: String,
     native_bridge: NativeBridge,
@@ -161,7 +187,12 @@ pub(super) async fn open(
         children: super::subagents::Children::default()
             .with_blobs(history::root(client)?.with_file_name("blobs")),
         prompt_id: None,
-        awaiting_settlement: false,
+        phase: TurnPhase::Idle,
+        state_check: None,
+        next_state_check: Instant::now(),
+        idle_without_outcome: None,
+        cancellation_started: None,
+        cancel_requests: BTreeMap::new(),
         submitted: false,
         created_at,
         native_bridge: NativeBridge::default(),
@@ -237,6 +268,9 @@ impl Session {
                 .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
             }
             self.transport = transport;
+            self.state_check = None;
+            self.cancel_requests.clear();
+            self.idle_without_outcome = None;
             self.state = state;
             self.service_tiers = service_tiers;
             self.stream.set_context(&self.state);
@@ -353,7 +387,10 @@ impl Session {
         self.stream.begin(turn.clone());
         self.active = Some(turn.clone());
         self.prompt_id = Some(prompt_id);
-        self.awaiting_settlement = false;
+        self.phase = TurnPhase::AwaitingAdmission;
+        self.cancellation_started = None;
+        self.next_state_check = Instant::now() + STATE_CHECK_INTERVAL;
+        self.idle_without_outcome = None;
         Ok(turn)
     }
 
@@ -421,6 +458,7 @@ impl Session {
             self.stream.failed = true;
             self.finish();
         } else if event["success"] == true {
+            self.phase = TurnPhase::Running;
             if event["data"]["agentInvoked"] == false {
                 self.stream.pending_inputs.pop_back();
                 self.finish();
@@ -431,8 +469,44 @@ impl Session {
         Ok(())
     }
 
+    fn control_response(&mut self, event: &Value) -> Result<bool, AgentSessionError> {
+        if self
+            .state_check
+            .as_ref()
+            .is_some_and(|check| event["id"] == check.id)
+        {
+            self.checked_state(event)?;
+            return Ok(true);
+        }
+        if let Some(id) = event["id"].as_str()
+            && let Some(turn) = self.cancel_requests.remove(id)
+        {
+            if self.active.as_deref() != Some(&turn) {
+                return Ok(true);
+            }
+            if event["command"] != "abort_and_restore_queue" || event["success"] != true {
+                self.transport
+                    .diagnostics
+                    .observe_native(&event["error"], "rpc", "abort");
+                return Err(AgentSessionError::Failed);
+            }
+            self.stream.aborted = true;
+            self.stream.pending_inputs.clear();
+            self.phase = TurnPhase::AwaitingSettlement;
+            self.next_state_check = Instant::now();
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     fn consume(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        if event["type"] == "response" && self.control_response(event)? {
+            return Ok(());
+        }
         self.observe_native_event(event)?;
+        if event["type"] == "agent_start" {
+            self.invalidate_state_check();
+        }
         if event["type"] == "message_end"
             && matches!(event["message"]["role"].as_str(), Some("assistant"))
         {
@@ -461,7 +535,8 @@ impl Session {
                 let turn = Uuid::new_v4().to_string();
                 self.stream.begin(turn.clone());
                 self.active = Some(turn.clone());
-                self.awaiting_settlement = true;
+                self.phase = TurnPhase::AwaitingSettlement;
+                self.next_state_check = Instant::now() + STATE_CHECK_INTERVAL;
                 self.stream.events.push_back(AgentTurnEvent::Started(turn));
             }
             Some("subagent_lifecycle" | "subagent_progress" | "subagent_event") => {
@@ -483,12 +558,12 @@ impl Session {
                         .observe_native(&event["error"], "result", "turn");
                 }
                 self.stream.aborted = event["status"] == "aborted";
-                self.awaiting_settlement = true;
+                self.phase = TurnPhase::AwaitingSettlement;
                 if event["sessionSettled"] == true {
                     self.finish();
                 }
             }
-            Some("session_settled") if self.awaiting_settlement => self.finish(),
+            Some("session_settled") if self.phase == TurnPhase::AwaitingSettlement => self.finish(),
             Some("rpc_frame_error") => {
                 let error = if event["error"].is_object() {
                     &event["error"]
@@ -539,7 +614,9 @@ impl Session {
         if self.active.take().is_some() {
             self.prompt_id = None;
             self.native_bridge.callbacks.clear();
-            self.awaiting_settlement = false;
+            self.phase = TurnPhase::Idle;
+            self.cancellation_started = None;
+            self.idle_without_outcome = None;
             self.stream.events.extend(self.dialogs.clear());
             self.stream.events.push_back(if self.stream.aborted {
                 AgentTurnEvent::Cancelled
@@ -549,6 +626,122 @@ impl Session {
                 AgentTurnEvent::Completed(self.stream.last_text.clone())
             });
         }
+    }
+
+    fn invalidate_state_check(&mut self) {
+        if let Some(check) = &mut self.state_check {
+            check.turn = None;
+        }
+        self.idle_without_outcome = None;
+    }
+
+    fn checked_state(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        let check = self.state_check.take().ok_or(AgentSessionError::Failed)?;
+        self.next_state_check = Instant::now() + STATE_CHECK_INTERVAL;
+        if check.turn.is_none() || self.active != check.turn {
+            return Ok(());
+        }
+        if event["command"] != "get_state" {
+            return Err(AgentSessionError::Failed);
+        }
+        // Older native profiles may omit settlement facts; absence never means idle.
+        let state = &event["data"];
+        if event["success"] != true || state["isSettled"] != true {
+            self.idle_without_outcome = None;
+            return Ok(());
+        }
+        if state["sessionId"] != self.state["sessionId"] {
+            self.transport.diagnostics.observe_failure(
+                Diagnostic::new(Category::Protocol, "state_session"),
+                "OMP returned settlement for a different native session.",
+                "get_state",
+            );
+            return Err(AgentSessionError::Failed);
+        }
+        if state["isStreaming"] == true
+            || state["isCompacting"] == true
+            || state["hasPendingAsyncWork"] == true
+            || state["queuedMessageCount"]
+                .as_u64()
+                .is_some_and(|count| count > 0)
+        {
+            self.idle_without_outcome = None;
+            return Ok(());
+        }
+        if self.cancellation_started.is_some() {
+            self.stream.aborted = true;
+            self.stream.pending_inputs.clear();
+        } else if self.phase != TurnPhase::AwaitingSettlement {
+            // A state response can beat the correlated result on the native event loop.
+            let idle_since = self.idle_without_outcome.get_or_insert_with(Instant::now);
+            if idle_since.elapsed() < STATE_CHECK_INTERVAL {
+                return Ok(());
+            }
+            self.stream.failed = true;
+            self.transport.diagnostics.observe_failure(
+                Diagnostic::new(Category::Protocol, "missing_prompt_result"),
+                "OMP became idle without reporting this prompt's outcome.",
+                "get_state",
+            );
+        }
+        self.finish();
+        Ok(())
+    }
+
+    fn check_cancellation(&self) -> Result<(), AgentSessionError> {
+        if self
+            .cancellation_started
+            .is_some_and(|started| started.elapsed() >= CANCEL_GRACE.min(self.client.deadline))
+        {
+            self.transport.diagnostics.observe_failure(
+                Diagnostic::new(Category::Timeout, "abort_confirmation"),
+                "OMP did not confirm cancellation; its native process will be closed.",
+                "abort",
+            );
+            return Err(AgentSessionError::Failed);
+        }
+        Ok(())
+    }
+
+    fn poll_state_check(&mut self) -> Result<(), AgentSessionError> {
+        if let Some(check) = &mut self.state_check
+            && let Some(written) = &mut check.written
+        {
+            match written.try_recv() {
+                Ok(Ok(())) => check.written = None,
+                Err(oneshot::error::TryRecvError::Empty) => {}
+                Ok(Err(_)) | Err(oneshot::error::TryRecvError::Closed) => {
+                    self.transport.diagnostics.observe_failure(
+                        Diagnostic::new(Category::Closed, "state_write"),
+                        "Ait could not write an OMP state check.",
+                        "get_state",
+                    );
+                    return Err(AgentSessionError::Failed);
+                }
+            }
+        }
+        let Some(turn) = self.active.as_ref().filter(|_| {
+            matches!(
+                self.phase,
+                TurnPhase::Running | TurnPhase::AwaitingSettlement
+            )
+        }) else {
+            return Ok(());
+        };
+        if self.state_check.is_some() || Instant::now() < self.next_state_check {
+            return Ok(());
+        }
+        let (id, written) = match self.transport.check_state() {
+            Ok(check) => check,
+            Err(AgentSessionError::Busy) => return Ok(()),
+            Err(error) => return Err(error),
+        };
+        self.state_check = Some(StateCheck {
+            id,
+            turn: Some(turn.clone()),
+            written: Some(written),
+        });
+        Ok(())
     }
 }
 
@@ -674,6 +867,7 @@ impl AgentSession for Session {
             self.transport
                 .request("steer", json!({"message":text,"images":images}))
                 .await?;
+            self.invalidate_state_check();
             self.stream
                 .pending_inputs
                 .push_back(prompt.client_message_id.clone());
@@ -688,11 +882,19 @@ impl AgentSession for Session {
             if self.active.as_deref() != Some(turn) || self.closed {
                 return Err(AgentSessionError::Rejected);
             }
-            self.transport
-                .request("abort_and_restore_queue", json!({}))
+            if self.cancellation_started.is_some() {
+                return Ok(());
+            }
+            if self.cancel_requests.len() >= 128 {
+                return Err(AgentSessionError::Failed);
+            }
+            let id = self
+                .transport
+                .begin("abort_and_restore_queue", json!({}))
                 .await?;
-            self.stream.aborted = true;
-            self.stream.pending_inputs.clear();
+            self.cancel_requests.insert(id, turn.to_owned());
+            self.cancellation_started = Some(Instant::now());
+            self.next_state_check = Instant::now();
             Ok(())
         })
     }
@@ -715,11 +917,13 @@ impl AgentSession for Session {
         })
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
+        self.check_cancellation()?;
         if let Some(event) = self.stream.events.pop_front() {
             return Ok(Some(event));
         }
         for _ in 0..64 {
             let Some(event) = self.transport.poll()? else {
+                self.poll_state_check()?;
                 return Ok(None);
             };
             self.consume(&event).inspect_err(|_| {
@@ -752,3 +956,6 @@ impl AgentSession for Session {
         })
     }
 }
+
+#[cfg(all(test, unix))]
+mod tests;

@@ -2,6 +2,7 @@
 
 Ait 负责适配官方 OMP，不要求 OMP 配套修改。决策见
 [ADR-190](../decisions/providers/adr-190-omp-acp-settlement.md)。
+遗漏终态时的原生状态核对与取消期限见 [ADR-194](../decisions/providers/adr-194-omp-settlement-reconciliation.md)。
 
 ```mermaid
 flowchart LR
@@ -36,7 +37,7 @@ flowchart LR
 | 命令、技能、插件工具   | OMP 动态发现/执行；Ait 不按插件名称、命令名称或安装路径添加分支                                                                 |
 | 审批和插件问答         | 标准 permission/form，支持选择、输入、确认、编辑和结构化 ask；Ait 保留原生授权与多选语义                                        |
 | 自定义消息             | 可见 `custom`/JSONL `custom_message` 共用投影；保留 customType，隐藏上下文不展示；command_output/notify 作为临时输出显示        |
-| 后台工作               | 原生 `prompt_result` + `session_settled`；不以无输出、延时或 agent_end 合成完成                                                 |
+| 后台工作               | 原生 `prompt_result` + `session_settled`，遗漏时以同一进程的明确 `get_state.isSettled` 核对；不以无输出或 agent_end 合成完成    |
 | 子 Agent               | 原生会话自己的订阅、状态、进度和消息；Ait 子 Agent 时间线通过完整宿主事件保留                                                   |
 | 取消、steering         | ACP 方法 → 当前原生回合；控制响应与交互回调分别关联                                                                             |
 | 历史和恢复             | 只读 OMP JSONL，保留当前分支、session ID、回执和 blob；ACP load 回放，resume 继续执行                                           |

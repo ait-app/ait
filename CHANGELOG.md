@@ -1,5 +1,11 @@
 # Ait changelog
 
+## 0.1.19 - 2026-10-26
+
+- Project large Codex native histories incrementally page by page, preserving load errors and preventing failed or cancelled history loads from admitting new messages.
+- Record realtime voice close sources and media-exit reasons to make provider shutdowns and transport failures easier to diagnose.
+- Extract embedded Android R8 mappings directly to disk and validate them as a stream, avoiding the 64 MiB output limit in Play release collection.
+
 ## 0.1.18 - 2026-10-25
 
 - Relay Codex native realtime voice through the daemon and keep voice transcripts, turn membership and restored session history consistent.

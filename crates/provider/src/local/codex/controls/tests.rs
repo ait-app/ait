@@ -29,7 +29,6 @@ async fn remote_selection_checks_model_tier_and_skill_invocation_uses_native_inp
     assert!(commands.iter().any(|command| command["name"] == "review"));
     assert!(commands.iter().any(|command| command["name"] == "compact"));
     let mut session = client.create_session(&spec).await.unwrap();
-    assert!(session.start_turn("/unknown", &spec.config).await.is_err());
     session
         .start_turn("/review check this", &spec.config)
         .await

@@ -1,4 +1,4 @@
-# ADR-192：Provider 输出分类与每轮 Thinking 展示
+# ADR-196：Provider 输出分类与每轮 Thinking 展示
 
 - 状态：Accepted，2026-10-25。
 - 范围：Provider 原生投影、OMP ACP 桥接与共享客户端展示；沿用 ADR-190 的所有权边界。

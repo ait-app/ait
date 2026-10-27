@@ -1,5 +1,7 @@
 use super::*;
 
+mod settlement;
+
 #[tokio::test]
 #[ignore = "requires AIT_TEST_OMP_BIN; uses isolated configuration without model inference"]
 async fn installed_omp_discovers_and_opens_native_rpc_without_inference() {
@@ -192,57 +194,17 @@ async fn installed_omp_acp_opens_without_ait_specific_capabilities() {
 #[tokio::test]
 #[ignore = "requires official AIT_TEST_OMP_BIN; uses isolated plugins and a local mock model"]
 async fn installed_omp_plugins_use_generic_commands_ui_and_custom_message_history() {
-    let root = tempfile::tempdir().unwrap();
-    let program = std::env::var_os("AIT_TEST_OMP_BIN").expect("set AIT_TEST_OMP_BIN");
-    let agent = root.path().join("agent");
-    let extensions = agent.join("extensions");
-    std::fs::create_dir_all(&extensions).unwrap();
-    std::fs::write(
-        extensions.join("generic-extension.ts"),
-        include_str!("fixtures/generic-extension.ts"),
-    )
-    .unwrap();
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let address = listener.local_addr().unwrap();
-    let router = axum::Router::new().route(
-        "/v1/chat/completions",
-        axum::routing::post(mock_plugin_completion),
-    );
-    let _server = tokio_util::task::AbortOnDropHandle::new(tokio::spawn(async move {
-        axum::serve(listener, router).await.unwrap();
-    }));
-    std::fs::write(agent.join("models.yml"),json!({"providers":{"ait-local-fixture":{
-        "baseUrl":format!("http://{address}/v1"),"api":"openai-completions","auth":"none",
-        "models":[{"id":"fixture","name":"Local fixture","reasoning":false,"input":["text"],
-            "contextWindow":32768,"maxTokens":1024,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0}}]}}}).to_string()).unwrap();
-    let client = OmpClient {
-        environment: AgentEnvironment::try_from(BTreeMap::from([
-            (
-                "PI_CODING_AGENT_DIR".to_owned(),
-                agent.to_str().unwrap().to_owned(),
-            ),
-            ("OMP_PROFILE".to_owned(), String::new()),
-            ("PI_PROFILE".to_owned(), String::new()),
-        ]))
-        .unwrap(),
-        ..OmpClient::new(program.into())
-    };
-    let spec = AgentSessionSpec {
-        provider: "omp".to_owned(),
-        cwd: root.path().to_str().unwrap().to_owned(),
-        config: StoredAgentConfig {
-            model: Some(json!(["ait-local-fixture", "fixture"]).to_string()),
-            ..StoredAgentConfig::default()
-        },
-    };
-    let commands = client.commands(&spec).await.unwrap();
+    let fixture = installed_with_plugins().await;
+    let client = &fixture.client;
+    let spec = &fixture.spec;
+    let commands = client.commands(spec).await.unwrap();
     for name in ["compat-vendor-alpha", "compat-other-command"] {
         assert!(
             commands.iter().any(|command| command["name"] == name),
             "missing {name}: {commands:?}"
         );
     }
-    let mut session = client.create_session(&spec).await.unwrap();
+    let mut session = client.create_session(spec).await.unwrap();
     for name in ["compat-vendor-alpha", "compat-other-command"] {
         session
             .start_turn(&format!("/{name}"), &spec.config)
@@ -292,6 +254,72 @@ async fn installed_omp_plugins_use_generic_commands_ui_and_custom_message_histor
             "{history:?}"
         );
     }
+}
+
+struct Installed {
+    _root: tempfile::TempDir,
+    client: OmpClient,
+    spec: AgentSessionSpec,
+    _server: tokio_util::task::AbortOnDropHandle<()>,
+}
+
+async fn installed_with_plugins() -> Installed {
+    let root = tempfile::tempdir().unwrap();
+    let program = std::env::var_os("AIT_TEST_OMP_BIN").expect("set AIT_TEST_OMP_BIN");
+    let agent = root.path().join("agent");
+    let extensions = agent.join("extensions");
+    std::fs::create_dir_all(&extensions).unwrap();
+    std::fs::write(
+        extensions.join("generic-extension.ts"),
+        include_str!("fixtures/generic-extension.ts"),
+    )
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let router = axum::Router::new().route(
+        "/v1/chat/completions",
+        axum::routing::post(mock_plugin_completion),
+    );
+    let server = tokio_util::task::AbortOnDropHandle::new(tokio::spawn(async move {
+        axum::serve(listener, router).await.unwrap();
+    }));
+    std::fs::write(agent.join("models.yml"),json!({"providers":{"ait-local-fixture":{
+        "baseUrl":format!("http://{address}/v1"),"api":"openai-completions","auth":"none",
+        "models":[{"id":"fixture","name":"Local fixture","reasoning":false,"input":["text"],
+            "contextWindow":32768,"maxTokens":1024,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0}}]}}}).to_string()).unwrap();
+    let client = OmpClient {
+        environment: AgentEnvironment::try_from(BTreeMap::from([
+            (
+                "PI_CODING_AGENT_DIR".to_owned(),
+                agent.to_str().unwrap().to_owned(),
+            ),
+            ("OMP_PROFILE".to_owned(), String::new()),
+            ("PI_PROFILE".to_owned(), String::new()),
+        ]))
+        .unwrap(),
+        ..OmpClient::new(program.into())
+    };
+    let spec = AgentSessionSpec {
+        provider: "omp".to_owned(),
+        cwd: root.path().to_str().unwrap().to_owned(),
+        config: StoredAgentConfig {
+            model: Some(json!(["ait-local-fixture", "fixture"]).to_string()),
+            ..StoredAgentConfig::default()
+        },
+    };
+    Installed {
+        _root: root,
+        client,
+        spec,
+        _server: server,
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires official AIT_TEST_OMP_BIN; injects lost settlement around loopback-only inference"]
+async fn installed_omp_settlement_uses_native_state_when_notification_is_lost() {
+    let fixture = installed_with_plugins().await;
+    settlement::verify(&fixture.client, &fixture.spec).await;
 }
 
 async fn mock_plugin_completion(

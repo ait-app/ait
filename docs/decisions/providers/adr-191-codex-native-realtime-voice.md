@@ -31,7 +31,7 @@ Codex app-server 已提供 `thread/realtime/*`，其音频、认证、原生工�
 - Canonical 语音通过 `thread/realtime/item/started`、`item/transcript/delta`、`item/completed` 投影为通用 `voice` Timeline 条目。条目包含原生片段 ID、语音会话 ID、双方角色、完整文本快照或开始/结束边界；无普通文本 turn 身份，不进入消息提交、审批和回退管线。流式快照按同一身份替换，完成文本允许修正转写，不要求它以增量文本为前缀。该协议扩展由配套客户端、SDK 与 daemon 一起发布。
 - 原生历史通过有界分页的 `thread/timeline/list` 读取，按 `position` 保留普通消息和语音的原始顺序。只在明确的 method-not-found（-32601）或精确匹配该方法名的 unknown-variant（-32600）时回退 `thread/read`，其他错误保持可见。实时与历史共用语音投影；已被 canonical 语音覆盖的交接片段不重复展示，独立输入和未覆盖片段保留。
 - `bemItemPromoted` 按 `turnId` / `itemId` 关联普通源消息。已展示的源消息不再插入；缺少源消息时用 `thread/items/read` 只读补齐，复用既有 Markdown、工具与可视化渲染。`wholeItem`、`inlineMarkdown`、`inlineVisualization` 当前均展示完整源条目，不另建重复副本，也不重放工具交互。
-- 语音文本进入 Provider 的持久化 Timeline 和客户端缓存，不通过仅面向录音连接的音频队列广播。单片段限制 64 KiB，实时状态限制 8192 项、16 MiB 文本，原生历史限制 32768 条、32 MiB 和 512 个分页游标。
+- 语音文本进入 Provider 的持久化 Timeline 和客户端缓存，不通过仅面向录音连接的音频队列广播。单片段限制 64 KiB，实时状态限制 8192 项、16 MiB 文本。原生历史限制由 [ADR-192](adr-192-codex-incremental-history-projection.md) 修订为 32768 条、32 MiB 展示投影和 512 页，图片及工具结果在计入展示预算前按页转换。
 
 ## 后果
 

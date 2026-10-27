@@ -99,6 +99,7 @@
 ## Provider、Agent 与会话
 
 - [Pi 模式移除验证](providers/pi-mode-removal-2026-10-24.md)
+- [Codex / Paseo 原生兼容验证](providers/codex-paseo-compatibility-2026-10-27.md)
 
 - [OMP 本机六模型实测与兼容修补](providers/omp-local-model-audit-2026-10-24.md)
 
@@ -212,6 +213,7 @@
 
 ## 发布验证
 
+- [Ait 0.1.19 发布说明与验证](releases/release-0.1.19.md)
 - [Ait 0.1.18 发布说明与验证](releases/release-0.1.18.md)
 - [Ait 0.1.17 发布说明与验证](releases/release-0.1.17.md)
 - [Ait 0.1.16 发布说明与验证](releases/release-0.1.16.md)

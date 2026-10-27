@@ -7,6 +7,7 @@ const PREVIEW_BYTES: usize = 128 * 1024;
 
 mod command_actions;
 mod mcp;
+mod subagent;
 
 /// Project a native tool into display rows, keeping command actions and file edits in source order.
 ///
@@ -51,6 +52,9 @@ pub(super) fn codex_tools(native: &Value, status: &str) -> Vec<(String, Value)> 
 ///
 /// Borrows the native type or tool name where possible; allocates only for `server.tool`.
 pub(super) fn codex_name(native: &Value) -> Cow<'_, str> {
+    if native["type"] == "subAgentActivity" {
+        return Cow::Borrowed("Sub-agent");
+    }
     if native["type"] == "mcpToolCall"
         && let Some(tool) = native["tool"]
             .as_str()
@@ -176,6 +180,7 @@ pub(super) fn codex(native: &Value) -> Value {
             }
             detail
         }
+        Some("subAgentActivity") => subagent::activity(native).unwrap_or_else(|| unknown(native)),
         Some("mcpToolCall") => mcp::detail(native),
         Some("imageView" | "imageGeneration") => {
             json!({"type":"plain_text","label":"Image","text":native["path"].as_str().unwrap_or("")})

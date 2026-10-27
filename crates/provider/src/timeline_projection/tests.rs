@@ -4,6 +4,19 @@ use super::page::select;
 use super::*;
 use crate::protocol::timeline::{Direction, NativeItem};
 
+#[test]
+fn shell_compatibility_preserves_valid_output_errors_and_unknown_tool_payloads() {
+    for item in [
+        json!({"type":"tool_call","status":"completed","error":null,
+            "detail":{"type":"shell","command":"true","cwd":"/workspace","output":""}}),
+        json!({"type":"tool_call","status":"failed","error":{"message":"denied"},
+            "detail":{"type":"unknown","input":null,"output":null}}),
+        json!({"type":"assistant_message","text":"unchanged"}),
+    ] {
+        assert_eq!(normalize_item(item.clone()), item);
+    }
+}
+
 fn rows(input: &Value) -> Vec<Row> {
     input["rows"]
         .as_array()

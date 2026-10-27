@@ -94,6 +94,17 @@ impl CodexSession {
             self.plan_progress(params)?;
             return Ok(self.stream.events.pop_front());
         }
+        if method == "thread/compacted" {
+            let turn = params["turnId"].as_str();
+            if self.manual_compactions == 0
+                && (self.active_turn.is_none()
+                    || turn.is_some_and(|turn| self.active_turn.as_deref() != Some(turn)))
+            {
+                return Ok(None);
+            }
+            self.manual_compactions = 0;
+            return self.stream.compacted(turn.or(self.active_turn.as_deref()));
+        }
         if method == "thread/tokenUsage/updated" {
             return Ok(crate::local::usage::codex(&params["tokenUsage"]).map(AgentTurnEvent::Usage));
         }
@@ -172,22 +183,37 @@ pub(super) async fn input(
     transport: &mut super::Transport,
     cwd: &str,
     prompt: &AgentPrompt,
+    environment: &crate::ports::environment::AgentEnvironment,
 ) -> Result<Vec<Value>, AgentSessionError> {
     let mut input = prompt.codex_input()?;
     let Some((name, args)) = split(&prompt.text) else {
         return Ok(input);
     };
     let command = if let Some(name) = name.strip_prefix("prompts:") {
-        let text = super::prompts::invoke(&super::prompts::directory()?, name, args)?;
+        let Ok(directory) = super::prompts::directory(environment) else {
+            return Ok(input);
+        };
+        let command_name = format!("prompts:{name}");
+        if !super::prompts::list(&directory)
+            .unwrap_or_default()
+            .iter()
+            .any(|command| command["name"] == command_name)
+        {
+            return Ok(input);
+        }
+        let text = super::prompts::invoke(&directory, name, args)?;
         vec![json!({"type":"text","text":text,"text_elements":[]})]
     } else {
         let response = transport
             .request("skills/list", json!({"cwds":[cwd],"forceReload":true}))
-            .await?;
-        let skill = super::controls::skills(&response, cwd)?
-            .into_iter()
-            .find(|skill| skill.name == name)
-            .ok_or(AgentSessionError::Rejected)?;
+            .await;
+        let skills = response.and_then(|response| super::controls::skills(&response, cwd));
+        let Some(skill) = skills
+            .ok()
+            .and_then(|skills| skills.into_iter().find(|skill| skill.name == name))
+        else {
+            return Ok(input);
+        };
         let text = if args.is_empty() {
             format!("${name}")
         } else {

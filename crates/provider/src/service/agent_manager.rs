@@ -60,6 +60,9 @@ pub enum AgentManagerError {
     /// The provider adapter failed or returned inconsistent facts.
     #[error("provider session failed")]
     Session,
+    /// History could not be replayed; contains only adapter-owned, payload-free context.
+    #[error("{0}")]
+    History(String),
     /// The provider rejected the requested session operation or configuration.
     #[error("provider rejected the Agent session operation or configuration")]
     SessionRejected,
@@ -253,39 +256,56 @@ impl AgentManager {
     /// Returns unavailable history, missing Agent, or durable projection failures.
     pub(crate) async fn load_timeline(&mut self, agent_id: &str) -> Result<(), model::ErrorCode> {
         use model::ErrorCode;
+        self.load_timeline_for_input(agent_id)
+            .await
+            .map_err(|error| match error {
+                AgentManagerError::NotFound(_) => ErrorCode::AgentNotFound,
+                AgentManagerError::ProviderUnavailable(_)
+                | AgentManagerError::MissingPersistence(_) => ErrorCode::UnsupportedCapability,
+                _ => ErrorCode::AgentIo,
+            })
+    }
+
+    async fn load_timeline_for_input(&mut self, agent_id: &str) -> Result<(), AgentManagerError> {
         if self.history_loaded(agent_id) {
             return Ok(());
         }
         let timeline = self
             .timeline
             .as_ref()
-            .ok_or(ErrorCode::UnsupportedCapability)?;
+            .ok_or_else(|| AgentManagerError::ProviderUnavailable("timeline".to_owned()))?;
         let record = self
             .registry
             .get(agent_id)
-            .map_err(|_| ErrorCode::AgentIo)?
-            .ok_or(ErrorCode::AgentNotFound)?;
-        let generation = timeline.generation(agent_id)?;
+            .map_err(map_registry)?
+            .ok_or_else(|| AgentManagerError::NotFound(agent_id.to_owned()))?;
+        let generation = timeline
+            .generation(agent_id)
+            .map_err(|_| AgentManagerError::Registry)?;
         let handle = record
             .persistence
             .as_ref()
-            .ok_or(ErrorCode::UnsupportedCapability)?;
+            .ok_or_else(|| AgentManagerError::MissingPersistence(agent_id.to_owned()))?;
         if handle
             .metadata
             .as_ref()
             .and_then(|metadata| metadata.get(controls::REPLACEMENT_MARKER))
             == Some(&json!(true))
         {
-            let history = self.inspect_native(handle, &record.cwd).await?;
+            let history = self
+                .inspect_native(handle, &record.cwd)
+                .await
+                .map_err(|_| AgentManagerError::Session)?;
             self.verify_history(&record, &generation)?;
-            self.finish_replacement(agent_id, &history)?;
+            self.finish_replacement(agent_id, &history)
+                .map_err(|_| AgentManagerError::Registry)?;
             self.mark_history_loaded(agent_id);
             return Ok(());
         }
         let client = self
             .clients
             .get(&record.provider)
-            .ok_or(ErrorCode::UnsupportedCapability)?;
+            .ok_or_else(|| AgentManagerError::ProviderUnavailable(record.provider.clone()))?;
         if !client.supports_history_replay() {
             self.mark_history_loaded(agent_id);
             return Ok(());
@@ -294,18 +314,21 @@ impl AgentManager {
             .history_budget
             .acquire()
             .await
-            .map_err(|_| ErrorCode::AgentIo)?;
+            .map_err(|_| AgentManagerError::Session)?;
         let entries = execution::native(
             &record.provider,
             "history",
             client.history(handle, &record.cwd),
         )
         .await
-        .map_err(|_| ErrorCode::AgentIo)?;
+        .map_err(map_session)?;
         self.verify_history(&record, &generation)?;
-        timeline.reconcile(agent_id, &record.provider, &entries)?;
+        timeline
+            .reconcile(agent_id, &record.provider, &entries)
+            .map_err(|_| AgentManagerError::Registry)?;
         if titles::missing(&record) {
-            self.fill_missing_title(agent_id, titles::from_entries(&entries))?;
+            self.fill_missing_title(agent_id, titles::from_entries(&entries))
+                .map_err(|_| AgentManagerError::Registry)?;
         }
         self.mark_history_loaded(agent_id);
         Ok(())
@@ -589,9 +612,7 @@ impl AgentManager {
             .and_then(|metadata| metadata.get(controls::REPLACEMENT_MARKER))
             == Some(&json!(true))
         {
-            self.load_timeline(agent_id)
-                .await
-                .map_err(|_| AgentManagerError::Registry)?;
+            self.load_timeline_for_input(agent_id).await?;
             record = self
                 .registry
                 .get(agent_id)
@@ -715,9 +736,7 @@ impl AgentManager {
             .validate()
             .map_err(|_| AgentManagerError::InvalidRequest)?;
         if self.timeline.is_some() && !self.history_loaded(agent_id) {
-            self.load_timeline(agent_id)
-                .await
-                .map_err(|_| AgentManagerError::Registry)?;
+            self.load_timeline_for_input(agent_id).await?;
         }
         let record = self.resume(agent_id).await?;
         if record.archived_at.is_some() || self.active_turn(agent_id).is_some() {
@@ -1148,11 +1167,12 @@ const fn map_registry(
     AgentManagerError::Registry
 }
 
-const fn map_session(error: AgentSessionError) -> AgentManagerError {
+fn map_session(error: AgentSessionError) -> AgentManagerError {
     match error {
         AgentSessionError::Busy => AgentManagerError::Busy,
         AgentSessionError::Rejected => AgentManagerError::SessionRejected,
         AgentSessionError::Unavailable | AgentSessionError::Failed => AgentManagerError::Session,
+        AgentSessionError::History(error) => AgentManagerError::History(error.to_string()),
     }
 }
 
