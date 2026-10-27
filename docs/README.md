@@ -1,5 +1,7 @@
 # Ait 文档
 
+- [ADR-194：OMP 原生空闲状态核对与有界取消](decisions/providers/adr-194-omp-settlement-reconciliation.md)：补齐遗漏终态、同一执行进程的状态核对和停止确认期限。
+
 - [ADR-192：Codex 历史按页投影后计算展示预算](decisions/providers/adr-192-codex-incremental-history-projection.md)：大图片历史、原始页释放、语音顺序与可诊断的历史失败。
 
 - [ADR-191：Codex Provider 拥有原生实时语音（daemon 中继 PCM 与 WebRTC）](decisions/providers/adr-191-codex-native-realtime-voice.md)：Provider 能力驱动入口、空会话创建、设备就绪与 WebRTC/PCM、各端连续播放与设备消费确认、积压时的关闭与插话、转写边界、统一语音历史、结构化消息关联与连接清理边界。

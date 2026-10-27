@@ -9,6 +9,7 @@ mod capabilities;
 mod diagnostics;
 mod installed;
 mod real;
+mod settlement;
 
 #[tokio::test]
 async fn a_previous_settlement_never_finishes_the_next_prompt_or_its_background_work() {

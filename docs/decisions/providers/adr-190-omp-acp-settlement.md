@@ -3,6 +3,8 @@
 - 状态：Accepted
 - 日期：2026-10-25
 
+- 结算修订：[ADR-194](adr-194-omp-settlement-reconciliation.md) 补充原生空闲状态核对与有界取消。
+
 ## 背景
 
 ACP 是固定入口，原有 RPC 功能必须保留，适配责任归 Ait。不能要求 OMP 修改源码、

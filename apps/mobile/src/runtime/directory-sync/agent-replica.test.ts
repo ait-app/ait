@@ -206,10 +206,17 @@ describe("AgentDirectoryReplica", () => {
     store.clearSession(serverId);
   });
 
-  it.each(["delta", "snapshot", "timeline", "changes"] as const)(
-    "keeps a completed OpenCode turn closed when its running snapshot arrives through %s",
-    (source) => {
-      const serverId = `agent-replica-completed-${source}`;
+  it.each(
+    (["opencode", "omp"] as const).flatMap((provider) =>
+      (["delta", "snapshot", "timeline", "changes"] as const).map((source) => ({
+        provider,
+        source,
+      })),
+    ),
+  )(
+    "keeps a completed $provider turn closed when its running snapshot arrives through $source",
+    ({ provider, source }) => {
+      const serverId = `agent-replica-completed-${provider}-${source}`;
       const store = useSessionStore.getState();
       store.initializeSession(serverId, null);
       const stopped: string[] = [];
@@ -219,8 +226,8 @@ describe("AgentDirectoryReplica", () => {
         () => undefined,
       );
       const running: AgentSnapshotPayload = {
-        ...payload("running OpenCode"),
-        provider: "opencode",
+        ...payload(`running ${provider}`),
+        provider,
         status: "running",
         activeTurn: { turnId: "turn-1", startedAt: "2026-07-17T00:01:00.000Z" },
       };
