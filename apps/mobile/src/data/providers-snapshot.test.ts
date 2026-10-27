@@ -4,7 +4,10 @@ import type { ProviderSnapshotEntry } from "@ait/protocol/agent-types";
 import type { GetProvidersSnapshotResponseMessage } from "@ait/protocol/messages";
 import { compactProviderSnapshot } from "@ait/protocol/provider-snapshot-codec";
 import { applyProvidersSnapshotUpdate } from "./push-router";
-import { createProviderSnapshotCache } from "./provider-snapshot-cache";
+import {
+  createProviderSnapshotCache,
+  ProviderSnapshotCacheMissError,
+} from "./provider-snapshot-cache";
 import {
   resolveProviderIconName,
   replaceProviderSnapshotIcons,
@@ -247,6 +250,127 @@ const snapshot = {
   snapshotHash: "test-hash",
   compactSnapshot: compactProviderSnapshot(entries),
 } satisfies GetProvidersSnapshotResponseMessage["payload"];
+
+describe("full provider snapshots with content hashes", () => {
+  it("rejects an uncached not-modified response rather than caching an empty catalog", async () => {
+    const queryClient = new QueryClient();
+    const getProvidersSnapshot = vi.fn().mockResolvedValue({
+      requestId: "not-modified",
+      entries: [],
+      snapshotHash: "missing-hash",
+      generatedAt: snapshot.generatedAt,
+      notModified: true,
+    });
+    try {
+      await expect(
+        fetchProvidersSnapshot({
+          client: { getProvidersSnapshot },
+          serverId: "missing-body",
+          cwd: null,
+          queryClient,
+          cache: createProviderSnapshotCache(createStorage()),
+        }),
+      ).rejects.toBeInstanceOf(ProviderSnapshotCacheMissError);
+      expect(getProvidersSnapshot).toHaveBeenCalledTimes(1);
+    } finally {
+      queryClient.clear();
+    }
+  });
+
+  it.each([
+    { name: "loading", entries: [{ ...entries[0]!, status: "loading" as const, models: [] }] },
+    { name: "ready", entries },
+    { name: "empty", entries: [] },
+  ])("loads and caches a $name Rust daemon response without another transfer", async (input) => {
+    const cache = createProviderSnapshotCache(createStorage());
+    const queryClient = new QueryClient();
+    const serverId = `full-snapshot-${input.name}`;
+    const full = {
+      requestId: "full-response",
+      cwd: snapshot.cwd,
+      entries: input.entries,
+      snapshotHash: `full-${input.name}`,
+      generatedAt: snapshot.generatedAt,
+      generation: "daemon",
+      revision: 1,
+      refreshing: input.name === "loading" ? [entries[0]!.provider] : [],
+    };
+    const getProvidersSnapshot = vi
+      .fn()
+      .mockResolvedValueOnce(full)
+      .mockResolvedValueOnce({ ...full, entries: [], notModified: true });
+    try {
+      for (let read = 0; read < 2; read += 1) {
+        const result = await fetchProvidersSnapshot({
+          client: { getProvidersSnapshot },
+          serverId,
+          cwd: snapshot.cwd,
+          queryClient,
+          cache,
+        });
+        expect(result).toMatchObject({
+          entries: input.entries,
+          snapshotHash: full.snapshotHash,
+          generation: full.generation,
+          revision: full.revision,
+          refreshing: full.refreshing,
+        });
+      }
+      expect(getProvidersSnapshot.mock.calls).toEqual([
+        [{ cwd: snapshot.cwd }],
+        [{ cwd: snapshot.cwd, ifNoneMatch: full.snapshotHash }],
+      ]);
+      expect((await cache.read(serverId, snapshot.cwd))?.entries).toEqual(input.entries);
+    } finally {
+      queryClient.clear();
+      replaceProviderSnapshotIcons(serverId, []);
+    }
+  });
+
+  it.each(["full", "reference"])("applies a %s ready push after lazy discovery", async (kind) => {
+    const cache = createProviderSnapshotCache(createStorage());
+    const queryClient = new QueryClient();
+    const serverId = `lazy-discovery-${kind}`;
+    const full = {
+      requestId: "ready-response",
+      cwd: snapshot.cwd,
+      entries,
+      snapshotHash: "ready-hash",
+      generatedAt: snapshot.generatedAt,
+      generation: "daemon",
+      revision: 2,
+      refreshing: [],
+    };
+    const getProvidersSnapshot = vi.fn().mockResolvedValue(full);
+    queryClient.setQueryData(providersSnapshotQueryKey(serverId, snapshot.cwd), {
+      ...full,
+      entries: [{ ...entries[0]!, status: "loading", models: [] }],
+      snapshotHash: "loading-hash",
+      revision: 1,
+      refreshing: [entries[0]!.provider],
+    });
+    try {
+      await applyProvidersSnapshotUpdate({
+        client: { getProvidersSnapshot },
+        serverId,
+        queryClient,
+        cache,
+        message: {
+          type: "provider.snapshot.update",
+          payload: { ...full, entries: kind === "full" ? entries : [] },
+        },
+      });
+      expect(
+        queryClient.getQueryData(providersSnapshotQueryKey(serverId, snapshot.cwd)),
+      ).toMatchObject({ entries, snapshotHash: "ready-hash", revision: 2, refreshing: [] });
+      expect(getProvidersSnapshot).toHaveBeenCalledTimes(kind === "full" ? 0 : 1);
+      expect((await cache.read(serverId, snapshot.cwd))?.entries).toEqual(entries);
+    } finally {
+      queryClient.clear();
+      replaceProviderSnapshotIcons(serverId, []);
+    }
+  });
+});
 
 describe("provider fetch with runtime abort signals", () => {
   it.each([
