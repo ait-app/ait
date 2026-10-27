@@ -1,5 +1,9 @@
 # Ait 文档
 
+- [ADR-195：OpenCode 独立取消信号与确认期限](decisions/providers/adr-195-opencode-independent-cancellation.md)：消除输出背压和历史回放对停止的阻塞，限制原生终态丢失后的停止等待。
+
+- [ADR-194：OMP 原生空闲状态核对与有界取消](decisions/providers/adr-194-omp-settlement-reconciliation.md)：补齐遗漏终态、同一执行进程的状态核对和停止确认期限。
+
 - [ADR-193：Codex 原生策略、事件与恢复兼容](decisions/providers/adr-193-codex-native-protocol-compatibility.md)：有效 sandbox、事件暂存、完成竞态、子会话、压缩与回退兼容；[定向验证](reports/providers/codex-paseo-compatibility-2026-10-27.md)。
 - [ADR-192：Codex 历史按页投影后计算展示预算](decisions/providers/adr-192-codex-incremental-history-projection.md)：大图片历史、原始页释放、语音顺序与可诊断的历史失败。
 

@@ -10,7 +10,14 @@ import { queryClient } from "@/data/query-client";
 import { buildDraftStoreKey } from "@/stores/draft-keys";
 import { useDraftStore } from "@/stores/draft-store";
 import { getInitDeferred, getInitKey, rejectInitDeferred } from "@/utils/agent-initialization";
-import { reduceTurnLiveness, type TurnLivenessTransition } from "@/timeline/turn-liveness";
+import {
+  reduceTurnLiveness,
+  TURN_LIVENESS_IDLE,
+  type TurnLiveness,
+  type TurnLivenessTransition,
+} from "@/timeline/turn-liveness";
+
+const MAX_CLOSED_TURNS_PER_AGENT = 128;
 
 function withoutAgent(agentId: string) {
   return <T>(current: Map<string, T>): Map<string, T> => {
@@ -21,18 +28,53 @@ function withoutAgent(agentId: string) {
   };
 }
 
-function mergeSnapshotTurn(previous: Agent | undefined, incoming: Agent): Agent {
-  if (!previous) return incoming;
-  const activeTurn =
-    incoming.turn.phase === "open"
-      ? { turnId: incoming.turn.turnId, startedAt: incoming.turn.startedAt }
-      : null;
-  const turn = reduceTurnLiveness(previous.turn, { type: "snapshot", activeTurn });
-  return turn === incoming.turn ? incoming : { ...incoming, turn };
-}
-
 export class AgentStoreProjection {
+  // Terminal identities outlive the running presentation so delayed reads and replays cannot reopen them.
+  private readonly closedTurns = new Map<string, Set<string>>();
+
   constructor(private readonly serverId: string) {}
+
+  private reduceTurn(
+    agentId: string,
+    current: TurnLiveness,
+    transition: TurnLivenessTransition,
+  ): TurnLiveness {
+    if (transition.type === "stream_close") {
+      const turnId = transition.turnId ?? (current.phase === "open" ? current.turnId : null);
+      if (turnId !== null) {
+        let closed = this.closedTurns.get(agentId);
+        if (!closed) {
+          closed = new Set();
+          this.closedTurns.set(agentId, closed);
+        }
+        closed.add(turnId);
+        if (closed.size > MAX_CLOSED_TURNS_PER_AGENT) {
+          const oldest = closed.values().next().value;
+          if (oldest !== undefined) closed.delete(oldest);
+        }
+      }
+    }
+    const incoming =
+      transition.type === "stream_open"
+        ? transition.turn
+        : transition.type === "snapshot"
+          ? transition.activeTurn
+          : null;
+    if (incoming?.turnId && this.closedTurns.get(agentId)?.has(incoming.turnId)) return current;
+    return reduceTurnLiveness(current, transition);
+  }
+
+  private mergeSnapshotTurn(previous: Agent | undefined, incoming: Agent): Agent {
+    const activeTurn =
+      incoming.turn.phase === "open"
+        ? { turnId: incoming.turn.turnId, startedAt: incoming.turn.startedAt }
+        : null;
+    const turn = this.reduceTurn(incoming.id, previous?.turn ?? TURN_LIVENESS_IDLE, {
+      type: "snapshot",
+      activeTurn,
+    });
+    return turn === incoming.turn ? incoming : { ...incoming, turn };
+  }
 
   snapshot(): Map<string, Agent> {
     return useSessionStore.getState().sessions[this.serverId]?.agents ?? new Map();
@@ -44,7 +86,9 @@ export class AgentStoreProjection {
   }
 
   commitCached(agents: Map<string, Agent>): Map<string, Agent> {
-    const merged = new Map(agents);
+    const merged = new Map(
+      Array.from(agents, ([agentId, agent]) => [agentId, this.mergeSnapshotTurn(undefined, agent)]),
+    );
     for (const [agentId, agent] of this.snapshot()) merged.set(agentId, agent);
     for (const agent of merged.values()) this.publishActivity(agent);
     useSessionStore.getState().setAgents(this.serverId, merged);
@@ -59,7 +103,7 @@ export class AgentStoreProjection {
     let accepted = agent;
     useSessionStore.getState().setAgents(this.serverId, (current) => {
       const previous = current.get(agent.id);
-      accepted = acceptAgentDirectoryUpdate(previous, mergeSnapshotTurn(previous, agent));
+      accepted = acceptAgentDirectoryUpdate(previous, this.mergeSnapshotTurn(previous, agent));
       if (accepted === previous) return current;
       const next = new Map(current);
       next.set(agent.id, accepted);
@@ -116,7 +160,7 @@ export class AgentStoreProjection {
     const agents = new Map<string, Agent>();
     for (const [agentId, fetchedAgent] of fetched) {
       const existing = current.get(agentId);
-      const merged = mergeSnapshotTurn(existing, fetchedAgent);
+      const merged = this.mergeSnapshotTurn(existing, fetchedAgent);
       agents.set(agentId, existing && equal(existing, merged) ? existing : merged);
       if (fetchedAgent.archivedAt) {
         clearArchiveAgentPending({ queryClient, serverId: this.serverId, agentId });
@@ -179,6 +223,7 @@ export class AgentStoreProjection {
   }
 
   remove(agentId: string): void {
+    this.closedTurns.delete(agentId);
     this.removeFromDirectory(agentId);
     // Only entity deletion destroys the transcript. A filtered active-list
     // response can arrive after a fresh history response for an archived agent.
@@ -215,8 +260,11 @@ export class AgentStoreProjection {
     let accepted: Agent | null = null;
     useSessionStore.getState().setAgents(this.serverId, (current) => {
       const agent = current.get(agentId);
+      const turn = transitions.reduce(
+        (turn, transition) => this.reduceTurn(agentId, turn, transition),
+        agent?.turn ?? TURN_LIVENESS_IDLE,
+      );
       if (!agent) return current;
-      const turn = transitions.reduce(reduceTurnLiveness, agent.turn);
       if (turn === agent.turn) return current;
       accepted = { ...agent, turn };
       const next = new Map(current);

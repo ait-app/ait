@@ -19,6 +19,7 @@ use crate::service::agent_manager::ownership::Owners;
 
 mod compaction;
 mod robustness;
+mod settlement;
 mod usage;
 mod v2;
 mod workflows;

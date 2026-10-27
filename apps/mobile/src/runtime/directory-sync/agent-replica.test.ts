@@ -206,6 +206,142 @@ describe("AgentDirectoryReplica", () => {
     store.clearSession(serverId);
   });
 
+  it.each(
+    (["opencode", "omp"] as const).flatMap((provider) =>
+      (["delta", "snapshot", "timeline", "changes"] as const).map((source) => ({
+        provider,
+        source,
+      })),
+    ),
+  )(
+    "keeps a completed $provider turn closed when its running snapshot arrives through $source",
+    ({ provider, source }) => {
+      const serverId = `agent-replica-completed-${provider}-${source}`;
+      const store = useSessionStore.getState();
+      store.initializeSession(serverId, null);
+      const stopped: string[] = [];
+      const replica = new AgentDirectoryReplica(
+        serverId,
+        (agentId) => stopped.push(agentId),
+        () => undefined,
+      );
+      const running: AgentSnapshotPayload = {
+        ...payload(`running ${provider}`),
+        provider,
+        status: "running",
+        activeTurn: { turnId: "turn-1", startedAt: "2026-07-17T00:01:00.000Z" },
+      };
+      replica.commitSnapshot([entry(running)], []);
+      const token = replica.captureTimeline("agent");
+      replica.applyTurnLiveness("agent", { type: "stream_close", turnId: "turn-1" });
+
+      if (source === "delta") replica.applyDelta({ kind: "upsert", ...entry(running) });
+      else if (source === "snapshot") replica.commitSnapshot([entry(running)], []);
+      else if (source === "timeline") replica.submitTimelineAgent(token, running);
+      else replica.commitChanges([entry(running)], [], []);
+
+      expect(selectAgentTurnPresentation(store.getSession(serverId), "agent").isActive).toBe(false);
+      expect(stopped).toEqual(["agent"]);
+
+      replica.applyDelta({
+        kind: "upsert",
+        ...entry({ ...running, activeTurn: { turnId: "turn-2", startedAt: null } }),
+      });
+      expect(selectAgentTurnPresentation(store.getSession(serverId), "agent").turnId).toBe(
+        "turn-2",
+      );
+      store.clearSession(serverId);
+    },
+  );
+
+  it("ignores completed turn replays while preserving a newer turn", () => {
+    const serverId = "agent-replica-completed-replay";
+    const store = useSessionStore.getState();
+    store.initializeSession(serverId, null);
+    const replica = new AgentDirectoryReplica(
+      serverId,
+      () => undefined,
+      () => undefined,
+    );
+    replica.commitSnapshot([entry(payload("agent"))], []);
+    for (const turnId of ["turn-1", "turn-2"]) {
+      replica.applyTurnLiveness("agent", {
+        type: "stream_open",
+        turn: { turnId, startedAt: null },
+      });
+      replica.applyTurnLiveness("agent", { type: "stream_close", turnId });
+    }
+    replica.applyTurnLiveness("agent", {
+      type: "stream_open",
+      turn: { turnId: "turn-1", startedAt: null },
+    });
+    expect(selectAgentTurnPresentation(store.getSession(serverId), "agent").isActive).toBe(false);
+
+    replica.applyTurnLiveness("agent", {
+      type: "stream_open",
+      turn: { turnId: "turn-3", startedAt: null },
+    });
+    replica.applyDelta({
+      kind: "upsert",
+      ...entry({ ...payload("late turn-1"), activeTurn: { turnId: "turn-1", startedAt: null } }),
+    });
+    expect(selectAgentTurnPresentation(store.getSession(serverId), "agent").turnId).toBe("turn-3");
+    store.clearSession(serverId);
+  });
+
+  it.each(["snapshot", "cache", "timeline"] as const)(
+    "remembers a terminal event received before the agent is hydrated through %s",
+    (source) => {
+      const serverId = `agent-replica-early-terminal-${source}`;
+      const store = useSessionStore.getState();
+      store.initializeSession(serverId, null);
+      const replica = new AgentDirectoryReplica(
+        serverId,
+        () => undefined,
+        () => undefined,
+      );
+      replica.applyTurnLiveness("agent", { type: "stream_close", turnId: "turn-1" });
+      const running: AgentSnapshotPayload = {
+        ...payload("late hydration"),
+        status: "running",
+        activeTurn: { turnId: "turn-1", startedAt: null },
+      };
+
+      if (source === "snapshot") replica.commitSnapshot([entry(running)], []);
+      else if (source === "cache") {
+        replica.commitCached(new Map([["agent", normalizeAgentSnapshot(running, serverId)]]));
+      } else replica.submitTimelineAgent(replica.captureTimeline("agent"), running);
+
+      expect(selectAgentTurnPresentation(store.getSession(serverId), "agent").isActive).toBe(false);
+      store.clearSession(serverId);
+    },
+  );
+
+  it("retains terminal identities across directory removal and clears them on entity deletion", () => {
+    const serverId = "agent-replica-terminal-removal";
+    const store = useSessionStore.getState();
+    store.initializeSession(serverId, null);
+    const replica = new AgentDirectoryReplica(
+      serverId,
+      () => undefined,
+      () => undefined,
+    );
+    const running: AgentSnapshotPayload = {
+      ...payload("running"),
+      activeTurn: { turnId: "turn-1", startedAt: null },
+    };
+    replica.commitSnapshot([entry(running)], []);
+    replica.applyTurnLiveness("agent", { type: "stream_close", turnId: "turn-1" });
+    replica.applyDelta({ kind: "remove", agentId: "agent" });
+    replica.commitSnapshot([entry(running)], []);
+    expect(selectAgentTurnPresentation(store.getSession(serverId), "agent").isActive).toBe(false);
+
+    replica.remove("agent");
+    replica.commitSnapshot([entry(running)], []);
+    expect(selectAgentTurnPresentation(store.getSession(serverId), "agent").turnId).toBe("turn-1");
+    store.clearSession(serverId);
+  });
+
   it("preserves cancellation state when the same active turn is snapshotted", () => {
     const serverId = "agent-replica-cancellation-snapshot";
     const store = useSessionStore.getState();
