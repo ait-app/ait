@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-import { AgentTimelineItemPayloadSchema } from "./messages.js";
+import { AgentTimelineItemPayloadSchema, WSOutboundMessageSchema } from "./messages.js";
+import { validateWSOutboundMessage } from "./validation/ws-outbound.js";
 
 function canonicalBase() {
   return {
@@ -16,6 +17,81 @@ function canonicalBase() {
 }
 
 describe("shared messages tool_call schema", () => {
+  it("accepts the Antigravity Rust adapter's tool cards in live events and history", () => {
+    const cases = JSON.parse(
+      readFileSync(
+        new URL(
+          "../../../crates/provider/tests/fixtures/antigravity_tool_cards.json",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    ) as Array<{ name: string; detail: unknown }>;
+    for (const fixture of cases) {
+      for (const status of ["running", "completed", "failed", "canceled"] as const) {
+        const item = {
+          ...canonicalBase(),
+          status,
+          error: status === "failed" ? { message: "Permission denied" } : null,
+          detail: fixture.detail,
+        };
+        expect(AgentTimelineItemPayloadSchema.safeParse(item).success, fixture.name).toBe(true);
+        const stream = {
+          type: "session",
+          message: {
+            type: "agent.stream",
+            payload: {
+              agentId: "agent",
+              timestamp: "2026-10-27T09:18:08.000Z",
+              event: { type: "timeline", provider: "antigravity", item },
+            },
+          },
+        };
+        const history = {
+          type: "session",
+          message: {
+            type: "agent.timeline.get.response",
+            payload: {
+              requestId: "refresh",
+              agentId: "agent",
+              agent: null,
+              direction: "tail",
+              projection: "projected",
+              epoch: "epoch",
+              reset: false,
+              staleCursor: false,
+              gap: false,
+              window: { minSeq: 1, maxSeq: 1, nextSeq: 2 },
+              startCursor: { epoch: "epoch", seq: 1 },
+              endCursor: { epoch: "epoch", seq: 1 },
+              hasOlder: false,
+              hasNewer: false,
+              entries: [
+                {
+                  provider: "antigravity",
+                  item,
+                  timestamp: "2026-10-27T09:18:08.000Z",
+                  seqStart: 1,
+                  seqEnd: 1,
+                  sourceSeqRanges: [{ startSeq: 1, endSeq: 1 }],
+                  collapsed: [],
+                },
+              ],
+              error: null,
+            },
+          },
+        };
+        for (const message of [stream, history]) {
+          expect(WSOutboundMessageSchema.parse(message), fixture.name).toEqual(message);
+          expect(validateWSOutboundMessage(message), fixture.name).toEqual({
+            success: true,
+            data: message,
+          });
+        }
+      }
+    }
+  });
+
   it("accepts the OpenCode Rust adapter's shared tool card projections", () => {
     const cases = JSON.parse(
       readFileSync(

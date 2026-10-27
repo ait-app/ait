@@ -140,6 +140,7 @@ impl Session {
             self.transport = Some(transport);
             self.init = init;
             self.config.clone_from(config);
+            self.stream.reset_process();
         }
         // Write once; a timeout leaves admission uncertain and closes the writer.
         let sent = self
@@ -155,6 +156,7 @@ impl Session {
                     .and_then(Transport::failure)
                     .unwrap_or(Failure::Exit),
             );
+            self.transport.take();
             return Err(error);
         }
         let turn = Uuid::new_v4().to_string();
@@ -179,6 +181,11 @@ impl Session {
             Some("result") => {
                 self.stream.finish(&message["result"])?;
                 self.active = None;
+                // Native ERROR (including interrupted) retires the driver. A later explicit
+                // prompt resumes the conversation; never retry an ambiguously admitted prompt.
+                if message["result"]["status"] != "SUCCESS" {
+                    self.transport.take();
+                }
                 Ok(())
             }
             Some("init") | None => Err(AgentSessionError::Failed),
@@ -273,9 +280,11 @@ impl AgentSession for Session {
             Ok(Some(message)) => message,
             Ok(None) => return Ok(None),
             Err(_) => {
-                self.stream
-                    .abort(transport.failure().unwrap_or(Failure::Exit));
-                self.active = None;
+                let failure = transport.failure().unwrap_or(Failure::Exit);
+                self.transport.take();
+                if self.active.take().is_some() {
+                    self.stream.abort(failure);
+                }
                 return Ok(self.stream.events.pop_front());
             }
         };
@@ -287,6 +296,7 @@ impl AgentSession for Session {
                 .unwrap_or(Failure::Protocol);
             self.stream.abort(failure);
             self.active = None;
+            self.transport.take();
         }
         Ok(self.stream.events.pop_front())
     }
@@ -296,12 +306,12 @@ impl AgentSession for Session {
             if self.active.as_deref() != Some(turn_id) || self.closed {
                 return Err(AgentSessionError::Rejected);
             }
-            self.transport
-                .as_ref()
-                .ok_or(AgentSessionError::Failed)?
-                .interrupt()
-                .await?;
             let result = tokio::time::timeout(Duration::from_secs(5), async {
+                self.transport
+                    .as_ref()
+                    .ok_or(AgentSessionError::Failed)?
+                    .interrupt()
+                    .await?;
                 while self.active.is_some() {
                     let message = self
                         .transport
@@ -323,11 +333,26 @@ impl AgentSession for Session {
                 }
             })
             .await;
+            let fallback = if result.is_err() {
+                Failure::Timeout
+            } else {
+                Failure::Exit
+            };
+            let failure = self
+                .transport
+                .as_ref()
+                .and_then(Transport::failure)
+                .unwrap_or(fallback);
             let stopped = if let Some(mut transport) = self.transport.take() {
                 transport.close().await
             } else {
                 Ok(())
             };
+            // An unacknowledged cancellation is a failure, but cannot leave a turn active
+            // after its transport has been closed. Emit exactly one terminal event.
+            if self.active.take().is_some() {
+                self.stream.abort(failure);
+            }
             stopped?;
             match result {
                 Ok(result) => result,

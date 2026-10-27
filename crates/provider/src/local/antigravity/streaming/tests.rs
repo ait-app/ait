@@ -1,5 +1,35 @@
 use super::*;
 
+mod native;
+
+#[test]
+fn tool_details_match_shared_client_schema_fixtures() {
+    let cases: Vec<Value> = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/antigravity_tool_cards.json"
+    ))
+    .unwrap();
+    for case in cases {
+        if let Some(fields) = case["step"].as_object() {
+            let mut stream = stream();
+            let mut update = step(1, "DONE", "tool");
+            update.as_object_mut().unwrap().extend(fields.clone());
+            stream.update(&update).unwrap();
+            let entry = match stream.events.pop_front().unwrap() {
+                AgentTurnEvent::Timeline(entry) | AgentTurnEvent::Progress { entry, .. } => entry,
+                other => panic!("expected tool card, got {other:?}"),
+            };
+            assert_eq!(entry.item["detail"], case["detail"], "{}", case["name"]);
+            continue;
+        }
+        assert_eq!(
+            tool_detail(&case["tool"]),
+            case["detail"],
+            "{}",
+            case["name"]
+        );
+    }
+}
+
 #[test]
 fn checkpoint_compaction_emits_loading_then_completion_and_deduplicates_updates() {
     let mut stream = stream();
@@ -212,6 +242,7 @@ fn native_success_with_denied_actions_finalizes_the_tool_as_failed() {
         assert_eq!(tool["status"], "failed");
         assert_eq!(tool["error"]["message"], Failure::Permission.message());
         assert_eq!(tool["detail"]["command"], "printf diagnostic");
+        assert!(tool["detail"].get("output").is_none());
         assert_eq!(stream.failure, Some(Failure::Permission));
         assert_eq!(stream.events.back(), Some(&AgentTurnEvent::Failed));
     }
@@ -263,10 +294,10 @@ fn rejects_malformed_or_oversized_denial_lists() {
         json!([{"display_name":"x".repeat(513)}]),
         json!(vec![json!({"display_name":"RunCommand"}); MAX_ITEMS + 1]),
     ] {
-        assert!(denied_tools(&json!({"denied_actions":denied})).is_err());
+        assert!(denied_tools(&json!({"denied_actions":denied}), &mut BTreeMap::new()).is_err());
     }
     assert!(
-        denied_tools(&json!({"denied_actions":[]}))
+        denied_tools(&json!({"denied_actions":[]}), &mut BTreeMap::new())
             .unwrap()
             .is_empty()
     );
