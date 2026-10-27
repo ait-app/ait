@@ -30,7 +30,8 @@ enum TurnPhase {
 #[derive(Debug)]
 struct StateCheck {
     id: String,
-    turn: String,
+    // New work relinquishes ownership while retaining correlation for the delayed reply.
+    turn: Option<String>,
     written: Option<oneshot::Receiver<Result<(), AgentSessionError>>>,
 }
 
@@ -503,6 +504,9 @@ impl Session {
             return Ok(());
         }
         self.observe_native_event(event)?;
+        if event["type"] == "agent_start" {
+            self.invalidate_state_check();
+        }
         if event["type"] == "message_end"
             && matches!(event["message"]["role"].as_str(), Some("assistant"))
         {
@@ -624,10 +628,17 @@ impl Session {
         }
     }
 
+    fn invalidate_state_check(&mut self) {
+        if let Some(check) = &mut self.state_check {
+            check.turn = None;
+        }
+        self.idle_without_outcome = None;
+    }
+
     fn checked_state(&mut self, event: &Value) -> Result<(), AgentSessionError> {
         let check = self.state_check.take().ok_or(AgentSessionError::Failed)?;
         self.next_state_check = Instant::now() + STATE_CHECK_INTERVAL;
-        if self.active.as_deref() != Some(&check.turn) {
+        if check.turn.is_none() || self.active != check.turn {
             return Ok(());
         }
         if event["command"] != "get_state" {
@@ -727,7 +738,7 @@ impl Session {
         };
         self.state_check = Some(StateCheck {
             id,
-            turn: turn.clone(),
+            turn: Some(turn.clone()),
             written: Some(written),
         });
         Ok(())
@@ -856,6 +867,7 @@ impl AgentSession for Session {
             self.transport
                 .request("steer", json!({"message":text,"images":images}))
                 .await?;
+            self.invalidate_state_check();
             self.stream
                 .pending_inputs
                 .push_back(prompt.client_message_id.clone());

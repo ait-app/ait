@@ -3,6 +3,39 @@ use super::*;
 use crate::local::omp::tests::{complete, fixture, next};
 
 #[tokio::test]
+async fn newly_accepted_or_started_work_invalidates_an_earlier_idle_check() {
+    for work in ["steer", "agent_start"] {
+        let (_root, client, spec) = fixture();
+        let mut session = open(&client, &spec, None).await.unwrap();
+        let turn = session.start_turn("wait", &spec.config).await.unwrap();
+        session.phase = TurnPhase::AwaitingSettlement;
+        session.state_check = Some(StateCheck {
+            id: "old-state".to_owned(),
+            turn: Some(turn.clone()),
+            written: None,
+        });
+        session.idle_without_outcome = Some(Instant::now() - STATE_CHECK_INTERVAL);
+
+        if work == "steer" {
+            session.steer_turn(&turn, "continue").await.unwrap();
+        } else {
+            session.consume(&json!({"type":"agent_start"})).unwrap();
+        }
+        session
+            .consume(
+                &json!({"type":"response","command":"get_state","id":"old-state",
+            "success":true,"data":{"sessionId":session.state["sessionId"],"isSettled":true}}),
+            )
+            .unwrap();
+
+        assert_eq!(session.active.as_deref(), Some(turn.as_str()), "{work}");
+        assert!(session.idle_without_outcome.is_none(), "{work}");
+        assert!(session.stream.events.is_empty(), "{work}");
+        session.close().await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn reconfiguration_discards_checks_owned_by_the_previous_native_process() {
     let (_root, client, spec) = fixture();
     let mut session = open(&client, &spec, None).await.unwrap();
@@ -11,7 +44,7 @@ async fn reconfiguration_discards_checks_owned_by_the_previous_native_process() 
     drop(sender);
     session.state_check = Some(StateCheck {
         id: "old-state".to_owned(),
-        turn: turn.clone(),
+        turn: Some(turn.clone()),
         written: Some(receiver),
     });
     session.cancel_requests.insert("old-abort".to_owned(), turn);
@@ -64,7 +97,7 @@ async fn a_previous_state_response_cannot_finish_the_next_admitted_turn() {
     let previous = session.start_turn("wait", &spec.config).await.unwrap();
     session.state_check = Some(StateCheck {
         id: "old-state".to_owned(),
-        turn: previous,
+        turn: Some(previous),
         written: None,
     });
     session.finish();
@@ -99,7 +132,7 @@ async fn busy_or_missing_state_facts_never_complete_the_active_turn() {
     ] {
         session.state_check = Some(StateCheck {
             id: "state".to_owned(),
-            turn: turn.clone(),
+            turn: Some(turn.clone()),
             written: None,
         });
         let mut state = json!({"sessionId":session.state["sessionId"],"isSettled":true});
@@ -126,7 +159,7 @@ async fn another_native_sessions_settlement_is_rejected() {
     let turn = session.start_turn("wait", &spec.config).await.unwrap();
     session.state_check = Some(StateCheck {
         id: "state".to_owned(),
-        turn,
+        turn: Some(turn),
         written: None,
     });
 
@@ -157,7 +190,7 @@ async fn a_failed_state_write_invalidates_the_connection() {
     sender.send(Err(AgentSessionError::Failed)).unwrap();
     session.state_check = Some(StateCheck {
         id: "state".to_owned(),
-        turn,
+        turn: Some(turn),
         written: Some(receiver),
     });
 
@@ -181,7 +214,7 @@ async fn a_state_response_can_precede_the_correlated_prompt_result() {
     let turn = session.start_turn("wait", &spec.config).await.unwrap();
     session.state_check = Some(StateCheck {
         id: "state".to_owned(),
-        turn: turn.clone(),
+        turn: Some(turn.clone()),
         written: None,
     });
     session
