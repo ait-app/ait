@@ -50,6 +50,8 @@ pub(super) struct Stream {
     pub(super) events: std::collections::VecDeque<AgentTurnEvent>,
     completed: BTreeSet<String>,
     compactions: BTreeSet<String>,
+    anonymous_compactions: usize,
+    item_compactions: usize,
     text_bytes: BTreeMap<String, usize>,
     summary_indices: BTreeMap<String, u64>,
     tools: BTreeMap<String, Vec<(String, Value)>>,
@@ -70,12 +72,57 @@ impl Stream {
             return Err(AgentSessionError::Failed);
         }
         self.text_bytes.remove(id);
-        self.compactions.remove(id);
+        let pending_compaction = self.compactions.remove(id);
+        let duplicate = item["type"] == "contextCompaction"
+            && !pending_compaction
+            && self.anonymous_compactions > 0;
+        if item["type"] == "contextCompaction" {
+            if duplicate {
+                self.anonymous_compactions -= 1;
+            } else {
+                self.item_compactions += 1;
+            }
+        }
         self.summary_indices.remove(id);
         if let Some(items) = self.tools.remove(id) {
             self.tool_rows -= items.len();
         }
-        Ok(self.completed.insert(id.to_owned()))
+        Ok(self.completed.insert(id.to_owned()) && !duplicate)
+    }
+
+    /// Settle loading compactions before the native turn's terminal event.
+    /// Returns an error if the completed-item budget is exhausted.
+    pub(super) fn finish_compactions(&mut self, turn: &str) -> Result<(), AgentSessionError> {
+        for id in std::mem::take(&mut self.compactions) {
+            if self.complete(&json!({"type":"contextCompaction","id":id}))? {
+                self.events.push_back(compaction_entry(Some(turn), &id));
+            }
+        }
+        Ok(())
+    }
+
+    /// Pair the legacy notification with native item completion in either arrival order.
+    /// Returns an error if retaining the native compaction identity fails.
+    pub(super) fn compacted(
+        &mut self,
+        turn: Option<&str>,
+    ) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
+        if self.item_compactions > 0 {
+            self.item_compactions -= 1;
+            return Ok(None);
+        }
+        let id = if let Some(id) = self.compactions.first().cloned() {
+            if self.completed.len() >= MAX_ITEMS {
+                return Err(AgentSessionError::Failed);
+            }
+            self.compactions.remove(&id);
+            self.completed.insert(id.clone());
+            id
+        } else {
+            self.anonymous_compactions += 1;
+            Uuid::new_v4().to_string()
+        };
+        Ok(Some(compaction_entry(turn, &id)))
     }
 
     pub(super) fn progress(
@@ -196,6 +243,7 @@ impl Stream {
                 | "dynamicToolCall"
                 | "webSearch"
                 | "collabAgentToolCall"
+                | "subAgentActivity"
         ) {
             return Ok(None);
         }
@@ -286,6 +334,15 @@ fn output_field(item: &Value) -> &'static str {
         Some("read" | "search") => "content",
         _ => "output",
     }
+}
+
+fn compaction_entry(turn: Option<&str>, id: &str) -> AgentTurnEvent {
+    AgentTurnEvent::Timeline(NativeItem {
+        key: format!("native:{}:{id}", turn.unwrap_or("codex:compaction")),
+        turn_id: turn.map(str::to_owned),
+        timestamp: discovery::timestamp(),
+        item: json!({"type":"compaction","status":"completed"}),
+    })
 }
 
 fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str, AgentSessionError> {

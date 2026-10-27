@@ -116,7 +116,10 @@ async fn unknown_resume_replaces_metadata_before_opening_a_writer_and_preserves_
             .expect("native resume reached");
         assert_eq!(handle.metadata, Some(verified));
         assert_eq!(handle.native_handle, Some(json!("native-external")));
-        assert_eq!(spec.cwd, fixture.cwd.to_str().unwrap());
+        assert_eq!(
+            spec.cwd,
+            fixture.cwd.canonicalize().unwrap().to_str().unwrap()
+        );
         assert_eq!(spec.config.model.as_deref(), Some("override-model"));
         assert_eq!(
             spec.config.system_prompt.as_deref(),

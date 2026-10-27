@@ -14,9 +14,11 @@ mod realtime;
 mod realtime_history;
 mod realtime_timeline;
 mod rewind;
+mod sandbox;
 mod speed;
 mod streaming;
 mod subagents;
+mod terminal;
 mod transport;
 mod user_images;
 mod voice_transcript;
@@ -106,23 +108,41 @@ impl CodexClient {
         }
     }
 
-    async fn open(
-        &self,
-        spec: &AgentSessionSpec,
-        resume: Option<(&AgentPersistenceHandle, AgentResumePurpose)>,
-    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
-        self.validate_remote(spec).await?;
-        let mut transport = self.launch_transport(&spec.cwd, false)?;
+    async fn initialized_transport(&self, cwd: &str) -> Result<Transport, AgentSessionError> {
+        let mut transport = self.launch_transport(cwd, false)?;
         let result = async {
             transport.initialize().await?;
             self.inspect_workflows(&mut transport).await?;
             self.ensure_models(&mut transport).await?;
             if self.goals() {
                 transport.close().await?;
-                transport = self.launch_transport(&spec.cwd, true)?;
+                transport = self.launch_transport(cwd, true)?;
                 transport.initialize().await?;
             }
+            Ok(())
+        }
+        .await;
+        if let Err(error) = result {
+            let _ = transport.close().await;
+            return Err(error);
+        }
+        Ok(transport)
+    }
+
+    async fn open(
+        &self,
+        spec: &AgentSessionSpec,
+        resume: Option<(&AgentPersistenceHandle, AgentResumePurpose)>,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        self.validate_remote(spec).await?;
+        let mut transport = self.initialized_transport(&spec.cwd).await?;
+        let result = async {
             let history = resume.is_some_and(|(_, purpose)| purpose == AgentResumePurpose::History);
+            let mut sandbox = if history {
+                sandbox::Sandbox::default()
+            } else {
+                sandbox::Sandbox::load(&mut transport, &spec.cwd).await?
+            };
             let (method, mut params) = if let Some((handle, _)) = resume {
                 if handle.provider != "codex" || handle.session_id.trim().is_empty() {
                     return Err(AgentSessionError::Failed);
@@ -152,22 +172,22 @@ impl CodexClient {
                 }
                 params["config"] = crate::local::configuration::codex(&spec.config)?;
             }
-            let response = transport.request(method, params).await?;
-            let id = response
-                .pointer("/thread/id")
-                .and_then(Value::as_str)
-                .filter(|id| !id.is_empty())
-                .ok_or(AgentSessionError::Failed)?
-                .to_owned();
+            let response = if method == "thread/resume" {
+                native_sessions::resume(&mut transport, params).await?
+            } else {
+                transport.request(method, params).await?
+            };
+            sandbox.observe(&response);
+            let id = native_sessions::text(&response["thread"], "id")?.to_owned();
             if resume.is_some_and(|(handle, _)| handle.session_id != id) {
                 return Err(AgentSessionError::Failed);
             }
             let info = runtime_info(&response, &id, spec);
-            Ok((id, info, history))
+            Ok((id, info, history, sandbox))
         }
         .await;
         match result {
-            Ok((id, info, history)) => {
+            Ok((id, info, history, sandbox)) => {
                 if history {
                     transport.close().await?;
                 }
@@ -177,6 +197,7 @@ impl CodexClient {
                     info,
                     realtime: None,
                     voice_timeline: realtime_timeline::Timeline::default(),
+                    sandbox,
                     active_turn: None,
                     last_message: None,
                     last_failure: None,
@@ -190,6 +211,7 @@ impl CodexClient {
                     pending_plan: plans::Plan::restore(saved(resume, "pendingPlan"))?,
                     latest_plan: None,
                     stream: streaming::Stream::default(),
+                    terminal: terminal::Terminal::default(),
                     children: self
                         .restore_children(resume.is_some() && !history, &spec.cwd, &id)
                         .await?,
@@ -511,6 +533,7 @@ impl AgentClient for CodexClient {
 #[derive(Debug)]
 struct CodexSession {
     transport: Option<Transport>,
+    sandbox: sandbox::Sandbox,
     id: String,
     info: StoredAgentRuntimeInfo,
     realtime: Option<realtime::Realtime>,
@@ -530,6 +553,7 @@ struct CodexSession {
     manual_compactions: u8,
     pending_goal_start: bool,
     stream: streaming::Stream,
+    terminal: terminal::Terminal,
     config: StoredAgentConfig,
     client: CodexClient,
 }
@@ -545,6 +569,9 @@ impl CodexSession {
                 crate::local::diagnostics::native(&params["turn"]["error"], "result"),
                 "turn",
             );
+        }
+        if let Some(turn) = &self.active_turn {
+            self.stream.finish_compactions(turn)?;
         }
         self.last_anchor.clone_from(&self.active_turn);
         self.active_turn = None;
@@ -597,7 +624,7 @@ impl CodexSession {
     }
 
     fn queue_completed_item(&mut self, item: &Value, turn: &str) -> Result<(), AgentSessionError> {
-        if item["type"] == "agentMessage" {
+        if item["type"] == "agentMessage" && item["delivery"] != "async" {
             self.last_message = item["text"].as_str().map(str::to_owned);
         }
         self.observe_interaction(item, turn)?;
@@ -645,20 +672,22 @@ impl CodexSession {
             .launch_transport(&self.cwd, self.client.goals())?;
         let result = async {
             transport.initialize().await?;
+            let mut resolved_sandbox = sandbox::Sandbox::load(&mut transport, &self.cwd).await?;
             let (approval, sandbox, _) = controls::policy(config);
-            let response = transport
-                .request(
-                    "thread/resume",
-                    json!({"threadId":self.id,
+            let response = native_sessions::resume(
+                &mut transport,
+                json!({"threadId":self.id,
                 "cwd":self.cwd,"model":config.model,"approvalPolicy":approval,"sandbox":sandbox,
                 "config":crate::local::configuration::codex(config)?,
                 "approvalsReviewer":workflows::reviewer(config),
                 "developerInstructions":config.system_prompt}),
-                )
-                .await?;
+            )
+            .await?;
             if response["thread"]["id"] != self.id {
                 return Err(AgentSessionError::Failed);
             }
+            resolved_sandbox.observe(&response);
+            self.sandbox = resolved_sandbox;
             Ok(())
         }
         .await;
@@ -859,9 +888,11 @@ impl AgentSession for CodexSession {
             }
 
             self.apply_configuration(config).await?;
-            let (approval, _, sandbox) = controls::policy(config);
+            let (approval, _, _) = controls::policy(config);
+            let sandbox = self.sandbox.policy(config);
             let transport = self.transport.as_mut().ok_or(AgentSessionError::Failed)?;
-            let input = commands::input(transport, &self.cwd, prompt).await?;
+            let input =
+                commands::input(transport, &self.cwd, prompt, &self.client.environment).await?;
             let collaboration = workflows::collaboration(
                 transport,
                 config,
@@ -891,7 +922,9 @@ impl AgentSession for CodexSession {
             self.latest_plan = None;
             self.active_turn = Some(id.clone());
             self.config = config.clone();
-            self.info.model.clone_from(&config.model);
+            if config.model.is_some() {
+                self.info.model.clone_from(&config.model);
+            }
             self.info.mode_id = Some(
                 config
                     .mode_id
@@ -1047,6 +1080,9 @@ impl AgentSession for CodexSession {
                     transport.observe_error(&params["error"], diagnostic, "turn");
                 }
                 continue;
+            }
+            if let Some(event) = self.terminal.observe(method, params)? {
+                return Ok(Some(event));
             }
             if let Some(event) = self.stream.progress(method, params)? {
                 if let AgentTurnEvent::Progress { entry, .. } = &event {

@@ -1,5 +1,6 @@
 # Ait 文档
 
+- [ADR-193：Codex 原生策略、事件与恢复兼容](decisions/providers/adr-193-codex-native-protocol-compatibility.md)：有效 sandbox、事件暂存、完成竞态、子会话、压缩与回退兼容；[定向验证](reports/providers/codex-paseo-compatibility-2026-10-27.md)。
 - [ADR-192：Codex 历史按页投影后计算展示预算](decisions/providers/adr-192-codex-incremental-history-projection.md)：大图片历史、原始页释放、语音顺序与可诊断的历史失败。
 
 - [ADR-191：Codex Provider 拥有原生实时语音（daemon 中继 PCM 与 WebRTC）](decisions/providers/adr-191-codex-native-realtime-voice.md)：Provider 能力驱动入口、空会话创建、设备就绪与 WebRTC/PCM、各端连续播放与设备消费确认、积压时的关闭与插话、转写边界、统一语音历史、结构化消息关联与连接清理边界。

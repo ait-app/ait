@@ -6,6 +6,7 @@ fn session() -> CodexSession {
     CodexSession {
         realtime: None,
         voice_timeline: crate::local::codex::realtime_timeline::Timeline::default(),
+        sandbox: crate::local::codex::sandbox::Sandbox::default(),
         pending_plan: None,
         latest_plan: None,
         pending_goal_start: false,
@@ -24,6 +25,7 @@ fn session() -> CodexSession {
         cwd: "/offline-fixture".to_owned(),
         permissions: std::collections::BTreeMap::new(),
         stream: crate::local::codex::streaming::Stream::default(),
+        terminal: crate::local::codex::terminal::Terminal::default(),
         config: domain::agent_runtime::StoredAgentConfig::default(),
         client: crate::local::codex::CodexClient::new("unused".into()),
     }
@@ -362,15 +364,15 @@ fn blocking_questions_preserve_question_identity_and_actions() {
 }
 
 #[test]
-fn nonblocking_native_questions_are_explicitly_unsupported() {
+fn nonblocking_native_questions_remain_answerable_without_failing_the_session() {
     let mut session = session();
     let mut native = request(json!(7), "item/tool/requestUserInput");
     native["params"]["isBlocking"] = json!(false);
-    assert_eq!(
-        session.capture_permission(&native),
-        Err(AgentSessionError::Unavailable)
-    );
-    assert!(session.permissions.is_empty());
+    assert!(matches!(
+        session.capture_permission(&native).unwrap(),
+        AgentTurnEvent::PermissionRequested(_)
+    ));
+    assert_eq!(session.permissions.len(), 1);
 }
 
 #[test]
