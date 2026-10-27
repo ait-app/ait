@@ -8,6 +8,7 @@ use super::*;
 use crate::ports::agent_session::AgentTurnEvent;
 use crate::protocol::prompt::{AgentPrompt, PromptImage};
 
+mod input_history;
 mod recovery;
 
 fn fixture() -> (TempDir, AntigravityClient, AgentSessionSpec) {
@@ -147,9 +148,11 @@ async fn streams_multiple_turns_resumes_and_restarts_for_config_changes() {
             _ => None,
         })
         .collect();
-    assert_eq!(timeline.len(), 3);
-    assert_eq!(timeline[0].item["type"], "tool_call");
-    assert_eq!(timeline[1].item["text"], "Hello world");
+    assert_eq!(timeline.len(), 4);
+    assert_eq!(timeline[0].item["type"], "user_message");
+    assert_eq!(timeline[0].item["clientMessageId"], "client-id");
+    assert_eq!(timeline[1].item["type"], "tool_call");
+    assert_eq!(timeline[2].item["text"], "Hello world");
     session.start_turn("second", &spec.config).await.unwrap();
     let second = completed(session.as_mut()).await;
     assert!(
@@ -334,6 +337,9 @@ async fn crashes_foreign_events_and_error_results_do_not_complete_successfully()
         loop {
             match event(session.as_mut()).await {
                 Ok(AgentTurnEvent::RuntimeInfo(_) | AgentTurnEvent::Usage(_)) => {}
+                Ok(AgentTurnEvent::Timeline(entry)) if entry.item["type"] == "user_message" => {
+                    assert_eq!(entry.item["text"], "hello");
+                }
                 Ok(AgentTurnEvent::Failed) | Err(AgentSessionError::Failed) => break,
                 unexpected => panic!("unexpected {unexpected:?}"),
             }

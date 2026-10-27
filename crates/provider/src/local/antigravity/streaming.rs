@@ -52,6 +52,45 @@ impl Stream {
         self.explanation.clear();
     }
 
+    /// Queue accepted input before reading native output. AGY's `user_input` echo has no text.
+    /// Call only after the complete validated text blocks have been written successfully.
+    pub(super) fn submitted(&mut self, blocks: &[Value], client_message_id: Option<&str>) {
+        // A control byte can occupy six JSON bytes; leave space for timeline metadata.
+        const INPUT_TEXT_BYTES: usize = 96 * 1024;
+        let text = blocks
+            .iter()
+            .filter_map(|block| block["text"].as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let timestamp = Utc::now().to_rfc3339();
+        let mut remaining = text.as_str();
+        let mut index = 0;
+        loop {
+            let end = remaining.floor_char_boundary(INPUT_TEXT_BYTES.min(remaining.len()));
+            let key = format!(
+                "native:antigravity:{}:{}:user:{index}",
+                self.conversation, self.turn
+            );
+            let mut item = json!({"type":"user_message","messageId":key,"text":&remaining[..end]});
+            if index == 0
+                && let Some(id) = client_message_id
+            {
+                item["clientMessageId"] = json!(id);
+            }
+            self.events.push_back(AgentTurnEvent::Timeline(NativeItem {
+                key,
+                turn_id: Some(self.turn.clone()),
+                timestamp: timestamp.clone(),
+                item,
+            }));
+            remaining = &remaining[end..];
+            if remaining.is_empty() {
+                break;
+            }
+            index += 1;
+        }
+    }
+
     pub(super) fn update(&mut self, update: &Value) -> Result<(), AgentSessionError> {
         if update["conversation_id"] != self.conversation {
             return Err(AgentSessionError::Failed);
@@ -65,7 +104,8 @@ impl Stream {
             Some("agent_response") => "assistant_message",
             Some("tool" | "subagent") => "tool_call",
             Some("checkpoint") => return self.compaction(update, done),
-            // Native user/checkpoint and new categories do not change the host's lifecycle.
+            // Metadata-only user_input echoes must not duplicate the accepted input above.
+            // Other categories do not change the host's lifecycle.
             Some(_) => return Ok(()),
             None => return Err(AgentSessionError::Failed),
         };

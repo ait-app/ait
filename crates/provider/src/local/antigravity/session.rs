@@ -169,6 +169,8 @@ impl Session {
                 &self.config,
                 &self.init,
             )));
+        self.stream
+            .submitted(&blocks, prompt.client_message_id.as_deref());
         Ok(turn)
     }
 

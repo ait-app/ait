@@ -1764,6 +1764,55 @@ describe("processTimelineResponse", () => {
     ]);
   });
 
+  it("reconciles Antigravity inputs before their replies after a history refresh", () => {
+    const entries: TimelineResponseEntry[] = ["first", "second"].flatMap((id, index) => [
+      {
+        ...makeTimelineEntry(index * 2 + 1, "question", "user_message"),
+        provider: "antigravity",
+        turnId: id,
+        item: {
+          type: "user_message",
+          text: "question",
+          messageId: `native:antigravity:conversation:${id}:user:0`,
+          clientMessageId: id,
+        },
+      },
+      {
+        ...makeTimelineEntry(index * 2 + 2, `${id} answer`),
+        provider: "antigravity",
+        turnId: id,
+        item: {
+          type: "assistant_message",
+          text: `${id} answer`,
+          messageId: `native:antigravity:conversation:${id}:step:1`,
+        },
+      },
+    ]);
+    const payload = {
+      ...baseTimelineInput.payload,
+      epoch: "epoch-1",
+      startCursor: { seq: 1 },
+      endCursor: { seq: 4 },
+      entries,
+    };
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [
+        makeSubmittedUserMessage("question", "first"),
+        makeSubmittedUserMessage("question", "second"),
+      ],
+      payload,
+    });
+    expect(result.acknowledgedClientMessageIds).toEqual(["first", "second"]);
+    for (const view of [result, processTimelineResponse({ ...baseTimelineInput, payload })]) {
+      expect(
+        [...view.tail, ...view.head]
+          .filter((item) => item.kind === "user_message" || item.kind === "assistant_message")
+          .map((item) => item.text),
+      ).toEqual(["question", "first answer", "question", "second answer"]);
+    }
+  });
+
   it("keeps a tail submitted prompt before a reconciled live assistant head", () => {
     const prompt = makeSubmittedUserMessage("new prompt", "submitted-new-prompt");
 

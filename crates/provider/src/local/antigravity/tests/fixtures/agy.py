@@ -94,7 +94,11 @@ def interrupted(signum, frame):
 
 signal.signal(signal.SIGINT, interrupted)
 # Install cancellation handling before advertising that the process is ready.
+if scenario == 'closed-input':
+    os.close(sys.stdin.fileno())
 emit({'event': 'init', 'conversation_id': conversation, 'init': init})
+if scenario == 'closed-input':
+    time.sleep(600)
 for line in sys.stdin:
     message = json.loads(line)
     log({'input': message})
