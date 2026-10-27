@@ -3,11 +3,15 @@ use std::borrow::Cow;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
-use tokio::sync::{mpsc, oneshot};
+use tokio::{
+    sync::{mpsc, oneshot, watch},
+    time::Instant,
+};
 use tokio_util::task::AbortOnDropHandle;
 
 use super::{
@@ -15,6 +19,7 @@ use super::{
     observation::{Observation, Source},
     streaming::Stream,
 };
+use crate::ports::diagnostics::{Category, Diagnostic};
 use crate::{
     local::{
         acp_permissions,
@@ -28,6 +33,9 @@ use crate::{
 };
 
 type Pending = Arc<Mutex<BTreeMap<String, acp_permissions::Pending>>>;
+
+// Native 2.1 drains interrupted tools for up to five seconds before returning its prompt result.
+const CANCEL_GRACE: Duration = Duration::from_secs(10);
 
 #[derive(Debug)]
 struct Connection {
@@ -50,13 +58,10 @@ struct Finished {
 }
 
 #[derive(Debug)]
-enum Command {
-    Reply(
-        String,
-        Value,
-        oneshot::Sender<Result<(), AgentSessionError>>,
-    ),
-    Cancel(oneshot::Sender<Result<(), AgentSessionError>>),
+struct Command {
+    id: String,
+    response: Value,
+    confirmation: oneshot::Sender<Result<(), AgentSessionError>>,
 }
 
 /// Owns one native identity and serializes prompt admission, callbacks and settlement.
@@ -70,6 +75,7 @@ pub(super) struct Session {
     clients: BTreeMap<String, String>,
     pending: Pending,
     commands: Option<mpsc::Sender<Command>>,
+    cancellation: Option<watch::Sender<Option<Instant>>>,
     events: mpsc::Receiver<AgentTurnEvent>,
     finished: Option<oneshot::Receiver<Result<Finished, AgentSessionError>>>,
     task: Option<AbortOnDropHandle<()>>,
@@ -224,6 +230,7 @@ pub(super) async fn open(
         }),
         pending: Arc::default(),
         commands: None,
+        cancellation: None,
         events,
         finished: None,
         task: None,
@@ -344,6 +351,8 @@ impl Session {
         self.events = events;
         let (commands, receiver) = mpsc::channel(128);
         self.commands = Some(commands);
+        let (cancellation, cancelled) = watch::channel(None);
+        self.cancellation = Some(cancellation.clone());
         let (finished, completion) = oneshot::channel();
         self.finished = Some(completion);
         let execution = Execution {
@@ -355,6 +364,8 @@ impl Session {
             pending: self.pending.clone(),
             events: sender,
             commands: receiver,
+            cancellation,
+            cancelled,
         };
         self.task = Some(AbortOnDropHandle::new(tokio::spawn(async move {
             let pending = execution.pending.clone();
@@ -436,15 +447,16 @@ impl Session {
         Ok(())
     }
 
-    async fn command(
-        &self,
-        command: impl FnOnce(oneshot::Sender<Result<(), AgentSessionError>>) -> Command,
-    ) -> Result<(), AgentSessionError> {
+    async fn command(&self, id: &str, response: &Value) -> Result<(), AgentSessionError> {
         let (sender, receiver) = oneshot::channel();
         self.commands
             .as_ref()
             .ok_or(AgentSessionError::Rejected)?
-            .send(command(sender))
+            .send(Command {
+                id: id.to_owned(),
+                response: response.clone(),
+                confirmation: sender,
+            })
             .await
             .map_err(|_| AgentSessionError::Failed)?;
         tokio::time::timeout(self.client.deadline, receiver)
@@ -452,6 +464,42 @@ impl Session {
             .map_err(|_| AgentSessionError::Failed)?
             .map_err(|_| AgentSessionError::Failed)?
     }
+
+    fn check_cancellation(&mut self) -> Result<(), AgentSessionError> {
+        let requested = self
+            .cancellation
+            .as_ref()
+            .and_then(|sender| *sender.borrow());
+        if requested
+            .is_some_and(|started| started.elapsed() >= CANCEL_GRACE.min(self.client.deadline))
+            && self.task.as_ref().is_some_and(|task| !task.is_finished())
+        {
+            let message =
+                "OpenCode did not confirm cancellation; its native process will be closed.";
+            self.diagnostics.observe_failure(
+                Diagnostic::new(Category::Timeout, "abort_confirmation"),
+                message,
+                "session/cancel",
+            );
+            self.failure = Some(message.to_owned());
+            self.failed = true;
+            if let Some(task) = &self.task {
+                task.abort();
+            }
+            return Err(AgentSessionError::Failed);
+        }
+        Ok(())
+    }
+}
+
+fn request_cancellation(sender: &watch::Sender<Option<Instant>>) {
+    sender.send_if_modified(|requested| {
+        if requested.is_some() {
+            return false;
+        }
+        *requested = Some(Instant::now());
+        true
+    });
 }
 
 struct Execution {
@@ -463,6 +511,8 @@ struct Execution {
     pending: Pending,
     events: mpsc::Sender<AgentTurnEvent>,
     commands: mpsc::Receiver<Command>,
+    cancellation: watch::Sender<Option<Instant>>,
+    cancelled: watch::Receiver<Option<Instant>>,
 }
 
 impl Execution {
@@ -541,7 +591,18 @@ impl Execution {
         stream: &mut Stream,
     ) -> Result<Value, AgentSessionError> {
         loop {
+            if self
+                .cancelled
+                .has_changed()
+                .map_err(|_| AgentSessionError::Failed)?
+            {
+                self.send_cancellation(&mut connection.transport).await?;
+            }
             tokio::select! {
+                changed = self.cancelled.changed() => {
+                    changed.map_err(|_| AgentSessionError::Failed)?;
+                    self.send_cancellation(&mut connection.transport).await?;
+                }
                 command = self.commands.recv() => {
                     let command = command.ok_or(AgentSessionError::Failed)?;
                     self.respond(&mut connection.transport, command).await;
@@ -561,6 +622,17 @@ impl Execution {
                 message = connection.transport.receive() => return message,
             }
         }
+    }
+
+    async fn send_cancellation(
+        &mut self,
+        transport: &mut Transport,
+    ) -> Result<(), AgentSessionError> {
+        self.cancelled.borrow_and_update();
+        transport
+            .send(&json!({"jsonrpc":"2.0","method":"session/cancel",
+            "params":{"sessionId":self.id}}))
+            .await
     }
 
     async fn refresh(
@@ -792,39 +864,40 @@ impl Execution {
     }
 
     async fn respond(&self, transport: &mut Transport, command: Command) {
-        match command {
-            Command::Cancel(sender) => {
-                let result = transport.send(&json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":self.id}})).await;
-                let _ = sender.send(result);
+        let Command {
+            id,
+            response,
+            confirmation,
+        } = command;
+        let reply = self
+            .pending
+            .lock()
+            .map_err(|_| AgentSessionError::Failed)
+            .and_then(|requests| {
+                interactions::resolve(
+                    requests.get(&id).ok_or(AgentSessionError::Rejected)?,
+                    &response,
+                )
+            });
+        let result = async {
+            transport.send(&reply?).await?;
+            self.pending
+                .lock()
+                .map_err(|_| AgentSessionError::Failed)?
+                .remove(&id);
+            self.emit(AgentTurnEvent::PermissionResolved(id)).await?;
+            if response["behavior"] == "deny" && response["interrupt"] == true {
+                request_cancellation(&self.cancellation);
             }
-            Command::Reply(id, response, sender) => {
-                let reply = self
-                    .pending
-                    .lock()
-                    .map_err(|_| AgentSessionError::Failed)
-                    .and_then(|requests| {
-                        interactions::resolve(
-                            requests.get(&id).ok_or(AgentSessionError::Rejected)?,
-                            &response,
-                        )
-                    });
-                let result = async {
-                    transport.send(&reply?).await?;
-                    self.pending.lock().map_err(|_| AgentSessionError::Failed)?.remove(&id);
-                    self.emit(AgentTurnEvent::PermissionResolved(id)).await?;
-                    if response["behavior"] == "deny" && response["interrupt"] == true {
-                        transport.send(&json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":self.id}})).await?;
-                    }
-                    Ok(())
-                }.await;
-                let _ = sender.send(result);
-            }
+            Ok(())
         }
+        .await;
+        let _ = confirmation.send(result);
     }
 }
 
 impl AgentSession for Session {
-    fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
+    fn failure_diagnostic(&self) -> Option<Diagnostic> {
         self.diagnostics.failure()
     }
 
@@ -868,7 +941,12 @@ impl AgentSession for Session {
             if self.turn.as_deref() != Some(turn) || self.closed {
                 return Err(AgentSessionError::Rejected);
             }
-            self.command(Command::Cancel).await
+            request_cancellation(
+                self.cancellation
+                    .as_ref()
+                    .ok_or(AgentSessionError::Rejected)?,
+            );
+            Ok(())
         })
     }
     fn pending_permissions(&self) -> Vec<Value> {
@@ -887,12 +965,10 @@ impl AgentSession for Session {
         id: &'a str,
         response: &'a Value,
     ) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            self.command(|sender| Command::Reply(id.to_owned(), response.clone(), sender))
-                .await
-        })
+        Box::pin(async move { self.command(id, response).await })
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
+        self.check_cancellation()?;
         if let Some(event) = self.initial.pop_front() {
             return Ok(Some(event));
         }
@@ -911,6 +987,7 @@ impl AgentSession for Session {
                     self.connection = Some(connection);
                     self.finished = None;
                     self.commands = None;
+                    self.cancellation = None;
                     self.task = None;
                     self.failure = failure;
                     self.queued.push_back(event);
@@ -922,6 +999,7 @@ impl AgentSession for Session {
                     self.failed = true;
                     self.finished = None;
                     self.commands = None;
+                    self.cancellation = None;
                     self.task = None;
                     return Err(error);
                 }
@@ -947,15 +1025,17 @@ impl AgentSession for Session {
                 return Ok(());
             }
             self.closed = true;
+            let failed_cancellation = self.failed
+                && self
+                    .cancellation
+                    .as_ref()
+                    .is_some_and(|sender| sender.borrow().is_some());
             let mut uncertain = false;
-            if let Some(commands) = &self.commands {
-                let (sender, _acknowledgement) = oneshot::channel();
-                if commands.send(Command::Cancel(sender)).await.is_err() {
-                    uncertain = true;
-                }
+            if let Some(cancellation) = &self.cancellation {
+                request_cancellation(cancellation);
             }
             if let Some(mut finished) = self.finished.take() {
-                let settled = tokio::time::timeout(std::time::Duration::from_secs(6), async {
+                let settled = tokio::time::timeout(Duration::from_secs(6), async {
                     loop {
                         tokio::select! {
                             result = &mut finished => return result,
@@ -967,7 +1047,9 @@ impl AgentSession for Session {
                 match settled {
                     Ok(Ok(Ok(finished))) => {
                         self.connection = Some(finished.connection);
-                        self.failure = finished.failure;
+                        if self.failure.is_none() {
+                            self.failure = finished.failure;
+                        }
                     }
                     _ => uncertain = true,
                 }
@@ -977,7 +1059,16 @@ impl AgentSession for Session {
                 if !task.is_finished() {
                     task.abort();
                 }
-                let _ = tokio::time::timeout(std::time::Duration::from_secs(2), &mut task).await;
+                if tokio::time::timeout(Duration::from_secs(2), &mut task)
+                    .await
+                    .is_err()
+                {
+                    uncertain = true;
+                } else if failed_cancellation {
+                    // Joining the failed owner confirms teardown, not successful prompt settlement.
+                    // Its cancellation failure must now be allowed to leave the host's running state.
+                    uncertain = false;
+                }
             }
             self.pending
                 .lock()
@@ -1003,3 +1094,6 @@ impl AgentSession for Session {
         })
     }
 }
+
+#[cfg(all(test, unix))]
+mod tests;

@@ -153,7 +153,10 @@ def complete(stop="end_turn"):
     update({"sessionUpdate": "usage_update", "used": 0 if scenario == "zero-usage" or (
         scenario == "zero-after-usage" and value["seq"] > 1) else 100,
             "size": 32000, "cost": {"amount": 0.02, "currency": "USD"}})
-    reply(active, {"stopReason": stop})
+    if scenario == "lost-terminal" and value["seq"] == 1:
+        (root / "terminal.lost").touch()
+    else:
+        reply(active, {"stopReason": stop})
     active = None
 
 
@@ -232,6 +235,10 @@ for line in sys.stdin:
                     "Invalid params: session %s does not belong to cwd: %s" % (session_id, params["cwd"])}})
                 continue
         if method == "session/load":
+            if scenario == "cancel-during-replay" and state()["seq"] == 1:
+                (root / "replay.entered").touch()
+                while not (root / "replay.release").exists():
+                    time.sleep(0.01)
             if scenario == "preview-failed":
                 send({"id": identity, "error": {"code": -32000, "message": "Fixture replay unavailable"}})
                 continue
@@ -327,7 +334,11 @@ for line in sys.stdin:
             send({"id": "permission", "method": "session/request_permission", "params": {"sessionId": session_id,
                 "toolCall": {"toolCallId": "shell", "title": "shell", "rawInput": {"command": "pwd"}},
                 "options": [{"optionId": "once", "kind": "allow_once", "name": "Allow once"}, {"optionId": "always", "kind": "allow_always", "name": "Always allow"}, {"optionId": "reject", "kind": "reject_once", "name": "Reject"}]}})
-        elif scenario == "waiting":
+        elif scenario == "cancel-backpressure":
+            for index in range(400):
+                update({"sessionUpdate":"agent_message_chunk", "messageId":"answer-live",
+                        "content":{"type":"text", "text":str(index) + " "}})
+        elif scenario == "waiting" or (scenario == "cancel-ignored" and value["seq"] == 1):
             (root / "waiting-pid").write_text(str(os.getpid()))
             update({"sessionUpdate": "agent_message_chunk", "messageId": "answer-live", "content": {"type": "text", "text": "Working"}})
         elif scenario == "ambiguous":
@@ -335,7 +346,7 @@ for line in sys.stdin:
         else:
             complete()
     elif method == "session/cancel":
-        if active:
+        if active and scenario != "cancel-ignored":
             complete("cancelled")
     elif method == "session/close":
         reply(identity, {})

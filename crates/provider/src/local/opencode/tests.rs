@@ -123,7 +123,8 @@ async fn bot_denies_acp_permissions_and_completes_without_interactive_approval()
 }
 
 #[cfg(unix)]
-fn fixture(scenario: &str) -> (TempDir, OpenCodeClient, AgentSessionSpec) {
+/// Create an offline ACP client and spec for `scenario`, owned by the returned isolated directory.
+pub(super) fn fixture(scenario: &str) -> (TempDir, OpenCodeClient, AgentSessionSpec) {
     let root = tempfile::tempdir().unwrap();
     let cwd = root
         .path()
@@ -150,7 +151,8 @@ fn fixture(scenario: &str) -> (TempDir, OpenCodeClient, AgentSessionSpec) {
     (root, client, spec)
 }
 
-fn requests(root: &TempDir) -> Vec<Value> {
+/// Read the fixture's captured ACP frames from `root`; missing or malformed test records panic.
+pub(super) fn requests(root: &TempDir) -> Vec<Value> {
     std::fs::read_to_string(root.path().join("requests.jsonl"))
         .unwrap()
         .lines()
@@ -173,7 +175,8 @@ async fn poll_until_idle(manager: &mut crate::service::agent_manager::AgentManag
     .unwrap();
 }
 
-async fn event(session: &mut dyn AgentSession) -> AgentTurnEvent {
+/// Poll `session` for its next event, panicking on provider failure or a ten-second test timeout.
+pub(super) async fn event(session: &mut dyn AgentSession) -> AgentTurnEvent {
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             if let Some(event) = session.poll_turn().unwrap() {
