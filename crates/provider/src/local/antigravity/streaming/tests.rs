@@ -1,5 +1,7 @@
 use super::*;
 
+mod native;
+
 #[test]
 fn tool_details_match_shared_client_schema_fixtures() {
     let cases: Vec<Value> = serde_json::from_str(include_str!(
@@ -7,6 +9,18 @@ fn tool_details_match_shared_client_schema_fixtures() {
     ))
     .unwrap();
     for case in cases {
+        if let Some(fields) = case["step"].as_object() {
+            let mut stream = stream();
+            let mut update = step(1, "DONE", "tool");
+            update.as_object_mut().unwrap().extend(fields.clone());
+            stream.update(&update).unwrap();
+            let entry = match stream.events.pop_front().unwrap() {
+                AgentTurnEvent::Timeline(entry) | AgentTurnEvent::Progress { entry, .. } => entry,
+                other => panic!("expected tool card, got {other:?}"),
+            };
+            assert_eq!(entry.item["detail"], case["detail"], "{}", case["name"]);
+            continue;
+        }
         assert_eq!(
             tool_detail(&case["tool"]),
             case["detail"],
@@ -280,10 +294,10 @@ fn rejects_malformed_or_oversized_denial_lists() {
         json!([{"display_name":"x".repeat(513)}]),
         json!(vec![json!({"display_name":"RunCommand"}); MAX_ITEMS + 1]),
     ] {
-        assert!(denied_tools(&json!({"denied_actions":denied})).is_err());
+        assert!(denied_tools(&json!({"denied_actions":denied}), &mut BTreeMap::new()).is_err());
     }
     assert!(
-        denied_tools(&json!({"denied_actions":[]}))
+        denied_tools(&json!({"denied_actions":[]}), &mut BTreeMap::new())
             .unwrap()
             .is_empty()
     );

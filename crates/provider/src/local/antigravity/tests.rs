@@ -8,6 +8,8 @@ use super::*;
 use crate::ports::agent_session::AgentTurnEvent;
 use crate::protocol::prompt::{AgentPrompt, PromptImage};
 
+mod recovery;
+
 fn fixture() -> (TempDir, AntigravityClient, AgentSessionSpec) {
     let directory = tempfile::tempdir().unwrap();
     let cwd = directory.path().canonicalize().unwrap();

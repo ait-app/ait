@@ -1,23 +1,40 @@
 [
   {
     "name": "command without output while running or denied",
-    "tool": { "name": "run_command", "parameters": { "CommandLine": "pwd" } },
-    "detail": { "type": "shell", "command": "pwd" }
+    "tool": {
+      "name": "run_command",
+      "parameters": {
+        "CommandLine": "pwd"
+      }
+    },
+    "detail": {
+      "type": "shell",
+      "command": "pwd"
+    }
   },
   {
     "name": "null optional command fields",
     "tool": {
       "name": "run_command",
-      "parameters": { "CommandLine": "pwd", "Cwd": null },
+      "parameters": {
+        "CommandLine": "pwd",
+        "Cwd": null
+      },
       "output": null
     },
-    "detail": { "type": "shell", "command": "pwd" }
+    "detail": {
+      "type": "shell",
+      "command": "pwd"
+    }
   },
   {
     "name": "completed command with text output",
     "tool": {
       "name": "run_command",
-      "parameters": { "CommandLine": "pwd", "Cwd": "/workspace" },
+      "parameters": {
+        "CommandLine": "pwd",
+        "Cwd": "/workspace"
+      },
       "output": "/workspace"
     },
     "detail": {
@@ -31,27 +48,197 @@
     "name": "empty output remains present and invalid cwd is omitted",
     "tool": {
       "name": "run_command",
-      "parameters": { "CommandLine": "true", "Cwd": 42 },
+      "parameters": {
+        "CommandLine": "true",
+        "Cwd": 42
+      },
       "output": ""
     },
-    "detail": { "type": "shell", "command": "true", "output": "" }
+    "detail": {
+      "type": "shell",
+      "command": "true",
+      "output": ""
+    }
   },
   {
     "name": "structured output retains the native data in an unknown card",
     "tool": {
       "name": "run_command",
-      "parameters": { "CommandLine": "pwd" },
-      "output": { "stdout": "/workspace", "exitCode": 0 }
+      "parameters": {
+        "CommandLine": "pwd"
+      },
+      "output": {
+        "stdout": "/workspace",
+        "exitCode": 0
+      }
     },
     "detail": {
       "type": "unknown",
-      "input": { "CommandLine": "pwd" },
-      "output": { "stdout": "/workspace", "exitCode": 0 }
+      "input": {
+        "CommandLine": "pwd"
+      },
+      "output": {
+        "stdout": "/workspace",
+        "exitCode": 0
+      }
     }
   },
   {
     "name": "unknown tools retain null output",
-    "tool": { "name": "custom", "parameters": { "value": 1 } },
-    "detail": { "type": "unknown", "input": { "value": 1 }, "output": null }
+    "tool": {
+      "name": "custom",
+      "parameters": {
+        "value": 1
+      }
+    },
+    "detail": {
+      "type": "unknown",
+      "input": {
+        "value": 1
+      },
+      "output": null
+    }
+  },
+  {
+    "name": "read with absent output",
+    "tool": {
+      "name": "view_file",
+      "parameters": {
+        "AbsolutePath": "/workspace/file"
+      }
+    },
+    "detail": {
+      "type": "read",
+      "filePath": "/workspace/file"
+    }
+  },
+  {
+    "name": "read with contents",
+    "tool": {
+      "name": "view_file",
+      "parameters": {
+        "AbsolutePath": "/workspace/file"
+      },
+      "output": "hello"
+    },
+    "detail": {
+      "type": "read",
+      "filePath": "/workspace/file",
+      "content": "hello"
+    }
+  },
+  {
+    "name": "write summary is not file contents",
+    "tool": {
+      "name": "write_to_file",
+      "parameters": {
+        "TargetFile": "/workspace/file"
+      },
+      "output": "Written 1 line"
+    },
+    "detail": {
+      "type": "write",
+      "filePath": "/workspace/file"
+    }
+  },
+  {
+    "name": "replace_file_content carries no fabricated diff",
+    "tool": {
+      "name": "replace_file_content",
+      "parameters": {
+        "TargetFile": "/workspace/file"
+      },
+      "output": "Edited 1 line"
+    },
+    "detail": {
+      "type": "edit",
+      "filePath": "/workspace/file"
+    }
+  },
+  {
+    "name": "multi_replace_file_content carries no fabricated diff",
+    "tool": {
+      "name": "multi_replace_file_content",
+      "parameters": {
+        "TargetFile": "/workspace/file"
+      },
+      "output": "Edited 1 line"
+    },
+    "detail": {
+      "type": "edit",
+      "filePath": "/workspace/file"
+    }
+  },
+  {
+    "name": "structured read output keeps unknown fallback",
+    "tool": {
+      "name": "view_file",
+      "parameters": {
+        "AbsolutePath": "/workspace/file"
+      },
+      "output": {
+        "value": 1
+      }
+    },
+    "detail": {
+      "type": "unknown",
+      "input": {
+        "AbsolutePath": "/workspace/file"
+      },
+      "output": {
+        "value": 1
+      }
+    }
+  },
+  {
+    "name": "subagent starts without a child id or log",
+    "step": {
+      "step_type": "subagent",
+      "state": "ACTIVE",
+      "tool_name": "invoke_subagent",
+      "tool_info": null,
+      "subagent_info": {
+        "subagents": [
+          {
+            "type_name": "counter",
+            "initial_prompt": "What is 2+2?",
+            "conversation_id": null
+          }
+        ]
+      }
+    },
+    "detail": {
+      "type": "sub_agent",
+      "log": "",
+      "actions": [],
+      "subAgentType": "counter",
+      "description": "What is 2+2?"
+    }
+  },
+  {
+    "name": "subagent completes with child metadata",
+    "step": {
+      "step_type": "subagent",
+      "state": "DONE",
+      "tool_name": "invoke_subagent",
+      "subagent_info": {
+        "subagents": [
+          {
+            "type_name": "counter",
+            "initial_prompt": "What is 2+2?",
+            "conversation_id": "child",
+            "log_uri": "file:///workspace/log"
+          }
+        ]
+      }
+    },
+    "detail": {
+      "type": "sub_agent",
+      "log": "file:///workspace/log",
+      "actions": [],
+      "subAgentType": "counter",
+      "description": "What is 2+2?",
+      "childSessionId": "child"
+    }
   }
 ]
