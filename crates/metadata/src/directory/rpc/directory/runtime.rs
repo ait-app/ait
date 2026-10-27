@@ -5,7 +5,9 @@ use domain::workspace::protocol::workspace::{
     WorkspaceDescriptorPayload, WorkspaceGitHubRuntimePayload, WorkspaceGitRuntimePayload,
     WorkspacePullRequest, WorkspaceRuntimeError,
 };
-use domain::workspace::runtime::{WorkspacePullRequestSnapshot, WorkspaceRuntimeSnapshot};
+use domain::workspace::runtime::{
+    WorkspaceCheckSnapshot, WorkspacePullRequestSnapshot, WorkspaceRuntimeSnapshot,
+};
 
 /// Overlay cached facts onto `descriptor`, explicitly clearing fields absent from `snapshot`.
 pub(super) fn apply(
@@ -63,25 +65,7 @@ fn pull_request(pr: &WorkspacePullRequestSnapshot) -> WorkspacePullRequest {
             "CONFLICTING" => Mergeable::Conflicting,
             _ => Mergeable::Unknown,
         }),
-        checks: Some(
-            pr.checks
-                .iter()
-                .map(|check| WorkspaceCheck {
-                    name: check.name.clone(),
-                    status: match check.status.as_str() {
-                        "success" => CheckStatus::Success,
-                        "failure" => CheckStatus::Failure,
-                        "skipped" => CheckStatus::Skipped,
-                        "cancelled" => CheckStatus::Cancelled,
-                        _ => CheckStatus::Pending,
-                    },
-                    url: check.url.clone(),
-                    workflow: check.workflow.clone(),
-                    duration: check.duration.clone(),
-                    traits: check.traits.clone(),
-                })
-                .collect(),
-        ),
+        checks: Some(pr.checks.iter().map(summary_check).collect()),
         checks_status: Some(match pr.checks_status.as_str() {
             "success" => ChecksStatus::Success,
             "failure" => ChecksStatus::Failure,
@@ -99,5 +83,27 @@ fn pull_request(pr: &WorkspacePullRequestSnapshot) -> WorkspacePullRequest {
         repo_owner: pr.repo_owner.clone(),
         repo_name: pr.repo_name.clone(),
         github: pr.github.clone(),
+    }
+}
+
+/// Keep only what sidebar and hover-card summaries count: name, status and traits.
+///
+/// Every listed Workspace carries its checks, and large CI matrices (100+ checks per PR)
+/// otherwise push one `workspace.list` response past the relay's 1 MiB record limit.
+/// Links, workflows and durations stay available through `checkout.pr.status.request`.
+fn summary_check(check: &WorkspaceCheckSnapshot) -> WorkspaceCheck {
+    WorkspaceCheck {
+        name: check.name.clone(),
+        status: match check.status.as_str() {
+            "success" => CheckStatus::Success,
+            "failure" => CheckStatus::Failure,
+            "skipped" => CheckStatus::Skipped,
+            "cancelled" => CheckStatus::Cancelled,
+            _ => CheckStatus::Pending,
+        },
+        url: None,
+        workflow: None,
+        duration: None,
+        traits: check.traits.clone(),
     }
 }

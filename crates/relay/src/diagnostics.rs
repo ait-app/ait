@@ -1,5 +1,5 @@
 //! Bounded diagnostic fields: never format peer-controlled errors or frame contents.
-use tokio_tungstenite::tungstenite::Error as SocketError;
+use tokio_tungstenite::tungstenite::{Error as SocketError, error::CapacityError};
 
 pub(super) fn socket_error(operation: &'static str, error: &SocketError) {
     let kind = match error {
@@ -20,10 +20,19 @@ pub(super) fn socket_error(operation: &'static str, error: &SocketError) {
         SocketError::Io(error) => error.raw_os_error(),
         _ => None,
     };
+    // Sizes are local counters, not peer content; they show which limit an oversized message hit.
+    let (size, max_size) = match error {
+        SocketError::Capacity(CapacityError::MessageTooLong { size, max_size }) => {
+            (Some(*size), Some(*max_size))
+        }
+        _ => (None, None),
+    };
     tracing::warn!(
         operation,
         error_kind = kind,
         os_error,
+        size,
+        max_size,
         "Relay socket failed"
     );
 }
