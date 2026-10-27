@@ -8,6 +8,7 @@ use super::*;
 use crate::ports::agent_session::AgentTurnEvent;
 use crate::protocol::prompt::{AgentPrompt, PromptImage};
 
+mod image_input;
 mod input_history;
 mod recovery;
 
@@ -17,7 +18,7 @@ fn fixture() -> (TempDir, AntigravityClient, AgentSessionSpec) {
     // An immutable executable avoids ETXTBSY when concurrent forks inherit writable handles.
     let program = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("src/local/antigravity/tests/fixtures/agy.py");
-    let mut client = AntigravityClient::new(program);
+    let mut client = AntigravityClient::new(program).with_image_directory(cwd.join("images"));
     client.environment = AgentEnvironment::try_from(BTreeMap::from([(
         "AGY_FIXTURE_LOG".to_owned(),
         cwd.join("requests.jsonl").to_str().unwrap().to_owned(),
@@ -195,7 +196,7 @@ async fn streams_multiple_turns_resumes_and_restarts_for_config_changes() {
 }
 
 #[tokio::test]
-async fn rejects_foreign_handles_models_and_unsupported_images_before_admission() {
+async fn rejects_foreign_handles_models_and_invalid_images_before_admission() {
     let (directory, client, mut spec) = fixture();
     spec.config.model = Some("missing-model".to_owned());
     assert_eq!(
@@ -235,7 +236,7 @@ async fn rejects_foreign_handles_models_and_unsupported_images_before_admission(
     let image = AgentPrompt {
         text: "image".to_owned(),
         images: vec![PromptImage {
-            data: "aGVsbG8=".to_owned(),
+            data: "invalid base64".to_owned(),
             mime_type: "image/png".to_owned(),
         }],
         ..Default::default()

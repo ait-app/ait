@@ -6,7 +6,7 @@ mod native;
 fn submitted_text_is_bounded_lossless_and_reconciles_the_client_only_once() {
     let mut stream = stream();
     let text = format!("{}{}", "\u{0001}".repeat(96 * 1024 - 1), "界".repeat(1024));
-    stream.submitted(&[json!({"type":"text","text":text})], Some("client"));
+    stream.submitted(&text, &["/private/image.png".to_owned()], Some("client"));
     let entries: Vec<_> = stream
         .events
         .iter()
@@ -21,6 +21,11 @@ fn submitted_text_is_bounded_lossless_and_reconciles_the_client_only_once() {
     assert_ne!(entries[0].key, entries[1].key);
     assert_eq!(entries[0].item["clientMessageId"], "client");
     assert!(entries[1].item.get("clientMessageId").is_none());
+    assert_eq!(
+        entries[0].item["imageSources"],
+        json!(["/private/image.png"])
+    );
+    assert!(entries[1].item.get("imageSources").is_none());
     assert_eq!(
         entries
             .iter()

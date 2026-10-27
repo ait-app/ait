@@ -41,9 +41,27 @@ Google 的 Antigravity CLI 使用 `agy` 命令。官方脚本与 Homebrew cask �
    之后关闭旧进程，下轮按 conversation ID 重连；Windows 不宣称支持原生取消。
    关闭和 Drop 回收 writer、reader 与 Unix 进程组。
 7. 官方 stream input 不支持控制/审批消息和非文本块。
-   保留 native permission soft-denial，不伪造 Ait 审批；拒绝图片、schema、system prompt、
+   保留 native permission soft-denial，不伪造 Ait 审批；拒绝 schema、system prompt、
    会话级 MCP 设置与未实现的 provider options。文本附件经现有有序 blocks 转换传入。
    CLI slash expansion 关闭，避免终端命令破坏流式协议。
+
+## 2026-10-28 修订：图片文件输入
+
+带图请求曾在 adapter 准入阶段被直接拒绝，且会话只显示 `Provider execution failed`。
+采用 [Paseo 的文件回退方式](https://github.com/getpaseo/paseo/blob/dc07efe937c3160e8fe83d02dc972c8a0b014957/plugins/antigravity-provider/server/internal/prompt.ts)：
+完整校验请求后，将图片块转换为 `Attached image: <absolute-path>` 文本块，保持附件顺序，
+由 AGY 自己的读图工具处理。原生 stream input 仍然只有文本块，不扩展协议或权限模式。
+
+图片复用现有 `ImageStore`，保存在 daemon 数据目录的 `agents/provider-images`，
+目录权限为 0700、文件权限为 0600；不写入用户仓库，不修改 AGY 全局设置或 cwd。
+与会话临时文件相比，保留内容寻址文件可以支持关闭/重启后的历史预览和原生会话继续读图。
+图片生命周期沿用其他 Provider 的共享图片存储，不在结束当前会话时删除。
+
+只有成功写入原生输入后，才发布带 `imageSources` 的用户时间线条目；
+其中保留用户原文和 `clientMessageId`，图片只挂在首个文本分块，纯图片消息也保留。
+文件引用提示不混入用户显示文本，图片字节不进入时间线。
+输入校验、schema、配置和图片存储失败均在发送前返回固定原因，诊断来源标为 `input`，
+后续有效输入会清除旧原因。图片转换失败或原生写入失败均不自动重发请求。
 
 ## 后果与验证
 

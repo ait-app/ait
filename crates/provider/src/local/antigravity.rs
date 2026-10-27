@@ -3,6 +3,7 @@
 mod config;
 mod diagnostics;
 mod discovery;
+mod input;
 mod quota;
 mod session;
 mod streaming;
@@ -30,6 +31,7 @@ pub(crate) struct AntigravityClient {
     program: PathBuf,
     deadline: Duration,
     environment: AgentEnvironment,
+    images: super::images::ImageStore,
 }
 
 impl AntigravityClient {
@@ -42,7 +44,15 @@ impl AntigravityClient {
             program,
             deadline: Duration::from_secs(30),
             environment: AgentEnvironment::default(),
+            images: super::images::ImageStore::default(),
         }
+    }
+
+    /// Keep submitted images in the host's private artifact directory for native reads and history.
+    #[must_use]
+    pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
+        self.images = super::images::ImageStore::new(directory);
+        self
     }
 
     /// Find `agy` on PATH, then in official installer and Homebrew locations.

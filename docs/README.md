@@ -186,7 +186,7 @@
 - [ADR-090：Timeline 单项 768 KiB 与按字节分页](decisions/providers/adr-090-timeline-entry-and-page-budgets.md)：展示条目预算、整页响应预算与连续 source 游标。
 - [ADR-089：内置 Provider 装配归 provider crate](decisions/providers/adr-089-provider-owned-composition.md)：内置列表、启动配置与辅助生成能力由 provider 自己组装。
 - [ADR-088：Provider 发现与启动历史同步隔离](decisions/providers/adr-088-provider-catalog-startup-isolation.md)：有界 catalog 通道与本机连接就绪后的恢复。
-- [ADR-087：Antigravity CLI 原生 Provider](decisions/providers/adr-087-antigravity-cli-provider.md)：官方与 Homebrew 安装发现、NDJSON 会话、权限模式与恢复边界。
+- [ADR-087：Antigravity CLI 原生 Provider](decisions/providers/adr-087-antigravity-cli-provider.md)：官方与 Homebrew 安装发现、NDJSON 会话、权限模式与恢复边界；图片文件输入和共享历史预览。
 - [ADR-087：中心设备管理与 Linux/macOS daemon 的 JWT 授权](decisions/clients/adr-087-headless-device-authorization.md)：固定中心，支持 Web 与 CLI token 授权；[授权与发布验收](plans/linux-headless-device-auth.md)覆盖脚本安装、JWT 续期、撤销与 relay。
 - [ADR-086：桌面、Android 与 iOS 的 Authing 浏览器登录](decisions/clients/adr-086-authing-native-login.md)：浏览器认证、手机号/邮箱账号、一次性代码与原生 PKCE 回传；[配置与验收](operations/authing-client-login.md)。
 - [ADR-085：Daemon 同步的稳定节点身份](decisions/clients/adr-085-stable-daemon-publication.md)：重复注册复用节点、旧 Host 绑定迁移、删除主机后的客户端登录及通用桌面 IPC 命名。

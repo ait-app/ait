@@ -53,17 +53,17 @@ impl Stream {
     }
 
     /// Queue accepted input before reading native output. AGY's `user_input` echo has no text.
-    /// Call only after the complete validated text blocks have been written successfully.
-    pub(super) fn submitted(&mut self, blocks: &[Value], client_message_id: Option<&str>) {
+    /// Call only after the prepared native input has been written successfully.
+    pub(super) fn submitted(
+        &mut self,
+        text: &str,
+        sources: &[String],
+        client_message_id: Option<&str>,
+    ) {
         // A control byte can occupy six JSON bytes; leave space for timeline metadata.
         const INPUT_TEXT_BYTES: usize = 96 * 1024;
-        let text = blocks
-            .iter()
-            .filter_map(|block| block["text"].as_str())
-            .collect::<Vec<_>>()
-            .join("\n");
         let timestamp = Utc::now().to_rfc3339();
-        let mut remaining = text.as_str();
+        let mut remaining = text;
         let mut index = 0;
         loop {
             let end = remaining.floor_char_boundary(INPUT_TEXT_BYTES.min(remaining.len()));
@@ -76,6 +76,9 @@ impl Stream {
                 && let Some(id) = client_message_id
             {
                 item["clientMessageId"] = json!(id);
+            }
+            if index == 0 && !sources.is_empty() {
+                item["imageSources"] = json!(sources);
             }
             self.events.push_back(AgentTurnEvent::Timeline(NativeItem {
                 key,
