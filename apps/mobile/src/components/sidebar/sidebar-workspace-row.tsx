@@ -233,6 +233,7 @@ function WorkspaceRowBody({
   archiveShortcutKeys,
 }: WorkspaceRowBodyProps) {
   const isCompact = useIsCompactFormFactor();
+  const showSelection = selected && !isCompact;
   const isTouchPlatform = platformIsNative || isCompact;
   const [isPressed, setIsPressed] = useState(false);
   const trailing = useSidebarWorkspaceTrailing();
@@ -277,10 +278,15 @@ function WorkspaceRowBody({
         const workspaceRowStyle = getWorkspaceRowStyle({
           isDragging,
           isPressed,
-          selected,
+          selected: showSelection,
           isHovered,
         });
-        const backdrop = getSidebarRowBackdrop({ isDragging, isPressed, selected, isHovered });
+        const backdrop = getSidebarRowBackdrop({
+          isDragging,
+          isPressed,
+          selected: showSelection,
+          isHovered,
+        });
         return (
           <View
             {...(draggable ? dragAttributes : {})}

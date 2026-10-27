@@ -1,5 +1,5 @@
-import { memo, useMemo, useCallback, useState, type ReactNode } from "react";
-import { Text, View, type ViewStyle } from "react-native";
+import { memo, useMemo, useState, type ReactNode } from "react";
+import { Text, View, type ViewProps, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { CircleAlert, Folder, FolderGit2, Monitor } from "lucide-react-native";
 import { ProjectStatusIndicator } from "@/components/sidebar/project-leading-visual";
@@ -29,6 +29,7 @@ import { StatusRing } from "@/components/status-ring";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
 import { TrailingActionScrim } from "@/components/ui/trailing-action-scrim";
 import { useWorkspaceLabelDefinitions } from "@/workspace-labels";
+import { useSidebarRowHover } from "./use-sidebar-row-hover";
 
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const needsInputColorMapping = (theme: Theme) => ({
@@ -52,23 +53,11 @@ export function SidebarWorkspaceRowFrame({
     isHovered: boolean;
     contextMenuOpen: boolean;
     onContextMenuOpenChange: (open: boolean) => void;
-    hoverHandlers: { onPointerEnter: () => void; onPointerLeave: () => void };
+    hoverHandlers: Pick<ViewProps, "onPointerEnter" | "onPointerLeave">;
   }) => ReactNode;
 }) {
-  const [isHovered, setIsHovered] = useState(false);
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
-  const handlePointerEnter = useCallback(() => {
-    if (!contextMenuOpen) setIsHovered(true);
-  }, [contextMenuOpen]);
-  const handlePointerLeave = useCallback(() => setIsHovered(false), []);
-  const handleContextMenuOpenChange = useCallback((open: boolean) => {
-    setContextMenuOpen(open);
-    if (open) setIsHovered(false);
-  }, []);
-  const hoverHandlers = useMemo(
-    () => ({ onPointerEnter: handlePointerEnter, onPointerLeave: handlePointerLeave }),
-    [handlePointerEnter, handlePointerLeave],
-  );
+  const { isHovered, hoverHandlers } = useSidebarRowHover(contextMenuOpen || isDragging);
 
   return (
     <WorkspaceHoverCard
@@ -78,9 +67,9 @@ export function SidebarWorkspaceRowFrame({
       disabled={contextMenuOpen}
     >
       {children({
-        isHovered: isHovered && !contextMenuOpen && !isDragging,
+        isHovered,
         contextMenuOpen,
-        onContextMenuOpenChange: handleContextMenuOpenChange,
+        onContextMenuOpenChange: setContextMenuOpen,
         hoverHandlers,
       })}
     </WorkspaceHoverCard>
