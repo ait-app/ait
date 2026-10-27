@@ -10,7 +10,7 @@ use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
 use super::{mux::bounded, wire};
-use crate::{Local, protocol::ClientHello, transport};
+use crate::{Local, diagnostics, protocol::ClientHello, transport};
 
 /// Validate OPEN/START and the original hello before opening the fixed local daemon socket.
 /// Returns on either endpoint closing, invalid records or bounded write/setup failures.
@@ -58,7 +58,12 @@ pub(super) async fn visit(
     let (pong_tx, mut pong_rx) = mpsc::channel(1);
     let from_local = async {
         while let Some(message) = local_stream.next().await {
-            match message.map_err(|_| wire::invalid())? {
+            // An oversized daemon message ends the visit; log it so the reconnect has a cause.
+            let message = message.map_err(|error| {
+                diagnostics::socket_error("tunnel_local_read", &error);
+                wire::invalid()
+            })?;
+            match message {
                 Message::Text(body) => {
                     bounded(wire::write(&mut writer, wire::TEXT, body.as_bytes())).await?;
                 }
@@ -102,3 +107,6 @@ pub(super) async fn visit(
     };
     tokio::select! { result = from_local => result, result = to_local => result }
 }
+
+#[cfg(test)]
+mod tests;

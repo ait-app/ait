@@ -121,6 +121,31 @@ fn runtime_projection_preserves_failed_checks_and_unknown_forge_states() {
 }
 
 #[test]
+fn listed_checks_keep_summary_fields_and_drop_links() {
+    let source = Arc::new(Runtime::default());
+    let mut snapshot = populated();
+    let pr = snapshot
+        .forge
+        .as_mut()
+        .unwrap()
+        .pull_request
+        .as_mut()
+        .unwrap();
+    pr.checks[0].url = Some("https://ci.example/job/1".to_owned());
+    pr.checks[0].duration = Some("1m 2s".to_owned());
+    pr.checks[0].traits = Some(vec!["manual".to_owned()]);
+    *source.snapshot.lock().unwrap() = snapshot;
+    let mut directory = directory().with_runtime_source(source);
+
+    let list = execute(&mut directory, "workspace.list.request", json!({})).unwrap();
+
+    assert_eq!(
+        list["entries"][0]["githubRuntime"]["pullRequest"]["checks"],
+        json!([{"name":"test","status":"success","url":null,"traits":["manual"]}])
+    );
+}
+
+#[test]
 fn workspace_runtime_projects_sidebar_and_hover_card_facts_once_per_directory() {
     let source = Arc::new(Runtime::default());
     *source.snapshot.lock().unwrap() = populated();
