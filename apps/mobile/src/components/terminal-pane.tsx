@@ -70,6 +70,7 @@ import {
   type TerminalRendererReadyChange,
 } from "@/utils/terminal-renderer-readiness";
 import { useAppSettings } from "@/hooks/use-settings";
+import { resolveTerminalRendererSelection } from "@/terminal/native-renderer/terminal-renderer-capability";
 import { classifyForResolution, fetchDaemonResolution } from "@/assistant-file-links/resolver";
 import type {
   TerminalLocalFileLinkSource,
@@ -237,6 +238,7 @@ export function TerminalPane({
   const isConnected = useHostRuntimeIsConnected(serverId);
   const hostReady = client !== null && isConnected;
   const isTerminalPresented = retainedPanelActive && isWorkspaceFocused;
+  const hasServerInfo = useSessionStore((state) => Boolean(state.sessions[serverId]?.serverInfo));
   const supportsTerminalRestoreModes = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.["terminal-restore-modes"] === true,
   );
@@ -285,7 +287,7 @@ export function TerminalPane({
   terminalPresentedRef.current = isTerminalPresented;
   const inputModeRef = useRef<TerminalInputModeState>(DEFAULT_TERMINAL_INPUT_MODE_STATE);
   const pendingTerminalInputRef = useRef<PendingTerminalInput[]>([]);
-  const keyboardRefitTimeoutsRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const keyboardRefitTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const lastAutoFocusKeyRef = useRef<string | null>(null);
   const paneFocusResizeClaimRef = useRef(EMPTY_FOCUS_CLAIM_STATE);
   const initialSnapshot = workspaceTerminalSession.snapshots.get({ terminalId });
@@ -1037,6 +1039,13 @@ export function TerminalPane({
     rendererReadyStreamKey,
     terminalStreamKey,
   });
+  const requiresHostUpgrade =
+    isNative &&
+    hasServerInfo &&
+    resolveTerminalRendererSelection({
+      useLegacyTerminalRenderer: settings.useLegacyTerminalRenderer,
+      supportsTerminalInputModeReplay,
+    }) === "update-host";
 
   // Keep the emulator mounted through transient disconnects. Replacing it with a
   // status screen destroys its canvas/DOM and makes every reconnect flash.
@@ -1094,6 +1103,10 @@ export function TerminalPane({
         {!hostReady ? (
           <View style={styles.attachOverlay} testID="terminal-host-disconnected">
             <Text style={styles.stateText}>{t("workspace.terminal.hostDisconnected")}</Text>
+          </View>
+        ) : requiresHostUpgrade ? (
+          <View style={styles.attachOverlay} testID="terminal-host-upgrade-required">
+            <Text style={styles.stateText}>{t("workspace.terminal.updateHost")}</Text>
           </View>
         ) : showLoadingOverlay ? (
           <View style={styles.attachOverlay} pointerEvents="none" testID="terminal-attach-loading">
