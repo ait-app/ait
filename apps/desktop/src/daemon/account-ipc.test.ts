@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   publish: vi.fn(),
   unpublish: vi.fn(),
   info: vi.fn(),
+  deleteAccount: vi.fn(),
   deps: null as AccountDependencies | null,
 }));
 
@@ -55,6 +56,10 @@ vi.mock("./account-session.js", () => ({
     async logout() {
       await this.deps.save(null);
       this.status = "logged_out";
+    }
+    async deleteAccount() {
+      await mocks.deleteAccount();
+      await this.logout();
     }
     publishHost = mocks.publish;
     unpublishHost = mocks.unpublish;
@@ -200,6 +205,45 @@ describe("desktop built-in daemon synchronization preference", () => {
 });
 
 describe("desktop account login commands", () => {
+  it("deletes through the credential owner and returns the signed-out state", async () => {
+    const command = invoke();
+    await command(event, "account_login_hosted");
+    await expect(command(event, "account_delete")).resolves.toMatchObject({ status: "logged_out" });
+    expect(mocks.deleteAccount).toHaveBeenCalledExactlyOnceWith();
+    expect(stored().account).toBeNull();
+  });
+
+  it("retains credentials when deletion is rejected", async () => {
+    const command = invoke();
+    await command(event, "account_login_hosted");
+    const saved = stored();
+    mocks.deleteAccount.mockRejectedValueOnce(new Error("Service unavailable"));
+    await expect(command(event, "account_delete")).rejects.toThrow("Service unavailable");
+    expect(stored()).toEqual(saved);
+    await expect(command(event, "account_status")).resolves.toMatchObject({ status: "online" });
+  });
+
+  it("serializes other account changes behind deletion", async () => {
+    const command = invoke();
+    await command(event, "account_login_hosted");
+    let finish!: () => void;
+    mocks.deleteAccount.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const deletion = command(event, "account_delete");
+    await vi.waitFor(() => expect(mocks.deleteAccount).toHaveBeenCalledOnce());
+    const publication = command(event, "account_host_sync", host);
+    await command(event, "account_status");
+    expect(mocks.publish).not.toHaveBeenCalled();
+    finish();
+    await deletion;
+    await publication;
+    expect(mocks.publish).toHaveBeenCalledOnce();
+  });
+
   it("rejects the removed password command without replacing the current account", async () => {
     const command = invoke();
     await command(event, "account_login_hosted");

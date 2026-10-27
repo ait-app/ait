@@ -435,6 +435,30 @@ export class AccountSessionManager {
     await this.disconnectAccount(true);
   }
 
+  async deleteAccount(): Promise<void> {
+    const account = this.account;
+    const generation = this.generation;
+    if (!account || this.suspended || this.closing) throw new Error("Sign in first.");
+    await this.api("/v1/me", "DELETE");
+    if (this.account !== account || this.generation !== generation)
+      throw new Error("The account changed. Refresh and try again.");
+    // Deleted accounts cannot keep other daemon leases alive after client logout.
+    const subject = accountSubject(account.token);
+    const bindingServerId = this.deps.runtime().serverId;
+    for (const [serverId, entry] of this.publications) {
+      if (
+        serverId !== bindingServerId &&
+        entry.authority.center === account.center &&
+        (entry.authority.token === account.token ||
+          (subject && accountSubject(entry.authority.token) === subject))
+      ) {
+        for (const request of entry.requests) request.abort();
+        this.publications.delete(serverId);
+      }
+    }
+    await this.logout();
+  }
+
   private async disconnectAccount(forgetAccount: boolean): Promise<void> {
     this.cancelLogin();
     this.generation += 1;

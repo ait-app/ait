@@ -190,6 +190,10 @@ export function createAccountIpc(
           await manager.logout();
           hub.stop();
           return snapshot();
+        case "account_delete":
+          await manager.deleteAccount();
+          hub.stop();
+          return snapshot();
         case "account_refresh":
           manager.refresh();
           return snapshot();
@@ -290,6 +294,7 @@ export function createAccountIpc(
       [
         "account_login_hosted",
         "account_logout",
+        "account_delete",
         "account_select",
         "account_host_sync",
         "account_host_disconnect",

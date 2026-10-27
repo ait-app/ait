@@ -75,6 +75,10 @@ export const en = {
     browserWaiting: "Waiting for browser sign-in…",
     expiresAt: "Account access expires: {{date}}",
     signOut: "Sign out",
+    deleteAccount: "Delete account",
+    deleteAccountTitle: "Delete your account?",
+    deleteAccountMessage:
+      "Your account will be deleted and you will be signed out. Connected hosts will lose access to the online service. This cannot be undone.",
     signOutHint:
       "Signing out releases this client's binding daemon lease. Other hosts stay synchronized until you stop them individually.",
     refresh: "Refresh",

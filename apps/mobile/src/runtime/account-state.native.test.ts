@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
     loginWithBrowser: vi.fn(),
     cancelLogin: vi.fn(),
     logout: vi.fn(),
+    deleteAccount: vi.fn(),
     select: vi.fn(),
     refresh: vi.fn(),
     getAccountInfo: vi.fn(),
@@ -57,6 +58,32 @@ beforeEach(() => {
 });
 
 describe("native mobile account commands", () => {
+  it.each(["android", "ios"])(
+    "clears %s host availability after account deletion",
+    async (platform) => {
+      mocks.platform = platform;
+      mocks.manager.snapshot.mockReturnValue({ status: "logged_out", hosts: [], selected: null });
+      await expect(accountCommand("account_delete")).resolves.toMatchObject({
+        status: "logged_out",
+      });
+      expect(mocks.manager.deleteAccount).toHaveBeenCalledExactlyOnceWith();
+      expect(mocks.manager.logout).not.toHaveBeenCalled();
+      expect(mocks.setCenter).toHaveBeenLastCalledWith(null);
+      expect(mocks.setAvailable).toHaveBeenLastCalledWith([]);
+      expect(useAccountState.getState().status).toBe("logged_out");
+    },
+  );
+
+  it("preserves local account state when deletion fails", async () => {
+    mocks.platform = "android";
+    useAccountState.setState({ status: "online" });
+    mocks.manager.deleteAccount.mockRejectedValueOnce(new Error("Service unavailable"));
+    await expect(accountCommand("account_delete")).rejects.toThrow("Service unavailable");
+    expect(useAccountState.getState().status).toBe("online");
+    expect(mocks.setCenter).not.toHaveBeenCalled();
+    expect(mocks.setAvailable).not.toHaveBeenCalled();
+  });
+
   it("reads account information without triggering host synchronization", async () => {
     const info = {
       loginName: "me@example.test",
