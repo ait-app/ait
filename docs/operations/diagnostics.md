@@ -26,6 +26,12 @@ Provider 的错误回报进入 daemon 日志。`Native provider diagnostic` 记�
 相同诊断每个原生连接最多每 30 秒记录一次，重复次数通过 `suppressed` 汇总。
 日志和界面使用安全分类文案，不写入任意原生错误包或 stderr 原文。
 
+导出的 incident 同样保留上述分类、来源、状态码和重试／重复次数，以及可用的
+`error_kind`、`os_error` 系统错误信息。DeepSeek Harness 的本机 HTTP 失败进一步标记
+`source=http_connect`（建立连接）、`http_send`（发送请求／等待响应头）或
+`http_body`（读取响应正文）。这些请求连接 daemon 本机的回环 Host，不能仅凭
+“Check your network” 文案判断手机网络故障；认证 URL、cookie 和响应正文不会被记录。
+
 最终失败会在聊天中保留错误通知，与 `lastError` 和失败事件使用相同文案。
 原生正在重试的错误只记录诊断，不误报为最终失败；取消和正常操作拒绝不会生成失败通知。
 Codex 模型目录刷新失败标记 `source=model_catalog`、`operation=model/list`，

@@ -144,6 +144,54 @@ fn tracing_omits_oversized_fields_and_unapproved_payloads() {
     assert!(!event.contains(&"x".repeat(2049)));
 }
 
+#[test]
+fn tracing_preserves_provider_failure_facts_without_native_payloads() {
+    let (sender, _receiver) = mpsc::sync_channel(4);
+    let diagnostics = Diagnostics {
+        sender,
+        recent: Arc::default(),
+        dropped: Arc::default(),
+        storage_failures: Arc::default(),
+    };
+    let subscriber = tracing_subscriber::registry().with(diagnostics.clone());
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::warn!(
+            provider = "deepseek-harness",
+            operation = "permissionPresets/catalog",
+            source = "http_connect",
+            category = "network",
+            error_kind = "ConnectionRefused",
+            os_error = 111,
+            native_code = -32000,
+            http_status = 503,
+            will_retry = false,
+            suppressed = 2,
+            payload = "private body",
+            cookie = "private cookie",
+            url = "http://127.0.0.1/?token=private",
+            "Native provider diagnostic"
+        );
+    });
+    let recent = diagnostics.recent.lock().unwrap();
+    let event = &recent.events[0].text;
+    for fact in [
+        "deepseek-harness",
+        "permissionPresets/catalog",
+        "source=\"http_connect\"",
+        "category=\"network\"",
+        "error_kind=\"ConnectionRefused\"",
+        "os_error=111",
+        "native_code=-32000",
+        "http_status=503",
+        "will_retry=false",
+        "suppressed=2",
+    ] {
+        assert!(event.contains(fact), "missing {fact}: {event}");
+    }
+    assert!(!event.contains("private"), "{event}");
+    assert!(!event.contains("token"), "{event}");
+}
+
 struct OversizedSources;
 
 impl EvidenceSource for OversizedSources {
