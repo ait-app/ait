@@ -26,6 +26,7 @@
 - [移动端通知](operations/mobile-notifications.md)：本地提醒、Apple APNs／Google FCM 配置和真机验收。
 
 - [daemon MCP 接口](operations/mcp.md)：Streamable HTTP、40 个编排工具、鉴权与 Workspace 上下文。
+- [Agent Skill 自动分发](operations/agent-skills.md)：内置技能、启动安装与更新、用户选择和卸载停用。
 - [项目说明](../README.md)：开发入口、workspace 和验证命令。
 - [品牌资源](../assets/brand/README.md)：深浅色 Logo、共用矢量源与生成命令；配色规范见 [ADR-051](decisions/branding/adr-051-ait-brand-identity.md)。
 - [桌面端](../apps/desktop/README.md)：Electron 启动、构建和打包。
@@ -38,6 +39,8 @@
 - [Bot 后端设计](plans/bot-backend.md)：Workspace Bot、独占 Channel、隐藏 session、内置 tab 对话与 Telegram、飞书、Email 接入方案。
 
 ## 架构决策
+
+- [ADR-198：内置 Skill 随 daemon 启动分发](decisions/providers/adr-198-bundled-skill-distribution.md)：二进制资源、选择收敛、卸载停用与兼容事务恢复。
 
 - [ADR-156（客户端）：初始化进度与活动事件使用 Ait 标准名称](decisions/clients/adr-156-setup-and-activity-events.md)：标准事件名称、版本化能力发现与客户端订阅。
 

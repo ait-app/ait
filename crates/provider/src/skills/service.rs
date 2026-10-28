@@ -17,7 +17,7 @@ use model::rpc::{decode, encode};
 use serde_json::{Value, json};
 
 use crate::skills::ports::{ApplyMode, SkillStore};
-use crate::skills::protocol::{self, ImportRequest, Kind, Operation, SaveRequest};
+use crate::skills::protocol::{self, ImportRequest, Kind, Operation, SaveRequest, Selection};
 
 /// Provider-owned skill coordinator; the host serializes access under its shared service lock.
 #[derive(Debug)]
@@ -30,6 +30,19 @@ impl Skills {
     #[must_use]
     pub fn new(store: Box<dyn SkillStore>) -> Self {
         Self { store }
+    }
+
+    /// Recover interrupted installation and distribute selected skills before Agent startup.
+    /// Explicit uninstall suspends distribution until a manual reconcile or selection save.
+    /// # Errors
+    /// Returns storage/conflict errors while retaining recovery records and foreign files.
+    pub fn distribute(&mut self) -> Result<(), ErrorCode> {
+        self.store.recover()?;
+        if self.store.automatic()? {
+            let selection = self.store.selection()?.unwrap_or_default();
+            self.reconcile(&selection, ApplyMode::Automatic)?;
+        }
+        Ok(())
     }
 
     /// Handle the canonical skill operations using fresh scans and explicit deletion consent.
@@ -53,34 +66,41 @@ impl Skills {
                     return Err(ErrorCode::InvalidMessage);
                 }
                 let selection = self.store.selection()?.unwrap_or_default();
-                let status = self.store.scan(&selection)?;
-                let (ops, mode): (Vec<Operation>, ApplyMode) = match method {
-                    protocol::GET_STATUS => return encode(status, ErrorCode::RegistryIo),
-                    protocol::UNINSTALL => (
-                        status
+                match method {
+                    protocol::UNINSTALL => {
+                        let ops: Vec<Operation> = self
+                            .store
+                            .scan(&selection)?
                             .installed
                             .into_iter()
                             .map(|name| Operation {
                                 kind: Kind::Delete,
                                 name,
                             })
-                            .collect(),
-                        ApplyMode::Uninstall,
-                    ),
-                    _ => (
-                        status
-                            .ops
-                            .into_iter()
-                            .filter(|op| op.kind != Kind::Delete)
-                            .collect(),
-                        ApplyMode::Reconcile,
-                    ),
-                };
-                self.store.apply(&selection, &ops, mode)?;
+                            .collect();
+                        self.store.apply(&selection, &ops, ApplyMode::Uninstall)?;
+                    }
+                    protocol::RECONCILE => self.reconcile(&selection, ApplyMode::Reconcile)?,
+                    _ => {}
+                }
                 encode(self.store.scan(&selection)?, ErrorCode::RegistryIo)
             }
             _ => Err(ErrorCode::MethodNotFound),
         }
+    }
+
+    fn reconcile(&mut self, selection: &Selection, mode: ApplyMode) -> Result<(), ErrorCode> {
+        let ops: Vec<_> = self
+            .store
+            .scan(selection)?
+            .ops
+            .into_iter()
+            .filter(|op| op.kind != Kind::Delete)
+            .collect();
+        if mode == ApplyMode::Automatic && ops.is_empty() {
+            return Ok(());
+        }
+        self.store.apply(selection, &ops, mode)
     }
 
     fn save(&mut self, mut request: SaveRequest) -> Result<Value, ErrorCode> {

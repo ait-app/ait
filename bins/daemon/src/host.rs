@@ -255,6 +255,7 @@ fn compose_services(
     let storage = open_directory_registries(config)?;
     let publication_sources = storage.publication_sources();
     let workspace_labels = compose_workspace_labels(config, &storage.workspaces)?;
+    let skills = compose_skills(&config.data_dir)?;
     let agents = Agents::new(Box::new(catalog::OwnedCatalog {
         catalog: SqliteCatalog::open(&config.data_dir)?,
         _instance: instance.clone(),
@@ -337,12 +338,12 @@ fn compose_services(
             bot: Some(bots),
             metadata: Some(metadata),
             filesystem: Some(compose_filesystem(config, &storage.workspaces)),
-            provider: Some(compose_provider_service(
-                agent_execution.clone(),
+            provider: Some(provider::Service::new(provider::Dependencies {
+                execution: agent_execution.clone(),
                 summary_generator,
                 agents,
-                &config.data_dir,
-            )?),
+                skills,
+            })),
             schedule: Some(schedules),
             browser: Some(Broker::default()),
             voice: Some(voice::compose(agent_execution, &config.data_dir)?),
@@ -359,20 +360,6 @@ fn compose_workspace_labels(
     Ok(WorkspaceLabels::new(Box::new(
         FileWorkspaceLabelStore::new(&config.data_dir, workspaces.clone()),
     ))?)
-}
-
-fn compose_provider_service(
-    execution: AgentExecution,
-    summary_generator: Arc<dyn SummaryGenerator>,
-    agents: Agents,
-    data: &std::path::Path,
-) -> anyhow::Result<provider::Service> {
-    Ok(provider::Service::new(provider::Dependencies {
-        summary_generator,
-        execution,
-        agents,
-        skills: compose_skills(data)?,
-    }))
 }
 
 fn compose_background(
@@ -693,8 +680,13 @@ fn compose_skills(data: &std::path::Path) -> anyhow::Result<provider::skills::se
     let targets = [".agents/skills", ".claude/skills", ".codex/skills"].map(|path| home.join(path));
     let store =
         provider::skills::local::LocalSkills::new(&source, &targets, &data.join("skills-state"))
-            .map_err(|error| anyhow::anyhow!("invalid skills configuration: {error:?}"))?;
-    Ok(provider::skills::service::Skills::new(Box::new(store)))
+            .map_err(|error| anyhow::anyhow!("invalid skills configuration: {error:?}"))?
+            .with_bundled();
+    let mut skills = provider::skills::service::Skills::new(Box::new(store));
+    if let Err(error) = skills.distribute() {
+        tracing::warn!(?error, "automatic Agent skill distribution failed");
+    }
+    Ok(skills)
 }
 
 fn compose_files(config: &Config) -> Files {

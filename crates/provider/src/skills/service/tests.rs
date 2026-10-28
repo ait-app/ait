@@ -7,6 +7,9 @@ impl SkillStore for FailingStore {
     fn recover(&mut self) -> Result<(), ErrorCode> {
         Ok(())
     }
+    fn automatic(&self) -> Result<bool, ErrorCode> {
+        Ok(true)
+    }
     fn selection(&self) -> Result<Option<Selection>, ErrorCode> {
         Ok(None)
     }
@@ -16,8 +19,11 @@ impl SkillStore for FailingStore {
     fn scan(&self, selection: &Selection) -> Result<Snapshot, ErrorCode> {
         Ok(Snapshot {
             state: "not-installed".into(),
-            ops: vec![],
-            available: vec![],
+            ops: vec![Operation {
+                kind: Kind::Add,
+                name: "alpha".into(),
+            }],
+            available: vec!["alpha".into()],
             installed: vec![],
             selection: selection.clone(),
         })
@@ -30,6 +36,7 @@ impl SkillStore for FailingStore {
 #[test]
 fn requests_are_strict_and_io_failures_propagate() {
     let mut service = Skills::new(Box::new(FailingStore));
+    assert_eq!(service.distribute(), Err(ErrorCode::RegistryIo));
     for method in [
         protocol::GET_STATUS,
         protocol::RECONCILE,

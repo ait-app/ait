@@ -7,6 +7,8 @@ use model::ErrorCode;
 use serde::{Serialize, de::DeserializeOwned};
 use sha2::{Digest, Sha256};
 
+mod bundled;
+
 pub(super) const MANIFEST: &str = ".ait-managed-files.json";
 const MAX_BYTES: usize = 32 * 1024 * 1024;
 

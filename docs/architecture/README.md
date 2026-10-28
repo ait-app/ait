@@ -116,10 +116,12 @@ filesystem 内部按能力组组织：`git`、`forge` 和 `files` 各自保留
 
 `provider::skills` 整组拥有 `agent.skills.*` 的协议、端口、服务和本地安装适配器，
 与原生执行保持独立锁，按 provider 整体安装。技能选择和安装仍是主机级能力，不需要
-Agent 身份或原生会话。daemon 注入原有 bundle、三个目标目录和 `skills-state`；安装路径、
-事务格式及删除确认保持兼容。单连接将这些已声明的方法继续分配到文件操作队列，
+Agent 身份或原生会话。daemon 注入外部 bundle、三个目标目录和 `skills-state`，并在启动时
+通过 Skills 分发内置和外部资源；显式卸载暂停自动分发。安装路径、既有事务恢复及删除确认
+保持兼容。单连接将这些已声明的方法继续分配到文件操作队列，
 避免技能文件操作阻塞同连接上的原生 Agent 请求。见
-[ADR-129](../decisions/providers/adr-129-provider-owned-skills.md)。
+[ADR-129](../decisions/providers/adr-129-provider-owned-skills.md) 与
+[ADR-198](../decisions/providers/adr-198-bundled-skill-distribution.md)。
 
 Pi 的原生 RPC adapter 归 `provider::local::pi`，使用现有 Agent ports，注册身份为 `pi`。
 会话、认证和工具由 Pi 持有，能力与限制见

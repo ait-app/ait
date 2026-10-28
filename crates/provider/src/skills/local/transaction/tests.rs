@@ -29,6 +29,7 @@ fn plan(store: &LocalSkills) -> Journal {
         id: Uuid::new_v4().to_string(),
         roots: store.targets.clone(),
         previous: store.selection().unwrap(),
+        previous_automatic: tree::load(&store.state.join("automatic.json")).unwrap(),
         entries: vec![],
         committed: false,
     };
@@ -131,6 +132,44 @@ fn committed_journal_only_cleans_staging_and_does_not_rollback() {
 }
 
 #[test]
+fn interrupted_distribution_restores_previous_automatic_preference() {
+    for previous in [None, Some(false), Some(true)] {
+        let (_root, mut store) = fixture();
+        if let Some(automatic) = previous {
+            tree::save(&store.state.join("automatic.json"), &automatic).unwrap();
+        }
+        let _journal = plan(&store);
+        tree::save(
+            &store.state.join("automatic.json"),
+            &!previous.unwrap_or(true),
+        )
+        .unwrap();
+
+        recover(&mut store).unwrap();
+        recover(&mut store).unwrap();
+
+        assert_eq!(
+            tree::load::<bool>(&store.state.join("automatic.json")).unwrap(),
+            previous
+        );
+    }
+}
+
+#[test]
+fn old_journal_without_automatic_preference_can_be_recovered() {
+    let (_root, mut store) = fixture();
+    let journal = plan(&store);
+    let mut value = serde_json::to_value(journal).unwrap();
+    value.as_object_mut().unwrap().remove("previous_automatic");
+    tree::save(&store.state.join("transaction.json"), &value).unwrap();
+
+    recover(&mut store).unwrap();
+
+    assert!(store.automatic().unwrap());
+    assert!(!store.state.join("transaction.json").exists());
+}
+
+#[test]
 fn changed_plan_before_publish_rolls_back_without_overwriting_external_files() {
     let (_root, mut store) = fixture();
     put(&store.source.join("alpha/SKILL.md"), "new");
@@ -197,6 +236,7 @@ fn interrupted_preparation_is_cleaned_without_live_mutations() {
         id: Uuid::new_v4().to_string(),
         roots: store.targets.clone(),
         previous: None,
+        previous_automatic: None,
         entries: vec![],
         committed: false,
     };

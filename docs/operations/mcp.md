@@ -24,6 +24,11 @@ curl --fail-with-body http://127.0.0.1:7316/mcp/agents \
 返回 JSON，不保存跨请求 session，也不提供独立 SSE 流。执行错误使用 `result.isError`；
 无效 JSON-RPC 或参数使用 `error.code`。
 
+daemon 内置并在启动时分发 [ait-orchestration Skill](../../skills/ait-orchestration/SKILL.md)，包含 Profile 选择、
+Agent 编排、Workspace 隔离、终端与调度操作说明。默认允许自动发现；是否加载由原生 Provider 决定。
+没有已连接 MCP 工具时，可参考 Skill 的 HTTP 调用说明，使用运行时提供的连接信息访问相同入口。
+安装目录、更新和停用见 [Skill 自动分发](agent-skills.md)。Skill 分发尚未接入 Provider MCP 自动注入。
+
 ## 可用工具
 
 | 能力               | 工具                                                                                                                                                                                            |
