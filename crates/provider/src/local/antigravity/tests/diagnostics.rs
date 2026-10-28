@@ -41,7 +41,7 @@ async fn assert_failure(scenario: &str, expected: Failure) {
     let subscription = connection
         .subscribe(
             EventsRequest {
-                events: vec!["activity_log".to_owned()],
+                events: vec!["activity.log".to_owned()],
                 notifications: false,
             },
             Arc::new(move |_, payload| {

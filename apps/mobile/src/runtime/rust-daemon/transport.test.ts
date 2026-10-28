@@ -118,6 +118,88 @@ function harness(
 }
 
 describe("Rust protocol adapter", () => {
+  it("subscribes to canonical setup and activity events after supported-only filtering", async () => {
+    const h = harness();
+    h.stopHello();
+    const client = new DaemonClient({
+      url: "ws://127.0.0.1:7316/v1/ws",
+      clientId: "setup-activity-subscription-test",
+      transportFactory: () => h.transport,
+      reconnect: { enabled: false },
+    });
+    try {
+      const connected = client.connect();
+      h.ready(undefined, ["workspace-setup-events-v1", "activity-log-events-v1"]);
+      await connected;
+      const events = ["workspace.setup.progress", "activity.log"] as const;
+      const subscription = client.observeEvents([...events], { supportedOnly: true });
+      const update = vi.fn();
+      subscription.subscribe({ snapshot: () => {}, update });
+      const request = h.last(0);
+      expect(request).toMatchObject({
+        method: "session.events.set_subscription.request",
+        params: { events: [...events] },
+      });
+      h.sockets[0].message({
+        type: "response",
+        request_id: request.request_id,
+        result: { subscriptionId: "setup-activity" },
+      });
+      await subscription.ready;
+      const payloads = [
+        {
+          workspaceId: "workspace",
+          status: "running",
+          detail: {
+            type: "worktree_setup",
+            worktreePath: "/workspace",
+            branchName: "main",
+            log: "Installing dependencies\n",
+            commands: [],
+          },
+          error: null,
+        },
+        {
+          id: "failure",
+          timestamp: "2026-10-18T00:00:00Z",
+          type: "error",
+          content: "Provider execution failed",
+          metadata: { agentId: "agent" },
+        },
+      ];
+      for (const [index, method] of events.entries()) {
+        h.sockets[0].message({
+          type: "event",
+          method,
+          params: { ...payloads[index], subscriptionId: "setup-activity" },
+        });
+      }
+      expect(update).toHaveBeenCalledTimes(2);
+      expect(update).toHaveBeenNthCalledWith(1, {
+        type: "workspace.setup.progress",
+        payload: { ...payloads[0], subscriptionId: "setup-activity" },
+      });
+      expect(update).toHaveBeenNthCalledWith(2, {
+        type: "activity.log",
+        payload: {
+          ...payloads[1],
+          timestamp: new Date("2026-10-18T00:00:00Z"),
+          subscriptionId: "setup-activity",
+        },
+      });
+      const released = subscription.release();
+      await vi.waitFor(() => expect(h.last(0).method).toBe("subscription.release.request"));
+      h.sockets[0].message({
+        type: "response",
+        request_id: h.last(0).request_id,
+        result: { subscriptionId: "setup-activity", released: true },
+      });
+      await released;
+    } finally {
+      await client.close();
+    }
+  });
+
   it("negotiates Bot capabilities and maps their requests and results on the execution channel", () => {
     const h = harness();
     h.ready(undefined, ["workspace-bots-v1"]);

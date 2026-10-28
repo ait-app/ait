@@ -279,9 +279,9 @@ export type DaemonEvent =
       payload: Extract<SessionOutboundMessage, { type: "project.update" }>["payload"];
     }
   | {
-      type: "workspace_setup_progress";
+      type: "workspace.setup.progress";
       workspaceId: string;
-      payload: Extract<SessionOutboundMessage, { type: "workspace_setup_progress" }>["payload"];
+      payload: Extract<SessionOutboundMessage, { type: "workspace.setup.progress" }>["payload"];
     }
   | {
       type: "agent.stream";
@@ -6567,9 +6567,9 @@ export class DaemonClient {
         };
       case "project.update":
         return { type: "project.update", payload: msg.payload };
-      case "workspace_setup_progress":
+      case "workspace.setup.progress":
         return {
-          type: "workspace_setup_progress",
+          type: "workspace.setup.progress",
           workspaceId: msg.payload.workspaceId,
           payload: msg.payload,
         };

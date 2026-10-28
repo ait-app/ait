@@ -57,7 +57,7 @@ describe("workspace message schemas", () => {
 
     expect(
       SessionOutboundMessageSchema.parse({
-        type: "workspace_setup_progress",
+        type: "workspace.setup.progress",
         payload: {
           workspaceId: "workspace-fork",
           status: "blocked",
@@ -885,9 +885,9 @@ describe("workspace message schemas", () => {
     });
   });
 
-  test("parses workspace_setup_progress payload", () => {
+  test("parses workspace.setup.progress payload", () => {
     const parsed = SessionOutboundMessageSchema.parse({
-      type: "workspace_setup_progress",
+      type: "workspace.setup.progress",
       payload: {
         workspaceId: "ws-feature-a",
         status: "completed",
@@ -912,7 +912,7 @@ describe("workspace message schemas", () => {
       },
     });
 
-    expect(parsed.type).toBe("workspace_setup_progress");
+    expect(parsed.type).toBe("workspace.setup.progress");
   });
 
   test("parses workspace.setup.status.request", () => {

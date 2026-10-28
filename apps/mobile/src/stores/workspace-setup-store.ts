@@ -16,7 +16,7 @@ export interface PendingWorkspaceSetup {
 
 export type WorkspaceSetupProgressPayload = Extract<
   SessionOutboundMessage,
-  { type: "workspace_setup_progress" }
+  { type: "workspace.setup.progress" }
 >["payload"];
 
 export type WorkspaceSetupStatusResult = Extract<

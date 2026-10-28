@@ -39,11 +39,13 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
         ? ["project.update"]
         : []),
       ...(has("workspace.script.list.request") ? ["script_status_update"] : []),
-      ...(has("workspace.setup.subscribe.request")
-        ? ["workspace_setup_status"]
-        : has("workspace.setup.status.request")
-          ? ["workspace_setup_progress"]
-          : []),
+      ...(has("workspace.setup.subscribe.request") ? ["workspace_setup_status"] : []),
+      ...(features.has("workspace-setup-events-v1") && has("workspace.setup.status.request")
+        ? ["workspace.setup.progress"]
+        : []),
+      ...(features.has("activity-log-events-v1") && has("agent.list.request")
+        ? ["activity.log"]
+        : []),
       ...(features.has("checkout-git-events-v1") && has("checkout.status.get.request")
         ? ["checkout.status.update"]
         : []),

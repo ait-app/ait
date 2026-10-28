@@ -3,6 +3,9 @@
 状态：Accepted
 日期：2026-10-04
 
+后续修订：[ADR-156](../clients/adr-156-setup-and-activity-events.md) 将初始化进度和活动事件
+分别统一为 `workspace.setup.progress` 与 `activity.log`，并补齐客户端能力发现和订阅。
+
 ## 背景
 
 ADR-068 的 Workspace 目录订阅每 250 ms 重读一次完整投影。Agent 目录也使用相同

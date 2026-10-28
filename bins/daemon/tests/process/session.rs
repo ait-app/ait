@@ -55,6 +55,8 @@ async fn config_and_attention_streams_are_connection_owned_and_presence_controls
     let address = ready(&mut process, &log).await;
     let mut observer = connect(&address, SESSION_METHODS).await;
     let subscription = subscribe(&mut observer, &["agent_attention_required"]).await;
+    let mut activities = connect(&address, SESSION_METHODS).await;
+    let activity_subscription = subscribe(&mut activities, &["activity.log"]).await;
     heartbeat(&mut observer, None).await;
     let mut writer = connect(
         &address,
@@ -103,6 +105,12 @@ async fn config_and_attention_streams_are_connection_owned_and_presence_controls
         true
     );
     assert_attention_delivery(&mut writer, &mut observer, id, &subscription, &state).await;
+    let activity = receive(&mut activities).await;
+    assert_eq!(activity["method"], "activity.log");
+    assert_eq!(activity["params"]["subscriptionId"], activity_subscription);
+    assert_eq!(activity["params"]["type"], "error");
+    assert_eq!(activity["params"]["metadata"]["agentId"], id);
+    assert!(!activity["params"]["content"].as_str().unwrap().is_empty());
     assert_eq!(
         request(
             &mut writer,
@@ -149,7 +157,7 @@ async fn event_subscriptions_enforce_budgets_validate_heartbeats_and_publish_con
     let mut process = start(&root.path().join("state"), &log);
     let address = ready(&mut process, &log).await;
     let mut observer = connect(&address, SESSION_METHODS).await;
-    let activity = subscribe(&mut observer, &["activity_log"]).await;
+    let activity = subscribe(&mut observer, &["activity.log"]).await;
     request(
         &mut observer,
         "subscription.release.request",

@@ -12,13 +12,13 @@ pub enum SessionEventKind {
     #[serde(rename = "script_status_update")]
     ScriptStatus,
     /// Workspace setup started, advanced, or finished.
-    #[serde(rename = "workspace_setup_progress")]
+    #[serde(rename = "workspace.setup.progress")]
     WorkspaceSetupProgress,
     /// Lightweight setup lifecycle, without transcripts.
     #[serde(rename = "workspace_setup_status")]
     WorkspaceSetupStatus,
     /// An operational activity or failure was reported to the client.
-    #[serde(rename = "activity_log")]
+    #[serde(rename = "activity.log")]
     ActivityLog,
     /// Provider discovery cache changed after an explicit refresh.
     #[serde(rename = "providers_snapshot_update")]
@@ -56,9 +56,9 @@ impl SessionEventKind {
         match self {
             Self::ProjectUpdate => "project.update",
             Self::ScriptStatus => "script_status_update",
-            Self::WorkspaceSetupProgress => "workspace_setup_progress",
+            Self::WorkspaceSetupProgress => "workspace.setup.progress",
             Self::WorkspaceSetupStatus => "workspace_setup_status",
-            Self::ActivityLog => "activity_log",
+            Self::ActivityLog => "activity.log",
             Self::ProvidersSnapshot => "providers_snapshot_update",
             Self::AgentAttention => "agent_attention_required",
             Self::AgentPermissionRequest => "agent_permission_request",

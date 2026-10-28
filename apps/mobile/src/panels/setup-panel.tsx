@@ -251,7 +251,7 @@ function useWorkspaceSetupSnapshot(serverId: string, workspaceId: string) {
       update: (message) => {
         if (
           !disposed &&
-          message.type === "workspace_setup_progress" &&
+          message.type === "workspace.setup.progress" &&
           message.payload.workspaceId === workspaceId
         ) {
           useWorkspaceSetupStore.getState().upsertProgress({ serverId, payload: message.payload });

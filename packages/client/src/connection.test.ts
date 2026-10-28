@@ -1144,7 +1144,7 @@ test("setup observations bootstrap before updates, restore on reconnect and rele
   await subscription.ready;
   expect(snapshots).toEqual([null]);
   h.receive({
-    type: "workspace_setup_progress",
+    type: "workspace.setup.progress",
     payload: {
       subscriptionId: "other",
       workspaceId: "workspace-two",
@@ -1184,12 +1184,12 @@ test("event selection is recalculated for each handshake without requiring a ser
   const ready = h.client.connect();
   h.open();
   await ready;
-  let next: ("workspace_setup_progress" | "workspace_setup_status")[] = [
-    "workspace_setup_progress",
+  let next: ("workspace.setup.progress" | "workspace_setup_status")[] = [
+    "workspace.setup.progress",
   ];
   const observation = h.client.observeEvents(() => next);
   await observation.ready;
-  expect(h.sent.at(-1)?.message?.events).toEqual(["workspace_setup_progress"]);
+  expect(h.sent.at(-1)?.message?.events).toEqual(["workspace.setup.progress"]);
   h.disconnect();
   next = ["workspace_setup_status"];
   const reconnect = h.client.connect();

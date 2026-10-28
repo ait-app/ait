@@ -27,7 +27,7 @@ type WorkspaceSetupDaemonClient = Pick<
 
 export type WorkspaceSetupProgressPayload = Extract<
   SessionOutboundMessage,
-  { type: "workspace_setup_progress" }
+  { type: "workspace.setup.progress" }
 >["payload"];
 
 export type { WorkspaceSetupDaemonClient };
@@ -38,7 +38,7 @@ export async function connectWorkspaceSetupClient(): Promise<WorkspaceSetupDaemo
   });
   // Establish demand before a caller can launch setup. Client close releases it.
   try {
-    await client.observeEvents(["workspace_setup_progress"]).ready;
+    await client.observeEvents(["workspace.setup.progress"]).ready;
   } catch (error) {
     await client.close();
     throw error;
@@ -310,11 +310,11 @@ export async function waitForWorkspaceSetupProgress(
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       unsubscribe();
-      reject(new Error(`Timed out waiting for workspace_setup_progress after ${timeoutMs}ms`));
+      reject(new Error(`Timed out waiting for workspace.setup.progress after ${timeoutMs}ms`));
     }, timeoutMs);
 
     const unsubscribe = client.subscribeRawMessages((message) => {
-      if (message.type !== "workspace_setup_progress") {
+      if (message.type !== "workspace.setup.progress") {
         return;
       }
       if (!predicate(message.payload)) {

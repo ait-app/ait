@@ -382,7 +382,7 @@ impl SessionConnection {
         }
         self.subscribe_filtered(
             EventsRequest {
-                events: vec!["workspace_setup_progress".to_owned()],
+                events: vec!["workspace.setup.progress".to_owned()],
                 notifications: false,
             },
             Some(workspace_id),

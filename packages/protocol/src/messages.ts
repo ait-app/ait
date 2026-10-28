@@ -2949,13 +2949,13 @@ export const SessionEventSubscriptionSchema = z.enum([
   "agent.permission.resolved",
   "checkout.status.update",
   "script_status_update",
-  "workspace_setup_progress",
+  "workspace.setup.progress",
   "workspace_setup_status",
   "agent.provider_subagents.update",
   "terminal.attention.required",
   "status.server_info",
   "status.daemon_config_changed",
-  "activity_log",
+  "activity.log",
 ]);
 export type SessionEventSubscription = z.infer<typeof SessionEventSubscriptionSchema>;
 export const SessionEventsSetSubscriptionRequestSchema = z.object({
@@ -3185,7 +3185,7 @@ export const ActivityLogPayloadSchema = z.object({
 });
 
 export const ActivityLogMessageSchema = z.object({
-  type: z.literal("activity_log"),
+  type: z.literal("activity.log"),
   payload: ActivityLogPayloadSchema,
 });
 
@@ -4140,7 +4140,7 @@ export const ScriptStatusUpdateMessageSchema = z.object({
 });
 
 export const WorkspaceSetupProgressMessageSchema = z.object({
-  type: z.literal("workspace_setup_progress"),
+  type: z.literal("workspace.setup.progress"),
   payload: z.object({
     subscriptionId: z.string().optional(),
     workspaceId: z.string(),
