@@ -2,13 +2,16 @@ import React, { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
+import { ExternalLink } from "lucide-react-native";
 import type { AccountInfo } from "@ait/client/internal/account-session";
 import { AccountHostPanel } from "@/components/account-host-panel";
 import { SettingsCard, SettingsRow, SettingsSection } from "@/components/settings";
+import { Button } from "@/components/ui/button";
 import { loadAccountInfo, useAccountState } from "@/runtime/account-state";
 import { supportsBrowserAccount } from "@/runtime/browser-account";
 import { useAppVisible } from "@/hooks/use-app-visible";
 import { settingsStyles } from "@/styles/settings";
+import { openExternalUrl } from "@/utils/open-external-url";
 
 function AccountInformation({ refreshKey }: { refreshKey: number }) {
   const { t, i18n } = useTranslation();
@@ -81,10 +84,22 @@ function AccountInformation({ refreshKey }: { refreshKey: number }) {
 }
 
 export function OnlineServiceSection() {
+  const { t } = useTranslation();
   const account = useAccountState();
   const [refreshKey, setRefreshKey] = useState(0);
+  const [portalOpenFailed, setPortalOpenFailed] = useState(false);
+
+  const openLoginPortal = async () => {
+    setPortalOpenFailed(false);
+    try {
+      await openExternalUrl("https://ait-login.authing.cn/u");
+    } catch {
+      setPortalOpenFailed(true);
+    }
+  };
+
   return (
-    <View testID="settings-online-service">
+    <View style={styles.section} testID="settings-online-service">
       <AccountHostPanel onRefresh={() => setRefreshKey((value) => value + 1)}>
         {account.status !== "logged_out" ? (
           <AccountInformation
@@ -93,11 +108,33 @@ export function OnlineServiceSection() {
           />
         ) : null}
       </AccountHostPanel>
+      {account.status !== "logged_out" ? (
+        <SettingsCard>
+          <SettingsRow
+            label={t("onlineService.loginPortal")}
+            hint={t("onlineService.loginPortalHint")}
+            error={portalOpenFailed ? t("onlineService.loginPortalOpenFailed") : null}
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              leftIcon={ExternalLink}
+              testID="account-login-portal"
+              onPress={() => void openLoginPortal()}
+            >
+              {t("onlineService.openInBrowser")}
+            </Button>
+          </SettingsRow>
+        </SettingsCard>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
+  section: {
+    gap: theme.spacing[6],
+  },
   value: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
