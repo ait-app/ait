@@ -27,25 +27,31 @@ alias 和密码。这只是凭据迁移；新 CI 无需登录 Expo。
 
 在仓库 Settings → Secrets and variables → Actions 添加以下 Secrets：
 
-| Secret                             | 内容                                                        |
-| ---------------------------------- | ----------------------------------------------------------- |
-| `ANDROID_KEYSTORE_BASE64`          | Play 已登记的上传 keystore 文件的 base64                    |
-| `ANDROID_KEYSTORE_PASSWORD`        | keystore 密码                                               |
-| `ANDROID_KEY_ALIAS`                | 上传 key 的别名                                             |
-| `ANDROID_KEY_PASSWORD`             | key 密码；PKCS12 通常与 keystore 密码相同                   |
-| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | 有 Ait 测试轨道发布权限的服务账号完整 JSON，原文而非 base64 |
+| Secret                             | 内容                                                            |
+| ---------------------------------- | --------------------------------------------------------------- |
+| `ANDROID_KEYSTORE_BASE64`          | Play 已登记的上传 keystore 文件的 base64                        |
+| `ANDROID_KEYSTORE_PASSWORD`        | keystore 密码                                                   |
+| `ANDROID_KEY_ALIAS`                | 上传 key 的别名                                                 |
+| `ANDROID_KEY_PASSWORD`             | key 密码；PKCS12 通常与 keystore 密码相同                       |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | 有 Ait 测试轨道发布权限的服务账号完整 JSON，原文而非 base64     |
+| `ANDROID_GOOGLE_SERVICES_JSON`     | Firebase 中 `dev.ait.mobile` 应用的 `google-services.json` 原文 |
 
 例如，在 macOS 上直接把文件传给 GitHub CLI，不将内容写入仓库或终端输出：
 
 ```bash
 base64 < /absolute/path/upload.keystore | tr -d '\n' | gh secret set ANDROID_KEYSTORE_BASE64 --repo ait-app/ait
 gh secret set GOOGLE_PLAY_SERVICE_ACCOUNT_JSON --repo ait-app/ait < /absolute/path/play-service-account.json
+gh secret set ANDROID_GOOGLE_SERVICES_JSON --repo ait-app/ait < /absolute/path/google-services.json
 ```
 
 其余三个 Secrets 可在 GitHub 页面填写，或使用 `gh secret set NAME --repo ait-app/ait`
 交互输入。keystore、密码与服务账号 JSON 不进入 Git、日志、聊天或 issue。
 只构建 AAB 也必须配置四个签名 Secrets；缺失时失败，不回退 debug 签名。
 `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` 仅上传时需要。
+`ANDROID_GOOGLE_SERVICES_JSON` 每次构建都需要：缺少它的包能正常安装，但拿不到 FCM token，
+后台推送永远无法送达。workflow 在 prebuild 后校验其中包含 `dev.ait.mobile`，
+且 Gradle 应用了 Google services 插件，否则失败。它必须与 daemon／中心
+`AIT_FCM_SERVICE_ACCOUNT_FILE` 属于同一个 Firebase 项目。
 
 在 **Variables** 中配置 `ANDROID_PLAY_VERSION_CODE_BASE`：迁移时将它设置为
 Play 历史最大 `versionCode`，后续保持不变。新应用可以不设置，默认为 `0`。
