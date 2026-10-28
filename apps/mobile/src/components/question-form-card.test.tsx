@@ -3,6 +3,7 @@ import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PendingPermission } from "@/types/shared";
+import { AgentPermissionRequestPayloadSchema } from "@ait/protocol/messages";
 import { QuestionFormCard } from "./question-form-card";
 import ompQuestion from "../../../../crates/provider/tests/fixtures/omp_question.json";
 
@@ -135,7 +136,7 @@ describe("question response recovery", () => {
         permission={{
           key: "agent:ask-1",
           agentId: "agent",
-          request: { ...fixture.request, provider: "omp", kind: "question" },
+          request: AgentPermissionRequestPayloadSchema.parse(fixture.request),
         }}
         onRespond={onRespond}
         isResponding={false}
