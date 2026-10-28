@@ -1,6 +1,72 @@
 use super::*;
 
 #[test]
+fn child_interactions_preserve_ancestry_without_enrolling_their_targets() {
+    let mut live = Live::default();
+    let images = ImageStore::default();
+    for (parent, child) in [("root", "child"), ("root", "sibling"), ("child", "nested")] {
+        live.observe(
+            "item/completed",
+            &spawn(parent, child),
+            ("root", "/tmp"),
+            &images,
+        )
+        .unwrap();
+    }
+    let descendants = live.children();
+
+    for receiver in ["root", "child", "sibling", "unknown"] {
+        let activity = json!({"threadId":"nested","turnId":"nested-turn","item":{
+            "id":format!("message-{receiver}"),"type":"subAgentActivity","kind":"interacted",
+            "agentThreadId":receiver,"agentPath":format!("/root/{receiver}")}});
+        for method in ["item/started", "item/completed"] {
+            let events = live
+                .observe(method, &activity, ("root", "/tmp"), &images)
+                .unwrap();
+            assert!(
+                events.iter().all(|event| !matches!(
+                    event,
+                    AgentTurnEvent::Subagent(SubagentEvent::Upsert(_))
+                ))
+            );
+        }
+    }
+
+    assert_eq!(live.children(), descendants);
+    assert!(!live.contains("root"));
+    assert!(!live.contains("unknown"));
+}
+
+#[test]
+fn interruptions_update_only_known_descendants_without_creating_ancestry() {
+    let mut live = Live::default();
+    let images = ImageStore::default();
+    for child in ["sender", "target"] {
+        live.observe(
+            "item/completed",
+            &spawn("root", child),
+            ("root", "/tmp"),
+            &images,
+        )
+        .unwrap();
+    }
+
+    for receiver in ["root", "target", "unknown"] {
+        let activity = json!({"threadId":"sender","turnId":"sender-turn","item":{
+            "id":format!("interrupt-{receiver}"),"type":"subAgentActivity","kind":"interrupted",
+            "agentThreadId":receiver,"agentPath":format!("/root/{receiver}")}});
+        live.observe("item/completed", &activity, ("root", "/tmp"), &images)
+            .unwrap();
+    }
+
+    let descendants = live.children();
+    assert_eq!(descendants.len(), 2);
+    assert!(descendants.iter().all(|child| child.parent_id == "root"));
+    assert_eq!(descendants[0].descriptor["status"], "running");
+    assert_eq!(descendants[1].descriptor["status"], "canceled");
+}
+
+#[test]
 fn modern_activity_preserves_ancestry_interruption_and_child_only_display_events() {
     let mut live = Live::default();
     let images = ImageStore::default();

@@ -443,12 +443,12 @@ for line in sys.stdin:
                     "threadId": thread_id, "turn": {"id": pending, "status": "completed"}}})
                 pending = None
             continue
-        if text in ("live-subagent", "modern-subagent"):
+        if text in ("live-subagent", "modern-subagent", "modern-subagent-return"):
             child = "child-" + thread_id
             spawn = {"type":"collabAgentToolCall", "id":"spawn-child", "senderThreadId":thread_id,
                 "receiverThreadIds":[child], "tool":"spawnAgent", "status":"completed", "prompt":"inspect",
                 "agentsStates":{child:{"status":"running"}}}
-            if text == "modern-subagent":
+            if text in ("modern-subagent", "modern-subagent-return"):
                 spawn = {"type":"subAgentActivity", "id":"spawn-child", "kind":"started",
                     "agentThreadId":child, "agentPath":"/root/code_reviewer",
                     "model":"offline-model", "reasoningEffort":"high"}
@@ -456,6 +456,10 @@ for line in sys.stdin:
             stream_items.append(spawn)
             emit({"method":"item/completed", "params":{"threadId":thread_id,"turnId":pending,"item":spawn}})
             (root / ("native-session-" + child + ".json")).write_text(json.dumps({"parentThreadId":thread_id}))
+            if text == "modern-subagent-return":
+                reply = {"type":"subAgentActivity", "id":"child-return", "kind":"interacted",
+                    "agentThreadId":thread_id, "agentPath":"/root"}
+                emit({"method":"item/completed", "params":{"threadId":child,"turnId":"child-turn","item":reply}})
             emit({"method":"item/agentMessage/delta","params":{"threadId":child,"turnId":"child-turn","itemId":"child-answer","delta":"Independent child"}})
             child_item = {"type":"agentMessage", "id":"child-answer", "text":"Independent child answer"}
             emit({"method":"item/completed", "params":{"threadId":child,"turnId":"child-turn","item":child_item}})
