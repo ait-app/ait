@@ -26,7 +26,9 @@ const mocks = vi.hoisted(() => ({
   removeConnection: vi.fn(),
   getHosts: vi.fn<() => HostProfile[]>(() => []),
   platform: "android",
+  revokePush: vi.fn(async () => {}),
 }));
+vi.mock("@/push-notifications", () => ({ revokeAccountPushNotifications: mocks.revokePush }));
 vi.mock("react-native", () => ({
   Platform: {
     get OS() {
@@ -63,16 +65,27 @@ describe("native mobile account commands", () => {
     async (platform) => {
       mocks.platform = platform;
       mocks.manager.snapshot.mockReturnValue({ status: "logged_out", hosts: [], selected: null });
+      mocks.manager.deleteAccount.mockResolvedValueOnce(true);
       await expect(accountCommand("account_delete")).resolves.toMatchObject({
         status: "logged_out",
       });
       expect(mocks.manager.deleteAccount).toHaveBeenCalledExactlyOnceWith();
       expect(mocks.manager.logout).not.toHaveBeenCalled();
+      expect(mocks.revokePush).toHaveBeenCalledOnce();
       expect(mocks.setCenter).toHaveBeenLastCalledWith(null);
       expect(mocks.setAvailable).toHaveBeenLastCalledWith([]);
       expect(useAccountState.getState().status).toBe("logged_out");
     },
   );
+
+  it("keeps the session and push registration while deletion continues in the browser", async () => {
+    mocks.platform = "android";
+    mocks.manager.deleteAccount.mockResolvedValueOnce(false);
+    mocks.manager.snapshot.mockReturnValue({ status: "online", hosts: [], selected: null });
+    await expect(accountCommand("account_delete")).resolves.toMatchObject({ status: "online" });
+    expect(mocks.revokePush).not.toHaveBeenCalled();
+    expect(mocks.manager.logout).not.toHaveBeenCalled();
+  });
 
   it("preserves local account state when deletion fails", async () => {
     mocks.platform = "android";

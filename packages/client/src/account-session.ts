@@ -91,6 +91,8 @@ export interface AccountDependencies {
   /** Desktop can keep login independent of explicitly publishing individual daemons. */
   publishRuntime?: boolean;
   browserLogin?: AccountBrowserLogin;
+  /** Opens a service page in the browser; services may require it to confirm account deletion. */
+  openUrl?(url: string): Promise<unknown>;
 }
 
 export interface AccountRuntime {
@@ -435,13 +437,29 @@ export class AccountSessionManager {
     await this.disconnectAccount(true);
   }
 
-  async deleteAccount(): Promise<void> {
+  /**
+   * Resolves `false` when the service requires confirmation in the browser. The session then
+   * stays signed in; the service revokes it once the user confirms there.
+   */
+  async deleteAccount(): Promise<boolean> {
     const account = this.account;
     const generation = this.generation;
     if (!account || this.suspended || this.closing) throw new Error("Sign in first.");
-    await this.api("/v1/me", "DELETE");
-    if (this.account !== account || this.generation !== generation)
-      throw new Error("The account changed. Refresh and try again.");
+    const changed = () => this.account !== account || this.generation !== generation;
+    try {
+      await this.api("/v1/me", "DELETE");
+    } catch (error) {
+      // Accounts linked to the identity provider are deleted only after fresh browser sign-in.
+      if (
+        !(error instanceof AccountError && error.code === "browser_confirmation_required") ||
+        !this.deps.openUrl
+      )
+        throw error;
+      if (changed()) throw new Error("The account changed. Refresh and try again.");
+      await this.deps.openUrl(`${account.center}/v1/auth/delete/authorize`);
+      return false;
+    }
+    if (changed()) throw new Error("The account changed. Refresh and try again.");
     // Deleted accounts cannot keep other daemon leases alive after client logout.
     const subject = accountSubject(account.token);
     const bindingServerId = this.deps.runtime().serverId;
@@ -457,6 +475,7 @@ export class AccountSessionManager {
       }
     }
     await this.logout();
+    return true;
   }
 
   private async disconnectAccount(forgetAccount: boolean): Promise<void> {

@@ -36,11 +36,13 @@ export function AccountHostPanel({
   const busy = working || account.loginPending === true;
   const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const runAccountAction = async (work: () => Promise<unknown>) => {
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       await work();
     } catch (error) {
@@ -213,8 +215,11 @@ export function AccountHostPanel({
                     cancelLabel: t("common.actions.cancel"),
                     destructive: true,
                   });
-                  if (confirmed && currentAccountIdentity.current === accountIdentity)
-                    await accountCommand("account_delete");
+                  if (!confirmed || currentAccountIdentity.current !== accountIdentity) return;
+                  const snapshot = await accountCommand("account_delete");
+                  // The service asked for confirmation in the browser it just opened.
+                  if (snapshot.status !== "logged_out")
+                    setNotice(t("onlineService.deleteAccountInBrowser"));
                 })
               }
             >
@@ -229,6 +234,11 @@ export function AccountHostPanel({
               {t("onlineService.signOut")}
             </Button>
           </View>
+          {notice ? (
+            <Text style={styles.notice} testID="account-delete-notice">
+              {notice}
+            </Text>
+          ) : null}
           {error || account.error ? (
             <Text style={styles.error} accessibilityRole="alert">
               {error ?? account.error}
@@ -299,5 +309,6 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.foregroundMuted,
   },
   onlineDot: { backgroundColor: theme.colors.statusDotSuccess },
+  notice: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.base },
   error: { color: theme.colors.destructive, fontSize: theme.fontSize.base },
 }));

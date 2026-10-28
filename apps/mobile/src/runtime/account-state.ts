@@ -191,8 +191,7 @@ export async function accountCommand(
           await manager.logout();
           break;
         case "account_delete":
-          await manager.deleteAccount();
-          await revokeAccountPushNotifications();
+          if (await manager.deleteAccount()) await revokeAccountPushNotifications();
           break;
         case "account_select":
           await manager.select(typeof args?.hostId === "string" ? args.hostId : null);

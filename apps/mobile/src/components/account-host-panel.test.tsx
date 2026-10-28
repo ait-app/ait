@@ -175,6 +175,21 @@ describe("AccountHostPanel account deletion", () => {
     await waitFor(() => expect(view.queryByRole("alert")).toBeNull());
   });
 
+  it("tells the user to finish deletion in the browser when the session remains", async () => {
+    vi.mocked(confirmDialog).mockResolvedValueOnce(true);
+    vi.mocked(accountCommand).mockResolvedValueOnce({ status: "online" } as Awaited<
+      ReturnType<typeof accountCommand>
+    >);
+    const view = render(<AccountHostPanel />);
+    fireEvent.click(view.getByTestId("account-delete"));
+    await waitFor(() =>
+      expect(view.getByTestId("account-delete-notice").textContent).toBe(
+        "Finish deleting your account in the browser. You will be signed out here once you confirm.",
+      ),
+    );
+    expect(view.queryByRole("alert")).toBeNull();
+  });
+
   it("does not delete a different account after a delayed confirmation", async () => {
     let confirm!: (value: boolean) => void;
     vi.mocked(confirmDialog).mockImplementationOnce(
