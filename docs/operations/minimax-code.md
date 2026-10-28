@@ -27,6 +27,16 @@ npm install --global @minimax-ai/code@latest --include=optional --ignore-scripts
 思考等级取决于当前模型：本次原生程序为 M3.1-Flash thinking 提供等级选择，
 切换至 M3 thinking 后不再提供该选项；AIT 不向不支持的模型强行传入思考等级。
 
+模型目录会在临时原生会话中验证每个选项，并分别读取该模型确认的思考等级。
+验证不发送提示词、不执行工具，也不修改原生默认模型或权限；整轮验证最多 30 秒。
+原生明确拒绝的模型标为不可选，传输断开或超时仍作为发现失败处理。
+
+`mcode 0.7.1` 存在目录与配置接口不一致的问题：本机列出的非 thinking 版
+`M3.1-Flash` 在 `session/set_config_option` 返回 `Invalid model reasoning`，导致
+旧版 AIT 创建会话失败。AIT 会根据实际确认结果屏蔽该项，不硬编码模型黑名单，也不
+擅自替换用户所选模型。已缓存此选项时，请运行修复后的 daemon、刷新 Provider 目录，
+重新选择可用模型；本机验证可用的是 `M3.1-Flash · thinking`、`M3` 和 `M3 · thinking`。
+
 daemon 默认从 PATH 查找 `mcode`。自定义安装位置使用：
 
 ```sh

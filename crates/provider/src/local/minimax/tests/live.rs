@@ -1,4 +1,43 @@
 #[tokio::test]
+#[ignore = "requires AIT_TEST_MINIMAX_CODE_BIN and native login; validates advertised model creation"]
+async fn installed_mcode_creates_sessions_for_every_selectable_model() {
+    use super::*;
+    let root = tempfile::tempdir().unwrap();
+    let program =
+        std::env::var_os("AIT_TEST_MINIMAX_CODE_BIN").expect("set AIT_TEST_MINIMAX_CODE_BIN");
+    let client = MiniMaxClient::new(program.into());
+    let details = client
+        .discover(root.path().to_str().unwrap())
+        .await
+        .unwrap();
+    let mut created = 0;
+    for model in &details.models {
+        if model["isSelectable"] == false {
+            eprintln!("native rejected advertised model: {}", model["id"]);
+            continue;
+        }
+        let spec = AgentSessionSpec {
+            provider: PROVIDER.into(),
+            cwd: root.path().to_str().unwrap().into(),
+            config: StoredAgentConfig {
+                model: Some(model["id"].as_str().unwrap().into()),
+                thinking_option_id: model["defaultThinkingOptionId"].as_str().map(str::to_owned),
+                ..StoredAgentConfig::default()
+            },
+        };
+        let mut session = client.create_session(&spec).await.unwrap();
+        assert_eq!(
+            session.runtime_info().await.unwrap().model,
+            spec.config.model
+        );
+        session.close().await.unwrap();
+        created += 1;
+    }
+    assert!(created > 0);
+    eprintln!("created sessions for {created} selectable models");
+}
+
+#[tokio::test]
 #[ignore = "requires AIT_TEST_MINIMAX_CODE_BIN and native login; performs model inference"]
 async fn installed_latest_mcode_works_through_ait_and_restores_context() {
     let program =

@@ -118,6 +118,35 @@ pub(super) async fn open(
 }
 
 impl Session {
+    /// Verify advertised models in this disposable discovery session without running prompts.
+    /// Returns confirmed model controls; rejects transport failures instead of hiding them.
+    pub(super) async fn discover(
+        &mut self,
+    ) -> Result<crate::protocol::provider::Details, AgentSessionError> {
+        let mut details = config::details(&self.options)?;
+        for model in &mut details.models {
+            let selected = StoredAgentConfig {
+                model: Some(text(model, "id")?.to_owned()),
+                ..StoredAgentConfig::default()
+            };
+            match config::apply(&mut self.transport, &self.id, &mut self.options, &selected).await {
+                Ok(()) => config::update_thinking(model, &self.options)?,
+                Err(AgentSessionError::Rejected) => {
+                    model["isSelectable"] = json!(false);
+                    model["isDefault"] = json!(false);
+                }
+                Err(error) => return Err(error),
+            }
+            // Configuration notifications belong to this disposable session. Drain them
+            // between probes so a large catalog cannot fill the transport's bounded queue.
+            while let Some(message) = self.transport.poll()? {
+                self.consume(&message)?;
+            }
+            self.stream.events.clear();
+        }
+        Ok(details)
+    }
+
     async fn start(
         &mut self,
         prompt: &AgentPrompt,

@@ -72,49 +72,52 @@ pub(super) fn details(options: &Value) -> Result<Details, AgentSessionError> {
             ..Details::default()
         });
     };
-    let thinking = option(options, "thought_level");
-    let thinking_options = thinking
+    Ok(Details {
+        models: choices(models)?
+            .into_iter()
+            .map(|choice| {
+                let mut model = json!({"provider":PROVIDER,
+                    "id":choice["value"],"label":choice["name"],
+                    "isDefault":choice["value"] == models["currentValue"],"isSelectable":true});
+                if let Some(description) = choice["description"].as_str() {
+                    model["description"] = json!(description);
+                }
+                update_thinking(&mut model, options)?;
+                Ok(model)
+            })
+            .collect::<Result<Vec<_>, AgentSessionError>>()?,
+        modes: modes(options)?,
+        features: features(options)?,
+    })
+}
+
+/// Set `model` reasoning choices from its confirmed native `options`, preserving default identity.
+/// Returns failure for malformed choices; unselected models have no confirmed reasoning controls.
+pub(super) fn update_thinking(model: &mut Value, options: &Value) -> Result<(), AgentSessionError> {
+    let thinking = option(options, "model")
+        .filter(|selected| selected["currentValue"] == model["id"])
+        .and_then(|_| option(options, "thought_level"));
+    let choices = thinking
         .map(|option| {
             choices(option).map(|choices| {
                 choices
                     .into_iter()
                     .map(|choice| {
                         json!({"id":choice["value"],"label":choice["name"],
-            "isDefault":choice["value"] == option["currentValue"]})
+                            "isDefault":choice["value"] == option["currentValue"]})
                     })
                     .collect::<Vec<_>>()
             })
         })
         .transpose()?
         .unwrap_or_default();
-    Ok(Details {
-        models: choices(models)?
-            .into_iter()
-            .map(|choice| {
-                let model_thinking: &[Value] = if choice["value"] == models["currentValue"] {
-                    &thinking_options
-                } else {
-                    &[]
-                };
-                let mut model = json!({"provider":PROVIDER,
-                    "id":choice["value"],"label":choice["name"],
-                    "isDefault":choice["value"] == models["currentValue"],"isSelectable":true,
-                    "thinkingOptions":model_thinking});
-                if let Some(description) = choice["description"].as_str() {
-                    model["description"] = json!(description);
-                }
-                if choice["value"] == models["currentValue"]
-                    && let Some(default) =
-                        thinking.and_then(|option| option["currentValue"].as_str())
-                {
-                    model["defaultThinkingOptionId"] = json!(default);
-                }
-                model
-            })
-            .collect(),
-        modes: modes(options)?,
-        features: features(options)?,
-    })
+    model["thinkingOptions"] = json!(choices);
+    if let Some(default) = thinking.and_then(|option| option["currentValue"].as_str()) {
+        model["defaultThinkingOptionId"] = json!(default);
+    } else if let Some(model) = model.as_object_mut() {
+        model.remove("defaultThinkingOptionId");
+    }
+    Ok(())
 }
 
 /// Return confirmed native selections and modes for the supplied session identity.
