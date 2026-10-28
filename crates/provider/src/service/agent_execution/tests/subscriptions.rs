@@ -319,9 +319,14 @@ async fn modern_provider_children_publish_live_output_and_preserve_it_after_rest
     assert_provider_children_publish("modern-subagent").await;
 }
 
+#[tokio::test]
+async fn child_message_to_parent_preserves_successful_turn_and_durable_timelines() {
+    assert_provider_children_publish("modern-subagent-return").await;
+}
+
 async fn assert_provider_children_publish(prompt: &str) {
     let fixture = Fixture::new();
-    let (execution, _) = worker(&fixture);
+    let (execution, registry) = worker(&fixture);
     let created = create(&execution, &fixture).await;
     let id = created["agentId"].as_str().unwrap();
     let mut peer = Peer::new(&execution);
@@ -337,6 +342,11 @@ async fn assert_provider_children_publish(prompt: &str) {
         .execute("agent.finish.wait.request", json!({"agentId":id}))
         .await
         .unwrap();
+    assert_eq!(registry.get(id).unwrap().unwrap().last_error, None);
+    assert_eq!(
+        registry.get(id).unwrap().unwrap().last_status,
+        domain::agent_runtime::AgentRuntimeStatus::Idle
+    );
     let mut updates = Vec::new();
     while let Ok(queued) = peer.receiver.try_recv() {
         let Frame::Text(text) = &queued.message else {
@@ -363,6 +373,7 @@ async fn assert_provider_children_publish(prompt: &str) {
         )
         .await
         .unwrap();
+    assert_eq!(children["subagents"].as_array().unwrap().len(), 1);
     let child = children["subagents"][0]["id"].as_str().unwrap();
     let page = execution
         .execute(
@@ -381,6 +392,12 @@ async fn assert_provider_children_publish(prompt: &str) {
         "Independent child answer"
     );
     let (_, parent) = execution.timeline().read(id).unwrap();
+    assert!(
+        parent
+            .iter()
+            .any(|row| row.entry.item["text"] == "Echo: Parent only")
+    );
+    assert!(parent.iter().all(|row| row.entry.item["type"] != "error"));
     assert!(
         parent
             .iter()

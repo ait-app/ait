@@ -38,10 +38,19 @@ impl Live {
         let receiver = super::native_sessions::text(item, "agentThreadId")?;
         let id = super::native_sessions::text(item, "id")?;
         let kind = item["kind"].as_str().ok_or(AgentSessionError::Failed)?;
-        if receiver == context.0
-            || receiver == sender
-            || !matches!(kind, "started" | "interacted" | "interrupted")
-        {
+        if receiver == sender || !matches!(kind, "started" | "interacted" | "interrupted") {
+            return Err(AgentSessionError::Failed);
+        }
+        // Communication can target an ancestor or peer; only a start proves child ancestry.
+        if kind != "started" {
+            if kind == "interrupted"
+                && let Some(child) = self.children.get_mut(receiver)
+            {
+                set_status(child, "canceled", events);
+            }
+            return Ok(());
+        }
+        if receiver == context.0 {
             return Err(AgentSessionError::Failed);
         }
         let detail = crate::local::tool_detail::codex(item);
@@ -62,9 +71,6 @@ impl Live {
             child.descriptor.descriptor["toolCallId"] = json!(id);
         }
         events.push(upsert(child));
-        if kind == "interrupted" {
-            set_status(child, "canceled", events);
-        }
         Ok(())
     }
 
