@@ -48,6 +48,9 @@ pub(super) fn features(services: &Services) -> Vec<String> {
     if services.bot.is_some() {
         features.push("workspace-bots-v1".to_owned());
     }
+    if services.metadata.is_some() {
+        features.push("workspace-setup-events-v1".to_owned());
+    }
     if services.filesystem.is_some() && services.metadata.is_some() {
         features.push("checkout-git-events-v1".to_owned());
     }
@@ -71,6 +74,7 @@ pub(super) fn features(services: &Services) -> Vec<String> {
         features.push("terminal-activity-v1".to_owned());
     }
     if services.provider.is_some() {
+        features.push("activity-log-events-v1".to_owned());
         features.push("agent-session-events-v1".to_owned());
         features.push("agent-timeline-cached-reads-v1".to_owned());
         if services.metadata.is_some() {

@@ -16,7 +16,13 @@ describe("Ait methods and Rust session event kinds", () => {
   });
 
   it("preserves already canonical and unknown categories", () => {
-    for (const method of ["project.update", "status.server_info", "future.event"]) {
+    for (const method of [
+      "project.update",
+      "workspace.setup.progress",
+      "activity.log",
+      "status.server_info",
+      "future.event",
+    ]) {
       expect(sessionEventKind(method)).toBe(method);
       expect(sessionEventMethod(method)).toBe(method);
     }

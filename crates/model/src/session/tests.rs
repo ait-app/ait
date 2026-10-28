@@ -221,6 +221,11 @@ fn paused_observers_deliver_after_activation_filter_topics_and_release() {
 
 #[test]
 fn workspace_and_activity_topics_deliver_their_own_payloads() {
+    assert_eq!(
+        SessionEventKind::WorkspaceSetupProgress.method(),
+        "workspace.setup.progress"
+    );
+    assert_eq!(SessionEventKind::ActivityLog.method(), "activity.log");
     let service = SessionEvents::default();
     let connection = service.connect();
     let received = Arc::new(Mutex::new(Vec::new()));
@@ -231,8 +236,8 @@ fn workspace_and_activity_topics_deliver_their_own_payloads() {
                 events: [
                     "project.update",
                     "script_status_update",
-                    "workspace_setup_progress",
-                    "activity_log",
+                    "workspace.setup.progress",
+                    "activity.log",
                 ]
                 .into_iter()
                 .map(str::to_owned)

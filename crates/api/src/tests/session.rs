@@ -16,6 +16,7 @@ async fn event_topics_require_installed_producers_and_shutdown_follows_the_subsc
         "status.daemon_config_changed",
         "providers_snapshot_update",
         "checkout_status_update",
+        "workspace.setup.progress",
     ] {
         assert_eq!(
             request(

@@ -173,11 +173,11 @@ function resolveAgentAttentionNotification(
 
 type WorkspaceSetupProgressPayload = Extract<
   SessionOutboundMessage,
-  { type: "workspace_setup_progress" }
+  { type: "workspace.setup.progress" }
 >["payload"];
 
 function notifyVoiceAbortFailure(
-  data: Extract<SessionOutboundMessage, { type: "activity_log" }>["payload"],
+  data: Extract<SessionOutboundMessage, { type: "activity.log" }>["payload"],
   notifyError: (message: string) => void,
 ): void {
   if (data.type === "error" && data.metadata?.voiceAbortFailed === true) {
@@ -541,7 +541,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       "agent.permission.resolved",
       "agent.provider_subagents.update",
       "checkout.status.update",
-      "activity_log",
+      "activity.log",
       "status.server_info",
     ];
     const feeds = client.observeEvents(
@@ -549,7 +549,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         ...requestedEvents,
         info?.features?.workspaceSetupObservation
           ? "workspace_setup_status"
-          : "workspace_setup_progress",
+          : "workspace.setup.progress",
       ],
       {
         notifications: true,
@@ -598,8 +598,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       if (message.type === "workspace_setup_status")
         useWorkspaceSetupStore.getState().upsertSummary({ serverId, payload: message.payload });
     });
-    const unsubWorkspaceSetupProgress = onFeed("workspace_setup_progress", (message) => {
-      if (message.type !== "workspace_setup_progress") return;
+    const unsubWorkspaceSetupProgress = onFeed("workspace.setup.progress", (message) => {
+      if (message.type !== "workspace.setup.progress") return;
       applyWorkspaceSetupProgress(message.payload);
     });
 
@@ -725,8 +725,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       }
     });
 
-    const unsubActivity = onFeed("activity_log", (message) => {
-      if (message.type !== "activity_log") return;
+    const unsubActivity = onFeed("activity.log", (message) => {
+      if (message.type !== "activity.log") return;
       notifyVoiceAbortFailure(message.payload, toast.error);
     });
 

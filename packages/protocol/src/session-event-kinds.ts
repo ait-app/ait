@@ -1,5 +1,5 @@
 // SessionEventKind identifiers are subscription parameters, separate from method names.
-// Keep these aligned with crates/metadata/src/protocol/session.rs.
+// Keep these aligned with crates/domain/src/session/protocol.rs.
 const SESSION_EVENT_KINDS: Readonly<Record<string, string>> = {
   "provider.snapshot.update": "providers_snapshot_update",
   "agent.attention.required": "agent_attention_required",

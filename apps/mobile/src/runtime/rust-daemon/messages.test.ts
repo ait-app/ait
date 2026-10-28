@@ -117,6 +117,27 @@ it("preserves Rust timeline search counts in the SDK response envelope", () => {
 });
 
 describe("Ait host capabilities", () => {
+  it.each([
+    ["workspace.setup.progress", "workspace-setup-events-v1", "workspace.setup.status.request"],
+    ["activity.log", "activity-log-events-v1", "agent.list.request"],
+  ])(
+    "advertises %s only with its canonical producer feature and method",
+    (event, feature, method) => {
+      for (const supported of [false, true]) {
+        for (const implemented of [false, true]) {
+          const envelope = serverInfo(
+            { server_id: "ait", features: supported ? [feature] : [] },
+            new Set(implemented ? [method] : []),
+          );
+          const catalog = parseServerInfoStatusPayload(
+            object(object(envelope.message).payload),
+          )?.sessionEventTypes;
+          expect(catalog?.includes(event)).toBe(supported && implemented);
+        }
+      }
+    },
+  );
+
   it("enables cached timeline reads only with the versioned feature and timeline method", () => {
     for (const supported of [false, true]) {
       for (const implemented of [false, true]) {

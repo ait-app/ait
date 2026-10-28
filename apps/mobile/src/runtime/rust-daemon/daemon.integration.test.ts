@@ -123,6 +123,8 @@ async function verifyStartupEventSubscriptions(client: DaemonClient) {
       "agent.permission.resolved",
       "agent.provider_subagents.update",
       "checkout.status.update",
+      "workspace.setup.progress",
+      "activity.log",
       "status.server_info",
     ],
   ] as const) {

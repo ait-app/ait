@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
-use super::transport::{Socket, connect, method_names, request};
+use super::transport::{Socket, connect, method_names, receive, request};
 use super::{ready, start, terminate};
 
 #[tokio::test]
@@ -28,8 +28,56 @@ async fn binary_runs_canonical_workspace_setup_and_script_methods() {
     let mut process = start(&state, &log);
     let address = ready(&mut process, &log).await;
     let mut client = connect(&address, &method_names(metadata::automation::rpc::METHODS)).await;
+    let mut observer = connect(
+        &address,
+        &[
+            "server.info",
+            "session.events.set_subscription.request",
+            "subscription.release.request",
+        ],
+    )
+    .await;
+    let info = request(&mut observer, "server.info", Value::Null).await;
+    assert!(
+        info["result"]["features"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("workspace-setup-events-v1"))
+    );
+    let subscription = request(
+        &mut observer,
+        "session.events.set_subscription.request",
+        json!({"events":["workspace.setup.progress"]}),
+    )
+    .await;
+    assert_eq!(subscription["type"], "response");
 
     assert_blocked_and_approve(&mut client, &workspace).await;
+    let mut saw_running = false;
+    loop {
+        let event = receive(&mut observer).await;
+        assert_eq!(event["method"], "workspace.setup.progress");
+        assert_eq!(
+            event["params"]["subscriptionId"],
+            subscription["result"]["subscriptionId"]
+        );
+        assert_eq!(event["params"]["workspaceId"], "wks_automation");
+        saw_running |= event["params"]["status"] == "running";
+        if event["params"]["status"] == "completed" {
+            assert!(saw_running);
+            assert_eq!(
+                event["params"]["detail"]["commands"][0]["status"],
+                "completed"
+            );
+            break;
+        }
+    }
+    request(
+        &mut observer,
+        "subscription.release.request",
+        subscription["result"].clone(),
+    )
+    .await;
     assert_script_lifecycle(&mut client, &workspace).await;
     assert_legacy_method_rejected(&mut client).await;
 

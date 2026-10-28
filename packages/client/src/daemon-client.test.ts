@@ -3015,7 +3015,7 @@ test("uploadFile sends metadata request and file bytes as binary chunks", async 
   });
 });
 
-test("normalizes workspace_setup_progress into a workspace-scoped daemon event", async () => {
+test("normalizes workspace.setup.progress into a workspace-scoped daemon event", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -3039,7 +3039,7 @@ test("normalizes workspace_setup_progress into a workspace-scoped daemon event",
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "workspace_setup_progress",
+      type: "workspace.setup.progress",
       payload: {
         workspaceId: "ws-feature-a",
         status: "running",
@@ -3065,7 +3065,7 @@ test("normalizes workspace_setup_progress into a workspace-scoped daemon event",
   );
 
   expect(events).toContainEqual({
-    type: "workspace_setup_progress",
+    type: "workspace.setup.progress",
     workspaceId: "ws-feature-a",
     payload: {
       workspaceId: "ws-feature-a",

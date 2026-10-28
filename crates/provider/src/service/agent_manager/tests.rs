@@ -783,7 +783,7 @@ async fn accepted_turn_survives_runtime_write_failure_and_reports_inspection_fai
     let subscription = connection
         .subscribe(
             domain::session::protocol::EventsRequest {
-                events: vec!["activity_log".to_owned()],
+                events: vec!["activity.log".to_owned()],
                 notifications: false,
             },
             Arc::new(move |_, payload| {

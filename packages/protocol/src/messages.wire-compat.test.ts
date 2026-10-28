@@ -395,7 +395,7 @@ test("blocked setup preserves the legacy failed shape and optional provenance", 
   };
   expect(legacySnapshot.safeParse(failed).success).toBe(true);
   const progress = {
-    type: "workspace_setup_progress",
+    type: "workspace.setup.progress",
     payload: { ...failed, workspaceId: "workspace" },
   };
   expect(WorkspaceSetupProgressMessageSchema.parse(progress)).toEqual(progress);
