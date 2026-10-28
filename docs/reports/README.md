@@ -98,6 +98,8 @@
 
 ## Provider、Agent 与会话
 
+- [OMP 审批与对话事件链路验证](providers/omp-interaction-events-2026-10-28.md)
+
 - [MiniMax Code 最新 ACP 接入验证](providers/minimax-code-acp-2026-10-28.md)
 
 - [Pi 模式移除验证](providers/pi-mode-removal-2026-10-24.md)

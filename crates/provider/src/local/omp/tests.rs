@@ -8,6 +8,7 @@ use crate::protocol::prompt::{AgentPrompt, PromptImage};
 mod capabilities;
 mod diagnostics;
 mod installed;
+mod interactions;
 mod real;
 mod settlement;
 

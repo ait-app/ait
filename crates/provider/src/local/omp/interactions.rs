@@ -47,8 +47,16 @@ impl Dialogs {
                 .filter(|options| options.len() <= 128)
                 .ok_or(AgentSessionError::Failed)?
                 .iter()
-                .map(|option| {
-                    Ok(json!({"label":option.as_str().ok_or(AgentSessionError::Failed)?}))
+                .enumerate()
+                .map(|(index, option)| {
+                    let mut option =
+                        json!({"label":option.as_str().ok_or(AgentSessionError::Failed)?});
+                    if let Some(description) =
+                        native["optionDetails"][index]["description"].as_str()
+                    {
+                        option["description"] = json!(description);
+                    }
+                    Ok(option)
                 })
                 .collect::<Result<Vec<_>, AgentSessionError>>()?
         } else {
@@ -63,6 +71,17 @@ impl Dialogs {
                 {"id":"deny","label":"Cancel","behavior":"deny"}]});
         if let Some(message) = native["message"].as_str() {
             request["description"] = json!(message);
+        }
+        if let Some(title) = native["title"].as_str() {
+            request["title"] = json!(title);
+        }
+        if method == "input"
+            && let Some(placeholder) = native["placeholder"].as_str()
+        {
+            request["input"]["questions"][0]["placeholder"] = json!(placeholder);
+        }
+        if method == "editor" {
+            request["input"]["questions"][0]["multiline"] = json!(true);
         }
         if method == "ask" {
             request["input"] = json!({"questions":questions(native)?});

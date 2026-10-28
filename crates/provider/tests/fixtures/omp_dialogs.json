@@ -1,0 +1,482 @@
+[
+  {
+    "name": "write approval",
+    "native": {
+      "type": "extension_ui_request",
+      "id": "write-approval",
+      "method": "select",
+      "title": "Write /tmp/probe.html",
+      "options": [
+        "Approve",
+        "Deny"
+      ],
+      "optionDetails": [
+        {
+          "description": "Allow this write once"
+        },
+        {
+          "description": "Reject this write"
+        }
+      ]
+    },
+    "request": {
+      "id": "write-approval",
+      "provider": "omp",
+      "name": "extension_ui",
+      "kind": "question",
+      "title": "Write /tmp/probe.html",
+      "input": {
+        "questions": [
+          {
+            "header": "Write /tmp/probe.html",
+            "question": "Write /tmp/probe.html",
+            "answerKey": "value",
+            "options": [
+              {
+                "label": "Approve",
+                "description": "Allow this write once"
+              },
+              {
+                "label": "Deny",
+                "description": "Reject this write"
+              }
+            ],
+            "multiSelect": false,
+            "allowOther": false
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "allow",
+          "label": "Submit",
+          "behavior": "allow"
+        },
+        {
+          "id": "deny",
+          "label": "Cancel",
+          "behavior": "deny"
+        }
+      ]
+    },
+    "response": {
+      "behavior": "allow",
+      "updatedInput": {
+        "answers": {
+          "Write /tmp/probe.html": "Approve"
+        }
+      }
+    },
+    "nativeResponse": {
+      "type": "extension_ui_response",
+      "id": "write-approval",
+      "value": "Approve"
+    }
+  },
+  {
+    "name": "execution approval",
+    "native": {
+      "type": "extension_ui_request",
+      "id": "execution-approval",
+      "method": "select",
+      "title": "Execute command",
+      "options": [
+        "Approve",
+        "Deny"
+      ]
+    },
+    "request": {
+      "id": "execution-approval",
+      "provider": "omp",
+      "name": "extension_ui",
+      "kind": "question",
+      "title": "Execute command",
+      "input": {
+        "questions": [
+          {
+            "header": "Execute command",
+            "question": "Execute command",
+            "answerKey": "value",
+            "options": [
+              {
+                "label": "Approve"
+              },
+              {
+                "label": "Deny"
+              }
+            ],
+            "multiSelect": false,
+            "allowOther": false
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "allow",
+          "label": "Submit",
+          "behavior": "allow"
+        },
+        {
+          "id": "deny",
+          "label": "Cancel",
+          "behavior": "deny"
+        }
+      ]
+    },
+    "response": {
+      "behavior": "allow",
+      "updatedInput": {
+        "answers": {
+          "Execute command": "Approve"
+        }
+      }
+    },
+    "nativeResponse": {
+      "type": "extension_ui_response",
+      "id": "execution-approval",
+      "value": "Approve"
+    }
+  },
+  {
+    "name": "extension selector",
+    "native": {
+      "type": "extension_ui_request",
+      "id": "extension-selector",
+      "method": "select",
+      "title": "Choose destination",
+      "options": [
+        "A, B",
+        "C"
+      ],
+      "message": null
+    },
+    "request": {
+      "id": "extension-selector",
+      "provider": "omp",
+      "name": "extension_ui",
+      "kind": "question",
+      "title": "Choose destination",
+      "input": {
+        "questions": [
+          {
+            "header": "Choose destination",
+            "question": "Choose destination",
+            "answerKey": "value",
+            "options": [
+              {
+                "label": "A, B"
+              },
+              {
+                "label": "C"
+              }
+            ],
+            "multiSelect": false,
+            "allowOther": false
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "allow",
+          "label": "Submit",
+          "behavior": "allow"
+        },
+        {
+          "id": "deny",
+          "label": "Cancel",
+          "behavior": "deny"
+        }
+      ]
+    },
+    "response": {
+      "behavior": "allow",
+      "updatedInput": {
+        "answers": {
+          "Choose destination": "A, B"
+        }
+      }
+    },
+    "nativeResponse": {
+      "type": "extension_ui_response",
+      "id": "extension-selector",
+      "value": "A, B"
+    }
+  },
+  {
+    "name": "confirmation",
+    "native": {
+      "type": "extension_ui_request",
+      "id": "confirmation",
+      "method": "confirm",
+      "title": "Continue?",
+      "message": "Run this operation?"
+    },
+    "request": {
+      "id": "confirmation",
+      "provider": "omp",
+      "name": "extension_ui",
+      "kind": "tool",
+      "title": "Continue?",
+      "input": {
+        "title": "Continue?",
+        "message": "Run this operation?"
+      },
+      "actions": [
+        {
+          "id": "allow",
+          "label": "Submit",
+          "behavior": "allow"
+        },
+        {
+          "id": "deny",
+          "label": "Cancel",
+          "behavior": "deny"
+        }
+      ],
+      "description": "Run this operation?"
+    },
+    "response": {
+      "behavior": "allow"
+    },
+    "nativeResponse": {
+      "type": "extension_ui_response",
+      "id": "confirmation",
+      "confirmed": true
+    }
+  },
+  {
+    "name": "text input",
+    "native": {
+      "type": "extension_ui_request",
+      "id": "text-input",
+      "method": "input",
+      "title": "Your name",
+      "placeholder": "Enter your name"
+    },
+    "request": {
+      "id": "text-input",
+      "provider": "omp",
+      "name": "extension_ui",
+      "kind": "question",
+      "title": "Your name",
+      "input": {
+        "questions": [
+          {
+            "header": "Your name",
+            "question": "Your name",
+            "answerKey": "value",
+            "options": [],
+            "multiSelect": false,
+            "allowOther": true,
+            "placeholder": "Enter your name"
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "allow",
+          "label": "Submit",
+          "behavior": "allow"
+        },
+        {
+          "id": "deny",
+          "label": "Cancel",
+          "behavior": "deny"
+        }
+      ]
+    },
+    "response": {
+      "behavior": "allow",
+      "updatedInput": {
+        "answers": {
+          "Your name": "User answer"
+        }
+      }
+    },
+    "nativeResponse": {
+      "type": "extension_ui_response",
+      "id": "text-input",
+      "value": "User answer"
+    }
+  },
+  {
+    "name": "editor",
+    "native": {
+      "type": "extension_ui_request",
+      "id": "editor",
+      "method": "editor",
+      "title": "Edit the plan",
+      "prefill": "Initial plan",
+      "promptStyle": true
+    },
+    "request": {
+      "id": "editor",
+      "provider": "omp",
+      "name": "extension_ui",
+      "kind": "question",
+      "title": "Edit the plan",
+      "input": {
+        "questions": [
+          {
+            "header": "Edit the plan",
+            "question": "Edit the plan",
+            "answerKey": "value",
+            "options": [],
+            "multiSelect": false,
+            "allowOther": true,
+            "multiline": true
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "allow",
+          "label": "Submit",
+          "behavior": "allow"
+        },
+        {
+          "id": "deny",
+          "label": "Cancel",
+          "behavior": "deny"
+        }
+      ]
+    },
+    "response": {
+      "behavior": "allow",
+      "updatedInput": {
+        "answers": {
+          "Edit the plan": "Updated plan\nwith a second line"
+        }
+      }
+    },
+    "nativeResponse": {
+      "type": "extension_ui_response",
+      "id": "editor",
+      "value": "Updated plan\nwith a second line"
+    }
+  },
+  {
+    "name": "structured ask",
+    "native": {
+      "type": "extension_ui_request",
+      "id": "ask-1",
+      "method": "ask",
+      "questions": [
+        {
+          "id": "db",
+          "header": "Database",
+          "question": "Which database?",
+          "options": [
+            {
+              "label": "A,B"
+            },
+            {
+              "label": "C"
+            }
+          ]
+        },
+        {
+          "id": "features",
+          "header": "Features",
+          "question": "Which features?",
+          "multi": true,
+          "options": [
+            {
+              "label": "Auth"
+            },
+            {
+              "label": "Search"
+            }
+          ]
+        }
+      ]
+    },
+    "request": {
+      "id": "ask-1",
+      "provider": "omp",
+      "name": "extension_ui",
+      "kind": "question",
+      "input": {
+        "questions": [
+          {
+            "answerKey": "db",
+            "header": "Database",
+            "question": "Which database?",
+            "options": [
+              {
+                "label": "A,B"
+              },
+              {
+                "label": "C"
+              }
+            ],
+            "multiSelect": false,
+            "allowOther": true,
+            "answerFormat": "array"
+          },
+          {
+            "answerKey": "features",
+            "header": "Features",
+            "question": "Which features?",
+            "options": [
+              {
+                "label": "Auth"
+              },
+              {
+                "label": "Search"
+              }
+            ],
+            "multiSelect": true,
+            "allowOther": true,
+            "answerFormat": "array"
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "allow",
+          "label": "Submit",
+          "behavior": "allow"
+        },
+        {
+          "id": "deny",
+          "label": "Cancel",
+          "behavior": "deny"
+        }
+      ]
+    },
+    "response": {
+      "behavior": "allow",
+      "updatedInput": {
+        "answers": {
+          "db": [
+            "A,B"
+          ],
+          "features": [
+            "Auth",
+            "Search"
+          ]
+        }
+      }
+    },
+    "nativeResponse": {
+      "type": "extension_ui_response",
+      "id": "ask-1",
+      "answers": [
+        {
+          "id": "db",
+          "selectedOptions": [
+            "A,B"
+          ]
+        },
+        {
+          "id": "features",
+          "selectedOptions": [
+            "Auth",
+            "Search"
+          ]
+        }
+      ]
+    }
+  }
+]

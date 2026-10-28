@@ -6,6 +6,8 @@ import type { PendingPermission } from "@/types/shared";
 import { AgentPermissionRequestPayloadSchema } from "@ait/protocol/messages";
 import { QuestionFormCard } from "./question-form-card";
 import ompQuestion from "../../../../crates/provider/tests/fixtures/omp_question.json";
+import ompDialogs from "../../../../crates/provider/tests/fixtures/omp_dialogs.json";
+import { parseQuestionFormQuestions } from "./question-form-card-core";
 
 vi.mock("@/constants/layout", () => ({ useIsCompactFormFactor: () => false }));
 vi.mock("@/components/ui/loading-spinner", () => ({
@@ -17,19 +19,29 @@ vi.mock("@/components/ui/text-input", () => ({
     onChangeText,
     accessibilityLabel,
     editable,
+    multiline,
   }: {
     initialValue: string;
     onChangeText: (text: string) => void;
     accessibilityLabel: string;
     editable: boolean;
-  }) => (
-    <input
-      aria-label={accessibilityLabel}
-      value={initialValue}
-      disabled={!editable}
-      onChange={(event) => onChangeText(event.target.value)}
-    />
-  ),
+    multiline?: boolean;
+  }) =>
+    multiline ? (
+      <textarea
+        aria-label={accessibilityLabel}
+        value={initialValue}
+        disabled={!editable}
+        onChange={(event) => onChangeText(event.target.value)}
+      />
+    ) : (
+      <input
+        aria-label={accessibilityLabel}
+        value={initialValue}
+        disabled={!editable}
+        onChange={(event) => onChangeText(event.target.value)}
+      />
+    ),
 }));
 
 const permission: PendingPermission = {
@@ -153,6 +165,37 @@ describe("question response recovery", () => {
     expect(onRespond).toHaveBeenCalledExactlyOnceWith({
       ...fixture.response,
       updatedInput: { ...fixture.request.input, ...fixture.response.updatedInput },
+    });
+  });
+
+  it.each(
+    ompDialogs.filter((fixture) => ["select", "input", "editor"].includes(fixture.native.method)),
+  )("renders OMP $name and returns the exact native answer", (fixture) => {
+    const request = AgentPermissionRequestPayloadSchema.parse(fixture.request);
+    const question = parseQuestionFormQuestions(request.input)![0];
+    const answer = fixture.nativeResponse.value!;
+    const onRespond = vi.fn();
+    render(
+      <QuestionFormCard
+        permission={{ key: `agent:${request.id}`, agentId: "agent", request }}
+        onRespond={onRespond}
+        isResponding={false}
+      />,
+    );
+
+    expect(screen.getByText(question.question)).toBeTruthy();
+    if (fixture.native.method === "select") {
+      fireEvent.click(screen.getByRole("radio", { name: answer }));
+    } else {
+      fireEvent.change(screen.getByRole("textbox", { name: question.question }), {
+        target: { value: answer },
+      });
+    }
+    fireEvent.click(screen.getByTestId("question-form-primary-action"));
+
+    expect(onRespond).toHaveBeenCalledExactlyOnceWith({
+      ...fixture.response,
+      updatedInput: { ...request.input, ...fixture.response.updatedInput },
     });
   });
 });
