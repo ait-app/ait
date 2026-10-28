@@ -263,6 +263,53 @@ struct Installed {
     _server: tokio_util::task::AbortOnDropHandle<()>,
 }
 
+#[tokio::test]
+#[ignore = "requires official AIT_TEST_OMP_BIN; answers native ask using a local mock model"]
+async fn installed_omp_structured_ask_reaches_the_host_and_returns_answers_to_the_model() {
+    let fixture = installed_with_plugins().await;
+    let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
+    session
+        .start_turn("OMP_ASK_FIXTURE", &fixture.spec.config)
+        .await
+        .unwrap();
+
+    let request = loop {
+        let event = next(session.as_mut()).await.unwrap();
+        if let AgentTurnEvent::PermissionRequested(request) = event {
+            break request;
+        }
+        assert!(
+            !matches!(event, AgentTurnEvent::Failed | AgentTurnEvent::Completed(_)),
+            "native ask ended without a question: {event:?}"
+        );
+    };
+    assert_eq!(request["kind"], "question");
+    assert!(request.get("description").is_none());
+    assert_eq!(request["input"]["questions"][1]["multiSelect"], true);
+    assert_eq!(session.pending_permissions(), vec![request.clone()]);
+    session
+        .respond_permission(
+            request["id"].as_str().unwrap(),
+            &json!({"behavior":"allow","updatedInput":{"answers":{
+                "db":["A,B"],"features":["Auth","Search"]}}}),
+        )
+        .await
+        .unwrap();
+
+    let events = complete(session.as_mut()).await;
+    assert_eq!(session.pending_permissions(), Vec::<Value>::new());
+    let Some(AgentTurnEvent::Completed(Some(reply))) = events.last() else {
+        panic!("ask did not complete: {events:?}");
+    };
+    for answer in ["A,B", "Auth", "Search"] {
+        assert!(
+            reply.contains(answer),
+            "model did not receive {answer}: {reply}"
+        );
+    }
+    session.close().await.unwrap();
+}
+
 async fn installed_with_plugins() -> Installed {
     let root = tempfile::tempdir().unwrap();
     let program = std::env::var_os("AIT_TEST_OMP_BIN").expect("set AIT_TEST_OMP_BIN");
@@ -330,8 +377,27 @@ async fn mock_plugin_completion(
         .unwrap()
         .iter()
         .any(|message| message["role"] == "tool");
+    let asking = request["messages"].to_string().contains("OMP_ASK_FIXTURE");
     let delta = if tool_finished {
-        json!({"role":"assistant","content":"Fixture complete"})
+        let text = if asking {
+            request["messages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|message| message["role"] == "tool")
+                .map(|message| message["content"].to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        } else {
+            "Fixture complete".to_owned()
+        };
+        json!({"role":"assistant","content":text})
+    } else if asking {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../../../../tests/fixtures/omp_question.json"))
+                .unwrap();
+        json!({"role":"assistant","tool_calls":[{"index":0,"id":"fixture-ask","type":"function",
+            "function":{"name":"ask","arguments":json!({"questions":fixture["native"]["questions"]}).to_string()}}]})
     } else {
         json!({"role":"assistant","tool_calls":[{"index":0,"id":"fixture-call","type":"function",
             "function":{"name":"compat_dynamic_tool","arguments":"{\"text\":\"plugin tool output\"}"}}]})

@@ -1,0 +1,68 @@
+{
+  "native": {
+    "type": "extension_ui_request",
+    "id": "ask-1",
+    "method": "ask",
+    "questions": [
+      {
+        "id": "db",
+        "header": "Database",
+        "question": "Which database?",
+        "options": [{ "label": "A,B" }, { "label": "C" }]
+      },
+      {
+        "id": "features",
+        "header": "Features",
+        "question": "Which features?",
+        "multi": true,
+        "options": [{ "label": "Auth" }, { "label": "Search" }]
+      }
+    ]
+  },
+  "request": {
+    "id": "ask-1",
+    "provider": "omp",
+    "name": "extension_ui",
+    "kind": "question",
+    "input": {
+      "questions": [
+        {
+          "answerKey": "db",
+          "header": "Database",
+          "question": "Which database?",
+          "options": [{ "label": "A,B" }, { "label": "C" }],
+          "multiSelect": false,
+          "allowOther": true,
+          "answerFormat": "array"
+        },
+        {
+          "answerKey": "features",
+          "header": "Features",
+          "question": "Which features?",
+          "options": [{ "label": "Auth" }, { "label": "Search" }],
+          "multiSelect": true,
+          "allowOther": true,
+          "answerFormat": "array"
+        }
+      ]
+    },
+    "actions": [
+      { "id": "allow", "label": "Submit", "behavior": "allow" },
+      { "id": "deny", "label": "Cancel", "behavior": "deny" }
+    ]
+  },
+  "response": {
+    "behavior": "allow",
+    "updatedInput": {
+      "answers": { "db": ["A,B"], "features": ["Auth", "Search"] }
+    }
+  },
+  "nativeResponse": {
+    "type": "extension_ui_response",
+    "id": "ask-1",
+    "answers": [
+      { "id": "db", "selectedOptions": ["A,B"] },
+      { "id": "features", "selectedOptions": ["Auth", "Search"] }
+    ]
+  }
+}

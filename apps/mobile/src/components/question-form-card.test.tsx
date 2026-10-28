@@ -3,7 +3,9 @@ import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PendingPermission } from "@/types/shared";
+import { AgentPermissionRequestPayloadSchema } from "@ait/protocol/messages";
 import { QuestionFormCard } from "./question-form-card";
+import ompQuestion from "../../../../crates/provider/tests/fixtures/omp_question.json";
 
 vi.mock("@/constants/layout", () => ({ useIsCompactFormFactor: () => false }));
 vi.mock("@/components/ui/loading-spinner", () => ({
@@ -124,5 +126,33 @@ describe("question response recovery", () => {
     expect(
       (screen.getByRole("textbox", { name: "Choose a runtime" }) as HTMLInputElement).value,
     ).toBe("Keep my answer");
+  });
+
+  it("renders the OMP wire question and submits native answer keys and multiple choices", () => {
+    const fixture = ompQuestion;
+    const onRespond = vi.fn();
+    render(
+      <QuestionFormCard
+        permission={{
+          key: "agent:ask-1",
+          agentId: "agent",
+          request: AgentPermissionRequestPayloadSchema.parse(fixture.request),
+        }}
+        onRespond={onRespond}
+        isResponding={false}
+      />,
+    );
+
+    expect(screen.getByText("Which database?")).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "A,B" }));
+    expect(screen.getByText("Which features?")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Auth" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Search" }));
+    fireEvent.click(screen.getByTestId("question-form-primary-action"));
+
+    expect(onRespond).toHaveBeenCalledExactlyOnceWith({
+      ...fixture.response,
+      updatedInput: { ...fixture.request.input, ...fixture.response.updatedInput },
+    });
   });
 });
