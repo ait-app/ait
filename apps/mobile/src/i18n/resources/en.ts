@@ -92,6 +92,7 @@ export const en = {
     serviceUrlHint: "Service URL (leave blank to use the default)",
     connected: "Connected to account",
     connecting: "Connecting to account...",
+    disconnected: "Connection to the online server was lost. Reconnecting automatically.",
     onlineHosts: "Online hosts",
     staleHosts: "Host list is out of date",
     hostCount: "{{count}} hosts online",

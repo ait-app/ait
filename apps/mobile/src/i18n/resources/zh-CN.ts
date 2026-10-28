@@ -87,6 +87,7 @@ export const zhCN: TranslationResources = {
     serviceUrlHint: "服务地址（留空使用默认地址）",
     connected: "已登录在线服务",
     connecting: "正在连接在线服务…",
+    disconnected: "在线服务器连接已断开，正在自动重连。",
     onlineHosts: "在线主机",
     staleHosts: "主机列表需要刷新",
     hostCount: "{{count}} 台主机在线",

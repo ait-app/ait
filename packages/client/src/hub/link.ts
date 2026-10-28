@@ -1,7 +1,7 @@
 import type { WebSocketFactory, WebSocketLike } from "../daemon-client-transport-types.js";
 import { extractWebSocketMessage } from "../daemon-client-transport-utils.js";
 import { formatDiagnosticFields } from "../diagnostic-log.js";
-import { bindWsHandler } from "../daemon-client-websocket-transport.js";
+import { bindWsHandler, closeWebSocket } from "../daemon-client-websocket-transport.js";
 import {
   decodeHubFrame,
   encodeHubFrame,
@@ -623,7 +623,7 @@ export class HubLink implements HubAccountConnection {
     this.verification = null;
     for (const resolve of this.pings.values()) resolve(false);
     try {
-      socket?.close();
+      if (socket) closeWebSocket(socket);
     } catch {
       /* Already closed. */
     }
