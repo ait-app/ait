@@ -3,7 +3,7 @@ import {
   nativeWebSocketFactory,
 } from "@ait/client/internal/daemon-client-websocket-transport";
 import { HubLink } from "@ait/client/internal/hub";
-import { AppState, Platform } from "react-native";
+import { AppState, Linking, Platform } from "react-native";
 import * as Crypto from "expo-crypto";
 import { fetch as nativeFetch } from "expo/fetch";
 import * as SecureStore from "expo-secure-store";
@@ -51,6 +51,7 @@ async function createAccount(): Promise<AccountSessionManager> {
     deviceName: platform === "ios" ? "Ait iOS" : "Ait Android",
     platform,
     browserLogin: platform === "ios" ? iosBrowserLogin : androidBrowserLogin,
+    openUrl: (url) => Linking.openURL(url),
     randomUUID: Crypto.randomUUID,
     fetch: nativeFetch as typeof fetch,
     appVersion: resolveAppVersion() ?? "unknown",

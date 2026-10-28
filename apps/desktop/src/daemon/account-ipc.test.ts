@@ -58,8 +58,9 @@ vi.mock("./account-session.js", () => ({
       this.status = "logged_out";
     }
     async deleteAccount() {
-      await mocks.deleteAccount();
+      if ((await mocks.deleteAccount()) === false) return false;
       await this.logout();
+      return true;
     }
     publishHost = mocks.publish;
     unpublishHost = mocks.unpublish;
@@ -211,6 +212,20 @@ describe("desktop account login commands", () => {
     await expect(command(event, "account_delete")).resolves.toMatchObject({ status: "logged_out" });
     expect(mocks.deleteAccount).toHaveBeenCalledExactlyOnceWith();
     expect(stored().account).toBeNull();
+  });
+
+  it("opens browser confirmation in the system browser and keeps the session", async () => {
+    const command = invoke();
+    await command(event, "account_login_hosted");
+    const saved = stored();
+    mocks.deleteAccount.mockResolvedValueOnce(false);
+    await expect(command(event, "account_delete")).resolves.toMatchObject({ status: "online" });
+    expect(stored()).toEqual(saved);
+    const { shell } = await import("electron");
+    await mocks.deps?.openUrl?.("https://example.test/api/v1/auth/delete/authorize");
+    expect(shell.openExternal).toHaveBeenCalledWith(
+      "https://example.test/api/v1/auth/delete/authorize",
+    );
   });
 
   it("retains credentials when deletion is rejected", async () => {

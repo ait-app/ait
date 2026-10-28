@@ -45,7 +45,7 @@ describe("account deletion", () => {
     expect(f.deps.closeTransports).not.toHaveBeenCalled();
     expect(f.manager.snapshot().status).toBe("online");
     finish(new Response(null, { status: 204 }));
-    await pending;
+    await expect(pending).resolves.toBe(true);
     expect(f.deps.save).toHaveBeenLastCalledWith(null);
     expect(f.deps.closeTransports).toHaveBeenCalledOnce();
     expect(f.manager.snapshot()).toMatchObject({
@@ -97,6 +97,48 @@ describe("account deletion", () => {
     expect(f.manager.snapshot()).toEqual(snapshot);
     expect(f.deps.save).not.toHaveBeenCalled();
     expect(f.deps.closeTransports).not.toHaveBeenCalled();
+    await f.manager.logout();
+  });
+
+  it("opens browser confirmation when the service requires it and keeps the session", async () => {
+    const f = fixture();
+    const openUrl = vi.fn(async () => undefined);
+    f.deps.openUrl = openUrl;
+    await f.manager.restore({
+      center: "https://custom.test/api",
+      token: "saved-jwt",
+      name: "Me",
+      expiresAt: Date.now() + 60_000,
+    });
+    vi.mocked(f.deps.save).mockClear();
+    vi.mocked(f.deps.closeTransports).mockClear();
+    f.http.mockResolvedValueOnce(
+      Response.json(
+        { error: { code: "browser_confirmation_required", message: "Use the browser" } },
+        { status: 403 },
+      ),
+    );
+    await expect(f.manager.deleteAccount()).resolves.toBe(false);
+    expect(openUrl).toHaveBeenCalledExactlyOnceWith(
+      "https://custom.test/api/v1/auth/delete/authorize",
+    );
+    expect(f.deps.save).not.toHaveBeenCalled();
+    expect(f.deps.closeTransports).not.toHaveBeenCalled();
+    expect(f.manager.snapshot()).toMatchObject({ status: "connecting", name: "Me" });
+    await f.manager.logout();
+  });
+
+  it("reports browser confirmation as an error when no browser is available", async () => {
+    const f = fixture();
+    await f.login();
+    f.http.mockResolvedValueOnce(
+      Response.json(
+        { error: { code: "browser_confirmation_required", message: "Use the browser" } },
+        { status: 403 },
+      ),
+    );
+    await expect(f.manager.deleteAccount()).rejects.toThrow("Use the browser");
+    expect(f.manager.snapshot().status).not.toBe("logged_out");
     await f.manager.logout();
   });
 

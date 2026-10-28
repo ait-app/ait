@@ -83,6 +83,8 @@ export const en = {
     deleteAccountTitle: "Delete your account?",
     deleteAccountMessage:
       "Your account will be deleted and you will be signed out. Connected hosts will lose access to the online service. This cannot be undone.",
+    deleteAccountInBrowser:
+      "Finish deleting your account in the browser. You will be signed out here once you confirm.",
     signOutHint:
       "Signing out releases this client's binding daemon lease. Other hosts stay synchronized until you stop them individually.",
     refresh: "Refresh",

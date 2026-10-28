@@ -101,6 +101,7 @@ export function createAccountIpc(
     appVersion: displayAppVersion(),
     publishRuntime: false,
     browserLogin: desktopBrowserLogin((url) => shell.openExternal(url)),
+    openUrl: (url) => shell.openExternal(url),
     runtime: () => getRuntime().status(),
     local: (method, body) => getRuntime().relayRequest(method, body),
     localHub: (method, body) => getRuntime().hubRequest(method, body),
@@ -191,8 +192,7 @@ export function createAccountIpc(
           hub.stop();
           return snapshot();
         case "account_delete":
-          await manager.deleteAccount();
-          hub.stop();
+          if (await manager.deleteAccount()) hub.stop();
           return snapshot();
         case "account_refresh":
           manager.refresh();
