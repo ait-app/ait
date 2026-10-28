@@ -1,6 +1,57 @@
 use super::*;
 
 #[test]
+fn structured_question_matches_the_client_wire_contract() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("../../../../tests/fixtures/omp_question.json")).unwrap();
+    let mut dialogs = Dialogs::default();
+
+    let events = dialogs.capture(&fixture["native"]).unwrap();
+
+    assert_eq!(
+        events,
+        vec![AgentTurnEvent::PermissionRequested(
+            fixture["request"].clone()
+        )]
+    );
+    assert_eq!(dialogs.pending(), vec![fixture["request"].clone()]);
+    assert_eq!(
+        dialogs.response("ask-1", &fixture["response"]).unwrap(),
+        fixture["nativeResponse"]
+    );
+}
+
+#[test]
+fn optional_dialog_descriptions_are_strings_or_absent() {
+    for method in ["select", "confirm", "input", "editor", "ask"] {
+        for message in [
+            None,
+            Some(Value::Null),
+            Some(json!(42)),
+            Some(json!("Details")),
+        ] {
+            let mut dialogs = Dialogs::default();
+            let mut native = json!({"id":"dialog","method":method,"title":"Question",
+                "options":["A"],"questions":[{"id":"choice","question":"Choose",
+                    "options":[{"label":"A"}]}]});
+            if let Some(message) = &message {
+                native["message"] = message.clone();
+            }
+
+            let events = dialogs.capture(&native).unwrap();
+
+            let [AgentTurnEvent::PermissionRequested(request)] = events.as_slice() else {
+                panic!("missing {method} request");
+            };
+            assert_eq!(
+                request.get("description"),
+                message.as_ref().filter(|v| v.is_string())
+            );
+        }
+    }
+}
+
+#[test]
 fn structured_questions_preserve_multiselect_and_commas() {
     let mut dialogs = Dialogs::default();
     let native = json!({"id":"ask","method":"ask","questions":[

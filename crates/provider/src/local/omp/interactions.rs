@@ -55,12 +55,15 @@ impl Dialogs {
             Vec::new()
         };
         let mut request = json!({"id":id,"provider":"omp","name":"extension_ui","kind":
-            if method=="confirm" {"tool"} else {"question"},"description":native["message"],
+            if method=="confirm" {"tool"} else {"question"},
             "input":if method=="confirm" {json!({"title":title,"message":native["message"]})}
             else {json!({"questions":[{"header":title,"question":title,"answerKey":"value",
                 "options":options,"multiSelect":false,"allowOther":method!="select"}]})},
             "actions":[{"id":"allow","label":"Submit","behavior":"allow"},
                 {"id":"deny","label":"Cancel","behavior":"deny"}]});
+        if let Some(message) = native["message"].as_str() {
+            request["description"] = json!(message);
+        }
         if method == "ask" {
             request["input"] = json!({"questions":questions(native)?});
         }
