@@ -87,7 +87,9 @@ impl AgentClient for MiniMaxClient {
                 config: StoredAgentConfig::default(),
             };
             let mut session = session::open(self, &spec, None).await?;
-            let details = config::details(&session.options);
+            let details = tokio::time::timeout(self.deadline, session.discover())
+                .await
+                .unwrap_or(Err(AgentSessionError::Failed));
             session.close().await?;
             details
         })

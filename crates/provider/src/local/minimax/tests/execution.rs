@@ -13,21 +13,55 @@ fn worker(fixture: &Fixture, program: PathBuf) -> AgentExecution {
     .0
 }
 
-/// Exercise the same catalog, registry, scheduling and timeline API used by AIT clients.
-/// Uses the isolated `fixture` and `program`; `live` selects model prompts over fixture commands.
-pub(super) async fn round_trip(fixture: &Fixture, program: PathBuf, live: bool) {
-    let execution = worker(fixture, program.clone());
+async fn discovered_model(execution: &AgentExecution, fixture: &Fixture, live: bool) -> Value {
     let models = request(
-        &execution,
+        execution,
         "provider.models.list.request",
         json!({"provider":PROVIDER,"cwd":fixture.cwd}),
     )
     .await;
-    assert!(!models["models"].as_array().unwrap().is_empty(), "{models}");
+    if !live {
+        let snapshot = request(
+            execution,
+            "provider.snapshot.get.request",
+            json!({"cwd":fixture.cwd}),
+        )
+        .await;
+        let rejected = snapshot["entries"][0]["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|model| model["id"] == "minimax/rejected")
+            .expect("rejected model remains visible in diagnostics");
+        assert_eq!(rejected["isSelectable"], false);
+        assert_eq!(models["models"].as_array().unwrap().len(), 2);
+        assert!(
+            models["models"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|model| model["id"] != "minimax/rejected")
+        );
+    }
+    models["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|model| model["isSelectable"] != false)
+        .expect("discovery advertises a model that can create a session")
+        .clone()
+}
+
+/// Exercise the same catalog, registry, scheduling and timeline API used by AIT clients.
+/// Uses the isolated `fixture` and `program`; `live` selects model prompts over fixture commands.
+pub(super) async fn round_trip(fixture: &Fixture, program: PathBuf, live: bool) {
+    let execution = worker(fixture, program.clone());
+    let model = discovered_model(&execution, fixture, live).await;
     let created = request(
         &execution,
         "agent.create.request",
-        json!({"config":{"provider":PROVIDER,"cwd":fixture.cwd}}),
+        json!({"config":{"provider":PROVIDER,"cwd":fixture.cwd,
+            "model":model["id"],"thinkingOptionId":model["defaultThinkingOptionId"]}}),
     )
     .await;
     let id = created["agentId"].as_str().unwrap().to_owned();
@@ -111,6 +145,7 @@ pub(super) async fn round_trip(fixture: &Fixture, program: PathBuf, live: bool) 
 #[tokio::test]
 async fn ait_catalog_execution_timeline_and_restart_preserve_conversation() {
     let fixture = Fixture::new();
+    std::fs::write(fixture.cwd.join("scenario"), "rejected-model").unwrap();
     let program =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/local/minimax/tests/fixtures/acp.py");
     round_trip(&fixture, program, false).await;

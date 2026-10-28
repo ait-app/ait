@@ -2,6 +2,7 @@ use super::*;
 use crate::ports::agent_session::AgentTurnEvent;
 use crate::protocol::prompt::AgentPrompt;
 
+mod discovery;
 mod execution;
 mod live;
 

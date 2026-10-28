@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 assert sys.argv[1] == "acp"
@@ -35,11 +36,21 @@ def options():
              {"value": "minimax/flash", "name": "Flash"},
              {"value": "minimax/pro", "name": "Pro"}]},
     ]
+    if scenario == "rejected-model":
+        result[1]["options"].insert(0, {"value": "minimax/rejected", "name": "Unavailable variant"})
+    if scenario in ("large-catalog", "slow-catalog"):
+        result[1]["options"].extend(
+            {"value": f"minimax/pro-{index}", "name": f"Pro {index}"} for index in range(140)
+        )
     if model == "minimax/flash":
         result.append({"id": "thinkingEffort", "category": "thought_level", "type": "select",
                        "name": "Thinking effort", "currentValue": thinking_effort, "options": [
                            {"value": "default", "name": "Default"},
                            {"value": "low", "name": "Low"}]})
+    elif scenario == "alternate-effort":
+        result.append({"id": "thinkingEffort", "category": "thought_level", "type": "select",
+                       "name": "Thinking effort", "currentValue": "high", "options": [
+                           {"value": "high", "name": "High"}]})
     return result
 
 
@@ -79,12 +90,21 @@ for line in sys.stdin:
         reply(identity, {})
     elif method == "session/set_config_option":
         if params["configId"] == "model":
+            if params["value"] == "minimax/rejected":
+                send({"id": identity, "error": {"code": -32603, "message": "Internal error",
+                                                "data": {"details": "Invalid model reasoning"}}})
+                continue
+            if scenario == "catalog-disconnected":
+                sys.exit(0)
+            if scenario == "slow-catalog":
+                time.sleep(0.02)
             model = params["value"]
         elif params["configId"] == "thinkingEffort":
             assert model == "minimax/flash"
             thinking_effort = params["value"]
         else:
             permission_mode = params["value"]
+        update({"sessionUpdate": "config_option_update", "configOptions": options()})
         reply(identity, {"configOptions": options()})
     elif method == "session/prompt":
         active = identity
