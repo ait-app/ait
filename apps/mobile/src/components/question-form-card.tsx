@@ -263,6 +263,7 @@ interface QuestionOtherInputProps {
   value: string;
   placeholder: string;
   isResponding: boolean;
+  multiline?: boolean;
   onChange: (qIndex: number, text: string) => void;
   onSubmit: () => void;
 }
@@ -273,6 +274,7 @@ function QuestionOtherInput({
   value,
   placeholder,
   isResponding,
+  multiline,
   onChange,
   onSubmit,
 }: QuestionOtherInputProps) {
@@ -311,7 +313,8 @@ function QuestionOtherInput({
       placeholderTextColor={theme.colors.foregroundMuted}
       initialValue={value}
       onChangeText={handleChange}
-      onSubmitEditing={onSubmit}
+      onSubmitEditing={multiline ? undefined : onSubmit}
+      multiline={multiline}
       editable={!isResponding}
       blurOnSubmit={false}
     />
@@ -573,6 +576,7 @@ export function QuestionFormCard({
           ) : null}
           {showTextInput ? (
             <QuestionOtherInput
+              multiline={activeQuestion.multiline}
               qIndex={resolvedActiveQuestionIndex}
               accessibilityLabel={activeQuestion.question}
               value={otherText}

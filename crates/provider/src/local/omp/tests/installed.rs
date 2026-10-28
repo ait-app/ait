@@ -1,5 +1,6 @@
 use super::*;
 
+mod interactions;
 mod settlement;
 
 #[tokio::test]
@@ -378,8 +379,14 @@ async fn mock_plugin_completion(
         .iter()
         .any(|message| message["role"] == "tool");
     let asking = request["messages"].to_string().contains("OMP_ASK_FIXTURE");
+    let writing = request["messages"]
+        .to_string()
+        .contains("OMP_WRITE_APPROVAL_FIXTURE");
+    let executing = request["messages"]
+        .to_string()
+        .contains("OMP_EXEC_APPROVAL_FIXTURE");
     let delta = if tool_finished {
-        let text = if asking {
+        let text = if asking || writing || executing {
             request["messages"]
                 .as_array()
                 .unwrap()
@@ -392,6 +399,17 @@ async fn mock_plugin_completion(
             "Fixture complete".to_owned()
         };
         json!({"role":"assistant","content":text})
+    } else if writing || executing {
+        let (tool, arguments) = if writing {
+            (
+                "write",
+                json!({"path":"approval-probe.html","content":"OMP_WRITE_OK"}),
+            )
+        } else {
+            ("bash", json!({"command":"printf OMP_EXEC_OK"}))
+        };
+        json!({"role":"assistant","tool_calls":[{"index":0,"id":"fixture-approval","type":"function",
+            "function":{"name":tool,"arguments":arguments.to_string()}}]})
     } else if asking {
         let fixture: Value =
             serde_json::from_str(include_str!("../../../../tests/fixtures/omp_question.json"))

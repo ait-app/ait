@@ -10,6 +10,7 @@ export interface QuestionFormQuestion {
   header: string;
   options: QuestionOption[];
   multiSelect: boolean;
+  multiline?: boolean;
   allowOther: boolean;
   allowEmpty: boolean;
   placeholder?: string;
@@ -58,6 +59,7 @@ export function parseQuestionFormQuestions(input: unknown): QuestionFormQuestion
       header: q.header,
       options,
       multiSelect: q.multiSelect === true,
+      ...(q.multiline === true ? { multiline: true } : {}),
       allowOther: q.allowOther === true || q.isOther === true,
       allowEmpty: q.allowEmpty === true,
       placeholder: readOptionalString(q, "placeholder"),
