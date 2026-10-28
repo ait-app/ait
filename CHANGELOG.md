@@ -1,5 +1,11 @@
 # Ait changelog
 
+## 0.1.21 - 2026-10-28
+
+- Add MiniMax Code through its native ACP interface.
+- Add account deletion and a unified account center entry to online-service settings.
+- Allow Codex child agents to send messages back to their parent session.
+
 ## 0.1.20 - 2026-10-27
 
 - Preserve Codex native protocol behavior across session configuration, approvals, commands, background events, subagents, terminal state and rewind.
