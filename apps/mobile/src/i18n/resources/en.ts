@@ -70,6 +70,10 @@ export const en = {
     accountInfoFailed: "Could not load account information. Use Refresh to try again.",
     signIn: "Sign in",
     unifiedLogin: "Sign in / Register",
+    loginPortal: "Unified login portal",
+    loginPortalHint: "Open the unified login page in your system's default browser.",
+    openInBrowser: "Open in browser",
+    loginPortalOpenFailed: "Could not open the unified login page. Please try again.",
     unifiedHint:
       "Continue in your browser with email, Google or WeChat. You can also verify your email or reset your password there.",
     browserWaiting: "Waiting for browser sign-in…",
