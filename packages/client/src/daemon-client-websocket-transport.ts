@@ -56,25 +56,29 @@ export function createWebSocketTransportFactory(factory: WebSocketFactory): Daem
         }
         ws.send(data);
       },
-      close: (code?: number, reason?: string) => {
-        // Node's `ws` may emit an `error` when a connecting socket is closed before the
-        // handshake completes. Keep a temporary no-op handler attached so cleanup during
-        // connect timeouts does not crash the CLI with an unhandled error event.
-        const suppressEarlyCloseError = bindTemporaryEarlyCloseErrorHandler(ws);
-        try {
-          ws.close(code, reason);
-        } finally {
-          if (typeof ws.on !== "function" && typeof ws.addEventListener !== "function") {
-            suppressEarlyCloseError();
-          }
-        }
-      },
+      close: (code?: number, reason?: string) => closeWebSocket(ws, code, reason),
       onOpen: (handler) => bindWsHandler(ws, "open", handler),
       onClose: (handler) => bindWsHandler(ws, "close", handler),
       onError: (handler) => bindWsHandler(ws, "error", handler),
       onMessage: (handler) => bindWsMessageHandler(ws, handler),
     };
   };
+}
+
+/** Close after detaching consumers without leaking Node ws's asynchronous handshake error. */
+export function closeWebSocket(ws: WebSocketLike, code?: number, reason?: string): void {
+  if (ws.readyState === 3) return;
+  const removeErrorHandler = bindTemporaryEarlyCloseErrorHandler(ws);
+  try {
+    ws.close(code, reason);
+  } finally {
+    if (
+      ws.readyState === 3 ||
+      (typeof ws.on !== "function" && typeof ws.addEventListener !== "function")
+    ) {
+      removeErrorHandler();
+    }
+  }
 }
 
 function bindWsMessageHandler(

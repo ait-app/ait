@@ -14,9 +14,11 @@ import { isWeb } from "@/constants/platform";
 import { startAccountPushNotifications } from "@/push-notifications";
 
 import { useHubServices } from "./hub-service-store";
+import { useOnlineServiceConnectionNotice } from "./use-online-service-connection-notice";
 
 /** One account-wide consumer, independent of which daemon views are mounted or connected. */
 export function AccountHubLifecycle() {
+  useOnlineServiceConnectionNotice();
   const signedIn = useAccountState((state) => state.status !== "logged_out");
   const center = useAccountState((state) => state.center);
   const visible = useAppVisible();
