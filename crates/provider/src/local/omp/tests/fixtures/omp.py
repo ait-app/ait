@@ -44,6 +44,8 @@ pending_plugin = None
 pending_control = None
 pending_async = False
 current_prompt = None
+pending_dialog = None
+dialog_commands = []
 
 def emit(value):
     data = json.dumps(value, ensure_ascii=False).encode()
@@ -102,6 +104,9 @@ for line in sys.stdin:
     with log.open('a') as output:
         output.write(json.dumps(command) + '\n')
     kind = command['type']
+    if pending_dialog and kind in ('get_state', 'steer'):
+        dialog_commands.append(command)
+        continue
     if kind == 'negotiate_protocol':
         response(command, {'protocolVersion':2})
     elif kind == 'get_state':
@@ -157,6 +162,11 @@ for line in sys.stdin:
         text = command['message']
         current_prompt = text
         prompt_id = command.get('id')
+        if text == 'interactive-fixture':
+            pending_dialog = command
+            dialog = json.loads((root / 'dialog.json').read_text())
+            emit({'type':'extension_ui_request','id':'dialog-1',**dialog})
+            continue
         plugins = json.loads((root/'plugins.json').read_text()) if (root/'plugins.json').exists() else []
         plugin = next((entry for entry in plugins if text == '/'+entry['name']), None)
         if plugin:
@@ -306,6 +316,21 @@ for line in sys.stdin:
         finish(aborted=True)
         response(command)
     elif kind == 'extension_ui_response':
+        if pending_dialog:
+            response(pending_dialog, {'agentInvoked':True})
+            pending_dialog = None
+            active = True
+            emit({'type':'agent_start'})
+            message('user', [{'type':'text','text':'interactive-fixture'}])
+            for queued in dialog_commands:
+                if queued['type'] == 'steer':
+                    response(queued, {'disposition':'queued'})
+                    message('user', queued['message'])
+                else:
+                    response(queued, {'sessionId':session_id,'isSettled':False,'isStreaming':True})
+            dialog_commands = []
+            finish()
+            continue
         if pending_control:
             response(pending_control,{'value':command.get('value')})
             pending_control=None

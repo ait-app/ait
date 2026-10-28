@@ -1,6 +1,41 @@
 use super::*;
 
 #[test]
+fn every_interactive_method_matches_the_shared_client_contract_and_native_reply() {
+    let fixtures: Vec<Value> =
+        serde_json::from_str(include_str!("../../../../tests/fixtures/omp_dialogs.json")).unwrap();
+    for fixture in fixtures {
+        let mut dialogs = Dialogs::default();
+        assert_eq!(
+            dialogs.capture(&fixture["native"]).unwrap(),
+            vec![AgentTurnEvent::PermissionRequested(
+                fixture["request"].clone()
+            )],
+            "{}",
+            fixture["name"]
+        );
+        let id = fixture["native"]["id"].as_str().unwrap();
+        assert_eq!(dialogs.pending(), vec![fixture["request"].clone()]);
+        assert_eq!(
+            dialogs.response(id, &fixture["response"]).unwrap(),
+            fixture["nativeResponse"]
+        );
+        assert_eq!(
+            dialogs.response(id, &json!({"behavior":"deny"})).unwrap(),
+            json!({"type":"extension_ui_response","id":id,"cancelled":true})
+        );
+        assert_eq!(
+            dialogs
+                .capture(&json!({"method":"cancel","targetId":id}))
+                .unwrap(),
+            vec![AgentTurnEvent::PermissionResolved(id.to_owned())]
+        );
+        assert_eq!(dialogs.pending(), Vec::<Value>::new());
+        assert!(dialogs.response(id, &fixture["response"]).is_err());
+    }
+}
+
+#[test]
 fn structured_question_matches_the_client_wire_contract() {
     let fixture: Value =
         serde_json::from_str(include_str!("../../../../tests/fixtures/omp_question.json")).unwrap();

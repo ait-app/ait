@@ -9,6 +9,23 @@ import {
 } from "./question-form-card-core";
 
 describe("question form card core", () => {
+  test("keeps explicit multiline editor text when generating native answers", () => {
+    const questions = parseQuestionFormQuestions({
+      questions: [
+        {
+          header: "Plan",
+          question: "Edit the plan",
+          options: [],
+          allowOther: true,
+          multiline: true,
+        },
+      ],
+    });
+    expect(questions?.[0].multiline).toBe(true);
+    expect(buildQuestionFormAnswers(questions!, {}, { 0: "First line\nSecond line" })).toEqual({
+      Plan: "First line\nSecond line",
+    });
+  });
   test("treats optional input prompts as skippable empty answers", () => {
     const questions = parseQuestionFormQuestions({
       questions: [

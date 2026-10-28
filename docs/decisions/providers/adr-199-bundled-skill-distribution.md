@@ -1,4 +1,4 @@
-# ADR-198：内置 Skill 随 daemon 启动分发
+# ADR-199：内置 Skill 随 daemon 启动分发
 
 - 状态：接受
 - 日期：2026-10-28

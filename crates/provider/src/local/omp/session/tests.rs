@@ -3,6 +3,57 @@ use super::*;
 use crate::local::omp::tests::{complete, fixture, next};
 
 #[tokio::test]
+async fn steering_acknowledgements_are_correlated_and_failures_are_visible() {
+    let (_root, client, spec) = fixture();
+    let mut session = open(&client, &spec, None).await.unwrap();
+    let turn = session.start_turn("wait", &spec.config).await.unwrap();
+    session
+        .input_requests
+        .insert("previous-input".to_owned(), "previous-turn".to_owned());
+    session
+        .consume(&json!({"type":"response","id":"previous-input",
+        "command":"steer","success":false,"error":"Old rejection"}))
+        .unwrap();
+    assert!(session.failure_message().is_none());
+    session
+        .input_requests
+        .insert("current-input".to_owned(), turn);
+
+    let result = session.consume(&json!({"type":"response","id":"current-input",
+        "command":"steer","success":false,"error":"Native input handler rejected this answer"}));
+
+    assert_eq!(result, Err(AgentSessionError::Failed));
+    assert!(
+        session
+            .failure_message()
+            .unwrap()
+            .contains("Native input handler rejected")
+    );
+    assert_eq!(session.input_requests, BTreeMap::new());
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn unacknowledged_steering_is_bounded_before_more_input_is_submitted() {
+    let (_root, client, spec) = fixture();
+    let mut session = open(&client, &spec, None).await.unwrap();
+    let turn = session.start_turn("wait", &spec.config).await.unwrap();
+    for index in 0..128 {
+        session
+            .input_requests
+            .insert(format!("input-{index}"), turn.clone());
+    }
+    let pending = session.stream.pending_inputs.clone();
+
+    assert_eq!(
+        session.steer_turn(&turn, "extra input").await,
+        Err(AgentSessionError::Rejected)
+    );
+    assert_eq!(session.stream.pending_inputs, pending);
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn newly_accepted_or_started_work_invalidates_an_earlier_idle_check() {
     for work in ["steer", "agent_start"] {
         let (_root, client, spec) = fixture();

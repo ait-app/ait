@@ -121,7 +121,7 @@ Agent 身份或原生会话。daemon 注入外部 bundle、三个目标目录和
 保持兼容。单连接将这些已声明的方法继续分配到文件操作队列，
 避免技能文件操作阻塞同连接上的原生 Agent 请求。见
 [ADR-129](../decisions/providers/adr-129-provider-owned-skills.md) 与
-[ADR-198](../decisions/providers/adr-198-bundled-skill-distribution.md)。
+[ADR-199](../decisions/providers/adr-199-bundled-skill-distribution.md)。
 
 Pi 的原生 RPC adapter 归 `provider::local::pi`，使用现有 Agent ports，注册身份为 `pi`。
 会话、认证和工具由 Pi 持有，能力与限制见

@@ -21,6 +21,25 @@ export default function (pi: ExtensionAPI) {
       ctx.ui.notify("OMP_NOTIFY_ONLY_OK", "info");
     },
   });
+  for (const method of ["confirm", "input", "editor"] as const) {
+    pi.registerCommand(`compat-dialog-${method}`, {
+      description: `Generic ${method} dialog`,
+      handler: async (_args, ctx) => {
+        const title = `OMP ${method} fixture`;
+        const answer =
+          method === "confirm"
+            ? await ctx.ui.confirm(title, "Continue this operation?")
+            : method === "input"
+              ? await ctx.ui.input(title, "Enter a response")
+              : await ctx.ui.editor(title, "Initial plan");
+        await pi.sendMessage({
+          customType: "compat-dialog-result",
+          content: `${method}: ${answer}`,
+          display: true,
+        });
+      },
+    });
+  }
   pi.registerTool({
     name: "compat_dynamic_tool",
     label: "Generic fixture tool",

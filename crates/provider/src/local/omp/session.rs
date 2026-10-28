@@ -65,6 +65,7 @@ pub(super) struct Session {
     idle_without_outcome: Option<Instant>,
     cancellation_started: Option<Instant>,
     cancel_requests: BTreeMap<String, String>,
+    input_requests: BTreeMap<String, String>,
     submitted: bool,
     created_at: String,
     native_bridge: NativeBridge,
@@ -193,6 +194,7 @@ pub(super) async fn open(
         idle_without_outcome: None,
         cancellation_started: None,
         cancel_requests: BTreeMap::new(),
+        input_requests: BTreeMap::new(),
         submitted: false,
         created_at,
         native_bridge: NativeBridge::default(),
@@ -270,6 +272,7 @@ impl Session {
             self.transport = transport;
             self.state_check = None;
             self.cancel_requests.clear();
+            self.input_requests.clear();
             self.idle_without_outcome = None;
             self.state = state;
             self.service_tiers = service_tiers;
@@ -476,6 +479,20 @@ impl Session {
             .is_some_and(|check| event["id"] == check.id)
         {
             self.checked_state(event)?;
+            return Ok(true);
+        }
+        if let Some(id) = event["id"].as_str()
+            && let Some(turn) = self.input_requests.remove(id)
+        {
+            if self.active.as_deref() != Some(&turn) {
+                return Ok(true);
+            }
+            if event["command"] != "steer" || event["success"] != true {
+                self.transport
+                    .diagnostics
+                    .observe_native(&event["error"], "rpc", "steer");
+                return Err(AgentSessionError::Failed);
+            }
             return Ok(true);
         }
         if let Some(id) = event["id"].as_str()
@@ -785,6 +802,13 @@ impl AgentSession for Session {
     }
     fn runtime_info(&mut self) -> AgentSessionFuture<'_, StoredAgentRuntimeInfo> {
         Box::pin(async {
+            // The manager asks immediately after submission, before polling any dialogs.
+            // A queued get_state can wait on that same dialog and prevent its publication.
+            if self.active.is_some() {
+                let mut info = config::runtime(&self.state)?;
+                info.mode_id.clone_from(&self.config.mode_id);
+                return Ok(info);
+            }
             let state = self.transport.request("get_state", json!({})).await?;
             if state["sessionId"] != self.state["sessionId"] {
                 let id = config::text(&state, "sessionId")?;
@@ -850,7 +874,10 @@ impl AgentSession for Session {
     ) -> AgentSessionFuture<'a, ()> {
         Box::pin(async move {
             prompt.validate()?;
-            if self.closed || self.active.as_deref() != Some(turn) || prompt.output_schema.is_some()
+            if self.closed
+                || self.active.as_deref() != Some(turn)
+                || prompt.output_schema.is_some()
+                || self.input_requests.len() >= 128
             {
                 return Err(AgentSessionError::Rejected);
             }
@@ -864,9 +891,11 @@ impl AgentSession for Session {
                 .into_iter()
                 .filter(|block| block["type"] == "image")
                 .collect();
-            self.transport
-                .request("steer", json!({"message":text,"images":images}))
+            let id = self
+                .transport
+                .begin("steer", json!({"message":text,"images":images}))
                 .await?;
+            self.input_requests.insert(id, turn.to_owned());
             self.invalidate_state_check();
             self.stream
                 .pending_inputs

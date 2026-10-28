@@ -45,4 +45,4 @@ Skill 会在下次启动时更新，无需运行中的源码目录。
 通过 reconcile 重试。
 
 Skill 文件分发不注册 MCP 工具，也不提供连接凭证。MCP 服务和 Provider 注入状态见
-[MCP 操作说明](mcp.md)，分发决策见 [ADR-198](../decisions/providers/adr-198-bundled-skill-distribution.md)。
+[MCP 操作说明](mcp.md)，分发决策见 [ADR-199](../decisions/providers/adr-199-bundled-skill-distribution.md)。
