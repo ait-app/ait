@@ -3,6 +3,7 @@ use crate::skills::protocol::{self, Selection};
 use crate::skills::service::Skills;
 use serde_json::{Value, json};
 
+mod distribution;
 mod paseo;
 
 fn store(root: &Path) -> LocalSkills {

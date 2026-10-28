@@ -20,6 +20,7 @@ pub struct LocalSkills {
     source: PathBuf,
     targets: [PathBuf; 3],
     state: PathBuf,
+    bundled: bool,
 }
 
 impl LocalSkills {
@@ -35,6 +36,7 @@ impl LocalSkills {
                 tree::normalize(&targets[2])?,
             ],
             state: tree::normalize(state)?,
+            bundled: false,
         };
         let roots = [
             &result.source,
@@ -55,14 +57,32 @@ impl LocalSkills {
         Ok(result)
     }
 
+    /// Include skills embedded in the binary, with same-named filesystem bundles taking priority.
+    #[must_use]
+    pub fn with_bundled(mut self) -> Self {
+        self.bundled = true;
+        self
+    }
+
+    fn bundle(&self, name: &str) -> Result<Option<tree::Tree>, ErrorCode> {
+        let source = tree::read(&self.source.join(name))?;
+        Ok(source
+            .or_else(|| (self.bundled && name == "orchestration").then(tree::Tree::orchestration)))
+    }
+
     fn available(&self) -> Result<Vec<String>, ErrorCode> {
         tree::safe(&self.source)?;
+        let mut names = BTreeSet::new();
+        if self.bundled {
+            names.insert("orchestration".to_owned());
+        }
         let entries = match fs::read_dir(&self.source) {
             Ok(entries) => entries,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(names.into_iter().collect());
+            }
             Err(_) => return Err(ErrorCode::RegistryIo),
         };
-        let mut names = Vec::new();
         for entry in entries {
             let entry = entry.map_err(|_| ErrorCode::RegistryIo)?;
             if !entry
@@ -79,13 +99,12 @@ impl LocalSkills {
             if !valid_name(&name) {
                 return Err(ErrorCode::InvalidMessage);
             }
-            names.push(name);
+            names.insert(name);
             if names.len() > 256 {
                 return Err(ErrorCode::ResourceExhausted);
             }
         }
-        names.sort();
-        Ok(names)
+        Ok(names.into_iter().collect())
     }
 }
 
@@ -100,6 +119,10 @@ fn valid_name(name: &str) -> bool {
 impl SkillStore for LocalSkills {
     fn recover(&mut self) -> Result<(), ErrorCode> {
         transaction::recover(self)
+    }
+
+    fn automatic(&self) -> Result<bool, ErrorCode> {
+        Ok(tree::load(&self.state.join("automatic.json"))?.unwrap_or(true))
     }
 
     fn selection(&self) -> Result<Option<Selection>, ErrorCode> {
@@ -150,11 +173,7 @@ impl SkillStore for LocalSkills {
         let mut ops = Vec::new();
         for name in names {
             let desired = selection.contains(&name) && available.iter().any(|entry| entry == &name);
-            let bundle = if desired {
-                tree::read(&self.source.join(&name))?
-            } else {
-                None
-            };
+            let bundle = if desired { self.bundle(&name)? } else { None };
             let mut present = 0;
             let mut changed = false;
             for root in &self.targets {
@@ -213,7 +232,7 @@ impl SkillStore for LocalSkills {
         let snapshot = self.scan(selection)?;
         let expected: Vec<_> = match mode {
             ApplyMode::Save => snapshot.ops,
-            ApplyMode::Reconcile => snapshot
+            ApplyMode::Automatic | ApplyMode::Reconcile => snapshot
                 .ops
                 .into_iter()
                 .filter(|op| op.kind != Kind::Delete)

@@ -23,6 +23,8 @@ struct Journal {
     id: String,
     roots: [std::path::PathBuf; 3],
     previous: Option<Selection>,
+    #[serde(default)]
+    previous_automatic: Option<bool>,
     entries: Vec<Entry>,
     committed: bool,
 }
@@ -38,6 +40,7 @@ pub(super) fn apply(
         id: Uuid::new_v4().to_string(),
         roots: store.targets.clone(),
         previous: store.selection()?,
+        previous_automatic: tree::load(&store.state.join("automatic.json"))?,
         entries: Vec::new(),
         committed: false,
     };
@@ -66,7 +69,7 @@ fn prepare(store: &LocalSkills, journal: &mut Journal, ops: &[Operation]) -> Res
         let bundle = if op.kind == Kind::Delete {
             None
         } else {
-            Some(tree::read(&store.source.join(&op.name))?.ok_or(ErrorCode::RegistryIo)?)
+            Some(store.bundle(&op.name)?.ok_or(ErrorCode::RegistryIo)?)
         };
         for target in 0..3 {
             let path = target_path(&store.targets[target], &op.name);
@@ -142,6 +145,16 @@ fn publish(
         }
         store.import(selection)?;
     }
+    let automatic = match mode {
+        ApplyMode::Automatic => None,
+        ApplyMode::Reconcile | ApplyMode::Save => Some(true),
+        ApplyMode::Uninstall => Some(false),
+    };
+    if let Some(automatic) = automatic
+        && store.automatic()? != automatic
+    {
+        tree::save(&store.state.join("automatic.json"), &automatic)?;
+    }
     journal.committed = true;
     tree::save(&store.state.join("transaction.json"), journal)
 }
@@ -169,6 +182,10 @@ pub(super) fn recover(store: &mut LocalSkills) -> Result<(), ErrorCode> {
         match &journal.previous {
             Some(selection) => store.import(selection)?,
             None => remove_file(&store.state.join("selection.json"))?,
+        }
+        match journal.previous_automatic {
+            Some(automatic) => tree::save(&store.state.join("automatic.json"), &automatic)?,
+            None => remove_file(&store.state.join("automatic.json"))?,
         }
     }
     cleanup(&journal)?;

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ait Orchestration"
+  short_description: "Coordinate Ait agents, workspaces, and schedules"
+  default_prompt: "Use $ait-orchestration to delegate this task in my current Ait workspace and report the result."

@@ -8,6 +8,8 @@ use model::ErrorCode;
 /// Whether a frozen plan also commits a new selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ApplyMode {
+    /// Startup install/update only; preserve the user's automatic distribution preference.
+    Automatic,
     /// Install/update only; preserve directories awaiting removal consent.
     Reconcile,
     /// Apply a confirmed selection transaction.
@@ -22,6 +24,10 @@ pub trait SkillStore: Send + std::fmt::Debug {
     /// # Errors
     /// Returns safe storage/conflict errors; unresolved backups must be retained.
     fn recover(&mut self) -> Result<(), ErrorCode>;
+    /// Whether startup distribution is enabled; absence of a preference means enabled.
+    /// # Errors
+    /// Returns safe storage errors.
+    fn automatic(&self) -> Result<bool, ErrorCode>;
     /// Read the explicitly persisted selection; absence means follow all bundled skills.
     /// # Errors
     /// Returns safe storage errors.
