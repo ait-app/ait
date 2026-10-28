@@ -86,7 +86,11 @@ impl ExecutionState {
         }
     }
 
-    pub(super) async fn configure(&self, method: &str, params: &Value) -> Result<Value, ErrorCode> {
+    pub(super) async fn configure(
+        &mut self,
+        method: &str,
+        params: &Value,
+    ) -> Result<Value, ErrorCode> {
         let field = match method {
             "agent.model.set.request" => "modelId",
             "agent.thinking.set.request" => "thinkingOptionId",
@@ -140,8 +144,10 @@ impl ExecutionState {
         }
         let patch: ConfigPatch = decode(patch)?;
         let result = self.manager.configure(&id, &patch).await;
-        let notice = (result.is_ok() && self.manager.active_turn(&id).is_some())
-            .then(|| json!({"type":"warning","message":"Configuration applies next turn"}));
+        let notice = (result.as_ref().is_ok_and(|outcome| {
+            *outcome == crate::service::agent_manager::ConfigurationOutcome::Deferred
+        }) && self.manager.active_turn(&id).is_some())
+        .then(|| json!({"type":"warning","message":"Configuration applies next turn"}));
         Ok(
             json!({"agentId":id,"accepted":result.is_ok(),"error":result.err().map(|error|error.to_string()),"notice":notice}),
         )

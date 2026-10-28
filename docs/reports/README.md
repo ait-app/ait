@@ -100,6 +100,8 @@
 
 - [MiniMax Code 最新 ACP 接入验证](providers/minimax-code-acp-2026-10-28.md)
 
+- [Pi 原生推理控件与运行时事实验证](providers/pi-reasoning-controls-2026-10-28.md)
+
 - [Pi 模式移除验证](providers/pi-mode-removal-2026-10-24.md)
 - [Codex / Paseo 原生兼容验证](providers/codex-paseo-compatibility-2026-10-27.md)
 

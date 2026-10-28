@@ -125,6 +125,12 @@ Pi 的原生 RPC adapter 归 `provider::local::pi`，使用现有 Agent ports，
 会话、认证和工具由 Pi 持有，能力与限制见
 [ADR-156](../decisions/providers/adr-156-pi-native-rpc-provider.md)；Ait 不为 Pi 暴露模式，见
 [ADR-189](../decisions/providers/adr-189-pi-without-host-mode.md)。
+Pi 的模型与推理控件通过可选 Session port 应用；有效配置与运行事实由共享 manager 持久化，
+原生默认值、clamping 与延迟命令仍归 adapter，见
+[ADR-198](../decisions/providers/adr-198-pi-reasoning-controls.md)。
+客户端的 Provider 控件展示策略集中在 `provider-selection/control-presentation.ts`：
+adapter 解释原生兼容字段、待应用状态和默认值策略，共享 composer、facts 与表单只消费规范化结果。
+Session 配置返回显式应用结果；默认延迟路径不读取或改写原生句柄。
 
 MiniMax Code 通过官方 `mcode acp` 接入，使用共享 ACP 传输、权限和事件投影；原生身份与认证仍归 MiniMax Code。详见 [ADR-197](../decisions/providers/adr-197-minimax-code-acp.md)。
 

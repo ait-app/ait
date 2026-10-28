@@ -1,6 +1,11 @@
-import type { AgentFeature, AgentModelDefinition } from "@ait/protocol/agent-types";
+import type {
+  AgentFeature,
+  AgentModelDefinition,
+  AgentRuntimeInfo,
+} from "@ait/protocol/agent-types";
 import { i18n } from "@/i18n/i18next";
 import { formatThinkingOptionLabel } from "@/agent-controls/labels";
+import { resolveProviderControlPresentation } from "@/provider-selection/control-presentation";
 import {
   FAST_MODE_FEATURE_ID,
   PLAN_MODE_FEATURE_ID,
@@ -147,6 +152,12 @@ function resolveThinkingDisplay(
 }
 
 export function resolveAgentModelSelection(input: {
+  provider?: string;
+  runtimeInfo?: AgentRuntimeInfo | null;
+  presentation?: Pick<
+    ReturnType<typeof resolveProviderControlPresentation>,
+    "preferRuntimeModel" | "selectedThinkingId" | "preserveUnknownThinking"
+  >;
   models: AgentModelDefinition[] | null;
   runtimeModelId: string | null | undefined;
   configuredModelId: string | null | undefined;
@@ -157,11 +168,16 @@ export function resolveAgentModelSelection(input: {
   const normalizedConfiguredModelId = normalizeModelId(configuredModelId);
 
   const runtimeSelectedModel = findModelById(models, normalizedRuntimeModelId);
-  const preferredModelId = resolvePreferredModelId(
-    runtimeSelectedModel,
-    normalizedConfiguredModelId,
-    normalizedRuntimeModelId,
-  );
+  const presentation =
+    input.presentation ?? resolveProviderControlPresentation(input.provider, input.runtimeInfo);
+  const preferredModelId =
+    presentation.preferRuntimeModel && runtimeSelectedModel
+      ? runtimeSelectedModel.id
+      : resolvePreferredModelId(
+          runtimeSelectedModel,
+          normalizedConfiguredModelId,
+          normalizedRuntimeModelId,
+        );
   const fallbackModel = getFallbackModel(models);
   const selectedModel = pickSelectedModel(models, preferredModelId, fallbackModel);
 
@@ -173,11 +189,19 @@ export function resolveAgentModelSelection(input: {
   );
 
   const thinkingOptions = selectedModel?.thinkingOptions ?? null;
-  const resolvedThinkingId = resolveThinkingId(explicitThinkingOptionId, selectedModel);
+  const nativeThinkingId = presentation.selectedThinkingId;
+  const resolvedThinkingId = resolveThinkingId(
+    nativeThinkingId ?? explicitThinkingOptionId,
+    selectedModel,
+  );
   const effectiveThinking = resolveEffectiveThinking(thinkingOptions, resolvedThinkingId);
-  const selectedThinkingId = effectiveThinking?.id ?? null;
+  const selectedThinkingId =
+    nativeThinkingId ??
+    (presentation.preserveUnknownThinking ? resolvedThinkingId : null) ??
+    effectiveThinking?.id ??
+    null;
   const displayThinking = resolveThinkingDisplay(
-    effectiveThinking,
+    selectedThinkingId && selectedThinkingId !== effectiveThinking?.id ? null : effectiveThinking,
     selectedThinkingId,
     i18n.t("agentControls.thinking.unknown"),
   );

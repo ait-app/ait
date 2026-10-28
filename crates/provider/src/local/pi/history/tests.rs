@@ -2247,3 +2247,47 @@ async fn imported_session_refresh_uses_the_native_handle_after_resume() {
     assert_eq!(refreshed.entries[0].item["text"], "hi");
     assert_eq!(refreshed.resume_metadata["sessionFile"], json!(file));
 }
+
+#[tokio::test]
+async fn file_inspection_projects_thinking_only_from_the_selected_branch() {
+    let (_directory, client, file, cwd) = fixture();
+    for level in ["off", "ultra"] {
+        write(
+            &file,
+            &cwd,
+            vec![
+                json!({"type":"thinking_level_change","id":"initial","parentId":null,"thinkingLevel":"high"}),
+                user("u", json!("initial"), "hello"),
+                json!({"type":"thinking_level_change","id":"selected","parentId":"u","thinkingLevel":level}),
+                json!({"type":"thinking_level_change","id":"abandoned","parentId":"u","thinkingLevel":"low"}),
+                assistant("a", "selected", json!([{"type":"text","text":"answer"}])),
+            ],
+        );
+        let history = client.inspect_session(&handle(), &cwd).await.unwrap();
+        assert_eq!(history.config.thinking_option_id.as_deref(), Some(level));
+        assert_eq!(history.config.model.as_deref(), Some("fixture/model"));
+        assert!(!client.program.exists());
+    }
+}
+
+#[test]
+fn file_inspection_rejects_invalid_persisted_thinking_ids() {
+    let (_directory, client, file, cwd) = fixture();
+    for level in [
+        json!(""),
+        json!("bad\nlevel"),
+        json!("x".repeat(513)),
+        json!(42),
+        Value::Null,
+    ] {
+        write(
+            &file,
+            &cwd,
+            vec![
+                json!({"type":"thinking_level_change","id":"thinking","parentId":null,"thinkingLevel":level}),
+                user("u", json!("thinking"), "hello"),
+            ],
+        );
+        assert!(inspect(&client, &handle(), &cwd).is_err());
+    }
+}

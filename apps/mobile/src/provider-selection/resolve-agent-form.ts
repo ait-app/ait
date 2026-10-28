@@ -4,6 +4,7 @@ import type {
   AgentProvider,
   ProviderSnapshotEntry,
 } from "@ait/protocol/agent-types";
+import { resolveDefaultThinkingOptionId } from "./control-presentation";
 import {
   mergeProviderPreferences,
   type FormPreferences,
@@ -174,7 +175,7 @@ export function resolveThinkingOptionId(args: {
 }): string {
   const effectiveModel = resolveEffectiveModel(args.availableModels, args.modelId);
   const thinkingOptions = effectiveModel?.thinkingOptions ?? [];
-  if (thinkingOptions.length === 0) return "";
+  if (!effectiveModel || thinkingOptions.length === 0) return "";
 
   const normalizedThinkingOptionId = args.requestedThinkingOptionId.trim();
   if (
@@ -184,7 +185,7 @@ export function resolveThinkingOptionId(args: {
     return normalizedThinkingOptionId;
   }
 
-  return effectiveModel?.defaultThinkingOptionId ?? thinkingOptions[0]?.id ?? "";
+  return resolveDefaultThinkingOptionId(effectiveModel);
 }
 
 const normalizeSelectedModeId = normalizeSelectedModelId;

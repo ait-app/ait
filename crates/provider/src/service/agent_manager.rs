@@ -19,7 +19,8 @@ use std::sync::Arc;
 
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use domain::agent_runtime::{
-    AgentRuntimeStatus, PersistedAgentRuntimeRecord, StoredAgentConfig, StoredAgentRuntimeInfo,
+    AgentPersistenceHandle, AgentRuntimeStatus, PersistedAgentRuntimeRecord, StoredAgentConfig,
+    StoredAgentRuntimeInfo,
 };
 use domain::session::protocol::SessionEventKind;
 use model::session::SessionEvents;
@@ -27,16 +28,50 @@ use serde_json::json;
 
 use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
-    AgentTurnEvent,
+    AgentTurnEvent, ConfigApplication,
 };
-use crate::protocol::agent_config::ConfigPatch;
+use crate::protocol::agent_config::{ConfigPatch, NullableSetting};
 use crate::support::time::now_timestamp;
+
+/// Whether accepted configuration is native-confirmed or saved for a later turn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConfigurationOutcome {
+    /// The native adapter confirmed the configuration immediately.
+    Applied,
+    /// The configuration is accepted for a later turn.
+    Deferred,
+}
+
+/// Adapter observations authorized for one configuration write.
+#[derive(Debug)]
+struct ConfigurationUpdate {
+    outcome: ConfigurationOutcome,
+    runtime: Option<StoredAgentRuntimeInfo>,
+    effective: Option<StoredAgentConfig>,
+    persistence: Option<AgentPersistenceHandle>,
+}
 
 enum Registration<'a> {
     Create,
     Read,
+    Configuration,
     Recovery,
     Restore(&'a crate::protocol::resume::Overrides),
+}
+
+impl Registration<'_> {
+    fn update_turn_facts(&self, record: &mut PersistedAgentRuntimeRecord, mode_id: Option<&str>) {
+        if matches!(self, Self::Configuration) {
+            return;
+        }
+        record.last_mode_id = mode_id.map(str::to_owned);
+        record.last_status = if matches!(self, Self::Recovery) {
+            AgentRuntimeStatus::Running
+        } else {
+            AgentRuntimeStatus::Idle
+        };
+        record.last_error = None;
+    }
 }
 
 /// Application failure while managing a live Agent session.
@@ -89,11 +124,17 @@ pub(crate) struct AgentRegistration {
     pub(crate) owner: Option<serde_json::Value>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionUse {
+    Interactive,
+    Configuration(AgentRuntimeStatus),
+}
+
 #[derive(Debug)]
 struct LiveAgent {
     usage_cache: usage::UsageCache,
     session: Box<dyn AgentSession>,
-    _permit: tokio::sync::OwnedSemaphorePermit,
+    permit: Option<tokio::sync::OwnedSemaphorePermit>,
     record: PersistedAgentRuntimeRecord,
     registered: bool,
     turn: Option<String>,
@@ -102,6 +143,8 @@ struct LiveAgent {
     latest_turn: Option<String>,
     pending: Option<AgentTurnEvent>,
     pending_runtime: Option<StoredAgentRuntimeInfo>,
+    // Sessions resumed only for controls are released after their observations persist.
+    session_use: SessionUse,
     pending_input_at: Option<String>,
     failure_diagnostic: Option<crate::ports::diagnostics::Diagnostic>,
     failure_entry: Option<crate::protocol::timeline::NativeItem>,
@@ -112,14 +155,14 @@ struct LiveAgent {
 impl LiveAgent {
     fn new(
         session: Box<dyn AgentSession>,
-        permit: tokio::sync::OwnedSemaphorePermit,
+        permit: Option<tokio::sync::OwnedSemaphorePermit>,
         record: PersistedAgentRuntimeRecord,
         registered: bool,
     ) -> Self {
         Self {
             usage_cache: usage::UsageCache::default(),
             session,
-            _permit: permit,
+            permit,
             record,
             registered,
             turn: None,
@@ -128,6 +171,7 @@ impl LiveAgent {
             latest_turn: None,
             pending: None,
             pending_runtime: None,
+            session_use: SessionUse::Interactive,
             pending_input_at: None,
             failure_diagnostic: None,
             failure_entry: None,
@@ -146,6 +190,7 @@ pub struct AgentManager {
     registry: Arc<dyn AgentRuntimeRegistry>,
     clients: BTreeMap<String, Arc<dyn AgentClient>>,
     live: BTreeMap<String, LiveAgent>,
+    pending_configuration_cleanup: BTreeMap<String, LiveAgent>,
     events: SessionEvents,
     timeline: Option<crate::storage::timeline::Timeline>,
     catalog: super::provider_catalog::Catalog,
@@ -176,6 +221,7 @@ impl AgentManager {
             registry: registry.into(),
             clients: BTreeMap::new(),
             live: BTreeMap::new(),
+            pending_configuration_cleanup: BTreeMap::new(),
             events: SessionEvents::default(),
             timeline: None,
             catalog: super::provider_catalog::Catalog::default(),
@@ -412,54 +458,147 @@ impl AgentManager {
         Some(sender.subscribe())
     }
 
-    /// Persist a validated patch for subsequent turns without altering an accepted turn.
+    /// Apply live provider controls or persist a validated patch for subsequent turns.
     ///
+    /// Returns the adapter's explicit immediate or deferred disposition.
     /// # Errors
     /// Returns validation, unavailable-provider, archived-Agent, or registry errors. All supplied
-    /// fields commit together; failed writes leave the running session and durable config intact.
+    /// fields persist together. Native controls may take effect before a storage failure;
+    /// subsequent provider observations retain their effective state.
     pub(crate) async fn configure(
-        &self,
+        &mut self,
         agent_id: &str,
         patch: &ConfigPatch,
-    ) -> Result<(), AgentManagerError> {
-        let record = self
+    ) -> Result<ConfigurationOutcome, AgentManagerError> {
+        if self.pending_configuration_cleanup.contains_key(agent_id)
+            || self
+                .live
+                .get(agent_id)
+                .is_some_and(|agent| matches!(agent.session_use, SessionUse::Configuration(_)))
+        {
+            self.release_configuration_session(agent_id).await?;
+        }
+        let mut record = self
             .registry
             .get(agent_id)
             .map_err(map_registry)?
             .ok_or_else(|| AgentManagerError::NotFound(agent_id.to_owned()))?;
-        if record.archived_at.is_some() {
-            return Err(AgentManagerError::Busy);
+        let mut config = self.validate_config_patch(&record, patch).await?;
+        let temporary = !self.live.contains_key(agent_id)
+            && self
+                .clients
+                .get(&record.provider)
+                .is_some_and(|client| client.supports_live_config());
+        let result = async {
+            if temporary {
+                // Restored directory records are not live native sessions. Do not accept a
+                // deferred patch when this provider promises immediate native readback.
+                record = self
+                    .resume_with_purpose(
+                        agent_id,
+                        false,
+                        AgentResumePurpose::Configuration {
+                            replace_model: matches!(patch.model_id, NullableSetting::Set(_)),
+                            replace_thinking: patch.thinking_option_id
+                                != NullableSetting::Unchanged,
+                        },
+                    )
+                    .await?;
+                config = patch.apply(
+                    record
+                        .config
+                        .as_ref()
+                        .unwrap_or(&StoredAgentConfig::default()),
+                );
+            }
+            self.apply_validated_config(agent_id, &config, patch).await
         }
-        if matches!(
-            patch.mode_id,
-            crate::protocol::agent_config::NullableSetting::Clear
-        ) {
-            return Err(AgentManagerError::InvalidRequest);
+        .await;
+        if temporary && self.live.contains_key(agent_id) {
+            let released = self.release_configuration_session(agent_id).await;
+            return match result {
+                Ok(applied) => released.map(|()| applied),
+                Err(error) => {
+                    if let Err(release_error) = released {
+                        tracing::warn!(agent_id, error_kind = %release_error,
+                            "Configuration session cleanup will retry");
+                    }
+                    Err(error)
+                }
+            };
         }
-        let config = patch.apply(
-            record
-                .config
-                .as_ref()
-                .unwrap_or(&StoredAgentConfig::default()),
-        );
-        if let Some(agent) = self.live.get(agent_id) {
-            agent
-                .session
-                .validate_config_update(&config)
-                .map_err(|_| AgentManagerError::InvalidRequest)?;
-        }
-        self.clients
-            .get(&record.provider)
-            .ok_or_else(|| AgentManagerError::ProviderUnavailable(record.provider.clone()))?
-            .validate_selection(&AgentSessionSpec {
-                provider: record.provider.clone(),
-                cwd: record.cwd.clone(),
-                config,
-            })
-            .await
-            .map_err(|_| AgentManagerError::InvalidRequest)?;
+        result
+    }
+
+    async fn apply_validated_config(
+        &mut self,
+        agent_id: &str,
+        config: &StoredAgentConfig,
+        patch: &ConfigPatch,
+    ) -> Result<ConfigurationOutcome, AgentManagerError> {
+        let ConfigurationUpdate {
+            outcome,
+            runtime,
+            effective,
+            persistence,
+        } = if let Some(agent) = self.live.get_mut(agent_id) {
+            let application = match agent.session.apply_config(config, patch).await {
+                Ok(application) => application,
+                Err(error) => {
+                    // Rejection may consume queued intent or follow a successful model
+                    // command. Retain its cached readback before shutdown can save a handle.
+                    if let Some(info) = agent.session.take_runtime_observation() {
+                        agent.pending_runtime = Some(info.clone());
+                        if matches!(agent.pending, Some(AgentTurnEvent::RuntimeInfo(_))) {
+                            agent.pending = Some(AgentTurnEvent::RuntimeInfo(info));
+                        }
+                    }
+                    return Err(map_session(error));
+                }
+            };
+            let update = match application {
+                ConfigApplication::Deferred => ConfigurationUpdate {
+                    outcome: ConfigurationOutcome::Deferred,
+                    runtime: None,
+                    effective: None,
+                    persistence: None,
+                },
+                ConfigApplication::Queued => ConfigurationUpdate {
+                    outcome: ConfigurationOutcome::Deferred,
+                    runtime: None,
+                    effective: agent.session.effective_config(),
+                    persistence: agent.session.persistence(),
+                },
+                ConfigApplication::Applied(info) => ConfigurationUpdate {
+                    outcome: ConfigurationOutcome::Applied,
+                    runtime: Some(info),
+                    effective: agent.session.effective_config(),
+                    persistence: agent.session.persistence(),
+                },
+            };
+            if update.runtime.as_ref().is_some_and(|info| {
+                !valid_runtime_info(info, agent.session.provider(), &agent.record.provider)
+            }) {
+                return Err(AgentManagerError::Session);
+            }
+            if let Some(info) = &update.runtime {
+                agent.pending_runtime = Some(info.clone());
+                if matches!(agent.pending, Some(AgentTurnEvent::RuntimeInfo(_))) {
+                    agent.pending = Some(AgentTurnEvent::RuntimeInfo(info.clone()));
+                }
+            }
+            update
+        } else {
+            ConfigurationUpdate {
+                outcome: ConfigurationOutcome::Deferred,
+                runtime: None,
+                effective: None,
+                persistence: None,
+            }
+        };
         let now = now_timestamp();
-        self.registry
+        let updated = self
+            .registry
             .update(agent_id, &|current| {
                 let mut next = current.clone();
                 next.config = Some(
@@ -470,16 +609,142 @@ impl AgentManager {
                             .unwrap_or(&StoredAgentConfig::default()),
                     ),
                 );
-                next.last_mode_id = next
-                    .config
-                    .as_ref()
-                    .and_then(|config| config.mode_id.clone());
+                if let Some(effective) = &effective {
+                    next.config = Some(effective.clone());
+                }
+                if let Some(runtime) = &runtime {
+                    let mut info = runtime.clone();
+                    streaming::preserve_usage(&mut info, current.runtime_info.as_ref());
+                    next.runtime_info = Some(info);
+                }
+                if let Some(persistence) = &persistence {
+                    next.persistence = Some(persistence.clone());
+                }
+                if patch.mode_id != NullableSetting::Unchanged {
+                    next.last_mode_id
+                        .clone_from(&effective.as_ref().unwrap_or(config).mode_id);
+                }
                 next.updated_at.clone_from(&now);
                 next
             })
             .map_err(map_registry)?
             .ok_or_else(|| AgentManagerError::NotFound(agent_id.to_owned()))?;
-        Ok(())
+        if let Some(agent) = self.live.get_mut(agent_id) {
+            agent.record = updated;
+            if runtime.is_some() {
+                agent.pending_runtime = None;
+            }
+        }
+        Ok(outcome)
+    }
+
+    async fn release_configuration_sessions(&mut self) {
+        let ids: Vec<_> = self
+            .live
+            .iter()
+            .filter(|(_, agent)| matches!(agent.session_use, SessionUse::Configuration(_)))
+            .map(|(id, _)| id.clone())
+            .chain(self.pending_configuration_cleanup.keys().cloned())
+            .collect();
+        for id in ids {
+            if let Err(error) = self.release_configuration_session(&id).await {
+                tracing::warn!(agent_id = %id, error_kind = %error,
+                    "provider.configuration.release_pending");
+            }
+        }
+    }
+
+    async fn release_configuration_session(
+        &mut self,
+        agent_id: &str,
+    ) -> Result<(), AgentManagerError> {
+        let Some(mut agent) = self
+            .live
+            .remove(agent_id)
+            .or_else(|| self.pending_configuration_cleanup.remove(agent_id))
+        else {
+            return Ok(());
+        };
+        // Closing invalidates the native session even when cleanup fails. Keep retryable
+        // observations outside live admission and release both forms of session capacity.
+        agent.permit.take();
+        let result = self
+            .finish_configuration_cleanup(agent_id, &mut agent)
+            .await;
+        if result.is_err() {
+            self.pending_configuration_cleanup
+                .insert(agent_id.to_owned(), agent);
+        }
+        result
+    }
+
+    async fn finish_configuration_cleanup(
+        &self,
+        agent_id: &str,
+        agent: &mut LiveAgent,
+    ) -> Result<(), AgentManagerError> {
+        let status = match agent.session_use {
+            SessionUse::Configuration(status) => status,
+            SessionUse::Interactive => agent.record.last_status,
+        };
+        agent.session.close().await.map_err(map_session)?;
+        if agent.registered {
+            persist_runtime(self.registry.as_ref(), agent_id, agent)?;
+            streaming::drain(
+                self.registry.as_ref(),
+                self.timeline.as_ref(),
+                &self.events,
+                agent_id,
+                agent,
+            )
+            .await?;
+        }
+        self.finish_close(agent_id, agent, status).await
+    }
+
+    async fn validate_config_patch(
+        &self,
+        record: &PersistedAgentRuntimeRecord,
+        patch: &ConfigPatch,
+    ) -> Result<StoredAgentConfig, AgentManagerError> {
+        if record.archived_at.is_some() {
+            return Err(AgentManagerError::Busy);
+        }
+        if matches!(patch.mode_id, NullableSetting::Clear) {
+            return Err(AgentManagerError::InvalidRequest);
+        }
+        let config = patch.apply(
+            record
+                .config
+                .as_ref()
+                .unwrap_or(&StoredAgentConfig::default()),
+        );
+        if let Some(agent) = self.live.get(&record.id) {
+            agent
+                .session
+                .validate_config_update(&config)
+                .map_err(|error| match error {
+                    AgentSessionError::Busy => AgentManagerError::Busy,
+                    AgentSessionError::Rejected
+                    | AgentSessionError::Unavailable
+                    | AgentSessionError::Failed
+                    | AgentSessionError::History(_) => AgentManagerError::InvalidRequest,
+                })?;
+        }
+        self.clients
+            .get(&record.provider)
+            .ok_or_else(|| AgentManagerError::ProviderUnavailable(record.provider.clone()))?
+            .validate_config_patch(
+                &AgentSessionSpec {
+                    provider: record.provider.clone(),
+                    cwd: record.cwd.clone(),
+                    config: config.clone(),
+                },
+                patch,
+            )
+            .await
+            .map_err(|_| AgentManagerError::InvalidRequest)?;
+        Ok(config)
     }
 
     /// Create a native session and persist its initial Agent snapshot.
@@ -561,7 +826,13 @@ impl AgentManager {
             owner: registration.owner,
         };
         let record = self
-            .register_session(agent_id, session, record, Registration::Create, permit)
+            .register_session(
+                agent_id,
+                session,
+                record,
+                Registration::Create,
+                Some(permit),
+            )
             .await?;
         self.mark_history_loaded(agent_id);
         Ok(record)
@@ -586,6 +857,24 @@ impl AgentManager {
         agent_id: &str,
         recovering: bool,
     ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
+        self.resume_with_purpose(agent_id, recovering, AgentResumePurpose::Interactive)
+            .await
+    }
+
+    async fn resume_with_purpose(
+        &mut self,
+        agent_id: &str,
+        recovering: bool,
+        purpose: AgentResumePurpose,
+    ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
+        if self.pending_configuration_cleanup.contains_key(agent_id)
+            || self
+                .live
+                .get(agent_id)
+                .is_some_and(|agent| matches!(agent.session_use, SessionUse::Configuration(_)))
+        {
+            self.release_configuration_session(agent_id).await?;
+        }
         if let Some(agent) = self.live.get(agent_id) {
             return if agent.registered {
                 self.registry
@@ -596,10 +885,14 @@ impl AgentManager {
                 Err(AgentManagerError::Session)
             };
         }
-        if self.live.len() >= 32 {
-            return Err(AgentManagerError::Busy);
-        }
-        let permit = self.reserve_session()?;
+        let permit = if matches!(purpose, AgentResumePurpose::Configuration { .. }) {
+            None
+        } else {
+            if self.live.len() >= 32 {
+                return Err(AgentManagerError::Busy);
+            }
+            Some(self.reserve_session()?)
+        };
         let mut record = self
             .registry
             .get(agent_id)
@@ -635,7 +928,7 @@ impl AgentManager {
         let purpose = if record.archived_at.is_some() {
             AgentResumePurpose::History
         } else {
-            AgentResumePurpose::Interactive
+            purpose
         };
         let client = self.available_client(&record.provider).await?;
         let session = execution::native(
@@ -645,7 +938,9 @@ impl AgentManager {
         )
         .await
         .map_err(map_session)?;
-        let registration = if recovering {
+        let registration = if matches!(purpose, AgentResumePurpose::Configuration { .. }) {
+            Registration::Configuration
+        } else if recovering {
             Registration::Recovery
         } else {
             Registration::Read
@@ -662,10 +957,36 @@ impl AgentManager {
     /// # Errors
     /// Returns provider or registry failure.
     pub(crate) async fn close(&mut self, agent_id: &str) -> Result<(), AgentManagerError> {
-        let Some(agent) = self.live.get_mut(agent_id) else {
+        self.close_with_status(agent_id, AgentRuntimeStatus::Closed)
+            .await
+    }
+
+    async fn close_with_status(
+        &mut self,
+        agent_id: &str,
+        status: AgentRuntimeStatus,
+    ) -> Result<(), AgentManagerError> {
+        if self.pending_configuration_cleanup.contains_key(agent_id) {
+            self.release_configuration_session(agent_id).await?;
+        }
+        let Some(mut agent) = self.live.remove(agent_id) else {
             return Ok(());
         };
+        let result = self.finish_close(agent_id, &mut agent, status).await;
+        if result.is_err() {
+            self.live.insert(agent_id.to_owned(), agent);
+        }
+        result
+    }
+
+    async fn finish_close(
+        &self,
+        agent_id: &str,
+        agent: &mut LiveAgent,
+        status: AgentRuntimeStatus,
+    ) -> Result<(), AgentManagerError> {
         if agent.registered {
+            persist_runtime(self.registry.as_ref(), agent_id, agent)?;
             streaming::persist_handle(self.registry.as_ref(), agent_id, agent)?;
         }
         agent.session.close().await.map_err(map_session)?;
@@ -681,7 +1002,6 @@ impl AgentManager {
             }
         }
         if !agent.registered {
-            self.live.remove(agent_id);
             return Ok(());
         }
         // Metadata and attention may have changed through other narrow ports. Never replace
@@ -694,7 +1014,7 @@ impl AgentManager {
         self.registry
             .update(agent_id, &|current| {
                 let mut next = current.clone();
-                next.last_status = AgentRuntimeStatus::Closed;
+                next.last_status = status;
                 if next.attention_reason
                     == Some(domain::agent_runtime::AgentAttentionReason::Permission)
                     && !durable_permissions
@@ -706,7 +1026,6 @@ impl AgentManager {
                 next
             })
             .map_err(map_registry)?;
-        self.live.remove(agent_id);
         Ok(())
     }
 
@@ -812,6 +1131,13 @@ impl AgentManager {
             }
             Ok(())
         } else {
+            // Admission may consume deferred controls even when native readback fails.
+            // Retain cached facts before terminal failure prevents normal event draining.
+            if let Some(info) = agent.session.take_runtime_observation() {
+                agent.pending_runtime = Some(info);
+            } else if let Ok(info) = agent.session.runtime_info().await {
+                agent.pending_runtime = Some(info);
+            }
             agent.pending = Some(AgentTurnEvent::Failed);
             self.poll().await?;
             Err(AgentManagerError::Session)
@@ -854,16 +1180,19 @@ impl AgentManager {
     ///
     /// A failed write retains its event for retry. Native failures close the process before
     /// publishing an error, so unsupported interactions cannot keep executing invisibly.
+    /// Temporary configuration cleanup failures are logged and retried independently so they
+    /// do not prevent command dispatch or cleanup of other sessions.
     ///
     /// # Errors
     /// Returns the first storage or close failure; later calls retry pending work.
     pub(crate) async fn poll(&mut self) -> Result<(), AgentManagerError> {
+        self.release_configuration_sessions().await;
         let ids = self.live.keys().cloned().collect::<Vec<_>>();
         for id in ids {
             let Some(agent) = self.live.get_mut(&id) else {
                 continue;
             };
-            if !agent.registered {
+            if !agent.registered || matches!(agent.session_use, SessionUse::Configuration(_)) {
                 continue;
             }
             persist_runtime(self.registry.as_ref(), &id, agent)?;
@@ -986,7 +1315,12 @@ impl AgentManager {
     /// Returns the first provider or registry failure after attempting every close.
     pub(crate) async fn close_all(&mut self) -> Result<(), AgentManagerError> {
         self.generated_titles.close().await;
-        let ids = self.live.keys().cloned().collect::<Vec<_>>();
+        let ids = self
+            .live
+            .keys()
+            .chain(self.pending_configuration_cleanup.keys())
+            .cloned()
+            .collect::<Vec<_>>();
         let mut first_error = None;
         for id in ids {
             if let Err(error) = self.close(&id).await {
@@ -1016,35 +1350,32 @@ impl AgentManager {
         mut session: Box<dyn AgentSession>,
         mut record: PersistedAgentRuntimeRecord,
         registration: Registration<'_>,
-        permit: tokio::sync::OwnedSemaphorePermit,
+        permit: Option<tokio::sync::OwnedSemaphorePermit>,
     ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
-        let inspected = session.runtime_info().await;
-        let mut runtime_info = match inspected {
+        let mut runtime_info = match session.runtime_info().await {
             Ok(info) if valid_runtime_info(&info, session.provider(), &record.provider) => info,
+            Err(_) if !matches!(registration, Registration::Create) => {
+                let rejection = self.reject_registration(agent_id, session, record, permit);
+                return Err(Box::pin(rejection).await);
+            }
             Ok(_) | Err(_) => {
                 return Err(self.reject_session(agent_id, session, record, permit).await);
             }
         };
         streaming::preserve_usage(&mut runtime_info, record.runtime_info.as_ref());
         let persistence = session.persistence().or(record.persistence.clone());
-        if persistence.as_ref().is_some_and(|handle| {
-            handle.provider != record.provider
-                || runtime_info
-                    .session_id
-                    .as_ref()
-                    .is_some_and(|session_id| session_id != &handle.session_id)
-        }) {
+        if !valid_registration_persistence(persistence.as_ref(), &runtime_info, &record.provider) {
             return Err(self.reject_session(agent_id, session, record, permit).await);
         }
-        record.last_mode_id.clone_from(&runtime_info.mode_id);
+        let effective = session.effective_config();
+        let has_effective_config = effective.is_some();
+        if let Some(effective) = effective {
+            record.config = Some(effective);
+        }
+        let configuration_only = matches!(registration, Registration::Configuration);
+        registration.update_turn_facts(&mut record, runtime_info.mode_id.as_deref());
         record.runtime_info = Some(runtime_info);
-        record.persistence = persistence;
-        record.last_status = if matches!(registration, Registration::Recovery) {
-            AgentRuntimeStatus::Running
-        } else {
-            AgentRuntimeStatus::Idle
-        };
-        record.last_error = None;
+        let previous_persistence = std::mem::replace(&mut record.persistence, persistence);
         if self.owner.as_ref().is_some_and(|owner| {
             owner
                 .bind(&record)
@@ -1062,18 +1393,38 @@ impl AgentManager {
                     overrides.apply(&mut next);
                     next.updated_at = now_timestamp();
                 }
+                if has_effective_config {
+                    next.config.clone_from(&record.config);
+                }
                 next.runtime_info.clone_from(&record.runtime_info);
-                next.last_mode_id.clone_from(&record.last_mode_id);
                 next.persistence.clone_from(&record.persistence);
-                next.last_status = record.last_status;
-                next.last_error = None;
+                registration.update_turn_facts(&mut next, record.last_mode_id.as_deref());
                 next
             })
         };
+        let retry_initialization = stored.is_err()
+            && !matches!(registration, Registration::Create)
+            && (session.initialization_error().is_some()
+                || record.persistence != previous_persistence);
         if let Ok(Some(current)) = stored {
             record = current;
         } else {
             let close_result = session.close().await;
+            if retry_initialization {
+                // Initialization changed durable native state before registration failed,
+                // including successfully consumed controls. Retain the readback and old
+                // durable handle so cleanup retries both writes without native replay.
+                record.persistence = previous_persistence;
+                let mut agent = LiveAgent::new(session, permit, record, true);
+                agent.pending_runtime.clone_from(&agent.record.runtime_info);
+                agent.session_use = SessionUse::Configuration(agent.record.last_status);
+                self.live.insert(agent_id.to_owned(), agent);
+                return Err(if close_result.is_err() {
+                    AgentManagerError::Session
+                } else {
+                    AgentManagerError::Registry
+                });
+            }
             if close_result.is_err() {
                 self.live.insert(
                     agent_id.to_owned(),
@@ -1083,11 +1434,47 @@ impl AgentManager {
             }
             return Err(AgentManagerError::Registry);
         }
-        self.live.insert(
-            agent_id.to_owned(),
-            LiveAgent::new(session, permit, record.clone(), true),
-        );
+        let initialization_error = session.initialization_error();
+        let mut agent = LiveAgent::new(session, permit, record.clone(), true);
+        if configuration_only {
+            agent.session_use = SessionUse::Configuration(record.last_status);
+        }
+        self.live.insert(agent_id.to_owned(), agent);
+        if let Some(error) = initialization_error {
+            self.close_with_status(agent_id, record.last_status).await?;
+            return Err(map_session(error));
+        }
         Ok(record)
+    }
+
+    async fn reject_registration(
+        &mut self,
+        agent_id: &str,
+        mut session: Box<dyn AgentSession>,
+        record: PersistedAgentRuntimeRecord,
+        permit: Option<tokio::sync::OwnedSemaphorePermit>,
+    ) -> AgentManagerError {
+        if let Some(info) = session.take_runtime_observation()
+            && valid_runtime_info(&info, session.provider(), &record.provider)
+            && valid_registration_persistence(
+                session.persistence().as_ref(),
+                &info,
+                &record.provider,
+            )
+        {
+            // Initialization may already have consumed deferred controls. Preserve
+            // verified facts through retryable cleanup even if fresh readback fails.
+            let mut agent = LiveAgent::new(session, permit, record, true);
+            agent.pending_runtime = Some(info);
+            agent.session_use = SessionUse::Configuration(agent.record.last_status);
+            self.live.insert(agent_id.to_owned(), agent);
+            return self
+                .release_configuration_session(agent_id)
+                .await
+                .err()
+                .unwrap_or(AgentManagerError::Session);
+        }
+        self.reject_session(agent_id, session, record, permit).await
     }
 
     async fn reject_session(
@@ -1095,7 +1482,7 @@ impl AgentManager {
         agent_id: &str,
         mut session: Box<dyn AgentSession>,
         record: PersistedAgentRuntimeRecord,
-        permit: tokio::sync::OwnedSemaphorePermit,
+        permit: Option<tokio::sync::OwnedSemaphorePermit>,
     ) -> AgentManagerError {
         if session.close().await.is_err() {
             self.live.insert(
@@ -1105,6 +1492,20 @@ impl AgentManager {
         }
         AgentManagerError::Session
     }
+}
+
+fn valid_registration_persistence(
+    persistence: Option<&AgentPersistenceHandle>,
+    info: &StoredAgentRuntimeInfo,
+    provider: &str,
+) -> bool {
+    persistence.is_none_or(|handle| {
+        handle.provider == provider
+            && info
+                .session_id
+                .as_ref()
+                .is_none_or(|id| id == &handle.session_id)
+    })
 }
 
 fn valid_runtime_info(
@@ -1185,15 +1586,15 @@ fn persist_runtime(
     agent: &mut LiveAgent,
 ) -> Result<(), AgentManagerError> {
     if let Some(info) = &agent.pending_runtime {
-        registry
-            .update(id, &|current| {
-                let mut next = current.clone();
-                let mut info = info.clone();
-                streaming::preserve_usage(&mut info, current.runtime_info.as_ref());
-                next.runtime_info = Some(info);
-                next
-            })
-            .map_err(map_registry)?;
+        let persistence =
+            streaming::persist_info(registry, id, agent, info).map_err(|error| match error {
+                model::ErrorCode::AgentNotFound => AgentManagerError::NotFound(id.to_owned()),
+                model::ErrorCode::InvalidMessage => AgentManagerError::Session,
+                _ => AgentManagerError::Registry,
+            })?;
+        if let Some(handle) = persistence {
+            agent.record.persistence = Some(handle);
+        }
         agent.pending_runtime = None;
     }
     Ok(())

@@ -38,6 +38,7 @@ impl AgentManager {
             registry: self.registry.clone(),
             clients: self.clients.clone(),
             live: BTreeMap::new(),
+            pending_configuration_cleanup: BTreeMap::new(),
             events: self.events.clone(),
             timeline: self.timeline.clone(),
             catalog: self.catalog.clone(),
@@ -156,9 +157,9 @@ impl AgentManager {
         }
     }
 
-    /// Whether the lane retains native resources that must be polled or reaped.
+    /// Whether native resources or pending configuration writes still need polling.
     pub(crate) fn has_sessions(&self) -> bool {
-        !self.live.is_empty()
+        !self.live.is_empty() || !self.pending_configuration_cleanup.is_empty()
     }
 
     /// Whether a live session has accepted native work whose events need low-latency draining.

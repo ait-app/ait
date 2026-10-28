@@ -294,7 +294,10 @@ pub(super) fn apply_history(record: &mut PersistedAgentRuntimeRecord, history: &
         }
     }
     if let Some(handle) = &mut record.persistence {
-        handle.metadata = Some(history.resume_metadata.clone());
+        handle
+            .metadata
+            .get_or_insert_with(Default::default)
+            .extend(history.resume_metadata.clone());
     }
     record.archived_at = None;
     record.last_status = AgentRuntimeStatus::Idle;

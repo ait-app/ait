@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -23,6 +24,8 @@ root = Path.cwd()
 path = root / 'session.jsonl'
 args = sys.argv[1:]
 (root / 'arguments.json').write_text(json.dumps(args))
+if '--no-session' not in args:
+    (root / 'rpc.pid').write_text(str(os.getpid()))
 if '--session' in args:
     path = Path(args[args.index('--session') + 1])
     identity = json.loads(path.read_text().splitlines()[0])['id']
@@ -35,39 +38,143 @@ finish_after_state = False
 compacting = False
 invalid_settlement = False
 state_requests = 0
-model = {'provider': 'fixture', 'id': 'model', 'name': 'Fixture Model', 'input': ['text', 'image']}
+registration_failure_at = None
+model = {'provider': 'fixture', 'id': 'model', 'name': 'Fixture Model', 'input': ['text', 'image'],
+         'reasoning': scenario != 'no-reasoning'}
+thinking = 'medium'
+native_thinking = {
+    'bad-thinking-state': 'future',
+    'none-thinking-state': 'none',
+    'ultra-thinking-state': 'ultra',
+    'null-thinking-state': None,
+    'malformed-thinking-state': 42,
+}
+if scenario == 'mapped-thinking':
+    model['thinkingLevelMap'] = {'medium': None, 'high': 'high', 'xhigh': 'xhigh', 'max': None}
+    thinking = 'high'
+available_models = [model]
+if scenario in ['multiple-models', 'reject-thinking-after-model', 'reject-default-model', 'control-burst-model', 'deferred-controls']:
+    available_models.append(dict(model, id='other', name='Other Model'))
+    available_models.append(dict(model, id='clamped', name='Clamped Model'))
+
+native_state_path = path.with_suffix('.state.json')
+if '--session' in args and native_state_path.exists():
+    restored_state = json.loads(native_state_path.read_text())
+    model = restored_state['model']
+    thinking = restored_state['thinking']
 
 def emit(value):
+    if '--no-session' not in args:
+        native_state_path.write_text(json.dumps({'model': model, 'thinking': thinking}))
     print(json.dumps(value), flush=True)
 
 def response(command, data=None, success=True):
     emit({'id': command['id'], 'type': 'response', 'command': command['type'], 'success': success, 'data': data})
+
+def control_burst(kind):
+    global running
+    target = scenario.removeprefix('control-burst-')
+    if not scenario.startswith('control-burst-') or not running or target not in [kind, 'limit' if kind == 'abort' else '',
+                                     'abort-rejected' if kind == 'abort' else '',
+                                     'rejected' if kind == 'thinking' else '']:
+        return
+    emit({'type': 'message_start', 'message': {'role': 'assistant'}})
+    for index in range(5000):
+        emit({'type': 'message_update', 'assistantMessageEvent': {
+            'type': 'text_delta', 'contentIndex': index if target == 'limit' else 0, 'delta': 'x'}})
+    for index in range(300):
+        emit({'type': 'tool_execution_start', 'toolCallId': str(index), 'toolName': 'bash', 'args': {}})
+        emit({'type': 'tool_execution_end', 'toolCallId': str(index), 'toolName': 'bash', 'result': {}, 'isError': False})
+    emit({'type': 'message_end', 'message': {'role': 'assistant',
+        'content': [{'type': 'text', 'text': 'x' * 5000}], 'stopReason': 'stop'}})
+    running = False
+    emit({'type': 'agent_settled', 'aborted': kind == 'abort'})
+
+def finish_delayed_turn():
+    global running
+    time.sleep(1.3)
+    running = False
+    emit({'type': 'message_start', 'message': {'role': 'assistant'}})
+    emit({'type': 'message_end', 'message': {'role': 'assistant',
+        'content': [{'type': 'text', 'text': 'Extension'}], 'stopReason': 'stop'}})
+    emit({'type': 'agent_settled', 'aborted': False})
 
 for line in sys.stdin:
     command = json.loads(line)
     with (root / 'requests.jsonl').open('a') as log:
         log.write(json.dumps(command) + '\n')
     kind = command['type']
+    if scenario == 'deferred-controls' and running and kind in ['set_model', 'set_thinking_level']:
+        time.sleep(1.3)
     if scenario == 'hang':
         continue
     if scenario == 'wrong-response':
         command['id'] = 'foreign'
     if kind == 'get_state':
+        if registration_failure_at == state_requests:
+            (root / 'fail-registration').unlink()
+            sys.exit(2)
+        if scenario.startswith('active-state-') and running:
+            if scenario == 'active-state-rejected':
+                response(command, success=False)
+            continue
+        if scenario == 'reject-thinking-readback-exit' and (root / 'rejected').exists():
+            sys.exit(2)
+        control_burst('state')
+        if '--no-session' in args:
+            if scenario == 'discovery-state-slow':
+                time.sleep(0.4)
+            if scenario == 'discovery-state-rejected':
+                response(command, success=False)
+                continue
+            if scenario == 'discovery-state-timeout':
+                continue
+            if scenario == 'discovery-state-exit':
+                sys.exit(2)
+            if scenario == 'discovery-state-malformed':
+                print('not json', flush=True)
+                continue
+            if scenario == 'discovery-state-missing-model':
+                response(command, {})
+                continue
         state_requests += 1
         if invalid_settlement:
             invalid_settlement = False
             emit({'type': 'compaction_start', 'reason': 'unknown'})
         if scenario == 'idle':
-            for event in ['entry_appended', 'session_info_changed', 'thinking_level_changed', 'queue_update', 'extension_error']:
+            for event in ['entry_appended', 'session_info_changed', 'queue_update', 'extension_error']:
                 emit({'type': event})
+            emit({'type': 'thinking_level_changed', 'level': thinking})
             emit({'type': 'compaction_start', 'reason': 'manual'})
             emit({'type': 'compaction_end', 'reason': 'manual', 'result': {}, 'aborted': False})
             emit({'type': 'agent_settled', 'aborted': False})
         swapped_at = {'session-swap-open': 1, 'session-swap-configure': 2,
                       'session-swap-synchronize': 2}.get(scenario)
         response_identity = 'foreign' if state_requests == swapped_at else identity
-        response(command, {'model': model, 'sessionId': response_identity, 'sessionFile': str(path),
-                           'thinkingLevel': 'medium', 'isStreaming': running, 'isCompacting': compacting})
+        state = {'model': model, 'sessionId': response_identity, 'sessionFile': str(path),
+                 'thinkingLevel': native_thinking.get(scenario, thinking),
+                 'isStreaming': running, 'isCompacting': compacting}
+        if scenario == 'missing-thinking-state' or (scenario == 'thinking-state-disappears' and state_requests > 1):
+            del state['thinkingLevel']
+        if scenario == 'missing-model-state':
+            del state['model']
+        if scenario.startswith('idle-thinking-') and state_requests == 1:
+            thinking = 'future' if scenario == 'idle-thinking-future' else 'low'
+            event = {'type': 'thinking_level_changed', 'level': thinking}
+            if scenario == 'idle-thinking-missing':
+                del event['level']
+            elif scenario == 'idle-thinking-malformed':
+                event['level'] = 42
+            emit(event)
+        notifications = root / 'state-notifications.json'
+        if scenario == 'thinking-readback' and notifications.exists():
+            injected = json.loads(notifications.read_text())
+            notifications.unlink()
+            state['thinkingLevel'] = injected['snapshot']
+            thinking = injected['nativeLevel']
+            for level in injected['levels']:
+                emit({'type': 'thinking_level_changed', 'level': level})
+        response(command, state)
         if compacting and scenario != 'compaction-hang':
             compacting = False
             emit({'type': 'compaction_end', 'reason': 'manual', 'result': {}})
@@ -78,12 +185,61 @@ for line in sys.stdin:
             emit({'type': 'message_end', 'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': 'Extension'}], 'stopReason': 'stop'}})
             emit({'type': 'agent_settled', 'aborted': False})
     elif kind == 'get_available_models':
-        models = {'bad-models': None, 'bad-model-label': [dict(model, name='bad\nlabel')]}.get(scenario, [model])
+        if scenario == 'discovery-models-rejected':
+            response(command, success=False)
+            continue
+        models = {'bad-models': None, 'bad-model-label': [dict(model, name='bad\nlabel')]}.get(scenario, available_models)
         response(command, {'models': models})
     elif kind == 'set_model':
-        response(command, model, command['provider'] == 'fixture' and command['modelId'] == 'model')
+        control_burst('model')
+        if scenario == 'reject-default-model' and command['modelId'] == 'model':
+            response(command, success=False)
+            continue
+        selected = next((candidate for candidate in available_models
+                         if candidate['provider'] == command['provider'] and candidate['id'] == command['modelId']), None)
+        if selected is not None:
+            model = selected
+            thinking = 'low' if model['id'] == 'other' else ('high' if scenario == 'mapped-thinking' else 'medium')
+        response(command, model, selected is not None)
+    elif kind == 'set_thinking_level':
+        if (root / 'fail-registration').exists():
+            registration_failure_at = state_requests + 1
+        control_burst('thinking')
+        if scenario == 'deferred-thinking-exit':
+            sys.exit(2)
+        if scenario == 'control-burst-rejected':
+            response(command, success=False)
+            continue
+        if scenario == 'reject-thinking-readback-exit':
+            (root / 'rejected').touch()
+            response(command, success=False)
+            continue
+        if scenario == 'reject-thinking' or (scenario == 'reject-thinking-after-model' and command.get('level') == 'high'):
+            response(command, success=False)
+            continue
+        thinking = 'high' if scenario == 'clamp-thinking' else ('low' if model['id'] == 'clamped' else command['level'])
+        emit({'type': 'thinking_level_changed', 'level': thinking})
+        response(command)
     elif kind == 'prompt':
         text = command['message']
+        if text in ['thinking-before', 'thinking-after', 'thinking-handled', 'thinking-invalid']:
+            if text == 'thinking-after':
+                response(command, {'disposition': 'started'})
+            level = {'thinking-event-future': 'future', 'thinking-event-none': 'none',
+                     'thinking-event-ultra': 'ultra', 'thinking-event-null': None,
+                     'thinking-event-malformed': 42}.get(scenario, 'low')
+            if text == 'thinking-invalid':
+                level = 'future'
+            event = {'type': 'thinking_level_changed', 'level': level}
+            if scenario == 'thinking-event-missing':
+                del event['level']
+            elif isinstance(level, str):
+                thinking = level
+            emit(event)
+            if text != 'thinking-after':
+                response(command, {'disposition': 'handled' if text == 'thinking-handled' else 'started'})
+            emit({'type': 'agent_settled', 'aborted': False})
+            continue
         if text == 'reject':
             response(command, success=False)
             continue
@@ -191,6 +347,15 @@ for line in sys.stdin:
         if text == 'die-after-admission':
             sys.exit(2)
         if text == 'wait':
+            if scenario.startswith('control-burst-'):
+                running = True
+            if scenario.startswith('active-state-'):
+                running = True
+                emit({'type': 'tool_execution_start', 'toolCallId': 'pending', 'toolName': 'bash', 'args': {}})
+            continue
+        if text == 'delayed-turn':
+            running = True
+            threading.Thread(target=finish_delayed_turn, daemon=True).start()
             continue
         if text == 'dialog':
             emit({'type': 'extension_ui_request', 'id': 'dialog', 'method': 'confirm', 'title': 'Approve?'})
@@ -204,6 +369,10 @@ for line in sys.stdin:
         emit({'type': 'agent_end', 'messages': []})
         emit({'type': 'agent_settled', 'aborted': False})
     elif kind == 'abort':
+        control_burst('abort')
+        if scenario == 'control-burst-abort-rejected':
+            response(command, success=False)
+            continue
         if running:
             running = False
             emit({'type': 'tool_execution_end', 'toolCallId': 'pending', 'toolName': 'bash', 'result': {}, 'isError': True})

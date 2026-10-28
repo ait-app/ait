@@ -75,6 +75,7 @@ import { readMeasuredWidth } from "@/hooks/use-container-width";
 import { useToast } from "@/contexts/toast-context";
 import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
+import { resolveProviderControlPresentation } from "@/provider-selection/control-presentation";
 import {
   useAgentControlCommandCenterActions,
   type AgentControlCommandCenterSource,
@@ -403,15 +404,20 @@ function pickDesktopModel({
   }
 }
 
-type AgentControlsSlice = {
-  provider: string;
-  cwd: string | null;
-  runtimeModelId: string | null;
-  model: string | null | undefined;
-  features: AgentFeature[] | undefined;
-  thinkingOptionId: string | null | undefined;
-  lastUsage: unknown;
-} | null;
+type AgentControlsSlice =
+  | ({
+      provider: string;
+      cwd: string | null;
+      runtimeModelId: string | null;
+      model: string | null | undefined;
+      features: AgentFeature[] | undefined;
+      thinkingOptionId: string | null | undefined;
+      lastUsage: unknown;
+    } & Pick<
+      ReturnType<typeof resolveProviderControlPresentation>,
+      "preferRuntimeModel" | "selectedThinkingId" | "preserveUnknownThinking"
+    >)
+  | null;
 
 function selectAgentControlsSlice(
   state: ReturnType<typeof useSessionStore.getState>,
@@ -422,10 +428,15 @@ function selectAgentControlsSlice(
   if (!currentAgent) {
     return null;
   }
+  const { preferRuntimeModel, selectedThinkingId, preserveUnknownThinking } =
+    resolveProviderControlPresentation(currentAgent.provider, currentAgent.runtimeInfo);
   return {
     provider: currentAgent.provider,
     cwd: currentAgent.cwd,
     runtimeModelId: currentAgent.runtimeInfo?.model ?? null,
+    preferRuntimeModel,
+    selectedThinkingId,
+    preserveUnknownThinking,
     model: currentAgent.model,
     features: currentAgent.features,
     thinkingOptionId: currentAgent.thinkingOptionId,
@@ -560,7 +571,9 @@ function ControlledAgentControls({
   const displayThinking = findOptionLabel(
     formattedThinkingOptions,
     selectedThinkingOptionId,
-    formattedThinkingOptions[0]?.label ?? t("agentControls.thinking.unknown"),
+    resolveProviderControlPresentation(provider).preserveUnknownThinking && selectedThinkingOptionId
+      ? formatThinkingOptionLabel({ id: selectedThinkingOptionId }, t)
+      : (formattedThinkingOptions[0]?.label ?? t("agentControls.thinking.unknown")),
   );
 
   const hasAnyControl = resolveHasAnyControl({
@@ -1674,6 +1687,8 @@ export const AgentControls = memo(function AgentControls({
 
   const modelSelection = resolveAgentModelSelection({
     models,
+    provider: agent?.provider,
+    presentation: agent ?? undefined,
     runtimeModelId: agent?.runtimeModelId,
     configuredModelId: agent?.model,
     explicitThinkingOptionId: agent?.thinkingOptionId,

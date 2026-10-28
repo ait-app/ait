@@ -3,7 +3,9 @@
 - Status: Accepted (implemented).
 - Date: 2026-10-17.
 - Scope: `crates/provider`, `packages/protocol`; follows [ADR-089](adr-089-provider-owned-composition.md).
-- Amended by: [ADR-189](adr-189-pi-without-host-mode.md) for host modes.
+- Amended by: [ADR-189](adr-189-pi-without-host-mode.md) for host modes and
+  [ADR-198](adr-198-pi-reasoning-controls.md) for native reasoning controls, catalog defaults,
+  effective runtime metadata, and control-wait buffering.
 
 ## Context
 
@@ -44,11 +46,13 @@ run from automatic retries and compaction recovery.
   `compaction_end`, including manual compaction while idle, cancellation/failure, and
   unfinished operations on stream failure or terminal settlement. Each start/end pair shares an adapter-owned UUID;
   native Pi does not supply a compaction ID. Duplicate starts/ends do not duplicate markers.
-- Apply [ADR-144](adr-144-provider-error-reporting.md): bounded stderr classification,
-  safe structured diagnostics for spawn/version/write/response/frame failures, and fixed
-  public failure messages. Native error text and credentials are not logged or persisted.
+- Apply [ADR-144](adr-144-provider-error-reporting.md): bounded stderr classification and
+  safe structured diagnostics for spawn/version/write/response/frame failures. As amended by
+  [ADR-185](adr-185-native-provider-failure-details.md), explicit native error messages pass
+  through shared bounded redaction before user-visible failure persistence. Logs retain only
+  structured facts; raw native text and credentials are not logged or persisted.
 - Preserve the host's persisted timeline across resume; do not advertise automatic native history
-  replay, rewind, steering, auxiliary generation or dynamic thinking controls. Native session
+  replay, rewind, steering or auxiliary generation. Native session
   import and explicit refresh are added by [ADR-174](adr-174-pi-session-import.md).
 - Preserve native configuration. Do not expose host modes, as specified by
   [ADR-189](adr-189-pi-without-host-mode.md). Cancel
@@ -66,17 +70,19 @@ run from automatic retries and compaction recovery.
   to 10 seconds. Own readers and child process groups through shutdown and drop.
 - Outbound records are limited to 64 MiB and inbound records to 2 MiB including LF;
   oversize input is rejected and oversize native frames produce a `frame_limit` protocol
-  diagnostic. The transport retains at most 128 intervening records / 8 MiB, accounting
-  original wire sizes once. Display events are capped at 256 with reserved cleanup slots.
-  Undrainable admission uses a separate 4096-event / 64 MiB display-payload budget;
+  diagnostic. The reader channel holds at most 128 records, each within the inbound frame
+  limit; there is no additional aggregate wire-byte cap. Control waits project intervening
+  events immediately rather than keeping a separate raw-event backlog.
+  Display events are capped at 256 with reserved cleanup slots.
+  Undrainable admission and control waits use a separate 4096-event / 64 MiB display-payload budget;
   afterward the normal 8 MiB budget applies once the backlog fits. Payload accounting
   combines cumulative text with currently queued tool previews. Tool progress always
   replaces unpublished snapshots by key; final items replace pending progress, and
   publishing releases the queued preview bytes. Thus long tool-heavy turns have no
   cumulative tool-output ceiling. Preview sizes are captured during rendering, without
   an extra whole-item serialization (UTF-8 display bytes for strings, rendered JSON bytes
-  for structured previews). Admission merges text deltas into chunks of at most 96 KiB.
-  Keep the admission event and payload allowances until the backlog fits the normal limits,
+  for structured previews). Buffered waits merge text deltas into chunks of at most 96 KiB.
+  Keep the buffered event and payload allowances until the backlog fits the normal limits,
   including during cancellation. Active tools are capped at 128, individual text at 96 KiB,
   and tool previews at 32 KiB plus a truncation marker. Preview and process-cleanup helpers
   remain private to Pi; existing adapters retain their own implementations. Excessive distinct queued items, retained previews, or cumulative
@@ -111,7 +117,7 @@ run from automatic retries and compaction recovery.
 
 Pi can be selected and used through the existing Agent workflow without adding a new service
 boundary. Unsupported host configuration and structured output are rejected before prompt
-submission. Richer extension dialogs, thinking controls, and
+submission. Richer extension dialogs and
 additional provider-specific slash-command controls need separate implementations.
 
 Operations and current limitations: [Pi](../../operations/pi.md).

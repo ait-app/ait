@@ -1,7 +1,8 @@
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
 
 use super::{
-    AgentManager, AgentManagerError, Registration, map_registry, map_session, validate_identity,
+    AgentManager, AgentManagerError, Registration, SessionUse, map_registry, map_session,
+    validate_identity,
 };
 use crate::ports::agent_session::{AgentResumePurpose, AgentSessionSpec};
 use crate::protocol::agent_config::NullableSetting;
@@ -55,7 +56,7 @@ impl AgentManager {
         )
         .await
         .map_err(map_session)?;
-        self.register_session(&id, session, record, Registration::Create, permit)
+        self.register_session(&id, session, record, Registration::Create, Some(permit))
             .await
     }
 
@@ -72,6 +73,15 @@ impl AgentManager {
         agent_id: &str,
         overrides: &Overrides,
     ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
+        // Confirmed native controls must reach storage before deriving restore settings.
+        if self.pending_configuration_cleanup.contains_key(agent_id)
+            || self
+                .live
+                .get(agent_id)
+                .is_some_and(|agent| matches!(agent.session_use, SessionUse::Configuration(_)))
+        {
+            self.release_configuration_session(agent_id).await?;
+        }
         if self.live.get(agent_id).is_some_and(|agent| {
             !agent.registered || agent.turn.is_some() || agent.pending.is_some()
         }) {
@@ -131,7 +141,7 @@ impl AgentManager {
             session,
             record,
             Registration::Restore(overrides),
-            permit,
+            Some(permit),
         )
         .await
     }

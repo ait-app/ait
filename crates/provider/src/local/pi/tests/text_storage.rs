@@ -7,7 +7,7 @@ fn escaped_text_leaves_storage_headroom_for_progress_and_completion() {
         let timeline = Timeline::memory().unwrap();
         let mut stream = streaming::Stream::default();
         stream.begin(uuid::Uuid::new_v4().to_string());
-        stream.admission = true;
+        stream.buffering = true;
         let text = "\u{0001}".repeat(96 * 1024);
         for part in text.as_bytes().chunks(1024) {
             stream
@@ -25,7 +25,7 @@ fn escaped_text_leaves_storage_headroom_for_progress_and_completion() {
         timeline
             .progress("agent", "pi", &observation, &entry)
             .unwrap();
-        stream.end_admission();
+        stream.end_buffering();
         stream
             .consume(&json!({"type":"message_end","message":{"role":"assistant",
                 "content":[{"type":kind,kind:text}]
@@ -49,7 +49,7 @@ fn published_deltas_require_an_ordered_prefix_at_completion() {
         let timeline = Timeline::memory().unwrap();
         let mut stream = streaming::Stream::default();
         stream.begin("turn".into());
-        stream.admission = true;
+        stream.buffering = true;
         for delta in ["first ", "second "] {
             stream
                 .consume(&json!({"type":"message_update","assistantMessageEvent":{
@@ -62,7 +62,7 @@ fn published_deltas_require_an_ordered_prefix_at_completion() {
             timeline
                 .progress("agent", "pi", &observation, &entry)
                 .unwrap();
-            stream.end_admission();
+            stream.end_buffering();
         }
         stream
             .consume(&json!({"type":"message_end","message":{"role":"assistant",
@@ -87,7 +87,7 @@ fn published_deltas_require_an_ordered_prefix_at_completion() {
 fn admission_chunk_rollover_preserves_order_and_observation_identity() {
     let mut stream = streaming::Stream::default();
     stream.begin("turn".into());
-    stream.admission = true;
+    stream.buffering = true;
     let first = "a".repeat(96 * 1024);
     for delta in [first.as_str(), "second", " third"] {
         stream

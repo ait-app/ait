@@ -17,8 +17,8 @@ use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
 const MAX_TEXT: usize = 96 * 1024;
 const MAX_ITEMS: usize = 4096;
 const MAX_EVENTS: usize = 256;
-const MAX_ADMISSION_EVENTS: usize = 4096;
-const MAX_ADMISSION_BYTES: usize = 64 * 1024 * 1024;
+const MAX_BUFFERED_EVENTS: usize = 4096;
+const MAX_BUFFERED_BYTES: usize = 64 * 1024 * 1024;
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 const MAX_TOOLS: usize = 128;
 
@@ -47,8 +47,8 @@ pub(super) struct Stream {
     bytes: usize,
     queued_tool_bytes: usize,
     queued_tools: BTreeMap<String, usize>,
-    /// Admission cannot be drained by the manager; retain a larger, still bounded projection.
-    pub(super) admission: bool,
+    /// RPC waits cannot be drained by the manager; retain a larger, still bounded projection.
+    pub(super) buffering: bool,
     backlog_capacity: usize,
     tools: BTreeMap<String, Tool>,
     compactions: Compactions,
@@ -227,20 +227,20 @@ impl Stream {
         }
     }
 
-    /// Restore normal polling budgets after the undrainable admission window.
-    pub(super) fn end_admission(&mut self) {
-        self.admission = false;
+    /// Restore normal polling budgets after an undrainable RPC wait.
+    pub(super) fn end_buffering(&mut self) {
+        self.buffering = false;
         self.backlog_capacity = if self.events.len() + self.tools.len() + 2 >= MAX_EVENTS
             || self.queued_tool_bytes >= MAX_BYTES
         {
-            MAX_ADMISSION_EVENTS
+            MAX_BUFFERED_EVENTS
         } else {
             MAX_EVENTS
         };
         self.bytes = 0;
     }
 
-    /// Drain display output, restoring the ordinary queue cap once admission backlog fits.
+    /// Drain display output, restoring the ordinary queue cap once RPC backlog fits.
     pub(super) fn pop(&mut self) -> Option<AgentTurnEvent> {
         let event = self.events.pop_front();
         if let Some(AgentTurnEvent::Progress { entry, .. } | AgentTurnEvent::Timeline(entry)) =
@@ -258,8 +258,8 @@ impl Stream {
     }
 
     fn event_limit(&self) -> usize {
-        if self.admission {
-            MAX_ADMISSION_EVENTS
+        if self.buffering {
+            MAX_BUFFERED_EVENTS
         } else {
             self.backlog_capacity.max(MAX_EVENTS)
         }
@@ -271,7 +271,7 @@ impl Stream {
     }
 
     fn push(&mut self, event: AgentTurnEvent) -> Result<(), AgentSessionError> {
-        if self.admission && self.coalesce(&event) {
+        if self.buffering && self.coalesce(&event) {
             return Ok(());
         }
         // Every pending tool, one compaction and the final status must fit even on failure.
@@ -330,8 +330,8 @@ impl Stream {
 
     fn byte_budget(&mut self, bytes: usize) -> Result<(), AgentSessionError> {
         self.bytes = self.bytes.saturating_add(bytes);
-        let text_limit = if self.admission {
-            MAX_ADMISSION_BYTES
+        let text_limit = if self.buffering {
+            MAX_BUFFERED_BYTES
         } else {
             MAX_BYTES
         };
@@ -342,8 +342,8 @@ impl Stream {
     }
 
     fn payload_limit(&self) -> usize {
-        if self.admission || self.backlog_capacity > MAX_EVENTS {
-            MAX_ADMISSION_BYTES
+        if self.buffering || self.backlog_capacity > MAX_EVENTS {
+            MAX_BUFFERED_BYTES
         } else {
             MAX_BYTES
         }

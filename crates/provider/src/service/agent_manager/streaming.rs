@@ -1,5 +1,7 @@
 use std::borrow::Cow;
 
+use domain::agent_runtime::AgentPersistenceHandle;
+
 use super::{AgentManager, AgentManagerError, AgentTurnEvent};
 use crate::ports::agent_session::AgentSessionError;
 use crate::support::time::now_timestamp;
@@ -108,7 +110,13 @@ pub(super) async fn drain(
             };
         }
         let result = match &agent.pending {
-            Some(AgentTurnEvent::RuntimeInfo(info)) => persist_info(registry, id, agent, info),
+            Some(AgentTurnEvent::RuntimeInfo(info)) => {
+                persist_info(registry, id, agent, info).map(|persistence| {
+                    if let Some(handle) = persistence {
+                        agent.record.persistence = Some(handle);
+                    }
+                })
+            }
             Some(AgentTurnEvent::Started(turn)) => {
                 persist_started(registry, timeline, id, agent, turn)
             }
@@ -181,14 +189,28 @@ pub(super) async fn drain(
     Ok(())
 }
 
-fn persist_info(
+/// Persist runtime and optional effective configuration and changed handle atomically.
+/// Returns the persisted handle for the caller's cache while preserving usage facts.
+/// Returns invalid identity, missing Agent, or registry errors without consuming the snapshot.
+pub(super) fn persist_info(
     registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     id: &str,
     agent: &super::LiveAgent,
     info: &domain::agent_runtime::StoredAgentRuntimeInfo,
-) -> Result<(), model::ErrorCode> {
+) -> Result<Option<AgentPersistenceHandle>, model::ErrorCode> {
     if !super::valid_runtime_info(info, agent.session.provider(), &agent.record.provider) {
         return Err(model::ErrorCode::InvalidMessage);
+    }
+    let effective = agent.session.effective_config();
+    // Effective configuration opts an adapter into native control reconciliation. Default
+    // adapters retain the independent handle path, and unchanged handles must not undo
+    // resume metadata repaired directly in the registry.
+    let persistence = effective
+        .as_ref()
+        .and_then(|_| agent.session.persistence())
+        .filter(|handle| agent.record.persistence.as_ref() != Some(handle));
+    if let Some(handle) = &persistence {
+        validate_persistence(handle, &agent.record.provider)?;
     }
     registry
         .update(id, &|record| {
@@ -196,11 +218,17 @@ fn persist_info(
             let mut info = info.clone();
             preserve_usage(&mut info, record.runtime_info.as_ref());
             next.runtime_info = Some(info);
+            if let Some(effective) = &effective {
+                next.config = Some(effective.clone());
+            }
+            if let Some(handle) = &persistence {
+                next.persistence = Some(handle.clone());
+            }
             next
         })
         .map_err(|_| model::ErrorCode::AgentIo)?
         .ok_or(model::ErrorCode::AgentNotFound)?;
-    Ok(())
+    Ok(persistence)
 }
 
 fn persist_started(
@@ -467,15 +495,8 @@ pub(super) fn persist_handle(
     if agent.record.persistence.as_ref() == Some(&handle) {
         return Ok(());
     }
-    if handle.provider != agent.record.provider
-        || handle.session_id.is_empty()
-        || serde_json::to_vec(&handle)
-            .map_err(|_| AgentManagerError::Session)?
-            .len()
-            > 256 * 1024
-    {
-        return Err(AgentManagerError::Session);
-    }
+    validate_persistence(&handle, &agent.record.provider)
+        .map_err(|_| AgentManagerError::Session)?;
     registry
         .update(agent_id, &|current| {
             let mut next = current.clone();
@@ -490,3 +511,22 @@ pub(super) fn persist_handle(
     agent.record.persistence = Some(handle);
     Ok(())
 }
+
+fn validate_persistence(
+    handle: &AgentPersistenceHandle,
+    provider: &str,
+) -> Result<(), model::ErrorCode> {
+    if handle.provider != provider
+        || handle.session_id.is_empty()
+        || serde_json::to_vec(handle)
+            .map_err(|_| model::ErrorCode::InvalidMessage)?
+            .len()
+            > 256 * 1024
+    {
+        return Err(model::ErrorCode::InvalidMessage);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests;

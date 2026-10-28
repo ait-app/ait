@@ -51,6 +51,14 @@ pub(crate) struct AgentSessionSpec {
 pub(crate) enum AgentResumePurpose {
     /// Resume an active Agent for interaction.
     Interactive,
+    /// Reconcile untouched controls before an immediate configuration patch.
+    /// Live-control adapters retain replaced preferences until that patch succeeds.
+    Configuration {
+        /// The patch replaces the saved model selection.
+        replace_model: bool,
+        /// The patch explicitly replaces or clears the saved thinking selection.
+        replace_thinking: bool,
+    },
     /// Read the history of an archived Agent without claiming an interactive writer.
     History,
 }
@@ -89,8 +97,27 @@ pub(crate) enum AgentTurnEvent {
     Failed,
 }
 
+/// Adapter-owned configuration disposition, independent of runtime snapshot availability.
+#[derive(Debug)]
+pub(crate) enum ConfigApplication {
+    /// The adapter leaves configuration to the host's existing next-turn path.
+    Deferred,
+    /// The adapter queued durable native intent; persist its configuration and handle.
+    Queued,
+    /// Native controls completed and returned their confirmed runtime facts.
+    Applied(StoredAgentRuntimeInfo),
+}
+
 /// Live provider session. Closing releases resources without deleting native history.
 pub(crate) trait AgentSession: Debug + Send {
+    /// Report a definitive initialization rejection after exposing reconciled native facts.
+    /// The manager persists runtime, effective configuration and consumed intent before
+    /// returning this error and releasing the session. Other initialization failures must
+    /// still fail creation or resume directly.
+    fn initialization_error(&self) -> Option<AgentSessionError> {
+        None
+    }
+
     /// Attach a connection-owned native audio stream. Unsupported adapters reject it.
     fn start_realtime(
         &mut self,
@@ -135,6 +162,35 @@ pub(crate) trait AgentSession: Debug + Send {
     /// Returns rejection before persisting a change that cannot apply to this session.
     fn validate_config_update(&self, _config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         Ok(())
+    }
+
+    /// Apply a validated patch immediately when the adapter supports native live controls.
+    /// `Deferred` preserves host-only configuration without reading a native handle.
+    /// `Queued` persists adapter-owned next-turn intent; `Applied` confirms live controls.
+    /// # Errors
+    /// Returns native control or readback failures; a partial native change may still be observed.
+    fn apply_config<'a>(
+        &'a mut self,
+        _config: &'a StoredAgentConfig,
+        _patch: &'a crate::protocol::agent_config::ConfigPatch,
+    ) -> AgentSessionFuture<'a, ConfigApplication> {
+        Box::pin(async { Ok(ConfigApplication::Deferred) })
+    }
+
+    /// Return adapter-owned durable configuration, including accepted next-turn intent.
+    /// `None` preserves the host's requested configuration for other adapters. The manager
+    /// reads this during configuration after `Queued`, `Applied`, or a failed operation's
+    /// cached runtime observation.
+    fn effective_config(&self) -> Option<StoredAgentConfig> {
+        None
+    }
+
+    /// Take a cached runtime observation without native I/O after an operation fails.
+    /// `Some` transfers observation ownership to the manager so shutdown can persist
+    /// effective configuration and consumed intent before releasing the session.
+    /// `None` leaves adapters without cached observations unchanged.
+    fn take_runtime_observation(&mut self) -> Option<StoredAgentRuntimeInfo> {
+        None
     }
 
     /// Return safe classified failure facts before the failed native connection is closed.
@@ -327,6 +383,12 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
         false
     }
 
+    /// Whether configuration requires a live native session before it can be accepted.
+    /// The manager resumes a dormant session before calling its live controls.
+    fn supports_live_config(&self) -> bool {
+        false
+    }
+
     /// Whether native history can be replayed as a complete authoritative transcript.
     /// Adapters without replay retain the server's already persisted display timeline.
     fn supports_history_replay(&self) -> bool {
@@ -418,6 +480,17 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
     /// Returns unsupported settings or unavailable native discovery.
     fn validate_selection<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, ()> {
         Box::pin(async move { self.validate_config(&spec.config) })
+    }
+
+    /// Validate a proposed patch; providers may avoid rediscovering unchanged selections.
+    /// `spec` contains the resulting configuration, and `patch` identifies explicit changes.
+    /// Returns the same validation errors as selection validation by default.
+    fn validate_config_patch<'a>(
+        &'a self,
+        spec: &'a AgentSessionSpec,
+        _patch: &'a crate::protocol::agent_config::ConfigPatch,
+    ) -> AgentSessionFuture<'a, ()> {
+        self.validate_selection(spec)
     }
 
     /// Inspect launch and authentication availability without exposing credentials.

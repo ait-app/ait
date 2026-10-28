@@ -854,6 +854,13 @@ fn project_config(
     config: &mut StoredAgentConfig,
 ) -> Result<(), AgentSessionError> {
     for record in branch {
+        if record["type"] == "thinking_level_change" {
+            let level = field(record, "thinkingLevel")?;
+            if !config::valid_thinking_level_id(level) {
+                return Err(AgentSessionError::Rejected);
+            }
+            config.thinking_option_id = Some(level.to_owned());
+        }
         if record["type"] == "model_change" {
             config.model = Some(format!(
                 "{}/{}",

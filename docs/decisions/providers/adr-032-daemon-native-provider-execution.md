@@ -2,6 +2,7 @@
 
 - 状态：Accepted。
 - 并发修订：当前调度与存储执行位置以 [ADR-091](adr-091-independent-session-execution.md) 为准，下面的全局串行描述保留为初始决策背景。
+- 配置会话修订：[ADR-198](adr-198-pi-reasoning-controls.md) 将仅用于即时控件的临时会话排除在交互会话配额之外；操作后关闭原生资源，待提交事实继续重试。
 - 日期：2026-09-24。
 - 范围：独立 server；延续 ADR-027/031，不依赖旧 `ait-*`。
 - 来源：`getpaseo/paseo@2c8e8a826810337492cc5a38bb0bbd705b6fb632` 的

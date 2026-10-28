@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::ffi::OsString;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -20,10 +19,9 @@ use crate::ports::{
 const MAX_VERSION_BYTES: usize = 64;
 
 const MAX_FRAME: usize = 64 * 1024 * 1024;
-const MAX_PENDING: usize = 128;
+const READER_CAPACITY: usize = 128;
 // Large native records fail explicitly with a frame_limit protocol diagnostic.
 const MAX_INBOUND_FRAME: usize = 2 * 1024 * 1024;
-const MAX_PENDING_BYTES: usize = 8 * 1024 * 1024;
 
 /// Validated version string, cached for one configured client and its clones.
 #[derive(Debug)]
@@ -122,22 +120,14 @@ fn parse_version(bytes: &[u8]) -> Result<Version, AgentSessionError> {
     })
 }
 
-#[derive(Debug)]
-struct Record {
-    value: Value,
-    bytes: usize,
-}
-
 /// Owned JSONL process with bounded queues, request correlation and shutdown.
 #[derive(Debug)]
 pub(super) struct Transport {
     child: Option<Child>,
     input: Arc<Mutex<Option<ChildStdin>>>,
-    messages: mpsc::Receiver<Record>,
+    messages: mpsc::Receiver<Value>,
     reader: JoinHandle<()>,
     stderr: JoinHandle<()>,
-    pending: VecDeque<Record>,
-    pending_bytes: usize,
     sequence: u64,
     deadline: Duration,
     pub(super) admission_deadline: Duration,
@@ -180,7 +170,7 @@ impl Transport {
             stderr_diagnostics.drain(errors).await;
             let _ = stderr_done.send(());
         });
-        let (sender, messages) = mpsc::channel(MAX_PENDING);
+        let (sender, messages) = mpsc::channel(READER_CAPACITY);
         let writer = input.clone();
         let deadline = client.deadline;
         let reader_diagnostics = diagnostics.clone();
@@ -213,14 +203,7 @@ impl Transport {
                     }
                     continue;
                 }
-                if sender
-                    .send(Record {
-                        value: message,
-                        bytes: bytes.len(),
-                    })
-                    .await
-                    .is_err()
-                {
+                if sender.send(message).await.is_err() {
                     return;
                 }
             };
@@ -235,8 +218,6 @@ impl Transport {
             messages,
             reader,
             stderr,
-            pending: VecDeque::new(),
-            pending_bytes: 0,
             sequence: 0,
             deadline,
             admission_deadline: client.admission_deadline,
@@ -263,9 +244,14 @@ impl Transport {
         Ok(())
     }
 
-    /// Correlate a control response while retaining bounded intervening records.
-    pub(super) async fn request(&mut self, message: Value) -> Result<Value, AgentSessionError> {
-        self.request_with(message, self.deadline, |_| Ok(())).await
+    /// Correlate a control response, projecting intervening events through `consume`.
+    /// Returns native rejection or closes the transport on timeout/protocol failure.
+    pub(super) async fn request(
+        &mut self,
+        message: Value,
+        consume: impl FnMut(&Value) -> Result<(), Diagnostic>,
+    ) -> Result<Value, AgentSessionError> {
+        self.request_with(message, self.deadline, consume).await
     }
 
     /// Submit a prompt with a distinct admission budget, consuming events as they arrive.
@@ -292,12 +278,11 @@ impl Transport {
         self.send(&message).await?;
         let result = tokio::time::timeout(deadline, async {
             loop {
-                let record = self
+                let response = self
                     .messages
                     .recv()
                     .await
                     .ok_or(AgentSessionError::Failed)?;
-                let response = &record.value;
                 if response["type"] == "response" {
                     if response["id"] != id || response["command"] != message["type"] {
                         return Err(AgentSessionError::Failed);
@@ -312,17 +297,9 @@ impl Transport {
                         None => Err(AgentSessionError::Failed),
                     };
                 }
-                if prompt {
-                    if let Err(diagnostic) = consume(response) {
-                        self.diagnostics.observe(diagnostic, "prompt");
-                        return Err(AgentSessionError::Failed);
-                    }
-                } else {
-                    self.pending_bytes = self.pending_bytes.saturating_add(record.bytes);
-                    if self.pending.len() >= MAX_PENDING || self.pending_bytes > MAX_PENDING_BYTES {
-                        return Err(AgentSessionError::Failed);
-                    }
-                    self.pending.push_back(record);
+                if let Err(diagnostic) = consume(&response) {
+                    self.diagnostics.observe(diagnostic, "request_event");
+                    return Err(AgentSessionError::Failed);
                 }
             }
         })
@@ -349,39 +326,18 @@ impl Transport {
         result
     }
 
-    fn pending(&mut self) -> Option<Value> {
-        let record = self.pending.pop_front()?;
-        self.pending_bytes -= record.bytes;
-        Some(record.value)
-    }
-
-    /// Receive a queued native event, failing on closed streams.
+    /// Receive a native event, failing on closed streams.
     pub(super) async fn receive(&mut self) -> Result<Value, AgentSessionError> {
-        if let Some(message) = self.pending() {
-            return Ok(message);
-        }
-        self.messages
-            .recv()
-            .await
-            .map(|record| record.value)
-            .ok_or(AgentSessionError::Failed)
+        self.messages.recv().await.ok_or(AgentSessionError::Failed)
     }
 
     /// Read one event without waiting; closed streams return failure.
     pub(super) fn poll(&mut self) -> Result<Option<Value>, AgentSessionError> {
-        if let Some(message) = self.pending() {
-            return Ok(Some(message));
-        }
         match self.messages.try_recv() {
-            Ok(record) => Ok(Some(record.value)),
+            Ok(event) => Ok(Some(event)),
             Err(mpsc::error::TryRecvError::Empty) if !self.closed => Ok(None),
             Err(_) => Err(AgentSessionError::Failed),
         }
-    }
-
-    /// Drain only events preceding the most recent control response, providing an ordering barrier.
-    pub(super) fn drain_pending(&mut self) -> impl Iterator<Item = Value> + '_ {
-        std::iter::from_fn(|| self.pending())
     }
 
     /// Allow native cleanup, then force termination if needed and reap the owned process.

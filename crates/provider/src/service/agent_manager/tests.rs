@@ -12,6 +12,8 @@ use crate::ports::agent_session::{AgentSessionFuture, AgentSessionSpec};
 
 mod auto_archive;
 mod bot_permissions;
+mod configuration;
+mod configuration_cleanup;
 mod environment;
 mod generated_titles;
 mod paseo;
@@ -120,6 +122,10 @@ struct FakeState {
     resume_purposes: Vec<AgentResumePurpose>,
     resume_specs: Vec<AgentSessionSpec>,
     close_calls: usize,
+    persistence_reads: usize,
+    config_result: Option<Result<(), AgentSessionError>>,
+    effective_config: Option<StoredAgentConfig>,
+    during_configuration: Option<MemoryRegistry>,
     events: std::collections::VecDeque<AgentTurnEvent>,
     start_result: Result<(), AgentSessionError>,
     start_calls: usize,
@@ -146,6 +152,10 @@ impl Default for FakeState {
             resume_purposes: Vec::new(),
             resume_specs: Vec::new(),
             close_calls: 0,
+            persistence_reads: 0,
+            config_result: None,
+            effective_config: None,
+            during_configuration: None,
             events: std::collections::VecDeque::new(),
             start_result: Ok(()),
             start_calls: 0,
@@ -169,6 +179,10 @@ struct FakeClient(Arc<Mutex<FakeState>>);
 struct FakeSession(Arc<Mutex<FakeState>>);
 
 impl AgentClient for FakeClient {
+    fn supports_live_config(&self) -> bool {
+        self.0.lock().unwrap().config_result.is_some()
+    }
+
     fn commands<'a>(&'a self, _spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, Vec<Value>> {
         Box::pin(async move { Err(self.0.lock().unwrap().commands_error) })
     }
@@ -245,6 +259,31 @@ async fn unsupported_commands_are_distinct_from_rejected_requests_and_provider_f
 }
 
 impl AgentSession for FakeSession {
+    fn apply_config<'a>(
+        &'a mut self,
+        config: &'a StoredAgentConfig,
+        _patch: &'a ConfigPatch,
+    ) -> AgentSessionFuture<'a, ConfigApplication> {
+        Box::pin(async move {
+            {
+                let mut state = self.0.lock().unwrap();
+                let Some(result) = state.config_result else {
+                    return Ok(ConfigApplication::Deferred);
+                };
+                result?;
+                state.effective_config = Some(config.clone());
+                if let Some(registry) = &state.during_configuration {
+                    registry.0.lock().unwrap().fail_update = true;
+                }
+            }
+            self.runtime_info().await.map(ConfigApplication::Applied)
+        })
+    }
+
+    fn effective_config(&self) -> Option<StoredAgentConfig> {
+        self.0.lock().unwrap().effective_config.clone()
+    }
+
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
         self.0.lock().unwrap().failure_diagnostic
     }
@@ -270,7 +309,7 @@ impl AgentSession for FakeSession {
     fn start_turn<'a>(
         &'a mut self,
         _text: &'a str,
-        _config: &'a domain::agent_runtime::StoredAgentConfig,
+        _config: &'a StoredAgentConfig,
     ) -> AgentSessionFuture<'a, String> {
         Box::pin(async move {
             let mut state = self.0.lock().unwrap();
@@ -347,9 +386,11 @@ impl AgentSession for FakeSession {
     }
 
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
+        let mut state = self.0.lock().expect("state");
+        state.persistence_reads += 1;
         Some(AgentPersistenceHandle {
             provider: "codex".to_owned(),
-            session_id: self.0.lock().expect("state").handle_session_id.clone(),
+            session_id: state.handle_session_id.clone(),
             native_handle: None,
             metadata: None,
         })
@@ -878,12 +919,12 @@ async fn cancelled_internal_archived_and_deleted_agents_do_not_publish_attention
 
 #[tokio::test]
 async fn configuration_write_failure_preserves_the_previous_bundle_and_unrelated_metadata() {
-    let (manager, registry, _) = make_manager();
+    let (mut manager, registry, _) = make_manager();
     registry.upsert(&stored_record()).unwrap();
     let original = registry.get("agent-1").unwrap().unwrap();
     let patch = ConfigPatch {
-        model_id: crate::protocol::agent_config::NullableSetting::Set("new".to_owned()),
-        thinking_option_id: crate::protocol::agent_config::NullableSetting::Set("high".to_owned()),
+        model_id: NullableSetting::Set("new".to_owned()),
+        thinking_option_id: NullableSetting::Set("high".to_owned()),
         ..ConfigPatch::default()
     };
     registry.0.lock().unwrap().fail_update = true;

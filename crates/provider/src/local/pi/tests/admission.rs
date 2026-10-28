@@ -68,7 +68,7 @@ fn resuming_running_work_preserves_current_failure_and_text() {
 fn admission_coalesces_deltas_and_final_items_without_losing_text() {
     let mut stream = streaming::Stream::default();
     stream.begin("turn".into());
-    stream.admission = true;
+    stream.buffering = true;
     let delta = json!({"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"é"}});
     for _ in 0..5000 {
         stream.consume(&delta).unwrap();
@@ -88,7 +88,7 @@ fn admission_coalesces_deltas_and_final_items_without_losing_text() {
 fn admission_tool_snapshots_coalesce_to_distinct_completed_items() {
     let mut stream = streaming::Stream::default();
     stream.begin("turn".into());
-    stream.admission = true;
+    stream.buffering = true;
     for id in 0..1400 {
         let mut event = json!({"type":"tool_execution_start","toolCallId":id.to_string(),"toolName":"bash","args":{}});
         stream.consume(&event).unwrap();
@@ -109,7 +109,7 @@ fn admission_tool_snapshots_coalesce_to_distinct_completed_items() {
             .iter()
             .all(|event| matches!(event, AgentTurnEvent::Timeline(_)))
     );
-    stream.end_admission();
+    stream.end_buffering();
     while stream.pop().is_some() {}
     let delta = json!({"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"x"}});
     assert!((0..256).any(|_| stream.consume(&delta).is_err()));
@@ -120,7 +120,7 @@ fn queued_tool_previews_remain_bounded_and_release_capacity_when_drained() {
     for admission in [false, true] {
         let mut stream = streaming::Stream::default();
         stream.begin("turn".into());
-        stream.admission = admission;
+        stream.buffering = admission;
         let mut completed = 0;
         loop {
             let id = completed.to_string();
@@ -151,7 +151,7 @@ fn long_tools_replace_pending_previews_and_drained_calls_do_not_accumulate_bytes
     for admission in [false, true] {
         let mut stream = streaming::Stream::default();
         stream.begin("turn".into());
-        stream.admission = admission;
+        stream.buffering = admission;
         stream.consume(&json!({"type":"tool_execution_start","toolCallId":"streaming","toolName":"bash","args":"x".repeat(32*1024)})).unwrap();
         let update = json!({"type":"tool_execution_update","toolCallId":"streaming","toolName":"bash","partialResult":"y".repeat(32*1024)});
         for _ in 0..3000 {

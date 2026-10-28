@@ -5,6 +5,7 @@ import type {
   AgentSelectOption,
   ProviderSnapshotEntry,
 } from "@ait/protocol/agent-types";
+import { resolveDefaultThinkingOptionId } from "@/provider-selection/control-presentation";
 import type { AgentProfile } from "@ait/protocol/messages";
 import { formatAgentModeLabel, formatThinkingOptionLabel } from "@/agent-controls/labels";
 import { applyFeatureValues, pruneFeatureValues } from "@/hooks/feature-preferences";
@@ -243,14 +244,8 @@ function buildThinkingOptions(options: readonly AgentSelectOption[]): AgentProfi
 }
 
 /**
- * Every selection resolves to a concrete id.
- *
- * Each list used to carry a synthetic "Provider default" row. It read as a value
- * you could choose but stored an absent one, so a profile that looked fully
- * specified would apply whatever the host preferred at the time — and two hosts
- * would materialize the same profile differently. The schedule form never
- * offered that row; this form now matches it and seeds the catalog's own default
- * instead, so what the form shows is what the profile stores.
+ * Seed concrete catalog defaults, falling back to the first offered choice.
+ * Provider presentation policy determines whether a missing default remains unspecified.
  */
 function defaultModelId(models: readonly AgentModelDefinition[]): string {
   return models.find((model) => model.isDefault)?.id ?? models[0]?.id ?? "";
@@ -258,16 +253,6 @@ function defaultModelId(models: readonly AgentModelDefinition[]): string {
 
 function defaultModeId(entry: ProviderSnapshotEntry | null, modes: readonly AgentMode[]): string {
   return entry?.defaultModeId ?? modes[0]?.id ?? "";
-}
-
-function defaultThinkingOptionId(model: AgentModelDefinition | null): string {
-  const options = model?.thinkingOptions ?? [];
-  return (
-    model?.defaultThinkingOptionId ??
-    options.find((option) => option.isDefault)?.id ??
-    options[0]?.id ??
-    ""
-  );
 }
 
 function seedSelections(
@@ -281,7 +266,8 @@ function seedSelections(
   const modelId = next.modelId || defaultModelId(input.models);
   const modeId = next.modeId || defaultModeId(input.entry, input.modes);
   const thinkingOptionId =
-    next.thinkingOptionId || defaultThinkingOptionId(resolveEffectiveModel(input.models, modelId));
+    next.thinkingOptionId ||
+    resolveDefaultThinkingOptionId(resolveEffectiveModel(input.models, modelId));
   if (
     modelId === next.modelId &&
     modeId === next.modeId &&

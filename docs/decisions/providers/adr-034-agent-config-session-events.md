@@ -4,6 +4,9 @@
 - 日期：2026-09-24。
 - 授权：继续实现独立 server 的 Agent 和 Session 接口，参考固定 Paseo 版本。
 - 更新：ADR-032 的配置边界，以及 ADR-029 的 heartbeat 占位状态。
+- 后续修订：[ADR-198](adr-198-pi-reasoning-controls.md) 为支持实时配置的 adapter 增加空闲时
+  即时原生控件与有效配置回读；以下延迟应用、null 交给原生 Provider 和写失败不影响原生状态的
+  描述，对 Pi 以 ADR-198 的清除语义和部分成功协调规则为准。活动 turn 仍保留下一轮配置。
 
 ## Agent 配置
 

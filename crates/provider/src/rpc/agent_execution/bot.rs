@@ -107,7 +107,7 @@ impl ExecutionState {
     }
 
     async fn refresh_bot_config(
-        &self,
+        &mut self,
         record: &PersistedAgentRuntimeRecord,
         instructions: String,
     ) -> Result<(), ErrorCode> {
@@ -133,6 +133,7 @@ impl ExecutionState {
                 },
             )
             .await
+            .map(|_| ())
             .map_err(|error| map_manager(&error))
     }
 

@@ -1,5 +1,7 @@
 # Ait 文档
 
+- [ADR-198：Pi 原生推理控件与运行时事实](decisions/providers/adr-198-pi-reasoning-controls.md)：原生目录默认值、即时与排队控件、配置临时会话、原子持久化与恢复，以及统一客户端展示；[验证报告](reports/providers/pi-reasoning-controls-2026-10-28.md)。
+
 - [MiniMax Code](operations/minimax-code.md)：最新版 `mcode` 原生 ACP、登录与真实联调；[ADR-197](decisions/providers/adr-197-minimax-code-acp.md)、[验证报告](reports/providers/minimax-code-acp-2026-10-28.md)。
 
 - [ADR-195：OpenCode 独立取消信号与确认期限](decisions/providers/adr-195-opencode-independent-cancellation.md)：消除输出背压和历史回放对停止的阻塞，限制原生终态丢失后的停止等待。

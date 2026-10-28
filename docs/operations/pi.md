@@ -21,6 +21,7 @@ not fall back to PATH. No provider process is launched merely by registering the
 ## Supported behavior
 
 - Model discovery without creating persistent sessions or submitting prompts.
+- Model-specific reasoning choices, native catalog defaults, and thinking-level selection.
 - Native session creation and resume with stable IDs.
 - Native session discovery, import, and explicit history refresh from Pi's JSONL storage.
 - Text and attachment input, inline images accepted by the native model, streaming text
@@ -28,7 +29,7 @@ not fall back to PATH. No provider process is launched merely by registering the
 - Cancellation and process cleanup, including failure and uncertain submission paths.
 - Ait display timeline retention across daemon restart.
 - Compaction start/completion/failure markers, including manual compaction while idle.
-- Safe failure classification and fixed user-facing explanations, without retaining raw errors.
+- Safe failure classification and bounded, redacted native failure explanations.
 
 Pi owns its credentials, session files, tools, extensions and settings. Ait does not expose a
 Pi mode or add a permission sandbox. Extension select, confirm, input and editor dialogs are
@@ -37,10 +38,77 @@ explicitly cancelled. Notification-only extension UI records
 UI methods fail immediately with a protocol diagnostic (`extension_method`). This can cause extensions requiring interaction to decline their operation.
 
 Rewind, live steering, host-provided MCP/tool policies,
-custom system prompts, thinking-level selection, structured output and auxiliary summaries
+custom system prompts, structured output and auxiliary summaries
 are not exposed by this adapter. Unsupported settings are rejected instead of ignored.
 Existing native history changed outside Ait is not automatically re-imported into the Ait
 display timeline; use explicit history refresh.
+
+## Reasoning controls and defaults
+
+Discovery reads `get_available_models` and `get_state` in the same ephemeral process,
+each under the normal 10-second control deadline. A failed state read fails discovery,
+so a temporary error cannot silently change defaults persisted by forms. A successful
+response without a catalog model leaves the default model unmarked.
+
+Reasoning models offer `off`, `minimal`, `low`, `medium`, and `high` unless a null
+`thinkingLevelMap` entry disables a level. `xhigh` and `max` require non-null mappings.
+Additional non-null native keys remain selectable; models without reasoning have no choices.
+Each model's catalog default follows Paseo: start at Medium, clamp upward to the first
+supported level, otherwise choose the highest remaining lower level. This is a catalog
+hint, not the running session's level or Pi's saved global default.
+
+Pi model and thinking changes apply immediately, without sending a prompt. If the agent
+is dormant after restart, Ait resumes its Pi session before applying the control. Failure
+to resume rejects the change; a saved request is not treated as an applied native selection.
+Ait closes a session opened solely for configuration after the operation, including failures,
+while preserving the Agent's prior UI status.
+If saving the result fails, native resources still close; polling retries the retained facts
+without executing the control again. Sessions already open remain open.
+Ait reads
+`get_state` after the control and saves Pi's effective model and thinking level. A model-only
+switch accepts the destination model's default; the previous model's level is not restored.
+Combined changes apply thinking after switching the model. Clearing thinking requests Medium
+once, which Pi may clamp, and removes the saved preference. An unspecified or cleared
+preference stays absent through readback, extension events, and subsequent resumes, so Pi's
+restored level remains authoritative. Runtime info still reports the effective native level.
+Explicit reselection sends the control again. While a turn is active, Ait saves the selection
+for the next turn and returns "Configuration applies next turn". No native control is sent
+during inference. Pending controls survive restart, including an explicit Clear, and execute
+before the next prompt or on idle resume. The composer displays the queued selection while
+runtime facts retain the current turn's effective native choices.
+Runtime inspection also avoids RPCs during active turns and returns the latest cached native
+observations. Idle inspection refreshes state normally. An absent per-turn preference leaves
+the native level alone, and missing native thinking metadata preserves an explicit saved
+preference while reporting an unknown runtime level.
+
+Creation and resume skip `set_model` when Pi already selected that model. Without a thinking
+override, its native/restored level is retained. Switching to a different model accepts that
+model's default, followed by any explicit thinking override. Resume adopts native readback,
+including clamping. Effective thinking replaces an explicit saved request after controls, registration,
+and extension changes, so future reloads use the latest observed native level.
+This also applies when restart recovers a deferred model command whose destination is already
+selected in Pi. Resume preserves that model's restored level unless an explicit thinking
+preference or pending clear applies. A deferred model-only switch saves the removed thinking
+override as soon as configuration is accepted, before background polling.
+
+`runtimeInfo.thinkingOptionId` and `runtimeInfo.extra.thinkingLevel` carry the native level.
+Pi's composer model, thinking label, dropdown checkmark, directory filters, and child-agent
+facts follow native readback. A native level absent from the catalog keeps its own label.
+Before readback is available, the existing configured/catalog fallback remains. Shared
+controls for other providers keep their existing behavior.
+The client presentation adapter normalizes native and compatibility metadata consistently
+for composer controls and facts; queued selections remain separate from effective runtime facts.
+
+Thinking IDs are nonempty, control-free strings of at most 512 UTF-8 bytes. Pi validates and
+clamps stale or future values. Pi also owns API mappings: native XHigh can map to
+`reasoning_effort: high`. Ait displays Pi's native vocabulary.
+
+Native controls and registry writes can fail separately. Ait reports the error and observes
+the actual native state after partial success; it does not promise native rollback.
+Pi's global settings and credentials are not rewritten. Pi-native extension subagents are
+not enumerated by this projection.
+
+The adapter and display contract is recorded in [ADR-198](../decisions/providers/adr-198-pi-reasoning-controls.md).
 
 ## Import an existing session
 
@@ -124,11 +192,13 @@ Handled commands running only manual compaction wait for its end and an idle sta
 within a 120-second settlement limit.
 
 Inbound JSONL records are limited to 2 MiB including LF; outbound records to 64 MiB.
+The reader channel holds at most 128 records within that per-frame limit, with no separate
+aggregate wire-byte cap. Control waits project incoming events immediately.
 Oversized native frames produce a protocol diagnostic with source `frame_limit`. Display
 queues normally hold at most 256 events, with reserved failure cleanup capacity. While
-prompt admission prevents the manager from draining events, a separate budget allows
+prompt admission or a control wait prevents the manager from draining events, a separate budget allows
 4096 events and 64 MiB of display payload. This combines cumulative text with currently
-queued tool previews. Text deltas merge in chunks of at most 96 KiB during admission;
+queued tool previews. Text deltas merge in chunks of at most 96 KiB during these waits;
 tool progress always keeps only the latest unpublished snapshot per item, and final
 items replace their pending progress. Publishing a tool item releases its preview bytes.
 Repeated updates and already-published tools therefore do not consume a lifetime tool
@@ -136,8 +206,8 @@ budget. Preview sizes are captured while rendering, without serializing whole to
 for accounting. Strings count displayed UTF-8 bytes; structured previews count rendered
 JSON bytes.
 
-After admission, the text counter resets and the normal 8 MiB combined payload budget
-applies once the admission backlog fits. The larger event and payload allowances remain
+After a buffered wait, the text counter resets and the normal 8 MiB combined payload budget
+applies once the backlog fits. The larger event and payload allowances remain
 until that backlog drains, including during cancellation. Individual text items are
 limited to 96 KiB, and each tool input/output preview to 32 KiB plus a truncation marker.
 Full results remain in Pi's native history. Excessive distinct queued items, retained tool
@@ -177,5 +247,7 @@ cargo test -p provider local::pi::tests::installed --lib -- --ignored
 ```
 
 Implementation decision: [ADR-156](../decisions/providers/adr-156-pi-native-rpc-provider.md).
+Reasoning controls and runtime state validation:
+[2026-10-28 report](../reports/providers/pi-reasoning-controls-2026-10-28.md).
 Focused user-image projection results and validation limits:
 [2026-10-21 report](../reports/providers/pi-user-image-projection-2026-10-21.md).

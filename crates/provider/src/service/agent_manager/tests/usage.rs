@@ -2,6 +2,57 @@ use super::*;
 use crate::protocol::usage::AgentUsage;
 
 #[tokio::test]
+async fn pending_and_streamed_runtime_snapshots_preserve_usage_and_retry_the_same_update() {
+    for streamed in [false, true] {
+        let (mut manager, registry, client) = make_manager();
+        manager
+            .create("agent-1", &spec(), AgentRegistration::default())
+            .await
+            .unwrap();
+        registry
+            .update("agent-1", &|current| {
+                let mut next = current.clone();
+                next.runtime_info.as_mut().unwrap().extra = Some(BTreeMap::from([(
+                    "lastUsage".into(),
+                    json!({"inputTokens":42}),
+                )]));
+                next
+            })
+            .unwrap();
+        let mut info = manager
+            .live
+            .get_mut("agent-1")
+            .unwrap()
+            .session
+            .runtime_info()
+            .await
+            .unwrap();
+        info.model = Some("updated-model".into());
+        if streamed {
+            client
+                .0
+                .lock()
+                .unwrap()
+                .events
+                .push_back(AgentTurnEvent::RuntimeInfo(info));
+        } else {
+            manager.live.get_mut("agent-1").unwrap().pending_runtime = Some(info);
+        }
+        registry.0.lock().unwrap().fail_update = true;
+        assert_eq!(manager.poll().await, Err(AgentManagerError::Registry));
+        registry.0.lock().unwrap().fail_update = false;
+        manager.poll().await.unwrap();
+        let record = registry.get("agent-1").unwrap().unwrap();
+        let runtime = record.runtime_info.unwrap();
+        assert_eq!(runtime.model.as_deref(), Some("updated-model"));
+        assert_eq!(runtime.extra.unwrap()["lastUsage"]["inputTokens"], 42);
+        assert!(manager.live["agent-1"].pending_runtime.is_none());
+        assert!(manager.live["agent-1"].pending.is_none());
+        manager.close_all().await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn native_control_and_usage_streams_have_timestamps_and_turn_identity() {
     let (manager, _, client) = make_manager();
     let timeline = crate::storage::timeline::Timeline::memory().unwrap();

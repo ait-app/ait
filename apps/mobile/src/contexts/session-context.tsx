@@ -909,10 +909,13 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         console.warn("[Session] setAgentModel skipped: daemon unavailable");
         return;
       }
-      void client.setAgentModel(agentId, modelId).catch((error) => {
-        console.error("[Session] Failed to set agent model:", error);
-        toast.error(toErrorMessage(error));
-      });
+      void client
+        .setAgentModel(agentId, modelId)
+        .then((notice) => showProviderNoticeToast(toast, notice))
+        .catch((error) => {
+          console.error("[Session] Failed to set agent model:", error);
+          toast.error(toErrorMessage(error));
+        });
     },
     [client, toast],
   );

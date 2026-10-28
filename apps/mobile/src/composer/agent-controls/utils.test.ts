@@ -218,3 +218,105 @@ describe("resolveAgentModelSelection", () => {
     expect(selection.displayThinking).toBe("Low");
   });
 });
+
+describe("Pi native selections", () => {
+  const models = [
+    {
+      provider: "pi",
+      id: "backend/old",
+      label: "Old",
+      thinkingOptions: [{ id: "medium", label: "Medium" }],
+    },
+    {
+      provider: "pi",
+      id: "backend/new",
+      label: "New",
+      thinkingOptions: [{ id: "high", label: "High" }],
+      defaultThinkingOptionId: "high",
+    },
+  ];
+  it("shows the saved next-turn choice while Pi is still using the current selection", () => {
+    const result = resolveAgentModelSelection({
+      provider: "pi",
+      models,
+      configuredModelId: "backend/new",
+      runtimeModelId: "backend/old",
+      explicitThinkingOptionId: "high",
+      runtimeInfo: {
+        provider: "pi",
+        sessionId: "s",
+        model: "backend/old",
+        thinkingOptionId: "medium",
+        extra: { configPending: true },
+      },
+    });
+    expect(result.activeModelId).toBe("backend/new");
+    expect(result.selectedThinkingId).toBe("high");
+  });
+  it("uses Pi's native model and clamped thinking instead of stale configuration", () => {
+    const result = resolveAgentModelSelection({
+      provider: "pi",
+      models,
+      configuredModelId: "backend/old",
+      runtimeModelId: "backend/new",
+      explicitThinkingOptionId: "medium",
+      runtimeInfo: {
+        provider: "pi",
+        sessionId: "s",
+        model: "backend/new",
+        thinkingOptionId: "high",
+      },
+    });
+    expect(result.activeModelId).toBe("backend/new");
+    expect(result.selectedThinkingId).toBe("high");
+    expect(result.displayThinking).toBe("High");
+  });
+  it("preserves a native level even when the catalog does not recognize it", () => {
+    const result = resolveAgentModelSelection({
+      provider: "pi",
+      models,
+      configuredModelId: "backend/new",
+      runtimeModelId: "backend/new",
+      explicitThinkingOptionId: "high",
+      runtimeInfo: { provider: "pi", sessionId: "s", thinkingOptionId: "future" },
+    });
+    expect(result.selectedThinkingId).toBe("future");
+    expect(result.displayThinking).toBe("Future");
+  });
+  it.each([false, true])(
+    "preserves an unknown requested Pi level while pending is %s",
+    (pending) => {
+      const result = resolveAgentModelSelection({
+        provider: "pi",
+        models: [
+          {
+            provider: "pi",
+            id: "backend/new",
+            label: "New",
+            thinkingOptions: [{ id: "off", label: "Off" }],
+          },
+        ],
+        configuredModelId: "backend/new",
+        runtimeModelId: "backend/new",
+        explicitThinkingOptionId: "future",
+        runtimeInfo: {
+          provider: "pi",
+          sessionId: "s",
+          ...(pending ? { thinkingOptionId: "off", extra: { configPending: true } } : {}),
+        },
+      });
+      expect(result.selectedThinkingId).toBe("future");
+      expect(result.displayThinking).toBe("Future");
+    },
+  );
+  it("falls back to the model default before native state is available", () => {
+    const result = resolveAgentModelSelection({
+      provider: "pi",
+      models,
+      configuredModelId: "backend/new",
+      runtimeModelId: null,
+      explicitThinkingOptionId: null,
+    });
+    expect(result.selectedThinkingId).toBe("high");
+  });
+});

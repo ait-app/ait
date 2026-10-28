@@ -1,12 +1,14 @@
 //! Pi's native JSONL RPC adapter. Authentication and sessions remain owned by Pi.
 
 mod config;
+mod controls;
 mod history;
 mod session;
 mod streaming;
 mod transport;
 
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -59,6 +61,45 @@ impl PiClient {
         self.images = super::images::ImageStore::new(directory);
         self
     }
+
+    /// Read the native catalog, optionally including defaults from the same process.
+    /// Returns validation, process or protocol errors rather than publishing partial defaults.
+    async fn discover_models(
+        &self,
+        cwd: &str,
+        include_defaults: bool,
+    ) -> Result<Vec<Value>, AgentSessionError> {
+        config::directory(cwd)?;
+        transport::version(self).await?;
+        let mut transport = transport::Transport::spawn(self, cwd, &["--no-session".into()])?;
+        let result = async {
+            let models = transport
+                .request(json!({"type":"get_available_models"}), |_| Ok(()))
+                .await?;
+            // Defaults seed persisted profiles, so a slow state read must not silently
+            // turn a concrete selection into an unspecified native preference.
+            let state = if include_defaults {
+                transport
+                    .request(json!({"type":"get_state"}), |_| Ok(()))
+                    .await?
+            } else {
+                Value::Null
+            };
+            config::models(&models, &state)
+        }
+        .await;
+        let closed = transport.close().await;
+        discovery_outcome(result, closed)
+    }
+}
+
+fn discovery_outcome(
+    result: Result<Vec<Value>, AgentSessionError>,
+    closed: Result<(), AgentSessionError>,
+) -> Result<Vec<Value>, AgentSessionError> {
+    let models = result?;
+    closed?;
+    Ok(models)
 }
 
 impl AgentClient for PiClient {
@@ -96,6 +137,10 @@ impl AgentClient for PiClient {
 
     fn provider(&self) -> &'static str {
         PROVIDER
+    }
+
+    fn supports_live_config(&self) -> bool {
+        true
     }
 
     fn supports_history_replay(&self) -> bool {
@@ -146,15 +191,8 @@ impl AgentClient for PiClient {
 
     fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
         Box::pin(async move {
-            config::directory(cwd)?;
-            transport::version(self).await?;
-            let mut transport = transport::Transport::spawn(self, cwd, &["--no-session".into()])?;
-            let result = transport
-                .request(json!({"type":"get_available_models"}))
-                .await;
-            transport.close().await?;
             Ok(Details {
-                models: config::models(&result?)?,
+                models: self.discover_models(cwd, true).await?,
                 modes: Vec::new(),
                 features: Vec::new(),
             })
@@ -164,15 +202,33 @@ impl AgentClient for PiClient {
     fn validate_selection<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, ()> {
         Box::pin(async move {
             config::spec(spec)?;
+            // Pi validates or clamps opaque levels against the selected model on creation,
+            // configuration and resume. A stale catalog/profile must not prevent resume.
             if let Some(model) = &spec.config.model
                 && !self
-                    .discover(&spec.cwd)
+                    .discover_models(&spec.cwd, false)
                     .await?
-                    .models
                     .iter()
                     .any(|item| item["id"] == *model)
             {
                 return Err(AgentSessionError::Rejected);
+            }
+            Ok(())
+        })
+    }
+
+    fn validate_config_patch<'a>(
+        &'a self,
+        spec: &'a AgentSessionSpec,
+        patch: &'a crate::protocol::agent_config::ConfigPatch,
+    ) -> AgentSessionFuture<'a, ()> {
+        Box::pin(async move {
+            config::spec(spec)?;
+            if matches!(
+                patch.model_id,
+                crate::protocol::agent_config::NullableSetting::Set(_)
+            ) {
+                self.validate_selection(spec).await?;
             }
             Ok(())
         })
@@ -183,7 +239,10 @@ impl AgentClient for PiClient {
         spec: &'a AgentSessionSpec,
     ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
         Box::pin(async move {
-            Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
+            Ok(
+                Box::new(session::open(self, spec, None, AgentResumePurpose::Interactive).await?)
+                    as Box<dyn AgentSession>,
+            )
         })
     }
 
@@ -221,13 +280,18 @@ impl AgentClient for PiClient {
                 let history = self.inspect_session(handle, &spec.cwd).await?;
                 let mut resolved = handle.clone();
                 resolved.native_handle = None;
-                resolved.metadata = Some(history.resume_metadata);
+                resolved
+                    .metadata
+                    .get_or_insert_with(BTreeMap::new)
+                    .extend(history.resume_metadata);
                 Cow::Owned(resolved)
             } else {
                 Cow::Borrowed(handle)
             };
-            Ok(Box::new(session::open(self, spec, Some(&resolved)).await?)
-                as Box<dyn AgentSession>)
+            Ok(
+                Box::new(session::open(self, spec, Some(&resolved), purpose).await?)
+                    as Box<dyn AgentSession>,
+            )
         })
     }
 }
