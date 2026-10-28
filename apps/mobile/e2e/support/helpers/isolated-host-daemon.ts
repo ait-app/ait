@@ -77,6 +77,7 @@ export async function startIsolatedHostDaemon(
           AIT_SERVER_PI_BIN: path.join(dataDir, "unconfigured-pi"),
           AIT_SERVER_DEEPSEEK_HARNESS_BIN: path.join(dataDir, "unconfigured-deepseek-harness"),
           AIT_SERVER_ANTIGRAVITY_BIN: path.join(dataDir, "unconfigured-antigravity"),
+          AIT_SERVER_MINIMAX_CODE_BIN: path.join(dataDir, "unconfigured-minimax-code"),
           ...options.environment,
           AIT_SERVER_TOKEN: token,
           AIT_SERVER_SKILLS_HOME: path.join(dataDir, "agent-home"),

@@ -46,7 +46,7 @@ fn rejects_unsupported_controls_and_maps_mcp_transports() {
     };
     validate(&config).unwrap();
     assert_eq!(
-        mcp_servers(&config),
+        crate::local::acp_config::mcp_servers(&config),
         vec![
             json!({"name":"local","command":"/bin/tool","args":["one"],"env":[{"name":"KEY","value":"value"}]}),
             json!({"type":"http","name":"remote","url":"https://example.test/mcp","headers":[{"name":"X-Test","value":"value"}]}),

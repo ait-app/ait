@@ -2,6 +2,7 @@
 
 mod acp_config;
 mod acp_permissions;
+mod acp_streaming;
 mod acp_transport;
 pub(crate) mod antigravity;
 pub(crate) mod claude;
@@ -13,6 +14,7 @@ pub(crate) mod diagnostics;
 mod elicitation;
 mod images;
 mod metadata_process;
+pub(crate) mod minimax;
 mod notes;
 pub(crate) mod omp;
 pub(crate) mod opencode;

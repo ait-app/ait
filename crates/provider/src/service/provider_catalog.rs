@@ -269,6 +269,10 @@ async fn discover(client: &dyn AgentClient, cwd: &str) -> Entry {
         value["description"] = json!("Oh My Pi native approvals, questions and subagents");
         value["defaultModeId"] = json!("full");
     }
+    if client.provider() == "minimax-code" {
+        value["label"] = json!("MiniMax Code");
+        value["description"] = json!("MiniMax Code via Agent Client Protocol");
+    }
     if let Some(error) = error {
         value["error"] = json!(error);
     }

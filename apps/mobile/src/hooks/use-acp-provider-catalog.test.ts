@@ -50,11 +50,11 @@ describe("ACP provider catalog", () => {
     expect(findProvider("traecli").command).toEqual(["traecli", "acp", "serve"]);
   });
 
-  it("offers MiniMax Code through its pinned public ACP package", () => {
+  it("offers the installed MiniMax Code ACP executable", () => {
     expect(findProvider("minimax-code")).toMatchObject({
       title: "MiniMax Code",
-      version: "0.1.2",
-      command: ["npx", "-y", "@minimax-ai/code@0.1.2", "acp"],
+      version: "manual",
+      command: ["mcode", "acp"],
     });
     expect(findProvider("minimax-code").iconSvg).toContain("<svg");
   });

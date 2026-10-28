@@ -107,3 +107,35 @@ pub(crate) fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str, AgentSess
         })
         .ok_or(AgentSessionError::Failed)
 }
+
+/// Convert validated host MCP definitions to ACP launch descriptions.
+/// Reads `config.mcp_servers`; returns an empty list when none are configured.
+pub(crate) fn mcp_servers(config: &domain::agent_runtime::StoredAgentConfig) -> Vec<Value> {
+    config
+        .mcp_servers
+        .iter()
+        .flatten()
+        .map(|(name, server)| {
+            let pairs = |field: &str| -> Vec<Value> {
+                server[field]
+                    .as_object()
+                    .into_iter()
+                    .flatten()
+                    .map(|(name, value)| serde_json::json!({"name":name,"value":value}))
+                    .collect()
+            };
+            if server["type"] == "stdio" {
+                serde_json::json!({
+                    "name":name,"command":server["command"],
+                    "args":server.get("args").cloned().unwrap_or_else(|| serde_json::json!([])),
+                    "env":pairs("env")
+                })
+            } else {
+                serde_json::json!({
+                    "type":server["type"],"name":name,
+                    "url":server["url"],"headers":pairs("headers")
+                })
+            }
+        })
+        .collect()
+}

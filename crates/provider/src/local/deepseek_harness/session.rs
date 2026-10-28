@@ -7,10 +7,10 @@ use uuid::Uuid;
 
 use super::{
     DeepSeekHarnessClient, PROVIDER, config,
-    streaming::Stream,
     transport::{self, Transport},
 };
 use crate::local::acp_permissions;
+use crate::local::acp_streaming::Stream;
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec, AgentTurnEvent,
 };
@@ -62,7 +62,8 @@ pub(super) async fn open(
         return Err(AgentSessionError::Failed);
     }
     let capabilities = initialized["agentCapabilities"].clone();
-    let mut params = json!({"cwd":spec.cwd,"mcpServers":config::mcp_servers(&spec.config)});
+    let mut params =
+        json!({"cwd":spec.cwd,"mcpServers":crate::local::acp_config::mcp_servers(&spec.config)});
     let method = if let Some(handle) = handle {
         if !capabilities["sessionCapabilities"]["resume"].is_object() {
             return Err(AgentSessionError::Rejected);

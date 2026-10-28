@@ -1,5 +1,6 @@
 //! One durable DSH event projection shared by live delivery and complete history recovery.
-use super::super::{config::text, streaming::Stream};
+use super::super::config::text;
+use crate::local::acp_streaming::Stream;
 use crate::{
     ports::agent_session::{AgentSessionError, AgentTurnEvent},
     protocol::timeline::NativeItem,

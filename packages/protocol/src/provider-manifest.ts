@@ -303,6 +303,13 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
     modes: OMP_MODES,
   },
   {
+    id: "minimax-code",
+    label: "MiniMax Code",
+    description: "MiniMax coding agent via its native ACP interface",
+    defaultModeId: null,
+    modes: [],
+  },
+  {
     id: "deepseek-harness",
     label: "DeepSeek Harness",
     description: "DeepSeek Harness with native permissions, questions, and persistent sessions",

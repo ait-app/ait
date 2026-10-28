@@ -126,6 +126,8 @@ Pi 的原生 RPC adapter 归 `provider::local::pi`，使用现有 Agent ports，
 [ADR-156](../decisions/providers/adr-156-pi-native-rpc-provider.md)；Ait 不为 Pi 暴露模式，见
 [ADR-189](../decisions/providers/adr-189-pi-without-host-mode.md)。
 
+MiniMax Code 通过官方 `mcode acp` 接入，使用共享 ACP 传输、权限和事件投影；原生身份与认证仍归 MiniMax Code。详见 [ADR-197](../decisions/providers/adr-197-minimax-code-acp.md)。
+
 内置 Provider 由 `provider::Providers` 组装。具体客户端列表、启动配置、安装发现与辅助
 元数据生成能力留在 provider crate 内部；daemon 提供数据目录并连接服务与进程生命周期。
 Codex、Claude、OpenCode 和 DSH 当前支持结构化辅助生成，各 adapter 自行选择辅助小模型。

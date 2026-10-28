@@ -5,7 +5,6 @@ mod launcher;
 mod metadata;
 mod native;
 mod session;
-mod streaming;
 mod transport;
 
 use std::path::PathBuf;

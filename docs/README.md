@@ -1,5 +1,7 @@
 # Ait 文档
 
+- [MiniMax Code](operations/minimax-code.md)：最新版 `mcode` 原生 ACP、登录与真实联调；[ADR-197](decisions/providers/adr-197-minimax-code-acp.md)、[验证报告](reports/providers/minimax-code-acp-2026-10-28.md)。
+
 - [ADR-195：OpenCode 独立取消信号与确认期限](decisions/providers/adr-195-opencode-independent-cancellation.md)：消除输出背压和历史回放对停止的阻塞，限制原生终态丢失后的停止等待。
 
 - [ADR-194：OMP 原生空闲状态核对与有界取消](decisions/providers/adr-194-omp-settlement-reconciliation.md)：补齐遗漏终态、同一执行进程的状态核对和停止确认期限。
