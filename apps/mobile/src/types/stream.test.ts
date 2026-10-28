@@ -529,6 +529,31 @@ it("pairs overlapping compactions by native identity and terminalizes interrupte
   ]);
 });
 
+it("updates only the matching turn's compaction without changing later rows", () => {
+  const timestamp = new Date("2026-10-13T12:00:00Z");
+  let state: StreamItem[] = [];
+  for (const [turnId, status] of [
+    ["turn-1", "loading"],
+    ["turn-2", "loading"],
+    ["turn-1", "completed"],
+  ] as const) {
+    state = reduceStreamUpdate(
+      state,
+      {
+        type: "timeline",
+        provider: "codex",
+        turnId,
+        item: { type: "compaction", status },
+      },
+      timestamp,
+    );
+  }
+  expect(state.map((item) => item.kind === "compaction" && [item.turnId, item.status])).toEqual([
+    ["turn-1", "completed"],
+    ["turn-2", "loading"],
+  ]);
+});
+
 function findToolByCallId(state: StreamItem[], callId: string): AgentToolCallItem | undefined {
   return state.find(
     (item): item is AgentToolCallItem =>

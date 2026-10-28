@@ -329,6 +329,253 @@ const baseStreamInput: ProcessAgentStreamEventInput = {
 // ---------------------------------------------------------------------------
 
 describe("processTimelineResponse", () => {
+  it("reconciles an unsequenced live compaction placeholder with a completed bootstrap", () => {
+    const currentHead = hydrateStreamState([
+      {
+        event: {
+          type: "timeline",
+          provider: "codex",
+          turnId: "turn-1",
+          item: { type: "compaction", status: "loading" },
+        },
+        timestamp: new Date(1000),
+      },
+    ]);
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentHead,
+      isInitializing: true,
+      hasActiveInitDeferred: true,
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "tail",
+        epoch: "epoch-1",
+        startCursor: { seq: 2 },
+        endCursor: { seq: 2 },
+        entries: [
+          {
+            seqStart: 2,
+            seqEnd: 2,
+            provider: "codex",
+            turnId: "turn-1",
+            item: { type: "compaction", status: "completed" },
+            timestamp: new Date(2000).toISOString(),
+          },
+        ],
+      },
+    });
+    expect(
+      [...result.tail, ...result.head].map((item) => item.kind === "compaction" && item.status),
+    ).toEqual(["completed"]);
+  });
+
+  it.each([
+    { label: "different turn", turnId: "turn-2", completedAt: 2000 },
+    { label: "earlier completion", turnId: "turn-1", completedAt: 500 },
+  ])("does not discard an unsequenced placeholder for a $label", ({ turnId, completedAt }) => {
+    const currentHead = hydrateStreamState([
+      {
+        event: {
+          type: "timeline",
+          provider: "codex",
+          turnId: "turn-1",
+          item: { type: "compaction", status: "loading" },
+        },
+        timestamp: new Date(1000),
+      },
+    ]);
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentHead,
+      isInitializing: true,
+      hasActiveInitDeferred: true,
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "tail",
+        epoch: "epoch-1",
+        startCursor: { seq: 2 },
+        endCursor: { seq: 2 },
+        entries: [
+          {
+            seqStart: 2,
+            seqEnd: 2,
+            provider: "codex",
+            turnId,
+            item: { type: "compaction", status: "completed" },
+            timestamp: new Date(completedAt).toISOString(),
+          },
+        ],
+      },
+    });
+    expect(
+      [...result.tail, ...result.head].map((item) => item.kind === "compaction" && item.status),
+    ).toEqual(["completed", "loading"]);
+  });
+  it.each([undefined, "compact-1"])(
+    "reconciles a compaction split across older history pages: %s",
+    (compactionId) => {
+      const currentTail = hydrateStreamState(
+        [
+          {
+            event: {
+              type: "timeline",
+              provider: "codex",
+              turnId: "turn-1",
+              item: { type: "compaction", status: "completed", compactionId },
+            },
+            timestamp: new Date(2000),
+            timelineCursor: { epoch: "epoch-1", seq: 2 },
+          },
+        ],
+        { source: "canonical" },
+      );
+      const result = processTimelineResponse({
+        ...baseTimelineInput,
+        currentTail,
+        currentCursor: { epoch: "epoch-1", startSeq: 2, endSeq: 2 },
+        payload: {
+          ...baseTimelineInput.payload,
+          direction: "before",
+          epoch: "epoch-1",
+          startCursor: { seq: 1 },
+          endCursor: { seq: 1 },
+          entries: [
+            {
+              seqStart: 1,
+              seqEnd: 1,
+              provider: "codex",
+              turnId: "turn-1",
+              item: { type: "compaction", status: "loading", compactionId },
+              timestamp: new Date(1000).toISOString(),
+            },
+          ],
+        },
+      });
+      expect([...result.tail, ...result.head]).toEqual([
+        expect.objectContaining({
+          kind: "compaction",
+          status: "completed",
+          timelineCursor: { epoch: "epoch-1", seq: 2 },
+        }),
+      ]);
+    },
+  );
+
+  it("does not guess which anonymous compaction completed when starts overlap", () => {
+    const currentTail = hydrateStreamState([
+      {
+        event: {
+          type: "timeline",
+          provider: "codex",
+          turnId: "turn-1",
+          item: { type: "compaction", status: "completed" },
+        },
+        timestamp: new Date(3000),
+        timelineCursor: { epoch: "epoch-1", seq: 3 },
+      },
+    ]);
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail,
+      currentCursor: { epoch: "epoch-1", startSeq: 3, endSeq: 3 },
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "before",
+        epoch: "epoch-1",
+        startCursor: { seq: 1 },
+        endCursor: { seq: 2 },
+        entries: [1, 2].map((seq) => ({
+          seqStart: seq,
+          seqEnd: seq,
+          provider: "codex" as const,
+          turnId: "turn-1",
+          item: { type: "compaction" as const, status: "loading" as const },
+          timestamp: new Date(seq * 1000).toISOString(),
+        })),
+      },
+    });
+    expect(result.tail.map((item) => item.kind === "compaction" && item.status)).toEqual([
+      "loading",
+      "loading",
+      "completed",
+    ]);
+  });
+
+  it.each([
+    {
+      label: "different turns",
+      olderTurn: "turn-1",
+      newerTurn: "turn-2",
+      olderId: undefined,
+      newerId: undefined,
+    },
+    {
+      label: "different identities",
+      olderTurn: "turn-1",
+      newerTurn: "turn-1",
+      olderId: "a",
+      newerId: "b",
+    },
+    {
+      label: "missing identities and turns",
+      olderTurn: undefined,
+      newerTurn: undefined,
+      olderId: undefined,
+      newerId: undefined,
+    },
+    {
+      label: "one missing identity",
+      olderTurn: "turn-1",
+      newerTurn: "turn-1",
+      olderId: undefined,
+      newerId: "b",
+    },
+  ])(
+    "keeps separate compactions across pages with $label",
+    ({ olderTurn, newerTurn, olderId, newerId }) => {
+      const currentTail = hydrateStreamState(
+        [
+          {
+            event: {
+              type: "timeline",
+              provider: "codex",
+              turnId: newerTurn,
+              item: { type: "compaction", status: "completed", compactionId: newerId },
+            },
+            timestamp: new Date(2000),
+            timelineCursor: { epoch: "epoch-1", seq: 2 },
+          },
+        ],
+        { source: "canonical" },
+      );
+      const result = processTimelineResponse({
+        ...baseTimelineInput,
+        currentTail,
+        currentCursor: { epoch: "epoch-1", startSeq: 2, endSeq: 2 },
+        payload: {
+          ...baseTimelineInput.payload,
+          direction: "before",
+          epoch: "epoch-1",
+          startCursor: { seq: 1 },
+          endCursor: { seq: 1 },
+          entries: [
+            {
+              seqStart: 1,
+              seqEnd: 1,
+              provider: "codex",
+              turnId: olderTurn,
+              item: { type: "compaction", status: "loading", compactionId: olderId },
+              timestamp: new Date(1000).toISOString(),
+            },
+          ],
+        },
+      });
+      expect(result.tail.map((item) => item.kind === "compaction" && item.status)).toEqual([
+        "loading",
+        "completed",
+      ]);
+    },
+  );
   it("discards an unchanged resume tail without replacing timeline state", () => {
     const canonical = createUserMessage({
       id: "canonical-prompt",
@@ -3790,6 +4037,41 @@ describe("processTimelineResponse", () => {
 // ---------------------------------------------------------------------------
 
 describe("processAgentStreamEvent", () => {
+  it("replaces a pre-bootstrap Codex compaction placeholder after the baseline arrives", () => {
+    const loading = processAgentStreamEvent({
+      ...baseStreamInput,
+      event: {
+        type: "timeline",
+        provider: "codex",
+        turnId: "turn-1",
+        item: { type: "compaction", status: "loading" },
+      },
+      seq: 2,
+      epoch: "epoch-1",
+      hasAuthoritativeBaseline: false,
+    });
+    expect(loading.head).toEqual([
+      expect.objectContaining({ kind: "compaction", status: "loading" }),
+    ]);
+
+    const completed = processAgentStreamEvent({
+      ...baseStreamInput,
+      event: {
+        type: "timeline",
+        provider: "codex",
+        turnId: "turn-1",
+        item: { type: "compaction", status: "completed" },
+      },
+      seq: 3,
+      epoch: "epoch-1",
+      currentTail: loading.tail,
+      currentHead: loading.head,
+      currentCursor: { epoch: "epoch-1", startSeq: 1, endSeq: 2 },
+    });
+    expect([...completed.tail, ...completed.head]).toEqual([
+      expect.objectContaining({ kind: "compaction", status: "completed", id: loading.head[0].id }),
+    ]);
+  });
   it("preserves the live timeline cursor on an assistant error", () => {
     const result = processAgentStreamEvent({
       ...baseStreamInput,

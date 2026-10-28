@@ -672,12 +672,50 @@ function mergePrependedCanonicalTail(olderTail: StreamItem[], currentTail: Strea
   let reconciledCurrent = currentTail;
   const newerTools = new Map<string, AgentToolCallItem>();
   const reconciledToolIds = new Set<string>();
+  const reconciledCompactionIds = new Set<string>();
   for (const item of currentTail) {
     if (!isAgentToolCallItem(item)) continue;
     const identity = streamTimelineItemIdentity(item);
     if (identity !== null) newerTools.set(identity, item);
   }
   for (const item of olderTail) {
+    if (item.kind === "compaction" && item.status === "loading") {
+      const anonymousStarts = item.compactionId
+        ? 0
+        : olderTail.filter(
+            (older) =>
+              older.kind === "compaction" &&
+              older.status === "loading" &&
+              !older.compactionId &&
+              older.turnId === item.turnId,
+          ).length;
+      const matches = currentTail.filter(
+        (newer) =>
+          newer.kind === "compaction" &&
+          newer.status !== "loading" &&
+          !reconciledCompactionIds.has(newer.id) &&
+          (item.compactionId
+            ? item.compactionId === newer.compactionId && item.turnId === newer.turnId
+            : !newer.compactionId &&
+              anonymousStarts === 1 &&
+              item.turnId !== undefined &&
+              item.turnId === newer.turnId),
+      );
+      if (matches.length === 1) {
+        const newer = matches[0];
+        if (newer.kind === "compaction") {
+          remainingOlder.push({
+            ...newer,
+            id: item.id,
+            timestamp: item.timestamp,
+            trigger: newer.trigger ?? item.trigger,
+            preTokens: newer.preTokens ?? item.preTokens,
+          });
+          reconciledCompactionIds.add(newer.id);
+          continue;
+        }
+      }
+    }
     if (isAgentToolCallItem(item)) {
       const identity = streamTimelineItemIdentity(item);
       const newer = identity === null ? undefined : newerTools.get(identity);
@@ -718,9 +756,11 @@ function mergePrependedCanonicalTail(olderTail: StreamItem[], currentTail: Strea
   }
   olderTail = remainingOlder;
   currentTail =
-    reconciledToolIds.size === 0
+    reconciledToolIds.size === 0 && reconciledCompactionIds.size === 0
       ? reconciledCurrent
-      : reconciledCurrent.filter((item) => !reconciledToolIds.has(item.id));
+      : reconciledCurrent.filter(
+          (item) => !reconciledToolIds.has(item.id) && !reconciledCompactionIds.has(item.id),
+        );
   if (olderTail.length === 0) return currentTail;
 
   const olderLast = olderTail.at(-1);

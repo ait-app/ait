@@ -554,6 +554,29 @@ function reconcileReplacementHeadAgainstTail(
   let reconciledTail = tail;
   const reconciledHeadIndexes = new Set<number>();
   for (const [headIndex, item] of retainedHead.entries()) {
+    if (item.kind === "compaction" && item.status === "loading" && !item.timelineCursor) {
+      const starts = retainedHead.filter(
+        (candidate) =>
+          candidate.kind === "compaction" &&
+          candidate.status === "loading" &&
+          candidate.compactionId === item.compactionId &&
+          candidate.turnId === item.turnId,
+      );
+      const completed = reconciledTail.filter(
+        (candidate) =>
+          candidate.kind === "compaction" &&
+          candidate.status !== "loading" &&
+          candidate.timestamp >= item.timestamp &&
+          candidate.compactionId === item.compactionId &&
+          (item.compactionId
+            ? !item.turnId || !candidate.turnId || item.turnId === candidate.turnId
+            : item.turnId !== undefined && item.turnId === candidate.turnId),
+      );
+      if (starts.length === 1 && completed.length === 1) {
+        reconciledHeadIndexes.add(headIndex);
+        continue;
+      }
+    }
     const nextTail = mergeRetainedLifecycleItem(reconciledTail, item);
     if (!nextTail) {
       continue;
@@ -1517,13 +1540,17 @@ function reduceTimelineCompaction(
     { type: "compaction" }
   >,
   timestamp: Date,
+  turnId?: string,
   timelineCursor?: TimelinePosition,
 ): StreamItem[] {
   if (item.compactionId || item.status !== "loading") {
     const loadingIdx = state.findIndex(
       (s) =>
         s.kind === "compaction" &&
-        (item.compactionId ? s.compactionId === item.compactionId : s.status === "loading"),
+        (!turnId || !s.turnId || s.turnId === turnId) &&
+        (item.compactionId
+          ? s.compactionId === item.compactionId
+          : !s.compactionId && s.status === "loading"),
     );
     const existing = loadingIdx >= 0 ? state[loadingIdx] : undefined;
     if (loadingIdx >= 0 && existing && existing.kind === "compaction") {
@@ -1531,6 +1558,7 @@ function reduceTimelineCompaction(
       const updated: CompactionItem = {
         ...existing,
         ...(timelineCursor ? { timelineCursor } : {}),
+        ...(turnId ? { turnId } : {}),
         status: item.status,
         trigger: item.trigger ?? existing.trigger,
         preTokens: item.preTokens ?? existing.preTokens,
@@ -1546,6 +1574,7 @@ function reduceTimelineCompaction(
     id: createUniqueTimelineId(state, "compaction", item.status, timestamp),
     ...(timelineCursor ? { timelineCursor } : {}),
     timestamp,
+    ...(turnId ? { turnId } : {}),
     status: item.status,
     compactionId: item.compactionId,
     trigger: item.trigger,
@@ -1659,7 +1688,7 @@ function reduceTimelineEvent(
     }
     case "compaction":
       return finalizeActiveThoughts(
-        reduceTimelineCompaction(state, item, timestamp, timelineCursor),
+        reduceTimelineCompaction(state, item, timestamp, event.turnId, timelineCursor),
       );
     case "plugin":
       return finalizeActiveThoughts(
@@ -1721,6 +1750,7 @@ function applyTimelineTurnId(
   items: StreamItem[],
   event: Extract<AgentStreamEventPayload, { type: "timeline" }>,
 ): StreamItem[] {
+  if (event.item.type === "compaction") return items;
   const clientMessageId =
     event.item.type === "user_message" ? event.item.clientMessageId : undefined;
   if (clientMessageId) {
@@ -1828,6 +1858,8 @@ function getEventItemKind(event: AgentStreamEventPayload): StreamItem["kind"] | 
       return "tool_call";
     case "todo":
       return "todo_list";
+    case "compaction":
+      return "compaction";
     case "error":
     case "notification":
       return "notification";
