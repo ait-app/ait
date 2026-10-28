@@ -11,6 +11,7 @@ import {
   collectAndroidPlayRelease,
   configureAndroidPlayGradle,
   planAndroidPlayRelease,
+  validateAndroidPlayGoogleServices,
   validateAndroidPlayManifest,
   validateAndroidPlayOptimization,
 } from "./android-play-release.mjs";
@@ -39,7 +40,19 @@ const gradle = `android {
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
-}`;
+}
+apply plugin: 'com.google.gms.google-services'`;
+const googleServices = JSON.stringify({
+  project_info: { project_number: "123", project_id: "ait-test" },
+  client: [
+    {
+      client_info: {
+        mobilesdk_app_id: "1:123:android:abc",
+        android_client_info: { package_name: "dev.ait.mobile" },
+      },
+    },
+  ],
+});
 const properties = `android.enableMinifyInReleaseBuilds=true
 android.enableShrinkResourcesInReleaseBuilds=true
 `;
@@ -142,6 +155,27 @@ test("Play rejects disabled optimization before invoking Gradle", () => {
   assert.throws(
     () => validateAndroidPlayOptimization(gradle.replace("-optimize.txt", ".txt"), properties),
     /optimized ProGuard/,
+  );
+});
+
+test("Play rejects builds without a Firebase config for the production package", () => {
+  validateAndroidPlayGoogleServices(googleServices, gradle, plan.packageId);
+  for (const json of [
+    "",
+    "{}",
+    googleServices.replace('"dev.ait.mobile"', '"dev.ait.mobile.debug"'),
+    googleServices.replace('"1:123:android:abc"', '""'),
+    googleServices.replace('"ait-test"', '""'),
+  ])
+    assert.throws(() => validateAndroidPlayGoogleServices(json, gradle, plan.packageId));
+  assert.throws(
+    () =>
+      validateAndroidPlayGoogleServices(
+        googleServices,
+        gradle.replace(/\napply plugin.*$/, ""),
+        plan.packageId,
+      ),
+    /Google services Gradle plugin/,
   );
 });
 
@@ -282,8 +316,8 @@ test("Play workflow builds locally and submits only the verified AAB to internal
   const position = (name) => steps.findIndex((step) => step.name === name);
   for (const [before, after] of [
     ["Move tooling outside the Metro source tree", "Generate Android project"],
-    ["Generate Android project", "Verify R8 configuration and set Gradle versionCode"],
-    ["Verify R8 configuration and set Gradle versionCode", "Build signed AAB with Gradle"],
+    ["Generate Android project", "Verify R8 and FCM configuration and set Gradle versionCode"],
+    ["Verify R8 and FCM configuration and set Gradle versionCode", "Build signed AAB with Gradle"],
     ["Build signed AAB with Gradle", "Verify and collect signed AAB"],
     ["Verify and collect signed AAB", "Submit this verified AAB to Google Play"],
   ]) {
@@ -388,7 +422,7 @@ test("collection reads the bundle's own mapping and rejects missing or corrupt R
   }
 });
 
-test("all actions require signing, only uploads require Play credentials, and keystores stay private", async (t) => {
+test("all actions require signing and Firebase config, only uploads require Play credentials, and secrets stay private", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "ait-play-credentials-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const step = steps.find((step) => step.name === "Validate release request and credentials");
@@ -397,6 +431,7 @@ test("all actions require signing, only uploads require Play credentials, and ke
     KEYSTORE_PASSWORD: "store",
     KEY_ALIAS: "ait",
     KEY_PASSWORD: "key",
+    GOOGLE_SERVICES_JSON: googleServices,
   };
   const execute = (action, overrides = {}) =>
     spawnSync("bash", ["-e", "-o", "pipefail", "-c", step.run], {
@@ -407,6 +442,7 @@ test("all actions require signing, only uploads require Play credentials, and ke
         RUNNER_TEMP: root,
         ACTION: action,
         TAG: "",
+        GITHUB_ENV: path.join(root, "github-env"),
         PLAY_SERVICE_ACCOUNT_JSON: "",
         ...secrets,
         ...overrides,
@@ -415,6 +451,13 @@ test("all actions require signing, only uploads require Play credentials, and ke
   assert.equal(execute("build-only").status, 0);
   assert.equal(await readFile(path.join(root, "android-play.keystore"), "utf8"), "test keystore");
   assert.equal((await stat(path.join(root, "android-play.keystore"))).mode & 0o777, 0o600);
+  const googleServicesFile = path.join(root, "google-services.json");
+  assert.equal(await readFile(googleServicesFile, "utf8"), googleServices);
+  assert.equal((await stat(googleServicesFile)).mode & 0o777, 0o600);
+  assert.equal(
+    await readFile(path.join(root, "github-env"), "utf8"),
+    `GOOGLE_SERVICES_FILE_PROD=${googleServicesFile}\n`,
+  );
   for (const action of ["build-only", "internal-draft", "internal"]) {
     for (const name of Object.keys(secrets))
       assert.notEqual(execute(action, { [name]: "" }).status, 0);
@@ -440,6 +483,7 @@ test("workflow passes the exact source, unique version and signing arguments int
   );
   await writeFile(path.join(root, "apps/mobile/android/app/build.gradle"), gradle);
   await writeFile(path.join(root, "apps/mobile/android/gradle.properties"), properties);
+  await writeFile(path.join(root, "apps/mobile/android/app/google-services.json"), googleServices);
   await mkdir(path.join(root, "android-play-release-tools/scripts"), {
     recursive: true,
   });
@@ -472,7 +516,7 @@ test("workflow passes the exact source, unique version and signing arguments int
     assert.equal(result.status, 0, result.stderr);
   };
   executeInlineNode("Plan Play build and versionCode");
-  executeInlineNode("Verify R8 configuration and set Gradle versionCode");
+  executeInlineNode("Verify R8 and FCM configuration and set Gradle versionCode");
   const actual = JSON.parse(await readFile(path.join(root, "android-play-plan.json"), "utf8"));
   assert.equal(actual.sourceCommit, sourceCommit);
   assert.equal(actual.versionCode, 14702);

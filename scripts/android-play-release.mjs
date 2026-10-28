@@ -80,6 +80,22 @@ export function validateAndroidPlayOptimization(gradle, properties) {
   assert.doesNotMatch(gradle, /["']proguard-android\.txt["']/);
 }
 
+export function validateAndroidPlayGoogleServices(json, gradle, packageId) {
+  const config = JSON.parse(json);
+  const client = config.client?.find(
+    (entry) => entry.client_info?.android_client_info?.package_name === packageId,
+  );
+  assert(
+    config.project_info?.project_id && client?.client_info?.mobilesdk_app_id,
+    `google-services.json has no Firebase Android app for ${packageId}`,
+  );
+  assert.match(
+    gradle,
+    /^apply\s+plugin:\s+["']com\.google\.gms\.google-services["']/m,
+    "Play release requires the Google services Gradle plugin",
+  );
+}
+
 export function validateAndroidPlayManifest(xml, plan, versionCode) {
   const manifest = xml.match(/<manifest\b([^>]*)>/);
   const application = xml.match(/<application\b([^>]*)>/);

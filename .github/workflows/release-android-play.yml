@@ -43,6 +43,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}
         run: |
           case "$ACTION" in build-only|internal-draft|internal) ;; *) exit 1 ;; esac
           if [ -n "$TAG" ]; then
@@ -57,6 +58,11 @@ jobs:
               exit 1
             fi
           done
+          # Without google-services.json the app builds fine but never gets an FCM token.
+          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
+            echo "::error::ANDROID_GOOGLE_SERVICES_JSON is required for Android push notifications"
+            exit 1
+          fi
           if [ "$ACTION" != build-only ] && [ -z "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
             echo "::error::GOOGLE_PLAY_SERVICE_ACCOUNT_JSON is required to upload to Play"
             exit 1
@@ -64,6 +70,8 @@ jobs:
           umask 077
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/android-play.keystore"
           test -s "$RUNNER_TEMP/android-play.keystore"
+          printf '%s' "$GOOGLE_SERVICES_JSON" > "$RUNNER_TEMP/google-services.json"
+          echo "GOOGLE_SERVICES_FILE_PROD=$RUNNER_TEMP/google-services.json" >> "$GITHUB_ENV"
 
       - name: Check out release source
         uses: actions/checkout@v5
@@ -134,17 +142,23 @@ jobs:
         working-directory: apps/mobile
         run: npx --no-install expo prebuild --platform android --clean --non-interactive
 
-      - name: Verify R8 configuration and set Gradle versionCode
+      - name: Verify R8 and FCM configuration and set Gradle versionCode
         run: |
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
           import { pathToFileURL } from 'node:url';
-          const { configureAndroidPlayGradle, validateAndroidPlayOptimization } = await import(pathToFileURL(
+          const {
+            configureAndroidPlayGradle,
+            validateAndroidPlayGoogleServices,
+            validateAndroidPlayOptimization,
+          } = await import(pathToFileURL(
             `${process.env.RUNNER_TEMP}/android-play-release-tools/scripts/android-play-release.mjs`));
           const plan = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/android-play-plan.json`, 'utf8'));
           const file = 'apps/mobile/android/app/build.gradle';
           const gradle = readFileSync(file, 'utf8');
           validateAndroidPlayOptimization(gradle, readFileSync('apps/mobile/android/gradle.properties', 'utf8'));
+          validateAndroidPlayGoogleServices(
+            readFileSync('apps/mobile/android/app/google-services.json', 'utf8'), gradle, plan.packageId);
           writeFileSync(file, configureAndroidPlayGradle(gradle, plan.versionCode));
           NODE
 
@@ -200,7 +214,7 @@ jobs:
 
       - name: Remove upload keystore
         if: always()
-        run: rm -f "$RUNNER_TEMP/android-play.keystore"
+        run: rm -f "$RUNNER_TEMP/android-play.keystore" "$RUNNER_TEMP/google-services.json"
 
       - name: Write release summary
         if: always()
