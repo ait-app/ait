@@ -56,6 +56,10 @@ fn start_with_path(directory: &Path, log: &Path, path: Option<&std::ffi::OsStr>)
             "AIT_SERVER_ANTIGRAVITY_BIN",
             directory.parent().unwrap().join("agy"),
         )
+        .env(
+            "AIT_SERVER_MINIMAX_CODE_BIN",
+            directory.parent().unwrap().join("mcode"),
+        )
         .env("AIT_SERVER_PI_BIN", directory.parent().unwrap().join("pi"))
         .env(
             "CLAUDE_CONFIG_DIR",

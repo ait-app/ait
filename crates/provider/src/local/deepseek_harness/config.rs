@@ -58,30 +58,6 @@ pub(super) fn validate_spec(spec: &AgentSessionSpec) -> Result<(), AgentSessionE
     validate(&spec.config)
 }
 
-pub(super) fn mcp_servers(config: &StoredAgentConfig) -> Vec<Value> {
-    config
-        .mcp_servers
-        .iter()
-        .flatten()
-        .map(|(name, server)| {
-            let pairs = |field: &str| -> Vec<Value> {
-                server[field]
-                    .as_object()
-                    .into_iter()
-                    .flatten()
-                    .map(|(name, value)| json!({"name":name,"value":value}))
-                    .collect()
-            };
-            if server["type"] == "stdio" {
-                json!({"name":name,"command":server["command"],
-                "args":server.get("args").cloned().unwrap_or_else(|| json!([])),"env":pairs("env")})
-            } else {
-                json!({"type":"http","name":name,"url":server["url"],"headers":pairs("headers")})
-            }
-        })
-        .collect()
-}
-
 pub(super) fn details(options: &Value) -> Result<Details, AgentSessionError> {
     let Some(models) = option(options, "model") else {
         return Ok(Details::default());

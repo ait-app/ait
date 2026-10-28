@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use chrono::Utc;
 use serde_json::{Value, json};
 
-use super::config::text;
+use super::acp_config::text;
 use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
 
@@ -17,8 +17,10 @@ struct Text {
     buffer: String,
 }
 
+/// Project native ACP notifications into bounded AIT timeline and progress events.
 #[derive(Debug, Default)]
 pub(super) struct Stream {
+    /// Events waiting for the owning session to deliver to its host.
     pub(super) events: VecDeque<AgentTurnEvent>,
     current: Option<Text>,
     tools: BTreeMap<String, Value>,
@@ -26,6 +28,7 @@ pub(super) struct Stream {
     turn: String,
     sequence: usize,
     observation: usize,
+    /// Most recently completed assistant text in the current turn.
     pub(super) last_message: Option<String>,
     images: crate::local::images::ImageStore,
     compactions: crate::local::compaction::Compactions,
@@ -34,6 +37,7 @@ pub(super) struct Stream {
 }
 
 impl Stream {
+    /// Create an empty projection using `images` for durable native image references.
     pub(super) fn new(images: crate::local::images::ImageStore) -> Self {
         Self {
             images,
@@ -41,6 +45,7 @@ impl Stream {
         }
     }
 
+    /// Reset per-turn state to `turn`, preserving events already queued for the host.
     pub(super) fn begin(&mut self, turn: String) {
         self.turn = turn;
         self.sequence = 0;
@@ -53,6 +58,7 @@ impl Stream {
         self.native_compaction = None;
     }
 
+    /// Queue events from one native `update`; malformed or oversized content fails.
     pub(super) fn update(&mut self, update: &Value) -> Result<(), AgentSessionError> {
         match update["sessionUpdate"].as_str() {
             Some("agent_message_chunk") => self.chunk("assistant_message", update),
@@ -83,13 +89,14 @@ impl Stream {
                 self.events.push_back(AgentTurnEvent::Usage(usage));
                 Ok(())
             }
-            // Harness currently omits plans/commands/modes. Unknown extension notifications
+            // Unknown extension notifications
             // have no authority over the host's lifecycle or execution policy.
             _ => Ok(()),
         }
     }
 
     /// Publish one bounded, deduplicated native compaction lifecycle marker.
+    /// `id` identifies the marker; `status` and optional `trigger` describe its transition.
     /// Invalid marker identities or metadata return a protocol error.
     pub(super) fn compaction(
         &mut self,
@@ -223,7 +230,7 @@ impl Stream {
             "detail":{"type":"unknown","input":snapshot["rawInput"],
                 "output":snapshot.get("rawOutput").unwrap_or(&snapshot["content"])},
             "metadata":{"kind":snapshot["kind"],"title":snapshot["title"]},
-            "error":if status == "failed" { json!({"message":"Harness tool failed"}) } else { Value::Null }});
+            "error":if status == "failed" { json!({"message":"Provider tool failed"}) } else { Value::Null }});
         let entry = self.entry(format!("native:{}:tool:{id}", self.turn), item);
         if status == "running" {
             self.observation += 1;
@@ -239,6 +246,7 @@ impl Stream {
         Ok(())
     }
 
+    /// Finish buffered text as a durable timeline event and retain the last assistant message.
     pub(super) fn flush(&mut self) {
         if let Some(mut current) = self.current.take() {
             current.entry.item["text"] = json!(current.buffer);

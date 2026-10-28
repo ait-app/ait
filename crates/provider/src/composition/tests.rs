@@ -31,6 +31,7 @@ fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplica
             "deepseek-harness",
             "pi",
             "omp",
+            "minimax-code",
         ]
     );
     providers.register(&mut manager).unwrap();
@@ -42,6 +43,7 @@ fn registration_preserves_the_catalog_without_startup_writes_and_rejects_duplica
         "deepseek-harness",
         "pi",
         "omp",
+        "minimax-code",
     ] {
         manager.validate_provider(provider).unwrap();
     }

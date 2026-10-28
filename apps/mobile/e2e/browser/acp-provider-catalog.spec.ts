@@ -1,43 +1,28 @@
-import { test } from "../support/fixtures";
+import path from "node:path";
+import { expect, test } from "../support/fixtures";
 import { gotoAppShell, openSettings } from "../support/helpers/app";
-import { connectDaemonClient } from "../support/helpers/daemon-client-loader";
+import { repoRoot } from "../support/helpers/ait-daemon";
 import { getServerId } from "../support/helpers/server-id";
 import {
   expectProviderInstalledInSettings,
-  installAcpCatalogProvider,
-  openAddProviderArea,
   openSettingsHost,
   openSettingsHostSection,
 } from "../support/helpers/settings";
 
-const ACP_PROVIDER = {
-  id: "minimax-code",
-  name: "MiniMax Code",
-};
+test.use({
+  e2eDaemonEnvironment: {
+    AIT_SERVER_MINIMAX_CODE_BIN: path.join(
+      repoRoot,
+      "crates/provider/src/local/minimax/tests/fixtures/acp.py",
+    ),
+  },
+});
 
-interface ProviderCatalogDaemonClient {
-  connect(): Promise<void>;
-  close(): Promise<void>;
-  patchDaemonConfig(config: { removeProviders?: string[] }): Promise<unknown>;
-}
-
-test.describe("ACP provider catalog", () => {
-  test("adds MiniMax Code from settings", async ({ page }) => {
-    const client = await connectDaemonClient<ProviderCatalogDaemonClient>({
-      clientIdPrefix: "provider-catalog-e2e",
-    });
-    try {
-      await gotoAppShell(page);
-      await openSettings(page);
-      await openSettingsHost(page, getServerId());
-      await openSettingsHostSection(page, getServerId(), "providers");
-      await openAddProviderArea(page);
-
-      await installAcpCatalogProvider(page, ACP_PROVIDER.name);
-      await expectProviderInstalledInSettings(page, ACP_PROVIDER.name);
-    } finally {
-      await client.patchDaemonConfig({ removeProviders: [ACP_PROVIDER.id] }).catch(() => undefined);
-      await client.close().catch(() => undefined);
-    }
-  });
+test("shows built-in MiniMax Code without adding a custom ACP provider", async ({ page }) => {
+  await gotoAppShell(page);
+  await openSettings(page);
+  await openSettingsHost(page, getServerId());
+  await openSettingsHostSection(page, getServerId(), "providers");
+  await expectProviderInstalledInSettings(page, "MiniMax Code");
+  await expect(page.getByTestId("provider-actions-minimax-code")).toHaveCount(0);
 });

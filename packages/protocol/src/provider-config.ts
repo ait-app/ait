@@ -72,6 +72,7 @@ const BUILTIN_PROVIDER_IDS = [
   "pi",
   "omp",
   "deepseek-harness",
+  "minimax-code",
 ] as const;
 const PROVIDER_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 

@@ -76,6 +76,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
+- [ADR-197：MiniMax Code 原生 ACP Provider](providers/adr-197-minimax-code-acp.md)
+
 - [ADR-196：Provider 输出分类与每轮 Thinking 展示](providers/adr-196-provider-output-semantics.md)
 - [ADR-195：OpenCode 独立取消信号与确认期限](providers/adr-195-opencode-independent-cancellation.md)
 - [ADR-194：OMP 原生空闲状态核对与有界取消](providers/adr-194-omp-settlement-reconciliation.md)
