@@ -135,13 +135,20 @@ export function FileEditorView({
     }
     const cm = getCM(view);
     if (!cm) return;
+    const previousSave = cm.save;
+    cm.save = () => {
+      void model.save();
+    };
     function handleModeChange(event: { mode?: string }) {
       onVimModeChange((event.mode ?? "normal").toUpperCase());
     }
     cm.on("vim-mode-change", handleModeChange);
     onVimModeChange("NORMAL");
-    return () => cm.off("vim-mode-change", handleModeChange);
-  }, [onVimModeChange, vimEnabled]);
+    return () => {
+      cm.off("vim-mode-change", handleModeChange);
+      cm.save = previousSave;
+    };
+  }, [model, onVimModeChange, vimEnabled]);
 
   return (
     <div style={FRAME_STYLE}>

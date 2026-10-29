@@ -90,8 +90,15 @@ export default defineConfig({
   // Unbundled, the same imports go through the resolver below and land on the web files.
   optimizeDeps: {
     esbuildOptions: { loader: { ".js": "jsx" } },
-    // Bundle the CJS dependencies of the excluded gesture-handler package for the browser.
+    // Pre-bundle editor and UI dependencies to avoid reloading browser tests during discovery.
     include: [
+      "@ait/highlight",
+      "@codemirror/commands",
+      "@codemirror/language",
+      "@codemirror/search",
+      "@codemirror/state",
+      "@codemirror/view",
+      "@replit/codemirror-vim",
       "react",
       "react-dom/client",
       "react-native",
