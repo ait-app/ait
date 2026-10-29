@@ -194,6 +194,72 @@ fn tools_finish_from_user_results_and_children_stay_out_of_parent_text() {
 }
 
 #[test]
+fn injected_user_records_stay_hidden_but_still_finish_tools() {
+    let mut stream = streaming::Stream::default();
+    let handback = "Another Claude session sent a message:\n<agent-message from=\"a1\">\n[Subagent hand-back] report\n</agent-message>";
+    for flag in ["isMeta", "isSynthetic"] {
+        stream
+            .record(&json!({"type":"user","uuid":flag,flag:true,"message":{"content":handback}}))
+            .unwrap();
+    }
+    assert!(stream.events.is_empty());
+    stream
+        .record(
+            &json!({"type":"assistant","uuid":"tool-msg","message":{"id":"api","content":[
+        {"type":"tool_use","id":"call","name":"Bash","input":{"command":"pwd"}}]}}),
+        )
+        .unwrap();
+    stream
+        .record(
+            &json!({"type":"user","uuid":"result","isSynthetic":true,"message":{"content":[
+        {"type":"tool_result","tool_use_id":"call","content":"/tmp"},
+        {"type":"text","text":"injected"}]}}),
+        )
+        .unwrap();
+    assert!(stream.tools.is_empty());
+    let AgentTurnEvent::Timeline(item) = stream.events.pop_back().unwrap() else {
+        panic!()
+    };
+    assert_eq!(item.item["status"], "completed");
+    assert!(stream.events.iter().all(|event| !matches!(event,
+        AgentTurnEvent::Timeline(entry) if entry.item["type"] == "user_message")));
+}
+
+#[test]
+fn subagent_handback_reports_show_as_the_final_message() {
+    let mut stream = streaming::Stream::default();
+    stream
+        .record(
+            &json!({"type":"assistant","uuid":"handback","message":{"id":"api","content":[
+        {"type":"tool_use","id":"back","name":"SubagentHandback","input":{"message":"## Report\n- done"}},
+        {"type":"tool_use","id":"empty","name":"SubagentHandback","input":{"message":"  "}}]}}),
+        )
+        .unwrap();
+    stream
+        .record(&json!({"type":"user","uuid":"ack","message":{"content":[
+        {"type":"tool_result","tool_use_id":"back","content":"Delivered"},
+        {"type":"tool_result","tool_use_id":"empty","content":"Delivered"}]}}))
+        .unwrap();
+    assert!(stream.tools.is_empty());
+    let items: Vec<_> = stream
+        .events
+        .drain(..)
+        .map(|event| match event {
+            AgentTurnEvent::Timeline(entry) => entry.item,
+            _ => panic!("handbacks must not stream tool rows"),
+        })
+        .collect();
+    assert_eq!(
+        items,
+        [json!({"type":"assistant_message","messageId":"api:0","text":"## Report\n- done"})]
+    );
+    stream
+        .result_text(&json!({"uuid":"r","result":"Delivered"}), "turn")
+        .unwrap();
+    assert!(stream.events.is_empty());
+}
+
+#[test]
 fn malformed_and_excessive_output_fail_without_panicking() {
     let mut stream = streaming::Stream::default();
     assert!(
