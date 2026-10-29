@@ -60,7 +60,7 @@ export const zhCN: TranslationResources = {
         "删除 Ait 账号不会取消 Apple 或 Google Play 订阅，请分别前往购买时使用的商店管理或取消。",
       title: "Online Service 订阅",
       stacking:
-        "每笔核实的月付增加一个自然月。App Store 与 Google Play 可同时订阅，已付时长累计；恢复购买不会重复增加时长。",
+        "每笔核实的月付增加一个自然月。App Store 与 Google Play 可同时订阅，已付时长累计；恢复购买不会重复增加时长。退款按比例扣减对应时长。",
       renewalCancelled: "已关闭续费",
       stores: { app_store: "App Store 订阅", google_play: "Google Play 订阅" },
       renewalByStore: {

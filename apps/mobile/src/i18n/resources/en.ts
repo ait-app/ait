@@ -63,7 +63,7 @@ export const en = {
         "Deleting your Ait account does not cancel Apple or Google Play subscriptions. Manage or cancel each subscription in the store where you purchased it.",
       title: "Online Service subscription",
       stacking:
-        "Each verified monthly payment adds one calendar month to your membership. App Store and Google Play subscriptions can coexist and their paid time adds up. Restoring purchases does not add duplicate time.",
+        "Each verified monthly payment adds one calendar month to your membership. App Store and Google Play subscriptions can coexist and their paid time adds up. Restoring purchases does not add duplicate time. Refunds reduce the corresponding paid time proportionally.",
       renewalCancelled: "Auto-renewal off",
       stores: { app_store: "App Store subscription", google_play: "Google Play subscription" },
       renewalByStore: {
