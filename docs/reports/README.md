@@ -219,6 +219,7 @@
 
 ## 发布验证
 
+- [Ait 0.1.22 发布说明与验证](releases/release-0.1.22.md)
 - [Ait 0.1.21 发布说明与验证](releases/release-0.1.21.md)
 - [Ait 0.1.20 发布说明与验证](releases/release-0.1.20.md)
 - [Ait 0.1.19 发布说明与验证](releases/release-0.1.19.md)

@@ -114,18 +114,15 @@ describe("account activation", () => {
     await manager.logout();
   });
 
-  it("uses the default HTTPS gateway for login, registration, control and data", async () => {
+  it("uses the default HTTPS gateway for login, access registration and data", async () => {
     const { manager, http, deps, channel } = fixture();
     expect(manager.snapshot().center).toBe(DEFAULT_ACCOUNT_CENTER);
     await manager.loginWithBrowser("");
     await vi.advanceTimersByTimeAsync(1);
     expect(http.mock.calls[0]?.[0]).toBe("https://aitapp.cn/api/v1/auth/providers");
     expect(http.mock.calls.some(([url]) => String(url).endsWith("/relay-sessions"))).toBe(false);
-    expect(deps.local).toHaveBeenCalledWith("PUT", {
-      center_url: "https://aitapp.cn/api",
-      control_ticket: "short-lived-control-ticket",
-      node_session_id: "activation",
-    });
+    expect(deps.local).not.toHaveBeenCalled();
+    expect(http.mock.calls.some(([url]) => String(url).endsWith("/control-tickets"))).toBe(false);
     expect(deps.save).toHaveBeenCalledWith(
       expect.objectContaining({ center: DEFAULT_ACCOUNT_CENTER }),
     );
@@ -164,11 +161,8 @@ describe("account activation", () => {
         String(url).startsWith("https://private.example:9443/ait/api/v1/"),
       ),
     ).toBe(true);
-    expect(deps.local).toHaveBeenCalledWith("PUT", {
-      center_url: "https://private.example:9443/ait/api",
-      control_ticket: "short-lived-control-ticket",
-      node_session_id: "activation",
-    });
+    expect(deps.local).not.toHaveBeenCalled();
+    expect(http.mock.calls.some(([url]) => String(url).endsWith("/control-tickets"))).toBe(false);
     await manager.logout();
   });
 
@@ -180,11 +174,8 @@ describe("account activation", () => {
     expect(http.mock.calls.some(([url]) => String(url).endsWith("/channel-tickets"))).toBe(true);
     expect(http.mock.calls.some(([url]) => String(url).endsWith("/relay-sessions"))).toBe(false);
     expect(http.mock.calls.some(([url]) => String(url).includes("/credentials"))).toBe(false);
-    expect(deps.local).toHaveBeenCalledWith("PUT", {
-      center_url: "http://127.0.0.1:3000",
-      control_ticket: "short-lived-control-ticket",
-      node_session_id: "activation",
-    });
+    expect(deps.local).not.toHaveBeenCalled();
+    expect(http.mock.calls.some(([url]) => String(url).endsWith("/control-tickets"))).toBe(false);
     expect(JSON.stringify(manager.snapshot())).not.toContain("private-user-token");
     await manager.logout();
   });

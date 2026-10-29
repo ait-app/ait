@@ -1,5 +1,13 @@
 # Ait changelog
 
+## 0.1.22 - 2026-10-29
+
+- Let the daemon own machine authorization, node registration and independent Hub/Relay connections, so publishing continues when the desktop account client exits. Direct daemon startup now uses the same lifecycle; remove the former `--headless` flag from startup scripts.
+- Reuse the daemon's private local API token across restarts, while honoring an explicit environment override, and simplify connection status and disconnect controls.
+- Automatically distribute bundled orchestration skills to supported coding agents.
+- Fix OMP interaction blocking and multiline input, and preserve MiniMax model selection when creating sessions.
+- Add browser confirmation to account deletion and synchronize authorization regression tests with the daemon-owned lifecycle.
+
 ## 0.1.21 - 2026-10-28
 
 - Add MiniMax Code through its native ACP interface.
