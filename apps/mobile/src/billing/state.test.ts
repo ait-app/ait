@@ -114,3 +114,23 @@ it("delivers a deferred approval outside the purchase screen and clears its pend
   stop();
   expect(remove).toHaveBeenCalledOnce();
 });
+
+it("shows pending approval when the other store already provides active membership", async () => {
+  const otherStore: OnlineServiceMembership = {
+    ...active,
+    subscriptions: [
+      {
+        store: "google_play",
+        status: "active",
+        auto_renewing: true,
+        expires_at: "2030-01-01T00:00:00Z",
+      },
+    ],
+  };
+  mocks.membership.mockResolvedValue(otherStore);
+  await refreshMembership();
+  mocks.store.purchase.mockResolvedValueOnce({ status: "pending" });
+  await purchaseMembership();
+  expect(useBillingState.getState().message).toBe("pending");
+  expect(useBillingState.getState().membership?.can_connect).toBe(true);
+});
