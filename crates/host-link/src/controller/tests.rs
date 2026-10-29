@@ -26,6 +26,12 @@ struct Observed {
     renew_error: Option<Error>,
     mismatch: bool,
     expired_receipt: bool,
+    ticket_error: Option<Error>,
+    ticket_delay: Duration,
+    ticket_requests: usize,
+    renew_delay: Duration,
+    lease_seconds: Option<i64>,
+    access_seconds: Option<i64>,
 }
 
 #[derive(Default)]
@@ -34,6 +40,8 @@ struct HubObserved {
     tickets: usize,
     active: bool,
     unavailable: bool,
+    ticket_delay: Duration,
+    error: Option<Error>,
 }
 
 #[derive(Clone)]
@@ -108,7 +116,11 @@ impl Center for Mock {
         if seen.mismatch {
             binding.host_id = Uuid::new_v4();
         }
-        let seconds = if seen.expired_receipt { -1 } else { 900 };
+        let seconds = if seen.expired_receipt {
+            -1
+        } else {
+            seen.access_seconds.unwrap_or(900)
+        };
         seen.expired_receipt = false;
         Ok(Tokens {
             access_token: format!("device-access-secret-{}", seen.refreshes.len()).into(),
@@ -139,6 +151,8 @@ impl Center for Mock {
         })
     }
     async fn renew(&self, tokens: &Tokens, _: Uuid) -> Result<DateTime<Utc>, Error> {
+        let delay = self.0.lock().unwrap().renew_delay;
+        tokio::time::sleep(delay).await;
         let mut seen = self.0.lock().unwrap();
         seen.renewals += 1;
         seen.renewal_tokens
@@ -146,14 +160,31 @@ impl Center for Mock {
         if let Some(error) = seen.renew_error.take() {
             return Err(error);
         }
-        Ok(Utc::now() + chrono::Duration::seconds(60))
+        Ok(Utc::now() + chrono::Duration::seconds(seen.lease_seconds.unwrap_or(60)))
     }
     async fn ticket(&self, _: &Tokens, _: Uuid) -> Result<SecretString, Error> {
+        let (error, delay) = {
+            let mut seen = self.0.lock().unwrap();
+            seen.ticket_requests += 1;
+            (seen.ticket_error, seen.ticket_delay)
+        };
+        tokio::time::sleep(delay).await;
+        if let Some(error) = error {
+            return Err(error);
+        }
         Ok("ticket-secret".into())
     }
     async fn hub_ticket(&self, _: &Tokens, _: Uuid) -> Result<SecretString, Error> {
-        let mut seen = self.0.lock().unwrap();
-        seen.hub.tickets += 1;
+        let delay = {
+            let mut seen = self.0.lock().unwrap();
+            seen.hub.tickets += 1;
+            seen.hub.ticket_delay
+        };
+        tokio::time::sleep(delay).await;
+        let seen = self.0.lock().unwrap();
+        if let Some(error) = seen.hub.error {
+            return Err(error);
+        }
         if seen.hub.unavailable {
             return Err(Error::Unavailable);
         }
@@ -164,6 +195,8 @@ impl Center for Mock {
         Ok(())
     }
 }
+
+mod links;
 
 #[async_trait]
 impl ManagedRelay for Mock {
@@ -404,6 +437,63 @@ async fn optional_hub_link_starts_beside_relay_and_backs_off_on_failure() {
     cancel.cancel();
     task.await.unwrap().unwrap();
     assert!(!mock.0.lock().unwrap().hub.active);
+}
+
+#[tokio::test(start_paused = true)]
+async fn relay_ticket_outage_does_not_block_hub_or_renewal_and_recovers() {
+    let (controller, mock) = fixture();
+    mock.0.lock().unwrap().ticket_error = Some(Error::Unavailable);
+    let cancel = CancellationToken::new();
+    let task = tokio::spawn(controller.run(cancel.clone()));
+    tick().await;
+    assert!(mock.0.lock().unwrap().hub.active);
+    for _ in 0..10 {
+        tick().await;
+    }
+    assert!(mock.0.lock().unwrap().renewals >= 10);
+    mock.0.lock().unwrap().ticket_error = None;
+    for _ in 0..31 {
+        tick().await;
+    }
+    assert!(mock.0.lock().unwrap().active);
+    cancel.cancel();
+    task.await.unwrap().unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn slow_tickets_do_not_block_the_other_link_or_renewal() {
+    for slow_hub in [false, true] {
+        let (controller, mock) = fixture();
+        {
+            let mut seen = mock.0.lock().unwrap();
+            if slow_hub {
+                seen.hub.ticket_delay = Duration::from_secs(5);
+            } else {
+                seen.ticket_delay = Duration::from_secs(5);
+            }
+        }
+        let cancel = CancellationToken::new();
+        let task = tokio::spawn(controller.run(cancel.clone()));
+        tick().await;
+        {
+            let seen = mock.0.lock().unwrap();
+            assert!(if slow_hub {
+                seen.active
+            } else {
+                seen.hub.active
+            });
+        }
+        for _ in 0..6 {
+            tick().await;
+        }
+        {
+            let seen = mock.0.lock().unwrap();
+            assert!(seen.renewals >= 6);
+            assert!(seen.active && seen.hub.active);
+        }
+        cancel.cancel();
+        task.await.unwrap().unwrap();
+    }
 }
 
 #[tokio::test(start_paused = true)]

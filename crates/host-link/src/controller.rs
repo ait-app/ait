@@ -6,8 +6,8 @@ use uuid::Uuid;
 
 use crate::{Center, CredentialStore, Error, ManagedRelay, Session, State, Tokens};
 
-/// Wait between attempts to open the optional hub link, e.g. on centers without one.
-const HUB_RETRY: Duration = Duration::from_secs(60);
+mod authority;
+mod links;
 
 /// Serializes refresh rotation and maintains runtime leases independently of a GUI.
 pub struct Controller<C, S, R> {
@@ -28,7 +28,7 @@ struct Publication {
     access_until: tokio::time::Instant,
     refresh_at: tokio::time::Instant,
     lease_until: Option<tokio::time::Instant>,
-    hub_retry_at: tokio::time::Instant,
+    generation: Uuid,
 }
 
 impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
@@ -57,6 +57,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
             self.state.credential.as_ref().map(|c| &c.binding),
         );
         let result = tokio::select! {
+            biased;
             () = cancel.cancelled() => Ok(()),
             result = self.maintain(&cancel) => result,
         };
@@ -101,146 +102,41 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
 
     async fn maintain(&mut self, cancel: &CancellationToken) -> Result<(), Error> {
         let tokens = self.initial_tokens(cancel).await?;
-        let (access_until, refresh_at) = token_schedule(&tokens);
-        let mut publication = Publication {
-            tokens,
-            registration: Uuid::new_v4(),
-            session: None,
-            next_renew: tokio::time::Instant::now(),
-            access_until,
-            refresh_at,
-            lease_until: None,
-            hub_retry_at: tokio::time::Instant::now(),
+        let (grants, receiver) = tokio::sync::watch::channel(None);
+        let (errors, failures) = tokio::sync::mpsc::channel(2);
+        let mut authority = authority::Authority {
+            center: &self.center,
+            store: &self.store,
+            relay: &self.relay,
+            state: &mut self.state,
+            instance: self.instance,
+            active_session: &mut self.active_session,
+            grants,
+            errors: failures,
         };
-        let mut retry_at = tokio::time::Instant::now();
-        let mut delay = 1;
-        loop {
-            if cancel.is_cancelled() {
-                return Ok(());
-            }
-            let now = tokio::time::Instant::now();
-            let expires = publication
-                .lease_until
-                .map_or(publication.access_until, |lease| {
-                    lease.min(publication.access_until)
-                });
-            if expires <= now {
-                self.relay.stop().await;
-            }
-            if tokio::time::Instant::now() < retry_at {
-                pause(cancel, 1).await;
-                continue;
-            }
-            // Do not leave remote transport open across its local authorization deadline while
-            // an HTTP operation is in flight. Dropped refresh requests retain their persisted ID.
-            let window = expires.checked_duration_since(now);
-            let attempt = if let Some(window) = window {
-                tokio::time::timeout(window, self.step(&mut publication))
-                    .await
-                    .unwrap_or(Err(Error::Unavailable))
-            } else {
-                self.step(&mut publication).await
-            };
-            match attempt {
-                Ok(()) => {
-                    delay = 1;
-                    pause(cancel, 1).await;
-                }
-                Err(Error::SessionExpired) => {
-                    self.relay.stop().await;
-                    publication.session = None;
-                    publication.lease_until = None;
-                    self.active_session = None;
-                    publication.registration = Uuid::new_v4();
-                }
-                Err(Error::Conflict) => {
-                    // A crashed predecessor can retain its lease after a service restart.
-                    // Wait for the center to release it; never steal or replace its authority.
-                    self.relay.stop().await;
-                    self.relay.report(
-                        "runtime_conflict",
-                        Some(&publication.tokens.credential.binding),
-                    );
-                    retry_at = tokio::time::Instant::now() + Duration::from_secs(30);
-                }
-                Err(Error::Unavailable) => {
-                    if expires <= tokio::time::Instant::now() {
-                        self.relay.stop().await;
-                    }
-                    self.relay
-                        .report("retrying", Some(&publication.tokens.credential.binding));
-                    retry_at = tokio::time::Instant::now() + Duration::from_secs(delay);
-                    delay = (delay * 2).min(30);
-                }
-                Err(error) => return Err(error),
-            }
+        let relay = links::maintain(
+            &self.center,
+            &self.relay,
+            receiver.clone(),
+            errors.clone(),
+            links::Kind::Relay,
+        );
+        let hub = links::maintain(
+            &self.center,
+            &self.relay,
+            receiver,
+            errors,
+            links::Kind::Hub,
+        );
+        // All three futures are scoped to this manager. On exit they are dropped before stop(),
+        // so an outstanding ticket can never restart transport after shutdown.
+        tokio::select! {
+            // Revoke expired authority before polling a ticket that becomes ready at the deadline.
+            biased;
+            result = authority.maintain(tokens, cancel) => result,
+            () = relay => Err(Error::Protocol),
+            () = hub => Err(Error::Protocol),
         }
-    }
-
-    async fn step(&mut self, publication: &mut Publication) -> Result<(), Error> {
-        if tokio::time::Instant::now() >= publication.refresh_at {
-            publication.tokens = self.refresh().await?;
-            (publication.access_until, publication.refresh_at) =
-                token_schedule(&publication.tokens);
-            // A recovered receipt retains its original expiry. Persist its successor before
-            // rotating again, and do not register with an expired JWT.
-            if publication.access_until <= tokio::time::Instant::now() {
-                return Ok(());
-            }
-            publication.next_renew = tokio::time::Instant::now();
-        }
-        if publication.session.is_none() {
-            let session = self
-                .center
-                .register(
-                    &publication.tokens,
-                    &self.state.machine,
-                    self.instance,
-                    publication.registration,
-                )
-                .await?;
-            // Registration recovery reports a duration, not the existing lease's absolute end.
-            // Renew immediately to learn its authoritative deadline before opening transport.
-            publication.next_renew = tokio::time::Instant::now();
-            publication.session = Some(session);
-        }
-        let active = publication.session.as_mut().ok_or(Error::Protocol)?;
-        self.active_session = Some((publication.tokens.clone(), active.id));
-        // An ambiguous renewal may have committed at the center. Retry the known session
-        // before creating a competing registration; only a terminal session error discards it.
-        if tokio::time::Instant::now() >= publication.next_renew
-            || publication
-                .lease_until
-                .is_some_and(|until| until <= tokio::time::Instant::now())
-        {
-            active.lease_until = self.center.renew(&publication.tokens, active.id).await?;
-            publication.lease_until = Some(
-                tokio::time::Instant::now()
-                    + (active.lease_until - Utc::now())
-                        .to_std()
-                        .unwrap_or_default(),
-            );
-            publication.next_renew =
-                tokio::time::Instant::now() + Duration::from_secs(active.renew_after_seconds);
-        }
-        if !self.relay.active().await {
-            let ticket = self.center.ticket(&publication.tokens, active.id).await?;
-            self.relay.start(active.id, ticket).await?;
-        }
-        // The hub is optional: its failures never affect the relay publication.
-        if tokio::time::Instant::now() >= publication.hub_retry_at && !self.relay.hub_active().await
-        {
-            let started = match self.center.hub_ticket(&publication.tokens, active.id).await {
-                Ok(ticket) => self.relay.start_hub(active.id, ticket).await,
-                Err(error) => Err(error),
-            };
-            if started.is_err() {
-                publication.hub_retry_at = tokio::time::Instant::now() + HUB_RETRY;
-            }
-        }
-        self.relay
-            .report("running", Some(&publication.tokens.credential.binding));
-        Ok(())
     }
 }
 

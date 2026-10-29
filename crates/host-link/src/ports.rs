@@ -51,7 +51,7 @@ pub trait Center: Send + Sync {
     async fn close(&self, tokens: &Tokens, session: Uuid) -> Result<(), Error>;
 }
 
-/// Exclusive internal Relay ownership; the API rejects external start/stop while claimed.
+/// Exclusive internal Relay/Hub ownership; the API rejects external start/stop while claimed.
 #[async_trait]
 pub trait ManagedRelay: Send + Sync {
     /// Begin a control connection with an ephemeral ticket from the fixed authority.
@@ -60,18 +60,14 @@ pub trait ManagedRelay: Send + Sync {
     async fn start(&self, session: Uuid, ticket: SecretString) -> Result<(), Error>;
     /// Return whether a connection is online or connecting.
     async fn active(&self) -> bool;
-    /// Close control and all reverse data channels immediately.
+    /// Close Relay, Hub and all reverse data channels immediately.
     async fn stop(&self);
     /// Begin the optional hub serve link with an ephemeral ticket.
     /// # Errors
     /// Rejects invalid tickets or unavailable local transport.
-    async fn start_hub(&self, _session: Uuid, _ticket: SecretString) -> Result<(), Error> {
-        Err(Error::Unavailable)
-    }
-    /// Return whether the hub link exists; Hosts without a hub report `true`.
-    async fn hub_active(&self) -> bool {
-        true
-    }
+    async fn start_hub(&self, session: Uuid, ticket: SecretString) -> Result<(), Error>;
+    /// Return whether the hub link is online, connecting, or yielding to another owner.
+    async fn hub_active(&self) -> bool;
     /// Publish a sanitized manager state for local status queries.
     fn report(&self, phase: &'static str, binding: Option<&Binding>);
 }

@@ -212,7 +212,7 @@ Relay 的类型化消息集中在 `crates/relay/src/protocol.rs`，WebSocket 收
 模块职责见 [ADR-075](../decisions/clients/adr-075-relay-protocol-modules.md)。
 
 Linux headless 的 `daemon` 组装 `host-link` 的 HTTP/凭据 adapter，`api` 实现其
-`ManagedRelay` port 并独占 Relay 控制权。机器复用中心 Host/node 身份，长期授权是 node grant。
+`ManagedRelay` port 并独占 Relay 与 Hub 控制权。Hub、Relay 分别取票和重连，凭据轮换与节点续租独立运行；授权失效时统一关闭两条链路，见 [ADR-200](../decisions/daemon/adr-200-headless-independent-transports.md)。机器复用中心 Host/node 身份，长期授权是 node grant。
 普通客户端只读取 managed 状态；刷新 token 不进入传输模块或本地 RPC。
 详细边界见 [ADR-087](../decisions/clients/adr-087-headless-device-authorization.md)。
 
