@@ -1,3 +1,4 @@
+import { OnlineServiceMembershipCard } from "@/billing/membership-card";
 import { supportsBrowserAccount } from "@/runtime/browser-account";
 import React, { useRef, useState, type ReactNode } from "react";
 import { Keyboard, Pressable, Text, View } from "react-native";
@@ -180,6 +181,7 @@ export function AccountHostPanel({
               {t("onlineService.refresh")}
             </Button>
           </View>
+          <OnlineServiceMembershipCard />
           {children ?? (
             <SettingsSection title={t("onlineService.accountInfo")} flush>
               <SettingsCard>
@@ -210,7 +212,7 @@ export function AccountHostPanel({
                 void runAccountAction(async () => {
                   const confirmed = await confirmDialog({
                     title: t("onlineService.deleteAccountTitle"),
-                    message: t("onlineService.deleteAccountMessage"),
+                    message: `${t("onlineService.deleteAccountMessage")}\n\n${t("onlineService.billing.deleteWarning")}`,
                     confirmLabel: t("onlineService.deleteAccount"),
                     cancelLabel: t("common.actions.cancel"),
                     destructive: true,

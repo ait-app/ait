@@ -13,7 +13,12 @@ import {
 import { DEFAULT_ACCOUNT_CENTER } from "@ait/client/internal/account-session";
 import { revokeAccountPushNotifications } from "@/push-notifications";
 
-import type { AccountHost, AccountInfo } from "@ait/client/internal/account-session";
+import type {
+  AccountHost,
+  AccountInfo,
+  OnlineServiceMembership,
+  AppStoreTransaction,
+} from "@ait/client/internal/account-session";
 export type { AccountHost } from "@ait/client/internal/account-session";
 
 export interface AccountState {
@@ -66,6 +71,21 @@ export async function loadAccountInfo(): Promise<AccountInfo> {
   if (invoke) return (await invoke("account_info")) as AccountInfo;
   const manager = await (supportsBrowserAccount() ? getBrowserAccount() : getNativeAccount());
   return manager.getAccountInfo();
+}
+
+/** Membership never passes account credentials to the UI or native StoreKit adapter. */
+export async function loadOnlineServiceMembership(): Promise<OnlineServiceMembership> {
+  const invoke = getDesktopHost()?.invoke;
+  if (invoke) return (await invoke("account_membership")) as OnlineServiceMembership;
+  const manager = await (supportsBrowserAccount() ? getBrowserAccount() : getNativeAccount());
+  return manager.getMembership();
+}
+
+export async function verifyAppStoreTransaction(
+  transaction: AppStoreTransaction,
+): Promise<OnlineServiceMembership> {
+  const manager = await getNativeAccount();
+  return manager.verifyAppStoreTransaction(transaction);
 }
 
 let commandTail = Promise.resolve<unknown>(undefined);

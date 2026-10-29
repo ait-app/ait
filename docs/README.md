@@ -1,5 +1,7 @@
 # Ait 文档
 
+- [Online Service 订阅](operations/online-service-subscription.md)：StoreKit 2、账号中心会员校验与沙盒验收；[ADR-203](decisions/clients/adr-203-online-service-subscription.md)。
+
 - [MiniMax Code](operations/minimax-code.md)：最新版 `mcode` 原生 ACP、登录与真实联调；[ADR-197](decisions/providers/adr-197-minimax-code-acp.md)、[验证报告](reports/providers/minimax-code-acp-2026-10-28.md)。
 
 - [ADR-195：OpenCode 独立取消信号与确认期限](decisions/providers/adr-195-opencode-independent-cancellation.md)：消除输出背压和历史回放对停止的阻塞，限制原生终态丢失后的停止等待。
@@ -48,7 +50,7 @@
 
 - [ADR-199：内置 Skill 随 daemon 启动分发](decisions/providers/adr-199-bundled-skill-distribution.md)：二进制资源、选择收敛、卸载停用与兼容事务恢复。
 
-- [ADR-198：OMP 交互等待期间持续发布事件](decisions/providers/adr-198-omp-interaction-progress.md)：运行中的元数据读取与追加输入不阻塞审批、选择、确认和提问；[验证报告](reports/providers/omp-interaction-events-2026-10-28.md)。
+- [ADR-203：OMP 交互等待期间持续发布事件](decisions/providers/adr-198-omp-interaction-progress.md)：运行中的元数据读取与追加输入不阻塞审批、选择、确认和提问；[验证报告](reports/providers/omp-interaction-events-2026-10-28.md)。
 
 - [ADR-156（客户端）：初始化进度与活动事件使用 Ait 标准名称](decisions/clients/adr-156-setup-and-activity-events.md)：标准事件名称、版本化能力发现与客户端订阅。
 

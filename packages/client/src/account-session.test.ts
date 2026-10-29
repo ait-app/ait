@@ -1396,3 +1396,58 @@ describe("daemon authorization handoff", () => {
     );
   });
 });
+
+describe("Online Service membership", () => {
+  const membership = {
+    required: true,
+    purchases_available: true,
+    app_account_token: "018f20b0-fbcc-7000-8000-000000000001",
+    product_id: "monthly",
+    can_connect: false,
+    status: "inactive",
+    expires_at: null,
+  };
+  it("reads and verifies using the signed-in authority without sharing credentials with StoreKit", async () => {
+    const f = fixture();
+    await f.login();
+    f.http.mockResolvedValueOnce(Response.json(membership));
+    expect(await f.manager.getMembership()).toEqual(membership);
+    const transaction = { transaction_id: "20000001", environment: "Production" as const };
+    f.http.mockResolvedValueOnce(
+      Response.json({ ...membership, can_connect: true, status: "active" }),
+    );
+    expect((await f.manager.verifyAppStoreTransaction(transaction)).can_connect).toBe(true);
+    expect(f.http).toHaveBeenLastCalledWith(
+      "https://aitapp.cn/api/v1/billing/app-store/transactions",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(transaction),
+        redirect: "error",
+        headers: expect.objectContaining({ Authorization: "Bearer private-jwt" }),
+      }),
+    );
+    await f.manager.logout();
+  });
+  it("requires login, validates membership responses, and preserves purchase ownership errors", async () => {
+    const f = fixture();
+    await expect(f.manager.getMembership()).rejects.toThrow("Sign in first");
+    await f.login();
+    f.http.mockResolvedValueOnce(Response.json({ ...membership, app_account_token: "invalid" }));
+    await expect(f.manager.getMembership()).rejects.toThrow("invalid membership");
+    f.http.mockResolvedValueOnce(
+      Response.json(
+        {
+          error: {
+            code: "purchase_account_mismatch",
+            message: "Sign in to the original Ait account",
+          },
+        },
+        { status: 409 },
+      ),
+    );
+    await expect(
+      f.manager.verifyAppStoreTransaction({ transaction_id: "20000001", environment: "Sandbox" }),
+    ).rejects.toMatchObject({ code: "purchase_account_mismatch", status: 409 });
+    await f.manager.logout();
+  });
+});

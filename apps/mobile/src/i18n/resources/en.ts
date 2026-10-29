@@ -58,6 +58,38 @@ export const en = {
     },
   },
   onlineService: {
+    billing: {
+      deleteWarning:
+        "Deleting your Ait account does not cancel your Apple subscription. Manage or cancel it in App Store subscriptions.",
+      title: "Online Service subscription",
+      plan: "Monthly membership",
+      benefit: "Connect to your computers using Ait Online Service.",
+      accessUntil: "Access until",
+      loading: "Loading membership…",
+      subscribe: "Subscribe · {{price}} / month",
+      unavailable: "Purchase unavailable",
+      restore: "Restore purchases",
+      manage: "Manage subscription",
+      privacy: "Privacy Policy",
+      terms: "Terms of Use",
+      renewal:
+        "Payment is charged to your Apple Account. Your subscription renews automatically each month unless cancelled at least 24 hours before the current period ends. Manage or cancel in App Store subscriptions. Deleting your Ait account does not cancel your Apple subscription.",
+      pending: "Your purchase is awaiting Apple approval. Access updates after approval.",
+      restored: "Purchases restored and verified.",
+      nothingToRestore: "No purchases found for this Apple Account.",
+      openFailed: "Could not open this link. Try again.",
+      accessAvailable:
+        "Online Service access is currently available without a subscription on this service.",
+      states: {
+        active: "Active",
+        inactive: "Not subscribed",
+        expired: "Expired",
+        billing_retry: "Payment issue",
+        grace_period: "Billing grace period",
+        revoked: "Refunded or revoked",
+        verification_required: "Verification needed",
+      },
+    },
     title: "Online Service",
     connectionDescription: "Sign in and connect to your online hosts.",
     loginDescription: "Sign in to access computers connected to your online service.",
