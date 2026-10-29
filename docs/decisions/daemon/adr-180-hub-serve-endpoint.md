@@ -2,6 +2,8 @@
 
 状态：采用（原型）。中心协议见中心仓库 `docs/hub-protocol.md`；本 ADR 记录 Host 与客户端侧边界。
 
+Headless 的发布调度与端口默认行为由 [ADR-200](adr-200-headless-independent-transports.md) 修订：两条传输独立维护，`ManagedRelay` 必须显式实现 Hub 方法。
+
 ## 背景
 
 旧 relay 每次访问都要新建会话：HTTP 申请、客户端 WSS、配对、业务 hello、重新订阅。daemon 的订阅归属单条连接（`ConnectionSubscriptions`），连接断开即释放，因此手机断网恢复后只能全量重来。

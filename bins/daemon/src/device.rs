@@ -393,6 +393,12 @@ impl host_link::ManagedRelay for StatusRelay {
     async fn active(&self) -> bool {
         self.inner.active().await
     }
+    async fn start_hub(&self, session: Uuid, ticket: SecretString) -> Result<(), Error> {
+        self.inner.start_hub(session, ticket).await
+    }
+    async fn hub_active(&self) -> bool {
+        self.inner.hub_active().await
+    }
     async fn stop(&self) {
         self.inner.stop().await;
     }

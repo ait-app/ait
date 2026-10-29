@@ -109,6 +109,7 @@ async fn status_relay_rejects_invalid_tickets_and_cleans_failed_snapshot_publica
         uuid::Uuid::new_v4(),
     );
     assert!(!relay.active().await);
+    assert!(!relay.hub_active().await);
     assert_eq!(
         relay
             .start(uuid::Uuid::new_v4(), "invalid-fixture-ticket".into())
@@ -116,7 +117,21 @@ async fn status_relay_rejects_invalid_tickets_and_cleans_failed_snapshot_publica
             .unwrap_err(),
         host_link::Error::Unavailable
     );
+    assert_eq!(
+        relay
+            .start_hub(uuid::Uuid::new_v4(), "invalid-fixture-ticket".into())
+            .await
+            .unwrap_err(),
+        host_link::Error::Unavailable
+    );
+    // This current-thread test stops the connector before its spawned network task is polled.
+    relay
+        .start_hub(uuid::Uuid::new_v4(), "a".repeat(64).into())
+        .await
+        .unwrap();
+    assert!(relay.hub_active().await);
     relay.stop().await;
+    assert!(!relay.hub_active().await);
     std::fs::create_dir_all(root.path().join("device/status.json")).unwrap();
 
     relay.report("running", None);

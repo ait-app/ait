@@ -40,6 +40,8 @@
 
 ## 架构决策
 
+- [ADR-200：Headless 独立维护 Hub、Relay 与节点租约](decisions/daemon/adr-200-headless-independent-transports.md)：修复 Hub 包装器接线，独立取票重试与续租，统一授权失效和关停取消。
+
 - [ADR-199：内置 Skill 随 daemon 启动分发](decisions/providers/adr-199-bundled-skill-distribution.md)：二进制资源、选择收敛、卸载停用与兼容事务恢复。
 
 - [ADR-198：OMP 交互等待期间持续发布事件](decisions/providers/adr-198-omp-interaction-progress.md)：运行中的元数据读取与追加输入不阻塞审批、选择、确认和提问；[验证报告](reports/providers/omp-interaction-events-2026-10-28.md)。
