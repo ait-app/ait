@@ -1,5 +1,66 @@
 use super::*;
 
+#[tokio::test]
+async fn agent_mcp_credential_is_private_and_limited_to_its_route() {
+    let fixture = Fixture::start().await;
+    let client = reqwest::Client::builder().no_proxy().build().unwrap();
+    let request = json!({"jsonrpc":"2.0","id":1,"method":"tools/list"});
+    let response = client
+        .post(fixture.url(crate::mcp::PATH))
+        .bearer_auth(AGENT_MCP_TOKEN)
+        .header("accept", "application/json, text/event-stream")
+        .json(&request)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let value: Value = response.json().await.unwrap();
+    assert_eq!(value["result"]["tools"], json!([]));
+    for path in ["/v1/server/info", "/v1/ws"] {
+        assert_eq!(
+            client
+                .get(fixture.url(path))
+                .bearer_auth(AGENT_MCP_TOKEN)
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+    }
+    let info = client
+        .get(fixture.url("/v1/server/info"))
+        .bearer_auth(TOKEN)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(info.status(), StatusCode::OK);
+    assert!(!info.text().await.unwrap().contains(AGENT_MCP_TOKEN));
+    assert!(!format!("{:?}", fixture.api).contains(AGENT_MCP_TOKEN));
+    let rejected = fixture
+        .api
+        .clone()
+        .with_agent_mcp_token(AGENT_MCP_TOKEN.into());
+    assert!(matches!(rejected, Err(ConfigError::SharedConfiguration)));
+    fixture.stop().await;
+}
+
+#[tokio::test]
+async fn invalid_agent_mcp_credential_is_rejected_before_serving() {
+    let api = Api::new(
+        "127.0.0.1:7316".parse().unwrap(),
+        "stable".into(),
+        "instance".into(),
+        TOKEN.into(),
+        Services::default(),
+    )
+    .unwrap();
+    assert!(matches!(
+        api.with_agent_mcp_token("invalid credential".into()),
+        Err(ConfigError::InvalidToken)
+    ));
+}
+
 fn post(client: &reqwest::Client, fixture: &Fixture, value: &Value) -> reqwest::RequestBuilder {
     client
         .post(fixture.url(crate::mcp::PATH))

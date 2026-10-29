@@ -6,6 +6,19 @@ use serde_json::json;
 use super::*;
 
 #[test]
+fn new_daemon_enables_injection_and_preserves_explicit_opt_out() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("config.json");
+    let store = FileDaemonConfigStore::with_defaults(path.clone());
+    assert_eq!(store.get().unwrap()["mcp"]["injectIntoAgents"], true);
+    store
+        .patch(&json!({"mcp":{"injectIntoAgents":false}}))
+        .unwrap();
+    let reopened = FileDaemonConfigStore::with_defaults(path);
+    assert_eq!(reopened.get().unwrap()["mcp"]["injectIntoAgents"], false);
+}
+
+#[test]
 fn invalid_known_fields_do_not_change_the_persisted_config() {
     let root = tempfile::tempdir().unwrap();
     let store = store(&root);

@@ -40,7 +40,7 @@ impl FileDaemonConfigStore {
             path,
             serde_json::json!({
                 "relay":{"enabled":false},
-                "mcp":{"enabled":true,"injectIntoAgents":false},
+                "mcp":{"enabled":true,"injectIntoAgents":true},
                 "browserTools":{"enabled":false},
                 "providers":{},
                 "metadataGeneration":{"providers":[]},

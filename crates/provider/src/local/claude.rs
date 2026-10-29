@@ -105,6 +105,10 @@ impl ClaudeClient {
 }
 
 impl AgentClient for ClaudeClient {
+    fn supports_agent_mcp(&self) -> bool {
+        true
+    }
+
     fn supports_summary_generation(&self) -> bool {
         true
     }

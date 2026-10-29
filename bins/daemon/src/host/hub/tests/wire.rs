@@ -91,7 +91,13 @@ async fn composed_host_publishes_current_attention_and_three_directories_over_se
     let listener = TcpListener::bind(config.listen).await.unwrap();
     let address = listener.local_addr().unwrap();
     let instance = Arc::new(InstanceLease::acquire(directory.path()).unwrap());
-    let (services, sources) = compose_services(&config, address, &instance).unwrap();
+    let (services, sources) = compose_services(
+        &config,
+        address,
+        &instance,
+        Uuid::new_v4().to_string().into(),
+    )
+    .unwrap();
     // Exercise real publication and wire transport without the autonomous owner's fixed center.
     // The full daemon's rejection of external tickets is covered in host::tests::publication.
     let api = api::Api::new(

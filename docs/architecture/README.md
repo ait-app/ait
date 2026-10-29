@@ -123,6 +123,11 @@ Agent 身份或原生会话。daemon 注入外部 bundle、三个目标目录和
 [ADR-129](../decisions/providers/adr-129-provider-owned-skills.md) 与
 [ADR-199](../decisions/providers/adr-199-bundled-skill-distribution.md)。
 
+`provider::service::agent_mcp` 根据 host 注入的实际端点、私有凭证与配置存储准备原生会话
+MCP 设置。AgentManager 保留持久用户配置与 live 会话绑定的分离，所有生命周期和后续输入
+使用相同绑定；API 只在 Agent MCP 路由接受专用凭证。见
+[ADR-202](../decisions/providers/adr-202-agent-mcp-injection.md)。
+
 Pi 的原生 RPC adapter 归 `provider::local::pi`，使用现有 Agent ports，注册身份为 `pi`。
 会话、认证和工具由 Pi 持有，能力与限制见
 [ADR-156](../decisions/providers/adr-156-pi-native-rpc-provider.md)；Ait 不为 Pi 暴露模式，见

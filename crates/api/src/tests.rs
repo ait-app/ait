@@ -22,6 +22,7 @@ use tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 
 const TOKEN: &str = "offline-test-token-at-least-32-characters";
+const AGENT_MCP_TOKEN: &str = "offline-agent-mcp-only-token-at-least-32-characters";
 type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 struct Fixture {
@@ -54,7 +55,11 @@ impl Fixture {
             services,
         )
         .unwrap();
-        let mut api = api.with_browser_origins(origins).unwrap();
+        let mut api = api
+            .with_agent_mcp_token(AGENT_MCP_TOKEN.into())
+            .unwrap()
+            .with_browser_origins(origins)
+            .unwrap();
         if managed {
             api.claim_managed_relay().unwrap();
         }

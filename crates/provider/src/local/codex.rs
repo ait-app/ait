@@ -232,6 +232,10 @@ impl CodexClient {
 }
 
 impl AgentClient for CodexClient {
+    fn supports_agent_mcp(&self) -> bool {
+        true
+    }
+
     fn supports_summary_generation(&self) -> bool {
         true
     }

@@ -32,7 +32,7 @@ use model::server::{Lifecycle, Limits, ServerInfo, VERSION};
 use model::{LifecycleIntent, Runtime};
 use provider::service::agent_execution::AgentExecution;
 use schedule::service::Schedules;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 use terminal::service::Terminals;
 use tokio::sync::Semaphore;
 use tower_http::timeout::TimeoutLayer;
@@ -76,6 +76,7 @@ struct Shared {
     managed_status: Arc<Mutex<serde_json::Value>>,
     runtime: Arc<Runtime>,
     token: SecretString,
+    agent_mcp_token: Option<SecretString>,
     browser_auth: browser_auth::BrowserAuth,
     authorities: Vec<String>,
     wildcard_listener: bool,
@@ -188,6 +189,18 @@ fn validate_listener(address: SocketAddr, token: &SecretString) -> Result<(), Co
 }
 
 impl Api {
+    /// Accept a private host credential on the Agent MCP route only.
+    /// Configure before sharing or serving this API; the credential is never returned to clients.
+    /// # Errors
+    /// Returns invalid credential or shared-configuration errors.
+    pub fn with_agent_mcp_token(mut self, token: SecretString) -> Result<Self, ConfigError> {
+        validate_token(token.expose_secret())?;
+        Arc::get_mut(&mut self.shared)
+            .ok_or(ConfigError::SharedConfiguration)?
+            .agent_mcp_token = Some(token);
+        Ok(self)
+    }
+
     /// Return the existing serve link as a center call port; no new network connection is opened.
     #[must_use]
     pub fn hub_center(&self) -> Arc<dyn model::hub::Center> {
@@ -356,6 +369,7 @@ impl Api {
                 provider,
                 terminal,
                 token,
+                agent_mcp_token: None,
                 browser_auth: browser_auth::BrowserAuth::default(),
                 authorities: allowed_authorities(address),
                 wildcard_listener: address.ip().is_unspecified(),
@@ -551,7 +565,16 @@ async fn guard(
         if request.uri().path() == "/v1/ws" && !request.headers().contains_key("authorization") {
             state.browser_auth.consume(request.headers())?;
         } else {
-            auth::authenticate(request.headers(), &state.token)?;
+            let authenticated = auth::authenticate(request.headers(), &state.token);
+            if request.uri().path() == mcp::PATH {
+                authenticated.or_else(|error| {
+                    state.agent_mcp_token.as_ref().map_or(Err(error), |token| {
+                        auth::authenticate(request.headers(), token)
+                    })
+                })?;
+            } else {
+                authenticated?;
+            }
         }
     }
     // Credentials and client state must never be accepted in a URL.

@@ -317,6 +317,11 @@ pub(crate) trait AgentSession: Debug + Send {
 
 /// Factory and availability boundary for one independent provider adapter.
 pub(crate) trait AgentClient: Debug + Send + Sync {
+    /// Whether this adapter accepts a session-private HTTP MCP connection.
+    fn supports_agent_mcp(&self) -> bool {
+        false
+    }
+
     /// Return the total catalog budget, including queueing and availability checks.
     fn discovery_timeout(&self) -> Duration {
         Duration::from_secs(30)

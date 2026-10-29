@@ -98,6 +98,8 @@
 
 ## Provider、Agent 与会话
 
+- [MCP 注入复核：参考 Paseo 当前实现](providers/paseo-mcp-injection-review-2026-10-30.md)
+
 - [MCP 自动注入：Paseo 与 Ait 对照](providers/paseo-mcp-injection-comparison-2026-10-28.md)
 
 - [OMP 审批与对话事件链路验证](providers/omp-interaction-events-2026-10-28.md)

@@ -25,7 +25,7 @@
 
 - [移动端通知](operations/mobile-notifications.md)：本地提醒、Apple APNs／Google FCM 配置和真机验收。
 
-- [daemon MCP 接口](operations/mcp.md)：Streamable HTTP、40 个编排工具、鉴权与 Workspace 上下文。
+- [daemon MCP 接口](operations/mcp.md)：Streamable HTTP、40 个编排工具、鉴权与 Workspace 上下文；[Paseo 注入复核](reports/providers/paseo-mcp-injection-review-2026-10-30.md)。
 - [Agent Skill 自动分发](operations/agent-skills.md)：内置技能、启动安装与更新、用户选择和卸载停用。
 - [项目说明](../README.md)：开发入口、workspace 和验证命令。
 - [品牌资源](../assets/brand/README.md)：深浅色 Logo、共用矢量源与生成命令；配色规范见 [ADR-051](decisions/branding/adr-051-ait-brand-identity.md)。
@@ -39,6 +39,8 @@
 - [Bot 后端设计](plans/bot-backend.md)：Workspace Bot、独占 Channel、隐藏 session、内置 tab 对话与 Telegram、飞书、Email 接入方案。
 
 ## 架构决策
+
+- [ADR-202：Agent MCP 运行时自动注入](decisions/providers/adr-202-agent-mcp-injection.md)：原生会话私有配置、MCP 专用凭证、能力判断与重启恢复。
 
 - [ADR-201：daemon 统一拥有节点发布与机器授权](decisions/daemon/adr-201-daemon-owned-publication.md)：删除 `--headless`，统一授权驱动的注册续租与重连、Hub/Relay 完整断开与凭据清理及本地 API token。
 

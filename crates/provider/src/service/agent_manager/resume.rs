@@ -48,15 +48,18 @@ impl AgentManager {
             .persistence
             .as_ref()
             .ok_or_else(|| AgentManagerError::MissingPersistence(id.clone()))?;
+        let (launch, binding) = self.prepare_mcp(&id, &spec, AgentResumePurpose::Interactive)?;
         let session = super::execution::native(
             &spec.provider,
             "resume",
-            client.resume_session(handle, &spec, AgentResumePurpose::Interactive),
+            client.resume_session(handle, &launch, AgentResumePurpose::Interactive),
         )
         .await
         .map_err(map_session)?;
-        self.register_session(&id, session, record, Registration::Create, permit)
-            .await
+        let record = self
+            .register_session(&id, session, record, Registration::Create, permit)
+            .await?;
+        Ok(self.retain_mcp(record, binding))
     }
 
     /// Restore an explicitly selected Agent for interactive use, including archived Agents.
@@ -119,21 +122,25 @@ impl AgentManager {
             .as_ref()
             .ok_or_else(|| AgentManagerError::MissingPersistence(agent_id.to_owned()))?;
         let client = self.available_client(&record.provider).await?;
+        let (launch, binding) =
+            self.prepare_mcp(agent_id, &spec, AgentResumePurpose::Interactive)?;
         let session = super::execution::native(
             &spec.provider,
             "restore",
-            client.resume_session(handle, &spec, AgentResumePurpose::Interactive),
+            client.resume_session(handle, &launch, AgentResumePurpose::Interactive),
         )
         .await
         .map_err(map_session)?;
-        self.register_session(
-            agent_id,
-            session,
-            record,
-            Registration::Restore(overrides),
-            permit,
-        )
-        .await
+        let record = self
+            .register_session(
+                agent_id,
+                session,
+                record,
+                Registration::Restore(overrides),
+                permit,
+            )
+            .await?;
+        Ok(self.retain_mcp(record, binding))
     }
 }
 
