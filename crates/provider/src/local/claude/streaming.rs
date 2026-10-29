@@ -10,6 +10,9 @@ use crate::protocol::timeline::NativeItem;
 
 const MAX_ITEMS: usize = 4096;
 const MAX_TEXT: usize = 192 * 1024;
+/// Since Claude Code 2.1.271 an auto-mode subagent hands its report to the caller through this
+/// tool instead of its final text, so the report is shown as the subagent's final message.
+const SUBAGENT_HANDBACK: &str = "SubagentHandback";
 
 #[derive(Debug, Default)]
 pub(super) struct Stream {
@@ -26,6 +29,8 @@ pub(super) struct Stream {
     compacting: bool,
     /// Subagent launches; their completion notices belong to the child, not the parent timeline.
     agent_calls: BTreeSet<String>,
+    /// Handback calls shown as messages; their acknowledgements stay hidden.
+    handbacks: BTreeSet<String>,
 }
 
 impl Stream {
@@ -198,15 +203,16 @@ impl Stream {
                     let content = block[if thinking { "thinking" } else { "text" }]
                         .as_str()
                         .ok_or(AgentSessionError::Failed)?;
-                    if content.len() > MAX_TEXT {
-                        return Err(AgentSessionError::Failed);
+                    self.text(&key, content, thinking, record)?;
+                }
+                Some("tool_use") if block["name"] == SUBAGENT_HANDBACK => {
+                    self.handbacks.insert(text(block, "id")?.to_owned());
+                    if let Some(report) = block["input"]["message"]
+                        .as_str()
+                        .filter(|report| !report.trim().is_empty())
+                    {
+                        self.text(&key, report, false, record)?;
                     }
-                    let mut item = json!({"type":if thinking {"reasoning"} else {"assistant_message"},"text":content});
-                    if !thinking {
-                        item["messageId"] = json!(key);
-                        self.last_message = Some(content.to_owned());
-                    }
-                    self.complete(&key, item, record)?;
                 }
                 Some("tool_use") => {
                     let call = text(block, "id")?;
@@ -234,10 +240,26 @@ impl Stream {
         Ok(())
     }
 
-    fn user(&mut self, record: &Value) -> Result<(), AgentSessionError> {
-        if record["isMeta"] == true {
-            return Ok(());
+    fn text(
+        &mut self,
+        key: &str,
+        content: &str,
+        thinking: bool,
+        record: &Value,
+    ) -> Result<(), AgentSessionError> {
+        if content.len() > MAX_TEXT {
+            return Err(AgentSessionError::Failed);
         }
+        let mut item =
+            json!({"type":if thinking {"reasoning"} else {"assistant_message"},"text":content});
+        if !thinking {
+            item["messageId"] = json!(key);
+            self.last_message = Some(content.to_owned());
+        }
+        self.complete(key, item, record)
+    }
+
+    fn user(&mut self, record: &Value) -> Result<(), AgentSessionError> {
         let content = &record["message"]["content"];
         let mut messages = Vec::new();
         if let Some(content) = content.as_str() {
@@ -252,7 +274,7 @@ impl Stream {
                 } else if block["type"] == "tool_result" {
                     let call = text(block, "tool_use_id")?;
                     let key = format!("tool:{call}");
-                    if self.completed.contains(&key) {
+                    if self.handbacks.remove(call) || self.completed.contains(&key) {
                         continue;
                     }
                     let mut item = self.tools.remove(call).ok_or(AgentSessionError::Failed)?;
@@ -268,7 +290,8 @@ impl Stream {
                 }
             }
         }
-        if messages.is_empty() {
+        // Injected prompts such as skill bodies and subagent hand-backs; tool results still apply.
+        if messages.is_empty() || super::synthetic::injected(record) {
             return Ok(());
         }
         let id = text(record, "uuid")?;

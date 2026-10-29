@@ -219,7 +219,7 @@ pub(super) fn parse(
         {
             title = Some(value.to_owned());
         }
-        if record["type"] == "user" && record["isMeta"] != true {
+        if record["type"] == "user" && !super::synthetic::injected(record) {
             active = true;
         }
         if record["type"] == "assistant" {

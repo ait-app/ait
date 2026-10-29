@@ -79,6 +79,12 @@ impl TaskNotification {
     }
 }
 
+/// Claude Code marks `user` records it writes for the model, such as skill bodies and subagent
+/// hand-backs, as meta or synthetic.
+pub(super) fn injected(record: &Value) -> bool {
+    record["isMeta"] == true || record["isSynthetic"] == true
+}
+
 /// Returns the text a user bubble should show, or `None` for transcript noise.
 ///
 /// Slash commands are recorded as `<command-name>`/`<command-args>` XML; they read back as the
