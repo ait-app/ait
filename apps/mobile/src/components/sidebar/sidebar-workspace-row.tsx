@@ -1,11 +1,10 @@
-import { memo, useCallback, useMemo, useState, type Ref } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { View, Text, type GestureResponderEvent } from "react-native";
+import { View, Text } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
-import type { DraggableListDragHandleProps } from "@/components/draggable-list.types";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { WorkspaceRenameModal } from "@/components/workspace-rename-modal";
 import { useWorkspaceClipboardActions } from "@/hooks/use-workspace-clipboard-actions";
@@ -18,7 +17,6 @@ import { useWorkspaceReadState } from "@/hooks/use-workspace-read-state";
 import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-archive-redirect";
 import { isNative as platformIsNative } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
 import {
   SidebarWorkspaceContextMenu,
   SidebarWorkspaceMenu,
@@ -40,8 +38,6 @@ import {
   type SidebarWorkspaceTrailing,
 } from "@/components/sidebar/workspace-trailing";
 
-function noop() {}
-
 interface SidebarWorkspaceRowProps {
   workspace: SidebarWorkspaceEntry;
   selected: boolean;
@@ -53,10 +49,6 @@ interface SidebarWorkspaceRowProps {
   hostBadge?: HostBadgeModel | null;
   /** Project grouping only: shows a transient "creating" affordance. */
   isCreating?: boolean;
-  /** Project grouping only: drag-to-reorder wiring. Absent → not draggable. */
-  drag?: () => void;
-  isDragging?: boolean;
-  dragHandleProps?: DraggableListDragHandleProps;
 }
 
 export function SidebarWorkspaceRow({
@@ -68,9 +60,6 @@ export function SidebarWorkspaceRow({
   onPress,
   hostBadge,
   isCreating = false,
-  drag,
-  isDragging = false,
-  dragHandleProps,
 }: SidebarWorkspaceRowProps) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -161,9 +150,6 @@ export function SidebarWorkspaceRow({
         isCreating={isCreating}
         isArchiving={isArchiving}
         onPress={onPress}
-        drag={drag}
-        isDragging={isDragging}
-        dragHandleProps={dragHandleProps}
         archiveLabel={t("sidebar.workspace.actions.archive")}
         archiveStatus={isArchiving ? "pending" : "idle"}
         archivePendingLabel={t("sidebar.workspace.actions.archiving")}
@@ -194,9 +180,6 @@ interface WorkspaceRowBodyProps {
   isCreating: boolean;
   isArchiving: boolean;
   onPress: () => void;
-  drag?: () => void;
-  isDragging: boolean;
-  dragHandleProps?: DraggableListDragHandleProps;
   archiveLabel?: string;
   archiveStatus?: "idle" | "pending" | "success";
   archivePendingLabel?: string;
@@ -218,9 +201,6 @@ function WorkspaceRowBody({
   isCreating,
   isArchiving,
   onPress,
-  drag,
-  isDragging,
-  dragHandleProps,
   archiveLabel,
   archiveStatus = "idle",
   archivePendingLabel,
@@ -237,66 +217,29 @@ function WorkspaceRowBody({
   const isTouchPlatform = platformIsNative || isCompact;
   const [isPressed, setIsPressed] = useState(false);
   const trailing = useSidebarWorkspaceTrailing();
-  const draggable = Boolean(drag);
-  const interaction = useLongPressDragInteraction({
-    drag: drag ?? noop,
-    menuController: null,
-  });
-  const {
-    role: _dragRole,
-    tabIndex: _dragTabIndex,
-    "aria-roledescription": _dragRoleDescription,
-    ...dragAttributes
-  } = dragHandleProps?.attributes ?? {};
-
-  const handlePress = useCallback(() => {
-    if (interaction.didLongPressRef.current) {
-      interaction.didLongPressRef.current = false;
-      return;
-    }
-    onPress();
-  }, [interaction.didLongPressRef, onPress]);
-  const handleWorkspacePressIn = useCallback(
-    (event: GestureResponderEvent) => {
-      setIsPressed(true);
-      if (draggable) interaction.handlePressIn(event);
-    },
-    [draggable, interaction],
-  );
-  const handleWorkspacePressOut = useCallback(() => {
-    setIsPressed(false);
-    if (draggable) interaction.handlePressOut();
-  }, [draggable, interaction]);
+  const handlePress = onPress;
+  const handleWorkspacePressIn = useCallback(() => setIsPressed(true), []);
+  const handleWorkspacePressOut = useCallback(() => setIsPressed(false), []);
 
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
 
   return (
-    <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
+    <SidebarWorkspaceRowFrame workspace={workspace}>
       {({ isHovered, contextMenuOpen, onContextMenuOpenChange, hoverHandlers }) => {
         const isDesktop = !isTouchPlatform;
         const serviceSummary = isDesktop ? selectWorkspaceServiceSummary(workspace.scripts) : null;
         const workspaceRowStyle = getWorkspaceRowStyle({
-          isDragging,
           isPressed,
           selected: showSelection,
           isHovered,
         });
         const backdrop = getSidebarRowBackdrop({
-          isDragging,
           isPressed,
           selected: showSelection,
           isHovered,
         });
         return (
-          <View
-            {...(draggable ? dragAttributes : {})}
-            {...(draggable ? dragHandleProps?.listeners : {})}
-            ref={
-              draggable ? (dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>) : undefined
-            }
-            style={styles.workspaceRowContainer}
-            {...hoverHandlers}
-          >
+          <View style={styles.workspaceRowContainer} {...hoverHandlers}>
             <SidebarWorkspaceContextMenu
               contextMenuOpen={contextMenuOpen}
               onContextMenuOpenChange={onContextMenuOpenChange}
@@ -322,7 +265,6 @@ function WorkspaceRowBody({
               style={workspaceRowStyle}
               highlightStyle={styles.workspaceRowPressed}
               onPressIn={handleWorkspacePressIn}
-              onTouchMove={draggable ? interaction.handleTouchMove : undefined}
               onPressOut={handleWorkspacePressOut}
               onPress={handlePress}
               testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
@@ -465,12 +407,10 @@ function WorkspaceRowTrailingActions({
 }
 
 function getWorkspaceRowStyle({
-  isDragging,
   isPressed,
   selected,
   isHovered,
 }: {
-  isDragging: boolean;
   isPressed: boolean;
   selected: boolean;
   isHovered: boolean;
@@ -479,7 +419,6 @@ function getWorkspaceRowStyle({
     styles.workspaceRow,
     isHovered && styles.workspaceRowHovered,
     selected && styles.sidebarRowSelected,
-    isDragging && styles.workspaceRowDragging,
     isPressed && styles.workspaceRowPressed,
   ];
 }
@@ -508,14 +447,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   workspaceRowPressed: {
     backgroundColor: theme.colors.surface2,
-  },
-  workspaceRowDragging: {
-    backgroundColor: theme.colors.surface2,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    transform: [{ scale: 1.02 }],
-    zIndex: 3,
-    ...theme.shadow.md,
   },
   sidebarRowSelected: {
     backgroundColor: theme.colors.surfaceSidebarSelected,

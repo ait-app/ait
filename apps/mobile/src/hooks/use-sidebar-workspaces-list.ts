@@ -6,11 +6,9 @@ import { useWorkspaceDirectoryServerIds } from "@/stores/session-store-hooks";
 import { workspaceEqualityFns } from "@/stores/session-store-hooks/selectors";
 import { useHostProjects } from "@/projects/host-projects";
 import { getHostRuntimeStore, useHostRegistryLoaded, useHosts } from "@/runtime/host-runtime";
-import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import {
   buildSidebarWorkspacePlacementModel,
-  computeSidebarOrderUpdates,
   createSidebarWorkspaceEntry,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
@@ -22,18 +20,14 @@ import {
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 
 export {
-  appendMissingOrderKeys,
-  applyStoredOrdering,
   buildSidebarProjectsFromHostProjects,
   buildSidebarProjectsFromStructure,
   createSidebarWorkspaceEntry,
   buildSidebarWorkspacePlacementModel,
-  computeSidebarOrderUpdates,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
   shouldShowSidebarHostLabels,
   type SidebarLoadingState,
-  type SidebarOrderUpdates,
   type SidebarStatusWorkspacePlacement,
   type SidebarWorkspacePlacement,
   type SidebarWorkspacePlacementModel,
@@ -79,7 +73,6 @@ export function useSidebarProjectStatusBucket(input: {
   return useStoreWithEqualityFn(useSessionStore, selector, Object.is);
 }
 
-const EMPTY_ORDER: string[] = [];
 const EMPTY_PROJECTS: SidebarProjectEntry[] = [];
 const EMPTY_WORKSPACES: SidebarWorkspacePlacement[] = [];
 const EMPTY_PROJECT_NAMES = new Map<string, string>();
@@ -134,8 +127,6 @@ export function useSidebarWorkspacesList(options?: {
     reconcileHostFilters(allServerIds);
   }, [allServerIds, hostRegistryLoaded, reconcileHostFilters]);
 
-  const persistedProjectOrder = useSidebarOrderStore((state) => state.projectOrder ?? EMPTY_ORDER);
-
   const directoryServerIds = useWorkspaceDirectoryServerIds(serverIds);
 
   const hostProjects = useHostProjects(directoryServerIds);
@@ -155,23 +146,6 @@ export function useSidebarWorkspacesList(options?: {
     sidebarModel.projectNamesByViewKey.size > 0
       ? sidebarModel.projectNamesByViewKey
       : EMPTY_PROJECT_NAMES;
-
-  useEffect(() => {
-    const orderStore = useSidebarOrderStore.getState();
-    const updates = computeSidebarOrderUpdates({
-      projects,
-      persistedProjectOrder,
-      getWorkspaceOrder: (projectViewKey) =>
-        orderStore.workspaceOrderByProject[projectViewKey] ?? EMPTY_ORDER,
-    });
-
-    if (updates.projectOrder) {
-      orderStore.setProjectOrder(updates.projectOrder);
-    }
-    for (const { projectViewKey, order } of updates.workspaceOrders) {
-      orderStore.setWorkspaceOrder(projectViewKey, order);
-    }
-  }, [persistedProjectOrder, projects]);
 
   const refreshAll = useCallback(() => {
     if (!isActive) return;

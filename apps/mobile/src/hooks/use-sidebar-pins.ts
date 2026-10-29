@@ -5,7 +5,6 @@ import type {
   SidebarProjectEntry,
   SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
-import { applyStoredOrdering } from "@/hooks/sidebar-workspaces-view-model";
 import { useSessionStore } from "@/stores/session-store";
 
 export interface PinnedSidebarKeys {
@@ -18,7 +17,7 @@ export interface PinnedSidebarGroups {
   // Individually pinned chats, hoisted into the Pinned section and removed from their
   // project below. Most recently pinned first.
   pinnedChats: SidebarWorkspacePlacement[];
-  // Everything else, with pinned chats removed. Feeds the draggable project list.
+  // Everything else, with pinned chats removed. Feeds the project list.
   unpinnedProjects: SidebarProjectEntry[];
 }
 
@@ -114,9 +113,8 @@ export function usePinnedSidebarKeys(projects: SidebarProjectEntry[]): PinnedSid
 export function splitPinnedSidebarGroups(input: {
   projects: SidebarProjectEntry[];
   keys: PinnedSidebarKeys;
-  pinnedWorkspaceOrder: string[];
 }): PinnedSidebarGroups {
-  const { projects, keys, pinnedWorkspaceOrder } = input;
+  const { projects, keys } = input;
   if (keys.pinnedWorkspaceKeys.length === 0) {
     return { pinnedChats: [], unpinnedProjects: projects };
   }
@@ -140,11 +138,7 @@ export function splitPinnedSidebarGroups(input: {
   );
 
   return {
-    pinnedChats: applyStoredOrdering({
-      items: pinnedChats,
-      storedOrder: pinnedWorkspaceOrder,
-      getKey: (workspace) => workspace.workspaceKey,
-    }),
+    pinnedChats,
     unpinnedProjects,
   };
 }

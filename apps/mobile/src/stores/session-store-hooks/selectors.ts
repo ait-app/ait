@@ -23,11 +23,6 @@ export interface SessionsSnapshot {
   >;
 }
 
-export interface SidebarOrderSnapshot {
-  projectOrder: string[];
-  workspaceOrderByProject: Record<string, string[]>;
-}
-
 const EMPTY_WORKSPACE_KEYS: string[] = [];
 const EMPTY_WORKSPACE_STRUCTURE: WorkspaceStructure = { projects: [] };
 
@@ -35,53 +30,6 @@ export const workspaceEqualityFns = {
   identity: Object.is as (a: unknown, b: unknown) => boolean,
   deep: equal as (a: unknown, b: unknown) => boolean,
 };
-
-function applyStoredOrdering<T>(input: {
-  items: T[];
-  storedOrder: readonly string[];
-  getKey: (item: T) => string;
-}): T[] {
-  if (input.items.length <= 1 || input.storedOrder.length === 0) {
-    return input.items;
-  }
-
-  const itemByKey = new Map<string, T>();
-  for (const item of input.items) {
-    itemByKey.set(input.getKey(item), item);
-  }
-
-  const prunedOrder: string[] = [];
-  const seen = new Set<string>();
-  for (const key of input.storedOrder) {
-    if (!itemByKey.has(key) || seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    prunedOrder.push(key);
-  }
-
-  if (prunedOrder.length === 0) {
-    return input.items;
-  }
-
-  const orderedSet = new Set(prunedOrder);
-  const ordered: T[] = [];
-  let orderedIndex = 0;
-
-  for (const item of input.items) {
-    const key = input.getKey(item);
-    if (!orderedSet.has(key)) {
-      ordered.push(item);
-      continue;
-    }
-
-    const targetKey = prunedOrder[orderedIndex] ?? key;
-    orderedIndex += 1;
-    ordered.push(itemByKey.get(targetKey) ?? item);
-  }
-
-  return ordered;
-}
 
 export function selectWorkspace(
   state: SessionsSnapshot,
@@ -238,42 +186,6 @@ export function selectProjectIdForServer(
     if (project.projectKey === source.projectKey) return project.projectId;
   }
   return null;
-}
-
-export function selectProjectOrder(state: SidebarOrderSnapshot): string[] {
-  return state.projectOrder ?? EMPTY_WORKSPACE_KEYS;
-}
-
-export function selectWorkspaceOrderByScope(state: SidebarOrderSnapshot): Record<string, string[]> {
-  return state.workspaceOrderByProject ?? {};
-}
-
-export function composeWorkspaceStructure(input: {
-  projects: WorkspaceStructureProject[];
-  projectOrder: readonly string[];
-  workspaceOrderByScope: Record<string, readonly string[]>;
-}): WorkspaceStructure {
-  if (input.projects.length === 0) {
-    return EMPTY_WORKSPACE_STRUCTURE;
-  }
-
-  const orderedProjects = applyStoredOrdering({
-    items: input.projects.map((project) => {
-      const workspaceOrder = input.workspaceOrderByScope[project.viewKey] ?? EMPTY_WORKSPACE_KEYS;
-      return {
-        ...project,
-        workspaceKeys: applyStoredOrdering({
-          items: project.workspaceKeys,
-          storedOrder: workspaceOrder,
-          getKey: (workspaceKey) => workspaceKey,
-        }),
-      };
-    }),
-    storedOrder: input.projectOrder,
-    getKey: (project) => project.viewKey,
-  });
-
-  return { projects: orderedProjects };
 }
 
 export function selectWorkspaceKeys(state: SessionsSnapshot, serverId: string | null): string[] {

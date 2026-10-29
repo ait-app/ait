@@ -3,22 +3,18 @@ import { createProjectViewKey } from "@/projects/workspace-structure";
 
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import {
-  composeWorkspaceStructure,
   createWorkspaceStructureProjectsSelector,
   selectHasWorkspaces,
   selectHydratedWorkspaceServerIds,
   selectWorkspaceDirectoryServerIds,
-  selectProjectOrder,
   selectRecommendedProjectPaths,
   selectWorkspace,
   selectWorkspaceDirectory,
   selectWorkspaceFields,
   selectWorkspaceKeys,
-  selectWorkspaceOrderByScope,
   selectWorkspaceStatusesForBadges,
   selectWorkspaceStructureProjects,
   workspaceEqualityFns,
-  type SidebarOrderSnapshot,
 } from "./selectors";
 import {
   useSessionStore,
@@ -112,13 +108,6 @@ function trackSelector<S, T>(
       return current;
     },
     stop,
-  };
-}
-
-function emptySidebarOrder(): SidebarOrderSnapshot {
-  return {
-    projectOrder: [],
-    workspaceOrderByProject: {},
   };
 }
 
@@ -357,17 +346,6 @@ describe("workspace structure composition", () => {
     expect(after).toBe(before);
   });
 
-  function snapshotStructure(
-    serverId: string,
-    sidebar: SidebarOrderSnapshot,
-  ): ReturnType<typeof composeWorkspaceStructure> {
-    return composeWorkspaceStructure({
-      projects: selectWorkspaceStructureProjects(useSessionStore.getState(), [serverId]),
-      projectOrder: selectProjectOrder(sidebar),
-      workspaceOrderByScope: selectWorkspaceOrderByScope(sidebar),
-    });
-  }
-
   it("keeps a project parent visible throughout the last workspace archive transition", () => {
     const workspace = createWorkspace({
       id: "workspace-a",
@@ -477,32 +455,6 @@ describe("workspace structure composition", () => {
     expect(tracked.current).not.toBe(before);
 
     tracked.stop();
-  });
-
-  it("changes the composed structure when persisted sidebar project order changes", () => {
-    const workspaceA = createWorkspace({
-      id: "workspace-a",
-      projectId: "project-a",
-      projectDisplayName: "Project A",
-    });
-    const workspaceB = createWorkspace({
-      id: "workspace-b",
-      projectId: "project-b",
-      projectDisplayName: "Project B",
-    });
-    initializeWorkspaces([workspaceA, workspaceB]);
-
-    const before = snapshotStructure(SERVER_ID, emptySidebarOrder());
-    const after = snapshotStructure(SERVER_ID, {
-      ...emptySidebarOrder(),
-      projectOrder: [equivalenceViewKey("project-b"), equivalenceViewKey("project-a")],
-    });
-
-    expect(after.projects.map((project) => project.viewKey)).toEqual([
-      equivalenceViewKey("project-b"),
-      equivalenceViewKey("project-a"),
-    ]);
-    expect(after).not.toEqual(before);
   });
 });
 

@@ -19,6 +19,7 @@ import {
   type SidebarShortcutSection,
 } from "@/utils/sidebar-shortcuts";
 import { statusWorkspaceGroups, type SidebarWorkspaceGroup } from "./sidebar-labels";
+import { compareSidebarWorkspaces } from "@/utils/sidebar-workspace-order";
 
 export interface SidebarProjection {
   pinnedGroups: PinnedSidebarGroups;
@@ -38,7 +39,6 @@ export interface SidebarProjection {
 export interface SidebarProjectionInput {
   projects: SidebarProjectEntry[];
   pinnedKeys: PinnedSidebarKeys;
-  pinnedWorkspaceOrder: string[];
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   projectNamesByViewKey: Map<string, string>;
   groupMode: SidebarGroupMode;
@@ -51,8 +51,21 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
   const pinnedGroups = splitPinnedSidebarGroups({
     projects: input.projects,
     keys: input.pinnedKeys,
-    pinnedWorkspaceOrder: input.pinnedWorkspaceOrder,
   });
+  if (input.groupMode === "project") {
+    pinnedGroups.unpinnedProjects = pinnedGroups.unpinnedProjects.map((project) => {
+      const workspaces = [...project.workspaces].sort((a, b) =>
+        compareSidebarWorkspaces(
+          input.workspaceEntriesByKey.get(a.workspaceKey) ?? a,
+          input.workspaceEntriesByKey.get(b.workspaceKey) ?? b,
+          input.projectNamesByViewKey,
+        ),
+      );
+      return workspaces.every((workspace, index) => workspace === project.workspaces[index])
+        ? project
+        : { ...project, workspaces };
+    });
+  }
   const pinnedWorkspaceKeys = new Set(input.pinnedKeys.pinnedWorkspaceKeys);
   const unpinnedWorkspaces = Array.from(input.workspaceEntriesByKey.values()).filter(
     (workspace) => !pinnedWorkspaceKeys.has(workspace.workspaceKey),
