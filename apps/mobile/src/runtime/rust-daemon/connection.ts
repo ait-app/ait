@@ -10,10 +10,9 @@ import type { TransportFactory } from "./types";
 import { createAccountRelayTransportFactory } from "./account-transport";
 
 export function buildAccountRelayClientConfig(connection: { hostId: string; center: string }) {
-  const url = new URL(`ait+desktop://account-relay/${connection.hostId}`);
-  url.searchParams.set("center", connection.center);
+  const query = new URLSearchParams({ center: connection.center });
   return {
-    url: url.toString(),
+    url: `ait+desktop://account-relay/${connection.hostId}?${query}`,
     connectTimeoutMs: 45_000,
     reconnect: { baseDelayMs: 500, maxDelayMs: 30_000 },
     transportFactory: createRustDaemonTransportFactory(createAccountRelayTransportFactory),
