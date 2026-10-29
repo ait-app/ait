@@ -25,7 +25,7 @@ it.each([
   async ({ configured, expected }) => {
     vi.stubEnv("AIT_SERVER_HUB_NOTIFICATIONS", configured);
     vi.stubEnv("AIT_SERVER_DATA_DIR", "/unrelated-runtime");
-    vi.stubEnv("AIT_SERVER_TOKEN", "unrelated-runtime-token");
+    vi.stubEnv("AIT_SERVER_TOKEN", "explicit-runtime-token-at-least-32-characters");
     vi.stubEnv("AIT_APNS_KEY_FILE", "/private/test-apns.p8");
     const home = mkdtempSync(path.join(tmpdir(), "ait-push-environment-"));
     const manager = new RustDaemonManager({
@@ -41,7 +41,7 @@ it.each([
       const options = vi.mocked(spawn).mock.calls.at(-1)?.[2];
       expect(options?.env?.AIT_SERVER_HUB_NOTIFICATIONS).toBe(expected);
       expect(options?.env?.AIT_SERVER_DATA_DIR).toBeUndefined();
-      expect(options?.env?.AIT_SERVER_TOKEN).toMatch(/^[0-9a-f]{64}$/);
+      expect(options?.env?.AIT_SERVER_TOKEN).toBe("explicit-runtime-token-at-least-32-characters");
       expect(options?.env?.AIT_APNS_KEY_FILE).toBe("/private/test-apns.p8");
     } finally {
       await manager.stop();
