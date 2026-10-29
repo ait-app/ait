@@ -5,7 +5,8 @@
 Ait daemon 注册 `deepseek-harness`；客户端模型选择器显示 **DeepSeek Harness**，
 模型和推理等级从本机 Harness 的实际配置目录发现。
 
-默认优先从 PATH 启动 `dsh`。找不到 CLI 时，Ait 自动检查 DSH 桌面安装包：
+默认优先从 PATH 启动 `dsh`，缺失时补查用户的 npm 全局 prefix 和 `~/.npm-global/bin`。
+找不到 CLI 时，Ait 自动检查 DSH 桌面安装包：
 Linux 会解析 PATH 中 `deepseek-harness` 的真实位置，并检查 `/opt/dsh-desktop-linux-bin`
 和 `/opt/deepseek-harness`；macOS 检查 `/Applications` 与 `~/Applications` 下的 DSH 应用。
 仅识别包身份为 `@deepseek-ai/dsh-desktop` 且包含 CLI 入口的安装包。
@@ -51,10 +52,16 @@ Linux 的 npm 全局命令位于 `{prefix}/bin`，通常是指向
 `npm install` 未加 `--global` 时只安装到当前项目，`npx @deepseek-ai/dsh` 也不等于安装全局
 `dsh` 命令。目录规则见 [npm 官方文档](https://docs.npmjs.com/cli/v11/configuring-npm/folders/)。
 
-若终端能找到 `dsh`，Ait 仍显示不可用，检查 daemon 启动时的 PATH 是否包含
-`npm prefix --global` 对应的 `bin`，并确认同一环境中 `node` 可执行。nvm/fnm 等工具配置的
-Node 路径需要由启动 Ait 的环境继承。桌面端会读取登录 shell 环境；独立运行的 daemon
-继承启动它的终端或服务环境。安装或修改环境后，重启 Ait daemon。
+即使桌面 PATH 不含 npm 全局 bin，Ait 也会补查 `npm_config_prefix` / `NPM_CONFIG_PREFIX`，
+以及用户 `~/.npmrc` 中的 `prefix`；用户配置路径可由 `npm_config_userconfig` /
+`NPM_CONFIG_USERCONFIG` 覆盖。支持绝对路径、`~/` 和 `${HOME}` 等环境变量展开，
+并补查常见的 `~/.npm-global/bin/dsh`。只读至多 64 KiB 的用户配置，不使用项目 `.npmrc`。
+这些路径仍需在运行 daemon 的同一用户下可读、可执行；发现过程不运行 npm 或 shell。
+
+若终端能找到 `dsh`，Ait 仍显示不可用，确认启动 daemon 的同一环境中 `node` 可执行。
+nvm/fnm 等工具配置的 Node 路径需要由启动 Ait 的环境继承。桌面端会读取登录 shell 环境；
+先使用 `SHELL`，再查询用户的登录 shell，Linux 最后回退为 bash，macOS 最后回退为 zsh。
+独立运行的 daemon 继承启动它的终端或服务环境。安装或修改环境后，重启 Ait daemon。
 
 若命令可见但模型列表加载失败，在终端运行本文开头的 Web Host 命令，确认原生 Host
 能启动；`dsh --version` 成功不能证明插件和原生依赖已安装完整。保留 npm 安装时关于

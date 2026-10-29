@@ -1,5 +1,6 @@
 //! Resolve CLI installations and desktop-bundled runtimes without opening the desktop UI.
 mod npm;
+mod npm_prefix;
 
 use std::path::{Path, PathBuf};
 
@@ -19,13 +20,14 @@ impl DeepSeekHarnessClient {
     /// Returns an unavailable `dsh` launcher when no installation can be resolved.
     #[must_use]
     pub(crate) fn installed() -> Self {
-        let paths: Vec<_> = std::env::var_os("PATH")
+        let mut paths: Vec<_> = std::env::var_os("PATH")
             .as_deref()
             .map(std::env::split_paths)
             .into_iter()
             .flatten()
             .filter(|path| path.is_absolute())
             .collect();
+        paths.extend(npm_prefix::bins(|key| std::env::var_os(key)));
         let mut bundles = Vec::new();
         for path in &paths {
             if let Ok(program) = path.join("deepseek-harness").canonicalize()
