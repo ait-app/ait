@@ -9,6 +9,7 @@ async-trait.workspace = true
 chrono.workspace = true
 chrono.features = ["serde"]
 secrecy.workspace = true
+secrecy.features = ["serde"]
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

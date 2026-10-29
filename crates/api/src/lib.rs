@@ -10,6 +10,7 @@ mod files;
 mod listener;
 pub mod managed_relay;
 mod mcp;
+mod publication;
 mod terminal_activity;
 mod workspace_cleanup;
 
@@ -71,6 +72,7 @@ struct Shared {
     _push_delivery: Option<metadata::push::delivery::Worker>,
     relay: relay::Connector,
     managed_relay: bool,
+    publication_control: Option<host_link::control::Handle>,
     managed_status: Arc<Mutex<serde_json::Value>>,
     runtime: Arc<Runtime>,
     token: SecretString,
@@ -121,9 +123,14 @@ pub struct Services {
 
 impl Shared {
     fn relay_management(&self) -> serde_json::Value {
-        self.managed_status
+        let mut status = self
+            .managed_status
             .lock()
-            .map_or(serde_json::Value::Null, |status| status.clone())
+            .map_or(serde_json::Value::Null, |status| status.clone());
+        if self.publication_control.is_some() {
+            status["autonomous"] = serde_json::Value::Bool(true);
+        }
+        status
     }
 
     fn start_draining(&self) {
@@ -227,6 +234,21 @@ impl Api {
         })
     }
 
+    /// Install the daemon's sole credential and publication owner before serving requests.
+    /// # Errors
+    /// Rejects an already shared API or a duplicate control owner.
+    pub fn set_publication_control(
+        &mut self,
+        control: host_link::control::Handle,
+    ) -> Result<(), ConfigError> {
+        let shared = Arc::get_mut(&mut self.shared).ok_or(ConfigError::SharedConfiguration)?;
+        if shared.publication_control.is_some() {
+            return Err(ConfigError::SharedConfiguration);
+        }
+        shared.publication_control = Some(control);
+        Ok(())
+    }
+
     /// Construct transport state for an already-bound TCP listener.
     ///
     /// `server_id` is persisted by the host; `instance_id` is unique to this process start.
@@ -314,6 +336,7 @@ impl Api {
                 _push_delivery: push_delivery,
                 relay,
                 managed_relay: false,
+                publication_control: None,
                 managed_status: Arc::new(Mutex::new(serde_json::json!({"mode":"external"}))),
                 schedule: schedule::dispatch::State {
                     schedules: services.schedules,
@@ -339,9 +362,13 @@ impl Api {
                 connections: Arc::new(Semaphore::new(model::server::MAX_CONNECTIONS)),
             }),
         };
-        workspace_cleanup::configure(&api.shared)?;
-        terminal::connection::maintain(&api.shared.terminal);
-        Ok(api)
+        api.start_runtime_services()
+    }
+
+    fn start_runtime_services(self) -> Result<Self, ConfigError> {
+        workspace_cleanup::configure(&self.shared)?;
+        terminal::connection::maintain(&self.shared.terminal);
+        Ok(self)
     }
 
     /// Allow browser pages from the given explicit HTTP loopback origins.
@@ -371,6 +398,12 @@ impl Api {
             .route(
                 "/api/hub/control",
                 get(hub_status).put(hub_start).delete(hub_stop),
+            )
+            .route(
+                "/api/device/authorization",
+                get(publication::http_status)
+                    .put(publication::http_authorize)
+                    .delete(publication::http_disconnect),
             )
             .route(browser_auth::TICKET_PATH, post(browser_ticket))
             .route("/api/files/download", get(files::download))
@@ -573,6 +606,13 @@ async fn relay_start(
 }
 
 async fn relay_stop(State(state): State<Arc<Shared>>) -> Result<StatusCode, ApiError> {
+    if let Some(control) = &state.publication_control {
+        control
+            .disconnect()
+            .await
+            .map_err(publication::http_error)?;
+        return Ok(StatusCode::NO_CONTENT);
+    }
     if state.managed_relay {
         return Err(ApiError(StatusCode::CONFLICT));
     }
@@ -586,10 +626,10 @@ async fn hub_status(State(state): State<Arc<Shared>>) -> Json<serde_json::Value>
     Json(value)
 }
 
-/// Start a hub serve link with an account-owned grant; managed Hosts own their link.
+/// Accept legacy Hub grants only for an unclaimed API; managed publication follows authorization.
 async fn hub_start(
     State(state): State<Arc<Shared>>,
-    Json(grant): Json<relay::hub::Grant>,
+    Json(value): Json<serde_json::Value>,
 ) -> Result<StatusCode, ApiError> {
     if state.cancellation.is_cancelled() {
         return Err(ApiError(StatusCode::SERVICE_UNAVAILABLE));
@@ -597,6 +637,7 @@ async fn hub_start(
     if state.managed_relay {
         return Err(ApiError(StatusCode::CONFLICT));
     }
+    let grant = serde_json::from_value(value).map_err(|_| ApiError(StatusCode::BAD_REQUEST))?;
     state
         .relay
         .hub()
@@ -607,6 +648,13 @@ async fn hub_start(
 }
 
 async fn hub_stop(State(state): State<Arc<Shared>>) -> Result<StatusCode, ApiError> {
+    if let Some(control) = &state.publication_control {
+        control
+            .disconnect()
+            .await
+            .map_err(publication::http_error)?;
+        return Ok(StatusCode::NO_CONTENT);
+    }
     if state.managed_relay {
         return Err(ApiError(StatusCode::CONFLICT));
     }

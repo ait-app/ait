@@ -55,8 +55,6 @@ async function createAccount(): Promise<AccountSessionManager> {
     randomUUID: Crypto.randomUUID,
     fetch: nativeFetch as typeof fetch,
     appVersion: resolveAppVersion() ?? "unknown",
-    runtime: () => ({ status: "stopped", serverId: "" }),
-    local: async () => undefined,
     save: async (account) => {
       if (account) await SecureStore.setItemAsync(CREDENTIAL_KEY, JSON.stringify(account));
       else await SecureStore.deleteItemAsync(CREDENTIAL_KEY);

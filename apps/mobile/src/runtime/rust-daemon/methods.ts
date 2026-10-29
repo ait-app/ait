@@ -11,6 +11,24 @@ export interface MethodSpec {
 
 export const METHODS: Readonly<Record<string, MethodSpec>> = {
   ...RELAY_METHODS,
+  "publication.status.request": {
+    method: "publication.status.request",
+    kind: "request",
+    channel: 3,
+    response: "publication.status.response",
+  },
+  "publication.authorize.request": {
+    method: "publication.authorize.request",
+    kind: "request",
+    channel: 3,
+    response: "publication.authorize.response",
+  },
+  "publication.stop.request": {
+    method: "publication.stop.request",
+    kind: "request",
+    channel: 3,
+    response: "publication.stop.response",
+  },
   ...Object.fromEntries(
     BOT_METHODS.map((method) => [
       method,

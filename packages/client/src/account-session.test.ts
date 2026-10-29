@@ -16,12 +16,6 @@ describe("account deletion", () => {
   it("deletes the signed-in account before clearing credentials, connections and daemon leases", async () => {
     const f = fixture();
     await f.login();
-    await f.manager.publishHost({
-      serverId: "remote",
-      instanceId: "instance",
-      name: "Remote",
-      platform: "linux",
-    });
     f.http.mockClear();
     vi.mocked(f.deps.save).mockClear();
     vi.mocked(f.deps.closeTransports).mockClear();
@@ -434,8 +428,6 @@ function fixture(autoChannel = true) {
     platform: "android",
     appVersion: "test",
     randomUUID: () => `uuid-${++sequence}`,
-    runtime: () => ({ status: "stopped", serverId: "" }),
-    local: vi.fn(async () => undefined),
     fetch: http,
     channelTransport: channel.create,
     browserLogin: {
@@ -466,32 +458,6 @@ function fixture(autoChannel = true) {
       leaseExpired = true;
     },
   };
-}
-
-function hostIdentityFixture() {
-  const context = fixture();
-  const original = context.http.getMockImplementation()!;
-  const installations = new Map<string, string>();
-  context.http.mockImplementation((url, options) => {
-    if (String(url).endsWith("/nodes/register")) {
-      const body = JSON.parse(String(options?.body));
-      if (body.runtime) {
-        const serverId = body.runtime.server_id;
-        const installation = installations.get(serverId);
-        // mirrors nodes.host_id UNIQUE: closing a session never removes its node binding
-        if (installation && installation !== body.installation_id)
-          return Promise.resolve(
-            Response.json(
-              { error: { code: "conflict", message: "Resource already exists" } },
-              { status: 409 },
-            ),
-          );
-        installations.set(serverId, body.installation_id);
-      }
-    }
-    return original(url, options);
-  });
-  return context;
 }
 
 function browserFixture() {
@@ -787,7 +753,6 @@ describe("client-only account lifecycle", () => {
       selected: null,
     });
     expect(http.mock.calls.some(([url]) => String(url).includes("relay-sessions"))).toBe(false);
-    expect(deps.local).not.toHaveBeenCalledWith("PUT", expect.anything());
     await vi.advanceTimersByTimeAsync(20_000);
     expect(http.mock.calls.some(([url]) => String(url).endsWith("/renew"))).toBe(true);
     expect(JSON.stringify(manager.snapshot())).not.toContain("private-jwt");
@@ -1060,316 +1025,6 @@ describe("account persistence across restarts", () => {
   });
 });
 
-describe("explicit daemon publication", () => {
-  const first = {
-    serverId: "first",
-    instanceId: "instance-1",
-    name: "First host",
-    platform: "linux",
-  };
-  const second = {
-    serverId: "second",
-    instanceId: "instance-2",
-    name: "Second host",
-    platform: "darwin",
-  };
-
-  it("reuses the host's node after stopping synchronization and after a daemon restart", async () => {
-    const { manager, http, login } = hostIdentityFixture();
-    await login();
-    await manager.publishHost(first);
-    await manager.unpublishHost(first.serverId);
-    await expect(manager.publishHost(first)).resolves.toMatchObject({
-      node_session_id: "lease-first",
-    });
-    await expect(manager.publishHost({ ...first, instanceId: "restarted" })).resolves.toMatchObject(
-      { node_session_id: "lease-first" },
-    );
-    const registrations = http.mock.calls
-      .filter(([url]) => String(url).endsWith("/nodes/register"))
-      .map(([, options]) => JSON.parse(String(options?.body)))
-      .filter((body) => body.runtime);
-    expect(registrations).toHaveLength(3);
-    expect(registrations.map((body) => body.installation_id)).toEqual([
-      first.serverId,
-      first.serverId,
-      first.serverId,
-    ]);
-    expect(new Set(registrations.map((body) => body.registration_id)).size).toBe(3);
-    await manager.unpublishHost(first.serverId);
-    await manager.logout();
-  });
-
-  it("reuses the same host identity when another client enables synchronization after lease expiry", async () => {
-    const { manager, deps, login } = hostIdentityFixture();
-    await login();
-    await manager.publishHost(first);
-    await manager.shutdown();
-    await vi.advanceTimersByTimeAsync(61_000);
-    const next = new AccountSessionManager({ ...deps, installationId: "another-client" });
-    await next.loginWithBrowser("");
-    await vi.advanceTimersByTimeAsync(1);
-    await expect(next.publishHost(first)).resolves.toMatchObject({
-      node_session_id: "lease-first",
-    });
-    await next.unpublishHost(first.serverId);
-    await next.logout();
-  });
-
-  it("replaces a closed registration ID while preserving the daemon installation identity", async () => {
-    const { manager, http, login } = fixture();
-    await login();
-    http.mockResolvedValueOnce(
-      Response.json(
-        { error: { code: "registration_expired", message: "Registration is closed" } },
-        { status: 409 },
-      ),
-    );
-    await expect(manager.publishHost(first)).rejects.toThrow("Registration is closed");
-    await expect(manager.publishHost(first)).resolves.toMatchObject({
-      node_session_id: "lease-first",
-    });
-    const registrations = http.mock.calls
-      .filter(([url]) => String(url).endsWith("/nodes/register"))
-      .map(([, options]) => JSON.parse(String(options?.body)))
-      .filter((body) => body.runtime);
-    expect(registrations).toHaveLength(2);
-    expect(registrations[0].registration_id).not.toBe(registrations[1].registration_id);
-    expect(registrations.map((body) => body.installation_id)).toEqual([
-      first.serverId,
-      first.serverId,
-    ]);
-    await manager.unpublishHost(first.serverId);
-    await manager.logout();
-  });
-
-  it("keeps desktop login independent from daemon publication and binds grants to each host", async () => {
-    const { manager, deps, http, login } = fixture();
-    deps.publishRuntime = false;
-    deps.runtime = () => ({
-      status: "running",
-      serverId: "local",
-      instanceId: "local-instance",
-      features: ["ait-rust-single-v1"],
-    });
-    await login();
-    const registration = http.mock.calls.find(([url]) => String(url).endsWith("/nodes/register"))!;
-    expect(JSON.parse(String(registration[1]?.body)).runtime).toBeNull();
-    const grant = await manager.publishHost(first);
-    expect(grant).toEqual({
-      center_url: "https://aitapp.cn/api",
-      control_ticket: "a".repeat(64),
-      node_session_id: "lease-first",
-    });
-    await manager.publishHost(second);
-    await manager.publishHost(first, false);
-    const registrations = http.mock.calls.filter(([url]) =>
-      String(url).endsWith("/nodes/register"),
-    );
-    expect(registrations).toHaveLength(3);
-    expect(JSON.parse(String(registrations[1][1]?.body))).toMatchObject({
-      display_name: "First host",
-      runtime: { server_id: "first", instance_id: "instance-1" },
-    });
-    expect(JSON.parse(String(registrations[2][1]?.body))).toMatchObject({
-      runtime: { server_id: "second", instance_id: "instance-2" },
-    });
-    expect(JSON.stringify(grant)).not.toContain("private-jwt");
-    expect(deps.local).not.toHaveBeenCalledWith("PUT", expect.anything());
-    await vi.advanceTimersByTimeAsync(22_000);
-    for (const id of ["first", "second"])
-      expect(
-        http.mock.calls.some(([url]) => String(url).endsWith(`/node-sessions/lease-${id}/renew`)),
-      ).toBe(true);
-    await manager.unpublishHost("first");
-    const before = http.mock.calls.length;
-    await vi.advanceTimersByTimeAsync(22_000);
-    expect(
-      http.mock.calls.slice(before).some(([url]) => String(url).endsWith("/lease-first/renew")),
-    ).toBe(false);
-    await manager.logout();
-    expect(http.mock.calls).not.toContainEqual([
-      expect.stringContaining("/node-sessions/lease-second"),
-      expect.objectContaining({ method: "DELETE" }),
-    ]);
-    expect(manager.snapshot()).toMatchObject({
-      status: "logged_out",
-      synchronizedHosts: ["second"],
-    });
-    const afterLogout = http.mock.calls.length;
-    await vi.advanceTimersByTimeAsync(22_000);
-    expect(http.mock.calls.slice(afterLogout)).toContainEqual([
-      expect.stringContaining("/node-sessions/lease-second/renew"),
-      expect.objectContaining({ method: "POST" }),
-    ]);
-    expect(
-      http.mock.calls.slice(afterLogout).some(([url]) => String(url).includes("/hosts/online")),
-    ).toBe(false);
-    await manager.unpublishHost("second");
-  });
-
-  it("replaces a restarted daemon's lease and requires a signed-in account", async () => {
-    const { manager, http, login } = fixture();
-    await expect(manager.publishHost(first)).rejects.toThrow("Sign in first");
-    await login();
-    await expect(manager.publishHost({ ...first, instanceId: "" })).rejects.toThrow(
-      "Invalid host identity",
-    );
-    await manager.publishHost(first);
-    await manager.publishHost({ ...first, instanceId: "restarted" });
-    expect(http.mock.calls).toContainEqual([
-      expect.stringContaining("/node-sessions/lease-first"),
-      expect.objectContaining({ method: "DELETE" }),
-    ]);
-    expect(http.mock.calls.filter(([url]) => String(url).endsWith("/nodes/register"))).toHaveLength(
-      3,
-    );
-    await manager.logout();
-  });
-
-  it("releases only the binding daemon on logout and lets remote daemons reconnect and stop while signed out", async () => {
-    const { manager, deps, http, login } = fixture();
-    deps.publishRuntime = false;
-    deps.runtime = () => ({ status: "running", serverId: "first", instanceId: first.instanceId });
-    await login();
-    await manager.publishHost(first);
-    await manager.publishHost(second);
-    await manager.logout();
-    expect(manager.snapshot()).toMatchObject({
-      status: "logged_out",
-      synchronizedHosts: ["second"],
-    });
-    const deleted = http.mock.calls
-      .filter(([, options]) => options?.method === "DELETE")
-      .map(([url]) => String(url));
-    expect(deleted).toContainEqual(expect.stringContaining("/node-sessions/lease"));
-    expect(deleted).toContainEqual(expect.stringContaining("/node-sessions/lease-first"));
-    expect(deleted).not.toContainEqual(expect.stringContaining("/node-sessions/lease-second"));
-    await expect(manager.publishHost(first)).rejects.toThrow("Sign in first");
-    expect(await manager.publishHost(second)).toMatchObject({ node_session_id: "lease-second" });
-    const before = http.mock.calls.length;
-    await vi.advanceTimersByTimeAsync(22_000);
-    const renewals = http.mock.calls
-      .slice(before)
-      .filter(([url]) => String(url).endsWith("/renew"));
-    expect(renewals).toHaveLength(1);
-    expect(String(renewals[0][0])).toContain("lease-second/renew");
-    await manager.unpublishHost("second");
-    const stopped = http.mock.calls.length;
-    await vi.advanceTimersByTimeAsync(22_000);
-    expect(http).toHaveBeenCalledTimes(stopped);
-    expect(JSON.stringify(manager.snapshot())).not.toContain("private-jwt");
-  });
-
-  it("keeps a daemon's original account authority when the client signs into another service", async () => {
-    const { manager, http, login } = fixture();
-    await login();
-    await manager.publishHost(second);
-    await manager.loginWithBrowser("https://other.test/api");
-    await vi.advanceTimersByTimeAsync(22_000);
-    expect(http.mock.calls).toContainEqual([
-      "https://aitapp.cn/api/v1/node-sessions/lease-second/renew",
-      expect.objectContaining({ method: "POST" }),
-    ]);
-    expect(await manager.publishHost(second)).toMatchObject({
-      center_url: "https://aitapp.cn/api",
-    });
-    await manager.unpublishHost("second");
-    await manager.logout();
-  });
-
-  it("does not revoke remote leases when the app shuts down", async () => {
-    const { manager, http, login } = fixture();
-    await login();
-    await manager.publishHost(second);
-    await manager.shutdown();
-    expect(http.mock.calls).not.toContainEqual([
-      expect.stringContaining("/node-sessions/lease-second"),
-      expect.objectContaining({ method: "DELETE" }),
-    ]);
-    const before = http.mock.calls.length;
-    await vi.advanceTimersByTimeAsync(22_000);
-    expect(http).toHaveBeenCalledTimes(before);
-  });
-
-  it("does not abort a remote registration in flight when the client signs out", async () => {
-    const { manager, http, login } = fixture();
-    await login();
-    let complete: (response: Response) => void = () => {};
-    http.mockImplementationOnce(
-      () =>
-        new Promise<Response>((resolve) => {
-          complete = resolve;
-        }),
-    );
-    const publishing = manager.publishHost(second);
-    const signal = http.mock.calls.at(-1)?.[1]?.signal;
-    await manager.logout();
-    expect(signal?.aborted).toBe(false);
-    complete(
-      Response.json({
-        node_id: "second",
-        node_session_id: "lease-second",
-        host_id: "second",
-        control_required: true,
-      }),
-    );
-    expect(await publishing).toMatchObject({ node_session_id: "lease-second" });
-    await manager.unpublishHost("second");
-  });
-
-  it("isolates a daemon authorization failure from the client and other daemon renewals", async () => {
-    const { manager, http, login } = fixture();
-    const original = http.getMockImplementation()!;
-    http.mockImplementation((url, options) =>
-      String(url).endsWith("/lease-first/renew")
-        ? Promise.resolve(Response.json({ error: { code: "unauthorized" } }, { status: 401 }))
-        : original(url, options),
-    );
-    await login();
-    await manager.publishHost(first);
-    await manager.publishHost(second);
-    await vi.advanceTimersByTimeAsync(44_000);
-    expect(manager.snapshot()).toMatchObject({
-      status: "online",
-      synchronizedHosts: ["first", "second"],
-    });
-    expect(
-      http.mock.calls.filter(([url]) => String(url).endsWith("/lease-second/renew")),
-    ).toHaveLength(2);
-    expect(http.mock.calls.some(([, options]) => options?.method === "DELETE")).toBe(false);
-    await manager.unpublishHost("first");
-    await manager.unpublishHost("second");
-    await manager.logout();
-  });
-
-  it("stops renewing the binding daemon even if its logout revocation cannot reach the service", async () => {
-    const { manager, deps, http, login } = fixture();
-    const original = http.getMockImplementation()!;
-    http.mockImplementation((url, options) =>
-      String(url).endsWith("/lease-first") && options?.method === "DELETE"
-        ? Promise.resolve(Response.json({ error: { code: "unavailable" } }, { status: 503 }))
-        : original(url, options),
-    );
-    deps.publishRuntime = false;
-    deps.runtime = () => ({ status: "running", serverId: first.serverId });
-    await login();
-    await manager.publishHost(first);
-    await manager.publishHost(second);
-    await manager.logout();
-    expect(manager.snapshot().synchronizedHosts).toEqual(["second"]);
-    const before = http.mock.calls.length;
-    await vi.advanceTimersByTimeAsync(22_000);
-    expect(
-      http.mock.calls.slice(before).some(([url]) => String(url).endsWith("/lease-first/renew")),
-    ).toBe(false);
-    expect(
-      http.mock.calls.slice(before).some(([url]) => String(url).endsWith("/lease-second/renew")),
-    ).toBe(true);
-    await manager.unpublishHost("second");
-  });
-});
-
 describe("account status channel", () => {
   it("uses a one-use ticket, retains the gateway and stops HTTP host polling", async () => {
     const { manager, login, http, channel } = fixture();
@@ -1578,13 +1233,6 @@ it.each(["disconnect", "suspend", "logout"])(
 
 describe("hub tickets", () => {
   const hubGrant = { hub_ticket: "c".repeat(64), hub_path: "/v1/hub", protocol: "ait-hub-v1" };
-  const builtIn = {
-    serverId: "first",
-    instanceId: "instance-1",
-    name: "Desktop",
-    platform: "linux",
-  };
-
   function hubFixture(grant: object = hubGrant) {
     const context = fixture();
     const original = context.http.getMockImplementation()!;
@@ -1623,151 +1271,6 @@ describe("hub tickets", () => {
     await expect(manager.openHubTicket()).rejects.toThrow("invalid hub ticket");
     await manager.logout();
   });
-
-  function desktopHub(localHub: AccountDependencies["localHub"]) {
-    const context = hubFixture();
-    context.deps.publishRuntime = false;
-    context.deps.runtime = () => ({
-      status: "running",
-      serverId: "first",
-      instanceId: "instance-1",
-    });
-    context.deps.localHub = localHub;
-    return context;
-  }
-
-  it("brings the built-in daemon's serve link online alongside the relay control", async () => {
-    let online = false;
-    const localHub = vi.fn(async (method: string) =>
-      method === "GET" ? { online, connecting: false, link: null, error: null } : null,
-    );
-    const { manager, http, deps, login } = desktopHub(localHub);
-    await login();
-    await manager.publishHost(builtIn);
-    await vi.advanceTimersByTimeAsync(1);
-    const [url, options] = hubCalls(http)[0]!;
-    expect(url).toBe("https://aitapp.cn/api/v1/node-sessions/lease-first/hub-tickets");
-    expect(options).toMatchObject({ body: JSON.stringify({ ep: "serve" }) });
-    expect(localHub).toHaveBeenCalledWith("PUT", {
-      center_url: "https://aitapp.cn/api",
-      hub_ticket: "c".repeat(64),
-      node_session_id: "lease-first",
-    });
-    online = true;
-    await vi.advanceTimersByTimeAsync(40_000);
-    expect(hubCalls(http)).toHaveLength(1);
-    // The legacy relay control path is untouched.
-    expect(deps.local).not.toHaveBeenCalledWith("PUT", expect.anything());
-    await manager.unpublishHost("first");
-    expect(localHub).toHaveBeenLastCalledWith("DELETE");
-    await manager.logout();
-  });
-
-  it.each([404, 409])("stops quietly when the local hub API answers %i", async (status) => {
-    const localHub = vi.fn(async (_method: string) => {
-      throw Object.assign(new Error("unavailable"), { status });
-    });
-    const { manager, http, deps, login } = desktopHub(localHub);
-    await login();
-    await manager.publishHost(builtIn);
-    await vi.advanceTimersByTimeAsync(40_000);
-    expect(localHub).toHaveBeenCalledOnce();
-    expect(hubCalls(http)).toHaveLength(0);
-    expect(manager.snapshot().error).toBeNull();
-    // A restarted runtime instance is a new publication and is asked again.
-    deps.runtime = () => ({ status: "running", serverId: "first", instanceId: "instance-2" });
-    await manager.publishHost({ ...builtIn, instanceId: "instance-2" });
-    await vi.advanceTimersByTimeAsync(40_000);
-    expect(localHub.mock.calls.filter(([method]) => method === "GET")).toHaveLength(2);
-    await manager.unpublishHost("first");
-    await manager.logout();
-  });
-
-  it("never delays lease renewal while the local hub API hangs", async () => {
-    const localHub = vi.fn((method: string) =>
-      method === "GET" ? new Promise<never>(() => undefined) : Promise.resolve(null),
-    );
-    const { manager, http, login } = desktopHub(localHub);
-    await login();
-    await manager.publishHost(builtIn);
-    const renewals = () => http.mock.calls.filter(([url]) => String(url).endsWith("/renew")).length;
-    const before = renewals();
-    await vi.advanceTimersByTimeAsync(45_000);
-    expect(renewals()).toBeGreaterThan(before);
-    expect(localHub).toHaveBeenCalledOnce();
-    expect(localHub).toHaveBeenCalledWith("GET");
-    await manager.unpublishHost("first");
-    await manager.logout();
-  });
-
-  it("leaves a serve link another process took over for five minutes", async () => {
-    const localHub = vi.fn(async (method: string) =>
-      method === "GET"
-        ? { online: false, connecting: false, link: null, error: null, rejected: "replaced" }
-        : null,
-    );
-    const { manager, http, login } = desktopHub(localHub);
-    await login();
-    await manager.publishHost(builtIn);
-    await vi.advanceTimersByTimeAsync(4 * 60_000);
-    expect(hubCalls(http)).toHaveLength(0);
-    expect(localHub).toHaveBeenCalledOnce();
-    await vi.advanceTimersByTimeAsync(2 * 60_000);
-    expect(localHub.mock.calls.filter(([method]) => method === "GET")).toHaveLength(3);
-    expect(hubCalls(http)).toHaveLength(1);
-    expect(localHub).toHaveBeenCalledWith(
-      "PUT",
-      expect.objectContaining({ hub_ticket: "c".repeat(64) }),
-    );
-    // A second takeover after that successful PUT gets its own bounded wait.
-    await vi.advanceTimersByTimeAsync(4 * 60_000);
-    expect(hubCalls(http)).toHaveLength(1);
-    await vi.advanceTimersByTimeAsync(2 * 60_000);
-    expect(hubCalls(http)).toHaveLength(2);
-    await manager.unpublishHost("first");
-    await manager.logout();
-  });
-
-  it("retries with backoff when the center fails to issue a hub ticket", async () => {
-    const localHub = vi.fn(async () => ({ online: false, connecting: false }));
-    const { manager, http, login } = desktopHub(localHub);
-    const original = http.getMockImplementation()!;
-    http.mockImplementation((url, options) =>
-      String(url).endsWith("/hub-tickets")
-        ? Promise.resolve(Response.json({ error: { code: "internal" } }, { status: 500 }))
-        : original(url, options),
-    );
-    await login();
-    await manager.publishHost(builtIn);
-    await vi.advanceTimersByTimeAsync(1);
-    expect(hubCalls(http)).toHaveLength(1);
-    await vi.advanceTimersByTimeAsync(30_000);
-    const retries = hubCalls(http).length;
-    expect(retries).toBeGreaterThan(1);
-    expect(retries).toBeLessThan(15);
-    expect(localHub).not.toHaveBeenCalledWith("PUT", expect.anything());
-    expect(manager.snapshot().error).toBeNull();
-    await manager.unpublishHost("first");
-    await manager.logout();
-  });
-
-  it("backs off when the center has no hub", async () => {
-    const localHub = vi.fn(async () => ({ online: false, connecting: false }));
-    const { manager, http, login } = desktopHub(localHub);
-    const original = http.getMockImplementation()!;
-    http.mockImplementation((url, options) =>
-      String(url).endsWith("/hub-tickets")
-        ? Promise.resolve(Response.json({ error: { code: "not_found" } }, { status: 404 }))
-        : original(url, options),
-    );
-    await login();
-    await manager.publishHost(builtIn);
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(hubCalls(http)).toHaveLength(1);
-    expect(localHub).not.toHaveBeenCalledWith("PUT", expect.anything());
-    await manager.unpublishHost("first");
-    await manager.logout();
-  });
 });
 
 describe("accountSubject", () => {
@@ -1779,5 +1282,117 @@ describe("accountSubject", () => {
     expect(accountSubject(`header.${payload}.signature`)).toBe("user-1");
     expect(accountSubject("not-a-jwt")).toBeUndefined();
     expect(accountSubject("a.!!!.c")).toBeUndefined();
+  });
+});
+
+describe("daemon authorization handoff", () => {
+  const runtime = {
+    serverId: "00000000-0000-4000-8000-000000000001",
+    instanceId: "instance",
+    name: "SHLP",
+    platform: "darwin",
+  };
+  function approvalFixture() {
+    const context = fixture();
+    context.deps.randomUUID = () => "00000000-0000-4000-8000-000000000002";
+    const original = context.http.getMockImplementation()!;
+    context.http.mockImplementation((url, options) =>
+      String(url).endsWith("/auth/device/authorize")
+        ? Promise.resolve(
+            Response.json({
+              device_code: "a".repeat(64),
+              user_code: "ABCD-0123-ABCD",
+              expires_in: 600,
+              interval: 5,
+            }),
+          )
+        : original(url, options),
+    );
+    return context;
+  }
+
+  it("approves a machine once and delegates token consumption, registration and renewal to the daemon", async () => {
+    const { manager, http, login } = approvalFixture();
+    await login();
+    const handoff = await manager.authorizeHost(runtime);
+    expect(handoff).toMatchObject({
+      kind: "device_code",
+      device_code: "a".repeat(64),
+      user_code: "ABCD-0123-ABCD",
+      interval: 5,
+    });
+    const calls = http.mock.calls;
+    const authorization = calls.find(([url]) => String(url).endsWith("/auth/device/authorize"))!;
+    expect(JSON.parse(String(authorization[1]?.body))).toEqual({
+      client_id: "ait-daemon",
+      machine: {
+        server_id: runtime.serverId,
+        display_name: "SHLP",
+        platform: "darwin",
+        app_version: "test",
+      },
+    });
+    expect(authorization[1]?.headers).not.toHaveProperty("Authorization");
+    expect(calls.find(([url]) => String(url).endsWith("/auth/device/approve"))?.[1]).toMatchObject({
+      body: JSON.stringify({ user_code: handoff.user_code }),
+      headers: { Authorization: "Bearer private-jwt" },
+    });
+    await vi.advanceTimersByTimeAsync(30_000);
+    for (const [url, options] of http.mock.calls) {
+      if (String(url).endsWith("/nodes/register"))
+        expect(JSON.parse(String(options?.body)).runtime).toBeNull();
+      expect(String(url)).not.toMatch(/device\/token|device\/refresh|control-tickets/);
+      if (String(url).endsWith("/renew"))
+        expect(String(url)).toContain("/node-sessions/lease/renew");
+    }
+    await manager.shutdown();
+    expect(JSON.stringify(manager.snapshot())).not.toContain(handoff.device_code);
+  });
+
+  it("requires a signed-in official account and rejects invalid machine identity", async () => {
+    const { manager, login, http } = approvalFixture();
+    await expect(manager.authorizeHost(runtime)).rejects.toThrow("Sign in");
+    await login();
+    await expect(manager.authorizeHost({ ...runtime, serverId: "" })).rejects.toThrow(
+      "Invalid host",
+    );
+    await manager.logout();
+    await manager.restore({
+      center: "https://custom.test/api",
+      token: "custom-jwt",
+      name: "Other",
+      expiresAt: Date.now() + 60_000,
+    });
+    http.mockClear();
+    await expect(manager.authorizeHost(runtime)).rejects.toThrow("official account service");
+    expect(http).not.toHaveBeenCalled();
+    await manager.logout();
+  });
+
+  it("does not approve or return a delayed authorization after sign-out", async () => {
+    const { manager, login, http } = approvalFixture();
+    await login();
+    let finish!: (response: Response) => void;
+    http.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const handoff = manager.authorizeHost(runtime);
+    const rejected = expect(handoff).rejects.toThrow("account changed");
+    await manager.logout();
+    finish(
+      Response.json({
+        device_code: "a".repeat(64),
+        user_code: "ABCD-0123-ABCD",
+        expires_in: 600,
+        interval: 5,
+      }),
+    );
+    await rejected;
+    expect(http.mock.calls.some(([url]) => String(url).endsWith("/auth/device/approve"))).toBe(
+      false,
+    );
   });
 });

@@ -62,8 +62,7 @@ vi.mock("./account-session.js", () => ({
       await this.logout();
       return true;
     }
-    publishHost = mocks.publish;
-    unpublishHost = mocks.unpublish;
+    authorizeHost = mocks.publish;
     getAccountInfo = mocks.info;
   },
 }));
@@ -111,25 +110,13 @@ describe("desktop built-in daemon synchronization preference", () => {
       syncBuiltInDaemon: true,
     });
     expect(stored()).toMatchObject({ syncBuiltInDaemon: true });
-    expect(mocks.deps?.publishRuntime).toBe(false);
-  });
-
-  it("routes hub serve control to the built-in daemon's local hub API", async () => {
-    const hubRequest = vi.fn(async () => null);
-    const command = createAccountIpc(
-      () => ({ ...runtime, hubRequest }) as unknown as RustDaemonManager,
-      () => true,
-    );
-    await command(event, "account_status");
-    await mocks.deps!.localHub!("PUT", { hub_ticket: "ticket" });
-    expect(hubRequest).toHaveBeenCalledWith("PUT", { hub_ticket: "ticket" });
   });
 
   it("retains a manual stop across logout, browser login and desktop restart", async () => {
     const command = invoke();
     await command(event, "account_login_hosted");
     await command(event, "account_host_disconnect", { serverId: "built-in" });
-    expect(mocks.unpublish).toHaveBeenCalledWith("built-in");
+    expect(mocks.unpublish).not.toHaveBeenCalled();
     expect(stored()).toMatchObject({ syncBuiltInDaemon: false });
     expect(mocks.send).toHaveBeenLastCalledWith(
       "paseo:event:account-state",
@@ -150,11 +137,15 @@ describe("desktop built-in daemon synchronization preference", () => {
     const command = invoke();
     await command(event, "account_host_disconnect", { serverId: "built-in" });
     await expect(
-      command(event, "account_host_sync", { ...host, enableBuiltInDaemon: true }),
+      command(event, "account_host_sync", {
+        ...host,
+        needsAuthorization: true,
+        enableBuiltInDaemon: true,
+      }),
     ).resolves.toEqual({
       control_ticket: "one-use",
     });
-    expect(mocks.publish).toHaveBeenCalledExactlyOnceWith(host, true);
+    expect(mocks.publish).toHaveBeenCalledExactlyOnceWith(host);
     expect(stored()).toMatchObject({ syncBuiltInDaemon: true });
     expect(mocks.send).toHaveBeenLastCalledWith(
       "paseo:event:account-state",
@@ -193,12 +184,11 @@ describe("desktop built-in daemon synchronization preference", () => {
     });
   });
 
-  it("rejects delayed automatic publication after a manual stop, including when revocation fails", async () => {
+  it("rejects delayed automatic authorization after a manual stop without revoking the daemon lease", async () => {
     const command = invoke();
-    mocks.unpublish.mockRejectedValueOnce(new Error("Service unreachable"));
     await expect(
       command(event, "account_host_disconnect", { serverId: "built-in" }),
-    ).rejects.toThrow("Service unreachable");
+    ).resolves.toBeUndefined();
     await expect(command(event, "account_host_sync", host)).resolves.toBeNull();
     expect(mocks.publish).not.toHaveBeenCalled();
     expect(stored().syncBuiltInDaemon).toBe(false);
@@ -250,7 +240,7 @@ describe("desktop account login commands", () => {
     );
     const deletion = command(event, "account_delete");
     await vi.waitFor(() => expect(mocks.deleteAccount).toHaveBeenCalledOnce());
-    const publication = command(event, "account_host_sync", host);
+    const publication = command(event, "account_host_sync", { ...host, needsAuthorization: true });
     await command(event, "account_status");
     expect(mocks.publish).not.toHaveBeenCalled();
     finish();

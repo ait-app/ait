@@ -16,6 +16,19 @@ pub trait CredentialStore: Send + Sync {
 /// Scoped center operations; never a user/account API client.
 #[async_trait]
 pub trait Center: Send + Sync {
+    /// Redeem a one-use enrollment with a durable request identity.
+    /// # Errors
+    /// Returns authorization, protocol or retryable transport failures.
+    async fn enroll(
+        &self,
+        token: &SecretString,
+        request_id: Uuid,
+        machine: &Machine,
+    ) -> Result<Tokens, Error>;
+    /// Claim a previously approved device authorization.
+    /// # Errors
+    /// Distinguishes pending/slow polling from denied or unavailable authorization.
+    async fn poll(&self, code: &SecretString, request_id: Uuid) -> Result<Tokens, Error>;
     /// Rotate with a persisted operation identity.
     /// # Errors
     /// Distinguishes terminal authorization errors from retryable outages.
@@ -45,13 +58,18 @@ pub trait Center: Send + Sync {
     async fn hub_ticket(&self, _tokens: &Tokens, _session: Uuid) -> Result<SecretString, Error> {
         Err(Error::Unavailable)
     }
+    /// Revoke the shared machine authorization on explicit disconnect.
+    /// # Errors
+    /// May fail offline; local credential removal must still complete without retaining a retry secret.
+    async fn revoke(&self, refresh_token: &SecretString) -> Result<(), Error>;
     /// Release a runtime without revoking its machine grant.
     /// # Errors
     /// May fail during center outages; leases still expire remotely.
     async fn close(&self, tokens: &Tokens, session: Uuid) -> Result<(), Error>;
 }
 
-/// Exclusive internal Relay/Hub ownership; the API rejects external start/stop while claimed.
+/// Exclusive internal Relay/Hub ownership. External adapters control the shared publication
+/// lifecycle; they cannot install independent transport grants while it is claimed.
 #[async_trait]
 pub trait ManagedRelay: Send + Sync {
     /// Begin a control connection with an ephemeral ticket from the fixed authority.
@@ -60,6 +78,8 @@ pub trait ManagedRelay: Send + Sync {
     async fn start(&self, session: Uuid, ticket: SecretString) -> Result<(), Error>;
     /// Return whether a connection is online or connecting.
     async fn active(&self) -> bool;
+    /// Return whether the Relay handshake has succeeded (connecting alone is not success).
+    async fn online(&self) -> bool;
     /// Close Relay, Hub and all reverse data channels immediately.
     async fn stop(&self);
     /// Begin the optional hub serve link with an ephemeral ticket.
@@ -68,6 +88,8 @@ pub trait ManagedRelay: Send + Sync {
     async fn start_hub(&self, session: Uuid, ticket: SecretString) -> Result<(), Error>;
     /// Return whether the hub link is online, connecting, or yielding to another owner.
     async fn hub_active(&self) -> bool;
+    /// Return whether the Hub handshake has succeeded, for resetting retry backoff.
+    async fn hub_online(&self) -> bool;
     /// Publish a sanitized manager state for local status queries.
     fn report(&self, phase: &'static str, binding: Option<&Binding>);
 }

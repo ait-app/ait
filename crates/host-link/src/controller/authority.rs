@@ -8,6 +8,13 @@ use uuid::Uuid;
 use super::{Publication, links, token_schedule};
 use crate::{Center, CredentialStore, Error, ManagedRelay, State, Tokens};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AccessRecovery {
+    Ready,
+    Refreshing,
+    Retried,
+}
+
 pub(super) struct Authority<'a, C, S, R> {
     pub(super) center: &'a C,
     pub(super) store: &'a S,
@@ -25,19 +32,10 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
         tokens: Tokens,
         cancel: &CancellationToken,
     ) -> Result<(), Error> {
-        let (access_until, refresh_at) = token_schedule(&tokens);
-        let mut publication = Publication {
-            tokens,
-            registration: Uuid::new_v4(),
-            session: None,
-            next_renew: tokio::time::Instant::now(),
-            access_until,
-            refresh_at,
-            lease_until: None,
-            generation: Uuid::new_v4(),
-        };
+        let mut publication = Publication::new(tokens);
         let mut retry_at = tokio::time::Instant::now();
         let mut delay = 1;
+        let mut access_recovery = AccessRecovery::Ready;
         loop {
             if cancel.is_cancelled() {
                 return Ok(());
@@ -59,6 +57,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
                 state: self.state,
                 instance: self.instance,
                 active_session: self.active_session,
+                access_recovery: &mut access_recovery,
             };
             let attempt = tokio::select! {
                 error = links::next_error(errors, generation) => {
@@ -93,6 +92,17 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
                         .report("running", Some(&publication.tokens.credential.binding));
                     delay = 1;
                     pause(cancel, publication.expires()).await;
+                }
+                Err(Error::AccessRejected) => {
+                    // Access expiry is not proof that the long-lived machine grant was revoked.
+                    // Close transport while probing it, and never refresh endlessly on bad access.
+                    if access_recovery != AccessRecovery::Ready {
+                        return Err(Error::Unauthorized);
+                    }
+                    access_recovery = AccessRecovery::Refreshing;
+                    self.revoke(&mut publication).await;
+                    publication.refresh_at = tokio::time::Instant::now();
+                    retry_at = publication.refresh_at;
                 }
                 Err(Error::SessionExpired) => {
                     self.revoke(&mut publication).await;
@@ -157,6 +167,20 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
 }
 
 impl Publication {
+    fn new(tokens: Tokens) -> Self {
+        let (access_until, refresh_at) = token_schedule(&tokens);
+        Self {
+            tokens,
+            registration: Uuid::new_v4(),
+            session: None,
+            next_renew: tokio::time::Instant::now(),
+            access_until,
+            refresh_at,
+            lease_until: None,
+            generation: Uuid::new_v4(),
+        }
+    }
+
     fn expires(&self) -> tokio::time::Instant {
         self.lease_until
             .map_or(self.access_until, |lease| lease.min(self.access_until))
@@ -184,13 +208,20 @@ struct Lease<'a, C, S> {
     state: &'a mut State,
     instance: Uuid,
     active_session: &'a mut Option<(Tokens, Uuid)>,
+    access_recovery: &'a mut AccessRecovery,
 }
 
 impl<C: Center, S: CredentialStore> Lease<'_, C, S> {
     async fn step(&mut self, publication: &mut Publication) -> Result<(), Error> {
-        if tokio::time::Instant::now() >= publication.refresh_at {
+        if tokio::time::Instant::now() >= publication.refresh_at
+            || publication.tokens.access_expires_at <= Utc::now()
+        {
             publication.tokens =
                 crate::authorization::restore(self.center, self.store, self.state).await?;
+            *self.access_recovery = match self.access_recovery {
+                AccessRecovery::Refreshing => AccessRecovery::Retried,
+                AccessRecovery::Ready | AccessRecovery::Retried => AccessRecovery::Ready,
+            };
             publication.generation = Uuid::new_v4();
             (publication.access_until, publication.refresh_at) =
                 token_schedule(&publication.tokens);

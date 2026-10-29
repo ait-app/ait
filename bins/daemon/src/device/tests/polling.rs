@@ -19,6 +19,8 @@ async fn enrollment_retries_pending_and_temporary_outage_with_one_durable_reques
     let store = Store::open(data.path()).unwrap();
     let request_id = Uuid::new_v4();
     let mut state = State {
+        authorization_id: None,
+        disconnected: false,
         machine,
         credential: None,
         pending: Some(Pending::Enrollment {
@@ -55,6 +57,8 @@ async fn refresh_or_absent_login_operations_fail_without_contacting_the_center()
     let store = Store::open(data.path()).unwrap();
     for pending in [None, Some(Pending::Refresh(Uuid::new_v4()))] {
         let mut state = State {
+            authorization_id: None,
+            disconnected: false,
             machine: declaration(),
             credential: None,
             pending,
@@ -83,6 +87,8 @@ async fn cancelled_web_approval_and_enrollment_slowdown_preserve_pending_state()
     let data = tempfile::tempdir().unwrap();
     let store = Store::open(data.path()).unwrap();
     let mut state = State {
+        authorization_id: None,
+        disconnected: false,
         machine: declaration(),
         credential: None,
         pending: Some(Pending::Web {

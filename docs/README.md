@@ -33,12 +33,14 @@
 - [移动端与 Web](../apps/mobile/README.md)：Expo、浏览器连接与原生构建。
 - [Relay 客户端登录保持](plans/relay-client-session-persistence.md)：14 天登录、退出凭据保护、网页重开恢复与待实施的自动续期方案。
 - [Workspace 定时任务](operations/schedules.md)：任务归属、目标、触发规则、运行历史与旧任务兼容；[设计与验证报告](reports/daemon/workspace-schedules-verification-2026-10-12.md)、[列表与统一创建验证](reports/clients/workspace-schedule-timeline-2026-10-12.md)。
-- [Linux/macOS 无人值守 daemon](operations/headless-daemon.md)：双模式授权、凭据恢复和脚本启动。
+- [Linux/macOS 无人值守 daemon](operations/headless-daemon.md)：CLI/API 授权、凭据恢复和统一启动。
 - [daemon 使用与连接协议](operations/daemon.md)：配置、鉴权、数据目录和生命周期。
 - [当前架构](architecture/README.md)：能力归属、依赖边界和数据所有权。
 - [Bot 后端设计](plans/bot-backend.md)：Workspace Bot、独占 Channel、隐藏 session、内置 tab 对话与 Telegram、飞书、Email 接入方案。
 
 ## 架构决策
+
+- [ADR-201：daemon 统一拥有节点发布与机器授权](decisions/daemon/adr-201-daemon-owned-publication.md)：删除 `--headless`，统一授权驱动的注册续租与重连、Hub/Relay 完整断开与凭据清理及本地 API token。
 
 - [ADR-200：Headless 独立维护 Hub、Relay 与节点租约](decisions/daemon/adr-200-headless-independent-transports.md)：修复 Hub 包装器接线，独立取票重试与续租，统一授权失效和关停取消。
 

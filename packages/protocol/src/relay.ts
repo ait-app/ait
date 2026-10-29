@@ -7,6 +7,7 @@ export const RelayStatusSchema = z.object({
   management: z
     .object({
       mode: z.enum(["external", "managed"]),
+      autonomous: z.boolean().optional(),
       phase: z.string().optional(),
       binding: z
         .object({

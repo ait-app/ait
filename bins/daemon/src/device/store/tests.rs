@@ -5,6 +5,8 @@ use host_link::Binding;
 fn snapshot() -> State {
     let server_id = Uuid::new_v4();
     State {
+        disconnected: false,
+        authorization_id: Some(Uuid::new_v4()),
         machine: Machine {
             server_id,
             display_name: "build's \"linux\"".into(),
@@ -79,7 +81,14 @@ fn private_state_round_trips_and_holds_an_exclusive_lock() {
     );
     store.clear().unwrap();
     store.clear().unwrap();
-    assert!(store.load().unwrap().is_none());
+    let cleared = store.load().unwrap().unwrap();
+    assert!(cleared.disconnected);
+    assert!(
+        cleared.credential.is_none()
+            && cleared.pending.is_none()
+            && cleared.authorization_id.is_none()
+    );
+    assert!(!Store::credentials_present(data.path()).unwrap());
     drop(store);
     assert!(Store::open(data.path()).is_ok());
 }
@@ -137,4 +146,45 @@ fn refuses_symlinks_directories_and_world_readable_secrets() {
     )
     .unwrap();
     assert!(Store::open(data.path()).is_err());
+}
+
+#[test]
+fn older_snapshots_do_not_require_an_external_handoff_identity() {
+    let mut value = encode(&snapshot());
+    value.as_object_mut().unwrap().remove("authorization_id");
+    assert!(decode(&value).unwrap().authorization_id.is_none());
+}
+
+#[test]
+fn disconnect_removes_orphaned_temporary_credentials_and_preserves_only_public_identity() {
+    let data = tempfile::tempdir().unwrap();
+    let store = Store::open(data.path()).unwrap();
+    let state = snapshot();
+    store.save(&state).unwrap();
+    assert!(Store::credentials_present(data.path()).unwrap());
+    let temporary = data
+        .path()
+        .join(format!("device/.env-{}.tmp", Uuid::new_v4()));
+    std::fs::write(&temporary, "old-secret-from-interrupted-save").unwrap();
+    let unrelated = data.path().join("device/operator-notes");
+    std::fs::write(&unrelated, "keep").unwrap();
+    store.clear().unwrap();
+    assert!(!temporary.exists());
+    assert!(unrelated.exists());
+    let saved = store.load().unwrap().unwrap();
+    assert!(saved.disconnected);
+    assert_eq!(saved.machine, state.machine);
+    assert!(
+        saved.credential.is_none() && saved.pending.is_none() && saved.authorization_id.is_none()
+    );
+    assert!(!Store::credentials_present(data.path()).unwrap());
+}
+
+#[test]
+fn disconnected_snapshot_cannot_contain_an_authorization() {
+    let mut value = encode(&snapshot());
+    value["disconnected"] = json!(true);
+    assert_eq!(decode(&value).unwrap_err(), Error::Storage);
+    value.as_object_mut().unwrap().remove("disconnected");
+    assert!(!decode(&value).unwrap().disconnected);
 }

@@ -394,6 +394,55 @@ describe("Rust protocol adapter", () => {
     }
   });
 
+  it("negotiates autonomous publication and carries write-only authorization through the SDK", async () => {
+    const h = harness();
+    h.stopHello();
+    const client = new DaemonClient({
+      url: "ws://127.0.0.1:7316/v1/ws",
+      clientId: "publication-test",
+      transportFactory: () => h.transport,
+      reconnect: { enabled: false },
+    });
+    const result = {
+      serverId: "server",
+      instanceId: "instance",
+      platform: "linux",
+      management: { mode: "managed", autonomous: true, phase: "connecting", binding: null },
+      hub: {
+        status: { online: false, connecting: false, error: null, rejected: null },
+      },
+      relay: { online: false, connecting: false, epoch: null, error: null },
+    };
+    try {
+      const connected = client.connect();
+      h.ready();
+      await connected;
+      const authorization = {
+        kind: "enrollment" as const,
+        token: "one-use-enrollment",
+        request_id: "00000000-0000-4000-8000-000000000001",
+      };
+      const calls: [string, () => Promise<unknown>, object][] = [
+        ["publication.status.request", () => client.getPublicationStatus(), {}],
+        [
+          "publication.authorize.request",
+          () => client.authorizePublication(authorization),
+          { authorization, mode: "explicit" },
+        ],
+        ["publication.stop.request", () => client.disconnectPublication(), {}],
+      ];
+      for (const [method, call, params] of calls) {
+        const pending = call();
+        const request = h.last(3);
+        expect(request).toMatchObject({ method, params });
+        h.sockets[3].message({ type: "response", request_id: request.request_id, method, result });
+        await expect(pending).resolves.toMatchObject(result);
+      }
+    } finally {
+      await client.close();
+    }
+  });
+
   it("carries typed online service control through the SDK without replaying a grant", async () => {
     const h = harness();
     h.stopHello();
@@ -708,9 +757,9 @@ describe("Rust protocol adapter", () => {
   });
 
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(195);
+    expect(Object.keys(METHODS)).toHaveLength(198);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(195);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(198);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);

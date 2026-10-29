@@ -21,6 +21,7 @@ pub(super) fn implemented_methods() -> impl Iterator<Item = model::methods::Meth
         .chain(provider::implemented_methods())
         .chain(terminal::implemented_methods())
         .chain(relay::rpc::METHODS.iter().copied())
+        .chain(crate::publication::METHODS.iter().copied())
 }
 
 /// Supply crate-level installation presence to each owner and collect its installed method names.
@@ -35,6 +36,7 @@ pub(super) fn installed_capabilities(services: &Services) -> Vec<String> {
         .chain(bot::installed_methods(services.bot.is_some()))
         .chain(browser::installed_methods(services.browser.is_some()))
         .chain(relay::rpc::METHODS.iter().copied())
+        .chain(crate::publication::METHODS.iter().copied())
         .map(|method| method.name.to_owned())
         .collect()
 }

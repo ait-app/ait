@@ -99,12 +99,8 @@ export function createAccountIpc(
   const manager = new AccountSessionManager({
     installationId,
     appVersion: displayAppVersion(),
-    publishRuntime: false,
     browserLogin: desktopBrowserLogin((url) => shell.openExternal(url)),
     openUrl: (url) => shell.openExternal(url),
-    runtime: () => getRuntime().status(),
-    local: (method, body) => getRuntime().relayRequest(method, body),
-    localHub: (method, body) => getRuntime().hubRequest(method, body),
     save,
     closeTransports: () => {
       transports?.closeAll();
@@ -209,22 +205,21 @@ export function createAccountIpc(
           )
             return null;
           if (args.enableBuiltInDaemon === true) await setBuiltInHostSync(args.serverId, true);
-          const grant = await manager.publishHost(
-            {
-              serverId: args.serverId as string,
-              instanceId: args.instanceId as string,
-              name: args.name as string,
-              platform: args.platform as string,
-            },
-            args.needsGrant !== false,
-          );
+          const grant =
+            args.needsAuthorization === true
+              ? await manager.authorizeHost({
+                  serverId: args.serverId as string,
+                  instanceId: args.instanceId as string,
+                  name: args.name as string,
+                  platform: args.platform as string,
+                })
+              : null;
           notify(manager.snapshot());
           return grant;
         }
         case "account_host_disconnect":
           if (typeof args.serverId !== "string") throw new Error("Invalid host identity");
           await setBuiltInHostSync(args.serverId, false);
-          await manager.unpublishHost(args.serverId);
           notify(manager.snapshot());
           return;
         case "account_transport_open":

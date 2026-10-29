@@ -81,12 +81,27 @@ pub enum Pending {
 /// Entire crash-recoverable credential snapshot.
 #[derive(Debug, Clone)]
 pub struct State {
+    /// Explicit sign-out, retained without secrets so clients cannot silently re-enroll on restart.
+    pub disconnected: bool,
+    /// Last external credential handoff, retained after rotation to make API retries idempotent.
+    pub authorization_id: Option<Uuid>,
     /// Original declaration used for an exchange retry.
     pub machine: Machine,
     /// Last successfully committed refresh credential.
     pub credential: Option<Credential>,
     /// Operation awaiting a durable response.
     pub pending: Option<Pending>,
+}
+
+impl State {
+    /// Remove all authorization and pending issuance/rotation state, retaining only machine identity
+    /// and explicit sign-out intent. Returns the old credential for bounded best-effort revocation.
+    pub fn disconnect(&mut self) -> Option<Credential> {
+        self.disconnected = true;
+        self.authorization_id = None;
+        self.pending = None;
+        self.credential.take()
+    }
 }
 
 /// Active runtime lease, distinct from long-term authorization.
@@ -106,6 +121,9 @@ pub enum Error {
     /// Retryable network or center outage.
     #[error("center temporarily unavailable")]
     Unavailable,
+    /// A short-lived access JWT was refused; probe the machine refresh credential once.
+    #[error("access token was refused")]
+    AccessRejected,
     /// Device revoked, expired, or unauthorized. Human reauthorization is required.
     #[error("device authorization is invalid; run daemon login")]
     Unauthorized,

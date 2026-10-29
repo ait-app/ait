@@ -92,8 +92,6 @@ it.each(["initial connection", "reconnection"])(
       platform: "web",
       appVersion: "test",
       randomUUID: () => crypto.randomUUID(),
-      runtime: () => ({ status: "stopped", serverId: "" }),
-      local: async () => undefined,
       save: async () => {},
       notify: () => {},
       closeTransports: () => {},

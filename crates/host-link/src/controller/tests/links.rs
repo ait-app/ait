@@ -53,6 +53,7 @@ async fn disconnected_hub_reopens_without_restarting_relay() {
     let cancel = CancellationToken::new();
     let task = tokio::spawn(controller.run(cancel.clone()));
     tick().await;
+    tick().await; // Observe the established handshake before simulating a later disconnect.
     mock.0.lock().unwrap().hub.active = false;
     tick().await;
     {
@@ -172,6 +173,7 @@ async fn ticket_revocation_interrupts_inflight_renewal_and_closes_both_links() {
         let (controller, mock) = fixture();
         let task = tokio::spawn(controller.run(CancellationToken::new()));
         tick().await;
+        tick().await;
         {
             let mut seen = mock.0.lock().unwrap();
             seen.renew_delay = Duration::from_secs(120);
@@ -212,4 +214,41 @@ async fn shutdown_cancels_outstanding_tickets_without_late_starts() {
     let seen = mock.0.lock().unwrap();
     assert_eq!((seen.starts, seen.hub.starts), (0, 0));
     assert_eq!(seen.closes, 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn repeated_async_hub_handshake_failures_back_off_until_online_then_reset() {
+    let (controller, mock) = fixture();
+    mock.0.lock().unwrap().hub.connecting = true;
+    let cancel = CancellationToken::new();
+    let task = tokio::spawn(controller.run(cancel.clone()));
+    tick().await;
+    // Starting an async connector is not a successful handshake. Each later failure must
+    // retain the growing interval instead of getting a fresh ticket every second.
+    for interval in [5, 10, 20, 40, 60, 60] {
+        let attempts = mock.0.lock().unwrap().hub.tickets;
+        mock.0.lock().unwrap().hub.active = false;
+        for _ in 0..interval - 1 {
+            tick().await;
+        }
+        assert_eq!(mock.0.lock().unwrap().hub.tickets, attempts);
+        tick().await;
+        assert_eq!(mock.0.lock().unwrap().hub.tickets, attempts + 1);
+    }
+    mock.0.lock().unwrap().hub.connecting = false;
+    tick().await;
+    mock.0.lock().unwrap().hub.active = false;
+    tick().await;
+    let attempts = mock.0.lock().unwrap().hub.tickets;
+    mock.0.lock().unwrap().hub.connecting = true;
+    mock.0.lock().unwrap().hub.active = false;
+    for _ in 0..4 {
+        tick().await;
+    }
+    assert_eq!(mock.0.lock().unwrap().hub.tickets, attempts);
+    tick().await;
+    assert_eq!(mock.0.lock().unwrap().hub.tickets, attempts + 1);
+    assert!(mock.0.lock().unwrap().renewals > 100);
+    cancel.cancel();
+    task.await.unwrap().unwrap();
 }

@@ -63,7 +63,7 @@ async fn run(mut cli: config::Cli) -> anyhow::Result<()> {
         Some(config::Command::OmpAcp { .. }) => {
             unreachable!("OMP ACP handled before daemon configuration")
         }
-        command @ (Some(config::Command::Run { .. }) | None) => cli.command = command,
+        command @ (Some(config::Command::Run) | None) => cli.command = command,
     }
 
     let config = config::Config::load(

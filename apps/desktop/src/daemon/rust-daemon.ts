@@ -5,7 +5,6 @@ import {
   serverConnectAddress,
 } from "@ait/protocol/server-listen";
 import { spawn, type ChildProcess } from "node:child_process";
-import { randomBytes } from "node:crypto";
 import {
   closeSync,
   mkdirSync,
@@ -66,7 +65,7 @@ function readRetainedDaemon(home: string): RetainedDaemon | null {
       Number.isInteger(value.pid) &&
       value.pid > 0 &&
       typeof value.token === "string" &&
-      /^[0-9a-f]{64}$/.test(value.token) &&
+      /^[!-~]{32,256}$/.test(value.token) &&
       typeof value.listen === "string" &&
       typeof value.configuredListen === "string" &&
       typeof value.startedAt === "string"
@@ -469,12 +468,11 @@ export class RustDaemonManager {
         ? (this.listenAddress ?? configuredListen)
         : configuredListen,
     );
-    this.token = randomBytes(32).toString("hex");
+    this.token = process.env.AIT_SERVER_TOKEN ?? null;
     const env = Object.fromEntries(
       Object.entries(process.env).filter(([key]) => !key.startsWith("AIT_SERVER_")),
     );
-    // Desktop's account lifecycle supplies the Hub connection and mobile device registrations.
-    // Keep this explicit override while isolating unrelated daemon settings and credentials.
+    // Mobile registrations arrive through the account's separate Hub access link.
     env.AIT_SERVER_HUB_NOTIFICATIONS = process.env.AIT_SERVER_HUB_NOTIFICATIONS ?? "true";
     // The daemon writes its log file directly and runs in its own process group, so it can
     // outlive this Desktop session when the user keeps it running after quit.
@@ -486,7 +484,7 @@ export class RustDaemonManager {
         this.options.binary,
         ["--data-dir", this.options.home, "--listen", listenAddress, "--log-level", "info"],
         {
-          env: { ...env, AIT_SERVER_TOKEN: this.token },
+          env: { ...env, ...(this.token === null ? {} : { AIT_SERVER_TOKEN: this.token }) },
           stdio: ["ignore", "ignore", log],
           detached: true,
           windowsHide: true,
@@ -542,6 +540,8 @@ export class RustDaemonManager {
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
     if (!listen) throw new Error("Timed out waiting for Rust daemon readiness.");
+    // The daemon creates this private credential before reporting readiness.
+    this.token ??= readFileSync(path.join(this.options.home, "local-api.token"), "utf8");
     const info = await probeRustDaemon(
       serverConnectAddress(listen),
       this.token,

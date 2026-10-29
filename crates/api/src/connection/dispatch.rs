@@ -30,9 +30,9 @@ pub(super) async fn request(
         }
         Err(DispatchError::Delivery(error)) => return Err(error),
     }
-    match relay::rpc::request(&mut context, &state.relay, Some(state.relay_management())).await {
+    match transport(&mut context, state).await {
         Ok(()) => return Ok(()),
-        Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "relay"),
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(&context, "transport"),
         Err(DispatchError::Delivery(error)) => return Err(error),
     }
     match schedule::dispatch::dispatch(&mut context, &state.schedule).await {
@@ -106,6 +106,14 @@ pub(super) async fn request(
     context
         .expect("All handlers declined without consuming the request")
         .respond(Err(ErrorCode::NotImplemented))
+}
+
+async fn transport(context: &mut Option<Context<'_>>, state: &Shared) -> Result<(), DispatchError> {
+    match crate::publication::request(context, state).await {
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "publication"),
+        result => return result,
+    }
+    relay::rpc::request(context, &state.relay, Some(state.relay_management())).await
 }
 
 async fn complete_metadata(

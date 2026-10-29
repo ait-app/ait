@@ -44,16 +44,12 @@ pub(super) enum Command {
         #[arg(long)]
         omp_bin: Option<PathBuf>,
     },
-    /// Authorize this Linux or macOS daemon through Web approval or a single-use enrollment token.
+    /// Authorize this daemon through Web approval or a single-use enrollment token.
     Login(Login),
     /// Revoke the machine grant and clear private local credentials (stop the service first).
     Logout,
-    /// Run the existing daemon, optionally with independent center-managed Host publication.
-    Run {
-        /// Own authorization, lease renewal and Relay without a desktop client.
-        #[arg(long)]
-        headless: bool,
-    },
+    /// Run the daemon and autonomously maintain publication when machine authorization exists.
+    Run,
     /// Read non-secret authorization and runtime status.
     Status {
         /// Emit machine-readable JSON.
@@ -116,20 +112,19 @@ pub(crate) struct Config {
     pub data_dir: PathBuf,
     /// Resolved socket address.
     pub listen: SocketAddr,
-    /// Environment override or a private persisted headless credential; never in TOML.
+    /// Environment override or a private persisted API credential; never in TOML.
     pub token: SecretString,
     /// Resolved logging threshold.
     pub log_level: tracing::level_filters::LevelFilter,
     /// Browser origins accepted by the injected host policy.
     pub web_origins: Vec<String>,
-    pub headless: bool,
     /// Opt in after clients register native push targets on the account Hub access link.
     pub hub_notifications: bool,
 }
 
 impl Config {
     /// Resolve `cli`, values from `env`, and the selected TOML file into startup settings.
-    /// Explicit credentials are validated before file I/O; headless credentials are restored or created.
+    /// Explicit credentials are validated before file I/O; otherwise credentials are restored or created.
     /// `validate_origin` checks every resolved origin.
     /// Both policies are injected by the host, keeping transport dependencies outside this crate.
     /// # Errors
@@ -140,17 +135,10 @@ impl Config {
         validate_token: impl Fn(&str) -> anyhow::Result<()>,
         validate_origin: impl Fn(&str) -> anyhow::Result<()>,
     ) -> anyhow::Result<Self> {
-        let headless = matches!(cli.command, Some(Command::Run { headless: true }));
-        if headless && !cfg!(any(target_os = "linux", target_os = "macos")) {
-            bail!("headless runtime requires Linux or macOS");
-        }
         let explicit_token = env("AIT_SERVER_TOKEN")
             .map(|value| value.into_string().map(SecretString::from))
             .transpose()
             .map_err(|_| anyhow::anyhow!("AIT_SERVER_TOKEN must be UTF-8"))?;
-        if explicit_token.is_none() && !headless {
-            bail!("set AIT_SERVER_TOKEN before starting daemon");
-        }
         let data_dir = data_directory(&cli, &env)?;
         if let Some(token) = &explicit_token {
             validate_token(token.expose_secret())?;
@@ -216,7 +204,6 @@ impl Config {
             token,
             log_level,
             web_origins,
-            headless,
             hub_notifications,
         })
     }

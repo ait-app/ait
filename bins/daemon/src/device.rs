@@ -18,10 +18,32 @@ use crate::instance::InstanceLease;
 pub(super) use http::HttpCenter;
 pub(super) use store::Store;
 
-pub(super) async fn login(data: &Path, options: Login) -> anyhow::Result<()> {
-    if !cfg!(any(target_os = "linux", target_os = "macos")) {
-        bail!("unattended device authorization requires Linux or macOS");
+/// Open the one credential owner even before login, so authenticated API handoff is available.
+pub(super) fn load_state(data: &Path, server: Uuid) -> anyhow::Result<(Store, State)> {
+    let store = Store::open(data)?;
+    let mut state = store.load()?.unwrap_or_else(|| State {
+        authorization_id: None,
+        disconnected: false,
+        machine: Machine {
+            server_id: server,
+            display_name: system_hostname().unwrap_or_else(|| "ait-daemon".to_owned()),
+            platform: PLATFORM.to_owned(),
+            app_version: model::BUILD_VERSION.to_owned(),
+        },
+        credential: None,
+        pending: None,
+    });
+    if state.machine.server_id != server {
+        bail!("device state belongs to another installation");
     }
+    if state.pending.is_none() {
+        model::BUILD_VERSION.clone_into(&mut state.machine.app_version);
+        PLATFORM.clone_into(&mut state.machine.platform);
+    }
+    Ok((store, state))
+}
+
+pub(super) async fn login(data: &Path, options: Login) -> anyhow::Result<()> {
     login_with_center(data, options, HttpCenter::new()?).await
 }
 
@@ -64,6 +86,8 @@ async fn login_with_center(data: &Path, options: Login, center: HttpCenter) -> a
             state
         }
         None => State {
+            authorization_id: None,
+            disconnected: false,
             machine,
             credential: None,
             pending: None,
@@ -84,7 +108,7 @@ async fn login_with_center(data: &Path, options: Login, center: HttpCenter) -> a
         .binding;
     writeln!(
         std::io::stdout(),
-        "Authorized Host {}. Start with daemon run --headless.",
+        "Authorized Host {}. Start with daemon run.",
         binding.host_id
     )?;
     Ok(())
@@ -109,6 +133,8 @@ async fn authenticate(
             "an unfinished operation exists; rerun daemon login to recover or use daemon login --force to start a new authorization"
         );
     }
+    state.disconnected = false;
+    state.authorization_id = None;
     state.pending = Some(if let Some(token) = supplied {
         Pending::Enrollment {
             token,
@@ -173,64 +199,12 @@ async fn complete_login(
     state: &mut State,
     cancel: &CancellationToken,
 ) -> Result<(), Error> {
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(600);
-    loop {
-        let result = match state.pending.as_ref().ok_or(Error::Protocol)? {
-            Pending::Enrollment { token, request_id } => {
-                center.enroll(token, *request_id, &state.machine).await
-            }
-            Pending::Web {
-                device_code,
-                request_id,
-                expires_at,
-                interval,
-                ..
-            } => {
-                if *expires_at <= Utc::now() {
-                    return Err(Error::Denied);
-                }
-                let seconds = *interval;
-                tokio::select! {
-                    () = cancel.cancelled() => return Err(Error::Denied),
-                    () = tokio::time::sleep(Duration::from_secs(seconds)) => {},
-                }
-                if *expires_at <= Utc::now() {
-                    return Err(Error::Denied);
-                }
-                center.poll(device_code, *request_id).await
-            }
-            Pending::Refresh(_) => return Err(Error::Protocol),
-        };
-        match result {
-            Ok(tokens) => {
-                if tokens.credential.binding.server_id != state.machine.server_id {
-                    return Err(Error::Protocol);
-                }
-                let mut next = state.clone();
-                next.credential = Some(tokens.credential);
-                next.pending = None;
-                store.save(&next)?;
-                *state = next;
-                return Ok(());
-            }
-            Err(Error::Pending) => {}
-            Err(Error::SlowDown) => {
-                if let Some(Pending::Web { interval, .. }) = &mut state.pending {
-                    *interval = (*interval + 5).min(300);
-                    store.save(state)?;
-                } else {
-                    return Err(Error::Protocol);
-                }
-            }
-            Err(Error::Unavailable) => {
-                tokio::time::sleep(Duration::from_secs(5)).await;
-            }
-            Err(error) => return Err(error),
-        }
-        if tokio::time::Instant::now() >= deadline {
-            return Err(Error::Unavailable);
-        }
-    }
+    tokio::time::timeout(
+        Duration::from_secs(600),
+        host_link::authorization::complete(center, store, state, cancel),
+    )
+    .await
+    .map_err(|_| Error::Unavailable)?
 }
 
 pub(super) async fn logout(data: &Path) -> anyhow::Result<()> {
@@ -247,11 +221,11 @@ async fn logout_with_center(data: &Path, center: HttpCenter) -> anyhow::Result<(
             Some(Pending::Web { .. } | Pending::Enrollment { .. })
         )
     });
+    store.clear()?;
     let mut online = !unresolved;
     if let Some(credential) = state.and_then(|s| s.credential) {
         online &= center.revoke(&credential.refresh_token).await.is_ok();
     }
-    store.clear()?;
     if online {
         writeln!(std::io::stdout(), "Device credentials cleared.")?;
     } else {
@@ -266,6 +240,8 @@ async fn logout_with_center(data: &Path, center: HttpCenter) -> anyhow::Result<(
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum Phase {
+    Unauthorized,
+    Disconnected,
     Connecting,
     Retrying,
     Running,
@@ -294,8 +270,8 @@ pub(super) fn status(data: &Path, json_output: bool) -> anyhow::Result<()> {
     let runtime = std::fs::read(data.join("device/status.json"))
         .ok()
         .and_then(|bytes| serde_json::from_slice::<RuntimeSnapshot>(&bytes).ok());
-    let value = serde_json::json!({"mode":"headless", "center":host_link::CENTER,
-        "server_id":server_id, "credentials_present":data.join("device/.env").is_file(),
+    let value = serde_json::json!({"mode":"daemon", "center":host_link::CENTER,
+        "server_id":server_id, "credentials_present":Store::credentials_present(data)?,
         "runtime_snapshot":runtime});
     if json_output {
         writeln!(std::io::stdout(), "{value}")?;
@@ -364,7 +340,7 @@ fn system_hostname() -> Option<String> {
 mod tests;
 
 /// Daemon-owned adapter writes a non-secret snapshot for CLI status without taking the credential lock.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct StatusRelay {
     inner: api::managed_relay::ManagedRelayHandle,
     directory: std::path::PathBuf,
@@ -398,6 +374,12 @@ impl host_link::ManagedRelay for StatusRelay {
     }
     async fn hub_active(&self) -> bool {
         self.inner.hub_active().await
+    }
+    async fn online(&self) -> bool {
+        self.inner.online().await
+    }
+    async fn hub_online(&self) -> bool {
+        self.inner.hub_online().await
     }
     async fn stop(&self) {
         self.inner.stop().await;

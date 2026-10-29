@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "expo-router";
-import { Text, View } from "react-native";
+import { Text } from "react-native";
 import { SettingsCard, SettingsRow, SettingsSection } from "@/components/settings";
 import { Button } from "@/components/ui/button";
 import { useAccountState } from "@/runtime/account-state";
@@ -10,10 +10,27 @@ import {
   disconnectOnlineServiceHost,
   synchronizeOnlineServiceHost,
   useOnlineServiceHostSync,
+  type HostSyncState,
 } from "@/runtime/online-service-host-sync";
 import { settingsStyles } from "@/styles/settings";
 import type { HostProfile } from "@/types/host-connection";
 import { buildSettingsSectionRoute } from "@/utils/host-routes";
+
+const actionLabels = {
+  start: "onlineService.syncAction",
+  stop: "onlineService.stopSync",
+  signIn: "onlineService.signIn",
+} as const;
+
+function hostStatus(connected: boolean, supported: boolean, sync: HostSyncState | undefined) {
+  if (!connected) return "hostDisconnected";
+  // Old daemon status replies have no publication snapshot and cannot use these controls.
+  if (!supported || (sync?.status && !sync.publication)) return "updateHost";
+  const link = sync?.publication?.hub.status;
+  if (!link) return sync?.busy ? "syncing" : "hostOffline";
+  if (link.online) return "hostOnline";
+  return link.connecting ? "hostConnecting" : "hostOffline";
+}
 
 export function OnlineServiceHostSection({ host }: { host: HostProfile }) {
   const { t } = useTranslation();
@@ -26,19 +43,13 @@ export function OnlineServiceHostSection({ host }: { host: HostProfile }) {
   useEffect(() => {
     if (connected && supported) void synchronizeOnlineServiceHost(host.serverId, host.label);
   }, [connected, supported, host.serverId, host.label]);
-  const loggedOut = account.status === "logged_out";
-  const managed = sync?.status?.management?.mode === "managed";
-  const online = sync?.status?.status.online;
-  const connecting = sync?.status?.status.connecting;
-  const statusKey = !connected
-    ? "hostDisconnected"
-    : !supported
-      ? "updateHost"
-      : online
-        ? "hostOnline"
-        : connecting
-          ? "hostConnecting"
-          : "hostOffline";
+  const status = hostStatus(connected, supported, sync);
+  const action = sync?.enabled ? "stop" : account.status === "logged_out" ? "signIn" : "start";
+  const actions = {
+    start: () => void synchronizeOnlineServiceHost(host.serverId, host.label, true),
+    stop: () => void disconnectOnlineServiceHost(host.serverId),
+    signIn: () => router.push(buildSettingsSectionRoute("online-service")),
+  };
   return (
     <SettingsSection
       title={t("onlineService.syncTitle")}
@@ -49,66 +60,29 @@ export function OnlineServiceHostSection({ host }: { host: HostProfile }) {
         <SettingsRow
           label={t("onlineService.title")}
           hint={
-            managed
+            sync?.enabled
               ? t("onlineService.managedHostHint")
-              : loggedOut
+              : account.status === "logged_out"
                 ? t("onlineService.signInFirst")
                 : `${account.name} · ${account.center}`
           }
         >
-          <Text style={settingsStyles.rowHint}>{t(`onlineService.${statusKey}`)}</Text>
-          {loggedOut && !managed ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onPress={() => router.push(buildSettingsSectionRoute("online-service"))}
-              testID="host-online-service-sign-in"
-            >
-              {t("onlineService.signIn")}
-            </Button>
-          ) : null}
+          <Text style={settingsStyles.rowHint}>{t(`onlineService.${status}`)}</Text>
         </SettingsRow>
         <SettingsRow
           label={t("onlineService.syncHost")}
-          hint={
-            managed
-              ? t("onlineService.managedHostHint")
-              : t("onlineService.syncHostHint", { name: host.label })
-          }
+          hint={t("onlineService.syncHostHint", { name: host.label })}
           error={sync?.error ?? sync?.status?.status.error}
         >
-          <View>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={
-                managed ||
-                (loggedOut && !sync?.enabled) ||
-                !connected ||
-                !supported ||
-                sync?.busy ||
-                Boolean((connecting || online) && !sync?.enabled)
-              }
-              onPress={() =>
-                void (sync?.enabled
-                  ? disconnectOnlineServiceHost(host.serverId)
-                  : synchronizeOnlineServiceHost(host.serverId, host.label, true))
-              }
-              testID="host-online-service-sync"
-            >
-              {t(
-                managed
-                  ? "onlineService.managedHost"
-                  : sync?.busy
-                    ? "onlineService.syncing"
-                    : sync?.enabled
-                      ? "onlineService.stopSync"
-                      : online
-                        ? "onlineService.hostOnline"
-                        : "onlineService.syncAction",
-              )}
-            </Button>
-          </View>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={sync?.busy || status === "hostDisconnected" || status === "updateHost"}
+            onPress={actions[action]}
+            testID="host-online-service-sync"
+          >
+            {t(sync?.busy ? "onlineService.syncing" : actionLabels[action])}
+          </Button>
         </SettingsRow>
       </SettingsCard>
     </SettingsSection>
