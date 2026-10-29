@@ -112,7 +112,7 @@ jobs:
           rm -rf target/sherpa-onnx-prebuilt
       - run: "cargo test --locked -p daemon --bin daemon device::"
       - run: "cargo test --locked -p daemon --bin daemon config::"
-      - run: cargo test --locked -p daemon --bin daemon host::tests::headless
+      - run: cargo test --locked -p daemon --bin daemon host::tests::publication
       - run: cargo test --locked -p host-link
 
   rust:
@@ -187,6 +187,7 @@ jobs:
           src/i18n/resources.test.ts src/runtime/rust-daemon maestro/support native-release-version.test.ts
           src/timeline src/types/stream.test.ts src/runtime/replica-cache
           src/runtime/directory-sync src/screens/workspace/workspace-route-state.test.ts
+          src/runtime/online-service-host-sync.test.ts src/screens/settings/online-service-host-section.test.tsx
           src/utils/tool-call-parsers.test.ts src/utils/diff-highlight.test.ts
           src/voice/audio-engine.native.test.ts src/voice/audio-engine.web.test.ts src/voice/voice-runtime.test.ts
 

@@ -212,6 +212,7 @@ describe("daemon-owned publication", () => {
   it("retries a lost handoff response with the same issuance identity", async () => {
     mocks.authorize.mockRejectedValueOnce(new Error("Connection lost"));
     await synchronizeOnlineServiceHost("first", "SHLP", true);
+    expect(useOnlineServiceHostSync.getState().hosts.first?.enabled).toBe(false);
     await synchronizeOnlineServiceHost("first", "SHLP", true);
     expect(mocks.authorize).toHaveBeenNthCalledWith(1, authorization, "explicit");
     expect(mocks.authorize).toHaveBeenNthCalledWith(2, authorization, "explicit");
@@ -274,6 +275,17 @@ describe("daemon-owned publication", () => {
     reconcileOnlineServiceHostsAfterLogout([]);
     expect(useOnlineServiceHostSync.getState().hosts.first?.enabled).toBe(true);
     expect(mocks.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("clears a cached publication when the host no longer supports autonomous publication", async () => {
+    mocks.publication.mockResolvedValue(publication("running"));
+    await synchronizeOnlineServiceHost("first", "SHLP");
+    mocks.status.mockResolvedValue({ ...status(), management: { mode: "managed" } });
+    await synchronizeOnlineServiceHost("first", "SHLP");
+    expect(useOnlineServiceHostSync.getState().hosts.first).toMatchObject({
+      enabled: false,
+      publication: undefined,
+    });
   });
 
   it("does not authorize a changed identity or an old daemon", async () => {

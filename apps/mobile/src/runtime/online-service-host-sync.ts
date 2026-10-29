@@ -9,7 +9,7 @@ import { getNativeAccount } from "./native-account";
 import { getHostRuntimeStore } from "./host-runtime";
 import { serializeNativeAccountCommand, useAccountState } from "./account-state";
 
-interface HostSyncState {
+export interface HostSyncState {
   enabled: boolean;
   busy: boolean;
   status: RelayStatus | null;
@@ -87,14 +87,14 @@ export async function synchronizeOnlineServiceHost(
   const client = getHostRuntimeStore().getClient(serverId);
   if (!client?.isConnected) return;
   const current = generation;
-  update(serverId, { busy: true, error: null, enabled: enable || previous.enabled });
+  update(serverId, { busy: true, error: null });
   try {
     const status = await client.getOnlineServiceStatus();
     if (status.serverId !== serverId)
       throw new Error("The host identity has changed. Reconnect first.");
     if (current !== generation) return;
     if (!status.management?.autonomous) {
-      update(serverId, { status, enabled: false });
+      update(serverId, { status, enabled: false, publication: undefined });
       if (enable) throw new Error("Update the host to use daemon-owned publication.");
       return;
     }
