@@ -11,7 +11,6 @@ import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import { seedRuntimeWorkspaces } from "@/test/seed-session";
 import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
-import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import type { HostProfile } from "@/types/host-connection";
 import { WorkspaceShortcutTargetsSubscriber } from "./workspace-shortcut-targets-subscriber";
@@ -21,6 +20,17 @@ import { defaultHostAppearance } from "@/hosts/appearance";
 vi.hoisted(() => {
   (globalThis as unknown as { __DEV__: boolean }).__DEV__ = false;
 });
+
+vi.mock("@react-native-async-storage/async-storage", () => ({
+  default: {
+    getItem: async () => null,
+    getAllKeys: async () => [],
+    multiGet: async () => [],
+    setItem: async () => {},
+    removeItem: async () => {},
+    multiRemove: async () => {},
+  },
+}));
 
 function workspaceDescriptor(input: {
   id: string;
@@ -84,10 +94,6 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
     useSidebarCollapsedSectionsStore.setState({
       collapsedProjectKeys: new Set(),
     });
-    useSidebarOrderStore.setState({
-      projectOrder: [],
-      workspaceOrderByProject: {},
-    });
     useSidebarViewStore.setState({
       groupMode: "project",
       hostFilters: [],
@@ -131,6 +137,54 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
           <WorkspaceShortcutTargetsSubscriber enabled={true} />
         </SidebarModelProvider>,
       );
+    });
+
+    expect(useKeyboardShortcutsStore.getState().sidebarShortcutWorkspaceTargets).toEqual([
+      { serverId: "srv", workspaceId: "ws-1" },
+      { serverId: "srv", workspaceId: "ws-2" },
+    ]);
+  });
+
+  it("updates project-mode shortcut order when only a workspace status time changes", async () => {
+    const older = workspaceDescriptor({
+      id: "ws-1",
+      name: "A workspace",
+      status: "running",
+      statusEnteredAt: new Date("2026-01-01T00:00:00Z"),
+    });
+    const newer = workspaceDescriptor({
+      id: "ws-2",
+      name: "Z workspace",
+      status: "done",
+      statusEnteredAt: new Date("2026-02-01T00:00:00Z"),
+    });
+    await act(async () => {
+      seedRuntimeWorkspaces(
+        "srv",
+        new Map([
+          [older.id, older],
+          [newer.id, newer],
+        ]),
+      );
+      root?.render(
+        <SidebarModelProvider>
+          <WorkspaceShortcutTargetsSubscriber enabled={true} />
+        </SidebarModelProvider>,
+      );
+    });
+
+    expect(useKeyboardShortcutsStore.getState().sidebarShortcutWorkspaceTargets).toEqual([
+      { serverId: "srv", workspaceId: "ws-2" },
+      { serverId: "srv", workspaceId: "ws-1" },
+    ]);
+
+    await act(async () => {
+      useSessionStore.getState().mergeWorkspaces("srv", [
+        {
+          ...older,
+          statusEnteredAt: new Date("2026-03-01T00:00:00Z"),
+        },
+      ]);
     });
 
     expect(useKeyboardShortcutsStore.getState().sidebarShortcutWorkspaceTargets).toEqual([

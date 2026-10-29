@@ -75,7 +75,6 @@ function projectionInput(options?: {
       pinnedWorkspaceKeys: [pinned.placement.workspaceKey],
       pinnedAtByKey: { [pinned.placement.workspaceKey]: "2026-07-12T12:00:00.000Z" },
     },
-    pinnedWorkspaceOrder: [],
     workspaceEntriesByKey: new Map([
       [pinned.entry.workspaceKey, pinned.entry],
       [unpinned.entry.workspaceKey, unpinned.entry],
@@ -111,6 +110,102 @@ function twoProjectInput(groupMode: "project" | "status") {
 }
 
 describe("buildSidebarProjection", () => {
+  it("orders project rows and shortcuts by status entry time across different statuses", () => {
+    const older = makeWorkspace("a-older", "needs_input");
+    const newer = makeWorkspace("z-newer", "done");
+    const pinned = makeWorkspace("pinned", "running");
+    older.entry.statusEnteredAt = new Date("2026-01-01T00:00:00Z");
+    newer.entry.statusEnteredAt = new Date("2026-02-01T00:00:00Z");
+    pinned.entry.statusEnteredAt = new Date("2026-03-01T00:00:00Z");
+    const project = makeProject([older.placement, pinned.placement, newer.placement]);
+    const input = {
+      ...projectionInput(),
+      projects: [project],
+      workspaceEntriesByKey: new Map(
+        [older, pinned, newer].map(({ entry }) => [entry.workspaceKey, entry]),
+      ),
+    };
+
+    const projection = buildSidebarProjection(input);
+
+    expect(projection.pinnedGroups.unpinnedProjects[0]?.workspaces).toEqual([
+      newer.placement,
+      older.placement,
+    ]);
+    expect(projection.shortcutModel.shortcutTargets).toEqual([
+      { serverId: "srv", workspaceId: "pinned" },
+      { serverId: "srv", workspaceId: "z-newer" },
+      { serverId: "srv", workspaceId: "a-older" },
+    ]);
+    expect(project.workspaces).toEqual([older.placement, pinned.placement, newer.placement]);
+
+    const updated = buildSidebarProjection({
+      ...input,
+      workspaceEntriesByKey: new Map(input.workspaceEntriesByKey).set(older.entry.workspaceKey, {
+        ...older.entry,
+        statusEnteredAt: new Date("2026-04-01T00:00:00Z"),
+      }),
+    });
+    expect(updated.pinnedGroups.unpinnedProjects[0]?.workspaces).toEqual([
+      older.placement,
+      newer.placement,
+    ]);
+    expect(updated.shortcutModel.shortcutTargets).toEqual([
+      { serverId: "srv", workspaceId: "pinned" },
+      { serverId: "srv", workspaceId: "a-older" },
+      { serverId: "srv", workspaceId: "z-newer" },
+    ]);
+  });
+
+  it("uses the same time and name tie-breakers in project and status groups", () => {
+    const datedZ = makeWorkspace("dated-z");
+    const datedA = makeWorkspace("dated-a");
+    const undatedZ = makeWorkspace("undated-z");
+    const undatedA = makeWorkspace("undated-a");
+    const duplicate = makeWorkspace("duplicate");
+    duplicate.entry.name = datedA.entry.name;
+    datedZ.entry.statusEnteredAt = new Date("2026-01-01T00:00:00Z");
+    datedA.entry.statusEnteredAt = datedZ.entry.statusEnteredAt;
+    duplicate.entry.statusEnteredAt = datedZ.entry.statusEnteredAt;
+    const workspaces = [undatedZ, datedZ, duplicate, undatedA, datedA];
+    const input = {
+      ...projectionInput(),
+      projects: [makeProject(workspaces.map(({ placement }) => placement))],
+      pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
+      workspaceEntriesByKey: new Map(workspaces.map(({ entry }) => [entry.workspaceKey, entry])),
+    };
+
+    const project = buildSidebarProjection(input);
+    const status = buildSidebarProjection({ ...input, groupMode: "status" });
+    const expected = ["dated-a", "duplicate", "dated-z", "undated-a", "undated-z"];
+
+    expect(
+      project.pinnedGroups.unpinnedProjects[0]?.workspaces.map((ws) => ws.workspaceId),
+    ).toEqual(expected);
+    expect(status.workspaceGroups[0]?.rows.map((ws) => ws.workspaceId)).toEqual(expected);
+    expect(project.shortcutModel.shortcutTargets).toEqual(status.shortcutModel.shortcutTargets);
+  });
+
+  it("keeps project shells and falls back to names while workspace entries hydrate", () => {
+    const z = makeWorkspace("z");
+    const a = makeWorkspace("a");
+    const empty = makeProject([], "empty");
+    const input = {
+      ...projectionInput(),
+      projects: [makeProject([z.placement, a.placement]), empty],
+      pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
+      workspaceEntriesByKey: new Map<string, SidebarWorkspaceEntry>(),
+    };
+
+    const projection = buildSidebarProjection(input);
+
+    expect(projection.pinnedGroups.unpinnedProjects[0]?.workspaces).toEqual([
+      a.placement,
+      z.placement,
+    ]);
+    expect(projection.pinnedGroups.unpinnedProjects[1]).toBe(empty);
+  });
+
   // The rule that outlived the bug it was written for: a project icon is fetched per project, so
   // whatever a mode groups by, the rows it produces can only reference projects already covered.
   for (const groupMode of ["project", "status"] as const) {

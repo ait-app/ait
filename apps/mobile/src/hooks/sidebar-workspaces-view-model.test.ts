@@ -3,18 +3,14 @@ import type { Agent, WorkspaceDescriptor } from "@/stores/session-store";
 import type { WorkspaceStructureProject } from "@/projects/workspace-structure";
 import { buildWorkspaceAgentActivityIndex } from "@/utils/workspace-agent-activity";
 import {
-  appendMissingOrderKeys,
-  applyStoredOrdering,
   buildSidebarWorkspaceEntries,
   buildSidebarWorkspacePlacementModel,
   buildSidebarProjectsFromStructure,
-  computeSidebarOrderUpdates,
   createSidebarWorkspaceEntry,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
   shouldShowSidebarHostLabels,
   type ProjectStatusSession,
-  type SidebarProjectEntry,
   type SidebarWorkspacePlacement,
 } from "./sidebar-workspaces-view-model";
 
@@ -126,14 +122,6 @@ describe("createSidebarWorkspaceEntry completion reconciliation", () => {
   });
 });
 
-interface OrderedItem {
-  key: string;
-}
-
-function item(key: string): OrderedItem {
-  return { key };
-}
-
 function project(input: {
   projectKey: string;
   projectName?: string;
@@ -164,20 +152,6 @@ function project(input: {
   };
 }
 
-function sidebarProject(input: {
-  projectKey: string;
-  workspaceKeys: string[];
-}): SidebarProjectEntry {
-  const projects = buildSidebarProjectsFromStructure({
-    projects: [project({ projectKey: input.projectKey, workspaceKeys: input.workspaceKeys })],
-  });
-  const result = projects[0];
-  if (!result) {
-    throw new Error("expected a project entry");
-  }
-  return result;
-}
-
 function workspace(input: {
   id: string;
   name: string;
@@ -202,61 +176,6 @@ function workspace(input: {
     scripts: [],
   };
 }
-
-describe("applyStoredOrdering", () => {
-  it("keeps unknown items on the baseline while applying stored order", () => {
-    const result = applyStoredOrdering({
-      items: [item("new"), item("a"), item("b")],
-      storedOrder: ["b", "a"],
-      getKey: (entry) => entry.key,
-    });
-
-    expect(result.map((entry) => entry.key)).toEqual(["new", "b", "a"]);
-  });
-
-  it("ignores stale and duplicate stored keys", () => {
-    const result = applyStoredOrdering({
-      items: [item("x"), item("y")],
-      storedOrder: ["missing", "y", "y", "x"],
-      getKey: (entry) => entry.key,
-    });
-
-    expect(result.map((entry) => entry.key)).toEqual(["y", "x"]);
-  });
-
-  it("returns baseline when there is no persisted order", () => {
-    const baseline = [item("first"), item("second")];
-    const result = applyStoredOrdering({
-      items: baseline,
-      storedOrder: [],
-      getKey: (entry) => entry.key,
-    });
-
-    expect(result).toBe(baseline);
-  });
-});
-
-describe("appendMissingOrderKeys", () => {
-  it("appends unseen keys while preserving existing order", () => {
-    const result = appendMissingOrderKeys({
-      currentOrder: ["project-b", "project-a"],
-      visibleKeys: ["project-a", "project-b", "project-c"],
-    });
-
-    expect(result).toEqual(["project-b", "project-a", "project-c"]);
-  });
-
-  it("returns the same array when there are no unseen keys", () => {
-    const currentOrder = ["project-a", "project-b"];
-
-    const result = appendMissingOrderKeys({
-      currentOrder,
-      visibleKeys: ["project-b", "project-a"],
-    });
-
-    expect(result).toBe(currentOrder);
-  });
-});
 
 describe("buildSidebarProjectsFromStructure", () => {
   it("creates structural workspace rows from ordered workspace keys", () => {
@@ -639,75 +558,6 @@ describe("shouldShowSidebarHostLabels", () => {
     });
 
     expect(shouldShowSidebarHostLabels(projects)).toBe(true);
-  });
-});
-
-describe("computeSidebarOrderUpdates", () => {
-  it("returns no updates when there are no visible projects", () => {
-    const updates = computeSidebarOrderUpdates({
-      projects: [],
-      persistedProjectOrder: ["stale-project"],
-      getWorkspaceOrder: () => [],
-    });
-
-    expect(updates).toEqual({ projectOrder: null, workspaceOrders: [] });
-  });
-
-  it("appends unseen projects while putting unseen workspaces before the saved order", () => {
-    const projects = [
-      sidebarProject({ projectKey: "project-a", workspaceKeys: ["ws-1", "ws-2"] }),
-      sidebarProject({ projectKey: "project-b", workspaceKeys: ["ws-3"] }),
-    ];
-
-    const updates = computeSidebarOrderUpdates({
-      projects,
-      persistedProjectOrder: ["project-a"],
-      getWorkspaceOrder: (projectKey) => (projectKey === "project-a" ? ["srv:ws-1"] : []),
-    });
-
-    expect(updates.projectOrder).toEqual(["project-a", "project-b"]);
-    expect(updates.workspaceOrders).toEqual([
-      { projectViewKey: "project-a", order: ["srv:ws-2", "srv:ws-1"] },
-      { projectViewKey: "project-b", order: ["srv:ws-3"] },
-    ]);
-  });
-
-  it("preserves the saved workspace order behind multiple newly discovered workspaces", () => {
-    const projects = [
-      sidebarProject({
-        projectKey: "project-a",
-        workspaceKeys: ["newest", "newer", "old-a", "old-b"],
-      }),
-    ];
-
-    const updates = computeSidebarOrderUpdates({
-      projects,
-      persistedProjectOrder: ["project-a"],
-      getWorkspaceOrder: () => ["srv:old-b", "srv:old-a"],
-    });
-
-    expect(updates.workspaceOrders).toEqual([
-      {
-        projectViewKey: "project-a",
-        order: ["srv:newest", "srv:newer", "srv:old-b", "srv:old-a"],
-      },
-    ]);
-  });
-
-  it("returns no project-order update when persisted order already covers visible keys", () => {
-    const projects = [
-      sidebarProject({ projectKey: "project-a", workspaceKeys: ["ws-1"] }),
-      sidebarProject({ projectKey: "project-b", workspaceKeys: ["ws-2"] }),
-    ];
-
-    const updates = computeSidebarOrderUpdates({
-      projects,
-      persistedProjectOrder: ["project-b", "project-a"],
-      getWorkspaceOrder: (projectKey) => (projectKey === "project-a" ? ["srv:ws-1"] : ["srv:ws-2"]),
-    });
-
-    expect(updates.projectOrder).toBeNull();
-    expect(updates.workspaceOrders).toEqual([]);
   });
 });
 
