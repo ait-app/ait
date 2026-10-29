@@ -8,6 +8,7 @@ import {
   loadOnlineServiceMembership,
   useAccountState,
   verifyAppStoreTransaction,
+  verifyGooglePlayPurchase,
 } from "@/runtime/account-state";
 import { subscriptionStore } from "./store";
 import { PurchaseCoordinator } from "./coordinator";
@@ -28,8 +29,11 @@ export const useBillingState = create<BillingState>(() => ({
 }));
 
 /** Store purchases are offered only on the account authority selected by this build. */
-export function supportsAppStorePurchases(): boolean {
-  const center = process.env.EXPO_PUBLIC_APP_STORE_CENTER ?? DEFAULT_ACCOUNT_CENTER;
+export function supportsStorePurchases(): boolean {
+  const center =
+    process.env.EXPO_PUBLIC_BILLING_CENTER ??
+    process.env.EXPO_PUBLIC_APP_STORE_CENTER ??
+    DEFAULT_ACCOUNT_CENTER;
   return (
     subscriptionStore !== null &&
     useAccountState.getState().center.replace(/\/$/, "") === center.replace(/\/$/, "")
@@ -46,6 +50,7 @@ const coordinator = subscriptionStore
       identity: billingIdentity,
       membership: loadOnlineServiceMembership,
       verify: verifyAppStoreTransaction,
+      verifyPlay: verifyGooglePlayPurchase,
       updated: (membership) => {
         const reconnect =
           membership.can_connect && !useBillingState.getState().membership?.can_connect;
@@ -85,7 +90,7 @@ export async function refreshMembership(): Promise<void> {
   try {
     const [membership, product] = await Promise.all([
       loadOnlineServiceMembership(),
-      supportsAppStorePurchases() ? subscriptionStore!.product().catch(() => null) : null,
+      supportsStorePurchases() ? subscriptionStore!.product().catch(() => null) : null,
     ]);
     if (generation === epoch && revision === membershipRevision && billingIdentity() === identity)
       useBillingState.setState({ membership, price: product?.displayPrice ?? null, error: null });
@@ -97,8 +102,8 @@ export async function refreshMembership(): Promise<void> {
 
 export async function purchaseMembership(): Promise<void> {
   await perform(async () => {
-    if (!supportsAppStorePurchases() || !coordinator)
-      throw new Error("App Store purchases are unavailable for this service.");
+    if (!supportsStorePurchases() || !coordinator)
+      throw new Error("Purchases are unavailable for this service.");
     const result = await coordinator.purchase();
     if (result === "pending" && useBillingState.getState().membership?.status !== "active")
       useBillingState.setState({ message: "pending" });
@@ -106,8 +111,8 @@ export async function purchaseMembership(): Promise<void> {
 }
 export async function restoreMembership(): Promise<void> {
   await perform(async () => {
-    if (!supportsAppStorePurchases() || !coordinator)
-      throw new Error("App Store purchases are unavailable for this service.");
+    if (!supportsStorePurchases() || !coordinator)
+      throw new Error("Purchases are unavailable for this service.");
     const count = await coordinator.synchronize(true);
     useBillingState.setState({ message: count ? "restored" : "nothingToRestore" });
   });
@@ -125,7 +130,7 @@ async function perform(work: () => Promise<void>): Promise<void> {
   }
 }
 export async function reconcilePurchases(): Promise<void> {
-  if (!supportsAppStorePurchases() || !coordinator || !billingIdentity()) return;
+  if (!supportsStorePurchases() || !coordinator || !billingIdentity()) return;
   const generation = epoch;
   try {
     await coordinator.synchronize();
@@ -136,7 +141,7 @@ export async function reconcilePurchases(): Promise<void> {
 export function observePurchases(): () => void {
   return (
     subscriptionStore?.subscribe((transaction) => {
-      if (!supportsAppStorePurchases() || !coordinator || !billingIdentity()) return;
+      if (!supportsStorePurchases() || !coordinator || !billingIdentity()) return;
       const generation = epoch;
       void coordinator.accept(transaction).catch((error) => {
         if (generation === epoch) useBillingState.setState({ error: message(error) });

@@ -56,11 +56,22 @@ export const zhCN: TranslationResources = {
   },
   onlineService: {
     billing: {
-      deleteWarning: "删除 Ait 账号不会取消 Apple 订阅，请在 App Store 订阅中管理或取消。",
+      deleteWarning:
+        "删除 Ait 账号不会取消 Apple 或 Google Play 订阅，请分别前往购买时使用的商店管理或取消。",
       title: "Online Service 订阅",
+      stacking:
+        "每笔核实的月付增加一个自然月。App Store 与 Google Play 可同时订阅，已付时长累计；恢复购买不会重复增加时长。",
+      renewalCancelled: "已关闭续费",
+      stores: { app_store: "App Store 订阅", google_play: "Google Play 订阅" },
+      renewalByStore: {
+        app_store:
+          "费用从 Apple 账户扣除，每月自动续费；如需取消，请在当前周期结束前至少 24 小时操作。每次成功扣款增加一个月。可在 App Store 管理或取消；删除 Ait 账号不会取消订阅。",
+        google_play:
+          "费用通过 Google Play 扣除，每月自动续费；如需取消，请在下次续费前操作。每次成功扣款增加一个月。可在 Google Play 管理或取消；删除 Ait 账号不会取消订阅。",
+      },
       plan: "月付会员",
       benefit: "通过 Ait 在线服务连接你的电脑。",
-      accessUntil: "权益有效至",
+      accessUntil: "累计会员有效至",
       loading: "正在读取会员状态…",
       subscribe: "订阅 · {{price}} / 月",
       unavailable: "暂时无法购买",
@@ -83,6 +94,9 @@ export const zhCN: TranslationResources = {
         grace_period: "扣款宽限期",
         revoked: "已退款或撤销",
         verification_required: "需要重新验证",
+        pending: "等待付款",
+        paused: "已暂停",
+        on_hold: "付款暂停",
       },
     },
     title: "在线服务",

@@ -12,8 +12,11 @@ const mocks = vi.hoisted(() => ({
   account: { accountId: "account-a", status: "online", center: "https://aitapp.cn/api" },
   membership: vi.fn(),
   verify: vi.fn(),
+  verifyPlay: vi.fn(),
   refresh: vi.fn(),
   store: {
+    provider: "app_store",
+    productId: "monthly",
     product: vi.fn(),
     purchase: vi.fn(),
     transactions: vi.fn(),
@@ -26,6 +29,7 @@ vi.mock("@/runtime/account-state", () => ({
   useAccountState: { getState: () => mocks.account },
   loadOnlineServiceMembership: mocks.membership,
   verifyAppStoreTransaction: mocks.verify,
+  verifyGooglePlayPurchase: mocks.verifyPlay,
   accountCommand: mocks.refresh,
 }));
 vi.mock("./store", () => ({ subscriptionStore: mocks.store }));

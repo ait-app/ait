@@ -60,11 +60,21 @@ export const en = {
   onlineService: {
     billing: {
       deleteWarning:
-        "Deleting your Ait account does not cancel your Apple subscription. Manage or cancel it in App Store subscriptions.",
+        "Deleting your Ait account does not cancel Apple or Google Play subscriptions. Manage or cancel each subscription in the store where you purchased it.",
       title: "Online Service subscription",
+      stacking:
+        "Each verified monthly payment adds one calendar month to your membership. App Store and Google Play subscriptions can coexist and their paid time adds up. Restoring purchases does not add duplicate time.",
+      renewalCancelled: "Auto-renewal off",
+      stores: { app_store: "App Store subscription", google_play: "Google Play subscription" },
+      renewalByStore: {
+        app_store:
+          "Payment is charged to your Apple Account. Your subscription renews automatically each month unless cancelled at least 24 hours before the current period ends. Each successful payment adds a month. Cancel in App Store subscriptions; deleting your Ait account does not cancel it.",
+        google_play:
+          "Payment is charged through Google Play. Renews monthly unless cancelled before renewal. Each successful payment adds a month. Manage or cancel in Google Play; deleting your Ait account does not cancel it.",
+      },
       plan: "Monthly membership",
       benefit: "Connect to your computers using Ait Online Service.",
-      accessUntil: "Access until",
+      accessUntil: "Membership valid until",
       loading: "Loading membership…",
       subscribe: "Subscribe · {{price}} / month",
       unavailable: "Purchase unavailable",
@@ -88,6 +98,9 @@ export const en = {
         grace_period: "Billing grace period",
         revoked: "Refunded or revoked",
         verification_required: "Verification needed",
+        pending: "Awaiting payment",
+        paused: "Paused",
+        on_hold: "Payment on hold",
       },
     },
     title: "Online Service",

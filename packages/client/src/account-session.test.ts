@@ -1428,6 +1428,45 @@ describe("Online Service membership", () => {
     );
     await f.manager.logout();
   });
+  it("submits Play proofs to the account authority and accepts both store options", async () => {
+    const f = fixture();
+    await f.login();
+    const current = {
+      ...membership,
+      purchase_options: {
+        app_store: { available: true, product_id: "monthly", base_plan_id: null },
+        google_play: { available: true, product_id: "monthly", base_plan_id: "monthly" },
+      },
+      subscriptions: [
+        {
+          store: "google_play",
+          status: "active",
+          auto_renewing: true,
+          expires_at: "2026-12-30T00:00:00Z",
+        },
+      ],
+    };
+    f.http.mockResolvedValueOnce(Response.json(current));
+    const purchase = { purchase_token: "fixture-play-proof" };
+    expect(await f.manager.verifyGooglePlayPurchase(purchase)).toEqual(current);
+    expect(f.http).toHaveBeenLastCalledWith(
+      "https://aitapp.cn/api/v1/billing/google-play/purchases",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(purchase),
+        headers: expect.objectContaining({ Authorization: "Bearer private-jwt" }),
+      }),
+    );
+    for (const invalid of [
+      { ...current, purchase_options: null },
+      { ...current, purchase_options: { ...current.purchase_options, google_play: null } },
+      { ...current, subscriptions: [{ ...current.subscriptions[0], expires_at: "invalid" }] },
+    ]) {
+      f.http.mockResolvedValueOnce(Response.json(invalid));
+      await expect(f.manager.getMembership()).rejects.toThrow("invalid membership");
+    }
+    await f.manager.logout();
+  });
   it("requires login, validates membership responses, and preserves purchase ownership errors", async () => {
     const f = fixture();
     await expect(f.manager.getMembership()).rejects.toThrow("Sign in first");

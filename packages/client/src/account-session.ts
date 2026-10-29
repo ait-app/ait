@@ -103,6 +103,24 @@ export interface OnlineServiceMembership {
   can_connect: boolean;
   status: string;
   expires_at: string | null;
+  purchase_options?: {
+    app_store: SubscriptionPurchaseOption;
+    google_play: SubscriptionPurchaseOption;
+  };
+  subscriptions?: Array<{
+    store: "app_store" | "google_play";
+    status: string;
+    expires_at: string;
+    auto_renewing: boolean;
+  }>;
+}
+export interface SubscriptionPurchaseOption {
+  available: boolean;
+  product_id: string;
+  base_plan_id: string | null;
+}
+export interface GooglePlayPurchase {
+  purchase_token: string;
 }
 
 export interface AppStoreTransaction {
@@ -545,8 +563,12 @@ export class AccountSessionManager {
     return this.membershipRequest(transaction);
   }
 
+  verifyGooglePlayPurchase(purchase: GooglePlayPurchase): Promise<OnlineServiceMembership> {
+    return this.membershipRequest(purchase);
+  }
+
   private async membershipRequest(
-    transaction?: AppStoreTransaction,
+    transaction?: AppStoreTransaction | GooglePlayPurchase,
   ): Promise<OnlineServiceMembership> {
     const account = this.account;
     const generation = this.generation;
@@ -554,15 +576,20 @@ export class AccountSessionManager {
     const value = await this.http<OnlineServiceMembership>(
       account.center,
       account.token,
-      transaction ? "/v1/billing/app-store/transactions" : "/v1/billing/membership",
+      transaction
+        ? "purchase_token" in transaction
+          ? "/v1/billing/google-play/purchases"
+          : "/v1/billing/app-store/transactions"
+        : "/v1/billing/membership",
       transaction ? "POST" : "GET",
       transaction,
       this.requests,
-      25_000,
+      transaction ? 65_000 : 5000,
     );
     if (this.account !== account || this.generation !== generation)
       throw new Error("The account changed. Refresh and try again.");
     if (
+      !value ||
       typeof value.required !== "boolean" ||
       typeof value.purchases_available !== "boolean" ||
       typeof value.can_connect !== "boolean" ||
@@ -574,6 +601,35 @@ export class AccountSessionManager {
       ) ||
       (value.expires_at !== null &&
         (typeof value.expires_at !== "string" || !Number.isFinite(Date.parse(value.expires_at))))
+    )
+      throw new Error("The service returned invalid membership information.");
+    if (value.purchase_options !== undefined) {
+      const options = value.purchase_options;
+      if (
+        !options ||
+        ![options.app_store, options.google_play].every(
+          (option) =>
+            option &&
+            typeof option.available === "boolean" &&
+            typeof option.product_id === "string" &&
+            option.product_id.length > 0 &&
+            (option.base_plan_id === null || typeof option.base_plan_id === "string"),
+        )
+      )
+        throw new Error("The service returned invalid membership information.");
+    }
+    if (
+      value.subscriptions !== undefined &&
+      (!Array.isArray(value.subscriptions) ||
+        !value.subscriptions.every(
+          (subscription) =>
+            subscription &&
+            ["app_store", "google_play"].includes(subscription.store) &&
+            typeof subscription.status === "string" &&
+            typeof subscription.auto_renewing === "boolean" &&
+            typeof subscription.expires_at === "string" &&
+            Number.isFinite(Date.parse(subscription.expires_at)),
+        ))
     )
       throw new Error("The service returned invalid membership information.");
     return value;

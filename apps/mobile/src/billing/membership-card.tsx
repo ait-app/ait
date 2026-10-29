@@ -4,26 +4,42 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { SettingsCard, SettingsRow, SettingsSection } from "@/components/settings";
 import { Button } from "@/components/ui/button";
+import { subscriptionStore } from "./store";
+import { purchaseOption } from "./coordinator";
 import { openExternalUrl } from "@/utils/open-external-url";
 import {
   purchaseMembership,
   refreshMembership,
   restoreMembership,
-  supportsAppStorePurchases,
+  supportsStorePurchases,
   useBillingState,
 } from "./state";
 
 const privacyURL = "https://ait-app.com/privacy/";
-const termsURL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
-const manageURL = "https://apps.apple.com/account/subscriptions";
+const appleTermsURL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
+const googleTermsURL = "https://play.google.com/intl/en_us/about/play-terms/";
 
 export function OnlineServiceMembershipCard() {
   const { t, i18n } = useTranslation();
   const { membership, price, busy, error, message } = useBillingState();
-  const native = supportsAppStorePurchases();
+  const native = supportsStorePurchases();
   if (!membership && !native && !error) return null;
   const active = membership?.status === "active" || membership?.status === "grace_period";
-  const purchasable = native && membership?.purchases_available && membership.required;
+  const provider =
+    subscriptionStore?.provider ?? (Platform.OS === "android" ? "google_play" : "app_store");
+  const option = membership ? purchaseOption(membership, { provider }) : null;
+  const currentSubscription = membership?.subscriptions?.find((item) => item.store === provider);
+  const subscribedHere = currentSubscription
+    ? ["active", "grace_period", "pending"].includes(currentSubscription.status) &&
+      (currentSubscription.status === "pending" ||
+        Date.parse(currentSubscription.expires_at) > Date.now())
+    : !membership?.subscriptions && active;
+  const purchasable = native && option?.available && membership?.required;
+  const termsURL = provider === "google_play" ? googleTermsURL : appleTermsURL;
+  const manageURL =
+    provider === "google_play"
+      ? `https://play.google.com/store/account/subscriptions?sku=${encodeURIComponent(option?.product_id ?? "monthly")}&package=dev.ait.mobile`
+      : "https://apps.apple.com/account/subscriptions";
   const status = membership
     ? t(`onlineService.billing.states.${membership.status}`, {
         defaultValue: t("onlineService.billing.states.inactive"),
@@ -54,11 +70,24 @@ export function OnlineServiceMembershipCard() {
             </Text>
           </SettingsRow>
         ) : null}
+        {membership?.subscriptions?.map((item) => (
+          <SettingsRow key={item.store} label={t(`onlineService.billing.stores.${item.store}`)}>
+            <Text style={styles.value}>
+              {t(`onlineService.billing.states.${item.status}`, {
+                defaultValue: item.status,
+              })}
+              {item.status === "active" && !item.auto_renewing
+                ? ` · ${t("onlineService.billing.renewalCancelled")}`
+                : ""}
+            </Text>
+          </SettingsRow>
+        ))}
+        <Text style={styles.note}>{t("onlineService.billing.stacking")}</Text>
         {membership && !membership.required ? (
           <Text style={styles.note}>{t("onlineService.billing.accessAvailable")}</Text>
         ) : null}
         <View style={styles.actions}>
-          {purchasable && !active ? (
+          {purchasable && !subscribedHere ? (
             <Button
               disabled={busy || message === "pending" || !price}
               testID="subscribe-online-service"
@@ -82,14 +111,14 @@ export function OnlineServiceMembershipCard() {
           <Button variant="ghost" disabled={busy} onPress={() => void refreshMembership()}>
             {t("onlineService.refresh")}
           </Button>
-          {Platform.OS === "ios" ? (
+          {native ? (
             <Button variant="ghost" onPress={() => open(manageURL)}>
               {t("onlineService.billing.manage")}
             </Button>
           ) : null}
         </View>
         {purchasable || active ? (
-          <Text style={styles.note}>{t("onlineService.billing.renewal")}</Text>
+          <Text style={styles.note}>{t(`onlineService.billing.renewalByStore.${provider}`)}</Text>
         ) : null}
         <View style={styles.actions}>
           <Button variant="ghost" size="sm" onPress={() => open(privacyURL)}>

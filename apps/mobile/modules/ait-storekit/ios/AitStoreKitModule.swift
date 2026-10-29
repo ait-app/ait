@@ -43,7 +43,7 @@ public final class AitStoreKitModule: Module {
       @unknown default: throw BillingError.unavailable
       }
     }
-    AsyncFunction("transactions") { () async -> [[String: Any]] in
+    AsyncFunction("transactions") { (includeHistory: Bool) async -> [[String: Any]] in
       var transactions: [UInt64: [String: Any]] = [:]
       for await result in Transaction.currentEntitlements {
         if case .verified(let transaction) = result, transaction.productID == self.productID {
@@ -53,6 +53,13 @@ public final class AitStoreKitModule: Module {
       for await result in Transaction.unfinished {
         if case .verified(let transaction) = result, transaction.productID == self.productID {
           transactions[transaction.id] = self.describe(transaction)
+        }
+      }
+      if includeHistory {
+        for await result in Transaction.all {
+          if case .verified(let transaction) = result, transaction.productID == self.productID {
+            transactions[transaction.id] = self.describe(transaction)
+          }
         }
       }
       return Array(transactions.values)

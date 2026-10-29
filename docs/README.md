@@ -1,6 +1,6 @@
 # Ait 文档
 
-- [Online Service 订阅](operations/online-service-subscription.md)：StoreKit 2、账号中心会员校验与沙盒验收；[ADR-203](decisions/clients/adr-203-online-service-subscription.md)。
+- [Online Service 订阅](operations/online-service-subscription.md)：StoreKit 2 / Play Billing、双平台付款累计时长、账号中心校验与测试验收；[ADR-203](decisions/clients/adr-203-online-service-subscription.md)。
 
 - [MiniMax Code](operations/minimax-code.md)：最新版 `mcode` 原生 ACP、登录与真实联调；[ADR-197](decisions/providers/adr-197-minimax-code-acp.md)、[验证报告](reports/providers/minimax-code-acp-2026-10-28.md)。
 

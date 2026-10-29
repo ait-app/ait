@@ -10,9 +10,11 @@ type StoreModule = Omit<SubscriptionStore, "subscribe"> & {
 const native = requireOptionalNativeModule<StoreModule>("AitStoreKit");
 export const subscriptionStore: SubscriptionStore | null = native
   ? {
+      provider: "app_store",
+      productId: "monthly",
       product: () => native.product(),
       purchase: (token) => native.purchase(token),
-      transactions: () => native.transactions(),
+      transactions: (includeHistory = false) => native.transactions(includeHistory),
       restore: () => native.restore(),
       finish: (id) => native.finish(id),
       subscribe(listener) {
