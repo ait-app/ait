@@ -18,6 +18,7 @@ import type {
   AccountInfo,
   OnlineServiceMembership,
   AppStoreTransaction,
+  GooglePlayPurchase,
 } from "@ait/client/internal/account-session";
 export type { AccountHost } from "@ait/client/internal/account-session";
 
@@ -86,6 +87,13 @@ export async function verifyAppStoreTransaction(
 ): Promise<OnlineServiceMembership> {
   const manager = await getNativeAccount();
   return manager.verifyAppStoreTransaction(transaction);
+}
+
+export async function verifyGooglePlayPurchase(
+  purchase: GooglePlayPurchase,
+): Promise<OnlineServiceMembership> {
+  const manager = await getNativeAccount();
+  return manager.verifyGooglePlayPurchase(purchase);
 }
 
 let commandTail = Promise.resolve<unknown>(undefined);

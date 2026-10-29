@@ -20,6 +20,8 @@ const transaction: StoreTransaction = {
 function fixture() {
   let identity: string | null = "account-a";
   const store = {
+    provider: "app_store" as const,
+    productId: "monthly",
     product: vi.fn().mockResolvedValue({ id: "monthly", displayPrice: "$4.99" }),
     purchase: vi
       .fn<SubscriptionStore["purchase"]>()
@@ -33,6 +35,7 @@ function fixture() {
     identity: () => identity,
     membership: vi.fn().mockResolvedValue(membership),
     verify: vi.fn().mockResolvedValue(membership),
+    verifyPlay: vi.fn().mockResolvedValue(membership),
     updated: vi.fn(),
   };
   return {
@@ -107,4 +110,63 @@ describe("account-bound StoreKit purchase delivery", () => {
     await expect(f.coordinator.synchronize(true)).rejects.toThrow("another Ait account");
     expect(f.store.finish).not.toHaveBeenCalled();
   });
+});
+
+it("delivers Play tokens to the Play verifier while the same account also has Apple membership", async () => {
+  const f = fixture();
+  const store: SubscriptionStore = {
+    ...f.store,
+    provider: "google_play",
+    productId: "monthly",
+    basePlanId: "monthly",
+  };
+  const playTransaction: StoreTransaction = {
+    store: "google_play",
+    id: "token-hash",
+    productId: "monthly",
+    purchaseToken: "private-play-fixture",
+  };
+  f.store.purchase.mockResolvedValue({ status: "purchased", transaction: playTransaction });
+  f.account.membership.mockResolvedValue({
+    ...membership,
+    purchase_options: {
+      app_store: { available: true, product_id: "monthly", base_plan_id: null },
+      google_play: { available: true, product_id: "monthly", base_plan_id: "monthly" },
+    },
+    subscriptions: [
+      {
+        store: "app_store",
+        status: "active",
+        expires_at: "2030-01-01T00:00:00Z",
+        auto_renewing: true,
+      },
+    ],
+  });
+  const coordinator = new PurchaseCoordinator(store, f.account);
+  expect(await coordinator.purchase()).toBe("purchased");
+  expect(f.account.verifyPlay).toHaveBeenCalledWith({ purchase_token: "private-play-fixture" });
+  expect(f.account.verify).not.toHaveBeenCalled();
+  expect(f.store.finish).toHaveBeenCalledWith("token-hash");
+});
+
+it("rejects Play product/base-plan drift and leaves failed Play verification retryable", async () => {
+  const f = fixture();
+  const store: SubscriptionStore = {
+    ...f.store,
+    provider: "google_play",
+    productId: "monthly",
+    basePlanId: "monthly",
+  };
+  const coordinator = new PurchaseCoordinator(store, f.account);
+  await expect(coordinator.purchase()).rejects.toThrow("unavailable");
+  expect(f.store.purchase).not.toHaveBeenCalled();
+  const transaction: StoreTransaction = {
+    store: "google_play",
+    id: "token-hash",
+    productId: "monthly",
+    purchaseToken: "private-play-fixture",
+  };
+  f.account.verifyPlay.mockRejectedValue(new Error("verification offline"));
+  await expect(coordinator.accept(transaction)).rejects.toThrow("offline");
+  expect(f.store.finish).not.toHaveBeenCalled();
 });

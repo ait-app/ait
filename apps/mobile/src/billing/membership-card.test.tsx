@@ -20,14 +20,20 @@ const mocks = vi.hoisted(() => ({
     error: null as string | null,
     message: null as string | null,
   },
+  store: {
+    provider: "app_store" as "app_store" | "google_play",
+    productId: "monthly",
+    basePlanId: "monthly",
+  },
   purchase: vi.fn(),
   restore: vi.fn(),
   refresh: vi.fn(),
   open: vi.fn(),
 }));
+vi.mock("./store", () => ({ subscriptionStore: mocks.store }));
 vi.mock("./state", () => ({
   useBillingState: () => mocks.state,
-  supportsAppStorePurchases: () => true,
+  supportsStorePurchases: () => true,
   purchaseMembership: mocks.purchase,
   restoreMembership: mocks.restore,
   refreshMembership: mocks.refresh,
@@ -35,6 +41,8 @@ vi.mock("./state", () => ({
 vi.mock("@/utils/open-external-url", () => ({ openExternalUrl: mocks.open }));
 beforeEach(async () => {
   vi.clearAllMocks();
+  mocks.store.provider = "app_store";
+  Object.assign(mocks.state.membership, { subscriptions: undefined, purchase_options: undefined });
   mocks.state.membership.status = "inactive";
   mocks.state.membership.expires_at = null;
   mocks.state.price = "¥38.00";
@@ -80,4 +88,66 @@ it("disables buying before product loading completes or while a purchase is pend
   fireEvent.click(view.getByTestId("subscribe-online-service"));
   expect(mocks.purchase).not.toHaveBeenCalled();
   expect(view.getByText(/awaiting Apple approval/)).toBeTruthy();
+});
+
+it("allows the other store to add time while showing both subscriptions once purchased", () => {
+  mocks.state.membership.status = "active";
+  Object.assign(mocks.state.membership, {
+    subscriptions: [
+      {
+        store: "google_play",
+        status: "active",
+        expires_at: "2030-01-01T00:00:00Z",
+        auto_renewing: true,
+      },
+    ],
+  });
+  const view = render(<OnlineServiceMembershipCard />);
+  expect(view.getByTestId("subscribe-online-service")).toBeTruthy();
+  expect(view.getByText(/their paid time adds up/)).toBeTruthy();
+  Object.assign(mocks.state.membership, {
+    subscriptions: [
+      {
+        store: "google_play",
+        status: "active",
+        expires_at: "2030-01-01T00:00:00Z",
+        auto_renewing: true,
+      },
+      {
+        store: "app_store",
+        status: "active",
+        expires_at: "2030-01-01T00:00:00Z",
+        auto_renewing: true,
+      },
+    ],
+  });
+  view.rerender(<OnlineServiceMembershipCard />);
+  expect(view.queryByTestId("subscribe-online-service")).toBeNull();
+  expect(view.getByText("Google Play subscription")).toBeTruthy();
+  expect(view.getByText("App Store subscription")).toBeTruthy();
+});
+it("uses Google Play renewal and management on Android even with active Apple credit", () => {
+  mocks.store.provider = "google_play";
+  mocks.state.membership.status = "active";
+  Object.assign(mocks.state.membership, {
+    purchase_options: {
+      app_store: { available: true, product_id: "monthly", base_plan_id: null },
+      google_play: { available: true, product_id: "monthly", base_plan_id: "monthly" },
+    },
+    subscriptions: [
+      {
+        store: "app_store",
+        status: "active",
+        expires_at: "2030-01-01T00:00:00Z",
+        auto_renewing: true,
+      },
+    ],
+  });
+  const view = render(<OnlineServiceMembershipCard />);
+  expect(view.getByTestId("subscribe-online-service")).toBeTruthy();
+  expect(view.getByText(/Payment is charged through Google Play/)).toBeTruthy();
+  fireEvent.click(view.getByText("Manage subscription"));
+  expect(mocks.open).toHaveBeenCalledWith(
+    "https://play.google.com/store/account/subscriptions?sku=monthly&package=dev.ait.mobile",
+  );
 });
