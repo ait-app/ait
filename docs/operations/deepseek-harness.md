@@ -10,6 +10,7 @@ Linux 会解析 PATH 中 `deepseek-harness` 的真实位置，并检查 `/opt/ds
 和 `/opt/deepseek-harness`；macOS 检查 `/Applications` 与 `~/Applications` 下的 DSH 应用。
 仅识别包身份为 `@deepseek-ai/dsh-desktop` 且包含 CLI 入口的安装包。
 Linux 使用包内 Node；macOS 没有独立 Node 时以 `ELECTRON_RUN_AS_NODE=1` 启动包内运行时。
+没有 PATH CLI 或完整桌面包时，Unix 主机继续检查已有的 npx 安装缓存。
 这些入口用于模型发现、会话导入/恢复、ACP 和辅助生成，不会打开 DSH 桌面窗口。
 缺失或不完整的安装包仍报告不可用；安装或升级 DSH 后需要重启 Ait daemon 重新发现。
 
@@ -18,6 +19,53 @@ Linux 使用包内 Node；macOS 没有独立 Node 时以 `ELECTRON_RUN_AS_NODE=1
 ```sh
 export AIT_SERVER_DEEPSEEK_HARNESS_BIN=/absolute/path/to/dsh
 ```
+
+## npm 安装与识别排查
+
+[官方 README](https://github.com/deepseek-ai/deepseek-harness#run-from-npm) 的运行示例是：
+
+```sh
+npx @deepseek-ai/dsh web
+```
+
+该命令可以启动 DSH，但不会安装全局 `dsh`。npm 将下载的包放入缓存，并仅为它启动的
+进程加入相应的命令路径，见 [npm exec 文档](https://docs.npmjs.com/cli/v11/commands/npm-exec/)。
+Ait 会在没有 PATH CLI 或完整桌面包时，从 Unix 用户的 `~/.npm/_npx` 发现已下载的 DSH。
+自定义缓存可在启动 Ait daemon 时导出绝对路径 `npm_config_cache` 或 `NPM_CONFIG_CACHE`；
+仅在 `.npmrc` 或某次 npx 命令参数中指定的缓存位置，需要显式导出后才能被 Ait 发现。
+扫描最多 256 个缓存目录，只接受包身份和 `bin.dsh` 匹配且入口可执行的安装，
+有多个有效缓存时选择包目录最近修改的一项；需要固定版本时可使用本文的显式 CLI 路径覆盖。
+Ait 直接启动缓存中的 CLI，不执行 npx、不下载依赖，也不连接外部命令已启动的 Web Host。
+首次 npx 下载完成后重启 Ait daemon，即可重新发现；原生 Host 不必保持运行。
+
+也可以在运行 Ait daemon 的主机和用户下使用 npm 全局安装 CLI：
+
+```sh
+npm install --global @deepseek-ai/dsh
+command -v dsh
+dsh --version
+```
+
+Linux 的 npm 全局命令位于 `{prefix}/bin`，通常是指向
+`{prefix}/lib/node_modules/@deepseek-ai/dsh/lib/bin.js` 的符号链接；Ait 支持这种入口。
+`npm install` 未加 `--global` 时只安装到当前项目，`npx @deepseek-ai/dsh` 也不等于安装全局
+`dsh` 命令。目录规则见 [npm 官方文档](https://docs.npmjs.com/cli/v11/configuring-npm/folders/)。
+
+若终端能找到 `dsh`，Ait 仍显示不可用，检查 daemon 启动时的 PATH 是否包含
+`npm prefix --global` 对应的 `bin`，并确认同一环境中 `node` 可执行。nvm/fnm 等工具配置的
+Node 路径需要由启动 Ait 的环境继承。桌面端会读取登录 shell 环境；独立运行的 daemon
+继承启动它的终端或服务环境。安装或修改环境后，重启 Ait daemon。
+
+若命令可见但模型列表加载失败，在终端运行本文开头的 Web Host 命令，确认原生 Host
+能启动；`dsh --version` 成功不能证明插件和原生依赖已安装完整。保留 npm 安装时关于
+失败或被阻止的安装脚本提示，并从[应用诊断](diagnostics.md)导出故障详情。
+如果 Provider 已被识别但模型列表为空，先在 DSH 中完成账号登录或配置模型凭据；
+DSH `0.2.1-rc.2` 的全新 profile 在未配置凭据时可返回空模型目录，这与 CLI 路径缺失不同。
+排查时提供安装命令、`command -v dsh`、`dsh --version`、`node --version`、
+`npm --version` 与 `npm prefix --global` 的输出。
+本次 Linux npm 独立安装的验证范围与限制见[排查记录](../reports/providers/dsh-npm-linux-2026-10-29.md)。
+
+## 创建与原生能力
 
 创建示例：
 

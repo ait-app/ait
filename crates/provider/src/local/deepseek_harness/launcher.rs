@@ -1,4 +1,6 @@
 //! Resolve CLI installations and desktop-bundled runtimes without opening the desktop UI.
+mod npm;
+
 use std::path::{Path, PathBuf};
 
 use tokio::process::Command;
@@ -13,8 +15,8 @@ pub(super) struct Desktop {
 }
 
 impl DeepSeekHarnessClient {
-    /// Prefer the installed CLI, falling back to the runtime bundled with the desktop app.
-    /// Returns an unavailable `dsh` launcher when neither installation can be resolved.
+    /// Prefer the installed CLI, then a desktop bundle, then an existing npx installation.
+    /// Returns an unavailable `dsh` launcher when no installation can be resolved.
     #[must_use]
     pub(crate) fn installed() -> Self {
         let paths: Vec<_> = std::env::var_os("PATH")
@@ -42,7 +44,8 @@ impl DeepSeekHarnessClient {
                 applications(&PathBuf::from(home).join("Applications"), &mut bundles);
             }
         }
-        resolve(&paths, &bundles)
+        let cache = npm::cache(|key| std::env::var_os(key));
+        resolve(&paths, &bundles, cache.as_deref())
     }
 
     pub(super) fn command(&self) -> Command {
@@ -58,7 +61,11 @@ impl DeepSeekHarnessClient {
     }
 }
 
-fn resolve(paths: &[PathBuf], bundles: &[PathBuf]) -> DeepSeekHarnessClient {
+fn resolve(
+    paths: &[PathBuf],
+    bundles: &[PathBuf],
+    npm_cache: Option<&Path>,
+) -> DeepSeekHarnessClient {
     let name = if cfg!(windows) { "dsh.exe" } else { "dsh" };
     if let Some(program) = paths
         .iter()
@@ -70,6 +77,11 @@ fn resolve(paths: &[PathBuf], bundles: &[PathBuf]) -> DeepSeekHarnessClient {
     bundles
         .iter()
         .find_map(|bundle| desktop(bundle))
+        .or_else(|| {
+            npm_cache
+                .and_then(npm::cached_cli)
+                .map(DeepSeekHarnessClient::new)
+        })
         .unwrap_or_else(|| DeepSeekHarnessClient::new("dsh".into()))
 }
 
