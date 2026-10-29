@@ -104,8 +104,9 @@ export async function purchaseMembership(): Promise<void> {
   await perform(async () => {
     if (!supportsStorePurchases() || !coordinator)
       throw new Error("Purchases are unavailable for this service.");
+    const revision = membershipRevision;
     const result = await coordinator.purchase();
-    if (result === "pending" && useBillingState.getState().membership?.status !== "active")
+    if (result === "pending" && revision === membershipRevision)
       useBillingState.setState({ message: "pending" });
   });
 }
