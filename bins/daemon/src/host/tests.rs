@@ -72,8 +72,13 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
     let root = tempfile::tempdir().unwrap();
     let configuration = config(root.path());
     let instance = Arc::new(InstanceLease::acquire(root.path()).unwrap());
-    let (mut services, sources) =
-        compose_services(&configuration, "127.0.0.1:7316".parse().unwrap(), &instance).unwrap();
+    let (mut services, sources) = compose_services(
+        &configuration,
+        "127.0.0.1:7316".parse().unwrap(),
+        &instance,
+        uuid::Uuid::new_v4().to_string().into(),
+    )
+    .unwrap();
     let cases = installation_cases(&mut services);
     for (installed, methods) in cases {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

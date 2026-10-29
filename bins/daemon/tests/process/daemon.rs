@@ -168,7 +168,7 @@ async fn daemon_status_config_diagnostics_and_update_match_canonical_contract() 
     assert_eq!(pairing["code"], "method_not_found");
     let config = request(&mut socket, "daemon.config.get.request", json!({})).await;
     assert_eq!(config["result"]["config"]["relay"]["enabled"], false);
-    assert_eq!(config["result"]["config"]["mcp"]["injectIntoAgents"], false);
+    assert_eq!(config["result"]["config"]["mcp"]["injectIntoAgents"], true);
 
     let changed = request(
         &mut socket,

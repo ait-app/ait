@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline stdio protocol peer. Never invokes Codex, a network API, or a model."""
+"""Offline stdio peer; the optional MCP probe calls only the injected local daemon."""
 import json
 import os
 from pathlib import Path
@@ -8,6 +8,8 @@ import time
 import subprocess
 import threading
 import uuid
+import urllib.request
+from urllib.parse import urlsplit
 
 # Diagnostic calls use the host cwd; their test-specific override is data beside the launcher link.
 cwd_override = Path(sys.argv[0]).with_suffix(".cwd")
@@ -26,6 +28,43 @@ history_lock = threading.Lock()
 stream_items = []
 steered_inputs = []
 voice_history = []
+agent_mcp = None
+
+def probe_agent_mcp():
+    if agent_mcp is None:
+        return "mcp-not-injected"
+    assert urlsplit(agent_mcp["url"]).hostname in ("127.0.0.1", "::1", "localhost")
+    headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream",
+               "MCP-Protocol-Version": "2025-11-25", **agent_mcp.get("http_headers", {})}
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    def rpc(method, params, notification=False):
+        message = {"jsonrpc": "2.0", "method": method, "params": params}
+        if not notification:
+            message["id"] = "native-mcp-probe"
+        request = urllib.request.Request(agent_mcp["url"], data=json.dumps(message).encode(), headers=headers)
+        with opener.open(request, timeout=10) as response:
+            body = response.read()
+        return json.loads(body) if body else {}
+    rpc("initialize", {"protocolVersion": "2025-11-25", "capabilities": {},
+                       "clientInfo": {"name": "offline-native", "version": "1"}})
+    rpc("notifications/initialized", {}, notification=True)
+    catalog = rpc("tools/list", {})
+    assert any(tool["name"] == "rename_workspace" for tool in catalog["result"]["tools"])
+    renamed = rpc("tools/call", {"name": "rename_workspace", "arguments": {"title": "Renamed through injected MCP"}})
+    assert renamed["result"]["isError"] is False, renamed
+    child_path = root / "mcp-injection-child.json"
+    if not child_path.exists():
+        created = rpc("tools/call", {"name": "create_agent", "arguments": {
+            "provider": "codex/offline-model", "title": "Injected MCP child", "initialPrompt": "child task"}})
+        assert created["result"]["isError"] is False, created
+        child = created["result"]["structuredContent"]
+        waited = rpc("tools/call", {"name": "wait_for_agent", "arguments": {"agentId": child["agentId"]}})
+        assert waited["result"]["isError"] is False, waited
+        assert waited["result"]["structuredContent"]["lastMessage"] == "Echo: child task", waited
+        child_path.write_text(json.dumps(child))
+    with (root / "mcp-injection-probes.jsonl").open("a") as output:
+        output.write(json.dumps({"url": agent_mcp["url"], "caller": headers["X-Ait-Agent-Id"]}) + "\n")
+    return "mcp-injection-ok"
 
 def voice_item(item, completed=True):
     item = {"realtimeSessionId":"realtime-fixture", **item}
@@ -172,6 +211,7 @@ for line in sys.stdin:
         result = {"data":[{"name":"Plan","mode":"plan","model":"offline-model","reasoning_effort":"high"},
             {"name":"Default","mode":"default","model":"offline-model"}]} if mode == "workflows" else {"data":[]}
     elif method in ("thread/start", "thread/resume", "thread/read"):
+        agent_mcp = params.get("config", {}).get("mcp_servers", {}).get("ait")
         if method == "thread/resume" and mode == "realtime-writer-busy":
             emit({"id": request["id"], "error": {"code": -32600, "message": "thread " + params["threadId"] + " already has an active writer"}})
             continue
@@ -336,6 +376,9 @@ for line in sys.stdin:
         text = next((item["text"] for item in params["input"] if item["type"] == "text"), "skill-only")
         turn_text = text
         turn_content = params["input"]
+        if text == "ait-mcp-probe":
+            complete(pending, probe_agent_mcp())
+            continue
         if text == "usage":
             emit({"method":"thread/tokenUsage/updated", "params":{"threadId":thread_id,
                 "tokenUsage":{"last":{"inputTokens":100,"cachedInputTokens":30,"outputTokens":7,"totalTokens":107},"modelContextWindow":200000}}})

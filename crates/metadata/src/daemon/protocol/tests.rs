@@ -119,7 +119,7 @@ fn config_defaults_and_passthrough_match_paseo_mutable_shape() {
     let value = serde_json::to_value(&config).unwrap();
     assert_eq!(value["relay"]["enabled"], false);
     assert_eq!(value["mcp"]["enabled"], true);
-    assert_eq!(value["mcp"]["injectIntoAgents"], false);
+    assert_eq!(value["mcp"]["injectIntoAgents"], true);
     assert_eq!(value["browserTools"]["enabled"], false);
     assert_eq!(value["metadataGeneration"]["providers"], json!([]));
 

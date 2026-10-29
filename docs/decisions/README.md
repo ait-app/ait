@@ -76,6 +76,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
+- [ADR-202：Agent MCP 运行时自动注入](providers/adr-202-agent-mcp-injection.md)
+
 - [ADR-199：内置 Skill 随 daemon 启动分发](providers/adr-199-bundled-skill-distribution.md)
 
 - [ADR-198：OMP 交互等待期间持续发布事件](providers/adr-198-omp-interaction-progress.md)

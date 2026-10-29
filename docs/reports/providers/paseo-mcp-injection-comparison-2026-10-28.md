@@ -6,6 +6,8 @@
 
 ## 结论
 
+本文保留实现前的审计基线；后续 HTTP 运行时注入见 [ADR-202](../../decisions/providers/adr-202-agent-mcp-injection.md)。
+
 MCP 服务端与 Skill 分发已经具备，缺的是从 daemon 到 Provider 的运行时注入与调用链。
 Paseo 同时支持原生工具目录注册与 HTTP MCP；完整对齐不能仅给所有 Provider 增加一个
 `mcpServers` 项。第一阶段可以先完成 Codex、Claude 和 DSH ACP 的 HTTP 路径，其他 Provider

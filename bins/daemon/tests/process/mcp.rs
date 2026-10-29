@@ -1,5 +1,8 @@
 use serde_json::{Value, json};
 
+#[path = "mcp/injection.rs"]
+mod injection;
+
 use super::native::NativeFixture;
 use super::{TOKEN, ready, start_with_path, terminate};
 

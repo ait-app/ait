@@ -45,6 +45,7 @@ use persistence::storage::workspace_labels::FileWorkspaceLabelStore;
 use provider::Providers;
 use provider::service::agent_execution::{AgentExecution, ExecutionDependencies};
 use provider::service::agent_manager::AgentManager;
+use provider::service::agent_mcp::AgentMcp;
 use provider::service::agent_runtime::AgentRuntimeDirectory;
 use provider::service::agents::Agents;
 use provider::service::workspace_attention::AgentWorkspaceAttention;
@@ -98,10 +99,13 @@ impl Server {
         let address = listener
             .local_addr()
             .context("read server listener address")?;
+        let mcp_token = secrecy::SecretString::from(uuid::Uuid::new_v4().to_string());
+        let launch_mcp_token = mcp_token.clone();
         let (instance, services, sources, device) = tokio::task::spawn_blocking(move || {
             let instance = Arc::new(InstanceLease::acquire(&config.data_dir)?);
             let device = crate::device::load_state(&config.data_dir, instance.server_id)?;
-            let (mut services, sources) = compose_services(&config, address, &instance)?;
+            let (mut services, sources) =
+                compose_services(&config, address, &instance, launch_mcp_token)?;
             if let Some(diagnostics) = diagnostics {
                 services.metadata = services.metadata.map(|service| {
                     let mut dependencies = service.into_dependencies();
@@ -120,6 +124,7 @@ impl Server {
             token,
             services,
         )?
+        .with_agent_mcp_token(mcp_token)?
         .with_browser_origins(web_origins)?;
         let (store, state) = device;
         let relay = crate::device::StatusRelay::new(
@@ -229,6 +234,7 @@ fn compose_services(
     config: &Config,
     address: SocketAddr,
     instance: &Arc<InstanceLease>,
+    mcp_token: secrecy::SecretString,
 ) -> anyhow::Result<(Services, hub::sources::Sources)> {
     let storage = open_directory_registries(config)?;
     let publication_sources = storage.publication_sources();
@@ -259,6 +265,7 @@ fn compose_services(
         &storage.projects,
         &storage.agents,
     );
+    let agent_mcp = AgentMcp::new(address, mcp_token, Arc::new(config_store.clone()));
     let daemon = compose_daemon(config_store, address, &server_id)?;
     let workspace_automation = Arc::new(Mutex::new(workspace_automation));
     let timeline = open_timeline(&config.data_dir)?;
@@ -278,7 +285,7 @@ fn compose_services(
     ))
     .with_activity_source(Arc::new(terminals.activity_source()));
     let agent_execution = compose_provider(
-        (storage.agents.clone(), timeline),
+        (storage.agents.clone(), timeline, agent_mcp),
         (&storage.workspaces, &storage.projects),
         instance,
         providers,
@@ -583,9 +590,10 @@ fn open_timeline(
 }
 
 fn compose_provider(
-    agent_storage: (
+    agent_runtime: (
         FileBackedAgentRuntimeRegistry,
         provider::storage::timeline::Timeline,
+        AgentMcp,
     ),
     registries: (&FileBackedWorkspaceRegistry, &FileBackedProjectRegistry),
     instance: &Arc<InstanceLease>,
@@ -598,9 +606,10 @@ fn compose_provider(
     ),
 ) -> anyhow::Result<AgentExecution> {
     let (directory, generator, names, workspace_automation) = metadata;
-    let (agent_runtime_registry, timeline) = agent_storage;
+    let (agent_runtime_registry, timeline, mcp) = agent_runtime;
     let (workspace_registry, project_registry) = registries;
     let mut manager = AgentManager::new(Box::new(agent_runtime_registry.clone()))
+        .with_agent_mcp(mcp)
         .with_timeline(timeline)
         .with_creations(directory.creations())
         .with_summary_generation(generator)

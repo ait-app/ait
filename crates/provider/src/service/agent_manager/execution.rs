@@ -35,6 +35,7 @@ impl AgentManager {
     /// Share factories and durable services while retaining separate live session ownership.
     pub(crate) fn fork(&self, owner: Option<Owner>) -> Self {
         Self {
+            mcp: self.mcp.clone(),
             registry: self.registry.clone(),
             clients: self.clients.clone(),
             live: BTreeMap::new(),

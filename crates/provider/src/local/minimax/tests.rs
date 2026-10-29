@@ -5,6 +5,7 @@ use crate::protocol::prompt::AgentPrompt;
 mod discovery;
 mod execution;
 mod live;
+mod mcp;
 
 fn fixture() -> (tempfile::TempDir, MiniMaxClient, AgentSessionSpec) {
     let root = tempfile::tempdir().unwrap();

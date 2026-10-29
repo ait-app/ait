@@ -94,6 +94,10 @@ impl DeepSeekHarnessClient {
 }
 
 impl AgentClient for DeepSeekHarnessClient {
+    fn supports_agent_mcp(&self) -> bool {
+        !self.interactive
+    }
+
     fn usage(&self) -> AgentSessionFuture<'_, Value> {
         Box::pin(async move {
             if !self.interactive {

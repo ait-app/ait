@@ -5,6 +5,7 @@ mod controls;
 mod delivery;
 mod execution;
 mod generated_titles;
+mod mcp;
 pub(crate) mod native_sessions;
 pub(crate) mod ownership;
 mod realtime;
@@ -91,6 +92,7 @@ pub(crate) struct AgentRegistration {
 
 #[derive(Debug)]
 struct LiveAgent {
+    mcp: Option<super::agent_mcp::Binding>,
     usage_cache: usage::UsageCache,
     session: Box<dyn AgentSession>,
     _permit: tokio::sync::OwnedSemaphorePermit,
@@ -117,6 +119,7 @@ impl LiveAgent {
         registered: bool,
     ) -> Self {
         Self {
+            mcp: None,
             usage_cache: usage::UsageCache::default(),
             session,
             _permit: permit,
@@ -143,6 +146,7 @@ impl LiveAgent {
 /// a failed registration attempts to close the unregistered session before returning an error.
 #[derive(Debug)]
 pub struct AgentManager {
+    mcp: Option<super::agent_mcp::AgentMcp>,
     registry: Arc<dyn AgentRuntimeRegistry>,
     clients: BTreeMap<String, Arc<dyn AgentClient>>,
     live: BTreeMap<String, LiveAgent>,
@@ -173,6 +177,7 @@ impl AgentManager {
     #[must_use]
     pub fn new(registry: Box<dyn AgentRuntimeRegistry>) -> Self {
         Self {
+            mcp: None,
             registry: registry.into(),
             clients: BTreeMap::new(),
             live: BTreeMap::new(),
@@ -189,6 +194,13 @@ impl AgentManager {
             auto_archives: auto_archive::AutoArchives::default(),
             usage_cache: usage::UsageCache::default(),
         }
+    }
+
+    /// Install the host's private MCP connection policy before spawning execution lanes.
+    #[must_use]
+    pub fn with_agent_mcp(mut self, mcp: super::agent_mcp::AgentMcp) -> Self {
+        self.mcp = Some(mcp);
+        self
     }
 
     /// Install the same creation receipt service used by Workspace metadata.
@@ -436,16 +448,19 @@ impl AgentManager {
         ) {
             return Err(AgentManagerError::InvalidRequest);
         }
-        let config = patch.apply(
+        let mut effective = patch.apply(
             record
                 .config
                 .as_ref()
                 .unwrap_or(&StoredAgentConfig::default()),
         );
         if let Some(agent) = self.live.get(agent_id) {
+            if let Some(binding) = &agent.mcp {
+                binding.apply(&mut effective);
+            }
             agent
                 .session
-                .validate_config_update(&config)
+                .validate_config_update(&effective)
                 .map_err(|_| AgentManagerError::InvalidRequest)?;
         }
         self.clients
@@ -454,7 +469,7 @@ impl AgentManager {
             .validate_selection(&AgentSessionSpec {
                 provider: record.provider.clone(),
                 cwd: record.cwd.clone(),
-                config,
+                config: effective,
             })
             .await
             .map_err(|_| AgentManagerError::InvalidRequest)?;
@@ -526,10 +541,12 @@ impl AgentManager {
         }
         let permit = self.reserve_session()?;
         let client = self.available_client(&spec.provider).await?;
+        let (launch, binding) =
+            self.prepare_mcp(agent_id, spec, AgentResumePurpose::Interactive)?;
         let session = execution::native(
             &spec.provider,
             "create",
-            client.create_session_with_environment(spec, environment),
+            client.create_session_with_environment(&launch, environment),
         )
         .await
         .map_err(map_session)?;
@@ -564,7 +581,7 @@ impl AgentManager {
             .register_session(agent_id, session, record, Registration::Create, permit)
             .await?;
         self.mark_history_loaded(agent_id);
-        Ok(record)
+        Ok(self.retain_mcp(record, binding))
     }
 
     /// Resume a persisted provider session, using history-only mode for archived Agents.
@@ -638,10 +655,11 @@ impl AgentManager {
             AgentResumePurpose::Interactive
         };
         let client = self.available_client(&record.provider).await?;
+        let (launch, binding) = self.prepare_mcp(agent_id, &spec, purpose)?;
         let session = execution::native(
             &spec.provider,
             "resume",
-            client.resume_session(handle, &spec, purpose),
+            client.resume_session(handle, &launch, purpose),
         )
         .await
         .map_err(map_session)?;
@@ -650,8 +668,10 @@ impl AgentManager {
         } else {
             Registration::Read
         };
-        self.register_session(agent_id, session, record, registration, permit)
-            .await
+        let record = self
+            .register_session(agent_id, session, record, registration, permit)
+            .await?;
+        Ok(self.retain_mcp(record, binding))
     }
 
     /// Close one live session while retaining its provider history and durable Agent record.
@@ -802,8 +822,11 @@ impl AgentManager {
                 }),
             );
         }
-        let config = record.config.unwrap_or_default();
-        if let Ok(turn) = agent.session.start_input(prompt, &config).await {
+        let mut effective = record.config.unwrap_or_default();
+        if let Some(binding) = &agent.mcp {
+            binding.apply(&mut effective);
+        }
+        if let Ok(turn) = agent.session.start_input(prompt, &effective).await {
             agent.latest_turn = Some(turn.clone());
             agent.turn = Some(turn);
             match agent.session.runtime_info().await {

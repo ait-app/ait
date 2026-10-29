@@ -2,6 +2,7 @@
 
 - 状态：接受
 - 日期：2026-10-14
+- 后续修订：[ADR-202](../providers/adr-202-agent-mcp-injection.md) 接入 Provider 运行时注入与 MCP 专用凭证。
 
 ## 背景
 

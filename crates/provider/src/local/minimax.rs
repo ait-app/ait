@@ -47,6 +47,10 @@ impl MiniMaxClient {
 }
 
 impl AgentClient for MiniMaxClient {
+    fn supports_agent_mcp(&self) -> bool {
+        true
+    }
+
     fn provider(&self) -> &'static str {
         PROVIDER
     }

@@ -14,6 +14,7 @@ mod auto_archive;
 mod bot_permissions;
 mod environment;
 mod generated_titles;
+mod mcp;
 mod paseo;
 mod recovery;
 mod resume;
@@ -111,6 +112,9 @@ impl AgentRuntimeRegistry for MemoryRegistry {
 
 #[derive(Debug)]
 struct FakeState {
+    mcp_support: mcp::Support,
+    create_specs: Vec<AgentSessionSpec>,
+    start_configs: Vec<StoredAgentConfig>,
     available: bool,
     fail_info: bool,
     fail_close: bool,
@@ -137,6 +141,9 @@ struct FakeState {
 impl Default for FakeState {
     fn default() -> Self {
         Self {
+            mcp_support: mcp::Support::Unsupported,
+            create_specs: Vec::new(),
+            start_configs: Vec::new(),
             available: true,
             fail_info: false,
             fail_close: false,
@@ -169,6 +176,10 @@ struct FakeClient(Arc<Mutex<FakeState>>);
 struct FakeSession(Arc<Mutex<FakeState>>);
 
 impl AgentClient for FakeClient {
+    fn supports_agent_mcp(&self) -> bool {
+        matches!(self.0.lock().unwrap().mcp_support, mcp::Support::Http)
+    }
+
     fn commands<'a>(&'a self, _spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, Vec<Value>> {
         Box::pin(async move { Err(self.0.lock().unwrap().commands_error) })
     }
@@ -186,12 +197,13 @@ impl AgentClient for FakeClient {
 
     fn create_session<'a>(
         &'a self,
-        _spec: &'a AgentSessionSpec,
+        spec: &'a AgentSessionSpec,
     ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
         Box::pin(async move {
             {
                 let mut state = self.0.lock().expect("state");
                 state.create_calls += 1;
+                state.create_specs.push(spec.clone());
                 if let Some(error) = state.create_error {
                     return Err(error);
                 }
@@ -270,11 +282,12 @@ impl AgentSession for FakeSession {
     fn start_turn<'a>(
         &'a mut self,
         _text: &'a str,
-        _config: &'a domain::agent_runtime::StoredAgentConfig,
+        config: &'a domain::agent_runtime::StoredAgentConfig,
     ) -> AgentSessionFuture<'a, String> {
         Box::pin(async move {
             let mut state = self.0.lock().unwrap();
             state.start_calls += 1;
+            state.start_configs.push(config.clone());
             state.start_result?;
             Ok("native-turn".to_owned())
         })

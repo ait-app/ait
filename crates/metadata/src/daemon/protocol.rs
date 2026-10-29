@@ -310,7 +310,7 @@ impl Default for DaemonConfig {
             }),
             mcp: MutableMcpConfig {
                 enabled: Some(true),
-                inject_into_agents: false,
+                inject_into_agents: true,
                 extra: Map::new(),
             },
             hostnames: None,
