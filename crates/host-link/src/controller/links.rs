@@ -6,7 +6,6 @@ use uuid::Uuid;
 use crate::{Center, Error, ManagedRelay, Tokens};
 
 const ATTEMPT_TIMEOUT: Duration = Duration::from_secs(10);
-const HUB_RETRY: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone)]
 pub(super) struct Grant {
@@ -67,29 +66,40 @@ async fn maintain_grant<C: Center, R: ManagedRelay>(
     grant: &Grant,
     kind: Kind,
 ) -> Error {
-    let mut delay = 1;
+    let (initial, maximum) = match kind {
+        Kind::Relay => (1, 30),
+        Kind::Hub => (5, 60),
+    };
+    let mut delay = initial;
+    let mut retry_at = tokio::time::Instant::now();
     loop {
-        let result = tokio::time::timeout(ATTEMPT_TIMEOUT, connect(center, relay, grant, kind))
-            .await
-            .unwrap_or(Err(Error::Unavailable));
-        let wait = match result {
-            Ok(()) => {
-                delay = 1;
-                Duration::from_secs(1)
-            }
-            Err(error) => match (kind, error) {
-                // Protocol/availability failures belong to one transport; an explicit loss
-                // of authority must instead be handled for the whole publication.
-                (_, Error::Unauthorized | Error::SessionExpired | Error::Conflict) => return error,
-                (Kind::Hub, _) => HUB_RETRY,
-                (Kind::Relay, _) => {
-                    let wait = Duration::from_secs(delay);
-                    delay = (delay * 2).min(30);
-                    wait
-                }
-            },
+        let (online, active) = match kind {
+            Kind::Relay => (relay.online().await, relay.active().await),
+            Kind::Hub => (relay.hub_online().await, relay.hub_active().await),
         };
-        tokio::time::sleep(wait).await;
+        if online {
+            // Starting a connector is not success: only a completed handshake resets backoff.
+            delay = initial;
+            retry_at = tokio::time::Instant::now();
+        } else if !active && tokio::time::Instant::now() >= retry_at {
+            let result = tokio::time::timeout(ATTEMPT_TIMEOUT, connect(center, relay, grant, kind))
+                .await
+                .unwrap_or(Err(Error::Unavailable));
+            if let Err(
+                error @ (Error::AccessRejected
+                | Error::Unauthorized
+                | Error::SessionExpired
+                | Error::Conflict),
+            ) = result
+            {
+                return error;
+            }
+            // Keep backoff after async starts too: their socket handshake can fail later.
+            retry_at = tokio::time::Instant::now() + Duration::from_secs(delay);
+            delay = (delay * 2).min(maximum);
+        }
+        // Observe successful handshakes promptly without issuing new tickets while connected.
+        tokio::time::sleep(Duration::from_secs(1)).await;
     }
 }
 

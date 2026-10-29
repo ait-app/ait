@@ -78,7 +78,7 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
     for (installed, methods) in cases {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
-        let api = Api::new(
+        let mut api = Api::new(
             address,
             instance.server_id.to_string(),
             instance.instance_id.to_string(),
@@ -86,6 +86,20 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
             installed,
         )
         .unwrap();
+        let (store, state) = crate::device::load_state(root.path(), instance.server_id).unwrap();
+        let relay = crate::device::StatusRelay::new(
+            api.claim_managed_relay().unwrap(),
+            root.path(),
+            instance.instance_id,
+        );
+        let managed = host_link::service::Service::new(
+            crate::device::HttpCenter::new().unwrap(),
+            store,
+            relay,
+            state,
+            instance.instance_id,
+        );
+        api.set_publication_control(managed.handle()).unwrap();
         let (stop, signal) = tokio::sync::oneshot::channel();
         let publication = hub::start(&api, sources.clone(), root.path(), instance.clone(), false)
             .await
@@ -94,7 +108,7 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
             listener,
             api,
             instance: instance.clone(),
-            managed: None,
+            managed,
             publication,
         };
         let task = tokio::spawn(server.serve(async move {
@@ -112,13 +126,13 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
             .json()
             .await
             .unwrap();
-        assert_eq!(info.implemented_capabilities.len(), 12 + methods.len());
+        assert_eq!(info.implemented_capabilities.len(), 16 + methods.len());
         assert!(methods.iter().all(|method| {
             info.implemented_capabilities
                 .iter()
                 .any(|name| name == method.name)
         }));
-        assert_eq!(info.capabilities.len(), 207);
+        assert_eq!(info.capabilities.len(), 211);
         stop.send(()).unwrap();
         tokio::time::timeout(Duration::from_secs(5), task)
             .await
@@ -139,12 +153,12 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-mod headless;
+mod publication;
 mod workspace_attention;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[tokio::test]
-async fn headless_host_composes_exclusive_internal_control_without_contacting_center() {
+async fn daemon_composes_autonomous_publication_without_contacting_center() {
     use host_link::{Binding, Credential, CredentialStore, Machine, State};
     let root = tempfile::tempdir().unwrap();
     let lease = InstanceLease::acquire(root.path()).unwrap();
@@ -153,6 +167,8 @@ async fn headless_host_composes_exclusive_internal_control_without_contacting_ce
     let store = crate::device::Store::open(root.path()).unwrap();
     store
         .save(&State {
+            authorization_id: None,
+            disconnected: false,
             machine: Machine {
                 server_id,
                 display_name: "build-linux".into(),
@@ -173,10 +189,8 @@ async fn headless_host_composes_exclusive_internal_control_without_contacting_ce
         })
         .unwrap();
     drop(store);
-    let mut configuration = config(root.path());
-    configuration.headless = true;
+    let configuration = config(root.path());
     let mut server = Server::bind(configuration).await.unwrap();
-    assert!(server.managed.is_some());
     assert!(server.api.claim_managed_relay().is_err());
     assert!(crate::device::Store::open(root.path()).is_err());
     server.api.begin_shutdown();

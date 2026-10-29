@@ -62,7 +62,17 @@ impl Store {
     }
 
     pub(crate) fn load(&self) -> Result<Option<State>, Error> {
-        let path = self.directory.join(".env");
+        Self::read_snapshot(&self.directory)
+    }
+
+    /// Read only the presence of secrets without contending with the runtime's exclusive lock.
+    pub(crate) fn credentials_present(data: &Path) -> Result<bool, Error> {
+        Ok(Self::read_snapshot(&data.join("device"))?
+            .is_some_and(|state| state.credential.is_some() || state.pending.is_some()))
+    }
+
+    fn read_snapshot(directory: &Path) -> Result<Option<State>, Error> {
+        let path = directory.join(".env");
         regular(&path)?;
         let file = match private_options().read(true).open(path) {
             Ok(file) => file,
@@ -98,17 +108,28 @@ impl Store {
         decode(&serde_json::from_slice::<Value>(&bytes).map_err(|_| Error::Storage)?).map(Some)
     }
 
-    pub(crate) fn clear(&self) -> Result<(), Error> {
-        let path = self.directory.join(".env");
-        regular(&path)?;
-        match std::fs::remove_file(path) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => return Err(Error::Storage),
+    fn clear_temporary_snapshots(&self) -> Result<(), Error> {
+        for entry in std::fs::read_dir(&self.directory).map_err(|_| Error::Storage)? {
+            let entry = entry.map_err(|_| Error::Storage)?;
+            let name = entry.file_name();
+            if name
+                .to_str()
+                .and_then(|name| name.strip_prefix(".env-"))
+                .and_then(|name| name.strip_suffix(".tmp"))
+                .is_some_and(|id| Uuid::parse_str(id).is_ok())
+            {
+                std::fs::remove_file(entry.path()).map_err(|_| Error::Storage)?;
+            }
         }
-        File::open(&self.directory)
-            .and_then(|f| f.sync_all())
-            .map_err(|_| Error::Storage)
+        Ok(())
+    }
+
+    pub(crate) fn clear(&self) -> Result<(), Error> {
+        if let Some(mut state) = self.load()? {
+            state.disconnect();
+            self.save(&state)?;
+        }
+        Ok(())
     }
 }
 
@@ -128,6 +149,9 @@ impl CredentialStore for Store {
                 .map_err(|_| Error::Storage)?;
             file.sync_all().map_err(|_| Error::Storage)?;
             std::fs::rename(&temporary, &path).map_err(|_| Error::Storage)?;
+            if state.disconnected {
+                self.clear_temporary_snapshots()?;
+            }
             File::open(&self.directory)
                 .and_then(|f| f.sync_all())
                 .map_err(|_| Error::Storage)
@@ -179,7 +203,7 @@ fn encode(state: &State) -> Value {
         } => json!({"kind":"web","request_id":request_id,
             "secret":device_code.expose_secret(),"user_code":user_code,"expires_at":expires_at,"interval":interval}),
     });
-    json!({"version":1,"machine":state.machine,"credential":credential,"pending":pending})
+    json!({"version":1,"disconnected":state.disconnected,"authorization_id":state.authorization_id,"machine":state.machine,"credential":credential,"pending":pending})
 }
 
 fn decode(value: &Value) -> Result<State, Error> {
@@ -240,7 +264,18 @@ fn decode(value: &Value) -> Result<State, Error> {
     {
         return Err(Error::Storage);
     }
+    let disconnected = value
+        .get("disconnected")
+        .map_or(Ok(false), |value| value.as_bool().ok_or(Error::Storage))?;
+    if disconnected
+        && (credential.is_some() || pending.is_some() || !value["authorization_id"].is_null())
+    {
+        return Err(Error::Storage);
+    }
     Ok(State {
+        disconnected,
+        authorization_id: serde_json::from_value(value["authorization_id"].clone())
+            .map_err(|_| Error::Storage)?,
         machine,
         credential,
         pending,

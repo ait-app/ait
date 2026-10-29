@@ -257,19 +257,14 @@ fn host_validation_runs_before_file_io_and_uses_the_resolved_origins() {
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
-fn headless_is_explicit_and_center_cannot_be_configured() {
+fn publication_is_default_and_headless_flag_is_removed() {
+    assert!(Cli::try_parse_from(["daemon", "run", "--headless"]).is_err());
     let configuration = load(
-        Cli::parse_from(["daemon", "run", "--headless", "--listen", "127.0.0.1:0"]),
+        Cli::parse_from(["daemon", "run", "--listen", "127.0.0.1:0"]),
         environment,
     )
     .unwrap();
-    assert!(configuration.headless);
     assert_eq!(configuration.listen.port(), 0);
-    assert!(
-        !load(Cli::parse_from(["daemon", "run"]), environment)
-            .unwrap()
-            .headless
-    );
     let root = tempfile::tempdir().unwrap();
     std::fs::write(
         root.path().join("config.toml"),
@@ -278,13 +273,7 @@ fn headless_is_explicit_and_center_cannot_be_configured() {
     .unwrap();
     assert!(
         load(
-            Cli::parse_from([
-                "daemon",
-                "run",
-                "--headless",
-                "--data-dir",
-                root.path().to_str().unwrap()
-            ]),
+            Cli::parse_from(["daemon", "run", "--data-dir", root.path().to_str().unwrap()]),
             environment
         )
         .is_err()
@@ -293,7 +282,7 @@ fn headless_is_explicit_and_center_cannot_be_configured() {
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
-fn headless_restores_local_token_and_environment_override_does_not_replace_it() {
+fn startup_restores_local_token_and_environment_override_does_not_replace_it() {
     use secrecy::ExposeSecret;
     let directory = tempfile::tempdir().unwrap();
     let args = [
@@ -301,7 +290,6 @@ fn headless_restores_local_token_and_environment_override_does_not_replace_it() 
         "--data-dir",
         directory.path().to_str().unwrap(),
         "run",
-        "--headless",
     ];
     let generated = load(Cli::parse_from(args), |_| None).unwrap();
     let restored = load(Cli::parse_from(args), |_| None).unwrap();
@@ -327,16 +315,10 @@ fn headless_restores_local_token_and_environment_override_does_not_replace_it() 
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
-fn invalid_headless_configuration_does_not_create_credentials() {
+fn invalid_startup_configuration_does_not_create_credentials() {
     let directory = tempfile::tempdir().unwrap();
     let data = directory.path().join("missing");
-    let args = [
-        "daemon",
-        "--data-dir",
-        data.to_str().unwrap(),
-        "run",
-        "--headless",
-    ];
+    let args = ["daemon", "--data-dir", data.to_str().unwrap(), "run"];
     for extra in [
         ["--log-level", "invalid-level"],
         ["--config", "/missing/ait-config.toml"],

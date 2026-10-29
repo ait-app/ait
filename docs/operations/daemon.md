@@ -7,11 +7,11 @@ Git/文件、终端、语音、调度和浏览器能力。源码边界见 [当�
 ## 启动与配置
 
 ```sh
-export AIT_SERVER_TOKEN="$(openssl rand -hex 32)"
 cargo run -p daemon --bin daemon -- --listen 127.0.0.1:7316
 ```
 
-普通启动的凭据从 `AIT_SERVER_TOKEN` 读取，要求 32–256 字节可见 ASCII、无空格。
+所有启动方式优先从 `AIT_SERVER_TOKEN` 读取凭据，要求 32–256 字节可见 ASCII、无空格。
+未配置时自动生成并复用 `<data-dir>/local-api.token`（0600）；Desktop 使用同一个 token。
 不从命令行、URL、TOML 或 `.env` 自动加载服务凭据。
 
 | 参数                   | 环境变量               | 默认值                                 |
@@ -89,7 +89,6 @@ curl -H "Authorization: Bearer $AIT_SERVER_TOKEN" http://127.0.0.1:7316/v1/serve
 独立 Web 开发入口：
 
 ```sh
-export AIT_SERVER_TOKEN="$(openssl rand -hex 32)"
 npm run dev:mobile
 ```
 
@@ -152,9 +151,9 @@ npm run dev:mobile
 原生 Provider 凭据由对应程序保存。Ait 连接 token 与 Provider 凭据用途不同。
 更多行为边界见 [分类 ADR](../decisions/README.md)，验证范围见 [报告索引](../reports/README.md)。
 
-Linux 无人值守运行支持 `daemon login` 和 `daemon run --headless`，
+Linux 无人值守运行支持 `daemon login` 和 `daemon run`，
 接入条件与命令见 [无人值守 daemon](headless-daemon.md)。
 
-## Headless 本地 API 凭据
+## 统一发布与本地 API 凭据
 
-`daemon login` 后可以直接运行 `daemon run --headless`。未设置 `AIT_SERVER_TOKEN` 时，首次启动自动生成 `<data-dir>/local-api.token`（权限 0600），重启复用；默认路径为 `~/.ait-server/local-api.token`。显式环境变量优先，但不会覆盖已保存文件。该令牌与中心机器登录凭据独立，不放入 TOML，也不输出到日志。普通启动仍要求环境变量。
+直接启动或 `daemon run` 均启用自主发布；没有机器授权时先提供本地 API，后续可通过 API 或停止服务后用 `daemon login` 写入。未设置 `AIT_SERVER_TOKEN` 时，首次启动自动生成 `<data-dir>/local-api.token`（权限 0600），重启复用；默认路径为 `~/.ait-server/local-api.token`。显式环境变量优先，但不会覆盖已保存文件。该令牌与中心机器登录凭据独立，不放入 TOML，也不输出到日志。外部用 `DELETE /api/device/authorization`（兼容 `DELETE /api/hub/control`、`DELETE /api/relay/control`） 完整断开 ait-server：停止两条链路和节点续租，清除机器凭据与未完成授权。断开状态跨重启保持，需重新登录或显式 API 授权；本地 API token 保留。授权交接及 RPC 见[无人值守操作指南](headless-daemon.md)。

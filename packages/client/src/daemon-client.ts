@@ -5198,6 +5198,27 @@ export class DaemonClient {
     });
   }
 
+  async getPublicationStatus() {
+    return this.sendNamespacedCorrelatedSessionRequest<"publication.status.response">({
+      message: { type: "publication.status.request" },
+    });
+  }
+
+  async authorizePublication(
+    authorization: import("@ait/protocol/publication").PublicationAuthorization,
+    mode: "explicit" | "initial" = "explicit",
+  ) {
+    return this.sendNamespacedCorrelatedSessionRequest<"publication.authorize.response">({
+      message: { type: "publication.authorize.request", authorization, mode },
+    });
+  }
+
+  async disconnectPublication() {
+    return this.sendNamespacedCorrelatedSessionRequest<"publication.stop.response">({
+      message: { type: "publication.stop.request" },
+    });
+  }
+
   async reloadDaemonConfig(requestId?: string): Promise<DaemonConfigReloadResponse["payload"]> {
     this.requireDaemonConfigReloadSupport();
     return this.sendNamespacedCorrelatedSessionRequest({

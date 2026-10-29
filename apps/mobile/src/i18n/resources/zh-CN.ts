@@ -98,10 +98,10 @@ export const zhCN: TranslationResources = {
     disconnectRemoteHost: "断开远程主机",
     hostListHint: "在线主机会自动加入主机列表。",
     hostSettingsHint:
-      "桌面端登录后默认同步内置守护进程。手动停止后将保持下线，可在主机的「连接」设置中重新开启；其他主机需手动开启同步。",
+      "桌面端登录后默认同步内置守护进程。断开会清除主机授权，需要在「连接」设置中重新授权；其他主机需手动开启同步。",
     requestFailed: "请求失败。",
     managedHost: "无人值守主机",
-    managedHostHint: "此主机独立保持授权，请在网页的主机页面管理或撤销。",
+    managedHostHint: "此主机自行维护服务端连接。断开会清除授权，重新连接需要再次登录授权。",
     syncTitle: "与在线服务同步",
     syncDescription: "将此主机接入在线服务，即可从其他设备远程访问。",
     signInFirst: "请先在「应用 → 在线服务」中登录。",
@@ -112,7 +112,7 @@ export const zhCN: TranslationResources = {
     hostOffline: "尚未连接在线服务",
     syncHost: "主机同步",
     syncHostHint:
-      "将 {{name}} 接入当前账户。客户端退出登录不会解除其他主机的租约，可在此主动停止同步。",
+      "授权 {{name}} 自行保持在线，退出客户端账号不影响连接。断开此主机会关闭所有服务端连接并清除授权。",
     syncAction: "连接在线服务",
     syncing: "正在同步…",
     stopSync: "停止同步",

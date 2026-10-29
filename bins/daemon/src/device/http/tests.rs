@@ -129,6 +129,31 @@ async fn errors_are_sanitized_and_distinguish_polling_session_and_revocation() {
 }
 
 #[tokio::test]
+async fn access_refusal_is_distinct_from_revoked_refresh_credentials() {
+    let tokens = decode_tokens(response(&declaration())).unwrap();
+    let fixture = Fixture::new(vec![
+        (
+            StatusCode::UNAUTHORIZED,
+            json!({"error":{"code":"unauthorized"}})
+        );
+        2
+    ])
+    .await;
+    assert_eq!(
+        fixture.center.renew(&tokens, Uuid::new_v4()).await,
+        Err(Error::AccessRejected)
+    );
+    assert_eq!(
+        fixture
+            .center
+            .refresh(&tokens.credential.refresh_token, Uuid::new_v4())
+            .await
+            .unwrap_err(),
+        Error::Unauthorized
+    );
+}
+
+#[tokio::test]
 async fn unknown_missing_endpoints_never_trigger_runtime_session_recovery() {
     let machine = declaration();
     let secret: SecretString = "private-secret".into();

@@ -9,6 +9,8 @@ fn saved_machine(data: &Path) -> (State, Value) {
     let machine = machine_for(data);
     let wire = response(&machine);
     let state = State {
+        authorization_id: None,
+        disconnected: false,
         machine,
         credential: Some(Credential {
             refresh_token: "saved-refresh-secret".into(),
@@ -231,12 +233,20 @@ async fn expired_browser_approval_is_replaced_without_requiring_logout() {
         interval: 5,
     });
     Store::open(data.path()).unwrap().save(&saved).unwrap();
-    let fixture = Fixture::new(vec![(StatusCode::OK, approval()), (StatusCode::OK, wire)]).await;
+    let fixture = Fixture::new(vec![
+        (
+            StatusCode::BAD_REQUEST,
+            json!({"error":{"code":"expired_token"}}),
+        ),
+        (StatusCode::OK, approval()),
+        (StatusCode::OK, wire),
+    ])
+    .await;
     login_with_center(data.path(), options(false), fixture.center.clone())
         .await
         .unwrap();
     assert_eq!(
-        fixture.seen.lock().unwrap().calls[0].0,
+        fixture.seen.lock().unwrap().calls[1].0,
         "/v1/auth/device/authorize"
     );
 }

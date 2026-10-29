@@ -20,13 +20,7 @@ fn fixed_center_and_login_modes_are_unambiguous_and_redacted() {
     for args in [
         vec!["daemon", "login", "--token", "a", "--token-stdin"],
         vec!["daemon", "login", "--center", "https://evil.test"],
-        vec![
-            "daemon",
-            "run",
-            "--headless",
-            "--center",
-            "https://evil.test",
-        ],
+        vec!["daemon", "run", "--center", "https://evil.test"],
         vec!["daemon", "service", "install", "--user"],
     ] {
         assert!(crate::config::Cli::try_parse_from(args).is_err());
@@ -54,6 +48,8 @@ async fn enrollment_response_is_durable_and_recovery_keeps_the_same_request() {
     let store = Store::open(data.path()).unwrap();
     let id = Uuid::new_v4();
     let mut state = State {
+        authorization_id: None,
+        disconnected: false,
         machine,
         credential: None,
         pending: Some(Pending::Enrollment {
@@ -89,6 +85,8 @@ async fn enrollment_mismatch_and_expired_web_approval_never_publish_credentials(
     let data = tempfile::tempdir().unwrap();
     let store = Store::open(data.path()).unwrap();
     let mut state = State {
+        authorization_id: None,
+        disconnected: false,
         machine,
         credential: None,
         pending: Some(Pending::Enrollment {
@@ -109,6 +107,10 @@ async fn enrollment_mismatch_and_expired_web_approval_never_publish_credentials(
         Error::Protocol
     );
     assert!(store.load().unwrap().unwrap().credential.is_none());
+    fixture.seen.lock().unwrap().responses.push_back((
+        axum::http::StatusCode::BAD_REQUEST,
+        serde_json::json!({"error":{"code":"expired_token"}}),
+    ));
     state.pending = Some(Pending::Web {
         device_code: "secret-code".into(),
         user_code: "ABCD-1234-EF56".into(),
@@ -127,7 +129,7 @@ async fn enrollment_mismatch_and_expired_web_approval_never_publish_credentials(
         .unwrap_err(),
         Error::Denied
     );
-    assert_eq!(fixture.seen.lock().unwrap().calls.len(), 1);
+    assert_eq!(fixture.seen.lock().unwrap().calls.len(), 2);
 }
 
 fn machine_for(data: &Path) -> Machine {
@@ -148,6 +150,7 @@ async fn complete_token_login_and_online_logout_use_same_installation_and_clear_
     let fixture = Fixture::new(vec![
         (axum::http::StatusCode::OK, response(&machine)),
         (axum::http::StatusCode::NO_CONTENT, serde_json::Value::Null),
+        (axum::http::StatusCode::OK, response(&machine)),
     ])
     .await;
     login_with_center(
@@ -170,11 +173,35 @@ async fn complete_token_login_and_online_logout_use_same_installation_and_clear_
     logout_with_center(data.path(), fixture.center.clone())
         .await
         .unwrap();
-    assert!(Store::open(data.path()).unwrap().load().unwrap().is_none());
+    assert!(!Store::credentials_present(data.path()).unwrap());
+    assert!(
+        Store::open(data.path())
+            .unwrap()
+            .load()
+            .unwrap()
+            .unwrap()
+            .disconnected
+    );
     assert_eq!(
         fixture.seen.lock().unwrap().calls[1].0,
         "/v1/auth/device/revoke"
     );
+    login_with_center(
+        data.path(),
+        Login {
+            force: false,
+            name: None,
+            token: Some("fresh.enrollment.jwt".into()),
+            token_stdin: false,
+        },
+        fixture.center.clone(),
+    )
+    .await
+    .unwrap();
+    let restored = Store::open(data.path()).unwrap().load().unwrap().unwrap();
+    assert!(!restored.disconnected);
+    assert!(restored.credential.is_some() && restored.pending.is_none());
+    assert_eq!(restored.machine.server_id, machine.server_id);
 }
 
 #[tokio::test]
@@ -244,6 +271,8 @@ async fn rejects_competing_or_invalid_logins_and_clears_local_state_when_center_
     let fixture = Fixture::new(vec![]).await;
     let store = Store::open(data.path()).unwrap();
     let state = State {
+        authorization_id: None,
+        disconnected: false,
         machine,
         credential: None,
         pending: Some(Pending::Enrollment {
@@ -277,9 +306,11 @@ async fn rejects_competing_or_invalid_logins_and_clears_local_state_when_center_
     logout_with_center(data.path(), fixture.center.clone())
         .await
         .unwrap();
-    assert!(!data.path().join("device/.env").exists());
+    assert!(!Store::credentials_present(data.path()).unwrap());
     status(data.path(), false).unwrap();
 }
 
 mod polling;
 mod restoration;
+
+mod receipts;

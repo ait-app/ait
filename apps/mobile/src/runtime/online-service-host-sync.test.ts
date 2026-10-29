@@ -14,7 +14,6 @@ import {
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   status: vi.fn(),
-  connect: vi.fn(),
   disconnect: vi.fn(),
   accountStatus: "online",
   syncBuiltInDaemon: true,
@@ -23,8 +22,9 @@ const mocks = vi.hoisted(() => ({
   supported: true,
   desktop: true,
   platform: "ios",
-  publishHost: vi.fn(),
-  unpublishHost: vi.fn(),
+  authorizeHost: vi.fn(),
+  publication: vi.fn(),
+  authorize: vi.fn(),
 }));
 vi.mock("react-native", () => ({
   Platform: {
@@ -52,8 +52,7 @@ vi.mock("./account-state", () => ({
 }));
 vi.mock("./native-account", () => ({
   getNativeAccount: async () => ({
-    publishHost: mocks.publishHost,
-    unpublishHost: mocks.unpublishHost,
+    authorizeHost: mocks.authorizeHost,
   }),
 }));
 vi.mock("./host-runtime", () => ({
@@ -66,21 +65,43 @@ vi.mock("./host-runtime", () => ({
       isConnected: mocks.connected,
       getLastServerInfoMessage: () => ({ features: { onlineServiceSync: mocks.supported } }),
       getOnlineServiceStatus: mocks.status,
-      connectOnlineService: mocks.connect,
-      disconnectOnlineService: mocks.disconnect,
+      getPublicationStatus: mocks.publication,
+      authorizePublication: mocks.authorize,
+      disconnectPublication: mocks.disconnect,
     }),
   }),
 }));
-const status = (serverId = "first", online = false, instanceId = "instance-1") => ({
-  serverId,
-  instanceId,
-  platform: "linux",
-  status: { online, connecting: false, epoch: null, error: null },
+const status = () => ({
+  serverId: "first",
+  instanceId: "instance-1",
+  platform: "darwin",
+  management: { mode: "managed", autonomous: true },
+  status: { online: false, connecting: false, epoch: null, error: null },
 });
-const grant = {
-  center_url: "https://example.test/api",
-  control_ticket: "a".repeat(64),
-  node_session_id: "00000000-0000-4000-8000-000000000001",
+const publication = (phase = "unauthorized") => ({
+  ...status(),
+  management: {
+    ...status().management,
+    phase,
+    binding: ["unauthorized", "disconnected"].includes(phase) ? null : { server_id: "first" },
+  },
+  hub: {
+    status: {
+      online: phase === "running",
+      connecting: phase === "connecting",
+      error: null,
+      rejected: null,
+    },
+  },
+  relay: status().status,
+});
+const authorization = {
+  kind: "device_code",
+  device_code: "a".repeat(64),
+  user_code: "ABCD-0123-ABCD",
+  request_id: "00000000-0000-4000-8000-000000000001",
+  expires_at: new Date(Date.now() + 600_000).toISOString(),
+  interval: 5,
 };
 
 beforeEach(() => {
@@ -91,199 +112,177 @@ beforeEach(() => {
   mocks.connected = true;
   mocks.supported = true;
   mocks.daemonStatus.mockResolvedValue({ status: "running", serverId: "first" });
+  reconcileOnlineServiceHostsAfterLogout([]);
   useOnlineServiceHostSync.setState({ hosts: {} });
   mocks.status.mockResolvedValue(status());
-  mocks.invoke.mockResolvedValue(grant);
-  mocks.connect.mockResolvedValue({
-    ...status(),
-    status: { ...status().status, connecting: true },
-  });
-  mocks.disconnect.mockResolvedValue(status());
-  mocks.publishHost.mockResolvedValue(grant);
+  mocks.publication.mockResolvedValue(publication());
+  mocks.invoke.mockResolvedValue(authorization);
+  mocks.authorizeHost.mockResolvedValue(authorization);
+  mocks.authorize.mockResolvedValue(publication("connecting"));
+  mocks.disconnect.mockResolvedValue(publication("disconnected"));
 });
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
 });
 
-describe("host online service synchronization", () => {
-  it("starts synchronization after login without opening settings and keeps a manual stop offline", async () => {
+describe("daemon-owned publication", () => {
+  it("hands an approval to the built-in daemon after login without opening Settings", async () => {
     mocks.accountStatus = "logged_out";
     const view = render(React.createElement(OnlineServiceHostSyncLifecycle));
     expect(mocks.invoke).not.toHaveBeenCalled();
     mocks.accountStatus = "online";
     view.rerender(React.createElement(OnlineServiceHostSyncLifecycle));
-    await waitFor(() => expect(mocks.connect).toHaveBeenCalledExactlyOnceWith(grant));
-    await disconnectOnlineServiceHost("first");
-    mocks.syncBuiltInDaemon = false;
-    mocks.invoke.mockClear();
-    vi.useFakeTimers();
-    view.rerender(React.createElement(OnlineServiceHostSyncLifecycle));
-    await vi.advanceTimersByTimeAsync(10000);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-  it("automatically publishes only the desktop's built-in daemon after sign-in", async () => {
-    await synchronizeDefaultDesktopHost();
-    expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith(
-      "account_host_sync",
-      expect.objectContaining({ serverId: "first", name: "Built-in daemon" }),
+    await waitFor(() =>
+      expect(mocks.authorize).toHaveBeenCalledExactlyOnceWith(authorization, "initial"),
     );
-    expect(mocks.connect).toHaveBeenCalledExactlyOnceWith(grant);
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "account_host_sync",
+      expect.objectContaining({ serverId: "first", needsAuthorization: true }),
+    );
   });
 
-  it("respects a persisted manual stop and can explicitly re-enable synchronization", async () => {
-    mocks.syncBuiltInDaemon = false;
+  it("does not automatically reauthorize an externally disconnected daemon, including after restart", async () => {
+    mocks.publication.mockResolvedValue(publication("disconnected"));
     await synchronizeDefaultDesktopHost();
-    expect(mocks.daemonStatus).not.toHaveBeenCalled();
+    await synchronizeOnlineServiceHost("first", "SHLP");
     expect(mocks.invoke).not.toHaveBeenCalled();
-    await synchronizeOnlineServiceHost("first", "Built-in daemon", true);
-    expect(mocks.connect).toHaveBeenCalledExactlyOnceWith(grant);
+    expect(mocks.authorize).not.toHaveBeenCalled();
+    expect(useOnlineServiceHostSync.getState().hosts.first?.enabled).toBe(false);
   });
 
-  it("does not auto-publish on mobile or before account registration completes", async () => {
-    mocks.desktop = false;
-    await synchronizeDefaultDesktopHost();
-    mocks.desktop = true;
-    mocks.accountStatus = "logged_out";
-    await synchronizeDefaultDesktopHost();
-    mocks.accountStatus = "connecting";
-    await synchronizeDefaultDesktopHost();
-    expect(mocks.daemonStatus).not.toHaveBeenCalled();
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-
-  it("waits for the local daemon and its connection, then retries after startup", async () => {
-    mocks.daemonStatus.mockResolvedValueOnce({ status: "stopped", serverId: "first" });
-    await synchronizeDefaultDesktopHost();
-    mocks.connected = false;
-    await synchronizeDefaultDesktopHost();
-    mocks.connected = true;
-    mocks.supported = false;
-    await synchronizeDefaultDesktopHost();
-    mocks.supported = true;
-    expect(mocks.invoke).not.toHaveBeenCalled();
-    await synchronizeDefaultDesktopHost();
-    expect(mocks.connect).toHaveBeenCalledExactlyOnceWith(grant);
-  });
-
-  it("does not publish when manual stop arrives during the daemon status request", async () => {
-    mocks.daemonStatus.mockImplementationOnce(async () => {
-      mocks.syncBuiltInDaemon = false;
-      return { status: "running", serverId: "first" };
+  it("submits automatic authorization conditionally even if a stale status reply arrives after disconnect", async () => {
+    let phase = "unauthorized";
+    mocks.publication.mockImplementation(async () => {
+      const snapshot = publication(phase);
+      phase = "disconnected"; // External DELETE wins after the status read.
+      return snapshot;
+    });
+    mocks.authorize.mockImplementation(async (_authorization, mode) => {
+      if (mode !== "initial" || phase === "unauthorized") phase = "connecting";
+      return publication(phase);
     });
     await synchronizeDefaultDesktopHost();
-    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(mocks.authorize).toHaveBeenCalledExactlyOnceWith(authorization, "initial");
+    expect(phase).toBe("disconnected");
+    expect(useOnlineServiceHostSync.getState().hosts.first?.enabled).toBe(false);
   });
 
-  it("reuses the stable host identity after the desktop daemon restarts", async () => {
+  it("requires login again after disconnect, then authorizes both links together", async () => {
+    mocks.accountStatus = "logged_out";
+    mocks.publication.mockResolvedValue(publication("disconnected"));
+    await synchronizeOnlineServiceHost("first", "SHLP", true);
+    expect(mocks.authorize).not.toHaveBeenCalled();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    mocks.accountStatus = "online";
+    await synchronizeOnlineServiceHost("first", "SHLP", true);
+    expect(mocks.authorize).toHaveBeenCalledExactlyOnceWith(authorization, "explicit");
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "account_host_sync",
+      expect.objectContaining({ needsAuthorization: true, enableBuiltInDaemon: true }),
+    );
+    expect(useOnlineServiceHostSync.getState().hosts.first?.enabled).toBe(true);
+  });
+
+  it("keeps a persisted manual stop until explicitly enabled", async () => {
+    mocks.syncBuiltInDaemon = false;
     await synchronizeDefaultDesktopHost();
-    mocks.status.mockResolvedValue(status("first", false, "instance-2"));
-    await synchronizeDefaultDesktopHost();
+    expect(mocks.daemonStatus).not.toHaveBeenCalled();
+    await synchronizeOnlineServiceHost("first", "SHLP", true);
+    expect(mocks.authorize).toHaveBeenCalledExactlyOnceWith(authorization, "explicit");
+  });
+
+  it("disconnects through the daemon and clears shared authorization and both links", async () => {
+    await disconnectOnlineServiceHost("first");
+    expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith("account_host_disconnect", {
+      serverId: "first",
+    });
+    expect(mocks.disconnect).toHaveBeenCalledOnce();
+    expect(mocks.authorize).not.toHaveBeenCalled();
+    expect(useOnlineServiceHostSync.getState().hosts.first).toMatchObject({
+      enabled: false,
+      publication: {
+        hub: { status: { online: false } },
+        relay: { online: false },
+        management: { phase: "disconnected", binding: null },
+      },
+    });
+  });
+
+  it("retries a lost handoff response with the same issuance identity", async () => {
+    mocks.authorize.mockRejectedValueOnce(new Error("Connection lost"));
+    await synchronizeOnlineServiceHost("first", "SHLP", true);
+    await synchronizeOnlineServiceHost("first", "SHLP", true);
+    expect(mocks.authorize).toHaveBeenNthCalledWith(1, authorization, "explicit");
+    expect(mocks.authorize).toHaveBeenNthCalledWith(2, authorization, "explicit");
     expect(mocks.invoke).toHaveBeenLastCalledWith(
       "account_host_sync",
-      expect.objectContaining({ serverId: "first", instanceId: "instance-2" }),
+      expect.objectContaining({ needsAuthorization: false }),
     );
-  });
-  it("uses the iOS native account authority to synchronize and disconnect a host", async () => {
-    mocks.desktop = false;
-    await synchronizeOnlineServiceHost("first", "First", true);
-    expect(mocks.publishHost).toHaveBeenCalledWith(
-      { serverId: "first", instanceId: "instance-1", platform: "linux", name: "First" },
-      true,
-    );
-    expect(mocks.connect).toHaveBeenCalledWith(grant);
-    await disconnectOnlineServiceHost("first");
-    expect(mocks.unpublishHost).toHaveBeenCalledWith("first");
-    expect(mocks.disconnect).toHaveBeenCalledOnce();
   });
 
-  it("reads status without publishing, then sends a grant only to the explicitly selected daemon", async () => {
-    await synchronizeOnlineServiceHost("first", "First");
-    expect(mocks.invoke).not.toHaveBeenCalled();
-    await synchronizeOnlineServiceHost("first", "First", true);
-    expect(mocks.invoke).toHaveBeenCalledWith("account_host_sync", {
+  it("discards an unacknowledged device code when explicitly disconnected", async () => {
+    mocks.authorize.mockRejectedValueOnce(new Error("Connection lost"));
+    await synchronizeOnlineServiceHost("first", "SHLP", true);
+    await disconnectOnlineServiceHost("first");
+    mocks.publication.mockResolvedValue(publication("disconnected"));
+    const fresh = { ...authorization, device_code: "b".repeat(64) };
+    mocks.invoke.mockResolvedValue(fresh);
+    await synchronizeOnlineServiceHost("first", "SHLP", true);
+    expect(mocks.invoke).toHaveBeenLastCalledWith(
+      "account_host_sync",
+      expect.objectContaining({ needsAuthorization: true }),
+    );
+    expect(mocks.authorize).toHaveBeenLastCalledWith(fresh, "explicit");
+  });
+
+  it("requires explicit authorization after revocation instead of automatically re-enrolling", async () => {
+    mocks.publication.mockResolvedValue(publication("reauthorization_required"));
+    await synchronizeDefaultDesktopHost();
+    expect(mocks.authorize).not.toHaveBeenCalled();
+    await synchronizeOnlineServiceHost("first", "SHLP", true);
+    expect(mocks.authorize).toHaveBeenCalledExactlyOnceWith(authorization, "explicit");
+  });
+
+  it.each(["storage_error", "protocol_error"])(
+    "reauthorizes explicitly after %s",
+    async (phase) => {
+      mocks.publication.mockResolvedValue(publication(phase));
+      await synchronizeDefaultDesktopHost();
+      expect(mocks.authorize).not.toHaveBeenCalled();
+      await synchronizeOnlineServiceHost("first", "SHLP", true);
+      expect(mocks.authorize).toHaveBeenCalledExactlyOnceWith(authorization, "explicit");
+    },
+  );
+
+  it("uses the native account only to approve a selected daemon", async () => {
+    mocks.desktop = false;
+    await synchronizeOnlineServiceHost("first", "SHLP", true);
+    expect(mocks.authorizeHost).toHaveBeenCalledExactlyOnceWith({
       serverId: "first",
       instanceId: "instance-1",
-      platform: "linux",
-      name: "First",
-      needsGrant: true,
-      enableBuiltInDaemon: true,
+      name: "SHLP",
+      platform: "darwin",
     });
-    expect(mocks.connect).toHaveBeenCalledExactlyOnceWith(grant);
-    expect(useOnlineServiceHostSync.getState().hosts.first).toMatchObject({
-      enabled: true,
-      busy: false,
-      status: { status: { connecting: true } },
-    });
-    mocks.status.mockResolvedValue(status("first", true));
-    mocks.invoke.mockResolvedValue(null);
-    await synchronizeOnlineServiceHost("first", "First");
-    expect(mocks.invoke).toHaveBeenLastCalledWith(
-      "account_host_sync",
-      expect.objectContaining({ needsGrant: false }),
-    );
-    expect(mocks.connect).toHaveBeenCalledOnce();
-    await disconnectOnlineServiceHost("first");
-    expect(mocks.invoke).toHaveBeenLastCalledWith("account_host_disconnect", { serverId: "first" });
-    expect(mocks.disconnect).toHaveBeenCalledOnce();
-    expect(useOnlineServiceHostSync.getState().hosts.first.enabled).toBe(false);
-  });
-
-  it("retains enabled intent after a connection failure so background polling can retry", async () => {
-    mocks.connect.mockRejectedValueOnce(new Error("Disconnected"));
-    await synchronizeOnlineServiceHost("first", "First", true);
-    expect(useOnlineServiceHostSync.getState().hosts.first).toMatchObject({
-      enabled: true,
-      busy: false,
-      error: "Disconnected",
-    });
-    await synchronizeOnlineServiceHost("first", "First");
-    expect(mocks.connect).toHaveBeenCalledTimes(2);
-    expect(useOnlineServiceHostSync.getState().hosts.first.error).toBeNull();
-  });
-
-  it("rejects mismatched identities and does not publish while signed out", async () => {
-    mocks.status.mockResolvedValue(status("other"));
-    await synchronizeOnlineServiceHost("first", "First", true);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-    expect(useOnlineServiceHostSync.getState().hosts.first.error).toContain("identity has changed");
-    mocks.accountStatus = "logged_out";
-    await synchronizeOnlineServiceHost("first", "First", true);
+    expect(mocks.authorize).toHaveBeenCalledExactlyOnceWith(authorization, "explicit");
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
-  it("preserves remote synchronization after logout and still allows an explicit stop", async () => {
-    await synchronizeOnlineServiceHost("first", "First", true);
-    useOnlineServiceHostSync.setState(({ hosts }) => ({
-      hosts: { ...hosts, binding: { ...hosts.first } },
-    }));
-    mocks.accountStatus = "logged_out";
-    reconcileOnlineServiceHostsAfterLogout(["first"]);
-    expect(useOnlineServiceHostSync.getState().hosts.first.enabled).toBe(true);
-    expect(useOnlineServiceHostSync.getState().hosts.binding.enabled).toBe(false);
-    mocks.connect.mockClear();
-    await synchronizeOnlineServiceHost("first", "First");
-    expect(mocks.connect).toHaveBeenCalledExactlyOnceWith(grant);
-    await disconnectOnlineServiceHost("first");
-    expect(mocks.invoke).toHaveBeenLastCalledWith("account_host_disconnect", { serverId: "first" });
-    expect(mocks.disconnect).toHaveBeenCalledOnce();
-    expect(useOnlineServiceHostSync.getState().hosts.first.enabled).toBe(false);
+  it("does not disturb daemon publication on account logout", async () => {
+    mocks.publication.mockResolvedValue(publication("running"));
+    await synchronizeOnlineServiceHost("first", "SHLP");
+    reconcileOnlineServiceHostsAfterLogout([]);
+    expect(useOnlineServiceHostSync.getState().hosts.first?.enabled).toBe(true);
+    expect(mocks.disconnect).not.toHaveBeenCalled();
   });
-});
 
-it("reads a managed daemon without registering or stopping its machine session", async () => {
-  mocks.status.mockResolvedValue({
-    ...status("first", true),
-    management: { mode: "managed", phase: "running" },
+  it("does not authorize a changed identity or an old daemon", async () => {
+    mocks.status.mockResolvedValueOnce({ ...status(), serverId: "other" });
+    await synchronizeOnlineServiceHost("first", "SHLP", true);
+    expect(useOnlineServiceHostSync.getState().hosts.first?.error).toContain("identity");
+    mocks.status.mockResolvedValueOnce({ ...status(), management: { mode: "managed" } });
+    await synchronizeOnlineServiceHost("first", "SHLP", true);
+    expect(useOnlineServiceHostSync.getState().hosts.first?.error).toContain("Update");
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
-  await synchronizeOnlineServiceHost("first", "First", true);
-  expect(mocks.invoke).not.toHaveBeenCalled();
-  expect(mocks.connect).not.toHaveBeenCalled();
-  expect(useOnlineServiceHostSync.getState().hosts.first).toMatchObject({
-    enabled: false,
-    status: { management: { mode: "managed" } },
-  });
-  await disconnectOnlineServiceHost("first");
-  expect(mocks.invoke).not.toHaveBeenCalled();
-  expect(mocks.disconnect).not.toHaveBeenCalled();
 });

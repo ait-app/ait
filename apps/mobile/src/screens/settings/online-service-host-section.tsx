@@ -27,7 +27,9 @@ export function OnlineServiceHostSection({ host }: { host: HostProfile }) {
     if (connected && supported) void synchronizeOnlineServiceHost(host.serverId, host.label);
   }, [connected, supported, host.serverId, host.label]);
   const loggedOut = account.status === "logged_out";
-  const managed = sync?.status?.management?.mode === "managed";
+  const autonomous = sync?.status?.management?.autonomous === true;
+  const managed = sync?.status?.management?.mode === "managed" && !autonomous;
+  const authorized = autonomous && Boolean(sync?.publication?.management?.binding);
   const online = sync?.status?.status.online;
   const connecting = sync?.status?.status.connecting;
   const statusKey = !connected
@@ -49,7 +51,7 @@ export function OnlineServiceHostSection({ host }: { host: HostProfile }) {
         <SettingsRow
           label={t("onlineService.title")}
           hint={
-            managed
+            managed || authorized
               ? t("onlineService.managedHostHint")
               : loggedOut
                 ? t("onlineService.signInFirst")
@@ -57,7 +59,7 @@ export function OnlineServiceHostSection({ host }: { host: HostProfile }) {
           }
         >
           <Text style={settingsStyles.rowHint}>{t(`onlineService.${statusKey}`)}</Text>
-          {loggedOut && !managed ? (
+          {loggedOut && !managed && !sync?.enabled ? (
             <Button
               variant="outline"
               size="sm"
@@ -87,7 +89,7 @@ export function OnlineServiceHostSection({ host }: { host: HostProfile }) {
                 !connected ||
                 !supported ||
                 sync?.busy ||
-                Boolean((connecting || online) && !sync?.enabled)
+                Boolean(!autonomous && (connecting || online) && !sync?.enabled)
               }
               onPress={() =>
                 void (sync?.enabled

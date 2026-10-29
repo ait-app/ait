@@ -209,6 +209,7 @@ impl Connector {
         state.cancel.cancel();
         state.generation = Uuid::new_v4();
         state.status = Status::default();
+        state.replaced_at = None;
         state.calls = None;
         self.publication.send_replace(LinkState::default());
     }

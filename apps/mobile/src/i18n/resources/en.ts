@@ -104,11 +104,11 @@ export const en = {
     disconnectRemoteHost: "Disconnect remote host",
     hostListHint: "Online hosts are automatically added to the host list.",
     hostSettingsHint:
-      "Desktop synchronizes its built-in daemon after sign-in. A manual stop keeps it offline until you enable synchronization in Host → Connections. Other hosts require manual synchronization.",
+      "Desktop synchronizes its built-in daemon after sign-in. Disconnecting removes its server authorization; reconnect explicitly to authorize it again. Other hosts require manual synchronization.",
     requestFailed: "Request failed.",
     managedHost: "Unattended host",
     managedHostHint:
-      "This host keeps its own authorization. Manage or revoke it on the Host web page.",
+      "This host maintains its own server connection. Disconnecting clears its authorization and requires a new login to reconnect.",
     syncTitle: "Sync with online service",
     syncDescription:
       "Connect this host to your online service so you can access it from your other devices.",
@@ -120,7 +120,7 @@ export const en = {
     hostOffline: "Not connected to online service",
     syncHost: "Host synchronization",
     syncHostHint:
-      "Connect {{name}} to your account. Other hosts keep their leases when this client signs out; stop synchronization here to disconnect this host.",
+      "Authorize {{name}} to stay online independently. Signing out of the app does not disconnect it. Disconnecting this host closes all server connections and removes its authorization.",
     syncAction: "Connect to online service",
     syncing: "Synchronizing...",
     stopSync: "Stop synchronization",

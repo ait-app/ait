@@ -11,12 +11,12 @@ mod links;
 
 /// Serializes refresh rotation and maintains runtime leases independently of a GUI.
 pub struct Controller<C, S, R> {
-    center: C,
-    store: S,
-    relay: R,
-    state: State,
+    pub(crate) center: C,
+    pub(crate) store: S,
+    pub(crate) relay: R,
+    pub(crate) state: State,
     instance: Uuid,
-    active_session: Option<(Tokens, Uuid)>,
+    pub(crate) active_session: Option<(Tokens, Uuid)>,
 }
 
 #[derive(Debug)]
@@ -52,6 +52,10 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
     /// # Errors
     /// Requires login for revoked/expired credentials; storage failures pause rotation.
     pub async fn run(mut self, cancel: CancellationToken) -> Result<(), Error> {
+        self.run_until(cancel).await
+    }
+
+    pub(crate) async fn run_until(&mut self, cancel: CancellationToken) -> Result<(), Error> {
         self.relay.report(
             "connecting",
             self.state.credential.as_ref().map(|c| &c.binding),
@@ -62,14 +66,16 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
             result = self.maintain(&cancel) => result,
         };
         self.relay.stop().await;
-        if let Some((tokens, session)) = &self.active_session {
-            let _ = self.center.close(tokens, *session).await;
+        if let Some((tokens, session)) = self.active_session.take() {
+            let _ =
+                tokio::time::timeout(Duration::from_secs(5), self.center.close(&tokens, session))
+                    .await;
         }
         self.relay.report(
             match result {
                 Ok(()) => "stopped",
                 Err(Error::Storage) => "storage_error",
-                Err(Error::Unauthorized) => "reauthorization_required",
+                Err(Error::Unauthorized | Error::Denied) => "reauthorization_required",
                 Err(Error::Conflict) => "runtime_conflict",
                 Err(_) => "protocol_error",
             },
@@ -85,7 +91,20 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
     async fn initial_tokens(&mut self, cancel: &CancellationToken) -> Result<Tokens, Error> {
         let mut delay = 1;
         loop {
-            match self.refresh().await {
+            let prepared = if matches!(
+                self.state.pending,
+                Some(crate::Pending::Enrollment { .. } | crate::Pending::Web { .. })
+            ) {
+                crate::authorization::complete(&self.center, &self.store, &mut self.state, cancel)
+                    .await
+            } else {
+                Ok(())
+            };
+            let result = match prepared {
+                Ok(()) => self.refresh().await,
+                Err(error) => Err(error),
+            };
+            match result {
                 Ok(tokens) => return Ok(tokens),
                 Err(Error::Unavailable) => {
                     self.relay.report(

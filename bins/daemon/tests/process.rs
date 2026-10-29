@@ -29,7 +29,7 @@ use tracing as _;
 use tracing_subscriber as _;
 
 #[test]
-fn help_and_missing_credentials_do_not_create_state() {
+fn help_and_invalid_credentials_do_not_create_state() {
     let directory = tempfile::tempdir().unwrap();
     let state = directory.path().join("state");
     let help = Command::new(env!("CARGO_BIN_EXE_daemon"))
@@ -53,7 +53,7 @@ fn help_and_missing_credentials_do_not_create_state() {
     );
     let failure = Command::new(env!("CARGO_BIN_EXE_daemon"))
         .args(["--data-dir", state.to_str().unwrap()])
-        .env_remove("AIT_SERVER_TOKEN")
+        .env("AIT_SERVER_TOKEN", "invalid-token")
         .output()
         .unwrap();
     assert!(!failure.status.success());
@@ -110,5 +110,5 @@ fn authorization_commands_are_explicit_and_status_never_requires_or_displays_sec
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-#[path = "process/headless_token.rs"]
-mod headless_token;
+#[path = "process/local_token.rs"]
+mod local_token;

@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 /// Internal exclusive Relay capability issued before the API is shared.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ManagedRelayHandle {
     pub(super) relay: relay::Connector,
     pub(super) hub: relay::hub::Connector,
@@ -31,6 +31,14 @@ impl ManagedRelay for ManagedRelayHandle {
     async fn active(&self) -> bool {
         let status = self.relay.status().await;
         status.online || status.connecting
+    }
+
+    async fn online(&self) -> bool {
+        self.relay.status().await.online
+    }
+
+    async fn hub_online(&self) -> bool {
+        self.hub.status().await.online
     }
 
     async fn stop(&self) {

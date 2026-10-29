@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { Platform } from "react-native";
 import { create } from "zustand";
-import type { RelayControlGrant, RelayStatus } from "@ait/protocol/relay";
+import type { RelayStatus } from "@ait/protocol/relay";
+import type { DeviceAuthorization, PublicationStatus } from "@ait/protocol/publication";
 import { getDesktopHost } from "@/desktop/host";
 import { getDesktopDaemonStatus } from "@/desktop/daemon/desktop-daemon";
 import { getNativeAccount } from "./native-account";
@@ -12,6 +13,7 @@ interface HostSyncState {
   enabled: boolean;
   busy: boolean;
   status: RelayStatus | null;
+  publication?: PublicationStatus;
   error: string | null;
 }
 const EMPTY_STATE: HostSyncState = { enabled: false, busy: false, status: null, error: null };
@@ -29,30 +31,51 @@ function update(serverId: string, patch: Partial<HostSyncState>) {
 async function hostCommand(
   command: "account_host_sync" | "account_host_disconnect",
   args: Record<string, unknown>,
-): Promise<RelayControlGrant | null> {
+): Promise<DeviceAuthorization | null> {
   const desktop = getDesktopHost();
-  if (desktop?.invoke) return desktop.invoke(command, args) as Promise<RelayControlGrant | null>;
+  if (desktop?.invoke) return desktop.invoke(command, args) as Promise<DeviceAuthorization | null>;
   if (Platform.OS !== "android" && Platform.OS !== "ios")
     throw new Error("Online service synchronization requires the desktop or native mobile app.");
   return serializeNativeAccountCommand(async () => {
     const manager = await getNativeAccount();
     if (command === "account_host_disconnect") {
-      await manager.unpublishHost(args.serverId as string);
       return null;
     }
-    return manager.publishHost(
-      {
-        serverId: args.serverId as string,
-        instanceId: args.instanceId as string,
-        name: args.name as string,
-        platform: args.platform as string,
-      },
-      args.needsGrant !== false,
-    );
+    return args.needsAuthorization === true
+      ? manager.authorizeHost({
+          serverId: args.serverId as string,
+          instanceId: args.instanceId as string,
+          name: args.name as string,
+          platform: args.platform as string,
+        })
+      : null;
   });
 }
 
-/** Read status from the selected daemon and maintain its enabled publication. */
+// Retain the same issuance identity across a lost daemon response; never consume codes here.
+const handoffs = new Map<string, DeviceAuthorization>();
+
+function publicationState(publication: PublicationStatus): Partial<HostSyncState> {
+  return {
+    publication,
+    enabled: ![
+      "unauthorized",
+      "disconnected",
+      "reauthorization_required",
+      "protocol_error",
+      "storage_error",
+    ].includes(publication.management?.phase ?? ""),
+    status: {
+      serverId: publication.serverId,
+      instanceId: publication.instanceId,
+      platform: publication.platform,
+      management: publication.management,
+      status: { ...publication.hub.status, epoch: null },
+    },
+  };
+}
+
+/** Observe daemon-owned publication; explicit sign-out requires a new authorization. */
 export async function synchronizeOnlineServiceHost(
   serverId: string,
   name: string,
@@ -63,32 +86,58 @@ export async function synchronizeOnlineServiceHost(
   if (previous.busy) return;
   const client = getHostRuntimeStore().getClient(serverId);
   if (!client?.isConnected) return;
-  if (enable && useAccountState.getState().status === "logged_out") return;
   const current = generation;
   update(serverId, { busy: true, error: null, enabled: enable || previous.enabled });
   try {
-    let status = await client.getOnlineServiceStatus();
+    const status = await client.getOnlineServiceStatus();
     if (status.serverId !== serverId)
       throw new Error("The host identity has changed. Reconnect first.");
     if (current !== generation) return;
-    if (status.management?.mode === "managed") {
+    if (!status.management?.autonomous) {
       update(serverId, { status, enabled: false });
+      if (enable) throw new Error("Update the host to use daemon-owned publication.");
       return;
     }
-    const enabled = enable || previous.enabled;
-    if (enabled) {
-      const grant = await hostCommand("account_host_sync", {
+    let publication = await client.getPublicationStatus();
+    const phase = publication.management?.phase;
+    if (phase === "disconnected") handoffs.delete(serverId);
+    const needsAuthorization = [
+      "unauthorized",
+      "disconnected",
+      "reauthorization_required",
+      "protocol_error",
+      "storage_error",
+    ].includes(phase ?? "");
+    if (enable && (!options?.automatic || phase === "unauthorized")) {
+      if (needsAuthorization && useAccountState.getState().status === "logged_out") {
+        update(serverId, publicationState(publication));
+        return;
+      }
+      let authorization = handoffs.get(serverId);
+      if (authorization && Date.parse(authorization.expires_at) <= Date.now()) {
+        handoffs.delete(serverId);
+        authorization = undefined;
+      }
+      const approved = await hostCommand("account_host_sync", {
         serverId,
         instanceId: status.instanceId,
         platform: status.platform,
         name,
-        needsGrant: !status.status.online && !status.status.connecting,
-        ...(enable && !options?.automatic ? { enableBuiltInDaemon: true } : {}),
+        needsAuthorization: needsAuthorization && !authorization,
+        ...(!options?.automatic ? { enableBuiltInDaemon: true } : {}),
       });
       if (current !== generation) return;
-      if (grant) status = await client.connectOnlineService(grant);
+      authorization ??= approved ?? undefined;
+      if (needsAuthorization && authorization) {
+        handoffs.set(serverId, authorization);
+        publication = await client.authorizePublication(
+          authorization,
+          options?.automatic ? "initial" : "explicit",
+        );
+        handoffs.delete(serverId);
+      }
     }
-    if (current === generation) update(serverId, { status, enabled });
+    if (current === generation) update(serverId, publicationState(publication));
   } catch (error) {
     if (current === generation)
       update(serverId, {
@@ -108,16 +157,13 @@ export async function disconnectOnlineServiceHost(serverId: string): Promise<voi
     const currentStatus = await client.getOnlineServiceStatus();
     if (currentStatus.serverId !== serverId)
       throw new Error("The host identity has changed. Reconnect first.");
-    if (currentStatus.management?.mode === "managed") {
-      if (current === generation) update(serverId, { status: currentStatus, enabled: false });
-      return;
-    }
-    // Revoke the lease even if the transport disappears while stopping the connector.
+    if (!currentStatus.management?.autonomous)
+      throw new Error("Update the host to control its server connection.");
+    handoffs.delete(serverId);
     await hostCommand("account_host_disconnect", { serverId });
     if (current !== generation) return;
-    update(serverId, { enabled: false });
-    const status = await client.disconnectOnlineService();
-    if (current === generation) update(serverId, { status });
+    const publication = await client.disconnectPublication();
+    if (current === generation) update(serverId, publicationState(publication));
   } catch (error) {
     if (current === generation)
       update(serverId, {
@@ -153,7 +199,7 @@ export async function synchronizeDefaultDesktopHost(): Promise<void> {
   await synchronizeOnlineServiceHost(host.serverId, host.label, true, { automatic: true });
 }
 
-/** Keep daemon controls healthy after leaving Settings; account authority renews their leases. */
+/** Poll display state; node registration, renewal and reconnects belong to the daemon. */
 export function OnlineServiceHostSyncLifecycle() {
   const status = useAccountState((state) => state.status);
   const synchronizedHosts = useAccountState((state) => state.synchronizedHosts);
@@ -181,9 +227,10 @@ export function OnlineServiceHostSyncLifecycle() {
   return null;
 }
 
-/** Invalidate in-flight UI work, preserving the remote leases retained by account authority. */
+/** Invalidate account-dependent UI work without changing any daemon authorization or connection. */
 export function reconcileOnlineServiceHostsAfterLogout(serverIds: readonly string[]): void {
   generation += 1;
+  handoffs.clear();
   useOnlineServiceHostSync.setState(({ hosts }) => ({
     hosts: Object.fromEntries(
       Object.entries(hosts).map(([serverId, state]) => [
@@ -191,8 +238,8 @@ export function reconcileOnlineServiceHostsAfterLogout(serverIds: readonly strin
         {
           ...state,
           busy: false,
-          enabled: serverIds.includes(serverId),
-          status: serverIds.includes(serverId) ? state.status : null,
+          enabled: state.publication ? state.enabled : serverIds.includes(serverId),
+          status: state.publication || serverIds.includes(serverId) ? state.status : null,
         },
       ]),
     ),

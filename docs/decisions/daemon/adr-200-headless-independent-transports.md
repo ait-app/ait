@@ -1,5 +1,7 @@
 # ADR-200：Headless 独立维护 Hub、Relay 与节点租约
 
+> 启动与控制边界已由 [ADR-201](adr-201-daemon-owned-publication.md) 修订：所有 daemon 自主发布，外部可暂停 Hub。
+
 状态：采用。修订 [ADR-180](adr-180-hub-serve-endpoint.md) 的 headless 发布调度与端口默认行为。
 
 ## 背景

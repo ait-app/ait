@@ -63,11 +63,8 @@ async function createAccount(): Promise<AccountSessionManager> {
       platform: "web",
       randomUUID: () => crypto.randomUUID(),
       appVersion: appPackage.version,
-      publishRuntime: false,
       // Same-origin page; a popup opened after the confirmation dialog would be blocked.
       openUrl: async (url) => window.location.assign(url),
-      runtime: () => ({ status: "stopped", serverId: "" }),
-      local: async () => undefined,
       save: async (account) => {
         try {
           if (account?.nodeSessionId) localStorage.setItem(NODE_KEY, account.nodeSessionId);

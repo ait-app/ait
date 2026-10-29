@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir, networkInterfaces } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { RustDaemonManager, resolveDesktopDaemonHome, rotateDaemonLog } from "./rust-daemon";
 
 const { version: expectedVersion } = JSON.parse(
@@ -28,6 +28,7 @@ function create(
 afterEach(async () => {
   for (const manager of managers.splice(0)) await manager.stop();
   for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true });
+  vi.unstubAllEnvs();
 });
 
 it("reports spawn failure and allows stop after a failed start", async () => {
@@ -101,7 +102,7 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
     ).toBeUndefined();
   }, 30000);
 
-  it("serializes startup, authenticates readiness, rotates credentials and cleans up on restart/stop", async () => {
+  it("serializes startup, authenticates readiness, restores credentials and cleans up on restart/stop", async () => {
     const manager = create(process.env.AIT_SERVER_BIN!);
     const [a, b] = await Promise.all([manager.start(), manager.start()]);
     expect(a).toEqual(b);
@@ -126,7 +127,7 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
     expect(restarted.version).toBe(expectedVersion);
     expect(restarted.listen).toBe(a.listen);
     expect(restarted.pid).not.toBe(a.pid);
-    expect(manager.authorization(`ws://${restarted.listen}/v1/ws`)).not.toBe(token);
+    expect(manager.authorization(`ws://${restarted.listen}/v1/ws`)).toBe(token);
     expect(() => process.kill(a.pid!, 0)).toThrow();
     await manager.stop();
     expect(manager.status()).toMatchObject({ status: "stopped", version: null });
@@ -134,14 +135,32 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
     expect(manager.authorization(`ws://${restarted.listen}/v1/ws`)).toBeUndefined();
   }, 40000);
 
-  it("controls the local hub serve link and reports refusals with their status", async () => {
+  it("uses a saved API token across Desktop restarts and honors an explicit environment override", async () => {
+    vi.stubEnv("AIT_SERVER_TOKEN", undefined);
+    const manager = create(process.env.AIT_SERVER_BIN!);
+    const initial = await manager.start();
+    const token = readFileSync(path.join(initial.home, "local-api.token"), "utf8");
+    expect(manager.authorization(`ws://${initial.connectAddress}/v1/ws`)).toBe(token);
+    expect(statSync(path.join(initial.home, "local-api.token")).mode & 0o077).toBe(0);
+    const restarted = await manager.restart();
+    expect(manager.authorization(`ws://${restarted.connectAddress}/v1/ws`)).toBe(token);
+    await manager.stop();
+    const override = "explicit-environment-token-at-least-32-characters";
+    vi.stubEnv("AIT_SERVER_TOKEN", override);
+    const external = await manager.start();
+    expect(manager.authorization(`ws://${external.connectAddress}/v1/ws`)).toBe(override);
+    expect(readFileSync(path.join(initial.home, "local-api.token"), "utf8")).toBe(token);
+    expect(readFileSync(path.join(initial.home, "daemon.log"), "utf8")).not.toContain(override);
+  }, 60000);
+
+  it("disconnects the shared server authorization and requires a fresh login after restart", async () => {
     const manager = create(process.env.AIT_SERVER_BIN!);
     await expect(manager.hubRequest("GET")).rejects.toThrow("The local runtime is not ready.");
     await manager.start();
     await expect(manager.hubRequest("GET")).resolves.toMatchObject({
       online: false,
       connecting: false,
-      management: { mode: "external" },
+      management: { mode: "managed", autonomous: true },
     });
     await expect(
       manager.hubRequest("PUT", {
@@ -149,8 +168,17 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
         hub_ticket: "a".repeat(64),
         node_session_id: "00000000-0000-4000-8000-000000000001",
       }),
-    ).rejects.toMatchObject({ status: 400 });
+    ).rejects.toMatchObject({ status: 409 });
     await expect(manager.hubRequest("DELETE")).resolves.toBeNull();
+    await expect(manager.hubRequest("GET")).resolves.toMatchObject({
+      management: { phase: "disconnected", binding: null },
+    });
+    await expect(manager.hubRequest("PUT", {})).rejects.toMatchObject({ status: 409 });
+    await manager.restart();
+    await expect(manager.hubRequest("GET")).resolves.toMatchObject({
+      management: { phase: "disconnected", binding: null },
+    });
+    await expect(manager.relayRequest("DELETE")).resolves.toBeNull();
   }, 40000);
 
   it("does not adopt or stop another process using the same data directory", async () => {

@@ -39,6 +39,13 @@ Release CI 和相关 PR 共用 [Windows 工作流](../../.github/workflows/windo
 在 Windows runner 上构建并运行 `node apps/desktop/e2e/windows-startup.e2e.mjs`，
 验证打包后的客户端可在没有 daemon 的情况下进入欢迎页。PR 仅上传 CI 产物。
 
+The bundled daemon owns machine authorization, Host registration, renewal and Hub reconnects, just like
+standalone `daemon run`. Desktop approves a device authorization once and hands it to the daemon;
+signing out or closing Desktop does not revoke it. Explicit host disconnection closes both Hub and Relay,
+clears the shared machine authorization, and requires a fresh login even after restart.
+When no `AIT_SERVER_TOKEN` is inherited, Desktop
+uses the daemon's private persisted `local-api.token`. See [daemon publication](../../docs/decisions/daemon/adr-201-daemon-owned-publication.md).
+
 ### Settings regression against Rust
 
 With the desktop development server running, run:

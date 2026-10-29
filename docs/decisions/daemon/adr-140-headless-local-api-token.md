@@ -1,5 +1,7 @@
 # ADR-140：Headless daemon 自动保存本地 API 凭据
 
+> 启动与控制边界已由 [ADR-201](adr-201-daemon-owned-publication.md) 修订：所有 daemon 自主发布，外部可暂停 Hub。
+
 状态：已接受
 
 `daemon login` 保存中心机器授权；本地 API 的凭据与之独立。要求用户在登录后额外设置环境变量，导致 `run --headless` 无法直接启动。

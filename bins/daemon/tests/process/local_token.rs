@@ -6,7 +6,7 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 use serde_json::json;
 
 #[tokio::test]
-async fn headless_process_restarts_with_saved_local_token_without_environment() {
+async fn daemon_process_restarts_with_saved_local_token_without_environment() {
     let root = tempfile::tempdir().unwrap();
     let data = root.path().join("state");
     std::fs::create_dir_all(data.join("device")).unwrap();
@@ -39,7 +39,6 @@ async fn headless_process_restarts_with_saved_local_token_without_environment() 
                 "--log-level",
                 "info",
                 "run",
-                "--headless",
             ])
             .env_remove("AIT_SERVER_TOKEN")
             .env("HOME", root.path())

@@ -1,4 +1,4 @@
-//! Private local API credential for standalone headless startup.
+//! Private local API credential for all daemon startup paths.
 
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};

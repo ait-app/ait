@@ -106,6 +106,7 @@ impl HttpCenter {
             Some("access_denied" | "expired_token") => Err(Error::Denied),
             Some("node_session_expired" | "registration_expired") => Err(Error::SessionExpired),
             Some("refresh_reuse") => Err(Error::Unauthorized),
+            _ if status.as_u16() == 401 && bearer.is_some() => Err(Error::AccessRejected),
             _ if status.as_u16() == 401 || status.as_u16() == 403 => Err(Error::Unauthorized),
             _ if status.as_u16() == 409 => Err(Error::Conflict),
             _ => Err(Error::Protocol),
@@ -227,6 +228,22 @@ fn decode_tokens(value: Value) -> Result<Tokens, Error> {
 
 #[async_trait]
 impl Center for HttpCenter {
+    async fn revoke(&self, refresh_token: &SecretString) -> Result<(), Error> {
+        self.revoke(refresh_token).await
+    }
+
+    async fn enroll(
+        &self,
+        token: &SecretString,
+        request_id: Uuid,
+        machine: &Machine,
+    ) -> Result<Tokens, Error> {
+        self.enroll(token, request_id, machine).await
+    }
+    async fn poll(&self, code: &SecretString, request_id: Uuid) -> Result<Tokens, Error> {
+        self.poll(code, request_id).await
+    }
+
     async fn refresh(&self, secret: &SecretString, request_id: Uuid) -> Result<Tokens, Error> {
         decode_tokens(
             self.request(

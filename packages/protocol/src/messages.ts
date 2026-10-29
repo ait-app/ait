@@ -1,3 +1,11 @@
+import {
+  PublicationStatusRequestSchema,
+  PublicationAuthorizeRequestSchema,
+  PublicationStopRequestSchema,
+  PublicationStatusResponseSchema,
+  PublicationAuthorizeResponseSchema,
+  PublicationStopResponseSchema,
+} from "./publication.js";
 import { BOT_REQUEST_SCHEMAS, BOT_RESPONSE_SCHEMAS } from "./bot/rpc-schemas.js";
 import { AgentProfileSchema, AgentSkillSelectionSchema } from "./agent-profile.js";
 export {
@@ -3028,6 +3036,9 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   RelayStatusRequestSchema,
   RelayStartRequestSchema,
   RelayStopRequestSchema,
+  PublicationStatusRequestSchema,
+  PublicationAuthorizeRequestSchema,
+  PublicationStopRequestSchema,
   DaemonConfigReloadRequestSchema,
   DiagnosticsRequestSchema,
   AgentTimelineAppendRequestSchema,
@@ -6426,6 +6437,9 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   RelayStatusResponseSchema,
   RelayStartResponseSchema,
   RelayStopResponseSchema,
+  PublicationStatusResponseSchema,
+  PublicationAuthorizeResponseSchema,
+  PublicationStopResponseSchema,
   DaemonConfigReloadResponseSchema,
   DiagnosticsResponseSchema,
   GetDaemonConfigResponseMessageSchema,

@@ -525,3 +525,26 @@ async fn stop_ends_an_online_link_and_its_late_result_is_ignored() {
     sleep(Duration::from_millis(100)).await;
     assert_eq!(hub.status().await, Status::default());
 }
+
+#[tokio::test]
+async fn disconnect_discards_previous_owner_yield() {
+    let (_relay, hub, center, _local) = connector().await;
+    let (mut socket, _) = accept(&center).await;
+    next(&mut socket).await;
+    socket
+        .send(frame(&welcome(Uuid::new_v4(), false, 0), b""))
+        .await
+        .unwrap();
+    next_status(&hub, |status| status.online).await;
+    socket
+        .send(frame(&json!({"t":"error","code":"replaced"}), b""))
+        .await
+        .unwrap();
+    next_status(&hub, |status| !status.online && !status.connecting).await;
+    assert!(hub.yielding().await);
+    hub.stop().await;
+    assert!(
+        !hub.yielding().await,
+        "a subsequent fresh login must not inherit the old grant's five-minute Hub suppression"
+    );
+}

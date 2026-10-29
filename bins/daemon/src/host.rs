@@ -54,7 +54,7 @@ use tokio::net::TcpListener;
 use crate::config::Config;
 use crate::instance::InstanceLease;
 
-type HostLink = host_link::Controller<
+type HostLink = host_link::service::Service<
     crate::device::HttpCenter,
     crate::device::Store,
     crate::device::StatusRelay,
@@ -65,7 +65,7 @@ pub(super) struct Server {
     api: Api,
     // Own the directory lock until all accepted connections have stopped.
     instance: Arc<InstanceLease>,
-    managed: Option<HostLink>,
+    managed: HostLink,
     publication: hub::Worker,
 }
 
@@ -100,21 +100,7 @@ impl Server {
             .context("read server listener address")?;
         let (instance, services, sources, device) = tokio::task::spawn_blocking(move || {
             let instance = Arc::new(InstanceLease::acquire(&config.data_dir)?);
-            // Validate managed state before spawning services that retain the instance lease.
-            let device = if config.headless {
-                let store = crate::device::Store::open(&config.data_dir)?;
-                let mut state = store
-                    .load()?
-                    .context("run daemon login before starting headless mode")?;
-                if state.machine.server_id != instance.server_id {
-                    anyhow::bail!("device state belongs to another installation");
-                }
-                model::BUILD_VERSION.clone_into(&mut state.machine.app_version);
-                crate::device::PLATFORM.clone_into(&mut state.machine.platform);
-                Some((store, state))
-            } else {
-                None
-            };
+            let device = crate::device::load_state(&config.data_dir, instance.server_id)?;
             let (mut services, sources) = compose_services(&config, address, &instance)?;
             if let Some(diagnostics) = diagnostics {
                 services.metadata = services.metadata.map(|service| {
@@ -135,6 +121,20 @@ impl Server {
             services,
         )?
         .with_browser_origins(web_origins)?;
+        let (store, state) = device;
+        let relay = crate::device::StatusRelay::new(
+            api.claim_managed_relay()?,
+            &data_dir,
+            instance.instance_id,
+        );
+        let managed = host_link::service::Service::new(
+            crate::device::HttpCenter::new()?,
+            store,
+            relay,
+            state,
+            instance.instance_id,
+        );
+        api.set_publication_control(managed.handle())?;
         let publication = hub::start(
             &api,
             sources,
@@ -143,22 +143,6 @@ impl Server {
             hub_notifications,
         )
         .await?;
-        let managed = if let Some((store, state)) = device {
-            let relay = crate::device::StatusRelay::new(
-                api.claim_managed_relay()?,
-                &data_dir,
-                instance.instance_id,
-            );
-            Some(host_link::Controller::new(
-                crate::device::HttpCenter::new()?,
-                store,
-                relay,
-                state,
-                instance.instance_id,
-            ))
-        } else {
-            None
-        };
         Ok(Self {
             listener,
             api,
@@ -187,11 +171,7 @@ impl Server {
         } = self;
         let cancel = tokio_util::sync::CancellationToken::new();
         let manager_cancel = cancel.clone();
-        let manager = managed.map(|manager| tokio::spawn(async move {
-            if let Err(error) = manager.run(manager_cancel).await {
-                tracing::error!(%error, "headless Host publication stopped; local daemon remains available");
-            }
-        }));
+        let manager = tokio::spawn(managed.run(manager_cancel));
         let result: anyhow::Result<()> = async {
             let shutdown_api = api.clone();
             let shutdown_manager = cancel.clone();
@@ -231,12 +211,10 @@ impl Server {
         }
         .await;
         cancel.cancel();
-        if let Some(manager) = manager {
-            tokio::time::timeout(Duration::from_secs(15), manager)
-                .await
-                .context("headless manager shutdown exceeded deadline")?
-                .context("join headless manager")?;
-        }
+        tokio::time::timeout(Duration::from_secs(15), manager)
+            .await
+            .context("publication manager shutdown exceeded deadline")?
+            .context("join publication manager")?;
         let lifecycle_intent = api.lifecycle_intent();
         publication.shutdown().await;
         // Drop routers and application storage before the data-directory instance lease.
