@@ -63,6 +63,7 @@ fn defaults_are_isolated_and_secrets_are_redacted() {
         "127.0.0.1:7316".parse::<SocketAddr>().unwrap()
     );
     assert!(config.web_origins.is_empty());
+    assert!(config.mcp_socket.is_none());
     assert!(!format!("{config:?}").contains(TOKEN));
     assert!(load(Cli::parse_from(["server"]), |_| None).is_err());
 }
@@ -350,4 +351,68 @@ fn omp_acp_arguments_preserve_executable_paths_without_daemon_configuration() {
         cli.command,
         Some(Command::OmpAcp { omp_bin: None })
     ));
+}
+
+#[cfg(unix)]
+#[test]
+fn mcp_socket_cli_overrides_environment_and_file() {
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(
+        directory.path().join("config.toml"),
+        "mcp_socket = '/tmp/file.sock'",
+    )
+    .unwrap();
+    let args = ["daemon", "--data-dir", directory.path().to_str().unwrap()];
+    assert_eq!(
+        load(Cli::parse_from(args), environment).unwrap().mcp_socket,
+        Some(PathBuf::from("/tmp/file.sock"))
+    );
+    let env = |name: &str| {
+        if name == "AIT_SERVER_MCP_SOCKET" {
+            Some("/tmp/env.sock".into())
+        } else {
+            environment(name)
+        }
+    };
+    assert_eq!(
+        load(Cli::parse_from(args), env).unwrap().mcp_socket,
+        Some(PathBuf::from("/tmp/env.sock"))
+    );
+    assert_eq!(
+        load(
+            Cli::parse_from(args.into_iter().chain(["--mcp-socket", "/tmp/cli.sock"])),
+            env
+        )
+        .unwrap()
+        .mcp_socket,
+        Some(PathBuf::from("/tmp/cli.sock"))
+    );
+}
+
+#[test]
+fn mcp_socket_invalid_paths_are_rejected_before_creating_credentials() {
+    let directory = tempfile::tempdir().unwrap();
+    let data = directory.path().join("missing");
+    let args = ["daemon", "--data-dir", data.to_str().unwrap()];
+    for path in ["", "relative.sock", "/"] {
+        if let Ok(cli) = Cli::try_parse_from(args.into_iter().chain(["--mcp-socket", path])) {
+            assert!(load(cli, |_| None).is_err());
+        }
+        assert!(!data.exists());
+        assert!(
+            load(Cli::parse_from(args), |name| (name
+                == "AIT_SERVER_MCP_SOCKET")
+                .then(|| path.into()))
+            .is_err()
+        );
+        assert!(!data.exists());
+    }
+    #[cfg(not(unix))]
+    assert!(
+        load(
+            Cli::parse_from(args.into_iter().chain(["--mcp-socket", "/tmp/mcp.sock"])),
+            |_| None
+        )
+        .is_err()
+    );
 }

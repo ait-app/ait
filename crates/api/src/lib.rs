@@ -564,17 +564,10 @@ async fn guard(
     if !matches!(request.uri().path(), "/healthz" | "/readyz") && !download && !terminal_activity {
         if request.uri().path() == "/v1/ws" && !request.headers().contains_key("authorization") {
             state.browser_auth.consume(request.headers())?;
+        } else if request.uri().path() == mcp::PATH {
+            mcp::authenticate(&state, request.headers())?;
         } else {
-            let authenticated = auth::authenticate(request.headers(), &state.token);
-            if request.uri().path() == mcp::PATH {
-                authenticated.or_else(|error| {
-                    state.agent_mcp_token.as_ref().map_or(Err(error), |token| {
-                        auth::authenticate(request.headers(), token)
-                    })
-                })?;
-            } else {
-                authenticated?;
-            }
+            auth::authenticate(request.headers(), &state.token)?;
         }
     }
     // Credentials and client state must never be accepted in a URL.

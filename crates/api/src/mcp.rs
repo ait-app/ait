@@ -14,6 +14,8 @@ use tower_http::timeout::TimeoutLayer;
 use crate::{ApiError, Shared, auth};
 
 mod catalog;
+#[cfg(unix)]
+mod socket;
 mod tools;
 mod validation;
 
@@ -21,6 +23,15 @@ mod validation;
 pub(super) const PATH: &str = "/mcp/agents";
 const VERSIONS: &[&str] = &["2025-03-26", "2025-06-18", "2025-11-25"];
 const CALL_TIMEOUT: Duration = Duration::from_secs(60);
+
+pub(super) fn authenticate(state: &Shared, headers: &HeaderMap) -> Result<(), ApiError> {
+    auth::authenticate(headers, &state.token).or_else(|error| {
+        state
+            .agent_mcp_token
+            .as_ref()
+            .map_or(Err(error), |token| auth::authenticate(headers, token))
+    })
+}
 
 /// Return stateless MCP routes; the parent API supplies shared state and authentication.
 pub(super) fn router() -> Router<Arc<Shared>> {

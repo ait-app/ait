@@ -6,6 +6,8 @@ use anyhow::Context;
 mod bot;
 mod catalog;
 mod hub;
+#[cfg(unix)]
+mod mcp_socket;
 mod push;
 mod schedule;
 mod voice;
@@ -63,6 +65,8 @@ type HostLink = host_link::service::Service<
 
 pub(super) struct Server {
     listener: TcpListener,
+    #[cfg(unix)]
+    mcp_socket: Option<mcp_socket::McpSocket>,
     api: Api,
     // Own the directory lock until all accepted connections have stopped.
     instance: Arc<InstanceLease>,
@@ -90,6 +94,13 @@ impl Server {
         diagnostics: Option<Arc<dyn metadata::daemon::ports::DaemonDiagnostics>>,
     ) -> anyhow::Result<Self> {
         let data_dir = config.data_dir.clone();
+        #[cfg(not(unix))]
+        anyhow::ensure!(
+            config.mcp_socket.is_none(),
+            "MCP sockets require a Unix platform"
+        );
+        #[cfg(unix)]
+        let mcp_socket_path = config.mcp_socket.clone();
         let listener = TcpListener::bind(config.listen)
             .await
             .context("bind server listener")?;
@@ -101,11 +112,22 @@ impl Server {
             .context("read server listener address")?;
         let mcp_token = secrecy::SecretString::from(uuid::Uuid::new_v4().to_string());
         let launch_mcp_token = mcp_token.clone();
-        let (instance, services, sources, device) = tokio::task::spawn_blocking(move || {
-            let instance = Arc::new(InstanceLease::acquire(&config.data_dir)?);
-            let device = crate::device::load_state(&config.data_dir, instance.server_id)?;
+        let instance_directory = data_dir.clone();
+        let instance =
+            tokio::task::spawn_blocking(move || InstanceLease::acquire(&instance_directory))
+                .await
+                .context("join server instance acquisition")??;
+        let instance = Arc::new(instance);
+        #[cfg(unix)]
+        let mcp_socket = match mcp_socket_path {
+            Some(path) => Some(mcp_socket::McpSocket::bind(&path).await?),
+            None => None,
+        };
+        let launch_instance = instance.clone();
+        let (services, sources, device) = tokio::task::spawn_blocking(move || {
+            let device = crate::device::load_state(&config.data_dir, launch_instance.server_id)?;
             let (mut services, sources) =
-                compose_services(&config, address, &instance, launch_mcp_token)?;
+                compose_services(&config, address, &launch_instance, launch_mcp_token)?;
             if let Some(diagnostics) = diagnostics {
                 services.metadata = services.metadata.map(|service| {
                     let mut dependencies = service.into_dependencies();
@@ -113,7 +135,7 @@ impl Server {
                     metadata::Service::new(dependencies)
                 });
             }
-            Ok::<_, anyhow::Error>((instance, services, sources, device))
+            Ok::<_, anyhow::Error>((services, sources, device))
         })
         .await
         .context("join server initialization")??;
@@ -150,6 +172,8 @@ impl Server {
         .await?;
         Ok(Self {
             listener,
+            #[cfg(unix)]
+            mcp_socket,
             api,
             instance,
             managed,
@@ -169,6 +193,8 @@ impl Server {
     ) -> anyhow::Result<Option<LifecycleIntent>> {
         let Self {
             listener,
+            #[cfg(unix)]
+            mcp_socket,
             api,
             instance,
             managed,
@@ -194,21 +220,39 @@ impl Server {
                 shutdown_api.begin_shutdown();
             })
             .into_future();
-            tokio::pin!(server);
+            let socket_server = async {
+                #[cfg(unix)]
+                if let Some(socket) = mcp_socket {
+                    return socket.serve(api.clone()).await;
+                }
+                api.wait_draining().await;
+                Ok(())
+            };
+            tokio::pin!(server, socket_server);
             // Readiness changes in the signal future before HTTP acceptance stops.
             // Also clean up WS tasks if the HTTP server terminates with an error.
-            let result = tokio::select! {
-                result = &mut server => Some(result),
-                () = api.wait_draining() => None,
+            let (result, socket_result) = tokio::select! {
+                result = &mut server => (Some(result), None),
+                result = &mut socket_server => (None, Some(result)),
+                () = api.wait_draining() => (None, None),
             };
             api.begin_shutdown();
             tokio::time::timeout(Duration::from_secs(15), async {
-                let result = match result {
-                    Some(result) => result,
-                    None => server.await,
+                let tcp = async {
+                    match result {
+                        Some(result) => result,
+                        None => server.await,
+                    }
                 };
-                api.wait_closed().await;
-                result.context("serve HTTP")
+                let socket = async {
+                    match socket_result {
+                        Some(result) => result,
+                        None => socket_server.await,
+                    }
+                };
+                let (result, socket_result, ()) = tokio::join!(tcp, socket, api.wait_closed());
+                result.context("serve HTTP")?;
+                socket_result
             })
             .await
             .context("server shutdown exceeded 15 seconds")??;

@@ -11,6 +11,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Daemon 与协议
 
+- [ADR-203：MCP 的可选 Unix socket 监听](daemon/adr-203-mcp-unix-socket.md)
+
 - [ADR-181：Host 向 Hub 发布事件与目录摘要](daemon/adr-181-hub-host-publication.md)
 - [ADR-148：daemon 的无状态 MCP 编排接口](daemon/adr-148-daemon-mcp.md)
 - [ADR-142：PTY 拥有基础终端设备属性回复](daemon/adr-142-terminal-primary-device-attributes.md)

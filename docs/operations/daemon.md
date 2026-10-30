@@ -14,19 +14,22 @@ cargo run -p daemon --bin daemon -- --listen 127.0.0.1:7316
 未配置时自动生成并复用 `<data-dir>/local-api.token`（0600）；Desktop 使用同一个 token。
 不从命令行、URL、TOML 或 `.env` 自动加载服务凭据。
 
-| 参数                   | 环境变量               | 默认值                                 |
-| ---------------------- | ---------------------- | -------------------------------------- |
-| `--data-dir`           | `AIT_SERVER_DATA_DIR`  | `~/.ait-server`                        |
-| `--listen`             | `AIT_SERVER_LISTEN`    | `127.0.0.1:7316`                       |
-| `--config`             | 无                     | `<data-dir>/config.toml`，不存在则跳过 |
-| `--log-level`          | `AIT_SERVER_LOG_LEVEL` | `info`                                 |
-| `--web-origin`，可重复 | 无                     | 无额外浏览器来源                       |
+| 参数                   | 环境变量                | 默认值                                 |
+| ---------------------- | ----------------------- | -------------------------------------- |
+| `--data-dir`           | `AIT_SERVER_DATA_DIR`   | `~/.ait-server`                        |
+| `--listen`             | `AIT_SERVER_LISTEN`     | `127.0.0.1:7316`                       |
+| `--mcp-socket`         | `AIT_SERVER_MCP_SOCKET` | 不监听 Unix socket                     |
+| `--config`             | 无                      | `<data-dir>/config.toml`，不存在则跳过 |
+| `--log-level`          | `AIT_SERVER_LOG_LEVEL`  | `info`                                 |
+| `--web-origin`，可重复 | 无                      | 无额外浏览器来源                       |
 
 启动配置优先级为命令行、环境变量、TOML、默认值。目录不接受 TOML 覆盖。
 显式 `--config` 指定的文件必须存在，未知字段和无效内容会拒绝启动：
 
 ```toml
 listen = "127.0.0.1:7316"
+# macOS / Linux 可选；路径须为绝对路径，父目录须存在。
+# mcp_socket = "/absolute/private-directory/mcp.sock"
 log_level = "info"
 web_origins = ["http://localhost:8081", "http://127.0.0.1:8081"]
 ```
@@ -34,6 +37,9 @@ web_origins = ["http://localhost:8081", "http://127.0.0.1:8081"]
 支持 IPv4、IPv6、具体网络地址和通配监听；端口 `0` 用于隔离测试。通配监听的客户端使用
 具体地址连接。桌面 Host 设置保存监听 IP/端口，环境变量可覆盖设置。
 浏览器页面来源须显式配置 HTTP loopback origin，包含端口且不带路径。
+
+`--mcp-socket` 在现有 TCP 监听之外增加 MCP 专用 Unix socket，使用 `0600` 权限及相同 Bearer
+鉴权。socket 上只暴露 `/mcp/agents`，连接示例和清理规则见 [MCP 手册](mcp.md#unix-socket-监听)。
 
 `AIT_SERVER_*` 和已有数据目录是兼容名称。桌面默认数据位于 `~/.ait-server-desktop`；
 开发桌面默认使用 `.tmp/ait/server`，开发 Web 默认使用 `.tmp/app/server`。
