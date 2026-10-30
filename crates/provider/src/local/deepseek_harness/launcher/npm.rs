@@ -1,24 +1,9 @@
 //! Discover an existing npm exec installation without invoking npm or downloading packages.
 
-use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::local::configuration::executable;
-
-/// Resolve the Unix npm cache using `environment` for exported configuration and HOME.
-/// Returns an absolute cache path, or `None` when unavailable or on unsupported platforms.
-pub(super) fn cache(environment: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
-    if !cfg!(unix) {
-        return None;
-    }
-    environment("npm_config_cache")
-        .filter(|path| !path.is_empty())
-        .or_else(|| environment("NPM_CONFIG_CACHE").filter(|path| !path.is_empty()))
-        .map(PathBuf::from)
-        .or_else(|| environment("HOME").map(|home| PathBuf::from(home).join(".npm")))
-        .filter(|path| path.is_absolute())
-}
 
 /// Scan at most 256 installations under the npm `cache` without invoking a package manager.
 /// Returns the newest executable DSH entrypoint, or `None` when no valid package can be read.
@@ -42,10 +27,21 @@ fn installation(directory: &Path) -> Option<(SystemTime, PathBuf)> {
     }
     let identity: serde_json::Value =
         serde_json::from_slice(&std::fs::read(manifest).ok()?).ok()?;
-    if identity["name"] != "@deepseek-ai/dsh" || identity["bin"]["dsh"] != "lib/bin.js" {
+    if identity["name"] != "@deepseek-ai/dsh" {
         return None;
     }
-    let program = package.join("lib/bin.js");
+    let entrypoint = identity["bin"]
+        .as_str()
+        .or_else(|| identity["bin"]["dsh"].as_str())?;
+    let entrypoint = Path::new(entrypoint);
+    if entrypoint.as_os_str().is_empty()
+        || entrypoint
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_) | Component::CurDir))
+    {
+        return None;
+    }
+    let program = package.join(entrypoint);
     if !executable(&program) {
         return None;
     }

@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::fs::{File, FileTimes};
 use std::os::unix::fs::PermissionsExt;
 use std::time::Duration;
@@ -31,40 +30,6 @@ fn package(cache: &Path, name: &str, modified: u64) -> PathBuf {
         )
         .unwrap();
     program
-}
-
-#[test]
-fn cache_configuration_precedes_the_default_home_cache() {
-    let mut environment = BTreeMap::from([
-        ("HOME", "/home/fixture"),
-        ("NPM_CONFIG_CACHE", "/uppercase"),
-        ("npm_config_cache", "/lowercase"),
-    ]);
-    for (expected, removed) in [
-        ("/lowercase", "npm_config_cache"),
-        ("/uppercase", "NPM_CONFIG_CACHE"),
-        ("/home/fixture/.npm", "HOME"),
-    ] {
-        assert_eq!(
-            cache(|key| environment.get(key).map(|value| OsString::from(*value))),
-            Some(expected.into())
-        );
-        environment.remove(removed);
-    }
-    assert_eq!(cache(|_| None), None);
-    assert_eq!(cache(|_| Some("relative-cache".into())), None);
-    assert_eq!(
-        cache(|key| (key == "HOME").then(|| "relative-home".into())),
-        None
-    );
-    assert_eq!(
-        cache(|key| match key {
-            "npm_config_cache" => Some(OsString::new()),
-            "NPM_CONFIG_CACHE" => Some("/uppercase".into()),
-            _ => None,
-        }),
-        Some("/uppercase".into())
-    );
 }
 
 #[tokio::test]
@@ -145,4 +110,32 @@ fn newest_complete_installation_is_selected_with_a_deterministic_tie_break() {
     std::fs::remove_file(newer).unwrap();
     std::fs::remove_file(tied).unwrap();
     assert_eq!(cached_cli(root.path()), Some(older));
+}
+
+#[test]
+fn cached_entrypoint_comes_from_the_package_manifest() {
+    let root = tempfile::tempdir().unwrap();
+    let original = package(root.path(), "cached", 1);
+    let package = original.parent().unwrap().parent().unwrap();
+    let declared = package.join("dist/custom-cli.cjs");
+    file(&declared, "#!/bin/sh\nexit 0\n", true);
+    for bin in [
+        serde_json::json!({"dsh":"dist/custom-cli.cjs"}),
+        serde_json::json!("dist/custom-cli.cjs"),
+    ] {
+        file(
+            &package.join("package.json"),
+            &serde_json::json!({"name":"@deepseek-ai/dsh","bin":bin}).to_string(),
+            false,
+        );
+        assert_eq!(cached_cli(root.path()), Some(declared.clone()));
+    }
+    for entrypoint in ["../outside", "/outside", "", "."] {
+        file(
+            &package.join("package.json"),
+            &serde_json::json!({"name":"@deepseek-ai/dsh","bin":{"dsh":entrypoint}}).to_string(),
+            false,
+        );
+        assert_eq!(cached_cli(root.path()), None);
+    }
 }

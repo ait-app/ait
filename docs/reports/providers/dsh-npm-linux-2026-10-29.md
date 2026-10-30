@@ -1,85 +1,77 @@
-# Linux npm / npx DSH 识别修复验证
+# DSH npm / npx 动态发现验证（2026-10-30 更新）
 
 ## 结论
 
-Linux 上，原版本能发现 PATH 中的全局 DSH，但遗漏了 PATH 外的用户 npm 全局目录，
-以及官方 `npx @deepseek-ai/dsh web` 下载的缓存。
-本 PR 同时补齐这两种入口，均已验证 CLI 可用性、版本读取和原生模型目录发现。
-验证覆盖 npm 用户 prefix、默认 npm 缓存及环境变量指定的自定义目录。
+发现逻辑应使用实际安装信息，不能根据反馈中的 `/home/new/.npm-global/bin/dsh` 猜测其他用户的目录。
+最终实现优先使用 PATH 中的 CLI；缺失时查询 npm 生效的 prefix 和 cache，
+据此发现全局 CLI 和已有的 npx 包。已移除固定 `.npm-global`、默认 `.npm` 根目录兜底，
+也移除了手写 `.npmrc` 解析器。npx CLI 的相对入口来自包的 `bin` 声明，不固定为 `lib/bin.js`。
 
-后续截图进一步确认，反馈者实际有 `/home/new/.npm-global/bin/dsh`，版本 `0.2.1-rc.2`。
-此前全局安装实测只覆盖 bin 已在 PATH 中的条件，npx 修复不能解释或覆盖这个额外场景。
-补充复现确认：终端通过 bashrc 加入全局 bin 时可运行，启动 PATH 缺少该目录时，
-`7d82e367` 中的 launcher 仍报告不可用。现在同时补查 npm prefix 和常见用户全局目录。
-这证明该启动环境差异能产生同样现象，尚未读取反馈者原机的 daemon 环境。
+真实包 `@deepseek-ai/dsh@0.2.1-rc.2` 在任意自定义 prefix、自定义缓存和全局 npm 配置下，
+均能完成 CLI 版本和模型目录读取。PATH 中已有 CLI 时不会额外调用 npm。
 
-| 运行方式                            | 修复前             | 修复后             |
-| ----------------------------------- | ------------------ | ------------------ |
-| npm 全局安装，bin 在 PATH 中        | 版本及模型目录通过 | 版本及模型目录通过 |
-| npm 全局安装，用户 bin 不在 PATH 中 | CLI 不可用         | 版本及模型目录通过 |
-| 仅有 npx 缓存，PATH 中没有 dsh      | CLI 不可用         | 版本及模型目录通过 |
+## 最终实现
 
-官方 [README](https://github.com/deepseek-ai/deepseek-harness#run-from-npm) 的示例是
-`npx @deepseek-ai/dsh web`。根据 [npm exec 文档](https://docs.npmjs.com/cli/v11/commands/npm-exec/)，
-包下载到缓存，其命令路径只加入 npx 启动的进程。此前 Ait 只检查 PATH 和桌面包，遗漏了这个入口。
+PATH 中找不到 dsh 时，仅运行一次：
 
-## 修复行为
+```sh
+npm --global config get prefix cache
+```
 
-Unix 主机依次选择 PATH CLI、用户 npm 全局 prefix、完整桌面包、已有的 npx 缓存。
-全局 prefix 优先读取 `npm_config_prefix` / `NPM_CONFIG_PREFIX`，然后读取用户 `.npmrc` 的
-根级 `prefix`，最后补查 `~/.npm-global/bin`。用户配置路径支持
-`npm_config_userconfig` / `NPM_CONFIG_USERCONFIG`；支持引号、注释、`~/` 和环境变量展开。
-只读至多 64 KiB 的用户配置，不读取项目 `.npmrc`，不通过 shell 执行配置值。
-缓存来自 `npm_config_cache`、`NPM_CONFIG_CACHE` 或默认 `~/.npm`，路径必须为绝对路径。
-仅在 `.npmrc` 或某次命令参数中配置的自定义缓存，需要额外导出环境变量。
-扫描 `_npx` 下至多 256 个目录；只接受包名为 `@deepseek-ai/dsh`、
-`bin.dsh` 为 `lib/bin.js` 且入口可执行的安装。manifest 最多 64 KiB。
-多个有效包按包目录修改时间选择，时间相同时按路径确定；显式 CLI 覆盖仍可固定版本。
-发现过程不运行 npm/npx、不下载、不修改缓存；使用独立的原生 Host 读取目录。
+[npm 的多键查询](https://docs.npmjs.com/cli/v11/commands/npm-config/#get)
+返回带键名的路径。npm 自己处理用户配置、全局配置、userconfig/globalconfig 覆盖、
+环境变量和路径展开；全局模式排除项目 `.npmrc`。
+Ait 只请求这两个路径，不请求完整配置，不输出原始 stderr，不下载或安装包。
+查询使用现有有界进程执行器，三秒超时后清理进程组；结果最多接受 64 KiB，且必须包含两个绝对路径。
 
-## 实测环境与隔离
+解析后的 prefix 用于查找 Unix 全局 bin，cache 用于发现 `_npx` 中已经安装的包。
+保留已有完整桌面安装包的发现行为；npx 缓存作为其后的回退。
+缓存扫描最多 256 个目录，manifest 最多 64 KiB，校验包身份及可执行权限，
+从 `package.json` 的 `bin.dsh` 或字符串 `bin` 读取相对入口，拒绝绝对入口和父目录跳转。
+多个有效包按包目录修改时间和路径稳定选择。
 
-Linux x86_64、Node `v24.22.0`、npm `12.2.1`、Rust `1.99.1`，
-真实包版本为 `@deepseek-ai/dsh@0.2.1-rc.2`。
-源码基于 `3aebf9d9` 加本次工作区变更，默认 features。
-初始失败探测基于此前的 `50ac8f62`；两基线间没有 provider 变更。
+同步 Provider 装配通过独立短期运行时执行这次异步查询，可在已有 Tokio 运行时中安全调用。
+npm 缺失、失败或超时时不猜测安装位置；PATH CLI 和完整桌面包仍可使用。
 
-临时目录 `/tmp/ait-dsh-install-matrix-d35u2cxm` 中分别设置 project、HOME、npm prefix 和缓存。
-测试 PATH 仅含 Node、npm、npx、sh 的符号链接；npm 场景额外加入测试 prefix 的 bin。
-本机 `/usr/bin/dsh` 不在 PATH 中，`/opt` 下也不存在可用桌面包，避免其他安装掩盖失败。
+## 本轮真实安装验证
 
-实际执行了 `npx --yes @deepseek-ai/dsh@0.2.1-rc.2 --version`，版本读取成功；
-同一环境的修复前 Ait launcher 随后在 `is_available()` 断言失败。
-接着实际执行 `npm install --global --no-audit --no-fund @deepseek-ai/dsh@0.2.1-rc.2`，
-将测试 prefix/bin 加入 PATH 后，版本和模型发现均通过。
+源码基线为 `4e7a1e80` 加本次工作区变更；原 PR 基于 `3aebf9d9`，使用默认 features。
+Linux x86*64、Node `v24.22.0`、npm `12.2.1`，真实 DSH 为 `0.2.1-rc.2`。
+在 `/tmp/ait-dsh-dynamic-npm-7m2pffr*` 中隔离 HOME、项目、PATH 和 npm 配置。
+初始用户配置为：
 
-修复后，对相同真实安装分别运行：全局 bin 在 PATH、自定义 `npm_config_cache`、
-自定义 `NPM_CONFIG_CACHE`、默认 HOME/.npm。后三种环境的 PATH 均没有 dsh。
-默认缓存场景将同一下载缓存移到 HOME/.npm，并通过离线 npx 版本命令确认可用。
-四种环境的两项原生验证全部通过，共 8 次通过。
+```ini
+prefix=${HOME}/vendor selected install 62
+cache=${HOME}/cache selected by npm 19
+```
 
-### 自定义 prefix 与 Ubuntu 26.04 补充验证
+实际运行 `npm install --global --no-audit --no-fund @deepseek-ai/dsh@0.2.1-rc.2`。
+测试 PATH 只保留 Node/npm/npx/sh，避免本机已有的 DSH 掩盖问题。
 
-在 `/tmp/ait-dsh-global-prefix-0a2uwl1a` 创建隔离 HOME、仅含 Node/npm/sh 的 PATH，
-以 `prefix=${HOME}/.npm-global` 安装真实 `0.2.1-rc.2` 包。
-bash 终端加载测试 bashrc 后，`command -v dsh` 和版本命令成功；
-不加载 bashrc 的启动环境找不到命令，修复前的 launcher 可用性检查失败。
+| 场景                                               | 结果                                                 |
+| -------------------------------------------------- | ---------------------------------------------------- |
+| PATH 显式包含真实 CLI                              | 版本、模型目录通过；npm 调用标记不存在，证明跳过查询 |
+| 只有用户 npmrc 指定的任意 prefix/cache             | 两项通过；标记确认实际查询 npm                       |
+| 仅全局 npmrc 指定 prefix/cache，项目配置为错误路径 | 两项通过，项目配置未污染结果                         |
+| 环境变量覆盖全局 prefix，安装被移到另一个目录      | 两项通过，遵循 npm 自己的优先级                      |
+| 仅有 npx 包，缓存位置只配置在全局 npmrc 中         | npx 版本成功，Ait 版本和模型目录两项通过             |
 
-补充修复后，下列六种不含全局 bin 的 PATH 环境，各自的版本和模型目录检查均通过：
-常见 `.npm-global` 加 npmrc、常见目录但无 npmrc、npmrc 指定带空格的其他 prefix、
-小写 prefix 环境变量、大写 prefix 环境变量、自定义 userconfig 文件。共 12 次通过。
+五种配置共 10 项真实安装检查通过。npx 场景同时隔离全局 prefix，
+确保不会复用本机的全局 DSH。
 
-另外在 Ubuntu **26.04.1 LTS** 容器内，以用户 `new`、HOME `/home/new`、
-Node `v22.22.1`、npm `9.2.0`，使用相同 npm 安装布局。
-PATH 仅为 `/usr/bin:/bin`，其中没有 dsh，真实入口为
-`/home/new/.npm-global/bin/dsh`。修复后的可用性/版本和模型目录两项检查通过。
-该验证覆盖 Ubuntu 容器运行环境，没有运行桌面 GUI 或 Electron。
+负向控制：创建一个未被配置的 `~/.npm-global/bin/dsh`，从 PATH 去掉 npm/dsh。
+可用性为 false，符合预期；没有因固定目录中存在文件而自动采用它。
 
-补充修改后再次在独立 HOME 下执行真实 npx，并重新验证缓存入口及模型目录，两项通过。
-该环境同时隔离 PATH 和 npm 全局 prefix，确保 npx 不会复用本机已有的全局 DSH。
+### Ubuntu / npm 9 兼容验证
 
-桌面代码并未固定 Linux 使用 zsh：选择顺序是 `SHELL`、用户登录 shell、Linux 回退 bash。
-本次没有修改 shell 选择行为，也未从截图推断反馈者的实际 shell。
+本轮在 Ubuntu 26.04.1 容器中，以用户 `new`、Node `v22.22.1`、npm `9.2.0`，
+PATH 仅为 `/usr/bin:/bin`，验证以下两种不在 PATH 中的真实安装：
+
+- 全局 npmrc 指定随机 prefix `/home/new/random-real-prefix-73`，通过 globalconfig 环境变量选择配置文件。
+- 将同一安装移到 `/home/new/.npm-global`，改由用户 npmrc 的 `prefix=${HOME}/.npm-global` 指定。
+
+两种配置的版本、模型目录检查全部通过，共 4 项；使用的测试二进制包含本轮动态查询实现。
+因此 npm 9 和 npm 12 的真实查询均已验证。没有运行 Electron 或桌面 GUI。
 
 ## Test execution
 
@@ -87,45 +79,31 @@ PATH 仅为 `/usr/bin:/bin`，其中没有 dsh，真实入口为
 cargo test --locked -p provider local::deepseek_harness::launcher:: --lib
 ```
 
-结果：17 passed、0 failed、2 ignored；其余 1398 项被过滤。
-覆盖 npm 符号链接、缓存入口运行、配置优先级、PATH/桌面优先级、坏 manifest、
-错误包身份、缺失或不可执行的入口、较新缓存选择与时间相同的稳定选择，
-以及全局 prefix 配置优先级、用户配置覆盖、路径展开、坏配置与桌面 PATH 缺失。
-最终 HOME 路径校验调整后，额外定向复核 npm_prefix 模块的 7 项测试：
-
-```sh
-cargo test --locked -p provider local::deepseek_harness::launcher::npm_prefix:: --lib
-```
-
-两个默认忽略的真实安装验证，在上述四种隔离环境中显式启用：
+结果：16 passed、0 failed、2 ignored；其余 1398 项被过滤。
+覆盖查询参数、任意目录、已有运行时、查询失败/超时、无效输出、动态 manifest 入口、
+缓存选择、CLI 优先级、桌面包及符号链接。
+两个默认忽略的真实安装测试在上述五种隔离配置中分别显式执行：
 
 ```sh
 <provider-test-binary> local::deepseek_harness::launcher::tests::installed_launcher_ --ignored
 ```
 
-每种环境均为 2 passed、0 failed；每次模型发现都使用临时 `DSH_HOME` 和非真实 Key 占位值，
-使原生目录包含模型。没有提交 prompt、创建 session 或验证真实模型服务认证。
-未配置凭据的全新 profile 可以返回空目录，这与 CLI 未发现是两个问题。
+模型发现使用临时 `DSH_HOME` 和测试占位 Key，没有提交 prompt、创建 session 或真实模型调用。
+负向控制故意对“应可用”的安装探针断言相反结果，退出 101，由外层验证脚本确认是预期不可用。
 
-`cargo build --locked -p provider`、`cargo fmt --all --check`、`git diff --check`、
-Markdown 格式检查和 `node scripts/check-docs.mjs` 通过。
-`cargo clippy --locked -p provider --lib -- -D warnings` 通过。
-本机 Rust 1.99.1 下，严格 all-targets Clippy 受既有测试的 18 处
-`clippy::assert_is_empty` 阻塞；CI 固定 Rust 1.98.1。
-`cargo clippy --locked -p provider --all-targets -- -D warnings -A clippy::assert_is_empty`
-通过，仅在命令中放宽这个已有 lint，没有修改源码 lint 配置。
+provider 构建、rustfmt、Markdown 格式、文档链接及严格 library Clippy 通过。
+本机 Rust 1.99.1 的 all-targets Clippy 仍受既有 18 处 `assert_is_empty` 告警阻塞，
+只在命令中关闭该已有 lint 后通过；CI 固定 Rust 1.98.1。
 
 ## Test coverage
 
-**not measured**：未请求覆盖率测量，没有当前覆盖率百分比、可比基线或覆盖率产物。
-如后续需要，使用 `cargo llvm-cov` 测量 launcher 定向测试。
-没有运行完整 workspace 测试或 workspace 覆盖率。
+**not measured**：未请求覆盖率测量，没有当前百分比、可比基线或覆盖率产物。
+如后续需要，使用 `cargo llvm-cov` 测量 launcher 定向测试；未运行 workspace 测试或覆盖率。
 
-## 限制
+## 范围与限制
 
-本次验证入口和模型发现，未测试真实模型调用、工具执行或桌面 GUI 的环境继承。
-npm 12 提示有五个依赖的安装脚本被阻止，但未影响本次版本和目录验证。
-Ubuntu 26.04.1 容器验证通过；未在 macOS、Windows 或反馈者机器上运行。
-清理 npx 缓存后需重新下载，
-安装、下载或配置变更后需重启 daemon 重新发现。
+必须让 daemon 的启动环境能执行 npm，才能查询未在 PATH 中的 npm 安装。
+一次性 npm/npx `--cache` 参数不会自动保留到其他进程，需要相同的持久配置或环境变量。
+Node 运行时也需要可用。更改配置、安装或下载后需重启 daemon 重新发现。
+未在反馈者原机运行，也未验证桌面 GUI 的环境继承、真实模型调用或工具执行。
 操作步骤见 [DeepSeek Harness](../../operations/deepseek-harness.md#npm-安装与识别排查)。

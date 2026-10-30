@@ -5,7 +5,8 @@
 Ait daemon 注册 `deepseek-harness`；客户端模型选择器显示 **DeepSeek Harness**，
 模型和推理等级从本机 Harness 的实际配置目录发现。
 
-默认优先从 PATH 启动 `dsh`，缺失时补查用户的 npm 全局 prefix 和 `~/.npm-global/bin`。
+默认优先从 PATH 启动 `dsh`。缺失时，通过 PATH 中的 npm 查询实际全局 prefix 和缓存目录，
+按 npm 返回的 prefix 查找全局 CLI；不猜测用户的安装目录。
 找不到 CLI 时，Ait 自动检查 DSH 桌面安装包：
 Linux 会解析 PATH 中 `deepseek-harness` 的真实位置，并检查 `/opt/dsh-desktop-linux-bin`
 和 `/opt/deepseek-harness`；macOS 检查 `/Applications` 与 `~/Applications` 下的 DSH 应用。
@@ -31,11 +32,12 @@ npx @deepseek-ai/dsh web
 
 该命令可以启动 DSH，但不会安装全局 `dsh`。npm 将下载的包放入缓存，并仅为它启动的
 进程加入相应的命令路径，见 [npm exec 文档](https://docs.npmjs.com/cli/v11/commands/npm-exec/)。
-Ait 会在没有 PATH CLI 或完整桌面包时，从 Unix 用户的 `~/.npm/_npx` 发现已下载的 DSH。
-自定义缓存可在启动 Ait daemon 时导出绝对路径 `npm_config_cache` 或 `NPM_CONFIG_CACHE`；
-仅在 `.npmrc` 或某次 npx 命令参数中指定的缓存位置，需要显式导出后才能被 Ait 发现。
-扫描最多 256 个缓存目录，只接受包身份和 `bin.dsh` 匹配且入口可执行的安装，
+Unix 主机通过 `npm --global config get prefix cache` 获取实际目录。
+npm 自己处理用户配置、全局配置、userconfig/globalconfig 覆盖和环境变量，Ait 不重复解析 `.npmrc`。
+没有全局 CLI 或完整桌面包时，从 npm 返回的缓存根目录的 `_npx` 中发现已有的 DSH。
+扫描最多 256 个缓存目录，校验包身份，并从包的 `package.json` 的 `bin` 声明读取可执行入口，
 有多个有效缓存时选择包目录最近修改的一项；需要固定版本时可使用本文的显式 CLI 路径覆盖。
+配置查询最多等待三秒，只读取 prefix 和 cache 两个路径，不读取完整配置输出；失败时不猜测目录。
 Ait 直接启动缓存中的 CLI，不执行 npx、不下载依赖，也不连接外部命令已启动的 Web Host。
 首次 npx 下载完成后重启 Ait daemon，即可重新发现；原生 Host 不必保持运行。
 
@@ -52,11 +54,10 @@ Linux 的 npm 全局命令位于 `{prefix}/bin`，通常是指向
 `npm install` 未加 `--global` 时只安装到当前项目，`npx @deepseek-ai/dsh` 也不等于安装全局
 `dsh` 命令。目录规则见 [npm 官方文档](https://docs.npmjs.com/cli/v11/configuring-npm/folders/)。
 
-即使桌面 PATH 不含 npm 全局 bin，Ait 也会补查 `npm_config_prefix` / `NPM_CONFIG_PREFIX`，
-以及用户 `~/.npmrc` 中的 `prefix`；用户配置路径可由 `npm_config_userconfig` /
-`NPM_CONFIG_USERCONFIG` 覆盖。支持绝对路径、`~/` 和 `${HOME}` 等环境变量展开，
-并补查常见的 `~/.npm-global/bin/dsh`。只读至多 64 KiB 的用户配置，不使用项目 `.npmrc`。
-这些路径仍需在运行 daemon 的同一用户下可读、可执行；发现过程不运行 npm 或 shell。
+即使桌面 PATH 不含 npm 全局 bin，只要同一环境中 npm 可执行，Ait 就会根据 npm 返回的实际
+prefix 查找 CLI，支持任意自定义安装目录。全局模式的查询忽略项目 `.npmrc`，不执行配置内容。
+一次性 `--cache` 参数只影响该次 npm/npx 命令；需要 Ait 使用该位置时，应在 npm 配置或环境中
+保留相同设置。所有入口仍需在运行 daemon 的同一用户下可读、可执行。
 
 若终端能找到 `dsh`，Ait 仍显示不可用，确认启动 daemon 的同一环境中 `node` 可执行。
 nvm/fnm 等工具配置的 Node 路径需要由启动 Ait 的环境继承。桌面端会读取登录 shell 环境；

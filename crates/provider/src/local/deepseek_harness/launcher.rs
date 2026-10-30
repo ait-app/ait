@@ -1,6 +1,6 @@
 //! Resolve CLI installations and desktop-bundled runtimes without opening the desktop UI.
 mod npm;
-mod npm_prefix;
+mod npm_config;
 
 use std::path::{Path, PathBuf};
 
@@ -27,7 +27,13 @@ impl DeepSeekHarnessClient {
             .flatten()
             .filter(|path| path.is_absolute())
             .collect();
-        paths.extend(npm_prefix::bins(|key| std::env::var_os(key)));
+        if let Some(program) = path_cli(&paths) {
+            return Self::new(program);
+        }
+        let npm = npm_config::read(&paths);
+        if let Some(configuration) = &npm {
+            paths.push(configuration.prefix.join("bin"));
+        }
         let mut bundles = Vec::new();
         for path in &paths {
             if let Ok(program) = path.join("deepseek-harness").canonicalize()
@@ -46,8 +52,12 @@ impl DeepSeekHarnessClient {
                 applications(&PathBuf::from(home).join("Applications"), &mut bundles);
             }
         }
-        let cache = npm::cache(|key| std::env::var_os(key));
-        resolve(&paths, &bundles, cache.as_deref())
+        resolve(
+            &paths,
+            &bundles,
+            npm.as_ref()
+                .map(|configuration| configuration.cache.as_path()),
+        )
     }
 
     pub(super) fn command(&self) -> Command {
@@ -68,12 +78,7 @@ fn resolve(
     bundles: &[PathBuf],
     npm_cache: Option<&Path>,
 ) -> DeepSeekHarnessClient {
-    let name = if cfg!(windows) { "dsh.exe" } else { "dsh" };
-    if let Some(program) = paths
-        .iter()
-        .map(|path| path.join(name))
-        .find(|path| executable(path))
-    {
+    if let Some(program) = path_cli(paths) {
         return DeepSeekHarnessClient::new(program);
     }
     bundles
@@ -85,6 +90,14 @@ fn resolve(
                 .map(DeepSeekHarnessClient::new)
         })
         .unwrap_or_else(|| DeepSeekHarnessClient::new("dsh".into()))
+}
+
+fn path_cli(paths: &[PathBuf]) -> Option<PathBuf> {
+    let name = if cfg!(windows) { "dsh.exe" } else { "dsh" };
+    paths
+        .iter()
+        .map(|path| path.join(name))
+        .find(|path| executable(path))
 }
 
 fn applications(directory: &Path, bundles: &mut Vec<PathBuf>) {
