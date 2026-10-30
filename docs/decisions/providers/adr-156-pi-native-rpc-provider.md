@@ -4,6 +4,7 @@
 - Date: 2026-10-17.
 - Scope: `crates/provider`, `packages/protocol`; follows [ADR-089](adr-089-provider-owned-composition.md).
 - Amended by: [ADR-189](adr-189-pi-without-host-mode.md) for host modes.
+- Amended by: [ADR-185](adr-185-native-provider-failure-details.md) for native failure details.
 
 ## Context
 
@@ -45,8 +46,14 @@ run from automatic retries and compaction recovery.
   unfinished operations on stream failure or terminal settlement. Each start/end pair shares an adapter-owned UUID;
   native Pi does not supply a compaction ID. Duplicate starts/ends do not duplicate markers.
 - Apply [ADR-144](adr-144-provider-error-reporting.md): bounded stderr classification,
-  safe structured diagnostics for spawn/version/write/response/frame failures, and fixed
-  public failure messages. Native error text and credentials are not logged or persisted.
+  safe structured diagnostics for spawn/version/write/response/frame failures. Preserve bounded,
+  redacted native failure details for user-facing errors as specified by
+  [ADR-185](adr-185-native-provider-failure-details.md); logs contain only safe structured facts.
+  Availability and diagnostic inspection first check whether the configured executable is
+  runnable. A missing or non-executable installation returns the existing unavailable result
+  without launching a version probe or logging an expected absence, even after a version was
+  cached. Recheck on later inspection so installation or permission repair can recover.
+  Actual version-probe and session failures retain structured diagnostics.
 - Preserve the host's persisted timeline across resume; do not advertise automatic native history
   replay, rewind, steering, auxiliary generation or dynamic thinking controls. Native session
   import and explicit refresh are added by [ADR-174](adr-174-pi-session-import.md).

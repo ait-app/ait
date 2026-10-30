@@ -125,7 +125,12 @@ impl AgentClient for PiClient {
 
     fn diagnostic(&self) -> AgentSessionFuture<'_, String> {
         Box::pin(async {
-            match transport::version_info(self).await {
+            let version = if super::configuration::executable(&self.program) {
+                transport::version_info(self).await
+            } else {
+                Err(AgentSessionError::Unavailable)
+            };
+            match version {
                 Ok(version) if !version.supported => Ok(format!(
                     "Pi {} is unsupported; requires a supported Pi version (1.2 or newer).",
                     version.text

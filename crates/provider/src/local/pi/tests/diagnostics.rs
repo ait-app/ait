@@ -33,6 +33,51 @@ impl Capture {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn missing_executable_diagnostics_are_quiet_and_recover_after_installation() {
+    let directory = tempfile::tempdir().unwrap();
+    let client = PiClient::new(directory.path().join("pi"));
+    let capture = Capture::default();
+    let _subscriber = tracing::subscriber::set_default(capture.subscriber());
+
+    for _ in 0..3 {
+        assert!(!client.is_available().await.unwrap());
+        assert_eq!(
+            client.diagnostic().await.unwrap(),
+            "Pi executable is unavailable; check PATH or AIT_SERVER_PI_BIN."
+        );
+    }
+    assert!(capture.text().is_empty(), "{}", capture.text());
+
+    std::fs::write(&client.program, include_str!("fixtures/pi.py")).unwrap();
+    std::fs::set_permissions(&client.program, std::fs::Permissions::from_mode(0o600)).unwrap();
+    assert!(!client.is_available().await.unwrap());
+    assert_eq!(
+        client.diagnostic().await.unwrap(),
+        "Pi executable is unavailable; check PATH or AIT_SERVER_PI_BIN."
+    );
+    assert!(capture.text().is_empty(), "{}", capture.text());
+
+    std::fs::set_permissions(&client.program, std::fs::Permissions::from_mode(0o700)).unwrap();
+
+    assert!(client.is_available().await.unwrap());
+    assert!(client.diagnostic().await.unwrap().contains("Pi RPC ready"));
+    std::fs::set_permissions(&client.program, std::fs::Permissions::from_mode(0o600)).unwrap();
+    assert!(!client.is_available().await.unwrap());
+    assert_eq!(
+        client.diagnostic().await.unwrap(),
+        "Pi executable is unavailable; check PATH or AIT_SERVER_PI_BIN."
+    );
+    assert!(capture.text().is_empty(), "{}", capture.text());
+    assert_eq!(
+        std::fs::read_to_string(directory.path().join("versions.log"))
+            .unwrap()
+            .lines()
+            .count(),
+        1
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn history_task_panics_are_logged_before_classification() {
     let capture = Capture::default();
     let _subscriber = tracing::subscriber::set_default(capture.subscriber());
