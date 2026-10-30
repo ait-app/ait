@@ -2,6 +2,7 @@ use super::*;
 use model::realtime::{Endpoint, Event, Session};
 
 mod diagnostics;
+mod input;
 
 #[derive(Debug)]
 struct Native {

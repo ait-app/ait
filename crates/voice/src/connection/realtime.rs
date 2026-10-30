@@ -1,6 +1,6 @@
 use model::{
     outbound::{Outbound, QueueError},
-    realtime::Event,
+    realtime::{Event, is_quiet_pcm},
 };
 use serde_json::json;
 
@@ -24,6 +24,9 @@ impl Voice {
             return Err(Error::Invalid);
         }
         let native = self.native.as_ref().ok_or(Error::Realtime)?;
+        if is_quiet_pcm(&bytes) {
+            return Ok(());
+        }
         if let Err(error) = native
             .input
             .try_send(model::realtime::Audio { bytes, sample_rate })
