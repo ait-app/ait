@@ -560,7 +560,8 @@ async fn share_status_frames_and_guest_opens_reach_the_daemon() {
         .send(frame(
             &json!({"t":"share_status","seq":1}),
             json!({"revision":3,"accepted":[],"rejected":[
-                {"workspaceKey":"ws_1","organizationId":share,"code":"revoked"}],"orgs":[]})
+                {"resourceKind":"workspace","resourceKey":"ws_1","groupId":share,"code":"revoked"}],
+                "groups":[]})
             .to_string()
             .as_bytes(),
         ))
@@ -574,8 +575,8 @@ async fn share_status_frames_and_guest_opens_reach_the_daemon() {
     assert_eq!(outcome.revision, Some(3));
     assert_eq!(outcome.rejected[0].code, "revoked");
 
-    let visitor = json!({"user_id":Uuid::new_v4(),"display_name":"Bob","organization_id":share,
-        "share_id":share,"workspace_key":"ws_1","permission":"operate"});
+    let visitor = json!({"user_id":Uuid::new_v4(),"display_name":"Bob","group_id":share,
+        "share_id":share,"resource_kind":"project","resource_key":"prj_1","permission":"operate"});
     socket
         .send(frame(
             &json!({"t":"open","seq":2,"s":Uuid::new_v4(),"from":Uuid::new_v4(),"visitor":visitor}),
@@ -585,8 +586,8 @@ async fn share_status_frames_and_guest_opens_reach_the_daemon() {
         .expect("guest open");
     let guest = accept_guest(&local).await.expect("guest header");
     assert_eq!(
-        (guest.share_id, guest.workspace_key.as_str()),
-        (share, "ws_1")
+        (guest.share_id, guest.resource_key.as_str()),
+        (share, "prj_1")
     );
 }
 

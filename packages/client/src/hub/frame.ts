@@ -42,7 +42,7 @@ export type HubInboundHeader =
   | { t: "msg"; seq: number; s?: string; from?: string; pt: HubPayloadType; ck?: string }
   | { t: "close"; seq: number; s: string; code: string }
   | { t: "presence"; seq: number }
-  | { t: "orgs"; seq: number }
+  | { t: "groups"; seq: number }
   | { t: "share_presence"; seq: number }
   | { t: "reply"; seq: number; id: string }
   | {
@@ -114,7 +114,7 @@ function valid(header: Record<string, unknown>): boolean {
         (header.pt === "text" || header.pt === "binary")
       );
     case "presence":
-    case "orgs":
+    case "groups":
     case "share_presence":
       return count(header.seq);
     case "reply":

@@ -44,40 +44,45 @@ export const HUB_ACCESS_METHODS = [
   "agent.list.request",
   "hub.events.get_cursor",
   "share.subscribe",
-  "org.members.list",
+  "group.members.list",
   "share.revoke",
 ] as const;
 
-/** One organization of the account, as pushed in `orgs` snapshots after `share.subscribe`. */
-export interface HubOrganization {
-  organizationId: string;
+/** One group of the account, as pushed in `groups` snapshots after `share.subscribe`. */
+export interface HubGroup {
+  groupId: string;
   name: string;
   slug: string;
   status: string;
   myRole: string;
-  /** Changes whenever membership changes; reload `org.members.list` when it does. */
+  /** Changes whenever membership changes; reload `group.members.list` when it does. */
   memberVersion: number;
 }
 
-/** A workspace another account shares with this one, from `share_presence` snapshots. */
-export interface HubSharedWorkspace {
+/** Kind of resource a share grants: one workspace, one project, or the whole node (Host). */
+export type HubShareResourceKind = "workspace" | "project" | "node";
+
+/** A resource another account shares with this one, from `share_presence` snapshots. */
+export interface HubShare {
   shareId: string;
-  organizationId: string;
-  organizationName: string;
+  groupId: string;
+  groupName: string;
   hostId: string;
   /** Serve endpoint to open the guest session to, together with `shareId`. */
   nodeId: string;
   hostName: string;
   owner: { userId: string; displayName: string };
-  workspaceKey: string;
+  resourceKind: HubShareResourceKind;
+  /** Workspace ID, project ID, or `""` for a node share. */
+  resourceKey: string;
   displayName: string;
   projectName: string | null;
   permission: string;
   state: "online" | "reconnecting";
 }
 
-/** One member of an organization, as returned by `org.members.list`. */
-export interface HubOrganizationMember {
+/** One member of a group, as returned by `group.members.list`. */
+export interface HubGroupMember {
   userId: string;
   displayName: string;
   email: string | null;
@@ -86,10 +91,10 @@ export interface HubOrganizationMember {
   joinedAt: string;
 }
 
-/** Result of `org.members.list`. */
-export interface HubOrganizationMembers {
+/** Result of `group.members.list`. */
+export interface HubGroupMembers {
   memberVersion: number;
-  members: HubOrganizationMember[];
+  members: HubGroupMember[];
 }
 
 export interface HubDirectoryItem {

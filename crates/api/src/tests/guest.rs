@@ -1,4 +1,4 @@
-//! A guest connection on a real socket is confined to its shared workspace and ends on revocation.
+//! A guest connection on a real socket is confined to its shared resource and ends on revocation.
 
 use model::share::{GUEST_HEADER, Visitor};
 use tokio_tungstenite::tungstenite::Error as WsError;
@@ -79,7 +79,7 @@ async fn guests_reach_only_their_workspace_until_revoked() {
     assert_eq!(status(served.connect(false, Some(&header)).await), 403);
     assert_eq!(status(served.connect(true, Some("%%%")).await), 400);
     let stranger = Visitor {
-        workspace_key: served.fixture.other.clone(),
+        resource_key: served.fixture.other.clone(),
         ..visitor.clone()
     };
     assert_eq!(
@@ -136,8 +136,9 @@ async fn guests_reach_only_their_workspace_until_revoked() {
         &mut owner,
         "share.remove.request",
         json!({
-            "workspaceKey": served.fixture.shared,
-            "organizationId": served.fixture.organization,
+            "resourceKind": "workspace",
+            "resourceKey": served.fixture.shared,
+            "groupId": served.fixture.group,
         }),
     )
     .await;

@@ -1,7 +1,7 @@
 //! Share publication: the Host republishes its complete share list on every fresh
 //! serve link and after every local change, and applies the center's outcomes.
 //!
-//! The center checks each publication against current organization membership and
+//! The center checks each publication against current group membership and
 //! answers with share identities; later membership changes arrive as `share_status`.
 //! Guest sessions are only routed to a link after it published, so a Host that
 //! never publishes never receives one.

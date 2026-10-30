@@ -16,7 +16,8 @@ struct ResourceCleanup {
 
 impl WorktreeArchiveCleanup for ResourceCleanup {
     fn close_workspaces(&self, workspace_ids: &[String]) -> Result<(), WorktreeError> {
-        self.shares.forget_workspaces(workspace_ids);
+        self.shares
+            .forget(model::share::ResourceKind::Workspace, workspace_ids);
         if let Some(terminals) = &self.terminals {
             terminals
                 .lock()

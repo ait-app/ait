@@ -4,6 +4,8 @@ use super::*;
 use crate::guest::admit;
 use crate::test_support::{Workspaces, address};
 
+mod scopes;
+
 struct Guest {
     fixture: Workspaces,
     session: Session,
@@ -11,10 +13,40 @@ struct Guest {
 
 impl Guest {
     async fn new() -> Self {
+        Self::with(ResourceKind::Workspace).await
+    }
+
+    /// A guest of a share of the fixture's shared workspace, shared project, or node.
+    async fn with(kind: ResourceKind) -> Self {
         let fixture = Workspaces::new(address());
-        let visitor = fixture.accept_share().await;
+        let key = match kind {
+            ResourceKind::Workspace => fixture.shared.clone(),
+            ResourceKind::Project => fixture.project.clone(),
+            ResourceKind::Node => String::new(),
+        };
+        let visitor = fixture.accept(kind, &key).await;
         let session = admit(&fixture.api.shared, &visitor.encode()).await.unwrap();
         Self { fixture, session }
+    }
+
+    async fn private(&self, method: &str, params: Value) -> Value {
+        let decision = self.decide(method, params).await;
+        let Decision::Private(request, private) = decision else {
+            panic!("{method} was not private: {decision:?}");
+        };
+        private::execute(
+            &self.session,
+            &self.fixture.api.shared,
+            method,
+            request.params,
+            private,
+        )
+        .await
+        .unwrap()
+    }
+
+    fn path(&self, name: &str) -> String {
+        self.fixture.path(name).to_string_lossy().into_owned()
     }
 
     async fn decide(&self, method: &str, params: Value) -> Decision {
@@ -88,7 +120,9 @@ fn methods_are_classified_by_default_deny() {
     for denied in [
         "daemon.get_status.request",
         "daemon.config.set.request",
+        "daemon.update.request",
         "server.shutdown.request",
+        "server.restart.request",
         "diagnostics.request",
         "push.unregister.request",
         "relay.start.request",
@@ -97,24 +131,20 @@ fn methods_are_classified_by_default_deny() {
         "bot.create.request",
         "browser.tunnel.open.request",
         "voice.mode.set.request",
+        "dictation.stream.start",
         "session.events.set_subscription.request",
         "creation.subscribe.request",
         "editor.open.request",
         "share.list.request",
         "share.set.request",
-        "workspace.create.request",
-        "workspace.archive.request",
-        "project.list.request",
-        "workspace.worktree.list.request",
-        "workspace.label.list.request",
-        "workspace.recovery.inspect.request",
-        "workspace.setup.run.request",
+        "share.groups.list.request",
         "agent.configure",
         "agent.list",
         "agent.default.set",
         "agent.config.apply.request",
         "agent.skills.reconcile.request",
         "agent.import.request",
+        "agent.refresh.request",
         "agent.resume.request",
         "agent.fork_context.request",
         "agent.delete.request",
@@ -128,6 +158,31 @@ fn methods_are_classified_by_default_deny() {
     ] {
         assert_eq!(classify(denied), Rule::Deny, "{denied}");
     }
+    for (method, rule) in [
+        ("workspace.create.request", Rule::WorkspaceCreate),
+        ("workspace.archive.request", Rule::WorkspaceManage),
+        ("workspace.worktree.create.request", Rule::WorktreeCreate),
+        ("workspace.worktree.archive.request", Rule::WorktreeArchive),
+        (
+            "workspace.worktree.list.request",
+            Rule::Paths(&["cwd", "repoRoot"]),
+        ),
+        ("workspace.open.request", Rule::WorkspaceOpen),
+        ("project.list.request", Rule::ProjectList),
+        ("project.icon.get.request", Rule::Project),
+        ("project.add.request", Rule::Node),
+        ("project.rename.request", Rule::Node),
+        ("workspace.label.list.request", Rule::Node),
+        ("workspace.recovery.inspect.request", Rule::Node),
+        ("workspace.setup.run.request", Rule::Node),
+    ] {
+        assert_eq!(classify(method), rule, "{method}");
+        assert!(!rule.admits(ResourceKind::Workspace), "{method}");
+        assert!(rule.admits(ResourceKind::Node), "{method}");
+    }
+    assert!(!Rule::Node.admits(ResourceKind::Project));
+    assert!(Rule::WorkspaceCreate.admits(ResourceKind::Project));
+    assert!(!Rule::Deny.admits(ResourceKind::Node));
 }
 
 #[tokio::test]
@@ -220,7 +275,7 @@ fn workspace_listings_keep_only_the_guest_workspace() {
         "sync": {"cursor": "x"},
     });
     assert_eq!(
-        private::filter_workspaces(&listing, "a"),
+        private::filter_workspaces(&listing, private::Keep::Workspace("a")),
         json!({
             "entries": [{"id": "a", "name": "A"}],
             "emptyProjects": [],
@@ -228,7 +283,7 @@ fn workspace_listings_keep_only_the_guest_workspace() {
         })
     );
     assert_eq!(
-        private::filter_workspaces(&json!({}), "a")["entries"],
+        private::filter_workspaces(&json!({}), private::Keep::Workspace("a"))["entries"],
         json!([])
     );
 }

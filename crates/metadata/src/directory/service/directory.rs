@@ -522,7 +522,7 @@ impl Directory {
     ///
     /// # Errors
     /// Returns `DirectoryError::Registry` when the registry cannot be read.
-    pub(crate) fn list_projects(&self) -> Result<Vec<PersistedProjectRecord>, DirectoryError> {
+    pub fn list_projects(&self) -> Result<Vec<PersistedProjectRecord>, DirectoryError> {
         self.projects.list().map_err(map_error)
     }
 

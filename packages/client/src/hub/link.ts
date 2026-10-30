@@ -16,8 +16,8 @@ import type {
   HubAccountConnection,
   HubAccountSnapshot,
   HubAccountEvent,
-  HubOrganization,
-  HubSharedWorkspace,
+  HubGroup,
+  HubShare,
 } from "./account.js";
 
 /** A one-use credential for `/v1/hub`, bound to the center that issued it. */
@@ -123,30 +123,33 @@ function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-function organizations(payload: Uint8Array): HubOrganization[] {
-  return snapshotItems(payload, "orgs").filter(
-    (org): org is HubOrganization =>
-      record(org) &&
-      strings(org, ["organizationId", "name", "slug", "status", "myRole"]) &&
-      typeof org.memberVersion === "number",
+function groups(payload: Uint8Array): HubGroup[] {
+  return snapshotItems(payload, "groups").filter(
+    (group): group is HubGroup =>
+      record(group) &&
+      strings(group, ["groupId", "name", "slug", "status", "myRole"]) &&
+      typeof group.memberVersion === "number",
   );
 }
 
-function sharedWorkspaces(payload: Uint8Array): HubSharedWorkspace[] {
+function shares(payload: Uint8Array): HubShare[] {
   return snapshotItems(payload, "shares").filter(
-    (share): share is HubSharedWorkspace =>
+    (share): share is HubShare =>
       record(share) &&
       strings(share, [
         "shareId",
-        "organizationId",
-        "organizationName",
+        "groupId",
+        "groupName",
         "hostId",
         "nodeId",
         "hostName",
-        "workspaceKey",
+        "resourceKey",
         "displayName",
         "permission",
       ]) &&
+      (share.resourceKind === "workspace" ||
+        share.resourceKind === "project" ||
+        share.resourceKind === "node") &&
       (share.projectName === null || typeof share.projectName === "string") &&
       record(share.owner) &&
       strings(share.owner, ["userId", "displayName"]) &&
@@ -179,8 +182,8 @@ export class HubLink implements HubAccountConnection {
   private tokenFailures = 0;
   private useTicket = false;
   private nodes: HubPresenceNode[] | null = null;
-  private orgSnapshot: HubOrganization[] | null = null;
-  private shareSnapshot: HubSharedWorkspace[] | null = null;
+  private groupSnapshot: HubGroup[] | null = null;
+  private shareSnapshot: HubShare[] | null = null;
   /** Active `subscribeShares()` interests. */
   private shareInterest = 0;
   /** Logical link that has accepted, or is processing, `share.subscribe`. */
@@ -268,13 +271,13 @@ export class HubLink implements HubAccountConnection {
     return this.nodes?.find((node) => node.host_id === hostId);
   }
 
-  /** Organizations of the account from the latest `orgs` snapshot of this link, or null. */
-  get orgs(): readonly HubOrganization[] | null {
-    return this.orgSnapshot;
+  /** Groups of the account from the latest `groups` snapshot of this link, or null. */
+  get groups(): readonly HubGroup[] | null {
+    return this.groupSnapshot;
   }
 
-  /** Workspaces shared with this account from the latest `share_presence`, or null. */
-  get shares(): readonly HubSharedWorkspace[] | null {
+  /** Workspaces, projects and nodes shared with this account from the latest `share_presence`, or null. */
+  get shares(): readonly HubShare[] | null {
     return this.shareSnapshot;
   }
 
@@ -284,7 +287,7 @@ export class HubLink implements HubAccountConnection {
   }
 
   /**
-   * Receive `orgs` and `share_presence` snapshots while the returned disposer is not called.
+   * Receive `groups` and `share_presence` snapshots while the returned disposer is not called.
    * The subscription belongs to the logical link, so it is renewed after every fresh link.
    * Centers that do not advertise `share.subscribe` are not asked.
    */
@@ -327,7 +330,7 @@ export class HubLink implements HubAccountConnection {
     });
   }
 
-  /** Observe state, presence, organization and share snapshot changes. */
+  /** Observe state, presence, group and share snapshot changes. */
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => {
@@ -460,13 +463,13 @@ export class HubLink implements HubAccountConnection {
 
   /**
    * Create a session to `nodeId`'s serve endpoint; its first send opens it. With `share`, the
-   * session is a guest session to a workspace another account shares (see `shares`).
+   * session is a guest session to a resource another account shares (see `shares`).
    */
   openSession(nodeId: string, options: { share?: string } = {}): HubSession {
     if (this.current === "stopped") throw new Error("Hub link is stopped.");
     // Older centers reject unknown header fields and would drop the whole link.
     if (options.share !== undefined && !this.sharesSupported)
-      throw new HubCallError("unsupported", "Center does not support shared workspaces.");
+      throw new HubCallError("unsupported", "Center does not support shares.");
     if (this.sessions.size >= 16) throw new Error("Too many hub sessions.");
     const id = (this.options.randomUUID ?? (() => crypto.randomUUID()))();
     const session = new HubSession(this.sessionLink, id, nodeId, options.share);
@@ -610,7 +613,7 @@ export class HubLink implements HubAccountConnection {
       case "msg":
       case "close":
       case "presence":
-      case "orgs":
+      case "groups":
       case "share_presence":
       case "reply":
       case "event":
@@ -654,7 +657,7 @@ export class HubLink implements HubAccountConnection {
       this.emit();
       return;
     }
-    if (header.t === "orgs" || header.t === "share_presence") {
+    if (header.t === "groups" || header.t === "share_presence") {
       this.snapshotReceived(header.t, payload);
       return;
     }
@@ -665,15 +668,15 @@ export class HubLink implements HubAccountConnection {
   }
 
   /** Newer snapshots replace older ones; malformed ones are ignored like presence. */
-  private snapshotReceived(kind: "orgs" | "share_presence", payload: Uint8Array): void {
+  private snapshotReceived(kind: "groups" | "share_presence", payload: Uint8Array): void {
     let changed: boolean;
     try {
-      if (kind === "orgs") {
-        const next = organizations(payload);
-        changed = !same(next, this.orgSnapshot);
-        if (changed) this.orgSnapshot = next;
+      if (kind === "groups") {
+        const next = groups(payload);
+        changed = !same(next, this.groupSnapshot);
+        if (changed) this.groupSnapshot = next;
       } else {
-        const next = sharedWorkspaces(payload);
+        const next = shares(payload);
         changed = !same(next, this.shareSnapshot);
         if (changed) this.shareSnapshot = next;
       }
@@ -856,7 +859,7 @@ export class HubLink implements HubAccountConnection {
     this.sent = this.recv = this.acked = this.unackedBytes = 0;
     this.unacked = [];
     this.nodes = null;
-    this.orgSnapshot = null;
+    this.groupSnapshot = null;
     this.shareSnapshot = null;
     this.shareLink = null;
     this.clearTimer("share");

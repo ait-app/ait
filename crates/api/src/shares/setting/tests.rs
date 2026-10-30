@@ -8,8 +8,9 @@ fn request(value: serde_json::Value) -> SetRequest {
 
 fn members(recipients: &[Uuid]) -> SetRequest {
     request(json!({
-        "workspaceKey": "w",
-        "organizationId": Uuid::nil(),
+        "resourceKind": "workspace",
+        "resourceKey": "w",
+        "groupId": Uuid::nil(),
         "permission": OPERATE,
         "audience": "members",
         "recipients": recipients,
@@ -35,9 +36,9 @@ fn rejects_invalid_requests() {
     permission.permission = "read".into();
     assert_eq!(permission.normalize(), Err(ShareError::Permission));
     assert_eq!(members(&[]).normalize(), Err(ShareError::Audience));
-    let mut organization = members(&[Uuid::nil()]);
-    organization.audience = Audience::Organization;
-    assert_eq!(organization.normalize(), Err(ShareError::Audience));
+    let mut group = members(&[Uuid::nil()]);
+    group.audience = Audience::Group;
+    assert_eq!(group.normalize(), Err(ShareError::Audience));
     let many: Vec<Uuid> = (0..=MAX_RECIPIENTS as u128).map(Uuid::from_u128).collect();
     assert_eq!(members(&many).normalize(), Err(ShareError::Recipients));
     let mut long = members(&[Uuid::nil()]);
@@ -47,17 +48,56 @@ fn rejects_invalid_requests() {
     control.project_name = Some("a\nb".into());
     assert_eq!(control.normalize(), Err(ShareError::Name));
     let mut blank = members(&[Uuid::nil()]);
-    blank.workspace_key = " ".into();
-    assert_eq!(blank.normalize(), Err(ShareError::Workspace));
+    blank.resource_key = " ".into();
+    assert_eq!(blank.normalize(), Err(ShareError::Resource));
+}
+
+#[test]
+fn resource_keys_must_fit_their_kind() {
+    let mut project = members(&[Uuid::nil()]);
+    project.resource_kind = ResourceKind::Project;
+    project.resource_key = "prj_1".into();
+    assert_eq!(
+        project.clone().normalize().map(|set| set.scope()),
+        Ok(Some(ShareScope::Project("prj_1".into())))
+    );
+    project.resource_key = String::new();
+    assert_eq!(project.normalize(), Err(ShareError::Resource));
+    let mut node = members(&[Uuid::nil()]);
+    node.resource_kind = ResourceKind::Node;
+    assert_eq!(node.clone().normalize(), Err(ShareError::Resource));
+    node.resource_key = String::new();
+    assert_eq!(
+        node.normalize().map(|set| set.scope()),
+        Ok(Some(ShareScope::Node))
+    );
+    let defaulted = request(json!({
+        "resourceKind": "node",
+        "groupId": Uuid::nil(),
+        "permission": OPERATE,
+        "audience": "group",
+    }));
+    assert_eq!(defaulted.resource_key, "");
+    assert!(
+        serde_json::from_value::<SetRequest>(json!({
+            "resourceKind": "host",
+            "resourceKey": "",
+            "groupId": Uuid::nil(),
+            "permission": OPERATE,
+            "audience": "group",
+        }))
+        .is_err()
+    );
 }
 
 #[test]
 fn generation_cannot_be_set_by_the_owner() {
     let result = serde_json::from_value::<SetRequest>(json!({
-        "workspaceKey": "w",
-        "organizationId": Uuid::nil(),
+        "resourceKind": "workspace",
+        "resourceKey": "w",
+        "groupId": Uuid::nil(),
         "permission": OPERATE,
-        "audience": "organization",
+        "audience": "group",
         "generation": 3,
     }));
     assert!(result.is_err());
@@ -86,16 +126,18 @@ fn only_accepted_matching_shares_admit_visitors() {
     let visitor = Visitor {
         user_id: user,
         display_name: None,
-        organization_id: Uuid::nil(),
+        group_id: Uuid::nil(),
         share_id,
-        workspace_key: "w".into(),
+        resource_kind: ResourceKind::Workspace,
+        resource_key: "w".into(),
         permission: OPERATE.into(),
     };
     assert!(!setting.admits(&visitor));
     setting.accept(&Accepted {
         share_id,
-        workspace_key: "w".into(),
-        organization_id: Uuid::nil(),
+        resource_kind: ResourceKind::Workspace,
+        resource_key: "w".into(),
+        group_id: Uuid::nil(),
         generation: 4,
         missing_recipients: vec![user],
     });
@@ -113,11 +155,16 @@ fn only_accepted_matching_shares_admit_visitors() {
     };
     assert!(!setting.admits(&wrong_share));
     let other_workspace = Visitor {
-        workspace_key: "x".into(),
+        resource_key: "x".into(),
         ..visitor.clone()
     };
     assert!(!setting.admits(&other_workspace));
-    setting.reject("org_inactive");
+    let other_kind = Visitor {
+        resource_kind: ResourceKind::Project,
+        ..visitor.clone()
+    };
+    assert!(!setting.admits(&other_kind));
+    setting.reject("group_inactive");
     assert!(!setting.admits(&visitor));
     assert_eq!(setting.share_id, Some(share_id));
 }
@@ -133,7 +180,15 @@ fn errors_map_to_safe_codes() {
         ErrorCode::WorkspaceNotFound
     );
     assert_eq!(
+        ErrorCode::from(ShareError::Project),
+        ErrorCode::WorkspaceNotFound
+    );
+    assert_eq!(
         ErrorCode::from(ShareError::Audience),
+        ErrorCode::InvalidMessage
+    );
+    assert_eq!(
+        ErrorCode::from(ShareError::Resource),
         ErrorCode::InvalidMessage
     );
 }

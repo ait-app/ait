@@ -44,16 +44,16 @@ describe("ait-hub-v1 frame codec", () => {
     expect(() => decodeHubFrame(oversized)).toThrow("header length");
   });
 
-  it("validates organization and share snapshots as sequenced frames", () => {
-    expect(decodeHubFrame(raw('{"t":"orgs","seq":4}', [123, 125])).header).toEqual({
-      t: "orgs",
+  it("validates group and share snapshots as sequenced frames", () => {
+    expect(decodeHubFrame(raw('{"t":"groups","seq":4}', [123, 125])).header).toEqual({
+      t: "groups",
       seq: 4,
     });
     expect(decodeHubFrame(raw('{"t":"share_presence","seq":5}')).header).toEqual({
       t: "share_presence",
       seq: 5,
     });
-    expect(() => decodeHubFrame(raw('{"t":"orgs"}'))).toThrow("Invalid hub frame header");
+    expect(() => decodeHubFrame(raw('{"t":"groups"}'))).toThrow("Invalid hub frame header");
     expect(() => decodeHubFrame(raw('{"t":"share_presence","seq":"5"}'))).toThrow();
   });
 

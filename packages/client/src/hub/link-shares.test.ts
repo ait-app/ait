@@ -6,10 +6,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const METHODS = ["share.subscribe", "org.members.list", "share.revoke"];
+const METHODS = ["share.subscribe", "group.members.list", "share.revoke"];
 
-const ORG = {
-  organizationId: "org-1",
+const GROUP = {
+  groupId: "group-1",
   name: "Acme",
   slug: "acme",
   status: "active",
@@ -19,13 +19,14 @@ const ORG = {
 
 const SHARE = {
   shareId: "share-1",
-  organizationId: "org-1",
-  organizationName: "Acme",
+  groupId: "group-1",
+  groupName: "Acme",
   hostId: "host-1",
   nodeId: "alice-node",
   hostName: "alice-mbp",
   owner: { userId: "alice", displayName: "Alice" },
-  workspaceKey: "ws_1f2e",
+  resourceKind: "workspace",
+  resourceKey: "ws_1f2e",
   displayName: "api-server",
   projectName: "Acme API",
   permission: "operate",
@@ -42,8 +43,8 @@ async function online(methods: string[] = METHODS) {
   return { h, socket };
 }
 
-function orgs(socket: FakeHubSocket, seq: number, items: object[]) {
-  socket.receive({ t: "orgs", seq }, JSON.stringify({ orgs: items }));
+function groups(socket: FakeHubSocket, seq: number, items: object[]) {
+  socket.receive({ t: "groups", seq }, JSON.stringify({ groups: items }));
 }
 
 function shares(socket: FakeHubSocket, seq: number, items: object[]) {
@@ -57,11 +58,11 @@ function accept(socket: FakeHubSocket, seq: number, result: object = { result: {
   socket.receive({ t: "reply", seq, id: call.id }, JSON.stringify(result));
 }
 
-describe("hub link organization and share snapshots", () => {
+describe("hub link group and share snapshots", () => {
   it("subscribes once and tracks sequenced snapshots", async () => {
     const { h, socket } = await online();
     expect(h.link.sharesSupported).toBe(true);
-    expect(h.link.orgs).toBeNull();
+    expect(h.link.groups).toBeNull();
     expect(h.link.shares).toBeNull();
     const changed = vi.fn();
     h.link.subscribe(changed);
@@ -70,30 +71,43 @@ describe("hub link organization and share snapshots", () => {
     expect(socket.frames("call")).toMatchObject([{ t: "call", seq: 1, method: "share.subscribe" }]);
     expect(new TextDecoder().decode(socket.sent.at(-1)!.payload)).toBe("{}");
     accept(socket, 1);
-    orgs(socket, 2, [ORG, { organizationId: "broken" }]);
-    shares(socket, 3, [SHARE, { ...SHARE, shareId: "share-2", state: "gone" }]);
-    expect(h.link.orgs).toEqual([ORG]);
-    expect(h.link.shares).toEqual([SHARE]);
+    const PROJECT = { ...SHARE, shareId: "share-3", resourceKind: "project", resourceKey: "prj_1" };
+    const NODE = { ...SHARE, shareId: "share-4", resourceKind: "node", resourceKey: "" };
+    groups(socket, 2, [
+      GROUP,
+      { groupId: "broken" },
+      { ...GROUP, organizationId: "x", groupId: 1 },
+    ]);
+    shares(socket, 3, [
+      SHARE,
+      PROJECT,
+      NODE,
+      { ...SHARE, shareId: "share-2", state: "gone" },
+      { ...SHARE, shareId: "share-5", resourceKind: "organization" },
+      { ...SHARE, shareId: "share-6", resourceKey: undefined },
+    ]);
+    expect(h.link.groups).toEqual([GROUP]);
+    expect(h.link.shares).toEqual([SHARE, PROJECT, NODE]);
     expect(changed).toHaveBeenCalledTimes(2);
     await vi.advanceTimersByTimeAsync(50);
     expect(socket.frames("ack").at(-1)).toEqual({ t: "ack", a: 3 });
 
     // Replays after a resume are dropped; newer snapshots replace older ones.
     shares(socket, 3, []);
-    expect(h.link.shares).toEqual([SHARE]);
+    expect(h.link.shares).toEqual([SHARE, PROJECT, NODE]);
     shares(socket, 4, [{ ...SHARE, state: "reconnecting" }]);
     expect(h.link.shares).toEqual([{ ...SHARE, state: "reconnecting" }]);
     expect(changed).toHaveBeenCalledTimes(3);
     // An identical snapshot does not notify.
-    orgs(socket, 5, [ORG]);
+    groups(socket, 5, [GROUP]);
     expect(changed).toHaveBeenCalledTimes(3);
     // A malformed snapshot is ignored but still consumes its sequence number.
-    socket.receive({ t: "orgs", seq: 6 }, "{}");
-    expect(h.link.orgs).toEqual([ORG]);
+    socket.receive({ t: "groups", seq: 6 }, "{}");
+    expect(h.link.groups).toEqual([GROUP]);
     await vi.advanceTimersByTimeAsync(50);
     expect(socket.frames("ack").at(-1)).toEqual({ t: "ack", a: 6 });
     expect(h.logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: "orgs" }),
+      expect.objectContaining({ kind: "groups" }),
       "[Hub] invalid snapshot ignored",
     );
     stop();
@@ -105,7 +119,7 @@ describe("hub link organization and share snapshots", () => {
     const { h, socket } = await online();
     h.link.subscribeShares();
     accept(socket, 1);
-    orgs(socket, 2, [ORG]);
+    groups(socket, 2, [GROUP]);
     shares(socket, 3, [SHARE]);
     await vi.advanceTimersByTimeAsync(50);
 
@@ -115,7 +129,7 @@ describe("hub link organization and share snapshots", () => {
     resumed.open();
     resumed.welcome({ resumed: true, recv: 1, center_methods: METHODS });
     expect(resumed.frames("call")).toEqual([]);
-    expect(h.link.orgs).toEqual([ORG]);
+    expect(h.link.groups).toEqual([GROUP]);
 
     resumed.drop();
     await h.flush();
@@ -123,7 +137,7 @@ describe("hub link organization and share snapshots", () => {
     fresh.open();
     expect(h.link.shares).toEqual([SHARE]);
     fresh.welcome({ link: "link-2", center_methods: METHODS });
-    expect(h.link.orgs).toBeNull();
+    expect(h.link.groups).toBeNull();
     expect(h.link.shares).toBeNull();
     expect(fresh.frames("call")).toMatchObject([{ seq: 1, method: "share.subscribe" }]);
     accept(fresh, 1);

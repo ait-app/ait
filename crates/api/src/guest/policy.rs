@@ -1,12 +1,16 @@
 //! Default-deny request policy for guest connections.
 //!
-//! Each admitted method is checked against the guest's single workspace, rewritten where
-//! the workspace must be forced, or executed privately when its reply must be filtered.
-//! Refusals use [`ErrorCode::Forbidden`] and never reveal other workspaces.
+//! Each admitted method is checked against the guest's shared workspace, project or node,
+//! rewritten where placement must be forced, or executed privately when its reply must be
+//! filtered. Refusals use [`ErrorCode::Forbidden`] and never reveal resources outside the
+//! shared scope.
 
 mod agents;
+mod directory;
 pub(crate) mod private;
+mod terminals;
 
+use model::share::ResourceKind;
 use model::{ErrorCode, Request};
 use serde_json::{Map, Value, json};
 
@@ -37,42 +41,61 @@ pub(crate) enum EventDecision {
     Refuse(ErrorCode),
 }
 
-/// How one method is confined to the guest's workspace.
+/// How one method is confined to the guest's shared scope.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Rule {
-    /// Reveals nothing about other workspaces.
+    /// Reveals nothing outside the scope.
     Open,
     /// Provider catalog read with an optional `cwd`.
     Catalog,
-    /// `workspaceId` must name only the guest's workspace.
+    /// `workspaceId` must name only workspaces inside the scope.
     Workspace,
-    /// Listed workspaces are filtered to the guest's workspace.
+    /// As [`Rule::Workspace`] for renaming or archiving; project and node shares only.
+    WorkspaceManage,
+    /// Listed workspaces are filtered to the scope.
     WorkspaceList,
-    /// Agent creation is forced into the workspace and labelled as guest-created.
+    /// Workspace creation is forced into the shared project; project and node shares only.
+    WorkspaceCreate,
+    /// Worktree creation is forced into the shared project; project and node shares only.
+    WorktreeCreate,
+    /// Worktree archive names only workspaces and paths in scope; project and node shares only.
+    WorktreeArchive,
+    /// Opening reuses a workspace of the shared project; project and node shares only.
+    WorkspaceOpen,
+    /// Listed projects are filtered to the shared project; project and node shares only.
+    ProjectList,
+    /// `projectId` must name the shared project; project and node shares only.
+    Project,
+    /// Every listed path parameter that is present must be in scope and one must be present;
+    /// project and node shares only.
+    Paths(&'static [&'static str]),
+    /// Host-wide project and workspace management; node shares only.
+    Node,
+    /// Agent creation is forced into the scope and labelled as guest-created.
     AgentCreate,
-    /// The Agent named by this parameter must belong to the workspace; read-only.
+    /// The Agent named by this parameter must belong to the scope; read-only.
     Agent(&'static str),
     /// The Agent named by this parameter must have been created by a guest of this
     /// share. Owner Agents keep the daemon MCP, which reaches every workspace, so
     /// guests may read them but never instruct them.
     AgentDrive(&'static str),
-    /// As [`Rule::Agent`], without changing labels.
+    /// As [`Rule::AgentDrive`], without changing labels.
     AgentUpdate,
     /// As [`Rule::Agent`], without draft configurations.
     AgentCommands,
-    /// Directory filters are forced to the workspace.
+    /// Directory filters are forced to the scope.
     AgentFilter,
-    /// Every listed Agent must belong to the workspace.
+    /// Every listed Agent must belong to the scope.
     AgentSubscription,
-    /// Every listed Agent and terminal must belong to the workspace.
+    /// Every listed Agent and terminal must belong to the scope.
     ItemsClose,
-    /// Terminal creation is forced into the workspace.
+    /// Terminal creation is forced into a workspace in scope.
     TerminalCreate,
-    /// Terminal listings are forced to the workspace.
+    /// Terminal listings are forced to a workspace in scope.
     TerminalFilter,
-    /// The terminal named by `terminalId` must belong to the workspace.
+    /// The terminal named by `terminalId` must belong to the scope.
     Terminal,
-    /// `cwd` must resolve inside the workspace root.
+    /// `cwd` must resolve inside the scope.
     Path,
     /// As [`Rule::Path`], within the guest's download token budget.
     Download,
@@ -80,6 +103,42 @@ enum Rule {
     Deny,
 }
 
+impl Rule {
+    /// Whether a share of `kind` may use methods of this rule at all.
+    fn admits(self, kind: ResourceKind) -> bool {
+        match self {
+            Self::Deny => false,
+            Self::Node => kind == ResourceKind::Node,
+            Self::WorkspaceManage
+            | Self::WorkspaceCreate
+            | Self::WorktreeCreate
+            | Self::WorktreeArchive
+            | Self::WorkspaceOpen
+            | Self::ProjectList
+            | Self::Project
+            | Self::Paths(_) => kind != ResourceKind::Workspace,
+            Self::Open
+            | Self::Catalog
+            | Self::Workspace
+            | Self::WorkspaceList
+            | Self::AgentCreate
+            | Self::Agent(_)
+            | Self::AgentDrive(_)
+            | Self::AgentUpdate
+            | Self::AgentCommands
+            | Self::AgentFilter
+            | Self::AgentSubscription
+            | Self::ItemsClose
+            | Self::TerminalCreate
+            | Self::TerminalFilter
+            | Self::Terminal
+            | Self::Path
+            | Self::Download => true,
+        }
+    }
+}
+
+/// Classify `method`; host management and everything unknown is denied.
 fn classify(method: &str) -> Rule {
     match method {
         "server.info"
@@ -103,7 +162,36 @@ fn classify(method: &str) -> Rule {
         | "workspace.script.stop.request"
         | "workspace.clear_attention.request"
         | "workspace.mark_unread.request" => Rule::Workspace,
+        "workspace.archive.request" | "workspace.title.set.request" => Rule::WorkspaceManage,
         "workspace.list.request" => Rule::WorkspaceList,
+        "workspace.create.request" => Rule::WorkspaceCreate,
+        "workspace.worktree.create.request" => Rule::WorktreeCreate,
+        "workspace.worktree.archive.request" => Rule::WorktreeArchive,
+        "workspace.worktree.list.request" => Rule::Paths(&["cwd", "repoRoot"]),
+        "workspace.open.request" => Rule::WorkspaceOpen,
+        "project.list.request" => Rule::ProjectList,
+        "project.icon.get.request" => Rule::Project,
+        "project.config.read.request" => Rule::Paths(&["repoRoot"]),
+        "project.add.request"
+        | "project.create_directory.request"
+        | "project.github.clone.request"
+        | "project.rename.request"
+        | "project.remove.request"
+        | "project.config.write.request"
+        | "project.icon.set.request"
+        | "workspace.pin.set.request"
+        | "workspace.setup.run.request"
+        | "workspace.recovery.inspect.request"
+        | "workspace.recovery.restore.request"
+        | "workspace.github.search_repositories.request" => Rule::Node,
+        method if method.starts_with("workspace.label.") => Rule::Node,
+        method => classify_resource(method),
+    }
+}
+
+/// Classify Agent, terminal and file methods.
+fn classify_resource(method: &str) -> Rule {
+    match method {
         "agent.create.request" => Rule::AgentCreate,
         "agent.get.request"
         | "agent.finish.wait.request"
@@ -153,7 +241,7 @@ fn classify(method: &str) -> Rule {
     }
 }
 
-/// Confine one guest request to the guest's workspace.
+/// Confine one guest request to the guest's shared scope.
 pub(crate) async fn request(session: &Session, state: &Shared, mut request: Request) -> Decision {
     let rule = classify(&request.method);
     let params = std::mem::take(&mut request.params);
@@ -177,27 +265,42 @@ async fn confine(
     rule: Rule,
     mut params: Value,
 ) -> Result<Confined, ErrorCode> {
+    if !rule.admits(session.kind()) {
+        return Err(ErrorCode::Forbidden);
+    }
     match rule {
-        Rule::Open => {}
+        Rule::Open | Rule::Node => {}
         Rule::Deny => return Err(ErrorCode::Forbidden),
-        Rule::Catalog => optional_path(session, &params).await?,
-        Rule::Workspace => only_workspace(session, &params["workspaceId"])?,
-        Rule::WorkspaceList => {
-            return private::workspace_list(params)
-                .map(|params| Confined::Private(params, Private::WorkspaceList));
+        Rule::Catalog => optional_path(session, state, &params).await?,
+        Rule::Workspace | Rule::WorkspaceManage => {
+            workspaces(session, state, &params["workspaceId"]).await?;
         }
+        Rule::WorkspaceList | Rule::ProjectList => {
+            return Ok(
+                match private::prepare(session, rule == Rule::ProjectList, params)? {
+                    (params, Some(private)) => Confined::Private(params, private),
+                    (params, None) => Confined::Forward(params),
+                },
+            );
+        }
+        Rule::WorkspaceCreate
+        | Rule::WorktreeCreate
+        | Rule::WorktreeArchive
+        | Rule::WorkspaceOpen
+        | Rule::Project
+        | Rule::Paths(_) => directory::confine(session, state, rule, &mut params).await?,
         Rule::TerminalCreate => {
-            force_terminal(session, &mut params, false).await?;
+            terminals::place(session, state, &mut params).await?;
             return Ok(Confined::Private(params, Private::TerminalCreate));
         }
-        Rule::TerminalFilter => force_terminal(session, &mut params, true).await?,
+        Rule::TerminalFilter => terminals::place(session, state, &mut params).await?,
         Rule::Terminal => {
             let id = params["terminalId"].as_str().ok_or(ErrorCode::Forbidden)?;
-            terminal(session, state, id).await?;
+            terminals::check(session, state, id).await?;
         }
-        Rule::Path => path(session, &params).await?,
+        Rule::Path => path(session, state, &params).await?,
         Rule::Download => {
-            path(session, &params).await?;
+            path(session, state, &params).await?;
             if !session.take_download(std::time::Instant::now()) {
                 return Err(ErrorCode::ResourceExhausted);
             }
@@ -224,7 +327,7 @@ pub(crate) async fn event(
     match method {
         "session.heartbeat" => EventDecision::Drop,
         "terminal.input" => match params["terminalId"].as_str() {
-            Some(id) => match terminal(session, state, id).await {
+            Some(id) => match terminals::check(session, state, id).await {
                 Ok(()) => EventDecision::Forward,
                 Err(code) => EventDecision::Refuse(code),
             },
@@ -245,72 +348,52 @@ fn present(value: Option<&Value>) -> bool {
     value.is_some_and(|value| !value.is_null())
 }
 
-fn only_workspace(session: &Session, selection: &Value) -> Result<(), ErrorCode> {
-    let workspace = session.workspace_id();
-    let only = match selection {
-        Value::String(id) => id == workspace,
-        Value::Array(ids) => !ids.is_empty() && ids.iter().all(|id| id == workspace),
-        _ => false,
+/// Require a workspace ID, or a non-empty list of them, naming only workspaces in scope.
+async fn workspaces(session: &Session, state: &Shared, selection: &Value) -> Result<(), ErrorCode> {
+    let ids: Vec<&Value> = match selection {
+        Value::String(_) => vec![selection],
+        Value::Array(ids) if !ids.is_empty() => ids.iter().collect(),
+        _ => return Err(ErrorCode::Forbidden),
     };
-    only.then_some(()).ok_or(ErrorCode::Forbidden)
+    for id in ids {
+        reached(session, state, id.as_str().ok_or(ErrorCode::Forbidden)?).await?;
+    }
+    Ok(())
 }
 
-async fn path(session: &Session, params: &Value) -> Result<(), ErrorCode> {
-    let cwd = params["cwd"].as_str().ok_or(ErrorCode::Forbidden)?;
-    if session.contains(cwd).await {
+/// Require workspace `id` to be inside the scope.
+async fn reached(session: &Session, state: &Shared, id: &str) -> Result<(), ErrorCode> {
+    if session.reaches(state, id).await.map_err(conceal)? {
         Ok(())
     } else {
         Err(ErrorCode::Forbidden)
     }
 }
 
-async fn optional_path(session: &Session, params: &Value) -> Result<(), ErrorCode> {
+/// Require `path` to resolve inside the scope.
+async fn inside(session: &Session, state: &Shared, path: &str) -> Result<(), ErrorCode> {
+    if session.contains(state, path).await.map_err(conceal)? {
+        Ok(())
+    } else {
+        Err(ErrorCode::Forbidden)
+    }
+}
+
+/// Require `cwd` inside the scope; node shares reach every path.
+async fn path(session: &Session, state: &Shared, params: &Value) -> Result<(), ErrorCode> {
+    if session.kind() == ResourceKind::Node {
+        return Ok(());
+    }
+    let cwd = params["cwd"].as_str().ok_or(ErrorCode::Forbidden)?;
+    inside(session, state, cwd).await
+}
+
+async fn optional_path(session: &Session, state: &Shared, params: &Value) -> Result<(), ErrorCode> {
     if present(params.get("cwd")) {
-        path(session, params).await
+        path(session, state, params).await
     } else {
         Ok(())
     }
-}
-
-/// Force `workspaceId` and a `cwd` inside the workspace; listings keep a contained `cwd`.
-async fn force_terminal(
-    session: &Session,
-    params: &mut Value,
-    listing: bool,
-) -> Result<(), ErrorCode> {
-    if listing {
-        optional_path(session, params).await?;
-    } else if present(params.get("cwd")) {
-        path(session, params).await?;
-    }
-    let object = object(params)?;
-    object.insert("workspaceId".to_owned(), json!(session.workspace_id()));
-    if !present(object.get("cwd")) {
-        object.insert("cwd".to_owned(), json!(session.root_text));
-    }
-    Ok(())
-}
-
-/// Require terminal `id` to belong to the guest's workspace.
-async fn terminal(session: &Session, state: &Shared, id: &str) -> Result<(), ErrorCode> {
-    if session.knows_terminal(id) {
-        return Ok(());
-    }
-    let listed = crate::connection::rpc::execute(
-        state,
-        "terminal.list.request",
-        json!({"workspaceId": session.workspace_id()}),
-    )
-    .await
-    .map_err(conceal)?;
-    let found = listed["terminals"]
-        .as_array()
-        .is_some_and(|terminals| terminals.iter().any(|terminal| terminal["id"] == id));
-    if !found {
-        return Err(ErrorCode::Forbidden);
-    }
-    session.remember_terminal(id);
-    Ok(())
 }
 
 #[cfg(test)]

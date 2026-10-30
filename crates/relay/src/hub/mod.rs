@@ -456,7 +456,7 @@ struct Sessions {
 
 impl Sessions {
     /// Start bridging a session, or return the close code that refuses it.
-    /// A `visitor` session is bridged as a guest of one shared workspace.
+    /// A `visitor` session is bridged as a guest of one shared resource.
     fn open(
         &mut self,
         id: Uuid,

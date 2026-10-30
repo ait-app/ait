@@ -1,4 +1,4 @@
-//! Host-owned workspace share settings, the center's outcome, and live guest grants.
+//! Host-owned share settings, the center's outcome, and live guest grants.
 //!
 //! The owner configures shares over local RPC. The daemon publishes them through
 //! [`model::share::ShareBook`] and feeds the center's outcome back. Guest connections are
@@ -14,8 +14,9 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
 use model::ErrorCode;
 use model::hub::{OutboxStore, StoreError};
-use model::share::{MAX_SHARES, Organization, Outcome, Published, ShareBook, Visitor};
-use serde::{Deserialize, Serialize};
+use model::share::{Group, MAX_SHARES, Outcome, Published, ResourceKind, ShareBook, Visitor};
+use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use tokio::sync::watch;
 use uuid::Uuid;
@@ -28,22 +29,41 @@ use setting::{SetRequest, Setting, ShareError};
 const REVOKED: &str = "revoked";
 
 /// Persisted share document, `<data_dir>/hub/shares.json`.
-#[derive(Debug, Default, Serialize, Deserialize)]
+///
+/// Entries are read one by one: an entry this version cannot read, such as one written
+/// before shares covered groups and resource kinds, is dropped instead of failing the load.
+#[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Document {
     #[serde(default)]
     revision: u64,
     #[serde(default)]
-    shares: Vec<Setting>,
+    shares: Vec<Value>,
     #[serde(default)]
-    orgs: Vec<Organization>,
+    groups: Vec<Value>,
+}
+
+/// Parse the readable entries of `values`, dropping the rest.
+fn readable<T: DeserializeOwned>(values: Vec<Value>) -> Vec<T> {
+    let total = values.len();
+    let parsed: Vec<T> = values
+        .into_iter()
+        .filter_map(|value| serde_json::from_value(value).ok())
+        .collect();
+    if parsed.len() != total {
+        tracing::warn!(
+            dropped = total - parsed.len(),
+            "unreadable stored share entries were dropped"
+        );
+    }
+    parsed
 }
 
 #[derive(Debug, Default)]
 struct Book {
     revision: u64,
     settings: Vec<Setting>,
-    orgs: Vec<Organization>,
+    groups: Vec<Group>,
     /// Orders persistence of concurrent snapshots; independent of the published revision.
     version: u64,
     guests: Guests,
@@ -51,13 +71,13 @@ struct Book {
 
 impl Book {
     fn document(&self) -> Value {
-        json!({"revision": self.revision, "shares": self.settings, "orgs": self.orgs})
+        json!({"revision": self.revision, "shares": self.settings, "groups": self.groups})
     }
 
-    fn position(&self, workspace_key: &str, organization_id: Uuid) -> Option<usize> {
+    fn position(&self, kind: ResourceKind, key: &str, group_id: Uuid) -> Option<usize> {
         self.settings
             .iter()
-            .position(|setting| setting.is(workspace_key, organization_id))
+            .position(|setting| setting.is(kind, key, group_id))
     }
 
     /// End grants that no accepted setting admits any more.
@@ -146,21 +166,21 @@ impl Shares {
             .map_err(|_| StoreError)?;
         let mut book = lock(&self.book);
         book.revision = document.revision;
-        book.settings = document.shares;
-        book.orgs = document.orgs;
+        book.settings = readable(document.shares);
+        book.groups = readable(document.groups);
         self.changes.send_replace(book.revision);
         Ok(())
     }
 
-    /// All settings with their center status, and the owner's organizations.
+    /// All settings with their center status, and the owner's groups.
     pub(crate) fn list(&self) -> Value {
         let book = lock(&self.book);
-        json!({"shares": book.settings, "orgs": book.orgs})
+        json!({"shares": book.settings, "groups": book.groups})
     }
 
-    /// The owner's organizations from the last center outcome.
-    pub(crate) fn orgs(&self) -> Value {
-        json!({"orgs": lock(&self.book).orgs})
+    /// The owner's groups from the last center outcome.
+    pub(crate) fn groups(&self) -> Value {
+        json!({"groups": lock(&self.book).groups})
     }
 
     /// Admit `visitor` when an accepted share grants it, registering its connection.
@@ -248,7 +268,7 @@ impl Shares {
         }
     }
 
-    /// Create or change the share keyed by the request's workspace and organization.
+    /// Create or change the share keyed by the request's resource and group.
     ///
     /// # Errors
     /// Returns invalid requests, capacity exhaustion, or a failed write.
@@ -269,30 +289,39 @@ impl Shares {
     /// Returns a failed write after the share was removed in memory.
     pub(crate) async fn remove(
         &self,
-        workspace_key: &str,
-        organization_id: Uuid,
+        kind: ResourceKind,
+        key: &str,
+        group_id: Uuid,
     ) -> Result<Value, ErrorCode> {
         let (removed, commit) = self.mutate(|book| {
             let removed = book
-                .position(workspace_key, organization_id)
+                .position(kind, key, group_id)
                 .map(|index| book.settings.remove(index))
                 .is_some();
             (removed, removed)
         });
         self.finish(commit).await?;
         Ok(json!({
-            "workspaceKey": workspace_key,
-            "organizationId": organization_id,
+            "resourceKind": kind,
+            "resourceKey": key,
+            "groupId": group_id,
             "removed": removed,
         }))
     }
 
-    /// Drop every share of retired workspaces and end their guest sessions.
-    pub(crate) fn forget_workspaces(&self, workspace_ids: &[String]) {
+    /// Drop every share of retired resources of `kind` and end their guest sessions.
+    ///
+    /// # Arguments
+    ///
+    /// * `kind` - [`ResourceKind::Workspace`] for archived workspaces or
+    ///   [`ResourceKind::Project`] for removed projects
+    /// * `keys` - IDs of the retired resources
+    pub(crate) fn forget(&self, kind: ResourceKind, keys: &[String]) {
         let ((), commit) = self.mutate(|book| {
             let before = book.settings.len();
-            book.settings
-                .retain(|setting| !workspace_ids.contains(&setting.workspace_key));
+            book.settings.retain(|setting| {
+                setting.resource_kind != kind || !keys.contains(&setting.resource_key)
+            });
             ((), book.settings.len() != before)
         });
         self.finish_detached(commit);
@@ -301,7 +330,11 @@ impl Shares {
 
 fn upsert(book: &mut Book, request: SetRequest) -> Result<(Setting, bool), ShareError> {
     let request = request.normalize()?;
-    if let Some(index) = book.position(&request.workspace_key, request.organization_id) {
+    if let Some(index) = book.position(
+        request.resource_kind,
+        &request.resource_key,
+        request.group_id,
+    ) {
         let setting = &mut book.settings[index];
         let changed = request.update(setting);
         return Ok((setting.clone(), changed));
@@ -316,13 +349,21 @@ fn upsert(book: &mut Book, request: SetRequest) -> Result<(Setting, bool), Share
 
 fn apply_outcome(book: &mut Book, outcome: Outcome) -> bool {
     for accepted in &outcome.accepted {
-        if let Some(index) = book.position(&accepted.workspace_key, accepted.organization_id) {
+        if let Some(index) = book.position(
+            accepted.resource_kind,
+            &accepted.resource_key,
+            accepted.group_id,
+        ) {
             book.settings[index].accept(accepted);
         }
     }
     let mut removed = false;
     for rejected in &outcome.rejected {
-        let Some(index) = book.position(&rejected.workspace_key, rejected.organization_id) else {
+        let Some(index) = book.position(
+            rejected.resource_kind,
+            &rejected.resource_key,
+            rejected.group_id,
+        ) else {
             continue;
         };
         if rejected.code == REVOKED {
@@ -332,7 +373,7 @@ fn apply_outcome(book: &mut Book, outcome: Outcome) -> bool {
             book.settings[index].reject(&rejected.code);
         }
     }
-    book.orgs = outcome.orgs;
+    book.groups = outcome.groups;
     removed
 }
 

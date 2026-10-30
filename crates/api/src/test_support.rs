@@ -3,9 +3,10 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use domain::workspace::lifecycle::WorkspaceCreation;
 use filesystem::git::local::provisioning::LocalDirectorySource;
 use metadata::directory::service::directory::{Directory, DirectoryDependencies};
-use model::share::{Accepted, Outcome, Visitor};
+use model::share::{Accepted, Outcome, ResourceKind, Visitor};
 use persistence::storage::project_config::LocalProjectConfigStore;
 use persistence::storage::project_icon::LocalProjectIconStore;
 use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
@@ -16,20 +17,25 @@ use crate::{Api, Services};
 
 pub(crate) const TOKEN: &str = "in-process-test-token-at-least-32-characters";
 
-/// An API whose directory holds two active workspaces in separate directories.
+/// An API whose directory holds two projects in separate directories. The shared project
+/// owns the `shared` workspace at its root and a `sibling` workspace outside its root, the
+/// way managed worktrees live; the other project owns the `other` workspace.
 pub(crate) struct Workspaces {
     pub(crate) root: tempfile::TempDir,
     pub(crate) api: Api,
     pub(crate) shared: String,
+    pub(crate) sibling: String,
     pub(crate) other: String,
-    pub(crate) organization: Uuid,
+    pub(crate) project: String,
+    pub(crate) other_project: String,
+    pub(crate) group: Uuid,
 }
 
 impl Workspaces {
-    /// Build the API for `address` with a shared and an unrelated workspace.
+    /// Build the API for `address` with a shared project and an unrelated project.
     pub(crate) fn new(address: SocketAddr) -> Self {
         let root = tempfile::tempdir().unwrap();
-        for name in ["shared", "other", "registry"] {
+        for name in ["shared", "sibling", "other", "registry"] {
             std::fs::create_dir(root.path().join(name)).unwrap();
         }
         let registry = root.path().join("registry");
@@ -45,14 +51,23 @@ impl Workspaces {
             icon_store: Box::new(LocalProjectIconStore::new(registry.join("icons"))),
             server_id: "test-server".into(),
         });
+        let path = |name: &str| root.path().join(name).to_str().unwrap().to_owned();
         let open = |name: &str| {
-            let path = root.path().join(name);
             directory
-                .open_workspace(path.to_str().unwrap(), "2026-10-30T00:00:00Z")
+                .open_workspace(&path(name), "2026-10-30T00:00:00Z")
                 .unwrap()
-                .workspace_id
         };
         let (shared, other) = (open("shared"), open("other"));
+        let sibling = directory
+            .create_workspace(WorkspaceCreation {
+                path: &path("sibling"),
+                title: None,
+                project_id: Some(&shared.project_id),
+                workspace_id: None,
+                expects_initial_agent: false,
+                timestamp: "2026-10-30T00:00:00Z",
+            })
+            .unwrap();
         let mut api = Api::new(
             address,
             "test-server".into(),
@@ -67,15 +82,23 @@ impl Workspaces {
         Self {
             root,
             api,
-            shared,
-            other,
-            organization: Uuid::new_v4(),
+            shared: shared.workspace_id,
+            sibling: sibling.workspace_id,
+            other: other.workspace_id,
+            project: shared.project_id,
+            other_project: other.project_id,
+            group: Uuid::new_v4(),
         }
     }
 
-    /// Canonical directory of the shared workspace.
+    /// Canonical directory of `name` below the fixture root.
+    pub(crate) fn path(&self, name: &str) -> std::path::PathBuf {
+        self.root.path().join(name).canonicalize().unwrap()
+    }
+
+    /// Canonical directory of the shared workspace and root of the shared project.
     pub(crate) fn shared_path(&self) -> std::path::PathBuf {
-        self.root.path().join("shared").canonicalize().unwrap()
+        self.path("shared")
     }
 
     /// Archive workspace `id` directly in the directory.
@@ -92,13 +115,19 @@ impl Workspaces {
             .unwrap();
     }
 
-    /// Configure an organization-wide share of the shared workspace and accept it.
+    /// Configure a group-wide share of the shared workspace and accept it.
     pub(crate) async fn accept_share(&self) -> Visitor {
+        self.accept(ResourceKind::Workspace, &self.shared).await
+    }
+
+    /// Configure a group-wide share of `kind` and `key` and accept it.
+    pub(crate) async fn accept(&self, kind: ResourceKind, key: &str) -> Visitor {
         let request = serde_json::from_value(json!({
-            "workspaceKey": self.shared,
-            "organizationId": self.organization,
+            "resourceKind": kind,
+            "resourceKey": key,
+            "groupId": self.group,
             "permission": "operate",
-            "audience": "organization",
+            "audience": "group",
         }))
         .unwrap();
         self.api.shared.shares.set(request).await.unwrap();
@@ -107,20 +136,22 @@ impl Workspaces {
             revision: None,
             accepted: vec![Accepted {
                 share_id,
-                workspace_key: self.shared.clone(),
-                organization_id: self.organization,
+                resource_kind: kind,
+                resource_key: key.to_owned(),
+                group_id: self.group,
                 generation: 1,
                 missing_recipients: Vec::new(),
             }],
             rejected: Vec::new(),
-            orgs: Vec::new(),
+            groups: Vec::new(),
         });
         Visitor {
             user_id: Uuid::new_v4(),
             display_name: Some("Guest".into()),
-            organization_id: self.organization,
+            group_id: self.group,
             share_id,
-            workspace_key: self.shared.clone(),
+            resource_kind: kind,
+            resource_key: key.to_owned(),
             permission: "operate".into(),
         }
     }

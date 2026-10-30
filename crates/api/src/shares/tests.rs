@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use model::share::{Accepted, Audience, Rejected};
+use model::share::{Accepted, Audience, Rejected, ResourceKind};
 use serde_json::json;
 
 use super::*;
@@ -43,15 +43,16 @@ fn shares(store: Option<Arc<MemoryStore>>) -> Arc<Shares> {
     Arc::new(shares)
 }
 
-fn set(workspace: &str, organization: Uuid, recipients: &[Uuid]) -> SetRequest {
+fn set(workspace: &str, group: Uuid, recipients: &[Uuid]) -> SetRequest {
     let audience = if recipients.is_empty() {
-        "organization"
+        "group"
     } else {
         "members"
     };
     serde_json::from_value(json!({
-        "workspaceKey": workspace,
-        "organizationId": organization,
+        "resourceKind": "workspace",
+        "resourceKey": workspace,
+        "groupId": group,
         "permission": "operate",
         "audience": audience,
         "recipients": recipients,
@@ -59,19 +60,20 @@ fn set(workspace: &str, organization: Uuid, recipients: &[Uuid]) -> SetRequest {
     .unwrap()
 }
 
-fn accepted(workspace: &str, organization: Uuid, share_id: Uuid) -> Outcome {
+fn accepted(workspace: &str, group: Uuid, share_id: Uuid) -> Outcome {
     Outcome {
         revision: Some(1),
         accepted: vec![Accepted {
             share_id,
-            workspace_key: workspace.into(),
-            organization_id: organization,
+            resource_kind: ResourceKind::Workspace,
+            resource_key: workspace.into(),
+            group_id: group,
             generation: 5,
             missing_recipients: Vec::new(),
         }],
         rejected: Vec::new(),
-        orgs: vec![Organization {
-            organization_id: organization,
+        groups: vec![Group {
+            group_id: group,
             name: "Team".into(),
             status: "active".into(),
             my_role: "admin".into(),
@@ -79,24 +81,26 @@ fn accepted(workspace: &str, organization: Uuid, share_id: Uuid) -> Outcome {
     }
 }
 
-fn rejected(workspace: &str, organization: Uuid, code: &str) -> Outcome {
+fn rejected(workspace: &str, group: Uuid, code: &str) -> Outcome {
     Outcome {
         rejected: vec![Rejected {
-            workspace_key: workspace.into(),
-            organization_id: organization,
+            resource_kind: ResourceKind::Workspace,
+            resource_key: workspace.into(),
+            group_id: group,
             code: code.into(),
         }],
         ..Outcome::default()
     }
 }
 
-fn visitor(share_id: Uuid, organization: Uuid, user_id: Uuid) -> Visitor {
+fn visitor(share_id: Uuid, group: Uuid, user_id: Uuid) -> Visitor {
     Visitor {
         user_id,
         display_name: None,
-        organization_id: organization,
+        group_id: group,
         share_id,
-        workspace_key: "w".into(),
+        resource_kind: ResourceKind::Workspace,
+        resource_key: "w".into(),
         permission: "operate".into(),
     }
 }
@@ -105,38 +109,38 @@ fn visitor(share_id: Uuid, organization: Uuid, user_id: Uuid) -> Visitor {
 async fn set_bumps_revision_only_for_published_changes() {
     let shares = shares(None);
     let mut changes = shares.changes();
-    let organization = Uuid::new_v4();
-    let stored = shares.set(set("w", organization, &[])).await.unwrap();
+    let group = Uuid::new_v4();
+    let stored = shares.set(set("w", group, &[])).await.unwrap();
     assert_eq!(stored["share"]["state"], "pending");
     assert!(stored["share"]["generation"].is_null());
     assert!(stored["share"]["shareId"].is_null());
     assert!(changes.has_changed().unwrap());
     assert_eq!(*changes.borrow_and_update(), 1);
-    shares.set(set("w", organization, &[])).await.unwrap();
+    shares.set(set("w", group, &[])).await.unwrap();
     assert!(!changes.has_changed().unwrap());
     let (revision, published) = shares.publication();
     assert_eq!(revision, 1);
     assert_eq!(published.len(), 1);
-    assert_eq!(published[0].audience, Audience::Organization);
+    assert_eq!(published[0].audience, Audience::Group);
     assert_eq!(published[0].generation, None);
 }
 
 #[tokio::test]
 async fn capacity_is_bounded() {
     let shares = shares(None);
-    let organization = Uuid::new_v4();
+    let group = Uuid::new_v4();
     for index in 0..MAX_SHARES {
         shares
-            .set(set(&format!("w{index}"), organization, &[]))
+            .set(set(&format!("w{index}"), group, &[]))
             .await
             .unwrap();
     }
     assert_eq!(
-        shares.set(set("extra", organization, &[])).await,
+        shares.set(set("extra", group, &[])).await,
         Err(ErrorCode::ResourceExhausted)
     );
     shares
-        .set(set("w0", organization, &[Uuid::new_v4()]))
+        .set(set("w0", group, &[Uuid::new_v4()]))
         .await
         .unwrap();
 }
@@ -145,22 +149,22 @@ async fn capacity_is_bounded() {
 fn acceptance_is_persisted_and_republished_with_its_generation() {
     let store = Arc::new(MemoryStore::default());
     let shares = shares(Some(store.clone()));
-    let organization = Uuid::new_v4();
+    let group = Uuid::new_v4();
     let share_id = Uuid::new_v4();
     let ((), commit) = shares.mutate(|book| {
-        let stored = upsert(book, set("w", organization, &[]));
+        let stored = upsert(book, set("w", group, &[]));
         ((), stored.is_ok())
     });
     shares.finish_detached(commit);
-    shares.apply(accepted("w", organization, share_id));
+    shares.apply(accepted("w", group, share_id));
     let (revision, published) = shares.publication();
     assert_eq!(revision, 1);
     assert_eq!(published[0].generation, Some(5));
     let listed = shares.list();
     assert_eq!(listed["shares"][0]["state"], "accepted");
     assert_eq!(listed["shares"][0]["shareId"], json!(share_id));
-    assert_eq!(listed["orgs"][0]["name"], "Team");
-    assert_eq!(shares.orgs()["orgs"][0]["myRole"], "admin");
+    assert_eq!(listed["groups"][0]["name"], "Team");
+    assert_eq!(shares.groups()["groups"][0]["myRole"], "admin");
 
     let reopened = self::shares(Some(store.clone()));
     assert_eq!(reopened.publication(), (1, published));
@@ -188,7 +192,7 @@ fn malformed_store_is_refused() {
 #[test]
 fn the_daemon_builder_attaches_a_store_once() {
     let store = Arc::new(MemoryStore::default());
-    *lock(&store.document) = json!({"revision": 7, "shares": [], "orgs": []});
+    *lock(&store.document) = json!({"revision": 7, "shares": [], "groups": []});
     let api = Api::new(
         address(),
         "server".into(),
@@ -212,59 +216,59 @@ fn the_daemon_builder_attaches_a_store_once() {
 async fn failed_writes_are_reported_and_retried_by_later_changes() {
     let store = Arc::new(MemoryStore::default());
     let shares = shares(Some(store.clone()));
-    let organization = Uuid::new_v4();
+    let group = Uuid::new_v4();
     store.fail.store(true, Ordering::SeqCst);
     assert_eq!(
-        shares.set(set("w", organization, &[])).await,
+        shares.set(set("w", group, &[])).await,
         Err(ErrorCode::RegistryIo)
     );
     store.fail.store(false, Ordering::SeqCst);
-    shares.set(set("x", organization, &[])).await.unwrap();
+    shares.set(set("x", group, &[])).await.unwrap();
     assert_eq!(lock(&store.document)["shares"].as_array().unwrap().len(), 2);
 }
 
 #[tokio::test]
 async fn revoked_shares_are_removed_and_republished() {
     let shares = shares(None);
-    let organization = Uuid::new_v4();
-    shares.set(set("w", organization, &[])).await.unwrap();
-    shares.set(set("x", organization, &[])).await.unwrap();
+    let group = Uuid::new_v4();
+    shares.set(set("w", group, &[])).await.unwrap();
+    shares.set(set("x", group, &[])).await.unwrap();
     let mut changes = shares.changes();
     changes.borrow_and_update();
-    shares.apply(rejected("w", organization, REVOKED));
+    shares.apply(rejected("w", group, REVOKED));
     assert!(changes.has_changed().unwrap());
     let (revision, published) = shares.publication();
     assert_eq!(revision, 3);
     assert_eq!(published.len(), 1);
-    assert_eq!(published[0].workspace_key, "x");
+    assert_eq!(published[0].resource_key, "x");
 }
 
 #[tokio::test]
 async fn unlisted_entries_keep_their_state() {
     let shares = shares(None);
-    let organization = Uuid::new_v4();
-    shares.set(set("w", organization, &[])).await.unwrap();
-    shares.apply(accepted("w", organization, Uuid::new_v4()));
+    let group = Uuid::new_v4();
+    shares.set(set("w", group, &[])).await.unwrap();
+    shares.apply(accepted("w", group, Uuid::new_v4()));
     shares.apply(Outcome::default());
     assert_eq!(shares.list()["shares"][0]["state"], "accepted");
-    assert_eq!(shares.list()["orgs"], json!([]));
+    assert_eq!(shares.list()["groups"], json!([]));
 }
 
 #[tokio::test]
 async fn guests_end_when_their_share_is_no_longer_accepted() {
     let shares = shares(None);
-    let organization = Uuid::new_v4();
+    let group = Uuid::new_v4();
     let share_id = Uuid::new_v4();
-    shares.set(set("w", organization, &[])).await.unwrap();
-    let guest = visitor(share_id, organization, Uuid::new_v4());
+    shares.set(set("w", group, &[])).await.unwrap();
+    let guest = visitor(share_id, group, Uuid::new_v4());
     assert!(shares.admit(&guest).is_none());
-    shares.apply(accepted("w", organization, share_id));
+    shares.apply(accepted("w", group, share_id));
     let registration = shares.admit(&guest).unwrap();
     assert!(!registration.cancellation().is_cancelled());
-    shares.apply(rejected("w", organization, "org_inactive"));
+    shares.apply(rejected("w", group, "group_inactive"));
     assert!(registration.cancellation().is_cancelled());
     assert!(shares.admit(&guest).is_none());
-    assert_eq!(shares.list()["shares"][0]["code"], "org_inactive");
+    assert_eq!(shares.list()["shares"][0]["code"], "group_inactive");
     drop(registration);
     assert_eq!(lock(&shares.book).guests.live(), 0);
 }
@@ -272,26 +276,19 @@ async fn guests_end_when_their_share_is_no_longer_accepted() {
 #[tokio::test]
 async fn removing_a_recipient_ends_only_that_visitor() {
     let shares = shares(None);
-    let organization = Uuid::new_v4();
+    let group = Uuid::new_v4();
     let share_id = Uuid::new_v4();
     let (kept, removed) = (Uuid::new_v4(), Uuid::new_v4());
-    shares
-        .set(set("w", organization, &[kept, removed]))
-        .await
-        .unwrap();
-    shares.apply(accepted("w", organization, share_id));
-    let keep = shares
-        .admit(&visitor(share_id, organization, kept))
-        .unwrap();
-    let lose = shares
-        .admit(&visitor(share_id, organization, removed))
-        .unwrap();
+    shares.set(set("w", group, &[kept, removed])).await.unwrap();
+    shares.apply(accepted("w", group, share_id));
+    let keep = shares.admit(&visitor(share_id, group, kept)).unwrap();
+    let lose = shares.admit(&visitor(share_id, group, removed)).unwrap();
     assert!(
         shares
-            .admit(&visitor(share_id, organization, Uuid::new_v4()))
+            .admit(&visitor(share_id, group, Uuid::new_v4()))
             .is_none()
     );
-    shares.set(set("w", organization, &[kept])).await.unwrap();
+    shares.set(set("w", group, &[kept])).await.unwrap();
     assert!(lose.cancellation().is_cancelled());
     assert!(!keep.cancellation().is_cancelled());
 }
@@ -299,20 +296,26 @@ async fn removing_a_recipient_ends_only_that_visitor() {
 #[tokio::test]
 async fn removal_ends_guests_immediately() {
     let shares = shares(None);
-    let organization = Uuid::new_v4();
+    let group = Uuid::new_v4();
     let share_id = Uuid::new_v4();
-    shares.set(set("w", organization, &[])).await.unwrap();
-    shares.apply(accepted("w", organization, share_id));
+    shares.set(set("w", group, &[])).await.unwrap();
+    shares.apply(accepted("w", group, share_id));
     let registration = shares
-        .admit(&visitor(share_id, organization, Uuid::new_v4()))
+        .admit(&visitor(share_id, group, Uuid::new_v4()))
         .unwrap();
     assert!(registration.record_terminal("terminal".into()));
-    let removed = shares.remove("w", organization).await.unwrap();
+    let removed = shares
+        .remove(ResourceKind::Workspace, "w", group)
+        .await
+        .unwrap();
     assert_eq!(removed["removed"], true);
     assert!(registration.cancellation().is_cancelled());
     assert_eq!(shares.publication(), (2, Vec::new()));
     assert!(!registration.record_terminal("late".into()));
-    let missing = shares.remove("w", organization).await.unwrap();
+    let missing = shares
+        .remove(ResourceKind::Workspace, "w", group)
+        .await
+        .unwrap();
     assert_eq!(missing["removed"], false);
     assert_eq!(shares.publication().0, 2);
 }
@@ -320,21 +323,77 @@ async fn removal_ends_guests_immediately() {
 #[tokio::test]
 async fn retired_workspaces_are_forgotten() {
     let shares = shares(None);
-    let organization = Uuid::new_v4();
+    let group = Uuid::new_v4();
     let share_id = Uuid::new_v4();
-    shares.set(set("w", organization, &[])).await.unwrap();
-    shares.set(set("x", organization, &[])).await.unwrap();
-    shares.apply(accepted("w", organization, share_id));
+    shares.set(set("w", group, &[])).await.unwrap();
+    shares.set(set("x", group, &[])).await.unwrap();
+    shares.apply(accepted("w", group, share_id));
     let registration = shares
-        .admit(&visitor(share_id, organization, Uuid::new_v4()))
+        .admit(&visitor(share_id, group, Uuid::new_v4()))
         .unwrap();
-    shares.forget_workspaces(&["w".to_owned()]);
+    shares.forget(ResourceKind::Workspace, &["w".to_owned()]);
     assert!(registration.cancellation().is_cancelled());
     let (revision, published) = shares.publication();
     assert_eq!(revision, 3);
     assert_eq!(published.len(), 1);
-    shares.forget_workspaces(&["missing".to_owned()]);
+    shares.forget(ResourceKind::Project, &["x".to_owned()]);
+    shares.forget(ResourceKind::Workspace, &["missing".to_owned()]);
     assert_eq!(shares.publication().0, 3);
+}
+
+#[tokio::test]
+async fn shares_are_keyed_by_kind_and_projects_are_forgotten_separately() {
+    let shares = shares(None);
+    let group = Uuid::new_v4();
+    let project: SetRequest = serde_json::from_value(json!({
+        "resourceKind": "project",
+        "resourceKey": "w",
+        "groupId": group,
+        "permission": "operate",
+        "audience": "group",
+    }))
+    .unwrap();
+    shares.set(set("w", group, &[])).await.unwrap();
+    shares.set(project).await.unwrap();
+    assert_eq!(shares.publication().1.len(), 2);
+    shares.forget(ResourceKind::Project, &["w".to_owned()]);
+    let (_, published) = shares.publication();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].resource_kind, ResourceKind::Workspace);
+    let removed = shares
+        .remove(ResourceKind::Project, "w", group)
+        .await
+        .unwrap();
+    assert_eq!(
+        removed,
+        json!({"resourceKind":"project","resourceKey":"w","groupId":group,"removed":false})
+    );
+}
+
+/// Documents written before shares named groups and resource kinds lose only those entries.
+#[test]
+fn unreadable_stored_entries_are_dropped() {
+    let store = Arc::new(MemoryStore::default());
+    let group = Uuid::new_v4();
+    *lock(&store.document) = json!({
+        "revision": 3,
+        "shares": [
+            {"workspaceKey": "w", "organizationId": group, "permission": "operate",
+                "audience": "organization"},
+            {"resourceKind": "node", "resourceKey": "", "groupId": group,
+                "permission": "operate", "audience": "group"},
+        ],
+        "orgs": [{"organizationId": group, "name": "Old", "status": "active", "myRole": "admin"}],
+        "groups": [{"groupId": group, "name": "Team", "status": "active", "myRole": "admin"},
+            {"name": "broken"}],
+    });
+    let shares = shares(Some(store));
+    let (revision, published) = shares.publication();
+    assert_eq!(revision, 3);
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].resource_kind, ResourceKind::Node);
+    assert_eq!(shares.groups()["groups"][0]["name"], "Team");
+    assert_eq!(shares.groups()["groups"].as_array().map(Vec::len), Some(1));
 }
 
 #[test]

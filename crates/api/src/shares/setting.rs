@@ -1,7 +1,9 @@
 //! One locally configured share and the owner's request to create or change it.
 
 use model::ErrorCode;
-use model::share::{Accepted, Audience, MAX_RECIPIENTS, Published, Visitor};
+use model::share::{
+    Accepted, Audience, MAX_RECIPIENTS, Published, ResourceKind, ShareScope, Visitor,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -28,8 +30,10 @@ pub(super) enum ShareState {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct Setting {
-    pub(super) workspace_key: String,
-    pub(super) organization_id: Uuid,
+    pub(super) resource_kind: ResourceKind,
+    #[serde(default)]
+    pub(super) resource_key: String,
+    pub(super) group_id: Uuid,
     pub(super) permission: String,
     pub(super) audience: Audience,
     #[serde(default)]
@@ -51,16 +55,17 @@ pub(super) struct Setting {
 }
 
 impl Setting {
-    /// Whether this setting is the entry keyed by `workspace_key` and `organization_id`.
-    pub(super) fn is(&self, workspace_key: &str, organization_id: Uuid) -> bool {
-        self.workspace_key == workspace_key && self.organization_id == organization_id
+    /// Whether this setting is the entry keyed by `kind`, `key` and `group_id`.
+    pub(super) fn is(&self, kind: ResourceKind, key: &str, group_id: Uuid) -> bool {
+        self.resource_kind == kind && self.resource_key == key && self.group_id == group_id
     }
 
     /// Project this setting into the form published to the center.
     pub(super) fn published(&self) -> Published {
         Published {
-            workspace_key: self.workspace_key.clone(),
-            organization_id: self.organization_id,
+            resource_kind: self.resource_kind,
+            resource_key: self.resource_key.clone(),
+            group_id: self.group_id,
             permission: self.permission.clone(),
             audience: self.audience,
             recipients: self.recipients.clone(),
@@ -74,13 +79,16 @@ impl Setting {
     pub(super) fn grants(&self, share_id: Uuid, user_id: Uuid) -> bool {
         self.state == ShareState::Accepted
             && self.share_id == Some(share_id)
-            && (self.audience == Audience::Organization || self.recipients.contains(&user_id))
+            && (self.audience == Audience::Group || self.recipients.contains(&user_id))
     }
 
     /// Whether this setting admits the guest session described by `visitor`.
     pub(super) fn admits(&self, visitor: &Visitor) -> bool {
-        self.is(&visitor.workspace_key, visitor.organization_id)
-            && self.permission == visitor.permission
+        self.is(
+            visitor.resource_kind,
+            &visitor.resource_key,
+            visitor.group_id,
+        ) && self.permission == visitor.permission
             && self.grants(visitor.share_id, visitor.user_id)
     }
 
@@ -105,8 +113,10 @@ impl Setting {
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct SetRequest {
-    pub(super) workspace_key: String,
-    pub(super) organization_id: Uuid,
+    pub(super) resource_kind: ResourceKind,
+    #[serde(default)]
+    pub(super) resource_key: String,
+    pub(super) group_id: Uuid,
     pub(super) permission: String,
     pub(super) audience: Audience,
     #[serde(default)]
@@ -121,8 +131,10 @@ pub(crate) struct SetRequest {
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct RemoveRequest {
-    pub(super) workspace_key: String,
-    pub(super) organization_id: Uuid,
+    pub(super) resource_kind: ResourceKind,
+    #[serde(default)]
+    pub(super) resource_key: String,
+    pub(super) group_id: Uuid,
 }
 
 /// Why a share request cannot be stored.
@@ -131,7 +143,7 @@ pub(super) enum ShareError {
     /// Only [`OPERATE`] can be granted.
     #[error("only the operate permission can be shared")]
     Permission,
-    /// Members audiences need recipients; organization audiences must not list any.
+    /// Members audiences need recipients; group audiences must not list any.
     #[error("recipients do not match the audience")]
     Audience,
     /// More than [`MAX_RECIPIENTS`] recipients.
@@ -143,9 +155,16 @@ pub(super) enum ShareError {
     /// The Host already has [`model::share::MAX_SHARES`] shares.
     #[error("too many shares")]
     Capacity,
+    /// The resource key does not fit its kind: blank for a workspace or project, or not
+    /// empty for a node.
+    #[error("resource key does not match its kind")]
+    Resource,
     /// The workspace does not exist or is archived.
     #[error("workspace is not active")]
     Workspace,
+    /// The project does not exist or is archived.
+    #[error("project is not active")]
+    Project,
 }
 
 impl From<ShareError> for ErrorCode {
@@ -154,9 +173,10 @@ impl From<ShareError> for ErrorCode {
             ShareError::Permission
             | ShareError::Audience
             | ShareError::Recipients
-            | ShareError::Name => Self::InvalidMessage,
+            | ShareError::Name
+            | ShareError::Resource => Self::InvalidMessage,
             ShareError::Capacity => Self::ResourceExhausted,
-            ShareError::Workspace => Self::WorkspaceNotFound,
+            ShareError::Workspace | ShareError::Project => Self::WorkspaceNotFound,
         }
     }
 }
@@ -181,10 +201,15 @@ impl SetRequest {
         }
         self.display_name = name(self.display_name)?;
         self.project_name = name(self.project_name)?;
-        if self.workspace_key.trim().is_empty() {
-            return Err(ShareError::Workspace);
+        if self.scope().is_none() {
+            return Err(ShareError::Resource);
         }
         Ok(self)
+    }
+
+    /// The shared resource; `None` when kind and key do not fit together.
+    pub(super) fn scope(&self) -> Option<ShareScope> {
+        ShareScope::new(self.resource_kind, &self.resource_key)
     }
 
     /// Write this request over `setting`, returning whether anything published changed.
@@ -211,8 +236,9 @@ impl SetRequest {
     /// Create a new pending setting without center identity or generation.
     pub(super) fn into_setting(self) -> Setting {
         Setting {
-            workspace_key: self.workspace_key,
-            organization_id: self.organization_id,
+            resource_kind: self.resource_kind,
+            resource_key: self.resource_key,
+            group_id: self.group_id,
             permission: self.permission,
             audience: self.audience,
             recipients: self.recipients,

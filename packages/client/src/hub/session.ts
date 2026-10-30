@@ -56,7 +56,7 @@ export class HubSession implements DaemonTransport {
     private readonly link: HubSessionLink,
     readonly id: string,
     readonly node: string,
-    /** Share ID for a guest session to another account's workspace. */
+    /** Share ID for a guest session to a resource another account shares. */
     readonly share?: string,
   ) {
     // Handlers are attached synchronously after construction; announce readiness afterwards.

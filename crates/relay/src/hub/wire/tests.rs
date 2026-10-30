@@ -68,7 +68,7 @@ fn decodes_guest_opens_and_share_status() {
     let share = Uuid::new_v4();
     let frame = raw(
         &format!(
-            r#"{{"t":"open","seq":2,"s":"{s}","from":"{s}","visitor":{{"user_id":"{s}","display_name":null,"organization_id":"{s}","share_id":"{share}","workspace_key":"ws_1","permission":"operate"}}}}"#
+            r#"{{"t":"open","seq":2,"s":"{s}","from":"{s}","visitor":{{"user_id":"{s}","display_name":null,"group_id":"{s}","share_id":"{share}","resource_kind":"workspace","resource_key":"ws_1","permission":"operate"}}}}"#
         ),
         b"hello",
     );
@@ -82,7 +82,7 @@ fn decodes_guest_opens_and_share_status() {
         std::panic!("expected a guest open, got {header:?}");
     };
     assert_eq!(
-        (visitor.share_id, visitor.workspace_key.as_str()),
+        (visitor.share_id, visitor.resource_key.as_str()),
         (share, "ws_1")
     );
 

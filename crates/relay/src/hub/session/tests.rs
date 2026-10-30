@@ -360,9 +360,10 @@ async fn guest_sessions_dial_with_the_visitor_and_report_refusal_as_revoked() {
     let visitor = model::share::Visitor {
         user_id: Uuid::new_v4(),
         display_name: Some("Bob".to_owned()),
-        organization_id: Uuid::new_v4(),
+        group_id: Uuid::new_v4(),
         share_id: Uuid::new_v4(),
-        workspace_key: "ws_1".to_owned(),
+        resource_kind: model::share::ResourceKind::Node,
+        resource_key: String::new(),
         permission: "operate".to_owned(),
     };
     let expected = visitor.clone();

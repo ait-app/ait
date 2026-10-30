@@ -75,7 +75,7 @@ pub(super) enum Inbound {
     Reply { seq: u64, id: Uuid },
     #[serde(rename = "error")]
     Error { code: String },
-    /// `visitor` marks a guest session confined to one shared workspace.
+    /// `visitor` marks a guest session confined to one shared resource.
     #[serde(rename = "open")]
     Open {
         seq: u64,

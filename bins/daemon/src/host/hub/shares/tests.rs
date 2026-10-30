@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 
 use model::hub::Scope;
-use model::share::Audience;
+use model::share::{Audience, ResourceKind};
 use serde_json::Value;
 use tokio::sync::watch;
 
@@ -61,8 +61,7 @@ impl Center for FakeCenter {
             .lock()
             .expect("results")
             .pop_front()
-            .unwrap_or_else(|| Ok(json!({"accepted":[],"rejected":[],"orgs":[]})));
-        result
+            .unwrap_or_else(|| Ok(json!({"accepted":[],"rejected":[],"groups":[]})))
     }
 
     fn share_status(&self) -> watch::Receiver<Option<Outcome>> {
@@ -115,10 +114,11 @@ impl ShareBook for FakeBook {
 
 fn entry(key: &str) -> Published {
     Published {
-        workspace_key: key.to_owned(),
-        organization_id: Uuid::nil(),
+        resource_kind: ResourceKind::Workspace,
+        resource_key: key.to_owned(),
+        group_id: Uuid::nil(),
         permission: "operate".to_owned(),
-        audience: Audience::Organization,
+        audience: Audience::Group,
         recipients: Vec::new(),
         display_name: None,
         project_name: None,
@@ -160,8 +160,10 @@ async fn publishes_only_to_online_centers_that_support_shares() {
             .as_u64()
             .is_some_and(|revision| revision > 0)
     );
-    assert_eq!(calls[0]["shares"][0]["workspaceKey"], "ws_1");
-    assert_eq!(calls[0]["shares"][0]["audience"], "organization");
+    assert_eq!(calls[0]["shares"][0]["resourceKind"], "workspace");
+    assert_eq!(calls[0]["shares"][0]["resourceKey"], "ws_1");
+    assert_eq!(calls[0]["shares"][0]["groupId"], json!(Uuid::nil()));
+    assert_eq!(calls[0]["shares"][0]["audience"], "group");
     assert_eq!(book.applied().len(), 1);
 }
 

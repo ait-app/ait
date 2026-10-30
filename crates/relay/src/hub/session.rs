@@ -48,7 +48,7 @@ pub(super) async fn run(
 }
 
 /// A guest session dials with the encoded visitor; the local API confines it to
-/// one workspace and refuses it once the share is gone.
+/// the shared resource and refuses it once the share is gone.
 async fn bridge(
     local: &Local,
     id: Uuid,

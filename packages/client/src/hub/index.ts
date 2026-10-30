@@ -33,9 +33,10 @@ export {
   type HubAccountEvent,
   type HubDirectoryItem,
   type HubDirectoryPage,
-  type HubOrganization,
-  type HubOrganizationMember,
-  type HubOrganizationMembers,
-  type HubSharedWorkspace,
+  type HubGroup,
+  type HubGroupMember,
+  type HubGroupMembers,
+  type HubShare,
+  type HubShareResourceKind,
 } from "./account.js";
 export { observeHubEvents } from "./subscription.js";

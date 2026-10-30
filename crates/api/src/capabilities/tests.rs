@@ -32,7 +32,7 @@ fn empty_host_keeps_only_builtin_api_methods() {
             "share.list.request",
             "share.set.request",
             "share.remove.request",
-            "share.orgs.list.request",
+            "share.groups.list.request",
         ]
     );
     let registered = crate::registered_capabilities();
