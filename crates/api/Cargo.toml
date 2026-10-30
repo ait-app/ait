@@ -8,7 +8,6 @@ publish.workspace = true
 bot.workspace = true
 domain.workspace = true
 host-link.workspace = true
-async-trait.workspace = true
 relay.workspace = true
 schedule.workspace = true
 browser.workspace = true

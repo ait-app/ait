@@ -1,7 +1,6 @@
 //! Internal capability for a center-managed daemon; never exposed through RPC.
 use std::sync::{Arc, Mutex};
 
-use async_trait::async_trait;
 use host_link::{Binding, CENTER, Error, ManagedRelay};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Value, json};
@@ -15,7 +14,6 @@ pub struct ManagedRelayHandle {
     pub(super) status: Arc<Mutex<Value>>,
 }
 
-#[async_trait]
 impl ManagedRelay for ManagedRelayHandle {
     async fn start(&self, session: Uuid, ticket: SecretString) -> Result<(), Error> {
         self.relay

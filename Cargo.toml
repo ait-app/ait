@@ -8,7 +8,6 @@ edition = "2024"
 publish = false
 
 [workspace.dependencies]
-async-trait = "0.1.89"
 host-link = { path = "crates/host-link" }
 api = { path = "crates/api" }
 bot = { path = "crates/bot" }

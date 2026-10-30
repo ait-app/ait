@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use secrecy::{ExposeSecret, SecretString};
 
@@ -110,7 +109,10 @@ impl CredentialStore for Mock {
     }
 }
 
-#[async_trait]
+#[expect(
+    clippy::unused_async_trait_impl,
+    reason = "Keep mock side effects lazy until polled, like the production adapters."
+)]
 impl Center for Mock {
     async fn revoke(&self, token: &SecretString) -> Result<(), Error> {
         let (delay, error) = {
@@ -254,7 +256,10 @@ mod links;
 mod recovery;
 mod service;
 
-#[async_trait]
+#[expect(
+    clippy::unused_async_trait_impl,
+    reason = "Keep mock side effects lazy until polled, like the production adapters."
+)]
 impl ManagedRelay for Mock {
     async fn start(&self, _: Uuid, _: SecretString) -> Result<(), Error> {
         let mut seen = self.0.lock().unwrap();

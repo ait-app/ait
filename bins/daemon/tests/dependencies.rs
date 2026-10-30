@@ -6,7 +6,6 @@ use std::process::Command;
 // Cargo passes the complete package dependency set to this integration test.
 use anyhow as _;
 use api as _;
-use async_trait as _;
 use axum as _;
 use base64 as _;
 use bot as _;

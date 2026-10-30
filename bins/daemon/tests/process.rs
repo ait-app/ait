@@ -2,7 +2,6 @@
 
 use std::process::Command;
 
-use async_trait as _;
 use base64 as _;
 use host_link as _;
 #[cfg(unix)]

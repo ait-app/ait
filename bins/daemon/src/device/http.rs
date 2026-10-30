@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures_util::StreamExt;
 use host_link::{
@@ -226,7 +225,6 @@ fn decode_tokens(value: Value) -> Result<Tokens, Error> {
     })
 }
 
-#[async_trait]
 impl Center for HttpCenter {
     async fn revoke(&self, refresh_token: &SecretString) -> Result<(), Error> {
         self.revoke(refresh_token).await

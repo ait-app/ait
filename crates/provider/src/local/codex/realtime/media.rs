@@ -89,39 +89,66 @@ struct Handler {
     ended: CancellationToken,
 }
 
-#[async_trait::async_trait]
+// Match WebRTC's boxed callback contract, including its receiver/future lifetime bounds.
 impl PeerConnectionEventHandler for Handler {
-    async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
-        if state == RTCIceGatheringState::Complete {
-            let _ = self.gathered.try_send(());
-        }
+    fn on_ice_gathering_state_change<'a, 'future>(
+        &'a self,
+        state: RTCIceGatheringState,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'future>>
+    where
+        'a: 'future,
+        Self: 'future,
+    {
+        Box::pin(async move {
+            if state == RTCIceGatheringState::Complete {
+                let _ = self.gathered.try_send(());
+            }
+        })
     }
 
-    async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
-        match state {
-            RTCPeerConnectionState::Connected => {
-                let _ = self.connected.try_send(());
+    fn on_connection_state_change<'a, 'future>(
+        &'a self,
+        state: RTCPeerConnectionState,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'future>>
+    where
+        'a: 'future,
+        Self: 'future,
+    {
+        Box::pin(async move {
+            match state {
+                RTCPeerConnectionState::Connected => {
+                    let _ = self.connected.try_send(());
+                }
+                RTCPeerConnectionState::Failed => {
+                    tracing::warn!(reason = "peer_failed", "Codex realtime peer ended");
+                    self.ended.cancel();
+                }
+                RTCPeerConnectionState::Closed => {
+                    tracing::info!(reason = "peer_closed", "Codex realtime peer ended");
+                    self.ended.cancel();
+                }
+                _ => {}
             }
-            RTCPeerConnectionState::Failed => {
-                tracing::warn!(reason = "peer_failed", "Codex realtime peer ended");
-                self.ended.cancel();
-            }
-            RTCPeerConnectionState::Closed => {
-                tracing::info!(reason = "peer_closed", "Codex realtime peer ended");
-                self.ended.cancel();
-            }
-            _ => {}
-        }
+        })
     }
 
-    async fn on_track(&self, track: Arc<dyn TrackRemote>) {
-        if self.tracks.try_send(track).is_err() {
-            tracing::warn!(
-                reason = "remote_track_queue_unavailable",
-                "Codex realtime peer ended"
-            );
-            self.ended.cancel();
-        }
+    fn on_track<'a, 'future>(
+        &'a self,
+        track: Arc<dyn TrackRemote>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'future>>
+    where
+        'a: 'future,
+        Self: 'future,
+    {
+        Box::pin(async move {
+            if self.tracks.try_send(track).is_err() {
+                tracing::warn!(
+                    reason = "remote_track_queue_unavailable",
+                    "Codex realtime peer ended"
+                );
+                self.ended.cancel();
+            }
+        })
     }
 }
 

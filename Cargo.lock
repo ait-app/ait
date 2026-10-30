@@ -107,7 +107,6 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 name = "api"
 version = "0.1.22"
 dependencies = [
- "async-trait",
  "axum",
  "bot",
  "browser",
@@ -755,7 +754,6 @@ version = "0.1.22"
 dependencies = [
  "anyhow",
  "api",
- "async-trait",
  "axum",
  "base64 0.22.1",
  "bot",
@@ -1249,7 +1247,6 @@ dependencies = [
 name = "host-link"
 version = "0.1.22"
 dependencies = [
- "async-trait",
  "chrono",
  "secrecy",
  "serde",
@@ -2156,7 +2153,6 @@ dependencies = [
 name = "provider"
 version = "0.1.22"
 dependencies = [
- "async-trait",
  "axum",
  "base64 0.22.1",
  "chrono",

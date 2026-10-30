@@ -1,4 +1,5 @@
-use async_trait::async_trait;
+use std::future::Future;
+
 use chrono::{DateTime, Utc};
 use secrecy::SecretString;
 use uuid::Uuid;
@@ -14,82 +15,115 @@ pub trait CredentialStore: Send + Sync {
 }
 
 /// Scoped center operations; never a user/account API client.
-#[async_trait]
 pub trait Center: Send + Sync {
     /// Redeem a one-use enrollment with a durable request identity.
     /// # Errors
     /// Returns authorization, protocol or retryable transport failures.
-    async fn enroll(
+    fn enroll(
         &self,
         token: &SecretString,
         request_id: Uuid,
         machine: &Machine,
-    ) -> Result<Tokens, Error>;
+    ) -> impl Future<Output = Result<Tokens, Error>> + Send;
     /// Claim a previously approved device authorization.
     /// # Errors
     /// Distinguishes pending/slow polling from denied or unavailable authorization.
-    async fn poll(&self, code: &SecretString, request_id: Uuid) -> Result<Tokens, Error>;
+    fn poll(
+        &self,
+        code: &SecretString,
+        request_id: Uuid,
+    ) -> impl Future<Output = Result<Tokens, Error>> + Send;
     /// Rotate with a persisted operation identity.
     /// # Errors
     /// Distinguishes terminal authorization errors from retryable outages.
-    async fn refresh(&self, secret: &SecretString, request_id: Uuid) -> Result<Tokens, Error>;
+    fn refresh(
+        &self,
+        secret: &SecretString,
+        request_id: Uuid,
+    ) -> impl Future<Output = Result<Tokens, Error>> + Send;
     /// Register this daemon instance using the short-lived JWT.
     /// # Errors
     /// Rejects conflicts and inconsistent center assignments.
-    async fn register(
+    fn register(
         &self,
         tokens: &Tokens,
         machine: &Machine,
         instance: Uuid,
         registration: Uuid,
-    ) -> Result<Session, Error>;
+    ) -> impl Future<Output = Result<Session, Error>> + Send;
     /// Renew a runtime lease with the latest JWT.
     /// # Errors
     /// Returns authorization or session expiry failures without extending the lease locally.
-    async fn renew(&self, tokens: &Tokens, session: Uuid) -> Result<DateTime<Utc>, Error>;
+    fn renew(
+        &self,
+        tokens: &Tokens,
+        session: Uuid,
+    ) -> impl Future<Output = Result<DateTime<Utc>, Error>> + Send;
     /// Obtain a one-use control ticket for this runtime.
     /// # Errors
     /// Rejects expired or unauthorized sessions.
-    async fn ticket(&self, tokens: &Tokens, session: Uuid) -> Result<SecretString, Error>;
+    fn ticket(
+        &self,
+        tokens: &Tokens,
+        session: Uuid,
+    ) -> impl Future<Output = Result<SecretString, Error>> + Send;
     /// Obtain a one-use hub serve ticket for this runtime. The hub is optional;
     /// centers without it report `Unavailable`.
     /// # Errors
     /// Rejects expired or unauthorized sessions, and centers without a hub.
-    async fn hub_ticket(&self, _tokens: &Tokens, _session: Uuid) -> Result<SecretString, Error> {
-        Err(Error::Unavailable)
+    fn hub_ticket(
+        &self,
+        _tokens: &Tokens,
+        _session: Uuid,
+    ) -> impl Future<Output = Result<SecretString, Error>> + Send {
+        std::future::ready(Err(Error::Unavailable))
     }
     /// Revoke the shared machine authorization on explicit disconnect.
     /// # Errors
     /// May fail offline; local credential removal must still complete without retaining a retry secret.
-    async fn revoke(&self, refresh_token: &SecretString) -> Result<(), Error>;
+    fn revoke(
+        &self,
+        refresh_token: &SecretString,
+    ) -> impl Future<Output = Result<(), Error>> + Send;
     /// Release a runtime without revoking its machine grant.
     /// # Errors
     /// May fail during center outages; leases still expire remotely.
-    async fn close(&self, tokens: &Tokens, session: Uuid) -> Result<(), Error>;
+    fn close(
+        &self,
+        tokens: &Tokens,
+        session: Uuid,
+    ) -> impl Future<Output = Result<(), Error>> + Send;
 }
 
 /// Exclusive internal Relay/Hub ownership. External adapters control the shared publication
 /// lifecycle; they cannot install independent transport grants while it is claimed.
-#[async_trait]
 pub trait ManagedRelay: Send + Sync {
     /// Begin a control connection with an ephemeral ticket from the fixed authority.
     /// # Errors
     /// Rejects invalid tickets or unavailable local transport.
-    async fn start(&self, session: Uuid, ticket: SecretString) -> Result<(), Error>;
+    fn start(
+        &self,
+        session: Uuid,
+        ticket: SecretString,
+    ) -> impl Future<Output = Result<(), Error>> + Send;
     /// Return whether a connection is online or connecting.
-    async fn active(&self) -> bool;
+    fn active(&self) -> impl Future<Output = bool> + Send;
     /// Return whether the Relay handshake has succeeded (connecting alone is not success).
-    async fn online(&self) -> bool;
+    fn online(&self) -> impl Future<Output = bool> + Send;
     /// Close Relay, Hub and all reverse data channels immediately.
-    async fn stop(&self);
+    fn stop(&self) -> impl Future<Output = ()> + Send;
     /// Begin the optional hub serve link with an ephemeral ticket.
     /// # Errors
     /// Rejects invalid tickets or unavailable local transport.
-    async fn start_hub(&self, session: Uuid, ticket: SecretString) -> Result<(), Error>;
+    fn start_hub(
+        &self,
+        session: Uuid,
+        ticket: SecretString,
+    ) -> impl Future<Output = Result<(), Error>> + Send;
     /// Return whether the hub link is online, connecting, or yielding to another owner.
-    async fn hub_active(&self) -> bool;
+    fn hub_active(&self) -> impl Future<Output = bool> + Send;
     /// Return whether the Hub handshake has succeeded, for resetting retry backoff.
-    async fn hub_online(&self) -> bool;
+    fn hub_online(&self) -> impl Future<Output = bool> + Send;
     /// Publish a sanitized manager state for local status queries.
     fn report(&self, phase: &'static str, binding: Option<&Binding>);
 }
