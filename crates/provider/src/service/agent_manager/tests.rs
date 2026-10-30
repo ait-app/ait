@@ -8,7 +8,7 @@ use model::ErrorCode;
 use serde_json::Value;
 
 use super::*;
-use crate::ports::agent_session::{AgentSessionFuture, AgentSessionSpec};
+use crate::ports::agent_session::AgentSessionSpec;
 
 mod auto_archive;
 mod bot_permissions;
@@ -175,13 +175,14 @@ struct FakeClient(Arc<Mutex<FakeState>>);
 #[derive(Debug)]
 struct FakeSession(Arc<Mutex<FakeState>>);
 
+#[async_trait::async_trait]
 impl AgentClient for FakeClient {
     fn supports_agent_mcp(&self) -> bool {
         matches!(self.0.lock().unwrap().mcp_support, mcp::Support::Http)
     }
 
-    fn commands<'a>(&'a self, _spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, Vec<Value>> {
-        Box::pin(async move { Err(self.0.lock().unwrap().commands_error) })
+    async fn commands(&self, _spec: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {
+        Err(self.0.lock().unwrap().commands_error)
     }
     fn provider(&self) -> &'static str {
         "codex"
@@ -191,52 +192,48 @@ impl AgentClient for FakeClient {
         Ok(())
     }
 
-    fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        Box::pin(async move { Ok(self.0.lock().expect("state").available) })
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        Ok(self.0.lock().expect("state").available)
     }
 
-    fn create_session<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            {
-                let mut state = self.0.lock().expect("state");
-                state.create_calls += 1;
-                state.create_specs.push(spec.clone());
-                if let Some(error) = state.create_error {
-                    return Err(error);
-                }
+    async fn create_session(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        {
+            let mut state = self.0.lock().expect("state");
+            state.create_calls += 1;
+            state.create_specs.push(spec.clone());
+            if let Some(error) = state.create_error {
+                return Err(error);
             }
-            Ok(Box::new(FakeSession(self.0.clone())) as Box<dyn AgentSession>)
-        })
+        }
+        Ok(Box::new(FakeSession(self.0.clone())) as Box<dyn AgentSession>)
     }
 
-    fn resume_session<'a>(
-        &'a self,
-        _handle: &'a AgentPersistenceHandle,
-        spec: &'a AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        _handle: &AgentPersistenceHandle,
+        spec: &AgentSessionSpec,
         purpose: AgentResumePurpose,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            self.0.lock().expect("state").resume_purposes.push(purpose);
-            self.0
-                .lock()
-                .expect("state")
-                .resume_specs
-                .push(spec.clone());
-            if let Some(registry) = &self.0.lock().expect("state").during_resume {
-                registry
-                    .update("agent-1", &|current| {
-                        let mut next = current.clone();
-                        next.title = Some("Changed during resume".to_owned());
-                        next.requires_attention = true;
-                        next
-                    })
-                    .unwrap();
-            }
-            Ok(Box::new(FakeSession(self.0.clone())) as Box<dyn AgentSession>)
-        })
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        self.0.lock().expect("state").resume_purposes.push(purpose);
+        self.0
+            .lock()
+            .expect("state")
+            .resume_specs
+            .push(spec.clone());
+        if let Some(registry) = &self.0.lock().expect("state").during_resume {
+            registry
+                .update("agent-1", &|current| {
+                    let mut next = current.clone();
+                    next.title = Some("Changed during resume".to_owned());
+                    next.requires_attention = true;
+                    next
+                })
+                .unwrap();
+        }
+        Ok(Box::new(FakeSession(self.0.clone())) as Box<dyn AgentSession>)
     }
 }
 
@@ -256,79 +253,70 @@ async fn unsupported_commands_are_distinct_from_rejected_requests_and_provider_f
     }
 }
 
+#[async_trait::async_trait]
 impl AgentSession for FakeSession {
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
         self.0.lock().unwrap().failure_diagnostic
     }
 
-    fn respond_permission<'a>(
-        &'a mut self,
-        id: &'a str,
-        response: &'a Value,
-    ) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            let mut state = self.0.lock().unwrap();
-            state
-                .permission_responses
-                .push((id.to_owned(), response.clone()));
-            state.permission_result
-        })
+    async fn respond_permission(
+        &mut self,
+        id: &str,
+        response: &Value,
+    ) -> Result<(), AgentSessionError> {
+        let mut state = self.0.lock().unwrap();
+        state
+            .permission_responses
+            .push((id.to_owned(), response.clone()));
+        state.permission_result
     }
 
     fn failure_message(&self) -> Option<Cow<'_, str>> {
         self.0.lock().unwrap().failure_message.map(Cow::Borrowed)
     }
 
-    fn start_turn<'a>(
-        &'a mut self,
-        _text: &'a str,
-        config: &'a domain::agent_runtime::StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(async move {
-            let mut state = self.0.lock().unwrap();
-            state.start_calls += 1;
-            state.start_configs.push(config.clone());
-            state.start_result?;
-            Ok("native-turn".to_owned())
-        })
+    async fn start_turn(
+        &mut self,
+        _text: &str,
+        config: &domain::agent_runtime::StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        let mut state = self.0.lock().unwrap();
+        state.start_calls += 1;
+        state.start_configs.push(config.clone());
+        state.start_result?;
+        Ok("native-turn".to_owned())
     }
 
-    fn start_input<'a>(
-        &'a mut self,
-        prompt: &'a crate::protocol::prompt::AgentPrompt,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(async move {
-            prompt.validate()?;
-            if !prompt.images.is_empty()
-                || !prompt.attachments.is_empty()
-                || prompt.output_schema.is_some()
-            {
-                return Err(AgentSessionError::Rejected);
-            }
-            self.start_turn(&prompt.text, config).await
-        })
+    async fn start_input(
+        &mut self,
+        prompt: &crate::protocol::prompt::AgentPrompt,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        prompt.validate()?;
+        if !prompt.images.is_empty()
+            || !prompt.attachments.is_empty()
+            || prompt.output_schema.is_some()
+        {
+            return Err(AgentSessionError::Rejected);
+        }
+        self.start_turn(&prompt.text, config).await
     }
 
-    fn steer_turn<'a>(&'a mut self, turn_id: &'a str, text: &'a str) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            let mut state = self.0.lock().unwrap();
-            state
-                .steer_calls
-                .push((turn_id.to_owned(), text.to_owned()));
-            state.steer_result
-        })
+    async fn steer_turn(&mut self, turn_id: &str, text: &str) -> Result<(), AgentSessionError> {
+        let mut state = self.0.lock().unwrap();
+        state
+            .steer_calls
+            .push((turn_id.to_owned(), text.to_owned()));
+        state.steer_result
     }
 
-    fn cancel_turn<'a>(&'a mut self, _turn_id: &'a str) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            self.0
-                .lock()
-                .unwrap()
-                .events
-                .push_back(AgentTurnEvent::Cancelled);
-            Ok(())
-        })
+    async fn cancel_turn(&mut self, _turn_id: &str) -> Result<(), AgentSessionError> {
+        self.0
+            .lock()
+            .unwrap()
+            .events
+            .push_back(AgentTurnEvent::Cancelled);
+        Ok(())
     }
 
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
@@ -342,20 +330,18 @@ impl AgentSession for FakeSession {
         "codex"
     }
 
-    fn runtime_info(&mut self) -> AgentSessionFuture<'_, StoredAgentRuntimeInfo> {
-        Box::pin(async move {
-            let state = self.0.lock().expect("state");
-            if state.fail_info {
-                return Err(AgentSessionError::Failed);
-            }
-            Ok(StoredAgentRuntimeInfo {
-                provider: "codex".to_owned(),
-                session_id: Some("native-1".to_owned()),
-                model: Some("gpt-6".to_owned()),
-                thinking_option_id: None,
-                mode_id: None,
-                extra: None,
-            })
+    async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
+        let state = self.0.lock().expect("state");
+        if state.fail_info {
+            return Err(AgentSessionError::Failed);
+        }
+        Ok(StoredAgentRuntimeInfo {
+            provider: "codex".to_owned(),
+            session_id: Some("native-1".to_owned()),
+            model: Some("gpt-6".to_owned()),
+            thinking_option_id: None,
+            mode_id: None,
+            extra: None,
         })
     }
 
@@ -368,16 +354,14 @@ impl AgentSession for FakeSession {
         })
     }
 
-    fn close(&mut self) -> AgentSessionFuture<'_, ()> {
-        Box::pin(async move {
-            let mut state = self.0.lock().expect("state");
-            state.close_calls += 1;
-            if state.fail_close {
-                Err(AgentSessionError::Failed)
-            } else {
-                Ok(())
-            }
-        })
+    async fn close(&mut self) -> Result<(), AgentSessionError> {
+        let mut state = self.0.lock().expect("state");
+        state.close_calls += 1;
+        if state.fail_close {
+            Err(AgentSessionError::Failed)
+        } else {
+            Ok(())
+        }
     }
 }
 

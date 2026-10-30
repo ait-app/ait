@@ -31,6 +31,7 @@ libc.workspace = true
 workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
 persistence.workspace = true
 tokio.workspace = true
 tokio.features = ["test-util"]

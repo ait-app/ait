@@ -10,31 +10,30 @@ struct Native {
     rejection: Option<Error>,
 }
 
+#[async_trait::async_trait]
 impl Agents for Native {
-    fn resolve<'a>(&'a self, _identifier: &'a str) -> Operation<'a, String> {
-        Box::pin(async { Ok("agent-1".to_owned()) })
+    async fn resolve(&self, _identifier: &str) -> Result<String, Error> {
+        Ok("agent-1".to_owned())
     }
 
-    fn realtime<'a>(
-        &'a self,
-        _agent: &'a str,
+    async fn realtime(
+        &self,
+        _agent: &str,
         _cancel: CancellationToken,
-    ) -> Operation<'a, Option<Session>> {
-        Box::pin(async move {
-            if let Some(error) = self.rejection {
-                return Err(error);
-            }
-            Ok(self.session.lock().unwrap().take())
-        })
+    ) -> Result<Option<Session>, Error> {
+        if let Some(error) = self.rejection {
+            return Err(error);
+        }
+        Ok(self.session.lock().unwrap().take())
     }
 
-    fn turn<'a>(
-        &'a self,
-        _agent: &'a str,
-        _text: &'a str,
+    async fn turn(
+        &self,
+        _agent: &str,
+        _text: &str,
         _cancel: CancellationToken,
-    ) -> Operation<'a, String> {
-        Box::pin(async { panic!("native audio must never become an Ait text turn") })
+    ) -> Result<String, Error> {
+        panic!("native audio must never become an Ait text turn")
     }
 }
 

@@ -26,8 +26,7 @@ use crate::{
         acp_transport::{self, Transport},
     },
     ports::agent_session::{
-        AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec,
-        AgentTurnEvent,
+        AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
     },
     protocol::prompt::AgentPrompt,
 };
@@ -896,6 +895,7 @@ impl Execution {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentSession for Session {
     fn failure_diagnostic(&self) -> Option<Diagnostic> {
         self.diagnostics.failure()
@@ -907,8 +907,8 @@ impl AgentSession for Session {
     fn provider(&self) -> &'static str {
         PROVIDER
     }
-    fn runtime_info(&mut self) -> AgentSessionFuture<'_, StoredAgentRuntimeInfo> {
-        Box::pin(async { Ok(self.info.clone()) })
+    async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
+        Ok(self.info.clone())
     }
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
         let native = json!({"transport":"acp","config":self.spec.config,"model":self.info.model,"clients":self.clients});
@@ -922,32 +922,30 @@ impl AgentSession for Session {
             ])),
         })
     }
-    fn start_turn<'a>(
-        &'a mut self,
-        text: &'a str,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(async move { self.start(&AgentPrompt::text(text), config).await })
+    async fn start_turn(
+        &mut self,
+        text: &str,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start(&AgentPrompt::text(text), config).await
     }
-    fn start_input<'a>(
-        &'a mut self,
-        prompt: &'a AgentPrompt,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(self.start(prompt, config))
+    async fn start_input(
+        &mut self,
+        prompt: &AgentPrompt,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start(prompt, config).await
     }
-    fn cancel_turn<'a>(&'a mut self, turn: &'a str) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            if self.turn.as_deref() != Some(turn) || self.closed {
-                return Err(AgentSessionError::Rejected);
-            }
-            request_cancellation(
-                self.cancellation
-                    .as_ref()
-                    .ok_or(AgentSessionError::Rejected)?,
-            );
-            Ok(())
-        })
+    async fn cancel_turn(&mut self, turn: &str) -> Result<(), AgentSessionError> {
+        if self.turn.as_deref() != Some(turn) || self.closed {
+            return Err(AgentSessionError::Rejected);
+        }
+        request_cancellation(
+            self.cancellation
+                .as_ref()
+                .ok_or(AgentSessionError::Rejected)?,
+        );
+        Ok(())
     }
     fn pending_permissions(&self) -> Vec<Value> {
         self.pending.lock().map_or_else(
@@ -960,12 +958,12 @@ impl AgentSession for Session {
             },
         )
     }
-    fn respond_permission<'a>(
-        &'a mut self,
-        id: &'a str,
-        response: &'a Value,
-    ) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move { self.command(id, response).await })
+    async fn respond_permission(
+        &mut self,
+        id: &str,
+        response: &Value,
+    ) -> Result<(), AgentSessionError> {
+        self.command(id, response).await
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
         self.check_cancellation()?;
@@ -1019,79 +1017,77 @@ impl AgentSession for Session {
         }
         Ok(event)
     }
-    fn close(&mut self) -> AgentSessionFuture<'_, ()> {
-        Box::pin(async move {
-            if self.closed {
-                return Ok(());
-            }
-            self.closed = true;
-            let failed_cancellation = self.failed
-                && self
-                    .cancellation
-                    .as_ref()
-                    .is_some_and(|sender| sender.borrow().is_some());
-            let mut uncertain = false;
-            if let Some(cancellation) = &self.cancellation {
-                request_cancellation(cancellation);
-            }
-            if let Some(mut finished) = self.finished.take() {
-                let settled = tokio::time::timeout(Duration::from_secs(6), async {
-                    loop {
-                        tokio::select! {
-                            result = &mut finished => return result,
-                            _ = self.events.recv() => {}
-                        }
+    async fn close(&mut self) -> Result<(), AgentSessionError> {
+        if self.closed {
+            return Ok(());
+        }
+        self.closed = true;
+        let failed_cancellation = self.failed
+            && self
+                .cancellation
+                .as_ref()
+                .is_some_and(|sender| sender.borrow().is_some());
+        let mut uncertain = false;
+        if let Some(cancellation) = &self.cancellation {
+            request_cancellation(cancellation);
+        }
+        if let Some(mut finished) = self.finished.take() {
+            let settled = tokio::time::timeout(Duration::from_secs(6), async {
+                loop {
+                    tokio::select! {
+                        result = &mut finished => return result,
+                        _ = self.events.recv() => {}
                     }
-                })
-                .await;
-                match settled {
-                    Ok(Ok(Ok(finished))) => {
-                        self.connection = Some(finished.connection);
-                        if self.failure.is_none() {
-                            self.failure = finished.failure;
-                        }
+                }
+            })
+            .await;
+            match settled {
+                Ok(Ok(Ok(finished))) => {
+                    self.connection = Some(finished.connection);
+                    if self.failure.is_none() {
+                        self.failure = finished.failure;
                     }
-                    _ => uncertain = true,
                 }
+                _ => uncertain = true,
             }
-            self.events.close();
-            if let Some(mut task) = self.task.take() {
-                if !task.is_finished() {
-                    task.abort();
-                }
-                if tokio::time::timeout(Duration::from_secs(2), &mut task)
-                    .await
-                    .is_err()
-                {
+        }
+        self.events.close();
+        if let Some(mut task) = self.task.take() {
+            if !task.is_finished() {
+                task.abort();
+            }
+            if tokio::time::timeout(Duration::from_secs(2), &mut task)
+                .await
+                .is_err()
+            {
+                uncertain = true;
+            } else if failed_cancellation {
+                // Joining the failed owner confirms teardown, not successful prompt settlement.
+                // Its cancellation failure must now be allowed to leave the host's running state.
+                uncertain = false;
+            }
+        }
+        self.pending
+            .lock()
+            .map_err(|_| AgentSessionError::Failed)?
+            .clear();
+        if let Some(mut connection) = self.connection.take() {
+            if connection.capabilities["sessionCapabilities"]["close"].is_object() {
+                let result = connection
+                    .transport
+                    .request("session/close", json!({"sessionId":self.id}))
+                    .await;
+                if result.is_err() {
                     uncertain = true;
-                } else if failed_cancellation {
-                    // Joining the failed owner confirms teardown, not successful prompt settlement.
-                    // Its cancellation failure must now be allowed to leave the host's running state.
-                    uncertain = false;
                 }
             }
-            self.pending
-                .lock()
-                .map_err(|_| AgentSessionError::Failed)?
-                .clear();
-            if let Some(mut connection) = self.connection.take() {
-                if connection.capabilities["sessionCapabilities"]["close"].is_object() {
-                    let result = connection
-                        .transport
-                        .request("session/close", json!({"sessionId":self.id}))
-                        .await;
-                    if result.is_err() {
-                        uncertain = true;
-                    }
-                }
-                connection.transport.close().await?;
-            }
-            if uncertain {
-                Err(AgentSessionError::Failed)
-            } else {
-                Ok(())
-            }
-        })
+            connection.transport.close().await?;
+        }
+        if uncertain {
+            Err(AgentSessionError::Failed)
+        } else {
+            Ok(())
+        }
     }
 }
 

@@ -10,8 +10,7 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
 use crate::ports::agent_session::{
-    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture,
-    AgentSessionSpec,
+    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
 use crate::ports::environment::AgentEnvironment;
 use crate::protocol::provider::Details;
@@ -46,6 +45,7 @@ impl MiniMaxClient {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentClient for MiniMaxClient {
     fn supports_agent_mcp(&self) -> bool {
         true
@@ -67,81 +67,71 @@ impl AgentClient for MiniMaxClient {
         config::settings(&json!([]))
     }
 
-    fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        Box::pin(async { Ok(super::configuration::executable(&self.program)) })
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        Ok(super::configuration::executable(&self.program))
     }
 
-    fn diagnostic(&self) -> AgentSessionFuture<'_, String> {
-        Box::pin(async {
-            Ok(if self.is_available().await? {
-                "MiniMax Code ACP requires native authentication; run mcode login."
-            } else {
-                "MiniMax Code executable is unavailable; install @minimax-ai/code \
+    async fn diagnostic(&self) -> Result<String, AgentSessionError> {
+        Ok(if self.is_available().await? {
+            "MiniMax Code ACP requires native authentication; run mcode login."
+        } else {
+            "MiniMax Code executable is unavailable; install @minimax-ai/code \
                  or set AIT_SERVER_MINIMAX_CODE_BIN."
-            }
-            .to_owned())
-        })
+        }
+        .to_owned())
     }
 
-    fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
-        Box::pin(async move {
-            let spec = AgentSessionSpec {
-                provider: PROVIDER.to_owned(),
-                cwd: cwd.to_owned(),
-                config: StoredAgentConfig::default(),
-            };
-            let mut session = session::open(self, &spec, None).await?;
-            let details = tokio::time::timeout(self.deadline, session.discover())
-                .await
-                .unwrap_or(Err(AgentSessionError::Failed));
-            session.close().await?;
-            details
-        })
+    async fn discover(&self, cwd: &str) -> Result<Details, AgentSessionError> {
+        let spec = AgentSessionSpec {
+            provider: PROVIDER.to_owned(),
+            cwd: cwd.to_owned(),
+            config: StoredAgentConfig::default(),
+        };
+        let mut session = session::open(self, &spec, None).await?;
+        let details = tokio::time::timeout(self.deadline, session.discover())
+            .await
+            .unwrap_or(Err(AgentSessionError::Failed));
+        session.close().await?;
+        details
     }
 
-    fn draft_features<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Vec<Value>> {
-        Box::pin(async move {
-            let mut session = session::open(self, spec, None).await?;
-            let features = config::features(&session.options);
-            session.close().await?;
-            features
-        })
+    async fn draft_features(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Vec<Value>, AgentSessionError> {
+        let mut session = session::open(self, spec, None).await?;
+        let features = config::features(&session.options);
+        session.close().await?;
+        features
     }
 
-    fn create_session<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
-        })
+    async fn create_session(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
     }
 
-    fn create_session_with_environment<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-        environment: &'a AgentEnvironment,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
+    async fn create_session_with_environment(
+        &self,
+        spec: &AgentSessionSpec,
+        environment: &AgentEnvironment,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         let mut client = self.clone();
         client.environment = environment.clone();
-        Box::pin(async move { client.create_session(spec).await })
+        client.create_session(spec).await
     }
 
-    fn resume_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        spec: &'a AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        spec: &AgentSessionSpec,
         purpose: AgentResumePurpose,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            if purpose == AgentResumePurpose::History {
-                return Err(AgentSessionError::Unavailable);
-            }
-            Ok(Box::new(session::open(self, spec, Some(handle)).await?) as Box<dyn AgentSession>)
-        })
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        if purpose == AgentResumePurpose::History {
+            return Err(AgentSessionError::Unavailable);
+        }
+        Ok(Box::new(session::open(self, spec, Some(handle)).await?) as Box<dyn AgentSession>)
     }
 }
 

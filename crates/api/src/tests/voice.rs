@@ -1,7 +1,7 @@
 use ::voice::{
     Error,
     audio::Audio,
-    ports::{Operation, Transcriber, Transcript},
+    ports::{Transcriber, Transcript},
     service::Speech,
 };
 use tokio_util::sync::CancellationToken;
@@ -11,16 +11,15 @@ use super::*;
 #[derive(Debug)]
 struct Engine;
 
+#[async_trait::async_trait]
 impl Transcriber for Engine {
-    fn transcribe(&self, audio: Audio, _: CancellationToken) -> Operation<'_, Transcript> {
-        Box::pin(async move {
-            if audio.bytes != [0, 0, 1, 0] {
-                return Err(Error::Invalid);
-            }
-            Ok(Transcript {
-                text: "socket transcript".to_owned(),
-                language: None,
-            })
+    async fn transcribe(&self, audio: Audio, _: CancellationToken) -> Result<Transcript, Error> {
+        if audio.bytes != [0, 0, 1, 0] {
+            return Err(Error::Invalid);
+        }
+        Ok(Transcript {
+            text: "socket transcript".to_owned(),
+            language: None,
         })
     }
 }

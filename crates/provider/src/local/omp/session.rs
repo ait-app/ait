@@ -11,7 +11,7 @@ use super::{
     OmpClient, config, history, interactions::Dialogs, stream::Stream, transport::Transport,
 };
 use crate::ports::agent_session::{
-    AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec, AgentTurnEvent,
+    AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
 use crate::ports::diagnostics::{Category, Diagnostic};
 use crate::protocol::prompt::AgentPrompt;
@@ -762,6 +762,7 @@ impl Session {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentSession for Session {
     fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         config::validate(config)?;
@@ -800,37 +801,35 @@ impl AgentSession for Session {
     fn provider(&self) -> &'static str {
         "omp"
     }
-    fn runtime_info(&mut self) -> AgentSessionFuture<'_, StoredAgentRuntimeInfo> {
-        Box::pin(async {
-            // The manager asks immediately after submission, before polling any dialogs.
-            // A queued get_state can wait on that same dialog and prevent its publication.
-            if self.active.is_some() {
-                let mut info = config::runtime(&self.state)?;
-                info.mode_id.clone_from(&self.config.mode_id);
-                return Ok(info);
-            }
-            let state = self.transport.request("get_state", json!({})).await?;
-            if state["sessionId"] != self.state["sessionId"] {
-                let id = config::text(&state, "sessionId")?;
-                Uuid::parse_str(id).map_err(|_| AgentSessionError::Failed)?;
-                let events = std::mem::take(&mut self.stream.events);
-                self.stream = Stream::new(id.to_owned(), self.client.images.clone())
-                    .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
-                self.stream.events = events;
-                if let Some(turn) = &self.active {
-                    self.stream.begin(turn.clone());
-                }
-                self.children = super::subagents::Children::default()
-                    .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
-                self.created_at = chrono::Utc::now().to_rfc3339();
-                self.submitted = false;
-            }
-            self.state = state;
-            self.stream.set_context(&self.state);
+    async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
+        // The manager asks immediately after submission, before polling any dialogs.
+        // A queued get_state can wait on that same dialog and prevent its publication.
+        if self.active.is_some() {
             let mut info = config::runtime(&self.state)?;
             info.mode_id.clone_from(&self.config.mode_id);
-            Ok(info)
-        })
+            return Ok(info);
+        }
+        let state = self.transport.request("get_state", json!({})).await?;
+        if state["sessionId"] != self.state["sessionId"] {
+            let id = config::text(&state, "sessionId")?;
+            Uuid::parse_str(id).map_err(|_| AgentSessionError::Failed)?;
+            let events = std::mem::take(&mut self.stream.events);
+            self.stream = Stream::new(id.to_owned(), self.client.images.clone())
+                .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
+            self.stream.events = events;
+            if let Some(turn) = &self.active {
+                self.stream.begin(turn.clone());
+            }
+            self.children = super::subagents::Children::default()
+                .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
+            self.created_at = chrono::Utc::now().to_rfc3339();
+            self.submitted = false;
+        }
+        self.state = state;
+        self.stream.set_context(&self.state);
+        let mut info = config::runtime(&self.state)?;
+        info.mode_id.clone_from(&self.config.mode_id);
+        Ok(info)
     }
     fn subagents(&self) -> Vec<crate::ports::controls::NativeSubagent> {
         self.children.list()
@@ -853,97 +852,91 @@ impl AgentSession for Session {
             ])),
         })
     }
-    fn start_turn<'a>(
-        &'a mut self,
-        text: &'a str,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(async move { self.start(&AgentPrompt::text(text), config).await })
+    async fn start_turn(
+        &mut self,
+        text: &str,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start(&AgentPrompt::text(text), config).await
     }
-    fn start_input<'a>(
-        &'a mut self,
-        prompt: &'a AgentPrompt,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(self.start(prompt, config))
+    async fn start_input(
+        &mut self,
+        prompt: &AgentPrompt,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start(prompt, config).await
     }
-    fn steer_input<'a>(
-        &'a mut self,
-        turn: &'a str,
-        prompt: &'a AgentPrompt,
-    ) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            prompt.validate()?;
-            if self.closed
-                || self.active.as_deref() != Some(turn)
-                || prompt.output_schema.is_some()
-                || self.input_requests.len() >= 128
-            {
-                return Err(AgentSessionError::Rejected);
-            }
-            let blocks = prompt.blocks()?;
-            let text = blocks
-                .iter()
-                .filter_map(|block| block["text"].as_str())
-                .collect::<Vec<_>>()
-                .join("\n\n");
-            let images: Vec<_> = blocks
-                .into_iter()
-                .filter(|block| block["type"] == "image")
-                .collect();
-            let id = self
-                .transport
-                .begin("steer", json!({"message":text,"images":images}))
-                .await?;
-            self.input_requests.insert(id, turn.to_owned());
-            self.invalidate_state_check();
-            self.stream
-                .pending_inputs
-                .push_back(prompt.client_message_id.clone());
-            Ok(())
-        })
+    async fn steer_input(
+        &mut self,
+        turn: &str,
+        prompt: &AgentPrompt,
+    ) -> Result<(), AgentSessionError> {
+        prompt.validate()?;
+        if self.closed
+            || self.active.as_deref() != Some(turn)
+            || prompt.output_schema.is_some()
+            || self.input_requests.len() >= 128
+        {
+            return Err(AgentSessionError::Rejected);
+        }
+        let blocks = prompt.blocks()?;
+        let text = blocks
+            .iter()
+            .filter_map(|block| block["text"].as_str())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        let images: Vec<_> = blocks
+            .into_iter()
+            .filter(|block| block["type"] == "image")
+            .collect();
+        let id = self
+            .transport
+            .begin("steer", json!({"message":text,"images":images}))
+            .await?;
+        self.input_requests.insert(id, turn.to_owned());
+        self.invalidate_state_check();
+        self.stream
+            .pending_inputs
+            .push_back(prompt.client_message_id.clone());
+        Ok(())
     }
-    fn steer_turn<'a>(&'a mut self, turn: &'a str, text: &'a str) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move { self.steer_input(turn, &AgentPrompt::text(text)).await })
+    async fn steer_turn(&mut self, turn: &str, text: &str) -> Result<(), AgentSessionError> {
+        self.steer_input(turn, &AgentPrompt::text(text)).await
     }
-    fn cancel_turn<'a>(&'a mut self, turn: &'a str) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            if self.active.as_deref() != Some(turn) || self.closed {
-                return Err(AgentSessionError::Rejected);
-            }
-            if self.cancellation_started.is_some() {
-                return Ok(());
-            }
-            if self.cancel_requests.len() >= 128 {
-                return Err(AgentSessionError::Failed);
-            }
-            let id = self
-                .transport
-                .begin("abort_and_restore_queue", json!({}))
-                .await?;
-            self.cancel_requests.insert(id, turn.to_owned());
-            self.cancellation_started = Some(Instant::now());
-            self.next_state_check = Instant::now();
-            Ok(())
-        })
+    async fn cancel_turn(&mut self, turn: &str) -> Result<(), AgentSessionError> {
+        if self.active.as_deref() != Some(turn) || self.closed {
+            return Err(AgentSessionError::Rejected);
+        }
+        if self.cancellation_started.is_some() {
+            return Ok(());
+        }
+        if self.cancel_requests.len() >= 128 {
+            return Err(AgentSessionError::Failed);
+        }
+        let id = self
+            .transport
+            .begin("abort_and_restore_queue", json!({}))
+            .await?;
+        self.cancel_requests.insert(id, turn.to_owned());
+        self.cancellation_started = Some(Instant::now());
+        self.next_state_check = Instant::now();
+        Ok(())
     }
     fn pending_permissions(&self) -> Vec<Value> {
         self.dialogs.pending()
     }
-    fn respond_permission<'a>(
-        &'a mut self,
-        id: &'a str,
-        response: &'a Value,
-    ) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            let native = self.dialogs.response(id, response)?;
-            self.transport.send(&native).await?;
-            self.dialogs.remove(id);
-            self.stream
-                .events
-                .push_back(AgentTurnEvent::PermissionResolved(id.to_owned()));
-            Ok(())
-        })
+    async fn respond_permission(
+        &mut self,
+        id: &str,
+        response: &Value,
+    ) -> Result<(), AgentSessionError> {
+        let native = self.dialogs.response(id, response)?;
+        self.transport.send(&native).await?;
+        self.dialogs.remove(id);
+        self.stream
+            .events
+            .push_back(AgentTurnEvent::PermissionResolved(id.to_owned()));
+        Ok(())
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
         self.check_cancellation()?;
@@ -977,12 +970,10 @@ impl AgentSession for Session {
         }
         Ok(None)
     }
-    fn close(&mut self) -> AgentSessionFuture<'_, ()> {
-        Box::pin(async move {
-            self.closed = true;
-            self.stream.events.extend(self.dialogs.clear());
-            self.transport.close().await
-        })
+    async fn close(&mut self) -> Result<(), AgentSessionError> {
+        self.closed = true;
+        self.stream.events.extend(self.dialogs.clear());
+        self.transport.close().await
     }
 }
 

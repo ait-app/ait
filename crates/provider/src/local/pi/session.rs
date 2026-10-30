@@ -14,7 +14,7 @@ use super::{
     transport::{self, Transport},
 };
 use crate::ports::agent_session::{
-    AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec, AgentTurnEvent,
+    AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
 use crate::ports::diagnostics::{Category, Diagnostic};
 use crate::protocol::prompt::AgentPrompt;
@@ -324,6 +324,7 @@ impl Session {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentSession for Session {
     fn failure_diagnostic(&self) -> Option<Diagnostic> {
         self.stream
@@ -358,20 +359,18 @@ impl AgentSession for Session {
         PROVIDER
     }
 
-    fn runtime_info(&mut self) -> AgentSessionFuture<'_, StoredAgentRuntimeInfo> {
-        Box::pin(async {
-            let model = &self.state["model"];
-            Ok(StoredAgentRuntimeInfo {
-                provider: PROVIDER.to_owned(),
-                session_id: Some(self.id.clone()),
-                model: model["provider"]
-                    .as_str()
-                    .zip(model["id"].as_str())
-                    .map(|(provider, id)| format!("{provider}/{id}")),
-                thinking_option_id: None,
-                mode_id: None,
-                extra: None,
-            })
+    async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
+        let model = &self.state["model"];
+        Ok(StoredAgentRuntimeInfo {
+            provider: PROVIDER.to_owned(),
+            session_id: Some(self.id.clone()),
+            model: model["provider"]
+                .as_str()
+                .zip(model["id"].as_str())
+                .map(|(provider, id)| format!("{provider}/{id}")),
+            thinking_option_id: None,
+            mode_id: None,
+            extra: None,
         })
     }
 
@@ -388,20 +387,20 @@ impl AgentSession for Session {
         })
     }
 
-    fn start_turn<'a>(
-        &'a mut self,
-        text: &'a str,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(async move { self.start(&AgentPrompt::text(text), config).await })
+    async fn start_turn(
+        &mut self,
+        text: &str,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start(&AgentPrompt::text(text), config).await
     }
 
-    fn start_input<'a>(
-        &'a mut self,
-        prompt: &'a AgentPrompt,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(self.start(prompt, config))
+    async fn start_input(
+        &mut self,
+        prompt: &AgentPrompt,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start(prompt, config).await
     }
 
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
@@ -428,39 +427,35 @@ impl AgentSession for Session {
         Ok(self.stream.pop())
     }
 
-    fn cancel_turn<'a>(&'a mut self, turn_id: &'a str) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            if self.closed || self.active.as_deref() != Some(turn_id) {
-                return Err(AgentSessionError::Rejected);
+    async fn cancel_turn(&mut self, turn_id: &str) -> Result<(), AgentSessionError> {
+        if self.closed || self.active.as_deref() != Some(turn_id) {
+            return Err(AgentSessionError::Rejected);
+        }
+        self.transport.request(json!({"type":"abort"})).await?;
+        let result = tokio::time::timeout(ABORT_SETTLEMENT_TIMEOUT, async {
+            while self.active.is_some() {
+                let event = self.transport.receive().await?;
+                self.consume(&event)?;
             }
-            self.transport.request(json!({"type":"abort"})).await?;
-            let result = tokio::time::timeout(ABORT_SETTLEMENT_TIMEOUT, async {
-                while self.active.is_some() {
-                    let event = self.transport.receive().await?;
-                    self.consume(&event)?;
-                }
-                Ok(())
-            })
-            .await
-            .unwrap_or(Err(AgentSessionError::Failed));
-            if result.is_err() {
-                self.transport.diagnostics.observe(
-                    Diagnostic::new(Category::Timeout, "abort_settlement"),
-                    "abort",
-                );
-                self.closed = true;
-                self.active = None;
-                self.transport.close().await?;
-                self.stream.fail();
-            }
-            result
+            Ok(())
         })
+        .await
+        .unwrap_or(Err(AgentSessionError::Failed));
+        if result.is_err() {
+            self.transport.diagnostics.observe(
+                Diagnostic::new(Category::Timeout, "abort_settlement"),
+                "abort",
+            );
+            self.closed = true;
+            self.active = None;
+            self.transport.close().await?;
+            self.stream.fail();
+        }
+        result
     }
 
-    fn close(&mut self) -> AgentSessionFuture<'_, ()> {
-        Box::pin(async move {
-            self.closed = true;
-            self.transport.close().await
-        })
+    async fn close(&mut self) -> Result<(), AgentSessionError> {
+        self.closed = true;
+        self.transport.close().await
     }
 }

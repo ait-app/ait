@@ -6,9 +6,7 @@ use domain::summary::{SummaryKind, SummarySelection};
 use serde_json::json;
 
 use super::*;
-use crate::ports::agent_session::{
-    AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture,
-};
+use crate::ports::agent_session::{AgentResumePurpose, AgentSession, AgentSessionError};
 use crate::service::summary_generation::test_config::Configuration;
 
 #[derive(Debug)]
@@ -18,12 +16,13 @@ struct Client {
     calls: Arc<Mutex<Vec<(String, String)>>>,
     wait: bool,
 }
+#[async_trait::async_trait]
 impl AgentClient for Client {
-    fn discover<'a>(
-        &'a self,
-        _: &'a str,
-    ) -> AgentSessionFuture<'a, crate::protocol::provider::Details> {
-        Box::pin(async { Ok(crate::protocol::provider::Details::default()) })
+    async fn discover(
+        &self,
+        _: &str,
+    ) -> Result<crate::protocol::provider::Details, AgentSessionError> {
+        Ok(crate::protocol::provider::Details::default())
     }
 
     fn summary_model(&self, _: &[Value]) -> Option<SummarySelection> {
@@ -37,44 +36,42 @@ impl AgentClient for Client {
     fn provider(&self) -> &str {
         &self.provider
     }
-    fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        Box::pin(async { Ok(true) })
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        Ok(true)
     }
-    fn create_session<'a>(
-        &'a self,
-        _: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async { panic!("metadata must not create a foreground session") })
+    async fn create_session(
+        &self,
+        _: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        panic!("metadata must not create a foreground session")
     }
-    fn resume_session<'a>(
-        &'a self,
-        _: &'a AgentPersistenceHandle,
-        _: &'a AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        _: &AgentPersistenceHandle,
+        _: &AgentSessionSpec,
         _: AgentResumePurpose,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async { panic!("metadata must not resume a foreground session") })
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        panic!("metadata must not resume a foreground session")
     }
-    fn generate_summary<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-        prompt: &'a str,
-        schema: &'a Value,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(async move {
-            assert_eq!(schema["additionalProperties"], false);
-            self.calls.lock().unwrap().push((
-                spec.config.model.clone().unwrap_or_default(),
-                prompt.to_owned(),
-            ));
-            if self.wait {
-                return std::future::pending().await;
-            }
-            self.outputs
-                .lock()
-                .unwrap()
-                .pop_front()
-                .unwrap_or(Err(AgentSessionError::Unavailable))
-        })
+    async fn generate_summary(
+        &self,
+        spec: &AgentSessionSpec,
+        prompt: &str,
+        schema: &Value,
+    ) -> Result<String, AgentSessionError> {
+        assert_eq!(schema["additionalProperties"], false);
+        self.calls.lock().unwrap().push((
+            spec.config.model.clone().unwrap_or_default(),
+            prompt.to_owned(),
+        ));
+        if self.wait {
+            return std::future::pending().await;
+        }
+        self.outputs
+            .lock()
+            .unwrap()
+            .pop_front()
+            .unwrap_or(Err(AgentSessionError::Unavailable))
     }
 }
 fn request(root: &std::path::Path) -> SummaryRequest {

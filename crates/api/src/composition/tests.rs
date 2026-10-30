@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use domain::summary::{SummaryError, SummaryKind, SummaryRequest, SummarySelection};
-use model::summary::SummaryFuture;
+
 use serde_json::json;
 
 #[derive(Debug, Default)]
@@ -13,15 +13,14 @@ struct Generator {
     cancelled: AtomicBool,
 }
 
+#[async_trait::async_trait]
 impl model::summary::SummaryGenerator for Generator {
-    fn generate(&self, request: SummaryRequest) -> SummaryFuture<'_> {
-        Box::pin(async move {
-            if self.cancelled.load(Ordering::SeqCst) {
-                return Err(SummaryError::Cancelled);
-            }
-            self.requests.lock().unwrap().push(request);
-            Ok(json!({"title":"Shared summary"}))
-        })
+    async fn generate(&self, request: SummaryRequest) -> Result<serde_json::Value, SummaryError> {
+        if self.cancelled.load(Ordering::SeqCst) {
+            return Err(SummaryError::Cancelled);
+        }
+        self.requests.lock().unwrap().push(request);
+        Ok(json!({"title":"Shared summary"}))
     }
     fn shutdown(&self) {
         self.cancelled.store(true, Ordering::SeqCst);

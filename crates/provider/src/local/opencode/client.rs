@@ -13,8 +13,7 @@ use super::{PROVIDER, config, history, launcher, session};
 use crate::{
     ports::{
         agent_session::{
-            AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture,
-            AgentSessionSpec,
+            AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
         },
         native_history::{ListOptions, SessionDescriptor, SessionHistory},
     },
@@ -88,48 +87,39 @@ impl OpenCodeClient {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentClient for OpenCodeClient {
-    fn diagnostic(&self) -> AgentSessionFuture<'_, String> {
-        Box::pin(async {
-            let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Unavailable)?;
-            match launcher::version(self, &cwd.to_string_lossy()).await {
-                Ok(version) if !launcher::supported(&version) => Ok(format!(
-                    "OpenCode {version} predates the supported ACP catalog and form implementation. \
+    async fn diagnostic(&self) -> Result<String, AgentSessionError> {
+        let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Unavailable)?;
+        match launcher::version(self, &cwd.to_string_lossy()).await {
+            Ok(version) if !launcher::supported(&version) => Ok(format!(
+                "OpenCode {version} predates the supported ACP catalog and form implementation. \
                      Upgrade OpenCode to 2.0.25 or newer, then refresh the provider."
-                )),
-                Ok(version) => {
-                    match launcher::spawn(
-                        self,
-                        &cwd.to_string_lossy(),
-                        &StoredAgentConfig::default(),
-                    )
+            )),
+            Ok(version) => {
+                match launcher::spawn(self, &cwd.to_string_lossy(), &StoredAgentConfig::default())
                     .await
-                    {
-                        Ok((mut transport, _)) => {
-                            transport.close().await?;
-                            Ok(format!("OpenCode {version}: ACP initialized."))
-                        }
-                        Err(error) => {
-                            Ok(format!("OpenCode {version}: ACP initialization {error}."))
-                        }
+                {
+                    Ok((mut transport, _)) => {
+                        transport.close().await?;
+                        Ok(format!("OpenCode {version}: ACP initialized."))
                     }
-                }
-                Err(_) => {
-                    Ok("OpenCode ACP requires an installed OpenCode 1.x or 2.x release.".into())
+                    Err(error) => Ok(format!("OpenCode {version}: ACP initialization {error}.")),
                 }
             }
-        })
+            Err(_) => Ok("OpenCode ACP requires an installed OpenCode 1.x or 2.x release.".into()),
+        }
     }
     fn supports_summary_generation(&self) -> bool {
         true
     }
-    fn generate_summary<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-        prompt: &'a str,
-        schema: &'a Value,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(super::summary::generate(self, spec, prompt, schema))
+    async fn generate_summary(
+        &self,
+        spec: &AgentSessionSpec,
+        prompt: &str,
+        schema: &Value,
+    ) -> Result<String, AgentSessionError> {
+        super::summary::generate(self, spec, prompt, schema).await
     }
     fn summary_model(&self, models: &[Value]) -> Option<domain::summary::SummarySelection> {
         if !self.capabilities.read().ok()?.as_ref()?.deletion {
@@ -141,11 +131,11 @@ impl AgentClient for OpenCodeClient {
             &["haiku", "mini", "flash", "minimax-m3", "nemotron-3-super"],
         )
     }
-    fn list_sessions<'a>(
-        &'a self,
-        options: &'a ListOptions,
-    ) -> AgentSessionFuture<'a, Vec<SessionDescriptor>> {
-        Box::pin(self.list(options))
+    async fn list_sessions(
+        &self,
+        options: &ListOptions,
+    ) -> Result<Vec<SessionDescriptor>, AgentSessionError> {
+        self.list(options).await
     }
     fn provider(&self) -> &'static str {
         PROVIDER
@@ -164,15 +154,13 @@ impl AgentClient for OpenCodeClient {
     fn validate_config(&self, selected: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         config::validate(selected)
     }
-    fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        Box::pin(async {
-            let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Unavailable)?;
-            // Discovery validates ACP and records capabilities in the requested directory.
-            // Probing it here would cold-start plugins twice, first in the daemon's directory.
-            Ok(launcher::version(self, &cwd.to_string_lossy())
-                .await
-                .is_ok_and(|version| launcher::supported(&version)))
-        })
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Unavailable)?;
+        // Discovery validates ACP and records capabilities in the requested directory.
+        // Probing it here would cold-start plugins twice, first in the daemon's directory.
+        Ok(launcher::version(self, &cwd.to_string_lossy())
+            .await
+            .is_ok_and(|version| launcher::supported(&version)))
     }
     fn settings(&self, selected: &StoredAgentConfig) -> Value {
         let listing = self
@@ -185,49 +173,43 @@ impl AgentClient for OpenCodeClient {
             "capabilities":{"supportsStreaming":true,"supportsSessionListing":listing,
                 "supportsDynamicModes":true,"supportsMcpServers":false}})
     }
-    fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
-        Box::pin(async move {
-            config::validate_spec(&AgentSessionSpec {
-                provider: PROVIDER.into(),
-                cwd: cwd.into(),
-                config: StoredAgentConfig::default(),
-            })?;
-            super::discovery::discover(self, cwd).await
-        })
+    async fn discover(&self, cwd: &str) -> Result<Details, AgentSessionError> {
+        config::validate_spec(&AgentSessionSpec {
+            provider: PROVIDER.into(),
+            cwd: cwd.into(),
+            config: StoredAgentConfig::default(),
+        })?;
+        super::discovery::discover(self, cwd).await
     }
-    fn create_session<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
-        })
+    async fn create_session(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
     }
-    fn resume_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        spec: &'a AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        spec: &AgentSessionSpec,
         purpose: AgentResumePurpose,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            Ok(
-                Box::new(session::open(self, spec, Some((handle, purpose))).await?)
-                    as Box<dyn AgentSession>,
-            )
-        })
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Ok(
+            Box::new(session::open(self, spec, Some((handle, purpose))).await?)
+                as Box<dyn AgentSession>,
+        )
     }
-    fn history<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, Vec<NativeItem>> {
-        Box::pin(async move { Ok(history::inspect(self, handle, cwd).await?.entries) })
+    async fn history(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<Vec<NativeItem>, AgentSessionError> {
+        Ok(history::inspect(self, handle, cwd).await?.entries)
     }
-    fn inspect_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, SessionHistory> {
-        Box::pin(history::inspect(self, handle, cwd))
+    async fn inspect_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<SessionHistory, AgentSessionError> {
+        history::inspect(self, handle, cwd).await
     }
 }

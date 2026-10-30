@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use domain::summary::SummaryError;
 use domain::workspace::records::PersistedWorkspaceRecord;
 use domain::workspace::registry::WorkspaceMutationContext;
-use model::summary::SummaryFuture;
+
 use persistence::storage::registry::FileBackedWorkspaceRegistry;
 use serde_json::json;
 
@@ -15,19 +15,18 @@ struct Generator {
     release: tokio::sync::Notify,
     calls: AtomicUsize,
 }
+#[async_trait::async_trait]
 impl SummarySource for Generator {
-    fn generate(&self, request: SummaryRequest) -> SummaryFuture<'_> {
-        Box::pin(async move {
-            assert_eq!(request.kind, SummaryKind::BranchName);
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            self.started.notify_one();
-            self.release.notified().await;
-            if request.context == "fail" {
-                Err(SummaryError::Unavailable)
-            } else {
-                Ok(json!({"title":"Generated title","branch":"fix/title"}))
-            }
-        })
+    async fn generate(&self, request: SummaryRequest) -> Result<Value, SummaryError> {
+        assert_eq!(request.kind, SummaryKind::BranchName);
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.started.notify_one();
+        self.release.notified().await;
+        if request.context == "fail" {
+            Err(SummaryError::Unavailable)
+        } else {
+            Ok(json!({"title":"Generated title","branch":"fix/title"}))
+        }
     }
     fn shutdown(&self) {}
 }

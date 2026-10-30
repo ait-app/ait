@@ -4,9 +4,7 @@ mod store;
 
 use std::collections::VecDeque;
 use std::fmt::Write as _;
-use std::future::Future;
 use std::path::PathBuf;
-use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
@@ -21,21 +19,15 @@ use store::REPORT_LIMIT;
 const EVENT_LIMIT: usize = 128;
 const CAPTURE_INTERVAL: Duration = Duration::from_secs(30);
 
+#[async_trait::async_trait(?Send)]
 trait EvidenceSource: Send {
-    fn collect(
-        &self,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
-    ) -> Pin<Box<dyn Future<Output = String> + '_>>;
+    async fn collect(&self, start: DateTime<Utc>, end: DateTime<Utc>) -> String;
 }
 
+#[async_trait::async_trait(?Send)]
 impl EvidenceSource for provider::diagnostics::HarnessEvidence {
-    fn collect(
-        &self,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
-    ) -> Pin<Box<dyn Future<Output = String> + '_>> {
-        Box::pin(self.collect(start, end))
+    async fn collect(&self, start: DateTime<Utc>, end: DateTime<Utc>) -> String {
+        self.collect(start, end).await
     }
 }
 

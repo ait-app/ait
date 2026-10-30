@@ -1,8 +1,6 @@
 //! Host coordination between schedules, independent Agent execution and workspace ownership.
 use std::{
-    future::Future,
     path::Path,
-    pin::Pin,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -85,89 +83,85 @@ fn futures_recover(execution: &AgentExecution, id: &str) -> anyhow::Result<()> {
             .map_err(|_| anyhow::anyhow!("recover scheduled agent"))
     })
 }
+#[async_trait::async_trait]
 impl Runner for AgentRunner {
-    fn resolve(
+    async fn resolve(
         &self,
         workspace_id: String,
         mut target: Target,
-    ) -> Pin<Box<dyn Future<Output = Result<Target, domain::storage::schedule::Error>> + Send + '_>>
-    {
-        Box::pin(async move {
-            use domain::storage::schedule::Error;
-            let workspace = self
-                .workspace(&workspace_id)
-                .await
-                .map_err(|_| Error::Invalid)?;
-            match &mut target {
-                Target::Agent { agent_id } => {
-                    let value = self
-                        .execution
-                        .execute("agent.get.request", json!({"agentId":agent_id}))
-                        .await
-                        .map_err(|_| Error::Invalid)?;
-                    if value["agent"].is_null()
-                        || !value["agent"]["archivedAt"].is_null()
-                        || value["agent"]["workspaceId"].as_str() != Some(&workspace_id)
-                    {
-                        return Err(Error::Invalid);
-                    }
-                }
-                Target::NewAgent { config } => {
-                    if config["isolation"] == "worktree" {
-                        return Err(Error::Invalid);
-                    }
-                    let object = config.as_object_mut().ok_or(Error::Invalid)?;
-                    object.insert("cwd".into(), json!(workspace.cwd));
-                    object.remove("isolation");
+    ) -> Result<Target, domain::storage::schedule::Error> {
+        use domain::storage::schedule::Error;
+        let workspace = self
+            .workspace(&workspace_id)
+            .await
+            .map_err(|_| Error::Invalid)?;
+        match &mut target {
+            Target::Agent { agent_id } => {
+                let value = self
+                    .execution
+                    .execute("agent.get.request", json!({"agentId":agent_id}))
+                    .await
+                    .map_err(|_| Error::Invalid)?;
+                if value["agent"].is_null()
+                    || !value["agent"]["archivedAt"].is_null()
+                    || value["agent"]["workspaceId"].as_str() != Some(&workspace_id)
+                {
+                    return Err(Error::Invalid);
                 }
             }
-            Ok(target)
-        })
+            Target::NewAgent { config } => {
+                if config["isolation"] == "worktree" {
+                    return Err(Error::Invalid);
+                }
+                let object = config.as_object_mut().ok_or(Error::Invalid)?;
+                object.insert("cwd".into(), json!(workspace.cwd));
+                object.remove("isolation");
+            }
+        }
+        Ok(target)
     }
-    fn run(
+    async fn run(
         &self,
         schedule: Schedule,
         run_id: String,
         progress: Progress,
         cancel: CancellationToken,
-    ) -> Pin<Box<dyn Future<Output = Outcome> + Send + '_>> {
-        Box::pin(async move {
-            let mut outcome = Outcome::default();
-            let occurrence = Occurrence {
-                run_id: &run_id,
-                progress: &progress,
-                cancel: &cancel,
-            };
-            let result = self.perform(&schedule, &occurrence, &mut outcome).await;
-            if let Err(error) = result {
-                outcome.error = Some(error.to_owned());
-            }
-            if let Target::NewAgent { config } = &schedule.target
-                && (outcome.agent_id.is_none() || config["archiveOnFinish"] != false)
-            {
-                if let Some(id) = &outcome.agent_id {
-                    let _ = self
-                        .execution
-                        .execute("agent.archive.request", json!({"agentId":id}))
-                        .await;
-                }
-                if schedule.workspace_id.is_none()
-                    && let Some(id) = outcome.workspace_id.clone()
-                {
-                    let directory = self.directory.clone();
-                    let archived = tokio::task::spawn_blocking(move || {
-                        directory.archive_workspace(&id, &chrono::Utc::now().to_rfc3339())
-                    })
+    ) -> Outcome {
+        let mut outcome = Outcome::default();
+        let occurrence = Occurrence {
+            run_id: &run_id,
+            progress: &progress,
+            cancel: &cancel,
+        };
+        let result = self.perform(&schedule, &occurrence, &mut outcome).await;
+        if let Err(error) = result {
+            outcome.error = Some(error.to_owned());
+        }
+        if let Target::NewAgent { config } = &schedule.target
+            && (outcome.agent_id.is_none() || config["archiveOnFinish"] != false)
+        {
+            if let Some(id) = &outcome.agent_id {
+                let _ = self
+                    .execution
+                    .execute("agent.archive.request", json!({"agentId":id}))
                     .await;
-                    if !matches!(archived, Ok(Ok(_))) {
-                        outcome
-                            .error
-                            .get_or_insert_with(|| "Scheduled workspace cleanup failed".into());
-                    }
+            }
+            if schedule.workspace_id.is_none()
+                && let Some(id) = outcome.workspace_id.clone()
+            {
+                let directory = self.directory.clone();
+                let archived = tokio::task::spawn_blocking(move || {
+                    directory.archive_workspace(&id, &chrono::Utc::now().to_rfc3339())
+                })
+                .await;
+                if !matches!(archived, Ok(Ok(_))) {
+                    outcome
+                        .error
+                        .get_or_insert_with(|| "Scheduled workspace cleanup failed".into());
                 }
             }
-            outcome
-        })
+        }
+        outcome
     }
 }
 impl AgentRunner {

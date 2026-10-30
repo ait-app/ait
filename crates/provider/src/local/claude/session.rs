@@ -9,8 +9,7 @@ mod commands;
 
 use super::{ClaudeClient, config, history, permissions, streaming, transport::Transport};
 use crate::ports::agent_session::{
-    AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec,
-    AgentTurnEvent,
+    AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
 
 #[derive(Debug)]
@@ -489,6 +488,7 @@ impl ClaudeSession {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentSession for ClaudeSession {
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
         self.diagnostics.failure()
@@ -498,14 +498,14 @@ impl AgentSession for ClaudeSession {
         self.diagnostics.message().map(Cow::Owned)
     }
 
-    fn prepare_account_usage(
+    async fn prepare_account_usage(
         &self,
-    ) -> AgentSessionFuture<'_, crate::ports::account_usage::PreparedUsage<'_>> {
-        Box::pin(self.client.prepare_native_usage())
+    ) -> Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+        self.client.prepare_native_usage().await
     }
 
-    fn account_usage(&self) -> AgentSessionFuture<'_, Value> {
-        Box::pin(self.client.native_usage())
+    async fn account_usage(&self) -> Result<Value, AgentSessionError> {
+        self.client.native_usage().await
     }
 
     fn subagents(&self) -> Vec<crate::ports::controls::NativeSubagent> {
@@ -516,8 +516,8 @@ impl AgentSession for ClaudeSession {
         "claude"
     }
 
-    fn runtime_info(&mut self) -> AgentSessionFuture<'_, StoredAgentRuntimeInfo> {
-        Box::pin(async { Ok(self.info.clone()) })
+    async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
+        Ok(self.info.clone())
     }
 
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
@@ -531,134 +531,124 @@ impl AgentSession for ClaudeSession {
             .collect()
     }
 
-    fn respond_permission<'a>(
-        &'a mut self,
-        id: &'a str,
-        response: &'a Value,
-    ) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            let pending = self
-                .permissions
-                .get(id)
-                .ok_or(AgentSessionError::Rejected)?;
-            let reply = permissions::resolve(pending, response)?;
-            self.transport
-                .as_mut()
-                .ok_or(AgentSessionError::Failed)?
-                .send(&reply)
-                .await?;
-            self.permissions.remove(id);
-            Ok(())
-        })
+    async fn respond_permission(
+        &mut self,
+        id: &str,
+        response: &Value,
+    ) -> Result<(), AgentSessionError> {
+        let pending = self
+            .permissions
+            .get(id)
+            .ok_or(AgentSessionError::Rejected)?;
+        let reply = permissions::resolve(pending, response)?;
+        self.transport
+            .as_mut()
+            .ok_or(AgentSessionError::Failed)?
+            .send(&reply)
+            .await?;
+        self.permissions.remove(id);
+        Ok(())
     }
 
-    fn start_turn<'a>(
-        &'a mut self,
-        text: &'a str,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(async move {
-            self.start_input(&crate::protocol::prompt::AgentPrompt::text(text), config)
-                .await
-        })
+    async fn start_turn(
+        &mut self,
+        text: &str,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start_input(&crate::protocol::prompt::AgentPrompt::text(text), config)
+            .await
     }
 
-    fn start_input<'a>(
-        &'a mut self,
-        prompt: &'a crate::protocol::prompt::AgentPrompt,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(async move {
-            crate::ports::agent_session::AgentClient::validate_config(&self.client, config)?;
-            prompt.validate()?;
-            if self.closed || self.history_only || self.active.is_some() {
-                return Err(AgentSessionError::Rejected);
+    async fn start_input(
+        &mut self,
+        prompt: &crate::protocol::prompt::AgentPrompt,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        crate::ports::agent_session::AgentClient::validate_config(&self.client, config)?;
+        prompt.validate()?;
+        if self.closed || self.history_only || self.active.is_some() {
+            return Err(AgentSessionError::Rejected);
+        }
+        if commands::is_rewind(&prompt.text) {
+            return self.start_rewind(prompt).await;
+        }
+        if &self.spec.config != config || self.output_schema != prompt.output_schema {
+            if let Some(mut transport) = self.transport.take() {
+                transport.close().await?;
             }
-            if commands::is_rewind(&prompt.text) {
-                return self.start_rewind(prompt).await;
-            }
-            if &self.spec.config != config || self.output_schema != prompt.output_schema {
-                if let Some(mut transport) = self.transport.take() {
-                    transport.close().await?;
-                }
-                self.spec.config = config.clone();
-                self.output_schema.clone_from(&prompt.output_schema);
-            }
-            if self.transport.is_none() {
-                self.launch().await?;
-            }
-            let id = self.inputs.admit(prompt.client_message_id.as_deref())?;
-            let message = json!({"type":"user","uuid":id,"session_id":self.id,
+            self.spec.config = config.clone();
+            self.output_schema.clone_from(&prompt.output_schema);
+        }
+        if self.transport.is_none() {
+            self.launch().await?;
+        }
+        let id = self.inputs.admit(prompt.client_message_id.as_deref())?;
+        let message = json!({"type":"user","uuid":id,"session_id":self.id,
                 "parent_tool_use_id":null,"message":{"role":"user","content":prompt.claude_content()?}});
-            // Once a native input write is attempted, a missing transcript is no longer an
-            // intentional empty branch. Never silently recreate a lost accepted conversation.
-            if let Some(metadata) = &mut self.metadata {
-                metadata.remove(super::rewind::FRESH);
-            }
-            if let Some(transport) = &self.transport {
-                transport.diagnostics.clear();
-            }
-            self.transport
-                .as_mut()
-                .ok_or(AgentSessionError::Failed)?
-                .send(&message)
-                .await?;
-            let events = std::mem::take(&mut self.stream.events);
-            let tasks = std::mem::take(&mut self.stream.tasks);
-            self.stream = streaming::Stream::new(self.client.images.clone());
-            self.stream.events = events;
-            self.stream.tasks = tasks;
-            self.unread_steers.clear();
-            self.compacting = false;
-            self.usage.begin();
-            // The CLI does not echo every submitted prompt. Use its supplied native UUID.
-            self.stream.record(&message)?;
-            self.active = Some(id.clone());
-            self.info
-                .thinking_option_id
-                .clone_from(&config.thinking_option_id);
-            self.info.mode_id = Some(
-                config
-                    .mode_id
-                    .clone()
-                    .unwrap_or_else(|| "default".to_owned()),
-            );
-            Ok(id)
-        })
+        // Once a native input write is attempted, a missing transcript is no longer an
+        // intentional empty branch. Never silently recreate a lost accepted conversation.
+        if let Some(metadata) = &mut self.metadata {
+            metadata.remove(super::rewind::FRESH);
+        }
+        if let Some(transport) = &self.transport {
+            transport.diagnostics.clear();
+        }
+        self.transport
+            .as_mut()
+            .ok_or(AgentSessionError::Failed)?
+            .send(&message)
+            .await?;
+        let events = std::mem::take(&mut self.stream.events);
+        let tasks = std::mem::take(&mut self.stream.tasks);
+        self.stream = streaming::Stream::new(self.client.images.clone());
+        self.stream.events = events;
+        self.stream.tasks = tasks;
+        self.unread_steers.clear();
+        self.compacting = false;
+        self.usage.begin();
+        // The CLI does not echo every submitted prompt. Use its supplied native UUID.
+        self.stream.record(&message)?;
+        self.active = Some(id.clone());
+        self.info
+            .thinking_option_id
+            .clone_from(&config.thinking_option_id);
+        self.info.mode_id = Some(
+            config
+                .mode_id
+                .clone()
+                .unwrap_or_else(|| "default".to_owned()),
+        );
+        Ok(id)
     }
 
-    fn steer_turn<'a>(&'a mut self, turn: &'a str, text: &'a str) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            self.submit_steer(turn, &crate::protocol::prompt::AgentPrompt::text(text))
-                .await
-        })
+    async fn steer_turn(&mut self, turn: &str, text: &str) -> Result<(), AgentSessionError> {
+        self.submit_steer(turn, &crate::protocol::prompt::AgentPrompt::text(text))
+            .await
     }
 
-    fn steer_input<'a>(
-        &'a mut self,
-        turn: &'a str,
-        prompt: &'a crate::protocol::prompt::AgentPrompt,
-    ) -> AgentSessionFuture<'a, ()> {
-        Box::pin(self.submit_steer(turn, prompt))
+    async fn steer_input(
+        &mut self,
+        turn: &str,
+        prompt: &crate::protocol::prompt::AgentPrompt,
+    ) -> Result<(), AgentSessionError> {
+        self.submit_steer(turn, prompt).await
     }
 
-    fn cancel_turn<'a>(&'a mut self, turn: &'a str) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            if self.active.as_deref() != Some(turn) {
-                return Err(AgentSessionError::Rejected);
-            }
-            let transport = self.transport.as_mut().ok_or(AgentSessionError::Failed)?;
-            transport.request(json!({"subtype":"interrupt"})).await?;
-            // Reap the interrupted query so stale results cannot finish a subsequent turn.
-            transport.close().await?;
-            self.transport = None;
-            self.permissions.clear();
-            self.stream
-                .events
-                .extend(self.children.stopped(false, true));
-            self.stream.events.push_back(AgentTurnEvent::Cancelled);
-            Ok(())
-        })
+    async fn cancel_turn(&mut self, turn: &str) -> Result<(), AgentSessionError> {
+        if self.active.as_deref() != Some(turn) {
+            return Err(AgentSessionError::Rejected);
+        }
+        let transport = self.transport.as_mut().ok_or(AgentSessionError::Failed)?;
+        transport.request(json!({"subtype":"interrupt"})).await?;
+        // Reap the interrupted query so stale results cannot finish a subsequent turn.
+        transport.close().await?;
+        self.transport = None;
+        self.permissions.clear();
+        self.stream
+            .events
+            .extend(self.children.stopped(false, true));
+        self.stream.events.push_back(AgentTurnEvent::Cancelled);
+        Ok(())
     }
 
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
@@ -690,18 +680,16 @@ impl AgentSession for ClaudeSession {
         Ok(None)
     }
 
-    fn close(&mut self) -> AgentSessionFuture<'_, ()> {
-        Box::pin(async {
-            self.closed = true;
-            if let Some(transport) = &mut self.transport {
-                transport.close().await?;
-            }
-            self.transport = None;
-            self.active = None;
-            self.permissions.clear();
-            self.stream = streaming::Stream::new(self.client.images.clone());
-            self.children.stopped(false, true);
-            Ok(())
-        })
+    async fn close(&mut self) -> Result<(), AgentSessionError> {
+        self.closed = true;
+        if let Some(transport) = &mut self.transport {
+            transport.close().await?;
+        }
+        self.transport = None;
+        self.active = None;
+        self.permissions.clear();
+        self.stream = streaming::Stream::new(self.client.images.clone());
+        self.children.stopped(false, true);
+        Ok(())
     }
 }

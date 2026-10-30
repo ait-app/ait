@@ -7,7 +7,7 @@ use super::*;
 
 mod cached_timeline;
 use crate::ports::agent_session::{
-    AgentClient, AgentResumePurpose, AgentSession, AgentSessionFuture, AgentSessionSpec,
+    AgentClient, AgentResumePurpose, AgentSession, AgentSessionSpec,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,67 +50,68 @@ struct GatedClient {
     gate: Arc<Gate>,
 }
 
+#[async_trait::async_trait]
 impl AgentClient for GatedClient {
     fn provider(&self) -> &'static str {
         "codex"
     }
-    fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        self.native.is_available()
+    async fn is_available(&self) -> Result<bool, crate::ports::agent_session::AgentSessionError> {
+        self.native.is_available().await
     }
     fn settings(&self, config: &StoredAgentConfig) -> Value {
         self.native.settings(config)
     }
-    fn validate_selection<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, ()> {
-        self.native.validate_selection(spec)
+    async fn validate_selection(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<(), crate::ports::agent_session::AgentSessionError> {
+        self.native.validate_selection(spec).await
     }
-    fn discover<'a>(
-        &'a self,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, crate::protocol::provider::Details> {
-        Box::pin(async move {
-            self.gate.hold(Operation::Discovery).await;
-            self.native.discover(cwd).await
-        })
+    async fn discover(
+        &self,
+        cwd: &str,
+    ) -> Result<crate::protocol::provider::Details, crate::ports::agent_session::AgentSessionError>
+    {
+        self.gate.hold(Operation::Discovery).await;
+        self.native.discover(cwd).await
     }
-    fn history<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, Vec<crate::protocol::timeline::NativeItem>> {
-        Box::pin(async move {
-            self.gate.hold(Operation::History).await;
-            self.native.history(handle, cwd).await
-        })
+    async fn history(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<
+        Vec<crate::protocol::timeline::NativeItem>,
+        crate::ports::agent_session::AgentSessionError,
+    > {
+        self.gate.hold(Operation::History).await;
+        self.native.history(handle, cwd).await
     }
-    fn inspect_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, crate::ports::native_history::SessionHistory> {
-        Box::pin(async move {
-            self.gate.hold(Operation::History).await;
-            self.native.inspect_session(handle, cwd).await
-        })
+    async fn inspect_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<
+        crate::ports::native_history::SessionHistory,
+        crate::ports::agent_session::AgentSessionError,
+    > {
+        self.gate.hold(Operation::History).await;
+        self.native.inspect_session(handle, cwd).await
     }
-    fn create_session<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            self.gate.hold(Operation::Create).await;
-            self.native.create_session(spec).await
-        })
+    async fn create_session(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, crate::ports::agent_session::AgentSessionError> {
+        self.gate.hold(Operation::Create).await;
+        self.native.create_session(spec).await
     }
-    fn resume_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        spec: &'a AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        spec: &AgentSessionSpec,
         purpose: AgentResumePurpose,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            self.gate.hold(Operation::Resume).await;
-            self.native.resume_session(handle, spec, purpose).await
-        })
+    ) -> Result<Box<dyn AgentSession>, crate::ports::agent_session::AgentSessionError> {
+        self.gate.hold(Operation::Resume).await;
+        self.native.resume_session(handle, spec, purpose).await
     }
 }
 

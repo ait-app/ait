@@ -2,15 +2,14 @@ use std::future::pending;
 use std::task::Poll;
 
 use super::*;
-use crate::ports::agent_session::{
-    AgentResumePurpose, AgentSession, AgentSessionFuture, AgentSessionSpec,
-};
+use crate::ports::agent_session::{AgentResumePurpose, AgentSession, AgentSessionSpec};
 
 #[derive(Debug)]
 struct PendingClient {
     pending_probe: bool,
 }
 
+#[async_trait::async_trait]
 impl AgentClient for PendingClient {
     fn provider(&self) -> &'static str {
         "listing"
@@ -20,36 +19,34 @@ impl AgentClient for PendingClient {
         true
     }
 
-    fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        Box::pin(async move {
-            if self.pending_probe {
-                pending().await
-            } else {
-                Ok(true)
-            }
-        })
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        if self.pending_probe {
+            pending().await
+        } else {
+            Ok(true)
+        }
     }
 
-    fn list_sessions<'a>(
-        &'a self,
-        _options: &'a ListOptions,
-    ) -> AgentSessionFuture<'a, Vec<SessionDescriptor>> {
-        Box::pin(pending())
+    async fn list_sessions(
+        &self,
+        _options: &ListOptions,
+    ) -> Result<Vec<SessionDescriptor>, AgentSessionError> {
+        pending().await
     }
 
-    fn create_session<'a>(
-        &'a self,
-        _spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
+    async fn create_session(
+        &self,
+        _spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         unreachable!("listing must not create a session")
     }
 
-    fn resume_session<'a>(
-        &'a self,
-        _handle: &'a AgentPersistenceHandle,
-        _spec: &'a AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        _handle: &AgentPersistenceHandle,
+        _spec: &AgentSessionSpec,
         _purpose: AgentResumePurpose,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         unreachable!("listing must not resume a session")
     }
 }

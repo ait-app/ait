@@ -62,13 +62,10 @@ fn saturated_collector_reports_busy_and_counts_dropped_captures() {
 
 struct FixtureSources;
 
+#[async_trait::async_trait(?Send)]
 impl EvidenceSource for FixtureSources {
-    fn collect(
-        &self,
-        _start: DateTime<Utc>,
-        _end: DateTime<Utc>,
-    ) -> Pin<Box<dyn Future<Output = String> + '_>> {
-        Box::pin(async { "Harness: opencode\nVersion: fixture\n".into() })
+    async fn collect(&self, _start: DateTime<Utc>, _end: DateTime<Utc>) -> String {
+        "Harness: opencode\nVersion: fixture\n".into()
     }
 }
 
@@ -194,13 +191,10 @@ fn tracing_preserves_provider_failure_facts_without_native_payloads() {
 
 struct OversizedSources;
 
+#[async_trait::async_trait(?Send)]
 impl EvidenceSource for OversizedSources {
-    fn collect(
-        &self,
-        _start: DateTime<Utc>,
-        _end: DateTime<Utc>,
-    ) -> Pin<Box<dyn Future<Output = String> + '_>> {
-        Box::pin(async { "fixture evidence\n".repeat(REPORT_LIMIT) })
+    async fn collect(&self, _start: DateTime<Utc>, _end: DateTime<Utc>) -> String {
+        "fixture evidence\n".repeat(REPORT_LIMIT)
     }
 }
 
