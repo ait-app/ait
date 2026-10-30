@@ -25,7 +25,7 @@
 
 - [移动端通知](operations/mobile-notifications.md)：本地提醒、Apple APNs／Google FCM 配置和真机验收。
 
-- [daemon MCP 接口](operations/mcp.md)：Streamable HTTP、40 个编排工具、鉴权与 Workspace 上下文；[Paseo 注入复核](reports/providers/paseo-mcp-injection-review-2026-10-30.md)。
+- [daemon MCP 接口](operations/mcp.md)：Streamable HTTP、可选 Unix socket、40 个编排工具、鉴权与 Workspace 上下文；[Paseo 注入复核](reports/providers/paseo-mcp-injection-review-2026-10-30.md)。
 - [Agent Skill 自动分发](operations/agent-skills.md)：内置技能、启动安装与更新、用户选择和卸载停用。
 - [项目说明](../README.md)：开发入口、workspace 和验证命令。
 - [品牌资源](../assets/brand/README.md)：深浅色 Logo、共用矢量源与生成命令；配色规范见 [ADR-051](decisions/branding/adr-051-ait-brand-identity.md)。
@@ -39,6 +39,8 @@
 - [Bot 后端设计](plans/bot-backend.md)：Workspace Bot、独占 Channel、隐藏 session、内置 tab 对话与 Telegram、飞书、Email 接入方案。
 
 ## 架构决策
+
+- [ADR-203：MCP 的可选 Unix socket 监听](decisions/daemon/adr-203-mcp-unix-socket.md)：HTTP 协议复用、MCP 专用路由、私有 socket 文件和双监听生命周期。
 
 - [ADR-202：Agent MCP 运行时自动注入](decisions/providers/adr-202-agent-mcp-injection.md)：原生会话私有配置、MCP 专用凭证、能力判断与重启恢复。
 

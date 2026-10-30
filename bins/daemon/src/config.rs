@@ -25,6 +25,9 @@ pub(crate) struct Cli {
     /// IP socket address (default: `AIT_SERVER_LISTEN`, config, or 127.0.0.1:7316).
     #[arg(long, global = true)]
     listen: Option<SocketAddr>,
+    /// Optional Unix socket for HTTP MCP (default: `AIT_SERVER_MCP_SOCKET` or config).
+    #[arg(long, global = true)]
+    mcp_socket: Option<PathBuf>,
     /// Non-secret TOML configuration (default: <data-dir>/config.toml, if present).
     #[arg(long, global = true)]
     config: Option<PathBuf>,
@@ -101,6 +104,7 @@ pub(super) fn data_directory(
 #[serde(deny_unknown_fields)]
 struct FileConfig {
     listen: Option<SocketAddr>,
+    mcp_socket: Option<PathBuf>,
     log_level: Option<String>,
     web_origins: Option<Vec<String>>,
 }
@@ -112,6 +116,8 @@ pub(crate) struct Config {
     pub data_dir: PathBuf,
     /// Resolved socket address.
     pub listen: SocketAddr,
+    /// Optional absolute Unix socket path serving only MCP over HTTP.
+    pub mcp_socket: Option<PathBuf>,
     /// Environment override or a private persisted API credential; never in TOML.
     pub token: SecretString,
     /// Resolved logging threshold.
@@ -150,7 +156,7 @@ impl Config {
                 // TOML diagnostics echo source lines, which may contain misplaced credentials.
                 toml::from_str::<FileConfig>(&text).map_err(|_| {
                     anyhow::anyhow!(
-                        "invalid daemon config; only listen, log_level and web_origins are supported"
+                        "invalid daemon config; only listen, mcp_socket, log_level and web_origins are supported"
                     )
                 })?
             }
@@ -173,6 +179,18 @@ impl Config {
             file.listen
                 .unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 7316)))
         };
+        let mcp_socket = cli
+            .mcp_socket
+            .or_else(|| env("AIT_SERVER_MCP_SOCKET").map(PathBuf::from))
+            .or(file.mcp_socket);
+        if let Some(path) = &mcp_socket {
+            if !cfg!(unix) {
+                bail!("MCP socket listeners require a Unix platform");
+            }
+            if !path.is_absolute() || path.file_name().is_none() {
+                bail!("MCP socket path must be an absolute file path");
+            }
+        }
         let log_level = cli
             .log_level
             .or_else(|| env("AIT_SERVER_LOG_LEVEL").map(|v| v.to_string_lossy().into_owned()))
@@ -201,6 +219,7 @@ impl Config {
         Ok(Self {
             data_dir,
             listen,
+            mcp_socket,
             token,
             log_level,
             web_origins,

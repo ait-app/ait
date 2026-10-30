@@ -111,6 +111,8 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
             .unwrap();
         let server = Server {
             listener,
+            #[cfg(unix)]
+            mcp_socket: None,
             api,
             instance: instance.clone(),
             managed,
@@ -157,6 +159,8 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
     remaining.wait_closed().await;
 }
 
+#[cfg(unix)]
+mod mcp_socket;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod publication;
 mod workspace_attention;
