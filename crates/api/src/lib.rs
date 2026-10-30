@@ -7,10 +7,12 @@ mod composition;
 pub use composition::summary_source;
 mod connection;
 mod files;
+mod guest;
 mod listener;
 pub mod managed_relay;
 mod mcp;
 mod publication;
+mod shares;
 mod terminal_activity;
 mod workspace_cleanup;
 
@@ -65,6 +67,9 @@ pub enum ConfigError {
     /// A shared service failed before transport initialization completed.
     #[error("shared service unavailable during API initialization")]
     ServiceInitialization,
+    /// Stored share settings could not be read.
+    #[error("share settings could not be loaded")]
+    ShareStore,
 }
 
 #[derive(Debug)]
@@ -90,6 +95,7 @@ struct Shared {
     bot: bot::dispatch::State,
     browser: browser::dispatch::State,
     workspace_names: Option<metadata::directory::service::workspace_names::WorkspaceNames>,
+    shares: Arc<shares::Shares>,
 }
 
 impl std::ops::Deref for Shared {
@@ -205,6 +211,29 @@ impl Api {
     #[must_use]
     pub fn hub_center(&self) -> Arc<dyn model::hub::Center> {
         Arc::new(self.shared.relay.hub().clone())
+    }
+
+    /// Load share settings from `store` and persist every later change there.
+    ///
+    /// Configure before sharing or serving this API. The daemon passes a file store at
+    /// `<data_dir>/hub/shares.json`.
+    /// # Errors
+    /// Returns `ShareStore` for an unreadable document or a second attachment.
+    pub fn with_share_store(
+        self,
+        store: Arc<dyn model::hub::OutboxStore>,
+    ) -> Result<Self, ConfigError> {
+        self.shared
+            .shares
+            .open(store)
+            .map_err(|_| ConfigError::ShareStore)?;
+        Ok(self)
+    }
+
+    /// Return the Host's share settings for the daemon's publication loop.
+    #[must_use]
+    pub fn share_book(&self) -> Arc<dyn model::share::ShareBook> {
+        self.shared.shares.clone()
     }
 
     /// Attach the daemon-owned publisher to committed session, creation and timeline events.
@@ -343,10 +372,9 @@ impl Api {
             address,
             &metadata.session_events,
         );
-        let push_delivery = metadata::push::delivery::start(&metadata);
         let api = Self {
             shared: Arc::new(Shared {
-                _push_delivery: push_delivery,
+                _push_delivery: metadata::push::delivery::start(&metadata),
                 relay,
                 managed_relay: false,
                 publication_control: None,
@@ -363,6 +391,7 @@ impl Api {
                     speech: services.speech,
                 }),
                 workspace_names: services.workspace_names,
+                shares: Arc::new(shares::Shares::new(&terminal, &provider)),
                 runtime,
                 metadata,
                 filesystem,
@@ -563,6 +592,10 @@ async fn guard(
         request.method() == Method::POST && request.uri().path() == terminal_activity::PATH;
     if !matches!(request.uri().path(), "/healthz" | "/readyz") && !download && !terminal_activity {
         if request.uri().path() == "/v1/ws" && !request.headers().contains_key("authorization") {
+            // Guest scope is honoured only together with the daemon's own credential.
+            if request.headers().contains_key(model::share::GUEST_HEADER) {
+                return Err(ApiError(StatusCode::FORBIDDEN));
+            }
             state.browser_auth.consume(request.headers())?;
         } else if request.uri().path() == mcp::PATH {
             mcp::authenticate(&state, request.headers())?;
@@ -694,6 +727,14 @@ async fn upgrade(
     headers: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> Result<Response, ApiError> {
+    let guest = match auth::single_header(&headers, model::share::GUEST_HEADER)? {
+        Some(value) => Some(
+            guest::admit(&state, value)
+                .await
+                .map_err(|error| ApiError(error.into()))?,
+        ),
+        None => None,
+    };
     let guard = state
         .admission
         .lock()
@@ -720,10 +761,12 @@ async fn upgrade(
         .max_write_buffer_size(model::server::MAX_QUEUE_BYTES)
         .on_upgrade(move |socket| async move {
             let (_tracking, _permit) = (tracking, permit);
-            Box::pin(connection::serve(socket, state)).await;
+            Box::pin(connection::serve(socket, state, guest)).await;
         }))
 }
 
+#[cfg(test)]
+mod test_support;
 #[cfg(test)]
 mod tests;
 

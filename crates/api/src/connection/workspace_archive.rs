@@ -151,6 +151,8 @@ async fn retire(state: &Shared, workspace_ids: Vec<String>) -> Result<Vec<String
     if workspace_ids.is_empty() {
         return Ok(Vec::new());
     }
+    // Retired workspaces are no longer shared; their guests leave before resources close.
+    state.shares.forget_workspaces(&workspace_ids);
     if let Some(bots) = &state.bot.bots {
         bots.retire(&workspace_ids).await?;
     }

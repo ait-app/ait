@@ -541,8 +541,12 @@ impl AgentManager {
         }
         let permit = self.reserve_session()?;
         let client = self.available_client(&spec.provider).await?;
-        let (launch, binding) =
-            self.prepare_mcp(agent_id, spec, AgentResumePurpose::Interactive)?;
+        let (launch, binding) = self.prepare_mcp(
+            agent_id,
+            spec,
+            AgentResumePurpose::Interactive,
+            &registration.labels,
+        )?;
         let session = execution::native(
             &spec.provider,
             "create",
@@ -655,7 +659,7 @@ impl AgentManager {
             AgentResumePurpose::Interactive
         };
         let client = self.available_client(&record.provider).await?;
-        let (launch, binding) = self.prepare_mcp(agent_id, &spec, purpose)?;
+        let (launch, binding) = self.prepare_mcp(agent_id, &spec, purpose, &record.labels)?;
         let session = execution::native(
             &spec.provider,
             "resume",

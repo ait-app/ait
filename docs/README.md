@@ -48,6 +48,7 @@
 
 - [ADR-202：Agent MCP 运行时自动注入](decisions/providers/adr-202-agent-mcp-injection.md)：原生会话私有配置、MCP 专用凭证、能力判断与重启恢复。
 
+- [ADR-203：组织内工作区共享与访客会话](decisions/daemon/adr-203-workspace-share-guests.md)：分享设置以 Host 为准，daemon 发布 `hub.shares.publish`，访客连接经 `x-ait-guest` 准入并受默认拒绝策略约束，撤销时清理访客终端与 Agent 回合。
 - [ADR-201：daemon 统一拥有节点发布与机器授权](decisions/daemon/adr-201-daemon-owned-publication.md)：删除 `--headless`，统一授权驱动的注册续租与重连、Hub/Relay 完整断开与凭据清理及本地 API token。
 
 - [ADR-200：Headless 独立维护 Hub、Relay 与节点租约](decisions/daemon/adr-200-headless-independent-transports.md)：修复 Hub 包装器接线，独立取票重试与续租，统一授权失效和关停取消。

@@ -2,7 +2,7 @@ import type { DaemonTransport } from "../daemon-client-transport-types.js";
 import { HUB_MAX_PAYLOAD, type HubInboundHeader } from "./frame.js";
 
 export type HubSessionHeader =
-  | { t: "open"; s: string; to: { node: string } }
+  | { t: "open"; s: string; to: { node: string }; share?: string }
   | { t: "msg"; s: string; pt: "text" | "binary" }
   | { t: "close"; s: string; code: string };
 
@@ -11,6 +11,21 @@ export interface HubSessionLink {
   recoverLiveness(): Promise<boolean>;
   send(header: HubSessionHeader, payload?: Uint8Array): void;
   release(session: string): void;
+}
+
+/** The center or peer ended the session; `code` is the hub close code, e.g. `share_revoked`. */
+export class HubSessionClosedError extends Error {
+  constructor(readonly code: string) {
+    super(`Hub session closed (${code}).`);
+    this.name = "HubSessionClosedError";
+  }
+}
+
+/** Close event a session reports; `hubCode` is set when the center sent the close. */
+export interface HubSessionCloseEvent {
+  code: number;
+  reason?: string;
+  hubCode?: string;
 }
 
 const ACCEPT_TIMEOUT_MS = 30_000;
@@ -35,11 +50,14 @@ export class HubSession implements DaemonTransport {
   private readonly messages = new Set<(data: unknown, isBinary: boolean) => void>();
   private stage: "hello" | "accept" | "ready" | "closed" = "hello";
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private code: string | null = null;
 
   constructor(
     private readonly link: HubSessionLink,
     readonly id: string,
     readonly node: string,
+    /** Share ID for a guest session to another account's workspace. */
+    readonly share?: string,
   ) {
     // Handlers are attached synchronously after construction; announce readiness afterwards.
     queueMicrotask(() => {
@@ -49,6 +67,15 @@ export class HubSession implements DaemonTransport {
 
   get closed(): boolean {
     return this.stage === "closed";
+  }
+
+  /**
+   * Hub close code when the center ended the session (`peer_gone`, `unknown_share`,
+   * `share_revoked`, ...), otherwise null. Guest sessions closed with `share_revoked` or
+   * `unknown_share` should not be reopened automatically.
+   */
+  get closeCode(): string | null {
+    return this.code;
   }
 
   /** Keep this session while the link resumes, then retry the daemon probe. */
@@ -72,7 +99,12 @@ export class HubSession implements DaemonTransport {
     }
     if (this.stage === "hello") {
       if (typeof data !== "string") throw new Error("Expected the AIT hello before sending data.");
-      this.link.send({ t: "open", s: this.id, to: { node: this.node } }, payload);
+      this.link.send(
+        this.share
+          ? { t: "open", s: this.id, to: { node: this.node }, share: this.share }
+          : { t: "open", s: this.id, to: { node: this.node } },
+        payload,
+      );
       this.stage = "accept";
       this.timer = setTimeout(
         () => this.abort(new Error("Hub session was not accepted in time.")),
@@ -105,8 +137,9 @@ export class HubSession implements DaemonTransport {
     if (this.stage === "closed") return;
     this.dispose();
     if (error) for (const handler of this.errors) handler(error);
-    for (const handler of this.closes)
-      handler({ code: error ? 1006 : 1000, reason: error?.message });
+    const event: HubSessionCloseEvent = { code: error ? 1006 : 1000, reason: error?.message };
+    if (error instanceof HubSessionClosedError) event.hubCode = error.code;
+    for (const handler of this.closes) handler(event);
   }
 
   /** End the session locally (sign-out, suspension or a local failure) and tell the peer. */
@@ -127,7 +160,8 @@ export class HubSession implements DaemonTransport {
     if (this.stage === "closed") return;
     if (header.t === "close") {
       // The center already ended the session; never echo a close back.
-      this.fail(new Error(`Hub session closed (${header.code}).`));
+      this.code = header.code;
+      this.fail(new HubSessionClosedError(header.code));
       return;
     }
     if (header.t === "accept") {

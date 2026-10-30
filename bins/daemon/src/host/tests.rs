@@ -133,13 +133,13 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
             .json()
             .await
             .unwrap();
-        assert_eq!(info.implemented_capabilities.len(), 15 + methods.len());
+        assert_eq!(info.implemented_capabilities.len(), 19 + methods.len());
         assert!(methods.iter().all(|method| {
             info.implemented_capabilities
                 .iter()
                 .any(|name| name == method.name)
         }));
-        assert_eq!(info.capabilities.len(), 210);
+        assert_eq!(info.capabilities.len(), 214);
         stop.send(()).unwrap();
         tokio::time::timeout(Duration::from_secs(5), task)
             .await

@@ -61,3 +61,40 @@ fn encodes_length_prefixed_header_and_payload() {
     assert_eq!(&frame[2 + length..], b"hi");
     assert!(encode(&Outbound::Ack { a: 1 }, &vec![0; MAX_PAYLOAD + 1]).is_err());
 }
+
+#[test]
+fn decodes_guest_opens_and_share_status() {
+    let s = Uuid::new_v4();
+    let share = Uuid::new_v4();
+    let frame = raw(
+        &format!(
+            r#"{{"t":"open","seq":2,"s":"{s}","from":"{s}","visitor":{{"user_id":"{s}","display_name":null,"organization_id":"{s}","share_id":"{share}","workspace_key":"ws_1","permission":"operate"}}}}"#
+        ),
+        b"hello",
+    );
+    let (header, _) = decode(&frame).expect("guest open");
+    let Inbound::Open {
+        seq: 2,
+        visitor: Some(visitor),
+        ..
+    } = header
+    else {
+        std::panic!("expected a guest open, got {header:?}");
+    };
+    assert_eq!(
+        (visitor.share_id, visitor.workspace_key.as_str()),
+        (share, "ws_1")
+    );
+
+    let (owner, _) = decode(&raw(
+        &format!(r#"{{"t":"open","seq":3,"s":"{s}","from":"{s}"}}"#),
+        b"",
+    ))
+    .expect("owner open");
+    assert!(matches!(owner, Inbound::Open { visitor: None, .. }));
+
+    let (status, payload) = decode(&raw(r#"{"t":"share_status","seq":5}"#, b"{}")).expect("status");
+    assert!(matches!(status, Inbound::ShareStatus { seq: 5 }));
+    assert_eq!(status.seq(), Some(5));
+    assert_eq!(payload.as_ref(), b"{}");
+}

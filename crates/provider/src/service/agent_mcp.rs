@@ -8,6 +8,14 @@ use model::storage::daemon_config::DaemonConfigStore;
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::json;
 
+/// Label carrying the share identity of an Agent created by a guest session.
+///
+/// Such Agents never receive the daemon MCP, which reaches every Workspace on this Host.
+pub const GUEST_SHARE_LABEL: &str = "ait.guest.share-id";
+
+/// Label carrying the visiting account of an Agent created by a guest session.
+pub const GUEST_USER_LABEL: &str = "ait.guest.user-id";
+
 /// Host-owned connection facts and mutable injection policy shared by execution lanes.
 #[derive(Debug, Clone)]
 pub struct AgentMcp {

@@ -1,0 +1,359 @@
+//! Host-owned workspace share settings, the center's outcome, and live guest grants.
+//!
+//! The owner configures shares over local RPC. The daemon publishes them through
+//! [`model::share::ShareBook`] and feeds the center's outcome back. Guest connections are
+//! admitted only for accepted shares and end as soon as their share stops admitting them;
+//! the terminals and Agent turns their guests started end with them.
+
+mod cleanup;
+pub(crate) mod guests;
+pub(crate) mod rpc;
+pub(crate) mod setting;
+
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
+
+use model::ErrorCode;
+use model::hub::{OutboxStore, StoreError};
+use model::share::{MAX_SHARES, Organization, Outcome, Published, ShareBook, Visitor};
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use tokio::sync::watch;
+use uuid::Uuid;
+
+use cleanup::Owners;
+use guests::{Grant, Guests, Registration, Revoked};
+use setting::{SetRequest, Setting, ShareError};
+
+/// Center code that removes a local setting: the owner revoked it from another device.
+const REVOKED: &str = "revoked";
+
+/// Persisted share document, `<data_dir>/hub/shares.json`.
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Document {
+    #[serde(default)]
+    revision: u64,
+    #[serde(default)]
+    shares: Vec<Setting>,
+    #[serde(default)]
+    orgs: Vec<Organization>,
+}
+
+#[derive(Debug, Default)]
+struct Book {
+    revision: u64,
+    settings: Vec<Setting>,
+    orgs: Vec<Organization>,
+    /// Orders persistence of concurrent snapshots; independent of the published revision.
+    version: u64,
+    guests: Guests,
+}
+
+impl Book {
+    fn document(&self) -> Value {
+        json!({"revision": self.revision, "shares": self.settings, "orgs": self.orgs})
+    }
+
+    fn position(&self, workspace_key: &str, organization_id: Uuid) -> Option<usize> {
+        self.settings
+            .iter()
+            .position(|setting| setting.is(workspace_key, organization_id))
+    }
+
+    /// End grants that no accepted setting admits any more.
+    fn revoke_stale(&mut self) -> Vec<Revoked> {
+        let settings = &self.settings;
+        self.guests.revoke(|grant| {
+            !settings
+                .iter()
+                .any(|setting| setting.grants(grant.share_id, grant.user_id))
+        })
+    }
+}
+
+/// Persistence and cleanup left after one in-memory change.
+#[derive(Debug, Default)]
+struct Commit {
+    save: Option<(u64, Value)>,
+    revoked: Vec<Revoked>,
+}
+
+#[derive(Debug)]
+struct Journal {
+    store: Arc<dyn OutboxStore>,
+    saved: Mutex<u64>,
+}
+
+impl Journal {
+    /// Write `document` unless a newer snapshot was already written.
+    fn write(&self, version: u64, document: &Value) -> Result<(), StoreError> {
+        let mut saved = lock(&self.saved);
+        if version <= *saved {
+            return Ok(());
+        }
+        self.store.save(document)?;
+        *saved = version;
+        Ok(())
+    }
+}
+
+/// Local share settings and live guest grants; implements [`ShareBook`].
+#[derive(Debug)]
+pub(crate) struct Shares {
+    book: Mutex<Book>,
+    changes: watch::Sender<u64>,
+    /// Attached once, before serving; absent in memory-only tests.
+    journal: OnceLock<Arc<Journal>>,
+    owners: Owners,
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+impl Shares {
+    /// Create an empty, memory-only book whose revocations reach `terminal` and `provider`.
+    pub(crate) fn new(
+        terminal: &Arc<terminal::dispatch::State>,
+        provider: &Arc<provider::dispatch::State>,
+    ) -> Self {
+        Self {
+            book: Mutex::new(Book::default()),
+            changes: watch::Sender::new(0),
+            journal: OnceLock::new(),
+            owners: Owners::new(terminal, provider),
+        }
+    }
+
+    /// Load settings from `store` and persist every later change there. Runtime services
+    /// may already hold this book, so attaching works through a shared reference.
+    ///
+    /// # Errors
+    /// Returns the store's error for unreadable or malformed documents, or when a store
+    /// is already attached.
+    pub(crate) fn open(&self, store: Arc<dyn OutboxStore>) -> Result<(), StoreError> {
+        let value = store.load()?;
+        let document: Document = if value.is_null() {
+            Document::default()
+        } else {
+            serde_json::from_value(value).map_err(|_| StoreError)?
+        };
+        self.journal
+            .set(Arc::new(Journal {
+                store,
+                saved: Mutex::new(0),
+            }))
+            .map_err(|_| StoreError)?;
+        let mut book = lock(&self.book);
+        book.revision = document.revision;
+        book.settings = document.shares;
+        book.orgs = document.orgs;
+        self.changes.send_replace(book.revision);
+        Ok(())
+    }
+
+    /// All settings with their center status, and the owner's organizations.
+    pub(crate) fn list(&self) -> Value {
+        let book = lock(&self.book);
+        json!({"shares": book.settings, "orgs": book.orgs})
+    }
+
+    /// The owner's organizations from the last center outcome.
+    pub(crate) fn orgs(&self) -> Value {
+        json!({"orgs": lock(&self.book).orgs})
+    }
+
+    /// Admit `visitor` when an accepted share grants it, registering its connection.
+    pub(crate) fn admit(self: &Arc<Self>, visitor: &Visitor) -> Option<Registration> {
+        let mut book = lock(&self.book);
+        if !book.settings.iter().any(|setting| setting.admits(visitor)) {
+            return None;
+        }
+        let grant = Grant {
+            share_id: visitor.share_id,
+            user_id: visitor.user_id,
+        };
+        Some(Registration::new(self, &mut book.guests, grant))
+    }
+
+    fn unregister(&self, id: u64) {
+        lock(&self.book).guests.unregister(id);
+    }
+
+    fn record_terminal(&self, grant: Grant, terminal_id: String) -> bool {
+        lock(&self.book).guests.record_terminal(grant, terminal_id)
+    }
+
+    /// Apply `change` and revoke grants it invalidated. `change` returns whether the
+    /// publishable list changed; the book is persisted either way.
+    fn mutate<R>(&self, change: impl FnOnce(&mut Book) -> (R, bool)) -> (R, Commit) {
+        let mut book = lock(&self.book);
+        let (result, published) = change(&mut book);
+        if published {
+            book.revision = book.revision.saturating_add(1);
+        }
+        let revoked = book.revoke_stale();
+        book.version = book.version.saturating_add(1);
+        let save = self
+            .journal
+            .get()
+            .is_some()
+            .then(|| (book.version, book.document()));
+        let revision = book.revision;
+        drop(book);
+        if published {
+            self.changes.send_replace(revision);
+        }
+        (result, Commit { save, revoked })
+    }
+
+    /// Persist and clean up before returning, reporting a failed write.
+    async fn finish(&self, commit: Commit) -> Result<(), ErrorCode> {
+        let saved = match (commit.save, self.journal.get()) {
+            (Some((version, document)), Some(journal)) => {
+                let journal = journal.clone();
+                tokio::task::spawn_blocking(move || journal.write(version, &document))
+                    .await
+                    .map_err(|_| ErrorCode::RegistryIo)?
+                    .map_err(|_| ErrorCode::RegistryIo)
+            }
+            _ => Ok(()),
+        };
+        if !commit.revoked.is_empty() {
+            self.owners.clone().run(commit.revoked).await;
+        }
+        saved
+    }
+
+    /// Persist and clean up in the background; called from synchronous ports.
+    fn finish_detached(&self, commit: Commit) {
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            if let (Some((version, document)), Some(journal)) = (commit.save, self.journal.get())
+                && journal.write(version, &document).is_err()
+            {
+                tracing::error!("share settings could not be saved");
+            }
+            return;
+        };
+        if let (Some((version, document)), Some(journal)) = (commit.save, self.journal.get()) {
+            let journal = journal.clone();
+            handle.spawn_blocking(move || {
+                if journal.write(version, &document).is_err() {
+                    tracing::error!("share settings could not be saved");
+                }
+            });
+        }
+        if !commit.revoked.is_empty() {
+            self.owners.clone().spawn(commit.revoked, &handle);
+        }
+    }
+
+    /// Create or change the share keyed by the request's workspace and organization.
+    ///
+    /// # Errors
+    /// Returns invalid requests, capacity exhaustion, or a failed write.
+    pub(crate) async fn set(&self, request: SetRequest) -> Result<Value, ErrorCode> {
+        let (stored, commit) = self.mutate(|book| {
+            let stored = upsert(book, request);
+            let changed = stored.as_ref().is_ok_and(|(_, changed)| *changed);
+            (stored.map(|(setting, _)| setting), changed)
+        });
+        let stored = stored?;
+        self.finish(commit).await?;
+        Ok(json!({"share": stored}))
+    }
+
+    /// Remove one share and end its guest sessions without waiting for the center.
+    ///
+    /// # Errors
+    /// Returns a failed write after the share was removed in memory.
+    pub(crate) async fn remove(
+        &self,
+        workspace_key: &str,
+        organization_id: Uuid,
+    ) -> Result<Value, ErrorCode> {
+        let (removed, commit) = self.mutate(|book| {
+            let removed = book
+                .position(workspace_key, organization_id)
+                .map(|index| book.settings.remove(index))
+                .is_some();
+            (removed, removed)
+        });
+        self.finish(commit).await?;
+        Ok(json!({
+            "workspaceKey": workspace_key,
+            "organizationId": organization_id,
+            "removed": removed,
+        }))
+    }
+
+    /// Drop every share of retired workspaces and end their guest sessions.
+    pub(crate) fn forget_workspaces(&self, workspace_ids: &[String]) {
+        let ((), commit) = self.mutate(|book| {
+            let before = book.settings.len();
+            book.settings
+                .retain(|setting| !workspace_ids.contains(&setting.workspace_key));
+            ((), book.settings.len() != before)
+        });
+        self.finish_detached(commit);
+    }
+}
+
+fn upsert(book: &mut Book, request: SetRequest) -> Result<(Setting, bool), ShareError> {
+    let request = request.normalize()?;
+    if let Some(index) = book.position(&request.workspace_key, request.organization_id) {
+        let setting = &mut book.settings[index];
+        let changed = request.update(setting);
+        return Ok((setting.clone(), changed));
+    }
+    if book.settings.len() >= MAX_SHARES {
+        return Err(ShareError::Capacity);
+    }
+    let setting = request.into_setting();
+    book.settings.push(setting.clone());
+    Ok((setting, true))
+}
+
+fn apply_outcome(book: &mut Book, outcome: Outcome) -> bool {
+    for accepted in &outcome.accepted {
+        if let Some(index) = book.position(&accepted.workspace_key, accepted.organization_id) {
+            book.settings[index].accept(accepted);
+        }
+    }
+    let mut removed = false;
+    for rejected in &outcome.rejected {
+        let Some(index) = book.position(&rejected.workspace_key, rejected.organization_id) else {
+            continue;
+        };
+        if rejected.code == REVOKED {
+            book.settings.remove(index);
+            removed = true;
+        } else {
+            book.settings[index].reject(&rejected.code);
+        }
+    }
+    book.orgs = outcome.orgs;
+    removed
+}
+
+impl ShareBook for Shares {
+    fn publication(&self) -> (u64, Vec<Published>) {
+        let book = lock(&self.book);
+        (
+            book.revision,
+            book.settings.iter().map(Setting::published).collect(),
+        )
+    }
+
+    fn changes(&self) -> watch::Receiver<u64> {
+        self.changes.subscribe()
+    }
+
+    fn apply(&self, outcome: Outcome) {
+        let ((), commit) = self.mutate(|book| ((), apply_outcome(book, outcome)));
+        self.finish_detached(commit);
+    }
+}
+
+#[cfg(test)]
+mod tests;

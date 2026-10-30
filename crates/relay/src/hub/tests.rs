@@ -548,3 +548,69 @@ async fn disconnect_discards_previous_owner_yield() {
         "a subsequent fresh login must not inherit the old grant's five-minute Hub suppression"
     );
 }
+
+#[tokio::test]
+async fn share_status_frames_and_guest_opens_reach_the_daemon() {
+    let (_relay, hub, center, local) = connector().await;
+    let mut status = model::hub::Center::share_status(&hub);
+    let mut socket = online(&hub, &center, 120).await;
+
+    let share = Uuid::new_v4();
+    socket
+        .send(frame(
+            &json!({"t":"share_status","seq":1}),
+            json!({"revision":3,"accepted":[],"rejected":[
+                {"workspaceKey":"ws_1","organizationId":share,"code":"revoked"}],"orgs":[]})
+            .to_string()
+            .as_bytes(),
+        ))
+        .await
+        .expect("status");
+    timeout(Duration::from_secs(3), status.changed())
+        .await
+        .expect("status in time")
+        .expect("connector alive");
+    let outcome = status.borrow_and_update().clone().expect("outcome");
+    assert_eq!(outcome.revision, Some(3));
+    assert_eq!(outcome.rejected[0].code, "revoked");
+
+    let visitor = json!({"user_id":Uuid::new_v4(),"display_name":"Bob","organization_id":share,
+        "share_id":share,"workspace_key":"ws_1","permission":"operate"});
+    socket
+        .send(frame(
+            &json!({"t":"open","seq":2,"s":Uuid::new_v4(),"from":Uuid::new_v4(),"visitor":visitor}),
+            HELLO.as_bytes(),
+        ))
+        .await
+        .expect("guest open");
+    let guest = accept_guest(&local).await.expect("guest header");
+    assert_eq!(
+        (guest.share_id, guest.workspace_key.as_str()),
+        (share, "ws_1")
+    );
+}
+
+/// Accept one bridged daemon connection and return its guest visitor, if any.
+#[expect(
+    clippy::result_large_err,
+    reason = "tungstenite's handshake callback fixes the error type"
+)]
+async fn accept_guest(local: &TcpListener) -> Option<Visitor> {
+    let (tcp, _) = timeout(Duration::from_secs(3), local.accept())
+        .await
+        .expect("bridge dials")
+        .expect("accept");
+    let seen = Arc::new(StdMutex::new(None));
+    let record = seen.clone();
+    let _socket = accept_hdr_async(tcp, move |request: &Request, response: Response| {
+        *record.lock().expect("record") = request
+            .headers()
+            .get(model::share::GUEST_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .and_then(Visitor::decode);
+        Ok(response)
+    })
+    .await
+    .expect("upgrade");
+    seen.lock().expect("record").clone()
+}
