@@ -1,4 +1,3 @@
-import { WebSocket, type RawData } from "ws";
 import type { AccountSessionManager } from "./account-session.js";
 import type { HubLink, HubSession } from "@ait/client/internal/hub";
 
@@ -20,13 +19,10 @@ interface Session {
   owner: AccountTransportOwner;
   destroyed: () => void;
   navigated: (_event: unknown, _url: string, sameDocument: boolean, mainFrame: boolean) => void;
-  socket: WebSocket | null;
   hub: HubSession | null;
-  visit: string | null;
-  ready: boolean;
   verified: boolean;
   closed: boolean;
-  expected: { serverId: string; instanceId: string | null } | null;
+  expectedServerId: string | null;
   deadline: ReturnType<typeof setTimeout>;
   pending: Map<number, { bytes: number; timer: ReturnType<typeof setTimeout> }>;
   queued: Map<number, { bytes: Buffer; binary: boolean }>;
@@ -64,13 +60,10 @@ export class AccountTransportManager {
       navigated: (_event, _url, sameDocument, mainFrame) => {
         if (mainFrame && !sameDocument) this.finish(id, session);
       },
-      socket: null,
       hub: null,
-      visit: null,
-      ready: false,
       verified: false,
       closed: false,
-      expected: null,
+      expectedServerId: null,
       deadline: setTimeout(() => this.finish(id, session, "Relay setup timed out"), 45_000),
       pending: new Map(),
       queued: new Map(),
@@ -87,68 +80,38 @@ export class AccountTransportManager {
       const node =
         this.link?.ready && this.link.centerUrl === center ? this.link.serveFor(host) : undefined;
       if (session.closed) return;
-      if (node && this.link) {
-        const target = this.account.snapshot().hosts.find((value) => value.host_id === host);
-        if (!target?.server_id) throw new Error("Host identity unavailable");
-        // Hub authenticates the selected serve node. Its current instance comes from
-        // accept/server_info; a legacy route may be absent or belong to an older instance.
-        session.expected = { serverId: target.server_id, instanceId: null };
-        const transport = this.link.openSession(node.node_id);
-        session.hub = transport;
-        // Hub accept contains server_info; there is no legacy relay.ready handshake.
-        session.ready = true;
-        transport.onOpen(() => {
-          if (!session.closed) this.emit(id, session, { kind: "open" });
-        });
-        transport.onMessage((data, binary) =>
-          this.message(
-            id,
-            session,
-            typeof data === "string" ? Buffer.from(data) : Buffer.from(data as Uint8Array),
-            binary,
-          ),
-        );
-        transport.onError(() => this.finish(id, session, "Hub session failed"));
-        transport.onClose(() => this.finish(id, session));
-        return;
-      }
-      const grant = await this.account.openVisit(host, center);
-      if (session.closed) {
-        await this.account.closeVisit(grant.relay_session_id);
-        return;
-      }
-      session.visit = grant.relay_session_id;
-      session.expected = { serverId: grant.server_id, instanceId: grant.instance_id };
-      const socket = new WebSocket(grant.url, {
-        headers: { Authorization: `Bearer ${grant.client_ticket}` },
-        maxPayload: 1024 * 1024,
-        perMessageDeflate: false,
-        handshakeTimeout: 5000,
+      if (!this.link?.ready || this.link.centerUrl !== center)
+        throw new Error("Online Hub is unavailable.");
+      if (!node) throw new Error("Target Host is unavailable on Hub.");
+      const target = this.account.snapshot().hosts.find((value) => value.host_id === host);
+      if (!target?.server_id) throw new Error("Host identity unavailable");
+      session.expectedServerId = target.server_id;
+      const transport = this.link.openSession(node.node_id);
+      session.hub = transport;
+      transport.onOpen(() => {
+        if (!session.closed) this.emit(id, session, { kind: "open" });
       });
-      session.socket = socket;
-      socket.on("message", (data, binary) => this.message(id, session, data, binary));
-      socket.on("close", () => {
-        owner.removeListener("destroyed", destroyed);
-        this.finish(id, session);
-      });
-      socket.on("error", () => this.finish(id, session, "Relay connection failed"));
+      transport.onMessage((data, binary) =>
+        this.message(
+          id,
+          session,
+          typeof data === "string" ? Buffer.from(data) : Buffer.from(data as Uint8Array),
+          binary,
+        ),
+      );
+      transport.onError(() => this.finish(id, session, "Hub session failed"));
+      transport.onClose(() => this.finish(id, session));
     } catch (error) {
       owner.removeListener("destroyed", destroyed);
       this.finish(id, session, error instanceof Error ? error.message : "Relay setup failed");
     }
   }
 
-  private message(id: string, session: Session, data: RawData, binary: boolean): void {
+  private message(id: string, session: Session, bytes: Buffer, binary: boolean): void {
     if (session.closed) return;
-    const bytes = Buffer.isBuffer(data)
-      ? data
-      : data instanceof ArrayBuffer
-        ? Buffer.from(data)
-        : Buffer.concat(data);
-    if (!session.ready || !session.verified) {
+    if (!session.verified) {
       let message: {
         type?: string;
-        relay_session_id?: string;
         info?: { server_id?: string; instance_id?: string; features?: string[] };
       };
       try {
@@ -158,27 +121,11 @@ export class AccountTransportManager {
         this.finish(id, session, "Invalid relay handshake");
         return;
       }
-      if (!session.ready) {
-        if (message.type !== "relay.ready" || message.relay_session_id !== session.visit) {
-          this.finish(id, session, "Relay pairing rejected");
-          return;
-        }
-        session.ready = true;
-        clearTimeout(session.deadline);
-        session.deadline = setTimeout(
-          () => this.finish(id, session, "AIT hello timed out"),
-          10_000,
-        );
-        this.emit(id, session, { kind: "open" });
-        return;
-      }
       if (
         message.type !== "server_info" ||
-        message.info?.server_id !== session.expected?.serverId ||
+        message.info?.server_id !== session.expectedServerId ||
         typeof message.info?.instance_id !== "string" ||
         !message.info.instance_id ||
-        (session.expected?.instanceId !== null &&
-          message.info?.instance_id !== session.expected?.instanceId) ||
         !Array.isArray(message.info?.features) ||
         !message.info.features.includes("ait-rust-single-v1")
       ) {
@@ -188,8 +135,7 @@ export class AccountTransportManager {
       session.verified = true;
       clearTimeout(session.deadline);
     }
-    // pause() stops further socket reads, but ws can still dispatch frames from
-    // its current read. Queue those frames separately from the IPC delivery window.
+    // Bound Hub output independently of the renderer IPC delivery window.
     if (
       session.pending.size + session.queued.size >= MAX_BUFFERED_MESSAGES ||
       session.bufferedBytes + bytes.length > MAX_BUFFERED_BYTES
@@ -200,7 +146,6 @@ export class AccountTransportManager {
     const sequence = ++session.sequence;
     session.queued.set(sequence, { bytes, binary });
     session.bufferedBytes += bytes.length;
-    session.socket?.pause();
     this.flush(id, session);
   }
 
@@ -222,7 +167,6 @@ export class AccountTransportManager {
     } finally {
       session.flushing = false;
     }
-    if (!session.closed && !session.pending.size && !session.queued.size) session.socket?.resume();
   }
 
   acknowledge(owner: AccountTransportOwner, id: string, sequence: number): void {
@@ -241,40 +185,12 @@ export class AccountTransportManager {
     input: { text?: string; binaryBase64?: string },
   ): Promise<void> {
     const session = this.owned(owner, id);
-    if (session.hub) {
-      if ((input.text === undefined) === (input.binaryBase64 === undefined))
-        throw new Error("Invalid Hub frame");
-      if ((input.text?.length ?? input.binaryBase64?.length ?? 0) > 2 * 1024 * 1024)
-        throw new Error("Hub frame too large");
-      session.hub.send(input.text ?? Buffer.from(input.binaryBase64!, "base64"));
-      return;
-    }
-    const socket = session.socket;
-    if (!session.ready || !socket || socket.readyState !== WebSocket.OPEN)
-      throw new Error("Relay is not ready");
+    if (!session.hub) throw new Error("Hub session is not ready");
     if ((input.text === undefined) === (input.binaryBase64 === undefined))
-      throw new Error("Invalid relay frame");
+      throw new Error("Invalid Hub frame");
     if ((input.text?.length ?? input.binaryBase64?.length ?? 0) > 2 * 1024 * 1024)
-      throw new Error("Relay frame too large");
-    const data = input.text === undefined ? Buffer.from(input.binaryBase64!, "base64") : input.text;
-    if (
-      Buffer.byteLength(data) > 1024 * 1024 ||
-      socket.bufferedAmount + Buffer.byteLength(data) > 4 * 1024 * 1024
-    ) {
-      this.finish(id, session, "Relay send budget exceeded");
-      throw new Error("Relay send budget exceeded");
-    }
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.finish(id, session, "Relay send timed out");
-        reject(new Error("Relay send timed out"));
-      }, 5000);
-      socket.send(data, { binary: input.text === undefined }, (error) => {
-        clearTimeout(timer);
-        if (error) reject(error);
-        else resolve();
-      });
-    });
+      throw new Error("Hub frame too large");
+    session.hub.send(input.text ?? Buffer.from(input.binaryBase64!, "base64"));
   }
 
   close(owner: AccountTransportOwner, id: string): void {
@@ -309,10 +225,8 @@ export class AccountTransportManager {
     session.pending.clear();
     session.queued.clear();
     session.bufferedBytes = 0;
-    session.socket?.terminate();
     session.hub?.close();
     this.sessions.delete(id);
-    if (session.visit) void this.account.closeVisit(session.visit);
     this.emit(id, session, { kind: "close", ...(error ? { error } : {}) });
   }
 }

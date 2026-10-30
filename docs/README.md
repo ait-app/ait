@@ -40,6 +40,8 @@
 
 ## 架构决策
 
+- [ADR-204：在线业务连接只使用 Hub](decisions/clients/adr-204-hub-only-online-business-transport.md)：删除传统 Relay 与 Yamux 业务回退，保留独立下载和账号发现通道。
+
 - [ADR-203：MCP 的可选 Unix socket 监听](decisions/daemon/adr-203-mcp-unix-socket.md)：HTTP 协议复用、MCP 专用路由、私有 socket 文件和双监听生命周期。
 
 - [ADR-202：Agent MCP 运行时自动注入](decisions/providers/adr-202-agent-mcp-injection.md)：原生会话私有配置、MCP 专用凭证、能力判断与重启恢复。

@@ -1,30 +1,15 @@
 import type { HubLink } from "@ait/client/internal/hub";
 import { getNativeHubLink, registerNativeAccountTransport } from "../native-account";
 import { parseAccountRelayTarget } from "./account-relay-target";
-import { createNativeAccountRelayTransportFactory } from "./native-account-transport";
 import type { Transport, TransportFactory } from "./types";
 
-/** Why a new account relay session took its path; kept for retiring the legacy relay. */
-export type AccountRelayPath = "hub" | "legacy:no_serve" | "legacy:hub_down";
-
-/** A connecting hub link may delay a new session this long before it falls back to legacy. */
+/** Bound how long a new session waits for the account's Hub link. */
 const HUB_READY_WAIT_MS = 5000;
 
 interface Dependencies {
   /** The account's hub link; a promise while the account is still being restored. */
   hub(): HubLink | Promise<HubLink | null> | null;
-  legacy: TransportFactory;
   register(close: () => void): () => void;
-  log(path: AccountRelayPath, fields: object): void;
-}
-
-function choose(
-  link: HubLink | null,
-  target: { hostId: string; center: string },
-): { path: AccountRelayPath; nodeId?: string } {
-  if (!link?.ready || link.centerUrl !== target.center) return { path: "legacy:hub_down" };
-  const node = link.serveFor(target.hostId);
-  return node ? { path: "hub", nodeId: node.node_id } : { path: "legacy:no_serve" };
 }
 
 function forward<T extends unknown[]>(handlers: Set<(...args: T) => void>) {
@@ -126,31 +111,23 @@ function hubTransport(link: HubLink, nodeId: string, deps: Dependencies): Transp
 }
 
 /**
- * Native account relays use the hub when presence lists the target Host's serve endpoint, and
- * the unchanged legacy relay otherwise. The choice is made once, when the session starts.
+ * All online business sessions require the account's Hub and the target Host's serve endpoint.
+ * A failed setup reports an error; the client can retry after Hub presence recovers.
  */
 export function createHubAccountRelayTransportFactory(
   deps: Dependencies = {
     hub: getNativeHubLink,
-    legacy: createNativeAccountRelayTransportFactory(),
     register: registerNativeAccountTransport,
-    log: (path, fields) => console.info("[AccountRelay] transport path", { path, ...fields }),
   },
 ): TransportFactory {
   return ({ url }) => {
-    let target: { hostId: string; center: string };
-    try {
-      target = parseAccountRelayTarget(url);
-    } catch {
-      // The legacy transport reports invalid targets exactly as before.
-      return deps.legacy({ url });
-    }
+    const target = parseAccountRelayTarget(url);
     const select = (link: HubLink | null): (() => Transport) => {
-      const { path, nodeId } = choose(link, target);
-      deps.log(path, { hostId: target.hostId, nodeId, hub: link?.state ?? "absent" });
-      return path === "hub" && link && nodeId
-        ? () => hubTransport(link, nodeId, deps)
-        : () => deps.legacy({ url });
+      if (!link?.ready || link.centerUrl !== target.center)
+        throw new Error("Online Hub is unavailable.");
+      const node = link.serveFor(target.hostId);
+      if (!node) throw new Error("Target Host is unavailable on Hub.");
+      return () => hubTransport(link, node.node_id, deps);
     };
     const hub = deps.hub();
     if (hub instanceof Promise || hub?.pending)
@@ -159,9 +136,8 @@ export function createHubAccountRelayTransportFactory(
         if (link && !link.ready) await link.whenReady(HUB_READY_WAIT_MS);
         return select(link);
       });
-    const create = select(hub);
     try {
-      return create();
+      return select(hub)();
     } catch (error) {
       return deferred(() => Promise.reject(error));
     }

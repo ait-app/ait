@@ -3,7 +3,6 @@ import {
   defaultWebSocketFactory,
 } from "@ait/client/internal/daemon-client-websocket-transport";
 import { getBrowserAccount, registerBrowserAccountTransport } from "../browser-account";
-import { createNativeAccountRelayTransportFactory } from "./native-account-transport";
 import { streamNativeAccountDownload } from "./native-account-download";
 import type { TransportFactory } from "./types";
 
@@ -19,9 +18,6 @@ const dependencies = {
   register: registerBrowserAccountTransport,
   connect: connectBrowserRelay,
 };
-
-export const createBrowserAccountRelayTransportFactory =
-  createNativeAccountRelayTransportFactory(dependencies);
 
 const MAX_DOWNLOAD_BYTES = 200 * 1024 * 1024;
 export async function downloadBrowserAccountFile(input: {

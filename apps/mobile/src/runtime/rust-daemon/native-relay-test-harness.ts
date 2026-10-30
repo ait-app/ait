@@ -38,7 +38,6 @@ export function nativeRelayHarness() {
     url: "wss://example.test/api/v1/relay/sessions/visit/client",
   };
   const account = {
-    openVisit: vi.fn(async () => grant),
     openDownload: vi.fn(async () => grant),
     closeVisit: vi.fn(async () => {}),
   };

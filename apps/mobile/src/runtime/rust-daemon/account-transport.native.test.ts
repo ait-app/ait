@@ -14,20 +14,17 @@ vi.mock("react-native", () => ({
   },
 }));
 vi.mock("@/desktop/host", () => ({ getDesktopHost: () => null }));
-vi.mock("./native-account-transport", () => ({
-  createNativeAccountRelayTransportFactory: () => mocks.connect,
+vi.mock("./hub-account-transport", () => ({
+  createHubAccountRelayTransportFactory: () => mocks.connect,
 }));
 
 beforeEach(() => vi.clearAllMocks());
 
 describe("native mobile account transport selection", () => {
-  it.each(["android", "ios"])(
-    "routes %s account relays through native ticket transport",
-    (platform) => {
-      mocks.platform = platform;
-      const target = { url: "ait+desktop://account-relay/11111111-1111-4111-8111-111111111111" };
-      createAccountRelayTransportFactory(target);
-      expect(mocks.connect).toHaveBeenCalledExactlyOnceWith(target);
-    },
-  );
+  it.each(["android", "ios"])("routes %s account relays through Hub transport", (platform) => {
+    mocks.platform = platform;
+    const target = { url: "ait+desktop://account-relay/11111111-1111-4111-8111-111111111111" };
+    createAccountRelayTransportFactory(target);
+    expect(mocks.connect).toHaveBeenCalledExactlyOnceWith(target);
+  });
 });

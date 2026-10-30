@@ -1,5 +1,7 @@
 # ADR-180：消息 Hub 服务端点（ait-hub-v1）
 
+> 普通业务传输已由 [ADR-204](../clients/adr-204-hub-only-online-business-transport.md) 修订：仅使用 Hub，传统 Relay 仅保留独立下载与控制。
+
 > 启动与控制边界已由 [ADR-201](adr-201-daemon-owned-publication.md) 修订：所有 daemon 自主发布，外部可暂停 Hub。
 
 状态：采用（原型）。中心协议见中心仓库 `docs/hub-protocol.md`；本 ADR 记录 Host 与客户端侧边界。

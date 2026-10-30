@@ -15,7 +15,7 @@ use crate::protocol::{self, ClientHello};
 use crate::transport::{MAX_MESSAGE, send};
 use crate::{Local, diagnostics};
 
-/// Matches the legacy bridge: the daemon must answer the hello promptly.
+/// The daemon must answer the business hello promptly.
 const FIRST_REPLY: Duration = Duration::from_secs(10);
 const WRITE: Duration = Duration::from_secs(5);
 

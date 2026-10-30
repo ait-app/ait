@@ -3,7 +3,6 @@ import {
   getBrowserHubLink,
   registerBrowserAccountTransport,
 } from "../browser-account";
-import { createBrowserAccountRelayTransportFactory } from "./browser-account-relay";
 import { getDesktopHost } from "@/desktop/host";
 import { Platform } from "react-native";
 import { createHubAccountRelayTransportFactory } from "./hub-account-transport";
@@ -18,9 +17,7 @@ export const createAccountRelayTransportFactory: TransportFactory = ({ url }) =>
   if (!desktop?.invoke && supportsBrowserAccount())
     return createHubAccountRelayTransportFactory({
       hub: getBrowserHubLink,
-      legacy: createBrowserAccountRelayTransportFactory,
       register: registerBrowserAccountTransport,
-      log: (path, fields) => console.info("[AccountRelay] transport path", { path, ...fields }),
     })({ url });
   if (!desktop?.invoke || !desktop.events?.on)
     throw new Error("Online relay requires the native mobile or desktop app.");

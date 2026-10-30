@@ -1,5 +1,7 @@
 # ADR-182：客户端接入 Hub 账号服务
 
+> 普通业务传输已由 [ADR-204](../clients/adr-204-hub-only-online-business-transport.md) 修订：仅使用 Hub，传统 Relay 仅保留独立下载与控制。
+
 状态：已实现。日期：2026-10-22。
 
 修订：2026-10-26，桌面内置 daemon 默认选择中心原生通知，独立 daemon 保留显式开启策略。

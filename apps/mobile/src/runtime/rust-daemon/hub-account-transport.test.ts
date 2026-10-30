@@ -3,7 +3,6 @@ import { HubLink } from "@ait/client/internal/hub";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHubAccountRelayTransportFactory } from "./hub-account-transport";
 import { createRustDaemonTransportFactory } from "./transport";
-import type { Transport } from "./types";
 
 const HOST_ID = "11111111-1111-4111-8111-111111111111";
 const CENTER = "https://example.test/api";
@@ -76,25 +75,15 @@ function harness(nodes: object[] = [{ node_id: "host-node", host_id: HOST_ID, st
     randomUUID: () => "session-1",
     logger: { info: () => {}, warn: () => {} },
   });
-  const legacyTransport: Transport = {
-    send: vi.fn(),
-    close: vi.fn(),
-    onOpen: () => () => {},
-    onClose: () => () => {},
-    onError: () => () => {},
-    onMessage: () => () => {},
-  };
   const closes = new Set<() => void>();
   const deps = {
     hub: vi.fn((): HubLink | Promise<HubLink | null> | null => link),
-    legacy: vi.fn(() => legacyTransport),
     register: vi.fn((close: () => void) => {
       closes.add(close);
       return () => {
         closes.delete(close);
       };
     }),
-    log: vi.fn(),
   };
   const connect = async () => {
     link.start();
@@ -116,7 +105,7 @@ function harness(nodes: object[] = [{ node_id: "host-node", host_id: HOST_ID, st
     socket.receive({ t: "presence", seq: 1 }, JSON.stringify({ nodes }));
     return socket;
   };
-  return { link, sockets, deps, legacyTransport, closes, connect };
+  return { link, sockets, deps, closes, connect };
 }
 
 afterEach(() => vi.useRealTimers());
@@ -133,12 +122,6 @@ describe("native account relay path selection", () => {
     transport.onMessage(receive);
     transport.onClose(close);
     transport.onOpen(() => transport.send(JSON.stringify({ type: "hello", clientId: "android" })));
-    expect(h.deps.log).toHaveBeenCalledWith("hub", {
-      hostId: HOST_ID,
-      nodeId: "host-node",
-      hub: "online",
-    });
-    expect(h.deps.legacy).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(0);
     const open = socket.sent.find((frame) => frame.header.t === "open")!;
     expect(open.header).toEqual({ t: "open", seq: 1, s: "session-1", to: { node: "host-node" } });
@@ -187,48 +170,47 @@ describe("native account relay path selection", () => {
     });
   });
 
-  it("uses the legacy relay when presence lists no serve endpoint for the Host", async () => {
+  it("reports a Host without a serve endpoint as unavailable", async () => {
     const h = harness([{ node_id: "other", host_id: "other-host", state: "online" }]);
     await h.connect();
-    expect(createHubAccountRelayTransportFactory(h.deps)({ url })).toBe(h.legacyTransport);
-    expect(h.deps.legacy).toHaveBeenCalledWith({ url });
-    expect(h.deps.log).toHaveBeenCalledWith("legacy:no_serve", {
-      hostId: HOST_ID,
-      nodeId: undefined,
-      hub: "online",
-    });
+    const transport = createHubAccountRelayTransportFactory(h.deps)({ url });
+    const error = vi.fn();
+    const close = vi.fn();
+    transport.onError(error);
+    transport.onClose(close);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(error).toHaveBeenCalledWith(new Error("Target Host is unavailable on Hub."));
+    expect(close).toHaveBeenCalledOnce();
+    expect(h.sockets[0].sent.some(({ header }) => header.t === "open")).toBe(false);
+    h.link.stop();
   });
 
-  it("uses the legacy relay at once when the hub is absent, stopped or on another center", async () => {
+  it.each(["absent", "stopped", "other-center"])("reports an unavailable Hub: %s", async (mode) => {
     const h = harness();
-    h.deps.hub.mockReturnValue(null);
-    expect(createHubAccountRelayTransportFactory(h.deps)({ url })).toBe(h.legacyTransport);
-    expect(h.deps.log).toHaveBeenLastCalledWith(
-      "legacy:hub_down",
-      expect.objectContaining({ hub: "absent" }),
-    );
-    h.deps.hub.mockReturnValue(h.link);
-    expect(createHubAccountRelayTransportFactory(h.deps)({ url })).toBe(h.legacyTransport);
-    expect(h.deps.log).toHaveBeenLastCalledWith(
-      "legacy:hub_down",
-      expect.objectContaining({ hub: "stopped" }),
-    );
-    await h.connect();
-    const other = `ait+desktop://account-relay/${HOST_ID}?center=${encodeURIComponent("https://other.test/api")}`;
-    expect(createHubAccountRelayTransportFactory(h.deps)({ url: other })).toBe(h.legacyTransport);
-    expect(h.deps.log).toHaveBeenLastCalledWith("legacy:hub_down", expect.anything());
-    expect(h.deps.legacy).toHaveBeenCalledTimes(3);
+    if (mode === "absent") h.deps.hub.mockReturnValue(null);
+    if (mode === "other-center") await h.connect();
+    const target =
+      mode === "other-center"
+        ? `ait+desktop://account-relay/${HOST_ID}?center=${encodeURIComponent("https://other.test/api")}`
+        : url;
+    const error = vi.fn();
+    createHubAccountRelayTransportFactory(h.deps)({ url: target }).onError(error);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(error).toHaveBeenCalledWith(new Error("Online Hub is unavailable."));
+    h.link.stop();
   });
 
-  it("passes invalid targets to the legacy transport unchanged", () => {
+  it("rejects invalid targets before opening a session", () => {
     const h = harness();
-    const target = { url: `ait+desktop://account-relay/${HOST_ID}` };
-    createHubAccountRelayTransportFactory(h.deps)(target);
-    expect(h.deps.legacy).toHaveBeenCalledExactlyOnceWith(target);
-    expect(h.deps.log).not.toHaveBeenCalled();
+    expect(() =>
+      createHubAccountRelayTransportFactory(h.deps)({
+        url: `ait+desktop://account-relay/${HOST_ID}`,
+      }),
+    ).toThrow("Invalid account relay target.");
+    expect(h.deps.hub).not.toHaveBeenCalled();
   });
 
-  it("waits for a connecting hub, then falls back after the bounded wait", async () => {
+  it("waits for a connecting Hub and reports an error if the bounded wait expires", async () => {
     const h = harness();
     h.link.start();
     const pending = createHubAccountRelayTransportFactory(h.deps)({ url });
@@ -254,46 +236,24 @@ describe("native account relay path selection", () => {
       JSON.stringify({ nodes: [{ node_id: "host-node", host_id: HOST_ID, state: "online" }] }),
     );
     await vi.advanceTimersByTimeAsync(0);
-    expect(h.deps.log).toHaveBeenCalledWith("hub", expect.anything());
     expect(opened).toHaveBeenCalledOnce();
 
     const slow = harness();
     slow.link.start();
-    const fallback = createHubAccountRelayTransportFactory(slow.deps)({ url });
-    expect(slow.deps.legacy).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(5000);
-    expect(slow.deps.legacy).toHaveBeenCalledWith({ url });
-    expect(slow.deps.log).toHaveBeenCalledWith(
-      "legacy:hub_down",
-      expect.objectContaining({ hub: "connecting" }),
-    );
-    fallback.close();
-    expect(slow.legacyTransport.close).toHaveBeenCalledOnce();
+    const pendingError = createHubAccountRelayTransportFactory(slow.deps)({ url });
+    const error = vi.fn();
+    pendingError.onError(error);
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(error).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(error).toHaveBeenCalledWith(new Error("Online Hub is unavailable."));
+    pending.close();
+    h.link.stop();
+    slow.link.stop();
   });
 });
 
 describe("deferred account relay transport", () => {
-  /** A legacy transport whose events the test fires. */
-  function scriptedLegacy() {
-    const handlers = {
-      open: new Set<() => void>(),
-      close: new Set<(event?: unknown) => void>(),
-      error: new Set<(event?: unknown) => void>(),
-      message: new Set<(data: unknown, binary: boolean) => void>(),
-    };
-    const transport: Transport = {
-      send: vi.fn(),
-      close: vi.fn(),
-      onOpen: (handler) => (handlers.open.add(handler), () => handlers.open.delete(handler)),
-      onClose: (handler) => (handlers.close.add(handler), () => handlers.close.delete(handler)),
-      onError: (handler) => (handlers.error.add(handler), () => handlers.error.delete(handler)),
-      onMessage: (handler) => (
-        handlers.message.add(handler), () => handlers.message.delete(handler)
-      ),
-    };
-    return { transport, handlers };
-  }
-
   it("reports a failed account restore as an error and close", async () => {
     const h = harness();
     h.deps.hub.mockReturnValue(Promise.reject(new Error("restore failed")));
@@ -307,7 +267,6 @@ describe("deferred account relay transport", () => {
     expect(error).toHaveBeenCalledWith(new Error("restore failed"));
     expect(close).toHaveBeenCalledWith({ code: 1006, reason: "restore failed" });
     transport.close();
-    expect(h.deps.legacy).not.toHaveBeenCalled();
   });
 
   it("never creates a transport once closed while the choice is pending", async () => {
@@ -318,15 +277,13 @@ describe("deferred account relay transport", () => {
     transport.close();
     resolve(null);
     await vi.advanceTimersByTimeAsync(0);
-    expect(h.deps.legacy).not.toHaveBeenCalled();
     expect(() => transport.send("late")).toThrow("Relay is not ready.");
   });
 
-  it("forwards the chosen transport's events only to subscribed handlers", async () => {
+  it("forwards deferred Hub events only to subscribed handlers", async () => {
     const h = harness();
-    const legacy = scriptedLegacy();
-    h.deps.legacy.mockReturnValue(legacy.transport);
-    h.deps.hub.mockReturnValue(Promise.resolve(null));
+    const socket = await h.connect();
+    h.deps.hub.mockReturnValue(Promise.resolve(h.link));
     const transport = createHubAccountRelayTransportFactory(h.deps)({ url });
     const kept = { open: vi.fn(), close: vi.fn(), error: vi.fn(), message: vi.fn() };
     const removed = { open: vi.fn(), close: vi.fn(), error: vi.fn(), message: vi.fn() };
@@ -340,19 +297,15 @@ describe("deferred account relay transport", () => {
       if (events === removed) for (const remove of removers) remove();
     }
     await vi.advanceTimersByTimeAsync(0);
-    for (const handler of legacy.handlers.open) handler();
-    for (const handler of legacy.handlers.message) handler("data", false);
-    for (const handler of legacy.handlers.error) handler("failure");
-    for (const handler of legacy.handlers.close) handler({ code: 1000 });
-    transport.send("payload");
-    expect(legacy.transport.send).toHaveBeenCalledWith("payload");
+    transport.send('{"type":"hello"}');
+    socket.receive({ t: "accept", seq: 2, s: "session-1" }, JSON.stringify(SERVER_INFO));
+    socket.receive({ t: "msg", seq: 3, s: "session-1", pt: "text" }, "data");
     expect(kept.open).toHaveBeenCalledOnce();
-    expect(kept.message).toHaveBeenCalledWith("data", false);
-    expect(kept.error).toHaveBeenCalledWith("failure");
-    expect(kept.close).toHaveBeenCalledWith({ code: 1000 });
+    expect(kept.message).toHaveBeenLastCalledWith("data", false);
     for (const handler of Object.values(removed)) expect(handler).not.toHaveBeenCalled();
-    transport.close(4000, "done");
-    expect(legacy.transport.close).toHaveBeenCalledWith(4000, "done");
+    transport.close();
+    expect(h.closes.size).toBe(0);
+    h.link.stop();
   });
 
   it("reports a hub session the account cannot track as a failed transport", async () => {
@@ -366,7 +319,6 @@ describe("deferred account relay transport", () => {
     transport.onError(error);
     await vi.advanceTimersByTimeAsync(0);
     expect(error).toHaveBeenCalledWith(new Error("Account is signing out."));
-    expect(h.deps.log).toHaveBeenCalledWith("hub", expect.anything());
     expect(h.sockets.at(-1)!.sent.filter((frame) => frame.header.t === "open")).toEqual([]);
   });
 });

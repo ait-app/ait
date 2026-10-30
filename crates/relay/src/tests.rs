@@ -1,7 +1,5 @@
 use super::*;
 
-const CLIENT_HELLO: &str =
-    r#"{ "type": "hello", "client_id": "test", "future": {"extension": true} }"#;
 use futures_util::SinkExt;
 use serde_json::json;
 mod lifecycle;
@@ -43,129 +41,94 @@ async fn stop_is_idempotent_and_bad_tickets_never_start() {
 }
 
 #[tokio::test]
-async fn control_opens_independent_reverse_data_and_keeps_local_token_private() {
+async fn control_ignores_tunnel_advertisements_and_still_streams_downloads() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
     use tokio_tungstenite::accept_async;
 
-    let center = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let local = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let connector = Connector::new(
-        local.local_addr().unwrap(),
-        SecretString::from("private-local-bearer"),
-        Uuid::new_v4().to_string(),
-        Uuid::new_v4().to_string(),
-    );
-    let local_task = tokio::spawn(mock_local(local));
-    connector
-        .start(ControlGrant {
-            center_url: format!("http://{}", center.local_addr().unwrap()),
-            control_ticket: "a".repeat(64),
-            node_session_id: Uuid::new_v4(),
-        })
-        .await
-        .unwrap();
-    let (tcp, _) = timeout(Duration::from_secs(3), center.accept())
-        .await
-        .unwrap()
-        .unwrap();
-    let mut control = accept_async(tcp).await.unwrap();
-    let hello = control.next().await.unwrap().unwrap();
-    assert!(!hello.to_text().unwrap().contains("private-local-bearer"));
-    let epoch = Uuid::new_v4();
-    control
-        .send(Message::Text(
-            json!({"type":"control.welcome","epoch":epoch})
+    let exercise = async {
+        let center = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let local = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let connector = Connector::new(
+            local.local_addr().unwrap(),
+            "private-local-bearer".into(),
+            "server".into(),
+            "instance".into(),
+        );
+        connector
+            .start(ControlGrant {
+                center_url: format!("http://{}", center.local_addr().unwrap()),
+                control_ticket: "a".repeat(64),
+                node_session_id: Uuid::new_v4(),
+            })
+            .await
+            .unwrap();
+        let (tcp, _) = center.accept().await.unwrap();
+        let mut control = accept_async(tcp).await.unwrap();
+        let hello = control.next().await.unwrap().unwrap();
+        assert!(!hello.to_text().unwrap().contains("private-local-bearer"));
+        let epoch = Uuid::new_v4();
+        control
+            .send(Message::Text(
+                json!({
+                    "type":"control.welcome", "epoch":epoch,
+                    "supported_tunnel_protocols":["ait-relay-tunnel-v1"]
+                })
+                .to_string()
+                .into(),
+            ))
+            .await
+            .unwrap();
+        control.send(Message::Ping(vec![1].into())).await.unwrap();
+        // No tunnel.request is sent, even when the center advertises the retired path.
+        assert_eq!(
+            control.next().await.unwrap().unwrap(),
+            Message::Pong(vec![1].into())
+        );
+        let session = Uuid::new_v4();
+        let download = json!({
+            "type":"open_data", "relay_session_id":session, "epoch":epoch,
+            "daemon_ticket":"b".repeat(64), "mode":"ait-download-v1",
+            "download_token":"scoped-token"
+        });
+        control
+            .send(Message::Text(download.to_string().into()))
+            .await
+            .unwrap();
+        let (tcp, _) = center.accept().await.unwrap();
+        let mut data = accept_async(tcp).await.unwrap();
+        data.send(Message::Text(
+            json!({"type":"relay.ready","relay_session_id":session})
                 .to_string()
                 .into(),
         ))
         .await
         .unwrap();
-    // There is no data connection before open_data.
-    assert!(
-        timeout(Duration::from_millis(50), center.accept())
+        let (mut http, _) = local.accept().await.unwrap();
+        let mut request = Vec::new();
+        while !request.ends_with(b"\r\n\r\n") {
+            request.push(http.read_u8().await.unwrap());
+            assert!(request.len() < 4096);
+        }
+        let request = String::from_utf8(request).unwrap();
+        assert!(request.starts_with("GET /api/files/download?token=scoped-token HTTP/1.1\r\n"));
+        assert!(!request.contains("private-local-bearer"));
+        http.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nabc")
             .await
-            .is_err()
-    );
-    let id = Uuid::new_v4();
-    control
-        .send(Message::Text(
-            json!({"type":"open_data","relay_session_id":id,"daemon_ticket":"b".repeat(64),
-        "epoch":epoch,"mode":"ait-rust-single-v1"})
-            .to_string()
-            .into(),
-        ))
-        .await
-        .unwrap();
-    let (tcp, _) = timeout(Duration::from_secs(3), center.accept())
-        .await
-        .unwrap()
-        .unwrap();
-    let mut data = accept_async(tcp).await.unwrap();
-    data.send(Message::Text(
-        json!({"type":"relay.ready","relay_session_id":id})
-            .to_string()
-            .into(),
-    ))
-    .await
-    .unwrap();
-    data.send(Message::Text(CLIENT_HELLO.into())).await.unwrap();
-    assert_eq!(
-        timeout(Duration::from_secs(3), data.next())
-            .await
-            .unwrap()
-            .unwrap()
-            .unwrap(),
-        Message::Text("native server info".into())
-    );
-    assert_eq!(
-        data.next().await.unwrap().unwrap(),
-        Message::Binary(vec![0, 255, 1].into())
-    );
-    data.send(Message::Text("client request".into()))
-        .await
-        .unwrap();
-    timeout(Duration::from_secs(3), local_task)
-        .await
-        .unwrap()
-        .unwrap();
-    connector.stop().await;
-    assert!(!connector.status().await.online);
-    assert!(matches!(
-        timeout(Duration::from_secs(3), control.next())
-            .await
-            .unwrap(),
-        None | Some(Err(_) | Ok(Message::Close(_)))
-    ));
-}
-
-#[expect(
-    clippy::result_large_err,
-    reason = "Tungstenite requires an unboxed ErrorResponse from the handshake callback"
-)]
-async fn mock_local(local: tokio::net::TcpListener) {
-    use tokio_tungstenite::accept_hdr_async;
-    use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
-    let (tcp, _) = local.accept().await.unwrap();
-    let mut socket = accept_hdr_async(tcp, |request: &Request, response: Response| {
-        assert_eq!(request.uri().path(), "/v1/ws");
+            .unwrap();
+        let header = data.next().await.unwrap().unwrap();
+        assert!(header.to_text().unwrap().contains("download.headers"));
         assert_eq!(
-            request.headers()["authorization"],
-            "Bearer private-local-bearer"
+            data.next().await.unwrap().unwrap(),
+            Message::Binary(b"abc".to_vec().into())
         );
-        Ok(response)
-    })
-    .await
-    .unwrap();
-    let hello = socket.next().await.unwrap().unwrap();
-    assert_eq!(hello.to_text().unwrap(), CLIENT_HELLO);
-    socket
-        .send(Message::Text("native server info".into()))
-        .await
-        .unwrap();
-    socket
-        .send(Message::Binary(vec![0, 255, 1].into()))
-        .await
-        .unwrap();
-    let reply = socket.next().await.unwrap().unwrap();
-    assert_eq!(reply, Message::Text("client request".into()));
+        let end = data.next().await.unwrap().unwrap();
+        assert!(end.to_text().unwrap().contains("download.end"));
+        data.send(Message::Text(r#"{"type":"download.complete"}"#.into()))
+            .await
+            .unwrap();
+        connector.stop().await;
+        assert!(!connector.status().await.online);
+    };
+    timeout(Duration::from_secs(5), exercise).await.unwrap();
 }

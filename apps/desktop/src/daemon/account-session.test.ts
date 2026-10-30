@@ -51,7 +51,7 @@ function fixture() {
             channel_path: "/v1/relay/channel",
             protocol: "ait-channel-v1",
           });
-    if (path.endsWith("/relay-sessions") || path.endsWith("/relay-downloads"))
+    if (path.endsWith("/relay-downloads"))
       return Response.json({
         relay_session_id: "visit",
         client_ticket: "one-use",
@@ -131,9 +131,6 @@ describe("account activation", () => {
       headers: { Authorization: "Bearer channel-ticket" },
     });
     await manager.select("remote");
-    expect((await manager.openVisit("remote", DEFAULT_ACCOUNT_CENTER)).url).toBe(
-      "wss://aitapp.cn/api/v1/relay/sessions/visit/client",
-    );
     expect(
       (await manager.openDownload("remote", "download-token", DEFAULT_ACCOUNT_CENTER)).url,
     ).toBe("wss://aitapp.cn/api/v1/relay/sessions/visit/client");
@@ -184,7 +181,11 @@ describe("account activation", () => {
     const { manager, http, deps } = fixture();
     await manager.loginWithBrowser("https://center.example/api");
     await vi.advanceTimersByTimeAsync(1);
-    const visit = await manager.openVisit("remote", "https://center.example/api");
+    const visit = await manager.openDownload(
+      "remote",
+      "download-token",
+      "https://center.example/api",
+    );
     expect(visit.url).toBe("wss://center.example/api/v1/relay/sessions/visit/client");
     await manager.logout();
     expect(manager.snapshot().selected).toBeNull();
@@ -193,7 +194,9 @@ describe("account activation", () => {
     const count = http.mock.calls.length;
     await vi.advanceTimersByTimeAsync(120_000);
     expect(http.mock.calls).toHaveLength(count);
-    await expect(manager.openVisit("remote", "https://center.example/api")).rejects.toThrow();
+    await expect(
+      manager.openDownload("remote", "download-token", "https://center.example/api"),
+    ).rejects.toThrow();
   });
 
   it("keeps the last online list and selected host when discovery fails", async () => {

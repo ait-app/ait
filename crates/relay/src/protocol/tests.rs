@@ -50,15 +50,15 @@ fn control_hello_and_download_messages_keep_their_wire_shapes() {
 #[test]
 fn control_commands_require_mode_specific_fields_and_hide_credentials() {
     let base = json!({"type":"open_data","relay_session_id":Uuid::nil(),
-        "epoch":Uuid::nil(),"daemon_ticket":"private-ticket","mode":"ait-rust-single-v1"});
+        "epoch":Uuid::nil(),"daemon_ticket":"private-ticket","mode":"ait-download-v1","download_token":"private-download-token"});
     let ControlCommand::OpenData(grant) = decode(&base.to_string()).unwrap() else {
         panic!("expected open data");
     };
-    assert!(matches!(grant.mode, DataMode::RustSingle));
+    assert!(matches!(grant.mode, DataMode::Download { .. }));
     assert_eq!(grant.daemon_ticket.expose_secret(), "private-ticket");
     assert!(!format!("{grant:?}").contains("private-ticket"));
     let mut download = base.clone();
-    download["mode"] = json!("ait-download-v1");
+    download.as_object_mut().unwrap().remove("download_token");
     assert!(decode::<ControlCommand>(&download.to_string()).is_err());
     download["download_token"] = json!("private-download-token");
     let command: ControlCommand = decode(&download.to_string()).unwrap();
@@ -111,7 +111,7 @@ fn pairing_and_handshake_messages_reject_wrong_kinds_or_sessions() {
     let welcome = json!({"type":"control.welcome","epoch":id,"future":true});
     assert!(
         matches!(decode::<ControlWelcome>(&welcome.to_string()).unwrap(),
-        ControlWelcome::Welcome { epoch, supported_tunnel_protocols } if epoch == id && supported_tunnel_protocols.is_empty())
+        ControlWelcome::Welcome { epoch } if epoch == id)
     );
     assert!(decode::<ControlWelcome>(&ready.to_string()).is_err());
     assert!(decode::<ClientHello>(r#"{"type":"hello","future":{"extension":true}}"#).is_ok());
@@ -138,4 +138,21 @@ fn download_token_syntax_stays_bounded() {
             Err(Error::Protocol)
         ));
     }
+}
+
+#[test]
+fn retired_business_modes_and_tunnel_commands_are_rejected() {
+    let business = json!({"type":"open_data","relay_session_id":Uuid::nil(),
+        "epoch":Uuid::nil(),"daemon_ticket":"ticket","mode":"ait-rust-single-v1"});
+    assert!(decode::<ControlCommand>(&business.to_string()).is_err());
+    for kind in ["tunnel.grant", "tunnel.error"] {
+        assert!(
+            decode::<ControlCommand>(&json!({"type":kind,"request_id":Uuid::nil()}).to_string())
+                .is_err()
+        );
+    }
+    // A center can advertise its tunnel capability without triggering a request from this Host.
+    let welcome = json!({"type":"control.welcome","epoch":Uuid::nil(),
+        "supported_tunnel_protocols":["ait-relay-tunnel-v1"]});
+    assert!(decode::<ControlWelcome>(&welcome.to_string()).is_ok());
 }
