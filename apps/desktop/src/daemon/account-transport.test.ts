@@ -1,6 +1,5 @@
-import { EventEmitter, once } from "node:events";
+import { EventEmitter } from "node:events";
 import { encodeTerminalStreamFrame, TerminalStreamOpcode } from "@ait/protocol/binary-frames/index";
-import { WebSocketServer } from "ws";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AccountSessionManager } from "./account-session.js";
 import { AccountTransportManager, type AccountTransportOwner } from "./account-transport.js";
@@ -25,22 +24,16 @@ function terminalFrames(count: number): Buffer[] {
   );
 }
 
-async function openRelay(synchronousAck = false) {
-  const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
-  await once(server, "listening");
-  const address = server.address();
-  if (!address || typeof address === "string") throw new Error("Missing test relay address");
+async function openHub(synchronousAck = false) {
+  const h = hubFixture();
+  const socket = await h.online();
   const account = {
-    openVisit: vi.fn(async () => ({
-      relay_session_id: "test-visit",
-      server_id: "test-server",
-      instance_id: "test-instance",
-      client_ticket: "test-only-ticket",
-      url: `ws://127.0.0.1:${address.port}`,
-    })),
-    closeVisit: vi.fn(async () => {}),
+    snapshot: () => ({ hosts: [{ host_id: HOST.host_id, server_id: "test-server" }] }),
   };
-  const manager = new AccountTransportManager(account as unknown as AccountSessionManager);
+  const manager = new AccountTransportManager(
+    account as unknown as AccountSessionManager,
+    h.link as unknown as HubLink,
+  );
   const events: Record<string, unknown>[] = [];
   const scheduledAcks = new Set<NodeJS.Immediate>();
   const pendingAcks = new Set<number>();
@@ -73,44 +66,30 @@ async function openRelay(synchronousAck = false) {
       scheduledAcks.add(scheduled);
     },
   });
-  let burst = (_frames: Buffer[]) => {
-    throw new Error("Test relay is not connected");
-  };
-  server.on("connection", (socket, request) => {
-    socket.send(JSON.stringify({ type: "relay.ready", relay_session_id: "test-visit" }));
-    socket.once("message", () => {
-      socket.send(
-        JSON.stringify({
-          type: "server_info",
-          info: {
-            server_id: "test-server",
-            instance_id: "test-instance",
-            features: ["ait-rust-single-v1"],
-          },
-        }),
-      );
-    });
-    burst = (frames) => {
-      // Real ws frames coalesced in one TCP read reproduce pause()'s buffered dispatch.
-      request.socket.cork();
-      for (const frame of frames) socket.send(frame);
-      request.socket.uncork();
-    };
-  });
   cleanups.push(async () => {
     for (const scheduled of scheduledAcks) clearImmediate(scheduled);
     manager.closeAll();
-    for (const client of server.clients) client.terminate();
-    await new Promise<void>((resolve, reject) =>
-      server.close((error) => (error ? reject(error) : resolve())),
-    );
+    h.link.stop();
   });
-  await manager.open(
-    owner,
-    sessionId,
-    "11111111-1111-4111-8111-111111111111",
-    "https://test.invalid/api",
+  await manager.open(owner, sessionId, HOST.host_id, h.link.centerUrl!);
+  await h.flush();
+  const open = socket.frames("open")[0];
+  socket.receive(
+    { t: "accept", seq: 2, s: open.s },
+    JSON.stringify({
+      type: "server_info",
+      info: {
+        server_id: "test-server",
+        instance_id: "test-instance",
+        features: ["ait-rust-single-v1"],
+      },
+    }),
   );
+  let sequence = 2;
+  const burst = (frames: Buffer[]) => {
+    for (const frame of frames)
+      socket.receive({ t: "msg", seq: ++sequence, s: open.s, pt: "binary" }, frame);
+  };
   await vi.waitFor(() => {
     expect(events.some((event) => typeof event.text === "string")).toBe(true);
     expect(pendingAcks.size).toBe(0);
@@ -118,7 +97,7 @@ async function openRelay(synchronousAck = false) {
   return {
     manager,
     owner,
-    account,
+    link: h.link,
     events,
     burst,
     acknowledge,
@@ -132,11 +111,11 @@ async function openRelay(synchronousAck = false) {
   };
 }
 
-describe("desktop relay terminal delivery", () => {
+describe("desktop Hub terminal delivery", () => {
   it.each([16, 17, 32, 256])(
     "keeps the host connected and preserves all %i frames with asynchronous renderer ACKs",
     async (frameCount) => {
-      const relay = await openRelay();
+      const relay = await openHub();
       const frames = terminalFrames(frameCount);
       relay.burst(frames);
       await vi.waitFor(() =>
@@ -151,7 +130,7 @@ describe("desktop relay terminal delivery", () => {
   );
 
   it("supports synchronous consumers without reordering frames", async () => {
-    const relay = await openRelay(true);
+    const relay = await openHub(true);
     const frames = terminalFrames(32);
     relay.burst(frames);
     await vi.waitFor(() => expect(relay.frames()).toHaveLength(frames.length));
@@ -162,7 +141,7 @@ describe("desktop relay terminal delivery", () => {
   });
 
   it("delivers queued frames only as the renderer acknowledges its delivery window", async () => {
-    const relay = await openRelay();
+    const relay = await openHub();
     relay.manualAck();
     const frames = terminalFrames(32);
     relay.burst(frames);
@@ -181,13 +160,13 @@ describe("desktop relay terminal delivery", () => {
     );
     expect(relay.maxPendingAcks()).toBe(16);
 
-    // Once the queue drains, socket reads must resume for later output.
+    // Once the queue drains, later Hub output must still arrive.
     relay.burst(frames.slice(0, 1));
     await vi.waitFor(() => expect(relay.frames()).toHaveLength(33));
   });
 
   it("still closes a stalled renderer and releases its queued output", async () => {
-    const relay = await openRelay();
+    const relay = await openHub();
     relay.manualAck();
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     relay.burst(terminalFrames(32));
@@ -196,7 +175,7 @@ describe("desktop relay terminal delivery", () => {
     await vi.advanceTimersByTimeAsync(5_000);
     expect(relay.closes()).toEqual([{ sessionId, kind: "close", error: "Relay renderer stalled" }]);
     expect(relay.frames()).toHaveLength(16);
-    expect(relay.account.closeVisit).toHaveBeenCalledExactlyOnceWith("test-visit");
+    relay.link.stop();
     expect(relay.owner.listenerCount("destroyed")).toBe(0);
     expect(relay.owner.listenerCount("did-start-navigation")).toBe(0);
     expect(vi.getTimerCount()).toBe(0);
@@ -214,8 +193,6 @@ describe("desktop Hub data connections", () => {
       const h = hubFixture();
       const socket = await h.online();
       const account = {
-        openVisit: vi.fn(),
-        closeVisit: vi.fn(),
         snapshot: () => ({
           hosts: [{ host_id: HOST.host_id, server_id: "server", instance_id: instanceId }],
         }),
@@ -235,7 +212,6 @@ describe("desktop Hub data connections", () => {
       });
       await manager.open(owner, "account-hub", HOST.host_id, h.link.centerUrl!);
       await h.flush();
-      expect(account.openVisit).not.toHaveBeenCalled();
       const open = socket.frames("open")[0];
       socket.receive(
         { t: "accept", seq: 2, s: open.s },
@@ -274,8 +250,6 @@ describe("desktop Hub data connections", () => {
       snapshot: () => ({
         hosts: [{ host_id: HOST.host_id, server_id: "server", instance_id: null }],
       }),
-      openVisit: vi.fn(),
-      closeVisit: vi.fn(),
     };
     const manager = new AccountTransportManager(
       account as unknown as AccountSessionManager,
@@ -306,4 +280,58 @@ describe("desktop Hub data connections", () => {
     expect(events.some((event) => event.kind === "message")).toBe(false);
     h.link.stop();
   });
+});
+
+describe("desktop Hub availability", () => {
+  it.each(["absent", "stopped", "other-center", "no-serve", "timeout"])(
+    "fails explicitly when Hub is unavailable: %s",
+    async (mode) => {
+      const h = hubFixture();
+      const account = {
+        snapshot: () => ({ hosts: [{ host_id: HOST.host_id, server_id: "server" }] }),
+      };
+      const manager = new AccountTransportManager(
+        account as unknown as AccountSessionManager,
+        mode === "absent" ? undefined : (h.link as unknown as HubLink),
+      );
+      cleanups.push(async () => {
+        manager.closeAll();
+        h.link.stop();
+      });
+      if (mode === "other-center" || mode === "no-serve") {
+        const socket = await h.online();
+        if (mode === "no-serve") socket.presence(2, []);
+      }
+      if (mode === "timeout") h.link.start();
+      const events: Record<string, unknown>[] = [];
+      const owner = Object.assign(new EventEmitter(), {
+        isDestroyed: () => false,
+        send: (_channel: string, event: Record<string, unknown>) => events.push(event),
+      });
+      const opened = manager.open(
+        owner,
+        "account-unavailable",
+        HOST.host_id,
+        mode === "other-center" ? "https://other.test/api" : "https://center.test/api",
+      );
+      if (mode === "timeout") {
+        await vi.advanceTimersByTimeAsync(4999);
+        expect(events).toEqual([]);
+        await vi.advanceTimersByTimeAsync(1);
+      }
+      await opened;
+      expect(events).toEqual([
+        {
+          sessionId: "account-unavailable",
+          kind: "close",
+          error:
+            mode === "no-serve"
+              ? "Target Host is unavailable on Hub."
+              : "Online Hub is unavailable.",
+        },
+      ]);
+      expect(owner.listenerCount("destroyed")).toBe(0);
+      expect(owner.listenerCount("did-start-navigation")).toBe(0);
+    },
+  );
 });

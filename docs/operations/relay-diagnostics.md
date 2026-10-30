@@ -1,5 +1,11 @@
 # Relay reconnect diagnostics
 
+Since [ADR-204](../decisions/clients/adr-204-hub-only-online-business-transport.md),
+online business sessions use Hub exclusively. Correlate those sessions with the
+`hub_link` and `hub_session` daemon spans. Relay control and independent session
+logs now apply to downloads; the `relay_endpoint` and business bridge setup fields
+below describe the retired path and remain useful when reading older logs.
+
 The daemon emits structured relay lifecycle logs at `info` and failures at `warn`.
 Use the daemon's `log_level = "info"` configuration (or `--log-level info`) to
 retain normal closes as well as failures. Desktop-managed daemon stderr is in

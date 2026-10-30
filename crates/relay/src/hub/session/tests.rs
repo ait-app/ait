@@ -92,6 +92,82 @@ async fn bridges_hello_replies_and_inbound_messages_then_reports_close() {
 }
 
 #[tokio::test]
+async fn realtime_voice_controls_pcm_and_playback_confirmation_traverse_hub() {
+    use serde_json::json;
+
+    let exercise = async {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let local = local(listener.local_addr().unwrap());
+        let (inbound_tx, inbound_rx) = mpsc::channel(4);
+        let (output_tx, mut output_rx) = mpsc::channel(4);
+        let task = tokio::spawn(run(
+            local,
+            Uuid::new_v4(),
+            Bytes::from_static(HELLO.as_bytes()),
+            inbound_rx,
+            output_tx,
+        ));
+        let (tcp, _) = listener.accept().await.unwrap();
+        let mut daemon = accept_async(tcp).await.unwrap();
+        assert_eq!(
+            daemon.next().await.unwrap().unwrap(),
+            Message::Text(HELLO.into())
+        );
+        daemon
+            .send(Message::Text("server info".into()))
+            .await
+            .unwrap();
+        assert!(matches!(next(&mut output_rx).await, Output::Accept(_)));
+        for params in [
+            json!({
+                "type":"request", "request_id":"start", "method":"voice.mode.set.request",
+                "params":{"enabled":true,"agentId":"codex"}
+            }),
+            json!({
+                "type":"event", "method":"voice.audio.chunk",
+                "params":{"audio":"AAgACA==","format":"pcm;rate=16000","isLast":false}
+            }),
+            json!({"type":"event","method":"voice.audio.played","params":{"id":"audio-1"}}),
+        ] {
+            let frame = Message::Text(params.to_string().into());
+            inbound_tx.send(frame.clone()).await.unwrap();
+            assert_eq!(daemon.next().await.unwrap().unwrap(), frame);
+        }
+        for params in [
+            json!({
+                "type":"response", "request_id":"start",
+                "result":{"accepted":true,"enabled":true,"agentId":"codex"}
+            }),
+            json!({
+                "type":"event", "method":"voice.audio.output", "params":{
+                    "id":"audio-1", "audio":"AAgACA==",
+                    "format":"audio/pcm;rate=24000;bits=16;channels=1",
+                    "isVoiceMode":true, "isLastChunk":true
+                }
+            }),
+            json!({"type":"event","method":"voice.session.closed","params":{}}),
+        ] {
+            let text = params.to_string();
+            daemon
+                .send(Message::Text(text.clone().into()))
+                .await
+                .unwrap();
+            assert_eq!(
+                next(&mut output_rx).await,
+                Output::Message(PayloadKind::Text, Bytes::from(text))
+            );
+        }
+        drop(inbound_tx);
+        assert!(matches!(
+            daemon.next().await,
+            Some(Ok(Message::Close(_))) | None
+        ));
+        task.await.unwrap();
+    };
+    timeout(Duration::from_secs(5), exercise).await.unwrap();
+}
+
+#[tokio::test]
 async fn refuses_invalid_hello_and_unreachable_daemon() {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let address = listener.local_addr().expect("address");

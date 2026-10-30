@@ -1,5 +1,7 @@
 # ADR-074：账户发现与按需反向中继
 
+> 普通业务传输已由 [ADR-204](../clients/adr-204-hub-only-online-business-transport.md) 修订：仅使用 Hub，传统 Relay 仅保留独立下载与控制。
+
 - 状态：已实现
 - 后续主机持久化与多台访问修订：[ADR-122](adr-122-persistent-online-service-hosts.md)。
 - 日期：2026-10-01

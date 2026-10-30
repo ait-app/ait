@@ -1,12 +1,10 @@
-//! Outbound control and reverse data transport. Local destinations are fixed at construction.
-mod bridge;
+//! Hub business transport and independent Relay downloads with fixed local destinations.
 mod diagnostics;
 mod download;
 pub mod hub;
 mod protocol;
 pub mod rpc;
 mod transport;
-mod tunnel;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -15,7 +13,7 @@ use std::time::Duration;
 
 use futures_util::StreamExt;
 use secrecy::SecretString;
-use tokio::sync::{Mutex, Semaphore, mpsc};
+use tokio::sync::{Mutex, Semaphore};
 use tokio::task::JoinSet;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
@@ -217,12 +215,10 @@ impl Connector {
             ),
         )
         .await?;
-        let ControlWelcome::Welcome {
-            epoch,
-            supported_tunnel_protocols,
-        } = timeout(Duration::from_secs(5), receive(&mut control))
-            .await
-            .map_err(|_| Error::Transport)??;
+        let ControlWelcome::Welcome { epoch } =
+            timeout(Duration::from_secs(5), receive(&mut control))
+                .await
+                .map_err(|_| Error::Transport)??;
         {
             let mut state = self.state.lock().await;
             if state.generation != generation {
@@ -235,11 +231,7 @@ impl Connector {
                 error: None,
             };
         }
-        let multiplex = supported_tunnel_protocols
-            .iter()
-            .any(|name| name == tunnel::PROTOCOL);
-        self.serve_commands(&mut control, &center, epoch, multiplex)
-            .await
+        self.serve_commands(&mut control, &center, epoch).await
     }
 
     async fn serve_commands(
@@ -247,33 +239,18 @@ impl Connector {
         control: &mut Socket,
         center: &Url,
         epoch: Uuid,
-        multiplex: bool,
     ) -> Result<(), Error> {
         let mut tasks = JoinSet::new();
         let mut active = HashMap::new();
-        let (request_tx, mut request_rx) = mpsc::channel(1);
-        let (grant_tx, grant_rx) = mpsc::channel(1);
-        if multiplex {
-            let local = self.local.clone();
-            let center = center.clone();
-            tasks.spawn(async move {
-                tunnel::maintain(local, center, epoch, request_tx, grant_rx).await;
-                None
-            });
-        }
         let idle = tokio::time::sleep(Duration::from_secs(65));
         tokio::pin!(idle);
         loop {
             let message = tokio::select! {
-                Some(request) = request_rx.recv(), if multiplex => {
-                    send(control, Message::Text(protocol::encode(&request)?.into())).await?;
-                    continue;
-                },
                 result = tasks.join_next(), if !tasks.is_empty() => {
                     match result {
-                        Some(Ok(Some(id))) => { active.remove(&id); },
+                        Some(Ok(id)) => { active.remove(&id); },
                         Some(Err(error)) => tracing::warn!(panicked = error.is_panic(), "Relay data task did not complete"),
-                        Some(Ok(None)) | None => {},
+                        None => {},
                     }
                     continue;
                 },
@@ -306,11 +283,8 @@ impl Connector {
                                 // Cancellation of a just-ended stream may still be releasing its permit.
                                 let _permit = timeout(Duration::from_secs(5), local.visits.clone().acquire_owned())
                                     .await.map_err(|_| Error::Transport)?.map_err(|_| Error::Transport)?;
-                                match grant.mode {
-                                    DataMode::Download { download_token } =>
-                                        download::run(url, grant.daemon_ticket, download_token, local, id).await,
-                                    DataMode::RustSingle => bridge::data(url, grant.daemon_ticket, local, id).await,
-                                }
+                                let DataMode::Download { download_token } = grant.mode;
+                                download::run(url, grant.daemon_ticket, download_token, local, id).await
                             } => {
                                 if let Err(error) = result {
                                     tracing::warn!(%error, "Relay session failed");
@@ -318,7 +292,7 @@ impl Connector {
                             },
                         }
                         tracing::info!(elapsed_ms = started.elapsed().as_millis(), "Relay session finished");
-                        Some(id)
+                        id
                     }.instrument(span));
                 }
                 ControlCommand::CancelSession {
@@ -327,15 +301,6 @@ impl Connector {
                     if let Some(cancel) = active.remove(&id) {
                         cancel.cancel();
                     }
-                }
-                ControlCommand::TunnelGrant(grant) if multiplex => {
-                    let _ = grant_tx.try_send((grant.request_id, Some(grant)));
-                }
-                ControlCommand::TunnelError { request_id } if multiplex => {
-                    let _ = grant_tx.try_send((request_id, None));
-                }
-                ControlCommand::TunnelGrant(_) | ControlCommand::TunnelError { .. } => {
-                    return Err(Error::Protocol);
                 }
             }
         }

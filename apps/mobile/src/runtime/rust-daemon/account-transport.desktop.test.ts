@@ -9,9 +9,6 @@ vi.mock("react-native", () => ({ Platform: { OS: "web" } }));
 vi.mock("@/desktop/host", () => ({
   getDesktopHost: () => ({ invoke: mocks.invoke, events: { on: mocks.on } }),
 }));
-vi.mock("./native-account-transport", () => ({
-  createNativeAccountRelayTransportFactory: vi.fn(),
-}));
 beforeEach(() => vi.clearAllMocks());
 
 describe("desktop saved relay targets", () => {

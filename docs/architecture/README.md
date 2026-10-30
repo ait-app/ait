@@ -191,21 +191,20 @@ MCP 复用鉴权与生命周期，不拥有业务服务或新增持久化；见
 从文档树移除，历史可从 Git 查阅。当前语义依据 [ADR 分类索引](../decisions/README.md)，
 启动与连接依据 [daemon 手册](../operations/daemon.md)。
 
-桌面账户管理器持有用户凭据，并向 `api` 传递一次性授权。
-`api` 持有 `relay`；`relay` 使用固定的本地目标地址，仅依赖 model 的共享 RPC 契约。
-relay 拥有控制方法声明和处理，API 的 HTTP 路由与 WebSocket RPC 共用同一 connector，
-鉴权、协商和停机由 API 管理。见 [ADR-108](../decisions/daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)，
-中继产品流程见 [ADR-074](../decisions/clients/adr-074-account-host-relay.md)。
+所有 daemon 通过 `host-link` 自主维护机器授权、节点租约、Hub serve 和专用下载 Relay。
+`api` 持有 `relay`，使用固定的本地目标地址；应用协调授权与传输生命周期，见
+[ADR-201](../decisions/daemon/adr-201-daemon-owned-publication.md)。客户端持有账号凭据，
+只发起设备授权和一次性凭据交接；退出客户端不会停止 daemon 发布。
 
-应用在线服务登录与主机发布分离。平台账户管理器维护显式选中 daemon 的独立租约，
-客户端通过该主机的鉴权业务连接发送一次性控制票据，API 将控制请求交给 relay 执行。
-客户端退出只释放自身节点及绑定 daemon，其他 daemon 保留各自原账户授权，由运行中的平台账户管理器继续续租；主动停止同步只撤销单台租约。
-本机、TCP 和 SSH 主机使用相同同步流程，详见 [ADR-083](../decisions/clients/adr-083-online-service-host-sync.md)。Desktop 登录后默认同步内置 daemon，手动停止的选择由桌面账户存储持久保存；其他主机仍需手动启用，详见 [ADR-096](../decisions/clients/adr-096-desktop-default-host-sync.md)。
+桌面、Android、iOS 和 Web 的普通在线业务连接只走 Hub。Hub 不可用、目标没有 serve
+presence 或等待就绪超时后明确失败，不再回退独立业务 WSS 或 Yamux。专用文件下载继续
+使用独立 Relay WSS；账号发现和下载控制通道保留，见
+[ADR-204](../decisions/clients/adr-204-hub-only-online-business-transport.md)。
 
 账户会话状态机位于 `packages/client`，通过依赖注入获取平台身份、存储、HTTP、WebSocket 和运行时操作。
 账号状态通过客户端节点的 `/v1/relay/channel`（`ait-channel-v1`）连接推送完整 Host 快照与Host 可连接状态事件，daemon 的 `/v1/relay/control` 独立维护 Host 控制，应用心跳和独立节点续租分别维护连接活跃及授权；重连、离线缓存和各端票据认证见 [ADR-154](../decisions/clients/adr-154-account-status-channel.md)。
 Electron 主进程提供桌面适配；Android 和 iOS 的原生适配使用 SecureStore 保存账户令牌，注册无本地
-运行时的客户端节点。移动端通过带认证头的原生 WebSocket 建立中继连接与下载。完整快照中已绑定 server ID 的
+运行时的客户端节点。移动端通过带认证头的原生 WebSocket 建立 Hub 业务连接与独立下载。完整快照中已绑定 server ID 的
 在线服务主机进入客户端持久注册表，账户恢复后按服务地址独立连接；离线记录保留，未绑定 runtime 的记录不生成连接。
 登出保留主机配置，显式删除移除记录，见 [ADR-122](../decisions/clients/adr-122-persistent-online-service-hosts.md)。管理网站中的浏览器客户端复用同源登录，见 [ADR-132](../decisions/clients/adr-132-web-console-client.md)。
 前后台生命周期、配对校验与凭据边界见
@@ -216,7 +215,7 @@ Relay 的类型化消息集中在 `crates/relay/src/protocol.rs`，WebSocket 收
 `transport.rs`；单连接协商标识由 `crates/model/src/server/single.rs` 定义。
 模块职责见 [ADR-075](../decisions/clients/adr-075-relay-protocol-modules.md)。
 
-Linux headless 的 `daemon` 组装 `host-link` 的 HTTP/凭据 adapter，`api` 实现其
+`daemon` 组装 `host-link` 的 HTTP/凭据 adapter，`api` 实现其
 `ManagedRelay` port 并独占 Relay 与 Hub 控制权。Hub、Relay 分别取票和重连，凭据轮换与节点续租独立运行；授权失效时统一关闭两条链路，见 [ADR-200](../decisions/daemon/adr-200-headless-independent-transports.md)。机器复用中心 Host/node 身份，长期授权是 node grant。
 普通客户端只读取 managed 状态；刷新 token 不进入传输模块或本地 RPC。
 详细边界见 [ADR-087](../decisions/clients/adr-087-headless-device-authorization.md)。

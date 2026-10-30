@@ -357,7 +357,7 @@ describe("account center domain migration", () => {
           expiresAt: saved.expiresAt,
         }),
       );
-      const visit = await manager.openVisit("remote", saved.center);
+      const visit = await manager.openDownload("remote", "download-token", saved.center);
       expect(visit.url).toBe("wss://aitapp.cn/api/v1/relay/sessions/visit/client");
       expect(
         http.mock.calls.every(([url]) => String(url).startsWith("https://aitapp.cn/api/")),
@@ -412,7 +412,7 @@ function fixture(autoChannel = true) {
       leaseExpired = false;
       return Response.json({ error: { code: "node_session_expired" } }, { status: 401 });
     }
-    if (path.endsWith("/relay-sessions"))
+    if (path.endsWith("/relay-downloads"))
       return Response.json({
         relay_session_id: "visit",
         client_ticket: "once",
@@ -700,7 +700,7 @@ describe("hosted account login", () => {
 });
 
 describe("client-only account lifecycle", () => {
-  it("keeps existing host visits available when another host is selected or deselected", async () => {
+  it("keeps host downloads available when another host is selected or deselected", async () => {
     const { manager, deps, login, channel, host } = fixture();
     await login();
     channel.sockets[0]!.receive({
@@ -711,12 +711,12 @@ describe("client-only account lifecycle", () => {
     vi.mocked(deps.closeTransports).mockClear();
     const center = manager.snapshot().center;
     await manager.select("remote");
-    await manager.openVisit("remote", center);
+    await manager.openDownload("remote", "download-token", center);
     await manager.select("another");
-    await manager.openVisit("remote", center);
-    await manager.openVisit("another", center);
+    await manager.openDownload("remote", "download-token", center);
+    await manager.openDownload("another", "download-token", center);
     await manager.select(null);
-    await manager.openVisit("remote", center);
+    await manager.openDownload("remote", "download-token", center);
     expect(deps.closeTransports).not.toHaveBeenCalled();
     await manager.logout();
     expect(deps.closeTransports).toHaveBeenCalledOnce();
@@ -726,9 +726,6 @@ describe("client-only account lifecycle", () => {
     const { manager, login, http } = fixture();
     await login();
     const count = http.mock.calls.length;
-    await expect(manager.openVisit("remote", "https://other.test/api")).rejects.toThrow(
-      "Sign in to the online service used by this host.",
-    );
     await expect(manager.openDownload("remote", "token", "https://other.test/api")).rejects.toThrow(
       "Sign in to the online service used by this host.",
     );
@@ -760,19 +757,23 @@ describe("client-only account lifecycle", () => {
     await manager.logout();
   });
 
-  it("reconnects saved hosts without a new selection and revokes visits on logout", async () => {
+  it("allows downloads without a new selection and revokes them on logout", async () => {
     const { manager, deps, login } = fixture();
     await login();
-    expect(await manager.openVisit("remote", manager.snapshot().center)).toMatchObject({
+    expect(
+      await manager.openDownload("remote", "download-token", manager.snapshot().center),
+    ).toMatchObject({
       url: "wss://aitapp.cn/api/v1/relay/sessions/visit/client",
     });
     await manager.logout();
     expect(deps.closeTransports).toHaveBeenCalled();
     expect(deps.save).toHaveBeenLastCalledWith(null);
-    await expect(manager.openVisit("remote", manager.snapshot().center)).rejects.toThrow();
+    await expect(
+      manager.openDownload("remote", "download-token", manager.snapshot().center),
+    ).rejects.toThrow();
   });
 
-  it("lets a visit opened during a cold restore wait for this device's registration", async () => {
+  it("lets a download opened during a cold restore wait for this device's registration", async () => {
     const { manager, http } = fixture();
     const saved = {
       center: "https://aitapp.cn/api",
@@ -782,12 +783,12 @@ describe("client-only account lifecycle", () => {
     };
     await manager.restore(saved);
     // Saved hosts reconnect before the first registration tick has run.
-    const visit = manager.openVisit("remote", saved.center);
+    const visit = manager.openDownload("remote", "download-token", saved.center);
     await vi.advanceTimersByTimeAsync(1);
     await expect(visit).resolves.toMatchObject({ relay_session_id: "visit" });
     const paths = http.mock.calls.map(([url]) => String(url));
     expect(paths.findIndex((path) => path.endsWith("/nodes/register"))).toBeLessThan(
-      paths.findIndex((path) => path.endsWith("/relay-sessions")),
+      paths.findIndex((path) => path.endsWith("/relay-downloads")),
     );
     await manager.logout();
   });
@@ -807,12 +808,12 @@ describe("client-only account lifecycle", () => {
         : original(url, options),
     );
     await manager.restore(saved);
-    const timedOut = manager.openVisit("remote", saved.center);
+    const timedOut = manager.openDownload("remote", "download-token", saved.center);
     const timedOutResult = expect(timedOut).rejects.toThrow("wait for this device to register");
     await vi.advanceTimersByTimeAsync(10_000);
     await timedOutResult;
 
-    const signedOut = manager.openVisit("remote", saved.center);
+    const signedOut = manager.openDownload("remote", "download-token", saved.center);
     const signedOutResult = expect(signedOut).rejects.toThrow("wait for this device to register");
     await manager.logout();
     await signedOutResult;
@@ -829,7 +830,9 @@ describe("client-only account lifecycle", () => {
     const count = http.mock.calls.length;
     await vi.advanceTimersByTimeAsync(120_000);
     expect(http).toHaveBeenCalledTimes(count);
-    await expect(manager.openVisit("remote", manager.snapshot().center)).rejects.toThrow();
+    await expect(
+      manager.openDownload("remote", "download-token", manager.snapshot().center),
+    ).rejects.toThrow();
     expect(deps.closeTransports).toHaveBeenCalled();
     expireLease();
     manager.resume();
