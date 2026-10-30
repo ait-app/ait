@@ -16,8 +16,7 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
 use crate::ports::agent_session::{
-    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture,
-    AgentSessionSpec,
+    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
 use crate::ports::environment::AgentEnvironment;
 use crate::protocol::provider::Details;
@@ -61,37 +60,36 @@ impl PiClient {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentClient for PiClient {
     fn supports_session_import(&self) -> bool {
         true
     }
 
-    fn list_sessions<'a>(
-        &'a self,
-        options: &'a crate::ports::native_history::ListOptions,
-    ) -> AgentSessionFuture<'a, Vec<crate::ports::native_history::SessionDescriptor>> {
+    async fn list_sessions(
+        &self,
+        options: &crate::ports::native_history::ListOptions,
+    ) -> Result<Vec<crate::ports::native_history::SessionDescriptor>, AgentSessionError> {
         let client = self.clone();
         let options = options.clone();
-        Box::pin(async move {
-            tokio::task::spawn_blocking(move || history::list(&client, &options))
-                .await
-                .map_err(|error| history_task_failed("list_sessions", &error))?
-        })
+
+        tokio::task::spawn_blocking(move || history::list(&client, &options))
+            .await
+            .map_err(|error| history_task_failed("list_sessions", &error))?
     }
 
-    fn inspect_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, crate::ports::native_history::SessionHistory> {
+    async fn inspect_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<crate::ports::native_history::SessionHistory, AgentSessionError> {
         let client = self.clone();
         let handle = handle.clone();
         let cwd = cwd.to_owned();
-        Box::pin(async move {
-            tokio::task::spawn_blocking(move || history::inspect(&client, &handle, &cwd))
-                .await
-                .map_err(|error| history_task_failed("inspect_session", &error))?
-        })
+
+        tokio::task::spawn_blocking(move || history::inspect(&client, &handle, &cwd))
+            .await
+            .map_err(|error| history_task_failed("inspect_session", &error))?
     }
 
     fn provider(&self) -> &'static str {
@@ -114,121 +112,108 @@ impl AgentClient for PiClient {
             "supportsRewindFiles":false,"supportsRewindBoth":false}})
     }
 
-    fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        Box::pin(async {
-            if !super::configuration::executable(&self.program) {
-                return Ok(false);
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        if !super::configuration::executable(&self.program) {
+            return Ok(false);
+        }
+        Ok(transport::version(self).await.is_ok())
+    }
+
+    async fn diagnostic(&self) -> Result<String, AgentSessionError> {
+        match transport::version_info(self).await {
+            Ok(version) if !version.supported => Ok(format!(
+                "Pi {} is unsupported; requires a supported Pi version (1.2 or newer).",
+                version.text
+            )),
+            Ok(_) => Ok(
+                "Pi RPC ready (requires Pi 1.2 or newer); authentication is managed by Pi"
+                    .to_owned(),
+            ),
+            Err(AgentSessionError::Unavailable) => {
+                Ok("Pi executable is unavailable; check PATH or AIT_SERVER_PI_BIN.".to_owned())
             }
-            Ok(transport::version(self).await.is_ok())
-        })
-    }
-
-    fn diagnostic(&self) -> AgentSessionFuture<'_, String> {
-        Box::pin(async {
-            match transport::version_info(self).await {
-                Ok(version) if !version.supported => Ok(format!(
-                    "Pi {} is unsupported; requires a supported Pi version (1.2 or newer).",
-                    version.text
-                )),
-                Ok(_) => Ok(
-                    "Pi RPC ready (requires Pi 1.2 or newer); authentication is managed by Pi"
-                        .to_owned(),
-                ),
-                Err(AgentSessionError::Unavailable) => {
-                    Ok("Pi executable is unavailable; check PATH or AIT_SERVER_PI_BIN.".to_owned())
-                }
-                Err(_) => Ok(
-                    "Pi version probe failed or timed out; requires Pi 1.2 or newer.".to_owned(),
-                ),
+            Err(_) => {
+                Ok("Pi version probe failed or timed out; requires Pi 1.2 or newer.".to_owned())
             }
+        }
+    }
+
+    async fn discover(&self, cwd: &str) -> Result<Details, AgentSessionError> {
+        config::directory(cwd)?;
+        transport::version(self).await?;
+        let mut transport = transport::Transport::spawn(self, cwd, &["--no-session".into()])?;
+        let result = transport
+            .request(json!({"type":"get_available_models"}))
+            .await;
+        transport.close().await?;
+        Ok(Details {
+            models: config::models(&result?)?,
+            modes: Vec::new(),
+            features: Vec::new(),
         })
     }
 
-    fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
-        Box::pin(async move {
-            config::directory(cwd)?;
-            transport::version(self).await?;
-            let mut transport = transport::Transport::spawn(self, cwd, &["--no-session".into()])?;
-            let result = transport
-                .request(json!({"type":"get_available_models"}))
-                .await;
-            transport.close().await?;
-            Ok(Details {
-                models: config::models(&result?)?,
-                modes: Vec::new(),
-                features: Vec::new(),
-            })
-        })
+    async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
+        config::spec(spec)?;
+        if let Some(model) = &spec.config.model
+            && !self
+                .discover(&spec.cwd)
+                .await?
+                .models
+                .iter()
+                .any(|item| item["id"] == *model)
+        {
+            return Err(AgentSessionError::Rejected);
+        }
+        Ok(())
     }
 
-    fn validate_selection<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            config::spec(spec)?;
-            if let Some(model) = &spec.config.model
-                && !self
-                    .discover(&spec.cwd)
-                    .await?
-                    .models
-                    .iter()
-                    .any(|item| item["id"] == *model)
-            {
-                return Err(AgentSessionError::Rejected);
-            }
-            Ok(())
-        })
+    async fn create_session(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
     }
 
-    fn create_session<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
-        })
-    }
-
-    fn create_session_with_environment<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-        environment: &'a AgentEnvironment,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
+    async fn create_session_with_environment(
+        &self,
+        spec: &AgentSessionSpec,
+        environment: &AgentEnvironment,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         let mut client = self.clone();
         client.environment = environment.clone();
         client.version = Arc::default();
-        Box::pin(async move { client.create_session(spec).await })
+        client.create_session(spec).await
     }
 
-    fn resume_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        spec: &'a AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        spec: &AgentSessionSpec,
         purpose: AgentResumePurpose,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            if purpose == AgentResumePurpose::History {
-                return Err(AgentSessionError::Unavailable);
-            }
-            let needs_lookup = handle.metadata.as_ref().is_some_and(|metadata| {
-                metadata.get("hasInput") == Some(&Value::Bool(true))
-                    && handle
-                        .native_handle
-                        .as_ref()
-                        .and_then(Value::as_str)
-                        .or_else(|| metadata.get("sessionFile")?.as_str())
-                        .is_none_or(|path| !std::path::Path::new(path).is_file())
-            });
-            let resolved = if needs_lookup {
-                let history = self.inspect_session(handle, &spec.cwd).await?;
-                let mut resolved = handle.clone();
-                resolved.native_handle = None;
-                resolved.metadata = Some(history.resume_metadata);
-                Cow::Owned(resolved)
-            } else {
-                Cow::Borrowed(handle)
-            };
-            Ok(Box::new(session::open(self, spec, Some(&resolved)).await?)
-                as Box<dyn AgentSession>)
-        })
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        if purpose == AgentResumePurpose::History {
+            return Err(AgentSessionError::Unavailable);
+        }
+        let needs_lookup = handle.metadata.as_ref().is_some_and(|metadata| {
+            metadata.get("hasInput") == Some(&Value::Bool(true))
+                && handle
+                    .native_handle
+                    .as_ref()
+                    .and_then(Value::as_str)
+                    .or_else(|| metadata.get("sessionFile")?.as_str())
+                    .is_none_or(|path| !std::path::Path::new(path).is_file())
+        });
+        let resolved = if needs_lookup {
+            let history = self.inspect_session(handle, &spec.cwd).await?;
+            let mut resolved = handle.clone();
+            resolved.native_handle = None;
+            resolved.metadata = Some(history.resume_metadata);
+            Cow::Owned(resolved)
+        } else {
+            Cow::Borrowed(handle)
+        };
+        Ok(Box::new(session::open(self, spec, Some(&resolved)).await?) as Box<dyn AgentSession>)
     }
 }
 

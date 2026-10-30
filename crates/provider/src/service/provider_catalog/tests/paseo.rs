@@ -42,6 +42,7 @@ impl Probe {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentClient for Probe {
     fn settings(&self, config: &domain::agent_runtime::StoredAgentConfig) -> Value {
         self.state
@@ -57,36 +58,32 @@ impl AgentClient for Probe {
         self.provider
     }
 
-    fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        Box::pin(async {
-            let mut state = self.state.lock().unwrap();
-            state.availability_calls += 1;
-            state.available
-        })
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        let mut state = self.state.lock().unwrap();
+        state.availability_calls += 1;
+        state.available
     }
 
-    fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
-        Box::pin(async {
-            let mut state = self.state.lock().unwrap();
-            state.discovery_cwds.push(cwd.to_owned());
-            state.discovery.clone()
-        })
+    async fn discover(&self, cwd: &str) -> Result<Details, AgentSessionError> {
+        let mut state = self.state.lock().unwrap();
+        state.discovery_cwds.push(cwd.to_owned());
+        state.discovery.clone()
     }
 
-    fn create_session<'a>(
-        &'a self,
-        _: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async { Err(AgentSessionError::Unavailable) })
+    async fn create_session(
+        &self,
+        _: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
     }
 
-    fn resume_session<'a>(
-        &'a self,
-        _: &'a AgentPersistenceHandle,
-        _: &'a AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        _: &AgentPersistenceHandle,
+        _: &AgentSessionSpec,
         _: AgentResumePurpose,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async { Err(AgentSessionError::Unavailable) })
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
     }
 }
 

@@ -9,18 +9,19 @@ use serde_json::json;
 #[derive(Debug)]
 struct MinimalSession;
 
+#[async_trait::async_trait]
 impl AgentSession for MinimalSession {
     fn provider(&self) -> &'static str {
         "minimal"
     }
-    fn runtime_info(&mut self) -> AgentSessionFuture<'_, StoredAgentRuntimeInfo> {
-        Box::pin(async { Err(AgentSessionError::Unavailable) })
+    async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
     }
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
         None
     }
-    fn close(&mut self) -> AgentSessionFuture<'_, ()> {
-        Box::pin(async { Ok(()) })
+    async fn close(&mut self) -> Result<(), AgentSessionError> {
+        Ok(())
     }
 }
 
@@ -39,27 +40,28 @@ impl MinimalClient {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentClient for MinimalClient {
     fn provider(&self) -> &'static str {
         "minimal"
     }
-    fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        Box::pin(async { self.available })
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        self.available
     }
-    fn create_session<'a>(
-        &'a self,
-        _: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
+    async fn create_session(
+        &self,
+        _: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         self.created.fetch_add(1, Ordering::SeqCst);
-        Box::pin(async { Ok(Box::new(MinimalSession) as Box<dyn AgentSession>) })
+        Ok(Box::new(MinimalSession) as Box<dyn AgentSession>)
     }
-    fn resume_session<'a>(
-        &'a self,
-        _: &'a AgentPersistenceHandle,
-        _: &'a AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        _: &AgentPersistenceHandle,
+        _: &AgentSessionSpec,
         _: AgentResumePurpose,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async { Err(AgentSessionError::Unavailable) })
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
     }
 }
 
@@ -80,7 +82,7 @@ fn handle() -> AgentPersistenceHandle {
     }
 }
 
-async fn unavailable<T>(operation: AgentSessionFuture<'_, T>) {
+async fn unavailable<T>(operation: impl Future<Output = Result<T, AgentSessionError>>) {
     assert_eq!(operation.await.err(), Some(AgentSessionError::Unavailable));
 }
 

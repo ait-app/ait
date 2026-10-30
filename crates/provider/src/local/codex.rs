@@ -33,8 +33,8 @@ use serde_json::{Value, json};
 use transport::Transport;
 
 use crate::ports::agent_session::{
-    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture,
-    AgentSessionSpec, AgentTurnEvent,
+    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
+    AgentTurnEvent,
 };
 
 /// A native Codex executable. Authentication remains in Codex's own environment and storage.
@@ -231,6 +231,7 @@ impl CodexClient {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentClient for CodexClient {
     fn supports_agent_mcp(&self) -> bool {
         true
@@ -244,14 +245,14 @@ impl AgentClient for CodexClient {
         true
     }
 
-    fn create_session_with_environment<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-        environment: &'a crate::ports::environment::AgentEnvironment,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
+    async fn create_session_with_environment(
+        &self,
+        spec: &AgentSessionSpec,
+        environment: &crate::ports::environment::AgentEnvironment,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         let mut client = self.clone();
         client.environment = environment.clone();
-        Box::pin(async move { client.open(spec, None).await })
+        client.open(spec, None).await
     }
 
     fn summary_model(&self, models: &[Value]) -> Option<domain::summary::SummarySelection> {
@@ -262,13 +263,13 @@ impl AgentClient for CodexClient {
         )
     }
 
-    fn generate_summary<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-        prompt: &'a str,
-        schema: &'a Value,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(self.metadata(spec, prompt, schema))
+    async fn generate_summary(
+        &self,
+        spec: &AgentSessionSpec,
+        prompt: &str,
+        schema: &Value,
+    ) -> Result<String, AgentSessionError> {
+        self.metadata(spec, prompt, schema).await
     }
 
     fn handles_out_of_band(&self, text: &str) -> bool {
@@ -303,108 +304,102 @@ impl AgentClient for CodexClient {
                 "supportsRealtimeVoice":true,"supportsStreaming":true,"supportsReasoningStream":true,"supportsSessionListing":true}})
     }
 
-    fn draft_features<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Vec<Value>> {
-        Box::pin(async move {
-            if spec.config.model.is_none() {
-                return Ok(Vec::new());
-            }
-            if !self.is_available().await? {
-                return Err(AgentSessionError::Unavailable);
-            }
-            let catalog = self.discover_native(&spec.cwd).await?;
-            let _ = catalog;
-            Ok(self.features(&spec.config))
-        })
-    }
-
-    fn validate_selection<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, ()> {
-        Box::pin(self.validate_remote(spec))
-    }
-
-    fn diagnostic(&self) -> AgentSessionFuture<'_, String> {
-        Box::pin(self.native_diagnostic())
-    }
-
-    fn prepare_usage(
+    async fn draft_features(
         &self,
-    ) -> AgentSessionFuture<'_, crate::ports::account_usage::PreparedUsage<'_>> {
-        Box::pin(self.prepare_native_usage())
+        spec: &AgentSessionSpec,
+    ) -> Result<Vec<Value>, AgentSessionError> {
+        if spec.config.model.is_none() {
+            return Ok(Vec::new());
+        }
+        if !self.is_available().await? {
+            return Err(AgentSessionError::Unavailable);
+        }
+        let catalog = self.discover_native(&spec.cwd).await?;
+        let _ = catalog;
+        Ok(self.features(&spec.config))
     }
 
-    fn usage(&self) -> AgentSessionFuture<'_, Value> {
-        Box::pin(self.native_usage())
+    async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
+        self.validate_remote(spec).await
     }
 
-    fn commands<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, Vec<Value>> {
-        Box::pin(async move {
-            validate(spec)?;
-            self.native_commands(&spec.cwd).await
-        })
+    async fn diagnostic(&self) -> Result<String, AgentSessionError> {
+        self.native_diagnostic().await
     }
 
-    fn subagents<'a>(
-        &'a self,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, Vec<crate::ports::controls::NativeSubagent>> {
-        Box::pin(self.native_subagents(cwd))
+    async fn prepare_usage(
+        &self,
+    ) -> Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+        self.prepare_native_usage().await
     }
 
-    fn rewind<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        spec: &'a AgentSessionSpec,
-        message: &'a str,
-    ) -> AgentSessionFuture<'a, crate::ports::native_history::SessionHistory> {
-        Box::pin(async move {
-            if handle.provider != "codex" {
-                return Err(AgentSessionError::Unavailable);
-            }
-            let mut history = self
-                .native_rewind(&handle.session_id, spec, message)
-                .await?;
-            let mut questions = async_questions::Questions::restore(
-                handle
-                    .metadata
-                    .as_ref()
-                    .and_then(|metadata| metadata.get("asyncQuestions")),
-            )?;
-            let mut notes = crate::local::notes::Notes::restore(
-                handle
-                    .metadata
-                    .as_ref()
-                    .and_then(|metadata| metadata.get("controlNotes")),
-            )?;
-            if let Some(plan) = plans::Plan::restore(
-                handle
-                    .metadata
-                    .as_ref()
-                    .and_then(|metadata| metadata.get("pendingPlan")),
-            )?
-            .filter(|plan| plan.retained(&history.entries))
-            {
-                history
-                    .resume_metadata
-                    .insert("pendingPlan".to_owned(), json!(plan));
-            }
-            notes.retain(&history.entries);
-            notes.history(&mut history.entries);
-            if let Some(saved) = notes.saved() {
-                history
-                    .resume_metadata
-                    .insert("controlNotes".to_owned(), saved);
-            }
-            questions.retain(&history.entries);
-            questions.history(&mut history.entries)?;
-            if let Some(saved) = questions.saved() {
-                history
-                    .resume_metadata
-                    .insert("asyncQuestions".to_owned(), saved);
-            }
-            Ok(history)
-        })
+    async fn usage(&self) -> Result<Value, AgentSessionError> {
+        self.native_usage().await
+    }
+
+    async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {
+        validate(spec)?;
+        self.native_commands(&spec.cwd).await
+    }
+
+    async fn subagents(
+        &self,
+        cwd: &str,
+    ) -> Result<Vec<crate::ports::controls::NativeSubagent>, AgentSessionError> {
+        self.native_subagents(cwd).await
+    }
+
+    async fn rewind(
+        &self,
+        handle: &AgentPersistenceHandle,
+        spec: &AgentSessionSpec,
+        message: &str,
+    ) -> Result<crate::ports::native_history::SessionHistory, AgentSessionError> {
+        if handle.provider != "codex" {
+            return Err(AgentSessionError::Unavailable);
+        }
+        let mut history = self
+            .native_rewind(&handle.session_id, spec, message)
+            .await?;
+        let mut questions = async_questions::Questions::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("asyncQuestions")),
+        )?;
+        let mut notes = crate::local::notes::Notes::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("controlNotes")),
+        )?;
+        if let Some(plan) = plans::Plan::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("pendingPlan")),
+        )?
+        .filter(|plan| plan.retained(&history.entries))
+        {
+            history
+                .resume_metadata
+                .insert("pendingPlan".to_owned(), json!(plan));
+        }
+        notes.retain(&history.entries);
+        notes.history(&mut history.entries);
+        if let Some(saved) = notes.saved() {
+            history
+                .resume_metadata
+                .insert("controlNotes".to_owned(), saved);
+        }
+        questions.retain(&history.entries);
+        questions.history(&mut history.entries)?;
+        if let Some(saved) = questions.saved() {
+            history
+                .resume_metadata
+                .insert("asyncQuestions".to_owned(), saved);
+        }
+        Ok(history)
     }
 
     fn provider(&self) -> &'static str {
@@ -415,122 +410,116 @@ impl AgentClient for CodexClient {
         validate_config(config)
     }
 
-    fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        Box::pin(async {
-            Ok(if self.program.components().count() > 1 {
-                self.program.is_file()
-            } else {
-                std::env::var_os("PATH").is_some_and(|paths| {
-                    std::env::split_paths(&paths).any(|path| path.join(&self.program).is_file())
-                })
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        Ok(if self.program.components().count() > 1 {
+            self.program.is_file()
+        } else {
+            std::env::var_os("PATH").is_some_and(|paths| {
+                std::env::split_paths(&paths).any(|path| path.join(&self.program).is_file())
             })
         })
     }
 
-    fn discover<'a>(
-        &'a self,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, crate::protocol::provider::Details> {
-        Box::pin(self.discover_native(cwd))
+    async fn discover(
+        &self,
+        cwd: &str,
+    ) -> Result<crate::protocol::provider::Details, AgentSessionError> {
+        self.discover_native(cwd).await
     }
 
-    fn history<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, Vec<crate::protocol::timeline::NativeItem>> {
-        Box::pin(async move {
-            if handle.provider != "codex" {
-                return Err(AgentSessionError::Unavailable);
-            }
-            let mut entries = self.read_history(&handle.session_id, cwd).await?;
-            crate::local::notes::Notes::restore(
-                handle
-                    .metadata
-                    .as_ref()
-                    .and_then(|metadata| metadata.get("controlNotes")),
-            )?
-            .history(&mut entries);
-            async_questions::Questions::restore(
-                handle
-                    .metadata
-                    .as_ref()
-                    .and_then(|metadata| metadata.get("asyncQuestions")),
-            )?
-            .history(&mut entries)?;
-            Ok(entries)
-        })
+    async fn history(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<Vec<crate::protocol::timeline::NativeItem>, AgentSessionError> {
+        if handle.provider != "codex" {
+            return Err(AgentSessionError::Unavailable);
+        }
+        let mut entries = self.read_history(&handle.session_id, cwd).await?;
+        crate::local::notes::Notes::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("controlNotes")),
+        )?
+        .history(&mut entries);
+        async_questions::Questions::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("asyncQuestions")),
+        )?
+        .history(&mut entries)?;
+        Ok(entries)
     }
 
-    fn create_session<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(self.open(spec, None))
+    async fn create_session(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        self.open(spec, None).await
     }
 
-    fn list_sessions<'a>(
-        &'a self,
-        options: &'a crate::ports::native_history::ListOptions,
-    ) -> AgentSessionFuture<'a, Vec<crate::ports::native_history::SessionDescriptor>> {
-        Box::pin(self.list_native(options))
+    async fn list_sessions(
+        &self,
+        options: &crate::ports::native_history::ListOptions,
+    ) -> Result<Vec<crate::ports::native_history::SessionDescriptor>, AgentSessionError> {
+        self.list_native(options).await
     }
 
-    fn inspect_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, crate::ports::native_history::SessionHistory> {
-        Box::pin(async move {
-            if handle.provider != "codex" {
-                return Err(AgentSessionError::Unavailable);
-            }
-            let mut history = self.inspect_native(&handle.session_id, cwd).await?;
-            if let Some(plan) = plans::Plan::restore(
-                handle
-                    .metadata
-                    .as_ref()
-                    .and_then(|metadata| metadata.get("pendingPlan")),
-            )? {
-                history
-                    .resume_metadata
-                    .insert("pendingPlan".to_owned(), json!(plan));
-            }
-            let notes = crate::local::notes::Notes::restore(
-                handle
-                    .metadata
-                    .as_ref()
-                    .and_then(|metadata| metadata.get("controlNotes")),
-            )?;
-            notes.history(&mut history.entries);
-            if let Some(saved) = notes.saved() {
-                history
-                    .resume_metadata
-                    .insert("controlNotes".to_owned(), saved);
-            }
-            let questions = async_questions::Questions::restore(
-                handle
-                    .metadata
-                    .as_ref()
-                    .and_then(|metadata| metadata.get("asyncQuestions")),
-            )?;
-            questions.history(&mut history.entries)?;
-            if let Some(saved) = questions.saved() {
-                history
-                    .resume_metadata
-                    .insert("asyncQuestions".to_owned(), saved);
-            }
-            Ok(history)
-        })
+    async fn inspect_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<crate::ports::native_history::SessionHistory, AgentSessionError> {
+        if handle.provider != "codex" {
+            return Err(AgentSessionError::Unavailable);
+        }
+        let mut history = self.inspect_native(&handle.session_id, cwd).await?;
+        if let Some(plan) = plans::Plan::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("pendingPlan")),
+        )? {
+            history
+                .resume_metadata
+                .insert("pendingPlan".to_owned(), json!(plan));
+        }
+        let notes = crate::local::notes::Notes::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("controlNotes")),
+        )?;
+        notes.history(&mut history.entries);
+        if let Some(saved) = notes.saved() {
+            history
+                .resume_metadata
+                .insert("controlNotes".to_owned(), saved);
+        }
+        let questions = async_questions::Questions::restore(
+            handle
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("asyncQuestions")),
+        )?;
+        questions.history(&mut history.entries)?;
+        if let Some(saved) = questions.saved() {
+            history
+                .resume_metadata
+                .insert("asyncQuestions".to_owned(), saved);
+        }
+        Ok(history)
     }
 
-    fn resume_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        spec: &'a AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        spec: &AgentSessionSpec,
         purpose: AgentResumePurpose,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(self.open(spec, Some((handle, purpose))))
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        self.open(spec, Some((handle, purpose))).await
     }
 }
 
@@ -704,20 +693,21 @@ impl CodexSession {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentSession for CodexSession {
-    fn start_realtime(
+    async fn start_realtime(
         &mut self,
         endpoint: model::realtime::Endpoint,
-    ) -> AgentSessionFuture<'_, ()> {
-        Box::pin(self.open_realtime(endpoint))
+    ) -> Result<(), AgentSessionError> {
+        self.open_realtime(endpoint).await
     }
 
     fn realtime_active(&self) -> bool {
         self.realtime.is_some()
     }
 
-    fn service_realtime(&mut self) -> AgentSessionFuture<'_, ()> {
-        Box::pin(self.drive_realtime())
+    async fn service_realtime(&mut self) -> Result<(), AgentSessionError> {
+        self.drive_realtime().await
     }
 
     fn failure_message(&self) -> Option<Cow<'_, str>> {
@@ -734,42 +724,40 @@ impl AgentSession for CodexSession {
             .and_then(|transport| transport.diagnostics.failure())
     }
 
-    fn prepare_account_usage(
+    async fn prepare_account_usage(
         &self,
-    ) -> AgentSessionFuture<'_, crate::ports::account_usage::PreparedUsage<'_>> {
-        Box::pin(self.client.prepare_native_usage_in(&self.cwd))
+    ) -> Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+        self.client.prepare_native_usage_in(&self.cwd).await
     }
 
-    fn account_usage(&self) -> AgentSessionFuture<'_, Value> {
-        Box::pin(self.client.native_usage_in(&self.cwd))
+    async fn account_usage(&self) -> Result<Value, AgentSessionError> {
+        self.client.native_usage_in(&self.cwd).await
     }
 
     fn pending_foreground(&self) -> bool {
         self.pending_goal_start || self.manual_compactions > 0
     }
 
-    fn cancel_pending(&mut self) -> AgentSessionFuture<'_, ()> {
-        Box::pin(async {
-            if self.pending_goal_start {
-                self.transport
-                    .as_mut()
-                    .ok_or(AgentSessionError::Failed)?
-                    .request(
-                        "thread/goal/set",
-                        json!({"threadId":self.id,"status":"paused"}),
-                    )
-                    .await?;
-                self.pending_goal_start = false;
-            }
-            Ok(())
-        })
+    async fn cancel_pending(&mut self) -> Result<(), AgentSessionError> {
+        if self.pending_goal_start {
+            self.transport
+                .as_mut()
+                .ok_or(AgentSessionError::Failed)?
+                .request(
+                    "thread/goal/set",
+                    json!({"threadId":self.id,"status":"paused"}),
+                )
+                .await?;
+            self.pending_goal_start = false;
+        }
+        Ok(())
     }
 
-    fn out_of_band<'a>(
-        &'a mut self,
-        prompt: &'a crate::protocol::prompt::AgentPrompt,
-    ) -> AgentSessionFuture<'a, ()> {
-        Box::pin(self.execute_command(prompt))
+    async fn out_of_band(
+        &mut self,
+        prompt: &crate::protocol::prompt::AgentPrompt,
+    ) -> Result<(), AgentSessionError> {
+        self.execute_command(prompt).await
     }
     fn subagents(&self) -> Vec<crate::ports::controls::NativeSubagent> {
         self.children.children()
@@ -811,36 +799,34 @@ impl AgentSession for CodexSession {
             .collect()
     }
 
-    fn respond_permission<'a>(
-        &'a mut self,
-        id: &'a str,
-        response: &'a Value,
-    ) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            if self.questions.contains(id) {
-                let entry = self.questions.resolve(id, response)?;
-                self.stream
-                    .events
-                    .push_back(AgentTurnEvent::Timeline(entry));
-                return Ok(());
-            }
-            if self
-                .pending_plan
-                .as_ref()
-                .is_some_and(|plan| plan.request_id() == id)
-            {
-                return self.resolve_plan(response);
-            }
-            self.answer_permission(id, response).await
-        })
+    async fn respond_permission(
+        &mut self,
+        id: &str,
+        response: &Value,
+    ) -> Result<(), AgentSessionError> {
+        if self.questions.contains(id) {
+            let entry = self.questions.resolve(id, response)?;
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::Timeline(entry));
+            return Ok(());
+        }
+        if self
+            .pending_plan
+            .as_ref()
+            .is_some_and(|plan| plan.request_id() == id)
+        {
+            return self.resolve_plan(response);
+        }
+        self.answer_permission(id, response).await
     }
 
     fn provider(&self) -> &'static str {
         "codex"
     }
 
-    fn runtime_info(&mut self) -> AgentSessionFuture<'_, StoredAgentRuntimeInfo> {
-        Box::pin(async { Ok(self.info.clone()) })
+    async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
+        Ok(self.info.clone())
     }
 
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
@@ -862,149 +848,138 @@ impl AgentSession for CodexSession {
         })
     }
 
-    fn start_turn<'a>(
-        &'a mut self,
-        text: &'a str,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(async move {
-            self.start_input(&crate::protocol::prompt::AgentPrompt::text(text), config)
-                .await
-        })
+    async fn start_turn(
+        &mut self,
+        text: &str,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start_input(&crate::protocol::prompt::AgentPrompt::text(text), config)
+            .await
     }
 
-    fn start_input<'a>(
-        &'a mut self,
-        prompt: &'a crate::protocol::prompt::AgentPrompt,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(async move {
-            validate_config(config)?;
-            prompt.validate()?;
-            if self.history || self.active_turn.is_some() {
-                return Err(AgentSessionError::Failed);
-            }
-            self.preflight_plan(prompt)?;
-            self.last_failure = None;
-            if let Some(transport) = &mut self.transport {
-                transport.diagnostics.clear();
-                transport.failure.clear();
-            }
+    async fn start_input(
+        &mut self,
+        prompt: &crate::protocol::prompt::AgentPrompt,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        validate_config(config)?;
+        prompt.validate()?;
+        if self.history || self.active_turn.is_some() {
+            return Err(AgentSessionError::Failed);
+        }
+        self.preflight_plan(prompt)?;
+        self.last_failure = None;
+        if let Some(transport) = &mut self.transport {
+            transport.diagnostics.clear();
+            transport.failure.clear();
+        }
 
-            self.apply_configuration(config).await?;
-            let (approval, _, _) = controls::policy(config);
-            let sandbox = self.sandbox.policy(config);
-            let transport = self.transport.as_mut().ok_or(AgentSessionError::Failed)?;
-            let input =
-                commands::input(transport, &self.cwd, prompt, &self.client.environment).await?;
-            let collaboration = workflows::collaboration(
-                transport,
-                config,
-                self.info.model.as_deref(),
-                self.config
-                    .feature_values
-                    .as_ref()
-                    .is_some_and(|values| values.contains_key("plan_mode")),
-            )
-            .await?;
-            let mut params = json!({"threadId":self.id,"input":input,
+        self.apply_configuration(config).await?;
+        let (approval, _, _) = controls::policy(config);
+        let sandbox = self.sandbox.policy(config);
+        let transport = self.transport.as_mut().ok_or(AgentSessionError::Failed)?;
+        let input = commands::input(transport, &self.cwd, prompt, &self.client.environment).await?;
+        let collaboration = workflows::collaboration(
+            transport,
+            config,
+            self.info.model.as_deref(),
+            self.config
+                .feature_values
+                .as_ref()
+                .is_some_and(|values| values.contains_key("plan_mode")),
+        )
+        .await?;
+        let mut params = json!({"threadId":self.id,"input":input,
                 "model":config.model,"effort":config.thinking_option_id,"approvalPolicy":approval,
                 "clientUserMessageId":prompt.client_message_id,"outputSchema":prompt.output_schema,
                 "approvalsReviewer":workflows::reviewer(config),
                 "sandboxPolicy":sandbox,"serviceTier":self.client.service_tier(config)});
-            if let Some(collaboration) = collaboration {
-                params["collaborationMode"] = collaboration;
-            }
-            let response = transport.request("turn/start", params).await?;
-            let id = response
-                .pointer("/turn/id")
-                .and_then(Value::as_str)
-                .filter(|id| !id.is_empty())
-                .ok_or(AgentSessionError::Failed)?
-                .to_owned();
-            self.dismiss_plan_for(prompt)?;
-            self.latest_plan = None;
-            self.active_turn = Some(id.clone());
-            self.config = config.clone();
-            if config.model.is_some() {
-                self.info.model.clone_from(&config.model);
-            }
-            self.info.mode_id = Some(
-                config
-                    .mode_id
-                    .clone()
-                    .unwrap_or_else(|| "read-only".to_owned()),
-            );
-            self.info
-                .thinking_option_id
-                .clone_from(&config.thinking_option_id);
-            self.last_message = None;
-            let queued = std::mem::take(&mut self.stream.events);
-            self.stream = streaming::Stream::default();
-            self.stream.events = queued;
-            Ok(id)
-        })
+        if let Some(collaboration) = collaboration {
+            params["collaborationMode"] = collaboration;
+        }
+        let response = transport.request("turn/start", params).await?;
+        let id = response
+            .pointer("/turn/id")
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
+            .ok_or(AgentSessionError::Failed)?
+            .to_owned();
+        self.dismiss_plan_for(prompt)?;
+        self.latest_plan = None;
+        self.active_turn = Some(id.clone());
+        self.config = config.clone();
+        if config.model.is_some() {
+            self.info.model.clone_from(&config.model);
+        }
+        self.info.mode_id = Some(
+            config
+                .mode_id
+                .clone()
+                .unwrap_or_else(|| "read-only".to_owned()),
+        );
+        self.info
+            .thinking_option_id
+            .clone_from(&config.thinking_option_id);
+        self.last_message = None;
+        let queued = std::mem::take(&mut self.stream.events);
+        self.stream = streaming::Stream::default();
+        self.stream.events = queued;
+        Ok(id)
     }
 
-    fn steer_turn<'a>(&'a mut self, turn_id: &'a str, text: &'a str) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            self.steer_input(turn_id, &crate::protocol::prompt::AgentPrompt::text(text))
-                .await
-        })
+    async fn steer_turn(&mut self, turn_id: &str, text: &str) -> Result<(), AgentSessionError> {
+        self.steer_input(turn_id, &crate::protocol::prompt::AgentPrompt::text(text))
+            .await
     }
 
-    fn steer_input<'a>(
-        &'a mut self,
-        turn_id: &'a str,
-        prompt: &'a crate::protocol::prompt::AgentPrompt,
-    ) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            prompt.validate()?;
-            if self.history
-                || self.active_turn.as_deref() != Some(turn_id)
-                || prompt.text.starts_with('/')
-                || prompt.output_schema.is_some()
-                || !self.permissions.is_empty()
-            {
-                return Err(AgentSessionError::Rejected);
-            }
-            let response = self
-                .transport
-                .as_mut()
-                .ok_or(AgentSessionError::Failed)?
-                .request(
-                    "turn/steer",
-                    json!({"threadId":self.id,"expectedTurnId":turn_id,
+    async fn steer_input(
+        &mut self,
+        turn_id: &str,
+        prompt: &crate::protocol::prompt::AgentPrompt,
+    ) -> Result<(), AgentSessionError> {
+        prompt.validate()?;
+        if self.history
+            || self.active_turn.as_deref() != Some(turn_id)
+            || prompt.text.starts_with('/')
+            || prompt.output_schema.is_some()
+            || !self.permissions.is_empty()
+        {
+            return Err(AgentSessionError::Rejected);
+        }
+        let response = self
+            .transport
+            .as_mut()
+            .ok_or(AgentSessionError::Failed)?
+            .request(
+                "turn/steer",
+                json!({"threadId":self.id,"expectedTurnId":turn_id,
                     "clientUserMessageId":prompt.client_message_id,"input":prompt.codex_input()?}),
-                )
-                .await?;
-            if response
-                .get("turnId")
-                .or_else(|| response.pointer("/turn/id"))
-                .and_then(Value::as_str)
-                != Some(turn_id)
-            {
-                return Err(AgentSessionError::Failed);
-            }
-            Ok(())
-        })
+            )
+            .await?;
+        if response
+            .get("turnId")
+            .or_else(|| response.pointer("/turn/id"))
+            .and_then(Value::as_str)
+            != Some(turn_id)
+        {
+            return Err(AgentSessionError::Failed);
+        }
+        Ok(())
     }
 
-    fn cancel_turn<'a>(&'a mut self, turn_id: &'a str) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            if self.active_turn.as_deref() != Some(turn_id) {
-                return Err(AgentSessionError::Failed);
-            }
-            self.transport
-                .as_mut()
-                .ok_or(AgentSessionError::Failed)?
-                .request(
-                    "turn/interrupt",
-                    json!({"threadId":self.id,"turnId":turn_id}),
-                )
-                .await?;
-            Ok(())
-        })
+    async fn cancel_turn(&mut self, turn_id: &str) -> Result<(), AgentSessionError> {
+        if self.active_turn.as_deref() != Some(turn_id) {
+            return Err(AgentSessionError::Failed);
+        }
+        self.transport
+            .as_mut()
+            .ok_or(AgentSessionError::Failed)?
+            .request(
+                "turn/interrupt",
+                json!({"threadId":self.id,"turnId":turn_id}),
+            )
+            .await?;
+        Ok(())
     }
 
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
@@ -1111,22 +1086,20 @@ impl AgentSession for CodexSession {
         Ok(None)
     }
 
-    fn close(&mut self) -> AgentSessionFuture<'_, ()> {
-        Box::pin(async {
-            if let Some(transport) = &mut self.transport {
-                if let Some(message) = transport.failure.take_message() {
-                    self.last_failure = Some(message);
-                }
-                transport.close().await?;
+    async fn close(&mut self) -> Result<(), AgentSessionError> {
+        if let Some(transport) = &mut self.transport {
+            if let Some(message) = transport.failure.take_message() {
+                self.last_failure = Some(message);
             }
-            self.transport = None;
-            self.realtime = None;
-            self.active_turn = None;
-            self.permissions.clear();
-            self.children.stopped();
-            self.stream = streaming::Stream::default();
-            Ok(())
-        })
+            transport.close().await?;
+        }
+        self.transport = None;
+        self.realtime = None;
+        self.active_turn = None;
+        self.permissions.clear();
+        self.children.stopped();
+        self.stream = streaming::Stream::default();
+        Ok(())
     }
 }
 

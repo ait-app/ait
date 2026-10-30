@@ -139,22 +139,24 @@ struct Generator {
     requests: std::sync::Mutex<Vec<SummaryRequest>>,
     fail: bool,
 }
+#[async_trait::async_trait]
 impl model::summary::SummarySource for Generator {
-    fn generate(&self, request: SummaryRequest) -> model::summary::SummaryFuture<'_> {
-        Box::pin(async move {
-            assert!(
-                self.runtime.jobs.try_acquire().is_ok(),
-                "generation must release foreground job admission"
-            );
-            self.requests.lock().unwrap().push(request);
-            if self.fail {
-                Err(domain::summary::SummaryError::Unavailable)
-            } else {
-                Ok(
-                    json!({"title":"Generated PR","body":"Generated details","message":"Generated commit"}),
-                )
-            }
-        })
+    async fn generate(
+        &self,
+        request: SummaryRequest,
+    ) -> Result<Value, domain::summary::SummaryError> {
+        assert!(
+            self.runtime.jobs.try_acquire().is_ok(),
+            "generation must release foreground job admission"
+        );
+        self.requests.lock().unwrap().push(request);
+        if self.fail {
+            Err(domain::summary::SummaryError::Unavailable)
+        } else {
+            Ok(
+                json!({"title":"Generated PR","body":"Generated details","message":"Generated commit"}),
+            )
+        }
     }
     fn shutdown(&self) {}
 }

@@ -1,6 +1,6 @@
 //! Host publication ports. Authentication, transport and durable storage remain adapters.
 
-use std::{fmt, future::Future, pin::Pin};
+use std::fmt;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -58,17 +58,21 @@ pub enum CallError {
     Rejected(String),
 }
 
-/// One call completes only after a business reply, never on a transport acknowledgement.
-pub type CallFuture<'a> = Pin<Box<dyn Future<Output = Result<Value, CallError>> + Send + 'a>>;
-
 /// A serve link adapter, independent of local business RPC connections.
+#[async_trait::async_trait]
 pub trait Center: fmt::Debug + Send + Sync {
     /// Observe authority, physical connection and discovered capability changes.
     fn state(&self) -> watch::Receiver<LinkState>;
 
     /// Call `method` only under `scope`, returning the result or a classified failure.
+    /// Completion requires a business reply, never just a transport acknowledgement.
     /// Pending calls survive physical resume; a new logical link requires an idempotent retry.
-    fn call(&self, scope: Scope, method: &'static str, params: Value) -> CallFuture<'_>;
+    async fn call(
+        &self,
+        scope: Scope,
+        method: &'static str,
+        params: Value,
+    ) -> Result<Value, CallError>;
 }
 
 /// Host-owned post-commit observer, invoked before connection focus or subscription filtering.

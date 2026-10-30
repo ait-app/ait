@@ -14,8 +14,7 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
 use crate::ports::agent_session::{
-    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture,
-    AgentSessionSpec,
+    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
 use crate::ports::environment::AgentEnvironment;
 use crate::protocol::provider::Details;
@@ -93,34 +92,31 @@ impl DeepSeekHarnessClient {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentClient for DeepSeekHarnessClient {
     fn supports_agent_mcp(&self) -> bool {
         !self.interactive
     }
 
-    fn usage(&self) -> AgentSessionFuture<'_, Value> {
-        Box::pin(async move {
-            if !self.interactive {
-                return Ok(native::quota::acp_unavailable());
-            }
-            let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
-            native::quota::read(self, cwd.to_str().ok_or(AgentSessionError::Failed)?).await
-        })
+    async fn usage(&self) -> Result<Value, AgentSessionError> {
+        if !self.interactive {
+            return Ok(native::quota::acp_unavailable());
+        }
+        let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
+        native::quota::read(self, cwd.to_str().ok_or(AgentSessionError::Failed)?).await
     }
 
-    fn prepare_usage(
+    async fn prepare_usage(
         &self,
-    ) -> AgentSessionFuture<'_, crate::ports::account_usage::PreparedUsage<'_>> {
-        Box::pin(async move {
-            if !self.interactive {
-                return Ok(crate::ports::account_usage::PreparedUsage {
-                    identity: None,
-                    report: Box::pin(async { Ok(native::quota::acp_unavailable()) }),
-                });
-            }
-            let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
-            native::quota::prepare_host(self, cwd.to_str().ok_or(AgentSessionError::Failed)?).await
-        })
+    ) -> Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {
+        if !self.interactive {
+            return Ok(crate::ports::account_usage::PreparedUsage {
+                identity: None,
+                report: Box::pin(async { Ok(native::quota::acp_unavailable()) }),
+            });
+        }
+        let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
+        native::quota::prepare_host(self, cwd.to_str().ok_or(AgentSessionError::Failed)?).await
     }
 
     fn supports_summary_generation(&self) -> bool {
@@ -145,32 +141,32 @@ impl AgentClient for DeepSeekHarnessClient {
         Some(selection)
     }
 
-    fn generate_summary<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-        prompt: &'a str,
-        schema: &'a Value,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(self.metadata(spec, prompt, schema))
+    async fn generate_summary(
+        &self,
+        spec: &AgentSessionSpec,
+        prompt: &str,
+        schema: &Value,
+    ) -> Result<String, AgentSessionError> {
+        self.metadata(spec, prompt, schema).await
     }
 
     fn supports_session_import(&self) -> bool {
         self.interactive
     }
 
-    fn list_sessions<'a>(
-        &'a self,
-        options: &'a crate::ports::native_history::ListOptions,
-    ) -> AgentSessionFuture<'a, Vec<crate::ports::native_history::SessionDescriptor>> {
-        Box::pin(native::native_sessions::list(self, options))
+    async fn list_sessions(
+        &self,
+        options: &crate::ports::native_history::ListOptions,
+    ) -> Result<Vec<crate::ports::native_history::SessionDescriptor>, AgentSessionError> {
+        native::native_sessions::list(self, options).await
     }
 
-    fn inspect_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, crate::ports::native_history::SessionHistory> {
-        Box::pin(native::native_sessions::inspect(self, handle, cwd))
+    async fn inspect_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<crate::ports::native_history::SessionHistory, AgentSessionError> {
+        native::native_sessions::inspect(self, handle, cwd).await
     }
 
     fn provider(&self) -> &'static str {
@@ -181,17 +177,15 @@ impl AgentClient for DeepSeekHarnessClient {
         self.interactive
     }
 
-    fn history<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, Vec<crate::protocol::timeline::NativeItem>> {
-        Box::pin(async move {
-            if !self.interactive {
-                return Err(AgentSessionError::Unavailable);
-            }
-            native::history::read(self, handle, cwd).await
-        })
+    async fn history(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<Vec<crate::protocol::timeline::NativeItem>, AgentSessionError> {
+        if !self.interactive {
+            return Err(AgentSessionError::Unavailable);
+        }
+        native::history::read(self, handle, cwd).await
     }
 
     fn validate_config(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
@@ -215,132 +209,116 @@ impl AgentClient for DeepSeekHarnessClient {
             "supportsRewindConversation":false,"supportsRewindFiles":false,"supportsRewindBoth":false}})
     }
 
-    fn draft_features<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Vec<Value>> {
-        Box::pin(async move {
-            self.validate_config(&spec.config)?;
-            if !self.interactive {
-                return Ok(Vec::new());
-            }
-            let mut details = native::discover(self, &spec.cwd).await?;
-            if let Some(value) = spec
-                .config
-                .feature_values
+    async fn draft_features(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Vec<Value>, AgentSessionError> {
+        self.validate_config(&spec.config)?;
+        if !self.interactive {
+            return Ok(Vec::new());
+        }
+        let mut details = native::discover(self, &spec.cwd).await?;
+        if let Some(value) = spec
+            .config
+            .feature_values
+            .as_ref()
+            .and_then(|values| values.get("permission_preset"))
+        {
+            details.features[0]["value"] = value.clone();
+        }
+        Ok(details.features)
+    }
+
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        Ok(super::configuration::executable(&self.program)
+            && self
+                .desktop
                 .as_ref()
-                .and_then(|values| values.get("permission_preset"))
-            {
-                details.features[0]["value"] = value.clone();
-            }
-            Ok(details.features)
-        })
+                .is_none_or(|desktop| desktop.entrypoint.is_file()))
     }
 
-    fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        Box::pin(async {
-            Ok(super::configuration::executable(&self.program)
-                && self
-                    .desktop
-                    .as_ref()
-                    .is_none_or(|desktop| desktop.entrypoint.is_file()))
-        })
-    }
-
-    fn diagnostic(&self) -> AgentSessionFuture<'_, String> {
-        Box::pin(async move {
-            if !self.is_available().await? {
-                return Ok("DeepSeek Harness executable is unavailable".to_owned());
-            }
-            let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
-            let details = self
-                .discover(cwd.to_str().ok_or(AgentSessionError::Failed)?)
-                .await?;
-            Ok(format!(
-                "DeepSeek Harness {} ready; {} models",
-                if self.interactive {
-                    "native Host"
-                } else {
-                    "ACP v1"
-                },
-                details.models.len()
-            ))
-        })
-    }
-
-    fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
-        Box::pin(async move {
+    async fn diagnostic(&self) -> Result<String, AgentSessionError> {
+        if !self.is_available().await? {
+            return Ok("DeepSeek Harness executable is unavailable".to_owned());
+        }
+        let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
+        let details = self
+            .discover(cwd.to_str().ok_or(AgentSessionError::Failed)?)
+            .await?;
+        Ok(format!(
+            "DeepSeek Harness {} ready; {} models",
             if self.interactive {
-                return native::discover(self, cwd).await;
-            }
-            self.probe(&AgentSessionSpec {
-                provider: PROVIDER.to_owned(),
-                cwd: cwd.to_owned(),
-                config: StoredAgentConfig::default(),
-            })
-            .await
-        })
-    }
-
-    fn validate_selection<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            if self.interactive {
-                self.validate_config(&spec.config)?;
-                let details = native::discover(self, &spec.cwd).await?;
-                return native::validate_selection(&details, &spec.config);
-            }
-            self.probe(spec).await.map(|_| ())
-        })
-    }
-
-    fn create_session<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            if self.interactive {
-                Ok(Box::new(native::open(self, spec, None).await?) as Box<dyn AgentSession>)
+                "native Host"
             } else {
-                Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
-            }
-        })
+                "ACP v1"
+            },
+            details.models.len()
+        ))
     }
 
-    fn create_session_with_environment<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-        environment: &'a AgentEnvironment,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
+    async fn discover(&self, cwd: &str) -> Result<Details, AgentSessionError> {
+        if self.interactive {
+            return native::discover(self, cwd).await;
+        }
+        self.probe(&AgentSessionSpec {
+            provider: PROVIDER.to_owned(),
+            cwd: cwd.to_owned(),
+            config: StoredAgentConfig::default(),
+        })
+        .await
+    }
+
+    async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
+        if self.interactive {
+            self.validate_config(&spec.config)?;
+            let details = native::discover(self, &spec.cwd).await?;
+            return native::validate_selection(&details, &spec.config);
+        }
+        self.probe(spec).await.map(|_| ())
+    }
+
+    async fn create_session(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        if self.interactive {
+            Ok(Box::new(native::open(self, spec, None).await?) as Box<dyn AgentSession>)
+        } else {
+            Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
+        }
+    }
+
+    async fn create_session_with_environment(
+        &self,
+        spec: &AgentSessionSpec,
+        environment: &AgentEnvironment,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         let mut client = self.clone();
         client.environment = environment.clone();
-        Box::pin(async move { client.create_session(spec).await })
+        client.create_session(spec).await
     }
 
-    fn resume_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        spec: &'a AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        spec: &AgentSessionSpec,
         purpose: AgentResumePurpose,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            if purpose == AgentResumePurpose::History {
-                return Err(AgentSessionError::Unavailable);
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        if purpose == AgentResumePurpose::History {
+            return Err(AgentSessionError::Unavailable);
+        }
+        if self.interactive {
+            Ok(Box::new(native::open(self, spec, Some(handle)).await?) as Box<dyn AgentSession>)
+        } else {
+            if handle
+                .metadata
+                .as_ref()
+                .is_some_and(|metadata| metadata.get("transport").is_some())
+            {
+                return Err(AgentSessionError::Rejected);
             }
-            if self.interactive {
-                Ok(Box::new(native::open(self, spec, Some(handle)).await?)
-                    as Box<dyn AgentSession>)
-            } else {
-                if handle
-                    .metadata
-                    .as_ref()
-                    .is_some_and(|metadata| metadata.get("transport").is_some())
-                {
-                    return Err(AgentSessionError::Rejected);
-                }
-                Ok(Box::new(session::open(self, spec, Some(handle)).await?)
-                    as Box<dyn AgentSession>)
-            }
-        })
+            Ok(Box::new(session::open(self, spec, Some(handle)).await?) as Box<dyn AgentSession>)
+        }
     }
 }
 

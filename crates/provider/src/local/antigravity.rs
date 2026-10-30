@@ -16,8 +16,7 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
 use crate::ports::agent_session::{
-    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture,
-    AgentSessionSpec,
+    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
 use crate::ports::environment::AgentEnvironment;
 use crate::protocol::provider::Details;
@@ -64,6 +63,7 @@ impl AntigravityClient {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentClient for AntigravityClient {
     fn provider(&self) -> &'static str {
         PROVIDER
@@ -85,86 +85,74 @@ impl AgentClient for AntigravityClient {
             "supportsRewindFiles":false,"supportsRewindBoth":false}})
     }
 
-    fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        Box::pin(async { Ok(super::configuration::executable(&self.program)) })
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        Ok(super::configuration::executable(&self.program))
     }
 
-    fn diagnostic(&self) -> AgentSessionFuture<'_, String> {
-        Box::pin(async move {
-            if !self.is_available().await? {
-                return Ok("Antigravity CLI (agy) executable is unavailable".to_owned());
-            }
-            let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
-            let models =
-                discovery::models(self, cwd.to_str().ok_or(AgentSessionError::Failed)?).await?;
-            Ok(format!("Antigravity CLI ready; {} models", models.len()))
+    async fn diagnostic(&self) -> Result<String, AgentSessionError> {
+        if !self.is_available().await? {
+            return Ok("Antigravity CLI (agy) executable is unavailable".to_owned());
+        }
+        let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
+        let models =
+            discovery::models(self, cwd.to_str().ok_or(AgentSessionError::Failed)?).await?;
+        Ok(format!("Antigravity CLI ready; {} models", models.len()))
+    }
+
+    async fn usage(&self) -> Result<Value, AgentSessionError> {
+        let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
+        quota::read(self, &cwd).await
+    }
+
+    async fn discover(&self, cwd: &str) -> Result<Details, AgentSessionError> {
+        config::validate_directory(cwd)?;
+        Ok(Details {
+            models: discovery::models(self, cwd).await?,
+            modes: config::modes(),
+            features: Vec::new(),
         })
     }
 
-    fn usage(&self) -> AgentSessionFuture<'_, Value> {
-        Box::pin(async move {
-            let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
-            quota::read(self, &cwd).await
-        })
+    async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
+        config::validate_spec(spec)?;
+        if let Some(model) = &spec.config.model
+            && !discovery::models(self, &spec.cwd)
+                .await?
+                .iter()
+                .any(|entry| entry["id"] == *model)
+        {
+            return Err(AgentSessionError::Rejected);
+        }
+        Ok(())
     }
 
-    fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
-        Box::pin(async move {
-            config::validate_directory(cwd)?;
-            Ok(Details {
-                models: discovery::models(self, cwd).await?,
-                modes: config::modes(),
-                features: Vec::new(),
-            })
-        })
+    async fn create_session(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
     }
 
-    fn validate_selection<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            config::validate_spec(spec)?;
-            if let Some(model) = &spec.config.model
-                && !discovery::models(self, &spec.cwd)
-                    .await?
-                    .iter()
-                    .any(|entry| entry["id"] == *model)
-            {
-                return Err(AgentSessionError::Rejected);
-            }
-            Ok(())
-        })
-    }
-
-    fn create_session<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
-        })
-    }
-
-    fn create_session_with_environment<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-        environment: &'a AgentEnvironment,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
+    async fn create_session_with_environment(
+        &self,
+        spec: &AgentSessionSpec,
+        environment: &AgentEnvironment,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         let mut client = self.clone();
         client.environment = environment.clone();
-        Box::pin(async move { client.create_session(spec).await })
+        client.create_session(spec).await
     }
 
-    fn resume_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        spec: &'a AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        spec: &AgentSessionSpec,
         purpose: AgentResumePurpose,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            if purpose == AgentResumePurpose::History {
-                return Err(AgentSessionError::Unavailable);
-            }
-            Ok(Box::new(session::open(self, spec, Some(handle)).await?) as Box<dyn AgentSession>)
-        })
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        if purpose == AgentResumePurpose::History {
+            return Err(AgentSessionError::Unavailable);
+        }
+        Ok(Box::new(session::open(self, spec, Some(handle)).await?) as Box<dyn AgentSession>)
     }
 }
 

@@ -107,6 +107,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 name = "api"
 version = "0.1.22"
 dependencies = [
+ "async-trait",
  "axum",
  "bot",
  "browser",
@@ -392,6 +393,7 @@ dependencies = [
 name = "bot"
 version = "0.1.22"
 dependencies = [
+ "async-trait",
  "axum",
  "chrono",
  "domain",
@@ -974,6 +976,7 @@ dependencies = [
 name = "filesystem"
 version = "0.1.22"
 dependencies = [
+ "async-trait",
  "base64 0.22.1",
  "chrono",
  "domain",
@@ -1248,6 +1251,7 @@ dependencies = [
 name = "host-link"
 version = "0.1.22"
 dependencies = [
+ "async-trait",
  "chrono",
  "secrecy",
  "serde",
@@ -1809,6 +1813,7 @@ dependencies = [
 name = "model"
 version = "0.1.22"
 dependencies = [
+ "async-trait",
  "base64 0.22.1",
  "chrono",
  "domain",
@@ -2155,6 +2160,7 @@ dependencies = [
 name = "provider"
 version = "0.1.22"
 dependencies = [
+ "async-trait",
  "axum",
  "base64 0.22.1",
  "chrono",
@@ -2427,6 +2433,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 name = "relay"
 version = "0.1.22"
 dependencies = [
+ "async-trait",
  "futures-util",
  "model",
  "rcgen",
@@ -2921,6 +2928,7 @@ checksum = "c62751faa8bc286982334a082fe125184a29fc89d17775766e4f891b7d726980"
 name = "schedule"
 version = "0.1.22"
 dependencies = [
+ "async-trait",
  "chrono",
  "chrono-tz",
  "domain",
@@ -3798,6 +3806,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 name = "voice"
 version = "0.1.22"
 dependencies = [
+ "async-trait",
  "axum",
  "base64 0.22.1",
  "bzip2 0.6.1",

@@ -361,6 +361,7 @@ impl StatusRelay {
     }
 }
 
+#[async_trait::async_trait]
 impl host_link::ManagedRelay for StatusRelay {
     async fn start(&self, session: Uuid, ticket: SecretString) -> Result<(), Error> {
         self.inner.start(session, ticket).await

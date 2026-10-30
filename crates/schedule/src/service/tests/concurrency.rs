@@ -211,36 +211,35 @@ struct CheckpointOnCancel {
     entered: tokio::sync::Notify,
 }
 
+#[async_trait::async_trait]
 impl Runner for CheckpointOnCancel {
-    fn resolve(
+    async fn resolve(
         &self,
         _: String,
         target: domain::schedule::Target,
-    ) -> Pin<Box<dyn Future<Output = Result<domain::schedule::Target, Error>> + Send + '_>> {
-        Box::pin(async move { Ok(target) })
+    ) -> Result<domain::schedule::Target, Error> {
+        Ok(target)
     }
-    fn run(
+    async fn run(
         &self,
         _: Schedule,
         _: String,
         progress: Progress,
         cancel: CancellationToken,
-    ) -> Pin<Box<dyn Future<Output = Outcome> + Send + '_>> {
-        Box::pin(async move {
-            self.entered.notify_one();
-            cancel.cancelled().await;
-            progress
-                .record(
-                    Some("cleanup-agent".into()),
-                    Some("cleanup-workspace".into()),
-                )
-                .await
-                .expect("shutdown must continue acknowledging accepted runner checkpoints");
-            Outcome {
-                error: Some("cleaned up after cancellation".into()),
-                ..Outcome::default()
-            }
-        })
+    ) -> Outcome {
+        self.entered.notify_one();
+        cancel.cancelled().await;
+        progress
+            .record(
+                Some("cleanup-agent".into()),
+                Some("cleanup-workspace".into()),
+            )
+            .await
+            .expect("shutdown must continue acknowledging accepted runner checkpoints");
+        Outcome {
+            error: Some("cleaned up after cancellation".into()),
+            ..Outcome::default()
+        }
     }
 }
 

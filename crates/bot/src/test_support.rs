@@ -24,43 +24,38 @@ pub(crate) struct Native {
     pub(crate) fail_denial: AtomicBool,
     pub(crate) status: Mutex<Option<Value>>,
 }
+#[async_trait::async_trait]
 impl Executor for Native {
-    fn execute(
-        &self,
-        owner: SessionOwner,
-        action: Action,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Value, ErrorCode>> + Send + '_>> {
-        Box::pin(async move {
-            self.calls.lock().unwrap().push((owner, action.clone()));
-            Ok(match action {
-                Action::Create { .. } | Action::Close { .. } | Action::Cancel { .. } => {
-                    json!({"ok":true})
+    async fn execute(&self, owner: SessionOwner, action: Action) -> Result<Value, ErrorCode> {
+        self.calls.lock().unwrap().push((owner, action.clone()));
+        Ok(match action {
+            Action::Create { .. } | Action::Close { .. } | Action::Cancel { .. } => {
+                json!({"ok":true})
+            }
+            Action::Release { .. } => json!({"released":true}),
+            Action::Send { agent_id, text, .. } => {
+                self.messages.lock().unwrap().insert(agent_id, text);
+                json!({"accepted":true})
+            }
+            Action::Permission { .. } => {
+                if self.fail_denial.load(Ordering::SeqCst) {
+                    return Err(ErrorCode::AgentIo);
                 }
-                Action::Release { .. } => json!({"released":true}),
-                Action::Send { agent_id, text, .. } => {
-                    self.messages.lock().unwrap().insert(agent_id, text);
-                    json!({"accepted":true})
+                self.approval.store(false, Ordering::SeqCst);
+                json!({"resolved":true})
+            }
+            Action::Status { agent_id } => {
+                if let Some(status) = self.status.lock().unwrap().as_ref() {
+                    return Ok(status.clone());
                 }
-                Action::Permission { .. } => {
-                    if self.fail_denial.load(Ordering::SeqCst) {
-                        return Err(ErrorCode::AgentIo);
-                    }
-                    self.approval.store(false, Ordering::SeqCst);
-                    json!({"resolved":true})
+                if self.approval.load(Ordering::SeqCst) {
+                    json!({"status":"permission","final":{"pendingPermissions":[{"id":"approval-1","options":["allow","deny"]}]}})
+                } else if self.hold.load(Ordering::SeqCst) {
+                    json!({"status":"running"})
+                } else {
+                    json!({"status":"idle","lastMessage":format!("reply:{}",self.messages.lock().unwrap().get(&agent_id).unwrap())})
                 }
-                Action::Status { agent_id } => {
-                    if let Some(status) = self.status.lock().unwrap().as_ref() {
-                        return Ok(status.clone());
-                    }
-                    if self.approval.load(Ordering::SeqCst) {
-                        json!({"status":"permission","final":{"pendingPermissions":[{"id":"approval-1","options":["allow","deny"]}]}})
-                    } else if self.hold.load(Ordering::SeqCst) {
-                        json!({"status":"running"})
-                    } else {
-                        json!({"status":"idle","lastMessage":format!("reply:{}",self.messages.lock().unwrap().get(&agent_id).unwrap())})
-                    }
-                }
-            })
+            }
         })
     }
 }

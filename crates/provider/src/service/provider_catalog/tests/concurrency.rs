@@ -33,6 +33,7 @@ struct ParallelClient {
     gate: Arc<Gate>,
 }
 
+#[async_trait::async_trait]
 impl AgentClient for ParallelClient {
     fn discovery_timeout(&self) -> Duration {
         if self.provider == "opencode" {
@@ -45,34 +46,32 @@ impl AgentClient for ParallelClient {
     fn provider(&self) -> &'static str {
         self.provider
     }
-    fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        Box::pin(async { Ok(true) })
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        Ok(true)
     }
-    fn discover<'a>(&'a self, _cwd: &'a str) -> AgentSessionFuture<'a, Details> {
-        Box::pin(async move {
-            self.gate.calls.fetch_add(1, Ordering::SeqCst);
-            self.gate.entered.add_permits(1);
-            self.gate.release.acquire().await.unwrap().forget();
-            Ok(Details {
-                models: vec![json!({"id":"test","provider":self.provider})],
-                modes: vec![],
-                features: vec![],
-            })
+    async fn discover(&self, _cwd: &str) -> Result<Details, AgentSessionError> {
+        self.gate.calls.fetch_add(1, Ordering::SeqCst);
+        self.gate.entered.add_permits(1);
+        self.gate.release.acquire().await.unwrap().forget();
+        Ok(Details {
+            models: vec![json!({"id":"test","provider":self.provider})],
+            modes: vec![],
+            features: vec![],
         })
     }
-    fn create_session<'a>(
-        &'a self,
-        _spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async { Err(AgentSessionError::Unavailable) })
+    async fn create_session(
+        &self,
+        _spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
     }
-    fn resume_session<'a>(
-        &'a self,
-        _handle: &'a AgentPersistenceHandle,
-        _spec: &'a AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        _handle: &AgentPersistenceHandle,
+        _spec: &AgentSessionSpec,
         _purpose: AgentResumePurpose,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async { Err(AgentSessionError::Unavailable) })
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
     }
 }
 

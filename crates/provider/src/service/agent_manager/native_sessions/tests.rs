@@ -135,6 +135,7 @@ struct ImportClient {
     remove_cwd: Option<PathBuf>,
 }
 
+#[async_trait::async_trait]
 impl AgentClient for ImportClient {
     fn provider(&self) -> &str {
         self.provider
@@ -144,15 +145,15 @@ impl AgentClient for ImportClient {
         self.supported
     }
 
-    fn is_available(&self) -> crate::ports::agent_session::AgentSessionFuture<'_, bool> {
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
         assert!(self.supported);
-        Box::pin(async { self.available })
+        self.available
     }
 
-    fn list_sessions<'a>(
-        &'a self,
-        options: &'a ListOptions,
-    ) -> crate::ports::agent_session::AgentSessionFuture<'a, Vec<SessionDescriptor>> {
+    async fn list_sessions(
+        &self,
+        options: &ListOptions,
+    ) -> Result<Vec<SessionDescriptor>, AgentSessionError> {
         assert_eq!(self.available, Ok(true));
         if let Some(expected) = &self.expected_cwd {
             assert_eq!(options.cwd.as_ref(), Some(expected));
@@ -160,28 +161,22 @@ impl AgentClient for ImportClient {
         if let Some(cwd) = &self.remove_cwd {
             std::fs::remove_dir(cwd).expect("requested cwd should exist until provider listing");
         }
-        Box::pin(async { self.sessions.clone() })
+        self.sessions.clone()
     }
 
-    fn create_session<'a>(
-        &'a self,
-        _spec: &'a crate::ports::agent_session::AgentSessionSpec,
-    ) -> crate::ports::agent_session::AgentSessionFuture<
-        'a,
-        Box<dyn crate::ports::agent_session::AgentSession>,
-    > {
+    async fn create_session(
+        &self,
+        _spec: &crate::ports::agent_session::AgentSessionSpec,
+    ) -> Result<Box<dyn crate::ports::agent_session::AgentSession>, AgentSessionError> {
         unreachable!("listing must not create a session")
     }
 
-    fn resume_session<'a>(
-        &'a self,
-        _handle: &'a AgentPersistenceHandle,
-        _spec: &'a crate::ports::agent_session::AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        _handle: &AgentPersistenceHandle,
+        _spec: &crate::ports::agent_session::AgentSessionSpec,
         _purpose: crate::ports::agent_session::AgentResumePurpose,
-    ) -> crate::ports::agent_session::AgentSessionFuture<
-        'a,
-        Box<dyn crate::ports::agent_session::AgentSession>,
-    > {
+    ) -> Result<Box<dyn crate::ports::agent_session::AgentSession>, AgentSessionError> {
         unreachable!("listing must not resume a session")
     }
 }

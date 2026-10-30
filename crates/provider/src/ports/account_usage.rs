@@ -2,10 +2,9 @@
 
 use std::fmt;
 
+use futures_util::future::BoxFuture;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-
-use super::agent_session::AgentSessionFuture;
 
 /// Opaque authentication identity, compared only in memory and never serialized or logged.
 #[derive(Clone, PartialEq, Eq)]
@@ -35,7 +34,7 @@ pub(crate) struct PreparedUsage<'a> {
     /// Known native account identity; absence disables historical fallback and cache reuse.
     pub(crate) identity: Option<UsageIdentity>,
     /// Quota operation bound to the authentication context used for `identity`.
-    pub(crate) report: AgentSessionFuture<'a, Value>,
+    pub(crate) report: BoxFuture<'a, Result<Value, super::agent_session::AgentSessionError>>,
 }
 
 impl fmt::Debug for PreparedUsage<'_> {

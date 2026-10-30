@@ -12,7 +12,7 @@ use super::{
 use crate::local::acp_permissions;
 use crate::local::acp_streaming::Stream;
 use crate::ports::agent_session::{
-    AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec, AgentTurnEvent,
+    AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
 use crate::protocol::prompt::AgentPrompt;
 
@@ -216,9 +216,10 @@ impl Session {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentSession for Session {
-    fn account_usage(&self) -> AgentSessionFuture<'_, Value> {
-        Box::pin(async { Ok(super::native::quota::acp_unavailable()) })
+    async fn account_usage(&self) -> Result<Value, AgentSessionError> {
+        Ok(super::native::quota::acp_unavailable())
     }
 
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
@@ -233,8 +234,8 @@ impl AgentSession for Session {
         PROVIDER
     }
 
-    fn runtime_info(&mut self) -> AgentSessionFuture<'_, StoredAgentRuntimeInfo> {
-        Box::pin(async { Ok(config::runtime(&self.id, &self.options)) })
+    async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
+        Ok(config::runtime(&self.id, &self.options))
     }
 
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
@@ -246,29 +247,31 @@ impl AgentSession for Session {
         })
     }
 
-    fn start_turn<'a>(
-        &'a mut self,
-        text: &'a str,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(async move { self.start(&AgentPrompt::text(text), config).await })
+    async fn start_turn(
+        &mut self,
+        text: &str,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start(&AgentPrompt::text(text), config).await
     }
 
-    fn start_input<'a>(
-        &'a mut self,
-        prompt: &'a AgentPrompt,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(self.start(prompt, config))
+    async fn start_input(
+        &mut self,
+        prompt: &AgentPrompt,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start(prompt, config).await
     }
 
-    fn cancel_turn<'a>(&'a mut self, turn_id: &'a str) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            if self.closed || self.active.as_ref().is_none_or(|(turn, _)| turn != turn_id) {
-                return Err(AgentSessionError::Rejected);
-            }
-            self.transport.send(&json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":self.id}})).await
-        })
+    async fn cancel_turn(&mut self, turn_id: &str) -> Result<(), AgentSessionError> {
+        if self.closed || self.active.as_ref().is_none_or(|(turn, _)| turn != turn_id) {
+            return Err(AgentSessionError::Rejected);
+        }
+        self.transport
+            .send(
+                &json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":self.id}}),
+            )
+            .await
     }
 
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
@@ -294,45 +297,41 @@ impl AgentSession for Session {
             .collect()
     }
 
-    fn respond_permission<'a>(
-        &'a mut self,
-        id: &'a str,
-        response: &'a Value,
-    ) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            let pending = self
-                .permissions
-                .get(id)
-                .ok_or(AgentSessionError::Rejected)?;
-            let reply = acp_permissions::resolve_tool(pending, response)?;
-            self.transport.send(&reply).await?;
-            self.permissions.remove(id);
-            self.stream
-                .events
-                .push_back(AgentTurnEvent::PermissionResolved(id.to_owned()));
-            if response["behavior"] == "deny" && response["interrupt"] == true {
-                self.transport.send(&json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":self.id}})).await?;
-            }
-            Ok(())
-        })
+    async fn respond_permission(
+        &mut self,
+        id: &str,
+        response: &Value,
+    ) -> Result<(), AgentSessionError> {
+        let pending = self
+            .permissions
+            .get(id)
+            .ok_or(AgentSessionError::Rejected)?;
+        let reply = acp_permissions::resolve_tool(pending, response)?;
+        self.transport.send(&reply).await?;
+        self.permissions.remove(id);
+        self.stream
+            .events
+            .push_back(AgentTurnEvent::PermissionResolved(id.to_owned()));
+        if response["behavior"] == "deny" && response["interrupt"] == true {
+            self.transport.send(&json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":self.id}})).await?;
+        }
+        Ok(())
     }
 
-    fn close(&mut self) -> AgentSessionFuture<'_, ()> {
-        Box::pin(async move {
-            if self.closed {
-                return Ok(());
-            }
-            let result = if self.capabilities["sessionCapabilities"]["close"].is_object() {
-                self.transport
-                    .request("session/close", json!({"sessionId":self.id}))
-                    .await
-                    .map(|_| ())
-            } else {
-                Ok(())
-            };
-            let stopped = self.transport.close().await;
-            self.closed = true;
-            result.and(stopped)
-        })
+    async fn close(&mut self) -> Result<(), AgentSessionError> {
+        if self.closed {
+            return Ok(());
+        }
+        let result = if self.capabilities["sessionCapabilities"]["close"].is_object() {
+            self.transport
+                .request("session/close", json!({"sessionId":self.id}))
+                .await
+                .map(|_| ())
+        } else {
+            Ok(())
+        };
+        let stopped = self.transport.close().await;
+        self.closed = true;
+        result.and(stopped)
     }
 }

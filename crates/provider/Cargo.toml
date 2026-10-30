@@ -11,6 +11,7 @@ domain.workspace = true
 webrtc.workspace = true
 rtc.workspace = true
 opus2.workspace = true
+async-trait.workspace = true
 
 # Consume bounded native event streams and concurrent session previews.
 futures-util.workspace = true

@@ -5,6 +5,7 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+async-trait.workspace = true
 futures-util.workspace = true
 model.workspace = true
 reqwest.workspace = true

@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     Error,
     audio::{Audio, Format, MAX_AUDIO_BYTES, MAX_TEXT_BYTES},
-    ports::{Operation, Synthesizer, Transcriber, Transcript},
+    ports::{Synthesizer, Transcriber, Transcript},
 };
 
 /// Explicit speech endpoint settings. Credentials are never serialized or logged.
@@ -84,70 +84,71 @@ impl OpenAi {
     }
 }
 
+#[async_trait::async_trait]
 impl Transcriber for OpenAi {
-    fn transcribe(&self, audio: Audio, cancel: CancellationToken) -> Operation<'_, Transcript> {
-        Box::pin(async move {
-            let wav = tokio::task::spawn_blocking(move || audio.wav())
-                .await
-                .map_err(|_| Error::Provider)??;
-            let file = Part::bytes(wav)
-                .file_name("speech.wav")
-                .mime_str("audio/wav")
-                .map_err(|_| Error::Invalid)?;
-            let form = Form::new()
-                .part("file", file)
-                .text("model", self.config.stt_model.clone())
-                .text("response_format", "json");
-            let bytes = response(
-                self.post("audio/transcriptions").multipart(form),
-                cancel,
-                MAX_TEXT_BYTES * 2,
-            )
-            .await?;
-            let transcript: Transcript =
-                serde_json::from_slice(&bytes).map_err(|_| Error::Provider)?;
-            if transcript.text.len() > MAX_TEXT_BYTES {
-                return Err(Error::Capacity);
-            }
-            Ok(transcript)
-        })
+    async fn transcribe(
+        &self,
+        audio: Audio,
+        cancel: CancellationToken,
+    ) -> Result<Transcript, Error> {
+        let wav = tokio::task::spawn_blocking(move || audio.wav())
+            .await
+            .map_err(|_| Error::Provider)??;
+        let file = Part::bytes(wav)
+            .file_name("speech.wav")
+            .mime_str("audio/wav")
+            .map_err(|_| Error::Invalid)?;
+        let form = Form::new()
+            .part("file", file)
+            .text("model", self.config.stt_model.clone())
+            .text("response_format", "json");
+        let bytes = response(
+            self.post("audio/transcriptions").multipart(form),
+            cancel,
+            MAX_TEXT_BYTES * 2,
+        )
+        .await?;
+        let transcript: Transcript = serde_json::from_slice(&bytes).map_err(|_| Error::Provider)?;
+        if transcript.text.len() > MAX_TEXT_BYTES {
+            return Err(Error::Capacity);
+        }
+        Ok(transcript)
     }
 }
 
+#[async_trait::async_trait]
 impl Synthesizer for OpenAi {
-    fn synthesize<'a>(&'a self, text: &'a str, cancel: CancellationToken) -> Operation<'a, Audio> {
-        Box::pin(async move {
-            if text.trim().is_empty() || text.len() > MAX_TEXT_BYTES {
-                return Err(Error::Invalid);
-            }
-            let mut bytes = Vec::new();
-            let mut remaining = text;
-            while !remaining.is_empty() {
-                let end = remaining
-                    .char_indices()
-                    .nth(2000)
-                    .map_or(remaining.len(), |(index, _)| index);
-                let request = self.post("audio/speech").json(&serde_json::json!({
+    async fn synthesize(&self, text: &str, cancel: CancellationToken) -> Result<Audio, Error> {
+        if text.trim().is_empty() || text.len() > MAX_TEXT_BYTES {
+            return Err(Error::Invalid);
+        }
+        let mut bytes = Vec::new();
+        let mut remaining = text;
+        while !remaining.is_empty() {
+            let end = remaining
+                .char_indices()
+                .nth(2000)
+                .map_or(remaining.len(), |(index, _)| index);
+            let request = self.post("audio/speech").json(&serde_json::json!({
                     "model":self.config.tts_model, "voice":self.config.voice, "input":&remaining[..end], "response_format":"pcm"
                 }));
-                let chunk = response(
-                    request,
-                    cancel.clone(),
-                    MAX_AUDIO_BYTES.saturating_sub(bytes.len()),
-                )
-                .await?;
-                if chunk.is_empty() || !chunk.len().is_multiple_of(2) {
-                    return Err(Error::Provider);
-                }
-                bytes.extend_from_slice(&chunk);
-                remaining = &remaining[end..];
+            let chunk = response(
+                request,
+                cancel.clone(),
+                MAX_AUDIO_BYTES.saturating_sub(bytes.len()),
+            )
+            .await?;
+            if chunk.is_empty() || !chunk.len().is_multiple_of(2) {
+                return Err(Error::Provider);
             }
-            Audio {
-                bytes,
-                format: Format::Pcm(24_000),
-            }
-            .pcm()
-        })
+            bytes.extend_from_slice(&chunk);
+            remaining = &remaining[end..];
+        }
+        Audio {
+            bytes,
+            format: Format::Pcm(24_000),
+        }
+        .pcm()
     }
 }
 

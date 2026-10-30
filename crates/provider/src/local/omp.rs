@@ -17,8 +17,7 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
 use crate::ports::agent_session::{
-    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture,
-    AgentSessionSpec,
+    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
 use crate::ports::environment::AgentEnvironment;
 use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
@@ -76,6 +75,7 @@ where
     bridge::serve(OmpClient::new(program), input, output).await
 }
 
+#[async_trait::async_trait]
 impl AgentClient for OmpClient {
     fn provider(&self) -> &'static str {
         "omp"
@@ -98,102 +98,91 @@ impl AgentClient for OmpClient {
             "supportsRewindFiles":false,"supportsRewindBoth":false}})
     }
 
-    fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        Box::pin(async { Ok(super::configuration::executable(&self.program)) })
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        Ok(super::configuration::executable(&self.program))
     }
 
-    fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
-        Box::pin(async move {
-            let mut probe = session::probe(self, cwd, None).await?;
-            let result = config::discover(&mut probe).await;
-            let closed = probe.close().await;
-            let details = result?;
-            closed?;
-            Ok(details)
-        })
+    async fn discover(&self, cwd: &str) -> Result<Details, AgentSessionError> {
+        let mut probe = session::probe(self, cwd, None).await?;
+        let result = config::discover(&mut probe).await;
+        let closed = probe.close().await;
+        let details = result?;
+        closed?;
+        Ok(details)
     }
 
-    fn draft_features<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Vec<Value>> {
-        Box::pin(async move {
-            config::validate_spec(spec)?;
-            let tiers = self
-                .service_tiers(&spec.cwd, spec.config.model.as_deref())
-                .await?;
-            Ok(config::features(&spec.config, tiers))
-        })
+    async fn draft_features(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Vec<Value>, AgentSessionError> {
+        config::validate_spec(spec)?;
+        let tiers = self
+            .service_tiers(&spec.cwd, spec.config.model.as_deref())
+            .await?;
+        Ok(config::features(&spec.config, tiers))
     }
 
-    fn commands<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, Vec<Value>> {
-        Box::pin(async move {
-            config::validate_spec(spec)?;
-            let mut probe = session::probe(self, &spec.cwd, None).await?;
-            let result = probe.request("get_available_commands", json!({})).await;
-            let closed = probe.close().await;
-            let result = result?;
-            closed?;
-            config::commands(&result)
-        })
+    async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {
+        config::validate_spec(spec)?;
+        let mut probe = session::probe(self, &spec.cwd, None).await?;
+        let result = probe.request("get_available_commands", json!({})).await;
+        let closed = probe.close().await;
+        let result = result?;
+        closed?;
+        config::commands(&result)
     }
 
-    fn diagnostic(&self) -> AgentSessionFuture<'_, String> {
-        Box::pin(async move {
-            if !self.is_available().await? {
-                return Ok(
-                    "Oh My Pi executable is unavailable; check PATH or AIT_SERVER_OMP_BIN."
-                        .to_owned(),
-                );
-            }
-            let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
-            let details = self
-                .discover(cwd.to_str().ok_or(AgentSessionError::Failed)?)
-                .await?;
-            Ok(format!(
-                "Oh My Pi RPC ready; {} available models",
-                details.models.len()
-            ))
-        })
+    async fn diagnostic(&self) -> Result<String, AgentSessionError> {
+        if !self.is_available().await? {
+            return Ok(
+                "Oh My Pi executable is unavailable; check PATH or AIT_SERVER_OMP_BIN.".to_owned(),
+            );
+        }
+        let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
+        let details = self
+            .discover(cwd.to_str().ok_or(AgentSessionError::Failed)?)
+            .await?;
+        Ok(format!(
+            "Oh My Pi RPC ready; {} available models",
+            details.models.len()
+        ))
     }
 
-    fn history<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, Vec<crate::protocol::timeline::NativeItem>> {
-        Box::pin(async move { Ok(history::inspect(self, handle, cwd).await?.entries) })
+    async fn history(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<Vec<crate::protocol::timeline::NativeItem>, AgentSessionError> {
+        Ok(history::inspect(self, handle, cwd).await?.entries)
     }
 
-    fn inspect_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, SessionHistory> {
-        Box::pin(history::inspect(self, handle, cwd))
+    async fn inspect_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<SessionHistory, AgentSessionError> {
+        history::inspect(self, handle, cwd).await
     }
 
-    fn list_sessions<'a>(
-        &'a self,
-        options: &'a ListOptions,
-    ) -> AgentSessionFuture<'a, Vec<SessionDescriptor>> {
-        Box::pin(history::list(self, options))
+    async fn list_sessions(
+        &self,
+        options: &ListOptions,
+    ) -> Result<Vec<SessionDescriptor>, AgentSessionError> {
+        history::list(self, options).await
     }
 
-    fn create_session<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            Ok(Box::new(bridge::Session::open(self, spec, None).await?) as Box<dyn AgentSession>)
-        })
+    async fn create_session(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Ok(Box::new(bridge::Session::open(self, spec, None).await?) as Box<dyn AgentSession>)
     }
 
-    fn create_session_with_environment<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-        environment: &'a AgentEnvironment,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
+    async fn create_session_with_environment(
+        &self,
+        spec: &AgentSessionSpec,
+        environment: &AgentEnvironment,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         let mut client = self.clone();
         let mut values: std::collections::BTreeMap<String, String> = client
             .environment
@@ -205,27 +194,24 @@ impl AgentClient for OmpClient {
                 .entries()
                 .map(|(key, value)| (key.to_owned(), value.to_owned())),
         );
-        Box::pin(async move {
-            client.environment = AgentEnvironment::try_from(values)?;
-            client.create_session(spec).await
-        })
+
+        client.environment = AgentEnvironment::try_from(values)?;
+        client.create_session(spec).await
     }
 
-    fn resume_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        spec: &'a AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        spec: &AgentSessionSpec,
         purpose: AgentResumePurpose,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            if purpose == AgentResumePurpose::History {
-                return Err(AgentSessionError::Unavailable);
-            }
-            Ok(
-                Box::new(bridge::Session::open(self, spec, Some(handle)).await?)
-                    as Box<dyn AgentSession>,
-            )
-        })
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        if purpose == AgentResumePurpose::History {
+            return Err(AgentSessionError::Unavailable);
+        }
+        Ok(
+            Box::new(bridge::Session::open(self, spec, Some(handle)).await?)
+                as Box<dyn AgentSession>,
+        )
     }
 }
 

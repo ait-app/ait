@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
-use model::hub::{CallFuture, Center, LinkState, Scope};
+use model::hub::{Center, LinkState, Scope};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, mpsc, watch};
@@ -613,18 +613,19 @@ impl Pump<'_> {
     }
 }
 
+#[async_trait::async_trait]
 impl Center for Connector {
     fn state(&self) -> watch::Receiver<LinkState> {
         self.publication.subscribe()
     }
 
-    fn call(
+    async fn call(
         &self,
         scope: Scope,
         method: &'static str,
         params: serde_json::Value,
-    ) -> CallFuture<'_> {
-        Box::pin(self.call_center(scope, method, params))
+    ) -> Result<serde_json::Value, model::hub::CallError> {
+        self.call_center(scope, method, params).await
     }
 }
 
