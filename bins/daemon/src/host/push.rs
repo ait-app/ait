@@ -6,7 +6,8 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use metadata::push::ports::{DeliveryError, DeliveryFuture, Notification, PushTransport};
+use async_trait::async_trait;
+use metadata::push::ports::{DeliveryError, Notification, PushTransport};
 use reqwest::{Client, Response, StatusCode};
 use secrecy::ExposeSecret;
 use serde::Deserialize;
@@ -167,21 +168,20 @@ impl NativePush {
     }
 }
 
+#[async_trait]
 impl PushTransport for NativePush {
-    fn send<'a>(&'a self, notification: &'a Notification, token: &'a str) -> DeliveryFuture<'a> {
-        Box::pin(async move {
-            match serde_json::from_str::<Target>(token).map_err(|_| DeliveryError::Unregistered)? {
-                Target::Apns {
-                    token,
-                    bundle_id,
-                    environment,
-                } => {
-                    self.apns(notification, &token, &bundle_id, &environment)
-                        .await
-                }
-                Target::Fcm { token } => self.fcm(notification, &token).await,
+    async fn send(&self, notification: &Notification, token: &str) -> Result<(), DeliveryError> {
+        match serde_json::from_str::<Target>(token).map_err(|_| DeliveryError::Unregistered)? {
+            Target::Apns {
+                token,
+                bundle_id,
+                environment,
+            } => {
+                self.apns(notification, &token, &bundle_id, &environment)
+                    .await
             }
-        })
+            Target::Fcm { token } => self.fcm(notification, &token).await,
+        }
     }
 }
 

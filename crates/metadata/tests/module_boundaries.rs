@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 
 // Cargo passes the complete package dependency set to this integration test.
+use async_trait as _;
 use base64 as _;
 use chrono as _;
 use domain as _;

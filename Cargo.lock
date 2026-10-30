@@ -754,6 +754,7 @@ version = "0.1.22"
 dependencies = [
  "anyhow",
  "api",
+ "async-trait",
  "axum",
  "base64 0.22.1",
  "bot",
@@ -1743,6 +1744,7 @@ dependencies = [
 name = "metadata"
 version = "0.1.22"
 dependencies = [
+ "async-trait",
  "base64 0.22.1",
  "chrono",
  "domain",

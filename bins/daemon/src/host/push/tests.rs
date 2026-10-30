@@ -69,10 +69,12 @@ async fn native_transports_send_authenticated_http_requests_and_classify_rejecti
         },
     };
     let notification = notification();
-    adapter
-        .apns(&notification, "abcd", "dev.ait.mobile", "production")
-        .await
-        .unwrap();
+    let transport: &dyn PushTransport = &adapter;
+    let apns_target = json!({
+        "provider": "apns", "token": "abcd", "bundleId": "dev.ait.mobile", "environment": "production",
+    })
+    .to_string();
+    transport.send(&notification, &apns_target).await.unwrap();
     let apple = requests.recv().await.unwrap();
     assert_eq!(apple.version, reqwest::Version::HTTP_2);
     assert_eq!(apple.path, "/3/device/abcd");
@@ -82,8 +84,11 @@ async fn native_transports_send_authenticated_http_requests_and_classify_rejecti
         serde_json::from_slice::<Value>(&apple.body).unwrap()["body"],
         notification.data
     );
-    adapter
-        .fcm(&notification, "native-fcm-token")
+    transport
+        .send(
+            &notification,
+            r#"{"provider":"fcm","token":"native-fcm-token"}"#,
+        )
         .await
         .unwrap();
     let google = requests.recv().await.unwrap();
