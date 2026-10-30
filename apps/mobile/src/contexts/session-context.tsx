@@ -529,8 +529,10 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   }, [client, serverId, setInitializingAgents, setViewedTimelineSync, voiceRuntime]);
 
   useEffect(() => {
+    // A connection switch can replace the owner while isConnected stays true.
+    // Reapply the current state after each commit; setConnected is idempotent.
     viewedTimelineSyncRef.current?.setConnected(isConnected);
-  }, [isConnected]);
+  });
 
   // Daemon message handlers - directly update Zustand store
   useEffect(() => {
