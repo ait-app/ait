@@ -757,9 +757,9 @@ describe("Rust protocol adapter", () => {
   });
 
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(198);
+    expect(Object.keys(METHODS)).toHaveLength(202);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(198);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(202);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);
@@ -767,6 +767,43 @@ describe("Rust protocol adapter", () => {
     expect(Object.keys(METHODS).some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(
       false,
     );
+  });
+
+  it("maps group sharing RPCs onto the background channel", () => {
+    const methods = [
+      "share.list.request",
+      "share.groups.list.request",
+      "share.set.request",
+      "share.remove.request",
+    ];
+    const h = harness();
+    try {
+      h.ready();
+      for (const [index, method] of methods.entries()) {
+        h.send({
+          type: method,
+          requestId: `share-${index}`,
+          ...(method === "share.set.request"
+            ? {
+                resourceKind: "workspace",
+                resourceKey: "workspace-1",
+                groupId: "group-1",
+                displayName: "Workspace 1",
+              }
+            : {}),
+          ...(method === "share.remove.request"
+            ? {
+                resourceKind: "workspace",
+                resourceKey: "workspace-1",
+                groupId: "group-1",
+              }
+            : {}),
+        });
+        expect(h.last(3)).toMatchObject({ method, request_id: `share-${index}` });
+      }
+    } finally {
+      h.transport.close();
+    }
   });
 
   it("rejects the retired pairing offer even when an older host implements it", () => {

@@ -7,6 +7,8 @@ import { createRustDaemonTransportFactory } from "./transport";
 const HOST_ID = "11111111-1111-4111-8111-111111111111";
 const CENTER = "https://example.test/api";
 const url = `ait+desktop://account-relay/${HOST_ID}?center=${encodeURIComponent(CENTER)}`;
+const SHARE_ID = "22222222-2222-4222-8222-222222222222";
+const guestUrl = `${url}&share=${SHARE_ID}&node=guest-node`;
 const SERVER_INFO = {
   type: "server_info",
   info: {
@@ -101,6 +103,7 @@ function harness(nodes: object[] = [{ node_id: "host-node", host_id: HOST_ID, st
       grace_seconds: 120,
       ping_seconds: 20,
       max_payload: 1024 * 1024,
+      center_methods: ["share.subscribe"],
     });
     socket.receive({ t: "presence", seq: 1 }, JSON.stringify({ nodes }));
     return socket;
@@ -111,6 +114,37 @@ function harness(nodes: object[] = [{ node_id: "host-node", host_id: HOST_ID, st
 afterEach(() => vi.useRealTimers());
 
 describe("native account relay path selection", () => {
+  it("opens guest sessions with the share grant and never falls back to the owner relay", async () => {
+    const h = harness();
+    const socket = await h.connect();
+    const transport = createRustDaemonTransportFactory(
+      createHubAccountRelayTransportFactory(h.deps),
+    )({ url: guestUrl });
+    transport.onOpen(() => transport.send('{"type":"hello","clientId":"guest"}'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(socket.sent.find((frame) => frame.header.t === "open")?.header).toEqual({
+      t: "open",
+      seq: 1,
+      s: "session-1",
+      to: { node: "guest-node" },
+      share: SHARE_ID,
+    });
+
+    const offline = harness();
+    offline.deps.hub.mockReturnValue(null);
+    const unavailable = createHubAccountRelayTransportFactory(offline.deps)({ url: guestUrl });
+    const error = vi.fn();
+    const closed = vi.fn();
+    unavailable.onError(error);
+    unavailable.onClose(closed);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(error).toHaveBeenCalledWith(new Error("Shared resource is offline."));
+    expect(closed).toHaveBeenCalledOnce();
+    expect(offline.sockets).toHaveLength(0);
+    transport.close();
+    h.link.stop();
+  });
+
   it("runs the unchanged Rust client over a hub session and survives a link reconnect", async () => {
     const h = harness();
     const socket = await h.connect();

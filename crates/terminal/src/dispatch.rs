@@ -89,6 +89,24 @@ pub async fn close_many(state: &State, ids: Vec<String>) -> Result<serde_json::V
     .await
 }
 
+/// Kill terminals whose creator lost authorization, waiting for terminal capacity.
+/// Unknown or already exited terminals are ignored.
+/// # Errors
+/// Returns shutdown or admission errors; absent terminal services are ignored.
+pub async fn revoke(state: &State, ids: Vec<String>) -> Result<(), ErrorCode> {
+    if state.terminals.is_none() {
+        return Ok(());
+    }
+    crate::connection::run_queued(state, move |terminals| {
+        for id in &ids {
+            // A terminal the guest already closed has nothing left to end.
+            let _ = terminals.kill(id);
+        }
+        Ok(())
+    })
+    .await
+}
+
 /// Apply a local HTTP activity report under the same bounded terminal admission as RPC calls.
 /// # Errors
 /// Returns shutdown, admission, or native terminal errors.

@@ -170,6 +170,31 @@ async fn archive_cleanup_waits_for_terminal_capacity() {
 }
 
 #[tokio::test]
+async fn revocation_waits_for_capacity_and_ignores_unknown_terminals() {
+    let fixture = Fixture::new();
+    let permit = fixture
+        .state
+        .terminal_jobs
+        .clone()
+        .acquire_many_owned(4)
+        .await
+        .unwrap();
+    let revoke = crate::dispatch::revoke(
+        &fixture.state,
+        vec!["missing".into(), fixture.terminal.clone()],
+    );
+    tokio::pin!(revoke);
+    std::future::poll_fn(|cx| {
+        assert!(revoke.as_mut().poll(cx).is_pending());
+        std::task::Poll::Ready(())
+    })
+    .await;
+    drop(permit);
+    revoke.await.unwrap();
+    assert_eq!(fixture.calls.lock().unwrap().killed, 1);
+}
+
+#[tokio::test]
 async fn archive_cleanup_wait_is_cancelled_by_shutdown() {
     let fixture = Fixture::new();
     let _permit = fixture

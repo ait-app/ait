@@ -64,13 +64,34 @@ fn control_commands_require_mode_specific_fields_and_hide_credentials() {
     let command: ControlCommand = decode(&download.to_string()).unwrap();
     assert!(!format!("{command:?}").contains("private-download-token"));
     let ControlCommand::OpenData(OpenData {
-        mode: DataMode::Download { download_token },
+        mode:
+            DataMode::Download {
+                download_token,
+                visitor_user_id,
+            },
         ..
     }) = command
     else {
         panic!("expected download grant");
     };
     assert_eq!(download_token.expose_secret(), "private-download-token");
+    // Owner downloads, and older centers, name no visitor.
+    assert_eq!(visitor_user_id, None);
+    let visitor = Uuid::new_v4();
+    download["visitor_user_id"] = json!(visitor);
+    download["future_field"] = json!(true);
+    let ControlCommand::OpenData(OpenData {
+        mode: DataMode::Download {
+            visitor_user_id, ..
+        },
+        ..
+    }) = decode(&download.to_string()).unwrap()
+    else {
+        panic!("expected download grant");
+    };
+    assert_eq!(visitor_user_id, Some(visitor));
+    download.as_object_mut().unwrap().remove("visitor_user_id");
+    download.as_object_mut().unwrap().remove("future_field");
     for (field, value) in [
         ("type", json!("future-command")),
         ("mode", json!("future-mode")),

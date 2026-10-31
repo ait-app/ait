@@ -19,6 +19,7 @@ pub mod rpc;
 pub mod runtime;
 pub mod server;
 pub mod session;
+pub mod share;
 pub mod storage;
 pub mod summary;
 pub mod workspace;

@@ -147,7 +147,10 @@ impl Server {
             services,
         )?
         .with_agent_mcp_token(mcp_token)?
-        .with_browser_origins(web_origins)?;
+        .with_browser_origins(web_origins)?
+        .with_share_store(Arc::new(persistence::storage::hub::FileOutbox::new(
+            data_dir.join("hub/shares.json"),
+        )))?;
         let (store, state) = device;
         let relay = crate::device::StatusRelay::new(
             api.claim_managed_relay()?,

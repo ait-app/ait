@@ -17,11 +17,12 @@ import {
   buildSchedulesRoute,
   buildSessionsRoute,
 } from "@/utils/host-routes";
-import { router, usePathname } from "expo-router";
-import { Gauge, CalendarClock, History, Plus, Search } from "lucide-react-native";
-import { memo, useCallback, useMemo, type ComponentType } from "react";
+import { router, usePathname, type Href } from "expo-router";
+import { Gauge, CalendarClock, History, Plus, Search, Users } from "lucide-react-native";
+import { Fragment, memo, useCallback, useMemo, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import { View, type StyleProp, type ViewStyle } from "react-native";
+import { useHubServices } from "@/runtime/hub-service-store";
 
 interface SidebarNavRowProps {
   onBeforeNavigate?: () => void;
@@ -47,8 +48,18 @@ export function SidebarNavRows({ style, onBeforeNavigate }: SidebarNavRowsProps)
     <View style={style}>
       {visibleItems.map((item) => {
         const Row = BUILTIN_ROWS[item.id];
-        return <Row key={item.key} onBeforeNavigate={onBeforeNavigate} />;
+        return (
+          <Fragment key={item.key}>
+            {item.id === "schedules" ? (
+              <SidebarSharedWithMeRow onBeforeNavigate={onBeforeNavigate} />
+            ) : null}
+            <Row onBeforeNavigate={onBeforeNavigate} />
+          </Fragment>
+        );
       })}
+      {!visibleItems.some((item) => item.id === "schedules") ? (
+        <SidebarSharedWithMeRow onBeforeNavigate={onBeforeNavigate} />
+      ) : null}
     </View>
   );
 }
@@ -156,6 +167,28 @@ function SidebarSchedulesRow({ onBeforeNavigate }: SidebarNavRowProps) {
       onPress={handlePress}
       isActive={pathname.includes("/schedules")}
       testID="sidebar-schedules"
+      variant="compact"
+    />
+  );
+}
+
+function SidebarSharedWithMeRow({ onBeforeNavigate }: SidebarNavRowProps) {
+  const { t } = useTranslation();
+  const pathname = usePathname();
+  const count = useHubServices((state) => state.snapshot?.shares?.length ?? 0);
+  const handlePress = useCallback(() => {
+    onBeforeNavigate?.();
+    router.push("/shared" as Href);
+  }, [onBeforeNavigate]);
+
+  return (
+    <SidebarHeaderRow
+      icon={Users}
+      label={t("sharing.sharedWithMe")}
+      trailingText={count > 0 ? String(count) : null}
+      onPress={handlePress}
+      isActive={pathname.includes("/shared")}
+      testID="sidebar-shared-with-me"
       variant="compact"
     />
   );

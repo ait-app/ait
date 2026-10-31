@@ -2,6 +2,7 @@
 
 mod events;
 mod outbox;
+mod shares;
 pub(super) mod sources;
 
 use std::sync::{Arc, Mutex};
@@ -141,6 +142,16 @@ pub(super) async fn start(
     tasks.spawn(async move {
         spool.spool(receiver).await;
         drop(spool_lifetime);
+    });
+    let shares_center = application.center.clone();
+    let shares_cancel = cancel.clone();
+    let book = api.share_book();
+    let restore = api.restore_guests();
+    let shares_lifetime = lifetime.clone();
+    tasks.spawn(async move {
+        restore.await;
+        shares::run(shares_center, book, shares_cancel).await;
+        drop(shares_lifetime);
     });
     tasks.spawn(async move {
         application.deliver().await;

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HOST, hubFixture } from "../../test/hub.js";
+import { HubSessionClosedError } from "./session.js";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -49,13 +50,61 @@ describe("hub session transport", () => {
     await h.flush();
     transport.send('{"type":"hello"}');
     socket.receive({ t: "close", seq: 2, s: transport.id, code: "peer_gone" });
-    expect(events.error).toHaveBeenCalledWith(new Error("Hub session closed (peer_gone)."));
+    expect(events.error).toHaveBeenCalledWith(new HubSessionClosedError("peer_gone"));
+    expect(events.error.mock.calls[0][0]).toMatchObject({
+      code: "peer_gone",
+      message: "Hub session closed (peer_gone).",
+    });
     expect(events.close).toHaveBeenCalledWith({
       code: 1006,
       reason: "Hub session closed (peer_gone).",
+      hubCode: "peer_gone",
     });
+    expect(transport.closeCode).toBe("peer_gone");
     expect(socket.frames("close")).toEqual([]);
     expect(() => transport.send("late")).toThrow("closed");
+  });
+
+  it("opens guest sessions with the share ID only when one is given", async () => {
+    const h = hubFixture();
+    h.link.start();
+    await h.flush();
+    const socket = h.socket();
+    socket.open();
+    socket.welcome({ center_methods: ["share.subscribe"] });
+    const own = h.link.openSession(HOST.node_id);
+    const guest = h.link.openSession("guest-node", { share: "share-1" });
+    expect(guest.share).toBe("share-1");
+    const close = vi.fn();
+    guest.onClose(close);
+    await h.flush();
+    own.send('{"type":"hello"}');
+    guest.send('{"type":"hello"}');
+    expect(socket.frames("open")).toEqual([
+      { t: "open", seq: 1, s: own.id, to: { node: HOST.node_id } },
+      { t: "open", seq: 2, s: guest.id, to: { node: "guest-node" }, share: "share-1" },
+    ]);
+    expect(own.closeCode).toBeNull();
+    socket.receive({ t: "close", seq: 1, s: guest.id, code: "share_revoked" });
+    expect(guest.closeCode).toBe("share_revoked");
+    expect(close).toHaveBeenCalledWith(expect.objectContaining({ hubCode: "share_revoked" }));
+    expect(socket.frames("close")).toEqual([]);
+  });
+
+  it("refuses guest sessions on centers without shares instead of sending the field", async () => {
+    const { h, socket } = await session();
+    expect(() => h.link.openSession("guest-node", { share: "share-1" })).toThrow(
+      expect.objectContaining({ code: "unsupported" }),
+    );
+    expect(socket.frames("open")).toEqual([]);
+  });
+
+  it("does not report a hub code for local failures", async () => {
+    const { h, transport, events } = await session();
+    await h.flush();
+    transport.abort(new Error("local"));
+    expect(events.close).toHaveBeenCalledWith({ code: 1006, reason: "local" });
+    expect(transport.closeCode).toBeNull();
   });
 
   it("closes quietly on a business close and tells the peer once opened", async () => {

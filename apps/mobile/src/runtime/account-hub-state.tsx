@@ -12,6 +12,7 @@ import { sendOsNotification } from "@/utils/os-notifications";
 import { claimAttentionNotification } from "@/utils/attention-notification-dedup";
 import { isWeb } from "@/constants/platform";
 import { startAccountPushNotifications } from "@/push-notifications";
+import { getHostRuntimeStore } from "./host-runtime";
 
 import { useHubServices } from "./hub-service-store";
 import { useOnlineServiceConnectionNotice } from "./use-online-service-connection-notice";
@@ -73,10 +74,17 @@ export function AccountHubLifecycle() {
           });
           return busy;
         };
-        useHubServices.setState({ connection: hub, snapshot: hub.snapshot() });
-        const removeState = hub.subscribe(() =>
-          useHubServices.setState({ snapshot: hub.snapshot() }),
-        );
+        const publishHubSnapshot = () => {
+          const snapshot = hub.snapshot();
+          useHubServices.setState({ connection: hub, snapshot });
+          getHostRuntimeStore().setSharedAccountRelayResources(
+            snapshot.shares ?? [],
+            snapshot.centerUrl,
+          );
+        };
+        const stopShares = hub.subscribeShares?.() ?? (() => {});
+        publishHubSnapshot();
+        const removeState = hub.subscribe(publishHubSnapshot);
         let refreshTimer: ReturnType<typeof setTimeout> | undefined;
         const removeEvents = observeHubEvents(hub, {
           randomUUID: Crypto.randomUUID,
@@ -137,7 +145,9 @@ export function AccountHubLifecycle() {
           stopPush();
           removeEvents();
           removeState();
+          stopShares();
           handle.dispose();
+          getHostRuntimeStore().setSharedAccountRelayResources([], null);
         };
       })
       .catch(() => {
@@ -152,6 +162,7 @@ export function AccountHubLifecycle() {
         agents: [],
         eventsActive: false,
       });
+      getHostRuntimeStore().setSharedAccountRelayResources([], null);
     };
   }, [signedIn, center]);
 

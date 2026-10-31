@@ -9,8 +9,17 @@ import { createBrowserRustTransportFactory } from "./browser-transport";
 import type { TransportFactory } from "./types";
 import { createAccountRelayTransportFactory } from "./account-transport";
 
-export function buildAccountRelayClientConfig(connection: { hostId: string; center: string }) {
+export function buildAccountRelayClientConfig(connection: {
+  hostId: string;
+  center: string;
+  shareId?: string;
+  nodeId?: string;
+}) {
   const query = new URLSearchParams({ center: connection.center });
+  if (connection.shareId && connection.nodeId) {
+    query.set("share", connection.shareId);
+    query.set("node", connection.nodeId);
+  }
   return {
     url: `ait+desktop://account-relay/${connection.hostId}?${query}`,
     connectTimeoutMs: 45_000,

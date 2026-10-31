@@ -5,16 +5,19 @@ import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceDirectoryServerIds } from "@/stores/session-store-hooks";
 import { workspaceEqualityFns } from "@/stores/session-store-hooks/selectors";
 import { useHostProjects } from "@/projects/host-projects";
-import { getHostRuntimeStore, useHostRegistryLoaded, useHosts } from "@/runtime/host-runtime";
+import {
+  getHostRuntimeStore,
+  isSharedResourceHost,
+  useHostRegistryLoaded,
+  useHosts,
+} from "@/runtime/host-runtime";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import {
   buildSidebarWorkspacePlacementModel,
-  createSidebarWorkspaceEntry,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
   type ProjectStatusSession,
   type SidebarProjectEntry,
-  type SidebarWorkspaceEntry,
   type SidebarWorkspacePlacement,
 } from "./sidebar-workspaces-view-model";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
@@ -94,7 +97,10 @@ export function useSidebarWorkspacesList(options?: {
   const runtime = getHostRuntimeStore();
   const allHosts = useHosts();
   const hostRegistryLoaded = useHostRegistryLoaded();
-  const allServerIds = useMemo(() => allHosts.map((h) => h.serverId), [allHosts]);
+  const allServerIds = useMemo(
+    () => allHosts.filter((host) => !isSharedResourceHost(host)).map((host) => host.serverId),
+    [allHosts],
+  );
 
   const storeHostFilters = useSidebarViewStore((state) => state.hostFilters);
   const hostFilters = options?.hostFilters ?? storeHostFilters;

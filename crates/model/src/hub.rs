@@ -73,6 +73,12 @@ pub trait Center: fmt::Debug + Send + Sync {
         method: &'static str,
         params: Value,
     ) -> Result<Value, CallError>;
+
+    /// Observe center-initiated outcomes of this Host's published shares.
+    /// Adapters without share support never produce one.
+    fn share_status(&self) -> watch::Receiver<Option<crate::share::Outcome>> {
+        watch::channel(None).1
+    }
 }
 
 /// Host-owned post-commit observer, invoked before connection focus or subscription filtering.

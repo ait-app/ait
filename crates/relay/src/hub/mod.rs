@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use model::hub::{Center, LinkState, Scope};
+use model::share::{Outcome, Visitor};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, mpsc, watch};
@@ -88,6 +89,8 @@ pub struct Connector {
     local: Arc<Local>,
     shutdown: CancellationToken,
     publication: watch::Sender<LinkState>,
+    /// Latest center-initiated share outcome (`share_status` frame).
+    shares: watch::Sender<Option<Outcome>>,
 }
 
 impl Connector {
@@ -103,6 +106,7 @@ impl Connector {
             local,
             shutdown,
             publication: watch::channel(LinkState::default()).0,
+            shares: watch::channel(None).0,
         }
     }
 }
@@ -277,6 +281,7 @@ impl Connector {
             local: self.local.clone(),
             output: output_tx,
             routes: HashMap::new(),
+            shares: self.shares.clone(),
         };
         let mut credential = ticket;
         let mut grace = Duration::MAX;
@@ -426,7 +431,8 @@ async fn join(
         | Inbound::Open { .. }
         | Inbound::Msg { .. }
         | Inbound::Reply { .. }
-        | Inbound::Close { .. } => Err(Error::Protocol.into()),
+        | Inbound::Close { .. }
+        | Inbound::ShareStatus { .. } => Err(Error::Protocol.into()),
     }
 }
 
@@ -445,11 +451,18 @@ struct Sessions {
     local: Arc<Local>,
     output: mpsc::Sender<(Uuid, Output)>,
     routes: HashMap<Uuid, mpsc::Sender<Message>>,
+    shares: watch::Sender<Option<Outcome>>,
 }
 
 impl Sessions {
     /// Start bridging a session, or return the close code that refuses it.
-    fn open(&mut self, id: Uuid, hello: Bytes) -> Result<(), &'static str> {
+    /// A `visitor` session is bridged as a guest of one shared resource.
+    fn open(
+        &mut self,
+        id: Uuid,
+        hello: Bytes,
+        visitor: Option<&Visitor>,
+    ) -> Result<(), &'static str> {
         if self.routes.contains_key(&id) {
             return Ok(());
         }
@@ -464,6 +477,7 @@ impl Sessions {
                 self.local.clone(),
                 id,
                 hello,
+                visitor.map(Visitor::encode),
                 inbound_rx,
                 self.output.clone(),
             )
@@ -566,7 +580,18 @@ impl Pump<'_> {
                 self.calls.reply(id, &payload)?;
                 return Ok(None);
             }
-            Inbound::Open { s, .. } => self.sessions.open(s, payload).err().map(|code| (s, code)),
+            Inbound::Open { s, visitor, .. } => self
+                .sessions
+                .open(s, payload, visitor.as_ref())
+                .err()
+                .map(|code| (s, code)),
+            Inbound::ShareStatus { .. } => {
+                // A malformed outcome is ignored; the next publication repairs state.
+                if let Ok(outcome) = serde_json::from_slice::<Outcome>(&payload) {
+                    self.sessions.shares.send_replace(Some(outcome));
+                }
+                return Ok(None);
+            }
             Inbound::Msg { s, pt, .. } => self
                 .sessions
                 .deliver(s, pt, payload)
@@ -617,6 +642,10 @@ impl Pump<'_> {
 impl Center for Connector {
     fn state(&self) -> watch::Receiver<LinkState> {
         self.publication.subscribe()
+    }
+
+    fn share_status(&self) -> watch::Receiver<Option<Outcome>> {
+        self.shares.subscribe()
     }
 
     async fn call(

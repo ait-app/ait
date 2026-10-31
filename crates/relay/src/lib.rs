@@ -283,8 +283,8 @@ impl Connector {
                                 // Cancellation of a just-ended stream may still be releasing its permit.
                                 let _permit = timeout(Duration::from_secs(5), local.visits.clone().acquire_owned())
                                     .await.map_err(|_| Error::Transport)?.map_err(|_| Error::Transport)?;
-                                let DataMode::Download { download_token } = grant.mode;
-                                download::run(url, grant.daemon_ticket, download_token, local, id).await
+                                let DataMode::Download { download_token, visitor_user_id } = grant.mode;
+                                download::run(url, grant.daemon_ticket, download_token, visitor_user_id, local, id).await
                             } => {
                                 if let Err(error) = result {
                                     tracing::warn!(%error, "Relay session failed");

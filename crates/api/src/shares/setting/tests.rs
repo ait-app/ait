@@ -1,0 +1,203 @@
+use serde_json::json;
+
+use super::*;
+
+fn request(value: serde_json::Value) -> SetRequest {
+    serde_json::from_value(value).unwrap()
+}
+
+fn members(recipients: &[Uuid]) -> SetRequest {
+    request(json!({
+        "resourceKind": "workspace",
+        "resourceKey": "w",
+        "groupId": Uuid::nil(),
+        "permission": OPERATE,
+        "audience": "members",
+        "recipients": recipients,
+    }))
+}
+
+#[test]
+fn normalizes_recipients_and_names() {
+    let first = Uuid::from_u128(2);
+    let second = Uuid::from_u128(1);
+    let mut set = members(&[first, second, first]);
+    set.display_name = Some("  Demo  ".into());
+    set.project_name = Some("   ".into());
+    let set = set.normalize().unwrap();
+    assert_eq!(set.recipients, vec![second, first]);
+    assert_eq!(set.display_name.as_deref(), Some("Demo"));
+    assert_eq!(set.project_name, None);
+}
+
+#[test]
+fn rejects_invalid_requests() {
+    let mut permission = members(&[Uuid::nil()]);
+    permission.permission = "read".into();
+    assert_eq!(permission.normalize(), Err(ShareError::Permission));
+    assert_eq!(members(&[]).normalize(), Err(ShareError::Audience));
+    let mut group = members(&[Uuid::nil()]);
+    group.audience = Audience::Group;
+    assert_eq!(group.normalize(), Err(ShareError::Audience));
+    let many: Vec<Uuid> = (0..=MAX_RECIPIENTS as u128).map(Uuid::from_u128).collect();
+    assert_eq!(members(&many).normalize(), Err(ShareError::Recipients));
+    let mut long = members(&[Uuid::nil()]);
+    long.display_name = Some("x".repeat(201));
+    assert_eq!(long.normalize(), Err(ShareError::Name));
+    let mut control = members(&[Uuid::nil()]);
+    control.project_name = Some("a\nb".into());
+    assert_eq!(control.normalize(), Err(ShareError::Name));
+    let mut blank = members(&[Uuid::nil()]);
+    blank.resource_key = " ".into();
+    assert_eq!(blank.normalize(), Err(ShareError::Resource));
+}
+
+#[test]
+fn resource_keys_must_fit_their_kind() {
+    let mut project = members(&[Uuid::nil()]);
+    project.resource_kind = ResourceKind::Project;
+    project.resource_key = "prj_1".into();
+    assert_eq!(
+        project.clone().normalize().map(|set| set.scope()),
+        Ok(Some(ShareScope::Project("prj_1".into())))
+    );
+    project.resource_key = String::new();
+    assert_eq!(project.normalize(), Err(ShareError::Resource));
+    let mut node = members(&[Uuid::nil()]);
+    node.resource_kind = ResourceKind::Node;
+    assert_eq!(node.clone().normalize(), Err(ShareError::Resource));
+    node.resource_key = String::new();
+    assert_eq!(
+        node.normalize().map(|set| set.scope()),
+        Ok(Some(ShareScope::Node))
+    );
+    let defaulted = request(json!({
+        "resourceKind": "node",
+        "groupId": Uuid::nil(),
+        "permission": OPERATE,
+        "audience": "group",
+    }));
+    assert_eq!(defaulted.resource_key, "");
+    assert!(
+        serde_json::from_value::<SetRequest>(json!({
+            "resourceKind": "host",
+            "resourceKey": "",
+            "groupId": Uuid::nil(),
+            "permission": OPERATE,
+            "audience": "group",
+        }))
+        .is_err()
+    );
+}
+
+#[test]
+fn setting_ids_cannot_be_chosen_by_the_owner() {
+    let result = serde_json::from_value::<SetRequest>(json!({
+        "resourceKind": "workspace",
+        "resourceKey": "w",
+        "groupId": Uuid::nil(),
+        "permission": OPERATE,
+        "audience": "group",
+        "settingId": Uuid::nil(),
+    }));
+    assert!(result.is_err());
+}
+
+#[test]
+fn update_reports_changes_and_retries_rejected_entries() {
+    let user = Uuid::from_u128(7);
+    let mut setting = members(&[user]).normalize().unwrap().into_setting();
+    assert_eq!(setting.state, ShareState::Pending);
+    let setting_id = setting.id;
+    assert_ne!(
+        members(&[user]).normalize().unwrap().into_setting().id,
+        setting_id
+    );
+    assert!(!members(&[user]).normalize().unwrap().update(&mut setting));
+    setting.reject("no_recipients");
+    let other = Uuid::from_u128(8);
+    assert!(members(&[other]).normalize().unwrap().update(&mut setting));
+    assert_eq!(setting.state, ShareState::Pending);
+    assert_eq!(setting.code, None);
+    assert_eq!(setting.recipients, vec![other]);
+    assert_eq!(setting.id, setting_id);
+}
+
+#[test]
+fn only_accepted_matching_shares_admit_visitors() {
+    let user = Uuid::from_u128(7);
+    let share_id = Uuid::from_u128(9);
+    let mut setting = members(&[user]).normalize().unwrap().into_setting();
+    let visitor = Visitor {
+        user_id: user,
+        display_name: None,
+        username: None,
+        group_id: Uuid::nil(),
+        share_id,
+        resource_kind: ResourceKind::Workspace,
+        resource_key: "w".into(),
+        permission: OPERATE.into(),
+    };
+    assert!(!setting.admits(&visitor));
+    setting.accept(&Accepted {
+        share_id,
+        resource_kind: ResourceKind::Workspace,
+        resource_key: "w".into(),
+        group_id: Uuid::nil(),
+        setting_id: setting.id,
+        missing_recipients: Vec::new(),
+    });
+    assert!(setting.admits(&visitor));
+    assert_eq!(setting.published().setting_id, setting.id);
+    let stranger = Visitor {
+        user_id: Uuid::from_u128(1),
+        ..visitor.clone()
+    };
+    assert!(!setting.admits(&stranger));
+    let wrong_share = Visitor {
+        share_id: Uuid::from_u128(1),
+        ..visitor.clone()
+    };
+    assert!(!setting.admits(&wrong_share));
+    let other_workspace = Visitor {
+        resource_key: "x".into(),
+        ..visitor.clone()
+    };
+    assert!(!setting.admits(&other_workspace));
+    let other_kind = Visitor {
+        resource_kind: ResourceKind::Project,
+        ..visitor.clone()
+    };
+    assert!(!setting.admits(&other_kind));
+    // A recipient who left the group waits until the center accepts them again.
+    setting.missing_recipients = vec![user];
+    assert!(!setting.admits(&visitor));
+    setting.missing_recipients.clear();
+    setting.reject("group_inactive");
+    assert!(!setting.admits(&visitor));
+    assert_eq!(setting.share_id, Some(share_id));
+}
+
+#[test]
+fn errors_map_to_safe_codes() {
+    assert_eq!(
+        ErrorCode::from(ShareError::Capacity),
+        ErrorCode::ResourceExhausted
+    );
+    assert_eq!(
+        ErrorCode::from(ShareError::Workspace),
+        ErrorCode::WorkspaceNotFound
+    );
+    assert_eq!(
+        ErrorCode::from(ShareError::Project),
+        ErrorCode::WorkspaceNotFound
+    );
+    assert_eq!(
+        ErrorCode::from(ShareError::Audience),
+        ErrorCode::InvalidMessage
+    );
+    assert_eq!(
+        ErrorCode::from(ShareError::Resource),
+        ErrorCode::InvalidMessage
+    );
+}

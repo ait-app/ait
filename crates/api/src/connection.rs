@@ -12,6 +12,8 @@ use tokio::time::timeout;
 use tracing::Instrument;
 
 use crate::Shared;
+use crate::guest::Session as Guest;
+use crate::guest::policy::{self, Decision, EventDecision};
 
 mod chunks;
 mod creation_receipts;
@@ -56,6 +58,13 @@ impl ConnectionSubscriptions {
     }
 }
 
+/// Negotiated capabilities and the optional guest scope of one physical connection.
+#[derive(Clone, Copy)]
+pub(super) struct Peer<'a> {
+    capabilities: &'a [String],
+    guest: Option<&'a Guest>,
+}
+
 fn websocket_frame(frame: Frame) -> Message {
     match frame {
         Frame::Text(text) => Message::Text(text.into()),
@@ -63,7 +72,7 @@ fn websocket_frame(frame: Frame) -> Message {
     }
 }
 
-pub(super) async fn serve(socket: WebSocket, state: Arc<Shared>) {
+pub(super) async fn serve(socket: WebSocket, state: Arc<Shared>, guest: Option<Guest>) {
     let (mut sink, mut stream) = socket.split();
     let hello = tokio::select! {
         () = state.cancellation.cancelled() => return,
@@ -124,11 +133,17 @@ pub(super) async fn serve(socket: WebSocket, state: Arc<Shared>) {
         })
         .await;
     };
+    // A guest connection ends as soon as its share stops admitting it.
+    let revoked = guest
+        .as_ref()
+        .map(|guest| guest.cancellation().clone())
+        .unwrap_or_default();
     let reader = async {
         tokio::select! {
             () = stopped.cancelled() => {},
             () = outbound_failure.cancelled() => {},
-            _ = read(stream, &state, &lanes, hello) => {},
+            () = revoked.cancelled() => {},
+            _ = read(stream, &state, &lanes, hello, guest.as_ref()) => {},
         }
         stopped.cancel();
     };
@@ -165,6 +180,7 @@ async fn read(
     state: &Shared,
     lanes: &[Outbound; 4],
     hello: Hello,
+    guest: Option<&Guest>,
 ) -> Result<(), QueueError> {
     let outbound = &lanes[0];
     let capabilities = match hello.negotiate_available(&state.info.capabilities) {
@@ -187,7 +203,10 @@ async fn read(
             stream,
             state,
             lanes,
-            &capabilities,
+            Peer {
+                capabilities: &capabilities,
+                guest,
+            },
             subscriptions,
         ))
         .await;
@@ -216,7 +235,11 @@ async fn read(
                 continue;
             },
         };
-        if process_message(message, state, outbound, &capabilities, &mut subscriptions)
+        let peer = Peer {
+            capabilities: &capabilities,
+            guest,
+        };
+        if process_message(message, state, outbound, peer, &mut subscriptions)
             .await?
             .is_break()
         {
@@ -253,13 +276,31 @@ async fn process_file_frame(
     Ok(ControlFlow::Continue(()))
 }
 
+/// Apply a terminal input or resize frame. Watching a terminal does not let a guest
+/// type into or resize it unless they own it or have a whole-node grant.
+async fn terminal_frame(
+    bytes: &[u8],
+    state: &Shared,
+    guest: Option<&Guest>,
+    terminals: &mut terminal::connection::TerminalConnection,
+) -> Result<(), ErrorCode> {
+    if state.terminal.terminals.is_none() {
+        return Err(ErrorCode::NotImplemented);
+    }
+    if let Some(guest) = guest {
+        policy::terminals::owned(guest, terminals.binary_target(bytes)?)?;
+    }
+    terminals.binary(bytes, &state.terminal).await
+}
+
 async fn process_message(
     message: Option<Result<Incoming, ErrorCode>>,
     state: &Shared,
     outbound: &Outbound,
-    capabilities: &[String],
+    peer: Peer<'_>,
     subscriptions: &mut ConnectionSubscriptions,
 ) -> Result<ControlFlow<()>, QueueError> {
+    let capabilities = peer.capabilities;
     match message {
         Some(Ok(Incoming::Text(
             ClientMessage::Request {
@@ -277,7 +318,7 @@ async fn process_message(
                 },
                 state,
                 outbound,
-                capabilities,
+                peer,
                 subscriptions,
             )
             .await?;
@@ -285,14 +326,7 @@ async fn process_message(
         Some(Ok(Incoming::Text(ClientMessage::Event { method, params }, _lease)))
             if valid_id(&method) =>
         {
-            process_event(
-                (method, params),
-                state,
-                outbound,
-                capabilities,
-                subscriptions,
-            )
-            .await?;
+            process_event((method, params), state, outbound, peer, subscriptions).await?;
         }
         Some(Ok(Incoming::Text(
             ClientMessage::Response {
@@ -302,7 +336,12 @@ async fn process_message(
             },
             _lease,
         ))) if valid_id(&method) && request_id.as_deref().is_none_or(valid_id) => {
-            if method == "browser.automation.execute.response"
+            if peer
+                .guest
+                .is_some_and(|guest| guest.kind() != model::share::ResourceKind::Node)
+            {
+                error(outbound, request_id, ErrorCode::Forbidden)?;
+            } else if method == "browser.automation.execute.response"
                 && capabilities.iter().any(|name| name == &method)
                 && let Some(broker) = &state.browser.broker
             {
@@ -318,19 +357,21 @@ async fn process_message(
         }
         None => return Ok(ControlFlow::Break(())),
         Some(Ok(Incoming::Binary(bytes))) if bytes.first().is_some_and(|opcode| *opcode < 0x10) => {
-            let code = if !capabilities.iter().any(|method| method == "terminal.input") {
-                Err(ErrorCode::UnsupportedCapability)
-            } else if state.terminal.terminals.is_none() {
-                Err(ErrorCode::NotImplemented)
+            let code = if capabilities.iter().any(|method| method == "terminal.input") {
+                terminal_frame(&bytes, state, peer.guest, &mut subscriptions.terminals).await
             } else {
-                subscriptions
-                    .terminals
-                    .binary(&bytes, &state.terminal)
-                    .await
+                Err(ErrorCode::UnsupportedCapability)
             };
             if let Err(code) = code {
                 error(outbound, None, code)?;
             }
+        }
+        Some(Ok(Incoming::Binary(_)))
+            if peer
+                .guest
+                .is_some_and(|guest| guest.kind() != model::share::ResourceKind::Node) =>
+        {
+            error(outbound, None, ErrorCode::Forbidden)?;
         }
         Some(Ok(Incoming::Binary(bytes)))
             if capabilities
@@ -363,10 +404,18 @@ async fn process_event(
     input: (String, serde_json::Value),
     state: &Shared,
     outbound: &Outbound,
-    capabilities: &[String],
+    peer: Peer<'_>,
     subscriptions: &mut ConnectionSubscriptions,
 ) -> Result<(), QueueError> {
     let (method, params) = input;
+    let capabilities = peer.capabilities;
+    if let Some(guest) = peer.guest {
+        match policy::event(guest, &method, &params) {
+            EventDecision::Forward => {}
+            EventDecision::Drop => return Ok(()),
+            EventDecision::Refuse(code) => return error(outbound, None, code),
+        }
+    }
     if validation::lookup(&method).is_some_and(|metadata| metadata.kind == InboundKind::Event)
         && voice::capabilities::implemented_methods().any(|spec| spec.name == method)
         && capabilities.iter().any(|capability| capability == &method)
@@ -439,7 +488,7 @@ async fn process_request(
     request: Request,
     state: &Shared,
     outbound: &Outbound,
-    capabilities: &[String],
+    peer: Peer<'_>,
     subscriptions: &mut ConnectionSubscriptions,
 ) -> Result<(), QueueError> {
     let span = tracing::info_span!(
@@ -459,10 +508,40 @@ async fn process_request(
         short_jobs_available = state.jobs.available_permits(),
         terminal_jobs_available = state.terminal_jobs.available_permits(),
     );
+    let request = match peer.guest {
+        Some(guest) => match policy::request(guest, state, request).await {
+            Decision::Forward(request) => request,
+            Decision::Refuse(request, code) => {
+                return span.in_scope(|| error(outbound, Some(request.id), code));
+            }
+            Decision::Private(request, private) => {
+                let result = match validation::request(
+                    &request.method,
+                    &state.info.implemented_capabilities,
+                    peer.capabilities,
+                ) {
+                    Ok(()) => {
+                        policy::private::execute(
+                            guest,
+                            state,
+                            &request.method,
+                            request.params,
+                            private,
+                        )
+                        .instrument(span)
+                        .await
+                    }
+                    Err(code) => Err(code),
+                };
+                return outbound.respond(request.id, result);
+            }
+        },
+        None => request,
+    };
     if let Err(code) = validation::request(
         &request.method,
         &state.info.implemented_capabilities,
-        capabilities,
+        peer.capabilities,
     ) {
         return span.in_scope(|| error(outbound, Some(request.id), code));
     }

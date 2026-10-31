@@ -35,6 +35,7 @@ pub(super) async fn request(
 
 async fn metadata(state: &Shared, context: &mut Context<'_>) -> Result<Value, ErrorCode> {
     let method = context.request.method.clone();
+    let removes_project = method == "project.remove.request";
     let params = std::mem::take(&mut context.request.params);
     let (value, workspace_ids) = state
         .runtime
@@ -44,6 +45,16 @@ async fn metadata(state: &Shared, context: &mut Context<'_>) -> Result<Value, Er
             move |directory| prepare_metadata(directory, &method, params),
         )
         .await?;
+    if removes_project
+        && value["accepted"] == true
+        && let Some(project_id) = value["projectId"].as_str()
+    {
+        // A removed project is no longer shared; its workspaces follow through `retire`.
+        state.shares.forget(
+            model::share::ResourceKind::Project,
+            &[project_id.to_owned()],
+        );
+    }
     let mut plans = Vec::new();
     if state.metadata.worktrees.is_some() {
         for workspace_id in &workspace_ids {
@@ -151,6 +162,10 @@ async fn retire(state: &Shared, workspace_ids: Vec<String>) -> Result<Vec<String
     if workspace_ids.is_empty() {
         return Ok(Vec::new());
     }
+    // Retired workspaces are no longer shared; their guests leave before resources close.
+    state
+        .shares
+        .forget(model::share::ResourceKind::Workspace, &workspace_ids);
     if let Some(bots) = &state.bot.bots {
         bots.retire(&workspace_ids).await?;
     }

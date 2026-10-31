@@ -325,6 +325,17 @@ async fn check_download(socket: &mut Socket, address: &str, cwd: &std::path::Pat
         token["result"]["token"].as_str().unwrap()
     );
     let client = reqwest::Client::new();
+    // An owner's token serves no visitor, and the refusal leaves it usable.
+    let visitor = client
+        .get(&url)
+        .header(
+            "x-ait-download-visitor",
+            "0193f2c4-0000-7000-8000-000000000001",
+        )
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(visitor.status(), 403);
     let download = client.get(&url).send().await.unwrap();
     assert_eq!(download.status(), 200);
     assert_eq!(download.headers()["cache-control"], "no-store");

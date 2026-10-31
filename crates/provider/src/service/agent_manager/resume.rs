@@ -48,7 +48,8 @@ impl AgentManager {
             .persistence
             .as_ref()
             .ok_or_else(|| AgentManagerError::MissingPersistence(id.clone()))?;
-        let (launch, binding) = self.prepare_mcp(&id, &spec, AgentResumePurpose::Interactive)?;
+        let (launch, binding) =
+            self.prepare_mcp(&id, &spec, AgentResumePurpose::Interactive, &record.labels)?;
         let session = super::execution::native(
             &spec.provider,
             "resume",
@@ -122,8 +123,12 @@ impl AgentManager {
             .as_ref()
             .ok_or_else(|| AgentManagerError::MissingPersistence(agent_id.to_owned()))?;
         let client = self.available_client(&record.provider).await?;
-        let (launch, binding) =
-            self.prepare_mcp(agent_id, &spec, AgentResumePurpose::Interactive)?;
+        let (launch, binding) = self.prepare_mcp(
+            agent_id,
+            &spec,
+            AgentResumePurpose::Interactive,
+            &record.labels,
+        )?;
         let session = super::execution::native(
             &spec.provider,
             "restore",

@@ -36,20 +36,24 @@ pub(super) async fn run(
     local: Arc<Local>,
     id: Uuid,
     hello: Bytes,
+    guest: Option<String>,
     inbound: mpsc::Receiver<Message>,
     output: mpsc::Sender<(Uuid, Output)>,
 ) {
-    let code = bridge(&local, id, hello, inbound, &output)
+    let code = bridge(&local, id, hello, guest.as_deref(), inbound, &output)
         .await
         .err()
         .unwrap_or("closed");
     let _ = output.send((id, Output::Closed(code))).await;
 }
 
+/// A guest session dials with the encoded visitor; the local API confines it to
+/// the shared resource and refuses it once the share is gone.
 async fn bridge(
     local: &Local,
     id: Uuid,
     hello: Bytes,
+    guest: Option<&str>,
     mut inbound: mpsc::Receiver<Message>,
     output: &mpsc::Sender<(Uuid, Output)>,
 ) -> Result<(), &'static str> {
@@ -57,9 +61,15 @@ async fn bridge(
     let _: ClientHello = protocol::decode(&hello).map_err(|_| "invalid_hello")?;
     let mut daemon = local
         .dialer
-        .connect(&local.url, local.token.expose_secret(), MAX_MESSAGE)
+        .connect_as(&local.url, local.token.expose_secret(), guest, MAX_MESSAGE)
         .await
-        .map_err(|_| "unavailable")?;
+        .map_err(|_| {
+            if guest.is_some() {
+                "share_revoked"
+            } else {
+                "unavailable"
+            }
+        })?;
     send(&mut daemon, Message::Text(hello))
         .await
         .map_err(|_| "unavailable")?;

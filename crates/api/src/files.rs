@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::extract::{Query, State};
-use axum::http::{StatusCode, header};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use filesystem::files::service::transfer::Cursor;
 use futures_util::stream;
@@ -11,8 +11,12 @@ use model::server::ErrorCode;
 
 use crate::Shared;
 
+/// Serve a one-use download. The relay names the visiting account of a guest download in
+/// [`model::share::DOWNLOAD_VISITOR_HEADER`]; tokens are bound to the account they were
+/// issued for, so the header only narrows what a request may consume.
 pub(crate) async fn download(
     State(state): State<Arc<Shared>>,
+    headers: HeaderMap,
     Query(query): Query<BTreeMap<String, String>>,
 ) -> Response {
     let Some(token) = query.get("token").filter(|token| !token.trim().is_empty()) else {
@@ -22,11 +26,18 @@ pub(crate) async fn download(
         return (StatusCode::BAD_REQUEST, "Unexpected download parameter").into_response();
     }
     let token = token.trim().to_owned();
+    let visitor = match headers.get(model::share::DOWNLOAD_VISITOR_HEADER) {
+        None => None,
+        Some(value) => match value.to_str() {
+            Ok(visitor) if !visitor.is_empty() => Some(visitor.to_owned()),
+            _ => return (StatusCode::BAD_REQUEST, "Invalid download visitor").into_response(),
+        },
+    };
     let result = state
         .run(
             state.filesystem.files.clone(),
             ErrorCode::ProjectIo,
-            move |files| Ok(files.consume_download(&token)),
+            move |files| Ok(files.consume_download(&token, visitor.as_deref())),
         )
         .await;
     let (reader, file_name) = match result {

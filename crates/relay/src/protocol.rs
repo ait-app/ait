@@ -102,7 +102,13 @@ pub(super) struct OpenData {
 pub(super) enum DataMode {
     /// An independent download authorized by a local one-use file token.
     #[serde(rename = "ait-download-v1")]
-    Download { download_token: SecretString },
+    Download {
+        download_token: SecretString,
+        /// The visiting account of a guest download through a share, asserted by the
+        /// center; absent for the owner's own downloads and from older centers.
+        #[serde(default)]
+        visitor_user_id: Option<Uuid>,
+    },
 }
 
 /// Pairing acknowledgement for one specific reverse data connection.

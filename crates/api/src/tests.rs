@@ -3,6 +3,7 @@ use super::*;
 mod bot;
 mod browser_auth;
 mod chunks;
+mod guest;
 mod hub_control;
 mod hub_publication;
 mod mcp;
@@ -195,9 +196,10 @@ fn assert_default_capabilities(info: &ServerInfo) {
         ])
         .chain(relay::rpc::METHODS.iter().map(|method| method.name))
         .chain(publication::METHODS.iter().map(|method| method.name))
+        .chain(shares::rpc::METHODS.iter().map(|method| method.name))
         .collect();
     assert_eq!(info.implemented_capabilities, expected);
-    assert_eq!(info.capabilities.len(), 210);
+    assert_eq!(info.capabilities.len(), 214);
     assert!(
         info.capabilities
             .contains(&"connection.single.v1".to_owned())

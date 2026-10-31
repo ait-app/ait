@@ -250,14 +250,24 @@ impl TerminalConnection {
     /// Rejects malformed frames, unknown slots or terminal/runtime failures.
     pub async fn binary(&mut self, bytes: &[u8], state: &Shared) -> Result<(), ErrorCode> {
         let (slot, input) = wire::client_frame(bytes)?;
-        let terminal = self
-            .streams
+        let terminal = self.slot_terminal(slot)?.to_owned();
+        self.input(terminal, input, state).await
+    }
+
+    /// The terminal an input frame would reach, so callers can authorize it first.
+    /// # Errors
+    /// Rejects malformed frames and unknown slots.
+    pub fn binary_target(&self, bytes: &[u8]) -> Result<&str, ErrorCode> {
+        let (slot, _) = wire::client_frame(bytes)?;
+        self.slot_terminal(slot)
+    }
+
+    fn slot_terminal(&self, slot: u8) -> Result<&str, ErrorCode> {
+        self.streams
             .values()
             .find(|stream| stream.slot == slot)
-            .ok_or(ErrorCode::SubscriptionNotFound)?
-            .terminal
-            .clone();
-        self.input(terminal, input, state).await
+            .map(|stream| stream.terminal.as_str())
+            .ok_or(ErrorCode::SubscriptionNotFound)
     }
 
     async fn input(

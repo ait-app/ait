@@ -19,6 +19,8 @@ struct DownloadGrant {
     root: String,
     path: String,
     file_name: String,
+    /// The visiting account a guest connection issued this grant for; `None` for the owner.
+    visitor: Option<String>,
 }
 
 impl Files {
@@ -55,19 +57,44 @@ impl Files {
                 root: info.root.clone(),
                 path: info.absolute_path.clone(),
                 file_name: info.file_name.clone(),
+                visitor: None,
             },
         );
         Ok(info)
     }
 
+    /// Bind an unconsumed, unbound grant to the visiting account it was issued for.
+    /// Returns false when the grant is gone or already bound.
+    pub fn bind_download(&mut self, token: &str, visitor: &str) -> bool {
+        match self.downloads.get_mut(token) {
+            Some(grant) if grant.visitor.is_none() => {
+                grant.visitor = Some(visitor.to_owned());
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Consume a download grant, returning its reader and original download name.
     ///
+    /// `downloader` is the visiting account the center asserted for a guest download, or
+    /// `None` for the owner. A grant bound to a visitor serves only that visitor, and an
+    /// owner's grant serves no visitor. A mismatch leaves the grant for its holder.
+    ///
     /// # Errors
-    /// Rejects unknown, reused, expired, removed, or newly outside paths.
+    /// Rejects unknown, reused, expired, mismatched, removed, or newly outside paths.
     pub fn consume_download(
         &mut self,
         token: &str,
+        downloader: Option<&str>,
     ) -> Result<(Box<dyn FileReader>, String), FileError> {
+        if self
+            .downloads
+            .get(token)
+            .is_some_and(|grant| grant.visitor.as_deref() != downloader)
+        {
+            return Err(FileError("Invalid or expired token".to_owned()));
+        }
         let grant = self
             .downloads
             .remove(token)

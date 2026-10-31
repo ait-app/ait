@@ -1,3 +1,5 @@
+import { useHubServices } from "@/runtime/hub-service-store";
+import { canManageHost, daemonManagementServerId } from "./host-management";
 import { supportsBrowserAccount } from "@/runtime/browser-account";
 import { AgentProfilesSection } from "@/agent-profiles";
 import { AgentSkillsSection } from "@/agent-skills";
@@ -9,6 +11,10 @@ import { SettingsTextAreaCard } from "@/components/settings-textarea";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { Alert as InlineAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  ShareManagerSheet,
+  type ShareResourceTarget,
+} from "@/components/sharing/share-manager-sheet";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
 import { Switch } from "@/components/ui/switch";
 import { getIsElectron } from "@/constants/platform";
@@ -29,6 +35,7 @@ import { HostUsageSection } from "@/usage/host-usage-section";
 import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
+  isSharedResourceHost,
   useHostMutations,
   useHostRuntimeClient,
   useHostRuntimeIsConnected,
@@ -62,6 +69,7 @@ import {
   Pencil,
   Plus,
   RotateCw,
+  Share2,
   SquareTerminal,
   Trash2,
 } from "lucide-react-native";
@@ -162,6 +170,10 @@ function useHostProfile(serverId: string): HostProfile | null {
   return daemons.find((entry) => entry.serverId === serverId) ?? null;
 }
 
+function useCanManageHost(host: HostProfile | null): boolean {
+  return useHubServices((state) => canManageHost(host, state.snapshot?.shares ?? []));
+}
+
 function HostNotFound() {
   const { t } = useTranslation();
   return (
@@ -247,7 +259,7 @@ export function HostConnectionsPage({ serverId }: { serverId: string }) {
     <View>
       <HostConnectionError serverId={serverId} />
       <ConnectionsSection host={host} />
-      {supportsAccountRelay() && !supportsBrowserAccount() ? (
+      {supportsAccountRelay() && !supportsBrowserAccount() && !isSharedResourceHost(host) ? (
         <OnlineServiceHostSection host={host} />
       ) : null}
     </View>
@@ -345,6 +357,7 @@ export function HostSettingsPage({
 }) {
   const host = useHostProfile(serverId);
   const isLocalDaemon = useIsLocalDaemon(serverId);
+  const canManage = useCanManageHost(host);
 
   if (!host) {
     return <HostNotFound />;
@@ -362,6 +375,8 @@ export function HostSettingsPage({
 
       <HostAppearanceSection host={host} />
 
+      {!isSharedResourceHost(host) ? <HostSharingSection host={host} /> : null}
+
       {getIsElectron() &&
       (isLocalDaemon ||
         host.connections.some(
@@ -370,10 +385,48 @@ export function HostSettingsPage({
         <LocalDaemonSection />
       ) : null}
 
-      {!isLocalDaemon ? <UpdateDaemonCard key={host.serverId} host={host} /> : null}
+      {!isLocalDaemon && canManage ? <UpdateDaemonCard key={host.serverId} host={host} /> : null}
 
       <RemoveHostSection host={host} isLocalDaemon={isLocalDaemon} onRemoved={onHostRemoved} />
     </View>
+  );
+}
+
+function HostSharingSection({ host }: { host: HostProfile }) {
+  const { t } = useTranslation();
+  const { theme } = useUnistyles();
+  const [target, setTarget] = useState<ShareResourceTarget | null>(null);
+  const handleOpen = useCallback(
+    () =>
+      setTarget({
+        serverId: host.serverId,
+        resourceKind: "node",
+        resourceKey: "",
+        displayName: host.label,
+      }),
+    [host.label, host.serverId],
+  );
+  const handleClose = useCallback(() => setTarget(null), []);
+  const icon = useMemo(
+    () => <Share2 size={theme.iconSize.sm} color={theme.colors.foreground} />,
+    [theme.colors.foreground, theme.iconSize.sm],
+  );
+
+  return (
+    <SettingsSection title={t("sharing.hostSection")} testID="host-page-sharing">
+      <View style={settingsStyles.card}>
+        <View style={settingsStyles.row}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>{t("sharing.hostTitle")}</Text>
+            <Text style={settingsStyles.rowHint}>{t("sharing.hostHint")}</Text>
+          </View>
+          <Button variant="outline" size="sm" leftIcon={icon} onPress={handleOpen}>
+            {t("sharing.manage")}
+          </Button>
+        </View>
+      </View>
+      <ShareManagerSheet visible={target !== null} target={target} onClose={handleClose} />
+    </SettingsSection>
   );
 }
 
@@ -454,7 +507,7 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
               latencyMs={probe?.status === "available" ? probe.latencyMs : undefined}
               latencyLoading={!probe || probe.status === "pending"}
               latencyError={probe?.status === "unavailable"}
-              onRemove={handleRequestRemove}
+              onRemove={isSharedResourceHost(host) ? undefined : handleRequestRemove}
             />
           );
         })}
@@ -512,7 +565,7 @@ function ConnectionRow({
   latencyMs: number | null | undefined;
   latencyLoading: boolean;
   latencyError: boolean;
-  onRemove: (connection: HostConnection) => void;
+  onRemove?: (connection: HostConnection) => void;
 }) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
@@ -527,7 +580,7 @@ function ConnectionRow({
   const latencyColor = latencyError ? theme.colors.palette.red[300] : theme.colors.foregroundMuted;
 
   const handlePressRemove = useCallback(() => {
-    onRemove(connection);
+    onRemove?.(connection);
   }, [onRemove, connection]);
 
   const rowStyle = useMemo(
@@ -551,14 +604,16 @@ function ConnectionRow({
         </Text>
       </View>
       <Text style={latencyTextStyle}>{latencyText}</Text>
-      <Button
-        variant="ghost"
-        size="sm"
-        textStyle={destructiveTextStyle}
-        onPress={handlePressRemove}
-      >
-        {t("settings.host.connections.removeAction")}
-      </Button>
+      {onRemove ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          textStyle={destructiveTextStyle}
+          onPress={handlePressRemove}
+        >
+          {t("settings.host.connections.removeAction")}
+        </Button>
+      ) : null}
     </View>
   );
 }
@@ -631,7 +686,10 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
         if (!confirmed) return;
         setIsRestarting(true);
         const restartRequest = restartDaemonFromSettings(
-          host.serverId,
+          daemonManagementServerId(
+            host.serverId,
+            daemonClient.getLastServerInfoMessage()?.serverId,
+          ),
           `settings_daemon_restart_${host.serverId}`,
           {
             ...(isLocalDaemon
@@ -808,14 +866,20 @@ function UpdateDaemonCard({ host }: { host: HostProfile }) {
         });
         unsubscribeRef.current = unsubscribe;
 
-        void updateDaemonFromSettings(host.serverId, {
-          updateDaemon: () => daemonClient.updateDaemon(requestId),
-          getStatus: async () => ({
-            ...(await daemonClient.getDaemonStatus({ timeout: 1500 })),
-            serverId: daemonClient.getLastServerInfoMessage()?.serverId ?? "",
-            version: daemonClient.getLastServerInfoMessage()?.version ?? null,
-          }),
-        })
+        void updateDaemonFromSettings(
+          daemonManagementServerId(
+            host.serverId,
+            daemonClient.getLastServerInfoMessage()?.serverId,
+          ),
+          {
+            updateDaemon: () => daemonClient.updateDaemon(requestId),
+            getStatus: async () => ({
+              ...(await daemonClient.getDaemonStatus({ timeout: 1500 })),
+              serverId: daemonClient.getLastServerInfoMessage()?.serverId ?? "",
+              version: daemonClient.getLastServerInfoMessage()?.version ?? null,
+            }),
+          },
+        )
           .then(({ workerVersion }) => {
             unsubscribeRef.current = null;
             unsubscribe();
@@ -1144,6 +1208,7 @@ function RemoveHostSection({
   isLocalDaemon: boolean;
   onRemoved?: () => void;
 }) {
+  const canManage = useCanManageHost(host);
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const { removeHost } = useHostMutations();
@@ -1249,34 +1314,36 @@ function RemoveHostSection({
       title={t("settings.host.daemon.dangerZone")}
       testID="host-page-remove-host-card"
     >
-      <RestartDaemonCard host={host} />
+      {canManage ? <RestartDaemonCard host={host} /> : null}
 
-      <View style={settingsStyles.card}>
-        <View style={settingsStyles.row}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>
-              {isLocalDaemon
-                ? t("settings.host.daemon.remove.localTitle")
-                : t("settings.host.daemon.remove.title")}
-            </Text>
-            <Text style={settingsStyles.rowHint}>
-              {stopsOwnedDaemon
-                ? t("settings.host.daemon.remove.localHint")
-                : t("settings.host.daemon.remove.hint")}
-            </Text>
+      {!isSharedResourceHost(host) ? (
+        <View style={settingsStyles.card}>
+          <View style={settingsStyles.row}>
+            <View style={settingsStyles.rowContent}>
+              <Text style={settingsStyles.rowTitle}>
+                {isLocalDaemon
+                  ? t("settings.host.daemon.remove.localTitle")
+                  : t("settings.host.daemon.remove.title")}
+              </Text>
+              <Text style={settingsStyles.rowHint}>
+                {stopsOwnedDaemon
+                  ? t("settings.host.daemon.remove.localHint")
+                  : t("settings.host.daemon.remove.hint")}
+              </Text>
+            </View>
+            <Button
+              variant="outline"
+              size="sm"
+              leftIcon={removeIcon}
+              textStyle={destructiveTextStyle}
+              onPress={handleOpenConfirm}
+              testID="host-page-remove-host-button"
+            >
+              {t("settings.host.connections.removeAction")}
+            </Button>
           </View>
-          <Button
-            variant="outline"
-            size="sm"
-            leftIcon={removeIcon}
-            textStyle={destructiveTextStyle}
-            onPress={handleOpenConfirm}
-            testID="host-page-remove-host-button"
-          >
-            {t("settings.host.connections.removeAction")}
-          </Button>
         </View>
-      </View>
+      ) : null}
 
       {isConfirming ? (
         <AdaptiveModalSheet

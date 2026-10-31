@@ -176,6 +176,8 @@ pub enum ErrorCode {
     LabelNameTaken,
     /// A compound label/catalog write has an uncertain durable outcome.
     WorkspaceLabelStorageUncertain,
+    /// The connection's scope does not admit this operation; the target is not disclosed.
+    Forbidden,
 }
 
 impl ErrorCode {
@@ -226,6 +228,7 @@ impl ErrorCode {
             Self::WorkspaceLabelStorageUncertain => {
                 "Workspace label storage outcome is uncertain; restart before retrying"
             }
+            Self::Forbidden => "Operation is not permitted on this connection",
         }
     }
 

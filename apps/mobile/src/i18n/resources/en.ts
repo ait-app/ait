@@ -1,4 +1,58 @@
 export const en = {
+  sharing: {
+    title: "Shared",
+    sharedWithMe: "Shared with me",
+    sharedWithMeCount: "Shared with me ({{count}})",
+    sharedByMe: "Shared by me",
+    sharedByMeCount: "Shared by me ({{count}})",
+    section: "Shared",
+    action: "Share with groups",
+    manage: "Manage",
+    refresh: "Refresh",
+    stop: "Stop sharing",
+    active: "Active",
+    loading: "Loading shared resources…",
+    hostSection: "Sharing",
+    hostTitle: "Share this node",
+    hostHint: "Give a group access to every project and workspace on this Host.",
+    shareTitle: "Share {{name}}",
+    resourceTitle: "Share resource",
+    intro: "Group members can open this resource in AIT while the sharing owner is online.",
+    scope: {
+      node: "Node",
+      project: "Project",
+      workspace: "Workspace",
+    },
+    scopeHint: {
+      node: "Everything on this node",
+      project: "This project and its workspaces",
+      workspace: "Only this workspace",
+    },
+    status: {
+      shared: "Shared",
+      rejected: "Not shared · {{code}}",
+      waiting: "Waiting for service",
+      groupAdmin: "You manage this group",
+      groupMember: "Group member",
+    },
+    noGroupsTitle: "No groups available",
+    noGroupsHint:
+      "Connect this node to the online service in Host settings → Connections, then check that the node owner belongs to a group.",
+    nodeSettingsOnly:
+      "These settings require a whole-node share. This share only grants access to its project or workspace.",
+    ownerOnly:
+      "Only the node owner can manage sharing. Resources shared with you cannot be shared again.",
+    unsupported: "This node does not support sharing management. Update the node and try again.",
+    loadError: "Could not load sharing settings.",
+    updateError: "Could not update sharing.",
+    listError: "Could not load shared resources.",
+    stopError: "Could not stop sharing.",
+    emptyIncomingTitle: "Nothing shared with you yet",
+    emptyIncomingHint: "Resources shared by members of your groups will appear here.",
+    emptyOutgoingTitle: "You are not sharing anything",
+    emptyOutgoingHint:
+      "Use the menu on a workspace or project, or open Host settings to share a whole node.",
+  },
   voiceTimeline: {
     started: "Voice conversation started",
     ended: "Voice conversation ended",

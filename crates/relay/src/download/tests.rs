@@ -6,6 +6,11 @@ use tokio_tungstenite::accept_async;
 use super::*;
 
 async fn transfer(status: u16, ack: &str) -> Result<(), Error> {
+    transfer_as(status, ack, None).await
+}
+
+/// Download through a fake center and local API; a guest download names `visitor`.
+async fn transfer_as(status: u16, ack: &str, visitor: Option<Uuid>) -> Result<(), Error> {
     let center = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let local = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let session = Uuid::new_v4();
@@ -29,6 +34,13 @@ async fn transfer(status: u16, ack: &str) -> Result<(), Error> {
         let request = String::from_utf8(request).unwrap();
         assert!(request.starts_with("GET /api/files/download?token=scoped-token HTTP/1.1\r\n"));
         assert!(!request.contains("relay-ticket"));
+        let named = request
+            .to_ascii_lowercase()
+            .contains(model::share::DOWNLOAD_VISITOR_HEADER);
+        assert_eq!(named, visitor.is_some());
+        if let Some(visitor) = visitor {
+            assert!(request.contains(&visitor.to_string()));
+        }
         let body = if status == 200 { body } else { Vec::new() };
         let header = format!(
             "HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nContent-Type: application/octet-stream\r\nConnection: close\r\n\r\n",
@@ -42,6 +54,7 @@ async fn transfer(status: u16, ack: &str) -> Result<(), Error> {
         url,
         SecretString::from("relay-ticket"),
         SecretString::from("scoped-token"),
+        visitor,
         destination,
         session,
     ));
@@ -99,6 +112,17 @@ async fn download_stream_preserves_headers_chunks_and_final_acknowledgement() {
     timeout(
         Duration::from_secs(5),
         transfer(200, r#"{"type":"download.complete"}"#),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+}
+
+#[tokio::test]
+async fn guest_downloads_name_their_visitor_to_the_local_api() {
+    timeout(
+        Duration::from_secs(5),
+        transfer_as(200, r#"{"type":"download.complete"}"#, Some(Uuid::new_v4())),
     )
     .await
     .unwrap()
