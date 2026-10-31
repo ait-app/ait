@@ -38,15 +38,22 @@ impl Live {
         let receiver = super::native_sessions::text(item, "agentThreadId")?;
         let id = super::native_sessions::text(item, "id")?;
         let kind = item["kind"].as_str().ok_or(AgentSessionError::Failed)?;
-        if receiver == sender || !matches!(kind, "started" | "interacted" | "interrupted") {
+        if receiver == sender
+            || !matches!(kind, "started" | "interacted" | "interrupted" | "completed")
+        {
             return Err(AgentSessionError::Failed);
         }
         // Communication can target an ancestor or peer; only a start proves child ancestry.
         if kind != "started" {
-            if kind == "interrupted"
-                && let Some(child) = self.children.get_mut(receiver)
-            {
-                set_status(child, "canceled", events);
+            if let Some(child) = self.children.get_mut(receiver) {
+                match kind {
+                    "interrupted" => set_status(child, "canceled", events),
+                    // The child's own terminal event retains a more specific failure/cancel state.
+                    "completed" if child.descriptor.descriptor["status"] == "running" => {
+                        set_status(child, "completed", events);
+                    }
+                    _ => {}
+                }
             }
             return Ok(());
         }

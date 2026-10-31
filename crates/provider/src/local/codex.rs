@@ -552,6 +552,26 @@ struct CodexSession {
 }
 
 impl CodexSession {
+    fn observe_children(&mut self, method: &str, params: &Value) -> Result<(), AgentSessionError> {
+        let events = self
+            .children
+            .observe(method, params, (&self.id, &self.cwd), &self.client.images)
+            .inspect_err(|_| {
+                if let Some(transport) = &mut self.transport {
+                    transport.observe_error(
+                        &json!({"message":"Codex sub-agent event could not be processed."}),
+                        crate::ports::diagnostics::Diagnostic::new(
+                            crate::ports::diagnostics::Category::Protocol,
+                            "subagent_event",
+                        ),
+                        "observe",
+                    );
+                }
+            })?;
+        self.stream.events.extend(events);
+        Ok(())
+    }
+
     fn finish_turn(&mut self, params: &Value) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
         if params["turn"]["status"] == "failed"
             && !params["turn"]["error"].is_null()
@@ -1018,12 +1038,7 @@ impl AgentSession for CodexSession {
                 return Ok(Some(event));
             }
             let params = &message["params"];
-            self.stream.events.extend(self.children.observe(
-                method,
-                params,
-                (&self.id, &self.cwd),
-                &self.client.images,
-            )?);
+            self.observe_children(method, params)?;
             if method == "serverRequest/resolved"
                 && params["threadId"]
                     .as_str()
