@@ -1,5 +1,14 @@
 # Ait changelog
 
+## 0.1.24 - 2026-11-01
+
+- Share workspaces, projects, or entire hosts with group members through Hub guest sessions, with scoped access, revocation, and recovery.
+- Fix shared project/workspace directories remaining in a loading state, and organize sharing, host navigation, and account login on the home page.
+- Restore native and nested subagent lists; improve OpenCode subagent state, history recovery, and live updates.
+- Handle Codex child-agent completion notifications without interrupting the parent session.
+- Correct provider execution ownership and public API contracts, improve Pi availability/version diagnostics, and mark Claude sessions launched by Ait.
+- Fix macOS sidebar and home-page buttons being blocked by window drag regions.
+
 ## 0.1.23 - 2026-10-30
 
 - Use Hub for online business sessions across clients and hosts, while keeping dedicated file downloads on Relay. Hub support is now required for online sessions.
