@@ -9,6 +9,7 @@ mod scopes;
 struct Guest {
     fixture: Workspaces,
     session: Session,
+    visitor: model::share::Visitor,
 }
 
 impl Guest {
@@ -26,7 +27,11 @@ impl Guest {
         };
         let visitor = fixture.accept(kind, &key).await;
         let session = admit(&fixture.api.shared, &visitor.encode()).await.unwrap();
-        Self { fixture, session }
+        Self {
+            fixture,
+            session,
+            visitor,
+        }
     }
 
     async fn private(&self, method: &str, params: Value) -> Value {
@@ -111,7 +116,9 @@ fn methods_are_classified_by_default_deny() {
         ("agent.history.get.request", Rule::AgentFilter),
         ("agent.items.close.request", Rule::ItemsClose),
         ("terminal.input", Rule::Deny),
-        ("terminal.kill.request", Rule::Terminal),
+        ("terminal.kill.request", Rule::TerminalDrive),
+        ("terminal.rename.request", Rule::TerminalDrive),
+        ("terminal.subscribe.request", Rule::Terminal),
         ("checkout.push.request", Rule::Path),
         ("fs.file.download_token.request", Rule::Download),
     ] {
@@ -485,40 +492,94 @@ async fn terminals_are_forced_into_the_workspace() {
 #[tokio::test]
 async fn events_are_confined() {
     let guest = Guest::new().await;
-    let state = &guest.fixture.api.shared;
     let session = &guest.session;
     assert_eq!(
-        event(session, state, "session.heartbeat", &json!({})).await,
+        event(session, "session.heartbeat", &json!({})),
         EventDecision::Drop
     );
     assert_eq!(
-        event(session, state, "push.register", &json!({})).await,
+        event(session, "push.register", &json!({})),
         EventDecision::Refuse(ErrorCode::Forbidden)
     );
     assert_eq!(
-        event(
-            session,
-            state,
-            "terminal.input",
-            &json!({"terminalId": "t"})
-        )
-        .await,
+        event(session, "terminal.input", &json!({})),
         EventDecision::Refuse(ErrorCode::Forbidden)
     );
+    // A terminal in scope is not enough: only the visitor's own terminals take input.
+    session.remember_terminal("owners");
     assert_eq!(
-        event(session, state, "terminal.input", &json!({})).await,
+        event(session, "terminal.input", &json!({"terminalId": "owners"})),
         EventDecision::Refuse(ErrorCode::Forbidden)
     );
-    session.remember_terminal("known");
+    assert!(session.registration.record_terminal("mine".into()));
     assert_eq!(
-        event(
-            session,
-            state,
-            "terminal.input",
-            &json!({"terminalId": "known"})
-        )
-        .await,
+        event(session, "terminal.input", &json!({"terminalId": "mine"})),
         EventDecision::Forward
+    );
+}
+
+/// Even a node share, which watches every terminal, drives only the visitor's own.
+#[tokio::test]
+async fn visitors_drive_only_terminals_they_created() {
+    let guest = Guest::with(ResourceKind::Node).await;
+    let session = &guest.session;
+    assert!(session.registration.record_terminal("mine".into()));
+    for method in ["terminal.kill.request", "terminal.rename.request"] {
+        assert_eq!(
+            guest
+                .refused(method, json!({"terminalId": "owners", "title": "x"}))
+                .await,
+            ErrorCode::Forbidden,
+            "{method}"
+        );
+        guest
+            .forwarded(method, json!({"terminalId": "mine", "title": "x"}))
+            .await;
+    }
+    assert_eq!(
+        guest
+            .refused(
+                "agent.items.close.request",
+                json!({"terminalIds": ["mine", "owners"]})
+            )
+            .await,
+        ErrorCode::Forbidden
+    );
+    guest
+        .forwarded(
+            "agent.items.close.request",
+            json!({"terminalIds": ["mine"]}),
+        )
+        .await;
+
+    // Watching another terminal never claims its size; the visitor's own keeps it.
+    let restore = json!({"mode": "live", "size": {"rows": 10, "cols": 20}});
+    let watched = guest
+        .forwarded(
+            "terminal.subscribe.request",
+            json!({"terminalId": "owners", "restore": restore}),
+        )
+        .await;
+    assert_eq!(watched["restore"], json!({"mode": "live"}));
+    let own = guest
+        .forwarded(
+            "terminal.subscribe.request",
+            json!({"terminalId": "mine", "restore": restore}),
+        )
+        .await;
+    assert_eq!(own["restore"], restore);
+
+    // Ownership follows the visitor to new connections, not other visitors of the share.
+    let state = &guest.fixture.api.shared;
+    let mut visitor = guest.visitor.clone();
+    let again = admit(state, &visitor.encode()).await.unwrap();
+    assert!(again.owns_terminal("mine"));
+    visitor.user_id = uuid::Uuid::new_v4();
+    let other = admit(state, &visitor.encode()).await.unwrap();
+    assert!(!other.owns_terminal("mine"));
+    assert_eq!(
+        event(&other, "terminal.input", &json!({"terminalId": "mine"})),
+        EventDecision::Refuse(ErrorCode::Forbidden)
     );
 }
 

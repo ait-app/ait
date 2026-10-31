@@ -77,6 +77,13 @@ impl Guests {
         self.grants.keys().copied()
     }
 
+    /// Whether a guest of `grant` created terminal `terminal_id`.
+    pub(super) fn owns_terminal(&self, grant: Grant, terminal_id: &str) -> bool {
+        self.grants
+            .get(&grant)
+            .is_some_and(|terminals| terminals.iter().any(|id| id == terminal_id))
+    }
+
     /// End every connection of each grant for which `stale` holds and forget the grant.
     pub(super) fn revoke(&mut self, stale: impl Fn(&Grant) -> bool) -> Vec<Revoked> {
         let revoked: Vec<Grant> = self.grants.keys().copied().filter(&stale).collect();
@@ -131,6 +138,12 @@ impl Registration {
     /// Returns false when the grant was revoked meanwhile; the caller must end the terminal.
     pub(crate) fn record_terminal(&self, terminal_id: String) -> bool {
         self.shares.record_terminal(self.grant, terminal_id)
+    }
+
+    /// Whether this visitor created terminal `terminal_id` through this share, on any of
+    /// its connections. Only such terminals take the visitor's input.
+    pub(crate) fn owns_terminal(&self, terminal_id: &str) -> bool {
+        self.shares.owns_terminal(self.grant, terminal_id)
     }
 
     /// The share and account this connection was admitted for.

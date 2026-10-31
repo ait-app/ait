@@ -276,6 +276,23 @@ async fn process_file_frame(
     Ok(ControlFlow::Continue(()))
 }
 
+/// Apply a terminal input or resize frame. Watching a terminal does not let a guest
+/// type into or resize it: guests reach only terminals they created.
+async fn terminal_frame(
+    bytes: &[u8],
+    state: &Shared,
+    guest: Option<&Guest>,
+    terminals: &mut terminal::connection::TerminalConnection,
+) -> Result<(), ErrorCode> {
+    if state.terminal.terminals.is_none() {
+        return Err(ErrorCode::NotImplemented);
+    }
+    if let Some(guest) = guest {
+        policy::terminals::owned(guest, terminals.binary_target(bytes)?)?;
+    }
+    terminals.binary(bytes, &state.terminal).await
+}
+
 async fn process_message(
     message: Option<Result<Incoming, ErrorCode>>,
     state: &Shared,
@@ -337,15 +354,10 @@ async fn process_message(
         }
         None => return Ok(ControlFlow::Break(())),
         Some(Ok(Incoming::Binary(bytes))) if bytes.first().is_some_and(|opcode| *opcode < 0x10) => {
-            let code = if !capabilities.iter().any(|method| method == "terminal.input") {
-                Err(ErrorCode::UnsupportedCapability)
-            } else if state.terminal.terminals.is_none() {
-                Err(ErrorCode::NotImplemented)
+            let code = if capabilities.iter().any(|method| method == "terminal.input") {
+                terminal_frame(&bytes, state, peer.guest, &mut subscriptions.terminals).await
             } else {
-                subscriptions
-                    .terminals
-                    .binary(&bytes, &state.terminal)
-                    .await
+                Err(ErrorCode::UnsupportedCapability)
             };
             if let Err(code) = code {
                 error(outbound, None, code)?;
@@ -391,7 +403,7 @@ async fn process_event(
     let (method, params) = input;
     let capabilities = peer.capabilities;
     if let Some(guest) = peer.guest {
-        match policy::event(guest, state, &method, &params).await {
+        match policy::event(guest, &method, &params) {
             EventDecision::Forward => {}
             EventDecision::Drop => return Ok(()),
             EventDecision::Refuse(code) => return error(outbound, None, code),

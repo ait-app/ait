@@ -369,6 +369,11 @@ impl Session {
         true
     }
 
+    /// Whether this visitor created terminal `id`; only those take its input.
+    pub(crate) fn owns_terminal(&self, id: &str) -> bool {
+        self.registration.owns_terminal(id)
+    }
+
     fn knows_terminal(&self, id: &str) -> bool {
         lock(&self.terminals).contains(id)
     }

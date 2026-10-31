@@ -236,6 +236,10 @@ impl Shares {
         lock(&self.book).guests.record_terminal(grant, terminal_id)
     }
 
+    fn owns_terminal(&self, grant: Grant, terminal_id: &str) -> bool {
+        lock(&self.book).guests.owns_terminal(grant, terminal_id)
+    }
+
     /// Apply `change` and revoke grants it invalidated. `change` returns whether the
     /// publishable list changed; the book is persisted either way.
     fn mutate<R>(&self, change: impl FnOnce(&mut Book) -> (R, bool)) -> (R, Commit) {

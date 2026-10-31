@@ -269,3 +269,27 @@ async fn failed_attach_resize_creates_no_observer_and_keeps_input_errors_visible
     assert!(fixture.connection.is_empty());
     assert!(fixture.calls.lock().unwrap().inputs.is_empty());
 }
+
+/// Callers authorize the terminal an input frame reaches before applying it.
+#[tokio::test]
+async fn input_frames_name_the_terminal_of_their_slot() {
+    let mut fixture = Fixture::new();
+    let subscribed = fixture.subscribe().await;
+    fixture.binary();
+    let input = wire::frame(Opcode::Input, slot(&subscribed), b"ls\r");
+    assert_eq!(
+        fixture.connection.binary_target(&input),
+        Ok(fixture.terminal.as_str())
+    );
+    let resize = wire::frame(Opcode::Resize, slot(&subscribed), br#"{"rows":5,"cols":5}"#);
+    assert_eq!(
+        fixture.connection.binary_target(&resize),
+        Ok(fixture.terminal.as_str())
+    );
+    let unknown = wire::frame(Opcode::Input, slot(&subscribed) + 1, b"x");
+    assert_eq!(
+        fixture.connection.binary_target(&unknown),
+        Err(ErrorCode::SubscriptionNotFound)
+    );
+    assert!(fixture.connection.binary_target(&[2]).is_err());
+}

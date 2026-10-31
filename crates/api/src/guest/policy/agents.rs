@@ -49,7 +49,7 @@ pub(super) async fn confine(
         Rule::AgentSubscription => many(session, state, params, "agentIds", false).await,
         Rule::ItemsClose => {
             many(session, state, params, "agentIds", true).await?;
-            terminals(session, state, params).await
+            terminals(session, params)
         }
         Rule::Open
         | Rule::Catalog
@@ -67,6 +67,7 @@ pub(super) async fn confine(
         | Rule::TerminalCreate
         | Rule::TerminalFilter
         | Rule::Terminal
+        | Rule::TerminalDrive
         | Rule::Path
         | Rule::Download
         | Rule::Deny => Err(ErrorCode::Forbidden),
@@ -176,7 +177,7 @@ async fn many(
     Ok(())
 }
 
-async fn terminals(session: &Session, state: &Shared, params: &Value) -> Result<(), ErrorCode> {
+fn terminals(session: &Session, params: &Value) -> Result<(), ErrorCode> {
     let Some(ids) = params.get("terminalIds").filter(|ids| !ids.is_null()) else {
         return Ok(());
     };
@@ -184,13 +185,9 @@ async fn terminals(session: &Session, state: &Shared, params: &Value) -> Result<
     if ids.len() > MAX_IDS {
         return Err(ErrorCode::InvalidMessage);
     }
+    // Closing kills the terminal, so only the visitor's own terminals may be closed.
     for id in ids {
-        terminals::check(
-            session,
-            state,
-            id.as_str().ok_or(ErrorCode::InvalidMessage)?,
-        )
-        .await?;
+        terminals::owned(session, id.as_str().ok_or(ErrorCode::InvalidMessage)?)?;
     }
     Ok(())
 }

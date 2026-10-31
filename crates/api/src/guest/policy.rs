@@ -8,7 +8,7 @@
 mod agents;
 mod directory;
 pub(crate) mod private;
-mod terminals;
+pub(crate) mod terminals;
 
 use model::share::ResourceKind;
 use model::{ErrorCode, Request};
@@ -93,8 +93,11 @@ enum Rule {
     TerminalCreate,
     /// Terminal listings are forced to a workspace in scope.
     TerminalFilter,
-    /// The terminal named by `terminalId` must belong to the scope.
+    /// The terminal named by `terminalId` must belong to the scope. A subscription to a
+    /// terminal the visitor did not create cannot claim its size.
     Terminal,
+    /// The terminal named by `terminalId` must have been created by this visitor.
+    TerminalDrive,
     /// `cwd` must resolve inside the scope.
     Path,
     /// As [`Rule::Path`], within the guest's download token budget.
@@ -132,6 +135,7 @@ impl Rule {
             | Self::TerminalCreate
             | Self::TerminalFilter
             | Self::Terminal
+            | Self::TerminalDrive
             | Self::Path
             | Self::Download => true,
         }
@@ -220,11 +224,10 @@ fn classify_resource(method: &str) -> Rule {
         "terminal.list.request"
         | "terminal.list.subscribe.request"
         | "terminal.list.unsubscribe.request" => Rule::TerminalFilter,
-        "terminal.rename.request"
-        | "terminal.subscribe.request"
+        "terminal.subscribe.request"
         | "terminal.unsubscribe.request"
-        | "terminal.kill.request"
         | "terminal.capture.request" => Rule::Terminal,
+        "terminal.rename.request" | "terminal.kill.request" => Rule::TerminalDrive,
         "fs.file.download_token.request" => Rule::Download,
         "directory.suggestions.request"
         | "fs.explorer.request"
@@ -297,6 +300,13 @@ async fn confine(
         Rule::Terminal => {
             let id = params["terminalId"].as_str().ok_or(ErrorCode::Forbidden)?;
             terminals::check(session, state, id).await?;
+            if !session.owns_terminal(id) {
+                terminals::watch_only(&mut params);
+            }
+        }
+        Rule::TerminalDrive => {
+            let id = params["terminalId"].as_str().ok_or(ErrorCode::Forbidden)?;
+            terminals::owned(session, id)?;
         }
         Rule::Path => path(session, state, &params).await?,
         Rule::Download => {
@@ -318,16 +328,11 @@ async fn confine(
 }
 
 /// Confine one guest event; heartbeats are dropped because a guest is not the owner's client.
-pub(crate) async fn event(
-    session: &Session,
-    state: &Shared,
-    method: &str,
-    params: &Value,
-) -> EventDecision {
+pub(crate) fn event(session: &Session, method: &str, params: &Value) -> EventDecision {
     match method {
         "session.heartbeat" => EventDecision::Drop,
         "terminal.input" => match params["terminalId"].as_str() {
-            Some(id) => match terminals::check(session, state, id).await {
+            Some(id) => match terminals::owned(session, id) {
                 Ok(()) => EventDecision::Forward,
                 Err(code) => EventDecision::Refuse(code),
             },

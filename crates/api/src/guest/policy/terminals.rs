@@ -1,4 +1,6 @@
-//! Terminal methods: only terminals of workspaces inside the shared scope.
+//! Terminal methods. A visitor watches terminals of workspaces inside the shared scope,
+//! but types into, resizes, renames and kills only terminals it created: the owner's or
+//! another visitor's shell may run outside the scope or hold cached credentials.
 
 use serde_json::{Value, json};
 
@@ -51,6 +53,25 @@ async fn placement(
         .ok_or(ErrorCode::Forbidden)?;
     object(params)?.insert("workspaceId".to_owned(), json!(id));
     Ok(directory)
+}
+
+/// Require terminal `id` to have been created by this visitor through this share.
+///
+/// # Errors
+/// Returns `Forbidden` for every other terminal.
+pub(crate) fn owned(session: &Session, id: &str) -> Result<(), ErrorCode> {
+    if session.owns_terminal(id) {
+        Ok(())
+    } else {
+        Err(ErrorCode::Forbidden)
+    }
+}
+
+/// Drop the size claim of a subscription, which would take over the terminal's size.
+pub(super) fn watch_only(params: &mut Value) {
+    if let Some(restore) = params.get_mut("restore").and_then(Value::as_object_mut) {
+        restore.remove("size");
+    }
 }
 
 /// Require terminal `id` to belong to a workspace in scope.

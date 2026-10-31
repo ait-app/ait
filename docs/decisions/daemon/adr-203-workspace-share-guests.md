@@ -64,7 +64,7 @@
   - 重命名、归档范围内的 workspace，归档其 worktree（`workspace.worktree.archive` 的 workspace 和路径都必须在范围内），列 worktree，读取该项目的图标和配置。
   - 不能重命名、删除、配置项目或设置图标（`project.rename/remove/config.write/icon.set`），不能添加项目，也不能触达其他项目。
 - 节点分享还可以添加和创建项目（`project.add`、`project.create_directory`、`project.github.clone`），重命名、删除、配置项目，置顶、标签、恢复和 setup 运行等 workspace 管理。
-- 终端：新建时必须归属到范围内的 workspace（workspace 分享强制为该 workspace；项目分享必须给出该项目的 `workspaceId`，未给 `cwd` 时使用该 workspace 的目录；节点分享不改写）；列表在 workspace 和项目分享下必须指定范围内的 workspace；按 ID 操作的方法和 `terminal.input`，终端必须属于范围内的 workspace。
+- 终端：新建时必须归属到范围内的 workspace（workspace 分享强制为该 workspace；项目分享必须给出该项目的 `workspaceId`，未给 `cwd` 时使用该 workspace 的目录；节点分享不改写）；列表在 workspace 和项目分享下必须指定范围内的 workspace。访客可以订阅、截取范围内的任何终端（节点分享是全部终端），但**只能操作自己通过本分享创建的终端**：`terminal.input`、二进制输入和尺寸帧、`terminal.kill`、`terminal.rename`、`agent.items.close` 中的终端都要求是自己创建的，同一分享的其他访客和所有者的终端都不行，因为所有者的 shell 可能已经 `cd` 到范围之外，或者缓存了 sudo 凭据。订阅别人的终端时，请求里的尺寸声明（`restore.size`）会被去掉，访客不会接管终端尺寸。访客创建的终端按 `(shareId, userId)` 记录，换连接后仍然归这个访客。
 - Agent：
   - 新建时打上 `ait.guest.share-id` 和 `ait.guest.user-id` 标签，禁止访客自带 `env`、`mcpServers`、`providerOptions` 和访客标签，`callerAgentId` 必须在范围内。workspace 分享强制归属到该 workspace；项目分享必须给出该项目的 `workspaceId`，并禁止 worktree、git 等新建位置的选项；节点分享可以放到任意 workspace，也可以新建 worktree。
   - `workspace.create` 不能附带初始 Agent，因为它会绕过上面的 Agent 规则并获得 daemon MCP。
