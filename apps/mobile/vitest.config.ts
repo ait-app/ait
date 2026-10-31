@@ -99,6 +99,7 @@ export default defineConfig({
       "@codemirror/state",
       "@codemirror/view",
       "@replit/codemirror-vim",
+      "@react-native-async-storage/async-storage",
       "react",
       "react-dom/client",
       "react-native",
@@ -107,6 +108,9 @@ export default defineConfig({
       "react-native-enriched-markdown/src/web/wasm/md4c.js",
       "react-native-gesture-handler > hoist-non-react-statics",
       "react-native-gesture-handler > invariant",
+      "zod",
+      "zustand",
+      "zustand/middleware",
     ],
     exclude: [
       "expo-modules-core",
