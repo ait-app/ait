@@ -26,6 +26,10 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
     "workspace.list.request",
     "agent.list.request",
   ].every(has);
+  const supportsProviderSubagents = [
+    "agent.provider_subagents.list.request",
+    "agent.provider_subagents.timeline.get.request",
+  ].every(has);
   const features = new Set(Array.isArray(info.features) ? info.features : []);
   return session("status", {
     status: "server_info",
@@ -135,6 +139,8 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
       agentRequestReceipts: features.has("creation-lifecycle-v1") && has("agent.create.request"),
       workspaceRequestReceipts:
         features.has("creation-lifecycle-v1") && has("workspace.create.request"),
+      providerSubagents: supportsProviderSubagents,
+      providerSubagentNesting: supportsProviderSubagents,
       projectedSubagentTimeline: has("agent.provider_subagents.timeline.get.request"),
     },
   });

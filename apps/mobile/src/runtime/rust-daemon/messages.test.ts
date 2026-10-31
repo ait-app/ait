@@ -118,6 +118,26 @@ it("preserves Rust timeline search counts in the SDK response envelope", () => {
 
 describe("Ait host capabilities", () => {
   it.each([
+    { list: true, timeline: true },
+    { list: true, timeline: false },
+    { list: false, timeline: true },
+    { list: false, timeline: false },
+  ])(
+    "advertises provider children with list=$list and timeline=$timeline",
+    ({ list, timeline }) => {
+      const methods = [
+        ...(list ? ["agent.provider_subagents.list.request"] : []),
+        ...(timeline ? ["agent.provider_subagents.timeline.get.request"] : []),
+      ];
+      expect(info(methods)?.features).toMatchObject({
+        providerSubagents: list && timeline,
+        providerSubagentNesting: list && timeline,
+        projectedSubagentTimeline: timeline,
+      });
+    },
+  );
+
+  it.each([
     ["workspace.setup.progress", "workspace-setup-events-v1", "workspace.setup.status.request"],
     ["activity.log", "activity-log-events-v1", "agent.list.request"],
   ])(
