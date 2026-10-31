@@ -60,7 +60,12 @@ export function SharedResourcesScreen() {
         ownerHosts.map(async (host) => {
           const client = runtime.getClient(host.serverId);
           if (!client) return [];
-          const result = await client.listShares();
+          const result = await client.listShares().catch((cause: unknown) => {
+            const code = cause && typeof cause === "object" && "code" in cause ? cause.code : null;
+            if (code === "not_implemented") return null;
+            throw cause;
+          });
+          if (!result) return [];
           const groups = new Map<string, ShareGroup>(
             result.groups.map((group) => [group.groupId, group]),
           );
