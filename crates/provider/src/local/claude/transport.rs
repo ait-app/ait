@@ -359,6 +359,7 @@ fn launch_command(
     command
         .envs(client.environment.entries())
         .env_remove("CLAUDECODE")
+        .env("CLAUDE_CODE_ENTRYPOINT", "ait")
         .env("CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING", "true");
     if let Some((id, resume)) = binding {
         command.arg(format!(

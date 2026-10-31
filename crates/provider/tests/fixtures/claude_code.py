@@ -10,7 +10,7 @@ args = sys.argv[1:]
 cwd = Path.cwd()
 if (cwd / "capture-environment").exists():
     with (cwd / "native-environment.jsonl").open("a") as output:
-        output.write(json.dumps({"value": os.environ.get("AIT_TEST_AGENT_ENV"), "nested": os.environ.get("CLAUDECODE"), "checkpoint": os.environ.get("CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING")}) + "\n")
+        output.write(json.dumps({"value": os.environ.get("AIT_TEST_AGENT_ENV"), "nested": os.environ.get("CLAUDECODE"), "checkpoint": os.environ.get("CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING"), "entrypoint": os.environ.get("CLAUDE_CODE_ENTRYPOINT")}) + "\n")
 config = Path(os.environ.get("CLAUDE_CONFIG_DIR", str(Path.home() / ".claude")))
 session = next((arg.split("=", 1)[1] for arg in args if arg.startswith(("--session-id=", "--resume="))), str(uuid.uuid4()))
 project = "".join(c if c.isascii() and c.isalnum() else "-" for c in str(cwd.resolve()))
