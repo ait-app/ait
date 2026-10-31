@@ -9,6 +9,47 @@ import { eventMessage, responseMessage, serverInfo } from "./messages";
 import { object } from "./types";
 import { validateWSOutboundMessage } from "@ait/protocol/validation/ws-outbound";
 
+it("retains full directory capabilities for whole-node shares", () => {
+  const info = {
+    server_id: "shared-node",
+    features: ["directory-sync-v1", "directory-subscriptions-v1"],
+  };
+  const methods = new Set(Object.values(METHODS).map((spec) => spec.method));
+  expect(serverInfo(info, methods, "node")).toEqual(serverInfo(info, methods));
+});
+
+it.each(["workspace", "project"] as const)(
+  "uses scoped snapshots for a %s guest even when the host advertises full directories",
+  (scope) => {
+    const methods = new Set([
+      "project.list.request",
+      "workspace.list.request",
+      "agent.list.request",
+      "subscription.release.request",
+      "session.events.set_subscription.request",
+      "workspace.label.list.request",
+    ]);
+    const info = serverInfo(
+      {
+        server_id: "shared-host",
+        features: ["directory-sync-v1", "directory-subscriptions-v1"],
+      },
+      methods,
+      scope,
+    );
+    const payload = object(object(info.message).payload);
+    expect(payload.features).toMatchObject({
+      directorySubscriptions: false,
+      directorySync: false,
+      explicitEventSubscriptions: false,
+      workspaceLabels: false,
+      projectList: true,
+      workspaceMultiplicity: true,
+    });
+    expect(payload.sessionEventTypes).toEqual([]);
+  },
+);
+
 describe("native agent stream control events", () => {
   it.each([
     { type: "turn_started", provider: "codex", turnId: "turn" },

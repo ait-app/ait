@@ -11,8 +11,16 @@ import {
 } from "lucide-react-native";
 import type { HubShare } from "@ait/client/internal/hub";
 import { useHubServices } from "@/runtime/hub-service-store";
-import { getHostRuntimeStore, sharedResourceServerId } from "@/runtime/host-runtime";
-import { useWorkspaceStructure, useWorkspace } from "@/stores/session-store-hooks";
+import {
+  getHostRuntimeStore,
+  sharedResourceServerId,
+  useHostRuntimeSnapshot,
+} from "@/runtime/host-runtime";
+import {
+  useWorkspaceStructure,
+  useWorkspace,
+  useHasHydratedWorkspaces,
+} from "@/stores/session-store-hooks";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import type { WorkspaceStructureProject } from "@/projects/workspace-structure";
 import type { Theme } from "@/styles/theme";
@@ -192,10 +200,40 @@ function SharedRoot({
             />
           ))
         ) : (
-          <Text style={styles.loading}>{t("sharing.loading")}</Text>
+          <SharedDirectoryStatus share={share} serverId={serverId} />
         )
       ) : null}
     </View>
+  );
+}
+
+function SharedDirectoryStatus({ share, serverId }: { share: HubShare; serverId: string }) {
+  const { t } = useTranslation();
+  const snapshot = useHostRuntimeSnapshot(serverId);
+  const hydrated = useHasHydratedWorkspaces(serverId);
+  const retry = useCallback(() => {
+    void getHostRuntimeStore()
+      .refreshWorkspaceDirectory({ serverId })
+      .catch(() => undefined);
+  }, [serverId]);
+
+  if (share.state === "reconnecting" || snapshot?.connectionStatus === "offline") {
+    return <Text style={styles.loading}>{t("sharing.offline")}</Text>;
+  }
+  if (snapshot?.workspaceDirectoryError || snapshot?.connectionStatus === "error") {
+    return (
+      <View>
+        <Text style={styles.loading}>{t("sharing.listError")}</Text>
+        {snapshot?.connectionStatus === "online" ? (
+          <Pressable accessibilityRole="button" onPress={retry} style={rowStyle}>
+            <Text style={styles.loading}>{t("common.actions.retry")}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  }
+  return (
+    <Text style={styles.loading}>{t(hydrated ? "sharing.emptyResources" : "sharing.loading")}</Text>
   );
 }
 

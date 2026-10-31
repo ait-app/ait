@@ -2,7 +2,13 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ptBR: TranslationResources = {
-  sharing: en.sharing,
+  sharing: {
+    ...en.sharing,
+    title: "Compartilhados",
+    offline: "Este recurso compartilhado está offline.",
+    emptyResources: "Este recurso compartilhado não tem espaços de trabalho.",
+    listError: "Não foi possível carregar os recursos compartilhados.",
+  },
   voiceTimeline: {
     started: "Conversa por voz iniciada",
     ended: "Conversa por voz encerrada",
@@ -1560,9 +1566,9 @@ export const ptBR: TranslationResources = {
         title: "Configurar provedores",
         description: "Configure Claude Code, Codex e outros",
       },
-      pairDevice: {
-        title: "Parear dispositivo",
-        description: "Conecte seu celular a este daemon",
+      signIn: {
+        title: "Entrar na conta",
+        description: "Abra a página de login unificado no navegador",
       },
     },
   },

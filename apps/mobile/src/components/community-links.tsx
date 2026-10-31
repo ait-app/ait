@@ -1,14 +1,12 @@
 import { useCallback } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { Mail } from "lucide-react-native";
+import { Globe, Mail } from "lucide-react-native";
 import { Button } from "@/components/ui/button";
 import { GitHubIcon } from "@/components/icons/github-icon";
-import { DiscordIcon } from "@/components/icons/discord-icon";
 import { openExternalUrl } from "@/utils/open-external-url";
 
 const renderGitHubIcon = (color: string) => <GitHubIcon color={color} size={14} />;
-const renderDiscordIcon = (color: string) => <DiscordIcon color={color} size={14} />;
 
 export function CommunityLinks() {
   const handleOpenGitHub = useCallback(() => {
@@ -19,8 +17,8 @@ export function CommunityLinks() {
     void openExternalUrl("mailto:dong@necoex.com");
   }, []);
 
-  const handleOpenDiscord = useCallback(() => {
-    void openExternalUrl("https://discord.gg/jz8T2uahpH");
+  const handleOpenHomepage = useCallback(() => {
+    void openExternalUrl("https://ait-app.com");
   }, []);
 
   return (
@@ -46,11 +44,11 @@ export function CommunityLinks() {
       <Button
         variant="ghost"
         size="sm"
-        leftIcon={renderDiscordIcon}
-        onPress={handleOpenDiscord}
-        testID="community-links-discord"
+        leftIcon={Globe}
+        onPress={handleOpenHomepage}
+        testID="community-links-homepage"
       >
-        Community
+        Homepage
       </Button>
     </View>
   );

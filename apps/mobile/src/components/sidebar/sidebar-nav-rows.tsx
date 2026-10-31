@@ -19,7 +19,7 @@ import {
 } from "@/utils/host-routes";
 import { router, usePathname, type Href } from "expo-router";
 import { Gauge, CalendarClock, History, Plus, Search, Users } from "lucide-react-native";
-import { Fragment, memo, useCallback, useMemo, type ComponentType } from "react";
+import { memo, useCallback, useMemo, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { useHubServices } from "@/runtime/hub-service-store";
@@ -48,18 +48,8 @@ export function SidebarNavRows({ style, onBeforeNavigate }: SidebarNavRowsProps)
     <View style={style}>
       {visibleItems.map((item) => {
         const Row = BUILTIN_ROWS[item.id];
-        return (
-          <Fragment key={item.key}>
-            {item.id === "schedules" ? (
-              <SidebarSharedWithMeRow onBeforeNavigate={onBeforeNavigate} />
-            ) : null}
-            <Row onBeforeNavigate={onBeforeNavigate} />
-          </Fragment>
-        );
+        return <Row key={item.key} onBeforeNavigate={onBeforeNavigate} />;
       })}
-      {!visibleItems.some((item) => item.id === "schedules") ? (
-        <SidebarSharedWithMeRow onBeforeNavigate={onBeforeNavigate} />
-      ) : null}
     </View>
   );
 }
@@ -172,7 +162,7 @@ function SidebarSchedulesRow({ onBeforeNavigate }: SidebarNavRowProps) {
   );
 }
 
-function SidebarSharedWithMeRow({ onBeforeNavigate }: SidebarNavRowProps) {
+function SidebarSharedRow({ onBeforeNavigate }: SidebarNavRowProps) {
   const { t } = useTranslation();
   const pathname = usePathname();
   const count = useHubServices((state) => state.snapshot?.shares?.length ?? 0);
@@ -184,7 +174,7 @@ function SidebarSharedWithMeRow({ onBeforeNavigate }: SidebarNavRowProps) {
   return (
     <SidebarHeaderRow
       icon={Users}
-      label={t("sharing.sharedWithMe")}
+      label={t(builtinSidebarNavLabelKey("shared"))}
       trailingText={count > 0 ? String(count) : null}
       onPress={handlePress}
       isActive={pathname.includes("/shared")}
@@ -198,6 +188,7 @@ const BUILTIN_ROWS: Record<BuiltinSidebarNavId, ComponentType<SidebarNavRowProps
   "new-workspace": SidebarNewWorkspaceRow,
   history: SidebarHistoryRow,
   search: SidebarSearchRow,
+  shared: SidebarSharedRow,
   schedules: SidebarSchedulesRow,
   usage: SidebarUsageRow,
 };

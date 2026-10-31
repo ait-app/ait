@@ -1,7 +1,6 @@
 export const en = {
   sharing: {
     title: "Shared",
-    sharedWithMe: "Shared with me",
     sharedWithMeCount: "Shared with me ({{count}})",
     sharedByMe: "Shared by me",
     sharedByMeCount: "Shared by me ({{count}})",
@@ -12,6 +11,8 @@ export const en = {
     stop: "Stop sharing",
     active: "Active",
     loading: "Loading shared resources…",
+    offline: "This shared resource is offline.",
+    emptyResources: "This shared resource has no workspaces.",
     hostSection: "Sharing",
     hostTitle: "Share this node",
     hostHint: "Give a group access to every project and workspace on this Host.",
@@ -1717,9 +1718,9 @@ export const en = {
         title: "Setup providers",
         description: "Configure Claude Code, Codex, and more",
       },
-      pairDevice: {
-        title: "Pair device",
-        description: "Connect your phone to this daemon",
+      signIn: {
+        title: "Sign in",
+        description: "Open the unified login page in your browser",
       },
     },
   },

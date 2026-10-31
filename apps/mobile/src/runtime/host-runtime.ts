@@ -121,6 +121,7 @@ export interface HostRuntimeSnapshot {
   lastOnlineAt: string | null;
   agentDirectoryStatus: HostRuntimeAgentDirectoryStatus;
   agentDirectoryError: string | null;
+  workspaceDirectoryError: string | null;
   hasEverLoadedAgentDirectory: boolean;
   probeByConnectionId: Map<string, ConnectionProbeState>;
   clientGeneration: number;
@@ -624,6 +625,7 @@ export class HostRuntimeController {
       client: null,
       agentDirectoryStatus: "idle",
       agentDirectoryError: null,
+      workspaceDirectoryError: null,
       hasEverLoadedAgentDirectory: false,
       probeByConnectionId: new Map(),
       clientGeneration: 0,
@@ -763,6 +765,10 @@ export class HostRuntimeController {
       agentDirectoryStatus: status,
       agentDirectoryError: null,
     });
+  }
+
+  markWorkspaceDirectorySyncError(error: string | null): void {
+    this.updateSnapshot({ workspaceDirectoryError: error });
   }
 
   markAgentDirectorySyncReady(): void {
@@ -1858,6 +1864,7 @@ export class HostRuntimeStore {
         markAgentLoading: () => controller.markAgentDirectorySyncLoading(),
         markAgentReady: () => controller.markAgentDirectorySyncReady(),
         markAgentError: (error) => controller.markAgentDirectorySyncError(error),
+        markWorkspaceError: (error) => controller.markWorkspaceDirectorySyncError(error),
       },
       this.replicaCache,
     );
@@ -2195,6 +2202,7 @@ export class HostRuntimeStore {
         share.hostName,
         share.owner.displayName,
         share.owner.username,
+        share.resourceKind,
         share.state,
       ]),
     );
@@ -2218,6 +2226,7 @@ export class HostRuntimeStore {
         center: center!,
         shareId: share.shareId,
         nodeId: share.nodeId,
+        shareResourceKind: share.resourceKind,
       });
       return {
         serverId: sharedResourceServerId(share.shareId),
@@ -2433,6 +2442,7 @@ export class HostRuntimeStore {
           markAgentLoading: () => controller.markAgentDirectorySyncLoading(),
           markAgentReady: () => controller.markAgentDirectorySyncReady(),
           markAgentError: (error) => controller.markAgentDirectorySyncError(error),
+          markWorkspaceError: (error) => controller.markWorkspaceDirectorySyncError(error),
         },
         this.replicaCache,
       );

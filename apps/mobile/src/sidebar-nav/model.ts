@@ -2,6 +2,7 @@ export const BUILTIN_SIDEBAR_NAV_IDS = [
   "new-workspace",
   "history",
   "search",
+  "shared",
   "schedules",
   "usage",
 ] as const;
@@ -26,6 +27,7 @@ const BUILTIN_LABEL_KEYS: Record<BuiltinSidebarNavId, string> = {
   "new-workspace": "sidebar.actions.newWorkspace",
   history: "sidebar.sections.sessions",
   search: "sidebar.sections.search",
+  shared: "sharing.title",
   schedules: "sidebar.sections.schedules",
   usage: "sidebar.sections.usage",
 };
@@ -43,6 +45,7 @@ const BUILTIN_SHORTCUT_ACTIONS: Record<BuiltinSidebarNavId, string | null> = {
   "new-workspace": "new-workspace",
   history: null,
   search: "toggle-command-center",
+  shared: null,
   schedules: null,
   usage: null,
 };

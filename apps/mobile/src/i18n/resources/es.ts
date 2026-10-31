@@ -2,7 +2,13 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const es: TranslationResources = {
-  sharing: en.sharing,
+  sharing: {
+    ...en.sharing,
+    title: "Compartidos",
+    offline: "Este recurso compartido está desconectado.",
+    emptyResources: "Este recurso compartido no tiene espacios de trabajo.",
+    listError: "No se pudieron cargar los recursos compartidos.",
+  },
   voiceTimeline: {
     started: "Conversación de voz iniciada",
     ended: "Conversación de voz finalizada",
@@ -1575,9 +1581,9 @@ export const es: TranslationResources = {
         title: "Proveedores de configuración",
         description: "ConfigurarClaude Code,Codexy más",
       },
-      pairDevice: {
-        title: "Emparejar dispositivo",
-        description: "Conecta tu teléfono a este demonio",
+      signIn: {
+        title: "Iniciar sesión",
+        description: "Abre la página de inicio de sesión unificado en tu navegador",
       },
     },
   },

@@ -262,6 +262,7 @@ export function HostConnectionsPage({ serverId }: { serverId: string }) {
       {supportsAccountRelay() && !supportsBrowserAccount() && !isSharedResourceHost(host) ? (
         <OnlineServiceHostSection host={host} />
       ) : null}
+      {!isSharedResourceHost(host) ? <HostSharingSection host={host} /> : null}
     </View>
   );
 }
@@ -374,8 +375,6 @@ export function HostSettingsPage({
       <HostStatusBadges serverId={serverId} />
 
       <HostAppearanceSection host={host} />
-
-      {!isSharedResourceHost(host) ? <HostSharingSection host={host} /> : null}
 
       {getIsElectron() &&
       (isLocalDaemon ||

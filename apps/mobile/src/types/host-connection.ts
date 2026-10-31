@@ -15,6 +15,7 @@ import {
 } from "@ait/protocol/ssh-transport";
 import { z } from "zod";
 import { normalizeCenter } from "@ait/client/internal/account-session";
+import type { HubShareResourceKind } from "@ait/client/internal/hub";
 
 export { DirectTcpHostConnectionSchema, type DirectTcpHostConnection };
 
@@ -48,6 +49,8 @@ export interface AccountRelayHostConnection {
   shareId?: string;
   /** Serve node selected by the center for this share. */
   nodeId?: string;
+  /** Guest scope used to select the supported directory synchronization mode. */
+  shareResourceKind?: HubShareResourceKind;
 }
 
 export type HostConnection =
@@ -130,7 +133,8 @@ function hostConnectionEquals(left: HostConnection, right: HostConnection): bool
       left.hostId === right.hostId &&
       left.center === right.center &&
       left.shareId === right.shareId &&
-      left.nodeId === right.nodeId
+      left.nodeId === right.nodeId &&
+      left.shareResourceKind === right.shareResourceKind
     );
 
   if (left.type === "directTcp" && right.type === "directTcp") {
@@ -362,6 +366,7 @@ export function createAccountRelayHostConnection(input: {
   center: string;
   shareId?: string;
   nodeId?: string;
+  shareResourceKind?: HubShareResourceKind;
 }): AccountRelayHostConnection {
   const hostId = z.uuid().parse(input.hostId.trim());
   const center = normalizeCenter(input.center);
@@ -375,7 +380,13 @@ export function createAccountRelayHostConnection(input: {
     type: "accountRelay",
     hostId,
     center,
-    ...(shareId ? { shareId, nodeId } : {}),
+    ...(shareId
+      ? {
+          shareId,
+          nodeId,
+          ...(input.shareResourceKind ? { shareResourceKind: input.shareResourceKind } : {}),
+        }
+      : {}),
   };
 }
 

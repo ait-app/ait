@@ -3,6 +3,7 @@ import { ProviderSnapshotEntrySchema } from "@ait/protocol/messages";
 import { compactProviderSnapshot } from "@ait/protocol/provider-snapshot-codec";
 import { sessionEventMethod } from "@ait/protocol/session-event-kinds";
 import { object, type Payload } from "./types";
+import type { HubShareResourceKind } from "@ait/client/internal/hub";
 
 export function session(type: string, payload: Payload): Payload {
   return { type: "session", message: { type, payload } };
@@ -19,7 +20,14 @@ export function rpcError(
 
 // The SDK uses these flags to choose wire shapes, not just to show UI controls.
 // Only advertise behavior supported by this adapter AND the Rust implementation.
-export function serverInfo(info: Payload, implemented: Set<string>): Payload {
+export function serverInfo(
+  info: Payload,
+  implemented: Set<string>,
+  guestScope?: HubShareResourceKind,
+): Payload {
+  // Scoped guests can read their directories, but whole-host subscriptions and
+  // synchronization cursors are rejected by the daemon's guest policy.
+  const scopedGuest = guestScope === "workspace" || guestScope === "project";
   const has = (method: string) => implemented.has(method);
   const supportsDirectories = [
     "project.list.request",
@@ -37,45 +45,47 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
     hostname: null,
     version: typeof info.version === "string" ? info.version : null,
     desktopManaged: false,
-    sessionEventTypes: [
-      "status.server_info",
-      ...(features.has("directory-subscriptions-v1") && has("project.list.request")
-        ? ["project.update"]
-        : []),
-      ...(has("workspace.script.list.request") ? ["script_status_update"] : []),
-      ...(has("workspace.setup.subscribe.request") ? ["workspace_setup_status"] : []),
-      ...(features.has("workspace-setup-events-v1") && has("workspace.setup.status.request")
-        ? ["workspace.setup.progress"]
-        : []),
-      ...(features.has("activity-log-events-v1") && has("agent.list.request")
-        ? ["activity.log"]
-        : []),
-      ...(features.has("checkout-git-events-v1") && has("checkout.status.get.request")
-        ? ["checkout.status.update"]
-        : []),
-      ...(has("daemon.config.get.request") ? ["status.daemon_config_changed"] : []),
-      ...(has("provider.snapshot.get.request")
-        ? ["provider.snapshot.update", "agent.attention.required"]
-        : []),
-      ...(features.has("terminal-activity-v1") && has("terminal.list.request")
-        ? ["terminal.attention.required"]
-        : []),
-      ...(features.has("agent-session-events-v1") && has("agent.permission.resolve.request")
-        ? [
-            "agent.permission.request",
-            "agent.permission.resolved",
-            "agent.provider_subagents.update",
-          ]
-        : []),
-    ],
+    sessionEventTypes: scopedGuest
+      ? []
+      : [
+          "status.server_info",
+          ...(features.has("directory-subscriptions-v1") && has("project.list.request")
+            ? ["project.update"]
+            : []),
+          ...(has("workspace.script.list.request") ? ["script_status_update"] : []),
+          ...(has("workspace.setup.subscribe.request") ? ["workspace_setup_status"] : []),
+          ...(features.has("workspace-setup-events-v1") && has("workspace.setup.status.request")
+            ? ["workspace.setup.progress"]
+            : []),
+          ...(features.has("activity-log-events-v1") && has("agent.list.request")
+            ? ["activity.log"]
+            : []),
+          ...(features.has("checkout-git-events-v1") && has("checkout.status.get.request")
+            ? ["checkout.status.update"]
+            : []),
+          ...(has("daemon.config.get.request") ? ["status.daemon_config_changed"] : []),
+          ...(has("provider.snapshot.get.request")
+            ? ["provider.snapshot.update", "agent.attention.required"]
+            : []),
+          ...(features.has("terminal-activity-v1") && has("terminal.list.request")
+            ? ["terminal.attention.required"]
+            : []),
+          ...(features.has("agent-session-events-v1") && has("agent.permission.resolve.request")
+            ? [
+                "agent.permission.request",
+                "agent.permission.resolved",
+                "agent.provider_subagents.update",
+              ]
+            : []),
+        ],
     features: {
       workspaceBots: features.has("workspace-bots-v1") && BOT_METHODS.every(has),
       ownedSubscriptions: has("subscription.release.request"),
-      explicitEventSubscriptions: has("session.events.set_subscription.request"),
+      explicitEventSubscriptions: !scopedGuest && has("session.events.set_subscription.request"),
       providersSnapshot: has("provider.snapshot.get.request"),
       importSessionWorkspaceTarget: has("agent.import.request"),
       importSessionSearch: has("provider.sessions.recent.list.request"),
-      workspaceLabels: has("workspace.label.list.request"),
+      workspaceLabels: !scopedGuest && has("workspace.label.list.request"),
       agentConfigApply: has("agent.config.apply.request"),
       daemonConfigReload: has("daemon.config.reload.request"),
       daemonStatusRpc: has("daemon.get_status.request"),
@@ -111,8 +121,9 @@ export function serverInfo(info: Payload, implemented: Set<string>): Payload {
       agentTimelineCachedReads:
         has("agent.timeline.get.request") && features.has("agent-timeline-cached-reads-v1"),
       rewind: has("agent.rewind.request"),
-      directorySync: supportsDirectories && features.has("directory-sync-v1"),
+      directorySync: !scopedGuest && supportsDirectories && features.has("directory-sync-v1"),
       directorySubscriptions:
+        !scopedGuest &&
         supportsDirectories &&
         has("subscription.release.request") &&
         features.has("directory-subscriptions-v1"),
