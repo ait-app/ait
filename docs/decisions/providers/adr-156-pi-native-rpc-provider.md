@@ -2,8 +2,10 @@
 
 - Status: Accepted (implemented).
 - Date: 2026-10-17.
+- Updated: 2026-10-31 for executable inspection and bounded, shared version probes.
 - Scope: `crates/provider`, `packages/protocol`; follows [ADR-089](adr-089-provider-owned-composition.md).
 - Amended by: [ADR-189](adr-189-pi-without-host-mode.md) for host modes.
+- Amended by: [ADR-185](adr-185-native-provider-failure-details.md) for native failure details.
 
 ## Context
 
@@ -45,8 +47,18 @@ run from automatic retries and compaction recovery.
   unfinished operations on stream failure or terminal settlement. Each start/end pair shares an adapter-owned UUID;
   native Pi does not supply a compaction ID. Duplicate starts/ends do not duplicate markers.
 - Apply [ADR-144](adr-144-provider-error-reporting.md): bounded stderr classification,
-  safe structured diagnostics for spawn/version/write/response/frame failures, and fixed
-  public failure messages. Native error text and credentials are not logged or persisted.
+  safe structured diagnostics for spawn/version/write/response/frame failures. Preserve bounded,
+  redacted native failure details for user-facing errors as specified by
+  [ADR-185](adr-185-native-provider-failure-details.md); logs contain only safe structured facts.
+  Availability and diagnostic inspection first check the configured file and its execute
+  permissions. A missing or non-executable installation returns the existing unavailable result
+  without launching a version probe or logging an expected absence, even after a version was
+  cached. Recheck on later inspection so installation or permission repair can recover.
+  Actual version-probe and session failures retain structured diagnostics. If the file passes
+  those checks but the version process cannot start, diagnostic inspection gives separate
+  launch guidance with the safe OS error kind and optional numeric code. It does not copy
+  paths, arguments, or native error text. Cached failures preserve these facts; launch failures
+  continue to map to `AgentSessionError::Unavailable` at the shared session port.
 - Preserve the host's persisted timeline across resume; do not advertise automatic native history
   replay, rewind, steering, auxiliary generation or dynamic thinking controls. Native session
   import and explicit refresh are added by [ADR-174](adr-174-pi-session-import.md).
@@ -55,9 +67,13 @@ run from automatic retries and compaction recovery.
   extension dialogs explicitly; unknown UI methods fail immediately with an
   `extension_method` protocol diagnostic;
   never implicitly approve them or leave Pi blocked waiting for an unsupported UI.
-- Cache a successfully parsed version for each configured client and its clones; failures
-  are retried and an environment override gets its own cache. Initial version probing and
-  ordinary control operations each have a 10-second budget. Discovery still starts an
+- Cache a successfully parsed version for each configured client and its clones; failed
+  probes share a 5-second cooldown before retrying so availability, diagnostic inspection,
+  and concurrent refreshes reuse the same failure. Classified probe diagnostics share the
+  configured client's 30-second log aggregation window; each actual spawn failure also logs
+  safe OS error facts through the shared spawn-error helper. An environment override gets its own cache
+  and probe diagnostics. Initial version probing has a 5-second budget; ordinary control
+  operations retain their 10-second budget. Discovery still starts an
   ephemeral RPC process; session creation starts its own writer. Catalog discovery uses
   the existing 30-second total catalog budget. There is no additional process pool.
 - Prompt admission has a separate 120-second response budget; events are consumed during
@@ -116,3 +132,5 @@ additional provider-specific slash-command controls need separate implementation
 
 Operations and current limitations: [Pi](../../operations/pi.md).
 Validation results and scope: [Pi native RPC provider validation](../../reports/providers/pi.md).
+Executable inspection and version-probe validation:
+[Pi unavailable diagnostics](../../reports/providers/pi-unavailable-diagnostics-2026-10-30.md).
