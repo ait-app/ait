@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { DaemonClient } from "@ait/client/internal/daemon-client";
+import type { HubShareResourceKind } from "@ait/client/internal/hub";
 import {
   decodeFileTransferFrame,
   encodeFileTransferFrame,
@@ -12,6 +13,7 @@ import { object, type Payload, type TransportFactory } from "./types";
 function harness(
   implemented = Object.values(METHODS).map((spec) => spec.method),
   url = "ws://127.0.0.1:7316/v1/ws",
+  guestScope?: HubShareResourceKind,
 ) {
   const sockets: {
     send: ReturnType<typeof vi.fn>;
@@ -65,7 +67,10 @@ function harness(
     };
   };
   const base = vi.fn(factory);
-  const transport = createRustDaemonTransportFactory(base)({
+  const transport = createRustDaemonTransportFactory(
+    base,
+    guestScope,
+  )({
     url,
     headers: { Authorization: "Bearer test" },
     protocols: ["paseo.bearer.test"],
@@ -118,6 +123,35 @@ function harness(
 }
 
 describe("Rust protocol adapter", () => {
+  it("keeps project guests on snapshots through hello and later server-info updates", () => {
+    const h = harness(
+      undefined,
+      "ait+desktop://account-relay/host?center=https://center.test",
+      "project",
+    );
+    const features = ["directory-sync-v1", "directory-subscriptions-v1"];
+    try {
+      h.ready("test", features);
+      h.sockets[0].message({
+        type: "event",
+        method: "status.server_info",
+        params: { info: { server_id: "server", features }, subscriptionId: "status" },
+      });
+      expect(h.received).toHaveLength(2);
+      for (const message of h.received) {
+        expect(message).toMatchObject({
+          message: {
+            payload: {
+              features: { directorySubscriptions: false, directorySync: false },
+            },
+          },
+        });
+      }
+    } finally {
+      h.transport.close();
+    }
+  });
+
   it("subscribes to canonical setup and activity events after supported-only filtering", async () => {
     const h = harness();
     h.stopHello();

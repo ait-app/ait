@@ -2,7 +2,13 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ko: TranslationResources = {
-  sharing: en.sharing,
+  sharing: {
+    ...en.sharing,
+    title: "공유",
+    offline: "이 공유 리소스는 오프라인 상태입니다.",
+    emptyResources: "이 공유 리소스에는 워크스페이스가 없습니다.",
+    listError: "공유 리소스를 불러올 수 없습니다.",
+  },
   voiceTimeline: {
     started: "음성 대화가 시작되었습니다",
     ended: "음성 대화가 종료되었습니다",

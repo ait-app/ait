@@ -2,7 +2,13 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ja: TranslationResources = {
-  sharing: en.sharing,
+  sharing: {
+    ...en.sharing,
+    title: "共有",
+    offline: "この共有リソースはオフラインです。",
+    emptyResources: "この共有リソースにはワークスペースがありません。",
+    listError: "共有リソースを読み込めませんでした。",
+  },
   voiceTimeline: {
     started: "音声会話を開始しました",
     ended: "音声会話が終了しました",

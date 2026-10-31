@@ -60,9 +60,9 @@ export function OpenProjectScreen() {
 
   return (
     <View style={styles.container}>
+      <TitlebarDragRegion />
       <MenuHeader borderless />
       <View style={styles.content}>
-        <TitlebarDragRegion />
         <View style={styles.logo}>
           <AitLogo size={52} />
         </View>

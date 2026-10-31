@@ -2,7 +2,13 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ar: TranslationResources = {
-  sharing: en.sharing,
+  sharing: {
+    ...en.sharing,
+    title: "المشاركة",
+    offline: "هذا المورد المشترك غير متصل حاليًا.",
+    emptyResources: "لا توجد مساحات عمل في هذا المورد المشترك.",
+    listError: "تعذر تحميل الموارد المشتركة.",
+  },
   voiceTimeline: {
     started: "بدأت المحادثة الصوتية",
     ended: "انتهت المحادثة الصوتية",

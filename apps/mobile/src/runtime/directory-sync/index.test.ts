@@ -235,6 +235,7 @@ function createDirectory(
     workspaceLabels?: boolean;
     workspaceTargetRead?: boolean;
     checkpoints?: DirectoryCheckpointStorage;
+    markWorkspaceError?: (error: string | null) => void;
   },
 ): {
   client: FakeDirectoryClient;
@@ -251,6 +252,7 @@ function createDirectory(
       markAgentLoading: () => undefined,
       markAgentReady: () => undefined,
       markAgentError: () => undefined,
+      markWorkspaceError: options?.markWorkspaceError,
     },
     options?.checkpoints,
   );
@@ -1849,6 +1851,29 @@ it("fills every cached workspace beneath live updates received during the SQLite
 });
 
 describe("snapshot-only host directories", () => {
+  it("reports workspace directory failures and clears the error after retry", async () => {
+    const serverId = "workspace-directory-error";
+    const markWorkspaceError = vi.fn();
+    const { client, directory } = createDirectory(serverId, { markWorkspaceError });
+    const store = useSessionStore.getState();
+    store.initializeSession(serverId, client as unknown as DaemonClient, 1);
+    store.updateSessionServerInfo(serverId, {
+      serverId,
+      hostname: null,
+      version: "test",
+      features: { workspaceMultiplicity: true },
+    });
+    vi.spyOn(client, "fetchWorkspaces").mockRejectedValueOnce(new Error("forbidden"));
+    try {
+      await expect(directory.refreshWorkspaces()).rejects.toThrow("forbidden");
+      expect(markWorkspaceError).toHaveBeenLastCalledWith("forbidden");
+      await directory.refreshWorkspaces();
+      expect(markWorkspaceError).toHaveBeenLastCalledWith(null);
+    } finally {
+      directory.dispose();
+    }
+  });
+
   it("negotiates live directory events against the connected host's catalog", async () => {
     const serverId = "directory-event-negotiation";
     const { client, directory } = createDirectory(serverId);

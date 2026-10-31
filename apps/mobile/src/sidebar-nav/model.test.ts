@@ -15,6 +15,7 @@ describe("built-in sidebar navigation", () => {
       { key: "search", visible: false },
       { key: "history", visible: true },
       { key: "new-workspace", visible: true },
+      { key: "shared", visible: true },
       { key: "schedules", visible: true },
       { key: "usage", visible: true },
     ]);
@@ -37,9 +38,37 @@ describe("built-in sidebar navigation", () => {
       "new-workspace",
       "search",
       "history",
+      "shared",
       "schedules",
       "usage",
     ]);
     expect(moved.find(({ key }) => key === "search")?.visible).toBe(false);
+  });
+
+  it("persists sharing visibility and order alongside existing navigation preferences", () => {
+    const previous = [{ key: "history", visible: false }];
+    const preferences = setSidebarNavItemVisible({
+      items: resolveSidebarNavItems({ preferences: previous }),
+      key: "shared",
+      visible: false,
+      previous,
+    });
+    const moved = moveSidebarNavItem({
+      items: resolveSidebarNavItems({ preferences }),
+      key: "shared",
+      direction: "up",
+      previous: preferences,
+    });
+
+    expect(
+      resolveSidebarNavItems({ preferences: moved }).map(({ key, visible }) => ({ key, visible })),
+    ).toEqual([
+      { key: "history", visible: false },
+      { key: "new-workspace", visible: true },
+      { key: "shared", visible: false },
+      { key: "search", visible: true },
+      { key: "schedules", visible: true },
+      { key: "usage", visible: true },
+    ]);
   });
 });

@@ -2,7 +2,13 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const fr: TranslationResources = {
-  sharing: en.sharing,
+  sharing: {
+    ...en.sharing,
+    title: "Partage",
+    offline: "Cette ressource partagée est hors ligne.",
+    emptyResources: "Cette ressource partagée ne contient aucun espace de travail.",
+    listError: "Impossible de charger les ressources partagées.",
+  },
   voiceTimeline: {
     started: "Conversation vocale démarrée",
     ended: "Conversation vocale terminée",

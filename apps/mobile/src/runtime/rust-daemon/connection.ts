@@ -8,12 +8,14 @@ import { createRustDaemonTransportFactory } from "./transport";
 import { createBrowserRustTransportFactory } from "./browser-transport";
 import type { TransportFactory } from "./types";
 import { createAccountRelayTransportFactory } from "./account-transport";
+import type { HubShareResourceKind } from "@ait/client/internal/hub";
 
 export function buildAccountRelayClientConfig(connection: {
   hostId: string;
   center: string;
   shareId?: string;
   nodeId?: string;
+  shareResourceKind?: HubShareResourceKind;
 }) {
   const query = new URLSearchParams({ center: connection.center });
   if (connection.shareId && connection.nodeId) {
@@ -24,7 +26,10 @@ export function buildAccountRelayClientConfig(connection: {
     url: `ait+desktop://account-relay/${connection.hostId}?${query}`,
     connectTimeoutMs: 45_000,
     reconnect: { baseDelayMs: 500, maxDelayMs: 30_000 },
-    transportFactory: createRustDaemonTransportFactory(createAccountRelayTransportFactory),
+    transportFactory: createRustDaemonTransportFactory(
+      createAccountRelayTransportFactory,
+      connection.shareId ? (connection.shareResourceKind ?? "workspace") : undefined,
+    ),
   };
 }
 

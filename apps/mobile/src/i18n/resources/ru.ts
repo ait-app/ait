@@ -2,7 +2,13 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ru: TranslationResources = {
-  sharing: en.sharing,
+  sharing: {
+    ...en.sharing,
+    title: "Общий доступ",
+    offline: "Этот общий ресурс не в сети.",
+    emptyResources: "В этом общем ресурсе нет рабочих пространств.",
+    listError: "Не удалось загрузить общие ресурсы.",
+  },
   voiceTimeline: {
     started: "Голосовой разговор начат",
     ended: "Голосовой разговор завершён",
