@@ -1399,3 +1399,97 @@ describe("daemon authorization handoff", () => {
     );
   });
 });
+
+describe("Online Service membership", () => {
+  const membership = {
+    required: true,
+    purchases_available: true,
+    app_account_token: "018f20b0-fbcc-7000-8000-000000000001",
+    product_id: "monthly",
+    can_connect: false,
+    status: "inactive",
+    expires_at: null,
+  };
+  it("reads and verifies using the signed-in authority without sharing credentials with StoreKit", async () => {
+    const f = fixture();
+    await f.login();
+    f.http.mockResolvedValueOnce(Response.json(membership));
+    expect(await f.manager.getMembership()).toEqual(membership);
+    const transaction = { transaction_id: "20000001", environment: "Production" as const };
+    f.http.mockResolvedValueOnce(
+      Response.json({ ...membership, can_connect: true, status: "active" }),
+    );
+    expect((await f.manager.verifyAppStoreTransaction(transaction)).can_connect).toBe(true);
+    expect(f.http).toHaveBeenLastCalledWith(
+      "https://aitapp.cn/api/v1/billing/app-store/transactions",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(transaction),
+        redirect: "error",
+        headers: expect.objectContaining({ Authorization: "Bearer private-jwt" }),
+      }),
+    );
+    await f.manager.logout();
+  });
+  it("submits Play proofs to the account authority and accepts both store options", async () => {
+    const f = fixture();
+    await f.login();
+    const current = {
+      ...membership,
+      purchase_options: {
+        app_store: { available: true, product_id: "monthly", base_plan_id: null },
+        google_play: { available: true, product_id: "monthly", base_plan_id: "monthly" },
+      },
+      subscriptions: [
+        {
+          store: "google_play",
+          status: "active",
+          auto_renewing: true,
+          expires_at: "2026-12-30T00:00:00Z",
+        },
+      ],
+    };
+    f.http.mockResolvedValueOnce(Response.json(current));
+    const purchase = { purchase_token: "fixture-play-proof" };
+    expect(await f.manager.verifyGooglePlayPurchase(purchase)).toEqual(current);
+    expect(f.http).toHaveBeenLastCalledWith(
+      "https://aitapp.cn/api/v1/billing/google-play/purchases",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(purchase),
+        headers: expect.objectContaining({ Authorization: "Bearer private-jwt" }),
+      }),
+    );
+    for (const invalid of [
+      { ...current, purchase_options: null },
+      { ...current, purchase_options: { ...current.purchase_options, google_play: null } },
+      { ...current, subscriptions: [{ ...current.subscriptions[0], expires_at: "invalid" }] },
+    ]) {
+      f.http.mockResolvedValueOnce(Response.json(invalid));
+      await expect(f.manager.getMembership()).rejects.toThrow("invalid membership");
+    }
+    await f.manager.logout();
+  });
+  it("requires login, validates membership responses, and preserves purchase ownership errors", async () => {
+    const f = fixture();
+    await expect(f.manager.getMembership()).rejects.toThrow("Sign in first");
+    await f.login();
+    f.http.mockResolvedValueOnce(Response.json({ ...membership, app_account_token: "invalid" }));
+    await expect(f.manager.getMembership()).rejects.toThrow("invalid membership");
+    f.http.mockResolvedValueOnce(
+      Response.json(
+        {
+          error: {
+            code: "purchase_account_mismatch",
+            message: "Sign in to the original Ait account",
+          },
+        },
+        { status: 409 },
+      ),
+    );
+    await expect(
+      f.manager.verifyAppStoreTransaction({ transaction_id: "20000001", environment: "Sandbox" }),
+    ).rejects.toMatchObject({ code: "purchase_account_mismatch", status: 409 });
+    await f.manager.logout();
+  });
+});

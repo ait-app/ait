@@ -55,6 +55,50 @@ export const zhCN: TranslationResources = {
     },
   },
   onlineService: {
+    billing: {
+      deleteWarning:
+        "删除 Ait 账号不会取消 Apple 或 Google Play 订阅，请分别前往购买时使用的商店管理或取消。",
+      title: "Online Service 订阅",
+      stacking:
+        "每笔核实的月付增加一个自然月。App Store 与 Google Play 可同时订阅，已付时长累计；恢复购买不会重复增加时长。退款按比例扣减对应时长。",
+      renewalCancelled: "已关闭续费",
+      stores: { app_store: "App Store 订阅", google_play: "Google Play 订阅" },
+      renewalByStore: {
+        app_store:
+          "费用从 Apple 账户扣除，每月自动续费；如需取消，请在当前周期结束前至少 24 小时操作。每次成功扣款增加一个月。可在 App Store 管理或取消；删除 Ait 账号不会取消订阅。",
+        google_play:
+          "费用通过 Google Play 扣除，每月自动续费；如需取消，请在下次续费前操作。每次成功扣款增加一个月。可在 Google Play 管理或取消；删除 Ait 账号不会取消订阅。",
+      },
+      plan: "月付会员",
+      benefit: "通过 Ait 在线服务连接你的电脑。",
+      accessUntil: "累计会员有效至",
+      loading: "正在读取会员状态…",
+      subscribe: "订阅 · {{price}} / 月",
+      unavailable: "暂时无法购买",
+      restore: "恢复购买",
+      manage: "管理订阅",
+      privacy: "隐私政策",
+      terms: "使用条款",
+      renewal:
+        "费用将从你的 Apple 账户扣除。订阅每月自动续费，除非你在当前周期结束前至少 24 小时取消。可在 App Store 订阅中管理或取消。删除 Ait 账号不会取消 Apple 订阅。",
+      pending: "购买正在等待 Apple 批准，批准后将自动更新权益。",
+      restored: "购买已恢复并完成验证。",
+      nothingToRestore: "当前 Apple 账户没有可恢复的购买。",
+      openFailed: "无法打开链接，请重试。",
+      accessAvailable: "当前服务暂未要求订阅，可直接使用在线连接。",
+      states: {
+        active: "已订阅",
+        inactive: "未订阅",
+        expired: "已到期",
+        billing_retry: "付款出现问题",
+        grace_period: "扣款宽限期",
+        revoked: "已退款或撤销",
+        verification_required: "需要重新验证",
+        pending: "等待付款",
+        paused: "已暂停",
+        on_hold: "付款暂停",
+      },
+    },
     title: "在线服务",
     connectionDescription: "登录账户，连接在线主机。",
     loginDescription: "登录在线服务，访问已接入服务的电脑。",
