@@ -2,6 +2,7 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ko: TranslationResources = {
+  sharing: en.sharing,
   voiceTimeline: {
     started: "음성 대화가 시작되었습니다",
     ended: "음성 대화가 종료되었습니다",

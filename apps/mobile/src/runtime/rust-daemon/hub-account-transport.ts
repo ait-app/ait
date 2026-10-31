@@ -86,8 +86,13 @@ function deferred(choose: () => Promise<() => Transport>): Transport {
 }
 
 /** A hub session closes with the account's other relay transports on sign-out or suspension. */
-function hubTransport(link: HubLink, nodeId: string, deps: Dependencies): Transport {
-  const session = link.openSession(nodeId);
+function hubTransport(
+  link: HubLink,
+  nodeId: string,
+  deps: Dependencies,
+  shareId?: string,
+): Transport {
+  const session = link.openSession(nodeId, shareId ? { share: shareId } : {});
   let unregister: () => void;
   try {
     unregister = deps.register(() => session.abort());
@@ -124,10 +129,13 @@ export function createHubAccountRelayTransportFactory(
     const target = parseAccountRelayTarget(url);
     const select = (link: HubLink | null): (() => Transport) => {
       if (!link?.ready || link.centerUrl !== target.center)
-        throw new Error("Online Hub is unavailable.");
-      const node = link.serveFor(target.hostId);
-      if (!node) throw new Error("Target Host is unavailable on Hub.");
-      return () => hubTransport(link, node.node_id, deps);
+        throw new Error(
+          target.shareId ? "Shared resource is offline." : "Online Hub is unavailable.",
+        );
+      const nodeId =
+        target.shareId && target.nodeId ? target.nodeId : link.serveFor(target.hostId)?.node_id;
+      if (!nodeId) throw new Error("Target Host is unavailable on Hub.");
+      return () => hubTransport(link, nodeId, deps, target.shareId);
     };
     const hub = deps.hub();
     if (hub instanceof Promise || hub?.pending)

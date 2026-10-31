@@ -21,6 +21,7 @@ interface SidebarHeaderRowProps {
   testID?: string;
   nativeID?: string;
   accessibilityLabel?: string;
+  trailingText?: string | null;
   /**
    * "header" (default): a sidebar-height row with its own bottom separator —
    * the lone header at the top of a sidebar (settings "Back to workspace").
@@ -39,6 +40,7 @@ export function SidebarHeaderRow({
   testID,
   nativeID,
   accessibilityLabel,
+  trailingText = null,
   variant = "header",
   shortcutKeys = null,
 }: SidebarHeaderRowProps) {
@@ -68,13 +70,14 @@ export function SidebarHeaderRow({
             uniProps={isHighlighted ? foregroundColorMapping : foregroundMutedColorMapping}
           />
           <SidebarHeaderRowLabel label={label} isHighlighted={isHighlighted} />
+          {trailingText ? <Text style={styles.trailingText}>{trailingText}</Text> : null}
           {shortcutKeys && Boolean(state.hovered) ? (
             <Shortcut chord={shortcutKeys} style={styles.shortcut} />
           ) : null}
         </>
       );
     },
-    [ThemedIcon, isActive, label, shortcutKeys],
+    [ThemedIcon, isActive, label, shortcutKeys, trailingText],
   );
 
   return (
@@ -155,6 +158,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   labelHighlighted: {
     color: theme.colors.foreground,
+  },
+  trailingText: {
+    marginLeft: "auto",
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    fontVariant: ["tabular-nums"],
   },
   shortcut: {
     marginLeft: "auto",

@@ -2,6 +2,7 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ptBR: TranslationResources = {
+  sharing: en.sharing,
   voiceTimeline: {
     started: "Conversa por voz iniciada",
     ended: "Conversa por voz encerrada",

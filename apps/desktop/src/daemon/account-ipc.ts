@@ -229,6 +229,9 @@ export function createAccountIpc(
             id,
             typeof args.hostId === "string" ? args.hostId : "",
             args.center,
+            typeof args.shareId === "string" && typeof args.nodeId === "string"
+              ? { shareId: args.shareId, nodeId: args.nodeId }
+              : undefined,
           );
         case "account_transport_send":
           return transports.send(event.sender, id, {

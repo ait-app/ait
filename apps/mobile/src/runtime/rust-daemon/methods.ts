@@ -29,6 +29,30 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 3,
     response: "publication.stop.response",
   },
+  "share.list.request": {
+    method: "share.list.request",
+    kind: "request",
+    channel: 3,
+    response: "share.list.response",
+  },
+  "share.groups.list.request": {
+    method: "share.groups.list.request",
+    kind: "request",
+    channel: 3,
+    response: "share.groups.list.response",
+  },
+  "share.set.request": {
+    method: "share.set.request",
+    kind: "request",
+    channel: 3,
+    response: "share.set.response",
+  },
+  "share.remove.request": {
+    method: "share.remove.request",
+    kind: "request",
+    channel: 3,
+    response: "share.remove.response",
+  },
   ...Object.fromEntries(
     BOT_METHODS.map((method) => [
       method,

@@ -187,6 +187,61 @@ import { hubFixture, HOST } from "../../../../packages/client/test/hub.js";
 import type { HubLink } from "@ait/client/internal/hub";
 
 describe("desktop Hub data connections", () => {
+  it("opens a guest share directly to its serve node without requiring the physical server id", async () => {
+    const h = hubFixture();
+    h.link.start();
+    await h.flush();
+    const socket = h.socket();
+    socket.open();
+    socket.welcome({ center_methods: ["share.subscribe"] });
+    socket.presence(1, [HOST]);
+    const account = {
+      openVisit: vi.fn(),
+      closeVisit: vi.fn(),
+      snapshot: () => ({ hosts: [] }),
+    };
+    const manager = new AccountTransportManager(
+      account as unknown as AccountSessionManager,
+      h.link as unknown as HubLink,
+    );
+    const events: Record<string, unknown>[] = [];
+    const owner = Object.assign(new EventEmitter(), {
+      isDestroyed: () => false,
+      send: (_channel: string, event: Record<string, unknown>) => {
+        events.push(event);
+        if (event.kind === "open")
+          void manager.send(owner, "account-guest", { text: JSON.stringify({ type: "hello" }) });
+      },
+    });
+    const shareId = "22222222-2222-4222-8222-222222222222";
+    await manager.open(owner, "account-guest", HOST.host_id, h.link.centerUrl!, {
+      shareId,
+      nodeId: "guest-node",
+    });
+    await h.flush();
+    expect(account.openVisit).not.toHaveBeenCalled();
+    expect(socket.frames("open")[0]).toMatchObject({
+      to: { node: "guest-node" },
+      share: shareId,
+    });
+    const open = socket.frames("open")[0]!;
+    socket.receive(
+      { t: "accept", seq: 2, s: open.s },
+      JSON.stringify({
+        type: "server_info",
+        info: {
+          server_id: "physical-server-id",
+          instance_id: "physical-instance-id",
+          features: ["ait-rust-single-v1"],
+        },
+      }),
+    );
+    expect(events.some((event) => typeof event.text === "string")).toBe(true);
+    expect(events.some((event) => event.kind === "close")).toBe(false);
+    manager.closeAll();
+    h.link.stop();
+  });
+
   it.each(["instance", null, "stale-instance"])(
     "opens through presence with Relay instance %s and preserves the logical session during resume",
     async (instanceId) => {

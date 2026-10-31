@@ -19,7 +19,14 @@ export async function connectAccountHub(): Promise<{
     return connection ? { connection, dispose() {} } : null;
   }
   if (!desktop.events?.on) return null;
-  let state: HubAccountSnapshot = { state: "stopped", linkId: null, centerUrl: null, methods: [] };
+  let state: HubAccountSnapshot = {
+    state: "stopped",
+    linkId: null,
+    centerUrl: null,
+    methods: [],
+    groups: null,
+    shares: null,
+  };
   let sequence = 0;
   let disposed = false;
   const listeners = new Set<() => void>();

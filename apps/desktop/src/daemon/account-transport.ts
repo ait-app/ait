@@ -49,6 +49,7 @@ export class AccountTransportManager {
     id: string,
     host: string,
     center: string,
+    guest?: { shareId: string; nodeId: string },
   ): Promise<void> {
     if (!/^account-[a-zA-Z0-9-]{1,80}$/.test(id) || !/^[0-9a-f-]{36}$/i.test(host))
       throw new Error("Invalid relay transport identity");
@@ -78,15 +79,22 @@ export class AccountTransportManager {
     try {
       if (this.link?.pending) await this.link.whenReady(5000);
       const node =
-        this.link?.ready && this.link.centerUrl === center ? this.link.serveFor(host) : undefined;
+        this.link?.ready && this.link.centerUrl === center
+          ? guest
+            ? { node_id: guest.nodeId }
+            : this.link.serveFor(host)
+          : undefined;
       if (session.closed) return;
       if (!this.link?.ready || this.link.centerUrl !== center)
         throw new Error("Online Hub is unavailable.");
       if (!node) throw new Error("Target Host is unavailable on Hub.");
-      const target = this.account.snapshot().hosts.find((value) => value.host_id === host);
-      if (!target?.server_id) throw new Error("Host identity unavailable");
-      session.expectedServerId = target.server_id;
-      const transport = this.link.openSession(node.node_id);
+      const target = guest
+        ? null
+        : this.account.snapshot().hosts.find((value) => value.host_id === host);
+      if (!guest && !target?.server_id) throw new Error("Host identity unavailable");
+      // Hub authenticates the shared serve node; guests do not have its owner Host record.
+      session.expectedServerId = target?.server_id ?? null;
+      const transport = this.link.openSession(node.node_id, guest ? { share: guest.shareId } : {});
       session.hub = transport;
       transport.onOpen(() => {
         if (!session.closed) this.emit(id, session, { kind: "open" });
@@ -123,7 +131,8 @@ export class AccountTransportManager {
       }
       if (
         message.type !== "server_info" ||
-        message.info?.server_id !== session.expectedServerId ||
+        (session.expectedServerId !== null &&
+          message.info?.server_id !== session.expectedServerId) ||
         typeof message.info?.instance_id !== "string" ||
         !message.info.instance_id ||
         !Array.isArray(message.info?.features) ||

@@ -51,6 +51,31 @@ describe("orderHostsLocalFirst", () => {
 });
 
 describe("normalizeStoredHostProfile", () => {
+  it("keeps simultaneous guest grants to one Host isolated and refuses to restore them", () => {
+    const common = {
+      hostId: "11111111-1111-4111-8111-111111111111",
+      center: "https://custom.test/api",
+      nodeId: "serve-node",
+    };
+    const first = createAccountRelayHostConnection({
+      ...common,
+      shareId: "22222222-2222-4222-8222-222222222222",
+    });
+    const second = createAccountRelayHostConnection({
+      ...common,
+      shareId: "33333333-3333-4333-8333-333333333333",
+    });
+    expect(first.id).not.toBe(second.id);
+    expect(first).toMatchObject({ shareId: "22222222-2222-4222-8222-222222222222" });
+    expect(second).toMatchObject({ shareId: "33333333-3333-4333-8333-333333333333" });
+    expect(
+      normalizeStoredHostProfile({
+        serverId: "shared:22222222-2222-4222-8222-222222222222",
+        connections: [first],
+      }),
+    ).toBeNull();
+  });
+
   it.each(["https://dash.ait-app.com:8443/api", "https://aitapp.cn:8443/api"])(
     "migrates a saved official relay host at %s while retaining its preferred connection",
     (center) => {

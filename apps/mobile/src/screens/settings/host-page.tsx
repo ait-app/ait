@@ -9,6 +9,10 @@ import { SettingsTextAreaCard } from "@/components/settings-textarea";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { Alert as InlineAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  ShareManagerSheet,
+  type ShareResourceTarget,
+} from "@/components/sharing/share-manager-sheet";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
 import { Switch } from "@/components/ui/switch";
 import { getIsElectron } from "@/constants/platform";
@@ -62,6 +66,7 @@ import {
   Pencil,
   Plus,
   RotateCw,
+  Share2,
   SquareTerminal,
   Trash2,
 } from "lucide-react-native";
@@ -362,6 +367,8 @@ export function HostSettingsPage({
 
       <HostAppearanceSection host={host} />
 
+      <HostSharingSection host={host} />
+
       {getIsElectron() &&
       (isLocalDaemon ||
         host.connections.some(
@@ -374,6 +381,44 @@ export function HostSettingsPage({
 
       <RemoveHostSection host={host} isLocalDaemon={isLocalDaemon} onRemoved={onHostRemoved} />
     </View>
+  );
+}
+
+function HostSharingSection({ host }: { host: HostProfile }) {
+  const { t } = useTranslation();
+  const { theme } = useUnistyles();
+  const [target, setTarget] = useState<ShareResourceTarget | null>(null);
+  const handleOpen = useCallback(
+    () =>
+      setTarget({
+        serverId: host.serverId,
+        resourceKind: "node",
+        resourceKey: "",
+        displayName: host.label,
+      }),
+    [host.label, host.serverId],
+  );
+  const handleClose = useCallback(() => setTarget(null), []);
+  const icon = useMemo(
+    () => <Share2 size={theme.iconSize.sm} color={theme.colors.foreground} />,
+    [theme.colors.foreground, theme.iconSize.sm],
+  );
+
+  return (
+    <SettingsSection title={t("sharing.hostSection")} testID="host-page-sharing">
+      <View style={settingsStyles.card}>
+        <View style={settingsStyles.row}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>{t("sharing.hostTitle")}</Text>
+            <Text style={settingsStyles.rowHint}>{t("sharing.hostHint")}</Text>
+          </View>
+          <Button variant="outline" size="sm" leftIcon={icon} onPress={handleOpen}>
+            {t("sharing.manage")}
+          </Button>
+        </View>
+      </View>
+      <ShareManagerSheet visible={target !== null} target={target} onClose={handleClose} />
+    </SettingsSection>
   );
 }
 

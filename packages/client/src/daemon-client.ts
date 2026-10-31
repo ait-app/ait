@@ -13,6 +13,14 @@ import { CreationClient } from "./creation/index.js";
 import type { CreationSnapshot } from "@ait/protocol/messages";
 import type { z } from "zod";
 import type { SessionEventSubscription } from "@ait/protocol/messages";
+import type {
+  ShareAudience,
+  ShareGroupsListResponse,
+  ShareListResponse,
+  ShareRemoveResponse,
+  ShareResourceKind,
+  ShareSetResponse,
+} from "@ait/protocol/messages";
 import type { ClientCapability } from "@ait/protocol/client-capabilities";
 import type { AgentAttentionNotificationPayload } from "@ait/protocol/agent-attention-notification";
 import {
@@ -2556,6 +2564,52 @@ export class DaemonClient {
         if (msg.payload.requestId !== resolvedRequestId) return null;
         return msg.payload;
       },
+    });
+  }
+
+  listShares(): Promise<ShareListResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      message: { type: "share.list.request" },
+    });
+  }
+
+  listShareGroups(): Promise<ShareGroupsListResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      message: { type: "share.groups.list.request" },
+    });
+  }
+
+  setShare(input: {
+    resourceKind: ShareResourceKind;
+    resourceKey: string;
+    groupId: string;
+    audience?: ShareAudience;
+    recipients?: string[];
+    displayName?: string;
+    projectName?: string;
+  }): Promise<ShareSetResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      message: {
+        type: "share.set.request",
+        resourceKind: input.resourceKind,
+        resourceKey: input.resourceKey,
+        groupId: input.groupId,
+        permission: "operate",
+        audience: input.audience ?? "group",
+        recipients: input.recipients ?? [],
+        ...(input.displayName ? { displayName: input.displayName } : {}),
+        ...(input.projectName ? { projectName: input.projectName } : {}),
+      },
+    });
+  }
+
+  removeShare(input: {
+    resourceKind: ShareResourceKind;
+    resourceKey: string;
+    groupId: string;
+  }): Promise<ShareRemoveResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      message: { type: "share.remove.request", ...input },
     });
   }
 

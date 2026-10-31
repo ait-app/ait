@@ -235,6 +235,8 @@ export class HubLink implements HubAccountConnection {
       linkId: this.link?.id ?? null,
       centerUrl: this.centerUrl,
       methods: this.link?.methods ?? [],
+      groups: this.groupSnapshot,
+      shares: this.shareSnapshot,
     };
   }
 

@@ -6,6 +6,10 @@ export interface HubAccountSnapshot {
   linkId: string | null;
   centerUrl: string | null;
   methods: readonly string[];
+  /** Present after `share.subscribe`; optional for older desktop main processes. */
+  groups?: readonly HubGroup[] | null;
+  /** Resources other accounts share with this account. */
+  shares?: readonly HubShare[] | null;
 }
 
 /** Account event identity is independent of the transport sequence and resource ID. */
@@ -25,6 +29,8 @@ export interface HubAccountEvent {
 export interface HubAccountConnection {
   snapshot(): HubAccountSnapshot;
   subscribe(listener: () => void): () => void;
+  /** Subscribe to group and share snapshots when this connection supports resource sharing. */
+  subscribeShares?(): () => void;
   call<T = unknown>(method: string, params: unknown): Promise<T>;
   onEvent(listener: (event: HubAccountEvent) => void): () => void;
 }

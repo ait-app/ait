@@ -70,6 +70,7 @@ import {
   type DaemonClientConfig,
   type FetchAgentsOptions,
 } from "@ait/client/internal/daemon-client";
+import type { HubShare } from "@ait/client/internal/hub";
 import { BROWSER_AUTOMATION_COMMAND_NAMES } from "@ait/protocol/browser-automation/rpc-schemas";
 import { CLIENT_CAPS } from "@ait/protocol/client-capabilities";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -84,6 +85,16 @@ import {
 
 export type HostRuntimeConnectionStatus = "idle" | "connecting" | "online" | "offline" | "error";
 export type HostRegistryStatus = "loading" | "ready";
+
+export function sharedResourceServerId(shareId: string): string {
+  return `shared:${shareId}`;
+}
+
+export function isSharedResourceHost(host: HostProfile): boolean {
+  return host.connections.some(
+    (connection) => connection.type === "accountRelay" && connection.shareId !== undefined,
+  );
+}
 
 export type ActiveConnection =
   | { type: "directTcp"; endpoint: string; display: string }
@@ -1026,7 +1037,11 @@ export class HostRuntimeController {
                 connection,
               });
               if (serverId !== this.host.serverId) {
-                if (isPlaceholderServerId(this.host.serverId) && this.onReconcileServerId) {
+                const sharedGuest =
+                  connection.type === "accountRelay" && connection.shareId !== undefined;
+                if (sharedGuest) {
+                  // A virtual id keeps simultaneous grants to one physical Host isolated.
+                } else if (isPlaceholderServerId(this.host.serverId) && this.onReconcileServerId) {
                   this.onReconcileServerId(this.host.serverId, serverId);
                 } else {
                   await client.close().catch(() => undefined);
@@ -1470,6 +1485,7 @@ export class HostRuntimeStore {
   private removedAccountRelayConnections = new Set<string>();
   private accountDiscoveryTail: Promise<void> = Promise.resolve();
   private accountRelayOwners: Record<string, string> | null = null;
+  private sharedResourcesKey = "";
   private hostPersistenceTail: Promise<void> = Promise.resolve();
   private hostAppearanceMutationTail: Promise<void> = Promise.resolve();
   private hostRegistryStatus: HostRegistryStatus = "loading";
@@ -2145,12 +2161,57 @@ export class HostRuntimeStore {
   }
 
   private async persistHosts(hosts = this.hosts): Promise<void> {
-    const document = JSON.stringify(hosts);
+    const document = JSON.stringify(hosts.filter((host) => !isSharedResourceHost(host)));
     const write = this.hostPersistenceTail.then(() =>
       this.storage.setItem(REGISTRY_STORAGE_KEY, document),
     );
     this.hostPersistenceTail = write.catch(() => undefined);
     await write;
+  }
+
+  /**
+   * Mirror current share presence as ephemeral Host runtimes. They use a virtual server id so
+   * multiple grants to the same physical Host keep independent guest authorization boundaries.
+   */
+  setSharedAccountRelayResources(shares: readonly HubShare[], center: string | null): void {
+    const usable = center ? shares : [];
+    const key = JSON.stringify(
+      usable.map((share) => [
+        share.shareId,
+        share.hostId,
+        share.nodeId,
+        share.hostName,
+        share.owner.displayName,
+        share.owner.username,
+        share.state,
+      ]),
+    );
+    if (key === this.sharedResourcesKey) return;
+    this.sharedResourcesKey = key;
+    const retained = this.hosts.filter((host) => !isSharedResourceHost(host));
+    const now = new Date().toISOString();
+    const ephemeral = usable.map((share): HostProfile => {
+      const owner =
+        share.owner.displayName?.trim() ||
+        (share.owner.username ? `@${share.owner.username}` : share.hostName);
+      const connection = createAccountRelayHostConnection({
+        hostId: share.hostId,
+        center: center!,
+        shareId: share.shareId,
+        nodeId: share.nodeId,
+      });
+      return {
+        serverId: sharedResourceServerId(share.shareId),
+        label: `${owner} · ${share.hostName}`,
+        appearance: defaultHostAppearance(),
+        lifecycle: {},
+        connections: [connection],
+        preferredConnectionId: connection.id,
+        createdAt: now,
+        updatedAt: now,
+      };
+    });
+    this.setHostsAndSync([...retained, ...ephemeral]);
   }
 
   /** Persist an account host while retaining its existing connections and appearance. */
@@ -2265,6 +2326,7 @@ export class HostRuntimeStore {
       host.connections.some(
         (connection) =>
           connection.type !== "accountRelay" ||
+          (connection.shareId !== undefined && connection.center === this.accountRelayCenter) ||
           (connection.center === this.accountRelayCenter &&
             this.availableAccountRelayServers.has(host.serverId)),
       ),
@@ -2314,6 +2376,7 @@ export class HostRuntimeStore {
           (connection) =>
             !this.pendingDesktopConnections.has(connection.id) &&
             (connection.type !== "accountRelay" ||
+              (connection.shareId !== undefined && connection.center === this.accountRelayCenter) ||
               (connection.center === this.accountRelayCenter &&
                 this.availableAccountRelayServers.has(storedHost.serverId))),
         ),

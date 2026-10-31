@@ -1755,6 +1755,59 @@ describe("HostRuntimeController", () => {
 });
 
 describe("HostRuntimeStore", () => {
+  it("keeps simultaneous resource shares ephemeral and isolated from the owned Host registry", async () => {
+    useHostRuntimeClock();
+    const center = "https://center.test/api";
+    const storage = createMemoryHostRuntimeStorage({ "@paseo:e2e": "1" });
+    const store = new HostRuntimeStore({ storage, deps: makeDeps({}, []) });
+    const common = {
+      groupId: "44444444-4444-4444-8444-444444444444",
+      groupName: "Design",
+      hostId: "11111111-1111-4111-8111-111111111111",
+      nodeId: "serve-node",
+      hostName: "Alice workstation",
+      owner: { userId: "alice", displayName: "Alice", username: "alice" },
+      resourceKind: "workspace" as const,
+      displayName: "Checkout",
+      projectName: "Storefront",
+      permission: "operate",
+      state: "online" as const,
+    };
+    try {
+      await store.boot();
+      store.setAccountRelayCenter(center);
+      store.setSharedAccountRelayResources(
+        [
+          {
+            ...common,
+            shareId: "22222222-2222-4222-8222-222222222222",
+            resourceKey: "workspace-a",
+          },
+          {
+            ...common,
+            shareId: "33333333-3333-4333-8333-333333333333",
+            resourceKey: "workspace-b",
+          },
+        ],
+        center,
+      );
+      expect(store.getHosts().map((host) => host.serverId)).toEqual([
+        "shared:22222222-2222-4222-8222-222222222222",
+        "shared:33333333-3333-4333-8333-333333333333",
+      ]);
+      expect(store.getAvailableHosts()).toHaveLength(2);
+      expect(store.getHosts()[0]?.connections[0]?.id).not.toBe(
+        store.getHosts()[1]?.connections[0]?.id,
+      );
+      expect(await storage.getItem("@paseo:daemon-registry")).toBeNull();
+
+      store.setSharedAccountRelayResources([], center);
+      expect(store.getHosts()).toEqual([]);
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
   it.each(["relay-first", "local-first"])(
     "uses the managed local connection regardless of discovery order: %s",
     async (order) => {
