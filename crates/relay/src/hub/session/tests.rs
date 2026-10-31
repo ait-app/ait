@@ -360,6 +360,7 @@ async fn guest_sessions_dial_with_the_visitor_and_report_refusal_as_revoked() {
     let visitor = model::share::Visitor {
         user_id: Uuid::new_v4(),
         display_name: Some("Bob".to_owned()),
+        username: Some("bob".to_owned()),
         group_id: Uuid::new_v4(),
         share_id: Uuid::new_v4(),
         resource_kind: model::share::ResourceKind::Node,

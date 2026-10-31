@@ -72,7 +72,17 @@ impl Guests {
         true
     }
 
-    /// Grants seen since the daemon started and not revoked since.
+    /// Remember `grant` without a live connection, after a restart found Agents its guest
+    /// created. Returns false when the registry is full.
+    pub(super) fn restore(&mut self, grant: Grant, limit: usize) -> bool {
+        if self.grants.len() >= limit && !self.grants.contains_key(&grant) {
+            return false;
+        }
+        self.grants.entry(grant).or_default();
+        true
+    }
+
+    /// Grants seen since the daemon started, or restored at start, and not revoked since.
     pub(super) fn grants(&self) -> impl Iterator<Item = Grant> + '_ {
         self.grants.keys().copied()
     }

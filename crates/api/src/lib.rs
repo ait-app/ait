@@ -230,6 +230,13 @@ impl Api {
         Ok(self)
     }
 
+    /// Restore guest grants from the labels of Agents guests created before a restart.
+    /// Run once, before the first publication, so it already lists those visitors.
+    pub fn restore_guests(&self) -> impl Future<Output = ()> + Send + 'static {
+        let shares = self.shared.shares.clone();
+        async move { shares.restore_guests().await }
+    }
+
     /// Return the Host's share settings for the daemon's publication loop.
     #[must_use]
     pub fn share_book(&self) -> Arc<dyn model::share::ShareBook> {

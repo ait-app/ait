@@ -314,6 +314,7 @@ async fn confine(
             if !session.take_download(std::time::Instant::now()) {
                 return Err(ErrorCode::ResourceExhausted);
             }
+            return Ok(Confined::Private(params, Private::Download));
         }
         Rule::AgentCreate
         | Rule::Agent(_)

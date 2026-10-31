@@ -16,6 +16,8 @@ pub(crate) enum Private {
     ProjectList,
     /// Remember the created terminal so revocation can end it.
     TerminalCreate,
+    /// Bind the issued download token to the visitor, so no other account can redeem it.
+    Download,
 }
 
 /// Which listed entries a guest keeps.
@@ -172,6 +174,25 @@ pub(crate) async fn execute(
             }
             session.remember_terminal(id);
             Ok(reply)
+        }
+        (Private::Download, _) => {
+            let Some(token) = reply["token"].as_str().map(str::to_owned) else {
+                return Ok(reply);
+            };
+            let visitor = session.registration.grant().user_id.to_string();
+            let bound = state
+                .run(
+                    state.filesystem.files.clone(),
+                    ErrorCode::ProjectIo,
+                    move |files| Ok(files.bind_download(&token, &visitor)),
+                )
+                .await?;
+            // The token is only useful once bound; an unbound one would serve the owner.
+            if bound {
+                Ok(reply)
+            } else {
+                Err(ErrorCode::Forbidden)
+            }
         }
     }
 }

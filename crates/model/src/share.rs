@@ -19,6 +19,11 @@ use uuid::Uuid;
 /// honours it only together with the daemon's own bearer credential.
 pub const GUEST_HEADER: &str = "x-ait-guest";
 
+/// Loopback download header naming the visiting account the center asserted for a guest
+/// download. A token issued on a guest connection serves only that account; without the
+/// header only tokens issued by the owner are served.
+pub const DOWNLOAD_VISITOR_HEADER: &str = "x-ait-download-visitor";
+
 /// Center method that replaces this Host's published share list.
 pub const PUBLISH_METHOD: &str = "hub.shares.publish";
 
@@ -104,6 +109,10 @@ pub struct Visitor {
     pub user_id: Uuid,
     /// Display name for attribution; never used for authorization.
     pub display_name: Option<String>,
+    /// Unique account handle for attribution; absent from older centers and from accounts
+    /// that have not chosen one. Never used for authorization.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
     /// Group through which the share is granted.
     pub group_id: Uuid,
     /// Center share identity.

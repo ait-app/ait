@@ -152,9 +152,15 @@ function shares(payload: Uint8Array): HubShare[] {
         share.resourceKind === "node") &&
       (share.projectName === null || typeof share.projectName === "string") &&
       record(share.owner) &&
-      strings(share.owner, ["userId", "displayName"]) &&
+      strings(share.owner, ["userId"]) &&
+      nullableString(share.owner.displayName) &&
+      (share.owner.username === undefined || nullableString(share.owner.username)) &&
       (share.state === "online" || share.state === "reconnecting"),
   );
+}
+
+function nullableString(value: unknown): boolean {
+  return value === null || typeof value === "string";
 }
 
 function same(a: unknown, b: unknown): boolean {

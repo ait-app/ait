@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde_json::json;
 
 use super::*;
@@ -349,9 +351,10 @@ async fn download_tokens_are_rate_limited() {
     let guest = Guest::new().await;
     let params = json!({"cwd": guest.root(), "path": "file"});
     for _ in 0..16 {
-        guest
-            .forwarded("fs.file.download_token.request", params.clone())
+        let decision = guest
+            .decide("fs.file.download_token.request", params.clone())
             .await;
+        assert!(matches!(decision, Decision::Private(_, Private::Download)));
     }
     assert_eq!(
         guest
@@ -359,6 +362,49 @@ async fn download_tokens_are_rate_limited() {
             .await,
         ErrorCode::ResourceExhausted
     );
+}
+
+/// A token a guest connection issues serves only that visitor; the owner path and other
+/// visitors are refused and leave it usable.
+#[tokio::test]
+async fn guest_download_tokens_are_bound_to_their_visitor() {
+    let mut guest = Guest::new().await;
+    let root = guest.fixture.shared_path();
+    std::fs::write(root.join("file"), b"abc").unwrap();
+    let files = filesystem::files::service::files::Files::new(Box::new(
+        filesystem::files::local::LocalFiles::new(root.clone(), &root),
+    ));
+    let state = Arc::get_mut(&mut guest.fixture.api.shared).unwrap();
+    Arc::get_mut(&mut state.filesystem).unwrap().files = Some(crate::shared_service(files));
+    let decision = guest
+        .decide(
+            "fs.file.download_token.request",
+            json!({"cwd": guest.root(), "path": "file"}),
+        )
+        .await;
+    let Decision::Private(request, Private::Download) = decision else {
+        panic!("download token was not private: {decision:?}");
+    };
+    let reply = private::execute(
+        &guest.session,
+        &guest.fixture.api.shared,
+        "fs.file.download_token.request",
+        request.params,
+        Private::Download,
+    )
+    .await
+    .unwrap();
+    let token = reply["token"].as_str().unwrap().to_owned();
+    let visitor = guest.visitor.user_id.to_string();
+    let files = guest.fixture.api.shared.filesystem.files.clone().unwrap();
+    let mut files = files.lock().unwrap();
+    assert!(files.consume_download(&token, None).is_err());
+    assert!(
+        files
+            .consume_download(&token, Some(&uuid::Uuid::new_v4().to_string()))
+            .is_err()
+    );
+    assert!(files.consume_download(&token, Some(&visitor)).is_ok());
 }
 
 #[tokio::test]

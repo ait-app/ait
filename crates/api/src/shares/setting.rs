@@ -24,6 +24,9 @@ pub(super) enum ShareState {
     Accepted,
     /// The center refused the entry; see its code.
     Rejected,
+    /// The owner revoked the share from another device. Kept so the owner sees why it
+    /// stopped; never published and never admits anyone. Sharing again creates a new setting.
+    Revoked,
 }
 
 /// One share setting with its center status; serialized identically for storage and clients.
@@ -103,6 +106,18 @@ impl Setting {
         self.code = None;
         self.missing_recipients
             .clone_from(&accepted.missing_recipients);
+    }
+
+    /// Whether the center still hears about this setting; revoked ones stay local.
+    pub(super) fn publishable(&self) -> bool {
+        self.state != ShareState::Revoked
+    }
+
+    /// Record the owner's revocation from another device.
+    pub(super) fn revoke(&mut self) {
+        self.state = ShareState::Revoked;
+        self.code = Some("revoked".to_owned());
+        self.missing_recipients.clear();
     }
 
     /// Record the center's refusal of this entry, keeping its identity for a later acceptance.

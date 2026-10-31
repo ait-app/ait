@@ -72,7 +72,8 @@ export class HubSession implements DaemonTransport {
   /**
    * Hub close code when the center ended the session (`peer_gone`, `unknown_share`,
    * `share_revoked`, ...), otherwise null. Guest sessions closed with `share_revoked` or
-   * `unknown_share` should not be reopened automatically.
+   * `unknown_share` lost their access and should not be reopened automatically; `peer_gone`
+   * means the sharing Host went away, so reopen once its share is `online` again.
    */
   get closeCode(): string | null {
     return this.code;

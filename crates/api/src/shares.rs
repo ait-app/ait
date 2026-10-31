@@ -30,8 +30,12 @@ use cleanup::Owners;
 use guests::{Grant, Guests, Registration, Revoked};
 use setting::{SetRequest, Setting, ShareError};
 
-/// Center code that removes a local setting: the owner revoked it from another device.
+/// Center code for a setting the owner revoked from another device; it becomes a local
+/// tombstone that is no longer published.
 const REVOKED: &str = "revoked";
+
+/// Tombstones of revoked settings kept at most; the oldest go first.
+const MAX_REVOKED: usize = MAX_SHARES;
 
 /// Persisted share document, `<data_dir>/hub/shares.json`.
 ///
@@ -228,6 +232,25 @@ impl Shares {
         Some(Registration::new(self, &mut book.guests, grant))
     }
 
+    /// After a restart, remember the grants of Agents guests created, so the center can
+    /// report them as denied and their turns end. Grants no accepted setting admits any
+    /// more end at once.
+    pub(crate) async fn restore_guests(&self) {
+        let grants = self.owners.guest_grants().await;
+        if grants.is_empty() {
+            return;
+        }
+        let ((), commit) = self.mutate(|book| {
+            let restored = grants
+                .into_iter()
+                .take_while(|grant| book.guests.restore(*grant, MAX_VISITORS))
+                .count();
+            tracing::info!(restored, "guest grants restored from Agent labels");
+            ((), false)
+        });
+        self.finish_detached(commit);
+    }
+
     fn unregister(&self, id: u64) {
         lock(&self.book).guests.unregister(id);
     }
@@ -332,9 +355,10 @@ impl Shares {
         let (removed, commit) = self.mutate(|book| {
             let removed = book
                 .position(kind, key, group_id)
-                .map(|index| book.settings.remove(index))
-                .is_some();
-            (removed, removed)
+                .map(|index| book.settings.remove(index));
+            // Removing a revoked tombstone changes nothing the center sees.
+            let published = removed.as_ref().is_some_and(Setting::publishable);
+            (removed.is_some(), published)
         });
         self.finish(commit).await?;
         Ok(json!({
@@ -372,10 +396,15 @@ fn upsert(book: &mut Book, request: SetRequest) -> Result<(Setting, bool), Share
         request.group_id,
     ) {
         let setting = &mut book.settings[index];
+        // Sharing a revoked resource again is a new setting the revocation does not cover.
+        if !setting.publishable() {
+            *setting = request.into_setting();
+            return Ok((setting.clone(), true));
+        }
         let changed = request.update(setting);
         return Ok((setting.clone(), changed));
     }
-    if book.settings.len() >= MAX_SHARES {
+    if book.settings.iter().filter(|s| s.publishable()).count() >= MAX_SHARES {
         return Err(ShareError::Capacity);
     }
     let setting = request.into_setting();
@@ -383,7 +412,8 @@ fn upsert(book: &mut Book, request: SetRequest) -> Result<(Setting, bool), Share
     Ok((setting, true))
 }
 
-/// Apply `outcome` unless a newer one was applied; returns whether a setting was removed.
+/// Apply `outcome` unless a newer one was applied; returns whether the published list
+/// changed because a setting was revoked.
 /// Entries apply only to the setting they were published for, so a late outcome never
 /// touches a setting the user created again.
 fn apply_outcome(book: &mut Book, outcome: Outcome) -> bool {
@@ -412,11 +442,23 @@ fn apply_outcome(book: &mut Book, outcome: Outcome) -> bool {
             continue;
         };
         if rejected.code == REVOKED {
-            book.settings.remove(index);
-            removed = true;
+            if book.settings[index].publishable() {
+                book.settings[index].revoke();
+                removed = true;
+            }
         } else {
             book.settings[index].reject(&rejected.code);
         }
+    }
+    let revoked: Vec<usize> = (0..book.settings.len())
+        .filter(|index| !book.settings[*index].publishable())
+        .collect();
+    for index in revoked
+        .iter()
+        .take(revoked.len().saturating_sub(MAX_REVOKED))
+        .rev()
+    {
+        book.settings.remove(*index);
     }
     book.groups = outcome.groups;
     book.denied = outcome
@@ -435,7 +477,12 @@ impl ShareBook for Shares {
         let book = lock(&self.book);
         Publication {
             revision: book.revision,
-            shares: book.settings.iter().map(Setting::published).collect(),
+            shares: book
+                .settings
+                .iter()
+                .filter(|setting| setting.publishable())
+                .map(Setting::published)
+                .collect(),
             visitors: book
                 .guests
                 .grants()

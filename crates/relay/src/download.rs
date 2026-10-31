@@ -15,6 +15,7 @@ use crate::transport::{MAX_MESSAGE, Socket, receive};
 use crate::{Error, Local, protocol};
 
 /// Pair `session` using its relay ticket and stream the local file authorized by `token`.
+/// A guest download names its `visitor`, so only a token issued to that visitor is served.
 ///
 /// # Errors
 /// Rejects invalid grants or HTTP responses, failed I/O, and a missing destination acknowledgement.
@@ -22,6 +23,7 @@ pub(super) async fn run(
     url: String,
     ticket: SecretString,
     token: SecretString,
+    visitor: Option<Uuid>,
     local: Arc<Local>,
     session: Uuid,
 ) -> Result<(), Error> {
@@ -34,7 +36,7 @@ pub(super) async fn run(
         .await
         .map_err(|_| Error::Transport)??;
     ready.verify(session)?;
-    let response = local_response(&local, token.expose_secret()).await?;
+    let response = local_response(&local, token.expose_secret(), visitor).await?;
     let headers = protocol::encode(&DownloadMessage::Headers {
         status: response.status().as_u16(),
         content_length: response.content_length(),
@@ -106,7 +108,11 @@ pub(super) async fn run(
     result
 }
 
-async fn local_response(local: &Local, token: &str) -> Result<reqwest::Response, Error> {
+async fn local_response(
+    local: &Local,
+    token: &str,
+    visitor: Option<Uuid>,
+) -> Result<reqwest::Response, Error> {
     let mut download = Url::parse(&local.url).map_err(|_| Error::Protocol)?;
     download.set_scheme("http").map_err(|()| Error::Protocol)?;
     download.set_path("/api/files/download");
@@ -117,7 +123,11 @@ async fn local_response(local: &Local, token: &str) -> Result<reqwest::Response,
         .connect_timeout(Duration::from_secs(5))
         .build()
         .map_err(|_| Error::Transport)?;
-    let response = timeout(Duration::from_secs(10), client.get(download).send())
+    let mut request = client.get(download);
+    if let Some(visitor) = visitor {
+        request = request.header(model::share::DOWNLOAD_VISITOR_HEADER, visitor.to_string());
+    }
+    let response = timeout(Duration::from_secs(10), request.send())
         .await
         .map_err(|_| Error::Transport)?
         .map_err(|_| Error::Transport)?;

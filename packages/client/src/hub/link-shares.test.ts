@@ -85,6 +85,7 @@ describe("hub link group and share snapshots", () => {
       { ...SHARE, shareId: "share-2", state: "gone" },
       { ...SHARE, shareId: "share-5", resourceKind: "organization" },
       { ...SHARE, shareId: "share-6", resourceKey: undefined },
+      { ...SHARE, shareId: "share-7", owner: { userId: "alice", displayName: 7 } },
     ]);
     expect(h.link.groups).toEqual([GROUP]);
     expect(h.link.shares).toEqual([SHARE, PROJECT, NODE]);
@@ -98,14 +99,20 @@ describe("hub link group and share snapshots", () => {
     shares(socket, 4, [{ ...SHARE, state: "reconnecting" }]);
     expect(h.link.shares).toEqual([{ ...SHARE, state: "reconnecting" }]);
     expect(changed).toHaveBeenCalledTimes(3);
+    // Owners without a display name, and with a username, are kept.
+    const NAMELESS = { ...SHARE, owner: { userId: "alice", displayName: null, username: "alice" } };
+    shares(socket, 5, [NAMELESS]);
+    expect(h.link.shares).toEqual([NAMELESS]);
+    shares(socket, 6, [{ ...SHARE, state: "reconnecting" }]);
+    expect(changed).toHaveBeenCalledTimes(5);
     // An identical snapshot does not notify.
-    groups(socket, 5, [GROUP]);
-    expect(changed).toHaveBeenCalledTimes(3);
+    groups(socket, 7, [GROUP]);
+    expect(changed).toHaveBeenCalledTimes(5);
     // A malformed snapshot is ignored but still consumes its sequence number.
-    socket.receive({ t: "groups", seq: 6 }, "{}");
+    socket.receive({ t: "groups", seq: 8 }, "{}");
     expect(h.link.groups).toEqual([GROUP]);
     await vi.advanceTimersByTimeAsync(50);
-    expect(socket.frames("ack").at(-1)).toEqual({ t: "ack", a: 6 });
+    expect(socket.frames("ack").at(-1)).toEqual({ t: "ack", a: 8 });
     expect(h.logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "groups" }),
       "[Hub] invalid snapshot ignored",

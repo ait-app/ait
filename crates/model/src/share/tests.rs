@@ -6,6 +6,7 @@ fn visitor() -> Visitor {
     Visitor {
         user_id: Uuid::nil(),
         display_name: Some("访客 Bob".into()),
+        username: Some("bob".into()),
         group_id: Uuid::max(),
         share_id: Uuid::nil(),
         resource_kind: ResourceKind::Project,
@@ -30,15 +31,23 @@ fn visitors_use_the_flat_snake_case_wire_form() {
     let value = serde_json::to_value(visitor()).unwrap();
     assert_eq!(
         value,
-        json!({"user_id":Uuid::nil(),"display_name":"访客 Bob","group_id":Uuid::max(),
-            "share_id":Uuid::nil(),"resource_kind":"project","resource_key":"prj_1",
-            "permission":"operate"})
+        json!({"user_id":Uuid::nil(),"display_name":"访客 Bob","username":"bob",
+            "group_id":Uuid::max(),"share_id":Uuid::nil(),"resource_kind":"project",
+            "resource_key":"prj_1","permission":"operate"})
     );
     let node: Visitor = serde_json::from_value(json!({"user_id":Uuid::nil(),
         "display_name":null,"group_id":Uuid::nil(),"share_id":Uuid::nil(),
         "resource_kind":"node","resource_key":"","permission":"operate"}))
     .unwrap();
     assert_eq!(node.scope(), Some(ShareScope::Node));
+    // Older centers and accounts without a handle send no username.
+    assert_eq!(node.username, None);
+    assert!(
+        serde_json::to_value(&node)
+            .unwrap()
+            .get("username")
+            .is_none()
+    );
 }
 
 #[test]

@@ -84,8 +84,11 @@ fn tokens_are_single_use_and_expiration_is_checked_before_opening() {
     files
         .issue_download("token".to_owned(), "/repo", "a")
         .unwrap();
-    assert_eq!(files.consume_download("token").unwrap().0.info().size, 3);
-    assert!(files.consume_download("token").is_err());
+    assert_eq!(
+        files.consume_download("token", None).unwrap().0.info().size,
+        3
+    );
+    assert!(files.consume_download("token", None).is_err());
     files.downloads.insert(
         "expired".to_owned(),
         DownloadGrant {
@@ -93,10 +96,34 @@ fn tokens_are_single_use_and_expiration_is_checked_before_opening() {
             root: "/repo".to_owned(),
             path: "a".to_owned(),
             file_name: "a".to_owned(),
+            visitor: None,
         },
     );
-    assert!(files.consume_download("expired").is_err());
+    assert!(files.consume_download("expired", None).is_err());
     assert!(files.downloads.is_empty());
+}
+
+#[test]
+fn bound_grants_serve_only_their_visitor() {
+    let mut files = Files::new(Box::new(MemoryFiles));
+    files
+        .issue_download("guest".to_owned(), "/repo", "a")
+        .unwrap();
+    assert!(files.bind_download("guest", "bob"));
+    // Binding is one-shot; unknown grants cannot be bound.
+    assert!(!files.bind_download("guest", "carol"));
+    assert!(!files.bind_download("missing", "bob"));
+    // Another visitor and the owner path are refused and leave the grant usable.
+    assert!(files.consume_download("guest", Some("carol")).is_err());
+    assert!(files.consume_download("guest", None).is_err());
+    assert!(files.consume_download("guest", Some("bob")).is_ok());
+
+    // An owner's grant serves no visitor.
+    files
+        .issue_download("owner".to_owned(), "/repo", "a")
+        .unwrap();
+    assert!(files.consume_download("owner", Some("bob")).is_err());
+    assert!(files.consume_download("owner", None).is_ok());
 }
 
 #[test]

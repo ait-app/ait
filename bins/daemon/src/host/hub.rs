@@ -146,8 +146,10 @@ pub(super) async fn start(
     let shares_center = application.center.clone();
     let shares_cancel = cancel.clone();
     let book = api.share_book();
+    let restore = api.restore_guests();
     let shares_lifetime = lifetime.clone();
     tasks.spawn(async move {
+        restore.await;
         shares::run(shares_center, book, shares_cancel).await;
         drop(shares_lifetime);
     });

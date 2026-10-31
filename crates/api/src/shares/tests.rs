@@ -109,6 +109,7 @@ fn visitor(share_id: Uuid, group: Uuid, user_id: Uuid) -> Visitor {
     Visitor {
         user_id,
         display_name: None,
+        username: None,
         group_id: group,
         share_id,
         resource_kind: ResourceKind::Workspace,
@@ -242,11 +243,14 @@ async fn failed_writes_are_reported_and_retried_by_later_changes() {
 }
 
 #[tokio::test]
-async fn revoked_shares_are_removed_and_republished() {
+async fn revoked_shares_stay_as_unpublished_tombstones() {
     let shares = shares(None);
     let group = Uuid::new_v4();
+    let share_id = Uuid::new_v4();
     shares.set(set("w", group, &[])).await.unwrap();
     shares.set(set("x", group, &[])).await.unwrap();
+    shares.apply(accepted(&shares, "w", group, share_id));
+    let revoked_setting = setting(&shares, "w", group);
     let mut changes = shares.changes();
     changes.borrow_and_update();
     shares.apply(rejected(&shares, "w", group, REVOKED));
@@ -255,6 +259,57 @@ async fn revoked_shares_are_removed_and_republished() {
     assert_eq!(publication.revision, 3);
     assert_eq!(publication.shares.len(), 1);
     assert_eq!(publication.shares[0].resource_key, "x");
+    // The owner still sees why the share stopped, and nobody is admitted through it.
+    let listed = shares.list();
+    let tombstone = &listed["shares"][0];
+    assert_eq!(tombstone["resourceKey"], "w");
+    assert_eq!(tombstone["state"], "revoked");
+    assert_eq!(tombstone["code"], "revoked");
+    assert!(
+        shares
+            .admit(&visitor(share_id, group, Uuid::new_v4()))
+            .is_none()
+    );
+    // A repeated revocation changes nothing.
+    changes.borrow_and_update();
+    shares.apply(rejected(&shares, "w", group, REVOKED));
+    assert!(!changes.has_changed().unwrap());
+
+    // Sharing again is a new setting the revocation does not cover.
+    let again = shares.set(set("w", group, &[])).await.unwrap();
+    assert_eq!(again["share"]["state"], "pending");
+    assert_ne!(setting(&shares, "w", group), revoked_setting);
+    assert_eq!(shares.publication().shares.len(), 2);
+
+    // Removing a tombstone leaves the published list alone.
+    shares.apply(rejected(&shares, "w", group, REVOKED));
+    let revision = shares.publication().revision;
+    let removed = shares
+        .remove(ResourceKind::Workspace, "w", group)
+        .await
+        .unwrap();
+    assert_eq!(removed["removed"], true);
+    assert_eq!(shares.publication().revision, revision);
+    assert_eq!(shares.list()["shares"].as_array().map(Vec::len), Some(1));
+}
+
+#[tokio::test]
+async fn tombstones_do_not_hold_share_capacity_and_are_bounded() {
+    let shares = shares(None);
+    let group = Uuid::new_v4();
+    for index in 0..MAX_SHARES + 2 {
+        let key = format!("w{index}");
+        shares.set(set(&key, group, &[])).await.unwrap();
+        let mut outcome = rejected(&shares, &key, group, REVOKED);
+        outcome.revision = u64::try_from(index).unwrap() + 1;
+        shares.apply(outcome);
+    }
+    assert!(shares.publication().shares.is_empty());
+    let listed = shares.list();
+    let kept = listed["shares"].as_array().unwrap();
+    assert_eq!(kept.len(), MAX_REVOKED);
+    // The oldest tombstones went first.
+    assert_eq!(kept[0]["resourceKey"], "w2");
 }
 
 #[tokio::test]
@@ -509,6 +564,69 @@ async fn recipients_that_are_not_members_are_not_admitted() {
     shares.apply(outcome);
     assert!(shares.admit(&visitor(share_id, group, member)).is_some());
     assert!(shares.admit(&visitor(share_id, group, former)).is_none());
+}
+
+#[test]
+fn restored_grants_come_from_guest_labels() {
+    let (share, user) = (Uuid::new_v4(), Uuid::new_v4());
+    let listed = json!({"entries": [
+        {"agent": {"id": "guest", "labels": {
+            "ait.guest.share-id": share.to_string(), "ait.guest.user-id": user.to_string()}}},
+        {"agent": {"id": "owner", "labels": {}}},
+        {"agent": {"id": "partial", "labels": {"ait.guest.share-id": share.to_string()}}},
+        {"agent": {"id": "malformed", "labels": {
+            "ait.guest.share-id": "not-a-uuid", "ait.guest.user-id": user.to_string()}}},
+    ]});
+    assert_eq!(
+        cleanup::labelled_grants(&listed),
+        vec![Grant {
+            share_id: share,
+            user_id: user
+        }]
+    );
+    assert!(cleanup::labelled_grants(&json!({})).is_empty());
+}
+
+/// Grants restored after a restart are published, and a denial ends them like live ones.
+#[tokio::test]
+async fn restored_grants_are_published_and_denied_like_live_ones() {
+    let shares = shares(None);
+    let group = Uuid::new_v4();
+    let share_id = Uuid::new_v4();
+    shares.set(set("w", group, &[])).await.unwrap();
+    shares.apply(accepted(&shares, "w", group, share_id));
+    let user = Uuid::new_v4();
+    let grant = Grant {
+        share_id,
+        user_id: user,
+    };
+    {
+        let mut book = lock(&shares.book);
+        assert!(book.guests.restore(grant, 1));
+        // The registry is bounded; known grants are not counted twice.
+        assert!(book.guests.restore(grant, 1));
+        assert!(!book.guests.restore(
+            Grant {
+                share_id,
+                user_id: Uuid::new_v4()
+            },
+            1
+        ));
+    }
+    assert_eq!(
+        shares.publication().visitors,
+        vec![VisitorGrant {
+            share_id,
+            user_id: user,
+        }]
+    );
+    let mut outcome = accepted(&shares, "w", group, share_id);
+    outcome.denied = vec![VisitorGrant {
+        share_id,
+        user_id: user,
+    }];
+    shares.apply(outcome);
+    assert!(shares.publication().visitors.is_empty());
 }
 
 #[test]

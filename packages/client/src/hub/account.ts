@@ -71,7 +71,11 @@ export interface HubShare {
   /** Serve endpoint to open the guest session to, together with `shareId`. */
   nodeId: string;
   hostName: string;
-  owner: { userId: string; displayName: string };
+  /**
+   * The sharing account. `displayName` and `username` may be null: accounts need not set a
+   * display name or choose a handle, and older centers send no `username`.
+   */
+  owner: { userId: string; displayName: string | null; username?: string | null };
   resourceKind: HubShareResourceKind;
   /** Workspace ID, project ID, or `""` for a node share. */
   resourceKey: string;
@@ -81,12 +85,22 @@ export interface HubShare {
   state: "online" | "reconnecting";
 }
 
-/** One member of a group, as returned by `group.members.list`. */
+/**
+ * One member of a group, as returned by `group.members.list`. Contact details are present
+ * only for group administrators; other members see `contactHint`, a contact with most
+ * characters hidden, to tell members apart.
+ */
 export interface HubGroupMember {
   userId: string;
-  displayName: string;
-  email: string | null;
-  phoneNumber: string | null;
+  displayName: string | null;
+  /** Unique account handle; null until the account chooses one, absent from older centers. */
+  username?: string | null;
+  /** Masked email or phone number, e.g. `b***@example.com`; absent from older centers. */
+  contactHint?: string;
+  /** Only for group administrators. */
+  email?: string | null;
+  /** Only for group administrators. */
+  phoneNumber?: string | null;
   role: string;
   joinedAt: string;
 }

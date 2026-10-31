@@ -131,6 +131,7 @@ fn only_accepted_matching_shares_admit_visitors() {
     let visitor = Visitor {
         user_id: user,
         display_name: None,
+        username: None,
         group_id: Uuid::nil(),
         share_id,
         resource_kind: ResourceKind::Workspace,

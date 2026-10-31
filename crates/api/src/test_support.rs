@@ -150,6 +150,7 @@ impl Workspaces {
         Visitor {
             user_id: Uuid::new_v4(),
             display_name: Some("Guest".into()),
+            username: None,
             group_id: self.group,
             share_id,
             resource_kind: kind,
