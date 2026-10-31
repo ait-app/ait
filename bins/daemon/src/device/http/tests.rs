@@ -272,5 +272,5 @@ fn original_expiry_is_preserved_for_recovery_receipts_and_invalid_tokens_rejecte
         invalid[key] = value;
         assert!(decode_tokens(invalid).is_err());
     }
-    assert_eq!(HttpCenter::new().unwrap().base, CENTER);
+    assert_eq!(HttpCenter::new().unwrap().base, host_link::center());
 }

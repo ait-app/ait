@@ -270,7 +270,7 @@ pub(super) fn status(data: &Path, json_output: bool) -> anyhow::Result<()> {
     let runtime = std::fs::read(data.join("device/status.json"))
         .ok()
         .and_then(|bytes| serde_json::from_slice::<RuntimeSnapshot>(&bytes).ok());
-    let value = serde_json::json!({"mode":"daemon", "center":host_link::CENTER,
+    let value = serde_json::json!({"mode":"daemon", "center":host_link::center(),
         "server_id":server_id, "credentials_present":Store::credentials_present(data)?,
         "runtime_snapshot":runtime});
     if json_output {
