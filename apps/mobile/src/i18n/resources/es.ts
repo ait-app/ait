@@ -1581,9 +1581,9 @@ export const es: TranslationResources = {
         title: "Proveedores de configuración",
         description: "ConfigurarClaude Code,Codexy más",
       },
-      pairDevice: {
-        title: "Emparejar dispositivo",
-        description: "Conecta tu teléfono a este demonio",
+      signIn: {
+        title: "Iniciar sesión",
+        description: "Abre la página de inicio de sesión unificado en tu navegador",
       },
     },
   },

@@ -1563,9 +1563,9 @@ export const ru: TranslationResources = {
         title: "Настроить провайдеров",
         description: "Настройте Claude Code, Codex и другие провайдеры",
       },
-      pairDevice: {
-        title: "Подключить устройство",
-        description: "Подключите свой телефон к этому демону",
+      signIn: {
+        title: "Войти в аккаунт",
+        description: "Откройте единую страницу входа в браузере",
       },
     },
   },

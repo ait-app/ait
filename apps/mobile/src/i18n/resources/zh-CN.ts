@@ -1677,9 +1677,9 @@ export const zhCN: TranslationResources = {
         title: "设置提供方",
         description: "配置 Claude Code、Codex 等",
       },
-      pairDevice: {
-        title: "配对设备",
-        description: "将手机连接到此守护进程",
+      signIn: {
+        title: "登录账号",
+        description: "在浏览器中打开统一登录页面",
       },
     },
   },

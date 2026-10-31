@@ -1566,9 +1566,9 @@ export const ptBR: TranslationResources = {
         title: "Configurar provedores",
         description: "Configure Claude Code, Codex e outros",
       },
-      pairDevice: {
-        title: "Parear dispositivo",
-        description: "Conecte seu celular a este daemon",
+      signIn: {
+        title: "Entrar na conta",
+        description: "Abra a página de login unificado no navegador",
       },
     },
   },

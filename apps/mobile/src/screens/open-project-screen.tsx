@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { View, Text, Pressable } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useRouter } from "expo-router";
-import { FolderOpen, Inbox, Plug, Smartphone } from "lucide-react-native";
+import { FolderOpen, Inbox, LogIn, Plug } from "lucide-react-native";
 import { AitLogo } from "@/components/icons/ait-logo";
 import { CommunityLinks } from "@/components/community-links";
 import { MenuHeader } from "@/components/headers/menu-header";
@@ -19,9 +19,8 @@ import {
   HEADER_TOP_PADDING_MOBILE,
 } from "@/constants/layout";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
-import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
-import { PairDeviceModal } from "@/desktop/components/pair-device-modal";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
+import { openExternalUrl } from "@/utils/open-external-url";
 
 export function OpenProjectScreen() {
   const { t } = useTranslation();
@@ -31,8 +30,7 @@ export function OpenProjectScreen() {
   const openProjectPicker = useOpenAddProject();
   const importSession = useImportSession();
   const chooseHost = useHostChooser();
-  const localServerId = useLocalDaemonServerId();
-  const [isPairDeviceOpen, setIsPairDeviceOpen] = useState(false);
+  const [loginPortalOpenFailed, setLoginPortalOpenFailed] = useState(false);
 
   const isCompactLayout = useIsCompactFormFactor();
 
@@ -46,8 +44,12 @@ export function OpenProjectScreen() {
     void openProjectPicker();
   }, [openProjectPicker]);
 
-  const handleOpenPairDevice = useCallback(() => setIsPairDeviceOpen(true), []);
-  const handleClosePairDevice = useCallback(() => setIsPairDeviceOpen(false), []);
+  const handleSignIn = useCallback(() => {
+    setLoginPortalOpenFailed(false);
+    void openExternalUrl("https://ait-login.authing.cn/u").catch(() =>
+      setLoginPortalOpenFailed(true),
+    );
+  }, []);
 
   const handleOpenProviders = useCallback(() => {
     chooseHost({
@@ -92,26 +94,23 @@ export function OpenProjectScreen() {
             onPress={handleOpenProviders}
             testID="open-project-setup-providers"
           />
-          {localServerId ? (
-            <HomeTile
-              icon={Smartphone}
-              title={t("openProject.tiles.pairDevice.title")}
-              description={t("openProject.tiles.pairDevice.description")}
-              onPress={handleOpenPairDevice}
-              testID="open-project-pair-device"
-            />
-          ) : null}
+          <HomeTile
+            icon={LogIn}
+            title={t("openProject.tiles.signIn.title")}
+            description={t("openProject.tiles.signIn.description")}
+            onPress={handleSignIn}
+            testID="open-project-sign-in"
+          />
         </View>
+        {loginPortalOpenFailed ? (
+          <Text accessibilityRole="alert" style={styles.hostError}>
+            {t("onlineService.loginPortalOpenFailed")}
+          </Text>
+        ) : null}
       </View>
       <View style={styles.communityRow}>
         <CommunityLinks />
       </View>
-      <PairDeviceModal
-        serverId={localServerId ?? ""}
-        visible={isPairDeviceOpen}
-        onClose={handleClosePairDevice}
-        testID="open-project-pair-device-modal"
-      />
       {importSession.sheet}
     </View>
   );

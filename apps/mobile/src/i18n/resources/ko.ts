@@ -1544,9 +1544,9 @@ export const ko: TranslationResources = {
         title: "프로바이더 설정",
         description: "Claude Code, Codex 등을 구성합니다",
       },
-      pairDevice: {
-        title: "기기 페어링",
-        description: "휴대폰을 이 데몬에 연결합니다",
+      signIn: {
+        title: "계정 로그인",
+        description: "브라우저에서 통합 로그인 페이지 열기",
       },
     },
   },

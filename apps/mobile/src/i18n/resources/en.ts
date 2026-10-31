@@ -1718,9 +1718,9 @@ export const en = {
         title: "Setup providers",
         description: "Configure Claude Code, Codex, and more",
       },
-      pairDevice: {
-        title: "Pair device",
-        description: "Connect your phone to this daemon",
+      signIn: {
+        title: "Sign in",
+        description: "Open the unified login page in your browser",
       },
     },
   },

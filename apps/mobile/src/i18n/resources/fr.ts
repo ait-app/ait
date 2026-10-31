@@ -1585,9 +1585,9 @@ export const fr: TranslationResources = {
         title: "Fournisseurs d'installation",
         description: "ConfigurezClaude Code,Codexet plus",
       },
-      pairDevice: {
-        title: "Associer un appareil",
-        description: "Connectez votre téléphone à ce démon",
+      signIn: {
+        title: "Se connecter",
+        description: "Ouvrez la page de connexion unifiée dans votre navigateur",
       },
     },
   },

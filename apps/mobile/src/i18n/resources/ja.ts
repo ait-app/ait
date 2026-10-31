@@ -1551,9 +1551,9 @@ export const ja: TranslationResources = {
         title: "プロバイダーをセットアップ",
         description: "Claude Code、Codexなどを設定",
       },
-      pairDevice: {
-        title: "デバイスをペアリング",
-        description: "このデーモンにスマートフォンを接続",
+      signIn: {
+        title: "アカウントにログイン",
+        description: "ブラウザーで統一ログインページを開く",
       },
     },
   },

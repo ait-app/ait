@@ -1535,9 +1535,9 @@ export const ar: TranslationResources = {
         title: "موفري الإعداد",
         description: "قم بتكوين Claude Code و Codex والمزيد",
       },
-      pairDevice: {
-        title: "إقران الجهاز",
-        description: "قم بتوصيل هاتفك بهذا البرنامج الخفي",
+      signIn: {
+        title: "تسجيل الدخول إلى الحساب",
+        description: "افتح صفحة تسجيل الدخول الموحد في متصفحك",
       },
     },
   },
