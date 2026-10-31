@@ -37,6 +37,7 @@ vi.mock("lucide-react-native", () => ({
   Plug: () => null,
   LogIn: () => null,
   Mail: () => null,
+  Globe: () => null,
 }));
 
 beforeEach(() => vi.clearAllMocks());
@@ -65,7 +66,7 @@ it("shows login portal failures and clears the error on retry", async () => {
 it.each([
   ["Star", "https://github.com/ait-app/ait"],
   ["Email", "mailto:dong@necoex.com"],
-  ["Community", "https://discord.gg/jz8T2uahpH"],
+  ["Homepage", "https://ait-app.com"],
 ])("keeps %s outside Electron's mouse-drag behavior and opens its URL", (label, url) => {
   const view = render(<OpenProjectScreen />);
   const button = view.getByRole("button", { name: label });
