@@ -560,8 +560,9 @@ async fn share_status_frames_and_guest_opens_reach_the_daemon() {
         .send(frame(
             &json!({"t":"share_status","seq":1}),
             json!({"revision":3,"accepted":[],"rejected":[
-                {"resourceKind":"workspace","resourceKey":"ws_1","groupId":share,"code":"revoked"}],
-                "groups":[]})
+                {"resourceKind":"workspace","resourceKey":"ws_1","groupId":share,
+                    "settingId":share,"code":"revoked"}],
+                "denied":[{"shareId":share,"userId":share}],"groups":[]})
             .to_string()
             .as_bytes(),
         ))
@@ -572,8 +573,9 @@ async fn share_status_frames_and_guest_opens_reach_the_daemon() {
         .expect("status in time")
         .expect("connector alive");
     let outcome = status.borrow_and_update().clone().expect("outcome");
-    assert_eq!(outcome.revision, Some(3));
+    assert_eq!(outcome.revision, 3);
     assert_eq!(outcome.rejected[0].code, "revoked");
+    assert_eq!(outcome.denied[0].user_id, share);
 
     let visitor = json!({"user_id":Uuid::new_v4(),"display_name":"Bob","group_id":share,
         "share_id":share,"resource_kind":"project","resource_key":"prj_1","permission":"operate"});

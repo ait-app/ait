@@ -130,19 +130,21 @@ impl Workspaces {
             "audience": "group",
         }))
         .unwrap();
-        self.api.shared.shares.set(request).await.unwrap();
+        let stored = self.api.shared.shares.set(request).await.unwrap();
+        let setting_id = serde_json::from_value(stored["share"]["settingId"].clone()).unwrap();
         let share_id = Uuid::new_v4();
         self.api.share_book().apply(Outcome {
-            revision: None,
+            revision: 1,
             accepted: vec![Accepted {
                 share_id,
                 resource_kind: kind,
                 resource_key: key.to_owned(),
                 group_id: self.group,
-                generation: 1,
+                setting_id,
                 missing_recipients: Vec::new(),
             }],
             rejected: Vec::new(),
+            denied: Vec::new(),
             groups: Vec::new(),
         });
         Visitor {

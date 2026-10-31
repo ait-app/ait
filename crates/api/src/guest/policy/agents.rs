@@ -97,19 +97,28 @@ async fn lookup(
     let agent = &value["agent"];
     let workspace = agent["workspaceId"].as_str().ok_or(ErrorCode::Forbidden)?;
     reached(session, state, workspace).await?;
-    let guest_created = created_under(agent, &session.registration.grant().share_id.to_string());
+    let grant = session.registration.grant();
+    let guest_created = created_under(
+        agent,
+        &grant.share_id.to_string(),
+        &grant.user_id.to_string(),
+    );
     agent["id"]
         .as_str()
         .map(|id| (id.to_owned(), guest_created))
         .ok_or(ErrorCode::Forbidden)
 }
 
-/// Whether `agent` (an `agent.get` payload) was created by a guest of `share`.
-pub(super) fn created_under(agent: &Value, share: &str) -> bool {
+/// Whether `agent` (an `agent.get` payload) was created by visitor `user` through `share`.
+/// Other visitors of the same share only read it: instructions, cancellation and
+/// permission decisions stay with its creator, and revoking a visitor ends what they ran.
+pub(super) fn created_under(agent: &Value, share: &str, user: &str) -> bool {
     agent["labels"][GUEST_SHARE_LABEL].as_str() == Some(share)
+        && agent["labels"][GUEST_USER_LABEL].as_str() == Some(user)
 }
 
-/// Require the Agent named by `key` to be guest-created under this share and pin its full ID.
+/// Require the Agent named by `key` to be created by this visitor under this share and pin
+/// its full ID.
 async fn driven(
     session: &Session,
     state: &Shared,

@@ -72,6 +72,11 @@ impl Guests {
         true
     }
 
+    /// Grants seen since the daemon started and not revoked since.
+    pub(super) fn grants(&self) -> impl Iterator<Item = Grant> + '_ {
+        self.grants.keys().copied()
+    }
+
     /// End every connection of each grant for which `stale` holds and forget the grant.
     pub(super) fn revoke(&mut self, stale: impl Fn(&Grant) -> bool) -> Vec<Revoked> {
         let revoked: Vec<Grant> = self.grants.keys().copied().filter(&stale).collect();

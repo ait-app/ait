@@ -42,10 +42,12 @@ pub(super) struct Setting {
     pub(super) display_name: Option<String>,
     #[serde(default)]
     pub(super) project_name: Option<String>,
+    /// Generated when the user creates the setting; the center rejects it for good once
+    /// the owner revokes it. Required: a stored setting without one could be revoked.
+    #[serde(rename = "settingId")]
+    pub(super) id: Uuid,
     #[serde(default)]
     pub(super) share_id: Option<Uuid>,
-    #[serde(default)]
-    pub(super) generation: Option<i32>,
     #[serde(default)]
     pub(super) state: ShareState,
     #[serde(default)]
@@ -71,15 +73,17 @@ impl Setting {
             recipients: self.recipients.clone(),
             display_name: self.display_name.clone(),
             project_name: self.project_name.clone(),
-            generation: self.generation,
+            setting_id: self.id,
         }
     }
 
-    /// Whether an accepted share `share_id` currently admits `user_id`.
+    /// Whether an accepted share `share_id` currently admits `user_id`. Recipients the
+    /// center reported as not being members are not admitted until it accepts them again.
     pub(super) fn grants(&self, share_id: Uuid, user_id: Uuid) -> bool {
         self.state == ShareState::Accepted
             && self.share_id == Some(share_id)
             && (self.audience == Audience::Group || self.recipients.contains(&user_id))
+            && !self.missing_recipients.contains(&user_id)
     }
 
     /// Whether this setting admits the guest session described by `visitor`.
@@ -95,7 +99,6 @@ impl Setting {
     /// Record the center's acceptance of this entry.
     pub(super) fn accept(&mut self, accepted: &Accepted) {
         self.share_id = Some(accepted.share_id);
-        self.generation = Some(accepted.generation);
         self.state = ShareState::Accepted;
         self.code = None;
         self.missing_recipients
@@ -109,7 +112,7 @@ impl Setting {
     }
 }
 
-/// Owner request to create or change one share; the center assigns identity and generation.
+/// Owner request to create or change one share; the center assigns its identity.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct SetRequest {
@@ -233,7 +236,7 @@ impl SetRequest {
         changed
     }
 
-    /// Create a new pending setting without center identity or generation.
+    /// Create a new pending setting with a fresh setting ID and no center identity.
     pub(super) fn into_setting(self) -> Setting {
         Setting {
             resource_kind: self.resource_kind,
@@ -244,8 +247,8 @@ impl SetRequest {
             recipients: self.recipients,
             display_name: self.display_name,
             project_name: self.project_name,
+            id: Uuid::new_v4(),
             share_id: None,
-            generation: None,
             state: ShareState::Pending,
             code: None,
             missing_recipients: Vec::new(),

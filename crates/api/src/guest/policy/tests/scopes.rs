@@ -296,8 +296,23 @@ async fn project_listings_keep_only_the_project() {
     };
     assert_eq!(
         request.params,
-        json!({"filter": {"projectId": guest.fixture.project}})
+        json!({"filter": {"projectId": guest.fixture.project}, "page": {"limit": 1}})
     );
+    // Paging covers only the project.
+    let first = guest
+        .private("workspace.list.request", request.params)
+        .await;
+    assert_eq!(first["entries"].as_array().map(Vec::len), Some(1));
+    assert_eq!(first["pageInfo"]["hasMore"], true);
+    let cursor = first["pageInfo"]["nextCursor"].clone();
+    let second = guest
+        .private(
+            "workspace.list.request",
+            json!({"page": {"limit": 1, "cursor": cursor}}),
+        )
+        .await;
+    assert_eq!(second["entries"].as_array().map(Vec::len), Some(1));
+    assert_eq!(second["pageInfo"]["hasMore"], false);
     let listed = guest.private("workspace.list.request", json!({})).await;
     let mut ids: Vec<&str> = listed["entries"]
         .as_array()
@@ -328,6 +343,11 @@ fn project_listings_filter_entries_and_empty_projects() {
             "emptyProjects": [{"projectId": "p"}],
             "pageInfo": {"nextCursor": null, "prevCursor": null, "hasMore": false},
         })
+    );
+    let paged = json!({"pageInfo": {"nextCursor": "c", "prevCursor": null, "hasMore": true}});
+    assert_eq!(
+        private::filter_workspaces(&paged, private::Keep::Project("p"))["pageInfo"],
+        paged["pageInfo"]
     );
     assert_eq!(
         private::filter_projects(&json!({"projects": [{"projectId": "q"}]}), "p"),

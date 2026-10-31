@@ -249,21 +249,31 @@ async fn workspace_lists_are_private_and_filtered() {
         panic!("workspace list was not private: {decision:?}");
     };
     assert_eq!(private, Private::WorkspaceList);
-    assert_eq!(request.params, json!({}));
-    let listed = private::execute(
-        &guest.session,
-        &guest.fixture.api.shared,
-        "workspace.list.request",
-        request.params,
-        private,
-    )
-    .await
-    .unwrap();
-    let entries = listed["entries"].as_array().unwrap();
-    assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0]["id"], json!(guest.fixture.shared));
-    assert_eq!(listed["emptyProjects"], json!([]));
-    assert_eq!(listed["pageInfo"]["hasMore"], false);
+    assert_eq!(request.params, json!({"page": {"limit": 1}}));
+    // The shared workspace is found wherever it sorts in the directory.
+    for direction in ["asc", "desc"] {
+        let params = json!({"sort": [{"key": "name", "direction": direction}],
+            "page": {"limit": 1}});
+        let Decision::Private(request, private) =
+            guest.decide("workspace.list.request", params).await
+        else {
+            panic!("workspace list was not private");
+        };
+        let listed = private::execute(
+            &guest.session,
+            &guest.fixture.api.shared,
+            "workspace.list.request",
+            request.params,
+            private,
+        )
+        .await
+        .unwrap();
+        let entries = listed["entries"].as_array().unwrap();
+        assert_eq!(entries.len(), 1, "{direction}");
+        assert_eq!(entries[0]["id"], json!(guest.fixture.shared));
+        assert_eq!(listed["emptyProjects"], json!([]));
+        assert_eq!(listed["pageInfo"]["hasMore"], false);
+    }
 }
 
 #[test]
@@ -513,13 +523,16 @@ async fn events_are_confined() {
 }
 
 #[test]
-fn only_agents_created_by_guests_of_the_share_can_be_instructed() {
+fn only_agents_created_by_the_same_visitor_of_the_share_can_be_instructed() {
     let share = "0193f2c4-0000-7000-8000-000000000001";
     let guest = json!({"labels": {GUEST_SHARE: share, GUEST_USER: "u"}});
-    let other_share = json!({"labels": {GUEST_SHARE: "0193f2c4-0000-7000-8000-000000000002"}});
+    let other_visitor = json!({"labels": {GUEST_SHARE: share, GUEST_USER: "v"}});
+    let other_share = json!({"labels": {
+        GUEST_SHARE: "0193f2c4-0000-7000-8000-000000000002", GUEST_USER: "u"}});
     let owner = json!({"labels": {}});
-    assert!(agents::created_under(&guest, share));
-    assert!(!agents::created_under(&other_share, share));
-    assert!(!agents::created_under(&owner, share));
-    assert!(!agents::created_under(&json!({}), share));
+    assert!(agents::created_under(&guest, share, "u"));
+    assert!(!agents::created_under(&other_visitor, share, "u"));
+    assert!(!agents::created_under(&other_share, share, "u"));
+    assert!(!agents::created_under(&owner, share, "u"));
+    assert!(!agents::created_under(&json!({}), share, "u"));
 }

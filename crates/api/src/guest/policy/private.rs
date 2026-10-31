@@ -38,10 +38,18 @@ impl Keep<'_> {
     }
 }
 
+/// Page size for finding a shared workspace in the directory; tests use single-entry pages.
+const WORKSPACE_PAGE: usize = if cfg!(test) { 1 } else { 200 };
+
+/// Pages read at most when looking for a shared workspace.
+const MAX_WORKSPACE_PAGES: usize = 100;
+
 /// Prepare a workspace or project listing. A node share forwards it unchanged, live
 /// subscription included, because every workspace and project is in scope. Other shares
-/// list privately without subscription, paging or synchronization cursor, because those
-/// describe the whole directory; a project share also narrows the query to its project.
+/// list privately without subscription or synchronization cursor, because those describe
+/// the whole directory. A project share narrows the query to its project and keeps its
+/// paging, which then covers only that project; a workspace share reads the directory
+/// page by page until it finds its workspace.
 ///
 /// # Errors
 /// Returns `Forbidden` for a subscription and `InvalidMessage` for non-object parameters.
@@ -57,34 +65,66 @@ pub(super) fn prepare(
     if present(request.get("subscribe")) {
         return Err(ErrorCode::Forbidden);
     }
-    for key in ["subscribe", "page", "sync"] {
+    for key in ["subscribe", "sync"] {
         request.remove(key);
     }
     if projects {
+        request.remove("page");
         return Ok((params, Some(Private::ProjectList)));
     }
-    if let Keep::Project(id) = keep {
-        let filter = object(request.entry("filter").or_insert_with(|| json!({})))?;
-        filter.insert("projectId".to_owned(), json!(id));
+    match keep {
+        Keep::Project(id) => {
+            let filter = object(request.entry("filter").or_insert_with(|| json!({})))?;
+            filter.insert("projectId".to_owned(), json!(id));
+        }
+        Keep::Workspace(_) => {
+            request.insert("page".to_owned(), json!({"limit": WORKSPACE_PAGE}));
+        }
     }
     Ok((params, Some(Private::WorkspaceList)))
 }
 
-/// Keep only the entries of `listing` that `keep` admits, discarding everything else.
+/// Keep only the entries of `listing` that `keep` admits, discarding everything else. A
+/// project listing keeps its page information, which covers only the project; a workspace
+/// listing is complete.
 pub(super) fn filter_workspaces(listing: &Value, keep: Keep<'_>) -> Value {
-    let (field, id) = match keep {
-        Keep::Workspace(id) => ("id", id),
-        Keep::Project(id) => ("projectId", id),
-    };
-    let empty_projects = match keep {
-        Keep::Workspace(_) => Vec::new(),
-        Keep::Project(id) => matching(&listing["emptyProjects"], "projectId", id),
-    };
-    json!({
-        "entries": matching(&listing["entries"], field, id),
-        "emptyProjects": empty_projects,
-        "pageInfo": {"nextCursor": null, "prevCursor": null, "hasMore": false},
-    })
+    match keep {
+        Keep::Workspace(id) => json!({
+            "entries": matching(&listing["entries"], "id", id),
+            "emptyProjects": [],
+            "pageInfo": {"nextCursor": null, "prevCursor": null, "hasMore": false},
+        }),
+        Keep::Project(id) => json!({
+            "entries": matching(&listing["entries"], "projectId", id),
+            "emptyProjects": matching(&listing["emptyProjects"], "projectId", id),
+            "pageInfo": {
+                "nextCursor": listing["pageInfo"]["nextCursor"],
+                "prevCursor": listing["pageInfo"]["prevCursor"],
+                "hasMore": listing["pageInfo"]["hasMore"].as_bool().unwrap_or(false),
+            },
+        }),
+    }
+}
+
+/// Read the directory page by page until the shared workspace appears.
+async fn find_workspace(
+    state: &Shared,
+    method: &str,
+    mut params: Value,
+    id: &str,
+) -> Result<Value, ErrorCode> {
+    for _ in 1..MAX_WORKSPACE_PAGES {
+        let reply = crate::connection::rpc::execute(state, method, params.clone()).await?;
+        let cursor = &reply["pageInfo"]["nextCursor"];
+        if !matching(&reply["entries"], "id", id).is_empty()
+            || reply["pageInfo"]["hasMore"] != true
+            || !cursor.is_string()
+        {
+            return Ok(reply);
+        }
+        params["page"] = json!({"limit": WORKSPACE_PAGE, "cursor": cursor});
+    }
+    crate::connection::rpc::execute(state, method, params).await
 }
 
 /// Keep only project `id` in a project listing.
@@ -110,8 +150,14 @@ pub(crate) async fn execute(
     params: Value,
     private: Private,
 ) -> Result<Value, ErrorCode> {
-    let reply = crate::connection::rpc::execute(state, method, params).await?;
-    match (private, Keep::of(session)) {
+    let keep = Keep::of(session);
+    let reply = match (private, keep) {
+        (Private::WorkspaceList, Some(Keep::Workspace(id))) => {
+            find_workspace(state, method, params, id).await?
+        }
+        _ => crate::connection::rpc::execute(state, method, params).await?,
+    };
+    match (private, keep) {
         (Private::WorkspaceList, Some(keep)) => Ok(filter_workspaces(&reply, keep)),
         (Private::ProjectList, Some(Keep::Project(id))) => Ok(filter_projects(&reply, id)),
         (Private::WorkspaceList | Private::ProjectList, _) => Err(ErrorCode::Forbidden),

@@ -40,10 +40,10 @@ async fn owner_methods_validate_and_report_settings() {
         .await,
         Err(ErrorCode::WorkspaceNotFound)
     );
-    let mut generation = share(&fixture, "workspace", &fixture.shared);
-    generation["generation"] = json!(1);
+    let mut chosen = share(&fixture, "workspace", &fixture.shared);
+    chosen["settingId"] = json!(Uuid::nil());
     assert_eq!(
-        execute(state, "share.set.request", generation).await,
+        execute(state, "share.set.request", chosen).await,
         Err(ErrorCode::InvalidMessage)
     );
     fixture.archive(&fixture.other);
@@ -153,7 +153,7 @@ async fn archiving_a_workspace_removes_its_shares() {
     .unwrap();
     assert!(result["archivedAt"].is_string());
     assert!(registration.cancellation().is_cancelled());
-    assert_eq!(fixture.api.share_book().publication().1, Vec::new());
+    assert_eq!(fixture.api.share_book().publication().shares, Vec::new());
 }
 
 #[tokio::test]
@@ -178,7 +178,7 @@ async fn removing_a_project_removes_its_project_and_workspace_shares() {
     .unwrap();
     assert_eq!(result["accepted"], true);
     assert!(registration.cancellation().is_cancelled());
-    let (_, published) = fixture.api.share_book().publication();
+    let published = fixture.api.share_book().publication().shares;
     assert_eq!(published.len(), 1);
     assert_eq!(published[0].resource_key, other.resource_key);
 }

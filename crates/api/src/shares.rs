@@ -14,7 +14,12 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
 use model::ErrorCode;
 use model::hub::{OutboxStore, StoreError};
-use model::share::{Group, MAX_SHARES, Outcome, Published, ResourceKind, ShareBook, Visitor};
+use std::collections::BTreeSet;
+
+use model::share::{
+    Group, MAX_SHARES, MAX_VISITORS, Outcome, Publication, ResourceKind, ShareBook, Visitor,
+    VisitorGrant,
+};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -64,6 +69,10 @@ struct Book {
     revision: u64,
     settings: Vec<Setting>,
     groups: Vec<Group>,
+    /// Revision of the latest outcome applied; older outcomes arrive late and are ignored.
+    applied: u64,
+    /// Visitors the center reported as having lost access to a still accepted share.
+    denied: BTreeSet<Grant>,
     /// Orders persistence of concurrent snapshots; independent of the published revision.
     version: u64,
     guests: Guests,
@@ -80,14 +89,35 @@ impl Book {
             .position(|setting| setting.is(kind, key, group_id))
     }
 
-    /// End grants that no accepted setting admits any more.
-    fn revoke_stale(&mut self) -> Vec<Revoked> {
-        let settings = &self.settings;
-        self.guests.revoke(|grant| {
-            !settings
+    /// The setting an outcome entry is for: same resource, group and setting ID.
+    fn outcome_position(
+        &self,
+        kind: ResourceKind,
+        key: &str,
+        group_id: Uuid,
+        setting_id: Uuid,
+    ) -> Option<usize> {
+        self.position(kind, key, group_id)
+            .filter(|index| self.settings[*index].id == setting_id)
+    }
+
+    /// Whether `grant` is admitted now.
+    fn grants(&self, grant: Grant) -> bool {
+        !self.denied.contains(&grant)
+            && self
+                .settings
                 .iter()
                 .any(|setting| setting.grants(grant.share_id, grant.user_id))
-        })
+    }
+
+    /// End grants that no accepted setting admits any more.
+    fn revoke_stale(&mut self) -> Vec<Revoked> {
+        let admitted: Vec<Grant> = self
+            .guests
+            .grants()
+            .filter(|grant| self.grants(*grant))
+            .collect();
+        self.guests.revoke(|grant| !admitted.contains(grant))
     }
 }
 
@@ -186,13 +216,15 @@ impl Shares {
     /// Admit `visitor` when an accepted share grants it, registering its connection.
     pub(crate) fn admit(self: &Arc<Self>, visitor: &Visitor) -> Option<Registration> {
         let mut book = lock(&self.book);
-        if !book.settings.iter().any(|setting| setting.admits(visitor)) {
-            return None;
-        }
         let grant = Grant {
             share_id: visitor.share_id,
             user_id: visitor.user_id,
         };
+        if book.denied.contains(&grant)
+            || !book.settings.iter().any(|setting| setting.admits(visitor))
+        {
+            return None;
+        }
         Some(Registration::new(self, &mut book.guests, grant))
     }
 
@@ -347,22 +379,31 @@ fn upsert(book: &mut Book, request: SetRequest) -> Result<(Setting, bool), Share
     Ok((setting, true))
 }
 
+/// Apply `outcome` unless a newer one was applied; returns whether a setting was removed.
+/// Entries apply only to the setting they were published for, so a late outcome never
+/// touches a setting the user created again.
 fn apply_outcome(book: &mut Book, outcome: Outcome) -> bool {
+    if outcome.revision < book.applied {
+        return false;
+    }
+    book.applied = outcome.revision;
     for accepted in &outcome.accepted {
-        if let Some(index) = book.position(
+        if let Some(index) = book.outcome_position(
             accepted.resource_kind,
             &accepted.resource_key,
             accepted.group_id,
+            accepted.setting_id,
         ) {
             book.settings[index].accept(accepted);
         }
     }
     let mut removed = false;
     for rejected in &outcome.rejected {
-        let Some(index) = book.position(
+        let Some(index) = book.outcome_position(
             rejected.resource_kind,
             &rejected.resource_key,
             rejected.group_id,
+            rejected.setting_id,
         ) else {
             continue;
         };
@@ -374,16 +415,33 @@ fn apply_outcome(book: &mut Book, outcome: Outcome) -> bool {
         }
     }
     book.groups = outcome.groups;
+    book.denied = outcome
+        .denied
+        .into_iter()
+        .map(|denied| Grant {
+            share_id: denied.share_id,
+            user_id: denied.user_id,
+        })
+        .collect();
     removed
 }
 
 impl ShareBook for Shares {
-    fn publication(&self) -> (u64, Vec<Published>) {
+    fn publication(&self) -> Publication {
         let book = lock(&self.book);
-        (
-            book.revision,
-            book.settings.iter().map(Setting::published).collect(),
-        )
+        Publication {
+            revision: book.revision,
+            shares: book.settings.iter().map(Setting::published).collect(),
+            visitors: book
+                .guests
+                .grants()
+                .take(MAX_VISITORS)
+                .map(|grant| VisitorGrant {
+                    share_id: grant.share_id,
+                    user_id: grant.user_id,
+                })
+                .collect(),
+        }
     }
 
     fn changes(&self) -> watch::Receiver<u64> {

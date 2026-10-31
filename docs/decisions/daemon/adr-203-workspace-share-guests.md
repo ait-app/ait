@@ -18,18 +18,22 @@
 
 **分享设置以 Host 为准。**
 
-- 设置保存在 `<data_dir>/hub/shares.json`，由本地 API 拥有，实现 `model::share::ShareBook`。读取时逐条解析，无法识别的条目（例如改名前写入的旧格式条目）被丢弃，不会让 daemon 无法启动。
+- 设置保存在 `<data_dir>/hub/shares.json`，由本地 API 拥有，实现 `model::share::ShareBook`。读取时逐条解析，无法识别的条目（例如改名前写入的旧格式条目、没有 `settingId` 的条目）被丢弃，不会让 daemon 无法启动。
+- 用户新建一条设置时生成 `settingId`，修改设置时保持不变，用户不能指定。中心把撤销记在这个 ID 上，所以撤销之后，无论是重试旧请求还是离线后重新上线，这条设置都不会恢复；用户重新分享会得到新的 ID。
 - 所有者通过本地方法 `share.list/set/remove/groups.list.request` 管理；访客连接不能调用这些方法。`share.set` 校验：workspace 必须存在且未归档，项目必须存在且未删除，节点分享的 key 必须为空。
 - 归档 workspace 时删除该 workspace 的分享；删除项目时删除该项目的分享，以及项目下各 workspace 的分享。
 
 **发布由 daemon 负责**（`bins/daemon/src/host/hub/shares.rs`）。
 
-- 发布条件：每条新逻辑链路建立时，以及每次本地设置变化后。只在中心声明了 `hub.shares.publish` 时发布，发布内容是完整列表：`{revision, shares:[{resourceKind, resourceKey, groupId, permission, audience: "group"|"members", recipients?, displayName?, projectName?, generation?}]}`。
+- 发布条件：每条新逻辑链路建立时，以及每次本地设置变化后。只在中心声明了 `hub.shares.publish` 时发布，发布内容是完整列表：`{revision, shares:[{resourceKind, resourceKey, groupId, permission, audience: "group"|"members", recipients?, displayName?, projectName?, settingId}], visitors:[{shareId, userId}]}`。
+- `visitors` 是本机保存着状态（终端、Agent）的访客授权，最多 4096 项。它的变化不触发发布：中心会自己加上之后准入的访客。
 - `revision`：内容不变时沿用原值，所以重试和换链路都是幂等的；内容变化时取 `max(上次 + 1, 当前毫秒数)`，daemon 重启后也只增不减。中心返回 `conflict` 时换一个新的 revision。
-- 中心的处理结果 `{revision?, accepted, rejected, groups}`，以及中心之后主动推送的 `share_status`，都交给 `ShareBook::apply`：
-  - 记录 `shareId` 和 `generation`，下次发布时带上 `generation`；
+- 中心的处理结果 `{revision, accepted, rejected, denied, groups}`，以及中心之后主动推送的 `share_status`，都交给 `ShareBook::apply`：
+  - `revision` 小于已应用结果的被忽略；`accepted`/`rejected` 的条目只作用于 `settingId` 相同的本地设置，迟到的旧结果不会影响用户重新创建的设置；
+  - 记录 `shareId` 和 `missingRecipients`，暂时不是成员的接收人不被准入；
   - 中心返回 `revoked` 时删除对应的本地设置；其他拒绝码（`group_inactive`、`not_member`、`missing_name`、`no_recipients`）保留设置并标记为被拒绝；
-  - 不再被接受的分享，立即结束它的访客会话。
+  - `denied` 列出分享仍被接受、但访客本人已失去授权的 `(shareId, userId)`，这些访客不再被准入；
+  - 不再被接受的分享和被 `denied` 的访客，立即结束其访客会话并按下文「撤销」清理，访客离线时也一样。
 
 **Hub 帧只发给已经声明支持的 Host。**
 
@@ -50,7 +54,7 @@
 - 路径（文件、Git、forge、下载、终端、Agent 的 `cwd`）：workspace 分享要求绝对路径在解析符号链接和 `..` 之后位于 workspace 目录内；项目分享要求位于项目根目录内，或位于该项目任一未归档 workspace 的目录内（受管 worktree 通常在项目根目录之外）；节点分享不检查路径。上传被拒绝。每条连接最多同时持有 16 个未过期的下载令牌。
 - workspace 方法（get、setup、script、attention 等）只能作用于范围内的 workspace。
 - 列表：
-  - workspace 分享和项目分享的 `workspace.list` 私下执行，去掉分页和同步游标，结果只保留范围内的 workspace（项目分享同时把查询过滤为该项目，`emptyProjects` 也只保留该项目）；订阅被拒绝，因为订阅事件覆盖整个目录。
+  - workspace 分享和项目分享的 `workspace.list` 私下执行，去掉同步游标，结果只保留范围内的 workspace；订阅被拒绝，因为订阅事件覆盖整个目录。项目分享把查询过滤为该项目并保留访客的分页，分页因此只覆盖该项目，`emptyProjects` 也只保留该项目。workspace 分享逐页读取目录直到找到该 workspace（最多 100 页），结果最多一项。
   - 项目分享的 `project.list` 只返回该项目；workspace 分享不能列项目。
   - 节点分享原样转发两种列表，包括订阅。
 - 项目分享还可以：
@@ -65,10 +69,10 @@
   - 新建时打上 `ait.guest.share-id` 和 `ait.guest.user-id` 标签，禁止访客自带 `env`、`mcpServers`、`providerOptions` 和访客标签，`callerAgentId` 必须在范围内。workspace 分享强制归属到该 workspace；项目分享必须给出该项目的 `workspaceId`，并禁止 worktree、git 等新建位置的选项；节点分享可以放到任意 workspace，也可以新建 worktree。
   - `workspace.create` 不能附带初始 Agent，因为它会绕过上面的 Agent 规则并获得 daemon MCP。
   - 带访客标签的 Agent 不注入 daemon MCP（ADR-202），因为这个 MCP 能访问所有 workspace。
-  - 访客可以读取范围内所有 Agent（get、timeline 等），但只能驱动本分享下访客自己创建的 Agent（发送消息、取消、权限决定、模型和模式设置等）。所有者的 Agent 带有 daemon MCP，不能由访客下达指令。Agent 列表在 workspace 和项目分享下被强制过滤为范围内的 workspace。
+  - 访客可以读取范围内所有 Agent（get、timeline 等），但只能驱动自己通过本分享创建的 Agent（发送消息、取消、权限决定、模型和模式设置等），同时校验 `ait.guest.share-id` 和 `ait.guest.user-id`；同一分享的其他访客创建的 Agent 也只能读取。所有者的 Agent 带有 daemon MCP，不能由访客下达指令。Agent 列表在 workspace 和项目分享下被强制过滤为范围内的 workspace。
 - 宿主级能力一律拒绝，节点分享也一样：`daemon.*`、`server.restart/shutdown`、诊断、daemon 配置和更新、schedule、bot、browser、relay、publication、push、语音和听写、编辑器、`share.*`、Agent 定义和技能的配置、导入、刷新、用量统计、`provider.sessions.recent`，以及全局会话事件订阅 `session.events.set_subscription`（它覆盖 Host 上的全部会话事件，保持拒绝最简单也最安全）。
 
-**撤销。** 本地删除分享、中心撤销、成员关系变化、workspace 归档或项目删除时：
+**撤销。** 本地删除分享、中心撤销、成员关系变化（含中心以 `denied` 报告的单个访客）、workspace 归档或项目删除时：
 
 - 关闭该授权下的访客连接；
 - 结束访客创建的终端；

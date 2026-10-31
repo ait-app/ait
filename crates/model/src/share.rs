@@ -28,6 +28,9 @@ pub const MAX_SHARES: usize = 64;
 /// A share names at most this many recipients, matching the center.
 pub const MAX_RECIPIENTS: usize = 100;
 
+/// A publication lists at most this many visitor grants, matching the center.
+pub const MAX_VISITORS: usize = 4096;
+
 /// Kind of resource a share grants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -171,9 +174,31 @@ pub struct Published {
     /// Project name shown to visitors.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_name: Option<String>,
-    /// Generation from the last acceptance; absent for a share the user just created.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub generation: Option<i32>,
+    /// Generated when the user creates the setting and kept while they edit it. The
+    /// center records a revocation against it, so this setting never comes back.
+    pub setting_id: Uuid,
+}
+
+/// One visiting account's access through one share.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VisitorGrant {
+    /// Center share identity.
+    pub share_id: Uuid,
+    /// Visiting account.
+    pub user_id: Uuid,
+}
+
+/// What the daemon publishes: its complete share list and the visitors it holds state for.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Publication {
+    /// Grows with every change of `shares`.
+    pub revision: u64,
+    /// The complete share list.
+    pub shares: Vec<Published>,
+    /// Grants whose guests left terminals or Agents here; the center reports those that
+    /// lose access in [`Outcome::denied`], even while their share stays accepted.
+    pub visitors: Vec<VisitorGrant>,
 }
 
 /// A published entry the center accepted.
@@ -188,9 +213,9 @@ pub struct Accepted {
     pub resource_key: String,
     /// Group of the entry.
     pub group_id: Uuid,
-    /// Generation to send with this entry from now on.
-    pub generation: i32,
-    /// Recipients that are not active members right now.
+    /// Setting the outcome is for.
+    pub setting_id: Uuid,
+    /// Recipients that are not active members right now; they are not admitted.
     #[serde(default)]
     pub missing_recipients: Vec<Uuid>,
 }
@@ -205,6 +230,8 @@ pub struct Rejected {
     pub resource_key: String,
     /// Group of the entry.
     pub group_id: Uuid,
+    /// Setting the outcome is for.
+    pub setting_id: Uuid,
     /// Reason: `group_inactive`, `not_member`, `revoked`, `missing_name` or `no_recipients`.
     pub code: String,
 }
@@ -227,13 +254,15 @@ pub struct Group {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Outcome {
-    /// Revision the outcome applies to; absent in a call reply.
-    #[serde(default)]
-    pub revision: Option<u64>,
+    /// Revision of the publication the outcome applies to.
+    pub revision: u64,
     /// Accepted entries with their identities.
     pub accepted: Vec<Accepted>,
     /// Refused entries with reasons.
     pub rejected: Vec<Rejected>,
+    /// Visitors that lost access to a share that is still accepted.
+    #[serde(default)]
+    pub denied: Vec<VisitorGrant>,
     /// The owner's current groups.
     pub groups: Vec<Group>,
 }
@@ -244,15 +273,17 @@ pub struct Outcome {
 /// [`ShareBook::changes`] advances or a fresh serve link appears, and feeds every
 /// center outcome back through [`ShareBook::apply`].
 pub trait ShareBook: fmt::Debug + Send + Sync {
-    /// The complete list to publish, with a revision that grows with every change.
-    fn publication(&self) -> (u64, Vec<Published>);
+    /// The complete list to publish, with a revision that grows with every change, and
+    /// the visitors this Host holds state for.
+    fn publication(&self) -> Publication;
 
     /// Advances whenever the list to publish changes.
     fn changes(&self) -> watch::Receiver<u64>;
 
-    /// Record the center's outcome: identities and generations of accepted entries,
-    /// removal of revoked ones, and the owner's groups. Guest sessions of shares that
-    /// are no longer accepted end, with their terminals and agent runs.
+    /// Record the center's outcome: identities of accepted entries, removal of revoked
+    /// ones, and the owner's groups. Outcomes for an older revision or another setting
+    /// are ignored. Guest sessions of shares that are no longer accepted, and of denied
+    /// visitors, end with their terminals and agent runs.
     fn apply(&self, outcome: Outcome);
 }
 

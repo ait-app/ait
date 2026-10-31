@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 
 use model::hub::Scope;
-use model::share::{Audience, ResourceKind};
+use model::share::{Audience, Publication, ResourceKind, VisitorGrant};
 use serde_json::Value;
 use tokio::sync::watch;
 
@@ -61,7 +61,7 @@ impl Center for FakeCenter {
             .lock()
             .expect("results")
             .pop_front()
-            .unwrap_or_else(|| Ok(json!({"accepted":[],"rejected":[],"groups":[]})))
+            .unwrap_or_else(|| Ok(json!({"revision":1,"accepted":[],"rejected":[],"groups":[]})))
     }
 
     fn share_status(&self) -> watch::Receiver<Option<Outcome>> {
@@ -96,11 +96,15 @@ impl FakeBook {
 }
 
 impl ShareBook for FakeBook {
-    fn publication(&self) -> (u64, Vec<Published>) {
-        (
-            *self.changes.borrow(),
-            self.entries.lock().expect("entries").clone(),
-        )
+    fn publication(&self) -> Publication {
+        Publication {
+            revision: *self.changes.borrow(),
+            shares: self.entries.lock().expect("entries").clone(),
+            visitors: vec![VisitorGrant {
+                share_id: Uuid::nil(),
+                user_id: Uuid::max(),
+            }],
+        }
     }
 
     fn changes(&self) -> watch::Receiver<u64> {
@@ -122,7 +126,7 @@ fn entry(key: &str) -> Published {
         recipients: Vec::new(),
         display_name: None,
         project_name: None,
-        generation: None,
+        setting_id: Uuid::nil(),
     }
 }
 
@@ -164,6 +168,11 @@ async fn publishes_only_to_online_centers_that_support_shares() {
     assert_eq!(calls[0]["shares"][0]["resourceKey"], "ws_1");
     assert_eq!(calls[0]["shares"][0]["groupId"], json!(Uuid::nil()));
     assert_eq!(calls[0]["shares"][0]["audience"], "group");
+    assert_eq!(calls[0]["shares"][0]["settingId"], json!(Uuid::nil()));
+    assert_eq!(
+        calls[0]["visitors"],
+        json!([{"shareId": Uuid::nil(), "userId": Uuid::max()}])
+    );
     assert_eq!(book.applied().len(), 1);
 }
 
@@ -247,11 +256,11 @@ async fn the_loop_publishes_and_applies_center_initiated_outcomes() {
     wait(|| book.applied().len() == 1).await;
 
     center.status.send_replace(Some(Outcome {
-        revision: Some(1),
+        revision: 1,
         ..Outcome::default()
     }));
     wait(|| book.applied().len() == 2).await;
-    assert_eq!(book.applied()[1].revision, Some(1));
+    assert_eq!(book.applied()[1].revision, 1);
 
     book.set(vec![entry("ws_1"), entry("ws_2")]);
     wait(|| center.calls().len() == 2).await;

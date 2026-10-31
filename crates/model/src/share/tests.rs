@@ -91,41 +91,50 @@ fn published_entries_match_the_center_wire_form() {
         recipients: vec![Uuid::max()],
         display_name: None,
         project_name: None,
-        generation: Some(2),
+        setting_id: Uuid::max(),
     };
     assert_eq!(
         serde_json::to_value(&entry).unwrap(),
         json!({"resourceKind":"workspace","resourceKey":"ws_1","groupId":Uuid::nil(),
             "permission":"operate","audience":"members","recipients":[Uuid::max()],
-            "generation":2})
+            "settingId":Uuid::max()})
     );
     let node = Published {
         resource_kind: ResourceKind::Node,
         resource_key: String::new(),
         audience: Audience::Group,
         recipients: Vec::new(),
-        generation: None,
         ..entry
     };
     assert_eq!(
         serde_json::to_value(&node).unwrap(),
         json!({"resourceKind":"node","resourceKey":"","groupId":Uuid::nil(),
-            "permission":"operate","audience":"group"})
+            "permission":"operate","audience":"group","settingId":Uuid::max()})
     );
 }
 
 #[test]
 fn outcomes_parse_replies_and_status_frames() {
     let reply: Outcome = serde_json::from_value(json!({
+        "revision":3,
         "accepted":[{"shareId":Uuid::nil(),"resourceKind":"project","resourceKey":"prj_1",
-            "groupId":Uuid::nil(),"generation":1,"missingRecipients":[Uuid::max()]}],
+            "groupId":Uuid::nil(),"settingId":Uuid::max(),"missingRecipients":[Uuid::max()]}],
         "rejected":[{"resourceKind":"workspace","resourceKey":"ws_2","groupId":Uuid::nil(),
-            "code":"group_inactive"}],
+            "settingId":Uuid::nil(),"code":"group_inactive"}],
+        "denied":[{"shareId":Uuid::nil(),"userId":Uuid::max()}],
         "groups":[{"groupId":Uuid::nil(),"name":"Acme","status":"active","myRole":"member"}]
     }))
     .unwrap();
-    assert_eq!(reply.revision, None);
-    assert_eq!(reply.accepted[0].generation, 1);
+    assert_eq!(reply.revision, 3);
+    assert_eq!(reply.accepted[0].setting_id, Uuid::max());
+    assert_eq!(reply.rejected[0].setting_id, Uuid::nil());
+    assert_eq!(
+        reply.denied,
+        vec![VisitorGrant {
+            share_id: Uuid::nil(),
+            user_id: Uuid::max()
+        }]
+    );
     assert_eq!(reply.accepted[0].resource_kind, ResourceKind::Project);
     assert_eq!(reply.accepted[0].missing_recipients, vec![Uuid::max()]);
     assert_eq!(reply.rejected[0].code, "group_inactive");
@@ -133,5 +142,6 @@ fn outcomes_parse_replies_and_status_frames() {
     let status: Outcome =
         serde_json::from_value(json!({"revision":4,"accepted":[],"rejected":[],"groups":[]}))
             .unwrap();
-    assert_eq!(status.revision, Some(4));
+    assert_eq!(status.revision, 4);
+    assert!(status.denied.is_empty());
 }

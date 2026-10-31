@@ -127,12 +127,19 @@ async fn publish(
     if !state.supports(PUBLISH_METHOD) {
         return Attempt::Settled;
     }
-    let (_, entries) = book.publication();
+    // Visitors ride along but never trigger a publication: the center adds the
+    // visitors it admits itself.
+    let publication = book.publication();
+    let entries = publication.shares;
     if !publisher.pending(state.link, &entries) {
         return Attempt::Settled;
     }
     let revision = publisher.revision_for(&entries);
-    let params = json!({ "revision": revision, "shares": entries });
+    let params = json!({
+        "revision": revision,
+        "shares": entries,
+        "visitors": publication.visitors,
+    });
     match center.call(scope, PUBLISH_METHOD, params).await {
         Ok(reply) => {
             let Ok(outcome) = serde_json::from_value::<Outcome>(reply) else {

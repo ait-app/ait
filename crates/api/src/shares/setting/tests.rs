@@ -91,14 +91,14 @@ fn resource_keys_must_fit_their_kind() {
 }
 
 #[test]
-fn generation_cannot_be_set_by_the_owner() {
+fn setting_ids_cannot_be_chosen_by_the_owner() {
     let result = serde_json::from_value::<SetRequest>(json!({
         "resourceKind": "workspace",
         "resourceKey": "w",
         "groupId": Uuid::nil(),
         "permission": OPERATE,
         "audience": "group",
-        "generation": 3,
+        "settingId": Uuid::nil(),
     }));
     assert!(result.is_err());
 }
@@ -108,7 +108,11 @@ fn update_reports_changes_and_retries_rejected_entries() {
     let user = Uuid::from_u128(7);
     let mut setting = members(&[user]).normalize().unwrap().into_setting();
     assert_eq!(setting.state, ShareState::Pending);
-    assert_eq!(setting.generation, None);
+    let setting_id = setting.id;
+    assert_ne!(
+        members(&[user]).normalize().unwrap().into_setting().id,
+        setting_id
+    );
     assert!(!members(&[user]).normalize().unwrap().update(&mut setting));
     setting.reject("no_recipients");
     let other = Uuid::from_u128(8);
@@ -116,6 +120,7 @@ fn update_reports_changes_and_retries_rejected_entries() {
     assert_eq!(setting.state, ShareState::Pending);
     assert_eq!(setting.code, None);
     assert_eq!(setting.recipients, vec![other]);
+    assert_eq!(setting.id, setting_id);
 }
 
 #[test]
@@ -138,12 +143,11 @@ fn only_accepted_matching_shares_admit_visitors() {
         resource_kind: ResourceKind::Workspace,
         resource_key: "w".into(),
         group_id: Uuid::nil(),
-        generation: 4,
-        missing_recipients: vec![user],
+        setting_id: setting.id,
+        missing_recipients: Vec::new(),
     });
     assert!(setting.admits(&visitor));
-    assert_eq!(setting.published().generation, Some(4));
-    assert_eq!(setting.missing_recipients, vec![user]);
+    assert_eq!(setting.published().setting_id, setting.id);
     let stranger = Visitor {
         user_id: Uuid::from_u128(1),
         ..visitor.clone()
@@ -164,6 +168,10 @@ fn only_accepted_matching_shares_admit_visitors() {
         ..visitor.clone()
     };
     assert!(!setting.admits(&other_kind));
+    // A recipient who left the group waits until the center accepts them again.
+    setting.missing_recipients = vec![user];
+    assert!(!setting.admits(&visitor));
+    setting.missing_recipients.clear();
     setting.reject("group_inactive");
     assert!(!setting.admits(&visitor));
     assert_eq!(setting.share_id, Some(share_id));
