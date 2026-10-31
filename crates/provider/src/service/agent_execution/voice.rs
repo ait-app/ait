@@ -1,3 +1,4 @@
+use super::operation::Operation;
 use super::{AgentExecution, CancellationToken, ErrorCode, ExecutionState, Value, json, oneshot};
 
 impl AgentExecution {
@@ -16,7 +17,7 @@ impl AgentExecution {
         let (session, endpoint) = model::realtime::channel(&cancel);
         let result = self
             .call_with_realtime(
-                "internal.realtime.start",
+                Operation::Realtime,
                 json!({"agentId":agent}),
                 Some(cancel),
                 Some(endpoint),
@@ -39,7 +40,7 @@ impl AgentExecution {
         cancel: CancellationToken,
     ) -> Result<Value, ErrorCode> {
         self.call_cancellable(
-            "internal.voice.send",
+            Operation::VoiceSend,
             json!({"agentId":agent,"text":text}),
             Some(cancel),
         )
@@ -51,7 +52,7 @@ type Reply = oneshot::Sender<Result<Value, ErrorCode>>;
 
 pub(super) async fn dispatch(
     state: &mut ExecutionState,
-    method: &str,
+    method: Operation,
     params: Value,
     context: (
         Reply,
@@ -89,7 +90,7 @@ async fn cancel_accepted(state: &mut ExecutionState, result: &Result<Value, Erro
     {
         let _ = state
             .execute(
-                "internal.voice.cancel",
+                Operation::VoiceCancel,
                 json!({"agentId":receipt["agentId"],"turnId":receipt["turnId"]}),
             )
             .await;

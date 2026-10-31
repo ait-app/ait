@@ -239,20 +239,21 @@ impl ExecutionState {
             .iter()
             .find(|child| child.id == child_id)
             .ok_or(ErrorCode::AgentNotFound)?;
-        let history = self.manager.child_history(&id, child).await;
         let timeline = self
             .manager
             .timeline()
             .ok_or(ErrorCode::UnsupportedCapability)?;
         let scope = format!("subagent:{id}:{child_id}");
         let existing = timeline.has_entries(&scope)?;
-        match history {
-            Ok(history) if !self.manager.live_child(&id, &child_id) || !existing => {
-                timeline.reconcile(&scope, &record.provider, &history.entries)?;
+        let live = self.manager.live_child(&id, &child_id);
+        if !live || !existing {
+            match self.manager.child_history(&id, child).await {
+                Ok(history) => {
+                    timeline.reconcile(&scope, &record.provider, &history.entries)?;
+                }
+                Err(_) if live || existing => {}
+                Err(error) => return Err(error.into()),
             }
-            Ok(_) => {}
-            Err(_) if self.manager.live_child(&id, &child_id) || existing => {}
-            Err(error) => return Err(error.into()),
         }
         let fetch = FetchRequest {
             agent_id: id.clone(),

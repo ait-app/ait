@@ -5,6 +5,7 @@ use tokio::sync::oneshot;
 
 use super::{Command, ErrorCode, ExecutionState, Router};
 use crate::service::agent_execution::lane::{Fence, Message};
+use crate::service::agent_execution::operation::{Access, Operation};
 use crate::service::agent_manager::auto_archive::Retirement;
 use crate::service::agent_manager::ownership::Barrier;
 
@@ -15,25 +16,19 @@ struct PendingFence {
     finish: oneshot::Sender<()>,
 }
 
-pub(super) fn is_mutation(method: &str) -> bool {
-    matches!(
-        method,
-        "agent.archive.request"
-            | "agent.delete.request"
-            | "agent.items.close.request"
-            | "internal.workspace.retire"
-    )
+pub(super) fn is_mutation(method: Operation) -> bool {
+    method.access() == Access::Mutation
 }
 
 pub(super) fn scopes(
     state: &ExecutionState,
-    method: &str,
+    method: Operation,
     params: &Value,
 ) -> Result<BTreeSet<String>, ErrorCode> {
     let records = state.registry.list().map_err(|_| ErrorCode::AgentIo)?;
     let mut scopes = BTreeSet::new();
     let mut pending = Vec::new();
-    if method == "internal.workspace.retire" {
+    if method == Operation::RetireWorkspaces {
         let workspaces: Vec<String> =
             serde_json::from_value(params.clone()).map_err(|_| ErrorCode::InvalidMessage)?;
         for workspace in &workspaces {
@@ -50,7 +45,7 @@ pub(super) fn scopes(
                 })
                 .map(|record| record.id.clone()),
         );
-    } else if method == "agent.items.close.request" {
+    } else if method == Operation::CloseItems {
         let ids: Vec<String> = params
             .get("agentIds")
             .map(|ids| serde_json::from_value(ids.clone()))
@@ -67,7 +62,7 @@ pub(super) fn scopes(
             )?,
         );
     }
-    let cascade = method != "agent.delete.request";
+    let cascade = method != Operation::Delete;
     let mut seen = BTreeSet::new();
     while let Some(id) = pending.pop() {
         if !seen.insert(id.clone()) {
@@ -98,7 +93,7 @@ impl Router {
                 .into_iter()
                 .map(|action| {
                     let params = serde_json::json!({"agentId":action.id});
-                    let scoped = scopes(&state, "agent.archive.request", &params)
+                    let scoped = scopes(&state, Operation::Archive, &params)
                         .or_else(|error| {
                             if error == ErrorCode::AgentNotFound {
                                 Ok(BTreeSet::new())
@@ -110,7 +105,7 @@ impl Router {
                             if let Some(workspace) = action.workspace() {
                                 scoped.extend(scopes(
                                     &state,
-                                    "internal.workspace.retire",
+                                    Operation::RetireWorkspaces,
                                     &serde_json::json!([workspace]),
                                 )?);
                             }
@@ -135,7 +130,7 @@ impl Router {
             self.mutate_inner(
                 state.fork(None),
                 Command::Request {
-                    method: "agent.archive.request".to_owned(),
+                    method: Operation::Archive,
                     params,
                     reply,
                     cancel: None,
@@ -204,7 +199,7 @@ impl Router {
             }
             let started = std::time::Instant::now();
             let queue_ms = queued.elapsed().as_millis();
-            let measured_method = method.clone();
+            let measured_method = method.as_str();
             let handle = tokio::runtime::Handle::current();
             let owners = state.owners.clone();
             let workspace_retirement = retirement.is_some();
@@ -224,7 +219,7 @@ impl Router {
                             .archive_workspace_agents(&[workspace])
                             .map_err(|_| ErrorCode::AgentIo)?;
                     }
-                    let result = state.execute(&method, params).await;
+                    let result = state.execute(method, params).await;
                     if workspace_retirement && matches!(result, Err(ErrorCode::AgentNotFound)) {
                         return Ok(serde_json::json!({}));
                     }

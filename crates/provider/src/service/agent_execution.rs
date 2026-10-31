@@ -11,7 +11,8 @@ use serde_json::{Value, json};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
-mod catalog;
+pub(crate) mod operation;
+use operation::{Access, Operation};
 mod lane;
 mod routing;
 mod voice;
@@ -46,7 +47,7 @@ pub struct ExecutionDependencies {
 
 enum Command {
     Request {
-        method: String,
+        method: Operation,
         params: Value,
         reply: oneshot::Sender<Result<Value, ErrorCode>>,
         cancel: Option<CancellationToken>,
@@ -224,11 +225,12 @@ impl AgentExecution {
     /// # Errors
     /// Returns safe validation, admission, provider or registry errors.
     pub async fn execute(&self, method: &str, params: Value) -> Result<Value, ErrorCode> {
-        if catalog::handles(method) {
-            return self.catalog(method, params).await;
+        let operation = Operation::parse(method)?;
+        if operation.access() == Access::Catalog {
+            return self.catalog(operation, params).await;
         }
-        if method != "agent.finish.wait.request" {
-            return self.call(method, params).await;
+        if operation != Operation::Wait {
+            return self.call(operation, params).await;
         }
         self.wait(params).await
     }
@@ -257,8 +259,10 @@ impl AgentExecution {
         result
     }
 
-    async fn catalog(&self, method: &str, params: Value) -> Result<Value, ErrorCode> {
-        self.admit_catalog(method, params)?.receive().await
+    async fn catalog(&self, method: Operation, params: Value) -> Result<Value, ErrorCode> {
+        self.admit_catalog_operation(method, params)?
+            .receive()
+            .await
     }
 
     /// Synchronously reserve bounded discovery work before a transport spawns its response task.
@@ -270,7 +274,15 @@ impl AgentExecution {
         method: &str,
         params: Value,
     ) -> Result<CatalogResponse, ErrorCode> {
-        if !catalog::handles(method) {
+        self.admit_catalog_operation(Operation::parse(method)?, params)
+    }
+
+    fn admit_catalog_operation(
+        &self,
+        method: Operation,
+        params: Value,
+    ) -> Result<CatalogResponse, ErrorCode> {
+        if method.access() != Access::Catalog {
             return Err(ErrorCode::UnsupportedCapability);
         }
         if self.0.cancellation.is_cancelled() {
@@ -292,7 +304,7 @@ impl AgentExecution {
         self.0
             .sender
             .try_send(Command::Request {
-                method: method.to_owned(),
+                method,
                 params,
                 reply,
                 cancel: None,
@@ -310,13 +322,13 @@ impl AgentExecution {
         })
     }
 
-    async fn call(&self, method: &str, params: Value) -> Result<Value, ErrorCode> {
+    async fn call(&self, method: Operation, params: Value) -> Result<Value, ErrorCode> {
         self.call_cancellable(method, params, None).await
     }
 
     async fn call_cancellable(
         &self,
-        method: &str,
+        method: Operation,
         params: Value,
         cancel: Option<CancellationToken>,
     ) -> Result<Value, ErrorCode> {
@@ -325,7 +337,7 @@ impl AgentExecution {
 
     async fn call_with_realtime(
         &self,
-        method: &str,
+        method: Operation,
         mut params: Value,
         cancel: Option<CancellationToken>,
         realtime: Option<model::realtime::Endpoint>,
@@ -339,7 +351,7 @@ impl AgentExecution {
             .clone()
             .try_acquire_owned()
             .map_err(|_| ErrorCode::CatalogBusy)?;
-        if method == "agent.create.request"
+        if method == Operation::Create
             && params.get("idempotencyKey").is_none()
             && params.is_object()
         {
@@ -349,7 +361,7 @@ impl AgentExecution {
         self.0
             .sender
             .try_send(Command::Request {
-                method: method.to_owned(),
+                method,
                 params,
                 reply,
                 cancel,

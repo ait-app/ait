@@ -40,6 +40,8 @@
 
 ## 架构决策
 
+- [ADR-205：Provider 执行归属与公共端口契约](decisions/providers/adr-205-provider-execution-contracts.md)：封闭命令分类、父会话所有权、动态控制快照复用条件，以及外部可实现的预设存储端口。
+
 - [ADR-204：在线业务连接只使用 Hub](decisions/clients/adr-204-hub-only-online-business-transport.md)：删除传统 Relay 与 Yamux 业务回退，保留独立下载和账号发现通道。
 
 - [ADR-203：MCP 的可选 Unix socket 监听](decisions/daemon/adr-203-mcp-unix-socket.md)：HTTP 协议复用、MCP 专用路由、私有 socket 文件和双监听生命周期。

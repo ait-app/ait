@@ -28,10 +28,13 @@ impl Agents {
     }
 
     /// Publish a configuration with a method-scoped retry key.
+    /// `target` selects creation or an expected revision to replace; `config` is the complete
+    /// desired preset. Reusing `key` with the same command returns its original receipt,
+    /// even after subsequent changes. Returns the committed preset identity and revision.
     ///
     /// # Errors
     /// Rejects invalid keys, stale edits, default disabling, conflicting retries, or storage errors.
-    pub(crate) fn configure(
+    pub fn configure(
         &mut self,
         target: AgentTarget,
         config: AgentConfig,
@@ -54,10 +57,11 @@ impl Agents {
     }
 
     /// Read an exact immutable revision or the current head.
+    /// `id` selects the preset; `revision: None` selects its latest snapshot.
     ///
     /// # Errors
     /// Returns missing Agent/revision or storage errors.
-    pub(crate) fn get(
+    pub fn get(
         &mut self,
         id: AgentId,
         revision: Option<Revision>,
@@ -66,10 +70,11 @@ impl Agents {
     }
 
     /// Read current heads ordered by stable ID without resolving secrets.
+    /// Returns up to `limit` snapshots strictly after `after`, or from the start when absent.
     ///
     /// # Errors
     /// Rejects limits outside 1–50 or storage failures.
-    pub(crate) fn list(
+    pub fn list(
         &mut self,
         after: Option<AgentId>,
         limit: usize,
@@ -84,15 +89,17 @@ impl Agents {
     ///
     /// # Errors
     /// Returns storage failures.
-    pub(crate) fn get_default(&mut self) -> Result<DefaultSelection, AgentError> {
+    pub fn get_default(&mut self) -> Result<DefaultSelection, AgentError> {
         self.catalog.get_default()
     }
 
     /// Select an enabled Agent, or explicitly clear the default, using its observed version.
+    /// `agent_id: None` clears the selection. `expected_version` guards concurrent edits;
+    /// replaying `key` with identical parameters returns the original selection receipt.
     ///
     /// # Errors
     /// Rejects malformed keys/versions, stale versions, disabled/missing presets, or storage errors.
-    pub(crate) fn set_default(
+    pub fn set_default(
         &mut self,
         agent_id: Option<AgentId>,
         expected_version: u64,

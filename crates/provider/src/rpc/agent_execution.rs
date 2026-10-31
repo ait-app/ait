@@ -24,6 +24,7 @@ use crate::ports::agent_session::AgentSessionSpec;
 use crate::protocol::agent_execution::{CreateRequest, ResumeRequest, SendRequest};
 use crate::protocol::agent_lifecycle::AgentIdRequest;
 use crate::rpc::ErrorCode;
+use crate::service::agent_execution::operation::Operation;
 use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
 use crate::service::agent_runtime::AgentRuntimeDirectory;
 use crate::support::rpc::decode;
@@ -46,15 +47,15 @@ pub(crate) struct ExecutionState {
 impl ExecutionState {
     pub(crate) async fn execute(
         &mut self,
-        method: &str,
+        method: Operation,
         params: Value,
     ) -> Result<Value, ErrorCode> {
         match method {
-            "internal.bot" => self.bot(params).await,
-            "internal.workspace.agent.create" => self.create_workspace_agent(params).await,
-            "internal.workspace.retire" => self.retire_workspaces(params).await,
-            "internal.agent.directory.prepare" => self.prepare_agent_directory(params),
-            "internal.agent.identities.resolve" => {
+            Operation::Bot => self.bot(params).await,
+            Operation::WorkspaceCreate => self.create_workspace_agent(params).await,
+            Operation::RetireWorkspaces => self.retire_workspaces(params).await,
+            Operation::PrepareDirectory => self.prepare_agent_directory(params),
+            Operation::ResolveIdentities => {
                 only(&params, &["agentIds"])?;
                 let ids: Vec<String> = decode(params["agentIds"].clone())?;
                 if ids.len() > 32 {
@@ -66,46 +67,46 @@ impl ExecutionState {
                     .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
                 Ok(json!(ids))
             }
-            "agent.list.request" if params.get("sync").is_some_and(|sync| !sync.is_null()) => {
+            Operation::List if params.get("sync").is_some_and(|sync| !sync.is_null()) => {
                 self.synchronized_agents(params)
             }
-            "internal.voice.send" | "internal.voice.status" | "internal.voice.cancel" => {
-                self.voice(method, params).await
+            Operation::VoiceSend | Operation::VoiceStatus | Operation::VoiceCancel => {
+                self.voice(method.as_str(), params).await
             }
-            "agent.rewind.request"
-            | "agent.commands.list.request"
-            | "agent.permission.resolve.request"
-            | "agent.provider_subagents.list.request"
-            | "agent.provider_subagents.timeline.get.request"
-            | "provider.diagnostic.request"
-            | "provider.usage.list.request" => self.controls(method, params).await,
-            "provider.sessions.recent.list.request"
-            | "agent.import.request"
-            | "agent.refresh.request"
-            | "agent.fork_context.request" => self.native_sessions(method, params).await,
-            "agent.create.request" => self.create(params).await,
-            "provider.available.list.request"
-            | "provider.models.list.request"
-            | "provider.modes.list.request"
-            | "provider.features.list.request"
-            | "provider.snapshot.get.request"
-            | "provider.snapshot.refresh.request" => self
+            Operation::Rewind
+            | Operation::Commands
+            | Operation::Permission
+            | Operation::Subagents
+            | Operation::ChildTimeline
+            | Operation::Diagnostic
+            | Operation::Usage => self.controls(method.as_str(), params).await,
+            Operation::RecentSessions
+            | Operation::Import
+            | Operation::Refresh
+            | Operation::ForkContext => self.native_sessions(method.as_str(), params).await,
+            Operation::Create => self.create(params).await,
+            Operation::Available
+            | Operation::Models
+            | Operation::Modes
+            | Operation::Features
+            | Operation::Snapshot
+            | Operation::RefreshSnapshot => self
                 .manager
-                .read_providers(method, params)
+                .read_providers(method.as_str(), params)
                 .await
                 .map_err(Into::into),
-            "agent.timeline.get.request"
-            | "agent.timeline.search.request"
-            | "agent.timeline.list_prompts.request"
-            | "internal.timeline.append" => self.timeline(method, params).await,
-            "agent.resume.request" => self.resume(params).await,
-            "agent.message.send.request" => self.send(params).await,
-            "agent.model.set.request"
-            | "agent.thinking.set.request"
-            | "agent.config.apply.request"
-            | "agent.mode.set.request"
-            | "agent.feature.set.request" => self.configure(method, &params).await,
-            "agent.cancel.request" => {
+            Operation::Timeline
+            | Operation::SearchTimeline
+            | Operation::Prompts
+            | Operation::AppendTimeline => self.timeline(method.as_str(), params).await,
+            Operation::Resume => self.resume(params).await,
+            Operation::Send => self.send(params).await,
+            Operation::Model
+            | Operation::Thinking
+            | Operation::Configure
+            | Operation::Mode
+            | Operation::Feature => self.configure(method.as_str(), &params).await,
+            Operation::Cancel => {
                 only(&params, &["agentId"])?;
                 let request: AgentIdRequest = decode(params)?;
                 let id = self.resolve(&request.agent_id)?;
@@ -115,13 +116,23 @@ impl ExecutionState {
                     .map_err(|error| map_manager(&error))?;
                 Ok(json!({"agentId":id,"agent":self.snapshot(&id)?,"error":null}))
             }
-            "agent.finish.wait.request" => {
+            Operation::Wait => {
                 let request: AgentIdRequest = decode(params)?;
                 let id = self.resolve(&request.agent_id)?;
                 self.wait_result(&id)
             }
-            _ => {
-                let result = super::agent_runtime::execute(&mut self.directory, method, params);
+            Operation::Realtime | Operation::Wake => Err(ErrorCode::MethodNotFound),
+            Operation::Get
+            | Operation::List
+            | Operation::History
+            | Operation::Update
+            | Operation::Archive
+            | Operation::Delete
+            | Operation::Detach
+            | Operation::ClearAttention
+            | Operation::CloseItems => {
+                let result =
+                    super::agent_runtime::execute(&mut self.directory, method.as_str(), params);
                 // Archive may cascade and can partially succeed. Reconcile even on RPC failure.
                 self.manager
                     .reconcile()
@@ -579,6 +590,11 @@ impl ExecutionState {
             }
         }
         self.manager.control_snapshot(record, &mut snapshot);
+        if self.manager.owns_runtime(&record.id) {
+            self.owners.publish_controls(record, &snapshot);
+        } else {
+            self.owners.restore_controls(record, &mut snapshot);
+        }
         if !self.manager.owns_runtime(&record.id)
             && let Some(committed) = self.owners.snapshot(&record.id)
         {
