@@ -324,6 +324,11 @@ async fn child_message_to_parent_preserves_successful_turn_and_durable_timelines
     assert_provider_children_publish("modern-subagent-return").await;
 }
 
+#[tokio::test]
+async fn child_completion_preserves_successful_parent_turn_and_durable_timelines() {
+    assert_provider_children_publish("modern-subagent-completed").await;
+}
+
 async fn assert_provider_children_publish(prompt: &str) {
     let fixture = Fixture::new();
     let (execution, registry) = worker(&fixture);

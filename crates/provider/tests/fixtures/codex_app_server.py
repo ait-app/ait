@@ -486,12 +486,12 @@ for line in sys.stdin:
                     "threadId": thread_id, "turn": {"id": pending, "status": "completed"}}})
                 pending = None
             continue
-        if text in ("live-subagent", "modern-subagent", "modern-subagent-return"):
+        if text in ("live-subagent", "modern-subagent", "modern-subagent-return", "modern-subagent-completed", "invalid-subagent-activity"):
             child = "child-" + thread_id
             spawn = {"type":"collabAgentToolCall", "id":"spawn-child", "senderThreadId":thread_id,
                 "receiverThreadIds":[child], "tool":"spawnAgent", "status":"completed", "prompt":"inspect",
                 "agentsStates":{child:{"status":"running"}}}
-            if text in ("modern-subagent", "modern-subagent-return"):
+            if text != "live-subagent":
                 spawn = {"type":"subAgentActivity", "id":"spawn-child", "kind":"started",
                     "agentThreadId":child, "agentPath":"/root/code_reviewer",
                     "model":"offline-model", "reasoningEffort":"high"}
@@ -508,6 +508,13 @@ for line in sys.stdin:
             emit({"method":"item/completed", "params":{"threadId":child,"turnId":"child-turn","item":child_item}})
             emit({"method":"turn/completed", "params":{"threadId":child,"turn":{"id":"child-turn","status":"completed"}}})
             (root / ("native-history-" + child + ".json")).write_text(json.dumps([{"id":"child-turn","status":"completed","startedAt":1700000000,"items":[child_item]}]))
+            if text in ("modern-subagent-completed", "invalid-subagent-activity"):
+                activity = {"type":"subAgentActivity", "id":"subagent-completed-child-turn",
+                    "kind":"completed" if text == "modern-subagent-completed" else "unknown",
+                    "agentThreadId":child, "agentPath":"/root/code_reviewer",
+                    "model":None, "reasoningEffort":None}
+                stream_items.append(activity)
+                emit({"method":"item/completed", "params":{"threadId":thread_id,"turnId":pending,"item":activity}})
             complete(pending, "Parent only")
             continue
         if text == "approval":

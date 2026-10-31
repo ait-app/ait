@@ -3,6 +3,56 @@ use super::*;
 mod command_actions;
 
 #[tokio::test]
+async fn child_completion_keeps_its_link_in_live_and_native_history_and_allows_next_turn() {
+    let fixture = Fixture::new();
+    let client = fixture.client();
+    let spec = fixture.spec();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("modern-subagent-completed", &spec.config)
+        .await
+        .unwrap();
+    let completion = tokio::time::timeout(Duration::from_secs(3), async {
+        let mut completion = None;
+        loop {
+            match session.poll_turn().unwrap() {
+                Some(AgentTurnEvent::Timeline(entry))
+                    if entry.item["callId"] == "subagent-completed-child-turn" =>
+                {
+                    completion = Some(entry);
+                }
+                Some(AgentTurnEvent::Completed(_)) => {
+                    break completion.expect("child completion item");
+                }
+                Some(AgentTurnEvent::Failed) => panic!("child completion failed its parent"),
+                _ => tokio::task::yield_now().await,
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(completion.item["status"], "completed");
+    assert_eq!(completion.item["detail"]["type"], "sub_agent");
+    assert_eq!(completion.item["detail"]["subAgentType"], "Code reviewer");
+    let handle = session.persistence().unwrap();
+    session
+        .start_turn("after-child-completion", &spec.config)
+        .await
+        .unwrap();
+    assert_eq!(
+        terminal(session.as_mut()).await.unwrap(),
+        AgentTurnEvent::Completed(Some("Echo: after-child-completion".into()))
+    );
+    session.close().await.unwrap();
+    let history = client.history(&handle, &spec.cwd).await.unwrap();
+    let restored = history
+        .iter()
+        .find(|entry| entry.key == completion.key)
+        .expect("native completion history");
+    assert_eq!(restored.item, completion.item);
+}
+
+#[tokio::test]
 async fn compaction_terminal_fallback_closes_loading_and_releases_manual_admission() {
     for mode in ["compaction-without-final-item", "legacy-compaction"] {
         let fixture = Fixture::new();
