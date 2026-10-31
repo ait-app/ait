@@ -1625,6 +1625,11 @@ export class HostRuntimeStore {
           shouldPersistHosts = true;
         }
       }
+      // Account share presence can arrive before the persisted Host registry finishes loading.
+      // Keep those ephemeral profiles instead of replacing them with the saved owned Hosts.
+      // They are never persisted and will still be removed by the next share snapshot.
+      const sharedProfiles = this.hosts.filter(isSharedResourceHost);
+      profiles = [...profiles, ...sharedProfiles];
       this.hosts = profiles;
       if (shouldUseDesktopDaemon()) {
         // Saved managed ports and main-process credentials belong to the previous
@@ -2186,7 +2191,14 @@ export class HostRuntimeStore {
         share.state,
       ]),
     );
-    if (key === this.sharedResourcesKey) return;
+    const expectedServerIds = new Set(usable.map((share) => sharedResourceServerId(share.shareId)));
+    const currentShared = this.hosts.filter(isSharedResourceHost);
+    if (
+      key === this.sharedResourcesKey &&
+      currentShared.length === expectedServerIds.size &&
+      currentShared.every((host) => expectedServerIds.has(host.serverId))
+    )
+      return;
     this.sharedResourcesKey = key;
     const retained = this.hosts.filter((host) => !isSharedResourceHost(host));
     const now = new Date().toISOString();
@@ -2253,7 +2265,10 @@ export class HostRuntimeStore {
           // Hosts saved before ownership was recorded are adopted; the fresh list prunes them.
           if (saved[center] !== options.accountId) {
             if (saved[center] !== undefined) {
-              next = withoutAccountRelayConnections(next, (c) => c.center === center);
+              next = withoutAccountRelayConnections(
+                next,
+                (c) => c.shareId === undefined && c.center === center,
+              );
               this.removedAccountRelayConnections.clear();
             }
             owners = { ...saved, [center]: options.accountId };
@@ -2263,7 +2278,7 @@ export class HostRuntimeStore {
         if (retained)
           next = withoutAccountRelayConnections(
             next,
-            (c) => c.center === center && !retained.has(c.hostId),
+            (c) => c.shareId === undefined && c.center === center && !retained.has(c.hostId),
           );
         for (const host of discovered) {
           const connection = createAccountRelayHostConnection({ hostId: host.host_id, center });

@@ -29,6 +29,7 @@ export async function connectAccountHub(): Promise<{
   };
   let sequence = 0;
   let disposed = false;
+  let shareInterests = 0;
   const listeners = new Set<() => void>();
   const events = new Set<(event: HubAccountEvent) => void>();
   const cleanup: (() => void)[] = [];
@@ -64,6 +65,17 @@ export async function connectAccountHub(): Promise<{
             events.delete(listener);
           };
         },
+        subscribeShares() {
+          if (++shareInterests === 1)
+            void desktop.invoke!("account_hub_shares", { active: true }).catch(() => {});
+          let released = false;
+          return () => {
+            if (released) return;
+            released = true;
+            if (shareInterests > 0 && --shareInterests === 0)
+              void desktop.invoke!("account_hub_shares", { active: false }).catch(() => {});
+          };
+        },
         async call<T>(method: string, params: unknown): Promise<T> {
           const value = (await desktop.invoke!("account_hub_call", { method, params })) as {
             result: T;
@@ -75,6 +87,10 @@ export async function connectAccountHub(): Promise<{
       },
       dispose() {
         disposed = true;
+        if (shareInterests > 0) {
+          shareInterests = 0;
+          void desktop.invoke!("account_hub_shares", { active: false }).catch(() => {});
+        }
         for (const remove of cleanup) remove();
         listeners.clear();
         events.clear();

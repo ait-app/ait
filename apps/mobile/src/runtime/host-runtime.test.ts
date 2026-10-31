@@ -1755,6 +1755,47 @@ describe("HostRuntimeController", () => {
 });
 
 describe("HostRuntimeStore", () => {
+  it("keeps shared resources that arrive while the saved Host registry is loading", async () => {
+    useHostRuntimeClock();
+    const registry = createDeferred<string | null>();
+    const storage: HostRuntimeStorage = {
+      getItem: (key) =>
+        key === "@paseo:daemon-registry" ? registry.promise : Promise.resolve(null),
+      setItem: async () => undefined,
+      removeItem: async () => undefined,
+    };
+    const store = new HostRuntimeStore({ storage, deps: makeDeps({}, []) });
+    const loading = store.loadRegistry();
+    store.setSharedAccountRelayResources(
+      [
+        {
+          shareId: "22222222-2222-4222-8222-222222222222",
+          groupId: "44444444-4444-4444-8444-444444444444",
+          groupName: "Design",
+          hostId: "11111111-1111-4111-8111-111111111111",
+          nodeId: "serve-node",
+          hostName: "Alice workstation",
+          owner: { userId: "alice", displayName: "Alice", username: "alice" },
+          resourceKind: "node",
+          resourceKey: "serve-node",
+          displayName: "Alice workstation",
+          projectName: null,
+          permission: "operate",
+          state: "online",
+        },
+      ],
+      "https://center.test/api",
+    );
+
+    registry.resolve("[]");
+    await loading;
+
+    expect(store.getHosts().map((host) => host.serverId)).toEqual([
+      "shared:22222222-2222-4222-8222-222222222222",
+    ]);
+    store.syncHosts([]);
+  });
+
   it("keeps simultaneous resource shares ephemeral and isolated from the owned Host registry", async () => {
     useHostRuntimeClock();
     const center = "https://center.test/api";
@@ -1800,6 +1841,30 @@ describe("HostRuntimeStore", () => {
         store.getHosts()[1]?.connections[0]?.id,
       );
       expect(await storage.getItem("@paseo:daemon-registry")).toBeNull();
+
+      await store.addDiscoveredAccountRelayHosts([], center, undefined, {
+        accountId: "visitor",
+        retainedHostIds: new Set(),
+      });
+      expect(store.getHosts()).toHaveLength(2);
+
+      await store.removeHost("shared:22222222-2222-4222-8222-222222222222");
+      store.setSharedAccountRelayResources(
+        [
+          {
+            ...common,
+            shareId: "22222222-2222-4222-8222-222222222222",
+            resourceKey: "workspace-a",
+          },
+          {
+            ...common,
+            shareId: "33333333-3333-4333-8333-333333333333",
+            resourceKey: "workspace-b",
+          },
+        ],
+        center,
+      );
+      expect(store.getHosts()).toHaveLength(2);
 
       store.setSharedAccountRelayResources([], center);
       expect(store.getHosts()).toEqual([]);

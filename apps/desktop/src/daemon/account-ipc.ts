@@ -165,6 +165,10 @@ export function createAccountIpc(
           return manager.getAccountInfo();
         case "account_hub_status":
           return hub.snapshot();
+        case "account_hub_shares":
+          if (typeof args.active !== "boolean") throw new Error("Invalid share subscription");
+          hubBridge.setShareSubscription(event.sender, args.active);
+          return null;
         case "account_hub_call": {
           return hubBridge.call(event.sender, args.method, args.params);
         }

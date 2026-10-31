@@ -8,8 +8,11 @@ const SUB = "11111111-1111-4111-8111-111111111111";
 function fixture() {
   let event = (_event: HubAccountEvent) => {};
   const call = vi.fn(async () => ({}));
+  const releaseShares = vi.fn();
+  const subscribeShares = vi.fn(() => releaseShares);
   const hub = {
     call,
+    subscribeShares,
     subscribe: vi.fn(),
     onEvent: (handler: typeof event) => {
       event = handler;
@@ -21,7 +24,14 @@ function fixture() {
       isDestroyed: () => false,
       send: vi.fn(),
     }) satisfies AccountTransportOwner;
-  return { bridge, call, owner, event: (value: HubAccountEvent) => event(value) };
+  return {
+    bridge,
+    call,
+    owner,
+    releaseShares,
+    subscribeShares,
+    event: (value: HubAccountEvent) => event(value),
+  };
 }
 describe("desktop account Hub boundary", () => {
   it("rejects publication and window attempts to release each other's interests", async () => {
@@ -73,5 +83,14 @@ describe("desktop account Hub boundary", () => {
       appVisible: false,
       deviceType: "web",
     });
+  });
+  it("owns share presence subscriptions by renderer lifetime", () => {
+    const h = fixture();
+    const owner = h.owner();
+    h.bridge.setShareSubscription(owner, true);
+    h.bridge.setShareSubscription(owner, true);
+    expect(h.subscribeShares).toHaveBeenCalledOnce();
+    owner.emit("did-start-navigation", {}, "about:blank", false, true);
+    expect(h.releaseShares).toHaveBeenCalledOnce();
   });
 });
