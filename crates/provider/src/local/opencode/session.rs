@@ -18,6 +18,7 @@ use super::{
     OpenCodeClient, PROVIDER, config, history, interactions, launcher,
     observation::{Observation, Source},
     streaming::Stream,
+    subagents::live::Live,
 };
 use crate::ports::diagnostics::{Category, Diagnostic};
 use crate::{
@@ -73,6 +74,7 @@ pub(super) struct Session {
     info: StoredAgentRuntimeInfo,
     clients: BTreeMap<String, String>,
     pending: Pending,
+    children: Arc<Mutex<Live>>,
     commands: Option<mpsc::Sender<Command>>,
     cancellation: Option<watch::Sender<Option<Instant>>>,
     events: mpsc::Receiver<AgentTurnEvent>,
@@ -160,36 +162,39 @@ pub(super) async fn open(
     };
     let (mut transport, capabilities, source) =
         launcher::observed(client, &spec.cwd, selected).await?;
-    let (id, mut options, mut identities, clients, location) = if let Some((handle, _)) = binding {
-        if capabilities["loadSession"] != true {
-            return Err(AgentSessionError::Unavailable);
-        }
-        let (options, identities, location) =
-            reload(client, &mut transport, handle, &spec.cwd).await?;
-        let clients = clients(handle)?;
-        (
-            handle.session_id.clone(),
-            options,
-            identities,
-            clients,
-            location,
-        )
-    } else {
-        let result = transport
-            .startup_request(
-                "session/new",
-                json!({"cwd":spec.cwd,"mcpServers":[]}),
-                client.startup_timeout,
+    let (id, mut options, mut identities, clients, location, children) =
+        if let Some((handle, _)) = binding {
+            if capabilities["loadSession"] != true {
+                return Err(AgentSessionError::Unavailable);
+            }
+            let (options, identities, location, children) =
+                reload(client, &mut transport, handle, &spec.cwd).await?;
+            let clients = clients(handle)?;
+            (
+                handle.session_id.clone(),
+                options,
+                identities,
+                clients,
+                location,
+                children,
             )
-            .await?;
-        (
-            config::text(&result, "sessionId")?.to_owned(),
-            config::state(&result)?,
-            BTreeSet::new(),
-            BTreeMap::new(),
-            spec.cwd.clone(),
-        )
-    };
+        } else {
+            let result = transport
+                .startup_request(
+                    "session/new",
+                    json!({"cwd":spec.cwd,"mcpServers":[]}),
+                    client.startup_timeout,
+                )
+                .await?;
+            (
+                config::text(&result, "sessionId")?.to_owned(),
+                config::state(&result)?,
+                BTreeSet::new(),
+                BTreeMap::new(),
+                spec.cwd.clone(),
+                Vec::new(),
+            )
+        };
     if !history_only
         && let Err(error) = config::apply(&mut transport, &id, &mut options, &spec.config).await
     {
@@ -209,9 +214,10 @@ pub(super) async fn open(
         identities.extend(observation.users().iter().cloned());
     }
     let (_, events) = mpsc::channel(1);
-    let diagnostics = transport.diagnostics.clone();
+    let mut live = Live::new(id.clone(), location.clone(), client.images.clone());
+    live.restore(children)?;
     Ok(Session {
-        diagnostics,
+        diagnostics: transport.diagnostics.clone(),
         client: client.clone(),
         spec: spec.clone(),
         id,
@@ -228,6 +234,7 @@ pub(super) async fn open(
             reported_usage: false,
         }),
         pending: Arc::default(),
+        children: Arc::new(Mutex::new(live)),
         commands: None,
         cancellation: None,
         events,
@@ -249,7 +256,15 @@ async fn reload(
     transport: &mut Transport,
     handle: &AgentPersistenceHandle,
     cwd: &str,
-) -> Result<(Value, BTreeSet<String>, String), AgentSessionError> {
+) -> Result<
+    (
+        Value,
+        BTreeSet<String>,
+        String,
+        Vec<crate::ports::controls::NativeSubagent>,
+    ),
+    AgentSessionError,
+> {
     let (options, stream, location) = history::replay(
         transport,
         &handle.session_id,
@@ -258,7 +273,18 @@ async fn reload(
         client.startup_timeout,
     )
     .await?;
-    Ok((options, history::identities(&stream), location))
+    let children = tokio::time::timeout(
+        client.startup_timeout,
+        super::subagents::history::restore(
+            transport,
+            client,
+            &handle.session_id,
+            stream.links.descriptors(&handle.session_id, &location)?,
+        ),
+    )
+    .await
+    .map_err(|_| AgentSessionError::Failed)??;
+    Ok((options, history::identities(&stream), location, children))
 }
 
 fn initial_usage(
@@ -361,6 +387,7 @@ impl Session {
             turn: turn.clone(),
             submitted,
             pending: self.pending.clone(),
+            children: self.children.clone(),
             events: sender,
             commands: receiver,
             cancellation,
@@ -464,6 +491,70 @@ impl Session {
             .map_err(|_| AgentSessionError::Failed)?
     }
 
+    fn poll_idle(&mut self) -> Result<(), AgentSessionError> {
+        if self.turn.is_some() || self.closed || !self.initial.is_empty() {
+            return Ok(());
+        }
+        let Some(connection) = &mut self.connection else {
+            return Ok(());
+        };
+        for _ in 0..32 {
+            let Some(message) = connection.transport.poll()? else {
+                break;
+            };
+            let (handled, events) = self
+                .children
+                .lock()
+                .map_err(|_| AgentSessionError::Failed)?
+                .consume(&message)?;
+            self.initial.extend(events);
+            if handled {
+                continue;
+            }
+            match message["method"].as_str() {
+                Some("session/request_permission" | "elicitation/create") => {
+                    if message["params"]["sessionId"] != self.id {
+                        return Err(AgentSessionError::Failed);
+                    }
+                    let captured = if message["method"] == "elicitation/create" {
+                        interactions::form(&message)?
+                    } else {
+                        acp_permissions::capture(&message, PROVIDER)?
+                    };
+                    self.initial
+                        .push_back(AgentTurnEvent::PermissionRequested(register_pending(
+                            &self.pending,
+                            captured,
+                        )?));
+                }
+                Some("$/cancel_request") => {
+                    let mut pending = self.pending.lock().map_err(|_| AgentSessionError::Failed)?;
+                    let id = pending
+                        .iter()
+                        .find(|(_, request)| request.rpc_id == message["params"]["requestId"])
+                        .map(|(id, _)| id.clone());
+                    if let Some(id) = id {
+                        pending.remove(&id);
+                        self.initial
+                            .push_back(AgentTurnEvent::PermissionResolved(id));
+                    }
+                }
+                Some("session/update")
+                    if message["params"]["sessionId"] == self.id
+                        && message["params"]["update"]["sessionUpdate"]
+                            == "config_option_update" =>
+                {
+                    connection.options = config::state(&message["params"]["update"])?;
+                    self.info = config::runtime(&self.id, &connection.options);
+                    self.initial
+                        .push_back(AgentTurnEvent::RuntimeInfo(self.info.clone()));
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
     fn check_cancellation(&mut self) -> Result<(), AgentSessionError> {
         let requested = self
             .cancellation
@@ -501,6 +592,24 @@ fn request_cancellation(sender: &watch::Sender<Option<Instant>>) {
     });
 }
 
+fn register_pending(
+    pending: &Pending,
+    captured: acp_permissions::Pending,
+) -> Result<Value, AgentSessionError> {
+    let id = config::text(&captured.request, "id")?.to_owned();
+    let request = captured.request.clone();
+    let mut pending = pending.lock().map_err(|_| AgentSessionError::Failed)?;
+    if pending.len() >= 128
+        || pending
+            .values()
+            .any(|previous| previous.rpc_id == captured.rpc_id)
+    {
+        return Err(AgentSessionError::Failed);
+    }
+    pending.insert(id, captured);
+    Ok(request)
+}
+
 struct Execution {
     client: OpenCodeClient,
     id: String,
@@ -508,6 +617,7 @@ struct Execution {
     turn: String,
     submitted: Vec<crate::protocol::timeline::NativeItem>,
     pending: Pending,
+    children: Arc<Mutex<Live>>,
     events: mpsc::Sender<AgentTurnEvent>,
     commands: mpsc::Receiver<Command>,
     cancellation: watch::Sender<Option<Instant>>,
@@ -515,6 +625,17 @@ struct Execution {
 }
 
 impl Execution {
+    async fn child_frame(&self, message: &Value) -> Result<bool, AgentSessionError> {
+        let (handled, events) = self
+            .children
+            .lock()
+            .map_err(|_| AgentSessionError::Failed)?
+            .consume(message)?;
+        for event in events {
+            self.emit(event).await?;
+        }
+        Ok(handled)
+    }
     async fn emit(&self, event: AgentTurnEvent) -> Result<(), AgentSessionError> {
         self.events
             .send(event)
@@ -555,6 +676,14 @@ impl Execution {
         message: &Value,
     ) -> Result<(), AgentSessionError> {
         if message["params"]["sessionId"] != self.id {
+            if matches!(
+                message["params"]["update"]["sessionUpdate"].as_str(),
+                Some("available_commands_update" | "config_option_update")
+            ) {
+                // Restoring descendants attaches multiple ACP sessions. Their delayed control
+                // notices belong to those sessions, not to this foreground prompt.
+                return Ok(());
+            }
             return Err(AgentSessionError::Failed);
         }
         let update = &message["params"]["update"];
@@ -699,6 +828,9 @@ impl Execution {
         }
         let (mut terminal, mut failure) = loop {
             let message = self.receive(&mut connection, &mut stream).await?;
+            if self.child_frame(&message).await? {
+                continue;
+            }
             if message.get("method").is_none() {
                 if message["id"] != self.rpc_id {
                     return Err(AgentSessionError::Failed);
@@ -781,6 +913,9 @@ impl Execution {
             self.client.deadline,
         )
         .await?;
+        for frame in replay.child_frames.drain(..) {
+            self.child_frame(&frame).await?;
+        }
         connection.location = location;
         let has_input = replay
             .users
@@ -845,19 +980,7 @@ impl Execution {
         } else {
             acp_permissions::capture(message, PROVIDER)?
         };
-        let id = config::text(&pending.request, "id")?.to_owned();
-        let request = pending.request.clone();
-        {
-            let mut requests = self.pending.lock().map_err(|_| AgentSessionError::Failed)?;
-            if requests.len() >= 128
-                || requests
-                    .values()
-                    .any(|previous| previous.rpc_id == pending.rpc_id)
-            {
-                return Err(AgentSessionError::Failed);
-            }
-            requests.insert(id, pending);
-        }
+        let request = register_pending(&self.pending, pending)?;
         self.emit(AgentTurnEvent::PermissionRequested(request))
             .await
     }
@@ -897,6 +1020,11 @@ impl Execution {
 
 #[async_trait::async_trait]
 impl AgentSession for Session {
+    fn subagents(&self) -> Vec<crate::ports::controls::NativeSubagent> {
+        self.children
+            .lock()
+            .map_or_else(|_| Vec::new(), |children| children.list())
+    }
     fn failure_diagnostic(&self) -> Option<Diagnostic> {
         self.diagnostics.failure()
     }
@@ -963,10 +1091,32 @@ impl AgentSession for Session {
         id: &str,
         response: &Value,
     ) -> Result<(), AgentSessionError> {
-        self.command(id, response).await
+        if self.commands.is_some() {
+            return self.command(id, response).await;
+        }
+        let reply = {
+            let pending = self.pending.lock().map_err(|_| AgentSessionError::Failed)?;
+            interactions::resolve(
+                pending.get(id).ok_or(AgentSessionError::Rejected)?,
+                response,
+            )?
+        };
+        let connection = self
+            .connection
+            .as_mut()
+            .ok_or(AgentSessionError::Rejected)?;
+        connection.transport.send(&reply).await?;
+        self.pending
+            .lock()
+            .map_err(|_| AgentSessionError::Failed)?
+            .remove(id);
+        self.initial
+            .push_back(AgentTurnEvent::PermissionResolved(id.to_owned()));
+        Ok(())
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
         self.check_cancellation()?;
+        self.poll_idle()?;
         if let Some(event) = self.initial.pop_front() {
             return Ok(Some(event));
         }
@@ -1083,6 +1233,10 @@ impl AgentSession for Session {
             }
             connection.transport.close().await?;
         }
+        self.children
+            .lock()
+            .map_err(|_| AgentSessionError::Failed)?
+            .stopped();
         if uncertain {
             Err(AgentSessionError::Failed)
         } else {

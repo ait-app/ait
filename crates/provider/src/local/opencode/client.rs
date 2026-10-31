@@ -89,6 +89,12 @@ impl OpenCodeClient {
 
 #[async_trait::async_trait]
 impl AgentClient for OpenCodeClient {
+    async fn subagents(
+        &self,
+        cwd: &str,
+    ) -> Result<Vec<crate::ports::controls::NativeSubagent>, AgentSessionError> {
+        super::subagents::history::discover(self, cwd).await
+    }
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {
         let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Unavailable)?;
         match launcher::version(self, &cwd.to_string_lossy()).await {

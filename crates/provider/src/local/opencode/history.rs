@@ -74,6 +74,7 @@ async fn load(
 ) -> Result<(Value, Stream), AgentSessionError> {
     let mut stream = Stream::new(images);
     let mut completed = VecDeque::new();
+    let mut child_bytes = 0usize;
     let ordinary_timeout = transport.control_deadline();
     transport.set_control_deadline(timeout);
     let result = transport
@@ -81,10 +82,31 @@ async fn load(
             "session/load",
             json!({"sessionId":id,"cwd":cwd,"mcpServers":[]}),
             |message| {
-                if message["method"] == "session/update" {
-                    if message["params"]["sessionId"] != id {
+                if message["method"] == "opencode/session/child_update"
+                    || (message["method"] == "session/update"
+                        && message["params"]["update"]
+                            .pointer("/_meta/opencode~1child-session")
+                            .is_some())
+                {
+                    child_bytes = child_bytes.saturating_add(
+                        serde_json::to_vec(message)
+                            .map_err(|_| AgentSessionError::Failed)?
+                            .len(),
+                    );
+                    if stream.child_frames.len() >= 256 || child_bytes > 512 * 1024 {
                         return Err(AgentSessionError::Failed);
                     }
+                    stream.child_frames.push(message.clone());
+                    return Ok(());
+                }
+                if message["method"] == "session/update" {
+                    if message["params"]["sessionId"] != id {
+                        // One ACP process can load multiple native sessions. A preceding load
+                        // may publish its commands after its response; never mix those updates
+                        // into the selected transcript or reject the next child's replay.
+                        return Ok(());
+                    }
+                    stream.links.update(&message["params"]["update"])?;
                     stream.update(&message["params"]["update"])?;
                     // Progress does not belong in a complete history replay.
                     completed.extend(stream.events.drain(..).filter(|event| {
@@ -242,6 +264,7 @@ pub(super) async fn inspect(
     config::validate_spec(&spec)?;
     let (mut transport, _, source) = launcher::observed(client, cwd, &spec.config).await?;
     let result = async {
+        let child = super::subagents::history::verify(&mut transport, client, handle, cwd).await?;
         let (options, mut stream, location) = replay(
             &mut transport,
             &handle.session_id,
@@ -261,6 +284,21 @@ pub(super) async fn inspect(
         let mut descriptor = descriptors
             .into_iter()
             .find(|entry| entry.provider_handle_id == handle.session_id)
+            .or_else(|| {
+                child.as_ref().map(|child| SessionDescriptor {
+                    provider_id: PROVIDER.into(),
+                    provider_label: "OpenCode".into(),
+                    provider_handle_id: child.id.clone(),
+                    cwd: location.clone(),
+                    title: child.descriptor["title"].as_str().map(str::to_owned),
+                    first_prompt_preview: None,
+                    last_prompt_preview: None,
+                    last_activity_at: child.descriptor["updatedAt"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_owned(),
+                })
+            })
             .ok_or(AgentSessionError::Rejected)?;
         let clients = super::session::clients(handle)?;
         let mut entries = entries(&mut stream, &clients);
@@ -287,7 +325,7 @@ pub(super) async fn inspect(
         }
         Ok(SessionHistory {
             resume_metadata,
-            parent_id: None,
+            parent_id: child.map(|child| child.parent_id),
             created_at: chrono::Utc::now().to_rfc3339(),
             descriptor,
             config,
