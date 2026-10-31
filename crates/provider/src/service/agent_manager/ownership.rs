@@ -4,7 +4,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 use crate::rpc::ErrorCode;
-use domain::agent_runtime::PersistedAgentRuntimeRecord;
+use domain::agent_runtime::{
+    AgentPersistenceHandle, PersistedAgentRuntimeRecord, StoredAgentConfig, StoredAgentRuntimeInfo,
+};
 use serde_json::{Value, json};
 use tokio::sync::{Notify, watch};
 use tokio_util::sync::CancellationToken;
@@ -24,11 +26,39 @@ struct Routes {
     scopes: BTreeMap<String, BTreeSet<String>>,
 }
 
+#[derive(Clone)]
+struct ControlSnapshot {
+    provider: String,
+    persistence: Option<AgentPersistenceHandle>,
+    config: Option<StoredAgentConfig>,
+    runtime: Option<StoredAgentRuntimeInfo>,
+    modes: Value,
+    features: Value,
+}
+
+impl std::fmt::Debug for ControlSnapshot {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ControlSnapshot")
+            .finish_non_exhaustive()
+    }
+}
+
+impl ControlSnapshot {
+    fn matches(&self, record: &PersistedAgentRuntimeRecord) -> bool {
+        self.provider == record.provider
+            && self.persistence == record.persistence
+            && self.config == record.config
+            && self.runtime == record.runtime_info
+    }
+}
+
 /// Routing and post-commit observations; these locks never cover native I/O.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Owners {
     routes: Arc<Mutex<Routes>>,
     observations: Arc<Mutex<BTreeMap<String, watch::Sender<Value>>>>,
+    controls: Arc<Mutex<BTreeMap<String, ControlSnapshot>>>,
     barriers: Arc<Mutex<BTreeMap<String, Vec<CancellationToken>>>>,
     retirements: Arc<Mutex<BTreeMap<String, PendingRetirement>>>,
     retired: Arc<Notify>,
@@ -67,6 +97,52 @@ pub(crate) struct Owner {
 }
 
 impl Owners {
+    /// Retain the owner's safe control projection with its exact configuration and runtime facts.
+    /// Configuration is private in-memory state and never added to a response or event.
+    pub(crate) fn publish_controls(&self, record: &PersistedAgentRuntimeRecord, snapshot: &Value) {
+        let mut controls = self
+            .controls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if controls.get(&record.id).is_some_and(|controls| {
+            controls.matches(record)
+                && controls.modes == snapshot["availableModes"]
+                && controls.features == snapshot["features"]
+        }) {
+            return;
+        }
+        controls.insert(
+            record.id.clone(),
+            ControlSnapshot {
+                provider: record.provider.clone(),
+                persistence: record.persistence.clone(),
+                config: record.config.clone(),
+                runtime: record.runtime_info.clone(),
+                modes: snapshot["availableModes"].clone(),
+                features: snapshot["features"].clone(),
+            },
+        );
+    }
+
+    /// Restore controls only for the same persisted inputs; stale discovery must not mask changes.
+    pub(crate) fn restore_controls(
+        &self,
+        record: &PersistedAgentRuntimeRecord,
+        snapshot: &mut Value,
+    ) {
+        let controls = self
+            .controls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(controls) = controls
+            .get(&record.id)
+            .filter(|controls| controls.matches(record))
+        {
+            snapshot["availableModes"] = controls.modes.clone();
+            snapshot["features"] = controls.features.clone();
+        }
+    }
+
     /// Wake directory observers after the runtime overlay becomes coherently visible.
     pub(crate) fn with_changes(mut self, changes: Option<model::changes::Changes>) -> Self {
         self.changes = changes;
@@ -197,7 +273,18 @@ impl Owners {
     /// Release inactive aliases after a lane has reaped all of its sessions.
     pub(crate) fn release(&self, lane: &str) {
         if let Ok(mut routes) = self.routes.lock() {
-            routes.agents.retain(|_, owner| owner != lane);
+            let mut controls = self
+                .controls
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            routes.agents.retain(|id, owner| {
+                if owner == lane {
+                    controls.remove(id);
+                    false
+                } else {
+                    true
+                }
+            });
             routes.native.retain(|_, owner| owner != lane);
             routes.scopes.remove(lane);
         }

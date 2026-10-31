@@ -315,7 +315,6 @@ impl AgentManager {
         if record.archived_at.is_some() {
             return Err(ErrorCode::CatalogBusy);
         }
-        self.stop_native(id).await?;
         let handle = record
             .persistence
             .as_ref()
@@ -325,6 +324,14 @@ impl AgentManager {
             cwd: record.cwd.clone(),
             config: record.config.clone().unwrap_or_default(),
         };
+        let client = self
+            .clients
+            .get(&record.provider)
+            .ok_or(ErrorCode::UnsupportedCapability)?;
+        if client.settings(&spec.config)["capabilities"]["supportsRewindConversation"] != true {
+            return Err(ErrorCode::UnsupportedCapability);
+        }
+        self.stop_native(id).await?;
         let history = self
             .clients
             .get(&record.provider)

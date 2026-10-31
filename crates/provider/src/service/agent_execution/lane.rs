@@ -2,6 +2,7 @@ use std::time::{Duration, Instant};
 
 use tokio::sync::{mpsc, oneshot};
 
+use super::operation::{Access, Operation};
 use super::{Command, ErrorCode, ExecutionState, voice};
 
 /// Drain cadence while a native turn may emit events that clients are waiting for.
@@ -141,10 +142,10 @@ pub(super) async fn request(
                         return state;
                     }
                 }
-                voice::dispatch(&mut state, &method, params, (reply, cancel, realtime)).await;
+                voice::dispatch(&mut state, method, params, (reply, cancel, realtime)).await;
                 tracing::debug!(
-                    method,
-                    class = class(&method, owned),
+                    method = method.as_str(),
+                    class = class(method, owned),
                     queue_ms,
                     execution_ms = started.elapsed().as_millis(),
                     "provider.request.completed"
@@ -180,11 +181,11 @@ async fn poll(mut state: ExecutionState) -> Result<ExecutionState, ErrorCode> {
     .map_err(|_| ErrorCode::AgentIo)
 }
 
-fn class(method: &str, owned: bool) -> &'static str {
-    if method.starts_with("provider.") {
+fn class(method: Operation, owned: bool) -> &'static str {
+    if matches!(method.access(), Access::Catalog | Access::Discovery) {
         return "catalog";
     }
-    if method.starts_with("agent.timeline.") && owned {
+    if method.access() == Access::Timeline && owned {
         return "history";
     }
     if !owned {
@@ -192,11 +193,11 @@ fn class(method: &str, owned: bool) -> &'static str {
     }
     if matches!(
         method,
-        "agent.create.request"
-            | "agent.resume.request"
-            | "agent.refresh.request"
-            | "agent.rewind.request"
-            | "internal.workspace.agent.create"
+        Operation::Create
+            | Operation::Resume
+            | Operation::Refresh
+            | Operation::Rewind
+            | Operation::WorkspaceCreate
     ) {
         return "lifecycle";
     }

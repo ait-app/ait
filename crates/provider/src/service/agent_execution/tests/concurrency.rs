@@ -663,7 +663,7 @@ async fn committed_reader_does_not_start_native_hydration_after_its_cache_marker
     let read = tokio::time::timeout(
         Duration::from_secs(5),
         reader.execute(
-            "agent.timeline.get.request",
+            operation::Operation::Timeline,
             json!({"agentId":agent["agentId"]}),
         ),
     )

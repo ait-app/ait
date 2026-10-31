@@ -1,6 +1,62 @@
 use super::*;
 
 #[test]
+fn controls_are_reused_only_for_the_same_agent_native_identity_and_configuration() {
+    let owners = Owners::default();
+    let record: PersistedAgentRuntimeRecord = serde_json::from_value(json!({
+        "id":"agent-1", "provider":"contract", "cwd":"/repo",
+        "createdAt":"2026-10-31T00:00:00Z", "updatedAt":"2026-10-31T00:00:00Z",
+        "config":{"model":"first", "systemPrompt":"private control config"},
+        "persistence":{"provider":"contract","sessionId":"native-1"}
+    }))
+    .unwrap();
+    let controls = json!({"features":[{"id":"fast","value":true}],
+        "availableModes":[{"id":"native","label":"Native"}]});
+    owners.publish_controls(&record, &controls);
+    owners.publish_controls(&record, &controls);
+    assert!(!format!("{owners:?}").contains("private control config"));
+    let fallback = json!({"features":[], "availableModes":[]});
+    let mut projected = fallback.clone();
+    owners.restore_controls(&record, &mut projected);
+    assert_eq!(projected, controls);
+
+    let mut variants = Vec::new();
+    let mut other = record.clone();
+    other.id = "agent-2".to_owned();
+    variants.push(other);
+    let mut configured = record.clone();
+    configured.config.as_mut().unwrap().model = Some("second".to_owned());
+    variants.push(configured);
+    let mut discovered = record.clone();
+    discovered.runtime_info = Some(
+        serde_json::from_value(json!({
+            "provider":"contract", "extra":{"availableModes":[]}
+        }))
+        .unwrap(),
+    );
+    variants.push(discovered);
+    let mut replaced = record.clone();
+    replaced.persistence.as_mut().unwrap().session_id = "native-2".to_owned();
+    variants.push(replaced);
+    let mut changed_provider = record.clone();
+    changed_provider.provider = "other".to_owned();
+    variants.push(changed_provider);
+    for changed in variants {
+        let mut projected = fallback.clone();
+        owners.restore_controls(&changed, &mut projected);
+        assert_eq!(projected, fallback, "stale controls masked updated facts");
+    }
+    let lane = owners.agent(&record.id).unwrap();
+    owners.release(&lane);
+    let mut projected = fallback.clone();
+    owners.restore_controls(&record, &mut projected);
+    assert_eq!(
+        projected, fallback,
+        "a released owner retained control facts"
+    );
+}
+
+#[test]
 fn committed_runtime_publication_wakes_directory_readers_only_after_the_overlay_changes() {
     let changes = model::changes::Changes::default();
     let owners = Owners::default().with_changes(Some(changes.clone()));
