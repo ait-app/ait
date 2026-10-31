@@ -43,7 +43,7 @@ it.each(["workspace", "project"] as const)(
       directorySync: false,
       explicitEventSubscriptions: false,
       workspaceLabels: false,
-      projectList: true,
+      projectList: scope === "project",
       workspaceMultiplicity: true,
     });
     expect(payload.sessionEventTypes).toEqual([]);

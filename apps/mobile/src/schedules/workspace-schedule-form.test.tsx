@@ -11,13 +11,15 @@ import {
 import type { ScheduleFormModel } from "./schedule-form-model";
 import type { ProjectSummary } from "@/utils/projects";
 import { i18n } from "@/i18n/i18next";
+import type { HostChoice } from "@/hosts/host-groups";
+import { createAccountRelayHostConnection } from "@/types/host-connection";
 
 const { createSchedule, updateSchedule, updatePreferences } = vi.hoisted(() => ({
   createSchedule: vi.fn(async () => ({ id: "schedule-created" })),
   updateSchedule: vi.fn(async () => {}),
   updatePreferences: vi.fn(async () => {}),
 }));
-const hosts = [
+const hosts: HostChoice[] = [
   { serverId: "host-a", label: "Host A" },
   { serverId: "host-b", label: "Host B" },
 ];
@@ -201,6 +203,41 @@ vi.mock("@/components/ui/form-field", () => ({
 }));
 
 describe("workspace schedule form", () => {
+  it("offers one Host when multiple resources were shared from that Host", () => {
+    const original = [...hosts];
+    const connection = createAccountRelayHostConnection({
+      center: "https://center.test/api",
+      hostId: "11111111-1111-4111-8111-111111111111",
+      shareId: "22222222-2222-4222-8222-222222222222",
+      nodeId: "node",
+      shareResourceKind: "workspace",
+    });
+    hosts.splice(
+      0,
+      hosts.length,
+      { serverId: "share-workspace", label: "Shared Host", connections: [connection] },
+      {
+        serverId: "share-project",
+        label: "Shared Host",
+        connections: [
+          {
+            ...connection,
+            shareId: "33333333-3333-4333-8333-333333333333",
+            shareResourceKind: "project",
+          },
+        ],
+      },
+    );
+    try {
+      render(
+        <ScheduleFormSheet visible mode="create" serverId="share-workspace" onClose={() => {}} />,
+      );
+      expect(screen.getAllByRole("option", { name: "Shared Host" })).toHaveLength(1);
+      expect(screen.getByTestId("schedule-host-trigger")).toHaveProperty("value", "share-project");
+    } finally {
+      hosts.splice(0, hosts.length, ...original);
+    }
+  });
   beforeEach(() => {
     vi.stubGlobal("React", React);
   });
@@ -407,7 +444,7 @@ describe("workspace schedule form", () => {
     {
       language: "zh-CN",
       code: "schedule_running",
-      expected: "任务正在运行，请等待本次运行结束后再修改。",
+      expected: "计划正在运行，请等待本次运行结束后再修改。",
     },
     {
       language: "en",

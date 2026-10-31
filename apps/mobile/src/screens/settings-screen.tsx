@@ -1,3 +1,4 @@
+import { groupHosts } from "@/hosts/host-groups";
 import { useHubServices } from "@/runtime/hub-service-store";
 import { canManageHost } from "@/screens/settings/host-management";
 import { openChangelog } from "@/changelog";
@@ -687,7 +688,7 @@ function ConnectedHostsSection({ clientVersion }: { clientVersion: string | null
   return (
     <SettingsSection title={t("settings.about.connectedHosts")}>
       <View style={settingsStyles.card}>
-        {hosts.map((host, index) => (
+        {groupHosts(hosts).map((host, index) => (
           <HostVersionRow
             key={host.serverId}
             host={host}

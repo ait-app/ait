@@ -13,6 +13,7 @@ import { claimAttentionNotification } from "@/utils/attention-notification-dedup
 import { isWeb } from "@/constants/platform";
 import { startAccountPushNotifications } from "@/push-notifications";
 import { getHostRuntimeStore } from "./host-runtime";
+import { bindSharedHosts } from "./shared-hosts";
 
 import { useHubServices } from "./hub-service-store";
 import { useOnlineServiceConnectionNotice } from "./use-online-service-connection-notice";
@@ -22,6 +23,7 @@ export function AccountHubLifecycle() {
   useOnlineServiceConnectionNotice();
   const signedIn = useAccountState((state) => state.status !== "logged_out");
   const center = useAccountState((state) => state.center);
+  const accountId = useAccountState((state) => state.accountId);
   const visible = useAppVisible();
   const pathname = usePathname();
   const serverId = parseServerIdFromPathname(pathname);
@@ -77,14 +79,11 @@ export function AccountHubLifecycle() {
         const publishHubSnapshot = () => {
           const snapshot = hub.snapshot();
           useHubServices.setState({ connection: hub, snapshot });
-          getHostRuntimeStore().setSharedAccountRelayResources(
-            snapshot.shares ?? [],
-            snapshot.centerUrl,
-          );
         };
         const stopShares = hub.subscribeShares?.() ?? (() => {});
         publishHubSnapshot();
         const removeState = hub.subscribe(publishHubSnapshot);
+        const stopSharedHosts = bindSharedHosts(hub, getHostRuntimeStore(), { center, accountId });
         let refreshTimer: ReturnType<typeof setTimeout> | undefined;
         const removeEvents = observeHubEvents(hub, {
           randomUUID: Crypto.randomUUID,
@@ -145,9 +144,9 @@ export function AccountHubLifecycle() {
           stopPush();
           removeEvents();
           removeState();
+          stopSharedHosts();
           stopShares();
           handle.dispose();
-          getHostRuntimeStore().setSharedAccountRelayResources([], null);
         };
       })
       .catch(() => {
@@ -164,7 +163,7 @@ export function AccountHubLifecycle() {
       });
       getHostRuntimeStore().setSharedAccountRelayResources([], null);
     };
-  }, [signedIn, center]);
+  }, [signedIn, center, accountId]);
 
   useEffect(() => {
     if (

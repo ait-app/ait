@@ -11,14 +11,20 @@ import {
 } from "@/runtime/replica-cache/row-store-sqlite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DaemonClient, WorkspaceLabelListPayload } from "@ait/client/internal/daemon-client";
-import type { SessionOutboundMessage } from "@ait/protocol/messages";
+import { parseServerInfoStatusPayload, type SessionOutboundMessage } from "@ait/protocol/messages";
 import {
   normalizeProjectDescriptor,
   normalizeWorkspaceDescriptor,
   useSessionStore,
 } from "@/stores/session-store";
 import { normalizeAgentSnapshot, projectAgentSnapshot } from "@/utils/agent-snapshots";
-import { selectWorkspaceDirectoryServerIds } from "@/stores/session-store-hooks/selectors";
+import {
+  selectWorkspaceDirectoryServerIds,
+  selectWorkspaceStructureProjects,
+} from "@/stores/session-store-hooks/selectors";
+import { buildSidebarWorkspacePlacementModel } from "@/hooks/sidebar-workspaces-view-model";
+import { serverInfo } from "../rust-daemon/messages";
+import { object } from "../rust-daemon/types";
 import { useWorkspaceLabels } from "@/workspace-labels";
 import type { DirectoryReplicaMutation } from "@/runtime/replica-cache";
 import {
@@ -1937,6 +1943,59 @@ describe("snapshot-only host directories", () => {
     } finally {
       directory.dispose();
       vi.useRealTimers();
+    }
+  });
+
+  it("loads a workspace-only share into the project and workspace lists without listing projects", async () => {
+    const serverId = "shared:workspace-only";
+    const { client, directory } = createDirectory(serverId);
+    // Real Rust handshakes advertise host implementations, even when the guest's
+    // scope forbids project.list. Use the production adapter to derive UI features.
+    const envelope = serverInfo(
+      { server_id: "owner-host", features: ["directory-sync-v1", "directory-subscriptions-v1"] },
+      new Set([
+        "project.list.request",
+        "workspace.list.request",
+        "agent.list.request",
+        "subscription.release.request",
+        "session.events.set_subscription.request",
+      ]),
+      "workspace",
+    );
+    const info = parseServerInfoStatusPayload(object(object(envelope.message).payload));
+    if (!info) throw new Error("Invalid guest server info");
+    Object.assign(client, { getLastServerInfoMessage: () => info });
+    const listProjects = vi.spyOn(client, "listProjects").mockRejectedValue(new Error("forbidden"));
+    const sharedWorkspace = createWorkspaceEntry("only-shared-workspace");
+    const fetchWorkspaces = vi.spyOn(client, "fetchWorkspaces").mockResolvedValue({
+      requestId: "workspaces",
+      entries: [sharedWorkspace],
+      emptyProjects: [],
+      pageInfo: { hasMore: false, nextCursor: null, prevCursor: null },
+    });
+    const store = useSessionStore.getState();
+    store.initializeSession(serverId, client as unknown as DaemonClient, 1);
+    store.updateSessionServerInfo(serverId, { ...info, serverId, hostname: null, version: "test" });
+    const demand = {};
+    try {
+      directory.setDemand(demand, true);
+      await expect(directory.refreshDemand()).resolves.toBeUndefined();
+      expect(listProjects).not.toHaveBeenCalled();
+      expect(fetchWorkspaces).toHaveBeenCalledOnce();
+      const query = fetchWorkspaces.mock.calls[0]?.[0];
+      expect(query).not.toHaveProperty("subscribe");
+      expect(query).not.toHaveProperty("sync");
+      const state = useSessionStore.getState();
+      const hydrated = selectWorkspaceDirectoryServerIds(state, [serverId]);
+      const projects = selectWorkspaceStructureProjects(state, hydrated);
+      const sidebar = buildSidebarWorkspacePlacementModel({ projects });
+      expect(sidebar.projects.map((project) => project.projectName)).toEqual(["Snapshot project"]);
+      expect(sidebar.workspaces).toEqual([
+        expect.objectContaining({ serverId, workspaceId: sharedWorkspace.id }),
+      ]);
+    } finally {
+      directory.setDemand(demand, false);
+      directory.dispose();
     }
   });
 });

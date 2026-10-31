@@ -1,3 +1,4 @@
+import { getHostGroupServerIds, groupHosts } from "@/hosts/host-groups";
 import {
   useCallback,
   useEffect,
@@ -151,11 +152,12 @@ function SchedulesScreenContent(): ReactElement {
   }, [schedules, agentsByKey, projectNameByCwd, workspaceNameByKey, agentDirReadyHosts, t]);
 
   const visibleRows = useMemo<ScheduleRowView[]>(() => {
-    const singleHost = hosts.length <= 1 || selectedHost !== ALL_HOSTS_OPTION_ID;
+    const singleHost = groupHosts(hosts).length <= 1 || selectedHost !== ALL_HOSTS_OPTION_ID;
+    const selectedServerIds = new Set(getHostGroupServerIds(hosts, selectedHost));
     return resolvedRows
       .filter(
         ({ schedule, resolved }) =>
-          (selectedHost === ALL_HOSTS_OPTION_ID || schedule.serverId === selectedHost) &&
+          (selectedHost === ALL_HOSTS_OPTION_ID || selectedServerIds.has(schedule.serverId)) &&
           resolved.bucket === statusFilter,
       )
       .sort((a, b) => Date.parse(b.schedule.createdAt) - Date.parse(a.schedule.createdAt))
@@ -167,10 +169,10 @@ function SchedulesScreenContent(): ReactElement {
         serverName: schedule.serverName,
         singleHost,
       }));
-  }, [resolvedRows, selectedHost, statusFilter, hosts.length]);
+  }, [resolvedRows, selectedHost, statusFilter, hosts]);
 
   const showLoadError = isError && loadState.status !== "loaded";
-  const showHostFilter = hosts.length > 1;
+  const showHostFilter = groupHosts(hosts).length > 1;
 
   return (
     <View style={styles.container}>

@@ -1,3 +1,4 @@
+import { getHostGroupServerIds } from "@/hosts/host-groups";
 import { useCallback, useEffect, useMemo } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
@@ -5,12 +6,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceDirectoryServerIds } from "@/stores/session-store-hooks";
 import { workspaceEqualityFns } from "@/stores/session-store-hooks/selectors";
 import { useHostProjects } from "@/projects/host-projects";
-import {
-  getHostRuntimeStore,
-  isSharedResourceHost,
-  useHostRegistryLoaded,
-  useHosts,
-} from "@/runtime/host-runtime";
+import { getHostRuntimeStore, useHostRegistryLoaded, useHosts } from "@/runtime/host-runtime";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import {
   buildSidebarWorkspacePlacementModel,
@@ -29,7 +25,6 @@ export {
   buildSidebarWorkspacePlacementModel,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
-  shouldShowSidebarHostLabels,
   type SidebarLoadingState,
   type SidebarStatusWorkspacePlacement,
   type SidebarWorkspacePlacement,
@@ -97,10 +92,7 @@ export function useSidebarWorkspacesList(options?: {
   const runtime = getHostRuntimeStore();
   const allHosts = useHosts();
   const hostRegistryLoaded = useHostRegistryLoaded();
-  const allServerIds = useMemo(
-    () => allHosts.filter((host) => !isSharedResourceHost(host)).map((host) => host.serverId),
-    [allHosts],
-  );
+  const allServerIds = useMemo(() => allHosts.map((host) => host.serverId), [allHosts]);
 
   const storeHostFilters = useSidebarViewStore((state) => state.hostFilters);
   const hostFilters = options?.hostFilters ?? storeHostFilters;
@@ -111,7 +103,7 @@ export function useSidebarWorkspacesList(options?: {
     if (hostFilters.length === 0) {
       return allServerIds;
     }
-    const selected = new Set(hostFilters);
+    const selected = new Set(hostFilters.flatMap((id) => getHostGroupServerIds(allHosts, id)));
     const matched = allServerIds.filter((id) => selected.has(id));
     // Registry has settled but none of the pinned hosts still exist — fall back to every
     // host rather than leaving the sidebar empty.
@@ -119,7 +111,7 @@ export function useSidebarWorkspacesList(options?: {
       return allServerIds;
     }
     return matched;
-  }, [allServerIds, hostFilters, hostRegistryLoaded]);
+  }, [allHosts, allServerIds, hostFilters, hostRegistryLoaded]);
   useEffect(() => {
     if (!isActive) return;
     const releases = serverIds.map((serverId) => runtime.acquireDirectoryDemand(serverId));

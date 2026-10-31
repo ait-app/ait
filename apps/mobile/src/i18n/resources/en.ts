@@ -2,6 +2,9 @@ export const en = {
   sharing: {
     title: "Shared",
     sharedWithMeCount: "Shared with me ({{count}})",
+    incomingHostHint:
+      "Enabled Hosts and their shared projects and workspaces appear in your lists.",
+    showHostInHosts: "Show {{host}} in Hosts",
     sharedByMe: "Shared by me",
     sharedByMeCount: "Shared by me ({{count}})",
     section: "Shared",

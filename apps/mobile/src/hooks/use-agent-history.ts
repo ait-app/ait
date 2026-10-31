@@ -1,3 +1,4 @@
+import { getHostGroupServerIds } from "@/hosts/host-groups";
 import type {
   DaemonClient,
   FetchAgentHistoryOptions,
@@ -239,7 +240,9 @@ export function useAgentHistory(options: {
   const { targetHosts, unreachableHosts } = useMemo(() => {
     void runtimeVersion;
     const serverLabelById = new Map(daemons.map((daemon) => [daemon.serverId, daemon.label]));
-    const serverIds = serverId ? [serverId] : daemons.map((daemon) => daemon.serverId);
+    const serverIds = serverId
+      ? getHostGroupServerIds(daemons, serverId)
+      : daemons.map((daemon) => daemon.serverId);
     const hosts: AgentHistoryHost[] = [];
     const unreachable: AgentHistoryHostError[] = [];
 
@@ -276,7 +279,9 @@ export function useAgentHistory(options: {
   }, [isSearchSupported, options.search]);
   const queryKey = useMemo(
     () => [
-      ...(serverId ? agentHistoryQueryKey(serverId) : allAgentHistoryQueryKey(targetServerIds)),
+      ...(serverId && targetServerIds.length === 1 && targetServerIds[0] === serverId
+        ? agentHistoryQueryKey(serverId)
+        : allAgentHistoryQueryKey(targetServerIds)),
       search,
     ],
     [search, serverId, targetServerIds],

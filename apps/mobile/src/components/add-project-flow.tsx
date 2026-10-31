@@ -1,3 +1,4 @@
+import { groupHosts, resolveHostGroupServerId } from "@/hosts/host-groups";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
@@ -326,8 +327,9 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const localServerId = useLocalDaemonServerId();
   const availableHosts = useMemo<AddProjectHost[]>(
     () =>
-      hosts.flatMap((host) => {
-        if (connectionStatuses.get(host.serverId) !== "online") return [];
+      groupHosts(
+        hosts.filter((host) => connectionStatuses.get(host.serverId) === "online"),
+      ).flatMap((host) => {
         const canAddProject =
           projectAddByHost.get(host.serverId) === true &&
           stableProjectIdentityByHost.get(host.serverId) === true;
@@ -354,10 +356,16 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
       stableProjectIdentityByHost,
     ],
   );
+  const preferredHostId = request.preferredHostId
+    ? resolveHostGroupServerId(
+        hosts.filter((host) => connectionStatuses.get(host.serverId) === "online"),
+        request.preferredHostId,
+      )
+    : undefined;
   const [state, setState] = useState(() =>
     openAddProjectFlow({
       hosts: availableHosts,
-      ...(request.preferredHostId ? { preferredHostId: request.preferredHostId } : {}),
+      ...(preferredHostId ? { preferredHostId } : {}),
     }),
   );
   const page = currentAddProjectPage(state);
@@ -387,10 +395,8 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const [debouncedQuery, setDebouncedQuery] = useState(query);
 
   useEffect(() => {
-    setState((current) =>
-      applyAvailableAddProjectHosts(current, availableHosts, request.preferredHostId),
-    );
-  }, [availableHosts, request.preferredHostId]);
+    setState((current) => applyAvailableAddProjectHosts(current, availableHosts, preferredHostId));
+  }, [availableHosts, preferredHostId]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 250);

@@ -1,3 +1,4 @@
+import { groupHosts } from "@/hosts/host-groups";
 import { useMemo } from "react";
 import { useFetchQuery } from "@/data/query";
 import {
@@ -37,7 +38,7 @@ export function useSchedules(): UseSchedulesResult {
   const hosts = useHosts();
   const runtime = getHostRuntimeStore();
   const hostInputs = useMemo<ScheduleHostInput[]>(
-    () => hosts.map((host) => ({ serverId: host.serverId, serverName: host.label })),
+    () => groupHosts(hosts).map((host) => ({ serverId: host.serverId, serverName: host.label })),
     [hosts],
   );
   const serverIds = useMemo(() => hostInputs.map((host) => host.serverId), [hostInputs]);

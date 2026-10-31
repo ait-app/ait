@@ -52,7 +52,6 @@ import {
   parseHostWorkspaceRouteFromPathname,
 } from "@/utils/host-routes";
 import {
-  shouldShowSidebarHostLabels,
   useSidebarProjectStatusBucket,
   type SidebarProjectEntry,
   type SidebarWorkspaceEntry,
@@ -1777,12 +1776,10 @@ export function SidebarWorkspaceList({
   const pathname = usePathname();
   const hosts = useHosts();
   const rowItems = useSidebarRowItems();
-  // Host badge visibility is a lattice, not three competing switches: this gate is the global
-  // "off", `shouldShowSidebarHostLabels` is the automatic "there is only one host so it says
-  // nothing", and each host's own `badgeDisplay` decides name vs icon vs hidden. Turning the
-  // item off here removes the badge everywhere; leaving it on defers to the per-host setting.
+  // The sidebar toggle controls all badges; each host's appearance controls its own badge.
+  // Filtering down to one host must still respect that host's name/icon preference.
   const hostBadgeByServerId = useHostBadges({
-    enabled: rowItems.host && shouldShowSidebarHostLabels(projects),
+    enabled: rowItems.host,
   });
   const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
   const supportsMultiplicityByServerId = useHostFeatureMap(serverIds, "workspaceMultiplicity");

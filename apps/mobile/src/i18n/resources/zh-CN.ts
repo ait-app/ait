@@ -5,6 +5,8 @@ export const zhCN: TranslationResources = {
   sharing: {
     title: "共享",
     sharedWithMeCount: "共享给我的（{{count}}）",
+    incomingHostHint: "开启后，这台 Host 及其共享项目和工作区会显示在对应列表中。",
+    showHostInHosts: "在 Hosts 中显示 {{host}}",
     sharedByMe: "我分享的",
     sharedByMeCount: "我分享的（{{count}}）",
     section: "Shared",

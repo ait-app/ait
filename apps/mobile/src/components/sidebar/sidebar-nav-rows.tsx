@@ -165,7 +165,9 @@ function SidebarSchedulesRow({ onBeforeNavigate }: SidebarNavRowProps) {
 function SidebarSharedRow({ onBeforeNavigate }: SidebarNavRowProps) {
   const { t } = useTranslation();
   const pathname = usePathname();
-  const count = useHubServices((state) => state.snapshot?.shares?.length ?? 0);
+  const count = useHubServices(
+    (state) => new Set(state.snapshot?.shares?.map((share) => share.hostId)).size,
+  );
   const handlePress = useCallback(() => {
     onBeforeNavigate?.();
     router.push("/shared" as Href);

@@ -1,8 +1,9 @@
 /**
  * @vitest-environment jsdom
  */
-import { act } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
+import type { HubShare } from "@ait/client/internal/hub";
 import type { WorkspaceScriptPayload } from "@ait/protocol/messages";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
@@ -33,6 +34,8 @@ import {
 import { useSidebarWorkspacesList } from "@/hooks/use-sidebar-workspaces-list";
 import {
   getHostRuntimeStore,
+  sharedResourceServerId,
+  useHosts,
   type HostRuntimeController,
   type HostRuntimeSnapshot,
 } from "@/runtime/host-runtime";
@@ -42,6 +45,8 @@ import { seedRuntimeWorkspaces } from "@/test/seed-session";
 import { useWorkspaceFields } from "@/stores/session-store-hooks";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { defaultHostAppearance } from "@/hosts/appearance";
+import { bindSharedHosts } from "@/runtime/shared-hosts";
+import { createSharedHostPreferencesStore } from "@/stores/shared-host-preferences-store";
 
 vi.mock("@react-native-async-storage/async-storage", () => ({
   default: {
@@ -425,4 +430,179 @@ describe("sidebar workspace render isolation", () => {
       "b-two": 1,
     });
   });
+});
+
+describe("shared resources in the regular sidebar lists", () => {
+  afterEach(() => {
+    cleanup();
+    setHostProfiles([]);
+    getHostRuntimeStore().setAccountRelayCenter(null);
+    useSessionStore.getState().clearSession(SERVER_ID);
+  });
+
+  it.each(["node", "project", "workspace"] as const)(
+    "includes an incoming %s share without opening the sharing screen",
+    async (resourceKind) => {
+      initializeSidebarState(createWorkspaces());
+      const preferences = createSharedHostPreferencesStore({
+        getItem: async () => null,
+        setItem: async () => {},
+        removeItem: async () => {},
+      });
+      await preferences.persist.rehydrate();
+      const account = { center: "https://center.test/api", accountId: "recipient" };
+      let stopSharedHosts = () => {};
+      const share: HubShare = {
+        shareId: "22222222-2222-4222-8222-222222222222",
+        groupId: "44444444-4444-4444-8444-444444444444",
+        groupName: "Team",
+        hostId: "11111111-1111-4111-8111-111111111111",
+        nodeId: "shared-node",
+        hostName: "Alice workstation",
+        owner: { userId: "alice", displayName: "Alice", username: "alice" },
+        resourceKind,
+        resourceKey:
+          resourceKind === "node"
+            ? ""
+            : resourceKind === "project"
+              ? "shared-project"
+              : "shared-workspace",
+        displayName: "Shared resource",
+        projectName: "Shared project",
+        permission: "operate",
+        state: "online",
+      };
+      const serverId = sharedResourceServerId(share.shareId);
+      const runtime = getHostRuntimeStore();
+      const acquireDirectoryDemand = vi.spyOn(runtime, "acquireDirectoryDemand");
+      const initialProps: { hostFilters: string[] } = { hostFilters: [] };
+      const { result, rerender } = renderHook(
+        ({ hostFilters }: { hostFilters: string[] }) => ({
+          hosts: useHosts({ availableOnly: true }),
+          list: useSidebarWorkspacesList({ hostFilters }),
+        }),
+        { initialProps },
+      );
+
+      try {
+        expect(result.current.list.projects.map((project) => project.projectName)).toEqual([
+          "Project A",
+          "Project B",
+        ]);
+
+        act(() => {
+          runtime.setAccountRelayCenter("https://center.test/api");
+          stopSharedHosts = bindSharedHosts(
+            {
+              snapshot: () => ({
+                state: "online",
+                linkId: "link",
+                centerUrl: account.center,
+                methods: [],
+                shares: [share],
+              }),
+              subscribe: () => () => {},
+            },
+            runtime,
+            account,
+            preferences,
+          );
+          const sharedWorkspace = workspace({
+            id: "shared-workspace",
+            projectId: "shared-project",
+            projectDisplayName: "Shared project",
+            name: "Shared workspace",
+          });
+          useSessionStore.getState().initializeSession(serverId, null);
+          seedRuntimeWorkspaces(serverId, new Map([[sharedWorkspace.id, sharedWorkspace]]));
+          useSessionStore.getState().setHasHydratedWorkspaces(serverId, true);
+        });
+
+        expect(result.current.hosts.map((host) => host.serverId)).toContain(serverId);
+        expect(acquireDirectoryDemand).toHaveBeenCalledWith(serverId);
+        expect(result.current.list.projects.map((project) => project.projectName)).toEqual([
+          "Project A",
+          "Project B",
+          "Shared project",
+        ]);
+        expect(result.current.list.workspacePlacements).toContainEqual(
+          expect.objectContaining({
+            serverId,
+            workspaceId: "shared-workspace",
+            workspaceKey: `${serverId}:shared-workspace`,
+          }),
+        );
+
+        rerender({ hostFilters: [serverId] });
+        expect(result.current.list.projects.map((project) => project.projectName)).toEqual([
+          "Shared project",
+        ]);
+        expect(result.current.list.workspacePlacements).toHaveLength(1);
+
+        // One physical Host filter must include its other grant runtimes too.
+        const siblingShare: HubShare = {
+          ...share,
+          shareId: "55555555-5555-4555-8555-555555555555",
+          resourceKind: "project",
+          resourceKey: "sibling-project",
+        };
+        const siblingServerId = sharedResourceServerId(siblingShare.shareId);
+        act(() => {
+          runtime.setSharedAccountRelayResources([share, siblingShare], account.center);
+          const siblingWorkspace = workspace({
+            id: "sibling-workspace",
+            projectId: "sibling-project",
+            projectDisplayName: "Sibling project",
+            name: "Sibling workspace",
+          });
+          useSessionStore.getState().initializeSession(siblingServerId, null);
+          seedRuntimeWorkspaces(
+            siblingServerId,
+            new Map([[siblingWorkspace.id, siblingWorkspace]]),
+          );
+          useSessionStore.getState().setHasHydratedWorkspaces(siblingServerId, true);
+        });
+        expect(
+          result.current.list.workspacePlacements.map((entry) => entry.serverId).sort(),
+        ).toEqual([serverId, siblingServerId].sort());
+
+        rerender({ hostFilters: [] });
+        act(() => {
+          preferences.getState().setHostEnabled(account, share.hostId, false);
+        });
+        expect(result.current.hosts.map((host) => host.serverId)).not.toContain(serverId);
+        expect(result.current.list.projects.map((project) => project.projectName)).toEqual([
+          "Project A",
+          "Project B",
+        ]);
+        expect(
+          result.current.list.workspacePlacements.some((entry) => entry.serverId === serverId),
+        ).toBe(false);
+
+        act(() => {
+          preferences.getState().setHostEnabled(account, share.hostId, true);
+          const restored = workspace({
+            id: "shared-workspace",
+            projectId: "shared-project",
+            projectDisplayName: "Shared project",
+            name: "Shared workspace",
+          });
+          useSessionStore.getState().initializeSession(serverId, null);
+          seedRuntimeWorkspaces(serverId, new Map([[restored.id, restored]]));
+          useSessionStore.getState().setHasHydratedWorkspaces(serverId, true);
+        });
+        expect(result.current.hosts.map((host) => host.serverId)).toContain(serverId);
+        expect(result.current.list.projects.map((project) => project.projectName)).toContain(
+          "Shared project",
+        );
+        expect(
+          result.current.list.workspacePlacements.some((entry) => entry.serverId === serverId),
+        ).toBe(true);
+      } finally {
+        act(stopSharedHosts);
+        acquireDirectoryDemand.mockRestore();
+        useSessionStore.getState().clearSession(serverId);
+      }
+    },
+  );
 });
