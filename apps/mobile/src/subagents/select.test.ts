@@ -8,6 +8,9 @@ import {
 import { createWorkspaceAgentVisibilitySelector } from "@/workspace-tabs/agent-visibility";
 import { useProviderSubagentStore } from "./provider-store";
 import { useSessionStore, type Agent } from "@/stores/session-store";
+import { parseServerInfoStatusPayload } from "@ait/protocol/messages";
+import { serverInfo } from "@/runtime/rust-daemon/messages";
+import { object } from "@/runtime/rust-daemon/types";
 
 const SERVER_ID = "server-1";
 const AGENT_TIMESTAMP = new Date("2026-03-08T10:00:00.000Z");
@@ -73,6 +76,61 @@ afterEach(() => {
 });
 
 describe("selectSubagentsForParent", () => {
+  it("shows Claude children using the capabilities advertised by the Rust adapter", () => {
+    const envelope = serverInfo(
+      { server_id: SERVER_ID },
+      new Set([
+        "agent.provider_subagents.list.request",
+        "agent.provider_subagents.timeline.get.request",
+      ]),
+    );
+    const info = parseServerInfoStatusPayload(object(object(envelope.message).payload));
+    const supported = info?.features?.providerSubagents === true;
+    const nestingSupported = info?.features?.providerSubagentNesting === true;
+    const store = useProviderSubagentStore.getState();
+    const child = {
+      id: "claude-child",
+      parentAgentId: "parent-a",
+      parentSubagentId: null,
+      provider: "claude" as const,
+      title: "general-purpose",
+      description: "Review sources",
+      status: "running" as const,
+      createdAt: "2026-10-31T09:15:00.000Z",
+      updatedAt: "2026-10-31T09:15:00.000Z",
+      toolCallId: "child-call",
+    };
+    store.applyUpdate(SERVER_ID, { kind: "upsert", subagent: child });
+    store.applyUpdate(SERVER_ID, {
+      kind: "upsert",
+      subagent: { ...child, id: "nested-child", parentSubagentId: child.id },
+    });
+    const params = { serverId: SERVER_ID, parentAgentId: "parent-a" };
+    const rows = () =>
+      selectProviderSubagentsForParent(
+        useProviderSubagentStore.getState(),
+        params,
+        supported,
+        nestingSupported,
+      );
+
+    expect(rows()).toMatchObject([{ id: child.id, status: "running" }]);
+    expect(
+      selectProviderSubagentsForParent(
+        useProviderSubagentStore.getState(),
+        { ...params, providerParentSubagentId: child.id },
+        supported,
+        nestingSupported,
+      ),
+    ).toMatchObject([{ id: "nested-child" }]);
+
+    store.applyUpdate(SERVER_ID, {
+      kind: "upsert",
+      subagent: { ...child, status: "completed" },
+    });
+    expect(rows()).toMatchObject([{ id: child.id, status: "completed" }]);
+  });
+
   it("hides cached provider children when the host does not support them", () => {
     useProviderSubagentStore.getState().applyUpdate(SERVER_ID, {
       kind: "upsert",
