@@ -1,3 +1,4 @@
+import { groupHosts } from "@/hosts/host-groups";
 import { useMemo, useState, useCallback, useEffect, type ReactElement } from "react";
 import { View, Text } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
@@ -118,7 +119,7 @@ function SessionsScreenContent() {
     isSearching,
     isAllHosts: selectedHost === ALL_HOSTS_OPTION_ID,
   });
-  const showHostFilter = hosts.length > 1;
+  const showHostFilter = groupHosts(hosts).length > 1;
   const showFilterRow = showHostFilter || isSearchSupported;
   const showLoadError = isError && agents.length === 0;
 

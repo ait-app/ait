@@ -1,3 +1,4 @@
+import { groupHosts } from "@/hosts/host-groups";
 import {
   useCallback,
   useMemo,
@@ -181,7 +182,7 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
     [],
   );
 
-  const showHostFilter = hosts.length > 1;
+  const showHostFilter = groupHosts(hosts).length > 1;
   // One project is the whole sidebar, so filtering to it is a no-op with a menu row attached.
   const showProjectFilter = allProjects.length > 1;
   // Nothing to filter by means no row at all. The active-filter half is not redundant: the merged
@@ -705,13 +706,21 @@ function HostFilterPage({
       >
         {t("sidebar.display.hostFilter.all")}
       </MenuItem>
-      {hosts.map((host) => (
+      {groupHosts(hosts).map((host) => (
         <HostFilterItem
           key={host.serverId}
           serverId={host.serverId}
           label={host.label?.trim() || host.serverId}
-          selected={preferences.hostFilters.includes(host.serverId)}
-          onToggle={preferences.toggleHostFilter}
+          selected={host.memberServerIds.some((id) => preferences.hostFilters.includes(id))}
+          onToggle={() => {
+            const selected = host.memberServerIds.some((id) =>
+              preferences.hostFilters.includes(id),
+            );
+            for (const id of host.memberServerIds) {
+              if (preferences.hostFilters.includes(id) === selected)
+                preferences.toggleHostFilter(id);
+            }
+          }}
         />
       ))}
     </>

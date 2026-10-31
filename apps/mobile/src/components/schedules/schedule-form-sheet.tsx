@@ -1,3 +1,4 @@
+import { groupHosts } from "@/hosts/host-groups";
 import { useTranslation } from "react-i18next";
 import equal from "fast-deep-equal";
 import {
@@ -275,17 +276,20 @@ function ScheduleFormScope(props: ScheduleFormSheetProps & { onDismiss?: () => v
   });
   const hostOptions = useMemo(
     () =>
-      hosts
-        .filter((host) => props.mode !== "edit" || host.serverId === props.serverId)
-        .map((host) => ({
-          id: host.serverId,
-          value: host.serverId,
-          label: host.label,
-          testID: buildScheduleHostOptionTestId(host.serverId),
-        })),
+      groupHosts(
+        hosts.filter((host) => props.mode !== "edit" || host.serverId === props.serverId),
+      ).map((host) => ({
+        id: host.serverId,
+        value: host.serverId,
+        label: host.label,
+        memberServerIds: host.memberServerIds,
+        testID: buildScheduleHostOptionTestId(host.serverId),
+      })),
     [hosts, props.mode, props.serverId],
   );
-  const host = hostOptions.find((option) => option.value === placement.serverId);
+  const host = hostOptions.find((option) =>
+    option.memberServerIds.includes(placement.serverId ?? ""),
+  );
   const projectOptions = useMemo(
     () =>
       projects.flatMap((project) =>
@@ -446,7 +450,16 @@ function ScheduleFormContent({
   const { t } = useTranslation();
   const controlSize: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
   const { projects } = useProjects();
-  const hostProfiles = useHosts();
+  const allHostProfiles = useHosts();
+  const hostProfiles = useMemo(
+    () =>
+      groupHosts(allHostProfiles).map((host) =>
+        host.memberServerIds.includes(serverId ?? "")
+          ? (allHostProfiles.find((profile) => profile.serverId === serverId) ?? host)
+          : host,
+      ),
+    [allHostProfiles, serverId],
+  );
   const hosts = useStoreWithEqualityFn(
     useSessionStore,
     useMemo(() => selectScheduleHosts(hostProfiles), [hostProfiles]),

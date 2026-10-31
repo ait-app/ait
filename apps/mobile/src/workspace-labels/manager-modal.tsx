@@ -1,3 +1,4 @@
+import { groupHosts } from "@/hosts/host-groups";
 import {
   useCallback,
   useEffect,
@@ -57,7 +58,8 @@ export function WorkspaceLabelManagerModal({
   onClose: () => void;
 }): ReactElement {
   const { t } = useTranslation();
-  const hosts = useHosts();
+  const hostProfiles = useHosts();
+  const hosts = useMemo(() => groupHosts(hostProfiles), [hostProfiles]);
   const { hosts: labelHosts } = useWorkspaceLabelProjection();
   const snapshots = useMemo(
     () => Object.fromEntries(labelHosts.map((host) => [host.serverId, host])),

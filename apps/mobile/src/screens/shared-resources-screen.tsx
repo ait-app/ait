@@ -4,12 +4,18 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { FolderGit2, Monitor, RefreshCw, Share2, Waypoints, X } from "lucide-react-native";
 import type { ShareGroup, ShareSetting } from "@ait/protocol/messages";
 import { MenuHeader } from "@/components/headers/menu-header";
-import { SharedResourceList } from "@/components/sidebar/shared-resource-list";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Switch } from "@/components/ui/switch";
 import { getHostRuntimeStore, isSharedResourceHost, useHosts } from "@/runtime/host-runtime";
 import { useHubServices } from "@/runtime/hub-service-store";
+import { useAccountState } from "@/runtime/account-state";
+import { groupIncomingSharedHosts } from "@/runtime/shared-hosts";
+import {
+  isSharedHostEnabled,
+  useSharedHostPreferences,
+} from "@/stores/shared-host-preferences-store";
 import { useTranslation } from "react-i18next";
 import type { HubAccountSnapshot } from "@ait/client/internal/hub";
 
@@ -44,6 +50,12 @@ export function SharedResourcesScreen() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<SharedTab>("incoming");
   const incoming = useHubServices((state) => selectIncomingShares(state.snapshot));
+  const incomingHosts = useMemo(() => groupIncomingSharedHosts(incoming), [incoming]);
+  const center = useAccountState((state) => state.center);
+  const accountId = useAccountState((state) => state.accountId);
+  const disabledHostKeys = useSharedHostPreferences((state) => state.disabledHostKeys);
+  const preferencesHydrated = useSharedHostPreferences((state) => state.hydrated);
+  const setHostEnabled = useSharedHostPreferences((state) => state.setHostEnabled);
   const hosts = useHosts();
   const ownerHosts = useMemo(() => hosts.filter((host) => !isSharedResourceHost(host)), [hosts]);
   const [outgoing, setOutgoing] = useState<OutgoingShare[]>([]);
@@ -119,14 +131,14 @@ export function SharedResourcesScreen() {
     () => [
       {
         value: "incoming" as const,
-        label: t("sharing.sharedWithMeCount", { count: incoming.length }),
+        label: t("sharing.sharedWithMeCount", { count: incomingHosts.length }),
       },
       {
         value: "outgoing" as const,
         label: t("sharing.sharedByMeCount", { count: outgoing.length }),
       },
     ],
-    [incoming.length, outgoing.length, t],
+    [incomingHosts.length, outgoing.length, t],
   );
 
   return (
@@ -149,8 +161,39 @@ export function SharedResourcesScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <ScrollView contentContainerStyle={styles.content}>
         {tab === "incoming" ? (
-          incoming.length ? (
-            <SharedResourceList showHeader={false} />
+          incomingHosts.length ? (
+            <View style={styles.incoming}>
+              <Text style={styles.meta}>{t("sharing.incomingHostHint")}</Text>
+              <View style={styles.shareList}>
+                {incomingHosts.map((host) => (
+                  <View key={host.hostId} style={styles.shareRow}>
+                    <View style={styles.scopeIcon}>
+                      <Monitor size={16} color={theme.colors.foregroundMuted} />
+                    </View>
+                    <View style={styles.copy}>
+                      <Text numberOfLines={1} style={styles.title}>
+                        {host.label}
+                      </Text>
+                      <Text numberOfLines={1} style={styles.meta}>
+                        {host.groupNames.join(" · ")}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={isSharedHostEnabled(
+                        { disabledHostKeys },
+                        { center, accountId },
+                        host.hostId,
+                      )}
+                      disabled={!preferencesHydrated}
+                      accessibilityLabel={t("sharing.showHostInHosts", { host: host.label })}
+                      onValueChange={(enabled) =>
+                        setHostEnabled({ center, accountId }, host.hostId, enabled)
+                      }
+                    />
+                  </View>
+                ))}
+              </View>
+            </View>
           ) : (
             <View style={styles.empty}>
               <Share2 size={28} color={theme.colors.foregroundMuted} />
@@ -163,9 +206,9 @@ export function SharedResourcesScreen() {
             <LoadingSpinner size="large" color={theme.colors.foregroundMuted} />
           </View>
         ) : outgoing.length ? (
-          <View style={styles.outgoingList}>
+          <View style={styles.shareList}>
             {outgoing.map((entry) => (
-              <View key={entry.setting.settingId} style={styles.outgoingRow}>
+              <View key={entry.setting.settingId} style={styles.shareRow}>
                 <View style={styles.scopeIcon}>
                   <ScopeIcon
                     kind={entry.setting.resourceKind}
@@ -255,13 +298,14 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     textAlign: "center",
   },
-  outgoingList: {
+  incoming: { gap: theme.spacing[3] },
+  shareList: {
     overflow: "hidden",
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: theme.borderRadius.xl,
   },
-  outgoingRow: {
+  shareRow: {
     minHeight: 68,
     flexDirection: "row",
     alignItems: "center",

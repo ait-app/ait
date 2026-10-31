@@ -123,34 +123,41 @@ function harness(
 }
 
 describe("Rust protocol adapter", () => {
-  it("keeps project guests on snapshots through hello and later server-info updates", () => {
-    const h = harness(
-      undefined,
-      "ait+desktop://account-relay/host?center=https://center.test",
-      "project",
-    );
-    const features = ["directory-sync-v1", "directory-subscriptions-v1"];
-    try {
-      h.ready("test", features);
-      h.sockets[0].message({
-        type: "event",
-        method: "status.server_info",
-        params: { info: { server_id: "server", features }, subscriptionId: "status" },
-      });
-      expect(h.received).toHaveLength(2);
-      for (const message of h.received) {
-        expect(message).toMatchObject({
-          message: {
-            payload: {
-              features: { directorySubscriptions: false, directorySync: false },
-            },
-          },
+  it.each(["workspace", "project"] as const)(
+    "keeps %s guests on scoped directories through hello and later server-info updates",
+    (scope) => {
+      const h = harness(
+        undefined,
+        "ait+desktop://account-relay/host?center=https://center.test",
+        scope,
+      );
+      const features = ["directory-sync-v1", "directory-subscriptions-v1"];
+      try {
+        h.ready("test", features);
+        h.sockets[0].message({
+          type: "event",
+          method: "status.server_info",
+          params: { info: { server_id: "server", features }, subscriptionId: "status" },
         });
+        expect(h.received).toHaveLength(2);
+        for (const message of h.received) {
+          expect(message).toMatchObject({
+            message: {
+              payload: {
+                features: {
+                  directorySubscriptions: false,
+                  directorySync: false,
+                  projectList: scope === "project",
+                },
+              },
+            },
+          });
+        }
+      } finally {
+        h.transport.close();
       }
-    } finally {
-      h.transport.close();
-    }
-  });
+    },
+  );
 
   it("subscribes to canonical setup and activity events after supported-only filtering", async () => {
     const h = harness();

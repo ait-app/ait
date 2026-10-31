@@ -1,4 +1,6 @@
+import { resolveHostGroupServerId } from "@/hosts/host-groups";
 import { useCallback, useMemo } from "react";
+import { useHosts } from "@/runtime/host-runtime";
 import { useAppSettings } from "@/hooks/use-settings";
 import {
   useActiveWorkspaceSelection,
@@ -22,9 +24,13 @@ function useActiveServerId(): string | null {
 
 function useUsageHostChoice(): UsageHostChoice {
   const { settings } = useAppSettings();
+  const hosts = useHosts();
+  const activeServerId = useActiveServerId();
   return {
-    pickedServerId: settings.usage.serverId,
-    activeServerId: useActiveServerId(),
+    pickedServerId: settings.usage.serverId
+      ? resolveHostGroupServerId(hosts, settings.usage.serverId)
+      : null,
+    activeServerId: activeServerId ? resolveHostGroupServerId(hosts, activeServerId) : null,
     hosts: useUsageHosts(),
   };
 }

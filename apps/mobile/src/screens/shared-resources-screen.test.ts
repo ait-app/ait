@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HubAccountSnapshot, HubShare } from "@ait/client/internal/hub";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { i18n } from "@/i18n/i18next";
+import { useHubServices } from "@/runtime/hub-service-store";
+import { useSharedHostPreferences } from "@/stores/shared-host-preferences-store";
 import { selectIncomingShares, SharedResourcesScreen } from "./shared-resources-screen";
 
 const state = vi.hoisted(() => ({
@@ -20,11 +22,14 @@ vi.mock("@/runtime/host-runtime", () => ({
   isSharedResourceHost: () => false,
   getHostRuntimeStore: () => ({ getClient: (serverId: string) => state.clients.get(serverId) }),
 }));
-vi.mock("@/runtime/hub-service-store", () => ({
-  useHubServices: (select: (store: { snapshot: null }) => unknown) => select({ snapshot: null }),
+vi.mock("@/runtime/account-state", () => ({
+  useAccountState: (select: (store: { center: string; accountId: string }) => unknown) =>
+    select({ center: "https://center.test/api", accountId: "recipient" }),
+}));
+vi.mock("@react-native-async-storage/async-storage", () => ({
+  default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} },
 }));
 vi.mock("@/components/headers/menu-header", () => ({ MenuHeader: () => null }));
-vi.mock("@/components/sidebar/shared-resource-list", () => ({ SharedResourceList: () => null }));
 vi.mock("lucide-react-native", () => ({
   FolderGit2: () => null,
   Monitor: () => null,
@@ -35,6 +40,9 @@ vi.mock("lucide-react-native", () => ({
 }));
 
 beforeEach(async () => {
+  await useSharedHostPreferences.persist.rehydrate();
+  useSharedHostPreferences.setState({ disabledHostKeys: [] });
+  useHubServices.setState({ snapshot: null });
   state.clients.clear();
   for (const host of state.hosts) {
     state.clients.set(host.serverId, {
@@ -63,6 +71,53 @@ describe("selectIncomingShares", () => {
 });
 
 describe("SharedResourcesScreen", () => {
+  it("lists each shared Host once with a default-on switch that remains available when turned off", () => {
+    const share: HubShare = {
+      shareId: "project-grant",
+      groupId: "team",
+      groupName: "Team",
+      hostId: "host",
+      nodeId: "node",
+      hostName: "Workstation",
+      owner: { userId: "owner", displayName: "Owner" },
+      resourceKind: "project",
+      resourceKey: "project",
+      displayName: "Project",
+      projectName: "Project",
+      permission: "operate",
+      state: "online",
+    };
+    const shares: HubShare[] = [
+      share,
+      { ...share, shareId: "workspace-grant", resourceKind: "workspace" },
+    ];
+    useHubServices.setState({
+      snapshot: {
+        state: "online",
+        linkId: "link",
+        centerUrl: "https://center.test/api",
+        methods: [],
+        shares,
+      },
+    });
+    const view = render(createElement(SharedResourcesScreen));
+    expect(view.getByRole("button", { name: "Shared with me (1)" })).toBeTruthy();
+    expect(view.getAllByRole("switch")).toHaveLength(1);
+    const toggle = () => view.getByRole("switch", { name: "Show Owner · Workstation in Hosts" });
+    expect(toggle().getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(toggle());
+    expect(toggle().getAttribute("aria-checked")).toBe("false");
+    expect(view.getByText("Owner · Workstation")).toBeTruthy();
+    expect(useHubServices.getState().snapshot?.shares).toBe(shares);
+    view.unmount();
+
+    const reopened = render(createElement(SharedResourcesScreen));
+    const restoredToggle = reopened.getByRole("switch");
+    expect(restoredToggle.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(restoredToggle);
+    expect(restoredToggle.getAttribute("aria-checked")).toBe("true");
+  });
+
   it("shows outgoing shares when another daemon does not implement sharing", async () => {
     state.clients.set("supported", {
       listShares: vi.fn<DaemonClient["listShares"]>().mockResolvedValue({

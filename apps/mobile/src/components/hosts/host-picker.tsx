@@ -3,6 +3,7 @@ import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/comb
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useHostRuntimeSnapshot, type ActiveConnection } from "@/runtime/host-runtime";
 import { orderHostsLocalFirst } from "@/types/host-connection";
+import { groupHosts, type HostChoice } from "@/hosts/host-groups";
 import type { TFunction } from "i18next";
 import { Plus, Server, Settings } from "lucide-react-native";
 import { useCallback, useMemo, type ReactElement, type ReactNode } from "react";
@@ -26,10 +27,6 @@ export {
 
 const SEARCHABLE_THRESHOLD = 10;
 type RenderHostOption = NonNullable<ComboboxProps["renderOption"]>;
-interface HostPickerHost {
-  serverId: string;
-  label: string;
-}
 
 export function HostStatusDotSlot({ serverId }: { serverId: string }): ReactElement {
   return (
@@ -162,7 +159,7 @@ function SystemHostPickerOption({
 }
 
 export interface HostPickerProps {
-  hosts: HostPickerHost[];
+  hosts: HostChoice[];
   value: string;
   onSelect: (id: string) => void;
   open: boolean;
@@ -209,9 +206,11 @@ export function HostPicker({
   const { t } = useTranslation();
   const localServerId = useLocalDaemonServerId();
   const orderedHosts = useMemo(
-    () => orderHostsLocalFirst(hosts, localServerId),
+    () => orderHostsLocalFirst(groupHosts(hosts), localServerId),
     [hosts, localServerId],
   );
+  const selectedValue =
+    orderedHosts.find((host) => host.memberServerIds.includes(value))?.serverId ?? value;
 
   const options = useMemo(() => {
     const hostOptions = orderedHosts.map((host) => ({ id: host.serverId, label: host.label }));
@@ -305,7 +304,7 @@ export function HostPicker({
       {children}
       <Combobox
         options={options}
-        value={value}
+        value={selectedValue}
         onSelect={handleSelect}
         renderOption={renderOption}
         searchable={isSearchable}

@@ -129,7 +129,9 @@ export function serverInfo(
         features.has("directory-subscriptions-v1"),
       daemonPairing: false,
       providerConfiguration: false,
-      projectList: has("project.list.request"),
+      // Workspace guests cannot list projects. DirectorySync derives their parent
+      // project from the allowed workspace snapshot instead.
+      projectList: guestScope !== "workspace" && has("project.list.request"),
       stableProjectIdentity: has("project.list.request") && has("project.add.request"),
       workspaceMultiplicity: has("workspace.list.request"),
       workspaceTargetRead: has("workspace.get.request"),

@@ -3,10 +3,13 @@ import { createProjectIconTarget, type ProjectIconTarget } from "@/projects/icon
 
 export function buildNewWorkspaceProjectIconTargets(
   projects: readonly HostProjectListItem[],
-  serverId: string,
+  serverId: string | readonly string[],
 ): ProjectIconTarget[] {
+  const serverIds = typeof serverId === "string" ? [serverId] : serverId;
   return projects.flatMap((project) => {
-    const host = project.hosts.find((candidate) => candidate.serverId === serverId);
+    const host = serverIds.flatMap((id) =>
+      project.hosts.filter((candidate) => candidate.serverId === id),
+    )[0];
     if (!host) return [];
     const target = createProjectIconTarget({ projectViewKey: project.viewKey, placement: host });
     return target ? [target] : [];

@@ -1,3 +1,4 @@
+import { groupHosts } from "@/hosts/host-groups";
 import { toUsageReport } from "./native-report";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { useCallback, useMemo } from "react";
@@ -234,7 +235,8 @@ export function useHostReportsUsage(serverId: string): boolean {
 
 /** Every host with whether it is connected and reports usage, in host order. */
 export function useUsageHosts(): UsageHost[] {
-  const hosts = useHosts();
+  const hostProfiles = useHosts();
+  const hosts = useMemo(() => groupHosts(hostProfiles), [hostProfiles]);
   const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
   const connectionStatuses = useHostRuntimeConnectionStatuses(serverIds);
   const supportedServerIds = useSessionStore(
