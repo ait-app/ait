@@ -18,6 +18,15 @@ The daemon uses `pi` on PATH. To select another executable, set `AIT_SERVER_PI_B
 path in the daemon's environment before starting it. An explicit missing executable does
 not fall back to PATH. No provider process is launched merely by registering the adapter.
 
+Availability and diagnostic inspection return unavailable quietly when the configured
+executable is missing or not executable. Later inspections recheck it, so installation or
+permission repair can recover; removing execute permission is detected even after a
+successful version check. Actual version-probe and session failures retain structured logs.
+If the executable passes the file and permission checks but cannot start, the displayed
+diagnostic instead reports a launch failure with the OS error kind and numeric code when
+available. Check the interpreter, executable format, and execution permissions, including
+mount restrictions. Cached failures retain the same guidance until the next probe.
+
 ## Supported behavior
 
 - Model discovery without creating persistent sessions or submitting prompts.
@@ -28,7 +37,8 @@ not fall back to PATH. No provider process is launched merely by registering the
 - Cancellation and process cleanup, including failure and uncertain submission paths.
 - Ait display timeline retention across daemon restart.
 - Compaction start/completion/failure markers, including manual compaction while idle.
-- Safe failure classification and fixed user-facing explanations, without retaining raw errors.
+- Safe failure classification and bounded, redacted native failure explanations; logs contain
+  only structured facts, as specified by [ADR-185](../decisions/providers/adr-185-native-provider-failure-details.md).
 
 Pi owns its credentials, session files, tools, extensions and settings. Ait does not expose a
 Pi mode or add a permission sandbox. Extension select, confirm, input and editor dialogs are
@@ -145,10 +155,14 @@ previews, or cumulative text fail the host turn and close Pi, even if an extensi
 completed its native work before acknowledging the command. Queue metadata, cached inputs
 for at most 128 active tools, and reserved terminal cleanup are additional overhead.
 
-Version checks are cached per configured adapter until daemon restart (transient errors are
-not cached). Discovery still starts a temporary RPC process and creation starts a native
-writer, so first use includes Node startup. An environment override has a separate version
-cache. Discovery retains the host's 30-second total catalog budget.
+Successful version checks are cached per configured adapter until daemon restart. Version
+probes have a 5-second timeout; failed probes are reused for 5 seconds before retrying,
+including across availability checks, diagnostic inspection, and adapter clones. Repeated
+classified probe failures share a 30-second diagnostic log aggregation window. Each actual
+spawn failure also logs the safe OS error kind and code. Discovery still starts
+a temporary RPC process and creation starts a native writer, so first use includes Node
+startup. An environment override has a separate version cache and probe diagnostics.
+Discovery retains the host's 30-second total catalog budget.
 
 ## Project trust
 

@@ -10,7 +10,6 @@ use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::OnceCell;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
@@ -29,7 +28,7 @@ pub(crate) struct PiClient {
     program: PathBuf,
     deadline: Duration,
     admission_deadline: Duration,
-    version: Arc<OnceCell<transport::Version>>,
+    version: Arc<transport::VersionProbe>,
     environment: AgentEnvironment,
     session_environment: history::SessionEnvironment,
     images: super::images::ImageStore,
@@ -120,6 +119,9 @@ impl AgentClient for PiClient {
     }
 
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {
+        if !super::configuration::executable(&self.program) {
+            return Ok("Pi executable is unavailable; check PATH or AIT_SERVER_PI_BIN.".to_owned());
+        }
         match transport::version_info(self).await {
             Ok(version) if !version.supported => Ok(format!(
                 "Pi {} is unsupported; requires a supported Pi version (1.2 or newer).",
@@ -129,12 +131,7 @@ impl AgentClient for PiClient {
                 "Pi RPC ready (requires Pi 1.2 or newer); authentication is managed by Pi"
                     .to_owned(),
             ),
-            Err(AgentSessionError::Unavailable) => {
-                Ok("Pi executable is unavailable; check PATH or AIT_SERVER_PI_BIN.".to_owned())
-            }
-            Err(_) => {
-                Ok("Pi version probe failed or timed out; requires Pi 1.2 or newer.".to_owned())
-            }
+            Err(error) => Ok(error.to_string()),
         }
     }
 

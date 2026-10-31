@@ -1,5 +1,25 @@
 use super::*;
 
+#[test]
+fn spawn_guidance_retains_only_safe_os_facts_with_an_optional_code() {
+    let error = VersionError::Spawn {
+        kind: std::io::ErrorKind::PermissionDenied,
+        os_error: Some(13),
+    };
+    assert_eq!(
+        error.to_string(),
+        "Pi executable could not be started (error kind: PermissionDenied, OS error: 13); check its interpreter, executable format, and execution permissions."
+    );
+    let error = VersionError::Spawn {
+        kind: std::io::ErrorKind::PermissionDenied,
+        os_error: None,
+    };
+    assert_eq!(
+        error.to_string(),
+        "Pi executable could not be started (error kind: PermissionDenied); check its interpreter, executable format, and execution permissions."
+    );
+}
+
 #[tokio::test]
 async fn writes_distinguish_closed_input_from_timeout_and_frame_limit() {
     let input = Mutex::new(None);

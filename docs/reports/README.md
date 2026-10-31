@@ -98,6 +98,8 @@
 
 ## Provider、Agent 与会话
 
+- [Pi 不可用诊断验证](providers/pi-unavailable-diagnostics-2026-10-30.md)
+
 - [MCP 注入复核：参考 Paseo 当前实现](providers/paseo-mcp-injection-review-2026-10-30.md)
 
 - [MCP 自动注入：Paseo 与 Ait 对照](providers/paseo-mcp-injection-comparison-2026-10-28.md)

@@ -1,3 +1,4 @@
+use super::diagnostics::Capture;
 use super::*;
 use crate::ports::diagnostics::Category;
 
@@ -165,7 +166,7 @@ async fn prompt_admission_uses_its_own_budget_and_never_replays_timeout() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn version_errors_are_bounded_and_old_installations_are_actionable() {
     for scenario in [
         "version-malformed",
@@ -177,12 +178,15 @@ async fn version_errors_are_bounded_and_old_installations_are_actionable() {
         client.deadline = Duration::from_millis(500);
         assert!(transport::version(&client).await.is_err(), "{scenario}");
     }
+    let capture = Capture::default();
+    let _subscriber = tracing::subscriber::set_default(capture.subscriber());
     let (_directory, client, _spec) = fixture("old");
     assert!(!client.is_available().await.unwrap());
     assert_eq!(
         client.diagnostic().await.unwrap(),
         "Pi 0.73.1 is unsupported; requires a supported Pi version (1.2 or newer)."
     );
+    assert!(capture.text().is_empty(), "{}", capture.text());
     let unavailable = PiClient::new("/missing/ait-pi-test".into());
     assert!(!unavailable.is_available().await.unwrap());
     assert!(
