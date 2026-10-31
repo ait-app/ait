@@ -127,7 +127,7 @@ def content(row):
             if part["type"] == "text":
                 update({"sessionUpdate": "agent_message_chunk", "messageId": row["id"], "content": part})
             elif part["type"] == "tool":
-                update({"sessionUpdate": "tool_call", "toolCallId": part["id"], "title": "read", "kind": part.get("kind", "read"), "status": "pending", "rawInput": part.get("input", {"path": "file"})})
+                update({"sessionUpdate": "tool_call", "toolCallId": part["id"], "title": part.get("title", "read"), "kind": part.get("kind", "read"), "status": "pending", "rawInput": part.get("input", {"path": "file"})})
                 update({"sessionUpdate": "tool_call_update", "toolCallId": part["id"], "status": "completed", "rawOutput": part["output"]})
 
 
@@ -172,6 +172,11 @@ for line in sys.stdin:
     identity = message.get("id")
     params = message.get("params", {})
     if method is None:
+        if message["id"] == "background-permission":
+            assert message["result"]["outcome"]["optionId"] == "once"
+            from opencode_subagents import finish_background
+            finish_background(root, session_id, send)
+            continue
         if message["id"] == "unsupported-fixture":
             assert message["error"]["code"] == -32601
         elif message["id"] == "question":
@@ -181,6 +186,8 @@ for line in sys.stdin:
         complete()
     elif method == "initialize":
         assert params["clientCapabilities"]["elicitation"]["form"] == {}
+        if scenario.startswith("subagents"):
+            assert params["clientCapabilities"]["_meta"]["opencode/child-session-updates"] is True
         if scenario == "slow-initialize":
             (root / "initialize.entered").touch()
             while not (root / "initialize.release").exists():
@@ -245,6 +252,13 @@ for line in sys.stdin:
             for row in state()["history"]:
                 content(row)
         reply(identity, {"sessionId": session_id, "configOptions": options()})
+        if scenario == "subagents" and method == "session/load":
+            update({"sessionUpdate":"available_commands_update","availableCommands":[]})
+        if scenario == "subagents-idle" and method == "session/load" and state()["seq"] == 1 and not (root / "background-requested").exists():
+            (root / "background-requested").touch()
+            send({"id":"background-permission", "method":"session/request_permission", "params":{
+                "sessionId":session_id, "toolCall":{"toolCallId":"ses_child:read", "title":"Child read", "rawInput":{"path":"file"}},
+                "options":[{"optionId":"once", "kind":"allow_once", "name":"Allow once"}]}})
     elif method == "session/list":
         moved = location("ses_one")
         rows = [] if not (root / "native-fixture.json").exists() or moved not in [None, params.get("cwd", moved)] else [{
@@ -278,6 +292,8 @@ for line in sys.stdin:
             reply(identity, {"configOptions": options()})
     elif method == "session/prompt":
         assert active is None
+        session_id = params["sessionId"]
+        state_path = session_path(session_id)
         active = identity
         if params["prompt"] == [{"type": "text", "text": "/compact"}]:
             value = state()
@@ -318,6 +334,14 @@ for line in sys.stdin:
                 "message": "OpenCode's free tier can only be used from within OpenCode",
                 "data": {"service": "session", "errorName": "APIError", "responseBody": "private diagnostic"}}})
             active = None
+        elif scenario == "subagents":
+            from opencode_subagents import run
+            run(root, session_id, send, update, value)
+            complete()
+        elif scenario == "subagents-idle":
+            from opencode_subagents import background
+            background(root, session_id, send, value)
+            complete()
         elif scenario == "protocol-controls":
             update({"sessionUpdate": "config_option_update", "configOptions": options()})
             send({"id": "permission", "method": "session/request_permission", "params": {

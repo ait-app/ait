@@ -18,6 +18,7 @@ checklist, not a claim that unchecked features are implemented.
 - [x] Host busy queue, client message IDs and idempotent admission
 - [x] Claude conversation/file/both rewind with immutable host history
 - [x] Claude/Codex subagent discovery/history, live events, aliases and Workflow replay
+- [x] OpenCode ACP subagent lifecycle, nested timelines and verified task-history recovery ([ADR-206](../decisions/providers/adr-206-opencode-acp-subagents.md)); live detail depends on native child-event support
 - [x] Codex compact/goal/custom prompt commands
 - [x] Rich tool details, diffs, task snapshots and image rendering
 - [x] Claude authentication and quota inspection
