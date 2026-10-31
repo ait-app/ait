@@ -6,6 +6,7 @@ use super::*;
 use crate::guest::admit;
 use crate::test_support::{Workspaces, address};
 
+mod node;
 mod scopes;
 
 struct Guest {
@@ -564,10 +565,12 @@ async fn events_are_confined() {
     );
 }
 
-/// Even a node share, which watches every terminal, drives only the visitor's own.
+/// Scoped shares watch other terminals but drive only the visitor's own.
 #[tokio::test]
 async fn visitors_drive_only_terminals_they_created() {
-    let guest = Guest::with(ResourceKind::Node).await;
+    let guest = Guest::with(ResourceKind::Project).await;
+    guest.session.remember_terminal("owners");
+    guest.session.remember_terminal("mine");
     let session = &guest.session;
     assert!(session.registration.record_terminal("mine".into()));
     for method in ["terminal.kill.request", "terminal.rename.request"] {

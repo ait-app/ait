@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { Check, Users } from "lucide-react-native";
+import { Users } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import type { ShareGroup, ShareResourceKind, ShareSetting } from "@ait/protocol/messages";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { Switch } from "@/components/ui/switch";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { useHostRuntimeClient } from "@/runtime/host-runtime";
+import { isSharedResourceHost, useHostRuntimeClient, useHosts } from "@/runtime/host-runtime";
 
 export interface ShareResourceTarget {
   serverId: string;
@@ -32,6 +33,9 @@ export function ShareManagerSheet({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const client = useHostRuntimeClient(target?.serverId ?? "");
+  const hosts = useHosts();
+  const host = hosts.find((candidate) => candidate.serverId === target?.serverId);
+  const isGuest = host ? isSharedResourceHost(host) : false;
   const [groups, setGroups] = useState<ShareGroup[]>([]);
   const [settings, setSettings] = useState<ShareSetting[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,16 +63,32 @@ export function ShareManagerSheet({
     if (!client || !target) return;
     setLoading(true);
     setError(null);
+    setGroups([]);
+    setSettings([]);
+    if (isGuest) {
+      setError(t("sharing.ownerOnly"));
+      setLoading(false);
+      return;
+    }
     try {
       const result = await client.listShares();
       setGroups(result.groups);
       setSettings(result.shares.filter((setting) => sameResource(setting, target)));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("sharing.loadError"));
+      const code = cause && typeof cause === "object" && "code" in cause ? cause.code : null;
+      setError(
+        t(
+          code === "forbidden"
+            ? "sharing.ownerOnly"
+            : code === "not_implemented"
+              ? "sharing.unsupported"
+              : "sharing.loadError",
+        ),
+      );
     } finally {
       setLoading(false);
     }
-  }, [client, t, target]);
+  }, [client, isGuest, t, target]);
 
   useEffect(() => {
     if (visible) void load();
@@ -76,7 +96,7 @@ export function ShareManagerSheet({
 
   const toggleGroup = useCallback(
     async (group: ShareGroup) => {
-      if (!client || !target || pendingGroup) return;
+      if (!client || !target || isGuest || pendingGroup) return;
       const existing = settings.find(
         (setting) => setting.groupId === group.groupId && setting.state !== "revoked",
       );
@@ -109,7 +129,7 @@ export function ShareManagerSheet({
         setPendingGroup(null);
       }
     },
-    [client, pendingGroup, settings, t, target],
+    [client, isGuest, pendingGroup, settings, t, target],
   );
 
   return (
@@ -134,18 +154,7 @@ export function ShareManagerSheet({
               );
               const selected = Boolean(setting);
               return (
-                <Pressable
-                  key={group.groupId}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: selected, disabled: pendingGroup !== null }}
-                  disabled={pendingGroup !== null}
-                  onPress={() => void toggleGroup(group)}
-                  style={({ hovered, pressed }) => [
-                    styles.groupRow,
-                    (hovered || pressed) && styles.groupRowActive,
-                  ]}
-                  testID={`share-group-${group.groupId}`}
-                >
+                <View key={group.groupId} style={styles.groupRow}>
                   <View style={styles.groupIcon}>
                     <Users size={16} color={theme.colors.foregroundMuted} />
                   </View>
@@ -165,21 +174,24 @@ export function ShareManagerSheet({
                   </View>
                   {pendingGroup === group.groupId ? (
                     <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
-                  ) : (
-                    <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
-                      {selected ? <Check size={13} color={theme.colors.accentForeground} /> : null}
-                    </View>
-                  )}
-                </Pressable>
+                  ) : null}
+                  <Switch
+                    value={selected}
+                    disabled={pendingGroup !== null}
+                    onValueChange={() => void toggleGroup(group)}
+                    accessibilityLabel={group.name}
+                    testID={`share-group-${group.groupId}`}
+                  />
+                </View>
               );
             })}
           </View>
-        ) : (
+        ) : !error ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>{t("sharing.noGroupsTitle")}</Text>
             <Text style={styles.emptyText}>{t("sharing.noGroupsHint")}</Text>
           </View>
-        )}
+        ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
     </AdaptiveModalSheet>
@@ -221,9 +233,6 @@ const styles = StyleSheet.create((theme) => ({
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
-  groupRowActive: {
-    backgroundColor: theme.colors.surface2,
-  },
   groupIcon: {
     width: 32,
     height: 32,
@@ -245,19 +254,6 @@ const styles = StyleSheet.create((theme) => ({
   groupMeta: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius.sm,
-  },
-  checkboxSelected: {
-    borderColor: theme.colors.accent,
-    backgroundColor: theme.colors.accent,
   },
   empty: {
     gap: theme.spacing[1],

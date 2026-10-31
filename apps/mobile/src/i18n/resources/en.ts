@@ -36,7 +36,13 @@ export const en = {
       groupMember: "Group member",
     },
     noGroupsTitle: "No groups available",
-    noGroupsHint: "Join a group in the AIT account console, then reconnect this node.",
+    noGroupsHint:
+      "Connect this node to the online service in Host settings → Connections, then check that the node owner belongs to a group.",
+    nodeSettingsOnly:
+      "These settings require a whole-node share. This share only grants access to its project or workspace.",
+    ownerOnly:
+      "Only the node owner can manage sharing. Resources shared with you cannot be shared again.",
+    unsupported: "This node does not support sharing management. Update the node and try again.",
     loadError: "Could not load sharing settings.",
     updateError: "Could not update sharing.",
     listError: "Could not load shared resources.",

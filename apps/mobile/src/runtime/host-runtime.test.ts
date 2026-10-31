@@ -1848,7 +1848,12 @@ describe("HostRuntimeStore", () => {
       });
       expect(store.getHosts()).toHaveLength(2);
 
-      await store.removeHost("shared:22222222-2222-4222-8222-222222222222");
+      const sharedHost = store.getHosts()[0]!;
+      await expect(store.removeHost(sharedHost.serverId)).rejects.toThrow("sharing owner");
+      await expect(
+        store.removeConnection(sharedHost.serverId, sharedHost.connections[0]!.id),
+      ).rejects.toThrow("sharing owner");
+      expect(store.getHosts()).toHaveLength(2);
       store.setSharedAccountRelayResources(
         [
           {

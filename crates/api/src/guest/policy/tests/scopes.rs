@@ -454,7 +454,7 @@ async fn project_agent_directories_cover_the_project_workspaces() {
 }
 
 #[tokio::test]
-async fn node_shares_reach_every_project_but_not_host_management() {
+async fn node_shares_reach_every_project_and_host_management() {
     let guest = Guest::with(ResourceKind::Node).await;
     for (method, params) in [
         ("project.add.request", json!({"cwd": guest.outside()})),
@@ -486,46 +486,26 @@ async fn node_shares_reach_every_project_but_not_host_management() {
         assert_eq!(forwarded, params, "{method}");
     }
     for method in [
-        "daemon.get_status.request",
-        "daemon.config.get.request",
-        "server.restart.request",
-        "diagnostics.request",
-        "schedule.create.request",
-        "bot.list.request",
-        "browser.host.register.request",
+        "share.list.request",
+        "share.set.request",
         "relay.status.request",
         "publication.authorize.request",
         "push.unregister.request",
-        "voice.abort.request",
-        "share.list.request",
-        "share.set.request",
-        "agent.configure",
-        "agent.skills.get_status.request",
-        "agent.refresh.request",
-        "provider.usage.list.request",
-        "provider.sessions.recent.list.request",
-        "session.events.set_subscription.request",
     ] {
-        assert_eq!(
-            guest.refused(method, json!({})).await,
-            ErrorCode::Forbidden,
-            "{method}"
-        );
+        assert_eq!(guest.refused(method, json!({})).await, ErrorCode::Forbidden);
     }
-    assert_eq!(
-        guest
-            .refused(
-                "workspace.create.request",
-                json!({"source": {"kind": "directory", "path": guest.root()},
-                    "agent": {"provider": "codex"}}),
-            )
-            .await,
-        ErrorCode::Forbidden
-    );
+    let created = guest
+        .forwarded(
+            "workspace.create.request",
+            json!({"source": {"kind": "directory", "path": guest.root()},
+            "agent": {"config": {"provider": "codex"}}}),
+        )
+        .await;
+    assert!(created["agent"]["labels"][GUEST_SHARE].is_string());
 }
 
 #[tokio::test]
-async fn node_shares_keep_the_agent_rules() {
+async fn node_shares_manage_all_agents_and_keep_creation_attribution() {
     let guest = Guest::with(ResourceKind::Node).await;
     let created = guest
         .forwarded(
@@ -542,15 +522,22 @@ async fn node_shares_keep_the_agent_rules() {
         json!({"config": {"provider": "codex"}, "env": {"A": "1"}}),
         json!({"config": {"provider": "codex", "mcpServers": {"x": {}}}}),
         json!({"config": {"provider": "codex", "providerOptions": {}}}),
-        json!({"config": {"provider": "codex"}, "labels": {GUEST_SHARE: "forged"}}),
         json!({"config": {"provider": "codex"}, "callerAgentId": "owner-agent"}),
     ] {
-        assert_eq!(
-            guest.refused("agent.create.request", params).await,
-            ErrorCode::Forbidden
-        );
+        let created = guest.forwarded("agent.create.request", params).await;
+        assert!(created["labels"][GUEST_SHARE].is_string());
     }
-    // Driving still requires an Agent this share's guests created.
+    assert_eq!(
+        guest
+            .refused(
+                "agent.create.request",
+                json!({"config": {"provider": "codex"},
+        "labels": {GUEST_SHARE: "forged"}})
+            )
+            .await,
+        ErrorCode::Forbidden
+    );
+    // A whole-node grant includes Agents created by the owner and other visitors.
     for (method, params) in [
         (
             "agent.message.send.request",
@@ -562,7 +549,7 @@ async fn node_shares_keep_the_agent_rules() {
             json!({"agentId": "owner-agent", "labels": {}}),
         ),
     ] {
-        assert_eq!(guest.refused(method, params).await, ErrorCode::Forbidden);
+        assert_eq!(guest.forwarded(method, params.clone()).await, params);
     }
     let decision = guest
         .decide("terminal.create.request", json!({"cwd": guest.outside()}))

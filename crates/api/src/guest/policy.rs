@@ -7,6 +7,7 @@
 
 mod agents;
 mod directory;
+mod node;
 pub(crate) mod private;
 pub(crate) mod terminals;
 
@@ -142,7 +143,7 @@ impl Rule {
     }
 }
 
-/// Classify `method`; host management and everything unknown is denied.
+/// Classify a scoped resource method; whole-node grants use the separate node policy.
 fn classify(method: &str) -> Rule {
     match method {
         "server.info"
@@ -246,6 +247,9 @@ fn classify_resource(method: &str) -> Rule {
 
 /// Confine one guest request to the guest's shared scope.
 pub(crate) async fn request(session: &Session, state: &Shared, mut request: Request) -> Decision {
+    if session.kind() == ResourceKind::Node {
+        return node::request(session, state, request).await;
+    }
     let rule = classify(&request.method);
     let params = std::mem::take(&mut request.params);
     match confine(session, state, rule, params).await {
@@ -330,6 +334,11 @@ async fn confine(
 
 /// Confine one guest event; heartbeats are dropped because a guest is not the owner's client.
 pub(crate) fn event(session: &Session, method: &str, params: &Value) -> EventDecision {
+    if session.kind() == ResourceKind::Node
+        && node::allows(method, model::methods::InboundKind::Event)
+    {
+        return EventDecision::Forward;
+    }
     match method {
         "session.heartbeat" => EventDecision::Drop,
         "terminal.input" => match params["terminalId"].as_str() {

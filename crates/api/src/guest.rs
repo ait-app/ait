@@ -3,7 +3,8 @@
 //! The hub bridge dials the local API with the daemon's own bearer credential and a
 //! [`model::share::GUEST_HEADER`] naming the visitor. A share covers one workspace, one
 //! project with all its workspaces, or the whole node (Host). Within that scope such a
-//! connection may use Agents, terminals and files; every other method is refused.
+//! connection may use Agents, terminals and files; a whole-node grant also manages
+//! resources, configuration and daemon lifecycle, while account authority stays private.
 //!
 //! This limits which RPCs a guest can reach; it is not a sandbox. A guest with the
 //! `operate` permission runs arbitrary commands as the Host user through terminals and
@@ -202,7 +203,7 @@ impl Session {
     }
 
     /// Kind of the shared resource.
-    fn kind(&self) -> ResourceKind {
+    pub(crate) fn kind(&self) -> ResourceKind {
         match self.reach {
             Reach::Workspace { .. } => ResourceKind::Workspace,
             Reach::Project { .. } => ResourceKind::Project,

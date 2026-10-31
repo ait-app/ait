@@ -1,3 +1,5 @@
+import { useHubServices } from "@/runtime/hub-service-store";
+import { canManageHost } from "@/screens/settings/host-management";
 import { openChangelog } from "@/changelog";
 import { AddHostMethodModal } from "@/components/add-host-method-modal";
 import { AddHostModal } from "@/components/add-host-modal";
@@ -1100,6 +1102,12 @@ function SettingsSidebar({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const hosts = useHosts();
+  const canManage = useHubServices((state) =>
+    canManageHost(
+      hosts.find((host) => host.serverId === activeHostServerId) ?? null,
+      state.snapshot?.shares ?? [],
+    ),
+  );
   const localServerId = useLocalDaemonServerId();
   const sortedHosts = useSortedHosts(hosts, localServerId);
   const hasHosts = sortedHosts.length > 0;
@@ -1152,7 +1160,9 @@ function SettingsSidebar({
             onAddHost={onAddHost}
             enableBuiltInDaemonOption={enableBuiltInDaemonOption}
           />
-          {HOST_SECTION_ITEMS.map((item) => (
+          {HOST_SECTION_ITEMS.filter(
+            (item) => canManage || item.id === "host" || item.id === "connections",
+          ).map((item) => (
             <SidebarHostSectionButton
               key={item.id}
               itemId={item.id}
@@ -1258,6 +1268,12 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const insets = useSafeAreaInsets();
   const insetBottomStyle = useMemo(() => ({ paddingBottom: insets.bottom }), [insets.bottom]);
   const hosts = useHosts();
+  const canManageRoutedHost = useHubServices((state) =>
+    canManageHost(
+      view.kind === "host" ? (hosts.find((host) => host.serverId === view.serverId) ?? null) : null,
+      state.snapshot?.shares ?? [],
+    ),
+  );
   const localServerId = useLocalDaemonServerId();
   const sortedHosts = useSortedHosts(hosts, localServerId);
   const lastWorkspaceSelection = useLastWorkspaceSelection();
@@ -1495,6 +1511,9 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   } else {
     content = (() => {
       if (view.kind === "host") {
+        if (!canManageRoutedHost && view.section !== "host" && view.section !== "connections") {
+          return <Text style={settingsStyles.rowHint}>{t("sharing.nodeSettingsOnly")}</Text>;
+        }
         return renderHostSettingsContent(view, handleHostRemoved);
       }
       if (view.kind === "project") {

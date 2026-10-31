@@ -1,6 +1,6 @@
 //! Terminal methods. A visitor watches terminals of workspaces inside the shared scope,
-//! but types into, resizes, renames and kills only terminals it created: the owner's or
-//! another visitor's shell may run outside the scope or hold cached credentials.
+//! and a whole-node visitor may manage all of them. Narrower grants drive only their own
+//! terminals: another shell may run outside the scope or hold cached credentials.
 
 use serde_json::{Value, json};
 
@@ -55,12 +55,12 @@ async fn placement(
     Ok(directory)
 }
 
-/// Require terminal `id` to have been created by this visitor through this share.
+/// A whole-node visitor may drive any terminal; narrower grants require ownership.
 ///
 /// # Errors
 /// Returns `Forbidden` for every other terminal.
 pub(crate) fn owned(session: &Session, id: &str) -> Result<(), ErrorCode> {
-    if session.owns_terminal(id) {
+    if matches!(session.reach, Reach::Node) || session.owns_terminal(id) {
         Ok(())
     } else {
         Err(ErrorCode::Forbidden)

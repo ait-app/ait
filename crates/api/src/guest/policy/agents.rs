@@ -1,4 +1,4 @@
-//! Agent methods: only Agents of workspaces in the shared scope, never the daemon MCP.
+//! Scoped Agent methods and guest creation attribution, including whole-node grants.
 
 use provider::service::agent_mcp::{GUEST_SHARE_LABEL, GUEST_USER_LABEL};
 use serde_json::{Value, json};
@@ -10,11 +10,10 @@ use crate::Shared;
 /// Agent creation options that could place an Agent outside an existing workspace.
 const PLACEMENT_DENIED: [&str; 3] = ["worktree", "worktreeName", "git"];
 
-/// Agent creation options no guest may choose: a custom environment reaches beyond the
-/// Agent's tools.
+/// Scoped guests cannot choose a custom environment that reaches beyond the Agent tools.
 const CREATE_DENIED: [&str; 1] = ["env"];
 
-/// Native configuration a guest must not choose.
+/// Native configuration unavailable to workspace and project guests.
 const CONFIG_DENIED: [&str; 2] = ["mcpServers", "providerOptions"];
 
 /// Label namespace reserved for guest attribution.
@@ -220,18 +219,22 @@ async fn filter(session: &Session, state: &Shared, params: &mut Value) -> Result
 /// beyond the scope. A workspace share forces its workspace; a project share requires a
 /// workspace of the project; a node share places the Agent where the guest asks, worktree
 /// placement included.
-async fn create(session: &Session, state: &Shared, params: &mut Value) -> Result<(), ErrorCode> {
+pub(super) async fn create(
+    session: &Session,
+    state: &Shared,
+    params: &mut Value,
+) -> Result<(), ErrorCode> {
     let placement = placement(session, state, params).await?;
     let request = object(params)?;
     let given = |keys: &[&str]| keys.iter().any(|key| present(request.get(*key)));
-    if given(&CREATE_DENIED) || (placement.is_some() && given(&PLACEMENT_DENIED)) {
+    if placement.is_some() && (given(&CREATE_DENIED) || given(&PLACEMENT_DENIED)) {
         return Err(ErrorCode::Forbidden);
     }
     let config = request
         .get_mut("config")
         .and_then(Value::as_object_mut)
         .ok_or(ErrorCode::InvalidMessage)?;
-    if CONFIG_DENIED.iter().any(|key| present(config.get(*key))) {
+    if placement.is_some() && CONFIG_DENIED.iter().any(|key| present(config.get(*key))) {
         return Err(ErrorCode::Forbidden);
     }
     if let Some((_, directory)) = &placement {
@@ -250,10 +253,11 @@ async fn create(session: &Session, state: &Shared, params: &mut Value) -> Result
         GUEST_USER_LABEL.to_owned(),
         json!(grant.user_id.to_string()),
     );
+    let scoped_creation = placement.is_some();
     if let Some((workspace, _)) = placement {
         request.insert("workspaceId".to_owned(), json!(workspace));
     }
-    if present(params.get("callerAgentId")) {
+    if scoped_creation && present(params.get("callerAgentId")) {
         scoped(session, state, params, "callerAgentId").await?;
     }
     Ok(())

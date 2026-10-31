@@ -14,7 +14,7 @@
 | -------------- | --------------------- | ------------------------------------ |
 | `workspace`    | workspace ID          | 这一个 workspace                     |
 | `project`      | 项目 ID（如 `prj_…`） | 该项目现有和以后新建的全部 workspace |
-| `node`         | 空字符串              | 本机所有项目和 workspace             |
+| `node`         | 空字符串              | 节点全部资源、配置及 daemon 生命周期 |
 
 **分享设置以 Host 为准。**
 
@@ -50,7 +50,7 @@
 - 准入的连接被登记到该分享的授权下面，撤销分享时一并结束。
 - 本机拒绝访客升级时，Hub 以 `share_revoked` 关闭会话。
 
-**访客策略默认拒绝**（`crates/api/src/guest/policy*`）。请求、事件和二进制帧都先经过策略检查，再进入原有的校验和分发流程。拒绝时返回 `forbidden`，不透露范围之外的资源是否存在。
+**workspace／project 访客策略默认拒绝**（`crates/api/src/guest/policy*`）。请求、事件和二进制帧都先经过策略检查，再进入原有的校验和分发流程。拒绝时返回 `forbidden`，不透露范围之外的资源是否存在。
 
 - 范围内的 workspace：workspace 分享只有它自己；项目分享是 `projectId` 等于该项目的全部 workspace（包括已归档的）；节点分享是全部 workspace。
 - 路径（文件、Git、forge、下载、终端、Agent 的 `cwd`）：workspace 分享要求绝对路径在解析符号链接和 `..` 之后位于 workspace 目录内；项目分享要求位于项目根目录内，或位于该项目任一未归档 workspace 的目录内（受管 worktree 通常在项目根目录之外）；节点分享不检查路径。上传被拒绝。每条连接最多同时持有 16 个未过期的下载令牌。
@@ -66,14 +66,17 @@
   - `workspace.open`：只能打开该项目某个未归档 workspace 的目录。打开其他目录可能登记出新的项目，因此在项目根目录下新建 workspace 需要用 `workspace.create`；
   - 重命名、归档范围内的 workspace，归档其 worktree（`workspace.worktree.archive` 的 workspace 和路径都必须在范围内），列 worktree，读取该项目的图标和配置。
   - 不能重命名、删除、配置项目或设置图标（`project.rename/remove/config.write/icon.set`），不能添加项目，也不能触达其他项目。
+- 节点分享具有整节点管理权限：可以读写 daemon 配置、诊断、重启、关闭和更新 daemon，管理全部 Agent（包括所有者及其他访客创建的）、终端、技能、Provider、schedule、bot、browser、语音、上传和全局事件订阅。准入使用已注册方法及其消息方向，未知方法仍拒绝；`share.*`、`publication.*`、`relay.*`、`hub.*`、`push.*` 和所有者心跳仍不开放，分享与账号授权属于所有者。
 - 节点分享还可以添加和创建项目（`project.add`、`project.create_directory`、`project.github.clone`），重命名、删除、配置项目，置顶、标签、恢复和 setup 运行等 workspace 管理。
-- 终端：新建时必须归属到范围内的 workspace（workspace 分享强制为该 workspace；项目分享必须给出该项目的 `workspaceId`，未给 `cwd` 时使用该 workspace 的目录；节点分享不改写）；列表在 workspace 和项目分享下必须指定范围内的 workspace。访客可以订阅、截取范围内的任何终端（节点分享是全部终端），但**只能操作自己通过本分享创建的终端**：`terminal.input`、二进制输入和尺寸帧、`terminal.kill`、`terminal.rename`、`agent.items.close` 中的终端都要求是自己创建的，同一分享的其他访客和所有者的终端都不行，因为所有者的 shell 可能已经 `cd` 到范围之外，或者缓存了 sudo 凭据。订阅别人的终端时，请求里的尺寸声明（`restore.size`）会被去掉，访客不会接管终端尺寸。访客创建的终端按 `(shareId, userId)` 记录，换连接后仍然归这个访客。
-- Agent：
-  - 新建时打上 `ait.guest.share-id` 和 `ait.guest.user-id` 标签，禁止访客自带 `env`、`mcpServers`、`providerOptions` 和访客标签，`callerAgentId` 必须在范围内。workspace 分享强制归属到该 workspace；项目分享必须给出该项目的 `workspaceId`，并禁止 worktree、git 等新建位置的选项；节点分享可以放到任意 workspace，也可以新建 worktree。
-  - `workspace.create` 不能附带初始 Agent，因为它会绕过上面的 Agent 规则并获得 daemon MCP。
+- 终端：新建时必须归属到范围内的 workspace（workspace 分享强制为该 workspace；项目分享必须给出该项目的 `workspaceId`，未给 `cwd` 时使用该 workspace 的目录；节点分享不改写）；列表在 workspace 和项目分享下必须指定范围内的 workspace。访客可以订阅、截取范围内的任何终端（节点分享是全部终端），其中 workspace／project 访客**只能操作自己通过本分享创建的终端**：`terminal.input`、二进制输入和尺寸帧、`terminal.kill`、`terminal.rename`、`agent.items.close` 中的终端都要求是自己创建的，同一分享的其他访客和所有者的终端都不行，因为所有者的 shell 可能已经 `cd` 到范围之外，或者缓存了 sudo 凭据。workspace／project 访客订阅别人的终端时，请求里的尺寸声明（`restore.size`）会被去掉，访客不会接管终端尺寸。访客创建的终端按 `(shareId, userId)` 记录，换连接后仍然归这个访客。
+- workspace／project 的 Agent：
+  - 新建时打上 `ait.guest.share-id` 和 `ait.guest.user-id` 标签，禁止访客自带 `env`、`mcpServers`、`providerOptions` 和访客标签，`callerAgentId` 必须在范围内。workspace 分享强制归属到该 workspace；项目分享必须给出该项目的 `workspaceId`，并禁止 worktree、git 等新建位置的选项；节点分享可以放到任意 workspace，也可以新建 worktree，并可指定环境与工具配置。
+  - workspace／project 的 `workspace.create` 不能附带初始 Agent。节点分享允许初始 Agent，并同样加上真实访客标签。
   - 带访客标签的 Agent 不注入 daemon MCP（ADR-202），因为这个 MCP 能访问所有 workspace。
   - 访客可以读取范围内所有 Agent（get、timeline 等），但只能驱动自己通过本分享创建的 Agent（发送消息、取消、权限决定、模型和模式设置等），同时校验 `ait.guest.share-id` 和 `ait.guest.user-id`；同一分享的其他访客创建的 Agent 也只能读取。所有者的 Agent 带有 daemon MCP，不能由访客下达指令。Agent 列表在 workspace 和项目分享下被强制过滤为范围内的 workspace。
-- 宿主级能力一律拒绝，节点分享也一样：`daemon.*`、`server.restart/shutdown`、诊断、daemon 配置和更新、schedule、bot、browser、relay、publication、push、语音和听写、编辑器、`share.*`、Agent 定义和技能的配置、导入、刷新、用量统计、`provider.sessions.recent`，以及全局会话事件订阅 `session.events.set_subscription`（它覆盖 Host 上的全部会话事件，保持拒绝最简单也最安全）。
+- workspace／project 的宿主级能力一律拒绝：`daemon.*`、`server.restart/shutdown`、诊断、daemon 配置和更新、schedule、bot、browser、relay、publication、push、语音和听写、编辑器、`share.*`、Agent 定义和技能的配置、导入、刷新、用量统计、`provider.sessions.recent`，以及全局会话事件订阅 `session.events.set_subscription`（它覆盖 Host 上的全部会话事件，保持拒绝最简单也最安全）。
+
+**客户端入口。** 整节点分享显示节点设置和重启／更新；workspace／project 分享不显示节点生命周期入口，后端同时拒绝。共享连接的客户端 runtime ID 为 `shared:<shareId>`，重启／更新确认使用握手返回的真实 daemon ID，避免把分享 ID 与节点 ID 混淆。所有访客均不显示转分享或账号授权控件，也不能移除自动生成的共享 Relay 连接或共享节点；删除方法同时拒绝这些操作。
 
 **撤销。** 本地删除分享、中心撤销、成员关系变化（含中心以 `denied` 报告的单个访客）、workspace 归档或项目删除时：
 
@@ -84,7 +87,7 @@
 
 ## 后果
 
-- `operate` 允许在被分享的范围内使用终端和 Agent，等于以 Host 用户的身份执行任意命令。上面的策略限制的是 RPC 能触达的范围，不是沙箱。节点分享几乎等同于把这台机器交给访客，只是不能管理 daemon 本身。具体来说：
+- `operate` 允许在被分享的范围内使用终端和 Agent，等于以 Host 用户的身份执行任意命令。上面的策略限制的是 RPC 能触达的范围，不是沙箱。节点分享等同于把节点资源和配置管理交给访客，包括 daemon 生命周期；分享和账号授权入口仍由所有者管理。具体来说：
   - workspace 分享里，`checkout.*` 以整个仓库为单位，访客能读到 workspace 目录之外的仓库文件；
   - 项目分享的访客可以归档项目里任何 workspace；
   - 节点分享的访客可以删除项目。
@@ -92,4 +95,4 @@
 - Git 操作会作用于整个仓库，forge 调用使用所有者的凭据。
 - 项目分享的目录范围在连接内缓存；新建的 workspace 会在下一次未命中时重新读取，刚归档的 workspace 目录在下一次重新读取前仍算在范围内。
 - 访客授权和终端记录只保存在内存中；daemon 重启后按 Agent 标签恢复授权（见上），终端归属不恢复，重启前的终端随 daemon 一起结束。
-- Host 的中心地址固定为生产中心（`host_link::CENTER`），本地中心无法与当前 daemon 做端到端联调；中心仓库的真实 runtime 测试需要一个可配置中心地址的构建。
+- Host 默认使用生产中心（`host_link::CENTER`）；本地测试构建可通过 `AIT_CENTER_URL` 接入测试中心。

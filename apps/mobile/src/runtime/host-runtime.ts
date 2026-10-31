@@ -2072,6 +2072,10 @@ export class HostRuntimeStore {
   }
 
   async removeHost(serverId: string): Promise<void> {
+    const host = this.hosts.find((candidate) => candidate.serverId === serverId);
+    if (host && isSharedResourceHost(host)) {
+      throw new Error("Shared connections are managed by the sharing owner.");
+    }
     await this.revokePushNotifications({ client: this.getClient(serverId), serverId });
     const remaining = this.hosts.filter((daemon) => daemon.serverId !== serverId);
     await this.persistHosts(remaining);
@@ -2084,6 +2088,9 @@ export class HostRuntimeStore {
 
   async removeConnection(serverId: string, connectionId: string): Promise<void> {
     const host = this.hosts.find((candidate) => candidate.serverId === serverId);
+    if (host && isSharedResourceHost(host)) {
+      throw new Error("Shared connections are managed by the sharing owner.");
+    }
     if (host?.connections.length === 1 && host.connections[0]?.id === connectionId) {
       await this.removeHost(serverId);
       return;

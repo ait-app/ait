@@ -277,7 +277,7 @@ async fn process_file_frame(
 }
 
 /// Apply a terminal input or resize frame. Watching a terminal does not let a guest
-/// type into or resize it: guests reach only terminals they created.
+/// type into or resize it unless they own it or have a whole-node grant.
 async fn terminal_frame(
     bytes: &[u8],
     state: &Shared,
@@ -336,7 +336,10 @@ async fn process_message(
             },
             _lease,
         ))) if valid_id(&method) && request_id.as_deref().is_none_or(valid_id) => {
-            if peer.guest.is_some() {
+            if peer
+                .guest
+                .is_some_and(|guest| guest.kind() != model::share::ResourceKind::Node)
+            {
                 error(outbound, request_id, ErrorCode::Forbidden)?;
             } else if method == "browser.automation.execute.response"
                 && capabilities.iter().any(|name| name == &method)
@@ -363,7 +366,11 @@ async fn process_message(
                 error(outbound, None, code)?;
             }
         }
-        Some(Ok(Incoming::Binary(_))) if peer.guest.is_some() => {
+        Some(Ok(Incoming::Binary(_)))
+            if peer
+                .guest
+                .is_some_and(|guest| guest.kind() != model::share::ResourceKind::Node) =>
+        {
             error(outbound, None, ErrorCode::Forbidden)?;
         }
         Some(Ok(Incoming::Binary(bytes)))
