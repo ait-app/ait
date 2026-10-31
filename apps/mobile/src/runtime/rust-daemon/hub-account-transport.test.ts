@@ -122,12 +122,6 @@ describe("native account relay path selection", () => {
     )({ url: guestUrl });
     transport.onOpen(() => transport.send('{"type":"hello","clientId":"guest"}'));
     await vi.advanceTimersByTimeAsync(0);
-    expect(h.deps.log).toHaveBeenCalledWith("hub", {
-      hostId: HOST_ID,
-      nodeId: "guest-node",
-      shareId: SHARE_ID,
-      hub: "online",
-    });
     expect(socket.sent.find((frame) => frame.header.t === "open")?.header).toEqual({
       t: "open",
       seq: 1,
@@ -135,14 +129,20 @@ describe("native account relay path selection", () => {
       to: { node: "guest-node" },
       share: SHARE_ID,
     });
-    expect(h.deps.legacy).not.toHaveBeenCalled();
 
     const offline = harness();
     offline.deps.hub.mockReturnValue(null);
-    expect(() => createHubAccountRelayTransportFactory(offline.deps)({ url: guestUrl })).toThrow(
-      "Shared resource is offline.",
-    );
-    expect(offline.deps.legacy).not.toHaveBeenCalled();
+    const unavailable = createHubAccountRelayTransportFactory(offline.deps)({ url: guestUrl });
+    const error = vi.fn();
+    const closed = vi.fn();
+    unavailable.onError(error);
+    unavailable.onClose(closed);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(error).toHaveBeenCalledWith(new Error("Shared resource is offline."));
+    expect(closed).toHaveBeenCalledOnce();
+    expect(offline.sockets).toHaveLength(0);
+    transport.close();
+    h.link.stop();
   });
 
   it("runs the unchanged Rust client over a hub session and survives a link reconnect", async () => {

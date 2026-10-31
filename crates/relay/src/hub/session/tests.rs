@@ -107,6 +107,7 @@ async fn realtime_voice_controls_pcm_and_playback_confirmation_traverse_hub() {
             local,
             Uuid::new_v4(),
             Bytes::from_static(HELLO.as_bytes()),
+            None,
             inbound_rx,
             output_tx,
         ));
