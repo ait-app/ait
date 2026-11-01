@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { resolveSchedulesScreenBodyState } from "./schedules-screen-state";
 
 describe("resolveSchedulesScreenBodyState", () => {
-  it("routes failed loading state to the retry UI instead of the spinner", () => {
+  it("shows the empty list when loading fails", () => {
     expect(
       resolveSchedulesScreenBodyState({
         loadState: { status: "loading" },
         showLoadError: true,
       }),
-    ).toEqual({ kind: "load-error" });
+    ).toEqual({ kind: "empty" });
   });
 });

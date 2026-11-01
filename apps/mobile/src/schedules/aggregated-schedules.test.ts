@@ -128,3 +128,48 @@ describe("fetchAggregatedSchedules load state", () => {
     });
   });
 });
+
+describe("fetchAggregatedSchedules unavailable hosts", () => {
+  it.each(["forbidden", "not_implemented", "DAEMON_REQUEST_TIMEOUT", "payload-error"])(
+    "returns a loaded empty list for %s",
+    async (code) => {
+      const result = await fetchAggregatedSchedules({
+        hosts: [{ serverId: "shared", serverName: "Shared Host" }],
+        runtime: {
+          getSnapshot: () => ({ connectionStatus: "online" }),
+          getClient: () => ({
+            scheduleList: async () => {
+              if (code === "payload-error")
+                return { requestId: "list", schedules: [], error: code };
+              throw Object.assign(new Error(code), { code });
+            },
+          }),
+        },
+      });
+      expect(result).toMatchObject({ status: "loaded", data: [] });
+    },
+  );
+
+  it("keeps available schedules when another host cannot load", async () => {
+    const schedule = makeSchedule();
+    const result = await fetchAggregatedSchedules({
+      hosts: [
+        { serverId: "healthy", serverName: "Healthy" },
+        { serverId: "shared", serverName: "Shared" },
+      ],
+      runtime: {
+        getSnapshot: () => ({ connectionStatus: "online" }),
+        getClient: (serverId) => ({
+          scheduleList: async () => {
+            if (serverId === "shared") throw new Error("forbidden");
+            return { requestId: "list", schedules: [schedule], error: null };
+          },
+        }),
+      },
+    });
+    expect(result).toMatchObject({
+      status: "loaded",
+      data: [{ ...schedule, serverId: "healthy", serverName: "Healthy" }],
+    });
+  });
+});

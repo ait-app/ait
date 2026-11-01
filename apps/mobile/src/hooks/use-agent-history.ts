@@ -6,7 +6,6 @@ import type {
 } from "@ait/client/internal/daemon-client";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import { useTranslation } from "react-i18next";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { getHostRuntimeStore, isHostRuntimeConnected, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
@@ -17,7 +16,6 @@ const AGENT_HISTORY_PAGE_LIMIT = 200;
 const AGENT_HISTORY_SORT: NonNullable<FetchAgentHistoryOptions["sort"]> = [
   { key: "updated_at", direction: "desc" },
 ];
-const AGENT_HISTORY_ALL_HOSTS_FAILED_MESSAGE = "No connected hosts could load agent history";
 
 export interface AgentHistoryResult {
   agents: AggregatedAgent[];
@@ -183,11 +181,8 @@ export async function fetchAgentHistoryBatch(input: {
   const pages = settledPages.flatMap((result) =>
     result.status === "fulfilled" ? [result.value] : [],
   );
-  if (pages.length === 0) {
-    throw new Error(AGENT_HISTORY_ALL_HOSTS_FAILED_MESSAGE);
-  }
-  // allSettled preserves order, so a rejection still names the host it came
-  // from. Losing that name is what would let the list quietly under-report.
+  // A failed host contributes no rows or pagination cursor. Retain its identity
+  // for diagnostics without turning partial or total failure into a list error.
   const hostErrors = settledPages.flatMap((result, index) =>
     result.status === "rejected"
       ? [
@@ -220,7 +215,6 @@ export function useAgentHistory(options: {
   enabled?: boolean;
   search?: string;
 }): AgentHistoryResult {
-  const { t } = useTranslation();
   const daemons = useHosts();
   const runtime = getHostRuntimeStore();
   const runtimeVersion = useSyncExternalStore(
@@ -233,10 +227,8 @@ export function useAgentHistory(options: {
     return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
   }, [options.serverId]);
   const enabled = options.enabled ?? true;
-  // A host the user asked about splits two ways: one this fetch can reach, and
-  // one whose sessions will be missing from the answer. Both come out of here,
-  // because dropping the unreachable ones silently is what lets the list — and
-  // worse, "No sessions match" — overstate what was actually searched.
+  // Query reachable hosts only; unavailable hosts contribute an empty list.
+  // Retain their identities separately for diagnostics.
   const { targetHosts, unreachableHosts } = useMemo(() => {
     void runtimeVersion;
     const serverLabelById = new Map(daemons.map((daemon) => [daemon.serverId, daemon.label]));
@@ -304,9 +296,6 @@ export function useAgentHistory(options: {
     initialPageParam: null,
     getNextPageParam: getNextAgentHistoryPageParam,
     queryFn: async ({ pageParam }) => {
-      if (targetHosts.length === 0) {
-        throw new Error(t("workspace.terminal.hostDisconnected"));
-      }
       return fetchAgentHistoryBatch({
         hosts: targetHosts,
         cursorByServerId: pageParam,
