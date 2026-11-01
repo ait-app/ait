@@ -1,5 +1,13 @@
 # Ait changelog
 
+## 0.1.25 - 2026-11-01
+
+- Keep the existing daemon running when a readiness probe fails, and reconnect to the same process after recovery.
+- Simplify schedules and shared-resource lists, improve agent history fallback, and clarify loading states.
+- Keep sidebar rows stable when shortcut badges appear on hover.
+- Use a gentler loading indicator while reconnecting to the online service.
+- Clarify Chinese wording for host sharing, local connections, and session states.
+
 ## 0.1.24 - 2026-11-01
 
 - Share workspaces, projects, or entire hosts with group members through Hub guest sessions, with scoped access, revocation, and recovery.
