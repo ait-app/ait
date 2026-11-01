@@ -72,7 +72,12 @@ export function SidebarHeaderRow({
           <SidebarHeaderRowLabel label={label} isHighlighted={isHighlighted} />
           {trailingText ? <Text style={styles.trailingText}>{trailingText}</Text> : null}
           {shortcutKeys && Boolean(state.hovered) ? (
-            <Shortcut chord={shortcutKeys} style={styles.shortcut} />
+            // Overlay the hover-only badge so it never changes the row height:
+            // with taller fallback fonts (Noto Sans CJK on Linux) the badge
+            // outgrows the label and the whole sidebar below shifts on hover.
+            <View style={styles.shortcutSlot} pointerEvents="none">
+              <Shortcut chord={shortcutKeys} />
+            </View>
           ) : null}
         </>
       );
@@ -165,7 +170,11 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     fontVariant: ["tabular-nums"],
   },
-  shortcut: {
-    marginLeft: "auto",
+  shortcutSlot: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    right: theme.spacing[2],
+    justifyContent: "center",
   },
 }));
