@@ -43,25 +43,46 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("online service connection notice", () => {
-  it("shows a readable error once per outage and allows a new notice after recovery", () => {
+  it("shows a neutral loading notice once per reconnection and allows a new notice after recovery", () => {
     mount();
     setState("online");
     setState("reconnecting");
+    expect(toast.show).toHaveBeenCalledExactlyOnceWith("Restoring connection…", {
+      variant: "loading",
+    });
+    expect(toast.error).not.toHaveBeenCalled();
+    setState("connecting");
+    setState("reconnecting");
+    expect(toast.show).toHaveBeenCalledOnce();
+    expect(toast.error).not.toHaveBeenCalled();
+
+    setState("online");
+    setState("reconnecting");
+    expect(toast.show).toHaveBeenCalledTimes(2);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("escalates to an error only when reconnection becomes unavailable", () => {
+    mount();
+    setState("reconnecting");
+    setState("unavailable");
     expect(toast.error).toHaveBeenCalledExactlyOnceWith(message);
     setState("connecting");
-    setState("unavailable");
     setState("reconnecting");
+    setState("unavailable");
+    expect(toast.show).toHaveBeenCalledOnce();
     expect(toast.error).toHaveBeenCalledOnce();
 
     setState("online");
     setState("reconnecting");
-    expect(toast.error).toHaveBeenCalledTimes(2);
+    expect(toast.show).toHaveBeenCalledTimes(2);
   });
 
   it("reports an initial connection timeout without repeating on retries", () => {
     mount();
     setState("connecting");
     expect(toast.error).not.toHaveBeenCalled();
+    expect(toast.show).not.toHaveBeenCalled();
     setState("unavailable");
     expect(toast.error).toHaveBeenCalledExactlyOnceWith(message);
     setState("connecting");
@@ -83,5 +104,6 @@ describe("online service connection notice", () => {
     setState("reconnecting");
     setState("unavailable");
     expect(toast.error).not.toHaveBeenCalled();
+    expect(toast.show).not.toHaveBeenCalled();
   });
 });
