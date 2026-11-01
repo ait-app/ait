@@ -237,7 +237,7 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
   }, 60000);
 });
 
-it("ignores a retained record whose process is gone or which belongs to someone else", async () => {
+it("preserves an unverified live PID without adopting or signalling it", async () => {
   const home = mkdtempSync(path.join(tmpdir(), "ait-desktop-retained-"));
   homes.push(home);
   const record = path.join(home, "desktop-daemon.json");
@@ -258,7 +258,8 @@ it("ignores a retained record whose process is gone or which belongs to someone 
     await expect(manager.start()).rejects.toThrow();
     expect(unrelated.exitCode).toBeNull();
     expect(unrelated.signalCode).toBeNull();
-    expect(existsSync(record)).toBe(false);
+    expect(existsSync(record)).toBe(true);
+    expect(manager.status().ownedByDesktop).toBe(false);
   } finally {
     unrelated.kill();
   }

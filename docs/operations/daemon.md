@@ -72,6 +72,8 @@ SIGINT、SIGTERM 和关闭 RPC 会停止接纳新连接、释放订阅、回收�
 数据目录的 `desktop-daemon.json`（0600，含访问 token）；下次启动经认证与 PID 校验后重新接管，
 见 [ADR-128](../decisions/clients/adr-128-desktop-daemon-keep-running.md)。
 日志使用 `daemon ready listen=...` 表示监听就绪；客户端仍需通过认证握手确认服务可用。
+桌面就绪探测超时或断线不会关闭仍存活的 daemon；重试启动会连接同一进程，显式停止或重启仍有效。
+跨桌面会话接管失败时保留交接记录供重试，不启动竞争进程，见 [ADR-207](../decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)。
 
 ## HTTP 与浏览器认证
 

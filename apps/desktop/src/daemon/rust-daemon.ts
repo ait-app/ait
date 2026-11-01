@@ -51,6 +51,13 @@ interface RetainedDaemon {
   startedAt: string;
 }
 
+/** Log progress belongs to the child, so a retry continues the same startup attempt. */
+interface PendingReadiness {
+  offset: number;
+  tail: string;
+  failure: Error | null;
+}
+
 function retainedDaemonPath(home: string): string {
   return path.join(home, RETAINED_DAEMON_FILENAME);
 }
@@ -129,6 +136,7 @@ export interface RustDaemonStatus {
   home: string;
   version: string | null;
   desktopManaged: boolean;
+  /** Process ownership survives readiness errors; only exit or handover clears it. */
   ownedByDesktop: boolean;
   startedAt: string | null;
   error: string | null;
@@ -140,6 +148,7 @@ export interface RustDaemonStatus {
  */
 export class RustDaemonManager {
   private child: ChildProcess | null = null;
+  private pendingReadiness: PendingReadiness | null = null;
   // Reattached daemon from an earlier session; it is not a child of this process.
   private retained: RetainedDaemon | null = null;
   private token: string | null = null;
@@ -296,15 +305,23 @@ export class RustDaemonManager {
   }
 
   /**
-   * Leave the running daemon for the next Desktop session instead of stopping it.
-   * Returns false, and changes nothing, when no healthy daemon is owned.
+   * Hand over an owned live process, including one whose readiness check failed.
+   * Connection health does not decide whether the process may outlive Desktop.
    */
   retainForNextSession(): Promise<boolean> {
     return this.serialize(async () => {
       const pid = this.child?.pid ?? this.retained?.pid;
+      if (pid && this.state.ownedByDesktop && !this.token) {
+        try {
+          this.token = readFileSync(path.join(this.options.home, "local-api.token"), "utf8");
+        } catch {
+          return false;
+        }
+      }
       if (
-        this.state.status !== "running" ||
+        !this.state.ownedByDesktop ||
         !pid ||
+        !isProcessAlive(pid) ||
         !this.token ||
         !this.listenAddress ||
         !this.configuredListen ||
@@ -324,6 +341,7 @@ export class RustDaemonManager {
       this.child?.removeAllListeners();
       this.child?.unref();
       this.child = null;
+      this.pendingReadiness = null;
       this.retained = null;
       this.token = null;
       this.state = {
@@ -355,6 +373,7 @@ export class RustDaemonManager {
     this.token = null;
     if (!child || child.exitCode !== null || child.signalCode !== null) {
       this.child = null;
+      this.pendingReadiness = null;
       return;
     }
     await new Promise<void>((resolve) => {
@@ -373,6 +392,7 @@ export class RustDaemonManager {
       child.kill("SIGTERM");
     });
     this.child = null;
+    this.pendingReadiness = null;
   }
 
   /** Stop a reattached daemon through its authenticated shutdown RPC, then by signal. */
@@ -396,6 +416,8 @@ export class RustDaemonManager {
   private async launch(): Promise<RustDaemonStatus> {
     if ((this.child || this.retained) && this.state.status === "running") return this.status();
     try {
+      // A failed probe must reconnect to the same owned child, never spawn a competitor.
+      if (this.child) return await this.connectChild();
       mkdirSync(this.options.home, { recursive: true, mode: 0o700 });
       const configuredListen = ServerListenSchema.parse(
         this.options.listen ?? (await this.options.getListen?.()) ?? DEFAULT_DESKTOP_SERVER_LISTEN,
@@ -405,15 +427,25 @@ export class RustDaemonManager {
       rotateDaemonLog(this.logPath);
       return await this.spawnDaemon(configuredListen);
     } catch (error) {
-      await this.terminate();
+      const alive =
+        this.child?.pid !== undefined &&
+        this.child.exitCode === null &&
+        this.child.signalCode === null;
+      if (!alive) {
+        this.child = null;
+        this.pendingReadiness = null;
+        this.token = null;
+      }
       this.state = {
         ...this.state,
         status: "errored",
-        pid: null,
-        listen: null,
-        connectAddress: null,
-        version: null,
-        ownedByDesktop: false,
+        ...(!alive && {
+          pid: null,
+          listen: null,
+          connectAddress: null,
+          version: null,
+          ownedByDesktop: false,
+        }),
         error: error instanceof Error ? error.message : String(error),
       };
       throw error;
@@ -421,28 +453,29 @@ export class RustDaemonManager {
   }
 
   /**
-   * Resume a daemon kept after an earlier quit. A record that no longer authenticates, reports
-   * another PID or listens elsewhere than the current settings is shut down or discarded.
+   * Resume a daemon kept after an earlier quit. Failed probes preserve the record for retry;
+   * only a dead or positively mismatched PID permits discarding it without taking ownership.
    */
   private async reattach(configuredListen: string): Promise<RustDaemonStatus | null> {
     const retained = readRetainedDaemon(this.options.home);
     if (!retained) return null;
-    forgetRetainedDaemon(this.options.home);
-    if (!isProcessAlive(retained.pid)) return null;
-    const address = serverConnectAddress(retained.listen);
-    let info: Awaited<ReturnType<typeof probeRustDaemon>>;
-    try {
-      info = await probeRustDaemon(address, retained.token, this.options.timeoutMs ?? 5_000);
-    } catch {
-      // Another process owns the PID or the daemon is unhealthy; never signal an unverified PID.
+    if (!isProcessAlive(retained.pid)) {
+      forgetRetainedDaemon(this.options.home);
       return null;
     }
-    if (info.pid !== retained.pid) return null;
+    const address = serverConnectAddress(retained.listen);
+    const info = await probeRustDaemon(address, retained.token, this.options.timeoutMs ?? 5_000);
+    if (info.pid !== retained.pid) {
+      forgetRetainedDaemon(this.options.home);
+      return null;
+    }
     if (retained.configuredListen !== configuredListen) {
       // The listen setting changed while Ait was closed: restart under the new address.
       await this.terminateRetained(retained);
+      forgetRetainedDaemon(this.options.home);
       return null;
     }
+    forgetRetainedDaemon(this.options.home);
     this.retained = retained;
     this.token = retained.token;
     this.listenAddress = retained.listen;
@@ -494,24 +527,28 @@ export class RustDaemonManager {
       closeSync(log);
     }
     this.child = child;
+    this.listenAddress = listenAddress;
+    this.configuredListen = configuredListen;
+    const readiness: PendingReadiness = { offset: logOffset, tail: "", failure: null };
+    this.pendingReadiness = readiness;
     this.state = {
       ...this.state,
       status: "starting",
       pid: child.pid ?? null,
-      listen: null,
-      connectAddress: null,
+      listen: listenAddress,
+      connectAddress: serverConnectAddress(listenAddress),
       version: null,
       startedAt: new Date().toISOString(),
       ownedByDesktop: true,
       error: null,
     };
-    let failure: Error | null = null;
     child.on("error", (error) => {
-      failure = error;
+      readiness.failure = error;
     });
     child.once("exit", () => {
       if (this.child !== child) return;
       this.child = null;
+      this.pendingReadiness = null;
       this.token = null;
       this.state = {
         ...this.state,
@@ -521,42 +558,55 @@ export class RustDaemonManager {
         connectAddress: null,
         version: null,
         ownedByDesktop: false,
-        error: failure?.message ?? "Rust daemon exited.",
+        error: readiness.failure?.message ?? "Rust daemon exited.",
       };
     });
+    return this.connectChild();
+  }
+
+  /** Retry readiness without transferring ownership or changing the process lifetime. */
+  private async connectChild(): Promise<RustDaemonStatus> {
+    const child = this.child;
+    if (!child) throw new Error("Rust daemon is not running.");
+    this.state = { ...this.state, status: "starting", error: null };
     const deadline = Date.now() + (this.options.timeoutMs ?? 30_000);
-    let tail = "";
-    let offset = logOffset;
-    let listen: string | undefined;
-    while (!listen && Date.now() < deadline) {
-      if (failure) throw failure;
-      const read = readLogFrom(this.logPath, offset);
-      offset = read.offset;
-      tail = (tail + read.text).slice(-16384);
-      listen = tail.match(/daemon ready\s+listen=((?:\[[0-9a-fA-F:.]+\]|[0-9.]+):\d+)(?=\s)/)?.[1];
-      if (listen) break;
+    const readiness = this.pendingReadiness;
+    while (readiness && Date.now() < deadline) {
+      if (readiness.failure) throw readiness.failure;
       if (child.exitCode !== null || child.signalCode !== null || this.child !== child)
-        throw new Error(tail || "Rust daemon exited before ready.");
+        throw new Error(readiness.tail || "Rust daemon exited before ready.");
+      const read = readLogFrom(this.logPath, readiness.offset);
+      readiness.offset = read.offset;
+      readiness.tail = (readiness.tail + read.text).slice(-16384);
+      const listen = readiness.tail.match(
+        /daemon ready\s+listen=((?:\[[0-9a-fA-F:.]+\]|[0-9.]+):\d+)(?=\s)/,
+      )?.[1];
+      if (listen) {
+        this.listenAddress = listen;
+        this.state = { ...this.state, listen, connectAddress: serverConnectAddress(listen) };
+        this.pendingReadiness = null;
+        break;
+      }
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
-    if (!listen) throw new Error("Timed out waiting for Rust daemon readiness.");
+    if (this.child !== child || child.exitCode !== null || child.signalCode !== null)
+      throw new Error("Rust daemon exited before ready.");
+    if (this.pendingReadiness) throw new Error("Timed out waiting for Rust daemon readiness.");
     // The daemon creates this private credential before reporting readiness.
     this.token ??= readFileSync(path.join(this.options.home, "local-api.token"), "utf8");
-    const info = await probeRustDaemon(
-      serverConnectAddress(listen),
+    const { info } = await rustDaemonRequest(
+      this.state.connectAddress!,
       this.token,
       Math.max(1, deadline - Date.now()),
     );
-    if (this.child !== child) throw new Error("Rust daemon exited during readiness handshake.");
-    this.listenAddress = listen;
-    this.configuredListen = configuredListen;
+    if (this.child !== child || child.exitCode !== null || child.signalCode !== null)
+      throw new Error("Rust daemon exited during readiness handshake.");
     this.state = {
       ...this.state,
-      ...withoutPid(info),
-      listen,
-      connectAddress: serverConnectAddress(listen),
+      ...daemonIdentity(info),
       status: "running",
       hostname: hostname(),
+      error: null,
     };
     return this.status();
   }
@@ -574,14 +624,14 @@ function withoutPid(info: DaemonProbe): Omit<DaemonProbe, "pid"> {
 const PROTOCOL = { major: 1, min_minor: 0, max_minor: 0 };
 
 /**
- * Open an authenticated connection, negotiate `method`, send one request and resolve with the
- * handshake info and the request result. The token proves the daemon is ours before use.
+ * Authenticate and negotiate a connection; optionally execute one lifecycle/identity request.
+ * A new child's readiness needs only the handshake, independent of business RPC admission.
  */
 function rustDaemonRequest(
   listen: string,
   token: string,
   timeout: number,
-  method: string,
+  method?: string,
 ): Promise<{ info: Record<string, unknown>; result: unknown }> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://${listen}/v1/ws`, {
@@ -606,8 +656,8 @@ function rustDaemonRequest(
           type: "hello",
           protocol: PROTOCOL,
           client_id: "desktop-readiness",
-          capabilities: [method],
-          required_capabilities: [method],
+          capabilities: method ? [method] : [],
+          required_capabilities: method ? [method] : [],
         }),
       ),
     );
@@ -616,11 +666,15 @@ function rustDaemonRequest(
         const message = JSON.parse(data.toString());
         if (message.type === "server_info" && typeof message.info?.server_id === "string") {
           info = message.info;
-          ws.send(JSON.stringify({ type: "request", request_id: "desktop", method, params: {} }));
+          if (method) {
+            ws.send(JSON.stringify({ type: "request", request_id: "desktop", method, params: {} }));
+          } else {
+            finish();
+          }
         } else if (message.type === "response" && message.request_id === "desktop") {
           finish(undefined, message.result);
         } else if (message.type === "error") {
-          finish(new Error(`Rust daemon rejected ${method}.`));
+          finish(new Error(`Rust daemon rejected ${method ?? "readiness handshake"}.`));
         }
       } catch {
         finish(new Error("Invalid Rust daemon readiness response."));
@@ -629,7 +683,7 @@ function rustDaemonRequest(
   });
 }
 
-/** Authenticated readiness check that also reports the daemon's own process ID. */
+/** Verify a saved process identity before adopting or signalling a retained daemon. */
 async function probeRustDaemon(
   listen: string,
   token: string,
@@ -643,12 +697,15 @@ async function probeRustDaemon(
   );
   const pid = (result as { pid?: unknown } | null)?.pid;
   if (typeof pid !== "number") throw new Error("Unexpected Rust daemon readiness response.");
+  return { ...daemonIdentity(info), pid };
+}
+
+function daemonIdentity(info: Record<string, unknown>): Omit<DaemonProbe, "pid"> {
   return {
     serverId: info.server_id as string,
     version: typeof info.version === "string" ? info.version : null,
     instanceId: typeof info.instance_id === "string" ? info.instance_id : "",
     features: Array.isArray(info.features) ? (info.features as string[]) : [],
-    pid,
   };
 }
 

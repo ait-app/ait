@@ -157,6 +157,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## 客户端、连接与品牌
 
+- [ADR-207：桌面 daemon 就绪探测与进程生命周期分离](clients/adr-207-desktop-daemon-readiness-ownership.md)
+
 - [ADR-204：在线业务连接只使用 Hub](clients/adr-204-hub-only-online-business-transport.md)
 
 - [ADR-187：GitHub 手动入口用专用标签触发 iOS App Store 构建](clients/adr-187-ios-app-store-cloud-trigger.md)（GitHub 触发入口已撤销）

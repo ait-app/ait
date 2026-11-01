@@ -3,6 +3,7 @@
 - 状态：Accepted
 - 日期：2026-09-25
 - 修订：退出后继续运行与重新接管由 [ADR-128](adr-128-desktop-daemon-keep-running.md) 恢复为可选行为。
+- 修订：[ADR-207](adr-207-desktop-daemon-readiness-ownership.md) 将就绪探测失败与进程生命周期分离；下文的启动失败回收策略不再用于仍存活的子进程。
 
 ## 决策
 
