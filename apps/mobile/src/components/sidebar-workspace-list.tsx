@@ -143,6 +143,7 @@ import { useHostBadges } from "@/hosts/use-host-badges";
 import { useSidebarRowItems } from "@/components/sidebar/display-preferences/model";
 import { PullRequestStateIcon } from "@/git/pull-request-state-icon";
 import { useSidebarRowHover } from "@/components/sidebar/use-sidebar-row-hover";
+import { useSidebarRowPress } from "@/components/sidebar/use-sidebar-row-press";
 import {
   ShareManagerSheet,
   type ShareResourceTarget,
@@ -866,7 +867,11 @@ function ProjectHeaderRow({
   onRemoveProject,
   removeProjectStatus = "idle",
 }: ProjectHeaderRowProps) {
-  const [isPressed, setIsPressed] = useState(false);
+  const {
+    isPressed,
+    onPressIn: handleProjectPressIn,
+    onPressOut: handleProjectPressOut,
+  } = useSidebarRowPress();
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const isMobileBreakpoint = useIsCompactFormFactor();
   const showSelection = selected && !isMobileBreakpoint;
@@ -900,9 +905,6 @@ function ProjectHeaderRow({
     );
   }, [displayName, onWorkspacePress, worktreeTarget]);
   const handlePress = onPress;
-
-  const handleProjectPressIn = useCallback(() => setIsPressed(true), []);
-  const handleProjectPressOut = useCallback(() => setIsPressed(false), []);
 
   const projectRowStyle = useMemo(
     () => [
@@ -1054,11 +1056,13 @@ function WorkspaceRowInner({
 }: WorkspaceRowInnerProps) {
   const isCompact = useIsCompactFormFactor();
   const showSelection = selected && !isCompact;
-  const [isPressed, setIsPressed] = useState(false);
+  const {
+    isPressed,
+    onPressIn: handleWorkspacePressIn,
+    onPressOut: handleWorkspacePressOut,
+  } = useSidebarRowPress();
   const isTouchPlatform = platformIsNative || isCompact;
   const handlePress = onPress;
-  const handleWorkspacePressIn = useCallback(() => setIsPressed(true), []);
-  const handleWorkspacePressOut = useCallback(() => setIsPressed(false), []);
 
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
   const [shareTarget, setShareTarget] = useState<ShareResourceTarget | null>(null);
