@@ -40,6 +40,8 @@
 
 ## 架构决策
 
+- [ADR-207：桌面 daemon 就绪探测与进程生命周期分离](decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)：轻量认证握手、探测失败保留自有进程、同 PID 重连，以及失败交接记录保留。
+
 - [ADR-206：OpenCode 的 ACP 子 Agent 观测与历史归属](decisions/providers/adr-206-opencode-acp-subagents.md)：实时创建与状态、嵌套时间线、后台审批和原生工具结果验证后的历史恢复。
 
 - [ADR-205：Provider 执行归属与公共端口契约](decisions/providers/adr-205-provider-execution-contracts.md)：封闭命令分类、父会话所有权、动态控制快照复用条件，以及外部可实现的预设存储端口。

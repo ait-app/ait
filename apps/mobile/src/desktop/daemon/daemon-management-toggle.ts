@@ -32,7 +32,8 @@ export async function executeDaemonManagementToggle(
   // state reflects what was actually applied if the stop fails.
   await deps.persistSettings({ manageBuiltInDaemon: false });
 
-  if (daemonStatus?.ownedByDesktop && ["running", "starting"].includes(daemonStatus.status)) {
+  // A failed readiness probe can leave an owned live process in the errored state.
+  if (daemonStatus?.ownedByDesktop) {
     const newStatus = await deps.stopDaemon();
     return { kind: "disabled", newStatus };
   }
