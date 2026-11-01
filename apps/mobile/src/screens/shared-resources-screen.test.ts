@@ -30,14 +30,17 @@ vi.mock("@react-native-async-storage/async-storage", () => ({
   default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} },
 }));
 vi.mock("@/components/headers/menu-header", () => ({ MenuHeader: () => null }));
-vi.mock("lucide-react-native", () => ({
-  FolderGit2: () => null,
-  Monitor: () => null,
-  RefreshCw: () => null,
-  Share2: () => null,
-  Waypoints: () => null,
-  X: () => null,
-}));
+vi.mock("react-native-reanimated", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-native-reanimated")>();
+  const { View } = await import("react-native");
+  return {
+    ...actual,
+    default: { ...actual.default, View },
+    useAnimatedStyle: (factory: () => unknown) => factory(),
+    useDerivedValue: (factory: () => unknown) => ({ value: factory() }),
+    withTiming: (value: unknown) => value,
+  };
+});
 
 beforeEach(async () => {
   await useSharedHostPreferences.persist.rehydrate();
@@ -71,7 +74,7 @@ describe("selectIncomingShares", () => {
 });
 
 describe("SharedResourcesScreen", () => {
-  it("lists each shared Host once with a default-on switch that remains available when turned off", () => {
+  it("lists each shared Host once with a default-on switch that remains available when turned off", async () => {
     const share: HubShare = {
       shareId: "project-grant",
       groupId: "team",
@@ -101,7 +104,8 @@ describe("SharedResourcesScreen", () => {
       },
     });
     const view = render(createElement(SharedResourcesScreen));
-    expect(view.getByRole("button", { name: "Shared with me (1)" })).toBeTruthy();
+    expect(view.getByText("Shared with me (1)")).toBeTruthy();
+    expect(await view.findByText("You are not sharing anything")).toBeTruthy();
     expect(view.getAllByRole("switch")).toHaveLength(1);
     const toggle = () => view.getByRole("switch", { name: "Show Owner · Workstation in Hosts" });
     expect(toggle().getAttribute("aria-checked")).toBe("true");
@@ -112,6 +116,7 @@ describe("SharedResourcesScreen", () => {
     view.unmount();
 
     const reopened = render(createElement(SharedResourcesScreen));
+    await reopened.findByText("You are not sharing anything");
     const restoredToggle = reopened.getByRole("switch");
     expect(restoredToggle.getAttribute("aria-checked")).toBe("false");
     fireEvent.click(restoredToggle);
@@ -140,17 +145,18 @@ describe("SharedResourcesScreen", () => {
       }),
     });
     const view = render(createElement(SharedResourcesScreen));
-    fireEvent.click(view.getByRole("button", { name: "Shared by me (0)" }));
 
     expect(await view.findByText("Shared project")).toBeTruthy();
     expect(view.getByText("Project · Team · Current daemon")).toBeTruthy();
-    expect(view.getByRole("button", { name: "Shared by me (1)" })).toBeTruthy();
+    expect(view.getByText("Shared by me (1)")).toBeTruthy();
+    expect(view.getByText("Shared with me (0)")).toBeTruthy();
+    expect(view.getByText("Nothing shared with you yet")).toBeTruthy();
+    expect(view.queryByRole("button", { name: /^Shared (with|by) me/ })).toBeNull();
     expect(view.queryByText("Rust daemon does not implement share.list.request")).toBeNull();
   });
 
   it("shows the empty state without an error when no daemon supports sharing", async () => {
     const view = render(createElement(SharedResourcesScreen));
-    fireEvent.click(view.getByRole("button", { name: "Shared by me (0)" }));
 
     expect(await view.findByText("You are not sharing anything")).toBeTruthy();
     expect(view.queryByText("Rust daemon does not implement share.list.request")).toBeNull();
@@ -164,7 +170,6 @@ describe("SharedResourcesScreen", () => {
       listShares: vi.fn<DaemonClient["listShares"]>().mockRejectedValue(error),
     });
     const view = render(createElement(SharedResourcesScreen));
-    fireEvent.click(view.getByRole("button", { name: "Shared by me (0)" }));
 
     expect(await view.findByText(error.message)).toBeTruthy();
   });

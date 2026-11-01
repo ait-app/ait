@@ -8,30 +8,29 @@ import {
   type ReactElement,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
-import { CalendarClock, Plus } from "lucide-react-native";
+import { Plus } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { MenuHeader } from "@/components/headers/menu-header";
+import { SettingsCard, SettingsRow, SettingsSection } from "@/components/settings";
 import { HostFilter } from "@/components/hosts/host-filter";
-import { ALL_HOSTS_OPTION_ID } from "@/components/hosts/host-picker";
+import { ALL_HOSTS_OPTION_ID } from "@/components/hosts/host-picker-constants";
 import { ScheduleFormSheet } from "@/components/schedules/schedule-form-sheet";
 import { SchedulesTable, type ScheduleRowView } from "@/components/schedules/schedules-table";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useAggregatedAgents } from "@/hooks/use-aggregated-agents";
 import { useProjects } from "@/hooks/use-projects";
 import {
   useSchedules,
   type AggregateLoadState,
   type AggregatedSchedule,
-  type ScheduleHostError,
 } from "@/hooks/use-schedules";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import {
   resolveSchedule,
-  type ScheduleBucket,
+  scheduleEndTime,
   type ScheduleTargetAgent,
 } from "@/schedules/schedule-derivation";
 import { resolveSchedulesScreenBodyState } from "./schedules-screen-state";
@@ -48,6 +47,7 @@ type FormState =
   | { mode: "edit"; serverId: string; schedule: ScheduleSummary };
 
 const EMPTY_SCHEDULES: AggregatedSchedule[] = [];
+const ENDED_PAGE_SIZE = 10;
 
 export function SchedulesScreen(): ReactElement {
   const isFocused = useIsFocused();
@@ -61,7 +61,7 @@ export function SchedulesScreen(): ReactElement {
 
 function SchedulesScreenContent(): ReactElement {
   const { t } = useTranslation();
-  const { loadState, hostErrors, isError, refetch } = useSchedules();
+  const { loadState, isError } = useSchedules();
   const schedules = loadState.status === "loaded" ? loadState.data : EMPTY_SCHEDULES;
   const { agents } = useAggregatedAgents({ includeArchived: true });
   const { projects } = useProjects();
@@ -99,7 +99,6 @@ function SchedulesScreenContent(): ReactElement {
 
   const [form, setForm] = useState<FormState>({ mode: "closed" });
   const [selectedHost, setSelectedHost] = useState(ALL_HOSTS_OPTION_ID);
-  const [statusFilter, setStatusFilter] = useState<ScheduleBucket>("runnable");
 
   useEffect(() => {
     if (
@@ -129,9 +128,7 @@ function SchedulesScreenContent(): ReactElement {
     [projects],
   );
 
-  // Resolve every schedule's derived state and target line once, then partition
-  // by the host and status filters. Sorted newest-first for a stable order
-  // across hosts.
+  // Resolve each schedule once before filtering hosts and grouping by status.
   const resolvedRows = useMemo(() => {
     const now = Date.now();
     return schedules.map((schedule) => ({
@@ -151,25 +148,36 @@ function SchedulesScreenContent(): ReactElement {
     }));
   }, [schedules, agentsByKey, projectNameByCwd, workspaceNameByKey, agentDirReadyHosts, t]);
 
-  const visibleRows = useMemo<ScheduleRowView[]>(() => {
+  const { runnableRows, endedRows } = useMemo(() => {
     const singleHost = groupHosts(hosts).length <= 1 || selectedHost !== ALL_HOSTS_OPTION_ID;
     const selectedServerIds = new Set(getHostGroupServerIds(hosts, selectedHost));
-    return resolvedRows
-      .filter(
-        ({ schedule, resolved }) =>
-          (selectedHost === ALL_HOSTS_OPTION_ID || selectedServerIds.has(schedule.serverId)) &&
-          resolved.bucket === statusFilter,
-      )
-      .sort((a, b) => Date.parse(b.schedule.createdAt) - Date.parse(a.schedule.createdAt))
-      .map(({ schedule, resolved }) => ({
+    const runnableRows: ScheduleRowView[] = [];
+    const endedRows: ScheduleRowView[] = [];
+    for (const { schedule, resolved } of resolvedRows) {
+      if (selectedHost !== ALL_HOSTS_OPTION_ID && !selectedServerIds.has(schedule.serverId)) {
+        continue;
+      }
+      const row: ScheduleRowView = {
         schedule,
         targetLabel: resolved.target.label,
         provider: resolved.target.provider,
         state: resolved.state,
         serverName: schedule.serverName,
         singleHost,
-      }));
-  }, [resolvedRows, selectedHost, statusFilter, hosts]);
+      };
+      (resolved.bucket === "runnable" ? runnableRows : endedRows).push(row);
+    }
+    runnableRows.sort(
+      (a, b) => Date.parse(b.schedule.createdAt) - Date.parse(a.schedule.createdAt),
+    );
+    endedRows.sort(
+      (a, b) =>
+        scheduleEndTime(b.schedule, b.state) - scheduleEndTime(a.schedule, a.state) ||
+        a.schedule.serverId.localeCompare(b.schedule.serverId) ||
+        a.schedule.id.localeCompare(b.schedule.id),
+    );
+    return { runnableRows, endedRows };
+  }, [resolvedRows, selectedHost, hosts]);
 
   const showLoadError = isError && loadState.status !== "loaded";
   const showHostFilter = groupHosts(hosts).length > 1;
@@ -178,17 +186,15 @@ function SchedulesScreenContent(): ReactElement {
     <View style={styles.container}>
       <MenuHeader title={t("schedules.title")} />
       <SchedulesScreenBody
-        rows={visibleRows}
+        key={selectedHost}
+        runnableRows={runnableRows}
+        endedRows={endedRows}
         loadState={loadState}
-        hostErrors={hostErrors}
         showLoadError={showLoadError}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
         showHostFilter={showHostFilter}
         hosts={hosts}
         selectedHost={selectedHost}
         onSelectHost={setSelectedHost}
-        onRetry={refetch}
         onCreate={openCreate}
         onEdit={openEdit}
       />
@@ -204,86 +210,36 @@ function SchedulesScreenContent(): ReactElement {
 }
 
 function SchedulesScreenBody({
-  rows,
+  runnableRows,
+  endedRows,
   loadState,
-  hostErrors,
   showLoadError,
-  statusFilter,
-  onStatusFilterChange,
   showHostFilter,
   hosts,
   selectedHost,
   onSelectHost,
-  onRetry,
   onCreate,
   onEdit,
 }: {
-  rows: ScheduleRowView[];
+  runnableRows: ScheduleRowView[];
+  endedRows: ScheduleRowView[];
   loadState: AggregateLoadState<AggregatedSchedule>;
-  hostErrors: ScheduleHostError[];
   showLoadError: boolean;
-  statusFilter: ScheduleBucket;
-  onStatusFilterChange: (value: ScheduleBucket) => void;
   showHostFilter: boolean;
   hosts: ReturnType<typeof useHosts>;
   selectedHost: string;
   onSelectHost: (serverId: string) => void;
-  onRetry: () => void;
   onCreate: () => void;
   onEdit: (schedule: AggregatedSchedule) => void;
 }): ReactElement {
   const { t } = useTranslation();
-  const statusFilterOptions = [
-    {
-      value: "runnable" as const,
-      label: t("schedules.activeFilter"),
-      testID: "schedules-filter-active",
-    },
-    {
-      value: "ended" as const,
-      label: t("schedules.endedFilter"),
-      testID: "schedules-filter-ended",
-    },
-  ];
+  const [endedVisibleCount, setEndedVisibleCount] = useState(ENDED_PAGE_SIZE);
   const bodyState = resolveSchedulesScreenBodyState({ loadState, showLoadError });
 
   if (bodyState.kind === "loading") {
     return (
       <View style={styles.centered}>
         <LoadingSpinner size="large" color={styles.spinner.color} />
-      </View>
-    );
-  }
-
-  if (bodyState.kind === "load-error") {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.message}>{t("schedules.loadError")}</Text>
-        <Button variant="ghost" onPress={onRetry} testID="schedules-retry">
-          {t("schedules.retry")}
-        </Button>
-      </View>
-    );
-  }
-
-  if (bodyState.kind === "empty") {
-    return (
-      <View style={styles.centered}>
-        {hostErrors.length > 0 ? <ScheduleHostErrorsBanner errors={hostErrors} /> : null}
-        <SchedulesEmptyState onCreate={onCreate} testID="schedules-empty" />
-      </View>
-    );
-  }
-
-  let schedulesContent: ReactElement;
-  if (rows.length > 0) {
-    schedulesContent = <SchedulesTable rows={rows} onEditSchedule={onEdit} />;
-  } else if (statusFilter === "ended") {
-    schedulesContent = <SchedulesEndedEmptyState />;
-  } else {
-    schedulesContent = (
-      <View style={styles.filterEmpty}>
-        <SchedulesEmptyState onCreate={onCreate} testID="schedules-empty" />
       </View>
     );
   }
@@ -300,13 +256,6 @@ function SchedulesScreenBody({
               triggerTestID="schedules-host-filter-trigger"
             />
           ) : null}
-          <SegmentedControl
-            size="sm"
-            value={statusFilter}
-            onValueChange={onStatusFilterChange}
-            options={statusFilterOptions}
-            testID="schedules-status-filter"
-          />
         </View>
         <Button
           variant="outline"
@@ -325,58 +274,58 @@ function SchedulesScreenBody({
         keyboardShouldPersistTaps="handled"
         testID="schedules-list"
       >
-        {hostErrors.length > 0 ? <ScheduleHostErrorsBanner errors={hostErrors} /> : null}
-        {schedulesContent}
+        <SettingsSection
+          title={t("schedules.activeCount", { count: runnableRows.length })}
+          testID="schedules-active-section"
+        >
+          {runnableRows.length ? (
+            <SchedulesTable rows={runnableRows} onEditSchedule={onEdit} />
+          ) : (
+            <SettingsCard>
+              <SettingsRow
+                label={t("schedules.empty")}
+                hint={t("schedules.emptyDescription")}
+                testID="schedules-empty"
+              >
+                <Button
+                  variant="outline"
+                  leftIcon={Plus}
+                  size="sm"
+                  onPress={onCreate}
+                  testID="schedules-empty-new"
+                >
+                  {t("schedules.new")}
+                </Button>
+              </SettingsRow>
+            </SettingsCard>
+          )}
+        </SettingsSection>
+        <SettingsSection
+          title={t("schedules.endedCount", { count: endedRows.length })}
+          testID="schedules-ended-section"
+          flush
+        >
+          {endedRows.length ? (
+            <SchedulesTable rows={endedRows.slice(0, endedVisibleCount)} onEditSchedule={onEdit} />
+          ) : (
+            <SettingsCard>
+              <SettingsRow label={t("schedules.endedEmpty")} />
+            </SettingsCard>
+          )}
+          {endedRows.length > endedVisibleCount ? (
+            <View style={styles.showMore}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onPress={() => setEndedVisibleCount((count) => count + ENDED_PAGE_SIZE)}
+                testID="schedules-ended-show-more"
+              >
+                {t("schedules.showMore")}
+              </Button>
+            </View>
+          ) : null}
+        </SettingsSection>
       </ScrollView>
-    </View>
-  );
-}
-
-function SchedulesEmptyState({
-  onCreate,
-  testID,
-}: {
-  onCreate: () => void;
-  testID?: string;
-}): ReactElement {
-  const { t } = useTranslation();
-  return (
-    <View style={styles.emptyState} testID={testID}>
-      <CalendarClock size={styles.emptyIcon.width} color={styles.emptyIcon.color} />
-      <View style={styles.emptyTextStack}>
-        <Text style={styles.emptyTitle}>{t("schedules.empty")}</Text>
-        <Text style={styles.emptyDescription}>{t("schedules.emptyDescription")}</Text>
-      </View>
-      <Button variant="outline" leftIcon={Plus} onPress={onCreate} testID="schedules-empty-new">
-        {t("schedules.new")}
-      </Button>
-    </View>
-  );
-}
-
-function SchedulesEndedEmptyState(): ReactElement {
-  const { t } = useTranslation();
-  return (
-    <View style={styles.filterEmpty}>
-      <View style={styles.endedEmptyState}>
-        <CalendarClock size={styles.emptyIcon.width} color={styles.emptyIcon.color} />
-        <Text style={styles.emptyTitle}>{t("schedules.endedEmpty")}</Text>
-      </View>
-    </View>
-  );
-}
-
-function ScheduleHostErrorsBanner({ errors }: { errors: ScheduleHostError[] }): ReactElement {
-  const { t } = useTranslation();
-  return (
-    <View style={styles.errorsBannerWrap}>
-      <View style={styles.errorsBanner} testID="schedules-host-errors">
-        {errors.map((error) => (
-          <Text key={error.serverId} style={styles.errorsBannerText}>
-            {t("schedules.hostLoadError", { host: error.serverName })}
-          </Text>
-        ))}
-      </View>
     </View>
   );
 }
@@ -389,6 +338,11 @@ const styles = StyleSheet.create((theme) => ({
   body: {
     flex: 1,
     minHeight: 0,
+    padding: theme.spacing[4],
+    paddingTop: theme.spacing[6],
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
   },
   centered: {
     flex: 1,
@@ -402,8 +356,6 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
     gap: theme.spacing[3],
-    paddingHorizontal: { xs: theme.spacing[3], md: theme.spacing[6] },
-    paddingTop: theme.spacing[4],
   },
   filterRowControls: {
     flexDirection: "row",
@@ -422,64 +374,12 @@ const styles = StyleSheet.create((theme) => ({
     paddingTop: theme.spacing[4],
     paddingBottom: theme.spacing[6],
   },
-  errorsBannerWrap: {
-    paddingHorizontal: { xs: theme.spacing[3], md: theme.spacing[6] },
-  },
-  errorsBanner: {
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing[3],
-    gap: theme.spacing[1],
-  },
-  errorsBannerText: {
-    color: theme.colors.palette.red[300],
-    fontSize: theme.fontSize.sm,
-  },
-  filterEmpty: {
-    flexGrow: 1,
-    paddingHorizontal: { xs: theme.spacing[3], md: theme.spacing[6] },
-    paddingVertical: theme.spacing[6],
+  showMore: {
     alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyState: {
-    alignItems: "center",
-    gap: theme.spacing[4],
-    maxWidth: 420,
-    width: "100%",
-  },
-  endedEmptyState: {
-    alignItems: "center",
-    gap: theme.spacing[3],
-  },
-  emptyTextStack: {
-    alignItems: "center",
-    gap: theme.spacing[2],
-  },
-  emptyTitle: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.normal,
-    textAlign: "center",
-  },
-  emptyDescription: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
-    textAlign: "center",
-  },
-  message: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
-    textAlign: "center",
   },
   // Static color holder read by the spinner; keeps the muted token without
   // useUnistyles (banned in new code).
   spinner: {
     color: theme.colors.foregroundMuted,
-  },
-  emptyIcon: {
-    color: theme.colors.foregroundMuted,
-    width: theme.iconSize.lg,
   },
 }));

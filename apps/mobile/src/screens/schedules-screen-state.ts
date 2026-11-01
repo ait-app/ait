@@ -2,7 +2,6 @@ import type { AggregateLoadState, AggregatedSchedule } from "@/schedules/aggrega
 
 export type SchedulesScreenBodyState =
   | { kind: "loading" }
-  | { kind: "load-error" }
   | { kind: "empty" }
   | { kind: "content" };
 
@@ -11,7 +10,7 @@ export function resolveSchedulesScreenBodyState(input: {
   showLoadError: boolean;
 }): SchedulesScreenBodyState {
   if (input.showLoadError) {
-    return { kind: "load-error" };
+    return { kind: "empty" };
   }
   if (input.loadState.status === "connecting" || input.loadState.status === "loading") {
     return { kind: "loading" };

@@ -4,8 +4,6 @@ import { toErrorMessage } from "@/utils/error-messages";
 
 export const schedulesQueryBaseKey = ["schedules"] as const;
 
-export const ALL_SCHEDULE_HOSTS_FAILED_MESSAGE = "No connected hosts could load schedules";
-
 export interface ScheduleHostInput {
   serverId: string;
   serverName: string;
@@ -62,9 +60,8 @@ export interface FetchAggregatedSchedulesInput {
  * Connectivity is checked here at execution time, so explicit query refreshes
  * pick up the currently connected host set.
  *
- * Offline hosts are skipped. A connected host that fails contributes to
- * `hostErrors` (surfaced as a banner) while the rest still render; only when
- * every connected host fails do we throw so the screen shows a full error.
+ * Offline hosts are skipped. Failed hosts contribute an empty list, including
+ * when every request fails. Keep hostErrors as diagnostic metadata.
  */
 export async function fetchAggregatedSchedules(
   input: FetchAggregatedSchedulesInput,
@@ -83,7 +80,6 @@ export async function fetchAggregatedSchedules(
 
   const schedules: AggregatedSchedule[] = [];
   const hostErrors: ScheduleHostError[] = [];
-  let connectedAttempts = 0;
 
   await Promise.all(
     input.hosts.map(async (host) => {
@@ -93,7 +89,6 @@ export async function fetchAggregatedSchedules(
       if (!client || !isOnline) {
         return;
       }
-      connectedAttempts += 1;
       try {
         const payload = await client.scheduleList();
         if (payload.error) {
@@ -111,10 +106,6 @@ export async function fetchAggregatedSchedules(
       }
     }),
   );
-
-  if (connectedAttempts > 0 && schedules.length === 0 && hostErrors.length === connectedAttempts) {
-    throw new Error(ALL_SCHEDULE_HOSTS_FAILED_MESSAGE);
-  }
 
   if (schedules.length === 0 && hasSettlingHost) {
     return { status: "connecting" };

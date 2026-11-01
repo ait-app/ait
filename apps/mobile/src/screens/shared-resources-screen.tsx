@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { FolderGit2, Monitor, RefreshCw, Share2, Waypoints, X } from "lucide-react-native";
+import { RefreshCw, X } from "lucide-react-native";
 import type { ShareGroup, ShareSetting } from "@ait/protocol/messages";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { SegmentedControl } from "@/components/ui/segmented-control";
+import { SettingsCard, SettingsRow, SettingsSection } from "@/components/settings";
 import { Switch } from "@/components/ui/switch";
 import { getHostRuntimeStore, isSharedResourceHost, useHosts } from "@/runtime/host-runtime";
 import { useHubServices } from "@/runtime/hub-service-store";
@@ -19,7 +19,6 @@ import {
 import { useTranslation } from "react-i18next";
 import type { HubAccountSnapshot } from "@ait/client/internal/hub";
 
-type SharedTab = "incoming" | "outgoing";
 const EMPTY_INCOMING_SHARES = [] as const;
 
 export function selectIncomingShares(snapshot: Pick<HubAccountSnapshot, "shares"> | null) {
@@ -39,16 +38,9 @@ function settingTitle(setting: ShareSetting, hostLabel: string): string {
   );
 }
 
-function ScopeIcon({ kind, color }: { kind: ShareSetting["resourceKind"]; color: string }) {
-  if (kind === "workspace") return <Waypoints size={16} color={color} />;
-  if (kind === "project") return <FolderGit2 size={16} color={color} />;
-  return <Monitor size={16} color={color} />;
-}
-
 export function SharedResourcesScreen() {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const [tab, setTab] = useState<SharedTab>("incoming");
   const incoming = useHubServices((state) => selectIncomingShares(state.snapshot));
   const incomingHosts = useMemo(() => groupIncomingSharedHosts(incoming), [incoming]);
   const center = useAccountState((state) => state.center);
@@ -59,7 +51,7 @@ export function SharedResourcesScreen() {
   const hosts = useHosts();
   const ownerHosts = useMemo(() => hosts.filter((host) => !isSharedResourceHost(host)), [hosts]);
   const [outgoing, setOutgoing] = useState<OutgoingShare[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
 
@@ -100,8 +92,8 @@ export function SharedResourcesScreen() {
   }, [ownerHosts, t]);
 
   useEffect(() => {
-    if (tab === "outgoing") void loadOutgoing();
-  }, [loadOutgoing, tab]);
+    void loadOutgoing();
+  }, [loadOutgoing]);
 
   const remove = useCallback(
     async (entry: OutgoingShare) => {
@@ -127,57 +119,24 @@ export function SharedResourcesScreen() {
     [t],
   );
 
-  const options = useMemo(
-    () => [
-      {
-        value: "incoming" as const,
-        label: t("sharing.sharedWithMeCount", { count: incomingHosts.length }),
-      },
-      {
-        value: "outgoing" as const,
-        label: t("sharing.sharedByMeCount", { count: outgoing.length }),
-      },
-    ],
-    [incomingHosts.length, outgoing.length, t],
-  );
-
   return (
     <View style={styles.container}>
       <MenuHeader title={t("sharing.title")} />
-      <View style={styles.toolbar}>
-        <SegmentedControl options={options} value={tab} onValueChange={setTab} size="sm" />
-        {tab === "outgoing" ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={RefreshCw}
-            onPress={() => void loadOutgoing()}
-            disabled={loading}
+      <ScrollView>
+        <View style={styles.content}>
+          <SettingsSection
+            title={t("sharing.sharedWithMeCount", { count: incomingHosts.length })}
+            info={t("sharing.incomingHostHint")}
+            testID="sharing-incoming"
           >
-            {t("sharing.refresh")}
-          </Button>
-        ) : null}
-      </View>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <ScrollView contentContainerStyle={styles.content}>
-        {tab === "incoming" ? (
-          incomingHosts.length ? (
-            <View style={styles.incoming}>
-              <Text style={styles.meta}>{t("sharing.incomingHostHint")}</Text>
-              <View style={styles.shareList}>
-                {incomingHosts.map((host) => (
-                  <View key={host.hostId} style={styles.shareRow}>
-                    <View style={styles.scopeIcon}>
-                      <Monitor size={16} color={theme.colors.foregroundMuted} />
-                    </View>
-                    <View style={styles.copy}>
-                      <Text numberOfLines={1} style={styles.title}>
-                        {host.label}
-                      </Text>
-                      <Text numberOfLines={1} style={styles.meta}>
-                        {host.groupNames.join(" · ")}
-                      </Text>
-                    </View>
+            <SettingsCard>
+              {incomingHosts.length ? (
+                incomingHosts.map((host) => (
+                  <SettingsRow
+                    key={host.hostId}
+                    label={host.label}
+                    hint={host.groupNames.join(" · ")}
+                  >
                     <Switch
                       value={isSharedHostEnabled(
                         { disabledHostKeys },
@@ -190,69 +149,82 @@ export function SharedResourcesScreen() {
                         setHostEnabled({ center, accountId }, host.hostId, enabled)
                       }
                     />
-                  </View>
+                  </SettingsRow>
+                ))
+              ) : (
+                <SettingsRow
+                  label={t("sharing.emptyIncomingTitle")}
+                  hint={t("sharing.emptyIncomingHint")}
+                />
+              )}
+            </SettingsCard>
+          </SettingsSection>
+          <SettingsSection
+            title={t("sharing.sharedByMeCount", { count: outgoing.length })}
+            testID="sharing-outgoing"
+            trailing={
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={RefreshCw}
+                onPress={() => void loadOutgoing()}
+                disabled={loading}
+              >
+                {t("sharing.refresh")}
+              </Button>
+            }
+            flush
+          >
+            {error ? (
+              <Text accessibilityRole="alert" style={styles.error}>
+                {error}
+              </Text>
+            ) : null}
+            {loading && outgoing.length === 0 ? (
+              <SettingsCard>
+                <View style={styles.loading}>
+                  <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
+                  <Text style={styles.meta}>{t("sharing.loading")}</Text>
+                </View>
+              </SettingsCard>
+            ) : outgoing.length ? (
+              <SettingsCard>
+                {outgoing.map((entry) => (
+                  <SettingsRow
+                    key={entry.setting.settingId}
+                    label={settingTitle(entry.setting, entry.hostLabel)}
+                    hint={`${t(`sharing.scope.${entry.setting.resourceKind}`)} · ${entry.groupName} · ${entry.hostLabel}`}
+                  >
+                    <View style={styles.actions}>
+                      <Text style={styles.meta}>
+                        {entry.setting.state === "accepted"
+                          ? t("sharing.active")
+                          : entry.setting.state}
+                      </Text>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={X}
+                        loading={removing === entry.setting.settingId}
+                        disabled={removing !== null}
+                        onPress={() => void remove(entry)}
+                      >
+                        {t("sharing.stop")}
+                      </Button>
+                    </View>
+                  </SettingsRow>
                 ))}
-              </View>
-            </View>
-          ) : (
-            <View style={styles.empty}>
-              <Share2 size={28} color={theme.colors.foregroundMuted} />
-              <Text style={styles.emptyTitle}>{t("sharing.emptyIncomingTitle")}</Text>
-              <Text style={styles.emptyText}>{t("sharing.emptyIncomingHint")}</Text>
-            </View>
-          )
-        ) : loading ? (
-          <View style={styles.empty}>
-            <LoadingSpinner size="large" color={theme.colors.foregroundMuted} />
-          </View>
-        ) : outgoing.length ? (
-          <View style={styles.shareList}>
-            {outgoing.map((entry) => (
-              <View key={entry.setting.settingId} style={styles.shareRow}>
-                <View style={styles.scopeIcon}>
-                  <ScopeIcon
-                    kind={entry.setting.resourceKind}
-                    color={theme.colors.foregroundMuted}
-                  />
-                </View>
-                <View style={styles.copy}>
-                  <Text numberOfLines={1} style={styles.title}>
-                    {settingTitle(entry.setting, entry.hostLabel)}
-                  </Text>
-                  <Text numberOfLines={1} style={styles.meta}>
-                    {t(`sharing.scope.${entry.setting.resourceKind}`)} · {entry.groupName} ·{" "}
-                    {entry.hostLabel}
-                  </Text>
-                </View>
-                <Text style={styles.state}>
-                  {entry.setting.state === "accepted" ? t("sharing.active") : entry.setting.state}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t("sharing.stop")}
-                  disabled={removing !== null}
-                  onPress={() => void remove(entry)}
-                  style={({ hovered, pressed }) => [
-                    styles.remove,
-                    (hovered || pressed) && styles.removeActive,
-                  ]}
-                >
-                  {removing === entry.setting.settingId ? (
-                    <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
-                  ) : (
-                    <X size={15} color={theme.colors.foregroundMuted} />
-                  )}
-                </Pressable>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.empty}>
-            <Share2 size={28} color={theme.colors.foregroundMuted} />
-            <Text style={styles.emptyTitle}>{t("sharing.emptyOutgoingTitle")}</Text>
-            <Text style={styles.emptyText}>{t("sharing.emptyOutgoingHint")}</Text>
-          </View>
-        )}
+              </SettingsCard>
+            ) : !error ? (
+              <SettingsCard>
+                <SettingsRow
+                  label={t("sharing.emptyOutgoingTitle")}
+                  hint={t("sharing.emptyOutgoingHint")}
+                />
+              </SettingsCard>
+            ) : null}
+          </SettingsSection>
+        </View>
       </ScrollView>
     </View>
   );
@@ -260,83 +232,21 @@ export function SharedResourcesScreen() {
 
 const styles = StyleSheet.create((theme) => ({
   container: { flex: 1, backgroundColor: theme.colors.surface0 },
-  toolbar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[3],
-    paddingHorizontal: { xs: theme.spacing[3], md: theme.spacing[6] },
-    paddingTop: theme.spacing[4],
-  },
   content: {
-    flexGrow: 1,
-    paddingHorizontal: { xs: theme.spacing[3], md: theme.spacing[6] },
-    paddingVertical: theme.spacing[4],
+    padding: theme.spacing[4],
+    paddingTop: theme.spacing[6],
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
   },
-  error: {
-    marginHorizontal: theme.spacing[6],
-    marginTop: theme.spacing[3],
-    color: theme.colors.destructive,
-    fontSize: theme.fontSize.sm,
-  },
-  empty: {
-    flex: 1,
-    minHeight: 260,
+  error: { color: theme.colors.destructive, fontSize: theme.fontSize.sm },
+  loading: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: theme.spacing[2],
-  },
-  emptyTitle: {
-    marginTop: theme.spacing[2],
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.lg,
-    fontWeight: theme.fontWeight.medium,
-  },
-  emptyText: {
-    maxWidth: 460,
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
-    textAlign: "center",
-  },
-  incoming: { gap: theme.spacing[3] },
-  shareList: {
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.xl,
-  },
-  shareRow: {
-    minHeight: 68,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[3],
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  scopeIcon: {
-    width: 34,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface2,
-  },
-  copy: { minWidth: 0, flex: 1, gap: 3 },
-  title: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.medium,
+    padding: theme.spacing[4],
   },
   meta: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
-  state: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
-  remove: {
-    width: 30,
-    height: 30,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: theme.borderRadius.lg,
-  },
-  removeActive: { backgroundColor: theme.colors.surface2 },
+  actions: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
 }));
