@@ -574,8 +574,9 @@ function withoutPid(info: DaemonProbe): Omit<DaemonProbe, "pid"> {
 const PROTOCOL = { major: 1, min_minor: 0, max_minor: 0 };
 
 /**
- * Open an authenticated connection, negotiate `method`, send one request and resolve with the
- * handshake info and the request result. The token proves the daemon is ours before use.
+ * Open an authenticated connection, negotiate `method` and resolve with the handshake info
+ * and request result. Only the read-only readiness probe retries temporary resource exhaustion.
+ * The token proves the daemon is ours before use; retries share the original deadline.
  */
 function rustDaemonRequest(
   listen: string,
@@ -588,15 +589,22 @@ function rustDaemonRequest(
       headers: { Authorization: `Bearer ${token}` },
     });
     const timer = setTimeout(() => finish(new Error("Rust daemon handshake timed out.")), timeout);
+    let retryTimer: NodeJS.Timeout | undefined;
     let settled = false;
     let info: Record<string, unknown> | null = null;
     const finish = (error?: Error, result?: unknown) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearTimeout(retryTimer);
       ws.close();
       if (error || !info) reject(error ?? new Error("Rust daemon closed before readiness."));
       else resolve({ info, result });
+    };
+    const sendRequest = () => {
+      retryTimer = undefined;
+      if (settled) return;
+      ws.send(JSON.stringify({ type: "request", request_id: "desktop", method, params: {} }));
     };
     ws.on("error", (error) => finish(error));
     ws.on("close", () => finish(new Error("Rust daemon closed before readiness handshake.")));
@@ -616,11 +624,21 @@ function rustDaemonRequest(
         const message = JSON.parse(data.toString());
         if (message.type === "server_info" && typeof message.info?.server_id === "string") {
           info = message.info;
-          ws.send(JSON.stringify({ type: "request", request_id: "desktop", method, params: {} }));
+          sendRequest();
         } else if (message.type === "response" && message.request_id === "desktop") {
           finish(undefined, message.result);
         } else if (message.type === "error") {
-          finish(new Error(`Rust daemon rejected ${method}.`));
+          if (
+            info &&
+            method === "daemon.get_status.request" &&
+            message.request_id === "desktop" &&
+            message.code === "resource_exhausted" &&
+            message.retryable === true
+          ) {
+            retryTimer ??= setTimeout(sendRequest, 100);
+          } else {
+            finish(new Error(`Rust daemon rejected ${method}.`));
+          }
         }
       } catch {
         finish(new Error("Invalid Rust daemon readiness response."));
