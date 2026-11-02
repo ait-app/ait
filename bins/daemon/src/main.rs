@@ -5,6 +5,7 @@ mod device;
 mod diagnostics;
 mod host;
 mod instance;
+mod migration;
 
 use std::process::ExitCode;
 
@@ -60,6 +61,9 @@ async fn run(mut cli: config::Cli) -> anyhow::Result<()> {
         Some(config::Command::Login(options)) => return device::login(&directory, options).await,
         Some(config::Command::Logout) => return device::logout(&directory).await,
         Some(config::Command::Status { json }) => return device::status(&directory, json),
+        Some(config::Command::MigrateData { source, json }) => {
+            return migration::migrate(&source, &directory, json);
+        }
         Some(config::Command::OmpAcp { .. }) => {
             unreachable!("OMP ACP handled before daemon configuration")
         }

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ipcMain } from "electron";
+import { dialog, ipcMain } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_DESKTOP_SETTINGS } from "../settings/desktop-settings";
@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   appLogPath: "",
   getElectronLogFile: vi.fn(),
   accountCommand: vi.fn(),
+  showMessageBox: vi.fn(async () => ({ response: 0 })),
 }));
 
 vi.mock("electron", () => ({
@@ -43,6 +44,7 @@ vi.mock("electron", () => ({
   },
   ipcMain: { handle: vi.fn() },
   powerMonitor: { getSystemIdleTime: vi.fn(() => 0) },
+  dialog: { showMessageBox: mocks.showMessageBox },
 }));
 
 vi.mock("electron-log/main", () => ({
@@ -99,6 +101,7 @@ describe("daemon-manager commands", () => {
   beforeEach(() => {
     fixtureRoot = mkdtempSync(path.join(tmpdir(), "ait daemon manager "));
     mocks.paseoHome = path.join(fixtureRoot, "home");
+    vi.stubEnv("AIT_SERVER_DATA_DIR", mocks.paseoHome);
     mocks.appLogPath = path.join(fixtureRoot, "main.log");
     mocks.settings = DEFAULT_DESKTOP_SETTINGS;
     mocks.createNodeEntrypointInvocation.mockReset();
@@ -113,6 +116,8 @@ describe("daemon-manager commands", () => {
     mocks.getElectronLogFile.mockReset();
     mocks.getElectronLogFile.mockReturnValue({ path: mocks.appLogPath });
     mocks.accountCommand.mockReset();
+    mocks.showMessageBox.mockReset();
+    mocks.showMessageBox.mockResolvedValue({ response: 0 });
     vi.mocked(ipcMain.handle).mockReset();
   });
 

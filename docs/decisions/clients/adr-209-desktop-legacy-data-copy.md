@@ -1,0 +1,57 @@
+# ADR-209：桌面启动时引导复制旧数据并恢复异常退出的 daemon
+
+- 状态：Accepted
+- 日期：2026-11-02
+- 关联：ADR-053、ADR-055、ADR-128、GitHub Issue #557
+
+## 背景
+
+独立 daemon 默认使用 `~/.ait-server`，桌面内置 daemon 使用
+`~/.ait-server-desktop`。桌面切换到独立数据目录时保留旧数据但不自动迁移；已有用户可能
+继续通过旧 Host 使用 `~/.ait-server`。当桌面内置 daemon 后来恢复运行时，客户端会注册一
+个新的空 Host，使仍在旧目录中的项目和会话看起来像被删除。
+
+桌面保留 daemon 的连接记录原先只在正常退出时写入。Electron 被终止时没有交接记录，下一
+次启动会尝试为同一数据目录创建第二个 daemon，触发实例锁冲突。连续启动请求会重复产生相
+同错误。
+
+## 决策
+
+1. 仅在没有显式 `AIT_SERVER_DATA_DIR`、且桌面内置 daemon 尚未启动时检查默认目录。若
+   `~/.ait-server` 的 Agent、Project 或 Workspace registry 有记录，而
+   `~/.ait-server-desktop` 对应 registry 为空，桌面必须先显示复制确认，不能静默启动空
+   Host。
+2. 用户取消时保持两个目录不变并阻止空 Host 启动。用户确认后，桌面调用随包 daemon 的
+   `migrate-data` 命令；复制和锁语义不在 renderer 或 shell 中实现。
+3. 迁移命令按规范路径顺序同时取得源、目标数据目录的实例租约。任一 daemon 仍在运行、源
+   目录没有记录或目标已有记录时，迁移失败且不覆盖目标。
+4. 迁移只发布 `agents/` 与 `projects/`，涵盖 Agent registry、Timeline SQLite、Project、
+   Workspace、标签和项目图标。旧目录不删除；其中已有 Workspace 的绝对路径继续有效，旧
+   Worktree 也继续留在原位置。
+5. 复制先进入目标同一文件系统的 staging 目录。发布前把目标原 `agents/` 和 `projects/`
+   移入永久备份；发布后重新读取三个 registry 并统计 Timeline 行数，只有与源摘要一致才
+   成功。目标保留自己的 `server-id`、本地 API token、在线服务凭据、配置、日志和运行态。
+6. daemon 每次通过认证就绪检查后立即写入私有 `desktop-daemon.json`，不再等正常退出。
+   后续桌面同时验证 token、PID、Server ID 和 Instance ID 后认领同一 daemon。已记录进程
+   存活但暂时无法验证时停止启动，不创建竞争写入者；确认进程退出或身份不符后才清理记录。
+
+## 后果
+
+- 首次遇到旧数据的用户得到明确、可取消的复制入口；复制失败不会进入空 Host。
+- 活跃旧 daemon 必须先停止。桌面会解释失败并允许重试，不会删除锁或强制终止未知进程。
+- 迁移后的新 daemon 使用新的 Host 身份；旧 Host 和源目录保留，便于回滚。旧目录不能在
+  用户确认不再需要旧 Worktree 和备份前删除。
+- 本次不合并两个非空目录，不迁移在线服务身份，也不把旧目录自动改名或删除。
+
+## 验证
+
+- Rust 单元测试覆盖成功迁移、目标非空拒绝、源持锁拒绝、目标身份保留和备份保留。
+- daemon 真实进程测试覆盖 CLI 参数、复制结果、摘要和备份路径。
+- Desktop 单元测试覆盖候选检测、目标非空跳过、用户确认和取消不写入。
+- Desktop 真实 Rust 子进程测试覆盖未正常交接时按 PID、Server ID 和 Instance ID 重新认领。
+
+## Test coverage
+
+未测量覆盖率；本次按仓库规范执行受影响的 Rust 和 TypeScript 定向测试，不扩大到 workspace
+全量覆盖率。CI 应保留对应测试报告，若发布前要求覆盖率，再对 `daemon` binary 与桌面 daemon
+管理模块执行限定文件测量。

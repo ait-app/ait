@@ -181,14 +181,17 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
     await expect(manager.relayRequest("DELETE")).resolves.toBeNull();
   }, 40000);
 
-  it("does not adopt or stop another process using the same data directory", async () => {
+  it("adopts an authenticated daemon after the Desktop owner disappears unexpectedly", async () => {
     const first = create(process.env.AIT_SERVER_BIN!);
     const running = await first.start();
     const second = create(process.env.AIT_SERVER_BIN!, running.home);
-    await expect(second.start()).rejects.toThrow();
+    await expect(second.start()).resolves.toMatchObject({
+      pid: running.pid,
+      serverId: running.serverId,
+      instanceId: running.instanceId,
+    });
     await second.stop();
-    expect(() => process.kill(running.pid!, 0)).not.toThrow();
-    expect(first.status().status).toBe("running");
+    expect(() => process.kill(running.pid!, 0)).toThrow();
   }, 30000);
 
   it("keeps a retained daemon running for the next session and stops it from there", async () => {
@@ -213,7 +216,7 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
       ownedByDesktop: true,
     });
     expect(next.authorization(`ws://${reattached.connectAddress}/v1/ws`)).toBe(token);
-    expect(existsSync(path.join(running.home, "desktop-daemon.json"))).toBe(false);
+    expect(existsSync(path.join(running.home, "desktop-daemon.json"))).toBe(true);
 
     await next.stop();
     expect(() => process.kill(running.pid!, 0)).toThrow();
@@ -237,7 +240,7 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
   }, 60000);
 });
 
-it("preserves an unverified live PID without adopting or signalling it", async () => {
+it("keeps a live unverifiable record without signaling its process or spawning a competitor", async () => {
   const home = mkdtempSync(path.join(tmpdir(), "ait-desktop-retained-"));
   homes.push(home);
   const record = path.join(home, "desktop-daemon.json");
@@ -254,7 +257,7 @@ it("preserves an unverified live PID without adopting or signalling it", async (
       }),
     );
     const manager = create("/missing/ait-server", home);
-    // The PID is alive but does not answer with the saved token, so it is never adopted.
+    // The PID is alive but does not answer with the saved token, so startup stops conservatively.
     await expect(manager.start()).rejects.toThrow();
     expect(unrelated.exitCode).toBeNull();
     expect(unrelated.signalCode).toBeNull();

@@ -49,6 +49,8 @@ interface RetainedDaemon {
   listen: string;
   configuredListen: string;
   startedAt: string;
+  serverId?: string;
+  instanceId?: string;
 }
 
 /** Log progress belongs to the child, so a retry continues the same startup attempt. */
@@ -75,7 +77,9 @@ function readRetainedDaemon(home: string): RetainedDaemon | null {
       /^[!-~]{32,256}$/.test(value.token) &&
       typeof value.listen === "string" &&
       typeof value.configuredListen === "string" &&
-      typeof value.startedAt === "string"
+      typeof value.startedAt === "string" &&
+      (value.serverId === undefined || typeof value.serverId === "string") &&
+      (value.instanceId === undefined || typeof value.instanceId === "string")
     ) {
       return value as RetainedDaemon;
     }
@@ -94,6 +98,10 @@ function writeRetainedDaemon(home: string, daemon: RetainedDaemon): void {
 
 function forgetRetainedDaemon(home: string): void {
   rmSync(retainedDaemonPath(home), { force: true });
+}
+
+function forgetRetainedDaemonIfPid(home: string, pid: number): void {
+  if (readRetainedDaemon(home)?.pid === pid) forgetRetainedDaemon(home);
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -353,6 +361,8 @@ export class RustDaemonManager {
         listen: this.listenAddress,
         configuredListen: this.configuredListen,
         startedAt: this.state.startedAt,
+        serverId: this.state.serverId,
+        instanceId: this.state.instanceId,
       });
       // Release the handle so Electron can exit without waiting for or killing the daemon;
       // this session no longer owns it, so later stops here leave it for the next session.
@@ -411,6 +421,7 @@ export class RustDaemonManager {
     });
     this.child = null;
     this.pendingReadiness = null;
+    if (child.pid) forgetRetainedDaemonIfPid(this.options.home, child.pid);
   }
 
   /** Stop a reattached daemon through its authenticated shutdown RPC, then by signal. */
@@ -483,9 +494,22 @@ export class RustDaemonManager {
     }
     const address = serverConnectAddress(retained.listen);
     this.unverifiedRecord = true;
-    const info = await probeRustDaemon(address, retained.token, this.options.timeoutMs ?? 5_000);
+    let info: Awaited<ReturnType<typeof probeRustDaemon>>;
+    try {
+      info = await probeRustDaemon(address, retained.token, this.options.timeoutMs ?? 5_000);
+    } catch (error) {
+      // A live recorded process may be temporarily unavailable. Keep the record and never spawn a
+      // competing writer for the same data directory until identity can be verified.
+      throw new Error("The existing desktop daemon is temporarily unavailable.", {
+        cause: error,
+      });
+    }
     this.unverifiedRecord = false;
-    if (info.pid !== retained.pid) {
+    if (
+      info.pid !== retained.pid ||
+      (retained.serverId && info.serverId !== retained.serverId) ||
+      (retained.instanceId && info.instanceId !== retained.instanceId)
+    ) {
       forgetRetainedDaemon(this.options.home);
       return null;
     }
@@ -495,7 +519,6 @@ export class RustDaemonManager {
       forgetRetainedDaemon(this.options.home);
       return null;
     }
-    forgetRetainedDaemon(this.options.home);
     this.retained = retained;
     this.token = retained.token;
     this.listenAddress = retained.listen;
@@ -512,6 +535,11 @@ export class RustDaemonManager {
       hostname: hostname(),
       error: null,
     };
+    writeRetainedDaemon(this.options.home, {
+      ...retained,
+      serverId: info.serverId,
+      instanceId: info.instanceId,
+    });
     return this.status();
   }
 
@@ -570,6 +598,7 @@ export class RustDaemonManager {
       this.child = null;
       this.pendingReadiness = null;
       this.token = null;
+      if (child.pid) forgetRetainedDaemonIfPid(this.options.home, child.pid);
       this.state = {
         ...this.state,
         status: "errored",
@@ -628,6 +657,18 @@ export class RustDaemonManager {
       hostname: hostname(),
       error: null,
     };
+    if (!child.pid || !this.token || !this.state.startedAt) {
+      throw new Error("Rust daemon readiness did not retain its process identity.");
+    }
+    writeRetainedDaemon(this.options.home, {
+      pid: child.pid,
+      token: this.token,
+      listen: this.listenAddress!,
+      configuredListen: this.configuredListen!,
+      startedAt: this.state.startedAt,
+      serverId: this.state.serverId,
+      instanceId: this.state.instanceId,
+    });
     return this.status();
   }
 }

@@ -1,0 +1,100 @@
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import {
+  findLegacyDataMigrationCandidate,
+  inspectDataHome,
+  LegacyDataMigrationCancelledError,
+  prepareLegacyDataMigration,
+} from "./legacy-data-migration";
+
+const roots: string[] = [];
+
+function fixture(): { source: string; destination: string } {
+  const root = mkdtempSync(path.join(tmpdir(), "ait legacy migration "));
+  roots.push(root);
+  return { source: path.join(root, ".ait-server"), destination: path.join(root, "desktop") };
+}
+
+function writeRegistry(home: string, relative: string, length: number): void {
+  const file = path.join(home, relative);
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(
+    file,
+    JSON.stringify(Array.from({ length }, (_value, index) => ({ id: `record-${index}` }))),
+  );
+}
+
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
+describe("legacy data migration preparation", () => {
+  it("detects populated legacy data beside an empty desktop destination", async () => {
+    const { source, destination } = fixture();
+    writeRegistry(source, "agents/agents.json", 4);
+    writeRegistry(source, "projects/projects.json", 2);
+    writeRegistry(source, "projects/workspaces.json", 3);
+    mkdirSync(path.join(source, "agents"), { recursive: true });
+    writeFileSync(path.join(source, "agents/timeline.sqlite3"), Buffer.alloc(128));
+
+    const candidate = await findLegacyDataMigrationCandidate(source, destination);
+
+    expect(candidate).toEqual({
+      source: { home: source, agents: 4, projects: 2, workspaces: 3, timelineBytes: 128 },
+      destination: {
+        home: destination,
+        agents: 0,
+        projects: 0,
+        workspaces: 0,
+        timelineBytes: 0,
+      },
+    });
+  });
+
+  it("does not offer migration when the desktop destination already has records", async () => {
+    const { source, destination } = fixture();
+    writeRegistry(source, "agents/agents.json", 4);
+    writeRegistry(destination, "projects/workspaces.json", 1);
+
+    await expect(findLegacyDataMigrationCandidate(source, destination)).resolves.toBeNull();
+  });
+
+  it("copies only after confirmation and passes both explicit homes to the executor", async () => {
+    const { source, destination } = fixture();
+    writeRegistry(source, "agents/agents.json", 1);
+    const migrate = vi.fn(async () => {});
+    const confirm = vi.fn(async () => true);
+
+    await prepareLegacyDataMigration({
+      sourceHome: source,
+      destinationHome: destination,
+      binary: "/app/daemon",
+      confirm,
+      migrate,
+    });
+
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(migrate).toHaveBeenCalledExactlyOnceWith("/app/daemon", source, destination);
+  });
+
+  it("leaves both homes untouched when the user postpones migration", async () => {
+    const { source, destination } = fixture();
+    writeRegistry(source, "agents/agents.json", 1);
+    const migrate = vi.fn(async () => {});
+
+    await expect(
+      prepareLegacyDataMigration({
+        sourceHome: source,
+        destinationHome: destination,
+        binary: "/app/daemon",
+        confirm: async () => false,
+        migrate,
+      }),
+    ).rejects.toBeInstanceOf(LegacyDataMigrationCancelledError);
+    expect(migrate).not.toHaveBeenCalled();
+    await expect(inspectDataHome(destination)).resolves.toMatchObject({ agents: 0 });
+  });
+});

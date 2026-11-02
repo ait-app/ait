@@ -26,6 +26,7 @@ use persistence as _;
 use provider as _;
 use reqwest as _;
 use ring as _;
+use rusqlite as _;
 #[cfg(unix)]
 use rustix as _;
 use schedule as _;

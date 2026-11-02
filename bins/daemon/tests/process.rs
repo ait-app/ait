@@ -19,6 +19,7 @@ use jsonwebtoken as _;
 use model as _;
 use persistence as _;
 use ring as _;
+use rusqlite as _;
 use schedule as _;
 use secrecy as _;
 use serde as _;
@@ -112,3 +113,6 @@ fn authorization_commands_are_explicit_and_status_never_requires_or_displays_sec
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[path = "process/local_token.rs"]
 mod local_token;
+
+#[path = "process/migration.rs"]
+mod migration;

@@ -40,6 +40,8 @@
 
 ## 架构决策
 
+- [ADR-209：桌面启动时引导复制旧数据并恢复异常退出的 daemon](decisions/clients/adr-209-desktop-legacy-data-copy.md)：发现旧目录有项目和会话而桌面目录为空时先确认、独占复制和校验；daemon 就绪后立即保留可验证的重连记录，避免异常退出后的锁冲突循环。
+
 - [ADR-208：群组内资源共享与访客会话](decisions/daemon/adr-208-workspace-share-guests.md)：可把 workspace、项目或整个节点共享给群组，分享设置以 Host 为准，daemon 发布 `hub.shares.publish`，访客连接经 `x-ait-guest` 准入，workspace／project 采用范围限制，node 允许节点资源、配置与生命周期管理（分享及账号授权保留给所有者），撤销时清理访客终端与 Agent 回合。
 
 - [ADR-207：桌面 daemon 就绪探测与进程生命周期分离](decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)：轻量认证握手、探测失败保留自有进程、同 PID 重连，以及失败交接记录保留。

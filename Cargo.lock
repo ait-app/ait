@@ -775,6 +775,7 @@ dependencies = [
  "provider",
  "reqwest",
  "ring",
+ "rusqlite",
  "rustix",
  "schedule",
  "secrecy",
