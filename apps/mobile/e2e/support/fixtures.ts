@@ -22,6 +22,7 @@ interface TrackedProjectPickerFixture extends ProjectPickerFixture {
 // subsequent spec when multiple specs run in the same worker. Auto fixtures run
 // reliably for every test that uses this `test` object.
 const metroTest = base.extend({
+  // oxlint-disable-next-line no-empty-pattern -- Playwright requires destructuring for fixture dependency discovery.
   baseURL: async ({}, provide) => {
     const metroPort = process.env.E2E_METRO_PORT;
     if (!metroPort) {
@@ -196,6 +197,7 @@ const test = daemonTest.extend<{
     },
     { auto: true },
   ],
+  // oxlint-disable-next-line no-empty-pattern -- Playwright requires destructuring for fixture dependency discovery.
   projectPickerFixture: async ({}, provide) => {
     const resource = await createProjectPickerFixture();
     const { fixture } = resource;

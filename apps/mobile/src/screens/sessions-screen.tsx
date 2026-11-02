@@ -4,7 +4,7 @@ import { View, Text } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { router } from "expo-router";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { ChevronLeft, Import } from "lucide-react-native";
+import { ChevronLeft, Import, RefreshCw } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { MenuHeader } from "@/components/headers/menu-header";
@@ -168,6 +168,15 @@ function SessionsScreenContent() {
           )}
           <Button variant="ghost" leftIcon={Import} onPress={importSession.open}>
             {t("importSession.title")}
+          </Button>
+          {/* Failed hosts contribute an empty page, so the empty state must offer a retry. */}
+          <Button
+            variant="ghost"
+            leftIcon={RefreshCw}
+            onPress={handleRefresh}
+            disabled={isManualRefresh}
+          >
+            {t("sessions.actions.refresh")}
           </Button>
         </View>
       ) : null}

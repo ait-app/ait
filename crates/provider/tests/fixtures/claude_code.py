@@ -55,6 +55,9 @@ for line in sys.stdin:
         kind = message["request"]["subtype"]
         if kind == "initialize":
             (cwd / "claude-args.json").write_text(json.dumps(args))
+            if "--mcp-config" in args:
+                mcp = Path(args[args.index("--mcp-config") + 1])
+                (cwd / "claude-mcp.json").write_text(json.dumps({"path": str(mcp), "mode": mcp.stat().st_mode & 0o777, "config": json.loads(mcp.read_text())}))
             (cwd / "claude-pid").write_text(str(os.getpid()))
             if (cwd / "fail-init").exists():
                 sys.exit(1)

@@ -142,3 +142,26 @@ fn task_links_require_structured_native_results_and_preserve_background_state() 
         .unwrap();
     assert!(unrelated.children.is_empty());
 }
+
+#[test]
+fn delivered_early_frames_release_their_buffer_budget() {
+    let mut live = live::Live::new("root".into(), "/work".into(), ImageStore::default());
+    let created = json!({"type":"status","status":"created"});
+    // A descendant whose parent never arrives keeps the queue non-empty throughout.
+    live.consume(&notification("orphan", "missing", 2, created.clone()))
+        .unwrap();
+    let text = "x".repeat(16 * 1024);
+    for index in 0..64 {
+        let child = format!("child-{index}");
+        let nested = format!("nested-{index}");
+        live.consume(&notification(&nested, &child, 2, created.clone()))
+            .unwrap();
+        live.consume(&notification(&nested, &child, 2, json!({"type":"update","update":{
+            "sessionUpdate":"agent_message_chunk","messageId":"m","content":{"type":"text","text":text}}})))
+            .unwrap();
+        // Delivering the parent releases both buffered frames and their bytes.
+        live.consume(&notification(&child, "root", 1, created.clone()))
+            .unwrap();
+    }
+    assert_eq!(live.list().len(), 128);
+}

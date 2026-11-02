@@ -514,7 +514,23 @@ async fn advanced_configuration_reaches_native_cli_and_can_be_cleared_next_turn(
         settings,
         json!({"sandbox":{"enabled":true},"fastMode":true,"ultracode":true})
     );
-    assert!(args.iter().any(|arg| arg.starts_with("--mcp-config=")));
+    assert!(args.iter().all(|arg| !arg.contains("server.js")));
+    let mcp: Value =
+        serde_json::from_slice(&std::fs::read(root.path().join("claude-mcp.json")).unwrap())
+            .unwrap();
+    assert_eq!(mcp["mode"], 0o600);
+    assert_eq!(
+        mcp["config"]["mcpServers"]["docs"]["args"],
+        json!(["server.js"])
+    );
+    let mcp_path = PathBuf::from(mcp["path"].as_str().unwrap());
+    assert_eq!(
+        args.iter()
+            .skip_while(|arg| *arg != "--mcp-config")
+            .nth(1)
+            .map(PathBuf::from),
+        Some(mcp_path.clone())
+    );
     let handle = session.persistence();
     session
         .start_turn("cleared", &StoredAgentConfig::default())
@@ -526,8 +542,12 @@ async fn advanced_configuration_reaches_native_cli_and_can_be_cleared_next_turn(
         serde_json::from_slice(&std::fs::read(root.path().join("claude-args.json")).unwrap())
             .unwrap();
     assert!(args.iter().all(|arg| !arg.starts_with("--settings=")
-        && !arg.starts_with("--mcp-config=")
+        && !arg.starts_with("--mcp-config")
         && !arg.starts_with("--allowedTools=")));
+    assert!(
+        !mcp_path.exists(),
+        "the private MCP document is removed with its native process"
+    );
     session.close().await.unwrap();
 }
 

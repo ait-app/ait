@@ -23,6 +23,11 @@ MCP 的客户端不注入。首阶段支持 Codex、Claude、DSH ACP 和 MiniMax
 新配置默认开启注入，已有显式关闭值保持不变。用户名为 `ait` 的 MCP 项优先，其他外部项
 全部保留；只分发 Skill 不会构造连接，Skill 文件中也没有运行时令牌。
 
+MCP 配置可能携带令牌、请求头和环境变量，不得写进原生进程的命令行参数，因为同主机其他用户可通过
+`ps` 或 `/proc/<pid>/cmdline` 读取。Claude 的 `--mcp-config` 因此只接收一个由 transport 持有的
+私有临时文件路径（0600），原生进程结束、transport 释放时随之删除；其余 Provider 通过 stdio 协议
+或原生配置请求传递，不经过进程参数。
+
 参考 [Paseo 当前实现的复核](../../reports/providers/paseo-mcp-injection-review-2026-10-30.md)，
 保留其持久与运行时配置分离、按 Provider 能力交付的设计。当前没有内部注入配置自动回流到
 Ait record 的路径，因此不采用仅按同名与 URL pathname 删除旧项的规则；未来引入完整原生

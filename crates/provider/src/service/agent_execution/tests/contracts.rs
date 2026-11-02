@@ -120,3 +120,17 @@ async fn reading_live_child_history_preserves_streamed_rows_and_cursors() {
     assert_eq!(continuation["rows"], json!([]));
     assert_eq!(page["rows"][0]["item"]["text"], "Live child output");
 }
+
+#[tokio::test]
+async fn attention_clear_accepts_the_documented_agent_id_array() {
+    let harness = Harness::new().await;
+    let result = harness
+        .execution
+        .execute(
+            "agent.attention.clear.request",
+            json!({"agentId":[harness.id.clone()]}),
+        )
+        .await;
+    harness.execution.shutdown().await.unwrap();
+    assert!(result.is_ok(), "{result:?}");
+}

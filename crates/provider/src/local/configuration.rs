@@ -313,14 +313,17 @@ pub(super) fn claude(config: &StoredAgentConfig) -> Result<Vec<String>, AgentSes
     {
         args.push(format!("--settings={settings}"));
     }
-    if let Some(servers) = config
+    Ok(args)
+}
+
+/// Native Claude MCP document; callers pass it through a private file because server headers
+/// and environment may carry credentials that must not appear in process arguments.
+pub(super) fn claude_mcp(config: &StoredAgentConfig) -> Option<Value> {
+    config
         .mcp_servers
         .as_ref()
         .filter(|servers| !servers.is_empty())
-    {
-        args.push(format!("--mcp-config={}", json!({"mcpServers":servers})));
-    }
-    Ok(args)
+        .map(|servers| json!({"mcpServers":servers}))
 }
 
 fn merge(target: &mut Value, source: &Value) {

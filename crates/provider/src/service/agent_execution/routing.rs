@@ -263,6 +263,9 @@ fn plan(
     ) && !(method == Operation::Usage && params.get("agentId").is_some())
     {
         None
+    } else if method == Operation::ClearAttention && params["agentId"].is_array() {
+        // Clearing several agents only updates the registry; no single native lane owns it.
+        None
     } else if let Some(identifier) = method
         .target()
         .and_then(|target| params.pointer(target.pointer()))

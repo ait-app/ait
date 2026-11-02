@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { RefreshCw, X } from "lucide-react-native";
@@ -8,7 +8,12 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { SettingsCard, SettingsRow, SettingsSection } from "@/components/settings";
 import { Switch } from "@/components/ui/switch";
-import { getHostRuntimeStore, isSharedResourceHost, useHosts } from "@/runtime/host-runtime";
+import {
+  getHostRuntimeStore,
+  isHostRuntimeConnected,
+  isSharedResourceHost,
+  useHosts,
+} from "@/runtime/host-runtime";
 import { useHubServices } from "@/runtime/hub-service-store";
 import { useAccountState } from "@/runtime/account-state";
 import { groupIncomingSharedHosts } from "@/runtime/shared-hosts";
@@ -55,40 +60,46 @@ export function SharedResourcesScreen() {
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
 
+  const loadGeneration = useRef(0);
+
   const loadOutgoing = useCallback(async () => {
+    const generation = ++loadGeneration.current;
     setLoading(true);
     setError(null);
     const runtime = getHostRuntimeStore();
-    try {
-      const results = await Promise.all(
-        ownerHosts.map(async (host) => {
-          const client = runtime.getClient(host.serverId);
-          if (!client) return [];
-          const result = await client.listShares().catch((cause: unknown) => {
-            const code = cause && typeof cause === "object" && "code" in cause ? cause.code : null;
-            if (code === "not_implemented") return null;
-            throw cause;
-          });
-          if (!result) return [];
-          const groups = new Map<string, ShareGroup>(
-            result.groups.map((group) => [group.groupId, group]),
-          );
-          return result.shares
-            .filter((setting) => setting.state !== "revoked")
-            .map((setting) => ({
-              serverId: host.serverId,
-              hostLabel: host.label,
-              groupName: groups.get(setting.groupId)?.name ?? setting.groupId,
-              setting,
-            }));
-        }),
-      );
-      setOutgoing(results.flat());
-    } catch (cause) {
+    // One unreachable daemon must not hide the shares of every other host.
+    const results = await Promise.allSettled(
+      ownerHosts.map(async (host) => {
+        const client = runtime.getClient(host.serverId);
+        if (!client || !isHostRuntimeConnected(runtime.getSnapshot(host.serverId))) return [];
+        const result = await client.listShares().catch((cause: unknown) => {
+          const code = cause && typeof cause === "object" && "code" in cause ? cause.code : null;
+          if (code === "not_implemented") return null;
+          throw cause;
+        });
+        if (!result) return [];
+        const groups = new Map<string, ShareGroup>(
+          result.groups.map((group) => [group.groupId, group]),
+        );
+        return result.shares
+          .filter((setting) => setting.state !== "revoked")
+          .map((setting) => ({
+            serverId: host.serverId,
+            hostLabel: host.label,
+            groupName: groups.get(setting.groupId)?.name ?? setting.groupId,
+            setting,
+          }));
+      }),
+    );
+    // A newer load, such as one started after removing a share, owns the visible state.
+    if (generation !== loadGeneration.current) return;
+    setOutgoing(results.flatMap((result) => (result.status === "fulfilled" ? result.value : [])));
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure) {
+      const cause: unknown = failure.reason;
       setError(cause instanceof Error ? cause.message : t("sharing.listError"));
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   }, [ownerHosts, t]);
 
   useEffect(() => {
@@ -107,6 +118,9 @@ export function SharedResourcesScreen() {
           resourceKey: entry.setting.resourceKey,
           groupId: entry.setting.groupId,
         });
+        // A list request started before this removal must not restore the stopped share.
+        loadGeneration.current += 1;
+        setLoading(false);
         setOutgoing((current) =>
           current.filter((candidate) => candidate.setting.settingId !== entry.setting.settingId),
         );

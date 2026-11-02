@@ -164,3 +164,86 @@ async fn acp_subagents_stream_nested_children_without_polluting_the_parent() {
     completed(restored.as_mut()).await;
     restored.close().await.unwrap();
 }
+
+#[tokio::test]
+async fn an_unloadable_child_session_does_not_prevent_resuming_the_parent() {
+    let (root, client, spec) = fixture("subagents");
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("Explore", &spec.config).await.unwrap();
+    completed(session.as_mut()).await;
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    std::fs::write(root.path().join("child-load-fails"), "").unwrap();
+
+    let mut restored = client
+        .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+    restored.start_turn("Continue", &spec.config).await.unwrap();
+    completed(restored.as_mut()).await;
+    restored.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn settling_a_new_turn_withdraws_an_unanswered_background_permission() {
+    let (root, client, spec) = fixture("subagents-idle");
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("Background", &spec.config)
+        .await
+        .unwrap();
+    completed(session.as_mut()).await;
+    let request = loop {
+        if let AgentTurnEvent::PermissionRequested(request) = event(session.as_mut()).await {
+            break request;
+        }
+    };
+    session.start_turn("Next", &spec.config).await.unwrap();
+    let mut resolved = false;
+    loop {
+        match event(session.as_mut()).await {
+            AgentTurnEvent::PermissionResolved(id) => resolved |= id == request["id"],
+            AgentTurnEvent::Completed(_) => break,
+            AgentTurnEvent::Failed | AgentTurnEvent::Cancelled => panic!("next turn failed"),
+            _ => {}
+        }
+    }
+    session.close().await.unwrap();
+    assert!(resolved);
+    assert!(
+        root.path().join("background-cancelled").exists(),
+        "the native callback must receive a cancelled reply instead of waiting forever"
+    );
+}
+
+#[tokio::test]
+async fn settling_a_turn_keeps_receiving_background_children_on_the_live_connection() {
+    let (root, client, spec) = fixture("subagents-detach");
+    let mut session = client.create_session(&spec).await.unwrap();
+    session
+        .start_turn("Background", &spec.config)
+        .await
+        .unwrap();
+    completed(session.as_mut()).await;
+    assert_eq!(session.subagents()[0].descriptor["status"], "running");
+    assert!(
+        !root.path().join("background-detached").exists(),
+        "settling must not re-attach the root while a background child is running"
+    );
+    session.start_turn("Next", &spec.config).await.unwrap();
+    let mut finished = false;
+    loop {
+        match event(session.as_mut()).await {
+            AgentTurnEvent::Subagent(SubagentEvent::Upsert(child))
+                if child.descriptor["status"] == "completed" =>
+            {
+                finished = true;
+            }
+            AgentTurnEvent::Completed(_) => break,
+            AgentTurnEvent::Failed | AgentTurnEvent::Cancelled => panic!("next turn failed"),
+            _ => {}
+        }
+    }
+    session.close().await.unwrap();
+    assert!(finished, "the background child never reported completion");
+}

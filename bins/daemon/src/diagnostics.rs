@@ -96,6 +96,17 @@ impl Diagnostics {
         })
     }
 
+    /// Return this collector as a layer that sees every span but only WARN and ERROR events.
+    /// Span fields are kept so incident events retain their request context.
+    pub(crate) fn filtered<S>(self) -> impl Layer<S>
+    where
+        S: tracing::Subscriber + for<'span> tracing_subscriber::registry::LookupSpan<'span>,
+    {
+        self.with_filter(tracing_subscriber::filter::filter_fn(|metadata| {
+            metadata.is_span() || *metadata.level() <= tracing::Level::WARN
+        }))
+    }
+
     fn record(&self, text: String, at: DateTime<Utc>) {
         let Ok(mut recent) = self.recent.lock() else {
             return;

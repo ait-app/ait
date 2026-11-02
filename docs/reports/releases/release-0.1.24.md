@@ -18,7 +18,7 @@ Draft 阶段下载桌面/COS 必需的 10 个文件：macOS 安装与更新文�
 - 改善 Pi 可用性与版本探测诊断，标记由 Ait 启动的 Claude 会话。
 - 修复 macOS 侧边栏切换与首页链接被窗口拖动区域拦截。
 
-资源共享需要中心声明相应能力和支持分享管理的新版 daemon。工作区/项目访客按资源范围与创建者校验操作，节点分享具有节点管理权限。终端与 Agent 以 Host 用户身份执行命令，资源范围不等于操作系统沙箱；详见 [ADR-203](../../decisions/daemon/adr-203-workspace-share-guests.md)。
+资源共享需要中心声明相应能力和支持分享管理的新版 daemon。工作区/项目访客按资源范围与创建者校验操作，节点分享具有节点管理权限。终端与 Agent 以 Host 用户身份执行命令，资源范围不等于操作系统沙箱；详见 [ADR-208](../../decisions/daemon/adr-208-workspace-share-guests.md)。
 
 ## 版本与验证
 
