@@ -139,6 +139,7 @@ import {
 } from "./workspace/terminals/state";
 import { captureWorkspaceDraftCleanup } from "./new-workspace/background-handoff";
 import { useNewWorkspaceScreenPresence } from "./new-workspace/screen-presence";
+import { createSharedProjectAgent } from "./new-workspace/shared-project-agent";
 
 const ThemedFolderPlus = withUnistyles(FolderPlus);
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -996,7 +997,7 @@ async function createWorkspaceChatAgent(input: CreateChatAgentInput): Promise<Su
   });
   let navigated = false;
   let outcome: SubmitOutcome = "background";
-  const initialAgent: NonNullable<CreateWorkspaceRequestOptions["agent"]> = {
+  const initialAgent = {
     config: {
       provider,
       cwd,
@@ -1009,49 +1010,58 @@ async function createWorkspaceChatAgent(input: CreateChatAgentInput): Promise<Su
     clientMessageId: `${input.draftId}:initial-message`,
     images: images?.length ? images : undefined,
     attachments: wirePayload.attachments?.length ? wirePayload.attachments : undefined,
-  };
+  } satisfies NonNullable<CreateWorkspaceRequestOptions["agent"]>;
   const execute = async (): Promise<AgentSnapshotPayload> => {
-    const { agent } = await ensureWorkspace({
-      cwd,
-      prompt: text,
-      attachments: workspaceNamingAttachments,
-      withInitialAgent: true,
-      agent: initialAgent,
-      onEvent: (snapshot) => {
-        if (!snapshot.workspace || navigated) return;
-        navigated = true;
-        if (!input.isStillOnCreateScreen()) return;
-        const workspace = normalizeWorkspaceDescriptor(snapshot.workspace);
-        getHostRuntimeStore().acceptWorkspaceSnapshots(serverId, [
-          { ...workspace, status: "running" },
-        ]);
-        const initialSetup = buildWorkspaceDraftSetupForCreatedWorkspace({
-          forkDraftSetup: input.forkDraftSetup,
-          workspaceDirectory: workspace.workspaceDirectory,
-          provider,
-          composerState,
-        });
-        outcome = submitWorkspaceDraft({
-          clearConsumedDraft,
-          draftKey: input.draftKey,
-          draftContextScopeKey: input.draftContextScopeKey,
-          resolveClient: input.resolveClient,
-          isStillOnCreateScreen: input.isStillOnCreateScreen,
-          serverId,
-          clearDraft,
-          draftId: input.draftId,
-          initialSetup,
-          workspaceId: workspace.id,
-          workspaceDirectory: workspace.workspaceDirectory,
-          text,
-          attachments,
-          provider,
-          composerState,
-          supportsForgeSearch: input.supportsForgeSearch,
-          agentCreation,
-        });
-      },
-    });
+    const createWorkspace = (agent?: CreateWorkspaceRequestOptions["agent"]) =>
+      ensureWorkspace({
+        cwd,
+        prompt: text,
+        attachments: workspaceNamingAttachments,
+        withInitialAgent: Boolean(agent),
+        agent,
+        onEvent: (snapshot) => {
+          if (!snapshot.workspace || navigated) return;
+          navigated = true;
+          if (!input.isStillOnCreateScreen()) return;
+          const workspace = normalizeWorkspaceDescriptor(snapshot.workspace);
+          getHostRuntimeStore().acceptWorkspaceSnapshots(serverId, [
+            { ...workspace, status: "running" },
+          ]);
+          const initialSetup = buildWorkspaceDraftSetupForCreatedWorkspace({
+            forkDraftSetup: input.forkDraftSetup,
+            workspaceDirectory: workspace.workspaceDirectory,
+            provider,
+            composerState,
+          });
+          outcome = submitWorkspaceDraft({
+            clearConsumedDraft,
+            draftKey: input.draftKey,
+            draftContextScopeKey: input.draftContextScopeKey,
+            resolveClient: input.resolveClient,
+            isStillOnCreateScreen: input.isStillOnCreateScreen,
+            serverId,
+            clearDraft,
+            draftId: input.draftId,
+            initialSetup,
+            workspaceId: workspace.id,
+            workspaceDirectory: workspace.workspaceDirectory,
+            text,
+            attachments,
+            provider,
+            composerState,
+            supportsForgeSearch: input.supportsForgeSearch,
+            agentCreation,
+          });
+        },
+      });
+    if (serverId.startsWith("shared:")) {
+      return createSharedProjectAgent({
+        createWorkspace: async () => (await createWorkspace()).workspace,
+        createAgent: (request) => input.resolveClient().createAgent(request),
+        agent: initialAgent,
+      });
+    }
+    const { agent } = await createWorkspace(initialAgent);
     if (!agent) throw new Error("Workspace creation returned no agent");
     return agent;
   };
