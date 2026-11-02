@@ -161,6 +161,8 @@ export function createAccountIpc(
       switch (command) {
         case "account_status":
           return snapshot();
+        case "account_membership":
+          return manager.getMembership();
         case "account_info":
           return manager.getAccountInfo();
         case "account_hub_status":

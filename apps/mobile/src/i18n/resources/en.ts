@@ -116,6 +116,51 @@ export const en = {
     },
   },
   onlineService: {
+    billing: {
+      deleteWarning:
+        "Deleting your Ait account does not cancel Apple or Google Play subscriptions. Manage or cancel each subscription in the store where you purchased it.",
+      title: "Online Service subscription",
+      stacking:
+        "Each verified monthly payment adds one calendar month to your membership. App Store and Google Play subscriptions can coexist and their paid time adds up. Restoring purchases does not add duplicate time. Refunds reduce the corresponding paid time proportionally.",
+      renewalCancelled: "Auto-renewal off",
+      stores: { app_store: "App Store subscription", google_play: "Google Play subscription" },
+      renewalByStore: {
+        app_store:
+          "Payment is charged to your Apple Account. Your subscription renews automatically each month unless cancelled at least 24 hours before the current period ends. Each successful payment adds a month. Cancel in App Store subscriptions; deleting your Ait account does not cancel it.",
+        google_play:
+          "Payment is charged through Google Play. Renews monthly unless cancelled before renewal. Each successful payment adds a month. Manage or cancel in Google Play; deleting your Ait account does not cancel it.",
+      },
+      plan: "Monthly membership",
+      benefit: "Connect to your computers using Ait Online Service.",
+      accessUntil: "Membership valid until",
+      loading: "Loading membership…",
+      subscribe: "Subscribe · {{price}} / month",
+      unavailable: "Purchase unavailable",
+      restore: "Restore purchases",
+      manage: "Manage subscription",
+      privacy: "Privacy Policy",
+      terms: "Terms of Use",
+      renewal:
+        "Payment is charged to your Apple Account. Your subscription renews automatically each month unless cancelled at least 24 hours before the current period ends. Manage or cancel in App Store subscriptions. Deleting your Ait account does not cancel your Apple subscription.",
+      pending: "Your purchase is awaiting Apple approval. Access updates after approval.",
+      restored: "Purchases restored and verified.",
+      nothingToRestore: "No purchases found for this Apple Account.",
+      openFailed: "Could not open this link. Try again.",
+      accessAvailable:
+        "Online Service access is currently available without a subscription on this service.",
+      states: {
+        active: "Active",
+        inactive: "Not subscribed",
+        expired: "Expired",
+        billing_retry: "Payment issue",
+        grace_period: "Billing grace period",
+        revoked: "Refunded or revoked",
+        verification_required: "Verification needed",
+        pending: "Awaiting payment",
+        paused: "Paused",
+        on_hold: "Payment on hold",
+      },
+    },
     title: "Online Service",
     connectionDescription: "Sign in and connect to your online hosts.",
     loginDescription: "Sign in to access computers connected to your online service.",
