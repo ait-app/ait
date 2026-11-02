@@ -1,6 +1,7 @@
 import { LucideProvider } from "lucide-react-native";
 import { ComposerEditingSessionsProvider } from "@/composer/editing-session";
 import { getNextThemePreference, ICON_STROKE_WIDTH } from "@/styles/theme";
+import { OnlineServiceBillingLifecycle } from "@/billing/lifecycle";
 import { AccountRelayLifecycle } from "@/runtime/account-state";
 import { AccountHubLifecycle } from "@/runtime/account-hub-state";
 import { OnlineServiceHostSyncLifecycle } from "@/runtime/online-service-host-sync";
@@ -926,6 +927,7 @@ function RuntimeProviders({ children }: { children: ReactNode }) {
   return (
     <HostRuntimeBootstrapProvider>
       <AccountRelayLifecycle />
+      <OnlineServiceBillingLifecycle />
       <AccountHubLifecycle />
       <OnlineServiceHostSyncLifecycle />
       <PushNotificationRouter />

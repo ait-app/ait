@@ -1,4 +1,6 @@
 PODS:
+  - AitStoreKit (0.1.0):
+    - ExpoModulesCore
   - EXApplication (7.0.8):
     - ExpoModulesCore
   - EXConstants (18.0.13):
@@ -2503,6 +2505,7 @@ PODS:
   - Yoga (0.0.0)
 
 DEPENDENCIES:
+  - AitStoreKit (from `../modules/ait-storekit/ios`)
   - EXApplication (from `../../../node_modules/expo-application/ios`)
   - EXConstants (from `../../../node_modules/expo-constants/ios`)
   - EXImageLoader (from `../../../node_modules/expo-image-loader/ios`)
@@ -2634,6 +2637,8 @@ SPEC REPOS:
     - SDWebImageWebPCoder
 
 EXTERNAL SOURCES:
+  AitStoreKit:
+    :path: "../modules/ait-storekit/ios"
   EXApplication:
     :path: "../../../node_modules/expo-application/ios"
   EXConstants:
@@ -2873,6 +2878,7 @@ EXTERNAL SOURCES:
     :path: "../../../node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
+  AitStoreKit: 2fbf73851cb7b5cf6bbf1853e433e6703e6c99aa
   EXApplication: 1e98d4b1dccdf30627f92917f4b2c5a53c330e5f
   EXConstants: fce59a631a06c4151602843667f7cfe35f81e271
   EXImageLoader: 189e3476581efe3ad4d1d3fb4735b7179eb26f05
