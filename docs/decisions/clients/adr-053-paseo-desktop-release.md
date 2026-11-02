@@ -43,4 +43,4 @@
 Linux 与 macOS 分别在原生 runner 执行；本地 macOS 的未公证验证包不能替代正式公证。
 
 操作步骤见 [发布操作指南](../../operations/releasing.md)，本次结果见
-[0.0.7 发布准备报告](../../reports/releases/release-0.0.7.md)。
+[0.0.7 发布准备报告](../../archive/reports/releases/release-0.0.7.md)。

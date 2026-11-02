@@ -54,7 +54,7 @@ project / workspace / agent 轻量目录。重试记录保存在数据目录的 
 
 客户端完成 Hub access 的设备注册、前台心跳和事件订阅，且中心已配置 APNs / FCM 后，
 设置 `AIT_SERVER_HUB_NOTIFICATIONS=true`（或 `1`）并重启 daemon，将新事件的原生通知
-交给中心。默认值为 false，继续使用旧客户端在 daemon 上注册的 token；`false` / `0`
+交给中心。独立启动默认值为 false，继续使用在 daemon 上注册的 token；Desktop 启动内置 daemon 时默认设为 true。`false` / `0`
 显式关闭，其他值拒绝启动。已有 journal 事件保留入队时的投递决策。
 
 ## 身份、数据与关闭
@@ -152,7 +152,8 @@ npm run dev:mobile
   [ADR-115](../decisions/providers/adr-115-opencode-acp-provider.md)。
 - [Antigravity CLI](antigravity.md)使用官方或 Homebrew 安装的 AGY；`AIT_SERVER_ANTIGRAVITY_BIN` 覆盖路径。
 - [Pi](pi.md)使用本机 `pi --mode rpc`；`AIT_SERVER_PI_BIN` 覆盖程序路径。
-- [Oh My Pi](oh-my-pi.md)使用独立 RPC UI 和 v2 传输；`AIT_SERVER_OMP_BIN` 覆盖程序路径。
+- [Oh My Pi](oh-my-pi.md)通过 Ait ACP 桥接官方 RPC，支持原生 v2 传输；`AIT_SERVER_OMP_BIN` 覆盖程序路径。
+- [MiniMax Code](minimax-code.md)使用官方 `mcode acp`；`AIT_SERVER_MINIMAX_CODE_BIN` 覆盖程序路径。
 - [语音与听写](speech.md)默认使用离线模型，也支持文档列出的远端后端。
 - GitHub/Forge 操作使用当前机器上的 Git、`gh` 或 `glab`。
 
@@ -164,4 +165,9 @@ Linux 无人值守运行支持 `daemon login` 和 `daemon run`，
 
 ## 统一发布与本地 API 凭据
 
-直接启动或 `daemon run` 均启用自主发布；没有机器授权时先提供本地 API，后续可通过 API 或停止服务后用 `daemon login` 写入。未设置 `AIT_SERVER_TOKEN` 时，首次启动自动生成 `<data-dir>/local-api.token`（权限 0600），重启复用；默认路径为 `~/.ait-server/local-api.token`。显式环境变量优先，但不会覆盖已保存文件。该令牌与中心机器登录凭据独立，不放入 TOML，也不输出到日志。外部用 `DELETE /api/device/authorization`（兼容 `DELETE /api/hub/control`、`DELETE /api/relay/control`） 完整断开 ait-server：停止两条链路和节点续租，清除机器凭据与未完成授权。断开状态跨重启保持，需重新登录或显式 API 授权；本地 API token 保留。授权交接及 RPC 见[无人值守操作指南](headless-daemon.md)。
+直接启动、`daemon run` 和 Desktop 内置 daemon 使用同一发布流程：daemon 持有机器授权，
+自行注册节点、续租与重连。未登录时仍提供本地 API。在线业务只使用 Hub，下载使用独立 Relay。
+
+本地 API token 的生成与覆盖规则见[启动与配置](#启动与配置)。机器授权的登录、运行中交接、
+状态查询、完整断开和恢复统一见[无人值守 daemon](headless-daemon.md#运行中的授权与统一断开)。
+显式断开会清除机器授权，重启不自动上线；本地 API token、任务和工作区数据保留。

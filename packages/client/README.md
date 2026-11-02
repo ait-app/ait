@@ -7,7 +7,10 @@ use `file:` dependencies; no Paseo SDK is fetched from npm.
 The initial source was imported from
 `getpaseo/paseo@2c8e8a826810337492cc5a38bb0bbd705b6fb632` (`0.9.0-beta.2`).
 Original attribution is preserved in [paseo/LICENSE](../../paseo/LICENSE).
-Relay/E2EE transport has been removed.
+The inherited Paseo Relay/E2EE transport has been removed. Ait online business
+sessions use the repository-owned Hub client; dedicated downloads and account
+status still use their separate Relay channels. See
+[ADR-204](../../docs/decisions/clients/adr-204-hub-only-online-business-transport.md).
 
 ## Local build
 

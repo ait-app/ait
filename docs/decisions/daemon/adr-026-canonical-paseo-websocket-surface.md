@@ -294,24 +294,24 @@ Forge、schedule、plugin、hub、voice、push 或 browser 的方法，在各自
 完成前保持 `not_implemented`，并且不进入 `implemented_capabilities`。
 
 当前 Paseo 对齐差异、每个第一阶段方法的状态和验证结果记录在
-[WebSocket 接口第一阶段报告](../../reports/daemon/paseo-websocket-surface-phase-1.md)；daemon/config 的行为、
+[WebSocket 接口第一阶段报告](../../archive/reports/daemon/paseo-websocket-surface-phase-1.md)；daemon/config 的行为、
 测试和安装边界记录在
-[WebSocket 接口第二阶段报告](../../reports/daemon/paseo-websocket-surface-phase-2.md)；Workspace 标签、事务与
+[WebSocket 接口第二阶段报告](../../archive/reports/daemon/paseo-websocket-surface-phase-2.md)；Workspace 标签、事务与
 订阅边界记录在
-[WebSocket 接口第三阶段报告](../../reports/daemon/paseo-websocket-surface-phase-3.md)；Worktree 生命周期、
+[WebSocket 接口第三阶段报告](../../archive/reports/daemon/paseo-websocket-surface-phase-3.md)；Worktree 生命周期、
 真实 Git 验证与剩余差异记录在
-[WebSocket 接口第四阶段报告](../../reports/daemon/paseo-websocket-surface-phase-4.md)；Workspace setup/script
+[WebSocket 接口第四阶段报告](../../archive/reports/daemon/paseo-websocket-surface-phase-4.md)；Workspace setup/script
 执行、测试和 Terminal/Proxy 差异记录在
-[WebSocket 接口第五阶段报告](../../reports/daemon/paseo-websocket-surface-phase-5.md)；Agent runtime 目录、
+[WebSocket 接口第五阶段报告](../../archive/reports/daemon/paseo-websocket-surface-phase-5.md)；Agent runtime 目录、
 元数据生命周期与 Provider runtime 差异记录在
-[WebSocket 接口第六阶段报告](../../reports/daemon/paseo-websocket-surface-phase-6.md)；Workspace attention、
+[WebSocket 接口第六阶段报告](../../archive/reports/daemon/paseo-websocket-surface-phase-6.md)；Workspace attention、
 归档恢复与真实 Git 验证记录在
-[WebSocket 接口第七阶段报告](../../reports/daemon/paseo-websocket-surface-phase-7.md)；Git checkout 状态、Diff、
+[WebSocket 接口第七阶段报告](../../archive/reports/daemon/paseo-websocket-surface-phase-7.md)；Git checkout 状态、Diff、
 订阅和提交历史记录在
-[WebSocket 接口第八阶段报告](../../reports/daemon/paseo-websocket-surface-phase-8.md)；Git 分支、commit、merge、pull、
+[WebSocket 接口第八阶段报告](../../archive/reports/daemon/paseo-websocket-surface-phase-8.md)；Git 分支、commit、merge、pull、
 push、discard 与 stash 记录在
-[WebSocket 接口第九阶段报告](../../reports/daemon/paseo-websocket-surface-phase-9.md)；Forge search、PR lifecycle、timeline
+[WebSocket 接口第九阶段报告](../../archive/reports/daemon/paseo-websocket-surface-phase-9.md)；Forge search、PR lifecycle、timeline
 与 check details 记录在
-[WebSocket 接口第十阶段报告](../../reports/daemon/paseo-websocket-surface-phase-10.md)；文件、目录、上传下载及文件版本
-订阅记录在 [WebSocket 接口第十一阶段报告](../../reports/daemon/paseo-websocket-surface-phase-11.md)；全部规范方法的
-占位分发与测试记录在 [WebSocket 接口第十二阶段报告](../../reports/daemon/paseo-websocket-surface-phase-12.md)。
+[WebSocket 接口第十阶段报告](../../archive/reports/daemon/paseo-websocket-surface-phase-10.md)；文件、目录、上传下载及文件版本
+订阅记录在 [WebSocket 接口第十一阶段报告](../../archive/reports/daemon/paseo-websocket-surface-phase-11.md)；全部规范方法的
+占位分发与测试记录在 [WebSocket 接口第十二阶段报告](../../archive/reports/daemon/paseo-websocket-surface-phase-12.md)。

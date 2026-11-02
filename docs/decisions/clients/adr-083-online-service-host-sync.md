@@ -1,5 +1,7 @@
 # ADR-083：在线服务登录与逐主机同步分离
 
+> 主机授权与租约归属已由 [ADR-201](../daemon/adr-201-daemon-owned-publication.md) 修订：daemon 自主管理发布，客户端退出不撤销机器授权；显式断开后需重新授权。以下保留原决策背景。
+
 - 状态：已实现
 - 日期：2026-10-05
 - 关系：修订 [ADR-074](adr-074-account-host-relay.md) 的登录入口与桌面自动发布行为，沿用 [ADR-076](adr-076-android-account-relay.md) 的凭据归属。

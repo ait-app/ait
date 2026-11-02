@@ -1,5 +1,7 @@
 # ADR-087：中心设备管理与 Linux/macOS daemon 的 JWT 授权
 
+> 主机授权与租约归属已由 [ADR-201](../daemon/adr-201-daemon-owned-publication.md) 修订：daemon 自主管理发布，客户端退出不撤销机器授权；显式断开后需重新授权。以下保留原决策背景。
+
 - 状态：已采纳；本分支实现，待两端发布
 - 日期：2026-10-06
 - 源码基线：Ait `feat/authing-native-login` / `384f8735`；配套中心 [ait-server PR #9](https://github.com/ait-app/ait-server/pull/9)
@@ -32,7 +34,7 @@ relay 的连接。当前 Rust daemon 已有运行时和 relay 通道，但注册
    普通网页登录退出不撤销设备授权；账号禁用、账号到期及显式设备撤销仍阻止访问。
 3. 设备 JWT 采用独立 audience、明确 token 类型、独立签名密钥和最小权限，只能发布自身
    Host、维护自身节点租约和申请控制票据。现有用户 JWT 接口不得接受设备 JWT。
-   TTL、claims、轮换与撤销规则见[详细设计](../../plans/linux-headless-device-auth.md)。
+   TTL、claims、轮换与撤销规则见[详细设计](../../archive/plans/linux-headless-device-auth.md)。
 4. `server_id` 持久化，`installation_id = server_id`，`instance_id` 随运行实例变化。
    复用 `hosts / nodes / node_sessions`，新增 `node_grants` 与现有 Host、节点及所属账号绑定；注册和续租不能改变授权的目标。一个主机同时
    只有一个活动 runtime，沿用现有冲突与失效租约处理。
@@ -61,7 +63,7 @@ relay 的连接。当前 Rust daemon 已有运行时和 relay 通道，但注册
 和 Web 设备页面，并与既有安装脚本对接。JWT 的引入不会免除中心数据库状态校验；轮换的
 持久化与失败恢复属于首版要求。中心与 daemon 的接口已对齐；上线需要合并两端并开启中心功能，不能视为当前已部署功能。
 
-完整流程、中心契约、恢复规则和发布验收见[Linux/macOS 无人值守设备授权设计](../../plans/linux-headless-device-auth.md)。
+完整流程、中心契约、恢复规则和发布验收见[Linux/macOS 无人值守设备授权设计](../../archive/plans/linux-headless-device-auth.md)。
 
 ## Test coverage
 

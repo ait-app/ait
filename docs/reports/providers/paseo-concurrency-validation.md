@@ -3,7 +3,7 @@
 日期：2026-10-07。平台：macOS arm64。
 初期实现基线：`5df233ac2f87cecda5f1a1ee99c003a15522dc49`；PR 已整合 `aa6d8d820c139f3f761d89c09a7608ecdc5629c9` 的最新 main。
 测量源码提交：`5a5645789e25ca416eaf479edea70afab52307d7`；后续提交仅固定文档和覆盖率证据的修订字段。
-范围：[并发修改清单](../../plans/paseo-agent-concurrency.md) C01–C12 的实现、定向验证和 PR 提交检查；架构依据 [ADR-091](../../decisions/providers/adr-091-independent-session-execution.md)。
+范围：[并发修改清单](../../archive/plans/paseo-agent-concurrency.md) C01–C12 的实现、定向验证和 PR 提交检查；架构依据 [ADR-091](../../decisions/providers/adr-091-independent-session-execution.md)。
 
 ## 交付行为
 
@@ -83,6 +83,6 @@ SHERPA_ONNX_LIB_DIR="$PWD/target/sherpa-onnx-prebuilt/sherpa-onnx-v1.13.8-osx-ar
 
 ## 性能验收限制
 
-受控测试证明慢操作不再造成跨会话整段排队，未测量真实远程 Workspace 打开的 p50/p95，因此没有给出提速倍数。网络建连、目录同步、长历史每页投影与浏览器渲染仍需按[打开性能方案](../../plans/remote-workspace-open-performance.md)分别采样。
+受控测试证明慢操作不再造成跨会话整段排队，未测量真实远程 Workspace 打开的 p50/p95，因此没有给出提速倍数。网络建连、目录同步、长历史每页投影与浏览器渲染仍需按[打开性能方案](../../archive/plans/remote-workspace-open-performance.md)分别采样。
 
 同一会话的 writer 修改仍保序；长 native 操作会让该会话的其他写操作等待。共享存储短事务受自身锁限制。显式模型/模式/available 查询（包括 daemon snapshot 的完整可用性查询）仍可等待目标 discovery，但其等待已经离开会话执行路径；普通 Provider 快照读取立即返回。

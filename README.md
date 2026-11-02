@@ -7,7 +7,7 @@
 
 **在一个界面里管理多个编程 Agent。**
 
-Ait 支持 Codex、Claude Code、OpenCode、DeepSeek Harness、Pi、Oh My Pi 等编程 Agent。
+Ait 支持 Codex、Claude Code、OpenCode、DeepSeek Harness、Antigravity、Pi、Oh My Pi、MiniMax Code 等编程 Agent。
 你可以在电脑上同时使用多个 Agent，查看文件和 Git 变更、操作终端，也可以从手机或另一台电脑连接，查看进度、发送消息和处理审批。
 Ait 提供中央中继服务：设备不在同一网络时，登录同一账户即可连接在线工作电脑，无需为工作电脑配置公网 IP 或路由器端口转发。
 
@@ -27,11 +27,11 @@ Agent 在你连接的电脑上运行。使用本机 Agent 时无需登录 Ait �
 
 ### 在电脑上使用
 
-1. 从 [GitHub Releases](https://github.com/ait-app/ait/releases) 下载适合系统的桌面安装包：macOS Apple Silicon 或 Linux x86_64。
-2. 在工作电脑上安装并完成所需编程 Agent 的认证，确保其可独立运行。
-3. 启动 Ait，添加项目、进入工作区，选择可用的 Agent 开始任务。
+1. 从 [GitHub Releases](https://github.com/ait-app/ait/releases) 下载适合系统的桌面安装包：macOS Apple Silicon、Linux x86_64 或 Windows x64。
+2. 在 macOS/Linux 工作电脑上安装并完成所需编程 Agent 的认证，确保其可独立运行。
+3. 启动 Ait，选择本机或远端主机，添加项目、进入工作区，选择可用的 Agent 开始任务。
 
-桌面安装包内置 daemon，由应用自动启动。
+macOS 和 Linux 桌面安装包内置 daemon，由应用自动启动。Windows 桌面作为客户端连接远端主机，不在本机运行 Agent。
 
 Arch Linux 用户也可以从 AUR 安装：[`ait-bin`](https://aur.archlinux.org/packages/ait-bin) 为正式版预编译包，[`ait-git`](https://aur.archlinux.org/packages/ait-git) 在本机从 `main` 源码编译，两者任选其一（例如 `paru -S ait-bin`）。
 
@@ -42,17 +42,16 @@ Arch Linux 用户也可以从 AUR 安装：[`ait-bin`](https://aur.archlinux.org
 
 应用默认使用 `https://aitapp.cn/api` 作为在线服务地址。
 两端只需能访问在线服务，无需处于同一局域网，也无需开放工作电脑的入站端口。中继负责转发连接，Agent 和项目文件仍在工作电脑上。
-桌面登录后默认同步内置 daemon；如果之前手动停止了同步，可在主机连接设置中重新启用。远程访问时，工作电脑及其服务需要保持运行。
+macOS/Linux 桌面登录后默认授权内置 daemon，由 daemon 自行维护上线和续租；退出客户端账号不会撤销机器授权。
+如果之前显式停止了同步，需要在主机连接设置中重新授权。远程访问时，工作电脑及 daemon 需要保持运行。
 
 Android 和 iOS 作为客户端连接电脑，不在手机上运行 daemon。
 也可以在 [网页客户端](https://aitapp.cn/) 登录同一账户，通过中央中继连接在线主机。
-登录入口与连接细节见 [客户端开发指南](apps/mobile/README.md)。
+登录、退出与凭据恢复见[统一登录](docs/operations/authing-client-login.md)。在线业务使用 Hub，文件下载使用独立中继通道。
 
 ### 在 Linux/macOS 上独立运行 daemon
 
-独立运行与 Desktop 内置 daemon 使用同一个发布流程：daemon 自主注册节点、续租和重连。没有桌面环境的服务器或需要长期在线的工作电脑，可以单独运行 daemon。先在这台机器上安装并认证需要使用的编程 Agent。
-
-在仓库根目录使用 [rust-toolchain.toml](rust-toolchain.toml) 指定的 Rust 工具链、CMake 及系统 C/C++ 构建工具编译：
+没有桌面环境的服务器可以使用 Release 中的独立 `ait-daemon` 归档；也可以从源码构建：
 
 ```sh
 cargo build --locked --release -p daemon --bin daemon
@@ -60,17 +59,9 @@ cargo build --locked --release -p daemon --bin daemon
 ./target/release/daemon run
 ```
 
-首次登录会显示网页地址和验证码。在任意设备浏览器中完成登录并批准机器接入，再运行启动命令。
-另一台设备登录同一 Ait 账户后，即可选择这台在线主机。机器名默认取系统 hostname，也可在首次登录时用 `login --name build-server` 指定；后续显示名称在网页 Host 管理中修改。
-
-- **重启**：直接执行 `daemon run`，自动恢复已保存的机器授权；显式断开会清除授权，需要重新登录。
-- **本地令牌**：不需要手动设置 `AIT_SERVER_TOKEN`；daemon 首次启动会自动生成私有令牌，后续复用。显式设置该环境变量时优先使用它。
-- **数据目录**：默认为 `~/.ait-server`。使用同一系统用户运行登录与服务；自定义目录时，各命令均传入 `--data-dir /path/to/data`。
-- **查看与退出**：`daemon status --json` 查看状态。需要重新授权或退出时，先停止服务，再执行 `daemon login` 或 `daemon logout`。
-- **后台常驻**：`run` 在前台运行；长期运行可交给 Linux systemd 或 macOS launchd 管理。无需开放入站端口，默认本地监听为 `127.0.0.1:7316`。
-
-以上 `daemon` 指编译产物或已放入 PATH 的程序。Linux 默认构建依赖 glibc，复制到其他机器前需确认 CPU 架构及系统库兼容；macOS 需在对应平台编译。离线语音引擎包含在构建中，模型另行下载。
-完整的授权恢复、一次性 token 接入和凭据说明见 [无人值守 daemon 操作指南](docs/operations/headless-daemon.md)。
+先在主机上安装并认证需要的 Agent。首次登录按终端提示完成网页授权，之后 daemon 自行续租和重连。
+默认数据目录为 `~/.ait-server`，默认监听 `127.0.0.1:7316`；本地 API token 会自动生成并保存。
+长期运行可交给 systemd 或 launchd。下载、凭据恢复和运行中授权见[无人值守 daemon 指南](docs/operations/headless-daemon.md)。
 
 ## 本地开发
 

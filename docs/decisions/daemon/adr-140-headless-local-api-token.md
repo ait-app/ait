@@ -1,6 +1,6 @@
 # ADR-140：Headless daemon 自动保存本地 API 凭据
 
-> 启动与控制边界已由 [ADR-201](adr-201-daemon-owned-publication.md) 修订：所有 daemon 自主发布，外部可暂停 Hub。
+> 启动与控制边界已由 [ADR-201](adr-201-daemon-owned-publication.md) 修订：所有 daemon 自主发布；外部断开会同时关闭 Hub/下载 Relay 并清除机器授权，不再支持单独暂停 Hub。
 
 状态：已接受
 

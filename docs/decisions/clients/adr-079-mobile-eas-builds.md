@@ -29,7 +29,7 @@ iOS 已通过 EAS 云构建并提交 TestFlight，Android APK 则在自托管 ru
 
 不再需要 Android 自托管 runner。团队新项目使用 EAS 托管的新 Android keystore，
 在本地 CLI 完成一次配置后，CI 冻结并复用该凭据。切换签名证书会影响旧签名应用的覆盖安装。
-实际云端编译以工作流运行结果为准，操作步骤见 [Android APK 发布](../../operations/android-releases.md)。
+实际云端编译以工作流运行结果为准，操作步骤见 [当前 Android 发布](../../operations/google-play-internal-testing.md)。
 
 Hermes `-O0` 关闭字节码编译优化，保留 Hermes 引擎与 source map。此设置只用于
 `production-apk` 的 Android 构建，其他 profile 与 iOS 沿用默认优化。

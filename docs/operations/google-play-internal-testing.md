@@ -6,12 +6,16 @@
 移动端仍使用 Expo SDK；`expo prebuild` 只在 runner 本地生成 Android 工程。
 设计见 [ADR-175](../decisions/clients/adr-175-android-play-gradle-release.md)。
 
+独立 APK 工作流已移除，桌面 Release 不再构建 Android；重跑旧 Release 时仅保留和校验已有 APK 附件。
+AAB 不能直接安装；若需要站外 APK，可在上传后从 Play Console 获取 Google 签名的通用 APK，
+本工作流不自动下载或发布它。
+
 ## 从 EAS 迁移
 
 已有 Play 应用、测试者名单和服务账号可继续使用。迁移需要把原有上传 keystore 和
 Play 服务账号 JSON 配置到 GitHub Secrets，并设置版本号基数。不要生成新的上传 key
-来代替已经在 Play 登记的 key。iOS TestFlight 继续使用 EAS，因此不要删除共享的
-`EXPO_TOKEN` 或 EAS 项目凭据。
+来代替已经在 Play 登记的 key。iOS 已迁移到 Xcode Cloud；当前移动端 CI 不使用 EAS。
+历史 `EXPO_TOKEN` 或 EAS 项目凭据是否仍被手动流程使用，应在清理前核实。
 
 若原上传 keystore 只保存在 EAS，可在已登录 Expo 的终端一次性导出：
 

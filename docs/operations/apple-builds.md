@@ -133,9 +133,10 @@ bundle exec pod install
 
 ## daemon 连接范围
 
-桌面包自动启动内置 Rust daemon。iOS 模拟器可连接宿主 `127.0.0.1:7316`，填写 daemon 的
-访问令牌。实体 iPhone 的 `127.0.0.1` 指向手机自身；当前 Rust daemon 只接受 loopback
-监听，真机访问电脑仍需要另行配置网络入口/安全隧道。本次打包不改变服务端网络边界。
+macOS 桌面包自动启动内置 Rust daemon，默认选择可用本地端口；独立 daemon 默认监听 `127.0.0.1:7316`。
+iOS 模拟器可用宿主实际监听地址和访问令牌直连。实体 iPhone 的 `127.0.0.1` 指向手机自身，
+可登录在线服务通过 Hub 连接电脑，或把 daemon 显式监听到可达的局域网地址并使用其 Bearer token。
+监听配置支持 IPv4、IPv6 和通配地址，见[daemon 手册](daemon.md#启动与配置)。
 
 参考：[electron-builder v26 macOS 配置](https://www.electron.build/v26/docs/mac/)、
 [Expo 本地 Release 构建](https://docs.expo.dev/guides/local-app-production/)、
