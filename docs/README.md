@@ -330,7 +330,7 @@
 - [Rust workspace 每 crate 95% 覆盖率验证](reports/daemon/crate-coverage-95-2026-10-14.md)：15 个 crate 的可比基线、最终计数与未覆盖行证据。
 - [Daemon 测试扩展与覆盖率验证（历史）](reports/daemon/crate-coverage-rebase.md)：rebase 验证、逐 crate 证据与历史测量索引。
 - [Provider 能力清单](plans/provider-parity.md)：当前能力与后续工作。
-- [2026-11-02 仓库审查遗留事项](plans/repository-review-2026-11-02.md)：Desktop 交接、节点授权重试、MCP socket、Provider 子 Agent 与客户端的待修问题。
+- [2026-11-02 仓库审查遗留事项](plans/repository-review-2026-11-02.md)：Desktop 交接、节点授权重试、MCP socket、Provider 子 Agent、访客分享撤销与客户端的待修问题。
 - [Antigravity CLI 验证](reports/providers/antigravity-cli.md)：协议夹具、安装路径和真实 AGY 验证范围。
 - [Provider 装配边界验证](reports/providers/provider-composition.md)：内置注册、辅助生成、DSH 简称与覆盖率证据。
 - [远程 Workspace 打开性能优化方案](plans/remote-workspace-open-performance.md)：连接、目录同步、Provider 排队与历史投影的代码分析、分阶段改动和验收指标。

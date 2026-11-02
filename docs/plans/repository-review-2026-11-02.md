@@ -56,6 +56,54 @@
       配置更新，`usage_update` 等会使回合失败，子会话的权限请求在 `capture` 与 `poll_idle`
       中也会被拒绝。需先用真实 OpenCode 确认加载后是否会发送这些通知。
 
+## 资源共享与访客会话（ADR-208）
+
+具备 `operate` 权限的访客能以 Host 用户身份执行命令，因此下列问题属于 RPC 范围与撤销清理的
+缺口，而非绕过操作系统边界。工作区与项目范围的 ID 绑定、路径校验和终端所有权检查已复核通过。
+
+- [ ] **访客终端可能逃出追踪，撤销时不会被关闭。**
+      `crates/api/src/guest/policy/private.rs` 在 `terminal.create.request` 返回后才调用
+      `record_terminal`。单连接模式下访客发出创建请求后立即断开，或撤销恰好发生在创建过程中，
+      `process_message` future 会被丢弃；终端服务的阻塞任务仍会启动进程，但记录与「撤销时
+      已启动」的回退清理都不会执行。建议在终端服务创建时直接打上 `(shareId, userId)` 标记并按
+      标记撤销（与 Agent 标签一致），至少把「创建并记录」放进不受连接取消影响的独立任务。
+- [ ] **较早的运行中终端会被挤出所有权列表。**
+      `crates/api/src/shares/guests.rs` 的 `record_terminal` 在达到 `MAX_TERMINALS = 128` 时
+      `pop_front`，且已结束的终端从不移除。访客先开一个长期终端，再反复创建并关闭 128 个，
+      第一个终端就不再受撤销清理（访客也失去其输入权限）。建议在终端结束时移除 ID，按存活状态
+      清理而非淘汰最旧项；Host 最多 32 个存活终端，列表仍有界。
+- [ ] **撤销只取消前 200 个访客 Agent。**
+      `crates/api/src/shares/cleanup.rs` 的 `cancel_agents` 调用 `agent.list.request` 时未传
+      `page`，默认上限 200，也不跟随 `pageInfo.nextCursor`。建议按 `guest_grants` 的方式分页。
+- [ ] **撤销期间创建的 Agent 首个回合不会被取消。**
+      已排入 provider 队列、带 `initialPrompt` 的 `agent.create` 不会因连接断开而停止；若它在
+      `cancel_agents` 列出 Agent 之后才注册，首个回合照常运行。建议在以访客标签创建 Agent 后
+      复核 `Book::grants`，授权已撤销则取消该回合。
+- [ ] **节点访客创建的 Bot 与定时任务在撤销后仍会运行。**
+      `guest/policy/node.rs` 允许节点访客调用 `bot.*` 与 `schedule.*`（例如把 Bot Channel 指向
+      访客自己的聊天账号，或创建启动无标签 Agent 的定时任务）；撤销只处理连接、访客终端和带
+      访客标签的 Agent。建议记录创建者并在撤销时删除或暂停，或在 ADR-208 中明确说明该边界。
+- [ ] **项目访客可永久删除所有者的其他分享设置。**
+      `workspace.archive` 属于 `WorkspaceManage`。项目访客归档项目内另有独立工作区分享的工作区时，
+      `connection/workspace_archive.rs` 经 `shares.rs` 的 `forget` 从 `shares.json` 删除该设置并
+      断开其他访客，取消归档也无法恢复；分享管理本应仅限所有者。建议访客触发的归档改为暂停这些
+      设置，或拒绝归档自带分享的工作区。
+- [ ] **路径校验使用未裁剪的 `cwd`（潜在问题）。**
+      访客策略检查原始 `cwd`（`guest.rs`、`policy.rs`），而 `fs.explorer` 与下载令牌处理
+      （`crates/filesystem/src/files/rpc.rs`）先 `trim`。工作区同时存在名为 `link `（尾随空格）
+      的目录和指向 `/` 的符号链接 `link` 时，`cwd="/ws/link "` 通过检查，实际读取 `/`；
+      两者都可经仓库内容带入。引入只读分享后即成为越界读取。建议拒绝未裁剪的 `cwd`，或检查
+      裁剪后的值。
+- [ ] **两处 RPC 范围缺口。**
+      `checkout.pr.timeline` 与 `checkout.*.get_check_details`（`forge/rpc.rs`）接受任意
+      `repoOwner`/`repoName`，访客可读取所有者 `gh` 登录可见的任意仓库 PR 时间线与检查详情；
+      策略只校验 `cwd`。项目访客被禁止 `project.config.write`，却可通过 `fs.file.write` 直接写
+      `<项目根>/ait.json`。建议将仓库参数绑定到 `cwd` 的远端，并禁止访客写项目配置文件。
+- [ ] **（待确认）被拒访客可能在下一次结果中被重新放行。**
+      `shares.rs` 的 `apply_outcome` 用每次新结果替换 `book.denied`，被拒授权又已从发布的
+      `visitors` 中移除，下一次结果可能清空拒绝记录。仅当中心仍会为被拒访客路由会话时才有影响，
+      需确认中心行为。
+
 ## Client
 
 - [ ] **计划列表只查询共享主机组的代表成员（待确认访客权限）。**
