@@ -58,3 +58,29 @@ fn migration_command_copies_core_data_and_reports_the_backup() {
     assert!(destination.join("projects/workspaces.json").is_file());
     assert!(std::path::Path::new(report["backup"].as_str().unwrap()).is_dir());
 }
+
+#[test]
+fn normal_start_refuses_an_incomplete_migration() {
+    let root = tempfile::tempdir().unwrap();
+    let destination = root.path().join("desktop");
+    std::fs::create_dir(&destination).unwrap();
+    std::fs::write(destination.join(".legacy-data-migration.json"), b"{}").unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_daemon"))
+        .args([
+            "--data-dir",
+            destination.to_str().unwrap(),
+            "--listen",
+            "127.0.0.1:0",
+        ])
+        .env_remove("AIT_SERVER_TOKEN")
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("migration is incomplete"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

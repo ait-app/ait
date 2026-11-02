@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { dialog, ipcMain } from "electron";
+import { ipcMain } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_DESKTOP_SETTINGS } from "../settings/desktop-settings";
@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   getElectronLogFile: vi.fn(),
   accountCommand: vi.fn(),
   showMessageBox: vi.fn(async () => ({ response: 0 })),
+  prepareMigration: vi.fn(async () => {}),
 }));
 
 vi.mock("electron", () => ({
@@ -68,6 +69,10 @@ vi.mock("./rust-daemon.js", () => ({
     status = mocks.status;
     authorization = mocks.authorization;
   },
+}));
+vi.mock("./legacy-data-migration.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./legacy-data-migration.js")>()),
+  prepareLegacyDataMigration: mocks.prepareMigration,
 }));
 vi.mock("./local-transport.js", () => ({
   openLocalTransportSession: mocks.openTransport,
@@ -116,8 +121,13 @@ describe("daemon-manager commands", () => {
     mocks.getElectronLogFile.mockReset();
     mocks.getElectronLogFile.mockReturnValue({ path: mocks.appLogPath });
     mocks.accountCommand.mockReset();
+    mocks.start.mockClear();
+    mocks.stop.mockClear();
+    mocks.restart.mockClear();
     mocks.showMessageBox.mockReset();
     mocks.showMessageBox.mockResolvedValue({ response: 0 });
+    mocks.prepareMigration.mockReset();
+    mocks.prepareMigration.mockResolvedValue(undefined);
     vi.mocked(ipcMain.handle).mockReset();
   });
 
@@ -181,6 +191,32 @@ describe("daemon-manager commands", () => {
     await expect(handlers.start_desktop_daemon()).rejects.toThrow("does not include");
     await expect(handlers.restart_desktop_daemon()).rejects.toThrow("does not include");
     expect(mocks.start).not.toHaveBeenCalled();
+    expect(mocks.restart).not.toHaveBeenCalled();
+  });
+
+  it("prepares the default data home before restart can launch a daemon", async () => {
+    vi.stubEnv("AIT_SERVER_DATA_DIR", undefined);
+    mocks.restart.mockResolvedValue({ status: "running" });
+
+    await expect(createDaemonCommandHandlers().restart_desktop_daemon()).resolves.toEqual({
+      status: "running",
+    });
+
+    expect(mocks.prepareMigration).toHaveBeenCalledOnce();
+    expect(mocks.restart).toHaveBeenCalledOnce();
+    expect(mocks.prepareMigration.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.restart.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("does not restart when default data home preparation is cancelled", async () => {
+    vi.stubEnv("AIT_SERVER_DATA_DIR", undefined);
+    mocks.prepareMigration.mockRejectedValue(new Error("cancelled"));
+
+    await expect(createDaemonCommandHandlers().restart_desktop_daemon()).rejects.toThrow(
+      "cancelled",
+    );
+
     expect(mocks.restart).not.toHaveBeenCalled();
   });
 

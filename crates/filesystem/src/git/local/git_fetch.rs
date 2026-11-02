@@ -23,6 +23,16 @@ impl LocalGitFetch {
             checkout: super::checkout::LocalCheckout::new(managed_worktrees_root),
         }
     }
+
+    /// Recognize worktrees retained below earlier daemon data directories.
+    #[must_use]
+    pub fn with_additional_managed_worktree_roots(
+        mut self,
+        roots: impl IntoIterator<Item = PathBuf>,
+    ) -> Self {
+        self.checkout = self.checkout.with_additional_managed_worktree_roots(roots);
+        self
+    }
 }
 
 impl GitFetchRuntime for LocalGitFetch {

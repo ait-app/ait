@@ -13,6 +13,7 @@ interface ReadinessConfig {
   waitForReady?: boolean;
   exitBeforeReady?: boolean;
   wrongPid?: boolean;
+  instanceId?: string;
 }
 
 const fixtures: ReturnType<typeof create>[] = [];
@@ -152,9 +153,31 @@ describe.skipIf(process.platform === "win32")("daemon readiness and process owne
       expect(next.status().ownedByDesktop).toBe(false);
       fixture.configure({});
       await expect(next.start()).resolves.toMatchObject({ status: "running", pid: running.pid });
+      expect(existsSync(path.join(fixture.home, "desktop-daemon.json"))).toBe(true);
+      await next.stop();
       expect(existsSync(path.join(fixture.home, "desktop-daemon.json"))).toBe(false);
     },
   );
+
+  it("reconciles an authenticated instance generation change without spawning", async () => {
+    const fixture = create();
+    const first = fixture.manager();
+    const running = await first.start();
+    await first.retainForNextSession();
+    fixture.configure({ instanceId: "restarted-instance" });
+
+    const next = fixture.manager();
+    await expect(next.start()).resolves.toMatchObject({
+      status: "running",
+      pid: running.pid,
+      serverId: running.serverId,
+      instanceId: "restarted-instance",
+    });
+    expect(fixture.lines("pids")).toHaveLength(1);
+    expect(readFileSync(path.join(fixture.home, "desktop-daemon.json"), "utf8")).toContain(
+      "restarted-instance",
+    );
+  });
 
   it("discards a record whose authenticated PID differs without signalling that process", async () => {
     const fixture = create();
@@ -190,6 +213,8 @@ describe.skipIf(process.platform === "win32")("daemon readiness and process owne
     expect(next.status).toBe("running");
     expect(next.pid).not.toBe(running.pid);
     expect(fixture.lines("pids")).toHaveLength(2);
+    expect(existsSync(path.join(fixture.home, "desktop-daemon.json"))).toBe(true);
+    await fixture.managers.at(-1)!.stop();
     expect(existsSync(path.join(fixture.home, "desktop-daemon.json"))).toBe(false);
   });
 

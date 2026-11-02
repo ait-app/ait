@@ -56,7 +56,8 @@ describe("legacy data migration preparation", () => {
 
   it("does not offer migration when the desktop destination already has records", async () => {
     const { source, destination } = fixture();
-    writeRegistry(source, "agents/agents.json", 4);
+    mkdirSync(path.join(source, "agents"), { recursive: true });
+    writeFileSync(path.join(source, "agents/agents.json"), "not-json");
     writeRegistry(destination, "projects/workspaces.json", 1);
 
     await expect(findLegacyDataMigrationCandidate(source, destination)).resolves.toBeNull();
@@ -78,6 +79,28 @@ describe("legacy data migration preparation", () => {
 
     expect(confirm).toHaveBeenCalledOnce();
     expect(migrate).toHaveBeenCalledExactlyOnceWith("/app/daemon", source, destination);
+  });
+
+  it("recovers an interrupted confirmed migration before inspecting the destination", async () => {
+    const { source, destination } = fixture();
+    mkdirSync(destination, { recursive: true });
+    writeFileSync(path.join(destination, ".legacy-data-migration.json"), "{}");
+    const migrate = vi.fn(async () => {
+      rmSync(path.join(destination, ".legacy-data-migration.json"));
+      writeRegistry(destination, "agents/agents.json", 1);
+    });
+    const confirm = vi.fn(async () => true);
+
+    await prepareLegacyDataMigration({
+      sourceHome: source,
+      destinationHome: destination,
+      binary: "/app/daemon",
+      confirm,
+      migrate,
+    });
+
+    expect(migrate).toHaveBeenCalledExactlyOnceWith("/app/daemon", source, destination);
+    expect(confirm).not.toHaveBeenCalled();
   });
 
   it("leaves both homes untouched when the user postpones migration", async () => {

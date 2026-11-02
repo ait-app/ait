@@ -2,6 +2,8 @@ import { execFile } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
+const MIGRATION_JOURNAL_FILENAME = ".legacy-data-migration.json";
+
 export interface DataHomeSummary {
   home: string;
   agents: number;
@@ -47,13 +49,12 @@ export async function findLegacyDataMigrationCandidate(
   destinationHome: string,
 ): Promise<LegacyDataMigrationCandidate | null> {
   if (path.resolve(sourceHome) === path.resolve(destinationHome)) return null;
-  const [source, destination] = await Promise.all([
-    inspectDataHome(sourceHome),
-    inspectDataHome(destinationHome),
-  ]);
-  const sourceHasData = source.agents > 0 || source.projects > 0 || source.workspaces > 0;
+  const destination = await inspectDataHome(destinationHome);
   const destinationHasData =
     destination.agents > 0 || destination.projects > 0 || destination.workspaces > 0;
+  if (destinationHasData) return null;
+  const source = await inspectDataHome(sourceHome);
+  const sourceHasData = source.agents > 0 || source.projects > 0 || source.workspaces > 0;
   return sourceHasData && !destinationHasData ? { source, destination } : null;
 }
 
@@ -61,17 +62,17 @@ export async function findLegacyDataMigrationCandidate(
 export async function prepareLegacyDataMigration(
   options: PrepareLegacyDataMigrationOptions,
 ): Promise<void> {
+  const migrate = options.migrate ?? runLegacyDataMigration;
+  if (await fileExists(path.join(options.destinationHome, MIGRATION_JOURNAL_FILENAME))) {
+    await migrate(options.binary, options.sourceHome, options.destinationHome);
+  }
   const candidate = await findLegacyDataMigrationCandidate(
     options.sourceHome,
     options.destinationHome,
   );
   if (!candidate) return;
   if (!(await options.confirm(candidate))) throw new LegacyDataMigrationCancelledError();
-  await (options.migrate ?? runLegacyDataMigration)(
-    options.binary,
-    candidate.source.home,
-    candidate.destination.home,
-  );
+  await migrate(options.binary, candidate.source.home, candidate.destination.home);
 }
 
 /** Run the daemon-owned exclusive migration command and surface its bounded diagnostics. */
@@ -124,6 +125,16 @@ async function readFileSize(file: string): Promise<number> {
     return (await stat(file)).size;
   } catch (error) {
     if (isMissing(error)) return 0;
+    throw error;
+  }
+}
+
+async function fileExists(file: string): Promise<boolean> {
+  try {
+    await stat(file);
+    return true;
+  } catch (error) {
+    if (isMissing(error)) return false;
     throw error;
   }
 }

@@ -70,6 +70,8 @@ async fn run(mut cli: config::Cli) -> anyhow::Result<()> {
         command @ (Some(config::Command::Run) | None) => cli.command = command,
     }
 
+    migration::ensure_complete(&directory)?;
+
     let config = config::Config::load(
         cli,
         |name| std::env::var_os(name),

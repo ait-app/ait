@@ -271,6 +271,7 @@ export async function stopDesktopDaemon(
 
 async function restartDaemon(): Promise<DesktopDaemonStatus> {
   assertBuiltInDaemonManagementEnabled(await getDesktopSettingsStore().get());
+  await prepareDefaultDesktopDataHome();
   return getRustDaemon().restart();
 }
 

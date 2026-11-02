@@ -31,6 +31,7 @@ const WRITE_TIMEOUT: Duration = Duration::from_secs(120);
 #[derive(Debug, Clone)]
 pub struct LocalManagedWorktrees {
     root: PathBuf,
+    additional_roots: Vec<PathBuf>,
     change_requests: Arc<dyn ChangeRequestResolver>,
 }
 
@@ -41,8 +42,20 @@ impl LocalManagedWorktrees {
     pub fn new(root: PathBuf, change_requests: Arc<dyn ChangeRequestResolver>) -> Self {
         Self {
             root,
+            additional_roots: Vec::new(),
             change_requests,
         }
+    }
+
+    /// Continue managing worktrees retained below earlier daemon data directories.
+    #[must_use]
+    pub fn with_additional_roots(mut self, roots: impl IntoIterator<Item = PathBuf>) -> Self {
+        self.additional_roots.extend(roots);
+        self
+    }
+
+    fn roots(&self) -> impl Iterator<Item = &PathBuf> {
+        std::iter::once(&self.root).chain(self.additional_roots.iter())
     }
 
     fn repository(cwd: &str) -> Result<Repository, WorktreeError> {
@@ -80,11 +93,17 @@ impl LocalManagedWorktrees {
     }
 
     fn normalize_owned(&self, path: &str) -> Result<OwnedWorktree, WorktreeError> {
-        let base = normalized_absolute(&self.root)?;
         let target = normalized_absolute(Path::new(path))?;
-        let relative = target
-            .strip_prefix(&base)
-            .map_err(|_| WorktreeError::NotAllowed)?;
+        let (base, relative) = self
+            .roots()
+            .filter_map(|root| normalized_absolute(root).ok())
+            .find_map(|base| {
+                target
+                    .strip_prefix(&base)
+                    .ok()
+                    .map(|relative| (base, relative.to_path_buf()))
+            })
+            .ok_or(WorktreeError::NotAllowed)?;
         let mut components = relative.components();
         let Some(Component::Normal(project)) = components.next() else {
             return Err(WorktreeError::NotAllowed);
@@ -118,7 +137,10 @@ impl ManagedWorktrees for LocalManagedWorktrees {
 
     fn list(&self, cwd: &str) -> Result<Vec<ManagedWorktreeInfo>, WorktreeError> {
         let repository = Self::repository(cwd)?;
-        let project_root = normalized_absolute(&self.project_root(&repository.repo_root))?;
+        let project_roots = self
+            .roots()
+            .map(|root| normalized_absolute(&root.join(repository_hash(&repository.repo_root))))
+            .collect::<Result<Vec<_>, _>>()?;
         let output = git(
             &repository.repo_root,
             &["worktree", "list", "--porcelain"],
@@ -129,7 +151,10 @@ impl ManagedWorktrees for LocalManagedWorktrees {
             .into_iter()
             .filter_map(|entry| {
                 let path = normalized_absolute(Path::new(&entry.path)).ok()?;
-                path.strip_prefix(&project_root).ok()?;
+                project_roots
+                    .iter()
+                    .any(|root| path.strip_prefix(root).is_ok())
+                    .then_some(())?;
                 Some(ManagedWorktreeInfo {
                     created_at: created_at(&path),
                     path: path_text(&path).ok()?,

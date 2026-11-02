@@ -45,7 +45,10 @@ fn migration_preserves_destination_identity_and_keeps_recoverable_backup() {
     let destination = root.path().join("desktop");
     seed(&source, 3, 2, 4);
     seed(&destination, 0, 0, 0);
-    let destination_id = InstanceLease::acquire(&destination).unwrap().server_id;
+    fs::create_dir(source.join("worktrees")).unwrap();
+    let destination_lease = InstanceLease::acquire(&destination).unwrap();
+    let destination_id = destination_lease.server_id;
+    drop(destination_lease);
 
     let report = migrate_data(&source, &destination).unwrap();
 
@@ -57,14 +60,108 @@ fn migration_preserves_destination_identity_and_keeps_recoverable_backup() {
     assert_eq!(summarize(&source).unwrap(), report.summary);
     assert!(report.backup.join("agents/timeline.sqlite3").is_file());
     assert!(report.backup.join("projects/projects.json").is_file());
-    assert_eq!(
-        InstanceLease::acquire(&destination).unwrap().server_id,
-        destination_id
-    );
+    let migrated_lease = InstanceLease::acquire(&destination).unwrap();
+    assert_eq!(migrated_lease.server_id, destination_id);
+    drop(migrated_lease);
     assert_eq!(
         fs::read(destination.join("projects/icons/icon.png")).unwrap(),
         b"icon"
     );
+    let roots = read_legacy_worktree_roots(
+        &destination
+            .join("projects")
+            .join(LEGACY_WORKTREE_ROOTS_FILENAME),
+    )
+    .unwrap();
+    assert_eq!(roots, [source.join("worktrees").canonicalize().unwrap()]);
+    assert!(!destination.join(JOURNAL_FILENAME).exists());
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            fs::metadata(&destination).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        assert_eq!(
+            fs::metadata(&report.backup).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        assert_eq!(
+            fs::metadata(
+                destination
+                    .join("projects")
+                    .join(LEGACY_WORKTREE_ROOTS_FILENAME)
+            )
+            .unwrap()
+            .permissions()
+            .mode()
+                & 0o777,
+            0o600
+        );
+    }
+}
+
+#[test]
+fn migration_recovers_an_interrupted_publication_before_retrying() {
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("legacy");
+    let destination = root.path().join("desktop");
+    seed(&source, 3, 2, 4);
+    seed(&destination, 0, 0, 0);
+    let original_agents = fs::read(destination.join("agents/agents.json")).unwrap();
+    let source = source.canonicalize().unwrap();
+    let destination = destination.canonicalize().unwrap();
+    let staging = root.path().join(".ait-data-migration-interrupted");
+    let backup = root
+        .path()
+        .join(".ait-server-desktop-before-migration-interrupted");
+    create_private_directory(&staging, false).unwrap();
+    create_private_directory(&backup, false).unwrap();
+    stage_data(&source, &staging).unwrap();
+    fs::rename(destination.join("agents"), backup.join("agents")).unwrap();
+    fs::rename(staging.join("agents"), destination.join("agents")).unwrap();
+    write_private_json(
+        &destination.join(JOURNAL_FILENAME),
+        &MigrationJournal {
+            source: source.clone(),
+            staging: staging.clone(),
+            backup: backup.clone(),
+        },
+    )
+    .unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            fs::metadata(&staging).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        assert_eq!(
+            fs::metadata(&backup).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        assert_eq!(
+            fs::metadata(destination.join(JOURNAL_FILENAME))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+    }
+
+    assert!(ensure_complete(&destination).is_err());
+    let report = migrate_data(&source, &destination).unwrap();
+
+    assert_eq!(report.summary, summarize(&source).unwrap());
+    assert_eq!(summarize(&destination).unwrap(), report.summary);
+    assert_eq!(
+        fs::read(report.backup.join("agents/agents.json")).unwrap(),
+        original_agents
+    );
+    assert!(!destination.join(JOURNAL_FILENAME).exists());
 }
 
 #[test]

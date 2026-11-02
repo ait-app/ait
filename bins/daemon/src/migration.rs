@@ -1,16 +1,18 @@
 //! Exclusive, recoverable migration of legacy desktop projects and Agent history.
 
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, bail};
 use rusqlite::{Connection, OpenFlags};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::instance::InstanceLease;
 
 const MIGRATED_DIRECTORIES: [&str; 2] = ["agents", "projects"];
+pub(super) const JOURNAL_FILENAME: &str = ".legacy-data-migration.json";
+const LEGACY_WORKTREE_ROOTS_FILENAME: &str = "legacy-worktree-roots.json";
 const TIMELINE_TABLES: [&str; 10] = [
     "timelines",
     "entries",
@@ -54,6 +56,28 @@ struct CopyStats {
     bytes: u64,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MigrationJournal {
+    source: PathBuf,
+    staging: PathBuf,
+    backup: PathBuf,
+}
+
+/// Refuse normal daemon startup while a prior migration still needs recovery.
+pub(super) fn ensure_complete(destination: &Path) -> anyhow::Result<()> {
+    match fs::symlink_metadata(destination.join(JOURNAL_FILENAME)) {
+        Ok(_) => {
+            bail!(
+                "desktop data migration is incomplete; rerun migrate-data before starting the daemon"
+            );
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error).context("inspect migration journal"),
+    }
+    Ok(())
+}
+
 /// Copy legacy user data into an empty destination while both daemon directories are locked.
 ///
 /// The destination keeps its own identity and credentials. Existing destination `agents` and
@@ -85,7 +109,7 @@ fn migrate_data(source: &Path, destination: &Path) -> anyhow::Result<MigrationRe
     if !source.is_dir() {
         bail!("legacy data directory does not exist: {}", source.display());
     }
-    fs::create_dir_all(destination).context("create desktop data directory")?;
+    create_private_directory(destination, true).context("create desktop data directory")?;
     let source = source
         .canonicalize()
         .context("resolve legacy data directory")?;
@@ -109,6 +133,8 @@ fn migrate_data(source: &Path, destination: &Path) -> anyhow::Result<MigrationRe
         )
     };
 
+    recover_incomplete_migration(&source, &destination)?;
+
     let source_summary = summarize(&source).context("inspect legacy data")?;
     if !source_summary.has_data() {
         bail!("legacy data directory contains no projects or Agent history");
@@ -126,14 +152,39 @@ fn migrate_data(source: &Path, destination: &Path) -> anyhow::Result<MigrationRe
     let identifier = uuid::Uuid::new_v4();
     let staging = parent.join(format!(".ait-data-migration-{identifier}"));
     let backup = parent.join(format!(".ait-server-desktop-before-migration-{identifier}"));
-    fs::create_dir(&staging).context("create migration staging directory")?;
-    fs::create_dir(&backup).context("create migration backup directory")?;
+    create_private_directory(&staging, false).context("create migration staging directory")?;
+    create_private_directory(&backup, false).context("create migration backup directory")?;
 
-    let result = stage_and_publish(&source, &destination, &staging, &backup, &source_summary);
-    if result.is_err() {
+    let staged = stage_data(&source, &staging);
+    let stats = match staged {
+        Ok(stats) => stats,
+        Err(error) => {
+            let _ = fs::remove_dir_all(&staging);
+            let _ = fs::remove_dir_all(&backup);
+            return Err(error);
+        }
+    };
+    let journal = MigrationJournal {
+        source: source.clone(),
+        staging: staging.clone(),
+        backup: backup.clone(),
+    };
+    if let Err(error) = write_private_json(&destination.join(JOURNAL_FILENAME), &journal)
+        .context("persist migration journal")
+    {
         let _ = fs::remove_dir_all(&staging);
+        let _ = fs::remove_dir_all(&backup);
+        return Err(error);
     }
-    let stats = result?;
+    if let Err(error) = publish_staged(&destination, &staging, &backup, &source_summary) {
+        let recovery = recover_incomplete_migration(&source, &destination);
+        return match recovery {
+            Ok(()) => Err(error),
+            Err(recovery) => Err(error.context(format!("migration rollback failed: {recovery:#}"))),
+        };
+    }
+    fs::remove_file(destination.join(JOURNAL_FILENAME)).context("finish migration journal")?;
+    sync_directory(&destination).context("sync completed migration")?;
     fs::remove_dir(&staging).context("remove empty migration staging directory")?;
 
     Ok(MigrationReport {
@@ -146,13 +197,7 @@ fn migrate_data(source: &Path, destination: &Path) -> anyhow::Result<MigrationRe
     })
 }
 
-fn stage_and_publish(
-    source: &Path,
-    destination: &Path,
-    staging: &Path,
-    backup: &Path,
-    source_summary: &DataSummary,
-) -> anyhow::Result<CopyStats> {
+fn stage_data(source: &Path, staging: &Path) -> anyhow::Result<CopyStats> {
     let mut stats = CopyStats::default();
     for name in MIGRATED_DIRECTORIES {
         let entry = source.join(name);
@@ -161,63 +206,208 @@ fn stage_and_publish(
                 .with_context(|| format!("stage legacy {name}"))?;
         }
     }
+    stage_legacy_worktree_roots(source, staging, &mut stats)?;
+    Ok(stats)
+}
 
-    let mut displaced = Vec::new();
-    let mut installed = Vec::new();
-    let publication = (|| -> anyhow::Result<()> {
-        for name in MIGRATED_DIRECTORIES {
-            let current = destination.join(name);
-            if current.exists() {
-                fs::rename(&current, backup.join(name))
-                    .with_context(|| format!("back up desktop {name}"))?;
-                displaced.push(name);
-            }
-            let prepared = staging.join(name);
-            if prepared.exists() {
-                fs::rename(&prepared, &current)
-                    .with_context(|| format!("publish migrated {name}"))?;
-                installed.push(name);
-            }
+fn publish_staged(
+    destination: &Path,
+    staging: &Path,
+    backup: &Path,
+    source_summary: &DataSummary,
+) -> anyhow::Result<()> {
+    for name in MIGRATED_DIRECTORIES {
+        let current = destination.join(name);
+        if current.exists() {
+            fs::rename(&current, backup.join(name))
+                .with_context(|| format!("back up desktop {name}"))?;
         }
-        sync_directory(destination).context("sync migrated desktop data directory")?;
-        sync_directory(backup).context("sync desktop data backup directory")?;
-        sync_directory(
-            destination
-                .parent()
-                .context("desktop data directory has no parent")?,
-        )
-        .context("sync migration parent directory")?;
-        Ok(())
-    })();
-    if let Err(error) = publication {
-        rollback_publication(destination, backup, &installed, &displaced);
-        return Err(error);
+        let prepared = staging.join(name);
+        if prepared.exists() {
+            fs::rename(&prepared, &current).with_context(|| format!("publish migrated {name}"))?;
+        }
     }
+    sync_directory(destination).context("sync migrated desktop data directory")?;
+    sync_directory(backup).context("sync desktop data backup directory")?;
+    sync_directory(
+        destination
+            .parent()
+            .context("desktop data directory has no parent")?,
+    )
+    .context("sync migration parent directory")?;
 
     match summarize(destination).context("verify migrated desktop data") {
-        Ok(summary) if &summary == source_summary => Ok(stats),
-        Ok(_) => {
-            rollback_publication(destination, backup, &installed, &displaced);
-            bail!("migrated data summary does not match the legacy source")
-        }
-        Err(error) => {
-            rollback_publication(destination, backup, &installed, &displaced);
-            Err(error)
-        }
+        Ok(summary) if &summary == source_summary => Ok(()),
+        Ok(_) => bail!("migrated data summary does not match the legacy source"),
+        Err(error) => Err(error),
     }
 }
 
-fn rollback_publication(destination: &Path, backup: &Path, installed: &[&str], displaced: &[&str]) {
-    for name in installed.iter().rev() {
-        let _ = fs::remove_dir_all(destination.join(name));
+fn stage_legacy_worktree_roots(
+    source: &Path,
+    staging: &Path,
+    stats: &mut CopyStats,
+) -> anyhow::Result<()> {
+    let mut roots =
+        read_legacy_worktree_roots(&source.join("projects").join(LEGACY_WORKTREE_ROOTS_FILENAME))?;
+    let source_worktrees = source.join("worktrees");
+    if source_worktrees.is_dir() {
+        roots.push(
+            source_worktrees
+                .canonicalize()
+                .context("resolve legacy worktree root")?,
+        );
     }
-    for name in displaced.iter().rev() {
-        let _ = fs::rename(backup.join(name), destination.join(name));
+    roots.sort();
+    roots.dedup();
+    if roots.is_empty() {
+        return Ok(());
     }
-    let _ = sync_directory(destination);
+    let projects = staging.join("projects");
+    if !projects.exists() {
+        create_private_directory(&projects, false).context("create staged projects directory")?;
+    }
+    let file = projects.join(LEGACY_WORKTREE_ROOTS_FILENAME);
+    let previous = fs::metadata(&file).ok();
+    let previous_bytes = previous.as_ref().map_or(0, fs::Metadata::len);
+    if previous.is_some() {
+        fs::remove_file(&file).context("replace staged legacy worktree roots")?;
+    }
+    write_private_json(&file, &roots).context("stage legacy worktree roots")?;
+    if previous.is_none() {
+        stats.files += 1;
+    }
+    stats.bytes = stats.bytes.saturating_sub(previous_bytes);
+    stats.bytes += fs::metadata(file)
+        .context("inspect staged legacy worktree roots")?
+        .len();
+    Ok(())
+}
+
+fn read_legacy_worktree_roots(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error).with_context(|| format!("read {}", path.display())),
+    };
+    serde_json::from_slice(&bytes).with_context(|| format!("decode {}", path.display()))
+}
+
+fn recover_incomplete_migration(source: &Path, destination: &Path) -> anyhow::Result<()> {
+    let journal_path = destination.join(JOURNAL_FILENAME);
+    if let Ok(metadata) = fs::symlink_metadata(&journal_path)
+        && metadata.file_type().is_symlink()
+    {
+        bail!("migration journal must not be a symbolic link");
+    }
+    let bytes = match fs::read(&journal_path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error).context("read migration journal"),
+    };
+    let journal: MigrationJournal =
+        serde_json::from_slice(&bytes).context("decode migration journal")?;
+    if journal.source != source {
+        bail!(
+            "incomplete migration belongs to a different source: {}",
+            journal.source.display()
+        );
+    }
+    validate_transaction_directory(destination, &journal.staging, ".ait-data-migration-")?;
+    validate_transaction_directory(
+        destination,
+        &journal.backup,
+        ".ait-server-desktop-before-migration-",
+    )?;
+
+    for name in MIGRATED_DIRECTORIES.into_iter().rev() {
+        let current = destination.join(name);
+        let prepared = journal.staging.join(name);
+        let previous = journal.backup.join(name);
+        if previous.exists() {
+            if current.exists() {
+                fs::remove_dir_all(&current)
+                    .with_context(|| format!("remove incomplete migrated {name}"))?;
+            }
+            fs::rename(&previous, &current)
+                .with_context(|| format!("restore previous desktop {name}"))?;
+        } else if !prepared.exists() && current.exists() {
+            fs::remove_dir_all(&current)
+                .with_context(|| format!("remove incomplete new desktop {name}"))?;
+        }
+    }
+    if journal.staging.exists() {
+        fs::remove_dir_all(&journal.staging).context("remove incomplete migration staging")?;
+    }
+    if journal.backup.exists() {
+        fs::remove_dir_all(&journal.backup).context("remove incomplete migration backup")?;
+    }
+    fs::remove_file(&journal_path).context("remove recovered migration journal")?;
+    sync_directory(destination).context("sync recovered desktop data")?;
     if let Some(parent) = destination.parent() {
-        let _ = sync_directory(parent);
+        sync_directory(parent).context("sync recovered migration parent")?;
     }
+    Ok(())
+}
+
+fn validate_transaction_directory(
+    destination: &Path,
+    candidate: &Path,
+    prefix: &str,
+) -> anyhow::Result<()> {
+    let parent = destination
+        .parent()
+        .context("desktop data directory has no parent")?;
+    let valid_name = candidate
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with(prefix));
+    if candidate.parent() != Some(parent) || !valid_name {
+        bail!("migration journal contains an unsafe transaction directory");
+    }
+    if let Ok(metadata) = fs::symlink_metadata(candidate)
+        && metadata.file_type().is_symlink()
+    {
+        bail!("migration transaction directory must not be a symbolic link");
+    }
+    Ok(())
+}
+
+fn create_private_directory(path: &Path, recursive: bool) -> anyhow::Result<()> {
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(recursive);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        if fs::metadata(path)?.mode() & 0o777 != 0o700 {
+            fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
+        }
+    }
+    Ok(())
+}
+
+fn write_private_json(path: &Path, value: &impl Serialize) -> anyhow::Result<()> {
+    let temporary = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
+    let mut options = OpenOptions::new();
+    options.create_new(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&temporary)?;
+    serde_json::to_writer(&mut file, value)?;
+    file.write_all(b"\n")?;
+    file.sync_all()?;
+    fs::rename(&temporary, path)?;
+    sync_directory(path.parent().context("private state file has no parent")?)?;
+    Ok(())
 }
 
 fn copy_tree(source: &Path, destination: &Path, stats: &mut CopyStats) -> anyhow::Result<()> {

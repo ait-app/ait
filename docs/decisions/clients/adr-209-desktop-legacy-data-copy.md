@@ -26,14 +26,21 @@
 3. 迁移命令按规范路径顺序同时取得源、目标数据目录的实例租约。任一 daemon 仍在运行、源
    目录没有记录或目标已有记录时，迁移失败且不覆盖目标。
 4. 迁移只发布 `agents/` 与 `projects/`，涵盖 Agent registry、Timeline SQLite、Project、
-   Workspace、标签和项目图标。旧目录不删除；其中已有 Workspace 的绝对路径继续有效，旧
-   Worktree 也继续留在原位置。
+   Workspace、标签和项目图标。旧目录不删除；其中已有 Workspace 的绝对路径继续有效。旧
+   Worktree 留在原位置，目标通过私有的旧根目录映射继续将其识别为托管 Worktree；新
+   Worktree 仍创建在目标目录中。
 5. 复制先进入目标同一文件系统的 staging 目录。发布前把目标原 `agents/` 和 `projects/`
    移入永久备份；发布后重新读取三个 registry 并统计 Timeline 行数，只有与源摘要一致才
    成功。目标保留自己的 `server-id`、本地 API token、在线服务凭据、配置、日志和运行态。
-6. daemon 每次通过认证就绪检查后立即写入私有 `desktop-daemon.json`，不再等正常退出。
-   后续桌面同时验证 token、PID、Server ID 和 Instance ID 后认领同一 daemon。已记录进程
-   存活但暂时无法验证时停止启动，不创建竞争写入者；确认进程退出或身份不符后才清理记录。
+   目标、staging 和备份目录在 Unix 上固定为 `0700`，迁移状态文件固定为 `0600`。
+6. 发布前在目标内持久化迁移 journal。异常终止后，普通 daemon 启动必须拒绝使用半发布
+   数据；桌面和 `migrate-data` 重试先根据 journal 回滚，再重新执行完整复制。journal 只在
+   发布、校验和目录同步全部成功后删除。
+7. daemon 每次通过认证就绪检查后立即写入私有 `desktop-daemon.json`，不再等正常退出。
+   后续桌面验证 token、PID 和 Server ID 后认领同一 daemon，并核对 Instance ID。已记录进程
+   存活但暂时无法验证时停止启动，不创建竞争写入者；同一 PID、token 和 Server ID 下的
+   Instance ID 换代视为进程内重启并更新记录。确认进程退出或 PID／Server ID 不符后才清理
+   记录。启动和重启入口都必须先经过数据目录准备门。
 
 ## 后果
 
@@ -46,6 +53,8 @@
 ## 验证
 
 - Rust 单元测试覆盖成功迁移、目标非空拒绝、源持锁拒绝、目标身份保留和备份保留。
+- Rust 单元与进程测试覆盖中断 journal 恢复、普通启动拒绝半发布数据、私有目录权限和旧
+  Worktree 根继续识别。
 - daemon 真实进程测试覆盖 CLI 参数、复制结果、摘要和备份路径。
 - Desktop 单元测试覆盖候选检测、目标非空跳过、用户确认和取消不写入。
 - Desktop 真实 Rust 子进程测试覆盖未正常交接时按 PID、Server ID 和 Instance ID 重新认领。

@@ -50,7 +50,8 @@ fn status_marks_only_linked_worktrees_in_the_managed_layout_as_owned() {
     std::fs::create_dir_all(&standalone).unwrap();
     git(&standalone, &["init", "-b", "main"]);
 
-    let runtime = LocalCheckout::new(managed);
+    let runtime = LocalCheckout::new(fixture.temp.path().join("current-worktrees"))
+        .with_additional_managed_worktree_roots([managed]);
     let linked_status = runtime.status(linked.to_str().unwrap()).unwrap();
     assert!(linked_status.is_managed_worktree);
     assert_eq!(

@@ -505,11 +505,7 @@ export class RustDaemonManager {
       });
     }
     this.unverifiedRecord = false;
-    if (
-      info.pid !== retained.pid ||
-      (retained.serverId && info.serverId !== retained.serverId) ||
-      (retained.instanceId && info.instanceId !== retained.instanceId)
-    ) {
+    if (info.pid !== retained.pid || (retained.serverId && info.serverId !== retained.serverId)) {
       forgetRetainedDaemon(this.options.home);
       return null;
     }

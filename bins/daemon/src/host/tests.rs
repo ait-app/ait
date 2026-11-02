@@ -21,6 +21,25 @@ pub(super) fn config(directory: &std::path::Path) -> Config {
     .unwrap()
 }
 
+#[test]
+fn migrated_legacy_worktree_roots_are_loaded_for_host_composition() {
+    let root = tempfile::tempdir().unwrap();
+    let data = root.path().join("desktop");
+    let legacy = root.path().join("legacy/worktrees");
+    std::fs::create_dir_all(data.join("projects")).unwrap();
+    std::fs::create_dir_all(&legacy).unwrap();
+    std::fs::write(
+        data.join("projects/legacy-worktree-roots.json"),
+        serde_json::to_vec(std::slice::from_ref(&legacy)).unwrap(),
+    )
+    .unwrap();
+
+    let roots = ManagedWorktreeRoots::load(&data).unwrap();
+
+    assert_eq!(roots.primary, data.join("worktrees"));
+    assert_eq!(roots.additional, [legacy.canonicalize().unwrap()]);
+}
+
 #[tokio::test]
 async fn binding_failure_has_no_state_side_effects() {
     let root = tempfile::tempdir().unwrap();
