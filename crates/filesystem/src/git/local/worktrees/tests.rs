@@ -145,6 +145,36 @@ fn lists_only_managed_worktrees_with_branch_and_head() {
 }
 
 #[test]
+fn retained_legacy_root_remains_managed_after_data_migration() {
+    let fixture = Fixture::new();
+    let created = fixture
+        .adapter()
+        .create(&ManagedWorktreeCreate {
+            cwd: path(&fixture.repository),
+            slug: "legacy".to_owned(),
+            mode: WorktreeCreateMode::BranchOff {
+                base_ref: None,
+                branch_name: "legacy".to_owned(),
+            },
+        })
+        .expect("legacy worktree");
+    let migrated = managed(fixture.root.path().join("current"))
+        .with_additional_roots([fixture.managed_root.clone()]);
+
+    assert_eq!(
+        migrated.owned(&created.worktree_path).unwrap().path,
+        created.worktree_path
+    );
+    assert!(
+        migrated
+            .list(fixture.repository.to_str().unwrap())
+            .unwrap()
+            .iter()
+            .any(|entry| entry.path == created.worktree_path)
+    );
+}
+
+#[test]
 fn branch_and_path_collisions_receive_paseo_suffixes() {
     let fixture = Fixture::new();
     let adapter = fixture.adapter();
