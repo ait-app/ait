@@ -1960,6 +1960,9 @@ export const ru: TranslationResources = {
     backdrop: "Фон меню",
   },
   subagents: {
+    observing: "Только чтение",
+    observationUnknown: "Ожидание подтверждения состояния",
+    observationUnavailable: "Сеанс недоступен",
     title: "Субагенты",
     pillLabelOne: "1 субагент",
     pillLabelMany: "Субагентов: {{count}}",

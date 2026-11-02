@@ -486,12 +486,12 @@ for line in sys.stdin:
                     "threadId": thread_id, "turn": {"id": pending, "status": "completed"}}})
                 pending = None
             continue
-        if text in ("live-subagent", "modern-subagent", "modern-subagent-return", "modern-subagent-completed", "invalid-subagent-activity"):
+        if text in ("background-subagent", "live-subagent", "modern-subagent", "modern-subagent-return", "modern-subagent-completed", "invalid-subagent-activity"):
             child = "child-" + thread_id
             spawn = {"type":"collabAgentToolCall", "id":"spawn-child", "senderThreadId":thread_id,
                 "receiverThreadIds":[child], "tool":"spawnAgent", "status":"completed", "prompt":"inspect",
                 "agentsStates":{child:{"status":"running"}}}
-            if text != "live-subagent":
+            if text not in ("live-subagent", "background-subagent"):
                 spawn = {"type":"subAgentActivity", "id":"spawn-child", "kind":"started",
                     "agentThreadId":child, "agentPath":"/root/code_reviewer",
                     "model":"offline-model", "reasoningEffort":"high"}
@@ -504,18 +504,29 @@ for line in sys.stdin:
                     "agentThreadId":thread_id, "agentPath":"/root"}
                 emit({"method":"item/completed", "params":{"threadId":child,"turnId":"child-turn","item":reply}})
             emit({"method":"item/agentMessage/delta","params":{"threadId":child,"turnId":"child-turn","itemId":"child-answer","delta":"Independent child"}})
-            child_item = {"type":"agentMessage", "id":"child-answer", "text":"Independent child answer"}
-            emit({"method":"item/completed", "params":{"threadId":child,"turnId":"child-turn","item":child_item}})
-            emit({"method":"turn/completed", "params":{"threadId":child,"turn":{"id":"child-turn","status":"completed"}}})
-            (root / ("native-history-" + child + ".json")).write_text(json.dumps([{"id":"child-turn","status":"completed","startedAt":1700000000,"items":[child_item]}]))
-            if text in ("modern-subagent-completed", "invalid-subagent-activity"):
-                activity = {"type":"subAgentActivity", "id":"subagent-completed-child-turn",
-                    "kind":"completed" if text == "modern-subagent-completed" else "unknown",
-                    "agentThreadId":child, "agentPath":"/root/code_reviewer",
-                    "model":None, "reasoningEffort":None}
-                stream_items.append(activity)
-                emit({"method":"item/completed", "params":{"threadId":thread_id,"turnId":pending,"item":activity}})
-            complete(pending, "Parent only")
+            def finish_child(child=child):
+                child_item = {"type":"agentMessage", "id":"child-answer", "text":"Independent child answer"}
+                (root / ("native-history-" + child + ".json")).write_text(json.dumps([{"id":"child-turn","status":"completed","startedAt":1700000000,"items":[child_item]}]))
+                emit({"method":"item/completed", "params":{"threadId":child,"turnId":"child-turn","item":child_item}})
+                emit({"method":"turn/completed", "params":{"threadId":child,"turn":{"id":"child-turn","status":"completed"}}})
+            if text == "background-subagent":
+                def finish_after_release(child=child, finish_child=finish_child):
+                    deadline = time.monotonic() + 20
+                    while not (root / ("release-" + child)).exists() and time.monotonic() < deadline:
+                        time.sleep(0.01)
+                    finish_child()
+                complete(pending, "Parent only")
+                threading.Thread(target=finish_after_release, daemon=True).start()
+            else:
+                finish_child()
+                if text in ("modern-subagent-completed", "invalid-subagent-activity"):
+                    activity = {"type":"subAgentActivity", "id":"subagent-completed-child-turn",
+                        "kind":"completed" if text == "modern-subagent-completed" else "unknown",
+                        "agentThreadId":child, "agentPath":"/root/code_reviewer",
+                        "model":None, "reasoningEffort":None}
+                    stream_items.append(activity)
+                    emit({"method":"item/completed", "params":{"threadId":thread_id,"turnId":pending,"item":activity}})
+                complete(pending, "Parent only")
             continue
         if text == "approval":
             emit({"id": "approval-1", "method": "item/commandExecution/requestApproval", "params": {}})

@@ -57,6 +57,7 @@ pub(crate) enum Operation {
     Rewind,
     Commands,
     Subagents,
+    UnifiedSubagents,
     ChildTimeline,
     Diagnostic,
     Usage,
@@ -115,6 +116,7 @@ impl Operation {
             "agent.rewind.request" => Ok(Self::Rewind),
             "agent.commands.list.request" => Ok(Self::Commands),
             "agent.provider_subagents.list.request" => Ok(Self::Subagents),
+            "agent.subagents.list.request" => Ok(Self::UnifiedSubagents),
             "agent.provider_subagents.timeline.get.request" => Ok(Self::ChildTimeline),
             "provider.diagnostic.request" => Ok(Self::Diagnostic),
             "provider.usage.list.request" => Ok(Self::Usage),
@@ -172,6 +174,7 @@ impl Operation {
             Self::Rewind => "agent.rewind.request",
             Self::Commands => "agent.commands.list.request",
             Self::Subagents => "agent.provider_subagents.list.request",
+            Self::UnifiedSubagents => "agent.subagents.list.request",
             Self::ChildTimeline => "agent.provider_subagents.timeline.get.request",
             Self::Diagnostic => "provider.diagnostic.request",
             Self::Usage => "provider.usage.list.request",
@@ -224,6 +227,7 @@ impl Operation {
             | Self::ForkContext
             | Self::Rewind
             | Self::Subagents
+            | Self::UnifiedSubagents
             | Self::ChildTimeline
             | Self::Update
             | Self::Detach
@@ -289,7 +293,7 @@ impl Operation {
             | Self::VoiceCancel
             | Self::Realtime
             | Self::Wake => Some(Target::Agent),
-            Self::Subagents | Self::ChildTimeline => Some(Target::Parent),
+            Self::Subagents | Self::UnifiedSubagents | Self::ChildTimeline => Some(Target::Parent),
             Self::AppendTimeline => Some(Target::AppendedAgent),
             Self::Create
             | Self::Resume

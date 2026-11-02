@@ -8,6 +8,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// Provider-owned execution observed through a registered root Agent.
+pub mod observation;
 /// Blocking storage contract for the persisted runtime record.
 pub mod registry;
 
@@ -189,6 +191,9 @@ pub struct PersistedAgentRuntimeRecord {
     /// Optional daemon execution ownership metadata.
     #[serde(default)]
     pub owner: Option<Value>,
+    /// Read-only native child binding; absent for sessions managed by Ait.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observation: Option<observation::ObservedAgent>,
 }
 
 #[cfg(test)]

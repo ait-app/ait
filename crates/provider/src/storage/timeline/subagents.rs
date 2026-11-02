@@ -6,6 +6,44 @@ use super::{ErrorCode, Timeline, io};
 use crate::ports::controls::NativeSubagent;
 
 impl Timeline {
+    /// Return the canonical host identity previously bound to a verified native child.
+    /// Returns storage errors without treating an unreadable binding as a missing child.
+    pub(crate) fn subagent_agent(
+        &self,
+        parent: &str,
+        child: &str,
+    ) -> Result<Option<String>, ErrorCode> {
+        let database = self.database.lock().map_err(io)?;
+        database
+            .query_row(
+                "SELECT host_agent FROM provider_subagents WHERE agent=? AND child=?",
+                params![parent, child],
+                |row| row.get(0),
+            )
+            .optional()
+            .map(Option::flatten)
+            .map_err(io)
+    }
+    /// Bind a legacy child scope to its stable host identity without moving timeline rows.
+    /// Returns a conflict when a different host identity already owns this scope.
+    pub(crate) fn bind_subagent(
+        &self,
+        parent: &str,
+        child: &str,
+        agent: &str,
+        observed: bool,
+    ) -> Result<(), ErrorCode> {
+        let database = self.database.lock().map_err(io)?;
+        let changed = database.execute(
+            "UPDATE provider_subagents SET host_agent=?3,host_observed=?4 WHERE agent=?1 AND child=?2 AND (host_agent IS NULL OR (host_agent=?3 AND host_observed=?4))",
+            params![parent, child, agent, observed],
+        ).map_err(io)?;
+        if changed != 1 {
+            return Err(ErrorCode::IdempotencyConflict);
+        }
+        Ok(())
+    }
+
     /// Read running native children and their host parent in one consistent snapshot.
     /// Returns storage errors without exposing a partial activity list.
     pub(crate) fn running_subagent_activity(
@@ -55,6 +93,19 @@ impl Timeline {
             if previous.parent_id != child.parent_id {
                 return Err(ErrorCode::IdempotencyConflict);
             }
+            if let Some((previous_at, next_at)) = previous.descriptor["updatedAt"]
+                .as_str()
+                .zip(child.descriptor["updatedAt"].as_str())
+                .and_then(|(previous, next)| {
+                    Some((
+                        chrono::DateTime::parse_from_rfc3339(previous).ok()?,
+                        chrono::DateTime::parse_from_rfc3339(next).ok()?,
+                    ))
+                })
+                && previous_at > next_at
+            {
+                return Ok(());
+            }
         } else {
             let count: u64 = tx
                 .query_row(
@@ -84,6 +135,27 @@ impl Timeline {
             .map(|row| serde_json::from_str(&row.map_err(io)?).map_err(io))
             .collect()
     }
+}
+
+pub(super) fn binding(
+    database: &rusqlite::Connection,
+    scope: &str,
+) -> Result<Option<String>, ErrorCode> {
+    let Some((parent, child)) = scope
+        .strip_prefix("subagent:")
+        .and_then(|scope| scope.split_once(':'))
+    else {
+        return Ok(None);
+    };
+    database
+        .query_row(
+            "SELECT host_agent FROM provider_subagents WHERE agent=? AND child=? AND host_observed=1",
+            params![parent, child],
+            |row| row.get(0),
+        )
+        .optional()
+        .map(Option::flatten)
+        .map_err(io)
 }
 
 #[cfg(test)]

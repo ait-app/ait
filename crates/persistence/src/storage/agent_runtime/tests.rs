@@ -31,7 +31,54 @@ fn record(id: &str) -> PersistedAgentRuntimeRecord {
         internal: false,
         archived_at: None,
         owner: None,
+        observation: None,
     }
+}
+
+#[test]
+fn observed_bindings_remain_private_read_only_and_validate_their_parent() {
+    use domain::agent_runtime::observation::{ObservationHealth, ObservedAgent, ObservedStatus};
+    let temp = tempfile::tempdir().expect("temporary directory");
+    let registry = FileBackedAgentRuntimeRegistry::new(temp.path().join("agents.json"));
+    let mut child = record("child");
+    child
+        .labels
+        .insert("paseo.parent-agent-id".to_owned(), "parent".to_owned());
+    child.observation = Some(ObservedAgent {
+        revision: 0,
+        root_agent_id: "parent".to_owned(),
+        root_session_id: "native-root".to_owned(),
+        parent_agent_id: "parent".to_owned(),
+        native_id: "native-child".to_owned(),
+        parent_native_id: "native-root".to_owned(),
+        persistence: None,
+        ready: false,
+        status: ObservedStatus::Running,
+        health: ObservationHealth::Stale,
+        observed_at: child.updated_at.clone(),
+        description: None,
+        subtitle: None,
+    });
+    registry.upsert(&child).expect("pending binding");
+    assert_eq!(registry.get("child").expect("read"), Some(child.clone()));
+    let mut invalid = child.clone();
+    invalid.persistence = Some(domain::agent_runtime::AgentPersistenceHandle {
+        provider: "codex".to_owned(),
+        session_id: "native-child".to_owned(),
+        native_handle: None,
+        metadata: None,
+    });
+    assert_eq!(
+        registry.upsert(&invalid),
+        Err(AgentRuntimeRegistryError::InvalidRecord)
+    );
+    invalid = child.clone();
+    invalid.labels.clear();
+    assert_eq!(
+        registry.upsert(&invalid),
+        Err(AgentRuntimeRegistryError::InvalidRecord)
+    );
+    assert_eq!(registry.get("child").expect("read"), Some(child));
 }
 
 #[test]

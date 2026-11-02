@@ -62,6 +62,8 @@ used by the imported Paseo client. The comparison baseline is Paseo
   call identity, and explicit background tasks may continue after the parent foreground turn ends.
   Read-only discovery can ignore an unfinished final JSONL fragment from an actively written child;
   complete malformed records and oversized frames remain errors.
+  [ADR-209](adr-209-observed-subagent-normalization.md) now registers verified children as read-only
+  host Agents and binds both stream surfaces to the existing child scope (timeline schema 7).
 - Codex `/compact` and `/goal` use native control RPCs with immediate-admission receipts and do
   not interrupt foreground input. Enable native goals only after the CLI version probe succeeds.
   Provider-originated `turn/started` events establish autonomous foreground turn ownership in the

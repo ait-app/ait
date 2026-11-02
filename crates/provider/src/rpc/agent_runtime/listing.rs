@@ -14,6 +14,7 @@ pub(crate) struct Listing {
     pub(crate) response: Value,
     pub(crate) entries: Vec<Value>,
     cursor: Option<Cursor>,
+    include_observed: bool,
 }
 
 pub(crate) fn prepare(
@@ -38,7 +39,8 @@ pub(crate) fn prepare(
     } else {
         QueryScope::All
     };
-    let query = query(request.filter, request.sort, request.page, scope, None)?;
+    let mut query = query(request.filter, request.sort, request.page, scope, None)?;
+    query.include_observed = request.include_observed;
     let entries = directory
         .matching_entries(&query)
         .map_err(|error| map_error(&error))?;
@@ -62,13 +64,14 @@ pub(crate) fn prepare(
         response,
         entries,
         cursor: request.sync,
+        include_observed: request.include_observed,
     })
 }
 
 impl Listing {
     pub(crate) fn finish(self, directory: &AgentRuntimeDirectory) -> Result<Value, ErrorCode> {
         let response = if let Some(cursor) = self.cursor {
-            synchronize(directory, self.response, &cursor)?
+            synchronize(directory, self.response, &cursor, self.include_observed)?
         } else {
             self.response
         };

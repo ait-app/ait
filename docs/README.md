@@ -40,6 +40,8 @@
 
 ## 架构决策
 
+- [ADR-209：通过只读登记统一子 Agent 展示](decisions/providers/adr-209-observed-subagent-normalization.md)：稳定 Ait 身份、观测与执行能力边界、统一父子树与时间线，以及兼容迁移方案；[实施与验证报告](reports/providers/unified-subagents-2026-10-31.md)。
+
 - [ADR-208：群组内资源共享与访客会话](decisions/daemon/adr-208-workspace-share-guests.md)：可把 workspace、项目或整个节点共享给群组，分享设置以 Host 为准，daemon 发布 `hub.shares.publish`，访客连接经 `x-ait-guest` 准入，workspace／project 采用范围限制，node 允许节点资源、配置与生命周期管理（分享及账号授权保留给所有者），撤销时清理访客终端与 Agent 回合。
 
 - [ADR-207：桌面 daemon 就绪探测与进程生命周期分离](decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)：轻量认证握手、探测失败保留自有进程、同 PID 重连，以及失败交接记录保留。

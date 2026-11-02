@@ -15,6 +15,7 @@ mod bot_permissions;
 mod environment;
 mod generated_titles;
 mod mcp;
+mod observed;
 mod paseo;
 mod recovery;
 mod resume;
@@ -417,6 +418,7 @@ pub(super) fn stored_record() -> PersistedAgentRuntimeRecord {
         internal: false,
         archived_at: None,
         owner: None,
+        observation: None,
     }
 }
 

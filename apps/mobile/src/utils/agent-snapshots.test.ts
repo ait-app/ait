@@ -36,6 +36,34 @@ function createSnapshot(
 }
 
 describe("normalizeAgentSnapshot", () => {
+  it("preserves read-only native identity and verified parentage across cache serialization", () => {
+    const snapshot: AgentSnapshotPayload = {
+      ...createSnapshot({
+        status: "closed",
+        labels: { [PARENT_AGENT_ID_LABEL]: "untrusted-label" },
+      }),
+      management: "observed",
+      parentAgentId: "verified-parent",
+      observation: {
+        rootAgentId: "root",
+        nativeId: "child",
+        status: "running",
+        health: "stale",
+        observedAt: "2026-10-31T00:00:00Z",
+        description: "Inspect project",
+        subtitle: "Explore",
+      },
+    };
+    const agent = normalizeAgentSnapshot(snapshot, "server");
+    expect(agent.parentAgentId).toBe("verified-parent");
+    expect(agent.turn.phase).toBe("idle");
+    expect(projectAgentSnapshot(agent)).toMatchObject({
+      management: "observed",
+      parentAgentId: "verified-parent",
+      observation: snapshot.observation,
+    });
+  });
+
   it("round-trips identified active turns through the canonical snapshot boundary", () => {
     const snapshot = createSnapshot({
       status: "running",

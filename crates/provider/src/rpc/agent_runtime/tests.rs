@@ -245,5 +245,6 @@ fn record() -> PersistedAgentRuntimeRecord {
         internal: false,
         archived_at: None,
         owner: None,
+        observation: None,
     }
 }

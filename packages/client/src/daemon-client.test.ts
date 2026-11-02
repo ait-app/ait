@@ -1802,6 +1802,68 @@ test("lists the full agent prompt index", async () => {
   });
 });
 
+test.each([true, false])(
+  "uses unified Agent identity only when the host advertises it (%s)",
+  async (supported) => {
+    const mock = createMockTransport();
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "unified",
+      logger: createMockLogger(),
+      reconnect: { enabled: false },
+      transportFactory: () => mock.transport,
+    });
+    clients.push(client);
+    const connected = client.connect();
+    mock.triggerOpen({ features: { unifiedSubagentAgents: supported } });
+    await connected;
+    const listing = client.fetchAgents({ requestId: "directory", scope: "active" });
+    expect(parseSentFrame(mock.sent[0]).includeObserved).toBe(supported ? true : undefined);
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "agent.list.response",
+        payload: {
+          requestId: "directory",
+          entries: [],
+          pageInfo: { nextCursor: null, prevCursor: null, hasMore: false },
+        },
+      }),
+    );
+    await listing;
+    const history = client.fetchAgentHistory({ requestId: "history" });
+    expect(parseSentFrame(mock.sent[1]).includeObserved).toBe(supported ? true : undefined);
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "agent.history.get.response",
+        payload: {
+          requestId: "history",
+          entries: [],
+          pageInfo: { nextCursor: null, prevCursor: null, hasMore: false },
+        },
+      }),
+    );
+    await history;
+    if (supported) {
+      const resolved = client.listSubagents("parent", {
+        requestId: "resolve",
+        subagentId: "native-child",
+      });
+      expect(parseSentFrame(mock.sent[2])).toMatchObject({
+        type: "agent.subagents.list.request",
+        parentAgentId: "parent",
+        subagentId: "native-child",
+      });
+      mock.triggerMessage(
+        wrapSessionMessage({
+          type: "agent.subagents.list.response",
+          payload: { requestId: "resolve", parentAgentId: "parent", agents: [], error: null },
+        }),
+      );
+      await expect(resolved).resolves.toMatchObject({ parentAgentId: "parent", agents: [] });
+    }
+  },
+);
+
 test("honors explicit fetchAgents timeout below the session RPC default", async () => {
   useHeartbeatClock();
   const logger = createMockLogger();

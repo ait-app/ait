@@ -1159,7 +1159,8 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
 }) {
   const { t } = useTranslation();
   // The workspace sheet is for looking; Open as tab brings the agent back with its composer.
-  const showsComposer = usePaneContext().host !== "sheet";
+  const showsComposer =
+    usePaneContext().host !== "sheet" && agentState.capabilities?.supportsMessageSend !== false;
   // The dock lays out fullscreen for the same session the composer edits in.
   const composerEditingSession = useComposerEditingSession("chat");
   const isComposerFullscreen = useComposerFullscreen(composerEditingSession);
@@ -1244,7 +1245,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     </RenderProfile>
   ) : null;
   const streamContent = (
-    <View style={animatedStaticStyles.content}>
+    <View style={animatedStaticStyles.content} testID="agent-conversation-panel">
       {showsComposer ? null : <SheetAgentFacts serverId={serverId} agentId={agentId} />}
       <RenderProfile id={`AgentStreamSection:${agentId}`}>
         <AgentStreamSection
@@ -1468,6 +1469,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
       agentId={agent.id}
       serverId={serverId}
       context={agent}
+      readOnly={agent.capabilities?.supportsMessageSend === false}
       streamItems={streamItems}
       pendingPermissions={pendingPermissions}
       routeBottomAnchorRequest={routeBottomAnchorRequest}

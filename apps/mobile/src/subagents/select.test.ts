@@ -7,6 +7,7 @@ import {
 } from "./select";
 import { createWorkspaceAgentVisibilitySelector } from "@/workspace-tabs/agent-visibility";
 import { useProviderSubagentStore } from "./provider-store";
+import { markObservedSubagentsStale } from "./unified";
 import { useSessionStore, type Agent } from "@/stores/session-store";
 import { parseServerInfoStatusPayload } from "@ait/protocol/messages";
 import { serverInfo } from "@/runtime/rust-daemon/messages";
@@ -129,6 +130,58 @@ describe("selectSubagentsForParent", () => {
       subagent: { ...child, status: "completed" },
     });
     expect(rows()).toMatchObject([{ id: child.id, status: "completed" }]);
+  });
+
+  it("shows managed and observed siblings through the same Agent target and retains outcomes while offline", () => {
+    const observation: NonNullable<Agent["observation"]> = {
+      rootAgentId: "parent",
+      nativeId: "native",
+      status: "running",
+      health: "current",
+      observedAt: AGENT_TIMESTAMP.toISOString(),
+      description: "Inspect project",
+      subtitle: "Explore",
+    };
+    setAgents([
+      makeAgent({ id: "parent" }),
+      makeAgent({ id: "managed", parentAgentId: "parent" }),
+      makeAgent({
+        id: "observed",
+        parentAgentId: "parent",
+        management: "observed",
+        observation,
+        status: "running",
+        capabilities: {
+          ...AGENT_DEFAULTS.capabilities,
+          supportsMessageSend: false,
+          supportsArchive: false,
+          supportsDetach: false,
+        },
+      }),
+    ]);
+    const rows = selectSubagentsForParent(
+      useSessionStore.getState(),
+      { serverId: SERVER_ID, parentAgentId: "parent" },
+      EMPTY_PENDING_ARCHIVE_IDS,
+    );
+    expect(rows.map((row) => [row.kind, row.id])).toEqual([
+      ["paseo", "managed"],
+      ["paseo", "observed"],
+    ]);
+    expect(rows[1]).toMatchObject({
+      description: "Inspect project",
+      subtitle: "Explore",
+      canArchive: false,
+      canDetach: false,
+    });
+    markObservedSubagentsStale(SERVER_ID, "parent");
+    expect(useSessionStore.getState().sessions[SERVER_ID]?.agents.get("observed")).toMatchObject({
+      status: "closed",
+      observation: { status: "running", health: "stale" },
+    });
+    expect(useSessionStore.getState().sessions[SERVER_ID]?.agents.get("managed")?.status).toBe(
+      "idle",
+    );
   });
 
   it("hides cached provider children when the host does not support them", () => {

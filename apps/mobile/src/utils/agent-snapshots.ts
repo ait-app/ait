@@ -59,6 +59,9 @@ export function derivePendingPermissionKey(
 
 export function projectAgentSnapshot(agent: Agent): AgentSnapshotPayload {
   return {
+    management: agent.management,
+    observation: agent.observation,
+    parentAgentId: agent.parentAgentId,
     id: agent.id,
     provider: agent.provider,
     cwd: agent.cwd,
@@ -98,13 +101,15 @@ export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId:
     ? new Date(snapshot.attentionTimestamp)
     : null;
   const archivedAt = snapshot.archivedAt ? new Date(snapshot.archivedAt) : null;
-  const parentAgentId = getParentAgentIdFromLabels(snapshot.labels);
+  const parentAgentId = snapshot.parentAgentId ?? getParentAgentIdFromLabels(snapshot.labels);
   // COMPAT(agentTurnIdentity): added in v0.2.6, remove after 2027-01-31 once daemon floor >= v0.2.6.
   // Old daemons expose only status. Normalize that legacy signal once so the rest
   // of the app consumes one activity shape.
   const turn = normalizeTurn(snapshot, lastUserMessageAt);
 
   return {
+    management: snapshot.management,
+    observation: snapshot.observation,
     serverId,
     id: snapshot.id,
     provider: snapshot.provider,

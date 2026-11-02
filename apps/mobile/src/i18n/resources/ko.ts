@@ -1936,6 +1936,9 @@ export const ko: TranslationResources = {
     backdrop: "메뉴 배경",
   },
   subagents: {
+    observing: "읽기 전용",
+    observationUnknown: "상태 확인 대기 중",
+    observationUnavailable: "세션을 사용할 수 없음",
     title: "하위 에이전트",
     pillLabelOne: "하위 에이전트 1개",
     pillLabelMany: "하위 에이전트 {{count}}개",

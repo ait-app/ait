@@ -1,4 +1,5 @@
 import type { AgentMode, AgentModelDefinition } from "@ait/protocol/agent-types";
+import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/shallow";
 import { formatAgentModeLabel } from "@/agent-controls/labels";
 import { formatTokenCount } from "@/components/context-window-meter.utils";
@@ -38,11 +39,14 @@ export function buildAgentFactsLine(input: AgentFactsInput): string | null {
 
 /** The facts line for a Paseo agent in the session store, kept current as the agent reports. */
 export function useAgentFactsLine(serverId: string, agentId: string): string | null {
+  const { t } = useTranslation();
   const agent = useSessionStore(
     useShallow((state) => {
-      const current = state.sessions[serverId]?.agents.get(agentId);
+      const session = state.sessions[serverId];
+      const current = session?.agents.get(agentId) ?? session?.agentDetails.get(agentId);
       return current
         ? {
+            observation: current.observation,
             provider: current.provider,
             cwd: current.cwd,
             runtimeModelId: current.runtimeInfo?.model ?? null,
@@ -59,6 +63,13 @@ export function useAgentFactsLine(serverId: string, agentId: string): string | n
   );
   const { entries } = useProvidersSnapshot(serverId, { cwd: agent?.cwd });
   const models = entries?.find((entry) => entry.provider === agent?.provider)?.models ?? null;
+  if (agent?.observation) {
+    const observation = agent.observation;
+    if (observation.health === "unavailable") return t("subagents.observationUnavailable");
+    if (observation.health === "stale" || observation.status === "unknown")
+      return t("subagents.observationUnknown");
+    return observation.subtitle ?? t("subagents.observing");
+  }
   return agent ? buildAgentFactsLine({ ...agent, models }) : null;
 }
 

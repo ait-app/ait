@@ -102,8 +102,7 @@ impl Runner for AgentRunner {
                     .execute("agent.get.request", json!({"agentId":agent_id}))
                     .await
                     .map_err(|_| Error::Invalid)?;
-                if value["agent"].is_null()
-                    || !value["agent"]["archivedAt"].is_null()
+                if !available_agent(&value)
                     || value["agent"]["workspaceId"].as_str() != Some(&workspace_id)
                 {
                     return Err(Error::Invalid);
@@ -318,9 +317,9 @@ impl AgentRunner {
                     }
                     Err(_) => return Err("Cannot load scheduled agent"),
                 };
-                if value["agent"].is_null() || !value["agent"]["archivedAt"].is_null() {
+                if !available_agent(&value) {
                     outcome.target_gone = true;
-                    return Err("Scheduled agent is missing or archived");
+                    return Err("Scheduled agent is missing, archived, or read-only");
                 }
                 if schedule
                     .workspace_id
@@ -413,3 +412,13 @@ impl AgentRunner {
         }
     }
 }
+
+fn available_agent(value: &serde_json::Value) -> bool {
+    value["agent"].is_object()
+        && value["agent"]["archivedAt"].is_null()
+        && value["agent"]["management"] != "observed"
+        && value["agent"]["capabilities"]["supportsMessageSend"] != false
+}
+
+#[cfg(test)]
+mod tests;

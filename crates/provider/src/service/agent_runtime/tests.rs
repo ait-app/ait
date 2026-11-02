@@ -689,6 +689,7 @@ fn agent(id: &str, workspace_id: &str, title: &str, internal: bool) -> Persisted
         internal,
         archived_at: None,
         owner: None,
+        observation: None,
     }
 }
 

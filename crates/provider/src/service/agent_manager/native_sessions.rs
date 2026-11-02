@@ -156,6 +156,25 @@ impl AgentManager {
         handle: &AgentPersistenceHandle,
         cwd: &str,
     ) -> Result<SessionHistory, ErrorCode> {
+        if self
+            .registry
+            .list()
+            .map_err(|_| ErrorCode::AgentIo)?
+            .iter()
+            .any(|record| {
+                record.provider == handle.provider
+                    && record.observation.as_ref().is_some_and(|source| {
+                        source.native_id == handle.session_id
+                            || source.persistence.as_ref().is_some_and(|native| {
+                                native.session_id == handle.session_id
+                                    || native.native_handle.as_ref().and_then(Value::as_str)
+                                        == Some(handle.session_id.as_str())
+                            })
+                    })
+            })
+        {
+            return Err(ErrorCode::UnsupportedCapability);
+        }
         let _history = self
             .history_budget
             .acquire()
@@ -178,6 +197,9 @@ impl AgentManager {
         {
             return Err(ErrorCode::InvalidMessage);
         }
+        if history.parent_id.is_some() {
+            return Err(ErrorCode::UnsupportedCapability);
+        }
         if history.active {
             return Err(ErrorCode::CatalogBusy);
         }
@@ -190,6 +212,9 @@ impl AgentManager {
         history: &SessionHistory,
         existing: bool,
     ) -> Result<PersistedAgentRuntimeRecord, ErrorCode> {
+        if record.observation.is_some() {
+            return Err(ErrorCode::UnsupportedCapability);
+        }
         if self.live.contains_key(&record.id) {
             return Err(ErrorCode::CatalogBusy);
         }
@@ -225,6 +250,8 @@ impl AgentManager {
     }
 
     pub(super) async fn stop_native(&mut self, id: &str) -> Result<(), ErrorCode> {
+        self.require_managed(id)
+            .map_err(|_| ErrorCode::UnsupportedCapability)?;
         if let Some(timeline) = &self.timeline {
             timeline.cancel_inputs(id)?;
         }

@@ -17,22 +17,6 @@ impl AgentManager {
         use domain::agent_runtime::AgentAttentionReason;
         for record in self.registry.list().map_err(super::map_registry)? {
             if !self.live.contains_key(&record.id)
-                && let Some(timeline) = &self.timeline
-            {
-                for mut child in timeline
-                    .subagents(&record.id)
-                    .map_err(|_| super::AgentManagerError::Registry)?
-                {
-                    if child.descriptor["status"] == "running" {
-                        child.descriptor["status"] = json!("failed");
-                        child.descriptor["updatedAt"] = json!(now_timestamp());
-                        timeline
-                            .store_subagent(&record.id, &child)
-                            .map_err(|_| super::AgentManagerError::Registry)?;
-                    }
-                }
-            }
-            if !self.live.contains_key(&record.id)
                 && self.clients.contains_key(&record.provider)
                 && record
                     .persistence
@@ -66,6 +50,26 @@ impl AgentManager {
         record: &PersistedAgentRuntimeRecord,
         snapshot: &mut Value,
     ) {
+        if record.observation.is_some() {
+            snapshot["providerUnavailable"] = json!(false);
+            if record.last_status == domain::agent_runtime::AgentRuntimeStatus::Running {
+                if let Some(snapshot) = snapshot.as_object_mut() {
+                    snapshot.remove("activeTurn");
+                }
+            } else {
+                snapshot["activeTurn"] = Value::Null;
+            }
+            return;
+        }
+        for flag in [
+            "supportsMessageSend",
+            "supportsCancel",
+            "supportsConfiguration",
+            "supportsDetach",
+            "supportsArchive",
+        ] {
+            snapshot["capabilities"][flag] = json!(true);
+        }
         if let Some(client) = self.clients.get(&record.provider) {
             let settings = client.settings(&record.config.clone().unwrap_or_default());
             snapshot["availableModes"] = record
@@ -145,6 +149,9 @@ impl AgentManager {
             .get(id)
             .map_err(|_| ErrorCode::AgentIo)?
             .ok_or(ErrorCode::AgentNotFound)?;
+        if record.observation.is_some() {
+            return Err(ErrorCode::UnsupportedCapability);
+        }
         if record.internal && record.owner.is_some() && response != &json!({"behavior":"deny"}) {
             return Err(ErrorCode::InvalidMessage);
         }
@@ -252,17 +259,28 @@ impl AgentManager {
             Err(_) if !live.is_empty() || !cached.is_empty() => BTreeMap::new(),
             Err(_) => return Err(ErrorCode::AgentIo),
         };
-        for child in cached {
-            if children.get(&child.id).is_none_or(|native| {
-                child.descriptor["updatedAt"].as_str() >= native.descriptor["updatedAt"].as_str()
-            }) {
+        for mut child in cached {
+            child.descriptor["observationStale"] = json!(!children.contains_key(&child.id));
+            if children
+                .get(&child.id)
+                .is_none_or(|native| child_timestamp(&child) > child_timestamp(native))
+            {
                 children.insert(child.id.clone(), child);
             }
         }
         for child in live {
             children.insert(child.id.clone(), child);
         }
-        descendants(&handle.session_id, children.into_values().collect())
+        let children = descendants(&handle.session_id, children.into_values().collect())?;
+        if let Some(timeline) = &self.timeline {
+            super::observed::register_children(
+                self.registry.as_ref(),
+                timeline,
+                &record,
+                &children,
+            )?;
+        }
+        Ok(children)
     }
 
     pub(crate) fn live_child(&self, parent: &str, child: &str) -> bool {
@@ -304,6 +322,9 @@ impl AgentManager {
             .map_err(|_| ErrorCode::AgentIo)?;
         if history.parent_id.as_deref() != Some(&child.parent_id)
             || history.descriptor.provider_handle_id != child.id
+            || history.descriptor.provider_id != record.provider
+            || super::native_sessions::canonical(&history.descriptor.cwd)?
+                != super::native_sessions::canonical(&child.cwd)?
         {
             return Err(ErrorCode::InvalidMessage);
         }
@@ -312,6 +333,9 @@ impl AgentManager {
 
     pub(crate) async fn rewind(&mut self, id: &str, message: &str) -> Result<(), ErrorCode> {
         let record = self.control_record(id)?;
+        if record.observation.is_some() {
+            return Err(ErrorCode::UnsupportedCapability);
+        }
         if record.archived_at.is_some() {
             return Err(ErrorCode::CatalogBusy);
         }
@@ -388,6 +412,9 @@ impl AgentManager {
             return Err(ErrorCode::InvalidMessage);
         }
         let record = self.control_record(id)?;
+        if record.observation.is_some() {
+            return Err(ErrorCode::UnsupportedCapability);
+        }
         if record.archived_at.is_some() {
             return Err(ErrorCode::CatalogBusy);
         }
@@ -468,7 +495,11 @@ impl AgentManager {
     }
 }
 
-fn descendants(
+fn child_timestamp(child: &NativeSubagent) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    chrono::DateTime::parse_from_rfc3339(child.descriptor["updatedAt"].as_str()?).ok()
+}
+
+pub(super) fn descendants(
     root: &str,
     children: Vec<NativeSubagent>,
 ) -> Result<Vec<NativeSubagent>, ErrorCode> {
@@ -584,6 +615,7 @@ pub(super) fn resolve_permission(
 }
 
 pub(super) fn publish_subagent(
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     timeline: Option<&crate::storage::timeline::Timeline>,
     events: &model::session::SessionEvents,
     agent: &super::LiveAgent,
@@ -594,7 +626,14 @@ pub(super) fn publish_subagent(
         return Ok(());
     };
     let root = agent.session.persistence().ok_or(ErrorCode::AgentIo)?;
-    let descendants = descendants(&root.session_id, agent.session.subagents())?;
+    let mut descendants = descendants(&root.session_id, agent.session.subagents())?;
+    if let SubagentEvent::Upsert(child) = event
+        && let Some(current) = descendants
+            .iter_mut()
+            .find(|current| current.id == child.id)
+    {
+        *current = child.clone();
+    }
     let id = match event {
         SubagentEvent::Upsert(child) => &child.id,
         SubagentEvent::Progress { id, .. } | SubagentEvent::Timeline { id, .. } => id,
@@ -603,6 +642,17 @@ pub(super) fn publish_subagent(
         return Err(ErrorCode::InvalidMessage);
     }
     let parent = &agent.record.id;
+    let previous = timeline
+        .subagent_agent(parent, id)?
+        .map(|id| registry.get(&id))
+        .transpose()
+        .map_err(|_| ErrorCode::AgentIo)?
+        .flatten();
+    let needs_registration =
+        matches!(event, SubagentEvent::Upsert(_)) || timeline.subagent_agent(parent, id)?.is_none();
+    if needs_registration {
+        super::observed::register_children(registry, timeline, &agent.record, &descendants)?;
+    }
     let scope = format!("subagent:{parent}:{id}");
     match event {
         SubagentEvent::Upsert(child) => {
@@ -620,6 +670,39 @@ pub(super) fn publish_subagent(
                 domain::session::protocol::SessionEventKind::ProviderSubagents,
                 &json!({"kind":"upsert","subagent":descriptor}),
             );
+            if let Some(id) = timeline.subagent_agent(parent, &child.id)?
+                && let Some(record) = registry.get(&id).map_err(|_| ErrorCode::AgentIo)?
+                && let Some(source) = &record.observation
+                && previous
+                    .as_ref()
+                    .and_then(|record| record.observation.as_ref())
+                    .is_none_or(|known| {
+                        known.status != source.status || known.health != source.health
+                    })
+            {
+                let event = match source.status {
+                    domain::agent_runtime::observation::ObservedStatus::Running => {
+                        Some(json!({"type":"turn_started","provider":record.provider}))
+                    }
+                    domain::agent_runtime::observation::ObservedStatus::Completed => {
+                        Some(json!({"type":"turn_completed","provider":record.provider}))
+                    }
+                    domain::agent_runtime::observation::ObservedStatus::Failed => Some(
+                        json!({"type":"turn_failed","provider":record.provider,"error":"Subagent failed"}),
+                    ),
+                    domain::agent_runtime::observation::ObservedStatus::Canceled => Some(
+                        json!({"type":"turn_canceled","provider":record.provider,"reason":"canceled"}),
+                    ),
+                    domain::agent_runtime::observation::ObservedStatus::Unknown => None,
+                };
+                if let Some(event) = event {
+                    timeline.events().publish(
+                        &id,
+                        "agent_stream",
+                        &json!({"agentId":id,"event":event,"timestamp":source.observed_at}),
+                    );
+                }
+            }
             Ok(())
         }
         SubagentEvent::Progress {
@@ -632,12 +715,14 @@ pub(super) fn publish_subagent(
 }
 
 pub(super) fn publish_children(
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     timeline: Option<&crate::storage::timeline::Timeline>,
     events: &model::session::SessionEvents,
     agent: &super::LiveAgent,
 ) -> Result<(), super::AgentManagerError> {
     for child in agent.session.subagents() {
         publish_subagent(
+            registry,
             timeline,
             events,
             agent,

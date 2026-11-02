@@ -32,7 +32,8 @@ impl AgentManager {
     pub(crate) fn recover_turns(&self) -> Result<(), AgentManagerError> {
         let timeline = self.timeline.as_ref().ok_or(AgentManagerError::Registry)?;
         for record in self.registry.list().map_err(map_registry)? {
-            if record.last_status != AgentRuntimeStatus::Running
+            if record.observation.is_some()
+                || record.last_status != AgentRuntimeStatus::Running
                 || self.live.contains_key(&record.id)
             {
                 continue;

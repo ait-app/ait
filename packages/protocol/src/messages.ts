@@ -836,7 +836,22 @@ const AgentActiveTurnPayloadSchema = z.object({
   startedAt: z.string().nullable(),
 });
 
+export const AgentObservationPayloadSchema = z.object({
+  revision: z.number().int().nonnegative().optional(),
+  rootAgentId: z.string(),
+  nativeId: z.string(),
+  status: z.enum(["running", "completed", "failed", "canceled", "unknown"]),
+  health: z.enum(["current", "stale", "unavailable"]),
+  observedAt: z.string(),
+  description: z.string().nullable(),
+  subtitle: z.string().nullable(),
+});
+export type AgentObservationPayload = z.infer<typeof AgentObservationPayloadSchema>;
+
 export const AgentSnapshotPayloadSchema = z.object({
+  management: z.enum(["managed", "observed"]).optional(),
+  parentAgentId: z.string().nullable().optional(),
+  observation: AgentObservationPayloadSchema.optional(),
   id: z.string(),
   provider: AgentProviderSchema,
   cwd: z.string(),
@@ -1267,6 +1282,7 @@ const DirectorySyncMetadataSchema = z.object({
 
 export const FetchAgentsRequestMessageSchema = z.object({
   type: z.literal("agent.list.request"),
+  includeObserved: z.boolean().optional(),
   requestId: z.string(),
   scope: z.enum(["active"]).optional(),
   filter: AgentDirectoryFilterSchema.optional(),
@@ -1407,6 +1423,7 @@ export const ShareRemoveRequestSchema = z.object({
 });
 
 export const FetchAgentHistoryRequestMessageSchema = z.object({
+  includeObserved: z.boolean().optional(),
   type: z.literal("agent.history.get.request"),
   requestId: z.string(),
   filter: AgentDirectoryFilterSchema.optional(),
@@ -1813,6 +1830,13 @@ export const AgentTimelineSearchRequestMessageSchema = z.object({
 export const AgentTimelineListPromptsRequestMessageSchema = z.object({
   type: z.literal("agent.timeline.list_prompts.request"),
   agentId: z.string(),
+  requestId: z.string(),
+});
+
+export const SubagentListRequestMessageSchema = z.object({
+  type: z.literal("agent.subagents.list.request"),
+  parentAgentId: z.string(),
+  subagentId: z.string().optional(),
   requestId: z.string(),
 });
 
@@ -3135,6 +3159,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   FetchAgentTimelineRequestMessageSchema,
   AgentTimelineSearchRequestMessageSchema,
   AgentTimelineListPromptsRequestMessageSchema,
+  SubagentListRequestMessageSchema,
   ProviderSubagentListRequestMessageSchema,
   ProviderSubagentTimelineRequestMessageSchema,
   SetAgentTimelineSubscriptionRequestMessageSchema,
@@ -3519,6 +3544,7 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(agentForkContextCursor): added in v0.1.108, remove gate after 2027-01-14.
         agentForkContextCursor: z.boolean().optional(),
         // COMPAT(providerSubagents): added in v0.1.107, remove gate after 2027-01-12.
+        unifiedSubagentAgents: z.boolean().optional(),
         providerSubagents: z.boolean().optional(),
         // COMPAT(projectedSubagentTimeline): added after v0.8.0, remove gates after 2027-03-14; retain wire field.
         projectedSubagentTimeline: z.boolean().optional(),
@@ -4601,6 +4627,16 @@ export const ProviderSubagentDescriptorPayloadSchema = z.object({
 export type ProviderSubagentDescriptorPayload = z.infer<
   typeof ProviderSubagentDescriptorPayloadSchema
 >;
+
+export const SubagentListResponseMessageSchema = z.object({
+  type: z.literal("agent.subagents.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    parentAgentId: z.string(),
+    agents: z.array(AgentSnapshotPayloadSchema),
+    error: z.string().nullable(),
+  }),
+});
 
 export const ProviderSubagentListResponseMessageSchema = z.object({
   type: z.literal("agent.provider_subagents.list.response"),
@@ -6517,6 +6553,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentTimelineReplacementMessageSchema,
   AgentTimelineSearchResponseMessageSchema,
   AgentTimelineListPromptsResponseMessageSchema,
+  SubagentListResponseMessageSchema,
   ProviderSubagentListResponseMessageSchema,
   ProviderSubagentTimelineResponseMessageSchema,
   ProviderSubagentUpdateMessageSchema,

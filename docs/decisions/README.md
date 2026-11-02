@@ -85,6 +85,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## Provider、Agent 与会话
 
+- [ADR-209：通过只读登记统一子 Agent 展示](providers/adr-209-observed-subagent-normalization.md)
+
 - [ADR-206：OpenCode 的 ACP 子 Agent 观测与历史归属](providers/adr-206-opencode-acp-subagents.md)
 - [ADR-205：Provider 执行归属与公共端口契约](providers/adr-205-provider-execution-contracts.md)
 - [ADR-202：Agent MCP 运行时自动注入](providers/adr-202-agent-mcp-injection.md)

@@ -48,7 +48,11 @@ impl WorkspaceActivitySource for AgentWorkspaceAttention {
         let agents = self.agents.list().map_err(map_agent_error)?;
         let by_id = agents
             .iter()
-            .filter(|agent| !agent.internal && !is_archived(agent.archived_at.as_deref()))
+            .filter(|agent| {
+                !agent.internal
+                    && agent.observation.is_none()
+                    && !is_archived(agent.archived_at.as_deref())
+            })
             .map(|agent| (agent.id.as_str(), agent))
             .collect::<BTreeMap<_, _>>();
         let mut activity: Vec<_> = by_id

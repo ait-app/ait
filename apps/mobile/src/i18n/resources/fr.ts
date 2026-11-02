@@ -1982,6 +1982,9 @@ export const fr: TranslationResources = {
     backdrop: "Toile de fond du menu",
   },
   subagents: {
+    observing: "Lecture seule",
+    observationUnknown: "En attente de confirmation de l’état",
+    observationUnavailable: "Session indisponible",
     title: "Sous-agents",
     pillLabelOne: "1 sous-agent",
     pillLabelMany: "{{count}} sous-agents",

@@ -71,12 +71,14 @@ retired_entries，插件条目保留，客户端旧 cursor 收到 reset/staleCur
 
 `agent.provider_subagents.list.request` 分页读取 subAgentThreadSpawn，根据原生父 ID 建图，
 只返回指定宿主 Agent 的原生后代，并保留直接/间接父关系。上限 4096 个候选、64 个分页
-游标，拒绝循环游标、冲突父关系及可达环。原生子 Agent 不注册成另一个宿主 Agent。
+游标，拒绝循环游标、冲突父关系及可达环。该初始设计不登记宿主 Agent；[ADR-209](adr-209-observed-subagent-normalization.md)
+现将已验证后代登记为只读 observed Agent，保留原生执行所有权。
 
 `agent.provider_subagents.timeline.get.request` 先验证后代关系，再读取并复核直接父 ID、
 原生 ID 和目录；展示缓存使用宿主父 ID + 原生子 ID 的独立键。查询复用持久 epoch/cursor
 规则并转换为 Paseo rows。当前只包含已完成/中断/失败 turn 的完整条目，没有持续的原生
-子 Agent 更新订阅；idle/notLoaded 按 completed 展示，不能进一步区分所有终止原因。
+子 Agent 更新订阅；后续 ADR-052 增加原生子进度，ADR-209 统一到 Agent 流，
+并将无法确认结果的 idle/notLoaded 投影为 unknown。
 
 `provider.diagnostic.request` 检查可执行文件、app-server 协议和登录类型，不输出账号邮件、
 凭证或原生 stderr。`provider.usage.list.request` 使用 account/rateLimits/read 的原生额度
