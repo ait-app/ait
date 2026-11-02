@@ -10,7 +10,7 @@
 
 前端 `git/diff-document/model.ts` 从 line `tokens` 构造颜色区间，Web/Native 画布已经支持
 语法颜色。Rust `rpc/checkout.rs::protocol_diff_file` 原先却为所有行固定设置 `tokens: None`。
-[第八阶段移植报告](../daemon/paseo-websocket-surface-phase-8.md)也记录了这个尚未补齐的行为。
+[第八阶段移植报告](../../archive/reports/daemon/paseo-websocket-surface-phase-8.md)也记录了这个尚未补齐的行为。
 
 对照本地 Paseo `b5b43edd65cc1253493b13cca3941dd390df6ef3` 的
 `packages/server/src/server/utils/diff-highlighter.ts`、

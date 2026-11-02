@@ -1,21 +1,16 @@
 # Ait 发布操作指南
 
-从 0.0.7 起，GitHub Release 构建 `apps/desktop` Electron 桌面、`apps/mobile` 的 Web 导出和
-Rust `daemon`。发布边界见 [ADR-053](../decisions/clients/adr-053-paseo-desktop-release.md)，
-旧桌面源码的移除见 [当前架构](../architecture/README.md)。
+发布入口按平台划分；版本准备统一从[准备版本](#准备版本)开始。
 
-推送标签和手动运行 Release Ait 构建 Linux、macOS 和 Windows 桌面；Android 使用独立的 Google Play AAB
-工作流，在 GitHub runner 上用 Gradle 构建并直接上传 Play。签名 Secrets 与操作步骤见
-[Google Play 内部测试与 CI 发布](google-play-internal-testing.md)。
+| 产物                                            | 入口                                            | 操作说明                                            |
+| ----------------------------------------------- | ----------------------------------------------- | --------------------------------------------------- |
+| Linux/macOS/Windows 桌面、独立 daemon、Web 镜像 | 标签或手动 `release.yml`                        | [创建 Release](#创建-release)                       |
+| Linux/macOS nightly 与独立 daemon               | `main` CI 成功后                                | [main CI Nightly](#main-ci-nightly)                 |
+| Android Google Play AAB                         | 手动 `release-android-play.yml`                 | [Google Play 指南](google-play-internal-testing.md) |
+| iOS 内部 TestFlight                             | Xcode Cloud `Default` 手动构建                  | [内部测试](#apple-testflight-ios-手动发布)          |
+| iOS 外部 TestFlight / App Store 构建            | Xcode Cloud `Release iOS to App Store` 手动构建 | [App Store 构建](#app-store-ios-手动发布)           |
 
-`apps/mobile` 的 Google Play Android Internal Testing 发布流程见下方
-[Google Play Android Internal Testing](#google-play-android-internal-testing) 一节，
-与桌面 GitHub Release 相互独立。`apps/mobile` 的 Apple TestFlight 发布流程见下方
-[Apple TestFlight iOS 手动发布](#apple-testflight-ios-手动发布)一节，
-同样与桌面 GitHub Release 相互独立。可用于正式上架并自动提交外部测试的构建使用
-[App Store iOS 手动发布](#app-store-ios-手动发布)。见
-[ADR-183](../decisions/clients/adr-183-ios-xcode-cloud-release.md) 和
-[ADR-187](../decisions/clients/adr-187-ios-app-store-cloud-trigger.md)。
+移动端发布独立于桌面 Release；Android 使用 Gradle，iOS 使用 Xcode Cloud，不使用 EAS CI。
 
 ## macOS 自动更新来源
 
@@ -42,12 +37,13 @@ ait-realease 发布编排核对 `SHA256SUMS`，将相同文件上传至 COS 的 
 和 Apple Silicon 安装包，适用的 CI 检查和两个平台构建全部成功后更新固定的 [nightly 预发布](https://github.com/ait-app/ait/releases/tag/nightly)。
 无需创建版本标签；不再使用独立的 dev nightly 工作流。
 
-nightly 的公开构建标识统一为 `<8位提交hash>-<提交UTC日期>`，例如 `38fb6054-2026-10-08`。
+nightly 的公开构建标识统一为 `<8位提交hash>-<构建UTC日期>`，例如 `38fb6054-2026-10-08`。
 Release 标题为 `Ait Nightly 38fb6054-2026-10-08`，安装包名例如
 `Ait-38fb6054-2026-10-08-macos-arm64.dmg`、`Ait-38fb6054-2026-10-08-linux-x86_64.AppImage`。
-ZIP、tar.gz、blockmap、CI 产物和 `BUILD-INFO.json` 使用同一标识；两平台及重跑均取同一提交日期。
+ZIP、tar.gz、blockmap、CI 产物和 `BUILD-INFO.json` 使用同一标识；同次运行的两平台共用准备步骤生成的标识；日期来自构建时间，重跑准备步骤可能改变日期。
 更新元数据沿用更新器识别的 `latest` / `beta` 入口文件名，内部引用对应的新安装包名。
-Electron、daemon 及更新协议内部仍保留必需的 SemVer 兼容字段，在构建信息中记作 `packagedVersion`。
+应用与 daemon 显示 `YYYY-MM-DD-<8位hash>`；更新器使用日期型 SemVer，在构建信息中记作 `packagedVersion`。
+命名规则以 [`nightly-build.mjs`](../../scripts/nightly-build.mjs) 和 [`source-version.cjs`](../../scripts/source-version.cjs) 为准。
 固定下载地址仍使用 `nightly` 标签；正式版本继续使用版本命名。
 
 最多保留最新两次 main CI 并行运行，以整个工作流为单位（每次包含检查及 Linux、macOS 构建）；
@@ -101,7 +97,6 @@ Google Play 和 iOS TestFlight 不随 PR 或 main CI 构建，均使用各自的
 | Windows           | x64                 | `Ait-VERSION-windows-x64.zip`                                          |
 | Linux 独立 daemon | x86_64              | `Ait-VERSION-daemon-linux-x64.tar.gz`                                  |
 | macOS 独立 daemon | Apple Silicon arm64 | `Ait-VERSION-daemon-macos-arm64.tar.gz`                                |
-| Android           | 通用                | `Ait-VERSION-android.apk`                                              |
 | 自动更新          | 各平台              | `latest-linux.yml`、`latest-mac.yml`、`latest.yml`、生成的 `.blockmap` |
 | 构建来源          | Windows             | `BUILD-INFO-windows.json`                                              |
 | 校验              | 全部资产            | `SHA256SUMS`                                                           |
@@ -177,8 +172,9 @@ fork PR 本就没有 secret。对应公钥需加入 AUR 维护者账户（My Acc
 本地运行（`AUR_PUSH=1` 时才推送；`publish` 只在配方或版本有变化时提交）：
 
 ```bash
-scripts/aur-publish.sh build ait-bin 0.1.9
-scripts/aur-publish.sh publish ait-bin 0.1.9
+AIT_RELEASE_VERSION=X.Y.Z  # 替换为已经发布的正式版本
+scripts/aur-publish.sh build ait-bin "$AIT_RELEASE_VERSION"
+scripts/aur-publish.sh publish ait-bin "$AIT_RELEASE_VERSION"
 scripts/aur-publish.sh build ait-git
 AUR_PUSH=1 scripts/aur-publish.sh publish ait-git
 ```
@@ -202,7 +198,7 @@ AUR_PUSH=1 scripts/aur-publish.sh publish ait-git
 
 ```bash
 npm ci
-npm run verify:release -- v0.0.20
+npm run verify:release
 npm run test:release
 npm run test:mobile-release
 npm run build:desktop-main
@@ -286,12 +282,14 @@ beta 标签不构建 Android APK；Google Play、iOS TestFlight 仍通过各自�
 ```bash
 git switch main
 git pull --ff-only
-npm run verify:release -- v0.0.20
-git tag -a v0.0.20 -m "Ait v0.0.20"
-git push origin v0.0.20
+npm run verify:release
+AIT_RELEASE_TAG="v$(node -p "require('./package.json').version")"
+git tag -a "$AIT_RELEASE_TAG" -m "Ait $AIT_RELEASE_TAG"
+git push origin "$AIT_RELEASE_TAG"
 ```
 
-`.github/workflows/release.yml` 在 Linux x86_64 和 macOS arm64 原生 runner 上构建桌面：
+`.github/workflows/release.yml` 构建 Linux x86_64、macOS arm64 和 Windows x64 桌面；
+Windows 使用独立工作流，不构建 daemon。Linux/macOS 流程为：
 
 1. 校验标签和全部活跃版本，安装根 npm workspace，验证发布脚本。
 2. 用锁定依赖只构建 `daemon` 的 `daemon`；Linux 在 `manylinux_2_28` 容器中编译并检查 glibc 基线。
@@ -313,7 +311,7 @@ git push origin v0.0.20
 满足条件时，代理默认执行完整发布流程。完成检查后直接 finalize，无需人工 review、
 二次确认或再次要求用户发送“final release”。用户明确要求只准备 Draft 时，才保持草稿。
 
-1. 等待适用的 CI、两平台构建、macOS 签名、公证和成品生命周期门禁通过。
+1. 等待适用的 CI、三平台桌面构建、macOS 签名/公证、Linux/macOS daemon 生命周期与 Windows 启动门禁通过。
 2. 核对不可变标签、`BUILD-INFO.json` 的源码与工作流提交、完整附件、`SHA256SUMS` 和
    更新元数据；整理变更说明、兼容性限制与本次实测覆盖率证据并写入 Release Notes。
 3. 检查通过后直接将草稿转为正式发布。任一检查失败或证据缺失时，先修复并重新验证，
@@ -342,7 +340,7 @@ Release Note 由 `.github/release.yml` 根据合并 PR 分组生成。
 `.tmp/release-tools`。因此修复发布工具后，可以选择包含修复的工作流分支重跑原始标签：
 
 ```bash
-gh workflow run release.yml --ref main -f tag=v0.0.7
+gh workflow run release.yml --ref main -f tag=vX.Y.Z
 ```
 
 修复尚在 PR 分支时，`--ref` 可以指定该分支。`github.workflow_sha` 固定该次运行使用的
@@ -356,7 +354,7 @@ gh workflow run release.yml --ref main -f tag=v0.0.7
 GitHub 自动生成的 Source code 归档仍对应原标签；修复后的源码应链接到 `sourceCommit`。
 
 ```bash
-gh workflow run release.yml --ref YOUR_PR_BRANCH -f tag=v0.0.7 -f source_commit=FULL_COMMIT_SHA
+gh workflow run release.yml --ref YOUR_PR_BRANCH -f tag=vX.Y.Z -f source_commit=FULL_COMMIT_SHA
 ```
 
 ## 本地验证
@@ -414,122 +412,62 @@ Android Play 内部测试使用独立手动工作流
 
 ## App Store iOS 手动发布
 
-在 Xcode 或 App Store Connect 中手动启动 Xcode Cloud 的 **Release iOS to App Store**
-工作流，归档、上传 App Store Connect，并自动提交到 `Ait External` 外部 TestFlight 测试组。
-Apple 可能要求 Beta App Review；通过后才可向外部测试者分发。**正式 App Store 审核仍手动
-提交，审核通过后的发布也保留手动。** 同一份 App Store Connect 构建可用于外部测试和正式
-审核，不必为了正式上架再次编译。
+在 Xcode 或 App Store Connect 手动启动 **Release iOS to App Store**，选择 `main` 或已完成
+版本准备的稳定标签 `vX.Y.Z`。此工作流用于外部 TestFlight 与正式上架所需的归档。
 
-### 手动启动和验收
-
-1. 按[准备版本](#准备版本)同步稳定版本及 [iOS 原生版本](#ios-原生版本同步)，提交工程和锁文件。
-2. 在下方 Cloud 工作流中选择 **Start Build**，手动选择 `main` 或稳定标签 `vX.Y.Z`。
-   启动前核对源码 commit、Cargo/npm/workspace 锁文件及 `Info.plist` 版本一致；旧
-   `v0.1.15` 标签的原生版本不一致问题不会因为重试而消失，不要移动已发布标签来绕过它。
-3. 在 Cloud 确认 Archive、上传和外部 TestFlight post-action，再到 TestFlight 确认处理、
-   审核及组内可用状态。构建成功、Apple 处理完成和测试组可用是不同阶段。
-4. 正式上架时，在 App Store 版本页面选择已处理完成的同一构建，补齐资料后手动提交审核。
-
-GitHub Actions 的发布入口及专用标签生成脚本已移除，原因见
-[ADR-187](../decisions/clients/adr-187-ios-app-store-cloud-trigger.md#撤销-github-触发入口)。
-发布权限由 Apple 团队和 Xcode Cloud 管理，无需在 GitHub 配置额外凭据。
-
-### App Store Cloud 配置
-
-以下配置已保存在 Apple 服务中；GitHub YAML 不会自动创建或修复它。
-
-| 设置                            | 值                                                                               |
+| 设置                            | 期望值                                                                           |
 | ------------------------------- | -------------------------------------------------------------------------------- |
 | Product / Workflow              | `Ait` / `Release iOS to App Store`                                               |
-| Workflow ID                     | `d1dfac80-341e-4726-81e8-89202ac76a06`                                           |
 | Repository / Workspace / Scheme | `ait-app/ait` / `apps/mobile/ios/Ait.xcworkspace` / `Ait`                        |
-| 手动 Start Condition            | 保留 `main` 分支和 Tag 的手动启动入口                                            |
+| Start Condition                 | 手动选择 Branch / Tag                                                            |
 | Actions                         | `Build - iOS`；`Archive - iOS`，Distribution Preparation = **App Store Connect** |
 | Post-Actions                    | Archive → `Ait Internal`；Archive → `Ait External`                               |
-| Editing                         | Account Holder / Admin / App Manager（Apple 对外部测试的要求）                   |
 
+配置保存在 Apple 服务中，GitHub YAML 不会创建或修复它；启动前在
 [Cloud 工作流](https://appstoreconnect.apple.com/teams/3e9381fe-a5bd-4fda-bc82-4f218c20480b/xcode-cloud/products/9153f73a-c52d-458b-ab3c-762228945ce5/workflows/d1dfac80-341e-4726-81e8-89202ac76a06)
-复用现有原生工程和 `ci_post_clone.sh`。
-`Default` 继续用于仅内部测试，`Public TestFlight` 的既有手动入口也保留。
+核对。GitHub 专用触发入口已撤销，见 [ADR-187](../decisions/clients/adr-187-ios-app-store-cloud-trigger.md)。
+既有触发标签只用于追溯，不移动或强制覆盖。
 
-云端原有的 `ios-app-store/` 标签触发条件独立保存在 Apple 服务中，不会随 GitHub 入口
-删除；当前发布直接手动启动，不再由 GitHub 创建专用标签。已有触发标签保留用于追溯，
-不要移动或强制覆盖。重试前先检查 Cloud 和 TestFlight 状态，避免在上传或外部审核仍在
-处理时重复构建；归档失败时查看 Cloud 日志，在 Cloud 界面重试。
+上传后确认外部 TestFlight post-action、Apple 处理与测试组可用状态；Apple 可能要求 Beta App Review。
+**正式 App Store 审核和审核后的发布仍手动操作。** 同一份符合分发要求的构建可用于外部测试和正式审核，
+无需仅为上架重复编译。共同准备、依赖和重试要求见下节。
 
 ## Apple TestFlight iOS 手动发布
 
-`apps/mobile` 的 iOS CI 统一使用 **Xcode Cloud**：直接在 Xcode 或
-[App Store Connect](https://appstoreconnect.apple.com/apps/6817043477) 启动 Ait 的 `Default`
-工作流，由 Apple 完成归档、签名、上传和 TestFlight 内部分发。
-与桌面 GitHub Release、Google Play Internal Testing 独立，保持手动触发。
-完整设计见 [ADR-183](../decisions/clients/adr-183-ios-xcode-cloud-release.md)。
+仅内部测试在 Xcode 或 [App Store Connect](https://appstoreconnect.apple.com/apps/6817043477)
+手动启动 Ait 的 **Default** 工作流；与桌面 GitHub Release、Google Play 独立。
 
-### 云端工作流配置
+| 设置                            | 期望值                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Product / Workflow              | `Ait` / `Default`                                                                                 |
+| Repository / Workspace / Scheme | `ait-app/ait` / `apps/mobile/ios/Ait.xcworkspace` / `Ait`                                         |
+| Bundle ID / Apple Team          | `com.necokeine.ait` / `SVS7GV79T9`                                                                |
+| Start Conditions                | `Manual Start - Branch, Tag`；分支为 `main`，标签手动选择                                         |
+| Actions                         | `Build - iOS`；`Archive - iOS`，Distribution Preparation = **TestFlight (Internal Testing Only)** |
+| Post-Actions                    | Archive → `TestFlight Internal Testing - iOS` → `Ait Internal`                                    |
 
-工作流配置保存在 Xcode Cloud，由 Xcode 的 Edit Workflow 或 App Store Connect 管理；
-GitHub YAML 无法替代这些设置。维护时核对：
+仅 Build 成功不会上传 TestFlight；必须完成 Archive 与 post-action。内部专用归档不能直接用于正式上架，
+需要上节的 App Store 分发构建。设计见 [ADR-183](../decisions/clients/adr-183-ios-xcode-cloud-release.md)。
 
-| 设置                                | 值                                                                                    |
-| ----------------------------------- | ------------------------------------------------------------------------------------- |
-| Product / Workflow                  | `Ait` / `Default`                                                                     |
-| Repository                          | `https://github.com/ait-app/ait.git`                                                  |
-| Workspace / Scheme                  | `apps/mobile/ios/Ait.xcworkspace` / `Ait`                                             |
-| Bundle ID / Apple Team              | `com.necokeine.ait` / `SVS7GV79T9`                                                    |
-| Start Conditions                    | `Manual Start - Branch, Tag`：分支限定 `main`，标签允许手动选择；不添加自动触发       |
-| Actions                             | 保留 `Build - iOS`；必须包含 `Archive - iOS`，scheme 为 `Ait`                         |
-| Archive 的 Distribution Preparation | `TestFlight (Internal Testing Only)`                                                  |
-| Post-Actions                        | `TestFlight Internal Testing - iOS`，使用 `Archive - iOS` 产物，测试组 `Ait Internal` |
+### 共同准备与验收
 
-仅 `Build - iOS` 成功不会上传 TestFlight。必须完成 Archive，并由 TestFlight post-action
-分发；这是 [Apple 官方分发工作流](https://developer.apple.com/documentation/xcode/creating-a-workflow-that-builds-your-app-for-distribution)
-要求的配置。内部测试构建不能直接转为正式 App Store 发布产物；正式上架使用上方
-[App Store iOS 手动发布](#app-store-ios-手动发布)准备符合分发要求的归档。
-
-仓库负责提交原生工程、共享 scheme、workspace、Ruby/Pod/npm 锁文件，以及
-[`ci_post_clone.sh`](../../apps/mobile/ios/ci_scripts/ci_post_clone.sh)。该 hook 安装锁定依赖、
-校验原生应用版本、构建共享包和 Terminal WebView，再以 `pod install --deployment`
-准备归档依赖；详情见 [Xcode Cloud 依赖安装](apple-builds.md#xcode-cloud-依赖安装)。
-Cloud 不执行 Expo prebuild，不自动修改或提交原生工程。
-
-### 触发和验收
-
-1. 先完成[准备版本](#准备版本)和 [iOS 原生版本同步](#ios-原生版本同步)，将工程与锁文件
-   合并到 `main`。日常内部测试可手动选择包含修复的 `main` 提交。
-2. 对应正式版本发布时，先完成该稳定 `vX.Y.Z` 的桌面 GitHub Release，再在 Cloud 手动选择
-   同一个标签。手动 Start Conditions 已启用 Tag 选择；恢复或重建工作流时也须启用，
-   不要添加标签推送的自动触发条件。启动前核对选中标签和源码 commit。
-3. 在 Xcode Report navigator → Cloud → Ait → Default → Start Build，或在 App Store
-   Connect 的 Xcode Cloud 中手动启动。稳定标签须包含原生版本修复；旧 `v0.1.15` 标签的
-   原生版本不一致问题不会因为重试而消失，也不要移动已发布标签来绕过它。
-4. 检查 `Archive - iOS` 成功、`TestFlight Internal Testing - iOS` 为 Completed，再到
-   App Store Connect 的 TestFlight 确认版本、构建号和 `Ait Internal` 可用状态。构建成功、
-   Apple 处理完成和测试组可用是不同阶段；需要处理的合规信息在 App Store Connect 中完成。
-
-迁移后不再有 GitHub `ios-testflight` environment 审核、`gh release view` 自动门禁、
-EAS 重复构建拦截或 `build_id` 重提入口。发布权限由 Apple 团队和 Xcode Cloud 管理；
-稳定版本与 GitHub Release 的对应关系在手动启动前核对，不能假定 Cloud 会执行旧门禁。
+1. 完成[版本准备](#准备版本)和 [iOS 原生版本同步](#ios-原生版本同步)，提交工程、共享 scheme 与锁文件。
+2. 日常测试可选 `main`；对应正式版本时，先完成稳定版桌面 Release，再手动选择同一标签。
+   核对 Cloud 所选 commit、Cargo/npm 版本及 Info.plist 一致，旧标签缺少修复时不能靠重试解决。
+3. Cloud 的 [`ci_post_clone.sh`](../../apps/mobile/ios/ci_scripts/ci_post_clone.sh) 安装锁定依赖、校验版本、
+   构建共享包和 Terminal WebView，以 `pod install --deployment` 准备归档。
+   Cloud 不执行 Expo prebuild，也不修改或提交原生工程；环境见 [Apple 构建](apple-builds.md#xcode-cloud-依赖安装)。
+4. 确认 Archive、上传和相应 TestFlight post-action 均完成，再检查 Apple 处理与测试组可用状态。
+   构建成功不等于可以分发；所需合规信息在 App Store Connect 中完成。
 
 ### 构建号与重试
 
-App Store Connect 使用 Xcode Cloud 递增的构建号（`CI_BUILD_NUMBER`），例如 Cloud 的
-Build 8 对应 TestFlight `0.1.15 (8)`，不使用源码里由 Expo 推导的 `1015999` 作为上传序号。
-参见 [Apple 的构建号说明](https://developer.apple.com/documentation/xcode/setting-the-next-build-number-for-xcode-cloud-builds)。
-不要重置 Cloud 计数器；若同一应用版本已有其它渠道上传的构建，迁移前核对版本与构建号，
-必要时在 Xcode Cloud Settings → Build Number 设置下一个可用值。
+上传构建号使用 Xcode Cloud 的 `CI_BUILD_NUMBER`，与源码中 Expo 推导的 build number 分开。
+不要重置 Cloud 计数器；若同一应用版本已有其他渠道上传的构建，先核对已用序号。
 
-失败时先打开失败 action 的 Logs。仅网络拉取等临时错误可对相同提交重试；版本或锁文件
-不一致必须先修复并提交，再构建包含修复的新提交。Archive 成功但 TestFlight 尚不可用时，
-先检查 post-action 和 App Store Connect 的处理状态，避免在 Apple 仍处理产物时重复构建。
-Cloud 的重试在 Cloud 界面操作，不使用旧 EAS build ID 或 `eas submit`。
+先查看失败 action 的 Logs。临时网络失败可重试同一提交；版本或锁文件不一致要先修复并提交，
+再构建新提交。Archive 成功但测试不可用时，先查 post-action、处理与审核状态，避免重复构建。
+发布权限、签名和上传由 Apple 团队及 Xcode Cloud 管理，不使用旧 EAS build ID 或 `eas submit`。
 
-### EAS 退出 CI
-
-已移除 `.github/workflows/release-ios-testflight.yml`、EAS 专用发布辅助脚本和旧
-`.eas/workflows` 发布／审核入口。iOS CI 不再需要 `EXPO_TOKEN`，也不向 GitHub 配置
-App Store Connect API key、Apple ID 密码或签名证书；签名与上传由 Xcode Cloud 管理。
-GitHub 中旧 environment 和 Secret 不会随代码删除而自动消失，只有确认无其它使用者后才清理。
-
-Expo SDK、config plugins、本地 prebuild 和 `eas.json` 中的历史手动配置仍然保留，
-它们不再承担 Ait 的 iOS CI 发布。外部 TestFlight 测试和 App Store 审核由维护者另行决定，
-不属于当前内部测试工作流。
+`eas.json` 只保留历史手动配置，当前 iOS CI 不使用 `EXPO_TOKEN` 或 GitHub 中的 Apple 上传凭据。
+旧 Secret/environment 不随代码删除而消失，清理前确认没有其他使用者。Expo SDK、config plugins 和本地 prebuild 继续使用。

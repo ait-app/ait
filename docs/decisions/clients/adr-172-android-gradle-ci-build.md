@@ -33,4 +33,4 @@
 APK 构建不再依赖 EAS 账号与 `EXPO_TOKEN`。为与此前 GitHub Release 中由 EAS 签名的
 APK 保持覆盖安装，Secrets 应使用从 EAS 导出的同一 keystore。Release 工作流需等待
 Android 构建完成，整体耗时随之增加。操作步骤见
-[Android APK 构建](../../operations/android-releases.md)。
+[当前 Android 发布](../../operations/google-play-internal-testing.md)。

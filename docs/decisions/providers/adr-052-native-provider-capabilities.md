@@ -1,6 +1,6 @@
 # ADR-052: Native provider capability completion
 
-Status: Accepted; implementation tracked in [the parity checklist](../../plans/provider-parity.md).
+Status: Accepted; implementation tracked in [the parity checklist](../../archive/plans/provider-parity.md).
 
 ## Context
 

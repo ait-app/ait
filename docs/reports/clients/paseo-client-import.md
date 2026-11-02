@@ -18,7 +18,7 @@
 源码、测试、原生模块和资源保持上游内容；原有 `apps/desktop`、Cargo workspace
 和 Rust 服务端实现保持独立。来源、摘要算法和目录映射保存在
 [导入清单](../../../paseo/import-manifest.json)。构建依赖及待整合路径见
-[导入说明](../../../paseo/README.md#构建整合范围)。
+[导入说明](../../../paseo/README.md#当前维护入口)。
 
 ## 验证
 

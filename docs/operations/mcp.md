@@ -1,7 +1,8 @@
 # 使用 Ait daemon MCP
 
 daemon 在现有监听地址提供 Streamable HTTP MCP：`http://127.0.0.1:7316/mcp/agents`。
-客户端从运行时环境取得令牌并发送 `Authorization: Bearer <AIT_SERVER_TOKEN>`。
+外部客户端使用 daemon 的本地 API token，发送 `Authorization: Bearer <token>`。
+该 token 来自显式 `AIT_SERVER_TOKEN` 或自动保存的 `<data-dir>/local-api.token`，见[daemon 配置](daemon.md#启动与配置)。
 
 新配置中 `mcp.enabled` 和 `mcp.injectIntoAgents` 默认均为 `true`。
 `mcp.enabled` 通过 `daemon.config.set.request` 修改即时生效，关闭时入口返回 404。

@@ -1,5 +1,7 @@
 # ADR-096：Desktop 内置 daemon 默认同步与手动下线
 
+> 主机授权与租约归属已由 [ADR-201](../daemon/adr-201-daemon-owned-publication.md) 修订：daemon 自主管理发布，客户端退出不撤销机器授权；显式断开后需重新授权。以下保留原决策背景。
+
 - 状态：已实现
 - 日期：2026-10-07
 - 关系：修订 [ADR-083](adr-083-online-service-host-sync.md) 的桌面默认发布行为，沿用 [ADR-085](adr-085-stable-daemon-publication.md) 的稳定主机身份。
