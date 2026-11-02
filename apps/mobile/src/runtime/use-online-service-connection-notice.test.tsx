@@ -15,7 +15,8 @@ vi.mock("./account-state", () => ({
 }));
 
 const toast = { show: vi.fn(), error: vi.fn(), copied: vi.fn() };
-const message = "Connection to the online server was lost. Reconnecting automatically.";
+const reconnecting = "Restoring connection…";
+const unavailable = "Connecting to the online service…";
 
 function setState(state: HubLinkState) {
   act(() => {
@@ -35,6 +36,10 @@ function mount() {
   });
 }
 
+function shown(message: string) {
+  return toast.show.mock.calls.filter(([content]) => content === message);
+}
+
 beforeEach(() => {
   useAccountState.setState({ status: "online" });
   useHubServices.setState({ connection: null, snapshot: null });
@@ -47,14 +52,10 @@ describe("online service connection notice", () => {
     mount();
     setState("online");
     setState("reconnecting");
-    expect(toast.show).toHaveBeenCalledExactlyOnceWith("Restoring connection…", {
-      variant: "loading",
-    });
-    expect(toast.error).not.toHaveBeenCalled();
+    expect(toast.show).toHaveBeenCalledExactlyOnceWith(reconnecting, { variant: "loading" });
     setState("connecting");
     setState("reconnecting");
     expect(toast.show).toHaveBeenCalledOnce();
-    expect(toast.error).not.toHaveBeenCalled();
 
     setState("online");
     setState("reconnecting");
@@ -62,38 +63,43 @@ describe("online service connection notice", () => {
     expect(toast.error).not.toHaveBeenCalled();
   });
 
-  it("escalates to an error only when reconnection becomes unavailable", () => {
+  it("keeps an unavailable connection as a loading notice while it retries", () => {
     mount();
     setState("reconnecting");
     setState("unavailable");
-    expect(toast.error).toHaveBeenCalledExactlyOnceWith(message);
+    expect(toast.show).toHaveBeenLastCalledWith(unavailable, {
+      variant: "loading",
+      durationMs: 3200,
+    });
     setState("connecting");
     setState("reconnecting");
     setState("unavailable");
-    expect(toast.show).toHaveBeenCalledOnce();
-    expect(toast.error).toHaveBeenCalledOnce();
+    expect(shown(reconnecting)).toHaveLength(1);
+    expect(shown(unavailable)).toHaveLength(1);
 
     setState("online");
     setState("reconnecting");
-    expect(toast.show).toHaveBeenCalledTimes(2);
+    expect(shown(reconnecting)).toHaveLength(2);
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it("reports an initial connection timeout without repeating on retries", () => {
     mount();
     setState("connecting");
-    expect(toast.error).not.toHaveBeenCalled();
     expect(toast.show).not.toHaveBeenCalled();
     setState("unavailable");
-    expect(toast.error).toHaveBeenCalledExactlyOnceWith(message);
+    expect(shown(unavailable)).toHaveLength(1);
     setState("connecting");
     setState("unavailable");
-    expect(toast.error).toHaveBeenCalledOnce();
+    expect(toast.show).toHaveBeenCalledOnce();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it("reports a connection that was already unavailable when the UI mounted", () => {
     setState("unavailable");
     mount();
-    expect(toast.error).toHaveBeenCalledExactlyOnceWith(message);
+    expect(shown(unavailable)).toHaveLength(1);
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it("does not report intentional shutdown or stale connection state after sign-out", () => {

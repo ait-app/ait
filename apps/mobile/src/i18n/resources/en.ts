@@ -153,7 +153,7 @@ export const en = {
     connected: "Connected to account",
     connecting: "Connecting to account...",
     reconnecting: "Restoring connection…",
-    disconnected: "Connection to the online server was lost. Reconnecting automatically.",
+    retrying: "Connecting to the online service…",
     onlineHosts: "Online hosts",
     staleHosts: "Host list is out of date",
     hostCount: "{{count}} hosts online",
