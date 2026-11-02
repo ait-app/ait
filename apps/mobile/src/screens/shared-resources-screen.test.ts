@@ -15,12 +15,20 @@ const state = vi.hoisted(() => ({
     { serverId: "unsupported", label: "Old daemon" },
   ],
   clients: new Map<string, Pick<DaemonClient, "listShares">>(),
+  offline: new Set<string>(),
 }));
 
 vi.mock("@/runtime/host-runtime", () => ({
   useHosts: () => state.hosts,
   isSharedResourceHost: () => false,
-  getHostRuntimeStore: () => ({ getClient: (serverId: string) => state.clients.get(serverId) }),
+  isHostRuntimeConnected: (snapshot: { connectionStatus: string } | null) =>
+    snapshot?.connectionStatus === "online",
+  getHostRuntimeStore: () => ({
+    getClient: (serverId: string) => state.clients.get(serverId),
+    getSnapshot: (serverId: string) => ({
+      connectionStatus: state.offline.has(serverId) ? "offline" : "online",
+    }),
+  }),
 }));
 vi.mock("@/runtime/account-state", () => ({
   useAccountState: (select: (store: { center: string; accountId: string }) => unknown) =>
@@ -47,6 +55,7 @@ beforeEach(async () => {
   useSharedHostPreferences.setState({ disabledHostKeys: [] });
   useHubServices.setState({ snapshot: null });
   state.clients.clear();
+  state.offline.clear();
   for (const host of state.hosts) {
     state.clients.set(host.serverId, {
       listShares: vi.fn<DaemonClient["listShares"]>().mockRejectedValue(
@@ -160,6 +169,42 @@ describe("SharedResourcesScreen", () => {
 
     expect(await view.findByText("You are not sharing anything")).toBeTruthy();
     expect(view.queryByText("Rust daemon does not implement share.list.request")).toBeNull();
+  });
+
+  it("keeps other hosts' shares when one daemon fails and skips offline daemons", async () => {
+    const listShares = vi.fn<DaemonClient["listShares"]>().mockResolvedValue({
+      requestId: "list-shares",
+      groups: [{ groupId: "group-1", name: "Team", status: "active", myRole: "member" }],
+      shares: [
+        {
+          resourceKind: "project",
+          resourceKey: "project-1",
+          groupId: "group-1",
+          permission: "operate",
+          audience: "group",
+          recipients: [],
+          settingId: "setting-1",
+          state: "accepted",
+          displayName: "Shared project",
+          missingRecipients: [],
+        },
+      ],
+    });
+    const failing = vi.fn<DaemonClient["listShares"]>().mockRejectedValue(new Error("Timed out"));
+    state.clients.set("supported", { listShares });
+    state.clients.set("unsupported", { listShares: failing });
+    const view = render(createElement(SharedResourcesScreen));
+
+    expect(await view.findByText("Shared project")).toBeTruthy();
+    expect(view.getByText("Timed out")).toBeTruthy();
+    view.unmount();
+
+    state.offline.add("unsupported");
+    failing.mockClear();
+    const reopened = render(createElement(SharedResourcesScreen));
+    expect(await reopened.findByText("Shared project")).toBeTruthy();
+    expect(reopened.queryByText("Timed out")).toBeNull();
+    expect(failing).not.toHaveBeenCalled();
   });
 
   it.each([

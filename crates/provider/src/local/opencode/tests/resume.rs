@@ -51,7 +51,14 @@ async fn inspected_resume_metadata_preserves_client_correlations() {
 #[tokio::test]
 async fn moved_native_session_settles_resumes_and_inspects_at_its_new_directory() {
     let (root, client, spec) = fixture("normal");
-    let moved = root.path().join("worktree").to_string_lossy().into_owned();
+    // The fixture canonicalizes its cwd; macOS temporary directories sit behind /var -> /private/var.
+    let moved = root
+        .path()
+        .canonicalize()
+        .unwrap()
+        .join("worktree")
+        .to_string_lossy()
+        .into_owned();
     let mut session = client.create_session(&spec).await.unwrap();
     session
         .start_turn("Move this session", &spec.config)

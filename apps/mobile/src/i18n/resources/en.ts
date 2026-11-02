@@ -480,6 +480,7 @@ export const en = {
     actions: {
       loadMore: "Load more",
       clearSearch: "Clear search",
+      refresh: "Refresh",
     },
   },
   agentList: {

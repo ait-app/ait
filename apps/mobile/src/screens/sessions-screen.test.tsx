@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { i18n } from "@/i18n/i18next";
 import { SessionsScreen } from "./sessions-screen";
@@ -49,6 +49,10 @@ it("shows the ordinary empty history when hosts are offline or requests fail", (
   expect(view.getByTestId("sessions-empty")).toBeTruthy();
   expect(view.queryByTestId("sessions-host-errors")).toBeNull();
   expect(view.queryByText("Unable to load sessions")).toBeNull();
+  // Failed hosts are cached as an empty page, so the empty state must still allow a retry.
+  history.refreshAll.mockClear();
+  fireEvent.click(view.getByRole("button", { name: "Refresh" }));
+  expect(history.refreshAll).toHaveBeenCalledTimes(1);
 });
 
 it("keeps readable history without showing unavailable host banners", () => {

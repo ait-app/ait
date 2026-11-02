@@ -28,7 +28,8 @@ pub(in crate::local::opencode) struct Live {
     images: ImageStore,
     children: BTreeMap<String, Child>,
     tasks: Links,
-    pending: VecDeque<Value>,
+    /// Frames waiting for their parent, each with its encoded size.
+    pending: VecDeque<(Value, usize)>,
     pending_bytes: usize,
 }
 
@@ -113,6 +114,13 @@ impl Live {
         }
     }
 
+    /// Whether a child observed on this connection may still publish updates.
+    pub(in crate::local::opencode) fn running(&self) -> bool {
+        self.children
+            .values()
+            .any(|child| child.observed && !child.terminal)
+    }
+
     /// Route negotiated child notifications and legacy tagged ACP updates away from the root.
     /// The boolean indicates that the frame belongs exclusively to a child.
     pub(in crate::local::opencode) fn consume(
@@ -153,18 +161,18 @@ impl Live {
                     return Err(AgentSessionError::Failed);
                 }
                 self.pending_bytes += size;
-                self.pending.push_back(frame);
+                self.pending.push_back((frame, size));
             }
             loop {
                 let before = self.pending.len();
                 for _ in 0..before {
-                    let pending = self.pending.pop_front().ok_or(AgentSessionError::Failed)?;
-                    if !self.frame(&pending, &mut events)? {
-                        self.pending.push_back(pending);
+                    let (pending, size) =
+                        self.pending.pop_front().ok_or(AgentSessionError::Failed)?;
+                    if self.frame(&pending, &mut events)? {
+                        self.pending_bytes -= size;
+                    } else {
+                        self.pending.push_back((pending, size));
                     }
-                }
-                if self.pending.is_empty() {
-                    self.pending_bytes = 0;
                 }
                 if self.pending.len() == before || self.pending.is_empty() {
                     break;

@@ -17,7 +17,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:net";
-import { hostname, homedir } from "node:os";
+import { hostname, homedir, uptime } from "node:os";
 import path from "node:path";
 import { WebSocket } from "ws";
 
@@ -106,6 +106,16 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
+/** Clock adjustments shortly after boot must not make a live daemon look older than the boot. */
+const BOOT_TIME_TOLERANCE_MS = 60_000;
+
+/** A process recorded before the current boot cannot still be running, whatever owns its PID now. */
+function startedBeforeBoot(startedAt: string): boolean {
+  const started = Date.parse(startedAt);
+  const boot = Date.now() - uptime() * 1000;
+  return Number.isFinite(started) && started < boot - BOOT_TIME_TOLERANCE_MS;
+}
+
 /** Read new bytes appended to the daemon log since `offset`, for readiness detection. */
 function readLogFrom(logPath: string, offset: number): { text: string; offset: number } {
   let descriptor: number | null = null;
@@ -151,6 +161,8 @@ export class RustDaemonManager {
   private pendingReadiness: PendingReadiness | null = null;
   // Reattached daemon from an earlier session; it is not a child of this process.
   private retained: RetainedDaemon | null = null;
+  // A saved handover record whose identity probe failed in this session.
+  private unverifiedRecord = false;
   private token: string | null = null;
   private listenAddress: string | null = null;
   private configuredListen: string | null = null;
@@ -290,6 +302,12 @@ export class RustDaemonManager {
         );
       }
       await this.terminate();
+      // An explicit stop also abandons a handover record this session could not verify; its PID
+      // is never signalled, but keeping the record would block every later start.
+      if (this.unverifiedRecord) {
+        this.unverifiedRecord = false;
+        forgetRetainedDaemon(this.options.home);
+      }
       this.state = {
         ...this.state,
         status: "stopped",
@@ -459,12 +477,14 @@ export class RustDaemonManager {
   private async reattach(configuredListen: string): Promise<RustDaemonStatus | null> {
     const retained = readRetainedDaemon(this.options.home);
     if (!retained) return null;
-    if (!isProcessAlive(retained.pid)) {
+    if (!isProcessAlive(retained.pid) || startedBeforeBoot(retained.startedAt)) {
       forgetRetainedDaemon(this.options.home);
       return null;
     }
     const address = serverConnectAddress(retained.listen);
+    this.unverifiedRecord = true;
     const info = await probeRustDaemon(address, retained.token, this.options.timeoutMs ?? 5_000);
+    this.unverifiedRecord = false;
     if (info.pid !== retained.pid) {
       forgetRetainedDaemon(this.options.home);
       return null;

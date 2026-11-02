@@ -273,17 +273,25 @@ async fn reload(
         client.startup_timeout,
     )
     .await?;
-    let children = tokio::time::timeout(
+    let descriptors = stream.links.descriptors(&handle.session_id, &location)?;
+    // Restored children only enrich the parent; a missing, slow or inconsistent child history
+    // must not prevent the user's own session from opening.
+    let children = match tokio::time::timeout(
         client.startup_timeout,
-        super::subagents::history::restore(
-            transport,
-            client,
-            &handle.session_id,
-            stream.links.descriptors(&handle.session_id, &location)?,
-        ),
+        super::subagents::history::restore(transport, client, &handle.session_id, descriptors),
     )
     .await
-    .map_err(|_| AgentSessionError::Failed)??;
+    {
+        Ok(Ok(children)) => children,
+        Ok(Err(error)) => {
+            tracing::warn!(provider = "opencode", ?error, "restore native subagents");
+            Vec::new()
+        }
+        Err(_) => {
+            tracing::warn!(provider = "opencode", "restore native subagents timed out");
+            Vec::new()
+        }
+    };
     Ok((options, history::identities(&stream), location, children))
 }
 
@@ -894,6 +902,34 @@ impl Execution {
         self.settle(connection, terminal, failure).await
     }
 
+    /// Read authoritative history through a short-lived ACP process. Loading the root on the live
+    /// connection re-attaches it, after which the native CLI stops forwarding child updates.
+    async fn replay_detached(
+        &self,
+        connection: &Connection,
+    ) -> Result<(Value, Stream, String), AgentSessionError> {
+        let (mut transport, _) = launcher::spawn(
+            &self.client,
+            &connection.location,
+            &StoredAgentConfig::default(),
+        )
+        .await?;
+        let result = history::replay(
+            &mut transport,
+            &self.id,
+            &connection.location,
+            self.client.images.clone(),
+            self.client.deadline,
+        )
+        .await;
+        let closed = transport.close().await;
+        let (options, mut replay, location) = result?;
+        closed?;
+        // Child frames replayed by the reader belong to its own attachment, not this connection.
+        replay.child_frames.clear();
+        Ok((options, replay, location))
+    }
+
     async fn settle(
         &self,
         mut connection: Connection,
@@ -902,17 +938,31 @@ impl Execution {
     ) -> Result<Finished, AgentSessionError> {
         let pending =
             std::mem::take(&mut *self.pending.lock().map_err(|_| AgentSessionError::Failed)?);
-        for id in pending.into_keys() {
+        for (id, request) in pending {
+            // Background children may still be waiting on this callback; never leave it unanswered.
+            connection
+                .transport
+                .send(&interactions::cancelled(&request))
+                .await?;
             self.emit(AgentTurnEvent::PermissionResolved(id)).await?;
         }
-        let (options, mut replay, location) = history::replay(
-            &mut connection.transport,
-            &self.id,
-            &connection.location,
-            self.client.images.clone(),
-            self.client.deadline,
-        )
-        .await?;
+        let running = self
+            .children
+            .lock()
+            .map_err(|_| AgentSessionError::Failed)?
+            .running();
+        let (options, mut replay, location) = if running {
+            self.replay_detached(&connection).await?
+        } else {
+            history::replay(
+                &mut connection.transport,
+                &self.id,
+                &connection.location,
+                self.client.images.clone(),
+                self.client.deadline,
+            )
+            .await?
+        };
         for frame in replay.child_frames.drain(..) {
             self.child_frame(&frame).await?;
         }

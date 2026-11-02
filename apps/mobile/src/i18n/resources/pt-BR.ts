@@ -316,6 +316,7 @@ export const ptBR: TranslationResources = {
     actions: {
       loadMore: "Carregar mais",
       clearSearch: "Limpar busca",
+      refresh: "Atualizar",
     },
   },
   agentList: {

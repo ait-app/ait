@@ -598,11 +598,7 @@ impl AgentSession for ClaudeSession {
             .ok_or(AgentSessionError::Failed)?
             .send(&message)
             .await?;
-        let events = std::mem::take(&mut self.stream.events);
-        let tasks = std::mem::take(&mut self.stream.tasks);
-        self.stream = streaming::Stream::new(self.client.images.clone());
-        self.stream.events = events;
-        self.stream.tasks = tasks;
+        self.stream.next_turn();
         self.unread_steers.clear();
         self.compacting = false;
         self.usage.begin();

@@ -47,6 +47,19 @@ impl Stream {
         }
     }
 
+    /// Start a new turn while keeping undelivered events and session-scoped background state:
+    /// running tasks, subagent launches and handbacks can complete in a later turn.
+    pub(super) fn next_turn(&mut self) {
+        *self = Self {
+            images: self.images.clone(),
+            events: std::mem::take(&mut self.events),
+            tasks: std::mem::take(&mut self.tasks),
+            agent_calls: std::mem::take(&mut self.agent_calls),
+            handbacks: std::mem::take(&mut self.handbacks),
+            ..Self::default()
+        };
+    }
+
     pub(super) fn result_text(
         &mut self,
         record: &Value,

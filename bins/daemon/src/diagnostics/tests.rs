@@ -290,3 +290,26 @@ fn manual_report_exposes_unavailable_incident_storage_and_reuses_cached_evidence
     assert!(first.contains("Harness: opencode"));
     assert_eq!(first, second);
 }
+
+#[test]
+fn production_filter_retains_span_context_for_warnings() {
+    let (sender, _receiver) = mpsc::sync_channel(4);
+    let diagnostics = Diagnostics {
+        sender,
+        recent: Arc::default(),
+        dropped: Arc::default(),
+        storage_failures: Arc::default(),
+    };
+    let subscriber = tracing_subscriber::registry().with(diagnostics.clone().filtered());
+    tracing::subscriber::with_default(subscriber, || {
+        let span = tracing::info_span!("rpc", method = "session.heartbeat");
+        let _entered = span.enter();
+        tracing::info!(resource = "ignored", "below the capture level");
+        tracing::warn!(resource = "short_jobs", "Resource budget exhausted");
+    });
+    let recent = diagnostics.recent.lock().unwrap();
+    assert_eq!(recent.events.len(), 1);
+    let event = &recent.events[0].text;
+    assert!(event.contains("method=\"session.heartbeat\""), "{event}");
+    assert!(event.contains("resource=\"short_jobs\""), "{event}");
+}

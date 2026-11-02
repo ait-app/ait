@@ -316,6 +316,7 @@ export const ru: TranslationResources = {
     actions: {
       loadMore: "Загрузить ещё",
       clearSearch: "Очистить поиск",
+      refresh: "Обновить",
     },
   },
   agentList: {

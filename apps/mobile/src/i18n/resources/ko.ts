@@ -313,6 +313,7 @@ export const ko: TranslationResources = {
     actions: {
       loadMore: "더 불러오기",
       clearSearch: "검색 지우기",
+      refresh: "새로 고침",
     },
   },
   agentList: {

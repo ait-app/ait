@@ -40,6 +40,8 @@
 
 ## 架构决策
 
+- [ADR-208：群组内资源共享与访客会话](decisions/daemon/adr-208-workspace-share-guests.md)：可把 workspace、项目或整个节点共享给群组，分享设置以 Host 为准，daemon 发布 `hub.shares.publish`，访客连接经 `x-ait-guest` 准入，workspace／project 采用范围限制，node 允许节点资源、配置与生命周期管理（分享及账号授权保留给所有者），撤销时清理访客终端与 Agent 回合。
+
 - [ADR-207：桌面 daemon 就绪探测与进程生命周期分离](decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)：轻量认证握手、探测失败保留自有进程、同 PID 重连，以及失败交接记录保留。
 
 - [ADR-206：OpenCode 的 ACP 子 Agent 观测与历史归属](decisions/providers/adr-206-opencode-acp-subagents.md)：实时创建与状态、嵌套时间线、后台审批和原生工具结果验证后的历史恢复。
@@ -52,7 +54,6 @@
 
 - [ADR-202：Agent MCP 运行时自动注入](decisions/providers/adr-202-agent-mcp-injection.md)：原生会话私有配置、MCP 专用凭证、能力判断与重启恢复。
 
-- [ADR-203：群组内资源共享与访客会话](decisions/daemon/adr-203-workspace-share-guests.md)：可把 workspace、项目或整个节点共享给群组，分享设置以 Host 为准，daemon 发布 `hub.shares.publish`，访客连接经 `x-ait-guest` 准入workspace／project 采用范围限制，node 允许节点资源、配置与生命周期管理（分享及账号授权保留给所有者），撤销时清理访客终端与 Agent 回合。
 - [ADR-201：daemon 统一拥有节点发布与机器授权](decisions/daemon/adr-201-daemon-owned-publication.md)：删除 `--headless`，统一授权驱动的注册续租与重连、Hub/Relay 完整断开与凭据清理及本地 API token。
 
 - [ADR-200：Headless 独立维护 Hub、Relay 与节点租约](decisions/daemon/adr-200-headless-independent-transports.md)：修复 Hub 包装器接线，独立取票重试与续租，统一授权失效和关停取消。
@@ -329,6 +330,7 @@
 - [Rust workspace 每 crate 95% 覆盖率验证](reports/daemon/crate-coverage-95-2026-10-14.md)：15 个 crate 的可比基线、最终计数与未覆盖行证据。
 - [Daemon 测试扩展与覆盖率验证（历史）](reports/daemon/crate-coverage-rebase.md)：rebase 验证、逐 crate 证据与历史测量索引。
 - [Provider 能力清单](plans/provider-parity.md)：当前能力与后续工作。
+- [2026-11-02 仓库审查遗留事项](plans/repository-review-2026-11-02.md)：Desktop 交接、节点授权重试、MCP socket、Provider 子 Agent 与客户端的待修问题。
 - [Antigravity CLI 验证](reports/providers/antigravity-cli.md)：协议夹具、安装路径和真实 AGY 验证范围。
 - [Provider 装配边界验证](reports/providers/provider-composition.md)：内置注册、辅助生成、DSH 简称与覆盖率证据。
 - [远程 Workspace 打开性能优化方案](plans/remote-workspace-open-performance.md)：连接、目录同步、Provider 排队与历史投影的代码分析、分阶段改动和验收指标。

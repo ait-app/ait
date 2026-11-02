@@ -36,6 +36,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
         let mut retry_at = tokio::time::Instant::now();
         let mut delay = 1;
         let mut access_recovery = AccessRecovery::Ready;
+        let mut session_expired = false;
         loop {
             if cancel.is_cancelled() {
                 return Ok(());
@@ -91,6 +92,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
                     self.relay
                         .report("running", Some(&publication.tokens.credential.binding));
                     delay = 1;
+                    session_expired = false;
                     pause(cancel, publication.expires()).await;
                 }
                 Err(Error::AccessRejected) => {
@@ -105,11 +107,13 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
                     retry_at = publication.refresh_at;
                 }
                 Err(Error::SessionExpired) => {
-                    self.revoke(&mut publication).await;
-                    publication.session = None;
-                    publication.lease_until = None;
-                    *self.active_session = None;
-                    publication.registration = Uuid::new_v4();
+                    self.replace_session(&mut publication).await;
+                    // A center that keeps expiring new sessions must not receive back-to-back
+                    // registrations; the first replacement still registers immediately.
+                    if std::mem::replace(&mut session_expired, true) {
+                        retry_at = tokio::time::Instant::now() + Duration::from_secs(delay);
+                        delay = (delay * 2).min(30);
+                    }
                 }
                 Err(Error::Conflict) => {
                     // A crashed predecessor can retain its lease after a service restart.
@@ -133,6 +137,15 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
                 Err(error) => return Err(error),
             }
         }
+    }
+
+    /// Close transport and forget the expired session so the next step registers a new one.
+    async fn replace_session(&mut self, publication: &mut Publication) {
+        self.revoke(publication).await;
+        publication.session = None;
+        publication.lease_until = None;
+        *self.active_session = None;
+        publication.registration = Uuid::new_v4();
     }
 
     async fn revoke(&self, publication: &mut Publication) {
