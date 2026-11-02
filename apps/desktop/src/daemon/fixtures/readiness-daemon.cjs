@@ -44,11 +44,7 @@ server.on("connection", (ws, request) => {
       ws.send(
         JSON.stringify({
           type: "server_info",
-          info: {
-            server_id: "readiness-fixture",
-            instance_id: settings.instanceId ?? "readiness-instance",
-            version: "fixture",
-          },
+          info: { server_id: "readiness-fixture", version: "fixture" },
         }),
       );
       return;

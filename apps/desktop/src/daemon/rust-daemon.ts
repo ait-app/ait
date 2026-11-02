@@ -49,16 +49,6 @@ interface RetainedDaemon {
   listen: string;
   configuredListen: string;
   startedAt: string;
-  serverId?: string;
-  instanceId?: string;
-}
-
-/** A saved desktop daemon whose authenticated status still reports the recorded process. */
-export interface VerifiedRetainedDaemonProcess {
-  home: string;
-  pid: number;
-  startedAt: string;
-  serverId: string;
 }
 
 /** Log progress belongs to the child, so a retry continues the same startup attempt. */
@@ -85,9 +75,7 @@ function readRetainedDaemon(home: string): RetainedDaemon | null {
       /^[!-~]{32,256}$/.test(value.token) &&
       typeof value.listen === "string" &&
       typeof value.configuredListen === "string" &&
-      typeof value.startedAt === "string" &&
-      (value.serverId === undefined || typeof value.serverId === "string") &&
-      (value.instanceId === undefined || typeof value.instanceId === "string")
+      typeof value.startedAt === "string"
     ) {
       return value as RetainedDaemon;
     }
@@ -108,10 +96,6 @@ function forgetRetainedDaemon(home: string): void {
   rmSync(retainedDaemonPath(home), { force: true });
 }
 
-function forgetRetainedDaemonIfPid(home: string, pid: number): void {
-  if (readRetainedDaemon(home)?.pid === pid) forgetRetainedDaemon(home);
-}
-
 function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -130,68 +114,6 @@ function startedBeforeBoot(startedAt: string): boolean {
   const started = Date.parse(startedAt);
   const boot = Date.now() - uptime() * 1000;
   return Number.isFinite(started) && started < boot - BOOT_TIME_TOLERANCE_MS;
-}
-
-async function verifyRetainedDaemon(
-  home: string,
-  timeout = 2_000,
-): Promise<{ retained: RetainedDaemon; process: VerifiedRetainedDaemonProcess } | null> {
-  const retained = readRetainedDaemon(home);
-  if (!retained) return null;
-  if (!isProcessAlive(retained.pid) || startedBeforeBoot(retained.startedAt)) {
-    forgetRetainedDaemon(home);
-    return null;
-  }
-  let info: DaemonProbe | null;
-  try {
-    info = await probeRustDaemon(serverConnectAddress(retained.listen), retained.token, timeout);
-  } catch {
-    info = null;
-  }
-  if (!info) return null;
-  if (info.pid !== retained.pid || (retained.serverId && info.serverId !== retained.serverId)) {
-    forgetRetainedDaemon(home);
-    return null;
-  }
-  return {
-    retained,
-    process: {
-      home: path.resolve(home),
-      pid: retained.pid,
-      startedAt: retained.startedAt,
-      serverId: info.serverId,
-    },
-  };
-}
-
-/** Return only authenticated saved processes; an unreadable or ambiguous record is not actionable. */
-export async function inspectRetainedDaemonForMigration(
-  home: string,
-): Promise<VerifiedRetainedDaemonProcess | null> {
-  return (await verifyRetainedDaemon(home))?.process ?? null;
-}
-
-/**
- * Revalidate a process selected in the migration prompt, then stop it without ever signalling a
- * different PID or server identity.
- */
-export async function stopRetainedDaemonForMigration(
-  expected: VerifiedRetainedDaemonProcess,
-): Promise<void> {
-  const verified = await verifyRetainedDaemon(expected.home);
-  if (
-    !verified ||
-    verified.process.pid !== expected.pid ||
-    verified.process.startedAt !== expected.startedAt ||
-    verified.process.serverId !== expected.serverId
-  ) {
-    throw new Error("The old daemon changed after confirmation and was not stopped.");
-  }
-  await terminateVerifiedRetainedDaemon(verified.retained);
-  if (isProcessAlive(expected.pid)) {
-    throw new Error(`The verified old daemon did not stop (PID ${expected.pid}).`);
-  }
-  forgetRetainedDaemonIfPid(expected.home, expected.pid);
 }
 
 /** Read new bytes appended to the daemon log since `offset`, for readiness detection. */
@@ -431,8 +353,6 @@ export class RustDaemonManager {
         listen: this.listenAddress,
         configuredListen: this.configuredListen,
         startedAt: this.state.startedAt,
-        serverId: this.state.serverId,
-        instanceId: this.state.instanceId,
       });
       // Release the handle so Electron can exit without waiting for or killing the daemon;
       // this session no longer owns it, so later stops here leave it for the next session.
@@ -491,13 +411,24 @@ export class RustDaemonManager {
     });
     this.child = null;
     this.pendingReadiness = null;
-    if (child.pid) forgetRetainedDaemonIfPid(this.options.home, child.pid);
   }
 
   /** Stop a reattached daemon through its authenticated shutdown RPC, then by signal. */
   private async terminateRetained(retained: RetainedDaemon): Promise<void> {
     this.token = null;
-    await terminateVerifiedRetainedDaemon(retained);
+    if (!isProcessAlive(retained.pid)) return;
+    const address = serverConnectAddress(retained.listen);
+    await requestRustDaemonShutdown(address, retained.token, 5_000).catch(() => undefined);
+    if (await waitForProcessExit(retained.pid, 15_000)) return;
+    // Only signal a PID that still answers with this token; a reused PID is left alone.
+    const still = await probeRustDaemon(address, retained.token, 2_000).catch(() => null);
+    if (still?.pid !== retained.pid) return;
+    try {
+      process.kill(retained.pid, "SIGKILL");
+    } catch {
+      /* Already exited. */
+    }
+    await waitForProcessExit(retained.pid, 5_000);
   }
 
   private async launch(): Promise<RustDaemonStatus> {
@@ -552,18 +483,9 @@ export class RustDaemonManager {
     }
     const address = serverConnectAddress(retained.listen);
     this.unverifiedRecord = true;
-    let info: Awaited<ReturnType<typeof probeRustDaemon>>;
-    try {
-      info = await probeRustDaemon(address, retained.token, this.options.timeoutMs ?? 5_000);
-    } catch (error) {
-      // A live recorded process may be temporarily unavailable. Keep the record and never spawn a
-      // competing writer for the same data directory until identity can be verified.
-      throw new Error("The existing desktop daemon is temporarily unavailable.", {
-        cause: error,
-      });
-    }
+    const info = await probeRustDaemon(address, retained.token, this.options.timeoutMs ?? 5_000);
     this.unverifiedRecord = false;
-    if (info.pid !== retained.pid || (retained.serverId && info.serverId !== retained.serverId)) {
+    if (info.pid !== retained.pid) {
       forgetRetainedDaemon(this.options.home);
       return null;
     }
@@ -573,6 +495,7 @@ export class RustDaemonManager {
       forgetRetainedDaemon(this.options.home);
       return null;
     }
+    forgetRetainedDaemon(this.options.home);
     this.retained = retained;
     this.token = retained.token;
     this.listenAddress = retained.listen;
@@ -589,11 +512,6 @@ export class RustDaemonManager {
       hostname: hostname(),
       error: null,
     };
-    writeRetainedDaemon(this.options.home, {
-      ...retained,
-      serverId: info.serverId,
-      instanceId: info.instanceId,
-    });
     return this.status();
   }
 
@@ -652,7 +570,6 @@ export class RustDaemonManager {
       this.child = null;
       this.pendingReadiness = null;
       this.token = null;
-      if (child.pid) forgetRetainedDaemonIfPid(this.options.home, child.pid);
       this.state = {
         ...this.state,
         status: "errored",
@@ -711,18 +628,6 @@ export class RustDaemonManager {
       hostname: hostname(),
       error: null,
     };
-    if (!child.pid || !this.token || !this.state.startedAt) {
-      throw new Error("Rust daemon readiness did not retain its process identity.");
-    }
-    writeRetainedDaemon(this.options.home, {
-      pid: child.pid,
-      token: this.token,
-      listen: this.listenAddress!,
-      configuredListen: this.configuredListen!,
-      startedAt: this.state.startedAt,
-      serverId: this.state.serverId,
-      instanceId: this.state.instanceId,
-    });
     return this.status();
   }
 }
@@ -831,32 +736,6 @@ async function requestRustDaemonShutdown(
   timeout: number,
 ): Promise<void> {
   await rustDaemonRequest(listen, token, timeout, "server.shutdown.request");
-}
-
-/** Graceful shutdown first; every signal is preceded by a fresh authenticated PID check. */
-async function terminateVerifiedRetainedDaemon(retained: RetainedDaemon): Promise<void> {
-  if (!isProcessAlive(retained.pid)) return;
-  const address = serverConnectAddress(retained.listen);
-  await requestRustDaemonShutdown(address, retained.token, 5_000).catch(() => undefined);
-  if (await waitForProcessExit(retained.pid, 15_000)) return;
-
-  const beforeTerminate = await probeRustDaemon(address, retained.token, 2_000).catch(() => null);
-  if (beforeTerminate?.pid !== retained.pid) return;
-  try {
-    process.kill(retained.pid, "SIGTERM");
-  } catch {
-    return;
-  }
-  if (await waitForProcessExit(retained.pid, 5_000)) return;
-
-  const beforeKill = await probeRustDaemon(address, retained.token, 2_000).catch(() => null);
-  if (beforeKill?.pid !== retained.pid) return;
-  try {
-    process.kill(retained.pid, "SIGKILL");
-  } catch {
-    return;
-  }
-  await waitForProcessExit(retained.pid, 5_000);
 }
 
 async function waitForProcessExit(pid: number, timeout: number): Promise<boolean> {

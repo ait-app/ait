@@ -1,7 +1,6 @@
 import { displayAppVersion } from "../app-version.js";
-import { app, dialog, ipcMain, powerMonitor } from "electron";
+import { app, ipcMain, powerMonitor } from "electron";
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import path from "node:path";
 import {
   copyAttachmentFileToManagedStorage,
@@ -17,18 +16,7 @@ import {
   type AppReleaseChannel,
   type AppUpdateCheckIntent,
 } from "../features/auto-updater.js";
-import {
-  inspectRetainedDaemonForMigration,
-  RustDaemonManager,
-  resolveDesktopDaemonHome,
-  stopRetainedDaemonForMigration,
-  type VerifiedRetainedDaemonProcess,
-} from "./rust-daemon.js";
-import {
-  LegacyDataMigrationCancelledError,
-  prepareLegacyDataMigration,
-  type LegacyDataMigrationCandidate,
-} from "./legacy-data-migration.js";
+import { RustDaemonManager, resolveDesktopDaemonHome } from "./rust-daemon.js";
 import { createAccountIpc, stopAccountForExit } from "./account-ipc.js";
 
 import {
@@ -55,28 +43,21 @@ import { isRunningUnderARM64Translation } from "../system/arm64-translation.js";
 
 const DAEMON_LOG_FILENAME = "daemon.log";
 let manager: RustDaemonManager | null = null;
-let dataMigrationPreparation: Promise<void> | null = null;
-
-function getDaemonBinary(): string {
-  return (
-    process.env.AIT_SERVER_BIN ||
-    (app.isPackaged
-      ? path.join(
-          process.resourcesPath,
-          "bin",
-          process.platform === "win32" ? "daemon.exe" : "daemon",
-        )
-      : path.resolve(
-          __dirname,
-          "../../../../target/debug",
-          process.platform === "win32" ? "daemon.exe" : "daemon",
-        ))
-  );
-}
-
 function getRustDaemon(): RustDaemonManager {
   manager ??= new RustDaemonManager({
-    binary: getDaemonBinary(),
+    binary:
+      process.env.AIT_SERVER_BIN ||
+      (app.isPackaged
+        ? path.join(
+            process.resourcesPath,
+            "bin",
+            process.platform === "win32" ? "daemon.exe" : "daemon",
+          )
+        : path.resolve(
+            __dirname,
+            "../../../../target/debug",
+            process.platform === "win32" ? "daemon.exe" : "daemon",
+          )),
     home: getDaemonHome(),
     listen: process.env.AIT_SERVER_LISTEN,
     getListen: async () => (await getDesktopSettingsStore().get()).daemon.listen,
@@ -210,88 +191,7 @@ function assertBuiltInDaemonManagementEnabled(settings: DesktopSettings): void {
 
 async function startDaemon(): Promise<DesktopDaemonStatus> {
   assertBuiltInDaemonManagementEnabled(await getDesktopSettingsStore().get());
-  await prepareDefaultDesktopDataHome();
   return getRustDaemon().start();
-}
-
-async function prepareDefaultDesktopDataHome(): Promise<void> {
-  if (process.env.AIT_SERVER_DATA_DIR || process.platform === "win32") return;
-  if (dataMigrationPreparation) return dataMigrationPreparation;
-  const destinationHome = getDaemonHome();
-  let confirmedProcesses: VerifiedRetainedDaemonProcess[] = [];
-  dataMigrationPreparation = prepareLegacyDataMigration({
-    sourceHome: path.join(homedir(), ".ait-server"),
-    destinationHome,
-    binary: getDaemonBinary(),
-    confirm: async (candidate) => {
-      const inspected = await Promise.all([
-        inspectRetainedDaemonForMigration(candidate.source.home),
-        inspectRetainedDaemonForMigration(candidate.destination.home),
-      ]);
-      confirmedProcesses = inspected.filter(
-        (process): process is VerifiedRetainedDaemonProcess => process !== null,
-      );
-      return confirmLegacyDataMigration(candidate, confirmedProcesses);
-    },
-    beforeMigrate: async () => {
-      for (const process of confirmedProcesses) await stopRetainedDaemonForMigration(process);
-    },
-  })
-    .catch(async (error: unknown) => {
-      if (!(error instanceof LegacyDataMigrationCancelledError)) {
-        await dialog.showMessageBox({
-          type: "error",
-          title: "Ait data was not copied / Ait 数据未复制",
-          message:
-            "Ait left both data directories unchanged. Stop any daemon using the previous directory, then retry. / Ait 未修改两个数据目录。请停止正在使用旧目录的 daemon 后重试。",
-          detail: error instanceof Error ? error.message.slice(0, 4000) : String(error),
-          buttons: ["OK / 确定"],
-          defaultId: 0,
-          cancelId: 0,
-          noLink: true,
-        });
-      }
-      throw error;
-    })
-    .finally(() => {
-      dataMigrationPreparation = null;
-    });
-  return dataMigrationPreparation;
-}
-
-async function confirmLegacyDataMigration(
-  candidate: LegacyDataMigrationCandidate,
-  processes: VerifiedRetainedDaemonProcess[] = [],
-): Promise<boolean> {
-  const processDetails = processes.map((process) => `PID ${process.pid} — ${process.home}`);
-  const result = await dialog.showMessageBox({
-    type: "question",
-    title: "Copy existing Ait data / 复制已有 Ait 数据",
-    message:
-      "Ait found projects and conversations in the previous data directory. Copy them into the new desktop data directory? / Ait 在旧数据目录中发现了项目和会话。是否复制到新的桌面数据目录？",
-    detail: [
-      `${candidate.source.agents} Agents, ${candidate.source.projects} projects, ${candidate.source.workspaces} Workspaces`,
-      `${candidate.source.home} → ${candidate.destination.home}`,
-      ...(processes.length > 0
-        ? [
-            "Ait verified the following old daemon process. Confirming will stop it before copying; shutdown is attempted before signals. / Ait 已核验以下旧 daemon 进程。确认后会先停止它再复制，并优先尝试正常关闭。",
-            ...processDetails,
-          ]
-        : [
-            "Both the source and the previous destination are preserved. Any unverified daemon must be stopped before copying. / 源目录和目标目录原内容都会保留。复制前必须停止无法核验的 daemon。",
-          ]),
-    ].join("\n"),
-    buttons: [
-      "Not now / 暂不处理",
-      processes.length > 0
-        ? "Stop old process and copy / 停止旧进程并复制"
-        : "Copy data / 复制数据",
-    ],
-    defaultId: 1,
-    cancelId: 0,
-    noLink: true,
-  });
-  return result.response === 1;
 }
 
 export async function stopDesktopDaemon(
@@ -304,7 +204,6 @@ export async function stopDesktopDaemon(
 
 async function restartDaemon(): Promise<DesktopDaemonStatus> {
   assertBuiltInDaemonManagementEnabled(await getDesktopSettingsStore().get());
-  await prepareDefaultDesktopDataHome();
   return getRustDaemon().restart();
 }
 

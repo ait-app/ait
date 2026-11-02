@@ -59,15 +59,6 @@ pub(super) enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// Copy legacy projects and Agent history into an unused daemon data directory.
-    MigrateData {
-        /// Existing daemon data directory to copy from.
-        #[arg(long)]
-        source: PathBuf,
-        /// Emit the migration report as machine-readable JSON.
-        #[arg(long)]
-        json: bool,
-    },
 }
 
 #[derive(Debug, Args)]

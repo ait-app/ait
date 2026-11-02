@@ -48,8 +48,6 @@ toml.workspace = true
 # No-clobber publication of the stable server identity.
 tempfile.workspace = true
 thiserror.workspace = true
-rusqlite.workspace = true
-rusqlite.features = ["bundled"]
 
 [lints]
 workspace = true

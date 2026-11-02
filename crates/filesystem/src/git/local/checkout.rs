@@ -41,7 +41,7 @@ struct GitRunOptions {
 /// Bounded Git adapter with a syntax cache and server-owned managed worktree root.
 #[derive(Debug, Clone)]
 pub struct LocalCheckout {
-    managed_worktrees_roots: Vec<PathBuf>,
+    managed_worktrees_root: PathBuf,
     highlighter: Arc<highlight::DiffHighlighter>,
     renames: Arc<renames::RenameCache>,
 }
@@ -51,20 +51,10 @@ impl LocalCheckout {
     #[must_use]
     pub fn new(managed_worktrees_root: PathBuf) -> Self {
         Self {
-            managed_worktrees_roots: vec![managed_worktrees_root],
+            managed_worktrees_root,
             highlighter: Arc::new(highlight::DiffHighlighter::default()),
             renames: Arc::new(renames::RenameCache::default()),
         }
-    }
-
-    /// Recognize worktrees owned by an earlier daemon data directory after migration.
-    #[must_use]
-    pub fn with_additional_managed_worktree_roots(
-        mut self,
-        roots: impl IntoIterator<Item = PathBuf>,
-    ) -> Self {
-        self.managed_worktrees_roots.extend(roots);
-        self
     }
 
     fn inspect(&self, cwd: &str) -> Result<CheckoutStatus, CheckoutRuntimeError> {
@@ -84,10 +74,7 @@ impl LocalCheckout {
             .is_some_and(|name| name == ".git")
             .then(|| common_dir.parent().map(Path::to_path_buf))
             .flatten();
-        let managed = self
-            .managed_worktrees_roots
-            .iter()
-            .any(|root| is_below(root, &repo_root))
+        let managed = is_below(&self.managed_worktrees_root, &repo_root)
             && main_repo_root
                 .as_ref()
                 .is_some_and(|main| main != &repo_root);
