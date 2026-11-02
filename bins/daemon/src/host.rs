@@ -284,7 +284,6 @@ fn compose_services(
     mcp_token: secrecy::SecretString,
 ) -> anyhow::Result<(Services, hub::sources::Sources)> {
     let storage = open_directory_registries(config)?;
-    let managed_worktrees = ManagedWorktreeRoots::load(&config.data_dir)?;
     let publication_sources = storage.publication_sources();
     let workspace_labels = compose_workspace_labels(config, &storage.workspaces)?;
     let skills = compose_skills(&config.data_dir)?;
@@ -294,20 +293,24 @@ fn compose_services(
     }));
     let server_id = instance.server_id.to_string();
     let providers = Providers::new(&config.data_dir);
-    let WorkspaceComposition {
+    let MetadataServices {
         config: config_store,
         generator: summary_generator,
         names: workspace_names,
-        worktrees,
+    } = compose_metadata(&config.data_dir, &storage.workspaces, &providers);
+    let worktrees = Arc::new(Mutex::new(
+        compose_worktrees(config, &storage.projects, &storage.workspaces, &server_id)
+            .with_workspace_names(Arc::new(workspace_names.clone())),
+    ));
+    let WorkspaceServices {
         automation: workspace_automation,
         state: workspace_state,
         recovery: workspace_recovery,
-    } = compose_workspace_dependencies(
+    } = compose_workspace_services(
         config,
-        &storage,
-        &providers,
-        &server_id,
-        &managed_worktrees,
+        &storage.workspaces,
+        &storage.projects,
+        &storage.agents,
     );
     let agent_mcp = AgentMcp::new(address, mcp_token, Arc::new(config_store.clone()));
     let daemon = compose_daemon(config_store, address, &server_id)?;
@@ -320,7 +323,6 @@ fn compose_services(
         &storage.workspaces,
         server_id,
         storage.changes,
-        &managed_worktrees,
     )?
     .with_worktrees(Arc::new(WorkspaceWorktrees::new(worktrees.clone())))
     .with_workspace_names(workspace_names.clone())
@@ -363,12 +365,11 @@ fn compose_services(
         worktrees,
         workspace_recovery,
     });
-    let filesystem = compose_filesystem(config, &storage.workspaces, &managed_worktrees);
     Ok((
         Services {
             bot: Some(bots),
             metadata: Some(metadata),
-            filesystem: Some(filesystem),
+            filesystem: Some(compose_filesystem(config, &storage.workspaces)),
             provider: Some(provider::Service::new(provider::Dependencies {
                 execution: agent_execution.clone(),
                 summary_generator,
@@ -418,9 +419,8 @@ fn compose_background(
 fn compose_filesystem(
     config: &Config,
     workspace_registry: &FileBackedWorkspaceRegistry,
-    managed_worktrees: &ManagedWorktreeRoots,
 ) -> filesystem::Service {
-    let (checkout, git_fetch) = compose_git(managed_worktrees, workspace_registry);
+    let (checkout, git_fetch) = compose_git(&config.data_dir, workspace_registry);
     filesystem::Service::new(filesystem::Dependencies {
         checkout,
         git_fetch,
@@ -454,73 +454,6 @@ struct Registries {
     changes: model::changes::Changes,
 }
 
-#[derive(Debug, Clone)]
-struct ManagedWorktreeRoots {
-    primary: std::path::PathBuf,
-    additional: Vec<std::path::PathBuf>,
-}
-
-impl ManagedWorktreeRoots {
-    fn load(data_dir: &std::path::Path) -> anyhow::Result<Self> {
-        let file = data_dir.join("projects/legacy-worktree-roots.json");
-        let mut additional = match std::fs::symlink_metadata(&file) {
-            Ok(metadata) => {
-                anyhow::ensure!(
-                    metadata.is_file() && !metadata.file_type().is_symlink(),
-                    "legacy worktree root mapping must be a regular file"
-                );
-                anyhow::ensure!(
-                    metadata.len() <= 64 * 1024,
-                    "legacy worktree root mapping is too large"
-                );
-                let bytes = std::fs::read(&file).context("read legacy worktree root mapping")?;
-                serde_json::from_slice::<Vec<std::path::PathBuf>>(&bytes)
-                    .context("decode legacy worktree root mapping")?
-                    .into_iter()
-                    .map(|root| {
-                        anyhow::ensure!(
-                            root.is_absolute(),
-                            "legacy worktree root must be absolute"
-                        );
-                        match root.canonicalize() {
-                            Ok(root) if root.is_dir() => Ok(Some(root)),
-                            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-                            Ok(_) => anyhow::bail!("legacy worktree root is not a directory"),
-                            Err(error) => Err(error).context("resolve legacy worktree root"),
-                        }
-                    })
-                    .collect::<anyhow::Result<Vec<_>>>()?
-                    .into_iter()
-                    .flatten()
-                    .collect()
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
-            Err(error) => return Err(error).context("inspect legacy worktree root mapping"),
-        };
-        additional.sort();
-        additional.dedup();
-        Ok(Self {
-            primary: data_dir.join("worktrees"),
-            additional,
-        })
-    }
-
-    fn checkout(&self) -> LocalCheckout {
-        LocalCheckout::new(self.primary.clone())
-            .with_additional_managed_worktree_roots(self.additional.clone())
-    }
-
-    fn git_fetch(&self) -> filesystem::git::local::git_fetch::LocalGitFetch {
-        filesystem::git::local::git_fetch::LocalGitFetch::new(self.primary.clone())
-            .with_additional_managed_worktree_roots(self.additional.clone())
-    }
-
-    fn worktrees(&self) -> LocalManagedWorktrees {
-        LocalManagedWorktrees::new(self.primary.clone(), Arc::new(LocalForge::new()))
-            .with_additional_roots(self.additional.clone())
-    }
-}
-
 impl Registries {
     fn publication_sources(&self) -> hub::sources::Sources {
         hub::sources::Sources {
@@ -547,13 +480,15 @@ fn compose_terminals(
 }
 
 fn compose_git(
-    managed_worktrees: &ManagedWorktreeRoots,
+    data_dir: &std::path::Path,
     workspace_registry: &FileBackedWorkspaceRegistry,
 ) -> (Checkout, filesystem::git::service::git_fetch::GitFetch) {
-    let checkout = Checkout::new(Box::new(managed_worktrees.checkout()))
+    let root = data_dir.join("worktrees");
+    let checkout = Checkout::new(Box::new(LocalCheckout::new(root.clone())))
         .with_workspace_registry(Arc::new(workspace_registry.clone()));
-    let fetch =
-        filesystem::git::service::git_fetch::GitFetch::new(Arc::new(managed_worktrees.git_fetch()));
+    let fetch = filesystem::git::service::git_fetch::GitFetch::new(Arc::new(
+        filesystem::git::local::git_fetch::LocalGitFetch::new(root),
+    ));
     (checkout, fetch)
 }
 
@@ -563,64 +498,11 @@ struct WorkspaceServices {
     recovery: WorkspaceRecovery,
 }
 
-struct WorkspaceComposition {
-    config: FileDaemonConfigStore,
-    generator: Arc<dyn SummaryGenerator>,
-    names: WorkspaceNames,
-    worktrees: Arc<Mutex<Worktrees>>,
-    automation: WorkspaceAutomation,
-    state: WorkspaceState,
-    recovery: WorkspaceRecovery,
-}
-
-fn compose_workspace_dependencies(
-    config: &Config,
-    storage: &Registries,
-    providers: &Providers,
-    server_id: &str,
-    managed_worktrees: &ManagedWorktreeRoots,
-) -> WorkspaceComposition {
-    let MetadataServices {
-        config: config_store,
-        generator: summary_generator,
-        names: workspace_names,
-    } = compose_metadata(
-        &config.data_dir,
-        &storage.workspaces,
-        providers,
-        managed_worktrees,
-    );
-    let worktrees = Arc::new(Mutex::new(
-        compose_worktrees(
-            &storage.projects,
-            &storage.workspaces,
-            server_id,
-            managed_worktrees,
-        )
-        .with_workspace_names(Arc::new(workspace_names.clone())),
-    ));
-    let services = compose_workspace_services(
-        &storage.workspaces,
-        &storage.projects,
-        &storage.agents,
-        managed_worktrees,
-    );
-    WorkspaceComposition {
-        config: config_store,
-        generator: summary_generator,
-        names: workspace_names,
-        worktrees,
-        automation: services.automation,
-        state: services.state,
-        recovery: services.recovery,
-    }
-}
-
 fn compose_workspace_services(
+    config: &Config,
     workspace_registry: &FileBackedWorkspaceRegistry,
     project_registry: &FileBackedProjectRegistry,
     agent_runtime_registry: &FileBackedAgentRuntimeRegistry,
-    managed_worktrees: &ManagedWorktreeRoots,
 ) -> WorkspaceServices {
     let workspace_automation = WorkspaceAutomation::new(
         Box::new(workspace_registry.clone()),
@@ -637,7 +519,10 @@ fn compose_workspace_services(
     let workspace_recovery = WorkspaceRecovery::new(
         Box::new(workspace_registry.clone()),
         Box::new(project_registry.clone()),
-        Box::new(managed_worktrees.worktrees()),
+        Box::new(LocalManagedWorktrees::new(
+            config.data_dir.join("worktrees"),
+            Arc::new(LocalForge::new()),
+        )),
     );
     WorkspaceServices {
         automation: workspace_automation,
@@ -656,7 +541,6 @@ fn compose_metadata(
     data_dir: &std::path::Path,
     registry: &FileBackedWorkspaceRegistry,
     providers: &Providers,
-    managed_worktrees: &ManagedWorktreeRoots,
 ) -> MetadataServices {
     let config_store = FileDaemonConfigStore::with_defaults(data_dir.join("config.json"));
     let summary_generator = providers.summary_generator(Arc::new(LocalSummaryConfiguration::new(
@@ -665,7 +549,7 @@ fn compose_metadata(
     let workspace_names = WorkspaceNames::new(
         Arc::new(registry.clone()),
         api::summary_source(summary_generator.clone()),
-        Arc::new(managed_worktrees.checkout()),
+        Arc::new(LocalCheckout::new(data_dir.join("worktrees"))),
     );
     MetadataServices {
         config: config_store,
@@ -680,7 +564,6 @@ fn compose_directory(
     workspace_registry: &FileBackedWorkspaceRegistry,
     server_id: String,
     changes: model::changes::Changes,
-    managed_worktrees: &ManagedWorktreeRoots,
 ) -> anyhow::Result<Directory> {
     let creations =
         persistence::storage::creation::open(config.data_dir.join("creations/receipts.json"))
@@ -698,21 +581,27 @@ fn compose_directory(
     .with_changes(changes.clone())
     .with_creations(creations)
     .with_runtime_source(Arc::new(
-        LocalWorkspaceRuntime::new(managed_worktrees.checkout(), LocalForge::new())
-            .with_changes(changes),
+        LocalWorkspaceRuntime::new(
+            LocalCheckout::new(config.data_dir.join("worktrees")),
+            LocalForge::new(),
+        )
+        .with_changes(changes),
     )))
 }
 
 fn compose_worktrees(
+    config: &Config,
     projects: &FileBackedProjectRegistry,
     workspaces: &FileBackedWorkspaceRegistry,
     server_id: &str,
-    managed_worktrees: &ManagedWorktreeRoots,
 ) -> Worktrees {
     Worktrees::new(
         Box::new(projects.clone()),
         Box::new(workspaces.clone()),
-        Box::new(managed_worktrees.worktrees()),
+        Box::new(LocalManagedWorktrees::new(
+            config.data_dir.join("worktrees"),
+            Arc::new(LocalForge::new()),
+        )),
         server_id.to_owned(),
     )
 }
