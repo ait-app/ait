@@ -42,7 +42,7 @@ async fn saturated_checkout_polling_does_not_consume_foreground_admission() {
     assert_eq!(result, Ok(1));
     assert_eq!(*service.lock().unwrap(), 1);
     assert_eq!(runtime.checkout_poll_jobs.available_permits(), 0);
-    assert_eq!(runtime.jobs.available_permits(), 1);
+    assert_eq!(runtime.jobs.available_permits(), 3);
 
     drop(held);
     drop(queued.await.unwrap());
@@ -69,7 +69,7 @@ async fn directory_reads_wait_on_their_own_budget_without_rejecting_foreground_r
     });
     start.await.unwrap();
     assert_eq!(runtime.directory_poll_jobs.available_permits(), 0);
-    assert_eq!(runtime.jobs.available_permits(), 1);
+    assert_eq!(runtime.jobs.available_permits(), 3);
 
     let foreground = Arc::new(Mutex::new(0_u8));
     let admitted = runtime
@@ -104,7 +104,7 @@ async fn directory_reads_wait_on_their_own_budget_without_rejecting_foreground_r
     assert_eq!(read.await.unwrap(), Ok(1));
     assert_eq!(queued.await.unwrap(), Ok(2));
     assert_eq!(runtime.directory_poll_jobs.available_permits(), 1);
-    assert_eq!(runtime.jobs.available_permits(), 1);
+    assert_eq!(runtime.jobs.available_permits(), 3);
 }
 
 #[tokio::test]

@@ -65,6 +65,12 @@ impl PushTokens {
             }
         }
         if subscriptions.len() > MAX_TOKENS {
+            tracing::warn!(
+                resource = "push_registrations",
+                limit = MAX_TOKENS,
+                requested = subscriptions.len(),
+                "Resource budget exhausted"
+            );
             return Err(PushError::Capacity);
         }
         let result = Self {
@@ -139,6 +145,12 @@ impl PushTokens {
         if next.len().saturating_add(self.invalidated.len()) >= MAX_TOKENS
             && !next.contains_key(token)
         {
+            tracing::warn!(
+                resource = "push_registrations",
+                limit = MAX_TOKENS,
+                available = 0,
+                "Resource budget exhausted"
+            );
             return Err(PushError::Capacity);
         }
         next.insert(token.to_owned(), now_ms.saturating_add(LEASE_MS));

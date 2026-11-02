@@ -56,6 +56,19 @@ Codex 模型目录刷新失败标记 `source=model_catalog`、`operation=model/l
 没有时区的时间按 UTC 解释。无时间戳的续行、会话 JSONL、符号链接不会被收集。
 日志采用其他格式或本地无时区时间时，报告可能没有匹配记录，不能据此认定没有发生错误。
 
+## 资源预算拒绝
+
+`Resource budget exhausted` 记录具体的 `resource`、`limit`、`available`，大消息还记录
+`requested`。`short_jobs` 是 daemon 共享短任务额度（3）；`terminal_jobs` 是终端任务额度（4）；
+`message_assembly_bytes` 是全局大消息组装字节预算；`push_registrations` 是推送登记数量限制。
+`message_allocation` 表示内存分配失败，只记录申请字节数，不把它混同为配置额度不足。
+
+RPC 错误保留方法、请求 ID、订阅余量和任务余量。无请求编号的心跳、推送及终端事件也记录
+`method` 上下文；二进制终端帧另带 `opcode`。连接请求队列拒绝记录 `resource=capability_queue`、
+`capability_lane` 和 `queue_capacity`。自动故障证据保留这些字段，不记录请求正文或推送凭据。
+`subscription_releases` 表示正在等待的订阅释放操作达到 32 个；`subscription_release_queue`
+表示释放请求无法进入能力组队列。
+
 ## 原生语音退出
 
 daemon 日志中的 `Voice resources released` 在取消和清理之前记录关闭来源。通过

@@ -293,6 +293,33 @@ async fn terminal_frame(
     terminals.binary(bytes, &state.terminal).await
 }
 
+#[tracing::instrument(
+    name = "event",
+    skip_all,
+    fields(method = "terminal.input", opcode = bytes.first().copied())
+)]
+async fn process_terminal_frame(
+    bytes: &[u8],
+    state: &Shared,
+    outbound: &Outbound,
+    peer: Peer<'_>,
+    terminals: &mut terminal::connection::TerminalConnection,
+) -> Result<(), QueueError> {
+    let result = if peer
+        .capabilities
+        .iter()
+        .any(|method| method == "terminal.input")
+    {
+        terminal_frame(bytes, state, peer.guest, terminals).await
+    } else {
+        Err(ErrorCode::UnsupportedCapability)
+    };
+    if let Err(code) = result {
+        error(outbound, None, code)?;
+    }
+    Ok(())
+}
+
 async fn process_message(
     message: Option<Result<Incoming, ErrorCode>>,
     state: &Shared,
@@ -357,14 +384,8 @@ async fn process_message(
         }
         None => return Ok(ControlFlow::Break(())),
         Some(Ok(Incoming::Binary(bytes))) if bytes.first().is_some_and(|opcode| *opcode < 0x10) => {
-            let code = if capabilities.iter().any(|method| method == "terminal.input") {
-                terminal_frame(&bytes, state, peer.guest, &mut subscriptions.terminals).await
-            } else {
-                Err(ErrorCode::UnsupportedCapability)
-            };
-            if let Err(code) = code {
-                error(outbound, None, code)?;
-            }
+            process_terminal_frame(&bytes, state, outbound, peer, &mut subscriptions.terminals)
+                .await?;
         }
         Some(Ok(Incoming::Binary(_)))
             if peer
@@ -400,6 +421,16 @@ async fn process_message(
     Ok(ControlFlow::Continue(()))
 }
 
+#[tracing::instrument(
+    name = "event",
+    skip_all,
+    fields(
+        method = %input.0,
+        subscription_slots = MAX_SUBSCRIPTIONS.saturating_sub(subscriptions.len()),
+        short_jobs_available = state.jobs.available_permits(),
+        terminal_jobs_available = state.terminal_jobs.available_permits(),
+    )
+)]
 async fn process_event(
     input: (String, serde_json::Value),
     state: &Shared,

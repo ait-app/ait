@@ -34,7 +34,7 @@ async fn checkout_jobs_are_serialized_and_do_not_occupy_catalog_admission() {
         Poll::Ready(())
     })
     .await;
-    assert_eq!(runtime.jobs.available_permits(), 1);
+    assert_eq!(runtime.jobs.available_permits(), 3);
     assert_eq!(runtime.checkout_jobs.available_permits(), 0);
     assert_eq!(
         runtime
@@ -101,7 +101,7 @@ async fn dropped_checkout_response_retains_its_tracked_blocking_job() {
     task.abort();
     assert!(task.await.unwrap_err().is_cancelled());
     assert_eq!(runtime.checkout_jobs.available_permits(), 0);
-    assert_eq!(runtime.jobs.available_permits(), 1);
+    assert_eq!(runtime.jobs.available_permits(), 3);
     assert_eq!(runtime.tasks.len(), 1);
     release.send(()).unwrap();
     runtime.tasks.close();

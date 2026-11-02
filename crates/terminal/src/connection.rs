@@ -438,7 +438,15 @@ pub(crate) async fn run<R: Send + 'static>(
         .terminal_jobs
         .clone()
         .try_acquire_owned()
-        .map_err(|_| ErrorCode::ResourceExhausted)?;
+        .map_err(|_| {
+            tracing::warn!(
+                resource = "terminal_jobs",
+                limit = model::runtime::TERMINAL_JOB_LIMIT,
+                available = state.terminal_jobs.available_permits(),
+                "Resource budget exhausted"
+            );
+            ErrorCode::ResourceExhausted
+        })?;
     run_with_permit(state, execute, permit).await
 }
 

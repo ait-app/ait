@@ -38,7 +38,7 @@ async fn checkout_refresh_survives_busy_catalog_jobs_and_keeps_the_socket_usable
             .shared
             .jobs
             .clone()
-            .acquire_owned()
+            .acquire_many_owned(3)
             .await
             .unwrap();
 

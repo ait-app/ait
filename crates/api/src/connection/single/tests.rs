@@ -1,6 +1,25 @@
 use super::*;
 
 #[test]
+fn rejected_releases_preserve_the_request_id_for_both_budget_categories() {
+    for (resource, limit) in [
+        ("subscription_releases", 32),
+        ("subscription_release_queue", WORKER_QUEUE_CAPACITY),
+    ] {
+        let (outbound, mut receiver) = Outbound::new();
+        reject_release(&outbound, "release-request", resource, limit).unwrap();
+        let queued = receiver.try_recv().unwrap();
+        let model::outbound::Frame::Text(text) = &queued.message else {
+            panic!("expected a correlated error response");
+        };
+        let response: serde_json::Value = serde_json::from_str(text).unwrap();
+        assert_eq!(response["request_id"], "release-request");
+        assert_eq!(response["code"], "resource_exhausted");
+        assert!(response["retryable"].as_bool().unwrap());
+    }
+}
+
+#[test]
 fn worker_lanes_keep_streams_and_subscriptions_with_their_connection_owner() {
     for (method, expected) in [
         ("terminal.input", 1),

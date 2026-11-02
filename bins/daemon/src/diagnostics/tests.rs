@@ -141,6 +141,69 @@ fn tracing_omits_oversized_fields_and_unapproved_payloads() {
     assert!(!event.contains(&"x".repeat(2049)));
 }
 
+#[tokio::test]
+async fn tracing_preserves_exhausted_budget_and_safe_event_context() {
+    use tracing::Instrument;
+
+    let (sender, _receiver) = mpsc::sync_channel(4);
+    let diagnostics = Diagnostics {
+        sender,
+        recent: Arc::default(),
+        dropped: Arc::default(),
+        storage_failures: Arc::default(),
+    };
+    let runtime = model::Runtime::new(model::ServerInfo {
+        server_id: "server".into(),
+        instance_id: "instance".into(),
+        version: None,
+        listen: "127.0.0.1:7316".into(),
+        lifecycle: model::Lifecycle::Ready,
+        protocol: model::VERSION,
+        capabilities: Vec::new(),
+        implemented_capabilities: Vec::new(),
+        features: Vec::new(),
+        limits: model::Limits::default(),
+    });
+    let _held = runtime.jobs.clone().acquire_many_owned(3).await.unwrap();
+    let subscriber = tracing_subscriber::registry().with(diagnostics.clone());
+    let _guard = tracing::subscriber::set_default(subscriber);
+    let span = tracing::info_span!(
+        "event",
+        method = tracing::field::Empty,
+        subscription_slots = 16,
+        params = "private-event-body",
+        token = "private-credential",
+    );
+    span.record("method", "session.heartbeat");
+
+    assert_eq!(
+        runtime
+            .run_shared(
+                Some(Arc::new(())),
+                model::ErrorCode::RegistryIo,
+                |()| Ok(())
+            )
+            .instrument(span)
+            .await,
+        Err(model::ErrorCode::ResourceExhausted)
+    );
+    let recent = diagnostics.recent.lock().unwrap();
+    assert_eq!(recent.events.len(), 1);
+    let event = &recent.events[0].text;
+    for field in [
+        "Resource budget exhausted",
+        "resource=\"short_jobs\"",
+        "limit=3",
+        "available=0",
+        "method=\"session.heartbeat\"",
+        "subscription_slots=16",
+    ] {
+        assert!(event.contains(field), "{event}");
+    }
+    assert!(!event.contains("private-event-body"), "{event}");
+    assert!(!event.contains("private-credential"), "{event}");
+}
+
 #[test]
 fn tracing_preserves_provider_failure_facts_without_native_payloads() {
     let (sender, _receiver) = mpsc::sync_channel(4);

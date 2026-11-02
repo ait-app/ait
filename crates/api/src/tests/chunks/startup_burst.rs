@@ -37,7 +37,7 @@ async fn read_burst(reads: usize, expect_exhaustion: bool) {
         .shared
         .jobs
         .clone()
-        .acquire_owned()
+        .acquire_many_owned(3)
         .await
         .unwrap();
     let frame = FileFrame::Begin(FileBegin {

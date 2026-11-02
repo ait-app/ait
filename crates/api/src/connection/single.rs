@@ -182,20 +182,17 @@ async fn route(
                     continue;
                 }
                 if releases.len() >= 32 {
-                    error(
-                        context.outbound,
-                        Some(request_id.clone()),
-                        ErrorCode::ResourceExhausted,
-                    )?;
+                    reject_release(context.outbound, request_id, "subscription_releases", 32)?;
                     continue;
                 }
                 let slots: Result<Vec<_>, _> =
                     senders.iter().map(mpsc::Sender::try_reserve).collect();
                 let Ok(slots) = slots else {
-                    error(
+                    reject_release(
                         context.outbound,
-                        Some(request_id.clone()),
-                        ErrorCode::ResourceExhausted,
+                        request_id,
+                        "subscription_release_queue",
+                        WORKER_QUEUE_CAPACITY,
                     )?;
                     continue;
                 };
@@ -221,6 +218,26 @@ async fn route(
         }
         admit(&senders, message, context.outbound)?;
     }
+}
+
+fn reject_release(
+    outbound: &Outbound,
+    request_id: &str,
+    resource: &'static str,
+    limit: usize,
+) -> Result<(), QueueError> {
+    tracing::warn!(
+        resource,
+        method = "subscription.release.request",
+        request_id,
+        limit,
+        "Resource budget exhausted"
+    );
+    error(
+        outbound,
+        Some(request_id.to_owned()),
+        ErrorCode::ResourceExhausted,
+    )
 }
 
 fn validate_request(method: &str, context: &WorkerContext<'_>) -> Result<(), ErrorCode> {
@@ -278,6 +295,12 @@ fn admit(
             .in_scope(|| error(outbound, Some(request_id), ErrorCode::ResourceExhausted))?;
         } else {
             // Binary/event loss cannot be repaired by retrying an RPC.
+            tracing::warn!(
+                resource = "capability_queue",
+                capability_lane = lane,
+                queue_capacity = WORKER_QUEUE_CAPACITY,
+                "Resource budget exhausted"
+            );
             return Err(QueueError::Full);
         }
     }

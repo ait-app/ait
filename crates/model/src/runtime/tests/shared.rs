@@ -11,7 +11,7 @@ async fn shared_services_use_existing_admission_and_preserve_business_errors() {
             .await,
         Err(ErrorCode::UnsupportedCapability)
     );
-    let permit = runtime.jobs.clone().acquire_owned().await.unwrap();
+    let permit = runtime.jobs.clone().acquire_many_owned(3).await.unwrap();
     assert_eq!(
         runtime
             .run_shared(Some(service.clone()), ErrorCode::RegistryIo, |_| Ok(()))
@@ -29,7 +29,7 @@ async fn shared_services_use_existing_admission_and_preserve_business_errors() {
         Err(ErrorCode::InvalidMessage)
     );
     assert_eq!(service.load(Ordering::SeqCst), 1);
-    assert_eq!(runtime.jobs.available_permits(), 1);
+    assert_eq!(runtime.jobs.available_permits(), 3);
     runtime.cancellation.cancel();
     assert_eq!(
         runtime
@@ -61,7 +61,7 @@ async fn dropped_shared_response_retains_the_owner_and_tracked_job() {
     start.await.unwrap();
     task.abort();
     assert!(task.await.unwrap_err().is_cancelled());
-    assert_eq!(runtime.jobs.available_permits(), 0);
+    assert_eq!(runtime.jobs.available_permits(), 2);
     assert_eq!(runtime.tasks.len(), 1);
     release.send(()).unwrap();
     runtime.tasks.close();
@@ -69,7 +69,7 @@ async fn dropped_shared_response_retains_the_owner_and_tracked_job() {
         .await
         .unwrap();
     assert_eq!(service.load(Ordering::SeqCst), 1);
-    assert_eq!(runtime.jobs.available_permits(), 1);
+    assert_eq!(runtime.jobs.available_permits(), 3);
 }
 
 #[tokio::test]
@@ -85,5 +85,5 @@ async fn shared_service_panics_return_the_safe_failure_and_release_admission() {
         )
         .await;
     assert_eq!(result, Err(ErrorCode::RegistryIo));
-    assert_eq!(runtime.jobs.available_permits(), 1);
+    assert_eq!(runtime.jobs.available_permits(), 3);
 }
