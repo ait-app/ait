@@ -19,8 +19,9 @@ Ait 编排创建的子 Agent 与 Provider 原生子 Agent 应出现在同一棵�
 接口，操作由会话实际能力决定。第一阶段没有 observed 转 managed 的操作。
 
 本决策修订 ADR-041 与 ADR-052 中“原生子会话不登记宿主 Agent”的边界。原生执行、
-凭据与日志仍归 Provider，登记只建立宿主展示身份。当前复用 Codex、Claude 已有的可信
-子会话端口；其他 Provider 须先提供身份、直接父级及可验证的历史读取能力。
+凭据与日志仍归 Provider，登记只建立宿主展示身份。登记复用 Provider 已有的可信
+子会话端口，包含 Codex、Claude 和主干新增的 OpenCode、OMP 观测。历史入口以 adapter
+实际提供的读取能力和宿主缓存为准；其他 Provider 须先提供可信身份与直接父级。
 
 ```mermaid
 flowchart LR
