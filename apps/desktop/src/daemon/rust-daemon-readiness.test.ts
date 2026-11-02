@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RustDaemonManager } from "./rust-daemon";
+import {
+  inspectRetainedDaemonForMigration,
+  RustDaemonManager,
+  stopRetainedDaemonForMigration,
+} from "./rust-daemon";
 
 interface ReadinessConfig {
   busy?: boolean;
@@ -177,6 +181,52 @@ describe.skipIf(process.platform === "win32")("daemon readiness and process owne
     expect(readFileSync(path.join(fixture.home, "desktop-daemon.json"), "utf8")).toContain(
       "restarted-instance",
     );
+  });
+
+  it("stops a confirmed retained daemon before data migration", async () => {
+    const fixture = create();
+    const first = fixture.manager();
+    const running = await first.start();
+    await first.retainForNextSession();
+
+    const confirmed = await inspectRetainedDaemonForMigration(fixture.home);
+    expect(confirmed).toMatchObject({
+      home: fixture.home,
+      pid: running.pid,
+      serverId: running.serverId,
+    });
+    await stopRetainedDaemonForMigration(confirmed!);
+
+    expect(fixture.lines("requests")).toContain("server.shutdown.request");
+    expect(existsSync(path.join(fixture.home, "desktop-daemon.json"))).toBe(false);
+    expect(() => process.kill(running.pid!, 0)).toThrow();
+  });
+
+  it("does not offer to stop a retained process whose identity cannot be authenticated", async () => {
+    const fixture = create();
+    const first = fixture.manager();
+    const running = await first.start();
+    await first.retainForNextSession();
+    fixture.configure({ silent: true });
+
+    await expect(inspectRetainedDaemonForMigration(fixture.home)).resolves.toBeNull();
+    expect(existsSync(path.join(fixture.home, "desktop-daemon.json"))).toBe(true);
+    expect(() => process.kill(running.pid!, 0)).not.toThrow();
+  });
+
+  it("does not stop a process whose authenticated identity changes after confirmation", async () => {
+    const fixture = create();
+    const first = fixture.manager();
+    const running = await first.start();
+    await first.retainForNextSession();
+    const confirmed = await inspectRetainedDaemonForMigration(fixture.home);
+    fixture.configure({ wrongPid: true });
+
+    await expect(stopRetainedDaemonForMigration(confirmed!)).rejects.toThrow(
+      "changed after confirmation",
+    );
+    expect(fixture.lines("requests")).not.toContain("server.shutdown.request");
+    expect(() => process.kill(running.pid!, 0)).not.toThrow();
   });
 
   it("discards a record whose authenticated PID differs without signalling that process", async () => {

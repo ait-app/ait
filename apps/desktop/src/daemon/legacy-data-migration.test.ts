@@ -68,16 +68,27 @@ describe("legacy data migration preparation", () => {
     writeRegistry(source, "agents/agents.json", 1);
     const migrate = vi.fn(async () => {});
     const confirm = vi.fn(async () => true);
+    const beforeMigrate = vi.fn(async () => {});
 
     await prepareLegacyDataMigration({
       sourceHome: source,
       destinationHome: destination,
       binary: "/app/daemon",
       confirm,
+      beforeMigrate,
       migrate,
     });
 
     expect(confirm).toHaveBeenCalledOnce();
+    expect(beforeMigrate).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ source: expect.objectContaining({ home: source }) }),
+    );
+    expect(confirm.mock.invocationCallOrder[0]).toBeLessThan(
+      beforeMigrate.mock.invocationCallOrder[0],
+    );
+    expect(beforeMigrate.mock.invocationCallOrder[0]).toBeLessThan(
+      migrate.mock.invocationCallOrder[0],
+    );
     expect(migrate).toHaveBeenCalledExactlyOnceWith("/app/daemon", source, destination);
   });
 
@@ -107,6 +118,7 @@ describe("legacy data migration preparation", () => {
     const { source, destination } = fixture();
     writeRegistry(source, "agents/agents.json", 1);
     const migrate = vi.fn(async () => {});
+    const beforeMigrate = vi.fn(async () => {});
 
     await expect(
       prepareLegacyDataMigration({
@@ -114,9 +126,11 @@ describe("legacy data migration preparation", () => {
         destinationHome: destination,
         binary: "/app/daemon",
         confirm: async () => false,
+        beforeMigrate,
         migrate,
       }),
     ).rejects.toBeInstanceOf(LegacyDataMigrationCancelledError);
+    expect(beforeMigrate).not.toHaveBeenCalled();
     expect(migrate).not.toHaveBeenCalled();
     await expect(inspectDataHome(destination)).resolves.toMatchObject({ agents: 0 });
   });

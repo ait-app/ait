@@ -22,6 +22,7 @@ interface PrepareLegacyDataMigrationOptions {
   destinationHome: string;
   binary: string;
   confirm: (candidate: LegacyDataMigrationCandidate) => Promise<boolean>;
+  beforeMigrate?: (candidate: LegacyDataMigrationCandidate) => Promise<void>;
   migrate?: (binary: string, source: string, destination: string) => Promise<void>;
 }
 
@@ -72,6 +73,7 @@ export async function prepareLegacyDataMigration(
   );
   if (!candidate) return;
   if (!(await options.confirm(candidate))) throw new LegacyDataMigrationCancelledError();
+  await options.beforeMigrate?.(candidate);
   await migrate(options.binary, candidate.source.home, candidate.destination.home);
 }
 

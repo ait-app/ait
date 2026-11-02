@@ -17,7 +17,13 @@ import {
   type AppReleaseChannel,
   type AppUpdateCheckIntent,
 } from "../features/auto-updater.js";
-import { RustDaemonManager, resolveDesktopDaemonHome } from "./rust-daemon.js";
+import {
+  inspectRetainedDaemonForMigration,
+  RustDaemonManager,
+  resolveDesktopDaemonHome,
+  stopRetainedDaemonForMigration,
+  type VerifiedRetainedDaemonProcess,
+} from "./rust-daemon.js";
 import {
   LegacyDataMigrationCancelledError,
   prepareLegacyDataMigration,
@@ -212,11 +218,24 @@ async function prepareDefaultDesktopDataHome(): Promise<void> {
   if (process.env.AIT_SERVER_DATA_DIR || process.platform === "win32") return;
   if (dataMigrationPreparation) return dataMigrationPreparation;
   const destinationHome = getDaemonHome();
+  let confirmedProcesses: VerifiedRetainedDaemonProcess[] = [];
   dataMigrationPreparation = prepareLegacyDataMigration({
     sourceHome: path.join(homedir(), ".ait-server"),
     destinationHome,
     binary: getDaemonBinary(),
-    confirm: confirmLegacyDataMigration,
+    confirm: async (candidate) => {
+      const inspected = await Promise.all([
+        inspectRetainedDaemonForMigration(candidate.source.home),
+        inspectRetainedDaemonForMigration(candidate.destination.home),
+      ]);
+      confirmedProcesses = inspected.filter(
+        (process): process is VerifiedRetainedDaemonProcess => process !== null,
+      );
+      return confirmLegacyDataMigration(candidate, confirmedProcesses);
+    },
+    beforeMigrate: async () => {
+      for (const process of confirmedProcesses) await stopRetainedDaemonForMigration(process);
+    },
   })
     .catch(async (error: unknown) => {
       if (!(error instanceof LegacyDataMigrationCancelledError)) {
@@ -242,7 +261,9 @@ async function prepareDefaultDesktopDataHome(): Promise<void> {
 
 async function confirmLegacyDataMigration(
   candidate: LegacyDataMigrationCandidate,
+  processes: VerifiedRetainedDaemonProcess[] = [],
 ): Promise<boolean> {
+  const processDetails = processes.map((process) => `PID ${process.pid} — ${process.home}`);
   const result = await dialog.showMessageBox({
     type: "question",
     title: "Copy existing Ait data / 复制已有 Ait 数据",
@@ -251,9 +272,21 @@ async function confirmLegacyDataMigration(
     detail: [
       `${candidate.source.agents} Agents, ${candidate.source.projects} projects, ${candidate.source.workspaces} Workspaces`,
       `${candidate.source.home} → ${candidate.destination.home}`,
-      "Both the source and the previous destination are preserved. The existing daemon must be stopped before copying. / 源目录和目标目录原内容都会保留。复制前必须停止原 daemon。",
+      ...(processes.length > 0
+        ? [
+            "Ait verified the following old daemon process. Confirming will stop it before copying; shutdown is attempted before signals. / Ait 已核验以下旧 daemon 进程。确认后会先停止它再复制，并优先尝试正常关闭。",
+            ...processDetails,
+          ]
+        : [
+            "Both the source and the previous destination are preserved. Any unverified daemon must be stopped before copying. / 源目录和目标目录原内容都会保留。复制前必须停止无法核验的 daemon。",
+          ]),
     ].join("\n"),
-    buttons: ["Not now / 暂不处理", "Copy data / 复制数据"],
+    buttons: [
+      "Not now / 暂不处理",
+      processes.length > 0
+        ? "Stop old process and copy / 停止旧进程并复制"
+        : "Copy data / 复制数据",
+    ],
     defaultId: 1,
     cancelId: 0,
     noLink: true,

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_DESKTOP_SETTINGS } from "../settings/desktop-settings";
 import { createDaemonCommandHandlers, registerDaemonManager } from "./daemon-manager";
+import type { LegacyDataMigrationCandidate } from "./legacy-data-migration";
 
 const mocks = vi.hoisted(() => ({
   paseoHome: "",
@@ -35,6 +36,8 @@ const mocks = vi.hoisted(() => ({
   accountCommand: vi.fn(),
   showMessageBox: vi.fn(async () => ({ response: 0 })),
   prepareMigration: vi.fn(async () => {}),
+  inspectRetainedForMigration: vi.fn(),
+  stopRetainedForMigration: vi.fn(async () => {}),
 }));
 
 vi.mock("electron", () => ({
@@ -69,6 +72,8 @@ vi.mock("./rust-daemon.js", () => ({
     status = mocks.status;
     authorization = mocks.authorization;
   },
+  inspectRetainedDaemonForMigration: mocks.inspectRetainedForMigration,
+  stopRetainedDaemonForMigration: mocks.stopRetainedForMigration,
 }));
 vi.mock("./legacy-data-migration.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./legacy-data-migration.js")>()),
@@ -128,6 +133,10 @@ describe("daemon-manager commands", () => {
     mocks.showMessageBox.mockResolvedValue({ response: 0 });
     mocks.prepareMigration.mockReset();
     mocks.prepareMigration.mockResolvedValue(undefined);
+    mocks.inspectRetainedForMigration.mockReset();
+    mocks.inspectRetainedForMigration.mockResolvedValue(null);
+    mocks.stopRetainedForMigration.mockReset();
+    mocks.stopRetainedForMigration.mockResolvedValue(undefined);
     vi.mocked(ipcMain.handle).mockReset();
   });
 
@@ -205,6 +214,56 @@ describe("daemon-manager commands", () => {
     expect(mocks.prepareMigration).toHaveBeenCalledOnce();
     expect(mocks.restart).toHaveBeenCalledOnce();
     expect(mocks.prepareMigration.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.restart.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("offers to stop an authenticated old daemon and does so only after confirmation", async () => {
+    vi.stubEnv("AIT_SERVER_DATA_DIR", undefined);
+    mocks.restart.mockResolvedValue({ status: "running" });
+    mocks.showMessageBox.mockResolvedValue({ response: 1 });
+    const source = path.join(fixtureRoot, ".ait-server");
+    const destination = mocks.paseoHome;
+    const candidate: LegacyDataMigrationCandidate = {
+      source: { home: source, agents: 2, projects: 1, workspaces: 1, timelineBytes: 64 },
+      destination: {
+        home: destination,
+        agents: 0,
+        projects: 0,
+        workspaces: 0,
+        timelineBytes: 0,
+      },
+    };
+    const retained = {
+      home: source,
+      pid: 4242,
+      startedAt: "2026-11-02T03:04:46.720Z",
+      serverId: "old-server",
+    };
+    mocks.inspectRetainedForMigration.mockResolvedValueOnce(retained).mockResolvedValueOnce(null);
+    mocks.prepareMigration.mockImplementationOnce(
+      async (options: {
+        confirm: (value: LegacyDataMigrationCandidate) => Promise<boolean>;
+        beforeMigrate: (value: LegacyDataMigrationCandidate) => Promise<void>;
+      }) => {
+        await expect(options.confirm(candidate)).resolves.toBe(true);
+        expect(mocks.stopRetainedForMigration).not.toHaveBeenCalled();
+        await options.beforeMigrate(candidate);
+      },
+    );
+
+    await expect(createDaemonCommandHandlers().restart_desktop_daemon()).resolves.toEqual({
+      status: "running",
+    });
+
+    expect(mocks.showMessageBox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: expect.stringContaining(`PID 4242 — ${source}`),
+        buttons: expect.arrayContaining(["Stop old process and copy / 停止旧进程并复制"]),
+      }),
+    );
+    expect(mocks.stopRetainedForMigration).toHaveBeenCalledExactlyOnceWith(retained);
+    expect(mocks.stopRetainedForMigration.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.restart.mock.invocationCallOrder[0],
     );
   });
