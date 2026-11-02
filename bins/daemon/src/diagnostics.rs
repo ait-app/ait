@@ -224,16 +224,60 @@ impl DaemonDiagnostics for Diagnostics {
     }
 }
 
-impl<S: tracing::Subscriber> Layer<S> for Diagnostics {
+impl<S> Layer<S> for Diagnostics
+where
+    S: tracing::Subscriber + for<'span> tracing_subscriber::registry::LookupSpan<'span>,
+{
+    fn on_new_span(
+        &self,
+        attributes: &tracing::span::Attributes<'_>,
+        id: &tracing::Id,
+        context: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        if let Some(span) = context.span(id) {
+            let mut fields = Fields(String::new());
+            attributes.record(&mut fields);
+            if !fields.0.is_empty() {
+                span.extensions_mut().insert(fields);
+            }
+        }
+    }
+
+    fn on_record(
+        &self,
+        id: &tracing::Id,
+        values: &tracing::span::Record<'_>,
+        context: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        if let Some(span) = context.span(id) {
+            let mut extensions = span.extensions_mut();
+            if extensions.get_mut::<Fields>().is_none() {
+                extensions.insert(Fields(String::new()));
+            }
+            values.record(
+                extensions
+                    .get_mut::<Fields>()
+                    .expect("span fields installed"),
+            );
+        }
+    }
+
     fn on_event(
         &self,
         event: &tracing::Event<'_>,
-        _context: tracing_subscriber::layer::Context<'_, S>,
+        context: tracing_subscriber::layer::Context<'_, S>,
     ) {
         if *event.metadata().level() > tracing::Level::WARN {
             return;
         }
         let mut fields = Fields(String::new());
+        if let Some(scope) = context.event_scope(event) {
+            for span in scope.from_root() {
+                if let Some(recorded) = span.extensions().get::<Fields>() {
+                    fields.0.push_str(&recorded.0);
+                }
+            }
+        }
         event.record(&mut fields);
         let text = sanitize(&format!(
             "{} {} {}",
@@ -270,6 +314,17 @@ impl Visit for Fields {
                 | "suppressed"
                 | "error_kind"
                 | "os_error"
+                | "method"
+                | "resource"
+                | "limit"
+                | "available"
+                | "requested"
+                | "subscription_slots"
+                | "short_jobs_available"
+                | "terminal_jobs_available"
+                | "capability_lane"
+                | "queue_capacity"
+                | "opcode"
         ) {
             let mut bounded = LimitedText(String::new());
             if write!(bounded, "{value:?}").is_err() {

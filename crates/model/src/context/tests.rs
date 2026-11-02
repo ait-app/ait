@@ -22,7 +22,7 @@ fn decode(message: Frame) -> Value {
 #[tokio::test]
 async fn admitted_rpc_waits_for_the_shared_job_instead_of_rejecting_another_lane() {
     let runtime = runtime();
-    let held = runtime.jobs.clone().acquire_owned().await.unwrap();
+    let held = runtime.jobs.clone().acquire_many_owned(3).await.unwrap();
     let service = Arc::new(Mutex::new(4_u64));
     let (outbound, mut receiver) = Outbound::new();
     let context = Context {
@@ -52,13 +52,13 @@ async fn admitted_rpc_waits_for_the_shared_job_instead_of_rejecting_another_lane
 
     let response = decode(receiver.recv().await.unwrap().message);
     assert_eq!(response["result"]["value"], 5);
-    assert_eq!(runtime.jobs.available_permits(), 1);
+    assert_eq!(runtime.jobs.available_permits(), 3);
 }
 
 #[tokio::test]
 async fn shutdown_cancels_an_admitted_rpc_waiting_for_the_shared_job() {
     let runtime = runtime();
-    let _held = runtime.jobs.clone().acquire_owned().await.unwrap();
+    let _held = runtime.jobs.clone().acquire_many_owned(3).await.unwrap();
     let service = Arc::new(Mutex::new(()));
     let (outbound, mut receiver) = Outbound::new();
     let context = Context {

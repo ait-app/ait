@@ -15,6 +15,7 @@ const MAX_BYTES: usize = 64 * 1024 * 1024;
 const CHUNK_BYTES: usize = 256 * 1024;
 const HEADER: usize = 13;
 const DEADLINE: Duration = Duration::from_secs(60);
+const ASSEMBLY_BUDGET_BYTES: usize = 256 * 1024 * 1024;
 static BUDGET: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
 #[derive(Default)]
@@ -53,15 +54,29 @@ impl Assembly {
             if offset != 0 {
                 return Err(ErrorCode::InvalidMessage);
             }
-            let budget = BUDGET.get_or_init(|| Arc::new(Semaphore::new(256 * 1024 * 1024)));
+            let budget = BUDGET.get_or_init(|| Arc::new(Semaphore::new(ASSEMBLY_BUDGET_BYTES)));
             let permit = budget
                 .clone()
                 .try_acquire_many_owned(u32::try_from(size).expect("validated message size"))
-                .map_err(|_| ErrorCode::ResourceExhausted)?;
+                .map_err(|_| {
+                    tracing::warn!(
+                        resource = "message_assembly_bytes",
+                        limit = ASSEMBLY_BUDGET_BYTES,
+                        available = budget.available_permits(),
+                        requested = size,
+                        "Resource budget exhausted"
+                    );
+                    ErrorCode::ResourceExhausted
+                })?;
             let mut bytes = Vec::new();
-            bytes
-                .try_reserve_exact(size)
-                .map_err(|_| ErrorCode::ResourceExhausted)?;
+            bytes.try_reserve_exact(size).map_err(|_| {
+                tracing::warn!(
+                    resource = "message_allocation",
+                    requested = size,
+                    "Message allocation failed"
+                );
+                ErrorCode::ResourceExhausted
+            })?;
             self.pending = Some(Pending {
                 id,
                 size,

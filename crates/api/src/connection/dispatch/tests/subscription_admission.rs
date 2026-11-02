@@ -18,7 +18,7 @@ async fn label_subscription_waits_for_busy_jobs_and_keeps_its_connection_owner()
     metadata.workspace_labels = Some(Arc::new(Mutex::new(
         WorkspaceLabels::new(Box::new(store)).unwrap(),
     )));
-    let held = api.shared.jobs.clone().acquire_owned().await.unwrap();
+    let held = api.shared.jobs.clone().acquire_many_owned(3).await.unwrap();
     let (outbound, mut receiver) = Outbound::new();
     let mut subscriptions = ConnectionSubscriptions::default();
     let mut request = context("workspace.label.list.request", &api.shared, &outbound);
@@ -47,5 +47,5 @@ async fn label_subscription_waits_for_busy_jobs_and_keeps_its_connection_owner()
     assert_eq!(response["request_id"], "request-1");
     assert!(response["result"]["subscriptionId"].is_string());
     assert_eq!(subscriptions.metadata.len(), 1);
-    assert_eq!(api.shared.jobs.available_permits(), 1);
+    assert_eq!(api.shared.jobs.available_permits(), 3);
 }

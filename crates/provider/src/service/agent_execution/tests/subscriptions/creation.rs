@@ -63,13 +63,13 @@ fn response(peer: &mut Peer) -> Value {
 async fn subscribed_dsh_creation_waits_for_busy_foreground_jobs_before_launching() {
     let fixture = Fixture::new();
     let (execution, mut peer) = dsh_peer(&fixture);
-    // A slow Diff read occupies this same server-wide permit, even in another Workspace.
+    // Foreground work occupies all shared permits, even across Workspaces.
     let permit = peer
         .state
         .runtime
         .jobs
         .clone()
-        .acquire_owned()
+        .acquire_many_owned(3)
         .await
         .unwrap();
     {
@@ -91,7 +91,7 @@ async fn subscribed_dsh_creation_waits_for_busy_foreground_jobs_before_launching
     assert_eq!(created["type"], "response");
     assert_eq!(created["result"]["agent"]["provider"], "deepseek-harness");
     assert_eq!(created["result"]["creation"]["phase"], "completed");
-    assert_eq!(peer.state.runtime.jobs.available_permits(), 1);
+    assert_eq!(peer.state.runtime.jobs.available_permits(), 3);
     execution.shutdown().await.unwrap();
 }
 
@@ -104,7 +104,7 @@ async fn draining_cancels_queued_dsh_creation_without_launching() {
         .runtime
         .jobs
         .clone()
-        .acquire_owned()
+        .acquire_many_owned(3)
         .await
         .unwrap();
     {
@@ -144,7 +144,7 @@ async fn unsubscribed_dsh_creation_does_not_need_foreground_job_capacity() {
         .runtime
         .jobs
         .clone()
-        .acquire_owned()
+        .acquire_many_owned(3)
         .await
         .unwrap();
     let mut params = parameters(&fixture);
@@ -165,6 +165,6 @@ async fn failed_dsh_startup_returns_agent_io_and_keeps_runtime_ready() {
     request(&peer, params, 1).await;
     assert_eq!(response(&mut peer)["code"], "agent_io");
     assert_eq!(peer.state.runtime.info().lifecycle, Lifecycle::Ready);
-    assert_eq!(peer.state.runtime.jobs.available_permits(), 1);
+    assert_eq!(peer.state.runtime.jobs.available_permits(), 3);
     execution.shutdown().await.unwrap();
 }

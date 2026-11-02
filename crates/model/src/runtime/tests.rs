@@ -1,6 +1,7 @@
 use super::*;
 use crate::tests::runtime;
 
+mod capacity;
 mod checkout;
 mod polling;
 mod shared;
@@ -8,7 +9,7 @@ mod shared;
 #[tokio::test]
 async fn admitted_continuations_wait_for_the_existing_budget() {
     let runtime = runtime();
-    let permit = runtime.jobs.clone().acquire_owned().await.unwrap();
+    let permit = runtime.jobs.clone().acquire_many_owned(3).await.unwrap();
     let queued = runtime.clone();
     let task = tokio::spawn(async move {
         queued
@@ -26,13 +27,13 @@ async fn admitted_continuations_wait_for_the_existing_budget() {
     assert!(!task.is_finished());
     drop(permit);
     assert_eq!(task.await.unwrap(), Ok(5));
-    assert_eq!(runtime.jobs.available_permits(), 1);
+    assert_eq!(runtime.jobs.available_permits(), 3);
 }
 
 #[tokio::test]
 async fn shutdown_cancels_queued_continuations_before_they_start() {
     let runtime = runtime();
-    let _permit = runtime.jobs.clone().acquire_owned().await.unwrap();
+    let _permit = runtime.jobs.clone().acquire_many_owned(3).await.unwrap();
     let queued = runtime.clone();
     let task = tokio::spawn(async move {
         queued
@@ -62,7 +63,7 @@ async fn admission_rejects_missing_exhausted_and_draining_work() {
             .await,
         Err(ErrorCode::UnsupportedCapability)
     );
-    let permit = runtime.jobs.clone().acquire_owned().await.unwrap();
+    let permit = runtime.jobs.clone().acquire_many_owned(3).await.unwrap();
     assert_eq!(
         runtime
             .run(Some(service.clone()), ErrorCode::RegistryIo, |()| Ok(()))
@@ -101,13 +102,13 @@ async fn dropped_response_keeps_the_started_job_tracked_until_it_finishes() {
     start.await.unwrap();
     task.abort();
     assert!(task.await.unwrap_err().is_cancelled());
-    assert_eq!(runtime.jobs.available_permits(), 0);
+    assert_eq!(runtime.jobs.available_permits(), 2);
     assert_eq!(runtime.tasks.len(), 1);
     runtime.tasks.close();
     release.send(()).unwrap();
     tokio::time::timeout(std::time::Duration::from_secs(5), runtime.tasks.wait())
         .await
         .unwrap();
-    assert_eq!(runtime.jobs.available_permits(), 1);
+    assert_eq!(runtime.jobs.available_permits(), 3);
     assert_eq!(*service.lock().unwrap(), 1);
 }
