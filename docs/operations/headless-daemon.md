@@ -113,7 +113,8 @@ daemon status --json
 ```
 
 status 不要求本地 API token，不创建文件，不争用运行中服务的凭据锁。输出稳定 ID、是否存在
-凭据以及带时间戳的非秘密 runtime 缓存快照。缓存不是即时在线证明；鉴权后的本地
+凭据以及带时间戳的非秘密 runtime 缓存快照；`runtime_process_alive` 表示快照记录的进程是否仍存在
+（PID 可能被复用，非 Unix 平台为 `null`）。缓存不是即时在线证明；鉴权后的本地
 `GET /api/device/authorization` 查看实时 Hub、Relay 及管理状态，`GET /api/hub/control` 查看 Hub。
 
 授权成功后保存 `<data-dir>/device/.env`，权限 `0600`，目录 `0700`。文件是私有凭据 snapshot，

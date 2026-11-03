@@ -339,5 +339,44 @@ async fn permission_wait_fails_and_restart_recovers_agent_without_archiving_owne
     terminate(&mut process).await;
 }
 
+#[tokio::test]
+async fn restart_recovery_tolerates_an_interrupted_run_whose_agent_is_gone() {
+    let fixture = super::native::NativeFixture::new();
+    let state = fixture.root.path().join("state");
+    let log = fixture.root.path().join("server.log");
+    let mut process = start_with_path(&state, &log, Some(&fixture.path));
+    let address = ready(&mut process, &log).await;
+    let mut socket = connect(&address, METHODS).await;
+    let workspace = open_workspace(&mut socket, &fixture.cwd).await;
+    let created=success(&mut socket,"schedule.create.request",json!({"workspaceId":workspace,"prompt":"permit-command","cadence":{"type":"every","everyMs":3_600_000},"target":{"type":"new-agent","config":{"provider":"codex","cwd":fixture.cwd,"archiveOnFinish":true}},"runOnCreate":false})).await;
+    let id = created["schedule"]["id"].clone();
+    success(
+        &mut socket,
+        "schedule.run_once.request",
+        json!({"scheduleId":id}),
+    )
+    .await;
+    terminate(&mut process).await;
+    drop(socket);
+    // A crash left the run open after its Agent record disappeared.
+    let path = state.join("schedules/schedules.json");
+    let mut doc: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    doc["schedules"][0]["runs"][0]["status"] = json!("running");
+    doc["schedules"][0]["runs"][0]["endedAt"] = Value::Null;
+    doc["schedules"][0]["runs"][0]["agentId"] = json!("00000000-0000-4000-8000-000000000001");
+    std::fs::write(&path, doc.to_string()).unwrap();
+    let mut process = start_with_path(&state, &log, Some(&fixture.path));
+    let address = ready(&mut process, &log).await;
+    let mut socket = connect(&address, METHODS).await;
+    let restored = success(
+        &mut socket,
+        "schedule.inspect.request",
+        json!({"scheduleId":id}),
+    )
+    .await;
+    assert_eq!(restored["schedule"]["runs"][0]["status"], "failed");
+    terminate(&mut process).await;
+}
+
 #[path = "schedule/ownership.rs"]
 mod ownership;

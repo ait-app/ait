@@ -6,6 +6,10 @@ use serde_json::json;
 use tokio_util::sync::CancellationToken;
 use voice::{Error, ports::Agents, service::Speech};
 
+/// Voice turn status polling backs off from a responsive start to a bounded interval.
+const STATUS_POLL_START: Duration = Duration::from_millis(25);
+const STATUS_POLL_MAX: Duration = Duration::from_millis(100);
+
 #[derive(Debug)]
 pub(super) struct NativeAgents(pub AgentExecution);
 
@@ -95,6 +99,7 @@ impl Agents for NativeAgents {
 
 impl NativeAgents {
     async fn wait(&self, agent: &str, turn: &str) -> Result<String, Error> {
+        let mut delay = STATUS_POLL_START;
         loop {
             let result = self
                 .0
@@ -106,7 +111,8 @@ impl NativeAgents {
                 .map_err(|_| Error::Agent)?;
             match result["status"].as_str() {
                 Some("running") => {
-                    tokio::time::sleep(Duration::from_millis(25)).await;
+                    tokio::time::sleep(delay).await;
+                    delay = (delay * 2).min(STATUS_POLL_MAX);
                 }
                 Some("idle") => {
                     return Ok(result["lastMessage"]

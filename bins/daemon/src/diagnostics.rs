@@ -48,6 +48,8 @@ struct Recent {
 enum Job {
     Incident(DateTime<Utc>),
     Report(mpsc::SyncSender<String>),
+    /// Save any unsaved events now, bypassing the capture interval, then acknowledge.
+    Flush(mpsc::SyncSender<()>),
 }
 
 #[derive(Clone, Debug)]
@@ -105,6 +107,16 @@ impl Diagnostics {
         self.with_filter(tracing_subscriber::filter::filter_fn(|metadata| {
             metadata.is_span() || *metadata.level() <= tracing::Level::WARN
         }))
+    }
+
+    /// Persist events recorded so far before the process exits, waiting at most `timeout`.
+    /// A fatal error is logged just before exit, so the background worker would otherwise be
+    /// stopped before it saved the incident that explains the failure.
+    pub(crate) fn flush(&self, timeout: Duration) {
+        let (reply, done) = mpsc::sync_channel(1);
+        if self.sender.try_send(Job::Flush(reply)).is_ok() {
+            let _ = done.recv_timeout(timeout);
+        }
     }
 
     fn record(&self, text: String, at: DateTime<Utc>) {
@@ -172,6 +184,14 @@ impl Worker {
                         let _ = reply.try_send(report.clone());
                     }
                 }
+                Ok(Job::Flush(reply)) => {
+                    if let Some(at) = self.unsaved(captured_through) {
+                        captured_through = Utc::now();
+                        self.save(&runtime, at);
+                        cache = None;
+                    }
+                    let _ = reply.try_send(());
+                }
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
                 Err(mpsc::RecvTimeoutError::Disconnected) => break,
             }
@@ -187,14 +207,24 @@ impl Worker {
         }
     }
 
+    /// The latest event not yet captured, once the automatic capture interval has elapsed.
     fn pending(&self, captured_through: DateTime<Utc>) -> Option<DateTime<Utc>> {
+        let interval_elapsed = self
+            .recent
+            .lock()
+            .ok()?
+            .last_capture
+            .is_none_or(|time| time.elapsed() >= CAPTURE_INTERVAL);
+        interval_elapsed
+            .then(|| self.unsaved(captured_through))
+            .flatten()
+    }
+
+    /// The latest event recorded after `captured_through`, marking a capture as started.
+    fn unsaved(&self, captured_through: DateTime<Utc>) -> Option<DateTime<Utc>> {
         let mut recent = self.recent.lock().ok()?;
         let at = recent.events.back()?.at;
-        if at <= captured_through
-            || recent
-                .last_capture
-                .is_some_and(|time| time.elapsed() < CAPTURE_INTERVAL)
-        {
+        if at <= captured_through {
             return None;
         }
         recent.last_capture = Some(Instant::now());

@@ -31,19 +31,31 @@ async fn main() -> ExitCode {
         };
     }
     let cli = config::Cli::parse();
-    match run(cli).await {
+    let mut collector = None;
+    match run(cli, &mut collector).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             let _ = tracing_subscriber::fmt()
                 .with_writer(std::io::stderr)
                 .try_init();
             tracing::error!(error = %format!("{error:#}"), "daemon stopped");
+            if let Some(diagnostics) = collector {
+                diagnostics.flush(FLUSH_TIMEOUT);
+            }
             ExitCode::FAILURE
         }
     }
 }
 
-async fn run(mut cli: config::Cli) -> anyhow::Result<()> {
+/// How long a failing daemon waits for its final incident to be saved before exiting.
+const FLUSH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Run one CLI command. Once the daemon's evidence collector starts it is stored in `collector`,
+/// so the caller can save the incident for a fatal error before the process exits.
+async fn run(
+    mut cli: config::Cli,
+    collector: &mut Option<diagnostics::Diagnostics>,
+) -> anyhow::Result<()> {
     if let Some(config::Command::OmpAcp { omp_bin }) = cli
         .command
         .take_if(|command| matches!(command, config::Command::OmpAcp { .. }))
@@ -75,6 +87,7 @@ async fn run(mut cli: config::Cli) -> anyhow::Result<()> {
     .context("load daemon configuration")?;
     let diagnostics = diagnostics::Diagnostics::start(config.data_dir.join("diagnostics"))
         .context("start diagnostic collector")?;
+    *collector = Some(diagnostics.clone());
     tracing_subscriber::registry()
         .with(diagnostics.clone().filtered())
         .with(

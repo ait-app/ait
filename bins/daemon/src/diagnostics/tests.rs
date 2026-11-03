@@ -86,6 +86,34 @@ fn worker_saves_sanitized_evidence_and_manual_report_survives_restart() {
     assert!(restarted.report().contains("fixture failure"));
 }
 
+fn incident_count(directory: &std::path::Path) -> usize {
+    std::fs::read_dir(directory).map_or(0, |entries| {
+        entries
+            .flatten()
+            .filter(|entry| entry.file_name().to_string_lossy().starts_with("incident-"))
+            .count()
+    })
+}
+
+#[test]
+fn flush_saves_a_fatal_event_that_the_capture_interval_would_defer() {
+    let directory = tempfile::tempdir().unwrap();
+    let diagnostics =
+        Diagnostics::with_sources(directory.path().to_owned(), FixtureSources).unwrap();
+    diagnostics.record("first failure".into(), Utc::now());
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while incident_count(directory.path()) == 0 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(incident_count(directory.path()), 1);
+    diagnostics.record("daemon stopped".into(), Utc::now());
+    assert_eq!(incident_count(directory.path()), 1);
+    diagnostics.flush(Duration::from_secs(10));
+    assert_eq!(incident_count(directory.path()), 2);
+    diagnostics.flush(Duration::from_secs(10));
+    assert_eq!(incident_count(directory.path()), 2);
+}
+
 #[test]
 fn deferred_capture_checks_new_events_and_exposes_storage_failures() {
     let directory = tempfile::tempdir().unwrap();

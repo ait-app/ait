@@ -55,6 +55,11 @@ impl Default for Document {
     }
 }
 
+/// The event journal reached its entry limit; the event is dropped rather than retried.
+#[derive(Debug, thiserror::Error)]
+#[error("Host event outbox full")]
+pub(super) struct OutboxFull;
+
 /// Immutable delivery attempt; a concurrent enqueue cannot change its event ID or content.
 #[derive(Debug, Clone)]
 pub(super) struct Job {
@@ -129,10 +134,9 @@ impl Outbox {
         {
             return Ok(());
         }
-        anyhow::ensure!(
-            self.document.events.len() < MAX_EVENTS,
-            "Host event outbox full"
-        );
+        if self.document.events.len() >= MAX_EVENTS {
+            return Err(OutboxFull.into());
+        }
         let mut next = self.document.clone();
         if let Some(key) = key {
             while next.seen.len() >= MAX_SEEN {
@@ -210,23 +214,58 @@ impl Outbox {
         self.commit(next)
     }
 
-    pub(super) fn next(&self, scope: &Scope, now: i64) -> Option<Job> {
-        if self.document.scope.as_ref() != Some(scope) {
-            return None;
-        }
-        let event = self
+    /// Clear quarantine so a fresh logical link retries every retained entry once.
+    /// Rejections such as `unauthorized` can be specific to the link that returned them.
+    pub(super) fn unblock(&mut self) -> anyhow::Result<()> {
+        let blocked = self
             .document
             .events
             .iter()
-            .find(|entry| {
-                entry.blocked.is_none() && now.saturating_sub(entry.created_at) < RETENTION_MS
-            })
-            .map(|entry| (EVENTS, entry));
-        let (method, entry) = event.or_else(|| {
-            self.document
+            .any(|entry| entry.blocked.is_some())
+            || self
+                .document
                 .directories
                 .values()
-                .find(|snapshot| snapshot.pending && snapshot.entry.blocked.is_none())
+                .any(|snapshot| snapshot.entry.blocked.is_some());
+        if !blocked {
+            return Ok(());
+        }
+        let mut next = self.document.clone();
+        for entry in &mut next.events {
+            entry.blocked = None;
+        }
+        for snapshot in next.directories.values_mut() {
+            if snapshot.entry.blocked.take().is_some() {
+                snapshot.pending = true;
+            }
+        }
+        self.commit(next)
+    }
+
+    /// The next deliverable entry using only `methods` the current link advertises, so an
+    /// unsupported event cannot hold back directory snapshots behind it.
+    pub(super) fn next(&self, scope: &Scope, methods: &[String], now: i64) -> Option<Job> {
+        if self.document.scope.as_ref() != Some(scope) {
+            return None;
+        }
+        let supports = |method: &str| methods.iter().any(|available| available == method);
+        let event = supports(EVENTS)
+            .then(|| {
+                self.document.events.iter().find(|entry| {
+                    entry.blocked.is_none() && now.saturating_sub(entry.created_at) < RETENTION_MS
+                })
+            })
+            .flatten()
+            .map(|entry| (EVENTS, entry));
+        let (method, entry) = event.or_else(|| {
+            supports(DIRECTORY)
+                .then(|| {
+                    self.document
+                        .directories
+                        .values()
+                        .find(|snapshot| snapshot.pending && snapshot.entry.blocked.is_none())
+                })
+                .flatten()
                 .map(|snapshot| (DIRECTORY, &snapshot.entry))
         })?;
         Some(Job {

@@ -6,6 +6,9 @@ use uuid::Uuid;
 
 use super::sources::Sources;
 
+/// Committed Timeline append or replacement marker; carries no history content.
+const TIMELINE: &str = "agent.timeline.update";
+
 #[derive(Debug)]
 pub(super) struct Event {
     pub(super) method: String,
@@ -30,11 +33,11 @@ impl Event {
             ),
             // Publish committed markers; clients fetch actual history from its Host.
             "agent_stream" if params["seq"].is_u64() && params["epoch"].is_string() => (
-                "agent.timeline.update",
+                TIMELINE,
                 json!({"agentId":params["agentId"],"epoch":params["epoch"],"seq":params["seq"]}),
             ),
             "agent.timeline.replacement" => (
-                "agent.timeline.update",
+                TIMELINE,
                 json!({"agentId":params["agentId"],"epoch":params["epoch"],"reset":true}),
             ),
             "agent_attention_required"
@@ -99,6 +102,11 @@ impl Event {
             });
         }
         Ok(publication)
+    }
+
+    /// Whether this is a Timeline marker, which is delivered from memory instead of the journal.
+    pub(super) fn timeline(&self) -> bool {
+        self.method == TIMELINE
     }
 
     pub(super) fn attention(&self) -> bool {

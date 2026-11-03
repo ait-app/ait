@@ -191,6 +191,7 @@ impl Publication {
             refresh_at,
             lease_until: None,
             generation: Uuid::new_v4(),
+            expired_refresh: false,
         }
     }
 
@@ -239,10 +240,15 @@ impl<C: Center, S: CredentialStore> Lease<'_, C, S> {
             (publication.access_until, publication.refresh_at) =
                 token_schedule(&publication.tokens);
             // A recovered receipt retains its original expiry. Persist its successor before
-            // rotating again, and do not register with an expired JWT.
+            // rotating again, and do not register with an expired JWT. A second expired token in
+            // a row means the local clock is ahead: back off instead of rotating every second.
             if publication.access_until <= tokio::time::Instant::now() {
+                if std::mem::replace(&mut publication.expired_refresh, true) {
+                    return Err(Error::Unavailable);
+                }
                 return Ok(());
             }
+            publication.expired_refresh = false;
             publication.next_renew = tokio::time::Instant::now();
         }
         if publication.session.is_none() {

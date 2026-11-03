@@ -61,6 +61,18 @@ Agent 通知入队与发送前都检查当前记录，已经读过、归档、�
   ingress 溢出会记录错误并触发重建；尚未入盘的 terminal hook 事件在崩溃或溢出时无法恢复，
   Timeline 标记也需要客户端重新读取所属 Host 的持久历史。中心 journal 不是 Host 全量审计日志。
 
+2026-11-04 修订（[daemon 审查遗留事项](../../plans/daemon-review-2026-11-03.md)）：
+
+- `agent.timeline.update` 不再写入 journal。每条已提交 Timeline 都会产生一个标记，逐条入盘需要
+  整体重写并同步 journal；标记改为按 Agent 保存在内存中，每个 Agent 最多一个待发 reset 和一个
+  其后的 update，新的 update 取代旧的，reset 取代此前全部标记。标记在 journal 事件和目录快照之后
+  按 Agent 轮流投递，重启后丢失，由客户端重新读取 Host 历史恢复。
+- journal 达到 1024 条时丢弃新事件并触发重建，不再反复重试；补扫的 attention 同样在写满时延后。
+- 新逻辑链路解除此前的隔离记录并各重试一次，`unauthorized` 等拒绝可能只针对上一条链路。
+- 只选择当前链路声明的方法，未声明的事件不再阻塞目录快照。
+- 目录超出 1000 项、单项 16 KiB 或整体 1 MiB 时，按 `updatedAt` 保留最近更新的条目，不再使
+  整次重建失败。
+
 ## 分阶段切换原生通知
 
 事件和目录发布在中心声明能力后自动启用。独立 daemon 的原生投递默认继续使用旧 daemon 注册，

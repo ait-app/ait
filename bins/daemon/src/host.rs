@@ -101,9 +101,16 @@ impl Server {
         );
         #[cfg(unix)]
         let mcp_socket_path = config.mcp_socket.clone();
-        let listener = TcpListener::bind(config.listen)
-            .await
-            .context("bind server listener")?;
+        // Bind before claiming the data directory so a port failure creates no state.
+        let listener = match TcpListener::bind(config.listen).await {
+            Ok(listener) => listener,
+            // A second daemon on the same port usually also shares the data directory;
+            // report that conflict rather than the port it implies.
+            Err(_) if InstanceLease::held(&data_dir) => {
+                anyhow::bail!("server data directory is already in use")
+            }
+            Err(error) => return Err(error).context("bind server listener"),
+        };
         let token = config.token.clone();
         let web_origins = config.web_origins.clone();
         let hub_notifications = config.hub_notifications;
@@ -263,16 +270,21 @@ impl Server {
         }
         .await;
         cancel.cancel();
-        tokio::time::timeout(Duration::from_secs(15), manager)
-            .await
-            .context("publication manager shutdown exceeded deadline")?
-            .context("join publication manager")?;
+        let manager_result = match tokio::time::timeout(Duration::from_secs(15), manager).await {
+            Ok(joined) => joined.context("join publication manager"),
+            Err(_) => Err(anyhow::anyhow!(
+                "publication manager shutdown exceeded deadline"
+            )),
+        };
         let lifecycle_intent = api.lifecycle_intent();
+        // Always flush publication, even when serving or the manager failed.
         publication.shutdown().await;
         // Drop routers and application storage before the data-directory instance lease.
         drop(api);
         drop(instance);
+        // The serving error explains a failed shutdown better than its consequences.
         result?;
+        manager_result?;
         Ok(lifecycle_intent)
     }
 }

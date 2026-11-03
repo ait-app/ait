@@ -29,6 +29,8 @@ struct Publication {
     refresh_at: tokio::time::Instant,
     lease_until: Option<tokio::time::Instant>,
     generation: Uuid,
+    /// The previous refresh already returned an access token expired by the local clock.
+    expired_refresh: bool,
 }
 
 impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {

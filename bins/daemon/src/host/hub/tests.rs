@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use super::*;
 
+mod delivery;
 mod wire;
 
 #[derive(Debug, Default)]
@@ -26,6 +27,11 @@ impl OutboxStore for MemoryStore {
         *self.document.lock().unwrap() = value.clone();
         Ok(())
     }
+}
+
+/// Both publication methods, as advertised by a current center.
+pub(super) fn methods() -> Vec<String> {
+    vec![EVENTS.to_owned(), DIRECTORY.to_owned()]
 }
 
 pub(super) fn scope() -> Scope {
@@ -120,6 +126,7 @@ fn application() -> (
         sources: sources(directory.path()),
         server: "server".to_owned(),
         outbox: Arc::new(Mutex::new(Outbox::open(store.clone()).unwrap())),
+        markers: Mutex::default(),
         changed: tokio::sync::Notify::new(),
         cancel: CancellationToken::new(),
         native: true,
@@ -154,7 +161,7 @@ async fn retry_and_restart_use_the_same_event_id_and_business_success_removes_it
         app.outbox
             .lock()
             .unwrap()
-            .next(&scope, Utc::now().timestamp_millis())
+            .next(&scope, &methods(), Utc::now().timestamp_millis())
             .is_none()
     );
 }
@@ -186,7 +193,7 @@ async fn rejected_events_are_quarantined_and_invalid_replies_remain_pending() {
         app.outbox
             .lock()
             .unwrap()
-            .next(&scope, Utc::now().timestamp_millis())
+            .next(&scope, &methods(), Utc::now().timestamp_millis())
             .is_none()
     );
 }
@@ -224,6 +231,7 @@ async fn ingress_uses_discovered_capabilities_keeps_offline_authority_and_refuse
         bytes: Arc::new(Semaphore::new(INGRESS_BYTES)),
         changes: app.sources.changes.clone(),
         native: true,
+        overflowing: AtomicBool::new(false),
     };
     let payload = json!({
         "terminalId":"terminal","workspaceId":"workspace","title":"Done","body":"Completed"
@@ -246,7 +254,7 @@ async fn ingress_uses_discovered_capabilities_keeps_offline_authority_and_refuse
         app.outbox
             .lock()
             .unwrap()
-            .next(&incoming.scope, Utc::now().timestamp_millis())
+            .next(&incoming.scope, &methods(), Utc::now().timestamp_millis())
             .is_none()
     );
 }
@@ -262,6 +270,7 @@ async fn cancellation_flushes_accepted_ingress_without_waiting_for_network() {
         bytes: Arc::new(Semaphore::new(INGRESS_BYTES)),
         changes: app.sources.changes.clone(),
         native: true,
+        overflowing: AtomicBool::new(false),
     };
     assert!(ingress.publish(
         "terminal_attention_required",
@@ -273,6 +282,7 @@ async fn cancellation_flushes_accepted_ingress_without_waiting_for_network() {
     let job = recovered
         .next(
             center.state.borrow().scope.as_ref().unwrap(),
+            &methods(),
             Utc::now().timestamp_millis(),
         )
         .unwrap();
@@ -301,6 +311,7 @@ async fn background_workers_spool_offline_and_deliver_after_link_returns() {
         bytes: Arc::new(Semaphore::new(INGRESS_BYTES)),
         changes: app.sources.changes.clone(),
         native: true,
+        overflowing: AtomicBool::new(false),
     };
     let spool = app.clone();
     let spool = tokio::spawn(spool.spool(receiver));
@@ -349,6 +360,7 @@ async fn migration_default_publishes_events_without_claiming_legacy_native_notif
         bytes: Arc::new(Semaphore::new(INGRESS_BYTES)),
         changes: app.sources.changes.clone(),
         native: false,
+        overflowing: AtomicBool::new(false),
     };
     assert!(!ingress.publish(
         "terminal_attention_required",
@@ -363,6 +375,7 @@ async fn migration_default_publishes_events_without_claiming_legacy_native_notif
         .unwrap()
         .next(
             center.snapshot().scope.as_ref().unwrap(),
+            &methods(),
             Utc::now().timestamp_millis(),
         )
         .unwrap();
@@ -393,7 +406,7 @@ async fn attention_cleared_before_retry_is_removed_without_a_native_delivery() {
         app.outbox
             .lock()
             .unwrap()
-            .next(&scope, Utc::now().timestamp_millis())
+            .next(&scope, &methods(), Utc::now().timestamp_millis())
             .is_none()
     );
 }

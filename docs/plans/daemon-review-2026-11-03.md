@@ -1,88 +1,102 @@
 # 2026-11-03 daemon 审查遗留事项
 
 来源：2026-11-03 对 `bins/daemon/src`（源码提交 `850e0075`）的审查，必要时追踪到 `host-link`、
-`persistence` 与 `provider` 的调用路径。审查未修改代码，也未运行测试；以下结论均基于源码阅读
-与调用链追踪。每项写明触发条件、影响和建议做法，完成后勾选，并附上修复 PR 和回归测试。
+`persistence` 与 `provider` 的调用路径。每项写明触发条件、影响和建议做法，完成后勾选，并附上
+修复与回归测试。
 
 与 [2026-11-02 仓库审查遗留事项](repository-review-2026-11-02.md) 不重复；`device/http.rs`
 协议错误终止发布、MCP socket 权限窗口等问题以那份清单为准。
 
+2026-11-04：分支 `fix/daemon-review-2026-11-03` 修复了下列已勾选条目；Hub 发布的行为变化记录在
+[ADR-181 修订](../decisions/daemon/adr-181-hub-host-publication.md)。剩余条目见文末「仍未完成」。
+
 ## 优先处理
 
-- [ ] **Hub 已连接时，每条时间线记录都会整体重写并 fsync 发布日志。**
-      每条已提交的时间线记录都会发布 `agent_stream`（`crates/provider/src/storage/timeline.rs`），
-      `host/hub/events.rs` 将其投影为 `agent.timeline.update`。`host/hub/outbox.rs` 的
-      `enqueue` → `commit` 每次都克隆整个文档（上限 24 MiB）、序列化三次、重写
-      `hub/publications.json` 并 fsync 两次（`crates/persistence/src/single.rs`）。活跃 Agent 的
-      每次工具调用或消息都触发一次完整写盘，离线积压到 1024 条时写放大接近 O(n²)。
-      建议按 Agent 合并时间线标记（只需保留最新 `seq`，客户端会向 Host 拉取历史），
-      或改为追加式日志。
-- [ ] **离线期间发布日志写满后，spool 循环停滞。**
-      `LinkState::supports` 在重连期间仍为真，事件持续入队直到 `MAX_EVENTS = 1024`。之后
-      `host/hub.rs` 的 `spool` 每 2 秒重试同一个必然失败的「outbox full」，期间不处理链路状态变化，
-      也不执行 reconcile；256 条的 ingress 队列随即写满，`Ingress::publish` 对每个被丢弃的事件
-      记录一条 `error!`，诊断采集器因此每 30 秒写一份事故文件。链路恢复后能自愈，但低价值的
-      时间线标记会挤占注意力事件。建议与上一项一起处理：合并标记、为不同事件类型分配配额，
-      并对「已满」限流记录日志，而不是逐条报错。
-- [ ] **目录条目超过 1000 时，发布永久失败并每 2 秒全量重读。**
-      `host/hub/sources.rs` 的 `snapshots` 在任一类别超过 1000 项时 `ensure!` 失败（Agent 计入
-      所有未归档项）。`reconcile` 随后每 2 秒重试、读取全部注册表并记录告警；注意力事件的恢复
-      位于同一个阻塞调用中、排在快照之后，因此也被阻断。建议对超出预算的类别降级处理（截断或跳过
-      该类别并记录一次告警），并把注意力恢复与目录快照拆开，互不阻塞。
-- [ ] **无关的 `GOOGLE_APPLICATION_CREDENTIALS` 会让 daemon 无法启动。**
-      `host/push/auth.rs` 的 `Google::from_environment` 回退读取 `GOOGLE_APPLICATION_CREDENTIALS`；
-      文件不存在，或不是服务账号密钥（如 `authorized_user`、`external_account`）时返回错误，
-      经 `host.rs` 的 `compose_push(...)?` 导致整个 daemon 退出。很多开发者会为其他工具设置该变量。
-      建议只有显式设置的 `AIT_FCM_SERVICE_ACCOUNT_FILE` 出错时才致命；回退变量无效时记录告警并
-      禁用 FCM。
-- [ ] **定时任务启动恢复可能让 daemon 永久无法启动。**
-      `host/schedule.rs` 的 `compose` 对 `futures_recover` 使用 `?`，而对已不存在的 Agent 执行
-      `agent.archive.request` 会返回 `NotFound`（`crates/provider/src/service/agent_runtime/archive.rs`）；
-      I/O 错误或 observed Agent 同样会中止启动。该运行仍保持 `Running`，之后每次启动都以同样方式
-      失败，只能手工编辑 `schedules.json`。建议把 `NotFound` 视为已恢复，其他错误记录日志后继续
-      启动，由调度器把该运行结算为失败。
+- [x] **Hub 已连接时，每条时间线记录都会整体重写并 fsync 发布日志。**
+      每条已提交的时间线记录都会发布 `agent_stream`，投影为 `agent.timeline.update` 后经
+      `Outbox::enqueue` → `commit` 整体重写 `hub/publications.json` 并 fsync 两次。
+      修复：标记改由 `host/hub/markers.rs` 在内存中按 Agent 合并（最多一个 reset 与一个 update），
+      在 journal 事件和目录快照之后轮流投递，不再入盘。回归：
+      `timeline_markers_skip_the_journal_coalesce_and_follow_journal_events`、
+      `failed_marker_delivery_is_retried_and_permanent_rejection_drops_it` 与 `markers` 单元测试。
+- [x] **离线期间发布日志写满后，spool 循环停滞。**
+      写满后 `spool` 每 2 秒重试必然失败的「outbox full」，不处理链路变化与 reconcile，
+      `Ingress::publish` 对每个被丢弃的事件记录 `error!`。
+      修复：写满返回类型化的 `OutboxFull`，事件被丢弃并触发重建；补扫 attention 写满时延后；
+      ingress 溢出每次只记录一条错误。回归：
+      `full_journal_drops_the_event_and_resynchronizes_instead_of_retrying`、
+      `a_full_journal_reports_a_typed_error_and_keeps_existing_entries`。
+- [x] **目录条目超过 1000 时，发布永久失败并每 2 秒全量重读。**
+      修复：`host/hub/sources.rs` 的 `fit_budget` 在预算内原样发布，超出时跳过过大条目并按
+      `updatedAt` 保留最近更新的条目。回归：`directories_within_budget_are_published_unchanged`、
+      `oversized_directories_keep_the_most_recently_updated_items`。
+- [x] **无关的 `GOOGLE_APPLICATION_CREDENTIALS` 会让 daemon 无法启动。**
+      修复：显式 `AIT_FCM_SERVICE_ACCOUNT_FILE` 无效仍导致启动失败；回退变量不可读或不是服务账户
+      时只记录告警并禁用 FCM，[移动端通知](../operations/mobile-notifications.md)已同步。回归：
+      `unusable_ambient_google_credentials_disable_fcm_without_failing_startup`。
+- [x] **定时任务启动恢复可能让 daemon 永久无法启动。**
+      修复：`recover_interrupted` 把 `AgentNotFound` 视为已恢复，其他归档失败记录告警后继续启动，
+      由调度器把该运行结算为失败；整批恢复共用一个运行时。回归（进程测试）：
+      `restart_recovery_tolerates_an_interrupted_run_whose_agent_is_gone`，在旧代码上以
+      「recover scheduled agent」启动失败。
 
 ## 中等
 
-- [ ] **本地时钟超前时，`daemon login` 可能无限循环。**
-      `device.rs` 的 `restore_login` 循环直到 `access_expires_at > now`；`device/http.rs` 的
-      `decode_tokens` 只拒绝过期时间过远的 access token，不拒绝已过期的。本地时钟超前约 15 分钟
-      以上时，每轮都会轮换 refresh token 并做两次 fsync 保存，没有退避也没有上限。
-      `crates/host-link/src/controller/authority.rs` 的刷新路径有相同模式。建议限制重试次数，
-      或把已过期的 access token 视为协议错误并提示检查系统时钟。
-- [ ] **两个可能是暂时性的错误码被当作永久错误，会冻结目录发布。**
-      `host/hub.rs` 的 `permanent()` 包含 `unauthorized` 与 `forbidden`，它们在令牌轮换期间可能
-      只是暂时状态。被隔离的目录快照只有在内容变化后才会恢复：重连时的强制重发不会清除
-      `blocked`（`host/hub/outbox.rs` 的 `snapshot`）。被隔离的事件保留 24 小时并占用 1024 条
-      配额，加重上面的写满问题。建议这两个码按可重试处理，或在新链路上清除 `blocked`。
-- [ ] **中心不支持的持久化事件会阻塞全部目录发布。**
-      `Outbox::next` 总是先返回事件、后返回目录快照；若队首事件的方法不再被中心声明，
-      `attempt` 返回 `Ok(false)`，目录快照在其后最多等待 24 小时。建议 `next` 只选择当前链路
-      支持的方法。
+- [x] **本地时钟超前时，`daemon login` 可能无限循环。**
+      修复：`restore_login` 最多轮换 `RESTORE_ATTEMPTS = 2` 次（第二次用于取得重放回执的后继），
+      仍过期时提示检查系统时钟；`host-link` 的 `Lease::step` 在连续两次得到过期 token 时返回
+      `Unavailable`，按 1–30 秒退避并报告 `retrying`，不再每秒轮换。回归：
+      `login_stops_rotating_when_every_access_token_is_already_expired`、
+      `replayed_expired_receipt_rotates_once_more_and_succeeds`、
+      `clock_skew_backs_off_instead_of_rotating_every_second`（修复前 60 秒内轮换 61 次）。
+- [x] **两个可能是暂时性的错误码被当作永久错误，会冻结目录发布。**
+      修复：隔离仍只在同一链路内生效；新逻辑链路的 reconcile 调用 `Outbox::unblock`，事件与目录快照
+      各重试一次。回归：`a_fresh_link_retries_quarantined_events_and_snapshots_once`、
+      `a_fresh_link_retries_events_quarantined_by_the_previous_link`。
+- [x] **中心不支持的持久化事件会阻塞全部目录发布。**
+      修复：`Outbox::next` 只选择当前链路声明的方法。回归：
+      `unsupported_events_do_not_hold_back_directory_snapshots`。
 
 ## 较低
 
-- [ ] **关闭时的错误处理会掩盖真实错误。**
-      `host.rs` 的 `serve` 中，发布管理器超时会经 `?` 提前返回，覆盖 `result` 中真正的服务错误，
-      并跳过 `publication.shutdown()`。建议先完成所有清理，再按优先级返回错误。
-- [ ] **`daemon status` 在崩溃后显示过期状态。**
-      `device.rs` 的 `status` 直接展示最后写入的阶段（如 `running`），不检查记录的 PID 是否存活。
-      `StatusRelay::report` 在异步运行时上做同步文件 I/O，崩溃残留的 `status-*.tmp` 也从不清理。
-      建议读取时校验 PID 存活，并在启动时清理临时文件。
-- [ ] **启动失败不会被诊断采集保存。**
-      `main.rs` 记录致命错误后立即退出，诊断工作线程来不及保存事故文件，而启动失败恰恰最需要
-      留证。建议退出前同步刷写一次，或直接写入一份最小事故报告。
-- [ ] **部分工作发生在实例锁之前。**
-      TCP 监听、本地令牌创建和诊断采集（会清理共享的事故目录）都早于 `InstanceLease::acquire`
-      （`host.rs`、`main.rs`）。第二个 daemon 使用同一数据目录和端口时，报错为
-      「bind server listener」而不是「数据目录已被占用」。建议先获取实例锁再绑定端口与启动采集。
-- [ ] **`--name` 被静默忽略。**
-      存在未完成授权且未传 `--force` 时，`daemon login --name X` 不生效（`device.rs`）。
-      建议报错提示，或在该情况下同样应用显式名称。
-- [ ] **本地令牌权限检查难以阅读，错误提示不明确。**
-      `config/local_token.rs` 的 `mode().trailing_zeros() >= 6` 应写为 `mode & 0o077 == 0`；
-      手工编辑后带尾随换行的令牌文件会被拒绝，且错误信息没有说明原因。
-- [ ] **定时任务恢复为每个 Agent 新建 Tokio 运行时。**
-      `host/schedule.rs` 的 `futures_recover` 可改为整批恢复共用一个运行时。
-- [ ] **等待循环高频轮询且没有整体超时。**
-      `host/voice.rs` 与 `host/schedule.rs` 的等待循环每 25 ms 轮询一次；建议加入退避或整体超时。
+- [x] **关闭时的错误处理会掩盖真实错误。**
+      修复：`serve` 始终执行 `publication.shutdown()`，先返回服务错误，再返回发布管理器错误。
+      管理器超时难以稳定构造，未新增专门测试，由现有生命周期测试覆盖正常路径。
+- [x] **`daemon status` 在崩溃后显示过期状态。**
+      修复：新增 `runtime_process_alive`（基于 `kill(pid, 0)`，PID 可能被复用），
+      [无人值守 daemon](../operations/headless-daemon.md)已同步；启动时清理残留的
+      `status-*.tmp`。回归：`status_probe_distinguishes_live_and_exited_processes`、
+      `stale_status_snapshots_are_removed_without_touching_other_files`。
+- [x] **启动失败不会被诊断采集保存。**
+      修复：`main` 记录致命错误后调用 `Diagnostics::flush`（最多等待 5 秒），绕过 30 秒采集间隔
+      保存尚未保存的事件。回归：`flush_saves_a_fatal_event_that_the_capture_interval_would_defer`。
+- [x] **第二个 daemon 在同一端口上报告端口错误而不是数据目录冲突。**
+      修复：保留「先绑定端口」的顺序（`binding_failure_has_no_state_side_effects` 要求端口失败不产生
+      任何状态）；绑定失败时用 `InstanceLease::held` 只读探测既有锁，被占用则报告数据目录冲突。
+      回归：`held_probe_reports_a_live_lease_without_creating_state` 与进程测试
+      `signal_shutdown_releases_process_lock_and_preserves_identity`。
+- [x] **`--name` 被静默忽略。**
+      修复：存在未完成的 Web/enrollment 授权且未传 `--force` 时直接报错；仅有待恢复的 refresh 时
+      应用显式名称。回归：`explicit_name_cannot_rename_an_unfinished_approval_without_force`。
+- [x] **本地令牌文件带尾随换行时被拒绝，错误提示不明确。**
+      修复：容忍单个 `\n` 或 `\r\n`，超长内容仍被拒绝，错误信息说明期望格式。审查中建议的
+      `mode & 0o077 == 0` 写法会触发本仓库启用的 `clippy::verbose_bit_mask`，因此保留
+      `trailing_zeros() >= 6` 并加注释。回归：
+      `hand_edited_credentials_tolerate_a_line_ending_but_not_group_access`。
+- [x] **定时任务恢复为每个 Agent 新建 Tokio 运行时。**
+      修复：仅在存在中断运行时创建一个运行时，整批共用。
+- [x] **等待循环高频轮询。**
+      修复：定时任务每次完成等待最长 1 秒且超时后不再额外休眠；语音状态轮询从 25 ms 退避到
+      100 ms。
+
+## 仍未完成
+
+- [ ] **本地令牌与诊断采集仍早于实例锁。**
+      `Config::load` 创建本地令牌、`main` 启动诊断采集（会清理共享的事故目录）都发生在
+      `InstanceLease::acquire` 之前。两者均为幂等或有界操作，影响低；如需彻底解决，应把实例锁
+      提前到 `main` 并调整「端口失败不产生状态」的约束。
+- [ ] **等待循环没有整体超时。**
+      `host/voice.rs` 与 `host/schedule.rs` 的等待仍可无限期进行，依赖取消令牌结束。定时运行可能
+      合理地持续很久，加入上限前需要先确定产品语义。
+- [ ] **`StatusRelay::report` 在异步运行时上做同步文件 I/O。**
+      写入的是小型状态文件，影响低；如需处理，可改为交给阻塞线程或后台任务写入。
