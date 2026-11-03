@@ -486,7 +486,7 @@ for line in sys.stdin:
                     "threadId": thread_id, "turn": {"id": pending, "status": "completed"}}})
                 pending = None
             continue
-        if text in ("background-subagent", "live-subagent", "modern-subagent", "modern-subagent-return", "modern-subagent-completed", "invalid-subagent-activity"):
+        if text in ("background-subagent", "live-subagent", "modern-subagent", "modern-subagent-return", "modern-subagent-completed", "invalid-subagent-activity", "unknown-subagent-activity"):
             child = "child-" + thread_id
             spawn = {"type":"collabAgentToolCall", "id":"spawn-child", "senderThreadId":thread_id,
                 "receiverThreadIds":[child], "tool":"spawnAgent", "status":"completed", "prompt":"inspect",
@@ -519,13 +519,23 @@ for line in sys.stdin:
                 threading.Thread(target=finish_after_release, daemon=True).start()
             else:
                 finish_child()
-                if text in ("modern-subagent-completed", "invalid-subagent-activity"):
+                if text in ("modern-subagent-completed", "invalid-subagent-activity", "unknown-subagent-activity"):
                     activity = {"type":"subAgentActivity", "id":"subagent-completed-child-turn",
-                        "kind":"completed" if text == "modern-subagent-completed" else "unknown",
-                        "agentThreadId":child, "agentPath":"/root/code_reviewer",
+                        "kind":"unknown" if text == "unknown-subagent-activity" else "completed",
+                        "agentThreadId":None if text == "invalid-subagent-activity" else child,
+                        "agentPath":"/root/code_reviewer",
                         "model":None, "reasoningEffort":None}
                     stream_items.append(activity)
+                    if text == "unknown-subagent-activity":
+                        emit({"method":"item/started", "params":{"threadId":thread_id,"turnId":pending,"item":activity}})
                     emit({"method":"item/completed", "params":{"threadId":thread_id,"turnId":pending,"item":activity}})
+                if text == "unknown-subagent-activity":
+                    state = {"type":"collabAgentToolCall", "id":"unknown-child-state",
+                        "senderThreadId":thread_id, "receiverThreadIds":[child], "tool":"wait",
+                        "status":"completed", "agentsStates":{child:{"status":"unknown"}}}
+                    stream_items.append(state)
+                    emit({"method":"item/started", "params":{"threadId":thread_id,"turnId":pending,"item":state}})
+                    emit({"method":"item/completed", "params":{"threadId":thread_id,"turnId":pending,"item":state}})
                 complete(pending, "Parent only")
             continue
         if text == "approval":

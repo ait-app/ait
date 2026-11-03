@@ -183,9 +183,7 @@ async fn accepted_successor_ticket_can_recover_a_later_access_refusal() {
         let (controller, mock) = fixture();
         let cancel = CancellationToken::new();
         let task = tokio::spawn(controller.run(cancel.clone()));
-        for _ in 0..2 {
-            tick().await;
-        }
+        wait_for_ticket_recovery(&mock, 1, hub).await;
         for expected_refreshes in [2, 3] {
             {
                 let mut seen = mock.0.lock().unwrap();
@@ -197,25 +195,39 @@ async fn accepted_successor_ticket_can_recover_a_later_access_refusal() {
                     seen.ticket_errors.push_back(Error::AccessRejected);
                 }
             }
-            for _ in 0..5 {
-                tick().await;
-            }
-            let seen = mock.0.lock().unwrap();
-            assert!(
-                seen.active && seen.hub.active,
-                "hub={hub}, expected_refreshes={expected_refreshes}, refreshes={}, reports={:?}, relay={}, hub_active={}, finished={}",
-                seen.refreshes.len(),
-                seen.reports,
-                seen.active,
-                seen.hub.active,
-                task.is_finished()
-            );
-            assert_eq!(seen.refreshes.len(), expected_refreshes);
+            wait_for_ticket_recovery(&mock, expected_refreshes, hub).await;
             assert!(!task.is_finished());
         }
         cancel.cancel();
         task.await.unwrap().unwrap();
     }
+}
+
+async fn wait_for_ticket_recovery(mock: &Mock, expected_refreshes: usize, hub: bool) {
+    // Let the paused clock follow pending timers rather than treating a fixed number of
+    // scheduler yields as completion of ticket issuance, refresh and both reconnects.
+    let recovered = tokio::time::timeout(Duration::from_secs(15), async {
+        loop {
+            {
+                let seen = mock.0.lock().unwrap();
+                assert!(seen.refreshes.len() <= expected_refreshes);
+                if seen.active && seen.hub.active && seen.refreshes.len() == expected_refreshes {
+                    return;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+    let seen = mock.0.lock().unwrap();
+    assert!(
+        recovered.is_ok(),
+        "hub={hub}, expected_refreshes={expected_refreshes}, refreshes={}, reports={:?}, relay={}, hub_active={}",
+        seen.refreshes.len(),
+        seen.reports,
+        seen.active,
+        seen.hub.active,
+    );
 }
 
 #[tokio::test(start_paused = true)]

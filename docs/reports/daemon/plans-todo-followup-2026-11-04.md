@@ -112,6 +112,30 @@ npm run test --workspace=@ait/mobile -- src/bots/workspace-bot-tab.test.tsx
 `cargo fmt --all --check`、`npm run check:docs`（509 份 Markdown 的本地链接）、
 `npm run check:ui` 和 `git diff --check` 通过。
 
+## PR #573 CI 回归修复
+
+提交 `a3ac3508` 的[首轮 CI](https://github.com/ait-app/ait/actions/runs/41685395367)
+发现两处测试问题，修复限定在测试和夹具：
+
+- host-link 的取票恢复测试用固定次数的 `advance` 与 `yield_now` 代替完成条件，可能在刷新或
+  重连尚未完成时断言失败。旧测试在 8 个并发进程中重复 100 次，失败 32 次；改为等待预期
+  刷新次数和两个连接恢复，保留 15 秒虚拟时间上限、刷新次数上界及任务存活断言后，同样
+  重复 100 次全部通过。`cargo test --locked --offline -p host-link controller::tests`
+  的 50 项也全部通过，没有降低测试并行度或改变生产重试逻辑。
+- Codex 的诊断夹具把未知但结构合法的 `subAgentActivity.kind` 当成损坏事件，仍期待父回合
+  报协议错误，与新的兼容行为冲突。将损坏夹具改为无效的子线程身份，保留错误上下文和
+  关闭后的诊断断言；另用未知类型与状态验证父回合完成、已知子 Agent 状态保留及下一回合可用。
+  `cargo test --locked --offline -p provider --lib local::codex::tests::diagnostics::` 的 5 项和
+  `cargo test --locked --offline -p provider --lib local::codex::subagents::` 的 11 项全部通过，
+  共用夹具的正常子 Agent 完成回归也通过。
+
+该正常完成回归的命令为：
+
+```sh
+cargo test --locked --offline -p provider --lib \
+  local::codex::tests::progress::child_completion_keeps_its_link_in_live_and_native_history_and_allows_next_turn -- --exact
+```
+
 ## 未完成边界
 
 - OpenCode 子会话恢复通知仍需支持对应扩展的真实版本确认；本机 2.0.32 不足以验收。
