@@ -80,6 +80,7 @@ export function useAggregatedAgents(options?: {
           continue;
         }
         const nextAgent: AggregatedAgent = {
+          management: agent.management,
           id: agent.id,
           serverId,
           serverLabel,

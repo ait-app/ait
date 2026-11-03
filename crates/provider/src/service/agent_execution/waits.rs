@@ -30,6 +30,10 @@ impl AgentExecution {
         let observed = tokio::task::spawn_blocking(move || {
             let state = template.lock().map_err(|_| ErrorCode::AgentIo)?.fork(None);
             let id = state.resolve(&request.agent_id)?;
+            state
+                .manager
+                .require_managed(&id)
+                .map_err(|_| ErrorCode::UnsupportedCapability)?;
             state.owners.observe(&id, state.wait_result(&id)?)
         })
         .await

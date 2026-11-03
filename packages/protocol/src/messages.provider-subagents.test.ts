@@ -2,6 +2,81 @@ import { describe, expect, test } from "vitest";
 import { SessionInboundMessageSchema, SessionOutboundMessageSchema } from "./messages.js";
 
 describe("provider subagent protocol", () => {
+  test("preserves unified discovery, directory opt-in and observation facts", () => {
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "agent.subagents.list.request",
+        requestId: "request",
+        parentAgentId: "parent",
+        subagentId: "native",
+      }),
+    ).toMatchObject({ subagentId: "native" });
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "agent.list.request",
+        requestId: "request",
+        includeObserved: true,
+      }),
+    ).toMatchObject({ includeObserved: true });
+    const response = SessionOutboundMessageSchema.parse({
+      type: "agent.subagents.list.response",
+      payload: {
+        requestId: "request",
+        parentAgentId: "parent",
+        error: null,
+        agents: [
+          {
+            id: "observed",
+            provider: "codex",
+            management: "observed",
+            parentAgentId: "parent",
+            cwd: "/project",
+            model: null,
+            createdAt: "2026-10-31T00:00:00Z",
+            updatedAt: "2026-10-31T00:00:00Z",
+            lastUserMessageAt: null,
+            status: "closed",
+            capabilities: {
+              supportsStreaming: true,
+              supportsSessionPersistence: false,
+              supportsDynamicModes: false,
+              supportsMcpServers: false,
+              supportsReasoningStream: false,
+              supportsToolInvocations: true,
+              supportsMessageSend: false,
+            },
+            currentModeId: null,
+            availableModes: [],
+            pendingPermissions: [],
+            persistence: null,
+            title: "Inspect project",
+            labels: {},
+            observation: {
+              rootAgentId: "parent",
+              nativeId: "native",
+              status: "unknown",
+              health: "stale",
+              observedAt: "2026-10-31T00:00:00Z",
+              description: "Inspect project",
+              subtitle: "Explore",
+            },
+          },
+        ],
+      },
+    });
+    expect(response).toMatchObject({
+      payload: {
+        agents: [
+          {
+            management: "observed",
+            parentAgentId: "parent",
+            observation: { status: "unknown", health: "stale" },
+          },
+        ],
+      },
+    });
+  });
+
   test("accepts a scoped timeline request and structured live update", () => {
     expect(
       SessionInboundMessageSchema.parse({

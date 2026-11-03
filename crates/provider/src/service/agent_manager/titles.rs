@@ -10,6 +10,7 @@ use crate::protocol::timeline::NativeItem;
 /// Return whether `record` is public and has no nonblank display title.
 pub(super) fn missing(record: &PersistedAgentRuntimeRecord) -> bool {
     !record.internal
+        && record.observation.is_none()
         && record
             .title
             .as_deref()

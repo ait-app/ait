@@ -548,7 +548,11 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     ];
     const feeds = client.observeEvents(
       (info) => [
-        ...requestedEvents,
+        ...requestedEvents.filter(
+          (event) =>
+            event !== "agent.provider_subagents.update" ||
+            info?.features?.unifiedSubagentAgents !== true,
+        ),
         info?.features?.workspaceSetupObservation
           ? "workspace_setup_status"
           : "workspace.setup.progress",
@@ -579,7 +583,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
 
     const unsubProviderSubagentUpdate = feeds.subscribe({
       snapshot: () => {
-        void resyncProviderSubagents(client, serverId);
+        if (client.getLastServerInfoMessage()?.features?.unifiedSubagentAgents !== true)
+          void resyncProviderSubagents(client, serverId);
       },
       update: (message) => {
         if (message.type !== "agent.provider_subagents.update") return;

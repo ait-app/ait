@@ -45,12 +45,42 @@ pub(crate) struct ExecutionState {
 }
 
 impl ExecutionState {
+    fn guard_observed_request(&self, method: &str, params: &Value) -> Result<(), ErrorCode> {
+        if method == "agent.commands.list.request" && params.get("draftConfig").is_some() {
+            return Ok(());
+        }
+        if let Some(id) = params["agentId"].as_str()
+            && !matches!(
+                method,
+                "agent.create.request"
+                    | "agent.get.request"
+                    | "agent.update.request"
+                    | "agent.archive.request"
+                    | "agent.attention.clear.request"
+            )
+            && !method.starts_with("agent.timeline.")
+        {
+            let id = self.resolve(id)?;
+            if self
+                .registry
+                .get(&id)
+                .map_err(|_| ErrorCode::AgentIo)?
+                .is_some_and(|record| record.observation.is_some())
+            {
+                return Err(ErrorCode::UnsupportedCapability);
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) async fn execute(
         &mut self,
         method: Operation,
         params: Value,
     ) -> Result<Value, ErrorCode> {
+        self.guard_observed_request(method.as_str(), &params)?;
         match method {
+            Operation::UnifiedSubagents => self.unified_subagents(params).await,
             Operation::Bot => self.bot(params).await,
             Operation::WorkspaceCreate => self.create_workspace_agent(params).await,
             Operation::RetireWorkspaces => self.retire_workspaces(params).await,
@@ -187,9 +217,10 @@ impl ExecutionState {
             return Err(ErrorCode::UnsupportedCapability);
         }
         let cursor = request.sync.clone().unwrap_or_default();
+        let include_observed = request.include_observed;
         let mut value = super::agent_runtime::sync_snapshot(&self.directory, request)?;
         self.decorate(&mut value)?;
-        super::agent_runtime::synchronize(&self.directory, value, &cursor)
+        super::agent_runtime::synchronize(&self.directory, value, &cursor, include_observed)
     }
 
     /// Whether an opted-in page can use committed history without owning native hydration.
@@ -204,6 +235,37 @@ impl ExecutionState {
         }
         let request: crate::protocol::timeline::FetchRequest = decode(params.clone())?;
         Ok(self.manager.can_read_cached_timeline(&request.agent_id)?)
+    }
+
+    async fn timeline_scope(
+        &mut self,
+        id: &str,
+        method: &str,
+        params: &Value,
+    ) -> Result<String, ErrorCode> {
+        let record = self
+            .registry
+            .get(id)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .ok_or(ErrorCode::AgentNotFound)?;
+        let scope = record.observation.as_ref().map_or_else(
+            || id.to_owned(),
+            crate::service::agent_manager::observed::scope,
+        );
+        if record.observation.is_some() {
+            if method == "internal.timeline.append" {
+                return Err(ErrorCode::UnsupportedCapability);
+            }
+            if !self.manager.history_loaded(id) && !self.can_read_cached_timeline(method, params)? {
+                self.manager.load_observed(id).await?;
+            }
+        }
+        // A queued warm read may run after rewind invalidates the shared hydration marker.
+        // Readers still use the committed projection; only the owner may start native hydration.
+        if self.manager.owns_runtime(id) {
+            self.manager.load_timeline(id).await?;
+        }
+        Ok(scope)
     }
 
     async fn timeline(&mut self, method: &str, params: Value) -> Result<Value, ErrorCode> {
@@ -221,11 +283,7 @@ impl ExecutionState {
             .as_str()
             .ok_or(ErrorCode::InvalidMessage)?;
         let id = self.resolve(identifier)?;
-        // A queued warm read may run after rewind invalidates the shared hydration marker.
-        // Readers still use the committed projection; only the owner may start native hydration.
-        if self.manager.owns_runtime(&id) {
-            self.manager.load_timeline(&id).await?;
-        }
+        let scope = self.timeline_scope(&id, method, &params).await?;
         let timeline = self
             .manager
             .timeline()
@@ -241,7 +299,7 @@ impl ExecutionState {
                 super::timeline::fetch_stored(
                     &request,
                     &timeline,
-                    &id,
+                    &scope,
                     &self.snapshot(&id)?,
                     history_needs_refresh,
                 )
@@ -250,12 +308,12 @@ impl ExecutionState {
             "agent.timeline.search.request" => {
                 let mut request: SearchRequest = decode(params)?;
                 request.agent_id = id;
-                let (epoch, rows) = timeline.read(&request.agent_id)?;
+                let (epoch, rows) = timeline.read(&scope)?;
                 super::timeline::search(&request, &epoch, &rows).map_err(Into::into)
             }
             "agent.timeline.list_prompts.request" => {
                 only(&params, &["agentId"])?;
-                let (epoch, rows) = timeline.read(&id)?;
+                let (epoch, rows) = timeline.read(&scope)?;
                 super::timeline::prompts(&id, &epoch, &rows).map_err(Into::into)
             }
             "internal.timeline.append" => {
@@ -590,12 +648,13 @@ impl ExecutionState {
             }
         }
         self.manager.control_snapshot(record, &mut snapshot);
-        if self.manager.owns_runtime(&record.id) {
+        if record.observation.is_none() && self.manager.owns_runtime(&record.id) {
             self.owners.publish_controls(record, &snapshot);
-        } else {
+        } else if record.observation.is_none() {
             self.owners.restore_controls(record, &mut snapshot);
         }
-        if !self.manager.owns_runtime(&record.id)
+        if record.observation.is_none()
+            && !self.manager.owns_runtime(&record.id)
             && let Some(committed) = self.owners.snapshot(&record.id)
         {
             for field in [

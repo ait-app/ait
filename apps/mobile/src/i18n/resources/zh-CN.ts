@@ -2390,6 +2390,9 @@ export const zhCN: TranslationResources = {
     backdrop: "菜单背景",
   },
   subagents: {
+    observing: "只读",
+    observationUnknown: "状态待确认",
+    observationUnavailable: "会话暂不可用",
     title: "子智能体",
     pillLabelOne: "1 个子智能体",
     pillLabelMany: "{{count}} 个子智能体",

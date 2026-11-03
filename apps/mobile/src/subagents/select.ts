@@ -5,15 +5,19 @@ import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useSessionStore, type Agent } from "@/stores/session-store";
 import { refreshProviderSubagents, useProviderSubagentStore } from "./provider-store";
 import type { ProviderSubagentDescriptorPayload } from "@ait/protocol/messages";
+import { markObservedSubagentsStale, refreshUnifiedSubagents } from "./unified";
 
 export interface PaseoSubagentRow {
   kind: "paseo";
   id: Agent["id"];
   provider: Agent["provider"];
   title: Agent["title"];
-  /** Managed agents have a real title, so the union's task line is always absent for them. */
-  description: null;
-  subtitle: null;
+  /** Optional native task metadata; the normal Agent title includes any user rename. */
+  description: string | null;
+  subtitle: string | null;
+  observation?: Agent["observation"];
+  canArchive?: boolean;
+  canDetach?: boolean;
   status: Agent["status"];
   turn: Agent["turn"];
   requiresAttention: Agent["requiresAttention"];
@@ -58,8 +62,15 @@ function toSubagentRow(agent: Agent): SubagentRow {
     id: agent.id,
     provider: agent.provider,
     title: agent.title,
-    description: null,
-    subtitle: null,
+    description: agent.observation?.description ?? null,
+    subtitle: agent.observation?.subtitle ?? null,
+    ...(agent.observation ? { observation: agent.observation } : {}),
+    ...(agent.capabilities.supportsArchive !== undefined
+      ? { canArchive: agent.capabilities.supportsArchive }
+      : {}),
+    ...(agent.capabilities.supportsDetach !== undefined
+      ? { canDetach: agent.capabilities.supportsDetach }
+      : {}),
     status: agent.status,
     turn: agent.turn,
     requiresAttention: agent.requiresAttention,
@@ -165,8 +176,13 @@ export function useSubagentsForParent(params: SelectSubagentsParams): SubagentRo
     [serverId, parentAgentId, pendingArchiveIds],
   );
   const paseoRows = useStoreWithEqualityFn(useSessionStore, selectPaseoRows, equal);
+  const unified = useSessionStore(
+    (state) =>
+      state.sessions[params.serverId]?.serverInfo?.features?.unifiedSubagentAgents === true,
+  );
   const supported = useSessionStore(
-    (state) => state.sessions[params.serverId]?.serverInfo?.features?.providerSubagents === true,
+    (state) =>
+      !unified && state.sessions[params.serverId]?.serverInfo?.features?.providerSubagents === true,
   );
   const nestingSupported = useSessionStore(
     (state) =>
@@ -180,11 +196,23 @@ export function useSubagentsForParent(params: SelectSubagentsParams): SubagentRo
   const client = useSessionStore((state) => state.sessions[params.serverId]?.client ?? null);
 
   useEffect(() => {
-    if (!client || !supported) return;
+    if (!client) return;
+    if (unified) {
+      return client.subscribeConnectionStatus(({ status }) => {
+        if (status === "connected") {
+          void refreshUnifiedSubagents(client, params.serverId, params.parentAgentId).catch(
+            () => undefined,
+          );
+        } else {
+          markObservedSubagentsStale(params.serverId, params.parentAgentId);
+        }
+      });
+    }
+    if (!supported) return;
     void refreshProviderSubagents(client, params.serverId, params.parentAgentId).catch(
       () => undefined,
     );
-  }, [client, params.parentAgentId, params.serverId, supported]);
+  }, [client, params.parentAgentId, params.serverId, supported, unified]);
 
   return useMemo(() => {
     if (params.providerParentSubagentId) return providerRows;

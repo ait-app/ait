@@ -271,19 +271,7 @@ fn plan(
         .and_then(|target| params.pointer(target.pointer()))
         .and_then(Value::as_str)
     {
-        let id = state.resolve(identifier)?;
-        if method.access() == Access::Timeline
-            && (state.manager.history_loaded(&id)
-                || state.can_read_cached_timeline(method.as_str(), params)?)
-        {
-            None
-        } else {
-            let lane = state.owners.agent(&id)?;
-            if let Some(record) = state.registry.get(&id).map_err(|_| ErrorCode::AgentIo)? {
-                state.owners.bind(&lane, &record)?;
-            }
-            Some(lane)
-        }
+        existing_agent_lane(&state, method, params, identifier)?
     } else {
         return Err(ErrorCode::InvalidMessage);
     };
@@ -311,6 +299,53 @@ fn plan(
         state.manager = state.manager.fork(Some(state.owners.owner(lane.clone())));
     }
     Ok((state, lane))
+}
+
+fn existing_agent_lane(
+    state: &ExecutionState,
+    method: Operation,
+    params: &Value,
+    identifier: &str,
+) -> Result<Option<String>, ErrorCode> {
+    Ok({
+        let id = state.resolve(identifier)?;
+        let record = state.registry.get(&id).map_err(|_| ErrorCode::AgentIo)?;
+        if let Some(source) = record
+            .as_ref()
+            .and_then(|record| record.observation.as_ref())
+        {
+            if method == Operation::UnifiedSubagents
+                || (method.access() == Access::Timeline
+                    && !state.manager.history_loaded(&id)
+                    && !state.can_read_cached_timeline(method.as_str(), params)?)
+            {
+                if let Some(root) = state
+                    .registry
+                    .get(&source.root_agent_id)
+                    .map_err(|_| ErrorCode::AgentIo)?
+                {
+                    let lane = state.owners.agent(&root.id)?;
+                    state.owners.bind(&lane, &root)?;
+                    Some(lane)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else if method.access() == Access::Timeline
+            && (state.manager.history_loaded(&id)
+                || state.can_read_cached_timeline(method.as_str(), params)?)
+        {
+            None
+        } else {
+            let lane = state.owners.agent(&id)?;
+            if let Some(record) = state.registry.get(&id).map_err(|_| ErrorCode::AgentIo)? {
+                state.owners.bind(&lane, &record)?;
+            }
+            Some(lane)
+        }
+    })
 }
 
 fn native_lane(

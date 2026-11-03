@@ -97,5 +97,6 @@ fn agent(id: &str, workspace_id: &str, updated_at: &str) -> PersistedAgentRuntim
         internal: false,
         archived_at: None,
         owner: None,
+        observation: None,
     }
 }

@@ -82,10 +82,11 @@ fn list(directory: &AgentRuntimeDirectory, request: AgentListRequest) -> Result<
         return Err(ErrorCode::UnsupportedCapability);
     }
     if let Some(cursor) = request.sync.clone() {
+        let include_observed = request.include_observed;
         let snapshot = sync_snapshot(directory, request)?;
-        return synchronize(directory, snapshot, &cursor);
+        return synchronize(directory, snapshot, &cursor, include_observed);
     }
-    let query = query(
+    let mut query = query(
         request.filter,
         request.sort,
         request.page,
@@ -96,6 +97,7 @@ fn list(directory: &AgentRuntimeDirectory, request: AgentListRequest) -> Result<
         },
         None,
     )?;
+    query.include_observed = request.include_observed;
     encode(
         page(&directory.list(&query).map_err(|error| map_error(&error))?),
         ErrorCode::AgentIo,
@@ -116,7 +118,8 @@ pub(crate) fn sync_snapshot(
     {
         return Err(ErrorCode::InvalidMessage);
     }
-    let query = query(None, request.sort, None, QueryScope::Active, None)?;
+    let mut query = query(None, request.sort, None, QueryScope::Active, None)?;
+    query.include_observed = request.include_observed;
     let entries = directory
         .matching_entries(&query)
         .map_err(|error| map_error(&error))?;
@@ -137,6 +140,7 @@ pub(crate) fn synchronize(
     directory: &AgentRuntimeDirectory,
     mut snapshot: Value,
     cursor: &domain::directory_sync::Cursor,
+    include_observed: bool,
 ) -> Result<Value, ErrorCode> {
     let Value::Array(rows) = snapshot["entries"].take() else {
         return Err(ErrorCode::AgentIo);
@@ -145,7 +149,26 @@ pub(crate) fn synchronize(
         let id = row["agent"]["id"].as_str().unwrap_or_default().to_owned();
         (id, row)
     });
-    let read = directory.sync.synchronize("agents", rows, cursor);
+    let mut scoped_cursor = cursor.clone();
+    if include_observed {
+        scoped_cursor.generation = cursor
+            .generation
+            .as_deref()
+            .and_then(|generation| generation.strip_suffix(":observed"))
+            .map(str::to_owned);
+    }
+    let mut read = directory.sync.synchronize(
+        if include_observed {
+            "agents:observed"
+        } else {
+            "agents"
+        },
+        rows,
+        &scoped_cursor,
+    );
+    if include_observed {
+        read.sync.generation.push_str(":observed");
+    }
     snapshot["entries"] = Value::Array(read.values);
     snapshot["sync"] = encode(read.sync, ErrorCode::AgentIo)?;
     Ok(snapshot)
@@ -155,13 +178,14 @@ fn history(
     directory: &AgentRuntimeDirectory,
     request: AgentHistoryRequest,
 ) -> Result<Value, ErrorCode> {
-    let query = query(
+    let mut query = query(
         request.filter,
         request.sort,
         request.page,
         QueryScope::History,
         request.search,
     )?;
+    query.include_observed = request.include_observed;
     encode(
         page(
             &directory
@@ -339,6 +363,7 @@ fn query(
         None => (None, 200),
     };
     Ok(AgentDirectoryQuery {
+        include_observed: false,
         active_scope: matches!(scope, QueryScope::Active),
         include_archived: filter
             .include_archived
@@ -418,6 +443,23 @@ pub(crate) fn snapshot(record: &PersistedAgentRuntimeRecord) -> AgentSnapshotPay
     let effective_thinking_option_id = effective_thinking_option_id(record).map(str::to_owned);
     AgentSnapshotPayload {
         id: record.id.clone(),
+        management: if record.observation.is_some() {
+            "observed"
+        } else {
+            "managed"
+        },
+        parent_agent_id: record
+            .observation
+            .as_ref()
+            .map(|source| source.parent_agent_id.clone())
+            .or_else(|| record.labels.get("paseo.parent-agent-id").cloned()),
+        observation: record.observation.as_ref().map(|source| {
+            serde_json::json!({
+            "revision":source.revision,"rootAgentId":source.root_agent_id,"nativeId":source.native_id,
+                "status":source.status,"health":source.health,"observedAt":source.observed_at,
+                "description":source.description,"subtitle":source.subtitle
+            })
+        }),
         provider: record.provider.clone(),
         cwd: record.cwd.clone(),
         workspace_id: record
@@ -436,7 +478,7 @@ pub(crate) fn snapshot(record: &PersistedAgentRuntimeRecord) -> AgentSnapshotPay
         last_user_message_at: record.last_user_message_at.as_deref().map(wire_timestamp),
         status: protocol_status(record.last_status),
         active_turn: None,
-        capabilities: stored_capabilities(),
+        capabilities: stored_capabilities(record),
         current_mode_id: record.last_mode_id.clone(),
         available_modes: Vec::new(),
         pending_permissions: Vec::new(),
@@ -479,8 +521,8 @@ fn project(placement: &AgentPlacement) -> ProjectPlacementPayload {
     }
 }
 
-fn stored_capabilities() -> AgentCapabilityFlags {
-    [
+fn stored_capabilities(record: &PersistedAgentRuntimeRecord) -> AgentCapabilityFlags {
+    let mut flags: AgentCapabilityFlags = [
         ("supportsStreaming", false),
         ("supportsSessionPersistence", true),
         ("supportsDynamicModes", false),
@@ -493,7 +535,21 @@ fn stored_capabilities() -> AgentCapabilityFlags {
     ]
     .into_iter()
     .map(|(key, value)| (key.to_owned(), value))
-    .collect()
+    .collect();
+    if let Some(source) = &record.observation {
+        for flag in [
+            "supportsSessionPersistence",
+            "supportsMessageSend",
+            "supportsCancel",
+            "supportsConfiguration",
+            "supportsDetach",
+        ] {
+            flags.insert(flag.to_owned(), false);
+        }
+        flags.insert("supportsArchive".to_owned(), source.status.is_terminal());
+        flags.insert("supportsStreaming".to_owned(), true);
+    }
+    flags
 }
 
 const fn domain_status(status: AgentStatus) -> AgentRuntimeStatus {

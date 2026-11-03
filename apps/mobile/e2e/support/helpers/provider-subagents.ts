@@ -65,7 +65,7 @@ export async function expectNestedProviderSubagentOwnership(
     page.getByText("Task notification", { exact: true }).filter({ visible: true }),
   ).toHaveCount(0);
   await selectOnlyRootSubagent(page, /^direct_owner\b/);
-  const directPanel = page.getByTestId("provider-subagent-panel").filter({ visible: true });
+  const directPanel = page.getByTestId("agent-conversation-panel").filter({ visible: true });
   await expect(directPanel).toBeVisible();
 
   await openOwnedSubagents(page, directPanel);
@@ -73,7 +73,7 @@ export async function expectNestedProviderSubagentOwnership(
   await attachScreenshot(page, testInfo, `nested-ownership-${phase}-tree`);
   await nestedRow.click();
 
-  const nestedPanel = page.locator('[data-testid="provider-subagent-panel"]:visible');
+  const nestedPanel = page.locator('[data-testid="agent-conversation-panel"]:visible');
   await expect(
     nestedPanel
       .getByRole("button", {

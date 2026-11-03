@@ -124,6 +124,10 @@ impl AgentExecution {
         dependencies.manager = dependencies.manager.with_timeline(timeline.clone());
         dependencies
             .manager
+            .recover_observed()
+            .map_err(std::io::Error::other)?;
+        dependencies
+            .manager
             .recover_turns()
             .map_err(|_| std::io::Error::other("recover interrupted Agent turns"))?;
         dependencies

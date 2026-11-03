@@ -2448,6 +2448,9 @@ export const en = {
     backdrop: "Menu backdrop",
   },
   subagents: {
+    observing: "Read only",
+    observationUnknown: "Awaiting status confirmation",
+    observationUnavailable: "Session unavailable",
     title: "Subagents",
     pillLabelOne: "1 subagent",
     pillLabelMany: "{{count}} subagents",

@@ -474,7 +474,10 @@ function ScheduleFormContent({
       agents
         .filter(
           (agent) =>
-            agent.serverId === serverId && agent.workspaceId === workspace?.id && !agent.archivedAt,
+            agent.serverId === serverId &&
+            agent.workspaceId === workspace?.id &&
+            !agent.archivedAt &&
+            agent.management !== "observed",
         )
         .map((agent) => ({
           id: agent.id,

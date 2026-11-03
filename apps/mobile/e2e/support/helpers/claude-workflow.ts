@@ -63,11 +63,9 @@ export async function expectSingleWorkflowParentCard(page: Page): Promise<void> 
 
 export async function openWorkflowTimeline(page: Page): Promise<void> {
   await workflowRow(page).click();
-  const panel = page.getByTestId("provider-subagent-panel");
+  const panel = page.getByTestId("agent-conversation-panel").filter({ visible: true });
   await expect(panel).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("provider-subagent-pane-subtitle")).toHaveText(
-    /Workflow(?: · .+)?/,
-  );
+  await expect(panel.getByTestId("agent-pane-subtitle")).toHaveText(/Workflow(?: · .+)?/);
   await expect(panel.getByText("Start chatting with this agent...", { exact: true })).toHaveCount(
     0,
   );

@@ -1960,6 +1960,9 @@ export const ptBR: TranslationResources = {
     backdrop: "Fundo do menu",
   },
   subagents: {
+    observing: "Somente leitura",
+    observationUnknown: "Aguardando confirmação do status",
+    observationUnavailable: "Sessão indisponível",
     title: "Subagentes",
     pillLabelOne: "1 subagente",
     pillLabelMany: "{{count}} subagentes",

@@ -33,7 +33,11 @@ fn every_worker_method_has_a_canonical_operation_and_explicit_ownership() {
 
 #[test]
 fn child_and_plugin_operations_use_their_own_identity_fields() {
-    for operation in [Operation::Subagents, Operation::ChildTimeline] {
+    for operation in [
+        Operation::Subagents,
+        Operation::UnifiedSubagents,
+        Operation::ChildTimeline,
+    ] {
         assert_eq!(operation.access(), Access::Session);
         assert_eq!(operation.target().unwrap().pointer(), "/parentAgentId");
     }

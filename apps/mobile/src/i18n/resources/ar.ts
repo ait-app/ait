@@ -1926,6 +1926,9 @@ export const ar: TranslationResources = {
     backdrop: "خلفية القائمة",
   },
   subagents: {
+    observing: "للقراءة فقط",
+    observationUnknown: "بانتظار تأكيد الحالة",
+    observationUnavailable: "الجلسة غير متاحة",
     title: "الوكلاء الفرعيون",
     pillLabelOne: "وكيل فرعي واحد",
     pillLabelMany: "{{count}} وكلاء فرعيين",

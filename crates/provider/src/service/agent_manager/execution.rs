@@ -97,7 +97,12 @@ impl AgentManager {
         self.timeline
             .as_ref()
             .ok_or(ErrorCode::UnsupportedCapability)?
-            .has_entries(id)
+            .has_entries(
+                &record
+                    .observation
+                    .as_ref()
+                    .map_or_else(|| id.to_owned(), super::observed::scope),
+            )
     }
 
     pub(super) fn mark_history_loaded(&self, id: &str) {

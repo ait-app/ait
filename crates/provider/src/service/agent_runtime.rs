@@ -57,6 +57,8 @@ pub(crate) struct AgentSort {
 /// Application-level Agent directory query.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct AgentDirectoryQuery {
+    /// Include verified read-only native children for clients using unified Agent identity.
+    pub(crate) include_observed: bool,
     /// Require active workspace/project placement.
     pub(crate) active_scope: bool,
     /// Include archived Agent records.
@@ -306,6 +308,12 @@ impl AgentRuntimeDirectory {
                 if let Some(labels) = labels {
                     next.labels.extend(labels.clone());
                 }
+                if let Some(source) = &next.observation {
+                    next.labels.insert(
+                        PARENT_AGENT_ID_LABEL.to_owned(),
+                        source.parent_agent_id.clone(),
+                    );
+                }
                 updated_at.clone_into(&mut next.updated_at);
                 next
             })
@@ -402,6 +410,7 @@ impl AgentRuntimeDirectory {
         Ok(self
             .public_records()?
             .into_iter()
+            .filter(|record| query.include_observed || record.observation.is_none())
             .filter(|record| query.include_archived || record.archived_at.is_none())
             .filter_map(|agent| {
                 let placement = placements.get(agent.workspace_id.as_deref()?)?.clone();
@@ -465,7 +474,13 @@ impl AgentRuntimeDirectory {
             .list()
             .map_err(map_agent_registry)?
             .into_iter()
-            .filter(|record| !record.internal)
+            .filter(|record| {
+                !record.internal
+                    && record
+                        .observation
+                        .as_ref()
+                        .is_none_or(|source| source.ready)
+            })
             .collect())
     }
 

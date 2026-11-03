@@ -109,6 +109,30 @@ impl AgentRuntimeRegistry for FileBackedAgentRuntimeRegistry {
 }
 
 fn validate_record(record: &PersistedAgentRuntimeRecord) -> Result<(), AgentRuntimeRegistryError> {
+    if let Some(source) = &record.observation
+        && (record.persistence.is_some()
+            || source.root_agent_id == record.id
+            || source.parent_agent_id == record.id
+            || source
+                .persistence
+                .as_ref()
+                .is_some_and(|handle| handle.provider != record.provider)
+            || record.labels.get("paseo.parent-agent-id") != Some(&source.parent_agent_id)
+            || [
+                &source.root_agent_id,
+                &source.root_session_id,
+                &source.parent_agent_id,
+                &source.native_id,
+                &source.parent_native_id,
+                &source.observed_at,
+            ]
+            .iter()
+            .any(|value| {
+                value.is_empty() || value.len() > 4096 || value.chars().any(char::is_control)
+            }))
+    {
+        return Err(AgentRuntimeRegistryError::InvalidRecord);
+    }
     let required = [
         record.id.as_str(),
         record.provider.as_str(),

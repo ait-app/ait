@@ -1,3 +1,5 @@
+import { acceptSubagentSnapshot } from "@/subagents/unified";
+import { toErrorMessage } from "@/utils/error-messages";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import { useSubagentOpensInSheet } from "@/subagents";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -114,6 +116,54 @@ function useProviderSubagentDescriptor(
 }
 
 function ProviderSubagentPanel() {
+  const { serverId } = usePaneContext();
+  const unified = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.unifiedSubagentAgents === true,
+  );
+  return unified ? <UnifiedSubagentRedirect /> : <LegacyProviderSubagentPanel />;
+}
+
+function UnifiedSubagentRedirect() {
+  const { t } = useTranslation();
+  const { serverId, target, retargetCurrentTab } = usePaneContext();
+  invariant(target.kind === "provider_subagent", "Expected a legacy provider child target");
+  const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!client) return;
+    let active = true;
+    let generation = 0;
+    const unsubscribe = client.subscribeConnectionStatus(({ status }) => {
+      const request = ++generation;
+      if (status !== "connected") return;
+      setError(null);
+      void client
+        .listSubagents(target.parentAgentId, { subagentId: target.subagentId })
+        .then(async (payload) => {
+          if (!active || request !== generation) return;
+          const snapshot = payload.agents[0];
+          if (!snapshot) throw new Error(t("subagents.observationUnavailable"));
+          await acceptSubagentSnapshot(serverId, snapshot, client);
+          if (!active || request !== generation || !client.isConnected) return;
+          retargetCurrentTab({ kind: "agent", agentId: snapshot.id });
+        })
+        .catch((error: unknown) => {
+          if (active && request === generation) setError(toErrorMessage(error));
+        });
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [client, retargetCurrentTab, serverId, t, target.parentAgentId, target.subagentId]);
+  return (
+    <View style={styles.unsupported}>
+      <Text style={styles.unsupportedText}>{error ?? t("common.states.loading")}</Text>
+    </View>
+  );
+}
+
+function LegacyProviderSubagentPanel() {
   const { t } = useTranslation();
   const { serverId, target, openFileInWorkspace, openTab } = usePaneContext();
   invariant(target.kind === "provider_subagent", "ProviderSubagentPanel requires provider target");

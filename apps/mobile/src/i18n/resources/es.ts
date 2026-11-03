@@ -1976,6 +1976,9 @@ export const es: TranslationResources = {
     backdrop: "Fondo del menú",
   },
   subagents: {
+    observing: "Solo lectura",
+    observationUnknown: "Esperando confirmación del estado",
+    observationUnavailable: "Sesión no disponible",
     title: "Subagentes",
     pillLabelOne: "1 subagente",
     pillLabelMany: "{{count}} subagentes",

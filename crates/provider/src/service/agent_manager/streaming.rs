@@ -70,7 +70,8 @@ pub(super) fn persist_failure(
 /// Close the failed writer and commit its child updates and prepared failure notice.
 /// # Errors
 /// Returns native close or storage failures; pending settlement remains retryable.
-pub(super) async fn settle_failure(
+async fn settle_failure(
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     timeline: Option<&crate::storage::timeline::Timeline>,
     events: &model::session::SessionEvents,
     id: &str,
@@ -78,7 +79,7 @@ pub(super) async fn settle_failure(
 ) -> Result<(), AgentManagerError> {
     prepare_failure(agent);
     agent.session.close().await.map_err(super::map_session)?;
-    super::controls::publish_children(timeline, events, agent)?;
+    super::controls::publish_children(registry, timeline, events, agent)?;
     persist_failure(timeline, id, agent)
 }
 
@@ -113,7 +114,7 @@ pub(super) async fn drain(
                 persist_started(registry, timeline, id, agent, turn)
             }
             Some(AgentTurnEvent::Subagent(event)) => {
-                super::controls::publish_subagent(timeline, events, agent, event)
+                super::controls::publish_subagent(registry, timeline, events, agent, event)
             }
             Some(AgentTurnEvent::Usage(usage)) => {
                 persist_usage(registry, timeline, id, agent, usage)
@@ -177,6 +178,10 @@ pub(super) async fn drain(
             }
             Err(_) => return Err(AgentManagerError::Registry),
         }
+    }
+    persist_handle(registry, id, agent)?;
+    if matches!(agent.pending, Some(AgentTurnEvent::Failed)) {
+        settle_failure(registry, timeline, events, id, agent).await?;
     }
     Ok(())
 }

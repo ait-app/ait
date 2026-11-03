@@ -70,6 +70,8 @@ export interface AgentRuntimeInfo {
 }
 
 export interface Agent {
+  management?: "managed" | "observed";
+  observation?: import("@ait/protocol/messages").AgentObservationPayload;
   serverId: string;
   id: string;
   provider: AgentProvider;
@@ -1860,6 +1862,7 @@ export const useSessionStore = create<SessionStore>()(
           // Get lastActivityAt from top-level slice, fallback to agent.lastActivityAt
           const lastActivityAt = state.agentLastActivity.get(agent.id) ?? agent.lastActivityAt;
           entries.push({
+            management: agent.management,
             id: agent.id,
             serverId,
             title: agent.title ?? null,

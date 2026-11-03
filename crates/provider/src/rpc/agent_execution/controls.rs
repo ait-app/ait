@@ -12,6 +12,79 @@ use crate::protocol::timeline::{FetchRequest, Projection};
 use crate::service::agent_manager::native_sessions::canonical;
 
 impl ExecutionState {
+    pub(super) async fn unified_subagents(&self, params: Value) -> Result<Value, ErrorCode> {
+        only(&params, &["parentAgentId", "subagentId"])?;
+        let parent = self.resolve(
+            params["parentAgentId"]
+                .as_str()
+                .ok_or(ErrorCode::InvalidMessage)?,
+        )?;
+        let record = self
+            .registry
+            .get(&parent)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .ok_or(ErrorCode::AgentNotFound)?;
+        let root = record
+            .observation
+            .as_ref()
+            .map_or(parent.as_str(), |source| source.root_agent_id.as_str());
+        // Providers without child discovery can still have Ait-managed descendants.
+        if self
+            .registry
+            .get(root)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .is_some_and(|record| record.persistence.is_some() && record.archived_at.is_none())
+        {
+            let _ = self.manager.subagents(root).await;
+        }
+        if let Some(native) = params.get("subagentId") {
+            let native = native.as_str().ok_or(ErrorCode::InvalidMessage)?;
+            let id = self
+                .manager
+                .timeline()
+                .ok_or(ErrorCode::UnsupportedCapability)?
+                .subagent_agent(root, native)?
+                .ok_or(ErrorCode::AgentNotFound)?;
+            let record = self
+                .registry
+                .get(&id)
+                .map_err(|_| ErrorCode::AgentIo)?
+                .ok_or(ErrorCode::AgentNotFound)?;
+            if record.internal
+                || record
+                    .observation
+                    .as_ref()
+                    .is_some_and(|source| !source.ready)
+            {
+                return Err(ErrorCode::AgentNotFound);
+            }
+            return Ok(
+                json!({"parentAgentId":parent,"agents":[self.project(&record)?],"error":null}),
+            );
+        }
+        let agents = self
+            .registry
+            .list()
+            .map_err(|_| ErrorCode::AgentIo)?
+            .iter()
+            .filter(|record| !record.internal && record.archived_at.is_none())
+            .filter(|record| {
+                record.observation.as_ref().map_or_else(
+                    || {
+                        record
+                            .labels
+                            .get("paseo.parent-agent-id")
+                            .is_some_and(|id| id == &parent)
+                    },
+                    |source| source.ready && source.parent_agent_id == parent,
+                )
+            })
+            .map(|record| self.project(record))
+            .collect::<Result<Vec<_>, _>>()?;
+        crate::rpc::timeline::bounded(json!({"parentAgentId":parent,"agents":agents,"error":null}))
+            .map_err(Into::into)
+    }
+
     pub(super) async fn controls(
         &mut self,
         method: &str,

@@ -180,6 +180,16 @@ describe("buildSubagentRowPresentationData", () => {
     expect(presentation.label).toBe("Build it");
   });
 
+  it("preserves the unified Agent title after a user rename", () => {
+    const presentation = buildSubagentRowPresentationData({
+      ...row({ id: "observed-child", title: "My investigation" }),
+      description: "Inspect execution",
+      subtitle: "Explore",
+    });
+    expect(presentation.label).toBe("My investigation");
+    expect(presentation.subtitle).toBe("Explore");
+  });
+
   it("marks the row loading and blanks the label for the placeholder title", () => {
     const presentation = buildSubagentRowPresentationData(row({ id: "a", title: "new agent" }));
     expect(presentation.titleState).toBe("loading");

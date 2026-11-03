@@ -154,6 +154,7 @@ export function serverInfo(
         features.has("creation-lifecycle-v1") && has("workspace.create.request"),
       providerSubagents: supportsProviderSubagents,
       providerSubagentNesting: supportsProviderSubagents,
+      unifiedSubagentAgents: has("agent.subagents.list.request"),
       projectedSubagentTimeline: has("agent.provider_subagents.timeline.get.request"),
     },
   });

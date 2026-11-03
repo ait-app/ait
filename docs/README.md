@@ -23,6 +23,7 @@
   [MiniMax Code](operations/minimax-code.md)。Codex 和 OpenCode 的启动配置见 [daemon 手册](operations/daemon.md#provider-与扩展能力)。
 - [MCP 编排接口](operations/mcp.md)：HTTP、可选 Unix socket、认证和工具发现。
 - [Agent Skill 分发](operations/agent-skills.md)：内置技能、更新、选择和卸载。
+- [查看子 Agent](decisions/providers/adr-209-observed-subagent-normalization.md)：统一会话入口、父子关系与只读观测边界。
 - [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)。
 - [语音与听写](operations/speech.md)、[移动端通知](operations/mobile-notifications.md)。
 

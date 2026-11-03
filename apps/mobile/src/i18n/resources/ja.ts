@@ -1945,6 +1945,9 @@ export const ja: TranslationResources = {
     backdrop: "メニューの背景",
   },
   subagents: {
+    observing: "読み取り専用",
+    observationUnknown: "状態を確認中",
+    observationUnavailable: "セッションを利用できません",
     title: "サブエージェント",
     pillLabelOne: "サブエージェント 1 件",
     pillLabelMany: "サブエージェント {{count}} 件",

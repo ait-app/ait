@@ -15,6 +15,9 @@ impl AgentManager {
         &mut self,
         record: PersistedAgentRuntimeRecord,
     ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
+        if record.observation.is_some() {
+            return Err(AgentManagerError::Busy);
+        }
         let id = record.id.clone();
         if self.live.len() >= 32 {
             return Err(AgentManagerError::Busy);
@@ -76,6 +79,7 @@ impl AgentManager {
         agent_id: &str,
         overrides: &Overrides,
     ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
+        self.require_managed(agent_id)?;
         if self.live.get(agent_id).is_some_and(|agent| {
             !agent.registered || agent.turn.is_some() || agent.pending.is_some()
         }) {

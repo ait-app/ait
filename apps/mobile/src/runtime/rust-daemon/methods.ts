@@ -520,6 +520,12 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "agent.context.compact.response",
   },
+  "agent.subagents.list.request": {
+    method: "agent.subagents.list.request",
+    kind: "request",
+    channel: 0,
+    response: "agent.subagents.list.response",
+  },
   "agent.provider_subagents.list.request": {
     method: "agent.provider_subagents.list.request",
     kind: "request",

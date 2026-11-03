@@ -233,6 +233,7 @@ fn agent(id: &str, workspace_id: &str, title: &str) -> PersistedAgentRuntimeReco
         internal: false,
         archived_at: None,
         owner: None,
+        observation: None,
     }
 }
 

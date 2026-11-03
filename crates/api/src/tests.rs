@@ -199,7 +199,7 @@ fn assert_default_capabilities(info: &ServerInfo) {
         .chain(shares::rpc::METHODS.iter().map(|method| method.name))
         .collect();
     assert_eq!(info.implemented_capabilities, expected);
-    assert_eq!(info.capabilities.len(), 214);
+    assert_eq!(info.capabilities.len(), 215);
     assert!(
         info.capabilities
             .contains(&"connection.single.v1".to_owned())

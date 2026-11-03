@@ -85,6 +85,14 @@ pub(crate) struct AgentRuntimeInfo {
 pub(crate) struct AgentSnapshotPayload {
     /// Stable Agent identity.
     pub(crate) id: String,
+    /// Whether Ait owns interactive execution or only observes a native descendant.
+    pub(crate) management: &'static str,
+    /// Verified immediate parent, independent of user-editable labels.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) parent_agent_id: Option<String>,
+    /// Public observation facts, excluding private native history locators.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) observation: Option<Value>,
     /// Provider identifier.
     pub(crate) provider: String,
     /// Session working directory.
@@ -221,6 +229,9 @@ pub(crate) struct AgentPageRequest {
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AgentListRequest {
+    /// Opt into read-only native Agent records; omitted by legacy clients.
+    #[serde(default)]
+    pub(crate) include_observed: bool,
     /// Paseo accepts only the literal `active`.
     #[serde(default)]
     pub(crate) scope: Option<String>,
@@ -245,6 +256,9 @@ pub(crate) struct AgentListRequest {
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AgentHistoryRequest {
+    /// Include archived observed Agents when the client supports unified identity.
+    #[serde(default)]
+    pub(crate) include_observed: bool,
     /// Directory filters; archived records are included by default.
     #[serde(default)]
     pub(crate) filter: Option<AgentDirectoryFilter>,
