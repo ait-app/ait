@@ -8,6 +8,22 @@ use crate::{
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
+#[derive(Debug, Default)]
+pub(super) struct State {
+    pub(super) tools: BTreeMap<String, Value>,
+    controls: super::controls::State,
+}
+
+impl State {
+    /// Initialize control facts from the native opening projection, rejecting malformed goals.
+    pub(super) fn from_projection(values: &Value) -> Result<Self, AgentSessionError> {
+        Ok(Self {
+            controls: super::controls::State::from_projection(&values["goal"])?,
+            ..Self::default()
+        })
+    }
+}
+
 /// Match the native agent loop: only an exactly empty argument string means an empty object.
 pub(super) fn arguments(raw: &str) -> Value {
     if raw.is_empty() {
@@ -27,12 +43,14 @@ pub(super) fn is_user_message(event: &Value) -> bool {
 /// malformed tool arguments remain native tool input rather than transport failures.
 pub(super) fn apply(
     stream: &mut Stream,
-    tools: &mut BTreeMap<String, Value>,
+    state: &mut State,
     event: &Value,
     session: &str,
 ) -> Result<(), AgentSessionError> {
     let data = &event["data"];
     let before = stream.events.len();
+    apply_controls(stream, state, event, session)?;
+    let tools = &mut state.tools;
     match event["type"].as_str() {
         Some("turn/start") => {
             let turn = data["turn"].as_u64().ok_or(AgentSessionError::Failed)?;
@@ -43,6 +61,9 @@ pub(super) fn apply(
         Some("user/message") if is_user_message(event) => stream
             .events
             .push_back(AgentTurnEvent::Timeline(user(event, session)?)),
+        Some("command/run") if data["source"]["kind"] == "user" => stream
+            .events
+            .push_back(AgentTurnEvent::Timeline(command_input(event, session)?)),
         Some("compaction/start" | "compaction/end") => compaction(stream, event, session)?,
         Some("assistant/message") => {
             let message = &data["message"];
@@ -127,6 +148,45 @@ pub(super) fn apply(
         entry.timestamp = timestamp(time)?;
     }
     Ok(())
+}
+
+fn apply_controls(
+    stream: &mut Stream,
+    state: &mut State,
+    event: &Value,
+    session: &str,
+) -> Result<(), AgentSessionError> {
+    if let Some(item) = state.controls.apply(event, session)? {
+        stream
+            .events
+            .push_back(AgentTurnEvent::Timeline(NativeItem {
+                key: String::new(),
+                turn_id: None,
+                timestamp: String::new(),
+                item,
+            }));
+    }
+    Ok(())
+}
+
+fn command_input(event: &Value, session: &str) -> Result<NativeItem, AgentSessionError> {
+    let data = &event["data"];
+    let id = text(data, "commandId")?;
+    let name = text(data, "name")?;
+    // Omitted args are intentional for commands with recordInput=false. Do not reconstruct
+    // their potentially private input from a client draft or another domain event.
+    let args = match data.get("args") {
+        Some(Value::String(args)) => args.as_str(),
+        None => "",
+        Some(_) => return Err(AgentSessionError::Failed),
+    };
+    Ok(NativeItem {
+        key: format!("native:dsh:v2:{session}:command:{id}"),
+        turn_id: None,
+        timestamp: timestamp(&event["time"])?,
+        item: json!({"type":"user_message","messageId":format!("command:{id}"),
+            "text":format!("/{name}{args}")}),
+    })
 }
 
 fn compaction(stream: &mut Stream, event: &Value, session: &str) -> Result<(), AgentSessionError> {

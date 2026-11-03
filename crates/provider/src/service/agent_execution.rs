@@ -138,6 +138,8 @@ impl AgentExecution {
             .build()?;
         let (sender, receiver) = mpsc::channel(64);
         let template = Arc::new(Mutex::new(ExecutionState {
+            pending_response: None,
+            pending_responses: tokio::task::JoinSet::new(),
             message_observers: std::collections::BTreeMap::new(),
             owners: crate::service::agent_manager::ownership::Owners::default().with_changes(
                 dependencies
@@ -378,6 +380,9 @@ async fn serve(
     let mut router = routing::Router::new(template);
     let mut interval = tokio::time::interval(Duration::from_secs(1));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    interval.tick().await;
+    // Recovered input owns a lane before readers can observe the initial closed snapshot.
+    router.maintenance().await;
     let mut shutdown = None;
     loop {
         tokio::select! {

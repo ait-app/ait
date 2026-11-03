@@ -2,6 +2,9 @@ use super::{AgentClient, SessionEvents, Value, json, watch};
 use super::{Arc, BTreeMap, CancellationToken, Duration, ErrorCode, Instant, Semaphore};
 use super::{Cache, Catalog, Entry, Snapshot, discover, response};
 
+const SUCCESS_TTL: Duration = Duration::from_mins(5);
+const RETRY_TTL: Duration = Duration::from_secs(30);
+
 #[derive(Clone, Copy)]
 pub(super) struct Scope<'a> {
     pub(super) key: &'a Option<String>,
@@ -57,7 +60,7 @@ impl Catalog {
             if !scope.refresh
                 && entry
                     .fetched
-                    .is_some_and(|at| at.elapsed() < Duration::from_secs(60))
+                    .is_some_and(|at| at.elapsed() < freshness(entry))
             {
                 continue;
             }
@@ -195,6 +198,13 @@ fn commit(catalog: &Catalog, load: &Load, mut result: Entry) -> Option<(Snapshot
         return None;
     }
     let again = current.refresh_again;
+    if result.value["status"] == "error" && current.value["status"] == "ready" {
+        // Failed background refreshes retain usable choices and their last successful timestamp.
+        let error = result.value["error"].clone();
+        result.value.clone_from(&current.value);
+        result.value["error"] = error;
+        result.features.clone_from(&current.features);
+    }
     result.generation = load.generation;
     if again {
         result.loading.clone_from(&current.loading);
@@ -203,6 +213,14 @@ fn commit(catalog: &Catalog, load: &Load, mut result: Entry) -> Option<(Snapshot
     snapshot.fetched = Instant::now();
     snapshot.revision = revision;
     Some((snapshot.clone(), again))
+}
+
+fn freshness(entry: &Entry) -> Duration {
+    if entry.value["status"] == "ready" && !entry.value["error"].is_string() {
+        SUCCESS_TTL
+    } else {
+        RETRY_TTL
+    }
 }
 
 fn failure(provider: &str) -> Entry {

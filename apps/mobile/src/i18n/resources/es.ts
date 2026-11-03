@@ -8,6 +8,7 @@ export const es: TranslationResources = {
     failed: "Conversación de voz interrumpida",
   },
   onlineService: en.onlineService,
+  providerControl: en.providerControl,
   bots: en.bots,
   paneFind: {
     searchFailed:

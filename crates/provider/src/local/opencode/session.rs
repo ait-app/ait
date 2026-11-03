@@ -48,6 +48,9 @@ struct Connection {
     identities: BTreeSet<String>,
     observation: Option<Observation>,
     reported_usage: bool,
+    catalog: watch::Sender<Option<Vec<Value>>>,
+    deferred: VecDeque<Value>,
+    command_lifecycle: bool,
 }
 
 #[derive(Debug)]
@@ -87,6 +90,7 @@ pub(super) struct Session {
     failed: bool,
     failure: Option<String>,
     diagnostics: crate::local::diagnostics::Diagnostics,
+    catalog: super::commands::Catalog,
 }
 
 /// Reject handles with a different provider or malformed native session identity.
@@ -159,7 +163,7 @@ pub(super) async fn open(
     } else {
         &spec.config
     };
-    let (mut transport, capabilities, source) =
+    let (mut transport, capabilities, source, command_lifecycle) =
         launcher::observed(client, &spec.cwd, selected).await?;
     let (id, mut options, mut identities, clients, location) = if let Some((handle, _)) = binding {
         if capabilities["loadSession"] != true {
@@ -211,6 +215,7 @@ pub(super) async fn open(
     }
     let (_, events) = mpsc::channel(1);
     let diagnostics = transport.diagnostics.clone();
+    let catalog = super::commands::Catalog::new();
     Ok(Session {
         diagnostics,
         client: client.clone(),
@@ -227,6 +232,9 @@ pub(super) async fn open(
             identities,
             observation,
             reported_usage: false,
+            catalog: catalog.sender(),
+            deferred: VecDeque::new(),
+            command_lifecycle,
         }),
         pending: Arc::default(),
         commands: None,
@@ -241,6 +249,7 @@ pub(super) async fn open(
         closed: false,
         failed: false,
         failure: None,
+        catalog,
     })
 }
 
@@ -292,6 +301,25 @@ async fn observe(source: Option<Source>, id: &str, cwd: &str) -> Option<Observat
 }
 
 impl Session {
+    fn validate_command_lifecycle(
+        &mut self,
+        supported: bool,
+        text: &str,
+    ) -> Result<(), AgentSessionError> {
+        if !supported
+            && let Some(command) = text.trim_start().strip_prefix('/')
+            && command.split_whitespace().next() != Some("compact")
+        {
+            self.failure = Some(
+                "OpenCode 2.1.3 ACP acknowledges custom commands before execution completes. \
+                 Native command lifecycle receipts are required to run them in Ait."
+                    .to_owned(),
+            );
+            return Err(AgentSessionError::Rejected);
+        }
+        Ok(())
+    }
+
     async fn start(
         &mut self,
         prompt: &AgentPrompt,
@@ -322,6 +350,12 @@ impl Session {
         }
         if let Err(error) = self.prepare(&mut connection, selected).await {
             self.info = config::runtime(&self.id, &connection.options);
+            self.connection = Some(connection);
+            return Err(error);
+        }
+        if let Err(error) =
+            self.validate_command_lifecycle(connection.command_lifecycle, &prompt.text)
+        {
             self.connection = Some(connection);
             return Err(error);
         }
@@ -399,7 +433,7 @@ impl Session {
             || selected.system_prompt != self.spec.config.system_prompt
             || (selected.system_prompt.is_some() && selected.mode_id != self.spec.config.mode_id)
         {
-            let (mut transport, capabilities, source) =
+            let (mut transport, capabilities, source, command_lifecycle) =
                 launcher::observed(&self.client, &self.spec.cwd, selected).await?;
             let location = &connection.location;
             let mut options = if capabilities["sessionCapabilities"]["resume"].is_object() {
@@ -428,6 +462,7 @@ impl Session {
             connection.transport.close().await?;
             connection.options = options;
             connection.capabilities = capabilities;
+            connection.command_lifecycle = command_lifecycle;
             connection.transport = transport;
             connection.observation = observe(source, &self.id, &connection.location).await;
             if let Some(observation) = &connection.observation {
@@ -559,6 +594,9 @@ impl Execution {
             return Err(AgentSessionError::Failed);
         }
         let update = &message["params"]["update"];
+        if super::commands::publish(&connection.catalog, &self.id, message)? {
+            return Ok(());
+        }
         if update["sessionUpdate"] == "usage_update" {
             if update["used"] == 0
                 && (connection.reported_usage
@@ -591,6 +629,9 @@ impl Execution {
         stream: &mut Stream,
     ) -> Result<Value, AgentSessionError> {
         loop {
+            if let Some(message) = connection.deferred.pop_front() {
+                return Ok(message);
+            }
             if self
                 .cancelled
                 .has_changed()
@@ -897,6 +938,19 @@ impl Execution {
 }
 
 impl AgentSession for Session {
+    fn commands(&self) -> Option<&[Value]> {
+        self.catalog.items()
+    }
+
+    fn refresh_commands(&mut self) -> AgentSessionFuture<'_, Option<Vec<Value>>> {
+        Box::pin(async {
+            let connection = self
+                .connection
+                .as_mut()
+                .map(|connection| (&mut connection.transport, &mut connection.deferred));
+            self.catalog.refresh(&self.id, connection).await
+        })
+    }
     fn failure_diagnostic(&self) -> Option<Diagnostic> {
         self.diagnostics.failure()
     }
@@ -969,6 +1023,16 @@ impl AgentSession for Session {
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
         self.check_cancellation()?;
+        if !self.closed {
+            if let Some(connection) = &mut self.connection {
+                self.catalog.drain(
+                    &self.id,
+                    &mut connection.transport,
+                    &mut connection.deferred,
+                )?;
+            }
+            self.catalog.observe();
+        }
         if let Some(event) = self.initial.pop_front() {
             return Ok(Some(event));
         }

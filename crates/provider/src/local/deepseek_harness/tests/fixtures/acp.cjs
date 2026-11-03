@@ -107,23 +107,27 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
         process.stdout.write("x".repeat(3 * 1024 * 1024) + "\n");
         return;
       }
-      reply(id, {
+      const initialized = {
         protocolVersion: scenario === "bad-version" ? 99 : 1,
         agentCapabilities: {
           sessionCapabilities: { resume: {}, close: {}, list: {} },
           promptCapabilities: { image: scenario === "image-enabled" },
         },
-      });
+      };
+      if (scenario === "slow-initialize") setTimeout(() => reply(id, initialized), 800);
+      else reply(id, initialized);
       break;
     case "session/new":
     case "session/resume":
       assert.ok(params.cwd.startsWith("/"));
       assert.ok(Array.isArray(params.mcpServers));
       if (method === "session/resume") assert.equal(params.sessionId, "native-one");
-      reply(id, {
+      const created = {
         ...(method === "session/new" ? { sessionId: "native-one" } : {}),
         configOptions: options(),
-      });
+      };
+      if (scenario === "slow-create") setTimeout(() => reply(id, created), 800);
+      else reply(id, created);
       break;
     case "session/set_config_option":
       assert.equal(params.sessionId, "native-one");

@@ -153,6 +153,29 @@ impl Session {
 }
 
 impl AgentSession for Session {
+    fn complete_commands<'a>(
+        &'a mut self,
+        input: &'a crate::protocol::commands::CompletionInput,
+    ) -> AgentSessionFuture<'a, crate::protocol::commands::CompletionResult> {
+        Box::pin(async move {
+            input.validate()?;
+            let result = self
+                .request(
+                    "_omp/commands/complete",
+                    json!({
+                        "sessionId":self.id,"text":input.text,"cursor":input.cursor
+                    }),
+                )
+                .await?;
+            let result: crate::protocol::commands::CompletionResult =
+                serde_json::from_value(result).map_err(|_| AgentSessionError::Failed)?;
+            result.validate(input)?;
+            Ok(result)
+        })
+    }
+    fn commands(&self) -> Option<&[Value]> {
+        self.engine.native().and_then(AgentSession::commands)
+    }
     fn provider(&self) -> &'static str {
         "omp"
     }
@@ -161,8 +184,33 @@ impl AgentSession for Session {
             .native()
             .and_then(|session| session.control_settings(config))
     }
+    fn ui_state(&self) -> Option<Value> {
+        self.engine.native().and_then(AgentSession::ui_state)
+    }
+    fn observation_committed(&mut self) {
+        if self.events.is_empty()
+            && let Ok(native) = self.engine.native_mut()
+        {
+            native.observation_committed();
+        }
+    }
+    fn begin_action<'a>(
+        &'a mut self,
+        action: &'a str,
+        arguments: &'a Value,
+    ) -> AgentSessionFuture<'a, AgentSessionFuture<'static, Value>> {
+        Box::pin(async move {
+            self.engine
+                .native_mut()?
+                .begin_action(action, arguments)
+                .await
+        })
+    }
     fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
-        super::config::validate(config)
+        self.engine
+            .native()
+            .ok_or(AgentSessionError::Unavailable)?
+            .validate_config_update(config)
     }
     fn failure_diagnostic(&self) -> Option<Diagnostic> {
         self.engine
@@ -268,6 +316,9 @@ impl AgentSession for Session {
             self.consume(&message)?;
         }
         Ok(self.events.pop_front())
+    }
+    fn service_realtime(&mut self) -> AgentSessionFuture<'_, ()> {
+        Box::pin(async move { self.engine.native_mut()?.service_realtime().await })
     }
     fn close(&mut self) -> AgentSessionFuture<'_, ()> {
         Box::pin(async move {

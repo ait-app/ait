@@ -655,6 +655,51 @@ export const VoiceTranscriptSchema = z
   .array(z.object({ role: z.enum(["user", "assistant", "unknown"]), text: z.string() }))
   .max(256);
 
+export const ProviderCommandTimelineItemSchema = z.object({
+  type: z.literal("provider_command"),
+  id: z.string().min(1).max(1024),
+  command: z.string().min(1).max(256),
+  status: z.enum(["success", "error"]),
+  text: z.string(),
+  file: z
+    .object({
+      directory: z.string().min(1).max(4096),
+      fileName: z
+        .string()
+        .min(1)
+        .max(255)
+        .regex(/^(?!\.{1,2}$)[^/\\\u0000-\u001f\u007f]+$/),
+      size: z
+        .number()
+        .int()
+        .nonnegative()
+        .max(1024 * 1024 * 1024),
+      mimeType: z.literal("application/zip"),
+    })
+    .optional(),
+  goal: z
+    .object({
+      id: z.string().min(1).max(1024),
+      revision: z.number().int().positive(),
+      phase: z.enum(["active", "paused", "blocked", "complete"]),
+      objective: z.string(),
+      rounds: z.number().int().nonnegative(),
+      maxRounds: z.number().int().positive(),
+      blockedReason: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
+  actions: z
+    .array(
+      z.object({
+        id: z.enum(["pause", "resume", "edit", "clear"]),
+        command: z.string().min(1).max(1024),
+      }),
+    )
+    .max(8)
+    .optional(),
+});
+
 export const VoiceTimelineItemSchema = z.intersection(
   z.object({ type: z.literal("voice"), id: z.string(), sessionId: z.string() }),
   z.discriminatedUnion("kind", [
@@ -712,6 +757,7 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
     message: z.string(),
   }),
   CompactionTimelineItemPayloadSchema,
+  ProviderCommandTimelineItemSchema,
   z.object({
     type: z.literal("plugin"),
     id: z.string(),
@@ -836,6 +882,46 @@ const AgentActiveTurnPayloadSchema = z.object({
   startedAt: z.string().nullable(),
 });
 
+export const ProviderUiStateSchema = z.object({
+  actions: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        fields: z.array(
+          z.object({
+            id: z.string(),
+            label: z.string(),
+            options: z.array(z.string()),
+            required: z.boolean(),
+          }),
+        ),
+      }),
+    )
+    .max(64)
+    .optional(),
+  statuses: z.array(z.object({ key: z.string().max(256), text: z.string().max(4096) })).max(32),
+  widgets: z
+    .array(
+      z.object({
+        key: z.string().max(256),
+        lines: z.array(z.string().max(8192)).max(128),
+        placement: z.enum(["aboveEditor", "belowEditor"]),
+      }),
+    )
+    .max(32),
+  title: z.string().max(4096).nullable(),
+  editor: z.object({ id: z.string().max(256), text: z.string().max(65536) }).nullable(),
+  link: z
+    .object({
+      url: z.httpUrl().max(8192),
+      launchUrl: z.httpUrl().max(8192),
+      instructions: z.string().max(8192).nullable(),
+    })
+    .nullable(),
+});
+export type ProviderUiState = z.infer<typeof ProviderUiStateSchema>;
+
 export const AgentSnapshotPayloadSchema = z.object({
   id: z.string(),
   provider: AgentProviderSchema,
@@ -843,6 +929,7 @@ export const AgentSnapshotPayloadSchema = z.object({
   workspaceId: z.string().optional(),
   model: z.string().nullable(),
   features: z.array(AgentFeatureSchema).optional(),
+  providerUi: ProviderUiStateSchema.nullable().optional(),
   thinkingOptionId: z.string().nullable().optional(),
   effectiveThinkingOptionId: z.string().nullable().optional(),
   createdAt: z.string(),
@@ -2795,6 +2882,34 @@ export const ListCommandsRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const CompleteCommandsRequestSchema = z.object({
+  type: z.literal("agent.commands.complete.request"),
+  agentId: z.string(),
+  draftConfig: ListCommandsDraftConfigSchema.optional(),
+  text: z.string().max(65536),
+  cursor: z.number().int().nonnegative(),
+  requestId: z.string(),
+});
+
+export const NativeActionRequestSchema = z.object({
+  type: z.literal("agent.native_action.request"),
+  agentId: z.string(),
+  action: z.string().max(128),
+  arguments: z.record(z.string(), z.string().max(16384)),
+  requestId: z.string(),
+});
+
+export const NativeActionResponseSchema = z.object({
+  type: z.literal("agent.native_action.response"),
+  payload: z.object({
+    agentId: z.string(),
+    text: z.string(),
+    requestId: z.string(),
+    file: z.object({ path: z.string(), fileName: z.string() }).nullable().optional(),
+    error: z.string().nullable().optional(),
+  }),
+});
+
 export const RegisterPushTokenMessageSchema = z.object({
   type: z.literal("push.register"),
   token: z.string(),
@@ -3153,6 +3268,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ClientHeartbeatMessageSchema,
   PingMessageSchema,
   ListCommandsRequestSchema,
+  CompleteCommandsRequestSchema,
+  NativeActionRequestSchema,
   RegisterPushTokenMessageSchema,
   PushUnregisterRequestSchema,
   ListTerminalsRequestSchema,
@@ -6121,6 +6238,19 @@ const AgentSlashCommandSchema = z.object({
   description: z.string(),
   argumentHint: z.string(),
   kind: z.enum(["command", "skill"]).optional().catch("command"),
+  aliases: z.array(z.string()).optional(),
+  source: z.string().optional(),
+  definitionId: z.string().optional(),
+  acceptsAttachments: z.boolean().optional(),
+  subcommands: z
+    .array(
+      z.object({
+        name: z.string(),
+        description: z.string().optional(),
+        usage: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export const ListCommandsResponseSchema = z.object({
@@ -6132,6 +6262,34 @@ export const ListCommandsResponseSchema = z.object({
     requestId: z.string(),
   }),
 });
+
+export const CommandCompletionItemSchema = z.object({
+  id: z.string().min(1).max(256),
+  label: z.string().max(8192),
+  insertText: z.string().max(65536),
+  replaceRange: z.object({
+    start: z.number().int().nonnegative(),
+    end: z.number().int().nonnegative(),
+  }),
+  description: z.string().optional(),
+  detail: z.string().optional(),
+  hint: z.string().optional(),
+  kind: z.string().optional(),
+  cursor: z.number().int().nonnegative().optional(),
+  triggerCompletion: z.boolean().default(false),
+});
+
+export const CompleteCommandsResponseSchema = z.object({
+  type: z.literal("agent.commands.complete.response"),
+  payload: z.object({
+    agentId: z.string(),
+    supported: z.boolean(),
+    items: z.array(CommandCompletionItemSchema).max(256),
+    requestId: z.string(),
+  }),
+});
+
+export type CommandCompletionItem = z.infer<typeof CommandCompletionItemSchema>;
 
 // ============================================================================
 // Terminal Outbound Messages
@@ -6525,6 +6683,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProviderDiagnosticResponseMessageSchema,
   ProviderUsageListResponseMessageSchema,
   ListCommandsResponseSchema,
+  CompleteCommandsResponseSchema,
+  NativeActionResponseSchema,
   ListTerminalsResponseSchema,
   TerminalsChangedSchema,
   CreateTerminalResponseSchema,
@@ -6939,6 +7099,8 @@ export type ClearAgentAttentionResponseMessage = z.infer<
 export type ClientHeartbeatMessage = z.infer<typeof ClientHeartbeatMessageSchema>;
 export type ListCommandsRequest = z.infer<typeof ListCommandsRequestSchema>;
 export type ListCommandsResponse = z.infer<typeof ListCommandsResponseSchema>;
+export type CompleteCommandsRequest = z.infer<typeof CompleteCommandsRequestSchema>;
+export type CompleteCommandsResponse = z.infer<typeof CompleteCommandsResponseSchema>;
 export type RegisterPushTokenMessage = z.infer<typeof RegisterPushTokenMessageSchema>;
 export type PushUnregisterRequest = z.infer<typeof PushUnregisterRequestSchema>;
 export type PushUnregisterResponse = z.infer<typeof PushUnregisterResponseSchema>;

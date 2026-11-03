@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::process::Stdio;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -17,6 +17,8 @@ use crate::ports::diagnostics::{Category, Diagnostic};
 
 const MAX_FRAME: usize = 1024 * 1024;
 const MAX_BUFFER: usize = 64 * 1024 * 1024;
+/// Cold native process/catalog initialization budget, independent of connected controls.
+pub(super) const STARTUP_TIMEOUT: Duration = Duration::from_mins(3);
 
 #[derive(Debug)]
 pub(super) struct Transport {
@@ -33,6 +35,9 @@ pub(super) struct Transport {
     sequence: u64,
     deadline: Duration,
     closed: bool,
+    command_completion: bool,
+    completion_support: Arc<RwLock<Option<bool>>>,
+    configuration: Option<tempfile::NamedTempFile>,
 }
 
 impl Transport {
@@ -47,6 +52,7 @@ impl Transport {
             .args(args)
             .current_dir(cwd)
             .envs(client.environment.entries())
+            .env("PI_RPC_EMIT_TITLE", "1")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -123,11 +129,19 @@ impl Transport {
             sequence: 0,
             deadline: client.deadline,
             closed: false,
+            command_completion: false,
+            completion_support: client.completion_support.clone(),
+            configuration: None,
         })
     }
 
+    /// Retain the private role overlay until this native owner has exited.
+    pub(super) fn retain_configuration(&mut self, configuration: Option<tempfile::NamedTempFile>) {
+        self.configuration = configuration;
+    }
+
     pub(super) async fn initialize(&mut self) -> Result<(), AgentSessionError> {
-        let ready = tokio::time::timeout(self.deadline, self.messages.recv())
+        let ready = tokio::time::timeout(STARTUP_TIMEOUT.max(self.deadline), self.messages.recv())
             .await
             .map_err(|_| AgentSessionError::Failed)?
             .ok_or(AgentSessionError::Failed)?;
@@ -138,13 +152,27 @@ impl Transport {
         {
             return Err(AgentSessionError::Rejected);
         }
+        let control_deadline = self.deadline;
+        self.deadline = STARTUP_TIMEOUT.max(control_deadline);
         let selected = self
             .request("negotiate_protocol", json!({"protocolVersion":2}))
-            .await?;
+            .await;
+        self.deadline = control_deadline;
+        let selected = selected?;
         if selected["protocolVersion"] != 2 {
             return Err(AgentSessionError::Failed);
         }
+        self.command_completion = ready["capabilities"]["commandCompletion"]["version"] == 1;
+        *self
+            .completion_support
+            .write()
+            .map_err(|_| AgentSessionError::Failed)? = Some(self.command_completion);
         Ok(())
+    }
+
+    /// Native feature negotiated from the official runtime's ready frame.
+    pub(super) fn command_completion(&self) -> bool {
+        self.command_completion
     }
 
     pub(super) async fn send(&mut self, message: &Value) -> Result<(), AgentSessionError> {
@@ -291,6 +319,7 @@ impl Transport {
         self.kill_group();
         self.group = None;
         if matches!(drained, Ok(Ok(_))) {
+            self.configuration.take();
             return Ok(());
         }
         let _ = self.child.start_kill();
@@ -298,17 +327,17 @@ impl Transport {
             .await
             .map_err(|_| AgentSessionError::Failed)?
             .map_err(|_| AgentSessionError::Failed)?;
+        self.configuration.take();
         Ok(())
     }
 
     fn kill_group(&self) {
         #[cfg(unix)]
-        if let Some(group) = self.group {
-            let _ = std::process::Command::new("/bin/kill")
-                .args(["-KILL", "--", &format!("-{group}")])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
+        if let Some(group) = self.group.and_then(|group| i32::try_from(group).ok()) {
+            let _ = nix::sys::signal::killpg(
+                nix::unistd::Pid::from_raw(group),
+                nix::sys::signal::Signal::SIGKILL,
+            );
         }
     }
 }
@@ -344,3 +373,6 @@ impl Drop for Transport {
         self.kill_group();
     }
 }
+
+#[cfg(all(test, unix))]
+mod tests;

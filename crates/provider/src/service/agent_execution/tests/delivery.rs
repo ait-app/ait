@@ -424,6 +424,7 @@ async fn failed_queued_admission_does_not_block_an_independent_agent() {
         )
         .await
         .unwrap();
+    assert_eq!(finished["status"], "idle", "{finished}");
     assert_eq!(finished["lastMessage"], "Echo: independent input");
     // Independent lanes can finish in either order; observe the failed admission separately.
     let rejected = restarted

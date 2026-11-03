@@ -17,6 +17,7 @@ import type { ClientCapability } from "@ait/protocol/client-capabilities";
 import type { AgentAttentionNotificationPayload } from "@ait/protocol/agent-attention-notification";
 import {
   AgentCreateFailedStatusPayloadSchema,
+  AgentCreateRequestSchema,
   AgentRefreshedStatusPayloadSchema,
   AgentResumedStatusPayloadSchema,
   CheckoutRenameBranchResponseSchema,
@@ -89,6 +90,7 @@ import type {
   ArchiveWorkspaceResponseMessage,
   WorkspaceSetupStatusResponseMessage,
   ListCommandsResponse,
+  CompleteCommandsResponse,
   ListProviderFeaturesResponseMessage,
   ListProviderModelsResponseMessage,
   ListProviderModesResponseMessage,
@@ -2829,9 +2831,15 @@ export class DaemonClient {
   });
 
   async createAgent(options: CreateAgentRequestOptions): Promise<AgentSnapshotPayload> {
-    const result = await this.creations.createAgent({
+    const { type: _type, ...request } = AgentCreateRequestSchema.parse({
       ...options,
+      type: "agent.create.request",
+      requestId: this.createRequestId(options.requestId),
       config: resolveAgentConfig(options),
+    });
+    const result = await this.creations.createAgent({
+      ...request,
+      onEvent: options.onEvent,
     });
     if (result.error || !result.agent) throw new Error(result.error ?? "Agent creation failed");
     return result.agent;
@@ -5346,6 +5354,40 @@ export class DaemonClient {
         ...(options.draftConfig ? { draftConfig: options.draftConfig } : {}),
       },
       responseType: "agent.commands.list.response",
+    });
+  }
+
+  /** Execute one advertised provider action while native questions remain interactive. */
+  async runNativeAction(
+    agentId: string,
+    action: string,
+    arguments_: Record<string, string>,
+  ): Promise<{ text: string; file?: { path: string; fileName: string } | null }> {
+    const result = await this.sendCorrelatedSessionRequest({
+      message: { type: "agent.native_action.request", agentId, action, arguments: arguments_ },
+      responseType: "agent.native_action.response",
+      timeout: 660000,
+    });
+    if (result.error) throw new Error(result.error);
+    return result;
+  }
+
+  /** Query native editor completion without submitting a prompt or running a command. */
+  async completeCommands(
+    options: ListCommandsOptions & { text: string; cursor: number },
+  ): Promise<CompleteCommandsResponse["payload"]> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options.requestId,
+      message: {
+        type: "agent.commands.complete.request",
+        agentId: options.agentId,
+        ...(options.draftConfig ? { draftConfig: options.draftConfig } : {}),
+        text: options.text,
+        cursor: options.cursor,
+      },
+      responseType: "agent.commands.complete.response",
+      // Drafts and inactive sessions may first start the provider's read-only runtime.
+      timeout: 30000,
     });
   }
 

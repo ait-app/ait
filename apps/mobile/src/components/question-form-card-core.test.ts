@@ -9,6 +9,48 @@ import {
 } from "./question-form-card-core";
 
 describe("question form card core", () => {
+  test("native editor prefill can be submitted unchanged, edited verbatim, or cleared", () => {
+    const questions = parseQuestionFormQuestions({
+      questions: [
+        {
+          header: "Editor",
+          question: "Edit config",
+          options: [],
+          allowOther: true,
+          multiline: true,
+          initialValue: "  initial\n",
+          allowEmpty: true,
+          dismissBehavior: "deny",
+        },
+      ],
+    })!;
+    expect(areQuestionsAnswered(questions, {}, {})).toBe(true);
+    expect(buildQuestionFormAnswers(questions, {}, {})).toEqual({ Editor: "  initial\n" });
+    expect(buildQuestionFormAnswers(questions, {}, { 0: "  revised\n\n" })).toEqual({
+      Editor: "  revised\n\n",
+    });
+    expect(buildQuestionFormAnswers(questions, {}, { 0: "" })).toEqual({ Editor: "" });
+    expect(shouldSubmitEmptyOnDismiss(questions)).toBe(false);
+  });
+
+  test("secret and verbatim inputs preserve spaces while ordinary answers keep their trimming", () => {
+    for (const metadata of [{ secret: true }, { preserveWhitespace: true }, {}]) {
+      const questions = parseQuestionFormQuestions({
+        questions: [
+          {
+            header: "Value",
+            question: "Enter a value",
+            options: [],
+            allowOther: true,
+            ...metadata,
+          },
+        ],
+      })!;
+      expect(buildQuestionFormAnswers(questions, {}, { 0: "  value  " })).toEqual({
+        Value: Object.keys(metadata).length ? "  value  " : "value",
+      });
+    }
+  });
   test("keeps explicit multiline editor text when generating native answers", () => {
     const questions = parseQuestionFormQuestions({
       questions: [

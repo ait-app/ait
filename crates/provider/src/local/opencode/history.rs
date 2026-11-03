@@ -240,7 +240,7 @@ pub(super) async fn inspect(
         config: StoredAgentConfig::default(),
     };
     config::validate_spec(&spec)?;
-    let (mut transport, _, source) = launcher::observed(client, cwd, &spec.config).await?;
+    let (mut transport, _, source, _) = launcher::observed(client, cwd, &spec.config).await?;
     let result = async {
         let (options, mut stream, location) = replay(
             &mut transport,

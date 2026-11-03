@@ -124,7 +124,6 @@ pub(super) async fn request(
                 queued,
             } = command
             {
-                let _permit = permit;
                 let started = Instant::now();
                 let queue_ms = queued.elapsed().as_millis();
                 if owned {
@@ -141,7 +140,13 @@ pub(super) async fn request(
                         return state;
                     }
                 }
-                voice::dispatch(&mut state, &method, params, (reply, cancel, realtime)).await;
+                voice::dispatch(
+                    &mut state,
+                    &method,
+                    params,
+                    (reply, cancel, realtime, permit),
+                )
+                .await;
                 tracing::debug!(
                     method,
                     class = class(&method, owned),
@@ -162,7 +167,11 @@ async fn poll(mut state: ExecutionState) -> Result<ExecutionState, ErrorCode> {
     tokio::task::spawn_blocking(move || {
         handle.block_on(async move {
             let started = Instant::now();
+            // Maintenance can admit queued input too. Fence readers until its native state,
+            // receipt and completion observation have all been committed together.
+            let _ = state.owners.pending(&state.manager.owned_agents());
             state.observe_messages();
+            while state.pending_responses.try_join_next().is_some() {}
             let _ = state.manager.reconcile().await;
             let _ = state.manager.poll().await;
             let _ = state.manager.dispatch_pending_inputs().await;
@@ -213,6 +222,7 @@ async fn close(mut state: ExecutionState) -> Result<(), ErrorCode> {
                 .close_all()
                 .await
                 .map_err(|_| ErrorCode::AgentIo);
+            while state.pending_responses.join_next().await.is_some() {}
             let _ = state.publish();
             state.manager.release_owner();
             result

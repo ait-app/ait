@@ -314,6 +314,7 @@ async fn bad_protocol_frames_and_timeout_fail_without_hanging() {
     for scenario in ["bad-version", "malformed", "oversized", "hung"] {
         let (_directory, mut client, spec) = fixture();
         client.deadline = Duration::from_millis(300);
+        client.startup_deadline = Duration::from_millis(300);
         client.environment = AgentEnvironment::try_from(BTreeMap::from([(
             "ACP_FIXTURE_SCENARIO".to_owned(),
             scenario.to_owned(),
@@ -327,6 +328,39 @@ async fn bad_protocol_frames_and_timeout_fail_without_hanging() {
             "{scenario}"
         );
     }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn acp_initialization_has_a_separate_budget_from_connected_controls() {
+    let (_directory, mut client, spec) = fixture();
+    client.deadline = Duration::from_millis(300);
+    assert!(client.discovery_timeout() > client.startup_deadline);
+    client.environment = AgentEnvironment::try_from(BTreeMap::from([(
+        "ACP_FIXTURE_SCENARIO".to_owned(),
+        "slow-initialize".to_owned(),
+    )]))
+    .unwrap();
+    let mut transport = transport::spawn(&client, &spec.cwd).unwrap();
+    let initialized = transport
+        .startup_request(
+            "initialize",
+            json!({"protocolVersion":1,"clientCapabilities":{}}),
+            client.startup_deadline,
+        )
+        .await
+        .unwrap();
+    assert_eq!(initialized["protocolVersion"], 1);
+    assert_eq!(transport.control_deadline(), Duration::from_millis(300));
+    transport.close().await.unwrap();
+    client.environment = AgentEnvironment::try_from(BTreeMap::from([(
+        "ACP_FIXTURE_SCENARIO".to_owned(),
+        "slow-create".to_owned(),
+    )]))
+    .unwrap();
+    // The new native session is also a cold operation; the same short control budget applies
+    // afterward. Dropping this unused fixture avoids making a timed control part of this check.
+    drop(client.create_session(&spec).await.unwrap());
 }
 
 #[tokio::test]

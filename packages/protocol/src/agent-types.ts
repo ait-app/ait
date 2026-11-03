@@ -363,6 +363,31 @@ export interface PluginTimelineItem {
   data: JsonValue;
 }
 
+/** A native control result, rendered separately from model-authored conversation. */
+export interface ProviderCommandTimelineItem {
+  type: "provider_command";
+  id: string;
+  command: string;
+  status: "success" | "error";
+  text: string;
+  file?: {
+    directory: string;
+    fileName: string;
+    size: number;
+    mimeType: "application/zip";
+  };
+  goal?: {
+    id: string;
+    revision: number;
+    phase: "active" | "paused" | "blocked" | "complete";
+    objective: string;
+    rounds: number;
+    maxRounds: number;
+    blockedReason?: string;
+  } | null;
+  actions?: { id: "pause" | "resume" | "edit" | "clear"; command: string }[];
+}
+
 export interface AgentTaskItem {
   text: string;
   completed: boolean;
@@ -410,6 +435,7 @@ export type AgentTimelineItem =
       message: string;
     }
   | CompactionTimelineItem
+  | ProviderCommandTimelineItem
   | PluginTimelineItem;
 
 export type AgentStreamEvent =

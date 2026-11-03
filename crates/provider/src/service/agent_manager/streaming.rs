@@ -1,5 +1,7 @@
 use std::borrow::Cow;
 
+use domain::agent_runtime::StoredAgentConfig;
+
 use super::{AgentManager, AgentManagerError, AgentTurnEvent};
 use crate::ports::agent_session::AgentSessionError;
 use crate::support::time::now_timestamp;
@@ -109,6 +111,9 @@ pub(super) async fn drain(
         }
         let result = match &agent.pending {
             Some(AgentTurnEvent::RuntimeInfo(info)) => persist_info(registry, id, agent, info),
+            Some(AgentTurnEvent::FeatureValuesUpdated(values)) => {
+                persist_features(registry, id, agent, values)
+            }
             Some(AgentTurnEvent::Started(turn)) => {
                 persist_started(registry, timeline, id, agent, turn)
             }
@@ -178,6 +183,9 @@ pub(super) async fn drain(
             Err(_) => return Err(AgentManagerError::Registry),
         }
     }
+    if agent.pending.is_none() {
+        agent.session.observation_committed();
+    }
     Ok(())
 }
 
@@ -196,6 +204,52 @@ fn persist_info(
             let mut info = info.clone();
             preserve_usage(&mut info, record.runtime_info.as_ref());
             next.runtime_info = Some(info);
+            next
+        })
+        .map_err(|_| model::ErrorCode::AgentIo)?
+        .ok_or(model::ErrorCode::AgentNotFound)?;
+    Ok(())
+}
+
+fn persist_features(
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
+    id: &str,
+    agent: &super::LiveAgent,
+    values: &std::collections::BTreeMap<String, serde_json::Value>,
+) -> Result<(), model::ErrorCode> {
+    if values.len() > 64 || serde_json::to_vec(values).map_or(true, |bytes| bytes.len() > 65536) {
+        return Err(model::ErrorCode::InvalidMessage);
+    }
+    let record = registry
+        .get(id)
+        .map_err(|_| model::ErrorCode::AgentIo)?
+        .ok_or(model::ErrorCode::AgentNotFound)?;
+    let patch = crate::protocol::agent_config::ConfigPatch {
+        feature_values: Some(values.clone()),
+        ..Default::default()
+    };
+    let config = patch.apply(
+        record
+            .config
+            .as_ref()
+            .unwrap_or(&StoredAgentConfig::default()),
+    );
+    agent
+        .session
+        .validate_config_update(&config)
+        .map_err(|_| model::ErrorCode::InvalidMessage)?;
+    registry
+        .update(id, &|current| {
+            let mut next = current.clone();
+            next.config = Some(
+                patch.apply(
+                    current
+                        .config
+                        .as_ref()
+                        .unwrap_or(&StoredAgentConfig::default()),
+                ),
+            );
+            next.updated_at = now_timestamp();
             next
         })
         .map_err(|_| model::ErrorCode::AgentIo)?

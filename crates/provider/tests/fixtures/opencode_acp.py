@@ -52,6 +52,7 @@ if scenario == "custom-mode":
     mode = "review"
 active = None
 catalog_changed = False
+command_catalog_empty = False
 
 
 def session_path(identity):
@@ -245,6 +246,10 @@ for line in sys.stdin:
             for row in state()["history"]:
                 content(row)
         reply(identity, {"sessionId": session_id, "configOptions": options()})
+        if scenario == "command-catalog":
+            update({"sessionUpdate":"available_commands_update", "availableCommands":[] if command_catalog_empty else [
+                {"name":"native:review", "description":"Native namespaced command", "input":{"hint":"<topic>"}},
+                {"name":"compact", "description":"Native compaction"}]})
     elif method == "session/list":
         moved = location("ses_one")
         rows = [] if not (root / "native-fixture.json").exists() or moved not in [None, params.get("cwd", moved)] else [{
@@ -279,6 +284,9 @@ for line in sys.stdin:
     elif method == "session/prompt":
         assert active is None
         active = identity
+        if scenario == "command-catalog":
+            command_catalog_empty = True
+            update({"sessionUpdate":"available_commands_update", "availableCommands":[]})
         if params["prompt"] == [{"type": "text", "text": "/compact"}]:
             value = state()
             compact_id = "compact-" + str(value["seq"])

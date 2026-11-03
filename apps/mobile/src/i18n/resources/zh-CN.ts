@@ -2,6 +2,26 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const zhCN: TranslationResources = {
+  providerControl: {
+    nativeOperations: "原生操作",
+    runOperation: "执行",
+    openBrowser: "在浏览器中打开",
+    goal: "目标",
+    details: "详情",
+    emptyGoal: "当前尚未设置目标。",
+    rounds: "已执行 {{count}} 轮 · 上限 {{max}} 轮",
+    editObjective: "编辑目标",
+    status: {
+      active: "进行中",
+      paused: "已暂停",
+      blocked: "受阻",
+      complete: "已完成",
+      empty: "未设置",
+      success: "已完成",
+      error: "未成功",
+    },
+    actions: { pause: "暂停", resume: "继续", edit: "编辑目标", clear: "清除" },
+  },
   voiceTimeline: { started: "语音对话已开始", ended: "语音对话已结束", failed: "语音对话已中断" },
   bots: {
     title: "Bot",

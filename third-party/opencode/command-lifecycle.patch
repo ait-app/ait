@@ -1,0 +1,977 @@
+diff --git a/packages/cli/src/acp/prompt.ts b/packages/cli/src/acp/prompt.ts
+--- a/packages/cli/src/acp/prompt.ts
++++ b/packages/cli/src/acp/prompt.ts
+@@ -51,11 +51,13 @@
+ }
+ 
+ function detectSlashCommand(text: string) {
+-  const value = text.trim()
++  const value = text.trimStart()
+   if (!value.startsWith("/")) return undefined
+-  const [name, ...rest] = value.slice(1).split(/\s+/)
++  const end = value.slice(1).search(/\s/)
++  const split = end === -1 ? value.length : end + 1
++  const name = value.slice(1, split)
+   if (!name) return undefined
+-  return { name, args: rest.join(" ").trim() }
++  return { name, args: end === -1 ? "" : value.slice(split + 1) }
+ }
+ 
+ export * as ACPPrompt from "./prompt"
+diff --git a/packages/cli/src/acp/service.ts b/packages/cli/src/acp/service.ts
+--- a/packages/cli/src/acp/service.ts
++++ b/packages/cli/src/acp/service.ts
+@@ -123,7 +123,7 @@
+           mcpCapabilities: { http: true, sse: false },
+           promptCapabilities: { embeddedContext: true, image: true },
+           sessionCapabilities: { additionalDirectories: {}, close: {}, delete: {}, fork: {}, list: {}, resume: {} },
+-          _meta: { [ACPCapabilities.ChildSessionUpdates]: true },
++          _meta: { [ACPCapabilities.ChildSessionUpdates]: true, "opencode/command-lifecycle": 1 },
+         },
+         authMethods: [authMethod],
+         agentInfo: { name: "OpenCode", version: OPENCODE_VERSION },
+diff --git a/packages/cli/src/acp/turn.ts b/packages/cli/src/acp/turn.ts
+--- a/packages/cli/src/acp/turn.ts
++++ b/packages/cli/src/acp/turn.ts
+@@ -146,9 +146,7 @@
+           return yield* input.connection.extNotification(ACPChild.UpdateMethod, { ...output.update, update })
+         }).pipe(
+           Effect.catchCause((cause) =>
+-            Cause.hasInterruptsOnly(cause)
+-              ? Effect.void
+-              : Effect.logWarning("ACP child session update failed", cause),
++            Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.logWarning("ACP child session update failed", cause),
+           ),
+         )
+       case "PermissionAsk": {
+@@ -238,24 +236,31 @@
+     }
+     if (prompt.start.type === "compaction") {
+       yield* input.client.session.compact({ sessionID, id: prompt.start.id }).pipe(Effect.catch(ACPClient.classify))
+-      return
++      return true
+     }
+     const command = prompt.command
+     if (command) {
+-      yield* input.client.session
+-        .command({
++      const receipt = yield* input.client.session
++        .submitCommand({
+           sessionID,
+           name: command.name,
++          id: prompt.start.id,
+           text: prompt.slash?.args ?? "",
+           files: prompt.files,
+           delivery: "steer",
+         })
+         .pipe(Effect.catch(ACPClient.classify))
+-      return
++      if (receipt !== undefined && (receipt.id !== prompt.start.id || receipt.sessionID !== sessionID))
++        return yield* new ACPError.ServiceFailureError({
++          safeMessage: "Command returned an uncorrelated input receipt",
++          service: "session",
++        })
++      return receipt !== undefined
+     }
+     yield* input.client.session
+       .prompt({ sessionID, id: prompt.start.id, text: prompt.text, files: prompt.files, delivery: "steer" })
+       .pipe(Effect.catch(ACPClient.classify))
++    return true
+   })
+ 
+   const windDown = Effect.fnUntraced(function* (
+@@ -286,8 +291,8 @@
+         return yield* Effect.die(new Error(`expected server.connected, got ${connected.type}`))
+       const events = yield* consume(turn).pipe(Effect.forkScoped)
+       return yield* Effect.gen(function* () {
+-        yield* submit(attached, prompt)
+-        if (prompt.command) return "succeeded" as const
++        const foreground = yield* submit(attached, prompt)
++        if (!foreground) return "succeeded" as const
+         return yield* Fiber.join(events)
+       }).pipe(Effect.onInterrupt(() => windDown(turn, events)))
+     }).pipe(Effect.scoped)
+diff --git a/packages/cli/test/acp/command-lifecycle.test.ts b/packages/cli/test/acp/command-lifecycle.test.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/cli/test/acp/command-lifecycle.test.ts
+@@ -0,0 +1,95 @@
++import { expect, test } from "bun:test"
++import { startSession, delivered, succeeded, textDelta, permissionAsked, interrupted, rpcError } from "./wire-fixture"
++
++test("a command input receipt keeps ACP open through delayed native execution", async () => {
++  const admission = Promise.withResolvers<{ sessionID: string; id: string }>()
++  await using acp = await startSession({
++    onCommand: (request) => {
++      admission.resolve(request)
++      return { inputID: request.id }
++    },
++  })
++  let finished = false
++  const response = acp.prompt(acp.sessionId, "/review some arguments").then((value) => {
++    finished = true
++    return value
++  })
++  const input = await admission.promise
++  expect(finished).toBe(false)
++  acp.server.send(delivered(input.sessionID, input.id), textDelta(input.sessionID, "msg_answer", "native answer"))
++  await acp.until(
++    () => acp.updates.some((entry) => entry.update.sessionUpdate === "agent_message_chunk"),
++    "command output",
++  )
++  expect(finished).toBe(false)
++  acp.server.send(succeeded(input.sessionID))
++  expect((await response).stopReason).toBe("end_turn")
++})
++
++test("a local command without model admission completes without waiting for model events", async () => {
++  await using acp = await startSession({ onCommand: () => ({}) })
++  expect((await acp.prompt(acp.sessionId, "/review status")).stopReason).toBe("end_turn")
++  expect(acp.server.prompts).toHaveLength(0)
++})
++
++test("native questions during a command stay answerable until the correlated terminal", async () => {
++  const admission = Promise.withResolvers<{ sessionID: string; id: string }>()
++  await using acp = await startSession({
++    onCommand: (request) => {
++      admission.resolve(request)
++      return { inputID: request.id }
++    },
++    permission: () => ({ outcome: { outcome: "selected", optionId: "once" } }),
++  })
++  const response = acp.prompt(acp.sessionId, "/review ask")
++  const input = await admission.promise
++  acp.server.send(
++    delivered(input.sessionID, input.id),
++    permissionAsked(input.sessionID, "perm_command", { action: "read" }),
++  )
++  await acp.until(() => acp.server.replies.length === 1, "command permission reply")
++  acp.server.send(succeeded(input.sessionID))
++  expect((await response).stopReason).toBe("end_turn")
++})
++
++test("command arguments retain quoted whitespace and multiline input", async () => {
++  let text = ""
++  await using acp = await startSession({
++    onCommand: (input) => {
++      text = input.text
++      return {}
++    },
++  })
++  await acp.prompt(acp.sessionId, '/review "two  words"  next\nlast  ')
++  expect(text).toBe('"two  words"  next\nlast  ')
++})
++
++test("cancelling a receipted model command waits for its native interruption", async () => {
++  const admission = Promise.withResolvers<{ sessionID: string; id: string }>()
++  await using acp = await startSession({
++    onCommand: (request) => {
++      admission.resolve(request)
++      return { inputID: request.id }
++    },
++    onInterrupt: ({ sessionID }) => [interrupted(sessionID)],
++  })
++  const response = acp.prompt(acp.sessionId, "/review hold")
++  const input = await admission.promise
++  acp.server.send(delivered(input.sessionID, input.id), textDelta(input.sessionID, "msg_command", "working"))
++  await acp.until(
++    () => acp.updates.some((entry) => entry.update.sessionUpdate === "agent_message_chunk"),
++    "command output",
++  )
++  await acp.notify("session/cancel", { sessionId: acp.sessionId })
++  expect((await response).stopReason).toBe("cancelled")
++})
++
++test("a command receipt for a different input fails instead of waiting forever", async () => {
++  await using acp = await startSession({ onCommand: () => ({ inputID: "msg_unrelated" }) })
++  expect(await rpcError(acp.prompt(acp.sessionId, "/review broken"))).toBeDefined()
++})
++
++test("a command receipt cannot transfer settlement ownership to another session", async () => {
++  await using acp = await startSession({ onCommand: (input) => ({ inputID: input.id, sessionID: "ses_unrelated" }) })
++  expect(await rpcError(acp.prompt(acp.sessionId, "/review wrong-session"))).toBeDefined()
++})
+diff --git a/packages/cli/test/acp/prompt.test.ts b/packages/cli/test/acp/prompt.test.ts
+--- a/packages/cli/test/acp/prompt.test.ts
++++ b/packages/cli/test/acp/prompt.test.ts
+@@ -262,7 +262,15 @@
+ 
+     expect([command.stopReason, compact.stopReason]).toEqual(["end_turn", "end_turn"])
+     expect(acp.server.submissions).toEqual([
+-      { kind: "command", sessionID: session.sessionId, name: "review", text: "now", files: [], delivery: "steer" },
++      {
++        kind: "command",
++        id: expect.stringMatching(/^msg_/),
++        sessionID: session.sessionId,
++        name: "review",
++        text: "now",
++        files: [],
++        delivery: "steer",
++      },
+       { kind: "compact", sessionID: session.sessionId, id: expect.stringMatching(/^msg_/) },
+     ])
+     expect(
+diff --git a/packages/cli/test/acp/wire-fixture.ts b/packages/cli/test/acp/wire-fixture.ts
+--- a/packages/cli/test/acp/wire-fixture.ts
++++ b/packages/cli/test/acp/wire-fixture.ts
+@@ -64,7 +64,13 @@
+ const Files = Schema.Array(Schema.Struct({ uri: Schema.String, name: Schema.optional(Schema.String) }))
+ const Delivery = Schema.optional(Schema.String)
+ const PromptBody = Schema.Struct({ id: Schema.String, text: Schema.String, files: Files, delivery: Delivery })
+-const CommandBody = Schema.Struct({ name: Schema.String, text: Schema.String, files: Files, delivery: Delivery })
++const CommandBody = Schema.Struct({
++  id: Schema.String,
++  name: Schema.String,
++  text: Schema.String,
++  files: Files,
++  delivery: Delivery,
++})
+ const CompactBody = Schema.Struct({ id: Schema.String })
+ const SyntheticBody = Schema.Struct({
+   text: Schema.String,
+@@ -134,6 +140,13 @@
+     readonly text: string
+     readonly signal: AbortSignal
+   }>
++  readonly onCommand?: (input: {
++    readonly sessionID: string
++    readonly id: string
++    readonly text: string
++  }) =>
++    | { readonly inputID?: string; readonly sessionID?: string }
++    | Promise<{ readonly inputID?: string; readonly sessionID?: string }>
+   readonly onInterrupt?: Hook<{ readonly sessionID: string }>
+   readonly onFormCancel?: Hook<{ readonly sessionID: string; readonly formID: string }>
+   readonly onFormReply?: Hook<FormReply>
+@@ -788,10 +801,14 @@
+           return enqueued(sessionID, input.id, "user", { text: input.text })
+         }),
+       },
+-      "/api/session/:sessionID/command": {
+-        POST: body(CommandBody, (req, input) => {
+-          fake.submissions.push({ kind: "command", sessionID: req.params.sessionID, ...input })
+-          return noContent()
++      "/api/experimental/session/:sessionID/command": {
++        POST: body(CommandBody, async (req, input) => {
++          const sessionID = req.params.sessionID
++          fake.submissions.push({ kind: "command", sessionID, ...input })
++          const result = await options.onCommand?.({ sessionID, id: input.id, text: input.text })
++          return result?.inputID === undefined
++            ? Response.json({})
++            : enqueued(result.sessionID ?? sessionID, result.inputID, "user", { text: input.text })
+         }),
+       },
+       "/api/session/:sessionID/compact": {
+diff --git a/packages/client/src/effect/api/api.ts b/packages/client/src/effect/api/api.ts
+--- a/packages/client/src/effect/api/api.ts
++++ b/packages/client/src/effect/api/api.ts
+@@ -297,6 +297,21 @@
+ export type SessionCommandOutput = void
+ export type SessionCommandOperation<E = never> = (input: SessionCommandInput) => Effect.Effect<SessionCommandOutput, E>
+ 
++export type SessionSubmitCommandInput = {
++  readonly sessionID: Session.ID
++  readonly id: SessionMessage.ID
++  readonly name: string
++  readonly text: string
++  readonly files?: ReadonlyArray<PromptInput.FileAttachment> | undefined
++  readonly agents?: ReadonlyArray<AgentAttachment> | undefined
++  readonly skills?: ReadonlyArray<PromptInput.SkillAttachment> | undefined
++  readonly delivery?: SessionInbox.Delivery | undefined
++}
++export type SessionSubmitCommandOutput = SessionInbox.User | undefined
++export type SessionSubmitCommandOperation<E = never> = (
++  input: SessionSubmitCommandInput,
++) => Effect.Effect<SessionSubmitCommandOutput, E>
++
+ export type SessionSkillInput = {
+   readonly sessionID: Session.ID
+   readonly id: Skill.ID
+@@ -1328,6 +1343,7 @@
+   readonly move: SessionMoveOperation<E>
+   readonly prompt: SessionPromptOperation<E>
+   readonly command: SessionCommandOperation<E>
++  readonly submitCommand: SessionSubmitCommandOperation<E>
+   readonly skill: SessionSkillOperation<E>
+   readonly synthetic: SessionSyntheticOperation<E>
+   readonly shell: SessionShellOperation<E>
+diff --git a/packages/client/src/effect/generated/client.ts b/packages/client/src/effect/generated/client.ts
+--- a/packages/client/src/effect/generated/client.ts
++++ b/packages/client/src/effect/generated/client.ts
+@@ -51,6 +51,8 @@
+   SessionPromptOutput,
+   SessionCommandInput,
+   SessionCommandOutput,
++  SessionSubmitCommandInput,
++  SessionSubmitCommandOutput,
+   SessionSkillInput,
+   SessionSkillOutput,
+   SessionSyntheticInput,
+@@ -547,6 +549,25 @@
+     }).pipe(Effect.mapError(mapClientError)),
+   )
+ 
++const EndpointSessionSubmitCommand = (raw: RawClient["server.session"]) => (input: SessionSubmitCommandInput) =>
++  preserveEffect<SessionSubmitCommandOutput>()(
++    raw["session.submitCommand"]({
++      params: { sessionID: input["sessionID"] },
++      payload: {
++        id: input["id"],
++        name: input["name"],
++        text: input["text"],
++        files: input["files"],
++        agents: input["agents"],
++        skills: input["skills"],
++        delivery: input["delivery"],
++      },
++    }).pipe(
++      Effect.mapError(mapClientError),
++      Effect.map((value) => value.data),
++    ),
++  )
++
+ const EndpointSessionSkill = (raw: RawClient["server.session"]) => (input: SessionSkillInput) =>
+   preserveEffect<SessionSkillOutput>()(
+     raw["session.skill"]({
+@@ -801,6 +822,7 @@
+   move: EndpointSessionMove(raw),
+   prompt: EndpointSessionPrompt(raw),
+   command: EndpointSessionCommand(raw),
++  submitCommand: EndpointSessionSubmitCommand(raw),
+   skill: EndpointSessionSkill(raw),
+   synthetic: EndpointSessionSynthetic(raw),
+   shell: EndpointSessionShell(raw),
+diff --git a/packages/client/src/promise/generated/client.ts b/packages/client/src/promise/generated/client.ts
+--- a/packages/client/src/promise/generated/client.ts
++++ b/packages/client/src/promise/generated/client.ts
+@@ -45,6 +45,8 @@
+   SessionPromptOutput,
+   SessionCommandInput,
+   SessionCommandOutput,
++  SessionSubmitCommandInput,
++  SessionSubmitCommandOutput,
+   SessionSkillInput,
+   SessionSkillOutput,
+   SessionSyntheticInput,
+@@ -766,6 +768,26 @@
+           },
+           requestOptions,
+         ),
++      submitCommand: (input: SessionSubmitCommandInput, requestOptions?: RequestOptions) =>
++        request<{ readonly data: SessionSubmitCommandOutput }>(
++          {
++            method: "POST",
++            path: `/api/experimental/session/${encodeURIComponent(input.sessionID)}/command`,
++            body: {
++              id: input["id"],
++              name: input["name"],
++              text: input["text"],
++              files: input["files"],
++              agents: input["agents"],
++              skills: input["skills"],
++              delivery: input["delivery"],
++            },
++            successStatus: 200,
++            declaredStatuses: [400, 401, 404, 500],
++            empty: false,
++          },
++          requestOptions,
++        ).then((value) => value.data),
+       skill: (input: SessionSkillInput, requestOptions?: RequestOptions) =>
+         request<SessionSkillOutput>(
+           {
+diff --git a/packages/client/src/promise/generated/types.ts b/packages/client/src/promise/generated/types.ts
+--- a/packages/client/src/promise/generated/types.ts
++++ b/packages/client/src/promise/generated/types.ts
+@@ -3785,6 +3785,152 @@
+ }
+ 
+ export type SessionCommandOutput = void
++
++export type SessionSubmitCommandInput = {
++  readonly sessionID: { readonly sessionID: string }["sessionID"]
++  readonly id: {
++    readonly id: string
++    readonly name: string
++    readonly text: string
++    readonly files?: ReadonlyArray<{
++      readonly uri: string
++      readonly name?: string
++      readonly description?: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly agents?: ReadonlyArray<{
++      readonly name: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly skills?: ReadonlyArray<{
++      readonly id: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly delivery?: ("steer" | "queue") | null
++  }["id"]
++  readonly name: {
++    readonly id: string
++    readonly name: string
++    readonly text: string
++    readonly files?: ReadonlyArray<{
++      readonly uri: string
++      readonly name?: string
++      readonly description?: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly agents?: ReadonlyArray<{
++      readonly name: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly skills?: ReadonlyArray<{
++      readonly id: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly delivery?: ("steer" | "queue") | null
++  }["name"]
++  readonly text: {
++    readonly id: string
++    readonly name: string
++    readonly text: string
++    readonly files?: ReadonlyArray<{
++      readonly uri: string
++      readonly name?: string
++      readonly description?: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly agents?: ReadonlyArray<{
++      readonly name: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly skills?: ReadonlyArray<{
++      readonly id: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly delivery?: ("steer" | "queue") | null
++  }["text"]
++  readonly files?: {
++    readonly id: string
++    readonly name: string
++    readonly text: string
++    readonly files?: ReadonlyArray<{
++      readonly uri: string
++      readonly name?: string
++      readonly description?: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly agents?: ReadonlyArray<{
++      readonly name: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly skills?: ReadonlyArray<{
++      readonly id: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly delivery?: ("steer" | "queue") | null
++  }["files"]
++  readonly agents?: {
++    readonly id: string
++    readonly name: string
++    readonly text: string
++    readonly files?: ReadonlyArray<{
++      readonly uri: string
++      readonly name?: string
++      readonly description?: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly agents?: ReadonlyArray<{
++      readonly name: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly skills?: ReadonlyArray<{
++      readonly id: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly delivery?: ("steer" | "queue") | null
++  }["agents"]
++  readonly skills?: {
++    readonly id: string
++    readonly name: string
++    readonly text: string
++    readonly files?: ReadonlyArray<{
++      readonly uri: string
++      readonly name?: string
++      readonly description?: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly agents?: ReadonlyArray<{
++      readonly name: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly skills?: ReadonlyArray<{
++      readonly id: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly delivery?: ("steer" | "queue") | null
++  }["skills"]
++  readonly delivery?: {
++    readonly id: string
++    readonly name: string
++    readonly text: string
++    readonly files?: ReadonlyArray<{
++      readonly uri: string
++      readonly name?: string
++      readonly description?: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly agents?: ReadonlyArray<{
++      readonly name: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly skills?: ReadonlyArray<{
++      readonly id: string
++      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
++    }>
++    readonly delivery?: ("steer" | "queue") | null
++  }["delivery"]
++}
++
++export type SessionSubmitCommandOutput = { data?: SessionInboxUser | null }["data"]
+ 
+ export type SessionSkillInput = {
+   readonly sessionID: { readonly sessionID: string }["sessionID"]
+diff --git a/packages/core/src/command.ts b/packages/core/src/command.ts
+--- a/packages/core/src/command.ts
++++ b/packages/core/src/command.ts
+@@ -1,28 +1,31 @@
+ export * as Command from "./command.js"
+ 
+ import { Command } from "@opencode/schema/command"
++import type { SessionMessage } from "@opencode/schema/session-message"
+ import type { PromptInput } from "@opencode/schema/prompt-input"
+ import type { Session } from "@opencode/schema/session"
+-import type { SessionInbox } from "@opencode/schema/session-inbox"
++import { SessionInbox } from "@opencode/schema/session-inbox"
+ import { makeLocationNode } from "@opencode/util/effect/app-node"
+-import { Context, Effect, Layer, Schema } from "effect"
++import { Context, Effect, Layer, Option, Schema } from "effect"
+ import { Bus } from "./bus.js"
+ import { State } from "./state.js"
+ 
+ export const Info = Command.Info
+ export type Info = Command.Info
++export type Result = Command.Result
+ export { Event } from "@opencode/schema/command"
+ 
+ export interface Invocation {
+   readonly sessionID: Session.ID
+-  readonly prompt: PromptInput.Prompt
++  readonly prompt: PromptInput.Prompt & { readonly id?: SessionMessage.ID }
+   readonly delivery: SessionInbox.Delivery
+ }
+ 
+ export interface Definition {
+   readonly name: string
+   readonly description?: string
+-  readonly execute: (input: Invocation) => Effect.Effect<void, unknown>
++  /** Return a foreground input receipt when admitting model work; other values remain ignored. */
++  readonly execute: (input: Invocation) => Effect.Effect<unknown, unknown>
+ }
+ 
+ export type Editor = {
+@@ -45,7 +48,7 @@
+   readonly execute: (input: {
+     readonly name: string
+     readonly invocation: Invocation
+-  }) => Effect.Effect<void, NotFoundError | ExecutionError>
++  }) => Effect.Effect<void | Command.Result, NotFoundError | ExecutionError>
+ }
+ 
+ export class Service extends Context.Service<Service, Interface>()("@opencode/Command") {}
+@@ -62,6 +65,7 @@
+       }),
+       notify: () => bus.publish(Command.Event.Updated, {}).pipe(Effect.asVoid),
+     })
++    const receipt = Schema.decodeUnknownOption(Schema.Union([Schema.toType(SessionInbox.User), SessionInbox.User]))
+     const info = (definition: Definition) =>
+       Info.make({
+         name: definition.name,
+@@ -82,10 +86,11 @@
+         const definition = state.get().get(input.name)
+         if (!definition)
+           return yield* new NotFoundError({ command: input.name, message: `Command not found: ${input.name}` })
+-        return yield* definition.execute(input.invocation).pipe(
++        const result = yield* definition.execute(input.invocation).pipe(
+           Effect.tapError((error) => Effect.logError("command execution failed", { command: input.name, error })),
+           Effect.mapError((error) => new ExecutionError({ command: input.name, message: errorMessage(error) })),
+         )
++        return Option.getOrUndefined(receipt(result))
+       }),
+     })
+   }),
+diff --git a/packages/core/src/config/plugin/command.ts b/packages/core/src/config/plugin/command.ts
+--- a/packages/core/src/config/plugin/command.ts
++++ b/packages/core/src/config/plugin/command.ts
+@@ -122,13 +122,13 @@
+                   if (session.agent !== agent) yield* ctx.session.switchAgent({ sessionID: input.sessionID, agent })
+                 }
+                 if (model !== undefined) yield* ctx.session.switchModel({ sessionID: input.sessionID, model })
+-                yield* ctx.session.prompt({
++                return yield* ctx.session.prompt({
+                   ...input.prompt,
+                   sessionID: input.sessionID,
+                   text,
+                   delivery: input.delivery,
+                 })
+-              }).pipe(Effect.asVoid),
++              }),
+           })
+         }
+       }
+diff --git a/packages/core/src/session.ts b/packages/core/src/session.ts
+--- a/packages/core/src/session.ts
++++ b/packages/core/src/session.ts
+@@ -205,6 +205,7 @@
+   }) => Effect.Effect<string, NotFoundError | SessionGenerate.Error>
+   readonly command: (input: {
+     sessionID: SessionSchema.ID
++    id?: SessionMessage.ID
+     command: string
+     text: string
+     files?: PromptInput.Prompt["files"]
+@@ -212,7 +213,7 @@
+     skills?: PromptInput.Prompt["skills"]
+     delivery?: SessionInbox.Delivery
+   }) => Effect.Effect<
+-    void,
++    void | Command.Result,
+     NotFoundError | Command.NotFoundError | Command.ExecutionError | FileSystem.DirectoryNotFoundError
+   >
+   readonly shell: (
+diff --git a/packages/core/src/session/command.ts b/packages/core/src/session/command.ts
+--- a/packages/core/src/session/command.ts
++++ b/packages/core/src/session/command.ts
+@@ -1,5 +1,6 @@
+ export * as SessionCommand from "./command.js"
+ 
++import type { SessionMessage } from "@opencode/schema/session-message"
+ import type { PromptInput } from "@opencode/schema/prompt-input"
+ import type { Session } from "@opencode/schema/session"
+ import type { SessionInbox } from "@opencode/schema/session-inbox"
+@@ -10,6 +11,7 @@
+ 
+ export const execute = Effect.fn("SessionCommand.execute")(function* (input: {
+   session: Session.Info
++  id?: SessionMessage.ID
+   command: string
+   text: string
+   files?: PromptInput.Prompt["files"]
+@@ -19,11 +21,12 @@
+ }) {
+   const instances = yield* Instance.Service
+   const commands = yield* Plugin.awaitActivation.pipe(Effect.andThen(Command.Service), instances.provide(input.session))
+-  yield* commands.execute({
++  return yield* commands.execute({
+     name: input.command,
+     invocation: {
+       sessionID: input.session.id,
+       prompt: {
++        id: input.id,
+         text: input.text,
+         files: input.files,
+         agents: input.agents,
+diff --git a/packages/core/test/command.test.ts b/packages/core/test/command.test.ts
+--- a/packages/core/test/command.test.ts
++++ b/packages/core/test/command.test.ts
+@@ -2,12 +2,50 @@
+ import { Command } from "@opencode/core/command"
+ import { AppNodeBuilder } from "@opencode/core/effect/app-node-builder"
+ import { Session } from "@opencode/schema/session"
+-import { Effect } from "effect"
++import { DateTime, Effect } from "effect"
++import { SessionInbox } from "@opencode/schema/session-inbox"
++import { SessionMessage } from "@opencode/schema/session-message"
+ import { testEffect } from "./lib/effect"
+ 
+ const it = testEffect(AppNodeBuilder.build(Command.node))
+ 
+ describe("Command", () => {
++  it.effect("normalizes a promise plugin's encoded input receipt without losing its identity", () =>
++    Effect.gen(function* () {
++      const command = yield* Command.Service
++      const wire = {
++        id: "msg_command",
++        sessionID: "ses_test",
++        type: "user",
++        delivery: "steer",
++        time: { created: 0 },
++        payload: { text: "native command input" },
++      }
++      yield* command.transform((editor) => {
++        editor.add({ name: "review", execute: () => Effect.succeed(wire) })
++      })
++      expect(
++        yield* command.execute({
++          name: "review",
++          invocation: {
++            sessionID: Session.ID.make("ses_test"),
++            prompt: { text: "review" },
++            delivery: "steer",
++          },
++        }),
++      ).toEqual(
++        SessionInbox.User.make({
++          id: SessionMessage.ID.make("msg_command"),
++          sessionID: Session.ID.make("ses_test"),
++          type: "user",
++          delivery: "steer",
++          time: { created: DateTime.makeUnsafe(0) },
++          payload: { text: "native command input" },
++        }),
++      )
++    }),
++  )
++
+   it.effect("registers and executes callback commands", () =>
+     Effect.gen(function* () {
+       const command = yield* Command.Service
+@@ -28,7 +66,7 @@
+         prompt: { text: "ship it", files: [{ uri: "file:///tmp/plan.md" }] },
+         delivery: "steer" as const,
+       }
+-      yield* command.execute({ name: "goal", invocation })
++      expect(yield* command.execute({ name: "goal", invocation })).toBeUndefined()
+       expect(calls).toEqual([invocation])
+     }),
+   )
+diff --git a/packages/core/test/config/command.test.ts b/packages/core/test/config/command.test.ts
+--- a/packages/core/test/config/command.test.ts
++++ b/packages/core/test/config/command.test.ts
+@@ -94,7 +94,7 @@
+     it.live(`interpolates ${JSON.stringify(item.template)} with literal input ${JSON.stringify(item.input)}`, () =>
+       Effect.gen(function* () {
+         const command = yield* Command.Service
+-        const prompts: { text: string; delivery?: string }[] = []
++        const prompts: { id?: SessionMessage.ID; text: string; delivery?: string }[] = []
+         yield* ConfigCommandPlugin.Plugin.effect(
+           host({
+             command: {
+@@ -105,9 +105,9 @@
+             session: {
+               prompt: (input) =>
+                 Effect.sync(() => {
+-                  prompts.push({ text: input.text, delivery: input.delivery })
++                  prompts.push({ id: input.id, text: input.text, delivery: input.delivery })
+                   return SessionInbox.User.make({
+-                    id: SessionMessage.ID.make("msg_test"),
++                    id: input.id ?? SessionMessage.ID.make("msg_test"),
+                     sessionID: input.sessionID,
+                     time: { created: DateTime.makeUnsafe(0) },
+                     type: "user",
+@@ -127,15 +127,18 @@
+             ]),
+           ),
+         )
+-        yield* command.execute({
++        const receipt = yield* command.execute({
+           name: "explain",
+           invocation: {
+             sessionID: Session.ID.make("ses_test"),
+-            prompt: { text: item.input },
++            prompt: { id: SessionMessage.ID.make("msg_from_acp"), text: item.input },
+             delivery: "queue",
+           },
+         })
+-        expect(prompts).toEqual([{ text: item.expected, delivery: "queue" }])
++        expect(prompts).toEqual([
++          { id: SessionMessage.ID.make("msg_from_acp"), text: item.expected, delivery: "queue" },
++        ])
++        expect(receipt).toMatchObject({ id: "msg_from_acp", sessionID: "ses_test", type: "user" })
+       }),
+     )
+   }
+diff --git a/packages/plugin/src/effect/command.ts b/packages/plugin/src/effect/command.ts
+--- a/packages/plugin/src/effect/command.ts
++++ b/packages/plugin/src/effect/command.ts
+@@ -1,4 +1,5 @@
+ import type { CommandApi } from "@opencode/client/effect/api"
++import type { SessionMessage } from "@opencode/schema/session-message"
+ import type { PromptInput } from "@opencode/schema/prompt-input"
+ import type { Session } from "@opencode/schema/session"
+ import type { SessionInbox } from "@opencode/schema/session-inbox"
+@@ -7,14 +8,15 @@
+ 
+ export interface CommandInvocation {
+   readonly sessionID: Session.ID
+-  readonly prompt: PromptInput.Prompt
++  readonly prompt: PromptInput.Prompt & { readonly id?: SessionMessage.ID }
+   readonly delivery: SessionInbox.Delivery
+ }
+ 
+ export interface CommandDefinition {
+   readonly name: string
+   readonly description?: string
+-  readonly execute: (input: CommandInvocation) => Effect.Effect<void, unknown>
++  /** Return a foreground input receipt when admitting model work; other values remain ignored. */
++  readonly execute: (input: CommandInvocation) => Effect.Effect<unknown, unknown>
+ }
+ 
+ export interface CommandEditor {
+diff --git a/packages/plugin/src/promise/command.ts b/packages/plugin/src/promise/command.ts
+--- a/packages/plugin/src/promise/command.ts
++++ b/packages/plugin/src/promise/command.ts
+@@ -1,4 +1,5 @@
+ import type { CommandApi } from "@opencode/client/promise/api"
++import type { SessionMessage } from "@opencode/schema/session-message"
+ import type { PromptInput } from "@opencode/schema/prompt-input"
+ import type { Session } from "@opencode/schema/session"
+ import type { SessionInbox } from "@opencode/schema/session-inbox"
+@@ -6,14 +7,15 @@
+ 
+ export interface CommandInvocation {
+   readonly sessionID: Session.ID
+-  readonly prompt: PromptInput.Prompt
++  readonly prompt: PromptInput.Prompt & { readonly id?: SessionMessage.ID }
+   readonly delivery: SessionInbox.Delivery
+ }
+ 
+ export interface CommandDefinition {
+   readonly name: string
+   readonly description?: string
+-  readonly execute: (input: CommandInvocation) => Promise<void>
++  /** Return a foreground input receipt when admitting model work; other values remain ignored. */
++  readonly execute: (input: CommandInvocation) => Promise<unknown>
+ }
+ 
+ export interface CommandEditor {
+diff --git a/packages/protocol/src/groups/session.ts b/packages/protocol/src/groups/session.ts
+--- a/packages/protocol/src/groups/session.ts
++++ b/packages/protocol/src/groups/session.ts
+@@ -302,7 +302,8 @@
+           metadata: Session.Metadata.pipe(Schema.optional),
+           permissions: Permission.Ruleset.pipe(Schema.optional),
+           archived: Schema.Boolean.pipe(Schema.optional).annotate({
+-            description: "Archive the session with true or restore it with false. Repeating the current state is a no-op.",
++            description:
++              "Archive the session with true or restore it with false. Repeating the current state is a no-op.",
+           }),
+         }),
+         success: HttpApiSchema.NoContent,
+@@ -370,6 +371,28 @@
+             identifier: "session.command",
+             summary: "Run command",
+             description: "Execute a slash command callback immediately.",
++          }),
++        ),
++    )
++    .add(
++      HttpApiEndpoint.post("session.submitCommand", "/api/experimental/session/:sessionID/command", {
++        params: { sessionID: Session.ID },
++        payload: Schema.Struct({
++          id: SessionMessage.ID,
++          name: Schema.String,
++          ...PromptInput.Prompt.fields,
++          delivery: SessionInbox.Delivery.pipe(Schema.optional),
++        }),
++        success: Schema.Struct({ data: SessionInbox.User.pipe(Schema.optional) }),
++        error: [SessionNotFoundError, CommandNotFoundError, CommandExecutionError],
++      })
++        .middleware(sessionLocationMiddleware)
++        .annotateMerge(
++          OpenApi.annotations({
++            identifier: "session.submitCommand",
++            summary: "Admit command with an input receipt",
++            description:
++              "Execute the native handler and return the foreground input it admitted, if any. The receipt is not a completion signal.",
+           }),
+         ),
+     )
+diff --git a/packages/schema/src/command.ts b/packages/schema/src/command.ts
+--- a/packages/schema/src/command.ts
++++ b/packages/schema/src/command.ts
+@@ -1,6 +1,7 @@
+ export * as Command from "./command.js"
+ 
+ import { Schema } from "effect"
++import type { SessionInbox } from "./session-inbox.js"
+ import { ephemeral, inventory } from "./event.js"
+ import { optional } from "./schema.js"
+ 
+@@ -12,6 +13,9 @@
+   description: Schema.String.pipe(optional),
+ }).annotate({ identifier: "Command.Info" })
+ 
++/** Foreground input admitted by a command, if any; local/background handlers may return void. */
++export type Result = SessionInbox.User
++
+ export const Event = {
+   Updated,
+   Definitions: inventory(Updated),
+diff --git a/packages/server/src/handlers/session.ts b/packages/server/src/handlers/session.ts
+--- a/packages/server/src/handlers/session.ts
++++ b/packages/server/src/handlers/session.ts
+@@ -44,6 +44,17 @@
+         sessionID: error.sessionID,
+         message: `Session is busy: ${error.sessionID}`,
+       })
++    const executeCommand = (input: Parameters<typeof session.command>[0]) =>
++      session.command(input).pipe(
++        Effect.catchTag("Session.NotFoundError", missingSession),
++        Effect.catchTag("Command.NotFoundError", (error) =>
++          Effect.fail(new CommandNotFoundError({ command: error.command, message: error.message })),
++        ),
++        Effect.catchTag("Command.ExecutionError", (error) =>
++          Effect.fail(new CommandExecutionError({ command: error.command, message: error.message })),
++        ),
++        locationErrors,
++      )
+     const pendingMutation = (effect: ReturnType<typeof session.cancelInbox>, conflict: string) =>
+       effect.pipe(
+         Effect.catchTag("Session.NotFoundError", missingSession),
+@@ -315,37 +326,19 @@
+       .handle(
+         "session.command",
+         Effect.fn(function* (ctx) {
+-          yield* session
+-            .command({
+-              sessionID: ctx.params.sessionID,
+-              command: ctx.payload.name,
+-              text: ctx.payload.text,
+-              files: ctx.payload.files,
+-              agents: ctx.payload.agents,
+-              skills: ctx.payload.skills,
+-              delivery: ctx.payload.delivery,
+-            })
+-            .pipe(
+-              Effect.catchTag("Session.NotFoundError", missingSession),
+-              Effect.catchTag("Command.NotFoundError", (error) =>
+-                Effect.fail(
+-                  new CommandNotFoundError({
+-                    command: error.command,
+-                    message: error.message,
+-                  }),
+-                ),
+-              ),
+-              Effect.catchTag("Command.ExecutionError", (error) =>
+-                Effect.fail(
+-                  new CommandExecutionError({
+-                    command: error.command,
+-                    message: error.message,
+-                  }),
+-                ),
+-              ),
+-              locationErrors,
+-            )
+-          return HttpApiSchema.NoContent.make()
++          yield* executeCommand({ ...ctx.payload, sessionID: ctx.params.sessionID, command: ctx.payload.name })
++          return HttpApiSchema.NoContent.make()
++        }),
++      )
++      .handle(
++        "session.submitCommand",
++        Effect.fn(function* (ctx) {
++          const admitted = yield* executeCommand({
++            ...ctx.payload,
++            sessionID: ctx.params.sessionID,
++            command: ctx.payload.name,
++          })
++          return { data: admitted ?? undefined }
+         }),
+       )
+       .handle(

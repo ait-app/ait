@@ -17,12 +17,11 @@ struct Process {
 impl Drop for Process {
     fn drop(&mut self) {
         #[cfg(unix)]
-        if let Some(group) = self.group {
-            let _ = std::process::Command::new("/bin/kill")
-                .args(["-KILL", "--", &format!("-{group}")])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
+        if let Some(group) = self.group.and_then(|group| i32::try_from(group).ok()) {
+            let _ = nix::sys::signal::killpg(
+                nix::unistd::Pid::from_raw(group),
+                nix::sys::signal::Signal::SIGKILL,
+            );
         }
         let _ = self.child.start_kill();
     }

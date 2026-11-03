@@ -76,6 +76,18 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
+- [ADR-210：原生临时界面与拥有者操作](providers/adr-210-native-ui-and-actions.md)
+
+- [ADR-209：OMP 模型角色配置](providers/adr-209-omp-model-roles.md)
+- [ADR-208：原生控制的延迟确认与文件交付](providers/adr-208-native-control-delivery.md)
+
+- [ADR-205：DSH 与 OpenCode 的原生命令所有权](providers/adr-205-provider-native-command-ownership.md)
+- [ADR-207：DSH 不激活 Agent 的历史读取](providers/adr-207-dsh-non-activating-history.md)
+- [ADR-206：原生控制结果使用独立时间线卡片](providers/adr-206-native-control-result-cards.md)
+
+- [ADR-203：OMP 会话命令目录与参数补全](providers/adr-203-omp-command-catalog-and-completion.md)
+- [ADR-204：由 Provider 拥有原生编辑器补全](providers/adr-204-native-editor-completion.md)
+
 - [ADR-202：Agent MCP 运行时自动注入](providers/adr-202-agent-mcp-injection.md)
 
 - [ADR-199：内置 Skill 随 daemon 启动分发](providers/adr-199-bundled-skill-distribution.md)

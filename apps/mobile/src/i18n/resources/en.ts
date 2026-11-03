@@ -1,4 +1,24 @@
 export const en = {
+  providerControl: {
+    nativeOperations: "Native operations",
+    runOperation: "Run",
+    openBrowser: "Open in browser",
+    goal: "Goal",
+    details: "Details",
+    emptyGoal: "No goal is currently set.",
+    rounds: "Rounds {{count}} / {{max}}",
+    editObjective: "Edit goal objective",
+    status: {
+      active: "Active",
+      paused: "Paused",
+      blocked: "Blocked",
+      complete: "Complete",
+      empty: "Not set",
+      success: "Done",
+      error: "Failed",
+    },
+    actions: { pause: "Pause", resume: "Resume", edit: "Edit goal", clear: "Clear" },
+  },
   voiceTimeline: {
     started: "Voice conversation started",
     ended: "Voice conversation ended",

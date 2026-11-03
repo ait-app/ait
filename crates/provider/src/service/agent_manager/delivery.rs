@@ -1,11 +1,22 @@
 //! Serialized message admission, native interruption and durable retry receipts.
 
+use std::{future::Future, pin::Pin};
+
 use super::{AgentManager, AgentManagerError};
 use crate::protocol::{agent_execution::ActiveTurnBehavior, prompt::AgentPrompt};
 use crate::storage::timeline::Timeline;
 use crate::storage::timeline::inbox::{QueuedInput, Receipt};
 use crate::support::time::now_timestamp;
 use model::ErrorCode;
+
+/// Final input acknowledgement, optionally pending without retaining the execution lane.
+#[must_use]
+pub(crate) enum Admission {
+    /// Native admission has already settled.
+    Accepted,
+    /// Native control settlement also commits its durable input receipt.
+    Pending(Pin<Box<dyn Future<Output = Result<(), ErrorCode>> + Send>>),
+}
 
 impl AgentManager {
     pub(crate) async fn deliver_answer(
@@ -77,7 +88,7 @@ impl AgentManager {
         agent: &str,
         prompt: &AgentPrompt,
         behavior: ActiveTurnBehavior,
-    ) -> Result<(), ErrorCode> {
+    ) -> Result<Admission, ErrorCode> {
         prompt.validate().map_err(|_| ErrorCode::InvalidMessage)?;
         let record = self
             .registry
@@ -98,7 +109,7 @@ impl AgentManager {
         };
         if let Some(receipt) = self.existing_input(agent, prompt, policy)? {
             match receipt {
-                Receipt::Accepted => return Ok(()),
+                Receipt::Accepted => return Ok(Admission::Accepted),
                 Receipt::Uncertain => return Err(ErrorCode::AgentIo),
                 Receipt::Rejected if !out_of_band => return Err(ErrorCode::InvalidMessage),
                 Receipt::Rejected | Receipt::New => {}
@@ -125,7 +136,7 @@ impl AgentManager {
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let queued = timeline.has_queued_input(agent)?;
         match timeline.reserve_input(agent, &message, prompt, policy)? {
-            Receipt::Accepted => return Ok(()),
+            Receipt::Accepted => return Ok(Admission::Accepted),
             Receipt::Uncertain => return Err(ErrorCode::AgentIo),
             Receipt::Rejected => return Err(ErrorCode::InvalidMessage),
             Receipt::New => {}
@@ -136,7 +147,10 @@ impl AgentManager {
         {
             timeline.claim_input(agent, &message)?;
             match self.steer_input(agent, prompt).await {
-                Ok(()) => return timeline.finish_input(agent, &message, Receipt::Accepted),
+                Ok(()) => {
+                    timeline.finish_input(agent, &message, Receipt::Accepted)?;
+                    return Ok(Admission::Accepted);
+                }
                 Err(AgentManagerError::Busy) => timeline.requeue_input(agent, &message)?,
                 Err(_) => {
                     timeline.finish_input(agent, &message, Receipt::Uncertain)?;
@@ -152,14 +166,15 @@ impl AgentManager {
             return Err(error);
         }
         // Native terminal acknowledgement may arrive later; the durable FIFO owns the input.
-        self.dispatch_inputs(Some(agent)).await
+        self.dispatch_inputs(Some(agent)).await?;
+        Ok(Admission::Accepted)
     }
 
     async fn deliver_command(
         &mut self,
         agent: &str,
         prompt: &AgentPrompt,
-    ) -> Result<(), ErrorCode> {
+    ) -> Result<Admission, ErrorCode> {
         let mut prompt = prompt.clone();
         let message = prompt
             .client_message_id
@@ -167,7 +182,7 @@ impl AgentManager {
             .clone();
         let timeline = self.timeline.clone().ok_or(ErrorCode::AgentIo)?;
         match timeline.claim_answer(agent, &message, &prompt)? {
-            Receipt::Accepted => return Ok(()),
+            Receipt::Accepted => return Ok(Admission::Accepted),
             Receipt::Uncertain => return Err(ErrorCode::AgentIo),
             Receipt::Rejected => return Err(ErrorCode::InvalidMessage),
             Receipt::New => {}
@@ -178,14 +193,27 @@ impl AgentManager {
         }
         let session = self.live.get_mut(agent).ok_or(ErrorCode::AgentIo)?;
         let result = session.session.out_of_band(&prompt).await;
-        let receipt = match &result {
-            Ok(()) => Receipt::Accepted,
-            Err(crate::ports::agent_session::AgentSessionError::Rejected) => Receipt::Rejected,
-            Err(_) => Receipt::Uncertain,
-        };
+        if result.is_ok()
+            && let Some(completion) = session.session.take_command_completion()
+        {
+            let agent = agent.to_owned();
+            self.poll().await.map_err(|_| ErrorCode::AgentIo)?;
+            return Ok(Admission::Pending(Box::pin(async move {
+                let result = completion.await;
+                let receipt = command_receipt(&result);
+                tokio::task::spawn_blocking(move || {
+                    timeline.finish_input(&agent, &message, receipt)
+                })
+                .await
+                .map_err(|_| ErrorCode::AgentIo)??;
+                result.map_err(|_| ErrorCode::AgentIo)
+            })));
+        }
+        let receipt = command_receipt(&result);
         timeline.finish_input(agent, &message, receipt)?;
         result.map_err(|_| ErrorCode::AgentIo)?;
-        self.poll().await.map_err(|_| ErrorCode::AgentIo)
+        self.poll().await.map_err(|_| ErrorCode::AgentIo)?;
+        Ok(Admission::Accepted)
     }
 
     fn existing_input(
@@ -420,5 +448,13 @@ impl AgentManager {
             .map(|agent| timeline.queued_for_agent(agent))
             .collect::<Result<Vec<_>, _>>()
             .map(|inputs| inputs.into_iter().flatten().collect())
+    }
+}
+
+fn command_receipt(result: &Result<(), crate::ports::agent_session::AgentSessionError>) -> Receipt {
+    match result {
+        Ok(()) => Receipt::Accepted,
+        Err(crate::ports::agent_session::AgentSessionError::Rejected) => Receipt::Rejected,
+        Err(_) => Receipt::Uncertain,
     }
 }

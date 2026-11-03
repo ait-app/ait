@@ -1,0 +1,49 @@
+{
+  "commands": [
+    {
+      "name": "advisor",
+      "aliases": ["adv"],
+      "description": "Control the advisor",
+      "input": { "hint": "on|off|status|dump|configure" },
+      "source": "builtin",
+      "subcommands": [
+        { "name": "on", "description": "Enable the advisor" },
+        { "name": "off", "description": "Disable the advisor" },
+        { "name": "status", "description": "Show advisor status" },
+        { "name": "dump", "description": "Copy the advisor's transcript to clipboard" },
+        { "name": "configure", "description": "Open the advisor configuration editor (TUI)" }
+      ]
+    },
+    {
+      "name": "custom-provider",
+      "description": "Configure a custom provider",
+      "source": "extension",
+      "input": { "hint": "arguments" }
+    },
+    {
+      "name": "review",
+      "description": "Review the changes",
+      "source": "skill"
+    },
+    {
+      "name": "clear",
+      "aliases": ["new"],
+      "description": "Start a native session",
+      "source": "builtin"
+    },
+    {
+      "name": "exit",
+      "aliases": ["quit", "q"],
+      "description": "Exit the native session",
+      "source": "builtin"
+    },
+    {
+      "name": "sample",
+      "description": "Run a sample action",
+      "source": "file",
+      "subcommands": [
+        { "name": "run", "description": "Run the action", "usage": "<path>" }
+      ]
+    }
+  ]
+}

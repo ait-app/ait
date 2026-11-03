@@ -52,10 +52,11 @@ pub(super) async fn open(
     }
     let mut transport = transport::spawn(client, &spec.cwd)?;
     let initialized = transport
-        .request(
+        .startup_request(
             "initialize",
             json!({"protocolVersion":1,
         "clientCapabilities":{},"clientInfo":{"name":"ait","version":env!("CARGO_PKG_VERSION")}}),
+            client.startup_deadline,
         )
         .await?;
     if initialized["protocolVersion"] != 1 {
@@ -73,7 +74,9 @@ pub(super) async fn open(
     } else {
         "session/new"
     };
-    let result = transport.request(method, params).await?;
+    let result = transport
+        .startup_request(method, params, client.startup_deadline)
+        .await?;
     let id = match handle {
         Some(handle) => handle.session_id.clone(),
         None => config::text(&result, "sessionId")?.to_owned(),

@@ -6,7 +6,25 @@ use serde_json::json;
 
 use super::super::DeepSeekHarnessClient;
 use crate::service::agent_execution::AgentExecution;
-use crate::test_support::{Fixture, request, worker_with_client};
+use crate::test_support::{Fixture, request as ordinary_request, worker_with_client};
+
+async fn request(
+    execution: &AgentExecution,
+    method: &str,
+    params: serde_json::Value,
+) -> serde_json::Value {
+    if matches!(
+        method,
+        "agent.create.request" | "agent.resume.request" | "provider.models.list.request"
+    ) {
+        tokio::time::timeout(Duration::from_secs(180), execution.execute(method, params))
+            .await
+            .unwrap_or_else(|_| panic!("{method} cold startup timed out"))
+            .unwrap_or_else(|error| panic!("{method}: {error:?}"))
+    } else {
+        ordinary_request(execution, method, params).await
+    }
+}
 
 fn worker(fixture: &Fixture) -> AgentExecution {
     let program = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

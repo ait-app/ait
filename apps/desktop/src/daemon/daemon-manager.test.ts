@@ -136,6 +136,16 @@ describe("daemon-manager commands", () => {
     expect(mocks.accountCommand).toHaveBeenCalledExactlyOnceWith(event, "account_host_sync", args);
   });
 
+  it("rejects direct file downloads from a window outside the Ait app", async () => {
+    registerDaemonManager(() => false);
+    const registration = vi
+      .mocked(ipcMain.handle)
+      .mock.calls.find(([channel]) => channel === "ait:invoke")!;
+    await expect(registration[1]({ sender: {} }, "file_download", {})).rejects.toThrow(
+      "Invalid download window.",
+    );
+  });
+
   it("starts the Rust owner and injects managed credentials only in the main process", async () => {
     const handlers = createDaemonCommandHandlers();
     mocks.start.mockResolvedValue({ status: "running" });

@@ -32,6 +32,9 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             value.is_empty() || value.len() > 128 || value.chars().any(char::is_control)
         })
         || config.feature_values.iter().flatten().any(|(key, value)| {
+            if super::roles::is_key(key) {
+                return !super::roles::valid(key, value);
+            }
             if key == "transport" {
                 return !matches!(value.as_str(), Some("acp" | "rpc"));
             }
@@ -148,6 +151,7 @@ pub(super) async fn apply(
     }
     for (id, value) in config.feature_values.iter().flatten() {
         let kind = match id.as_str() {
+            id if super::roles::is_key(id) => continue,
             "transport" => continue,
             "autoCompaction" => "set_auto_compaction",
             "autoRetry" => "set_auto_retry",
@@ -245,7 +249,11 @@ pub(super) fn runtime(state: &Value) -> Result<StoredAgentRuntimeInfo, AgentSess
 }
 
 pub(super) fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str, AgentSessionError> {
-    value[key]
+    checked_text(&value[key])
+}
+
+fn checked_text(value: &Value) -> Result<&str, AgentSessionError> {
+    value
         .as_str()
         .filter(|text| {
             !text.is_empty() && text.len() <= 4096 && !text.chars().any(char::is_control)
@@ -253,6 +261,8 @@ pub(super) fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str, AgentSess
         .ok_or(AgentSessionError::Failed)
 }
 
+/// Normalize a bounded native command catalog without losing completion metadata.
+/// Returns a protocol failure for missing names, malformed aliases, or invalid subcommands.
 pub(super) fn commands(value: &Value) -> Result<Vec<Value>, AgentSessionError> {
     value["commands"]
         .as_array()
@@ -260,13 +270,49 @@ pub(super) fn commands(value: &Value) -> Result<Vec<Value>, AgentSessionError> {
         .ok_or(AgentSessionError::Failed)?
         .iter()
         .map(|entry| {
-            Ok(
+            let mut command =
                 json!({"name":text(entry,"name")?,"description":entry["description"].as_str()
                 .unwrap_or_default(),"argumentHint":entry["input"]["hint"].as_str().unwrap_or_default(),
-                "kind":if entry["source"]=="skill"{"skill"}else{"command"}}),
-            )
+                "kind":if entry["source"]=="skill"{"skill"}else{"command"}});
+            if let Some(source) = entry.get("source") {
+                text(entry, "source")?;
+                command["source"] = source.clone();
+            }
+            if let Some(aliases) = entry.get("aliases") {
+                let aliases = aliases
+                    .as_array()
+                    .filter(|aliases| aliases.len() <= 4096)
+                    .ok_or(AgentSessionError::Failed)?;
+                for alias in aliases {
+                    checked_text(alias)?;
+                }
+                command["aliases"] = json!(aliases);
+            }
+            if let Some(subcommands) = entry.get("subcommands") {
+                let subcommands = subcommands
+                    .as_array()
+                    .filter(|subcommands| subcommands.len() <= 4096)
+                    .ok_or(AgentSessionError::Failed)?;
+                command["subcommands"] = json!(
+                    subcommands.iter().map(subcommand).collect::<Result<Vec<_>, _>>()?
+                );
+            }
+            Ok(command)
         })
         .collect()
+}
+
+fn subcommand(entry: &Value) -> Result<Value, AgentSessionError> {
+    let mut value = json!({"name":text(entry,"name")?});
+    for field in ["description", "usage"] {
+        if let Some(text) = entry.get(field) {
+            if !text.is_string() {
+                return Err(AgentSessionError::Failed);
+            }
+            value[field] = text.clone();
+        }
+    }
+    Ok(value)
 }
 
 #[cfg(test)]

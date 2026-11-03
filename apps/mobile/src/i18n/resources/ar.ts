@@ -8,6 +8,7 @@ export const ar: TranslationResources = {
     failed: "انقطعت المحادثة الصوتية",
   },
   onlineService: en.onlineService,
+  providerControl: en.providerControl,
   bots: en.bots,
   paneFind: {
     searchFailed: "تعذر البحث في هذه المحادثة. تحقق من الاتصال بالمضيف وأعد المحاولة.",

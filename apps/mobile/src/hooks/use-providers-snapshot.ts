@@ -83,12 +83,12 @@ export function useProvidersSnapshot(
     structuralSharing: false,
     enabled: Boolean(enabled && supportsSnapshot && serverId && client && isConnected),
     pushEvent: "provider.snapshot.update",
-    // Lazy discovery must converge even if its completion push was missed.
+    // Recheck active catalogs in the background; pending discovery converges without a push.
     refetchInterval: (query) =>
       query.state.data?.refreshing?.length ||
       query.state.data?.entries.some((entry) => entry.status === "loading")
         ? 1_000
-        : false,
+        : 5 * 60_000,
     queryFn: async ({ signal }) => {
       if (!client || !serverId) {
         throw new Error(t("workspace.terminal.hostDisconnected"));

@@ -20,12 +20,14 @@ vi.mock("@/components/ui/text-input", () => ({
     accessibilityLabel,
     editable,
     multiline,
+    secureTextEntry,
   }: {
     initialValue: string;
     onChangeText: (text: string) => void;
     accessibilityLabel: string;
     editable: boolean;
     multiline?: boolean;
+    secureTextEntry?: boolean;
   }) =>
     multiline ? (
       <textarea
@@ -36,6 +38,7 @@ vi.mock("@/components/ui/text-input", () => ({
       />
     ) : (
       <input
+        type={secureTextEntry ? "password" : "text"}
         aria-label={accessibilityLabel}
         value={initialValue}
         disabled={!editable}
@@ -70,6 +73,65 @@ describe("question response recovery", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it("shows native editor prefill and submits it with leading and trailing whitespace", () => {
+    const fixture = ompDialogs.find((fixture) => fixture.name === "editor")!;
+    const onRespond = vi.fn();
+    const initialValue = "  initial line\n";
+    const input = { questions: [{ ...fixture.request.input.questions![0], initialValue }] };
+    render(
+      <QuestionFormCard
+        permission={{
+          ...permission,
+          request: { ...fixture.request, input } as PendingPermission["request"],
+        }}
+        onRespond={onRespond}
+        isResponding={false}
+      />,
+    );
+    expect(
+      (screen.getByRole("textbox", { name: "Edit the plan" }) as HTMLTextAreaElement).value,
+    ).toBe(initialValue);
+    fireEvent.click(screen.getByTestId("question-form-primary-action"));
+    expect(onRespond).toHaveBeenCalledWith(
+      expect.objectContaining({
+        behavior: "allow",
+        updatedInput: expect.objectContaining({ answers: { "Edit the plan": initialValue } }),
+      }),
+    );
+  });
+
+  it("masks a native secret input and keeps cancel distinct from submitting an empty answer", () => {
+    const onRespond = vi.fn();
+    render(
+      <QuestionFormCard
+        permission={{
+          ...permission,
+          request: {
+            ...permission.request,
+            input: {
+              questions: [
+                {
+                  header: "Secret",
+                  question: "Enter secret",
+                  options: [],
+                  allowOther: true,
+                  secret: true,
+                  allowEmpty: true,
+                  dismissBehavior: "deny",
+                },
+              ],
+            },
+          },
+        }}
+        onRespond={onRespond}
+        isResponding={false}
+      />,
+    );
+    expect(screen.getByLabelText("Enter secret").getAttribute("type")).toBe("password");
+    fireEvent.click(screen.getByTestId("question-form-dismiss"));
+    expect(onRespond).toHaveBeenCalledWith(expect.objectContaining({ behavior: "deny" }));
   });
 
   it.each(["dismiss", "submit"] as const)(

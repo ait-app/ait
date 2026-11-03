@@ -147,6 +147,8 @@ pub(super) async fn execution(
                 | "agent.context.compact.request"
                 | "agent.rewind.request"
                 | "agent.commands.list.request"
+                | "agent.commands.complete.request"
+                | "agent.native_action.request"
                 | "agent.mode.set.request"
                 | "agent.feature.set.request"
                 | "agent.permission.resolve.request"

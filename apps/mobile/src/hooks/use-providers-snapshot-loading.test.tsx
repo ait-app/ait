@@ -84,7 +84,7 @@ describe("provider discovery without completion pushes", () => {
   });
 
   it.each(["ready", "error", "unavailable"] as const)(
-    "rechecks loading until %s and then stops",
+    "rechecks loading until %s and then slows down",
     async (status) => {
       const terminal = snapshot(status, 2);
       host.client.getProvidersSnapshot
@@ -102,6 +102,37 @@ describe("provider discovery without completion pushes", () => {
       expect(host.client.getProvidersSnapshot).toHaveBeenCalledTimes(2);
     },
   );
+
+  it("refreshes warm models in the background and stops when the panel is inactive", async () => {
+    const original = snapshot("ready");
+    queryClient.setQueryData(providersSnapshotQueryKey(serverId, cwd), original);
+    let finish!: (value: ReturnType<typeof snapshot>) => void;
+    host.client.getProvidersSnapshot.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { result, rerender } = renderHook(() => useProvidersSnapshot(serverId, { cwd }), {
+      wrapper,
+    });
+    await act(() => vi.advanceTimersByTimeAsync(299_999));
+    expect(host.client.getProvidersSnapshot).not.toHaveBeenCalled();
+    await act(() => vi.advanceTimersByTimeAsync(1));
+    expect(host.client.getProvidersSnapshot).toHaveBeenCalledTimes(1);
+    expect(result.current.entries).toEqual(original.entries);
+    expect(result.current.isLoading).toBe(false);
+    const updated = snapshot("ready", 2);
+    updated.entries[0].models[0].id = "new-model";
+    await act(async () => {
+      finish(updated);
+    });
+    expect(result.current.entries).toEqual(updated.entries);
+    host.active = false;
+    rerender();
+    await act(() => vi.advanceTimersByTimeAsync(300_000));
+    expect(host.client.getProvidersSnapshot).toHaveBeenCalledTimes(1);
+  });
 
   it("resumes discovery from a cached loading snapshot when the panel opens", async () => {
     queryClient.setQueryData(providersSnapshotQueryKey(serverId, cwd), snapshot("loading"));

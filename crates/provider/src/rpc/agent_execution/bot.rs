@@ -47,7 +47,8 @@ impl ExecutionState {
                 if existing.is_none() {
                     return Err(ErrorCode::AgentNotFound);
                 }
-                self.manager
+                let admission = self
+                    .manager
                     .deliver(
                         &agent_id,
                         &AgentPrompt {
@@ -58,6 +59,14 @@ impl ExecutionState {
                         ActiveTurnBehavior::Interrupt,
                     )
                     .await?;
+                if let crate::service::agent_manager::delivery::Admission::Pending(completion) =
+                    admission
+                {
+                    self.pending_response = Some(Box::pin(async move {
+                        completion.await?;
+                        Ok(json!({"accepted":true}))
+                    }));
+                }
                 Ok(json!({"accepted":true}))
             }
             Action::Status { agent_id } => self.wait_result(&agent_id),

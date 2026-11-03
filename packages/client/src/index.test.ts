@@ -53,6 +53,7 @@ class FakeWebSocket {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   FakeWebSocket.instances.length = 0;
 });
@@ -973,6 +974,40 @@ test("agent handles list the session's own commands through the existing daemon 
       { name: "usage", kind: "command" },
     ],
   });
+  await client.close();
+});
+
+test("agent handles request native completion without submitting a prompt", async () => {
+  const { client, ws } = await connectClient();
+  vi.useFakeTimers();
+  const agent = client.agents.ref("agent_sdk");
+  const pending = agent.completeCommands({ text: "/native first second ", cursor: 21 });
+  const completed = expect(pending).resolves.toMatchObject({
+    agentId: "agent_sdk",
+    supported: true,
+    items: [],
+  });
+  const request = parseSentSessionMessage(ws.sent.at(-1));
+  expect(request).toMatchObject({
+    type: "agent.commands.complete.request",
+    agentId: "agent_sdk",
+    text: "/native first second ",
+    cursor: 21,
+  });
+  // Starting an inactive provider's read-only runtime can exceed five seconds.
+  await vi.advanceTimersByTimeAsync(6000);
+  ws.message(
+    sessionMessage({
+      type: "agent.commands.complete.response",
+      payload: {
+        agentId: "agent_sdk",
+        requestId: request.requestId,
+        supported: true,
+        items: [],
+      },
+    }),
+  );
+  await completed;
   await client.close();
 });
 

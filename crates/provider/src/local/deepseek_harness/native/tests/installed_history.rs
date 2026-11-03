@@ -73,7 +73,12 @@ async fn installed_existing_session_import_and_resume_preserve_history() {
     let mut session = client
         .resume_session(&handle, &spec, AgentResumePurpose::Interactive)
         .await
-        .unwrap();
+        .unwrap_or_else(|error| {
+            panic!(
+                "native resume failed: {error}; model={:?}, mode={:?}, effort={:?}",
+                spec.config.model, spec.config.mode_id, spec.config.thinking_option_id
+            )
+        });
     assert_eq!(session.persistence().unwrap().session_id, handle.session_id);
     let runtime = session.runtime_info().await.unwrap();
     assert_eq!(runtime.mode_id, before.config.mode_id);

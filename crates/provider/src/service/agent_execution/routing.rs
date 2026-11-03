@@ -114,8 +114,10 @@ impl Router {
         } else {
             let reads = if (method_of(&command).starts_with("provider.")
                 && !method_of(&command).starts_with("provider.snapshot."))
-                || method_of(&command) == "agent.commands.list.request"
-            {
+                || matches!(
+                    method_of(&command),
+                    "agent.commands.list.request" | "agent.commands.complete.request"
+                ) {
                 self.providers.clone()
             } else {
                 self.reads.clone()
@@ -224,6 +226,7 @@ fn plan(
     method: &str,
     params: &Value,
 ) -> Result<(ExecutionState, Option<String>), ErrorCode> {
+    let session_commands = uses_command_owner(&state, method, params)?;
     let lane = if mutation::is_mutation(method) {
         None
     } else if method == "internal.bot" {
@@ -263,6 +266,7 @@ fn plan(
         native_lane(&state, method, params)?
     } else if is_read(method)
         && !(method == "provider.usage.list.request" && params.get("agentId").is_some())
+        && !session_commands
     {
         None
     } else {
@@ -313,6 +317,28 @@ fn plan(
         state.manager = state.manager.fork(Some(state.owners.owner(lane.clone())));
     }
     Ok((state, lane))
+}
+
+fn uses_command_owner(
+    state: &ExecutionState,
+    method: &str,
+    params: &Value,
+) -> Result<bool, ErrorCode> {
+    if !matches!(
+        method,
+        "agent.commands.list.request" | "agent.commands.complete.request"
+    ) {
+        return Ok(false);
+    }
+    match state.resolve(
+        params["agentId"]
+            .as_str()
+            .ok_or(ErrorCode::InvalidMessage)?,
+    ) {
+        Ok(id) => state.manager.uses_session_commands(&id).map_err(Into::into),
+        Err(ErrorCode::AgentNotFound) => Ok(false),
+        Err(error) => Err(error),
+    }
 }
 
 fn native_lane(
@@ -370,11 +396,16 @@ fn is_read(method: &str) -> bool {
                 | "internal.agent.directory.prepare"
                 | "internal.agent.identities.resolve"
                 | "agent.commands.list.request"
+                | "agent.commands.complete.request"
         )
 }
 
 fn canonicalize(state: &ExecutionState, method: &str, params: &mut Value) -> Result<(), ErrorCode> {
-    if method == "agent.commands.list.request" && params.get("draftConfig").is_some() {
+    if matches!(
+        method,
+        "agent.commands.list.request" | "agent.commands.complete.request"
+    ) && params.get("draftConfig").is_some()
+    {
         return Ok(());
     }
     if matches!(

@@ -323,10 +323,14 @@ fn response(
         method,
         "provider.snapshot.get.request" | "provider.snapshot.refresh.request"
     ) {
-        let hashable: Vec<_> = entries
-            .iter()
-            .map(|entry| {
-                let mut entry = entry.clone();
+        let hashable: Vec<_> = snapshot
+            .entries
+            .values()
+            .map(|cached| {
+                let mut entry = cached.value.clone();
+                // Roles and feature choices share this discovery version even though
+                // clients fetch their forms separately from the model snapshot body.
+                entry["features"] = json!(cached.features);
                 if let Some(object) = entry.as_object_mut() {
                     object.remove("fetchedAt");
                 }

@@ -5,10 +5,13 @@ use super::*;
 use crate::ports::agent_session::AgentTurnEvent;
 use crate::protocol::prompt::{AgentPrompt, PromptImage};
 
+mod actions;
 mod capabilities;
+mod commands;
 mod diagnostics;
 mod installed;
 mod interactions;
+mod model_roles;
 mod real;
 mod settlement;
 

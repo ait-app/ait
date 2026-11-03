@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use super::*;
 
@@ -7,6 +7,7 @@ struct Gate {
     calls: AtomicUsize,
     entered: Semaphore,
     release: Semaphore,
+    failed: AtomicBool,
 }
 
 impl Gate {
@@ -15,6 +16,7 @@ impl Gate {
             calls: AtomicUsize::new(0),
             entered: Semaphore::new(0),
             release: Semaphore::new(0),
+            failed: AtomicBool::new(false),
         })
     }
 
@@ -53,6 +55,9 @@ impl AgentClient for ParallelClient {
             self.gate.calls.fetch_add(1, Ordering::SeqCst);
             self.gate.entered.add_permits(1);
             self.gate.release.acquire().await.unwrap().forget();
+            if self.gate.failed.load(Ordering::SeqCst) {
+                return Err(AgentSessionError::Failed);
+            }
             Ok(Details {
                 models: vec![json!({"id":"test","provider":self.provider})],
                 modes: vec![],
@@ -284,4 +289,101 @@ async fn one_provider_has_at_most_four_concurrent_scopes() {
     }
     assert_eq!(gate.calls.load(Ordering::SeqCst), 5);
     catalog.close().await;
+}
+
+#[tokio::test]
+async fn expired_models_refresh_once_in_background_and_survive_a_failed_refresh() {
+    let root = tempfile::tempdir().unwrap();
+    let gate = Gate::new();
+    gate.release.add_permits(1);
+    let clients = clients(&[("codex", gate.clone())]);
+    let catalog = Catalog::default();
+    let events = SessionEvents::default();
+    let params = json!({"cwd":root.path()});
+    let method = "provider.snapshot.get.request";
+    let original = catalog
+        .execute(&clients, &events, method, params.clone())
+        .await
+        .unwrap();
+    gate.entered(1).await;
+    for _ in 0..5 {
+        catalog
+            .read(&clients, &events, method, params.clone())
+            .await
+            .unwrap();
+    }
+    assert_eq!(gate.calls.load(Ordering::SeqCst), 1);
+
+    expire_models(&catalog, root.path(), Duration::from_secs(301));
+    let refreshing = catalog
+        .read(&clients, &events, method, params.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        refreshing["entries"][0]["models"],
+        original["entries"][0]["models"]
+    );
+    assert_eq!(refreshing["refreshing"], json!(["codex"]));
+    gate.entered(1).await;
+    for _ in 0..5 {
+        catalog
+            .read(&clients, &events, method, params.clone())
+            .await
+            .unwrap();
+    }
+    assert_eq!(gate.calls.load(Ordering::SeqCst), 2);
+    gate.failed.store(true, Ordering::SeqCst);
+    gate.release.add_permits(1);
+    let failed = catalog
+        .execute(&clients, &events, method, params.clone())
+        .await
+        .unwrap();
+    assert_eq!(failed["entries"][0]["status"], "ready");
+    assert_eq!(
+        failed["entries"][0]["models"],
+        original["entries"][0]["models"]
+    );
+    assert_eq!(
+        failed["entries"][0]["fetchedAt"],
+        original["entries"][0]["fetchedAt"]
+    );
+    assert_eq!(failed["entries"][0]["error"], "Provider discovery failed");
+    catalog
+        .read(&clients, &events, method, params.clone())
+        .await
+        .unwrap();
+    assert_eq!(gate.calls.load(Ordering::SeqCst), 2);
+
+    expire_models(&catalog, root.path(), Duration::from_secs(31));
+    catalog
+        .read(&clients, &events, method, params.clone())
+        .await
+        .unwrap();
+    gate.entered(1).await;
+    gate.failed.store(false, Ordering::SeqCst);
+    gate.release.add_permits(1);
+    let recovered = catalog
+        .execute(&clients, &events, method, params)
+        .await
+        .unwrap();
+    assert_eq!(recovered["entries"][0]["status"], "ready");
+    assert!(recovered["entries"][0]["error"].is_null());
+    assert_eq!(gate.calls.load(Ordering::SeqCst), 3);
+    catalog.close().await;
+}
+
+fn expire_models(catalog: &Catalog, cwd: &std::path::Path, age: Duration) {
+    catalog
+        .cache
+        .lock()
+        .unwrap()
+        .snapshots
+        .get_mut(&Some(
+            cwd.canonicalize().unwrap().to_str().unwrap().to_owned(),
+        ))
+        .unwrap()
+        .entries
+        .get_mut("codex")
+        .unwrap()
+        .fetched = Some(Instant::now().checked_sub(age).unwrap());
 }

@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn unfinished_native_compaction_fails_at_turn_end_and_malformed_owner_is_rejected() {
     let mut stream = Stream::default();
-    let mut tools = BTreeMap::new();
+    let mut tools = State::default();
     for (seq, kind) in [(1, "compaction/start"), (2, "turn/end")] {
         apply(
             &mut stream,
@@ -42,7 +42,7 @@ fn unfinished_native_compaction_fails_at_turn_end_and_malformed_owner_is_rejecte
 #[test]
 fn older_compaction_journals_pair_by_opening_sequence_without_reusing_a_turn_identity() {
     let mut stream = Stream::default();
-    let mut tools = BTreeMap::new();
+    let mut tools = State::default();
     for (seq, kind) in [
         (1, "compaction/start"),
         (2, "compaction/end"),
@@ -81,7 +81,7 @@ fn older_compaction_journals_pair_by_opening_sequence_without_reusing_a_turn_ide
 fn native_compaction_brackets_preserve_identity_time_trigger_and_failure() {
     for (turn, terminal) in [(json!(1), "completed"), (Value::Null, "failed")] {
         let mut stream = Stream::default();
-        let mut tools = BTreeMap::new();
+        let mut tools = State::default();
         let mut data = json!({"turn":turn,"compactionId":"compact"});
         for (seq, kind) in [(1, "compaction/start"), (2, "compaction/end")] {
             if seq == 2 && terminal == "failed" {
@@ -119,9 +119,9 @@ fn native_compaction_brackets_preserve_identity_time_trigger_and_failure() {
     }
 }
 
-fn tool_stream() -> (Stream, BTreeMap<String, Value>) {
+fn tool_stream() -> (Stream, State) {
     let mut stream = Stream::default();
-    let mut tools = BTreeMap::new();
+    let mut tools = State::default();
     apply(
         &mut stream,
         &mut tools,

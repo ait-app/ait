@@ -343,7 +343,7 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
         dispatch({ type: "DRAFT_SET_ERROR", message: error.message });
         throw error;
       }
-      await createAgent({ text: trimmedPrompt, ...wirePayload, cwd });
+      await createAgent({ text: trimmedPrompt ? text : "", ...wirePayload, cwd });
     },
     [createAgent, getPendingServerId, t],
   );

@@ -26,6 +26,8 @@ export async function submitAgentInput<TAttachment>(
   input: AgentInputSubmitActionInput<TAttachment>,
 ): Promise<AgentInputSubmitResult> {
   const trimmedMessage = input.message.trim();
+  // Leading whitespace can decide whether the provider treats this as a command at all.
+  const message = trimmedMessage.startsWith("/") ? input.message : trimmedMessage;
   const attachments = input.attachments;
   const shouldClearOnSubmit = input.submitBehavior !== "preserve-and-lock";
 
@@ -43,7 +45,7 @@ export async function submitAgentInput<TAttachment>(
   }
 
   if (input.isAgentRunning && !input.forceSend) {
-    input.queueMessage({ message: trimmedMessage, attachments });
+    input.queueMessage({ message, attachments });
     if (shouldClearOnSubmit) {
       input.setUserInput("");
       input.setAttachments([]);
@@ -60,14 +62,14 @@ export async function submitAgentInput<TAttachment>(
   input.setIsProcessing(true);
 
   try {
-    await input.submitMessage({ message: trimmedMessage, attachments });
+    await input.submitMessage({ message, attachments });
     input.clearDraft("sent");
     input.setIsProcessing(false);
     return "submitted";
   } catch (error) {
     input.onSubmitError?.(error);
     if (shouldClearOnSubmit) {
-      input.setUserInput(trimmedMessage);
+      input.setUserInput(message);
       input.setAttachments(attachments);
     }
     input.setSendError(

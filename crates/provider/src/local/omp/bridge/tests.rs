@@ -3,6 +3,9 @@ use crate::ports::agent_session::{AgentClient, AgentResumePurpose};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream, ReadHalf, WriteHalf};
 use tokio_util::task::AbortOnDropHandle;
 
+mod commands;
+mod model_roles;
+
 #[test]
 fn standard_acp_retains_provider_notifications_without_assistant_text() {
     let event = AgentTurnEvent::Timeline(crate::protocol::timeline::NativeItem {
@@ -51,6 +54,7 @@ struct Peer {
     output: BufReader<ReadHalf<DuplexStream>>,
     task: AbortOnDropHandle<std::io::Result<()>>,
     sequence: u64,
+    read_budget: std::time::Duration,
 }
 
 #[tokio::test]
@@ -88,6 +92,7 @@ impl Peer {
             output: BufReader::new(read),
             task,
             sequence: 0,
+            read_budget: std::time::Duration::from_secs(5),
         }
     }
     async fn send(&mut self, message: Value) {
@@ -96,6 +101,12 @@ impl Peer {
         self.input.write_all(&bytes).await.unwrap();
     }
     async fn begin(&mut self, method: &str, params: Value) -> Value {
+        self.read_budget = if matches!(method, "session/new" | "session/load" | "session/fork") {
+            // These requests cold-start real fixture processes and discover their profile.
+            std::time::Duration::from_secs(60)
+        } else {
+            std::time::Duration::from_secs(5)
+        };
         self.sequence += 1;
         let id = json!(self.sequence);
         self.send(json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))
@@ -104,13 +115,10 @@ impl Peer {
     }
     async fn next(&mut self) -> Value {
         let mut line = String::new();
-        let bytes = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            self.output.read_line(&mut line),
-        )
-        .await
-        .unwrap()
-        .unwrap();
+        let bytes = tokio::time::timeout(self.read_budget, self.output.read_line(&mut line))
+            .await
+            .unwrap()
+            .unwrap();
         assert!(bytes > 0, "bridge closed");
         serde_json::from_str(&line).unwrap()
     }
@@ -121,6 +129,7 @@ impl Peer {
             let done = message.get("method").is_none() && message["id"] == *id;
             messages.push(message);
             if done {
+                self.read_budget = std::time::Duration::from_secs(5);
                 return messages;
             }
         }

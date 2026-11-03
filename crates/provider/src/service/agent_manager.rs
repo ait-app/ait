@@ -2,7 +2,7 @@
 
 pub(crate) mod auto_archive;
 mod controls;
-mod delivery;
+pub(crate) mod delivery;
 mod execution;
 mod generated_titles;
 mod mcp;

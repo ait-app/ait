@@ -1,6 +1,42 @@
 use super::*;
 
 #[test]
+fn native_secret_input_and_editor_prefill_preserve_their_form_semantics() {
+    let mut dialogs = Dialogs::default();
+    dialogs
+        .capture(&json!({"type":"extension_ui_request","id":"secret",
+        "method":"input","title":"Value","secret":true}))
+        .unwrap();
+    let question = &dialogs.pending()[0]["input"]["questions"][0];
+    assert_eq!(question["secret"], true);
+    assert_eq!(question["allowEmpty"], true);
+    assert_eq!(question["dismissBehavior"], "deny");
+    for value in ["", "  value  "] {
+        assert_eq!(
+            dialogs
+                .response(
+                    "secret",
+                    &json!({"behavior":"allow",
+            "updatedInput":{"answers":{"value":value}}})
+                )
+                .unwrap()["value"],
+            value
+        );
+    }
+    dialogs
+        .capture(&json!({"type":"extension_ui_request","id":"editor",
+        "method":"editor","title":"Edit","prefill":"  indented\n"}))
+        .unwrap();
+    let pending = dialogs.pending();
+    let question = &pending
+        .iter()
+        .find(|request| request["id"] == "editor")
+        .unwrap()["input"]["questions"][0];
+    assert_eq!(question["initialValue"], "  indented\n");
+    assert_eq!(question["multiline"], true);
+}
+
+#[test]
 fn every_interactive_method_matches_the_shared_client_contract_and_native_reply() {
     let fixtures: Vec<Value> =
         serde_json::from_str(include_str!("../../../../tests/fixtures/omp_dialogs.json")).unwrap();
@@ -130,6 +166,10 @@ fn confirmation_cancellation_and_stale_answers_preserve_native_authority() {
     let mut dialogs = Dialogs::default();
     let request = json!({"type":"extension_ui_request","id":"confirm","method":"confirm","title":"Continue?","message":"Run tool"});
     assert_eq!(dialogs.capture(&request).unwrap().len(), 1);
+    assert_eq!(
+        dialogs.pending()[0]["detail"],
+        json!({"type":"unknown","input":null,"output":null})
+    );
     assert_eq!(
         dialogs
             .response("confirm", &json!({"behavior":"allow"}))

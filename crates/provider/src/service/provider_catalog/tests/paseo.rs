@@ -129,6 +129,42 @@ async fn warm_snapshot_reads_do_not_probe_or_rediscover_the_provider() {
 }
 
 #[tokio::test]
+async fn changed_feature_choices_advance_the_catalog_content_hash_without_model_changes() {
+    let root = tempfile::tempdir().unwrap();
+    let probe = Probe::new("omp");
+    let probes = [probe.clone()];
+    let catalog = Catalog::default();
+    let original = snapshot(&catalog, &probes, root.path()).await;
+    probe
+        .state
+        .lock()
+        .unwrap()
+        .discovery
+        .as_mut()
+        .unwrap()
+        .features = vec![json!({
+        "type":"select","id":"modelRole.custom","label":"Custom model",
+        "value":"native","options":[{"id":"native","label":"Use OMP setting"}]
+    })];
+    catalog
+        .execute(
+            &clients(&probes),
+            &SessionEvents::default(),
+            "provider.snapshot.refresh.request",
+            json!({"cwd":root.path(),"providers":["omp"]}),
+        )
+        .await
+        .unwrap();
+    let updated = snapshot(&catalog, &probes, root.path()).await;
+    assert_eq!(
+        updated["entries"][0]["models"],
+        original["entries"][0]["models"]
+    );
+    assert_ne!(updated["snapshotHash"], original["snapshotHash"]);
+    catalog.close().await;
+}
+
+#[tokio::test]
 async fn explicit_refresh_reprobes_only_the_selected_warm_provider() {
     let root = tempfile::tempdir().unwrap();
     let probes = [Probe::new("codex"), Probe::new("claude")];
@@ -322,7 +358,11 @@ async fn expired_snapshot_reprobes_before_returning_new_native_content() {
         .values_mut()
         .next()
         .unwrap()
-        .fetched = Some(Instant::now().checked_sub(Duration::from_secs(61)).unwrap());
+        .fetched = Some(
+        Instant::now()
+            .checked_sub(Duration::from_secs(301))
+            .unwrap(),
+    );
     probes[0]
         .state
         .lock()

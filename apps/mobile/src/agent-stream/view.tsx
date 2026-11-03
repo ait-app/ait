@@ -21,6 +21,11 @@ import {
 import { PlanCard } from "@/components/plan-card";
 import { VoiceTimelineEntry } from "@/components/voice-timeline-entry";
 import { QuestionFormCard } from "@/components/question-form-card";
+import { ProviderCommandCard } from "@/components/provider-command-card";
+import { dispatchComposerAgentMessage } from "@/composer/actions";
+import { createMessageSubmissionWriter } from "@/composer/submission/writer";
+import { encodeImages } from "@/utils/encode-images";
+import { hasMeaningfulToolCallDetail } from "@/utils/tool-call-detail-state";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import type { ToastApi } from "@/components/toast-host";
 import { ToolCallDetailsContent } from "@/components/tool-call-details";
@@ -381,6 +386,30 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       state.sessions[resolvedServerId]?.agentStreamHead?.get(agentId),
     );
     const streamHead = providedStreamHead ?? sessionStreamHead;
+    const latestGoalCard = useMemo(() => {
+      let latest: string | null = null;
+      for (const items of [streamItems, streamHead ?? []]) {
+        for (const item of items) {
+          if (item.kind === "provider_command" && item.result.goal !== undefined) latest = item.id;
+        }
+      }
+      return latest;
+    }, [streamItems, streamHead]);
+    const sendControlCommand = useCallback(
+      async (text: string) => {
+        if (!client || readOnly) throw new Error(t("workspace.terminal.hostDisconnected"));
+        await dispatchComposerAgentMessage({
+          client,
+          agentId,
+          text,
+          attachments: [],
+          encodeImages,
+          submission: createMessageSubmissionWriter(resolvedServerId),
+          activeTurnBehavior: "steer",
+        });
+      },
+      [client, readOnly, agentId, resolvedServerId, t],
+    );
     const forkAgent = useForkAgent({ serverId: resolvedServerId, toast, readOnly });
     const supportsAgentForkContextCursor = useSessionStore(
       (state) =>
@@ -892,18 +921,38 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
           case "plugin":
             return null;
+          case "provider_command":
+            return (
+              <ProviderCommandCard
+                serverId={serverId}
+                result={item.result}
+                active={
+                  item.id === latestGoalCard &&
+                  !readOnly &&
+                  Boolean(client) &&
+                  !isTimelineDetached &&
+                  isAuthoritativeHistoryReady
+                }
+                onCommand={sendControlCommand}
+              />
+            );
 
           default:
             return null;
         }
       },
       [
-        agentId,
+        client,
+        latestGoalCard,
+        serverId,
+        isTimelineDetached,
+        isAuthoritativeHistoryReady,
+        readOnly,
+        sendControlCommand,
         renderUserMessageItem,
         renderAssistantMessageItem,
         renderThoughtItem,
         renderToolCallItem,
-        resolvedServerId,
       ],
     );
 
@@ -1618,7 +1667,7 @@ function PermissionRequestCard({
         />
       ) : null}
 
-      {!isPlanRequest ? (
+      {!isPlanRequest && hasMeaningfulToolCallDetail(resolvedToolCallDetail) ? (
         <ToolCallDetailsContent detail={resolvedToolCallDetail} maxHeight={200} />
       ) : null}
 

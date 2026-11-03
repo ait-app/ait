@@ -27,6 +27,12 @@ it.each([
     vi.stubEnv("AIT_SERVER_DATA_DIR", "/unrelated-runtime");
     vi.stubEnv("AIT_SERVER_TOKEN", "explicit-runtime-token-at-least-32-characters");
     vi.stubEnv("AIT_APNS_KEY_FILE", "/private/test-apns.p8");
+    vi.stubEnv("AIT_SERVER_LISTEN", "127.0.0.1:9999");
+    vi.stubEnv("AIT_SERVER_OMP_BIN", "/native/omp");
+    vi.stubEnv("AIT_SERVER_OPENCODE_BIN", "/native/opencode");
+    vi.stubEnv("AIT_SERVER_DEEPSEEK_HARNESS_BIN", "/native/dsh");
+    vi.stubEnv("AIT_SERVER_DEEPSEEK_HARNESS_PROFILE", "desktop-profile");
+    vi.stubEnv("AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT", "acp");
     const home = mkdtempSync(path.join(tmpdir(), "ait-push-environment-"));
     const manager = new RustDaemonManager({
       binary: path.join(home, "missing-daemon"),
@@ -41,6 +47,12 @@ it.each([
       const options = vi.mocked(spawn).mock.calls.at(-1)?.[2];
       expect(options?.env?.AIT_SERVER_HUB_NOTIFICATIONS).toBe(expected);
       expect(options?.env?.AIT_SERVER_DATA_DIR).toBeUndefined();
+      expect(options?.env?.AIT_SERVER_LISTEN).toBeUndefined();
+      expect(options?.env?.AIT_SERVER_OMP_BIN).toBe("/native/omp");
+      expect(options?.env?.AIT_SERVER_OPENCODE_BIN).toBe("/native/opencode");
+      expect(options?.env?.AIT_SERVER_DEEPSEEK_HARNESS_BIN).toBe("/native/dsh");
+      expect(options?.env?.AIT_SERVER_DEEPSEEK_HARNESS_PROFILE).toBe("desktop-profile");
+      expect(options?.env?.AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT).toBe("acp");
       expect(options?.env?.AIT_SERVER_TOKEN).toBe("explicit-runtime-token-at-least-32-characters");
       expect(options?.env?.AIT_APNS_KEY_FILE).toBe("/private/test-apns.p8");
     } finally {

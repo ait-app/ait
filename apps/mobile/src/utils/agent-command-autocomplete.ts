@@ -25,6 +25,65 @@ export interface SlashCommandRange {
   position: SlashCommandPosition;
 }
 
+export interface SlashCommandArgumentsRange {
+  start: number;
+  end: number;
+  commandName: string;
+  query: string;
+}
+
+export interface CommandArgumentSuggestion {
+  name: string;
+  description?: string;
+  usage?: string;
+}
+
+interface CommandWithArguments {
+  name: string;
+  aliases?: readonly string[];
+  subcommands?: readonly CommandArgumentSuggestion[];
+}
+
+export function findActiveSlashCommandArguments(
+  input: FindActiveSlashCommandInput,
+): SlashCommandArgumentsRange | null {
+  const cursor = Math.max(0, Math.min(input.cursorIndex, input.text.length));
+  const match = /^[ \t]*\/([^/\s]+)[ \t]+([^\r\n]*)$/.exec(input.text.slice(0, cursor));
+  if (!match) return null;
+  const query = match[2];
+  const suffix = /^[^\s]*/.exec(input.text.slice(cursor))?.[0] ?? "";
+  return {
+    start: cursor - query.length,
+    end: cursor + suffix.length,
+    commandName: match[1],
+    query,
+  };
+}
+
+export function getCommandArgumentSuggestions(
+  commands: readonly CommandWithArguments[],
+  range: SlashCommandArgumentsRange,
+): CommandArgumentSuggestion[] {
+  // OMP's declarative completer stops after the first argument and keeps native order.
+  if (/\s/.test(range.query)) return [];
+  const command = commands.find(
+    (command) => command.name === range.commandName || command.aliases?.includes(range.commandName),
+  );
+  const prefix = range.query.toLowerCase();
+  return command?.subcommands?.filter((subcommand) => subcommand.name.startsWith(prefix)) ?? [];
+}
+
+export function applySlashCommandArgumentReplacement(input: {
+  text: string;
+  range: SlashCommandArgumentsRange;
+  value: string;
+}): string {
+  const before = input.text.slice(0, input.range.start);
+  const after = input.text.slice(input.range.end);
+  const separator = after.length === 0 || !/^\s/.test(after) ? " " : "";
+  return `${before}${input.value}${separator}${after}`;
+}
+
 interface FindActiveSlashCommandInput {
   text: string;
   cursorIndex: number;
@@ -109,7 +168,7 @@ export function findActiveSlashCommand(
       start: slashIndex,
       end: clampedCursor,
       query,
-      position: slashIndex === 0 ? "start" : "inline",
+      position: input.text.slice(0, slashIndex).trim().length === 0 ? "start" : "inline",
     };
   }
 

@@ -8,6 +8,7 @@ export const ru: TranslationResources = {
     failed: "Голосовой разговор прерван",
   },
   onlineService: en.onlineService,
+  providerControl: en.providerControl,
   bots: en.bots,
   paneFind: {
     searchFailed:

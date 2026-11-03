@@ -29,13 +29,11 @@ pub(super) async fn populate(runtime: &mut Runtime, sessions: &mut [SessionDescr
         if session.first_prompt_preview.is_some() {
             continue;
         }
-        let stream_id = format!("preview-{}", uuid::Uuid::new_v4());
         let result = timeout_at(
             deadline.min(Instant::now() + Duration::from_secs(2)),
-            read(runtime, session, &stream_id),
+            read(runtime, session),
         )
         .await;
-        let _ = runtime.unsubscribe(&stream_id).await;
         if let Ok(Ok((first, last))) = result {
             session.first_prompt_preview = first;
             session.last_prompt_preview = last;
@@ -46,40 +44,23 @@ pub(super) async fn populate(runtime: &mut Runtime, sessions: &mut [SessionDescr
 async fn read(
     runtime: &mut Runtime,
     session: &SessionDescriptor,
-    stream_id: &str,
 ) -> Result<Previews, AgentSessionError> {
     let address = json!({"kind":"session","sessionId":session.provider_handle_id});
-    runtime
-        .subscribe(
-            stream_id,
-            "session/follow",
-            json!({"request":{"address":address,"maxMessages":50}}),
-        )
-        .await?;
-    let snapshot = loop {
-        let frame = runtime.next().await?;
-        if frame["streamId"] != stream_id {
-            continue;
-        }
-        if frame["type"] != "item" || frame["value"]["type"] != "snapshot" {
-            return Err(AgentSessionError::Failed);
-        }
-        break frame["value"].clone();
-    };
-    if snapshot["header"]["id"] != session.provider_handle_id
-        || snapshot["header"]["cwd"] != session.cwd
-    {
-        return Err(AgentSessionError::Failed);
-    }
-    let projected = projection(&snapshot["projections"]["values"]);
+    let (cut, values) =
+        super::super::history::baseline(runtime, &session.provider_handle_id).await?;
+    let projected = projection(&values);
     if projected.0.is_some() {
         return Ok(projected);
     }
-    let cut = snapshot["cursor"]
-        .as_i64()
-        .ok_or(AgentSessionError::Failed)?;
     let mut before = cut.checked_add(1).ok_or(AgentSessionError::Failed)?;
-    let mut page = snapshot;
+    let mut page = runtime
+        .api
+        .call(
+            "session/page",
+            json!({"request":{
+        "address":address,"throughSeq":cut,"maxMessages":50}}),
+        )
+        .await?;
     let mut bytes = 0;
     let mut first = None;
     let mut last = None;

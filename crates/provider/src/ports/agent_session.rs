@@ -81,6 +81,9 @@ pub(crate) enum AgentTurnEvent {
     Usage(crate::protocol::usage::AgentUsage),
     /// Native initialization resolved the session's actual model or runtime settings.
     RuntimeInfo(StoredAgentRuntimeInfo),
+    /// Native commands changed acknowledged feature selections. Persist these values so later
+    /// prompts and toolbar snapshots retain the native choice, after adapter validation.
+    FeatureValuesUpdated(std::collections::BTreeMap<String, serde_json::Value>),
     /// The native provider drained its turn successfully.
     Completed(Option<String>),
     /// The native provider acknowledged interruption.
@@ -91,6 +94,27 @@ pub(crate) enum AgentTurnEvent {
 
 /// Live provider session. Closing releases resources without deleting native history.
 pub(crate) trait AgentSession: Debug + Send {
+    /// Complete editor input without admitting a prompt or executing a command.
+    /// Returns unsupported for adapters without native completion; native errors remain errors.
+    fn complete_commands<'a>(
+        &'a mut self,
+        _input: &'a crate::protocol::commands::CompletionInput,
+    ) -> AgentSessionFuture<'a, crate::protocol::commands::CompletionResult> {
+        Box::pin(async { Ok(crate::protocol::commands::CompletionResult::default()) })
+    }
+    /// Latest command catalog from this native session, including aliases and argument metadata.
+    /// `None` asks discovery to use the provider client; an empty slice is authoritative.
+    fn commands(&self) -> Option<&[serde_json::Value]> {
+        None
+    }
+
+    /// Refresh the receiving session's native directory without submitting input or creating a writer.
+    /// Defaults to the last observed catalog; native lookup and validation failures are propagated.
+    fn refresh_commands(&mut self) -> AgentSessionFuture<'_, Option<Vec<serde_json::Value>>> {
+        let commands = self.commands().map(<[serde_json::Value]>::to_vec);
+        Box::pin(async move { Ok(commands) })
+    }
+
     /// Attach a connection-owned native audio stream. Unsupported adapters reject it.
     fn start_realtime(
         &mut self,
@@ -127,6 +151,24 @@ pub(crate) trait AgentSession: Debug + Send {
     /// `config` includes pending user selections; `None` retains client-level controls.
     fn control_settings(&self, _config: &StoredAgentConfig) -> Option<serde_json::Value> {
         None
+    }
+
+    /// Return transient native UI state for connected clients; never persist it as history.
+    fn ui_state(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    /// Acknowledge that drained observations and the current native handle committed durably.
+    fn observation_committed(&mut self) {}
+
+    /// Begin an advertised semantic action without holding the session while it asks for input.
+    /// Returns a detached completion receipt, or rejects unsupported actions and arguments.
+    fn begin_action<'a>(
+        &'a mut self,
+        _action: &'a str,
+        _arguments: &'a serde_json::Value,
+    ) -> AgentSessionFuture<'a, AgentSessionFuture<'static, serde_json::Value>> {
+        Box::pin(async { Err(AgentSessionError::Rejected) })
     }
 
     /// Validate a proposed configuration against this session's native constraints.
@@ -178,6 +220,13 @@ pub(crate) trait AgentSession: Debug + Send {
         _prompt: &'a crate::protocol::prompt::AgentPrompt,
     ) -> AgentSessionFuture<'a, ()> {
         Box::pin(async { Err(AgentSessionError::Rejected) })
+    }
+
+    /// Take final admission for an accepted control whose attachments are still being checked.
+    /// The owned future permits continued session polling and permission responses while waiting.
+    /// Its error distinguishes native rejection from an uncertain transport outcome.
+    fn take_command_completion(&mut self) -> Option<AgentSessionFuture<'static, ()>> {
+        None
     }
     /// Current verified native descendants observed by this live session.
     fn subagents(&self) -> Vec<super::controls::NativeSubagent> {
@@ -317,6 +366,21 @@ pub(crate) trait AgentSession: Debug + Send {
 
 /// Factory and availability boundary for one independent provider adapter.
 pub(crate) trait AgentClient: Debug + Send + Sync {
+    /// Complete a draft through isolated native discovery; never creates a foreground session.
+    /// Returns unsupported when the native runtime lacks the completion capability.
+    fn complete_commands<'a>(
+        &'a self,
+        _spec: &'a AgentSessionSpec,
+        _input: &'a crate::protocol::commands::CompletionInput,
+    ) -> AgentSessionFuture<'a, crate::protocol::commands::CompletionResult> {
+        Box::pin(async { Ok(crate::protocol::commands::CompletionResult::default()) })
+    }
+    /// Whether command discovery for registered Agents should read their live session owner.
+    /// Other adapters keep isolated discovery so catalog reads cannot block their native turn.
+    fn supports_session_commands(&self) -> bool {
+        false
+    }
+
     /// Whether this adapter accepts a session-private HTTP MCP connection.
     fn supports_agent_mcp(&self) -> bool {
         false

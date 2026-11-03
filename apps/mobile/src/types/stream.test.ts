@@ -24,6 +24,26 @@ import { timelineItemIdentity } from "@ait/protocol/timeline-identity";
 
 type CanonicalToolStatus = "running" | "completed" | "failed" | "canceled";
 
+it("keeps control results separate from model text across live delivery and history replay", () => {
+  const event: AgentStreamEventPayload = {
+    type: "timeline",
+    provider: "deepseek-harness",
+    item: {
+      type: "provider_command",
+      id: "native-command",
+      command: "plan",
+      status: "success",
+      text: "Plan mode off.",
+    },
+  };
+  const live = reduceStreamUpdate([], event, new Date(1));
+  const replayed = hydrateStreamState([{ event, timestamp: new Date(1) }]);
+  expect(live).toEqual(replayed);
+  expect(live[0]?.kind).toBe("provider_command");
+  expect(streamTimelineItemIdentity(live[0]!)).toBe("provider-command:native-command");
+  expect(reduceStreamUpdate(live, event, new Date(1))).toHaveLength(1);
+});
+
 it("updates a resolved Claude plan at its proposal position across a follow-up", () => {
   const proposal = {
     type: "timeline",

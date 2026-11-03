@@ -59,3 +59,7 @@ tracing-subscriber.workspace = true
 [target.'cfg(target_os = "macos")'.dependencies]
 # Match Claude Agent SDK's NFC normalization of native session directory names.
 unicode-normalization.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+# Signal owned provider process groups without blocking a runtime thread on a helper process.
+nix = { workspace = true, features = ["signal", "process"] }

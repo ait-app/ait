@@ -22,7 +22,8 @@ pub(crate) struct Transport {
     child: Child,
     pub(crate) diagnostics: Diagnostics,
     _stderr: AbortOnDropHandle<()>,
-    input: ChildStdin,
+    input: Option<ChildStdin>,
+    group: Option<u32>,
     messages: mpsc::Receiver<Value>,
     reader: JoinHandle<()>,
     events: VecDeque<Value>,
@@ -88,10 +89,11 @@ impl Transport {
             }
         });
         Ok(Self {
+            group: child.id(),
             child,
             diagnostics,
             _stderr: stderr_task,
-            input,
+            input: Some(input),
             messages,
             reader,
             events: VecDeque::new(),
@@ -136,9 +138,10 @@ impl Transport {
             return Err(AgentSessionError::Rejected);
         }
         bytes.push(b'\n');
+        let input = self.input.as_mut().ok_or(AgentSessionError::Failed)?;
         let result = tokio::time::timeout(self.deadline, async {
-            self.input.write_all(&bytes).await?;
-            self.input.flush().await
+            input.write_all(&bytes).await?;
+            input.flush().await
         })
         .await;
         if matches!(result, Ok(Ok(()))) {
@@ -294,35 +297,56 @@ impl Transport {
         }
         self.diagnostics.flush();
         self.closed = true;
+        self.input.take();
+        let started = tokio::time::Instant::now();
+        let mut killed_at = None;
+        // Process exit can lag signal delivery under load. Reuse the connection's control
+        // budget, bounded to 2–10 seconds, rather than failing an acknowledged close at 2s.
+        let reap_budget = self
+            .deadline
+            .clamp(Duration::from_secs(2), Duration::from_secs(10));
+        // Observe exit before deadlines: a delayed runtime poll must not turn an already
+        // reaped peer into a timeout. The force budget begins when SIGKILL is actually sent.
+        let result = loop {
+            match self.child.try_wait() {
+                Ok(Some(_)) => break Ok(()),
+                Err(_) => break Err(AgentSessionError::Failed),
+                Ok(None) => {}
+            }
+            if killed_at.is_none() && started.elapsed() >= Duration::from_millis(100) {
+                kill_group(self.group);
+                let _ = self.child.start_kill();
+                killed_at = Some(tokio::time::Instant::now());
+            }
+            if killed_at.is_some_and(|at| at.elapsed() >= reap_budget) {
+                break Err(AgentSessionError::Failed);
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        };
         self.reader.abort();
-        kill_group(&self.child);
-        let _ = self.child.start_kill();
-        tokio::time::timeout(Duration::from_secs(2), self.child.wait())
-            .await
-            .map_err(|_| AgentSessionError::Failed)?
-            .map_err(|_| AgentSessionError::Failed)?;
-        Ok(())
+        kill_group(self.group);
+        self.group = None;
+        result
     }
 }
 
 impl Drop for Transport {
     fn drop(&mut self) {
         self.reader.abort();
-        kill_group(&self.child);
+        kill_group(self.group);
     }
 }
 
-fn kill_group(child: &Child) {
+fn kill_group(group: Option<u32>) {
     #[cfg(unix)]
-    if let Some(id) = child.id() {
-        let _ = std::process::Command::new("/bin/kill")
-            .args(["-KILL", "--", &format!("-{id}")])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+    if let Some(id) = group.and_then(|id| i32::try_from(id).ok()) {
+        let _ = nix::sys::signal::killpg(
+            nix::unistd::Pid::from_raw(id),
+            nix::sys::signal::Signal::SIGKILL,
+        );
     }
     #[cfg(not(unix))]
-    let _ = child;
+    let _ = group;
 }
 
 /// Decode a JSON-RPC result or return a safe rejection/failure without exposing native payloads.
@@ -335,3 +359,6 @@ pub(crate) fn response(message: &Value) -> Result<Value, AgentSessionError> {
     }
     Err(AgentSessionError::Failed)
 }
+
+#[cfg(all(test, unix))]
+mod tests;

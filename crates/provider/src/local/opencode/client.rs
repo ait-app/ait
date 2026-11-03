@@ -89,6 +89,13 @@ impl OpenCodeClient {
 }
 
 impl AgentClient for OpenCodeClient {
+    fn supports_session_commands(&self) -> bool {
+        true
+    }
+
+    fn commands<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, Vec<Value>> {
+        Box::pin(super::commands::discover(self, spec))
+    }
     fn diagnostic(&self) -> AgentSessionFuture<'_, String> {
         Box::pin(async {
             let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Unavailable)?;

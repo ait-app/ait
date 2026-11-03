@@ -51,16 +51,18 @@ pub(super) async fn spawn(
     cwd: &str,
     selected: &StoredAgentConfig,
 ) -> Result<(Transport, Value), AgentSessionError> {
-    let (transport, capabilities, _) = launch(client, cwd, selected, false, false).await?;
+    let (transport, capabilities, _, _) = launch(client, cwd, selected, false, false).await?;
     Ok((transport, capabilities))
 }
 
 /// Initialize ACP with a read-only supplement only for its verified missing metadata profile.
+/// Returns the transport, capabilities, observation source and custom-command settlement support.
+/// Launch, initialization and unsupported-version failures are propagated.
 pub(super) async fn observed(
     client: &OpenCodeClient,
     cwd: &str,
     selected: &StoredAgentConfig,
-) -> Result<(Transport, Value, Option<Source>), AgentSessionError> {
+) -> Result<(Transport, Value, Option<Source>, bool), AgentSessionError> {
     launch(client, cwd, selected, false, true).await
 }
 
@@ -70,7 +72,7 @@ pub(super) async fn auxiliary(
     cwd: &str,
     selected: &StoredAgentConfig,
 ) -> Result<(Transport, Value), AgentSessionError> {
-    let (transport, capabilities, _) = launch(client, cwd, selected, true, false).await?;
+    let (transport, capabilities, _, _) = launch(client, cwd, selected, true, false).await?;
     Ok((transport, capabilities))
 }
 
@@ -80,7 +82,7 @@ async fn launch(
     selected: &StoredAgentConfig,
     auxiliary: bool,
     observe: bool,
-) -> Result<(Transport, Value, Option<Source>), AgentSessionError> {
+) -> Result<(Transport, Value, Option<Source>, bool), AgentSessionError> {
     let started = Instant::now();
     let deadline = started + client.startup_timeout;
     let version = tokio::time::timeout_at(deadline, version(client, cwd))
@@ -169,7 +171,15 @@ async fn launch(
         transport,
         initialized["agentCapabilities"].clone(),
         observation,
+        command_lifecycle(&version, capabilities),
     ))
+}
+
+fn command_lifecycle(version: &str, capabilities: &Value) -> bool {
+    // This release acknowledges native commands before their model execution has settled.
+    // A native receipt implementation explicitly advertises that it restores ACP settlement.
+    version.split(['-', '+']).next() != Some("2.1.3")
+        || capabilities["_meta"]["opencode/command-lifecycle"] == 1
 }
 
 fn configure_overlay(

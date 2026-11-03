@@ -233,7 +233,12 @@
           "behavior": "deny"
         }
       ],
-      "description": "Run this operation?"
+      "description": "Run this operation?",
+      "detail": {
+        "type": "unknown",
+        "input": null,
+        "output": null
+      }
     },
     "response": {
       "behavior": "allow"
@@ -268,7 +273,10 @@
             "options": [],
             "multiSelect": false,
             "allowOther": true,
-            "placeholder": "Enter your name"
+            "placeholder": "Enter your name",
+            "allowEmpty": true,
+            "dismissBehavior": "deny",
+            "preserveWhitespace": true
           }
         ]
       },
@@ -324,7 +332,11 @@
             "options": [],
             "multiSelect": false,
             "allowOther": true,
-            "multiline": true
+            "multiline": true,
+            "allowEmpty": true,
+            "dismissBehavior": "deny",
+            "preserveWhitespace": true,
+            "initialValue": "Initial plan"
           }
         ]
       },

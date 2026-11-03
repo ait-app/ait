@@ -8,6 +8,7 @@ export const ko: TranslationResources = {
     failed: "음성 대화가 중단되었습니다",
   },
   onlineService: en.onlineService,
+  providerControl: en.providerControl,
   bots: en.bots,
   paneFind: {
     searchFailed: "이 채팅을 검색할 수 없습니다. 호스트 연결을 확인하고 다시 시도하세요.",

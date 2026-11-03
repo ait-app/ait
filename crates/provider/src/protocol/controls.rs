@@ -28,6 +28,20 @@ pub(crate) struct CommandsRequest {
     pub(crate) draft_config: Option<SessionConfig>,
 }
 
+/// Read-only completion for an existing native owner or an unregistered draft.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct CompleteCommandsRequest {
+    /// Existing Agent identifier, or a UI draft identifier.
+    pub(crate) agent_id: String,
+    /// Native draft configuration; ignored when the Agent already exists.
+    pub(crate) draft_config: Option<SessionConfig>,
+    /// Complete editable draft.
+    pub(crate) text: String,
+    /// Caret offset measured in UTF-16 code units.
+    pub(crate) cursor: usize,
+}
+
 /// Resolve a pending native approval scoped to one live Agent session.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

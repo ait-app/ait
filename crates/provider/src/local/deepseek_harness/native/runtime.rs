@@ -1,7 +1,8 @@
 //! Own one DSH Web Host and its authenticated event socket for one Ait session.
+use std::{process::Stdio, time::Duration};
+
 use futures_util::{SinkExt, StreamExt, stream::SplitSink};
 use serde_json::{Value, json};
-use std::{process::Stdio, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, BufReader},
     net::TcpStream,
@@ -20,6 +21,9 @@ use crate::ports::agent_session::AgentSessionError;
 
 type Writer = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
 
+// Native profile composition on a cold installation can outlast a connected control request.
+const STARTUP_DEADLINE: Duration = Duration::from_secs(60);
+
 #[derive(Debug)]
 pub(super) struct Runtime {
     pub(super) api: Api,
@@ -31,6 +35,7 @@ pub(super) struct Runtime {
     writer: Writer,
     events: mpsc::Receiver<Value>,
     closed: bool,
+    _preview: Option<tempfile::TempDir>,
 }
 
 impl Runtime {
@@ -39,11 +44,40 @@ impl Runtime {
         client: &DeepSeekHarnessClient,
         cwd: &str,
     ) -> Result<Self, AgentSessionError> {
+        Self::open_scoped(client, cwd, None).await
+    }
+
+    /// Run native Agent composition with session persistence isolated in owned temporary storage.
+    /// The public profile overlay changes only the JSONL root; credentials and plugins stay native.
+    /// Returns filesystem, unsupported-profile, or native startup errors without admitting input.
+    pub(super) async fn preview(
+        client: &DeepSeekHarnessClient,
+        cwd: &str,
+    ) -> Result<Self, AgentSessionError> {
+        let directory = tempfile::tempdir().map_err(|_| AgentSessionError::Failed)?;
+        let root = directory.path().join("sessions");
+        let root = root.to_str().ok_or(AgentSessionError::Failed)?;
+        let patch = json!([{"id":"session-persistence-jsonl",
+            "name":"@deepseek-ai/dsh-session-persistence-jsonl","config":{"root":root}}]);
+        std::fs::write(directory.path().join("preview.json"), patch.to_string())
+            .map_err(|_| AgentSessionError::Failed)?;
+        Self::open_scoped(client, cwd, Some(directory)).await
+    }
+
+    async fn open_scoped(
+        client: &DeepSeekHarnessClient,
+        cwd: &str,
+        preview: Option<tempfile::TempDir>,
+    ) -> Result<Self, AgentSessionError> {
         let diagnostics = crate::local::diagnostics::Diagnostics::new("deepseek-harness");
         let mut command = client.command();
+        command.arg("--profile").arg(&client.native_profile);
+        if let Some(directory) = &preview {
+            command
+                .arg("--patch")
+                .arg(directory.path().join("preview.json"));
+        }
         command
-            .arg("--profile")
-            .arg(&client.native_profile)
             .args(["--no-open", "--host", "127.0.0.1", "--port", "0"])
             .current_dir(cwd)
             .stdin(Stdio::null())
@@ -60,7 +94,7 @@ impl Runtime {
             diagnostics.clone().drain(stderr),
         ));
         let result = tokio::time::timeout(
-            client.deadline,
+            STARTUP_DEADLINE,
             Self::connect(&mut child, client.deadline, diagnostics.clone()),
         )
         .await;
@@ -75,6 +109,7 @@ impl Runtime {
                 client_id,
                 child,
                 closed: false,
+                _preview: preview,
             })
         } else {
             let category = if result.is_err() {
@@ -195,16 +230,6 @@ impl Runtime {
                 json!({"type":"open","streamId":id,"endpoint":endpoint,"payload":{"args":args}})
                     .to_string()
                     .into(),
-            ))
-            .await
-            .map_err(|_| AgentSessionError::Failed)
-    }
-
-    /// Release one read-only native stream; returns an error if its socket is closed.
-    pub(super) async fn unsubscribe(&mut self, id: &str) -> Result<(), AgentSessionError> {
-        self.writer
-            .send(Message::Text(
-                json!({"type":"cancel","streamId":id}).to_string().into(),
             ))
             .await
             .map_err(|_| AgentSessionError::Failed)

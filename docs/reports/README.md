@@ -1,5 +1,7 @@
 # 验证报告分类索引
 
+- [原生附件、ZIP 交付与 OMP 模型角色](providers/native-delivery-and-omp-roles-2026-11-02.md)
+
 - [Paseo 0.12.0 选择性移植与验证](clients/paseo-0.12-port-2026-10-20.md)
 
 文档按当前能力归属分类。历史验证记录只对应各文件注明的源码提交与平台。
@@ -97,6 +99,10 @@
 - [Workspace 侧边栏信息与运行标记修复](workspace/workspace-sidebar-runtime.md)
 
 ## Provider、Agent 与会话
+
+- [DSH / OpenCode 原生命令与能力适配](providers/dsh-opencode-capability-adaptation-2026-10-30.md)
+
+- [OMP 命令、参数补全与交互兼容验证](providers/omp-commands-and-completion-2026-10-30.md)
 
 - [MCP 注入复核：参考 Paseo 当前实现](providers/paseo-mcp-injection-review-2026-10-30.md)
 

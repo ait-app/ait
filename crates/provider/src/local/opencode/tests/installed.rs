@@ -17,6 +17,7 @@ use tokio_util::task::AbortOnDropHandle;
 use super::*;
 use crate::service::agent_manager::ownership::Owners;
 
+mod commands;
 mod compaction;
 mod robustness;
 mod settlement;
@@ -41,6 +42,10 @@ struct Model {
 
 async fn installed(question: bool) -> Installed {
     let binary = std::env::var("AIT_TEST_OPENCODE_BIN").expect("set AIT_TEST_OPENCODE_BIN");
+    installed_with_binary(question, binary).await
+}
+
+async fn installed_with_binary(question: bool, binary: String) -> Installed {
     let root = tempfile::tempdir().unwrap();
     let cwd = root
         .path()

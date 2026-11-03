@@ -1,5 +1,19 @@
 # Ait 文档
 
+- [ADR-209：OMP 模型角色配置](decisions/providers/adr-209-omp-model-roles.md)：原生角色目录、每会话模型与推理档位覆盖、继承恢复。
+
+- [ADR-208：原生控制的延迟确认与文件交付](decisions/providers/adr-208-native-control-delivery.md)：附件结果与交互 lane 分离、原生 ZIP 交付和恢复后的下载卡片。
+
+- [ADR-207：DSH 不激活 Agent 的历史读取](decisions/providers/adr-207-dsh-non-activating-history.md)：只读原生接口、固定事件前缀与交互 owner 隔离。
+
+- [ADR-206：原生控制结果卡片](decisions/providers/adr-206-native-control-result-cards.md)：DSH 命令与目标使用结构化卡片、原生操作及一致的历史和缓存投影。
+
+- [DSH / OpenCode 原生能力适配](reports/providers/dsh-opencode-capability-adaptation-2026-10-30.md)：插件命令、临时存储中的草稿发现、首条命令分发、控制隔离、ACP 推送目录与逐项差异；[ADR-205](decisions/providers/adr-205-provider-native-command-ownership.md)。
+
+- [OMP 完整能力接入方案](plans/omp-acp-full-capabilities.md)：对照 Codex 的能力映射，明确 ACP 优先、原生多级补全接口和各功能操作入口的验收要求。
+
+- [OMP 命令与参数补全](reports/providers/omp-commands-and-completion-2026-10-30.md)：原生命令目录、别名、参数补全、命令分发及编辑器交互；[ADR-203](decisions/providers/adr-203-omp-command-catalog-and-completion.md)、[原生动态补全契约](decisions/providers/adr-204-native-editor-completion.md)。
+
 - [MiniMax Code](operations/minimax-code.md)：最新版 `mcode` 原生 ACP、登录与真实联调；[ADR-197](decisions/providers/adr-197-minimax-code-acp.md)、[验证报告](reports/providers/minimax-code-acp-2026-10-28.md)。
 
 - [ADR-195：OpenCode 独立取消信号与确认期限](decisions/providers/adr-195-opencode-independent-cancellation.md)：消除输出背压和历史回放对停止的阻塞，限制原生终态丢失后的停止等待。
@@ -39,6 +53,8 @@
 - [Bot 后端设计](plans/bot-backend.md)：Workspace Bot、独占 Channel、隐藏 session、内置 tab 对话与 Telegram、飞书、Email 接入方案。
 
 ## 架构决策
+
+- [ADR-210：原生临时界面与拥有者操作](decisions/providers/adr-210-native-ui-and-actions.md)：OMP 状态组件、编辑器、登录链接及语义操作；会话变更在历史与句柄提交后确认。
 
 - [ADR-202：Agent MCP 运行时自动注入](decisions/providers/adr-202-agent-mcp-injection.md)：原生会话私有配置、MCP 专用凭证、能力判断与重启恢复。
 

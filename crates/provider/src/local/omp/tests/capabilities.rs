@@ -23,7 +23,13 @@ async fn draft_tiers_follow_the_exact_model_without_persisting_native_settings()
         spec.config.model = Some(json!([provider, "model"]).to_string());
         spec.config.feature_values = Some(BTreeMap::from([("fastMode".to_owned(), json!(true))]));
         let features = client.draft_features(&spec).await.unwrap();
-        assert_eq!(features.len(), expected);
+        assert_eq!(
+            features
+                .iter()
+                .filter(|feature| !feature["id"].as_str().unwrap().starts_with("modelRole."))
+                .count(),
+            expected
+        );
         assert_eq!(features[0]["id"], "autoCompaction");
         assert_eq!(features[1]["id"], "autoRetry");
         if provider == "test" {
@@ -48,7 +54,15 @@ async fn live_controls_do_not_offer_tiers_for_an_unsupported_model() {
         spec.config.model = Some(json!([provider, "model"]).to_string());
         let mut session = client.create_session(&spec).await.unwrap();
         let controls = session.control_settings(&spec.config).unwrap();
-        assert_eq!(controls["features"].as_array().unwrap().len(), expected);
+        assert_eq!(
+            controls["features"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|feature| !feature["id"].as_str().unwrap().starts_with("modelRole."))
+                .count(),
+            expected
+        );
         session.close().await.unwrap();
     }
 }
@@ -61,11 +75,27 @@ async fn live_tiers_are_refreshed_after_model_changes_and_never_reused_for_a_pen
     for (provider, expected) in [("other", 2), ("test", 4)] {
         spec.config.model = Some(json!([provider, "model"]).to_string());
         let pending = session.control_settings(&spec.config).unwrap();
-        assert_eq!(pending["features"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            pending["features"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|feature| !feature["id"].as_str().unwrap().starts_with("modelRole."))
+                .count(),
+            2
+        );
         session.start_turn("hello", &spec.config).await.unwrap();
         complete(session.as_mut()).await;
         let applied = session.control_settings(&spec.config).unwrap();
-        assert_eq!(applied["features"].as_array().unwrap().len(), expected);
+        assert_eq!(
+            applied["features"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|feature| !feature["id"].as_str().unwrap().starts_with("modelRole."))
+                .count(),
+            expected
+        );
     }
     session.close().await.unwrap();
 }

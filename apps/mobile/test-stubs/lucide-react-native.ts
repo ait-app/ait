@@ -110,6 +110,7 @@ export const Star = StubIcon;
 export const Sun = StubIcon;
 export const Terminal = StubIcon;
 export const Trash2 = StubIcon;
+export const Target = StubIcon;
 export const TriangleAlert = StubIcon;
 export const Undo2 = StubIcon;
 export const Unlink = StubIcon;

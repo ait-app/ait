@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import React, { type ComponentProps, type ReactNode } from "react";
-import { act, cleanup, render, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
+import type { ComboboxProps } from "@/components/ui/combobox";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { i18n } from "@/i18n/i18next";
 import { buildProviderDefinitions } from "@/utils/provider-definitions";
@@ -16,7 +17,28 @@ vi.mock("./model-sheet", () => ({
   CompactModelSheet: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 vi.mock("@/components/combined-model-selector", () => ({ CombinedModelSelector: () => null }));
-vi.mock("@/components/ui/combobox", () => ({ Combobox: () => null, ComboboxItem: () => null }));
+vi.mock("@/components/ui/combobox", () => ({
+  Combobox: ({
+    open,
+    options,
+    value,
+    onSelect,
+  }: Pick<ComboboxProps, "open" | "options" | "value" | "onSelect">) =>
+    open ? (
+      <select
+        aria-label="Role model"
+        value={value}
+        onChange={(event) => onSelect(event.target.value)}
+      >
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    ) : null,
+  ComboboxItem: () => null,
+}));
 vi.mock("@/hooks/use-shortcut-keys", () => ({ useShortcutKeys: () => [] }));
 vi.mock("@/hooks/use-keyboard-action-handler", () => ({
   useKeyboardActionHandler: () => undefined,
@@ -53,6 +75,74 @@ afterEach(async () => {
 });
 
 describe("OMP model settings presentation", () => {
+  it("offers native role selects and forwards each selection and inheritance reset separately", () => {
+    const onSetFeature = vi.fn();
+    const features = [
+      "default",
+      "smol",
+      "vision",
+      "advisor",
+      "plan",
+      "commit",
+      "slow",
+      "tiny",
+      "memory",
+      "task",
+      "widget",
+      "image",
+      "web",
+      "speech",
+      "dictation",
+      "judge",
+    ].map((role) => ({
+      type: "select" as const,
+      id: `modelRole.${role}`,
+      label: `${role} model`,
+      value: "native",
+      options: [
+        { id: "native", label: "Use OMP setting", isDefault: true },
+        { id: "test/model", label: "Fixture model" },
+      ],
+    }));
+    const view = render(
+      <DraftAgentControls
+        selectedProvider="omp"
+        providerDefinitions={[]}
+        modeOptions={[]}
+        selectedMode=""
+        onSelectMode={vi.fn()}
+        models={[{ provider: "omp", id: "main", label: "Main" }]}
+        selectedModel="main"
+        onSelectModel={vi.fn()}
+        isModelLoading={false}
+        isAllModelsLoading={false}
+        onSelectProviderAndModel={vi.fn()}
+        onApplyAgentProfile={vi.fn()}
+        modelSelectorProviders={[]}
+        isCompactLayout
+        thinkingOptions={[]}
+        selectedThinkingOptionId=""
+        onSelectThinkingOption={vi.fn()}
+        features={features}
+        onSetFeature={onSetFeature}
+      />,
+    );
+    for (const role of ["default", "smol", "vision", "advisor"]) {
+      fireEvent.click(view.getByTestId(`agent-feature-modelRole.${role}`));
+      fireEvent.change(view.getByRole("combobox", { name: "Role model" }), {
+        target: { value: "test/model" },
+      });
+      expect(onSetFeature).toHaveBeenLastCalledWith(`modelRole.${role}`, "test/model");
+      fireEvent.change(view.getByRole("combobox", { name: "Role model" }), {
+        target: { value: "native" },
+      });
+      expect(onSetFeature).toHaveBeenLastCalledWith(`modelRole.${role}`, "native");
+    }
+    for (const feature of features)
+      expect(view.getByTestId(`agent-feature-${feature.id}`)).toBeTruthy();
+    expect(onSetFeature).toHaveBeenCalledTimes(8);
+  });
+
   it("renders localized labels and semantic icons, then updates the existing controls on language change", async () => {
     const modes = [{ id: "full", label: "Full Access" }];
     const features = [

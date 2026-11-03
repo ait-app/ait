@@ -8,6 +8,7 @@ export const ptBR: TranslationResources = {
     failed: "Conversa por voz interrompida",
   },
   onlineService: en.onlineService,
+  providerControl: en.providerControl,
   bots: en.bots,
   paneFind: {
     searchFailed:

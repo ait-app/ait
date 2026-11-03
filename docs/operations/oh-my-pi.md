@@ -33,6 +33,18 @@ export AIT_SERVER_OMP_BIN=/absolute/path/to/omp
 流式文本/推理/工具、token/cost、图片与文本附件、取消和追加输入。
 服务档位和推理选项仍由当前原生模型验证。
 
+模型设置中还可分别选择 default、smol、slow、vision、plan、commit、tiny、memory、task、
+advisor、widget、image、web、speech、dictation、judge，以及 OMP 已配置的自定义角色。
+候选来自原生目录，包含各模型支持的推理档位，支持图片的聊天模型会标注 images。
+每个角色可恢复为 `Use OMP setting`，保留原生配置及其推理后缀。
+这些选择保存到 Ait 会话配置，从下一轮生效，重启后恢复；不修改用户全局或项目配置。
+当前聊天模型仍由独立模型选择器控制。角色配置使用官方 `--config`，无需 OMP 补丁。
+见 [ADR-209](../decisions/providers/adr-209-omp-model-roles.md)。
+
+模型目录成功后缓存五分钟，按工作目录与运行环境隔离。打开菜单复用有效目录，过期后
+后台刷新；失败保留上一份成功目录，三十秒后允许重试。并发发现合并，隐藏面板不做定时
+刷新，角色设置和新会话创建复用目录；显式刷新仍读取原生最新值。
+
 OMP `ask` 使用结构化问答，支持单选、多选、含逗号的选项与自由文本。
 文件/命令审批和插件的 `select/confirm/input/editor/ask` 均经共享交互事件展示，
 保留原生标题、选项说明和输入提示。运行中的元数据读取和追加输入不等待原生命令确认，
@@ -40,6 +52,16 @@ OMP `ask` 使用结构化问答，支持单选、多选、含逗号的选项与�
 原生 `editor` 使用多行输入，答案保留换行。
 原生子 Agent 的状态与消息进入 Ait 子 Agent 界面和各自时间线。
 技能/命令发现、会话列表、导入、已有会话恢复和当前分支历史同样可用。
+
+输入 `/` 可查找原生命令与别名；命令后输入空格可继续补全原生目录声明的子命令，
+例如 `/advisor o` 的 `on`、`off` 及说明。方向键选择，Tab/Enter 接受候选；参数完成后
+再按 Enter 走原生提交。Escape 关闭 OMP 补全并保留草稿。命令内继续编辑时保留后续文本。
+OMP 的 clear/new/exit/quit/q 交给 OMP 处理，客户端不替换成归档或新草稿操作。
+运行中的插件目录更新来自同一实例，重新打开菜单即可刷新。
+
+原生文本对话可提交空字符串，取消保持取消语义；editor 显示原生预填内容，提交保留
+缩进和首尾换行，secret 输入使用密码控件。任意插件补全函数和 TUI 组件的限制见
+[命令兼容报告](../reports/providers/omp-commands-and-completion-2026-10-30.md)。
 
 ## 输出分类
 
@@ -71,9 +93,20 @@ ready 后协商 v2，校验并重组 stdout 分块，支持大于 1 MiB 的原�
 状态未知或仍有后台工作时继续等待。停止请求写入后即返回，原生取消确认等待最多五秒，
 超过后报告失败并关闭受管进程；进程清理还需要短暂等待。
 
-暂不提供原生会话/文件回退、单独控制子 Agent、终端组件 UI、每会话 MCP/工具策略覆盖、
+编辑器旁的 Native operations 提供官方 RPC 的 36 项语义操作，包括会话树、分支、fork、
+导航、handoff、新会话、目标、标签、命名、统计、HTML 导出、账号和自有子 Agent 控制，
+以及投递模式、旁路问答、shell 和 Host 语音/听写。各项独立保存输入、结果和等待状态；
+失败后可修正重试，后台操作不锁住草稿。下载使用认证文件通道，桌面原生写盘完成后才显示成功。
+
+官方扩展的状态、文本 widget、标题、编辑器和登录链接进入独立临时界面，不写成助手正文。
+认证链接由用户点击，沿用官方 OAuth/原生交互；不自动打开链接或收集额外秘密。
+Host 语音与听写使用 daemon 所在主机的设备，和客户端录音入口分别拥有。
+
+暂不提供原生文件回退、任意终端组件工厂、主题及 header/footer、每会话 MCP/工具策略覆盖、
 宿主工具/URI callback 注册和输出 schema。OMP 自己的工具、MCP 与扩展仍由本机配置加载。
-认证在原生 CLI 完成，不通过 Ait 问答收集登录秘密。
+操作、异步等待、模型缓存和恢复边界见
+[ADR-210](../decisions/providers/adr-210-native-ui-and-actions.md)，
+实测范围见[最终交付报告](../reports/providers/native-delivery-and-omp-roles-2026-11-02.md)。
 
 决策见 [ADR-180](../decisions/providers/adr-180-omp-native-rpc-provider.md)，
 验证结果见 [报告](../reports/providers/omp-native-provider.md)。

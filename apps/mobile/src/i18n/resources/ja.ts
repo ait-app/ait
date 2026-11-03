@@ -8,6 +8,7 @@ export const ja: TranslationResources = {
     failed: "音声会話が中断されました",
   },
   onlineService: en.onlineService,
+  providerControl: en.providerControl,
   bots: en.bots,
   paneFind: {
     searchFailed:

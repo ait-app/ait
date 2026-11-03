@@ -755,6 +755,14 @@ describe("dispatchComposerAgentMessage", () => {
 });
 
 describe("queueComposerMessage", () => {
+  it.each(["", " \t"])("preserves command syntax across queueing (prefix='%s')", (prefix) => {
+    const queue = createFakeQueue();
+    const text = `${prefix}/native "  argument  "\n  `;
+    const result = queueComposerMessage({ agentId: "agent", text, attachments: [], queue });
+    expect(result.queued?.text).toBe(text);
+    expect(queue.state.get("agent")?.[0]?.text).toBe(text);
+  });
+
   it("queues a trimmed message under the agent id and returns the new entry", () => {
     const queue = createFakeQueue();
     const result = queueComposerMessage({

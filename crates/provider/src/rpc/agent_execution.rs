@@ -2,6 +2,7 @@
 
 mod bot;
 mod controls;
+mod deferred;
 mod native_sessions;
 mod placement;
 mod resume;
@@ -29,6 +30,8 @@ use crate::service::agent_runtime::AgentRuntimeDirectory;
 use crate::support::rpc::decode;
 
 pub(crate) struct ExecutionState {
+    pub(crate) pending_response: Option<deferred::Response>,
+    pub(crate) pending_responses: tokio::task::JoinSet<()>,
     pub(crate) manager: AgentManager,
     pub(crate) message_observers:
         std::collections::BTreeMap<String, tokio::sync::watch::Receiver<Option<String>>>,
@@ -74,6 +77,8 @@ impl ExecutionState {
             }
             "agent.rewind.request"
             | "agent.commands.list.request"
+            | "agent.commands.complete.request"
+            | "agent.native_action.request"
             | "agent.permission.resolve.request"
             | "agent.provider_subagents.list.request"
             | "agent.provider_subagents.timeline.get.request"
@@ -443,25 +448,58 @@ impl ExecutionState {
         prompt: Option<crate::protocol::prompt::AgentPrompt>,
     ) -> Result<Value, ErrorCode> {
         let creations = self.manager.creations();
-        let result = json!({"agent":self.snapshot(id)?});
+        let result = json!({"agent":deferred::creation_snapshot(self.snapshot(id)?)});
         let mut progress = creations.advance(admission, "agent_ready", Some(result), None)?;
+        let mut completion = None;
         if let Some(prompt) = prompt {
-            if let Err(error) = self.manager.send_input(id, &prompt).await {
-                creations.advance(&progress, "failed", None, Some(error.to_string()))?;
-                return Err(map_manager(&error));
+            match self
+                .manager
+                .deliver(
+                    id,
+                    &prompt,
+                    crate::protocol::agent_execution::ActiveTurnBehavior::Steer,
+                )
+                .await
+            {
+                Ok(crate::service::agent_manager::delivery::Admission::Accepted) => {}
+                Ok(crate::service::agent_manager::delivery::Admission::Pending(pending)) => {
+                    completion = Some(pending);
+                }
+                Err(error) => {
+                    creations.advance(
+                        &progress,
+                        "failed",
+                        None,
+                        Some(error.message().to_owned()),
+                    )?;
+                    return Err(error.into());
+                }
             }
             progress = creations.advance(&progress, "prompt_started", None, None)?;
         }
         let snapshot = self.snapshot(id)?;
-        progress = creations.advance(
-            &progress,
-            "completed",
-            Some(json!({"agent":snapshot})),
-            None,
-        )?;
-        Ok(
-            json!({"status":"agent_created","agentId":id,"agent":snapshot,"error":null,"creation":progress}),
-        )
+        let id = id.to_owned();
+        if let Some(completion) = completion {
+            self.pending_response = Some(Box::pin(async move {
+                let result = completion.await;
+                tokio::task::spawn_blocking(move || {
+                    if let Err(error) = result {
+                        creations.advance(
+                            &progress,
+                            "failed",
+                            None,
+                            Some(error.message().to_owned()),
+                        )?;
+                        return Err(error.into());
+                    }
+                    deferred::created(&creations, &progress, &id, snapshot)
+                })
+                .await
+                .map_err(|_| ErrorCode::AgentIo)?
+            }));
+            return Ok(Value::Null);
+        }
+        deferred::created(&creations, &progress, &id, snapshot)
     }
 
     async fn send(&mut self, params: Value) -> Result<Value, ErrorCode> {
@@ -487,10 +525,18 @@ impl ExecutionState {
         self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
         let behavior = request.active_turn_behavior.unwrap_or_default();
         let prompt = request.into_prompt();
-        let result = self.manager.deliver(&id, &prompt, behavior).await;
-        Ok(
-            json!({"agentId":id,"accepted":result.is_ok(),"error":result.err().map(model::ErrorCode::message)}),
-        )
+        match self.manager.deliver(&id, &prompt, behavior).await {
+            Ok(crate::service::agent_manager::delivery::Admission::Pending(completion)) => {
+                self.pending_response = Some(Box::pin(async move {
+                    let result = completion.await;
+                    Ok(json!({"agentId":id,"accepted":result.is_ok(),
+                        "error":result.err().map(model::ErrorCode::message)}))
+                }));
+                Ok(Value::Null)
+            }
+            result => Ok(json!({"agentId":id,"accepted":result.is_ok(),
+                "error":result.err().map(model::ErrorCode::message)})),
+        }
     }
 
     pub(crate) fn workspace(&self, selected: Option<&str>, cwd: &str) -> Result<String, ErrorCode> {
@@ -583,6 +629,8 @@ impl ExecutionState {
             && let Some(committed) = self.owners.snapshot(&record.id)
         {
             for field in [
+                "availableModes",
+                "features",
                 "status",
                 "requiresAttention",
                 "attentionReason",
@@ -590,7 +638,18 @@ impl ExecutionState {
                 "activeTurn",
                 "providerUnavailable",
                 "pendingPermissions",
+                "providerUi",
             ] {
+                if field == "availableModes"
+                    && record
+                        .runtime_info
+                        .as_ref()
+                        .and_then(|info| info.extra.as_ref())
+                        .and_then(|extra| extra.get("availableModes"))
+                        .is_some()
+                {
+                    continue;
+                }
                 if let Some(value) = committed.get(field) {
                     snapshot[field] = value.clone();
                 }

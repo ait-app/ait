@@ -1,0 +1,20 @@
+{
+  "type": "provider_command",
+  "id": "dsh:session:command:control",
+  "command": "goal",
+  "status": "success",
+  "text": "Arbitrary localized native output",
+  "goal": {
+    "id": "native-goal",
+    "revision": 2,
+    "phase": "paused",
+    "objective": "Keep the objective intact",
+    "rounds": 1,
+    "maxRounds": 256
+  },
+  "actions": [
+    { "id": "resume", "command": "/goal resume" },
+    { "id": "edit", "command": "/goal edit " },
+    { "id": "clear", "command": "/goal clear" }
+  ]
+}

@@ -5,6 +5,7 @@ import type {
   CompactionTimelineItem,
   JsonValue,
   ToolCallDetail,
+  ProviderCommandTimelineItem,
   VoiceTranscriptEntry,
   VoiceTimelineItem,
 } from "@ait/protocol/agent-types";
@@ -89,6 +90,7 @@ export type StreamItem =
   | TodoListItem
   | NotificationItem
   | CompactionItem
+  | ProviderCommandItem
   | PluginTimelineStreamItem;
 
 export interface VoiceItem {
@@ -468,7 +470,11 @@ function removeUserMessageAt(items: UserMessageItem[], index: number): UserMessa
 }
 
 function mergeRetainedLifecycleItem(tail: StreamItem[], retained: StreamItem): StreamItem[] | null {
-  if (retained.kind === "plugin" || retained.kind === "voice") {
+  if (
+    retained.kind === "plugin" ||
+    retained.kind === "voice" ||
+    retained.kind === "provider_command"
+  ) {
     return replaceTimelineIdentityItem(tail, retained);
   }
   if (!retained.timelineCursor) {
@@ -535,7 +541,7 @@ function mergeRetainedLifecycleItem(tail: StreamItem[], retained: StreamItem): S
 
 function replaceTimelineIdentityItem(
   items: StreamItem[],
-  retained: PluginTimelineStreamItem | VoiceItem,
+  retained: PluginTimelineStreamItem | VoiceItem | ProviderCommandItem,
 ): StreamItem[] | null {
   const identity = streamTimelineItemIdentity(retained);
   if (identity === null) return null;
@@ -874,6 +880,15 @@ export interface PluginTimelineStreamItem {
   data: JsonValue;
 }
 
+export interface ProviderCommandItem {
+  kind: "provider_command";
+  id: string;
+  timelineCursor?: TimelinePosition;
+  turnId?: string;
+  timestamp: Date;
+  result: ProviderCommandTimelineItem;
+}
+
 export interface TodoEntry {
   text: string;
   completed: boolean;
@@ -1096,6 +1111,7 @@ function finalizeActiveThoughts(state: StreamItem[]): StreamItem[] {
 }
 
 export function streamTimelineItemIdentity(item: StreamItem): string | null {
+  if (item.kind === "provider_command") return timelineItemIdentity(item.result);
   if (item.kind === "voice") return timelineItemIdentity(item.payload);
   if (item.kind === "plugin") {
     return timelineItemIdentity({
@@ -1694,6 +1710,23 @@ function reduceTimelineEvent(
       return finalizeActiveThoughts(
         appendPluginTimelineItem(state, item, timestamp, timelineCursor),
       );
+    case "provider_command": {
+      const id = timelineItemIdentity(item)!;
+      const next: ProviderCommandItem = {
+        kind: "provider_command",
+        id,
+        result: item,
+        timestamp,
+        ...(event.turnId ? { turnId: event.turnId } : {}),
+        ...(timelineCursor ? { timelineCursor } : {}),
+      };
+      const index = findExistingTimelineIdentityIndex(state, id);
+      return finalizeActiveThoughts(
+        index < 0
+          ? [...state, next]
+          : state.map((existing, position) => (position === index ? next : existing)),
+      );
+    }
     default:
       return state;
   }
@@ -1865,6 +1898,8 @@ function getEventItemKind(event: AgentStreamEventPayload): StreamItem["kind"] | 
       return "notification";
     case "plugin":
       return "plugin";
+    case "provider_command":
+      return "provider_command";
     default:
       return null;
   }

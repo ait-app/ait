@@ -106,6 +106,9 @@ function AutocompleteRow({
       ) : (
         <View style={styles.itemMainRow}>
           <Text style={styles.itemLabel}>{optionLabel}</Text>
+          {removeBoltGlyphs(option.detail) ? (
+            <Text style={styles.itemDetail}>{removeBoltGlyphs(option.detail)}</Text>
+          ) : null}
           {optionDescription ? (
             <Text style={styles.itemDescriptionInline} numberOfLines={1}>
               {optionDescription}

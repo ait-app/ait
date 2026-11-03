@@ -52,8 +52,13 @@ pub(super) struct Session {
     state: Value,
     config: StoredAgentConfig,
     service_tiers: config::ServiceTiers,
+    role_catalog: super::roles::Catalog,
     stream: Stream,
     dialogs: Dialogs,
+    ui: super::ui::State,
+    actions: super::actions::Pending,
+    navigation: Option<Value>,
+    navigation_target: Option<String>,
     active: Option<String>,
     closed: bool,
     children: super::subagents::Children,
@@ -69,6 +74,8 @@ pub(super) struct Session {
     submitted: bool,
     created_at: String,
     native_bridge: NativeBridge,
+    commands: Vec<Value>,
+    command_version: u64,
 }
 
 /// Start a disposable native capability reader for `model` in `cwd`.
@@ -77,6 +84,17 @@ pub(super) async fn probe(
     client: &OmpClient,
     cwd: &str,
     model: Option<&str>,
+) -> Result<Transport, AgentSessionError> {
+    probe_config(client, cwd, model, None).await
+}
+
+/// Read capabilities with the proposed native role overlay and no persistent session.
+/// Returns startup, invalid configuration or mismatched explicit model errors.
+pub(super) async fn probe_config(
+    client: &OmpClient,
+    cwd: &str,
+    model: Option<&str>,
+    config: Option<&StoredAgentConfig>,
 ) -> Result<Transport, AgentSessionError> {
     config::validate_spec(&AgentSessionSpec {
         provider: "omp".to_owned(),
@@ -89,6 +107,21 @@ pub(super) async fn probe(
         "--no-session".to_owned(),
     ];
     let route = model.map(config::model_route).transpose()?;
+    let configuration = if let Some(config) = config {
+        super::roles::overlay(config).await?
+    } else {
+        None
+    };
+    if let Some(configuration) = &configuration {
+        args.extend([
+            "--config".to_owned(),
+            configuration
+                .path()
+                .to_str()
+                .ok_or(AgentSessionError::Failed)?
+                .to_owned(),
+        ]);
+    }
     if let Some([provider, model]) = &route {
         args.extend([
             "--provider".to_owned(),
@@ -98,6 +131,7 @@ pub(super) async fn probe(
         ]);
     }
     let mut transport = Transport::spawn(client, cwd, &args)?;
+    transport.retain_configuration(configuration);
     transport.initialize().await?;
     let state = transport.request("get_state", json!({})).await?;
     if route.is_some_and(|[provider, model]| {
@@ -112,8 +146,22 @@ async fn connect(
     client: &OmpClient,
     spec: &AgentSessionSpec,
     path: Option<&str>,
+    roles: &super::roles::Catalog,
+    capabilities: (Option<String>, config::ServiceTiers),
 ) -> Result<(Transport, Value, config::ServiceTiers), AgentSessionError> {
+    roles.validate(&spec.config)?;
+    let configuration = super::roles::overlay(&spec.config).await?;
     let mut args = vec!["--mode".to_owned(), "rpc-ui".to_owned()];
+    if let Some(configuration) = &configuration {
+        args.extend([
+            "--config".to_owned(),
+            configuration
+                .path()
+                .to_str()
+                .ok_or(AgentSessionError::Failed)?
+                .to_owned(),
+        ]);
+    }
     if let Some(path) = path {
         args.extend(["--resume".to_owned(), path.to_owned()]);
     }
@@ -127,6 +175,7 @@ async fn connect(
         ]);
     }
     let mut transport = Transport::spawn(client, &spec.cwd, &args)?;
+    transport.retain_configuration(configuration);
     transport.initialize().await?;
     let state = config::apply(&mut transport, &spec.config).await?;
     transport
@@ -136,9 +185,13 @@ async fn connect(
         .request("set_subagent_subscription", json!({"level":"events"}))
         .await?;
     let runtime = config::runtime(&state)?;
-    let tiers = client
-        .service_tiers(&spec.cwd, runtime.model.as_deref())
-        .await?;
+    let tiers = if runtime.model == capabilities.0 {
+        capabilities.1
+    } else {
+        client
+            .service_tiers(&spec.cwd, runtime.model.as_deref())
+            .await?
+    };
     Ok((transport, state, tiers))
 }
 
@@ -148,7 +201,7 @@ pub(super) async fn open(
     handle: Option<&AgentPersistenceHandle>,
 ) -> Result<Session, AgentSessionError> {
     config::validate_spec(spec)?;
-    let journal = if let Some(handle) = handle {
+    let mut journal = if let Some(handle) = handle {
         Some(history::load(client, handle, &spec.cwd).await?)
     } else {
         None
@@ -162,12 +215,28 @@ pub(super) async fn open(
         .as_ref()
         .and_then(|journal| journal.header["timestamp"].as_str())
         .map_or_else(|| chrono::Utc::now().to_rfc3339(), str::to_owned);
-    let (transport, state, service_tiers) =
-        connect(client, spec, path.filter(|_| persisted)).await?;
+    let (role_catalog, tiers) = client.role_settings(spec).await?;
+    let (mut transport, state, service_tiers) = connect(
+        client,
+        spec,
+        path.filter(|_| persisted),
+        &role_catalog,
+        tiers,
+    )
+    .await?;
+    let commands = config::commands(
+        &transport
+            .request("get_available_commands", json!({}))
+            .await?,
+    )?;
     let id = config::text(&state, "sessionId")?;
     if persisted && handle.is_some_and(|handle| handle.session_id != id) {
         return Err(AgentSessionError::Failed);
     }
+    restore_navigation(client, &mut transport, handle, &mut journal).await?;
+    let navigation = journal
+        .as_ref()
+        .and_then(|journal| journal.navigation.clone());
     let mut stream = match (journal, handle) {
         (Some(journal), Some(handle)) if persisted => journal.project(client, handle)?.1,
         _ => Stream::new(id.to_owned(), client.images.clone()),
@@ -181,8 +250,13 @@ pub(super) async fn open(
         state,
         config: spec.config.clone(),
         service_tiers,
+        role_catalog,
         stream,
         dialogs: Dialogs::default(),
+        ui: super::ui::State::default(),
+        actions: super::actions::Pending::default(),
+        navigation,
+        navigation_target: None,
         active: None,
         closed: false,
         children: super::subagents::Children::default()
@@ -198,7 +272,41 @@ pub(super) async fn open(
         submitted: false,
         created_at,
         native_bridge: NativeBridge::default(),
+        commands,
+        command_version: 1,
     })
+}
+
+async fn restore_navigation(
+    client: &OmpClient,
+    transport: &mut Transport,
+    handle: Option<&AgentPersistenceHandle>,
+    journal: &mut Option<history::Journal>,
+) -> Result<(), AgentSessionError> {
+    let Some(navigation) = journal
+        .as_ref()
+        .and_then(|journal| journal.navigation.clone())
+    else {
+        return Ok(());
+    };
+    let target = config::text(&navigation, "targetId")?;
+    let result = transport
+        .request("navigate_tree", json!({"entryId":target}))
+        .await?;
+    if result["cancelled"] == true || result["aborted"] == true {
+        return Err(AgentSessionError::Rejected);
+    }
+    let native = transport.request("get_entries", json!({})).await?;
+    if native.get("leafId") != navigation.get("leafId") {
+        return Err(AgentSessionError::Failed);
+    }
+    let cwd = journal.as_ref().ok_or(AgentSessionError::Failed)?.header["cwd"]
+        .as_str()
+        .ok_or(AgentSessionError::Failed)?;
+    let mut restored = history::load(client, handle.ok_or(AgentSessionError::Failed)?, cwd).await?;
+    restored.set_navigation(target, &navigation["leafId"])?;
+    *journal = Some(restored);
+    Ok(())
 }
 
 fn validate_native_control(kind: &str) -> Result<(), AgentSessionError> {
@@ -224,6 +332,11 @@ fn validate_native_control(kind: &str) -> Result<(), AgentSessionError> {
 }
 
 impl Session {
+    /// Revision of the most recently observed native command catalog, for ACP notifications.
+    pub(super) fn command_version(&self) -> u64 {
+        self.command_version
+    }
+
     /// Apply native settings while idle, retaining the persisted session when reopening.
     /// Invalid settings or an active turn reject before any native mutation.
     pub(super) async fn configure(
@@ -239,6 +352,7 @@ impl Session {
         }
         if self.config.mode_id == config.mode_id
             && self.config.system_prompt == config.system_prompt
+            && super::roles::overrides(&self.config) == super::roles::overrides(config)
         {
             self.state = config::apply(&mut self.transport, config).await?;
             let runtime = config::runtime(&self.state)?;
@@ -249,16 +363,39 @@ impl Session {
             self.stream.set_context(&self.state);
             self.config.clone_from(config);
         } else {
-            self.transport.close().await?;
+            if super::roles::overrides(&self.config) != super::roles::overrides(config) {
+                let state = self.transport.request("get_state", json!({})).await?;
+                if state["hasPendingAsyncWork"] != false
+                    || state["isStreaming"] != false
+                    || state["isCompacting"] != false
+                    || state["isSettled"] != true
+                    || state["queuedMessageCount"].as_u64() != Some(0)
+                {
+                    return Err(AgentSessionError::Busy);
+                }
+            }
             let path = config::text(&self.state, "sessionFile")?.to_owned();
             let spec = AgentSessionSpec {
                 provider: "omp".to_owned(),
                 cwd: self.cwd.clone(),
                 config: config.clone(),
             };
+            let (role_catalog, tiers) = self.client.role_settings(&spec).await?;
+            self.transport.close().await?;
             let persisted = std::path::Path::new(&path).is_file();
-            let (transport, state, service_tiers) =
-                connect(&self.client, &spec, persisted.then_some(path.as_str())).await?;
+            let (mut transport, state, service_tiers) = connect(
+                &self.client,
+                &spec,
+                persisted.then_some(path.as_str()),
+                &role_catalog,
+                tiers,
+            )
+            .await?;
+            let commands = config::commands(
+                &transport
+                    .request("get_available_commands", json!({}))
+                    .await?,
+            )?;
             if persisted && state["sessionId"] != self.state["sessionId"] {
                 return Err(AgentSessionError::Failed);
             }
@@ -276,10 +413,19 @@ impl Session {
             self.idle_without_outcome = None;
             self.state = state;
             self.service_tiers = service_tiers;
+            self.role_catalog = role_catalog;
             self.stream.set_context(&self.state);
             self.config.clone_from(config);
+            self.update_commands(commands);
         }
         Ok(())
+    }
+
+    fn update_commands(&mut self, commands: Vec<Value>) {
+        if self.commands != commands {
+            self.commands = commands;
+            self.command_version = self.command_version.wrapping_add(1);
+        }
     }
 
     /// Forward a native control command without permitting a second conversation owner.
@@ -357,7 +503,11 @@ impl Session {
     ) -> Result<String, AgentSessionError> {
         prompt.validate()?;
         config::validate(config)?;
-        if self.closed || self.active.is_some() || prompt.output_schema.is_some() {
+        if self.closed
+            || self.active.is_some()
+            || self.actions.changing_history()
+            || prompt.output_schema.is_some()
+        {
             return Err(AgentSessionError::Rejected);
         }
         self.configure(config).await?;
@@ -372,20 +522,13 @@ impl Session {
             .filter(|block| block["type"] == "image")
             .collect();
         self.transport.diagnostics.clear();
-        self.stream
-            .pending_inputs
-            .push_back(prompt.client_message_id.clone());
-        let prompt_id = match self
+        let prompt_id = self
             .transport
             .begin("prompt", json!({"message":text,"images":images}))
-            .await
-        {
-            Ok(id) => id,
-            Err(error) => {
-                self.stream.pending_inputs.pop_back();
-                return Err(error);
-            }
-        };
+            .await?;
+        self.stream
+            .pending_inputs
+            .push_back((prompt_id.clone(), prompt.client_message_id.clone()));
         let turn = Uuid::new_v4().to_string();
         self.stream.begin(turn.clone());
         self.active = Some(turn.clone());
@@ -424,6 +567,7 @@ impl Session {
                             | "setWidget"
                             | "setTitle"
                             | "set_editor_text"
+                            | "open_url"
                             | "cancel"
                     )
                 ))
@@ -454,7 +598,6 @@ impl Session {
             return Err(AgentSessionError::Failed);
         }
         if event["success"] == false {
-            self.stream.pending_inputs.pop_back();
             self.transport
                 .diagnostics
                 .observe_native(&event["error"], "rpc", "prompt");
@@ -463,7 +606,6 @@ impl Session {
         } else if event["success"] == true {
             self.phase = TurnPhase::Running;
             if event["data"]["agentInvoked"] == false {
-                self.stream.pending_inputs.pop_back();
                 self.finish();
             }
         } else {
@@ -517,6 +659,10 @@ impl Session {
     }
 
     fn consume(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        if event["type"] == "response" && self.actions.capture(event) {
+            self.ui.capture(event)?;
+            return Ok(());
+        }
         if event["type"] == "response" && self.control_response(event)? {
             return Ok(());
         }
@@ -541,12 +687,11 @@ impl Session {
             }
         }
         match event["type"].as_str() {
+            Some("available_commands_update") => {
+                self.update_commands(config::commands(event)?);
+            }
             Some("extension_ui_request") => {
-                let events = self.dialogs.capture(event)?;
-                if events.is_empty() {
-                    self.project(event)?;
-                }
-                self.stream.events.extend(events);
+                self.ui_request(event)?;
             }
             Some("agent_start") if self.active.is_none() => {
                 let turn = Uuid::new_v4().to_string();
@@ -627,9 +772,23 @@ impl Session {
         })
     }
 
+    fn ui_request(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        self.ui.capture(event)?;
+        let events = self.dialogs.capture(event)?;
+        if events.is_empty() {
+            self.project(event)?;
+        }
+        self.stream.events.extend(events);
+        Ok(())
+    }
+
     fn finish(&mut self) {
         if self.active.take().is_some() {
-            self.prompt_id = None;
+            if let Some(id) = self.prompt_id.take() {
+                self.stream
+                    .pending_inputs
+                    .retain(|(request, _)| request != &id);
+            }
             self.native_bridge.callbacks.clear();
             self.phase = TurnPhase::Idle;
             self.cancellation_started = None;
@@ -763,9 +922,18 @@ impl Session {
 }
 
 impl AgentSession for Session {
+    fn complete_commands<'a>(
+        &'a mut self,
+        input: &'a crate::protocol::commands::CompletionInput,
+    ) -> AgentSessionFuture<'a, crate::protocol::commands::CompletionResult> {
+        Box::pin(super::completion::complete(&mut self.transport, input))
+    }
+    fn commands(&self) -> Option<&[Value]> {
+        Some(&self.commands)
+    }
     fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         config::validate(config)?;
-        Ok(())
+        self.role_catalog.validate(config)
     }
     fn control_settings(&self, config: &StoredAgentConfig) -> Option<Value> {
         let tiers = if config.model == self.config.model {
@@ -773,11 +941,101 @@ impl AgentSession for Session {
         } else {
             config::ServiceTiers::default()
         };
-        Some(json!({"availableModes":config::modes(),"features":config::features(config, tiers)}))
+        let mut features = config::features(config, tiers);
+        features.extend(self.role_catalog.features(config));
+        Some(json!({"availableModes":config::modes(),"features":features}))
+    }
+
+    fn ui_state(&self) -> Option<Value> {
+        if self.closed {
+            return None;
+        }
+        let mut snapshot = self.ui.snapshot();
+        snapshot["actions"] = super::actions::catalog();
+        Some(snapshot)
+    }
+    fn observation_committed(&mut self) {
+        if self.stream.events.is_empty() {
+            self.actions.committed();
+        }
+    }
+
+    fn begin_action<'a>(
+        &'a mut self,
+        action: &'a str,
+        arguments: &'a Value,
+    ) -> AgentSessionFuture<'a, AgentSessionFuture<'static, Value>> {
+        Box::pin(async move {
+            if self.closed {
+                return Err(AgentSessionError::Unavailable);
+            }
+            if (self.actions.changing_history() && action != "abort_branch_summary")
+                || (super::actions::changes_history(action) && self.active.is_some())
+            {
+                return Err(AgentSessionError::Busy);
+            }
+            let fields = super::actions::validate(action, arguments, &self.cwd)?;
+            if matches!(action, "cancel_subagent" | "steer_subagent") {
+                let owned = self.transport.request("get_subagents", json!({})).await?;
+                super::actions::validate_child(&owned, &fields["subagentId"])?;
+            }
+            self.actions.check_capacity()?;
+            let target = fields["entryId"].as_str().map(str::to_owned);
+            let id = self.transport.begin(action, fields).await?;
+            if action == "navigate_tree" {
+                self.navigation_target = target;
+            }
+            Ok(self.actions.insert(id, action))
+        })
     }
 
     fn failure_diagnostic(&self) -> Option<Diagnostic> {
         self.transport.diagnostics.failure()
+    }
+
+    fn service_realtime(&mut self) -> AgentSessionFuture<'_, ()> {
+        Box::pin(async move {
+            while let Some(refresh) = self.actions.take_refresh() {
+                let result = async {
+                    self.navigation = None;
+                    let input_ids = self.stream.input_ids.clone();
+                    let info = self.runtime_info().await?;
+                    self.stream.input_ids.extend(input_ids);
+                    let handle = self.persistence().ok_or(AgentSessionError::Failed)?;
+                    let mut journal = history::load(&self.client, &handle, &self.cwd).await?;
+                    if refresh.action == "navigate_tree" {
+                        let native = self.transport.request("get_entries", json!({})).await?;
+                        journal.set_navigation(
+                            self.navigation_target
+                                .take()
+                                .as_deref()
+                                .ok_or(AgentSessionError::Failed)?,
+                            native.get("leafId").ok_or(AgentSessionError::Failed)?,
+                        )?;
+                        self.navigation.clone_from(&journal.navigation);
+                    } else {
+                        self.navigation_target = None;
+                    }
+                    let (history, mut stream) = journal.project(&self.client, &handle)?;
+                    stream.set_context(&self.state);
+                    stream.events = std::mem::take(&mut self.stream.events);
+                    stream.events.push_back(AgentTurnEvent::RuntimeInfo(info));
+                    stream
+                        .events
+                        .push_back(AgentTurnEvent::History(history.entries));
+                    self.stream = stream;
+                    self.submitted = !self.stream.input_ids.is_empty();
+                    Ok(())
+                }
+                .await;
+                if let Err(error) = result {
+                    refresh.finish(Err(error));
+                    return Err(error);
+                }
+                self.actions.prepared(refresh);
+            }
+            Ok(())
+        })
     }
 
     fn failure_message(&self) -> Option<Cow<'_, str>> {
@@ -824,6 +1082,7 @@ impl AgentSession for Session {
                     .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
                 self.created_at = chrono::Utc::now().to_rfc3339();
                 self.submitted = false;
+                self.navigation = None;
             }
             self.state = state;
             self.stream.set_context(&self.state);
@@ -845,6 +1104,7 @@ impl AgentSession for Session {
                 ("cwd".to_owned(), json!(self.cwd)),
                 ("sessionFile".to_owned(), json!(file)),
                 ("inputIds".to_owned(), json!(self.stream.input_ids)),
+                ("navigation".to_owned(), json!(self.navigation)),
                 (
                     "empty".to_owned(),
                     json!(!self.submitted && !std::path::Path::new(file).is_file()),
@@ -895,11 +1155,11 @@ impl AgentSession for Session {
                 .transport
                 .begin("steer", json!({"message":text,"images":images}))
                 .await?;
-            self.input_requests.insert(id, turn.to_owned());
+            self.input_requests.insert(id.clone(), turn.to_owned());
             self.invalidate_state_check();
             self.stream
                 .pending_inputs
-                .push_back(prompt.client_message_id.clone());
+                .push_back((id, prompt.client_message_id.clone()));
             Ok(())
         })
     }
@@ -980,6 +1240,7 @@ impl AgentSession for Session {
     fn close(&mut self) -> AgentSessionFuture<'_, ()> {
         Box::pin(async move {
             self.closed = true;
+            self.actions.close();
             self.stream.events.extend(self.dialogs.clear());
             self.transport.close().await
         })

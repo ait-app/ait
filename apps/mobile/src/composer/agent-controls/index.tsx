@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { useQuery } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
 import { router } from "expo-router";
 import {
@@ -104,6 +105,7 @@ import {
   type DraftAgentProfileControls,
 } from "@/agent-profiles";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
+import { mergeRoleChoices } from "./role-choices";
 
 interface AgentControlOption {
   id: string;
@@ -1650,6 +1652,29 @@ export const AgentControls = memo(function AgentControls({
     [snapshotEntries, agent?.provider],
   );
 
+  // Read the completed background catalog, rather than caching its initial empty loading state.
+  // Saved selections remain usable throughout discovery; this never resumes the conversation.
+  const roleChoices = useQuery({
+    queryKey: ["ompRoleChoices", serverId, agent?.cwd, snapshotSelectedEntry?.fetchedAt],
+    enabled: Boolean(
+      client && agent?.provider === "omp" && agent.cwd && snapshotSelectedEntry?.status === "ready",
+    ),
+    staleTime: Infinity,
+    queryFn: async () => {
+      if (!client || !agent?.cwd) throw new Error("Host unavailable");
+      const result = await client.listProviderFeatures({ provider: "omp", cwd: agent.cwd });
+      if (result.error) throw new Error(result.error);
+      return result.features ?? [];
+    },
+  });
+  const features = useMemo(
+    () =>
+      agent?.provider === "omp"
+        ? mergeRoleChoices(agent.features, roleChoices.data)
+        : agent?.features,
+    [agent?.provider, agent?.features, roleChoices.data],
+  );
+
   const models = filterSelectableModels(snapshotSelectedEntry?.models ?? null);
   const selectedProviderIsLoading = snapshotSelectedEntry?.status === "loading";
 
@@ -1817,13 +1842,13 @@ export const AgentControls = memo(function AgentControls({
       },
       modes: commandCenterModes,
       features: {
-        list: agent?.features,
+        list: features,
         set: handleSetFeature,
       },
     }),
     [
       activeModelId,
-      agent?.features,
+      features,
       agentId,
       agentModelSelectorProviders,
       agentProvider,
@@ -1879,7 +1904,7 @@ export const AgentControls = memo(function AgentControls({
         thinkingOptions={thinkingOptions.length > 0 ? thinkingOptions : undefined}
         selectedThinkingOptionId={modelSelection.selectedThinkingId ?? undefined}
         onSelectThinkingOption={handleSelectThinkingOption}
-        features={agent.features}
+        features={features}
         onSetFeature={handleSetFeature}
         isModelLoading={snapshotIsLoading || selectedProviderIsLoading}
         onModelSelectorOpen={handleModelSelectorOpen}

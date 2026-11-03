@@ -13,6 +13,74 @@ use crate::support::time::now_timestamp;
 pub(super) const REPLACEMENT_MARKER: &str = "aitTimelineReplacement";
 
 impl AgentManager {
+    /// Submit an advertised native action on its existing owner lane; callbacks remain pollable.
+    /// Restores an inactive owner only for an explicit advertised action, rejecting archives.
+    pub(crate) async fn begin_action(
+        &mut self,
+        id: &str,
+        action: &str,
+        arguments: &Value,
+    ) -> Result<crate::ports::agent_session::AgentSessionFuture<'static, Value>, ErrorCode> {
+        if !self.live.contains_key(id) {
+            let record = self
+                .registry
+                .get(id)
+                .map_err(|_| ErrorCode::AgentIo)?
+                .ok_or(ErrorCode::AgentNotFound)?;
+            if record.archived_at.is_some() {
+                return Err(ErrorCode::InvalidMessage);
+            }
+            let settings = self
+                .clients
+                .get(&record.provider)
+                .ok_or(ErrorCode::UnsupportedCapability)?
+                .settings(&record.config.unwrap_or_default());
+            if !settings["providerUi"]["actions"]
+                .as_array()
+                .is_some_and(|actions| actions.iter().any(|item| item["id"] == action))
+            {
+                return Err(ErrorCode::InvalidMessage);
+            }
+            self.resume(id).await.map_err(|_| ErrorCode::AgentIo)?;
+        }
+        let agent = self.live.get_mut(id).ok_or(ErrorCode::AgentNotFound)?;
+        agent
+            .session
+            .begin_action(action, arguments)
+            .await
+            .map_err(|error| match error {
+                AgentSessionError::Rejected => ErrorCode::InvalidMessage,
+                AgentSessionError::Busy => ErrorCode::CatalogBusy,
+                _ => ErrorCode::AgentIo,
+            })
+    }
+    /// Query completion using the live owner when available, otherwise isolated native discovery.
+    /// Never resumes an inactive Agent or changes prompt admission; returns native/validation errors.
+    pub(crate) async fn complete_commands(
+        &mut self,
+        id: &str,
+        spec: &AgentSessionSpec,
+        input: &crate::protocol::commands::CompletionInput,
+    ) -> Result<crate::protocol::commands::CompletionResult, ErrorCode> {
+        input.validate().map_err(|_| ErrorCode::InvalidMessage)?;
+        let result = if let Some(agent) = self.live.get_mut(id) {
+            agent.session.complete_commands(input).await
+        } else {
+            self.clients
+                .get(&spec.provider)
+                .ok_or(ErrorCode::UnsupportedCapability)?
+                .complete_commands(spec, input)
+                .await
+        }
+        .map_err(|error| match error {
+            AgentSessionError::Rejected => ErrorCode::InvalidMessage,
+            AgentSessionError::Busy => ErrorCode::CatalogBusy,
+            AgentSessionError::Unavailable => ErrorCode::UnsupportedCapability,
+            AgentSessionError::Failed | AgentSessionError::History(_) => ErrorCode::AgentIo,
+        })?;
+        result.validate(input).map_err(|_| ErrorCode::AgentIo)?;
+        Ok(result)
+    }
     pub(crate) fn recover_permissions(&self) -> Result<(), super::AgentManagerError> {
         use domain::agent_runtime::AgentAttentionReason;
         for record in self.registry.list().map_err(super::map_registry)? {
@@ -66,8 +134,16 @@ impl AgentManager {
         record: &PersistedAgentRuntimeRecord,
         snapshot: &mut Value,
     ) {
+        snapshot["providerUi"] = self
+            .live
+            .get(&record.id)
+            .and_then(|agent| agent.session.ui_state())
+            .unwrap_or(Value::Null);
         if let Some(client) = self.clients.get(&record.provider) {
             let settings = client.settings(&record.config.clone().unwrap_or_default());
+            if snapshot["providerUi"].is_null() {
+                snapshot["providerUi"] = settings.get("providerUi").cloned().unwrap_or(Value::Null);
+            }
             snapshot["availableModes"] = record
                 .runtime_info
                 .as_ref()
@@ -118,6 +194,33 @@ impl AgentManager {
             .await
             .unwrap_or_else(|_| "Provider inspection unavailable".to_owned());
         Ok(json!({"provider":provider,"diagnostic":diagnostic}))
+    }
+
+    /// Refresh only an already owned native session's command directory, without admitting input.
+    /// Returns no catalog for a detached or unsupported session and preserves native read failures.
+    pub(crate) async fn refresh_commands(
+        &mut self,
+        id: &str,
+    ) -> Result<Option<Vec<Value>>, ErrorCode> {
+        let Some(agent) = self.live.get_mut(id) else {
+            return Ok(None);
+        };
+        agent
+            .session
+            .refresh_commands()
+            .await
+            .map_err(|_| ErrorCode::AgentIo)
+    }
+
+    /// Whether `id` opts into command reads on its native session lane.
+    /// Returns registry I/O failures; an unknown Agent has no live catalog capability.
+    pub(crate) fn uses_session_commands(&self, id: &str) -> Result<bool, ErrorCode> {
+        let record = self.registry.get(id).map_err(|_| ErrorCode::AgentIo)?;
+        Ok(record.as_ref().is_some_and(|record| {
+            self.clients
+                .get(&record.provider)
+                .is_some_and(|client| client.supports_session_commands())
+        }))
     }
 
     pub(crate) async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, ErrorCode> {
