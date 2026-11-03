@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { AgentProvider, ProviderSnapshotEntry } from "@ait/protocol/agent-types";
@@ -14,6 +14,7 @@ import {
   providersSnapshotQueryRoot,
   fetchProvidersSnapshot,
   refreshAndApplyProvidersSnapshot,
+  refreshOmpModelsOnAccess,
 } from "@/data/providers-snapshot";
 
 export {
@@ -58,6 +59,7 @@ interface UseProvidersSnapshotResult {
 interface UseProvidersSnapshotOptions {
   enabled?: boolean;
   cwd?: string | null;
+  refreshOnAccess?: boolean;
 }
 
 export function useProvidersSnapshot(
@@ -83,12 +85,12 @@ export function useProvidersSnapshot(
     structuralSharing: false,
     enabled: Boolean(enabled && supportsSnapshot && serverId && client && isConnected),
     pushEvent: "provider.snapshot.update",
-    // Recheck active catalogs in the background; pending discovery converges without a push.
+    // Only pending work needs polling; model access explicitly starts background refreshes.
     refetchInterval: (query) =>
       query.state.data?.refreshing?.length ||
       query.state.data?.entries.some((entry) => entry.status === "loading")
         ? 1_000
-        : 5 * 60_000,
+        : false,
     queryFn: async ({ signal }) => {
       if (!client || !serverId) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
@@ -96,6 +98,16 @@ export function useProvidersSnapshot(
       return fetchProvidersSnapshot({ client, serverId, cwd, queryClient, signal });
     },
   });
+
+  const refreshOnAccess = useCallback(() => {
+    if (!enabled || !supportsSnapshot || !serverId || !client || !isConnected) return;
+    // Background failure leaves the cached choices and the owner's error projection intact.
+    void refreshOmpModelsOnAccess({ client, queryClient, serverId, cwd }).catch(() => undefined);
+  }, [client, cwd, enabled, isConnected, queryClient, serverId, supportsSnapshot]);
+
+  useEffect(() => {
+    if (options.refreshOnAccess !== false) refreshOnAccess();
+  }, [options.refreshOnAccess, refreshOnAccess]);
 
   const refreshMutation = useMutation({
     mutationFn: async (providers?: AgentProvider[]) => {
@@ -122,8 +134,11 @@ export function useProvidersSnapshot(
 
   const refetchIfStale = useCallback(
     (selectedProvider?: AgentProvider | null) => {
+      refreshOnAccess();
       const decision = selectorOpenRefetchDecision({
-        entries: snapshotQuery.data?.entries,
+        entries:
+          queryClient.getQueryData<Awaited<ReturnType<typeof fetchProvidersSnapshot>>>(queryKey)
+            ?.entries,
         selectedProvider,
       });
       if (decision === "refetch-always") {
@@ -132,7 +147,7 @@ export function useProvidersSnapshot(
       }
       void queryClient.refetchQueries({ queryKey, type: "active", stale: true });
     },
-    [queryClient, queryKey, snapshotQuery.data?.entries],
+    [queryClient, queryKey, refreshOnAccess],
   );
 
   return {

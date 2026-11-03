@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { AgentProvider, AgentSessionConfig } from "@ait/protocol/agent-types";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { mergeProviderPreferences, useFormPreferences } from "./use-form-preferences";
+import { useProvidersSnapshot } from "./use-providers-snapshot";
 import {
   applyFeatureValues,
   pruneFeatureValues,
@@ -55,6 +56,12 @@ export function useDraftAgentFeatures(input: {
     };
   }, [modeId, modelId, normalizedCwd, normalizedProvider, thinkingOptionId]);
 
+  const { entries } = useProvidersSnapshot(serverId ?? null, {
+    cwd: normalizedCwd,
+    enabled: normalizedProvider === "omp",
+    refreshOnAccess: false,
+  });
+  const catalogFetchedAt = entries?.find((entry) => entry.provider === "omp")?.fetchedAt;
   const featuresQuery = useQuery({
     queryKey: [
       "providerFeatures",
@@ -64,6 +71,7 @@ export function useDraftAgentFeatures(input: {
       modeId ?? null,
       modelId ?? null,
       thinkingOptionId ?? null,
+      normalizedProvider === "omp" ? catalogFetchedAt : null,
     ],
     enabled: Boolean(serverId && client && isConnected && draftConfig),
     staleTime: 5 * 60 * 1000,

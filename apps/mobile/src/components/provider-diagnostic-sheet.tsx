@@ -250,11 +250,13 @@ function DiagnosticSubSheet({
   const { theme } = useUnistyles();
   const toast = useToast();
   const client = useHostRuntimeClient(serverId);
+  const { refetchIfStale } = useProvidersSnapshot(serverId, { refreshOnAccess: false });
   const [diagnostic, setDiagnostic] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const fetchDiagnostic = useCallback(async () => {
     if (!client) return;
+    refetchIfStale(provider);
     setLoading(true);
     try {
       const result = await client.getProviderDiagnostic(provider);
@@ -266,7 +268,7 @@ function DiagnosticSubSheet({
     } finally {
       setLoading(false);
     }
-  }, [client, provider, t]);
+  }, [client, provider, refetchIfStale, t]);
 
   useEffect(() => {
     if (visible) {
@@ -583,7 +585,12 @@ export function ProviderDiagnosticSheet({
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const isCompact = useIsCompactFormFactor();
-  const { entries: snapshotEntries, refresh, isRefreshing } = useProvidersSnapshot(serverId);
+  const {
+    entries: snapshotEntries,
+    refresh,
+    isRefreshing,
+    refetchIfStale,
+  } = useProvidersSnapshot(serverId, { refreshOnAccess: visible });
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [query, setQuery] = useState("");
   const [addSheetOpen, setAddSheetOpen] = useState(false);
@@ -651,7 +658,10 @@ export function ProviderDiagnosticSheet({
     void refresh([provider]);
   }, [provider, refresh]);
 
-  const handleOpenAddSheet = useCallback(() => setAddSheetOpen(true), []);
+  const handleOpenAddSheet = useCallback(() => {
+    refetchIfStale(provider);
+    setAddSheetOpen(true);
+  }, [provider, refetchIfStale]);
   const handleCloseAddSheet = useCallback(() => setAddSheetOpen(false), []);
   const handleOpenDiagSheet = useCallback(() => setDiagSheetOpen(true), []);
   const handleCloseDiagSheet = useCallback(() => setDiagSheetOpen(false), []);

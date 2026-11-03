@@ -153,7 +153,7 @@ export function MetadataGenerationPage({ serverId }: { serverId: string }) {
               selectedModel={configuredProvider?.model ?? ""}
               onSelect={handleModelSelect}
               isLoading={snapshot.isLoading || snapshot.isFetching}
-              onOpen={handleSelectorOpen}
+              onCatalogAccess={handleSelectorOpen}
               onRetryProvider={handleRetryProvider}
               isRetryingProvider={snapshot.isRefreshing}
               disabled={isSaving}

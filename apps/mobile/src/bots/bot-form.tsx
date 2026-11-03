@@ -18,6 +18,7 @@ function BotSelect({
   value,
   options,
   onChange,
+  onAccess,
   disabled = false,
   testID,
 }: {
@@ -25,6 +26,7 @@ function BotSelect({
   value: string;
   options: { id: string; label: string }[];
   onChange: (value: string) => void;
+  onAccess?: () => void;
   disabled?: boolean;
   testID: string;
 }) {
@@ -38,7 +40,11 @@ function BotSelect({
           options.find((option) => option.id === value)?.label || value || t("bots.defaultOption"),
       }}
       options={options.map((option) => ({ ...option, value: option.id }))}
-      onChange={onChange}
+      onOpen={onAccess}
+      onChange={(value) => {
+        onAccess?.();
+        onChange(value);
+      }}
       disabled={disabled}
       searchable
       placeholder={t("bots.defaultOption")}
@@ -157,6 +163,7 @@ export function BotForm({
           setThinking("");
         }}
         disabled={disabled}
+        onAccess={() => snapshot.refetchIfStale(selectedProvider)}
         testID="bot-provider"
       />
       <BotSelect
@@ -168,6 +175,7 @@ export function BotForm({
           setThinking("");
         }}
         disabled={disabled}
+        onAccess={() => snapshot.refetchIfStale(selectedProvider)}
         testID="bot-model"
       />
       <BotSelect
@@ -184,6 +192,7 @@ export function BotForm({
         options={[defaultOption, ...(selectedModel?.thinkingOptions ?? [])]}
         onChange={setThinking}
         disabled={disabled}
+        onAccess={() => snapshot.refetchIfStale(selectedProvider)}
         testID="bot-thinking"
       />
       {bot ? (

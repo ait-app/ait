@@ -37,6 +37,14 @@ struct ParallelClient {
 
 #[async_trait::async_trait]
 impl AgentClient for ParallelClient {
+    fn discovery_cache_ttl(&self) -> Duration {
+        if self.provider == "omp" {
+            Duration::MAX
+        } else {
+            Duration::from_mins(5)
+        }
+    }
+
     fn discovery_timeout(&self) -> Duration {
         if self.provider == "opencode" {
             Duration::from_secs(300)
@@ -291,6 +299,66 @@ async fn one_provider_has_at_most_four_concurrent_scopes() {
 }
 
 #[tokio::test]
+async fn access_driven_catalog_keeps_old_models_until_explicit_background_refresh() {
+    let root = tempfile::tempdir().unwrap();
+    let gate = Gate::new();
+    gate.release.add_permits(1);
+    let clients = clients(&[("omp", gate.clone())]);
+    let catalog = Catalog::default();
+    let events = SessionEvents::default();
+    let params = json!({"cwd":root.path()});
+    let method = "provider.snapshot.get.request";
+    let original = catalog
+        .execute(&clients, &events, method, params.clone())
+        .await
+        .unwrap();
+    gate.entered(1).await;
+    expire_models(&catalog, root.path(), "omp", Duration::from_hours(24));
+    let retained = catalog
+        .read(&clients, &events, method, params.clone())
+        .await
+        .unwrap();
+    assert_eq!(retained["entries"], original["entries"]);
+    assert_eq!(retained["refreshing"], json!([]));
+    assert_eq!(gate.calls.load(Ordering::SeqCst), 1);
+
+    let refreshing = catalog
+        .read(
+            &clients,
+            &events,
+            "provider.snapshot.refresh.request",
+            json!({"cwd":root.path(),"providers":["omp"]}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(refreshing["acknowledged"], true);
+    gate.entered(1).await;
+    let pending = catalog
+        .read(&clients, &events, method, params.clone())
+        .await
+        .unwrap();
+    assert_eq!(pending["entries"], original["entries"]);
+    assert_eq!(pending["refreshing"], json!(["omp"]));
+    gate.failed.store(true, Ordering::SeqCst);
+    gate.release.add_permits(1);
+    let failed = catalog
+        .execute(&clients, &events, method, params)
+        .await
+        .unwrap();
+    assert_eq!(failed["entries"][0]["status"], "ready");
+    assert_eq!(
+        failed["entries"][0]["models"],
+        original["entries"][0]["models"]
+    );
+    assert_eq!(
+        failed["entries"][0]["fetchedAt"],
+        original["entries"][0]["fetchedAt"]
+    );
+    assert_eq!(failed["entries"][0]["error"], "Provider discovery failed");
+    catalog.close().await;
+}
+
+#[tokio::test]
 async fn expired_models_refresh_once_in_background_and_survive_a_failed_refresh() {
     let root = tempfile::tempdir().unwrap();
     let gate = Gate::new();
@@ -313,7 +381,7 @@ async fn expired_models_refresh_once_in_background_and_survive_a_failed_refresh(
     }
     assert_eq!(gate.calls.load(Ordering::SeqCst), 1);
 
-    expire_models(&catalog, root.path(), Duration::from_secs(301));
+    expire_models(&catalog, root.path(), "codex", Duration::from_secs(301));
     let refreshing = catalog
         .read(&clients, &events, method, params.clone())
         .await
@@ -353,7 +421,7 @@ async fn expired_models_refresh_once_in_background_and_survive_a_failed_refresh(
         .unwrap();
     assert_eq!(gate.calls.load(Ordering::SeqCst), 2);
 
-    expire_models(&catalog, root.path(), Duration::from_secs(31));
+    expire_models(&catalog, root.path(), "codex", Duration::from_secs(31));
     catalog
         .read(&clients, &events, method, params.clone())
         .await
@@ -371,7 +439,7 @@ async fn expired_models_refresh_once_in_background_and_survive_a_failed_refresh(
     catalog.close().await;
 }
 
-fn expire_models(catalog: &Catalog, cwd: &std::path::Path, age: Duration) {
+fn expire_models(catalog: &Catalog, cwd: &std::path::Path, provider: &str, age: Duration) {
     catalog
         .cache
         .lock()
@@ -382,7 +450,7 @@ fn expire_models(catalog: &Catalog, cwd: &std::path::Path, age: Duration) {
         ))
         .unwrap()
         .entries
-        .get_mut("codex")
+        .get_mut(provider)
         .unwrap()
         .fetched = Some(Instant::now().checked_sub(age).unwrap());
 }

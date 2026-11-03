@@ -662,16 +662,30 @@ function ControlledAgentControls({
     [theme.colors.foreground],
   );
 
+  const handleCatalogAccess = useCallback(
+    (selector: AgentControlSelector) => {
+      if (
+        selector === "provider" ||
+        selector === "thinking" ||
+        selector.startsWith("feature-modelRole.")
+      )
+        onModelSelectorOpen?.();
+    },
+    [onModelSelectorOpen],
+  );
   const handleOpenChange = useCallback(
-    (selector: AgentControlSelector) =>
-      buildOpenChangeHandler(selector, setOpenSelector, onDropdownClose),
-    [onDropdownClose],
+    (selector: AgentControlSelector) => (nextOpen: boolean) => {
+      if (nextOpen) handleCatalogAccess(selector);
+      buildOpenChangeHandler(selector, setOpenSelector, onDropdownClose)(nextOpen);
+    },
+    [handleCatalogAccess, onDropdownClose],
   );
   const handleSheetOpenChange = useCallback(
     (selector: AgentControlSelector) => (nextOpen: boolean) => {
+      if (nextOpen) handleCatalogAccess(selector);
       setOpenSelector(nextOpen ? selector : null);
     },
-    [],
+    [handleCatalogAccess],
   );
 
   const handleProviderPress = useCallback(() => {
@@ -690,8 +704,11 @@ function ControlledAgentControls({
     [onSelectProvider],
   );
   const handleThinkingSelect = useCallback(
-    (id: string) => onSelectThinkingOption?.(id),
-    [onSelectThinkingOption],
+    (id: string) => {
+      onModelSelectorOpen?.();
+      onSelectThinkingOption?.(id);
+    },
+    [onModelSelectorOpen, onSelectThinkingOption],
   );
 
   const handleDesktopModelSelect = useCallback(
@@ -718,10 +735,14 @@ function ControlledAgentControls({
     [canSelectProvider, disabled, openSelector],
   );
 
-  const handleOpenSheet = useCallback((sheet: Exclude<ActiveSheet, null>) => {
-    Keyboard.dismiss();
-    setActiveSheet(sheet);
-  }, []);
+  const handleOpenSheet = useCallback(
+    (sheet: Exclude<ActiveSheet, null>) => {
+      if (sheet === "thinking") onModelSelectorOpen?.();
+      Keyboard.dismiss();
+      setActiveSheet(sheet);
+    },
+    [onModelSelectorOpen],
+  );
 
   const handleCloseSheet = useCallback(() => {
     setActiveSheet(null);
@@ -730,10 +751,11 @@ function ControlledAgentControls({
 
   const handleSelectThinkingAndClose = useCallback(
     (thinkingOptionId: string) => {
+      onModelSelectorOpen?.();
       onSelectThinkingOption?.(thinkingOptionId);
       setActiveSheet(null);
     },
-    [onSelectThinkingOption],
+    [onModelSelectorOpen, onSelectThinkingOption],
   );
 
   const handleSheetModelSelect = useCallback(
@@ -748,6 +770,14 @@ function ControlledAgentControls({
       });
     },
     [onSelectModel, onSelectProvider, onSelectProviderAndModel, provider],
+  );
+
+  const handleSetFeature = useCallback(
+    (featureId: string, value: unknown) => {
+      if (featureId.startsWith("modelRole.")) onModelSelectorOpen?.();
+      onSetFeature?.(featureId, value);
+    },
+    [onModelSelectorOpen, onSetFeature],
   );
 
   if (!hasAnyControl) {
@@ -767,7 +797,7 @@ function ControlledAgentControls({
             thinkingOptions={formattedThinkingOptions}
             selectedThinkingOptionId={selectedThinkingOptionId}
             features={features}
-            onSetFeature={onSetFeature}
+            onSetFeature={handleSetFeature}
             onApplyAgentProfile={onApplyAgentProfile}
             onEditAgentProfiles={onEditAgentProfiles}
             onCreateAgentProfile={onCreateAgentProfile}
@@ -816,7 +846,7 @@ function ControlledAgentControls({
             selectedModelId={selectedModelId}
             selectedThinkingOptionId={selectedThinkingOptionId}
             features={features}
-            onSetFeature={onSetFeature}
+            onSetFeature={handleSetFeature}
             onApplyAgentProfile={onApplyAgentProfile}
             onEditAgentProfiles={onEditAgentProfiles}
             onCreateAgentProfile={onCreateAgentProfile}
@@ -1021,7 +1051,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                 onEditProfile={onEditAgentProfile}
                 isLoading={isModelLoading}
                 disabled={modelDisabled}
-                onOpen={onModelSelectorOpen}
+                onCatalogAccess={onModelSelectorOpen}
                 onClose={onDropdownClose}
                 onRetryProvider={onRetryModelProvider}
                 isRetryingProvider={isRetryingModelProvider}
@@ -1288,7 +1318,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
       onEditProfile={onEditAgentProfile}
       isLoading={isModelLoading}
       disabled={modelDisabled}
-      onOpen={onModelSelectorOpen}
+      onCatalogAccess={onModelSelectorOpen}
       onClose={onDropdownClose}
       onRetryProvider={onRetryModelProvider}
       isRetryingProvider={isRetryingModelProvider}
@@ -1829,6 +1859,7 @@ export const AgentControls = memo(function AgentControls({
       ownerKey: agentId,
       provider: agentProvider,
       providerDefinitions: modeProviderDefinitions,
+      onCatalogAccess: refetchSnapshotIfStale,
       models: {
         providers: agentModelSelectorProviders,
         selectedProvider: agentProvider,
@@ -1857,6 +1888,7 @@ export const AgentControls = memo(function AgentControls({
       handleSelectThinkingOption,
       handleSetFeature,
       modeProviderDefinitions,
+      refetchSnapshotIfStale,
       modelSelection.selectedThinkingId,
       modelSelection.thinkingOptions,
       serverId,

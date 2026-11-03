@@ -265,7 +265,10 @@ export function useLiveAgentModeControl(
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   const { updatePreferences } = useFormPreferences();
   const toast = useToast();
-  const { entries: snapshotEntries } = useProvidersSnapshot(serverId, { cwd: slice?.cwd });
+  const { entries: snapshotEntries } = useProvidersSnapshot(serverId, {
+    cwd: slice?.cwd,
+    refreshOnAccess: false,
+  });
 
   const providerDefinitions = useMemo<AgentProviderDefinition[]>(() => {
     if (!slice?.provider) return [];

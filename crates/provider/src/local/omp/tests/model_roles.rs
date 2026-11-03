@@ -92,9 +92,13 @@ async fn concurrent_discovery_shares_one_native_bootstrap_and_later_refresh_stil
 }
 
 #[tokio::test]
-async fn creating_a_session_reuses_the_warm_native_model_catalog() {
+async fn creating_a_session_reuses_retained_models_until_explicit_discovery() {
     let (root, client, spec) = fixture();
     client.discover(&spec.cwd).await.unwrap();
+    for snapshot in client.role_catalogs.write().unwrap().values_mut() {
+        snapshot.updated -= Duration::from_hours(24);
+    }
+    client.draft_features(&spec).await.unwrap();
     let catalog_reads = || {
         std::fs::read_to_string(root.path().join("agent/metadata-calls.jsonl"))
             .unwrap()
@@ -106,6 +110,8 @@ async fn creating_a_session_reuses_the_warm_native_model_catalog() {
     let mut session = client.create_session(&spec).await.unwrap();
     session.close().await.unwrap();
     assert_eq!(catalog_reads(), previous);
+    client.discover(&spec.cwd).await.unwrap();
+    assert_eq!(catalog_reads(), previous + 2);
 }
 
 #[tokio::test]

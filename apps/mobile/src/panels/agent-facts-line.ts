@@ -61,7 +61,10 @@ export function useAgentFactsLine(serverId: string, agentId: string): string | n
         : null;
     }),
   );
-  const { entries } = useProvidersSnapshot(serverId, { cwd: agent?.cwd });
+  const { entries } = useProvidersSnapshot(serverId, {
+    cwd: agent?.cwd,
+    refreshOnAccess: agent?.provider === "omp",
+  });
   const models = entries?.find((entry) => entry.provider === agent?.provider)?.models ?? null;
   if (agent?.observation) {
     const observation = agent.observation;

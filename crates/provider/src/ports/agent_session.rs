@@ -386,6 +386,12 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
         Duration::from_secs(30)
     }
 
+    /// Retain successful discovery for this long before an implicit catalog read may refresh it.
+    /// Access-driven adapters return `Duration::MAX`; explicit refresh still probes native state.
+    fn discovery_cache_ttl(&self) -> Duration {
+        Duration::from_mins(5)
+    }
+
     /// Whether this adapter implements native session listing and import inspection.
     fn supports_session_import(&self) -> bool {
         false

@@ -141,8 +141,14 @@ function OpenAgentProfileEditModal({
   );
   const model = useAgentProfileFormModel(snapshot);
   const state = useAgentProfileFormState(model);
-  useAgentProfileFormCatalog({ serverId, model });
-  useAgentProfileFormFeatures({ serverId, model, state });
+  const catalog = useAgentProfileFormCatalog({ serverId, model });
+  const catalogFetchedAt = catalog.entries?.find(
+    (entry) => entry.provider === state.featureRequest?.provider,
+  )?.fetchedAt;
+  useAgentProfileFormFeatures({ serverId, model, state, catalogFetchedAt });
+  const handleCatalogAccess = useCallback(() => {
+    catalog.refetchIfStale(state.featureRequest?.provider);
+  }, [catalog.refetchIfStale, state.featureRequest?.provider]);
 
   const sheetHeader = useMemo<SheetHeader>(
     () => ({
@@ -170,21 +176,29 @@ function OpenAgentProfileEditModal({
     [model],
   );
   const handleProviderChange = useCallback(
-    (value: string, display: SelectFieldDisplay) => model.setProvider(value, display),
-    [model],
+    (value: string, display: SelectFieldDisplay) => {
+      handleCatalogAccess();
+      model.setProvider(value, display);
+    },
+    [handleCatalogAccess, model],
   );
   const handleModelChange = useCallback(
-    (value: string, display: SelectFieldDisplay) => model.setModel(value, value ? display : null),
-    [model],
+    (value: string, display: SelectFieldDisplay) => {
+      handleCatalogAccess();
+      model.setModel(value, value ? display : null);
+    },
+    [handleCatalogAccess, model],
   );
   const handleModeChange = useCallback(
     (value: string, display: SelectFieldDisplay) => model.setMode(value, value ? display : null),
     [model],
   );
   const handleThinkingChange = useCallback(
-    (value: string, display: SelectFieldDisplay) =>
-      model.setThinking(value, value ? display : null),
-    [model],
+    (value: string, display: SelectFieldDisplay) => {
+      handleCatalogAccess();
+      model.setThinking(value, value ? display : null);
+    },
+    [handleCatalogAccess, model],
   );
 
   const handleSave = useCallback(async () => {
@@ -263,6 +277,7 @@ function OpenAgentProfileEditModal({
           value={state.provider || null}
           selectedDisplay={state.providerDisplay}
           options={providerOptions}
+          onOpen={handleCatalogAccess}
           onChange={handleProviderChange}
           placeholder={t("settings.host.agentProfiles.providerPlaceholder")}
           emptyText={t("settings.host.agentProfiles.noProviders")}
@@ -281,6 +296,7 @@ function OpenAgentProfileEditModal({
             value={state.modelId || UNSET_VALUE}
             selectedDisplay={state.modelDisplay}
             options={modelOptions}
+            onOpen={handleCatalogAccess}
             onChange={handleModelChange}
             placeholder={t("settings.host.agentProfiles.modelLabel")}
             emptyText={t("settings.host.agentProfiles.noModels")}
@@ -317,6 +333,7 @@ function OpenAgentProfileEditModal({
             value={state.thinkingOptionId || UNSET_VALUE}
             selectedDisplay={state.thinkingDisplay}
             options={thinkingOptions}
+            onOpen={handleCatalogAccess}
             onChange={handleThinkingChange}
             placeholder={t("settings.host.agentProfiles.thinkingLabel")}
             emptyText={t("settings.host.agentProfiles.noThinkingOptions")}
@@ -343,6 +360,7 @@ function OpenAgentProfileEditModal({
                   disabled={state.isSubmitting}
                   size={controlSize}
                   model={model}
+                  onCatalogAccess={handleCatalogAccess}
                 />
               ))}
             </View>
@@ -407,12 +425,14 @@ function AgentProfileFeatureRow({
   disabled,
   size,
   model,
+  onCatalogAccess,
 }: {
   feature: AgentFeature;
   isFirst: boolean;
   disabled: boolean;
   size: FieldControlSize;
   model: AgentProfileFormModel;
+  onCatalogAccess: () => void;
 }): ReactElement {
   const { t } = useTranslation();
   const featureLabel = formatAgentFeatureLabel(feature, t);
@@ -425,8 +445,11 @@ function AgentProfileFeatureRow({
     [feature.id, model],
   );
   const handleSelect = useCallback(
-    (value: string) => model.setFeatureValue(feature.id, value),
-    [feature.id, model],
+    (value: string) => {
+      if (feature.id.startsWith("modelRole.")) onCatalogAccess();
+      model.setFeatureValue(feature.id, value);
+    },
+    [feature.id, model, onCatalogAccess],
   );
   const selectOptions = useMemo<SelectFieldOption<string>[]>(
     () =>
@@ -457,6 +480,7 @@ function AgentProfileFeatureRow({
           value={feature.value}
           selectedDisplay={selectedDisplay}
           options={selectOptions}
+          onOpen={feature.id.startsWith("modelRole.") ? onCatalogAccess : undefined}
           onChange={handleSelect}
           placeholder={featureLabel}
           emptyText={featureLabel}

@@ -536,6 +536,7 @@ export function WorkspaceDraftAgentTab({
       ownerKey: tabId,
       provider: draftProvider,
       providerDefinitions: draftProviderDefinitions,
+      onCatalogAccess: composerState.refetchProviderModelsIfStale,
       models: {
         providers: composerState.modelSelectorProviders,
         selectedProvider: draftProvider,

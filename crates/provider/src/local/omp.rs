@@ -181,7 +181,6 @@ impl OmpClient {
             .read()
             .map_err(|_| AgentSessionError::Failed)?
             .get(&key)
-            .filter(|snapshot| snapshot.updated.elapsed() < Duration::from_mins(5))
             .map(|snapshot| snapshot.catalog.clone()))
     }
 
@@ -211,6 +210,10 @@ where
 
 #[async_trait::async_trait]
 impl AgentClient for OmpClient {
+    fn discovery_cache_ttl(&self) -> Duration {
+        Duration::MAX
+    }
+
     fn discovery_timeout(&self) -> Duration {
         // Config, model catalog and RPC each cold-start an official native process.
         // The catalog owner runs this in the background, outside all Agent lanes.
@@ -342,7 +345,6 @@ impl AgentClient for OmpClient {
                 .read()
                 .map_err(|_| AgentSessionError::Failed)?
                 .get(&key)
-                .filter(|snapshot| snapshot.updated.elapsed() < Duration::from_mins(5))
                 .and_then(|snapshot| {
                     snapshot
                         .default_details

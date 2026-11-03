@@ -56,6 +56,7 @@ describe.each(["combined", "compact"] as const)("%s model selector with slow OMP
   it.each([false, true])("can switch providers with OMP completed = %s", (ompReady) => {
     layout.compact = surface === "compact";
     const onSelect = vi.fn();
+    const onCatalogAccess = vi.fn();
     function Selector({ ompReady = false }: { ompReady?: boolean }) {
       const props = {
         providers: providers(ompReady),
@@ -63,6 +64,7 @@ describe.each(["combined", "compact"] as const)("%s model selector with slow OMP
         selectedModel: "remembered-model",
         isLoading: !ompReady,
         onSelect,
+        onCatalogAccess,
       };
       return surface === "compact" ? (
         <CompactModelSheet {...props} thinkingLabel={null} glyphSize={20} canSwitchProvider>
@@ -78,6 +80,7 @@ describe.each(["combined", "compact"] as const)("%s model selector with slow OMP
     expect(trigger.textContent).toBe("Select model");
     expect(trigger.getAttribute("aria-disabled")).not.toBe("true");
     fireEvent.click(trigger);
+    expect(onCatalogAccess).toHaveBeenCalledTimes(1);
     if (surface === "compact") {
       fireEvent.click(view.getByTestId("agent-controls-model"));
     }
@@ -89,7 +92,9 @@ describe.each(["combined", "compact"] as const)("%s model selector with slow OMP
 
     // OMP finishing in the background must not pull the browser away from Codex.
     if (ompReady) view.rerender(<Selector ompReady />);
+    const accessesBeforeSelection = onCatalogAccess.mock.calls.length;
     fireEvent.click(view.getByText("GPT-5.4"));
+    expect(onCatalogAccess).toHaveBeenCalledTimes(accessesBeforeSelection + 1);
     expect(onSelect).toHaveBeenCalledExactlyOnceWith("codex", "gpt-5.4");
   });
 });

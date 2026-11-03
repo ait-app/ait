@@ -2,7 +2,6 @@ use super::{AgentClient, SessionEvents, Value, json, watch};
 use super::{Arc, BTreeMap, CancellationToken, Duration, ErrorCode, Instant, Semaphore};
 use super::{Cache, Catalog, Entry, Snapshot, discover, response};
 
-const SUCCESS_TTL: Duration = Duration::from_mins(5);
 const RETRY_TTL: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Copy)]
@@ -37,6 +36,9 @@ impl Catalog {
         prepare(&mut cache, scope.key.as_ref(), clients, &self.cancellation);
         let mut waits = Vec::with_capacity(scope.providers.len());
         for provider in scope.providers {
+            let client = clients
+                .get(provider)
+                .ok_or(ErrorCode::UnsupportedCapability)?;
             let limit = cache
                 .limits
                 .entry(provider.clone())
@@ -60,7 +62,7 @@ impl Catalog {
             if !scope.refresh
                 && entry
                     .fetched
-                    .is_some_and(|at| at.elapsed() < freshness(entry))
+                    .is_some_and(|at| at.elapsed() < freshness(entry, client.discovery_cache_ttl()))
             {
                 continue;
             }
@@ -78,10 +80,7 @@ impl Catalog {
                 key: scope.key.clone(),
                 provider: provider.clone(),
                 cwd: scope.cwd.to_owned(),
-                client: clients
-                    .get(provider)
-                    .ok_or(ErrorCode::UnsupportedCapability)?
-                    .clone(),
+                client: client.clone(),
                 limit,
                 cancellation: snapshot.cancellation.child_token(),
                 generation,
@@ -215,9 +214,9 @@ fn commit(catalog: &Catalog, load: &Load, mut result: Entry) -> Option<(Snapshot
     Some((snapshot.clone(), again))
 }
 
-fn freshness(entry: &Entry) -> Duration {
+fn freshness(entry: &Entry, success_ttl: Duration) -> Duration {
     if entry.value["status"] == "ready" && !entry.value["error"].is_string() {
-        SUCCESS_TTL
+        success_ttl
     } else {
         RETRY_TTL
     }

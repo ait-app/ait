@@ -43,6 +43,7 @@ interface CombinedModelSelectorProps {
     pressed: boolean;
   }) => React.ReactNode;
   onOpen?: () => void;
+  onCatalogAccess?: () => void;
   onClose?: () => void;
   onRetryProvider?: (provider: AgentProvider) => void;
   isRetryingProvider?: boolean;
@@ -78,6 +79,7 @@ export function CombinedModelSelector({
   onEditProfile,
   renderTrigger,
   onOpen,
+  onCatalogAccess,
   onClose,
   onRetryProvider,
   isRetryingProvider = false,
@@ -110,20 +112,22 @@ export function CombinedModelSelector({
       if (open) {
         prepareToOpen();
         onOpen?.();
+        onCatalogAccess?.();
         return;
       }
       reset();
       onClose?.();
     },
-    [onClose, onOpen, prepareToOpen, reset],
+    [onCatalogAccess, onClose, onOpen, prepareToOpen, reset],
   );
 
   const handleSelect = useCallback(
     (provider: string, modelId: string) => {
+      onCatalogAccess?.();
       onSelect(provider, modelId);
       handleOpenChange(false);
     },
-    [handleOpenChange, onSelect],
+    [handleOpenChange, onCatalogAccess, onSelect],
   );
 
   useEffect(() => {

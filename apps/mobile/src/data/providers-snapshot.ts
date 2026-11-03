@@ -137,31 +137,74 @@ export async function fetchProvidersSnapshot(input: {
   return snapshot;
 }
 
-export async function refreshAndApplyProvidersSnapshot(input: {
+interface RefreshSnapshotInput {
   client: SnapshotClient & Pick<DaemonClient, "refreshProvidersSnapshot">;
   queryClient: QueryClient;
   serverId: string;
   cwd: string | null;
   providers?: AgentProvider[];
   cache?: ProviderSnapshotCache;
-}) {
+}
+
+/** One access refresh per Host/cwd; all callers keep rendering the last successful snapshot. */
+export function refreshOmpModelsOnAccess(input: Omit<RefreshSnapshotInput, "providers">) {
+  const queryKey = providersSnapshotQueryKey(input.serverId, input.cwd);
+  return input.queryClient.fetchQuery({
+    queryKey: ["ompModelCatalogAccess", ...queryKey],
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const current =
+        input.queryClient.getQueryData<Snapshot>(queryKey) ??
+        (await input.queryClient.fetchQuery({
+          queryKey,
+          structuralSharing: false,
+          queryFn: ({ signal }) => fetchProvidersSnapshot({ ...input, signal }),
+        }));
+      if (!current) return;
+      const omp = current.entries.find((entry) => entry.provider === "omp");
+      if (!omp || !omp.enabled) return;
+      // Joining initial discovery must not queue a second native bootstrap.
+      if (omp.status !== "loading" && !current.refreshing?.includes("omp")) {
+        await input.client.refreshProvidersSnapshot(
+          providersSnapshotRequestOptions({ ...input, providers: ["omp"] }),
+        );
+      }
+      await pollProvidersSnapshotRefresh({ ...input, providers: ["omp"] }, signal);
+    },
+  });
+}
+
+async function pollProvidersSnapshotRefresh(input: RefreshSnapshotInput, signal: AbortSignal) {
+  const queryKey = providersSnapshotQueryKey(input.serverId, input.cwd);
+  const deadline = Date.now() + 120_000;
+  while (true) {
+    const snapshot = await fetchProvidersSnapshot({ ...input, signal });
+    const pending =
+      snapshot.refreshing?.some(
+        (provider) => !input.providers || input.providers.includes(provider),
+      ) ||
+      snapshot.entries.some(
+        (entry) =>
+          entry.status === "loading" &&
+          (!input.providers || input.providers.includes(entry.provider)),
+      );
+    input.queryClient.setQueryData(queryKey, snapshot);
+    if (!pending) break;
+    if (Date.now() >= deadline) throw new Error("Provider refresh timed out");
+    await waitForRefresh(signal);
+  }
+}
+
+export async function refreshAndApplyProvidersSnapshot(input: RefreshSnapshotInput) {
   const result = await input.client.refreshProvidersSnapshot(
     providersSnapshotRequestOptions(input),
   );
   const queryKey = providersSnapshotQueryKey(input.serverId, input.cwd);
   await input.queryClient.cancelQueries({ queryKey, exact: true });
   const controller = new AbortController();
-  const deadline = Date.now() + 120_000;
-  while (true) {
-    const snapshot = await fetchProvidersSnapshot({ ...input, signal: controller.signal });
-    const pending = snapshot.refreshing?.some(
-      (provider) => !input.providers || input.providers.includes(provider),
-    );
-    input.queryClient.setQueryData(queryKey, snapshot);
-    if (!pending) break;
-    if (Date.now() >= deadline) throw new Error("Provider refresh timed out");
-    await waitForRefresh(controller.signal);
-  }
+  await pollProvidersSnapshotRefresh(input, controller.signal);
   void input.queryClient.invalidateQueries({
     queryKey: agentCommandsQueryRoot(input.serverId),
     exact: false,

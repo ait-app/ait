@@ -77,6 +77,7 @@ afterEach(async () => {
 describe("OMP model settings presentation", () => {
   it("offers native role selects and forwards each selection and inheritance reset separately", () => {
     const onSetFeature = vi.fn();
+    const onModelSelectorOpen = vi.fn();
     const features = [
       "default",
       "smol",
@@ -125,6 +126,7 @@ describe("OMP model settings presentation", () => {
         onSelectThinkingOption={vi.fn()}
         features={features}
         onSetFeature={onSetFeature}
+        onModelSelectorOpen={onModelSelectorOpen}
       />,
     );
     for (const role of ["default", "smol", "vision", "advisor"]) {
@@ -141,6 +143,8 @@ describe("OMP model settings presentation", () => {
     for (const feature of features)
       expect(view.getByTestId(`agent-feature-${feature.id}`)).toBeTruthy();
     expect(onSetFeature).toHaveBeenCalledTimes(8);
+    // Each role open, model selection and inheritance reset starts background access work.
+    expect(onModelSelectorOpen).toHaveBeenCalledTimes(12);
   });
 
   it("renders localized labels and semantic icons, then updates the existing controls on language change", async () => {

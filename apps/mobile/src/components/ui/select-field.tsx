@@ -46,6 +46,7 @@ export interface SelectFieldProps<TValue> {
   selectedDisplay: SelectFieldDisplay | null;
   options: SelectFieldOption<TValue>[];
   onChange: (value: TValue, display: SelectFieldDisplay) => void;
+  onOpen?: () => void;
   placeholder: string;
   emptyText: string;
   loading?: boolean;
@@ -176,6 +177,7 @@ export function SelectField<TValue>({
   selectedDisplay,
   options,
   onChange,
+  onOpen,
   placeholder,
   emptyText,
   loading = false,
@@ -228,12 +230,19 @@ export function SelectField<TValue>({
     [onChange, optionById],
   );
 
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen);
+      if (nextOpen && !open) onOpen?.();
+    },
+    [onOpen, open],
+  );
   const handlePress = useCallback(() => {
     if (disabled) {
       return;
     }
-    setOpen((current) => !current);
-  }, [disabled]);
+    handleOpenChange(!open);
+  }, [disabled, handleOpenChange, open]);
   const handleTriggerFocus = useCallback((_event: NativeSyntheticEvent<TargetedEvent>) => {
     setTriggerFocused(true);
   }, []);
@@ -323,7 +332,7 @@ export function SelectField<TValue>({
         emptyText={loading && visibleOptions.length === 0 ? "Loading..." : emptyText}
         title={title ?? label}
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={handleOpenChange}
         anchorRef={anchorRef}
         renderOption={renderComboboxOption}
       />
