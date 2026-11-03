@@ -101,3 +101,144 @@ async fn repeated_session_expiry_backs_off_registration() {
     cancel.cancel();
     task.await.unwrap().unwrap();
 }
+
+#[tokio::test(start_paused = true)]
+async fn protocol_failures_retry_initial_refresh_with_the_same_request() {
+    let (controller, mock) = fixture();
+    mock.0.lock().unwrap().refresh_error = Some(Error::Protocol);
+    let cancel = CancellationToken::new();
+    let task = tokio::spawn(controller.run(cancel.clone()));
+    for _ in 0..5 {
+        tick().await;
+    }
+    {
+        let seen = mock.0.lock().unwrap();
+        assert_eq!(seen.refreshes.len(), 2);
+        assert_eq!(seen.refreshes[0], seen.refreshes[1]);
+        assert!(seen.reports.contains(&"retrying"));
+        assert!(seen.active && seen.hub.active);
+    }
+    cancel.cancel();
+    task.await.unwrap().unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn protocol_failures_retry_registration_and_renewal_without_reauthorization() {
+    let (controller, mock) = fixture();
+    mock.0.lock().unwrap().register_error = Some(Error::Protocol);
+    let cancel = CancellationToken::new();
+    let task = tokio::spawn(controller.run(cancel.clone()));
+    for _ in 0..5 {
+        tick().await;
+    }
+    {
+        let mut seen = mock.0.lock().unwrap();
+        assert!(seen.active && seen.hub.active);
+        assert_eq!(seen.registrations.len(), 2);
+        assert_eq!(seen.registrations[0], seen.registrations[1]);
+        seen.renew_errors = [Error::Protocol; 3].into();
+    }
+    for _ in 0..10 {
+        tick().await;
+    }
+    {
+        let seen = mock.0.lock().unwrap();
+        assert!(seen.active && seen.hub.active);
+        assert_eq!(seen.refreshes.len(), 1);
+        assert_eq!(
+            seen.reports
+                .iter()
+                .filter(|phase| **phase == "retrying")
+                .count(),
+            4
+        );
+    }
+    cancel.cancel();
+    task.await.unwrap().unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn accepted_successor_lease_can_recover_a_later_access_refusal() {
+    let (controller, mock) = fixture();
+    let cancel = CancellationToken::new();
+    let task = tokio::spawn(controller.run(cancel.clone()));
+    tick().await;
+    for expected_refreshes in [2, 3] {
+        mock.0.lock().unwrap().renew_error = Some(Error::AccessRejected);
+        for _ in 0..5 {
+            tick().await;
+        }
+        let seen = mock.0.lock().unwrap();
+        assert!(seen.active && seen.hub.active);
+        assert_eq!(seen.refreshes.len(), expected_refreshes);
+        assert!(!task.is_finished());
+    }
+    cancel.cancel();
+    task.await.unwrap().unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn accepted_successor_ticket_can_recover_a_later_access_refusal() {
+    for hub in [false, true] {
+        let (controller, mock) = fixture();
+        let cancel = CancellationToken::new();
+        let task = tokio::spawn(controller.run(cancel.clone()));
+        wait_for_ticket_recovery(&mock, 1, hub).await;
+        for expected_refreshes in [2, 3] {
+            {
+                let mut seen = mock.0.lock().unwrap();
+                if hub {
+                    seen.hub.active = false;
+                    seen.hub.errors.push_back(Error::AccessRejected);
+                } else {
+                    seen.active = false;
+                    seen.ticket_errors.push_back(Error::AccessRejected);
+                }
+            }
+            wait_for_ticket_recovery(&mock, expected_refreshes, hub).await;
+            assert!(!task.is_finished());
+        }
+        cancel.cancel();
+        task.await.unwrap().unwrap();
+    }
+}
+
+async fn wait_for_ticket_recovery(mock: &Mock, expected_refreshes: usize, hub: bool) {
+    // Let the paused clock follow pending timers rather than treating a fixed number of
+    // scheduler yields as completion of ticket issuance, refresh and both reconnects.
+    let recovered = tokio::time::timeout(Duration::from_secs(15), async {
+        loop {
+            {
+                let seen = mock.0.lock().unwrap();
+                assert!(seen.refreshes.len() <= expected_refreshes);
+                if seen.active && seen.hub.active && seen.refreshes.len() == expected_refreshes {
+                    return;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+    let seen = mock.0.lock().unwrap();
+    assert!(
+        recovered.is_ok(),
+        "hub={hub}, expected_refreshes={expected_refreshes}, refreshes={}, reports={:?}, relay={}, hub_active={}",
+        seen.refreshes.len(),
+        seen.reports,
+        seen.active,
+        seen.hub.active,
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn persistent_hub_ticket_refusal_is_not_hidden_by_successful_renewals() {
+    let (controller, mock) = fixture();
+    mock.0.lock().unwrap().hub.error = Some(Error::AccessRejected);
+    let task = tokio::spawn(controller.run(CancellationToken::new()));
+    let result = tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .expect("persistent hub ticket rejection must terminate")
+        .unwrap();
+    assert_eq!(result, Err(Error::Unauthorized));
+    assert_eq!(mock.0.lock().unwrap().refreshes.len(), 2);
+}

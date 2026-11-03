@@ -372,20 +372,13 @@ impl Session {
             .filter(|block| block["type"] == "image")
             .collect();
         self.transport.diagnostics.clear();
-        self.stream
-            .pending_inputs
-            .push_back(prompt.client_message_id.clone());
-        let prompt_id = match self
+        let prompt_id = self
             .transport
             .begin("prompt", json!({"message":text,"images":images}))
-            .await
-        {
-            Ok(id) => id,
-            Err(error) => {
-                self.stream.pending_inputs.pop_back();
-                return Err(error);
-            }
-        };
+            .await?;
+        self.stream
+            .pending_inputs
+            .push_back((prompt_id.clone(), prompt.client_message_id.clone()));
         let turn = Uuid::new_v4().to_string();
         self.stream.begin(turn.clone());
         self.active = Some(turn.clone());
@@ -454,7 +447,6 @@ impl Session {
             return Err(AgentSessionError::Failed);
         }
         if event["success"] == false {
-            self.stream.pending_inputs.pop_back();
             self.transport
                 .diagnostics
                 .observe_native(&event["error"], "rpc", "prompt");
@@ -463,7 +455,6 @@ impl Session {
         } else if event["success"] == true {
             self.phase = TurnPhase::Running;
             if event["data"]["agentInvoked"] == false {
-                self.stream.pending_inputs.pop_back();
                 self.finish();
             }
         } else {
@@ -484,6 +475,14 @@ impl Session {
         if let Some(id) = event["id"].as_str()
             && let Some(turn) = self.input_requests.remove(id)
         {
+            if self.active.as_deref() != Some(&turn)
+                || event["command"] != "steer"
+                || event["success"] != true
+            {
+                self.stream
+                    .pending_inputs
+                    .retain(|(request, _)| request != id);
+            }
             if self.active.as_deref() != Some(&turn) {
                 return Ok(true);
             }
@@ -630,6 +629,7 @@ impl Session {
     fn finish(&mut self) {
         if self.active.take().is_some() {
             self.prompt_id = None;
+            self.stream.pending_inputs.clear();
             self.native_bridge.callbacks.clear();
             self.phase = TurnPhase::Idle;
             self.cancellation_started = None;
@@ -893,11 +893,11 @@ impl AgentSession for Session {
             .transport
             .begin("steer", json!({"message":text,"images":images}))
             .await?;
-        self.input_requests.insert(id, turn.to_owned());
+        self.input_requests.insert(id.clone(), turn.to_owned());
         self.invalidate_state_check();
         self.stream
             .pending_inputs
-            .push_back(prompt.client_message_id.clone());
+            .push_back((id, prompt.client_message_id.clone()));
         Ok(())
     }
     async fn steer_turn(&mut self, turn: &str, text: &str) -> Result<(), AgentSessionError> {

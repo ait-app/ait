@@ -9,6 +9,7 @@ mod agents;
 mod directory;
 mod node;
 pub(crate) mod private;
+mod resources;
 pub(crate) mod terminals;
 
 use model::share::ResourceKind;
@@ -25,7 +26,7 @@ use private::Private;
 pub(crate) enum Decision {
     /// Dispatch normally with these, possibly rewritten, parameters.
     Forward(Request),
-    /// Dispatch once without subscriptions and post-process the reply for this guest.
+    /// Dispatch privately and confine its reply; tracked Agent creation relays progress.
     Private(Request, Private),
     /// Refuse the request with `code`.
     Refuse(Request, ErrorCode),
@@ -250,6 +251,9 @@ pub(crate) async fn request(session: &Session, state: &Shared, mut request: Requ
     if session.kind() == ResourceKind::Node {
         return node::request(session, state, request).await;
     }
+    if let Err(code) = resources::check(session, state, &request.method, &request.params).await {
+        return Decision::Refuse(request, code);
+    }
     let rule = classify(&request.method);
     let params = std::mem::take(&mut request.params);
     match confine(session, state, rule, params).await {
@@ -320,8 +324,11 @@ async fn confine(
             }
             return Ok(Confined::Private(params, Private::Download));
         }
-        Rule::AgentCreate
-        | Rule::Agent(_)
+        Rule::AgentCreate => {
+            agents::create(session, state, &mut params).await?;
+            return Ok(Confined::Private(params, Private::AgentCreate));
+        }
+        Rule::Agent(_)
         | Rule::AgentDrive(_)
         | Rule::AgentUpdate
         | Rule::AgentCommands

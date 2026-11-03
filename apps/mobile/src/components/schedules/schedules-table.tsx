@@ -8,6 +8,7 @@ import type { ScheduleDerivedState } from "@/schedules/schedule-derivation";
 import { settingsStyles } from "@/styles/settings";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { resolveScheduleTitle, scheduleProductName } from "@/utils/schedule-format";
+import { canManageBackgroundTasks } from "@/hosts/background-task-access";
 
 /** A schedule plus the client-derived fields the row renders. */
 export interface ScheduleRowView {
@@ -136,6 +137,7 @@ function SchedulesTableRow({
       serverName={row.serverName}
       singleHost={row.singleHost}
       isFirst={isFirst}
+      readOnly={!canManageBackgroundTasks(serverId)}
       pending={pending}
       onEdit={handleEdit}
       onPause={handlePause}

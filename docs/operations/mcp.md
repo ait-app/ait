@@ -64,6 +64,8 @@ daemon --mcp-socket /absolute/private-directory/mcp.sock
 `mcp_socket = "/absolute/private-directory/mcp.sock"`。优先级为 CLI、环境变量、TOML。
 父目录必须存在，建议使用 daemon 数据目录或其他私有目录。
 
+父目录须为当前用户拥有的真实目录（不是符号链接），权限为 `0700`，否则启动失败。
+这保证 socket 从创建开始就不可被其他用户访问；可先运行 `chmod 700 /absolute/private-directory`。
 socket 文件权限为 `0600`，仅暴露 `/mcp/agents`。客户端通过 socket 连接，HTTP 地址固定使用
 `http://localhost/mcp/agents`；`localhost` 是 HTTP Host，不会建立到本机 TCP 端口的连接：
 

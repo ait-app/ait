@@ -81,10 +81,11 @@ pub(in crate::local::opencode) async fn discover(
         }
         Ok(children.into_values().collect())
     })
-    .await
-    .map_err(|_| AgentSessionError::Failed)?;
-    transport.close().await?;
-    result
+    .await;
+    let closed = transport.close().await;
+    let children = result.map_err(|_| AgentSessionError::Failed)??;
+    closed?;
+    Ok(children)
 }
 
 /// Walk native task links breadth-first; reject cycles, conflicting ownership and unbounded trees.

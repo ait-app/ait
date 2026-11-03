@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Utc;
@@ -11,8 +12,18 @@ use crate::{Center, CredentialStore, Error, ManagedRelay, State, Tokens};
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum AccessRecovery {
     Ready,
-    Refreshing,
-    Retried,
+    Refreshing(Option<links::Kind>),
+    Retried(Option<links::Kind>),
+}
+
+impl AccessRecovery {
+    fn observe(&mut self, acceptance: &links::Acceptance) {
+        if let Self::Retried(Some(kind)) = *self
+            && acceptance.accepted(kind)
+        {
+            *self = Self::Ready;
+        }
+    }
 }
 
 pub(super) struct Authority<'a, C, S, R> {
@@ -41,6 +52,9 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
             if cancel.is_cancelled() {
                 return Ok(());
             }
+            // Only acceptance by the endpoint that rejected the successor JWT restores its
+            // probe budget. Renewal success alone cannot hide a persistently rejected ticket.
+            access_recovery.observe(&publication.acceptance);
             let now = tokio::time::Instant::now();
             let expires = publication.expires();
             if expires <= now {
@@ -60,14 +74,17 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
                 active_session: self.active_session,
                 access_recovery: &mut access_recovery,
             };
-            let attempt = tokio::select! {
-                error = links::next_error(errors, generation) => {
+            let (attempt, rejected_link) = tokio::select! {
+                // Ready rejections must preempt routine lease work instead of racing another
+                // successful renewal and its polling delay on every iteration.
+                biased;
+                failure = links::next_error(errors, generation) => {
                     // Refresh may have committed while renewal is still awaiting its response.
                     // Errors from the previous JWT must not revoke that successor authority.
                     if generation != Some(publication.generation) {
                         continue;
                     }
-                    Err(error)
+                    (Err(failure.error), Some(failure.kind))
                 },
                 result = async {
                     if tokio::time::Instant::now() < retry_at {
@@ -82,15 +99,14 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
                         lease.step(&mut publication).await
                     })
                 } => match result {
-                    Some(result) => result,
+                    Some(result) => (result, None),
                     None => continue,
                 },
             };
             match attempt {
                 Ok(()) => {
                     self.publish(&publication);
-                    self.relay
-                        .report("running", Some(&publication.tokens.credential.binding));
+                    self.report("running", &publication).await;
                     delay = 1;
                     session_expired = false;
                     pause(cancel, publication.expires()).await;
@@ -101,7 +117,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
                     if access_recovery != AccessRecovery::Ready {
                         return Err(Error::Unauthorized);
                     }
-                    access_recovery = AccessRecovery::Refreshing;
+                    access_recovery = AccessRecovery::Refreshing(rejected_link);
                     self.revoke(&mut publication).await;
                     publication.refresh_at = tokio::time::Instant::now();
                     retry_at = publication.refresh_at;
@@ -119,24 +135,26 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
                     // A crashed predecessor can retain its lease after a service restart.
                     // Wait for the center to release it; never steal or replace its authority.
                     self.revoke(&mut publication).await;
-                    self.relay.report(
-                        "runtime_conflict",
-                        Some(&publication.tokens.credential.binding),
-                    );
+                    self.report("runtime_conflict", &publication).await;
                     retry_at = tokio::time::Instant::now() + Duration::from_secs(30);
                 }
-                Err(Error::Unavailable) => {
+                Err(Error::Unavailable | Error::Protocol) => {
                     if expires <= tokio::time::Instant::now() {
                         self.revoke(&mut publication).await;
                     }
-                    self.relay
-                        .report("retrying", Some(&publication.tokens.credential.binding));
+                    self.report("retrying", &publication).await;
                     retry_at = tokio::time::Instant::now() + Duration::from_secs(delay);
                     delay = (delay * 2).min(30);
                 }
                 Err(error) => return Err(error),
             }
         }
+    }
+
+    async fn report(&self, phase: &'static str, publication: &Publication) {
+        self.relay
+            .report(phase, Some(&publication.tokens.credential.binding))
+            .await;
     }
 
     /// Close transport and forget the expired session so the next step registers a new one.
@@ -150,6 +168,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
 
     async fn revoke(&self, publication: &mut Publication) {
         publication.generation = Uuid::new_v4();
+        publication.acceptance = Arc::default();
         self.grants.send_replace(None);
         self.relay.stop().await;
     }
@@ -174,6 +193,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
                 generation: publication.generation,
                 tokens: publication.tokens.clone(),
                 session: session.id,
+                acceptance: publication.acceptance.clone(),
             }));
         }
     }
@@ -191,6 +211,7 @@ impl Publication {
             refresh_at,
             lease_until: None,
             generation: Uuid::new_v4(),
+            acceptance: Arc::default(),
             expired_refresh: false,
         }
     }
@@ -233,10 +254,11 @@ impl<C: Center, S: CredentialStore> Lease<'_, C, S> {
             publication.tokens =
                 crate::authorization::restore(self.center, self.store, self.state).await?;
             *self.access_recovery = match self.access_recovery {
-                AccessRecovery::Refreshing => AccessRecovery::Retried,
-                AccessRecovery::Ready | AccessRecovery::Retried => AccessRecovery::Ready,
+                AccessRecovery::Refreshing(kind) => AccessRecovery::Retried(*kind),
+                AccessRecovery::Ready | AccessRecovery::Retried(_) => AccessRecovery::Ready,
             };
             publication.generation = Uuid::new_v4();
+            publication.acceptance = Arc::default();
             (publication.access_until, publication.refresh_at) =
                 token_schedule(&publication.tokens);
             // A recovered receipt retains its original expiry. Persist its successor before
@@ -276,6 +298,9 @@ impl<C: Center, S: CredentialStore> Lease<'_, C, S> {
                 .is_some_and(|until| until <= tokio::time::Instant::now())
         {
             active.lease_until = self.center.renew(&publication.tokens, active.id).await?;
+            if *self.access_recovery == AccessRecovery::Retried(None) {
+                *self.access_recovery = AccessRecovery::Ready;
+            }
             publication.lease_until = Some(
                 tokio::time::Instant::now()
                     + (active.lease_until - Utc::now())

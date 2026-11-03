@@ -206,6 +206,14 @@ impl Shares {
         Ok(())
     }
 
+    /// Whether a resource has owner-managed sharing settings, including inactive ones.
+    pub(crate) fn has_settings(&self, kind: ResourceKind, key: &str) -> bool {
+        lock(&self.book)
+            .settings
+            .iter()
+            .any(|setting| setting.resource_kind == kind && setting.resource_key == key)
+    }
+
     /// All settings with their center status, and the owner's groups.
     pub(crate) fn list(&self) -> Value {
         let book = lock(&self.book);
@@ -255,8 +263,24 @@ impl Shares {
         lock(&self.book).guests.unregister(id);
     }
 
-    fn record_terminal(&self, grant: Grant, terminal_id: String) -> bool {
+    /// Remember a newly created terminal; false when its grant has already been revoked.
+    pub(crate) fn record_terminal(&self, grant: Grant, terminal_id: String) -> bool {
         lock(&self.book).guests.record_terminal(grant, terminal_id)
+    }
+
+    /// Whether this grant is still authorized after a potentially long creation.
+    pub(crate) fn grants(&self, grant: Grant) -> bool {
+        lock(&self.book).grants(grant)
+    }
+
+    /// All recorded terminal IDs before checking which processes remain alive.
+    pub(crate) fn terminal_ids(&self) -> Vec<String> {
+        lock(&self.book).guests.terminal_ids()
+    }
+
+    /// Forget terminal IDs confirmed to have exited; live IDs are never evicted by age.
+    pub(crate) fn forget_terminals(&self, ids: &[String]) {
+        lock(&self.book).guests.forget_terminals(ids);
     }
 
     fn owns_terminal(&self, grant: Grant, terminal_id: &str) -> bool {

@@ -200,7 +200,9 @@ async fn internal_claim_is_unique_and_reports_only_public_binding() {
         server_id: uuid::Uuid::new_v4(),
         grant_id: uuid::Uuid::new_v4(),
     };
-    handle.report("reauthorization_required", Some(&binding));
+    handle
+        .report("reauthorization_required", Some(&binding))
+        .await;
     assert_eq!(
         api.shared.managed_status.lock().unwrap()["phase"],
         "reauthorization_required"

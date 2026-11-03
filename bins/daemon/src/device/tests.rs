@@ -312,6 +312,7 @@ async fn rejects_competing_or_invalid_logins_and_clears_local_state_when_center_
 
 mod polling;
 mod restoration;
+mod status;
 
 mod receipts;
 

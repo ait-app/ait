@@ -9,7 +9,7 @@ use uuid::Uuid;
 #[derive(Debug)]
 pub(super) struct InstanceLease {
     // Never unlink the lock file: other processes may already hold the same inode open.
-    _lock: File,
+    lock: File,
     pub server_id: Uuid,
     pub instance_id: Uuid,
 }
@@ -34,7 +34,7 @@ impl InstanceLease {
         let server_id =
             identity::load_or_create(&directory).context("load stable server identity")?;
         Ok(Self {
-            _lock: lock,
+            lock,
             server_id,
             instance_id: Uuid::new_v4(),
         })
@@ -42,6 +42,19 @@ impl InstanceLease {
 }
 
 impl InstanceLease {
+    /// Keep the same directory lock and stable identity for a new runtime generation.
+    /// Returns a descriptor duplication error without releasing the original lease.
+    pub(crate) fn next_runtime(&self) -> anyhow::Result<Self> {
+        Ok(Self {
+            lock: self
+                .lock
+                .try_clone()
+                .context("retain server instance lock")?,
+            server_id: self.server_id,
+            instance_id: Uuid::new_v4(),
+        })
+    }
+
     /// Whether another process currently holds `directory`'s lease, without creating anything.
     /// A brief shared probe only runs after a startup failure, to explain that failure.
     pub(crate) fn held(directory: &Path) -> bool {

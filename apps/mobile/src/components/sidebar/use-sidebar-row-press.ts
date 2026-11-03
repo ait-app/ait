@@ -11,6 +11,8 @@ export function useSidebarRowPress() {
   // scrolling takes over the touch, leaving the row highlighted after release.
   return {
     isPressed: !isNative && isPressed,
+    isHighlighted: isPressed,
+    onHighlightChange: isNative ? setIsPressed : undefined,
     onPressIn: isNative ? undefined : onPressIn,
     onPressOut: isNative ? undefined : onPressOut,
   };

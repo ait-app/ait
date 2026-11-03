@@ -1,4 +1,4 @@
-//! Whole-node grants manage every resource and daemon setting, except account authority.
+//! Whole-node grants manage the Host, reserving account authority and automation writes.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -16,6 +16,25 @@ pub(super) fn allows(method: &str, kind: InboundKind) -> bool {
         .iter()
         .any(|prefix| method.starts_with(prefix))
         || method == "session.heartbeat"
+    {
+        return false;
+    }
+    if (method.starts_with("bot.") || method.starts_with("schedule."))
+        && !matches!(
+            method,
+            "schedule.list.request"
+                | "schedule.inspect.request"
+                | "schedule.logs.request"
+                | "bot.list.request"
+                | "bot.get.request"
+                | "bot.channel.list.request"
+                | "bot.channel.types.request"
+                | "bot.channel.status.request"
+                | "bot.conversation.list.request"
+                | "bot.history.get.request"
+                | "bot.turn.get.request"
+                | "bot.memory.get.request"
+        )
     {
         return false;
     }
@@ -43,7 +62,7 @@ pub(super) async fn request(session: &Session, state: &Shared, mut request: Requ
             }
         }
         "agent.create.request" => match agents::create(session, state, &mut request.params).await {
-            Ok(()) => Decision::Forward(request),
+            Ok(()) => Decision::Private(request, Private::AgentCreate),
             Err(code) => Decision::Refuse(request, code),
         },
         "workspace.create.request" => {
@@ -55,7 +74,15 @@ pub(super) async fn request(session: &Session, state: &Shared, mut request: Requ
             {
                 return Decision::Refuse(request, code);
             }
-            Decision::Forward(request)
+            if request
+                .params
+                .get("agent")
+                .is_some_and(|agent| !agent.is_null())
+            {
+                Decision::Private(request, Private::AgentCreate)
+            } else {
+                Decision::Forward(request)
+            }
         }
         _ => Decision::Forward(request),
     }

@@ -416,3 +416,46 @@ fn mcp_socket_invalid_paths_are_rejected_before_creating_credentials() {
         .is_err()
     );
 }
+
+#[test]
+fn startup_guard_runs_before_local_credentials_are_created() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("absent");
+    let reserved = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = reserved.local_addr().unwrap().to_string();
+    let cli = Cli::parse_from([
+        "daemon",
+        "--data-dir",
+        directory.to_str().unwrap(),
+        "--listen",
+        &address,
+    ]);
+    let result = Config::load_guarded(
+        cli,
+        |_| None,
+        |_| Ok(()),
+        |_| Ok(()),
+        crate::host::Startup::bind,
+    );
+    assert!(result.is_err());
+    assert!(!directory.exists());
+
+    let instance = crate::instance::InstanceLease::acquire(&directory).unwrap();
+    let cli = Cli::parse_from([
+        "daemon",
+        "--data-dir",
+        directory.to_str().unwrap(),
+        "--listen",
+        "127.0.0.1:0",
+    ]);
+    let result = Config::load_guarded(
+        cli,
+        |_| None,
+        |_| Ok(()),
+        |_| Ok(()),
+        crate::host::Startup::bind,
+    );
+    assert!(result.is_err());
+    assert!(!directory.join("local-api.token").exists());
+    drop(instance);
+}

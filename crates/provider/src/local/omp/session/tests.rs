@@ -3,6 +3,56 @@ use super::*;
 use crate::local::omp::tests::{complete, fixture, next};
 
 #[tokio::test]
+async fn late_steering_rejection_cannot_claim_the_next_prompts_client_message_id() {
+    let (_root, client, spec) = fixture();
+    let mut session = open(&client, &spec, None).await.unwrap();
+    let turn = session.start_turn("wait", &spec.config).await.unwrap();
+    session
+        .stream
+        .message(&json!({"role":"user","timestamp":1000,"content":"wait"}))
+        .unwrap();
+    session
+        .steer_input(
+            &turn,
+            &AgentPrompt {
+                client_message_id: Some("rejected-input".into()),
+                ..AgentPrompt::text("continue")
+            },
+        )
+        .await
+        .unwrap();
+    let request = session.input_requests.keys().next().unwrap().clone();
+    session.finish();
+    session.stream.events.clear();
+    session
+        .start_input(
+            &AgentPrompt {
+                client_message_id: Some("next-input".into()),
+                ..AgentPrompt::text("wait")
+            },
+            &spec.config,
+        )
+        .await
+        .unwrap();
+
+    session
+        .consume(&json!({"type":"response","id":request,"command":"steer",
+            "success":false,"error":"Previous input rejected"}))
+        .unwrap();
+    session
+        .stream
+        .message(&json!({"role":"user","timestamp":2000,"content":"wait"}))
+        .unwrap();
+
+    assert!(
+        matches!(session.stream.events.back(), Some(AgentTurnEvent::Timeline(entry))
+        if entry.item["clientMessageId"] == "next-input")
+    );
+    assert!(session.stream.pending_inputs.is_empty());
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn steering_acknowledgements_are_correlated_and_failures_are_visible() {
     let (_root, client, spec) = fixture();
     let mut session = open(&client, &spec, None).await.unwrap();
@@ -10,14 +60,33 @@ async fn steering_acknowledgements_are_correlated_and_failures_are_visible() {
     session
         .input_requests
         .insert("previous-input".to_owned(), "previous-turn".to_owned());
+    session.stream.pending_inputs.push_back((
+        "previous-input".to_owned(),
+        Some("previous-message".to_owned()),
+    ));
     session
         .consume(&json!({"type":"response","id":"previous-input",
         "command":"steer","success":false,"error":"Old rejection"}))
         .unwrap();
     assert!(session.failure_message().is_none());
+    assert!(
+        session
+            .stream
+            .pending_inputs
+            .iter()
+            .all(|(id, _)| id != "previous-input")
+    );
     session
         .input_requests
         .insert("current-input".to_owned(), turn);
+    session.stream.pending_inputs.push_back((
+        "current-input".to_owned(),
+        Some("current-message".to_owned()),
+    ));
+    session.stream.pending_inputs.push_back((
+        "another-input".to_owned(),
+        Some("another-message".to_owned()),
+    ));
 
     let result = session.consume(&json!({"type":"response","id":"current-input",
         "command":"steer","success":false,"error":"Native input handler rejected this answer"}));
@@ -30,6 +99,17 @@ async fn steering_acknowledgements_are_correlated_and_failures_are_visible() {
             .contains("Native input handler rejected")
     );
     assert_eq!(session.input_requests, BTreeMap::new());
+    assert!(
+        session
+            .stream
+            .pending_inputs
+            .iter()
+            .all(|(id, _)| id != "current-input")
+    );
+    assert_eq!(
+        session.stream.pending_inputs.back().unwrap().0,
+        "another-input"
+    );
     session.close().await.unwrap();
 }
 

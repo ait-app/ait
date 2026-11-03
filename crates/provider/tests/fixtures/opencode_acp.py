@@ -269,6 +269,9 @@ for line in sys.stdin:
             # background child updates; later child events are never delivered on this process.
             (root / "background-detached").touch()
     elif method == "session/list":
+        if scenario == "subagents-list-timeout":
+            (root / "list.entered").touch()
+            continue
         moved = location("ses_one")
         rows = [] if not (root / "native-fixture.json").exists() or moved not in [None, params.get("cwd", moved)] else [{
             "sessionId": "ses_one", "cwd": moved or params.get("cwd", str(pathlib.Path.cwd())),

@@ -182,6 +182,20 @@ impl LocalForge {
 }
 
 impl ForgeRuntime for LocalForge {
+    fn admits_repository(
+        &self,
+        cwd: &str,
+        owner: &str,
+        name: &str,
+    ) -> Result<bool, ForgeRuntimeError> {
+        let cwd = require_git_directory(cwd)?;
+        let context = self.forge_context(&cwd)?;
+        let Some((remote_owner, remote_name)) = context.project_path.rsplit_once('/') else {
+            return Ok(false);
+        };
+        Ok(remote_owner.eq_ignore_ascii_case(owner) && remote_name.eq_ignore_ascii_case(name))
+    }
+
     fn providers(&self) -> &'static [&'static str] {
         &["github", "gitlab"]
     }

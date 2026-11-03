@@ -38,7 +38,10 @@ export function useSchedules(): UseSchedulesResult {
   const hosts = useHosts();
   const runtime = getHostRuntimeStore();
   const hostInputs = useMemo<ScheduleHostInput[]>(
-    () => groupHosts(hosts).map((host) => ({ serverId: host.serverId, serverName: host.label })),
+    () =>
+      groupHosts(hosts).flatMap((host) =>
+        host.memberServerIds.map((serverId) => ({ serverId, serverName: host.label })),
+      ),
     [hosts],
   );
   const serverIds = useMemo(() => hostInputs.map((host) => host.serverId), [hostInputs]);

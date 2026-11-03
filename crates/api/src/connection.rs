@@ -177,7 +177,7 @@ impl Receiver {
 
 async fn read(
     mut stream: SplitStream<WebSocket>,
-    state: &Shared,
+    state: &Arc<Shared>,
     lanes: &[Outbound; 4],
     hello: Hello,
     guest: Option<&Guest>,
@@ -322,7 +322,7 @@ async fn process_terminal_frame(
 
 async fn process_message(
     message: Option<Result<Incoming, ErrorCode>>,
-    state: &Shared,
+    state: &Arc<Shared>,
     outbound: &Outbound,
     peer: Peer<'_>,
     subscriptions: &mut ConnectionSubscriptions,
@@ -517,7 +517,7 @@ async fn process_event(
 
 async fn process_request(
     request: Request,
-    state: &Shared,
+    state: &Arc<Shared>,
     outbound: &Outbound,
     peer: Peer<'_>,
     subscriptions: &mut ConnectionSubscriptions,
@@ -546,25 +546,40 @@ async fn process_request(
                 return span.in_scope(|| error(outbound, Some(request.id), code));
             }
             Decision::Private(request, private) => {
+                let request_id = request.id.clone();
                 let result = match validation::request(
                     &request.method,
                     &state.info.implemented_capabilities,
                     peer.capabilities,
                 ) {
                     Ok(()) => {
-                        policy::private::execute(
-                            guest,
-                            state,
-                            &request.method,
-                            request.params,
-                            private,
-                        )
-                        .instrument(span)
-                        .await
+                        if private == policy::private::Private::AgentCreate {
+                            policy::private::create_observed(
+                                guest,
+                                state,
+                                request,
+                                (
+                                    outbound.clone(),
+                                    MAX_SUBSCRIPTIONS.saturating_sub(subscriptions.len()),
+                                ),
+                            )
+                            .instrument(span)
+                            .await
+                        } else {
+                            policy::private::execute(
+                                guest,
+                                state,
+                                &request.method,
+                                request.params,
+                                private,
+                            )
+                            .instrument(span)
+                            .await
+                        }
                     }
                     Err(code) => Err(code),
                 };
-                return outbound.respond(request.id, result);
+                return outbound.respond(request_id, result);
             }
         },
         None => request,

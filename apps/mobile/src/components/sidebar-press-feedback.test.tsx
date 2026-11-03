@@ -162,6 +162,14 @@ function background(id: string) {
   return StyleSheet.flatten(typeof style === "function" ? style({ pressed: false }) : style)
     ?.backgroundColor;
 }
+function badgeBackdrop(children: React.ReactNode): unknown {
+  for (const child of React.Children.toArray(children)) {
+    if (!React.isValidElement<{ backdrop?: unknown; children?: React.ReactNode }>(child)) continue;
+    if (child.props.backdrop !== undefined) return child.props.backdrop;
+    const nested = badgeBackdrop(child.props.children);
+    if (nested !== undefined) return nested;
+  }
+}
 function touch(pageY: number): GestureResponderEvent {
   return { nativeEvent: { pageX: 20, pageY } } as GestureResponderEvent;
 }
@@ -200,6 +208,24 @@ describe.each([
     act(() => {
       rowProps(id).onPressOut?.(touch(32));
     });
+    expect(background(id)).toBe(idleBackground);
+  });
+  it("uses native highlight finalization without painting a second row background", () => {
+    renderRow(mode);
+    const idleBackground = background(id);
+    const backdrop = () => {
+      const children = rowProps(id).children;
+      return badgeBackdrop(
+        typeof children === "function" ? children({ pressed: false }) : children,
+      );
+    };
+    expect(backdrop()).toBe("surfaceSidebar");
+    expect(rowProps(id).onHighlightChange).toBeTypeOf("function");
+    act(() => rowProps(id).onHighlightChange?.(true));
+    expect(backdrop()).toBe("surface2");
+    expect(background(id)).toBe(idleBackground);
+    act(() => rowProps(id).onHighlightChange?.(false));
+    expect(backdrop()).toBe("surfaceSidebar");
     expect(background(id)).toBe(idleBackground);
   });
   it("preserves web press feedback and clears it on release", () => {

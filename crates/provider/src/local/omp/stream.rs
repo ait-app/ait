@@ -34,7 +34,8 @@ pub(super) enum Error {
 pub(super) struct Stream {
     pub(super) events: VecDeque<AgentTurnEvent>,
     pub(super) input_ids: BTreeMap<String, Value>,
-    pub(super) pending_inputs: VecDeque<Option<String>>,
+    /// Native request identity and optional client identity, in input admission order.
+    pub(super) pending_inputs: VecDeque<(String, Option<String>)>,
     pub(super) failed: bool,
     pub(super) aborted: bool,
     pub(super) last_text: Option<String>,
@@ -200,7 +201,7 @@ impl Stream {
                 .push_back(AgentTurnEvent::Timeline(Self::item(key, message, item)?));
         } else if role == "user" {
             let mut item = json!({"type":"user_message","messageId":key,"text":self.text(&message["content"])?});
-            if let Some(Some(id)) = self.pending_inputs.pop_front() {
+            if let Some((_, Some(id))) = self.pending_inputs.pop_front() {
                 self.input_ids.insert(key.clone(), json!(id));
             }
             if let Some(id) = self.input_ids.get(&key) {

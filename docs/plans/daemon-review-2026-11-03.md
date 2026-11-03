@@ -89,14 +89,25 @@
       修复：定时任务每次完成等待最长 1 秒且超时后不再额外休眠；语音状态轮询从 25 ms 退避到
       100 ms。
 
-## 仍未完成
+## 2026-11-04 追加修复
 
-- [ ] **本地令牌与诊断采集仍早于实例锁。**
+- [x] **本地令牌与诊断采集仍早于实例锁。**
       `Config::load` 创建本地令牌、`main` 启动诊断采集（会清理共享的事故目录）都发生在
       `InstanceLease::acquire` 之前。两者均为幂等或有界操作，影响低；如需彻底解决，应把实例锁
       提前到 `main` 并调整「端口失败不产生状态」的约束。
+      修复：先验证配置、预绑定端口，再获取进程级实例锁，之后才初始化令牌和诊断；运行时重启
+      复用锁与监听端口并生成新的实例 ID，仍保留端口失败不产生状态的约束。已修订
+      [ADR-201](../decisions/daemon/adr-201-daemon-owned-publication.md)。回归：
+      `startup_guard_runs_before_local_credentials_are_created`、
+      `restarting_runtime_keeps_the_directory_locked_until_all_generations_drop` 及宿主生命周期测试。
+- [x] **`StatusRelay::report` 在异步运行时上做同步文件 I/O。**
+      修复：状态文件交给阻塞线程写入，保留实例锁直到写完，串行写入并丢弃过期快照。
+      回归：`cancelled_status_writes_keep_the_lease_and_cannot_overwrite_newer_reports`。
+
+## 仍未完成
+
 - [ ] **等待循环没有整体超时。**
       `host/voice.rs` 与 `host/schedule.rs` 的等待仍可无限期进行，依赖取消令牌结束。定时运行可能
       合理地持续很久，加入上限前需要先确定产品语义。
-- [ ] **`StatusRelay::report` 在异步运行时上做同步文件 I/O。**
-      写入的是小型状态文件，影响低；如需处理，可改为交给阻塞线程或后台任务写入。
+      2026-11-04：保留已有取消令牌机制；还需明确语音与定时任务各自的上限、超时是否取消
+      Agent 回合，以及用户可配置方式，不能以任意固定时限中断合法的长任务。

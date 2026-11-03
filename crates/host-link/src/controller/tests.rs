@@ -37,6 +37,7 @@ struct Observed {
     mismatch: bool,
     expired_receipt: bool,
     ticket_error: Option<Error>,
+    ticket_errors: std::collections::VecDeque<Error>,
     ticket_delay: Duration,
     ticket_requests: usize,
     renew_delay: Duration,
@@ -52,6 +53,7 @@ struct HubObserved {
     active: bool,
     ticket_delay: Duration,
     error: Option<Error>,
+    errors: std::collections::VecDeque<Error>,
 }
 
 #[derive(Clone)]
@@ -222,7 +224,10 @@ impl Center for Mock {
             seen.relay_grants
                 .push((tokens.credential.binding.clone(), session));
             seen.ticket_requests += 1;
-            (seen.ticket_error, seen.ticket_delay)
+            (
+                seen.ticket_errors.pop_front().or(seen.ticket_error),
+                seen.ticket_delay,
+            )
         };
         tokio::time::sleep(delay).await;
         if let Some(error) = error {
@@ -239,8 +244,8 @@ impl Center for Mock {
             seen.hub.ticket_delay
         };
         tokio::time::sleep(delay).await;
-        let seen = self.0.lock().unwrap();
-        if let Some(error) = seen.hub.error {
+        let mut seen = self.0.lock().unwrap();
+        if let Some(error) = seen.hub.errors.pop_front().or(seen.hub.error) {
             return Err(error);
         }
         Ok("hub-ticket-secret".into())
@@ -290,7 +295,7 @@ impl ManagedRelay for Mock {
         let seen = self.0.lock().unwrap();
         seen.hub.active
     }
-    fn report(&self, phase: &'static str, _: Option<&Binding>) {
+    async fn report(&self, phase: &'static str, _: Option<&Binding>) {
         self.0.lock().unwrap().reports.push(phase);
     }
 }
@@ -702,7 +707,6 @@ async fn initial_terminal_failures_close_relay_and_report_the_recovery_action() 
     for (error, phase) in [
         (Error::Storage, "storage_error"),
         (Error::Conflict, "runtime_conflict"),
-        (Error::Protocol, "protocol_error"),
         (Error::Denied, "reauthorization_required"),
     ] {
         let (controller, mock) = fixture();

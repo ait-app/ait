@@ -101,6 +101,19 @@ function rowIds(section: HTMLElement): string[] {
 }
 
 describe("SchedulesScreen sections", () => {
+  it("does not offer task creation when every configured Host is shared", () => {
+    const previous = [...state.hosts];
+    state.hosts.splice(0, state.hosts.length, { serverId: "shared:grant", label: "Shared" });
+    try {
+      const view = render(<SchedulesScreen />);
+      expect(view.queryByTestId("schedules-new")).toBeNull();
+      expect(view.queryByTestId("schedules-empty-new")).toBeNull();
+      expect(view.getByTestId("schedules-empty")).toBeTruthy();
+    } finally {
+      state.hosts.splice(0, state.hosts.length, ...previous);
+    }
+  });
+
   it("shows all unfinished schedules first and pages ended schedules by completion time", () => {
     state.result.loadState = {
       status: "loaded",

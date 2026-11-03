@@ -4,7 +4,7 @@ import type { View } from "react-native";
 import type { PressHighlightProps } from "./press-highlight.types";
 
 export const PressHighlight = forwardRef<View, PressHighlightProps>(function PressHighlight(
-  { highlightStyle: _highlightStyle, ...props },
+  { highlightStyle: _highlightStyle, onHighlightChange: _onHighlightChange, ...props },
   ref,
 ) {
   return <Pressable ref={ref} {...props} />;

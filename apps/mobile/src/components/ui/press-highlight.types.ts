@@ -1,6 +1,8 @@
 import type { PressableProps, StyleProp, ViewStyle } from "react-native";
 
 export interface PressHighlightProps extends PressableProps {
+  /** Native gesture feedback, including cancellation when scrolling takes over. */
+  onHighlightChange?: (highlighted: boolean) => void;
   /**
    * What the native finger-down surface is painted with — a background colour, an opacity.
    * Desktop hover remains owned by the caller.

@@ -40,14 +40,17 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Service<C, S, R> {
     pub async fn run(mut self, cancel: CancellationToken) {
         let mut active = self.authorized();
         if !active {
-            self.controller.relay.report(
-                if self.controller.state.disconnected {
-                    "disconnected"
-                } else {
-                    "unauthorized"
-                },
-                None,
-            );
+            self.controller
+                .relay
+                .report(
+                    if self.controller.state.disconnected {
+                        "disconnected"
+                    } else {
+                        "unauthorized"
+                    },
+                    None,
+                )
+                .await;
         }
         while !cancel.is_cancelled() {
             let command = if active {
@@ -88,14 +91,17 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Service<C, S, R> {
                 let result = self.controller.store.save(&next);
                 if result.is_ok() {
                     self.controller.state = next;
-                    self.controller.relay.report(
-                        "connecting",
-                        self.controller
-                            .state
-                            .credential
-                            .as_ref()
-                            .map(|c| &c.binding),
-                    );
+                    self.controller
+                        .relay
+                        .report(
+                            "connecting",
+                            self.controller
+                                .state
+                                .credential
+                                .as_ref()
+                                .map(|c| &c.binding),
+                        )
+                        .await;
                 }
                 // A failed replacement preserves the previous authorization unless explicitly disconnected.
                 let _ = reply.send(result);
@@ -115,14 +121,17 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Service<C, S, R> {
         self.controller.relay.stop().await;
         let credential = self.controller.state.disconnect();
         let result = self.controller.store.save(&self.controller.state);
-        self.controller.relay.report(
-            if result.is_ok() {
-                "disconnected"
-            } else {
-                "storage_error"
-            },
-            None,
-        );
+        self.controller
+            .relay
+            .report(
+                if result.is_ok() {
+                    "disconnected"
+                } else {
+                    "storage_error"
+                },
+                None,
+            )
+            .await;
         if let Some(credential) = credential {
             // Remote cleanup must not retain a secret or prevent local sign-out during an outage.
             let _ = tokio::time::timeout(

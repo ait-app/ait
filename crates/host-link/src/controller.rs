@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Utc;
@@ -29,6 +30,7 @@ struct Publication {
     refresh_at: tokio::time::Instant,
     lease_until: Option<tokio::time::Instant>,
     generation: Uuid,
+    acceptance: Arc<links::Acceptance>,
     /// The previous refresh already returned an access token expired by the local clock.
     expired_refresh: bool,
 }
@@ -58,10 +60,12 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
     }
 
     pub(crate) async fn run_until(&mut self, cancel: CancellationToken) -> Result<(), Error> {
-        self.relay.report(
-            "connecting",
-            self.state.credential.as_ref().map(|c| &c.binding),
-        );
+        self.relay
+            .report(
+                "connecting",
+                self.state.credential.as_ref().map(|c| &c.binding),
+            )
+            .await;
         let result = tokio::select! {
             biased;
             () = cancel.cancelled() => Ok(()),
@@ -73,16 +77,18 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
                 tokio::time::timeout(Duration::from_secs(5), self.center.close(&tokens, session))
                     .await;
         }
-        self.relay.report(
-            match result {
-                Ok(()) => "stopped",
-                Err(Error::Storage) => "storage_error",
-                Err(Error::Unauthorized | Error::Denied) => "reauthorization_required",
-                Err(Error::Conflict) => "runtime_conflict",
-                Err(_) => "protocol_error",
-            },
-            self.state.credential.as_ref().map(|c| &c.binding),
-        );
+        self.relay
+            .report(
+                match result {
+                    Ok(()) => "stopped",
+                    Err(Error::Storage) => "storage_error",
+                    Err(Error::Unauthorized | Error::Denied) => "reauthorization_required",
+                    Err(Error::Conflict) => "runtime_conflict",
+                    Err(_) => "protocol_error",
+                },
+                self.state.credential.as_ref().map(|c| &c.binding),
+            )
+            .await;
         result
     }
 
@@ -108,11 +114,13 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
             };
             match result {
                 Ok(tokens) => return Ok(tokens),
-                Err(Error::Unavailable) => {
-                    self.relay.report(
-                        "retrying",
-                        self.state.credential.as_ref().map(|c| &c.binding),
-                    );
+                Err(Error::Unavailable | Error::Protocol) => {
+                    self.relay
+                        .report(
+                            "retrying",
+                            self.state.credential.as_ref().map(|c| &c.binding),
+                        )
+                        .await;
                     pause(cancel, delay).await;
                     delay = (delay * 2).min(30);
                 }

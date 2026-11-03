@@ -13,6 +13,49 @@ use crate::storage::timeline::Timeline;
 use crate::test_support::Fixture;
 
 #[tokio::test]
+async fn unknown_subagent_activity_and_state_keep_parent_completion_and_next_turn() {
+    let fixture = Fixture::new();
+    let spec = fixture.spec();
+    let mut session = fixture.client().create_session(&spec).await.unwrap();
+    session
+        .start_turn("unknown-subagent-activity", &spec.config)
+        .await
+        .unwrap();
+
+    let completed = tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            match session.poll_turn().unwrap() {
+                Some(AgentTurnEvent::Completed(text)) => break text,
+                Some(AgentTurnEvent::Failed | AgentTurnEvent::Cancelled) => {
+                    panic!("unknown sub-agent activity or state interrupted its parent");
+                }
+                _ => tokio::task::yield_now().await,
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(completed.as_deref(), Some("Echo: Parent only"));
+    assert_eq!(session.failure_diagnostic(), None);
+    assert_eq!(session.failure_message(), None);
+    let children = session.subagents();
+    assert_eq!(children.len(), 1);
+    assert_eq!(children[0].descriptor["status"], "completed");
+
+    session
+        .start_turn("after-unknown-subagent-activity", &spec.config)
+        .await
+        .unwrap();
+    assert_eq!(
+        terminal(session.as_mut()).await.unwrap(),
+        AgentTurnEvent::Completed(Some("Echo: after-unknown-subagent-activity".into()))
+    );
+    session.close().await.unwrap();
+    assert_eq!(session.failure_diagnostic(), None);
+    assert_eq!(session.failure_message(), None);
+}
+
+#[tokio::test]
 async fn invalid_subagent_events_preserve_protocol_failure_context_after_close() {
     let fixture = Fixture::new();
     let spec = fixture.spec();

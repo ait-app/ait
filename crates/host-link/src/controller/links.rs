@@ -1,3 +1,5 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use tokio::sync::{mpsc, watch};
@@ -12,18 +14,41 @@ pub(super) struct Grant {
     pub(super) generation: Uuid,
     pub(super) tokens: Tokens,
     pub(super) session: Uuid,
+    pub(super) acceptance: Arc<Acceptance>,
 }
 
 #[derive(Debug)]
 pub(super) struct Failure {
     generation: Uuid,
-    error: Error,
+    pub(super) error: Error,
+    pub(super) kind: Kind,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Kind {
     Relay,
     Hub,
+}
+
+/// Successful ticket issuance proves that one endpoint accepted the current JWT generation.
+#[derive(Debug, Default)]
+pub(super) struct Acceptance {
+    relay: AtomicBool,
+    hub: AtomicBool,
+}
+
+impl Acceptance {
+    /// Return whether `kind` accepted this generation, retaining evidence across socket disconnects.
+    pub(super) fn accepted(&self, kind: Kind) -> bool {
+        self.flag(kind).load(Ordering::Relaxed)
+    }
+
+    fn flag(&self, kind: Kind) -> &AtomicBool {
+        match kind {
+            Kind::Relay => &self.relay,
+            Kind::Hub => &self.hub,
+        }
+    }
 }
 
 pub(super) async fn maintain<C: Center, R: ManagedRelay>(
@@ -50,7 +75,7 @@ pub(super) async fn maintain<C: Center, R: ManagedRelay>(
                 }
             }
             error = maintain_grant(center, relay, &grant, kind) => {
-                if errors.send(Failure { generation: grant.generation, error }).await.is_err()
+                if errors.send(Failure { generation: grant.generation, error, kind }).await.is_err()
                     || grants.changed().await.is_err()
                 {
                     return;
@@ -113,12 +138,14 @@ async fn connect<C: Center, R: ManagedRelay>(
         Kind::Relay => {
             if !relay.active().await {
                 let ticket = center.ticket(&grant.tokens, grant.session).await?;
+                grant.acceptance.flag(kind).store(true, Ordering::Relaxed);
                 relay.start(grant.session, ticket).await?;
             }
         }
         Kind::Hub => {
             if !relay.hub_active().await {
                 let ticket = center.hub_ticket(&grant.tokens, grant.session).await?;
+                grant.acceptance.flag(kind).store(true, Ordering::Relaxed);
                 relay.start_hub(grant.session, ticket).await?;
             }
         }
@@ -129,10 +156,10 @@ async fn connect<C: Center, R: ManagedRelay>(
 pub(super) async fn next_error(
     errors: &mut mpsc::Receiver<Failure>,
     generation: Option<Uuid>,
-) -> Error {
+) -> Failure {
     while let Some(failure) = errors.recv().await {
         if Some(failure.generation) == generation {
-            return failure.error;
+            return failure;
         }
     }
     std::future::pending().await

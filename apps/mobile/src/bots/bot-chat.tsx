@@ -9,6 +9,7 @@ import { FormTextInput } from "@/components/ui/form-field";
 import { BotLoadingSpinner } from "./loading";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
+import { canManageBackgroundTasks } from "@/hosts/background-task-access";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { botKeys, isBotTurnPending, useBotHistory } from "./queries";
 import { botStyles as styles } from "./styles";
@@ -26,8 +27,10 @@ function BotMessage({
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
+  const readOnly = !canManageBackgroundTasks(serverId);
   const cancel = useMutation({
     mutationFn: async () => {
+      if (readOnly) throw new Error(t("bots.requestFailed"));
       if (!client) throw new Error(t("bots.disconnected"));
       await client.botRequest("bot.turn.cancel.request", { botId: bot.id, turnId: turn.id });
     },
@@ -48,7 +51,7 @@ function BotMessage({
           {turn.error}
         </Text>
       ) : null}
-      {isBotTurnPending(turn) ? (
+      {!readOnly && isBotTurnPending(turn) ? (
         <Button
           size="sm"
           variant="outline"
@@ -74,6 +77,7 @@ export function BotChat({
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
+  const readOnly = !canManageBackgroundTasks(serverId);
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
   const [inputRevision, setInputRevision] = useState(0);
@@ -86,7 +90,7 @@ export function BotChat({
     staleTime: 0,
     queryFn: async () => {
       if (!client) throw new Error(t("bots.disconnected"));
-      if (bot.archivedAt) {
+      if (bot.archivedAt || readOnly) {
         const { conversations } = await client.botRequest("bot.conversation.list.request", {
           botId: bot.id,
         });
@@ -102,6 +106,7 @@ export function BotChat({
   };
   const send = useMutation({
     mutationFn: async () => {
+      if (readOnly) throw new Error(t("bots.requestFailed"));
       if (!client || !conversation.data) throw new Error(t("bots.disconnected"));
       if (new TextEncoder().encode(text).length > 16 * 1024) throw new Error(t("bots.tooLong"));
       // Keep the receipt identity after a timeout so retrying cannot duplicate input.
@@ -130,6 +135,7 @@ export function BotChat({
   });
   const reset = useMutation({
     mutationFn: async () => {
+      if (readOnly) throw new Error(t("bots.requestFailed"));
       if (!client || !conversation.data) throw new Error(t("bots.disconnected"));
       const confirmed = await confirmDialog({
         title: t("bots.reset"),
@@ -164,14 +170,16 @@ export function BotChat({
     <View style={styles.root} testID="bot-chat">
       <View style={styles.toolbar}>
         <Text style={[styles.hint, styles.grow]}>{!bot.enabled ? t("bots.paused") : null}</Text>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={disabled || busy || send.isPending}
-          onPress={() => reset.mutate()}
-        >
-          {t("bots.reset")}
-        </Button>
+        {!readOnly ? (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={disabled || busy || send.isPending}
+            onPress={() => reset.mutate()}
+          >
+            {t("bots.reset")}
+          </Button>
+        ) : null}
       </View>
       {conversation.isPending && !conversation.data && !bot.archivedAt ? (
         <BotLoadingSpinner />
@@ -205,24 +213,28 @@ export function BotChat({
               {error?.message}
             </Text>
           ))}
-        <FormTextInput
-          initialValue=""
-          resetKey={inputRevision}
-          onChangeText={setText}
-          multiline
-          style={styles.messageInput}
-          editable={!disabled && !send.isPending}
-          accessibilityLabel={t("bots.message")}
-          placeholder={t("bots.message")}
-          testID="bot-message-input"
-        />
-        <Button
-          onPress={() => send.mutate()}
-          disabled={disabled || !text.trim() || send.isPending}
-          testID="bot-message-send"
-        >
-          {t("bots.send")}
-        </Button>
+        {!readOnly ? (
+          <>
+            <FormTextInput
+              initialValue=""
+              resetKey={inputRevision}
+              onChangeText={setText}
+              multiline
+              style={styles.messageInput}
+              editable={!disabled && !send.isPending}
+              accessibilityLabel={t("bots.message")}
+              placeholder={t("bots.message")}
+              testID="bot-message-input"
+            />
+            <Button
+              onPress={() => send.mutate()}
+              disabled={disabled || !text.trim() || send.isPending}
+              testID="bot-message-send"
+            >
+              {t("bots.send")}
+            </Button>
+          </>
+        ) : null}
       </View>
     </View>
   );
