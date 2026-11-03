@@ -115,7 +115,7 @@ npm run test --workspace=@ait/mobile -- src/bots/workspace-bot-tab.test.tsx
 ## PR #573 CI 回归修复
 
 提交 `a3ac3508` 的[首轮 CI](https://github.com/ait-app/ait/actions/runs/41685395367)
-发现两处测试问题，修复限定在测试和夹具：
+发现固定调度次数断言与过时诊断夹具两处问题：
 
 - host-link 的取票恢复测试用固定次数的 `advance` 与 `yield_now` 代替完成条件，可能在刷新或
   重连尚未完成时断言失败。旧测试在 8 个并发进程中重复 100 次，失败 32 次；改为等待预期
@@ -135,6 +135,13 @@ npm run test --workspace=@ait/mobile -- src/bots/workspace-bot-tab.test.tsx
 cargo test --locked --offline -p provider --lib \
   local::codex::tests::progress::child_completion_keeps_its_link_in_live_and_native_history_and_allows_next_turn -- --exact
 ```
+
+提交 `927df258` 的[第二轮 CI](https://github.com/ait-app/ait/actions/runs/41688255647)
+中，上述失败均通过，但持续 Hub 拒绝测试触发 10 秒超时。本地同条件重复 100 次失败 2 次，
+进一步定位到生产调度：拒绝结果与续租同时就绪时，随机 `select!` 可以反复先选续租，且每次
+成功后还会等待轮询间隔。现在优先处理已排队的拒绝，沿用原有 generation 过滤和单次刷新预算。
+修复后该测试重复 100 次全部通过；恢复模块的 10 项测试整组重复 100 次也全部通过，
+完整 controller 范围的 50 项通过。未放宽持续拒绝测试的超时上限或降低并行度。
 
 ## 未完成边界
 
