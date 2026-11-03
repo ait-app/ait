@@ -668,6 +668,7 @@ export const ProviderCommandTimelineItemSchema = z.object({
         .string()
         .min(1)
         .max(255)
+        // oxlint-disable-next-line no-control-regex -- File basenames must reject ASCII controls.
         .regex(/^(?!\.{1,2}$)[^/\\\u0000-\u001f\u007f]+$/),
       size: z
         .number()

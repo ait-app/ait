@@ -47,10 +47,45 @@ test("delivered native archive metadata survives generated wire validation", () 
     },
   };
   expect(validateWSOutboundMessage(envelope)).toEqual({ success: true, data: envelope });
-  for (const fileName of ["../outside.zip", "a/b.zip", "a\\b.zip", ".", "..", "a\u0000.zip"]) {
+  for (const fileName of [
+    "../outside.zip",
+    "a/b.zip",
+    "a\\b.zip",
+    ".",
+    "..",
+    "a\u0000.zip",
+    "a\u001f.zip",
+    "a\u007f.zip",
+  ]) {
+    const invalid = { ...item, file: { ...item.file, fileName } };
+    expect(AgentTimelineItemPayloadSchema.safeParse(invalid).success).toBe(false);
     expect(
-      AgentTimelineItemPayloadSchema.safeParse({ ...item, file: { ...item.file, fileName } })
-        .success,
+      validateWSOutboundMessage({
+        ...envelope,
+        message: {
+          ...envelope.message,
+          payload: {
+            ...envelope.message.payload,
+            event: { ...envelope.message.payload.event, item: invalid },
+          },
+        },
+      }).success,
     ).toBe(false);
   }
+  const unicode = { ...item, file: { ...item.file, fileName: "会话记录.zip" } };
+  expect(AgentTimelineItemPayloadSchema.parse(unicode)).toEqual(unicode);
+  const unicodeEnvelope = {
+    ...envelope,
+    message: {
+      ...envelope.message,
+      payload: {
+        ...envelope.message.payload,
+        event: { ...envelope.message.payload.event, item: unicode },
+      },
+    },
+  };
+  expect(validateWSOutboundMessage(unicodeEnvelope)).toEqual({
+    success: true,
+    data: unicodeEnvelope,
+  });
 });
