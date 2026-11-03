@@ -2,6 +2,7 @@
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
@@ -45,7 +46,7 @@ impl AgentWorkspaceAttention {
 
 impl WorkspaceActivitySource for AgentWorkspaceAttention {
     fn snapshot(&self) -> Result<Vec<WorkspaceActivity>, WorkspaceStateError> {
-        let agents = self.agents.list().map_err(map_agent_error)?;
+        let agents = self.agents.snapshot().map_err(map_agent_error)?;
         let by_id = agents
             .iter()
             .filter(|agent| {
@@ -53,7 +54,7 @@ impl WorkspaceActivitySource for AgentWorkspaceAttention {
                     && agent.observation.is_none()
                     && !is_archived(agent.archived_at.as_deref())
             })
-            .map(|agent| (agent.id.as_str(), agent))
+            .map(|agent| (agent.id.as_str(), agent.as_ref()))
             .collect::<BTreeMap<_, _>>();
         let mut activity: Vec<_> = by_id
             .values()
@@ -128,7 +129,7 @@ fn agent_bucket(agent: &PersistedAgentRuntimeRecord) -> WorkspaceStateBucket {
 
 impl WorkspaceAttention for AgentWorkspaceAttention {
     fn scan(&self) -> Result<Box<dyn WorkspaceAttentionScan + '_>, WorkspaceStateError> {
-        let records = self.agents.list().map_err(map_agent_error)?;
+        let records = self.agents.snapshot().map_err(map_agent_error)?;
         Ok(Box::new(AttentionScan {
             records,
             registry: self.agents.as_ref(),
@@ -197,7 +198,7 @@ impl WorkspaceAttention for AgentWorkspaceAttention {
 
 #[derive(Debug)]
 struct AttentionScan<'a> {
-    records: Vec<PersistedAgentRuntimeRecord>,
+    records: Arc<[Arc<PersistedAgentRuntimeRecord>]>,
     registry: &'a dyn AgentRuntimeRegistry,
 }
 
@@ -218,7 +219,7 @@ impl WorkspaceAttentionScan for AttentionScan<'_> {
             match self.registry.update(&agent.id, &|current| {
                 // The batch snapshot can precede a new permission, completion or placement.
                 // Compare under the registry's update lock before consuming its attention.
-                if current != agent {
+                if current != agent.as_ref() {
                     return current.clone();
                 }
                 let mut next = current.clone();

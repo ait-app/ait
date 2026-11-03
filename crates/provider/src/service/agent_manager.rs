@@ -998,7 +998,7 @@ impl AgentManager {
     pub(crate) async fn reconcile(&mut self) -> Result<(), AgentManagerError> {
         let mut close = Vec::new();
         for (id, live) in &self.live {
-            let current = self.registry.get(id).map_err(map_registry)?;
+            let current = self.registry.get_shared(id).map_err(map_registry)?;
             if current.is_none()
                 || (live.record.archived_at.is_none()
                     && current

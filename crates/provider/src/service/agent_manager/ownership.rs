@@ -13,6 +13,17 @@ use tokio_util::sync::CancellationToken;
 
 use super::auto_archive::Retirement;
 
+/// Committed control fields overlaid on independent directory reads.
+pub(crate) const RUNTIME_OVERLAY_FIELDS: [&str; 7] = [
+    "status",
+    "requiresAttention",
+    "attentionReason",
+    "lastError",
+    "activeTurn",
+    "providerUnavailable",
+    "pendingPermissions",
+];
+
 #[derive(Debug)]
 struct PendingRetirement {
     action: Retirement,
@@ -404,11 +415,12 @@ impl Owners {
         let sender = observations
             .entry(id.to_owned())
             .or_insert_with(|| watch::channel(Value::Null).0);
-        let snapshot_changed = sender.borrow()["final"] != value["final"];
+        let mut snapshot_changed = false;
         let changed = sender.send_if_modified(|current| {
             if *current == value {
                 return false;
             }
+            snapshot_changed = current["final"] != value["final"];
             *current = value;
             true
         });
@@ -423,14 +435,22 @@ impl Owners {
 
     /// Return the last committed runtime overlay for an independent reader.
     pub(crate) fn snapshot(&self, id: &str) -> Option<Value> {
-        let observations = self.observations.lock().ok()?;
-        observations.get(id).and_then(|sender| {
-            sender
-                .borrow()
-                .get("final")
-                .filter(|value| value.is_object())
-                .cloned()
-        })
+        let sender = {
+            let observations = self.observations.lock().ok()?;
+            observations.get(id)?.clone()
+        };
+        let value = sender.borrow();
+        let committed = value.get("final").filter(|value| value.is_object())?;
+        Some(Value::Object(
+            RUNTIME_OVERLAY_FIELDS
+                .into_iter()
+                .filter_map(|field| {
+                    committed
+                        .get(field)
+                        .map(|value| (field.to_owned(), value.clone()))
+                })
+                .collect(),
+        ))
     }
 }
 

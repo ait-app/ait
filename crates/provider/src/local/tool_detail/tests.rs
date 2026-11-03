@@ -1,6 +1,47 @@
 use super::*;
 
 #[test]
+fn process_resources_preserve_native_arguments_and_results() {
+    for name in ["Read", "Edit", "Write"] {
+        let input = json!({"file_path":"proc://collector/kill","content":null});
+        let mut detail = claude(name, &input);
+        assert_eq!(
+            detail,
+            json!({"type":"unknown","input":input,"output":null})
+        );
+        claude_result(&mut detail, &json!({"stopped":true}));
+        assert_eq!(detail["output"], json!({"stopped":true}));
+    }
+}
+
+#[test]
+fn optional_tool_fields_keep_their_declared_types() {
+    for content in [
+        Value::Null,
+        json!(true),
+        json!({"text":"invalid"}),
+        json!(5),
+    ] {
+        let detail = claude("Write", &json!({"file_path":"file.rs","content":content}));
+        assert_eq!(detail, json!({"type":"write","filePath":"file.rs"}));
+    }
+    for content in ["", "file contents"] {
+        let detail = claude("Write", &json!({"file_path":"file.rs","content":content}));
+        assert_eq!(detail["content"], content);
+    }
+    let shell = claude("Bash", &json!({"command":"pwd","cwd":null}));
+    assert_eq!(shell, json!({"type":"shell","command":"pwd"}));
+    let read = claude(
+        "Read",
+        &json!({"file_path":"file.rs","offset":null,"limit":"2"}),
+    );
+    assert_eq!(read, json!({"type":"read","filePath":"file.rs"}));
+    let read = claude("Read", &json!({"file_path":"file.rs","offset":1,"limit":2}));
+    assert_eq!(read["offset"], 1);
+    assert_eq!(read["limit"], 2);
+}
+
+#[test]
 fn native_shell_file_web_and_delegation_tools_get_typed_details() {
     let shell = codex(
         &json!({"type":"commandExecution","command":"pwd","cwd":"/project","aggregatedOutput":"/project","exitCode":0}),

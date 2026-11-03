@@ -77,6 +77,8 @@
 
 ## Provider、Agent 与会话
 
+- [性能交接报告修复验证（2026-11-03）](providers/performance-handoff-fixes-2026-11-03.md)
+
 - [统一子 Agent 展示：实施与验证](providers/unified-subagents-2026-10-31.md)
 - [Agent 创建时的任务预算竞争](providers/agent-creation-resource-contention.md)
 - [Antigravity 已登录但额度不可用：修复验证](providers/antigravity-account-quota-2026-10-14.md)

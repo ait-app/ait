@@ -495,20 +495,26 @@ fn tool_item(tool: &Value, output: Option<String>, failed: bool, running: bool) 
         "task" => "Task",
         _ => name,
     };
-    let mut parameters = input.clone();
-    if let Some(path) = input.get("path") {
-        parameters["file_path"] = path.clone();
-    }
-    if let Some(old) = input.get("oldText") {
-        parameters["old_string"] = old.clone();
-    }
-    if let Some(new) = input.get("newText") {
-        parameters["new_string"] = new.clone();
-    }
     let encoded = input.to_string();
     let mut detail = if encoded.len() > 256 * 1024 {
         json!({"type":"unknown","input":preview(&encoded),"output":null})
+    } else if matches!(name, "read" | "edit" | "write")
+        && input["path"]
+            .as_str()
+            .is_some_and(|path| path.starts_with("proc://"))
+    {
+        json!({"type":"unknown","input":input,"output":null})
     } else {
+        let mut parameters = input.clone();
+        if let Some(path) = input.get("path") {
+            parameters["file_path"] = path.clone();
+        }
+        if let Some(old) = input.get("oldText") {
+            parameters["old_string"] = old.clone();
+        }
+        if let Some(new) = input.get("newText") {
+            parameters["new_string"] = new.clone();
+        }
         crate::local::tool_detail::claude(mapped, &parameters)
     };
     if let Some(output) = output {

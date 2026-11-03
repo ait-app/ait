@@ -1,6 +1,7 @@
 //! Durable Agent snapshots backed by the shared atomic file engine.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
 use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
@@ -10,7 +11,7 @@ use crate::registry::{Error as RegistryError, FileRegistry};
 /// Atomically persisted registry of Paseo Agent runtime snapshots.
 #[derive(Debug, Clone)]
 pub struct FileBackedAgentRuntimeRegistry {
-    file: std::sync::Arc<FileRegistry<PersistedAgentRuntimeRecord>>,
+    file: Arc<FileRegistry<PersistedAgentRuntimeRecord>>,
     changes: Option<model::changes::Changes>,
 }
 
@@ -19,7 +20,7 @@ impl FileBackedAgentRuntimeRegistry {
     #[must_use]
     pub fn new(path: PathBuf) -> Self {
         Self {
-            file: std::sync::Arc::new(FileRegistry::new(path, |record| &record.id)),
+            file: Arc::new(FileRegistry::new(path, |record| &record.id)),
             changes: None,
         }
     }
@@ -41,11 +42,24 @@ impl AgentRuntimeRegistry for FileBackedAgentRuntimeRegistry {
         self.file.list().map_err(map_error)
     }
 
+    fn snapshot(
+        &self,
+    ) -> Result<Arc<[Arc<PersistedAgentRuntimeRecord>]>, AgentRuntimeRegistryError> {
+        self.file.snapshot().map_err(map_error)
+    }
+
     fn get(
         &self,
         agent_id: &str,
     ) -> Result<Option<PersistedAgentRuntimeRecord>, AgentRuntimeRegistryError> {
         self.file.get(agent_id).map_err(map_error)
+    }
+
+    fn get_shared(
+        &self,
+        agent_id: &str,
+    ) -> Result<Option<Arc<PersistedAgentRuntimeRecord>>, AgentRuntimeRegistryError> {
+        self.file.get_shared(agent_id).map_err(map_error)
     }
 
     fn upsert(

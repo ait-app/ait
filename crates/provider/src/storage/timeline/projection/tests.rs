@@ -5,6 +5,8 @@ use crate::rpc::timeline::{fetch, fetch_stored};
 
 use super::*;
 
+mod compatibility;
+
 fn item(seq: u64, item: Value) -> NativeItem {
     NativeItem {
         key: format!("native:{seq}"),

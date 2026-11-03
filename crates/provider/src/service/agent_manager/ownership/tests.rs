@@ -1,6 +1,59 @@
 use super::*;
 
 #[test]
+fn waiters_receive_completion_fields_without_republishing_an_unchanged_directory_overlay() {
+    let changes = model::changes::Changes::default();
+    let owners = Owners::default().with_changes(Some(changes.clone()));
+    let mut value = json!({"status":"idle","final":{"status":"idle"},
+        "busy":true,"completionText":null});
+    owners.publish("agent", value.clone()).unwrap();
+    let notifications = changes.subscribe();
+    let mut waiter = owners.observe("agent", Value::Null).unwrap();
+
+    value["busy"] = json!(false);
+    value["completionText"] = json!("Final response");
+    owners.publish("agent", value.clone()).unwrap();
+
+    assert!(waiter.has_changed().unwrap());
+    assert_eq!(*waiter.borrow_and_update(), value);
+    assert!(!notifications.has_changed().unwrap());
+    assert_eq!(owners.snapshot("agent"), Some(json!({"status":"idle"})));
+}
+
+#[test]
+fn runtime_overlay_clones_only_control_fields_without_losing_permissions() {
+    let owners = Owners::default();
+    let permissions = json!([{"id":"permission","input":{"path":"file"}}]);
+    owners
+        .publish(
+            "agent",
+            json!({"final":{
+        "status":"running","requiresAttention":true,"attentionReason":"permission",
+        "lastError":null,"activeTurn":{"turnId":"turn"},"providerUnavailable":false,
+        "pendingPermissions":permissions,"runtimeInfo":{"extra":"x".repeat(1024*1024)},
+        "config":{"opaque":"x".repeat(1024*1024)}}}),
+        )
+        .unwrap();
+    let snapshot = owners.snapshot("agent").unwrap();
+    assert_eq!(snapshot.as_object().unwrap().len(), 7);
+    assert_eq!(snapshot["pendingPermissions"], permissions);
+    assert_eq!(snapshot["activeTurn"]["turnId"], "turn");
+    assert!(snapshot.get("runtimeInfo").is_none());
+    assert!(snapshot.get("config").is_none());
+    owners
+        .publish(
+            "agent",
+            json!({"final":{"status":"idle","activeTurn":null}}),
+        )
+        .unwrap();
+    assert_eq!(
+        owners.snapshot("agent").unwrap(),
+        json!({"status":"idle","activeTurn":null})
+    );
+    assert_eq!(snapshot["status"], "running");
+}
+
+#[test]
 fn controls_are_reused_only_for_the_same_agent_native_identity_and_configuration() {
     let owners = Owners::default();
     let record: PersistedAgentRuntimeRecord = serde_json::from_value(json!({

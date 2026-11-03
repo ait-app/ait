@@ -25,6 +25,7 @@ use crate::protocol::agent_execution::{CreateRequest, ResumeRequest, SendRequest
 use crate::protocol::agent_lifecycle::AgentIdRequest;
 use crate::rpc::ErrorCode;
 use crate::service::agent_execution::operation::Operation;
+use crate::service::agent_manager::ownership::RUNTIME_OVERLAY_FIELDS;
 use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
 use crate::service::agent_runtime::AgentRuntimeDirectory;
 use crate::support::rpc::decode;
@@ -627,7 +628,7 @@ impl ExecutionState {
     fn snapshot(&self, id: &str) -> Result<Value, ErrorCode> {
         let record = self
             .registry
-            .get(id)
+            .get_shared(id)
             .map_err(|_| ErrorCode::AgentIo)?
             .ok_or(ErrorCode::AgentNotFound)?;
         self.project(&record)
@@ -657,15 +658,7 @@ impl ExecutionState {
             && !self.manager.owns_runtime(&record.id)
             && let Some(committed) = self.owners.snapshot(&record.id)
         {
-            for field in [
-                "status",
-                "requiresAttention",
-                "attentionReason",
-                "lastError",
-                "activeTurn",
-                "providerUnavailable",
-                "pendingPermissions",
-            ] {
+            for field in RUNTIME_OVERLAY_FIELDS {
                 if let Some(value) = committed.get(field) {
                     snapshot[field] = value.clone();
                 }

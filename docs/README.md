@@ -32,6 +32,7 @@
 - [当前架构](architecture/README.md)：组件职责、依赖、存储和生命周期；[OMP ACP 桥接](architecture/omp-acp-bridge.md)。
 - [ADR 分类索引](decisions/README.md)：决策及修订关系，完整清单只在此维护。
 - [仓库约定](../AGENTS.md)、[Rust 规范](policy/rust.md)、[文档维护规范](policy/documentation.md)。
+- [Agent 共享读视图](decisions/providers/adr-210-committed-runtime-read-snapshots.md)：已提交记录、目录与 Hub 读取的性能边界。
 - [移动端 E2E](../apps/mobile/e2e/README.md)、[Maestro](../apps/mobile/maestro/README.md)。
 - [品牌资源](../assets/brand/README.md)、[Paseo 来源与许可证](../paseo/README.md)。
 
