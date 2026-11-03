@@ -1,7 +1,8 @@
 //! Native push delivery boundary; adapters own provider authentication and HTTP.
 
-use std::{fmt, future::Future, pin::Pin};
+use std::fmt;
 
+use async_trait::async_trait;
 use serde_json::Value;
 
 /// User-visible content and routing identifiers, without device credentials.
@@ -32,11 +33,11 @@ pub enum DeliveryError {
     Unconfigured,
 }
 
-/// One asynchronous delivery attempt.
-pub type DeliveryFuture<'a> = Pin<Box<dyn Future<Output = Result<(), DeliveryError>> + Send + 'a>>;
-
 /// Direct APNs/FCM adapter. Tokens are opaque serialized installation descriptors and secrets.
+#[async_trait]
 pub trait PushTransport: fmt::Debug + Send + Sync {
     /// Deliver `notification` to `token`; return a classified failure without disclosing secrets.
-    fn send<'a>(&'a self, notification: &'a Notification, token: &'a str) -> DeliveryFuture<'a>;
+    /// # Errors
+    /// Returns `DeliveryError` for invalid tokens, unavailable providers or rejected notifications.
+    async fn send(&self, notification: &Notification, token: &str) -> Result<(), DeliveryError>;
 }

@@ -1,5 +1,6 @@
 //! Capability groups reference each other only through `ports` and `protocol`.
 
+use async_trait as _;
 use std::path::{Path, PathBuf};
 
 // Cargo passes the complete package dependency set to this integration test.

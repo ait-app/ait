@@ -97,6 +97,7 @@ describe("app diagnostics report", () => {
       lastOnlineAt: "2026-06-25T00:00:00.000Z",
       agentDirectoryStatus: "ready",
       agentDirectoryError: null,
+      workspaceDirectoryError: null,
       hasEverLoadedAgentDirectory: true,
       probeByConnectionId: new Map([
         ["direct:secret.example.test:6767", { status: "available", latencyMs: 42 }],

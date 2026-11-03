@@ -35,6 +35,8 @@ pub(crate) struct Row {
 pub struct Timeline {
     database: Arc<Mutex<Connection>>,
     events: EventHub,
+    /// Serializes native identity registration across independent readers and session lanes.
+    pub(crate) registration: Arc<Mutex<()>>,
 }
 
 impl Timeline {
@@ -84,6 +86,7 @@ impl Timeline {
             && !(version == 4 && application == 0x4154_544C && tables == 5)
             && !(version == 5 && application == 0x4154_544C && tables == 6)
             && !(version == 6 && application == 0x4154_544C && tables == 10)
+            && !(version == 7 && application == 0x4154_544C && tables == 10)
         {
             return Err(ErrorCode::UnsupportedFormat);
         }
@@ -106,7 +109,7 @@ impl Timeline {
                 prompt TEXT, state TEXT NOT NULL, UNIQUE(agent,message));
             CREATE INDEX IF NOT EXISTS queued_inputs ON input_receipts(state,agent,seq);
             CREATE TABLE IF NOT EXISTS provider_subagents(agent TEXT NOT NULL, child TEXT NOT NULL,
-                descriptor TEXT NOT NULL, PRIMARY KEY(agent,child));
+                descriptor TEXT NOT NULL, host_agent TEXT, host_observed INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(agent,child));
             CREATE TABLE IF NOT EXISTS projection_heads(agent TEXT PRIMARY KEY, epoch TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS display_entries(agent TEXT NOT NULL, seq_start INTEGER NOT NULL,
                 seq_end INTEGER NOT NULL, identity TEXT, entry TEXT NOT NULL, bytes INTEGER NOT NULL,
@@ -118,12 +121,29 @@ impl Timeline {
             CREATE TABLE IF NOT EXISTS display_sources(agent TEXT NOT NULL, seq INTEGER NOT NULL,
                 provider TEXT NOT NULL, entry TEXT NOT NULL, bytes INTEGER NOT NULL,
                 PRIMARY KEY(agent,seq));
-            PRAGMA user_version=6; PRAGMA application_id=1096045644; COMMIT;",
+            PRAGMA application_id=1096045644;",
             )
             .map_err(io)?;
+        for (column, migration) in [
+            (
+                "host_agent",
+                "ALTER TABLE provider_subagents ADD COLUMN host_agent TEXT;",
+            ),
+            (
+                "host_observed",
+                "ALTER TABLE provider_subagents ADD COLUMN host_observed INTEGER NOT NULL DEFAULT 1;",
+            ),
+        ] {
+            let present: bool = database.query_row("SELECT EXISTS(SELECT 1 FROM pragma_table_info('provider_subagents') WHERE name=?)", [column], |row| row.get(0)).map_err(io)?;
+            if !present {
+                database.execute_batch(migration).map_err(io)?;
+            }
+        }
+        database.execute_batch("CREATE INDEX IF NOT EXISTS provider_subagents_host ON provider_subagents(host_agent); PRAGMA user_version=7; COMMIT;").map_err(io)?;
         Ok(Self {
             database: Arc::new(Mutex::new(database)),
             events: EventHub::default(),
+            registration: Arc::default(),
         })
     }
 
@@ -219,7 +239,7 @@ impl Timeline {
         if prefix {
             let appended = append_rows(&transaction, agent, provider, entries)?;
             transaction.commit().map_err(io)?;
-            self.publish(agent, provider, &old_epoch, &appended.entries);
+            self.publish(&database, agent, provider, &old_epoch, &appended.entries)?;
             return Ok(old_epoch);
         }
         let entries = progress::retain_timestamps(&transaction, agent, &previous, entries)?;
@@ -259,6 +279,13 @@ impl Timeline {
             "agent.timeline.replacement",
             &json!({"agentId":agent,"epoch":replacement}),
         );
+        if let Some(id) = subagents::binding(&database, agent)? {
+            self.events.publish(
+                &id,
+                "agent.timeline.replacement",
+                &json!({"agentId":id,"epoch":replacement}),
+            );
+        }
         Ok(replacement)
     }
 
@@ -277,12 +304,20 @@ impl Timeline {
         let epoch = epoch(&transaction, agent)?;
         let appended = append_rows(&transaction, agent, provider, entries)?;
         transaction.commit().map_err(io)?;
-        self.publish(agent, provider, &epoch, &appended.entries);
+        self.publish(&database, agent, provider, &epoch, &appended.entries)?;
         Ok((epoch, appended.positions))
     }
 
-    fn publish(&self, agent: &str, provider: &str, epoch: &str, entries: &[(u64, NativeItem)]) {
+    fn publish(
+        &self,
+        database: &Connection,
+        agent: &str,
+        provider: &str,
+        epoch: &str,
+        entries: &[(u64, NativeItem)],
+    ) -> Result<(), ErrorCode> {
         // The caller retains the database lock so concurrent commits cannot reorder events.
+        let binding = subagents::binding(database, agent)?;
         for (seq, entry) in entries {
             if let Some((parent, child)) = agent
                 .strip_prefix("subagent:")
@@ -295,19 +330,22 @@ impl Timeline {
                     "kind":"timeline","parentAgentId":parent,"subagentId":child,"provider":provider,
                     "item":entry.item,"timestamp":entry.timestamp,"seq":seq,"epoch":epoch}),
                 );
-                continue;
+                if binding.is_none() {
+                    continue;
+                }
             }
             let mut event = json!({"type":"timeline","provider":provider,"item":entry.item});
             if let Some(turn) = &entry.turn_id {
                 event["turnId"] = json!(turn);
             }
             self.events.publish(
-                agent,
+                binding.as_deref().unwrap_or(agent),
                 "agent_stream",
-                &json!({"agentId":agent,"event":event,
+                &json!({"agentId":binding.as_deref().unwrap_or(agent),"event":event,
                 "timestamp":entry.timestamp,"seq":seq,"epoch":epoch}),
             );
         }
+        Ok(())
     }
 }
 

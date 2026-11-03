@@ -17,13 +17,14 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react-native";
 import { getOverlayRoot, OVERLAY_Z } from "@/lib/overlay-root";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   HEADER_INNER_HEIGHT,
   HEADER_INNER_HEIGHT_MOBILE,
   HEADER_TOP_PADDING_MOBILE,
 } from "@/constants/layout";
 
-export type ToastVariant = "default" | "info" | "success" | "warning" | "error";
+export type ToastVariant = "default" | "loading" | "info" | "success" | "warning" | "error";
 
 export interface ToastShowOptions {
   icon?: ReactNode;
@@ -58,6 +59,7 @@ const toastExiting = FadeOut.duration(140);
 const ThemedCheckCircle = withUnistyles(CheckCircle2);
 const ThemedInfo = withUnistyles(Info);
 const ThemedWarning = withUnistyles(AlertTriangle);
+const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundIcon = (theme: Theme) => ({ color: theme.colors.foreground });
 const infoIcon = (theme: Theme) => ({ color: theme.colors.palette.blue[300] });
 const successIcon = (theme: Theme) => ({ color: theme.colors.primary });
@@ -227,7 +229,9 @@ function ToastCard({
   onHoverOut: () => void;
 }) {
   let defaultIcon: ReactNode = null;
-  if (toast.variant === "info") {
+  if (toast.variant === "loading") {
+    defaultIcon = <ThemedLoadingSpinner size={18} uniProps={foregroundIcon} />;
+  } else if (toast.variant === "info") {
     defaultIcon = <ThemedInfo size={18} uniProps={infoIcon} />;
   } else if (toast.variant === "success") {
     defaultIcon = <ThemedCheckCircle size={18} uniProps={successIcon} />;

@@ -20,7 +20,7 @@ use model::{
 
 use crate::{
     audio::Format,
-    ports::{Agents, Operation, Synthesizer, Transcriber},
+    ports::{Agents, Synthesizer, Transcriber},
 };
 
 use super::*;
@@ -112,6 +112,7 @@ struct Engine {
     resolve_blocking: AtomicBool,
 }
 
+#[async_trait::async_trait]
 impl Transcriber for Engine {
     fn readiness(&self) -> Result<(), Error> {
         if self.preparing.load(Ordering::SeqCst) {
@@ -120,89 +121,87 @@ impl Transcriber for Engine {
             Ok(())
         }
     }
-    fn transcribe(&self, audio: Audio, cancel: CancellationToken) -> Operation<'_, Transcript> {
-        Box::pin(async move {
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            self.samples.lock().unwrap().push(audio.bytes);
-            if self.failing.load(Ordering::SeqCst) {
-                return Err(Error::Provider);
-            }
-            if self.blocking.load(Ordering::SeqCst) {
-                cancel.cancelled().await;
-                self.cancelled.fetch_add(1, Ordering::SeqCst);
-                return Err(Error::Cancelled);
-            }
-            Ok(Transcript {
-                text: self
-                    .transcript
-                    .lock()
-                    .unwrap()
-                    .clone()
-                    .unwrap_or_else(|| "recognized speech".to_owned()),
-                language: Some("en".to_owned()),
-            })
-        })
-    }
-}
-
-impl Synthesizer for Engine {
-    fn synthesize<'a>(&'a self, text: &'a str, cancel: CancellationToken) -> Operation<'a, Audio> {
-        Box::pin(async move {
-            self.synthesis_calls.fetch_add(1, Ordering::SeqCst);
-            assert_eq!(text, "Agent reply");
-            if self.synthesis_failing.load(Ordering::SeqCst) {
-                return Err(Error::Provider);
-            }
-            if self.synthesis_blocking.load(Ordering::SeqCst) {
-                cancel.cancelled().await;
-                self.cancelled.fetch_add(1, Ordering::SeqCst);
-                return Err(Error::Cancelled);
-            }
-            Ok(Audio {
-                bytes: vec![1; 150_000],
-                format: Format::Pcm(24000),
-            })
-        })
-    }
-}
-
-impl Agents for Engine {
-    fn resolve<'a>(&'a self, identifier: &'a str) -> Operation<'a, String> {
-        Box::pin(async move {
-            if self.resolve_blocking.load(Ordering::SeqCst) {
-                std::future::pending::<()>().await;
-            }
-            if identifier == "bad" {
-                Err(Error::Agent)
-            } else {
-                Ok("agent-1".to_owned())
-            }
-        })
-    }
-
-    fn turn<'a>(
-        &'a self,
-        agent: &'a str,
-        text: &'a str,
+    async fn transcribe(
+        &self,
+        audio: Audio,
         cancel: CancellationToken,
-    ) -> Operation<'a, String> {
-        Box::pin(async move {
-            self.agent_calls.fetch_add(1, Ordering::SeqCst);
-            assert_eq!(agent, "agent-1");
-            if self.agent_failing.load(Ordering::SeqCst) {
-                return Err(Error::Agent);
-            }
-            assert_eq!(text, "recognized speech");
-            if self.agent_blocking.load(Ordering::SeqCst) {
-                cancel.cancelled().await;
-                self.cancelled.fetch_add(1, Ordering::SeqCst);
-                return Err(Error::Cancelled);
-            }
-            Ok(if self.empty_reply.load(Ordering::SeqCst) {
-                " \n ".to_owned()
-            } else {
-                "Agent reply".to_owned()
-            })
+    ) -> Result<Transcript, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.samples.lock().unwrap().push(audio.bytes);
+        if self.failing.load(Ordering::SeqCst) {
+            return Err(Error::Provider);
+        }
+        if self.blocking.load(Ordering::SeqCst) {
+            cancel.cancelled().await;
+            self.cancelled.fetch_add(1, Ordering::SeqCst);
+            return Err(Error::Cancelled);
+        }
+        Ok(Transcript {
+            text: self
+                .transcript
+                .lock()
+                .unwrap()
+                .clone()
+                .unwrap_or_else(|| "recognized speech".to_owned()),
+            language: Some("en".to_owned()),
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl Synthesizer for Engine {
+    async fn synthesize(&self, text: &str, cancel: CancellationToken) -> Result<Audio, Error> {
+        self.synthesis_calls.fetch_add(1, Ordering::SeqCst);
+        assert_eq!(text, "Agent reply");
+        if self.synthesis_failing.load(Ordering::SeqCst) {
+            return Err(Error::Provider);
+        }
+        if self.synthesis_blocking.load(Ordering::SeqCst) {
+            cancel.cancelled().await;
+            self.cancelled.fetch_add(1, Ordering::SeqCst);
+            return Err(Error::Cancelled);
+        }
+        Ok(Audio {
+            bytes: vec![1; 150_000],
+            format: Format::Pcm(24000),
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl Agents for Engine {
+    async fn resolve(&self, identifier: &str) -> Result<String, Error> {
+        if self.resolve_blocking.load(Ordering::SeqCst) {
+            std::future::pending::<()>().await;
+        }
+        if identifier == "bad" {
+            Err(Error::Agent)
+        } else {
+            Ok("agent-1".to_owned())
+        }
+    }
+
+    async fn turn(
+        &self,
+        agent: &str,
+        text: &str,
+        cancel: CancellationToken,
+    ) -> Result<String, Error> {
+        self.agent_calls.fetch_add(1, Ordering::SeqCst);
+        assert_eq!(agent, "agent-1");
+        if self.agent_failing.load(Ordering::SeqCst) {
+            return Err(Error::Agent);
+        }
+        assert_eq!(text, "recognized speech");
+        if self.agent_blocking.load(Ordering::SeqCst) {
+            cancel.cancelled().await;
+            self.cancelled.fetch_add(1, Ordering::SeqCst);
+            return Err(Error::Cancelled);
+        }
+        Ok(if self.empty_reply.load(Ordering::SeqCst) {
+            " \n ".to_owned()
+        } else {
+            "Agent reply".to_owned()
         })
     }
 }

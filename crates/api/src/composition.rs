@@ -122,12 +122,13 @@ pub fn summary_source(
 #[derive(Debug)]
 struct SummarySource(Arc<dyn model::summary::SummaryGenerator>);
 
+#[async_trait::async_trait]
 impl model::summary::SummarySource for SummarySource {
-    fn generate(
+    async fn generate(
         &self,
         request: domain::summary::SummaryRequest,
-    ) -> model::summary::SummaryFuture<'_> {
-        self.0.generate(request)
+    ) -> Result<serde_json::Value, domain::summary::SummaryError> {
+        self.0.generate(request).await
     }
     fn shutdown(&self) {
         self.0.shutdown();

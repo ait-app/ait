@@ -11,6 +11,7 @@ const SUBSCRIPTIONS = new Set([
 /** Keep each renderer's account interests owned by its window, including crash/navigation cleanup. */
 export class AccountHubBridge {
   private readonly subscriptions = new Map<string, AccountTransportOwner>();
+  private readonly shareSubscriptions = new Map<AccountTransportOwner, () => void>();
   private readonly owners = new Map<AccountTransportOwner, () => void>();
   private link: string | null = null;
   private readonly presence = new Map<
@@ -95,6 +96,19 @@ export class AccountHubBridge {
     }
   }
 
+  /** Keep Hub share presence subscribed only while a renderer window consumes it. */
+  setShareSubscription(owner: AccountTransportOwner, active: boolean): void {
+    const current = this.shareSubscriptions.get(owner);
+    if (!active) {
+      current?.();
+      this.shareSubscriptions.delete(owner);
+      return;
+    }
+    if (current) return;
+    this.watch(owner);
+    this.shareSubscriptions.set(owner, this.hub.subscribeShares());
+  }
+
   private watch(owner: AccountTransportOwner): void {
     if (this.owners.has(owner)) return;
     const navigated = (
@@ -109,6 +123,8 @@ export class AccountHubBridge {
       owner.removeListener("destroyed", close);
       owner.removeListener("did-start-navigation", navigated);
       this.owners.delete(owner);
+      this.shareSubscriptions.get(owner)?.();
+      this.shareSubscriptions.delete(owner);
       if (this.presence.delete(owner))
         void this.hub.call("session.heartbeat", this.heartbeat()).catch(() => {});
       for (const [subscriptionId, current] of this.subscriptions) {

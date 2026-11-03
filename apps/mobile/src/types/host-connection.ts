@@ -15,6 +15,7 @@ import {
 } from "@ait/protocol/ssh-transport";
 import { z } from "zod";
 import { normalizeCenter } from "@ait/client/internal/account-session";
+import type { HubShareResourceKind } from "@ait/client/internal/hub";
 
 export { DirectTcpHostConnectionSchema, type DirectTcpHostConnection };
 
@@ -44,6 +45,12 @@ export interface AccountRelayHostConnection {
   type: "accountRelay";
   hostId: string;
   center: string;
+  /** Guest resource grant; omitted for a Host owned by the signed-in account. */
+  shareId?: string;
+  /** Serve node selected by the center for this share. */
+  nodeId?: string;
+  /** Guest scope used to select the supported directory synchronization mode. */
+  shareResourceKind?: HubShareResourceKind;
 }
 
 export type HostConnection =
@@ -122,7 +129,13 @@ function hostConnectionEquals(left: HostConnection, right: HostConnection): bool
     return false;
   }
   if (left.type === "accountRelay" && right.type === "accountRelay")
-    return left.hostId === right.hostId && left.center === right.center;
+    return (
+      left.hostId === right.hostId &&
+      left.center === right.center &&
+      left.shareId === right.shareId &&
+      left.nodeId === right.nodeId &&
+      left.shareResourceKind === right.shareResourceKind
+    );
 
   if (left.type === "directTcp" && right.type === "directTcp") {
     return (
@@ -351,14 +364,29 @@ export function createRemoteSshHostConnection(input: {
 export function createAccountRelayHostConnection(input: {
   hostId: string;
   center: string;
+  shareId?: string;
+  nodeId?: string;
+  shareResourceKind?: HubShareResourceKind;
 }): AccountRelayHostConnection {
   const hostId = z.uuid().parse(input.hostId.trim());
   const center = normalizeCenter(input.center);
+  const shareId = input.shareId ? z.uuid().parse(input.shareId.trim()) : undefined;
+  const nodeId = input.nodeId?.trim() || undefined;
+  if ((shareId === undefined) !== (nodeId === undefined)) {
+    throw new Error("Shared relay connections require both shareId and nodeId");
+  }
   return {
-    id: `account-relay:${encodeURIComponent(center)}:${hostId}`,
+    id: `account-relay:${encodeURIComponent(center)}:${hostId}${shareId ? `:share:${shareId}` : ""}`,
     type: "accountRelay",
     hostId,
     center,
+    ...(shareId
+      ? {
+          shareId,
+          nodeId,
+          ...(input.shareResourceKind ? { shareResourceKind: input.shareResourceKind } : {}),
+        }
+      : {}),
   };
 }
 

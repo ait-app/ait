@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use model::hub::{CallFuture, OutboxStore, StoreError};
+use model::hub::{OutboxStore, StoreError};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -71,22 +71,26 @@ impl FakeCenter {
     }
 }
 
+#[async_trait::async_trait]
 impl Center for FakeCenter {
     fn state(&self) -> watch::Receiver<LinkState> {
         self.state.subscribe()
     }
-    fn call(&self, scope: Scope, method: &'static str, params: Value) -> CallFuture<'_> {
-        Box::pin(async move {
-            self.calls
-                .lock()
-                .unwrap()
-                .push((scope, method, params.clone()));
-            self.results.lock().unwrap().pop_front().unwrap_or_else(|| {
-                Ok(if method == EVENTS {
-                    json!({"cursor":1,"inserted":true})
-                } else {
-                    json!({"revision":params["revision"],"changed":true})
-                })
+    async fn call(
+        &self,
+        scope: Scope,
+        method: &'static str,
+        params: Value,
+    ) -> Result<Value, CallError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push((scope, method, params.clone()));
+        self.results.lock().unwrap().pop_front().unwrap_or_else(|| {
+            Ok(if method == EVENTS {
+                json!({"cursor":1,"inserted":true})
+            } else {
+                json!({"revision":params["revision"],"changed":true})
             })
         })
     }

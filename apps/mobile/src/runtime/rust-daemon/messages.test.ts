@@ -9,6 +9,47 @@ import { eventMessage, responseMessage, serverInfo } from "./messages";
 import { object } from "./types";
 import { validateWSOutboundMessage } from "@ait/protocol/validation/ws-outbound";
 
+it("retains full directory capabilities for whole-node shares", () => {
+  const info = {
+    server_id: "shared-node",
+    features: ["directory-sync-v1", "directory-subscriptions-v1"],
+  };
+  const methods = new Set(Object.values(METHODS).map((spec) => spec.method));
+  expect(serverInfo(info, methods, "node")).toEqual(serverInfo(info, methods));
+});
+
+it.each(["workspace", "project"] as const)(
+  "uses scoped snapshots for a %s guest even when the host advertises full directories",
+  (scope) => {
+    const methods = new Set([
+      "project.list.request",
+      "workspace.list.request",
+      "agent.list.request",
+      "subscription.release.request",
+      "session.events.set_subscription.request",
+      "workspace.label.list.request",
+    ]);
+    const info = serverInfo(
+      {
+        server_id: "shared-host",
+        features: ["directory-sync-v1", "directory-subscriptions-v1"],
+      },
+      methods,
+      scope,
+    );
+    const payload = object(object(info.message).payload);
+    expect(payload.features).toMatchObject({
+      directorySubscriptions: false,
+      directorySync: false,
+      explicitEventSubscriptions: false,
+      workspaceLabels: false,
+      projectList: scope === "project",
+      workspaceMultiplicity: true,
+    });
+    expect(payload.sessionEventTypes).toEqual([]);
+  },
+);
+
 describe("native agent stream control events", () => {
   it.each([
     { type: "turn_started", provider: "codex", turnId: "turn" },
@@ -117,6 +158,26 @@ it("preserves Rust timeline search counts in the SDK response envelope", () => {
 });
 
 describe("Ait host capabilities", () => {
+  it.each([
+    { list: true, timeline: true },
+    { list: true, timeline: false },
+    { list: false, timeline: true },
+    { list: false, timeline: false },
+  ])(
+    "advertises provider children with list=$list and timeline=$timeline",
+    ({ list, timeline }) => {
+      const methods = [
+        ...(list ? ["agent.provider_subagents.list.request"] : []),
+        ...(timeline ? ["agent.provider_subagents.timeline.get.request"] : []),
+      ];
+      expect(info(methods)?.features).toMatchObject({
+        providerSubagents: list && timeline,
+        providerSubagentNesting: list && timeline,
+        projectedSubagentTimeline: timeline,
+      });
+    },
+  );
+
   it.each([
     ["workspace.setup.progress", "workspace-setup-events-v1", "workspace.setup.status.request"],
     ["activity.log", "activity-log-events-v1", "agent.list.request"],

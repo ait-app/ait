@@ -1,8 +1,5 @@
 //! Host-supplied secrets and native-execution ports.
 
-use std::future::Future;
-use std::pin::Pin;
-
 use domain::bot::SessionOwner;
 use model::ErrorCode;
 use provider::service::agent_execution::AgentExecution;
@@ -33,23 +30,17 @@ pub fn valid_credential_reference(reference: &str) -> bool {
 }
 
 /// Owner-checked native execution, injectable for offline Bot tests.
+#[async_trait::async_trait]
 pub trait Executor: std::fmt::Debug + Send + Sync {
     /// Execute one operation without moving session ownership to a client connection.
     /// # Errors
     /// Returns validation, inactive workspace, native or persistence failures.
-    fn execute(
-        &self,
-        owner: SessionOwner,
-        action: Action,
-    ) -> Pin<Box<dyn Future<Output = Result<Value, ErrorCode>> + Send + '_>>;
+    async fn execute(&self, owner: SessionOwner, action: Action) -> Result<Value, ErrorCode>;
 }
 
+#[async_trait::async_trait]
 impl Executor for AgentExecution {
-    fn execute(
-        &self,
-        owner: SessionOwner,
-        action: Action,
-    ) -> Pin<Box<dyn Future<Output = Result<Value, ErrorCode>> + Send + '_>> {
-        Box::pin(async move { self.bot(&owner, action).await })
+    async fn execute(&self, owner: SessionOwner, action: Action) -> Result<Value, ErrorCode> {
+        self.bot(&owner, action).await
     }
 }

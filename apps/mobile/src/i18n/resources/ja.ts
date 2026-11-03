@@ -2,6 +2,13 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ja: TranslationResources = {
+  sharing: {
+    ...en.sharing,
+    title: "共有",
+    offline: "この共有リソースはオフラインです。",
+    emptyResources: "この共有リソースにはワークスペースがありません。",
+    listError: "共有リソースを読み込めませんでした。",
+  },
   voiceTimeline: {
     started: "音声会話を開始しました",
     ended: "音声会話が終了しました",
@@ -311,6 +318,7 @@ export const ja: TranslationResources = {
     actions: {
       loadMore: "さらに読み込む",
       clearSearch: "検索をクリア",
+      refresh: "更新",
     },
   },
   agentList: {
@@ -1545,9 +1553,9 @@ export const ja: TranslationResources = {
         title: "プロバイダーをセットアップ",
         description: "Claude Code、Codexなどを設定",
       },
-      pairDevice: {
-        title: "デバイスをペアリング",
-        description: "このデーモンにスマートフォンを接続",
+      signIn: {
+        title: "アカウントにログイン",
+        description: "ブラウザーで統一ログインページを開く",
       },
     },
   },
@@ -1938,6 +1946,9 @@ export const ja: TranslationResources = {
     backdrop: "メニューの背景",
   },
   subagents: {
+    observing: "読み取り専用",
+    observationUnknown: "状態を確認中",
+    observationUnavailable: "セッションを利用できません",
     title: "サブエージェント",
     pillLabelOne: "サブエージェント 1 件",
     pillLabelMany: "サブエージェント {{count}} 件",

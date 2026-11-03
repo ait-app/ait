@@ -36,5 +36,5 @@ plugin completion, and lookup while an extension form remains unanswered.
 For upstream review, apply the patch to the recorded release source, run the
 focused `test/slash-commands/session-completion.test.ts`, regenerate RPC artifacts
 with `bun run gen:rpc`, and run package checks. See
-[ADR-204](../../docs/decisions/providers/adr-204-native-editor-completion.md)
+[ADR-212](../../docs/decisions/providers/adr-212-native-editor-completion.md)
 for the Ait integration boundary.

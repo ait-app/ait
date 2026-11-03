@@ -31,7 +31,87 @@ fn record(id: &str) -> PersistedAgentRuntimeRecord {
         internal: false,
         archived_at: None,
         owner: None,
+        observation: None,
     }
+}
+
+#[test]
+fn committed_snapshots_are_shared_across_registry_clones_and_invalidated_after_commit() {
+    let temp = tempfile::tempdir().unwrap();
+    let registry = FileBackedAgentRuntimeRegistry::new(temp.path().join("agents.json"));
+    registry.upsert(&record("agent")).unwrap();
+    let before = registry.snapshot().unwrap();
+    let other_reader = registry.clone();
+    assert!(std::sync::Arc::ptr_eq(
+        &before,
+        &other_reader.snapshot().unwrap()
+    ));
+    registry
+        .update("agent", &|current| {
+            let mut next = current.clone();
+            next.requires_attention = true;
+            next
+        })
+        .unwrap();
+    let after = other_reader.snapshot().unwrap();
+    assert!(!std::sync::Arc::ptr_eq(&before, &after));
+    assert!(!before[0].requires_attention);
+    assert!(after[0].requires_attention);
+    assert!(std::sync::Arc::ptr_eq(
+        &after[0],
+        &registry.get_shared("agent").unwrap().unwrap()
+    ));
+    assert!(registry.get_shared("absent").unwrap().is_none());
+    assert_eq!(
+        registry.get("agent").unwrap().as_ref(),
+        Some(after[0].as_ref())
+    );
+}
+
+#[test]
+fn observed_bindings_remain_private_read_only_and_validate_their_parent() {
+    use domain::agent_runtime::observation::{ObservationHealth, ObservedAgent, ObservedStatus};
+    let temp = tempfile::tempdir().expect("temporary directory");
+    let registry = FileBackedAgentRuntimeRegistry::new(temp.path().join("agents.json"));
+    let mut child = record("child");
+    child
+        .labels
+        .insert("paseo.parent-agent-id".to_owned(), "parent".to_owned());
+    child.observation = Some(ObservedAgent {
+        revision: 0,
+        root_agent_id: "parent".to_owned(),
+        root_session_id: "native-root".to_owned(),
+        parent_agent_id: "parent".to_owned(),
+        native_id: "native-child".to_owned(),
+        parent_native_id: "native-root".to_owned(),
+        persistence: None,
+        ready: false,
+        status: ObservedStatus::Running,
+        health: ObservationHealth::Stale,
+        observed_at: child.updated_at.clone(),
+        description: None,
+        subtitle: None,
+    });
+    registry.upsert(&child).expect("pending binding");
+    assert_eq!(registry.get("child").expect("read"), Some(child.clone()));
+    let mut invalid = child.clone();
+    invalid.persistence = Some(domain::agent_runtime::AgentPersistenceHandle {
+        provider: "codex".to_owned(),
+        session_id: "native-child".to_owned(),
+        native_handle: None,
+        metadata: None,
+    });
+    assert_eq!(
+        registry.upsert(&invalid),
+        Err(AgentRuntimeRegistryError::InvalidRecord)
+    );
+    invalid = child.clone();
+    invalid.labels.clear();
+    assert_eq!(
+        registry.upsert(&invalid),
+        Err(AgentRuntimeRegistryError::InvalidRecord)
+    );
+    assert_eq!(registry.get("child").expect("read"), Some(child));
 }
 
 #[test]

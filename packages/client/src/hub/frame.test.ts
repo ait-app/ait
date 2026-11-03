@@ -44,6 +44,37 @@ describe("ait-hub-v1 frame codec", () => {
     expect(() => decodeHubFrame(oversized)).toThrow("header length");
   });
 
+  it("validates group and share snapshots as sequenced frames", () => {
+    expect(decodeHubFrame(raw('{"t":"groups","seq":4}', [123, 125])).header).toEqual({
+      t: "groups",
+      seq: 4,
+    });
+    expect(decodeHubFrame(raw('{"t":"share_presence","seq":5}')).header).toEqual({
+      t: "share_presence",
+      seq: 5,
+    });
+    expect(() => decodeHubFrame(raw('{"t":"groups"}'))).toThrow("Invalid hub frame header");
+    expect(() => decodeHubFrame(raw('{"t":"share_presence","seq":"5"}'))).toThrow();
+  });
+
+  it("encodes the share of a guest session open", () => {
+    const frame = encodeHubFrame({
+      t: "open",
+      seq: 1,
+      s: "session",
+      to: { node: "node" },
+      share: "share-1",
+    });
+    const length = (frame[0] << 8) | frame[1];
+    expect(JSON.parse(new TextDecoder().decode(frame.subarray(2, 2 + length)))).toEqual({
+      t: "open",
+      seq: 1,
+      s: "session",
+      to: { node: "node" },
+      share: "share-1",
+    });
+  });
+
   it("refuses payloads above the center limit", () => {
     expect(() =>
       encodeHubFrame(

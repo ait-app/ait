@@ -1,8 +1,10 @@
 # 架构决策分类索引
 
-文档按当前能力归属分类，每类按编号从新到旧排列。
+文档按能力归属分类，每类按编号从新到旧排列。ADR 保存决策背景，不逐篇充当当前使用手册。
+当前关系先看[架构概览](../architecture/README.md)，操作步骤见[文档入口](../README.md)。
+旧决策按状态、后续修订与取代关系阅读；保留原路径以便代码和历史报告引用。
 ADR-001–024 已随旧架构删除，可从 Git 历史查阅；旧 ADR 中对这些编号的引用指向历史版本。
-ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路径区分。
+ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不同类别中各有两份，引用时以路径区分。
 
 ## Bot
 
@@ -11,10 +13,18 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Daemon 与协议
 
+- [ADR-208：群组内资源共享与访客会话](daemon/adr-208-workspace-share-guests.md)
+- [ADR-203：MCP 的可选 Unix socket 监听](daemon/adr-203-mcp-unix-socket.md)
+
+- [ADR-201：daemon 统一拥有节点发布与机器授权](daemon/adr-201-daemon-owned-publication.md)
+- [ADR-200：Headless 独立维护 Hub、Relay 与节点租约](daemon/adr-200-headless-independent-transports.md)
 - [ADR-181：Host 向 Hub 发布事件与目录摘要](daemon/adr-181-hub-host-publication.md)
+- [ADR-180：消息 Hub 服务端点（ait-hub-v1）](daemon/adr-180-hub-serve-endpoint.md)
+- [ADR-155：可协商的持久 Relay 数据隧道](daemon/adr-155-persistent-relay-data-tunnel.md)
 - [ADR-148：daemon 的无状态 MCP 编排接口](daemon/adr-148-daemon-mcp.md)
 - [ADR-142：PTY 拥有基础终端设备属性回复](daemon/adr-142-terminal-primary-device-attributes.md)
 
+- [ADR-140：Headless daemon 自动保存本地 API 凭据](daemon/adr-140-headless-local-api-token.md)
 - [ADR-134：已接纳的普通 RPC 等待共享任务额度](daemon/adr-134-admitted-rpc-job-waiting.md)
 - [ADR-127：移除 daemon 配对 offer RPC](daemon/adr-127-remove-daemon-pairing-offer.md)
 - [ADR-120：单连接启动请求的有界排队](daemon/adr-120-single-connection-startup-admission.md)
@@ -47,6 +57,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 - [ADR-168：Setup 全局摘要与面板日志订阅分离](workspace/adr-168-scoped-setup-observation.md)
 
+- [ADR-146：Workspace 重置清除变更请求关联](workspace/adr-146-reset-workspace-change-request-association.md)
 - [ADR-138：定时任务固定归属于 Workspace](workspace/adr-138-workspace-owned-schedules.md)
 
 - [ADR-132：Checkout 刷新独立准入与有界输出背压](workspace/adr-132-checkout-refresh-admission-and-backpressure.md)：隔离前台 Git 任务，diff 拥堵时等待输出额度并保持连接。
@@ -76,18 +87,21 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## Provider、Agent 与会话
 
-- [ADR-210：原生临时界面与拥有者操作](providers/adr-210-native-ui-and-actions.md)
+- [ADR-218：原生临时界面与拥有者操作](providers/adr-218-native-ui-and-actions.md)
+- [ADR-217：OMP 模型角色配置](providers/adr-217-omp-model-roles.md)
+- [ADR-216：原生控制的延迟确认与文件交付](providers/adr-216-native-control-delivery.md)
+- [ADR-213：DSH 与 OpenCode 的原生命令所有权](providers/adr-213-provider-native-command-ownership.md)
+- [ADR-215：DSH 不激活 Agent 的历史读取](providers/adr-215-dsh-non-activating-history.md)
+- [ADR-214：原生控制结果使用独立时间线卡片](providers/adr-214-native-control-result-cards.md)
+- [ADR-211：OMP 会话命令目录与参数补全](providers/adr-211-omp-command-catalog-and-completion.md)
+- [ADR-212：由 Provider 拥有原生编辑器补全](providers/adr-212-native-editor-completion.md)
 
-- [ADR-209：OMP 模型角色配置](providers/adr-209-omp-model-roles.md)
-- [ADR-208：原生控制的延迟确认与文件交付](providers/adr-208-native-control-delivery.md)
+- [ADR-210：Agent 目录共享已提交的不可变记录](providers/adr-210-committed-runtime-read-snapshots.md)
 
-- [ADR-205：DSH 与 OpenCode 的原生命令所有权](providers/adr-205-provider-native-command-ownership.md)
-- [ADR-207：DSH 不激活 Agent 的历史读取](providers/adr-207-dsh-non-activating-history.md)
-- [ADR-206：原生控制结果使用独立时间线卡片](providers/adr-206-native-control-result-cards.md)
+- [ADR-209：通过只读登记统一子 Agent 展示](providers/adr-209-observed-subagent-normalization.md)
 
-- [ADR-203：OMP 会话命令目录与参数补全](providers/adr-203-omp-command-catalog-and-completion.md)
-- [ADR-204：由 Provider 拥有原生编辑器补全](providers/adr-204-native-editor-completion.md)
-
+- [ADR-206：OpenCode 的 ACP 子 Agent 观测与历史归属](providers/adr-206-opencode-acp-subagents.md)
+- [ADR-205：Provider 执行归属与公共端口契约](providers/adr-205-provider-execution-contracts.md)
 - [ADR-202：Agent MCP 运行时自动注入](providers/adr-202-agent-mcp-injection.md)
 
 - [ADR-199：内置 Skill 随 daemon 启动分发](providers/adr-199-bundled-skill-distribution.md)
@@ -104,6 +118,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 - [ADR-191：Codex Provider 拥有原生实时语音](providers/adr-191-codex-native-realtime-voice.md)
 - [ADR-190：Ait ACP 桥接官方 OMP 与通用插件接口](providers/adr-190-omp-acp-settlement.md)
 
+- [ADR-189：Pi 不暴露 Host 模式](providers/adr-189-pi-without-host-mode.md)
 - [ADR-185：各 Provider 保留原生失败原因](providers/adr-185-native-provider-failure-details.md)
 
 - [ADR-180：Oh My Pi 原生 RPC Provider](providers/adr-180-omp-native-rpc-provider.md)
@@ -122,6 +137,7 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 - [ADR-167：用量缓存按原生账号与成功快照隔离](providers/adr-167-account-scoped-successful-usage.md)
 
+- [ADR-159：OpenCode 优先使用 ACP，按缺失能力补充原生观测](providers/adr-159-opencode-acp-native-observation.md)
 - [ADR-157：整图输入与 Codex 用户图片的跨设备展示](providers/adr-157-codex-user-image-projection.md)
 - [ADR-156：Pi 原生 RPC Provider](providers/adr-156-pi-native-rpc-provider.md)
 - [ADR-153：OpenCode ACP 冷启动预算](providers/adr-153-opencode-acp-cold-start-budget.md)
@@ -167,10 +183,17 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 ## 客户端、连接与品牌
 
+- [ADR-207：桌面 daemon 就绪探测与进程生命周期分离](clients/adr-207-desktop-daemon-readiness-ownership.md)
+
+- [ADR-204：在线业务连接只使用 Hub](clients/adr-204-hub-only-online-business-transport.md)
+
+- [ADR-188：网页客户端以独立镜像部署在网站根路径](clients/adr-188-standalone-web-client-image.md)
 - [ADR-187：GitHub 手动入口用专用标签触发 iOS App Store 构建](clients/adr-187-ios-app-store-cloud-trigger.md)（GitHub 触发入口已撤销）
 
 - [ADR-186：内置浏览器按 Workspace daemon 选择出站位置](clients/adr-186-workspace-browser-egress.md)
 
+- [ADR-184：Windows Desktop 不附带内置 daemon](clients/adr-184-windows-desktop-without-daemon.md)
+- [ADR-183：iOS CI 使用 Xcode Cloud 归档与内部分发](clients/adr-183-ios-xcode-cloud-release.md)
 - [ADR-182：客户端接入 Hub 账号服务](clients/adr-182-hub-account-client.md)
 
 - [ADR-177：移动端本地通知与 APNs／FCM 直连](clients/adr-177-native-local-and-remote-notifications.md)
@@ -179,6 +202,8 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 
 - [ADR-173：移动端终端输入复用 React Native](clients/adr-173-shared-native-terminal-input.md)
 
+- [ADR-172：Android APK 在 GitHub runner 上用 Gradle 构建](clients/adr-172-android-gradle-ci-build.md)
+- [ADR-171：iOS 窗口由 UIScene 管理](clients/adr-171-ios-scene-lifecycle.md)
 - [ADR-170：完整回滚 PR #381](clients/adr-170-revert-error-diagnostics-and-recovery.md)
 - [ADR-169：统一 Markdown 渲染与移动面板编辑生命周期](clients/adr-169-shared-markdown-and-composer-lifetimes.md)
 - [ADR-166：后台错误只记录、不弹错误提示](clients/adr-166-background-errors-without-toasts.md)
@@ -186,9 +211,12 @@ ADR-074、082、083、084、122 在不同类别中各有两份，引用时以路
 - [ADR-164：移除 Workspace 服务代理 URL 字段](clients/adr-164-remove-workspace-service-proxy-urls.md)
 - [ADR-163：nightly 附带独立 daemon 归档](clients/adr-163-nightly-standalone-daemon.md)
 - [ADR-160：清理旧公钥中继协议与测试残留](clients/adr-160-remove-legacy-relay-protocol.md)
+- [ADR-158：Release 附带独立 daemon 归档](clients/adr-158-standalone-daemon-release.md)
+- [ADR-156：初始化进度与活动事件使用 Ait 标准名称](clients/adr-156-setup-and-activity-events.md)
 - [ADR-154：账号状态通过共享客户端 Channel 推送](clients/adr-154-account-status-channel.md)
 - [ADR-152：在线中继 Workspace 的浏览器回环转发](clients/adr-152-remote-workspace-browser-loopback.md)
 - [ADR-151：Android 边缘手势进入移动面板导航](clients/adr-151-android-panel-edge-gestures.md)
+- [ADR-141：客户端测试功能开关与 Workspace Bot 标签页](clients/adr-141-experimental-workspace-bots.md)
 - [ADR-137：清理已移除功能的共享协议与 SDK](clients/adr-137-remove-retired-feature-protocol.md)
 - [ADR-132：管理网站中的浏览器客户端](clients/adr-132-web-console-client.md)
 - [ADR-128：桌面内置 daemon 可在退出后继续运行](clients/adr-128-desktop-daemon-keep-running.md)

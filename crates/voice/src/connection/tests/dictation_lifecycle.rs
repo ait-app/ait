@@ -93,18 +93,21 @@ struct Call {
 #[derive(Debug)]
 struct Gated(mpsc::UnboundedSender<Call>);
 
+#[async_trait::async_trait]
 impl Transcriber for Gated {
-    fn transcribe(&self, audio: Audio, cancel: CancellationToken) -> Operation<'_, Transcript> {
-        Box::pin(async move {
-            let (reply, receive) = oneshot::channel();
-            self.0
-                .send(Call { audio, reply })
-                .unwrap_or_else(|_| panic!("test receiver remains alive"));
-            tokio::select! {
-                result = receive => result.expect("test must settle transcription"),
-                () = cancel.cancelled() => Err(Error::Cancelled),
-            }
-        })
+    async fn transcribe(
+        &self,
+        audio: Audio,
+        cancel: CancellationToken,
+    ) -> Result<Transcript, Error> {
+        let (reply, receive) = oneshot::channel();
+        self.0
+            .send(Call { audio, reply })
+            .unwrap_or_else(|_| panic!("test receiver remains alive"));
+        tokio::select! {
+            result = receive => result.expect("test must settle transcription"),
+            () = cancel.cancelled() => Err(Error::Cancelled),
+        }
     }
 }
 

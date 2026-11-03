@@ -1,8 +1,4 @@
-use std::{
-    future::Future,
-    pin::Pin,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use domain::schedule::Schedule;
 
@@ -15,40 +11,39 @@ struct Fake {
     hold: bool,
     panic: bool,
 }
+#[async_trait::async_trait]
 impl Runner for Fake {
-    fn resolve(
+    async fn resolve(
         &self,
         _: String,
         target: domain::schedule::Target,
-    ) -> Pin<Box<dyn Future<Output = Result<domain::schedule::Target, Error>> + Send + '_>> {
-        Box::pin(async move { Ok(target) })
+    ) -> Result<domain::schedule::Target, Error> {
+        Ok(target)
     }
-    fn run(
+    async fn run(
         &self,
         _: Schedule,
         _: String,
         progress: Progress,
         cancel: CancellationToken,
-    ) -> Pin<Box<dyn Future<Output = Outcome> + Send + '_>> {
-        Box::pin(async move {
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            assert!(!self.panic, "runner panic fixture");
-            progress
-                .record(Some("agent".into()), Some("workspace".into()))
-                .await
-                .unwrap();
-            if self.hold {
-                cancel.cancelled().await;
-                return Outcome {
-                    error: Some("canceled".into()),
-                    ..Outcome::default()
-                };
-            }
-            Outcome {
-                output: Some("done".into()),
+    ) -> Outcome {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        assert!(!self.panic, "runner panic fixture");
+        progress
+            .record(Some("agent".into()), Some("workspace".into()))
+            .await
+            .unwrap();
+        if self.hold {
+            cancel.cancelled().await;
+            return Outcome {
+                error: Some("canceled".into()),
                 ..Outcome::default()
-            }
-        })
+            };
+        }
+        Outcome {
+            output: Some("done".into()),
+            ..Outcome::default()
+        }
     }
 }
 #[tokio::test]

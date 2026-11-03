@@ -1,98 +1,44 @@
-# Relay reconnect diagnostics
+# Hub 与下载 Relay 连接诊断
 
-The daemon emits structured relay lifecycle logs at `info` and failures at `warn`.
-Use the daemon's `log_level = "info"` configuration (or `--log-level info`) to
-retain normal closes as well as failures. Desktop-managed daemon stderr is in
-`daemon.log` under its configured data directory.
+在线业务使用 Hub，文件下载使用独立 Relay；账号 Channel 负责主机状态。
+先区分故障通道，避免把下载成功或 WebSocket `101` 当作业务会话健康证明。
+当前边界见 [ADR-204](../decisions/clients/adr-204-hub-only-online-business-transport.md)。
 
-Correlate a center access log's `/relay/sessions/<id>/client` and `/daemon` requests
-with `relay_session_id` in the Host daemon log. A WebSocket `101` only establishes
-that the upgrade succeeded; it does not prove the connection remained healthy.
+## 先检查状态
 
-## Fields and interpretation
+1. 从客户端导出[应用诊断](diagnostics.md)，记录时间、主机、平台和故障操作。
+2. 在目标主机使用本地 API token 查询 `GET /api/device/authorization`，区分机器授权、Hub 和下载 Relay 状态。
+   `daemon status --json` 是带时间戳的本地缓存，不能证明此刻在线。
+3. 检查 daemon `info` 日志。桌面管理的日志在数据目录的 `daemon.log`；独立服务由启动脚本收集 stdout/stderr。
+4. 将同一时间窗口的客户端、daemon 与中心日志按下表关联，再定位最早失败事件。
 
-- `relay_control` carries `generation` and `node_session_id`. A control failure
-  closes its active data tasks; those tasks may be dropped before emitting their
-  individual completion events.
-- `relay_session` carries `relay_session_id` and control `epoch`. Its completion
-  includes `elapsed_ms`; setup failures include the safe public error category.
-- `relay_endpoint.side` identifies `remote_relay` (Host to center) or `local_daemon`
-  (bridge to the local application WebSocket). Read and write refer to that socket.
-- `close_frame` includes a numeric `close_code` when the peer supplied one. `eof`
-  means the stream ended. These alone do not establish a network root cause.
-- `peer_queue_timeout` means forwarding to the other endpoint's bounded queue
-  exceeded five seconds. `write_timeout` means a socket write exceeded five seconds.
-  `pong_queue_full`, `peer_queue_closed`, and `incoming_queue_closed` identify other
-  bridge exit paths. The sibling endpoint can finish as a consequence of cancellation;
-  inspect the preceding cause event rather than treating both finishes as failures.
-- `operation`, `error_kind`, and optional `os_error` distinguish socket failures
-  without formatting peer-controlled errors. Setup `stage` distinguishes remote
-  connect, pairing, client hello, local connect, and local hello write. Explicit
-  timeout events also report `timeout_ms`.
-- `center_cancelled` means a control command cancelled the session. A control
-  `cancelled` event can mean stop, replacement, or runtime shutdown.
+授权恢复和显式断开见[无人值守 daemon](headless-daemon.md)。客户端退出不会撤销机器授权；
+完整断开会清除它，不能用反复断开替代暂时网络故障的诊断。
 
-Tickets, bearer tokens, URLs, message bodies, raw error strings, and peer close
-reason text are intentionally omitted. A `protocol` or `capacity` category may
-require further targeted investigation; this logging does not claim a root cause
-or alter retries, deadlines, queue sizes, or forwarding behavior.
+## 当前日志与链路
 
-## Incident motivating this instrumentation
+| 通道         | daemon 关联字段                                            | 排查重点                                              |
+| ------------ | ---------------------------------------------------------- | ----------------------------------------------------- |
+| Hub serve    | `hub_link`：`generation`、`node_session_id`                | 取票、握手、续传、连接被替换                          |
+| Hub 业务会话 | `hub_session`：`session`                                   | 本地 daemon 握手、输出、会话关闭与容量限制            |
+| 下载控制     | `relay_control`：`generation`、`node_session_id`           | 下载调度、控制连接、取消                              |
+| 下载数据     | `relay_session`：`relay_session_id`、`epoch`、`elapsed_ms` | `/relay/sessions/<id>/client` 与 `/daemon` 的同次传输 |
+| 账号状态     | 客户端 `ait-channel-v1`                                    | Host 快照、可连接状态与应用心跳；不承载业务 RPC       |
 
-On 2026-10-12, 13:19–13:21 UTC+8, one Firefox client repeatedly established relay
-sessions that lasted about 3.5–4 seconds. Matched center proxy records mostly showed
-`client closed` on the daemon leg and `upstream closed` on the browser leg. The
-center service containers had no restart or OOM indication. These particular short
-sessions did not match the configured 60-second heartbeat or 75-second proxy idle
-timeouts.
+字段来源见 [`relay::hub`](../../crates/relay/src/hub/mod.rs) 和
+[`relay`](../../crates/relay/src/lib.rs)。`center_cancelled` 表示中心取消下载；控制连接结束还可能
+取消其所属下载任务。随后发生的清理事件不一定是另一个独立故障。
 
-This narrows the investigation to the Host direction, but does not distinguish
-an application close, bridge error, or network interruption. Existing Host logs
-had no corresponding close reason, and the bridge discarded transport errors.
-The instrumentation supplies the missing evidence for a subsequent reproduction;
-it is not a confirmed fix for that incident.
+Hub 链路不可用、服务地址不匹配或目标没有 serve presence 时业务连接明确失败，按客户端重连机制重试；
+不会退回旧 Relay 业务会话。物理链路续传只在中心允许的恢复窗口内保留逻辑会话，不重放业务写入。
+独立下载成功不能证明 Hub 正常；账号列表里存在已保存主机也不能证明该主机当前可连接。
 
-## Connection reuse and recovery
+## 故障证据的限制
 
-Relay Host runtimes connect saved hosts when their account becomes available and
-retain their active client across page subscriptions and host metadata updates.
-Fresh account discovery warms a host once when it becomes available again; repeated
-unchanged discovery does not restart its connection. A failed initial probe can be
-retried immediately on recovery, even when no active client exists. Concurrent
-recovery signals share the in-flight probe.
+日志中的安全错误类别、阶段和系统错误应与之前的事件结合使用。`eof`、关闭帧或短连接时长
+本身不能区分主动关闭、应用异常和网络中断。不要通过记录票据、Bearer、原始消息或带凭据 URL 补充证据。
 
-Foregrounding and visible browser/Electron `online` events bypass pending reconnect
-backoff. Healthy sockets are verified and retained. Native account suspension marks
-discovery stale; successful discovery after resume or account recovery wakes existing
-relay hosts. This does not add a native OS network listener or keep native relay
-sockets alive while the account is suspended.
-
-Active relay clients retry after 500 ms, then 1, 2, 4, 8, 16 and at most 30 seconds
-on consecutive failures. One-shot host probes still disable automatic retries.
-The ordinary 45-second setup deadline and pairing/hello deadlines are unchanged.
-On explicit foreground recovery, an active client whose handshake has already
-been pending for at least three seconds retries immediately. A fresh attempt is
-retained so simultaneous recovery signals do not repeatedly cancel it. Callbacks
-from a replaced transport cannot close or send a hello on its replacement.
-
-Account status channels also verify foreground recovery with the existing
-`channel.heartbeat` and a three-second reply deadline, independent of the normal
-heartbeat timeout. A healthy channel is retained; an unresponsive one obtains a
-new ticket immediately after verification fails. Repeated recovery signals do not
-extend that deadline. Status-channel recovery leaves business sockets and downloads
-alone. A refresh requested during an account maintenance tick runs once as soon as
-that tick finishes, without the extra two-second polling delay.
-
-If renewal reports an expired existing node lease, the client registers once
-immediately. Registration failures and repeated rejection of new leases retain
-backoff. These changes introduce no new protocol or center requirement; the
-existing minimum requirement for `ait-channel-v1` still applies. The deadlines
-bound client-side waiting, not total reconnect time or Host startup latency.
-
-The Rust relay connector shares one TLS configuration and bounded session cache
-across control, data, download and subsequent reconnect sockets. Certificate and
-hostname verification remain enabled; TLS early data remains disabled. TLS session
-resumption requires support from the center's TLS endpoint. Outbound relay and
-loopback WebSockets enable `TCP_NODELAY`.
-
-See the [implementation validation](../reports/clients/relay-connect-latency.md).
+旧 `relay_endpoint`、业务配对、Yamux 及 2026-10-12 Firefox 事件的说明已移到
+[历史诊断记录](../archive/operations/relay-diagnostics.md)，只适用于对应旧版本。
+当前重连行为以 [Hub 客户端](../../packages/client/src/hub/link.ts)、
+[Host 连接](../../crates/relay/src/hub/mod.rs)和[机器授权流程](headless-daemon.md)为准。

@@ -76,11 +76,7 @@ async fn run(mut cli: config::Cli) -> anyhow::Result<()> {
     let diagnostics = diagnostics::Diagnostics::start(config.data_dir.join("diagnostics"))
         .context("start diagnostic collector")?;
     tracing_subscriber::registry()
-        .with(
-            diagnostics
-                .clone()
-                .with_filter(tracing_subscriber::filter::LevelFilter::WARN),
-        )
+        .with(diagnostics.clone().filtered())
         .with(
             tracing_subscriber::fmt::layer()
                 .with_ansi(false)

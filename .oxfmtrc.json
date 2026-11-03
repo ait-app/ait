@@ -16,6 +16,7 @@
     "**/*.gen.ts",
     "**/*.gen.tsx",
     "**/fixtures/**/*.json",
-    "docs/reports/**/*.json"
+    "docs/reports/**/*.json",
+    "docs/archive/**/*.json"
   ]
 }

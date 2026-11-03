@@ -12,6 +12,7 @@ use super::*;
 
 mod archive;
 mod paseo_api;
+mod shared_snapshots;
 mod synchronization;
 
 #[tokio::test]
@@ -53,7 +54,7 @@ async fn directory_only_hosts_check_identity_and_retire_only_the_requested_works
             .unwrap()
     );
     let retired = {
-        let permit = runtime.jobs.clone().acquire_owned().await.unwrap();
+        let permit = runtime.jobs.clone().acquire_many_owned(3).await.unwrap();
         let retirement = crate::dispatch::retire_workspaces(&state, vec!["wks-one".to_owned()]);
         tokio::pin!(retirement);
         assert!(futures_util::poll!(&mut retirement).is_pending());
@@ -689,6 +690,7 @@ fn agent(id: &str, workspace_id: &str, title: &str, internal: bool) -> Persisted
         internal,
         archived_at: None,
         owner: None,
+        observation: None,
     }
 }
 

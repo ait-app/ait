@@ -2,6 +2,7 @@
 //!
 //! Each frame is one WebSocket Binary message: `header_len:u16 BE | JSON header | payload`.
 
+use model::share::Visitor;
 use serde::{Deserialize, Serialize};
 use tokio_tungstenite::tungstenite::Bytes;
 use uuid::Uuid;
@@ -74,12 +75,22 @@ pub(super) enum Inbound {
     Reply { seq: u64, id: Uuid },
     #[serde(rename = "error")]
     Error { code: String },
+    /// `visitor` marks a guest session confined to one shared resource.
     #[serde(rename = "open")]
-    Open { seq: u64, s: Uuid },
+    Open {
+        seq: u64,
+        s: Uuid,
+        #[serde(default)]
+        visitor: Option<Visitor>,
+    },
     #[serde(rename = "msg")]
     Msg { seq: u64, s: Uuid, pt: PayloadKind },
     #[serde(rename = "close")]
     Close { seq: u64, s: Uuid },
+    /// Center-initiated outcome of the published shares; sent only after this
+    /// Host called `hub.shares.publish` on the link.
+    #[serde(rename = "share_status")]
+    ShareStatus { seq: u64 },
 }
 
 impl Inbound {
@@ -89,7 +100,8 @@ impl Inbound {
             Self::Open { seq, .. }
             | Self::Msg { seq, .. }
             | Self::Close { seq, .. }
-            | Self::Reply { seq, .. } => Some(*seq),
+            | Self::Reply { seq, .. }
+            | Self::ShareStatus { seq } => Some(*seq),
             Self::Welcome { .. } | Self::Ack { .. } | Self::Error { .. } => None,
         }
     }

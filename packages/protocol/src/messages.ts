@@ -921,8 +921,22 @@ export const ProviderUiStateSchema = z.object({
     .nullable(),
 });
 export type ProviderUiState = z.infer<typeof ProviderUiStateSchema>;
+export const AgentObservationPayloadSchema = z.object({
+  revision: z.number().int().nonnegative().optional(),
+  rootAgentId: z.string(),
+  nativeId: z.string(),
+  status: z.enum(["running", "completed", "failed", "canceled", "unknown"]),
+  health: z.enum(["current", "stale", "unavailable"]),
+  observedAt: z.string(),
+  description: z.string().nullable(),
+  subtitle: z.string().nullable(),
+});
+export type AgentObservationPayload = z.infer<typeof AgentObservationPayloadSchema>;
 
 export const AgentSnapshotPayloadSchema = z.object({
+  management: z.enum(["managed", "observed"]).optional(),
+  parentAgentId: z.string().nullable().optional(),
+  observation: AgentObservationPayloadSchema.optional(),
   id: z.string(),
   provider: AgentProviderSchema,
   cwd: z.string(),
@@ -1354,6 +1368,7 @@ const DirectorySyncMetadataSchema = z.object({
 
 export const FetchAgentsRequestMessageSchema = z.object({
   type: z.literal("agent.list.request"),
+  includeObserved: z.boolean().optional(),
   requestId: z.string(),
   scope: z.enum(["active"]).optional(),
   filter: AgentDirectoryFilterSchema.optional(),
@@ -1435,7 +1450,66 @@ export const ProjectListRequestMessageSchema = z.object({
   sync: DirectorySyncRequestSchema.optional(),
 });
 
+export const ShareResourceKindSchema = z.enum(["workspace", "project", "node"]);
+export const ShareAudienceSchema = z.enum(["group", "members"]);
+export const ShareStateSchema = z.enum(["pending", "accepted", "rejected", "revoked"]);
+
+export const ShareGroupSchema = z.object({
+  groupId: z.string().uuid(),
+  name: z.string(),
+  status: z.string(),
+  myRole: z.string(),
+});
+
+export const ShareSettingSchema = z.object({
+  resourceKind: ShareResourceKindSchema,
+  resourceKey: z.string(),
+  groupId: z.string().uuid(),
+  permission: z.literal("operate"),
+  audience: ShareAudienceSchema,
+  recipients: z.array(z.string().uuid()).default([]),
+  displayName: z.string().nullable().optional(),
+  projectName: z.string().nullable().optional(),
+  settingId: z.string().uuid(),
+  shareId: z.string().uuid().nullable().optional(),
+  state: ShareStateSchema,
+  code: z.string().nullable().optional(),
+  missingRecipients: z.array(z.string().uuid()).default([]),
+});
+
+export const ShareListRequestSchema = z.object({
+  type: z.literal("share.list.request"),
+  requestId: z.string(),
+});
+
+export const ShareGroupsListRequestSchema = z.object({
+  type: z.literal("share.groups.list.request"),
+  requestId: z.string(),
+});
+
+export const ShareSetRequestSchema = z.object({
+  type: z.literal("share.set.request"),
+  requestId: z.string(),
+  resourceKind: ShareResourceKindSchema,
+  resourceKey: z.string(),
+  groupId: z.string().uuid(),
+  permission: z.literal("operate"),
+  audience: ShareAudienceSchema,
+  recipients: z.array(z.string().uuid()).default([]),
+  displayName: z.string().optional(),
+  projectName: z.string().optional(),
+});
+
+export const ShareRemoveRequestSchema = z.object({
+  type: z.literal("share.remove.request"),
+  requestId: z.string(),
+  resourceKind: ShareResourceKindSchema,
+  resourceKey: z.string(),
+  groupId: z.string().uuid(),
+});
+
 export const FetchAgentHistoryRequestMessageSchema = z.object({
+  includeObserved: z.boolean().optional(),
   type: z.literal("agent.history.get.request"),
   requestId: z.string(),
   filter: AgentDirectoryFilterSchema.optional(),
@@ -1842,6 +1916,13 @@ export const AgentTimelineSearchRequestMessageSchema = z.object({
 export const AgentTimelineListPromptsRequestMessageSchema = z.object({
   type: z.literal("agent.timeline.list_prompts.request"),
   agentId: z.string(),
+  requestId: z.string(),
+});
+
+export const SubagentListRequestMessageSchema = z.object({
+  type: z.literal("agent.subagents.list.request"),
+  parentAgentId: z.string(),
+  subagentId: z.string().optional(),
   requestId: z.string(),
 });
 
@@ -3127,6 +3208,10 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   FetchWorkspacesRequestMessageSchema,
   WorkspaceGetRequestMessageSchema,
   ProjectListRequestMessageSchema,
+  ShareListRequestSchema,
+  ShareGroupsListRequestSchema,
+  ShareSetRequestSchema,
+  ShareRemoveRequestSchema,
   FetchAgentRequestMessageSchema,
   DeleteAgentRequestMessageSchema,
   ArchiveAgentRequestMessageSchema,
@@ -3188,6 +3273,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   FetchAgentTimelineRequestMessageSchema,
   AgentTimelineSearchRequestMessageSchema,
   AgentTimelineListPromptsRequestMessageSchema,
+  SubagentListRequestMessageSchema,
   ProviderSubagentListRequestMessageSchema,
   ProviderSubagentTimelineRequestMessageSchema,
   SetAgentTimelineSubscriptionRequestMessageSchema,
@@ -3574,6 +3660,7 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(agentForkContextCursor): added in v0.1.108, remove gate after 2027-01-14.
         agentForkContextCursor: z.boolean().optional(),
         // COMPAT(providerSubagents): added in v0.1.107, remove gate after 2027-01-12.
+        unifiedSubagentAgents: z.boolean().optional(),
         providerSubagents: z.boolean().optional(),
         // COMPAT(projectedSubagentTimeline): added after v0.8.0, remove gates after 2027-03-14; retain wire field.
         projectedSubagentTimeline: z.boolean().optional(),
@@ -4258,6 +4345,42 @@ export const ProjectListResponseMessageSchema = z.object({
   }),
 });
 
+export const ShareListResponseSchema = z.object({
+  type: z.literal("share.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    shares: z.array(ShareSettingSchema),
+    groups: z.array(ShareGroupSchema),
+  }),
+});
+
+export const ShareGroupsListResponseSchema = z.object({
+  type: z.literal("share.groups.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    groups: z.array(ShareGroupSchema),
+  }),
+});
+
+export const ShareSetResponseSchema = z.object({
+  type: z.literal("share.set.response"),
+  payload: z.object({
+    requestId: z.string(),
+    share: ShareSettingSchema,
+  }),
+});
+
+export const ShareRemoveResponseSchema = z.object({
+  type: z.literal("share.remove.response"),
+  payload: z.object({
+    requestId: z.string(),
+    resourceKind: ShareResourceKindSchema,
+    resourceKey: z.string(),
+    groupId: z.string().uuid(),
+    removed: z.boolean(),
+  }),
+});
+
 export const ScriptStatusUpdateMessageSchema = z.object({
   type: z.literal("script_status_update"),
   payload: z.object({
@@ -4620,6 +4743,16 @@ export const ProviderSubagentDescriptorPayloadSchema = z.object({
 export type ProviderSubagentDescriptorPayload = z.infer<
   typeof ProviderSubagentDescriptorPayloadSchema
 >;
+
+export const SubagentListResponseMessageSchema = z.object({
+  type: z.literal("agent.subagents.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    parentAgentId: z.string(),
+    agents: z.array(AgentSnapshotPayloadSchema),
+    error: z.string().nullable(),
+  }),
+});
 
 export const ProviderSubagentListResponseMessageSchema = z.object({
   type: z.literal("agent.provider_subagents.list.response"),
@@ -6543,6 +6676,10 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceLabelDeleteInspectResponseSchema,
   ProjectUpdateMessageSchema,
   ProjectListResponseMessageSchema,
+  ShareListResponseSchema,
+  ShareGroupsListResponseSchema,
+  ShareSetResponseSchema,
+  ShareRemoveResponseSchema,
   ScriptStatusUpdateMessageSchema,
   WorkspaceSetupProgressMessageSchema,
   WorkspaceSetupStatusMessageSchema,
@@ -6573,6 +6710,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentTimelineReplacementMessageSchema,
   AgentTimelineSearchResponseMessageSchema,
   AgentTimelineListPromptsResponseMessageSchema,
+  SubagentListResponseMessageSchema,
   ProviderSubagentListResponseMessageSchema,
   ProviderSubagentTimelineResponseMessageSchema,
   ProviderSubagentUpdateMessageSchema,
@@ -6741,6 +6879,15 @@ export type WorkspaceProjectDescriptorPayload = z.infer<
   typeof WorkspaceProjectDescriptorPayloadSchema
 >;
 export type ProjectListResponseMessage = z.infer<typeof ProjectListResponseMessageSchema>;
+export type ShareResourceKind = z.infer<typeof ShareResourceKindSchema>;
+export type ShareAudience = z.infer<typeof ShareAudienceSchema>;
+export type ShareState = z.infer<typeof ShareStateSchema>;
+export type ShareGroup = z.infer<typeof ShareGroupSchema>;
+export type ShareSetting = z.infer<typeof ShareSettingSchema>;
+export type ShareListResponse = z.infer<typeof ShareListResponseSchema>;
+export type ShareGroupsListResponse = z.infer<typeof ShareGroupsListResponseSchema>;
+export type ShareSetResponse = z.infer<typeof ShareSetResponseSchema>;
+export type ShareRemoveResponse = z.infer<typeof ShareRemoveResponseSchema>;
 export type WorkspaceScriptLifecycle = z.infer<typeof WorkspaceScriptLifecycleSchema>;
 export type WorkspaceScriptHealth = z.infer<typeof WorkspaceScriptHealthSchema>;
 export type WorkspaceScriptPayload = z.infer<typeof WorkspaceScriptPayloadSchema>;

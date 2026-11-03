@@ -6,6 +6,10 @@ export interface HubAccountSnapshot {
   linkId: string | null;
   centerUrl: string | null;
   methods: readonly string[];
+  /** Present after `share.subscribe`; optional for older desktop main processes. */
+  groups?: readonly HubGroup[] | null;
+  /** Resources other accounts share with this account. */
+  shares?: readonly HubShare[] | null;
 }
 
 /** Account event identity is independent of the transport sequence and resource ID. */
@@ -25,6 +29,8 @@ export interface HubAccountEvent {
 export interface HubAccountConnection {
   snapshot(): HubAccountSnapshot;
   subscribe(listener: () => void): () => void;
+  /** Subscribe to group and share snapshots when this connection supports resource sharing. */
+  subscribeShares?(): () => void;
   call<T = unknown>(method: string, params: unknown): Promise<T>;
   onEvent(listener: (event: HubAccountEvent) => void): () => void;
 }
@@ -43,7 +49,73 @@ export const HUB_ACCESS_METHODS = [
   "workspace.list.request",
   "agent.list.request",
   "hub.events.get_cursor",
+  "share.subscribe",
+  "group.members.list",
+  "share.revoke",
 ] as const;
+
+/** One group of the account, as pushed in `groups` snapshots after `share.subscribe`. */
+export interface HubGroup {
+  groupId: string;
+  name: string;
+  slug: string;
+  status: string;
+  myRole: string;
+  /** Changes whenever membership changes; reload `group.members.list` when it does. */
+  memberVersion: number;
+}
+
+/** Kind of resource a share grants: one workspace, one project, or the whole node (Host). */
+export type HubShareResourceKind = "workspace" | "project" | "node";
+
+/** A resource another account shares with this one, from `share_presence` snapshots. */
+export interface HubShare {
+  shareId: string;
+  groupId: string;
+  groupName: string;
+  hostId: string;
+  /** Serve endpoint to open the guest session to, together with `shareId`. */
+  nodeId: string;
+  hostName: string;
+  /**
+   * The sharing account. `displayName` and `username` may be null: accounts need not set a
+   * display name or choose a handle, and older centers send no `username`.
+   */
+  owner: { userId: string; displayName: string | null; username?: string | null };
+  resourceKind: HubShareResourceKind;
+  /** Workspace ID, project ID, or `""` for a node share. */
+  resourceKey: string;
+  displayName: string;
+  projectName: string | null;
+  permission: string;
+  state: "online" | "reconnecting";
+}
+
+/**
+ * One member of a group, as returned by `group.members.list`. Contact details are present
+ * only for group administrators; other members see `contactHint`, a contact with most
+ * characters hidden, to tell members apart.
+ */
+export interface HubGroupMember {
+  userId: string;
+  displayName: string | null;
+  /** Unique account handle; null until the account chooses one, absent from older centers. */
+  username?: string | null;
+  /** Masked email or phone number, e.g. `b***@example.com`; absent from older centers. */
+  contactHint?: string;
+  /** Only for group administrators. */
+  email?: string | null;
+  /** Only for group administrators. */
+  phoneNumber?: string | null;
+  role: string;
+  joinedAt: string;
+}
+
+/** Result of `group.members.list`. */
+export interface HubGroupMembers {
+  memberVersion: number;
+  members: HubGroupMember[];
+}
 
 export interface HubDirectoryItem {
   hostId: string;

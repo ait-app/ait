@@ -27,6 +27,7 @@ tokio-tungstenite.features = ["rustls-tls-webpki-roots"]
 url.workspace = true
 # Feishu's documented protobuf WebSocket frame; no code generator or SDK runtime.
 prost.workspace = true
+async-trait.workspace = true
 
 [dev-dependencies]
 persistence.workspace = true

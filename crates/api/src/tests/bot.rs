@@ -1,5 +1,3 @@
-use std::pin::Pin;
-
 use ::bot::ports::{Credentials, Executor};
 use ::bot::service::{Bots, Dependencies};
 use domain::BotId;
@@ -13,13 +11,10 @@ use super::*;
 
 #[derive(Debug)]
 struct Native;
+#[async_trait::async_trait]
 impl Executor for Native {
-    fn execute(
-        &self,
-        _: SessionOwner,
-        _: Action,
-    ) -> Pin<Box<dyn Future<Output = Result<Value, model::ErrorCode>> + Send + '_>> {
-        Box::pin(async { Ok(json!({"status":"idle","lastMessage":"Bot answer"})) })
+    async fn execute(&self, _: SessionOwner, _: Action) -> Result<Value, model::ErrorCode> {
+        Ok(json!({"status":"idle","lastMessage":"Bot answer"}))
     }
 }
 impl Credentials for Native {

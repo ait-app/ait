@@ -77,7 +77,7 @@ async fn acknowledged_upload_waits_for_contended_jobs_without_losing_the_file() 
             .shared
             .jobs
             .clone()
-            .acquire_owned()
+            .acquire_many_owned(3)
             .await
             .unwrap();
         let mut bytes = file_transfer::encode("upload", &frame).unwrap();

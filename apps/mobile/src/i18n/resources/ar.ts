@@ -2,6 +2,13 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ar: TranslationResources = {
+  sharing: {
+    ...en.sharing,
+    title: "المشاركة",
+    offline: "هذا المورد المشترك غير متصل حاليًا.",
+    emptyResources: "لا توجد مساحات عمل في هذا المورد المشترك.",
+    listError: "تعذر تحميل الموارد المشتركة.",
+  },
   voiceTimeline: {
     started: "بدأت المحادثة الصوتية",
     ended: "انتهت المحادثة الصوتية",
@@ -306,6 +313,7 @@ export const ar: TranslationResources = {
     actions: {
       loadMore: "تحميل المزيد",
       clearSearch: "مسح البحث",
+      refresh: "تحديث",
     },
   },
   agentList: {
@@ -1529,9 +1537,9 @@ export const ar: TranslationResources = {
         title: "موفري الإعداد",
         description: "قم بتكوين Claude Code و Codex والمزيد",
       },
-      pairDevice: {
-        title: "إقران الجهاز",
-        description: "قم بتوصيل هاتفك بهذا البرنامج الخفي",
+      signIn: {
+        title: "تسجيل الدخول إلى الحساب",
+        description: "افتح صفحة تسجيل الدخول الموحد في متصفحك",
       },
     },
   },
@@ -1919,6 +1927,9 @@ export const ar: TranslationResources = {
     backdrop: "خلفية القائمة",
   },
   subagents: {
+    observing: "للقراءة فقط",
+    observationUnknown: "بانتظار تأكيد الحالة",
+    observationUnavailable: "الجلسة غير متاحة",
     title: "الوكلاء الفرعيون",
     pillLabelOne: "وكيل فرعي واحد",
     pillLabelMany: "{{count}} وكلاء فرعيين",

@@ -7,6 +7,7 @@ async fn per_agent_environment_reaches_claude_and_does_not_change_the_shared_cli
     let environment = serde_json::from_value(serde_json::json!({
         "AIT_TEST_AGENT_ENV":"claude-private-fixture", "CLAUDECODE":"nested-client",
         "CLAUDE_CONFIG_DIR":root.path().join("custom-config"),
+        "CLAUDE_CODE_ENTRYPOINT":"sdk-cli",
         "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING":"false"
     }))
     .unwrap();
@@ -37,13 +38,14 @@ async fn per_agent_environment_reaches_claude_and_does_not_change_the_shared_cli
         rows.iter()
             .all(|row| row["nested"].is_null() && row["checkpoint"] == "true")
     );
+    assert!(rows.iter().all(|row| row["entrypoint"] == "ait"));
     std::fs::write(root.path().join("native-environment.jsonl"), "").unwrap();
     let mut other = client.create_session(&spec).await.unwrap();
     other.close().await.unwrap();
     assert!(
         captured(root.path())
             .iter()
-            .all(|row| row["value"].is_null())
+            .all(|row| row["value"].is_null() && row["entrypoint"] == "ait")
     );
 }
 

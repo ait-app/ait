@@ -1,7 +1,9 @@
 use super::*;
 use crate::ports::agent_session::AgentClient;
 
-fn file(path: &Path, contents: &str, runnable: bool) {
+/// Create `path` with `contents`, marking it executable when `runnable` is true.
+/// Panics if the temporary fixture cannot be written.
+pub(super) fn file(path: &Path, contents: &str, runnable: bool) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, contents).unwrap();
     #[cfg(unix)]
@@ -12,7 +14,9 @@ fn file(path: &Path, contents: &str, runnable: bool) {
     let _ = runnable;
 }
 
-fn bundle(root: &Path, mac: bool) -> (PathBuf, PathBuf) {
+/// Build a desktop fixture at `root`, using a macOS layout when `mac` is true.
+/// Returns the runtime and CLI paths; panics if the temporary fixture cannot be written.
+pub(super) fn bundle(root: &Path, mac: bool) -> (PathBuf, PathBuf) {
     let resources = root.join(if mac { "Resources" } else { "resources" });
     file(
         &resources.join("app/package.json"),
@@ -34,7 +38,7 @@ fn bundle(root: &Path, mac: bool) -> (PathBuf, PathBuf) {
 async fn desktop_runtime_is_available_without_a_path_cli() {
     let temp = tempfile::tempdir().unwrap();
     let (program, entrypoint) = bundle(temp.path(), false);
-    let client = resolve(&[], &[temp.path().into()]);
+    let client = resolve(&[], &[temp.path().into()], None);
     assert_eq!(client.program, program);
     assert!(client.is_available().await.unwrap());
     let mut command = client.command();
@@ -54,12 +58,46 @@ fn path_cli_precedes_desktop_and_explicit_programs_remain_unchanged() {
     let bin = temp.path().join("bin");
     let cli = bin.join(if cfg!(windows) { "dsh.exe" } else { "dsh" });
     file(&cli, "#!/bin/sh\nexit 0\n", true);
-    let client = resolve(&[bin], &[temp.path().into()]);
+    let client = resolve(&[bin], &[temp.path().into()], None);
     assert_eq!(client.program, cli);
     assert!(client.desktop.is_none());
     let explicit = DeepSeekHarnessClient::new("custom-dsh".into());
     assert_eq!(explicit.command().as_std().get_program(), "custom-dsh");
     assert_eq!(explicit.command().as_std().get_args().count(), 0);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn npm_global_symlink_is_available_and_precedes_desktop() {
+    let temp = tempfile::tempdir().unwrap();
+    bundle(temp.path(), false);
+    let prefix = temp.path().join("npm prefix");
+    let bin = prefix.join("bin");
+    let entrypoint = prefix.join("lib/node_modules/@deepseek-ai/dsh/lib/bin.js");
+    file(
+        &entrypoint,
+        "#!/bin/sh\n[ \"$#\" -eq 1 ] && [ \"$1\" = --version ] || exit 1\nprintf 'npm-cli-fixture\\n'\n",
+        true,
+    );
+    std::fs::create_dir_all(&bin).unwrap();
+    let cli = bin.join("dsh");
+    std::os::unix::fs::symlink("../lib/node_modules/@deepseek-ai/dsh/lib/bin.js", &cli).unwrap();
+    let client = resolve(&[bin], &[temp.path().into()], None);
+
+    assert_eq!(client.program, cli);
+    assert!(client.desktop.is_none());
+    assert!(client.is_available().await.unwrap());
+    let output = client.command().arg("--version").output().await.unwrap();
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"npm-cli-fixture\n");
+
+    std::fs::remove_file(entrypoint).unwrap();
+    assert!(!client.is_available().await.unwrap());
+    assert!(
+        resolve(&[prefix.join("bin")], &[temp.path().into()], None)
+            .desktop
+            .is_some()
+    );
 }
 
 #[test]
@@ -77,7 +115,7 @@ fn incomplete_or_unrelated_desktop_bundles_are_skipped() {
     );
     assert!(desktop(temp.path()).is_none());
     assert_eq!(
-        resolve(&[], &[temp.path().into()]).program,
+        resolve(&[], &[temp.path().into()], None).program,
         Path::new("dsh")
     );
 }
@@ -89,7 +127,7 @@ fn mac_bundle_uses_electron_as_node_and_preserves_paths_with_spaces() {
     let (program, entrypoint) = bundle(&root, true);
     let mut bundles = Vec::new();
     applications(temp.path(), &mut bundles);
-    let client = resolve(&[], &bundles);
+    let client = resolve(&[], &bundles, None);
     assert_eq!(client.program, program);
     let command = client.command();
     assert_eq!(
@@ -119,4 +157,28 @@ async fn installed_launcher_runs_native_cli_without_a_wrapper() {
     let output = client.command().arg("--version").output().await.unwrap();
     assert!(output.status.success());
     assert_ne!(output.stdout, [] as [u8; 0]);
+}
+
+#[tokio::test]
+#[ignore = "requires an installed DSH CLI or desktop bundle; temporary profile, no model request"]
+async fn installed_launcher_discovers_models_without_a_session() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut client = DeepSeekHarnessClient::installed();
+    client.environment = std::collections::BTreeMap::from([
+        ("DSH_HOME".into(), directory.path().to_str().unwrap().into()),
+        // Make models visible without a real credential or a model request.
+        ("DEEPSEEK_API_KEY".into(), "ait-discovery-fixture".into()),
+    ])
+    .try_into()
+    .unwrap();
+
+    assert!(client.is_available().await.unwrap());
+    let details = client
+        .discover(directory.path().to_str().unwrap())
+        .await
+        .unwrap();
+
+    assert_ne!(details.models, [] as [serde_json::Value; 0]);
+    assert_ne!(details.modes, [] as [serde_json::Value; 0]);
+    assert!(!directory.path().join("sessions").exists());
 }

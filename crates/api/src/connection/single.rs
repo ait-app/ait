@@ -13,7 +13,7 @@ use model::server::{ClientMessage, ErrorCode, valid_id};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
-use super::{ConnectionSubscriptions, Incoming, chunks, error, process_message};
+use super::{ConnectionSubscriptions, Incoming, Peer, chunks, error, process_message};
 use crate::Shared;
 
 // Workspace bootstrap sends several reads per group before the first response arrives.
@@ -28,7 +28,7 @@ pub(super) async fn read(
     stream: SplitStream<WebSocket>,
     state: &Shared,
     lanes: &[Outbound; 4],
-    capabilities: &[String],
+    peer: Peer<'_>,
     mut subscriptions: ConnectionSubscriptions,
 ) -> Result<(), QueueError> {
     let provider = ConnectionSubscriptions {
@@ -43,7 +43,7 @@ pub(super) async fn read(
     let contexts = lanes.each_ref().map(|outbound| WorkerContext {
         state,
         outbound,
-        capabilities,
+        peer,
         cancel: &cancel,
     });
     let reader = async {
@@ -73,7 +73,7 @@ pub(super) async fn read(
 struct WorkerContext<'a> {
     state: &'a Shared,
     outbound: &'a Outbound,
-    capabilities: &'a [String],
+    peer: Peer<'a>,
     cancel: &'a CancellationToken,
 }
 
@@ -108,7 +108,7 @@ async fn worker(
                 let result = tokio::select! {
                     () = context.cancel.cancelled() => return Ok(()),
                     result = process_message(Some(Ok(message)), context.state, context.outbound,
-                        context.capabilities, &mut subscriptions) => result?,
+                        context.peer, &mut subscriptions) => result?,
                 };
                 if result.is_break() {
                     context.cancel.cancel();
@@ -182,20 +182,17 @@ async fn route(
                     continue;
                 }
                 if releases.len() >= 32 {
-                    error(
-                        context.outbound,
-                        Some(request_id.clone()),
-                        ErrorCode::ResourceExhausted,
-                    )?;
+                    reject_release(context.outbound, request_id, "subscription_releases", 32)?;
                     continue;
                 }
                 let slots: Result<Vec<_>, _> =
                     senders.iter().map(mpsc::Sender::try_reserve).collect();
                 let Ok(slots) = slots else {
-                    error(
+                    reject_release(
                         context.outbound,
-                        Some(request_id.clone()),
-                        ErrorCode::ResourceExhausted,
+                        request_id,
+                        "subscription_release_queue",
+                        WORKER_QUEUE_CAPACITY,
                     )?;
                     continue;
                 };
@@ -223,11 +220,31 @@ async fn route(
     }
 }
 
+fn reject_release(
+    outbound: &Outbound,
+    request_id: &str,
+    resource: &'static str,
+    limit: usize,
+) -> Result<(), QueueError> {
+    tracing::warn!(
+        resource,
+        method = "subscription.release.request",
+        request_id,
+        limit,
+        "Resource budget exhausted"
+    );
+    error(
+        outbound,
+        Some(request_id.to_owned()),
+        ErrorCode::ResourceExhausted,
+    )
+}
+
 fn validate_request(method: &str, context: &WorkerContext<'_>) -> Result<(), ErrorCode> {
     super::validation::request(
         method,
         &context.state.info.implemented_capabilities,
-        context.capabilities,
+        context.peer.capabilities,
     )
 }
 
@@ -248,7 +265,7 @@ fn reject_negotiation(
             .capabilities
             .iter()
             .any(|name| name == method),
-        negotiated = context.capabilities.iter().any(|name| name == method),
+        negotiated = context.peer.capabilities.iter().any(|name| name == method),
     )
     .in_scope(|| error(context.outbound, Some(request_id.to_owned()), code))
 }
@@ -278,6 +295,12 @@ fn admit(
             .in_scope(|| error(outbound, Some(request_id), ErrorCode::ResourceExhausted))?;
         } else {
             // Binary/event loss cannot be repaired by retrying an RPC.
+            tracing::warn!(
+                resource = "capability_queue",
+                capability_lane = lane,
+                queue_capacity = WORKER_QUEUE_CAPACITY,
+                "Resource budget exhausted"
+            );
             return Err(QueueError::Full);
         }
     }

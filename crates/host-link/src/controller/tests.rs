@@ -31,6 +31,7 @@ struct Observed {
     save_fail_at: Option<usize>,
     refresh_error: Option<Error>,
     register_error: Option<Error>,
+    register_errors: Option<Error>,
     renew_error: Option<Error>,
     renew_errors: std::collections::VecDeque<Error>,
     mismatch: bool,
@@ -191,7 +192,7 @@ impl Center for Mock {
     ) -> Result<Session, Error> {
         let mut seen = self.0.lock().unwrap();
         seen.registrations.push(registration);
-        if let Some(error) = seen.register_error.take() {
+        if let Some(error) = seen.register_error.take().or(seen.register_errors) {
             return Err(error);
         }
         Ok(Session {

@@ -7,6 +7,7 @@ mod execution;
 mod generated_titles;
 mod mcp;
 pub(crate) mod native_sessions;
+pub(crate) mod observed;
 pub(crate) mod ownership;
 mod realtime;
 mod recovery;
@@ -291,6 +292,12 @@ impl AgentManager {
             .get(agent_id)
             .map_err(map_registry)?
             .ok_or_else(|| AgentManagerError::NotFound(agent_id.to_owned()))?;
+        if record.observation.is_some() {
+            return self
+                .load_observed(agent_id)
+                .await
+                .map_err(|_| AgentManagerError::Session);
+        }
         let generation = timeline
             .generation(agent_id)
             .map_err(|_| AgentManagerError::Registry)?;
@@ -439,7 +446,7 @@ impl AgentManager {
             .get(agent_id)
             .map_err(map_registry)?
             .ok_or_else(|| AgentManagerError::NotFound(agent_id.to_owned()))?;
-        if record.archived_at.is_some() {
+        if record.observation.is_some() || record.archived_at.is_some() {
             return Err(AgentManagerError::Busy);
         }
         if matches!(
@@ -541,8 +548,12 @@ impl AgentManager {
         }
         let permit = self.reserve_session()?;
         let client = self.available_client(&spec.provider).await?;
-        let (launch, binding) =
-            self.prepare_mcp(agent_id, spec, AgentResumePurpose::Interactive)?;
+        let (launch, binding) = self.prepare_mcp(
+            agent_id,
+            spec,
+            AgentResumePurpose::Interactive,
+            &registration.labels,
+        )?;
         let session = execution::native(
             &spec.provider,
             "create",
@@ -576,6 +587,7 @@ impl AgentManager {
             internal: registration.internal,
             archived_at: None,
             owner: registration.owner,
+            observation: None,
         };
         let record = self
             .register_session(agent_id, session, record, Registration::Create, permit)
@@ -603,6 +615,7 @@ impl AgentManager {
         agent_id: &str,
         recovering: bool,
     ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
+        self.require_managed(agent_id)?;
         if let Some(agent) = self.live.get(agent_id) {
             return if agent.registered {
                 self.registry
@@ -655,7 +668,7 @@ impl AgentManager {
             AgentResumePurpose::Interactive
         };
         let client = self.available_client(&record.provider).await?;
-        let (launch, binding) = self.prepare_mcp(agent_id, &spec, purpose)?;
+        let (launch, binding) = self.prepare_mcp(agent_id, &spec, purpose, &record.labels)?;
         let session = execution::native(
             &spec.provider,
             "resume",
@@ -692,6 +705,7 @@ impl AgentManager {
         if agent.registered {
             for child in agent.session.subagents() {
                 controls::publish_subagent(
+                    self.registry.as_ref(),
                     self.timeline.as_ref(),
                     &self.events,
                     agent,
@@ -846,6 +860,7 @@ impl AgentManager {
     /// # Errors
     /// Returns native interruption failures. An idle Agent is an idempotent success.
     pub(crate) async fn cancel(&mut self, agent_id: &str) -> Result<(), AgentManagerError> {
+        self.require_managed(agent_id)?;
         if let Some(timeline) = &self.timeline {
             timeline
                 .cancel_inputs(agent_id)
@@ -898,10 +913,6 @@ impl AgentManager {
                 agent,
             )
             .await?;
-            streaming::persist_handle(self.registry.as_ref(), &id, agent)?;
-            if matches!(agent.pending, Some(AgentTurnEvent::Failed)) {
-                streaming::settle_failure(self.timeline.as_ref(), &self.events, &id, agent).await?;
-            }
             let Some(event) = &agent.pending else {
                 continue;
             };
@@ -987,7 +998,7 @@ impl AgentManager {
     pub(crate) async fn reconcile(&mut self) -> Result<(), AgentManagerError> {
         let mut close = Vec::new();
         for (id, live) in &self.live {
-            let current = self.registry.get(id).map_err(map_registry)?;
+            let current = self.registry.get_shared(id).map_err(map_registry)?;
             if current.is_none()
                 || (live.record.archived_at.is_none()
                     && current

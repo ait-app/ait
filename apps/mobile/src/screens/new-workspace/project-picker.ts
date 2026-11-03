@@ -3,6 +3,7 @@ import type { ComboboxOption as ComboboxOptionType } from "@/components/ui/combo
 import { isWorkspaceArchivePending } from "@/contexts/session-workspace-upserts";
 import {
   filterWorkspaceProjectsForHost,
+  canCreateWorkspaceForHostProject,
   getHostProjectSourceDirectory,
   resolveInitialWorkspaceProject,
   type HostProjectListItem,
@@ -22,6 +23,8 @@ const PROJECT_OPTION_PREFIX = "project:";
 
 interface NewWorkspaceProjectPickerInput {
   selectedServerId: string;
+  projectServerIds?: readonly string[];
+  onSelectServerId?: (serverId: string) => void;
   projects: HostProjectListItem[];
   routeProject: HostProjectListItem | null;
   routeProjectContextViewKey: string | null;
@@ -83,12 +86,23 @@ function hasPendingArchiveForProject(input: {
 
 export function useNewWorkspaceProjectPicker({
   selectedServerId,
+  projectServerIds,
+  onSelectServerId,
   projects,
   routeProject,
   routeProjectContextViewKey,
   lastActiveProject,
   allowAllProjects,
 }: NewWorkspaceProjectPickerInput): NewWorkspaceProjectPickerState {
+  const pickerProjects = useMemo(
+    () =>
+      projects.filter((project) =>
+        (projectServerIds ?? [selectedServerId]).some((serverId) =>
+          canCreateWorkspaceForHostProject({ project, serverId, allowAllProjects }),
+        ),
+      ),
+    [allowAllProjects, projectServerIds, projects, selectedServerId],
+  );
   const selectableProjects = useMemo(
     () =>
       filterWorkspaceProjectsForHost({ projects, serverId: selectedServerId, allowAllProjects }),
@@ -160,18 +174,18 @@ export function useNewWorkspaceProjectPicker({
   const activeSelection = reconcileProjectSelection(projectSelection, selectionContext);
   const selectedProject = resolveProjectSelection(activeSelection, selectionContext);
   const { options: projectPickerOptions, projectByOptionId } = useMemo(
-    () => computeProjectOptionData(selectableProjects),
-    [selectableProjects],
+    () => computeProjectOptionData(pickerProjects),
+    [pickerProjects],
   );
   const handleSelectProjectOption = useCallback(
     (id: string) => {
       const project = projectByOptionId.get(id);
       if (!project) return;
-      if (
-        !allowAllProjects &&
-        !project.hosts.some((host) => host.worktreeSupport !== "unsupported")
-      )
-        return;
+      const targetServerId = [selectedServerId, ...(projectServerIds ?? [])].find((serverId) =>
+        canCreateWorkspaceForHostProject({ project, serverId, allowAllProjects }),
+      );
+      if (!targetServerId) return;
+      if (targetServerId !== selectedServerId) onSelectServerId?.(targetServerId);
       setProjectSelection({
         contextKey: manualSelectionContextKey,
         project,
@@ -179,7 +193,14 @@ export function useNewWorkspaceProjectPicker({
         source: "manual",
       });
     },
-    [allowAllProjects, manualSelectionContextKey, projectByOptionId],
+    [
+      allowAllProjects,
+      manualSelectionContextKey,
+      onSelectServerId,
+      projectByOptionId,
+      projectServerIds,
+      selectedServerId,
+    ],
   );
 
   return {

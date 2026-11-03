@@ -43,13 +43,11 @@ fn errors_log_categories_without_peer_payloads() {
             ))),
         );
         socket_error("read", &SocketError::Io(io::Error::from_raw_os_error(104)));
-        setup_error("pairing", &crate::Error::Protocol);
     });
     let log = capture.text();
     assert!(log.contains("error_kind=\"io\""));
     assert!(log.contains("os_error=104"));
     assert!(log.contains("error_kind=\"write_buffer_full\""));
-    assert!(log.contains("stage=\"pairing\""));
     assert!(!log.contains("private-"));
 }
 

@@ -17,11 +17,12 @@ import {
   buildSchedulesRoute,
   buildSessionsRoute,
 } from "@/utils/host-routes";
-import { router, usePathname } from "expo-router";
-import { Gauge, CalendarClock, History, Plus, Search } from "lucide-react-native";
+import { router, usePathname, type Href } from "expo-router";
+import { Gauge, CalendarClock, History, Plus, Search, Users } from "lucide-react-native";
 import { memo, useCallback, useMemo, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import { View, type StyleProp, type ViewStyle } from "react-native";
+import { useHubServices } from "@/runtime/hub-service-store";
 
 interface SidebarNavRowProps {
   onBeforeNavigate?: () => void;
@@ -161,10 +162,35 @@ function SidebarSchedulesRow({ onBeforeNavigate }: SidebarNavRowProps) {
   );
 }
 
+function SidebarSharedRow({ onBeforeNavigate }: SidebarNavRowProps) {
+  const { t } = useTranslation();
+  const pathname = usePathname();
+  const count = useHubServices(
+    (state) => new Set(state.snapshot?.shares?.map((share) => share.hostId)).size,
+  );
+  const handlePress = useCallback(() => {
+    onBeforeNavigate?.();
+    router.push("/shared" as Href);
+  }, [onBeforeNavigate]);
+
+  return (
+    <SidebarHeaderRow
+      icon={Users}
+      label={t(builtinSidebarNavLabelKey("shared"))}
+      trailingText={count > 0 ? String(count) : null}
+      onPress={handlePress}
+      isActive={pathname.includes("/shared")}
+      testID="sidebar-shared-with-me"
+      variant="compact"
+    />
+  );
+}
+
 const BUILTIN_ROWS: Record<BuiltinSidebarNavId, ComponentType<SidebarNavRowProps>> = {
   "new-workspace": SidebarNewWorkspaceRow,
   history: SidebarHistoryRow,
   search: SidebarSearchRow,
+  shared: SidebarSharedRow,
   schedules: SidebarSchedulesRow,
   usage: SidebarUsageRow,
 };

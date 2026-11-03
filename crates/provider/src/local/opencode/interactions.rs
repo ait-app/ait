@@ -5,6 +5,16 @@ use super::PROVIDER;
 use crate::local::acp_permissions::{Pending, resolve_tool};
 use crate::ports::agent_session::AgentSessionError;
 
+/// Native reply that withdraws an unanswered permission or form without choosing an option.
+pub(super) fn cancelled(pending: &Pending) -> Value {
+    let result = if pending.schema.is_some() {
+        json!({"action":"cancel"})
+    } else {
+        json!({"outcome":{"outcome":"cancelled"}})
+    };
+    json!({"jsonrpc":"2.0","id":pending.rpc_id,"result":result})
+}
+
 /// Validate a host answer and build its exact native callback reply; invalid answers reject.
 pub(super) fn resolve(pending: &Pending, response: &Value) -> Result<Value, AgentSessionError> {
     if let Some(schema) = &pending.schema {

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createArchiveFinishedSubagents, type ManagedSubagentSnapshot } from "./archive-finished";
+import {
+  createArchiveFinishedSubagents,
+  isFinishedSubagent,
+  type ManagedSubagentSnapshot,
+} from "./archive-finished";
 import type { PaseoSubagentRow, ProviderSubagentRow } from "./select";
 
 function paseo(id: string, status: PaseoSubagentRow["status"] = "idle"): PaseoSubagentRow {
@@ -19,6 +23,30 @@ function paseo(id: string, status: PaseoSubagentRow["status"] = "idle"): PaseoSu
     createdAt: new Date(),
   };
 }
+
+it("requires a confirmed native outcome before offering an observed Agent for bulk archive", () => {
+  const row: PaseoSubagentRow = {
+    ...paseo("native", "closed"),
+    canArchive: false,
+    observation: {
+      rootAgentId: "parent",
+      nativeId: "native",
+      status: "unknown",
+      health: "stale",
+      observedAt: new Date().toISOString(),
+      description: null,
+      subtitle: null,
+    },
+  };
+  expect(isFinishedSubagent(row)).toBe(false);
+  expect(
+    isFinishedSubagent({
+      ...row,
+      canArchive: true,
+      observation: { ...row.observation!, status: "completed" },
+    }),
+  ).toBe(true);
+});
 
 function provider(
   id: string,

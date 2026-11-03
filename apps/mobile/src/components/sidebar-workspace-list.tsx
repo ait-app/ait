@@ -35,7 +35,7 @@ import { getSidebarRowBackdrop } from "@/components/sidebar/sidebar-row-backdrop
 import { ScrollView as GestureScrollView, type GestureType } from "react-native-gesture-handler";
 import { WorkspaceRenameModal } from "@/components/workspace-rename-modal";
 import { useWorkspaceClipboardActions } from "@/hooks/use-workspace-clipboard-actions";
-import { ExternalLink, Settings, MoreVertical, Plus, Trash2 } from "lucide-react-native";
+import { ExternalLink, Settings, MoreVertical, Plus, Share2, Trash2 } from "lucide-react-native";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import type { PinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 import {
@@ -52,7 +52,6 @@ import {
   parseHostWorkspaceRouteFromPathname,
 } from "@/utils/host-routes";
 import {
-  shouldShowSidebarHostLabels,
   useSidebarProjectStatusBucket,
   type SidebarProjectEntry,
   type SidebarWorkspaceEntry,
@@ -144,6 +143,11 @@ import { useHostBadges } from "@/hosts/use-host-badges";
 import { useSidebarRowItems } from "@/components/sidebar/display-preferences/model";
 import { PullRequestStateIcon } from "@/git/pull-request-state-icon";
 import { useSidebarRowHover } from "@/components/sidebar/use-sidebar-row-hover";
+import { useSidebarRowPress } from "@/components/sidebar/use-sidebar-row-press";
+import {
+  ShareManagerSheet,
+  type ShareResourceTarget,
+} from "@/components/sharing/share-manager-sheet";
 
 const WORKSPACE_STATUS_DOT_WIDTH = 14;
 const ThemedExternalLink = withUnistyles(ExternalLink);
@@ -386,6 +390,7 @@ function ProjectRowTrailingActions({
   isMobileBreakpoint,
   isProjectActive,
   onBeginWorkspaceSetup,
+  onShare,
   onRemoveProject,
   removeProjectStatus,
 }: {
@@ -398,6 +403,7 @@ function ProjectRowTrailingActions({
   isMobileBreakpoint: boolean;
   isProjectActive: boolean;
   onBeginWorkspaceSetup: () => void;
+  onShare?: () => void;
   onRemoveProject?: () => void;
   removeProjectStatus: "idle" | "pending" | "success";
 }) {
@@ -422,6 +428,7 @@ function ProjectRowTrailingActions({
             projectViewKey={projectViewKey}
             settingsTarget={settingsTarget}
             projectPath={projectPath}
+            onShare={onShare}
             onRemoveProject={onRemoveProject}
             removeProjectStatus={removeProjectStatus}
           />
@@ -433,6 +440,8 @@ function ProjectRowTrailingActions({
 
 const trash2LeadingIcon = <ThemedTrash2 size={14} uniProps={foregroundMutedColorMapping} />;
 const settingsLeadingIcon = <ThemedSettings size={14} uniProps={foregroundMutedColorMapping} />;
+const ThemedShare2 = withUnistyles(Share2);
+const shareLeadingIcon = <ThemedShare2 size={14} uniProps={foregroundMutedColorMapping} />;
 const openInNewWindowLeadingIcon = (
   <ThemedExternalLink size={14} uniProps={foregroundMutedColorMapping} />
 );
@@ -450,12 +459,14 @@ function ProjectKebabMenu({
   projectViewKey,
   settingsTarget,
   projectPath,
+  onShare,
   onRemoveProject,
   removeProjectStatus,
 }: {
   projectViewKey: string;
   settingsTarget: { serverId: string; projectId: string } | null;
   projectPath: string;
+  onShare?: () => void;
   onRemoveProject: () => void;
   removeProjectStatus: "idle" | "pending" | "success";
 }) {
@@ -477,6 +488,7 @@ function ProjectKebabMenu({
           projectViewKey={projectViewKey}
           settingsTarget={settingsTarget}
           projectPath={projectPath}
+          onShare={onShare}
           onRemoveProject={onRemoveProject}
           removeProjectStatus={removeProjectStatus}
         />
@@ -505,6 +517,7 @@ function ProjectMenuItems({
   projectViewKey,
   settingsTarget,
   projectPath,
+  onShare,
   onRemoveProject,
   removeProjectStatus,
 }: {
@@ -512,6 +525,7 @@ function ProjectMenuItems({
   projectViewKey: string;
   settingsTarget: { serverId: string; projectId: string } | null;
   projectPath: string;
+  onShare?: () => void;
   onRemoveProject: () => void;
   removeProjectStatus: "idle" | "pending" | "success";
 }) {
@@ -543,6 +557,16 @@ function ProjectMenuItems({
           onSelect={handleOpenProjectSettings}
         >
           {t("sidebar.project.actions.openSettings")}
+        </ProjectMenuItem>
+      ) : null}
+      {onShare ? (
+        <ProjectMenuItem
+          surface={surface}
+          testID={`sidebar-project-menu-share-${projectViewKey}`}
+          leading={shareLeadingIcon}
+          onSelect={onShare}
+        >
+          {t("sharing.action")}
         </ProjectMenuItem>
       ) : null}
       {canOpenInNewWindow ? (
@@ -594,6 +618,7 @@ function WorkspaceRowRightGroup({
   onRename,
   isPinned,
   onTogglePin,
+  onShare,
 }: {
   workspace: SidebarWorkspaceEntry;
   backdrop: SidebarSurfaceBackdrop;
@@ -614,6 +639,7 @@ function WorkspaceRowRightGroup({
   onRename?: () => void;
   isPinned?: boolean;
   onTogglePin?: () => void;
+  onShare?: () => void;
 }) {
   const workspacePath = workspace.workspaceDirectory ?? workspace.projectRootPath;
   const { t } = useTranslation();
@@ -668,6 +694,7 @@ function WorkspaceRowRightGroup({
                 archiveShortcutKeys={archiveShortcutKeys}
                 isPinned={isPinned}
                 onTogglePin={onTogglePin}
+                onShare={onShare}
                 openInFileManagerPath={workspacePath}
               />
             ) : null}
@@ -840,7 +867,11 @@ function ProjectHeaderRow({
   onRemoveProject,
   removeProjectStatus = "idle",
 }: ProjectHeaderRowProps) {
-  const [isPressed, setIsPressed] = useState(false);
+  const {
+    isPressed,
+    onPressIn: handleProjectPressIn,
+    onPressOut: handleProjectPressOut,
+  } = useSidebarRowPress();
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const isMobileBreakpoint = useIsCompactFormFactor();
   const showSelection = selected && !isMobileBreakpoint;
@@ -848,6 +879,17 @@ function ProjectHeaderRow({
   const localDaemonServerId = useLocalDaemonServerId();
   const projectPath = resolveSidebarProjectLocalPath(project, localDaemonServerId);
   const settingsTarget = project.hosts[0] ?? null;
+  const [shareTarget, setShareTarget] = useState<ShareResourceTarget | null>(null);
+  const handleShare = useCallback(() => {
+    if (!settingsTarget) return;
+    setShareTarget({
+      serverId: settingsTarget.serverId,
+      resourceKind: "project",
+      resourceKey: settingsTarget.projectId,
+      displayName,
+    });
+  }, [displayName, settingsTarget]);
+  const handleCloseShare = useCallback(() => setShareTarget(null), []);
   const handleBeginWorkspaceSetup = useCallback(() => {
     if (!worktreeTarget) {
       return;
@@ -863,9 +905,6 @@ function ProjectHeaderRow({
     );
   }, [displayName, onWorkspacePress, worktreeTarget]);
   const handlePress = onPress;
-
-  const handleProjectPressIn = useCallback(() => setIsPressed(true), []);
-  const handleProjectPressOut = useCallback(() => setIsPressed(false), []);
 
   const projectRowStyle = useMemo(
     () => [
@@ -911,6 +950,7 @@ function ProjectHeaderRow({
         isMobileBreakpoint={isMobileBreakpoint}
         isProjectActive={isProjectActive}
         onBeginWorkspaceSetup={handleBeginWorkspaceSetup}
+        onShare={settingsTarget ? handleShare : undefined}
         onRemoveProject={onRemoveProject}
         removeProjectStatus={removeProjectStatus}
       />
@@ -924,53 +964,68 @@ function ProjectHeaderRow({
 
   if (!onRemoveProject) {
     return (
-      <View {...hoverHandlers}>
-        <PressHighlight
-          accessibilityRole="button"
-          style={projectRowStyle}
-          highlightStyle={styles.projectRowPressed}
-          onPressIn={handleProjectPressIn}
-          onPressOut={handleProjectPressOut}
-          onPress={handlePress}
-          testID={`sidebar-project-row-${project.viewKey}`}
-        >
-          {rowChildren}
-        </PressHighlight>
-      </View>
+      <>
+        <View {...hoverHandlers}>
+          <PressHighlight
+            accessibilityRole="button"
+            style={projectRowStyle}
+            highlightStyle={styles.projectRowPressed}
+            onPressIn={handleProjectPressIn}
+            onPressOut={handleProjectPressOut}
+            onPress={handlePress}
+            testID={`sidebar-project-row-${project.viewKey}`}
+          >
+            {rowChildren}
+          </PressHighlight>
+        </View>
+        <ShareManagerSheet
+          visible={shareTarget !== null}
+          target={shareTarget}
+          onClose={handleCloseShare}
+        />
+      </>
     );
   }
 
   return (
-    <ContextMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
-      <View {...hoverHandlers}>
-        <ContextMenuTrigger
-          enabledOnMobile={false}
-          accessibilityRole="button"
-          style={projectRowStyle}
-          highlightStyle={styles.projectRowPressed}
-          onPressIn={handleProjectPressIn}
-          onPressOut={handleProjectPressOut}
-          onPress={handlePress}
-          testID={`sidebar-project-row-${project.viewKey}`}
+    <>
+      <ContextMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
+        <View {...hoverHandlers}>
+          <ContextMenuTrigger
+            enabledOnMobile={false}
+            accessibilityRole="button"
+            style={projectRowStyle}
+            highlightStyle={styles.projectRowPressed}
+            onPressIn={handleProjectPressIn}
+            onPressOut={handleProjectPressOut}
+            onPress={handlePress}
+            testID={`sidebar-project-row-${project.viewKey}`}
+          >
+            {rowChildren}
+          </ContextMenuTrigger>
+        </View>
+        <ContextMenuContent
+          align="start"
+          width={220}
+          testID={`sidebar-project-context-menu-${project.viewKey}`}
         >
-          {rowChildren}
-        </ContextMenuTrigger>
-      </View>
-      <ContextMenuContent
-        align="start"
-        width={220}
-        testID={`sidebar-project-context-menu-${project.viewKey}`}
-      >
-        <ProjectMenuItems
-          surface="context"
-          projectViewKey={project.viewKey}
-          settingsTarget={settingsTarget}
-          projectPath={projectPath}
-          onRemoveProject={onRemoveProject}
-          removeProjectStatus={removeProjectStatus}
-        />
-      </ContextMenuContent>
-    </ContextMenu>
+          <ProjectMenuItems
+            surface="context"
+            projectViewKey={project.viewKey}
+            settingsTarget={settingsTarget}
+            projectPath={projectPath}
+            onShare={settingsTarget ? handleShare : undefined}
+            onRemoveProject={onRemoveProject}
+            removeProjectStatus={removeProjectStatus}
+          />
+        </ContextMenuContent>
+      </ContextMenu>
+      <ShareManagerSheet
+        visible={shareTarget !== null}
+        target={shareTarget}
+        onClose={handleCloseShare}
+      />
+    </>
   );
 }
 
@@ -1001,103 +1056,125 @@ function WorkspaceRowInner({
 }: WorkspaceRowInnerProps) {
   const isCompact = useIsCompactFormFactor();
   const showSelection = selected && !isCompact;
-  const [isPressed, setIsPressed] = useState(false);
+  const {
+    isPressed,
+    onPressIn: handleWorkspacePressIn,
+    onPressOut: handleWorkspacePressOut,
+  } = useSidebarRowPress();
   const isTouchPlatform = platformIsNative || isCompact;
   const handlePress = onPress;
-  const handleWorkspacePressIn = useCallback(() => setIsPressed(true), []);
-  const handleWorkspacePressOut = useCallback(() => setIsPressed(false), []);
 
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
+  const [shareTarget, setShareTarget] = useState<ShareResourceTarget | null>(null);
+  const handleShare = useCallback(
+    () =>
+      setShareTarget({
+        serverId: workspace.serverId,
+        resourceKind: "workspace",
+        resourceKey: workspace.workspaceId,
+        displayName: workspace.name,
+        projectName: workspace.projectName,
+      }),
+    [workspace],
+  );
+  const closeShare = useCallback(() => setShareTarget(null), []);
 
   return (
-    <SidebarWorkspaceRowFrame workspace={workspace}>
-      {({ isHovered, contextMenuOpen, onContextMenuOpenChange, hoverHandlers }) => {
-        const isDesktop = !isTouchPlatform;
-        const serviceSummary = isDesktop ? selectWorkspaceServiceSummary(workspace.scripts) : null;
-        const workspaceRowStyle = getProjectWorkspaceRowStyle({
-          isPressed,
-          selected: showSelection,
-          isHovered,
-        });
-        const backdrop = getSidebarRowBackdrop({
-          isPressed,
-          selected: showSelection,
-          isHovered,
-        });
-        return (
-          <View style={styles.workspaceRowContainer} {...hoverHandlers}>
-            <SidebarWorkspaceContextMenu
-              contextMenuOpen={contextMenuOpen}
-              onContextMenuOpenChange={onContextMenuOpenChange}
-              workspace={workspace}
-              leadingProjectName={leadingProjectName}
-              hostBadgeLabel={hostBadge?.label}
-              workspaceKey={workspace.workspaceKey}
-              onCopyPath={onCopyPath}
-              onCopyBranchName={onCopyBranchName}
-              onRename={onRename}
-              onMarkAsRead={onMarkAsRead}
-              onMarkAsUnread={onMarkAsUnread}
-              onArchive={onArchive}
-              archiveLabel={archiveLabel}
-              archiveStatus={archiveStatus}
-              archivePendingLabel={archivePendingLabel}
-              archiveShortcutKeys={archiveShortcutKeys}
-              isPinned={isPinned}
-              onTogglePin={onTogglePin}
-              openInFileManagerPath={workspace.workspaceDirectory}
-              disabled={isArchiving}
-              aria-selected={selected}
-              accessibilityRole="button"
-              accessibilityState={accessibilityState}
-              style={workspaceRowStyle}
-              highlightStyle={styles.workspaceRowPressed}
-              onPressIn={handleWorkspacePressIn}
-              onPressOut={handleWorkspacePressOut}
-              onPress={handlePress}
-              testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
-            >
-              <SidebarWorkspaceRowContent
+    <>
+      <SidebarWorkspaceRowFrame workspace={workspace}>
+        {({ isHovered, contextMenuOpen, onContextMenuOpenChange, hoverHandlers }) => {
+          const isDesktop = !isTouchPlatform;
+          const serviceSummary = isDesktop
+            ? selectWorkspaceServiceSummary(workspace.scripts)
+            : null;
+          const workspaceRowStyle = getProjectWorkspaceRowStyle({
+            isPressed,
+            selected: showSelection,
+            isHovered,
+          });
+          const backdrop = getSidebarRowBackdrop({
+            isPressed,
+            selected: showSelection,
+            isHovered,
+          });
+          return (
+            <View style={styles.workspaceRowContainer} {...hoverHandlers}>
+              <SidebarWorkspaceContextMenu
+                contextMenuOpen={contextMenuOpen}
+                onContextMenuOpenChange={onContextMenuOpenChange}
                 workspace={workspace}
-                hostBadge={hostBadge}
                 leadingProjectName={leadingProjectName}
-                leadingProjectIconDataUri={leadingProjectIconDataUri}
-                serviceSummary={serviceSummary}
-                backdrop={backdrop}
-                isHovered={isHovered}
-                isLoading={isArchiving || isCreating}
-                isCreating={isCreating}
-                shortcutNumber={shortcutNumber}
-                showShortcutBadge={showShortcutBadge}
-                reserveIdleStatusIndicatorSpace={reserveIdleStatusIndicatorSpace}
+                hostBadgeLabel={hostBadge?.label}
+                workspaceKey={workspace.workspaceKey}
+                onCopyPath={onCopyPath}
+                onCopyBranchName={onCopyBranchName}
+                onRename={onRename}
+                onMarkAsRead={onMarkAsRead}
+                onMarkAsUnread={onMarkAsUnread}
+                onArchive={onArchive}
+                archiveLabel={archiveLabel}
+                archiveStatus={archiveStatus}
+                archivePendingLabel={archivePendingLabel}
+                archiveShortcutKeys={archiveShortcutKeys}
+                isPinned={isPinned}
+                onTogglePin={onTogglePin}
+                onShare={handleShare}
+                openInFileManagerPath={workspace.workspaceDirectory}
+                disabled={isArchiving}
+                aria-selected={selected}
+                accessibilityRole="button"
+                accessibilityState={accessibilityState}
+                style={workspaceRowStyle}
+                highlightStyle={styles.workspaceRowPressed}
+                onPressIn={handleWorkspacePressIn}
+                onPressOut={handleWorkspacePressOut}
+                onPress={handlePress}
+                testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
               >
-                <WorkspaceRowRightGroup
+                <SidebarWorkspaceRowContent
                   workspace={workspace}
+                  hostBadge={hostBadge}
+                  leadingProjectName={leadingProjectName}
+                  leadingProjectIconDataUri={leadingProjectIconDataUri}
+                  serviceSummary={serviceSummary}
                   backdrop={backdrop}
                   isHovered={isHovered}
-                  isTouchPlatform={isTouchPlatform}
+                  isLoading={isArchiving || isCreating}
                   isCreating={isCreating}
-                  showShortcutBadge={showShortcutBadge}
                   shortcutNumber={shortcutNumber}
-                  archiveLabel={archiveLabel}
-                  archiveStatus={archiveStatus}
-                  archivePendingLabel={archivePendingLabel}
-                  archiveShortcutKeys={archiveShortcutKeys}
-                  onArchive={onArchive}
-                  onCopyBranchName={onCopyBranchName}
-                  onCopyPath={onCopyPath}
-                  onRename={onRename}
-                  onMarkAsRead={onMarkAsRead}
-                  onMarkAsUnread={onMarkAsUnread}
-                  isPinned={isPinned}
-                  onTogglePin={onTogglePin}
-                />
-              </SidebarWorkspaceRowContent>
-            </SidebarWorkspaceContextMenu>
-          </View>
-        );
-      }}
-    </SidebarWorkspaceRowFrame>
+                  showShortcutBadge={showShortcutBadge}
+                  reserveIdleStatusIndicatorSpace={reserveIdleStatusIndicatorSpace}
+                >
+                  <WorkspaceRowRightGroup
+                    workspace={workspace}
+                    backdrop={backdrop}
+                    isHovered={isHovered}
+                    isTouchPlatform={isTouchPlatform}
+                    isCreating={isCreating}
+                    showShortcutBadge={showShortcutBadge}
+                    shortcutNumber={shortcutNumber}
+                    archiveLabel={archiveLabel}
+                    archiveStatus={archiveStatus}
+                    archivePendingLabel={archivePendingLabel}
+                    archiveShortcutKeys={archiveShortcutKeys}
+                    onArchive={onArchive}
+                    onCopyBranchName={onCopyBranchName}
+                    onCopyPath={onCopyPath}
+                    onRename={onRename}
+                    onMarkAsRead={onMarkAsRead}
+                    onMarkAsUnread={onMarkAsUnread}
+                    isPinned={isPinned}
+                    onTogglePin={onTogglePin}
+                    onShare={handleShare}
+                  />
+                </SidebarWorkspaceRowContent>
+              </SidebarWorkspaceContextMenu>
+            </View>
+          );
+        }}
+      </SidebarWorkspaceRowFrame>
+      <ShareManagerSheet visible={shareTarget !== null} target={shareTarget} onClose={closeShare} />
+    </>
   );
 }
 
@@ -1703,12 +1780,10 @@ export function SidebarWorkspaceList({
   const pathname = usePathname();
   const hosts = useHosts();
   const rowItems = useSidebarRowItems();
-  // Host badge visibility is a lattice, not three competing switches: this gate is the global
-  // "off", `shouldShowSidebarHostLabels` is the automatic "there is only one host so it says
-  // nothing", and each host's own `badgeDisplay` decides name vs icon vs hidden. Turning the
-  // item off here removes the badge everywhere; leaving it on defers to the per-host setting.
+  // The sidebar toggle controls all badges; each host's appearance controls its own badge.
+  // Filtering down to one host must still respect that host's name/icon preference.
   const hostBadgeByServerId = useHostBadges({
-    enabled: rowItems.host && shouldShowSidebarHostLabels(projects),
+    enabled: rowItems.host,
   });
   const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
   const supportsMultiplicityByServerId = useHostFeatureMap(serverIds, "workspaceMultiplicity");

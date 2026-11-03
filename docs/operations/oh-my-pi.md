@@ -39,7 +39,7 @@ advisor、widget、image、web、speech、dictation、judge，以及 OMP 已配�
 每个角色可恢复为 `Use OMP setting`，保留原生配置及其推理后缀。
 这些选择保存到 Ait 会话配置，从下一轮生效，重启后恢复；不修改用户全局或项目配置。
 当前聊天模型仍由独立模型选择器控制。角色配置使用官方 `--config`，无需 OMP 补丁。
-见 [ADR-209](../decisions/providers/adr-209-omp-model-roles.md)。
+见 [ADR-217](../decisions/providers/adr-217-omp-model-roles.md)。
 
 模型目录成功后缓存五分钟，按工作目录与运行环境隔离。打开菜单复用有效目录，过期后
 后台刷新；失败保留上一份成功目录，三十秒后允许重试。并发发现合并，隐藏面板不做定时
@@ -105,7 +105,7 @@ Host 语音与听写使用 daemon 所在主机的设备，和客户端录音入�
 暂不提供原生文件回退、任意终端组件工厂、主题及 header/footer、每会话 MCP/工具策略覆盖、
 宿主工具/URI callback 注册和输出 schema。OMP 自己的工具、MCP 与扩展仍由本机配置加载。
 操作、异步等待、模型缓存和恢复边界见
-[ADR-210](../decisions/providers/adr-210-native-ui-and-actions.md)，
+[ADR-218](../decisions/providers/adr-218-native-ui-and-actions.md)，
 实测范围见[最终交付报告](../reports/providers/native-delivery-and-omp-roles-2026-11-02.md)。
 
 决策见 [ADR-180](../decisions/providers/adr-180-omp-native-rpc-provider.md)，

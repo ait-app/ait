@@ -134,6 +134,17 @@ describe("executeDaemonManagementToggle", () => {
       expect(result).toEqual({ kind: "disabled", newStatus: stoppedStatus });
     });
 
+    it("stops an owned daemon whose readiness probe failed", async () => {
+      const { deps, calls } = makeDeps();
+      const result = await executeDaemonManagementToggle(
+        true,
+        { ...runningManagedStatus, status: "errored" },
+        deps,
+      );
+      expect(calls).toEqual(["persist", "stop"]);
+      expect(result).toEqual({ kind: "disabled", newStatus: stoppedStatus });
+    });
+
     it("skips stop for an attached daemon even with a legacy desktop-managed flag", async () => {
       const { deps, calls } = makeDeps();
       const manuallyManagedStatus = { ...runningManagedStatus, ownedByDesktop: false };

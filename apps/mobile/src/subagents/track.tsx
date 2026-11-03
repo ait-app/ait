@@ -229,14 +229,17 @@ function SubagentsTrackRow({
             <SubagentFacts rowId={row.id} text={presentation.subtitle} />
           )}
         </View>
-        {row.kind === "paseo" ? (
+        {row.kind === "paseo" &&
+        (row.canArchive !== false || (onDetachSubagent && row.canDetach !== false)) ? (
           <SubagentRowActions
             rowId={row.id}
             displayLabel={displayLabel}
             compact={isCompact}
             visible={actionsAlwaysVisible || active}
-            onDetachPress={onDetachSubagent ? handleDetachPress : undefined}
-            onArchivePress={handleArchivePress}
+            onDetachPress={
+              onDetachSubagent && row.canDetach !== false ? handleDetachPress : undefined
+            }
+            onArchivePress={row.canArchive !== false ? handleArchivePress : undefined}
           />
         ) : null}
       </>
@@ -249,6 +252,7 @@ function SubagentsTrackRow({
       isCompact,
       onDetachSubagent,
       presentation,
+      row,
       row.kind,
       row.id,
       serverId,
@@ -295,7 +299,7 @@ function SubagentRowActions({
   compact: boolean;
   visible: boolean;
   onDetachPress?: () => void;
-  onArchivePress: () => void;
+  onArchivePress?: () => void;
 }): ReactElement {
   const { t } = useTranslation();
   const iconSize = paneContentToolbarIconSize(compact);
@@ -315,15 +319,17 @@ function SubagentRowActions({
           <ThemedUnlink size={iconSize} uniProps={mutedIconColorMapping} />
         </SubagentActionButton>
       ) : null}
-      <SubagentActionButton
-        label={t("subagents.archiveAction", { label: displayLabel })}
-        tooltipLabel={t("subagents.archiveTooltip")}
-        compact={compact}
-        onPress={onArchivePress}
-        testID={`subagents-track-archive-${rowId}`}
-      >
-        <ThemedArchive size={iconSize} uniProps={mutedIconColorMapping} />
-      </SubagentActionButton>
+      {onArchivePress ? (
+        <SubagentActionButton
+          label={t("subagents.archiveAction", { label: displayLabel })}
+          tooltipLabel={t("subagents.archiveTooltip")}
+          compact={compact}
+          onPress={onArchivePress}
+          testID={`subagents-track-archive-${rowId}`}
+        >
+          <ThemedArchive size={iconSize} uniProps={mutedIconColorMapping} />
+        </SubagentActionButton>
+      ) : null}
     </View>
   );
 }

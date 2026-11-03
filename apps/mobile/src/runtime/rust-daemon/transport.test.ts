@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { DaemonClient } from "@ait/client/internal/daemon-client";
+import type { HubShareResourceKind } from "@ait/client/internal/hub";
 import {
   decodeFileTransferFrame,
   encodeFileTransferFrame,
@@ -12,6 +13,7 @@ import { object, type Payload, type TransportFactory } from "./types";
 function harness(
   implemented = Object.values(METHODS).map((spec) => spec.method),
   url = "ws://127.0.0.1:7316/v1/ws",
+  guestScope?: HubShareResourceKind,
 ) {
   const sockets: {
     send: ReturnType<typeof vi.fn>;
@@ -65,7 +67,10 @@ function harness(
     };
   };
   const base = vi.fn(factory);
-  const transport = createRustDaemonTransportFactory(base)({
+  const transport = createRustDaemonTransportFactory(
+    base,
+    guestScope,
+  )({
     url,
     headers: { Authorization: "Bearer test" },
     protocols: ["paseo.bearer.test"],
@@ -159,6 +164,41 @@ describe("Rust protocol adapter", () => {
       await client.close();
     }
   });
+  it.each(["workspace", "project"] as const)(
+    "keeps %s guests on scoped directories through hello and later server-info updates",
+    (scope) => {
+      const h = harness(
+        undefined,
+        "ait+desktop://account-relay/host?center=https://center.test",
+        scope,
+      );
+      const features = ["directory-sync-v1", "directory-subscriptions-v1"];
+      try {
+        h.ready("test", features);
+        h.sockets[0].message({
+          type: "event",
+          method: "status.server_info",
+          params: { info: { server_id: "server", features }, subscriptionId: "status" },
+        });
+        expect(h.received).toHaveLength(2);
+        for (const message of h.received) {
+          expect(message).toMatchObject({
+            message: {
+              payload: {
+                features: {
+                  directorySubscriptions: false,
+                  directorySync: false,
+                  projectList: scope === "project",
+                },
+              },
+            },
+          });
+        }
+      } finally {
+        h.transport.close();
+      }
+    },
+  );
 
   it("subscribes to canonical setup and activity events after supported-only filtering", async () => {
     const h = harness();
@@ -799,9 +839,9 @@ describe("Rust protocol adapter", () => {
   });
 
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(199);
+    expect(Object.keys(METHODS)).toHaveLength(205);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(199);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(205);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);
@@ -809,6 +849,43 @@ describe("Rust protocol adapter", () => {
     expect(Object.keys(METHODS).some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(
       false,
     );
+  });
+
+  it("maps group sharing RPCs onto the background channel", () => {
+    const methods = [
+      "share.list.request",
+      "share.groups.list.request",
+      "share.set.request",
+      "share.remove.request",
+    ];
+    const h = harness();
+    try {
+      h.ready();
+      for (const [index, method] of methods.entries()) {
+        h.send({
+          type: method,
+          requestId: `share-${index}`,
+          ...(method === "share.set.request"
+            ? {
+                resourceKind: "workspace",
+                resourceKey: "workspace-1",
+                groupId: "group-1",
+                displayName: "Workspace 1",
+              }
+            : {}),
+          ...(method === "share.remove.request"
+            ? {
+                resourceKind: "workspace",
+                resourceKey: "workspace-1",
+                groupId: "group-1",
+              }
+            : {}),
+        });
+        expect(h.last(3)).toMatchObject({ method, request_id: `share-${index}` });
+      }
+    } finally {
+      h.transport.close();
+    }
   });
 
   it("rejects the retired pairing offer even when an older host implements it", () => {

@@ -57,6 +57,8 @@ pub(crate) struct AgentSort {
 /// Application-level Agent directory query.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct AgentDirectoryQuery {
+    /// Include verified read-only native children for clients using unified Agent identity.
+    pub(crate) include_observed: bool,
     /// Require active workspace/project placement.
     pub(crate) active_scope: bool,
     /// Include archived Agent records.
@@ -121,7 +123,7 @@ pub(crate) struct AgentPlacement {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct AgentDirectoryEntry {
     /// Durable Agent runtime snapshot.
-    pub(crate) agent: PersistedAgentRuntimeRecord,
+    pub(crate) agent: Arc<PersistedAgentRuntimeRecord>,
     /// Project/workspace placement.
     pub(crate) placement: AgentPlacement,
 }
@@ -243,7 +245,7 @@ impl AgentRuntimeDirectory {
     /// Returns a registry error when the identity cannot be checked.
     pub(crate) fn contains_identity(&self, id: &str) -> Result<bool, AgentRuntimeError> {
         self.agents
-            .get(id)
+            .get_shared(id)
             .map(|agent| agent.is_some())
             .map_err(map_agent_registry)
     }
@@ -275,7 +277,7 @@ impl AgentRuntimeDirectory {
             .placements()?
             .remove(&record.workspace_id.clone().unwrap_or_default());
         Ok(ResolvedAgent {
-            agent: record,
+            agent: record.as_ref().clone(),
             placement,
         })
     }
@@ -305,6 +307,12 @@ impl AgentRuntimeDirectory {
                 }
                 if let Some(labels) = labels {
                     next.labels.extend(labels.clone());
+                }
+                if let Some(source) = &next.observation {
+                    next.labels.insert(
+                        PARENT_AGENT_ID_LABEL.to_owned(),
+                        source.parent_agent_id.clone(),
+                    );
                 }
                 updated_at.clone_into(&mut next.updated_at);
                 next
@@ -402,6 +410,7 @@ impl AgentRuntimeDirectory {
         Ok(self
             .public_records()?
             .into_iter()
+            .filter(|record| query.include_observed || record.observation.is_none())
             .filter(|record| query.include_archived || record.archived_at.is_none())
             .filter_map(|agent| {
                 let placement = placements.get(agent.workspace_id.as_deref()?)?.clone();
@@ -459,13 +468,20 @@ impl AgentRuntimeDirectory {
         })
     }
 
-    fn public_records(&self) -> Result<Vec<PersistedAgentRuntimeRecord>, AgentRuntimeError> {
+    fn public_records(&self) -> Result<Vec<Arc<PersistedAgentRuntimeRecord>>, AgentRuntimeError> {
         Ok(self
             .agents
-            .list()
+            .snapshot()
             .map_err(map_agent_registry)?
-            .into_iter()
-            .filter(|record| !record.internal)
+            .iter()
+            .filter(|record| {
+                !record.internal
+                    && record
+                        .observation
+                        .as_ref()
+                        .is_none_or(|source| source.ready)
+            })
+            .cloned()
             .collect())
     }
 
@@ -493,9 +509,9 @@ impl AgentRuntimeDirectory {
     }
 
     fn resolve_title(
-        records: &[PersistedAgentRuntimeRecord],
+        records: &[Arc<PersistedAgentRuntimeRecord>],
         title: &str,
-    ) -> Result<PersistedAgentRuntimeRecord, AgentRuntimeError> {
+    ) -> Result<Arc<PersistedAgentRuntimeRecord>, AgentRuntimeError> {
         let matches = records
             .iter()
             .filter(|record| record.title.as_deref() == Some(title))

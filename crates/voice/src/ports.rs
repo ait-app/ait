@@ -1,13 +1,8 @@
 //! Speech engines and native Agent execution are replaceable external boundaries.
 
-use std::{future::Future, pin::Pin};
-
 use tokio_util::sync::CancellationToken;
 
 use crate::{Error, audio::Audio};
-
-/// Cancellable asynchronous adapter result, borrowing its provider.
-pub type Operation<'a, T> = Pin<Box<dyn Future<Output = Result<T, Error>> + Send + 'a>>;
 
 /// Recognized text and optional provider metadata.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -21,6 +16,7 @@ pub struct Transcript {
 }
 
 /// Speech-to-text boundary. Implementations must honor cancellation and bound output.
+#[async_trait::async_trait]
 pub trait Transcriber: Send + Sync + std::fmt::Debug {
     /// Check readiness before recording.
     /// # Errors
@@ -29,10 +25,15 @@ pub trait Transcriber: Send + Sync + std::fmt::Debug {
         Ok(())
     }
     /// Recognize audio, returning text or a safe configuration/provider/cancellation error.
-    fn transcribe(&self, audio: Audio, cancel: CancellationToken) -> Operation<'_, Transcript>;
+    async fn transcribe(
+        &self,
+        audio: Audio,
+        cancel: CancellationToken,
+    ) -> Result<Transcript, Error>;
 }
 
 /// Text-to-speech boundary. Implementations return mono PCM16 audio.
+#[async_trait::async_trait]
 pub trait Synthesizer: Send + Sync + std::fmt::Debug {
     /// Check readiness before enabling conversations.
     /// # Errors
@@ -41,29 +42,30 @@ pub trait Synthesizer: Send + Sync + std::fmt::Debug {
         Ok(())
     }
     /// Synthesize text, returning audio or a safe configuration/provider/cancellation error.
-    fn synthesize<'a>(&'a self, text: &'a str, cancel: CancellationToken) -> Operation<'a, Audio>;
+    async fn synthesize(&self, text: &str, cancel: CancellationToken) -> Result<Audio, Error>;
 }
 
 /// Native Agent coordination supplied by the composition root.
+#[async_trait::async_trait]
 pub trait Agents: Send + Sync + std::fmt::Debug {
     /// Open provider-native audio when supported; errors must never trigger text fallback.
     /// Dropping the returned session cancels provider work, including abandoned startup.
-    fn realtime<'a>(
-        &'a self,
-        _agent: &'a str,
+    async fn realtime(
+        &self,
+        _agent: &str,
         _cancel: CancellationToken,
-    ) -> Operation<'a, Option<model::realtime::Session>> {
-        Box::pin(async { Ok(None) })
+    ) -> Result<Option<model::realtime::Session>, Error> {
+        Ok(None)
     }
 
     /// Resolve and validate an enabled voice target, returning its canonical identity.
-    fn resolve<'a>(&'a self, identifier: &'a str) -> Operation<'a, String>;
+    async fn resolve(&self, identifier: &str) -> Result<String, Error>;
     /// Execute a text turn and return its final response. Cancellation must interrupt owned work
     /// and await its cleanup before this operation returns.
-    fn turn<'a>(
-        &'a self,
-        agent: &'a str,
-        text: &'a str,
+    async fn turn(
+        &self,
+        agent: &str,
+        text: &str,
         cancel: CancellationToken,
-    ) -> Operation<'a, String>;
+    ) -> Result<String, Error>;
 }

@@ -64,7 +64,22 @@ impl Dialer {
         ticket: &str,
         max: usize,
     ) -> Result<Socket, Error> {
-        self.dial(url, ticket, max)
+        self.connect_as(url, ticket, None, max).await
+    }
+
+    /// Dial the local daemon, optionally as a guest confined by `guest`
+    /// (an encoded [`model::share::Visitor`] for [`model::share::GUEST_HEADER`]).
+    ///
+    /// # Errors
+    /// Returns `Error::InvalidGrant` for an unusable request and `Error::Transport` otherwise.
+    pub(super) async fn connect_as(
+        &self,
+        url: &str,
+        ticket: &str,
+        guest: Option<&str>,
+        max: usize,
+    ) -> Result<Socket, Error> {
+        self.dial_as(url, ticket, guest, max)
             .await
             .map_err(|error| match error {
                 Dial::Request => Error::InvalidGrant,
@@ -83,7 +98,7 @@ impl Dialer {
         credential: &str,
         max: usize,
     ) -> Result<Socket, Error> {
-        self.dial(url, credential, max)
+        self.dial_as(url, credential, None, max)
             .await
             .map_err(|error| match error {
                 Dial::Request | Dial::Refused => Error::InvalidGrant,
@@ -91,7 +106,13 @@ impl Dialer {
             })
     }
 
-    async fn dial(&self, url: &str, ticket: &str, max: usize) -> Result<Socket, Dial> {
+    async fn dial_as(
+        &self,
+        url: &str,
+        ticket: &str,
+        guest: Option<&str>,
+        max: usize,
+    ) -> Result<Socket, Dial> {
         let mut request = url.into_client_request().map_err(|_| Dial::Request)?;
         request.headers_mut().insert(
             "authorization",
@@ -99,6 +120,12 @@ impl Dialer {
                 .parse()
                 .map_err(|_| Dial::Request)?,
         );
+        if let Some(guest) = guest {
+            request.headers_mut().insert(
+                model::share::GUEST_HEADER,
+                guest.parse().map_err(|_| Dial::Request)?,
+            );
+        }
         let config = WebSocketConfig::default()
             .max_message_size(Some(max))
             .max_frame_size(Some(max));

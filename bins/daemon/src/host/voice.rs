@@ -4,11 +4,7 @@ use anyhow::Context;
 use provider::service::agent_execution::AgentExecution;
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
-use voice::{
-    Error,
-    ports::{Agents, Operation},
-    service::Speech,
-};
+use voice::{Error, ports::Agents, service::Speech};
 
 #[derive(Debug)]
 pub(super) struct NativeAgents(pub AgentExecution);
@@ -27,78 +23,73 @@ pub(super) fn compose(
     Ok(speech)
 }
 
+#[async_trait::async_trait]
 impl Agents for NativeAgents {
-    fn realtime<'a>(
-        &'a self,
-        agent: &'a str,
+    async fn realtime(
+        &self,
+        agent: &str,
         cancel: CancellationToken,
-    ) -> Operation<'a, Option<model::realtime::Session>> {
-        Box::pin(async move {
-            self.0
-                .start_realtime(agent, cancel)
-                .await
-                .map_err(|error| match error {
-                    provider::rpc::ErrorCode::CatalogBusy => Error::AgentBusy,
-                    _ => Error::Realtime,
-                })
-        })
+    ) -> Result<Option<model::realtime::Session>, Error> {
+        self.0
+            .start_realtime(agent, cancel)
+            .await
+            .map_err(|error| match error {
+                provider::rpc::ErrorCode::CatalogBusy => Error::AgentBusy,
+                _ => Error::Realtime,
+            })
     }
 
-    fn resolve<'a>(&'a self, identifier: &'a str) -> Operation<'a, String> {
-        Box::pin(async move {
-            let result = self
-                .0
-                .execute("agent.get.request", json!({"agentId":identifier}))
-                .await
-                .map_err(|_| Error::Agent)?;
-            let agent = &result["agent"];
-            if !agent["archivedAt"].is_null() || agent["status"] == "archived" {
-                return Err(Error::Agent);
-            }
-            agent["id"].as_str().map(str::to_owned).ok_or(Error::Agent)
-        })
+    async fn resolve(&self, identifier: &str) -> Result<String, Error> {
+        let result = self
+            .0
+            .execute("agent.get.request", json!({"agentId":identifier}))
+            .await
+            .map_err(|_| Error::Agent)?;
+        let agent = &result["agent"];
+        if !agent["archivedAt"].is_null() || agent["status"] == "archived" {
+            return Err(Error::Agent);
+        }
+        agent["id"].as_str().map(str::to_owned).ok_or(Error::Agent)
     }
 
-    fn turn<'a>(
-        &'a self,
-        agent: &'a str,
-        text: &'a str,
+    async fn turn(
+        &self,
+        agent: &str,
+        text: &str,
         cancel: CancellationToken,
-    ) -> Operation<'a, String> {
-        Box::pin(async move {
-            if cancel.is_cancelled() {
-                return Err(Error::Cancelled);
-            }
-            // Await the admission receipt even if cancellation arrives during send: only an
-            // accepted turn belongs to this voice operation and may be interrupted by it.
-            let receipt = self
-                .0
-                .send_voice(agent, text, cancel.clone())
-                .await
-                .map_err(|_| Error::Agent)?;
-            if receipt["accepted"] != true {
-                return Err(Error::Agent);
-            }
-            let turn = receipt["turnId"].as_str().ok_or(Error::Agent)?;
-            let result = tokio::select! { biased;
-                () = cancel.cancelled() => Err(Error::Cancelled),
-                result = self.wait(agent, turn) => result,
-            };
-            if matches!(result, Err(Error::Cancelled)) {
-                let _ = tokio::time::timeout(Duration::from_secs(4), async {
-                    self.0
-                        .execute(
-                            "internal.voice.cancel",
-                            json!({"agentId":agent,"turnId":turn}),
-                        )
-                        .await
-                        .map_err(|_| Error::Agent)?;
-                    self.wait(agent, turn).await.map(|_| ())
-                })
-                .await;
-            }
-            result
-        })
+    ) -> Result<String, Error> {
+        if cancel.is_cancelled() {
+            return Err(Error::Cancelled);
+        }
+        // Await the admission receipt even if cancellation arrives during send: only an
+        // accepted turn belongs to this voice operation and may be interrupted by it.
+        let receipt = self
+            .0
+            .send_voice(agent, text, cancel.clone())
+            .await
+            .map_err(|_| Error::Agent)?;
+        if receipt["accepted"] != true {
+            return Err(Error::Agent);
+        }
+        let turn = receipt["turnId"].as_str().ok_or(Error::Agent)?;
+        let result = tokio::select! { biased;
+            () = cancel.cancelled() => Err(Error::Cancelled),
+            result = self.wait(agent, turn) => result,
+        };
+        if matches!(result, Err(Error::Cancelled)) {
+            let _ = tokio::time::timeout(Duration::from_secs(4), async {
+                self.0
+                    .execute(
+                        "internal.voice.cancel",
+                        json!({"agentId":agent,"turnId":turn}),
+                    )
+                    .await
+                    .map_err(|_| Error::Agent)?;
+                self.wait(agent, turn).await.map(|_| ())
+            })
+            .await;
+        }
+        result
     }
 }
 

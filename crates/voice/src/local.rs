@@ -15,7 +15,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     Error,
     audio::{Audio, Format, MAX_AUDIO_BYTES, MAX_TEXT_BYTES},
-    ports::{Operation, Synthesizer, Transcriber, Transcript},
+    ports::{Synthesizer, Transcriber, Transcript},
 };
 
 /// whisper.cpp CLI and its already-installed model.
@@ -35,34 +35,37 @@ impl Whisper {
     }
 }
 
+#[async_trait::async_trait]
 impl Transcriber for Whisper {
-    fn transcribe(&self, audio: Audio, cancel: CancellationToken) -> Operation<'_, Transcript> {
-        Box::pin(async move {
-            let directory = tempfile::tempdir().map_err(|_| Error::Provider)?;
-            let input = directory.path().join("input.wav");
-            let output = directory.path().join("transcript");
-            let wav = tokio::task::spawn_blocking(move || wav_16khz(audio))
-                .await
-                .map_err(|_| Error::Provider)??;
-            tokio::fs::write(&input, wav)
-                .await
-                .map_err(|_| Error::Provider)?;
-            let mut command = Command::new(&self.binary);
-            command
-                .arg("--model")
-                .arg(&self.model)
-                .arg("--file")
-                .arg(&input)
-                .args(["--language", "auto", "--output-txt", "--output-file"])
-                .arg(&output)
-                .args(["--no-prints", "--no-timestamps"]);
-            run(command, None, cancel).await?;
-            let bytes = read_bounded(&output.with_extension("txt"), MAX_TEXT_BYTES).await?;
-            let text = String::from_utf8(bytes).map_err(|_| Error::Provider)?;
-            Ok(Transcript {
-                text: text.trim().to_owned(),
-                language: None,
-            })
+    async fn transcribe(
+        &self,
+        audio: Audio,
+        cancel: CancellationToken,
+    ) -> Result<Transcript, Error> {
+        let directory = tempfile::tempdir().map_err(|_| Error::Provider)?;
+        let input = directory.path().join("input.wav");
+        let output = directory.path().join("transcript");
+        let wav = tokio::task::spawn_blocking(move || wav_16khz(audio))
+            .await
+            .map_err(|_| Error::Provider)??;
+        tokio::fs::write(&input, wav)
+            .await
+            .map_err(|_| Error::Provider)?;
+        let mut command = Command::new(&self.binary);
+        command
+            .arg("--model")
+            .arg(&self.model)
+            .arg("--file")
+            .arg(&input)
+            .args(["--language", "auto", "--output-txt", "--output-file"])
+            .arg(&output)
+            .args(["--no-prints", "--no-timestamps"]);
+        run(command, None, cancel).await?;
+        let bytes = read_bounded(&output.with_extension("txt"), MAX_TEXT_BYTES).await?;
+        let text = String::from_utf8(bytes).map_err(|_| Error::Provider)?;
+        Ok(Transcript {
+            text: text.trim().to_owned(),
+            language: None,
         })
     }
 }
@@ -84,33 +87,32 @@ impl Piper {
     }
 }
 
+#[async_trait::async_trait]
 impl Synthesizer for Piper {
-    fn synthesize<'a>(&'a self, text: &'a str, cancel: CancellationToken) -> Operation<'a, Audio> {
-        Box::pin(async move {
-            if text.trim().is_empty() || text.len() > MAX_TEXT_BYTES {
-                return Err(Error::Invalid);
+    async fn synthesize(&self, text: &str, cancel: CancellationToken) -> Result<Audio, Error> {
+        if text.trim().is_empty() || text.len() > MAX_TEXT_BYTES {
+            return Err(Error::Invalid);
+        }
+        let directory = tempfile::tempdir().map_err(|_| Error::Provider)?;
+        let output = directory.path().join("speech.wav");
+        let mut command = Command::new(&self.binary);
+        command
+            .arg("--model")
+            .arg(&self.model)
+            .arg("--output_file")
+            .arg(&output);
+        let input = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        run(command, Some(&input), cancel).await?;
+        let bytes = read_bounded(&output, MAX_AUDIO_BYTES).await?;
+        tokio::task::spawn_blocking(move || {
+            Audio {
+                bytes,
+                format: Format::Wav,
             }
-            let directory = tempfile::tempdir().map_err(|_| Error::Provider)?;
-            let output = directory.path().join("speech.wav");
-            let mut command = Command::new(&self.binary);
-            command
-                .arg("--model")
-                .arg(&self.model)
-                .arg("--output_file")
-                .arg(&output);
-            let input = text.split_whitespace().collect::<Vec<_>>().join(" ");
-            run(command, Some(&input), cancel).await?;
-            let bytes = read_bounded(&output, MAX_AUDIO_BYTES).await?;
-            tokio::task::spawn_blocking(move || {
-                Audio {
-                    bytes,
-                    format: Format::Wav,
-                }
-                .pcm()
-            })
-            .await
-            .map_err(|_| Error::Provider)?
+            .pcm()
         })
+        .await
+        .map_err(|_| Error::Provider)?
     }
 }
 

@@ -13,7 +13,7 @@ export type HubOutboundHeader =
   | { t: "ack"; a: number }
   | { t: "ping"; n: number }
   | { t: "call"; seq: number; id: string; method: string }
-  | { t: "open"; seq: number; s: string; to: { node: string } }
+  | { t: "open"; seq: number; s: string; to: { node: string }; share?: string }
   | { t: "msg"; seq: number; s: string; pt: HubPayloadType }
   | { t: "close"; seq: number; s: string; code: string };
 
@@ -42,6 +42,8 @@ export type HubInboundHeader =
   | { t: "msg"; seq: number; s?: string; from?: string; pt: HubPayloadType; ck?: string }
   | { t: "close"; seq: number; s: string; code: string }
   | { t: "presence"; seq: number }
+  | { t: "groups"; seq: number }
+  | { t: "share_presence"; seq: number }
   | { t: "reply"; seq: number; id: string }
   | {
       t: "event";
@@ -112,6 +114,8 @@ function valid(header: Record<string, unknown>): boolean {
         (header.pt === "text" || header.pt === "binary")
       );
     case "presence":
+    case "groups":
+    case "share_presence":
       return count(header.seq);
     case "reply":
       return count(header.seq) && text(header.id);

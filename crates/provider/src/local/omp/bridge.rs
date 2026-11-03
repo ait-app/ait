@@ -5,6 +5,7 @@ mod engine;
 mod mapping;
 mod protocol;
 
+use crate::ports::agent_session::AgentSessionFuture;
 use std::borrow::Cow;
 use std::collections::VecDeque;
 
@@ -13,7 +14,7 @@ use serde_json::{Value, json};
 
 use super::OmpClient;
 use crate::ports::agent_session::{
-    AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec, AgentTurnEvent,
+    AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
 use crate::ports::diagnostics::Diagnostic;
 use crate::protocol::prompt::AgentPrompt;
@@ -152,26 +153,25 @@ impl Session {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentSession for Session {
-    fn complete_commands<'a>(
-        &'a mut self,
-        input: &'a crate::protocol::commands::CompletionInput,
-    ) -> AgentSessionFuture<'a, crate::protocol::commands::CompletionResult> {
-        Box::pin(async move {
-            input.validate()?;
-            let result = self
-                .request(
-                    "_omp/commands/complete",
-                    json!({
-                        "sessionId":self.id,"text":input.text,"cursor":input.cursor
-                    }),
-                )
-                .await?;
-            let result: crate::protocol::commands::CompletionResult =
-                serde_json::from_value(result).map_err(|_| AgentSessionError::Failed)?;
-            result.validate(input)?;
-            Ok(result)
-        })
+    async fn complete_commands(
+        &mut self,
+        input: &crate::protocol::commands::CompletionInput,
+    ) -> Result<crate::protocol::commands::CompletionResult, AgentSessionError> {
+        input.validate()?;
+        let result = self
+            .request(
+                "_omp/commands/complete",
+                json!({
+                    "sessionId":self.id,"text":input.text,"cursor":input.cursor
+                }),
+            )
+            .await?;
+        let result: crate::protocol::commands::CompletionResult =
+            serde_json::from_value(result).map_err(|_| AgentSessionError::Failed)?;
+        result.validate(input)?;
+        Ok(result)
     }
     fn commands(&self) -> Option<&[Value]> {
         self.engine.native().and_then(AgentSession::commands)
@@ -194,17 +194,15 @@ impl AgentSession for Session {
             native.observation_committed();
         }
     }
-    fn begin_action<'a>(
-        &'a mut self,
-        action: &'a str,
-        arguments: &'a Value,
-    ) -> AgentSessionFuture<'a, AgentSessionFuture<'static, Value>> {
-        Box::pin(async move {
-            self.engine
-                .native_mut()?
-                .begin_action(action, arguments)
-                .await
-        })
+    async fn begin_action(
+        &mut self,
+        action: &str,
+        arguments: &Value,
+    ) -> Result<AgentSessionFuture<'static, Value>, AgentSessionError> {
+        self.engine
+            .native_mut()?
+            .begin_action(action, arguments)
+            .await
     }
     fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         self.engine
@@ -220,14 +218,12 @@ impl AgentSession for Session {
     fn failure_message(&self) -> Option<Cow<'_, str>> {
         self.engine.native().and_then(AgentSession::failure_message)
     }
-    fn runtime_info(&mut self) -> AgentSessionFuture<'_, StoredAgentRuntimeInfo> {
-        Box::pin(async move {
-            serde_json::from_value(
-                self.request("_ait/runtime", json!({"sessionId":self.id}))
-                    .await?,
-            )
-            .map_err(|_| AgentSessionError::Failed)
-        })
+    async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
+        serde_json::from_value(
+            self.request("_ait/runtime", json!({"sessionId":self.id}))
+                .await?,
+        )
+        .map_err(|_| AgentSessionError::Failed)
     }
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
         self.engine
@@ -246,47 +242,43 @@ impl AgentSession for Session {
             .map(AgentSession::subagents)
             .unwrap_or_default()
     }
-    fn start_turn<'a>(
-        &'a mut self,
-        text: &'a str,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(async move { self.start(&AgentPrompt::text(text), config).await })
+    async fn start_turn(
+        &mut self,
+        text: &str,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start(&AgentPrompt::text(text), config).await
     }
-    fn start_input<'a>(
-        &'a mut self,
-        prompt: &'a AgentPrompt,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(self.start(prompt, config))
+    async fn start_input(
+        &mut self,
+        prompt: &AgentPrompt,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start(prompt, config).await
     }
-    fn steer_turn<'a>(&'a mut self, turn: &'a str, text: &'a str) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move { self.steer_input(turn, &AgentPrompt::text(text)).await })
+    async fn steer_turn(&mut self, turn: &str, text: &str) -> Result<(), AgentSessionError> {
+        self.steer_input(turn, &AgentPrompt::text(text)).await
     }
-    fn steer_input<'a>(
-        &'a mut self,
-        turn: &'a str,
-        prompt: &'a AgentPrompt,
-    ) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            self.request(
-                "_session/steering",
-                json!({"sessionId":self.id,"prompt":prompt.blocks()?,
+    async fn steer_input(
+        &mut self,
+        turn: &str,
+        prompt: &AgentPrompt,
+    ) -> Result<(), AgentSessionError> {
+        self.request(
+            "_session/steering",
+            json!({"sessionId":self.id,"prompt":prompt.blocks()?,
                 "_meta":{"ait":{"turnId":turn,"prompt":prompt}}}),
-            )
-            .await
-            .map(|_| ())
-        })
+        )
+        .await
+        .map(|_| ())
     }
-    fn cancel_turn<'a>(&'a mut self, turn: &'a str) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            self.request(
-                "session/cancel",
-                json!({"sessionId":self.id,"_meta":{"ait":{"turnId":turn}}}),
-            )
-            .await
-            .map(|_| ())
-        })
+    async fn cancel_turn(&mut self, turn: &str) -> Result<(), AgentSessionError> {
+        self.request(
+            "session/cancel",
+            json!({"sessionId":self.id,"_meta":{"ait":{"turnId":turn}}}),
+        )
+        .await
+        .map(|_| ())
     }
     fn pending_permissions(&self) -> Vec<Value> {
         self.engine
@@ -294,19 +286,17 @@ impl AgentSession for Session {
             .map(AgentSession::pending_permissions)
             .unwrap_or_default()
     }
-    fn respond_permission<'a>(
-        &'a mut self,
-        id: &'a str,
-        response: &'a Value,
-    ) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            self.request(
-                "_ait/respond_permission",
-                json!({"sessionId":self.id,"id":id,"response":response}),
-            )
-            .await
-            .map(|_| ())
-        })
+    async fn respond_permission(
+        &mut self,
+        id: &str,
+        response: &Value,
+    ) -> Result<(), AgentSessionError> {
+        self.request(
+            "_ait/respond_permission",
+            json!({"sessionId":self.id,"id":id,"response":response}),
+        )
+        .await
+        .map(|_| ())
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
         if let Some(event) = self.events.pop_front() {
@@ -317,15 +307,13 @@ impl AgentSession for Session {
         }
         Ok(self.events.pop_front())
     }
-    fn service_realtime(&mut self) -> AgentSessionFuture<'_, ()> {
-        Box::pin(async move { self.engine.native_mut()?.service_realtime().await })
+    async fn service_realtime(&mut self) -> Result<(), AgentSessionError> {
+        self.engine.native_mut()?.service_realtime().await
     }
-    fn close(&mut self) -> AgentSessionFuture<'_, ()> {
-        Box::pin(async move {
-            self.request("session/close", json!({"sessionId":self.id}))
-                .await
-                .map(|_| ())
-        })
+    async fn close(&mut self) -> Result<(), AgentSessionError> {
+        self.request("session/close", json!({"sessionId":self.id}))
+            .await
+            .map(|_| ())
     }
 }
 

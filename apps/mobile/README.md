@@ -37,7 +37,7 @@ npm run build:ui-deps
 npm run web:expo --workspace=@ait/mobile -- --localhost --port 8081
 ```
 
-服务端从环境读取 `AIT_SERVER_TOKEN`。浏览器先用 Bearer 换取 30 秒有效的一次性连接票据；
+服务端优先读取 `AIT_SERVER_TOKEN`；未设置时复用数据目录内自动生成的 `local-api.token`。浏览器先用 Bearer 换取 30 秒有效的一次性连接票据；
 每次重连都会重新换票。页面来源必须匹配 `--web-origin`，原生客户端不需要这个参数。
 配置也可写入 server 的非秘密 TOML：`web_origins = ["http://localhost:8081"]`。
 
@@ -46,22 +46,14 @@ npm run web:expo --workspace=@ait/mobile -- --localhost --port 8081
 `npm run ios --workspace=@ait/mobile` / `npm run android --workspace=@ait/mobile` 构建
 共享依赖后启动对应原生工程。后端仍需单独启动。iOS simulator 可直接访问宿主 loopback；
 Android emulator/device 可先运行 `adb reverse tcp:7316 tcp:7316`，再连接 `127.0.0.1:7316`。
-Android 和 iOS 支持账户登录与中继：首次启动点击欢迎页的 **Online Service（在线服务）**；
-也可打开 **Settings → App → Online Service（应用 → 在线服务）**，或在 **Add Host → Online Service** 二级页面登录。
-使用与电脑桌面应用相同的账户登录，再选择在线电脑。工作区、Agent、终端和文件
-复用 Rust 单连接协议；下载写入手机缓存文件，完成后打开系统分享面板。
-登录凭据保存在系统安全存储中。Android 与 iOS 切后台后保留账号中继连接和下载 2 分钟；
-期间切回前台取消延迟暂停，复用仍健康的连接。仅进入 `inactive` 不会主动断开。
-后台满 2 分钟后暂停账户轮询、取消请求并关闭中继与下载，回到前台重新验证账户节点。
-系统可能提前挂起进程或断开网络，这个窗口不保证后台执行；后台冷启动仍直接暂停账户活动。
-使用自建服务时，在 **Service settings** 中填写 API 基础地址；留空则使用默认服务
-`https://aitapp.cn/api`。已保存的旧官方 API 地址（包括 `https://aitapp.cn:8443/api`）会自动迁移到默认 HTTPS 地址，账户和 Host 使用的自定义地址保持原值。`/hosts` 是管理页面，不是 API 基础地址。
-手机不运行 daemon，也不作为工作主机出现在列表里。独立 Web 开发默认仍使用直接连接；管理网站的 Web 构建启用账号中继，见下文。
-要让电脑上线，在其 **Host → Connections → Sync with online service（主机 → 连接 → 与在线服务同步）** 点击连接。
-停止同步只影响当前主机。客户端退出账户只释放自身节点与绑定 daemon 的租约，其他 daemon 保留原账户授权并继续续租，退出登录后仍可在对应主机中主动停止。
-应用运行期间负责这些主机的续租；关闭应用不主动撤销远程租约，但进程停止或授权失效后无法续租。重新启动应用后需再次启用同步；旧 daemon 需更新后才能使用此入口。
-已在实体 Android 设备验证欢迎页账户入口与邮箱/密码登录表单；真实账户到远程电脑的完整
-中继流程尚未完成真机验收。
+Android 和 iOS 只作为客户端，登录同一账号后连接在线工作主机；在线业务使用 Hub，文件下载走独立 Relay。
+登录入口、服务地址、凭据持久化和主机授权统一见[账号登录与主机上线](../../docs/operations/authing-client-login.md)。
+daemon 自行维护机器授权与租约，退出移动客户端不会撤销主机授权。
+
+Android 与 iOS 切后台后，账号连接和下载最多保留 2 分钟，随后暂停账户活动；
+回前台重新验证账户节点并恢复连接。仅进入 `inactive` 不主动断开。系统可提前挂起进程或断网，
+这个窗口不保证后台执行；后台冷启动直接暂停账户活动。下载写入手机缓存，完成后打开系统分享面板。
+独立 Web 开发可直接连接本地 daemon；生产网页仅提供在线服务连接，见下文。
 
 Android 和 iOS 的消息输入框附件菜单支持 **拍照（Take photo）**：授权相机后使用系统相机拍摄，
 确认照片后加入待发送图片附件；取消拍摄不修改草稿。相机权限被拒绝后，可在系统设置中重新开启。
@@ -101,7 +93,7 @@ APP_BROWSER_UI=1 node scripts/validate-app-rust-browser.mjs
 直接连接边界见 [ADR-049](../../docs/decisions/clients/adr-049-app-rust-browser-transport.md) 和
 [实施报告](../../docs/reports/clients/app-rust-daemon.md)。
 
-## 管理网站的客户端入口
+## 网页客户端部署
 
 网页客户端以独立静态镜像部署在网站根路径 `/`，与 ait-server 同源：网关保留 `/api`、
 管理控制台 `/dash` 及登录授权页，其余路径交给本镜像。客户端共享网站登录和同源 `/api`，

@@ -127,7 +127,12 @@ impl Read<'_> {
                 return self.sources(start, end);
             }
             let encoded: String = row.get(0).map_err(io)?;
-            entries.push(serde_json::from_str(&encoded).map_err(io)?);
+            let entry = serde_json::from_str(&encoded).map_err(io)?;
+            used += compatibility_expansion(&entry, encoded.len())?;
+            if used > self.bytes {
+                return self.sources(start, end);
+            }
+            entries.push(entry);
         }
         Ok(Page {
             entries,
@@ -191,6 +196,7 @@ impl Read<'_> {
         if used > self.bytes {
             return self.sources(start, end);
         }
+        let mut expanded = 0;
         let entries = ids
             .into_iter()
             .map(|id| {
@@ -202,9 +208,14 @@ impl Read<'_> {
                         |row| row.get(0),
                     )
                     .map_err(io)?;
-                serde_json::from_str::<Entry>(&encoded).map_err(io)
+                let entry = serde_json::from_str::<Entry>(&encoded).map_err(io)?;
+                expanded += compatibility_expansion(&entry, encoded.len())?;
+                Ok(entry)
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, ErrorCode>>()?;
+        if used + expanded > self.bytes {
+            return self.sources(start, end);
+        }
         Ok(page::after(
             entries,
             self.header.min_seq,
@@ -261,4 +272,24 @@ impl Read<'_> {
         };
         page::fit(&rows, page, self.header.selection, self.bytes)
     }
+}
+
+// Old cache byte counts predate the process-resource wrapper. Recount only repaired entries;
+// ordinary pages keep their indexed byte accounting without serializing every payload again.
+fn compatibility_expansion(entry: &Entry, stored_bytes: usize) -> Result<usize, ErrorCode> {
+    let detail = &entry.item["detail"];
+    if detail["type"] == "unknown"
+        && matches!(
+            detail["input"]["type"].as_str(),
+            Some("read" | "edit" | "write")
+        )
+        && detail["input"]["filePath"]
+            .as_str()
+            .is_some_and(|path| path.starts_with("proc://"))
+    {
+        return serde_json::to_vec(entry)
+            .map(|bytes| bytes.len().saturating_sub(stored_bytes))
+            .map_err(io);
+    }
+    Ok(0)
 }

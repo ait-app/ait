@@ -529,8 +529,10 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   }, [client, serverId, setInitializingAgents, setViewedTimelineSync, voiceRuntime]);
 
   useEffect(() => {
+    // A connection switch can replace the owner while isConnected stays true.
+    // Reapply the current state after each commit; setConnected is idempotent.
     viewedTimelineSyncRef.current?.setConnected(isConnected);
-  }, [isConnected]);
+  });
 
   // Daemon message handlers - directly update Zustand store
   useEffect(() => {
@@ -546,7 +548,11 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     ];
     const feeds = client.observeEvents(
       (info) => [
-        ...requestedEvents,
+        ...requestedEvents.filter(
+          (event) =>
+            event !== "agent.provider_subagents.update" ||
+            info?.features?.unifiedSubagentAgents !== true,
+        ),
         info?.features?.workspaceSetupObservation
           ? "workspace_setup_status"
           : "workspace.setup.progress",
@@ -577,7 +583,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
 
     const unsubProviderSubagentUpdate = feeds.subscribe({
       snapshot: () => {
-        void resyncProviderSubagents(client, serverId);
+        if (client.getLastServerInfoMessage()?.features?.unifiedSubagentAgents !== true)
+          void resyncProviderSubagents(client, serverId);
       },
       update: (message) => {
         if (message.type !== "agent.provider_subagents.update") return;

@@ -21,6 +21,7 @@ interface SidebarHeaderRowProps {
   testID?: string;
   nativeID?: string;
   accessibilityLabel?: string;
+  trailingText?: string | null;
   /**
    * "header" (default): a sidebar-height row with its own bottom separator —
    * the lone header at the top of a sidebar (settings "Back to workspace").
@@ -39,6 +40,7 @@ export function SidebarHeaderRow({
   testID,
   nativeID,
   accessibilityLabel,
+  trailingText = null,
   variant = "header",
   shortcutKeys = null,
 }: SidebarHeaderRowProps) {
@@ -68,13 +70,19 @@ export function SidebarHeaderRow({
             uniProps={isHighlighted ? foregroundColorMapping : foregroundMutedColorMapping}
           />
           <SidebarHeaderRowLabel label={label} isHighlighted={isHighlighted} />
+          {trailingText ? <Text style={styles.trailingText}>{trailingText}</Text> : null}
           {shortcutKeys && Boolean(state.hovered) ? (
-            <Shortcut chord={shortcutKeys} style={styles.shortcut} />
+            // Overlay the hover-only badge so it never changes the row height:
+            // with taller fallback fonts (Noto Sans CJK on Linux) the badge
+            // outgrows the label and the whole sidebar below shifts on hover.
+            <View style={styles.shortcutSlot} pointerEvents="none">
+              <Shortcut chord={shortcutKeys} />
+            </View>
           ) : null}
         </>
       );
     },
-    [ThemedIcon, isActive, label, shortcutKeys],
+    [ThemedIcon, isActive, label, shortcutKeys, trailingText],
   );
 
   return (
@@ -156,7 +164,17 @@ const styles = StyleSheet.create((theme) => ({
   labelHighlighted: {
     color: theme.colors.foreground,
   },
-  shortcut: {
+  trailingText: {
     marginLeft: "auto",
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    fontVariant: ["tabular-nums"],
+  },
+  shortcutSlot: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    right: theme.spacing[2],
+    justifyContent: "center",
   },
 }));

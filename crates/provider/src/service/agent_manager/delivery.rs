@@ -24,6 +24,8 @@ impl AgentManager {
         agent: &str,
         prompt: &AgentPrompt,
     ) -> Result<(), ErrorCode> {
+        self.require_managed(agent)
+            .map_err(|_| ErrorCode::UnsupportedCapability)?;
         if let Some(receipt) = self.existing_input(agent, prompt, "answer")? {
             match receipt {
                 Receipt::Accepted => return Ok(()),
@@ -89,6 +91,8 @@ impl AgentManager {
         prompt: &AgentPrompt,
         behavior: ActiveTurnBehavior,
     ) -> Result<Admission, ErrorCode> {
+        self.require_managed(agent)
+            .map_err(|_| ErrorCode::UnsupportedCapability)?;
         prompt.validate().map_err(|_| ErrorCode::InvalidMessage)?;
         let record = self
             .registry

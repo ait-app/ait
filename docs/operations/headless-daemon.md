@@ -1,7 +1,7 @@
 # Linux/macOS 无人值守 daemon
 
-此功能需要配套 [ait-server PR #9](https://github.com/ait-app/ait-server/pull/9) 已部署，且中心开启
-`DEVICE_AUTH_ENABLED` 并配置独立签名/回执密钥。生产中心固定为
+中心需要支持 device authorization、Hub serve 和下载 Relay，并开启 `DEVICE_AUTH_ENABLED`、
+配置机器授权签名与回执密钥；旧中心仅支持 Relay 业务连接时不能使用当前客户端。生产中心固定为
 `https://aitapp.cn/api`，不能修改。Linux 的 systemd、macOS 的 launchd 安装与管理由外部脚本负责。
 
 ## 获取 daemon
@@ -140,7 +140,8 @@ logout 尝试中心撤销并清除本地凭据。中心不可达、或初次领�
 详情补做撤销。网页撤销会关闭现有 Relay 控制和数据连接；普通网页登录退出不撤销机器授权。
 桌面/手机可以完整断开 Host，也可以显式重新授权；节点租约始终由 daemon 自行维护。
 
-协议、数据库差异与部署验收见 [设计与实施记录](../plans/linux-headless-device-auth.md)。
+早期协议、数据库差异与部署验收见[历史设计](../archive/plans/linux-headless-device-auth.md)；
+当前统一发布边界见 [ADR-201](../decisions/daemon/adr-201-daemon-owned-publication.md)。
 
 ## 机器名称与平台
 

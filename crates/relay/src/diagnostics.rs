@@ -37,9 +37,5 @@ pub(super) fn socket_error(operation: &'static str, error: &SocketError) {
     );
 }
 
-pub(super) fn setup_error(stage: &'static str, error: &crate::Error) {
-    tracing::warn!(stage, %error, "Relay setup failed");
-}
-
 #[cfg(test)]
 pub(crate) mod tests;

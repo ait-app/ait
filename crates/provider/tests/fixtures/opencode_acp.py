@@ -128,7 +128,7 @@ def content(row):
             if part["type"] == "text":
                 update({"sessionUpdate": "agent_message_chunk", "messageId": row["id"], "content": part})
             elif part["type"] == "tool":
-                update({"sessionUpdate": "tool_call", "toolCallId": part["id"], "title": "read", "kind": part.get("kind", "read"), "status": "pending", "rawInput": part.get("input", {"path": "file"})})
+                update({"sessionUpdate": "tool_call", "toolCallId": part["id"], "title": part.get("title", "read"), "kind": part.get("kind", "read"), "status": "pending", "rawInput": part.get("input", {"path": "file"})})
                 update({"sessionUpdate": "tool_call_update", "toolCallId": part["id"], "status": "completed", "rawOutput": part["output"]})
 
 
@@ -173,15 +173,28 @@ for line in sys.stdin:
     identity = message.get("id")
     params = message.get("params", {})
     if method is None:
+        if message["id"] == "background-permission":
+            if message["result"]["outcome"]["outcome"] == "cancelled":
+                (root / "background-cancelled").touch()
+                continue
+            assert message["result"]["outcome"]["optionId"] == "once"
+            from opencode_subagents import finish_background
+            finish_background(root, session_id, send)
+            continue
         if message["id"] == "unsupported-fixture":
             assert message["error"]["code"] == -32601
         elif message["id"] == "question":
             assert message["result"]["action"] in ["accept", "decline", "cancel"]
+            if active is None:
+                # A withdrawn callback after its prompt settled must not finish another turn.
+                continue
         elif message["id"] == "permission":
             assert message["result"]["outcome"]["outcome"] == "selected"
         complete()
     elif method == "initialize":
         assert params["clientCapabilities"]["elicitation"]["form"] == {}
+        if scenario.startswith("subagents"):
+            assert params["clientCapabilities"]["_meta"]["opencode/child-session-updates"] is True
         if scenario == "slow-initialize":
             (root / "initialize.entered").touch()
             while not (root / "initialize.release").exists():
@@ -243,6 +256,9 @@ for line in sys.stdin:
             if scenario == "preview-failed":
                 send({"id": identity, "error": {"code": -32000, "message": "Fixture replay unavailable"}})
                 continue
+            if session_id.startswith("ses_child") and (root / "child-load-fails").exists():
+                send({"id": identity, "error": {"code": -32000, "message": "Child session unavailable"}})
+                continue
             for row in state()["history"]:
                 content(row)
         reply(identity, {"sessionId": session_id, "configOptions": options()})
@@ -250,6 +266,13 @@ for line in sys.stdin:
             update({"sessionUpdate":"available_commands_update", "availableCommands":[] if command_catalog_empty else [
                 {"name":"native:review", "description":"Native namespaced command", "input":{"hint":"<topic>"}},
                 {"name":"compact", "description":"Native compaction"}]})
+        if scenario == "subagents" and method == "session/load":
+            update({"sessionUpdate":"available_commands_update","availableCommands":[]})
+        if scenario == "subagents-detach" and method == "session/load" and (root / "prompt-owner").exists() \
+                and (root / "prompt-owner").read_text() == str(os.getpid()):
+            # OpenCode 2.2 re-attaches the root on load and closes the scope that forwarded
+            # background child updates; later child events are never delivered on this process.
+            (root / "background-detached").touch()
     elif method == "session/list":
         moved = location("ses_one")
         rows = [] if not (root / "native-fixture.json").exists() or moved not in [None, params.get("cwd", moved)] else [{
@@ -283,6 +306,8 @@ for line in sys.stdin:
             reply(identity, {"configOptions": options()})
     elif method == "session/prompt":
         assert active is None
+        session_id = params["sessionId"]
+        state_path = session_path(session_id)
         active = identity
         if scenario == "command-catalog":
             command_catalog_empty = True
@@ -326,6 +351,29 @@ for line in sys.stdin:
                 "message": "OpenCode's free tier can only be used from within OpenCode",
                 "data": {"service": "session", "errorName": "APIError", "responseBody": "private diagnostic"}}})
             active = None
+        elif scenario == "subagents":
+            from opencode_subagents import run
+            run(root, session_id, send, update, value)
+            complete()
+        elif scenario == "subagents-idle":
+            from opencode_subagents import background
+            background(root, session_id, send, value)
+            complete()
+            if value["seq"] == 1:
+                # The live process asks for the background child after the parent prompt settles.
+                send({"id":"background-permission", "method":"session/request_permission", "params":{
+                    "sessionId":session_id, "toolCall":{"toolCallId":"ses_child:read", "title":"Child read", "rawInput":{"path":"file"}},
+                    "options":[{"optionId":"once", "kind":"allow_once", "name":"Allow once"}]}})
+        elif scenario == "subagents-detach" and value["seq"] == 1:
+            from opencode_subagents import background
+            (root / "prompt-owner").write_text(str(os.getpid()))
+            background(root, session_id, send, value)
+            complete()
+        elif scenario == "subagents-detach" and value["seq"] == 2:
+            if not (root / "background-detached").exists():
+                from opencode_subagents import finish_background
+                finish_background(root, session_id, send)
+            complete()
         elif scenario == "protocol-controls":
             update({"sessionUpdate": "config_option_update", "configOptions": options()})
             send({"id": "permission", "method": "session/request_permission", "params": {

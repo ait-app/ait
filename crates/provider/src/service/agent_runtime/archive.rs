@@ -21,6 +21,13 @@ pub(crate) fn archive(
     if root.archived_at.is_some() {
         return Ok(root);
     }
+    if root
+        .observation
+        .as_ref()
+        .is_some_and(|source| !source.status.is_terminal())
+    {
+        return Err(AgentRuntimeError::InvalidRequest);
+    }
     let archived = archive_one(registry, id, timestamp)?;
     let mut children = BTreeMap::<String, Vec<PersistedAgentRuntimeRecord>>::new();
     for record in registry.list().map_err(map_agent_registry)? {
@@ -34,6 +41,10 @@ pub(crate) fn archive(
     let mut pending = vec![archived.clone()];
     while let Some(parent) = pending.pop() {
         for child in children.remove(&parent.id).unwrap_or_default() {
+            if child.observation.is_some() {
+                pending.push(archive_one(registry, &child.id, timestamp)?);
+                continue;
+            }
             let open = child.labels.iter().any(|(label, value)| {
                 label.starts_with(OPEN_AGENT_TAB_LABEL_PREFIX) && value == "true"
             });
@@ -95,6 +106,18 @@ fn archive_one(
             }
             let mut next = current.clone();
             next.archived_at = Some(timestamp.to_owned());
+            if let Some(source) = &mut next.observation {
+                if !source.status.is_terminal() {
+                    if source.health
+                        != domain::agent_runtime::observation::ObservationHealth::Unavailable
+                    {
+                        source.revision = source.revision.saturating_add(1);
+                    }
+                    source.health =
+                        domain::agent_runtime::observation::ObservationHealth::Unavailable;
+                }
+                next.last_status = AgentRuntimeStatus::Closed;
+            }
             if matches!(
                 next.last_status,
                 AgentRuntimeStatus::Running | AgentRuntimeStatus::Initializing
@@ -119,6 +142,9 @@ pub(crate) fn detach(
         .get(id)
         .map_err(map_agent_registry)?
         .ok_or_else(|| AgentRuntimeError::NotFound(id.to_owned()))?;
+    if current.observation.is_some() {
+        return Err(AgentRuntimeError::InvalidRequest);
+    }
     if current
         .labels
         .get(PARENT_AGENT_ID_LABEL)

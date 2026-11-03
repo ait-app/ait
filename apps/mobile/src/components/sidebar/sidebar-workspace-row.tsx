@@ -31,6 +31,7 @@ import {
 } from "@/components/sidebar/sidebar-workspace-row-content";
 import { useOpenKebabMenuVisibility } from "@/components/sidebar/use-open-kebab-menu-visibility";
 import { getSidebarRowBackdrop } from "@/components/sidebar/sidebar-row-backdrop";
+import { useSidebarRowPress } from "@/components/sidebar/use-sidebar-row-press";
 import { selectWorkspaceServiceSummary } from "@/components/sidebar/workspace-meta-row";
 import {
   SidebarWorkspaceTrailingContent,
@@ -215,11 +216,13 @@ function WorkspaceRowBody({
   const isCompact = useIsCompactFormFactor();
   const showSelection = selected && !isCompact;
   const isTouchPlatform = platformIsNative || isCompact;
-  const [isPressed, setIsPressed] = useState(false);
+  const {
+    isPressed,
+    onPressIn: handleWorkspacePressIn,
+    onPressOut: handleWorkspacePressOut,
+  } = useSidebarRowPress();
   const trailing = useSidebarWorkspaceTrailing();
   const handlePress = onPress;
-  const handleWorkspacePressIn = useCallback(() => setIsPressed(true), []);
-  const handleWorkspacePressOut = useCallback(() => setIsPressed(false), []);
 
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
 

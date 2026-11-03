@@ -3,7 +3,7 @@
 - 日期：2026-10-30。
 - 源码：`ac8e7e33` 加本次工作树修改。
 - 平台：Linux x86_64，官方 `/usr/bin/omp` 为 `omp/18.14.0`，Rust 1.99.1。
-- 决策：[ADR-203](../../decisions/providers/adr-203-omp-command-catalog-and-completion.md)、[ADR-204](../../decisions/providers/adr-204-native-editor-completion.md)。
+- 决策：[ADR-211](../../decisions/providers/adr-211-omp-command-catalog-and-completion.md)、[ADR-212](../../decisions/providers/adr-212-native-editor-completion.md)。
 
 ## 2026-11-02 模型角色配置
 
@@ -156,7 +156,7 @@ Ait 尚未提供的界面，以及尚未执行的平台验收：
 
 ## 原生动态补全阶段
 
-在 ADR-203 的目录回退之外，增加 `agent.commands.complete.request`、SDK
+在 ADR-211 的目录回退之外，增加 `agent.commands.complete.request`、SDK
 `agent.completeCommands({text,cursor})` 和 Composer 原生编辑接入。已有会话查询同一
 owner，OMP 原生支持通过 ready capability 协商；旧版明确不支持且不发送未知命令。
 已确认缺少能力时复用协商结果，不在每次输入时重新启动 CLI；再次发现可更新能力。

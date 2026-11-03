@@ -81,7 +81,7 @@ describe("resolveHostBadgeDisplay", () => {
 });
 
 describe("selectHostBadges", () => {
-  it("shows no badges while the sidebar spans a single host", () => {
+  it("shows no badges when the sidebar host toggle is off", () => {
     const badges = selectHostBadges({
       hosts: [host("alpha", "Alpha"), host("beta", "Beta")],
       localServerId: null,

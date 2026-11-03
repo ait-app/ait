@@ -76,15 +76,29 @@ fn deserialize_item<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result
 }
 
 fn normalize_item(mut item: Value) -> Value {
-    // Older AGY projections persisted null for absent shell fields. Omit them on both
-    // cached and rebuilt display reads without rewriting canonical history or its cursors.
-    if item["type"] == "tool_call"
-        && item["detail"]["type"] == "shell"
-        && let Some(detail) = item["detail"].as_object_mut()
+    if item["type"] != "tool_call" {
+        return item;
+    }
+    if matches!(
+        item["detail"]["type"].as_str(),
+        Some("read" | "edit" | "write")
+    ) && item["detail"]["filePath"]
+        .as_str()
+        .is_some_and(|path| path.starts_with("proc://"))
     {
-        for field in ["output", "cwd"] {
-            if detail.get(field).is_some_and(Value::is_null) {
-                detail.remove(field);
+        let input = std::mem::take(&mut item["detail"]);
+        item["detail"] = json!({"type":"unknown","input":input,"output":null});
+        return item;
+    }
+    let fields: &[&str] = match item["detail"]["type"].as_str() {
+        Some("write") => &["content"],
+        Some("shell") => &["output", "cwd"],
+        _ => return item,
+    };
+    if let Some(detail) = item["detail"].as_object_mut() {
+        for field in fields {
+            if detail.get(*field).is_some_and(Value::is_null) {
+                detail.remove(*field);
             }
         }
     }
@@ -201,8 +215,13 @@ pub(crate) fn merge_identity(previous: &mut Entry, incoming: &Entry) -> bool {
 
 fn merge_tool(previous: &mut Value, incoming: &Value) {
     let known_detail = (incoming["detail"]["type"] == "unknown"
-        && previous["detail"]["type"] != "unknown")
-        .then(|| previous["detail"].clone());
+        && previous["detail"]["type"] != "unknown"
+        && !["path", "file_path", "filePath"].iter().any(|field| {
+            incoming["detail"]["input"][field]
+                .as_str()
+                .is_some_and(|path| path.starts_with("proc://"))
+        }))
+    .then(|| previous["detail"].clone());
     let mut metadata = previous["metadata"]
         .as_object()
         .cloned()

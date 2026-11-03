@@ -39,7 +39,8 @@ pub(crate) struct FileRegistry<R, E = Error> {
 struct State<R> {
     loaded: bool,
     frozen: bool,
-    records: IndexMap<String, R>,
+    records: IndexMap<String, Arc<R>>,
+    snapshot: Option<Arc<[Arc<R>]>>,
 }
 
 impl<R, E> fmt::Debug for FileRegistry<R, E> {
@@ -60,6 +61,7 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
                 loaded: false,
                 frozen: false,
                 records: IndexMap::new(),
+                snapshot: None,
             }),
             writer: Arc::new(write_atomic),
             id,
@@ -93,7 +95,9 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
                 Err(_) => return Err(E::from(Error::Io)),
             };
             for record in records {
-                state.records.insert((self.id)(&record).to_owned(), record);
+                state
+                    .records
+                    .insert((self.id)(&record).to_owned(), Arc::new(record));
             }
             state.loaded = true;
         }
@@ -120,7 +124,27 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
     /// # Errors
     /// Returns malformed-file, lock or filesystem errors.
     pub(crate) fn list(&self) -> Result<Vec<R>, E> {
-        Ok(self.loaded()?.records.values().cloned().collect())
+        Ok(self
+            .snapshot()?
+            .iter()
+            .map(|record| record.as_ref().clone())
+            .collect())
+    }
+
+    /// Share the insertion-ordered committed view without cloning record payloads.
+    /// Old views remain immutable after writes; repeated reads reuse the same allocation.
+    /// # Errors
+    /// Returns malformed-file, lock or filesystem errors.
+    pub(crate) fn snapshot(&self) -> Result<Arc<[Arc<R>]>, E> {
+        let mut state = self.loaded()?;
+        if state.snapshot.is_none() {
+            state.snapshot = Some(state.records.values().cloned().collect());
+        }
+        Ok(state
+            .snapshot
+            .as_ref()
+            .expect("committed snapshot initialized")
+            .clone())
     }
 
     /// Read the committed record for `id`, or none when it is absent.
@@ -128,6 +152,13 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
     /// # Errors
     /// Returns malformed-file, lock or filesystem errors.
     pub(crate) fn get(&self, id: &str) -> Result<Option<R>, E> {
+        Ok(self.get_shared(id)?.map(|record| record.as_ref().clone()))
+    }
+
+    /// Share one committed record for `id`, or none when it is absent.
+    /// # Errors
+    /// Returns malformed-file, lock or filesystem errors.
+    pub(crate) fn get_shared(&self, id: &str) -> Result<Option<Arc<R>>, E> {
         Ok(self.loaded()?.records.get(id).cloned())
     }
 
@@ -169,7 +200,11 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
         if state.frozen {
             return Err(E::from(Error::Frozen));
         }
-        let mut staged = state.records.clone();
+        let mut staged = state
+            .records
+            .iter()
+            .map(|(id, record)| (id.clone(), record.as_ref().clone()))
+            .collect();
         let (result, changed) = update(&mut staged)?;
         if changed {
             let records: Vec<&R> = staged.values().collect();
@@ -178,11 +213,19 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
             // Validate programmatically constructed records too (e.g. positive request numbers).
             serde_json::from_slice::<Vec<R>>(&bytes).map_err(|_| E::from(Error::InvalidRecord))?;
             // Journal before-images must come from the same locked state as the write.
-            let records = state.records.values().cloned().collect::<Vec<_>>();
+            let records = state
+                .records
+                .values()
+                .map(|record| record.as_ref().clone())
+                .collect::<Vec<_>>();
             before_write(&records)?;
             (self.writer)(&self.path, &bytes)?;
             after_write()?;
-            state.records = staged;
+            state.records = staged
+                .into_iter()
+                .map(|(id, record)| (id, Arc::new(record)))
+                .collect();
+            state.snapshot = None;
         }
         Ok(result)
     }

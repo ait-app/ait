@@ -82,6 +82,12 @@
         -webkit-app-region: no-drag !important;
       }
 
+      /* On macOS the sidebar toggle floats beside the traffic lights, outside
+         the header that owns the drag region. Exclude the button itself. */
+      #menu-button {
+        -webkit-app-region: no-drag !important;
+      }
+
       /* React Native Web Modal portals live outside #overlay-root. Exclude the
          temporary modal surface so workspace drag regions cannot swallow its
          pointer events, including the backdrop and controls. */

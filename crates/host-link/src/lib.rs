@@ -12,5 +12,16 @@ pub use types::{Binding, Credential, Error, Machine, Pending, Session, State, To
 
 /// The only production authority for unattended machines.
 pub const CENTER: &str = "https://aitapp.cn/api";
+/// Override the center for local compatibility testing; production remains the default.
+#[must_use]
+pub fn center() -> String {
+    std::env::var("AIT_CENTER_URL")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map_or_else(
+            || CENTER.to_owned(),
+            |value| value.trim().trim_end_matches('/').to_owned(),
+        )
+}
 /// The browser destination for human approval; never supplied by a token.
 pub const VERIFICATION_URI: &str = "https://aitapp.cn/auth/device";

@@ -2,6 +2,13 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ko: TranslationResources = {
+  sharing: {
+    ...en.sharing,
+    title: "공유",
+    offline: "이 공유 리소스는 오프라인 상태입니다.",
+    emptyResources: "이 공유 리소스에는 워크스페이스가 없습니다.",
+    listError: "공유 리소스를 불러올 수 없습니다.",
+  },
   voiceTimeline: {
     started: "음성 대화가 시작되었습니다",
     ended: "음성 대화가 종료되었습니다",
@@ -307,6 +314,7 @@ export const ko: TranslationResources = {
     actions: {
       loadMore: "더 불러오기",
       clearSearch: "검색 지우기",
+      refresh: "새로 고침",
     },
   },
   agentList: {
@@ -1538,9 +1546,9 @@ export const ko: TranslationResources = {
         title: "프로바이더 설정",
         description: "Claude Code, Codex 등을 구성합니다",
       },
-      pairDevice: {
-        title: "기기 페어링",
-        description: "휴대폰을 이 데몬에 연결합니다",
+      signIn: {
+        title: "계정 로그인",
+        description: "브라우저에서 통합 로그인 페이지 열기",
       },
     },
   },
@@ -1929,6 +1937,9 @@ export const ko: TranslationResources = {
     backdrop: "메뉴 배경",
   },
   subagents: {
+    observing: "읽기 전용",
+    observationUnknown: "상태 확인 대기 중",
+    observationUnavailable: "세션을 사용할 수 없음",
     title: "하위 에이전트",
     pillLabelOne: "하위 에이전트 1개",
     pillLabelMany: "하위 에이전트 {{count}}개",

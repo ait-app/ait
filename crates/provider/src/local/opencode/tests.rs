@@ -1450,3 +1450,6 @@ mod compatibility;
 mod live;
 
 mod startup;
+
+#[cfg(unix)]
+mod subagents;

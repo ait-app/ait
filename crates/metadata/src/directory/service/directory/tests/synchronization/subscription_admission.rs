@@ -33,7 +33,7 @@ async fn workspace_subscription_waits_for_busy_jobs_before_publishing_its_snapsh
         has_terminals: false,
         has_git_fetch: false,
     };
-    let held = runtime.jobs.clone().acquire_owned().await.unwrap();
+    let held = runtime.jobs.clone().acquire_many_owned(3).await.unwrap();
     let (outbound, mut receiver) = model::outbound::Outbound::new();
     let mut connection = crate::connection::Connection::default();
     {

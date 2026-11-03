@@ -1,6 +1,7 @@
 //! Prepare private launch settings while retaining the user's durable configuration.
 
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
 
@@ -9,17 +10,23 @@ use crate::ports::agent_session::{AgentResumePurpose, AgentSessionSpec};
 use crate::service::agent_mcp::Binding;
 
 impl AgentManager {
+    /// Bind the daemon MCP for an interactive session, except for guest-created Agents.
+    ///
+    /// The daemon MCP reaches every Workspace on this Host, so an Agent labelled with
+    /// [`crate::service::agent_mcp::GUEST_SHARE_LABEL`] never receives it.
     pub(super) fn prepare_mcp<'a>(
         &self,
         id: &str,
         spec: &'a AgentSessionSpec,
         purpose: AgentResumePurpose,
+        labels: &BTreeMap<String, String>,
     ) -> Result<(Cow<'a, AgentSessionSpec>, Option<Binding>), AgentManagerError> {
         let supported = self
             .clients
             .get(&spec.provider)
             .is_some_and(|client| client.supports_agent_mcp());
-        let binding = if supported && purpose == AgentResumePurpose::Interactive {
+        let guest = labels.contains_key(crate::service::agent_mcp::GUEST_SHARE_LABEL);
+        let binding = if supported && !guest && purpose == AgentResumePurpose::Interactive {
             self.mcp
                 .as_ref()
                 .map(|mcp| mcp.bind(id, &spec.config))

@@ -2,6 +2,13 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const ru: TranslationResources = {
+  sharing: {
+    ...en.sharing,
+    title: "Общий доступ",
+    offline: "Этот общий ресурс не в сети.",
+    emptyResources: "В этом общем ресурсе нет рабочих пространств.",
+    listError: "Не удалось загрузить общие ресурсы.",
+  },
   voiceTimeline: {
     started: "Голосовой разговор начат",
     ended: "Голосовой разговор завершён",
@@ -310,6 +317,7 @@ export const ru: TranslationResources = {
     actions: {
       loadMore: "Загрузить ещё",
       clearSearch: "Очистить поиск",
+      refresh: "Обновить",
     },
   },
   agentList: {
@@ -1557,9 +1565,9 @@ export const ru: TranslationResources = {
         title: "Настроить провайдеров",
         description: "Настройте Claude Code, Codex и другие провайдеры",
       },
-      pairDevice: {
-        title: "Подключить устройство",
-        description: "Подключите свой телефон к этому демону",
+      signIn: {
+        title: "Войти в аккаунт",
+        description: "Откройте единую страницу входа в браузере",
       },
     },
   },
@@ -1953,6 +1961,9 @@ export const ru: TranslationResources = {
     backdrop: "Фон меню",
   },
   subagents: {
+    observing: "Только чтение",
+    observationUnknown: "Ожидание подтверждения состояния",
+    observationUnavailable: "Сеанс недоступен",
     title: "Субагенты",
     pillLabelOne: "1 субагент",
     pillLabelMany: "Субагентов: {{count}}",

@@ -1,6 +1,11 @@
 import type { ScheduleSummary } from "@ait/protocol/schedule/types";
 import { describe, expect, it } from "vitest";
-import { resolveSchedule, scheduleBucket, type ScheduleTargetAgent } from "./schedule-derivation";
+import {
+  resolveSchedule,
+  scheduleBucket,
+  scheduleEndTime,
+  type ScheduleTargetAgent,
+} from "./schedule-derivation";
 
 const NOW = Date.parse("2026-07-02T00:00:00.000Z");
 const AGENT_ID = "00000000-0000-4000-8000-000000000000";
@@ -153,4 +158,58 @@ it("labels scoped tasks with their owning workspace and existing agent", () => {
       }),
     }).target.label,
   ).toBe("Feature workspace · Reviewer");
+});
+
+describe("scheduleEndTime", () => {
+  it("uses execution completion rather than creation or a later edit for finished schedules", () => {
+    const schedule = makeSchedule({
+      status: "completed",
+      lastRunAt: "2026-07-01T12:00:00Z",
+      updatedAt: "2026-07-01T18:00:00Z",
+    });
+    expect(scheduleEndTime(schedule, "finished")).toBe(Date.parse("2026-07-01T12:00:00Z"));
+  });
+
+  it("uses expiry when the last run predates it, including schedules that never ran", () => {
+    for (const lastRunAt of [null, "2026-07-01T12:00:00Z"]) {
+      const schedule = makeSchedule({
+        status: "completed",
+        lastRunAt,
+        expiresAt: "2026-07-01T18:00:00Z",
+        updatedAt: "2026-07-01T18:05:00Z",
+      });
+      expect(scheduleEndTime(schedule, "expired")).toBe(Date.parse("2026-07-01T18:00:00Z"));
+    }
+  });
+
+  it("uses the actual run end when execution finishes after expiry", () => {
+    const schedule = makeSchedule({
+      status: "completed",
+      lastRunAt: "2026-07-01T19:00:00Z",
+      expiresAt: "2026-07-01T18:00:00Z",
+      updatedAt: "2026-07-01T19:00:00Z",
+    });
+    expect(scheduleEndTime(schedule, "expired")).toBe(Date.parse("2026-07-01T19:00:00Z"));
+  });
+
+  it("keeps an earlier completion time after the unused expiry date passes", () => {
+    const schedule = makeSchedule({
+      status: "completed",
+      lastRunAt: "2026-07-01T12:00:00Z",
+      updatedAt: "2026-07-01T12:00:00Z",
+      expiresAt: "2026-07-01T18:00:00Z",
+    });
+    expect(scheduleEndTime(schedule, "expired")).toBe(Date.parse("2026-07-01T12:00:00Z"));
+  });
+
+  it("falls back to the last known update when a completion or target-removal time is absent", () => {
+    const schedule = makeSchedule({
+      lastRunAt: "2026-07-01T12:00:00Z",
+      updatedAt: "2026-07-01T18:00:00Z",
+    });
+    expect(scheduleEndTime(schedule, "targetGone")).toBe(Date.parse("2026-07-01T18:00:00Z"));
+    expect(scheduleEndTime({ ...schedule, lastRunAt: null, status: "completed" }, "finished")).toBe(
+      Date.parse("2026-07-01T18:00:00Z"),
+    );
+  });
 });

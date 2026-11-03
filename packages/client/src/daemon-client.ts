@@ -13,6 +13,14 @@ import { CreationClient } from "./creation/index.js";
 import type { CreationSnapshot } from "@ait/protocol/messages";
 import type { z } from "zod";
 import type { SessionEventSubscription } from "@ait/protocol/messages";
+import type {
+  ShareAudience,
+  ShareGroupsListResponse,
+  ShareListResponse,
+  ShareRemoveResponse,
+  ShareResourceKind,
+  ShareSetResponse,
+} from "@ait/protocol/messages";
 import type { ClientCapability } from "@ait/protocol/client-capabilities";
 import type { AgentAttentionNotificationPayload } from "@ait/protocol/agent-attention-notification";
 import {
@@ -2295,7 +2303,16 @@ export class DaemonClient {
     const { signal, requestId, timeout, ...query } = options;
     return this.observe(
       "agent.list.response",
-      { ...query, type: "agent.list.request", subscribe: {} },
+      () => ({
+        ...query,
+        ...(query.includeObserved !== undefined
+          ? { includeObserved: query.includeObserved }
+          : this.lastServerInfoMessage?.features?.unifiedSubagentAgents === true
+            ? { includeObserved: true }
+            : {}),
+        type: "agent.list.request",
+        subscribe: {},
+      }),
       { signal, requestId, timeout },
     );
   }
@@ -2328,6 +2345,11 @@ export class DaemonClient {
     const message = SessionInboundMessageSchema.parse({
       type: "agent.list.request",
       requestId: resolvedRequestId,
+      ...(options?.includeObserved !== undefined
+        ? { includeObserved: options.includeObserved }
+        : this.lastServerInfoMessage?.features?.unifiedSubagentAgents === true
+          ? { includeObserved: true }
+          : {}),
       ...(options?.scope ? { scope: options.scope } : {}),
       ...(options?.filter ? { filter: options.filter } : {}),
       ...(options?.sort ? { sort: options.sort } : {}),
@@ -2357,6 +2379,11 @@ export class DaemonClient {
     const message = SessionInboundMessageSchema.parse({
       type: "agent.history.get.request",
       requestId: resolvedRequestId,
+      ...(options?.includeObserved !== undefined
+        ? { includeObserved: options.includeObserved }
+        : this.lastServerInfoMessage?.features?.unifiedSubagentAgents === true
+          ? { includeObserved: true }
+          : {}),
       ...(options?.filter ? { filter: options.filter } : {}),
       ...(options?.search ? { search: options.search } : {}),
       ...(options?.sort ? { sort: options.sort } : {}),
@@ -2558,6 +2585,52 @@ export class DaemonClient {
         if (msg.payload.requestId !== resolvedRequestId) return null;
         return msg.payload;
       },
+    });
+  }
+
+  listShares(): Promise<ShareListResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      message: { type: "share.list.request" },
+    });
+  }
+
+  listShareGroups(): Promise<ShareGroupsListResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      message: { type: "share.groups.list.request" },
+    });
+  }
+
+  setShare(input: {
+    resourceKind: ShareResourceKind;
+    resourceKey: string;
+    groupId: string;
+    audience?: ShareAudience;
+    recipients?: string[];
+    displayName?: string;
+    projectName?: string;
+  }): Promise<ShareSetResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      message: {
+        type: "share.set.request",
+        resourceKind: input.resourceKind,
+        resourceKey: input.resourceKey,
+        groupId: input.groupId,
+        permission: "operate",
+        audience: input.audience ?? "group",
+        recipients: input.recipients ?? [],
+        ...(input.displayName ? { displayName: input.displayName } : {}),
+        ...(input.projectName ? { projectName: input.projectName } : {}),
+      },
+    });
+  }
+
+  removeShare(input: {
+    resourceKind: ShareResourceKind;
+    resourceKey: string;
+    groupId: string;
+  }): Promise<ShareRemoveResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      message: { type: "share.remove.request", ...input },
     });
   }
 
@@ -3283,6 +3356,36 @@ export class DaemonClient {
       options: { skipQueue: true },
       select: (response) =>
         response.type === "agent.timeline.list_prompts.response" &&
+        response.payload.requestId === requestId
+          ? response.payload
+          : null,
+    });
+    if (payload.error) {
+      throw new Error(payload.error);
+    }
+    return payload;
+  }
+
+  async listSubagents(
+    parentAgentId: string,
+    options: { requestId?: string; timeout?: number; subagentId?: string } = {},
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "agent.subagents.list.response" }>["payload"]
+  > {
+    const requestId = this.createRequestId(options.requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "agent.subagents.list.request",
+      parentAgentId,
+      subagentId: options.subagentId,
+      requestId,
+    });
+    const payload = await this.sendRequest({
+      requestId,
+      message,
+      timeout: options.timeout,
+      options: { skipQueue: true },
+      select: (response) =>
+        response.type === "agent.subagents.list.response" &&
         response.payload.requestId === requestId
           ? response.payload
           : null,

@@ -1,3 +1,4 @@
+import { groupHosts } from "@/hosts/host-groups";
 import { useCallback, useState } from "react";
 import { Text, View } from "react-native";
 import { Activity, CircleHelp, Gift, Keyboard } from "lucide-react-native";
@@ -154,7 +155,7 @@ export function SidebarHelpMenu() {
           >
             {t("sidebar.help.appName")}
           </DropdownMenuHint>
-          {hosts.map((host) => (
+          {groupHosts(hosts).map((host) => (
             <HostVersionHint key={host.serverId} host={host} />
           ))}
         </View>

@@ -1,7 +1,8 @@
 //! Native tool display projections. Execution and the complete raw output stay provider-owned.
 
-use serde_json::{Value, json};
 use std::borrow::Cow;
+
+use serde_json::{Value, json};
 
 const PREVIEW_BYTES: usize = 128 * 1024;
 
@@ -84,7 +85,16 @@ pub(super) fn codex_error(native: &Value, failed: bool) -> Value {
     json!("Native tool failed")
 }
 
+/// Project recognized native arguments into typed display fields.
+/// Process resources retain their native input instead of appearing as filesystem operations.
 pub(super) fn claude(name: &str, input: &Value) -> Value {
+    if matches!(name, "Read" | "Edit" | "Write")
+        && input["file_path"]
+            .as_str()
+            .is_some_and(|path| path.starts_with("proc://"))
+    {
+        return unknown(input);
+    }
     let mut detail = match name {
         "Bash" if input["command"].is_string() => {
             json!({"type":"shell","command":input["command"]})
@@ -111,8 +121,6 @@ pub(super) fn claude(name: &str, input: &Value) -> Value {
     };
     for (source, target) in [
         ("cwd", "cwd"),
-        ("offset", "offset"),
-        ("limit", "limit"),
         ("old_string", "oldString"),
         ("new_string", "newString"),
         ("content", "content"),
@@ -120,8 +128,13 @@ pub(super) fn claude(name: &str, input: &Value) -> Value {
         ("description", "description"),
         ("subagent_type", "subAgentType"),
     ] {
-        if let Some(value) = input.get(source) {
-            detail[target] = value.clone();
+        if let Some(value) = input.get(source).and_then(Value::as_str) {
+            detail[target] = json!(value);
+        }
+    }
+    for field in ["offset", "limit"] {
+        if let Some(value) = input.get(field).filter(|value| value.is_number()) {
+            detail[field] = value.clone();
         }
     }
     detail

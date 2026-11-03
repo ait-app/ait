@@ -5,8 +5,7 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 
 use super::*;
 use crate::ports::agent_session::{
-    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture,
-    AgentSessionSpec,
+    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
 use crate::ports::native_history::{SessionDescriptor, SessionHistory};
 
@@ -16,6 +15,7 @@ struct MetadataClient {
     resumed: Arc<Mutex<Option<(AgentPersistenceHandle, AgentSessionSpec)>>>,
 }
 
+#[async_trait::async_trait]
 impl AgentClient for MetadataClient {
     fn provider(&self) -> &'static str {
         "metadata-test"
@@ -25,59 +25,55 @@ impl AgentClient for MetadataClient {
         Ok(())
     }
 
-    fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        Box::pin(async { Ok(true) })
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        Ok(true)
     }
 
-    fn inspect_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, SessionHistory> {
-        Box::pin(async move {
-            Ok(SessionHistory {
-                resume_metadata: self.verified.clone(),
-                parent_id: None,
-                descriptor: SessionDescriptor {
-                    provider_id: self.provider().into(),
-                    provider_label: "Metadata test".into(),
-                    provider_handle_id: handle.session_id.clone(),
-                    cwd: cwd.into(),
-                    title: None,
-                    first_prompt_preview: None,
-                    last_prompt_preview: None,
-                    last_activity_at: "2026-10-20T00:00:00Z".into(),
-                },
-                created_at: "2026-10-20T00:00:00Z".into(),
-                config: StoredAgentConfig {
-                    model: Some("native-model".into()),
-                    ..StoredAgentConfig::default()
-                },
-                active: false,
-                entries: Vec::new(),
-            })
+    async fn inspect_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<SessionHistory, AgentSessionError> {
+        Ok(SessionHistory {
+            resume_metadata: self.verified.clone(),
+            parent_id: None,
+            descriptor: SessionDescriptor {
+                provider_id: self.provider().into(),
+                provider_label: "Metadata test".into(),
+                provider_handle_id: handle.session_id.clone(),
+                cwd: cwd.into(),
+                title: None,
+                first_prompt_preview: None,
+                last_prompt_preview: None,
+                last_activity_at: "2026-10-20T00:00:00Z".into(),
+            },
+            created_at: "2026-10-20T00:00:00Z".into(),
+            config: StoredAgentConfig {
+                model: Some("native-model".into()),
+                ..StoredAgentConfig::default()
+            },
+            active: false,
+            entries: Vec::new(),
         })
     }
 
-    fn create_session<'a>(
-        &'a self,
-        _spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async { Err(AgentSessionError::Unavailable) })
+    async fn create_session(
+        &self,
+        _spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
     }
 
-    fn resume_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        spec: &'a AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        spec: &AgentSessionSpec,
         purpose: AgentResumePurpose,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            assert_eq!(purpose, AgentResumePurpose::Interactive);
-            *self.resumed.lock().unwrap() = Some((handle.clone(), spec.clone()));
-            // Stop at the native writer boundary so persistence cannot mask the supplied metadata.
-            Err(AgentSessionError::Unavailable)
-        })
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        assert_eq!(purpose, AgentResumePurpose::Interactive);
+        *self.resumed.lock().unwrap() = Some((handle.clone(), spec.clone()));
+        // Stop at the native writer boundary so persistence cannot mask the supplied metadata.
+        Err(AgentSessionError::Unavailable)
     }
 }
 

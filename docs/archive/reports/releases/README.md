@@ -1,0 +1,30 @@
+# 0.0.x 发布记录
+
+历史验证仅对应原文的提交与环境；当前入口和归档原因见[归档索引](../../README.md)。
+原始 JSON 测量附件随报告保留在本目录。
+
+- [Ait 0.0.29 发布说明](release-0.0.29.md)
+- [Ait 0.0.28 发布说明](release-0.0.28.md)
+- [Ait 0.0.27 发布说明](release-0.0.27.md)
+- [Ait 0.0.26 发布说明](release-0.0.26.md)
+- [Ait 0.0.25 发布说明](release-0.0.25.md)
+- [Ait 0.0.24 发布说明](release-0.0.24.md)
+- [Ait 0.0.23-beta.1 发布说明](release-0.0.23-beta.1.md)
+- [Ait 0.0.23 发布说明](release-0.0.23.md)
+- [Ait 0.0.22 发布说明](release-0.0.22.md)
+- [Ait 0.0.21 发布准备与失败记录](release-0.0.21.md)
+- [Ait 0.0.20 发布说明](release-0.0.20.md)
+- [Ait 0.0.19 发布说明](release-0.0.19.md)
+- [Ait 0.0.18 发布说明](release-0.0.18.md)
+- [Ait 0.0.17 发布说明](release-0.0.17.md)
+- [Ait 0.0.16 发布说明](release-0.0.16.md)
+- [Ait 0.0.15 发布说明](release-0.0.15.md)
+- [Ait 0.0.14 发布说明](release-0.0.14.md)
+- [Ait 0.0.13 发布说明](release-0.0.13.md)
+- [Ait 0.0.12 发布说明](release-0.0.12.md)
+- [Ait 0.0.11 发布说明](release-0.0.11.md)
+- [Ait 0.0.10 发布说明](release-0.0.10.md)
+- [Ait 0.0.9 发布说明](release-0.0.9.md)
+- [Ait 0.0.8 发布准备](release-0.0.8.md)
+- [Ait 0.0.7 同版本重建发布](release-0.0.7-rebuild-2026-09-28.md)
+- [Ait 0.0.7 发布准备](release-0.0.7.md)

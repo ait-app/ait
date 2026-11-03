@@ -18,7 +18,13 @@ export {
   type HubPresenceNode,
   type HubTicket,
 } from "./link.js";
-export { HubSession, type HubSessionHeader, type HubSessionLink } from "./session.js";
+export {
+  HubSession,
+  HubSessionClosedError,
+  type HubSessionCloseEvent,
+  type HubSessionHeader,
+  type HubSessionLink,
+} from "./session.js";
 export { HubCallError } from "./calls.js";
 export {
   HUB_ACCESS_METHODS,
@@ -27,5 +33,10 @@ export {
   type HubAccountEvent,
   type HubDirectoryItem,
   type HubDirectoryPage,
+  type HubGroup,
+  type HubGroupMember,
+  type HubGroupMembers,
+  type HubShare,
+  type HubShareResourceKind,
 } from "./account.js";
 export { observeHubEvents } from "./subscription.js";

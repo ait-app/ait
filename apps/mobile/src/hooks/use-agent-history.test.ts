@@ -633,7 +633,7 @@ describe("fetchAgentHistoryPage", () => {
     });
   });
 
-  it("throws when every requested host history fetch fails", async () => {
+  it("returns an empty page when every requested host history fetch fails", async () => {
     await expect(
       fetchAgentHistoryBatch({
         hosts: [
@@ -642,6 +642,6 @@ describe("fetchAgentHistoryPage", () => {
         ] satisfies AgentHistoryHost[],
         cursorByServerId: null,
       }),
-    ).rejects.toThrow("No connected hosts could load agent history");
+    ).resolves.toMatchObject({ agents: [], pageInfoByServerId: {} });
   });
 });

@@ -110,6 +110,22 @@ export function scheduleBucket(state: ScheduleDerivedState): ScheduleBucket {
   return state === "active" || state === "paused" ? "runnable" : "ended";
 }
 
+/** lastRunAt is recorded when execution finishes, not when it starts. */
+export function scheduleEndTime(schedule: ScheduleSummary, state: ScheduleDerivedState): number {
+  const updatedAt = Date.parse(schedule.updatedAt);
+  const lastRunAt = schedule.lastRunAt ? Date.parse(schedule.lastRunAt) : null;
+  if (state === "expired" && schedule.expiresAt) {
+    const expiresAt = Date.parse(schedule.expiresAt);
+    // A completed schedule may have finished before its later expiry date.
+    if (schedule.status !== "completed" || updatedAt >= expiresAt) {
+      return Math.max(expiresAt, lastRunAt ?? expiresAt);
+    }
+  }
+  // The summary has no target-deletion timestamp; use its last known update.
+  if (state === "targetGone" && schedule.status !== "completed") return updatedAt;
+  return lastRunAt ?? updatedAt;
+}
+
 export function resolveSchedule(
   input: ResolveScheduleInput,
   t: TFunction = i18n.t,

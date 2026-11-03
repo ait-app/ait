@@ -1,6 +1,7 @@
 use super::*;
 
 mod diagnostics;
+mod silence;
 
 /// Offline media boundary for native app-server lifecycle tests.
 pub(in crate::local::codex) fn fixture(
@@ -249,6 +250,21 @@ async fn downstream_overflow_cancels_media_and_a_new_session_can_connect() {
         let (peer, track, _incoming) = answer_peer(&mut media).await;
         (&mut session.ready).await.unwrap();
         let mut encoder = codec::Encoder::new().unwrap();
+        encoder
+            .push(&model::realtime::Audio {
+                bytes: (0..4800)
+                    .flat_map(|index| {
+                        (if index % 40 < 20 {
+                            12_000_i16
+                        } else {
+                            -12_000_i16
+                        })
+                        .to_le_bytes()
+                    })
+                    .collect(),
+                sample_rate: 24_000,
+            })
+            .unwrap();
         speak(&track, &mut encoder).await;
         media.cancel.cancelled().await;
         session.input.closed().await;

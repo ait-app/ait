@@ -178,7 +178,7 @@ async fn fetches_immediately_deduplicates_worktrees_and_publishes_each_status() 
     let second = harness.observe(&["linked"]);
     wait_for(|| harness.updates.lock().unwrap().len() == 2).await;
     assert_eq!(harness.calls(), 1);
-    assert_eq!(harness.runtime.jobs.available_permits(), 1);
+    assert_eq!(harness.runtime.jobs.available_permits(), 3);
     let paths: BTreeSet<_> = harness
         .updates
         .lock()
@@ -280,7 +280,7 @@ async fn limits_concurrency_across_repositories_without_using_foreground_permits
     harness.backend.blocked.store(true, Ordering::SeqCst);
     let _observation = harness.observe(&["one", "two", "three"]);
     wait_for(|| harness.calls() == 2).await;
-    assert_eq!(harness.runtime.jobs.available_permits(), 1);
+    assert_eq!(harness.runtime.jobs.available_permits(), 3);
     assert_eq!(harness.backend.maximum.load(Ordering::SeqCst), 2);
     harness.stop().await;
     assert_eq!(harness.calls(), 2);

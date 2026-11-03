@@ -101,7 +101,7 @@ async fn archive_waits_for_shared_capacity_before_mutating_metadata() {
         .runtime
         .jobs
         .clone()
-        .acquire_owned()
+        .acquire_many_owned(3)
         .await
         .unwrap();
     let archive = metadata(&fixture.api.shared, &mut context);
@@ -126,7 +126,7 @@ async fn shutdown_cancels_archive_wait_without_mutating_metadata() {
         .runtime
         .jobs
         .clone()
-        .acquire_owned()
+        .acquire_many_owned(3)
         .await
         .unwrap();
     let archive = metadata(&fixture.api.shared, &mut context);

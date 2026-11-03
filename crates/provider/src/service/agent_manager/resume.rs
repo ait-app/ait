@@ -15,6 +15,9 @@ impl AgentManager {
         &mut self,
         record: PersistedAgentRuntimeRecord,
     ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
+        if record.observation.is_some() {
+            return Err(AgentManagerError::Busy);
+        }
         let id = record.id.clone();
         if self.live.len() >= 32 {
             return Err(AgentManagerError::Busy);
@@ -48,7 +51,8 @@ impl AgentManager {
             .persistence
             .as_ref()
             .ok_or_else(|| AgentManagerError::MissingPersistence(id.clone()))?;
-        let (launch, binding) = self.prepare_mcp(&id, &spec, AgentResumePurpose::Interactive)?;
+        let (launch, binding) =
+            self.prepare_mcp(&id, &spec, AgentResumePurpose::Interactive, &record.labels)?;
         let session = super::execution::native(
             &spec.provider,
             "resume",
@@ -75,6 +79,7 @@ impl AgentManager {
         agent_id: &str,
         overrides: &Overrides,
     ) -> Result<PersistedAgentRuntimeRecord, AgentManagerError> {
+        self.require_managed(agent_id)?;
         if self.live.get(agent_id).is_some_and(|agent| {
             !agent.registered || agent.turn.is_some() || agent.pending.is_some()
         }) {
@@ -122,8 +127,12 @@ impl AgentManager {
             .as_ref()
             .ok_or_else(|| AgentManagerError::MissingPersistence(agent_id.to_owned()))?;
         let client = self.available_client(&record.provider).await?;
-        let (launch, binding) =
-            self.prepare_mcp(agent_id, &spec, AgentResumePurpose::Interactive)?;
+        let (launch, binding) = self.prepare_mcp(
+            agent_id,
+            &spec,
+            AgentResumePurpose::Interactive,
+            &record.labels,
+        )?;
         let session = super::execution::native(
             &spec.provider,
             "restore",

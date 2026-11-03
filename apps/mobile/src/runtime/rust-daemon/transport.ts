@@ -4,6 +4,7 @@ import { ClientMessageChunks } from "./chunks";
 import { METHODS, type MethodSpec } from "./methods";
 import { sessionEventKind } from "@ait/protocol/session-event-kinds";
 import { eventMessage, responseMessage, rpcError, serverInfo } from "./messages";
+import type { HubShareResourceKind } from "@ait/client/internal/hub";
 import { object, strings, type Payload, type Transport, type TransportFactory } from "./types";
 import {
   asUint8Array,
@@ -43,7 +44,10 @@ interface Pending {
 }
 
 /** Adapt the existing UI SDK to Rust v1.0, preserving physical subscription ownership. */
-export function createRustDaemonTransportFactory(baseFactory: TransportFactory): TransportFactory {
+export function createRustDaemonTransportFactory(
+  baseFactory: TransportFactory,
+  guestScope?: HubShareResourceKind,
+): TransportFactory {
   return ({ url, headers }) => {
     const parsed = parseRustDaemonTransportUrl(url);
     const single = parsed.protocol === "ait+desktop:" && parsed.hostname === "account-relay";
@@ -171,7 +175,7 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
         if (negotiated.size === capabilityGroups.length) {
           ready = true;
           clearTimeout(setupTimer);
-          emit(serverInfo(info, implemented));
+          emit(serverInfo(info, implemented, guestScope));
         }
         return;
       }
@@ -190,7 +194,7 @@ export function createRustDaemonTransportFactory(baseFactory: TransportFactory):
       if (message.type === "event") {
         if (message.method === "status.server_info") {
           const params = object(message.params);
-          const update = serverInfo(object(params.info), implemented);
+          const update = serverInfo(object(params.info), implemented, guestScope);
           const payload = object(object(update.message).payload);
           if (typeof params.subscriptionId === "string")
             payload.subscriptionId = params.subscriptionId;

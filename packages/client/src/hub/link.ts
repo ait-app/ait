@@ -12,7 +12,13 @@ import {
 } from "./frame.js";
 import { HubSession, type HubSessionHeader, type HubSessionLink } from "./session.js";
 import { HubCalls, HubCallError } from "./calls.js";
-import type { HubAccountConnection, HubAccountSnapshot, HubAccountEvent } from "./account.js";
+import type {
+  HubAccountConnection,
+  HubAccountSnapshot,
+  HubAccountEvent,
+  HubGroup,
+  HubShare,
+} from "./account.js";
 
 /** A one-use credential for `/v1/hub`, bound to the center that issued it. */
 export interface HubTicket {
@@ -76,6 +82,8 @@ const MAX_UNACKED_BYTES = 8 * 1024 * 1024;
 const TOKEN_ATTEMPTS = 2;
 const DEFAULT_VERIFY_MS = 3000;
 const HEARTBEAT_INTERVAL_MS = 20_000;
+const SHARE_RETRY_MS = 3000;
+const SHARE_SUBSCRIBE = "share.subscribe";
 
 const consoleLogger: HubLinkLogger = {
   info: (fields, message) => console.info(message, formatDiagnosticFields(fields)),
@@ -100,6 +108,65 @@ function presenceNodes(payload: Uint8Array): HubPresenceNode[] {
   );
 }
 
+function snapshotItems(payload: Uint8Array, key: string): unknown[] {
+  const value = JSON.parse(new TextDecoder().decode(payload)) as Record<string, unknown> | null;
+  const items = value?.[key];
+  if (!Array.isArray(items)) throw new Error(`Invalid hub ${key} snapshot.`);
+  return items;
+}
+
+function strings(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return keys.every((key) => typeof value[key] === "string");
+}
+
+function record(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function groups(payload: Uint8Array): HubGroup[] {
+  return snapshotItems(payload, "groups").filter(
+    (group): group is HubGroup =>
+      record(group) &&
+      strings(group, ["groupId", "name", "slug", "status", "myRole"]) &&
+      typeof group.memberVersion === "number",
+  );
+}
+
+function shares(payload: Uint8Array): HubShare[] {
+  return snapshotItems(payload, "shares").filter(
+    (share): share is HubShare =>
+      record(share) &&
+      strings(share, [
+        "shareId",
+        "groupId",
+        "groupName",
+        "hostId",
+        "nodeId",
+        "hostName",
+        "resourceKey",
+        "displayName",
+        "permission",
+      ]) &&
+      (share.resourceKind === "workspace" ||
+        share.resourceKind === "project" ||
+        share.resourceKind === "node") &&
+      (share.projectName === null || typeof share.projectName === "string") &&
+      record(share.owner) &&
+      strings(share.owner, ["userId"]) &&
+      nullableString(share.owner.displayName) &&
+      (share.owner.username === undefined || nullableString(share.owner.username)) &&
+      (share.state === "online" || share.state === "reconnecting"),
+  );
+}
+
+function nullableString(value: unknown): boolean {
+  return value === null || typeof value === "string";
+}
+
+function same(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 /**
  * One persistent `ait-hub-v1` access link per process. Frames are numbered per direction and kept
  * until acknowledged; a dropped connection resumes the same link within the center's grace period
@@ -121,6 +188,12 @@ export class HubLink implements HubAccountConnection {
   private tokenFailures = 0;
   private useTicket = false;
   private nodes: HubPresenceNode[] | null = null;
+  private groupSnapshot: HubGroup[] | null = null;
+  private shareSnapshot: HubShare[] | null = null;
+  /** Active `subscribeShares()` interests. */
+  private shareInterest = 0;
+  /** Logical link that has accepted, or is processing, `share.subscribe`. */
+  private shareLink: string | null = null;
   private nextPing = 0;
   private readonly pings = new Map<number, (ok: boolean) => void>();
   private verification: Promise<boolean> | null = null;
@@ -133,6 +206,7 @@ export class HubLink implements HubAccountConnection {
   private ackTimer: ReturnType<typeof setTimeout> | null = null;
   private graceTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+  private shareTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly logger: HubLinkLogger;
   private readonly sessionLink: HubSessionLink = {
     recoverLiveness: () => this.recoverLiveness(),
@@ -161,6 +235,8 @@ export class HubLink implements HubAccountConnection {
       linkId: this.link?.id ?? null,
       centerUrl: this.centerUrl,
       methods: this.link?.methods ?? [],
+      groups: this.groupSnapshot,
+      shares: this.shareSnapshot,
     };
   }
 
@@ -203,7 +279,66 @@ export class HubLink implements HubAccountConnection {
     return this.nodes?.find((node) => node.host_id === hostId);
   }
 
-  /** Observe state and presence changes. */
+  /** Groups of the account from the latest `groups` snapshot of this link, or null. */
+  get groups(): readonly HubGroup[] | null {
+    return this.groupSnapshot;
+  }
+
+  /** Workspaces, projects and nodes shared with this account from the latest `share_presence`, or null. */
+  get shares(): readonly HubShare[] | null {
+    return this.shareSnapshot;
+  }
+
+  /** The current center accepts `share.subscribe` and guest sessions. */
+  get sharesSupported(): boolean {
+    return this.link?.methods.includes(SHARE_SUBSCRIBE) ?? false;
+  }
+
+  /**
+   * Receive `groups` and `share_presence` snapshots while the returned disposer is not called.
+   * The subscription belongs to the logical link, so it is renewed after every fresh link.
+   * Centers that do not advertise `share.subscribe` are not asked.
+   */
+  subscribeShares(): () => void {
+    this.shareInterest += 1;
+    this.syncShares();
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      this.shareInterest -= 1;
+      if (!this.shareInterest) this.clearTimer("share");
+    };
+  }
+
+  private syncShares(): void {
+    const link = this.link;
+    if (
+      !this.shareInterest ||
+      this.current !== "online" ||
+      !link ||
+      this.shareLink === link.id ||
+      this.shareTimer ||
+      !link.methods.includes(SHARE_SUBSCRIBE)
+    )
+      return;
+    this.shareLink = link.id;
+    this.call(SHARE_SUBSCRIBE, {}).catch((error: unknown) => {
+      // A reset link already forgot this attempt; its successor subscribes again.
+      if (this.shareLink !== link.id) return;
+      this.shareLink = null;
+      this.logger.warn(
+        { link: link.id, reason: error instanceof Error ? error.message : String(error) },
+        "[Hub] share subscription failed",
+      );
+      this.shareTimer = setTimeout(() => {
+        this.shareTimer = null;
+        this.syncShares();
+      }, SHARE_RETRY_MS);
+    });
+  }
+
+  /** Observe state, presence, group and share snapshot changes. */
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => {
@@ -334,12 +469,18 @@ export class HubLink implements HubAccountConnection {
     }, HEARTBEAT_INTERVAL_MS);
   }
 
-  /** Create a session to `nodeId`'s serve endpoint; its first send opens it. */
-  openSession(nodeId: string): HubSession {
+  /**
+   * Create a session to `nodeId`'s serve endpoint; its first send opens it. With `share`, the
+   * session is a guest session to a resource another account shares (see `shares`).
+   */
+  openSession(nodeId: string, options: { share?: string } = {}): HubSession {
     if (this.current === "stopped") throw new Error("Hub link is stopped.");
+    // Older centers reject unknown header fields and would drop the whole link.
+    if (options.share !== undefined && !this.sharesSupported)
+      throw new HubCallError("unsupported", "Center does not support shares.");
     if (this.sessions.size >= 16) throw new Error("Too many hub sessions.");
     const id = (this.options.randomUUID ?? (() => crypto.randomUUID()))();
-    const session = new HubSession(this.sessionLink, id, nodeId);
+    const session = new HubSession(this.sessionLink, id, nodeId, options.share);
     this.sessions.set(id, session);
     return session;
   }
@@ -351,10 +492,11 @@ export class HubLink implements HubAccountConnection {
   }
 
   private emit(): void {
+    this.syncShares();
     for (const listener of this.listeners) listener();
   }
 
-  private clearTimer(name: "retry" | "handshake" | "ack" | "grace" | "heartbeat"): void {
+  private clearTimer(name: "retry" | "handshake" | "ack" | "grace" | "heartbeat" | "share"): void {
     const key = `${name}Timer` as const;
     const timer = this[key];
     if (timer) clearTimeout(timer);
@@ -479,6 +621,8 @@ export class HubLink implements HubAccountConnection {
       case "msg":
       case "close":
       case "presence":
+      case "groups":
+      case "share_presence":
       case "reply":
       case "event":
         break;
@@ -521,10 +665,34 @@ export class HubLink implements HubAccountConnection {
       this.emit();
       return;
     }
+    if (header.t === "groups" || header.t === "share_presence") {
+      this.snapshotReceived(header.t, payload);
+      return;
+    }
     // Broadcasts carry no session; the access side does not consume them yet.
     if (header.t === "open" || (header.t === "msg" && !header.s)) return;
     const id = header.s;
     if (id) this.sessions.get(id)?.receive(header, payload);
+  }
+
+  /** Newer snapshots replace older ones; malformed ones are ignored like presence. */
+  private snapshotReceived(kind: "groups" | "share_presence", payload: Uint8Array): void {
+    let changed: boolean;
+    try {
+      if (kind === "groups") {
+        const next = groups(payload);
+        changed = !same(next, this.groupSnapshot);
+        if (changed) this.groupSnapshot = next;
+      } else {
+        const next = shares(payload);
+        changed = !same(next, this.shareSnapshot);
+        if (changed) this.shareSnapshot = next;
+      }
+    } catch {
+      this.logger.warn({ link: this.link?.id, kind }, "[Hub] invalid snapshot ignored");
+      return;
+    }
+    if (changed) this.emit();
   }
 
   private welcome(generation: number, welcome: HubWelcome, centerUrl: string): void {
@@ -699,6 +867,10 @@ export class HubLink implements HubAccountConnection {
     this.sent = this.recv = this.acked = this.unackedBytes = 0;
     this.unacked = [];
     this.nodes = null;
+    this.groupSnapshot = null;
+    this.shareSnapshot = null;
+    this.shareLink = null;
+    this.clearTimer("share");
     this.useTicket = false;
     this.tokenFailures = 0;
     this.clearTimer("grace");

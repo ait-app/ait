@@ -286,7 +286,7 @@ fn seed(fixture: &Fixture, id: &str, parent: Option<&str>) {
 }
 
 #[tokio::test]
-async fn subagent_history_is_scoped_to_verified_descendants_and_does_not_register_agents() {
+async fn subagent_history_is_scoped_to_verified_descendants_and_registers_read_only_agents() {
     let fixture = Fixture::new();
     let (execution, registry) = worker(&fixture);
     let created = create(&execution, &fixture).await;
@@ -333,8 +333,241 @@ async fn subagent_history_is_scoped_to_verified_descendants_and_does_not_registe
             .await
             .is_err()
     );
-    assert_eq!(registry.list().unwrap().len(), 1);
+    assert_eq!(registry.list().unwrap().len(), 3);
     execution.shutdown().await.unwrap();
+}
+
+#[test]
+fn background_children_keep_running_after_the_parent_turn_and_share_normal_history() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let fixture = Fixture::new();
+            let (execution, registry) = worker(&fixture);
+            let created = create(&execution, &fixture).await;
+            let root = created["agentId"].as_str().unwrap();
+            execution
+                .execute(
+                    "agent.message.send.request",
+                    json!({"agentId":root,"text":"background-subagent"}),
+                )
+                .await
+                .unwrap();
+            execution
+                .execute("agent.finish.wait.request", json!({"agentId":root}))
+                .await
+                .unwrap();
+            let listed = execution
+                .execute(
+                    "agent.subagents.list.request",
+                    json!({"parentAgentId":root}),
+                )
+                .await
+                .unwrap();
+            let child = listed["agents"][0]["id"].as_str().unwrap();
+            let native = listed["agents"][0]["observation"]["nativeId"]
+                .as_str()
+                .unwrap();
+            assert_eq!(listed["agents"][0]["status"], "running");
+            assert_eq!(
+                registry.get(root).unwrap().unwrap().last_status,
+                domain::agent_runtime::AgentRuntimeStatus::Idle
+            );
+            let initial = execution
+                .execute("agent.timeline.get.request", json!({"agentId":child}))
+                .await
+                .unwrap();
+            assert_eq!(initial["entries"][0]["item"]["text"], "Independent child");
+            std::fs::write(fixture.cwd.join(format!("release-{native}")), "finish").unwrap();
+            tokio::time::timeout(Duration::from_secs(5), async {
+                loop {
+                    let record = registry.get(child).unwrap().unwrap();
+                    if record.observation.as_ref().unwrap().status
+                        == domain::agent_runtime::observation::ObservedStatus::Completed
+                    {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .unwrap();
+            let page = execution
+                .execute("agent.timeline.get.request", json!({"agentId":child}))
+                .await
+                .unwrap();
+            let answer = page["entries"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|row| row["item"]["text"].as_str())
+                .collect::<String>();
+            assert_eq!(answer, "Independent child answer");
+            assert_eq!(page["agent"]["observation"]["status"], "completed");
+            assert_eq!(page["agent"]["capabilities"]["supportsArchive"], true);
+            execution
+                .execute("agent.archive.request", json!({"agentId":child}))
+                .await
+                .unwrap();
+            assert!(registry.get(root).unwrap().unwrap().archived_at.is_none());
+            assert!(
+                fixture
+                    .cwd
+                    .join(format!("native-history-{native}.json"))
+                    .exists()
+            );
+            execution.shutdown().await.unwrap();
+        });
+}
+
+#[test]
+fn unified_children_share_normal_reads_and_reject_independent_writers() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("test runtime")
+        .block_on(async {
+            let fixture = Fixture::new();
+            let (execution, registry) = worker(&fixture);
+            let created = create(&execution, &fixture).await;
+            let root = created["agentId"].as_str().unwrap();
+            let native = created["agent"]["persistence"]["sessionId"]
+                .as_str()
+                .unwrap();
+            seed(&fixture, "child", Some(native));
+            seed(&fixture, "grandchild", Some("child"));
+            seed(&fixture, "foreign", Some("other"));
+            let listed = execution
+                .execute(
+                    "agent.subagents.list.request",
+                    json!({"parentAgentId":root}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(listed["agents"].as_array().unwrap().len(), 1);
+            let child = listed["agents"][0]["id"].as_str().unwrap();
+            assert_eq!(listed["agents"][0]["management"], "observed");
+            assert_eq!(listed["agents"][0]["parentAgentId"], root);
+            assert_eq!(listed["agents"][0]["persistence"], Value::Null);
+            assert_eq!(
+                listed["agents"][0]["capabilities"]["supportsMessageSend"],
+                false
+            );
+            assert_eq!(listed["agents"][0]["observation"]["status"], "unknown");
+            let nested = execution
+                .execute(
+                    "agent.subagents.list.request",
+                    json!({"parentAgentId":child}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(nested["agents"].as_array().unwrap().len(), 1);
+            assert_eq!(nested["agents"][0]["parentAgentId"], child);
+            let legacy = execution
+                .execute(
+                    "agent.provider_subagents.timeline.get.request",
+                    json!({"parentAgentId":root,"subagentId":"child"}),
+                )
+                .await
+                .unwrap();
+            let page = execution
+                .execute("agent.timeline.get.request", json!({"agentId":child}))
+                .await
+                .unwrap();
+            assert_eq!(page["agentId"], child);
+            assert_eq!(page["entries"][0]["item"]["text"], "child prompt");
+            assert_eq!(page["epoch"], legacy["epoch"]);
+            assert_eq!(page["endCursor"], legacy["endCursor"]);
+            let default = execution
+                .execute("agent.list.request", json!({"scope":"active","sync":{}}))
+                .await
+                .unwrap();
+            assert_eq!(default["entries"].as_array().unwrap().len(), 1);
+            let modern = execution
+                .execute(
+                    "agent.list.request",
+                    json!({"scope":"active","includeObserved":true,"sync":{"generation":default["sync"]["generation"],"afterSeq":default["sync"]["headSeq"]}}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(modern["entries"].as_array().unwrap().len(), 3);
+            assert_eq!(modern["sync"]["mode"], "snapshot");
+            assert_observed_read_only(&execution, &fixture, &registry, child).await;
+            let alias = execution
+                .execute(
+                    "agent.subagents.list.request",
+                    json!({"parentAgentId":root,"subagentId":"grandchild"}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(alias["agents"][0]["id"], nested["agents"][0]["id"]);
+            execution.shutdown().await.unwrap();
+            let (execution, _) = worker(&fixture);
+            let reopened = execution
+                .execute("agent.get.request", json!({"agentId":child}))
+                .await
+                .unwrap();
+            assert_eq!(reopened["agent"]["observation"]["health"], "stale");
+            assert_eq!(reopened["agent"]["status"], "closed");
+            execution.shutdown().await.unwrap();
+        });
+}
+
+async fn assert_observed_read_only(
+    execution: &AgentExecution,
+    fixture: &Fixture,
+    registry: &FileBackedAgentRuntimeRegistry,
+    child: &str,
+) {
+    let original = registry.get(child).unwrap().unwrap();
+    let requests = fixture.requests().len();
+    for method in [
+        "agent.cancel.request",
+        "agent.refresh.request",
+        "agent.commands.list.request",
+        "agent.detach.request",
+        "agent.finish.wait.request",
+    ] {
+        assert!(
+            execution
+                .execute(method, json!({"agentId":child}))
+                .await
+                .is_err(),
+            "{method}"
+        );
+    }
+    assert!(
+        execution
+            .execute(
+                "agent.message.send.request",
+                json!({"agentId":child,"text":"write"})
+            )
+            .await
+            .is_err()
+    );
+    assert!(
+        execution
+            .execute(
+                "agent.config.apply.request",
+                json!({"agentId":child,"config":{"modelId":"other"}})
+            )
+            .await
+            .is_err()
+    );
+    assert!(
+        execution
+            .execute(
+                "agent.import.request",
+                json!({"provider":"codex","sessionId":"child","cwd":fixture.cwd})
+            )
+            .await
+            .is_err()
+    );
+    assert!(execution.execute("agent.resume.request", json!({"handle":{"provider":"codex","sessionId":"child"},"overrides":{"cwd":fixture.cwd}})).await.is_err());
+    assert_eq!(fixture.requests().len(), requests);
+    assert_eq!(registry.get(child).unwrap().unwrap(), original);
 }
 
 #[tokio::test]

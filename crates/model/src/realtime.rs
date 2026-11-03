@@ -3,6 +3,26 @@
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
+// Approximately -60 dBFS for signed PCM16.
+const SILENCE_PEAK: u16 = 32;
+
+/// Classify PCM16 little-endian bytes using the shared realtime silence peak.
+///
+/// # Arguments
+/// * `bytes` - Raw signed PCM16 samples, without a container header.
+///
+/// # Returns
+/// `true` for empty audio or chunks whose samples all have magnitude at most 32.
+/// Odd byte lengths are not classified as quiet; callers validate audio before filtering.
+#[must_use]
+pub fn is_quiet_pcm(bytes: &[u8]) -> bool {
+    let (samples, remainder) = bytes.as_chunks::<2>();
+    remainder.is_empty()
+        && samples
+            .iter()
+            .all(|sample| i16::from_le_bytes(*sample).unsigned_abs() <= SILENCE_PEAK)
+}
+
 /// Mono signed PCM16 little-endian audio. Adapters validate rate and byte budgets.
 #[derive(Debug)]
 pub struct Audio {
@@ -80,3 +100,6 @@ pub fn channel(cancel: &CancellationToken) -> (Session, Endpoint) {
         },
     )
 }
+
+#[cfg(test)]
+mod tests;

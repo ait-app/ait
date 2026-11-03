@@ -3,7 +3,7 @@
 日期：2026-10-30，2026-10-31 补充结算与控制隔离验证，2026-11-02 补充提交入口复核。源码：`ac8e7e33` 加当前工作树。
 平台：Linux x86_64。DSH：官方 `@deepseek-ai/dsh` 0.2.1-rc.4；OpenCode：官方 2.1.3，
 发布源码 `bb25a2f4a3f3f04d7c344bec0c0574ea3510b3b1`。
-决策：[ADR-205](../../decisions/providers/adr-205-provider-native-command-ownership.md)。
+决策：[ADR-213](../../decisions/providers/adr-213-provider-native-command-ownership.md)。
 
 ## 2026-11-02 后续交付
 
@@ -61,7 +61,7 @@ DSH 已完成的实际路径：
   `DESKTOP_DSH_FILE_OK`（131–133）。
 - `/plan`、`/plan off`、目标创建、目标状态、编辑、恢复、清除及原生提问；选择 Beta 后
   工具收到答案并完成目标。`/compact` 实际压缩 29 条历史记录（134–151）。
-- 根据用户反馈改为结构化目标和命令卡片，[ADR-206](../../decisions/providers/adr-206-native-control-result-cards.md)。
+- 根据用户反馈改为结构化目标和命令卡片，[ADR-214](../../decisions/providers/adr-214-native-control-result-cards.md)。
   暂停、编辑、继续和清除均通过真实卡片按钮操作；继续后选择 Alpha，原生目标完成，
   卡片自动变为 Complete，旧卡片移除操作（180–192）。原始多行输出收进详情。
 - 只读历史修复后的新 daemon 再次恢复同一会话，编辑器正确预填且可取消；切换深色主题后
@@ -95,7 +95,7 @@ OpenCode 已完成的实际路径：
 随后真实并发验收又复现一次恢复拒绝。源码核实 `session/follow` 会在发送冷历史快照后
 自动激活 Agent，原来的历史与列表预览因此也会竞争 writer。现已改用官方不激活 Agent 的
 `session/list`、`session/projections` 和固定 `asOfSeq` 的 `session/page`；恢复前也先只读
-验证 ID 和目录，见 [ADR-207](../../decisions/providers/adr-207-dsh-non-activating-history.md)。
+验证 ID 和目录，见 [ADR-215](../../decisions/providers/adr-215-dsh-non-activating-history.md)。
 原来失败的两项真实已有会话测试保持默认并行运行，修复后 **2 项通过**，原生记录和配置不变。
 只读目录不导出创建时间，导入改用已有契约允许的观察时间，最后活动时间继续使用原生记录。
 

@@ -13,6 +13,42 @@ use crate::storage::timeline::Timeline;
 use crate::test_support::Fixture;
 
 #[tokio::test]
+async fn invalid_subagent_events_preserve_protocol_failure_context_after_close() {
+    let fixture = Fixture::new();
+    let spec = fixture.spec();
+    let mut session = fixture.client().create_session(&spec).await.unwrap();
+    session
+        .start_turn("invalid-subagent-activity", &spec.config)
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            match session.poll_turn() {
+                Err(_) => break,
+                Ok(Some(AgentTurnEvent::Completed(_) | AgentTurnEvent::Failed)) => {
+                    panic!("expected a sub-agent protocol error");
+                }
+                _ => tokio::task::yield_now().await,
+            }
+        }
+    })
+    .await
+    .unwrap();
+    let diagnostic = session
+        .failure_diagnostic()
+        .expect("sub-agent protocol diagnostic");
+    assert_eq!(diagnostic.category, Category::Protocol);
+    assert_eq!(diagnostic.source, "subagent_event");
+    let message = session
+        .failure_message()
+        .expect("sub-agent failure explanation")
+        .into_owned();
+    assert!(message.contains("Codex sub-agent event could not be processed"));
+    session.close().await.unwrap();
+    assert_eq!(session.failure_message().as_deref(), Some(message.as_str()));
+}
+
+#[tokio::test]
 async fn upstream_failures_keep_their_cause_without_resending_input() {
     for (error, expected) in [
         (

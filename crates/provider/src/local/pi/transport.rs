@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
-use tokio::sync::{Mutex, mpsc, oneshot};
+use tokio::sync::{Mutex, OnceCell, mpsc, oneshot};
 use tokio::task::JoinHandle;
 
 use super::{PROVIDER, PiClient};
@@ -18,6 +18,8 @@ use crate::ports::{
 };
 
 const MAX_VERSION_BYTES: usize = 64;
+const VERSION_TIMEOUT: Duration = Duration::from_secs(5);
+const VERSION_RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
 const MAX_FRAME: usize = 64 * 1024 * 1024;
 const MAX_PENDING: usize = 128;
@@ -34,25 +36,81 @@ pub(super) struct Version {
     pub(super) supported: bool,
 }
 
-/// Probe once per client. Errors are not cached, so repaired installations can recover.
-pub(super) async fn version_info(client: &PiClient) -> Result<&Version, AgentSessionError> {
-    client
+/// Safe version-probe failures, retaining spawn facts without paths or native error text.
+#[derive(Debug, Clone, Copy, thiserror::Error)]
+pub(super) enum VersionError {
+    /// The OS rejected launching the configured executable.
+    #[error(
+        "Pi executable could not be started (error kind: {kind:?}{os_error}); check its interpreter, executable format, and execution permissions.",
+        os_error = .os_error.map_or_else(String::new, |code| format!(", OS error: {code}"))
+    )]
+    Spawn {
+        /// Safe OS error classification.
+        kind: std::io::ErrorKind,
+        /// Native numeric error code when provided by the OS.
+        os_error: Option<i32>,
+    },
+    /// The probe timed out or failed to return a valid version successfully.
+    #[error("Pi version probe failed or timed out; requires Pi 1.2 or newer.")]
+    Failed,
+}
+
+/// Shared successful version, retry cooldown, and diagnostics for one configured client.
+#[derive(Debug)]
+pub(super) struct VersionProbe {
+    value: OnceCell<Version>,
+    failure: Mutex<Option<(VersionError, tokio::time::Instant)>>,
+    diagnostics: Diagnostics,
+}
+
+impl Default for VersionProbe {
+    fn default() -> Self {
+        Self {
+            value: OnceCell::new(),
+            failure: Mutex::new(None),
+            diagnostics: Diagnostics::new(PROVIDER),
+        }
+    }
+}
+
+/// Cache successful versions and serialize retries after a short failure cooldown.
+pub(super) async fn version_info(client: &PiClient) -> Result<&Version, VersionError> {
+    if let Some(version) = client.version.value.get() {
+        return Ok(version);
+    }
+    let mut failure = client.version.failure.lock().await;
+    if let Some((error, at)) = *failure
+        && at.elapsed() < VERSION_RETRY_INTERVAL
+    {
+        return Err(error);
+    }
+    let result = client
         .version
+        .value
         .get_or_try_init(|| probe_version(client))
-        .await
+        .await;
+    *failure = result
+        .as_ref()
+        .err()
+        .map(|error| (*error, tokio::time::Instant::now()));
+    result
 }
 
 /// Require native settlement support, returning unavailable for an old installation.
 pub(super) async fn version(client: &PiClient) -> Result<(), AgentSessionError> {
-    if version_info(client).await?.supported {
+    let version = version_info(client).await.map_err(|error| match error {
+        VersionError::Spawn { .. } => AgentSessionError::Unavailable,
+        VersionError::Failed => AgentSessionError::Failed,
+    })?;
+    if version.supported {
         Ok(())
     } else {
         Err(AgentSessionError::Unavailable)
     }
 }
 
-async fn probe_version(client: &PiClient) -> Result<Version, AgentSessionError> {
-    let diagnostics = Diagnostics::new(PROVIDER);
+async fn probe_version(client: &PiClient) -> Result<Version, VersionError> {
+    let diagnostics = &client.version.diagnostics;
     let mut child = Command::new(&client.program)
         .arg("--version")
         .envs(client.environment.entries())
@@ -61,13 +119,19 @@ async fn probe_version(client: &PiClient) -> Result<Version, AgentSessionError> 
         .stderr(Stdio::null())
         .kill_on_drop(true)
         .spawn()
-        .map_err(|error| diagnostics.spawn_error(&error))?;
+        .map_err(|error| {
+            diagnostics.spawn_error(&error);
+            VersionError::Spawn {
+                kind: error.kind(),
+                os_error: error.raw_os_error(),
+            }
+        })?;
     let mut stdout = child
         .stdout
         .take()
-        .ok_or(AgentSessionError::Failed)?
+        .ok_or(VersionError::Failed)?
         .take((MAX_VERSION_BYTES + 1) as u64);
-    let result = tokio::time::timeout(client.deadline, async {
+    let result = tokio::time::timeout(VERSION_TIMEOUT.min(client.deadline), async {
         let mut bytes = Vec::new();
         stdout
             .read_to_end(&mut bytes)
@@ -95,7 +159,7 @@ async fn probe_version(client: &PiClient) -> Result<Version, AgentSessionError> 
         diagnostics.observe(Diagnostic::new(category, "version"), "version");
         let _ = child.kill().await;
     }
-    result
+    result.map_err(|_| VersionError::Failed)
 }
 
 fn parse_version(bytes: &[u8]) -> Result<Version, AgentSessionError> {

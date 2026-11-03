@@ -14,7 +14,7 @@ use crate::{
     Error,
     audio::{Audio, Format, MAX_AUDIO_BYTES, MAX_TEXT_BYTES},
     local::read_bounded,
-    ports::{Operation, Synthesizer, Transcriber, Transcript},
+    ports::{Synthesizer, Transcriber, Transcript},
 };
 use catalog::Model;
 use download::Preparation;
@@ -88,41 +88,43 @@ impl Offline {
     }
 }
 
+#[async_trait::async_trait]
 impl Transcriber for Offline {
     fn readiness(&self) -> Result<(), Error> {
         self.preparation.readiness()
     }
 
-    fn transcribe(&self, audio: Audio, cancel: CancellationToken) -> Operation<'_, Transcript> {
-        Box::pin(async move {
-            let wav = tokio::task::spawn_blocking(move || audio.wav())
-                .await
-                .map_err(|_| Error::Provider)??;
-            let bytes = self.execute(wav, cancel, MAX_TEXT_BYTES * 2).await?;
-            serde_json::from_slice(&bytes).map_err(|_| Error::Provider)
-        })
+    async fn transcribe(
+        &self,
+        audio: Audio,
+        cancel: CancellationToken,
+    ) -> Result<Transcript, Error> {
+        let wav = tokio::task::spawn_blocking(move || audio.wav())
+            .await
+            .map_err(|_| Error::Provider)??;
+        let bytes = self.execute(wav, cancel, MAX_TEXT_BYTES * 2).await?;
+        serde_json::from_slice(&bytes).map_err(|_| Error::Provider)
     }
 }
 
+#[async_trait::async_trait]
 impl Synthesizer for Offline {
     fn readiness(&self) -> Result<(), Error> {
         self.preparation.readiness()
     }
 
-    fn synthesize<'a>(&'a self, text: &'a str, cancel: CancellationToken) -> Operation<'a, Audio> {
-        Box::pin(async move {
-            if text.trim().is_empty() || text.len() > MAX_TEXT_BYTES || text.contains('\0') {
-                return Err(Error::Invalid);
-            }
-            let bytes = self
-                .execute(text.as_bytes().to_vec(), cancel, MAX_AUDIO_BYTES)
-                .await?;
-            Audio {
-                bytes,
-                format: Format::Wav,
-            }
-            .pcm()
-        })
+    async fn synthesize(&self, text: &str, cancel: CancellationToken) -> Result<Audio, Error> {
+        if text.trim().is_empty() || text.len() > MAX_TEXT_BYTES || text.contains('\0') {
+            return Err(Error::Invalid);
+        }
+        let bytes = self
+            .execute(text.as_bytes().to_vec(), cancel, MAX_AUDIO_BYTES)
+            .await?;
+        Audio {
+            bytes,
+            format: Format::Wav,
+        }
+        .pcm()
     }
 }
 

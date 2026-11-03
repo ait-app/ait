@@ -352,6 +352,7 @@ export function LocalDaemonSection() {
   const daemonVersionMismatch = isVersionMismatch(appVersion, daemonVersion);
   const daemonStatusStateText =
     statusError ??
+    daemonStatus?.error ??
     (daemonStatus?.status === "running"
       ? t("desktop.daemon.status.running")
       : t("desktop.daemon.status.notRunning"));

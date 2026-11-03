@@ -1,12 +1,12 @@
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
+use async_trait::async_trait;
 use domain::agent_runtime::{PersistedAgentRuntimeRecord, registry::AgentRuntimeRegistryError};
 use model::storage::push::TokenStore;
 use model::{Lifecycle, Limits, Runtime, ServerInfo};
 
 use super::*;
-use crate::push::ports::DeliveryFuture;
 use crate::push::service::PushTokens;
 
 #[derive(Debug, Default)]
@@ -67,13 +67,12 @@ struct Transport {
     results: Mutex<VecDeque<Result<(), DeliveryError>>>,
     changed: tokio::sync::Notify,
 }
+#[async_trait]
 impl PushTransport for Transport {
-    fn send<'a>(&'a self, notification: &'a Notification, _: &'a str) -> DeliveryFuture<'a> {
-        Box::pin(async move {
-            self.sent.lock().unwrap().push(notification.clone());
-            self.changed.notify_one();
-            self.results.lock().unwrap().pop_front().unwrap_or(Ok(()))
-        })
+    async fn send(&self, notification: &Notification, _: &str) -> Result<(), DeliveryError> {
+        self.sent.lock().unwrap().push(notification.clone());
+        self.changed.notify_one();
+        self.results.lock().unwrap().pop_front().unwrap_or(Ok(()))
     }
 }
 

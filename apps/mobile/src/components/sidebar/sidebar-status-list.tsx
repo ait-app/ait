@@ -63,6 +63,7 @@ import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
 import { useSidebarRowHover } from "@/components/sidebar/use-sidebar-row-hover";
+import { useSidebarRowPress } from "@/components/sidebar/use-sidebar-row-press";
 
 // Themed icon wrappers
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -704,14 +705,12 @@ function StatusWorkspaceRowInner({
   const isCompact = useIsCompactFormFactor();
   const isTouchPlatform = platformIsNative || isCompact;
   const showSelection = selected && !isCompact;
-  const [isPressed, setIsPressed] = useState(false);
+  const { isPressed, onPressIn: handlePressIn, onPressOut: handlePressOut } = useSidebarRowPress();
   const trailing = useSidebarWorkspaceTrailing();
   const isDesktop = !isTouchPlatform;
   const serviceSummary = isDesktop ? selectWorkspaceServiceSummary(workspace.scripts) : null;
 
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
-  const handlePressIn = useCallback(() => setIsPressed(true), []);
-  const handlePressOut = useCallback(() => setIsPressed(false), []);
 
   return (
     <SidebarWorkspaceRowFrame workspace={workspace}>

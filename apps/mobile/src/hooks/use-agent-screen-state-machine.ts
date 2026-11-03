@@ -155,12 +155,16 @@ function resolveAgentScreenSource(args: {
 
 function resolveCatchingUpUi(args: {
   hasOptimisticCreateContinuity: boolean;
+  hasRenderedReadyBefore: boolean;
   isVisibilityCatchUpPending: boolean;
   hasHydratedHistoryBefore: boolean;
   hadInitialSyncFailure: boolean;
 }): "overlay" | "status" | "silent" {
   if (args.hasOptimisticCreateContinuity) return "silent";
-  if (args.hasHydratedHistoryBefore) return "status";
+  // Once this route has painted usable content, keep it interactive while the
+  // authoritative timeline catches up. Replica hydration can temporarily fall
+  // back during reconnect, but that must not restore the first-load overlay.
+  if (args.hasHydratedHistoryBefore || args.hasRenderedReadyBefore) return "status";
   if (args.isVisibilityCatchUpPending) return "overlay";
   if (args.hadInitialSyncFailure) return "silent";
   return "overlay";
@@ -168,9 +172,10 @@ function resolveCatchingUpUi(args: {
 
 function resolveAgentScreenSync(args: {
   input: AgentScreenMachineInput;
+  hasRenderedReadyBefore: boolean;
   hadInitialSyncFailure: boolean;
 }): AgentScreenReadySyncState {
-  const { input, hadInitialSyncFailure } = args;
+  const { input, hasRenderedReadyBefore, hadInitialSyncFailure } = args;
   if (input.isArchived) {
     return { status: "idle" };
   }
@@ -192,6 +197,7 @@ function resolveAgentScreenSync(args: {
       status: "catching_up",
       ui: resolveCatchingUpUi({
         hasOptimisticCreateContinuity: hasOptimisticCreateContinuity(input),
+        hasRenderedReadyBefore,
         isVisibilityCatchUpPending: input.visibilityCatchUpStatus === "pending",
         hasHydratedHistoryBefore: input.hasHydratedHistoryBefore,
         hadInitialSyncFailure,
@@ -213,6 +219,7 @@ export function deriveAgentScreenViewState({
     lastReadyAgent: memory.lastReadyAgent,
     hadInitialSyncFailure: memory.hadInitialSyncFailure,
   };
+  const hasRenderedReadyBefore = nextMemory.hasRenderedReady;
 
   updateInitialSyncFailureMemory({ input, nextMemory });
 
@@ -292,6 +299,7 @@ export function deriveAgentScreenViewState({
 
   const sync = resolveAgentScreenSync({
     input,
+    hasRenderedReadyBefore,
     hadInitialSyncFailure: nextMemory.hadInitialSyncFailure,
   });
 

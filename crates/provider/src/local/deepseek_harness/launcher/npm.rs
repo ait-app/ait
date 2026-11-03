@@ -1,0 +1,52 @@
+//! Discover an existing npm exec installation without invoking npm or downloading packages.
+
+use std::path::{Component, Path, PathBuf};
+use std::time::SystemTime;
+
+use crate::local::configuration::executable;
+
+/// Scan at most 256 installations under the npm `cache` without invoking a package manager.
+/// Returns the newest executable DSH entrypoint, or `None` when no valid package can be read.
+pub(super) fn cached_cli(cache: &Path) -> Option<PathBuf> {
+    cache
+        .join("_npx")
+        .read_dir()
+        .ok()?
+        .take(256)
+        .filter_map(Result::ok)
+        .filter_map(|entry| installation(&entry.path()))
+        .max()
+        .map(|(_, program)| program)
+}
+
+fn installation(directory: &Path) -> Option<(SystemTime, PathBuf)> {
+    let package = directory.join("node_modules/@deepseek-ai/dsh");
+    let manifest = package.join("package.json");
+    if manifest.metadata().ok()?.len() > 64 * 1024 {
+        return None;
+    }
+    let identity: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(manifest).ok()?).ok()?;
+    if identity["name"] != "@deepseek-ai/dsh" {
+        return None;
+    }
+    let entrypoint = identity["bin"]
+        .as_str()
+        .or_else(|| identity["bin"]["dsh"].as_str())?;
+    let entrypoint = Path::new(entrypoint);
+    if entrypoint.as_os_str().is_empty()
+        || entrypoint
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_) | Component::CurDir))
+    {
+        return None;
+    }
+    let program = package.join(entrypoint);
+    if !executable(&program) {
+        return None;
+    }
+    Some((package.metadata().ok()?.modified().ok()?, program))
+}
+
+#[cfg(all(test, unix))]
+mod tests;

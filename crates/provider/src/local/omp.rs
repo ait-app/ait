@@ -24,8 +24,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::ports::agent_session::{
-    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionFuture,
-    AgentSessionSpec,
+    AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
 };
 use crate::ports::environment::AgentEnvironment;
 use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
@@ -210,6 +209,7 @@ where
     bridge::serve(OmpClient::new(program), input, output).await
 }
 
+#[async_trait::async_trait]
 impl AgentClient for OmpClient {
     fn discovery_timeout(&self) -> Duration {
         // Config, model catalog and RPC each cold-start an official native process.
@@ -217,29 +217,27 @@ impl AgentClient for OmpClient {
         transport::STARTUP_TIMEOUT.saturating_mul(3)
     }
 
-    fn complete_commands<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-        input: &'a crate::protocol::commands::CompletionInput,
-    ) -> AgentSessionFuture<'a, crate::protocol::commands::CompletionResult> {
-        Box::pin(async move {
-            config::validate_spec(spec)?;
-            input.validate()?;
-            if *self
-                .completion_support
-                .read()
-                .map_err(|_| AgentSessionError::Failed)?
-                == Some(false)
-            {
-                return Ok(crate::protocol::commands::CompletionResult::default());
-            }
-            let mut probe = session::probe(self, &spec.cwd, spec.config.model.as_deref()).await?;
-            let result = completion::complete(&mut probe, input).await;
-            let closed = probe.close().await;
-            let result = result?;
-            closed?;
-            Ok(result)
-        })
+    async fn complete_commands(
+        &self,
+        spec: &AgentSessionSpec,
+        input: &crate::protocol::commands::CompletionInput,
+    ) -> Result<crate::protocol::commands::CompletionResult, AgentSessionError> {
+        config::validate_spec(spec)?;
+        input.validate()?;
+        if *self
+            .completion_support
+            .read()
+            .map_err(|_| AgentSessionError::Failed)?
+            == Some(false)
+        {
+            return Ok(crate::protocol::commands::CompletionResult::default());
+        }
+        let mut probe = session::probe(self, &spec.cwd, spec.config.model.as_deref()).await?;
+        let result = completion::complete(&mut probe, input).await;
+        let closed = probe.close().await;
+        let result = result?;
+        closed?;
+        Ok(result)
     }
     fn supports_session_commands(&self) -> bool {
         true
@@ -257,30 +255,28 @@ impl AgentClient for OmpClient {
         config::validate(config)
     }
 
-    fn validate_selection<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            config::validate_spec(spec)?;
-            if spec
-                .config
-                .feature_values
-                .iter()
-                .flatten()
-                .any(|(key, value)| roles::is_key(key) && value != "native")
-            {
-                let key = self.role_catalog_key(&spec.cwd);
-                let cached = self
-                    .role_catalogs
-                    .read()
-                    .map_err(|_| AgentSessionError::Failed)?
-                    .get(&key)
-                    .map(|snapshot| snapshot.catalog.validate(&spec.config));
-                if let Some(result) = cached {
-                    return result;
-                }
-                self.role_settings(spec).await?;
+    async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
+        config::validate_spec(spec)?;
+        if spec
+            .config
+            .feature_values
+            .iter()
+            .flatten()
+            .any(|(key, value)| roles::is_key(key) && value != "native")
+        {
+            let key = self.role_catalog_key(&spec.cwd);
+            let cached = self
+                .role_catalogs
+                .read()
+                .map_err(|_| AgentSessionError::Failed)?
+                .get(&key)
+                .map(|snapshot| snapshot.catalog.validate(&spec.config));
+            if let Some(result) = cached {
+                return result;
             }
-            Ok(())
-        })
+            self.role_settings(spec).await?;
+        }
+        Ok(())
     }
 
     fn settings(&self, config: &StoredAgentConfig) -> Value {
@@ -296,145 +292,134 @@ impl AgentClient for OmpClient {
             "supportsRewindFiles":false,"supportsRewindBoth":false}})
     }
 
-    fn is_available(&self) -> AgentSessionFuture<'_, bool> {
-        Box::pin(async { Ok(super::configuration::executable(&self.program)) })
+    async fn is_available(&self) -> Result<bool, AgentSessionError> {
+        Ok(super::configuration::executable(&self.program))
     }
 
-    fn discover<'a>(&'a self, cwd: &'a str) -> AgentSessionFuture<'a, Details> {
-        Box::pin(async move {
-            let started = Instant::now();
-            let _metadata = self.metadata_gate(cwd)?.lock_owned().await;
-            let key = self.role_catalog_key(cwd);
-            let completed = self
+    async fn discover(&self, cwd: &str) -> Result<Details, AgentSessionError> {
+        let started = Instant::now();
+        let _metadata = self.metadata_gate(cwd)?.lock_owned().await;
+        let key = self.role_catalog_key(cwd);
+        let completed = self
+            .role_catalogs
+            .read()
+            .map_err(|_| AgentSessionError::Failed)?
+            .get(&key)
+            .filter(|snapshot| snapshot.updated >= started)
+            .cloned();
+        if let Some(details) = completed
+            .as_ref()
+            .and_then(|snapshot| snapshot.default_details.clone())
+        {
+            return Ok(details);
+        }
+        let mut roles = match completed {
+            Some(snapshot) => snapshot.catalog,
+            None => roles::Catalog::read(self, cwd).await?,
+        };
+        let mut probe = session::probe(self, cwd, None).await?;
+        roles.read_chat(&mut probe).await?;
+        let result = config::discover(&mut probe).await;
+        let closed = probe.close().await;
+        let mut details = result?;
+        closed?;
+        roles.append(&mut details, &StoredAgentConfig::default());
+        self.cache_roles(cwd, &roles, Some(&details))?;
+        Ok(details)
+    }
+
+    async fn draft_features(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Vec<Value>, AgentSessionError> {
+        config::validate_spec(spec)?;
+        // Role menus request the default profile after background discovery completes.
+        // Reuse that completed snapshot instead of cold-starting three more native readers.
+        if spec.config == StoredAgentConfig::default() {
+            let key = self.role_catalog_key(&spec.cwd);
+            let cached = self
                 .role_catalogs
                 .read()
                 .map_err(|_| AgentSessionError::Failed)?
                 .get(&key)
-                .filter(|snapshot| snapshot.updated >= started)
-                .cloned();
-            if let Some(details) = completed
-                .as_ref()
-                .and_then(|snapshot| snapshot.default_details.clone())
-            {
-                return Ok(details);
+                .filter(|snapshot| snapshot.updated.elapsed() < Duration::from_mins(5))
+                .and_then(|snapshot| {
+                    snapshot
+                        .default_details
+                        .as_ref()
+                        .map(|details| details.features.clone())
+                });
+            if let Some(features) = cached {
+                return Ok(features);
             }
-            let mut roles = match completed {
-                Some(snapshot) => snapshot.catalog,
-                None => roles::Catalog::read(self, cwd).await?,
-            };
-            let mut probe = session::probe(self, cwd, None).await?;
-            roles.read_chat(&mut probe).await?;
-            let result = config::discover(&mut probe).await;
-            let closed = probe.close().await;
-            let mut details = result?;
-            closed?;
-            roles.append(&mut details, &StoredAgentConfig::default());
-            self.cache_roles(cwd, &roles, Some(&details))?;
-            Ok(details)
-        })
+        }
+        let (roles, tiers) = self.role_settings(spec).await?;
+        let mut features = config::features(&spec.config, tiers.1);
+        features.extend(roles.features(&spec.config));
+        Ok(features)
     }
 
-    fn draft_features<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Vec<Value>> {
-        Box::pin(async move {
-            config::validate_spec(spec)?;
-            // Role menus request the default profile after background discovery completes.
-            // Reuse that completed snapshot instead of cold-starting three more native readers.
-            if spec.config == StoredAgentConfig::default() {
-                let key = self.role_catalog_key(&spec.cwd);
-                let cached = self
-                    .role_catalogs
-                    .read()
-                    .map_err(|_| AgentSessionError::Failed)?
-                    .get(&key)
-                    .filter(|snapshot| snapshot.updated.elapsed() < Duration::from_mins(5))
-                    .and_then(|snapshot| {
-                        snapshot
-                            .default_details
-                            .as_ref()
-                            .map(|details| details.features.clone())
-                    });
-                if let Some(features) = cached {
-                    return Ok(features);
-                }
-            }
-            let (roles, tiers) = self.role_settings(spec).await?;
-            let mut features = config::features(&spec.config, tiers.1);
-            features.extend(roles.features(&spec.config));
-            Ok(features)
-        })
+    async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {
+        config::validate_spec(spec)?;
+        let mut probe = session::probe(self, &spec.cwd, None).await?;
+        let result = probe.request("get_available_commands", json!({})).await;
+        let closed = probe.close().await;
+        let result = result?;
+        closed?;
+        config::commands(&result)
     }
 
-    fn commands<'a>(&'a self, spec: &'a AgentSessionSpec) -> AgentSessionFuture<'a, Vec<Value>> {
-        Box::pin(async move {
-            config::validate_spec(spec)?;
-            let mut probe = session::probe(self, &spec.cwd, None).await?;
-            let result = probe.request("get_available_commands", json!({})).await;
-            let closed = probe.close().await;
-            let result = result?;
-            closed?;
-            config::commands(&result)
-        })
+    async fn diagnostic(&self) -> Result<String, AgentSessionError> {
+        if !self.is_available().await? {
+            return Ok(
+                "Oh My Pi executable is unavailable; check PATH or AIT_SERVER_OMP_BIN.".to_owned(),
+            );
+        }
+        let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
+        let details = self
+            .discover(cwd.to_str().ok_or(AgentSessionError::Failed)?)
+            .await?;
+        Ok(format!(
+            "Oh My Pi RPC ready; {} available models",
+            details.models.len()
+        ))
     }
 
-    fn diagnostic(&self) -> AgentSessionFuture<'_, String> {
-        Box::pin(async move {
-            if !self.is_available().await? {
-                return Ok(
-                    "Oh My Pi executable is unavailable; check PATH or AIT_SERVER_OMP_BIN."
-                        .to_owned(),
-                );
-            }
-            let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Failed)?;
-            let details = self
-                .discover(cwd.to_str().ok_or(AgentSessionError::Failed)?)
-                .await?;
-            Ok(format!(
-                "Oh My Pi RPC ready; {} available models",
-                details.models.len()
-            ))
-        })
+    async fn history(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<Vec<crate::protocol::timeline::NativeItem>, AgentSessionError> {
+        Ok(history::inspect(self, handle, cwd).await?.entries)
     }
 
-    fn history<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, Vec<crate::protocol::timeline::NativeItem>> {
-        Box::pin(async move { Ok(history::inspect(self, handle, cwd).await?.entries) })
+    async fn inspect_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<SessionHistory, AgentSessionError> {
+        history::inspect(self, handle, cwd).await
     }
 
-    fn inspect_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        cwd: &'a str,
-    ) -> AgentSessionFuture<'a, SessionHistory> {
-        Box::pin(history::inspect(self, handle, cwd))
+    async fn list_sessions(
+        &self,
+        options: &ListOptions,
+    ) -> Result<Vec<SessionDescriptor>, AgentSessionError> {
+        history::list(self, options).await
     }
 
-    fn list_sessions<'a>(
-        &'a self,
-        options: &'a ListOptions,
-    ) -> AgentSessionFuture<'a, Vec<SessionDescriptor>> {
-        Box::pin(history::list(self, options))
+    async fn create_session(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        Ok(Box::new(bridge::Session::open(self, spec, None).await?) as Box<dyn AgentSession>)
     }
 
-    fn create_session<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            Ok(Box::new(bridge::Session::open(self, spec, None).await?) as Box<dyn AgentSession>)
-        })
-    }
-
-    fn create_session_with_environment<'a>(
-        &'a self,
-        spec: &'a AgentSessionSpec,
-        environment: &'a AgentEnvironment,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
+    async fn create_session_with_environment(
+        &self,
+        spec: &AgentSessionSpec,
+        environment: &AgentEnvironment,
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         let mut client = self.clone();
         let mut values: BTreeMap<String, String> = client
             .environment
@@ -446,27 +431,24 @@ impl AgentClient for OmpClient {
                 .entries()
                 .map(|(key, value)| (key.to_owned(), value.to_owned())),
         );
-        Box::pin(async move {
-            client.environment = AgentEnvironment::try_from(values)?;
-            client.create_session(spec).await
-        })
+
+        client.environment = AgentEnvironment::try_from(values)?;
+        client.create_session(spec).await
     }
 
-    fn resume_session<'a>(
-        &'a self,
-        handle: &'a AgentPersistenceHandle,
-        spec: &'a AgentSessionSpec,
+    async fn resume_session(
+        &self,
+        handle: &AgentPersistenceHandle,
+        spec: &AgentSessionSpec,
         purpose: AgentResumePurpose,
-    ) -> AgentSessionFuture<'a, Box<dyn AgentSession>> {
-        Box::pin(async move {
-            if purpose == AgentResumePurpose::History {
-                return Err(AgentSessionError::Unavailable);
-            }
-            Ok(
-                Box::new(bridge::Session::open(self, spec, Some(handle)).await?)
-                    as Box<dyn AgentSession>,
-            )
-        })
+    ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
+        if purpose == AgentResumePurpose::History {
+            return Err(AgentSessionError::Unavailable);
+        }
+        Ok(
+            Box::new(bridge::Session::open(self, spec, Some(handle)).await?)
+                as Box<dyn AgentSession>,
+        )
     }
 }
 

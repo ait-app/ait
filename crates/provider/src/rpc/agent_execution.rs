@@ -25,6 +25,8 @@ use crate::ports::agent_session::AgentSessionSpec;
 use crate::protocol::agent_execution::{CreateRequest, ResumeRequest, SendRequest};
 use crate::protocol::agent_lifecycle::AgentIdRequest;
 use crate::rpc::ErrorCode;
+use crate::service::agent_execution::operation::Operation;
+use crate::service::agent_manager::ownership::RUNTIME_OVERLAY_FIELDS;
 use crate::service::agent_manager::{AgentManager, AgentManagerError, AgentRegistration};
 use crate::service::agent_runtime::AgentRuntimeDirectory;
 use crate::support::rpc::decode;
@@ -47,17 +49,47 @@ pub(crate) struct ExecutionState {
 }
 
 impl ExecutionState {
+    fn guard_observed_request(&self, method: &str, params: &Value) -> Result<(), ErrorCode> {
+        if method == "agent.commands.list.request" && params.get("draftConfig").is_some() {
+            return Ok(());
+        }
+        if let Some(id) = params["agentId"].as_str()
+            && !matches!(
+                method,
+                "agent.create.request"
+                    | "agent.get.request"
+                    | "agent.update.request"
+                    | "agent.archive.request"
+                    | "agent.attention.clear.request"
+            )
+            && !method.starts_with("agent.timeline.")
+        {
+            let id = self.resolve(id)?;
+            if self
+                .registry
+                .get(&id)
+                .map_err(|_| ErrorCode::AgentIo)?
+                .is_some_and(|record| record.observation.is_some())
+            {
+                return Err(ErrorCode::UnsupportedCapability);
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) async fn execute(
         &mut self,
-        method: &str,
+        method: Operation,
         params: Value,
     ) -> Result<Value, ErrorCode> {
+        self.guard_observed_request(method.as_str(), &params)?;
         match method {
-            "internal.bot" => self.bot(params).await,
-            "internal.workspace.agent.create" => self.create_workspace_agent(params).await,
-            "internal.workspace.retire" => self.retire_workspaces(params).await,
-            "internal.agent.directory.prepare" => self.prepare_agent_directory(params),
-            "internal.agent.identities.resolve" => {
+            Operation::UnifiedSubagents => self.unified_subagents(params).await,
+            Operation::Bot => self.bot(params).await,
+            Operation::WorkspaceCreate => Box::pin(self.create_workspace_agent(params)).await,
+            Operation::RetireWorkspaces => self.retire_workspaces(params).await,
+            Operation::PrepareDirectory => self.prepare_agent_directory(params),
+            Operation::ResolveIdentities => {
                 only(&params, &["agentIds"])?;
                 let ids: Vec<String> = decode(params["agentIds"].clone())?;
                 if ids.len() > 32 {
@@ -69,48 +101,48 @@ impl ExecutionState {
                     .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
                 Ok(json!(ids))
             }
-            "agent.list.request" if params.get("sync").is_some_and(|sync| !sync.is_null()) => {
+            Operation::List if params.get("sync").is_some_and(|sync| !sync.is_null()) => {
                 self.synchronized_agents(params)
             }
-            "internal.voice.send" | "internal.voice.status" | "internal.voice.cancel" => {
-                self.voice(method, params).await
+            Operation::VoiceSend | Operation::VoiceStatus | Operation::VoiceCancel => {
+                self.voice(method.as_str(), params).await
             }
-            "agent.rewind.request"
-            | "agent.commands.list.request"
-            | "agent.commands.complete.request"
-            | "agent.native_action.request"
-            | "agent.permission.resolve.request"
-            | "agent.provider_subagents.list.request"
-            | "agent.provider_subagents.timeline.get.request"
-            | "provider.diagnostic.request"
-            | "provider.usage.list.request" => self.controls(method, params).await,
-            "provider.sessions.recent.list.request"
-            | "agent.import.request"
-            | "agent.refresh.request"
-            | "agent.fork_context.request" => self.native_sessions(method, params).await,
-            "agent.create.request" => self.create(params).await,
-            "provider.available.list.request"
-            | "provider.models.list.request"
-            | "provider.modes.list.request"
-            | "provider.features.list.request"
-            | "provider.snapshot.get.request"
-            | "provider.snapshot.refresh.request" => self
+            Operation::Rewind
+            | Operation::Commands
+            | Operation::CompleteCommands
+            | Operation::NativeAction
+            | Operation::Permission
+            | Operation::Subagents
+            | Operation::ChildTimeline
+            | Operation::Diagnostic
+            | Operation::Usage => self.controls(method.as_str(), params).await,
+            Operation::RecentSessions
+            | Operation::Import
+            | Operation::Refresh
+            | Operation::ForkContext => self.native_sessions(method.as_str(), params).await,
+            Operation::Create => Box::pin(self.create(params)).await,
+            Operation::Available
+            | Operation::Models
+            | Operation::Modes
+            | Operation::Features
+            | Operation::Snapshot
+            | Operation::RefreshSnapshot => self
                 .manager
-                .read_providers(method, params)
+                .read_providers(method.as_str(), params)
                 .await
                 .map_err(Into::into),
-            "agent.timeline.get.request"
-            | "agent.timeline.search.request"
-            | "agent.timeline.list_prompts.request"
-            | "internal.timeline.append" => self.timeline(method, params).await,
-            "agent.resume.request" => self.resume(params).await,
-            "agent.message.send.request" => self.send(params).await,
-            "agent.model.set.request"
-            | "agent.thinking.set.request"
-            | "agent.config.apply.request"
-            | "agent.mode.set.request"
-            | "agent.feature.set.request" => self.configure(method, &params).await,
-            "agent.cancel.request" => {
+            Operation::Timeline
+            | Operation::SearchTimeline
+            | Operation::Prompts
+            | Operation::AppendTimeline => self.timeline(method.as_str(), params).await,
+            Operation::Resume => self.resume(params).await,
+            Operation::Send => self.send(params).await,
+            Operation::Model
+            | Operation::Thinking
+            | Operation::Configure
+            | Operation::Mode
+            | Operation::Feature => self.configure(method.as_str(), &params).await,
+            Operation::Cancel => {
                 only(&params, &["agentId"])?;
                 let request: AgentIdRequest = decode(params)?;
                 let id = self.resolve(&request.agent_id)?;
@@ -120,13 +152,23 @@ impl ExecutionState {
                     .map_err(|error| map_manager(&error))?;
                 Ok(json!({"agentId":id,"agent":self.snapshot(&id)?,"error":null}))
             }
-            "agent.finish.wait.request" => {
+            Operation::Wait => {
                 let request: AgentIdRequest = decode(params)?;
                 let id = self.resolve(&request.agent_id)?;
                 self.wait_result(&id)
             }
-            _ => {
-                let result = super::agent_runtime::execute(&mut self.directory, method, params);
+            Operation::Realtime | Operation::Wake => Err(ErrorCode::MethodNotFound),
+            Operation::Get
+            | Operation::List
+            | Operation::History
+            | Operation::Update
+            | Operation::Archive
+            | Operation::Delete
+            | Operation::Detach
+            | Operation::ClearAttention
+            | Operation::CloseItems => {
+                let result =
+                    super::agent_runtime::execute(&mut self.directory, method.as_str(), params);
                 // Archive may cascade and can partially succeed. Reconcile even on RPC failure.
                 self.manager
                     .reconcile()
@@ -181,9 +223,10 @@ impl ExecutionState {
             return Err(ErrorCode::UnsupportedCapability);
         }
         let cursor = request.sync.clone().unwrap_or_default();
+        let include_observed = request.include_observed;
         let mut value = super::agent_runtime::sync_snapshot(&self.directory, request)?;
         self.decorate(&mut value)?;
-        super::agent_runtime::synchronize(&self.directory, value, &cursor)
+        super::agent_runtime::synchronize(&self.directory, value, &cursor, include_observed)
     }
 
     /// Whether an opted-in page can use committed history without owning native hydration.
@@ -198,6 +241,37 @@ impl ExecutionState {
         }
         let request: crate::protocol::timeline::FetchRequest = decode(params.clone())?;
         Ok(self.manager.can_read_cached_timeline(&request.agent_id)?)
+    }
+
+    async fn timeline_scope(
+        &mut self,
+        id: &str,
+        method: &str,
+        params: &Value,
+    ) -> Result<String, ErrorCode> {
+        let record = self
+            .registry
+            .get(id)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .ok_or(ErrorCode::AgentNotFound)?;
+        let scope = record.observation.as_ref().map_or_else(
+            || id.to_owned(),
+            crate::service::agent_manager::observed::scope,
+        );
+        if record.observation.is_some() {
+            if method == "internal.timeline.append" {
+                return Err(ErrorCode::UnsupportedCapability);
+            }
+            if !self.manager.history_loaded(id) && !self.can_read_cached_timeline(method, params)? {
+                self.manager.load_observed(id).await?;
+            }
+        }
+        // A queued warm read may run after rewind invalidates the shared hydration marker.
+        // Readers still use the committed projection; only the owner may start native hydration.
+        if self.manager.owns_runtime(id) {
+            self.manager.load_timeline(id).await?;
+        }
+        Ok(scope)
     }
 
     async fn timeline(&mut self, method: &str, params: Value) -> Result<Value, ErrorCode> {
@@ -215,11 +289,7 @@ impl ExecutionState {
             .as_str()
             .ok_or(ErrorCode::InvalidMessage)?;
         let id = self.resolve(identifier)?;
-        // A queued warm read may run after rewind invalidates the shared hydration marker.
-        // Readers still use the committed projection; only the owner may start native hydration.
-        if self.manager.owns_runtime(&id) {
-            self.manager.load_timeline(&id).await?;
-        }
+        let scope = self.timeline_scope(&id, method, &params).await?;
         let timeline = self
             .manager
             .timeline()
@@ -235,7 +305,7 @@ impl ExecutionState {
                 super::timeline::fetch_stored(
                     &request,
                     &timeline,
-                    &id,
+                    &scope,
                     &self.snapshot(&id)?,
                     history_needs_refresh,
                 )
@@ -244,12 +314,12 @@ impl ExecutionState {
             "agent.timeline.search.request" => {
                 let mut request: SearchRequest = decode(params)?;
                 request.agent_id = id;
-                let (epoch, rows) = timeline.read(&request.agent_id)?;
+                let (epoch, rows) = timeline.read(&scope)?;
                 super::timeline::search(&request, &epoch, &rows).map_err(Into::into)
             }
             "agent.timeline.list_prompts.request" => {
                 only(&params, &["agentId"])?;
-                let (epoch, rows) = timeline.read(&id)?;
+                let (epoch, rows) = timeline.read(&scope)?;
                 super::timeline::prompts(&id, &epoch, &rows).map_err(Into::into)
             }
             "internal.timeline.append" => {
@@ -604,7 +674,7 @@ impl ExecutionState {
     fn snapshot(&self, id: &str) -> Result<Value, ErrorCode> {
         let record = self
             .registry
-            .get(id)
+            .get_shared(id)
             .map_err(|_| ErrorCode::AgentIo)?
             .ok_or(ErrorCode::AgentNotFound)?;
         self.project(&record)
@@ -625,31 +695,16 @@ impl ExecutionState {
             }
         }
         self.manager.control_snapshot(record, &mut snapshot);
-        if !self.manager.owns_runtime(&record.id)
+        if record.observation.is_none() && self.manager.owns_runtime(&record.id) {
+            self.owners.publish_controls(record, &snapshot);
+        } else if record.observation.is_none() {
+            self.owners.restore_controls(record, &mut snapshot);
+        }
+        if record.observation.is_none()
+            && !self.manager.owns_runtime(&record.id)
             && let Some(committed) = self.owners.snapshot(&record.id)
         {
-            for field in [
-                "availableModes",
-                "features",
-                "status",
-                "requiresAttention",
-                "attentionReason",
-                "lastError",
-                "activeTurn",
-                "providerUnavailable",
-                "pendingPermissions",
-                "providerUi",
-            ] {
-                if field == "availableModes"
-                    && record
-                        .runtime_info
-                        .as_ref()
-                        .and_then(|info| info.extra.as_ref())
-                        .and_then(|extra| extra.get("availableModes"))
-                        .is_some()
-                {
-                    continue;
-                }
+            for field in RUNTIME_OVERLAY_FIELDS {
                 if let Some(value) = committed.get(field) {
                     snapshot[field] = value.clone();
                 }

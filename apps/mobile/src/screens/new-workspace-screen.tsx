@@ -30,6 +30,12 @@ import {
 } from "@/composer/attachments/submit";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { HostPicker } from "@/components/hosts/host-picker";
+import {
+  getHostGroupServerIds,
+  getSharedHostScope,
+  groupHosts,
+  resolveHostGroupServerId,
+} from "@/hosts/host-groups";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { Combobox, ComboboxItem } from "@/components/ui/combobox";
 import type { ComboboxOption as ComboboxOptionType, ComboboxProps } from "@/components/ui/combobox";
@@ -1308,7 +1314,12 @@ function useNewWorkspaceInitialContext({
   projectId,
   displayName: displayNameProp,
 }: NewWorkspaceScreenProps): NewWorkspaceInitialContextState {
-  const allHosts = useHosts();
+  const hostProfiles = useHosts();
+  // A workspace grant permits using that workspace, not creating another one.
+  const allHosts = useMemo(
+    () => hostProfiles.filter((host) => getSharedHostScope(host) !== "workspace"),
+    [hostProfiles],
+  );
   const allServerIds = useMemo(() => allHosts.map((h) => h.serverId), [allHosts]);
   const projects = useHostProjects(allServerIds);
   const routeDisplayName = displayNameProp?.trim() ?? "";
@@ -1358,7 +1369,9 @@ function useNewWorkspaceInitialContext({
     handleHostPickerOpenChange,
     openHostPicker,
   } = useNewWorkspaceHostSelector({
-    initialServerId: serverId,
+    initialServerId: allHosts.some((host) => host.serverId === serverId)
+      ? serverId
+      : resolveHostGroupServerId(hostProfiles, serverId),
     allServerIds,
     projects,
     lastActiveProject,
@@ -1442,7 +1455,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
 
   const selectedHostLabel =
     host.allHosts.find((h) => h.serverId === host.selectedServerId)?.label ?? "Host";
-  const showHostControl = host.allHosts.length > 1;
+  const showHostControl = groupHosts(host.allHosts).length > 1;
   const isolationTriggerLabel = isolationLabel(t, isolation.effectiveIsolation);
   const addProjectAction = useMemo(
     () => <AddProjectPickerAction onPress={project.onAddProject} />,
@@ -1750,6 +1763,10 @@ export function NewWorkspaceScreen({
   const { workspace } = creationResult;
   const client = useHostRuntimeClient(selectedServerId);
   const isConnected = useHostRuntimeIsConnected(selectedServerId);
+  const projectServerIds = useMemo(
+    () => getHostGroupServerIds(allHosts, selectedServerId),
+    [allHosts, selectedServerId],
+  );
   const {
     selectedProject,
     selectedSourceDirectory,
@@ -1760,6 +1777,8 @@ export function NewWorkspaceScreen({
     handleSelectProjectOption: selectProjectOption,
   } = useNewWorkspaceProjectPicker({
     selectedServerId,
+    projectServerIds,
+    onSelectServerId: handleSelectHost,
     projects,
     routeProject,
     routeProjectContextViewKey,
@@ -1767,8 +1786,8 @@ export function NewWorkspaceScreen({
     allowAllProjects: supportsWorkspaceMultiplicity,
   });
   const projectIconTargets = useMemo(
-    () => buildNewWorkspaceProjectIconTargets(projects, selectedServerId),
-    [projects, selectedServerId],
+    () => buildNewWorkspaceProjectIconTargets(projects, [selectedServerId, ...projectServerIds]),
+    [projects, selectedServerId, projectServerIds],
   );
 
   const projectIconDataByProjectViewKey = useProjectIcons({
@@ -1954,13 +1973,14 @@ export function NewWorkspaceScreen({
 
   const handleSelectWorkspaceHost = useCallback(
     (id: string) => {
-      handleSelectHost(id);
-      if (id !== selectedServerId) {
+      const nextServerId = projectServerIds.includes(id) ? selectedServerId : id;
+      handleSelectHost(nextServerId);
+      if (nextServerId !== selectedServerId) {
         setErrorMessage(null);
       }
-      clearPickerSelectionForTargetChange(selectedServerId, id);
+      clearPickerSelectionForTargetChange(selectedServerId, nextServerId);
     },
-    [clearPickerSelectionForTargetChange, handleSelectHost, selectedServerId],
+    [clearPickerSelectionForTargetChange, handleSelectHost, projectServerIds, selectedServerId],
   );
 
   const handleAddProject = useCallback(() => {

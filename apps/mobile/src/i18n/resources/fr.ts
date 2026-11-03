@@ -2,6 +2,13 @@ import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
 export const fr: TranslationResources = {
+  sharing: {
+    ...en.sharing,
+    title: "Partage",
+    offline: "Cette ressource partagée est hors ligne.",
+    emptyResources: "Cette ressource partagée ne contient aucun espace de travail.",
+    listError: "Impossible de charger les ressources partagées.",
+  },
   voiceTimeline: {
     started: "Conversation vocale démarrée",
     ended: "Conversation vocale terminée",
@@ -312,6 +319,7 @@ export const fr: TranslationResources = {
     actions: {
       loadMore: "Charger plus",
       clearSearch: "Effacer la recherche",
+      refresh: "Actualiser",
     },
   },
   agentList: {
@@ -1579,9 +1587,9 @@ export const fr: TranslationResources = {
         title: "Fournisseurs d'installation",
         description: "ConfigurezClaude Code,Codexet plus",
       },
-      pairDevice: {
-        title: "Associer un appareil",
-        description: "Connectez votre téléphone à ce démon",
+      signIn: {
+        title: "Se connecter",
+        description: "Ouvrez la page de connexion unifiée dans votre navigateur",
       },
     },
   },
@@ -1975,6 +1983,9 @@ export const fr: TranslationResources = {
     backdrop: "Toile de fond du menu",
   },
   subagents: {
+    observing: "Lecture seule",
+    observationUnknown: "En attente de confirmation de l’état",
+    observationUnavailable: "Session indisponible",
     title: "Sous-agents",
     pillLabelOne: "1 sous-agent",
     pillLabelMany: "{{count}} sous-agents",

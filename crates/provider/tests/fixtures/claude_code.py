@@ -10,7 +10,7 @@ args = sys.argv[1:]
 cwd = Path.cwd()
 if (cwd / "capture-environment").exists():
     with (cwd / "native-environment.jsonl").open("a") as output:
-        output.write(json.dumps({"value": os.environ.get("AIT_TEST_AGENT_ENV"), "nested": os.environ.get("CLAUDECODE"), "checkpoint": os.environ.get("CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING")}) + "\n")
+        output.write(json.dumps({"value": os.environ.get("AIT_TEST_AGENT_ENV"), "nested": os.environ.get("CLAUDECODE"), "checkpoint": os.environ.get("CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING"), "entrypoint": os.environ.get("CLAUDE_CODE_ENTRYPOINT")}) + "\n")
 config = Path(os.environ.get("CLAUDE_CONFIG_DIR", str(Path.home() / ".claude")))
 session = next((arg.split("=", 1)[1] for arg in args if arg.startswith(("--session-id=", "--resume="))), str(uuid.uuid4()))
 project = "".join(c if c.isascii() and c.isalnum() else "-" for c in str(cwd.resolve()))
@@ -55,6 +55,9 @@ for line in sys.stdin:
         kind = message["request"]["subtype"]
         if kind == "initialize":
             (cwd / "claude-args.json").write_text(json.dumps(args))
+            if "--mcp-config" in args:
+                mcp = Path(args[args.index("--mcp-config") + 1])
+                (cwd / "claude-mcp.json").write_text(json.dumps({"path": str(mcp), "mode": mcp.stat().st_mode & 0o777, "config": json.loads(mcp.read_text())}))
             (cwd / "claude-pid").write_text(str(os.getpid()))
             if (cwd / "fail-init").exists():
                 sys.exit(1)

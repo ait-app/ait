@@ -5,7 +5,7 @@
 
 2026-11-03 范围确认：用户选择保持官方 OMP，补齐其已导出接口的操作。未导出的任意
 TUI 工厂不再作为交付前提，不安装私有 OMP 运行时；原生补全也保持实际协商结果。
-本轮临时界面和语义操作边界见 [ADR-210](../decisions/providers/adr-210-native-ui-and-actions.md)。
+本轮临时界面和语义操作边界见 [ADR-218](../decisions/providers/adr-218-native-ui-and-actions.md)。
 这一确认范围的实现和验收已完成，结果见
 [最终交付报告](../reports/providers/native-delivery-and-omp-roles-2026-11-02.md#2026-11-03-最终交付)。
 下文完整远程 completer 与直连 ACP 的设计仍是后续提案，不作为已导出能力交付的一部分。
@@ -83,7 +83,7 @@ result:     { supported: true, items: [
 原版 OMP 获得该能力。最小官方接口扩展比长期维护自定义 OMP 运行时更合适。
 
 实施进度：AIT 的只读请求、原生支持协商、精确编辑及再次查询已实现，见
-[ADR-204](../decisions/providers/adr-204-native-editor-completion.md)。
+[ADR-212](../decisions/providers/adr-212-native-editor-completion.md)。
 [上游源码补丁](../../third-party/omp/README.md)已在隔离的官方 18.14.0 源码包验证
 ACP、RPC、三级插件补全及表单等待期间的查询；系统安装的 OMP 未修改。
 88 个内置命令中，46 个有文本/ACP handler。后续已将公开 RPC 的其他操作映射到
@@ -103,7 +103,7 @@ ACP、RPC、三级插件补全及表单等待期间的查询；系统安装的 O
 - [x] 缓存模型发现，合并并发请求，后台刷新保留旧目录；隔离操作等待与草稿编辑。
 - [x] 完成 Linux Electron 实际点击、错误重试、角色配置、原生 UI 和文件下载验收。
 
-实现见 [ADR-209](../decisions/providers/adr-209-omp-model-roles.md)，
+实现见 [ADR-217](../decisions/providers/adr-217-omp-model-roles.md)，
 验收见[后续报告](../reports/providers/native-delivery-and-omp-roles-2026-11-02.md)。
 
 | 能力                                   | Ait 入口与负责层                                      | 必须验证的结果                                                    |

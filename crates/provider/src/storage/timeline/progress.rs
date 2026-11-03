@@ -82,7 +82,7 @@ impl Timeline {
             },
         )?;
         transaction.commit().map_err(io)?;
-        self.publish(agent, provider, &epoch, &[(seq, entry.clone())]);
+        self.publish(&database, agent, provider, &epoch, &[(seq, entry.clone())])?;
         Ok(())
     }
 }

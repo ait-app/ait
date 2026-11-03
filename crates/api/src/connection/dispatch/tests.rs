@@ -9,6 +9,36 @@ use crate::{Api, Services};
 
 mod subscription_admission;
 
+#[tokio::test]
+async fn binary_terminal_rejection_keeps_its_uncorrelated_error_envelope() {
+    let api = api();
+    for capabilities in [vec![], vec!["terminal.input".to_owned()]] {
+        let (outbound, mut receiver) = Outbound::new();
+        super::super::process_terminal_frame(
+            &[0x01],
+            &api.shared,
+            &outbound,
+            super::super::Peer {
+                capabilities: &capabilities,
+                guest: None,
+            },
+            &mut terminal::connection::TerminalConnection::default(),
+        )
+        .await
+        .unwrap();
+        let response = decode(receiver.try_recv().unwrap().message);
+        assert!(response["request_id"].is_null());
+        assert_eq!(
+            response["code"],
+            if capabilities.is_empty() {
+                "unsupported_capability"
+            } else {
+                "not_implemented"
+            }
+        );
+    }
+}
+
 const OWNED_METHODS: &[&str] = &[
     "relay.status.request",
     "schedule.list.request",

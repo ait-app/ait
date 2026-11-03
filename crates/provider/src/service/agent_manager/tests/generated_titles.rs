@@ -1,6 +1,6 @@
 use domain::agent_runtime::TitleOrigin;
 use domain::summary::SummaryRequest;
-use model::summary::SummaryFuture;
+
 use serde_json::json;
 
 use super::*;
@@ -11,14 +11,16 @@ struct Generator {
     started: tokio::sync::Notify,
     release: tokio::sync::Notify,
 }
+#[async_trait::async_trait]
 impl SummaryGenerator for Generator {
-    fn generate(&self, request: SummaryRequest) -> SummaryFuture<'_> {
-        Box::pin(async move {
-            assert_eq!(request.context, "First user prompt");
-            self.started.notify_one();
-            self.release.notified().await;
-            Ok(json!({"title":"Generated session title"}))
-        })
+    async fn generate(
+        &self,
+        request: SummaryRequest,
+    ) -> Result<Value, domain::summary::SummaryError> {
+        assert_eq!(request.context, "First user prompt");
+        self.started.notify_one();
+        self.release.notified().await;
+        Ok(json!({"title":"Generated session title"}))
     }
     fn shutdown(&self) {}
 }

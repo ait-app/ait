@@ -3,9 +3,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures_util::StreamExt;
-use host_link::{
-    Binding, CENTER, Center, Credential, Error, Machine, Session, Tokens, VERIFICATION_URI,
-};
+use host_link::{Binding, Center, Credential, Error, Machine, Session, Tokens, VERIFICATION_URI};
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -49,7 +47,7 @@ impl HttpCenter {
             .map_err(|_| Error::Unavailable)?;
         Ok(Self {
             client,
-            base: CENTER.to_owned(),
+            base: host_link::center(),
             hostname: super::system_hostname(),
         })
     }

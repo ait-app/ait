@@ -122,16 +122,13 @@ fn claude_merges_sandbox_settings_without_losing_permission_rules() {
     );
     assert_eq!(settings["sandbox"]["network"]["allowLocalBinding"], true);
     assert_eq!(settings["fastMode"], true);
-    let mcp: Value = serde_json::from_str(
-        args.iter()
-            .find_map(|arg| arg.strip_prefix("--mcp-config="))
-            .unwrap(),
-    )
-    .unwrap();
+    assert!(args.iter().all(|arg| !arg.contains("literal$(value)")));
+    let mcp = claude_mcp(&config).unwrap();
     assert_eq!(
         mcp["mcpServers"]["docs"]["args"],
         json!(["literal$(value)"])
     );
+    assert_eq!(claude_mcp(&StoredAgentConfig::default()), None);
 }
 
 #[test]

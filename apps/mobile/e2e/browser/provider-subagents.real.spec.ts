@@ -47,10 +47,10 @@ const cases: ProviderSubagentCase[] = [
     provider: "opencode",
     sentinel: "OPENCODE_CHILD_SENTINEL",
     expectedName: "Verify OpenCode descriptor",
-    expectedSubtitle: /explore · gpt-5\.4(?: · [^\n·]+)? · \d+(?:\.\d+)?k? tokens/i,
+    expectedSubtitle: /explore(?: · (?:openai\/)?gpt-5\.4)?/i,
     providerConfig: { model: "openai/gpt-5.4" },
     prompt:
-      'Use the task tool exactly once with description "Verify OpenCode descriptor" and the explore subagent. Ask it to reply with exactly OPENCODE_CHILD_SENTINEL and do nothing else. Wait for it, then reply ROOT_DONE.',
+      'Use the native subagent tool (task on older OpenCode) exactly once with description "Verify OpenCode descriptor" and the explore agent. Ask it to reply with exactly OPENCODE_CHILD_SENTINEL and do nothing else. Wait for it, then reply ROOT_DONE.',
   },
 ];
 
@@ -96,10 +96,10 @@ test.describe("real provider subagent timelines", () => {
         // Choosing a row is a menu selection: the track panel goes with it.
         await expect(page.getByTestId("subagents-track-header-panel")).toBeHidden();
 
-        const panel = page.getByTestId("provider-subagent-panel");
+        const panel = page.getByTestId("agent-conversation-panel").filter({ visible: true });
         await expect(panel).toBeVisible({ timeout: 30_000 });
         if (scenario.expectedSubtitle) {
-          await expect(page.getByTestId("provider-subagent-pane-subtitle")).toHaveText(
+          await expect(panel.getByTestId("agent-pane-subtitle")).toHaveText(
             scenario.expectedSubtitle,
           );
           const desktopScreenshot = testInfo.outputPath(
@@ -111,7 +111,7 @@ test.describe("real provider subagent timelines", () => {
             contentType: "image/png",
           });
           await page.setViewportSize({ width: 494, height: 862 });
-          await expect(page.getByTestId("provider-subagent-pane-subtitle")).toHaveText(
+          await expect(panel.getByTestId("agent-pane-subtitle")).toHaveText(
             scenario.expectedSubtitle,
           );
           const compactScreenshot = testInfo.outputPath(

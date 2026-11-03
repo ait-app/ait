@@ -144,3 +144,42 @@ async fn unsupported_disabled_and_history_sessions_are_not_injected() {
         );
     }
 }
+
+#[tokio::test]
+async fn guest_created_agents_never_receive_the_daemon_mcp() {
+    let (manager, registry, client) = make_manager();
+    client.0.lock().unwrap().mcp_support = Support::Http;
+    let policy = Arc::new(Policy(Mutex::new(json!({}))));
+    let mut manager = manager.with_agent_mcp(connection(policy, 7316)).fork(None);
+    let labels = BTreeMap::from([(
+        crate::service::agent_mcp::GUEST_SHARE_LABEL.to_owned(),
+        "share".to_owned(),
+    )]);
+    manager
+        .create(
+            "agent-guest",
+            &spec(),
+            AgentRegistration {
+                labels: labels.clone(),
+                ..AgentRegistration::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(
+        client.0.lock().unwrap().create_specs[0]
+            .config
+            .mcp_servers
+            .is_none()
+    );
+    let mut record = stored_record();
+    record.labels = labels;
+    registry.upsert(&record).unwrap();
+    manager.resume("agent-1").await.unwrap();
+    assert!(
+        client.0.lock().unwrap().resume_specs[0]
+            .config
+            .mcp_servers
+            .is_none()
+    );
+}

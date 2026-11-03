@@ -1,3 +1,4 @@
+import { groupHosts } from "@/hosts/host-groups";
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
@@ -76,8 +77,8 @@ export function useHostChooser() {
 
   return useCallback(
     (input: ChooseHostInput) => {
-      const availableHosts = orderHostsLocalFirst(hosts, localServerId).filter(
-        input.filter ?? (() => true),
+      const availableHosts = groupHosts(
+        orderHostsLocalFirst(hosts, localServerId).filter(input.filter ?? (() => true)),
       );
 
       if (availableHosts.length === 0) {

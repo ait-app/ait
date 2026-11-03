@@ -27,6 +27,8 @@ struct Text {
 /// Bounded native projections, sharing identities across live updates and history replay.
 #[derive(Debug, Default)]
 pub(super) struct Stream {
+    pub(super) links: super::subagents::Links,
+    pub(super) child_frames: Vec<Value>,
     pub(super) events: VecDeque<AgentTurnEvent>,
     pub(super) last_message: Option<String>,
     pub(super) clients: BTreeMap<String, String>,

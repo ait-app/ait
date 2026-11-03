@@ -139,7 +139,7 @@ async fn launch(
         transport.request(
             "initialize",
             json!({"protocolVersion":1,
-        "clientCapabilities":{"elicitation":{"form":{}}},
+        "clientCapabilities":{"elicitation":{"form":{}},"_meta":{"opencode/child-session-updates":true}},
         "clientInfo":{"name":"ait","version":env!("CARGO_PKG_VERSION")}}),
         ),
     )

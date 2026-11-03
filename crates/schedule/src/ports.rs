@@ -1,5 +1,4 @@
 //! Host execution and durable storage boundaries.
-use std::{future::Future, pin::Pin};
 
 use domain::schedule::{Schedule, Target};
 use domain::storage::schedule::Error;
@@ -21,6 +20,7 @@ pub struct Outcome {
 }
 
 /// Asynchronous host execution, isolated from persistence and transport.
+#[async_trait::async_trait]
 pub trait Runner: Send + Sync + std::fmt::Debug {
     /// Check active Workspace ownership and target membership before accepting a task change.
     /// `workspace_id` identifies the owner; `target` selects an existing Agent or its creation config.
@@ -28,19 +28,15 @@ pub trait Runner: Send + Sync + std::fmt::Debug {
     ///
     /// # Errors
     /// Returns validation or storage errors when the owner or target is unavailable or incompatible.
-    fn resolve(
-        &self,
-        workspace_id: String,
-        target: Target,
-    ) -> Pin<Box<dyn Future<Output = Result<Target, Error>> + Send + '_>>;
+    async fn resolve(&self, workspace_id: String, target: Target) -> Result<Target, Error>;
     /// Execute an occurrence; honor cancellation and release owned resources before returning.
-    fn run(
+    async fn run(
         &self,
         schedule: Schedule,
         run_id: String,
         progress: Progress,
         cancel: CancellationToken,
-    ) -> Pin<Box<dyn Future<Output = Outcome> + Send + '_>>;
+    ) -> Outcome;
 }
 
 /// Acknowledged durable occurrence identity updates, sent before starting the native turn.

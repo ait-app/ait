@@ -9,45 +9,38 @@ struct ValidatingRunner {
     running: tokio::sync::Notify,
     finished: tokio::sync::Notify,
 }
+#[async_trait::async_trait]
 impl Runner for ValidatingRunner {
-    fn resolve(
-        &self,
-        workspace_id: String,
-        mut target: Target,
-    ) -> Pin<Box<dyn Future<Output = Result<Target, Error>> + Send + '_>> {
-        Box::pin(async move {
-            if workspace_id == "missing" {
-                return Err(Error::Invalid);
+    async fn resolve(&self, workspace_id: String, mut target: Target) -> Result<Target, Error> {
+        if workspace_id == "missing" {
+            return Err(Error::Invalid);
+        }
+        if let Target::NewAgent { config } = &mut target {
+            if config["provider"] == "slow" {
+                self.validating.notify_one();
+                self.validated.notified().await;
             }
-            if let Target::NewAgent { config } = &mut target {
-                if config["provider"] == "slow" {
-                    self.validating.notify_one();
-                    self.validated.notified().await;
-                }
-                config["cwd"] = json!("/canonical/workspace");
-            }
-            Ok(target)
-        })
+            config["cwd"] = json!("/canonical/workspace");
+        }
+        Ok(target)
     }
-    fn run(
+    async fn run(
         &self,
         _: Schedule,
         _: String,
         progress: Progress,
         _: CancellationToken,
-    ) -> Pin<Box<dyn Future<Output = Outcome> + Send + '_>> {
-        Box::pin(async move {
-            self.running.notify_one();
-            self.finished.notified().await;
-            progress
-                .record(Some("agent".into()), Some("wks-test".into()))
-                .await
-                .unwrap();
-            Outcome {
-                output: Some("persisted while validating".into()),
-                ..Outcome::default()
-            }
-        })
+    ) -> Outcome {
+        self.running.notify_one();
+        self.finished.notified().await;
+        progress
+            .record(Some("agent".into()), Some("wks-test".into()))
+            .await
+            .unwrap();
+        Outcome {
+            output: Some("persisted while validating".into()),
+            ..Outcome::default()
+        }
     }
 }
 fn slow_target() -> Value {

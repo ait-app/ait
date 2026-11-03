@@ -1,5 +1,31 @@
 # Ait changelog
 
+## 0.1.25 - 2026-11-01
+
+- Keep the existing daemon running when a readiness probe fails, and reconnect to the same process after recovery.
+- Simplify schedules and shared-resource lists, improve agent history fallback, and clarify loading states.
+- Keep sidebar rows stable when shortcut badges appear on hover.
+- Use a gentler loading indicator while reconnecting to the online service.
+- Clarify Chinese wording for host sharing, local connections, and session states.
+
+## 0.1.24 - 2026-11-01
+
+- Share workspaces, projects, or entire hosts with group members through Hub guest sessions, with scoped access, revocation, and recovery.
+- Fix shared project/workspace directories remaining in a loading state, and organize sharing, host navigation, and account login on the home page.
+- Restore native and nested subagent lists; improve OpenCode subagent state, history recovery, and live updates.
+- Handle Codex child-agent completion notifications without interrupting the parent session.
+- Correct provider execution ownership and public API contracts, improve Pi availability/version diagnostics, and mark Claude sessions launched by Ait.
+- Fix macOS sidebar and home-page buttons being blocked by window drag regions.
+
+## 0.1.23 - 2026-10-30
+
+- Use Hub for online business sessions across clients and hosts, while keeping dedicated file downloads on Relay. Hub support is now required for online sessions.
+- Automatically connect the daemon's orchestration MCP to supported agent sessions, and add Unix socket listeners for MCP.
+- Unify workspace ordering in the sidebar and remove drag sorting; improve internal transport URL compatibility in browsers.
+- Hide Claude's injected subagent hand-back records and display returned reports as messages; discover DSH through npm configuration.
+- Connect Vim write commands to file saving and filter silent PCM frames in realtime voice input and output.
+- Simplify Rust asynchronous interfaces with async-trait.
+
 ## 0.1.22 - 2026-10-29
 
 - Let the daemon own machine authorization, node registration and independent Hub/Relay connections, so publishing continues when the desktop account client exits. Direct daemon startup now uses the same lifecycle; remove the former `--headless` flag from startup scripts.

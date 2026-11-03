@@ -1,5 +1,8 @@
 use super::*;
 
+#[cfg(unix)]
+mod socket;
+
 #[tokio::test]
 async fn agent_mcp_credential_is_private_and_limited_to_its_route() {
     let fixture = Fixture::start().await;

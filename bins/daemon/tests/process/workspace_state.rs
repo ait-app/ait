@@ -214,6 +214,7 @@ fn agent(
         internal: false,
         archived_at: None,
         owner: None,
+        observation: None,
     }
 }
 

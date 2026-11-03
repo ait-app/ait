@@ -66,7 +66,7 @@ OMP 通过官方每次运行的 `--config` 接收稀疏覆盖，用户全局和�
   页面、不将整份文件缓存在 renderer。只有写盘完成才显示成功，连接、并发、停滞、
   取消和窗口关闭均有清理；用户选择保存位置的时间不计入连接等待预算。
 
-边界见 [ADR-210](../../decisions/providers/adr-210-native-ui-and-actions.md)。
+边界见 [ADR-218](../../decisions/providers/adr-218-native-ui-and-actions.md)。
 
 ## 最终桌面验收
 
@@ -124,6 +124,35 @@ AIT_TEST_OMP_BIN=/usr/bin/omp AIT_TEST_DSH_BIN=/usr/bin/dsh \
   installed_omp_native_actions_commit_forks_tree_navigation_and_reopen \
   installed_omp_roles_resolve_inside_native_extensions_and_survive_reopen \
   installed_host_admits_native_image_and_file_receipts_and_delivers_real_zip
+```
+
+## PR 与最新主分支整合
+
+提交前将功能提交 `083112e8` 与 `main` 的 `850e0075` 合并。保留主分支新的异步
+Provider trait、封闭操作路由、只读子 Agent 登记和共享读取缓存；新原生操作继续持有
+对应 Agent 的 owner，延迟 receipt 不占用该 owner 的交互处理。新 ADR 编号调整为
+211–218，保留主分支已有 ADR 及文档分类。
+
+整合回归发现命令目录读取暂存的 OpenCode 空闲事件未交付给新子 Agent 处理器，
+导致两项后台权限测试超时。已先消费同一连接的暂存帧，再读取新帧，并保留目录推送。
+没有增加等待预算或减少并行度。修复后扩大到直接相关模块的定向检查：
+
+- Rust：**548 通过、0 失败、58 忽略**。范围包括 OMP、DSH、OpenCode、旧 ACP、
+  元数据进程、模型目录、执行路由、延迟回执与 owner；不是全 workspace 测试。
+- 最后按 Clippy 拆分函数、固定较大创建 Future 后，OpenCode 与执行/RPC 直接相关回归
+  **253 通过、0 失败、33 忽略**；与前述范围重叠，不累加。
+- 官方 OMP/DSH 联合复验：**3 通过、0 失败**，默认并行，13.91 秒。
+- 共享前端：**73 通过**；Electron 下载、IPC 和启动环境：**22 通过**。
+- 相关协议：**12 通过**；SDK 原生补全：**1 通过、18 未选中**。
+- provider 全目标 Clippy、Rust 格式、daemon 构建、协议/SDK 构建、共享前端和桌面类型检查、
+  Electron 主进程构建、相关 ESLint/oxlint
+  及文档链接检查通过。桌面截图与手动端到端结果对应前一节的整合前工作树。
+
+```sh
+cargo test --locked -q -p provider --lib -- \
+  local::omp local::deepseek_harness local::opencode local::acp_transport \
+  local::metadata_process service::provider_catalog service::agent_execution \
+  rpc::agent_execution service::agent_manager::ownership
 ```
 
 ## 阶段一 Test execution

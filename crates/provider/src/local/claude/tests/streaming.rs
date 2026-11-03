@@ -260,6 +260,27 @@ fn subagent_handback_reports_show_as_the_final_message() {
 }
 
 #[test]
+fn background_subagent_completion_stays_hidden_after_the_next_turn_starts() {
+    let mut stream = streaming::Stream::default();
+    stream
+        .record(
+            &json!({"type":"assistant","uuid":"launch","message":{"id":"api","content":[
+        {"type":"tool_use","id":"agent-call","name":"Agent","input":{"prompt":"explore"}}]}}),
+        )
+        .unwrap();
+    stream.next_turn();
+    stream.events.clear();
+    stream
+        .record(&json!({"type":"user","uuid":"done","message":{"content":
+            "<task-notification><tool-use-id>agent-call</tool-use-id><status>completed</status><summary>Full child result</summary></task-notification>"}}))
+        .unwrap();
+    assert!(
+        stream.events.is_empty(),
+        "a subagent launched in an earlier turn must not leak its result into the parent"
+    );
+}
+
+#[test]
 fn malformed_and_excessive_output_fail_without_panicking() {
     let mut stream = streaming::Stream::default();
     assert!(

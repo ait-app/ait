@@ -10,6 +10,7 @@ mod launcher;
 mod observation;
 mod session;
 mod streaming;
+mod subagents;
 mod summary;
 mod tool;
 

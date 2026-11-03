@@ -137,6 +137,7 @@ impl AgentManager {
 
 fn eligible(record: &PersistedAgentRuntimeRecord) -> bool {
     !record.internal
+        && record.observation.is_none()
         && record.archived_at.is_none()
         && record.title_origin == Some(TitleOrigin::Prompt)
 }

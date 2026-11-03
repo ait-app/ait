@@ -26,36 +26,35 @@ impl Controlled {
     }
 }
 
+#[async_trait::async_trait]
 impl Runner for Controlled {
-    fn resolve(
+    async fn resolve(
         &self,
         _: String,
         target: domain::schedule::Target,
-    ) -> Pin<Box<dyn Future<Output = Result<domain::schedule::Target, Error>> + Send + '_>> {
-        Box::pin(async move { Ok(target) })
+    ) -> Result<domain::schedule::Target, Error> {
+        Ok(target)
     }
-    fn run(
+    async fn run(
         &self,
         schedule: Schedule,
         _: String,
         progress: Progress,
         cancel: CancellationToken,
-    ) -> Pin<Box<dyn Future<Output = Outcome> + Send + '_>> {
-        Box::pin(async move {
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            let (complete, receive) = oneshot::channel();
-            self.started
-                .send(Started {
-                    schedule,
-                    progress,
-                    complete,
-                })
-                .unwrap_or_else(|_| panic!("controlled runner receiver must stay alive"));
-            tokio::select! {
-                result = receive => result.expect("test must complete accepted occurrence"),
-                () = cancel.cancelled() => Outcome { error: Some("cancelled".into()), ..Outcome::default() },
-            }
-        })
+    ) -> Outcome {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let (complete, receive) = oneshot::channel();
+        self.started
+            .send(Started {
+                schedule,
+                progress,
+                complete,
+            })
+            .unwrap_or_else(|_| panic!("controlled runner receiver must stay alive"));
+        tokio::select! {
+            result = receive => result.expect("test must complete accepted occurrence"),
+            () = cancel.cancelled() => Outcome { error: Some("cancelled".into()), ..Outcome::default() },
+        }
     }
 }
 

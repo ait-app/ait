@@ -1,6 +1,90 @@
 use super::*;
 
 #[test]
+fn completion_updates_only_known_children_and_is_idempotent_in_either_event_order() {
+    let images = ImageStore::default();
+    for completion_first in [false, true] {
+        let mut live = Live::default();
+        live.observe(
+            "item/completed",
+            &spawn("root", "child"),
+            ("root", "/tmp"),
+            &images,
+        )
+        .unwrap();
+        let activity = json!({"threadId":"root","turnId":"parent-turn","item":{
+            "type":"subAgentActivity","id":"subagent-completed-child-turn","kind":"completed",
+            "agentThreadId":"child","agentPath":"/root/reviewer","model":null,"reasoningEffort":null}});
+        let completed = json!({"threadId":"child","turn":{"id":"child-turn","status":"completed"}});
+        let mut notifications = [
+            ("item/completed", &activity),
+            ("turn/completed", &completed),
+        ];
+        if !completion_first {
+            notifications.reverse();
+        }
+        for (method, params) in notifications {
+            let events = live
+                .observe(method, params, ("root", "/tmp"), &images)
+                .unwrap();
+            assert!(
+                events
+                    .iter()
+                    .all(|event| matches!(event, AgentTurnEvent::Subagent(_)))
+            );
+            assert_eq!(live.children()[0].descriptor["status"], "completed");
+        }
+        assert!(
+            live.observe("item/completed", &activity, ("root", "/tmp"), &images)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(live.children()[0].parent_id, "root");
+
+        let mut unknown = activity;
+        unknown["item"]["agentThreadId"] = json!("unknown");
+        assert!(
+            live.observe("item/completed", &unknown, ("root", "/tmp"), &images)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(live.children().len(), 1);
+        assert!(!live.contains("unknown"));
+    }
+}
+
+#[test]
+fn completion_preserves_a_childs_native_failed_or_canceled_status() {
+    let images = ImageStore::default();
+    for (native_status, expected) in [("failed", "failed"), ("interrupted", "canceled")] {
+        let mut live = Live::default();
+        live.observe(
+            "item/completed",
+            &spawn("root", "child"),
+            ("root", "/tmp"),
+            &images,
+        )
+        .unwrap();
+        live.observe(
+            "turn/completed",
+            &json!({"threadId":"child","turn":{"id":"child-turn","status":native_status}}),
+            ("root", "/tmp"),
+            &images,
+        )
+        .unwrap();
+        let completion = json!({"threadId":"root","turnId":"parent-turn","item":{
+            "type":"subAgentActivity","id":"child-completed","kind":"completed",
+            "agentThreadId":"child","agentPath":"/root/reviewer"}});
+        assert!(
+            live.observe("item/completed", &completion, ("root", "/tmp"), &images)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(live.children()[0].descriptor["status"], expected);
+    }
+}
+
+#[test]
 fn child_interactions_preserve_ancestry_without_enrolling_their_targets() {
     let mut live = Live::default();
     let images = ImageStore::default();

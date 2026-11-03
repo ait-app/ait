@@ -21,6 +21,7 @@ import {
   History,
   Plus,
   Search,
+  Users,
   type LucideIcon,
 } from "lucide-react-native";
 import { useCallback, useMemo, type ReactElement } from "react";
@@ -40,6 +41,7 @@ const BUILTIN_ICONS: Record<BuiltinSidebarNavId, LucideIcon> = {
   "new-workspace": Plus,
   history: History,
   search: Search,
+  shared: Users,
   schedules: CalendarClock,
   usage: Gauge,
 };

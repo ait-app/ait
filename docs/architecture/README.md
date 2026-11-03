@@ -1,238 +1,122 @@
 # 当前 Ait 架构
 
-Ait 的本机服务入口是 `bins/daemon`，Cargo package 和可执行文件均名为 `daemon`。
-Electron 位于 `apps/desktop`；`apps/mobile` 提供桌面、浏览器与移动端共享界面，npm package
-分别为 `@ait/desktop` 和 `@ait/mobile`。本地 SDK 和协议位于 `packages/`。
+本页描述当前组件关系；决策背景和历史取舍见 [ADR 索引](../decisions/README.md)。
+Rust 服务入口是 `bins/daemon`，Cargo package 和可执行文件均为 `daemon`；独立发布归档将它命名为 `ait-daemon`。
+Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端共享界面；SDK 与协议在 `packages/`。
 
 ## Rust 能力边界
 
-| Crate         | 职责                                                 | 允许的内部依赖                                        |
-| ------------- | ---------------------------------------------------- | ----------------------------------------------------- |
-| `domain`      | Agent/Project/Workspace 值、记录、不变量与纯投影     | 无                                                    |
-| `persistence` | 单文件工具、通用 Registry 及具体文件持久化适配器     | `model`、`domain`                                     |
-| `model`       | 协作端口、连接协议、请求和事件资源、创建流程协调     | `domain`                                              |
-| `metadata`    | 基础连接方法、Project/Workspace 目录、配置与生命周期 | `domain`、`model`；测试使用 `persistence`             |
-| `filesystem`  | 文件、Git、Forge 及 worktree/clone 本地适配器        | `domain`、`model`；测试使用 `persistence`             |
-| `provider`    | 原生 Provider 会话、执行、历史、摘要和技能安装       | `domain`、`model`；测试使用 `persistence`             |
-| `terminal`    | PTY、终端快照、活动和连接订阅                        | `domain`、`model`                                     |
-| `voice`       | 语音、听写和离线推理                                 | `model`                                               |
-| `bot`         | Workspace Bot、独占 Channel、隐藏对话和消息协调      | `domain`、`model`、`provider`；测试使用 `persistence` |
-| `schedule`    | 定时任务服务与协议                                   | `domain`、`model`；测试使用 `persistence`             |
-| `browser`     | 浏览器自动化请求、回传与回环 TCP 流                  | `model`                                               |
-| `relay`       | 控制 RPC、主动连接与反向数据通道                     | `model`                                               |
-| `api`         | HTTP/WebSocket 鉴权、连接与跨能力协调                | 上述能力包、`domain`、`model`；测试使用 `persistence` |
-| `daemon`      | 启动配置、进程锁、server identity、服务组装和停机    | API、领域、`model`、`persistence` 及能力包            |
-| `host-link`   | 无人值守机器认证、租约和连接协调                     | 无（通过 ports 调用 adapters）                        |
+| Crate         | 职责                                          | 生产代码的内部依赖                                   |
+| ------------- | --------------------------------------------- | ---------------------------------------------------- |
+| `domain`      | 业务值、记录、不变量与纯投影                  | 无                                                   |
+| `model`       | 协作端口、协议、请求资源与共享协调            | `domain`                                             |
+| `persistence` | 原子文件、Registry、具体文件持久化适配器      | `model`、`domain`                                    |
+| `metadata`    | 基础连接、Project/Workspace、配置与生命周期   | `domain`、`model`                                    |
+| `filesystem`  | 文件、Git、Forge、worktree/clone 本地适配器   | `domain`、`model`                                    |
+| `provider`    | 原生 Agent、执行、历史、摘要、技能与 MCP 注入 | `domain`、`model`                                    |
+| `terminal`    | PTY、快照、活动与订阅                         | `domain`、`model`                                    |
+| `voice`       | 语音、听写、离线推理与媒体连接                | `model`                                              |
+| `bot`         | Workspace Bot、Channel、隐藏会话与消息协调    | `domain`、`model`、`provider`                        |
+| `schedule`    | 定时任务服务与协议                            | `domain`、`model`                                    |
+| `browser`     | 浏览器自动化与 TCP 隧道                       | `model`                                              |
+| `relay`       | Hub serve、下载 Relay、控制与传输             | `model`                                              |
+| `host-link`   | 机器授权、节点租约与发布协调                  | 无，通过 ports 调用适配器                            |
+| `api`         | HTTP/WebSocket、鉴权、分发与跨能力协调        | `domain`、`model`、`host-link` 及上述功能 crate      |
+| `daemon`      | CLI/配置、进程锁、身份、服务组装与停机        | `api`、`domain`、`model`、`persistence` 及功能 crate |
 
-`bot → provider` 是用户指定的单向协作边，Provider 不反向依赖 Bot，见
-[ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)。
+适配器实现所属能力的 port，应用服务协调领域行为。功能 crate 的持久化由 daemon 注入；
+相关测试可以使用 `persistence`。`bot → provider` 是明确允许的单向协作边，Provider 不反向依赖 Bot。
+`domain` 不含 Tokio、传输或存储实现；`model` 含异步请求资源，不属于纯领域层。
+依赖守卫见 [`dependencies.rs`](../../bins/daemon/tests/dependencies.rs)，具体依赖以各 Cargo.toml 为准。
 
-各实现组件自己声明方法，功能 crate 对外提供一个完整的 `Service`，API 按 crate 整体安装。
-`implemented_methods()` 返回业务方法声明，`installed_methods(bool)` 返回全部或空集合。
-metadata 另由 `connection_methods()` 声明始终可用的九个基础连接方法，relay 声明三个控制
-RPC；API 聚合这些声明，并复用 model 的会话和创建记录基础设施。内部功能对象
-保留独立锁、适配器和任务，私有 transport composition 负责连接共享资源，不作为安装开关。
-服务安装见 [ADR-100](../decisions/daemon/adr-100-crate-level-service-installation.md)，基础声明归属见
-[ADR-108](../decisions/daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)。具体 adapter 实现所属能力的 port；应用服务协调领域行为。`domain` 无 Tokio、
-传输适配器或存储实现依赖。`domain` 拥有纯业务数据和验证，`model` 依赖它并含 Tokio
-请求资源，不属于纯领域层。原 `protocol` crate 已并入 `model::server`：连接 envelope、
-错误码、版本、预算和能力协商与 server metadata 放在一起。方法声明元数据仍由
-`model::methods` 提供。见 [ADR-111](../decisions/daemon/adr-111-domain-values-and-server-protocol.md)。
+每个功能 crate 对外提供完整 `Service`，API 按 crate 安装，组件声明方法和消息方向。
+`implemented_methods()` 与 `installed_methods()` 提供能力清单；metadata 声明基础连接方法。
+请求校验后通过可消费的 `Option<Context>` 逐级分发；未匹配的入口必须保留请求。
+见 [ADR-093](../decisions/daemon/adr-093-consumable-request-context.md)、
+[ADR-100](../decisions/daemon/adr-100-crate-level-service-installation.md)。
 
-请求通过名称、方向和 capability 校验后，以 `Option<Context>` 逐级进入处理入口。每个入口
-自行匹配，未匹配时保留请求，匹配后取走并执行；成功后 API 完成响应或跨能力收尾并返回，
-仅在 `NotImplemented` 时断言 Context 仍为 `Some` 后继续。违约消费会先记录 error 再触发断言。
-方法名称和消息方向由所属组件声明，功能 crate 聚合，API 汇总用于协议校验；业务处理
-不预先选择 handler，详见 [ADR-093](../decisions/daemon/adr-093-consumable-request-context.md)
-与 [ADR-095](../decisions/daemon/adr-095-component-method-declarations.md)。
+## 共享数据与持久化
 
-摘要生成接口 `SummaryGenerator`、配置端口 `SummaryConfiguration`、消费端口 `SummarySource`
-和 future 位于 `model::summary`，输入输出类型位于 `domain::summary`。provider 实现生成器，
-persistence 的 `LocalSummaryConfiguration` 读取 daemon/project 配置，daemon 注入两者；
-API 将同一生成器适配为 `SummarySource`，见
-[ADR-118](../decisions/daemon/adr-118-summary-contracts-and-persistence-configuration.md) 与
-[ADR-101](../decisions/providers/adr-101-provider-summary-generator.md)。
+- 业务记录和纯算法归 `domain`；Workspace、会话、创建回执、目录同步、摘要和存储端口归 `model`。
+  连接 envelope、协议版本、错误码和预算归 `model::server`，方法元数据归 `model::methods`。
+- `persistence` 实现 Registry、配置、创建回执、push token、Agent runtime、Bot 和 schedule 的文件存储。
+  功能服务负责流程，daemon 注入具体适配器；共享契约不执行文件 I/O。
+- `metadata` 拥有 Project/Workspace 登记、setup、worktree/recovery/GitHub provisioning RPC；
+  本地 Git、Forge 与目录操作由 `filesystem` 通过 model 端口提供。
+- `provider` 拥有原生历史适配、Timeline SQLite 展示索引和 preset catalog；
+  原生 Provider 的认证、工具和会话仍由各原生程序持有，不能合并为一个通用数据库入口。
 
-Provider 不依赖 metadata。共享 Workspace 记录、活动值、worktree 意图、Git/Forge 快照和
-wire 类型归 `domain::workspace`；registry、活动与关注接口、worktree 端口归
-`model::workspace`。事件和 presence 数据归 `domain::session`，事件通道归 `model::session`；
-创建回执与进度归 `domain::creation`，幂等创建协调归 `model::creation`，通过
-`ReceiptStore` 使用持久化。目录 checkpoint 值归 `domain::directory_sync`，共享序列资源
-归 `model::directory_sync`；排序、行值和分页结果归 `domain::pagination`，分页算法归
-`model::pagination`；调度记录归 `domain::schedule`。通用原子文件引擎归 `persistence::registry`，
-Project/Workspace registry 和标签事务归 `persistence::storage`，回执文件适配归
-`persistence::storage::creation`。
-Workspace 登记、setup 和命名仍由 metadata 实现，通过 `model::workspace::lifecycle` 的接口注入
-provider。调用处直接导入共享定义，metadata 的旧共享转发路径已移除。
-详见 [ADR-102](../decisions/providers/adr-102-provider-metadata-independence.md)。
-
-`persistence` 提供单文件读取与原子写入，并承载通用 FileRegistry 的缓存、
-提交锁、事务 hooks 和冻结。它通过 model/domain 契约实现 registry、创建回执、daemon/project
-配置、project icon、push token、Agent runtime 和 schedule 文件持久化。
-`model::storage` 只声明共享存储接口，不执行文件 I/O，也不依赖 persistence；功能服务保留
-流程协调，只有 daemon 在生产代码中注入具体适配器。metadata 的 workspace 自动化通过
-`ProjectConfigStore::config_path` 定位项目配置。daemon 自己拥有启动 CLI/环境/TOML 加载
-（`bins/daemon/src/config.rs`）、故障证据文件和稳定 server identity，API 校验策略仍由宿主注入。
-见 [ADR-112](../decisions/daemon/adr-112-persistence-crate.md) 与
-[ADR-106](../decisions/daemon/adr-106-concrete-file-persistence.md)，修订前的通用工具提取见
-[ADR-105](../decisions/daemon/adr-105-file-tools-and-startup-config.md)。
-存储端口交换的 revision、事务结果与错误值归 `domain::storage` 和 `domain::workspace`，
-具体存储端口继续归 model。
-
-迁移时保留的纯 `pub use` 模块已删除；共享组件直接从 model/domain 导入，具体文件适配器
-直接从 persistence 导入。功能 crate 的生产代码仅通过存储契约接收宿主注入，测试使用
-persistence 适配器；见 [ADR-107](../decisions/daemon/adr-107-direct-imports-from-owning-crates.md)。
-
-Terminal 同样直接使用 model 的 Workspace registry、活动契约和连接事件资源，以及 domain
-的记录和活动值，不依赖 metadata；见 [ADR-103](../decisions/daemon/adr-103-terminal-model-dependency.md)。
-Filesystem 的生产代码依赖 domain/model，相关测试使用 persistence 适配器：共享目录观察与摘要
-消费端口归 model，Git/Forge 快照、身份与 descriptor 纯函数归 domain。功能 crate 之间没有
-直接依赖，`bot → provider` 例外见 ADR-139；见 [ADR-104](../decisions/workspace/adr-104-filesystem-model-collaboration.md)。
-
-`workspace.worktree.*`、`workspace.recovery.*`、`workspace.github.*` 与 `project.github.*`
-的服务、RPC 和协议归 metadata，与其余 Project/Workspace 方法一起安装。它们依赖的本地 Git、
-`gh` 与目录操作通过 `model::workspace::worktrees` 的 `ManagedWorktrees`、
-`WorkspaceRecoveryRuntime`、`ChangeRequestResolver` 和 `model::workspace::provisioning` 的
-`GithubProjectsRuntime` 端口注入，交换的值归 domain；daemon 将 filesystem 的
-`LocalManagedWorktrees`、`LocalForge` 与 `LocalGithubProjects` 注入 metadata。同一份
-`Arc<Mutex<Worktrees>>` 由 worktree RPC、`Directory` 和旧版未绑定的 schedule 执行共享，创建后的 setup 直接
-使用 metadata 的自动化服务，归档前的资源关闭经 `metadata::worktrees::ports` 由 API 注入。
-单连接仍把这些长耗时方法分配到文件操作队列。见
+依赖与数据归属见 [ADR-102](../decisions/providers/adr-102-provider-metadata-independence.md)、
+[ADR-111](../decisions/daemon/adr-111-domain-values-and-server-protocol.md)、
+[ADR-112](../decisions/daemon/adr-112-persistence-crate.md)、
 [ADR-130](../decisions/workspace/adr-130-workspace-methods-owned-by-metadata.md)。
+metadata 和 filesystem 内部按能力组组织，组间只引用 ports/protocol；各自的 module boundary 测试约束这一点。
 
-metadata 内部同样按能力组组织：`server`、`daemon`、`push`、`directory`、`labels`、
-`automation`、`worktrees` 各自保留分层，组间只引用对方的 `ports` 和 `protocol`；
-`installation`、`capabilities`、`dispatch`、`connection` 与实现 model 协作端口的
-`collaboration` 位于顶层，共享 `ErrorCode` 位于 `support::error`。
-`crates/metadata/tests/module_boundaries.rs` 检查这些约定，见
-[ADR-131](../decisions/workspace/adr-131-metadata-capability-groups.md)。
+## Provider 与工作区生命周期
 
-filesystem 内部按能力组组织：`git`、`forge` 和 `files` 各自保留
-`ports`/`protocol`/`service`/`rpc`/`connection`/`local` 分层。组之间只引用对方的 `ports` 和
-`protocol`；`installation`、`capabilities`、`dispatch`、`connection` 以及组合 Git/Forge 缓存的
-`workspace_runtime` 位于顶层，可以组合多个组；组间共享的输出预算、有界 Git runner 和分发
-错误码位于不依赖任何组的 `support`。`crates/filesystem/tests/module_boundaries.rs`
-检查这些约定，见 [ADR-113](../decisions/workspace/adr-113-filesystem-capability-groups.md)。
+`provider::Providers` 组装 Codex、Claude Code、OpenCode、DeepSeek Harness、Antigravity、Pi、
+Oh My Pi 与 MiniMax Code。可用性、模型和原生版本支持由运行时发现；操作说明见[文档索引](../README.md#agent-与工作区)。
+每个稳定 Agent 身份的异步任务独占原生 session，不同身份独立执行；发现、已提交读取、完成等待
+使用独立路径，阻塞存储操作离开专用 Tokio reactor。全局预算限制接纳和原生资源数量。
+见 [ADR-091](../decisions/providers/adr-091-independent-session-execution.md)、
+[ADR-205](../decisions/providers/adr-205-provider-execution-contracts.md)。
 
-`provider::skills` 整组拥有 `agent.skills.*` 的协议、端口、服务和本地安装适配器，
-与原生执行保持独立锁，按 provider 整体安装。技能选择和安装仍是主机级能力，不需要
-Agent 身份或原生会话。daemon 注入外部 bundle、三个目标目录和 `skills-state`，并在启动时
-通过 Skills 分发内置和外部资源；显式卸载暂停自动分发。安装路径、既有事务恢复及删除确认
-保持兼容。单连接将这些已声明的方法继续分配到文件操作队列，
-避免技能文件操作阻塞同连接上的原生 Agent 请求。见
-[ADR-129](../decisions/providers/adr-129-provider-owned-skills.md) 与
-[ADR-199](../decisions/providers/adr-199-bundled-skill-distribution.md)。
+Agent registry 通过 `snapshot()` 与 `get_shared()` 提供已提交的不可变读视图；目录、
+Workspace attention、生命周期检查和 Hub 摘要复用记录，写入成功后失效缓存。
+旧视图保持有效，权限写入仍核对最新记录，见
+[ADR-210](../decisions/providers/adr-210-committed-runtime-read-snapshots.md)。
 
-`provider::service::agent_mcp` 根据 host 注入的实际端点、私有凭证与配置存储准备原生会话
-MCP 设置。AgentManager 保留持久用户配置与 live 会话绑定的分离，所有生命周期和后续输入
-使用相同绑定；API 只在 Agent MCP 路由接受专用凭证。见
-[ADR-202](../decisions/providers/adr-202-agent-mcp-injection.md)。
+Provider 拥有摘要生成、主机级技能安装与原生会话 MCP 注入。daemon 注入配置、资源和端点；
+API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储。
+Provider 自身行为测试归 `crates/provider`；daemon 测试覆盖宿主、传输和跨能力组合，见
+[ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)。
 
-Pi 的原生 RPC adapter 归 `provider::local::pi`，使用现有 Agent ports，注册身份为 `pi`。
-会话、认证和工具由 Pi 持有，能力与限制见
-[ADR-156](../decisions/providers/adr-156-pi-native-rpc-provider.md)；Ait 不为 Pi 暴露模式，见
-[ADR-189](../decisions/providers/adr-189-pi-without-host-mode.md)。
+新定时任务保存固定 Workspace 身份，执行时校验归属，在该 Workspace 内选择或创建 Agent。
+新建 Agent 的收尾不归档 Workspace；旧未绑定任务保留兼容分支，见[任务手册](../operations/schedules.md)。
+Bot 持有独占 Channel 与隐藏 Provider session，普通 Agent API 不能接管；Workspace 归档先停用 Bot。
+执行期间权限请求自动拒绝，重启后不重做结果不明的副作用输入，见[Bot 手册](../operations/bots.md)。
 
-MiniMax Code 通过官方 `mcode acp` 接入，使用共享 ACP 传输、权限和事件投影；原生身份与认证仍归 MiniMax Code。详见 [ADR-197](../decisions/providers/adr-197-minimax-code-acp.md)。
+## 主机、连接与客户端
 
-内置 Provider 由 `provider::Providers` 组装。具体客户端列表、启动配置、安装发现与辅助
-元数据生成能力留在 provider crate 内部；daemon 提供数据目录并连接服务与进程生命周期。
-Codex、Claude、OpenCode 和 DSH 当前支持结构化辅助生成，各 adapter 自行选择辅助小模型。
-详见 [ADR-089](../decisions/providers/adr-089-provider-owned-composition.md) 与
-[ADR-099](../decisions/providers/adr-099-provider-owned-auxiliary-models.md)。
+daemon 以 `instance.lock` 排他持有数据目录，`server-id` 稳定，`instance_id` 每次启动变化。
+启动配置、身份、故障证据及服务组装归 daemon。SIGINT/SIGTERM 与关闭 RPC 停止接纳、回收所属资源并释放锁。
+本地 API token 自动持久化，显式 `AIT_SERVER_TOKEN` 优先；详细路径和恢复方式见[daemon 手册](../operations/daemon.md)。
 
-依赖守卫位于 `bins/daemon/tests/dependencies.rs`。它检查 `cargo metadata --no-deps` 的全部
-workspace 包与普通、开发、构建、optional 和平台条件依赖，拒绝未知内部包及向外依赖。
+所有 daemon 通过 `host-link` 自主管理机器授权、节点注册、续租、Hub serve 和下载 Relay。
+Desktop/移动客户端批准 device authorization 后把待领取授权交给 daemon；客户端只维护自身 access 节点。
+退出客户端账号不撤销 daemon 授权；显式断开清除机器凭据，重启后也不会自动恢复发布。
+见 [ADR-201](../decisions/daemon/adr-201-daemon-owned-publication.md)。
 
-## 数据与进程所有权
+| 通道                   | 当前用途                                 |
+| ---------------------- | ---------------------------------------- |
+| Hub access → Hub serve | 在线业务 RPC、终端、实时语音、浏览器隧道 |
+| 独立下载 Relay WSS     | 文件下载、完成确认与取消                 |
+| `ait-channel-v1`       | 账号 Host 快照、可连接状态与心跳         |
+| 直接 TCP / SSH         | 经认证的 daemon 直连                     |
 
-移动端前台通过本地通知显示 attention；后台推送由 `metadata::push` 协调，`daemon::host::push` 实现 Apple APNs 和 Google FCM adapter。`model::session` 提供不依赖连接的有界 attention 通道以及设备前台去重；Provider 和 Terminal 仍只发布已提交事件，见 [ADR-177](../decisions/clients/adr-177-native-local-and-remote-notifications.md)。
+在线业务只使用 Hub，无传统 Relay/Yamux 回退，见
+[ADR-204](../decisions/clients/adr-204-hub-only-online-business-transport.md)。
+Host 通过 `model::hub` 发布事件和目录摘要，`persistence` 保存发布 journal；中心方法由握手协商。
+Desktop 内置 daemon 默认启用 Hub 原生通知，独立 daemon 默认直发，可用 `AIT_SERVER_HUB_NOTIFICATIONS` 覆盖。
+通知配置和凭据归属见[移动端通知](../operations/mobile-notifications.md)。
 
-Host 通过 `model::hub` 的端口向中心发布事件和目录摘要。`relay::hub` 实现现有 serve 链路
-上的中心调用，`persistence::storage::hub` 实现原子 journal，`daemon::host::hub` 协调队列、
-重试与投影。发布观察在本机焦点筛选之前；Timeline 仅发布更新标记，实际历史仍由 Provider
-持有。中心原生通知通过 `AIT_SERVER_HUB_NOTIFICATIONS=true` 显式开启，需客户端完成
-账号级设备注册并配置中心提供方凭据后切换；默认继续旧原生推送。详见 [ADR-181](../decisions/daemon/adr-181-hub-host-publication.md)。
+macOS/Linux Desktop 管理自己启动或验证接管的 daemon，Windows Desktop 只连接远端。
+就绪探测失败保留存活的自有进程，见 [ADR-207](../decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)。
+桌面内置浏览器对本地 Workspace 直接联网，对远端 Workspace 的所有目标经对应 daemon 出站并解析 DNS，
+见 [ADR-186](../decisions/clients/adr-186-workspace-browser-egress.md)。
+浏览器直连先换取一次性 WebSocket 票据；连接所属订阅在关闭时释放。
+Hub 会话支持物理链路续传，超出恢复窗口后仍需重新建立会话和订阅。
 
-metadata 的 `workspace.get.request` 按身份读取一个 Workspace 与所属 Project；客户端目标缓存和
-定向读取独立于完整侧栏快照，不标记全局 hydrated 或完整 checkpoint，见
-[ADR-126](../decisions/workspace/adr-126-workspace-target-read.md)。provider 在 Timeline SQLite 内维护
-可重建的展示组与源覆盖索引，写入和原始事件共享事务；分页读取所需窗口，见
-[ADR-125](../decisions/providers/adr-125-durable-timeline-projection-pages.md)。
+群组分享以 Host 保存的范围为准，Hub 访客通过 `x-ait-guest` 准入；workspace/project 限制访问范围，
+node 分享允许更广的节点操作，分享和账号授权保留给所有者。见
+[ADR-208](../decisions/daemon/adr-208-workspace-share-guests.md)。
 
-daemon 持有数据目录的 OS 文件锁及稳定 `server-id`，同一目录只能有一个活动实例。
-Project/Workspace 和 Agent runtime 目录、配置、时间线由当前文件存储与 Provider adapter
-管理；Agent preset catalog 的 SQLite 存储位于 `provider`。这些职责不能合并成一个通用数据库入口。
-原生 Codex、Claude Code、Antigravity、OpenCode、DeepSeek Harness 与 Pi 的凭据和会话仍由对应程序持有。
+原生实时语音由 Provider 拥有原生 thread、SDP、上游 WebRTC、音频协议及认证，voice 拥有媒体连接
+和 PCM 消费确认，daemon 桥接端口，客户端采集与播放，见
+[ADR-191](../decisions/providers/adr-191-codex-native-realtime-voice.md)。
 
-桌面进程只管理自己启动的 daemon 子进程，生成连接凭据并通过主进程 bridge 提供授权。
-在线中继 Workspace 的内置浏览器通过主进程按 Host 配置的 profile，把回环网页流量送到远程
-daemon 的连接所属 TCP 流；网页 URL 保持原样。详见
-[ADR-152](../decisions/clients/adr-152-remote-workspace-browser-loopback.md)。
-浏览器用一次性 WebSocket 票据连接；桌面、Web 和移动端使用同一个 Rust transport adapter。
-连接关闭释放所属订阅，daemon 负责已接纳任务与原生进程的生命周期。
+## 兼容名称
 
-Provider 的原生 session 由稳定身份所属的异步任务独占，不同身份独立执行和提交事件。
-Catalog discovery、已提交读取与 completion watch 使用独立路径；阻塞存储操作离开专用
-Tokio reactor，级联归档与 worktree 清理用相关会话屏障协调，全局预算限制接纳和 native
-资源总量。详见 [ADR-091](../decisions/providers/adr-091-independent-session-execution.md)。
-
-## 名称与兼容
-
-`api` 的 `/mcp/agents` 将无状态 Streamable HTTP 工具调用适配到同一 Rust RPC 分发链。
-MCP 复用鉴权与生命周期，不拥有业务服务或新增持久化；见
-[ADR-148](../decisions/daemon/adr-148-daemon-mcp.md) 和 [MCP 手册](../operations/mcp.md)。
-
-源码、构建产物和运行日志使用 daemon 名称。WebSocket `server_info`、`server.*` 方法、
-`/v1/server/info`、稳定身份文件、`AIT_SERVER_*` 配置与已有数据目录保持兼容。
-当前客户端 API 使用这些字段；目录重命名不迁移或删除用户数据。
-
-旧 CLI、旧独立 worker 及其 Project SQLite 架构已不在当前 workspace 中。旧实现的资料
-从文档树移除，历史可从 Git 查阅。当前语义依据 [ADR 分类索引](../decisions/README.md)，
-启动与连接依据 [daemon 手册](../operations/daemon.md)。
-
-桌面账户管理器持有用户凭据，并向 `api` 传递一次性授权。
-`api` 持有 `relay`；`relay` 使用固定的本地目标地址，仅依赖 model 的共享 RPC 契约。
-relay 拥有控制方法声明和处理，API 的 HTTP 路由与 WebSocket RPC 共用同一 connector，
-鉴权、协商和停机由 API 管理。见 [ADR-108](../decisions/daemon/adr-108-relay-rpc-and-metadata-connection-methods.md)，
-中继产品流程见 [ADR-074](../decisions/clients/adr-074-account-host-relay.md)。
-
-应用在线服务登录与主机发布分离。平台账户管理器维护显式选中 daemon 的独立租约，
-客户端通过该主机的鉴权业务连接发送一次性控制票据，API 将控制请求交给 relay 执行。
-客户端退出只释放自身节点及绑定 daemon，其他 daemon 保留各自原账户授权，由运行中的平台账户管理器继续续租；主动停止同步只撤销单台租约。
-本机、TCP 和 SSH 主机使用相同同步流程，详见 [ADR-083](../decisions/clients/adr-083-online-service-host-sync.md)。Desktop 登录后默认同步内置 daemon，手动停止的选择由桌面账户存储持久保存；其他主机仍需手动启用，详见 [ADR-096](../decisions/clients/adr-096-desktop-default-host-sync.md)。
-
-账户会话状态机位于 `packages/client`，通过依赖注入获取平台身份、存储、HTTP、WebSocket 和运行时操作。
-账号状态通过客户端节点的 `/v1/relay/channel`（`ait-channel-v1`）连接推送完整 Host 快照与Host 可连接状态事件，daemon 的 `/v1/relay/control` 独立维护 Host 控制，应用心跳和独立节点续租分别维护连接活跃及授权；重连、离线缓存和各端票据认证见 [ADR-154](../decisions/clients/adr-154-account-status-channel.md)。
-Electron 主进程提供桌面适配；Android 和 iOS 的原生适配使用 SecureStore 保存账户令牌，注册无本地
-运行时的客户端节点。移动端通过带认证头的原生 WebSocket 建立中继连接与下载。完整快照中已绑定 server ID 的
-在线服务主机进入客户端持久注册表，账户恢复后按服务地址独立连接；离线记录保留，未绑定 runtime 的记录不生成连接。
-登出保留主机配置，显式删除移除记录，见 [ADR-122](../decisions/clients/adr-122-persistent-online-service-hosts.md)。管理网站中的浏览器客户端复用同源登录，见 [ADR-132](../decisions/clients/adr-132-web-console-client.md)。
-前后台生命周期、配对校验与凭据边界见
-[ADR-076](../decisions/clients/adr-076-android-account-relay.md) 与
-[ADR-084](../decisions/clients/adr-084-ios-account-relay.md)。
-
-Relay 的类型化消息集中在 `crates/relay/src/protocol.rs`，WebSocket 收发集中在
-`transport.rs`；单连接协商标识由 `crates/model/src/server/single.rs` 定义。
-模块职责见 [ADR-075](../decisions/clients/adr-075-relay-protocol-modules.md)。
-
-Linux headless 的 `daemon` 组装 `host-link` 的 HTTP/凭据 adapter，`api` 实现其
-`ManagedRelay` port 并独占 Relay 与 Hub 控制权。Hub、Relay 分别取票和重连，凭据轮换与节点续租独立运行；授权失效时统一关闭两条链路，见 [ADR-200](../decisions/daemon/adr-200-headless-independent-transports.md)。机器复用中心 Host/node 身份，长期授权是 node grant。
-普通客户端只读取 managed 状态；刷新 token 不进入传输模块或本地 RPC。
-详细边界见 [ADR-087](../decisions/clients/adr-087-headless-device-authorization.md)。
-
-## 定时任务归属
-
-新定时任务在 `domain::schedule::Schedule.workspace_id` 保存固定 Workspace 身份，
-`run.workspace_id` 表示实际执行位置。schedule 经 `Runner::resolve` 校验归属并规范化目录；
-daemon 连接 metadata/provider，在已有 Workspace 内选择或创建 Agent。新 Agent 的结束
-清理只归档 Agent，不归档所属 Workspace。版本 1 的未绑定任务保留旧执行分支，编辑时
-明确选择 Workspace 后绑定。见 [ADR-138](../decisions/workspace/adr-138-workspace-owned-schedules.md)。
-
-客户端的 Hub access 链路由各平台账号权限层持有，SDK 实现中心调用和游标订阅，
-客户端内部读取通知所需的 Agent 摘要与账号 attention，沿用现有账号和主机列表。Electron 将凭据、窗口兴趣和多窗口前台汇总
-保留在主进程。普通资源详情与操作继续连接对应 Host。见 [ADR-182](../decisions/clients/adr-182-hub-account-client.md)。
-
-原生实时语音通过 `model::realtime` 的有界通道连接 `voice` 与 `provider`，由 daemon 桥接端口。
-`provider` 负责原生 thread、SDP、上游 WebRTC、音频协议和认证；`voice` 负责物理连接所有权及 PCM 播放确认；客户端负责麦克风采集与 PCM 播放。
-见 [ADR-191](../decisions/providers/adr-191-codex-native-realtime-voice.md)。
+源码与产物使用 daemon 名称；`server.*`、`server_info`、`/v1/server/info`、`AIT_SERVER_*` 与已有数据目录
+保留协议兼容拼写。旧 CLI、独立 worker 和旧 Project SQLite 架构已退役，不属于当前 workspace。
+历史边界应按 ADR 的修订关系阅读；早期移植和已完成方案见[归档](../archive/README.md)。

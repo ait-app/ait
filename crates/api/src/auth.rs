@@ -34,13 +34,13 @@ pub(super) fn single_header<'a>(
 
 pub(super) fn validate_source(
     headers: &HeaderMap,
-    authorities: &[String],
+    authorities: &[impl AsRef<str>],
     browser: &crate::browser_auth::BrowserAuth,
 ) -> Result<(), ApiError> {
     let host = single_header(headers, "host")?.ok_or(ApiError(StatusCode::BAD_REQUEST))?;
     if !authorities
         .iter()
-        .any(|allowed| authority_matches(allowed, host))
+        .any(|allowed| authority_matches(allowed.as_ref(), host))
     {
         return Err(ApiError(StatusCode::FORBIDDEN));
     }
@@ -52,9 +52,11 @@ pub(super) fn validate_source(
             .parse()
             .map_err(|_| ApiError(StatusCode::FORBIDDEN))?;
         if origin.scheme_str() != Some("http")
-            || !origin
-                .authority()
-                .is_some_and(|a| authorities.iter().any(|v| authority_matches(v, a.as_str())))
+            || !origin.authority().is_some_and(|a| {
+                authorities
+                    .iter()
+                    .any(|v| authority_matches(v.as_ref(), a.as_str()))
+            })
             || origin
                 .path_and_query()
                 .is_some_and(|v| !v.as_str().is_empty() && v.as_str() != "/")

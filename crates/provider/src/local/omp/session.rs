@@ -1,3 +1,4 @@
+use crate::ports::agent_session::AgentSessionFuture;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
@@ -11,7 +12,7 @@ use super::{
     OmpClient, config, history, interactions::Dialogs, stream::Stream, transport::Transport,
 };
 use crate::ports::agent_session::{
-    AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec, AgentTurnEvent,
+    AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
 use crate::ports::diagnostics::{Category, Diagnostic};
 use crate::protocol::prompt::AgentPrompt;
@@ -921,12 +922,13 @@ impl Session {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentSession for Session {
-    fn complete_commands<'a>(
-        &'a mut self,
-        input: &'a crate::protocol::commands::CompletionInput,
-    ) -> AgentSessionFuture<'a, crate::protocol::commands::CompletionResult> {
-        Box::pin(super::completion::complete(&mut self.transport, input))
+    async fn complete_commands(
+        &mut self,
+        input: &crate::protocol::commands::CompletionInput,
+    ) -> Result<crate::protocol::commands::CompletionResult, AgentSessionError> {
+        super::completion::complete(&mut self.transport, input).await
     }
     fn commands(&self) -> Option<&[Value]> {
         Some(&self.commands)
@@ -960,82 +962,78 @@ impl AgentSession for Session {
         }
     }
 
-    fn begin_action<'a>(
-        &'a mut self,
-        action: &'a str,
-        arguments: &'a Value,
-    ) -> AgentSessionFuture<'a, AgentSessionFuture<'static, Value>> {
-        Box::pin(async move {
-            if self.closed {
-                return Err(AgentSessionError::Unavailable);
-            }
-            if (self.actions.changing_history() && action != "abort_branch_summary")
-                || (super::actions::changes_history(action) && self.active.is_some())
-            {
-                return Err(AgentSessionError::Busy);
-            }
-            let fields = super::actions::validate(action, arguments, &self.cwd)?;
-            if matches!(action, "cancel_subagent" | "steer_subagent") {
-                let owned = self.transport.request("get_subagents", json!({})).await?;
-                super::actions::validate_child(&owned, &fields["subagentId"])?;
-            }
-            self.actions.check_capacity()?;
-            let target = fields["entryId"].as_str().map(str::to_owned);
-            let id = self.transport.begin(action, fields).await?;
-            if action == "navigate_tree" {
-                self.navigation_target = target;
-            }
-            Ok(self.actions.insert(id, action))
-        })
+    async fn begin_action(
+        &mut self,
+        action: &str,
+        arguments: &Value,
+    ) -> Result<AgentSessionFuture<'static, Value>, AgentSessionError> {
+        if self.closed {
+            return Err(AgentSessionError::Unavailable);
+        }
+        if (self.actions.changing_history() && action != "abort_branch_summary")
+            || (super::actions::changes_history(action) && self.active.is_some())
+        {
+            return Err(AgentSessionError::Busy);
+        }
+        let fields = super::actions::validate(action, arguments, &self.cwd)?;
+        if matches!(action, "cancel_subagent" | "steer_subagent") {
+            let owned = self.transport.request("get_subagents", json!({})).await?;
+            super::actions::validate_child(&owned, &fields["subagentId"])?;
+        }
+        self.actions.check_capacity()?;
+        let target = fields["entryId"].as_str().map(str::to_owned);
+        let id = self.transport.begin(action, fields).await?;
+        if action == "navigate_tree" {
+            self.navigation_target = target;
+        }
+        Ok(self.actions.insert(id, action))
     }
 
     fn failure_diagnostic(&self) -> Option<Diagnostic> {
         self.transport.diagnostics.failure()
     }
 
-    fn service_realtime(&mut self) -> AgentSessionFuture<'_, ()> {
-        Box::pin(async move {
-            while let Some(refresh) = self.actions.take_refresh() {
-                let result = async {
-                    self.navigation = None;
-                    let input_ids = self.stream.input_ids.clone();
-                    let info = self.runtime_info().await?;
-                    self.stream.input_ids.extend(input_ids);
-                    let handle = self.persistence().ok_or(AgentSessionError::Failed)?;
-                    let mut journal = history::load(&self.client, &handle, &self.cwd).await?;
-                    if refresh.action == "navigate_tree" {
-                        let native = self.transport.request("get_entries", json!({})).await?;
-                        journal.set_navigation(
-                            self.navigation_target
-                                .take()
-                                .as_deref()
-                                .ok_or(AgentSessionError::Failed)?,
-                            native.get("leafId").ok_or(AgentSessionError::Failed)?,
-                        )?;
-                        self.navigation.clone_from(&journal.navigation);
-                    } else {
-                        self.navigation_target = None;
-                    }
-                    let (history, mut stream) = journal.project(&self.client, &handle)?;
-                    stream.set_context(&self.state);
-                    stream.events = std::mem::take(&mut self.stream.events);
-                    stream.events.push_back(AgentTurnEvent::RuntimeInfo(info));
-                    stream
-                        .events
-                        .push_back(AgentTurnEvent::History(history.entries));
-                    self.stream = stream;
-                    self.submitted = !self.stream.input_ids.is_empty();
-                    Ok(())
+    async fn service_realtime(&mut self) -> Result<(), AgentSessionError> {
+        while let Some(refresh) = self.actions.take_refresh() {
+            let result = async {
+                self.navigation = None;
+                let input_ids = self.stream.input_ids.clone();
+                let info = self.runtime_info().await?;
+                self.stream.input_ids.extend(input_ids);
+                let handle = self.persistence().ok_or(AgentSessionError::Failed)?;
+                let mut journal = history::load(&self.client, &handle, &self.cwd).await?;
+                if refresh.action == "navigate_tree" {
+                    let native = self.transport.request("get_entries", json!({})).await?;
+                    journal.set_navigation(
+                        self.navigation_target
+                            .take()
+                            .as_deref()
+                            .ok_or(AgentSessionError::Failed)?,
+                        native.get("leafId").ok_or(AgentSessionError::Failed)?,
+                    )?;
+                    self.navigation.clone_from(&journal.navigation);
+                } else {
+                    self.navigation_target = None;
                 }
-                .await;
-                if let Err(error) = result {
-                    refresh.finish(Err(error));
-                    return Err(error);
-                }
-                self.actions.prepared(refresh);
+                let (history, mut stream) = journal.project(&self.client, &handle)?;
+                stream.set_context(&self.state);
+                stream.events = std::mem::take(&mut self.stream.events);
+                stream.events.push_back(AgentTurnEvent::RuntimeInfo(info));
+                stream
+                    .events
+                    .push_back(AgentTurnEvent::History(history.entries));
+                self.stream = stream;
+                self.submitted = !self.stream.input_ids.is_empty();
+                Ok(())
             }
-            Ok(())
-        })
+            .await;
+            if let Err(error) = result {
+                refresh.finish(Err(error));
+                return Err(error);
+            }
+            self.actions.prepared(refresh);
+        }
+        Ok(())
     }
 
     fn failure_message(&self) -> Option<Cow<'_, str>> {
@@ -1058,38 +1056,36 @@ impl AgentSession for Session {
     fn provider(&self) -> &'static str {
         "omp"
     }
-    fn runtime_info(&mut self) -> AgentSessionFuture<'_, StoredAgentRuntimeInfo> {
-        Box::pin(async {
-            // The manager asks immediately after submission, before polling any dialogs.
-            // A queued get_state can wait on that same dialog and prevent its publication.
-            if self.active.is_some() {
-                let mut info = config::runtime(&self.state)?;
-                info.mode_id.clone_from(&self.config.mode_id);
-                return Ok(info);
-            }
-            let state = self.transport.request("get_state", json!({})).await?;
-            if state["sessionId"] != self.state["sessionId"] {
-                let id = config::text(&state, "sessionId")?;
-                Uuid::parse_str(id).map_err(|_| AgentSessionError::Failed)?;
-                let events = std::mem::take(&mut self.stream.events);
-                self.stream = Stream::new(id.to_owned(), self.client.images.clone())
-                    .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
-                self.stream.events = events;
-                if let Some(turn) = &self.active {
-                    self.stream.begin(turn.clone());
-                }
-                self.children = super::subagents::Children::default()
-                    .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
-                self.created_at = chrono::Utc::now().to_rfc3339();
-                self.submitted = false;
-                self.navigation = None;
-            }
-            self.state = state;
-            self.stream.set_context(&self.state);
+    async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
+        // The manager asks immediately after submission, before polling any dialogs.
+        // A queued get_state can wait on that same dialog and prevent its publication.
+        if self.active.is_some() {
             let mut info = config::runtime(&self.state)?;
             info.mode_id.clone_from(&self.config.mode_id);
-            Ok(info)
-        })
+            return Ok(info);
+        }
+        let state = self.transport.request("get_state", json!({})).await?;
+        if state["sessionId"] != self.state["sessionId"] {
+            let id = config::text(&state, "sessionId")?;
+            Uuid::parse_str(id).map_err(|_| AgentSessionError::Failed)?;
+            let events = std::mem::take(&mut self.stream.events);
+            self.stream = Stream::new(id.to_owned(), self.client.images.clone())
+                .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
+            self.stream.events = events;
+            if let Some(turn) = &self.active {
+                self.stream.begin(turn.clone());
+            }
+            self.children = super::subagents::Children::default()
+                .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
+            self.created_at = chrono::Utc::now().to_rfc3339();
+            self.submitted = false;
+            self.navigation = None;
+        }
+        self.state = state;
+        self.stream.set_context(&self.state);
+        let mut info = config::runtime(&self.state)?;
+        info.mode_id.clone_from(&self.config.mode_id);
+        Ok(info)
     }
     fn subagents(&self) -> Vec<crate::ports::controls::NativeSubagent> {
         self.children.list()
@@ -1113,97 +1109,91 @@ impl AgentSession for Session {
             ])),
         })
     }
-    fn start_turn<'a>(
-        &'a mut self,
-        text: &'a str,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(async move { self.start(&AgentPrompt::text(text), config).await })
+    async fn start_turn(
+        &mut self,
+        text: &str,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start(&AgentPrompt::text(text), config).await
     }
-    fn start_input<'a>(
-        &'a mut self,
-        prompt: &'a AgentPrompt,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(self.start(prompt, config))
+    async fn start_input(
+        &mut self,
+        prompt: &AgentPrompt,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start(prompt, config).await
     }
-    fn steer_input<'a>(
-        &'a mut self,
-        turn: &'a str,
-        prompt: &'a AgentPrompt,
-    ) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            prompt.validate()?;
-            if self.closed
-                || self.active.as_deref() != Some(turn)
-                || prompt.output_schema.is_some()
-                || self.input_requests.len() >= 128
-            {
-                return Err(AgentSessionError::Rejected);
-            }
-            let blocks = prompt.blocks()?;
-            let text = blocks
-                .iter()
-                .filter_map(|block| block["text"].as_str())
-                .collect::<Vec<_>>()
-                .join("\n\n");
-            let images: Vec<_> = blocks
-                .into_iter()
-                .filter(|block| block["type"] == "image")
-                .collect();
-            let id = self
-                .transport
-                .begin("steer", json!({"message":text,"images":images}))
-                .await?;
-            self.input_requests.insert(id.clone(), turn.to_owned());
-            self.invalidate_state_check();
-            self.stream
-                .pending_inputs
-                .push_back((id, prompt.client_message_id.clone()));
-            Ok(())
-        })
+    async fn steer_input(
+        &mut self,
+        turn: &str,
+        prompt: &AgentPrompt,
+    ) -> Result<(), AgentSessionError> {
+        prompt.validate()?;
+        if self.closed
+            || self.active.as_deref() != Some(turn)
+            || prompt.output_schema.is_some()
+            || self.input_requests.len() >= 128
+        {
+            return Err(AgentSessionError::Rejected);
+        }
+        let blocks = prompt.blocks()?;
+        let text = blocks
+            .iter()
+            .filter_map(|block| block["text"].as_str())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        let images: Vec<_> = blocks
+            .into_iter()
+            .filter(|block| block["type"] == "image")
+            .collect();
+        let id = self
+            .transport
+            .begin("steer", json!({"message":text,"images":images}))
+            .await?;
+        self.input_requests.insert(id.clone(), turn.to_owned());
+        self.invalidate_state_check();
+        self.stream
+            .pending_inputs
+            .push_back((id, prompt.client_message_id.clone()));
+        Ok(())
     }
-    fn steer_turn<'a>(&'a mut self, turn: &'a str, text: &'a str) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move { self.steer_input(turn, &AgentPrompt::text(text)).await })
+    async fn steer_turn(&mut self, turn: &str, text: &str) -> Result<(), AgentSessionError> {
+        self.steer_input(turn, &AgentPrompt::text(text)).await
     }
-    fn cancel_turn<'a>(&'a mut self, turn: &'a str) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            if self.active.as_deref() != Some(turn) || self.closed {
-                return Err(AgentSessionError::Rejected);
-            }
-            if self.cancellation_started.is_some() {
-                return Ok(());
-            }
-            if self.cancel_requests.len() >= 128 {
-                return Err(AgentSessionError::Failed);
-            }
-            let id = self
-                .transport
-                .begin("abort_and_restore_queue", json!({}))
-                .await?;
-            self.cancel_requests.insert(id, turn.to_owned());
-            self.cancellation_started = Some(Instant::now());
-            self.next_state_check = Instant::now();
-            Ok(())
-        })
+    async fn cancel_turn(&mut self, turn: &str) -> Result<(), AgentSessionError> {
+        if self.active.as_deref() != Some(turn) || self.closed {
+            return Err(AgentSessionError::Rejected);
+        }
+        if self.cancellation_started.is_some() {
+            return Ok(());
+        }
+        if self.cancel_requests.len() >= 128 {
+            return Err(AgentSessionError::Failed);
+        }
+        let id = self
+            .transport
+            .begin("abort_and_restore_queue", json!({}))
+            .await?;
+        self.cancel_requests.insert(id, turn.to_owned());
+        self.cancellation_started = Some(Instant::now());
+        self.next_state_check = Instant::now();
+        Ok(())
     }
     fn pending_permissions(&self) -> Vec<Value> {
         self.dialogs.pending()
     }
-    fn respond_permission<'a>(
-        &'a mut self,
-        id: &'a str,
-        response: &'a Value,
-    ) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            let native = self.dialogs.response(id, response)?;
-            self.transport.send(&native).await?;
-            self.dialogs.remove(id);
-            self.stream
-                .events
-                .push_back(AgentTurnEvent::PermissionResolved(id.to_owned()));
-            Ok(())
-        })
+    async fn respond_permission(
+        &mut self,
+        id: &str,
+        response: &Value,
+    ) -> Result<(), AgentSessionError> {
+        let native = self.dialogs.response(id, response)?;
+        self.transport.send(&native).await?;
+        self.dialogs.remove(id);
+        self.stream
+            .events
+            .push_back(AgentTurnEvent::PermissionResolved(id.to_owned()));
+        Ok(())
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
         self.check_cancellation()?;
@@ -1237,13 +1227,11 @@ impl AgentSession for Session {
         }
         Ok(None)
     }
-    fn close(&mut self) -> AgentSessionFuture<'_, ()> {
-        Box::pin(async move {
-            self.closed = true;
-            self.actions.close();
-            self.stream.events.extend(self.dialogs.clear());
-            self.transport.close().await
-        })
+    async fn close(&mut self) -> Result<(), AgentSessionError> {
+        self.closed = true;
+        self.actions.close();
+        self.stream.events.extend(self.dialogs.clear());
+        self.transport.close().await
     }
 }
 

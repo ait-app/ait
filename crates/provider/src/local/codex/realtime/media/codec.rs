@@ -2,7 +2,7 @@
 
 use std::collections::VecDeque;
 
-use model::realtime::Audio;
+use model::realtime::{Audio, is_quiet_pcm};
 use opus2::{Application, Bitrate, Channels};
 
 use super::super::{AgentSessionError, Resampler, valid_audio};
@@ -147,10 +147,19 @@ impl Decoder {
         Ok(())
     }
 
-    /// Finish pending loss concealment and take decoded PCM, if any.
+    /// Finish pending loss concealment and return PCM exceeding the silence peak.
+    ///
+    /// Returns `None` for absent or very quiet audio without resetting Opus or RTP state.
+    ///
+    /// # Errors
+    /// Returns `AgentSessionError::Failed` if pending audio cannot be decoded within its budget.
     pub(super) fn flush(&mut self) -> Result<Option<Audio>, AgentSessionError> {
         self.drain(true)?;
-        Ok((!self.samples.is_empty()).then(|| Audio {
+        if is_quiet_pcm(&self.samples) {
+            self.samples.clear();
+            return Ok(None);
+        }
+        Ok(Some(Audio {
             bytes: std::mem::take(&mut self.samples),
             sample_rate: RATE,
         }))

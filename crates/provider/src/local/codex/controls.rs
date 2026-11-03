@@ -131,7 +131,7 @@ async fn child_pages(transport: &mut Transport) -> Result<Vec<NativeSubagent>, A
                 id: id.clone(),
                 descriptor: json!({"id":id,"provider":"codex","title":facts.title.or_else(||thread["agentNickname"].as_str().map(str::to_owned)),
                     "description":facts.first_prompt_preview,"status":status,"createdAt":native_sessions::timestamp(&thread["createdAt"])?,
-                    "updatedAt":facts.last_activity_at,"toolCallId":null,"cwd":facts.cwd,"subtitle":thread["agentRole"].as_str()}),
+                    "updatedAt":facts.last_activity_at,"toolCallId":null,"cwd":facts.cwd,"subtitle":thread["agentRole"].as_str(),"outcomeKnown":status != "completed"}),
             };
             if let Some(previous) = children.insert(id, child) {
                 let current = children

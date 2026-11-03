@@ -2,7 +2,7 @@
 
 - 状态：已实现
 - 日期：2026-10-11
-- 关系：补充 [ADR-081](adr-081-directory-change-push.md) 的目录订阅路径；推进[远程打开方案](../../plans/remote-workspace-open-performance.md)的目标读取部分。
+- 关系：补充 [ADR-081](adr-081-directory-change-push.md) 的目录订阅路径；推进[远程打开方案](../../archive/plans/remote-workspace-open-performance.md)的目标读取部分。
 
 ## 背景
 

@@ -16,7 +16,7 @@
 `server-workspace`、`api`、`daemon`，不依赖旧 Ait 服务。`DirectoryDependencies`
 集中组装这些 port；WS 路由树仍按规范 dotted 名称分发。此后 Paseo 188 个规范方法中已有
 95 个真实实现，93 个仍为明确的 `not_implemented`；加上 11 个独立方法，生产 binary 的
-`implemented_capabilities` 应为 106。此统计按 [第十二阶段报告](../daemon/paseo-websocket-surface-phase-12.md)
+`implemented_capabilities` 应为 106。此统计按 [第十二阶段报告](../../archive/reports/daemon/paseo-websocket-surface-phase-12.md)
 的 93/95 基线，加本次 2 个方法计算，不代表其余占位已有 DTO 或业务行为。
 
 与 Paseo 的差异：独立入口只接受 `github.com` HTTPS/SSH 或需显式 `cloneProtocol` 的

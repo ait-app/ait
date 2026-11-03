@@ -2,7 +2,7 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use host_link::{Binding, CENTER, Error, ManagedRelay};
+use host_link::{Binding, Error, ManagedRelay};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -20,7 +20,7 @@ impl ManagedRelay for ManagedRelayHandle {
     async fn start(&self, session: Uuid, ticket: SecretString) -> Result<(), Error> {
         self.relay
             .start(relay::ControlGrant {
-                center_url: CENTER.to_owned(),
+                center_url: host_link::center(),
                 control_ticket: ticket.expose_secret().to_owned(),
                 node_session_id: session,
             })
@@ -49,7 +49,7 @@ impl ManagedRelay for ManagedRelayHandle {
     async fn start_hub(&self, session: Uuid, ticket: SecretString) -> Result<(), Error> {
         self.hub
             .start(relay::hub::Grant {
-                center_url: CENTER.to_owned(),
+                center_url: host_link::center(),
                 hub_ticket: ticket,
                 node_session_id: session,
             })

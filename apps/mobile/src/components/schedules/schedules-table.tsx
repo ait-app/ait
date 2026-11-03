@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useCallback, useState, type ReactElement } from "react";
 import { View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
 import { ScheduleRow, type ScheduleRowPending } from "@/components/schedules/schedule-row";
 import { useScheduleMutations } from "@/hooks/use-schedule-mutations";
 import type { AggregatedSchedule } from "@/hooks/use-schedules";
@@ -32,24 +31,21 @@ interface SchedulesTableProps {
 }
 
 /**
- * The schedules list: a single settings-style card of rows across every
- * connected host, in a full-width list matching the History screen. Rows own
+ * A settings-style card of schedules; the containing section owns its spacing. Rows own
  * their host-scoped mutations (pause/resume/run/delete via the mutations hook +
  * a destructive confirm) and delegate editing upward.
  */
 export function SchedulesTable({ rows, onEditSchedule }: SchedulesTableProps): ReactElement {
   return (
-    <View style={styles.listContent} testID="schedules-table">
-      <View style={settingsStyles.card}>
-        {rows.map((row, index) => (
-          <SchedulesTableRow
-            key={`${row.schedule.serverId}:${row.schedule.id}`}
-            row={row}
-            isFirst={index === 0}
-            onEditSchedule={onEditSchedule}
-          />
-        ))}
-      </View>
+    <View style={settingsStyles.card} testID="schedules-table">
+      {rows.map((row, index) => (
+        <SchedulesTableRow
+          key={`${row.schedule.serverId}:${row.schedule.id}`}
+          row={row}
+          isFirst={index === 0}
+          onEditSchedule={onEditSchedule}
+        />
+      ))}
     </View>
   );
 }
@@ -149,10 +145,3 @@ function SchedulesTableRow({
     />
   );
 }
-
-const styles = StyleSheet.create((theme) => ({
-  // Full-width list padding matching the History screen.
-  listContent: {
-    paddingHorizontal: { xs: theme.spacing[3], md: theme.spacing[6] },
-  },
-}));

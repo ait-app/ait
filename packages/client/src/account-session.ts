@@ -569,19 +569,10 @@ export class AccountSessionManager {
     return authorization;
   }
 
-  openVisit(hostId: string, center: string) {
-    return this.openSession(hostId, center, "ait-rust-single-v1");
-  }
-
-  openDownload(hostId: string, token: string, center: string) {
-    return this.openSession(hostId, center, "ait-download-v1", token);
-  }
-
-  private async openSession(
+  async openDownload(
     hostId: string,
+    token: string,
     expectedCenter: string,
-    mode: string,
-    token?: string,
   ): Promise<{
     relay_session_id: string;
     client_ticket: string;
@@ -605,16 +596,12 @@ export class AccountSessionManager {
       client_ticket: string;
       server_id: string;
       instance_id: string;
-    }>(
-      `/v1/hosts/${hostId}/${token === undefined ? "relay-sessions" : "relay-downloads"}`,
-      "POST",
-      {
-        source_node_session_id: this.node.node_session_id,
-        attempt_id: this.deps.randomUUID(),
-        mode,
-        ...(token === undefined ? {} : { download_token: token }),
-      },
-    );
+    }>(`/v1/hosts/${hostId}/relay-downloads`, "POST", {
+      source_node_session_id: this.node.node_session_id,
+      attempt_id: this.deps.randomUUID(),
+      mode: "ait-download-v1",
+      download_token: token,
+    });
     if (generation !== this.generation) {
       await this.closeVisit(result.relay_session_id);
       throw new Error("Connection cancelled.");

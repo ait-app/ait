@@ -9,7 +9,6 @@ use std::time::Duration;
 
 use domain::agent_runtime::StoredAgentConfig;
 use domain::summary::{SummaryError, SummaryRequest};
-use model::summary::SummaryFuture;
 use serde_json::Value;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
@@ -118,17 +117,16 @@ impl Generation {
     }
 }
 
+#[async_trait::async_trait]
 impl SummaryGenerator for Generation {
-    fn generate(&self, request: SummaryRequest) -> SummaryFuture<'_> {
-        Box::pin(async move {
-            tokio::select! {
-                biased;
-                () = self.cancel.cancelled() => Err(SummaryError::Cancelled),
-                result = tokio::time::timeout(self.deadline, self.run(request)) => {
-                    result.unwrap_or(Err(SummaryError::Unavailable))
-                }
+    async fn generate(&self, request: SummaryRequest) -> Result<Value, SummaryError> {
+        tokio::select! {
+            biased;
+            () = self.cancel.cancelled() => Err(SummaryError::Cancelled),
+            result = tokio::time::timeout(self.deadline, self.run(request)) => {
+                result.unwrap_or(Err(SummaryError::Unavailable))
             }
-        })
+        }
     }
 
     fn shutdown(&self) {

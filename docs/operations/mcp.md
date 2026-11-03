@@ -1,7 +1,8 @@
 # 使用 Ait daemon MCP
 
 daemon 在现有监听地址提供 Streamable HTTP MCP：`http://127.0.0.1:7316/mcp/agents`。
-客户端从运行时环境取得令牌并发送 `Authorization: Bearer <AIT_SERVER_TOKEN>`。
+外部客户端使用 daemon 的本地 API token，发送 `Authorization: Bearer <token>`。
+该 token 来自显式 `AIT_SERVER_TOKEN` 或自动保存的 `<data-dir>/local-api.token`，见[daemon 配置](daemon.md#启动与配置)。
 
 新配置中 `mcp.enabled` 和 `mcp.injectIntoAgents` 默认均为 `true`。
 `mcp.enabled` 通过 `daemon.config.set.request` 修改即时生效，关闭时入口返回 404。
@@ -49,6 +50,41 @@ curl --fail-with-body http://127.0.0.1:7316/mcp/agents \
 标准客户端先发送 `initialize` 和 `notifications/initialized`，再调用 `tools/list` / `tools/call`。
 返回 JSON，不保存跨请求 session，也不提供独立 SSE 流。执行错误使用 `result.isError`；
 无效 JSON-RPC 或参数使用 `error.code`。
+
+## Unix socket 监听
+
+macOS / Linux 可以额外启用一个 Unix domain socket，使用相同的 HTTP MCP 协议、工具目录、
+Bearer 鉴权和 `mcp.enabled` 开关。默认不创建 socket；配置绝对文件路径后重启 daemon：
+
+```sh
+daemon --mcp-socket /absolute/private-directory/mcp.sock
+```
+
+也可设置 `AIT_SERVER_MCP_SOCKET`，或在 daemon 的 `config.toml` 中设置
+`mcp_socket = "/absolute/private-directory/mcp.sock"`。优先级为 CLI、环境变量、TOML。
+父目录必须存在，建议使用 daemon 数据目录或其他私有目录。
+
+socket 文件权限为 `0600`，仅暴露 `/mcp/agents`。客户端通过 socket 连接，HTTP 地址固定使用
+`http://localhost/mcp/agents`；`localhost` 是 HTTP Host，不会建立到本机 TCP 端口的连接：
+
+```sh
+curl --fail-with-body --unix-socket /absolute/private-directory/mcp.sock \
+  http://localhost/mcp/agents \
+  -H "Authorization: Bearer $AIT_SERVER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'MCP-Protocol-Version: 2025-11-25' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+```
+
+正常停止和重启会删除本次创建的 socket 文件。异常退出遗留的 socket 在确认无监听者后可自动
+清理；普通文件、目录、符号链接和仍在监听的 socket 不会被覆盖。非 Unix 平台拒绝此配置。
+
+客户端需要支持 HTTP over Unix socket。Provider 自动注入继续使用 TCP HTTP 地址；只接受
+普通 HTTP URL 的客户端需通过本地代理或桥接接入，不能直接把 socket 文件路径作为 MCP URL。
+监听与生命周期约定见 [ADR-203](../decisions/daemon/adr-203-mcp-unix-socket.md)。
+
+## Skill 使用指引
 
 daemon 内置并在启动时分发 [ait-orchestration Skill](../../skills/ait-orchestration/SKILL.md)，包含 Profile 选择、
 Agent 编排、Workspace 隔离、终端与调度操作说明。默认允许自动发现；是否加载由原生 Provider 决定。

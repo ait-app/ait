@@ -62,13 +62,10 @@ fn saturated_collector_reports_busy_and_counts_dropped_captures() {
 
 struct FixtureSources;
 
+#[async_trait::async_trait(?Send)]
 impl EvidenceSource for FixtureSources {
-    fn collect(
-        &self,
-        _start: DateTime<Utc>,
-        _end: DateTime<Utc>,
-    ) -> Pin<Box<dyn Future<Output = String> + '_>> {
-        Box::pin(async { "Harness: opencode\nVersion: fixture\n".into() })
+    async fn collect(&self, _start: DateTime<Utc>, _end: DateTime<Utc>) -> String {
+        "Harness: opencode\nVersion: fixture\n".into()
     }
 }
 
@@ -144,6 +141,69 @@ fn tracing_omits_oversized_fields_and_unapproved_payloads() {
     assert!(!event.contains(&"x".repeat(2049)));
 }
 
+#[tokio::test]
+async fn tracing_preserves_exhausted_budget_and_safe_event_context() {
+    use tracing::Instrument;
+
+    let (sender, _receiver) = mpsc::sync_channel(4);
+    let diagnostics = Diagnostics {
+        sender,
+        recent: Arc::default(),
+        dropped: Arc::default(),
+        storage_failures: Arc::default(),
+    };
+    let runtime = model::Runtime::new(model::ServerInfo {
+        server_id: "server".into(),
+        instance_id: "instance".into(),
+        version: None,
+        listen: "127.0.0.1:7316".into(),
+        lifecycle: model::Lifecycle::Ready,
+        protocol: model::VERSION,
+        capabilities: Vec::new(),
+        implemented_capabilities: Vec::new(),
+        features: Vec::new(),
+        limits: model::Limits::default(),
+    });
+    let _held = runtime.jobs.clone().acquire_many_owned(3).await.unwrap();
+    let subscriber = tracing_subscriber::registry().with(diagnostics.clone());
+    let _guard = tracing::subscriber::set_default(subscriber);
+    let span = tracing::info_span!(
+        "event",
+        method = tracing::field::Empty,
+        subscription_slots = 16,
+        params = "private-event-body",
+        token = "private-credential",
+    );
+    span.record("method", "session.heartbeat");
+
+    assert_eq!(
+        runtime
+            .run_shared(
+                Some(Arc::new(())),
+                model::ErrorCode::RegistryIo,
+                |()| Ok(())
+            )
+            .instrument(span)
+            .await,
+        Err(model::ErrorCode::ResourceExhausted)
+    );
+    let recent = diagnostics.recent.lock().unwrap();
+    assert_eq!(recent.events.len(), 1);
+    let event = &recent.events[0].text;
+    for field in [
+        "Resource budget exhausted",
+        "resource=\"short_jobs\"",
+        "limit=3",
+        "available=0",
+        "method=\"session.heartbeat\"",
+        "subscription_slots=16",
+    ] {
+        assert!(event.contains(field), "{event}");
+    }
+    assert!(!event.contains("private-event-body"), "{event}");
+    assert!(!event.contains("private-credential"), "{event}");
+}
+
 #[test]
 fn tracing_preserves_provider_failure_facts_without_native_payloads() {
     let (sender, _receiver) = mpsc::sync_channel(4);
@@ -194,13 +254,10 @@ fn tracing_preserves_provider_failure_facts_without_native_payloads() {
 
 struct OversizedSources;
 
+#[async_trait::async_trait(?Send)]
 impl EvidenceSource for OversizedSources {
-    fn collect(
-        &self,
-        _start: DateTime<Utc>,
-        _end: DateTime<Utc>,
-    ) -> Pin<Box<dyn Future<Output = String> + '_>> {
-        Box::pin(async { "fixture evidence\n".repeat(REPORT_LIMIT) })
+    async fn collect(&self, _start: DateTime<Utc>, _end: DateTime<Utc>) -> String {
+        "fixture evidence\n".repeat(REPORT_LIMIT)
     }
 }
 
@@ -232,4 +289,27 @@ fn manual_report_exposes_unavailable_incident_storage_and_reuses_cached_evidence
     assert!(first.contains("Incident storage unavailable"));
     assert!(first.contains("Harness: opencode"));
     assert_eq!(first, second);
+}
+
+#[test]
+fn production_filter_retains_span_context_for_warnings() {
+    let (sender, _receiver) = mpsc::sync_channel(4);
+    let diagnostics = Diagnostics {
+        sender,
+        recent: Arc::default(),
+        dropped: Arc::default(),
+        storage_failures: Arc::default(),
+    };
+    let subscriber = tracing_subscriber::registry().with(diagnostics.clone().filtered());
+    tracing::subscriber::with_default(subscriber, || {
+        let span = tracing::info_span!("rpc", method = "session.heartbeat");
+        let _entered = span.enter();
+        tracing::info!(resource = "ignored", "below the capture level");
+        tracing::warn!(resource = "short_jobs", "Resource budget exhausted");
+    });
+    let recent = diagnostics.recent.lock().unwrap();
+    assert_eq!(recent.events.len(), 1);
+    let event = &recent.events[0].text;
+    assert!(event.contains("method=\"session.heartbeat\""), "{event}");
+    assert!(event.contains("resource=\"short_jobs\""), "{event}");
 }

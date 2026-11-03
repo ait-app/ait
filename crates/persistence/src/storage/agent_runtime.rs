@@ -1,6 +1,7 @@
 //! Durable Agent snapshots backed by the shared atomic file engine.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
 use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistryError};
@@ -10,7 +11,7 @@ use crate::registry::{Error as RegistryError, FileRegistry};
 /// Atomically persisted registry of Paseo Agent runtime snapshots.
 #[derive(Debug, Clone)]
 pub struct FileBackedAgentRuntimeRegistry {
-    file: std::sync::Arc<FileRegistry<PersistedAgentRuntimeRecord>>,
+    file: Arc<FileRegistry<PersistedAgentRuntimeRecord>>,
     changes: Option<model::changes::Changes>,
 }
 
@@ -19,7 +20,7 @@ impl FileBackedAgentRuntimeRegistry {
     #[must_use]
     pub fn new(path: PathBuf) -> Self {
         Self {
-            file: std::sync::Arc::new(FileRegistry::new(path, |record| &record.id)),
+            file: Arc::new(FileRegistry::new(path, |record| &record.id)),
             changes: None,
         }
     }
@@ -41,11 +42,24 @@ impl AgentRuntimeRegistry for FileBackedAgentRuntimeRegistry {
         self.file.list().map_err(map_error)
     }
 
+    fn snapshot(
+        &self,
+    ) -> Result<Arc<[Arc<PersistedAgentRuntimeRecord>]>, AgentRuntimeRegistryError> {
+        self.file.snapshot().map_err(map_error)
+    }
+
     fn get(
         &self,
         agent_id: &str,
     ) -> Result<Option<PersistedAgentRuntimeRecord>, AgentRuntimeRegistryError> {
         self.file.get(agent_id).map_err(map_error)
+    }
+
+    fn get_shared(
+        &self,
+        agent_id: &str,
+    ) -> Result<Option<Arc<PersistedAgentRuntimeRecord>>, AgentRuntimeRegistryError> {
+        self.file.get_shared(agent_id).map_err(map_error)
     }
 
     fn upsert(
@@ -109,6 +123,30 @@ impl AgentRuntimeRegistry for FileBackedAgentRuntimeRegistry {
 }
 
 fn validate_record(record: &PersistedAgentRuntimeRecord) -> Result<(), AgentRuntimeRegistryError> {
+    if let Some(source) = &record.observation
+        && (record.persistence.is_some()
+            || source.root_agent_id == record.id
+            || source.parent_agent_id == record.id
+            || source
+                .persistence
+                .as_ref()
+                .is_some_and(|handle| handle.provider != record.provider)
+            || record.labels.get("paseo.parent-agent-id") != Some(&source.parent_agent_id)
+            || [
+                &source.root_agent_id,
+                &source.root_session_id,
+                &source.parent_agent_id,
+                &source.native_id,
+                &source.parent_native_id,
+                &source.observed_at,
+            ]
+            .iter()
+            .any(|value| {
+                value.is_empty() || value.len() > 4096 || value.chars().any(char::is_control)
+            }))
+    {
+        return Err(AgentRuntimeRegistryError::InvalidRecord);
+    }
     let required = [
         record.id.as_str(),
         record.provider.as_str(),

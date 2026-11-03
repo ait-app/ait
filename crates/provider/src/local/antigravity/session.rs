@@ -11,7 +11,7 @@ use super::{
     transport::Transport,
 };
 use crate::ports::agent_session::{
-    AgentSession, AgentSessionError, AgentSessionFuture, AgentSessionSpec, AgentTurnEvent,
+    AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
 use crate::protocol::prompt::AgentPrompt;
 
@@ -210,12 +210,10 @@ impl Session {
     }
 }
 
+#[async_trait::async_trait]
 impl AgentSession for Session {
-    fn account_usage(&self) -> AgentSessionFuture<'_, Value> {
-        Box::pin(super::quota::read(
-            &self.client,
-            std::path::Path::new(&self.cwd),
-        ))
+    async fn account_usage(&self) -> Result<Value, AgentSessionError> {
+        super::quota::read(&self.client, std::path::Path::new(&self.cwd)).await
     }
 
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
@@ -262,8 +260,8 @@ impl AgentSession for Session {
         PROVIDER
     }
 
-    fn runtime_info(&mut self) -> AgentSessionFuture<'_, StoredAgentRuntimeInfo> {
-        Box::pin(async { Ok(config::runtime(&self.id, &self.config, &self.init)) })
+    async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
+        Ok(config::runtime(&self.id, &self.config, &self.init))
     }
 
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
@@ -275,20 +273,20 @@ impl AgentSession for Session {
         })
     }
 
-    fn start_turn<'a>(
-        &'a mut self,
-        text: &'a str,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(async move { self.start(&AgentPrompt::text(text), config).await })
+    async fn start_turn(
+        &mut self,
+        text: &str,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start(&AgentPrompt::text(text), config).await
     }
 
-    fn start_input<'a>(
-        &'a mut self,
-        prompt: &'a AgentPrompt,
-        config: &'a StoredAgentConfig,
-    ) -> AgentSessionFuture<'a, String> {
-        Box::pin(self.start(prompt, config))
+    async fn start_input(
+        &mut self,
+        prompt: &AgentPrompt,
+        config: &StoredAgentConfig,
+    ) -> Result<String, AgentSessionError> {
+        self.start(prompt, config).await
     }
 
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
@@ -323,84 +321,80 @@ impl AgentSession for Session {
         Ok(self.stream.events.pop_front())
     }
 
-    fn cancel_turn<'a>(&'a mut self, turn_id: &'a str) -> AgentSessionFuture<'a, ()> {
-        Box::pin(async move {
-            if self.active.as_deref() != Some(turn_id) || self.closed {
-                return Err(AgentSessionError::Rejected);
-            }
-            let result = tokio::time::timeout(Duration::from_secs(5), async {
-                self.transport
-                    .as_ref()
-                    .ok_or(AgentSessionError::Failed)?
-                    .interrupt()
-                    .await?;
-                while self.active.is_some() {
-                    let message = self
-                        .transport
-                        .as_mut()
-                        .ok_or(AgentSessionError::Failed)?
-                        .receive()
-                        .await?;
-                    self.consume(&message)?;
-                }
-                if self
-                    .stream
-                    .events
-                    .iter()
-                    .any(|event| matches!(event, AgentTurnEvent::Cancelled))
-                {
-                    Ok(())
-                } else {
-                    Err(AgentSessionError::Rejected)
-                }
-            })
-            .await;
-            let fallback = if result.is_err() {
-                Failure::Timeout
-            } else {
-                Failure::Exit
-            };
-            let failure = self
-                .transport
+    async fn cancel_turn(&mut self, turn_id: &str) -> Result<(), AgentSessionError> {
+        if self.active.as_deref() != Some(turn_id) || self.closed {
+            return Err(AgentSessionError::Rejected);
+        }
+        let result = tokio::time::timeout(Duration::from_secs(5), async {
+            self.transport
                 .as_ref()
-                .and_then(Transport::failure)
-                .unwrap_or(fallback);
-            let stopped = if let Some(mut transport) = self.transport.take() {
-                transport.close().await
-            } else {
-                Ok(())
-            };
-            // An unacknowledged cancellation is a failure, but cannot leave a turn active
-            // after its transport has been closed. Emit exactly one terminal event.
-            if self.active.take().is_some() {
-                self.stream.abort(failure);
+                .ok_or(AgentSessionError::Failed)?
+                .interrupt()
+                .await?;
+            while self.active.is_some() {
+                let message = self
+                    .transport
+                    .as_mut()
+                    .ok_or(AgentSessionError::Failed)?
+                    .receive()
+                    .await?;
+                self.consume(&message)?;
             }
-            stopped?;
-            match result {
-                Ok(result) => result,
-                Err(_) => Err(AgentSessionError::Failed),
+            if self
+                .stream
+                .events
+                .iter()
+                .any(|event| matches!(event, AgentTurnEvent::Cancelled))
+            {
+                Ok(())
+            } else {
+                Err(AgentSessionError::Rejected)
             }
         })
+        .await;
+        let fallback = if result.is_err() {
+            Failure::Timeout
+        } else {
+            Failure::Exit
+        };
+        let failure = self
+            .transport
+            .as_ref()
+            .and_then(Transport::failure)
+            .unwrap_or(fallback);
+        let stopped = if let Some(mut transport) = self.transport.take() {
+            transport.close().await
+        } else {
+            Ok(())
+        };
+        // An unacknowledged cancellation is a failure, but cannot leave a turn active
+        // after its transport has been closed. Emit exactly one terminal event.
+        if self.active.take().is_some() {
+            self.stream.abort(failure);
+        }
+        stopped?;
+        match result {
+            Ok(result) => result,
+            Err(_) => Err(AgentSessionError::Failed),
+        }
     }
 
-    fn close(&mut self) -> AgentSessionFuture<'_, ()> {
-        Box::pin(async move {
-            let failed = self.stream.failure.is_some() || self.active.is_some();
-            if let Some(mut transport) = self.transport.take() {
-                transport.close().await?;
-                if let Some(failure) = transport.failure().filter(|_| failed) {
-                    self.stream.failure = Some(
-                        self.stream
-                            .failure
-                            .map_or(failure, |current| current.max(failure)),
-                    );
-                }
+    async fn close(&mut self) -> Result<(), AgentSessionError> {
+        let failed = self.stream.failure.is_some() || self.active.is_some();
+        if let Some(mut transport) = self.transport.take() {
+            transport.close().await?;
+            if let Some(failure) = transport.failure().filter(|_| failed) {
+                self.stream.failure = Some(
+                    self.stream
+                        .failure
+                        .map_or(failure, |current| current.max(failure)),
+                );
             }
-            if let Some(failure) = self.stream.failure {
-                tracing::warn!(message = failure.message(), "AGY session failed");
-            }
-            self.closed = true;
-            Ok(())
-        })
+        }
+        if let Some(failure) = self.stream.failure {
+            tracing::warn!(message = failure.message(), "AGY session failed");
+        }
+        self.closed = true;
+        Ok(())
     }
 }

@@ -7,6 +7,11 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use crate::{ErrorCode, Lifecycle, ServerInfo};
 
+/// Maximum shared short jobs running in one daemon instance.
+const SHORT_JOB_LIMIT: usize = 3;
+/// Maximum terminal I/O jobs running in one daemon instance.
+pub const TERMINAL_JOB_LIMIT: usize = 4;
+
 /// Process lifecycle action executed after request admission.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LifecycleIntent {
@@ -56,9 +61,9 @@ impl Runtime {
             tasks: TaskTracker::new(),
             admission: Mutex::new(()),
             lifecycle_intent: Mutex::new(None),
-            jobs: Arc::new(Semaphore::new(1)),
+            jobs: Arc::new(Semaphore::new(SHORT_JOB_LIMIT)),
             checkout_jobs: Arc::new(Semaphore::new(1)),
-            terminal_jobs: Arc::new(Semaphore::new(4)),
+            terminal_jobs: Arc::new(Semaphore::new(TERMINAL_JOB_LIMIT)),
             checkout_poll_jobs: Arc::new(Semaphore::new(1)),
             directory_poll_jobs: Arc::new(Semaphore::new(1)),
             execution_waits: Arc::new(Semaphore::new(32)),
@@ -109,11 +114,15 @@ impl Runtime {
         if self.cancellation.is_cancelled() {
             return Err(ErrorCode::ServerDraining);
         }
-        let permit = self
-            .jobs
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| ErrorCode::ResourceExhausted)?;
+        let permit = self.jobs.clone().try_acquire_owned().map_err(|_| {
+            tracing::warn!(
+                resource = "short_jobs",
+                limit = SHORT_JOB_LIMIT,
+                available = self.jobs.available_permits(),
+                "Resource budget exhausted"
+            );
+            ErrorCode::ResourceExhausted
+        })?;
         let job = self.spawn_tracked(service, execute, permit)?;
         job.await.map_err(|_| failure)?
     }

@@ -33,6 +33,8 @@ pub(super) struct Transport {
     sequence: u64,
     deadline: Duration,
     closed: bool,
+    /// Owner-only MCP document read by the child; removed when the transport is dropped.
+    _mcp_config: Option<tempfile::NamedTempFile>,
 }
 
 impl Transport {
@@ -71,7 +73,7 @@ impl Transport {
         {
             return Err(AgentSessionError::Unavailable);
         }
-        let mut command = launch_command(client, spec, binding)?;
+        let (mut command, mcp_config) = launch_command(client, spec, binding)?;
         if metadata {
             command.args([
                 "--tools=",
@@ -147,6 +149,7 @@ impl Transport {
             sequence: 0,
             deadline,
             closed: false,
+            _mcp_config: mcp_config,
         })
     }
 
@@ -327,7 +330,7 @@ fn launch_command(
     client: &ClaudeClient,
     spec: &AgentSessionSpec,
     binding: Option<(&str, bool)>,
-) -> Result<Command, AgentSessionError> {
+) -> Result<(Command, Option<tempfile::NamedTempFile>), AgentSessionError> {
     let mut command = Command::new(&client.program);
     command
         .args([
@@ -353,12 +356,19 @@ fn launch_command(
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     command.args(crate::local::configuration::claude(&spec.config)?);
+    let mcp_config = crate::local::configuration::claude_mcp(&spec.config)
+        .map(|document| mcp_config_file(&document))
+        .transpose()?;
+    if let Some(file) = &mcp_config {
+        command.arg("--mcp-config").arg(file.path());
+    }
     if let Some(path) = &client.config_dir {
         command.env("CLAUDE_CONFIG_DIR", path);
     }
     command
         .envs(client.environment.entries())
         .env_remove("CLAUDECODE")
+        .env("CLAUDE_CODE_ENTRYPOINT", "ait")
         .env("CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING", "true");
     if let Some((id, resume)) = binding {
         command.arg(format!(
@@ -392,5 +402,19 @@ fn launch_command(
     }
     #[cfg(unix)]
     command.process_group(0);
-    Ok(command)
+    Ok((command, mcp_config))
+}
+
+/// Write `document` to a new owner-only temporary file so MCP credentials stay out of `ps`.
+fn mcp_config_file(document: &Value) -> Result<tempfile::NamedTempFile, AgentSessionError> {
+    let mut file = tempfile::Builder::new()
+        .prefix("ait-claude-mcp-")
+        .suffix(".json")
+        .tempfile()
+        .map_err(|_| AgentSessionError::Failed)?;
+    serde_json::to_writer(&mut file, document).map_err(|_| AgentSessionError::Failed)?;
+    file.as_file()
+        .sync_all()
+        .map_err(|_| AgentSessionError::Failed)?;
+    Ok(file)
 }

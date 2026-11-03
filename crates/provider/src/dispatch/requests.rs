@@ -153,6 +153,7 @@ pub(super) async fn execution(
                 | "agent.feature.set.request"
                 | "agent.permission.resolve.request"
                 | "agent.provider_subagents.list.request"
+                | "agent.subagents.list.request"
                 | "agent.provider_subagents.timeline.get.request"
                 | "provider.diagnostic.request"
                 | "provider.usage.list.request"

@@ -9,7 +9,7 @@ pub(super) fn activity(native: &Value) -> Option<Value> {
         .filter(|id| !id.is_empty())?;
     if !matches!(
         native["kind"].as_str(),
-        Some("started" | "interacted" | "interrupted")
+        Some("started" | "interacted" | "interrupted" | "completed")
     ) {
         return None;
     }
