@@ -46,6 +46,12 @@ clears the shared machine authorization, and requires a fresh login even after r
 When no `AIT_SERVER_TOKEN` is inherited, Desktop
 uses the daemon's private persisted `local-api.token`. See [daemon publication](../../docs/decisions/daemon/adr-201-daemon-owned-publication.md).
 
+## Local development
+
+From the repository root, run `npm ci` and `npm run dev:desktop`. The launcher builds
+shared packages, the daemon and Electron main process before starting the app.
+See the [root development guide](../../README.md#本地开发) for prerequisites.
+
 ### Settings regression against Rust
 
 With the desktop development server running, run:
@@ -80,7 +86,7 @@ See [the implementation report](../../docs/reports/clients/desktop-server-listen
 The built-in browser connects directly for the local daemon's Workspaces. For all other
 Workspaces, every destination goes through the corresponding daemon, including public,
 LAN, link-local and loopback addresses. DNS resolution also happens on that daemon.
-Online Hub/relay, direct TCP and SSH connections use authenticated daemon transports;
+Online Hub, direct TCP and SSH connections use authenticated daemon transports;
 remote profiles never fall back to client networking. Update both Electron and the remote
 daemon. Browser profiles are isolated by Host and connection target.
 

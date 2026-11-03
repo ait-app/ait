@@ -32,4 +32,4 @@ Android APK，并沿用安装包命名、源码选择和校验和规则。当前
 签名凭据。Android 构建失败会阻止本次整套 Release 发布，可在同次运行中重跑失败任务。
 当前产物使用测试签名；以后切换正式密钥需要考虑已安装应用的签名兼容性。
 本决策定义工作流行为，GitHub runner 上的完整发布结果以实际运行记录为准。
-操作步骤见 [Android APK 发布](../../operations/android-releases.md)。
+操作步骤见 [当前 Android 发布](../../operations/google-play-internal-testing.md)。

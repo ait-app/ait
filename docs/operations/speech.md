@@ -35,9 +35,9 @@ export AIT_SPEECH_OFFLINE_TTS_MODEL=kokoro-multi-lang-v1_0
 推理在 daemon 自身的私有子进程中执行；模型保持加载，取消或超时会终止并回收该子进程，后续请求按需重启。
 临时录音和生成文件随请求删除，不上传到云端。
 
-Codex CLI 0.157.1 的 app-server 实验协议包含实时对话，但没有独立的文件转写方法；当前登录方式实测返回
-`realtime conversation requires API key auth`，因此默认使用离线回退。不会读取或复用 Codex 登录令牌。
-需要 Provider HTTP 语音接口时可显式配置下方 OpenAI 兼容后端；已有显式选择继续优先于默认值。
+上述配置只控制听写和通用 STT/TTS，不是 Codex 原生实时语音的回退路径。
+原生语音的认证和媒体由 Codex Provider 管理；不支持或失败时直接返回原生语音错误。
+需要独立 HTTP 转写或合成服务时，可显式配置下方 OpenAI 兼容后端。
 
 OpenAI 兼容服务：
 

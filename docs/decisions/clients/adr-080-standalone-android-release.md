@@ -25,4 +25,4 @@
 
 桌面 Release 完成后可按需追加 Android APK，重跑 Android 不需要重跑桌面构建。
 测试和正式模式不再维护两套 Android 工作流。Android APK 的操作步骤见
-[Android APK 发布](../../operations/android-releases.md)。
+[当前 Android 发布](../../operations/google-play-internal-testing.md)。

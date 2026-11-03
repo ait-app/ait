@@ -158,7 +158,7 @@ describe("deriveAgentScreenViewState", () => {
     expect(ready.sync.status).toBe("reconnecting");
   });
 
-  it("shows overlay catching-up state for first open while loading history", () => {
+  it("keeps previously rendered content interactive while hydration state catches up", () => {
     const memory = createBaseMemory({
       hasRenderedReady: true,
       lastReadyAgent: createAgent("agent-1"),
@@ -169,6 +169,20 @@ describe("deriveAgentScreenViewState", () => {
     };
 
     const result = deriveAgentScreenViewState({ input, memory });
+    const ready = expectReadyState(result.state);
+    const sync = expectCatchingUpSync(ready);
+
+    expect(sync.ui).toBe("status");
+  });
+
+  it("shows the blocking overlay only before the first usable timeline paint", () => {
+    const input: AgentScreenMachineInput = {
+      ...createBaseInput(),
+      agent: createAgent("agent-1"),
+      visibilityCatchUpStatus: "pending",
+    };
+
+    const result = deriveAgentScreenViewState({ input, memory: createBaseMemory() });
     const ready = expectReadyState(result.state);
     const sync = expectCatchingUpSync(ready);
 
@@ -283,7 +297,7 @@ describe("deriveAgentScreenViewState", () => {
     expectSyncErrorSync(ready);
   });
 
-  it("remembers first-load sync failure and keeps catch-up overlay off after error clears", () => {
+  it("remembers first-load sync failure and uses non-blocking status after error clears", () => {
     const initialMemory = createBaseMemory({
       hasRenderedReady: true,
       lastReadyAgent: createAgent("agent-1"),
@@ -314,7 +328,7 @@ describe("deriveAgentScreenViewState", () => {
     const retryReady = expectReadyState(retryResult.state);
     const retrySync = expectCatchingUpSync(retryReady);
 
-    expect(retrySync.ui).toBe("silent");
+    expect(retrySync.ui).toBe("status");
     expect(retryResult.memory.hadInitialSyncFailure).toBe(true);
   });
 

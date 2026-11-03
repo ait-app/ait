@@ -22,4 +22,4 @@
 
 日常推送标签不会消耗 Android 构建资源，也不会等待 Android。需要 APK 时，维护者在
 Release Ait 手动入口选择已有标签并勾选 Android，或者使用独立 Android 测试发布。
-操作步骤见 [Android APK 发布](../../operations/android-releases.md)。
+操作步骤见 [当前 Android 发布](../../operations/google-play-internal-testing.md)。

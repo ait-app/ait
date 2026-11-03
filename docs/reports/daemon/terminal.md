@@ -91,4 +91,4 @@ shell/Agent activity hook 或 HTTP token route。setup/script executor 的逻辑
 终端仅在本次 server 实例内保留，服务重启不恢复 shell。自然退出的 capture 保留至淘汰；显式
 kill 后 capture 为空，原 observer 仍可排尾。Unix 清理已知 child/foreground process group，
 不承诺回收自行脱离 session 的守护进程。Windows 使用 portable-pty ConPTY，尚未实机验证。
-完整参数和运行方式见[操作说明](../../operations/daemon.md#terminal-pty)。
+当前运行配置见[daemon 手册](../../operations/daemon.md)，原 PTY 接口设计见 [ADR-033](../../decisions/daemon/adr-033-daemon-terminal.md)。

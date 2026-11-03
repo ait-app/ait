@@ -3,7 +3,7 @@
 - 状态：Accepted。
 - 日期：2026-10-07。
 - 修订：[ADR-088](adr-088-provider-catalog-startup-isolation.md)的串行 Catalog 与执行队列；保留其物理连接响应接纳和客户端连接就绪规则。[ADR-032](adr-032-daemon-native-provider-execution.md)的全局串行范围和阻塞存储执行位置；保留其原生会话、单 writer、持久化合并与进程租约边界。
-- 参考：Paseo `0.9.0-beta.2`，提交 `2c8e8a826810337492cc5a38bb0bbd705b6fb632`，来源见[实施清单](../../plans/paseo-agent-concurrency.md)。
+- 参考：Paseo `0.9.0-beta.2`，提交 `2c8e8a826810337492cc5a38bb0bbd705b6fb632`，来源见[实施清单](../../archive/plans/paseo-agent-concurrency.md)。
 
 ## 背景
 
