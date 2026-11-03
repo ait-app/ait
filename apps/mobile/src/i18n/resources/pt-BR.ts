@@ -15,7 +15,31 @@ export const ptBR: TranslationResources = {
     failed: "Conversa por voz interrompida",
   },
   onlineService: en.onlineService,
-  providerControl: en.providerControl,
+  providerControl: {
+    nativeOperations: "Operações nativas",
+    runOperation: "Executar",
+    openBrowser: "Abrir no navegador",
+    goal: "Objetivo",
+    details: "Detalhes",
+    emptyGoal: "Nenhum objetivo definido.",
+    rounds: "Rodadas {{count}} / {{max}}",
+    editObjective: "Editar objetivo",
+    status: {
+      active: "Ativo",
+      paused: "Pausado",
+      blocked: "Bloqueado",
+      complete: "Concluído",
+      empty: "Não definido",
+      success: "Feito",
+      error: "Falhou",
+    },
+    actions: {
+      pause: "Pausar",
+      resume: "Retomar",
+      edit: "Editar objetivo",
+      clear: "Limpar",
+    },
+  },
   bots: en.bots,
   paneFind: {
     searchFailed:

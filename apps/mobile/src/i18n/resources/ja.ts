@@ -15,7 +15,31 @@ export const ja: TranslationResources = {
     failed: "音声会話が中断されました",
   },
   onlineService: en.onlineService,
-  providerControl: en.providerControl,
+  providerControl: {
+    nativeOperations: "ネイティブ操作",
+    runOperation: "実行",
+    openBrowser: "ブラウザーで開く",
+    goal: "目標",
+    details: "詳細",
+    emptyGoal: "目標は設定されていません。",
+    rounds: "実行回数 {{count}} / {{max}}",
+    editObjective: "目標を編集",
+    status: {
+      active: "実行中",
+      paused: "一時停止中",
+      blocked: "ブロック中",
+      complete: "完了",
+      empty: "未設定",
+      success: "完了",
+      error: "失敗",
+    },
+    actions: {
+      pause: "一時停止",
+      resume: "再開",
+      edit: "目標を編集",
+      clear: "クリア",
+    },
+  },
   bots: en.bots,
   paneFind: {
     searchFailed:

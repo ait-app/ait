@@ -15,7 +15,31 @@ export const es: TranslationResources = {
     failed: "Conversación de voz interrumpida",
   },
   onlineService: en.onlineService,
-  providerControl: en.providerControl,
+  providerControl: {
+    nativeOperations: "Operaciones nativas",
+    runOperation: "Ejecutar",
+    openBrowser: "Abrir en el navegador",
+    goal: "Objetivo",
+    details: "Detalles",
+    emptyGoal: "No hay ningún objetivo definido.",
+    rounds: "Rondas {{count}} / {{max}}",
+    editObjective: "Editar el objetivo",
+    status: {
+      active: "Activo",
+      paused: "En pausa",
+      blocked: "Bloqueado",
+      complete: "Completado",
+      empty: "Sin definir",
+      success: "Hecho",
+      error: "Error",
+    },
+    actions: {
+      pause: "Pausar",
+      resume: "Reanudar",
+      edit: "Editar objetivo",
+      clear: "Borrar",
+    },
+  },
   bots: en.bots,
   paneFind: {
     searchFailed:

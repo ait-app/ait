@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import type { DraftCommandConfig } from "./use-agent-commands-query";
@@ -14,6 +15,7 @@ export function useAgentCommandCompletionsQuery(input: {
   enabled: boolean;
   revision: number;
 }) {
+  const { t } = useTranslation();
   const client = useHostRuntimeClient(input.serverId);
   const connected = useHostRuntimeIsConnected(input.serverId);
   const panelActive = useRetainedPanelActive();
@@ -38,7 +40,7 @@ export function useAgentCommandCompletionsQuery(input: {
       input.revision,
     ],
     queryFn: () => {
-      if (!client) throw new Error("Daemon client unavailable");
+      if (!client) throw new Error(t("common.errors.daemonClientUnavailable"));
       return client.completeCommands({
         agentId: input.agentId,
         draftConfig: input.draftConfig,

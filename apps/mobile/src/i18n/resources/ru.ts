@@ -15,7 +15,31 @@ export const ru: TranslationResources = {
     failed: "Голосовой разговор прерван",
   },
   onlineService: en.onlineService,
-  providerControl: en.providerControl,
+  providerControl: {
+    nativeOperations: "Нативные операции",
+    runOperation: "Выполнить",
+    openBrowser: "Открыть в браузере",
+    goal: "Цель",
+    details: "Подробности",
+    emptyGoal: "Цель не задана.",
+    rounds: "Раунды {{count}} / {{max}}",
+    editObjective: "Изменить цель",
+    status: {
+      active: "Выполняется",
+      paused: "Приостановлено",
+      blocked: "Заблокировано",
+      complete: "Завершено",
+      empty: "Не задано",
+      success: "Готово",
+      error: "Ошибка",
+    },
+    actions: {
+      pause: "Приостановить",
+      resume: "Продолжить",
+      edit: "Изменить цель",
+      clear: "Очистить",
+    },
+  },
   bots: en.bots,
   paneFind: {
     searchFailed:
