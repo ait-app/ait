@@ -73,7 +73,8 @@ async fn unknown_resume_preserves_symlink_spelling_from_metadata_and_overrides()
             &file,
             &cwd,
             vec![
-                user("u", Value::Null, "linked"),
+                json!({"type":"thinking_level_change","id":"thinking","parentId":null,"thinkingLevel":"off"}),
+                user("u", json!("thinking"), "linked"),
                 assistant("a", "u", json!([{"type":"text","text":"done"}])),
             ],
         );
@@ -94,6 +95,24 @@ async fn unknown_resume_preserves_symlink_spelling_from_metadata_and_overrides()
         let id = response["agentId"].as_str().unwrap();
         let record = registry.get(id).unwrap().unwrap();
         assert_eq!(record.cwd, cwd);
+        assert_eq!(
+            record
+                .config
+                .as_ref()
+                .unwrap()
+                .thinking_option_id
+                .as_deref(),
+            Some("off")
+        );
+        assert_eq!(
+            record
+                .runtime_info
+                .as_ref()
+                .unwrap()
+                .thinking_option_id
+                .as_deref(),
+            Some("off")
+        );
         assert_eq!(
             record
                 .persistence
@@ -118,4 +137,66 @@ async fn unknown_resume_preserves_symlink_spelling_from_metadata_and_overrides()
             .unwrap();
         restarted.shutdown().await.unwrap();
     }
+}
+
+#[tokio::test]
+async fn imported_thinking_from_an_earlier_model_is_clamped_before_the_first_prompt() {
+    let (directory, mut client, file, cwd) = fixture();
+    write(
+        &file,
+        &cwd,
+        vec![
+            user("u", Value::Null, "initial"),
+            assistant("a", "u", json!([{"type":"text","text":"done"}])),
+            json!({"type":"thinking_level_change","id":"thinking","parentId":"a",
+                "thinkingLevel":"xhigh"}),
+            json!({"type":"model_change","id":"model","parentId":"thinking",
+                "provider":"fixture","modelId":"low-ceiling"}),
+        ],
+    );
+    let program = directory.path().join("pi");
+    std::fs::write(&program, include_str!("../../tests/fixtures/pi.py")).unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    client.program = program;
+    client.environment = crate::ports::environment::AgentEnvironment::try_from(BTreeMap::from([(
+        "PI_FIXTURE_SCENARIO".into(),
+        "strict-thinking-models".into(),
+    )]))
+    .unwrap();
+    let (execution, registry) = worker(directory.path(), &cwd, client);
+
+    let resumed = execution
+        .execute(
+            "agent.resume.request",
+            json!({"handle":{"provider":"pi","sessionId":SESSION,"metadata":{"cwd":cwd}}}),
+        )
+        .await
+        .unwrap();
+
+    let id = resumed["agentId"].as_str().unwrap();
+    let record = registry.get(id).unwrap().unwrap();
+    let config = record.config.unwrap();
+    assert_eq!(config.model.as_deref(), Some("fixture/low-ceiling"));
+    assert_eq!(config.thinking_option_id.as_deref(), Some("xhigh"));
+    assert_eq!(
+        record.runtime_info.unwrap().thinking_option_id.as_deref(),
+        Some("low")
+    );
+    let sent = execution
+        .execute(
+            "agent.message.send.request",
+            json!({"agentId":id,"text":"after import","messageId":"after-import"}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(sent["accepted"], true);
+    execution
+        .execute(
+            "agent.finish.wait.request",
+            json!({"agentId":id,"timeoutMs":5000}),
+        )
+        .await
+        .unwrap();
+    assert!(registry.get(id).unwrap().unwrap().last_error.is_none());
+    execution.shutdown().await.unwrap();
 }

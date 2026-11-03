@@ -8,11 +8,16 @@ use tempfile::TempDir;
 use super::*;
 
 mod admission;
+mod configuration;
+mod configuration_rejections;
 mod diagnostics;
+mod discovery;
 mod installed;
 mod preview;
+mod reasoning;
 mod review;
 mod text_storage;
+mod thinking_delivery;
 mod tool_schema;
 use crate::ports::agent_session::AgentTurnEvent;
 use crate::ports::diagnostics::Category;
@@ -37,6 +42,10 @@ fn fixture(scenario: &str) -> (TempDir, PiClient, AgentSessionSpec) {
         config: StoredAgentConfig::default(),
     };
     (directory, client, spec)
+}
+
+fn native_thinking(info: &domain::agent_runtime::StoredAgentRuntimeInfo) -> Option<&str> {
+    info.thinking_option_id.as_deref()
 }
 
 async fn terminal(session: &mut dyn AgentSession) -> Vec<AgentTurnEvent> {
@@ -278,7 +287,9 @@ async fn rejection_errors_handled_commands_and_extension_dialogs_do_not_hang() {
         let (_directory, client, spec) = fixture("");
         let mut session = client.create_session(&spec).await.unwrap();
         let start = session.start_turn(text, &spec.config).await;
-        if matches!(text, "reject" | "exit" | "malformed") {
+        if text == "reject" {
+            assert_eq!(start, Err(AgentSessionError::Rejected));
+        } else if matches!(text, "exit" | "malformed") {
             assert!(start.is_err(), "{text}");
         } else {
             start.unwrap();
@@ -306,7 +317,7 @@ async fn unsupported_configuration_and_structured_output_are_rejected_before_sub
     config.model = Some("unqualified".into());
     assert!(client.validate_config(&config).is_err());
     config = spec.config.clone();
-    config.thinking_option_id = Some("high".into());
+    config.thinking_option_id = Some("bad\nlevel".into());
     assert!(client.validate_config(&config).is_err());
     let mut session = client
         .create_session_with_environment(&spec, &client.environment)
@@ -338,8 +349,11 @@ fn stream_does_not_finish_at_agent_end_and_bounds_display_output() {
             .is_err()
     );
     assert!(
-        config::models(&json!({"models":[{"provider":"a","id":"b"},{"provider":"a","id":"b"}]}))
-            .is_err()
+        config::models(
+            &json!({"models":[{"provider":"a","id":"b"},{"provider":"a","id":"b"}]}),
+            &Value::Null
+        )
+        .is_err()
     );
 }
 

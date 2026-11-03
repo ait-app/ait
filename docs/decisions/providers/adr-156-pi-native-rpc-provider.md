@@ -2,10 +2,11 @@
 
 - Status: Accepted (implemented).
 - Date: 2026-10-17.
-- Updated: 2026-10-31 for executable inspection and bounded, shared version probes.
+- Updated: 2026-11-03 for next-prompt reasoning controls.
 - Scope: `crates/provider`, `packages/protocol`; follows [ADR-089](adr-089-provider-owned-composition.md).
 - Amended by: [ADR-189](adr-189-pi-without-host-mode.md) for host modes.
 - Amended by: [ADR-185](adr-185-native-provider-failure-details.md) for native failure details.
+- Amended by: [ADR-211](adr-211-pi-next-turn-reasoning-controls.md) for next-prompt reasoning controls.
 
 ## Context
 
@@ -60,7 +61,8 @@ run from automatic retries and compaction recovery.
   paths, arguments, or native error text. Cached failures preserve these facts; launch failures
   continue to map to `AgentSessionError::Unavailable` at the shared session port.
 - Preserve the host's persisted timeline across resume; do not advertise automatic native history
-  replay, rewind, steering, auxiliary generation or dynamic thinking controls. Native session
+  replay, rewind, steering or auxiliary generation. Next-prompt thinking controls are added by
+  [ADR-211](adr-211-pi-next-turn-reasoning-controls.md). Native session
   import and explicit refresh are added by [ADR-174](adr-174-pi-session-import.md).
 - Preserve native configuration. Do not expose host modes, as specified by
   [ADR-189](adr-189-pi-without-host-mode.md). Cancel
@@ -127,7 +129,7 @@ run from automatic retries and compaction recovery.
 
 Pi can be selected and used through the existing Agent workflow without adding a new service
 boundary. Unsupported host configuration and structured output are rejected before prompt
-submission. Richer extension dialogs, thinking controls, and
+submission. Richer extension dialogs and
 additional provider-specific slash-command controls need separate implementations.
 
 Operations and current limitations: [Pi](../../operations/pi.md).
