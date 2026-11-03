@@ -231,6 +231,21 @@ async fn signal_shutdown_releases_process_lock_and_preserves_identity() {
     assert!(!second.status.success());
     assert!(String::from_utf8_lossy(&second.stderr).contains("already in use"));
     assert!(!String::from_utf8_lossy(&second.stderr).contains(TOKEN));
+    // The directory claim precedes binding, so the same port reports the directory conflict.
+    let same_port = Command::new(env!("CARGO_BIN_EXE_daemon"))
+        .args([
+            "--data-dir",
+            directory.to_str().unwrap(),
+            "--listen",
+            &address,
+        ])
+        .env("AIT_SERVER_TOKEN", TOKEN)
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&same_port.stderr);
+    assert!(!same_port.status.success());
+    assert!(stderr.contains("already in use"), "{stderr}");
+    assert!(!stderr.contains("bind server listener"), "{stderr}");
     terminate(&mut first).await;
     let mut restarted = start(&directory, &log);
     let address = ready(&mut restarted, &log).await;

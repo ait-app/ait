@@ -294,3 +294,57 @@ async fn first_authorization_uses_hostname_or_portable_fallback() {
         assert_eq!(restored.machine.platform, PLATFORM);
     }
 }
+
+#[tokio::test]
+async fn login_stops_rotating_when_every_access_token_is_already_expired() {
+    let data = tempfile::tempdir().unwrap();
+    let (_saved, mut wire) = saved_machine(data.path());
+    wire["access_expires_at"] = json!(Utc::now() - chrono::Duration::minutes(1));
+    let fixture = Fixture::new(vec![(StatusCode::OK, wire); RESTORE_ATTEMPTS + 1]).await;
+    let error = login_with_center(data.path(), options(false), fixture.center.clone())
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("system clock"), "{error:#}");
+    let seen = fixture.seen.lock().unwrap();
+    assert_eq!(seen.calls.len(), RESTORE_ATTEMPTS);
+    assert!(
+        seen.calls
+            .iter()
+            .all(|call| call.0 == "/v1/auth/device/refresh")
+    );
+}
+
+#[tokio::test]
+async fn replayed_expired_receipt_rotates_once_more_and_succeeds() {
+    let data = tempfile::tempdir().unwrap();
+    let (_saved, fresh) = saved_machine(data.path());
+    let mut replayed = fresh.clone();
+    replayed["access_expires_at"] = json!(Utc::now() - chrono::Duration::minutes(1));
+    let fixture = Fixture::new(vec![(StatusCode::OK, replayed), (StatusCode::OK, fresh)]).await;
+    login_with_center(data.path(), options(false), fixture.center.clone())
+        .await
+        .unwrap();
+    assert_eq!(fixture.seen.lock().unwrap().calls.len(), 2);
+}
+
+#[tokio::test]
+async fn explicit_name_cannot_rename_an_unfinished_approval_without_force() {
+    let data = tempfile::tempdir().unwrap();
+    let (mut saved, _wire) = saved_machine(data.path());
+    saved.credential = None;
+    saved.pending = Some(Pending::Enrollment {
+        token: "enrollment.jwt.secret".into(),
+        request_id: Uuid::new_v4(),
+    });
+    Store::open(data.path()).unwrap().save(&saved).unwrap();
+    let fixture = Fixture::new(Vec::new()).await;
+    let mut renamed = options(false);
+    renamed.name = Some("renamed".to_owned());
+    let error = login_with_center(data.path(), renamed, fixture.center.clone())
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("--force"), "{error:#}");
+    assert!(fixture.seen.lock().unwrap().calls.is_empty());
+    let kept = Store::open(data.path()).unwrap().load().unwrap().unwrap();
+    assert_eq!(kept.machine.display_name, saved.machine.display_name);
+}

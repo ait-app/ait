@@ -96,3 +96,44 @@ fn project_workspace_renames_and_archives_replace_lightweight_snapshots() {
     assert_eq!(snapshots[0].1, json!([]));
     assert_eq!(snapshots[1].1, json!([]));
 }
+
+fn item(id: usize, updated: &str, bytes: usize) -> Value {
+    json!({"id":id,"data":{"title":"x".repeat(bytes),"updatedAt":updated}})
+}
+
+#[test]
+fn directories_within_budget_are_published_unchanged() {
+    let items = vec![item(2, "2026-01-01", 1), item(1, "2026-02-01", 1)];
+    assert_eq!(fit_budget("agent", items.clone()), Value::from(items));
+}
+
+#[test]
+fn oversized_directories_keep_the_most_recently_updated_items() {
+    let items = (0..ITEM_LIMIT + 5)
+        .map(|id| item(id, &format!("2026-01-01T00:00:{id:05}Z"), 1))
+        .collect::<Vec<_>>();
+    let published = fit_budget("agent", items);
+    let published = published.as_array().unwrap();
+    assert_eq!(published.len(), ITEM_LIMIT);
+    assert_eq!(published[0]["id"], ITEM_LIMIT + 4);
+    assert!(
+        published
+            .iter()
+            .all(|item| item["id"].as_u64().unwrap() >= 5)
+    );
+    let mixed = vec![
+        item(1, "2026-01-02", ITEM_BYTES + 1),
+        item(2, "2026-01-01", 1),
+    ];
+    assert_eq!(
+        fit_budget("agent", mixed),
+        json!([item(2, "2026-01-01", 1)])
+    );
+    let heavy = (0..80)
+        .map(|id| item(id, &format!("2026-01-01T00:00:{id:05}Z"), ITEM_BYTES - 64))
+        .collect::<Vec<_>>();
+    let published = fit_budget("agent", heavy);
+    let encoded = serde_json::to_vec(&published).unwrap().len();
+    assert!(encoded <= KIND_BYTES, "{encoded}");
+    assert_eq!(published[0]["id"], 79);
+}

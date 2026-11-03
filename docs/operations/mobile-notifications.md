@@ -47,7 +47,7 @@ export AIT_APNS_BUNDLE_IDS=com.necokeine.ait,dev.ait.mobile,dev.ait.mobile.debug
 export AIT_FCM_SERVICE_ACCOUNT_FILE=/private/path/firebase-service-account.json
 ```
 
-也支持 `GOOGLE_APPLICATION_CREDENTIALS` 指向服务账户 JSON。项目 ID、邮箱和 RSA 私钥从文件读取；通过 Google OAuth 获取并缓存访问 token，通知经 FCM HTTP v1 发送。当前一个 daemon 配置一个 Firebase 项目。F-Droid 构建仍不接入 Google 推送。
+也支持 `GOOGLE_APPLICATION_CREDENTIALS` 指向服务账户 JSON；该回退值不可读或不是服务账户时只记录告警并禁用 FCM，不阻止 daemon 启动，而显式设置的 `AIT_FCM_SERVICE_ACCOUNT_FILE` 无效仍会导致启动失败。项目 ID、邮箱和 RSA 私钥从文件读取；通过 Google OAuth 获取并缓存访问 token，通知经 FCM HTTP v1 发送。当前一个 daemon 配置一个 Firebase 项目。F-Droid 构建仍不接入 Google 推送。
 
 ## 验收与故障排查
 

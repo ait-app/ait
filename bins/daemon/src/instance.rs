@@ -1,6 +1,6 @@
 mod identity;
 
-use std::fs::{File, OpenOptions};
+use std::fs::{File, OpenOptions, TryLockError};
 use std::path::Path;
 
 use anyhow::{Context, bail};
@@ -38,6 +38,21 @@ impl InstanceLease {
             server_id,
             instance_id: Uuid::new_v4(),
         })
+    }
+}
+
+impl InstanceLease {
+    /// Whether another process currently holds `directory`'s lease, without creating anything.
+    /// A brief shared probe only runs after a startup failure, to explain that failure.
+    pub(crate) fn held(directory: &Path) -> bool {
+        let lock_path = directory.join("instance.lock");
+        if reject_symlink(&lock_path).is_err() {
+            return false;
+        }
+        OpenOptions::new()
+            .read(true)
+            .open(lock_path)
+            .is_ok_and(|lock| matches!(lock.try_lock_shared(), Err(TryLockError::WouldBlock)))
     }
 }
 

@@ -468,6 +468,29 @@ async fn runs_without_gui_renews_reconnects_and_closes_on_shutdown() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn clock_skew_backs_off_instead_of_rotating_every_second() {
+    let (controller, mock) = fixture();
+    mock.0.lock().unwrap().access_seconds = Some(-60);
+    let cancel = CancellationToken::new();
+    let task = tokio::spawn(controller.run(cancel.clone()));
+    for _ in 0..60 {
+        tick().await;
+    }
+    {
+        let seen = mock.0.lock().unwrap();
+        assert!(
+            seen.refreshes.len() <= 10,
+            "{} refreshes",
+            seen.refreshes.len()
+        );
+        assert_eq!(seen.reports.last(), Some(&"retrying"));
+        assert_eq!(seen.starts, 0);
+    }
+    cancel.cancel();
+    task.await.unwrap().unwrap();
+}
+
+#[tokio::test(start_paused = true)]
 async fn optional_hub_link_starts_beside_relay_and_backs_off_on_failure() {
     let (controller, mock) = fixture();
     mock.0.lock().unwrap().hub.error = Some(Error::Unavailable);

@@ -53,6 +53,18 @@ async fn login_with_center(data: &Path, options: Login, center: HttpCenter) -> a
     let store = Store::open(data)?;
     let previous = store.load()?;
     let explicit_name = options.name.is_some();
+    let unfinished = previous.as_ref().is_some_and(|state| {
+        matches!(
+            state.pending,
+            Some(Pending::Web { .. } | Pending::Enrollment { .. })
+        )
+    });
+    // The center already holds the name sent with an unfinished approval.
+    if explicit_name && unfinished && !options.force {
+        bail!(
+            "--name cannot rename an unfinished authorization; rerun daemon login to finish it or add --force to start a new one"
+        );
+    }
     let name = options.name.unwrap_or_else(|| {
         previous.as_ref().map_or_else(
             || {
@@ -76,10 +88,10 @@ async fn login_with_center(data: &Path, options: Login, center: HttpCenter) -> a
     };
     let mut state = match previous {
         Some(mut state) => {
+            if explicit_name {
+                state.machine.display_name = machine.display_name;
+            }
             if state.pending.is_none() || options.force {
-                if explicit_name {
-                    state.machine.display_name = machine.display_name;
-                }
                 state.machine.platform = machine.platform;
                 state.machine.app_version = machine.app_version;
             }
@@ -124,8 +136,11 @@ async fn authenticate(
     let (supplied, force) = authorization;
     if supplied.is_none() && !force {
         match restore_login(center, store, state, cancel).await {
-            Ok(true) => return Ok(()),
-            Ok(false) | Err(Error::Unauthorized | Error::Denied) => {}
+            Ok(Restored::Authorized) => return Ok(()),
+            Ok(Restored::ExpiredAccess) => bail!(
+                "the center returned only expired access tokens; check that the system clock is correct"
+            ),
+            Ok(Restored::Unauthorized) | Err(Error::Unauthorized | Error::Denied) => {}
             Err(error) => return Err(error.into()),
         }
     } else if state.pending.is_some() && !force {
@@ -157,30 +172,45 @@ async fn authenticate(
     Ok(())
 }
 
+/// Outcome of resuming saved authorization without starting a new one.
+#[derive(Debug, PartialEq, Eq)]
+enum Restored {
+    /// Saved credentials or a pending approval produced a usable grant.
+    Authorized,
+    /// No saved credential exists; a new authorization is required.
+    Unauthorized,
+    /// Every rotation returned an access token already expired by the local clock.
+    ExpiredAccess,
+}
+
+/// A replayed refresh receipt keeps its original expiry, so one further rotation obtains its
+/// committed successor. Expiry after that indicates local clock skew, not a recoverable receipt.
+const RESTORE_ATTEMPTS: usize = 2;
+
 async fn restore_login(
     center: &HttpCenter,
     store: &Store,
     state: &mut State,
     cancel: &CancellationToken,
-) -> Result<bool, Error> {
+) -> Result<Restored, Error> {
     if matches!(
         state.pending,
         Some(Pending::Web { .. } | Pending::Enrollment { .. })
     ) {
         show_approval(state).map_err(|_| Error::Unavailable)?;
         complete_login(center, store, state, cancel).await?;
-        return Ok(true);
+        return Ok(Restored::Authorized);
     }
     if state.credential.is_none() {
-        return Ok(false);
+        return Ok(Restored::Unauthorized);
     }
-    loop {
+    for _ in 0..RESTORE_ATTEMPTS {
         let tokens = host_link::authorization::restore(center, store, state).await?;
         if tokens.access_expires_at > Utc::now() {
-            return Ok(true);
+            return Ok(Restored::Authorized);
         }
-        // A replayed receipt keeps its original expiry. Rotate its committed successor.
     }
+    Ok(Restored::ExpiredAccess)
 }
 
 fn show_approval(state: &State) -> std::io::Result<()> {
@@ -270,9 +300,13 @@ pub(super) fn status(data: &Path, json_output: bool) -> anyhow::Result<()> {
     let runtime = std::fs::read(data.join("device/status.json"))
         .ok()
         .and_then(|bytes| serde_json::from_slice::<RuntimeSnapshot>(&bytes).ok());
+    // A snapshot outlives a crashed daemon; report whether its recorded process still exists.
+    let alive = runtime
+        .as_ref()
+        .and_then(|snapshot| process_alive(snapshot.pid));
     let value = serde_json::json!({"mode":"daemon", "center":host_link::center(),
         "server_id":server_id, "credentials_present":Store::credentials_present(data)?,
-        "runtime_snapshot":runtime});
+        "runtime_snapshot":runtime, "runtime_process_alive":alive});
     if json_output {
         writeln!(std::io::stdout(), "{value}")?;
     } else {
@@ -336,6 +370,23 @@ fn system_hostname() -> Option<String> {
     None
 }
 
+/// Whether `pid` names a live process; `None` when it cannot be probed on this platform.
+/// A recycled PID can report a different process as alive, so this is a hint, not proof.
+#[cfg(unix)]
+fn process_alive(pid: u32) -> Option<bool> {
+    let pid = rustix::process::Pid::from_raw(i32::try_from(pid).ok()?)?;
+    // Only ESRCH proves absence; EPERM means the process exists but belongs to another user.
+    Some(!matches!(
+        rustix::process::test_kill_process(pid),
+        Err(rustix::io::Errno::SRCH)
+    ))
+}
+
+#[cfg(not(unix))]
+fn process_alive(_pid: u32) -> Option<bool> {
+    None
+}
+
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 mod tests;
 
@@ -348,14 +399,18 @@ pub(super) struct StatusRelay {
 }
 
 impl StatusRelay {
+    /// Wrap `inner`, removing temporary snapshots a crashed predecessor left in `data`.
+    /// The caller holds the data-directory lease, so no other writer can own them.
     pub(crate) fn new(
         inner: api::managed_relay::ManagedRelayHandle,
         data: &Path,
         instance: Uuid,
     ) -> Self {
+        let directory = data.join("device");
+        remove_stale_snapshots(&directory);
         Self {
             inner,
-            directory: data.join("device"),
+            directory,
             instance,
         }
     }
@@ -397,6 +452,24 @@ impl host_link::ManagedRelay for StatusRelay {
             if result.is_err() {
                 let _ = std::fs::remove_file(&temporary);
             }
+        }
+    }
+}
+
+/// Best-effort removal of `status-<uuid>.tmp` files interrupted before their rename.
+fn remove_stale_snapshots(directory: &Path) {
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let stale = name
+            .to_str()
+            .and_then(|name| name.strip_prefix("status-"))
+            .and_then(|name| name.strip_suffix(".tmp"))
+            .is_some_and(|id| Uuid::parse_str(id).is_ok());
+        if stale && let Err(error) = std::fs::remove_file(entry.path()) {
+            tracing::warn!(%error, "failed to remove stale runtime status snapshot");
         }
     }
 }

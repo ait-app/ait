@@ -79,22 +79,10 @@ impl Sources {
                 })
             })
             .collect::<Vec<_>>();
-        for items in [&projects, &workspaces, &agents] {
-            anyhow::ensure!(
-                items.len() <= 1000,
-                "Host directory exceeds center item budget"
-            );
-            for item in items {
-                anyhow::ensure!(
-                    serde_json::to_vec(&item["data"])?.len() <= 16 * 1024,
-                    "Host directory item exceeds center budget"
-                );
-            }
-        }
         Ok([
-            ("project", projects.into()),
-            ("workspace", workspaces.into()),
-            ("agent", agents.into()),
+            ("project", fit_budget("project", projects)),
+            ("workspace", fit_budget("workspace", workspaces)),
+            ("agent", fit_budget("agent", agents)),
         ])
     }
 
@@ -123,6 +111,62 @@ impl Sources {
             })
             .collect())
     }
+}
+
+/// Most items the center accepts in one directory kind.
+const ITEM_LIMIT: usize = 1000;
+/// Largest encoded `data` object of one directory item.
+const ITEM_BYTES: usize = 16 * 1024;
+/// Encoded item budget per kind, leaving room for the publication envelope under 1 MiB.
+const KIND_BYTES: usize = 1024 * 1024 - 1024;
+
+/// Keep `items` within the center's directory budget.
+///
+/// A list that fits is returned unchanged. Otherwise oversized items are skipped and the most
+/// recently updated items are kept, so an unusually large Host still publishes a useful partial
+/// directory instead of failing every reconciliation.
+fn fit_budget(kind: &str, items: Vec<Value>) -> Value {
+    let mut sized = items
+        .into_iter()
+        .map(|item| {
+            let size = (encoded_len(&item), encoded_len(&item["data"]));
+            (item, size)
+        })
+        .collect::<Vec<_>>();
+    let total = sized.iter().fold(2_usize, |total, (_, (encoded, _))| {
+        total.saturating_add(encoded.saturating_add(1))
+    });
+    let fits = sized.len() <= ITEM_LIMIT
+        && total <= KIND_BYTES
+        && sized.iter().all(|(_, (_, data))| *data <= ITEM_BYTES);
+    if !fits {
+        sized.sort_by(|(left, _), (right, _)| {
+            right["data"]["updatedAt"]
+                .as_str()
+                .cmp(&left["data"]["updatedAt"].as_str())
+        });
+        let mut bytes = 2_usize;
+        sized.retain(|(_, (encoded, data))| {
+            let next = bytes.saturating_add(encoded.saturating_add(1));
+            let keep = *data <= ITEM_BYTES && next <= KIND_BYTES;
+            if keep {
+                bytes = next;
+            }
+            keep
+        });
+        sized.truncate(ITEM_LIMIT);
+        tracing::info!(
+            kind,
+            published = sized.len(),
+            "Host directory exceeds center budget; publishing the most recently updated items"
+        );
+    }
+    sized.into_iter().map(|(item, _)| item).collect()
+}
+
+/// Encoded JSON length; a `Value` always serializes, so failure only marks the item oversized.
+fn encoded_len(value: &Value) -> usize {
+    serde_json::to_vec(value).map_or(usize::MAX, |bytes| bytes.len())
 }
 
 #[cfg(test)]

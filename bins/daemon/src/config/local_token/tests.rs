@@ -60,3 +60,28 @@ fn rejects_symlinks_and_directories() {
     std::fs::create_dir(&path).unwrap();
     assert!(load_or_create(directory.path()).is_err());
 }
+
+#[test]
+fn hand_edited_credentials_tolerate_a_line_ending_but_not_group_access() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("local-api.token");
+    let token = load_or_create(directory.path()).unwrap();
+    for ending in ["\n", "\r\n"] {
+        std::fs::write(&path, format!("{}{ending}", token.expose_secret())).unwrap();
+        assert_eq!(
+            load_or_create(directory.path()).unwrap().expose_secret(),
+            token.expose_secret()
+        );
+    }
+    let longest = "x".repeat(256);
+    std::fs::write(&path, format!("{longest}\r\n")).unwrap();
+    assert_eq!(
+        load_or_create(directory.path()).unwrap().expose_secret(),
+        longest
+    );
+    std::fs::write(&path, format!("{longest}\nextra")).unwrap();
+    assert!(load_or_create(directory.path()).is_err());
+    std::fs::write(&path, token.expose_secret()).unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).unwrap();
+    assert!(load_or_create(directory.path()).is_err());
+}
