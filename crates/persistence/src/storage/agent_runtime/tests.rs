@@ -36,6 +36,39 @@ fn record(id: &str) -> PersistedAgentRuntimeRecord {
 }
 
 #[test]
+fn committed_snapshots_are_shared_across_registry_clones_and_invalidated_after_commit() {
+    let temp = tempfile::tempdir().unwrap();
+    let registry = FileBackedAgentRuntimeRegistry::new(temp.path().join("agents.json"));
+    registry.upsert(&record("agent")).unwrap();
+    let before = registry.snapshot().unwrap();
+    let other_reader = registry.clone();
+    assert!(std::sync::Arc::ptr_eq(
+        &before,
+        &other_reader.snapshot().unwrap()
+    ));
+    registry
+        .update("agent", &|current| {
+            let mut next = current.clone();
+            next.requires_attention = true;
+            next
+        })
+        .unwrap();
+    let after = other_reader.snapshot().unwrap();
+    assert!(!std::sync::Arc::ptr_eq(&before, &after));
+    assert!(!before[0].requires_attention);
+    assert!(after[0].requires_attention);
+    assert!(std::sync::Arc::ptr_eq(
+        &after[0],
+        &registry.get_shared("agent").unwrap().unwrap()
+    ));
+    assert!(registry.get_shared("absent").unwrap().is_none());
+    assert_eq!(
+        registry.get("agent").unwrap().as_ref(),
+        Some(after[0].as_ref())
+    );
+}
+
+#[test]
 fn observed_bindings_remain_private_read_only_and_validate_their_parent() {
     use domain::agent_runtime::observation::{ObservationHealth, ObservedAgent, ObservedStatus};
     let temp = tempfile::tempdir().expect("temporary directory");

@@ -123,7 +123,7 @@ pub(crate) struct AgentPlacement {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct AgentDirectoryEntry {
     /// Durable Agent runtime snapshot.
-    pub(crate) agent: PersistedAgentRuntimeRecord,
+    pub(crate) agent: Arc<PersistedAgentRuntimeRecord>,
     /// Project/workspace placement.
     pub(crate) placement: AgentPlacement,
 }
@@ -245,7 +245,7 @@ impl AgentRuntimeDirectory {
     /// Returns a registry error when the identity cannot be checked.
     pub(crate) fn contains_identity(&self, id: &str) -> Result<bool, AgentRuntimeError> {
         self.agents
-            .get(id)
+            .get_shared(id)
             .map(|agent| agent.is_some())
             .map_err(map_agent_registry)
     }
@@ -277,7 +277,7 @@ impl AgentRuntimeDirectory {
             .placements()?
             .remove(&record.workspace_id.clone().unwrap_or_default());
         Ok(ResolvedAgent {
-            agent: record,
+            agent: record.as_ref().clone(),
             placement,
         })
     }
@@ -468,12 +468,12 @@ impl AgentRuntimeDirectory {
         })
     }
 
-    fn public_records(&self) -> Result<Vec<PersistedAgentRuntimeRecord>, AgentRuntimeError> {
+    fn public_records(&self) -> Result<Vec<Arc<PersistedAgentRuntimeRecord>>, AgentRuntimeError> {
         Ok(self
             .agents
-            .list()
+            .snapshot()
             .map_err(map_agent_registry)?
-            .into_iter()
+            .iter()
             .filter(|record| {
                 !record.internal
                     && record
@@ -481,6 +481,7 @@ impl AgentRuntimeDirectory {
                         .as_ref()
                         .is_none_or(|source| source.ready)
             })
+            .cloned()
             .collect())
     }
 
@@ -508,9 +509,9 @@ impl AgentRuntimeDirectory {
     }
 
     fn resolve_title(
-        records: &[PersistedAgentRuntimeRecord],
+        records: &[Arc<PersistedAgentRuntimeRecord>],
         title: &str,
-    ) -> Result<PersistedAgentRuntimeRecord, AgentRuntimeError> {
+    ) -> Result<Arc<PersistedAgentRuntimeRecord>, AgentRuntimeError> {
         let matches = records
             .iter()
             .filter(|record| record.title.as_deref() == Some(title))

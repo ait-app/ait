@@ -1,0 +1,22 @@
+[
+  {
+    "name": "legacy file write without content",
+    "item": {"type":"tool_call","callId":"file","name":"write","status":"completed","error":null,"detail":{"type":"write","filePath":"file.rs","content":null}},
+    "expected": {"type":"tool_call","callId":"file","name":"write","status":"completed","error":null,"detail":{"type":"write","filePath":"file.rs"}}
+  },
+  {
+    "name": "legacy process control preserves native detail",
+    "item": {"type":"tool_call","callId":"process","name":"write","status":"running","error":null,"detail":{"type":"write","filePath":"proc://collector/kill","content":null}},
+    "expected": {"type":"tool_call","callId":"process","name":"write","status":"running","error":null,"detail":{"type":"unknown","input":{"type":"write","filePath":"proc://collector/kill","content":null},"output":null}}
+  },
+  {
+    "name": "legacy shell optional strings",
+    "item": {"type":"tool_call","callId":"shell","name":"Bash","status":"canceled","error":null,"detail":{"type":"shell","command":"pwd","cwd":null,"output":null}},
+    "expected": {"type":"tool_call","callId":"shell","name":"Bash","status":"canceled","error":null,"detail":{"type":"shell","command":"pwd"}}
+  },
+  {
+    "name": "normal file content is retained",
+    "item": {"type":"tool_call","callId":"file","name":"Write","status":"failed","error":"permission denied","detail":{"type":"write","filePath":"file.rs","content":"fn main() {}"}},
+    "expected": {"type":"tool_call","callId":"file","name":"Write","status":"failed","error":"permission denied","detail":{"type":"write","filePath":"file.rs","content":"fn main() {}"}}
+  }
+]

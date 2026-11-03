@@ -2,6 +2,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::*;
 
+mod performance;
+
 #[derive(Debug, Clone, PartialEq, Serialize, serde::Deserialize)]
 struct Record {
     id: String,
@@ -24,6 +26,38 @@ fn insert(registry: &FileRegistry<Record>, record: Record) -> Result<(), Error> 
         records.insert(record.id.clone(), record);
         Ok(((), true))
     })
+}
+
+#[test]
+fn shared_views_reuse_commits_and_survive_updates_removals_and_failed_writes() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("records.json");
+    let mut store = registry(path.clone());
+    insert(&store, record("first", 1.0)).unwrap();
+    insert(&store, record("second", 2.0)).unwrap();
+    let before = store.snapshot().unwrap();
+    assert!(Arc::ptr_eq(&before, &store.snapshot().unwrap()));
+    store.mutate(|_| Ok(((), false))).unwrap();
+    assert!(Arc::ptr_eq(&before, &store.snapshot().unwrap()));
+    insert(&store, record("first", 3.0)).unwrap();
+    let updated = store.snapshot().unwrap();
+    assert!(!Arc::ptr_eq(&before, &updated));
+    assert_eq!(*before[0], record("first", 1.0));
+    assert_eq!(*updated[0], record("first", 3.0));
+    assert_eq!(*updated[1], record("second", 2.0));
+    store.set_writer(Arc::new(|_, _| Err(Error::Io)));
+    assert_eq!(insert(&store, record("third", 4.0)), Err(Error::Io));
+    assert!(Arc::ptr_eq(&updated, &store.snapshot().unwrap()));
+    let reopened = registry(path);
+    assert_eq!(reopened.list().unwrap(), store.list().unwrap());
+    reopened
+        .mutate(|records| {
+            records.shift_remove("first");
+            Ok(((), true))
+        })
+        .unwrap();
+    assert_eq!(*reopened.snapshot().unwrap()[0], record("second", 2.0));
+    assert_eq!(updated.len(), 2);
 }
 
 #[test]

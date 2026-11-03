@@ -87,6 +87,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## Provider、Agent 与会话
 
+- [ADR-210：Agent 目录共享已提交的不可变记录](providers/adr-210-committed-runtime-read-snapshots.md)
+
 - [ADR-209：通过只读登记统一子 Agent 展示](providers/adr-209-observed-subagent-normalization.md)
 
 - [ADR-206：OpenCode 的 ACP 子 Agent 观测与历史归属](providers/adr-206-opencode-acp-subagents.md)

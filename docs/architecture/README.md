@@ -61,6 +61,11 @@ Oh My Pi 与 MiniMax Code。可用性、模型和原生版本支持由运行时�
 见 [ADR-091](../decisions/providers/adr-091-independent-session-execution.md)、
 [ADR-205](../decisions/providers/adr-205-provider-execution-contracts.md)。
 
+Agent registry 通过 `snapshot()` 与 `get_shared()` 提供已提交的不可变读视图；目录、
+Workspace attention、生命周期检查和 Hub 摘要复用记录，写入成功后失效缓存。
+旧视图保持有效，权限写入仍核对最新记录，见
+[ADR-210](../decisions/providers/adr-210-committed-runtime-read-snapshots.md)。
+
 Provider 拥有摘要生成、主机级技能安装与原生会话 MCP 注入。daemon 注入配置、资源和端点；
 API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储。
 Provider 自身行为测试归 `crates/provider`；daemon 测试覆盖宿主、传输和跨能力组合，见

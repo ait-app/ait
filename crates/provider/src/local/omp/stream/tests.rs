@@ -1,6 +1,36 @@
 use super::*;
 
 #[test]
+fn process_control_and_file_writes_keep_their_native_semantics() {
+    let arguments = json!({"path":"proc://collector/kill","content":null});
+    let tool = json!({"id":"process","name":"write","arguments":arguments});
+    let running = tool_item(&tool, None, false, true);
+    assert_eq!(running["status"], "running");
+    assert_eq!(
+        running["detail"],
+        json!({"type":"unknown","input":arguments,"output":null})
+    );
+    let completed = tool_item(&tool, Some("Stopped".to_owned()), false, false);
+    assert_eq!(completed["status"], "completed");
+    assert_eq!(completed["detail"]["input"], arguments);
+    assert_eq!(completed["detail"]["output"], "Stopped");
+    let failed = tool_item(&tool, Some("Not running".to_owned()), true, false);
+    assert_eq!(failed["status"], "failed");
+    assert!(!failed["error"].is_null());
+    let file = json!({"id":"file","name":"write","arguments":{"path":"file.rs","content":"text"}});
+    assert_eq!(
+        tool_item(&file, None, false, true)["detail"],
+        json!({"type":"write","filePath":"file.rs","content":"text"})
+    );
+    let partial =
+        json!({"id":"partial","name":"write","arguments":{"path":"file.rs","content":null}});
+    assert_eq!(
+        tool_item(&partial, None, false, true)["detail"],
+        json!({"type":"write","filePath":"file.rs"})
+    );
+}
+
+#[test]
 fn projection_errors_describe_the_cause_without_native_payloads() {
     let mut stream = Stream::new("session".to_owned(), ImageStore::default());
     for (message, expected) in [

@@ -1,6 +1,7 @@
 //! Persistence boundary for Paseo Agent runtime snapshots.
 
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use crate::agent_runtime::PersistedAgentRuntimeRecord;
 
@@ -32,6 +33,19 @@ pub trait AgentRuntimeRegistry: Debug + Send + Sync {
     /// Returns an error when initialization or storage access fails.
     fn list(&self) -> Result<Vec<PersistedAgentRuntimeRecord>, AgentRuntimeRegistryError>;
 
+    /// Capture immutable records from one committed state in insertion order.
+    /// Shared snapshots remain valid after later mutations; adapters may reuse allocations until
+    /// their next commit. The default preserves compatibility with registries that only own rows.
+    ///
+    /// # Errors
+    /// Returns an error when initialization or storage access fails.
+    fn snapshot(
+        &self,
+    ) -> Result<Arc<[Arc<PersistedAgentRuntimeRecord>]>, AgentRuntimeRegistryError> {
+        self.list()
+            .map(|records| records.into_iter().map(Arc::new).collect())
+    }
+
     /// Return one record by its full identity.
     ///
     /// # Errors
@@ -40,6 +54,18 @@ pub trait AgentRuntimeRegistry: Debug + Send + Sync {
         &self,
         agent_id: &str,
     ) -> Result<Option<PersistedAgentRuntimeRecord>, AgentRuntimeRegistryError>;
+
+    /// Capture one immutable committed record without copying its payload when supported.
+    /// Returns none for an absent identity; later commits leave an acquired record unchanged.
+    ///
+    /// # Errors
+    /// Returns an error when initialization or storage access fails.
+    fn get_shared(
+        &self,
+        agent_id: &str,
+    ) -> Result<Option<Arc<PersistedAgentRuntimeRecord>>, AgentRuntimeRegistryError> {
+        self.get(agent_id).map(|record| record.map(Arc::new))
+    }
 
     /// Atomically insert or replace one record.
     ///

@@ -17,6 +17,70 @@ function canonicalBase() {
 }
 
 describe("shared messages tool_call schema", () => {
+  const cases = JSON.parse(
+    readFileSync(
+      new URL("../../../crates/provider/tests/fixtures/legacy_tool_details.json", import.meta.url),
+      "utf8",
+    ),
+  ) as Array<{ name: string; expected: unknown }>;
+  it.each(cases)("accepts repaired Rust history: $name", (fixture) => {
+    expect(AgentTimelineItemPayloadSchema.safeParse(fixture.expected).success, fixture.name).toBe(
+      true,
+    );
+    const message = {
+      type: "session",
+      message: {
+        type: "agent.timeline.get.response",
+        payload: {
+          requestId: "legacy-history",
+          agentId: "agent",
+          agent: null,
+          direction: "tail",
+          projection: "projected",
+          epoch: "epoch",
+          reset: false,
+          staleCursor: false,
+          gap: false,
+          window: { minSeq: 319, maxSeq: 319, nextSeq: 320 },
+          startCursor: { epoch: "epoch", seq: 319 },
+          endCursor: { epoch: "epoch", seq: 319 },
+          hasOlder: false,
+          hasNewer: false,
+          entries: [
+            {
+              provider: "omp",
+              item: fixture.expected,
+              timestamp: "2026-11-03T00:00:00Z",
+              seqStart: 319,
+              seqEnd: 319,
+              sourceSeqRanges: [{ startSeq: 319, endSeq: 319 }],
+              collapsed: [],
+            },
+          ],
+          error: null,
+        },
+      },
+    };
+    expect(WSOutboundMessageSchema.parse(message), fixture.name).toEqual(message);
+    expect(validateWSOutboundMessage(message), fixture.name).toEqual({
+      success: true,
+      data: message,
+    });
+  });
+
+  it("rejects optional write content with invalid types", () => {
+    for (const content of [null, 1, true, { text: "invalid" }]) {
+      expect(
+        AgentTimelineItemPayloadSchema.safeParse({
+          ...canonicalBase(),
+          status: "completed",
+          error: null,
+          detail: { type: "write", filePath: "file.rs", content },
+        }).success,
+      ).toBe(false);
+    }
+  });
+
   it("accepts the Antigravity Rust adapter's tool cards in live events and history", () => {
     const cases = JSON.parse(
       readFileSync(

@@ -12,6 +12,7 @@ use super::*;
 
 mod archive;
 mod paseo_api;
+mod shared_snapshots;
 mod synchronization;
 
 #[tokio::test]

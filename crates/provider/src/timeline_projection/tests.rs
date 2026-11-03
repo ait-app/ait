@@ -5,6 +5,99 @@ use super::*;
 use crate::protocol::timeline::{Direction, NativeItem};
 
 #[test]
+fn complete_process_arguments_replace_a_partial_file_card_in_the_same_lifecycle() {
+    for field in ["path", "file_path", "filePath"] {
+        let mut input = json!({"content":null});
+        input[field] = json!("proc://collector/kill");
+        let completed = json!({"type":"tool_call","callId":"process","name":"write",
+            "status":"completed","error":null,"detail":{"type":"unknown",
+            "input":input,"output":"Stopped"}});
+        let source = rows(&json!({"rows":[
+            {"seq":1,"turnId":"turn","timestamp":"2026-11-03T00:00:00Z",
+                "item":{"type":"tool_call","callId":"process","name":"write",
+                "status":"running","error":null,"detail":{"type":"write","filePath":"proc"}}},
+            {"seq":2,"turnId":"turn","timestamp":"2026-11-03T00:00:01Z","item":completed}
+        ]}));
+        let projected = project(&source);
+        assert_eq!(projected.len(), 1);
+        assert_eq!(projected[0].item, completed);
+        assert_eq!(
+            projected[0].source_seq_ranges,
+            [Range {
+                start_seq: 1,
+                end_seq: 2
+            }]
+        );
+        assert_eq!(source[0].entry.item["detail"]["type"], "write");
+    }
+}
+
+#[test]
+fn legacy_tool_details_match_the_strict_protocol_fixtures() {
+    let cases: Vec<Value> = serde_json::from_str(include_str!(
+        "../../tests/fixtures/legacy_tool_details.json"
+    ))
+    .unwrap();
+    for case in cases {
+        assert_eq!(
+            normalize_item(case["item"].clone()),
+            case["expected"],
+            "{}",
+            case["name"]
+        );
+    }
+}
+
+#[test]
+fn legacy_null_write_is_normalized_in_source_and_cached_views_only() {
+    for detail in [
+        json!({"type":"write","filePath":"file.rs","content":null}),
+        json!({"type":"write","filePath":"proc://collector/kill","content":null}),
+        json!({"type":"shell","command":"pwd","output":null,"cwd":null}),
+    ] {
+        let source = rows(&json!({"rows":[{"seq":319,"turnId":"turn",
+            "timestamp":"2026-11-03T00:00:00Z","item":{"type":"tool_call",
+            "callId":"call","name":"write","status":"completed","detail":detail}}]}));
+        let raw = source[0].entry.item.clone();
+        let projected = Entry::from(&source[0]);
+        let mut cached = serde_json::to_value(&projected).unwrap();
+        cached["item"] = raw.clone();
+        let decoded: Entry = serde_json::from_value(cached).unwrap();
+        assert_eq!(decoded, projected);
+        assert_eq!(source[0].entry.item, raw);
+        assert_eq!(projected.seq_start, 319);
+        assert_eq!(projected.seq_end, 319);
+        assert_eq!(
+            projected.source_seq_ranges,
+            [Range {
+                start_seq: 319,
+                end_seq: 319
+            }]
+        );
+        if detail["filePath"] == "proc://collector/kill" {
+            assert_eq!(
+                projected.item["detail"],
+                json!({"type":"unknown","input":detail,"output":null})
+            );
+        } else {
+            assert!(projected.item["detail"].get("content").is_none());
+            assert!(projected.item["detail"].get("output").is_none());
+            assert!(projected.item["detail"].get("cwd").is_none());
+        }
+    }
+}
+
+#[test]
+fn history_compatibility_preserves_strings_and_does_not_coerce_invalid_values() {
+    for content in [json!(""), json!("text"), json!({"invalid":true})] {
+        let item = json!({"type":"tool_call","detail":{"type":"write","filePath":"file.rs","content":content}});
+        assert_eq!(normalize_item(item.clone()), item);
+    }
+    let unrelated = json!({"type":"plugin","detail":{"type":"write","content":null}});
+    assert_eq!(normalize_item(unrelated.clone()), unrelated);
+}
+
+#[test]
 fn shell_compatibility_preserves_valid_output_errors_and_unknown_tool_payloads() {
     for item in [
         json!({"type":"tool_call","status":"completed","error":null,

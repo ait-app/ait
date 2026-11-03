@@ -58,9 +58,9 @@ impl Sources {
             .collect::<Vec<_>>();
         let agents = self
             .agents
-            .list()
+            .snapshot()
             .context("read Hub Agent projection")?
-            .into_iter()
+            .iter()
             .filter(|record| !record.internal && record.archived_at.is_none())
             .map(|record| {
                 json!({
@@ -99,35 +99,29 @@ impl Sources {
     }
 
     pub(super) fn attention(&self, now: i64) -> anyhow::Result<Vec<Value>> {
-        self.agents
-            .list()
+        Ok(self
+            .agents
+            .snapshot()
             .context("read current Host attention")?
-            .into_iter()
+            .iter()
             .filter(|record| {
                 !record.internal && record.archived_at.is_none() && record.requires_attention
             })
             .filter_map(|record| {
-                let timestamp = record.attention_timestamp?;
-                let occurred = chrono::DateTime::parse_from_rfc3339(&timestamp)
+                let timestamp = record.attention_timestamp.as_deref()?;
+                let occurred = chrono::DateTime::parse_from_rfc3339(timestamp)
                     .ok()?
                     .timestamp_millis();
                 // Recover recent events without republishing old unread records daily.
                 if now.saturating_sub(occurred) >= 24 * 60 * 60 * 1000 || occurred > now {
                     return None;
                 }
-                Some((
-                    record.id,
-                    record.workspace_id,
-                    record.attention_reason?,
-                    timestamp,
-                ))
-            })
-            .map(|(id, workspace, reason, timestamp)| {
-                Ok(json!({
-                    "agentId":id,"workspaceId":workspace,"reason":reason,"timestamp":timestamp
+                Some(json!({
+                    "agentId":record.id,"workspaceId":record.workspace_id,
+                    "reason":record.attention_reason?,"timestamp":timestamp
                 }))
             })
-            .collect()
+            .collect())
     }
 }
 
