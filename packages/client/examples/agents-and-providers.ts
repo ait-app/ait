@@ -1,13 +1,11 @@
-import { createPaseoClient, type PaseoClient } from "@ait/client";
+import { createPaseoClient, type PaseoClient, type PaseoClientConfig } from "@ait/client";
 
-export function createClient(url: string): PaseoClient {
-  return createPaseoClient({
-    url,
-  });
+export function createClient(config: PaseoClientConfig): PaseoClient {
+  return createPaseoClient(config);
 }
 
-export async function createCodexAgent(url: string, cwd: string): Promise<string> {
-  const client = createClient(url);
+export async function createCodexAgent(config: PaseoClientConfig, cwd: string): Promise<string> {
+  const client = createClient(config);
 
   try {
     await client.connect();
@@ -27,8 +25,11 @@ export async function createCodexAgent(url: string, cwd: string): Promise<string
   }
 }
 
-export async function chooseProviderFromSnapshot(url: string, cwd: string): Promise<string> {
-  const client = createClient(url);
+export async function chooseProviderFromSnapshot(
+  config: PaseoClientConfig,
+  cwd: string,
+): Promise<string> {
+  const client = createClient(config);
 
   try {
     await client.connect();
@@ -53,8 +54,11 @@ export async function chooseProviderFromSnapshot(url: string, cwd: string): Prom
   }
 }
 
-export async function runFollowUp(url: string, agentId: string): Promise<string | null> {
-  const client = createClient(url);
+export async function runFollowUp(
+  config: PaseoClientConfig,
+  agentId: string,
+): Promise<string | null> {
+  const client = createClient(config);
 
   try {
     await client.connect();

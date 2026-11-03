@@ -1,5 +1,8 @@
 # ADR-044：Paseo 前端适配 Rust server 协议
 
+> 协议实现归属由 [ADR-211](adr-211-sdk-native-daemon-protocol.md) 修订：
+> Rust v1 处理已收进 `@ait/client`，应用层适配器移除。以下保留原始决策背景。
+
 - 状态：Accepted；方法范围经 ADR-045 修订为 186 个上游名称 / 183 个规范方法，第四条连接为 28 项能力，下文计数保留原始决策记录。
 - 日期：2026-09-25。
 - 范围：`apps/mobile` 的 TCP 客户端连接层和 `apps/desktop` 的 Electron transport bridge。

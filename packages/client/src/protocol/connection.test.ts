@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
-import { DaemonClient } from "@ait/client/internal/daemon-client";
-import type { HubShareResourceKind } from "@ait/client/internal/hub";
+import { DaemonClient } from "../daemon-client.js";
+import { createPaseoClient } from "../index.js";
+import type { HubShareResourceKind } from "../hub/index.js";
 import {
   decodeFileTransferFrame,
   encodeFileTransferFrame,
   FileTransferOpcode,
 } from "@ait/protocol/binary-frames/index";
-import { CHANNEL_CAPABILITIES, createRustDaemonTransportFactory } from "./transport";
-import { METHODS } from "./methods";
-import { object, type Payload, type TransportFactory } from "./types";
-
+import { CHANNEL_CAPABILITIES, createDaemonConnection } from "./connection.js";
+import { METHODS } from "./methods.js";
+import { object, type Payload, type TransportFactory } from "./types.js";
 function harness(
   implemented = Object.values(METHODS).map((spec) => spec.method),
   url = "ws://127.0.0.1:7316/v1/ws",
@@ -67,25 +67,20 @@ function harness(
     };
   };
   const base = vi.fn(factory);
-  const transport = createRustDaemonTransportFactory(
-    base,
+  const transport = createDaemonConnection(base, {
     guestScope,
-  )({
     url,
     headers: { Authorization: "Bearer test" },
-    protocols: ["paseo.bearer.test"],
   });
   const received: Payload[] = [];
   const errors = vi.fn();
   const closed = vi.fn();
   transport.onMessage((value, binary) => {
-    if (!binary) received.push(JSON.parse(String(value)));
+    if (!binary) received.push(object(value));
   });
   transport.onError(errors);
   transport.onClose(closed);
-  const stopHello = transport.onOpen(() =>
-    transport.send(JSON.stringify({ type: "hello", clientId: "test" })),
-  );
+  const stopHello = transport.onOpen(() => transport.send({ type: "hello", clientId: "test" }));
   function ready(version?: string, features: string[] = []) {
     for (const socket of sockets) socket.open();
     for (const [index, socket] of sockets.entries())
@@ -103,14 +98,18 @@ function harness(
       });
   }
   function send(message: Payload) {
-    transport.send(JSON.stringify({ type: "session", message }));
+    transport.send(message);
   }
   function last(channel: number) {
     return JSON.parse(sockets[channel].send.mock.lastCall![0]);
   }
   return {
     transport,
-    stopHello,
+    stopHello: () => {
+      stopHello();
+      transport.close();
+      sockets.length = 0;
+    },
     sockets,
     ready,
     send,
@@ -121,8 +120,111 @@ function harness(
     closed,
   };
 }
+describe("Rust v1 connection", () => {
+  it("connects the public SDK directly to raw Rust transports with Bearer authentication", async () => {
+    const h = harness();
+    h.stopHello();
+    h.base.mockClear();
+    const client = createPaseoClient({
+      url: "ws://127.0.0.1:7316/v1/ws",
+      clientId: "native-sdk",
+      password: "private-test-token",
+      transportFactory: h.base,
+      reconnect: { enabled: false },
+    });
+    try {
+      const connected = client.connect();
+      expect(h.base).toHaveBeenCalledTimes(4);
+      expect(h.base).toHaveBeenCalledWith({
+        url: "ws://127.0.0.1:7316/v1/ws",
+        headers: { Authorization: "Bearer private-test-token" },
+      });
+      h.ready();
+      await connected;
+      for (const [index, socket] of h.sockets.entries()) {
+        expect(JSON.parse(socket.send.mock.calls[0][0])).toEqual({
+          type: "hello",
+          client_id: "native-sdk",
+          protocol: { major: 1, min_minor: 0, max_minor: 0 },
+          capabilities: CHANNEL_CAPABILITIES[index],
+          required_capabilities: [],
+        });
+      }
+    } finally {
+      await client.close();
+    }
+  });
 
-describe("Rust protocol adapter", () => {
+  it("clears correlation and admission retries at the SDK request deadline", async () => {
+    vi.useFakeTimers();
+    const h = harness();
+    h.stopHello();
+    const client = new DaemonClient({
+      url: "ws://127.0.0.1:7316/v1/ws",
+      clientId: "request-deadline",
+      transportFactory: h.base,
+      reconnect: { enabled: false },
+    });
+    try {
+      const connected = client.connect();
+      h.ready();
+      await connected;
+      const pending = client.fetchAgents({ requestId: "deadline", timeout: 10 });
+      const rejected = expect(pending).rejects.toThrow("Timeout waiting for message");
+      h.sockets[0].message({
+        type: "error",
+        request_id: "deadline",
+        code: "resource_exhausted",
+        retryable: true,
+        message: "Busy",
+      });
+      const sent = h.sockets[0].send.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(200);
+      await rejected;
+      expect(h.sockets[0].send).toHaveBeenCalledTimes(sent);
+      // Reusing a completed request ID must not collide with stale protocol state.
+      const next = client.fetchAgents({ requestId: "deadline", timeout: 1000 });
+      const denied = expect(next).rejects.toMatchObject({ code: "invalid_message" });
+      h.sockets[0].message({
+        type: "error",
+        request_id: "deadline",
+        code: "invalid_message",
+        message: "Rejected",
+      });
+      await denied;
+    } finally {
+      await client.close();
+      vi.useRealTimers();
+    }
+  });
+  it("traces wire frames and JSON parsing at the native protocol boundary", async () => {
+    const h = harness();
+    h.stopHello();
+    const beginSection = vi.fn();
+    const endSection = vi.fn();
+    const client = new DaemonClient({
+      url: "ws://127.0.0.1:7316/v1/ws",
+      clientId: "native-tracing",
+      transportFactory: h.base,
+      reconnect: { enabled: false },
+      trace: { isEnabled: () => true, beginSection, endSection },
+    });
+    try {
+      const connected = client.connect();
+      h.ready();
+      await connected;
+      for (const name of [
+        "paseo.ws.frame.outbound",
+        "paseo.ws.frame.inbound",
+        "paseo.ws.json.parse",
+      ]) {
+        expect(beginSection.mock.calls.filter(([section]) => section === name)).toHaveLength(4);
+      }
+      expect(endSection).toHaveBeenCalledTimes(beginSection.mock.calls.length);
+    } finally {
+      await client.close();
+    }
+  });
   it.each(["workspace", "project"] as const)(
     "keeps %s guests on scoped directories through hello and later server-info updates",
     (scope) => {
@@ -142,13 +244,11 @@ describe("Rust protocol adapter", () => {
         expect(h.received).toHaveLength(2);
         for (const message of h.received) {
           expect(message).toMatchObject({
-            message: {
-              payload: {
-                features: {
-                  directorySubscriptions: false,
-                  directorySync: false,
-                  projectList: scope === "project",
-                },
+            payload: {
+              features: {
+                directorySubscriptions: false,
+                directorySync: false,
+                projectList: scope === "project",
               },
             },
           });
@@ -158,14 +258,13 @@ describe("Rust protocol adapter", () => {
       }
     },
   );
-
   it("subscribes to canonical setup and activity events after supported-only filtering", async () => {
     const h = harness();
     h.stopHello();
     const client = new DaemonClient({
       url: "ws://127.0.0.1:7316/v1/ws",
       clientId: "setup-activity-subscription-test",
-      transportFactory: () => h.transport,
+      transportFactory: h.base,
       reconnect: { enabled: false },
     });
     try {
@@ -240,12 +339,11 @@ describe("Rust protocol adapter", () => {
       await client.close();
     }
   });
-
   it("negotiates Bot capabilities and maps their requests and results on the execution channel", () => {
     const h = harness();
     h.ready(undefined, ["workspace-bots-v1"]);
-    const info = h.received.find((message) => object(message.message).type === "status");
-    expect(object(object(info?.message).payload).features).toMatchObject({ workspaceBots: true });
+    const info = h.received.find((message) => object(message).type === "status");
+    expect(object(object(info).payload).features).toMatchObject({ workspaceBots: true });
     h.send({ type: "bot.list.request", requestId: "bot-list", workspaceId: "workspace-a" });
     expect(h.last(3)).toMatchObject({
       type: "request",
@@ -255,11 +353,10 @@ describe("Rust protocol adapter", () => {
     });
     h.sockets[3].message({ type: "response", request_id: "bot-list", result: { bots: [] } });
     expect(h.received.at(-1)).toEqual({
-      type: "session",
-      message: { type: "bot.list.response", payload: { requestId: "bot-list", bots: [] } },
+      type: "bot.list.response",
+      payload: { requestId: "bot-list", bots: [] },
     });
   });
-
   it.each([
     {
       name: "timeline producer",
@@ -323,7 +420,7 @@ describe("Rust protocol adapter", () => {
       const client = new DaemonClient({
         url: "ws://127.0.0.1:7316/v1/ws",
         clientId: "timeline-producer-test",
-        transportFactory: () => h.transport,
+        transportFactory: h.base,
         reconnect: { enabled: false },
         logger,
       });
@@ -375,7 +472,7 @@ describe("Rust protocol adapter", () => {
     const client = new DaemonClient({
       url: "ws://127.0.0.1:7316/v1/ws",
       clientId: "managed-host-test",
-      transportFactory: () => h.transport,
+      transportFactory: h.base,
       reconnect: { enabled: false },
     });
     try {
@@ -405,14 +502,13 @@ describe("Rust protocol adapter", () => {
       await client.close();
     }
   });
-
   it("completes an SDK agent attention clear from the Rust result", async () => {
     const h = harness();
     h.stopHello();
     const client = new DaemonClient({
       url: "ws://127.0.0.1:7316/v1/ws",
       clientId: "attention-clear-test",
-      transportFactory: () => h.transport,
+      transportFactory: h.base,
       reconnect: { enabled: false },
     });
     try {
@@ -434,14 +530,13 @@ describe("Rust protocol adapter", () => {
       await client.close();
     }
   });
-
   it("negotiates autonomous publication and carries write-only authorization through the SDK", async () => {
     const h = harness();
     h.stopHello();
     const client = new DaemonClient({
       url: "ws://127.0.0.1:7316/v1/ws",
       clientId: "publication-test",
-      transportFactory: () => h.transport,
+      transportFactory: h.base,
       reconnect: { enabled: false },
     });
     const result = {
@@ -483,14 +578,13 @@ describe("Rust protocol adapter", () => {
       await client.close();
     }
   });
-
   it("carries typed online service control through the SDK without replaying a grant", async () => {
     const h = harness();
     h.stopHello();
     const client = new DaemonClient({
       url: "ws://127.0.0.1:7316/v1/ws",
       clientId: "online-service-test",
-      transportFactory: () => h.transport,
+      transportFactory: h.base,
       reconnect: { enabled: false },
     });
     const result = {
@@ -550,14 +644,13 @@ describe("Rust protocol adapter", () => {
       await client.close();
     }
   });
-
   it("passes the connected server's software version to the SDK", async () => {
     const h = harness();
     h.stopHello();
     const client = new DaemonClient({
       url: "ws://127.0.0.1:7316/v1/ws",
       clientId: "server-version-test",
-      transportFactory: () => h.transport,
+      transportFactory: h.base,
       reconnect: { enabled: false },
     });
     try {
@@ -569,14 +662,13 @@ describe("Rust protocol adapter", () => {
       await client.close();
     }
   });
-
   it("completes interleaved SDK file reads using the original request IDs", async () => {
     const h = harness();
     h.stopHello();
     const client = new DaemonClient({
       url: "ws://127.0.0.1:7316/v1/ws",
       clientId: "file-read-test",
-      transportFactory: () => h.transport,
+      transportFactory: h.base,
       reconnect: { enabled: false },
     });
     const completed = vi.fn();
@@ -638,7 +730,6 @@ describe("Rust protocol adapter", () => {
       await client.close();
     }
   });
-
   it("releases binary read admission and timers at FileEnd and ignores late frames", () => {
     vi.useFakeTimers();
     const h = harness();
@@ -685,7 +776,7 @@ describe("Rust protocol adapter", () => {
         h.sockets[2].message(end, true);
         expect(received).toHaveBeenCalledTimes(count);
       }
-      vi.advanceTimersByTime(300_001);
+      vi.advanceTimersByTime(300001);
       expect(h.received).toHaveLength(1); // No completed read becomes a later timeout.
       expect(h.errors).not.toHaveBeenCalled();
     } finally {
@@ -693,7 +784,6 @@ describe("Rust protocol adapter", () => {
       vi.useRealTimers();
     }
   });
-
   it("discards file data arriving after a correlated read failure", () => {
     const h = harness();
     const binary = vi.fn();
@@ -724,10 +814,8 @@ describe("Rust protocol adapter", () => {
         },
       });
       expect(h.received.at(-1)).toMatchObject({
-        message: {
-          type: "fs.explorer.response",
-          payload: { requestId: "failed-read", error: "File disappeared" },
-        },
+        type: "fs.explorer.response",
+        payload: { requestId: "failed-read", error: "File disappeared" },
       });
       h.sockets[2].message(
         encodeFileTransferFrame({
@@ -743,7 +831,6 @@ describe("Rust protocol adapter", () => {
       h.transport.close();
     }
   });
-
   it("rejects a binary read response on a different physical connection", () => {
     const h = harness();
     try {
@@ -764,16 +851,13 @@ describe("Rust protocol adapter", () => {
         true,
       );
       expect(h.errors).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: "Rust file came from the wrong connection",
-        }),
+        expect.objectContaining({ message: "Rust file came from the wrong connection" }),
       );
       expect(h.closed).toHaveBeenCalledOnce();
     } finally {
       h.transport.close();
     }
   });
-
   it("uses Rust negotiation and RPC for SSH channels", () => {
     const h = harness(undefined, "ait+desktop://ssh?host=build-box&daemonPort=7316");
     try {
@@ -796,7 +880,6 @@ describe("Rust protocol adapter", () => {
       h.transport.close();
     }
   });
-
   it("uses canonical names and stays within Rust's per-connection limits", () => {
     expect(Object.keys(METHODS)).toHaveLength(203);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
@@ -809,7 +892,6 @@ describe("Rust protocol adapter", () => {
       false,
     );
   });
-
   it("maps group sharing RPCs onto the background channel", () => {
     const methods = [
       "share.list.request",
@@ -846,7 +928,6 @@ describe("Rust protocol adapter", () => {
       h.transport.close();
     }
   });
-
   it("rejects the retired pairing offer even when an older host implements it", () => {
     const method = "daemon.get_pairing_offer.request";
     const h = harness([...Object.values(METHODS).map((spec) => spec.method), method]);
@@ -862,7 +943,6 @@ describe("Rust protocol adapter", () => {
       h.transport.close();
     }
   });
-
   it("routes the local workspace reset method on the Git channel", () => {
     const method = "checkout.reset_workspace.request";
     const h = harness([...Object.values(METHODS).map((spec) => spec.method), method]);
@@ -888,20 +968,16 @@ describe("Rust protocol adapter", () => {
       h.transport.close();
     }
   });
-
   it("waits for every handshake and keeps credentials out of subprotocols and URLs", () => {
     const h = harness();
     try {
       h.ready();
       expect(h.received).toHaveLength(1);
       expect(h.received[0]).toMatchObject({
-        type: "session",
-        message: {
-          type: "status",
-          payload: {
-            serverId: "server",
-            features: { directorySync: false },
-          },
+        type: "status",
+        payload: {
+          serverId: "server",
+          features: { directorySync: false },
         },
       });
       expect(h.base.mock.calls.every(([options]) => options.protocols === undefined)).toBe(true);
@@ -914,7 +990,6 @@ describe("Rust protocol adapter", () => {
       h.transport.close();
     }
   });
-
   it("preserves native session search and workspace import targets", () => {
     const h = harness();
     try {
@@ -952,7 +1027,6 @@ describe("Rust protocol adapter", () => {
       h.transport.close();
     }
   });
-
   it("correlates concurrent replies and sends params without envelope fields", () => {
     const h = harness();
     try {
@@ -978,22 +1052,17 @@ describe("Rust protocol adapter", () => {
         result: { projects: [] },
       });
       expect(h.received.at(-1)).toMatchObject({
-        message: {
-          type: "project.list.response",
-          payload: { requestId: "projects" },
-        },
+        type: "project.list.response",
+        payload: { requestId: "projects" },
       });
       expect(h.received.at(-2)).toMatchObject({
-        message: {
-          type: "workspace.list.response",
-          payload: { requestId: "workspaces" },
-        },
+        type: "workspace.list.response",
+        payload: { requestId: "workspaces" },
       });
     } finally {
       h.transport.close();
     }
   });
-
   it("rejects a duplicate pending ID without replacing the original request", () => {
     const h = harness();
     try {
@@ -1008,7 +1077,8 @@ describe("Rust protocol adapter", () => {
         result: { projects: [] },
       });
       expect(h.received.at(-1)).toMatchObject({
-        message: { type: "project.list.response", payload: { requestId: "shared-id" } },
+        type: "project.list.response",
+        payload: { requestId: "shared-id" },
       });
       h.send({ type: "workspace.list.request", requestId: "shared-id" });
       expect(h.last(1).request_id).toBe("shared-id");
@@ -1016,14 +1086,13 @@ describe("Rust protocol adapter", () => {
       h.transport.close();
     }
   });
-
   it("bootstraps SDK terminal subscriptions and routes updates without reconnecting", async () => {
     const h = harness();
     h.stopHello();
     const client = new DaemonClient({
       url: "ws://127.0.0.1:7316/v1/ws",
       clientId: "terminal-subscription-test",
-      transportFactory: () => h.transport,
+      transportFactory: h.base,
       reconnect: { enabled: false },
     });
     try {
@@ -1073,7 +1142,6 @@ describe("Rust protocol adapter", () => {
       await client.close();
     }
   });
-
   it("releases each subscription on the socket that owns it", () => {
     const h = harness();
     try {
@@ -1101,7 +1169,6 @@ describe("Rust protocol adapter", () => {
       h.transport.close();
     }
   });
-
   it("delivers server errors as correlated SDK errors and exposes unavailable methods immediately", () => {
     const h = harness(["project.list.request", "connection.ping"]);
     try {
@@ -1114,23 +1181,18 @@ describe("Rust protocol adapter", () => {
         message: "Registry failed",
       });
       expect(h.received.at(-1)).toMatchObject({
-        message: {
-          type: "rpc_error",
-          payload: { requestId: "list", code: "registry_io" },
-        },
+        type: "rpc_error",
+        payload: { requestId: "list", code: "registry_io" },
       });
       h.send({ type: "schedule.list.request", requestId: "schedule" });
       expect(h.received.at(-1)).toMatchObject({
-        message: {
-          type: "rpc_error",
-          payload: { requestId: "schedule", code: "not_implemented" },
-        },
+        type: "rpc_error",
+        payload: { requestId: "schedule", code: "not_implemented" },
       });
     } finally {
       h.transport.close();
     }
   });
-
   it("preserves permission identity and voice stream ownership", () => {
     const h = harness();
     try {
@@ -1157,14 +1219,11 @@ describe("Rust protocol adapter", () => {
         method: "dictation.stream.ack",
         params: { dictationId: "dictation", ackSeq: -1 },
       });
-      expect(h.received.at(-1)).toMatchObject({
-        message: { type: "dictation.stream.ack" },
-      });
+      expect(h.received.at(-1)).toMatchObject({ type: "dictation.stream.ack" });
     } finally {
       h.transport.close();
     }
   });
-
   it("routes terminal/file binary frames without corrupting them", () => {
     const h = harness();
     try {
@@ -1179,11 +1238,10 @@ describe("Rust protocol adapter", () => {
       h.transport.close();
     }
   });
-
   it("translates the SDK liveness ping and cleans every socket on partial failure", () => {
     const h = harness();
     h.ready();
-    h.transport.send(JSON.stringify({ type: "connection.ping" }));
+    h.transport.send({ type: "connection.ping" });
     const ping = h.last(0);
     expect(ping.request_id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
@@ -1200,7 +1258,6 @@ describe("Rust protocol adapter", () => {
     expect(h.closed).toHaveBeenCalledTimes(1);
     expect(() => h.send({ type: "project.list.request" })).toThrow("closed");
   });
-
   it("keeps a GitHub clone pending through foreground verification on a nonce-only daemon", async () => {
     vi.useFakeTimers();
     const h = harness();
@@ -1208,7 +1265,7 @@ describe("Rust protocol adapter", () => {
     const client = new DaemonClient({
       url: "ws://127.0.0.1:7316/v1/ws",
       clientId: "clone-foreground",
-      transportFactory: () => h.transport,
+      transportFactory: h.base,
       reconnect: { enabled: false },
     });
     try {
@@ -1226,7 +1283,6 @@ describe("Rust protocol adapter", () => {
       await vi.advanceTimersByTimeAsync(0);
       const cloneRequest = h.last(1);
       expect(cloneRequest.method).toBe("project.github.clone.request");
-
       client.ensureConnected({ verify: true });
       await vi.advanceTimersByTimeAsync(0);
       const ping = h.last(0);
@@ -1237,8 +1293,7 @@ describe("Rust protocol adapter", () => {
         request_id: ping.request_id,
         result: { nonce: ping.params.nonce },
       });
-      await vi.advanceTimersByTimeAsync(3_000);
-
+      await vi.advanceTimersByTimeAsync(3000);
       const project = {
         projectId: "app",
         projectDisplayName: "app",
@@ -1258,7 +1313,6 @@ describe("Rust protocol adapter", () => {
       vi.useRealTimers();
     }
   });
-
   it("rejects mixed server instances and never reports a successful connection", () => {
     const h = harness();
     for (const socket of h.sockets) socket.open();
@@ -1277,13 +1331,12 @@ describe("Rust protocol adapter", () => {
     expect(h.errors).toHaveBeenCalledTimes(1);
     expect(h.sockets.every((socket) => socket.close.mock.calls.length === 1)).toBe(true);
   });
-
   it("closes every socket when only part of the handshake completes", () => {
     vi.useFakeTimers();
     const h = harness();
     try {
       h.sockets[0].open();
-      vi.advanceTimersByTime(10_001);
+      vi.advanceTimersByTime(10001);
       expect(h.errors).toHaveBeenCalledTimes(1);
       expect(h.received).toHaveLength(0);
       expect(h.sockets.every((socket) => socket.close.mock.calls.length === 1)).toBe(true);
@@ -1292,7 +1345,6 @@ describe("Rust protocol adapter", () => {
       vi.useRealTimers();
     }
   });
-
   it("expires pending RPCs and ignores late replies", () => {
     vi.useFakeTimers();
     const h = harness();
@@ -1300,12 +1352,10 @@ describe("Rust protocol adapter", () => {
       h.ready();
       h.send({ type: "project.list.request", requestId: "expired" });
       const id = h.last(1).request_id;
-      vi.advanceTimersByTime(300_001);
+      vi.advanceTimersByTime(300001);
       expect(h.received.at(-1)).toMatchObject({
-        message: {
-          type: "rpc_error",
-          payload: { requestId: "expired", code: "timeout" },
-        },
+        type: "rpc_error",
+        payload: { requestId: "expired", code: "timeout" },
       });
       const count = h.received.length;
       h.sockets[1].message({
@@ -1319,7 +1369,6 @@ describe("Rust protocol adapter", () => {
       vi.useRealTimers();
     }
   });
-
   it("releases a permission ID after five seconds so the response can be retried", () => {
     vi.useFakeTimers();
     const h = harness();
@@ -1332,14 +1381,12 @@ describe("Rust protocol adapter", () => {
         response: { behavior: "deny" },
       };
       h.send(request);
-      vi.advanceTimersByTime(4_999);
-      expect(h.received.at(-1)?.message).not.toMatchObject({ type: "rpc_error" });
+      vi.advanceTimersByTime(4999);
+      expect(h.received.at(-1)).not.toMatchObject({ type: "rpc_error" });
       vi.advanceTimersByTime(1);
       expect(h.received.at(-1)).toMatchObject({
-        message: {
-          type: "rpc_error",
-          payload: { requestId: "permission", code: "timeout" },
-        },
+        type: "rpc_error",
+        payload: { requestId: "permission", code: "timeout" },
       });
       expect(() => h.send(request)).not.toThrow();
       expect(h.last(0)).toMatchObject({
@@ -1348,17 +1395,14 @@ describe("Rust protocol adapter", () => {
         params: { agentId: "agent", requestId: "permission" },
       });
       h.sockets[0].message({ type: "response", request_id: "permission", result: {} });
-      vi.advanceTimersByTime(5_000);
-      expect(h.received.filter((value) => object(value.message).type === "rpc_error")).toHaveLength(
-        1,
-      );
+      vi.advanceTimersByTime(5000);
+      expect(h.received.filter((value) => object(value).type === "rpc_error")).toHaveLength(1);
     } finally {
       h.transport.close();
       expect(vi.getTimerCount()).toBe(0);
       vi.useRealTimers();
     }
   });
-
   it("preserves server identity and ownership in lifecycle status events", () => {
     const h = harness();
     try {
@@ -1372,14 +1416,12 @@ describe("Rust protocol adapter", () => {
         },
       });
       expect(h.received.at(-1)).toMatchObject({
-        message: {
-          type: "status",
-          payload: {
-            status: "server_info",
-            serverId: "server",
-            version: "0.0.10",
-            subscriptionId: "lifecycle",
-          },
+        type: "status",
+        payload: {
+          status: "server_info",
+          serverId: "server",
+          version: "0.0.10",
+          subscriptionId: "lifecycle",
         },
       });
     } finally {
@@ -1387,7 +1429,6 @@ describe("Rust protocol adapter", () => {
     }
   });
 });
-
 describe("Browser host bridge", () => {
   it("preserves server request fields and uses the payload requestId for callbacks", () => {
     const h = harness();
@@ -1417,14 +1458,11 @@ describe("Browser host bridge", () => {
         },
       });
       expect(h.received.at(-1)).toEqual({
-        type: "session",
-        message: {
-          type: "browser.automation.execute.request",
-          subscriptionId: "host-lease",
-          requestId: "browser-call",
-          command: { command: "list_tabs", args: {} },
-          workspaceId: "workspace",
-        },
+        type: "browser.automation.execute.request",
+        subscriptionId: "host-lease",
+        requestId: "browser-call",
+        command: { command: "list_tabs", args: {} },
+        workspaceId: "workspace",
       });
       const payload = {
         requestId: "browser-call",
@@ -1449,7 +1487,6 @@ describe("Browser host bridge", () => {
     }
   });
 });
-
 describe("Rust admission retries", () => {
   it("retries a rejected busy read with the same correlation and returns its result", async () => {
     vi.useFakeTimers();
@@ -1474,12 +1511,10 @@ describe("Rust admission retries", () => {
         result: { config: { appendSystemPrompt: "saved" } },
       });
       expect(h.received.at(-1)).toMatchObject({
-        message: {
-          type: "daemon.config.get.response",
-          payload: {
-            requestId: "config",
-            config: { appendSystemPrompt: "saved" },
-          },
+        type: "daemon.config.get.response",
+        payload: {
+          requestId: "config",
+          config: { appendSystemPrompt: "saved" },
         },
       });
     } finally {
@@ -1487,7 +1522,6 @@ describe("Rust admission retries", () => {
       vi.useRealTimers();
     }
   });
-
   it("bounds retries and cancels pending retry timers on close", async () => {
     vi.useFakeTimers();
     const h = harness();
@@ -1506,10 +1540,8 @@ describe("Rust admission retries", () => {
         await vi.advanceTimersByTimeAsync(2000);
       }
       expect(h.received.at(-1)).toMatchObject({
-        message: {
-          type: "rpc_error",
-          payload: { code: "resource_exhausted" },
-        },
+        type: "rpc_error",
+        payload: { code: "resource_exhausted" },
       });
       h.send({
         type: "daemon.config.get.request",
@@ -1532,19 +1564,16 @@ describe("Rust admission retries", () => {
       vi.useRealTimers();
     }
   });
-
   it("keeps terminal event rejections in the session without reconnecting the host", () => {
     const h = harness();
     try {
       h.ready();
       expect(h.received[0]).toMatchObject({
-        message: {
-          payload: {
-            features: {
-              "terminal-restore-modes": true,
-              "terminal-input-mode-replay": true,
-              "terminal-size-ownership": true,
-            },
+        payload: {
+          features: {
+            "terminal-restore-modes": true,
+            "terminal-input-mode-replay": true,
+            "terminal-size-ownership": true,
           },
         },
       });
@@ -1559,13 +1588,11 @@ describe("Rust admission retries", () => {
       expect(h.closed).not.toHaveBeenCalled();
       expect(h.sockets.every((socket) => socket.close.mock.calls.length === 0)).toBe(true);
       expect(h.received.at(-1)).toMatchObject({
-        message: {
-          type: "rpc_error",
-          payload: {
-            requestType: "terminal.input",
-            code: "invalid_message",
-            error: "Invalid terminal parameters",
-          },
+        type: "rpc_error",
+        payload: {
+          requestType: "terminal.input",
+          code: "invalid_message",
+          error: "Invalid terminal parameters",
         },
       });
       h.send({
@@ -1578,9 +1605,7 @@ describe("Rust admission retries", () => {
         request_id: sent.request_id,
         result: { serverId: "server" },
       });
-      expect(h.received.at(-1)).toMatchObject({
-        message: { payload: { requestId: "still-alive" } },
-      });
+      expect(h.received.at(-1)).toMatchObject({ payload: { requestId: "still-alive" } });
       h.sockets[1].error();
       expect(h.errors).toHaveBeenCalledOnce();
       expect(h.closed).toHaveBeenCalledOnce();
@@ -1588,7 +1613,6 @@ describe("Rust admission retries", () => {
       h.transport.close();
     }
   });
-
   it("never retries a non-retryable error", async () => {
     vi.useFakeTimers();
     const h = harness();
@@ -1605,16 +1629,13 @@ describe("Rust admission retries", () => {
       });
       await vi.advanceTimersByTimeAsync(5000);
       expect(h.sockets[1].send).toHaveBeenCalledTimes(sent);
-      expect(h.received.at(-1)).toMatchObject({
-        message: { type: "rpc_error" },
-      });
+      expect(h.received.at(-1)).toMatchObject({ type: "rpc_error" });
     } finally {
       h.transport.close();
       vi.useRealTimers();
     }
   });
 });
-
 it("account relay negotiates and routes every capability through one business socket", () => {
   const h = harness(undefined, "ait+desktop://account-relay/00000000-0000-4000-8000-000000000001");
   expect(h.sockets).toHaveLength(1);
@@ -1636,8 +1657,7 @@ it("account relay negotiates and routes every capability through one business so
   expect(h.sockets[0].send).toHaveBeenLastCalledWith(new Uint8Array([0x10, 2, 3]));
   h.transport.close();
 });
-
-it("chunks canonical envelopes and consumes upload acknowledgements inside the adapter", async () => {
+it("chunks canonical envelopes and consumes upload acknowledgements inside the SDK", async () => {
   const h = harness();
   h.ready(undefined, ["client-message-chunks-v1"]);
   const text = "x".repeat(2 * 1024 * 1024);

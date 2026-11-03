@@ -16,7 +16,7 @@
 
 入口：[主机探测](../../../apps/mobile/src/utils/test-daemon-connection.ts)、
 [运行时](../../../apps/mobile/src/runtime/host-runtime.ts)、
-[协议适配器](../../../apps/mobile/src/runtime/rust-daemon/transport.ts)、
+[协议适配器](../../../packages/client/src/protocol/connection.ts)、
 [主进程 transport](../../../apps/desktop/src/daemon/local-transport.ts)。
 
 ## Rust 侧优先缺口

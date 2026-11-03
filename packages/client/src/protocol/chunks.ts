@@ -1,4 +1,4 @@
-import type { Transport } from "./types";
+import type { Transport } from "./types.js";
 
 const MESSAGE_BYTES = 1024 * 1024;
 const ASSEMBLED_BYTES = 64 * 1024 * 1024;

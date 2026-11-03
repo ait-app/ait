@@ -94,6 +94,12 @@ Desktop/移动客户端批准 device authorization 后把待领取授权交给 d
 | `ait-channel-v1`       | 账号 Host 快照、可连接状态与心跳         |
 | 直接 TCP / SSH         | 经认证的 daemon 直连                     |
 
+`@ait/client` 原生处理 Rust v1 握手、请求关联、订阅归属、消息分块和二进制路由。
+业务 API 直接传递对象给 SDK 内部协议模块，仅在物理传输处编码/解析 JSON。
+`apps/mobile/src/runtime/daemon-transport` 选择平台连接，不维护独立的协议兼容层。
+Electron 的 `rust-daemon.ts` 继续只负责本机进程管理。见
+[ADR-211](../decisions/clients/adr-211-sdk-native-daemon-protocol.md)。
+
 在线业务只使用 Hub，无传统 Relay/Yamux 回退，见
 [ADR-204](../decisions/clients/adr-204-hub-only-online-business-transport.md)。
 Host 通过 `model::hub` 发布事件和目录摘要，`persistence` 保存发布 journal；中心方法由握手协商。

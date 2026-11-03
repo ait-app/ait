@@ -79,9 +79,9 @@ import { useMemo, useSyncExternalStore } from "react";
 import { z } from "zod";
 import {
   buildAccountRelayClientConfig,
-  buildRustClientConfig,
-  buildRustSshClientConfig,
-} from "./rust-daemon/connection";
+  buildDaemonClientConfig,
+  buildSshDaemonClientConfig,
+} from "./daemon-transport/connection";
 
 export type HostRuntimeConnectionStatus = "idle" | "connecting" | "online" | "offline" | "error";
 export type HostRegistryStatus = "loading" | "ready";
@@ -542,7 +542,7 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
       if (connection.type === "remoteSsh") {
         return new DaemonClient({
           ...base,
-          ...buildRustSshClientConfig(connection, desktopTransportFactory),
+          ...buildSshDaemonClientConfig(connection, desktopTransportFactory),
         });
       }
       if (connection.type === "accountRelay") {
@@ -551,7 +551,7 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
       if (connection.type === "directTcp") {
         return new DaemonClient({
           ...base,
-          ...buildRustClientConfig(connection, desktopTransportFactory),
+          ...buildDaemonClientConfig(connection, desktopTransportFactory),
         });
       }
       throw new Error("Unsupported host connection");

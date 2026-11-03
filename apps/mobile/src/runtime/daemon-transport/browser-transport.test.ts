@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createBrowserRustTransportFactory } from "./browser-transport";
-import type { Transport } from "./types";
+import { createBrowserDaemonTransportFactory } from "./browser-transport";
+import type { Transport } from "@ait/client/internal/protocol/types";
 
 const url = "ws://127.0.0.1:7316/v1/ws";
 const headers = { Authorization: "Bearer test-secret" };
@@ -34,7 +34,7 @@ function setup(
     },
   };
   const connect = vi.fn().mockReturnValue(base);
-  const transport = createBrowserRustTransportFactory(fetcher, connect)({ url, headers });
+  const transport = createBrowserDaemonTransportFactory(fetcher, connect)({ url, headers });
   const error = vi.fn();
   transport.onError(error);
   return { transport, fetcher, connect, base, error, events, detach };
@@ -130,7 +130,7 @@ describe("Rust browser transport", () => {
 
   it("reports a missing token after observers are attached", async () => {
     const fetcher = vi.fn<(url: string, options: RequestInit) => Promise<Response>>();
-    const transport = createBrowserRustTransportFactory(fetcher)({ url });
+    const transport = createBrowserDaemonTransportFactory(fetcher)({ url });
     const error = vi.fn();
     transport.onError(error);
     await vi.waitFor(() => expect(error).toHaveBeenCalledOnce());

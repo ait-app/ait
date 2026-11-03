@@ -23,8 +23,8 @@ import {
   selectWorkspaceStructureProjects,
 } from "@/stores/session-store-hooks/selectors";
 import { buildSidebarWorkspacePlacementModel } from "@/hooks/sidebar-workspaces-view-model";
-import { serverInfo } from "../rust-daemon/messages";
-import { object } from "../rust-daemon/types";
+import { serverInfo } from "@ait/client/internal/protocol/messages";
+import { object } from "@ait/client/internal/protocol/types";
 import { useWorkspaceLabels } from "@/workspace-labels";
 import type { DirectoryReplicaMutation } from "@/runtime/replica-cache";
 import {
@@ -1962,7 +1962,7 @@ describe("snapshot-only host directories", () => {
       ]),
       "workspace",
     );
-    const info = parseServerInfoStatusPayload(object(object(envelope.message).payload));
+    const info = parseServerInfoStatusPayload(object(object(envelope).payload));
     if (!info) throw new Error("Invalid guest server info");
     Object.assign(client, { getLastServerInfoMessage: () => info });
     const listProjects = vi.spyOn(client, "listProjects").mockRejectedValue(new Error("forbidden"));

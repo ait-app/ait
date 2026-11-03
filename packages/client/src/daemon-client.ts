@@ -1,3 +1,10 @@
+import {
+  createDaemonConnection,
+  type DaemonConnection,
+  type MessageMetrics,
+} from "./protocol/connection.js";
+import type { HubShareResourceKind } from "./hub/index.js";
+import type { Payload } from "./protocol/types.js";
 import type { BotMethod, BotParams, BotResult } from "@ait/protocol/bot/rpc-schemas";
 import type { ScheduleCadence, ScheduleTarget } from "@ait/protocol/schedule/types";
 import { subscribeTimeline, type TimelineMessage } from "./timeline-subscription/index.js";
@@ -153,11 +160,9 @@ import {
 } from "@ait/protocol/binary-frames/index";
 import {
   createWebSocketTransportFactory,
-  decodeMessageData,
   defaultWebSocketFactory,
   describeTransportClose,
   describeTransportError,
-  type DaemonTransport,
   type DaemonTransportFactory,
   type WebSocketFactory,
 } from "./daemon-client-transport.js";
@@ -334,7 +339,9 @@ export interface DaemonClientConfig {
   password?: string;
   authHeader?: string;
   suppressSendErrors?: boolean;
+  /** Raw frame transport; Rust v1 negotiation and encoding are owned by this client. */
   transportFactory?: DaemonTransportFactory;
+  guestScope?: HubShareResourceKind;
   webSocketFactory?: WebSocketFactory;
   logger?: Logger;
   connectTimeoutMs?: number;
@@ -1035,26 +1042,6 @@ function concatByteChunks(chunks: Uint8Array[], size: number): Uint8Array {
   return bytes;
 }
 
-function getTransportFrameSize(frame: string | Uint8Array | ArrayBuffer): number {
-  if (typeof frame === "string") {
-    return frame.length;
-  }
-  return frame.byteLength;
-}
-
-function describeInboundTransportFrame(
-  frame: unknown,
-  rawBytes: Uint8Array | null,
-): Record<string, string> {
-  if (typeof frame === "string") {
-    return { kind: "text", size: String(frame.length) };
-  }
-  if (rawBytes) {
-    return { kind: "binary", size: String(rawBytes.byteLength) };
-  }
-  return { kind: "unknown", size: "0" };
-}
-
 function hashForLog(value: string): string {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {
@@ -1143,7 +1130,7 @@ export class DaemonClient {
         "Subscription failed",
       ),
   });
-  private transport: DaemonTransport | null = null;
+  private transport: DaemonConnection | null = null;
   private uploadTail: Promise<void> = Promise.resolve();
   private queuedUploadCount = 0;
   private queuedUploadBytes = 0;
@@ -1181,7 +1168,7 @@ export class DaemonClient {
   private runtimeMetricsInterval: ReturnType<typeof setInterval> | null = null;
   private runtimeMetrics: DaemonClientRuntimeMetrics | null = null;
   private readonly pingProbes = new Map<"shared" | "verification", PingProbe>();
-  private connectionVerification: DaemonTransport | null = null;
+  private connectionVerification: DaemonConnection | null = null;
   private livenessHeartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private lastLivenessRttMs: number | null = null;
   private consecutiveLivenessFailures = 0;
@@ -1287,7 +1274,6 @@ export class DaemonClient {
     } else if (this.config.authHeader) {
       headers.Authorization = this.config.authHeader;
     }
-    const protocols = password ? [`paseo.bearer.${password}`] : undefined;
 
     try {
       // Reconnect can overlap with browser close/error delivery ordering.
@@ -1297,10 +1283,11 @@ export class DaemonClient {
         this.config.transportFactory ??
         createWebSocketTransportFactory(this.config.webSocketFactory ?? defaultWebSocketFactory);
       const transportUrl = this.resolveTransportUrlForAttempt();
-      const transport = transportFactory({
+      const transport = createDaemonConnection(transportFactory, {
         url: transportUrl,
         headers,
-        ...(protocols ? { protocols } : {}),
+        guestScope: this.config.guestScope,
+        trace: this.config.trace,
       });
       this.transport = transport;
       this.connectStartedAt = Date.now();
@@ -1395,8 +1382,8 @@ export class DaemonClient {
             reasonCode: "transport_error",
           });
         }),
-        transport.onMessage((data) => {
-          if (this.transport === transport) this.handleTransportMessage(data);
+        transport.onMessage((data, _binary, metrics) => {
+          if (this.transport === transport) this.handleProtocolMessage(data, metrics);
         }),
       ];
     } catch (error) {
@@ -1649,27 +1636,24 @@ export class DaemonClient {
     this.endTraceSection(isOpen);
   }
 
-  private sendJsonMessage(envelopeType: string, messageType: string, message: unknown): void {
+  private sendProtocolMessage(message: Payload): void {
+    if (!this.transport) throw new DaemonConnectionError("Transport not connected");
     this.traceInstant("paseo.ws.message.outbound", {
-      envelopeType,
-      messageType,
+      envelopeType: message.type === "hello" ? "hello" : "request",
+      messageType: String(message.type),
     });
-    this.sendTransportFrame(JSON.stringify(message));
+    const requestId = message.requestId;
+    const tracked =
+      typeof requestId === "string" &&
+      [...this.waiters].some((waiter) => waiter.requestId === requestId);
+    this.transport.send(message, { tracked });
   }
 
-  private sendTransportFrame(frame: string | Uint8Array | ArrayBuffer): void {
+  private sendTransportFrame(frame: Uint8Array | ArrayBuffer): void {
     if (!this.transport) {
       throw new DaemonConnectionError("Transport not connected");
     }
-    const isOpen = this.beginTraceSection("paseo.ws.frame.outbound", {
-      kind: typeof frame === "string" ? "text" : "binary",
-      size: String(getTransportFrameSize(frame)),
-    });
-    try {
-      this.transport.send(frame);
-    } finally {
-      this.endTraceSection(isOpen);
-    }
+    this.transport.send(frame);
   }
 
   /**
@@ -1686,7 +1670,7 @@ export class DaemonClient {
     }
     const payload = SessionInboundMessageSchema.parse(message);
     try {
-      this.sendJsonMessage("session", payload.type, { type: "session", message: payload });
+      this.sendProtocolMessage(payload);
     } catch (error) {
       if (this.config.suppressSendErrors) {
         return;
@@ -1728,7 +1712,7 @@ export class DaemonClient {
     // If connected, send immediately
     if (this.transport && status === "connected") {
       const payload = SessionInboundMessageSchema.parse(message);
-      this.sendJsonMessage("session", payload.type, { type: "session", message: payload });
+      this.sendProtocolMessage(payload);
       return Promise.resolve();
     }
 
@@ -1769,10 +1753,7 @@ export class DaemonClient {
       try {
         if (this.transport && this.connectionState.status === "connected") {
           const payload = SessionInboundMessageSchema.parse(pending.message);
-          this.sendJsonMessage("session", payload.type, {
-            type: "session",
-            message: payload,
-          });
+          this.sendProtocolMessage(payload);
           pending.resolve();
         } else {
           pending.reject(new DaemonConnectionError("Connection lost before message could be sent"));
@@ -1933,7 +1914,7 @@ export class DaemonClient {
     }
     const payload = SessionInboundMessageSchema.parse(message);
     try {
-      this.sendJsonMessage("session", payload.type, { type: "session", message: payload });
+      this.sendProtocolMessage(payload);
     } catch (error) {
       throw error instanceof Error ? error : new Error(String(error));
     }
@@ -2145,7 +2126,7 @@ export class DaemonClient {
           probe.startedAt = perfNow();
           probe.timeoutHandle = setTimeout(() => void expire(), timeoutMs);
           try {
-            this.sendJsonMessage("connection.ping", "connection.ping", { type: "connection.ping" });
+            this.sendProtocolMessage({ type: "connection.ping" });
           } catch (error) {
             fail(error instanceof Error ? error : new Error(String(error)));
           }
@@ -2165,7 +2146,7 @@ export class DaemonClient {
     this.pingProbes.set(kind, probe);
 
     try {
-      this.sendJsonMessage("connection.ping", "connection.ping", { type: "connection.ping" });
+      this.sendProtocolMessage({ type: "connection.ping" });
     } catch (error) {
       fail(error instanceof Error ? error : new Error(String(error)));
     }
@@ -6111,17 +6092,7 @@ export class DaemonClient {
     }
 
     try {
-      this.sendJsonMessage("hello", "hello", {
-        type: "hello",
-        clientId: this.config.clientId,
-        clientType: this.config.clientType ?? "cli",
-        protocolVersion: 1,
-        capabilities: {
-          ...DEFAULT_CLIENT_CAPABILITIES,
-          ...this.config.capabilities,
-        },
-        ...(this.config.appVersion ? { appVersion: this.config.appVersion } : {}),
-      });
+      this.sendProtocolMessage({ type: "hello", clientId: this.config.clientId });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to send hello message";
       this.lastErrorValue = message;
@@ -6172,62 +6143,19 @@ export class DaemonClient {
     this.connectTimeout = null;
   }
 
-  private handleTransportMessage(data: unknown): void {
-    const rawData =
-      data && typeof data === "object" && "data" in data ? (data as { data: unknown }).data : data;
-
-    if (
-      typeof Blob !== "undefined" &&
-      rawData instanceof Blob &&
-      typeof rawData.arrayBuffer === "function"
-    ) {
-      const transport = this.transport;
-      void rawData
-        .arrayBuffer()
-        .then((buffer) => {
-          if (this.transport === transport) this.handleTransportMessage(buffer);
-          return;
-        })
-        .catch(() => {
-          // Ignore failed blob decoding and allow reconnect logic to recover.
-        });
+  private handleProtocolMessage(data: unknown, metrics?: MessageMetrics): void {
+    const rawBytes = asUint8Array(data);
+    if (rawBytes) {
+      this.tryHandleBinaryFrame(rawBytes);
       return;
     }
-
-    const rawBytes = asUint8Array(rawData);
-    const isOpen = this.beginTraceSection(
-      "paseo.ws.frame.inbound",
-      describeInboundTransportFrame(rawData, rawBytes),
-    );
-    try {
-      if (rawBytes && this.tryHandleBinaryFrame(rawBytes)) {
-        return;
-      }
-      const payload = decodeMessageData(rawData);
-      if (!payload) {
-        return;
-      }
-      this.handleJsonPayload(payload, rawBytes?.byteLength);
-    } finally {
-      this.endTraceSection(isOpen);
-    }
-  }
-
-  private handleJsonPayload(payload: string, rawBytesLength: number | undefined): void {
-    const bytes = rawBytesLength ?? payload.length;
-    const startMs = perfNow();
-    let parsedJson: unknown;
-    const parseTraceOpen = this.beginTraceSection("paseo.ws.json.parse", {
-      size: String(bytes),
-    });
-    try {
-      parsedJson = JSON.parse(payload);
-    } catch {
-      return;
-    } finally {
-      this.endTraceSection(parseTraceOpen);
-    }
-
+    // Validate the SDK's typed event projection without another JSON encode/decode.
+    const parsedJson =
+      data && typeof data === "object" && "type" in data && data.type === "connection.pong"
+        ? data
+        : { type: "session", message: data };
+    const bytes = metrics?.bytes ?? 0;
+    const startMs = perfNow() - (metrics?.decodeMs ?? 0);
     const parsed = validateWSOutboundMessage(parsedJson);
     if (!parsed.success) {
       const responseIdentity = extractCorrelatedResponseIdentity(parsedJson);
@@ -6757,6 +6685,7 @@ export class DaemonClient {
       const wrappedReject = (error: Error) => {
         if (settled) return;
         settled = true;
+        if (options?.requestId) this.transport?.forget(options.requestId);
         reject(error);
       };
       rejectFn = wrappedReject;

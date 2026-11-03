@@ -1,17 +1,15 @@
-import { createPaseoClient, type PaseoClient } from "@ait/client";
+import { createPaseoClient, type PaseoClient, type PaseoClientConfig } from "@ait/client";
 
-export function createClient(url: string): PaseoClient {
-  return createPaseoClient({
-    url,
-  });
+export function createClient(config: PaseoClientConfig): PaseoClient {
+  return createPaseoClient(config);
 }
 
 export async function subscribeToEvents(
-  url: string,
+  config: PaseoClientConfig,
   agentId: string,
   workspaceId: string,
 ): Promise<() => Promise<void>> {
-  const client = createClient(url);
+  const client = createClient(config);
   await client.connect();
 
   const agents = await client.agents.list({ subscribe: {} });
@@ -51,8 +49,8 @@ export async function subscribeToEvents(
   };
 }
 
-export async function refetchTimeline(url: string, agentId: string): Promise<number> {
-  const client = createClient(url);
+export async function refetchTimeline(config: PaseoClientConfig, agentId: string): Promise<number> {
+  const client = createClient(config);
 
   try {
     await client.connect();

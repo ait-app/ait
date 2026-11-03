@@ -1,9 +1,9 @@
 import { expect, it, vi } from "vitest";
-import { DaemonClient } from "../../../../../packages/client/src/daemon-client";
+import { DaemonClient } from "../daemon-client.js";
 import { decodeFileTransferFrame, FileTransferOpcode } from "@ait/protocol/binary-frames/index";
-import { CHANNEL_CAPABILITIES, createRustDaemonTransportFactory } from "./transport";
-import { METHODS } from "./methods";
-import type { Payload, TransportFactory } from "./types";
+import { CHANNEL_CAPABILITIES, createDaemonConnection } from "./connection.js";
+import { METHODS } from "./methods.js";
+import { object, type Payload, type TransportFactory } from "./types.js";
 
 function harness(
   implemented = Object.values(METHODS).map((spec) => spec.method),
@@ -61,22 +61,19 @@ function harness(
     };
   };
   const base = vi.fn(factory);
-  const transport = createRustDaemonTransportFactory(base)({
+  const transport = createDaemonConnection(base, {
     url,
     headers: { Authorization: "Bearer test" },
-    protocols: ["paseo.bearer.test"],
   });
   const received: Payload[] = [];
   const errors = vi.fn();
   const closed = vi.fn();
   transport.onMessage((value, binary) => {
-    if (!binary) received.push(JSON.parse(String(value)));
+    if (!binary) received.push(object(value));
   });
   transport.onError(errors);
   transport.onClose(closed);
-  const stopHello = transport.onOpen(() =>
-    transport.send(JSON.stringify({ type: "hello", clientId: "test" })),
-  );
+  const stopHello = transport.onOpen(() => transport.send({ type: "hello", clientId: "test" }));
   function ready(version?: string, features: string[] = []) {
     for (const socket of sockets) socket.open();
     for (const [index, socket] of sockets.entries())
@@ -94,14 +91,18 @@ function harness(
       });
   }
   function send(message: Payload) {
-    transport.send(JSON.stringify({ type: "session", message }));
+    transport.send(message);
   }
   function last(channel: number) {
     return JSON.parse(sockets[channel].send.mock.lastCall![0]);
   }
   return {
     transport,
-    stopHello,
+    stopHello: () => {
+      stopHello();
+      transport.close();
+      sockets.length = 0;
+    },
     sockets,
     ready,
     send,
@@ -193,7 +194,7 @@ it.each([
     const client = new DaemonClient({
       url: "ws://127.0.0.1:7316/v1/ws",
       clientId: "qa-large",
-      transportFactory: () => h.transport,
+      transportFactory: h.base,
       reconnect: { enabled: false },
     });
     try {
@@ -238,7 +239,7 @@ it.each([false, true])(
     const client = new DaemonClient({
       url: "ws://127.0.0.1:7316/v1/ws",
       clientId: "qa-parallel",
-      transportFactory: () => h.transport,
+      transportFactory: h.base,
       reconnect: { enabled: false },
     });
     try {
@@ -260,7 +261,7 @@ it.each([false, true])(
               outcomes.push({ requestId, status: "fulfilled" });
             },
             (error) => {
-              outcomes.push({ requestId, status: "rejected", message: error.message });
+              outcomes.push({ requestId, status: "rejected", message: error });
             },
           );
       }
@@ -280,7 +281,7 @@ it("a stalled ACK fails active and queued uploads without sending the queued fil
   const client = new DaemonClient({
     url: "ws://127.0.0.1:7316/v1/ws",
     clientId: "stalled",
-    transportFactory: () => h.transport,
+    transportFactory: h.base,
     reconnect: { enabled: false },
   });
   try {
@@ -319,7 +320,7 @@ it("bounds queued files while retaining the active upload", async () => {
   const client = new DaemonClient({
     url: "ws://127.0.0.1:7316/v1/ws",
     clientId: "bounded",
-    transportFactory: () => h.transport,
+    transportFactory: h.base,
     reconnect: { enabled: false },
   });
   try {

@@ -1,5 +1,5 @@
 import { supportsBrowserAccount } from "@/runtime/browser-account";
-import { downloadBrowserAccountFile } from "@/runtime/rust-daemon/browser-account-relay";
+import { downloadBrowserAccountFile } from "@/runtime/daemon-transport/browser-account-relay";
 import { create } from "zustand";
 import { getDesktopHost } from "@/desktop/host";
 import { File as FSFile, Paths } from "expo-file-system";
@@ -11,7 +11,7 @@ import { openExternalUrl } from "@/utils/open-external-url";
 import { isWeb } from "@/constants/platform";
 import { i18n } from "@/i18n/i18next";
 import { Platform } from "react-native";
-import { streamNativeAccountDownload } from "@/runtime/rust-daemon/native-account-download";
+import { streamNativeAccountDownload } from "@/runtime/daemon-transport/native-account-download";
 
 interface DownloadProgress {
   percent: number;

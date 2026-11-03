@@ -6,7 +6,7 @@ import {
 import { getDesktopHost } from "@/desktop/host";
 import { Platform } from "react-native";
 import { createHubAccountRelayTransportFactory } from "./hub-account-transport";
-import type { TransportFactory } from "./types";
+import type { TransportFactory } from "@ait/client/internal/protocol/types";
 import { parseAccountRelayTarget } from "./account-relay-target";
 
 /** Each platform owns its account authority and one-use relay tickets. */

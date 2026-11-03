@@ -1,13 +1,14 @@
-import { createPaseoClient, type PaseoClient } from "@ait/client";
+import { createPaseoClient, type PaseoClient, type PaseoClientConfig } from "@ait/client";
 
-export function createClient(url: string): PaseoClient {
-  return createPaseoClient({
-    url,
-  });
+export function createClient(config: PaseoClientConfig): PaseoClient {
+  return createPaseoClient(config);
 }
 
-export async function createOpenAndArchiveWorkspace(url: string, cwd: string): Promise<void> {
-  const client = createClient(url);
+export async function createOpenAndArchiveWorkspace(
+  config: PaseoClientConfig,
+  cwd: string,
+): Promise<void> {
+  const client = createClient(config);
 
   try {
     await client.connect();

@@ -2,11 +2,11 @@ import { BOT_METHODS } from "@ait/protocol/bot/rpc-schemas";
 import { ProviderSnapshotEntrySchema } from "@ait/protocol/messages";
 import { compactProviderSnapshot } from "@ait/protocol/provider-snapshot-codec";
 import { sessionEventMethod } from "@ait/protocol/session-event-kinds";
-import { object, type Payload } from "./types";
-import type { HubShareResourceKind } from "@ait/client/internal/hub";
+import { object, type Payload } from "./types.js";
+import type { HubShareResourceKind } from "../hub/index.js";
 
 export function session(type: string, payload: Payload): Payload {
-  return { type: "session", message: { type, payload } };
+  return { type, payload };
 }
 
 export function rpcError(
@@ -201,7 +201,7 @@ export function eventMessage(method: string, params: unknown): Payload {
     return session("provider.snapshot.update", providerSnapshot(payload));
   }
   if (method === "browser.automation.execute.request") {
-    return { type: "session", message: { type: method, ...payload } };
+    return { type: method, ...payload };
   }
   if (method.startsWith("status.")) {
     // Status event payloads retain their SDK discriminator.

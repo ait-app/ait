@@ -4,7 +4,7 @@ import {
 } from "@ait/client/internal/daemon-client-websocket-transport";
 import { getBrowserAccount, registerBrowserAccountTransport } from "../browser-account";
 import { streamNativeAccountDownload } from "./native-account-download";
-import type { TransportFactory } from "./types";
+import type { TransportFactory } from "@ait/client/internal/protocol/types";
 
 const connect = createWebSocketTransportFactory(defaultWebSocketFactory);
 /** Browsers authenticate with the server's one-use, Origin-bound subprotocol. */

@@ -56,7 +56,7 @@ const frontend = createServer(async (request, response) => {
 try {
   const compiled = await build({
     stdin: {
-      contents: `export { DaemonClient } from '@ait/client/internal/daemon-client'; export { buildRustClientConfig } from './apps/mobile/src/runtime/rust-daemon/connection';`,
+      contents: `export { DaemonClient } from '@ait/client/internal/daemon-client'; export { buildDaemonClientConfig } from './apps/mobile/src/runtime/daemon-transport/connection';`,
       resolveDir: root,
       loader: "ts",
     },
@@ -135,9 +135,9 @@ try {
   await page.goto(`${origin}/fixture`);
   const result = await page.evaluate(
     async ({ endpoint, token }) => {
-      const { DaemonClient, buildRustClientConfig } = window.fixture;
+      const { DaemonClient, buildDaemonClientConfig } = window.fixture;
       const config = (password) => ({
-        ...buildRustClientConfig({ endpoint, password }, null),
+        ...buildDaemonClientConfig({ endpoint, password }, null),
         clientId: "app-browser-validation",
         reconnect: { enabled: false },
         suppressSendErrors: true,
