@@ -2,10 +2,10 @@ import {
   createWebSocketTransportFactory,
   defaultWebSocketFactory,
 } from "@ait/client/internal/daemon-client-websocket-transport";
-import type { Transport, TransportFactory } from "./types";
+import type { Transport, TransportFactory } from "@ait/client/internal/protocol/types";
 
 /** Exchange the Bearer token for a single-use, origin-bound WebSocket ticket. */
-export function createBrowserRustTransportFactory(
+export function createBrowserDaemonTransportFactory(
   fetchTicket: (url: string, options: RequestInit) => Promise<Response> = globalThis.fetch.bind(
     globalThis,
   ),

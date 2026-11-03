@@ -1,5 +1,5 @@
 import { decodeFileTransferFrame } from "@ait/protocol/binary-frames/index";
-import type { Transport } from "./types";
+import type { Transport } from "./types.js";
 
 /** Hold the uploader until the daemon has processed each file frame. */
 export class UploadAcknowledgements {

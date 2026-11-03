@@ -7,9 +7,11 @@ import { createPaseoClient, type PaseoClient } from "@ait/client";
 ```
 
 Build the repository-local library first with `npm run build:sdk` from the repository
-root. These examples target the original Paseo daemon wire protocol, using a `/ws` URL.
-The desktop-managed Rust server requires the app's Rust transport adapter; its address
-cannot be substituted directly into these examples. See the [library README](../README.md).
+root. These examples target Ait's Rust daemon at `/v1/ws`. Supply its Bearer token
+and a platform WebSocket factory that supports headers (Node), or the App's
+one-use ticket transport (browser). No protocol adapter is required. Connection helpers accept `PaseoClientConfig`, including the URL, Bearer token and
+platform factory; see [quickstart.ts](quickstart.ts) for a complete Node configuration
+and the [library README](../README.md) for transport details.
 
 - `quickstart.ts` runs one agent and prints its reply. It is a standalone script with the URL at the top; the rest export functions.
 - `workspaces.ts` covers creating a fresh workspace, opening by directory, refreshing, and archiving.

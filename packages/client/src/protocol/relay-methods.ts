@@ -1,4 +1,4 @@
-import type { MethodSpec } from "./methods";
+import type { MethodSpec } from "./methods.js";
 
 // Transport-owned additions to the canonical Ait method catalog.
 export const RELAY_METHODS: Readonly<Record<string, MethodSpec>> = {

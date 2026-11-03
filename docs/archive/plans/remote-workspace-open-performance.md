@@ -87,12 +87,12 @@ Codex 的 [history 适配](../../../crates/provider/src/local/codex/discovery.rs
 
 ### 5. 连接建立有不同的成本
 
-| 方式       | 已确认行为                                                                                                                                                                                | 主要优化机会                                                             |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| TCP        | [Rust transport](../../../apps/mobile/src/runtime/rust-daemon/transport.ts) 创建 4 条物理 WebSocket；全部 open 后才发 hello，全部收到 server_info 后才 ready                              | 测每条连接，减少首次依赖的物理连接或按需建立                             |
-| 浏览器 TCP | 每条 WebSocket 前有一次 [一次性票据交换](../../../apps/mobile/src/runtime/rust-daemon/browser-transport.ts)                                                                               | 减少物理连接可以同时减少票据交换                                         |
-| SSH        | 同样 4 条 WebSocket；[桌面 transport](../../../apps/desktop/src/daemon/local-transport.ts) 为每条连接创建 proxy 并启动 `ssh` 子进程                                                       | 共享 SSH 隧道或采用协商后的单连接；底层是否已复用 SSH 会话取决于用户配置 |
-| Relay      | [账户连接](../../../apps/mobile/src/runtime/rust-daemon/connection.ts) 已使用 1 条物理连接；[openVisit](../../../packages/client/src/account-session.ts) → WSS → relay.ready → Rust hello | 分段测量票据、配对、hello；保持已选 Host 的可用连接                      |
+| 方式       | 已确认行为                                                                                                                                                                                     | 主要优化机会                                                             |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| TCP        | [Rust transport](../../../packages/client/src/protocol/connection.ts) 创建 4 条物理 WebSocket；全部 open 后才发 hello，全部收到 server_info 后才 ready                                         | 测每条连接，减少首次依赖的物理连接或按需建立                             |
+| 浏览器 TCP | 每条 WebSocket 前有一次 [一次性票据交换](../../../apps/mobile/src/runtime/daemon-transport/browser-transport.ts)                                                                               | 减少物理连接可以同时减少票据交换                                         |
+| SSH        | 同样 4 条 WebSocket；[桌面 transport](../../../apps/desktop/src/daemon/local-transport.ts) 为每条连接创建 proxy 并启动 `ssh` 子进程                                                            | 共享 SSH 隧道或采用协商后的单连接；底层是否已复用 SSH 会话取决于用户配置 |
+| Relay      | [账户连接](../../../apps/mobile/src/runtime/daemon-transport/connection.ts) 已使用 1 条物理连接；[openVisit](../../../packages/client/src/account-session.ts) → WSS → relay.ready → Rust hello | 分段测量票据、配对、hello；保持已选 Host 的可用连接                      |
 
 4 条连接是并行建立，成本接近最慢一条加握手屏障，不能直接算成 4 倍 RTT。Relay 已经是单连接，减少 4 条连接的方案不会改善它。
 

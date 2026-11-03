@@ -2,7 +2,7 @@ import { DaemonClient } from "@ait/client/internal/daemon-client";
 import { HubLink } from "@ait/client/internal/hub";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHubAccountRelayTransportFactory } from "./hub-account-transport";
-import { createRustDaemonTransportFactory } from "./transport";
+import { createDaemonConnection } from "@ait/client/internal/protocol/connection";
 
 const HOST_ID = "11111111-1111-4111-8111-111111111111";
 const CENTER = "https://example.test/api";
@@ -117,10 +117,10 @@ describe("native account relay path selection", () => {
   it("opens guest sessions with the share grant and never falls back to the owner relay", async () => {
     const h = harness();
     const socket = await h.connect();
-    const transport = createRustDaemonTransportFactory(
-      createHubAccountRelayTransportFactory(h.deps),
-    )({ url: guestUrl });
-    transport.onOpen(() => transport.send('{"type":"hello","clientId":"guest"}'));
+    const transport = createDaemonConnection(createHubAccountRelayTransportFactory(h.deps), {
+      url: guestUrl,
+    });
+    transport.onOpen(() => transport.send({ type: "hello", clientId: "guest" }));
     await vi.advanceTimersByTimeAsync(0);
     expect(socket.sent.find((frame) => frame.header.t === "open")?.header).toEqual({
       t: "open",
@@ -148,14 +148,14 @@ describe("native account relay path selection", () => {
   it("runs the unchanged Rust client over a hub session and survives a link reconnect", async () => {
     const h = harness();
     const socket = await h.connect();
-    const transport = createRustDaemonTransportFactory(
-      createHubAccountRelayTransportFactory(h.deps),
-    )({ url });
+    const transport = createDaemonConnection(createHubAccountRelayTransportFactory(h.deps), {
+      url,
+    });
     const receive = vi.fn();
     const close = vi.fn();
     transport.onMessage(receive);
     transport.onClose(close);
-    transport.onOpen(() => transport.send(JSON.stringify({ type: "hello", clientId: "android" })));
+    transport.onOpen(() => transport.send({ type: "hello", clientId: "android" }));
     await vi.advanceTimersByTimeAsync(0);
     const open = socket.sent.find((frame) => frame.header.t === "open")!;
     expect(open.header).toEqual({ t: "open", seq: 1, s: "session-1", to: { node: "host-node" } });
@@ -165,7 +165,10 @@ describe("native account relay path selection", () => {
       required_capabilities: ["connection.single.v1"],
     });
     socket.receive({ t: "accept", seq: 2, s: "session-1" }, JSON.stringify(SERVER_INFO));
-    expect(receive.mock.calls.at(-1)?.[0]).toContain("server_info");
+    expect(receive.mock.calls.at(-1)?.[0]).toMatchObject({
+      type: "status",
+      payload: { status: "server_info" },
+    });
 
     socket.drop();
     await vi.advanceTimersByTimeAsync(0);
@@ -182,14 +185,18 @@ describe("native account relay path selection", () => {
       ping_seconds: 20,
       max_payload: 1024 * 1024,
     });
-    transport.send('{"type":"connection.ping"}');
+    transport.send({ type: "connection.ping" });
     const ping = JSON.parse(resumed.sent.at(-1)!.payload);
     expect(ping).toMatchObject({ type: "request", method: "connection.ping" });
     resumed.receive(
       { t: "msg", seq: 3, s: "session-1", pt: "text" },
       JSON.stringify({ type: "response", request_id: ping.request_id, result: {} }),
     );
-    expect(receive).toHaveBeenLastCalledWith('{"type":"connection.pong"}', false);
+    expect(receive).toHaveBeenLastCalledWith(
+      { type: "connection.pong" },
+      false,
+      expect.objectContaining({ bytes: expect.any(Number) }),
+    );
     expect(close).not.toHaveBeenCalled();
 
     // Sign-out and suspension close hub sessions with the other account transports.
@@ -368,9 +375,7 @@ describe("Hub recovery with business liveness", () => {
         url,
         clientId: "foreground",
         reconnect: { enabled: false },
-        transportFactory: createRustDaemonTransportFactory(
-          createHubAccountRelayTransportFactory(h.deps),
-        ),
+        transportFactory: createHubAccountRelayTransportFactory(h.deps),
       });
       try {
         const connected = client.connect();
@@ -430,9 +435,7 @@ describe("Hub recovery with business liveness", () => {
       url,
       clientId: "silent-daemon",
       reconnect: { enabled: false },
-      transportFactory: createRustDaemonTransportFactory(
-        createHubAccountRelayTransportFactory(h.deps),
-      ),
+      transportFactory: createHubAccountRelayTransportFactory(h.deps),
     });
     try {
       const connected = client.connect();

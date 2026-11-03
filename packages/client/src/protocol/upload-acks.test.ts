@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { encodeFileTransferFrame, FileTransferOpcode } from "@ait/protocol/binary-frames/index";
-import { UploadAcknowledgements } from "./upload-acks";
-import type { Transport } from "./types";
+import { UploadAcknowledgements } from "./upload-acks.js";
+import type { Transport } from "./types.js";
 
 it("waits for matching acknowledgements and rejects disconnected transfers", async () => {
   const channel = { send: vi.fn() } as unknown as Transport;

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { FetchRecentProviderSessionEntry } from "@ait/client/internal/daemon-client";
 import { parseServerInfoStatusPayload } from "@ait/protocol/messages";
-import { serverInfo } from "@/runtime/rust-daemon/messages";
-import { object } from "@/runtime/rust-daemon/types";
+import { serverInfo } from "@ait/client/internal/protocol/messages";
+import { object } from "@ait/client/internal/protocol/types";
 import {
   aggregateSessionEntries,
   ALL_FILTER_VALUE,
@@ -121,7 +121,7 @@ describe("requiresImportSessionsHostUpgrade", () => {
       { server_id: "rust-host" },
       new Set(["provider.snapshot.get.request", "agent.import.request"]),
     );
-    const features = parseServerInfoStatusPayload(object(object(status.message).payload))?.features;
+    const features = parseServerInfoStatusPayload(object(object(status).payload))?.features;
     expect(
       requiresImportSessionsHostUpgrade({
         supportsSnapshot: features?.providersSnapshot === true,

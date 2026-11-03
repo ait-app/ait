@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildAccountRelayClientConfig } from "./connection";
 import { createAccountRelayTransportFactory } from "./account-transport";
 import { parseAccountRelayTarget } from "./account-relay-target";
-import { createRustDaemonTransportFactory } from "./transport";
-import type { Transport } from "./types";
+import { createDaemonConnection } from "@ait/client/internal/protocol/connection";
+import type { Transport } from "@ait/client/internal/protocol/types";
 
 vi.mock("./account-transport", () => ({ createAccountRelayTransportFactory: vi.fn() }));
 vi.mock("@/desktop/daemon/desktop-daemon-transport", () => ({
@@ -82,7 +82,7 @@ describe.each([
     "wss://example.test/v1/ws",
   ])("preserves four-channel transport for %s", (url) => {
     const connect = vi.fn(socket);
-    const transport = createRustDaemonTransportFactory(connect)({ url });
+    const transport = createDaemonConnection(connect, { url });
     try {
       expect(connect).toHaveBeenCalledTimes(4);
       expect(connect).toHaveBeenCalledWith({ url, headers: undefined });
@@ -107,7 +107,7 @@ describe.each([
     "https://example.test/v1/ws",
   ])("rejects invalid endpoints before opening a channel: %s", (url) => {
     const connect = vi.fn(socket);
-    expect(() => createRustDaemonTransportFactory(connect)({ url })).toThrow();
+    expect(() => createDaemonConnection(connect, { url })).toThrow();
     expect(connect).not.toHaveBeenCalled();
   });
 

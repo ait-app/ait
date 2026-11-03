@@ -12,7 +12,7 @@ type TransportUrl = Pick<
 >;
 
 /** Internal targets must not depend on a browser's non-special URL authority parsing. */
-export function parseRustDaemonTransportUrl(url: string): TransportUrl {
+export function parseDaemonTransportUrl(url: string): TransportUrl {
   if (!/^ait\+desktop:/i.test(url)) return new URL(url);
 
   // Match the whole authority, not a prefix: credentials, ports and lookalike hosts

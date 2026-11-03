@@ -1,7 +1,7 @@
 # @ait/protocol
 
 Private Ait workspace containing the local schemas, codecs and compatibility wire
-types used by [@ait/client](../client/README.md) and the App Rust transport.
+types used by [@ait/client](../client/README.md) and its native daemon protocol implementation.
 Source is checked in under `packages/protocol/src`; consumers use explicit `file:`
 dependencies. Build with `npm run build:sdk` from the repository root.
 

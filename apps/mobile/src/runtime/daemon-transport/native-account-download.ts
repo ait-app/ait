@@ -4,7 +4,7 @@ import {
   nativeWebSocketFactory,
 } from "@ait/client/internal/daemon-client-websocket-transport";
 import { getNativeAccount, registerNativeAccountTransport } from "../native-account";
-import { object, type Transport, type TransportFactory } from "./types";
+import { object, type Transport, type TransportFactory } from "@ait/client/internal/protocol/types";
 
 interface DownloadDependencies {
   account(): Promise<Pick<AccountSessionManager, "openDownload" | "closeVisit">>;

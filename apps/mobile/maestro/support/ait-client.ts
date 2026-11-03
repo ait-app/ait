@@ -3,7 +3,6 @@ import { readFile, writeFile } from "node:fs/promises";
 import { DaemonClient } from "@ait/client/internal/daemon-client";
 import { createWebSocketTransportFactory } from "@ait/client/internal/daemon-client-websocket-transport";
 import { parseHostPort, serializeConnectionUriForStorage } from "@ait/protocol/daemon-endpoints";
-import { createRustDaemonTransportFactory } from "../../src/runtime/rust-daemon/transport";
 import { createNodeWebSocketFactory } from "../../e2e/support/helpers/node-ws-factory";
 
 export function readMaestroConnection(
@@ -72,9 +71,7 @@ export async function connectMaestroClient(
     password: connection.token,
     clientId: `ait-maestro-${randomUUID()}`,
     clientType: "cli",
-    transportFactory: createRustDaemonTransportFactory(
-      createWebSocketTransportFactory(createNodeWebSocketFactory()),
-    ),
+    transportFactory: createWebSocketTransportFactory(createNodeWebSocketFactory()),
   });
   try {
     await client.connect();

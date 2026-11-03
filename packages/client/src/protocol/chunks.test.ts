@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { ClientMessageChunks } from "./chunks";
-import type { Transport } from "./types";
+import { ClientMessageChunks } from "./chunks.js";
+import type { Transport } from "./types.js";
 
 afterEach(() => vi.useRealTimers());
 

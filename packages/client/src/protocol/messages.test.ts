@@ -2,13 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   AgentTimelineSearchResponseMessageSchema,
   parseServerInfoStatusPayload,
-  WSOutboundMessageSchema,
+  SessionOutboundMessageSchema,
 } from "@ait/protocol/messages";
-import { METHODS } from "./methods";
-import { eventMessage, responseMessage, serverInfo } from "./messages";
-import { object } from "./types";
+import { METHODS } from "./methods.js";
+import { eventMessage, responseMessage, serverInfo } from "./messages.js";
+import { object } from "./types.js";
 import { validateWSOutboundMessage } from "@ait/protocol/validation/ws-outbound";
-
 it("retains full directory capabilities for whole-node shares", () => {
   const info = {
     server_id: "shared-node",
@@ -17,7 +16,6 @@ it("retains full directory capabilities for whole-node shares", () => {
   const methods = new Set(Object.values(METHODS).map((spec) => spec.method));
   expect(serverInfo(info, methods, "node")).toEqual(serverInfo(info, methods));
 });
-
 it.each(["workspace", "project"] as const)(
   "uses scoped snapshots for a %s guest even when the host advertises full directories",
   (scope) => {
@@ -37,7 +35,7 @@ it.each(["workspace", "project"] as const)(
       methods,
       scope,
     );
-    const payload = object(object(info.message).payload);
+    const payload = object(object(info).payload);
     expect(payload.features).toMatchObject({
       directorySubscriptions: false,
       directorySync: false,
@@ -49,7 +47,6 @@ it.each(["workspace", "project"] as const)(
     expect(payload.sessionEventTypes).toEqual([]);
   },
 );
-
 describe("native agent stream control events", () => {
   it.each([
     { type: "turn_started", provider: "codex", turnId: "turn" },
@@ -71,13 +68,12 @@ describe("native agent stream control events", () => {
       agentId: "agent",
       event,
     });
-    const parsed = validateWSOutboundMessage(envelope);
+    const parsed = validateWSOutboundMessage({ type: "session", message: envelope });
     expect(parsed.success).toBe(true);
-    const payload = object(object(envelope.message).payload);
+    const payload = object(object(envelope).payload);
     expect(Number.isFinite(Date.parse(String(payload.timestamp)))).toBe(true);
     expect(payload.subscriptionId).toBe("timeline-lease");
   });
-
   it("preserves source timestamps on new host usage events", () => {
     const payload = {
       agentId: "agent",
@@ -85,20 +81,18 @@ describe("native agent stream control events", () => {
       event: { type: "usage_updated", provider: "codex", usage: { inputTokens: 100 } },
     };
     const envelope = eventMessage("agent_stream", payload);
-    expect(validateWSOutboundMessage(envelope).success).toBe(true);
-    expect(object(envelope.message).payload).toEqual(payload);
+    expect(validateWSOutboundMessage({ type: "session", message: envelope }).success).toBe(true);
+    expect(object(envelope).payload).toEqual(payload);
   });
-
   it.each([
     { type: "usage_updated", provider: "codex", usage: { inputTokens: "invalid" } },
     { type: "timeline", provider: "codex", item: { type: "assistant_message", text: "hello" } },
     { type: "unknown_event", provider: "codex" },
   ])("keeps malformed $type events subject to protocol validation", (event) => {
     const envelope = eventMessage("agent_stream", { agentId: "agent", event });
-    expect(validateWSOutboundMessage(envelope).success).toBe(false);
+    expect(validateWSOutboundMessage({ type: "session", message: envelope }).success).toBe(false);
   });
 });
-
 it.each([
   ["agent.update", "agent.update", { agentId: "agent" }],
   ["workspace.update", "workspace.update", { id: "workspace", removedProjectId: "project" }],
@@ -113,35 +107,28 @@ it.each([
       seq: 3,
     };
     const envelope = eventMessage(method, payload);
-    expect(WSOutboundMessageSchema.parse(envelope)).toEqual({
-      type: "session",
-      message: { type, payload },
-    });
+    expect(SessionOutboundMessageSchema.parse(envelope)).toEqual({ type, payload });
   },
 );
-
 function info(methods: string[]) {
   const message = serverInfo({ server_id: "ait" }, new Set(methods));
-  return parseServerInfoStatusPayload(object(object(message.message).payload));
+  return parseServerInfoStatusPayload(object(object(message).payload));
 }
-
 describe("Rust daemon software version", () => {
   it.each(["0.0.10", "v0.0.11"])("preserves the connected server's version %s", (version) => {
     const envelope = serverInfo({ server_id: "ait", version }, new Set());
-    const value = parseServerInfoStatusPayload(object(object(envelope.message).payload));
+    const value = parseServerInfoStatusPayload(object(object(envelope).payload));
     expect(value?.version).toBe(version);
   });
-
   it.each([undefined, null, 11, { major: 1, minor: 0 }])(
     "keeps an unknown software version when the server sends %j",
     (version) => {
       const envelope = serverInfo({ server_id: "ait", version }, new Set());
-      const value = parseServerInfoStatusPayload(object(object(envelope.message).payload));
+      const value = parseServerInfoStatusPayload(object(object(envelope).payload));
       expect(value?.version).toBeNull();
     },
   );
 });
-
 it("preserves Rust timeline search counts in the SDK response envelope", () => {
   const result = {
     agentId: "agent",
@@ -151,12 +138,11 @@ it("preserves Rust timeline search counts in the SDK response envelope", () => {
     error: null,
   };
   const envelope = responseMessage("agent.timeline.search.response", "search", result, {});
-  expect(AgentTimelineSearchResponseMessageSchema.parse(envelope.message).payload).toEqual({
+  expect(AgentTimelineSearchResponseMessageSchema.parse(envelope).payload).toEqual({
     ...result,
     requestId: "search",
   });
 });
-
 describe("Ait host capabilities", () => {
   it.each([
     { list: true, timeline: true },
@@ -177,7 +163,6 @@ describe("Ait host capabilities", () => {
       });
     },
   );
-
   it.each([
     ["workspace.setup.progress", "workspace-setup-events-v1", "workspace.setup.status.request"],
     ["activity.log", "activity-log-events-v1", "agent.list.request"],
@@ -191,14 +176,13 @@ describe("Ait host capabilities", () => {
             new Set(implemented ? [method] : []),
           );
           const catalog = parseServerInfoStatusPayload(
-            object(object(envelope.message).payload),
+            object(object(envelope).payload),
           )?.sessionEventTypes;
           expect(catalog?.includes(event)).toBe(supported && implemented);
         }
       }
     },
   );
-
   it("enables cached timeline reads only with the versioned feature and timeline method", () => {
     for (const supported of [false, true]) {
       for (const implemented of [false, true]) {
@@ -210,7 +194,7 @@ describe("Ait host capabilities", () => {
           new Set(implemented ? ["agent.timeline.get.request"] : []),
         );
         expect(
-          parseServerInfoStatusPayload(object(object(envelope.message).payload))?.features
+          parseServerInfoStatusPayload(object(object(envelope).payload))?.features
             ?.agentTimelineCachedReads,
         ).toBe(supported && implemented);
       }
@@ -219,9 +203,7 @@ describe("Ait host capabilities", () => {
   it("advertises directory and script events only with their installed producers", () => {
     const read = (features: string[], methods: string[]) =>
       parseServerInfoStatusPayload(
-        object(
-          object(serverInfo({ server_id: "ait", features }, new Set(methods)).message).payload,
-        ),
+        object(object(serverInfo({ server_id: "ait", features }, new Set(methods))).payload),
       )?.sessionEventTypes;
     const methods = ["project.list.request", "workspace.script.list.request"];
     expect(read(["directory-subscriptions-v1"], methods)).toEqual(
@@ -231,20 +213,16 @@ describe("Ait host capabilities", () => {
     expect(read(["directory-subscriptions-v1"], [])).not.toContain("project.update");
     expect(read(["directory-subscriptions-v1"], [])).not.toContain("script_status_update");
   });
-
   it("advertises checkout status events only with the Git producer and checkout method", () => {
     const read = (features: string[], methods: string[]) =>
       parseServerInfoStatusPayload(
-        object(
-          object(serverInfo({ server_id: "ait", features }, new Set(methods)).message).payload,
-        ),
+        object(object(serverInfo({ server_id: "ait", features }, new Set(methods))).payload),
       )?.sessionEventTypes;
     const method = "checkout.status.get.request";
     expect(read(["checkout-git-events-v1"], [method])).toContain("checkout.status.update");
     expect(read([], [method])).not.toContain("checkout.status.update");
     expect(read(["checkout-git-events-v1"], [])).not.toContain("checkout.status.update");
   });
-
   it("enables composite creation only with the lifecycle producer and its methods", () => {
     const methods = new Set([
       "agent.create.request",
@@ -253,7 +231,7 @@ describe("Ait host capabilities", () => {
     ]);
     const read = (features: string[]) =>
       parseServerInfoStatusPayload(
-        object(object(serverInfo({ server_id: "ait", features }, methods).message).payload),
+        object(object(serverInfo({ server_id: "ait", features }, methods)).payload),
       )?.features;
     expect(read(["creation-lifecycle-v1"])).toMatchObject({
       creationLifecycle: true,
@@ -267,9 +245,7 @@ describe("Ait host capabilities", () => {
   it("advertises native approval and child events only with the producer feature", () => {
     const read = (features: string[], methods: string[]) =>
       parseServerInfoStatusPayload(
-        object(
-          object(serverInfo({ server_id: "ait", features }, new Set(methods)).message).payload,
-        ),
+        object(object(serverInfo({ server_id: "ait", features }, new Set(methods))).payload),
       )?.sessionEventTypes;
     const method = "agent.permission.resolve.request";
     expect(read(["agent-session-events-v1"], [method])).toEqual(
@@ -285,9 +261,7 @@ describe("Ait host capabilities", () => {
   it("advertises terminal attention only for hosts with terminal activity events", () => {
     const read = (features: string[], methods: string[]) =>
       parseServerInfoStatusPayload(
-        object(
-          object(serverInfo({ server_id: "ait", features }, new Set(methods)).message).payload,
-        ),
+        object(object(serverInfo({ server_id: "ait", features }, new Set(methods))).payload),
       )?.sessionEventTypes;
     expect(read(["terminal-activity-v1"], ["terminal.list.request"])).toContain(
       "terminal.attention.required",
@@ -295,7 +269,6 @@ describe("Ait host capabilities", () => {
     expect(read([], ["terminal.list.request"])).not.toContain("terminal.attention.required");
     expect(read(["terminal-activity-v1"], [])).not.toContain("terminal.attention.required");
   });
-
   it("enables directory sync and streams only when the connected host advertises them", () => {
     const methods = new Set([
       "project.list.request",
@@ -306,9 +279,7 @@ describe("Ait host capabilities", () => {
     const features = ["directory-sync-v1", "directory-subscriptions-v1"];
     const read = (advertised: string[]) =>
       parseServerInfoStatusPayload(
-        object(
-          object(serverInfo({ server_id: "ait", features: advertised }, methods).message).payload,
-        ),
+        object(object(serverInfo({ server_id: "ait", features: advertised }, methods)).payload),
       )?.features;
     expect(read(features)).toMatchObject({ directorySync: true, directorySubscriptions: true });
     expect(read([])).toMatchObject({ directorySync: false, directorySubscriptions: false });
@@ -318,7 +289,6 @@ describe("Ait host capabilities", () => {
       directorySubscriptions: false,
     });
   });
-
   it("enables Workspace target reads only when the host implements the method", () => {
     for (const supported of [false, true]) {
       const info = serverInfo(
@@ -326,12 +296,10 @@ describe("Ait host capabilities", () => {
         new Set(supported ? ["workspace.get.request"] : []),
       );
       expect(
-        parseServerInfoStatusPayload(object(object(info.message).payload))?.features
-          ?.workspaceTargetRead,
+        parseServerInfoStatusPayload(object(object(info).payload))?.features?.workspaceTargetRead,
       ).toBe(supported);
     }
   });
-
   it("enables GitLab panels only when the server advertises its installed adapter", () => {
     const methods = new Set([
       "checkout.pr.status.request",
@@ -339,7 +307,7 @@ describe("Ait host capabilities", () => {
       "checkout.forge.set_auto_merge.request",
     ]);
     const envelope = serverInfo({ server_id: "ait", features: ["forge-gitlab-v1"] }, methods);
-    const value = parseServerInfoStatusPayload(object(object(envelope.message).payload));
+    const value = parseServerInfoStatusPayload(object(object(envelope).payload));
     expect(value?.features).toMatchObject({
       forgeProviders: true,
       forgeCheckDetails: true,
@@ -348,7 +316,6 @@ describe("Ait host capabilities", () => {
     expect(info([...methods])?.features?.forgeProviders).toBe(false);
     expect(info([])?.features?.forgeCheckDetails).toBe(false);
   });
-
   it("exposes working settings and directory features without unsupported transports", () => {
     const value = info(Object.values(METHODS).map((method) => method.method));
     expect(value?.features).toMatchObject({
@@ -378,7 +345,6 @@ describe("Ait host capabilities", () => {
       "agent.attention.required",
     ]);
   });
-
   it("does not enable controls without all their required methods", () => {
     expect(info(["project.list.request", "daemon.config.get.request"])?.features).toMatchObject({
       projectList: true,
@@ -392,7 +358,6 @@ describe("Ait host capabilities", () => {
     });
   });
 });
-
 it("adapts post-fetch checkout status events into the SDK schema", () => {
   const payload = {
     cwd: "/repo",
@@ -413,13 +378,12 @@ it("adapts post-fetch checkout status events into the SDK schema", () => {
     subscriptionId: "checkout-events",
   };
   const envelope = eventMessage("checkout.status.update", payload);
-  const parsed = WSOutboundMessageSchema.parse(envelope);
+  const parsed = SessionOutboundMessageSchema.parse(envelope);
   expect(parsed).toMatchObject({
-    type: "session",
-    message: { type: "checkout.status.update", payload: { ...payload, requestId: "" } },
+    type: "checkout.status.update",
+    payload: { ...payload, requestId: "" },
   });
 });
-
 describe("Rust provider snapshots", () => {
   const entries = [
     {
@@ -437,7 +401,7 @@ describe("Rust provider snapshots", () => {
       { entries, snapshotHash: "hash", notModified: false },
       {},
     );
-    expect(object(message.message).payload).toMatchObject({
+    expect(object(message).payload).toMatchObject({
       requestId: "catalog",
       snapshotHash: "hash",
       compactSnapshot: { entries: [{ provider: "codex", models: [{ id: "model-1" }] }] },
@@ -450,7 +414,7 @@ describe("Rust provider snapshots", () => {
       snapshotHash: "hash",
       subscriptionId: "feed",
     });
-    expect(object(message.message).payload).toMatchObject({
+    expect(object(message).payload).toMatchObject({
       subscriptionId: "feed",
       compactSnapshot: { entries: [{ provider: "codex" }] },
     });
@@ -462,7 +426,7 @@ describe("Rust provider snapshots", () => {
       { entries: [], snapshotHash: "hash", notModified: true },
       {},
     );
-    expect(object(message.message).payload).not.toHaveProperty("compactSnapshot");
+    expect(object(message).payload).not.toHaveProperty("compactSnapshot");
   });
   it("keeps a genuinely empty full catalog cacheable", () => {
     const message = responseMessage(
@@ -471,12 +435,11 @@ describe("Rust provider snapshots", () => {
       { entries: [], snapshotHash: "empty", notModified: false },
       {},
     );
-    expect(object(message.message).payload).toMatchObject({
+    expect(object(message).payload).toMatchObject({
       compactSnapshot: { entries: [], thinkingSets: [] },
     });
   });
 });
-
 it("uses daemon voice readiness without upstream SDP and recognizes terminal realtime events", () => {
   const response = responseMessage(
     "voice.mode.set.response",
@@ -484,8 +447,8 @@ it("uses daemon voice readiness without upstream SDP and recognizes terminal rea
     { accepted: true, enabled: true, agentId: "agent", error: null },
     {},
   );
-  expect(validateWSOutboundMessage(response).success).toBe(true);
-  expect(object(object(response.message).payload)).not.toHaveProperty("sdp");
+  expect(validateWSOutboundMessage({ type: "session", message: response }).success).toBe(true);
+  expect(object(object(response).payload)).not.toHaveProperty("sdp");
   for (const [method, params] of [
     ["voice.session.closed", {}],
     [
@@ -493,6 +456,8 @@ it("uses daemon voice readiness without upstream SDP and recognizes terminal rea
       { error: "native voice unavailable", reasonCode: "native_realtime_failed", retryable: false },
     ],
   ] as const) {
-    expect(validateWSOutboundMessage(eventMessage(method, params)).success).toBe(true);
+    expect(
+      validateWSOutboundMessage({ type: "session", message: eventMessage(method, params) }).success,
+    ).toBe(true);
   }
 });

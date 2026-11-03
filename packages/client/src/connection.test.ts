@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { CLIENT_CAPS } from "@ait/protocol/client-capabilities";
 import { DaemonClient, type DaemonTransport } from "./daemon-client";
 
@@ -137,23 +137,6 @@ function connection(
     receive: (message: unknown) => receive(JSON.stringify({ type: "session", message })),
   };
 }
-
-test("a plain client advertises every protocol capability and no browser host", async () => {
-  const h = connection();
-  try {
-    const ready = h.client.connect();
-    h.open();
-    await ready;
-    const { browserHost: _browser, ...protocolCapabilities } = CLIENT_CAPS;
-    // Every new capability needs a deliberate default or a host-owned exception.
-    expect(h.sent).toHaveLength(1);
-    expect(h.sent[0].capabilities).toEqual(
-      Object.fromEntries(Object.values(protocolCapabilities).map((key) => [key, true])),
-    );
-  } finally {
-    await h.client.close();
-  }
-});
 
 test.each([true, false])(
   "supported event demand uses each handshake with ownedSubscriptions=%s",
@@ -1199,4 +1182,10 @@ test("event selection is recalculated for each handshake without requiring a ser
   expect(h.sent.at(-1)?.message?.events).toEqual(["workspace_setup_status"]);
   await observation.release();
   await h.client.close();
+});
+
+// These tests cover SDK business behavior; protocol tests use real Rust wire frames.
+vi.mock("./protocol/connection.js", async () => {
+  const { createProtocolStub } = await import("./test-support/protocol-stub.js");
+  return { createDaemonConnection: createProtocolStub };
 });

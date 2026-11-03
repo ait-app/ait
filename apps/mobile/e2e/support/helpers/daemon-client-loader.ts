@@ -4,7 +4,6 @@ import * as protocolSchemas from "@ait/protocol/messages";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { createRustDaemonTransportFactory } from "../../../src/runtime/rust-daemon/transport";
 import { requireAitDaemon } from "./ait-daemon";
 import { getE2EDaemonPort } from "./daemon-port";
 import { createNodeWebSocketFactory } from "./node-ws-factory";
@@ -30,9 +29,7 @@ export async function connectDaemonClient<
     clientId: `${options.clientIdPrefix}-${randomUUID()}`,
     clientType: "cli",
     appVersion: options.appVersion ?? loadAppVersion(),
-    transportFactory: createRustDaemonTransportFactory(
-      createWebSocketTransportFactory(createNodeWebSocketFactory()),
-    ),
+    transportFactory: createWebSocketTransportFactory(createNodeWebSocketFactory()),
   });
   try {
     await client.connect();

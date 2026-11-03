@@ -1,5 +1,8 @@
 # ADR-094：客户端统一使用 Ait 标准方法名
 
+> 协议实现归属由 [ADR-211](adr-211-sdk-native-daemon-protocol.md) 修订：
+> Rust v1 处理已收进 `@ait/client`，应用层适配器移除。以下保留原始决策背景。
+
 - 状态：Accepted。
 - 日期：2026-10-07。
 - 范围：`apps/`、仓库内 `@ait/client` 与 `@ait/protocol`。

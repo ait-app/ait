@@ -4,9 +4,8 @@ import { createWebSocketTransportFactory } from "@ait/client/internal/daemon-cli
 import { buildDaemonWebSocketUrl } from "@/utils/daemon-endpoints";
 import { isWeb } from "@/constants/platform";
 import { createAppWebSocketFactory } from "../websocket-factory";
-import { createRustDaemonTransportFactory } from "./transport";
-import { createBrowserRustTransportFactory } from "./browser-transport";
-import type { TransportFactory } from "./types";
+import { createBrowserDaemonTransportFactory } from "./browser-transport";
+import type { TransportFactory } from "@ait/client/internal/protocol/types";
 import { createAccountRelayTransportFactory } from "./account-transport";
 import type { HubShareResourceKind } from "@ait/client/internal/hub";
 
@@ -26,15 +25,13 @@ export function buildAccountRelayClientConfig(connection: {
     url: `ait+desktop://account-relay/${connection.hostId}?${query}`,
     connectTimeoutMs: 45_000,
     reconnect: { baseDelayMs: 500, maxDelayMs: 30_000 },
-    transportFactory: createRustDaemonTransportFactory(
-      createAccountRelayTransportFactory,
-      connection.shareId ? (connection.shareResourceKind ?? "workspace") : undefined,
-    ),
+    transportFactory: createAccountRelayTransportFactory,
+    guestScope: connection.shareId ? (connection.shareResourceKind ?? "workspace") : undefined,
   };
 }
 
 /** Shared by the host probe and the long-lived runtime; password is the Rust Bearer token. */
-export function buildRustClientConfig(
+export function buildDaemonClientConfig(
   connection: { endpoint: string; useTls?: boolean; password?: string },
   desktopTransport: TransportFactory | null,
 ) {
@@ -46,16 +43,16 @@ export function buildRustClientConfig(
   url.pathname = "/v1/ws";
   const nativeTransport = createWebSocketTransportFactory(createAppWebSocketFactory());
   const base: TransportFactory =
-    desktopTransport ?? (isWeb ? createBrowserRustTransportFactory() : nativeTransport);
+    desktopTransport ?? (isWeb ? createBrowserDaemonTransportFactory() : nativeTransport);
   return {
     url: url.toString(),
     ...(connection.password ? { password: connection.password } : {}),
-    transportFactory: createRustDaemonTransportFactory(base),
+    transportFactory: base,
   };
 }
 
 /** SSH carries the same Rust protocol and Bearer authentication as direct TCP. */
-export function buildRustSshClientConfig(
+export function buildSshDaemonClientConfig(
   connection: { host: string; sshPort?: number; daemonPort?: number; password?: string },
   desktopTransport: TransportFactory | null | undefined,
   buildUrl: (target: DesktopDaemonTransportTarget) => string = buildDesktopDaemonTransportUrl,
@@ -72,6 +69,6 @@ export function buildRustSshClientConfig(
       ...(connection.daemonPort !== undefined ? { daemonPort: connection.daemonPort } : {}),
     }),
     password: connection.password,
-    transportFactory: createRustDaemonTransportFactory(desktopTransport),
+    transportFactory: desktopTransport,
   };
 }

@@ -1,7 +1,7 @@
 /**
- * Validate the imported frontend adapter against the pinned Paseo SDK and a real Rust server.
+ * Validate the repository SDK and desktop transports against a real Rust server.
  * Dependencies: esbuild, vitest, zod ^4.4.3, tweetnacl, base64-js, semver and ws (or Playwright).
- * PASEO_SOURCE_ROOT: pinned upstream checkout; PASEO_TEST_DEPS: test node_modules directory.
+ * PASEO_TEST_DEPS: test node_modules directory.
  * AIT_SERVER_BIN: compiled Rust server; PASEO_VALIDATION_REPORT: optional JSON output.
  * --terminal: test the imported SDK and desktop terminal lifecycle only (no upstream checkout needed).
  * --files: test real file lookup, reads and the desktop live-file model using the imported SDK.
@@ -18,11 +18,10 @@ const repo = path.resolve(__dirname, "..");
 const terminalOnly = process.argv.includes("--terminal");
 const filesOnly = process.argv.includes("--files");
 const focused = terminalOnly || filesOnly;
-const upstream = focused ? repo : process.env.PASEO_SOURCE_ROOT || path.resolve(repo, "../paseo");
+const upstream = repo;
 const deps = process.env.PASEO_TEST_DEPS || path.join(repo, "node_modules");
 const serverBinary = process.env.AIT_SERVER_BIN || path.join(repo, "target/debug/daemon");
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "ait-paseo-validation-"));
-const pin = "2c8e8a826810337492cc5a38bb0bbd705b6fb632";
 const resolve = (name) => require.resolve(name, { paths: [deps, repo] });
 const esbuild = require(resolve("esbuild"));
 let wsPath;
@@ -35,7 +34,6 @@ const wsModule = require(wsPath);
 const WebSocket = wsModule.WebSocket || wsModule.ws || wsModule;
 let DaemonClient,
   WSOutboundMessageSchema,
-  createRustDaemonTransportFactory,
   createDesktopDaemonTransportFactory,
   createLocalTransportManager,
   LiveFileModel;
@@ -84,7 +82,6 @@ async function buildFixtures() {
   );
   for (const [name, entry] of [
     ["sdk", path.join(work, "sdk-entry.ts")],
-    ["adapter", path.join(repo, "apps/mobile/src/runtime/rust-daemon/transport.ts")],
     ["renderer", path.join(repo, "apps/mobile/src/desktop/daemon/desktop-daemon-transport.ts")],
     ["main", path.join(repo, "apps/desktop/src/daemon/local-transport.ts")],
     ["file-model", path.join(repo, "apps/mobile/src/file-pane/live-file/model.ts")],
@@ -153,7 +150,7 @@ async function runIntegration() {
       sendMessage: (input) => manager.send(input),
       closeSession: async (id) => manager.close(id),
     });
-    const factory = createRustDaemonTransportFactory(base);
+    const factory = base;
     const checkedFactory = (options) => {
       const t = factory(options);
       t.onMessage((data, binary) => {
@@ -169,13 +166,6 @@ async function runIntegration() {
           }
           return;
         }
-        const value = JSON.parse(String(data));
-        const check = WSOutboundMessageSchema.safeParse(value);
-        if (!check.success)
-          results.invalidMessages.push({
-            message: value,
-            issues: check.error.issues,
-          });
       });
       return t;
     };
@@ -186,8 +176,19 @@ async function runIntegration() {
       password: token,
       transportFactory: checkedFactory,
       reconnect: { enabled: false },
-      logger: { debug() {}, info() {}, warn() {}, error() {} },
+      logger: {
+        debug() {},
+        info() {},
+        warn(fields, message) {
+          if (message === "Message validation failed") results.invalidMessages.push(fields);
+        },
+        error() {},
+      },
       suppressSendErrors: false,
+    });
+    client.subscribeRawMessages((message) => {
+      const check = WSOutboundMessageSchema.safeParse({ type: "session", message });
+      if (!check.success) results.invalidMessages.push({ message, issues: check.error.issues });
     });
     async function check(name, fn, expectedCode) {
       let timer;
@@ -227,7 +228,7 @@ async function runIntegration() {
         ["provider snapshot", () => client.getProvidersSnapshot()],
         ["workspace labels", () => client.listWorkspaceLabels()],
         ["voice mode off", () => client.setVoiceMode(false)],
-        ["liveness ping", () => client.livenessPing({ timeoutMs: 2000 })],
+        ["liveness ping", () => client.measureLatency({ timeoutMs: 2000 })],
         ["schedules", () => client.scheduleList()],
         [
           "agents subscribe",
@@ -541,7 +542,7 @@ vi.mock('@/desktop/daemon/local-daemon-transport-rpc', () => ({ defaultLocalDaem
     test: {
       setupFiles: [path.join(work, "setup.mjs")],
       include: [
-        "apps/mobile/src/runtime/rust-daemon/transport.test.ts",
+        "packages/client/src/protocol/connection.test.ts",
         "apps/mobile/src/utils/test-daemon-connection.test.ts",
         "apps/mobile/src/desktop/daemon/desktop-daemon-transport.test.ts",
         "apps/desktop/src/daemon/local-transport.test.ts",
@@ -576,13 +577,6 @@ vi.mock('@/desktop/daemon/local-daemon-transport-rpc', () => ({ defaultLocalDaem
 
 (async () => {
   try {
-    if (!focused)
-      assert.equal(
-        execFileSync("git", ["-C", upstream, "rev-parse", "HEAD"], {
-          encoding: "utf8",
-        }).trim(),
-        pin,
-      );
     assert(fs.existsSync(serverBinary), "Build daemon or set AIT_SERVER_BIN");
     fs.writeFileSync(
       path.join(work, "ws.cjs"),
@@ -590,13 +584,15 @@ vi.mock('@/desktop/daemon/local-daemon-transport-rpc', () => ({ defaultLocalDaem
     );
     await buildFixtures();
     ({ DaemonClient, WSOutboundMessageSchema } = require(path.join(work, "sdk.cjs")));
-    ({ createRustDaemonTransportFactory } = require(path.join(work, "adapter.cjs")));
     ({ createDesktopDaemonTransportFactory } = require(path.join(work, "renderer.cjs")));
     ({ createLocalTransportManager } = require(path.join(work, "main.cjs")));
     ({ LiveFileModel } = require(path.join(work, "file-model.cjs")));
     runUnitTests();
     await runIntegration();
-    results.upstreamRevision = focused ? "imported workspace SDK" : pin;
+    results.upstreamRevision = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repo,
+      encoding: "utf8",
+    }).trim();
     results.schema = "Original Zod WSOutboundMessageSchema (AOT build output not imported)";
     results.scope =
       "Real SDK, renderer IPC transport, main-process transport manager and isolated Rust server; no Electron UI";

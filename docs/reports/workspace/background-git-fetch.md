@@ -26,7 +26,7 @@ Ait 补齐了 Paseo 的远端引用刷新：活跃目录订阅首次观察仓库
 生产实现：[观察协调](../../../crates/filesystem/src/git/service/git_fetch.rs)、
 [Git adapter](../../../crates/filesystem/src/git/local/git_fetch.rs)、
 [目录订阅](../../../crates/metadata/src/directory/rpc/directory/listing.rs)、
-[App 事件映射](../../../apps/mobile/src/runtime/rust-daemon/messages.ts)。
+[App 事件映射](../../../packages/client/src/protocol/messages.ts)。
 
 ## 测试执行
 
@@ -74,7 +74,7 @@ Sherpa ONNX 静态库缓存；前端复用本机已安装依赖，未做干净�
 [目录筛选和归档](../../../crates/metadata/src/directory/service/directory/tests/git_observation.rs)、
 [基准引用](../../../crates/filesystem/src/git/local/checkout/tests/remote_base.rs)、
 [真实 server WebSocket 流程](../../../bins/daemon/tests/process/git_fetch.rs)、
-[SDK schema 验证](../../../apps/mobile/src/runtime/rust-daemon/messages.test.ts)。
+[SDK schema 验证](../../../packages/client/src/protocol/messages.test.ts)。
 
 ## Test coverage
 

@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import type { Transport } from "./types";
+import type { Transport } from "@ait/client/internal/protocol/types";
 
 export function nativeRelayHarness() {
   const callbacks = {

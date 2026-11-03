@@ -1,6 +1,6 @@
 # @ait/client
 
-Private, repository-local Ait client compatibility library. All implementation
+Private, repository-local Ait client library. All implementation
 source lives in `packages/client/src` and is built from this checkout. Consumers
 use `file:` dependencies; no Paseo SDK is fetched from npm.
 
@@ -26,17 +26,20 @@ JavaScript and TypeScript declarations under each package's `dist/`.
 
 ## Connecting to Ait
 
-The library retains the compatibility client API and wire types. Ait uses its
-Rust v1 protocol, so App and native test consumers must supply the production
-[transport adapter](../../apps/mobile/src/runtime/rust-daemon/transport.ts),
-connect to `/v1/ws`, and provide the server's Bearer token. Browser connections
-use the production ticket transport. Package renaming alone does not replace
-this adapter.
+`DaemonClient` and the public `createPaseoClient` API speak the Rust v1 protocol
+natively. Connect to `/v1/ws` and supply the daemon's Bearer token. Callers may
+supply a raw `transportFactory` or `webSocketFactory` for their platform;
+protocol negotiation, request correlation, subscriptions, chunks and binary frame
+routing live in [the SDK protocol modules](src/protocol/connection.ts).
 
-[Maestro's connection helper](../../apps/mobile/maestro/support/ait-client.ts) shows
-a Node connection using the local `@ait/client/internal/*` modules and the same
-Rust adapter. [App E2E](../../apps/mobile/e2e/README.md) starts an isolated Ait server.
+The App's [transport selection](../../apps/mobile/src/runtime/daemon-transport/connection.ts)
+chooses Electron IPC, native WebSockets, browser one-use tickets or account Hub.
+Direct TCP/SSH retains four capability channels; account Hub uses one session.
+Node callers should provide a WebSocket implementation that supports Authorization
+headers; standard browser WebSockets require the ticket transport.
 
-The high-level client API and examples inherited from Paseo still use compatibility
-names such as `createPaseoClient`; those names are not independent Ait transport
-implementations. Imports and workspace builds now consistently use `@ait/*`.
+[Maestro's connection helper](../../apps/mobile/maestro/support/ait-client.ts) and
+[App E2E](../../apps/mobile/e2e/README.md) use the same native SDK without an App
+protocol adapter. High-level API names such as `createPaseoClient` remain for
+source compatibility; the original Paseo wire protocol is no longer a client mode.
+See [ADR-211](../../docs/decisions/clients/adr-211-sdk-native-daemon-protocol.md).

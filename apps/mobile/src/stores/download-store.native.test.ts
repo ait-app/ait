@@ -25,7 +25,7 @@ vi.mock("expo-file-system/legacy", () => ({}));
 vi.mock("expo-sharing", () => ({ isAvailableAsync: async () => true, shareAsync: mocks.share }));
 vi.mock("@/utils/daemon-endpoints", () => ({ buildDaemonWebSocketUrl: vi.fn() }));
 vi.mock("@/utils/open-external-url", () => ({ openExternalUrl: vi.fn() }));
-vi.mock("@/runtime/rust-daemon/native-account-download", () => ({
+vi.mock("@/runtime/daemon-transport/native-account-download", () => ({
   streamNativeAccountDownload: mocks.stream,
 }));
 vi.mock("expo-file-system", () => ({

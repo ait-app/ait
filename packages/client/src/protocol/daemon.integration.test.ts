@@ -7,10 +7,9 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 import WebSocket from "ws";
-import { DaemonClient } from "@ait/client/internal/daemon-client";
-import { createWebSocketTransportFactory } from "@ait/client/internal/daemon-client-websocket-transport";
-import type { WebSocketLike } from "@ait/client/internal/daemon-client-transport-types";
-import { createRustDaemonTransportFactory } from "./transport";
+import { DaemonClient } from "../daemon-client.js";
+import { createWebSocketTransportFactory } from "../daemon-client-websocket-transport.js";
+import type { WebSocketLike } from "../daemon-client-transport-types.js";
 import type { SessionOutboundMessage } from "@ait/protocol/messages";
 
 // Opt in with AIT_TEST_RUST_SERVER=/absolute/path/to/target/debug/daemon.
@@ -18,7 +17,7 @@ import type { SessionOutboundMessage } from "@ait/protocol/messages";
 it.runIf(Boolean(process.env.AIT_TEST_RUST_SERVER) && process.platform !== "win32")(
   "preserves Paseo SDK creation, directory, permission, resume and terminal behavior",
   async () => {
-    const repository = fileURLToPath(new URL("../../../../../", import.meta.url));
+    const repository = fileURLToPath(new URL("../../../../", import.meta.url));
     const root = await mkdtemp(join(tmpdir(), "ait-sdk-creation-"));
     const cwd = join(root, "work");
     const token = randomBytes(32).toString("hex");
@@ -59,7 +58,7 @@ it.runIf(Boolean(process.env.AIT_TEST_RUST_SERVER) && process.platform !== "win3
         clientId: "paseo-creation-smoke",
         authHeader: `Bearer ${token}`,
         reconnect: { enabled: false },
-        transportFactory: createRustDaemonTransportFactory(base),
+        transportFactory: base,
       });
       await client.connect();
       await verifyStartupEventSubscriptions(client);

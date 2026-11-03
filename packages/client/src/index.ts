@@ -79,6 +79,10 @@ export interface PaseoLogger {
 }
 
 export interface PaseoClientConfig {
+  /** Optional raw platform transport; the SDK always owns the Rust v1 protocol. */
+  transportFactory?: DaemonClientConfig["transportFactory"];
+  webSocketFactory?: DaemonClientConfig["webSocketFactory"];
+  guestScope?: DaemonClientConfig["guestScope"];
   capabilities?: DaemonClientConfig["capabilities"];
   url: string;
   clientId?: string;

@@ -1,7 +1,7 @@
 import type { HubLink } from "@ait/client/internal/hub";
 import { getNativeHubLink, registerNativeAccountTransport } from "../native-account";
 import { parseAccountRelayTarget } from "./account-relay-target";
-import type { Transport, TransportFactory } from "./types";
+import type { Transport, TransportFactory } from "@ait/client/internal/protocol/types";
 
 /** Bound how long a new session waits for the account's Hub link. */
 const HUB_READY_WAIT_MS = 5000;

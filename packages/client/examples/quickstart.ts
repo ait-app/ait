@@ -1,6 +1,16 @@
-import { createPaseoClient } from "@ait/client";
+import WebSocket from "ws";
+import { createPaseoClient, type PaseoClientConfig } from "@ait/client";
 
-const client = createPaseoClient({ url: "ws://127.0.0.1:6767/ws" });
+const token = process.env.AIT_SERVER_TOKEN;
+if (!token) throw new Error("Set AIT_SERVER_TOKEN for the target daemon");
+const client = createPaseoClient({
+  url: process.env.AIT_SERVER_URL ?? "ws://127.0.0.1:7316/v1/ws",
+  password: token,
+  webSocketFactory: (url, options) =>
+    new WebSocket(url, { headers: options?.headers }) as unknown as ReturnType<
+      NonNullable<PaseoClientConfig["webSocketFactory"]>
+    >,
+});
 
 await client.connect();
 
