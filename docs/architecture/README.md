@@ -71,6 +71,10 @@ API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储�
 Provider 自身行为测试归 `crates/provider`；daemon 测试覆盖宿主、传输和跨能力组合，见
 [ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)。
 
+Pi 模型与推理偏好沿用配置持久化及下一条 prompt 前应用的流程；请求偏好与原生有效状态分别保存，
+准入拒绝或 busy 时也在关闭 writer 前保存已知运行事实，见
+[ADR-211](../decisions/providers/adr-211-pi-next-turn-reasoning-controls.md)。
+
 新定时任务保存固定 Workspace 身份，执行时校验归属，在该 Workspace 内选择或创建 Agent。
 新建 Agent 的收尾不归档 Workspace；旧未绑定任务保留兼容分支，见[任务手册](../operations/schedules.md)。
 Bot 持有独占 Channel 与隐藏 Provider session，普通 Agent API 不能接管；Workspace 归档先停用 Bot。

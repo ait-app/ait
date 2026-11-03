@@ -21,6 +21,7 @@ use crate::ports::environment::AgentEnvironment;
 use crate::protocol::provider::Details;
 
 pub(crate) const PROVIDER: &str = "pi";
+const DISCOVERY_DEFAULTS_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Native Pi executable and ephemeral environment; constructing it performs no I/O.
 #[derive(Debug, Clone)]
@@ -56,6 +57,41 @@ impl PiClient {
     pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
         self.images = super::images::ImageStore::new(directory);
         self
+    }
+
+    /// Read the native catalog, optionally including defaults from the same process.
+    /// Returns catalog errors; unavailable optional state leaves defaults unspecified.
+    async fn discover_models(
+        &self,
+        cwd: &str,
+        include_defaults: bool,
+    ) -> Result<(Value, Value), AgentSessionError> {
+        config::directory(cwd)?;
+        transport::version(self).await?;
+        let mut transport = transport::Transport::spawn(self, cwd, &["--no-session".into()])?;
+        let result = async {
+            let models = transport
+                .request(json!({"type":"get_available_models"}))
+                .await?;
+            // Capability discovery must remain usable when optional ambient defaults fail.
+            let state = if include_defaults {
+                match tokio::time::timeout(
+                    DISCOVERY_DEFAULTS_TIMEOUT,
+                    transport.request(json!({"type":"get_state"})),
+                )
+                .await
+                {
+                    Ok(Ok(state)) => state,
+                    Ok(Err(_)) | Err(_) => Value::Null,
+                }
+            } else {
+                Value::Null
+            };
+            Ok((models, state))
+        }
+        .await;
+        let closed = transport.close().await;
+        result.and_then(|models| closed.map(|()| models))
     }
 }
 
@@ -136,15 +172,9 @@ impl AgentClient for PiClient {
     }
 
     async fn discover(&self, cwd: &str) -> Result<Details, AgentSessionError> {
-        config::directory(cwd)?;
-        transport::version(self).await?;
-        let mut transport = transport::Transport::spawn(self, cwd, &["--no-session".into()])?;
-        let result = transport
-            .request(json!({"type":"get_available_models"}))
-            .await;
-        transport.close().await?;
+        let (models, state) = self.discover_models(cwd, true).await?;
         Ok(Details {
-            models: config::models(&result?)?,
+            models: config::models(&models, &state)?,
             modes: Vec::new(),
             features: Vec::new(),
         })
@@ -152,15 +182,13 @@ impl AgentClient for PiClient {
 
     async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
         config::spec(spec)?;
-        if let Some(model) = &spec.config.model
-            && !self
-                .discover(&spec.cwd)
-                .await?
-                .models
-                .iter()
-                .any(|item| item["id"] == *model)
-        {
-            return Err(AgentSessionError::Rejected);
+        // Pi validates or clamps opaque levels against the selected model on creation,
+        // configuration and resume. A stale catalog/profile must not prevent resume.
+        if let Some(model) = &spec.config.model {
+            let (models, _) = self.discover_models(&spec.cwd, false).await?;
+            if !config::model_ids(&models)?.contains(model) {
+                return Err(AgentSessionError::Rejected);
+            }
         }
         Ok(())
     }

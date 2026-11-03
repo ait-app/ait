@@ -6,6 +6,9 @@ use axum::{Json, Router, routing::post};
 use std::sync::{Arc, Mutex};
 use tokio_util::task::AbortOnDropHandle;
 
+mod thinking_clamping;
+mod thinking_delivery;
+
 #[tokio::test]
 #[ignore = "requires Pi >= 1.2 on PATH; uses only an isolated loopback model"]
 async fn installed_pi_streams_and_resumes_with_loopback_model() {

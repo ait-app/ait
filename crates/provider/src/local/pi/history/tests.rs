@@ -334,10 +334,49 @@ async fn lists_and_imports_only_current_branch_without_launching_pi() {
     assert_eq!(history.entries[2].item["text"], "current");
     assert_eq!(history.entries[0].timestamp, "2026-10-18T01:00:00Z");
     assert_eq!(history.config.model.as_deref(), Some("fixture/model"));
+    assert_eq!(history.config.thinking_option_id, None);
     assert_eq!(history.config.mode_id, None);
     assert_eq!(history.resume_metadata["sessionFile"], json!(file));
     assert_eq!(std::fs::read(&file).unwrap(), before);
     assert!(!client.program.exists());
+}
+
+#[test]
+fn inspection_projects_the_latest_thinking_level_on_the_current_branch() {
+    let boundary_level = "a".repeat(512);
+    for (level, expected) in [
+        (json!("off"), Some("off")),
+        (json!("low"), Some("low")),
+        (json!("future"), Some("future")),
+        (json!(boundary_level), Some(boundary_level.as_str())),
+        (json!("a".repeat(513)), None),
+        (json!("bad\nlevel"), None),
+        (json!(""), None),
+        (Value::Null, None),
+        (json!(42), None),
+    ] {
+        let (_directory, client, file, cwd) = fixture();
+        write(
+            &file,
+            &cwd,
+            vec![
+                json!({"type":"model_change","id":"model","parentId":null,"provider":"fixture","modelId":"model"}),
+                json!({"type":"thinking_level_change","id":"initial","parentId":"model","thinkingLevel":"high"}),
+                json!({"type":"thinking_level_change","id":"current","parentId":"initial","thinkingLevel":level}),
+                user("u", json!("current"), "first"),
+                json!({"type":"thinking_level_change","id":"abandoned","parentId":"u","thinkingLevel":"minimal"}),
+                assistant("a", "u", json!([{"type":"text","text":"current branch"}])),
+            ],
+        );
+        let before = std::fs::read(&file).unwrap();
+
+        let history = inspect(&client, &handle(), &cwd).unwrap();
+
+        assert_eq!(history.config.thinking_option_id.as_deref(), expected);
+        assert_eq!(history.config.model.as_deref(), Some("fixture/model"));
+        assert_eq!(std::fs::read(&file).unwrap(), before);
+        assert!(!client.program.exists());
+    }
 }
 
 #[test]

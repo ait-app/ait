@@ -118,6 +118,7 @@ struct FakeState {
     start_configs: Vec<StoredAgentConfig>,
     available: bool,
     fail_info: bool,
+    runtime_info: Option<StoredAgentRuntimeInfo>,
     fail_close: bool,
     handle_session_id: String,
     create_calls: usize,
@@ -147,6 +148,7 @@ impl Default for FakeState {
             start_configs: Vec::new(),
             available: true,
             fail_info: false,
+            runtime_info: None,
             fail_close: false,
             handle_session_id: "native-1".to_owned(),
             create_calls: 0,
@@ -335,6 +337,9 @@ impl AgentSession for FakeSession {
         let state = self.0.lock().expect("state");
         if state.fail_info {
             return Err(AgentSessionError::Failed);
+        }
+        if let Some(info) = &state.runtime_info {
+            return Ok(info.clone());
         }
         Ok(StoredAgentRuntimeInfo {
             provider: "codex".to_owned(),
@@ -939,6 +944,44 @@ async fn failed_start_is_persisted_and_native_ownership_is_released() {
     );
     assert!(manager.live_snapshot("agent-1").is_none());
     assert_eq!(client.0.lock().unwrap().close_calls, 1);
+}
+
+#[tokio::test]
+async fn rejected_and_busy_admission_persist_changed_runtime_before_closing() {
+    for error in [AgentSessionError::Rejected, AgentSessionError::Busy] {
+        let (mut manager, registry, client) = make_manager();
+        let created = manager
+            .create("agent-1", &spec(), AgentRegistration::default())
+            .await
+            .unwrap();
+        let initial = created.runtime_info.unwrap();
+        let changed = StoredAgentRuntimeInfo {
+            model: Some("native-model".to_owned()),
+            thinking_option_id: Some("high".to_owned()),
+            ..initial.clone()
+        };
+        {
+            let mut state = client.0.lock().unwrap();
+            state.start_result = Err(error);
+            state.runtime_info = Some(changed.clone());
+        }
+
+        assert_eq!(
+            manager.send("agent-1", "hello").await,
+            Err(AgentManagerError::Session)
+        );
+
+        let record = registry.get("agent-1").unwrap().unwrap();
+        assert_ne!(record.runtime_info.as_ref(), Some(&initial));
+        assert_eq!(record.runtime_info, Some(changed));
+        assert_eq!(record.config, created.config);
+        assert_eq!(record.last_status, AgentRuntimeStatus::Error);
+        assert!(record.last_error.is_some());
+        assert!(manager.live_snapshot("agent-1").is_none());
+        assert_eq!(client.0.lock().unwrap().close_calls, 1);
+        manager.poll().await.unwrap();
+        assert_eq!(registry.get("agent-1").unwrap().unwrap(), record);
+    }
 }
 
 #[tokio::test]

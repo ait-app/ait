@@ -840,7 +840,8 @@ impl AgentManager {
         if let Some(binding) = &agent.mcp {
             binding.apply(&mut effective);
         }
-        if let Ok(turn) = agent.session.start_input(prompt, &effective).await {
+        let admission = agent.session.start_input(prompt, &effective).await;
+        if let Ok(turn) = admission {
             agent.latest_turn = Some(turn.clone());
             agent.turn = Some(turn);
             match agent.session.runtime_info().await {
@@ -849,6 +850,15 @@ impl AgentManager {
             }
             Ok(())
         } else {
+            // Rejected or busy admission can follow applied controls or extension changes.
+            // Capture facts before settlement closes the writer and bypasses queued events.
+            if matches!(
+                admission,
+                Err(AgentSessionError::Rejected | AgentSessionError::Busy)
+            ) && let Ok(info) = agent.session.runtime_info().await
+            {
+                agent.pending_runtime = Some(info);
+            }
             agent.pending = Some(AgentTurnEvent::Failed);
             self.poll().await?;
             Err(AgentManagerError::Session)
