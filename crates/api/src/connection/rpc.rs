@@ -1,8 +1,9 @@
 //! One-shot transport adapter for the existing capability dispatch chain.
 
-use model::outbound::{Frame, Outbound};
+use model::outbound::{Frame, Outbound, Queued};
 use model::{Context, ErrorCode, Request, ServerMessage};
 use serde_json::Value;
+use tokio::sync::mpsc;
 
 use super::ConnectionSubscriptions;
 use crate::Shared;
@@ -15,6 +16,19 @@ pub(crate) async fn execute(
     state: &Shared,
     method: &str,
     params: Value,
+) -> Result<Value, ErrorCode> {
+    execute_observed(state, method, params, None).await
+}
+
+/// Dispatch one creation, relaying progress while retaining ownership of its final response.
+/// A disconnected observer does not cancel the admitted creation or its cleanup.
+/// # Errors
+/// Returns the same dispatch and decoding failures as [`execute`].
+pub(crate) async fn execute_observed(
+    state: &Shared,
+    method: &str,
+    params: Value,
+    observer: Option<(Outbound, usize)>,
 ) -> Result<Value, ErrorCode> {
     let (outbound, mut receiver) = Outbound::new();
     let _lifetime = OutputLifetime(outbound.clone());
@@ -30,30 +44,16 @@ pub(crate) async fn execute(
             request,
             runtime: state,
             outbound: &outbound,
-            available_subscriptions: 0,
+            available_subscriptions: observer.as_ref().map_or(0, |(_, available)| *available),
         },
         state,
         &mut subscriptions,
     );
-    let receive = async {
-        while let Some(queued) = receiver.recv().await {
-            let Frame::Text(text) = &queued.message else {
-                continue;
-            };
-            let message: ServerMessage =
-                serde_json::from_str(text).map_err(|_| ErrorCode::InvalidMessage)?;
-            match message {
-                ServerMessage::Response { request_id, result } if request_id == id => {
-                    return Ok(result);
-                }
-                ServerMessage::Error {
-                    request_id, code, ..
-                } if request_id.as_deref() == Some(&id) => return Err(code),
-                _ => {}
-            }
-        }
-        Err(ErrorCode::ResourceExhausted)
-    };
+    let receive = receive(
+        &mut receiver,
+        &id,
+        observer.as_ref().map(|(outbound, _)| outbound),
+    );
     tokio::pin!(dispatch, receive);
     tokio::select! {
         result = &mut receive => result,
@@ -64,6 +64,35 @@ pub(crate) async fn execute(
     }
 }
 
+/// Relay creation events independently of the connection's lifetime and retain its result.
+async fn receive(
+    receiver: &mut mpsc::Receiver<Queued>,
+    id: &str,
+    observer: Option<&Outbound>,
+) -> Result<Value, ErrorCode> {
+    while let Some(queued) = receiver.recv().await {
+        let Frame::Text(text) = &queued.message else {
+            continue;
+        };
+        let message: ServerMessage =
+            serde_json::from_str(text).map_err(|_| ErrorCode::InvalidMessage)?;
+        match message {
+            ServerMessage::Response { request_id, result } if request_id == id => {
+                return Ok(result);
+            }
+            ServerMessage::Error {
+                request_id, code, ..
+            } if request_id.as_deref() == Some(id) => return Err(code),
+            message => {
+                if let Some(observer) = observer {
+                    let _ = observer.send(&message);
+                }
+            }
+        }
+    }
+    Err(ErrorCode::ResourceExhausted)
+}
+
 struct OutputLifetime(Outbound);
 
 impl Drop for OutputLifetime {
@@ -71,3 +100,6 @@ impl Drop for OutputLifetime {
         self.0.failure().cancel();
     }
 }
+
+#[cfg(test)]
+mod tests;

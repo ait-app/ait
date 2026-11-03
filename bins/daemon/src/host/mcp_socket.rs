@@ -26,6 +26,17 @@ impl McpSocket {
     /// Bind `path` with owner-only permissions, reclaiming only an inactive socket.
     /// Returns filesystem, active-listener, or bind errors without replacing other file types.
     pub(super) async fn bind(path: &Path) -> anyhow::Result<Self> {
+        let parent = path
+            .parent()
+            .context("MCP Unix socket must have a parent directory")?;
+        let metadata = std::fs::symlink_metadata(parent)
+            .context("inspect MCP Unix socket parent directory")?;
+        anyhow::ensure!(
+            metadata.is_dir()
+                && metadata.uid() == rustix::process::geteuid().as_raw()
+                && metadata.permissions().mode() & 0o777 == 0o700,
+            "MCP Unix socket parent must be owned by the current user with mode 0700"
+        );
         remove_stale(path).await?;
         let listener = UnixListener::bind(path).context("bind MCP Unix socket")?;
         let metadata = std::fs::symlink_metadata(path).context("inspect bound MCP Unix socket")?;

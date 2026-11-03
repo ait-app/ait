@@ -45,7 +45,8 @@ export interface ToastState {
 }
 
 export interface ToastApi {
-  show: (content: ReactNode, options?: ToastShowOptions) => void;
+  /** Returns a dismiss callback scoped to this toast, when rendered in the app. */
+  show: (content: ReactNode, options?: ToastShowOptions) => (() => void) | void;
   copied: (label?: string) => void;
   error: (message: string) => void;
 }
@@ -92,9 +93,9 @@ export function useToastHost(): {
       return;
     }
 
-    idRef.current += 1;
+    const id = ++idRef.current;
     setToast({
-      id: idRef.current,
+      id,
       content,
       nativeMessage,
       icon: options?.icon,
@@ -102,6 +103,7 @@ export function useToastHost(): {
       durationMs,
       testID: options?.testID,
     });
+    return () => setToast((current) => (current?.id === id ? null : current));
   }, []);
 
   const api = useMemo<ToastApi>(

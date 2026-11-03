@@ -869,6 +869,8 @@ function ProjectHeaderRow({
 }: ProjectHeaderRowProps) {
   const {
     isPressed,
+    isHighlighted,
+    onHighlightChange,
     onPressIn: handleProjectPressIn,
     onPressOut: handleProjectPressOut,
   } = useSidebarRowPress();
@@ -925,7 +927,7 @@ function ProjectHeaderRow({
           statusBucket={statusBucket}
           projectViewKey={project.viewKey}
           backdrop={getSidebarRowBackdrop({
-            isPressed,
+            isPressed: isHighlighted,
             selected: showSelection,
             isHovered,
           })}
@@ -970,6 +972,7 @@ function ProjectHeaderRow({
             accessibilityRole="button"
             style={projectRowStyle}
             highlightStyle={styles.projectRowPressed}
+            onHighlightChange={onHighlightChange}
             onPressIn={handleProjectPressIn}
             onPressOut={handleProjectPressOut}
             onPress={handlePress}
@@ -996,6 +999,7 @@ function ProjectHeaderRow({
             accessibilityRole="button"
             style={projectRowStyle}
             highlightStyle={styles.projectRowPressed}
+            onHighlightChange={onHighlightChange}
             onPressIn={handleProjectPressIn}
             onPressOut={handleProjectPressOut}
             onPress={handlePress}
@@ -1058,6 +1062,8 @@ function WorkspaceRowInner({
   const showSelection = selected && !isCompact;
   const {
     isPressed,
+    isHighlighted,
+    onHighlightChange,
     onPressIn: handleWorkspacePressIn,
     onPressOut: handleWorkspacePressOut,
   } = useSidebarRowPress();
@@ -1093,7 +1099,7 @@ function WorkspaceRowInner({
             isHovered,
           });
           const backdrop = getSidebarRowBackdrop({
-            isPressed,
+            isPressed: isHighlighted,
             selected: showSelection,
             isHovered,
           });
@@ -1126,6 +1132,7 @@ function WorkspaceRowInner({
                 accessibilityState={accessibilityState}
                 style={workspaceRowStyle}
                 highlightStyle={styles.workspaceRowPressed}
+                onHighlightChange={onHighlightChange}
                 onPressIn={handleWorkspacePressIn}
                 onPressOut={handleWorkspacePressOut}
                 onPress={handlePress}

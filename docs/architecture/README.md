@@ -78,7 +78,8 @@ Bot 持有独占 Channel 与隐藏 Provider session，普通 Agent API 不能接
 
 ## 主机、连接与客户端
 
-daemon 以 `instance.lock` 排他持有数据目录，`server-id` 稳定，`instance_id` 每次启动变化。
+daemon 先预绑定 TCP 端口，再以 `instance.lock` 排他持有数据目录；锁覆盖本地令牌初始化、诊断采集和
+运行时重启。`server-id` 稳定，`instance_id` 每个运行时变化。
 启动配置、身份、故障证据及服务组装归 daemon。SIGINT/SIGTERM 与关闭 RPC 停止接纳、回收所属资源并释放锁。
 本地 API token 自动持久化，显式 `AIT_SERVER_TOKEN` 优先；详细路径和恢复方式见[daemon 手册](../operations/daemon.md)。
 
@@ -101,14 +102,17 @@ Desktop 内置 daemon 默认启用 Hub 原生通知，独立 daemon 默认直发
 通知配置和凭据归属见[移动端通知](../operations/mobile-notifications.md)。
 
 macOS/Linux Desktop 管理自己启动或验证接管的 daemon，Windows Desktop 只连接远端。
-就绪探测失败保留存活的自有进程，见 [ADR-207](../decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)。
+就绪探测失败保留存活的自有进程供重试；退出时只交接已输出就绪日志的进程，未就绪进程被停止。
+见 [ADR-207](../decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)。
 桌面内置浏览器对本地 Workspace 直接联网，对远端 Workspace 的所有目标经对应 daemon 出站并解析 DNS，
 见 [ADR-186](../decisions/clients/adr-186-workspace-browser-egress.md)。
 浏览器直连先换取一次性 WebSocket 票据；连接所属订阅在关闭时释放。
 Hub 会话支持物理链路续传，超出恢复窗口后仍需重新建立会话和订阅。
 
 群组分享以 Host 保存的范围为准，Hub 访客通过 `x-ait-guest` 准入；workspace/project 限制访问范围，
-node 分享允许更广的节点操作，分享和账号授权保留给所有者。见
+node 分享允许更广的节点操作，分享和账号授权保留给所有者，Bot 与定时任务仅可读取。
+创建访客 Agent／终端的任务在连接断开后仍完成归属记录与撤销检查；撤销逐页取消 Agent，
+终端归属按存活状态清理。共享项目的配置文件和独立分享设置受保护，Forge 查询绑定到 checkout 远端。见
 [ADR-208](../decisions/daemon/adr-208-workspace-share-guests.md)。
 
 原生实时语音由 Provider 拥有原生 thread、SDP、上游 WebRTC、音频协议及认证，voice 拥有媒体连接

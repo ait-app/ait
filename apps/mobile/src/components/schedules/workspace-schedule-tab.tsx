@@ -18,6 +18,7 @@ import type { ScheduleFormWorkspace } from "@/schedules/schedule-form-model";
 import { formatCadence, resolveScheduleTitle } from "@/utils/schedule-format";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { toErrorMessage } from "@/utils/error-messages";
+import { canManageBackgroundTasks } from "@/hosts/background-task-access";
 
 interface WorkspaceScheduleTabProps {
   serverId: string;
@@ -35,11 +36,12 @@ interface WorkspaceScheduleTabProps {
 
 export function WorkspaceScheduleTab(props: WorkspaceScheduleTabProps) {
   const { t } = useTranslation();
+  const readOnly = !canManageBackgroundTasks(props.serverId);
   const view = props.scheduleId
-    ? props.view === "edit"
+    ? props.view === "edit" && !readOnly
       ? "edit"
       : "detail"
-    : props.view === "create"
+    : props.view === "create" && !readOnly
       ? "create"
       : "list";
   const detail = useScheduleDetail(props.serverId, props.scheduleId, props.interactive);
@@ -120,7 +122,7 @@ export function WorkspaceScheduleTab(props: WorkspaceScheduleTabProps) {
             {t("schedules.timeline.back")}
           </Button>
         )}
-        {view !== "create" ? (
+        {view !== "create" && !readOnly ? (
           <Button
             size="sm"
             variant="outline"
@@ -140,6 +142,7 @@ function ScheduleTimelineList(
   props: WorkspaceScheduleTabProps & { query: ReturnType<typeof useWorkspaceSchedules> },
 ) {
   const { t, i18n } = useTranslation();
+  const readOnly = !canManageBackgroundTasks(props.serverId);
   const filter = props.filter ?? "upcoming";
   const groups = useMemo(
     () =>
@@ -199,15 +202,21 @@ function ScheduleTimelineList(
               <View key={schedule.id} style={styles.eventRow}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={t("schedules.timeline.editTask", {
-                    title: resolveScheduleTitle(schedule, t),
-                  })}
+                  accessibilityLabel={
+                    readOnly
+                      ? resolveScheduleTitle(schedule, t)
+                      : t("schedules.timeline.editTask", {
+                          title: resolveScheduleTitle(schedule, t),
+                        })
+                  }
                   style={({ pressed }) => [
                     styles.eventButton,
                     pressed ? styles.pressedEvent : null,
                   ]}
                   testID={`workspace-schedule-${schedule.id}`}
-                  onPress={() => props.onEditTask(schedule.id)}
+                  onPress={() =>
+                    readOnly ? props.onOpen(schedule.id) : props.onEditTask(schedule.id)
+                  }
                 >
                   <View style={styles.eventTime}>
                     <Text style={styles.timeLabel} testID={`schedule-next-trigger-${schedule.id}`}>
@@ -253,7 +262,7 @@ function ScheduleTimelineList(
       ) : (
         <View style={styles.emptyList}>
           <Text style={styles.muted}>{t(`schedules.timeline.empty.${filter}`)}</Text>
-          {filter === "upcoming" ? (
+          {filter === "upcoming" && !readOnly ? (
             <Button variant="outline" onPress={props.onCreate}>
               {t("schedules.new")}
             </Button>
@@ -279,6 +288,7 @@ function ScheduleDetails({
   refresh: () => void;
 }) {
   const { t, i18n } = useTranslation();
+  const readOnly = !canManageBackgroundTasks(serverId);
   const mutations = useScheduleMutations({ serverId });
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
@@ -294,6 +304,7 @@ function ScheduleDetails({
   const title = resolveScheduleTitle(schedule, t);
   const date = (iso: string) => new Date(iso).toLocaleString(i18n.resolvedLanguage);
   const runAction = async (action: string, execute: () => Promise<void>) => {
+    if (readOnly) return;
     setPending((current) => new Set([...current, action]));
     setError(null);
     void queryClient.invalidateQueries({ queryKey: ["schedule-detail", serverId, schedule.id] });
@@ -353,60 +364,62 @@ function ScheduleDetails({
           {t("schedules.openAgent")}
         </Button>
       ) : null}
-      <View style={styles.actions}>
-        {!ended ? (
-          <>
-            <Button
-              size="sm"
-              onPress={() => {
-                void runAction("run", () => mutations.runScheduleNow(schedule.id));
-              }}
-              loading={pending.has("run")}
-              disabled={pending.size > 0 || running}
-              testID="schedule-run-now"
-            >
-              {t("schedules.runNow")}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onPress={() => {
-                void runAction("status", () =>
-                  schedule.status === "paused"
-                    ? mutations.resumeSchedule(schedule.id)
-                    : mutations.pauseSchedule(schedule.id),
-                );
-              }}
-              disabled={pending.has("status") || pending.has("delete")}
-              loading={pending.has("status")}
-              testID="schedule-toggle-status"
-            >
-              {t(schedule.status === "paused" ? "schedules.resume" : "schedules.pause")}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onPress={onEdit}
-              disabled={pending.size > 0 || running}
-              testID="schedule-edit"
-            >
-              {t("schedules.edit", { product: t("schedules.product.schedule") })}
-            </Button>
-          </>
-        ) : null}
-        <Button
-          size="sm"
-          variant="ghost"
-          onPress={() => {
-            void deleteTask();
-          }}
-          disabled={pending.size > 0 || running}
-          loading={pending.has("delete")}
-          testID="schedule-delete"
-        >
-          {t("schedules.deleteAction")}
-        </Button>
-      </View>
+      {!readOnly ? (
+        <View style={styles.actions}>
+          {!ended ? (
+            <>
+              <Button
+                size="sm"
+                onPress={() => {
+                  void runAction("run", () => mutations.runScheduleNow(schedule.id));
+                }}
+                loading={pending.has("run")}
+                disabled={pending.size > 0 || running}
+                testID="schedule-run-now"
+              >
+                {t("schedules.runNow")}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onPress={() => {
+                  void runAction("status", () =>
+                    schedule.status === "paused"
+                      ? mutations.resumeSchedule(schedule.id)
+                      : mutations.pauseSchedule(schedule.id),
+                  );
+                }}
+                disabled={pending.has("status") || pending.has("delete")}
+                loading={pending.has("status")}
+                testID="schedule-toggle-status"
+              >
+                {t(schedule.status === "paused" ? "schedules.resume" : "schedules.pause")}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onPress={onEdit}
+                disabled={pending.size > 0 || running}
+                testID="schedule-edit"
+              >
+                {t("schedules.edit", { product: t("schedules.product.schedule") })}
+              </Button>
+            </>
+          ) : null}
+          <Button
+            size="sm"
+            variant="ghost"
+            onPress={() => {
+              void deleteTask();
+            }}
+            disabled={pending.size > 0 || running}
+            loading={pending.has("delete")}
+            testID="schedule-delete"
+          >
+            {t("schedules.deleteAction")}
+          </Button>
+        </View>
+      ) : null}
       {error ? (
         <Text style={styles.error} accessibilityRole="alert">
           {error}

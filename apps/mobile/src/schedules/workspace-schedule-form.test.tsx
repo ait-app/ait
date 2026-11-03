@@ -203,7 +203,7 @@ vi.mock("@/components/ui/form-field", () => ({
 }));
 
 describe("workspace schedule form", () => {
-  it("offers one Host when multiple resources were shared from that Host", () => {
+  it("excludes shared Hosts from background task creation", () => {
     const original = [...hosts];
     const connection = createAccountRelayHostConnection({
       center: "https://center.test/api",
@@ -232,11 +232,23 @@ describe("workspace schedule form", () => {
       render(
         <ScheduleFormSheet visible mode="create" serverId="share-workspace" onClose={() => {}} />,
       );
-      expect(screen.getAllByRole("option", { name: "Shared Host" })).toHaveLength(1);
-      expect(screen.getByTestId("schedule-host-trigger")).toHaveProperty("value", "share-project");
+      expect(screen.queryAllByRole("option", { name: "Shared Host" })).toHaveLength(0);
+      expect(screen.queryByTestId("schedule-form-submit")).toBeNull();
     } finally {
       hosts.splice(0, hosts.length, ...original);
     }
+  });
+
+  it("does not mount an inline task editor for a persisted guest runtime", () => {
+    render(
+      <WorkspaceScheduleForm
+        serverId="shared:grant"
+        workspace={{ id: "workspace-a", name: "Shared", cwd: "/repo" }}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId("workspace-schedule-form")).toBeNull();
+    expect(createSchedule).not.toHaveBeenCalled();
   });
   beforeEach(() => {
     vi.stubGlobal("React", React);

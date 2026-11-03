@@ -1,15 +1,12 @@
 //! Live guest connections and the resources each visiting account created.
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use super::Shares;
-
-/// Terminal identities remembered per grant; the Host runs far fewer terminals than this.
-const MAX_TERMINALS: usize = 128;
 
 /// One visiting account's access through one share.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -38,7 +35,7 @@ struct Live {
 pub(super) struct Guests {
     next: u64,
     live: BTreeMap<u64, Live>,
-    grants: BTreeMap<Grant, VecDeque<String>>,
+    grants: BTreeMap<Grant, BTreeSet<String>>,
 }
 
 impl Guests {
@@ -65,11 +62,24 @@ impl Guests {
         let Some(terminals) = self.grants.get_mut(&grant) else {
             return false;
         };
-        if terminals.len() >= MAX_TERMINALS {
-            terminals.pop_front();
-        }
-        terminals.push_back(terminal_id);
+        terminals.insert(terminal_id);
         true
+    }
+
+    /// Snapshot all recorded terminal IDs for a later live-process check.
+    pub(super) fn terminal_ids(&self) -> Vec<String> {
+        self.grants
+            .values()
+            .flat_map(|ids| ids.iter().cloned())
+            .collect()
+    }
+
+    /// Remove confirmed exited terminals without evicting newer or long-lived ones.
+    pub(super) fn forget_terminals(&mut self, stale: &[String]) {
+        let stale = stale.iter().map(String::as_str).collect::<BTreeSet<_>>();
+        for terminals in self.grants.values_mut() {
+            terminals.retain(|id| !stale.contains(id.as_str()));
+        }
     }
 
     /// Remember `grant` without a live connection, after a restart found Agents its guest
@@ -91,7 +101,7 @@ impl Guests {
     pub(super) fn owns_terminal(&self, grant: Grant, terminal_id: &str) -> bool {
         self.grants
             .get(&grant)
-            .is_some_and(|terminals| terminals.iter().any(|id| id == terminal_id))
+            .is_some_and(|terminals| terminals.contains(terminal_id))
     }
 
     /// End every connection of each grant for which `stale` holds and forget the grant.
@@ -107,7 +117,7 @@ impl Guests {
                 terminals: self
                     .grants
                     .remove(&grant)
-                    .map(Vec::from)
+                    .map(|terminals| terminals.into_iter().collect())
                     .unwrap_or_default(),
             })
             .collect()
@@ -146,6 +156,7 @@ impl Registration {
 
     /// Remember a terminal this guest created so revocation can end it.
     /// Returns false when the grant was revoked meanwhile; the caller must end the terminal.
+    #[cfg(test)]
     pub(crate) fn record_terminal(&self, terminal_id: String) -> bool {
         self.shares.record_terminal(self.grant, terminal_id)
     }

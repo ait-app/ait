@@ -75,6 +75,7 @@ interface ScheduleRowProps extends ScheduleRowActions {
   /** True when a sole configured host or a specific filter already identifies the host. */
   singleHost?: boolean;
   pending?: ScheduleRowPending;
+  readOnly?: boolean;
   isFirst: boolean;
 }
 
@@ -167,6 +168,7 @@ export function ScheduleRow({
   serverName,
   singleHost,
   pending,
+  readOnly = false,
   isFirst,
   onEdit,
   onPause,
@@ -216,8 +218,11 @@ export function ScheduleRow({
       <Pressable
         style={rowStyle}
         onPress={onEdit}
-        accessibilityRole="button"
-        accessibilityLabel={t("schedules.editNamed", { product: productName.toLowerCase(), title })}
+        disabled={readOnly}
+        accessibilityRole={readOnly ? undefined : "button"}
+        accessibilityLabel={
+          readOnly ? title : t("schedules.editNamed", { product: productName.toLowerCase(), title })
+        }
         testID={`schedule-row-${schedule.id}`}
       >
         <View style={styles.leading}>
@@ -237,7 +242,7 @@ export function ScheduleRow({
       </Pressable>
       <View style={styles.trailing}>
         <StatusBadge label={badge.label} variant={badge.variant} />
-        {canChangeStatus ? (
+        {canChangeStatus && !readOnly ? (
           <Button
             size="xs"
             variant="outline"
@@ -250,17 +255,19 @@ export function ScheduleRow({
             {t(isPaused ? "schedules.resume" : "schedules.pause")}
           </Button>
         ) : null}
-        <ScheduleKebabMenu
-          schedule={schedule}
-          canChangeStatus={canChangeStatus}
-          canRun={canRun}
-          pending={pending}
-          onEdit={onEdit}
-          onPause={onPause}
-          onResume={onResume}
-          onRunNow={onRunNow}
-          onDelete={onDelete}
-        />
+        {!readOnly ? (
+          <ScheduleKebabMenu
+            schedule={schedule}
+            canChangeStatus={canChangeStatus}
+            canRun={canRun}
+            pending={pending}
+            onEdit={onEdit}
+            onPause={onPause}
+            onResume={onResume}
+            onRunNow={onRunNow}
+            onDelete={onDelete}
+          />
+        ) : null}
       </View>
     </View>
   );

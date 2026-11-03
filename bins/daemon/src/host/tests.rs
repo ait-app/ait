@@ -95,7 +95,7 @@ async fn each_composite_service_installs_all_its_methods_without_other_component
         let relay = crate::device::StatusRelay::new(
             api.claim_managed_relay().unwrap(),
             root.path(),
-            instance.instance_id,
+            instance.clone(),
         );
         let managed = host_link::service::Service::new(
             crate::device::HttpCenter::new().unwrap(),

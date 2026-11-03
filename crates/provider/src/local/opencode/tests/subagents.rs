@@ -2,6 +2,41 @@ use super::*;
 use crate::ports::controls::SubagentEvent;
 
 #[tokio::test]
+async fn timed_out_child_discovery_reaps_its_native_process_before_returning() {
+    let (root, mut client, spec) = fixture("subagents-list-timeout");
+    let timeout = client.startup_timeout;
+    client.deadline = timeout + Duration::from_secs(1);
+    let pending = tokio::spawn(async move { client.subagents(&spec.cwd).await });
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !root.path().join("list.entered").exists() {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+
+    tokio::time::pause();
+    tokio::time::advance(timeout).await;
+    tokio::time::resume();
+    assert_eq!(pending.await.unwrap(), Err(AgentSessionError::Failed));
+
+    for pid in std::fs::read_to_string(root.path().join("pids.txt"))
+        .unwrap()
+        .lines()
+    {
+        let status = std::process::Command::new("ps")
+            .args(["-o", "stat=", "-p", pid])
+            .output()
+            .unwrap();
+        assert!(status.status.success() || status.status.code() == Some(1));
+        assert!(
+            String::from_utf8(status.stdout).unwrap().trim().is_empty(),
+            "discovery returned before reaping native process {pid}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn opencode_subagents_are_persisted_and_queryable_after_host_restart() {
     use crate::service::agent_manager::{AgentManager, AgentRegistration};
     use domain::agent_runtime::registry::AgentRuntimeRegistry;
@@ -19,7 +54,9 @@ async fn opencode_subagents_are_persisted_and_queryable_after_host_restart() {
         .unwrap();
     manager.send("parent", "Explore").await.unwrap();
     poll_until_idle(&mut manager, "parent").await;
+    let requests_before_listing = requests(&root).len();
     assert_eq!(manager.subagents("parent").await.unwrap().len(), 2);
+    assert_eq!(requests(&root).len(), requests_before_listing);
     assert_eq!(timeline.subagents("parent").unwrap().len(), 2);
     let (_, rows) = timeline.read("subagent:parent:ses_nested").unwrap();
     assert!(

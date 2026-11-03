@@ -4,6 +4,8 @@ mod store;
 
 use std::io::{Read, Write};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context, bail};
@@ -395,7 +397,9 @@ mod tests;
 pub(super) struct StatusRelay {
     inner: api::managed_relay::ManagedRelayHandle,
     directory: std::path::PathBuf,
-    instance: Uuid,
+    instance: Arc<InstanceLease>,
+    revision: Arc<AtomicU64>,
+    writer: Arc<Mutex<()>>,
 }
 
 impl StatusRelay {
@@ -404,7 +408,7 @@ impl StatusRelay {
     pub(crate) fn new(
         inner: api::managed_relay::ManagedRelayHandle,
         data: &Path,
-        instance: Uuid,
+        instance: Arc<InstanceLease>,
     ) -> Self {
         let directory = data.join("device");
         remove_stale_snapshots(&directory);
@@ -412,6 +416,8 @@ impl StatusRelay {
             inner,
             directory,
             instance,
+            revision: Arc::new(AtomicU64::new(0)),
+            writer: Arc::new(Mutex::new(())),
         }
     }
 }
@@ -439,20 +445,33 @@ impl host_link::ManagedRelay for StatusRelay {
     async fn stop(&self) {
         self.inner.stop().await;
     }
-    fn report(&self, phase: &'static str, binding: Option<&host_link::Binding>) {
-        self.inner.report(phase, binding);
+    async fn report(&self, phase: &'static str, binding: Option<&host_link::Binding>) {
+        self.inner.report(phase, binding).await;
         let value = serde_json::json!({"mode":"managed", "phase":phase, "binding":binding,
-            "instance_id":self.instance,"pid":std::process::id(),"updated_at":Utc::now()});
-        let temporary = self
-            .directory
-            .join(format!("status-{}.tmp", Uuid::new_v4()));
-        if let Ok(bytes) = serde_json::to_vec(&value) {
-            let result = std::fs::write(&temporary, bytes)
-                .and_then(|()| std::fs::rename(&temporary, self.directory.join("status.json")));
-            if result.is_err() {
-                let _ = std::fs::remove_file(&temporary);
+            "instance_id":self.instance.instance_id,"pid":std::process::id(),"updated_at":Utc::now()});
+        let snapshot = self.clone();
+        let revision = self.revision.fetch_add(1, Ordering::Relaxed) + 1;
+        let _ = tokio::task::spawn_blocking(move || {
+            // A dropped report future cannot cancel file I/O. Retain the instance lease until
+            // completion, serialize writes, and discard older queued snapshots after cancellation.
+            let _writer = snapshot
+                .writer
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if snapshot.revision.load(Ordering::Relaxed) != revision {
+                return;
             }
-        }
+            let directory = &snapshot.directory;
+            let temporary = directory.join(format!("status-{}.tmp", Uuid::new_v4()));
+            if let Ok(bytes) = serde_json::to_vec(&value) {
+                let result = std::fs::write(&temporary, bytes)
+                    .and_then(|()| std::fs::rename(&temporary, directory.join("status.json")));
+                if result.is_err() {
+                    let _ = std::fs::remove_file(&temporary);
+                }
+            }
+        })
+        .await;
     }
 }
 

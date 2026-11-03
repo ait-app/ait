@@ -1,6 +1,32 @@
 use super::*;
 
 #[test]
+fn unknown_activity_kinds_do_not_fail_the_parent_or_change_child_lifecycle() {
+    let images = ImageStore::default();
+    let mut live = Live::default();
+    live.observe(
+        "item/completed",
+        &spawn("root", "child"),
+        ("root", "/tmp"),
+        &images,
+    )
+    .unwrap();
+    let children = live.children();
+    for receiver in ["child", "unknown"] {
+        let activity = json!({"threadId":"root","item":{"type":"subAgentActivity",
+            "id":"future","kind":"future_activity","agentThreadId":receiver}});
+        for method in ["item/started", "item/completed"] {
+            assert!(
+                live.observe(method, &activity, ("root", "/tmp"), &images)
+                    .unwrap()
+                    .is_empty()
+            );
+            assert_eq!(live.children(), children);
+        }
+    }
+}
+
+#[test]
 fn completion_updates_only_known_children_and_is_idempotent_in_either_event_order() {
     let images = ImageStore::default();
     for completion_first in [false, true] {

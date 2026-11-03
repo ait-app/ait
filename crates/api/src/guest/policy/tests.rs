@@ -7,6 +7,7 @@ use crate::guest::admit;
 use crate::test_support::{Workspaces, address};
 
 mod node;
+mod regressions;
 mod scopes;
 
 struct Guest {
@@ -70,6 +71,13 @@ impl Guest {
         match self.decide(method, params).await {
             Decision::Refuse(_, code) => code,
             decision => panic!("{method} was not refused: {decision:?}"),
+        }
+    }
+
+    async fn creation_params(&self, method: &str, params: Value) -> Value {
+        match self.decide(method, params).await {
+            Decision::Private(request, Private::AgentCreate) => request.params,
+            decision => panic!("{method} was not tracked creation: {decision:?}"),
         }
     }
 
@@ -412,7 +420,7 @@ async fn guest_download_tokens_are_bound_to_their_visitor() {
 async fn agent_creation_is_forced_into_the_workspace() {
     let guest = Guest::new().await;
     let created = guest
-        .forwarded(
+        .creation_params(
             "agent.create.request",
             json!({
                 "config": {"provider": "codex", "cwd": guest.outside()},

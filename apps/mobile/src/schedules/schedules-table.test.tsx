@@ -68,6 +68,20 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it("keeps shared tasks visible without edit, status or execution actions", () => {
+  const row = task(newAgentTarget);
+  row.schedule.serverId = "shared:grant";
+  const onEdit = vi.fn();
+  render(<SchedulesTable rows={[row]} onEditSchedule={onEdit} />);
+
+  expect(screen.getByText("Daily release")).toBeTruthy();
+  expect(screen.queryByTestId("schedule-toggle-status-daily-release")).toBeNull();
+  expect(screen.queryByTestId("schedule-kebab-daily-release")).toBeNull();
+  fireEvent.click(screen.getByTestId("schedule-row-daily-release"));
+  expect(onEdit).not.toHaveBeenCalled();
+  expect(mutations.runScheduleNow).not.toHaveBeenCalled();
+});
+
 it.each([agentTarget, newAgentTarget])(
   "pauses and resumes a $type task directly in the list without editing it",
   async (target) => {

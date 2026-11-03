@@ -245,12 +245,17 @@ impl AgentManager {
             .get(id)
             .map(|agent| agent.session.subagents())
             .unwrap_or_default();
-        let discovered = self
+        let client = self
             .clients
             .get(&record.provider)
-            .ok_or(ErrorCode::UnsupportedCapability)?
-            .subagents(&record.cwd)
-            .await;
+            .ok_or(ErrorCode::UnsupportedCapability)?;
+        let discovered = if record.provider == "opencode" && !live.is_empty() {
+            // The owned process already observes descendants; do not replay the entire directory
+            // on this parent's execution lane merely to return its live children.
+            Ok(Vec::new())
+        } else {
+            client.subagents(&record.cwd).await
+        };
         let mut children: BTreeMap<_, _> = match discovered {
             Ok(children) => children
                 .into_iter()

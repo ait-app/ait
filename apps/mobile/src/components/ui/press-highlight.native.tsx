@@ -2,11 +2,12 @@ import { forwardRef, useMemo } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { resolveHighlightCorners } from "./press-highlight.shape";
 import type { PressHighlightProps } from "./press-highlight.types";
 
 export const PressHighlight = forwardRef<View, PressHighlightProps>(function PressHighlight(
-  { children, disabled, highlightStyle, ...props },
+  { children, disabled, highlightStyle, onHighlightChange, ...props },
   ref,
 ) {
   const highlighted = useSharedValue(0);
@@ -22,11 +23,13 @@ export const PressHighlight = forwardRef<View, PressHighlightProps>(function Pre
         .shouldCancelWhenOutside(true)
         .onBegin(() => {
           highlighted.value = 1;
+          if (onHighlightChange) scheduleOnRN(onHighlightChange, true);
         })
         .onFinalize(() => {
           highlighted.value = 0;
+          if (onHighlightChange) scheduleOnRN(onHighlightChange, false);
         }),
-    [disabled, highlightStyle, highlighted],
+    [disabled, highlightStyle, highlighted, onHighlightChange],
   );
 
   const highlight = highlightStyle ? (

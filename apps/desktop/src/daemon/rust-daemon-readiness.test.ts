@@ -120,8 +120,20 @@ describe.skipIf(process.platform === "win32")("daemon readiness and process owne
     expect(fixture.lines("terminations")).toEqual([String(pid)]);
   });
 
-  it.each([{ silent: true }, { waitForReady: true }])(
-    "hands over a live child after a readiness timeout %j",
+  it("does not hand over a child that never reported ready", async () => {
+    const fixture = create({ waitForReady: true });
+    const manager = fixture.manager();
+    await expect(manager.start()).rejects.toThrow();
+    const pid = Number(fixture.lines("pids")[0]);
+    await expect(manager.retainForNextSession()).resolves.toBe(false);
+    expect(existsSync(path.join(fixture.home, "desktop-daemon.json"))).toBe(false);
+    expect(manager.status().ownedByDesktop).toBe(true);
+    await manager.stop();
+    expect(() => process.kill(pid, 0)).toThrow();
+  });
+
+  it.each([{ silent: true }, { closeHello: true }, { rejectHello: true }])(
+    "hands over a live child that reported ready before its handshake failed %j",
     async (config) => {
       const fixture = create(config);
       const first = fixture.manager();

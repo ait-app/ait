@@ -106,7 +106,7 @@ async fn status_relay_rejects_invalid_tickets_and_cleans_failed_snapshot_publica
     let relay = crate::device::StatusRelay::new(
         api.claim_managed_relay().unwrap(),
         root.path(),
-        uuid::Uuid::new_v4(),
+        Arc::new(InstanceLease::acquire(root.path()).unwrap()),
     );
     assert!(!relay.active().await);
     assert!(!relay.online().await);
@@ -137,7 +137,7 @@ async fn status_relay_rejects_invalid_tickets_and_cleans_failed_snapshot_publica
     assert!(!relay.hub_active().await);
     std::fs::create_dir_all(root.path().join("device/status.json")).unwrap();
 
-    relay.report("running", None);
+    relay.report("running", None).await;
 
     let entries: Vec<_> = std::fs::read_dir(root.path().join("device"))
         .unwrap()

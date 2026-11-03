@@ -13,12 +13,17 @@ export function useOnlineServiceConnectionNotice(): void {
   const connection = useHubServices((state) => state.connection);
   const state = useHubServices((state) => state.snapshot?.state);
   const notice = useRef({ center, connection, reconnectingShown: false, unavailableShown: false });
+  const dismiss = useRef<(() => void) | void>(undefined);
 
   useEffect(() => {
     if (notice.current.center !== center || notice.current.connection !== connection) {
+      dismiss.current?.();
+      dismiss.current = undefined;
       notice.current = { center, connection, reconnectingShown: false, unavailableShown: false };
     }
     if (!signedIn || !state || state === "online" || state === "stopped") {
+      dismiss.current?.();
+      dismiss.current = undefined;
       notice.current.reconnectingShown = false;
       notice.current.unavailableShown = false;
       return;
@@ -29,10 +34,24 @@ export function useOnlineServiceConnectionNotice(): void {
       !notice.current.unavailableShown
     ) {
       notice.current.reconnectingShown = true;
-      toast.show(t("onlineService.reconnecting"), { variant: "loading" });
+      dismiss.current = toast.show(t("onlineService.reconnecting"), { variant: "loading" });
     } else if (state === "unavailable" && !notice.current.unavailableShown) {
       notice.current.unavailableShown = true;
-      toast.show(t("onlineService.retrying"), { variant: "loading", durationMs: 3200 });
+      dismiss.current?.();
+      dismiss.current = toast.show(t("onlineService.retrying"), {
+        variant: "loading",
+        durationMs: 3200,
+      });
     }
   }, [signedIn, center, connection, state, t, toast]);
+
+  useEffect(
+    () => () => {
+      dismiss.current?.();
+      dismiss.current = undefined;
+      notice.current.reconnectingShown = false;
+      notice.current.unavailableShown = false;
+    },
+    [],
+  );
 }

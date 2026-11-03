@@ -1,4 +1,5 @@
 //! Four bounded capability workers behind one physical, connection-owned socket.
+use std::sync::Arc;
 use std::time::Duration;
 
 use axum::extract::ws::WebSocket;
@@ -26,7 +27,7 @@ enum Work {
 
 pub(super) async fn read(
     stream: SplitStream<WebSocket>,
-    state: &Shared,
+    state: &Arc<Shared>,
     lanes: &[Outbound; 4],
     peer: Peer<'_>,
     mut subscriptions: ConnectionSubscriptions,
@@ -71,7 +72,7 @@ pub(super) async fn read(
 }
 
 struct WorkerContext<'a> {
-    state: &'a Shared,
+    state: &'a Arc<Shared>,
     outbound: &'a Outbound,
     peer: Peer<'a>,
     cancel: &'a CancellationToken,

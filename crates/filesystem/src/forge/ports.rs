@@ -399,6 +399,20 @@ pub struct CheckDetails {
 
 /// Blocking forge runtime.
 pub trait ForgeRuntime: std::fmt::Debug + Send {
+    /// Whether `owner` and `name` identify the origin repository of `cwd`.
+    /// Adapters without repository resolution refuse explicit identities by default.
+    ///
+    /// # Errors
+    /// Returns local Git or remote resolution failures.
+    fn admits_repository(
+        &self,
+        _cwd: &str,
+        _owner: &str,
+        _name: &str,
+    ) -> Result<bool, ForgeRuntimeError> {
+        Ok(false)
+    }
+
     /// Installed platform implementations; authentication remains per-host.
     fn providers(&self) -> &'static [&'static str] {
         &["github"]

@@ -9,6 +9,7 @@
 
 ## Daemon 与协议
 
+- [Plans 待办核查与修复（2026-11-04）](daemon/plans-todo-followup-2026-11-04.md)
 - [Cargo workspace 依赖整理与警告清理：PR 验证](daemon/cargo-workspace-pr-validation-2026-10-04.md)
 - [Crate 边界整合到最新 main 的验证](daemon/crate-boundaries-main-rebase-2026-10-07.md)
 - [Rust workspace 每 crate 95% 覆盖率验证](daemon/crate-coverage-95-2026-10-14.md)

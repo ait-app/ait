@@ -323,11 +323,12 @@ export class RustDaemonManager {
   }
 
   /**
-   * Hand over an owned live process, including one whose readiness check failed.
-   * Connection health does not decide whether the process may outlive Desktop.
+   * Hand over an owned live process once its ready log confirms startup completed.
+   * A later handshake failure does not prevent an otherwise complete handover.
    */
   retainForNextSession(): Promise<boolean> {
     return this.serialize(async () => {
+      if (this.pendingReadiness) return false;
       const pid = this.child?.pid ?? this.retained?.pid;
       if (pid && this.state.ownedByDesktop && !this.token) {
         try {

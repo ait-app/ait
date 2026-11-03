@@ -91,5 +91,6 @@ pub trait ManagedRelay: Send + Sync {
     /// Return whether the Hub handshake has succeeded, for resetting retry backoff.
     async fn hub_online(&self) -> bool;
     /// Publish a sanitized manager state for local status queries.
-    fn report(&self, phase: &'static str, binding: Option<&Binding>);
+    /// Waits for best-effort persistence without blocking the async runtime.
+    async fn report(&self, phase: &'static str, binding: Option<&Binding>);
 }

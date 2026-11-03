@@ -112,3 +112,59 @@ fn authorization_commands_are_explicit_and_status_never_requires_or_displays_sec
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[path = "process/local_token.rs"]
 mod local_token;
+
+#[test]
+fn occupied_port_does_not_create_credentials_or_diagnostics() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("absent");
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let result = Command::new(env!("CARGO_BIN_EXE_daemon"))
+        .args([
+            "--data-dir",
+            directory.to_str().unwrap(),
+            "--listen",
+            &address,
+        ])
+        .env_remove("AIT_SERVER_TOKEN")
+        .output()
+        .unwrap();
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("bind server listener"));
+    assert!(!directory.exists());
+}
+
+#[test]
+fn owned_data_directory_is_not_modified_before_lock_acquisition() {
+    let root = tempfile::tempdir().unwrap();
+    let lease = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .open(root.path().join("instance.lock"))
+        .unwrap();
+    lease.try_lock().unwrap();
+    let diagnostics = root.path().join("diagnostics");
+    std::fs::create_dir(&diagnostics).unwrap();
+    let incidents: Vec<_> = (0..21)
+        .map(|_| diagnostics.join(format!("incident-{}.txt", uuid::Uuid::new_v4())))
+        .collect();
+    for incident in &incidents {
+        std::fs::write(incident, "preserve the running daemon's evidence").unwrap();
+    }
+    let result = Command::new(env!("CARGO_BIN_EXE_daemon"))
+        .args([
+            "--data-dir",
+            root.path().to_str().unwrap(),
+            "--listen",
+            "127.0.0.1:0",
+        ])
+        .env_remove("AIT_SERVER_TOKEN")
+        .output()
+        .unwrap();
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("already in use"));
+    assert!(!root.path().join("local-api.token").exists());
+    assert!(incidents.iter().all(|path| path.exists()));
+    assert_eq!(std::fs::read_dir(&diagnostics).unwrap().count(), 21);
+}
