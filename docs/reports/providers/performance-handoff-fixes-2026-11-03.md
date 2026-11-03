@@ -28,7 +28,7 @@
 
 ## 验证
 
-未运行完整 Rust workspace 测试。切换基线前及系统 Rust 1.99.1 的检查不作为最终版本验收结果。
+本地未运行完整 Rust workspace 测试。切换基线前及系统 Rust 1.99.1 的检查不作为最终版本验收结果。
 以下 Cargo 命令均加 `PATH=/tmp/ait-rust-toolchain-1.98.1/bin:$PATH`，使用本地安装的官方
 1.98.1 工具链；未修改系统工具链。
 
@@ -61,6 +61,24 @@ cargo test --locked -p provider --lib -- \
 4 个非法 content 形状全部通过正反断言（本次冷校验合计 6963.81 ms）。该窗口属于本次 Linux
 开发验证，不与原报告的 Mac/模型等待拼接。协议用例以 threads 和显式冷校验时限重跑已通过，
 不减少并发，也不以测试框架耗时推断生产 paint 或 API 延迟。
+
+## PR CI 回归
+
+提交 `648a2e3e1c485c185f331aec16e3e86c96e6e10a` 的 Linux Rust、UI、Web 和文档/格式任务通过；
+[macOS headless 任务](https://github.com/ait-app/ait/actions/runs/41609740387/job/125828377111)
+在 `host-link` 的 `persistent_access_refusal_probes_refresh_once_then_stops` 失败：
+`task.is_finished()` 为 false，44 项测试中 43 项通过。
+
+该测试使用 `advance()` 和固定次数的 `yield_now()` 后断言结束，但推进时间不保证所有已唤醒
+定时器和任务完成。三个同类认证退出用例改为在原有 10/5 秒虚拟时间上限内等待 JoinHandle；
+保留 `Unauthorized`、刷新次数和已关闭链路的断言。未修改业务状态机或降低测试并发。
+
+- `cargo test --locked -p host-link --lib controller::tests::recovery -- --nocapture`：5 通过。
+- `cargo test --locked -p host-link --lib`：44 通过。
+- 同一构建产生的 `target/debug/deps/host_link-b77293d1836a0bac --quiet` 默认并发重复 20 轮，
+  合计 880 项通过、0 失败；未设置 `--test-threads` 或减少测试并发。
+- `cargo fmt --all --check` 和
+  `cargo clippy --locked -p host-link --all-targets -- -D warnings`：通过。
 
 ## 性能测量
 

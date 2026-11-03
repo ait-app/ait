@@ -36,11 +36,12 @@ async fn persistent_access_refusal_probes_refresh_once_then_stops() {
     let (controller, mock) = fixture();
     mock.0.lock().unwrap().ticket_error = Some(Error::AccessRejected);
     let task = tokio::spawn(controller.run(CancellationToken::new()));
-    for _ in 0..10 {
-        tick().await;
-    }
-    assert!(task.is_finished());
-    assert_eq!(task.await.unwrap(), Err(Error::Unauthorized));
+    // Let the paused runtime drive completion instead of assuming a fixed number of yields.
+    let result = tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .expect("persistent ticket rejection must terminate within 10 seconds")
+        .expect("controller task must not panic");
+    assert_eq!(result, Err(Error::Unauthorized));
     let seen = mock.0.lock().unwrap();
     assert_eq!(seen.refreshes.len(), 2);
     assert!(!seen.active && !seen.hub.active);
@@ -50,18 +51,11 @@ async fn persistent_access_refusal_probes_refresh_once_then_stops() {
 async fn persistent_renewal_refusal_does_not_loop_on_refresh() {
     let (controller, mock) = fixture();
     mock.0.lock().unwrap().renew_errors = [Error::AccessRejected; 2].into();
-    let cancel = CancellationToken::new();
-    let task = tokio::spawn(controller.run(cancel.clone()));
-    for _ in 0..10 {
-        tick().await;
-    }
-    let finished = task.is_finished();
-    cancel.cancel();
-    let result = task.await.unwrap();
-    assert!(
-        finished,
-        "repeated 401 must terminate after one refresh probe"
-    );
+    let task = tokio::spawn(controller.run(CancellationToken::new()));
+    let result = tokio::time::timeout(Duration::from_secs(10), task)
+        .await
+        .expect("repeated 401 must terminate after one refresh probe within 10 seconds")
+        .expect("controller task must not panic");
     assert_eq!(result, Err(Error::Unauthorized));
     assert_eq!(mock.0.lock().unwrap().refreshes.len(), 2);
 }
@@ -76,11 +70,11 @@ async fn rejected_refresh_after_access_refusal_requires_login() {
         seen.renew_error = Some(Error::AccessRejected);
         seen.refresh_error = Some(Error::Unauthorized);
     }
-    for _ in 0..5 {
-        tick().await;
-    }
-    assert!(task.is_finished());
-    assert_eq!(task.await.unwrap(), Err(Error::Unauthorized));
+    let result = tokio::time::timeout(Duration::from_secs(5), task)
+        .await
+        .expect("rejected refresh must require login within 5 seconds")
+        .expect("controller task must not panic");
+    assert_eq!(result, Err(Error::Unauthorized));
     assert_eq!(mock.0.lock().unwrap().refreshes.len(), 2);
 }
 
