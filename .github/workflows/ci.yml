@@ -184,7 +184,7 @@ jobs:
       - run: npm run test --workspace=@ait/highlight
       - run: >-
           npm run test --workspace=@ait/mobile --
-          src/i18n/resources.test.ts src/runtime/rust-daemon maestro/support native-release-version.test.ts
+          src/i18n/resources.test.ts src/runtime/daemon-transport maestro/support native-release-version.test.ts
           src/timeline src/types/stream.test.ts src/runtime/replica-cache
           src/runtime/directory-sync src/screens/workspace/workspace-route-state.test.ts
           src/runtime/online-service-host-sync.test.ts src/screens/settings/online-service-host-section.test.tsx
