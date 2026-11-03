@@ -230,3 +230,17 @@ DSH popupSelect/业务页面、OpenCode 未导出的终端操作仍见
 模型菜单，原有 `main` 仍可见，新模型通过后台刷新出现，未出现 page error。证据：
 `target/provider-parity-validation/2026-11-02/desktop-acceptance-PZsb4s/33-model-access-refreshed-cached-options.png`。
 该检查针对真实官方 OMP 18.14.0，不等待五分钟、不清空目录；测试模型文件会恢复。
+
+输入防阻塞补充证据：同一桌面测试在原生目录仍返回 `refreshing: ["omp"]` 时，成功编辑
+消息输入框，草稿保持为 `Typed while OMP model refresh runs`，没有 page error；截图
+`desktop-acceptance-PZsb4s/36-model-refresh-input-editable.png`。
+
+## CI 认证恢复竞争修复
+
+提交 `bbec9eb3` 的 CI 中，3293 项 Rust 测试有一项 Host-link 认证恢复失败：已排队的
+票据拒绝与就绪的租约续期竞争，随机选择可多次先续期，最终超过测试的十秒终止预算。
+收紧断言后本地复现为四次续期而非预期两次。现优先处理排队的传输错误，同时保留旧 generation
+过滤及现有超时，避免持续认证拒绝被正常续期拖延；没有延长超时或降低测试并行度。
+
+Host-link 的 44 项测试通过；该恢复用例以 8 个并行进程重复 500 次，零失败。
+此修复只改变已就绪错误的处理优先级，不扩展授权或 Provider 边界。覆盖率仍未测量。

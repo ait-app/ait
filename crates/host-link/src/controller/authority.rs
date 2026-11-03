@@ -61,6 +61,8 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
                 access_recovery: &mut access_recovery,
             };
             let attempt = tokio::select! {
+                // A ready renewal must not repeatedly defer an already queued access rejection.
+                biased;
                 error = links::next_error(errors, generation) => {
                     // Refresh may have committed while renewal is still awaiting its response.
                     // Errors from the previous JWT must not revoke that successor authority.
