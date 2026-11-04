@@ -97,6 +97,44 @@ async fn empty_agents_reopen_without_manufacturing_or_resending_input() {
     assert!(client.history(&handle, &spec.cwd).await.is_err());
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn symlinked_workspaces_match_the_physical_cwd_recorded_by_omp() {
+    let (root, client, mut spec) = fixture();
+    let project = root.path().join("project");
+    let linked = root.path().join("linked-project");
+    let other = root.path().join("other-project");
+    std::fs::create_dir(&project).unwrap();
+    std::fs::create_dir(&other).unwrap();
+    std::os::unix::fs::symlink(&project, &linked).unwrap();
+    spec.cwd = linked.to_str().unwrap().to_owned();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("hello", &spec.config).await.unwrap();
+    complete(session.as_mut()).await;
+    let handle = session.persistence().unwrap();
+    session.close().await.unwrap();
+    let listing = |cwd: &str| ListOptions {
+        cwd: Some(cwd.to_owned()),
+        scan_limit: 10,
+    };
+
+    let history = client.history(&handle, &spec.cwd).await.unwrap();
+    let sessions = client.list_sessions(&listing(&spec.cwd)).await.unwrap();
+
+    assert!(history.iter().any(|entry| entry.item["text"] == "hello"));
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].provider_handle_id, handle.session_id);
+    let other = other.to_str().unwrap();
+    assert!(client.history(&handle, other).await.is_err());
+    assert!(
+        client
+            .list_sessions(&listing(other))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
 #[tokio::test]
 async fn native_modes_questions_children_and_chunked_frames() {
     let (root, client, mut spec) = fixture();

@@ -175,6 +175,36 @@ fn read(path: PathBuf) -> Result<Journal, AgentSessionError> {
     })
 }
 
+/// A requested working directory, matched by spelling or by canonical path.
+///
+/// OMP records its physical working directory, so a symlinked workspace spelling still
+/// identifies the same journals.
+struct Workspace<'a> {
+    spelling: &'a str,
+    canonical: Option<PathBuf>,
+}
+
+impl<'a> Workspace<'a> {
+    /// Resolve `spelling` once; this blocks on file-system I/O.
+    fn new(spelling: &'a str) -> Self {
+        Self {
+            spelling,
+            canonical: std::fs::canonicalize(spelling).ok(),
+        }
+    }
+
+    /// Whether a journal's recorded `cwd` names this workspace; unresolvable paths
+    /// match only by identical spelling.
+    fn matches(&self, cwd: &Value) -> bool {
+        cwd.as_str().is_some_and(|cwd| {
+            cwd == self.spelling
+                || self.canonical.as_ref().is_some_and(|canonical| {
+                    std::fs::canonicalize(cwd).is_ok_and(|resolved| resolved == *canonical)
+                })
+        })
+    }
+}
+
 /// Validated persistence lookup, captured before any blocking file-system work.
 struct Lookup {
     known: Option<PathBuf>,
@@ -250,7 +280,7 @@ impl Lookup {
             });
         }
         let journal = read(path)?;
-        if journal.header["id"] != id || journal.header["cwd"] != cwd {
+        if journal.header["id"] != id || !Workspace::new(&cwd).matches(&journal.header["cwd"]) {
             return Err(AgentSessionError::Rejected);
         }
         Ok(journal)
@@ -518,6 +548,7 @@ pub(super) async fn list(
     let root = root(client)?;
     let options = options.clone();
     tokio::task::spawn_blocking(move || {
+        let workspace = options.cwd.as_deref().map(Workspace::new);
         let mut sessions = Vec::new();
         let mut bytes = 0;
         for path in paths(&root)? {
@@ -532,10 +563,9 @@ pub(super) async fn list(
             let Ok(journal) = read(path) else {
                 continue;
             };
-            if options
-                .cwd
+            if workspace
                 .as_ref()
-                .is_some_and(|cwd| journal.header["cwd"] != *cwd)
+                .is_some_and(|workspace| !workspace.matches(&journal.header["cwd"]))
             {
                 continue;
             }
