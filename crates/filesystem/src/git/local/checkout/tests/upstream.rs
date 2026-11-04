@@ -142,3 +142,59 @@ fn unconfigured_upstream_and_detached_head_have_no_upstream() {
     assert_eq!(detached.ahead_of_origin, None);
     assert_eq!(detached.behind_of_origin, None);
 }
+
+#[test]
+fn push_targets_upstream_remotes_whose_names_contain_slashes() {
+    let fixture = Fixture::new();
+    let remote = fixture.temp.path().join("fork.git");
+    git(fixture.temp.path(), &["init", "--bare", "fork.git"]);
+    git(
+        &fixture.repo,
+        &["remote", "add", "team/fork", remote.to_str().unwrap()],
+    );
+    git(
+        &fixture.repo,
+        &["push", "--set-upstream", "team/fork", "main"],
+    );
+    git(
+        &fixture.repo,
+        &["commit", "--allow-empty", "-m", "local change"],
+    );
+    let runtime = LocalCheckout::new(fixture.temp.path().join("managed"));
+
+    runtime.push(fixture.repo.to_str().unwrap()).unwrap();
+
+    assert_eq!(
+        git_output(&remote, &["rev-parse", "main"]),
+        git_output(&fixture.repo, &["rev-parse", "HEAD"])
+    );
+}
+
+#[test]
+fn push_with_a_local_branch_upstream_publishes_to_origin() {
+    let fixture = Fixture::new();
+    let origin = fixture.temp.path().join("origin.git");
+    git(fixture.temp.path(), &["init", "--bare", "origin.git"]);
+    git(
+        &fixture.repo,
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
+    git(
+        &fixture.repo,
+        &["checkout", "-b", "feature", "--track", "main"],
+    );
+    git(
+        &fixture.repo,
+        &["commit", "--allow-empty", "-m", "feature change"],
+    );
+    let main = git_output(&fixture.repo, &["rev-parse", "main"]);
+    let runtime = LocalCheckout::new(fixture.temp.path().join("managed"));
+
+    runtime.push(fixture.repo.to_str().unwrap()).unwrap();
+
+    assert_eq!(
+        git_output(&origin, &["rev-parse", "feature"]),
+        git_output(&fixture.repo, &["rev-parse", "HEAD"])
+    );
+    assert_eq!(git_output(&fixture.repo, &["rev-parse", "main"]), main);
+}

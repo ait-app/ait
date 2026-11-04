@@ -14,14 +14,10 @@ use super::{
     unavailable_search,
 };
 
-mod checkout;
-mod pipeline;
+pub(super) mod checkout;
+pub(super) mod pipeline;
 mod status;
-mod timeline;
-
-pub(super) use checkout::checkout;
-pub(super) use pipeline::check_details;
-pub(super) use timeline::timeline;
+pub(super) mod timeline;
 
 fn run(
     forge: &LocalForge,

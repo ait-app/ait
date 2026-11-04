@@ -17,6 +17,52 @@ fn checkout_directory_aliases_expand_consistently_and_files_are_rejected() {
 }
 
 #[test]
+fn too_many_untracked_files_report_an_oversized_diff_instead_of_spawning_per_file() {
+    let fixture = Fixture::new();
+    for index in 0..=crate::git::local::checkout::UNTRACKED_DIFF_LIMIT {
+        std::fs::write(fixture.repo.join(format!("new-{index}.txt")), "new\n").unwrap();
+    }
+    let runtime = LocalCheckout::new(fixture.temp.path().join("managed"));
+    let diff = runtime
+        .diff(
+            fixture.repo.to_str().unwrap(),
+            &CheckoutDiffCompare {
+                mode: CheckoutDiffMode::Uncommitted,
+                base_ref: None,
+                ignore_whitespace: false,
+            },
+        )
+        .unwrap();
+    assert!(diff.diff_too_large);
+    assert!(diff.files.is_empty());
+}
+
+#[test]
+fn status_beyond_the_listing_limit_is_dirty_instead_of_failing() {
+    let fixture = Fixture::new();
+    let padding = "p".repeat(120);
+    // About 330 KiB of porcelain status, over the 256 KiB listing limit.
+    for index in 0..2_600 {
+        std::fs::write(fixture.repo.join(format!("{padding}-{index}")), "").unwrap();
+    }
+    let runtime = LocalCheckout::new(fixture.temp.path().join("managed"));
+    let cwd = fixture.repo.to_str().unwrap();
+
+    let status = runtime.status(cwd).unwrap();
+
+    assert_eq!(status.is_dirty, Some(true));
+    assert!(!status.branch_status.unwrap().has_conflicts);
+    git(&fixture.repo, &["checkout", "-b", "feature"]);
+    assert_eq!(
+        runtime
+            .merge_from_base(cwd, Some("main"), true)
+            .unwrap_err()
+            .message,
+        "Working directory has uncommitted changes."
+    );
+}
+
+#[test]
 fn invalid_revisions_cannot_be_interpreted_as_git_options_or_paths() {
     let fixture = Fixture::new();
     let runtime = LocalCheckout::new(fixture.temp.path().join("managed"));

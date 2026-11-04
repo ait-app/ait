@@ -87,3 +87,17 @@ fn commit_statistics_normalize_braced_renames_and_ignore_malformed_rows() {
         (3, 2)
     );
 }
+
+#[test]
+fn rename_headers_keep_paths_that_start_with_diff_prefixes() {
+    let patch = concat!(
+        "diff --git a/a/x.txt b/b/x.txt\n",
+        "similarity index 100%\n",
+        "rename from a/x.txt\n",
+        "rename to b/x.txt\n",
+    );
+    let files = parse_diff(patch);
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].path, "b/x.txt");
+    assert_eq!(files[0].old_path.as_deref(), Some("a/x.txt"));
+}

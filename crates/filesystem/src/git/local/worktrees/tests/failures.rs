@@ -98,18 +98,33 @@ fn invalid_sources_and_managed_roots_fail_without_creating_branches() {
 }
 
 #[test]
-fn git_output_budget_is_enforced_even_when_the_process_has_already_exited() {
-    use std::io::Write;
-    let mut output = tempfile::tempfile().unwrap();
-    output
-        .write_all(&vec![b'x'; usize::try_from(OUTPUT_LIMIT).unwrap()])
+fn git_output_budget_accepts_the_limit_and_rejects_one_extra_byte() {
+    let fixture = Fixture::new();
+    let repo = &fixture.repository;
+    for (size, fits) in [(OUTPUT_LIMIT, true), (OUTPUT_LIMIT + 1, false)] {
+        std::fs::write(
+            repo.join("large"),
+            vec![b'x'; usize::try_from(size).unwrap()],
+        )
         .unwrap();
-    assert_eq!(read_output(&mut output).unwrap().len() as u64, OUTPUT_LIMIT);
-    output.write_all(b"x").unwrap();
-    assert_eq!(
-        read_output(&mut output).unwrap_err(),
-        WorktreeError::Io("Git command output exceeded limit".to_owned())
-    );
+        let object = git(repo, &["hash-object", "-w", "large"], READ_TIMEOUT, &[0]).unwrap();
+        let result = git(
+            repo,
+            &["cat-file", "blob", object.stdout.trim()],
+            READ_TIMEOUT,
+            &[0],
+        );
+        if fits {
+            assert_eq!(result.unwrap().stdout.len() as u64, OUTPUT_LIMIT);
+        } else {
+            assert_eq!(
+                result.err(),
+                Some(WorktreeError::Io(
+                    "Git command output exceeded limit".to_owned()
+                ))
+            );
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -135,4 +150,44 @@ fn managed_storage_rejects_a_symbolic_link_without_writing_through_it() {
     );
     assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
     assert!(!local_branch_exists(&fixture.repository, "safe"));
+}
+
+#[cfg(unix)]
+#[test]
+fn network_commands_use_the_repository_ssh_command() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = Fixture::new();
+    let marker = fixture.root.path().join("ssh-invoked");
+    let ssh = fixture.root.path().join("fake-ssh");
+    std::fs::write(
+        &ssh,
+        format!("#!/bin/sh\ntouch '{}'\nexit 1\n", marker.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&ssh, std::fs::Permissions::from_mode(0o700)).unwrap();
+    run(
+        &fixture.repository,
+        &["config", "core.sshCommand", ssh.to_str().unwrap()],
+    );
+    run(
+        &fixture.repository,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "ssh://git@example.invalid/repo.git",
+        ],
+    );
+
+    assert!(
+        git(
+            &fixture.repository,
+            &["ls-remote", "origin"],
+            READ_TIMEOUT,
+            &[0]
+        )
+        .is_err()
+    );
+
+    assert!(marker.exists());
 }

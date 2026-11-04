@@ -10,7 +10,7 @@ pub(super) fn read(
     cwd: &Path,
     branch: Option<&str>,
     remote: Option<&str>,
-    working_status: &str,
+    has_conflicts: bool,
 ) -> Result<CheckoutBranchStatus, CheckoutRuntimeError> {
     let head_sha = git_optional(cwd, &["rev-parse", "--verify", "HEAD"])?;
     let remote_ref = match (remote, branch) {
@@ -27,14 +27,19 @@ pub(super) fn read(
         .flatten();
     Ok(CheckoutBranchStatus {
         head_sha,
-        has_conflicts: working_status.lines().any(|line| {
-            matches!(
-                line.get(..2),
-                Some("DD" | "AU" | "UD" | "UA" | "DU" | "AA" | "UU")
-            )
-        }),
+        has_conflicts,
         remote_ref,
         ahead_behind,
+    })
+}
+
+/// Whether `git status --porcelain=v1` output lists an unmerged path.
+pub(super) fn porcelain_has_conflicts(working_status: &str) -> bool {
+    working_status.lines().any(|line| {
+        matches!(
+            line.get(..2),
+            Some("DD" | "AU" | "UD" | "UA" | "DU" | "AA" | "UU")
+        )
     })
 }
 

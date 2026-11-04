@@ -1,9 +1,13 @@
 //! Bounded Git runner for short, fixed read and mutation invocations.
 
-use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
-use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use crate::support::process::{self, Bounds};
+
+const TIMEOUT: Duration = Duration::from_secs(3);
+const OUTPUT_LIMIT: u64 = 16 * 1024;
+const STDERR_LIMIT: u64 = 64 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum GitError {
@@ -13,52 +17,37 @@ pub(crate) enum GitError {
 
 // Fixed Git invocations with bounded output and lifetime; callers select reads or mutations.
 pub(crate) fn run(root: &Path, arguments: &[&str]) -> Result<String, GitError> {
-    let mut output = tempfile::tempfile().map_err(|_| GitError::Io)?;
-    let mut command = Command::new("git");
+    run_with_bounds(root, arguments, OUTPUT_LIMIT, TIMEOUT)
+}
+
+// Like `run`, for listings whose size grows with the repository.
+pub(crate) fn run_with_bounds(
+    root: &Path,
+    arguments: &[&str],
+    output_limit: u64,
+    timeout: Duration,
+) -> Result<String, GitError> {
+    let mut command = process::git_command(root);
     command
         .arg("--no-optional-locks")
         .args(["-c", "core.fsmonitor=false"])
-        .args(arguments)
-        .current_dir(root)
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .stdout(output.try_clone().map_err(|_| GitError::Io)?);
-    for (name, _) in std::env::vars_os() {
-        if name.to_string_lossy().starts_with("GIT_") {
-            command.env_remove(name);
-        }
-    }
-    let mut child = command.spawn().map_err(|_| GitError::Io)?;
-    let deadline = Instant::now() + Duration::from_secs(3);
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None)
-                if Instant::now() < deadline
-                    && output
-                        .metadata()
-                        .is_ok_and(|metadata| metadata.len() <= 16 * 1024) =>
-            {
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            Ok(None) | Err(_) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(GitError::Io);
-            }
-        }
-    };
-    if !status.success() {
+        .args(arguments);
+    let output = process::run_bounded(
+        &mut command,
+        Bounds {
+            timeout,
+            stdout_limit: output_limit,
+            stderr_limit: STDERR_LIMIT,
+        },
+        None,
+    )
+    .map_err(|_| GitError::Io)?;
+    if !output.status.success() {
         return Err(GitError::Rejected);
     }
-    output.seek(SeekFrom::Start(0)).map_err(|_| GitError::Io)?;
-    let mut text = String::new();
-    output
-        .take(16 * 1024 + 1)
-        .read_to_string(&mut text)
-        .map_err(|_| GitError::Io)?;
-    if text.len() > 16 * 1024 {
-        return Err(GitError::Rejected);
+    let mut text = String::from_utf8(output.stdout).map_err(|_| GitError::Io)?;
+    if text.ends_with('\n') {
+        text.pop();
     }
-    Ok(text.strip_suffix('\n').unwrap_or(&text).to_owned())
+    Ok(text)
 }

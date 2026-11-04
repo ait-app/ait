@@ -517,6 +517,37 @@ fn merge_conflicts_are_aborted_and_categorized() {
 }
 
 #[test]
+fn squash_merge_conflicts_are_reset_and_the_feature_checkout_restored() {
+    let fixture = Fixture::new();
+    git(&fixture.repo, &["checkout", "-b", "feature"]);
+    std::fs::write(fixture.repo.join("tracked.txt"), "feature\n").unwrap();
+    git(&fixture.repo, &["commit", "-am", "feature conflict"]);
+    git(&fixture.repo, &["checkout", "main"]);
+    std::fs::write(fixture.repo.join("tracked.txt"), "main\n").unwrap();
+    git(&fixture.repo, &["commit", "-am", "main conflict"]);
+    let main = git_output(&fixture.repo, &["rev-parse", "main"]);
+    git(&fixture.repo, &["checkout", "feature"]);
+
+    let runtime = LocalCheckout::new(fixture.temp.path().join("managed"));
+    let error = runtime
+        .merge_to_base(
+            fixture.repo.to_str().unwrap(),
+            Some("main"),
+            CheckoutMergeStrategy::Squash,
+            true,
+        )
+        .unwrap_err();
+
+    assert_eq!(error.kind, CheckoutFailureKind::MergeConflict);
+    assert!(git_output(&fixture.repo, &["status", "--porcelain"]).is_empty());
+    assert_eq!(
+        git_output(&fixture.repo, &["symbolic-ref", "--short", "HEAD"]),
+        "feature"
+    );
+    assert_eq!(git_output(&fixture.repo, &["rev-parse", "main"]), main);
+}
+
+#[test]
 fn squash_merge_to_base_restores_feature_and_creates_one_base_commit() {
     let fixture = Fixture::new();
     git(&fixture.repo, &["checkout", "-b", "feature"]);

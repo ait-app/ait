@@ -77,7 +77,7 @@ pub(super) async fn files(
     connection
         .files
         .request(
-            crate::files::connection::FileRequest {
+            crate::files::connection::state::FileRequest {
                 id: context.request.id,
                 method: context.request.method,
                 params: context.request.params,

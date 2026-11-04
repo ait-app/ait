@@ -4,11 +4,10 @@ mod change_request;
 mod directory;
 
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Seek, SeekFrom};
 use std::path::{Component, Path, PathBuf};
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::ExitStatus;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
 use chrono::{DateTime, Utc};
 use domain::workspace::provisioning::{LEGACY_PROJECT_CONFIG_FILE_NAME, PROJECT_CONFIG_FILE_NAME};
@@ -22,6 +21,8 @@ use domain::workspace::worktrees::{
 use model::workspace::worktrees::{
     ChangeRequestResolver, ManagedWorktrees, WorkspaceRecoveryRuntime,
 };
+
+use crate::support::process::{self, Bounds, RunError};
 
 const OUTPUT_LIMIT: u64 = 64 * 1024;
 const READ_TIMEOUT: Duration = Duration::from_secs(10);
@@ -805,91 +806,45 @@ fn git(
     timeout: Duration,
     accepted: &[i32],
 ) -> Result<GitOutput, WorktreeError> {
-    let mut stdout = tempfile::tempfile().map_err(|error| WorktreeError::Io(error.to_string()))?;
-    let mut stderr = tempfile::tempfile().map_err(|error| WorktreeError::Io(error.to_string()))?;
-    let mut command = Command::new("git");
+    // Network commands rely on the user's own SSH configuration (including core.sshCommand)
+    // and fail instead of prompting: stdin is null and terminal/credential prompts are off.
+    let mut command = process::git_command(cwd);
     command
         .arg("--no-optional-locks")
         .args(["-c", "core.fsmonitor=false"])
         .args(arguments)
-        .current_dir(cwd)
-        .stdin(Stdio::null())
-        .stdout(
-            stdout
-                .try_clone()
-                .map_err(|error| WorktreeError::Io(error.to_string()))?,
-        )
-        .stderr(
-            stderr
-                .try_clone()
-                .map_err(|error| WorktreeError::Io(error.to_string()))?,
-        )
         .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes");
-    for (name, _) in std::env::vars_os() {
-        if name.to_string_lossy().starts_with("GIT_") {
-            command.env_remove(name);
-        }
-    }
-    command
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes");
-    let mut child = command
-        .spawn()
-        .map_err(|error| WorktreeError::Io(error.to_string()))?;
-    let deadline = Instant::now() + timeout;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None)
-                if Instant::now() < deadline
-                    && stdout
-                        .metadata()
-                        .is_ok_and(|metadata| metadata.len() <= OUTPUT_LIMIT)
-                    && stderr
-                        .metadata()
-                        .is_ok_and(|metadata| metadata.len() <= OUTPUT_LIMIT) =>
-            {
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            Ok(None) | Err(_) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(WorktreeError::Io("Git command timed out".to_owned()));
-            }
-        }
+        .env("GCM_INTERACTIVE", "never");
+    let bounds = Bounds {
+        timeout,
+        stdout_limit: OUTPUT_LIMIT,
+        stderr_limit: OUTPUT_LIMIT,
     };
-    let stdout_text = read_output(&mut stdout)?;
-    let stderr_text = read_output(&mut stderr)?;
-    if !accepted.contains(&status.code().unwrap_or(-1)) {
+    let output = process::run_bounded(&mut command, bounds, None).map_err(|error| match error {
+        RunError::StdoutExceeded => {
+            WorktreeError::Io("Git command output exceeded limit".to_owned())
+        }
+        RunError::TimedOut | RunError::StderrExceeded | RunError::Cancelled => {
+            WorktreeError::Io("Git command timed out".to_owned())
+        }
+        RunError::Spawn(error) | RunError::Io(error) => WorktreeError::Io(error.to_string()),
+    })?;
+    if !accepted.contains(&output.code()) {
         if arguments.first() == Some(&"rev-parse") {
             return Err(WorktreeError::NotGitRepository);
         }
-        return Err(WorktreeError::Io(if stderr_text.trim().is_empty() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(WorktreeError::Io(if stderr.trim().is_empty() {
             "Git command failed".to_owned()
         } else {
-            stderr_text.trim().to_owned()
+            stderr.trim().to_owned()
         }));
     }
     Ok(GitOutput {
-        status,
-        stdout: stdout_text,
+        status: output.status,
+        stdout: String::from_utf8(output.stdout)
+            .map_err(|error| WorktreeError::Io(error.to_string()))?,
     })
-}
-
-fn read_output(file: &mut File) -> Result<String, WorktreeError> {
-    file.seek(SeekFrom::Start(0))
-        .map_err(|error| WorktreeError::Io(error.to_string()))?;
-    let mut text = String::new();
-    file.take(OUTPUT_LIMIT + 1)
-        .read_to_string(&mut text)
-        .map_err(|error| WorktreeError::Io(error.to_string()))?;
-    if text.len() as u64 > OUTPUT_LIMIT {
-        return Err(WorktreeError::Io(
-            "Git command output exceeded limit".to_owned(),
-        ));
-    }
-    Ok(text)
 }
 
 fn normalized_absolute(path: &Path) -> Result<PathBuf, WorktreeError> {
