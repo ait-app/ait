@@ -87,3 +87,31 @@ async fn shared_service_panics_return_the_safe_failure_and_release_admission() {
     assert_eq!(result, Err(ErrorCode::RegistryIo));
     assert_eq!(runtime.jobs.available_permits(), 3);
 }
+
+#[tokio::test]
+async fn queued_shared_services_wait_for_the_existing_budget() {
+    let runtime = runtime();
+    let permit = runtime.jobs.clone().acquire_many_owned(3).await.unwrap();
+    let queued = runtime.clone();
+    let task = tokio::spawn(async move {
+        queued
+            .run_shared_queued(
+                Some(Arc::new(AtomicUsize::new(4))),
+                ErrorCode::RegistryIo,
+                |value| Ok(value.fetch_add(1, Ordering::SeqCst) + 1),
+            )
+            .await
+    });
+    tokio::task::yield_now().await;
+    assert!(!task.is_finished());
+    drop(permit);
+    assert_eq!(task.await.unwrap(), Ok(5));
+    assert_eq!(runtime.jobs.available_permits(), 3);
+    runtime.cancellation.cancel();
+    assert_eq!(
+        runtime
+            .run_shared_queued(Some(Arc::new(())), ErrorCode::RegistryIo, |()| Ok(()))
+            .await,
+        Err(ErrorCode::ServerDraining)
+    );
+}

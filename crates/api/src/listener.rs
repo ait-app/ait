@@ -13,13 +13,13 @@ pub struct LocalAddress(pub(super) SocketAddr, pub(super) SocketAddr);
 
 impl Connected<IncomingStream<'_, TcpListener>> for LocalAddress {
     fn connect_info(stream: IncomingStream<'_, TcpListener>) -> Self {
-        Self(
-            stream
-                .io()
-                .local_addr()
-                .expect("accepted TCP socket has a local address"),
-            *stream.remote_addr(),
-        )
+        // This runs in the accept loop: a failed lookup must reject one request, not panic
+        // the listener. The unspecified address admits no Host authority.
+        let local = stream.io().local_addr().unwrap_or_else(|error| {
+            tracing::warn!(%error, "accepted TCP socket has no local address");
+            SocketAddr::from(([0, 0, 0, 0], 0))
+        });
+        Self(local, *stream.remote_addr())
     }
 }
 
@@ -30,7 +30,11 @@ impl LocalAddress {
             || self.1.ip() == std::net::Ipv6Addr::LOCALHOST
     }
 
+    /// Host authorities of the destination interface; none when it is unknown.
     pub(super) fn authorities(self) -> Vec<String> {
+        if self.0.ip().is_unspecified() {
+            return Vec::new();
+        }
         let address = SocketAddr::new(self.0.ip().to_canonical(), self.0.port());
         allowed_authorities(address)
     }
