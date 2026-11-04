@@ -39,45 +39,39 @@ export function isLikelyNamespacedToolName(name: string): boolean {
   return false;
 }
 
-export function isPaseoToolName(name: string): boolean {
+/**
+ * MCP server names the daemon's own agent tools are exposed under. The daemon
+ * registers itself as `ait`; `paseo` remains for transcripts recorded before
+ * the rename and sessions imported from Paseo.
+ */
+const AIT_TOOL_NAMESPACES = ["ait", "paseo"] as const;
+
+function isAitToolNamespace(segment: string): boolean {
+  return AIT_TOOL_NAMESPACES.some(
+    (namespace) => segment === namespace || segment.startsWith(`${namespace}_`),
+  );
+}
+
+export function isAitToolName(name: string): boolean {
   const normalized = normalizeToolName(name);
   if (isSpeakToolName(normalized)) {
     return false;
   }
-  if (normalized.includes("__")) {
-    const segments = normalized.split("__").filter((s) => s.length > 0);
-    return (
-      segments.length >= 3 &&
-      segments[0] === "mcp" &&
-      (segments[1] === "paseo" || segments[1].startsWith("paseo_"))
-    );
-  }
-  if (normalized.includes(".")) {
-    const firstSegment = normalized.split(".")[0];
-    return firstSegment === "paseo" || firstSegment.startsWith("paseo_");
-  }
-  return false;
+  return getAitToolLeafName(normalized) !== null;
 }
 
-export function getPaseoToolLeafName(name: string): string | null {
+export function getAitToolLeafName(name: string): string | null {
   const normalized = normalizeToolName(name);
   if (normalized.includes("__")) {
     const segments = normalized.split("__").filter((s) => s.length > 0);
-    if (
-      segments.length >= 3 &&
-      segments[0] === "mcp" &&
-      (segments[1] === "paseo" || segments[1].startsWith("paseo_"))
-    ) {
+    if (segments.length >= 3 && segments[0] === "mcp" && isAitToolNamespace(segments[1])) {
       return segments.slice(2).join("__");
     }
     return null;
   }
   if (normalized.includes(".")) {
-    const firstSegment = normalized.split(".")[0];
-    if (firstSegment === "paseo" || firstSegment.startsWith("paseo_")) {
-      return normalized.split(".").slice(1).join(".");
-    }
-    return null;
+    const [namespace, ...rest] = normalized.split(".");
+    return isAitToolNamespace(namespace) ? rest.join(".") : null;
   }
   return null;
 }

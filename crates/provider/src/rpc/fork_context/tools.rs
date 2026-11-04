@@ -52,6 +52,18 @@ pub(super) fn summary(item: &Value) -> String {
     format!("[{display}] {summary}")
 }
 
+/// MCP server names the daemon's own agent tools appear under: `ait` is the
+/// injected server, `paseo` covers transcripts recorded before the rename.
+const AIT_TOOL_NAMESPACES: [&str; 2] = ["ait", "paseo"];
+
+fn is_ait_tool_namespace(segment: &str) -> bool {
+    AIT_TOOL_NAMESPACES.iter().any(|namespace| {
+        segment
+            .strip_prefix(namespace)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('_'))
+    })
+}
+
 fn humanize(name: &str) -> String {
     let trimmed = name.trim();
     if trimmed.is_empty() {
@@ -67,14 +79,11 @@ fn humanize(name: &str) -> String {
                 .split("__")
                 .filter(|segment| !segment.is_empty())
                 .collect();
-            if segments.len() >= 3
-                && segments[0] == "mcp"
-                && (segments[1] == "paseo" || segments[1].starts_with("paseo_"))
-            {
+            if segments.len() >= 3 && segments[0] == "mcp" && is_ait_tool_namespace(segments[1]) {
                 return humanize(&segments[2..].join("__"));
             }
         } else if let Some((namespace, leaf)) = normalized.split_once('.')
-            && (namespace == "paseo" || namespace.starts_with("paseo_"))
+            && is_ait_tool_namespace(namespace)
         {
             return humanize(leaf);
         }

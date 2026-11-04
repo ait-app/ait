@@ -1,5 +1,5 @@
 import type { ToolCallDetail, ToolCallIconName } from "@ait/protocol/agent-types";
-import { isPaseoToolName } from "@ait/protocol/tool-name-normalization";
+import { isAitToolName } from "@ait/protocol/tool-name-normalization";
 
 export type ToolCallIcon = ToolCallIconName | "paseo";
 
@@ -31,7 +31,7 @@ export function resolveToolCallIconName(toolName: string, detail?: ToolCallDetai
   if (lowerName === "speak") {
     return "mic_vocal";
   }
-  if (isPaseoToolName(lowerName)) {
+  if (isAitToolName(lowerName)) {
     return "paseo";
   }
   if (lowerName === "task") {

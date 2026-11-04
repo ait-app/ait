@@ -157,6 +157,11 @@ export const PASEO_TOOL_CATALOG = {
     context: targetAgent(),
     detail: { inputOrder: ["agentId", "limit"] },
   },
+  wait_for_agent: {
+    label: "Wait for agent",
+    context: targetAgent(),
+    detail: { inputOrder: ["agentId", "timeoutMs"] },
+  },
   list_agents: {
     label: "List agents",
     detail: { inputOrder: ["cwd", "statuses", "sinceHours", "limit", "includeArchived"] },

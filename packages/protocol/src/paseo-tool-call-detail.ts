@@ -1,4 +1,4 @@
-import { getPaseoToolLeafName } from "./tool-name-normalization.js";
+import { getAitToolLeafName } from "./tool-name-normalization.js";
 
 export interface PaseoToolDetailField {
   label: string;
@@ -113,6 +113,7 @@ const TOOL_SPECS: Readonly<Record<string, ToolDetailSpec>> = {
   kill_agent: { inputOrder: ["agentId"] },
   update_agent: { inputOrder: AGENT_FIELDS },
   get_agent_activity: { inputOrder: ["agentId", "limit"] },
+  wait_for_agent: { inputOrder: ["agentId", "timeoutMs"] },
   set_agent_mode: { inputOrder: ["agentId", "modeId"] },
   list_workspace_scripts: { inputOrder: ["workspaceId"] },
   start_workspace_script: { inputOrder: ["workspaceId", "scriptName"] },
@@ -325,7 +326,7 @@ export function buildPaseoToolDetailSections(
   input: unknown,
   output: unknown,
 ): PaseoToolDetailSection[] | null {
-  const leafName = getPaseoToolLeafName(toolName);
+  const leafName = getAitToolLeafName(toolName);
   if (!leafName) return null;
 
   const spec = TOOL_SPECS[leafName] ?? {};
