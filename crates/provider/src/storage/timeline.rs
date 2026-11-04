@@ -79,15 +79,16 @@ impl Timeline {
             .query_row("PRAGMA application_id", [], |row| row.get(0))
             .map_err(io)?;
         let tables: i64 = database.query_row("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", [], |row|row.get(0)).map_err(io)?;
-        if !(version == 0 && application == 0 && tables == 0
-            || version == 1 && application == 0x4154_544C && tables == 2
-            || version == 2 && application == 0x4154_544C && tables == 3
-            || version == 3 && application == 0x4154_544C && tables == 4)
-            && !(version == 4 && application == 0x4154_544C && tables == 5)
-            && !(version == 5 && application == 0x4154_544C && tables == 6)
-            && !(version == 6 && application == 0x4154_544C && tables == 10)
-            && !(version == 7 && application == 0x4154_544C && tables == 10)
-        {
+        if !matches!(
+            (version, application, tables),
+            (0, 0, 0)
+                | (1, 0x4154_544C, 2)
+                | (2, 0x4154_544C, 3)
+                | (3, 0x4154_544C, 4)
+                | (4, 0x4154_544C, 5)
+                | (5, 0x4154_544C, 6)
+                | (6 | 7, 0x4154_544C, 10)
+        ) {
             return Err(ErrorCode::UnsupportedFormat);
         }
         database
@@ -287,6 +288,30 @@ impl Timeline {
             );
         }
         Ok(replacement)
+    }
+
+    /// Delete every display generation, incremental item, input receipt and native child
+    /// descriptor owned by a deleted Agent in one transaction, so a later Agent reusing its ID
+    /// starts empty. Child timelines stay under their own scopes for observed children.
+    /// # Errors
+    /// Returns storage errors; nothing is deleted when any statement fails.
+    pub(crate) fn forget(&self, agent: &str) -> Result<(), ErrorCode> {
+        let mut database = self.database.lock().map_err(io)?;
+        let transaction = database.transaction().map_err(io)?;
+        for table in [
+            "timelines",
+            "entries",
+            "retired_entries",
+            "progress",
+            "input_receipts",
+            "provider_subagents",
+        ] {
+            transaction
+                .execute(&format!("DELETE FROM {table} WHERE agent=?"), [agent])
+                .map_err(io)?;
+        }
+        projection::clear(&transaction, agent)?;
+        transaction.commit().map_err(io)
     }
 
     /// Atomically append new source identities, deduplicating replay without rewriting old rows.

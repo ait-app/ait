@@ -209,3 +209,30 @@ fn pending_admission_blocks_a_watch_before_the_native_writer_exists() {
     assert_eq!(watch.borrow()["busy"], false);
     assert_eq!(owners.snapshot("agent-1").unwrap()["status"], "idle");
 }
+
+#[test]
+fn released_and_forgotten_observations_are_dropped_once_no_waiter_remains() {
+    let owners = Owners::default();
+    let committed = json!({"status":"idle","final":{"status":"idle"},"completionText":"done"});
+    for id in ["agent-1", "agent-2"] {
+        let lane = owners.agent(id).unwrap();
+        owners.publish(id, committed.clone()).unwrap();
+        assert_eq!(lane, format!("agent:{id}"));
+    }
+    let waiter = owners.observe("agent-1", Value::Null).unwrap();
+
+    owners.release("agent:agent-1");
+    assert!(owners.snapshot("agent-1").is_some());
+    assert!(owners.snapshot("agent-2").is_some());
+    drop(waiter);
+    owners.release("agent:agent-1");
+    assert!(owners.snapshot("agent-1").is_none());
+    assert!(owners.snapshot("agent-2").is_some());
+
+    let waiter = owners.observe("agent-2", Value::Null).unwrap();
+    owners.forget("agent-2");
+    assert!(owners.snapshot("agent-2").is_some());
+    drop(waiter);
+    owners.forget("agent-2");
+    assert!(owners.snapshot("agent-2").is_none());
+}

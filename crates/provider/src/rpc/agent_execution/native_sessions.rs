@@ -12,63 +12,56 @@ use crate::protocol::native_sessions::{ForkRequest, ImportRequest};
 use crate::service::agent_manager::native_sessions::canonical;
 
 impl ExecutionState {
-    pub(super) async fn native_sessions(
-        &mut self,
-        method: &str,
-        params: Value,
-    ) -> Result<Value, ErrorCode> {
-        match method {
-            "provider.sessions.recent.list.request" => self
-                .manager
-                .recent_sessions(decode(params)?)
-                .await
-                .map_err(Into::into),
-            "agent.import.request" => self.import(params).await,
-            "agent.refresh.request" => {
-                only(&params, &["agentId"])?;
-                let id = self.resolve(
-                    params["agentId"]
-                        .as_str()
-                        .ok_or(ErrorCode::InvalidMessage)?,
-                )?;
-                let record = self
-                    .registry
-                    .get(&id)
-                    .map_err(|_| ErrorCode::AgentIo)?
-                    .ok_or(ErrorCode::AgentNotFound)?;
-                self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
-                self.manager.refresh_native(&id).await?;
-                let (_, rows) = self
-                    .manager
-                    .timeline()
-                    .ok_or(ErrorCode::UnsupportedCapability)?
-                    .read(&id)?;
-                Ok(
-                    json!({"status":"agent_refreshed","agentId":id,"agent":self.snapshot(&id)?,"timelineSize":rows.len()}),
-                )
-            }
-            "agent.fork_context.request" => {
-                let mut request: ForkRequest = decode(params)?;
-                request.agent_id = self.resolve(&request.agent_id)?;
-                self.manager.load_timeline(&request.agent_id).await?;
-                let (epoch, rows) = self
-                    .manager
-                    .timeline()
-                    .ok_or(ErrorCode::UnsupportedCapability)?
-                    .read(&request.agent_id)?;
-                crate::rpc::fork_context::export(
-                    &request,
-                    &epoch,
-                    &rows,
-                    &self.snapshot(&request.agent_id)?,
-                )
-                .map_err(Into::into)
-            }
-            _ => Err(ErrorCode::MethodNotFound),
-        }
+    pub(super) async fn recent_sessions(&self, params: Value) -> Result<Value, ErrorCode> {
+        self.manager
+            .recent_sessions(decode(params)?)
+            .await
+            .map_err(Into::into)
     }
 
-    async fn import(&mut self, params: Value) -> Result<Value, ErrorCode> {
+    pub(super) async fn refresh(&mut self, params: Value) -> Result<Value, ErrorCode> {
+        only(&params, &["agentId"])?;
+        let id = self.resolve(
+            params["agentId"]
+                .as_str()
+                .ok_or(ErrorCode::InvalidMessage)?,
+        )?;
+        let record = self
+            .registry
+            .get(&id)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .ok_or(ErrorCode::AgentNotFound)?;
+        self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
+        self.manager.refresh_native(&id).await?;
+        let (_, rows) = self
+            .manager
+            .timeline()
+            .ok_or(ErrorCode::UnsupportedCapability)?
+            .read(&id)?;
+        Ok(
+            json!({"status":"agent_refreshed","agentId":id,"agent":self.snapshot(&id)?,"timelineSize":rows.len()}),
+        )
+    }
+
+    pub(super) async fn fork_context(&mut self, params: Value) -> Result<Value, ErrorCode> {
+        let mut request: ForkRequest = decode(params)?;
+        request.agent_id = self.resolve(&request.agent_id)?;
+        self.manager.load_timeline(&request.agent_id).await?;
+        let (epoch, rows) = self
+            .manager
+            .timeline()
+            .ok_or(ErrorCode::UnsupportedCapability)?
+            .read(&request.agent_id)?;
+        crate::rpc::fork_context::export(
+            &request,
+            &epoch,
+            &rows,
+            &self.snapshot(&request.agent_id)?,
+        )
+        .map_err(Into::into)
+    }
+
+    pub(super) async fn import(&mut self, params: Value) -> Result<Value, ErrorCode> {
         let request: ImportRequest = decode(params)?;
         let handle = import_handle(&request)?;
         let cwd = canonical(&request.cwd)?;

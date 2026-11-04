@@ -282,6 +282,8 @@ impl Owners {
     }
 
     /// Release inactive aliases after a lane has reaped all of its sessions.
+    /// Observations of unowned Agents are dropped once no waiter holds them; their committed
+    /// state is already durable, so a later wait or read rebuilds it from the registry.
     pub(crate) fn release(&self, lane: &str) {
         if let Ok(mut routes) = self.routes.lock() {
             let mut controls = self
@@ -298,6 +300,28 @@ impl Owners {
             });
             routes.native.retain(|_, owner| owner != lane);
             routes.scopes.remove(lane);
+            self.observations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .retain(|id, sender| routes.agents.contains_key(id) || sender.receiver_count() > 0);
+        }
+    }
+
+    /// Drop the cached controls and unobserved completion snapshot of a deleted Agent.
+    pub(crate) fn forget(&self, id: &str) {
+        self.controls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(id);
+        let mut observations = self
+            .observations
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if observations
+            .get(id)
+            .is_some_and(|sender| sender.receiver_count() == 0)
+        {
+            observations.remove(id);
         }
     }
     /// Fence completion reads while a queued writer operation is being admitted.
