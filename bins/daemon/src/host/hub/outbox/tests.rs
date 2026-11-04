@@ -115,6 +115,21 @@ fn snapshots_coalesce_and_late_ack_cannot_remove_a_newer_revision() {
 }
 
 #[test]
+fn reactivation_commits_only_when_retention_expires_entries() {
+    let store = Arc::new(MemoryStore::default());
+    let scope = scope();
+    let mut outbox = Outbox::open(store.clone()).unwrap();
+    outbox.activate(&scope, 0).unwrap();
+    outbox.enqueue(&scope, event(), 0).unwrap();
+    store.fail.store(true, Ordering::Relaxed);
+    outbox.activate(&scope, RETENTION_MS - 1).unwrap();
+    assert!(outbox.activate(&scope, RETENTION_MS).is_err());
+    store.fail.store(false, Ordering::Relaxed);
+    outbox.activate(&scope, RETENTION_MS).unwrap();
+    assert!(outbox.next(&scope, &methods(), RETENTION_MS).is_none());
+}
+
+#[test]
 fn quarantine_and_expiration_do_not_block_other_events() {
     let mut outbox = Outbox::open(Arc::new(MemoryStore::default())).unwrap();
     let scope = scope();

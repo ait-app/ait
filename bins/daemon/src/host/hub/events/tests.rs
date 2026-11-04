@@ -11,11 +11,12 @@ fn timeline_projection_excludes_history_and_uncommitted_deltas() {
         )
         .is_none()
     );
-    let event = Event::project(
+    let (event, size) = Event::project(
         "agent_stream",
         &json!({"agentId":"agent","epoch":"epoch","seq":7,"event":{"text":"history"}}),
     )
     .unwrap();
+    assert_eq!(size, serde_json::to_vec(&event.params).unwrap().len());
     assert_eq!(event.method, "agent.timeline.update");
     assert_eq!(
         event.params,
@@ -25,7 +26,8 @@ fn timeline_projection_excludes_history_and_uncommitted_deltas() {
         "agent.timeline.replacement",
         &json!({"agentId":"agent","epoch":"new"}),
     )
-    .unwrap();
+    .unwrap()
+    .0;
     assert_eq!(reset.params["reset"], true);
     assert!(
         Event::project(
@@ -42,7 +44,8 @@ fn timeline_projection_excludes_history_and_uncommitted_deltas() {
             "agent":{"config":{"systemPrompt":"private"}}
         }),
     )
-    .unwrap();
+    .unwrap()
+    .0;
     assert_eq!(creation.method, "creation.update");
     assert_eq!(creation.params["agentId"], "agent");
     assert!(!creation.params.to_string().contains("private"));
@@ -59,7 +62,8 @@ fn terminal_notification_is_utf8_bounded_and_does_not_upload_paths() {
             "title":"完成".repeat(120),"body":"body"
         }),
     )
-    .unwrap();
+    .unwrap()
+    .0;
     let publication = event
         .publication(&sources(directory.path()), "server", true)
         .unwrap();
@@ -91,7 +95,8 @@ fn agent_notifications_validate_durable_attention_and_retry_payload_has_no_crede
         "agent_attention_required",
         &json!({"agentId":"agent","timestamp":"now","reason":"finished"}),
     )
-    .unwrap();
+    .unwrap()
+    .0;
     let publication = event.publication(&sources, "server", true).unwrap();
     assert_eq!(publication["notification"]["title"], "Agent finished");
     assert!(!publication.to_string().contains("secret"));
@@ -113,8 +118,9 @@ fn agent_notifications_validate_durable_attention_and_retry_payload_has_no_crede
             .get("notification")
             .is_none()
     );
-    let permission =
-        Event::project("agent_permission_request", &json!({"agentId":"agent"})).unwrap();
+    let permission = Event::project("agent_permission_request", &json!({"agentId":"agent"}))
+        .unwrap()
+        .0;
     assert!(!permission.attention());
     assert!(
         permission

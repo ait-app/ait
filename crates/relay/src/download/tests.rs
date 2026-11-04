@@ -21,6 +21,7 @@ async fn transfer_as(status: u16, ack: &str, visitor: Option<Uuid>) -> Result<()
         token: SecretString::from("local-bearer"),
         server_id: "server".to_owned(),
         instance_id: "instance".to_owned(),
+        downloads: tokio::sync::OnceCell::new(),
     });
     let body = vec![42_u8; 128 * 1024 + 17];
     let expected = body.clone();

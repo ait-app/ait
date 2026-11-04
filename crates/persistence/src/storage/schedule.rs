@@ -3,7 +3,9 @@ use domain::schedule::Schedule;
 use domain::storage::schedule::Error;
 use model::storage::schedule::Store;
 use serde::{Deserialize, Serialize};
-use std::{fs, io::Read, path::PathBuf};
+use std::{fs, path::PathBuf};
+
+const MAX_DOCUMENT_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Local JSON adapter; the independent host owns the containing data directory lease.
 #[derive(Debug)]
@@ -41,18 +43,13 @@ impl FileStore {
 impl Store for FileStore {
     fn load(&self) -> Result<Vec<Schedule>, Error> {
         self.check()?;
-        let file = match fs::File::open(&self.path) {
-            Ok(file) => file,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
-            Err(_) => return Err(Error::Storage),
+        let bytes = match crate::File::new(&self.path).read_limited(MAX_DOCUMENT_BYTES) {
+            Ok(bytes) => bytes,
+            Err(crate::Error::Io(e)) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(vec![]);
+            }
+            Err(crate::Error::Io(_) | crate::Error::TooLarge) => return Err(Error::Storage),
         };
-        let mut bytes = Vec::new();
-        file.take(16 * 1024 * 1024 + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|_| Error::Storage)?;
-        if bytes.len() > 16 * 1024 * 1024 {
-            return Err(Error::Storage);
-        }
         let doc: Document = serde_json::from_slice(&bytes).map_err(|_| Error::Storage)?;
         if !matches!(doc.version, 1 | 2) {
             return Err(Error::Storage);
@@ -60,24 +57,18 @@ impl Store for FileStore {
         Ok(doc.schedules)
     }
     fn save(&mut self, schedules: &[Schedule]) -> Result<(), Error> {
-        use std::io::Write;
         self.check()?;
         let bytes = serde_json::to_vec(&Document {
             version: 2,
             schedules: schedules.to_vec(),
         })
         .map_err(|_| Error::Storage)?;
-        if bytes.len() > 16 * 1024 * 1024 {
+        if u64::try_from(bytes.len()).map_or(true, |size| size > MAX_DOCUMENT_BYTES) {
             return Err(Error::Conflict);
         }
-        let parent = self.path.parent().ok_or(Error::Storage)?;
-        fs::create_dir_all(parent).map_err(|_| Error::Storage)?;
-        let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|_| Error::Storage)?;
-        temp.write_all(&bytes)
-            .and_then(|()| temp.as_file().sync_all())
-            .map_err(|_| Error::Storage)?;
-        temp.persist(&self.path).map_err(|_| Error::Storage)?;
-        Ok(())
+        crate::File::new(&self.path)
+            .write(&bytes)
+            .map_err(|_| Error::Storage)
     }
 }
 #[cfg(test)]

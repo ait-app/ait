@@ -210,7 +210,10 @@ impl AgentRunner {
                 .list_workspaces()
                 .map_err(|_| "Cannot load scheduled workspace")?
                 .into_iter()
-                .find(|workspace| workspace.workspace_id == id && workspace.archived_at.is_none())
+                .find(|workspace| {
+                    workspace.workspace_id == id
+                        && workspace.archived_at.as_deref().is_none_or(str::is_empty)
+                })
                 .ok_or("Scheduled workspace is missing or archived")?;
             if !Path::new(&workspace.cwd).is_dir() {
                 return Err("Scheduled workspace directory no longer exists");

@@ -32,12 +32,11 @@ impl OutboxStore for FileOutbox {
         }
     }
 
-    fn save(&self, document: &Value) -> Result<(), StoreError> {
-        let bytes = serde_json::to_vec(document).map_err(|_| StoreError)?;
-        if bytes.len() as u64 > MAX_BYTES {
+    fn save(&self, document: &[u8]) -> Result<(), StoreError> {
+        if document.len() as u64 > MAX_BYTES {
             return Err(StoreError);
         }
-        self.0.write(&bytes).map_err(|_| StoreError)
+        self.0.write(document).map_err(|_| StoreError)
     }
 }
 

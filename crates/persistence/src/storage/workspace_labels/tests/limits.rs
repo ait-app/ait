@@ -1,5 +1,6 @@
 use super::super::{MAX_DOCUMENT_BYTES, read_optional, transaction_for};
 use super::*;
+use crate::registry::Records;
 
 fn catalog_mutation(name: String) -> WorkspaceLabelStoreMutation {
     WorkspaceLabelStoreMutation {
@@ -66,10 +67,10 @@ fn committed_marker_size_is_checked_before_writing_a_prepared_marker() {
     let root = tempfile::tempdir().unwrap();
     let labels = store(root.path());
     let mut mutation = catalog_mutation("x".to_owned());
-    let transaction = transaction_for(&[], &mutation, &[]).unwrap();
+    let transaction = transaction_for(&[], &mutation, &Records::default()).unwrap();
     let overhead = serde_json::to_vec_pretty(&transaction).unwrap().len();
     mutation.labels[0].name = "x".repeat(usize::try_from(MAX_DOCUMENT_BYTES).unwrap() - overhead);
-    let prepared = transaction_for(&[], &mutation, &[]).unwrap();
+    let prepared = transaction_for(&[], &mutation, &Records::default()).unwrap();
     assert_eq!(
         serde_json::to_vec_pretty(&prepared).unwrap().len() + 1,
         usize::try_from(MAX_DOCUMENT_BYTES).unwrap()

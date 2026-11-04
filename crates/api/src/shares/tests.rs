@@ -18,11 +18,11 @@ impl OutboxStore for MemoryStore {
         Ok(lock(&self.document).clone())
     }
 
-    fn save(&self, document: &Value) -> Result<(), StoreError> {
+    fn save(&self, document: &[u8]) -> Result<(), StoreError> {
         if self.fail.load(Ordering::SeqCst) {
             return Err(StoreError);
         }
-        *lock(&self.document) = document.clone();
+        *lock(&self.document) = serde_json::from_slice(document).map_err(|_| StoreError)?;
         Ok(())
     }
 }

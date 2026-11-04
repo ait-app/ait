@@ -145,7 +145,8 @@ impl Journal {
         if version <= *saved {
             return Ok(());
         }
-        self.store.save(document)?;
+        let bytes = serde_json::to_vec(document).map_err(|_| StoreError)?;
+        self.store.save(&bytes)?;
         *saved = version;
         Ok(())
     }

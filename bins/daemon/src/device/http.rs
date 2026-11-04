@@ -141,50 +141,15 @@ impl HttpCenter {
             interval,
         })
     }
+}
 
-    pub(crate) async fn poll(
-        &self,
-        code: &SecretString,
-        request_id: Uuid,
-    ) -> Result<Tokens, Error> {
-        decode_tokens(
-            self.request(
-                reqwest::Method::POST,
-                "/v1/auth/device/token",
-                None,
-                json!({"device_code":code.expose_secret(), "request_id":request_id}),
-            )
-            .await?,
-        )
+/// Extract a one-use 64-hex ticket from a center response field.
+fn ticket(value: &Value, field: &str) -> Result<SecretString, Error> {
+    let ticket = value[field].as_str().ok_or(Error::Protocol)?;
+    if ticket.len() != 64 || !ticket.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(Error::Protocol);
     }
-
-    pub(crate) async fn enroll(
-        &self,
-        token: &SecretString,
-        request_id: Uuid,
-        machine: &Machine,
-    ) -> Result<Tokens, Error> {
-        decode_tokens(
-            self.request(
-                reqwest::Method::POST,
-                "/v1/auth/device/enroll",
-                None,
-                json!({"token":token.expose_secret(), "request_id":request_id, "machine":machine}),
-            )
-            .await?,
-        )
-    }
-
-    pub(crate) async fn revoke(&self, token: &SecretString) -> Result<(), Error> {
-        self.request(
-            reqwest::Method::POST,
-            "/v1/auth/device/revoke",
-            None,
-            json!({"refresh_token":token.expose_secret()}),
-        )
-        .await?;
-        Ok(())
-    }
+    Ok(ticket.to_owned().into())
 }
 
 fn decode_tokens(value: Value) -> Result<Tokens, Error> {
@@ -227,7 +192,14 @@ fn decode_tokens(value: Value) -> Result<Tokens, Error> {
 #[async_trait]
 impl Center for HttpCenter {
     async fn revoke(&self, refresh_token: &SecretString) -> Result<(), Error> {
-        self.revoke(refresh_token).await
+        self.request(
+            reqwest::Method::POST,
+            "/v1/auth/device/revoke",
+            None,
+            json!({"refresh_token":refresh_token.expose_secret()}),
+        )
+        .await?;
+        Ok(())
     }
 
     async fn enroll(
@@ -236,10 +208,26 @@ impl Center for HttpCenter {
         request_id: Uuid,
         machine: &Machine,
     ) -> Result<Tokens, Error> {
-        self.enroll(token, request_id, machine).await
+        decode_tokens(
+            self.request(
+                reqwest::Method::POST,
+                "/v1/auth/device/enroll",
+                None,
+                json!({"token":token.expose_secret(), "request_id":request_id, "machine":machine}),
+            )
+            .await?,
+        )
     }
     async fn poll(&self, code: &SecretString, request_id: Uuid) -> Result<Tokens, Error> {
-        self.poll(code, request_id).await
+        decode_tokens(
+            self.request(
+                reqwest::Method::POST,
+                "/v1/auth/device/token",
+                None,
+                json!({"device_code":code.expose_secret(), "request_id":request_id}),
+            )
+            .await?,
+        )
     }
 
     async fn refresh(&self, secret: &SecretString, request_id: Uuid) -> Result<Tokens, Error> {
@@ -318,11 +306,7 @@ impl Center for HttpCenter {
                 json!({}),
             )
             .await?;
-        let ticket = value["control_ticket"].as_str().ok_or(Error::Protocol)?;
-        if ticket.len() != 64 || !ticket.bytes().all(|b| b.is_ascii_hexdigit()) {
-            return Err(Error::Protocol);
-        }
-        Ok(ticket.to_owned().into())
+        ticket(&value, "control_ticket")
     }
     async fn hub_ticket(&self, tokens: &Tokens, session: Uuid) -> Result<SecretString, Error> {
         let value = self
@@ -333,11 +317,7 @@ impl Center for HttpCenter {
                 json!({"ep":"serve"}),
             )
             .await?;
-        let ticket = value["hub_ticket"].as_str().ok_or(Error::Protocol)?;
-        if ticket.len() != 64 || !ticket.bytes().all(|b| b.is_ascii_hexdigit()) {
-            return Err(Error::Protocol);
-        }
-        Ok(ticket.to_owned().into())
+        ticket(&value, "hub_ticket")
     }
     async fn close(&self, tokens: &Tokens, session: Uuid) -> Result<(), Error> {
         self.request(

@@ -27,6 +27,9 @@ pub(crate) enum Error {
 /// Atomic writer supplied by a host; it must install all bytes or report failure.
 pub(crate) type Writer<E = Error> = Arc<dyn Fn(&Path, &[u8]) -> Result<(), E> + Send + Sync>;
 
+/// Committed records keyed by identity, in insertion order.
+pub(crate) type Records<R> = IndexMap<String, Arc<R>>;
+
 /// Shared atomic JSON array engine; business registries validate and publish their own records.
 /// Hosts must serialize independent writers with a data-directory lease.
 pub(crate) struct FileRegistry<R, E = Error> {
@@ -39,7 +42,7 @@ pub(crate) struct FileRegistry<R, E = Error> {
 struct State<R> {
     loaded: bool,
     frozen: bool,
-    records: IndexMap<String, Arc<R>>,
+    records: Records<R>,
     snapshot: Option<Arc<[Arc<R>]>>,
 }
 
@@ -186,14 +189,14 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
     }
 
     /// Commit a staged change with hooks under the same registry lock.
-    /// `before_write` receives the committed before-image; `after_write` runs after installation.
+    /// `before_write` borrows the committed before-image; `after_write` runs after installation.
     /// Failed hooks leave the cache unchanged; the caller owns journal recovery after a disk write.
     /// # Errors
     /// Returns loading, validation, frozen-state, writer, or hook errors.
     pub(crate) fn mutate_with<T>(
         &self,
         update: impl FnOnce(&mut IndexMap<String, R>) -> Result<(T, bool), E>,
-        before_write: impl FnOnce(&[R]) -> Result<(), E>,
+        before_write: impl FnOnce(&Records<R>) -> Result<(), E>,
         after_write: impl FnOnce() -> Result<(), E>,
     ) -> Result<T, E> {
         let mut state = self.loaded()?;
@@ -213,12 +216,7 @@ impl<R: Clone + Serialize + DeserializeOwned, E: From<Error> + 'static> FileRegi
             // Validate programmatically constructed records too (e.g. positive request numbers).
             serde_json::from_slice::<Vec<R>>(&bytes).map_err(|_| E::from(Error::InvalidRecord))?;
             // Journal before-images must come from the same locked state as the write.
-            let records = state
-                .records
-                .values()
-                .map(|record| record.as_ref().clone())
-                .collect::<Vec<_>>();
-            before_write(&records)?;
+            before_write(&state.records)?;
             (self.writer)(&self.path, &bytes)?;
             after_write()?;
             state.records = staged

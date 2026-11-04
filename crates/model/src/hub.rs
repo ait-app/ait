@@ -100,10 +100,12 @@ pub trait OutboxStore: fmt::Debug + Send + Sync {
     /// # Errors
     /// Returns a safe I/O or malformed-document error without modifying existing storage.
     fn load(&self) -> Result<Value, StoreError>;
-    /// Atomically replace the journal before acknowledging an enqueue or removal.
+    /// Atomically replace the journal with JSON-encoded `document` bytes before acknowledging
+    /// an enqueue or removal; callers encode once so they can bound the size they commit.
     /// # Errors
-    /// Returns a safe I/O error; the previous committed document remains usable.
-    fn save(&self, document: &Value) -> Result<(), StoreError>;
+    /// Returns a safe I/O or oversized-document error; the previous committed document remains
+    /// usable.
+    fn save(&self, document: &[u8]) -> Result<(), StoreError>;
 }
 
 #[cfg(test)]

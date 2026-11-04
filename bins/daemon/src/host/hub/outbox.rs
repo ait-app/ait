@@ -89,37 +89,40 @@ impl Outbox {
     }
 
     fn commit(&mut self, document: Document) -> anyhow::Result<()> {
-        let value = serde_json::to_value(&document)?;
-        anyhow::ensure!(
-            serde_json::to_vec(&value)?.len() <= MAX_BYTES,
-            "Host publication journal full"
-        );
+        let bytes = serde_json::to_vec(&document)?;
+        anyhow::ensure!(bytes.len() <= MAX_BYTES, "Host publication journal full");
         self.store
-            .save(&value)
+            .save(&bytes)
             .context("commit Host publication journal")?;
         self.document = document;
         Ok(())
     }
 
     pub(super) fn activate(&mut self, scope: &Scope, now: i64) -> anyhow::Result<()> {
-        let mut next = self.document.clone();
-        if next.scope.as_ref() != Some(scope) {
-            next = Document {
+        if self.document.scope.as_ref() != Some(scope) {
+            return self.commit(Document {
                 scope: Some(scope.clone()),
                 ..Document::default()
-            };
+            });
         }
-        next.events
-            .retain(|entry| now.saturating_sub(entry.created_at) < RETENTION_MS);
-        next.seen
-            .retain(|_, created| now.saturating_sub(*created) < RETENTION_MS);
-        if next.scope != self.document.scope
-            || next.events.len() != self.document.events.len()
-            || next.seen.len() != self.document.seen.len()
+        let retained = |created: i64| now.saturating_sub(created) < RETENTION_MS;
+        if self
+            .document
+            .events
+            .iter()
+            .all(|entry| retained(entry.created_at))
+            && self
+                .document
+                .seen
+                .values()
+                .all(|created| retained(*created))
         {
-            self.commit(next)?;
+            return Ok(());
         }
-        Ok(())
+        let mut next = self.document.clone();
+        next.events.retain(|entry| retained(entry.created_at));
+        next.seen.retain(|_, created| retained(*created));
+        self.commit(next)
     }
 
     pub(super) fn enqueue(&mut self, scope: &Scope, params: Value, now: i64) -> anyhow::Result<()> {
