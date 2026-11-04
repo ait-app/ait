@@ -211,7 +211,12 @@ export function createDesktopAppUpdater(deps: DesktopAppUpdaterDeps): DesktopApp
       return null;
     }
     const { releaseChannel, intent = "manual", silent = false } = options;
-    if (silent && state.status === "checking") {
+    // A check must not replace an install in progress, and a background check must not
+    // replace the "installed, restart to apply" state.
+    if (
+      state.isInstalling ||
+      (silent && (state.status === "checking" || state.status === "installed"))
+    ) {
       return null;
     }
 
@@ -295,8 +300,13 @@ export function createDesktopAppUpdater(deps: DesktopAppUpdaterDeps): DesktopApp
   async function installUpdate(options: {
     releaseChannel: DesktopReleaseChannel;
   }): Promise<DesktopAppUpdateInstallResult | null> {
+    if (state.isInstalling) {
+      return null;
+    }
+    // Bumping the request version discards any check still in flight.
     commit({
       ...state,
+      requestVersion: state.requestVersion + 1,
       status: "installing",
       errorMessage: null,
       isInstalling: true,

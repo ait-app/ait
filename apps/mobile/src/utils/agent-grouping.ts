@@ -133,7 +133,7 @@ export function deriveProjectName(projectKey: string): string {
   if (projectKey.startsWith(githubRemotePrefix)) {
     return projectKey.slice(githubRemotePrefix.length) || projectKey;
   }
-  const segments = projectKey.split("/").filter(Boolean);
+  const segments = projectKey.split(/[\\/]/).filter(Boolean);
   return segments[segments.length - 1] || projectKey;
 }
 

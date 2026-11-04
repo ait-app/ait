@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import {
   checkDesktopAppUpdate,
   formatVersionWithPrefix,
@@ -14,6 +14,8 @@ import {
   PENDING_RECHECK_MS,
   createDesktopAppUpdater,
   formatStatusText,
+  type DesktopAppUpdater,
+  type DesktopAppUpdaterErrorReport,
   type DesktopAppUpdateStatus,
 } from "@/desktop/updates/desktop-app-updater";
 import { formatMessageTimestamp } from "@/utils/time";
@@ -36,24 +38,33 @@ export interface UseDesktopAppUpdaterReturn {
   installUpdate: () => Promise<DesktopAppUpdateInstallResult | null>;
 }
 
+// One updater per app: the sidebar callout and Settings must observe the same check/install
+// state, and the install guard only works if both drive the same instance.
+let sharedUpdater: DesktopAppUpdater | null = null;
+let reportSharedInstallError: ((report: DesktopAppUpdaterErrorReport) => void) | null = null;
+
+function getSharedDesktopAppUpdater(): DesktopAppUpdater {
+  sharedUpdater ??= createDesktopAppUpdater({
+    port: {
+      checkDesktopAppUpdate,
+      installDesktopAppUpdate,
+    },
+    now: () => Date.now(),
+    reportInstallError: (report) => reportSharedInstallError?.(report),
+  });
+  return sharedUpdater;
+}
+
 export function useDesktopAppUpdater(): UseDesktopAppUpdaterReturn {
   const isDesktopApp = shouldShowDesktopUpdateSection();
-  const { settings: desktopSettings } = useDesktopSettings();
+  const { settings: desktopSettings, isLoading: isLoadingSettings } = useDesktopSettings();
   const releaseChannel = desktopSettings.releaseChannel;
   const reportError = useDesktopIpcErrorReporter();
+  const updater = getSharedDesktopAppUpdater();
 
-  const updater = useMemo(
-    () =>
-      createDesktopAppUpdater({
-        port: {
-          checkDesktopAppUpdate,
-          installDesktopAppUpdate,
-        },
-        now: () => Date.now(),
-        reportInstallError: reportError,
-      }),
-    [reportError],
-  );
+  useEffect(() => {
+    reportSharedInstallError = reportError;
+  }, [reportError]);
 
   const snapshot = useSyncExternalStore(
     updater.subscribe,
@@ -66,13 +77,19 @@ export function useDesktopAppUpdater(): UseDesktopAppUpdaterReturn {
       if (!isDesktopApp) {
         return null;
       }
+      const intent = options.intent ?? "manual";
+      // Until settings load, releaseChannel is the "stable" default; an automatic check would
+      // query the wrong channel. Callers re-run once this callback changes after the load.
+      if (intent === "automatic" && isLoadingSettings) {
+        return null;
+      }
       return updater.checkForUpdates({
         releaseChannel,
-        intent: options.intent ?? "manual",
+        intent,
         silent: options.silent,
       });
     },
-    [isDesktopApp, releaseChannel, updater],
+    [isDesktopApp, isLoadingSettings, releaseChannel, updater],
   );
 
   const installUpdate = useCallback(async () => {

@@ -62,6 +62,9 @@ function start(resolution: TickResolution): void {
   tier.handle = setTimeout(() => {
     tier.handle = null;
     notify(tier);
+    // Every listener may have unsubscribed during notify (stop() then had nothing to clear), or a
+    // fresh subscriber may have restarted the tier; either way this tick must not add a timer.
+    if (tier.listeners.size === 0 || tier.handle !== null) return;
     tier.interval = setInterval(() => notify(tier), period);
   }, delay);
 }

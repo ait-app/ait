@@ -57,7 +57,10 @@ export function useUsageHostSelection(): {
   );
   const select = useCallback(
     (serverId: string) => {
-      void updateSettings((current) => ({ usage: setUsageHost(current.usage, serverId) }));
+      // updateSettings logs a failed save before rethrowing; only the rejection needs handling.
+      updateSettings((current) => ({ usage: setUsageHost(current.usage, serverId) })).catch(
+        () => {},
+      );
     },
     [updateSettings],
   );

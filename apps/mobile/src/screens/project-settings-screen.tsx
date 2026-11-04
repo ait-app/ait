@@ -524,6 +524,10 @@ function ProjectConfigForm({
         setWriteError(result.error);
       }
     },
+    // A rejected request has no typed code; surface it through the generic failure callout.
+    onError: () => {
+      setWriteError({ code: "write_failed" });
+    },
   });
 
   const handleSave = useCallback(() => {
@@ -659,7 +663,9 @@ function ProjectConfigForm({
   );
 
   const isStale = writeError?.code === "stale_project_config";
-  const isWriteFailed = writeError?.code === "write_failed";
+  // project_not_found and invalid_project_config have no dedicated copy; every failure other
+  // than a stale revision shows the generic "couldn't save" callout.
+  const isWriteFailed = writeError !== null && !isStale;
   const saveDisabled = saveMutation.isPending || isStale || hasInvalidScripts;
 
   return (

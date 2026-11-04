@@ -7,6 +7,8 @@ import type {
 import {
   acceptMessageSubmission,
   beginMessageSubmission,
+  isDeliveredSendError,
+  markDeliveredSendError,
   rejectMessageSubmission,
   type MessageSubmissionRecord,
 } from "@/composer/submission/model";
@@ -592,6 +594,25 @@ describe("dispatchComposerAgentMessage", () => {
     ).rejects.toBe(transportError);
   });
 
+  it("marks a failure as delivered only when the daemon already echoed the message", async () => {
+    const delivered = new Error("lost after echo");
+    const rejected = new Error("lost before echo");
+    const send = (error: Error, outcome: "accepted" | "rejected") =>
+      dispatchComposerAgentMessage({
+        client: createFakeSendClient({ rejection: error }),
+        agentId: "agent",
+        text: "hi",
+        attachments: [],
+        encodeImages: passthroughEncodeImages,
+        submission: { begin: () => {}, accept: () => {}, reject: () => outcome },
+      });
+
+    await expect(send(delivered, "accepted")).rejects.toBe(delivered);
+    await expect(send(rejected, "rejected")).rejects.toBe(rejected);
+    expect(isDeliveredSendError(delivered)).toBe(true);
+    expect(isDeliveredSendError(rejected)).toBe(false);
+  });
+
   it("sends text + image data + structured attachments and appends user_message to the tail when head is empty", async () => {
     const client = createFakeSendClient();
     const stream = createFakeStream();
@@ -895,6 +916,24 @@ describe("sendQueuedComposerMessageNow", () => {
     expect(result).toEqual({ status: "failed", errorMessage: "network down" });
     const state = queue.state.get("agent");
     expect(state?.map((m) => m.id)).toEqual(["msg-1", "msg-2"]);
+  });
+
+  it("does not re-queue a message the daemon already received", async () => {
+    const queue = createFakeQueue(
+      new Map([["agent", [{ id: "msg-1", text: "first", attachments: [] }]]]),
+    );
+    const result = await sendQueuedComposerMessageNow({
+      agentId: "agent",
+      messageId: "msg-1",
+      queue,
+      submitMessage: async () => {
+        const error = new Error("lost after echo");
+        markDeliveredSendError(error);
+        throw error;
+      },
+    });
+    expect(result).toEqual({ status: "failed", errorMessage: "lost after echo" });
+    expect(queue.state.get("agent")).toEqual([]);
   });
 });
 

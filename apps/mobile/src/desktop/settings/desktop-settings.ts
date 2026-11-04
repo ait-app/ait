@@ -100,6 +100,9 @@ export function useDesktopSettings(): {
     },
   });
 
+  // Failures are reported (toast + log) by the mutation's onError and then rethrown so callers
+  // can roll back or show inline state. Callers must not report them again, and fire-and-forget
+  // callers must catch the rejection.
   const updateSettings = useCallback(
     async (updates: DesktopSettingsPatch) => {
       if (!getIsElectron()) {

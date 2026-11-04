@@ -13,6 +13,11 @@ const SIDEBAR_TARGETS = [
   { serverId: "srv", workspaceId: "ws-5" },
 ] as const;
 
+const MANY_TARGETS = Array.from({ length: 12 }, (_, index) => ({
+  serverId: "srv",
+  workspaceId: `ws-${index + 1}`,
+}));
+
 function makeCtx(overrides: Partial<ShortcutRoutingContext> = {}): ShortcutRoutingContext {
   return {
     pathname: "/h/srv/workspace/ws-2",
@@ -146,6 +151,15 @@ describe("routeKeyboardShortcut — workspace.navigate.index", () => {
     ).toEqual<ShortcutAction>({ kind: "none" });
   });
 
+  it("keeps digit navigation within the first nine visible workspaces", () => {
+    expect(
+      routeKeyboardShortcut(
+        { action: "workspace.navigate.index", payload: { index: 10 } },
+        makeCtx({ sidebarShortcutTargets: MANY_TARGETS }),
+      ),
+    ).toEqual<ShortcutAction>({ kind: "none" });
+  });
+
   it("returns none when the index payload is missing", () => {
     expect(
       routeKeyboardShortcut({ action: "workspace.navigate.index", payload: null }, makeCtx()),
@@ -247,6 +261,34 @@ describe("routeKeyboardShortcut — workspace.navigate.relative", () => {
       kind: "navigate-workspace",
       serverId: "srv",
       workspaceId: "ws-2",
+    });
+  });
+
+  it("moves past the ninth visible workspace and back", () => {
+    const ctx = (workspaceId: string) =>
+      makeCtx({
+        sidebarShortcutTargets: MANY_TARGETS,
+        navigationActiveWorkspace: { serverId: "srv", workspaceId },
+      });
+    expect(
+      routeKeyboardShortcut(
+        { action: "workspace.navigate.relative", payload: { delta: 1 } },
+        ctx("ws-9"),
+      ),
+    ).toEqual<ShortcutAction>({
+      kind: "navigate-workspace",
+      serverId: "srv",
+      workspaceId: "ws-10",
+    });
+    expect(
+      routeKeyboardShortcut(
+        { action: "workspace.navigate.relative", payload: { delta: -1 } },
+        ctx("ws-11"),
+      ),
+    ).toEqual<ShortcutAction>({
+      kind: "navigate-workspace",
+      serverId: "srv",
+      workspaceId: "ws-10",
     });
   });
 

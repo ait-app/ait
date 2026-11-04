@@ -362,6 +362,57 @@ describe("desktop app updater — install", () => {
   });
 });
 
+describe("desktop app updater — install concurrency", () => {
+  it("ignores a second install while one is in flight", async () => {
+    const { updater, port } = createUpdater();
+    const first = updater.installUpdate({ releaseChannel: "stable" });
+    const second = await updater.installUpdate({ releaseChannel: "stable" });
+    await first;
+
+    expect(second).toBeNull();
+    expect(port.recordedInstalls).toHaveLength(1);
+  });
+
+  it("does not let a check started before the install overwrite the installed state", async () => {
+    const { updater, port } = createUpdater();
+    const deferred = port.deferNextCheck();
+    const check = updater.checkForUpdates({
+      releaseChannel: "stable",
+      intent: "automatic",
+      silent: true,
+    });
+    port.nextInstallResult(buildFakeInstallResult({ installed: true }));
+
+    await updater.installUpdate({ releaseChannel: "stable" });
+    deferred.resolve(buildFakeCheckResult({ hasUpdate: false }));
+    await check;
+
+    expect(updater.getSnapshot().status).toBe("installed");
+  });
+
+  it("skips checks while an install is in flight", async () => {
+    const { updater, port } = createUpdater();
+    const install = updater.installUpdate({ releaseChannel: "stable" });
+
+    const result = await updater.checkForUpdates({ releaseChannel: "stable" });
+    await install;
+
+    expect(result).toBeNull();
+    expect(port.recordedChecks).toHaveLength(0);
+  });
+
+  it("skips silent checks once an update is installed", async () => {
+    const { updater, port } = createUpdater();
+    port.nextInstallResult(buildFakeInstallResult({ installed: true }));
+    await updater.installUpdate({ releaseChannel: "stable" });
+
+    await updater.checkForUpdates({ releaseChannel: "stable", intent: "automatic", silent: true });
+
+    expect(port.recordedChecks).toHaveLength(0);
+    expect(updater.getSnapshot().status).toBe("installed");
+  });
+});
+
 describe("desktop app updater — subscribe", () => {
   it("notifies subscribers when the status changes", async () => {
     const { updater, port } = createUpdater();

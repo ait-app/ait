@@ -330,7 +330,11 @@ export function LocalDaemonSection() {
     [updateDaemonSettings],
   );
   const handleToggleKeepRunning = useCallback(() => {
-    void updateDaemonSettings({ keepRunningAfterQuit: !daemonSettings.keepRunningAfterQuit });
+    void updateDaemonSettings({ keepRunningAfterQuit: !daemonSettings.keepRunningAfterQuit }).catch(
+      () => {
+        // useDesktopSettings owns the user-visible IPC error.
+      },
+    );
   }, [daemonSettings.keepRunningAfterQuit, updateDaemonSettings]);
   const { data, isLoading, error: statusError, setStatus, refetch } = useDaemonStatus();
 

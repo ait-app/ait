@@ -1,6 +1,13 @@
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
+// Russian plural categories English lacks; i18next selects them from the count. Kept
+// outside the literal because TranslationResources only declares the English categories.
+const labelDeletePluralForms = {
+  deleteMessage_few: "Метка будет снята с {{count}} рабочих пространств на этом хосте.",
+  deleteMessage_many: "Метка будет снята с {{count}} рабочих пространств на этом хосте.",
+};
+
 export const ru: TranslationResources = {
   sharing: {
     ...en.sharing,
@@ -1132,6 +1139,7 @@ export const ru: TranslationResources = {
       delete: "Удалить",
       deleteTitle: "Удалить метку «{{name}}»?",
       deleteMessage_one: "Метка будет снята с {{count}} рабочего пространства на этом хосте.",
+      ...labelDeletePluralForms,
       deleteMessage_other: "Метка будет снята с {{count}} рабочих пространств на этом хосте.",
       offline: "Этот хост не в сети.",
       updateHost: "Обновите этот хост для управления метками.",

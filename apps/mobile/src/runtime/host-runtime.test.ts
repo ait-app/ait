@@ -595,6 +595,38 @@ describe("HostRuntimeController", () => {
     }
   });
 
+  it("stays stopped when stop() lands during the first startup probe", async () => {
+    useHostRuntimeClock();
+    const connection = makeHost().connections[0]!;
+    const host = makeHost({ connections: [connection] });
+    const firstProbe =
+      createDeferred<Awaited<ReturnType<HostRuntimeControllerDeps["connectToDaemon"]>>>();
+    const clients: FakeDaemonClient[] = [];
+    const connectToDaemon = vi.fn().mockReturnValueOnce(firstProbe.promise);
+    const controller = new HostRuntimeController({
+      host,
+      deps: { ...makeDeps({}, clients), connectToDaemon },
+    });
+    const starting = controller.start();
+    await vi.waitFor(() => expect(connectToDaemon).toHaveBeenCalledTimes(1));
+    await controller.stop();
+    const probeClient = makeConnectedProbeClient(20);
+    firstProbe.resolve({
+      client: probeClient as unknown as DaemonClient,
+      serverId: host.serverId,
+      hostname: null,
+    });
+    await starting;
+    await vi.advanceTimersByTimeAsync(10_000);
+    await controller.activateConnection({ connectionId: connection.id });
+
+    expect(connectToDaemon).toHaveBeenCalledTimes(1);
+    expect(clients).toHaveLength(0);
+    expect(probeClient.isDisposed()).toBe(true);
+    expect(controller.getClient()).toBeNull();
+    expect(controller.getSnapshot().connectionStatus).not.toBe("online");
+  });
+
   it.each([true, false])(
     "keeps a successful startup connection when another probe fails (failure first: %s)",
     async (failureFirst) => {
@@ -3077,6 +3109,72 @@ describe("HostRuntimeStore", () => {
     expect(store.getHosts()[0]?.appearance).toEqual({ color: "teal", badgeDisplay: "icon" });
     const persistedHosts = JSON.parse((await storage.getItem("@paseo:daemon-registry")) ?? "[]");
     expect(persistedHosts[0]?.appearance).toEqual({ color: "teal", badgeDisplay: "icon" });
+    store.syncHosts([]);
+  });
+
+  it.each([
+    [
+      "color change",
+      (store: HostRuntimeStore) => store.setHostColor("srv_appearance", "teal"),
+      { serverIds: ["srv_appearance", "srv_other"], color: "teal" },
+    ],
+    [
+      "host removal",
+      (store: HostRuntimeStore) => store.removeHost("srv_other"),
+      { serverIds: ["srv_appearance"], color: "none" },
+    ],
+    [
+      "connection removal",
+      (store: HostRuntimeStore) => store.removeConnection("srv_appearance", "direct:lan:6767"),
+      { serverIds: ["srv_appearance", "srv_other"], color: "none" },
+    ],
+    [
+      "account host addition",
+      (store: HostRuntimeStore) =>
+        store.addAccountRelayHost(
+          { host_id: "33333333-3333-4333-8333-333333333333", server_id: "srv_new", name: "New" },
+          "https://center.test/api",
+        ),
+      { serverIds: ["srv_appearance", "srv_other", "srv_new"], color: "none" },
+    ],
+  ])("keeps a rename made while a %s is being persisted", async (_, mutate, expected) => {
+    const host = makeHost({ serverId: "srv_appearance" });
+    const other = makeHost({ serverId: "srv_other" });
+    const storage = createMemoryHostRuntimeStorage();
+    await storage.setItem("@paseo:daemon-registry", JSON.stringify([host, other]));
+    await storage.setItem("@paseo:e2e", "1");
+    const store = createAppearanceStore(storage);
+
+    const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
+    store.boot();
+    await registryLoaded;
+
+    const firstWrite = createDeferred<void>();
+    let writeCount = 0;
+    const setItem = storage.setItem.bind(storage);
+    storage.setItem = async (key, value) => {
+      if (key === "@paseo:daemon-registry") {
+        writeCount += 1;
+        if (writeCount === 1) await firstWrite.promise;
+      }
+      await setItem(key, value);
+    };
+
+    const mutation = mutate(store);
+    await vi.waitFor(() => expect(writeCount).toBe(1));
+    const rename = store.renameHost("srv_appearance", "Renamed");
+    firstWrite.resolve();
+    await Promise.all([mutation, rename]);
+
+    const expectHosts = (hosts: HostProfile[]) => {
+      expect(hosts.map((entry) => entry.serverId)).toEqual(expected.serverIds);
+      expect(hosts[0]).toMatchObject({
+        label: "Renamed",
+        appearance: { color: expected.color },
+      });
+    };
+    expectHosts(store.getHosts());
+    expectHosts(JSON.parse((await storage.getItem("@paseo:daemon-registry")) ?? "[]"));
     store.syncHosts([]);
   });
 

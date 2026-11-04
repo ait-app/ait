@@ -140,6 +140,7 @@ import {
 import { captureWorkspaceDraftCleanup } from "./new-workspace/background-handoff";
 import { useNewWorkspaceScreenPresence } from "./new-workspace/screen-presence";
 import { createSharedProjectAgent } from "./new-workspace/shared-project-agent";
+import { buildWorkspaceCreationRequestKey } from "./new-workspace/creation-request-key";
 
 const ThemedFolderPlus = withUnistyles(FolderPlus);
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -1703,8 +1704,8 @@ export function NewWorkspaceScreen({
   const [creationDraftId] = useState(() => draftId?.trim() || generateDraftId());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [creationResult, setCreationResult] = useState<
-    WorkspaceCreationResult | { workspace: null }
-  >({ workspace: null });
+    (WorkspaceCreationResult & { requestKey: string }) | { workspace: null; requestKey: null }
+  >({ workspace: null, requestKey: null });
   const [pendingAction, setPendingAction] = useState<
     "chat" | "empty" | "terminal" | "voice" | null
   >(null);
@@ -2102,17 +2103,24 @@ export function NewWorkspaceScreen({
       agent?: CreateWorkspaceRequestOptions["agent"];
       onEvent?: (snapshot: CreationSnapshot) => void;
     }) => {
-      if (creationResult.workspace) {
-        return creationResult;
-      }
       if (!selectedProject) {
         throw new Error("Choose a project");
       }
       if (!selectedSourceDirectory) {
         throw new Error("Choose a host for this project");
       }
-      const connectedClient = withConnectedClient();
       const createsWorktree = !supportsWorkspaceMultiplicity || effectiveIsolation === "worktree";
+      const requestKey = buildWorkspaceCreationRequestKey({
+        serverId: selectedServerId,
+        projectId: getHostProjectId(selectedProject, selectedServerId),
+        sourceDirectory: selectedSourceDirectory,
+        isolation: createsWorktree ? "worktree" : "local",
+        selectedItem,
+      });
+      if (creationResult.workspace && creationResult.requestKey === requestKey) {
+        return creationResult;
+      }
+      const connectedClient = withConnectedClient();
       const checkoutStatusForCreate = createsWorktree
         ? await ensureCheckoutStatus({
             queryClient,
@@ -2142,7 +2150,7 @@ export function NewWorkspaceScreen({
         serverId: selectedServerId,
         createFailedMessage: t("newWorkspace.errors.createWorktreeFailed"),
       });
-      setCreationResult(normalizedWorkspace);
+      setCreationResult({ ...normalizedWorkspace, requestKey });
       return normalizedWorkspace;
     },
     [

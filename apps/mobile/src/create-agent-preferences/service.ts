@@ -23,11 +23,18 @@ export class CreateAgentPreferencesService {
       return this.preferences;
     }
     if (!this.loadPromise) {
-      this.loadPromise = this.storage.read().then((stored) => {
-        this.preferences = parseFormPreferences(stored);
-        this.isLoaded = true;
-        return this.preferences;
-      });
+      this.loadPromise = this.storage.read().then(
+        (stored) => {
+          this.preferences = parseFormPreferences(stored);
+          this.isLoaded = true;
+          return this.preferences;
+        },
+        (error: unknown) => {
+          // A failed read must not stick: the next load retries storage.
+          this.loadPromise = null;
+          throw error;
+        },
+      );
     }
     return this.loadPromise;
   }

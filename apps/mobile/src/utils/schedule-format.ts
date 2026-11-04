@@ -207,11 +207,15 @@ export function formatNextRun(iso: string | null, t: TFunction = i18n.t): string
   if (diffMs < MS_PER_MINUTE) {
     return t("schedules.time.soon");
   }
-  if (diffMs < MS_PER_HOUR) {
-    return t("schedules.time.nextMinutes", { count: Math.round(diffMs / MS_PER_MINUTE) });
+  // Round within each unit, but let a value that rounds up to a full next unit move to that
+  // unit: 59m45s reads "in 1h", never "in 60m"; 23h40m reads "in 1d", never "in 24h".
+  const minutes = Math.round(diffMs / MS_PER_MINUTE);
+  if (minutes < 60) {
+    return t("schedules.time.nextMinutes", { count: minutes });
   }
-  if (diffMs < MS_PER_DAY) {
-    return t("schedules.time.nextHours", { count: Math.round(diffMs / MS_PER_HOUR) });
+  const hours = Math.round(diffMs / MS_PER_HOUR);
+  if (hours < 24) {
+    return t("schedules.time.nextHours", { count: hours });
   }
   return t("schedules.time.nextDays", { count: Math.round(diffMs / MS_PER_DAY) });
 }

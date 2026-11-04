@@ -1,6 +1,6 @@
 import { Image } from "react-native";
 import { isWeb } from "@/constants/platform";
-import { useMemo, useEffect, useId } from "react";
+import { useMemo, useEffect, useId, useRef } from "react";
 import { useFetchQueries } from "@/data/query";
 import { createAssistantImageFileAcquisition } from "@/assistant-image/file-acquisition";
 import {
@@ -80,15 +80,22 @@ export function useMarkdownSource(text: string, context: MarkdownImageContext) {
       },
     })),
   );
+  const retained = results.flatMap((result, index) => {
+    const acquisition = acquisitions[index];
+    return result.data && acquisition ? [{ key: acquisition.key, value: result.data }] : [];
+  });
+  // `results` and `acquisitions` are new arrays every render. Keying the retention on the set of
+  // acquisition keys keeps each image retained across renders instead of releasing it (and
+  // letting the cache evict it and revoke its URL) only to retain it again.
+  const retainedRef = useRef(retained);
+  retainedRef.current = retained;
+  const retainedKeys = JSON.stringify(retained.map((entry) => entry.key));
   useEffect(() => {
-    const releases = results.flatMap((result, index) => {
-      const acquisition = acquisitions[index];
-      if (!result.data || !acquisition) return [];
-      const value = result.data;
-      return [urls.acquireRetained(acquisition.key, async () => value).release];
-    });
+    const releases = retainedRef.current.map(
+      ({ key, value }) => urls.acquireRetained(key, async () => value).release,
+    );
     return () => releases.forEach((release) => release());
-  }, [results, acquisitions]);
+  }, [retainedKeys]);
   const resolved = new Map<string, string>();
   results.forEach((result, index) => {
     if (result.data) resolved.set(sources[index]!, result.data.uri);

@@ -129,6 +129,9 @@ describe("buildSidebarShortcutModel", () => {
     expect(model.shortcutTargets).toHaveLength(9);
     expect(model.shortcutTargets[0]).toEqual({ serverId: "s", workspaceId: "ws-1" });
     expect(model.shortcutTargets[8]).toEqual({ serverId: "s", workspaceId: "ws-9" });
+    expect(model.shortcutIndexByWorkspaceKey.get("s:ws-10")).toBeUndefined();
+    expect(model.navigationTargets).toHaveLength(20);
+    expect(model.navigationTargets[19]).toEqual({ serverId: "s", workspaceId: "ws-20" });
   });
 
   it("excludes a collapsed project's workspaces regardless of project kind", () => {

@@ -841,7 +841,7 @@ describe("git-actions-policy", () => {
     });
     expect(actions.secondary.find((entry) => entry.id === "pr")).toMatchObject({
       label: "创建 PR",
-      unavailableMessage: "无法创建 PR，因为此分支还没有新的 commit",
+      unavailableMessage: "无法创建 PR，因为此分支还没有新的提交",
     });
   });
 

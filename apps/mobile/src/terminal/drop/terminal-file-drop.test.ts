@@ -94,7 +94,13 @@ describe("terminal file drop", () => {
     expect(prepareDroppedPathForTerminal("/tmp/a$(touch bad).png", bridge)).toBe(
       "'/tmp/a(touch bad).png'",
     );
-    expect(prepareDroppedPathForTerminal("/tmp/it's.png", bridge)).toBe("'/tmp/it\\'s.png'");
+    expect(prepareDroppedPathForTerminal("/tmp/it's.png", bridge)).toBe("'/tmp/it'\\''s.png'");
+    expect(prepareDroppedPathForTerminal(`/tmp/it's "x".png`, bridge)).toBe(
+      `'/tmp/it'\\''s "x".png'`,
+    );
+    expect(prepareDroppedPathForTerminal("/tmp/back\\slash.png", bridge)).toBe(
+      "'/tmp/back\\slash.png'",
+    );
   });
 
   it("prepares Windows paths with space quoting", () => {

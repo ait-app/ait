@@ -200,7 +200,11 @@ export function useWorkspaceCommandCenterActions(): void {
       ? buildWorkspaceTabPersistenceKey({ serverId, workspaceId: fields.id })
       : null;
   const canShowSetup = useWorkspaceSetupStore((state) =>
-    shouldShowWorkspaceSetup(persistenceKey ? (state.snapshots[persistenceKey] ?? null) : null),
+    shouldShowWorkspaceSetup(
+      persistenceKey
+        ? (state.summaries[persistenceKey] ?? state.snapshots[persistenceKey] ?? null)
+        : null,
+    ),
   );
   const { overrides } = useKeyboardShortcutOverrides();
   const { gitActions, isGit } = useGitActions({

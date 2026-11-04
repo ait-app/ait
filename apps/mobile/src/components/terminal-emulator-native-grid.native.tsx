@@ -514,8 +514,12 @@ function NativeTerminalEmulator({
       },
       restoreOutput: (data: TerminalOutputData) => {
         outputDecoderRef.current.decode();
-        resetInputModeTracker();
         const text = outputDecoderRef.current.decode(data, { stream: false });
+        // Daemon restore frames end with the screen's input modes; re-seed the tracker from
+        // them so bracketed paste and cursor-key modes survive reconnects and remounts.
+        inputModeTrackerRef.current.reset();
+        inputModeTrackerRef.current.feed(text);
+        emitInputModeChange();
         outputDrainRef.current?.restoreText(text);
       },
       renderSnapshot: (state: TerminalState | null) => {
@@ -581,6 +585,7 @@ function NativeTerminalEmulator({
       claimActiveTerminalSize,
       claimActiveTerminalSizeForAction,
       clearSelection,
+      emitInputModeChange,
       resetInputModeTracker,
       resetTerminal,
       schedulePaint,
