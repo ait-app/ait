@@ -1,5 +1,16 @@
 # Ait changelog
 
+## 0.1.29 - 2026-11-05
+
+- Improve connection recovery and release desktop transports when windows close or reload.
+- Preserve drafts, queued messages, workspace creation intent, and host-specific session state across retries.
+- Harden guest access, share revocation, workspace persistence, Git operations, and resource cleanup.
+- Fix scheduling edge cases, bot queue recovery, native provider cancellation, and resumed session history.
+- Bound large provider payloads and permission previews while preserving complete native approval input.
+- Align Agent tool names with the ait namespace while retaining compatibility with older transcripts.
+- Fix terminal keyboard handling, editor saves, downloads, and browser lifecycle issues.
+- Restore iOS notification tap callbacks and keep host synchronization buttons stable during background refresh.
+
 ## 0.1.28 - 2026-11-04
 
 - Apply Pi reasoning preferences before prompts and keep provider controls consistent with native sessions.
