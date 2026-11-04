@@ -85,13 +85,7 @@ impl AgentManager {
             .get(id)
             .map_err(|_| ErrorCode::AgentIo)?
             .ok_or(ErrorCode::AgentNotFound)?;
-        if record
-            .persistence
-            .as_ref()
-            .and_then(|handle| handle.metadata.as_ref())
-            .and_then(|metadata| metadata.get(super::controls::REPLACEMENT_MARKER))
-            == Some(&Value::Bool(true))
-        {
+        if super::controls::replacement_pending(&record) {
             return Ok(false);
         }
         self.timeline
@@ -107,6 +101,18 @@ impl AgentManager {
 
     pub(super) fn mark_history_loaded(&self, id: &str) {
         self.histories().insert(id.to_owned());
+    }
+
+    /// Discard the display history, input receipts and hydration marker of a deleted Agent,
+    /// so a later Agent reusing its ID starts empty.
+    /// # Errors
+    /// Returns timeline storage failures.
+    pub(crate) fn forget(&self, id: &str) -> Result<(), ErrorCode> {
+        if let Some(timeline) = &self.timeline {
+            timeline.forget(id)?;
+        }
+        self.invalidate_history(id);
+        Ok(())
     }
 
     pub(super) fn invalidate_history(&self, id: &str) {

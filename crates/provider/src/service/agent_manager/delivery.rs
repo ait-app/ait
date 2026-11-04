@@ -111,18 +111,10 @@ impl AgentManager {
         if record.archived_at.is_some() || self.live.get(agent).is_some_and(|live| live.exclusive) {
             return Err(ErrorCode::CatalogBusy);
         }
-        if self
-            .clients
-            .get(&record.provider)
-            .is_some_and(|client| client.handles_out_of_band(&prompt.text))
-        {
+        if out_of_band {
             return self.deliver_command(agent, prompt).await;
         }
         let timeline = self.timeline.clone().ok_or(ErrorCode::AgentIo)?;
-        let policy = match behavior {
-            ActiveTurnBehavior::Interrupt => "interrupt",
-            ActiveTurnBehavior::Steer => "steer",
-        };
         let message = prompt
             .client_message_id
             .clone()

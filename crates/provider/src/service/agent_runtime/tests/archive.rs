@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn observed_children_keep_verified_parentage_and_only_archive_confirmed_results() {
-    use domain::agent_runtime::observation::{ObservationHealth, ObservedAgent, ObservedStatus};
+    use domain::agent_runtime::observation::{ObservationHealth, ObservedStatus};
     let (service, registry) = service();
     let mut child = agent("observed", "wks-one", "Task", false);
     child
@@ -13,21 +13,7 @@ fn observed_children_keep_verified_parentage_and_only_archive_confirmed_results(
         "true".to_owned(),
     );
     child.last_status = AgentRuntimeStatus::Running;
-    child.observation = Some(ObservedAgent {
-        revision: 0,
-        root_agent_id: "agent-a".to_owned(),
-        root_session_id: "root".to_owned(),
-        parent_agent_id: "agent-a".to_owned(),
-        native_id: "child".to_owned(),
-        parent_native_id: "root".to_owned(),
-        persistence: None,
-        ready: true,
-        status: ObservedStatus::Running,
-        health: ObservationHealth::Current,
-        observed_at: child.updated_at.clone(),
-        description: None,
-        subtitle: None,
-    });
+    child.observation = Some(observation(&child, ObservedStatus::Running));
     registry.upsert(&child).expect("observed child");
     assert!(service.detach("observed", "now").is_err());
     assert!(service.archive("observed", "now").is_err());
@@ -116,4 +102,54 @@ fn workspace_batch_archives_all_owned_agents_and_detaches_cross_workspace_childr
             .iter()
             .all(|record| record.archived_at.is_some())
     );
+}
+
+#[test]
+fn workspace_batch_archives_observed_children_instead_of_detaching_them() {
+    use domain::agent_runtime::observation::ObservedStatus;
+    let (service, registry) = service();
+    let mut child = agent("observed", "wks-two", "Task", false);
+    child
+        .labels
+        .insert(PARENT_AGENT_ID_LABEL.to_owned(), "agent-a".to_owned());
+    child.observation = Some(observation(&child, ObservedStatus::Completed));
+    registry.upsert(&child).unwrap();
+    let mut grandchild = agent("nested", "wks-two", "Nested", false);
+    grandchild
+        .labels
+        .insert(PARENT_AGENT_ID_LABEL.to_owned(), "observed".to_owned());
+    grandchild.observation = Some(observation(&grandchild, ObservedStatus::Completed));
+    registry.upsert(&grandchild).unwrap();
+
+    let archived = service
+        .archive_workspaces(&["wks-one".into()], "archived")
+        .unwrap();
+
+    assert_eq!(archived, ["agent-a", "agent-b", "nested", "observed"]);
+    for id in ["observed", "nested"] {
+        let record = registry.get(id).unwrap().unwrap();
+        assert_eq!(record.archived_at.as_deref(), Some("archived"));
+        assert!(record.labels.contains_key(PARENT_AGENT_ID_LABEL));
+    }
+}
+
+fn observation(
+    record: &PersistedAgentRuntimeRecord,
+    status: domain::agent_runtime::observation::ObservedStatus,
+) -> domain::agent_runtime::observation::ObservedAgent {
+    domain::agent_runtime::observation::ObservedAgent {
+        revision: 0,
+        root_agent_id: "agent-a".to_owned(),
+        root_session_id: "root".to_owned(),
+        parent_agent_id: record.labels[PARENT_AGENT_ID_LABEL].clone(),
+        native_id: record.id.clone(),
+        parent_native_id: "root".to_owned(),
+        persistence: None,
+        ready: true,
+        status,
+        health: domain::agent_runtime::observation::ObservationHealth::Current,
+        observed_at: record.updated_at.clone(),
+        description: None,
+        subtitle: None,
+    }
 }

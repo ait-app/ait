@@ -9,6 +9,7 @@ use crate::protocol::controls::{
     CommandsRequest, PermissionRequest, RewindRequest, SubagentRequest,
 };
 use crate::protocol::timeline::{FetchRequest, Projection};
+use crate::service::agent_execution::operation::Operation;
 use crate::service::agent_manager::native_sessions::canonical;
 
 impl ExecutionState {
@@ -85,88 +86,72 @@ impl ExecutionState {
             .map_err(Into::into)
     }
 
-    pub(super) async fn controls(
-        &mut self,
-        method: &str,
-        params: Value,
-    ) -> Result<Value, ErrorCode> {
-        match method {
-            "provider.diagnostic.request" => {
-                only(&params, &["provider"])?;
-                let provider = params["provider"]
-                    .as_str()
-                    .ok_or(ErrorCode::InvalidMessage)?;
-                self.manager.diagnostic(provider).await.map_err(Into::into)
-            }
-            "provider.usage.list.request" => {
-                only(&params, &["agentId", "providerId", "forceRefresh"])?;
-                let agent = match params.get("agentId") {
-                    None => None,
-                    Some(value) => {
-                        Some(self.resolve(value.as_str().ok_or(ErrorCode::InvalidMessage)?)?)
-                    }
-                };
-                let force = match params.get("forceRefresh") {
-                    None => false,
-                    Some(value) => value.as_bool().ok_or(ErrorCode::InvalidMessage)?,
-                };
-                let provider = match params.get("providerId") {
-                    None => None,
-                    Some(value) => Some(
-                        value
-                            .as_str()
-                            .filter(|id| !id.is_empty() && id.len() <= 256)
-                            .ok_or(ErrorCode::InvalidMessage)?,
-                    ),
-                };
-                self.manager
-                    .usage(agent.as_deref(), provider, force)
-                    .await
-                    .map_err(Into::into)
-            }
-            "agent.commands.list.request" => self.commands(params).await,
-            "agent.rewind.request" => {
-                let request: RewindRequest = decode(params)?;
-                let id = self.resolve(&request.agent_id)?;
-                self.active_workspace(&id)?;
-                let result = if request.message_id.is_empty() || request.message_id.len() > 512 {
-                    Err(model::ErrorCode::InvalidMessage)
-                } else {
-                    self.manager
-                        .rewind_mode(&id, &request.message_id, &request.mode)
-                        .await
-                };
-                Ok(
-                    json!({"agentId":id,"ok":result.is_ok(),"error":result.err().map(|error|format!("{error:?}"))}),
-                )
-            }
-            "agent.permission.resolve.request" => {
-                let request: PermissionRequest = decode(params)?;
-                let id = self.resolve(&request.agent_id)?;
-                self.active_workspace(&id)?;
-                self.manager
-                    .permission(&id, &request.request_id, &request.response)
-                    .await?;
-                Ok(
-                    json!({"agentId":id,"requestId":request.request_id,"resolution":request.response}),
-                )
-            }
-            "agent.provider_subagents.list.request"
-            | "agent.provider_subagents.timeline.get.request" => {
-                self.subagents(method, params).await
-            }
-            _ => Err(ErrorCode::MethodNotFound),
-        }
+    pub(super) async fn diagnostic(&self, params: Value) -> Result<Value, ErrorCode> {
+        only(&params, &["provider"])?;
+        let provider = params["provider"]
+            .as_str()
+            .ok_or(ErrorCode::InvalidMessage)?;
+        self.manager.diagnostic(provider).await.map_err(Into::into)
     }
 
-    pub(super) async fn configure(&self, method: &str, params: &Value) -> Result<Value, ErrorCode> {
-        let field = match method {
-            "agent.model.set.request" => "modelId",
-            "agent.thinking.set.request" => "thinkingOptionId",
-            "agent.mode.set.request" => "modeId",
-            "agent.feature.set.request" => "value",
-            _ => "config",
+    pub(super) async fn usage(&mut self, params: Value) -> Result<Value, ErrorCode> {
+        only(&params, &["agentId", "providerId", "forceRefresh"])?;
+        let agent = match params.get("agentId") {
+            None => None,
+            Some(value) => Some(self.resolve(value.as_str().ok_or(ErrorCode::InvalidMessage)?)?),
         };
+        let force = match params.get("forceRefresh") {
+            None => false,
+            Some(value) => value.as_bool().ok_or(ErrorCode::InvalidMessage)?,
+        };
+        let provider = match params.get("providerId") {
+            None => None,
+            Some(value) => Some(
+                value
+                    .as_str()
+                    .filter(|id| !id.is_empty() && id.len() <= 256)
+                    .ok_or(ErrorCode::InvalidMessage)?,
+            ),
+        };
+        self.manager
+            .usage(agent.as_deref(), provider, force)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(super) async fn rewind(&mut self, params: Value) -> Result<Value, ErrorCode> {
+        let request: RewindRequest = decode(params)?;
+        let id = self.resolve(&request.agent_id)?;
+        self.active_workspace(&id)?;
+        let result = if request.message_id.is_empty() || request.message_id.len() > 512 {
+            Err(model::ErrorCode::InvalidMessage)
+        } else {
+            self.manager
+                .rewind_mode(&id, &request.message_id, &request.mode)
+                .await
+        };
+        Ok(
+            json!({"agentId":id,"ok":result.is_ok(),"error":result.err().map(|error|format!("{error:?}"))}),
+        )
+    }
+
+    pub(super) async fn permission(&mut self, params: Value) -> Result<Value, ErrorCode> {
+        let request: PermissionRequest = decode(params)?;
+        let id = self.resolve(&request.agent_id)?;
+        self.active_workspace(&id)?;
+        self.manager
+            .permission(&id, &request.request_id, &request.response)
+            .await?;
+        Ok(json!({"agentId":id,"requestId":request.request_id,"resolution":request.response}))
+    }
+
+    /// Apply one configuration request whose payload is carried in `field`: `config` for a
+    /// bundle, `value` for a feature, or the named single configuration field.
+    pub(super) async fn configure(
+        &self,
+        field: &'static str,
+        params: &Value,
+    ) -> Result<Value, ErrorCode> {
         let allowed = if field == "value" {
             vec!["agentId", "featureId", "value"]
         } else {
@@ -220,7 +205,7 @@ impl ExecutionState {
         )
     }
 
-    async fn commands(&self, params: Value) -> Result<Value, ErrorCode> {
+    pub(super) async fn commands(&self, params: Value) -> Result<Value, ErrorCode> {
         if let Some(config) = params.get("draftConfig").filter(|value| !value.is_null()) {
             only(
                 config,
@@ -274,8 +259,12 @@ impl ExecutionState {
             .map_err(Into::into)
     }
 
-    async fn subagents(&self, method: &str, params: Value) -> Result<Value, ErrorCode> {
-        let list = method == "agent.provider_subagents.list.request";
+    pub(super) async fn subagents(
+        &self,
+        method: Operation,
+        params: Value,
+    ) -> Result<Value, ErrorCode> {
+        let list = method == Operation::Subagents;
         if list {
             only(&params, &["parentAgentId"])?;
         }

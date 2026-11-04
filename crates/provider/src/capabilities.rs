@@ -12,7 +12,7 @@ pub fn implemented_methods() -> impl Iterator<Item = MethodSpec> {
         crate::rpc::agent_runtime::METHODS,
         crate::dispatch::agent_execution::METHODS,
         crate::rpc::timeline::METHODS,
-        crate::dispatch::CATALOG_METHODS,
+        crate::dispatch::catalog::METHODS,
     ]
     .into_iter()
     .flat_map(|methods| methods.iter().copied())

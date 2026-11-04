@@ -317,7 +317,7 @@ fn existing_agent_lane(
             if method == Operation::UnifiedSubagents
                 || (method.access() == Access::Timeline
                     && !state.manager.history_loaded(&id)
-                    && !state.can_read_cached_timeline(method.as_str(), params)?)
+                    && !state.can_read_cached_timeline(method, params)?)
             {
                 if let Some(root) = state
                     .registry
@@ -335,7 +335,7 @@ fn existing_agent_lane(
             }
         } else if method.access() == Access::Timeline
             && (state.manager.history_loaded(&id)
-                || state.can_read_cached_timeline(method.as_str(), params)?)
+                || state.can_read_cached_timeline(method, params)?)
         {
             None
         } else {

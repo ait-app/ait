@@ -12,6 +12,16 @@ use crate::support::time::now_timestamp;
 
 pub(super) const REPLACEMENT_MARKER: &str = "aitTimelineReplacement";
 
+/// Whether a native history replacement is recorded for `record` but not yet reloaded.
+pub(super) fn replacement_pending(record: &PersistedAgentRuntimeRecord) -> bool {
+    record
+        .persistence
+        .as_ref()
+        .and_then(|handle| handle.metadata.as_ref())
+        .and_then(|metadata| metadata.get(REPLACEMENT_MARKER))
+        == Some(&Value::Bool(true))
+}
+
 impl AgentManager {
     pub(crate) fn recover_permissions(&self) -> Result<(), super::AgentManagerError> {
         use domain::agent_runtime::AgentAttentionReason;
@@ -631,7 +641,9 @@ pub(super) fn publish_subagent(
         return Ok(());
     };
     let root = agent.session.persistence().ok_or(ErrorCode::AgentIo)?;
-    let mut descendants = descendants(&root.session_id, agent.session.subagents())?;
+    // Cyclic ancestry is a provider fact that cannot change on retry.
+    let mut descendants = descendants(&root.session_id, agent.session.subagents())
+        .map_err(|_| ErrorCode::InvalidMessage)?;
     if let SubagentEvent::Upsert(child) = event
         && let Some(current) = descendants
             .iter_mut()
@@ -647,14 +659,13 @@ pub(super) fn publish_subagent(
         return Err(ErrorCode::InvalidMessage);
     }
     let parent = &agent.record.id;
-    let previous = timeline
-        .subagent_agent(parent, id)?
+    let bound = timeline.subagent_agent(parent, id)?;
+    let needs_registration = matches!(event, SubagentEvent::Upsert(_)) || bound.is_none();
+    let previous = bound
         .map(|id| registry.get(&id))
         .transpose()
         .map_err(|_| ErrorCode::AgentIo)?
         .flatten();
-    let needs_registration =
-        matches!(event, SubagentEvent::Upsert(_)) || timeline.subagent_agent(parent, id)?.is_none();
     if needs_registration {
         super::observed::register_children(registry, timeline, &agent.record, &descendants)?;
     }
