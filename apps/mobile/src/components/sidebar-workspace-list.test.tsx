@@ -39,7 +39,7 @@ import {
   type HostRuntimeController,
   type HostRuntimeSnapshot,
 } from "@/runtime/host-runtime";
-import type { HostProfile } from "@/types/host-connection";
+import { createAccountRelayHostConnection, type HostProfile } from "@/types/host-connection";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import { seedRuntimeWorkspaces } from "@/test/seed-session";
 import { useWorkspaceFields } from "@/stores/session-store-hooks";
@@ -151,8 +151,9 @@ function makeHost(): HostProfile {
     label: "Render Count Host",
     appearance: defaultHostAppearance(),
     lifecycle: {},
-    connections: [],
-    preferredConnectionId: null,
+    // A host with no connection is unavailable and contributes no sidebar workspaces.
+    connections: [{ id: "socket:sidebar", type: "directSocket", path: "/tmp/sidebar.sock" }],
+    preferredConnectionId: "socket:sidebar",
     createdAt: now,
     updatedAt: now,
   };
@@ -605,4 +606,71 @@ describe("shared resources in the regular sidebar lists", () => {
       }
     },
   );
+});
+
+describe("unavailable hosts in the sidebar workspace list", () => {
+  const RELAY_SERVER_ID = "sidebar-relay-host";
+  const CENTER = "https://center.test/api";
+
+  afterEach(() => {
+    cleanup();
+    setHostProfiles([]);
+    getHostRuntimeStore().setAccountRelayCenter(null);
+    useSessionStore.getState().clearSession(SERVER_ID);
+    useSessionStore.getState().clearSession(RELAY_SERVER_ID);
+  });
+
+  it("hides cached workspaces of a saved relay host the account no longer reports", () => {
+    const runtime = getHostRuntimeStore();
+    const connection = createAccountRelayHostConnection({
+      hostId: "33333333-3333-4333-8333-333333333333",
+      center: CENTER,
+    });
+    act(() => {
+      runtime.setAccountRelayCenter(CENTER);
+      setHostProfiles([
+        makeHost(),
+        {
+          ...makeHost(),
+          serverId: RELAY_SERVER_ID,
+          label: "Relay Host",
+          connections: [connection],
+          preferredConnectionId: connection.id,
+        },
+      ]);
+      runtime.setAvailableAccountRelayHosts([RELAY_SERVER_ID]);
+      useSessionStore.getState().initializeSession(SERVER_ID, null as unknown as DaemonClient);
+      seedRuntimeWorkspaces(SERVER_ID, new Map([["a-main", createWorkspaces()[0]!]]));
+      useSessionStore.getState().setHasHydratedWorkspaces(SERVER_ID, true);
+      const relayWorkspace = workspace({
+        id: "relay-workspace",
+        projectId: "relay-project",
+        projectDisplayName: "Relay project",
+        name: "Relay workspace",
+      });
+      useSessionStore.getState().initializeSession(RELAY_SERVER_ID, null);
+      seedRuntimeWorkspaces(RELAY_SERVER_ID, new Map([[relayWorkspace.id, relayWorkspace]]));
+      useSessionStore.getState().setHasHydratedWorkspaces(RELAY_SERVER_ID, true);
+    });
+    const initialProps: { hostFilters: string[] } = { hostFilters: [] };
+    const { result, rerender } = renderHook(
+      ({ hostFilters }: { hostFilters: string[] }) => useSidebarWorkspacesList({ hostFilters }),
+      { initialProps },
+    );
+    const placementServerIds = () =>
+      [...new Set(result.current.workspacePlacements.map((entry) => entry.serverId))].sort();
+
+    expect(placementServerIds()).toEqual([RELAY_SERVER_ID, SERVER_ID].sort());
+
+    act(() => runtime.setAvailableAccountRelayHosts([]));
+    expect(runtime.getHosts().map((host) => host.serverId)).toContain(RELAY_SERVER_ID);
+    expect(placementServerIds()).toEqual([SERVER_ID]);
+
+    // A filter pinned to the unavailable host is kept and shows nothing, not every host.
+    rerender({ hostFilters: [RELAY_SERVER_ID] });
+    expect(result.current.workspacePlacements).toEqual([]);
+
+    act(() => runtime.setAvailableAccountRelayHosts([RELAY_SERVER_ID]));
+    expect(placementServerIds()).toEqual([RELAY_SERVER_ID]);
+  });
 });
