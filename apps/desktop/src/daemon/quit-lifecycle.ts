@@ -119,12 +119,19 @@ export function createQuitLifecycle({
   // update re-fires app.quit(); otherwise app.exit(0) bypasses Electron's macOS
   // window-all-closed handler, which would veto that second quit.
   let quitting = false;
+  let stoppingDaemon = false;
   let quittingForUpdate = false;
   const updateQuit = createDeferredUpdateQuit();
 
   function handleBeforeQuit(event: BeforeQuitEvent): void {
     closeTransportSessions();
     if (quittingForUpdate) return;
+    if (stoppingDaemon) {
+      // A repeated quit while the daemon is still stopping or being handed over must not
+      // let Electron exit early and leave the detached daemon running unreachable.
+      event.preventDefault();
+      return;
+    }
     if (quitting) {
       // MacUpdater's no-relaunch path calls app.quit() without emitting
       // before-quit-for-update. A second quit is equivalent handoff evidence.
@@ -132,6 +139,7 @@ export function createQuitLifecycle({
       return;
     }
     quitting = true;
+    stoppingDaemon = true;
     event.preventDefault();
 
     void (async () => {
@@ -139,6 +147,8 @@ export function createQuitLifecycle({
         await stopDesktopManagedDaemonIfNeeded();
       } catch (error) {
         onStopError(error);
+      } finally {
+        stoppingDaemon = false;
       }
 
       const signal = createUpdateDeadlineSignal();

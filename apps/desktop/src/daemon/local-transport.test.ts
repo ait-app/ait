@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import {
   buildSshArgs,
@@ -255,6 +256,33 @@ describe("local transport session lifecycle", () => {
     expect(endpoint.close).toHaveBeenCalledTimes(1);
     expect(scheduledTimeouts[0]?.cancelled).toBe(true);
     expect(events).toEqual([]);
+  });
+
+  it.each([
+    ["closes", (owner: EventEmitter) => owner.emit("destroyed")],
+    [
+      "reloads",
+      (owner: EventEmitter) => owner.emit("did-start-navigation", {}, "ait://app/", false, true),
+    ],
+  ])("releases the tunnel when its owning window %s", async (_label, release) => {
+    const endpoint = createEndpoint();
+    const socket = createConnectingSocket();
+    const { events, manager } = createManagerHarness(async () => endpoint, [socket]);
+    const owner = new EventEmitter();
+
+    manager.open(SESSION_INPUT, owner);
+    await Promise.resolve();
+    owner.emit("did-start-navigation", {}, "ait://app/#agent", true, true);
+    owner.emit("did-start-navigation", {}, "https://frame.test/", false, false);
+    expect(endpoint.close).not.toHaveBeenCalled();
+    release(owner);
+
+    expect(socket.terminate).toHaveBeenCalledTimes(1);
+    expect(endpoint.close).toHaveBeenCalledTimes(1);
+    expect(owner.listenerCount("destroyed")).toBe(0);
+    expect(owner.listenerCount("did-start-navigation")).toBe(0);
+    expect(events).toEqual([]);
+    expect(() => manager.open(SESSION_INPUT, owner)).not.toThrow();
   });
 
   it("closes an endpoint that resolves after the caller cancels setup", async () => {

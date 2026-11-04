@@ -119,6 +119,24 @@ describe("diff document measurement cost", () => {
     expect(long / short).toBeLessThan(32);
   });
 
+  it("keeps shaped wrapped search work proportional to long source lines", () => {
+    function shapedWrappedCharacters(length: number): number {
+      const { stats, measurer } = countingMeasurer();
+      measureFragments({
+        text: codeLine(length),
+        availableWidth: 800,
+        wrapLines: true,
+        lineHeight: 18,
+        measureText: measurer,
+      });
+      return stats.shapedCharacters;
+    }
+    const short = shapedWrappedCharacters(2_000);
+    const long = shapedWrappedCharacters(32_000);
+    // 16x the characters must not cost more than ~16x the shaping work.
+    expect(long / short).toBeLessThan(32);
+  });
+
   it("shapes a bounded number of characters per character of text", () => {
     // The shape of the CHANGELOG.md working diff that froze the renderer: 42
     // lines, longest 597 characters.

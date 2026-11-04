@@ -361,7 +361,9 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
         (error: unknown) => {
           if (generation !== playback.generation) return;
           console.error("[VoiceRuntime] Native audio playback failed:", error);
-          void api.stopVoice();
+          void api.stopVoice().catch((stopError: unknown) => {
+            console.warn("[VoiceRuntime] Failed to stop voice after playback failure:", stopError);
+          });
         },
       )
       .finally(() => {

@@ -59,6 +59,24 @@ describe("createTerminalLocalFileLinkProvider", () => {
 
     await expect(provideLinks(provider, 1)).resolves.toBeUndefined();
   });
+
+  it("keeps resolving a line after a resolution failure", async () => {
+    const terminal = createTerminal(["file.ts:42"]);
+    const resolveLink = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("lookup failed"))
+      .mockResolvedValueOnce({ path: "/repo/src/file.ts", lineStart: 42 });
+    const provider = createTerminalLocalFileLinkProvider(terminal, {
+      resolveLink,
+      openLink: vi.fn(),
+    });
+
+    await expect(provideLinks(provider, 1)).resolves.toBeUndefined();
+    const links = await provideLinks(provider, 1);
+
+    expect(resolveLink).toHaveBeenCalledTimes(2);
+    expect(links).toHaveLength(1);
+  });
 });
 
 function provideLinks(

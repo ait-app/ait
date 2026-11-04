@@ -38,6 +38,21 @@ export interface TransportEventPayload {
   error?: string | null;
 }
 
+type OwnerNavigationListener = (
+  event: unknown,
+  url: string,
+  sameDocument: boolean,
+  mainFrame: boolean,
+) => void;
+
+/** Renderer that opened a session; its sockets and SSH tunnels must not outlive its document. */
+export interface LocalTransportOwner {
+  once(event: "destroyed", listener: () => void): unknown;
+  on(event: "did-start-navigation", listener: OwnerNavigationListener): unknown;
+  removeListener(event: "destroyed", listener: () => void): unknown;
+  removeListener(event: "did-start-navigation", listener: OwnerNavigationListener): unknown;
+}
+
 interface Session {
   id: string;
   target: TransportTarget;
@@ -45,6 +60,7 @@ interface Session {
   state: "opening" | "open" | "closed";
   closeTarget: (() => void) | null;
   cancelSetupDeadline: () => void;
+  releaseOwner: () => void;
   authorization?: string;
 }
 
@@ -82,7 +98,7 @@ export interface LocalTransportManagerDependencies {
 }
 
 export interface LocalTransportManager {
-  open(rawInput: unknown): void;
+  open(rawInput: unknown, owner?: LocalTransportOwner): void;
   send(input: { sessionId: string; text?: string; binaryBase64?: string }): Promise<void>;
   close(sessionId: string): void;
   closeAll(): void;
@@ -358,6 +374,9 @@ export function createLocalTransportManager(
       // Continue releasing the socket and endpoint if a runtime adapter fails.
     }
     session.cancelSetupDeadline = () => undefined;
+    const releaseOwner = session.releaseOwner;
+    session.releaseOwner = () => undefined;
+    releaseOwner();
     if (sessions.get(session.id) === session) {
       sessions.delete(session.id);
     }
@@ -522,7 +541,7 @@ export function createLocalTransportManager(
     });
   }
 
-  function open(rawInput: unknown): void {
+  function open(rawInput: unknown, owner?: LocalTransportOwner): void {
     const { sessionId, target, authorization } = parseOpenTransportSessionInput(rawInput);
     if (sessions.has(sessionId)) {
       throw new Error(`Local transport session already exists: ${sessionId}`);
@@ -535,9 +554,22 @@ export function createLocalTransportManager(
       state: "opening",
       closeTarget: null,
       cancelSetupDeadline: () => undefined,
+      releaseOwner: () => undefined,
       authorization,
     };
     sessions.set(sessionId, session);
+    if (owner) {
+      const destroyed = () => disposeSession(session);
+      const navigated: OwnerNavigationListener = (_event, _url, sameDocument, mainFrame) => {
+        if (mainFrame && !sameDocument) disposeSession(session);
+      };
+      owner.once("destroyed", destroyed);
+      owner.on("did-start-navigation", navigated);
+      session.releaseOwner = () => {
+        owner.removeListener("destroyed", destroyed);
+        owner.removeListener("did-start-navigation", navigated);
+      };
+    }
     session.cancelSetupDeadline = deps.scheduleTimeout(() => {
       failOpeningSession(
         session,
@@ -618,8 +650,8 @@ export function createMainProcessTransportManager(
 
 const localTransportManager = createMainProcessTransportManager(emitTransportEvent);
 
-export function openLocalTransportSession(rawInput: unknown): void {
-  localTransportManager.open(rawInput);
+export function openLocalTransportSession(rawInput: unknown, owner?: LocalTransportOwner): void {
+  localTransportManager.open(rawInput, owner);
 }
 
 export async function sendLocalTransportMessage(input: {

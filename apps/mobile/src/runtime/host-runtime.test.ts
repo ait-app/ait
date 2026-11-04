@@ -923,6 +923,41 @@ describe("HostRuntimeController", () => {
     expect(controller.getSnapshot().connectionStatus).toBe("online");
   });
 
+  it("retries client id resolution after a transient storage failure", async () => {
+    const host = makeHost({
+      connections: [{ id: "direct:lan:6767", type: "directTcp", endpoint: "lan:6767" }],
+    });
+    const getClientId = vi
+      .fn<() => Promise<string>>()
+      .mockRejectedValueOnce(new Error("storage unavailable"))
+      .mockResolvedValue("cid_after_retry");
+    const seenClientIds: string[] = [];
+    const controller = new HostRuntimeController({
+      host,
+      deps: {
+        createClient: ({ clientId }) => {
+          seenClientIds.push(clientId);
+          return new FakeDaemonClient() as unknown as DaemonClient;
+        },
+        connectToDaemon: async () => {
+          throw new Error("probe unavailable");
+        },
+        getClientId,
+      },
+    });
+
+    await controller.activateConnection({ connectionId: "direct:lan:6767" });
+    expect(controller.getSnapshot()).toMatchObject({
+      connectionStatus: "error",
+      lastError: "Failed to resolve client id: storage unavailable",
+    });
+
+    await controller.activateConnection({ connectionId: "direct:lan:6767" });
+    expect(getClientId).toHaveBeenCalledTimes(2);
+    expect(seenClientIds).toEqual(["cid_after_retry"]);
+    expect(controller.getSnapshot().connectionStatus).toBe("online");
+  });
+
   it("keeps browser client lifecycle tied to the active host runtime client", async () => {
     const host = makeHost({ preferredConnectionId: "direct:lan:6767" });
     const fakeClient = makeConnectedProbeClient(12);
@@ -1826,6 +1861,58 @@ describe("HostRuntimeStore", () => {
       "shared:22222222-2222-4222-8222-222222222222",
     ]);
     expect(store.getHosts()[0]?.connections[0]).toMatchObject({ shareResourceKind: "node" });
+    store.syncHosts([]);
+  });
+
+  it("keeps runtimes for shared resources that arrive while saved availability is restoring", async () => {
+    useHostRuntimeClock();
+    const lastAvailable = createDeferred<string | null>();
+    let lastAvailableRequested: () => void = () => undefined;
+    const lastAvailableRead = new Promise<void>((resolve) => {
+      lastAvailableRequested = resolve;
+    });
+    const storage: HostRuntimeStorage = {
+      getItem: (key) => {
+        if (key === "@paseo:daemon-registry") return Promise.resolve("[]");
+        if (key === "@ait:account-relay-last-available-v1") {
+          lastAvailableRequested();
+          return lastAvailable.promise;
+        }
+        return Promise.resolve(null);
+      },
+      setItem: async () => undefined,
+      removeItem: async () => undefined,
+    };
+    const store = new HostRuntimeStore({ storage, deps: makeDeps({}, []) });
+    const loading = store.loadRegistry();
+    await lastAvailableRead;
+    store.setSharedAccountRelayResources(
+      [
+        {
+          shareId: "22222222-2222-4222-8222-222222222222",
+          groupId: "44444444-4444-4444-8444-444444444444",
+          groupName: "Design",
+          hostId: "11111111-1111-4111-8111-111111111111",
+          nodeId: "serve-node",
+          hostName: "Alice workstation",
+          owner: { userId: "alice", displayName: "Alice", username: "alice" },
+          resourceKind: "node",
+          resourceKey: "serve-node",
+          displayName: "Alice workstation",
+          projectName: null,
+          permission: "operate",
+          state: "online",
+        },
+      ],
+      "https://center.test/api",
+    );
+
+    lastAvailable.resolve(null);
+    await loading;
+
+    const sharedServerId = "shared:22222222-2222-4222-8222-222222222222";
+    expect(store.getHosts().map((host) => host.serverId)).toEqual([sharedServerId]);
+    expect(store.getSnapshot(sharedServerId)).not.toBeNull();
     store.syncHosts([]);
   });
 

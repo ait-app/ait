@@ -54,7 +54,8 @@ function ComposerViewport({
       if (geometry.height <= 0) return;
       sizing.value = updateComposerCapacity(sizing.value, geometry);
     },
-    [],
+    // An explicit list replaces closure tracking; the plain props must restart the mapper.
+    [bottomInset, centered],
   );
   const measureViewport = useCallback(
     (event: LayoutChangeEvent) => {

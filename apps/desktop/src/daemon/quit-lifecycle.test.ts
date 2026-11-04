@@ -182,6 +182,32 @@ describe("quit-lifecycle", () => {
     expect(events).not.toContain("second-prevent-default");
   });
 
+  it("holds a repeated quit until the managed daemon has stopped", async () => {
+    const stopDecision = deferred<boolean>();
+    const exits: number[] = [];
+    let preventedQuitCount = 0;
+    const quitLifecycle = createQuitLifecycle({
+      app: { exit: (code) => exits.push(code) },
+      closeTransportSessions: () => {},
+      stopDesktopManagedDaemonIfNeeded: () => stopDecision.promise,
+      installAppUpdateOnQuit: async () => false,
+      createUpdateDeadlineSignal: () => new AbortController().signal,
+      onStopError: () => {},
+      onUpdateError: () => {},
+    });
+
+    quitLifecycle.handleBeforeQuit({ preventDefault: () => preventedQuitCount++ });
+    quitLifecycle.handleBeforeQuit({ preventDefault: () => preventedQuitCount++ });
+    await waitForQuitLifecycle();
+
+    expect(preventedQuitCount).toBe(2);
+    expect(exits).toEqual([]);
+
+    stopDecision.resolve(true);
+    await waitForQuitLifecycle();
+    expect(exits).toEqual([0]);
+  });
+
   it("lets the updater own process exit when a validated update is installing", async () => {
     const exits: number[] = [];
     const quitLifecycle = createQuitLifecycle({

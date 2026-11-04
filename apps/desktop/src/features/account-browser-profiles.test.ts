@@ -102,6 +102,21 @@ test("removes failed profile initialization so a later request can retry", async
   await expect(profiles.prepare(owner(1), input)).resolves.toHaveProperty("profilePartition");
 });
 
+test("keeps a retried profile when the owner of a failed attempt closes", async () => {
+  const profiles = new AccountBrowserProfiles(account);
+  const first = owner(1);
+  const second = owner(2);
+  mocks.listen.mockRejectedValueOnce(new Error("listen failed"));
+  await expect(profiles.prepare(first, input)).rejects.toThrow("listen failed");
+  const retried = await profiles.prepare(first, input);
+  await profiles.prepare(second, input);
+  mocks.close.mockClear();
+  first.emit("destroyed");
+  expect(profiles.partitions(2)).toEqual([retried.profilePartition]);
+  second.emit("destroyed");
+  expect(mocks.close).toHaveBeenCalledOnce();
+});
+
 test("rejects invalid Host identities before allocating a listener", async () => {
   const profiles = new AccountBrowserProfiles(account);
   await expect(profiles.prepare(owner(1), { ...input, hostId: "invalid" })).rejects.toThrow(

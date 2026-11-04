@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parsePcm16Wav } from "@/utils/pcm16-wav";
+import { AttemptCancelledError, AttemptGuard } from "@/utils/attempt-guard";
 import { isElectronRuntime } from "@/desktop/host";
 
 import type {
@@ -126,6 +127,16 @@ function disconnectDictationAudioGraph(graph: {
   }
 }
 
+function stopStreamTracks(stream: MediaStream): void {
+  stream.getTracks().forEach((track) => {
+    try {
+      track.stop();
+    } catch {
+      // no-op
+    }
+  });
+}
+
 function stopMediaRecorderIfActive(recorder: MediaRecorder | null): void {
   if (!recorder) return;
   try {
@@ -206,6 +217,12 @@ export function useDictationAudioSource(config: DictationAudioSourceConfig): Dic
     },
   });
 
+  // stop() (including the unmount cleanup) can run while start() is still
+  // awaiting getUserMedia, e.g. while the permission prompt is open. The guard
+  // lets start() notice that and release the microphone instead of installing
+  // a live stream nobody will ever stop.
+  const attemptGuardRef = useRef(new AttemptGuard());
+
   const decodeAudioData = useCallback(
     async (context: AudioContext, buffer: ArrayBuffer): Promise<AudioBuffer> => {
       const maybePromise = context.decodeAudioData(buffer);
@@ -234,6 +251,7 @@ export function useDictationAudioSource(config: DictationAudioSourceConfig): Dic
   }, []);
 
   const start = useCallback(async () => {
+    const attemptId = attemptGuardRef.current.next();
     const missingNavigator =
       typeof navigator === "undefined" ||
       !navigator.mediaDevices ||
@@ -277,8 +295,18 @@ export function useDictationAudioSource(config: DictationAudioSourceConfig): Dic
     });
 
     const stream = rawStream;
+    if (!attemptGuardRef.current.isCurrent(attemptId)) {
+      stopStreamTracks(stream);
+      throw new AttemptCancelledError();
+    }
 
-    const context = new AudioContextCtor();
+    let context: AudioContext;
+    try {
+      context = new AudioContextCtor();
+    } catch (err) {
+      stopStreamTracks(stream);
+      throw err;
+    }
 
     try {
       const source = context.createMediaStreamSource(stream);
@@ -337,17 +365,30 @@ export function useDictationAudioSource(config: DictationAudioSourceConfig): Dic
       // isn't available (e.g., Playwright tests with a stubbed getUserMedia).
     }
 
+    refs.current.started = false;
+    const releaseCapture = () => {
+      stopStreamTracks(stream);
+      void context.close().catch(() => undefined);
+    };
+
     const RecorderCtor =
       typeof window !== "undefined"
         ? (window as Window & { MediaRecorder?: typeof MediaRecorder }).MediaRecorder
         : undefined;
     if (!RecorderCtor) {
+      releaseCapture();
       throw new Error("MediaRecorder unavailable");
     }
 
-    const recorder = new RecorderCtor(stream, {
-      mimeType: "audio/webm;codecs=opus",
-    } as MediaRecorderOptions);
+    let recorder: MediaRecorder;
+    try {
+      recorder = new RecorderCtor(stream, {
+        mimeType: "audio/webm;codecs=opus",
+      } as MediaRecorderOptions);
+    } catch (err) {
+      releaseCapture();
+      throw err instanceof Error ? err : new Error(String(err));
+    }
 
     const recorderRefs: RecorderRefs = {
       recorder,
@@ -386,6 +427,7 @@ export function useDictationAudioSource(config: DictationAudioSourceConfig): Dic
     try {
       recorder.start();
     } catch (err) {
+      releaseCapture();
       throw err instanceof Error ? err : new Error(String(err));
     }
 
@@ -404,6 +446,7 @@ export function useDictationAudioSource(config: DictationAudioSourceConfig): Dic
   }, []);
 
   const stop = useCallback(async () => {
+    attemptGuardRef.current.cancel();
     refs.current.started = false;
     setVolume(0);
 
@@ -470,7 +513,9 @@ export function useDictationAudioSource(config: DictationAudioSourceConfig): Dic
           await start();
         } catch (err) {
           const normalized = err instanceof Error ? err : new Error(String(err));
-          onErrorRef.current?.(normalized);
+          if (!(normalized instanceof AttemptCancelledError)) {
+            onErrorRef.current?.(normalized);
+          }
           throw normalized;
         }
       },

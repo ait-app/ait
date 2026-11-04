@@ -256,16 +256,12 @@ export class FileEditorModel {
       });
     } catch (error) {
       if (this.disposed || sequence !== this.saveSequence) return;
-      this.setSnapshot({
-        ...this.snapshot,
-        status: "error",
-        error: error instanceof Error ? error.message : String(error),
-      });
+      this.failWrite(error instanceof Error ? error.message : String(error));
       return;
     }
     if (this.disposed || sequence !== this.saveSequence) return;
     if (result.status === "error") {
-      this.setSnapshot({ ...this.snapshot, status: "error", error: result.error });
+      this.failWrite(result.error);
       return;
     }
     if (result.status === "conflict") {
@@ -309,6 +305,20 @@ export class FileEditorModel {
       error: null,
     });
     if (modified) this.scheduleAutosave();
+  }
+
+  private failWrite(error: string): void {
+    const pending = this.takeObservedWhileSaving();
+    this.setSnapshot({ ...this.snapshot, status: "error", error });
+    if (!pending) return;
+    // A disk change buffered during the failed write still has to be judged:
+    // a retry would otherwise expect its version and overwrite it silently.
+    if (pending.status === "ready" && pending.file.content === this.persistedContent) {
+      this.adoptUnchangedFile(pending.file);
+      return;
+    }
+    this.observed = pending;
+    this.enterConflict(observationVersion(pending));
   }
 
   private applyFile(file: FileEditorFile): void {
