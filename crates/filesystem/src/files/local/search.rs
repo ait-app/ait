@@ -1,8 +1,15 @@
 use std::collections::{BTreeSet, VecDeque};
 use std::fs;
+use std::path::Path;
+use std::time::Duration;
 
 use super::{LocalFiles, absolute, relative};
 use crate::files::ports::{EntryKind, FileError, FileSearch};
+use crate::support::git_command::{self, GitError};
+
+// `--directory` lists each ignored directory once rather than every file below it.
+const IGNORED_LISTING_LIMIT: u64 = 4 * 1024 * 1024;
+const IGNORED_LISTING_TIMEOUT: Duration = Duration::from_secs(10);
 
 const HIDDEN: &[&str] = &[
     ".agents",
@@ -79,23 +86,8 @@ pub(super) fn search(
         exact.truncate(request.limit);
         return Ok(exact);
     }
-    let ignored: BTreeSet<String> = if workspace.is_some() {
-        crate::support::git_command::run(
-            &root,
-            &[
-                "ls-files",
-                "--others",
-                "--ignored",
-                "--exclude-standard",
-                "--directory",
-                "-z",
-            ],
-        )
-        .unwrap_or_default()
-        .split('\0')
-        .filter(|s| !s.is_empty())
-        .map(|s| s.trim_end_matches('/').to_owned())
-        .collect()
+    let ignored = if workspace.is_some() {
+        git_ignored(&root)
     } else {
         BTreeSet::new()
     };
@@ -113,6 +105,39 @@ pub(super) fn search(
     Ok(exact)
 }
 
+// Paths Git ignores below `root`. Outside a repository nothing is Git-ignored; when Git
+// cannot list them in time, only the built-in directory filters apply.
+fn git_ignored(root: &Path) -> BTreeSet<String> {
+    let listing = git_command::run_with_bounds(
+        root,
+        &[
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            "--directory",
+            "-z",
+        ],
+        IGNORED_LISTING_LIMIT,
+        IGNORED_LISTING_TIMEOUT,
+    );
+    match listing {
+        Ok(listing) => listing
+            .split('\0')
+            .filter(|path| !path.is_empty())
+            .map(|path| path.trim_end_matches('/').to_owned())
+            .collect(),
+        Err(GitError::Rejected) => BTreeSet::new(),
+        Err(GitError::Io) => {
+            tracing::debug!(
+                root = %root.display(),
+                "Git-ignored paths unavailable; file search applies only built-in filters"
+            );
+            BTreeSet::new()
+        }
+    }
+}
+
 fn included(request: &FileSearch, kind: EntryKind) -> bool {
     match kind {
         EntryKind::File => request.include_files,
@@ -120,7 +145,7 @@ fn included(request: &FileSearch, kind: EntryKind) -> bool {
     }
 }
 
-fn format_path(root: &std::path::Path, path: &str, workspace: bool) -> String {
+fn format_path(root: &Path, path: &str, workspace: bool) -> String {
     if workspace {
         path.to_owned()
     } else {
@@ -162,7 +187,7 @@ fn score(path: &str, query: &str, suffix: bool) -> Option<usize> {
 fn scan(
     files: &LocalFiles,
     request: &FileSearch,
-    root: &std::path::Path,
+    root: &Path,
     query: &str,
     ignored: &BTreeSet<String>,
 ) -> Vec<(usize, usize, String, EntryKind)> {
@@ -210,7 +235,7 @@ fn scan(
             } else {
                 continue;
             };
-            if std::path::Path::new(&path)
+            if Path::new(&path)
                 .ancestors()
                 .any(|ancestor| ignored.contains(ancestor.to_string_lossy().as_ref()))
             {

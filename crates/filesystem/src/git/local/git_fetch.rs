@@ -1,13 +1,17 @@
 //! Non-interactive, bounded background fetches of origin.
 
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
-use std::time::{Duration, Instant};
+use std::process::Command;
+use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
 use crate::git::ports::checkout::{CheckoutRuntime, CheckoutRuntimeError, CheckoutStatus};
 use crate::git::ports::git_fetch::{GitFetchError, GitFetchRuntime};
+use crate::support::process::{self, Bounds, RunError};
+
+// A quiet fetch reports only errors; anything larger is not a fetch diagnostic.
+const OUTPUT_LIMIT: u64 = 64 * 1024;
 
 /// Local background Git adapter sharing checkout projection behavior.
 #[derive(Debug)]
@@ -65,26 +69,11 @@ impl GitFetchRuntime for LocalGitFetch {
 }
 
 fn fetch_command(cwd: &str) -> Command {
-    let mut command = Command::new("git");
+    let mut command = process::git_command(Path::new(cwd));
     command
         .args(["fetch", "origin", "--prune", "--quiet"])
-        .current_dir(cwd)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    for (name, _) in std::env::vars_os() {
-        if name.to_string_lossy().starts_with("GIT_") {
-            command.env_remove(name);
-        }
-    }
-    command
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GCM_INTERACTIVE", "never");
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        command.process_group(0);
-    }
     command
 }
 
@@ -93,55 +82,23 @@ fn run_fetch(
     cancellation: &CancellationToken,
     timeout: Duration,
 ) -> Result<(), GitFetchError> {
-    if cancellation.is_cancelled() {
-        return Err(GitFetchError::Cancelled);
+    let bounds = Bounds {
+        timeout,
+        stdout_limit: OUTPUT_LIMIT,
+        stderr_limit: OUTPUT_LIMIT,
+    };
+    match process::run_bounded(command, bounds, Some(cancellation)) {
+        Ok(output) if output.status.success() => Ok(()),
+        Err(RunError::Cancelled) => Err(GitFetchError::Cancelled),
+        Err(RunError::TimedOut) => Err(GitFetchError::TimedOut),
+        Ok(_)
+        | Err(
+            RunError::Spawn(_)
+            | RunError::Io(_)
+            | RunError::StdoutExceeded
+            | RunError::StderrExceeded,
+        ) => Err(GitFetchError::Failed),
     }
-    let mut child = command.spawn().map_err(|_| GitFetchError::Failed)?;
-    let deadline = Instant::now() + timeout;
-    loop {
-        let failure = if cancellation.is_cancelled() {
-            Some(GitFetchError::Cancelled)
-        } else if Instant::now() >= deadline {
-            Some(GitFetchError::TimedOut)
-        } else {
-            None
-        };
-        if let Some(failure) = failure {
-            terminate(&mut child);
-            return Err(failure);
-        }
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                return if status.success() {
-                    Ok(())
-                } else {
-                    Err(GitFetchError::Failed)
-                };
-            }
-            Ok(None) => std::thread::sleep(Duration::from_millis(10)),
-            Err(_) => {
-                terminate(&mut child);
-                return Err(GitFetchError::Failed);
-            }
-        }
-    }
-}
-
-fn terminate(child: &mut Child) {
-    #[cfg(unix)]
-    let _ = Command::new("/bin/kill")
-        .args(["-KILL", "--", &format!("-{}", child.id())])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
-    #[cfg(windows)]
-    let _ = Command::new("taskkill")
-        .args(["/PID", &child.id().to_string(), "/T", "/F"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
-    let _ = child.kill();
-    let _ = child.wait();
 }
 
 #[cfg(test)]

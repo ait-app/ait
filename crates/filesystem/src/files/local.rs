@@ -17,6 +17,8 @@ mod search;
 mod upload;
 
 const MAX_EDITABLE: u64 = 1024 * 1024;
+/// Leading bytes inspected to tell text from binary; covers every inline preview and edit.
+const CLASSIFY_LIMIT: u64 = MAX_EDITABLE;
 const OUTSIDE: &str = "Access outside of workspace is not allowed";
 
 /// Local filesystem access with explicit home and upload roots.
@@ -462,16 +464,15 @@ fn binary(bytes: &[u8]) -> bool {
                 > bytes.len() * 3)
 }
 
+// Classifies at most `CLASSIFY_LIMIT` leading bytes, so opening a huge file for download
+// stays cheap; every file small enough to show inline or edit is still scanned completely.
 fn file_is_binary(file: &mut File, size: u64) -> Result<bool, FileError> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
-    let mut remaining = size;
+    let sampled = size.min(CLASSIFY_LIMIT);
+    let mut remaining = sampled;
     let mut suspicious = 0_u64;
     let mut carry = Vec::with_capacity(3);
     let mut block = vec![0; 256 * 1024 + 3];
     while remaining > 0 {
-        if std::time::Instant::now() >= deadline {
-            return fail("File classification exceeded its time limit");
-        }
         let length = usize::try_from(remaining)
             .unwrap_or(usize::MAX)
             .min(256 * 1024);
@@ -496,7 +497,10 @@ fn file_is_binary(file: &mut File, size: u64) -> Result<bool, FileError> {
         }
         remaining -= length as u64;
     }
-    Ok(!carry.is_empty() || u128::from(suspicious) * 10 > u128::from(size) * 3)
+    // A character split by the sample boundary continues past it; only a complete file
+    // can end inside one.
+    let truncated_character = !carry.is_empty() && sampled == size;
+    Ok(truncated_character || u128::from(suspicious) * 10 > u128::from(sampled) * 3)
 }
 
 fn image_mime(extension: &str) -> Option<&'static str> {
@@ -657,35 +661,57 @@ fn copy_entry(
     }
     if metadata.is_dir() {
         fs::create_dir(target)?;
-        for entry in fs::read_dir(source)? {
-            let entry = entry?;
-            copy_entry(
-                &entry.path(),
-                &target.join(entry.file_name()),
-                budget,
-                depth + 1,
-            )?;
+        let copied = copy_directory(source, target, &metadata, budget, depth);
+        if copied.is_err() {
+            // Remove only the partial tree this call created; the caller reports the error.
+            let _ = fs::remove_dir_all(target);
         }
-        fs::set_permissions(target, metadata.permissions())?;
+        copied
     } else if metadata.is_file() {
         let mut input = open_regular(source)?;
         let mut output = OpenOptions::new()
             .create_new(true)
             .write(true)
             .open(target)?;
-        let copied = std::io::copy(
-            &mut Read::by_ref(&mut input).take(metadata.len() + 1),
-            &mut output,
-        )?;
-        if copied != metadata.len() || revision(&input.metadata()?) != revision(&metadata) {
-            return fail("File changed during copy");
+        let copied = copy_file(&mut input, &mut output, &metadata);
+        if copied.is_err() {
+            drop(output);
+            let _ = fs::remove_file(target);
         }
-        output.set_permissions(metadata.permissions())?;
-        if let Ok(modified) = metadata.modified() {
-            output.set_times(fs::FileTimes::new().set_modified(modified))?;
-        }
+        copied
     } else {
-        return fail("Special files cannot be copied");
+        fail("Special files cannot be copied")
+    }
+}
+
+fn copy_directory(
+    source: &Path,
+    target: &Path,
+    metadata: &Metadata,
+    budget: &mut CopyBudget,
+    depth: usize,
+) -> Result<(), FileError> {
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        copy_entry(
+            &entry.path(),
+            &target.join(entry.file_name()),
+            budget,
+            depth + 1,
+        )?;
+    }
+    fs::set_permissions(target, metadata.permissions())?;
+    Ok(())
+}
+
+fn copy_file(input: &mut File, output: &mut File, metadata: &Metadata) -> Result<(), FileError> {
+    let copied = std::io::copy(&mut Read::by_ref(input).take(metadata.len() + 1), output)?;
+    if copied != metadata.len() || revision(&input.metadata()?) != revision(metadata) {
+        return fail("File changed during copy");
+    }
+    output.set_permissions(metadata.permissions())?;
+    if let Ok(modified) = metadata.modified() {
+        output.set_times(fs::FileTimes::new().set_modified(modified))?;
     }
     Ok(())
 }

@@ -75,6 +75,30 @@ fn copy_budget_rejects_depth_entry_and_byte_limits_before_creating_a_destination
     }
 }
 
+#[test]
+fn failed_duplicate_removes_the_partial_copy_it_created() {
+    let (_temp, files, cwd) = fixture();
+    let folder = Path::new(&cwd).join("folder");
+    fs::create_dir_all(folder.join("nested")).unwrap();
+    fs::write(folder.join("nested/small.txt"), "small").unwrap();
+    // Sparse: counts against the byte budget without writing 64 MiB.
+    File::create(folder.join("large.bin"))
+        .unwrap()
+        .set_len(64 * 1024 * 1024 + 1)
+        .unwrap();
+
+    assert_eq!(
+        files.duplicate(&cwd, "folder").unwrap_err().0,
+        "Copy exceeds filesystem operation limit"
+    );
+
+    assert!(!Path::new(&cwd).join("folder copy").exists());
+    assert_eq!(
+        fs::read_to_string(folder.join("nested/small.txt")).unwrap(),
+        "small"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn directory_links_are_listed_but_special_files_cannot_be_copied() {
@@ -410,6 +434,31 @@ fn search_filters_and_exact_retrieval_bypasses_discovery_filters() {
     assert!(files.search(&request).unwrap().is_empty());
 }
 
+#[test]
+fn search_keeps_git_ignored_paths_hidden_when_the_ignored_listing_is_large() {
+    let (_temp, files, cwd) = fixture();
+    let root = Path::new(&cwd);
+    crate::support::git_command::run(root, &["init", "--quiet"]).unwrap();
+    fs::write(root.join(".gitignore"), "*.log\n").unwrap();
+    fs::write(root.join("ignored-file-kept.txt"), "content").unwrap();
+    // Well over the 16 KiB a short Git invocation may print.
+    for index in 0..1_000 {
+        fs::write(root.join(format!("ignored-file-number-{index:04}.log")), "").unwrap();
+    }
+    let request = FileSearch {
+        cwd: Some(cwd.clone()),
+        query: "ignored-file".to_owned(),
+        include_files: true,
+        include_directories: false,
+        suffix: false,
+        limit: 30,
+    };
+    assert_eq!(
+        files.search(&request).unwrap(),
+        [("ignored-file-kept.txt".to_owned(), EntryKind::File)]
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn symlinks_remain_scoped_and_deletion_removes_only_the_link() {
@@ -511,6 +560,22 @@ fn classification_scans_beyond_the_first_block_and_preserves_utf8_boundaries() {
     assert_eq!(read(&files, &cwd, "large").0.kind, FileKind::Binary);
     fs::write(&path, [1; 100]).unwrap();
     assert_eq!(read(&files, &cwd, "large").0.kind, FileKind::Binary);
+}
+
+#[test]
+fn classification_reads_only_a_bounded_prefix_of_large_files() {
+    let (_temp, files, cwd) = fixture();
+    let path = Path::new(&cwd).join("huge.log");
+    let sample = usize::try_from(CLASSIFY_LIMIT).unwrap();
+    // A character split by the sample boundary and a NUL beyond it do not make it binary.
+    let mut bytes = vec![b'a'; sample - 1];
+    bytes.extend_from_slice("界".as_bytes());
+    bytes.extend_from_slice(&[0; 16]);
+    fs::write(&path, &bytes).unwrap();
+    assert_eq!(read(&files, &cwd, "huge.log").0.kind, FileKind::Text);
+    bytes[sample / 2] = 0;
+    fs::write(&path, &bytes).unwrap();
+    assert_eq!(read(&files, &cwd, "huge.log").0.kind, FileKind::Binary);
 }
 
 #[cfg(unix)]

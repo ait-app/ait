@@ -8,12 +8,9 @@ mod renames;
 pub(crate) mod summary;
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
 use std::path::{Component, Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::git::ports::checkout::{
     AheadBehind, CheckoutBranchResolution, CheckoutBranchSource, CheckoutBranchSuggestion,
@@ -22,15 +19,20 @@ use crate::git::ports::checkout::{
     CheckoutRuntime, CheckoutRuntimeError, CheckoutStashEntry, CheckoutStatus, DiffHunk, DiffLine,
     DiffLineKind, ParsedDiffFile, ParsedDiffStatus,
 };
+use crate::support::directory;
+use crate::support::process::{self, Bounds, RunError};
 
 const READ_TIMEOUT: Duration = Duration::from_secs(10);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(120);
 const SMALL_OUTPUT_LIMIT: u64 = 256 * 1024;
+const STDERR_LIMIT: u64 = 64 * 1024;
 const DIFF_OUTPUT_LIMIT: u64 = 4 * 1024 * 1024;
 const COMMIT_OUTPUT_LIMIT: u64 = 4 * 1024 * 1024;
 const BASE_COMMIT_LIMIT: usize = 10;
+const UNTRACKED_DIFF_LIMIT: usize = 256;
 const COMMIT_FIELD_SEPARATOR: char = '\0';
 const COMMIT_RECORD_SEPARATOR: char = '\x1e';
+const OUTPUT_EXCEEDED: &str = "Git output exceeded the configured limit";
 
 #[derive(Debug, Clone, Copy)]
 struct GitRunOptions {
@@ -79,12 +81,7 @@ impl LocalCheckout {
                 .as_ref()
                 .is_some_and(|main| main != &repo_root);
         let current_branch = git_optional(&cwd, &["symbolic-ref", "--quiet", "--short", "HEAD"])?;
-        let working_status = git_required(
-            &cwd,
-            &["status", "--porcelain=v1", "--untracked-files=normal"],
-            SMALL_OUTPUT_LIMIT,
-        )?;
-        let dirty = !working_status.is_empty();
+        let (dirty, has_conflicts) = working_tree_state(&cwd)?;
         let remotes = lines(&git_required(&cwd, &["remote"], SMALL_OUTPUT_LIMIT)?);
         let preferred_remote = remotes
             .iter()
@@ -98,7 +95,7 @@ impl LocalCheckout {
             &cwd,
             current_branch.as_deref(),
             preferred_remote.map(String::as_str),
-            &working_status,
+            has_conflicts,
         )?;
         let base_ref = resolve_default_branch(&cwd, current_branch.as_deref())?;
         let ahead_behind = match (&base_ref, &current_branch) {
@@ -209,24 +206,32 @@ impl CheckoutRuntime for LocalCheckout {
         let argument_refs = arguments.iter().map(String::as_str).collect::<Vec<_>>();
         let tracked = match run_git(&cwd, &argument_refs, &[0], DIFF_OUTPUT_LIMIT) {
             Ok(output) => output.stdout,
-            Err(error) if error.message == "Git output exceeded the configured limit" => {
-                return Ok(CheckoutDiff {
-                    files: Vec::new(),
-                    diff_too_large: true,
-                });
+            Err(error) if error.message == OUTPUT_EXCEEDED => {
+                return Ok(too_large_diff());
             }
             Err(error) => return Err(error),
         };
         let mut text = tracked;
         if compare.mode == CheckoutDiffMode::Uncommitted {
-            let untracked = run_git(
+            let untracked = match run_git(
                 &cwd,
                 &["ls-files", "--others", "--exclude-standard", "-z"],
                 &[0],
                 SMALL_OUTPUT_LIMIT,
-            )?
-            .stdout;
-            for path in untracked.split('\0').filter(|path| !path.is_empty()) {
+            ) {
+                Ok(output) => output.stdout,
+                Err(error) if error.message == OUTPUT_EXCEEDED => return Ok(too_large_diff()),
+                Err(error) => return Err(error),
+            };
+            let untracked = untracked
+                .split('\0')
+                .filter(|path| !path.is_empty())
+                .collect::<Vec<_>>();
+            // Each untracked file costs one `git diff --no-index` process.
+            if untracked.len() > UNTRACKED_DIFF_LIMIT {
+                return Ok(too_large_diff());
+            }
+            for path in untracked {
                 validate_relative_path(path)?;
                 let mut untracked_arguments =
                     vec!["diff", "--no-ext-diff", "--no-color", "--no-index"];
@@ -236,20 +241,14 @@ impl CheckoutRuntime for LocalCheckout {
                 untracked_arguments.extend(["--", "/dev/null", path]);
                 let output = match run_git(&cwd, &untracked_arguments, &[0, 1], DIFF_OUTPUT_LIMIT) {
                     Ok(output) => output.stdout,
-                    Err(error) if error.message == "Git output exceeded the configured limit" => {
-                        return Ok(CheckoutDiff {
-                            files: Vec::new(),
-                            diff_too_large: true,
-                        });
+                    Err(error) if error.message == OUTPUT_EXCEEDED => {
+                        return Ok(too_large_diff());
                     }
                     Err(error) => return Err(error),
                 };
                 let combined = text.len().saturating_add(output.len());
                 if u64::try_from(combined).unwrap_or(u64::MAX) > DIFF_OUTPUT_LIMIT {
-                    return Ok(CheckoutDiff {
-                        files: Vec::new(),
-                        diff_too_large: true,
-                    });
+                    return Ok(too_large_diff());
                 }
                 text.push_str(&output);
             }
@@ -621,21 +620,10 @@ impl CheckoutRuntime for LocalCheckout {
             return git_write(&cwd, &["push", &remote, &format!("HEAD:refs/heads/{head}")])
                 .map(|_| ());
         }
-        if let Some(upstream) = git_optional(
-            &cwd,
-            &[
-                "rev-parse",
-                "--abbrev-ref",
-                "--symbolic-full-name",
-                "@{upstream}",
-            ],
-        )? {
-            let (remote, head) = upstream.split_once('/').ok_or_else(|| {
-                checkout_error(CheckoutFailureKind::Unknown, "Invalid upstream branch")
-            })?;
+        if let Some((remote, head)) = remote_upstream(&cwd, &current)? {
             return git_write(
                 &cwd,
-                &["push", "-u", remote, &format!("HEAD:refs/heads/{head}")],
+                &["push", "-u", &remote, &format!("HEAD:refs/heads/{head}")],
             )
             .map(|_| ());
         }
@@ -705,6 +693,13 @@ struct CommitRecord {
     files: Vec<CheckoutCommitFile>,
 }
 
+const fn too_large_diff() -> CheckoutDiff {
+    CheckoutDiff {
+        files: Vec::new(),
+        diff_too_large: true,
+    }
+}
+
 fn non_git_status() -> CheckoutStatus {
     CheckoutStatus {
         is_git: false,
@@ -725,36 +720,8 @@ fn non_git_status() -> CheckoutStatus {
 }
 
 fn expanded_directory(value: &str) -> Result<PathBuf, CheckoutRuntimeError> {
-    let path = if value == "~" {
-        std::env::var_os("HOME").map(PathBuf::from).ok_or_else(|| {
-            checkout_error(
-                CheckoutFailureKind::NotAllowed,
-                "Home directory is unavailable",
-            )
-        })?
-    } else if let Some(relative) = value.strip_prefix("~/") {
-        std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .ok_or_else(|| {
-                checkout_error(
-                    CheckoutFailureKind::NotAllowed,
-                    "Home directory is unavailable",
-                )
-            })?
-            .join(relative)
-    } else {
-        PathBuf::from(value)
-    };
-    path.canonicalize()
+    directory::existing_directory(value)
         .map_err(|error| checkout_error(CheckoutFailureKind::NotAllowed, error.to_string()))
-        .and_then(|path| {
-            path.is_dir().then_some(path).ok_or_else(|| {
-                checkout_error(
-                    CheckoutFailureKind::NotAllowed,
-                    "Checkout cwd is not a directory",
-                )
-            })
-        })
 }
 
 fn require_git_directory(value: &str) -> Result<PathBuf, CheckoutRuntimeError> {
@@ -877,9 +844,7 @@ fn run_git_with_interaction(
     output_limit: u64,
     options: GitRunOptions,
 ) -> Result<CommandOutput, CheckoutRuntimeError> {
-    let mut stdout = tempfile::tempfile().map_err(|error| io_error(&error))?;
-    let mut stderr = tempfile::tempfile().map_err(|error| io_error(&error))?;
-    let mut command = Command::new("git");
+    let mut command = process::git_command(cwd);
     command
         .arg("--no-optional-locks")
         .args(["-c", "core.fsmonitor=false"])
@@ -887,58 +852,27 @@ fn run_git_with_interaction(
         .args(["-c", "core.quotepath=false"])
         .args(["-c", "diff.noprefix=false"])
         .args(["-c", "diff.mnemonicPrefix=false"])
-        .args(arguments)
-        .current_dir(cwd)
-        .stdin(Stdio::null())
-        .stdout(stdout.try_clone().map_err(|error| io_error(&error))?)
-        .stderr(stderr.try_clone().map_err(|error| io_error(&error))?);
-    for (name, _) in std::env::vars_os() {
-        if name.to_string_lossy().starts_with("GIT_") {
-            command.env_remove(name);
-        }
-    }
+        .args(arguments);
     if options.noninteractive {
         command
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GCM_INTERACTIVE", "never");
     }
-    let mut child = command.spawn().map_err(|error| io_error(&error))?;
-    let deadline = Instant::now() + options.timeout;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None)
-                if Instant::now() < deadline
-                    && stdout
-                        .metadata()
-                        .is_ok_and(|metadata| metadata.len() <= output_limit)
-                    && stderr
-                        .metadata()
-                        .is_ok_and(|metadata| metadata.len() <= 64 * 1024) =>
-            {
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            Ok(None) | Err(_) => {
-                let too_large = stdout
-                    .metadata()
-                    .is_ok_and(|metadata| metadata.len() > output_limit);
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(checkout_error(
-                    CheckoutFailureKind::Unknown,
-                    if too_large {
-                        "Git output exceeded the configured limit"
-                    } else {
-                        "Git command timed out"
-                    },
-                ));
-            }
-        }
+    let bounds = Bounds {
+        timeout: options.timeout,
+        stdout_limit: output_limit,
+        stderr_limit: STDERR_LIMIT,
     };
-    let code = status.code().unwrap_or(-1);
+    let output = process::run_bounded(&mut command, bounds, None).map_err(|error| match error {
+        RunError::StdoutExceeded => checkout_error(CheckoutFailureKind::Unknown, OUTPUT_EXCEEDED),
+        RunError::TimedOut | RunError::StderrExceeded | RunError::Cancelled => {
+            checkout_error(CheckoutFailureKind::Unknown, "Git command timed out")
+        }
+        RunError::Spawn(error) | RunError::Io(error) => io_error(&error),
+    })?;
+    let code = output.code();
     if !accepted_exit_codes.contains(&code) {
-        let diagnostic = read_bounded(&mut stderr, 64 * 1024)
-            .unwrap_or_default()
+        let diagnostic = String::from_utf8_lossy(&output.stderr)
             .trim()
             .replace(['\r', '\n'], " ");
         let kind = classify_git_error(&diagnostic);
@@ -951,9 +885,8 @@ fn run_git_with_interaction(
             },
         ));
     }
-    let bytes = read_bytes_bounded(&mut stdout, output_limit)?;
     Ok(CommandOutput {
-        stdout: String::from_utf8_lossy(&bytes).into_owned(),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
         exit_code: code,
     })
 }
@@ -978,26 +911,6 @@ fn git_write_noninteractive(
         },
     )
     .map(|output| output.stdout.trim_end().to_owned())
-}
-
-fn read_bounded(file: &mut File, limit: u64) -> Result<String, CheckoutRuntimeError> {
-    Ok(String::from_utf8_lossy(&read_bytes_bounded(file, limit)?).into_owned())
-}
-
-fn read_bytes_bounded(file: &mut File, limit: u64) -> Result<Vec<u8>, CheckoutRuntimeError> {
-    file.seek(SeekFrom::Start(0))
-        .map_err(|error| io_error(&error))?;
-    let mut bytes = Vec::new();
-    file.take(limit + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|error| io_error(&error))?;
-    if bytes.len() as u64 > limit {
-        return Err(checkout_error(
-            CheckoutFailureKind::Unknown,
-            "Git output exceeded the configured limit",
-        ));
-    }
-    Ok(bytes)
 }
 
 fn classify_git_error(message: &str) -> CheckoutFailureKind {
@@ -1288,13 +1201,42 @@ fn list_branch_suggestions(
         .collect()
 }
 
-fn require_clean(cwd: &Path) -> Result<(), CheckoutRuntimeError> {
-    let status = git_required(
+// Whether the working tree has changes and whether any path is unmerged.
+fn working_tree_state(cwd: &Path) -> Result<(bool, bool), CheckoutRuntimeError> {
+    match working_status(cwd)? {
+        Some(status) => Ok((
+            !status.is_empty(),
+            branch_status::porcelain_has_conflicts(&status),
+        )),
+        // Too many changes to list: the tree is dirty, and unmerged paths are listed apart.
+        None => match run_git(
+            cwd,
+            &["diff", "--name-only", "--diff-filter=U"],
+            &[0],
+            SMALL_OUTPUT_LIMIT,
+        ) {
+            Ok(output) => Ok((true, !output.stdout.trim().is_empty())),
+            Err(error) if error.message == OUTPUT_EXCEEDED => Ok((true, true)),
+            Err(error) => Err(error),
+        },
+    }
+}
+
+// Porcelain status, or `None` when it exceeds the output limit; it is then certainly dirty.
+fn working_status(cwd: &Path) -> Result<Option<String>, CheckoutRuntimeError> {
+    match git_required(
         cwd,
         &["status", "--porcelain=v1", "--untracked-files=normal"],
         SMALL_OUTPUT_LIMIT,
-    )?;
-    if status.is_empty() {
+    ) {
+        Ok(status) => Ok(Some(status)),
+        Err(error) if error.message == OUTPUT_EXCEEDED => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+fn require_clean(cwd: &Path) -> Result<(), CheckoutRuntimeError> {
+    if working_status(cwd)?.is_some_and(|status| status.is_empty()) {
         Ok(())
     } else {
         Err(checkout_error(
@@ -1430,7 +1372,16 @@ fn abort_merge_on_conflict(
         .flatten()
         .is_some_and(|paths| !paths.is_empty());
     if error.kind == CheckoutFailureKind::MergeConflict || conflicts {
-        let _ = git_write(cwd, &["merge", "--abort"]);
+        // `merge --squash` records no MERGE_HEAD, so `merge --abort` would refuse to run.
+        let merging = git_optional(cwd, &["rev-parse", "-q", "--verify", "MERGE_HEAD"])
+            .ok()
+            .flatten()
+            .is_some();
+        let _ = if merging {
+            git_write(cwd, &["merge", "--abort"])
+        } else {
+            git_write(cwd, &["reset", "--merge"])
+        };
         error.kind = CheckoutFailureKind::MergeConflict;
     }
     Err(error)
@@ -1510,6 +1461,32 @@ fn configured_push_target(
         .map(str::trim)
         .filter(|head| !head.is_empty())
         .map(|head| (remote, head.to_owned())))
+}
+
+// Remote name and branch of the current `branch`'s resolvable upstream, read from its
+// configuration because remote names may contain '/'. A local-branch upstream (remote ".")
+// has none.
+fn remote_upstream(
+    cwd: &Path,
+    branch: &str,
+) -> Result<Option<(String, String)>, CheckoutRuntimeError> {
+    if git_optional(cwd, &["rev-parse", "--verify", "--quiet", "@{upstream}"])?.is_none() {
+        return Ok(None);
+    }
+    let Some(remote) = git_optional(
+        cwd,
+        &["config", "--get", &format!("branch.{branch}.remote")],
+    )?
+    .filter(|remote| remote != ".") else {
+        return Ok(None);
+    };
+    let merge = git_optional(cwd, &["config", "--get", &format!("branch.{branch}.merge")])?;
+    let head = merge
+        .as_deref()
+        .and_then(|merge| merge.strip_prefix("refs/heads/"))
+        .filter(|head| !head.is_empty())
+        .ok_or_else(|| checkout_error(CheckoutFailureKind::Unknown, "Invalid upstream branch"))?;
+    Ok(Some((remote, head.to_owned())))
 }
 
 fn discard_paths(cwd: &Path, paths: &[&str]) -> Result<(), CheckoutRuntimeError> {
@@ -1688,10 +1665,14 @@ fn parse_diff_section(section: &str) -> Option<ParsedDiffFile> {
                 .find_map(|line| line.strip_prefix("--- "))
                 .filter(|path| *path != "/dev/null")
         });
+    // Rename headers carry bare paths; only `---`/`+++` paths have `a/` and `b/` prefixes.
     let path = renamed_path
-        .or(metadata_path)
-        .map(|path| path.strip_suffix('\t').unwrap_or(path))
-        .map(|path| strip_diff_prefix(&paths::decode(path)).to_owned())
+        .map(|path| paths::decode(path).into_owned())
+        .or_else(|| {
+            metadata_path
+                .map(|path| path.strip_suffix('\t').unwrap_or(path))
+                .map(|path| strip_diff_prefix(&paths::decode(path)).to_owned())
+        })
         .or_else(|| header.split_once(" b/").map(|(_, path)| path.to_owned()))
         .or_else(|| {
             header.rsplit_once(" \"b/").map(|(_, path)| {

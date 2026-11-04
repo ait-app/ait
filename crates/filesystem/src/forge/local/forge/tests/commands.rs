@@ -1,4 +1,6 @@
 //! Offline subprocess counterparts of Paseo forge CLI and GitHub service tests.
+use std::time::Instant;
+
 use super::*;
 use serde_json::json;
 
@@ -142,10 +144,37 @@ fn fork_timeline_uses_the_explicit_parent_repository_identity() {
     assert_eq!(result.pr_number, 42);
     let calls = fixture.calls();
     assert!(
-        calls.contains("owner=parent\n-F\nname=upstream\n-F\nnumber=42\n"),
+        calls.contains("-f\nowner=parent\n-f\nname=upstream\n-F\nnumber=42\n"),
         "{calls}"
     );
     assert!(calls.contains("pullRequestReview"));
+}
+
+#[test]
+fn checkout_lookup_passes_numeric_looking_repository_names_as_strings() {
+    use model::workspace::worktrees::ChangeRequestResolver;
+    let fixture = Fixture::new(
+        "if [ \"$1\" = repo ]; then printf '{\"owner\":{\"login\":\"2048\"},\"name\":\"@app\"}'; \
+         else printf '{\"data\":{\"repository\":{\"pullRequest\":{\"number\":7,\"headRefName\":\"topic\"}}}}'; fi",
+    );
+    let target = fixture
+        .forge
+        .resolve_change_request(
+            fixture.cwd(),
+            &domain::workspace::worktrees::WorktreeChangeRequest {
+                forge: Some("github".to_owned()),
+                number: 7,
+                project_path: None,
+            },
+            None,
+        )
+        .unwrap();
+    assert_eq!(target.head_ref, "topic");
+    let calls = fixture.calls();
+    assert!(
+        calls.contains("-f\nowner=2048\n-f\nname=@app\n-F\nnumber=7\n"),
+        "{calls}"
+    );
 }
 
 #[test]
@@ -271,7 +300,7 @@ fn check_identity_is_validated_before_requesting_remote_data() {
 #[test]
 fn standalone_checks_do_not_request_an_unrelated_workflow() {
     let fixture = Fixture::new(
-        "case \"$2\" in */annotations) printf '[]';; *) printf '{\"id\":9,\"name\":\"lint\"}';; esac",
+        "case \"$2\" in */annotations?per_page=20) printf '[]';; *) printf '{\"id\":9,\"name\":\"lint\"}';; esac",
     );
     let result = fixture
         .forge
