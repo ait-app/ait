@@ -23,7 +23,7 @@ impl Sources {
             .list()
             .context("read Hub project projection")?
             .into_iter()
-            .filter(|record| record.archived_at.as_deref().is_none_or(str::is_empty))
+            .filter(|record| !record.is_archived())
             .map(|record| {
                 json!({
                     "id": record.project_id,
@@ -41,7 +41,7 @@ impl Sources {
             .list()
             .context("read Hub workspace projection")?
             .into_iter()
-            .filter(|record| record.archived_at.as_deref().is_none_or(str::is_empty))
+            .filter(|record| !record.is_archived())
             .map(|record| {
                 json!({
                     "id": record.workspace_id,

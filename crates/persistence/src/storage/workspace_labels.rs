@@ -254,7 +254,7 @@ fn require_active_workspace(
     workspace: Option<&PersistedWorkspaceRecord>,
 ) -> Result<(), WorkspaceLabelStoreError> {
     workspace
-        .filter(|workspace| workspace.archived_at.as_deref().is_none_or(str::is_empty))
+        .filter(|workspace| !workspace.is_archived())
         .ok_or(WorkspaceLabelStoreError::WorkspaceNotFound)
         .map(|_| ())
 }

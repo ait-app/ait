@@ -192,7 +192,7 @@ impl Checkout {
                 .ok_or_else(|| invalid_reset_workspace("Workspace not found"))?;
             // Clients normalize trailing separators in registered workspace paths.
             if Path::new(&workspace.cwd) != Path::new(cwd)
-                || workspace.archived_at.is_some()
+                || workspace.is_archived()
                 || !workspace.is_paseo_owned_worktree
                 || workspace.display_name != initial_branch
             {
@@ -207,7 +207,7 @@ impl Checkout {
                 .update(workspace_id, &|workspace| {
                     let mut updated = workspace.clone();
                     if Path::new(&updated.cwd) == Path::new(cwd)
-                        && updated.archived_at.is_none()
+                        && !updated.is_archived()
                         && updated.is_paseo_owned_worktree
                         && updated.display_name == initial_branch
                     {

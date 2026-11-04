@@ -507,7 +507,7 @@ impl Terminals {
             .list()
             .map_err(|_| Error::Registry)?
             .into_iter()
-            .filter(|project| project.archived_at.as_ref().is_none_or(String::is_empty))
+            .filter(|project| !project.is_archived())
             .map(|project| project.project_id)
             .collect();
         Ok(self
@@ -516,8 +516,7 @@ impl Terminals {
             .map_err(|_| Error::Registry)?
             .into_iter()
             .filter(move |workspace| {
-                workspace.archived_at.as_ref().is_none_or(String::is_empty)
-                    && projects.contains(&workspace.project_id)
+                !workspace.is_archived() && projects.contains(&workspace.project_id)
             }))
     }
 }

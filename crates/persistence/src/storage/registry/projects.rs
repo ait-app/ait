@@ -82,7 +82,7 @@ impl ProjectRegistry for FileBackedProjectRegistry {
             let active = records
                 .values()
                 .filter(|record| {
-                    record.archived_at.as_ref().is_none_or(String::is_empty)
+                    !record.is_archived()
                         && super::paths::equivalent(&record.root_path, &input.root_path)
                 })
                 .min_by(|left, right| oldest(left, right))
@@ -164,7 +164,7 @@ impl ProjectRegistry for FileBackedProjectRegistry {
             let Some(record) = records.get_mut(id) else {
                 return Ok((None, false));
             };
-            if record.archived_at.as_ref().is_some_and(|v| !v.is_empty()) {
+            if record.is_archived() {
                 return Ok((None, false));
             }
             timestamp.clone_into(&mut record.updated_at);
