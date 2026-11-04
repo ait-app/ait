@@ -3,7 +3,7 @@ use std::path::Path;
 use domain::agent_runtime::{StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
 
-use super::transport::Transport;
+use super::{PROVIDER, transport::Transport};
 use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 use crate::protocol::provider::Details;
 
@@ -50,7 +50,7 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
 }
 
 pub(super) fn validate_spec(spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
-    if spec.provider != "omp"
+    if spec.provider != PROVIDER
         || !Path::new(&spec.cwd).is_absolute()
         || !Path::new(&spec.cwd).is_dir()
     {
@@ -187,7 +187,7 @@ pub(super) async fn discover(transport: &mut Transport) -> Result<Details, Agent
                 model_thinking_options(model)?
             };
         entries.push(
-            json!({"provider":"omp","id":json!([provider,id]).to_string(),
+            json!({"provider":PROVIDER,"id":json!([provider,id]).to_string(),
             "label":model["name"].as_str().unwrap_or(id),"isSelectable":true,
             "isDefault":state["model"]["provider"] == provider && state["model"]["id"] == id,
             "thinkingOptions":thinking}),
@@ -235,7 +235,7 @@ pub(super) fn runtime(state: &Value) -> Result<StoredAgentRuntimeInfo, AgentSess
         .map(|model| Ok(json!([text(model, "provider")?, text(model, "id")?]).to_string()))
         .transpose()?;
     Ok(StoredAgentRuntimeInfo {
-        provider: "omp".to_owned(),
+        provider: PROVIDER.to_owned(),
         session_id: Some(id.to_owned()),
         model,
         thinking_option_id: state["thinkingLevel"].as_str().map(str::to_owned),

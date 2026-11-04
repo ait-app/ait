@@ -69,6 +69,15 @@ enum Operation {
     Permission(crate::protocol::DecisionRequest),
     Retire(Vec<String>),
 }
+/// Outcome of channel input that the Bot did not refuse.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Admission {
+    /// The message is durably queued (or was already queued under the same id).
+    Accepted,
+    /// The global turn backlog is full; the message was not stored and must be retried.
+    Backlogged,
+}
+
 struct Command {
     operation: Operation,
     reply: oneshot::Sender<Result<Value, ErrorCode>>,
@@ -172,8 +181,24 @@ impl Bots {
             .map_err(|_| ErrorCode::BotIo)?;
         result.await.map_err(|_| ErrorCode::BotIo)?
     }
-    pub(crate) async fn accept(&self, incoming: Incoming) -> Result<Value, ErrorCode> {
-        self.call(Operation::Accept(incoming)).await
+    /// Admit channel input, waiting for command capacity so a busy service never drops it.
+    ///
+    /// Returns [`Admission::Backlogged`] when the global turn backlog is full; the channel
+    /// keeps the message and retries later.
+    /// # Errors
+    /// `ResourceExhausted` reports a backlog owned by this message's conversation (or the
+    /// conversation catalog limit); `InvalidMessage` and `IdempotencyConflict` report a message
+    /// that can never be admitted; other codes report lifecycle or persistence failures.
+    pub(crate) async fn accept(&self, incoming: Incoming) -> Result<Admission, ErrorCode> {
+        if self.0.cancellation.is_cancelled() {
+            return Err(ErrorCode::ServerDraining);
+        }
+        let receipt = self.send(Operation::Accept(incoming)).await?;
+        Ok(if receipt["accepted"] == true {
+            Admission::Accepted
+        } else {
+            Admission::Backlogged
+        })
     }
     pub(crate) async fn cursor(&self, channel: ChannelId, cursor: i64) -> Result<(), ErrorCode> {
         self.call(Operation::Cursor(channel, cursor))
@@ -317,7 +342,7 @@ fn apply(
             state.cancel(crate::protocol::decode(params)?)
         }
         Operation::Rpc(method, params) => state.execute(&method, params),
-        Operation::Accept(incoming) => state.accept(incoming),
+        Operation::Accept(incoming) => state.accept_channel(incoming),
         Operation::Cursor(channel, cursor) => {
             state.advance_cursor(channel, cursor).map(|()| Value::Null)
         }

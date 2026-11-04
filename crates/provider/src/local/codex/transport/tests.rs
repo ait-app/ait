@@ -67,6 +67,8 @@ impl Fixture {
             Path::new("python3"),
             root.path().to_str().unwrap(),
             Duration::from_secs(3),
+            false,
+            &crate::ports::environment::AgentEnvironment::default(),
         )
         .unwrap();
         Self {

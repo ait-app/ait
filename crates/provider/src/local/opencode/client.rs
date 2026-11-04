@@ -1,8 +1,8 @@
 //! `OpenCode` factory using official ACP and read-only native model discovery.
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     path::PathBuf,
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
 
@@ -30,6 +30,9 @@ pub(crate) struct OpenCodeClient {
     pub(super) images: crate::local::images::ImageStore,
     pub(super) capabilities: Arc<RwLock<Option<Capabilities>>>,
     pub(super) startup: Arc<tokio::sync::Mutex<()>>,
+    /// Validated CLI versions by launch directory, shared by clones; launches reuse them.
+    /// Availability and diagnostics probe again and reset this cache.
+    pub(super) versions: Arc<Mutex<HashMap<String, String>>>,
 }
 
 /// Session methods actually advertised by the installed native ACP process.
@@ -54,6 +57,7 @@ impl OpenCodeClient {
             images: crate::local::images::ImageStore::default(),
             capabilities: Arc::new(RwLock::new(None)),
             startup: Arc::default(),
+            versions: Arc::default(),
         }
     }
 
@@ -82,7 +86,7 @@ impl OpenCodeClient {
         let result = history::list(&mut transport, options).await;
         transport.close().await?;
         let mut sessions = result?;
-        history::populate(self, &mut sessions).await;
+        history::previews::populate(self, &mut sessions).await;
         Ok(sessions)
     }
 }
@@ -97,7 +101,7 @@ impl AgentClient for OpenCodeClient {
     }
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {
         let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Unavailable)?;
-        match launcher::version(self, &cwd.to_string_lossy()).await {
+        match launcher::refresh_version(self, &cwd.to_string_lossy()).await {
             Ok(version) if !launcher::supported(&version) => Ok(format!(
                 "OpenCode {version} predates the supported ACP catalog and form implementation. \
                      Upgrade OpenCode to 2.0.25 or newer, then refresh the provider."
@@ -164,7 +168,7 @@ impl AgentClient for OpenCodeClient {
         let cwd = std::env::current_dir().map_err(|_| AgentSessionError::Unavailable)?;
         // Discovery validates ACP and records capabilities in the requested directory.
         // Probing it here would cold-start plugins twice, first in the daemon's directory.
-        Ok(launcher::version(self, &cwd.to_string_lossy())
+        Ok(launcher::refresh_version(self, &cwd.to_string_lossy())
             .await
             .is_ok_and(|version| launcher::supported(&version)))
     }

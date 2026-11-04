@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use anyhow::{Context, bail};
 use chrono::Utc;
-use host_link::{CredentialStore, Error, Machine, Pending, State, VERIFICATION_URI};
+use host_link::{Center, CredentialStore, Error, Machine, Pending, State, VERIFICATION_URI};
 use secrecy::{ExposeSecret, SecretString};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;

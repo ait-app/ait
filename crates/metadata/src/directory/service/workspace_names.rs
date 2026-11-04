@@ -4,11 +4,14 @@ use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
 use domain::summary::{SummaryKind, SummaryRequest, SummarySelection};
+use domain::workspace::records::PersistedWorkspaceRecord;
 use model::summary::SummarySource;
 use model::workspace::naming::WorkspaceBranchNamer;
 use model::workspace::registry::WorkspaceRegistry;
 use serde_json::Value;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+
+use crate::support::time::now_timestamp;
 
 /// Shared background coordinator for directory titles and managed placeholder branches.
 #[derive(Debug, Clone)]
@@ -110,7 +113,7 @@ async fn generate(inner: &Inner, id: &str, context: String, selection: Option<Su
     else {
         return;
     };
-    if before.auto_name.is_none() || before.archived_at.is_some() {
+    if before.auto_name.is_none() || before.is_archived() {
         return;
     }
     let Ok(value) = inner
@@ -138,34 +141,52 @@ async fn generate(inner: &Inner, id: &str, context: String, selection: Option<Su
         if cancel.is_cancelled() {
             return;
         }
-        let _ = registry.update(&before.workspace_id, &|current| {
-            let mut next = current.clone();
-            if current.archived_at.is_some()
-                || current.auto_name != before.auto_name
-                || current.title != before.title
-                || current.cwd != before.cwd
-                || current.created_at != before.created_at
+        let Ok(Some(current)) = registry.get(&before.workspace_id) else {
+            return;
+        };
+        if !still_unnamed(&current, &before) {
+            return;
+        }
+        // Git renames run before the registry update so they never hold the registry lock.
+        let placeholder = before
+            .auto_name
+            .as_ref()
+            .and_then(|name| name.placeholder_branch.as_deref())
+            .filter(|expected| current.branch.as_deref() == Some(*expected));
+        let renamed = placeholder.and_then(|expected| {
+            let desired = value.get("branch").and_then(Value::as_str)?;
+            Some((expected, branches.rename(&current.cwd, expected, desired)?))
+        });
+        let _ = registry.update(&before.workspace_id, &|latest| {
+            let mut next = latest.clone();
+            let mut changed = false;
+            if let Some((expected, branch)) = &renamed
+                && latest.branch.as_deref() == Some(*expected)
             {
-                return next;
+                next.branch = Some(branch.clone());
+                changed = true;
             }
-            next.title = Some(title.clone());
-            next.auto_name = None;
-            if let Some(expected) = before
-                .auto_name
-                .as_ref()
-                .and_then(|name| name.placeholder_branch.as_deref())
-                && current.branch.as_deref() == Some(expected)
-                && let Some(desired) = value.get("branch").and_then(Value::as_str)
-                && let Some(branch) = branches.rename(&current.cwd, expected, desired)
-            {
-                next.branch = Some(branch);
+            if still_unnamed(latest, &before) {
+                next.title = Some(title.clone());
+                next.auto_name = None;
+                changed = true;
             }
-            next.updated_at =
-                chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+            if changed {
+                next.updated_at = now_timestamp();
+            }
             next
         });
     })
     .await;
+}
+
+/// Whether `current` still carries the automatic name observed before generation started.
+fn still_unnamed(current: &PersistedWorkspaceRecord, before: &PersistedWorkspaceRecord) -> bool {
+    !current.is_archived()
+        && current.auto_name == before.auto_name
+        && current.title == before.title
+        && current.cwd == before.cwd
+        && current.created_at == before.created_at
 }
 
 #[cfg(test)]

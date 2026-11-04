@@ -67,12 +67,47 @@ impl From<ErrorCode> for model::ErrorCode {
 impl From<model::ErrorCode> for ErrorCode {
     fn from(error: model::ErrorCode) -> Self {
         match error {
+            model::ErrorCode::IdempotencyConflict => Self::IdempotencyConflict,
+            model::ErrorCode::ResourceExhausted => Self::ResourceExhausted,
             model::ErrorCode::InvalidMessage => Self::InvalidMessage,
             model::ErrorCode::UnsupportedCapability => Self::UnsupportedCapability,
             model::ErrorCode::MethodNotFound => Self::MethodNotFound,
-            model::ErrorCode::IdempotencyConflict => Self::IdempotencyConflict,
-            model::ErrorCode::ResourceExhausted => Self::ResourceExhausted,
-            _ => Self::RegistryIo,
+            model::ErrorCode::DaemonConfigInvalid => Self::DaemonConfigInvalid,
+            model::ErrorCode::DaemonIo => Self::DaemonIo,
+            model::ErrorCode::WorkspaceNotFound => Self::WorkspaceNotFound,
+            model::ErrorCode::LabelNameEmpty => Self::LabelNameEmpty,
+            model::ErrorCode::LabelNotFound => Self::LabelNotFound,
+            model::ErrorCode::LabelNameTaken => Self::LabelNameTaken,
+            model::ErrorCode::WorkspaceLabelStorageUncertain => {
+                Self::WorkspaceLabelStorageUncertain
+            }
+            // Codes owned by other capabilities collapse into the retryable registry failure.
+            model::ErrorCode::RegistryIo
+            | model::ErrorCode::BotNotFound
+            | model::ErrorCode::BotConflict
+            | model::ErrorCode::BotIo
+            | model::ErrorCode::RelayManaged
+            | model::ErrorCode::ScheduleRequestFailed
+            | model::ErrorCode::ScheduleRunning
+            | model::ErrorCode::SpeechIo
+            | model::ErrorCode::TerminalIo
+            | model::ErrorCode::TerminalNotFound
+            | model::ErrorCode::WorkingDirectoryUnavailable
+            | model::ErrorCode::IncompatibleVersion
+            | model::ErrorCode::NotImplemented
+            | model::ErrorCode::SubscriptionNotFound
+            | model::ErrorCode::ServerDraining
+            | model::ErrorCode::UnsupportedFormat
+            | model::ErrorCode::ProjectIo
+            | model::ErrorCode::AgentNotFound
+            | model::ErrorCode::AgentRevisionNotFound
+            | model::ErrorCode::AgentRevisionConflict
+            | model::ErrorCode::AgentDefaultConflict
+            | model::ErrorCode::AgentDisabled
+            | model::ErrorCode::AgentIsDefault
+            | model::ErrorCode::CatalogBusy
+            | model::ErrorCode::AgentIo
+            | model::ErrorCode::Forbidden => Self::RegistryIo,
         }
     }
 }

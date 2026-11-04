@@ -2,6 +2,8 @@
 
 use serde::Deserialize;
 
+use super::workspace::serde_fields::MAX_SAFE_INTEGER;
+
 /// A forge change request selected as a checkout source.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,7 +43,7 @@ impl ChangeRequestCheckoutSource {
 
 fn positive_number<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
     let number = u64::deserialize(deserializer)?;
-    if number == 0 || number > 9_007_199_254_740_991 {
+    if number == 0 || number > MAX_SAFE_INTEGER {
         return Err(serde::de::Error::custom(
             "expected a positive JavaScript-safe integer",
         ));

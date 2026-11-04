@@ -15,6 +15,8 @@ permission_mode = "auto"
 thinking_effort = "default"
 active = None
 session_id = "minimax-session"
+# Like native ACP agents, a prompt blocked on an unanswered permission cannot settle a cancel.
+awaiting_permission = False
 
 
 def send(value):
@@ -119,6 +121,7 @@ for line in sys.stdin:
                 "sessionId": session_id, "toolCall": {"toolCallId": "tool", "title": "Read file"},
                 "options": [{"optionId": "yes", "kind": "allow_once", "name": "Allow once"},
                             {"optionId": "no", "kind": "reject_once", "name": "Deny"}]}})
+            awaiting_permission = True
         elif text == "remember":
             (root / "native-memory").write_text("remembered")
             finish("remembered")
@@ -127,12 +130,15 @@ for line in sys.stdin:
         else:
             finish("Hello from MiniMax")
     elif method == "session/cancel":
-        if scenario != "ignore-cancel":
+        if scenario != "ignore-cancel" and not awaiting_permission:
             reply(active, {"stopReason": "cancelled"})
     elif method == "session/close":
         reply(identity, {})
     elif identity == "permission":
+        awaiting_permission = False
         outcome = request["result"]["outcome"]
+        if outcome["outcome"] == "cancelled":
+            continue
         update({"sessionUpdate": "tool_call_update", "toolCallId": "tool", "status": "completed"})
         finish("approved" if outcome.get("optionId") == "yes" else "denied")
     else:

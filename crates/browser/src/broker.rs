@@ -347,12 +347,17 @@ fn remember(state: &mut State, host: &str, reply: &Value) {
         return;
     }
     let tabs: Vec<_> = if result["command"] == "list_tabs" {
-        result["tabs"]
+        let tabs: BTreeSet<_> = result["tabs"]
             .as_array()
             .into_iter()
             .flatten()
             .filter_map(|tab| tab["browserId"].as_str())
-            .collect()
+            .collect();
+        // A listing is the host's complete tab set; forget its tabs that have since vanished.
+        state
+            .affinity
+            .retain(|tab, owner| owner != host || tabs.contains(tab.as_str()));
+        tabs.into_iter().collect()
     } else {
         result["browserId"].as_str().into_iter().collect()
     };

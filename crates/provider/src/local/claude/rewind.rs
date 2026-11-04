@@ -100,7 +100,16 @@ pub(super) async fn files(
     spec: &AgentSessionSpec,
     message: &str,
 ) -> Result<(), AgentSessionError> {
-    target(client, handle, spec, message)?;
+    let (owned_client, owned_handle, owned_spec, owned_message) = (
+        client.clone(),
+        handle.clone(),
+        spec.clone(),
+        message.to_owned(),
+    );
+    super::blocking(move || {
+        target(&owned_client, &owned_handle, &owned_spec, &owned_message).map(|_| ())
+    })
+    .await?;
     let mut transport = Transport::spawn(client, spec, Some((&handle.session_id, true)), None)?;
     let result = async {
         transport.initialize().await?;

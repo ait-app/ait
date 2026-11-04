@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
+use super::PROVIDER;
 use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 
 #[derive(Debug)]
@@ -62,7 +63,7 @@ impl Dialogs {
         } else {
             Vec::new()
         };
-        let mut request = json!({"id":id,"provider":"omp","name":"extension_ui","kind":
+        let mut request = json!({"id":id,"provider":PROVIDER,"name":"extension_ui","kind":
             if method=="confirm" {"tool"} else {"question"},
             "input":if method=="confirm" {json!({"title":title,"message":native["message"]})}
             else {json!({"questions":[{"header":title,"question":title,"answerKey":"value",

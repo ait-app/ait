@@ -158,5 +158,3 @@ pub(super) fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str, AgentSess
         .filter(|text| !text.is_empty() && text.len() <= 1024)
         .ok_or(AgentSessionError::Failed)
 }
-
-pub(super) use crate::local::configuration::executable;

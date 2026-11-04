@@ -10,13 +10,21 @@ use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio_util::task::AbortOnDropHandle;
 
-use super::OmpClient;
+use super::{LABEL, OmpClient};
 use crate::local::diagnostics::Diagnostics;
+use crate::local::process_group::{self, Signal};
 use crate::ports::agent_session::AgentSessionError;
 use crate::ports::diagnostics::{Category, Diagnostic};
 
 const MAX_FRAME: usize = 1024 * 1024;
 const MAX_BUFFER: usize = 64 * 1024 * 1024;
+
+/// Decoded native frame with the wire bytes it occupied, counted once against buffer limits.
+#[derive(Debug)]
+struct Record {
+    value: Value,
+    bytes: usize,
+}
 
 #[derive(Debug)]
 pub(super) struct Transport {
@@ -26,9 +34,9 @@ pub(super) struct Transport {
     group: Option<u32>,
     input: Option<Arc<Mutex<ChildStdin>>>,
     background_write: Option<AbortOnDropHandle<()>>,
-    messages: mpsc::Receiver<Value>,
+    messages: mpsc::Receiver<Record>,
     reader: JoinHandle<()>,
-    events: VecDeque<Value>,
+    events: VecDeque<Record>,
     buffered_bytes: usize,
     sequence: u64,
     deadline: Duration,
@@ -41,7 +49,7 @@ impl Transport {
         cwd: &str,
         args: &[String],
     ) -> Result<Self, AgentSessionError> {
-        let diagnostics = Diagnostics::new("Oh My Pi");
+        let diagnostics = Diagnostics::new(LABEL);
         let mut command = Command::new(&client.program);
         command
             .args(args)
@@ -70,6 +78,7 @@ impl Transport {
         let reader = tokio::spawn(async move {
             let mut output = BufReader::new(output);
             let mut decoder = super::framing::Decoder::default();
+            let mut frame_bytes = 0;
             let failure = loop {
                 let mut bytes = Vec::new();
                 let read = (&mut output)
@@ -96,9 +105,11 @@ impl Transport {
                 if !value["type"].is_string() {
                     break Diagnostic::new(Category::Protocol, "missing_frame_type");
                 }
+                frame_bytes += bytes.len();
                 match decoder.push(value) {
                     Ok(Some(value)) => {
-                        if sender.send(value).await.is_err() {
+                        let bytes = std::mem::take(&mut frame_bytes);
+                        if sender.send(Record { value, bytes }).await.is_err() {
                             return;
                         }
                     }
@@ -130,7 +141,8 @@ impl Transport {
         let ready = tokio::time::timeout(self.deadline, self.messages.recv())
             .await
             .map_err(|_| AgentSessionError::Failed)?
-            .ok_or(AgentSessionError::Failed)?;
+            .ok_or(AgentSessionError::Failed)?
+            .value;
         if ready["type"] != "ready"
             || !ready["supportedProtocolVersions"]
                 .as_array()
@@ -212,11 +224,12 @@ impl Transport {
         let id = self.begin(kind, fields).await?;
         let response = tokio::time::timeout(self.deadline, async {
             loop {
-                let value = self
+                let record = self
                     .messages
                     .recv()
                     .await
                     .ok_or(AgentSessionError::Failed)?;
+                let value = &record.value;
                 if value["type"] == "response" && value["id"] == id {
                     if value["command"] != kind {
                         return Err(AgentSessionError::Failed);
@@ -231,11 +244,11 @@ impl Transport {
                         None => Err(AgentSessionError::Failed),
                     };
                 }
-                self.buffered_bytes += value.to_string().len();
+                self.buffered_bytes += record.bytes;
                 if self.events.len() >= 4096 || self.buffered_bytes > MAX_BUFFER {
                     return Err(AgentSessionError::Failed);
                 }
-                self.events.push_back(value);
+                self.events.push_back(record);
             }
         })
         .await;
@@ -259,12 +272,12 @@ impl Transport {
     }
 
     pub(super) fn poll(&mut self) -> Result<Option<Value>, AgentSessionError> {
-        if let Some(value) = self.events.pop_front() {
-            self.buffered_bytes = self.buffered_bytes.saturating_sub(value.to_string().len());
-            return Ok(Some(value));
+        if let Some(record) = self.events.pop_front() {
+            self.buffered_bytes -= record.bytes;
+            return Ok(Some(record.value));
         }
         match self.messages.try_recv() {
-            Ok(value) => Ok(Some(value)),
+            Ok(record) => Ok(Some(record.value)),
             Err(mpsc::error::TryRecvError::Empty) if !self.closed => Ok(None),
             Err(_) => Err(AgentSessionError::Failed),
         }
@@ -288,7 +301,7 @@ impl Transport {
         })
         .await;
         self.reader.abort();
-        self.kill_group();
+        process_group::signal(self.group, Signal::Kill);
         self.group = None;
         if matches!(drained, Ok(Ok(_))) {
             return Ok(());
@@ -299,17 +312,6 @@ impl Transport {
             .map_err(|_| AgentSessionError::Failed)?
             .map_err(|_| AgentSessionError::Failed)?;
         Ok(())
-    }
-
-    fn kill_group(&self) {
-        #[cfg(unix)]
-        if let Some(group) = self.group {
-            let _ = std::process::Command::new("/bin/kill")
-                .args(["-KILL", "--", &format!("-{group}")])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
-        }
     }
 }
 
@@ -341,6 +343,6 @@ async fn write(
 impl Drop for Transport {
     fn drop(&mut self) {
         self.reader.abort();
-        self.kill_group();
+        process_group::signal(self.group, Signal::Kill);
     }
 }

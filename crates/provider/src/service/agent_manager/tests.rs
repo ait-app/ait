@@ -1037,3 +1037,83 @@ async fn active_turn_cadence_tracks_accepted_native_work_only() {
     assert!(!manager.has_active_turns());
     manager.close_all().await.unwrap();
 }
+
+#[tokio::test]
+async fn deterministic_event_rejection_fails_the_turn_instead_of_wedging_the_lane() {
+    let (mut manager, registry, client) = make_manager();
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    manager.send("agent-1", "hello").await.unwrap();
+    client
+        .0
+        .lock()
+        .unwrap()
+        .events
+        .push_back(AgentTurnEvent::Started("another-turn".to_owned()));
+
+    manager.poll().await.unwrap();
+
+    assert!(manager.live_snapshot("agent-1").is_none());
+    assert_eq!(client.0.lock().unwrap().close_calls, 1);
+    assert_eq!(
+        registry.get("agent-1").unwrap().unwrap().last_status,
+        AgentRuntimeStatus::Error
+    );
+}
+
+#[tokio::test]
+async fn invalid_native_handle_fails_the_turn_and_never_blocks_close() {
+    let (mut manager, registry, client) = make_manager();
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    manager.send("agent-1", "hello").await.unwrap();
+    client.0.lock().unwrap().handle_session_id = String::new();
+
+    manager.poll().await.unwrap();
+
+    assert!(manager.live_snapshot("agent-1").is_none());
+    assert_eq!(client.0.lock().unwrap().close_calls, 1);
+    assert_eq!(
+        registry.get("agent-1").unwrap().unwrap().last_status,
+        AgentRuntimeStatus::Error
+    );
+
+    client.0.lock().unwrap().handle_session_id = "native-1".to_owned();
+    manager.resume("agent-1").await.unwrap();
+    client.0.lock().unwrap().handle_session_id = String::new();
+    manager.close("agent-1").await.unwrap();
+    assert!(manager.live_snapshot("agent-1").is_none());
+    assert_eq!(client.0.lock().unwrap().close_calls, 2);
+    assert_eq!(
+        registry.get("agent-1").unwrap().unwrap().last_status,
+        AgentRuntimeStatus::Closed
+    );
+}
+
+#[tokio::test]
+async fn transient_registry_failure_keeps_a_changed_handle_and_close_retryable() {
+    let (mut manager, registry, client) = make_manager();
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    client.0.lock().unwrap().handle_session_id = "native-2".to_owned();
+    registry.0.lock().unwrap().fail_update = true;
+
+    assert_eq!(
+        manager.close("agent-1").await,
+        Err(AgentManagerError::Registry)
+    );
+    assert!(manager.live_snapshot("agent-1").is_some());
+    assert_eq!(client.0.lock().unwrap().close_calls, 0);
+
+    registry.0.lock().unwrap().fail_update = false;
+    manager.close("agent-1").await.unwrap();
+    assert_eq!(client.0.lock().unwrap().close_calls, 1);
+    let record = registry.get("agent-1").unwrap().unwrap();
+    assert_eq!(record.persistence.unwrap().session_id, "native-2");
+}

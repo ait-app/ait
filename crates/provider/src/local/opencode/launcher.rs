@@ -1,18 +1,60 @@
 //! ACP launch configuration only; no project files or shared native configuration are written.
-use std::{path::Path, process::Stdio};
+use std::path::Path;
 
 use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Value, json};
-use tokio::{io::AsyncReadExt, process::Command, time::Instant};
+use tokio::{process::Command, time::Instant};
 
-use super::{OpenCodeClient, config, observation::Source};
-use crate::{local::acp_transport::Transport, ports::agent_session::AgentSessionError};
+use super::{client::OpenCodeClient, config, observation::Source};
+use crate::local::{acp_transport::Transport, metadata_process::Process};
+use crate::ports::agent_session::AgentSessionError;
 
-/// Read and validate the installed CLI version; unsupported releases return unavailable.
+const MAX_QUERY_BYTES: u64 = 8 * 1024 * 1024;
+
+/// Read and validate the CLI version a launch in `cwd` resolves, reusing an earlier probe there.
+/// Version managers can resolve a different release per directory, so the cache is per cwd.
+/// Unsupported releases return unavailable and are not cached; the next call probes again.
 pub(super) async fn version(
     client: &OpenCodeClient,
     cwd: &str,
 ) -> Result<String, AgentSessionError> {
+    let cached = client
+        .versions
+        .lock()
+        .map_err(|_| AgentSessionError::Failed)?
+        .get(cwd)
+        .cloned();
+    if let Some(version) = cached {
+        return Ok(version);
+    }
+    let version = probe_version(client, cwd).await?;
+    client
+        .versions
+        .lock()
+        .map_err(|_| AgentSessionError::Failed)?
+        .insert(cwd.to_owned(), version.clone());
+    Ok(version)
+}
+
+/// Probe the installed CLI version in `cwd` without the cache, for availability and diagnostics.
+/// Every cached directory is forgotten so later launches observe an upgraded or removed release.
+pub(super) async fn refresh_version(
+    client: &OpenCodeClient,
+    cwd: &str,
+) -> Result<String, AgentSessionError> {
+    let probed = probe_version(client, cwd).await;
+    let mut versions = client
+        .versions
+        .lock()
+        .map_err(|_| AgentSessionError::Failed)?;
+    versions.clear();
+    if let Ok(version) = &probed {
+        versions.insert(cwd.to_owned(), version.clone());
+    }
+    probed
+}
+
+async fn probe_version(client: &OpenCodeClient, cwd: &str) -> Result<String, AgentSessionError> {
     let output = read(client, cwd, &["--version"]).await?;
     let version = output
         .trim()
@@ -279,45 +321,19 @@ pub(super) async fn read(
     if !Path::new(cwd).is_dir() {
         return Err(AgentSessionError::Rejected);
     }
-    let mut command = Command::new(&client.program);
-    command
-        .args(arguments)
-        .envs(&client.environment)
-        .current_dir(cwd)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true);
-    let mut child = command.spawn().map_err(|error| {
+    let process = Process::spawn(
+        Command::new(&client.program)
+            .args(arguments)
+            .envs(&client.environment)
+            .current_dir(cwd),
+    )
+    .map_err(|error| {
         tracing::warn!(error_kind = ?error.kind(), os_error = error.raw_os_error(), "OpenCode CLI query failed to start");
         AgentSessionError::Unavailable
     })?;
-    let mut stdout = child
-        .stdout
-        .take()
-        .ok_or(AgentSessionError::Failed)?
-        .take(8 * 1024 * 1024 + 1);
-    tokio::time::timeout(client.startup_timeout, async {
-        let mut bytes = Vec::new();
-        stdout
-            .read_to_end(&mut bytes)
-            .await
-            .map_err(|_| AgentSessionError::Failed)?;
-        if bytes.len() > 8 * 1024 * 1024 {
-            return Err(AgentSessionError::Failed);
-        }
-        if !child
-            .wait()
-            .await
-            .map_err(|_| AgentSessionError::Failed)?
-            .success()
-        {
-            return Err(AgentSessionError::Failed);
-        }
-        String::from_utf8(bytes).map_err(|_| AgentSessionError::Failed)
-    })
-    .await
-    .map_err(|_| AgentSessionError::Failed)?
+    tokio::time::timeout(client.startup_timeout, process.output(MAX_QUERY_BYTES))
+        .await
+        .map_err(|_| AgentSessionError::Failed)?
 }
 
 #[cfg(test)]

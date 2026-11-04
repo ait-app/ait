@@ -203,6 +203,9 @@ async fn version_spawn_failures_preserve_os_facts_and_respect_probe_cooldown() {
     assert!(client.diagnostic().await.unwrap().contains("Pi RPC ready"));
 }
 
+// Rust spawns through `posix_spawnp`; Apple's implementation runs ENOEXEC files with
+// `/bin/sh` instead of reporting the format error, so only Linux can observe it.
+#[cfg(target_os = "linux")]
 #[tokio::test]
 async fn invalid_executable_format_has_launch_guidance_without_native_text() {
     let (_directory, client, _spec) = fixture("");

@@ -131,7 +131,7 @@ impl WorkspaceState {
             .get(workspace_id)
             .map_err(map_workspace_error)?
             .ok_or_else(|| WorkspaceStateError::WorkspaceNotFound(workspace_id.to_owned()))?;
-        if is_archived(workspace.archived_at.as_deref()) {
+        if workspace.is_archived() {
             return Err(WorkspaceStateError::WorkspaceNotFound(
                 workspace_id.to_owned(),
             ));
@@ -159,10 +159,6 @@ fn attention_batch(results: Vec<WorkspaceAttentionResult>) -> WorkspaceAttention
         error: (!errors.is_empty()).then(|| errors.join("; ")),
         results,
     }
-}
-
-fn is_archived(archived_at: Option<&str>) -> bool {
-    archived_at.is_some_and(|value| !value.is_empty())
 }
 
 const fn map_workspace_error(_: RegistryError) -> WorkspaceStateError {

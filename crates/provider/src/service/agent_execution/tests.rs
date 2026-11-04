@@ -373,6 +373,43 @@ async fn explicit_resume_reactivates_archived_agents_and_delete_does_not_resurre
 }
 
 #[tokio::test]
+async fn delete_forgets_the_display_history_and_input_receipts_of_the_agent() {
+    let fixture = Fixture::new();
+    let (execution, _) = worker(&fixture);
+    let created = create(&execution, &fixture).await;
+    let id = created["agentId"].as_str().unwrap();
+    execution
+        .execute(
+            "agent.message.send.request",
+            json!({"agentId":id,"text":"hello","messageId":"deleted-message"}),
+        )
+        .await
+        .unwrap();
+    execution
+        .execute("agent.finish.wait.request", json!({"agentId":id}))
+        .await
+        .unwrap();
+
+    execution
+        .execute("agent.delete.request", json!({"agentId":id}))
+        .await
+        .unwrap();
+
+    let database = rusqlite::Connection::open(fixture.root.path().join("timeline.sqlite")).unwrap();
+    let rows: u64 = database
+        .query_row(
+            "SELECT (SELECT count(*) FROM entries WHERE agent=?1)
+                + (SELECT count(*) FROM input_receipts WHERE agent=?1)
+                + (SELECT count(*) FROM timelines WHERE agent=?1)",
+            [id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(rows, 0);
+    execution.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn failures_are_durable_and_a_new_turn_can_resume_after_native_exit() {
     let fixture = Fixture::new();
     let (execution, registry) = worker(&fixture);

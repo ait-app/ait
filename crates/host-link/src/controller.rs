@@ -11,7 +11,7 @@ mod authority;
 mod links;
 
 /// Serializes refresh rotation and maintains runtime leases independently of a GUI.
-pub struct Controller<C, S, R> {
+pub(crate) struct Controller<C, S, R> {
     pub(crate) center: C,
     pub(crate) store: S,
     pub(crate) relay: R,
@@ -38,7 +38,7 @@ struct Publication {
 impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
     /// Assemble a manager with an exclusively locked private store and claimed Relay handle.
     #[must_use]
-    pub fn new(center: C, store: S, relay: R, state: State, instance: Uuid) -> Self {
+    pub(crate) fn new(center: C, store: S, relay: R, state: State, instance: Uuid) -> Self {
         Self {
             center,
             store,
@@ -55,7 +55,8 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
     /// expired authorization or leases immediately close remote transport.
     /// # Errors
     /// Requires login for revoked/expired credentials; storage failures pause rotation.
-    pub async fn run(mut self, cancel: CancellationToken) -> Result<(), Error> {
+    #[cfg(test)]
+    pub(crate) async fn run(mut self, cancel: CancellationToken) -> Result<(), Error> {
         self.run_until(cancel).await
     }
 

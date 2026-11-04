@@ -47,6 +47,9 @@ fn crud_summary_logs_pause_resume_and_delete() {
         .request("schedule.inspect.request", json!({"scheduleId":id}), now())
         .unwrap();
     assert_eq!(inspect["schedule"]["runs"], json!([]));
+    let mut full = inspect["schedule"].clone();
+    full.as_object_mut().unwrap().remove("runs");
+    assert_eq!(listed["schedules"][0], full);
     assert_eq!(
         engine
             .request("schedule.logs.request", json!({"scheduleId":id}), now())

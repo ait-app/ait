@@ -304,3 +304,34 @@ fn malformed_and_excessive_output_fail_without_panicking() {
         Some(AgentTurnEvent::Timeline(_))
     ));
 }
+
+#[test]
+fn large_file_writes_and_edits_complete_without_failing_the_stream() {
+    let mut stream = streaming::Stream::default();
+    let content = "x".repeat(300 * 1024);
+    stream
+        .record(
+            &json!({"type":"assistant","uuid":"tools","message":{"id":"api","content":[
+            {"type":"tool_use","id":"write","name":"Write",
+                "input":{"file_path":"/tmp/a.rs","content":content}},
+            {"type":"tool_use","id":"edit","name":"Edit",
+                "input":{"file_path":"/tmp/a.rs","old_string":content,"new_string":content}}]}}),
+        )
+        .unwrap();
+    stream
+        .record(
+            &json!({"type":"user","uuid":"results","message":{"content":[
+            {"type":"tool_result","tool_use_id":"write","content":"written"},
+            {"type":"tool_result","tool_use_id":"edit","content":"edited"}]}}),
+        )
+        .unwrap();
+    assert!(stream.tools.is_empty());
+    let completed = stream
+        .events
+        .iter()
+        .filter(|event| {
+            matches!(event, AgentTurnEvent::Timeline(entry) if entry.item["status"] == "completed")
+        })
+        .count();
+    assert_eq!(completed, 2);
+}

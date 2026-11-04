@@ -12,9 +12,48 @@ use serde_json::json;
 use tokio_util::sync::CancellationToken;
 
 use crate::ports::Credentials;
-use crate::service::Bots;
+use crate::service::{Admission, Bots};
 
-#[derive(Debug)]
+/// Reply sent when a conversation's own backlog refuses a message, which is then dropped.
+const BUSY_NOTICE: &str =
+    "This conversation is busy with earlier messages; please resend this one later.";
+
+/// What a receiver does with one inbound message after asking the Bot to admit it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Disposition {
+    /// Durably queued; acknowledge it.
+    Accepted,
+    /// The global backlog is full; leave it unacknowledged so it is delivered again.
+    Retry,
+    /// It can never be admitted; acknowledge and drop it.
+    Skip,
+    /// Its conversation is saturated; acknowledge and drop it, then tell the sender.
+    Busy,
+}
+
+/// Admit one channel message and classify the outcome identically for every channel.
+/// A saturated conversation never blocks other chats; a saturated Bot service never loses input.
+async fn admit(bots: &Bots, incoming: Incoming) -> Result<Disposition, ErrorCode> {
+    let (channel, message) = (incoming.channel_id, incoming.message_id.clone());
+    match bots.accept(incoming).await {
+        Ok(Admission::Accepted) => Ok(Disposition::Accepted),
+        Ok(Admission::Backlogged) => {
+            tracing::warn!(%channel, message, "Bot backlog is full; channel input will be retried");
+            Ok(Disposition::Retry)
+        }
+        Err(error @ (ErrorCode::InvalidMessage | ErrorCode::IdempotencyConflict)) => {
+            tracing::warn!(%channel, message, ?error, "skipping channel input refused by the Bot");
+            Ok(Disposition::Skip)
+        }
+        Err(ErrorCode::ResourceExhausted) => {
+            tracing::warn!(%channel, message, "dropping channel input for a saturated conversation");
+            Ok(Disposition::Busy)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct Incoming {
     pub(crate) channel_id: ChannelId,
     pub(crate) peer: String,

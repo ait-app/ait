@@ -305,12 +305,7 @@ impl AgentManager {
             .persistence
             .as_ref()
             .ok_or_else(|| AgentManagerError::MissingPersistence(agent_id.to_owned()))?;
-        if handle
-            .metadata
-            .as_ref()
-            .and_then(|metadata| metadata.get(controls::REPLACEMENT_MARKER))
-            == Some(&json!(true))
-        {
+        if controls::replacement_pending(&record) {
             let history = self
                 .inspect_native(handle, &record.cwd)
                 .await
@@ -635,13 +630,7 @@ impl AgentManager {
             .get(agent_id)
             .map_err(map_registry)?
             .ok_or_else(|| AgentManagerError::NotFound(agent_id.to_owned()))?;
-        if record
-            .persistence
-            .as_ref()
-            .and_then(|handle| handle.metadata.as_ref())
-            .and_then(|metadata| metadata.get(controls::REPLACEMENT_MARKER))
-            == Some(&json!(true))
-        {
+        if controls::replacement_pending(&record) {
             self.load_timeline_for_input(agent_id).await?;
             record = self
                 .registry
@@ -690,7 +679,9 @@ impl AgentManager {
     /// Close one live session while retaining its provider history and durable Agent record.
     ///
     /// A native close failure retains manager ownership so a later attempt can retry. Missing
-    /// live sessions are idempotent.
+    /// live sessions are idempotent. An invalid native handle, or one whose record vanished, is
+    /// logged and does not prevent the native session from closing; a registry failure keeps
+    /// the session live so the changed handle is not lost and close can be retried.
     ///
     /// # Errors
     /// Returns provider or registry failure.
@@ -698,21 +689,25 @@ impl AgentManager {
         let Some(agent) = self.live.get_mut(agent_id) else {
             return Ok(());
         };
+        // An unrecordable handle must not keep the native process open forever.
         if agent.registered {
-            streaming::persist_handle(self.registry.as_ref(), agent_id, agent)?;
+            match streaming::persist_handle(self.registry.as_ref(), agent_id, agent) {
+                Err(error @ (AgentManagerError::Session | AgentManagerError::NotFound(_))) => {
+                    tracing::warn!(provider = %agent.record.provider, agent_id = %agent_id,
+                        error_kind = %error,
+                        "Native provider handle could not be recorded before close");
+                }
+                result => result?,
+            }
         }
         agent.session.close().await.map_err(map_session)?;
         if agent.registered {
-            for child in agent.session.subagents() {
-                controls::publish_subagent(
-                    self.registry.as_ref(),
-                    self.timeline.as_ref(),
-                    &self.events,
-                    agent,
-                    &crate::ports::controls::SubagentEvent::Upsert(child),
-                )
-                .map_err(|_| AgentManagerError::Registry)?;
-            }
+            controls::publish_children(
+                self.registry.as_ref(),
+                self.timeline.as_ref(),
+                &self.events,
+                agent,
+            )?;
         }
         if !agent.registered {
             self.live.remove(agent_id);

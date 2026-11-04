@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 
-use super::{capture, resolve_tool};
+use super::{cancelled, capture, resolve_tool};
 
 const PROVIDER: &str = "deepseek-harness";
 
@@ -119,6 +119,40 @@ fn native_full_file_previews_do_not_exhaust_the_retained_approval_budget() {
         message["params"]["toolCall"]["rawInput"]
     );
     assert!(pending.request.to_string().len() < 192 * 1024);
-    message["params"]["toolCall"]["rawInput"] = json!({"command":"x".repeat(65536)});
-    assert!(capture(&message, "opencode").is_err());
+}
+
+#[test]
+fn oversized_titles_and_raw_input_become_bounded_previews_instead_of_failing() {
+    let mut message = request();
+    message["params"]["toolCall"]["title"] = json!("t".repeat(1024 * 1024));
+    message["params"]["toolCall"]["rawInput"] =
+        json!({"path":"large.txt","content":"x".repeat(1024 * 1024)});
+    let pending = capture(&message, "opencode").unwrap();
+    assert!(pending.request.to_string().len() < 192 * 1024);
+    assert_eq!(pending.request["input"]["path"], "large.txt");
+    for text in [
+        &pending.request["title"],
+        &pending.request["input"]["content"],
+    ] {
+        assert!(text.as_str().unwrap().contains("Output truncated"));
+    }
+    assert_eq!(pending.request["detail"]["input"], pending.request["input"]);
+    assert_eq!(
+        resolve_tool(&pending, &json!({"behavior":"allow"})).unwrap()["result"]["outcome"]["optionId"],
+        "once"
+    );
+}
+
+#[test]
+fn cancelled_replies_withdraw_permissions_and_forms_without_a_choice() {
+    let mut pending = capture(&request(), PROVIDER).unwrap();
+    assert_eq!(
+        cancelled(&pending),
+        json!({"jsonrpc":"2.0","id":42,"result":{"outcome":{"outcome":"cancelled"}}})
+    );
+    pending.schema = Some(json!({"type":"object"}));
+    assert_eq!(
+        cancelled(&pending),
+        json!({"jsonrpc":"2.0","id":42,"result":{"action":"cancel"}})
+    );
 }

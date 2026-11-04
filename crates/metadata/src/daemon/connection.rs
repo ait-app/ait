@@ -28,34 +28,17 @@ pub(crate) async fn dispatch(
         return Ok(request.value);
     }
     let method = method.to_owned();
-    let capabilities = state.info.implemented_capabilities.clone();
-    let lifecycle = state.info().lifecycle;
     let events = state.session_events.clone();
     state
         .run(state.daemon.clone(), ErrorCode::DaemonIo, move |daemon| {
-            let result = rpc::execute(daemon, &method, params, &capabilities, lifecycle)?;
-            if matches!(
-                method.as_str(),
-                "daemon.config.set.request" | "daemon.config.reload.request"
-            ) {
-                let config = if method == "daemon.config.set.request" {
-                    result["config"].clone()
-                } else {
-                    rpc::execute(
-                        daemon,
-                        "daemon.config.get.request",
-                        serde_json::json!({}),
-                        &capabilities,
-                        lifecycle,
-                    )?["config"]
-                        .clone()
-                };
+            let executed = rpc::execute(daemon, &method, params)?;
+            if let Some(config) = executed.changed_config {
                 events.publish(
                     domain::session::protocol::SessionEventKind::DaemonConfig,
                     &serde_json::json!({"status":"daemon_config_changed","config":config}),
                 );
             }
-            Ok(result)
+            Ok(executed.value)
         })
         .await
 }

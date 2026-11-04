@@ -412,6 +412,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tokio-util",
+ "tracing",
  "url",
  "uuid",
 ]
@@ -2167,6 +2168,7 @@ dependencies = [
  "domain",
  "futures-util",
  "model",
+ "nix 0.31.3",
  "opus2",
  "persistence",
  "pulldown-cmark",

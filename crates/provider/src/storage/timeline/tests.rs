@@ -318,3 +318,49 @@ fn version_one_migration_keeps_existing_rows_and_epoch() {
     assert_eq!(rows[0].entry.item["text"], "original");
     assert_ne!(migrated.reconcile("agent", "codex", &[]).unwrap(), epoch);
 }
+
+#[test]
+fn forget_removes_every_row_of_one_agent_and_keeps_other_agents() {
+    let timeline = Timeline::memory().unwrap();
+    let prompt = crate::protocol::prompt::AgentPrompt::text("hello");
+    for agent in ["agent", "other"] {
+        timeline
+            .append(agent, "codex", &[item("one", "first")])
+            .unwrap();
+        timeline
+            .reserve_input(agent, "message", &prompt, "queue")
+            .unwrap();
+    }
+    let epoch = timeline
+        .reconcile("agent", "codex", &[item("two", "rewritten")])
+        .unwrap();
+
+    timeline.forget("agent").unwrap();
+
+    assert!(!timeline.has_entries("agent").unwrap());
+    assert_eq!(
+        timeline
+            .input_receipt("agent", "message", &prompt, "queue")
+            .unwrap(),
+        None
+    );
+    assert_ne!(timeline.generation("agent").unwrap(), epoch);
+    let retired: u64 = timeline
+        .database
+        .lock()
+        .unwrap()
+        .query_row(
+            "SELECT count(*) FROM retired_entries WHERE agent='agent'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(retired, 0);
+    assert!(timeline.has_entries("other").unwrap());
+    assert!(
+        timeline
+            .input_receipt("other", "message", &prompt, "queue")
+            .unwrap()
+            .is_some()
+    );
+}

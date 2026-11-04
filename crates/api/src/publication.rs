@@ -61,12 +61,25 @@ pub(super) async fn http_disconnect(
 }
 
 pub(super) fn http_error(error: host_link::Error) -> ApiError {
-    ApiError(match error {
-        host_link::Error::Protocol => StatusCode::BAD_REQUEST,
-        host_link::Error::Unauthorized => StatusCode::CONFLICT,
-        host_link::Error::Storage => StatusCode::INTERNAL_SERVER_ERROR,
-        _ => StatusCode::SERVICE_UNAVAILABLE,
-    })
+    ApiError(classify(error).0)
+}
+
+/// The HTTP status and RPC code of one publication failure, so both routes agree on which
+/// failures a retry can fix.
+fn classify(error: host_link::Error) -> (StatusCode, ErrorCode) {
+    match error {
+        host_link::Error::Protocol => (StatusCode::BAD_REQUEST, ErrorCode::InvalidMessage),
+        // A human must reauthorize, approve again or stop the other instance first.
+        host_link::Error::Unauthorized | host_link::Error::Denied | host_link::Error::Conflict => {
+            (StatusCode::CONFLICT, ErrorCode::Forbidden)
+        }
+        host_link::Error::Storage => (StatusCode::INTERNAL_SERVER_ERROR, ErrorCode::DaemonIo),
+        host_link::Error::Unavailable
+        | host_link::Error::AccessRejected
+        | host_link::Error::SessionExpired
+        | host_link::Error::Pending
+        | host_link::Error::SlowDown => (StatusCode::SERVICE_UNAVAILABLE, ErrorCode::DaemonIo),
+    }
 }
 
 pub(super) async fn request(
@@ -107,10 +120,7 @@ async fn execute(request: &model::Request, state: &Shared) -> Result<Value, Erro
         "publication.status.request" => Ok(()),
         _ => return Err(ErrorCode::MethodNotFound),
     };
-    result.map_err(|error| match error {
-        host_link::Error::Protocol => ErrorCode::InvalidMessage,
-        _ => ErrorCode::AgentIo,
-    })?;
+    result.map_err(|error| classify(error).1)?;
     if request.method == "relay.stop.request" {
         return Ok(json!({
             "serverId": state.info.server_id,
@@ -122,3 +132,6 @@ async fn execute(request: &model::Request, state: &Shared) -> Result<Value, Erro
     }
     Ok(status(state).await)
 }
+
+#[cfg(test)]
+mod tests;

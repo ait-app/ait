@@ -4,7 +4,7 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-use super::super::OpenCodeClient;
+use super::super::client::OpenCodeClient;
 use crate::service::agent_execution::AgentExecution;
 use crate::test_support::{Fixture, request, worker_with_client};
 

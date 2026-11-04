@@ -190,6 +190,20 @@ fn parses_supported_remote_spellings() {
 }
 
 #[test]
+fn https_remotes_with_userinfo_resolve_to_the_forge_host() {
+    for remote in [
+        "https://x-access-token:secret-token@github.com/acme/app.git",
+        "https://user@github.com/acme/app.git",
+        "http://user:password@github.com:8080/acme/app",
+        "ssh://git@github.com:22/acme/app.git",
+    ] {
+        let location = parse_remote(remote).unwrap();
+        assert_eq!(location.host, "github.com", "{remote}");
+        assert_eq!(location.project_path, "acme/app", "{remote}");
+    }
+}
+
+#[test]
 fn forge_directory_aliases_and_git_diagnostics_keep_their_failure_categories() {
     let home = std::env::var("HOME").unwrap();
     assert_eq!(require_git_directory("~"), require_git_directory(&home));
@@ -254,11 +268,14 @@ elif [ "$1 $2" = "pr merge" ]; then
   exit 0
 elif [ "$1 $2" = "api graphql" ]; then
   echo '{{"data":{{"repository":{{"pullRequest":{{"number":2,"reviews":{{"nodes":[{{"id":"R1","state":"APPROVED","body":"ship","url":"https://example/review","submittedAt":"2026-01-03T00:00:00Z","author":{{"login":"reviewer","url":null,"avatarUrl":null}}}}],"pageInfo":{{"hasNextPage":false}}}},"comments":{{"nodes":[{{"id":"C1","body":"general","url":"https://example/comment","createdAt":"2026-01-01T00:00:00Z","author":{{"login":"commenter","url":null,"avatarUrl":null}}}}],"pageInfo":{{"hasNextPage":true}}}},"reviewThreads":{{"nodes":[{{"id":"T1","path":"src/lib.rs","line":5,"startLine":4,"isResolved":false,"isOutdated":false,"comments":{{"nodes":[{{"id":"C2","body":"inline","url":"https://example/inline","createdAt":"2026-01-02T00:00:00Z","author":{{"login":"inline","url":null,"avatarUrl":null}},"pullRequestReview":{{"id":"R1"}}}}],"pageInfo":{{"hasNextPage":false}}}}}}],"pageInfo":{{"hasNextPage":false}}}}}}}}}}}}'
+elif [ "$1" = "api" ] && [ $# -ne 2 ]; then
+  echo "REST reads take no fields, which would switch gh to POST: $*" >&2
+  exit 2
 elif [ "$1" = "api" ] && [ "$2" = "repos/acme/app/check-runs/9" ]; then
   echo '{{"id":9,"name":"tests","status":"completed","conclusion":"failure","html_url":"https://example/check","details_url":"https://example/details","check_suite":{{"workflow_run":{{"id":44}}}},"output":{{"title":"failed","summary":"summary","text":"text"}}}}'
-elif [ "$1" = "api" ] && [ "$2" = "repos/acme/app/check-runs/9/annotations" ]; then
+elif [ "$1" = "api" ] && [ "$2" = "repos/acme/app/check-runs/9/annotations?per_page=20" ]; then
   echo '[{{"path":"src/lib.rs","start_line":4,"end_line":5,"annotation_level":"failure","message":"broken","title":"lint","raw_details":"details"}}]'
-elif [ "$1" = "api" ] && [ "$2" = "repos/acme/app/actions/runs/44/jobs" ]; then
+elif [ "$1" = "api" ] && [ "$2" = "repos/acme/app/actions/runs/44/jobs?per_page=100" ]; then
   echo '{{"jobs":[{{"id":70,"name":"test","status":"completed","conclusion":"failure","html_url":"https://example/job"}}]}}'
 else
   echo "unexpected: $*" >&2

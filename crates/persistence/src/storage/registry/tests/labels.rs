@@ -23,7 +23,10 @@ fn label_journal_callback_observes_the_locked_before_image() {
         .commit_workspace_label_mutation(
             &[after.clone()],
             |before| {
-                assert_eq!(before, &[current]);
+                assert_eq!(
+                    before.values().map(AsRef::as_ref).collect::<Vec<_>>(),
+                    [&current]
+                );
                 Ok(())
             },
             || Ok(()),

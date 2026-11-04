@@ -2,7 +2,8 @@ use serde::{Deserialize, Deserializer};
 
 use super::Mergeable;
 
-pub(super) fn required_nullable<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+/// Require a field to be present while accepting `null` as `None`.
+pub(crate) fn required_nullable<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     D: Deserializer<'de>,
     T: Deserialize<'de>,
@@ -10,7 +11,8 @@ where
     Option::deserialize(deserializer)
 }
 
-pub(super) fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+/// Distinguish an omitted field from a present one; `null` is invalid.
+pub(crate) fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     D: Deserializer<'de>,
     T: Deserialize<'de>,
@@ -18,15 +20,23 @@ where
     T::deserialize(deserializer).map(Some)
 }
 
-pub(super) fn positive_integer<'de, D: Deserializer<'de>>(d: D) -> Result<u64, D::Error> {
+/// Accept a positive integral JSON number no larger than [`MAX_SAFE_INTEGER`].
+pub(crate) fn positive_integer<'de, D: Deserializer<'de>>(d: D) -> Result<u64, D::Error> {
     safe_integer(f64::deserialize(d)?)
 }
 
+/// Largest integer every JavaScript client represents exactly (`2^53 - 1`).
+pub(crate) const MAX_SAFE_INTEGER: u64 = (1 << 53) - 1;
+
 fn safe_integer<E: serde::de::Error>(value: f64) -> Result<u64, E> {
-    if value.is_finite() && (1.0..=9_007_199_254_740_991.0).contains(&value) && value.fract() == 0.0
+    // Formatting an integral value avoids lossy float-to-int casts.
+    if value.is_finite()
+        && value >= 1.0
+        && value.fract() == 0.0
+        && let Ok(integer) = format!("{value:.0}").parse::<u64>()
+        && integer <= MAX_SAFE_INTEGER
     {
-        // Formatting an already bounded integral value avoids lossy float-to-int casts.
-        format!("{value:.0}").parse().map_err(E::custom)
+        Ok(integer)
     } else {
         Err(E::custom("expected a positive safe integer"))
     }

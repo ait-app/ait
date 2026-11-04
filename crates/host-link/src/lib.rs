@@ -5,7 +5,6 @@ mod controller;
 mod ports;
 mod types;
 
-pub use controller::Controller;
 pub mod service;
 pub use ports::{Center, CredentialStore, ManagedRelay};
 pub use types::{Binding, Credential, Error, Machine, Pending, Session, State, Tokens};

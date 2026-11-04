@@ -30,8 +30,9 @@ use crate::labels::protocol::{
     WorkspaceLabelUpdateRequest, WorkspaceLabelUpdateResult,
 };
 use crate::labels::service::{
-    SequencedWorkspaceLabelChange, WorkspaceLabelChange, WorkspaceLabelCursor, WorkspaceLabelError,
-    WorkspaceLabelSubscription, WorkspaceLabelSync, WorkspaceLabelSyncMode, WorkspaceLabels,
+    JOURNAL_LIMIT, SequencedWorkspaceLabelChange, WorkspaceLabelChange, WorkspaceLabelCursor,
+    WorkspaceLabelError, WorkspaceLabelSubscription, WorkspaceLabelSync, WorkspaceLabelSyncMode,
+    WorkspaceLabels,
 };
 use crate::support::error::ErrorCode;
 use crate::support::rpc::{decode, encode};
@@ -69,7 +70,10 @@ pub(crate) struct PendingSubscription {
 
 struct Delivery {
     ready: bool,
-    pending: Vec<(String, SequencedWorkspaceLabelChange)>,
+    /// More than [`JOURNAL_LIMIT`] changes arrived before activation; the buffer was dropped
+    /// and activation fails so the client resubscribes with its cursor.
+    overflowed: bool,
+    pending: Vec<SequencedWorkspaceLabelChange>,
     outbound: EventSink,
     subscription_id: String,
 }
@@ -78,17 +82,20 @@ impl PendingSubscription {
     /// Activate after admitting the snapshot response into the host send queue.
     ///
     /// # Errors
-    /// Returns a delivery error if an event cannot be sent.
+    /// Returns a delivery error if an event cannot be sent, or [`DeliveryError::Closed`] when
+    /// more changes arrived before activation than the subscription buffers.
     pub(crate) fn activate(self) -> Result<(String, WorkspaceLabelSubscription), DeliveryError> {
         let mut delivery = self
             .delivery
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if delivery.overflowed {
+            return Err(DeliveryError::Closed);
+        }
         delivery.ready = true;
         let pending = std::mem::take(&mut delivery.pending);
         for change in pending
             .into_iter()
-            .map(|(_, change)| change)
             .filter(|change| change.seq > self.head_seq)
         {
             delivery.send(&change)?;
@@ -102,16 +109,15 @@ impl Delivery {
     fn accept(&mut self, change: SequencedWorkspaceLabelChange) {
         if self.ready {
             let _ = self.send(&change);
-        } else {
-            let key = change_key(&change);
-            if let Some((_, pending)) = self
-                .pending
-                .iter_mut()
-                .find(|(pending_key, _)| pending_key == &key)
-            {
-                *pending = change;
+        } else if !self.overflowed {
+            if self.pending.len() >= JOURNAL_LIMIT {
+                // Beyond the journal a cursor resync is as complete as replay; stop buffering.
+                self.overflowed = true;
+                self.pending = Vec::new();
             } else {
-                self.pending.push((key, change));
+                // Keep every change in sequence order; a rename's previous name must survive
+                // later edits.
+                self.pending.push(change);
             }
         }
     }
@@ -165,6 +171,7 @@ fn list(
     let subscription_id = Uuid::new_v4().to_string();
     let delivery = Arc::new(Mutex::new(Delivery {
         ready: false,
+        overflowed: false,
         pending: Vec::new(),
         outbound,
         subscription_id: subscription_id.clone(),
@@ -307,13 +314,6 @@ fn live_update(
             generation: update.generation.clone(),
             seq: update.seq,
         },
-    }
-}
-
-fn change_key(update: &SequencedWorkspaceLabelChange) -> String {
-    match &update.change {
-        WorkspaceLabelChange::Upsert { label, .. } => label.name.to_lowercase(),
-        WorkspaceLabelChange::Remove { name } => name.to_lowercase(),
     }
 }
 

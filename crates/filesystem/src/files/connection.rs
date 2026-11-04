@@ -24,11 +24,9 @@ use model::methods::MethodSpec;
 use serde_json::Value;
 
 use crate::dispatch::State as Shared;
-mod state;
+pub(crate) mod state;
 /// Binary preview and shared download chunk reading.
 pub mod transfer;
-pub(crate) use state::FileConnection;
-pub(crate) use state::FileRequest;
 
 async fn execute(method: String, params: Value, state: &Shared) -> Result<Value, ErrorCode> {
     state

@@ -32,16 +32,24 @@ impl Owners {
         }
     }
 
-    /// Run [`Owners::run`] on the provider's tracked tasks so shutdown waits for it.
-    pub(super) fn spawn(self, revoked: Vec<Revoked>, handle: &tokio::runtime::Handle) {
-        if let Some(provider) = self.provider.upgrade() {
-            provider.tasks.spawn_on(self.run(revoked), handle);
-        }
+    /// Run [`Owners::run`] on the provider's tracked tasks so shutdown waits for it and a
+    /// dropped caller cannot abandon it after the grants were removed.
+    ///
+    /// # Returns
+    ///
+    /// The cleanup task, or `None` once the services shut down.
+    pub(super) fn spawn(
+        self,
+        revoked: Vec<Revoked>,
+        handle: &tokio::runtime::Handle,
+    ) -> Option<tokio::task::JoinHandle<()>> {
+        let provider = self.provider.upgrade()?;
+        Some(provider.tasks.spawn_on(self.run(revoked), handle))
     }
 
     /// Kill the revoked grants' terminals and cancel their Agents' turns.
     /// Does nothing once the services shut down.
-    pub(super) async fn run(self, revoked: Vec<Revoked>) {
+    async fn run(self, revoked: Vec<Revoked>) {
         let (Some(terminal), Some(provider)) = (self.terminal.upgrade(), self.provider.upgrade())
         else {
             return;

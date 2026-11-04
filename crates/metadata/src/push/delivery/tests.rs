@@ -296,6 +296,30 @@ async fn temporary_delivery_failure_is_retried() {
 }
 
 #[tokio::test]
+async fn long_provider_retry_after_gives_up_without_stalling_delivery() {
+    let transport = Transport::default();
+    transport
+        .results
+        .lock()
+        .unwrap()
+        .extend([Err(DeliveryError::Retryable(3600)), Ok(())]);
+    let notification = Notification {
+        title: "Done".to_owned(),
+        body: String::new(),
+        data: json!({}),
+    };
+    let result = tokio::time::timeout(
+        Duration::from_secs(2),
+        send_with_retry(&transport, &notification, "device"),
+    )
+    .await
+    .expect("a long Retry-After must not be waited inline");
+
+    assert_eq!(result, Err(DeliveryError::Retryable(3600)));
+    assert_eq!(transport.sent.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
 async fn dropping_worker_cancels_without_requiring_server_shutdown() {
     let (state, _, _) = fixture();
     let worker = start(&state).unwrap();

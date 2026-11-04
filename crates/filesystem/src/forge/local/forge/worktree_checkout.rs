@@ -53,7 +53,13 @@ impl ChangeRequestResolver for LocalForge {
             return Err(WorktreeError::ForgeUnavailable);
         }
         if context.kind == ForgeKind::Gitlab {
-            return super::gitlab::checkout(self, &cwd, &context, source.number, head_ref);
+            return super::gitlab::checkout::checkout(
+                self,
+                &cwd,
+                &context,
+                source.number,
+                head_ref,
+            );
         }
         self.github_checkout(&cwd, &context, source.number, head_ref)
     }
@@ -94,9 +100,10 @@ impl LocalForge {
                     "graphql".into(),
                     "-f".into(),
                     format!("query={CHECKOUT_QUERY}"),
-                    "-F".into(),
+                    // `-f` keeps names as strings; `-F` would coerce "2048" or read "@file".
+                    "-f".into(),
                     format!("owner={owner}"),
-                    "-F".into(),
+                    "-f".into(),
                     format!("name={name}"),
                     "-F".into(),
                     format!("number={number}"),

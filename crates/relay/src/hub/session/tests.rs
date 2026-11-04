@@ -22,6 +22,7 @@ fn local(address: std::net::SocketAddr) -> Arc<Local> {
         token: SecretString::from("local-token"),
         server_id: "server".to_owned(),
         instance_id: "instance".to_owned(),
+        downloads: tokio::sync::OnceCell::new(),
     })
 }
 

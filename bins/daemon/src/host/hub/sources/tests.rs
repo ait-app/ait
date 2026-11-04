@@ -82,6 +82,20 @@ fn project_workspace_renames_and_archives_replace_lightweight_snapshots() {
     assert_eq!(snapshots[1].1[0]["data"]["title"], "Workspace");
     assert!(snapshots[0].1[0]["data"].get("rootPath").is_none());
     assert!(snapshots[1].1[0]["data"].get("cwd").is_none());
+    // Imported Paseo records may store an empty archive marker for active entries.
+    project.archived_at = Some(String::new());
+    workspace.archived_at = Some(String::new());
+    sources.projects.upsert(&project).unwrap();
+    sources
+        .workspaces
+        .upsert(
+            &workspace,
+            domain::workspace::registry::WorkspaceMutationContext::default(),
+        )
+        .unwrap();
+    let snapshots = sources.snapshots().unwrap();
+    assert_eq!(snapshots[0].1[0]["id"], "project");
+    assert_eq!(snapshots[1].1[0]["id"], "workspace");
     project.archived_at = Some("later".to_owned());
     workspace.archived_at = Some("later".to_owned());
     sources.projects.upsert(&project).unwrap();

@@ -8,6 +8,7 @@ use domain::agent_runtime::AgentPersistenceHandle;
 use serde_json::{Value, json};
 
 use super::PROVIDER;
+use crate::local::acp_config;
 use crate::ports::{agent_session::AgentSessionError, controls::NativeSubagent};
 
 const MAX_CHILDREN: usize = 256;
@@ -29,7 +30,7 @@ impl Links {
         ) {
             return Ok(None);
         }
-        let call = super::config::text(update, "toolCallId")?;
+        let call = acp_config::text(update, "toolCallId")?;
         if self.pending.len() >= 128 && !self.pending.contains_key(call) {
             return Err(AgentSessionError::Failed);
         }
@@ -116,7 +117,7 @@ fn valid_id(id: &str) -> Result<(), AgentSessionError> {
 }
 
 fn descriptor(link: &Value, parent: &str, cwd: &str) -> Result<NativeSubagent, AgentSessionError> {
-    let id = super::config::text(link, "id")?;
+    let id = acp_config::text(link, "id")?;
     valid_id(parent)?;
     if id == parent
         || link["parentID"]

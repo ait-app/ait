@@ -54,7 +54,7 @@ use crate::directory::protocol::project_icon::{
     ProjectIconGetRequest, ProjectIconGetResult, ProjectIconPayload, ProjectIconSetRequest,
     ProjectIconSetResult, ProjectIconSource,
 };
-use crate::directory::service::directory::{Directory, DirectoryError};
+use crate::directory::service::directory::{Directory, DirectoryError, normalize_optional_text};
 use crate::support::error::ErrorCode;
 use crate::support::rpc::{decode, encode};
 use crate::support::time::now_timestamp;
@@ -662,7 +662,7 @@ fn project_list(directory: &Directory, request: &ProjectListRequest) -> Result<V
         .list_projects()
         .map_err(directory_error)?
         .into_iter()
-        .filter(active_project)
+        .filter(|project| !project.is_archived())
         .map(|project| project_descriptor(&project))
         .collect();
     if let Some(cursor) = &request.sync {
@@ -830,10 +830,8 @@ fn describe_workspace(
     workspace: &PersistedWorkspaceRecord,
 ) -> Result<WorkspaceDescriptorPayload, ErrorCode> {
     let project = directory
-        .list_projects()
-        .map_err(directory_error)?
-        .into_iter()
-        .find(|project| project.project_id == workspace.project_id);
+        .get_project(&workspace.project_id)
+        .map_err(directory_error)?;
     Ok(runtime_workspace_descriptor(
         directory,
         workspace,
@@ -897,20 +895,6 @@ fn project_matches_filter(
         .map(str::trim)
         .filter(|id| !id.is_empty())
         .is_none_or(|id| id == project.project_id)
-}
-
-fn active_project(project: &PersistedProjectRecord) -> bool {
-    project.archived_at.as_ref().is_none_or(String::is_empty)
-}
-
-fn active_workspace(workspace: &PersistedWorkspaceRecord) -> bool {
-    workspace.archived_at.as_ref().is_none_or(String::is_empty)
-}
-
-fn normalize_optional_text(value: Option<String>) -> Option<String> {
-    value
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
 }
 
 const fn directory_create_error_code(error: &DirectoryError) -> &'static str {

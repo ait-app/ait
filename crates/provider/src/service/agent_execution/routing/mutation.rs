@@ -200,34 +200,11 @@ impl Router {
             let started = std::time::Instant::now();
             let queue_ms = queued.elapsed().as_millis();
             let measured_method = method.as_str();
-            let handle = tokio::runtime::Handle::current();
             let owners = state.owners.clone();
-            let workspace_retirement = retirement.is_some();
-            let workspace = retirement
-                .as_ref()
-                .and_then(Retirement::workspace)
-                .map(str::to_owned);
-            let result = tokio::task::spawn_blocking(move || {
-                handle.block_on(async move {
-                    if let Some(error) = ready_error {
-                        return Err(error);
-                    }
-                    let mut state = state;
-                    if let Some(workspace) = workspace {
-                        state
-                            .manager
-                            .archive_workspace_agents(&[workspace])
-                            .map_err(|_| ErrorCode::AgentIo)?;
-                    }
-                    let result = state.execute(method, params).await;
-                    if workspace_retirement && matches!(result, Err(ErrorCode::AgentNotFound)) {
-                        return Ok(serde_json::json!({}));
-                    }
-                    result
-                })
-            })
-            .await
-            .unwrap_or(Err(ErrorCode::AgentIo));
+            let (state, result) = match ready_error {
+                Some(error) => (Some(state), Err(error)),
+                None => execute_blocking(state, method, params, retirement.clone()).await,
+            };
             for release in releases {
                 let _ = release.send(());
             }
@@ -238,6 +215,12 @@ impl Router {
                 }
             }
             let mut result = result.and_then(|value| close_error.map_or(Ok(value), Err));
+            if method == Operation::Delete
+                && let Some(state) = state
+                && let Ok(value) = &result
+            {
+                forget_deleted(state, value).await;
+            }
             result = cleanup(&owners, retirement, result).await;
             tracing::debug!(
                 method = measured_method,
@@ -299,6 +282,65 @@ impl Router {
             });
         }
         Ok((barrier, pending))
+    }
+}
+
+/// Execute a fenced mutation on a blocking worker, returning its state for post-close work.
+async fn execute_blocking(
+    mut state: ExecutionState,
+    method: Operation,
+    params: Value,
+    retirement: Option<Retirement>,
+) -> (Option<ExecutionState>, Result<Value, ErrorCode>) {
+    let handle = tokio::runtime::Handle::current();
+    tokio::task::spawn_blocking(move || {
+        handle.block_on(async move {
+            let result = async {
+                if let Some(workspace) = retirement.as_ref().and_then(Retirement::workspace) {
+                    state
+                        .manager
+                        .archive_workspace_agents(&[workspace.to_owned()])
+                        .map_err(|_| ErrorCode::AgentIo)?;
+                }
+                let result = state.execute(method, params).await;
+                if retirement.is_some() && matches!(result, Err(ErrorCode::AgentNotFound)) {
+                    return Ok(serde_json::json!({}));
+                }
+                result
+            }
+            .await;
+            (Some(state), result)
+        })
+    })
+    .await
+    .unwrap_or((None, Err(ErrorCode::AgentIo)))
+}
+
+/// Forget a deleted Agent's history only after every fenced lane has closed its native writer,
+/// so a closing writer cannot re-create rows for the deleted identity.
+/// # Errors
+/// Returns timeline storage failures.
+/// Discard local state of an Agent whose durable record is already removed.
+///
+/// The delete has happened by now and a retry would only report `AgentNotFound`, so a
+/// timeline failure is logged rather than reported; ownership is always released.
+async fn forget_deleted(state: ExecutionState, deleted: &Value) {
+    let Some(id) = deleted["agentId"].as_str().map(str::to_owned) else {
+        return;
+    };
+    let forgotten = tokio::task::spawn_blocking(move || {
+        state.owners.forget(&id);
+        state.manager.forget(&id).map_err(|error| (id, error))
+    })
+    .await;
+    match forgotten {
+        Ok(Ok(())) => {}
+        Ok(Err((agent_id, error))) => tracing::warn!(
+            agent_id,
+            ?error,
+            "Deleted Agent timeline could not be discarded; orphaned rows remain"
+        ),
+        Err(error) => tracing::warn!(?error, "Deleted Agent cleanup task failed"),
     }
 }
 

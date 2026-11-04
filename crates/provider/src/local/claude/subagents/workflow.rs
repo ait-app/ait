@@ -2,8 +2,7 @@
 
 use serde_json::Value;
 
-mod replay;
-pub(super) use replay::histories;
+pub(super) mod replay;
 use std::io::Read;
 use std::path::Path;
 

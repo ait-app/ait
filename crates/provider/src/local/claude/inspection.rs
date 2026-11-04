@@ -4,15 +4,13 @@ mod quota;
 
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::time::Duration;
 
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tokio::io::AsyncReadExt;
 
-use super::{ClaudeClient, config};
+use super::ClaudeClient;
 use crate::ports::agent_session::AgentSessionError;
 
 #[derive(Debug)]
@@ -39,7 +37,7 @@ struct OAuth {
 
 impl ClaudeClient {
     pub(super) async fn native_diagnostic(&self) -> Result<String, AgentSessionError> {
-        if !config::executable(&self.program) {
+        if !crate::local::configuration::executable(&self.program) {
             return Ok("Claude Code executable: unavailable".to_owned());
         }
         let mut command = tokio::process::Command::new(&self.program);
@@ -254,43 +252,26 @@ fn read_file(path: &Path) -> Result<Option<Credentials>, AgentSessionError> {
     Ok(decode(&raw))
 }
 
+/// Read at most 64 KiB of secret stdout. Native status commands report a signed-out state
+/// with a nonzero exit, so only an empty unsuccessful result is unavailable.
 async fn output(
     mut command: tokio::process::Command,
     deadline: Duration,
 ) -> Result<SecretString, AgentSessionError> {
-    command
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true);
-    let mut child = command
-        .spawn()
-        .map_err(|_| AgentSessionError::Unavailable)?;
-    let mut stdout = child.stdout.take().ok_or(AgentSessionError::Failed)?;
-    let result = tokio::time::timeout(deadline, async {
-        let mut raw = String::new();
-        (&mut stdout)
-            .take(65537)
-            .read_to_string(&mut raw)
-            .await
-            .map_err(|_| AgentSessionError::Failed)?;
-        let raw = SecretString::from(raw);
-        if raw.expose_secret().len() > 65536 {
-            return Err(AgentSessionError::Failed);
-        }
-        let status = child.wait().await.map_err(|_| AgentSessionError::Failed)?;
-        if !status.success() && raw.expose_secret().trim().is_empty() {
-            return Err(AgentSessionError::Unavailable);
-        }
-        Ok(raw)
-    })
-    .await;
-    if let Ok(result) = result {
-        result
-    } else {
-        let _ = child.kill().await;
-        Err(AgentSessionError::Unavailable)
+    let Ok(result) = tokio::time::timeout(
+        deadline,
+        crate::local::metadata_process::bounded_output(&mut command, 65536),
+    )
+    .await
+    else {
+        return Err(AgentSessionError::Unavailable);
+    };
+    let (status, bytes) = result?;
+    let raw = SecretString::from(String::from_utf8(bytes).map_err(|_| AgentSessionError::Failed)?);
+    if !status.success() && raw.expose_secret().trim().is_empty() {
+        return Err(AgentSessionError::Unavailable);
     }
+    Ok(raw)
 }
 
 #[cfg(target_os = "macos")]

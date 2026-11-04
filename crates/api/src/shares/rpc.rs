@@ -97,10 +97,9 @@ pub(crate) async fn active_workspace(
                 let workspaces = directory
                     .list_workspaces()
                     .map_err(|_| ErrorCode::RegistryIo)?;
-                Ok(workspaces.into_iter().find(|workspace| {
-                    workspace.workspace_id == id
-                        && workspace.archived_at.as_ref().is_none_or(String::is_empty)
-                }))
+                Ok(workspaces
+                    .into_iter()
+                    .find(|workspace| workspace.workspace_id == id && !workspace.is_archived()))
             },
         )
         .await
@@ -124,10 +123,9 @@ pub(crate) async fn active_project(
                 let projects = directory
                     .list_projects()
                     .map_err(|_| ErrorCode::RegistryIo)?;
-                Ok(projects.into_iter().find(|project| {
-                    project.project_id == id
-                        && project.archived_at.as_ref().is_none_or(String::is_empty)
-                }))
+                Ok(projects
+                    .into_iter()
+                    .find(|project| project.project_id == id && !project.is_archived()))
             },
         )
         .await

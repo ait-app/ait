@@ -12,6 +12,7 @@ use tokio::sync::{Mutex, mpsc};
 use tokio::task::JoinHandle;
 
 use crate::local::diagnostics::{self, Diagnostics};
+use crate::local::process_group::{self, Signal};
 use crate::ports::agent_session::AgentSessionError;
 use crate::ports::diagnostics::{Category, Diagnostic};
 use tokio_util::task::AbortOnDropHandle;
@@ -41,29 +42,6 @@ pub(super) struct Transport {
 
 impl Transport {
     pub(super) fn spawn(
-        program: &Path,
-        cwd: &str,
-        deadline: Duration,
-    ) -> Result<Self, AgentSessionError> {
-        Self::spawn_with_goals(program, cwd, deadline, false)
-    }
-
-    pub(super) fn spawn_with_goals(
-        program: &Path,
-        cwd: &str,
-        deadline: Duration,
-        goals: bool,
-    ) -> Result<Self, AgentSessionError> {
-        Self::spawn_with_environment(
-            program,
-            cwd,
-            deadline,
-            goals,
-            &crate::ports::environment::AgentEnvironment::default(),
-        )
-    }
-
-    pub(super) fn spawn_with_environment(
         program: &Path,
         cwd: &str,
         deadline: Duration,
@@ -275,26 +253,17 @@ impl Transport {
             }
         })
         .await;
-        match result {
-            Ok(Ok(value)) => Ok(value),
-            Ok(Err(
-                error @ (AgentSessionError::Rejected
-                | AgentSessionError::Unavailable
-                | AgentSessionError::Busy),
-            )) => Err(error),
-            failure => {
-                let category = if failure.is_err() {
-                    Category::Timeout
-                } else {
-                    Category::Network
-                };
-                if self.diagnostics.failure().is_none() {
-                    self.diagnostics
-                        .observe(Diagnostic::new(category, "transport"), method);
-                }
+        let retained = [
+            AgentSessionError::Rejected,
+            AgentSessionError::Unavailable,
+            AgentSessionError::Busy,
+        ];
+        match self.diagnostics.settle(result, method, &retained) {
+            Err(AgentSessionError::Failed) => {
                 let _ = self.close().await;
                 Err(AgentSessionError::Failed)
             }
+            settled => settled,
         }
     }
 
@@ -449,16 +418,7 @@ impl Transport {
         self.pending_response = None;
         self.events = events::Queue::default();
         self.reader.abort();
-        #[cfg(unix)]
-        if let Some(id) = self.child.id() {
-            let mut signal = Command::new("/bin/kill");
-            signal
-                .args(["-KILL", "--", &format!("-{id}")])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .kill_on_drop(true);
-            let _ = tokio::time::timeout(Duration::from_secs(1), signal.status()).await;
-        }
+        process_group::signal(self.child.id(), Signal::Kill);
         // kill is idempotent for an already-exited child; wait always reaps it.
         let _ = self.child.start_kill();
         tokio::time::timeout(Duration::from_secs(2), self.child.wait())
@@ -515,14 +475,7 @@ async fn write_response(
 impl Drop for Transport {
     fn drop(&mut self) {
         self.reader.abort();
-        #[cfg(unix)]
-        if let Some(id) = self.child.id() {
-            let _ = std::process::Command::new("/bin/kill")
-                .args(["-KILL", "--", &format!("-{id}")])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
-        }
+        process_group::signal(self.child.id(), Signal::Kill);
         // kill_on_drop handles exceptional paths; normal ownership ends through close + wait.
     }
 }
