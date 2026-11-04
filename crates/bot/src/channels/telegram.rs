@@ -100,7 +100,22 @@ impl Receiver<'_> {
                 if let Some(incoming) =
                     incoming(self.channel, update, self.identity, self.username)?
                 {
-                    self.bots.accept(incoming).await?;
+                    match self.bots.accept(incoming).await {
+                        // A refused message is skipped so one chat cannot block the channel.
+                        Err(
+                            error @ (ErrorCode::InvalidMessage
+                            | ErrorCode::IdempotencyConflict
+                            | ErrorCode::ResourceExhausted),
+                        ) => tracing::warn!(
+                            channel = %self.channel.id,
+                            update = id,
+                            ?error,
+                            "skipping Telegram update refused by the Bot"
+                        ),
+                        result => {
+                            result?;
+                        }
+                    }
                 }
                 cursor = id.checked_add(1).ok_or(ErrorCode::BotIo)?;
                 self.bots.cursor(self.channel.id, cursor).await?;

@@ -6,9 +6,7 @@ use model::methods::MethodSpec;
 /// # Returns
 /// Static names and message directions, independent of host installation or backend availability.
 pub fn implemented_methods() -> impl Iterator<Item = MethodSpec> {
-    [crate::connection::METHODS]
-        .into_iter()
-        .flat_map(|methods| methods.iter().copied())
+    crate::connection::METHODS.iter().copied()
 }
 
 /// Return this crate's complete method set when its service is `installed`.

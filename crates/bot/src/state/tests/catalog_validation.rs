@@ -40,6 +40,51 @@ fn catalog_rejects_duplicate_owners_missing_builtin_channels_and_invalid_configu
 }
 
 #[test]
+fn capacity_counts_only_live_bots_and_channels() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    state
+        .execute("bot.create.request", creation(BotId::generate()))
+        .unwrap();
+    let template = state.catalog.clone();
+    let mut catalog = domain::bot::Catalog::default();
+    for index in 0..200 {
+        let mut bot = template.bots[0].clone();
+        bot.id = BotId::generate();
+        bot.builtin_channel_id = ChannelId::generate();
+        if index >= 128 {
+            bot.archived_at = Some("2026-01-01T00:00:00Z".into());
+        }
+        let mut channel = template.channels[0].clone();
+        channel.id = bot.builtin_channel_id;
+        channel.bot_id = bot.id;
+        catalog.bots.push(bot);
+        catalog.channels.push(channel);
+    }
+    let owner = catalog.bots[0].id;
+    for _ in 0..300 {
+        catalog.channels.push(domain::bot::Channel {
+            id: ChannelId::generate(),
+            bot_id: owner,
+            enabled: false,
+            cursor: None,
+            deleted: true,
+            config: ChannelConfig::Telegram {
+                token_ref: "env:AIT_SERVER_CREDENTIAL_TEST".into(),
+                allowed_senders: vec!["1".into()],
+                allow_groups: false,
+            },
+        });
+    }
+    assert_eq!(crate::state::catalog::validate(&catalog), Ok(()));
+    catalog.bots[128].archived_at = None;
+    assert_eq!(
+        crate::state::catalog::validate(&catalog),
+        Err(ErrorCode::ResourceExhausted)
+    );
+}
+
+#[test]
 fn bot_configuration_updates_apply_to_new_sessions_and_archived_bots_reject_edits() {
     let fixture = Fixture::new();
     let mut state = fixture.state();

@@ -12,7 +12,7 @@ Bot 是 Workspace 内长期存在的对话实体，使用独占 Channel 和隐�
 
 - 同一 Conversation 串行执行，不同发送者/线程的外部对话分开维护上下文。
 - Provider 会话从创建起隐藏，普通 Agent API 无法接管；关闭界面不停止 Bot。
-- 配置在新 Conversation 或显式 reset 后生效。reset 前先完成或取消正在执行的轮次；旧历史保留。
+- 配置在新 Conversation 或显式 reset 后生效。reset 前先完成或取消正在执行的轮次；排队中的输入随 reset 取消；旧历史保留。
 - 暂停取消排队和执行中的输入，保留可恢复会话；归档才退役会话。Workspace 归档先停用 Bot。
 - 所有 Provider 权限请求自动拒绝，不等待用户审批；Bot 内禁用原生自动审核，见
   [ADR-145](../decisions/bot/adr-145-bot-permission-denial.md)。

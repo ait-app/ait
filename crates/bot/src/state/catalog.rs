@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use domain::ChannelId;
 use domain::bot::{Bot, Catalog, Channel, ChannelConfig, ExecutionConfig};
@@ -8,44 +8,64 @@ use serde_json::{Value, json};
 use super::State;
 use crate::protocol::{BotRequest, ChannelCreate, ChannelRequest, ChannelUpdate, Create, Update};
 
-pub(super) fn validate(catalog: &Catalog) -> Result<(), ErrorCode> {
-    let mut bots = BTreeSet::new();
-    let mut channels = BTreeSet::new();
-    let mut accounts = BTreeSet::new();
-    if catalog.bots.len() > 128 || catalog.channels.len() > 256 {
+/// Most Bots that are not archived.
+const LIVE_BOTS: usize = 128;
+/// Most undeleted Channels owned by Bots that are not archived.
+const LIVE_CHANNELS: usize = 256;
+/// Hard cap on stored Bots; archived Bots keep their history, so it exceeds the live limit.
+const STORED_BOTS: usize = 4096;
+/// Hard cap on stored Channels; deleted Channels keep their history, so it exceeds the live limit.
+const STORED_CHANNELS: usize = 8192;
+
+fn validate_capacity(catalog: &Catalog) -> Result<(), ErrorCode> {
+    if catalog.bots.len() > STORED_BOTS || catalog.channels.len() > STORED_CHANNELS {
         return Err(ErrorCode::ResourceExhausted);
     }
+    let archived: BTreeSet<_> = catalog
+        .bots
+        .iter()
+        .filter(|bot| bot.archived_at.is_some())
+        .map(|bot| bot.id)
+        .collect();
+    let live_channels = catalog
+        .channels
+        .iter()
+        .filter(|channel| !channel.deleted && !archived.contains(&channel.bot_id))
+        .count();
+    let live_bots = catalog
+        .bots
+        .iter()
+        .filter(|bot| bot.archived_at.is_none())
+        .count();
+    if live_bots > LIVE_BOTS || live_channels > LIVE_CHANNELS {
+        return Err(ErrorCode::ResourceExhausted);
+    }
+    Ok(())
+}
+
+pub(super) fn validate(catalog: &Catalog) -> Result<(), ErrorCode> {
+    validate_capacity(catalog)?;
+    let mut bots = BTreeMap::new();
     for bot in &catalog.bots {
         validate_bot(&bot.name, &bot.instructions, &bot.execution)?;
-        if !model::valid_id(&bot.workspace_id) || !bots.insert(bot.id) {
-            return Err(ErrorCode::InvalidMessage);
-        }
-        if catalog
-            .channels
-            .iter()
-            .filter(|channel| {
-                channel.bot_id == bot.id && matches!(channel.config, ChannelConfig::Builtin)
-            })
-            .count()
-            != 1
-        {
+        if !model::valid_id(&bot.workspace_id) || bots.insert(bot.id, bot).is_some() {
             return Err(ErrorCode::InvalidMessage);
         }
     }
+    let mut channels = BTreeSet::new();
+    let mut accounts = BTreeSet::new();
+    let mut builtin = 0;
     for channel in &catalog.channels {
-        let bot = catalog
-            .bots
-            .iter()
-            .find(|bot| bot.id == channel.bot_id)
-            .ok_or(ErrorCode::InvalidMessage)?;
+        let bot = bots.get(&channel.bot_id).ok_or(ErrorCode::InvalidMessage)?;
         validate_channel(&channel.config)?;
         if !channels.insert(channel.id) {
             return Err(ErrorCode::InvalidMessage);
         }
-        if matches!(channel.config, ChannelConfig::Builtin)
-            && (channel.id != bot.builtin_channel_id || channel.deleted)
-        {
-            return Err(ErrorCode::InvalidMessage);
+        if matches!(channel.config, ChannelConfig::Builtin) {
+            if channel.id != bot.builtin_channel_id || channel.deleted {
+                return Err(ErrorCode::InvalidMessage);
+            }
+            builtin += 1;
         }
         if !channel.deleted
             && let Some(account) = account(&channel.config)
@@ -53,6 +73,10 @@ pub(super) fn validate(catalog: &Catalog) -> Result<(), ErrorCode> {
         {
             return Err(ErrorCode::BotConflict);
         }
+    }
+    // Builtin channel IDs are unique and equal their Bot's, so equal counts mean one per Bot.
+    if builtin != bots.len() {
+        return Err(ErrorCode::InvalidMessage);
     }
     Ok(())
 }

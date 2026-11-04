@@ -167,12 +167,17 @@ impl State {
         if self.running.contains_key(&conversation.id) {
             return Err(ErrorCode::BotConflict);
         }
-        if self.receipts.values().any(|receipt| {
-            receipt.conversation == conversation.id && receipt.status == TurnStatus::Queued
-        }) {
-            return Err(ErrorCode::BotConflict);
-        }
         let owner = self.owner(&conversation)?;
+        // Queued input of the old generation can never run after reset (and never runs while the
+        // generation is uncertain), so it is cancelled rather than blocking the reset.
+        let queued: Vec<_> = self
+            .pending
+            .range((conversation.id, 0)..=(conversation.id, u64::MAX))
+            .map(|(_, id)| *id)
+            .collect();
+        for id in queued {
+            self.progress(id, TurnStatus::Cancelled, None, None)?;
+        }
         self.session_actions.push((
             owner,
             provider::service::bot_execution::Action::Close {

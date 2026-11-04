@@ -39,6 +39,40 @@ fn queue_budget_and_reset_conflicts_leave_the_active_turn_untouched() {
 }
 
 #[test]
+fn reset_of_an_uncertain_conversation_cancels_its_blocked_queue() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    let bot = BotId::generate();
+    state.execute("bot.create.request", creation(bot)).unwrap();
+    let interrupted = admit(&mut state, bot, "interrupted");
+    assert_eq!(state.ready().unwrap().len(), 1);
+    let queued = admit(&mut state, bot, "queued");
+    let mut restarted = fixture.state();
+    assert_eq!(
+        restarted.turn(interrupted.id).unwrap().status,
+        TurnStatus::Uncertain
+    );
+    assert!(restarted.ready().unwrap().is_empty());
+
+    restarted
+        .execute(
+            "bot.conversation.reset.request",
+            json!({"botId":bot,"conversationId":queued.conversation_id}),
+        )
+        .unwrap();
+
+    assert_eq!(
+        restarted.turn(queued.id).unwrap().status,
+        TurnStatus::Cancelled
+    );
+    let next = admit(&mut restarted, bot, "after-reset");
+    let ready = restarted.ready().unwrap();
+    assert_eq!(ready.len(), 1);
+    assert_eq!(ready[0].turn.id, next.id);
+    assert_eq!(ready[0].turn.generation, 1);
+}
+
+#[test]
 fn pause_preserves_session_identity_and_archive_retires_it() {
     let fixture = Fixture::new();
     let mut state = fixture.state();

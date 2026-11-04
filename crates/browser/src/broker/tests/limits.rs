@@ -102,6 +102,52 @@ async fn list_fanout_refuses_aggregate_over_tab_limit_without_learning_affinity(
 }
 
 #[tokio::test]
+async fn listing_prunes_vanished_tabs_so_full_affinity_can_learn_new_ones() {
+    let broker = Broker::default();
+    let (first, mut first_rx) = host(&broker, protocol::COMMANDS);
+    let (second, mut second_rx) = host(&broker, protocol::COMMANDS);
+    {
+        let mut state = broker.0.lock().unwrap();
+        for index in 0..4095 {
+            state
+                .affinity
+                .insert(format!("1700000000000-{index:x}"), first.id().to_owned());
+        }
+        state
+            .affinity
+            .insert("1800000000000-1".into(), second.id().to_owned());
+    }
+    let run = spawn(&broker, json!({"command":"list_tabs"}));
+    let first_call = request(&mut first_rx).await;
+    let second_call = request(&mut second_rx).await;
+    answer(
+        &broker,
+        &first,
+        &first_call,
+        &json!({"command":"list_tabs",
+        "tabs":[{"browserId":TAB,"title":"","url":"about:blank"}]}),
+    );
+    answer(
+        &broker,
+        &second,
+        &second_call,
+        &json!({"command":"list_tabs",
+        "tabs":[{"browserId":"1800000000000-1","title":"","url":"about:blank"}]}),
+    );
+    assert_eq!(run.await.unwrap()["ok"], true);
+    let state = broker.0.lock().unwrap();
+    assert_eq!(state.affinity.len(), 2);
+    assert_eq!(
+        state.affinity.get(TAB).map(String::as_str),
+        Some(first.id())
+    );
+    assert_eq!(
+        state.affinity.get("1800000000000-1").map(String::as_str),
+        Some(second.id())
+    );
+}
+
+#[tokio::test]
 async fn cancelling_fanout_clears_every_child_and_ignores_late_callbacks() {
     let broker = Broker::default();
     let (first, mut first_rx) = host(&broker, protocol::COMMANDS);

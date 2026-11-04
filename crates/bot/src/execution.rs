@@ -111,10 +111,8 @@ async fn perform(
                     .progress(run.turn.id, TurnStatus::Completed, Some(reply), None)
                     .await;
             }
-            Some("running") => {
-                bots.progress(run.turn.id, TurnStatus::Running, None, None)
-                    .await?;
-            }
+            // The turn was marked running before polling began.
+            Some("running") => {}
             Some("error") => {
                 return bots
                     .progress(
