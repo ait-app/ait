@@ -16,7 +16,8 @@ use model::workspace::label_store::WorkspaceLabelStore;
 
 use crate::support::random::random_hyphenated_id;
 
-const JOURNAL_LIMIT: usize = 256;
+/// Changes retained for cursor catch-up and buffered for a subscription awaiting activation.
+pub(crate) const JOURNAL_LIMIT: usize = 256;
 
 /// Incremental synchronization cursor.
 #[derive(Debug, Clone, PartialEq, Eq)]

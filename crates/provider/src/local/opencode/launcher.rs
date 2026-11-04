@@ -11,17 +11,47 @@ use crate::ports::agent_session::AgentSessionError;
 
 const MAX_QUERY_BYTES: u64 = 8 * 1024 * 1024;
 
-/// Read and validate the installed CLI version once per configured client.
-/// Unsupported releases return unavailable; failures are retried on the next call.
+/// Read and validate the CLI version a launch in `cwd` resolves, reusing an earlier probe there.
+/// Version managers can resolve a different release per directory, so the cache is per cwd.
+/// Unsupported releases return unavailable and are not cached; the next call probes again.
 pub(super) async fn version(
     client: &OpenCodeClient,
     cwd: &str,
 ) -> Result<String, AgentSessionError> {
+    let cached = client
+        .versions
+        .lock()
+        .map_err(|_| AgentSessionError::Failed)?
+        .get(cwd)
+        .cloned();
+    if let Some(version) = cached {
+        return Ok(version);
+    }
+    let version = probe_version(client, cwd).await?;
     client
-        .version
-        .get_or_try_init(|| probe_version(client, cwd))
-        .await
-        .cloned()
+        .versions
+        .lock()
+        .map_err(|_| AgentSessionError::Failed)?
+        .insert(cwd.to_owned(), version.clone());
+    Ok(version)
+}
+
+/// Probe the installed CLI version in `cwd` without the cache, for availability and diagnostics.
+/// Every cached directory is forgotten so later launches observe an upgraded or removed release.
+pub(super) async fn refresh_version(
+    client: &OpenCodeClient,
+    cwd: &str,
+) -> Result<String, AgentSessionError> {
+    let probed = probe_version(client, cwd).await;
+    let mut versions = client
+        .versions
+        .lock()
+        .map_err(|_| AgentSessionError::Failed)?;
+    versions.clear();
+    if let Ok(version) = &probed {
+        versions.insert(cwd.to_owned(), version.clone());
+    }
+    probed
 }
 
 async fn probe_version(client: &OpenCodeClient, cwd: &str) -> Result<String, AgentSessionError> {

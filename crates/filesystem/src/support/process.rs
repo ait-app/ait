@@ -16,6 +16,12 @@ const POLL_INTERVAL: Duration = Duration::from_millis(10);
 /// Time a terminated process group gets to run signal handlers, such as Git removing its
 /// `index.lock`, before it is killed.
 const TERMINATE_GRACE: Duration = Duration::from_millis(250);
+/// Git subcommands that may open an SSH connection to a remote.
+const NETWORK_SUBCOMMANDS: [&str; 5] = ["clone", "fetch", "ls-remote", "pull", "push"];
+/// Fails on any passphrase, password or unknown host key instead of asking for it.
+const BATCH_SSH_COMMAND: &str = "ssh -oBatchMode=yes";
+/// Budget for reading local Git configuration before a network command.
+const CONFIG_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Lifetime and captured-output bounds of one child process.
 #[derive(Debug, Clone, Copy)]
@@ -68,6 +74,38 @@ pub(crate) fn git_command(cwd: &Path) -> Command {
         }
     }
     command
+}
+
+/// Make a [`git_command`] for `arguments` in `cwd` fail instead of prompting.
+///
+/// Children have no terminal and run in their own process group, so an SSH passphrase or
+/// host-key prompt would stop the child until its timeout and an askpass helper could open a
+/// dialog. Terminal, credential-manager and askpass prompts are disabled; for subcommands that
+/// may reach a remote, ssh runs in batch mode unless the repository configures its own
+/// `core.sshCommand`, which is honored. The server's own `GIT_SSH_COMMAND` is never inherited.
+pub(crate) fn disable_git_prompts(command: &mut Command, cwd: &Path, arguments: &[&str]) {
+    command
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GCM_INTERACTIVE", "never")
+        .env("SSH_ASKPASS_REQUIRE", "never");
+    let network = arguments
+        .first()
+        .is_some_and(|subcommand| NETWORK_SUBCOMMANDS.contains(subcommand));
+    if network && !configured_ssh_command(cwd) {
+        command.env("GIT_SSH_COMMAND", BATCH_SSH_COMMAND);
+    }
+}
+
+/// Whether the effective Git configuration in `cwd` sets `core.sshCommand`.
+fn configured_ssh_command(cwd: &Path) -> bool {
+    let bounds = Bounds {
+        timeout: CONFIG_TIMEOUT,
+        stdout_limit: 64 * 1024,
+        stderr_limit: 64 * 1024,
+    };
+    let mut command = git_command(cwd);
+    command.args(["config", "--get", "core.sshCommand"]);
+    run_bounded(&mut command, bounds, None).is_ok_and(|output| output.status.success())
 }
 
 /// Run `command` with null stdin in its own process group within `bounds`.

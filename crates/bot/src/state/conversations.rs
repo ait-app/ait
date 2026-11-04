@@ -8,6 +8,9 @@ use super::{State, project_conversation};
 use crate::channels::Incoming;
 use crate::protocol::{BotRequest, ConversationRequest, History, MemoryUpdate, Send};
 
+/// Queued and running turns admitted across all Bots before channel input must wait.
+const MAX_BACKLOG: usize = 512;
+
 impl State {
     pub(super) fn open(&mut self, request: BotRequest) -> Result<Value, ErrorCode> {
         let bot = self.bot(request.bot_id)?;
@@ -84,6 +87,21 @@ impl State {
             reply_to: None,
         })
     }
+    /// Whether queued and running turns across all Bots reached the global admission limit.
+    pub(crate) fn backlog_full(&self) -> bool {
+        self.pending.len() + self.running.len() >= MAX_BACKLOG
+    }
+    /// Admit channel input like [`State::accept`], except that a full global backlog returns
+    /// `{"accepted":false}` so the channel retries later instead of dropping the message.
+    /// A conversation's own backlog still refuses with `ResourceExhausted`.
+    pub(crate) fn accept_channel(&mut self, incoming: Incoming) -> Result<Value, ErrorCode> {
+        match self.accept(incoming) {
+            Err(ErrorCode::ResourceExhausted) if self.backlog_full() => {
+                Ok(json!({"accepted":false}))
+            }
+            result => result,
+        }
+    }
     pub(crate) fn accept(&mut self, incoming: Incoming) -> Result<Value, ErrorCode> {
         self.ensure_writable()?;
         if !model::valid_id(&incoming.message_id)
@@ -123,7 +141,7 @@ impl State {
             return Ok(json!({"turn":turn,"accepted":true,"duplicate":true}));
         }
         let conversation = self.route(&incoming)?;
-        if self.pending.len() + self.running.len() >= 512
+        if self.backlog_full()
             || self
                 .pending
                 .range((conversation.id, 0)..=(conversation.id, u64::MAX))

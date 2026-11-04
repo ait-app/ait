@@ -111,11 +111,14 @@ pub(super) fn resolve(pending: &Pending, response: &Value) -> Result<Value, Agen
             question_input(&pending.input, &response["updatedInput"])?
         } else if let Some(updated) = response
             .get("updatedInput")
-            .filter(|updated| **updated != pending.request["input"])
+            .filter(|updated| **updated != pending.request["input"] && **updated != pending.input)
         {
             // Host-authored replacements stay bounded. The native original, or the displayed
             // preview echoed unchanged, approves the complete input exactly as received.
-            if !updated.is_object()
+            // An edit of a truncated preview would hand Claude the truncation marker instead
+            // of the elided content, so only complete previews may be edited.
+            if pending.request["input"] != pending.input
+                || !updated.is_object()
                 || serde_json::to_vec(updated)
                     .map_err(|_| AgentSessionError::Rejected)?
                     .len()

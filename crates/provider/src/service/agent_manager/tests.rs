@@ -1093,3 +1093,27 @@ async fn invalid_native_handle_fails_the_turn_and_never_blocks_close() {
         AgentRuntimeStatus::Closed
     );
 }
+
+#[tokio::test]
+async fn transient_registry_failure_keeps_a_changed_handle_and_close_retryable() {
+    let (mut manager, registry, client) = make_manager();
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    client.0.lock().unwrap().handle_session_id = "native-2".to_owned();
+    registry.0.lock().unwrap().fail_update = true;
+
+    assert_eq!(
+        manager.close("agent-1").await,
+        Err(AgentManagerError::Registry)
+    );
+    assert!(manager.live_snapshot("agent-1").is_some());
+    assert_eq!(client.0.lock().unwrap().close_calls, 0);
+
+    registry.0.lock().unwrap().fail_update = false;
+    manager.close("agent-1").await.unwrap();
+    assert_eq!(client.0.lock().unwrap().close_calls, 1);
+    let record = registry.get("agent-1").unwrap().unwrap();
+    assert_eq!(record.persistence.unwrap().session_id, "native-2");
+}

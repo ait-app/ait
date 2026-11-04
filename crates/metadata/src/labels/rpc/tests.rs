@@ -156,6 +156,7 @@ fn live_update_uses_the_connection_subscription_and_sequence() {
     let outbound: super::EventSink = Arc::new(|_| Ok(()));
     let mut delivery = Delivery {
         ready: false,
+        overflowed: false,
         pending: Vec::new(),
         outbound,
         subscription_id: "subscription-one".to_owned(),
@@ -273,4 +274,36 @@ fn activation_reports_sink_failure_and_releases_the_listener() {
         .update("Blocked", Some("Silent"), None, "after-failure")
         .unwrap();
     assert_eq!(*attempts.lock().unwrap(), 1);
+}
+
+#[test]
+fn changes_beyond_the_journal_before_activation_fail_it_for_a_cursor_resync() {
+    let labels = labels();
+    let attempts = Arc::new(Mutex::new(0));
+    let delivered = attempts.clone();
+    let sink: super::EventSink = Arc::new(move |_| {
+        *delivered.lock().unwrap() += 1;
+        Ok(())
+    });
+    let dispatch = super::execute(
+        &labels,
+        "workspace.label.list.request",
+        json!({"subscribe":{}}),
+        sink,
+    )
+    .unwrap();
+    for index in 0..=crate::labels::service::JOURNAL_LIMIT {
+        let color = if index % 2 == 0 {
+            WorkspaceLabelColor::Blue
+        } else {
+            WorkspaceLabelColor::Red
+        };
+        labels.update("Urgent", None, Some(color), "now").unwrap();
+    }
+
+    assert!(matches!(
+        dispatch.subscription.unwrap().activate(),
+        Err(super::DeliveryError::Closed)
+    ));
+    assert_eq!(*attempts.lock().unwrap(), 0);
 }

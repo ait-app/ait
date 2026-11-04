@@ -69,11 +69,10 @@ impl GitFetchRuntime for LocalGitFetch {
 }
 
 fn fetch_command(cwd: &str) -> Command {
+    const ARGUMENTS: [&str; 4] = ["fetch", "origin", "--prune", "--quiet"];
     let mut command = process::git_command(Path::new(cwd));
-    command
-        .args(["fetch", "origin", "--prune", "--quiet"])
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GCM_INTERACTIVE", "never");
+    command.args(ARGUMENTS);
+    process::disable_git_prompts(&mut command, Path::new(cwd), &ARGUMENTS);
     command
 }
 

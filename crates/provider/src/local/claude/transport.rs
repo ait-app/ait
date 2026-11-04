@@ -6,7 +6,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore, mpsc};
 use tokio::task::JoinHandle;
 use tokio_util::task::AbortOnDropHandle;
 
@@ -21,7 +21,20 @@ use crate::ports::diagnostics::{Category, Diagnostic};
 /// prompt plus Claude's record envelope.
 pub(super) const MAX_FRAME: usize = crate::protocol::prompt::MAX_PROMPT_BYTES + 2 * 1024 * 1024;
 const MAX_EVENTS: usize = 128;
+/// Bytes of decoded stdout frames buffered between the reader and the session, across the
+/// channel and the event backlog. One maximal frame always fits; the reader waits for budget
+/// like it waits for channel capacity, so the count limit alone cannot buffer gigabytes.
+const MAX_QUEUED_BYTES: usize = 2 * MAX_FRAME;
+// A frame larger than the whole budget could never be admitted and would stall the reader.
+const _: () = assert!(MAX_FRAME <= MAX_QUEUED_BYTES);
 const MAX_REPLIES: usize = 32;
+
+/// One decoded stdout frame holding its share of [`MAX_QUEUED_BYTES`] until it is consumed.
+#[derive(Debug)]
+struct Record {
+    value: Value,
+    _budget: OwnedSemaphorePermit,
+}
 
 #[derive(Debug)]
 pub(super) struct Transport {
@@ -29,9 +42,9 @@ pub(super) struct Transport {
     pub(super) diagnostics: Diagnostics,
     _stderr: AbortOnDropHandle<()>,
     input: Arc<Mutex<ChildStdin>>,
-    messages: mpsc::Receiver<Value>,
+    messages: mpsc::Receiver<Record>,
     reader: JoinHandle<()>,
-    events: VecDeque<Value>,
+    events: VecDeque<Record>,
     /// Request ids answered through `send`; `--replay-user-messages` echoes those replies.
     replies: VecDeque<Value>,
     sequence: u64,
@@ -101,6 +114,7 @@ impl Transport {
         let stderr_task = AbortOnDropHandle::new(tokio::spawn(diagnostics.clone().drain(stderr)));
         let reader_diagnostics = diagnostics.clone();
         let (sender, messages) = mpsc::channel(MAX_EVENTS);
+        let budget = Arc::new(Semaphore::new(MAX_QUEUED_BYTES));
         let reader_input = input.clone();
         let deadline = client.deadline;
         let reader = tokio::spawn(async move {
@@ -136,7 +150,17 @@ impl Transport {
                     let _ = tokio::time::timeout(deadline, write(&reader_input, &reply)).await;
                     break;
                 }
-                if sender.send(message).await.is_err() {
+                let Ok(size) = u32::try_from(bytes.len()) else {
+                    break;
+                };
+                let Ok(permit) = budget.clone().acquire_many_owned(size).await else {
+                    break;
+                };
+                let record = Record {
+                    value: message,
+                    _budget: permit,
+                };
+                if sender.send(record).await.is_err() {
                     break;
                 }
             }
@@ -175,12 +199,13 @@ impl Transport {
             )
             .await?;
             loop {
-                let message = self
+                let record = self
                     .messages
                     .recv()
                     .await
                     .ok_or(AgentSessionError::Failed)?;
-                if self.is_replayed_reply(&message) {
+                let message = &record.value;
+                if self.is_replayed_reply(message) {
                     continue;
                 }
                 if message["type"] == "control_response" {
@@ -207,7 +232,7 @@ impl Transport {
                 if self.events.len() >= MAX_EVENTS {
                     return Err(AgentSessionError::Failed);
                 }
-                self.events.push_back(message);
+                self.events.push_back(record);
             }
         })
         .await;
@@ -245,16 +270,16 @@ impl Transport {
 
     pub(super) fn poll(&mut self) -> Result<Option<Value>, AgentSessionError> {
         loop {
-            let message = match self.events.pop_front() {
-                Some(message) => message,
+            let record = match self.events.pop_front() {
+                Some(record) => record,
                 None => match self.messages.try_recv() {
-                    Ok(message) => message,
+                    Ok(record) => record,
                     Err(mpsc::error::TryRecvError::Empty) if !self.closed => return Ok(None),
                     Err(_) => return Err(AgentSessionError::Failed),
                 },
             };
-            if !self.is_replayed_reply(&message) {
-                return Ok(Some(message));
+            if !self.is_replayed_reply(&record.value) {
+                return Ok(Some(record.value));
             }
         }
     }

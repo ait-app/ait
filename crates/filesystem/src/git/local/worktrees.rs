@@ -806,15 +806,14 @@ fn git(
     timeout: Duration,
     accepted: &[i32],
 ) -> Result<GitOutput, WorktreeError> {
-    // Network commands rely on the user's own SSH configuration (including core.sshCommand)
-    // and fail instead of prompting: stdin is null and terminal/credential prompts are off.
+    // Network commands honor a repository core.sshCommand and otherwise fail instead of
+    // prompting: stdin is null and terminal, credential, askpass and ssh prompts are off.
     let mut command = process::git_command(cwd);
     command
         .arg("--no-optional-locks")
         .args(["-c", "core.fsmonitor=false"])
-        .args(arguments)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GCM_INTERACTIVE", "never");
+        .args(arguments);
+    process::disable_git_prompts(&mut command, cwd, arguments);
     let bounds = Bounds {
         timeout,
         stdout_limit: OUTPUT_LIMIT,

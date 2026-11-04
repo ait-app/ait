@@ -478,6 +478,7 @@ impl CheckoutRuntime for LocalCheckout {
             &operation_cwd,
             &["symbolic-ref", "--quiet", "--short", "HEAD"],
         )?;
+        let mut cleanup = merge_cleanup(&operation_cwd);
         let outcome = (|| {
             git_write(&operation_cwd, &["checkout", &base])?;
             match strategy {
@@ -485,13 +486,17 @@ impl CheckoutRuntime for LocalCheckout {
                     git_write(&operation_cwd, &["merge", &current]).map(|_| ())
                 }
                 CheckoutMergeStrategy::Squash => {
+                    if cleanup == MergeCleanup::Abort {
+                        // Only a squash this call started may be undone with `reset --merge`.
+                        cleanup = MergeCleanup::SquashReset;
+                    }
                     git_write(&operation_cwd, &["merge", "--squash", &current])?;
                     let message = format!("Squash merge {current} into {base}");
                     git_write(&operation_cwd, &["commit", "-m", &message]).map(|_| ())
                 }
             }
         })();
-        let outcome = abort_merge_on_conflict(&operation_cwd, outcome);
+        let outcome = abort_merge_on_conflict(&operation_cwd, outcome, cleanup);
         if same_checkout
             && original.as_deref().is_some_and(|name| name != base)
             && let Some(original) = original
@@ -517,8 +522,9 @@ impl CheckoutRuntime for LocalCheckout {
         if base == current {
             return Ok(());
         }
+        let cleanup = merge_cleanup(&cwd);
         let outcome = git_write(&cwd, &["merge", &base]).map(|_| ());
-        abort_merge_on_conflict(&cwd, outcome)
+        abort_merge_on_conflict(&cwd, outcome, cleanup)
     }
 
     fn reset_workspace(&self, cwd: &str, initial_branch: &str) -> Result<(), CheckoutRuntimeError> {
@@ -854,9 +860,7 @@ fn run_git_with_interaction(
         .args(["-c", "diff.mnemonicPrefix=false"])
         .args(arguments);
     if options.noninteractive {
-        command
-            .env("GIT_TERMINAL_PROMPT", "0")
-            .env("GCM_INTERACTIVE", "never");
+        process::disable_git_prompts(&mut command, cwd, arguments);
     }
     let bounds = Bounds {
         timeout: options.timeout,
@@ -1360,29 +1364,55 @@ fn comparison_base(cwd: &Path, base: &str) -> Result<String, CheckoutRuntimeErro
     }
 }
 
+/// How a failed merge may clean up the checkout it ran in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MergeCleanup {
+    /// Unmerged paths predate the merge; another operation owns them and they are kept.
+    Preserve,
+    /// A regular merge records `MERGE_HEAD`; `merge --abort` restores the pre-merge state.
+    Abort,
+    /// `merge --squash` records no `MERGE_HEAD`; `reset --merge` drops only its conflicts.
+    SquashReset,
+}
+
+/// Choose cleanup before a merge starts: an in-progress rebase, cherry-pick or stash pop with
+/// unmerged paths makes git refuse the merge, and its staged resolutions must survive.
+fn merge_cleanup(cwd: &Path) -> MergeCleanup {
+    if has_unmerged_paths(cwd) {
+        MergeCleanup::Preserve
+    } else {
+        MergeCleanup::Abort
+    }
+}
+
+fn has_unmerged_paths(cwd: &Path) -> bool {
+    git_optional(cwd, &["diff", "--name-only", "--diff-filter=U"])
+        .ok()
+        .flatten()
+        .is_some_and(|paths| !paths.is_empty())
+}
+
 fn abort_merge_on_conflict(
     cwd: &Path,
     result: Result<(), CheckoutRuntimeError>,
+    cleanup: MergeCleanup,
 ) -> Result<(), CheckoutRuntimeError> {
     let Err(mut error) = result else {
         return Ok(());
     };
-    let conflicts = git_optional(cwd, &["diff", "--name-only", "--diff-filter=U"])
-        .ok()
-        .flatten()
-        .is_some_and(|paths| !paths.is_empty());
-    if error.kind == CheckoutFailureKind::MergeConflict || conflicts {
-        // `merge --squash` records no MERGE_HEAD, so `merge --abort` would refuse to run.
-        let merging = git_optional(cwd, &["rev-parse", "-q", "--verify", "MERGE_HEAD"])
-            .ok()
-            .flatten()
-            .is_some();
-        let _ = if merging {
-            git_write(cwd, &["merge", "--abort"])
-        } else {
-            git_write(cwd, &["reset", "--merge"])
-        };
-        error.kind = CheckoutFailureKind::MergeConflict;
+    if error.kind != CheckoutFailureKind::MergeConflict && !has_unmerged_paths(cwd) {
+        return Err(error);
+    }
+    error.kind = CheckoutFailureKind::MergeConflict;
+    match cleanup {
+        MergeCleanup::Preserve => {}
+        // Without MERGE_HEAD this fails harmlessly and leaves the checkout untouched.
+        MergeCleanup::Abort => {
+            let _ = git_write(cwd, &["merge", "--abort"]);
+        }
+        MergeCleanup::SquashReset => {
+            let _ = git_write(cwd, &["reset", "--merge"]);
+        }
     }
     Err(error)
 }

@@ -679,8 +679,9 @@ impl AgentManager {
     /// Close one live session while retaining its provider history and durable Agent record.
     ///
     /// A native close failure retains manager ownership so a later attempt can retry. Missing
-    /// live sessions are idempotent. A native handle that cannot be recorded is logged and does
-    /// not prevent the native session from closing.
+    /// live sessions are idempotent. An invalid native handle, or one whose record vanished, is
+    /// logged and does not prevent the native session from closing; a registry failure keeps
+    /// the session live so the changed handle is not lost and close can be retried.
     ///
     /// # Errors
     /// Returns provider or registry failure.
@@ -689,11 +690,15 @@ impl AgentManager {
             return Ok(());
         };
         // An unrecordable handle must not keep the native process open forever.
-        if agent.registered
-            && let Err(error) = streaming::persist_handle(self.registry.as_ref(), agent_id, agent)
-        {
-            tracing::warn!(provider = %agent.record.provider, agent_id = %agent_id,
-                error_kind = %error, "Native provider handle could not be recorded before close");
+        if agent.registered {
+            match streaming::persist_handle(self.registry.as_ref(), agent_id, agent) {
+                Err(error @ (AgentManagerError::Session | AgentManagerError::NotFound(_))) => {
+                    tracing::warn!(provider = %agent.record.provider, agent_id = %agent_id,
+                        error_kind = %error,
+                        "Native provider handle could not be recorded before close");
+                }
+                result => result?,
+            }
         }
         agent.session.close().await.map_err(map_session)?;
         if agent.registered {
