@@ -242,7 +242,7 @@ pub(super) async fn workspace_state(
     pending: &mut Option<Context<'_>>,
     state: &State,
 ) -> Result<(), DispatchError> {
-    let Some(mut context) = pending.take_if(|context| {
+    let Some(context) = pending.take_if(|context| {
         matches!(
             context.request.method.as_str(),
             "workspace.clear_attention.request" | "workspace.mark_unread.request"
@@ -250,18 +250,14 @@ pub(super) async fn workspace_state(
     }) else {
         return Err(DispatchError::NotImplemented);
     };
-    let result = context
-        .call(
+    context
+        .rpc(
             state.workspace_state.clone(),
             ErrorCode::RegistryIo,
             crate::directory::rpc::workspace_state::execute,
         )
-        .await;
-    match result {
-        Ok(reply) => context.workspace(reply.value, reply.event),
-        Err(error) => context.respond(Err(error)),
-    }
-    .map_err(Into::into)
+        .await
+        .map_err(Into::into)
 }
 
 /// Try the managed worktree request branch and consume `pending` only on a match.

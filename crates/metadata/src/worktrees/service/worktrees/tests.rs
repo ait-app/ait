@@ -129,7 +129,7 @@ impl ProjectRegistry for Projects {
         let mut records = self.0.lock().expect("projects");
         if let Some(project) = records
             .iter()
-            .find(|project| project.root_path == input.root_path && is_active_project(project))
+            .find(|project| project.root_path == input.root_path && !project.is_archived())
         {
             return Ok(project.clone());
         }
@@ -674,7 +674,7 @@ fn worktree_scope_archives_all_descendant_workspaces_and_removes_directory() {
         .list()
         .expect("list")
         .into_iter()
-        .filter(is_active)
+        .filter(|workspace| !workspace.is_archived())
         .map(|workspace| workspace.workspace_id)
         .collect::<Vec<_>>();
     assert_eq!(active, ["other"]);

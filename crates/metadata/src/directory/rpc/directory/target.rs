@@ -1,6 +1,7 @@
 //! Exact Workspace lookups for the first screen, with cached runtime and stable activity.
 
 use domain::workspace::protocol::projection::{project_descriptor, workspace_descriptor};
+use domain::workspace::records::PersistedProjectRecord;
 use serde_json::Value;
 
 use crate::directory::protocol::directory::{
@@ -9,7 +10,7 @@ use crate::directory::protocol::directory::{
 use crate::support::rpc::encode;
 use crate::support::time::now_timestamp;
 
-use super::{Directory, ErrorCode, active_project, active_workspace, directory_error, runtime};
+use super::{Directory, ErrorCode, directory_error, runtime};
 
 /// Project the exact `request` target from `directory` without creating or restoring records.
 /// Returns safe validation, registry, activity-source or encoding errors.
@@ -29,10 +30,10 @@ pub(super) fn get(directory: &Directory, request: WorkspaceGetRequest) -> Result
     else {
         return encode(result, ErrorCode::RegistryIo);
     };
-    if !active_workspace(&workspace)
+    if workspace.is_archived()
         || project
             .as_ref()
-            .is_some_and(|project| !active_project(project))
+            .is_some_and(PersistedProjectRecord::is_archived)
     {
         result.state = WorkspaceGetState::Archived;
         return encode(result, ErrorCode::RegistryIo);

@@ -142,6 +142,9 @@ async fn deliver(
     }
 }
 
+/// Longest retry delay waited inline; one device must not stall the shared delivery queue.
+const MAX_INLINE_RETRY_DELAY: Duration = Duration::from_secs(5);
+
 async fn send_with_retry(
     transport: &dyn PushTransport,
     notification: &Notification,
@@ -150,7 +153,12 @@ async fn send_with_retry(
     for attempt in 0..3 {
         match transport.send(notification, token).await {
             Err(DeliveryError::Retryable(after)) if attempt < 2 => {
-                tokio::time::sleep(Duration::from_secs((1 << attempt).max(after))).await;
+                let delay = Duration::from_secs((1 << attempt).max(after));
+                if delay > MAX_INLINE_RETRY_DELAY {
+                    // Honor the provider's Retry-After by dropping this best-effort delivery.
+                    return Err(DeliveryError::Retryable(after));
+                }
+                tokio::time::sleep(delay).await;
             }
             result => return result,
         }

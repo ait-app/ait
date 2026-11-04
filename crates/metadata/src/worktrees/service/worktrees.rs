@@ -17,10 +17,10 @@ use model::workspace::lifecycle::WorkspaceNaming;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use model::workspace::worktrees::ManagedWorktrees;
 
+use crate::support::random::random_hex;
 use crate::worktrees::ports::WorktreeArchiveCleanup;
 
-mod provisioning;
-pub use provisioning::WorkspaceWorktrees;
+pub mod provisioning;
 
 /// Create action independent of the transport schema.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -314,11 +314,10 @@ impl Worktrees {
             slug,
             mode,
         })?;
-        let registered = self.register_created(&created, input, timestamp, untrusted_source);
-        if registered.is_ok() {
-            return registered;
-        }
-        let cause = registered.expect_err("checked error");
+        let cause = match self.register_created(&created, input, timestamp, untrusted_source) {
+            Ok(registered) => return Ok(registered),
+            Err(cause) => cause,
+        };
         let owned = OwnedWorktree {
             path: created.worktree_path,
             repo_root: Some(created.repo_root),
@@ -366,7 +365,7 @@ impl Worktrees {
                 } else {
                     let mut matches = records
                         .iter()
-                        .filter(|workspace| is_active(workspace))
+                        .filter(|workspace| !workspace.is_archived())
                         .filter(|workspace| same_path(&*self.managed, &workspace.cwd, &target))
                         .cloned()
                         .collect::<Vec<_>>();
@@ -403,7 +402,10 @@ impl Worktrees {
             .map(|workspace| workspace.workspace_id.clone())
             .collect();
         let mut archived = Vec::with_capacity(selected.len());
-        for workspace in selected.into_iter().filter(is_active) {
+        for workspace in selected
+            .into_iter()
+            .filter(|workspace| !workspace.is_archived())
+        {
             self.workspaces
                 .archive(
                     &workspace.workspace_id,
@@ -443,7 +445,8 @@ impl Worktrees {
                     .map_err(map_registry)?
                     .iter()
                     .any(|workspace| {
-                        is_active(workspace) && references(&*self.managed, workspace, &owned.path)
+                        !workspace.is_archived()
+                            && references(&*self.managed, workspace, &owned.path)
                     });
             if remaining_reference && pending.scope == ArchiveScope::Worktree {
                 return Err(WorktreeError::Invalid(
@@ -530,7 +533,7 @@ impl Worktrees {
                 .get(project_id)
                 .map_err(map_registry)?
                 .ok_or_else(|| WorktreesError::UnknownProject(project_id.to_owned()))?;
-            if !is_active_project(&project) {
+            if project.is_archived() {
                 return Err(WorktreesError::ArchivedProject(project_id.to_owned()));
             }
             return self.ensure_git_project(project, timestamp);
@@ -541,7 +544,7 @@ impl Worktrees {
             .list()
             .map_err(map_registry)?
             .into_iter()
-            .filter(is_active)
+            .filter(|workspace| !workspace.is_archived())
             .find(|workspace| {
                 same_path(&*self.managed, &workspace.cwd, &created.source_cwd)
                     || same_path(&*self.managed, &workspace.cwd, &created.repo_root)
@@ -672,14 +675,6 @@ fn same_path(managed: &dyn ManagedWorktrees, left: &str, right: &str) -> bool {
     managed.contains(left, right) && managed.contains(right, left)
 }
 
-fn is_active(workspace: &PersistedWorkspaceRecord) -> bool {
-    workspace.archived_at.as_ref().is_none_or(String::is_empty)
-}
-
-fn is_active_project(project: &PersistedProjectRecord) -> bool {
-    project.archived_at.as_ref().is_none_or(String::is_empty)
-}
-
 fn normalize_ref(value: Option<&str>) -> Option<&str> {
     value.map(str::trim).filter(|value| !value.is_empty())
 }
@@ -721,15 +716,9 @@ fn slugify(input: &str) -> String {
 }
 
 fn random_slug() -> Result<String, WorktreesError> {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut bytes = [0_u8; 4];
-    getrandom::fill(&mut bytes).map_err(|_| WorktreesError::Registry)?;
-    let mut slug = String::from("worktree-");
-    for byte in bytes {
-        slug.push(char::from(HEX[usize::from(byte >> 4)]));
-        slug.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    Ok(slug)
+    random_hex::<4>()
+        .map(|suffix| format!("worktree-{suffix}"))
+        .map_err(|_| WorktreesError::Registry)
 }
 
 const fn map_registry(_error: RegistryError) -> WorktreesError {
