@@ -8,8 +8,10 @@ use tokio::{sync::oneshot, time::Instant};
 use uuid::Uuid;
 
 use super::{
-    OmpClient, config, history, interactions::Dialogs, stream::Stream, transport::Transport,
+    LABEL, OmpClient, PROVIDER, config, history, interactions::Dialogs, stream::Stream,
+    transport::Transport,
 };
+use crate::local::prompt_blocks;
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
@@ -79,7 +81,7 @@ pub(super) async fn probe(
     model: Option<&str>,
 ) -> Result<Transport, AgentSessionError> {
     config::validate_spec(&AgentSessionSpec {
-        provider: "omp".to_owned(),
+        provider: PROVIDER.to_owned(),
         cwd: cwd.to_owned(),
         config: StoredAgentConfig::default(),
     })?;
@@ -148,16 +150,18 @@ pub(super) async fn open(
     handle: Option<&AgentPersistenceHandle>,
 ) -> Result<Session, AgentSessionError> {
     config::validate_spec(spec)?;
-    let journal = if let Some(handle) = handle {
-        Some(history::load(client, handle, &spec.cwd).await?)
-    } else {
-        None
+    let (journal, replayed) = match handle {
+        Some(handle) => {
+            let (journal, replayed) = history::resume(client, handle, &spec.cwd).await?;
+            (Some(journal), replayed)
+        }
+        None => (None, None),
     };
     let path = journal
         .as_ref()
         .map(|journal| journal.path.to_str().ok_or(AgentSessionError::Failed))
         .transpose()?;
-    let persisted = path.is_some_and(|path| std::path::Path::new(path).is_file());
+    let persisted = replayed.is_some();
     let created_at = journal
         .as_ref()
         .and_then(|journal| journal.header["timestamp"].as_str())
@@ -168,10 +172,7 @@ pub(super) async fn open(
     if persisted && handle.is_some_and(|handle| handle.session_id != id) {
         return Err(AgentSessionError::Failed);
     }
-    let mut stream = match (journal, handle) {
-        (Some(journal), Some(handle)) if persisted => journal.project(client, handle)?.1,
-        _ => Stream::new(id.to_owned(), client.images.clone()),
-    };
+    let mut stream = replayed.unwrap_or_else(|| Stream::new(id.to_owned(), client.images.clone()));
     stream = stream.with_blobs(history::root(client)?.with_file_name("blobs"));
     stream.set_context(&state);
     Ok(Session {
@@ -252,7 +253,7 @@ impl Session {
             self.transport.close().await?;
             let path = config::text(&self.state, "sessionFile")?.to_owned();
             let spec = AgentSessionSpec {
-                provider: "omp".to_owned(),
+                provider: PROVIDER.to_owned(),
                 cwd: self.cwd.clone(),
                 config: config.clone(),
             };
@@ -361,16 +362,7 @@ impl Session {
             return Err(AgentSessionError::Rejected);
         }
         self.configure(config).await?;
-        let blocks = prompt.blocks()?;
-        let text = blocks
-            .iter()
-            .filter_map(|block| block["text"].as_str())
-            .collect::<Vec<_>>()
-            .join("\n\n");
-        let images: Vec<_> = blocks
-            .into_iter()
-            .filter(|block| block["type"] == "image")
-            .collect();
+        let (text, images) = prompt_blocks::split(prompt.blocks()?);
         self.transport.diagnostics.clear();
         let prompt_id = self
             .transport
@@ -523,12 +515,8 @@ impl Session {
         if event["type"] == "agent_start" {
             self.invalidate_state_check();
         }
-        if event["type"] == "message_end"
-            && matches!(event["message"]["role"].as_str(), Some("assistant"))
-        {
-            self.submitted = true;
-        }
         if event["type"] == "message_end" && event["message"]["role"] == "assistant" {
+            self.submitted = true;
             if event["message"]["stopReason"] == "error" {
                 self.transport.diagnostics.observe_native(
                     &event["message"]["errorMessage"],
@@ -795,11 +783,11 @@ impl AgentSession for Session {
             "stdout_read" => "Ait could not read OMP stdout.",
             _ => diagnostic.category.message(),
         };
-        Some(Cow::Owned(format!("Oh My Pi: {reason}")))
+        Some(Cow::Owned(format!("{LABEL}: {reason}")))
     }
 
     fn provider(&self) -> &'static str {
-        "omp"
+        PROVIDER
     }
     async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
         // The manager asks immediately after submission, before polling any dialogs.
@@ -837,7 +825,7 @@ impl AgentSession for Session {
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
         let file = self.state["sessionFile"].as_str()?;
         Some(AgentPersistenceHandle {
-            provider: "omp".to_owned(),
+            provider: PROVIDER.to_owned(),
             session_id: self.state["sessionId"].as_str()?.to_owned(),
             native_handle: None,
             metadata: Some(BTreeMap::from([
@@ -879,16 +867,7 @@ impl AgentSession for Session {
         {
             return Err(AgentSessionError::Rejected);
         }
-        let blocks = prompt.blocks()?;
-        let text = blocks
-            .iter()
-            .filter_map(|block| block["text"].as_str())
-            .collect::<Vec<_>>()
-            .join("\n\n");
-        let images: Vec<_> = blocks
-            .into_iter()
-            .filter(|block| block["type"] == "image")
-            .collect();
+        let (text, images) = prompt_blocks::split(prompt.blocks()?);
         let id = self
             .transport
             .begin("steer", json!({"message":text,"images":images}))

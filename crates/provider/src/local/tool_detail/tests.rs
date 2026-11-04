@@ -205,3 +205,18 @@ fn truncate_keeps_fitting_text_and_marks_shortened_text_at_a_char_boundary() {
     assert_eq!(shortened, "界界~");
     assert!(shortened.len() <= 8);
 }
+
+#[test]
+fn truncation_respects_the_byte_limit_and_utf8_boundaries() {
+    assert!(matches!(
+        truncate("short", 1024, MARKER),
+        Cow::Borrowed("short")
+    ));
+    let text = "文".repeat(1000);
+
+    let truncated = truncate(&text, 200, MARKER);
+
+    assert!(truncated.len() <= 200);
+    assert!(truncated.starts_with('文'));
+    assert!(truncated.ends_with("remains in the native transcript.]"));
+}

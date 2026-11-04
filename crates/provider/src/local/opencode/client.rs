@@ -30,6 +30,8 @@ pub(crate) struct OpenCodeClient {
     pub(super) images: crate::local::images::ImageStore,
     pub(super) capabilities: Arc<RwLock<Option<Capabilities>>>,
     pub(super) startup: Arc<tokio::sync::Mutex<()>>,
+    /// Validated CLI version shared by clones; launches reuse it instead of probing again.
+    pub(super) version: Arc<tokio::sync::OnceCell<String>>,
 }
 
 /// Session methods actually advertised by the installed native ACP process.
@@ -54,6 +56,7 @@ impl OpenCodeClient {
             images: crate::local::images::ImageStore::default(),
             capabilities: Arc::new(RwLock::new(None)),
             startup: Arc::default(),
+            version: Arc::default(),
         }
     }
 
@@ -82,7 +85,7 @@ impl OpenCodeClient {
         let result = history::list(&mut transport, options).await;
         transport.close().await?;
         let mut sessions = result?;
-        history::populate(self, &mut sessions).await;
+        history::previews::populate(self, &mut sessions).await;
         Ok(sessions)
     }
 }

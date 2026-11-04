@@ -13,6 +13,7 @@ use super::{
     AntigravityClient,
     diagnostics::{Diagnostics, Failure},
 };
+use crate::local::process_group::{self, Signal};
 use crate::ports::agent_session::AgentSessionError;
 
 const MAX_FRAME: usize = 2 * 1024 * 1024;
@@ -50,7 +51,7 @@ impl Process {
     }
 
     async fn stop(&mut self) -> Result<(), AgentSessionError> {
-        kill_group(self.group);
+        process_group::signal(self.group, Signal::Kill);
         let _ = self.child.start_kill();
         tokio::time::timeout(Duration::from_secs(2), self.child.wait())
             .await
@@ -72,7 +73,7 @@ impl Process {
 
 impl Drop for Process {
     fn drop(&mut self) {
-        kill_group(self.group);
+        process_group::signal(self.group, Signal::Kill);
         self.stderr_reader.abort();
     }
 }
@@ -308,17 +309,4 @@ impl Drop for Transport {
     fn drop(&mut self) {
         self.reader.abort();
     }
-}
-
-fn kill_group(group: Option<u32>) {
-    #[cfg(unix)]
-    if let Some(group) = group {
-        let _ = std::process::Command::new("/bin/kill")
-            .args(["-KILL", "--", &format!("-{group}")])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-    }
-    #[cfg(not(unix))]
-    let _ = group;
 }

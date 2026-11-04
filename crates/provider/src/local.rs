@@ -19,6 +19,8 @@ mod notes;
 pub(crate) mod omp;
 pub(crate) mod opencode;
 pub(crate) mod pi;
+mod process_group;
+mod prompt_blocks;
 mod summary_model;
 mod tool_detail;
 mod usage;

@@ -6,6 +6,7 @@ use futures_util::{StreamExt, stream};
 use serde_json::json;
 
 use super::{OpenCodeClient, SessionDescriptor, launcher};
+use crate::local::acp_config;
 use crate::{
     local::session_preview, ports::agent_session::AgentSessionError, protocol::timeline::NativeItem,
 };
@@ -24,10 +25,7 @@ impl Prompts {
             self.flush();
             self.current = Some(id.to_owned());
         }
-        let mut count = (4096 - self.buffer.len()).min(text.len());
-        while !text.is_char_boundary(count) {
-            count -= 1;
-        }
+        let count = text.floor_char_boundary((4096 - self.buffer.len()).min(text.len()));
         self.buffer.push_str(&text[..count]);
     }
 
@@ -83,7 +81,7 @@ async fn read(
                         && update["content"]["type"] == "text"
                     {
                         prompts.push(
-                            super::config::text(update, "messageId")?,
+                            acp_config::text(update, "messageId")?,
                             update["content"]["text"]
                                 .as_str()
                                 .ok_or(AgentSessionError::Failed)?,

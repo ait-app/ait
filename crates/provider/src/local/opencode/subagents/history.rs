@@ -4,10 +4,11 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 
 use super::{LOCATOR, MAX_CHILDREN};
+use crate::local::acp_config;
 use crate::{
     local::{
         acp_transport::Transport,
-        opencode::{OpenCodeClient, config, history, launcher},
+        opencode::{client::OpenCodeClient, config, history, launcher},
     },
     ports::{
         agent_session::AgentSessionError, controls::NativeSubagent, native_history::ListOptions,
@@ -153,7 +154,7 @@ pub(in crate::local::opencode) async fn verify(
     else {
         return Ok(None);
     };
-    let parent = config::text(locator, "parent")?;
+    let parent = acp_config::text(locator, "parent")?;
     if parent == handle.session_id || locator["cwd"] != cwd {
         return Err(AgentSessionError::Rejected);
     }

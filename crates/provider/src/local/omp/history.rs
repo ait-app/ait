@@ -5,11 +5,14 @@ use std::path::{Path, PathBuf};
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
-use super::{OmpClient, config, stream::Stream};
+use super::{LABEL, OmpClient, PROVIDER, config, stream::Stream};
+use crate::local::session_preview;
 use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
 
 const MAX_BYTES: u64 = 64 * 1024 * 1024;
+/// Directory entries inspected per scan; later entries are ignored rather than failing.
+const MAX_ENTRIES: usize = 32_768;
 
 pub(super) struct Journal {
     pub(super) path: PathBuf,
@@ -66,22 +69,31 @@ pub(super) fn root(client: &OmpClient) -> Result<PathBuf, AgentSessionError> {
 }
 
 fn paths(root: &Path) -> Result<Vec<PathBuf>, AgentSessionError> {
+    scan(root, MAX_ENTRIES)
+}
+
+/// Collect session journals newest first, inspecting at most `limit` directory entries.
+fn scan(root: &Path, limit: usize) -> Result<Vec<PathBuf>, AgentSessionError> {
     let mut files = Vec::new();
     let mut directories = vec![root.to_path_buf()];
     let mut scanned = 0;
     while let Some(directory) = directories.pop() {
+        if scanned >= limit {
+            break;
+        }
         let entries = match std::fs::read_dir(directory) {
             Ok(entries) => entries,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
             Err(_) => return Err(AgentSessionError::Failed),
         };
-        for entry in entries {
+        for entry in entries.take(limit - scanned) {
             scanned += 1;
-            if scanned > 32768 {
-                return Err(AgentSessionError::Failed);
-            }
-            let entry = entry.map_err(|_| AgentSessionError::Failed)?;
-            let kind = entry.file_type().map_err(|_| AgentSessionError::Failed)?;
+            let Some(entry) = present(entry)? else {
+                continue;
+            };
+            let Some(kind) = present(entry.file_type())? else {
+                continue;
+            };
             if kind.is_dir() && entry.path().parent() == Some(root) {
                 directories.push(entry.path());
             } else if kind.is_file()
@@ -102,6 +114,15 @@ fn paths(root: &Path) -> Result<Vec<PathBuf>, AgentSessionError> {
         )
     });
     Ok(files)
+}
+
+/// Treat an entry removed by a native writer after enumeration as absent.
+fn present<T>(result: std::io::Result<T>) -> Result<Option<T>, AgentSessionError> {
+    match result {
+        Ok(value) => Ok(Some(value)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(_) => Err(AgentSessionError::Failed),
+    }
 }
 
 fn read(path: PathBuf) -> Result<Journal, AgentSessionError> {
@@ -154,36 +175,57 @@ fn read(path: PathBuf) -> Result<Journal, AgentSessionError> {
     })
 }
 
-pub(super) async fn load(
-    client: &OmpClient,
-    handle: &AgentPersistenceHandle,
-    cwd: &str,
-) -> Result<Journal, AgentSessionError> {
-    if handle.provider != "omp"
-        || uuid::Uuid::parse_str(&handle.session_id).is_err()
-        || !Path::new(cwd).is_absolute()
-    {
-        return Err(AgentSessionError::Rejected);
-    }
-    let known = handle
-        .metadata
-        .as_ref()
-        .and_then(|metadata| metadata.get("sessionFile"))
-        .and_then(Value::as_str)
-        .map(PathBuf::from);
-    let root = root(client)?;
-    let id = handle.session_id.clone();
-    let cwd = cwd.to_owned();
-    let empty = handle
-        .metadata
-        .as_ref()
-        .filter(|metadata| {
-            metadata.get("empty") == Some(&json!(true)) && metadata.get("cwd") == Some(&json!(cwd))
+/// Validated persistence lookup, captured before any blocking file-system work.
+struct Lookup {
+    known: Option<PathBuf>,
+    root: PathBuf,
+    id: String,
+    cwd: String,
+    empty: Option<String>,
+}
+
+impl Lookup {
+    fn new(
+        client: &OmpClient,
+        handle: &AgentPersistenceHandle,
+        cwd: &str,
+    ) -> Result<Self, AgentSessionError> {
+        if handle.provider != PROVIDER
+            || uuid::Uuid::parse_str(&handle.session_id).is_err()
+            || !Path::new(cwd).is_absolute()
+        {
+            return Err(AgentSessionError::Rejected);
+        }
+        let metadata = handle.metadata.as_ref();
+        let empty = metadata
+            .filter(|metadata| {
+                metadata.get("empty") == Some(&json!(true))
+                    && metadata.get("cwd") == Some(&json!(cwd))
+            })
+            .and_then(|metadata| metadata.get("createdAt"))
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        Ok(Self {
+            known: metadata
+                .and_then(|metadata| metadata.get("sessionFile"))
+                .and_then(Value::as_str)
+                .map(PathBuf::from),
+            root: root(client)?,
+            id: handle.session_id.clone(),
+            cwd: cwd.to_owned(),
+            empty,
         })
-        .and_then(|metadata| metadata.get("createdAt"))
-        .and_then(Value::as_str)
-        .map(str::to_owned);
-    tokio::task::spawn_blocking(move || {
+    }
+
+    /// Locate and read the journal; this blocks on file-system I/O.
+    fn load(self) -> Result<Journal, AgentSessionError> {
+        let Self {
+            known,
+            root,
+            id,
+            cwd,
+            empty,
+        } = self;
         let path = match known {
             Some(path) if path.is_absolute() => path,
             Some(_) => return Err(AgentSessionError::Rejected),
@@ -199,14 +241,41 @@ pub(super) async fn load(
         if let Some(created) = empty
             && matches!(path.symlink_metadata(), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
         {
-            chrono::DateTime::parse_from_rfc3339(&created).map_err(|_| AgentSessionError::Rejected)?;
-            return Ok(Journal {path, header:json!({"type":"session","version":3,"id":id,"cwd":cwd,"timestamp":created}), records:Vec::new()});
+            chrono::DateTime::parse_from_rfc3339(&created)
+                .map_err(|_| AgentSessionError::Rejected)?;
+            return Ok(Journal {
+                path,
+                header: json!({"type":"session","version":3,"id":id,"cwd":cwd,"timestamp":created}),
+                records: Vec::new(),
+            });
         }
         let journal = read(path)?;
         if journal.header["id"] != id || journal.header["cwd"] != cwd {
             return Err(AgentSessionError::Rejected);
         }
         Ok(journal)
+    }
+}
+
+/// Load a resumable journal and, when it is persisted, replay it for the live stream.
+/// Reading, branch projection and image materialization all run off the async runtime.
+/// Returns a rejected foreign handle, a missing journal, or invalid native records.
+pub(super) async fn resume(
+    client: &OmpClient,
+    handle: &AgentPersistenceHandle,
+    cwd: &str,
+) -> Result<(Journal, Option<Stream>), AgentSessionError> {
+    let lookup = Lookup::new(client, handle, cwd)?;
+    let client = client.clone();
+    let handle = handle.clone();
+    tokio::task::spawn_blocking(move || {
+        let journal = lookup.load()?;
+        let stream = if journal.path.is_file() {
+            Some(journal.project(&client, &handle)?.1)
+        } else {
+            None
+        };
+        Ok((journal, stream))
     })
     .await
     .map_err(|_| AgentSessionError::Failed)?
@@ -268,11 +337,21 @@ impl Journal {
         Ok(path)
     }
 
-    pub(super) fn project(
-        &self,
-        client: &OmpClient,
-        handle: &AgentPersistenceHandle,
-    ) -> Result<(SessionHistory, Stream), AgentSessionError> {
+    /// Summarize the active branch from record text without materializing images.
+    /// Returns none for a branch without conversation messages to import.
+    fn descriptor(&self) -> Result<Option<SessionDescriptor>, AgentSessionError> {
+        self.ensure_replayable()?;
+        let branch = self.branch()?;
+        if !branch
+            .iter()
+            .any(|record| matches!(record["type"].as_str(), Some("message" | "custom_message")))
+        {
+            return Ok(None);
+        }
+        self.describe(&branch).map(Some)
+    }
+
+    fn ensure_replayable(&self) -> Result<(), AgentSessionError> {
         if self
             .records
             .iter()
@@ -280,22 +359,62 @@ impl Journal {
         {
             return Err(AgentSessionError::Rejected);
         }
+        Ok(())
+    }
+
+    fn describe(&self, branch: &[&Value]) -> Result<SessionDescriptor, AgentSessionError> {
+        let mut title = self.header["title"].as_str().map(str::to_owned);
+        let mut updated = self.header["timestamp"]
+            .as_str()
+            .ok_or(AgentSessionError::Failed)?;
+        let mut first_prompt = None;
+        let mut last_prompt = None;
+        for record in branch {
+            if let Some(timestamp) = record["timestamp"].as_str() {
+                updated = timestamp;
+            }
+            match record["type"].as_str() {
+                Some("message") if record["message"]["role"] == "user" => {
+                    if let Some(preview) = prompt_preview(&record["message"]["content"]) {
+                        first_prompt.get_or_insert_with(|| preview.clone());
+                        last_prompt = Some(preview);
+                    }
+                }
+                Some("title_change") => title = record["title"].as_str().map(str::to_owned),
+                _ => {}
+            }
+        }
+        Ok(SessionDescriptor {
+            provider_id: PROVIDER.to_owned(),
+            provider_label: LABEL.to_owned(),
+            provider_handle_id: config::text(&self.header, "id")?.to_owned(),
+            cwd: config::text(&self.header, "cwd")?.to_owned(),
+            title,
+            first_prompt_preview: first_prompt,
+            last_prompt_preview: last_prompt,
+            last_activity_at: updated.to_owned(),
+        })
+    }
+
+    /// Replay the active branch into timeline entries and a stream ready for live events.
+    /// An image that can no longer be materialized degrades to a placeholder.
+    /// Returns a rejected or malformed journal; this blocks on image file-system I/O.
+    pub(super) fn project(
+        &self,
+        client: &OmpClient,
+        handle: &AgentPersistenceHandle,
+    ) -> Result<(SessionHistory, Stream), AgentSessionError> {
+        self.ensure_replayable()?;
         let id = config::text(&self.header, "id")?;
         let mut stream = Stream::new(id.to_owned(), client.images.clone())
             .with_blobs(root(client)?.with_file_name("blobs"));
         restore_input_ids(&mut stream, handle)?;
+        stream.replay_images(true);
         let mut config = StoredAgentConfig::default();
-        let mut title = self.header["title"].as_str().map(str::to_owned);
         let mut active = false;
-        let mut updated = self.header["timestamp"]
-            .as_str()
-            .ok_or(AgentSessionError::Failed)?
-            .to_owned();
         let mut messages = Vec::new();
-        for record in self.branch()? {
-            if let Some(timestamp) = record["timestamp"].as_str() {
-                timestamp.clone_into(&mut updated);
-            }
+        let branch = self.branch()?;
+        for record in &branch {
             match record["type"].as_str() {
                 Some("message" | "custom_message") => {
                     let message = record_message(record)?;
@@ -329,29 +448,11 @@ impl Journal {
                 Some("thinking_level_change") => {
                     config.thinking_option_id = record["thinkingLevel"].as_str().map(str::to_owned);
                 }
-                Some("title_change") => title = record["title"].as_str().map(str::to_owned),
                 _ => {}
             }
         }
-        let users: Vec<_> = messages
-            .iter()
-            .filter(|entry| entry.item["type"] == "user_message")
-            .collect();
-        let preview = |entry: &&crate::protocol::timeline::NativeItem| {
-            entry.item["text"]
-                .as_str()
-                .map(|text| text.chars().take(300).collect::<String>())
-        };
-        let descriptor = SessionDescriptor {
-            provider_id: "omp".to_owned(),
-            provider_label: "Oh My Pi".to_owned(),
-            provider_handle_id: id.to_owned(),
-            cwd: config::text(&self.header, "cwd")?.to_owned(),
-            title,
-            first_prompt_preview: users.first().and_then(preview),
-            last_prompt_preview: users.last().and_then(preview),
-            last_activity_at: updated,
-        };
+        stream.replay_images(false);
+        let descriptor = self.describe(&branch)?;
         let resume_metadata = BTreeMap::from([
             ("cwd".to_owned(), self.header["cwd"].clone()),
             ("sessionFile".to_owned(), json!(self.path)),
@@ -376,16 +477,30 @@ impl Journal {
     }
 }
 
+fn prompt_preview(content: &Value) -> Option<String> {
+    match content {
+        Value::String(text) => session_preview::text(std::iter::once(text.as_str())),
+        Value::Array(blocks) => session_preview::text(
+            blocks
+                .iter()
+                .filter(|block| block["type"] == "text")
+                .filter_map(|block| block["text"].as_str()),
+        ),
+        _ => None,
+    }
+}
+
 pub(super) async fn inspect(
     client: &OmpClient,
     handle: &AgentPersistenceHandle,
     cwd: &str,
 ) -> Result<SessionHistory, AgentSessionError> {
-    let journal = load(client, handle, cwd).await?;
+    let lookup = Lookup::new(client, handle, cwd)?;
     let client = client.clone();
     let handle = handle.clone();
     tokio::task::spawn_blocking(move || {
-        journal
+        lookup
+            .load()?
             .project(&client, &handle)
             .map(|(history, _)| history)
     })
@@ -401,16 +516,16 @@ pub(super) async fn list(
         return Err(AgentSessionError::Rejected);
     }
     let root = root(client)?;
-    let client = client.clone();
     let options = options.clone();
     tokio::task::spawn_blocking(move || {
         let mut sessions = Vec::new();
         let mut bytes = 0;
         for path in paths(&root)? {
-            let size = std::fs::metadata(&path)
-                .map_err(|_| AgentSessionError::Failed)?
-                .len();
-            bytes += size;
+            // A native writer can remove or replace a candidate after the directory scan.
+            let Ok(metadata) = std::fs::metadata(&path) else {
+                continue;
+            };
+            bytes += metadata.len();
             if bytes > 256 * 1024 * 1024 {
                 break;
             }
@@ -424,16 +539,9 @@ pub(super) async fn list(
             {
                 continue;
             }
-            let handle = AgentPersistenceHandle {
-                provider: "omp".to_owned(),
-                session_id: config::text(&journal.header, "id")?.to_owned(),
-                native_handle: None,
-                metadata: None,
-            };
-            if let Ok((history, _)) = journal.project(&client, &handle)
-                && !history.entries.is_empty()
-            {
-                sessions.push(history.descriptor);
+            // Listing reads only record text; image artifacts are materialized on import.
+            if let Ok(Some(descriptor)) = journal.descriptor() {
+                sessions.push(descriptor);
             }
             if sessions.len() >= options.scan_limit {
                 break;

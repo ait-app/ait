@@ -11,7 +11,7 @@ use std::collections::VecDeque;
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
 
-use super::OmpClient;
+use super::{LABEL, OmpClient, PROVIDER};
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
@@ -24,7 +24,7 @@ pub(super) fn redact_event(event: &Value) -> Value {
     let safe_error = |error: &Value| {
         let mut failure = crate::local::diagnostics::failure::Failure::default();
         let diagnostic = crate::local::diagnostics::native(error, "omp_bridge");
-        failure.observe("Oh My Pi", error, diagnostic);
+        failure.observe(LABEL, error, diagnostic);
         json!(failure.message().unwrap_or("OMP native error"))
     };
     let mut event = event.clone();
@@ -155,7 +155,7 @@ impl Session {
 #[async_trait::async_trait]
 impl AgentSession for Session {
     fn provider(&self) -> &'static str {
-        "omp"
+        PROVIDER
     }
     fn control_settings(&self, config: &StoredAgentConfig) -> Option<Value> {
         self.engine

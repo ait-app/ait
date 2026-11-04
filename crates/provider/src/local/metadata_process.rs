@@ -4,43 +4,91 @@ use std::process::{ExitStatus, Stdio};
 use tokio::io::AsyncReadExt;
 use tokio::process::{Child, Command};
 
+use super::process_group::{self, Signal};
 use crate::ports::agent_session::AgentSessionError;
 
 const MAX_OUTPUT: u64 = 1024 * 1024;
 
-struct Process {
+/// One-shot native command whose process group is killed when it is dropped.
+pub(super) struct Process {
     child: Child,
-    #[cfg(unix)]
     group: Option<u32>,
 }
 
 impl Drop for Process {
     fn drop(&mut self) {
-        #[cfg(unix)]
-        if let Some(group) = self.group {
-            let _ = std::process::Command::new("/bin/kill")
-                .args(["-KILL", "--", &format!("-{group}")])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
-        }
+        process_group::signal(self.group, Signal::Kill);
         let _ = self.child.start_kill();
     }
 }
 
-/// Run `command` once and return its UTF-8 stdout, bounded to 1 MiB.
+impl Process {
+    /// Start `command` in its own process group with null stdin/stderr and piped stdout.
+    ///
+    /// # Errors
+    ///
+    /// Returns the OS launch error so callers can classify an unusable executable.
+    pub(super) fn spawn(command: &mut Command) -> std::io::Result<Self> {
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .kill_on_drop(true);
+        #[cfg(unix)]
+        command.process_group(0);
+        let child = command.spawn()?;
+        Ok(Self {
+            group: child.id(),
+            child,
+        })
+    }
+
+    /// Read at most `limit` bytes of UTF-8 stdout and require a successful exit.
+    ///
+    /// # Errors
+    ///
+    /// Returns `AgentSessionError::Failed` for oversized, non-UTF-8 or unreadable output
+    /// and for a non-zero exit status.
+    pub(super) async fn output(mut self, limit: u64) -> Result<String, AgentSessionError> {
+        let (status, bytes) = self.collect(limit).await?;
+        if !status.success() {
+            return Err(AgentSessionError::Failed);
+        }
+        String::from_utf8(bytes).map_err(|_| AgentSessionError::Failed)
+    }
+
+    /// Read at most `limit` bytes of stdout, then wait for the exit status.
+    async fn collect(&mut self, limit: u64) -> Result<(ExitStatus, Vec<u8>), AgentSessionError> {
+        let stdout = self.child.stdout.take().ok_or(AgentSessionError::Failed)?;
+        let mut bytes = Vec::new();
+        stdout
+            .take(limit.saturating_add(1))
+            .read_to_end(&mut bytes)
+            .await
+            .map_err(|_| AgentSessionError::Failed)?;
+        if bytes.len() as u64 > limit {
+            return Err(AgentSessionError::Failed);
+        }
+        let status = self
+            .child
+            .wait()
+            .await
+            .map_err(|_| AgentSessionError::Failed)?;
+        Ok((status, bytes))
+    }
+}
+
+/// Run `command` and return at most one MiB of successful UTF-8 stdout.
 ///
 /// # Errors
 ///
-/// Returns `AgentSessionError::Unavailable` when the command cannot start, and
-/// `AgentSessionError::Failed` for read failures, oversized or non-UTF-8 output, or an
-/// unsuccessful exit status.
+/// Returns `AgentSessionError::Unavailable` when the command cannot start, otherwise the
+/// output failures of [`Process::output`].
 pub(super) async fn output(command: &mut Command) -> Result<String, AgentSessionError> {
-    let (status, bytes) = bounded_output(command, MAX_OUTPUT).await?;
-    if !status.success() {
-        return Err(AgentSessionError::Failed);
-    }
-    String::from_utf8(bytes).map_err(|_| AgentSessionError::Failed)
+    Process::spawn(command)
+        .map_err(|_| AgentSessionError::Unavailable)?
+        .output(MAX_OUTPUT)
+        .await
 }
 
 /// Run `command` once and return its exit status with at most `limit` bytes of stdout.
@@ -65,41 +113,10 @@ pub(super) async fn bounded_output(
     command: &mut Command,
     limit: u64,
 ) -> Result<(ExitStatus, Vec<u8>), AgentSessionError> {
-    command
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true);
-    #[cfg(unix)]
-    command.process_group(0);
-    let child = command
-        .spawn()
-        .map_err(|_| AgentSessionError::Unavailable)?;
-    let mut process = Process {
-        #[cfg(unix)]
-        group: child.id(),
-        child,
-    };
-    let stdout = process
-        .child
-        .stdout
-        .take()
-        .ok_or(AgentSessionError::Failed)?;
-    let mut bytes = Vec::new();
-    stdout
-        .take(limit.saturating_add(1))
-        .read_to_end(&mut bytes)
+    Process::spawn(command)
+        .map_err(|_| AgentSessionError::Unavailable)?
+        .collect(limit)
         .await
-        .map_err(|_| AgentSessionError::Failed)?;
-    if bytes.len() as u64 > limit {
-        return Err(AgentSessionError::Failed);
-    }
-    let status = process
-        .child
-        .wait()
-        .await
-        .map_err(|_| AgentSessionError::Failed)?;
-    Ok((status, bytes))
 }
 
 #[cfg(test)]

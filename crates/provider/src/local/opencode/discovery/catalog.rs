@@ -3,6 +3,7 @@ use futures_util::{StreamExt, TryStreamExt, stream};
 use serde_json::{Value, json};
 
 use super::{Details, OpenCodeClient, PROVIDER, config, launcher};
+use crate::local::acp_config;
 use crate::ports::agent_session::AgentSessionError;
 
 /// Query native models and primary agents without creating or modifying native sessions.
@@ -27,7 +28,7 @@ async fn modes(client: &OpenCodeClient, cwd: &str) -> Result<Vec<Value>, AgentSe
     let agents = launcher::read(client, cwd, &["agent", "list"]).await?;
     Ok(stream::iter(parse_modes(&agents)?)
         .map(|mut mode| async move {
-            let id = config::text(&mode, "id")?;
+            let id = acp_config::text(&mode, "id")?;
             let output = launcher::read(client, cwd, &["debug", "agent", id]).await?;
             let agent: Value =
                 serde_json::from_str(&output).map_err(|_| AgentSessionError::Failed)?;
@@ -83,7 +84,7 @@ pub(super) fn native(providers: &Value, agents: &[Value]) -> Result<Details, Age
     }
     let mut models = Vec::new();
     for provider in providers {
-        let provider_id = config::text(provider, "id")?;
+        let provider_id = acp_config::text(provider, "id")?;
         let entries = provider["models"]
             .as_object()
             .ok_or(AgentSessionError::Failed)?;
@@ -96,7 +97,7 @@ pub(super) fn native(providers: &Value, agents: &[Value]) -> Result<Details, Age
     }
     let mut available_modes = Vec::new();
     for agent in agents {
-        let id = config::text(agent, "name")?;
+        let id = acp_config::text(agent, "name")?;
         if agent["hidden"] == true || agent["mode"] == "subagent" {
             continue;
         }
@@ -125,7 +126,7 @@ fn model_entry(id: &str, metadata: &Value) -> Result<Value, AgentSessionError> {
         model: Some(id.into()),
         ..Default::default()
     })?;
-    let name = config::text(metadata, "name")?;
+    let name = acp_config::text(metadata, "name")?;
     let variants = metadata["variants"].as_object();
     if variants.is_some_and(|variants| variants.len() > 128) {
         return Err(AgentSessionError::Failed);

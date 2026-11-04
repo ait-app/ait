@@ -1,22 +1,17 @@
 //! DSH's native interactive Host, isolated from the automation-only ACP adapter.
-mod config;
+pub(super) mod config;
 mod content;
-mod discovery;
+pub(super) mod discovery;
 pub(super) mod history;
 mod http;
 mod interactions;
 pub(super) mod native_sessions;
-mod presets;
+pub(super) mod presets;
 mod projection;
 pub(super) mod quota;
 mod runtime;
-mod session;
+pub(super) mod session;
 mod usage;
-
-pub(super) use config::validate;
-pub(super) use discovery::discover;
-pub(super) use presets::validate_selection;
-pub(super) use session::open;
 
 #[cfg(all(test, unix))]
 mod tests;

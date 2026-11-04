@@ -4,6 +4,7 @@ use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
+use super::client::OpenCodeClient;
 use super::*;
 use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,

@@ -5,12 +5,11 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAge
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use super::{
-    DeepSeekHarnessClient, PROVIDER, config,
-    transport::{self, Transport},
-};
+use super::{DeepSeekHarnessClient, PROVIDER, config, transport};
+use crate::local::acp_config;
 use crate::local::acp_permissions;
 use crate::local::acp_streaming::Stream;
+use crate::local::acp_transport::Transport;
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
@@ -62,8 +61,7 @@ pub(super) async fn open(
         return Err(AgentSessionError::Failed);
     }
     let capabilities = initialized["agentCapabilities"].clone();
-    let mut params =
-        json!({"cwd":spec.cwd,"mcpServers":crate::local::acp_config::mcp_servers(&spec.config)});
+    let mut params = json!({"cwd":spec.cwd,"mcpServers":acp_config::mcp_servers(&spec.config)});
     let method = if let Some(handle) = handle {
         if !capabilities["sessionCapabilities"]["resume"].is_object() {
             return Err(AgentSessionError::Rejected);
@@ -76,14 +74,14 @@ pub(super) async fn open(
     let result = transport.request(method, params).await?;
     let id = match handle {
         Some(handle) => handle.session_id.clone(),
-        None => config::text(&result, "sessionId")?.to_owned(),
+        None => acp_config::text(&result, "sessionId")?.to_owned(),
     };
     let mut session = Session {
         transport,
         id,
         cwd: spec.cwd.clone(),
         initial_config: spec.config.clone(),
-        options: config::state(&result)?,
+        options: acp_config::state(&result)?,
         capabilities,
         active: None,
         stream: Stream::new(client.images.clone()),
@@ -168,7 +166,7 @@ impl Session {
                 }
                 let update = &message["params"]["update"];
                 if update["sessionUpdate"] == "config_option_update" {
-                    self.options = config::state(update)?;
+                    self.options = acp_config::state(update)?;
                     self.stream
                         .events
                         .push_back(AgentTurnEvent::RuntimeInfo(config::runtime(
@@ -180,50 +178,25 @@ impl Session {
                 }
             }
             Some("session/request_permission") => {
-                if self.active.is_none()
-                    || message["params"]["sessionId"] != self.id
-                    || self.permissions.len() >= 128
-                    || self
-                        .permissions
-                        .values()
-                        .any(|pending| pending.rpc_id == message["id"])
-                {
-                    return Err(AgentSessionError::Failed);
-                }
-                let pending = acp_permissions::capture(message, PROVIDER)?;
-                let id = config::text(&pending.request, "id")?.to_owned();
+                let request = acp_permissions::admit(
+                    message,
+                    &self.id,
+                    self.active.is_some(),
+                    &mut self.permissions,
+                    PROVIDER,
+                )?;
                 self.stream
                     .events
-                    .push_back(AgentTurnEvent::PermissionRequested(pending.request.clone()));
-                self.permissions.insert(id, pending);
+                    .push_back(AgentTurnEvent::PermissionRequested(request));
             }
             None => {
                 let (_, id) = self.active.as_ref().ok_or(AgentSessionError::Failed)?;
                 if message["id"] != *id {
                     return Err(AgentSessionError::Failed);
                 }
-                self.stream.flush();
-                self.stream.finish_compactions();
-                if let Some(error) = message.get("error") {
-                    self.transport
-                        .diagnostics
-                        .observe_native(error, "rpc", "session/prompt");
-                }
-                let event = match transport::response(message) {
-                    Ok(result) => match result["stopReason"].as_str() {
-                        Some("cancelled") => AgentTurnEvent::Cancelled,
-                        Some("end_turn" | "max_tokens" | "max_turn_requests" | "refusal") => {
-                            AgentTurnEvent::Completed(self.stream.last_message.clone())
-                        }
-                        _ => AgentTurnEvent::Failed,
-                    },
-                    Err(_) => AgentTurnEvent::Failed,
-                };
-                for id in std::mem::take(&mut self.permissions).into_keys() {
+                let event =
                     self.stream
-                        .events
-                        .push_back(AgentTurnEvent::PermissionResolved(id));
-                }
+                        .settle(message, &mut self.permissions, &self.transport.diagnostics);
                 self.stream.events.push_back(event);
                 self.active = None;
             }

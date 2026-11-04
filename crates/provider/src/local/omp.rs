@@ -23,6 +23,11 @@ use crate::ports::environment::AgentEnvironment;
 use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
 use crate::protocol::provider::Details;
 
+/// Stable provider identity recorded on handles, descriptors and host requests.
+const PROVIDER: &str = "omp";
+/// Product name shown in descriptors and diagnostics.
+const LABEL: &str = "Oh My Pi";
+
 /// Installed OMP executable with bounded RPC startup and discovery.
 #[derive(Debug, Clone)]
 pub(crate) struct OmpClient {
@@ -78,7 +83,7 @@ where
 #[async_trait::async_trait]
 impl AgentClient for OmpClient {
     fn provider(&self) -> &'static str {
-        "omp"
+        PROVIDER
     }
 
     fn supports_session_import(&self) -> bool {

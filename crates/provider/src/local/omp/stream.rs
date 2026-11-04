@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use chrono::{TimeZone, Utc};
 use serde_json::{Value, json};
 
-use crate::local::images::ImageStore;
+use crate::local::images::{ImageStore, UNAVAILABLE_IMAGE};
 use crate::ports::agent_session::AgentTurnEvent;
 use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
 
@@ -48,6 +48,7 @@ pub(super) struct Stream {
     usage: AgentUsage,
     images: ImageStore,
     blobs: Option<PathBuf>,
+    replaying: bool,
 }
 
 impl Stream {
@@ -76,6 +77,7 @@ impl Stream {
             usage: AgentUsage::default(),
             images,
             blobs: None,
+            replaying: false,
         }
     }
 
@@ -83,6 +85,19 @@ impl Stream {
     pub(super) fn with_blobs(mut self, directory: PathBuf) -> Self {
         self.blobs = Some(directory);
         self
+    }
+
+    /// While replaying persisted history, show an image that cannot be materialized as a
+    /// placeholder; live output keeps failing on invalid images.
+    pub(super) fn replay_images(&mut self, replaying: bool) {
+        self.replaying = replaying;
+    }
+
+    fn display_image(&self, image: &Value) -> Result<String, Error> {
+        match self.image(image) {
+            Err(Error::Image) if self.replaying => Ok(UNAVAILABLE_IMAGE.to_owned()),
+            result => result,
+        }
     }
 
     fn image(&self, image: &Value) -> Result<String, Error> {
@@ -177,7 +192,7 @@ impl Stream {
                 Some("text") => parts.push(preview(
                     block["text"].as_str().ok_or(Error::Field("content.text"))?,
                 )),
-                Some("image") => parts.push(self.image(block)?),
+                Some("image") => parts.push(self.display_image(block)?),
                 _ => {}
             }
         }
@@ -244,7 +259,7 @@ impl Stream {
                     }
                     Some("image") => {
                         let key = format!("{key}:{index}");
-                        let image = self.image(block)?;
+                        let image = self.display_image(block)?;
                         let item = json!({"type":"assistant_message","messageId":key,"text":image});
                         self.events
                             .push_back(AgentTurnEvent::Timeline(Self::item(key, message, item)?));
@@ -527,10 +542,7 @@ fn tool_item(tool: &Value, output: Option<String>, failed: bool, running: bool) 
 }
 
 pub(super) fn preview(text: &str) -> String {
-    let mut end = text.len().min(128 * 1024);
-    while !text.is_char_boundary(end) {
-        end -= 1;
-    }
+    let end = text.floor_char_boundary(text.len().min(128 * 1024));
     if end == text.len() {
         text.to_owned()
     } else {
