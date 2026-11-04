@@ -10,7 +10,7 @@ import type {
   VoiceTimelineItem,
 } from "@ait/protocol/agent-types";
 import type { AgentAttachment, AgentStreamEventPayload } from "@ait/protocol/messages";
-import { timelineItemIdentity } from "@ait/protocol/timeline-identity";
+import { timelineItemIdentity, unwrapTimelineItem } from "@ait/protocol/timeline-identity";
 import { extractTaskEntriesFromToolCall } from "../utils/tool-call-parsers";
 
 /**
@@ -1607,7 +1607,7 @@ function reduceTimelineEvent(
   reservedItemIds?: ReadonlySet<string>,
   timelineCursor?: TimelinePosition,
 ): StreamItem[] {
-  const item = event.item;
+  const item = unwrapTimelineItem(event.item);
   switch (item.type) {
     case "voice": {
       const id = timelineItemIdentity(item)!;
@@ -1878,7 +1878,7 @@ function getEventItemKind(event: AgentStreamEventPayload): StreamItem["kind"] | 
   if (event.type !== "timeline") {
     return null;
   }
-  switch (event.item.type) {
+  switch (unwrapTimelineItem(event.item).type) {
     case "voice":
       return "voice";
     case "user_message":

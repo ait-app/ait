@@ -346,9 +346,15 @@ impl Session {
         supported: bool,
         text: &str,
     ) -> Result<(), AgentSessionError> {
+        self.catalog.observe();
         if !supported
             && let Some(command) = text.trim_start().strip_prefix('/')
-            && command.split_whitespace().next() != Some("compact")
+            && let Some(name) = command.split_whitespace().next()
+            && name != "compact"
+            && self
+                .catalog
+                .items()
+                .is_some_and(|items| items.iter().any(|item| item["name"].as_str() == Some(name)))
         {
             self.failure = Some(
                 "OpenCode 2.1.3 ACP acknowledges custom commands before execution completes. \
@@ -358,6 +364,21 @@ impl Session {
             return Err(AgentSessionError::Rejected);
         }
         Ok(())
+    }
+
+    fn prepare_command(
+        &mut self,
+        connection: &mut Connection,
+        text: &str,
+    ) -> Result<(), AgentSessionError> {
+        if !connection.command_lifecycle {
+            self.catalog.drain(
+                &self.id,
+                &mut connection.transport,
+                &mut connection.deferred,
+            )?;
+        }
+        self.validate_command_lifecycle(connection.command_lifecycle, text)
     }
 
     async fn start(
@@ -393,9 +414,7 @@ impl Session {
             self.connection = Some(connection);
             return Err(error);
         }
-        if let Err(error) =
-            self.validate_command_lifecycle(connection.command_lifecycle, &prompt.text)
-        {
+        if let Err(error) = self.prepare_command(&mut connection, &prompt.text) {
             self.connection = Some(connection);
             return Err(error);
         }

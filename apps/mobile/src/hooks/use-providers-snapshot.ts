@@ -15,6 +15,7 @@ import {
   fetchProvidersSnapshot,
   refreshAndApplyProvidersSnapshot,
   refreshOmpModelsOnAccess,
+  waitForProvidersSnapshotRefresh,
 } from "@/data/providers-snapshot";
 
 export {
@@ -85,12 +86,6 @@ export function useProvidersSnapshot(
     structuralSharing: false,
     enabled: Boolean(enabled && supportsSnapshot && serverId && client && isConnected),
     pushEvent: "provider.snapshot.update",
-    // Only pending work needs polling; model access explicitly starts background refreshes.
-    refetchInterval: (query) =>
-      query.state.data?.refreshing?.length ||
-      query.state.data?.entries.some((entry) => entry.status === "loading")
-        ? 1_000
-        : false,
     queryFn: async ({ signal }) => {
       if (!client || !serverId) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
@@ -98,6 +93,20 @@ export function useProvidersSnapshot(
       return fetchProvidersSnapshot({ client, serverId, cwd, queryClient, signal });
     },
   });
+
+  const pending = Boolean(
+    snapshotQuery.data?.refreshing?.length ||
+    snapshotQuery.data?.entries.some((entry) => entry.status === "loading"),
+  );
+  useEffect(() => {
+    if (!pending || !enabled || !supportsSnapshot || !serverId || !client || !isConnected) return;
+    const controller = new AbortController();
+    void waitForProvidersSnapshotRefresh(
+      { client, queryClient, serverId, cwd, deferFirstRead: true },
+      controller.signal,
+    ).catch(() => undefined);
+    return () => controller.abort();
+  }, [client, cwd, enabled, isConnected, pending, queryClient, serverId, supportsSnapshot]);
 
   const refreshOnAccess = useCallback(() => {
     if (!enabled || !supportsSnapshot || !serverId || !client || !isConnected) return;

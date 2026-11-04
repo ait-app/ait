@@ -318,3 +318,43 @@ fn version_one_migration_keeps_existing_rows_and_epoch() {
     assert_eq!(rows[0].entry.item["text"], "original");
     assert_ne!(migrated.reconcile("agent", "codex", &[]).unwrap(), epoch);
 }
+
+#[test]
+fn native_commands_use_the_same_compatible_envelope_in_live_events_and_history_pages() {
+    use serde_json::Value;
+    let cases: Vec<Value> = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/provider_command_compat.json"
+    ))
+    .unwrap();
+    let timeline = Timeline::memory().unwrap();
+    let (outbound, mut receiver) = model::outbound::Outbound::new();
+    let subscription = timeline.events().subscribe(
+        "compat".into(),
+        std::collections::BTreeSet::from(["agent".into()]),
+        outbound,
+    );
+    subscription.activate().unwrap();
+    for (index, case) in cases.iter().enumerate() {
+        let mut entry = item(&index.to_string(), "");
+        entry.item = case["native"].clone();
+        timeline
+            .append("agent", "deepseek-harness", &[entry])
+            .unwrap();
+        let model::outbound::Frame::Text(text) = receiver.try_recv().unwrap().message else {
+            panic!("expected JSON event");
+        };
+        let event: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(event["params"]["event"]["item"], case["wire"]);
+    }
+    let request = serde_json::from_value(json!({"agentId":"agent","limit":20})).unwrap();
+    let page = crate::rpc::timeline::fetch_stored(&request, &timeline, "agent", &Value::Null, None)
+        .unwrap();
+    for (entry, case) in page["entries"].as_array().unwrap().iter().zip(&cases) {
+        assert_eq!(entry["item"], case["wire"]);
+    }
+    assert_eq!(page["entries"].as_array().unwrap().len(), cases.len());
+    assert_eq!(
+        timeline.read("agent").unwrap().1[0].entry.item,
+        cases[0]["native"]
+    );
+}

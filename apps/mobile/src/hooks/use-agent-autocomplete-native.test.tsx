@@ -6,7 +6,11 @@ import type { PropsWithChildren } from "react";
 import { useAgentAutocomplete } from "./use-agent-autocomplete";
 import { applyNativeCommandCompletion } from "@/utils/native-command-completion";
 
-const mocks = vi.hoisted(() => ({ completeCommands: vi.fn(), commandsLoading: false }));
+const mocks = vi.hoisted(() => ({
+  completeCommands: vi.fn(),
+  commandsLoading: false,
+  completionSupported: true,
+}));
 vi.mock("@/runtime/host-runtime", () => ({
   useHostRuntimeClient: () => mocks,
   useHostRuntimeIsConnected: () => true,
@@ -22,6 +26,7 @@ vi.mock("@/stores/session-store", () => ({
     select({
       sessions: {
         host: {
+          serverInfo: { features: { agentCommandCompletion: mocks.completionSupported } },
           agents: new Map([["agent", { cwd: "/repo", provider: "omp" }]]),
         },
       },
@@ -44,6 +49,7 @@ afterEach(() => {
   cleanup();
   vi.resetAllMocks();
   mocks.commandsLoading = false;
+  mocks.completionSupported = true;
 });
 
 const candidate = {
@@ -223,4 +229,28 @@ test("native edits reject malformed UTF-16 boundaries", () => {
       cursor: 1,
     }),
   ).toBeNull();
+});
+
+test("an older daemon without the completion method keeps the static catalog", async () => {
+  mocks.completionSupported = false;
+  const { result } = setup("/cat", 4);
+  await waitFor(() =>
+    expect(result.current.options.some((option) => option.label === "/catalog-fallback")).toBe(
+      true,
+    ),
+  );
+  expect(mocks.completeCommands).not.toHaveBeenCalled();
+});
+
+test("not_implemented falls back while advertised native errors remain visible", async () => {
+  mocks.completeCommands.mockRejectedValue(
+    Object.assign(new Error("Method is not implemented"), { code: "not_implemented" }),
+  );
+  const { result } = setup("/cat", 4);
+  await waitFor(() =>
+    expect(result.current.options.some((option) => option.label === "/catalog-fallback")).toBe(
+      true,
+    ),
+  );
+  expect(result.current.errorMessage).toBeFalsy();
 });

@@ -53,7 +53,7 @@ pub(super) struct Session {
     state: Value,
     config: StoredAgentConfig,
     service_tiers: config::ServiceTiers,
-    role_catalog: super::roles::Catalog,
+    role_catalog: std::sync::Arc<super::roles::Catalog>,
     stream: Stream,
     dialogs: Dialogs,
     ui: super::ui::State,
@@ -927,7 +927,7 @@ impl AgentSession for Session {
     async fn complete_commands(
         &mut self,
         input: &crate::protocol::commands::CompletionInput,
-    ) -> Result<crate::protocol::commands::CompletionResult, AgentSessionError> {
+    ) -> Result<crate::protocol::commands::ValidatedCompletion, AgentSessionError> {
         super::completion::complete(&mut self.transport, input).await
     }
     fn commands(&self) -> Option<&[Value]> {
@@ -935,7 +935,11 @@ impl AgentSession for Session {
     }
     fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         config::validate(config)?;
-        self.role_catalog.validate(config)
+        if let Some(catalog) = self.client.cached_roles(&self.cwd)? {
+            catalog.validate(config)?;
+        }
+        // A cache miss must reach the client's current-directory validation, never an old copy.
+        Ok(())
     }
     fn control_settings(&self, config: &StoredAgentConfig) -> Option<Value> {
         let tiers = if config.model == self.config.model {
@@ -944,7 +948,19 @@ impl AgentSession for Session {
             config::ServiceTiers::default()
         };
         let mut features = config::features(config, tiers);
-        features.extend(self.role_catalog.features(config));
+        let catalog = match self.client.cached_roles(&self.cwd) {
+            Ok(catalog) => catalog,
+            Err(error) => {
+                tracing::warn!(?error, "OMP role catalog could not be read");
+                return None;
+            }
+        };
+        features.extend(
+            catalog
+                .as_ref()
+                .unwrap_or(&self.role_catalog)
+                .features(config),
+        );
         Some(json!({"availableModes":config::modes(),"features":features}))
     }
 

@@ -424,7 +424,12 @@ export type AgentTimelineItem =
       imageSources?: string[];
       voiceTranscript?: VoiceTranscriptEntry[];
     }
-  | { type: "assistant_message"; text: string; messageId?: string }
+  | {
+      type: "assistant_message";
+      text: string;
+      messageId?: string;
+      providerCommand?: Omit<ProviderCommandTimelineItem, "type" | "text">;
+    }
   | { type: "reasoning"; text: string }
   | ToolCallTimelineItem
   | { type: "todo"; items: AgentTaskItem[] }

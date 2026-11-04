@@ -11,7 +11,7 @@
 ## 决策
 
 - 共享时间线增加 `provider_command`：包含稳定原生身份、命令名、成功或失败、原始输出，
-  可附带结构化 goal 事实和 Provider 提供的操作。命令结果不再冒充 assistant_message。
+  可附带结构化 goal 事实和 Provider 提供的操作；内部存储与当前界面将命令结果和模型回答分开。
 - DSH adapter 从 `command/run`、`command/done`、`goal/change` 和 goal round 的原生
   journal 派生数据。命令名按原生 commandId 关联；目标状态直接读取原生结构，不能
   解析英文输出、猜测状态或在客户端重写插件业务规则。live 与完整 history 共用投影。
@@ -24,7 +24,11 @@
   提交状态，不新增直接访问原生 Host 的写入通道。
 - 历史卡片、归档会话、分离的历史窗口及尚未完成权威恢复的窗口不提供活动操作。
   卡片身份、结构化状态和操作也进入客户端持久缓存，刷新后仍按原生事实展示。
-- 新时间线类型由同版本 protocol、SDK 与界面共同发布；生成的出站校验器必须同步更新。
+- 传输出口始终使用已有 `assistant_message` 变体：`text` 提供旧客户端可读的结果，
+  可选 `providerCommand` 元数据携带身份、状态、目标、动作与文件信息，避免新增判别成员破坏旧客户端。
+  元数据不重复保存正文；`messageId` 使用稳定命令身份。旧 schema 忽略可选字段，新客户端还原独立卡片。
+  实时事件、子 Agent 事件和历史分页共用同一编码；持久投影缓存解码时恢复内部类型，不改变游标、
+  源覆盖范围或分组身份。升级不依赖“同版本共同发布”的假设，也不提高最低连接协议版本。
   现有安装的第三方 CLI 不修改。当前首先用于 DSH，其他 Provider 仅在有相应原生控制事实时接入。
 - DSH 恢复保留 native handle，通过公开 `session/selectModel` 确认当前保存的模型并
   恢复 Agent；`session/create` 的 sessionId 是空会话复用提示，不能用于已有对话。
@@ -33,6 +37,7 @@
 ## 验证
 
 共享 fixture 贯穿 Rust 投影、TypeScript schema、生成的 WebSocket validator 和桌面组件。
+另以 `850e0075` 的真实 schema 验证实时消息和整页历史均可读取。
 定向测试覆盖自主完成、清除、暂停后的合法按钮、原始输出折叠、编辑参数保留及缓存恢复。
 桌面实测结果及仍未完成的原生功能分别记录在 [适配报告](../../reports/providers/dsh-opencode-capability-adaptation-2026-10-30.md)。
 

@@ -1,0 +1,98 @@
+[
+  {
+    "name": "goal",
+    "native": {
+      "type": "provider_command",
+      "id": "dsh:session:command:control",
+      "command": "goal",
+      "status": "success",
+      "text": "Arbitrary localized native output",
+      "goal": {
+        "id": "native-goal",
+        "revision": 2,
+        "phase": "paused",
+        "objective": "Keep the objective intact",
+        "rounds": 1,
+        "maxRounds": 256
+      },
+      "actions": [
+        {
+          "id": "resume",
+          "command": "/goal resume"
+        },
+        {
+          "id": "edit",
+          "command": "/goal edit "
+        },
+        {
+          "id": "clear",
+          "command": "/goal clear"
+        }
+      ]
+    },
+    "wire": {
+      "type": "assistant_message",
+      "text": "Arbitrary localized native output",
+      "messageId": "provider-command:dsh:session:command:control",
+      "providerCommand": {
+        "id": "dsh:session:command:control",
+        "command": "goal",
+        "status": "success",
+        "goal": {
+          "id": "native-goal",
+          "revision": 2,
+          "phase": "paused",
+          "objective": "Keep the objective intact",
+          "rounds": 1,
+          "maxRounds": 256
+        },
+        "actions": [
+          {
+            "id": "resume",
+            "command": "/goal resume"
+          },
+          {
+            "id": "edit",
+            "command": "/goal edit "
+          },
+          {
+            "id": "clear",
+            "command": "/goal clear"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "export",
+    "native": {
+      "type": "provider_command",
+      "id": "dsh:session:command:export-1",
+      "command": "export",
+      "status": "success",
+      "text": "Session log download requested.",
+      "file": {
+        "directory": "/private/ait/dsh-exports/command",
+        "fileName": "session.zip",
+        "size": 127,
+        "mimeType": "application/zip"
+      }
+    },
+    "wire": {
+      "type": "assistant_message",
+      "text": "Session log download requested.",
+      "messageId": "provider-command:dsh:session:command:export-1",
+      "providerCommand": {
+        "id": "dsh:session:command:export-1",
+        "command": "export",
+        "status": "success",
+        "file": {
+          "directory": "/private/ait/dsh-exports/command",
+          "fileName": "session.zip",
+          "size": 127,
+          "mimeType": "application/zip"
+        }
+      }
+    }
+  }
+]

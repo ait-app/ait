@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { useSessionStore } from "@/stores/session-store";
 import type { DraftCommandConfig } from "./use-agent-commands-query";
 
 /** Native completion is keyed by the entire editor state; older edits never become current. */
@@ -19,7 +20,10 @@ export function useAgentCommandCompletionsQuery(input: {
   const client = useHostRuntimeClient(input.serverId);
   const connected = useHostRuntimeIsConnected(input.serverId);
   const panelActive = useRetainedPanelActive();
-  const active = input.enabled && !!client && connected && panelActive;
+  const supported = useSessionStore(
+    (state) => state.sessions[input.serverId]?.serverInfo?.features?.agentCommandCompletion,
+  );
+  const active = input.enabled && !!client && connected && panelActive && supported === true;
   const [settled, setSettled] = useState({
     text: input.text,
     cursor: input.cursor,
@@ -39,14 +43,22 @@ export function useAgentCommandCompletionsQuery(input: {
       input.cursor,
       input.revision,
     ],
-    queryFn: () => {
+    queryFn: async () => {
       if (!client) throw new Error(t("common.errors.daemonClientUnavailable"));
-      return client.completeCommands({
-        agentId: input.agentId,
-        draftConfig: input.draftConfig,
-        text: input.text,
-        cursor: input.cursor,
-      });
+      try {
+        return await client.completeCommands({
+          agentId: input.agentId,
+          draftConfig: input.draftConfig,
+          text: input.text,
+          cursor: input.cursor,
+        });
+      } catch (error) {
+        // A missing method is compatibility fallback; native execution failures remain errors.
+        if (error instanceof Error && "code" in error && error.code === "not_implemented") {
+          return { supported: false, items: [] };
+        }
+        throw error;
+      }
     },
     enabled: active && current,
     retry: false,

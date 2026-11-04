@@ -328,13 +328,14 @@ impl Timeline {
                     "agent.provider_subagents.update",
                     &json!({
                     "kind":"timeline","parentAgentId":parent,"subagentId":child,"provider":provider,
-                    "item":entry.item,"timestamp":entry.timestamp,"seq":seq,"epoch":epoch}),
+                    "item":crate::timeline_projection::wire_item(&entry.item),"timestamp":entry.timestamp,"seq":seq,"epoch":epoch}),
                 );
                 if binding.is_none() {
                     continue;
                 }
             }
-            let mut event = json!({"type":"timeline","provider":provider,"item":entry.item});
+            let mut event = json!({"type":"timeline","provider":provider,
+                "item":crate::timeline_projection::wire_item(&entry.item)});
             if let Some(turn) = &entry.turn_id {
                 event["turnId"] = json!(turn);
             }

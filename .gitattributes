@@ -1,4 +1,2 @@
 * text=auto eol=lf
 *.md text diff=markdown
-# Unified diff context preserves upstream whitespace, including blank context lines.
-third-party/**/*.patch -whitespace

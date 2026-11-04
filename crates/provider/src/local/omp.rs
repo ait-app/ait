@@ -32,7 +32,7 @@ use crate::protocol::provider::Details;
 
 #[derive(Debug, Clone)]
 struct RoleSnapshot {
-    catalog: roles::Catalog,
+    catalog: Arc<roles::Catalog>,
     default_details: Option<Details>,
     updated: Instant,
 }
@@ -87,13 +87,14 @@ impl OmpClient {
     async fn role_settings(
         &self,
         spec: &AgentSessionSpec,
-    ) -> Result<(roles::Catalog, (Option<String>, config::ServiceTiers)), AgentSessionError> {
+    ) -> Result<(Arc<roles::Catalog>, (Option<String>, config::ServiceTiers)), AgentSessionError>
+    {
         let _metadata = self.metadata_gate(&spec.cwd)?.lock_owned().await;
         let cached = self.cached_roles(&spec.cwd)?;
         let fresh = cached.is_none();
         let mut roles = match cached {
             Some(roles) => roles,
-            None => roles::Catalog::read(self, &spec.cwd).await?,
+            None => Arc::new(roles::Catalog::read(self, &spec.cwd).await?),
         };
         let mut probe = session::probe_config(
             self,
@@ -104,7 +105,7 @@ impl OmpClient {
         .await.inspect_err(|error|tracing::warn!(phase="role_probe",error=?error,"OMP role probe could not start"))?;
         let result: Result<_, AgentSessionError> = async {
             if fresh {
-                roles.read_chat(&mut probe).await?;
+                Arc::make_mut(&mut roles).read_chat(&mut probe).await?;
             }
             roles.validate(&spec.config)?;
             let state = probe.request("get_state", json!({})).await?;
@@ -126,7 +127,7 @@ impl OmpClient {
     fn cache_roles(
         &self,
         cwd: &str,
-        roles: &roles::Catalog,
+        roles: &Arc<roles::Catalog>,
         default_details: Option<&Details>,
     ) -> Result<(), AgentSessionError> {
         let key = self.role_catalog_key(cwd);
@@ -174,7 +175,7 @@ impl OmpClient {
         Ok(gate)
     }
 
-    fn cached_roles(&self, cwd: &str) -> Result<Option<roles::Catalog>, AgentSessionError> {
+    fn cached_roles(&self, cwd: &str) -> Result<Option<Arc<roles::Catalog>>, AgentSessionError> {
         let key = self.role_catalog_key(cwd);
         Ok(self
             .role_catalogs
@@ -224,7 +225,7 @@ impl AgentClient for OmpClient {
         &self,
         spec: &AgentSessionSpec,
         input: &crate::protocol::commands::CompletionInput,
-    ) -> Result<crate::protocol::commands::CompletionResult, AgentSessionError> {
+    ) -> Result<crate::protocol::commands::ValidatedCompletion, AgentSessionError> {
         config::validate_spec(spec)?;
         input.validate()?;
         if *self
@@ -233,7 +234,7 @@ impl AgentClient for OmpClient {
             .map_err(|_| AgentSessionError::Failed)?
             == Some(false)
         {
-            return Ok(crate::protocol::commands::CompletionResult::default());
+            return Ok(crate::protocol::commands::ValidatedCompletion::default());
         }
         let mut probe = session::probe(self, &spec.cwd, spec.config.model.as_deref()).await?;
         let result = completion::complete(&mut probe, input).await;
@@ -318,10 +319,10 @@ impl AgentClient for OmpClient {
         }
         let mut roles = match completed {
             Some(snapshot) => snapshot.catalog,
-            None => roles::Catalog::read(self, cwd).await?,
+            None => Arc::new(roles::Catalog::read(self, cwd).await?),
         };
         let mut probe = session::probe(self, cwd, None).await?;
-        roles.read_chat(&mut probe).await?;
+        Arc::make_mut(&mut roles).read_chat(&mut probe).await?;
         let result = config::discover(&mut probe).await;
         let closed = probe.close().await;
         let mut details = result?;

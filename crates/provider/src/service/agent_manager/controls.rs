@@ -61,7 +61,7 @@ impl AgentManager {
         id: &str,
         spec: &AgentSessionSpec,
         input: &crate::protocol::commands::CompletionInput,
-    ) -> Result<crate::protocol::commands::CompletionResult, ErrorCode> {
+    ) -> Result<crate::protocol::commands::ValidatedCompletion, ErrorCode> {
         input.validate().map_err(|_| ErrorCode::InvalidMessage)?;
         let result = if let Some(agent) = self.live.get_mut(id) {
             agent.session.complete_commands(input).await
@@ -78,7 +78,6 @@ impl AgentManager {
             AgentSessionError::Unavailable => ErrorCode::UnsupportedCapability,
             AgentSessionError::Failed | AgentSessionError::History(_) => ErrorCode::AgentIo,
         })?;
-        result.validate(input).map_err(|_| ErrorCode::AgentIo)?;
         Ok(result)
     }
     pub(crate) fn recover_permissions(&self) -> Result<(), super::AgentManagerError> {

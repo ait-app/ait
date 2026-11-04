@@ -361,3 +361,71 @@ async fn manager_persists_role_selections_across_restart_and_replays_the_same_se
     assert_eq!(calls.last().unwrap()["modelRoles"]["advisor"], "test/model");
     manager.close_all().await.unwrap();
 }
+
+#[tokio::test]
+async fn live_session_accepts_new_role_and_model_after_background_catalog_refresh() {
+    use crate::service::agent_manager::{AgentManager, AgentRegistration};
+    use domain::agent_runtime::registry::AgentRuntimeRegistry;
+    use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
+    let (root, client, spec) = fixture();
+    let registry = FileBackedAgentRuntimeRegistry::new(root.path().join("agents.json"));
+    let mut manager = AgentManager::new(Box::new(registry.clone()));
+    manager.register_client(Box::new(client.clone())).unwrap();
+    manager
+        .create("refresh", &spec, AgentRegistration::default())
+        .await
+        .unwrap();
+    std::fs::write(root.path().join("agent/extra-models.json"), json!([{"selector":"future/model","name":"Added model","kind":"chat","input":["text"],"thinking":["high"]}]).to_string()).unwrap();
+    std::fs::write(
+        root.path().join("agent/model-tags.json"),
+        json!({"future":{"name":"New helper"}}).to_string(),
+    )
+    .unwrap();
+    client.discover(&spec.cwd).await.unwrap();
+    let patch = serde_json::from_value(json!({"featureValues":{"modelRole.future":"future/model","modelRole.advisor":"future/model:high"}})).unwrap();
+    manager.configure("refresh", &patch).await.unwrap();
+    client.role_catalogs.write().unwrap().clear();
+    let patch =
+        serde_json::from_value(json!({"featureValues":{"modelRole.future":"future/model:high"}}))
+            .unwrap();
+    manager.configure("refresh", &patch).await.unwrap();
+    let record = registry.get("refresh").unwrap().unwrap();
+    let mut snapshot = json!({});
+    manager.control_snapshot(&record, &mut snapshot);
+    assert!(
+        snapshot["features"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|feature| feature["id"] == "modelRole.future"
+                && feature["options"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|option| option["id"] == "future/model"))
+    );
+    assert_eq!(
+        registry
+            .get("refresh")
+            .unwrap()
+            .unwrap()
+            .config
+            .unwrap()
+            .feature_values
+            .unwrap()["modelRole.future"],
+        "future/model:high"
+    );
+    manager
+        .send("refresh", "Use the refreshed role")
+        .await
+        .unwrap();
+    while manager.active_turn("refresh").is_some() {
+        manager.poll().await.unwrap();
+        tokio::time::sleep(Duration::from_millis(2)).await;
+    }
+    assert_eq!(
+        launches(root.path()).last().unwrap()["modelRoles"]["future"],
+        "future/model:high"
+    );
+    manager.close_all().await.unwrap();
+}

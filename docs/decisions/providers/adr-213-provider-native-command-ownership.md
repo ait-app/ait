@@ -41,7 +41,8 @@ DSH 命令是插件注册的 Host 事务，不是模型提示词或 OMP 风格�
   或失败后删除。缺少 delete 时不创建持久空会话。命令执行继续由 ACP prompt 交给
   原生处理器，Ait 不展开 `$ARGUMENTS`、不猜子命令或复制命令的 Agent/模型规则。
 - 已验证 OpenCode 2.1.3 的自定义命令 ACP 只应答受理，不能据此结算模型。该版本未协商
-  原生回执修复时，在执行前拒绝受影响的斜杠输入；普通提示词和 /compact 保留原路径。
+  原生回执修复时，只在执行前拒绝原生命令目录中注册的命令；绝对路径、未知斜杠文本和
+  `/compact` 保留原路径。目录匹配与固定版本上游的 `catalog.commands.find` 规则一致。
   [上游修复提案](../../../third-party/opencode/README.md)由 handler 返回原生输入回执，
   ACP 校验会话和输入身份后等待已有事件流，不增加第二个 writer 或轮询推断。
 - OMP、DSH、OpenCode 的斜杠名称由 Provider 拥有，客户端不将 clear/new/exit 等改成

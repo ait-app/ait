@@ -730,6 +730,7 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
     type: z.literal("assistant_message"),
     text: z.string(),
     messageId: z.string().optional(),
+    providerCommand: ProviderCommandTimelineItemSchema.omit({ type: true, text: true }).optional(),
   }),
   z.object({
     type: z.literal("reasoning"),
@@ -3570,6 +3571,7 @@ export const ServerInfoStatusPayloadSchema = z
         creationLifecycle: z.boolean().optional(),
         workspaceBots: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
+        agentCommandCompletion: z.boolean().optional(),
         // COMPAT(providersSnapshotCwd): added in v0.3.2, remove gate after 2027-02-10.
         providersSnapshotCwd: z.boolean().optional(),
         // COMPAT(directorySync): added in v0.3.x, remove gate after 2027-02-12.

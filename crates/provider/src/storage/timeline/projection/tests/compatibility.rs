@@ -147,3 +147,31 @@ fn install_legacy_cache(timeline: &Timeline, rows: &[Row]) -> usize {
     }
     bytes
 }
+
+#[test]
+fn legacy_native_result_cache_keeps_wire_pages_within_budget_in_both_directions() {
+    let timeline = Timeline::memory().unwrap();
+    let entries: Vec<_> = (1..=2).map(|seq| item(seq, json!({"type":"provider_command","id":seq.to_string(),"command":"goal","status":"success","text":"Native goal status"}))).collect();
+    timeline
+        .append("agent", "deepseek-harness", &entries)
+        .unwrap();
+    let (epoch, rows) = timeline.read("agent").unwrap();
+    let budget = install_legacy_cache(&timeline, &rows);
+    for (direction, cursor) in [("tail", 2), ("before", 3), ("after", 0)] {
+        let request: FetchRequest = serde_json::from_value(json!({"agentId":"agent","direction":direction,"limit":2,"cursor":{"epoch":epoch,"seq":cursor}})).unwrap();
+        let page = timeline.page(&request, "agent", |_| Ok(budget)).unwrap();
+        assert_eq!(page.entries.len(), 1);
+        assert!(serde_json::to_vec(&page.entries).unwrap().len() <= budget);
+        assert_eq!(
+            page.entries[0].seq_start,
+            if direction == "after" { 1 } else { 2 }
+        );
+        assert_eq!(page.has_older, direction != "after");
+        assert_eq!(page.has_newer, direction == "after");
+        assert_eq!(
+            serde_json::to_value(&page.entries[0]).unwrap()["item"]["type"],
+            "assistant_message"
+        );
+    }
+    assert_eq!(timeline.read("agent").unwrap(), (epoch, rows));
+}

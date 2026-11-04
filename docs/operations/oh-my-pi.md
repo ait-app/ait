@@ -137,3 +137,13 @@ Ait 内部已使用同一引擎，不需要另外启动这个进程。
 
 决策见 [ADR-190](../decisions/providers/adr-190-omp-acp-settlement.md)，
 当前官方 CLI 与插件验证见[报告](../reports/providers/omp-acp-settlement-2026-10-25.md)。
+
+## 原生 model preset 的支持边界
+
+官方 OMP 18.14.0 提供 `/modelpreset list|save|switch|delete`。Ait 可通过原生命令通道
+转发这些命令；它们由 OMP 处理，原生 `save/delete/switch` 可以修改全局或项目配置。
+
+当前 Ait 的完整适配是单个 `modelRole.*` 的模型、推理档位和继承设置。尚未完成原生 preset
+列表管理、成套应用后的角色/默认思考强度同步，以及 preset 与会话私有 `--config` 覆盖冲突的
+专项验收，因此不把原生 preset 管理列为完整支持。Ait Agent Profile 和 OMP 原生 preset 是
+不同的配置机制。

@@ -83,6 +83,33 @@ pub(crate) struct CompletionResult {
     pub(crate) items: Vec<CompletionItem>,
 }
 
+/// Native candidates validated once at the adapter boundary; internal callers cannot deserialize it.
+#[derive(Debug, Default, Serialize)]
+#[serde(transparent)]
+pub(crate) struct ValidatedCompletion(CompletionResult);
+
+impl ValidatedCompletion {
+    /// Decode and validate untrusted native output against its original editor state.
+    /// Returns failed for malformed data or invalid edits; preserves native errors at the caller.
+    pub(crate) fn parse(
+        value: serde_json::Value,
+        input: &CompletionInput,
+    ) -> Result<Self, AgentSessionError> {
+        let result: CompletionResult =
+            serde_json::from_value(value).map_err(|_| AgentSessionError::Failed)?;
+        result.validate(input)?;
+        Ok(Self(result))
+    }
+}
+
+impl std::ops::Deref for ValidatedCompletion {
+    type Target = CompletionResult;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl CompletionResult {
     /// Validate native edits against `input` without exposing malformed payloads.
     /// Returns failed for inconsistent support, excessive output or invalid UTF-16 ranges.

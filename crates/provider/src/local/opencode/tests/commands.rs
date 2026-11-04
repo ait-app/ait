@@ -8,11 +8,7 @@ async fn early_ack_profile_rejects_custom_commands_before_admission_and_preserve
         .insert("AIT_ACP_VERSION".into(), "2.1.3".into());
     let mut session = client.create_session(&spec).await.unwrap();
     assert!(session.refresh_commands().await.unwrap().is_some());
-    for text in [
-        "/native:review subject",
-        "  /native:review subject",
-        "/unknown",
-    ] {
+    for text in ["/native:review subject", "  /native:review subject"] {
         assert_eq!(
             session.start_turn(text, &spec.config).await,
             Err(AgentSessionError::Rejected)
@@ -29,12 +25,28 @@ async fn early_ack_profile_rejects_custom_commands_before_admission_and_preserve
             .iter()
             .any(|request| request["method"] == "session/prompt")
     );
-    session
-        .start_turn("Native catalog changes", &spec.config)
-        .await
-        .unwrap();
-    completed(session.as_mut()).await;
-    assert!(session.failure_message().is_none());
+    for text in [
+        "/etc/hosts explain this file",
+        "/unknown",
+        "/compact",
+        "Normal prompt",
+    ] {
+        session.start_turn(text, &spec.config).await.unwrap();
+        if text == "/compact" {
+            loop {
+                match event(session.as_mut()).await {
+                    AgentTurnEvent::Completed(_) => break,
+                    AgentTurnEvent::Failed | AgentTurnEvent::Cancelled => {
+                        panic!("compaction rejected")
+                    }
+                    _ => {}
+                }
+            }
+        } else {
+            completed(session.as_mut()).await;
+        }
+        assert!(session.failure_message().is_none());
+    }
     session.close().await.unwrap();
 }
 

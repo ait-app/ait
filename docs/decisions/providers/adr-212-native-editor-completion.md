@@ -18,13 +18,15 @@
   使用无持久化发现通道。其他 Provider 默认明确返回不支持，分别实现自己的原生映射。
 - Composer 按完整输入、光标、Provider 和会话关联结果，延迟 120 ms 查询；输入改变
   立即撤下旧候选，接受前再比较快照。原生编辑原样应用，不补空格或改引用。原生空结果
-  是权威结果；只有明确不支持才允许目录降级，错误不能伪装成降级成功。
+  是权威结果；Host 未实现补全方法或明确返回不支持时使用目录降级，已实现接口的执行错误仍然显示。
+  前端先检查 Host 方法能力；`not_implemented` 单独识别，不将其他错误当作“不支持”。
+- 候选只在原生适配器的不可信输入边界完整校验一次，返回不可反序列化的 `ValidatedCompletion`。
+  内部 bridge 直接传递已校验结果，AgentManager 保留请求入口校验，不再重复扫描、序列化每个候选。
 - OMP 的 ACP 边界使用 `_omp/commands/complete`，返回后端真实支持状态。只有 RPC
   声明 `ready.capabilities.commandCompletion.version = 1` 才发送 `complete`。
   原版 OMP 18.14.0 不提供此能力，继续使用 ADR-211 的目录补全。
-- 最小 OMP 上游提案放在 [third-party/omp](../../../third-party/omp/README.md)：从
-  TUI 提取共享命令构建，ACP/RPC 调用同一补全器及插件函数。补丁不自动安装、不更改
-  系统 OMP，也不代表官方已经发布该 API。
+- [OMP 版本与能力说明](../../../third-party/omp/README.md)只保留固定版本来源、能力协商与限制。
+  未发布的上游补丁独立保存，不放在本次 Ait 交付中，也不代表官方已经发布该 API。
 
 ## 后果
 

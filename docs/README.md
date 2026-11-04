@@ -25,6 +25,7 @@
 - [Agent Skill 分发](operations/agent-skills.md)：内置技能、更新、选择和卸载。
 - [OMP 模型角色与原生操作](operations/oh-my-pi.md)：角色配置、异步模型目录及官方已导出操作；
   [原生 UI 与拥有者边界](decisions/providers/adr-218-native-ui-and-actions.md)、[验收报告](reports/providers/native-delivery-and-omp-roles-2026-11-02.md)。
+- [原生控制结果兼容](decisions/providers/adr-214-native-control-result-cards.md)：旧客户端文本封装与当前结果卡片共用实时及历史出口。
 - [查看子 Agent](decisions/providers/adr-209-observed-subagent-normalization.md)：统一会话入口、父子关系与只读观测边界。
 - [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)。
 - [语音与听写](operations/speech.md)、[移动端通知](operations/mobile-notifications.md)。

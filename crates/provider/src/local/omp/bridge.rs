@@ -158,20 +158,8 @@ impl AgentSession for Session {
     async fn complete_commands(
         &mut self,
         input: &crate::protocol::commands::CompletionInput,
-    ) -> Result<crate::protocol::commands::CompletionResult, AgentSessionError> {
-        input.validate()?;
-        let result = self
-            .request(
-                "_omp/commands/complete",
-                json!({
-                    "sessionId":self.id,"text":input.text,"cursor":input.cursor
-                }),
-            )
-            .await?;
-        let result: crate::protocol::commands::CompletionResult =
-            serde_json::from_value(result).map_err(|_| AgentSessionError::Failed)?;
-        result.validate(input)?;
-        Ok(result)
+    ) -> Result<crate::protocol::commands::ValidatedCompletion, AgentSessionError> {
+        self.engine.native_mut()?.complete_commands(input).await
     }
     fn commands(&self) -> Option<&[Value]> {
         self.engine.native().and_then(AgentSession::commands)

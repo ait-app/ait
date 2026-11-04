@@ -1,40 +1,18 @@
-# OMP native completion proposal
+# OMP native interface compatibility
 
-[native-completion.patch](native-completion.patch) is a reviewable upstream proposal for OMP 18.14.0,
-tag `v18.14.0` (`31147f9d1a76608549821c3759f8487b4d66c72d`). It is
-not applied by Ait installation or builds. The upstream code is MIT licensed;
-its notice is preserved in [LICENSE](LICENSE).
+Ait supports the public interfaces of official OMP 18.14.0, pinned to
+[`v18.14.0` / `31147f9d`](https://github.com/can1357/oh-my-pi/tree/31147f9d1a76608549821c3759f8487b4d66c72d).
+Installation and builds do not modify OMP.
 
-The patch extracts existing TUI command builders and their live completion
-context. TUI, ACP and RPC share builtin argument completion, extension/custom
-callbacks, file commands and template precedence. Ait does not copy the completer.
+Native editor completion is used only after `commandCompletion.version = 1` is
+advertised. Otherwise Ait keeps the command catalog fallback. Arbitrary custom
+TUI factories remain outside the official RPC surface.
 
-The proposed ACP extension advertises `_meta.ompCommandCompletion.version = 1`
-in initialize and accepts `_omp/commands/complete` with `{sessionId,text,cursor}`.
-RPC advertises `ready.capabilities.commandCompletion.version = 1` and accepts
-`complete` with `{text,cursor}`. Both return `{supported:true,items}`. Offsets use
-UTF-16 code units; candidates include exact edits and resulting carets.
+The unshipped completion proposal is isolated from this delivery. Its original
+[patch and license](https://github.com/ait-app/ait/tree/1628ace3/third-party/omp)
+remain available as historical design material; they are not part of current
+installation or builds. An independent local proposal commit is `82ba8c84`
+(`proposal/native-provider-interfaces-20261104`).
 
-Lookup does not submit prompts or invoke `onApplied` callbacks. Candidates that
-leave both text and caret unchanged are omitted so Enter can submit a completed
-command. RPC lookup runs
-outside the serial command queue, so an unanswered form cannot block it. Limits:
-64 KiB input/resulting text, 256 candidates, 896 KiB candidate data, 750 ms lookup.
-Newer lookup aborts the previous one. Generated schemas and Python/Rust/Go wire
-definitions are included.
-
-Only remotely executable builtins are offered. Arbitrary TUI factories, editor
-actions with local callbacks and TUI-only dashboards still need semantic remote
-operations; this patch does not claim to implement them.
-
-Isolated validation uses the official npm source package and embedded Bun from
-`/usr/bin/omp`, with test-only models and plugins. Rust tests distinguish the
-unmodified installed binary (`AIT_TEST_OMP_BIN`) from the patched source runtime
-(`AIT_TEST_OMP_COMPLETION_BIN`). The latter verifies native ACP, three levels of
-plugin completion, and lookup while an extension form remains unanswered.
-
-For upstream review, apply the patch to the recorded release source, run the
-focused `test/slash-commands/session-completion.test.ts`, regenerate RPC artifacts
-with `bun run gen:rpc`, and run package checks. See
-[ADR-212](../../docs/decisions/providers/adr-212-native-editor-completion.md)
-for the Ait integration boundary.
+See [ADR-212](../../docs/decisions/providers/adr-212-native-editor-completion.md)
+for the negotiated Ait integration boundary.

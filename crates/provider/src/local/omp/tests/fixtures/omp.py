@@ -30,6 +30,7 @@ if args[:1] == ['models']:
     print(json.dumps({'models': [
         {'selector': 'test/model', 'name': 'Fixture model', 'kind': 'chat', 'input': ['text', 'image'], 'thinking': ['low', 'high']},
         {'selector': 'other/model', 'name': 'Other', 'kind': 'chat', 'input': ['text'], 'thinking': ['low', 'high', 'max']},
+        *(json.loads((root / 'extra-models.json').read_text()) if (root / 'extra-models.json').exists() else []),
         *[{'selector': 'test/' + kind, 'name': kind, 'kind': kind} for kind in ['tiny', 'image', 'search', 'tts', 'stt', 'judge']]
     ]}))
     sys.exit(0)

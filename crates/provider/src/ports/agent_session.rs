@@ -101,8 +101,8 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
     async fn complete_commands(
         &mut self,
         _input: &crate::protocol::commands::CompletionInput,
-    ) -> Result<crate::protocol::commands::CompletionResult, AgentSessionError> {
-        Ok(crate::protocol::commands::CompletionResult::default())
+    ) -> Result<crate::protocol::commands::ValidatedCompletion, AgentSessionError> {
+        Ok(crate::protocol::commands::ValidatedCompletion::default())
     }
     /// Latest command catalog from this native session, including aliases and argument metadata.
     /// `None` asks discovery to use the provider client; an empty slice is authoritative.
@@ -367,8 +367,8 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
         &self,
         _spec: &AgentSessionSpec,
         _input: &crate::protocol::commands::CompletionInput,
-    ) -> Result<crate::protocol::commands::CompletionResult, AgentSessionError> {
-        Ok(crate::protocol::commands::CompletionResult::default())
+    ) -> Result<crate::protocol::commands::ValidatedCompletion, AgentSessionError> {
+        Ok(crate::protocol::commands::ValidatedCompletion::default())
     }
     /// Whether command discovery for registered Agents should read their live session owner.
     /// Other adapters keep isolated discovery so catalog reads cannot block their native turn.
