@@ -244,14 +244,17 @@ fn output_text(value: &Value) -> String {
 }
 
 fn preview(text: &str) -> Cow<'_, str> {
+    truncate(text, PREVIEW_BYTES)
+}
+
+/// Bound `text` to `limit` bytes on a UTF-8 boundary, including a truncation marker.
+/// Text that already fits is borrowed unchanged.
+pub(super) fn truncate(text: &str, limit: usize) -> Cow<'_, str> {
     const MARKER: &str = "\n[Output truncated; full output remains in the native transcript.]";
-    if text.len() <= PREVIEW_BYTES {
+    if text.len() <= limit {
         return Cow::Borrowed(text);
     }
-    let mut end = PREVIEW_BYTES - MARKER.len();
-    while !text.is_char_boundary(end) {
-        end -= 1;
-    }
+    let end = text.floor_char_boundary(limit.saturating_sub(MARKER.len()));
     Cow::Owned(format!("{}{MARKER}", &text[..end]))
 }
 

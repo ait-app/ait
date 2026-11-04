@@ -6,6 +6,7 @@ use std::{
 
 use serde_json::{Value, json};
 
+use crate::local::{acp_config, tool_detail};
 use crate::{
     local::images::ImageStore,
     ports::agent_session::{AgentSessionError, AgentTurnEvent},
@@ -93,17 +94,17 @@ impl Stream {
         match update["sessionUpdate"].as_str() {
             Some("user_message_chunk") => self.chunk(
                 "user_message",
-                super::config::text(update, "messageId")?,
+                acp_config::text(update, "messageId")?,
                 &update["content"],
             ),
             Some("agent_message_chunk") => self.chunk(
                 "assistant_message",
-                super::config::text(update, "messageId")?,
+                acp_config::text(update, "messageId")?,
                 &update["content"],
             ),
             Some("agent_thought_chunk") => self.chunk(
                 "reasoning",
-                super::config::text(update, "messageId")?,
+                acp_config::text(update, "messageId")?,
                 &update["content"],
             ),
             Some("tool_call" | "tool_call_update") => self.tool(update),
@@ -120,7 +121,7 @@ impl Stream {
                     _ => return Ok(()),
                 };
                 self.compaction(
-                    super::config::text(marker, "messageId")?,
+                    acp_config::text(marker, "messageId")?,
                     status,
                     marker["reason"].as_str(),
                 )
@@ -224,10 +225,7 @@ impl Stream {
         while !remaining.is_empty() {
             let current = self.current.as_mut().ok_or(AgentSessionError::Failed)?;
             let available = TEXT_BYTES - current.buffer.len();
-            let mut count = available.min(remaining.len());
-            while !remaining.is_char_boundary(count) {
-                count -= 1;
-            }
+            let count = remaining.floor_char_boundary(available.min(remaining.len()));
             if count == 0 {
                 self.split_text()?;
                 continue;
@@ -273,7 +271,7 @@ impl Stream {
 
     fn tool(&mut self, update: &Value) -> Result<(), AgentSessionError> {
         self.flush();
-        let id = super::config::text(update, "toolCallId")?;
+        let id = acp_config::text(update, "toolCallId")?;
         if self.tools.len() >= 128 && !self.tools.contains_key(id) {
             return Err(AgentSessionError::Failed);
         }
@@ -368,10 +366,9 @@ impl Stream {
                     self.last_message = Some(String::new());
                 }
                 if let Some(message) = &mut self.last_message {
-                    let mut length = (8 * 1024 * 1024 - message.len()).min(current.buffer.len());
-                    while !current.buffer.is_char_boundary(length) {
-                        length -= 1;
-                    }
+                    let length = current.buffer.floor_char_boundary(
+                        (8 * 1024 * 1024 - message.len()).min(current.buffer.len()),
+                    );
                     message.push_str(&current.buffer[..length]);
                 }
             }
@@ -418,15 +415,8 @@ fn preview(value: &Value) -> Value {
     let text = value
         .as_str()
         .map_or_else(|| Cow::Owned(value.to_string()), Cow::Borrowed);
-    if text.len() <= PREVIEW_BYTES {
-        return value.clone();
+    match tool_detail::truncate(&text, PREVIEW_BYTES) {
+        Cow::Borrowed(_) => value.clone(),
+        Cow::Owned(truncated) => json!(truncated),
     }
-    let mut end = PREVIEW_BYTES;
-    while !text.is_char_boundary(end) {
-        end -= 1;
-    }
-    json!(format!(
-        "{}\n[Output truncated; full output remains in the native transcript.]",
-        &text[..end]
-    ))
 }

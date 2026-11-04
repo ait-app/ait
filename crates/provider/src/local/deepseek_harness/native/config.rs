@@ -1,9 +1,6 @@
 //! Native Host model catalog and session-local permission presets.
-use super::{
-    super::{PROVIDER, config::text},
-    http::Api,
-    presets,
-};
+use super::{super::PROVIDER, http::Api, presets};
+use crate::local::acp_config::text;
 use crate::{ports::agent_session::AgentSessionError, protocol::provider::Details};
 use domain::agent_runtime::{StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};

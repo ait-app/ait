@@ -43,12 +43,6 @@ async fn writes_distinguish_closed_input_from_timeout_and_frame_limit() {
     );
 }
 
-#[test]
-fn absent_process_group_requires_no_cleanup() {
-    signal_group(None, "-TERM");
-    signal_group(None, "-KILL");
-}
-
 #[tokio::test]
 async fn extension_notifications_are_ignored_but_unknown_methods_fail_explicitly() {
     let input = Mutex::new(None);

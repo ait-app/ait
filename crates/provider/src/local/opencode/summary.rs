@@ -3,7 +3,8 @@ use std::{collections::BTreeMap, time::Duration};
 
 use serde_json::{Value, json};
 
-use super::{OpenCodeClient, config, launcher};
+use super::{client::OpenCodeClient, config, launcher};
+use crate::local::acp_config;
 use crate::{
     local::acp_transport::Transport,
     ports::agent_session::{AgentSessionError, AgentSessionSpec},
@@ -116,9 +117,9 @@ pub(super) async fn generate(
     let result = async {
         let transport = temporary.transport.as_mut().ok_or(AgentSessionError::Failed)?;
         let result = transport.startup_request("session/new", json!({"cwd":spec.cwd,"mcpServers":[]}), client.startup_timeout).await?;
-        let id = config::text(&result, "sessionId")?.to_owned();
+        let id = acp_config::text(&result, "sessionId")?.to_owned();
         temporary.id = Some(id.clone());
-        let mut options = config::state(&result)?;
+        let mut options = acp_config::state(&result)?;
         config::apply(transport, &id, &mut options, &selected).await?;
         let mut answer = String::new();
         let result = transport.request_with_updates("session/prompt", json!({"sessionId":id,

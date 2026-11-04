@@ -159,3 +159,15 @@ fn claude_results_populate_typed_cards_and_unknown_tools_preserve_structured_res
             .contains("Output truncated")
     );
 }
+
+#[test]
+fn truncation_respects_the_byte_limit_and_utf8_boundaries() {
+    assert!(matches!(truncate("short", 1024), Cow::Borrowed("short")));
+    let text = "文".repeat(1000);
+
+    let truncated = truncate(&text, 200);
+
+    assert!(truncated.len() <= 200);
+    assert!(truncated.starts_with('文'));
+    assert!(truncated.ends_with("remains in the native transcript.]"));
+}

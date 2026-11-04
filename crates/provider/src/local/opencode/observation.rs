@@ -138,9 +138,11 @@ impl Observation {
     pub(super) async fn next(&mut self) -> Result<Vec<Value>, AgentSessionError> {
         loop {
             if self.resync {
-                let updates = self.refresh(true).await?;
+                let result = self.refresh(true).await;
+                // A cancelled refresh retries on the next poll. A completed one, including a
+                // failure, waits for the next reconnect instead of retrying in a tight loop.
                 self.resync = false;
-                return Ok(updates);
+                return result;
             }
             let Some(event) = self.receiver.recv().await else {
                 return std::future::pending().await;

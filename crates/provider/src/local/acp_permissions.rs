@@ -1,5 +1,7 @@
 //! Shared ACP tool-permission callbacks for stdio ACP adapters.
 
+use std::collections::BTreeMap;
+
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -94,6 +96,46 @@ pub(crate) fn capture(message: &Value, provider: &str) -> Result<Pending, AgentS
             "detail":{"type":"unknown","input":params["toolCall"]["rawInput"],"output":null},
             "metadata":{"toolCallId":params["toolCall"]["toolCallId"]}}),
     })
+}
+
+/// Retain a native permission callback for the active prompt of one session.
+///
+/// # Arguments
+///
+/// * `message` - Native `session/request_permission` callback.
+/// * `session` - Native session identity the callback must address.
+/// * `active` - Whether a prompt is currently running in that session.
+/// * `pending` - Callbacks awaiting a host answer, keyed by host request identity.
+/// * `provider` - Stable provider identity recorded on the host request.
+///
+/// # Returns
+/// The host-facing request to publish.
+///
+/// # Errors
+///
+/// Returns `AgentSessionError::Failed` outside an active prompt, for another session,
+/// beyond 128 pending callbacks, for a repeated native identity, or for a callback that
+/// [`capture`] rejects.
+pub(super) fn admit(
+    message: &Value,
+    session: &str,
+    active: bool,
+    pending: &mut BTreeMap<String, Pending>,
+    provider: &str,
+) -> Result<Value, AgentSessionError> {
+    if !active
+        || message["params"]["sessionId"] != session
+        || pending.len() >= 128
+        || pending
+            .values()
+            .any(|retained| retained.rpc_id == message["id"])
+    {
+        return Err(AgentSessionError::Failed);
+    }
+    let captured = capture(message, provider)?;
+    let request = captured.request.clone();
+    pending.insert(text(&request, "id")?.to_owned(), captured);
+    Ok(request)
 }
 
 /// Validate a host tool answer and build its exact native callback reply.

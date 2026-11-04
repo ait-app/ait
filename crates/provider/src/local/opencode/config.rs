@@ -3,11 +3,8 @@ use std::{collections::BTreeMap, path::Path};
 use domain::agent_runtime::{StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
 
-// The adapter's ACP configuration surface: shared helpers stay owned by `acp_config`,
-// while this facade keeps adapter-local call sites on one path.
-pub(super) use crate::local::acp_config::{choices, option, state, text};
-
 use super::PROVIDER;
+use crate::local::acp_config::{choices, option, state, text};
 use crate::local::acp_transport::Transport;
 use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 

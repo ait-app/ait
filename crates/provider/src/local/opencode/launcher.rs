@@ -1,18 +1,30 @@
 //! ACP launch configuration only; no project files or shared native configuration are written.
-use std::{path::Path, process::Stdio};
+use std::path::Path;
 
 use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Value, json};
-use tokio::{io::AsyncReadExt, process::Command, time::Instant};
+use tokio::{process::Command, time::Instant};
 
-use super::{OpenCodeClient, config, observation::Source};
-use crate::{local::acp_transport::Transport, ports::agent_session::AgentSessionError};
+use super::{client::OpenCodeClient, config, observation::Source};
+use crate::local::{acp_transport::Transport, metadata_process::Process};
+use crate::ports::agent_session::AgentSessionError;
 
-/// Read and validate the installed CLI version; unsupported releases return unavailable.
+const MAX_QUERY_BYTES: u64 = 8 * 1024 * 1024;
+
+/// Read and validate the installed CLI version once per configured client.
+/// Unsupported releases return unavailable; failures are retried on the next call.
 pub(super) async fn version(
     client: &OpenCodeClient,
     cwd: &str,
 ) -> Result<String, AgentSessionError> {
+    client
+        .version
+        .get_or_try_init(|| probe_version(client, cwd))
+        .await
+        .cloned()
+}
+
+async fn probe_version(client: &OpenCodeClient, cwd: &str) -> Result<String, AgentSessionError> {
     let output = read(client, cwd, &["--version"]).await?;
     let version = output
         .trim()
@@ -279,45 +291,19 @@ pub(super) async fn read(
     if !Path::new(cwd).is_dir() {
         return Err(AgentSessionError::Rejected);
     }
-    let mut command = Command::new(&client.program);
-    command
-        .args(arguments)
-        .envs(&client.environment)
-        .current_dir(cwd)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true);
-    let mut child = command.spawn().map_err(|error| {
+    let process = Process::spawn(
+        Command::new(&client.program)
+            .args(arguments)
+            .envs(&client.environment)
+            .current_dir(cwd),
+    )
+    .map_err(|error| {
         tracing::warn!(error_kind = ?error.kind(), os_error = error.raw_os_error(), "OpenCode CLI query failed to start");
         AgentSessionError::Unavailable
     })?;
-    let mut stdout = child
-        .stdout
-        .take()
-        .ok_or(AgentSessionError::Failed)?
-        .take(8 * 1024 * 1024 + 1);
-    tokio::time::timeout(client.startup_timeout, async {
-        let mut bytes = Vec::new();
-        stdout
-            .read_to_end(&mut bytes)
-            .await
-            .map_err(|_| AgentSessionError::Failed)?;
-        if bytes.len() > 8 * 1024 * 1024 {
-            return Err(AgentSessionError::Failed);
-        }
-        if !child
-            .wait()
-            .await
-            .map_err(|_| AgentSessionError::Failed)?
-            .success()
-        {
-            return Err(AgentSessionError::Failed);
-        }
-        String::from_utf8(bytes).map_err(|_| AgentSessionError::Failed)
-    })
-    .await
-    .map_err(|_| AgentSessionError::Failed)?
+    tokio::time::timeout(client.startup_timeout, process.output(MAX_QUERY_BYTES))
+        .await
+        .map_err(|_| AgentSessionError::Failed)?
 }
 
 #[cfg(test)]

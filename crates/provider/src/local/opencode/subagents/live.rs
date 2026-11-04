@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use serde_json::{Value, json};
 
 use super::{Links, MAX_CHILDREN, descriptor, valid_id};
+use crate::local::acp_config;
 use crate::{
     local::{images::ImageStore, opencode::streaming::Stream},
     ports::{
@@ -230,10 +231,10 @@ impl Live {
         frame: &Value,
         events: &mut Vec<AgentTurnEvent>,
     ) -> Result<bool, AgentSessionError> {
-        let kind = super::super::config::text(frame, "type")?;
+        let kind = acp_config::text(frame, "type")?;
         let status = match kind {
             "update" => None,
-            "status" => match super::super::config::text(frame, "status")? {
+            "status" => match acp_config::text(frame, "status")? {
                 "created" | "running" => Some("running"),
                 "completed" => Some("completed"),
                 "failed" => Some("failed"),
@@ -248,8 +249,8 @@ impl Live {
                 return Ok(true);
             }
         };
-        let id = super::super::config::text(frame, "childSessionId")?;
-        let parent = super::super::config::text(frame, "parentSessionId")?;
+        let id = acp_config::text(frame, "childSessionId")?;
+        let parent = acp_config::text(frame, "parentSessionId")?;
         valid_id(id)?;
         valid_id(parent)?;
         if id == self.root

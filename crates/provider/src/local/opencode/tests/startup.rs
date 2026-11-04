@@ -133,12 +133,13 @@ async fn legacy_owned_catalog_avoids_extra_cli_processes_and_native_sessions() {
     );
     assert_eq!(details.modes.len(), 3);
     assert!(!root.path().join("native-fixture.json").exists());
+    // One version probe is shared by availability and discovery; the other is the ACP child.
     assert_eq!(
         std::fs::read_to_string(root.path().join("pids.txt"))
             .unwrap()
             .lines()
             .count(),
-        3
+        2
     );
     let requests: Vec<Value> = std::fs::read_to_string(root.path().join("http-requests.jsonl"))
         .unwrap()

@@ -13,6 +13,7 @@ use super::{
     streaming::Stream,
     transport::{self, Transport},
 };
+use crate::local::prompt_blocks;
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
@@ -291,16 +292,7 @@ impl Session {
         if self.closed || self.active.is_some() || prompt.output_schema.is_some() {
             return Err(AgentSessionError::Rejected);
         }
-        let blocks = prompt.blocks()?;
-        let text = blocks
-            .iter()
-            .filter_map(|block| block["text"].as_str())
-            .collect::<Vec<_>>()
-            .join("\n\n");
-        let images: Vec<_> = blocks
-            .into_iter()
-            .filter(|block| block["type"] == "image")
-            .collect();
+        let (text, images) = prompt_blocks::split(prompt.blocks()?);
         if self
             .rejected_thinking
             .as_deref()

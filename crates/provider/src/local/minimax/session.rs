@@ -7,11 +7,7 @@ use uuid::Uuid;
 
 use super::{MiniMaxClient, PROVIDER, config};
 use crate::local::acp_streaming::Stream;
-use crate::local::{
-    acp_config::text,
-    acp_permissions,
-    acp_transport::{self as transport, Transport},
-};
+use crate::local::{acp_config::text, acp_permissions, acp_transport::Transport, prompt_blocks};
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
@@ -176,11 +172,7 @@ impl Session {
             .collect::<Result<Vec<_>, _>>()?;
         self.transport.diagnostics.clear();
         config::apply(&mut self.transport, &self.id, &mut self.options, config).await?;
-        let user_text = blocks
-            .iter()
-            .filter_map(|block| block["text"].as_str())
-            .collect::<Vec<_>>()
-            .join("\n\n");
+        let user_text = prompt_blocks::text(&blocks);
         let turn = Uuid::new_v4().to_string();
         let rpc_id = self
             .transport
@@ -250,50 +242,25 @@ impl Session {
                 }
             }
             Some("session/request_permission") => {
-                if self.active.is_none()
-                    || message["params"]["sessionId"] != self.id
-                    || self.permissions.len() >= 128
-                    || self
-                        .permissions
-                        .values()
-                        .any(|pending| pending.rpc_id == message["id"])
-                {
-                    return Err(AgentSessionError::Failed);
-                }
-                let pending = acp_permissions::capture(message, PROVIDER)?;
-                let id = text(&pending.request, "id")?.to_owned();
+                let request = acp_permissions::admit(
+                    message,
+                    &self.id,
+                    self.active.is_some(),
+                    &mut self.permissions,
+                    PROVIDER,
+                )?;
                 self.stream
                     .events
-                    .push_back(AgentTurnEvent::PermissionRequested(pending.request.clone()));
-                self.permissions.insert(id, pending);
+                    .push_back(AgentTurnEvent::PermissionRequested(request));
             }
             None => {
                 let (_, id) = self.active.as_ref().ok_or(AgentSessionError::Failed)?;
                 if message["id"] != *id {
                     return Err(AgentSessionError::Failed);
                 }
-                self.stream.flush();
-                self.stream.finish_compactions();
-                if let Some(error) = message.get("error") {
-                    self.transport
-                        .diagnostics
-                        .observe_native(error, "rpc", "session/prompt");
-                }
-                let event = match transport::response(message) {
-                    Ok(result) => match result["stopReason"].as_str() {
-                        Some("cancelled") => AgentTurnEvent::Cancelled,
-                        Some("end_turn" | "max_tokens" | "max_turn_requests" | "refusal") => {
-                            AgentTurnEvent::Completed(self.stream.last_message.clone())
-                        }
-                        _ => AgentTurnEvent::Failed,
-                    },
-                    Err(_) => AgentTurnEvent::Failed,
-                };
-                for id in std::mem::take(&mut self.permissions).into_keys() {
+                let event =
                     self.stream
-                        .events
-                        .push_back(AgentTurnEvent::PermissionResolved(id));
-                }
+                        .settle(message, &mut self.permissions, &self.transport.diagnostics);
                 if let Some(usage) = message["result"].get("usage") {
                     let usage = crate::protocol::usage::AgentUsage {
                         input_tokens: usage["inputTokens"].as_u64(),

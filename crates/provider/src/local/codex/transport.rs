@@ -12,6 +12,7 @@ use tokio::sync::{Mutex, mpsc};
 use tokio::task::JoinHandle;
 
 use crate::local::diagnostics::{self, Diagnostics};
+use crate::local::process_group::{self, Signal};
 use crate::ports::agent_session::AgentSessionError;
 use crate::ports::diagnostics::{Category, Diagnostic};
 use tokio_util::task::AbortOnDropHandle;
@@ -449,16 +450,7 @@ impl Transport {
         self.pending_response = None;
         self.events = events::Queue::default();
         self.reader.abort();
-        #[cfg(unix)]
-        if let Some(id) = self.child.id() {
-            let mut signal = Command::new("/bin/kill");
-            signal
-                .args(["-KILL", "--", &format!("-{id}")])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .kill_on_drop(true);
-            let _ = tokio::time::timeout(Duration::from_secs(1), signal.status()).await;
-        }
+        process_group::signal(self.child.id(), Signal::Kill);
         // kill is idempotent for an already-exited child; wait always reaps it.
         let _ = self.child.start_kill();
         tokio::time::timeout(Duration::from_secs(2), self.child.wait())
@@ -515,14 +507,7 @@ async fn write_response(
 impl Drop for Transport {
     fn drop(&mut self) {
         self.reader.abort();
-        #[cfg(unix)]
-        if let Some(id) = self.child.id() {
-            let _ = std::process::Command::new("/bin/kill")
-                .args(["-KILL", "--", &format!("-{id}")])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
-        }
+        process_group::signal(self.child.id(), Signal::Kill);
         // kill_on_drop handles exceptional paths; normal ownership ends through close + wait.
     }
 }

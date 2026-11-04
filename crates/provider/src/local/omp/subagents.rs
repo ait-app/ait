@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use chrono::Utc;
 use serde_json::{Value, json};
 
-use super::{config, stream::Stream};
+use super::{PROVIDER, config, stream::Stream};
 use crate::local::images::ImageStore;
 use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use crate::ports::controls::{NativeSubagent, SubagentEvent};
@@ -48,10 +48,12 @@ impl Children {
             let Some(child) = self.children.get_mut(id) else {
                 return Ok(Vec::new());
             };
-            child
-                .stream
-                .consume(&payload["event"])
-                .map_err(|_| AgentSessionError::Failed)?;
+            if child.stream.consume(&payload["event"]).is_err() {
+                // A child's display projection must not fail the parent turn.
+                tracing::debug!("Ignoring an OMP child event that could not be projected");
+                child.stream.events.clear();
+                return Ok(Vec::new());
+            }
             return Ok(child
                 .stream
                 .events
@@ -89,7 +91,10 @@ impl Children {
             Some("completed") => "completed",
             Some("failed") => "failed",
             Some("aborted") => "canceled",
-            _ => return Err(AgentSessionError::Failed),
+            _ => {
+                tracing::debug!("Ignoring an unknown OMP child status");
+                return Ok(Vec::new());
+            }
         };
         let now = Utc::now().to_rfc3339();
         let blobs = &self.blobs;
@@ -99,7 +104,7 @@ impl Children {
                 id: id.to_owned(),
                 parent_id: parent.to_owned(),
                 cwd: cwd.to_owned(),
-                descriptor: json!({"id":id,"provider":"omp","title":payload["agent"],"cwd":cwd,
+                descriptor: json!({"id":id,"provider":PROVIDER,"title":payload["agent"],"cwd":cwd,
                     "description":payload["description"],"createdAt":now,"updatedAt":now,
                     "toolCallId":payload["parentToolCallId"],"status":status}),
             },

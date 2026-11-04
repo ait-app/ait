@@ -10,6 +10,7 @@ use tokio::task::JoinHandle;
 use tokio_util::task::AbortOnDropHandle;
 
 use crate::local::diagnostics::Diagnostics;
+use crate::local::process_group::{self, Signal};
 use crate::ports::agent_session::AgentSessionError;
 use crate::ports::diagnostics::{Category, Diagnostic};
 
@@ -295,7 +296,7 @@ impl Transport {
         self.diagnostics.flush();
         self.closed = true;
         self.reader.abort();
-        kill_group(&self.child);
+        process_group::signal(self.child.id(), Signal::Kill);
         let _ = self.child.start_kill();
         tokio::time::timeout(Duration::from_secs(2), self.child.wait())
             .await
@@ -308,21 +309,8 @@ impl Transport {
 impl Drop for Transport {
     fn drop(&mut self) {
         self.reader.abort();
-        kill_group(&self.child);
+        process_group::signal(self.child.id(), Signal::Kill);
     }
-}
-
-fn kill_group(child: &Child) {
-    #[cfg(unix)]
-    if let Some(id) = child.id() {
-        let _ = std::process::Command::new("/bin/kill")
-            .args(["-KILL", "--", &format!("-{id}")])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-    }
-    #[cfg(not(unix))]
-    let _ = child;
 }
 
 /// Decode a JSON-RPC result or return a safe rejection/failure without exposing native payloads.

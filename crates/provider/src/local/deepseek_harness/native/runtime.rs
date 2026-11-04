@@ -16,6 +16,7 @@ use tokio_tungstenite::{
 
 use super::super::DeepSeekHarnessClient;
 use super::http::{Api, MAX_FRAME};
+use crate::local::process_group::{self, Signal};
 use crate::ports::agent_session::AgentSessionError;
 
 type Writer = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
@@ -86,7 +87,7 @@ impl Runtime {
                 crate::ports::diagnostics::Diagnostic::new(category, "transport"),
                 "connect",
             );
-            kill_group(&child);
+            process_group::signal(child.id(), Signal::Kill);
             let _ = child.kill().await;
             Err(AgentSessionError::Failed)
         }
@@ -151,7 +152,7 @@ impl Runtime {
         {
             return Err(AgentSessionError::Failed);
         }
-        let client_id = super::super::config::text(&ready["value"], "clientId")?.to_owned();
+        let client_id = crate::local::acp_config::text(&ready["value"], "clientId")?.to_owned();
         let (writer, mut socket) = socket.split();
         let (sender, events) = mpsc::channel(128);
         let reader = tokio::spawn(async move {
@@ -236,7 +237,7 @@ impl Runtime {
         self.closed = true;
         self.reader.abort();
         #[cfg(unix)]
-        signal_group(&self.child, "-TERM");
+        process_group::signal(self.child.id(), Signal::Terminate);
         #[cfg(not(unix))]
         let _ = self.child.start_kill();
         if matches!(
@@ -245,7 +246,7 @@ impl Runtime {
         ) {
             return Ok(());
         }
-        kill_group(&self.child);
+        process_group::signal(self.child.id(), Signal::Kill);
         let _ = self.child.start_kill();
         tokio::time::timeout(Duration::from_secs(2), self.child.wait())
             .await
@@ -258,23 +259,6 @@ impl Runtime {
 impl Drop for Runtime {
     fn drop(&mut self) {
         self.reader.abort();
-        kill_group(&self.child);
+        process_group::signal(self.child.id(), Signal::Kill);
     }
-}
-
-fn kill_group(child: &Child) {
-    signal_group(child, "-KILL");
-}
-
-fn signal_group(child: &Child, signal: &str) {
-    #[cfg(unix)]
-    if let Some(id) = child.id() {
-        let _ = std::process::Command::new("/bin/kill")
-            .args([signal, "--", &format!("-{id}")])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-    }
-    #[cfg(not(unix))]
-    let _ = (child, signal);
 }

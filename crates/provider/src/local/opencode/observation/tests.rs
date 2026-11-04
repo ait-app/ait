@@ -217,3 +217,33 @@ fn native_completion_fails_an_unfinished_compaction_instead_of_leaving_it_loadin
     );
     assert_eq!(projection.finish().unwrap(), [] as [Value; 0]);
 }
+
+#[tokio::test]
+async fn failed_resync_waits_for_the_next_reconnect_instead_of_retrying_immediately() {
+    let mut source = Source::prepare("1.18.4", Duration::from_secs(1))
+        .unwrap()
+        .unwrap();
+    // Releasing the reserved address leaves nothing listening, so refreshes fail fast.
+    source.release();
+    let (sender, receiver) = mpsc::channel(1);
+    let mut observation = Observation {
+        client: source.client,
+        id: "parent".to_owned(),
+        cwd: "/tmp".to_owned(),
+        projection: Projection::default(),
+        receiver,
+        _task: AbortOnDropHandle::new(tokio::spawn(async {})),
+        initial: Vec::new(),
+        resync: true,
+    };
+
+    assert!(observation.next().await.is_err());
+    let idle = tokio::time::timeout(Duration::from_millis(100), observation.next()).await;
+
+    assert!(idle.is_err());
+    sender
+        .send(json!({"type":"ait.observation.resync"}))
+        .await
+        .unwrap();
+    assert!(observation.next().await.is_err());
+}

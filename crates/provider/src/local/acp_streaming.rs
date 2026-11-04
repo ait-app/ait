@@ -4,6 +4,9 @@ use chrono::Utc;
 use serde_json::{Value, json};
 
 use super::acp_config::text;
+use super::acp_permissions::Pending;
+use super::acp_transport;
+use super::diagnostics::Diagnostics;
 use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
 
@@ -43,6 +46,44 @@ impl Stream {
             images,
             ..Self::default()
         }
+    }
+
+    /// Settle the active ACP prompt from its correlated JSON-RPC `response`.
+    ///
+    /// Flushes buffered output, closes open compactions, records a native error in
+    /// `diagnostics` and queues a resolution for every outstanding permission in `pending`.
+    ///
+    /// # Returns
+    ///
+    /// The terminal turn event for the caller to queue: `Cancelled`, `Completed` for an
+    /// ordinary end, refusal or token/turn limit, and `Failed` otherwise.
+    pub(super) fn settle(
+        &mut self,
+        response: &Value,
+        pending: &mut BTreeMap<String, Pending>,
+        diagnostics: &Diagnostics,
+    ) -> AgentTurnEvent {
+        self.flush();
+        self.finish_compactions();
+        if let Some(error) = response.get("error") {
+            diagnostics.observe_native(error, "rpc", "session/prompt");
+        }
+        let event = match acp_transport::response(response) {
+            Ok(result) => match result["stopReason"].as_str() {
+                Some("cancelled") => AgentTurnEvent::Cancelled,
+                Some("end_turn" | "max_tokens" | "max_turn_requests" | "refusal") => {
+                    AgentTurnEvent::Completed(self.last_message.clone())
+                }
+                _ => AgentTurnEvent::Failed,
+            },
+            Err(_) => AgentTurnEvent::Failed,
+        };
+        self.events.extend(
+            std::mem::take(pending)
+                .into_keys()
+                .map(AgentTurnEvent::PermissionResolved),
+        );
+        event
     }
 
     /// Reset per-turn state to `turn`, preserving events already queued for the host.
