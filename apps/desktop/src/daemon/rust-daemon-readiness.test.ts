@@ -13,6 +13,7 @@ interface ReadinessConfig {
   waitForReady?: boolean;
   exitBeforeReady?: boolean;
   wrongPid?: boolean;
+  tokenLineEnding?: boolean;
 }
 
 const fixtures: ReturnType<typeof create>[] = [];
@@ -76,6 +77,14 @@ describe.skipIf(process.platform === "win32")("daemon readiness and process owne
     await expect(manager.start()).resolves.toMatchObject({ status: "running" });
     expect(fixture.lines("requests")).toEqual([]);
     expect(fixture.lines("terminations")).toEqual([]);
+  });
+
+  it("accepts a saved credential with the trailing line ending the daemon tolerates", async () => {
+    const fixture = create({ tokenLineEnding: true });
+    const manager = fixture.manager();
+    const status = await manager.start();
+    expect(status).toMatchObject({ status: "running" });
+    expect(manager.authorization(`ws://${status.connectAddress}/v1/ws`)).toBe("t".repeat(64));
   });
 
   it.each([{ silent: true }, { closeHello: true }, { rejectHello: true }, { waitForReady: true }])(

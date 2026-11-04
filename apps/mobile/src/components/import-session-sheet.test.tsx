@@ -1357,4 +1357,55 @@ describe("ImportSessionSheet", () => {
       expect(fetchRecentProviderSessions).toHaveBeenCalledTimes(2);
     });
   });
+
+  it("does not show another host's cached sessions for the same directory", async () => {
+    applyHostMocks({
+      snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+    });
+    // The app's client keeps session lists fresh forever; only a host-scoped key avoids reuse.
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity, refetchOnMount: false } },
+    });
+    const firstHost = createRecentSessionsClient(
+      vi.fn(async () => ({
+        requestId: "recent-provider-sessions",
+        entries: [
+          createProviderSessionEntry({ providerId: "claude", title: "First host session" }),
+        ],
+      })),
+      vi.fn(),
+    );
+    const secondHost = createRecentSessionsClient(
+      vi.fn(async () => ({
+        requestId: "recent-provider-sessions",
+        entries: [
+          createProviderSessionEntry({ providerId: "claude", title: "Second host session" }),
+        ],
+      })),
+      vi.fn(),
+    );
+    const renderForHost = (
+      serverId: string,
+      client: Pick<DaemonClient, "fetchRecentProviderSessions" | "importAgent">,
+    ) => (
+      <QueryClientProvider client={queryClient}>
+        <ImportSessionSheet
+          visible
+          client={client}
+          serverId={serverId}
+          onClose={vi.fn()}
+          onImported={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+
+    const view = render(renderForHost("server-1", firstHost));
+    await screen.findByText("First host session");
+
+    view.rerender(renderForHost("server-2", secondHost));
+
+    await screen.findByText("Second host session");
+    expect(secondHost.fetchRecentProviderSessions).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("First host session")).toBeNull();
+  });
 });

@@ -26,6 +26,7 @@ describe("Paseo tool display", () => {
     ["create_agent", { title: "Reviewer", initialPrompt: "Review it" }, "Create agent", "Reviewer"],
     ["create_agent", { initialPrompt: "Review it" }, "Create agent", "Review it"],
     ["get_agent_status", { agentId: "agt_1" }, "Check agent", "agt_1"],
+    ["wait_for_agent", { agentId: "agt_1", timeoutMs: 5000 }, "Wait for agent", "agt_1"],
     ["update_agent", { agentId: "agt_1", name: "Renamed" }, "Update agent", "Renamed"],
     ["create_workspace", { path: "/tmp/repo/feature-x" }, "Create workspace", "feature-x"],
     ["create_workspace", { title: "Docs", branchName: "docs" }, "Create workspace", "Docs"],
@@ -41,22 +42,32 @@ describe("Paseo tool display", () => {
     ],
     ["browser_resize", { width: 800, height: 600 }, "Resize browser", "800×600"],
   ])("presents %s with a fixed label and its context", (tool, input, label, summary) => {
-    expect(display(`mcp__paseo__${tool}`, input)).toEqual({ displayName: label, summary });
+    expect(display(`mcp__ait__${tool}`, input)).toEqual({ displayName: label, summary });
   });
 
   it("omits the summary when a call has no context", () => {
     expect(display("mcp__paseo__list_agents", {})).toEqual({ displayName: "List agents" });
   });
 
-  it("recognizes every Paseo namespace format", () => {
-    for (const name of ["mcp__paseo__kill_agent", "paseo.kill_agent", "paseo_remote.kill_agent"]) {
+  it("recognizes every ait namespace format and the legacy Paseo namespace", () => {
+    for (const name of [
+      "mcp__ait__kill_agent",
+      "mcp__ait_remote__kill_agent",
+      "ait.kill_agent",
+      "ait_remote.kill_agent",
+      "mcp__paseo__kill_agent",
+      "paseo.kill_agent",
+      "paseo_remote.kill_agent",
+    ]) {
       expect(display(name, { agentId: "agt_1" })?.displayName).toBe("Kill agent");
     }
   });
 
   it("returns null outside the Paseo namespace, including speak", () => {
     expect(display("Bash", {})).toBeNull();
+    expect(display("mcp__ait__speak", { text: "hi" })).toBeNull();
     expect(display("mcp__paseo__speak", { text: "hi" })).toBeNull();
+    expect(display("mcp__aitx__kill_agent", {})).toBeNull();
   });
 
   it("humanizes a Paseo tool that has no catalog entry", () => {

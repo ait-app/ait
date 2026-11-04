@@ -241,6 +241,21 @@ describe("diff document workspace cache", () => {
     expect(loadCount).toBe(1);
     expect(resource.isReady()).toBe(true);
   });
+
+  it("becomes ready with fallback fonts when the font loader rejects", async () => {
+    const cache = createDiffDocumentWorkspaceCache();
+    const { measureText } = countingMeasurer();
+    const resource = cache.typography({
+      typography: { family: "Source Code Pro (NF)", size: 12, lineHeight: 18 },
+      load: async () => {
+        throw new SyntaxError("Could not parse font");
+      },
+      createMeasurer: () => measureText,
+    });
+
+    await expect(resource.load()).resolves.toMatchObject({ size: 12 });
+    expect(resource.isReady()).toBe(true);
+  });
 });
 
 function measuredFragmentCount(model: DiffDocumentModel, fileIndex: number): number {

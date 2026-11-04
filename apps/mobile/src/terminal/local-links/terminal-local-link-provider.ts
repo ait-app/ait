@@ -87,7 +87,8 @@ class TerminalLocalFileLinkProvider implements ILinkProvider {
         continue;
       }
 
-      const target = await this.options.resolveLink(source);
+      // A rejection would leave this line's request cached in activeRequests forever.
+      const target = await this.options.resolveLink(source).catch(() => null);
       if (!target) {
         continue;
       }

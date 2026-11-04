@@ -1326,7 +1326,10 @@ export class DaemonClient {
           this.sendHelloMessage();
         }),
         transport.onClose((event) => {
-          if (this.transport !== transport) return;
+          // The SDK connection reports a failure as error then close; one
+          // disconnect must schedule one retry, not double the backoff.
+          if (this.transport !== transport || this.connectionState.status === "disconnected")
+            return;
           this.resetConnectTimeout();
           if (this.pendingGenericTransportErrorTimeout) {
             clearTimeout(this.pendingGenericTransportErrorTimeout);
@@ -1343,7 +1346,8 @@ export class DaemonClient {
           });
         }),
         transport.onError((event) => {
-          if (this.transport !== transport) return;
+          if (this.transport !== transport || this.connectionState.status === "disconnected")
+            return;
           this.resetConnectTimeout();
           const reason = describeTransportError(event);
           const isGeneric = reason === "Transport error";
@@ -1422,9 +1426,8 @@ export class DaemonClient {
       return;
     }
     this.shouldReconnect = false;
-    this.connectPromise = null;
-    this.connectResolve = null;
-    this.connectReject = null;
+    // Settle an in-flight connect(); no later transport event can resolve it.
+    this.rejectConnect(new Error("Daemon client closed"));
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
@@ -1479,7 +1482,8 @@ export class DaemonClient {
       this.attemptConnect();
       return;
     }
-    void this.connect();
+    // Fire-and-forget: state listeners report failures, including close() during connect.
+    void this.connect().catch(() => undefined);
   }
 
   private verifyConnection(): void {
@@ -6550,7 +6554,13 @@ export class DaemonClient {
     const event = this.toEvent(consumerMessage);
     if (event) {
       for (const handler of this.eventListeners) {
-        handler(event);
+        // A throwing subscriber must not skip waiter resolution or reach the
+        // transport, which treats handler errors as a failed connection.
+        try {
+          handler(event);
+        } catch (error) {
+          this.logger.error({ err: error, eventType: event.type }, "Daemon event handler failed");
+        }
       }
     }
 

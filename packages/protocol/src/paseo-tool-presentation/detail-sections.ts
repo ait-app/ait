@@ -1,4 +1,4 @@
-import { getPaseoToolLeafName } from "../tool-name-normalization.js";
+import { getAitToolLeafName } from "../tool-name-normalization.js";
 import { getPaseoToolEntry, type PaseoToolDetailSpec } from "./catalog.js";
 
 export interface PaseoToolDetailField {
@@ -173,7 +173,7 @@ export function buildPaseoToolDetailSections(
   input: unknown,
   output: unknown,
 ): PaseoToolDetailSection[] | null {
-  const leafName = getPaseoToolLeafName(toolName);
+  const leafName = getAitToolLeafName(toolName);
   if (!leafName) return null;
 
   const spec: PaseoToolDetailSpec = getPaseoToolEntry(leafName)?.detail ?? {};

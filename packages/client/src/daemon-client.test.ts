@@ -3969,6 +3969,94 @@ test("reconnects after the server replaces a connection", async () => {
   }
 });
 
+test("one transport failure reported as error then close schedules a single retry", async () => {
+  useHeartbeatClock();
+  const first = createMockTransport();
+  const second = createMockTransport();
+  const factory = vi.fn().mockReturnValueOnce(first.transport).mockReturnValue(second.transport);
+  const states: string[] = [];
+  const client = new DaemonClient({
+    url: "ws://server.test/v1/ws",
+    clientId: "single-retry",
+    logger: noopLogger,
+    reconnect: { enabled: true, baseDelayMs: 1_000, maxDelayMs: 10_000 },
+    transportFactory: factory,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  first.triggerOpen();
+  await connected;
+  client.subscribeConnectionStatus((state) => states.push(state.status));
+  states.length = 0;
+
+  // The SDK connection reports each failure to both error and close listeners.
+  first.triggerError(new Error("network lost"));
+  first.triggerClose({ code: 1006, reason: "network lost" });
+  expect(states).toEqual(["disconnected"]);
+
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(factory).toHaveBeenCalledTimes(2);
+  expect(client.getConnectionState().status).toBe("connecting");
+});
+
+test("close rejects a connect that is still waiting for the handshake", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "close-during-connect",
+    logger: noopLogger,
+    reconnect: { enabled: true },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  const settled = connected.then(
+    () => "resolved",
+    (error: Error) => error.message,
+  );
+  await client.close();
+  expect(await settled).toBe("Daemon client closed");
+});
+
+test("a throwing event subscriber does not block RPC responses or later subscribers", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "throwing-subscriber",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  client.subscribe(() => {
+    throw new Error("subscriber bug");
+  });
+  const seen: string[] = [];
+  client.subscribe((event) => seen.push(event.type));
+
+  const deleted = client.deleteAgent("agent-1");
+  const request = parseSentFrame(mock.sent[0]);
+  expect(() =>
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "agent.delete.response",
+        payload: { agentId: "agent-1", requestId: request.requestId },
+      }),
+    ),
+  ).not.toThrow();
+
+  await expect(deleted).resolves.toBeUndefined();
+  expect(seen).toEqual(["agent.delete.response"]);
+  expect(logger.error).toHaveBeenCalledWith(
+    expect.objectContaining({ eventType: "agent.delete.response" }),
+    "Daemon event handler failed",
+  );
+});
+
 test("requires non-empty clientId", () => {
   expect(() => {
     const _client = new DaemonClient({

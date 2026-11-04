@@ -582,6 +582,7 @@ export function ProviderDiagnosticSheet({
   );
   const { t } = useTranslation();
   const { theme } = useUnistyles();
+  const toast = useToast();
   const isCompact = useIsCompactFormFactor();
   const { entries: snapshotEntries, refresh, isRefreshing } = useProvidersSnapshot(serverId);
   const { config, patchConfig } = useDaemonConfig(serverId);
@@ -667,11 +668,16 @@ export function ProviderDiagnosticSheet({
         },
       })
         .then(() => refresh([provider]))
+        .catch((err) => {
+          toast.error(
+            err instanceof Error ? err.message : t("settings.providers.models.failedToSave"),
+          );
+        })
         .finally(() => {
           setDeletingModelId((current) => (current === modelId ? null : current));
         });
     },
-    [additionalModels, patchConfig, provider, refresh],
+    [additionalModels, patchConfig, provider, refresh, t, toast],
   );
 
   const sheetHeader = useMemo<SheetHeader>(

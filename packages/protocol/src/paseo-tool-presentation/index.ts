@@ -1,5 +1,5 @@
 import type { ToolCallDetail } from "../agent-types.js";
-import { getPaseoToolLeafName, isPaseoToolName } from "../tool-name-normalization.js";
+import { getAitToolLeafName, isAitToolName } from "../tool-name-normalization.js";
 import { getPaseoToolEntry, PASEO_TOOL_CATALOG, type PaseoToolName } from "./catalog.js";
 import { toSummaryText } from "./summary-text.js";
 
@@ -49,7 +49,7 @@ export function getPaseoToolTargetAgentId(
 }
 
 function paseoLeafName(toolName: string): string | null {
-  return isPaseoToolName(toolName) ? getPaseoToolLeafName(toolName) : null;
+  return isAitToolName(toolName) ? getAitToolLeafName(toolName) : null;
 }
 
 function readToolInput(detail: ToolCallDetail): Readonly<Record<string, unknown>> {

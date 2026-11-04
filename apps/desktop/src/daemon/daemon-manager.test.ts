@@ -136,6 +136,24 @@ describe("daemon-manager commands", () => {
     expect(mocks.accountCommand).toHaveBeenCalledExactlyOnceWith(event, "account_host_sync", args);
   });
 
+  it("binds local transport sessions to the requesting window", async () => {
+    registerDaemonManager(() => true);
+    const registration = vi
+      .mocked(ipcMain.handle)
+      .mock.calls.find(([channel]) => channel === "ait:invoke");
+    const sender = {} as Electron.WebContents;
+    const args = {
+      sessionId: "owned",
+      target: { transportType: "socket", transportPath: "/tmp/ait.sock" },
+    };
+    await registration![1](
+      { sender } as Electron.IpcMainInvokeEvent,
+      "open_local_daemon_transport",
+      args,
+    );
+    expect(mocks.openTransport).toHaveBeenLastCalledWith(args, sender);
+  });
+
   it("starts the Rust owner and injects managed credentials only in the main process", async () => {
     const handlers = createDaemonCommandHandlers();
     mocks.start.mockResolvedValue({ status: "running" });

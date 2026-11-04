@@ -43,4 +43,22 @@ describe("project icon URL import", () => {
     ).rejects.toThrow("URL must use HTTP or HTTPS without credentials");
     expect(fetched).toBe(false);
   });
+
+  it("never fetches non-HTTP icon links declared by the page", async () => {
+    const requested: string[] = [];
+    const source = await importProjectIconFromUrl("https://example.com", async (input) => {
+      const url = input.toString();
+      requested.push(url);
+      if (url === "https://example.com/") {
+        return response(
+          '<link rel="icon" href="file:///etc/passwd"><link rel="icon" href="https://user:pw@example.com/a.png">',
+          "text/html",
+        );
+      }
+      return response(IMAGE.buffer, "image/png");
+    });
+
+    expect(requested).toEqual(["https://example.com/", "https://example.com/favicon.ico"]);
+    expect(source.type).toBe("upload");
+  });
 });

@@ -837,6 +837,10 @@ async function createWindow(
   return mainWindow;
 }
 
+function isAppBrowserWindow(win: BrowserWindow): boolean {
+  return !win.isDestroyed() && accountAppWindows.has(win.webContents.id);
+}
+
 function ownedDesktopWindow(win: BrowserWindow): OwnedDesktopWindow<AgentDeepLinkTarget> {
   return {
     webContentsId: win.webContents.id,
@@ -860,10 +864,11 @@ desktopWindowOwner = createDesktopWindowOwner<AgentDeepLinkTarget>({
     });
     return ownedDesktopWindow(win);
   },
-  windows: () => BrowserWindow.getAllWindows().map(ownedDesktopWindow),
+  // Workspace browser popups (e.g. OAuth) are BrowserWindows too, but cannot receive app routes.
+  windows: () => BrowserWindow.getAllWindows().filter(isAppBrowserWindow).map(ownedDesktopWindow),
   focusedWindow: () => {
     const win = BrowserWindow.getFocusedWindow();
-    if (!win) return null;
+    if (!win || !isAppBrowserWindow(win)) return null;
     return ownedDesktopWindow(win);
   },
   agentRoute: buildAgentDeepLinkRoute,

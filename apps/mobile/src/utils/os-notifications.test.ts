@@ -308,6 +308,31 @@ describe("sendOsNotification", () => {
     expect(created[0]?.clickListeners).toHaveLength(0);
   });
 
+  it("treats a rejected permission request as denied and asks again next time", async () => {
+    const created: unknown[] = [];
+    const requestPermission = vi
+      .fn<() => Promise<string>>()
+      .mockRejectedValueOnce(new Error("requires user gesture"))
+      .mockResolvedValueOnce("granted");
+
+    class MockNotification {
+      static permission = "default";
+      static requestPermission = requestPermission;
+      constructor() {
+        created.push(this);
+      }
+      addEventListener(): void {}
+    }
+
+    (globalThis as { Notification?: unknown }).Notification = MockNotification;
+    const { sendOsNotification } = await loadModuleForPlatform("web");
+
+    await expect(sendOsNotification({ title: "first" })).resolves.toBe(false);
+    await expect(sendOsNotification({ title: "second" })).resolves.toBe(true);
+    expect(requestPermission).toHaveBeenCalledTimes(2);
+    expect(created).toHaveLength(1);
+  });
+
   it("uses the desktop notification bridge when available", async () => {
     const sendNotification = vi.fn(async () => true);
 

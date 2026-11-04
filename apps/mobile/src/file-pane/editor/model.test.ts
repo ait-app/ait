@@ -602,6 +602,42 @@ describe("FileEditorModel", () => {
     });
   });
 
+  test("conflicts instead of retrying over a disk change observed during a failed save", async () => {
+    const { model, session } = makeModel();
+    session.holdNextWrite();
+    model.edit("local");
+
+    const save = model.save();
+    observeFile(model, {
+      content: "external",
+      hasBom: false,
+      version: ready("2026-07-18T00:00:05.000Z", 8),
+    });
+    session.finishHeldWrite({ status: "error", error: "permission denied" });
+    await save;
+
+    expect(model.getSnapshot()).toMatchObject({ status: "conflict", content: "local" });
+    await model.save();
+    expect(session.writes).toHaveLength(1);
+  });
+
+  test("keeps a failed save retryable when the observed disk bytes are unchanged", async () => {
+    const { model, session } = makeModel();
+    session.holdNextWrite();
+    model.edit("local");
+
+    const save = model.save();
+    observeFile(model, {
+      content: "one",
+      hasBom: false,
+      version: ready("2026-07-18T00:00:05.000Z", 3),
+    });
+    session.finishHeldWrite({ status: "error", error: "permission denied" });
+    await save;
+
+    expect(model.getSnapshot()).toMatchObject({ status: "error", error: "permission denied" });
+  });
+
   test("a deletion conflicts with local changes and stops autosave", () => {
     const { model, session, clock } = makeModel();
     model.edit("local");

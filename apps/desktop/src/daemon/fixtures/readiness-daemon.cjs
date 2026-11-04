@@ -8,7 +8,8 @@ const home = args[args.indexOf("--data-dir") + 1];
 const listen = args[args.indexOf("--listen") + 1];
 const config = () => JSON.parse(readFileSync(path.join(home, "readiness.json"), "utf8"));
 const token = process.env.AIT_SERVER_TOKEN ?? "t".repeat(64);
-writeFileSync(path.join(home, "local-api.token"), token, { mode: 0o600 });
+const tokenFileSuffix = config().tokenLineEnding ? "\r\n" : "";
+writeFileSync(path.join(home, "local-api.token"), `${token}${tokenFileSuffix}`, { mode: 0o600 });
 appendFileSync(path.join(home, "pids"), `${process.pid}\n`);
 
 if (config().exitBeforeReady) process.exit(1);

@@ -17,6 +17,10 @@ interface FileSourceViewProps {
   tooLargeMessage: string;
 }
 
+// getItemLayout and the row styles must agree, or line navigation lands on the
+// wrong line and the virtualized window drifts from what is on screen.
+const SOURCE_LINE_HEIGHT = 20;
+
 interface SourceLine {
   number: number;
   tokens: HighlightToken[];
@@ -60,12 +64,15 @@ function VirtualizedSource({
 }) {
   const listRef = useRef<FlatList<SourceLine>>(null);
   const lines = useMemo(() => {
+    // Split on every line break the web editor recognizes; a CR left inside a
+    // native Text renders as an extra line break and breaks the fixed row height.
+    const source = content.includes("\r") ? content.replace(/\r\n?/g, "\n") : content;
     if (presentation === "highlighted")
-      return highlightCode(content, filename).map((tokens, index) => ({
+      return highlightCode(source, filename).map((tokens, index) => ({
         number: index + 1,
         tokens,
       }));
-    return content
+    return source
       .split("\n")
       .map((text, index) => ({ number: index + 1, tokens: [{ text, style: null }] }));
   }, [content, filename, presentation]);
@@ -95,8 +102,8 @@ function SourceLineView({ line }: { line: SourceLine }) {
     <View style={styles.line}>
       <Text style={styles.gutter}>{line.number}</Text>
       <Text selectable style={styles.text}>
-        {line.tokens.map((token) => (
-          <Text key={`${token.style}:${token.text}`} style={syntaxTokenStyleFor(token.style)}>
+        {line.tokens.map((token, index) => (
+          <Text key={index} style={syntaxTokenStyleFor(token.style)}>
             {token.text}
           </Text>
         ))}
@@ -110,7 +117,7 @@ function sourceLineKey(line: SourceLine): string {
 }
 
 function sourceLineLayout(_data: ArrayLike<SourceLine> | null | undefined, index: number) {
-  return { length: 20, offset: index * 20, index };
+  return { length: SOURCE_LINE_HEIGHT, offset: index * SOURCE_LINE_HEIGHT, index };
 }
 
 const renderSourceLine: ListRenderItem<SourceLine> = ({ item }) => <SourceLineView line={item} />;
@@ -123,7 +130,7 @@ const styles = StyleSheet.create((theme) => ({
     padding: theme.spacing[4],
   },
   unsupportedText: { color: theme.colors.foregroundMuted, textAlign: "center" },
-  line: { flexDirection: "row", minHeight: theme.fontSize.code * 1.45 },
+  line: { flexDirection: "row", minHeight: SOURCE_LINE_HEIGHT },
   gutter: {
     width: 56,
     paddingRight: theme.spacing[3],
@@ -136,6 +143,6 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     fontFamily: theme.fontFamily.mono,
     fontSize: theme.fontSize.code,
-    lineHeight: theme.fontSize.code * 1.45,
+    lineHeight: SOURCE_LINE_HEIGHT,
   },
 }));

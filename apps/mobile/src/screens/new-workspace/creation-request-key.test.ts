@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildWorkspaceCreationRequestKey,
+  canReuseCreatedWorkspace,
   type WorkspaceCreationRequestIdentity,
 } from "./creation-request-key";
 
@@ -52,5 +53,27 @@ describe("buildWorkspaceCreationRequestKey", () => {
     expect(buildWorkspaceCreationRequestKey({ ...local, selectedItem: null })).toBe(
       buildWorkspaceCreationRequestKey(local),
     );
+  });
+});
+
+describe("canReuseCreatedWorkspace", () => {
+  const requestKey = buildWorkspaceCreationRequestKey(base);
+
+  it("reuses the workspace for a matching request without an agent", () => {
+    expect(
+      canReuseCreatedWorkspace({ cachedRequestKey: requestKey, requestKey, createsAgent: false }),
+    ).toBe(true);
+  });
+
+  it("creates again when the request changed", () => {
+    expect(
+      canReuseCreatedWorkspace({ cachedRequestKey: "other", requestKey, createsAgent: false }),
+    ).toBe(false);
+  });
+
+  it("creates again when the request needs an agent created with the workspace", () => {
+    expect(
+      canReuseCreatedWorkspace({ cachedRequestKey: requestKey, requestKey, createsAgent: true }),
+    ).toBe(false);
   });
 });

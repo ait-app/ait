@@ -577,7 +577,10 @@ export function measureFragments(input: {
     ((slice: readonly string[]) => advancesFor(input.measureText)(slice).at(-1) ?? 0);
   // Joining/ligatures can make a longer prefix narrower. Preserve the existing
   // search order for those runs; changing the probes can change their breaks.
-  const canBoundSearch = !requiresShaping(input.text);
+  // Past a bound the unbounded search re-measures the whole remaining tail for
+  // every fragment, which is quadratic and freezes on minified lines.
+  const canBoundSearch =
+    !requiresShaping(input.text) || graphemes.length > UNBOUNDED_SHAPED_SEARCH_LIMIT;
   let graphemeIndex = 0;
   while (graphemeIndex < graphemes.length) {
     let low = graphemeIndex + 1;
@@ -643,6 +646,7 @@ function createFragment(
 }
 
 const TAB_SIZE = 4;
+const UNBOUNDED_SHAPED_SEARCH_LIMIT = 1024;
 
 function segmentGraphemes(text: string): Array<Omit<DiffGrapheme, "width">> {
   const segments: Array<Omit<DiffGrapheme, "width">> = [];

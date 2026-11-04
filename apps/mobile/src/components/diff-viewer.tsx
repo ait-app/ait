@@ -69,9 +69,10 @@ function DiffLineRow({ line }: { line: DiffLine }) {
           <Text style={line.type === "add" ? styles.addText : styles.removeText}>
             {line.content[0]}
           </Text>
-          {line.segments.map((segment) => (
+          {line.segments.map((segment, index) => (
             <DiffSegment
-              key={`${segment.changed ? "c" : "u"}:${segment.text}`}
+              // Repeated words yield equal segments (`a b a` -> `x b x`), so position disambiguates.
+              key={`${index}:${segment.changed ? "c" : "u"}:${segment.text}`}
               segment={segment}
               lineType={line.type}
             />

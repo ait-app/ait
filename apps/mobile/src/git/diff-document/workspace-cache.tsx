@@ -101,10 +101,15 @@ function createTypographyResource(input: TypographyResourceInput): DiffTypograph
     isReady: () => ready,
     load() {
       if (ready) return Promise.resolve(input.typography);
-      pending ??= input.load().then(() => {
-        ready = true;
-        return input.typography;
-      });
+      // A family the font loader rejects (e.g. an invalid CSS font shorthand from a
+      // user setting) must fall back to the browser's font, not leave the diff blank.
+      pending ??= input
+        .load()
+        .catch(() => undefined)
+        .then(() => {
+          ready = true;
+          return input.typography;
+        });
       return pending;
     },
   };

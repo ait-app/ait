@@ -30,6 +30,12 @@ describe("normalizeBrowserUrl", () => {
     expect(normalizeBrowserUrl("//example.com/path")).toBe("https://example.com/path");
   });
 
+  it("treats a host with a port as a host rather than a URL scheme", () => {
+    expect(normalizeBrowserUrl("example.com:8080")).toBe("https://example.com:8080");
+    expect(normalizeBrowserUrl("devbox:3000/path")).toBe("https://devbox:3000/path");
+    expect(normalizeBrowserUrl("mailto:someone@example.com")).toBe("mailto:someone@example.com");
+  });
+
   it("keeps explicit protocols unchanged", () => {
     expect(normalizeBrowserUrl("http://localhost:8081")).toBe("http://localhost:8081");
     expect(normalizeBrowserUrl("https://localhost:8081")).toBe("https://localhost:8081");

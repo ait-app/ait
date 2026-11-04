@@ -273,24 +273,26 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
     read_file_base64: (args) => readManagedFileBase64(args ?? {}),
     delete_attachment_file: (args) => deleteManagedAttachmentFile(args ?? {}),
     garbage_collect_attachment_files: (args) => garbageCollectManagedAttachmentFiles(args ?? {}),
-    open_local_daemon_transport: async (args) => {
+    open_local_daemon_transport: async (args, event) => {
       const target = args?.target as { transportType?: string; url?: string } | undefined;
       const token =
         target?.transportType === "rustTcp" && typeof target.url === "string"
           ? manager?.authorization(target.url)
           : undefined;
-      return openLocalTransportSession(
-        token
-          ? {
-              ...args,
-              bearerToken: token,
-              target: {
-                transportType: "rustTcp",
-                url: `ws://${manager!.status().connectAddress ?? manager!.status().listen}/v1/ws`,
-              },
-            }
-          : args,
-      );
+      const input = token
+        ? {
+            ...args,
+            bearerToken: token,
+            target: {
+              transportType: "rustTcp",
+              url: `ws://${manager!.status().connectAddress ?? manager!.status().listen}/v1/ws`,
+            },
+          }
+        : args;
+      // Sessions belong to the requesting window so a reload or close releases their sockets.
+      return event?.sender
+        ? openLocalTransportSession(input, event.sender)
+        : openLocalTransportSession(input);
     },
     send_local_daemon_transport_message: async (args) => {
       await sendLocalTransportMessage(
@@ -339,6 +341,6 @@ export function registerDaemonManager(
     if (!handler) {
       throw new Error(`Unknown desktop command: ${command}`);
     }
-    return await handler(args);
+    return await handler(args, _event);
   });
 }

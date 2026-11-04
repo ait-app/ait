@@ -1717,13 +1717,18 @@ function ComposerContentImpl({
   );
 
   const handlePickImage = useCallback(async () => {
-    const newImages = await pickAndPersistImages({
-      pickImages,
-      persister: composerImageAttachmentPersister,
-    });
-    if (newImages.length === 0) return;
-    addImages(newImages);
-  }, [addImages, pickImages]);
+    try {
+      const newImages = await pickAndPersistImages({
+        pickImages,
+        persister: composerImageAttachmentPersister,
+      });
+      if (newImages.length === 0) return;
+      addImages(newImages);
+    } catch (error) {
+      console.error("[Composer] Failed to attach picked image:", error);
+      toastErrorRef.current(t("imageAttachmentPicker.failedToSelect"));
+    }
+  }, [addImages, pickImages, t]);
 
   const handleTakePhoto = useCallback(async () => {
     try {
