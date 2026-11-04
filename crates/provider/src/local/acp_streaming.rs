@@ -1,9 +1,11 @@
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use chrono::Utc;
 use serde_json::{Value, json};
 
 use super::acp_config::text;
+use super::tool_detail::{MARKER, truncate};
 use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
 
@@ -128,13 +130,13 @@ impl Stream {
 
     fn chunk(&mut self, kind: &str, update: &Value) -> Result<(), AgentSessionError> {
         let delta = match update["content"]["type"].as_str() {
-            Some("text") => std::borrow::Cow::Borrowed(
+            Some("text") => Cow::Borrowed(
                 update["content"]["text"]
                     .as_str()
                     .ok_or(AgentSessionError::Failed)?,
             ),
             Some("image") if kind == "assistant_message" => {
-                std::borrow::Cow::Owned(self.images.render(&update["content"])?)
+                Cow::Owned(self.images.render(&update["content"])?)
             }
             _ => return Err(AgentSessionError::Failed),
         };
@@ -268,20 +270,16 @@ impl Stream {
     }
 }
 
+/// Retain `value` within the display budget; text keeps its own characters when shortened.
 fn preview(value: &Value) -> Value {
     const MAX_PREVIEW: usize = 32 * 1024;
-    let encoded = value.to_string();
-    if encoded.len() <= MAX_PREVIEW {
-        return value.clone();
+    let encoded = value
+        .as_str()
+        .map_or_else(|| Cow::Owned(value.to_string()), Cow::Borrowed);
+    match truncate(&encoded, MAX_PREVIEW, MARKER) {
+        Cow::Borrowed(_) => value.clone(),
+        Cow::Owned(text) => Value::String(text),
     }
-    let mut end = MAX_PREVIEW;
-    while !encoded.is_char_boundary(end) {
-        end -= 1;
-    }
-    json!(format!(
-        "{}\n[Output truncated; full output remains in the native transcript.]",
-        &encoded[..end]
-    ))
 }
 
 fn tool_content(

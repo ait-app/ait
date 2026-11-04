@@ -159,3 +159,49 @@ fn claude_results_populate_typed_cards_and_unknown_tools_preserve_structured_res
             .contains("Output truncated")
     );
 }
+
+#[test]
+fn claude_file_contents_edits_and_unknown_arguments_are_bounded_previews() {
+    let large = "界".repeat(100 * 1024);
+    for (name, input) in [
+        ("Write", json!({"file_path":"a.rs","content":large})),
+        (
+            "Edit",
+            json!({"file_path":"a.rs","old_string":large,"new_string":large}),
+        ),
+        ("Bash", json!({"command":large})),
+        ("ExitPlanMode", json!({"plan":large})),
+        ("mcp__server__tool", json!({"payload":large})),
+    ] {
+        let mut detail = claude(name, &input);
+        claude_result(&mut detail, &json!({"payload":large}));
+        let encoded = serde_json::to_vec(&detail).unwrap();
+        assert!(
+            encoded.len() < 192 * 1024,
+            "{name}: {} bytes",
+            encoded.len()
+        );
+        for field in ["content", "oldString", "newString", "command", "text"] {
+            if let Some(text) = detail[field].as_str() {
+                assert!(text.len() <= CLAUDE_FIELD_BYTES);
+                assert!(text.ends_with(MARKER));
+                assert!(!text.contains('\u{fffd}'));
+            }
+        }
+    }
+    assert_eq!(
+        claude("Write", &json!({"file_path":"a.rs","content":"small"}))["content"],
+        "small"
+    );
+}
+
+#[test]
+fn truncate_keeps_fitting_text_and_marks_shortened_text_at_a_char_boundary() {
+    assert!(matches!(
+        truncate("short", 5, MARKER),
+        Cow::Borrowed("short")
+    ));
+    let shortened = truncate("界界界", 8, "~");
+    assert_eq!(shortened, "界界~");
+    assert!(shortened.len() <= 8);
+}

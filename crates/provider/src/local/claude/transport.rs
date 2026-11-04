@@ -15,7 +15,10 @@ use crate::local::diagnostics::Diagnostics;
 use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 use crate::ports::diagnostics::{Category, Diagnostic};
 
-const MAX_FRAME: usize = 2 * 1024 * 1024;
+/// Largest stdout frame or native transcript line. `--replay-user-messages` and the transcript
+/// echo complete user inputs, including inline images, so the cap covers the largest accepted
+/// prompt plus Claude's record envelope.
+pub(super) const MAX_FRAME: usize = crate::protocol::prompt::MAX_PROMPT_BYTES + 2 * 1024 * 1024;
 const MAX_EVENTS: usize = 128;
 const MAX_REPLIES: usize = 32;
 
@@ -207,22 +210,15 @@ impl Transport {
             }
         })
         .await;
-        match result {
-            Ok(Ok(value)) => Ok(value),
-            Ok(Err(AgentSessionError::Rejected)) => Err(AgentSessionError::Rejected),
-            result => {
-                let category = if result.is_err() {
-                    Category::Timeout
-                } else {
-                    Category::Network
-                };
-                if self.diagnostics.failure().is_none() {
-                    self.diagnostics
-                        .observe(Diagnostic::new(category, "transport"), "control");
-                }
+        match self
+            .diagnostics
+            .settle(result, "control", &[AgentSessionError::Rejected])
+        {
+            Err(AgentSessionError::Failed) => {
                 let _ = self.close().await;
                 Err(AgentSessionError::Failed)
             }
+            settled => settled,
         }
     }
 

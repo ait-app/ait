@@ -206,6 +206,27 @@ fn rejects_unknown_invalid_or_overbroad_advanced_configuration() {
 }
 
 #[test]
+fn empty_provider_options_are_accepted_for_every_provider() {
+    let empty = config(json!({"providerOptions":{}}));
+    for provider in [
+        "codex",
+        "claude",
+        "minimax-code",
+        "deepseek-harness",
+        "opencode",
+    ] {
+        assert_eq!(validate(&empty, provider), Ok(()), "{provider}");
+    }
+    assert_eq!(
+        validate(
+            &config(json!({"providerOptions":{"unknown":true}})),
+            "minimax-code"
+        ),
+        Err(AgentSessionError::Rejected)
+    );
+}
+
+#[test]
 fn empty_and_inherited_configuration_does_not_add_cli_arguments() {
     assert_eq!(
         claude(&StoredAgentConfig::default()).unwrap(),

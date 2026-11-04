@@ -33,6 +33,8 @@ struct ClaudeSession {
     children: super::subagents::live::Live,
     notes: crate::local::notes::Notes,
     inputs: super::inputs::Inputs,
+    /// Native session whose existing transcript passed identity and cwd validation.
+    validated: Option<String>,
 }
 
 pub(super) async fn open(
@@ -45,7 +47,12 @@ pub(super) async fn open(
     let (id, history_only) = match resume {
         Some((handle, purpose)) => {
             history::validate_handle(handle)?;
-            if history::read(client, handle, &spec.cwd)?.is_none() {
+            // Launching validates the transcript itself; only history views read it here.
+            if purpose == AgentResumePurpose::History
+                && super::read_history(client, handle, &spec.cwd)
+                    .await?
+                    .is_none()
+            {
                 return Err(AgentSessionError::Unavailable);
             }
             (
@@ -98,9 +105,10 @@ pub(super) async fn open(
             ),
             extra: None,
         },
+        validated: None,
     };
     if !history_only {
-        session.restore_observations()?;
+        session.restore_observations().await?;
         session.launch().await?;
         if resume.is_some() {
             session.children.restore(client, &session.id, &spec.cwd)?;
@@ -110,13 +118,17 @@ pub(super) async fn open(
 }
 
 impl ClaudeSession {
-    fn restore_observations(&mut self) -> Result<(), AgentSessionError> {
+    async fn restore_observations(&mut self) -> Result<(), AgentSessionError> {
         let path =
             history::project_dir(&self.client, &self.spec.cwd)?.join(format!("{}.jsonl", self.id));
-        let records = match history::read_records(&path) {
-            Ok(records) => records,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-            Err(_) => return Err(AgentSessionError::Failed),
+        let records = super::blocking(move || match history::read_records(&path) {
+            Ok(records) => Ok(Some(records)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(_) => Err(AgentSessionError::Failed),
+        })
+        .await?;
+        let Some(records) = records else {
+            return Ok(());
         };
         for record in &records {
             if record["isSidechain"] == true || record["parent_tool_use_id"].is_string() {
@@ -142,14 +154,23 @@ impl ClaudeSession {
     }
 
     async fn launch(&mut self) -> Result<(), AgentSessionError> {
-        let handle = self.handle();
-        // Reading validates the cwd as well as the identity before claiming a native writer.
-        if history::read(&self.client, &handle, &self.spec.cwd)?.is_none() {
-            return Err(AgentSessionError::Unavailable);
-        }
         let existing = history::project_dir(&self.client, &self.spec.cwd)?
             .join(format!("{}.jsonl", self.id))
             .is_file();
+        // Reading validates the cwd as well as the identity before claiming a native writer.
+        // An existing transcript validated earlier keeps both, so relaunches skip re-parsing it;
+        // a missing one is always re-read so a lost accepted conversation is never recreated.
+        if !existing || self.validated.as_deref() != Some(self.id.as_str()) {
+            if super::read_history(&self.client, &self.handle(), &self.spec.cwd)
+                .await?
+                .is_none()
+            {
+                return Err(AgentSessionError::Unavailable);
+            }
+            if existing {
+                self.validated = Some(self.id.clone());
+            }
+        }
         if existing && let Some(metadata) = &mut self.metadata {
             metadata.remove(super::rewind::FRESH);
         }

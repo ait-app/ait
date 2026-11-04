@@ -167,61 +167,43 @@ impl Transport {
         method: &str,
         params: Value,
     ) -> Result<Value, AgentSessionError> {
-        let id = self.begin(method, params).await?;
-        let result = tokio::time::timeout(self.deadline, async {
-            loop {
-                let message = self
-                    .messages
-                    .recv()
-                    .await
-                    .ok_or(AgentSessionError::Failed)?;
-                if message.get("method").is_none() && message["id"] == id {
-                    if let Some(error) = message.get("error") {
-                        self.diagnostics.observe_native(error, "rpc", method);
-                    }
-                    return response(&message);
-                }
-                // No prompt runs during configuration/discovery. Reject unsupported callbacks
-                // so a provider cannot deadlock initialization waiting for an answer.
-                if message.get("id").is_some() && message["method"].is_string() {
-                    self.send(&json!({"jsonrpc":"2.0","id":message["id"],
-                        "error":{"code":-32601,"message":"Unsupported client method"}}))
-                        .await?;
-                    continue;
-                }
-                if self.events.len() >= MAX_EVENTS {
+        let mut events = std::mem::take(&mut self.events);
+        let result = self
+            .exchange(method, params, |message| {
+                if events.len() >= MAX_EVENTS {
                     return Err(AgentSessionError::Failed);
                 }
-                self.events.push_back(message);
-            }
-        })
-        .await;
-        match result {
-            Ok(Ok(value)) => Ok(value),
-            Ok(Err(AgentSessionError::Rejected)) => Err(AgentSessionError::Rejected),
-            result => {
-                let category = if result.is_err() {
-                    Category::Timeout
-                } else {
-                    Category::Network
-                };
-                if self.diagnostics.failure().is_none() {
-                    self.diagnostics
-                        .observe(Diagnostic::new(category, "transport"), method);
-                }
-                let _ = self.close().await;
-                Err(AgentSessionError::Failed)
-            }
-        }
+                events.push_back(message);
+                Ok(())
+            })
+            .await;
+        self.events = events;
+        result
     }
 
     /// Consume replay notifications as they arrive rather than buffering a complete transcript.
+    /// Frames other than the response and native callbacks, which are rejected, go to `update`.
     /// Returns protocol, callback, timeout or child-process failures without retrying the request.
     pub(crate) async fn request_with_updates(
         &mut self,
         method: &str,
         params: Value,
         mut update: impl FnMut(&Value) -> Result<(), AgentSessionError> + Send,
+    ) -> Result<Value, AgentSessionError> {
+        self.exchange(method, params, |message| update(&message))
+            .await
+    }
+
+    /// Submit one request and await its response under the control deadline.
+    ///
+    /// Native callbacks are rejected so a provider cannot deadlock waiting for an answer while
+    /// no prompt runs; every other frame goes to `other` in arrival order. Failures other than
+    /// a native rejection close the connection.
+    async fn exchange(
+        &mut self,
+        method: &str,
+        params: Value,
+        mut other: impl FnMut(Value) -> Result<(), AgentSessionError> + Send,
     ) -> Result<Value, AgentSessionError> {
         let id = self.begin(method, params).await?;
         let result = tokio::time::timeout(self.deadline, async {
@@ -237,32 +219,25 @@ impl Transport {
                     }
                     return response(&message);
                 }
-                if message.get("id").is_some() {
+                if message.get("id").is_some() && message["method"].is_string() {
                     self.send(&json!({"jsonrpc":"2.0","id":message["id"],
                         "error":{"code":-32601,"message":"Unsupported client method"}}))
                         .await?;
-                } else {
-                    update(&message)?;
+                    continue;
                 }
+                other(message)?;
             }
         })
         .await;
-        match result {
-            Ok(Ok(value)) => Ok(value),
-            Ok(Err(AgentSessionError::Rejected)) => Err(AgentSessionError::Rejected),
-            result => {
-                let category = if result.is_err() {
-                    Category::Timeout
-                } else {
-                    Category::Network
-                };
-                if self.diagnostics.failure().is_none() {
-                    self.diagnostics
-                        .observe(Diagnostic::new(category, "transport"), method);
-                }
+        match self
+            .diagnostics
+            .settle(result, method, &[AgentSessionError::Rejected])
+        {
+            Err(AgentSessionError::Failed) => {
                 let _ = self.close().await;
                 Err(AgentSessionError::Failed)
             }
+            settled => settled,
         }
     }
 

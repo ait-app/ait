@@ -44,29 +44,6 @@ impl Transport {
         program: &Path,
         cwd: &str,
         deadline: Duration,
-    ) -> Result<Self, AgentSessionError> {
-        Self::spawn_with_goals(program, cwd, deadline, false)
-    }
-
-    pub(super) fn spawn_with_goals(
-        program: &Path,
-        cwd: &str,
-        deadline: Duration,
-        goals: bool,
-    ) -> Result<Self, AgentSessionError> {
-        Self::spawn_with_environment(
-            program,
-            cwd,
-            deadline,
-            goals,
-            &crate::ports::environment::AgentEnvironment::default(),
-        )
-    }
-
-    pub(super) fn spawn_with_environment(
-        program: &Path,
-        cwd: &str,
-        deadline: Duration,
         goals: bool,
         environment: &crate::ports::environment::AgentEnvironment,
     ) -> Result<Self, AgentSessionError> {
@@ -275,26 +252,17 @@ impl Transport {
             }
         })
         .await;
-        match result {
-            Ok(Ok(value)) => Ok(value),
-            Ok(Err(
-                error @ (AgentSessionError::Rejected
-                | AgentSessionError::Unavailable
-                | AgentSessionError::Busy),
-            )) => Err(error),
-            failure => {
-                let category = if failure.is_err() {
-                    Category::Timeout
-                } else {
-                    Category::Network
-                };
-                if self.diagnostics.failure().is_none() {
-                    self.diagnostics
-                        .observe(Diagnostic::new(category, "transport"), method);
-                }
+        let retained = [
+            AgentSessionError::Rejected,
+            AgentSessionError::Unavailable,
+            AgentSessionError::Busy,
+        ];
+        match self.diagnostics.settle(result, method, &retained) {
+            Err(AgentSessionError::Failed) => {
                 let _ = self.close().await;
                 Err(AgentSessionError::Failed)
             }
+            settled => settled,
         }
     }
 

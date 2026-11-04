@@ -190,3 +190,30 @@ fn explicit_native_rule_selection_preserves_destination_and_exact_rule() {
     let plan = request("ExitPlanMode", &json!({"plan":"Implement"}));
     assert_eq!(plan.request["kind"], "plan");
 }
+
+#[test]
+fn large_tool_inputs_show_bounded_previews_and_approve_the_complete_native_input() {
+    let input = json!({"file_path":"/tmp/large.rs","content":"x".repeat(1024 * 1024)});
+    let pending = request("Write", &input);
+    let shown = &pending.request["input"];
+    assert_eq!(shown["file_path"], "/tmp/large.rs");
+    assert!(
+        shown["content"]
+            .as_str()
+            .unwrap()
+            .contains("Output truncated")
+    );
+    assert!(pending.request.to_string().len() < 192 * 1024);
+    for response in [
+        json!({"behavior":"allow"}),
+        // A host that echoes the displayed preview still approves the native input unchanged.
+        json!({"behavior":"allow","updatedInput":shown}),
+    ] {
+        let reply = permissions::resolve(&pending, &response).unwrap();
+        assert_eq!(reply["response"]["response"]["updatedInput"], input);
+    }
+    let edited = json!({"file_path":"/tmp/large.rs","content":"edited"});
+    let reply =
+        permissions::resolve(&pending, &json!({"behavior":"allow","updatedInput":edited})).unwrap();
+    assert_eq!(reply["response"]["response"]["updatedInput"], edited);
+}

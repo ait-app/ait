@@ -464,20 +464,17 @@ fn preview(value: &Value) -> (Value, usize) {
     let encoded = value
         .as_str()
         .map_or_else(|| Cow::Owned(value.to_string()), Cow::Borrowed);
-    if encoded.len() <= MAX_PREVIEW {
-        return (value.clone(), encoded.len());
+    match crate::local::tool_detail::truncate(
+        &encoded,
+        MAX_PREVIEW,
+        "\n[Output truncated; full output remains in AGY.]",
+    ) {
+        Cow::Borrowed(text) => (value.clone(), text.len()),
+        Cow::Owned(text) => {
+            let size = text.len();
+            (Value::String(text), size)
+        }
     }
-    let mut end = MAX_PREVIEW;
-    while !encoded.is_char_boundary(end) {
-        end -= 1;
-    }
-    (
-        json!(format!(
-            "{}\n[Output truncated; full output remains in AGY.]",
-            &encoded[..end]
-        )),
-        end,
-    )
 }
 
 fn tool_detail(tool: &Value) -> Value {
