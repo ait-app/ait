@@ -83,25 +83,32 @@ async fn scoped_file_mutations_cannot_replace_project_configuration() {
     for kind in [ResourceKind::Workspace, ResourceKind::Project] {
         let guest = Guest::with(kind).await;
         std::fs::write(guest.fixture.shared_path().join("file.txt"), "content").unwrap();
-        for (method, params) in [
-            (
-                "fs.file.write.request",
-                json!({"cwd": guest.root(), "path": "ait.json"}),
-            ),
-            (
-                "fs.entry.create.request",
-                json!({"cwd": guest.root(), "parentPath": ".", "name": "ait.json"}),
-            ),
-            (
-                "fs.entry.rename.request",
-                json!({"cwd": guest.root(), "path": "file.txt", "name": "ait.json"}),
-            ),
-            (
-                "fs.entry.delete.request",
-                json!({"cwd": guest.root(), "path": "ait.json"}),
-            ),
-        ] {
-            assert_eq!(guest.refused(method, params).await, ErrorCode::Forbidden);
+        // The config store falls back to `paseo.json` when `ait.json` is missing.
+        for config in ["ait.json", "paseo.json"] {
+            for (method, params) in [
+                (
+                    "fs.file.write.request",
+                    json!({"cwd": guest.root(), "path": config}),
+                ),
+                (
+                    "fs.entry.create.request",
+                    json!({"cwd": guest.root(), "parentPath": ".", "name": config}),
+                ),
+                (
+                    "fs.entry.rename.request",
+                    json!({"cwd": guest.root(), "path": "file.txt", "name": config}),
+                ),
+                (
+                    "fs.entry.delete.request",
+                    json!({"cwd": guest.root(), "path": config}),
+                ),
+            ] {
+                assert_eq!(
+                    guest.refused(method, params).await,
+                    ErrorCode::Forbidden,
+                    "{method} {config}"
+                );
+            }
         }
         guest
             .forwarded(

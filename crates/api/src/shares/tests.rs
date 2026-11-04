@@ -394,6 +394,49 @@ async fn removal_ends_guests_immediately() {
 }
 
 #[tokio::test]
+async fn revocation_cleanup_survives_a_dropped_request() {
+    use futures_util::FutureExt;
+
+    let api = Api::new(
+        address(),
+        "server".into(),
+        "instance".into(),
+        TOKEN.into(),
+        Services::default(),
+    )
+    .unwrap();
+    let shares = Arc::new(Shares::new(&api.shared.terminal, &api.shared.provider));
+    let group = Uuid::new_v4();
+    let share_id = Uuid::new_v4();
+    shares.set(set("w", group, &[])).await.unwrap();
+    shares.apply(accepted(&shares, "w", group, share_id));
+    let registration = shares
+        .admit(&visitor(share_id, group, Uuid::new_v4()))
+        .unwrap();
+    assert!(registration.record_terminal("terminal".into()));
+    let tasks = &api.shared.provider.tasks;
+    let before = tasks.len();
+    // A disconnect drops the request after its first poll, once the grant is already gone.
+    assert!(
+        shares
+            .remove(ResourceKind::Workspace, "w", group)
+            .now_or_never()
+            .is_none()
+    );
+    assert!(!shares.grants(registration.grant()));
+    assert_eq!(tasks.len(), before + 1);
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while tasks.len() > before {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    api.begin_shutdown();
+    api.wait_closed().await;
+}
+
+#[tokio::test]
 async fn retired_workspaces_are_forgotten() {
     let shares = shares(None);
     let group = Uuid::new_v4();

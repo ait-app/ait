@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Number;
 
 mod checkout;
-mod serde_fields;
+pub(crate) mod serde_fields;
 pub use checkout::ProjectCheckoutLitePayload;
 use serde_fields::{optional_positive_integer, present, required_nullable};
 

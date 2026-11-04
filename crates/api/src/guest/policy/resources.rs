@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
+use domain::workspace::provisioning::{LEGACY_PROJECT_CONFIG_FILE_NAME, PROJECT_CONFIG_FILE_NAME};
 use model::ErrorCode;
 use model::share::ResourceKind;
 use serde_json::Value;
@@ -126,7 +127,12 @@ async fn configuration(
     let project = active_project(state, &project)
         .await?
         .ok_or(ErrorCode::Forbidden)?;
-    let protected = resolved(&Path::new(&project.root_path).join("ait.json")).await?;
+    // The config store falls back to the legacy name, so both files steer setup commands.
+    let root = Path::new(&project.root_path);
+    let protected = [
+        resolved(&root.join(PROJECT_CONFIG_FILE_NAME)).await?,
+        resolved(&root.join(LEGACY_PROJECT_CONFIG_FILE_NAME)).await?,
+    ];
     let path = if method == "fs.entry.create.request" {
         Path::new(cwd)
             .join(params["parentPath"].as_str().ok_or(ErrorCode::Forbidden)?)
@@ -134,13 +140,13 @@ async fn configuration(
     } else {
         Path::new(cwd).join(params["path"].as_str().ok_or(ErrorCode::Forbidden)?)
     };
-    let target = resolved(&path).await?;
-    if protected.starts_with(&target) {
+    let replaces = |target: PathBuf| protected.iter().any(|file| file.starts_with(&target));
+    if replaces(resolved(&path).await?) {
         return Err(ErrorCode::Forbidden);
     }
     if method == "fs.entry.rename.request" {
         let renamed = path.with_file_name(params["name"].as_str().ok_or(ErrorCode::Forbidden)?);
-        if protected.starts_with(resolved(&renamed).await?) {
+        if replaces(resolved(&renamed).await?) {
             return Err(ErrorCode::Forbidden);
         }
     }

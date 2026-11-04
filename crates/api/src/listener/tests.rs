@@ -28,6 +28,24 @@ fn authorities_are_limited_to_the_destination_and_loopback_alias() {
 }
 
 #[test]
+fn an_unknown_destination_admits_no_host() {
+    let local = LocalAddress(
+        SocketAddr::from(([0, 0, 0, 0], 0)),
+        "127.0.0.1:1".parse().unwrap(),
+    );
+    assert!(local.authorities().is_empty());
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert("host", "0.0.0.0:0".parse().unwrap());
+    let rejected = crate::auth::validate_source(
+        &headers,
+        &local.authorities(),
+        &crate::browser_auth::BrowserAuth::default(),
+    )
+    .unwrap_err();
+    assert_eq!(rejected.0, axum::http::StatusCode::FORBIDDEN);
+}
+
+#[test]
 fn accepts_network_addresses_but_requires_an_assigned_port() {
     for address in ["0.0.0.0:7316", "[::]:7316", "192.168.1.2:7316"] {
         assert!(api(address.parse().unwrap()).is_ok());

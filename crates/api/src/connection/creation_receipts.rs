@@ -1,6 +1,6 @@
 //! Completed receipts reference existing resources; observation must not recreate missing ones.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use domain::creation::protocol::{Kind, Snapshot, SubscribeRequest};
 use model::{ErrorCode, Request};
@@ -10,14 +10,12 @@ use crate::Shared;
 pub(super) async fn validate(request: &Request, state: &Shared) -> Result<(), ErrorCode> {
     let request: SubscribeRequest =
         serde_json::from_value(request.params.clone()).map_err(|_| ErrorCode::InvalidMessage)?;
-    let creations = state.metadata.creations.clone();
+    let creations = Arc::new(state.metadata.creations.clone());
     let snapshot = state
         .runtime
-        .run(
-            Some(Arc::new(Mutex::new(creations))),
-            ErrorCode::RegistryIo,
-            move |creations| creations.snapshot(request.kind, &request.idempotency_key),
-        )
+        .run_shared(Some(creations), ErrorCode::RegistryIo, move |creations| {
+            creations.snapshot(request.kind, &request.idempotency_key)
+        })
         .await?;
     let Some(snapshot) = snapshot.filter(|snapshot| snapshot.phase == "completed") else {
         return Ok(());
