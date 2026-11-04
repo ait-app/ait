@@ -3,7 +3,8 @@
 mod catalog;
 mod download;
 mod engine;
-mod worker;
+/// Isolated native inference child process and its stdin/stdout entry point.
+pub mod worker;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -19,8 +20,6 @@ use crate::{
 use catalog::Model;
 use download::Preparation;
 use worker::{Init, Worker};
-
-pub use worker::run as run_worker;
 
 #[derive(Debug)]
 pub(crate) struct Offline {

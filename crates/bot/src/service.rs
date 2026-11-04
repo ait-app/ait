@@ -172,8 +172,13 @@ impl Bots {
             .map_err(|_| ErrorCode::BotIo)?;
         result.await.map_err(|_| ErrorCode::BotIo)?
     }
+    /// Admit channel input, waiting for command capacity so a busy service never drops it;
+    /// `ResourceExhausted` therefore only reports a refused message, not a full queue.
     pub(crate) async fn accept(&self, incoming: Incoming) -> Result<Value, ErrorCode> {
-        self.call(Operation::Accept(incoming)).await
+        if self.0.cancellation.is_cancelled() {
+            return Err(ErrorCode::ServerDraining);
+        }
+        self.send(Operation::Accept(incoming)).await
     }
     pub(crate) async fn cursor(&self, channel: ChannelId, cursor: i64) -> Result<(), ErrorCode> {
         self.call(Operation::Cursor(channel, cursor))

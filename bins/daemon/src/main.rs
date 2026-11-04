@@ -24,7 +24,7 @@ async fn main() -> ExitCode {
         .nth(1)
         .is_some_and(|arg| arg == "--speech-worker")
     {
-        return if voice::offline::run_worker().is_ok() {
+        return if voice::offline::worker::run().is_ok() {
             ExitCode::SUCCESS
         } else {
             ExitCode::FAILURE

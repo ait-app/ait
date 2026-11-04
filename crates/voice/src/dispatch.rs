@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use model::methods::InboundKind;
 use model::{Context, DispatchError, ErrorCode, Runtime};
 
 use crate::{connection::Connection, service::Speech};
@@ -36,14 +37,9 @@ pub async fn dispatch(
         return Ok(());
     }
     let Some(mut context) = context.take_if(|context| {
-        matches!(
-            context.request.method.as_str(),
-            "voice.mode.set.request"
-                | "voice.abort.request"
-                | "dictation.stream.start"
-                | "dictation.stream.finish"
-                | "dictation.stream.cancel"
-        )
+        crate::connection::METHODS.iter().any(|method| {
+            method.kind == InboundKind::Request && method.name == context.request.method
+        })
     }) else {
         return Err(DispatchError::NotImplemented);
     };
