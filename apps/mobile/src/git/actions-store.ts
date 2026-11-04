@@ -89,8 +89,12 @@ function invalidateCheckoutGitQueries(serverId: string, cwd: string) {
 const successTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const inFlight = new Map<string, Promise<unknown>>();
 
-function inFlightKey(key: CheckoutKey, actionId: CheckoutGitAsyncActionId): string {
-  return `${key}::${actionId}`;
+function inFlightKey(
+  key: CheckoutKey,
+  actionId: CheckoutGitAsyncActionId,
+  variant: string | undefined,
+): string {
+  return variant === undefined ? `${key}::${actionId}` : `${key}::${actionId}::${variant}`;
 }
 
 interface CheckoutGitActionsStoreState {
@@ -133,15 +137,18 @@ async function runCheckoutAction({
   serverId,
   cwd,
   actionId,
+  variant,
   run,
 }: {
   serverId: string;
   cwd: string;
   actionId: CheckoutGitAsyncActionId;
+  // Parameterized actions only share an in-flight request when their parameters match.
+  variant?: string;
   run: () => Promise<void>;
 }): Promise<void> {
   const key = checkoutKey(serverId, cwd);
-  const inflightId = inFlightKey(key, actionId);
+  const inflightId = inFlightKey(key, actionId, variant);
 
   const existing = inFlight.get(inflightId);
   if (existing) {
@@ -345,6 +352,7 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
       serverId,
       cwd,
       actionId: "merge-branch",
+      variant: baseRef,
       run: async () => {
         const client = resolveClient(serverId);
         const payload = await client.checkoutMerge(cwd, {
@@ -379,6 +387,7 @@ export const useCheckoutGitActionsStore = create<CheckoutGitActionsStoreState>()
       serverId,
       cwd,
       actionId: "discard-changes",
+      variant: JSON.stringify(paths),
       run: async () => {
         const client = resolveClient(serverId);
         const payload = await client.checkoutDiscardChanges(cwd, { paths });

@@ -25,6 +25,9 @@ interface UsagePreferencesState {
   display: UsageDisplay;
 }
 
+/** `useAppSettings().updateSettings` logs a failed save before rethrowing; nothing else to do. */
+function ignoreLoggedSaveFailure(): void {}
+
 /** The device's usage preferences, with pins resolved against a host's reports. */
 export function useUsagePreferences(serverId?: string): UsagePreferencesState {
   const defaultServerId = useUsageHostId();
@@ -37,15 +40,17 @@ export function useUsageDisplay(reports: readonly UsageReportEntry[]): UsagePref
   const preferences = settings.usage;
   const setDisplayAs = useCallback(
     (displayAs: UsageDisplayAs) => {
-      void updateSettings((current) => ({ usage: setUsageDisplayAs(current.usage, displayAs) }));
+      updateSettings((current) => ({
+        usage: setUsageDisplayAs(current.usage, displayAs),
+      })).catch(ignoreLoggedSaveFailure);
     },
     [updateSettings],
   );
   const togglePin = useCallback(
     (pin: UsagePin) => {
-      void updateSettings((current) => ({
+      updateSettings((current) => ({
         usage: toggleUsagePin({ preferences: current.usage, pin, reports }),
-      }));
+      })).catch(ignoreLoggedSaveFailure);
     },
     [updateSettings, reports],
   );

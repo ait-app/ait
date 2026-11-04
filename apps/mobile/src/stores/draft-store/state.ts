@@ -1,6 +1,7 @@
 import {
   NEW_WORKSPACE_PICKER_ATTACHMENT_OWNER,
   type AttachmentMetadata,
+  type ComposerAttachment,
   type UserComposerAttachment,
 } from "@/attachments/types";
 import { z } from "zod";
@@ -236,6 +237,28 @@ export function collectReferencedAttachmentIdsFromState(state: DraftStoreState):
   }
 
   return referencedIds;
+}
+
+/**
+ * Queued messages keep their attachments outside any draft or workspace scope
+ * until they are sent, so their stored files must stay referenced: draft images
+ * and browser-element screenshots alike.
+ */
+export function collectQueuedMessageAttachmentIds(
+  queuedMessages: ReadonlyMap<string, readonly { attachments: readonly ComposerAttachment[] }[]>,
+  referencedIds: Set<string>,
+): void {
+  for (const queue of queuedMessages.values()) {
+    for (const queuedMessage of queue) {
+      for (const attachment of queuedMessage.attachments) {
+        if (attachment.kind === "image") {
+          referencedIds.add(attachment.metadata.id);
+        } else if (attachment.kind === "browser_element" && attachment.attachment.screenshot) {
+          referencedIds.add(attachment.attachment.screenshot.id);
+        }
+      }
+    }
+  }
 }
 
 export function pruneFinalizedDraftRecords(input: {

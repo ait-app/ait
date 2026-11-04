@@ -371,6 +371,14 @@ describe("mountBrowserAutomationHandler", () => {
         url: "https://example.com",
       }),
     ]);
+    const orphanBrowserId = browser.resident.ensuredWebviews[0]?.browserId ?? "";
+    const workspaceKey = buildWorkspaceTabPersistenceKey({
+      serverId: "server-1",
+      workspaceId: "wks_workspace_a",
+    });
+    expect(workspaceBrowserTabs(workspaceKey ?? "", orphanBrowserId)).toEqual([]);
+    expect(useBrowserStore.getState().browsersById).toEqual({});
+    expect(browser.browser.unregisteredWorkspaceBrowsers).toEqual([orphanBrowserId]);
   });
 
   test("browser_new_tab wraps registration bridge errors in a response", async () => {
@@ -395,6 +403,8 @@ describe("mountBrowserAutomationHandler", () => {
         },
       },
     ]);
+    expect(useBrowserStore.getState().browsersById).toEqual({});
+    expect(browser.browser.unregisteredWorkspaceBrowsers).toHaveLength(1);
   });
 
   test("browser_resize updates resident webview dimensions", async () => {

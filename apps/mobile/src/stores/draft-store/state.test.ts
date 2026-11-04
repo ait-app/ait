@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { AttachmentMetadata, ComposerAttachment } from "@/attachments/types";
 import {
   applyClearDraftRecord,
   CanonicalDraftInputSchema,
+  collectQueuedMessageAttachmentIds,
   editDraftRecordText,
   pruneFinalizedDraftRecords,
   toDraftInputIfReady,
@@ -181,4 +183,46 @@ it("drops removed plugin attachments without losing the draft text or ordinary a
   expect(parsed.attachments).toEqual([
     { kind: "workspace_file", path: "README.md", selection: { kind: "whole_file" } },
   ]);
+});
+
+it("keeps queued images and browser-element screenshots referenced", () => {
+  const metadata = (id: string): AttachmentMetadata => ({
+    id,
+    mimeType: "image/png",
+    storageType: "web-indexeddb",
+    storageKey: id,
+    createdAt: 1,
+  });
+  const browserElement: ComposerAttachment = {
+    kind: "browser_element",
+    attachment: {
+      url: "http://localhost/",
+      selector: "#app",
+      tag: "div",
+      text: "",
+      outerHTML: "<div></div>",
+      computedStyles: {},
+      boundingRect: { x: 0, y: 0, width: 1, height: 1 },
+      reactSource: null,
+      parentChain: [],
+      children: [],
+      screenshot: metadata("screenshot"),
+      formatted: "<div></div>",
+    },
+  };
+  const referencedIds = new Set<string>();
+  collectQueuedMessageAttachmentIds(
+    new Map([
+      [
+        "agent-1",
+        [
+          {
+            attachments: [{ kind: "image", metadata: metadata("image") }, browserElement],
+          },
+        ],
+      ],
+    ]),
+    referencedIds,
+  );
+  expect([...referencedIds].sort()).toEqual(["image", "screenshot"]);
 });

@@ -50,7 +50,11 @@ class FakeTerminalStreamClient implements TerminalStreamControllerClient {
     cols: number;
     intent?: "claim" | "update";
   }> = [];
-  public nextSubscribeResults: Array<{ terminalId: string; error?: string | null }> = [];
+  public nextSubscribeResults: Array<{
+    terminalId: string;
+    error?: string | null;
+    readyError?: string;
+  }> = [];
 
   observeTerminal: TerminalStreamControllerClient["observeTerminal"] = (
     terminalId,
@@ -71,7 +75,7 @@ class FakeTerminalStreamClient implements TerminalStreamControllerClient {
           terminalId,
           subscriptionId,
           slot: this.subscribeCalls.length,
-          error: null,
+          error: result.readyError ?? null,
           requestId: subscriptionId,
         });
     let released = false;
@@ -203,6 +207,24 @@ describe("terminal-stream-controller", () => {
       terminalId: "term-1",
       isAttaching: false,
       error: "network disconnected",
+    });
+  });
+
+  it("releases the subscription when the attach payload reports an error", async () => {
+    const harness = createHarness();
+    harness.client.nextSubscribeResults.push({
+      terminalId: "term-1",
+      readyError: "terminal not found",
+    });
+
+    harness.controller.setTerminal({ terminalId: "term-1" });
+    await flushAsyncWork();
+
+    expect(harness.client.unsubscribeCalls).toEqual(["term-1"]);
+    expect(harness.statuses.at(-1)).toEqual({
+      terminalId: "term-1",
+      isAttaching: false,
+      error: "terminal not found",
     });
   });
 

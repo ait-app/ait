@@ -8,6 +8,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 
 /**
  * Shared overlay root for web portals (modals, toasts, etc.)
@@ -166,7 +167,7 @@ export function dispatchTopWebOverlayKeyDown(event: KeyboardEvent): boolean {
   // Composition keys belong to the active text field. A modal must not turn an
   // IME candidate confirmation into an overlay shortcut before the browser has
   // committed the composed text.
-  if (event.isComposing || event.key === "Process") return false;
+  if (isImeComposingKeyboardEvent(event) || event.key === "Process") return false;
 
   const top = getTopWebOverlay();
   const scope = top?.getScope();

@@ -242,6 +242,35 @@ describe("checkout-git-actions-store", () => {
     ).toBe("success");
   });
 
+  it("does not merge concurrent discards of different paths into one request", async () => {
+    const first = createDeferred<{ success: boolean; error: null }>();
+    const checkoutDiscardChanges = vi
+      .fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(async () => ({ success: true, error: null }));
+    const client = { checkoutDiscardChanges };
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: {
+        ...state.sessions,
+        [serverId]: { client } as unknown as (typeof state.sessions)[string],
+      },
+    }));
+    const store = useCheckoutGitActionsStore.getState();
+
+    const discardA = store.discardChanges({ serverId, cwd, paths: ["a.ts"] });
+    const discardADuplicate = store.discardChanges({ serverId, cwd, paths: ["a.ts"] });
+    const discardB = store.discardChanges({ serverId, cwd, paths: ["b.ts"] });
+    await discardB;
+    first.resolve({ success: true, error: null });
+    await Promise.all([discardA, discardADuplicate]);
+
+    expect(checkoutDiscardChanges.mock.calls).toEqual([
+      [cwd, { paths: ["a.ts"] }],
+      [cwd, { paths: ["b.ts"] }],
+    ]);
+  });
+
   for (const rpc of [
     {
       label: "forge",

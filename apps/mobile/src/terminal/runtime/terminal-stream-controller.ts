@@ -110,12 +110,7 @@ export class TerminalStreamController {
           return;
         }
         if (payload.error) {
-          this.terminalId = null;
-          this.options.onStatusChange?.({
-            terminalId: nextTerminalId,
-            isAttaching: false,
-            error: payload.error,
-          });
+          this.failAttach(nextTerminalId, new Error(payload.error));
           return;
         }
         this.options.onStatusChange?.({

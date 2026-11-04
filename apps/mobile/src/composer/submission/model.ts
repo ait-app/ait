@@ -35,6 +35,21 @@ export function getSendingClientMessageIds(
 
 export type MessageSubmissionRejectionOutcome = "rejected" | "accepted" | "unknown";
 
+const deliveredSendErrors = new WeakSet<object>();
+
+/**
+ * Marks a send failure whose message the daemon had already echoed back. The
+ * error still surfaces, but callers must not re-queue or restore the message,
+ * which would deliver it twice.
+ */
+export function markDeliveredSendError(error: unknown): void {
+  if (typeof error === "object" && error !== null) deliveredSendErrors.add(error);
+}
+
+export function isDeliveredSendError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && deliveredSendErrors.has(error);
+}
+
 export interface MessageSubmissionRejectionResult {
   submissions: MessageSubmissionRecord[];
   outcome: MessageSubmissionRejectionOutcome;

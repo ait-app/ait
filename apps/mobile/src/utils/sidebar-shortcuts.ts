@@ -9,8 +9,14 @@ export interface SidebarShortcutWorkspaceTarget {
   workspaceId: string;
 }
 
+/** Number of workspaces reachable through the Cmd/Ctrl/Alt+digit shortcuts. */
+export const SIDEBAR_SHORTCUT_LIMIT = 9;
+
 export interface SidebarShortcutModel {
+  /** Visible workspaces with a digit shortcut, capped at the shortcut limit. */
   shortcutTargets: SidebarShortcutWorkspaceTarget[];
+  /** Every visible workspace in visual order, for next/previous workspace navigation. */
+  navigationTargets: SidebarShortcutWorkspaceTarget[];
   shortcutIndexByWorkspaceKey: Map<string, number>;
 }
 
@@ -60,8 +66,9 @@ export function buildSidebarShortcutSections(input: {
   sections: readonly SidebarShortcutSection[];
   shortcutLimit?: number;
 }): SidebarShortcutModel {
-  const maxShortcuts = Math.max(0, Math.floor(input.shortcutLimit ?? 9));
+  const maxShortcuts = Math.max(0, Math.floor(input.shortcutLimit ?? SIDEBAR_SHORTCUT_LIMIT));
   const shortcutTargets: SidebarShortcutWorkspaceTarget[] = [];
+  const navigationTargets: SidebarShortcutWorkspaceTarget[] = [];
   const shortcutIndexByWorkspaceKey = new Map<string, number>();
 
   for (const section of input.sections) {
@@ -70,17 +77,19 @@ export function buildSidebarShortcutSections(input: {
     }
 
     for (const workspace of section.workspaces) {
+      const target = createShortcutTarget(workspace);
+      navigationTargets.push(target);
       if (shortcutTargets.length >= maxShortcuts) {
-        break;
+        continue;
       }
 
       const shortcutNumber = shortcutTargets.length + 1;
-      shortcutTargets.push(createShortcutTarget(workspace));
+      shortcutTargets.push(target);
       shortcutIndexByWorkspaceKey.set(workspace.workspaceKey, shortcutNumber);
     }
   }
 
-  return { shortcutTargets, shortcutIndexByWorkspaceKey };
+  return { shortcutTargets, navigationTargets, shortcutIndexByWorkspaceKey };
 }
 
 export function getRelativeSidebarShortcutTarget(input: {

@@ -162,4 +162,14 @@ describe("formatNextRun", () => {
     expect(formatNextRun("2026-01-01T03:00:00.000Z")).toBe("in 3h");
     expect(formatNextRun("2026-01-03T00:00:00.000Z")).toBe("in 2d");
   });
+
+  it("never rounds a label up to a full count of its own unit", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+
+    expect(formatNextRun("2026-01-01T00:59:20.000Z")).toBe("in 59m");
+    expect(formatNextRun("2026-01-01T00:59:45.000Z")).toBe("in 1h");
+    expect(formatNextRun("2026-01-01T23:20:00.000Z")).toBe("in 23h");
+    expect(formatNextRun("2026-01-01T23:40:00.000Z")).toBe("in 1d");
+  });
 });

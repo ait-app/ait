@@ -3,12 +3,14 @@ import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispat
 import { buildSettingsRoute, parseHostWorkspaceRouteFromPathname } from "@/utils/host-routes";
 import {
   getRelativeSidebarShortcutTarget,
+  SIDEBAR_SHORTCUT_LIMIT,
   type SidebarShortcutWorkspaceTarget,
 } from "@/utils/sidebar-shortcuts";
 
 export interface ShortcutRoutingContext {
   pathname: string;
   isMobile: boolean;
+  /** Every visible sidebar workspace in visual order; digit shortcuts use the first nine. */
   sidebarShortcutTargets: ReadonlyArray<SidebarShortcutWorkspaceTarget>;
   navigationActiveWorkspace: SidebarShortcutWorkspaceTarget | null;
   commandCenterOpen: boolean;
@@ -121,6 +123,7 @@ function routeWorkspaceNavigateIndex(
   ctx: ShortcutRoutingContext,
 ): ShortcutAction {
   if (!hasPayloadKey(payload, "index")) return NONE;
+  if (payload.index < 1 || payload.index > SIDEBAR_SHORTCUT_LIMIT) return NONE;
   const target = ctx.sidebarShortcutTargets[payload.index - 1] ?? null;
   if (!target) return NONE;
   return {

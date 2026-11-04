@@ -77,7 +77,7 @@ import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
 import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/input-mode";
 import { ComposerKeyboardScopeProvider, useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
-import { submitAgentInput } from "@/composer/submit";
+import { joinRestoredText, submitAgentInput } from "@/composer/submit";
 import { FOOTER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
@@ -1328,6 +1328,8 @@ function ComposerContentImpl({
     onOpenWorkspaceAttachment,
   });
   const setSelectedAttachments = onChangeAttachments;
+  const latestUserAttachmentsRef = useRef(attachments);
+  latestUserAttachmentsRef.current = attachments;
   const checkoutStatusQuery = useCheckoutStatusQuery({ serverId, cwd });
   const supportsForgeSearch = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.forgeSearch === true,
@@ -1651,6 +1653,10 @@ function ComposerContentImpl({
           await submitMessage(submitText, submitAttachments);
         },
         clearDraft,
+        readCurrentDraft: () => ({
+          text: textSource.getSnapshot(),
+          attachments: latestUserAttachmentsRef.current,
+        }),
         setUserInput: replaceUserInput,
         setAttachments: (nextAttachments) => {
           setSelectedAttachments(composerWorkspaceAttachment.userAttachmentsOnly(nextAttachments));
@@ -1680,6 +1686,7 @@ function ComposerContentImpl({
       submitBehavior,
       submitMessage,
       t,
+      textSource,
     ],
   );
 
@@ -1933,10 +1940,11 @@ function ComposerContentImpl({
         queue: queueWriter,
       });
       if (!result) return;
-      replaceUserInput(result.text);
-      setSelectedAttachments(result.attachments);
+      // Pull the queued message in ahead of the current draft instead of replacing it.
+      replaceUserInput(joinRestoredText(result.text, textSource.getSnapshot()));
+      setSelectedAttachments([...result.attachments, ...latestUserAttachmentsRef.current]);
     },
-    [agentId, queueWriter, replaceUserInput, setSelectedAttachments],
+    [agentId, queueWriter, replaceUserInput, setSelectedAttachments, textSource],
   );
 
   const handleSendQueuedNow = useCallback(

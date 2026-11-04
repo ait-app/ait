@@ -1115,7 +1115,6 @@ export class TerminalEmulatorRuntime {
     if (operation.type === "snapshot") {
       this.inputModeDecoder.decode();
       this.inputModeTracker.reset();
-      this.emitInputModeChange();
       try {
         if (
           typeof operation.cols === "number" &&
@@ -1125,16 +1124,19 @@ export class TerminalEmulatorRuntime {
           terminal.resize(operation.cols, operation.rows);
         }
       } catch {
+        this.emitInputModeChange();
         finalizeOperation(operation);
         return;
       }
     }
 
     const data = operation.data;
-    if (operation.type === "write") {
+    // Daemon restore frames end with the screen's input modes, so a snapshot re-seeds the
+    // tracker from its own data after the reset above; emit once for the net change.
+    if (operation.type === "write" || operation.type === "snapshot") {
       const text = this.inputModeDecoder.decode(data, { stream: true });
       const result = this.inputModeTracker.feed(text);
-      if (result.changed) {
+      if (result.changed || operation.type === "snapshot") {
         this.emitInputModeChange();
       }
     }

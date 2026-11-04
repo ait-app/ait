@@ -13,7 +13,9 @@ vi.mock("expo-file-system", () => ({
   Paths: { cache: "file:///cache" },
 }));
 vi.mock("expo-file-system/legacy", () => ({
-  createDownloadResumable: () => ({ downloadAsync: async () => ({ uri: "file:///report.txt" }) }),
+  createDownloadResumable: () => ({
+    downloadAsync: async () => ({ uri: "file:///report.txt", status: 200 }),
+  }),
 }));
 vi.mock("expo-sharing", () => ({ isAvailableAsync: async () => false }));
 vi.mock("@/utils/daemon-endpoints", () => ({ buildDaemonWebSocketUrl: vi.fn() }));

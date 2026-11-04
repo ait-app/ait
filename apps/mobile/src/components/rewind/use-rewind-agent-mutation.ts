@@ -41,11 +41,17 @@ export function useRewindAgentMutation(input: UseRewindAgentMutationInput): {
               .sessions[input.serverId]?.agentTimelineCursor.get(input.agentId)
           : undefined;
         if (!input.serverId) throw new Error(t("common.errors.daemonClientUnavailable"));
-        await getHostRuntimeStore().fetchAgentTimeline(input.serverId, input.agentId, {
-          direction: "tail",
-          projection: "projected",
-          ...(cursor ? { cursor: { epoch: cursor.epoch, seq: cursor.endSeq } } : {}),
-        });
+        // The rewind already happened on the daemon; a failed refresh only leaves the timeline
+        // stale until the next fetch, so it must not undo the composer restore.
+        try {
+          await getHostRuntimeStore().fetchAgentTimeline(input.serverId, input.agentId, {
+            direction: "tail",
+            projection: "projected",
+            ...(cursor ? { cursor: { epoch: cursor.epoch, seq: cursor.endSeq } } : {}),
+          });
+        } catch (error) {
+          console.warn("[rewind] Failed to refresh timeline after rewind", error);
+        }
       }
     },
     onSuccess: (_data, variables) => {

@@ -372,6 +372,43 @@ describe("terminal-emulator-runtime", () => {
     ]);
   });
 
+  it("re-seeds input modes from the restored output instead of leaving them reset", () => {
+    const { runtime, writeCallbacks } = createRuntimeWithTerminal();
+    const inputModeChanges: Array<{ bracketedPaste: boolean; applicationCursorKeys: boolean }> = [];
+    runtime.setCallbacks({
+      callbacks: {
+        onInputModeChange: (state) => {
+          inputModeChanges.push({
+            bracketedPaste: Boolean(state.bracketedPaste),
+            applicationCursorKeys: Boolean(state.applicationCursorKeys),
+          });
+        },
+      },
+    });
+
+    // Daemon restore frames append the screen's input modes after the screen contents.
+    runtime.restoreOutput({ data: terminalOutput("restored screen\x1b[?1h\x1b[?2004h") });
+
+    expect(runtime.getInputModeState()).toMatchObject({
+      bracketedPaste: true,
+      applicationCursorKeys: true,
+    });
+    expect(inputModeChanges).toEqual([{ bracketedPaste: true, applicationCursorKeys: true }]);
+
+    // A later restore without those modes clears them again.
+    writeCallbacks[0]?.();
+    runtime.restoreOutput({ data: terminalOutput("plain screen") });
+
+    expect(runtime.getInputModeState()).toMatchObject({
+      bracketedPaste: false,
+      applicationCursorKeys: false,
+    });
+    expect(inputModeChanges).toEqual([
+      { bracketedPaste: true, applicationCursorKeys: true },
+      { bracketedPaste: false, applicationCursorKeys: false },
+    ]);
+  });
+
   it("exposes the tracked input mode state", () => {
     const { runtime } = createRuntimeWithTerminal();
 
