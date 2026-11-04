@@ -121,8 +121,8 @@ impl DaemonConfigStore for FileDaemonConfigStore {
     }
 
     fn reload(&self) -> Result<DaemonConfigReload, DaemonConfigStoreError> {
-        let next = read(&self.path)?;
         let mut state = self.lock()?;
+        let next = read(&self.path)?;
         let current = self.current(&mut state)?;
         let mut changed = Vec::new();
         diff_paths(current, &next, "", &mut changed);

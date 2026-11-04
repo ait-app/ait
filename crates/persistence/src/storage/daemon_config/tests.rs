@@ -1,4 +1,5 @@
 use std::fs;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use model::storage::daemon_config::DaemonConfigStore;
 use serde_json::json;
@@ -168,4 +169,29 @@ fn invalid_or_symlink_documents_are_rejected_without_replacing_current() {
         let fresh = store(&directory);
         assert_eq!(fresh.get(), Err(DaemonConfigStoreError::Io));
     }
+}
+
+#[test]
+fn concurrent_reload_never_installs_a_config_older_than_a_completed_patch() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = store(&directory);
+    store.get().unwrap();
+    let patching = AtomicBool::new(true);
+    let stale_reads = std::thread::scope(|scope| {
+        scope.spawn(|| {
+            while patching.load(Ordering::Relaxed) {
+                store.reload().unwrap();
+            }
+        });
+        let stale_reads = (0..200)
+            .filter(|revision| {
+                let prompt = format!("revision-{revision}");
+                store.patch(&json!({"appendSystemPrompt": prompt})).unwrap();
+                store.get().unwrap()["appendSystemPrompt"] != prompt
+            })
+            .count();
+        patching.store(false, Ordering::Relaxed);
+        stale_reads
+    });
+    assert_eq!(stale_reads, 0);
 }

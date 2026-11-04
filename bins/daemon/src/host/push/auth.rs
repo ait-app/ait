@@ -15,13 +15,45 @@ struct Cached {
     expires_at: i64,
 }
 
+/// One reusable provider credential; minting happens under the lock so callers share it.
+#[derive(Default)]
+struct TokenCache(Mutex<Option<Cached>>);
+
+impl TokenCache {
+    /// Return the credential still valid at `now`, or store and return the one `mint` produces.
+    async fn get_or_mint<Mint>(&self, now: i64, mint: Mint) -> Result<SecretString, DeliveryError>
+    where
+        Mint: Future<Output = Result<Cached, DeliveryError>>,
+    {
+        let mut cached = self.0.lock().await;
+        if let Some(token) = cached.as_ref().filter(|token| token.expires_at > now) {
+            return Ok(token.value.clone());
+        }
+        let token = mint.await?;
+        let value = token.value.clone();
+        *cached = Some(token);
+        Ok(value)
+    }
+
+    /// Clear only `rejected`, preserving credentials refreshed by concurrent requests.
+    async fn invalidate(&self, rejected: &SecretString) {
+        let mut cached = self.0.lock().await;
+        if cached
+            .as_ref()
+            .is_some_and(|current| current.value.expose_secret() == rejected.expose_secret())
+        {
+            *cached = None;
+        }
+    }
+}
+
 /// Apple signing material and a reusable provider-token cache; never debug-print credentials.
 pub(super) struct Apple {
     key: EncodingKey,
     key_id: String,
     team_id: String,
     bundles: Vec<String>,
-    cached: Mutex<Option<Cached>>,
+    cached: TokenCache,
 }
 
 impl Apple {
@@ -65,7 +97,7 @@ impl Apple {
             key_id,
             team_id,
             bundles,
-            cached: Mutex::new(None),
+            cached: TokenCache::default(),
         }))
     }
 
@@ -77,31 +109,23 @@ impl Apple {
     /// Reuse a current credential or sign a new one; signing failures are safely classified.
     pub(super) async fn authorization(&self) -> Result<SecretString, DeliveryError> {
         let now = chrono::Utc::now().timestamp();
-        let mut cached = self.cached.lock().await;
-        if let Some(token) = cached.as_ref().filter(|token| token.expires_at > now) {
-            return Ok(token.value.clone());
-        }
-        let mut header = Header::new(Algorithm::ES256);
-        header.kid = Some(self.key_id.clone());
-        let value = encode(&header, &json!({"iss":self.team_id,"iat":now}), &self.key)
-            .map_err(|_| DeliveryError::Rejected)?;
-        let value = SecretString::from(value);
-        *cached = Some(Cached {
-            value: value.clone(),
-            expires_at: now + 50 * 60,
-        });
-        Ok(value)
+        self.cached
+            .get_or_mint(now, async {
+                let mut header = Header::new(Algorithm::ES256);
+                header.kid = Some(self.key_id.clone());
+                let value = encode(&header, &json!({"iss":self.team_id,"iat":now}), &self.key)
+                    .map_err(|_| DeliveryError::Rejected)?;
+                Ok(Cached {
+                    value: SecretString::from(value),
+                    expires_at: now + 50 * 60,
+                })
+            })
+            .await
     }
 
     /// Clear only `rejected`, preserving credentials refreshed by concurrent requests.
     pub(super) async fn invalidate(&self, rejected: &SecretString) {
-        let mut cached = self.cached.lock().await;
-        if cached
-            .as_ref()
-            .is_some_and(|current| current.value.expose_secret() == rejected.expose_secret())
-        {
-            *cached = None;
-        }
+        self.cached.invalidate(rejected).await;
     }
 }
 
@@ -123,7 +147,7 @@ pub(super) struct Google {
     project_id: String,
     email: String,
     key: EncodingKey,
-    cached: Mutex<Option<Cached>>,
+    cached: TokenCache,
     token_url: String,
 }
 
@@ -173,7 +197,7 @@ impl Google {
             project_id: account.project_id,
             email: account.client_email,
             key,
-            cached: Mutex::new(None),
+            cached: TokenCache::default(),
             token_url: GOOGLE_TOKEN_URL.to_owned(),
         })
     }
@@ -190,23 +214,20 @@ impl Google {
         client: &reqwest::Client,
     ) -> Result<SecretString, DeliveryError> {
         let now = chrono::Utc::now().timestamp();
-        let mut cached = self.cached.lock().await;
-        if let Some(token) = cached.as_ref().filter(|token| token.expires_at > now) {
-            return Ok(token.value.clone());
-        }
-        let assertion = encode(
-            &Header::new(Algorithm::RS256),
-            &json!({
-                "iss":self.email,"scope":"https://www.googleapis.com/auth/firebase.messaging",
-                "aud":self.token_url,"iat":now,"exp":now+3600,
-            }),
-            &self.key,
-        )
-        .map_err(|_| DeliveryError::Rejected)?;
-        let result = self.exchange(client, &assertion).await?;
-        let value = result.value.clone();
-        *cached = Some(result);
-        Ok(value)
+        self.cached
+            .get_or_mint(now, async {
+                let assertion = encode(
+                    &Header::new(Algorithm::RS256),
+                    &json!({
+                        "iss":self.email,"scope":"https://www.googleapis.com/auth/firebase.messaging",
+                        "aud":self.token_url,"iat":now,"exp":now+3600,
+                    }),
+                    &self.key,
+                )
+                .map_err(|_| DeliveryError::Rejected)?;
+                self.exchange(client, &assertion).await
+            })
+            .await
     }
 
     async fn exchange(
@@ -244,13 +265,7 @@ impl Google {
 
     /// Clear only `rejected`, preserving credentials refreshed by concurrent requests.
     pub(super) async fn invalidate(&self, rejected: &SecretString) {
-        let mut cached = self.cached.lock().await;
-        if cached
-            .as_ref()
-            .is_some_and(|current| current.value.expose_secret() == rejected.expose_secret())
-        {
-            *cached = None;
-        }
+        self.cached.invalidate(rejected).await;
     }
 }
 

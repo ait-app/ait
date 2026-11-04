@@ -9,7 +9,7 @@ use domain::workspace::registry::{
 use model::workspace::registry::{MutationListener, MutationSubscription, WorkspaceRegistry};
 
 use super::listeners::Listeners;
-use crate::registry::FileRegistry;
+use crate::registry::{FileRegistry, Records};
 
 /// Serialized workspace registry backed by a Paseo-shaped JSON array.
 /// Clones share state; reads and writes require the host's data-directory lease.
@@ -39,7 +39,7 @@ impl FileBackedWorkspaceRegistry {
     pub(crate) fn commit_workspace_label_mutation(
         &self,
         updates: &[PersistedWorkspaceRecord],
-        before_write: impl FnOnce(&[PersistedWorkspaceRecord]) -> Result<(), RegistryError>,
+        before_write: impl FnOnce(&Records<PersistedWorkspaceRecord>) -> Result<(), RegistryError>,
         after_write: impl FnOnce() -> Result<(), RegistryError>,
         publish: bool,
     ) -> Result<(), RegistryError> {

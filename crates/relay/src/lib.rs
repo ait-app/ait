@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use futures_util::StreamExt;
 use secrecy::SecretString;
-use tokio::sync::{Mutex, Semaphore};
+use tokio::sync::{Mutex, OnceCell, Semaphore};
 use tokio::task::JoinSet;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
@@ -50,6 +50,8 @@ struct Local {
     token: SecretString,
     server_id: String,
     instance_id: String,
+    /// Local download client, built on first use and reused for every later download.
+    downloads: OnceCell<reqwest::Client>,
 }
 
 /// Connector failures deliberately omit URLs and credentials.
@@ -97,6 +99,7 @@ impl Connector {
             token,
             server_id,
             instance_id,
+            downloads: OnceCell::new(),
         });
         Self {
             hub: hub::Connector::new(local.clone(), shutdown.clone()),
@@ -125,11 +128,7 @@ impl Connector {
             return Err(Error::Transport);
         }
         let center = center_url(&grant.center_url)?;
-        if grant.control_ticket.len() != 64
-            || !grant.control_ticket.bytes().all(|b| b.is_ascii_hexdigit())
-        {
-            return Err(Error::InvalidGrant);
-        }
+        validate_ticket(&grant.control_ticket)?;
         let generation = Uuid::new_v4();
         let cancel = self.shutdown.child_token();
         let resume = {
@@ -348,6 +347,14 @@ fn center_url(value: &str) -> Result<Url, Error> {
         url.set_path(&format!("{}/", url.path()));
     }
     Ok(url)
+}
+
+/// Reject anything but a one-use 64-hex center ticket.
+fn validate_ticket(ticket: &str) -> Result<(), Error> {
+    if ticket.len() != 64 || !ticket.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(Error::InvalidGrant);
+    }
+    Ok(())
 }
 
 fn endpoint(center: &Url, path: &str) -> String {

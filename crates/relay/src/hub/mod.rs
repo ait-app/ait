@@ -25,7 +25,7 @@ use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::transport::Socket;
-use crate::{Error, Local, center_url, diagnostics, endpoint};
+use crate::{Error, Local, center_url, diagnostics, endpoint, validate_ticket};
 use link::{Joined, Link};
 use session::Output;
 use wire::{Inbound, Outbound};
@@ -152,10 +152,7 @@ impl Connector {
             return Err(Error::Transport);
         }
         let center = center_url(&grant.center_url)?;
-        let ticket = grant.hub_ticket.expose_secret();
-        if ticket.len() != 64 || !ticket.bytes().all(|b| b.is_ascii_hexdigit()) {
-            return Err(Error::InvalidGrant);
-        }
+        validate_ticket(grant.hub_ticket.expose_secret())?;
         let generation = Uuid::new_v4();
         let cancel = self.shutdown.child_token();
         let scope = Scope {

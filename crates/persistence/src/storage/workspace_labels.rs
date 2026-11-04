@@ -3,9 +3,8 @@
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use domain::workspace::label_store::{
     WorkspaceLabelStoreError, WorkspaceLabelStoreMutation, WorkspaceLabelStoreSnapshot,
@@ -17,6 +16,7 @@ use model::workspace::label_store::WorkspaceLabelStore;
 use model::workspace::registry::WorkspaceRegistry;
 use serde::{Deserialize, Serialize};
 
+use crate::registry::Records;
 use crate::storage::registry::FileBackedWorkspaceRegistry;
 
 const MAX_DOCUMENT_BYTES: u64 = 4 * 1024 * 1024;
@@ -204,11 +204,7 @@ impl WorkspaceLabelStore for FileWorkspaceLabelStore {
             |workspaces| {
                 let prepare = || {
                     if let Some(id) = &mutation.require_active_workspace {
-                        require_active_workspace(
-                            workspaces
-                                .iter()
-                                .find(|workspace| workspace.workspace_id == *id),
-                        )?;
+                        require_active_workspace(workspaces.get(id).map(Arc::as_ref))?;
                     }
                     let mut transaction = transaction_for(&state.labels, mutation, workspaces)?;
                     let prepared = json_document(&transaction)?;
@@ -266,13 +262,12 @@ fn require_active_workspace(
 fn transaction_for(
     current_labels: &[WorkspaceLabelDefinition],
     mutation: &WorkspaceLabelStoreMutation,
-    workspaces: &[PersistedWorkspaceRecord],
+    workspaces: &Records<PersistedWorkspaceRecord>,
 ) -> Result<Transaction, WorkspaceLabelStoreError> {
     let mut before_workspaces = Vec::with_capacity(mutation.workspace_updates.len());
     for update in &mutation.workspace_updates {
         let before = workspaces
-            .iter()
-            .find(|workspace| workspace.workspace_id == update.workspace_id)
+            .get(&update.workspace_id)
             .ok_or(WorkspaceLabelStoreError::Invalid)?;
         before_workspaces.push(workspace_state(before));
     }
@@ -361,29 +356,14 @@ fn json_document<T: Serialize>(value: &T) -> Result<Vec<u8>, WorkspaceLabelStore
 }
 
 fn write_bytes_atomic(path: &Path, bytes: &[u8]) -> Result<(), WorkspaceLabelStoreError> {
-    let parent = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .unwrap_or(Path::new("."));
-    fs::create_dir_all(parent).map_err(|_| WorkspaceLabelStoreError::Io)?;
     if fs::symlink_metadata(path)
         .is_ok_and(|metadata| metadata.file_type().is_symlink() || !metadata.is_file())
     {
         return Err(WorkspaceLabelStoreError::Invalid);
     }
-    let mut temporary =
-        tempfile::NamedTempFile::new_in(parent).map_err(|_| WorkspaceLabelStoreError::Io)?;
-    temporary
-        .write_all(bytes)
-        .map_err(|_| WorkspaceLabelStoreError::Io)?;
-    temporary
-        .as_file()
-        .sync_all()
-        .map_err(|_| WorkspaceLabelStoreError::Io)?;
-    temporary
-        .persist(path)
-        .map_err(|_| WorkspaceLabelStoreError::Io)?;
-    Ok(())
+    crate::File::new(path)
+        .write(bytes)
+        .map_err(|_| WorkspaceLabelStoreError::Io)
 }
 
 fn remove_if_present(path: &Path) -> Result<(), WorkspaceLabelStoreError> {

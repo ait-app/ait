@@ -71,15 +71,14 @@ pub(super) async fn run(
             };
             let Some(chunk) = chunk else { break };
             let bytes = chunk.map_err(|_| Error::Transport)?;
-            for chunk in bytes.chunks(64 * 1024) {
-                timeout(
-                    Duration::from_secs(5),
-                    sink.send(Message::Binary(chunk.to_vec().into())),
-                )
-                .await
-                .map_err(|_| Error::Transport)?
-                .map_err(|_| Error::Transport)?;
-                written += chunk.len() as u64;
+            for start in (0..bytes.len()).step_by(64 * 1024) {
+                let chunk = bytes.slice(start..bytes.len().min(start + 64 * 1024));
+                let length = chunk.len() as u64;
+                timeout(Duration::from_secs(5), sink.send(Message::Binary(chunk)))
+                    .await
+                    .map_err(|_| Error::Transport)?
+                    .map_err(|_| Error::Transport)?;
+                written += length;
             }
         }
         timeout(
@@ -117,12 +116,17 @@ async fn local_response(
     download.set_scheme("http").map_err(|()| Error::Protocol)?;
     download.set_path("/api/files/download");
     download.query_pairs_mut().append_pair("token", token);
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .no_proxy()
-        .connect_timeout(Duration::from_secs(5))
-        .build()
-        .map_err(|_| Error::Transport)?;
+    let client = local
+        .downloads
+        .get_or_try_init(|| async {
+            reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .no_proxy()
+                .connect_timeout(Duration::from_secs(5))
+                .build()
+                .map_err(|_| Error::Transport)
+        })
+        .await?;
     let mut request = client.get(download);
     if let Some(visitor) = visitor {
         request = request.header(model::share::DOWNLOAD_VISITOR_HEADER, visitor.to_string());
