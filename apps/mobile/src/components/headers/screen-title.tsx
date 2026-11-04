@@ -11,7 +11,7 @@ interface ScreenTitleProps {
 
 /**
  * Canonical screen title for use inside `ScreenHeader`. One typography, one
- * color, responsive weight. Leading icons are siblings (HeaderToggleButton,
+ * color and weight. Leading icons are siblings (HeaderToggleButton,
  * HeaderIconBadge) — never nested inside this component.
  */
 export function ScreenTitle({ children, numberOfLines = 1, testID, style }: ScreenTitleProps) {
@@ -28,10 +28,7 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
     minWidth: 0,
     fontSize: theme.fontSize.base,
-    fontWeight: {
-      xs: "400",
-      md: "300",
-    },
+    fontWeight: theme.fontWeight.medium,
     color: theme.colors.foreground,
   },
 }));
