@@ -219,6 +219,30 @@ impl Session {
         Ok(turn)
     }
 
+    /// Answer every unanswered permission with ACP's `cancelled` outcome so the agent can settle.
+    async fn withdraw_permissions(&mut self) -> Result<(), AgentSessionError> {
+        for (id, pending) in std::mem::take(&mut self.permissions) {
+            self.transport
+                .send(&acp_permissions::cancelled(&pending))
+                .await?;
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::PermissionResolved(id));
+        }
+        Ok(())
+    }
+
+    /// Withdraw pending permissions, then ask the agent to cancel the running prompt.
+    async fn cancel_prompt(&mut self) -> Result<(), AgentSessionError> {
+        self.withdraw_permissions().await?;
+        self.transport
+            .send(&json!({
+                "jsonrpc":"2.0","method":"session/cancel",
+                "params":{"sessionId":self.id}
+            }))
+            .await
+    }
+
     fn consume(&mut self, message: &Value) -> Result<(), AgentSessionError> {
         if self.stream.events.len() >= 4096 {
             return Err(AgentSessionError::Failed);
@@ -377,16 +401,13 @@ impl AgentSession for Session {
         if self.closed || self.active.as_ref().is_none_or(|(turn, _)| turn != turn_id) {
             return Err(AgentSessionError::Rejected);
         }
-        self.transport
-            .send(&json!({
-                "jsonrpc":"2.0","method":"session/cancel",
-                "params":{"sessionId":self.id}
-            }))
-            .await?;
+        self.cancel_prompt().await?;
         let result = tokio::time::timeout(self.transport.control_deadline(), async {
             while self.active.is_some() {
                 let message = self.transport.receive().await?;
                 self.consume(&message)?;
+                // Requests raced with the cancellation must not block the agent's settlement.
+                self.withdraw_permissions().await?;
             }
             Ok(())
         })
@@ -438,12 +459,7 @@ impl AgentSession for Session {
             .events
             .push_back(AgentTurnEvent::PermissionResolved(id.to_owned()));
         if response["behavior"] == "deny" && response["interrupt"] == true {
-            self.transport
-                .send(&json!({
-                    "jsonrpc":"2.0","method":"session/cancel",
-                    "params":{"sessionId":self.id}
-                }))
-                .await?;
+            self.cancel_prompt().await?;
         }
         Ok(())
     }

@@ -51,20 +51,7 @@ pub(crate) struct CodexClient {
 
 impl CodexClient {
     fn launch_transport(&self, cwd: &str, goals: bool) -> Result<Transport, AgentSessionError> {
-        if self.environment.is_empty() {
-            return if goals {
-                Transport::spawn_with_goals(&self.program, cwd, self.deadline, true)
-            } else {
-                Transport::spawn(&self.program, cwd, self.deadline)
-            };
-        }
-        Transport::spawn_with_environment(
-            &self.program,
-            cwd,
-            self.deadline,
-            goals,
-            &self.environment,
-        )
+        Transport::spawn(&self.program, cwd, self.deadline, goals, &self.environment)
     }
 
     /// Use `program` directly without invoking a shell. Requests have a twenty-second deadline.

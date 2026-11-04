@@ -6,7 +6,7 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::Value;
 use uuid::Uuid;
 
-use super::{ClaudeClient, streaming::Stream};
+use super::{ClaudeClient, streaming::Stream, transport::MAX_FRAME};
 use crate::ports::agent_session::{AgentSessionError, AgentTurnEvent};
 use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
 
@@ -149,7 +149,7 @@ fn read_records_mode(path: &Path, allow_partial_tail: bool) -> std::io::Result<V
     loop {
         bytes.clear();
         if (&mut input)
-            .take(2 * 1024 * 1024)
+            .take(MAX_FRAME as u64)
             .read_until(b'\n', &mut bytes)?
             == 0
         {
@@ -160,7 +160,7 @@ fn read_records_mode(path: &Path, allow_partial_tail: bool) -> std::io::Result<V
             return Err(std::io::Error::other("Claude history exceeds limit"));
         }
         if bytes.last() != Some(&b'\n') {
-            if allow_partial_tail && bytes.len() < 2 * 1024 * 1024 && input.fill_buf()?.is_empty() {
+            if allow_partial_tail && bytes.len() < MAX_FRAME && input.fill_buf()?.is_empty() {
                 break;
             }
             return Err(std::io::Error::other("Incomplete Claude history"));

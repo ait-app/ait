@@ -946,7 +946,7 @@ impl Execution {
             // Background children may still be waiting on this callback; never leave it unanswered.
             connection
                 .transport
-                .send(&interactions::cancelled(&request))
+                .send(&acp_permissions::cancelled(&request))
                 .await?;
             self.emit(AgentTurnEvent::PermissionResolved(id)).await?;
         }

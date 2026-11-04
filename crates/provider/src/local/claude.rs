@@ -179,7 +179,7 @@ impl AgentClient for ClaudeClient {
     }
 
     async fn is_available(&self) -> Result<bool, AgentSessionError> {
-        Ok(config::executable(&self.program))
+        Ok(crate::local::configuration::executable(&self.program))
     }
 
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {
@@ -237,7 +237,8 @@ impl AgentClient for ClaudeClient {
         handle: &AgentPersistenceHandle,
         cwd: &str,
     ) -> Result<Vec<NativeItem>, AgentSessionError> {
-        Ok(history::read(self, handle, cwd)?
+        Ok(read_history(self, handle, cwd)
+            .await?
             .ok_or(AgentSessionError::Unavailable)?
             .entries)
     }
@@ -252,16 +253,20 @@ impl AgentClient for ClaudeClient {
             .as_ref()
             .is_some_and(|metadata| metadata.contains_key(subagents::LOCATOR))
         {
-            return subagents::read(self, handle, cwd);
+            let (client, handle, cwd) = (self.clone(), handle.clone(), cwd.to_owned());
+            return blocking(move || subagents::read(&client, &handle, &cwd)).await;
         }
-        history::read(self, handle, cwd)?.ok_or(AgentSessionError::Unavailable)
+        read_history(self, handle, cwd)
+            .await?
+            .ok_or(AgentSessionError::Unavailable)
     }
 
     async fn subagents(
         &self,
         cwd: &str,
     ) -> Result<Vec<crate::ports::controls::NativeSubagent>, AgentSessionError> {
-        subagents::list(self, cwd)
+        let (client, cwd) = (self.clone(), cwd.to_owned());
+        blocking(move || subagents::list(&client, &cwd)).await
     }
 
     async fn rewind(
@@ -270,7 +275,13 @@ impl AgentClient for ClaudeClient {
         spec: &AgentSessionSpec,
         message: &str,
     ) -> Result<SessionHistory, AgentSessionError> {
-        rewind::conversation(self, handle, spec, message)
+        let (client, handle, spec, message) = (
+            self.clone(),
+            handle.clone(),
+            spec.clone(),
+            message.to_owned(),
+        );
+        blocking(move || rewind::conversation(&client, &handle, &spec, &message)).await
     }
 
     async fn rewind_files(
@@ -286,8 +297,31 @@ impl AgentClient for ClaudeClient {
         &self,
         options: &ListOptions,
     ) -> Result<Vec<SessionDescriptor>, AgentSessionError> {
-        history::list(self, options)
+        let (client, options) = (self.clone(), options.clone());
+        blocking(move || history::list(&client, &options)).await
     }
+}
+
+/// Run synchronous transcript reads and parsing off the async reactor.
+///
+/// Claude transcripts reach 128 MiB, so their I/O and parsing must not stall runtime workers.
+/// Returns the task's result, or `AgentSessionError::Failed` when the task panics.
+async fn blocking<T: Send + 'static>(
+    task: impl FnOnce() -> Result<T, AgentSessionError> + Send + 'static,
+) -> Result<T, AgentSessionError> {
+    tokio::task::spawn_blocking(task)
+        .await
+        .map_err(|_| AgentSessionError::Failed)?
+}
+
+/// Read and validate a native transcript on the blocking pool; see [`history::read`].
+async fn read_history(
+    client: &ClaudeClient,
+    handle: &AgentPersistenceHandle,
+    cwd: &str,
+) -> Result<Option<SessionHistory>, AgentSessionError> {
+    let (client, handle, cwd) = (client.clone(), handle.clone(), cwd.to_owned());
+    blocking(move || history::read(&client, &handle, &cwd)).await
 }
 
 #[cfg(test)]

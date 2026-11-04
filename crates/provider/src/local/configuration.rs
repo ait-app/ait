@@ -23,7 +23,12 @@ pub(super) fn validate(
     {
         return Err(AgentSessionError::Rejected);
     }
-    if let Some(options) = &config.provider_options {
+    // An empty map is the same as no options; providers without option rules accept it.
+    if let Some(options) = config
+        .provider_options
+        .as_ref()
+        .filter(|options| !options.is_empty())
+    {
         options::validate(options, provider)?;
     }
     if let Some(servers) = &config.mcp_servers {

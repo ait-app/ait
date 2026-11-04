@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 use tokio::io::{AsyncRead, AsyncReadExt};
 
+use crate::ports::agent_session::AgentSessionError;
 use crate::ports::diagnostics::{Category, Diagnostic};
 
 const MAX_TEXT: usize = 32 * 1024;
@@ -86,6 +87,32 @@ pub(crate) fn classify(text: &str) -> Category {
     } else {
         Category::Unknown
     }
+}
+
+/// Read `output` until it closes, passing each line to `observe` with bounded memory.
+///
+/// # Arguments
+///
+/// * `output` - Native diagnostic stream such as stderr.
+/// * `observe` - Receives each newline-terminated line, then the unterminated tail, without
+///   its newline and truncated to the first 32 KiB.
+pub(crate) async fn drain_lines(
+    mut output: impl AsyncRead + Unpin,
+    mut observe: impl FnMut(&[u8]),
+) {
+    let mut chunk = [0; 4096];
+    let mut line = Vec::with_capacity(4096);
+    while let Ok(count @ 1..) = output.read(&mut chunk).await {
+        for byte in &chunk[..count] {
+            if *byte == b'\n' {
+                observe(&line);
+                line.clear();
+            } else if line.len() < MAX_TEXT {
+                line.push(*byte);
+            }
+        }
+    }
+    observe(&line);
 }
 
 /// Read only recognized error facts, preferring structured classification over message text.
@@ -199,13 +226,10 @@ impl Diagnostics {
     }
 
     /// Report safe OS failure facts without formatting paths or launch arguments.
-    pub(crate) fn spawn_error(
-        &self,
-        error: &std::io::Error,
-    ) -> crate::ports::agent_session::AgentSessionError {
+    pub(crate) fn spawn_error(&self, error: &std::io::Error) -> AgentSessionError {
         self.observe(Diagnostic::new(Category::Unavailable, "spawn"), "spawn");
         tracing::warn!(provider = self.provider, error_kind = ?error.kind(), os_error = error.raw_os_error(), "Native provider spawn failed");
-        crate::ports::agent_session::AgentSessionError::Unavailable
+        AgentSessionError::Unavailable
     }
 
     /// Read the last non-retrying failure, with specific causes preferred over stream closure.
@@ -257,6 +281,41 @@ impl Diagnostics {
             state.failure = failure;
             state.explanation.clear();
         }
+    }
+
+    /// Settle a control exchange bounded by its deadline.
+    ///
+    /// # Arguments
+    ///
+    /// * `result` - Exchange outcome, or the elapsed deadline.
+    /// * `operation` - Native operation recorded with a transport failure.
+    /// * `retained` - Errors after which the connection stays usable.
+    ///
+    /// # Returns
+    ///
+    /// The exchange value.
+    ///
+    /// # Errors
+    ///
+    /// Returns a retained error unchanged. Any other error or an elapsed deadline records a
+    /// network or timeout failure, unless one is already known, and returns
+    /// `AgentSessionError::Failed`; the caller must then close its connection.
+    pub(crate) fn settle<T>(
+        &self,
+        result: Result<Result<T, AgentSessionError>, tokio::time::error::Elapsed>,
+        operation: &str,
+        retained: &[AgentSessionError],
+    ) -> Result<T, AgentSessionError> {
+        let category = match result {
+            Ok(Ok(value)) => return Ok(value),
+            Ok(Err(error)) if retained.contains(&error) => return Err(error),
+            Ok(Err(_)) => Category::Network,
+            Err(_) => Category::Timeout,
+        };
+        if self.failure().is_none() {
+            self.observe(Diagnostic::new(category, "transport"), operation);
+        }
+        Err(AgentSessionError::Failed)
     }
 
     /// Record a safe error and aggregate repeats rather than logging native messages.
@@ -353,20 +412,8 @@ impl Diagnostics {
     }
 
     /// Drain stderr continuously with bounded line memory, retaining only recognized classes.
-    pub(crate) async fn drain(self, mut output: impl AsyncRead + Unpin) {
-        let mut chunk = [0; 4096];
-        let mut line = Vec::with_capacity(4096);
-        while let Ok(count @ 1..) = output.read(&mut chunk).await {
-            for byte in &chunk[..count] {
-                if *byte == b'\n' {
-                    self.line(&line);
-                    line.clear();
-                } else if line.len() < MAX_TEXT {
-                    line.push(*byte);
-                }
-            }
-        }
-        self.line(&line);
+    pub(crate) async fn drain(self, output: impl AsyncRead + Unpin) {
+        drain_lines(output, |line| self.line(line)).await;
     }
 
     fn line(&self, line: &[u8]) {

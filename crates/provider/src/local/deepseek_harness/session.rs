@@ -142,6 +142,24 @@ impl Session {
         Ok(turn)
     }
 
+    /// Answer every unanswered permission with ACP's `cancelled` outcome, then ask the agent
+    /// to cancel the running prompt. The correlated prompt response still settles the turn.
+    async fn cancel_prompt(&mut self) -> Result<(), AgentSessionError> {
+        for (id, pending) in std::mem::take(&mut self.permissions) {
+            self.transport
+                .send(&acp_permissions::cancelled(&pending))
+                .await?;
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::PermissionResolved(id));
+        }
+        self.transport
+            .send(
+                &json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":self.id}}),
+            )
+            .await
+    }
+
     fn consume(&mut self, message: &Value) -> Result<(), AgentSessionError> {
         match message["method"].as_str() {
             Some("session/update") => {
@@ -267,11 +285,7 @@ impl AgentSession for Session {
         if self.closed || self.active.as_ref().is_none_or(|(turn, _)| turn != turn_id) {
             return Err(AgentSessionError::Rejected);
         }
-        self.transport
-            .send(
-                &json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":self.id}}),
-            )
-            .await
+        self.cancel_prompt().await
     }
 
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
@@ -313,7 +327,7 @@ impl AgentSession for Session {
             .events
             .push_back(AgentTurnEvent::PermissionResolved(id.to_owned()));
         if response["behavior"] == "deny" && response["interrupt"] == true {
-            self.transport.send(&json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":self.id}})).await?;
+            self.cancel_prompt().await?;
         }
         Ok(())
     }

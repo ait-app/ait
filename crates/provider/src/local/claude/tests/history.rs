@@ -151,8 +151,20 @@ fn live_child_reads_ignore_only_an_unfinished_final_record() {
     );
     std::fs::write(&path, "{broken}\n").unwrap();
     assert!(history::read_active_records(&path).is_err());
-    std::fs::write(&path, "x".repeat(2 * 1024 * 1024)).unwrap();
+    std::fs::write(&path, "x".repeat(transport::MAX_FRAME)).unwrap();
     assert!(history::read_active_records(&path).is_err());
+}
+
+#[test]
+fn transcript_records_echoing_large_prompt_images_remain_readable() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("images.jsonl");
+    // A replayed user prompt carries its base64 images inline, far beyond the former 2 MiB cap.
+    let image = "A".repeat(8 * 1024 * 1024);
+    let record = json!({"type":"user","message":{"content":[
+        {"type":"image","source":{"type":"base64","media_type":"image/png","data":image}}]}});
+    std::fs::write(&path, format!("{record}\n")).unwrap();
+    assert_eq!(history::read_records(&path).unwrap(), [record]);
 }
 
 #[test]

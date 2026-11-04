@@ -12,21 +12,24 @@ pub(super) struct Pending {
     input: Value,
 }
 
+/// Retain a native `can_use_tool` request and project its host-facing permission request.
+///
+/// The complete native input stays in [`Pending`] so an approval echoes it unchanged. Tool
+/// requests show bounded argument previews; questions and plans keep their complete input
+/// because the host answers or reviews it.
 pub(super) fn capture(message: &Value) -> Result<Pending, AgentSessionError> {
     let native_id = text(message, "request_id")?.to_owned();
     let params = &message["request"];
-    if params["subtype"] != "can_use_tool"
-        || !params["input"].is_object()
-        || serde_json::to_vec(params)
-            .map_err(|_| AgentSessionError::Failed)?
-            .len()
-            > 65536
-    {
+    if params["subtype"] != "can_use_tool" || !params["input"].is_object() {
         return Err(AgentSessionError::Failed);
     }
     let name = text(params, "tool_name")?;
-    let mut input = params["input"].clone();
     let question = name == "AskUserQuestion";
+    let mut input = if question || name == "ExitPlanMode" {
+        params["input"].clone()
+    } else {
+        crate::local::tool_detail::input_preview(&params["input"])
+    };
     if question {
         let questions = input["questions"]
             .as_array_mut()
@@ -106,17 +109,23 @@ pub(super) fn resolve(pending: &Pending, response: &Value) -> Result<Value, Agen
     let mut result = if allow {
         let input = if pending.request["kind"] == "question" {
             question_input(&pending.input, &response["updatedInput"])?
-        } else {
-            let input = response.get("updatedInput").unwrap_or(&pending.input);
-            if !input.is_object()
-                || serde_json::to_vec(input)
+        } else if let Some(updated) = response
+            .get("updatedInput")
+            .filter(|updated| **updated != pending.request["input"])
+        {
+            // Host-authored replacements stay bounded. The native original, or the displayed
+            // preview echoed unchanged, approves the complete input exactly as received.
+            if !updated.is_object()
+                || serde_json::to_vec(updated)
                     .map_err(|_| AgentSessionError::Rejected)?
                     .len()
                     > 65536
             {
                 return Err(AgentSessionError::Rejected);
             }
-            input.clone()
+            updated.clone()
+        } else {
+            pending.input.clone()
         };
         json!({"behavior":"allow","updatedInput":input})
     } else {

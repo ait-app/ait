@@ -128,6 +128,8 @@ async fn logged_in_codex_connects_the_provider_owned_media_peer() {
         std::path::Path::new("codex"),
         cwd.path().to_str().unwrap(),
         Duration::from_secs(25),
+        false,
+        &crate::ports::environment::AgentEnvironment::default(),
     )
     .unwrap();
     native.initialize().await.unwrap();

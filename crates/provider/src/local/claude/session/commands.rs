@@ -1,8 +1,6 @@
 //! Native checkpoint commands run as foreground control turns without model inference.
 
-use super::{
-    AgentSessionError, AgentTurnEvent, ClaudeSession, Uuid, Value, history, json, streaming,
-};
+use super::{AgentSessionError, AgentTurnEvent, ClaudeSession, Uuid, Value, json, streaming};
 use crate::protocol::prompt::AgentPrompt;
 
 pub(super) fn is_rewind(text: &str) -> bool {
@@ -20,9 +18,10 @@ impl ClaudeSession {
         {
             return Err(AgentSessionError::Rejected);
         }
-        let handle = self.handle();
-        let history = history::read(&self.client, &handle, &self.spec.cwd)?
-            .ok_or(AgentSessionError::Rejected)?;
+        let history =
+            crate::local::claude::read_history(&self.client, &self.handle(), &self.spec.cwd)
+                .await?
+                .ok_or(AgentSessionError::Rejected)?;
         let requested = prompt
             .text
             .trim()

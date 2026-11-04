@@ -1,5 +1,5 @@
 use super::*;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 async fn serve(status: &str, body: &str) -> (String, tokio::task::JoinHandle<String>) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
