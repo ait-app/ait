@@ -153,6 +153,7 @@
 
 ## 客户端、连接与品牌
 
+- [工作区标题字重验证（2026-11-04）](clients/workspace-title-weight-2026-11-04.md)
 - [账户主机中继验证](clients/account-host-relay-validation.md)
 - [Ait 0.1.3 启动拥堵与草稿会话查询诊断](clients/ait-0.1.3-startup-diagnostics-2026-10-14.md)
 - [AIT 飞鸟 Logo 落地报告](clients/ait-brand-rollout.md)
