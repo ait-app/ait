@@ -208,12 +208,26 @@ fn large_tool_inputs_show_bounded_previews_and_approve_the_complete_native_input
         json!({"behavior":"allow"}),
         // A host that echoes the displayed preview still approves the native input unchanged.
         json!({"behavior":"allow","updatedInput":shown}),
+        json!({"behavior":"allow","updatedInput":input}),
     ] {
         let reply = permissions::resolve(&pending, &response).unwrap();
         assert_eq!(reply["response"]["response"]["updatedInput"], input);
     }
-    let edited = json!({"file_path":"/tmp/large.rs","content":"edited"});
+    // Edits of a truncated preview would write the truncation marker instead of the content.
+    let mut retargeted = shown.clone();
+    retargeted["file_path"] = json!("/tmp/other.rs");
+    for edited in [
+        json!({"file_path":"/tmp/large.rs","content":"edited"}),
+        retargeted,
+    ] {
+        assert_eq!(
+            permissions::resolve(&pending, &json!({"behavior":"allow","updatedInput":edited})),
+            Err(AgentSessionError::Rejected)
+        );
+    }
+    let small = request("Write", &json!({"file_path":"/tmp/small.rs","content":"x"}));
+    let edited = json!({"file_path":"/tmp/small.rs","content":"edited"});
     let reply =
-        permissions::resolve(&pending, &json!({"behavior":"allow","updatedInput":edited})).unwrap();
+        permissions::resolve(&small, &json!({"behavior":"allow","updatedInput":edited})).unwrap();
     assert_eq!(reply["response"]["response"]["updatedInput"], edited);
 }

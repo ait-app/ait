@@ -218,9 +218,8 @@ impl Router {
             if method == Operation::Delete
                 && let Some(state) = state
                 && let Ok(value) = &result
-                && let Err(error) = forget_deleted(state, value).await
             {
-                result = Err(error);
+                forget_deleted(state, value).await;
             }
             result = cleanup(&owners, retirement, result).await;
             tracing::debug!(
@@ -321,17 +320,28 @@ async fn execute_blocking(
 /// so a closing writer cannot re-create rows for the deleted identity.
 /// # Errors
 /// Returns timeline storage failures.
-async fn forget_deleted(state: ExecutionState, deleted: &Value) -> Result<(), ErrorCode> {
+/// Discard local state of an Agent whose durable record is already removed.
+///
+/// The delete has happened by now and a retry would only report `AgentNotFound`, so a
+/// timeline failure is logged rather than reported; ownership is always released.
+async fn forget_deleted(state: ExecutionState, deleted: &Value) {
     let Some(id) = deleted["agentId"].as_str().map(str::to_owned) else {
-        return Ok(());
+        return;
     };
-    tokio::task::spawn_blocking(move || {
-        state.manager.forget(&id)?;
+    let forgotten = tokio::task::spawn_blocking(move || {
         state.owners.forget(&id);
-        Ok(())
+        state.manager.forget(&id).map_err(|error| (id, error))
     })
-    .await
-    .unwrap_or(Err(ErrorCode::AgentIo))
+    .await;
+    match forgotten {
+        Ok(Ok(())) => {}
+        Ok(Err((agent_id, error))) => tracing::warn!(
+            agent_id,
+            ?error,
+            "Deleted Agent timeline could not be discarded; orphaned rows remain"
+        ),
+        Err(error) => tracing::warn!(?error, "Deleted Agent cleanup task failed"),
+    }
 }
 
 async fn cleanup(

@@ -237,3 +237,52 @@ fn failed_pull_clears_merge_state_and_preserves_local_commit() {
     assert!(!fixture.repo.join(".git/MERGE_HEAD").exists());
     assert!(git_output(&fixture.repo, &["status", "--porcelain"]).is_empty());
 }
+
+#[test]
+fn merge_refused_by_an_unfinished_cherry_pick_keeps_its_staged_resolutions() {
+    let fixture = Fixture::new();
+    for path in ["a.txt", "b.txt"] {
+        std::fs::write(fixture.repo.join(path), "base\n").unwrap();
+    }
+    git(&fixture.repo, &["add", "a.txt", "b.txt"]);
+    git(&fixture.repo, &["commit", "-m", "base files"]);
+    git(&fixture.repo, &["branch", "feature"]);
+    git(&fixture.repo, &["checkout", "-b", "picked"]);
+    for path in ["a.txt", "b.txt"] {
+        std::fs::write(fixture.repo.join(path), "picked\n").unwrap();
+    }
+    git(&fixture.repo, &["commit", "-am", "picked change"]);
+    git(&fixture.repo, &["checkout", "main"]);
+    std::fs::write(fixture.repo.join("c.txt"), "main\n").unwrap();
+    git(&fixture.repo, &["add", "c.txt"]);
+    git(&fixture.repo, &["commit", "-m", "main change"]);
+    git(&fixture.repo, &["checkout", "feature"]);
+    for path in ["a.txt", "b.txt"] {
+        std::fs::write(fixture.repo.join(path), "feature\n").unwrap();
+    }
+    git(&fixture.repo, &["commit", "-am", "feature change"]);
+    let picked = Command::new("git")
+        .args(["cherry-pick", "picked"])
+        .current_dir(&fixture.repo)
+        .output()
+        .unwrap();
+    assert!(!picked.status.success());
+    std::fs::write(fixture.repo.join("a.txt"), "resolved\n").unwrap();
+    git(&fixture.repo, &["add", "a.txt"]);
+
+    let runtime = LocalCheckout::new(fixture.temp.path().join("managed"));
+    let error = runtime
+        .merge_from_base(fixture.repo.to_str().unwrap(), Some("main"), false)
+        .unwrap_err();
+
+    assert_eq!(error.kind, CheckoutFailureKind::MergeConflict);
+    assert_eq!(git_output(&fixture.repo, &["show", ":a.txt"]), "resolved");
+    assert_eq!(
+        git_output(&fixture.repo, &["diff", "--name-only", "--diff-filter=U"]),
+        "b.txt"
+    );
+    git(
+        &fixture.repo,
+        &["rev-parse", "-q", "--verify", "CHERRY_PICK_HEAD"],
+    );
+}

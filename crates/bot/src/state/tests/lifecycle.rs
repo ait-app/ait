@@ -39,6 +39,45 @@ fn queue_budget_and_reset_conflicts_leave_the_active_turn_untouched() {
 }
 
 #[test]
+fn channel_admission_retries_a_full_bot_backlog_but_refuses_a_full_conversation() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    let bot = BotId::generate();
+    let channel = ChannelId::generate();
+    state.execute("bot.create.request", creation(bot)).unwrap();
+    state.execute("bot.channel.create.request", json!({"botId":bot,"channelId":channel,"enabled":true,"config":{"kind":"telegram","tokenRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":["1"]}})).unwrap();
+    let message = |sender: usize, index: usize| {
+        external(
+            channel,
+            &format!("s{sender}"),
+            &format!("m{sender}-{index}"),
+        )
+    };
+    for index in 0..32 {
+        state.accept_channel(message(0, index)).unwrap();
+    }
+
+    assert_eq!(
+        state.accept_channel(message(0, 32)),
+        Err(ErrorCode::ResourceExhausted)
+    );
+    for sender in 1..16 {
+        for index in 0..32 {
+            state.accept_channel(message(sender, index)).unwrap();
+        }
+    }
+    assert!(state.backlog_full());
+    assert_eq!(
+        state.accept_channel(message(16, 0)).unwrap(),
+        json!({"accepted":false})
+    );
+    assert_eq!(
+        state.accept(message(16, 0)),
+        Err(ErrorCode::ResourceExhausted)
+    );
+}
+
+#[test]
 fn reset_of_an_uncertain_conversation_cancels_its_blocked_queue() {
     let fixture = Fixture::new();
     let mut state = fixture.state();

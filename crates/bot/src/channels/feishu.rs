@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::{Message as WsMessage, protocol::WebSocketConfig};
 use tokio_util::sync::CancellationToken;
 
-use super::{Incoming, chunks, deliver, expose, json_response};
+use super::{BUSY_NOTICE, Disposition, Incoming, admit, chunks, deliver, expose, json_response};
 use crate::service::Bots;
 use frames::{Fragments, Frame, Header};
 
@@ -195,11 +195,12 @@ async fn receive(
                 };
                 let event: Value =
                     serde_json::from_slice(&payload).map_err(|_| ErrorCode::BotIo)?;
-                let accepted = match incoming(connection.channel, &event, options.bot_id)? {
-                    Some(incoming) => bots.accept(incoming).await.map(|_| ()),
-                    None => Ok(()),
+                let acknowledged = match incoming(connection.channel, &event, options.bot_id)? {
+                    Some(incoming) => connection.admit(bots, incoming).await,
+                    None => true,
                 };
-                frame.payload = Some(serde_json::to_vec(&json!({"code":if accepted.is_ok() {200} else {500},"headers":null,"data":null})).map_err(|_| ErrorCode::BotIo)?);
+                // A non-200 response makes Feishu deliver the event again later.
+                frame.payload = Some(serde_json::to_vec(&json!({"code":if acknowledged {200} else {500},"headers":null,"data":null})).map_err(|_| ErrorCode::BotIo)?);
                 socket
                     .send(WsMessage::Binary(frame.encode_to_vec().into()))
                     .await
@@ -287,38 +288,80 @@ impl Connection<'_> {
     ) -> Result<(), ErrorCode> {
         let text = turn.reply.as_deref().ok_or(ErrorCode::BotIo)?;
         for (index, chunk) in chunks(text, 3000).into_iter().enumerate() {
-            let content =
-                serde_json::to_string(&json!({"text":chunk})).map_err(|_| ErrorCode::BotIo)?;
-            let body = json!({"receive_id":conversation.peer,"msg_type":"text","content":content,
-                "uuid":format!("{}-{index}",turn.id)});
-            if let Some(message) = &turn.reply_to {
-                if !message
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
-                {
-                    return Err(ErrorCode::BotIo);
-                }
-                let mut body = body;
-                body.as_object_mut()
-                    .ok_or(ErrorCode::BotIo)?
-                    .remove("receive_id");
-                body["reply_in_thread"] = json!(conversation.thread.is_some());
-                self.call(
-                    "POST",
-                    &format!("/open-apis/im/v1/messages/{message}/reply"),
-                    Some(body),
-                )
-                .await?;
-            } else {
-                self.call(
-                    "POST",
-                    "/open-apis/im/v1/messages?receive_id_type=chat_id",
-                    Some(body),
-                )
-                .await?;
-            }
+            self.post_text(
+                &conversation.peer,
+                turn.reply_to.as_deref(),
+                conversation.thread.is_some(),
+                chunk,
+                &format!("{}-{index}", turn.id),
+            )
+            .await?;
         }
         Ok(())
+    }
+
+    /// Send one text message, as a reply to `reply_to` when present; `uuid` deduplicates retries.
+    async fn post_text(
+        &self,
+        peer: &str,
+        reply_to: Option<&str>,
+        in_thread: bool,
+        text: &str,
+        uuid: &str,
+    ) -> Result<(), ErrorCode> {
+        let content = serde_json::to_string(&json!({"text":text})).map_err(|_| ErrorCode::BotIo)?;
+        let body = json!({"receive_id":peer,"msg_type":"text","content":content,"uuid":uuid});
+        if let Some(message) = reply_to {
+            if !message
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+            {
+                return Err(ErrorCode::BotIo);
+            }
+            let mut body = body;
+            body.as_object_mut()
+                .ok_or(ErrorCode::BotIo)?
+                .remove("receive_id");
+            body["reply_in_thread"] = json!(in_thread);
+            self.call(
+                "POST",
+                &format!("/open-apis/im/v1/messages/{message}/reply"),
+                Some(body),
+            )
+            .await?;
+        } else {
+            self.call(
+                "POST",
+                "/open-apis/im/v1/messages?receive_id_type=chat_id",
+                Some(body),
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    /// Admit one event and report whether Feishu may consider it delivered.
+    /// A full Bot backlog and internal failures leave it unacknowledged for redelivery; a
+    /// saturated conversation drops only its own message and tells the sender.
+    async fn admit(&self, bots: &Bots, incoming: Incoming) -> bool {
+        match admit(bots, incoming.clone()).await {
+            Ok(Disposition::Accepted | Disposition::Skip) => true,
+            Ok(Disposition::Retry) | Err(_) => false,
+            Ok(Disposition::Busy) => {
+                let uuid = format!("busy-{}", incoming.message_id);
+                let notice = self.post_text(
+                    &incoming.peer,
+                    incoming.reply_to.as_deref(),
+                    incoming.thread.is_some(),
+                    BUSY_NOTICE,
+                    &uuid,
+                );
+                if let Err(error) = notice.await {
+                    tracing::warn!(channel = %self.channel.id, ?error, "Feishu busy notice failed");
+                }
+                true
+            }
+        }
     }
 
     async fn token(&self) -> Result<SecretString, ErrorCode> {

@@ -3,7 +3,9 @@ use std::time::{Duration, Instant};
 
 use tokio_util::sync::CancellationToken;
 
-use super::{Bounds, RunError, run_bounded};
+use super::{
+    Bounds, RunError, configured_ssh_command, disable_git_prompts, git_command, run_bounded,
+};
 
 const BOUNDS: Bounds = Bounds {
     timeout: Duration::from_secs(5),
@@ -84,4 +86,48 @@ fn timeouts_terminate_the_whole_process_group_gracefully() {
         assert!(Instant::now() < deadline, "grandchild {pid} survived");
         std::thread::sleep(Duration::from_millis(10));
     }
+}
+
+#[test]
+fn network_git_commands_use_batch_ssh_unless_the_repository_configures_one() {
+    let root = tempfile::tempdir().unwrap();
+    let repository = root.path();
+    assert!(
+        git_command(repository)
+            .arg("init")
+            .status()
+            .unwrap()
+            .success()
+    );
+    let environment = |arguments: &[&str]| {
+        let mut command = git_command(repository);
+        disable_git_prompts(&mut command, repository, arguments);
+        let lookup = |name: &str| {
+            command
+                .get_envs()
+                .find(|(key, _)| *key == name)
+                .and_then(|(_, value)| value)
+                .map(|value| value.to_string_lossy().into_owned())
+        };
+        (lookup("GIT_SSH_COMMAND"), lookup("SSH_ASKPASS_REQUIRE"))
+    };
+    // A user-level core.sshCommand on the test machine is honored like a repository one.
+    let inherited = configured_ssh_command(repository);
+
+    let (ssh, askpass) = environment(&["fetch", "origin"]);
+    assert_eq!(ssh.is_none(), inherited);
+    if !inherited {
+        assert_eq!(ssh.as_deref(), Some("ssh -oBatchMode=yes"));
+    }
+    assert_eq!(askpass.as_deref(), Some("never"));
+    assert_eq!(environment(&["status"]).0, None);
+
+    assert!(
+        git_command(repository)
+            .args(["config", "core.sshCommand", "ssh -i key"])
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert_eq!(environment(&["push", "origin"]).0, None);
 }
