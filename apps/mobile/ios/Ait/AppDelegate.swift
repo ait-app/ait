@@ -86,7 +86,9 @@ class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
 }
 
 // @generated Ait scene lifecycle begin
+import EXNotifications
 import UIKit
+import UserNotifications
 
 // Expo 54 only dispatches application-delegate callbacks. Bridge the single scene to those
 // callbacks until an Expo upgrade supplies its own scene delegate. Do not post application
@@ -143,6 +145,12 @@ final class AitSceneDelegate: UIResponder, UIWindowSceneDelegate {
   }
 
   private func forward(_ options: UIScene.ConnectionOptions) {
+    if let response = options.notificationResponse {
+      // launchOptions alone does not populate Expo's last notification response. Its manager
+      // queues this response until the JS emitter attaches, including on scene reconnection.
+      NotificationCenterManager.shared.userNotificationCenter(
+        UNUserNotificationCenter.current(), didReceive: response, withCompletionHandler: {})
+    }
     open(options.urlContexts)
     for activity in options.userActivities {
       continueActivity(activity)
