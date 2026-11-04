@@ -12,8 +12,8 @@ use crate::support::time::now_timestamp;
 
 use super::{
     Directory, ErrorCode, WorkspaceDescriptorPayload, WorkspaceListRequest, WorkspaceListResult,
-    WorkspaceProjectDescriptorPayload, active_project, active_workspace, directory_error,
-    matches_filter, pagination, project_matches_filter,
+    WorkspaceProjectDescriptorPayload, directory_error, matches_filter, pagination,
+    project_matches_filter,
 };
 
 struct Snapshot {
@@ -222,11 +222,11 @@ fn snapshot(directory: &Directory, request: &WorkspaceListRequest) -> Result<Sna
         .list_workspaces()
         .map_err(directory_error)?
         .into_iter()
-        .filter(active_workspace)
+        .filter(|workspace| !workspace.is_archived())
         .filter(|workspace| {
             projects
                 .get(&workspace.project_id)
-                .is_none_or(active_project)
+                .is_none_or(|project| !project.is_archived())
         })
         .collect();
     let statuses = directory
@@ -258,7 +258,7 @@ fn snapshot(directory: &Directory, request: &WorkspaceListRequest) -> Result<Sna
         .collect();
     let empty = projects
         .values()
-        .filter(|project| active_project(project))
+        .filter(|project| !project.is_archived())
         .filter(|project| !occupied.contains(project.project_id.as_str()))
         .filter(|project| project_matches_filter(project, request))
         .map(project_descriptor)
@@ -268,7 +268,7 @@ fn snapshot(directory: &Directory, request: &WorkspaceListRequest) -> Result<Sna
         empty,
         projects: projects
             .into_values()
-            .filter(active_project)
+            .filter(|project| !project.is_archived())
             .map(|project| project.project_id)
             .collect(),
     })

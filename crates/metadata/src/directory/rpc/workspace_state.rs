@@ -19,15 +19,6 @@ use crate::support::error::ErrorCode;
 use crate::support::rpc::{decode, encode};
 use crate::support::time::now_timestamp;
 
-/// Completed Workspace state request.
-#[derive(Debug)]
-pub(crate) struct Dispatched {
-    /// Response payload.
-    pub(crate) value: Value,
-    /// Optional Workspace event sent after the response.
-    pub(crate) event: Option<Value>,
-}
-
 /// Decode and execute a business request.
 ///
 /// # Errors
@@ -36,7 +27,7 @@ pub(crate) fn execute(
     workspace_state: &mut WorkspaceState,
     method: &str,
     params: Value,
-) -> Result<Dispatched, ErrorCode> {
+) -> Result<Value, ErrorCode> {
     match method {
         "workspace.clear_attention.request" => clear_attention(workspace_state, decode(params)?),
         "workspace.mark_unread.request" => mark_unread(workspace_state, decode(params)?),
@@ -47,7 +38,7 @@ pub(crate) fn execute(
 fn clear_attention(
     workspace_state: &WorkspaceState,
     request: WorkspaceClearAttentionRequest,
-) -> Result<Dispatched, ErrorCode> {
+) -> Result<Value, ErrorCode> {
     let ids = match &request.workspace_id {
         WorkspaceIdSelection::One(workspace_id) => vec![workspace_id.clone()],
         WorkspaceIdSelection::Many(workspace_ids) => workspace_ids.clone(),
@@ -59,7 +50,7 @@ fn clear_attention(
 fn mark_unread(
     workspace_state: &WorkspaceState,
     request: WorkspaceMarkUnreadRequest,
-) -> Result<Dispatched, ErrorCode> {
+) -> Result<Value, ErrorCode> {
     let result = match workspace_state.mark_unread(&request.workspace_id, &now_timestamp()) {
         Ok(agent_id) => WorkspaceMarkUnreadResult {
             workspace_id: request.workspace_id,
@@ -99,15 +90,8 @@ fn clear_attention_result(
     }
 }
 
-fn value(value: impl Serialize) -> Result<Dispatched, ErrorCode> {
-    dispatched(value, None)
-}
-
-fn dispatched(value: impl Serialize, event: Option<Value>) -> Result<Dispatched, ErrorCode> {
-    Ok(Dispatched {
-        value: encode(value, ErrorCode::RegistryIo)?,
-        event,
-    })
+fn value(value: impl Serialize) -> Result<Value, ErrorCode> {
+    encode(value, ErrorCode::RegistryIo)
 }
 
 #[cfg(test)]

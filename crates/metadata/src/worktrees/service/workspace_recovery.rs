@@ -106,6 +106,8 @@ enum RecoveryPlan {
         workspace: PersistedWorkspaceRecord,
         project: PersistedProjectRecord,
         source_repo_root: String,
+        /// Nonempty recorded branch to check out again.
+        branch: String,
     },
 }
 
@@ -171,13 +173,8 @@ impl WorkspaceRecovery {
                 workspace,
                 project,
                 source_repo_root,
+                branch,
             } => {
-                let branch = workspace.branch.clone().ok_or_else(|| {
-                    WorkspaceRecoveryError::RecoveryUnavailable(
-                        "The archived worktree has no branch recorded, so it cannot be restored."
-                            .to_owned(),
-                    )
-                })?;
                 self.recovery
                     .restore_worktree(&ArchivedWorktreeRestore {
                         source_repo_root,
@@ -193,7 +190,7 @@ impl WorkspaceRecovery {
                 (workspace, project, WorkspaceRecoveryAction::Restore)
             }
         };
-        let project = if is_archived(project.archived_at.as_deref()) {
+        let project = if project.is_archived() {
             self.projects
                 .update(&project.project_id, &|current| {
                     let mut next = current.clone();
@@ -237,7 +234,7 @@ impl WorkspaceRecovery {
                 "This workspace is no longer known to the host.",
             )));
         };
-        if !is_archived(workspace.archived_at.as_deref()) {
+        if !workspace.is_archived() {
             return Ok(Err(unavailable(
                 WorkspaceRecoveryUnavailableReason::WorkspaceNotArchived,
                 "This workspace is not archived, but it is unavailable from the host.",
@@ -262,12 +259,12 @@ impl WorkspaceRecovery {
                 "The archived workspace directory no longer exists and cannot be recreated.",
             )));
         }
-        if workspace.branch.as_deref().is_none_or(str::is_empty) {
+        let Some(branch) = workspace.branch.clone().filter(|branch| !branch.is_empty()) else {
             return Ok(Err(unavailable(
                 WorkspaceRecoveryUnavailableReason::WorktreeBranchMissing,
                 "The archived worktree has no branch recorded, so it cannot be restored.",
             )));
-        }
+        };
         let source_repo_root = workspace
             .main_repo_root
             .clone()
@@ -282,6 +279,7 @@ impl WorkspaceRecovery {
             workspace,
             project,
             source_repo_root,
+            branch,
         }))
     }
 }
@@ -310,9 +308,6 @@ fn recovery_state(plan: &RecoveryPlan) -> WorkspaceRecoveryState {
     }
 }
 
-fn is_archived(value: Option<&str>) -> bool {
-    value.is_some_and(|value| !value.is_empty())
-}
 const fn map_workspace_error(_: RegistryError) -> WorkspaceRecoveryError {
     WorkspaceRecoveryError::WorkspaceRegistry
 }

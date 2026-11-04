@@ -62,6 +62,14 @@ impl PersistedProjectRecord {
     pub fn display_name(&self) -> &str {
         self.custom_name.as_deref().unwrap_or(&self.display_name)
     }
+
+    /// Whether the project is archived; an empty archive timestamp counts as active.
+    #[must_use]
+    pub fn is_archived(&self) -> bool {
+        self.archived_at
+            .as_ref()
+            .is_some_and(|value| !value.is_empty())
+    }
 }
 
 /// Provenance that requires an explicit automation trust decision.
@@ -158,6 +166,14 @@ impl PersistedWorkspaceRecord {
     #[must_use]
     pub fn display_name(&self) -> &str {
         self.title.as_deref().unwrap_or(&self.display_name)
+    }
+
+    /// Whether the workspace is archived; an empty archive timestamp counts as active.
+    #[must_use]
+    pub fn is_archived(&self) -> bool {
+        self.archived_at
+            .as_ref()
+            .is_some_and(|value| !value.is_empty())
     }
 }
 

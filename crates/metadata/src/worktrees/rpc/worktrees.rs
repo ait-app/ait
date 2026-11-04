@@ -204,7 +204,10 @@ const fn checkout_error_code(kind: WorktreeFailureKind) -> CheckoutErrorCode {
     match kind {
         WorktreeFailureKind::NotGitRepository => CheckoutErrorCode::NotGitRepo,
         WorktreeFailureKind::NotAllowed => CheckoutErrorCode::NotAllowed,
-        _ => CheckoutErrorCode::Unknown,
+        WorktreeFailureKind::BranchAlreadyCheckedOut
+        | WorktreeFailureKind::MissingCheckoutTarget
+        | WorktreeFailureKind::UnknownBranch
+        | WorktreeFailureKind::Other => CheckoutErrorCode::Unknown,
     }
 }
 
@@ -217,7 +220,9 @@ const fn create_error_code_for_kind(kind: WorktreeFailureKind) -> &'static str {
         WorktreeFailureKind::BranchAlreadyCheckedOut => "branch_already_checked_out",
         WorktreeFailureKind::MissingCheckoutTarget => "missing_checkout_target",
         WorktreeFailureKind::UnknownBranch => "unknown_branch",
-        _ => "unknown",
+        WorktreeFailureKind::NotGitRepository
+        | WorktreeFailureKind::NotAllowed
+        | WorktreeFailureKind::Other => "unknown",
     }
 }
 

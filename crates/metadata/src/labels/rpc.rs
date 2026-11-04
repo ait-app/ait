@@ -69,7 +69,7 @@ pub(crate) struct PendingSubscription {
 
 struct Delivery {
     ready: bool,
-    pending: Vec<(String, SequencedWorkspaceLabelChange)>,
+    pending: Vec<SequencedWorkspaceLabelChange>,
     outbound: EventSink,
     subscription_id: String,
 }
@@ -88,7 +88,6 @@ impl PendingSubscription {
         let pending = std::mem::take(&mut delivery.pending);
         for change in pending
             .into_iter()
-            .map(|(_, change)| change)
             .filter(|change| change.seq > self.head_seq)
         {
             delivery.send(&change)?;
@@ -103,16 +102,8 @@ impl Delivery {
         if self.ready {
             let _ = self.send(&change);
         } else {
-            let key = change_key(&change);
-            if let Some((_, pending)) = self
-                .pending
-                .iter_mut()
-                .find(|(pending_key, _)| pending_key == &key)
-            {
-                *pending = change;
-            } else {
-                self.pending.push((key, change));
-            }
+            // Keep every change in sequence order; a rename's previous name must survive later edits.
+            self.pending.push(change);
         }
     }
 
@@ -307,13 +298,6 @@ fn live_update(
             generation: update.generation.clone(),
             seq: update.seq,
         },
-    }
-}
-
-fn change_key(update: &SequencedWorkspaceLabelChange) -> String {
-    match &update.change {
-        WorkspaceLabelChange::Upsert { label, .. } => label.name.to_lowercase(),
-        WorkspaceLabelChange::Remove { name } => name.to_lowercase(),
     }
 }
 

@@ -23,23 +23,21 @@ pub(crate) async fn subscribe(
     };
     let id = uuid::Uuid::new_v4().to_string();
     let observer_id = id.clone();
-    let changes = state
-        .directory
-        .as_ref()
-        .and_then(|directory| directory.lock().ok()?.changes())
-        .map(|changes| changes.subscribe());
     let prepared = state
         .runtime
         .run_queued(
             state.directory.clone(),
             ErrorCode::RegistryIo,
             move |directory| {
+                // Subscribe before the snapshot so no committed change is missed in between.
+                let changes = directory.changes().map(|changes| changes.subscribe());
                 crate::directory::rpc::directory::listing::prepare(directory, request, observer_id)
+                    .map(|(value, observation)| (value, observation, changes))
                     .map_err(Into::into)
             },
         )
         .await;
-    let (value, mut observation) = match prepared {
+    let (value, mut observation, changes) = match prepared {
         Ok(prepared) => prepared,
         Err(error) => return context.respond(Err(error)),
     };

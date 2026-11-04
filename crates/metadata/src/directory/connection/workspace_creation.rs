@@ -1,5 +1,7 @@
 //! Workspace creation with optional receipt observation and post-creation setup.
 
+use std::sync::{Arc, Mutex};
+
 use domain::creation::protocol::Kind;
 use model::outbound::QueueError;
 use model::{Context, ErrorCode};
@@ -33,7 +35,7 @@ pub(crate) async fn create(mut context: Context<'_>, state: &State) -> Result<()
         let result = context
             .runtime
             .run(
-                Some(std::sync::Arc::new(std::sync::Mutex::new(creations))),
+                Some(Arc::new(Mutex::new(creations))),
                 ErrorCode::RegistryIo,
                 move |creations| creations.observe(Kind::Workspace, &key, outbound),
             )
@@ -48,12 +50,21 @@ pub(crate) async fn create(mut context: Context<'_>, state: &State) -> Result<()
     if let Some(subscription) = &subscription {
         subscription.activate()?;
     }
+    let Some(directory) = state.directory.clone() else {
+        return context.respond(Err(ErrorCode::UnsupportedCapability));
+    };
+    let params = std::mem::take(&mut context.request.params);
+    // Provisioning can run forge lookups and Git commands. The clone shares every internally
+    // synchronized adapter, so the directory lock is held only while copying the handle.
     let result = context
-        .call(
-            state.directory.clone(),
+        .runtime
+        .run_queued(
+            Some(Arc::new(Mutex::new(directory))),
             ErrorCode::RegistryIo,
-            |directory, _, params| {
-                crate::directory::rpc::directory::workspace_creation(directory, params)
+            move |directory| {
+                let directory = directory.lock().map_err(|_| ErrorCode::RegistryIo)?.clone();
+                crate::directory::rpc::directory::workspace_creation(&directory, params)
+                    .map_err(Into::into)
             },
         )
         .await;

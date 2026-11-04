@@ -8,7 +8,7 @@ use domain::workspace::worktrees::{
 };
 use model::workspace::worktrees::WorktreeProvisioning;
 
-use super::{CreateAction, CreateWorktree, Worktrees, WorktreesError, is_active_project};
+use super::{CreateAction, CreateWorktree, Worktrees, WorktreesError};
 
 /// Directory adapter sharing the same serialized service as the worktree RPCs.
 #[derive(Debug, Clone)]
@@ -91,7 +91,7 @@ impl WorktreeProvisioning for WorkspaceWorktrees {
                     .get(id)
                     .map_err(|_| WorktreesError::Registry)?
                     .ok_or_else(|| WorktreesError::UnknownProject(id.to_owned()))?;
-                if !is_active_project(&project) {
+                if project.is_archived() {
                     return Err(WorktreesError::ArchivedProject(id.to_owned()));
                 }
                 Ok(project)

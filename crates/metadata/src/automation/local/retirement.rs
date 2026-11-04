@@ -41,7 +41,12 @@ fn close_until(
         if ids.iter().all(|id| !state.setup_running.contains(id)) {
             for id in ids {
                 state.setup_cancelled.remove(id);
+                state.setups.remove(id);
             }
+            // Ports stay reserved: setup may have written the port into a restorable checkout.
+            state.scripts.retain(|(workspace, _), process| {
+                process.child.is_some() || !selected.contains(workspace.as_str())
+            });
             return Ok(());
         }
         drop(state);

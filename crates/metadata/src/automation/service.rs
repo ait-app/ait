@@ -235,7 +235,7 @@ impl WorkspaceAutomation {
         self.workspaces
             .get(workspace_id)
             .map_err(map_registry)?
-            .filter(|workspace| workspace.archived_at.as_ref().is_none_or(String::is_empty))
+            .filter(|workspace| !workspace.is_archived())
             .ok_or_else(|| {
                 WorkspaceAutomationServiceError::WorkspaceNotFound(workspace_id.to_owned())
             })

@@ -1,7 +1,6 @@
 //! Workspace-owned sort values for the shared Paseo keyset pager.
 
 use domain::pagination::{Direction, Entry, Sort, SortValue};
-use domain::workspace::activity::WorkspaceStateBucket;
 use domain::workspace::protocol::directory::{
     SortDirection, WorkspacePage, WorkspacePageInfo, WorkspaceSort, WorkspaceSortKey,
 };
@@ -88,13 +87,9 @@ const fn key_name(key: WorkspaceSortKey) -> &'static str {
 
 fn sort_value(workspace: &WorkspaceDescriptorPayload, key: WorkspaceSortKey) -> SortValue {
     match key {
-        WorkspaceSortKey::StatusPriority => SortValue::Number(match workspace.status {
-            WorkspaceStateBucket::NeedsInput => 0,
-            WorkspaceStateBucket::Failed => 1,
-            WorkspaceStateBucket::Running => 2,
-            WorkspaceStateBucket::Attention => 3,
-            WorkspaceStateBucket::Done => 4,
-        }),
+        WorkspaceSortKey::StatusPriority => {
+            SortValue::Number(i64::from(workspace.status.priority()))
+        }
         WorkspaceSortKey::ActivityAt => workspace
             .activity_at
             .as_deref()
