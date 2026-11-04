@@ -579,7 +579,7 @@ impl ExecutionState {
                 .map_err(|_| ErrorCode::RegistryIo)?
                 .into_iter()
                 .filter(|workspace| {
-                    workspace.archived_at.as_ref().is_none_or(String::is_empty)
+                    !workspace.is_archived()
                         && std::fs::canonicalize(&workspace.cwd).ok().as_ref() == Some(&canonical)
                 })
                 .min_by(|left, right| {
