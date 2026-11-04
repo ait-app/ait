@@ -54,6 +54,7 @@ pub(super) fn summary(item: &Value) -> String {
 
 /// MCP server names the daemon's own agent tools appear under: `ait` is the
 /// injected server, `paseo` covers transcripts recorded before the rename.
+// TODO(0.2.0): drop the legacy `paseo` alias together with the TS tool-name helpers.
 const AIT_TOOL_NAMESPACES: [&str; 2] = ["ait", "paseo"];
 
 fn is_ait_tool_namespace(segment: &str) -> bool {

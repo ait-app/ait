@@ -1,7 +1,10 @@
 import { isAitToolName } from "@ait/protocol/tool-name-normalization";
 import { describeToolCall, type ToolCallRun } from "../grouping";
 
-/** Providers that flatten MCP names (`<server>_<tool>`) report daemon tools with these prefixes. */
+/**
+ * Providers that flatten MCP names (`<server>_<tool>`) report daemon tools with these prefixes.
+ * TODO(0.2.0): drop the legacy `paseo_` prefix with the `paseo` namespace alias.
+ */
 const DIRECT_AIT_TOOL_PREFIXES = ["ait_", "paseo_"] as const;
 const DIRECT_SEARCH_TOOL_SUFFIX_PATTERN = /(?:^|[_.:/])(?:web_search|llm_context)$/;
 
