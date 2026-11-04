@@ -64,6 +64,7 @@ export class FileEditorModel {
   private readonly listeners = new Set<() => void>();
   private snapshot: FileEditorSnapshot;
   private autosave: ReturnType<typeof setTimeout> | null = null;
+  private inFlightWrite: Promise<void> | null = null;
   private saveSequence = 0;
   private disposed = false;
   private observedWhileSaving: FileEditorObservation | null = null;
@@ -125,8 +126,10 @@ export class FileEditorModel {
     this.reloadRequested = false;
     const modified = content !== this.persistedContent;
     let status: FileEditorStatus = modified ? "dirty" : "clean";
-    if (this.snapshot.status === "conflict") {
-      status = "conflict";
+    // A write in flight keeps "saving" so watcher echoes stay buffered; its completion
+    // re-arms autosave from the version it produced when newer edits remain.
+    if (this.snapshot.status === "conflict" || this.snapshot.status === "saving") {
+      status = this.snapshot.status;
     }
     this.setSnapshot({ ...this.snapshot, status, content, modified, error: null });
     if (status === "dirty") this.scheduleAutosave();
@@ -134,6 +137,12 @@ export class FileEditorModel {
   }
 
   async save(): Promise<void> {
+    const inFlightWrite = this.inFlightWrite;
+    if (!this.disposed && inFlightWrite) {
+      // Chain after the in-flight write so the next write expects the version it produced.
+      await inFlightWrite;
+      return this.save();
+    }
     if (this.disposed || (this.snapshot.status !== "dirty" && this.snapshot.status !== "error")) {
       return;
     }
@@ -195,6 +204,7 @@ export class FileEditorModel {
     this.disposed = true;
     this.reloadRequested = false;
     this.saveSequence += 1;
+    this.inFlightWrite = null;
     this.clearAutosave();
     this.disconnectFileObservations();
     this.listeners.clear();
@@ -211,15 +221,31 @@ export class FileEditorModel {
     };
   }
 
-  private async performWrite(
-    expectedVersion: Extract<FileVersion, { status: "ready" }>,
-  ): Promise<void> {
+  private performWrite(expectedVersion: Extract<FileVersion, { status: "ready" }>): Promise<void> {
     this.clearAutosave();
     const sequence = ++this.saveSequence;
     const content = this.snapshot.content;
     const hasBom = this.hasBom;
     this.observedWhileSaving = null;
     this.setSnapshot({ ...this.snapshot, status: "saving", error: null });
+    const write = this.completeWrite({ sequence, content, hasBom, expectedVersion }).finally(() => {
+      if (this.inFlightWrite === write) this.inFlightWrite = null;
+    });
+    this.inFlightWrite = write;
+    return write;
+  }
+
+  private async completeWrite({
+    sequence,
+    content,
+    hasBom,
+    expectedVersion,
+  }: {
+    sequence: number;
+    content: string;
+    hasBom: boolean;
+    expectedVersion: Extract<FileVersion, { status: "ready" }>;
+  }): Promise<void> {
     const serializedContent = hasBom ? `\uFEFF${content}` : content;
     let result: FileWriteResult;
     try {
@@ -288,6 +314,7 @@ export class FileEditorModel {
   private applyFile(file: FileEditorFile): void {
     this.clearAutosave();
     this.saveSequence += 1;
+    this.inFlightWrite = null;
     this.persistedContent = file.content;
     this.hasBom = file.hasBom;
     this.observed = { status: "ready", file };

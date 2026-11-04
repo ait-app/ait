@@ -230,6 +230,24 @@ impl Live {
         frame: &Value,
         events: &mut Vec<AgentTurnEvent>,
     ) -> Result<bool, AgentSessionError> {
+        let kind = super::super::config::text(frame, "type")?;
+        let status = match kind {
+            "update" => None,
+            "status" => match super::super::config::text(frame, "status")? {
+                "created" | "running" => Some("running"),
+                "completed" => Some("completed"),
+                "failed" => Some("failed"),
+                "interrupted" => Some("canceled"),
+                _ => {
+                    tracing::debug!("Ignoring an unknown OpenCode child status");
+                    return Ok(true);
+                }
+            },
+            _ => {
+                tracing::debug!("Ignoring an unknown OpenCode child frame type");
+                return Ok(true);
+            }
+        };
         let id = super::super::config::text(frame, "childSessionId")?;
         let parent = super::super::config::text(frame, "parentSessionId")?;
         valid_id(id)?;
@@ -258,41 +276,30 @@ impl Live {
         }
         let mut link = None;
         child.observed = true;
-        match frame["type"].as_str() {
-            Some("status") => {
-                let status = match frame["status"].as_str() {
-                    Some("created" | "running") => "running",
-                    Some("completed") => "completed",
-                    Some("failed") => "failed",
-                    Some("interrupted") => "canceled",
-                    _ => return Err(AgentSessionError::Failed),
-                };
-                child.descriptor.descriptor["status"] = json!(status);
-                child.terminal = status != "running";
-                if status != "running" {
-                    child.stream.flush();
-                }
+        if let Some(status) = status {
+            child.descriptor.descriptor["status"] = json!(status);
+            child.terminal = status != "running";
+            if status != "running" {
+                child.stream.flush();
             }
-            Some("update") => {
-                let mut update = frame["update"].clone();
-                // Legacy ACP prefixes IDs/titles; restore native identities for history parity.
-                if let Some(call) = update["toolCallId"]
+        } else {
+            let mut update = frame["update"].clone();
+            // Legacy ACP prefixes IDs/titles; restore native identities for history parity.
+            if let Some(call) = update["toolCallId"]
+                .as_str()
+                .and_then(|call| call.strip_prefix(&format!("{id}:")))
+            {
+                update["toolCallId"] = json!(call);
+            }
+            if let Some(title) = frame["title"].as_str()
+                && let Some(value) = update["title"]
                     .as_str()
-                    .and_then(|call| call.strip_prefix(&format!("{id}:")))
-                {
-                    update["toolCallId"] = json!(call);
-                }
-                if let Some(title) = frame["title"].as_str()
-                    && let Some(value) = update["title"]
-                        .as_str()
-                        .and_then(|value| value.strip_prefix(&format!("{title}: ")))
-                {
-                    update["title"] = json!(value);
-                }
-                link = child.stream.links.update(&update)?;
-                child.stream.update(&update)?;
+                    .and_then(|value| value.strip_prefix(&format!("{title}: ")))
+            {
+                update["title"] = json!(value);
             }
-            _ => return Err(AgentSessionError::Failed),
+            link = child.stream.links.update(&update)?;
+            child.stream.update(&update)?;
         }
         child.descriptor.descriptor["updatedAt"] = json!(chrono::Utc::now().to_rfc3339());
         events.push(AgentTurnEvent::Subagent(SubagentEvent::Upsert(

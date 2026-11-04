@@ -19,6 +19,9 @@ use schedule::service::Schedules;
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
 
+/// Upper bound for one completion wait; pending permissions are re-checked after each wait.
+const FINISH_WAIT_MS: u64 = 1_000;
+
 #[derive(Debug)]
 struct AgentRunner {
     execution: AgentExecution,
@@ -42,25 +45,7 @@ pub(super) fn compose(
         .context("resolve schedule data directory")?;
     let store = FileStore::new(data.join("schedules/schedules.json"));
     // Recover owned workspaces before marking interrupted occurrences settled.
-    for schedule in store.load()? {
-        if let Target::NewAgent { config } = &schedule.target {
-            for run in &schedule.runs {
-                if run.status == RunStatus::Running
-                    && (run.agent_id.is_none() || config["archiveOnFinish"] != false)
-                {
-                    if let Some(id) = &run.agent_id {
-                        // No live provider process exists during composition; archive through its owner.
-                        futures_recover(&execution, id)?;
-                    }
-                    if schedule.workspace_id.is_none()
-                        && let Some(id) = &run.workspace_id
-                    {
-                        directory.archive_workspace(id, &chrono::Utc::now().to_rfc3339())?;
-                    }
-                }
-            }
-        }
-    }
+    recover_interrupted(&store.load()?, &execution, &directory)?;
     Schedules::spawn(
         Box::new(store),
         Arc::new(AgentRunner {
@@ -71,17 +56,73 @@ pub(super) fn compose(
     )
     .context("start schedule worker")
 }
-fn futures_recover(execution: &AgentExecution, id: &str) -> anyhow::Result<()> {
+/// Clean up resources owned by occurrences that were running when the daemon stopped.
+///
+/// Cleanup is best effort: an Agent or Workspace that is already gone counts as recovered, and
+/// other failures are logged so a stale run record can never prevent the daemon from starting.
+/// # Errors
+/// Returns an error only when the recovery runtime cannot be created.
+fn recover_interrupted(
+    schedules: &[Schedule],
+    execution: &AgentExecution,
+    directory: &Directory,
+) -> anyhow::Result<()> {
+    let interrupted = schedules
+        .iter()
+        .filter_map(|schedule| match &schedule.target {
+            Target::NewAgent { config } => Some((schedule, config)),
+            Target::Agent { .. } => None,
+        })
+        .flat_map(|(schedule, config)| {
+            schedule
+                .runs
+                .iter()
+                .filter(move |run| {
+                    run.status == RunStatus::Running
+                        && (run.agent_id.is_none() || config["archiveOnFinish"] != false)
+                })
+                .map(move |run| {
+                    let workspace = run
+                        .workspace_id
+                        .as_deref()
+                        .filter(|_| schedule.workspace_id.is_none());
+                    (run.agent_id.as_deref(), workspace)
+                })
+        })
+        .collect::<Vec<_>>();
+    if interrupted.is_empty() {
+        return Ok(());
+    }
+    // No live provider process exists during composition; archive through its owner.
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
-        .build()?;
-    runtime.block_on(async {
-        execution
-            .execute("agent.archive.request", json!({"agentId":id}))
-            .await
-            .map(|_| ())
-            .map_err(|_| anyhow::anyhow!("recover scheduled agent"))
-    })
+        .build()
+        .context("start scheduled run recovery")?;
+    let archived_at = chrono::Utc::now().to_rfc3339();
+    for (agent, workspace) in interrupted {
+        if let Some(id) = agent {
+            runtime.block_on(archive_agent(execution, id));
+        }
+        if let Some(id) = workspace
+            && let Err(error) = directory.archive_workspace(id, &archived_at)
+        {
+            tracing::warn!(?error, "scheduled workspace recovery failed");
+        }
+    }
+    Ok(())
+}
+
+/// Archive a scheduled Agent; an Agent that no longer exists needs no cleanup.
+async fn archive_agent(execution: &AgentExecution, id: &str) {
+    match execution
+        .execute("agent.archive.request", json!({"agentId":id}))
+        .await
+    {
+        Ok(_) | Err(provider::rpc::ErrorCode::AgentNotFound) => {}
+        Err(error) => {
+            tracing::warn!(error_code = ?error, agent_id = id, "scheduled agent archive failed");
+        }
+    }
 }
 #[async_trait::async_trait]
 impl Runner for AgentRunner {
@@ -140,10 +181,7 @@ impl Runner for AgentRunner {
             && (outcome.agent_id.is_none() || config["archiveOnFinish"] != false)
         {
             if let Some(id) = &outcome.agent_id {
-                let _ = self
-                    .execution
-                    .execute("agent.archive.request", json!({"agentId":id}))
-                    .await;
+                archive_agent(&self.execution, id).await;
             }
             if schedule.workspace_id.is_none()
                 && let Some(id) = outcome.workspace_id.clone()
@@ -386,7 +424,7 @@ impl AgentRunner {
         loop {
             let waited = tokio::select! {
                 ()=cancel.cancelled()=>{let _=self.execution.execute("agent.cancel.request",json!({"agentId":id})).await;return Err("Scheduled run canceled");},
-                result=self.execution.execute("agent.finish.wait.request",json!({"agentId":id,"timeoutMs":250}))=>result.map_err(|_|"Scheduled agent wait failed")?,
+                result=self.execution.execute("agent.finish.wait.request",json!({"agentId":id,"timeoutMs":FINISH_WAIT_MS}))=>result.map_err(|_|"Scheduled agent wait failed")?,
             };
             if waited["final"]["pendingPermissions"]
                 .as_array()
@@ -402,7 +440,9 @@ impl AgentRunner {
                 return Err("Scheduled agent is waiting for permission");
             }
             match waited["status"].as_str() {
-                Some("timeout" | "running") => tokio::time::sleep(Duration::from_millis(25)).await,
+                // A timed-out wait already blocked for the full interval; only re-check permissions.
+                Some("timeout") => {}
+                Some("running") => tokio::time::sleep(Duration::from_millis(25)).await,
                 Some("idle") => {
                     outcome.output = waited["lastMessage"].as_str().map(str::to_owned);
                     return Ok(());

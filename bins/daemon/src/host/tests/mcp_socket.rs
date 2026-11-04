@@ -1,5 +1,7 @@
 use super::*;
 
+use std::os::unix::fs::PermissionsExt;
+
 use serde_json::{Value, json};
 
 const TOKEN: &str = "offline-host-test-token-at-least-32-characters";
@@ -7,6 +9,7 @@ const TOKEN: &str = "offline-host-test-token-at-least-32-characters";
 #[tokio::test]
 async fn mcp_socket_serves_the_shared_tools_and_cleans_up_across_restart() {
     let root = tempfile::tempdir_in("/tmp").unwrap();
+    std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
     let path = root.path().join("mcp.sock");
     let mut configuration = config(&root.path().join("data"));
     configuration.listen = "0.0.0.0:0".parse().unwrap();
@@ -106,6 +109,7 @@ async fn mcp_socket_serves_the_shared_tools_and_cleans_up_across_restart() {
 #[tokio::test]
 async fn mcp_socket_bind_failure_releases_the_instance_without_removing_other_files() {
     let root = tempfile::tempdir_in("/tmp").unwrap();
+    std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
     let path = root.path().join("keep");
     std::fs::write(&path, "keep me").unwrap();
     let mut configuration = config(&root.path().join("data"));

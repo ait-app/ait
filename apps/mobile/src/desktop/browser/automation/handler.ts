@@ -359,31 +359,49 @@ async function openBrowserTabForRequest(params: {
       message: "Cannot create a browser tab without a workspace context.",
     });
   }
-  useWorkspaceLayoutStore.getState().openTab({
+  const tabId = useWorkspaceLayoutStore.getState().openTab({
     workspaceKey,
     target: { kind: "browser", browserId },
     intent: "background",
   });
 
   if (browserHost?.executeAutomationCommand) {
-    const profileHost = await resolveBrowserProfileHost(serverId, browserHost);
-    ensureResidentBrowserWebview({
-      browserId,
-      workspaceId,
-      url: normalizedUrl,
-      ...(profileHost ? { profileHost } : {}),
-    });
-    const registered = await waitForBrowserRegistration({
-      request,
-      browserId,
-      workspaceId,
-      executeAutomationCommand: browserHost.executeAutomationCommand,
-      ...(registrationWaitTimeoutMs !== undefined ? { timeoutMs: registrationWaitTimeoutMs } : {}),
-      ...(registrationPollIntervalMs !== undefined
-        ? { pollIntervalMs: registrationPollIntervalMs }
-        : {}),
-    });
+    // The caller is told to retry, so a tab that never registered must not linger behind.
+    const discardTab = async () => {
+      if (tabId) {
+        useWorkspaceLayoutStore.getState().closeTab(workspaceKey, tabId);
+      }
+      useBrowserStore.getState().removeBrowser(browserId);
+      removeResidentBrowserWebview(browserId);
+      await browserHost.unregisterWorkspaceBrowser?.(browserId);
+    };
+    let registered: boolean;
+    try {
+      const profileHost = await resolveBrowserProfileHost(serverId, browserHost);
+      ensureResidentBrowserWebview({
+        browserId,
+        workspaceId,
+        url: normalizedUrl,
+        ...(profileHost ? { profileHost } : {}),
+      });
+      registered = await waitForBrowserRegistration({
+        request,
+        browserId,
+        workspaceId,
+        executeAutomationCommand: browserHost.executeAutomationCommand,
+        ...(registrationWaitTimeoutMs !== undefined
+          ? { timeoutMs: registrationWaitTimeoutMs }
+          : {}),
+        ...(registrationPollIntervalMs !== undefined
+          ? { pollIntervalMs: registrationPollIntervalMs }
+          : {}),
+      });
+    } catch (error) {
+      await discardTab();
+      throw error;
+    }
     if (!registered) {
+      await discardTab();
       return browserAutomationFailure({
         requestId: request.requestId,
         code: "browser_timeout",

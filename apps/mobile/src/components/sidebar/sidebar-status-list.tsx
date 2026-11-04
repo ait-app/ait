@@ -705,7 +705,13 @@ function StatusWorkspaceRowInner({
   const isCompact = useIsCompactFormFactor();
   const isTouchPlatform = platformIsNative || isCompact;
   const showSelection = selected && !isCompact;
-  const { isPressed, onPressIn: handlePressIn, onPressOut: handlePressOut } = useSidebarRowPress();
+  const {
+    isPressed,
+    isHighlighted,
+    onHighlightChange,
+    onPressIn: handlePressIn,
+    onPressOut: handlePressOut,
+  } = useSidebarRowPress();
   const trailing = useSidebarWorkspaceTrailing();
   const isDesktop = !isTouchPlatform;
   const serviceSummary = isDesktop ? selectWorkspaceServiceSummary(workspace.scripts) : null;
@@ -737,7 +743,7 @@ function StatusWorkspaceRowInner({
           inStatusGroup,
         });
         const backdrop = getSidebarRowBackdrop({
-          isPressed,
+          isPressed: isHighlighted,
           selected: showSelection,
           isHovered,
         });
@@ -769,6 +775,7 @@ function StatusWorkspaceRowInner({
               accessibilityState={accessibilityState}
               style={workspaceRowStyle}
               highlightStyle={styles.workspaceRowPressed}
+              onHighlightChange={onHighlightChange}
               onPressIn={handlePressIn}
               onPressOut={handlePressOut}
               onPress={onPress}

@@ -854,6 +854,14 @@ fn project_config(
     config: &mut StoredAgentConfig,
 ) -> Result<(), AgentSessionError> {
     for record in branch {
+        // Pi 1.2 SessionManager.appendThinkingLevelChange writes this record and field;
+        // RPC notifications instead use thinking_level_changed / level.
+        if record["type"] == "thinking_level_change" {
+            config.thinking_option_id = record["thinkingLevel"]
+                .as_str()
+                .filter(|level| config::valid_thinking_level_id(level))
+                .map(str::to_owned);
+        }
         if record["type"] == "model_change" {
             config.model = Some(format!(
                 "{}/{}",

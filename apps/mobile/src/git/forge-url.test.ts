@@ -78,6 +78,24 @@ describe("buildForgeBranchTreeUrl", () => {
     ).toBe("https://home-git.example.com:60443/team/repo/src/branch/master");
   });
 
+  it("keeps the http scheme and port for a self-hosted http remote", () => {
+    expect(
+      buildForgeBranchTreeUrl("forgejo", {
+        remoteUrl: "http://home-git.example.com:3000/team/repo.git",
+        branch: "master",
+      }),
+    ).toBe("http://home-git.example.com:3000/team/repo/src/branch/master");
+  });
+
+  it("uses https for a cloud host reached over an http remote", () => {
+    expect(
+      buildForgeBranchTreeUrl("github", {
+        remoteUrl: "http://github.com/acme/repo.git",
+        branch: "main",
+      }),
+    ).toBe("https://github.com/acme/repo/tree/main");
+  });
+
   it("omits the port for a self-hosted remote on the default port", () => {
     expect(
       buildForgeBranchTreeUrl("forgejo", {
@@ -184,6 +202,16 @@ describe("buildForgeBlobUrl", () => {
         lineEnd: 20,
       }),
     ).toBe("https://home-git.example.com:60443/team/repo/src/branch/master/src/index.ts#L12-L20");
+  });
+
+  it("keeps the http scheme for a self-hosted http remote blob", () => {
+    expect(
+      buildForgeBlobUrl("forgejo", {
+        remoteUrl: "http://home-git.example.com:3000/team/repo.git",
+        branch: "master",
+        path: "src/index.ts",
+      }),
+    ).toBe("http://home-git.example.com:3000/team/repo/src/branch/master/src/index.ts");
   });
 
   it("canonicalizes the github.com SSH-alias host to the web host", () => {

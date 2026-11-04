@@ -63,7 +63,7 @@ impl ManagedRelay for ManagedRelayHandle {
         status.online || status.connecting || self.hub.yielding().await
     }
 
-    fn report(&self, phase: &'static str, binding: Option<&Binding>) {
+    async fn report(&self, phase: &'static str, binding: Option<&Binding>) {
         if let Ok(mut status) = self.status.lock() {
             *status = json!({"mode":"managed", "phase":phase, "binding":binding});
         }

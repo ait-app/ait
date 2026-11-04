@@ -12,7 +12,7 @@ describe("formatTimeAgo", () => {
 
   it.each([
     ["2026-07-16T11:59:55.000Z", "just now"],
-    ["2026-07-16T11:59:30.000Z", "30s ago"],
+    ["2026-07-16T11:59:30.000Z", "just now"],
     ["2026-07-16T11:55:00.000Z", "5m ago"],
     ["2026-07-16T10:00:00.000Z", "2h ago"],
     ["2026-07-13T12:00:00.000Z", "3d ago"],
@@ -106,6 +106,22 @@ describe("formatMessageTimestamp", () => {
     const formatted = formatMessageTimestamp(date, now);
     expect(formatted).toMatch(/Monday|星期一|周一/);
     expect(formatted).toMatch(/10:12 PM|22:12/);
+  });
+
+  it("shows a full date for the same weekday one week ago, even under 7×24h", () => {
+    // Thursday 23:00 vs the previous Thursday 00:30: 6d 22.5h apart, 7 calendar days.
+    const now = new Date(2026, 4, 14, 23, 0);
+    const date = new Date(2026, 4, 7, 0, 30);
+    const formatted = formatMessageTimestamp(date, now);
+    expect(formatted).not.toMatch(/Thursday|星期四|周四/);
+    expect(formatted).toMatch(/2026/);
+  });
+
+  it("uses the weekday for six calendar days ago", () => {
+    // Thursday 00:30 vs the previous Friday 23:00: just over 5 days, 6 calendar days.
+    const now = new Date(2026, 4, 14, 0, 30);
+    const date = new Date(2026, 4, 8, 23, 0);
+    expect(formatMessageTimestamp(date, now)).toMatch(/Friday|星期五|周五/);
   });
 
   it("includes full date for older timestamps", () => {

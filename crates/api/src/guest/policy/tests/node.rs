@@ -18,7 +18,7 @@ async fn management_requires_a_whole_node_grant() {
             "server.restart.request",
             "server.shutdown.request",
             "diagnostics.request",
-            "schedule.create.request",
+            "schedule.list.request",
             "bot.list.request",
             "provider.usage.list.request",
             "agent.skills.get_status.request",

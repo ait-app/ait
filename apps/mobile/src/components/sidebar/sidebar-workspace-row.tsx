@@ -218,6 +218,8 @@ function WorkspaceRowBody({
   const isTouchPlatform = platformIsNative || isCompact;
   const {
     isPressed,
+    isHighlighted,
+    onHighlightChange,
     onPressIn: handleWorkspacePressIn,
     onPressOut: handleWorkspacePressOut,
   } = useSidebarRowPress();
@@ -237,7 +239,7 @@ function WorkspaceRowBody({
           isHovered,
         });
         const backdrop = getSidebarRowBackdrop({
-          isPressed,
+          isPressed: isHighlighted,
           selected: showSelection,
           isHovered,
         });
@@ -267,6 +269,7 @@ function WorkspaceRowBody({
               accessibilityState={accessibilityState}
               style={workspaceRowStyle}
               highlightStyle={styles.workspaceRowPressed}
+              onHighlightChange={onHighlightChange}
               onPressIn={handleWorkspacePressIn}
               onPressOut={handleWorkspacePressOut}
               onPress={handlePress}

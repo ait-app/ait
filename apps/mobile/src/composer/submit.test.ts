@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { markDeliveredSendError } from "@/composer/submission/model";
 import { submitAgentInput } from "./submit";
 
 function createDeferredPromise<T>() {
@@ -126,7 +127,64 @@ describe("submitAgentInput", () => {
     deferred.resolve();
 
     await expect(submitPromise).resolves.toBe("submitted");
-    expect(clearDraft).toHaveBeenCalledWith("sent");
+    // The composer was already cleared; clearing again would erase input typed in flight.
+    expect(clearDraft).not.toHaveBeenCalled();
+  });
+
+  it("restores a failed send ahead of input entered while it was in flight", async () => {
+    const setUserInput = vi.fn();
+    const setAttachments = vi.fn();
+
+    await expect(
+      submitAgentInput({
+        message: "first",
+        attachments: [{ id: "img-1" }],
+        isAgentRunning: false,
+        canSubmit: true,
+        queueMessage: vi.fn(),
+        submitMessage: async () => {
+          throw new Error("offline");
+        },
+        clearDraft: vi.fn(),
+        readCurrentDraft: () => ({ text: "follow-up", attachments: [{ id: "img-2" }] }),
+        setUserInput,
+        setAttachments,
+        setSendError: vi.fn(),
+        setIsProcessing: vi.fn(),
+      }),
+    ).resolves.toBe("failed");
+
+    expect(setUserInput).toHaveBeenLastCalledWith("first\n\nfollow-up");
+    expect(setAttachments).toHaveBeenLastCalledWith([{ id: "img-1" }, { id: "img-2" }]);
+  });
+
+  it("keeps the composer clear when the failed message was already delivered", async () => {
+    const setUserInput = vi.fn();
+    const setSendError = vi.fn();
+
+    await expect(
+      submitAgentInput({
+        message: "sent once",
+        attachments: [],
+        isAgentRunning: false,
+        canSubmit: true,
+        queueMessage: vi.fn(),
+        submitMessage: async () => {
+          const error = new Error("lost after echo");
+          markDeliveredSendError(error);
+          throw error;
+        },
+        clearDraft: vi.fn(),
+        setUserInput,
+        setAttachments: vi.fn(),
+        setSendError,
+        setIsProcessing: vi.fn(),
+      }),
+    ).resolves.toBe("failed");
+
+    expect(setUserInput).toHaveBeenCalledTimes(1);
+    expect(setUserInput).toHaveBeenCalledWith("");
+    expect(setSendError).toHaveBeenLastCalledWith("lost after echo");
   });
 
   it("preserves the composer before an in-flight submit resolves when requested", async () => {
@@ -318,6 +376,7 @@ describe("submitAgentInput", () => {
       message: "",
       attachments: [],
     });
-    expect(clearDraft).toHaveBeenCalledWith("sent");
+    expect(setUserInput).toHaveBeenCalledWith("");
+    expect(clearDraft).not.toHaveBeenCalled();
   });
 });

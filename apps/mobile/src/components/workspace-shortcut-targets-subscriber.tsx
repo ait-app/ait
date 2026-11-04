@@ -14,8 +14,8 @@ export function WorkspaceShortcutTargetsSubscriber({ enabled }: { enabled: boole
       return;
     }
 
-    setSidebarShortcutWorkspaceTargets(shortcutModel.shortcutTargets);
-  }, [enabled, setSidebarShortcutWorkspaceTargets, shortcutModel.shortcutTargets]);
+    setSidebarShortcutWorkspaceTargets(shortcutModel.navigationTargets);
+  }, [enabled, setSidebarShortcutWorkspaceTargets, shortcutModel.navigationTargets]);
 
   useEffect(() => {
     return () => {

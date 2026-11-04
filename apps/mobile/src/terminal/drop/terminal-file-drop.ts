@@ -67,20 +67,10 @@ export function extractTerminalDropPaths(
 }
 
 function escapeNonWindowsPath(path: string): string {
-  let nextPath = path;
-  if (nextPath.includes("\\")) {
-    nextPath = nextPath.replace(/\\/g, "\\\\");
-  }
-
-  nextPath = nextPath.replace(DANGEROUS_NON_WINDOWS_PATH_CHARS, "");
-
-  if (nextPath.includes("'") && nextPath.includes('"')) {
-    return `$'${nextPath.replace(/'/g, "\\'")}'`;
-  }
-  if (nextPath.includes("'")) {
-    return `'${nextPath.replace(/'/g, "\\'")}'`;
-  }
-  return `'${nextPath}'`;
+  const nextPath = path.replace(DANGEROUS_NON_WINDOWS_PATH_CHARS, "");
+  // POSIX single quotes keep every byte literal, including backslashes; an embedded quote
+  // must close the string, emit an escaped quote, and reopen it.
+  return `'${nextPath.replace(/'/g, "'\\''")}'`;
 }
 
 function escapeWindowsPath(path: string): string {

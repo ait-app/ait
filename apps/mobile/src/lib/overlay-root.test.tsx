@@ -83,6 +83,23 @@ describe("useWebOverlayRegistration", () => {
     expect(openerFocus).toHaveBeenCalled();
   });
 
+  it("leaves Safari post-composition Enter (keyCode 229) with the focused editor", () => {
+    const onKeyDown = vi.fn(() => true);
+    const { result, unmount } = renderHook(() =>
+      useWebOverlayRegistration({ active: true, layer: 20, onKeyDown }),
+    );
+    act(() => result.current(scope));
+
+    const event = new KeyboardEvent("keydown", { key: "Enter", keyCode: 229, bubbles: true });
+    expect(dispatchTopWebOverlayKeyDown(event)).toBe(false);
+    expect(onKeyDown).not.toHaveBeenCalled();
+
+    const plainEnter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true });
+    expect(dispatchTopWebOverlayKeyDown(plainEnter)).toBe(true);
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+
   it("leaves IME composition keys with the focused editor", () => {
     const event = new KeyboardEvent("keydown", { key: "Process", bubbles: true });
     expect(dispatchTopWebOverlayKeyDown(event)).toBe(false);

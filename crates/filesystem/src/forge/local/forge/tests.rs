@@ -271,3 +271,23 @@ fi
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
     executable
 }
+
+#[test]
+fn guest_repository_identity_must_match_the_checkout_origin() {
+    let root = tempfile::tempdir().unwrap();
+    let repository = root.path().join("repo");
+    create_repository(&repository, true);
+    let service = crate::forge::service::Forge::new(Box::new(LocalForge::with_executable(
+        root.path().join("unused-gh"),
+    )));
+    let cwd = repository.to_str().unwrap();
+    assert!(service.admits_repository(cwd, "acme", "app").unwrap());
+    assert!(service.admits_repository(cwd, "ACME", "App").unwrap());
+    assert!(!service.admits_repository(cwd, "private", "other").unwrap());
+    assert!(!service.admits_repository(cwd, "acme", "other").unwrap());
+    assert!(
+        service
+            .admits_repository(root.path().to_str().unwrap(), "acme", "app")
+            .is_err()
+    );
+}

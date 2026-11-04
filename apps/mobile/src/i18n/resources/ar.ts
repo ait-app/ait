@@ -1,6 +1,15 @@
 import { en, type TranslationResources } from "./en";
 import { pluginSettings } from "./plugin-settings";
 
+// Arabic plural categories English lacks; i18next selects them from the count. Kept
+// outside the literal because TranslationResources only declares the English categories.
+const labelDeletePluralForms = {
+  deleteMessage_zero: "سيؤدي هذا إلى إزالة التسمية من {{count}} مساحة عمل على هذا المضيف.",
+  deleteMessage_two: "سيؤدي هذا إلى إزالة التسمية من مساحتَي عمل ({{count}}) على هذا المضيف.",
+  deleteMessage_few: "سيؤدي هذا إلى إزالة التسمية من {{count}} مساحات عمل على هذا المضيف.",
+  deleteMessage_many: "سيؤدي هذا إلى إزالة التسمية من {{count}} مساحة عمل على هذا المضيف.",
+};
+
 export const ar: TranslationResources = {
   sharing: {
     ...en.sharing,
@@ -1139,7 +1148,8 @@ export const ar: TranslationResources = {
       delete: "حذف",
       deleteTitle: "حذف {{name}}؟",
       deleteMessage_one: "سيؤدي هذا إلى إزالة التسمية من {{count}} مساحة عمل على هذا المضيف.",
-      deleteMessage_other: "سيؤدي هذا إلى إزالة التسمية من {{count}} مساحات عمل على هذا المضيف.",
+      ...labelDeletePluralForms,
+      deleteMessage_other: "سيؤدي هذا إلى إزالة التسمية من {{count}} مساحة عمل على هذا المضيف.",
       offline: "هذا المضيف غير متصل.",
       updateHost: "حدّث هذا المضيف لإدارة التسميات.",
     },

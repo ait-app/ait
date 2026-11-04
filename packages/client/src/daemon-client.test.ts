@@ -3,8 +3,6 @@ import {
   encodeFileTransferFrame,
   FileTransferOpcode,
 } from "@ait/protocol/binary-frames/index";
-import { BROWSER_AUTOMATION_COMMAND_NAMES } from "@ait/protocol/browser-automation/rpc-schemas";
-import { CLIENT_CAPS } from "@ait/protocol/client-capabilities";
 import {
   encodeTerminalSnapshotPayload,
   encodeTerminalStreamFrame,
@@ -324,7 +322,7 @@ test("connect retries after the transport factory fails synchronously", async ()
   expect(client.getConnectionState().status).toBe("connected");
 });
 
-test("traces WebSocket frames, message types, and JSON parse duration", async () => {
+test("traces SDK messages without reparsing JSON", async () => {
   const mock = createMockTransport();
   const recorder = createTraceRecorder();
   const client = new DaemonClient({
@@ -349,89 +347,11 @@ test("traces WebSocket frames, message types, and JSON parse duration", async ()
     { phase: "end" },
     {
       phase: "begin",
-      name: "paseo.ws.frame.outbound",
-      args: { kind: "text", size: expect.any(String) },
-    },
-    { phase: "end" },
-    {
-      phase: "begin",
-      name: "paseo.ws.frame.inbound",
-      args: { kind: "text", size: expect.any(String) },
-    },
-    {
-      phase: "begin",
-      name: "paseo.ws.json.parse",
-      args: { size: expect.any(String) },
-    },
-    { phase: "end" },
-    {
-      phase: "begin",
       name: "paseo.ws.message.inbound",
       args: { envelopeType: "session", messageType: "status" },
     },
     { phase: "end" },
-    { phase: "end" },
   ]);
-});
-
-test("does not infer browser automation capabilities from Electron runtime", async () => {
-  vi.stubGlobal("navigator", {
-    userAgent:
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Paseo/0.1.89 Chrome/146 Electron/41.2.0 Safari/537.36",
-  });
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "electron_unit_test",
-    transportFactory: () => mock.transport,
-    reconnect: { enabled: false },
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen({ preserveSent: true });
-  await connectPromise;
-
-  const hello = z
-    .object({
-      type: z.literal("hello"),
-      capabilities: z.record(z.string(), z.unknown()),
-    })
-    .parse(JSON.parse(assertStr(mock.sent[0])));
-  expect(hello.capabilities[CLIENT_CAPS.browserHost]).toBeUndefined();
-  expect(hello.capabilities[CLIENT_CAPS.selectiveAgentTimeline]).toBe(true);
-});
-
-test("advertises consumer-provided browser automation capabilities", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "browser_capability_unit_test",
-    transportFactory: () => mock.transport,
-    reconnect: { enabled: false },
-    capabilities: {
-      [CLIENT_CAPS.browserHost]: {
-        supportedCommands: [...BROWSER_AUTOMATION_COMMAND_NAMES],
-        hostKind: "desktop app",
-      },
-    },
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen({ preserveSent: true });
-  await connectPromise;
-
-  const hello = z
-    .object({
-      type: z.literal("hello"),
-      capabilities: z.record(z.string(), z.unknown()),
-    })
-    .parse(JSON.parse(assertStr(mock.sent[0])));
-  expect(hello.capabilities[CLIENT_CAPS.browserHost]).toEqual({
-    supportedCommands: [...BROWSER_AUTOMATION_COMMAND_NAMES],
-    hostKind: "desktop app",
-  });
 });
 
 test.each([
@@ -983,7 +903,7 @@ test("dedupes in-flight checkout status requests per agentId", async () => {
   });
 });
 
-test("passes password as HTTP bearer header and WebSocket subprotocol", async () => {
+test("passes password to the raw transport as an HTTP bearer header", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
   const transportFactory = vi.fn(() => mock.transport);
@@ -1005,88 +925,7 @@ test("passes password as HTTP bearer header and WebSocket subprotocol", async ()
   expect(transportFactory).toHaveBeenCalledWith({
     url: "ws://test",
     headers: { Authorization: "Bearer shared-secret" },
-    protocols: ["paseo.bearer.shared-secret"],
   });
-});
-
-test("advertises client capabilities in hello", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-    capabilities: {
-      browser_host: {
-        supportedCommands: ["list_tabs"],
-        hostKind: "desktop app",
-      },
-    },
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen({ preserveSent: true });
-  await connectPromise;
-
-  expect(mock.sent).toHaveLength(1);
-  expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
-    type: "hello",
-    clientId: "clsk_unit_test",
-    clientType: "cli",
-    protocolVersion: 1,
-    capabilities: {
-      all_providers: true,
-      selective_agent_timeline: true,
-      timeline_replacement_invalidation: true,
-      provider_snapshot_references: true,
-      explicit_event_subscriptions: true,
-      owned_subscriptions: true,
-      compact_provider_snapshots: true,
-      custom_mode_icons: true,
-      project_updates: true,
-      provider_subagents: true,
-      projected_subagent_timeline: true,
-      reasoning_merge_enum: true,
-      terminal_reflowable_snapshot: true,
-      timeline_notifications: true,
-      plugin_timeline_items: true,
-      workspace_setup_blocked: true,
-      browser_host: {
-        supportedCommands: ["list_tabs"],
-        hostKind: "desktop app",
-      },
-    },
-  });
-});
-
-test("allows callers to disable default client capabilities", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_capability_override_test",
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-    capabilities: {
-      [CLIENT_CAPS.projectUpdates]: false,
-    },
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen({ preserveSent: true });
-  await connectPromise;
-
-  const hello = z
-    .object({
-      type: z.literal("hello"),
-      capabilities: z.record(z.string(), z.unknown()),
-    })
-    .parse(JSON.parse(assertStr(mock.sent[0])));
-  expect(hello.capabilities[CLIENT_CAPS.projectUpdates]).toBe(false);
 });
 
 test("sends new-agent run options when creating schedules", async () => {
@@ -7024,9 +6863,6 @@ test("wire snapshot callers own expansion and receive hash references unchanged"
   const connected = client.connect();
   transport.triggerOpen({ preserveSent: true });
   await connected;
-  expect(JSON.parse(assertStr(transport.sent[0])).capabilities.provider_snapshot_references).toBe(
-    true,
-  );
   const received: unknown[] = [];
   client.on("provider.snapshot.update", (message) => received.push(message.payload));
   const payload = {
@@ -7464,3 +7300,9 @@ test.each(["retry", "close", "reject"])(
     }
   },
 );
+
+// These tests cover SDK business behavior; protocol tests use real Rust wire frames.
+vi.mock("./protocol/connection.js", async () => {
+  const { createProtocolStub } = await import("./test-support/protocol-stub.js");
+  return { createDaemonConnection: createProtocolStub };
+});

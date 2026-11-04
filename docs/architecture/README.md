@@ -71,6 +71,10 @@ API 的 `/mcp/agents` 适配到已有 Rust RPC，不另建业务服务或存储�
 Provider 自身行为测试归 `crates/provider`；daemon 测试覆盖宿主、传输和跨能力组合，见
 [ADR-179](../decisions/providers/adr-179-provider-owned-tests.md)。
 
+Pi 模型与推理偏好沿用配置持久化及下一条 prompt 前应用的流程；请求偏好与原生有效状态分别保存，
+准入拒绝或 busy 时也在关闭 writer 前保存已知运行事实，见
+[ADR-211](../decisions/providers/adr-211-pi-next-turn-reasoning-controls.md)。
+
 新定时任务保存固定 Workspace 身份，执行时校验归属，在该 Workspace 内选择或创建 Agent。
 新建 Agent 的收尾不归档 Workspace；旧未绑定任务保留兼容分支，见[任务手册](../operations/schedules.md)。
 Bot 持有独占 Channel 与隐藏 Provider session，普通 Agent API 不能接管；Workspace 归档先停用 Bot。
@@ -78,7 +82,8 @@ Bot 持有独占 Channel 与隐藏 Provider session，普通 Agent API 不能接
 
 ## 主机、连接与客户端
 
-daemon 以 `instance.lock` 排他持有数据目录，`server-id` 稳定，`instance_id` 每次启动变化。
+daemon 先预绑定 TCP 端口，再以 `instance.lock` 排他持有数据目录；锁覆盖本地令牌初始化、诊断采集和
+运行时重启。`server-id` 稳定，`instance_id` 每个运行时变化。
 启动配置、身份、故障证据及服务组装归 daemon。SIGINT/SIGTERM 与关闭 RPC 停止接纳、回收所属资源并释放锁。
 本地 API token 自动持久化，显式 `AIT_SERVER_TOKEN` 优先；详细路径和恢复方式见[daemon 手册](../operations/daemon.md)。
 
@@ -94,6 +99,12 @@ Desktop/移动客户端批准 device authorization 后把待领取授权交给 d
 | `ait-channel-v1`       | 账号 Host 快照、可连接状态与心跳         |
 | 直接 TCP / SSH         | 经认证的 daemon 直连                     |
 
+`@ait/client` 原生处理 Rust v1 握手、请求关联、订阅归属、消息分块和二进制路由。
+业务 API 直接传递对象给 SDK 内部协议模块，仅在物理传输处编码/解析 JSON。
+`apps/mobile/src/runtime/daemon-transport` 选择平台连接，不维护独立的协议兼容层。
+Electron 的 `rust-daemon.ts` 继续只负责本机进程管理。见
+[ADR-211](../decisions/clients/adr-211-sdk-native-daemon-protocol.md)。
+
 在线业务只使用 Hub，无传统 Relay/Yamux 回退，见
 [ADR-204](../decisions/clients/adr-204-hub-only-online-business-transport.md)。
 Host 通过 `model::hub` 发布事件和目录摘要，`persistence` 保存发布 journal；中心方法由握手协商。
@@ -101,14 +112,17 @@ Desktop 内置 daemon 默认启用 Hub 原生通知，独立 daemon 默认直发
 通知配置和凭据归属见[移动端通知](../operations/mobile-notifications.md)。
 
 macOS/Linux Desktop 管理自己启动或验证接管的 daemon，Windows Desktop 只连接远端。
-就绪探测失败保留存活的自有进程，见 [ADR-207](../decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)。
+就绪探测失败保留存活的自有进程供重试；退出时只交接已输出就绪日志的进程，未就绪进程被停止。
+见 [ADR-207](../decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)。
 桌面内置浏览器对本地 Workspace 直接联网，对远端 Workspace 的所有目标经对应 daemon 出站并解析 DNS，
 见 [ADR-186](../decisions/clients/adr-186-workspace-browser-egress.md)。
 浏览器直连先换取一次性 WebSocket 票据；连接所属订阅在关闭时释放。
 Hub 会话支持物理链路续传，超出恢复窗口后仍需重新建立会话和订阅。
 
 群组分享以 Host 保存的范围为准，Hub 访客通过 `x-ait-guest` 准入；workspace/project 限制访问范围，
-node 分享允许更广的节点操作，分享和账号授权保留给所有者。见
+node 分享允许更广的节点操作，分享和账号授权保留给所有者，Bot 与定时任务仅可读取。
+创建访客 Agent／终端的任务在连接断开后仍完成归属记录与撤销检查；撤销逐页取消 Agent，
+终端归属按存活状态清理。共享项目的配置文件和独立分享设置受保护，Forge 查询绑定到 checkout 远端。见
 [ADR-208](../decisions/daemon/adr-208-workspace-share-guests.md)。
 
 原生实时语音由 Provider 拥有原生 thread、SDP、上游 WebRTC、音频协议及认证，voice 拥有媒体连接

@@ -5,9 +5,9 @@ import {
 } from "@/desktop/daemon/desktop-daemon-transport";
 import {
   buildAccountRelayClientConfig,
-  buildRustClientConfig,
-  buildRustSshClientConfig,
-} from "@/runtime/rust-daemon/connection";
+  buildDaemonClientConfig,
+  buildSshDaemonClientConfig,
+} from "@/runtime/daemon-transport/connection";
 import type { HostConnection } from "@/types/host-connection";
 import type { DaemonClientConfig } from "@ait/client/internal/daemon-client";
 import { DaemonClient } from "@ait/client/internal/daemon-client";
@@ -134,7 +134,7 @@ export async function buildClientConfig(
   if (connection.type === "remoteSsh") {
     return {
       ...base,
-      ...buildRustSshClientConfig(
+      ...buildSshDaemonClientConfig(
         connection,
         desktopTransportFactory,
         deps.buildDesktopTransportUrl,
@@ -149,7 +149,7 @@ export async function buildClientConfig(
   if (connection.type === "directTcp") {
     return {
       ...base,
-      ...buildRustClientConfig(connection, desktopTransportFactory ?? null),
+      ...buildDaemonClientConfig(connection, desktopTransportFactory ?? null),
     };
   }
 

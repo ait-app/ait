@@ -166,7 +166,7 @@ fn credential_configuration_errors_are_safe_and_optional_providers_do_not_read_f
             .contains("cannot read APNs signing key")
     );
     let google = Google::from_environment(&|name| {
-        (name == "GOOGLE_APPLICATION_CREDENTIALS").then(|| path.clone())
+        (name == "AIT_FCM_SERVICE_ACCOUNT_FILE").then(|| path.clone())
     });
     assert!(
         google
@@ -175,6 +175,27 @@ fn credential_configuration_errors_are_safe_and_optional_providers_do_not_read_f
             .to_string()
             .contains("cannot read FCM service account")
     );
+}
+
+#[test]
+fn unusable_ambient_google_credentials_disable_fcm_without_failing_startup() {
+    let directory = tempfile::tempdir().unwrap();
+    let missing = directory.path().join("missing.json");
+    let user_credentials = directory
+        .path()
+        .join("application_default_credentials.json");
+    std::fs::write(
+        &user_credentials,
+        r#"{"type":"authorized_user","client_id":"id","client_secret":"s","refresh_token":"r"}"#,
+    )
+    .unwrap();
+    for path in [missing, user_credentials] {
+        let path = path.to_string_lossy().into_owned();
+        let google = Google::from_environment(&|name| {
+            (name == "GOOGLE_APPLICATION_CREDENTIALS").then(|| path.clone())
+        });
+        assert!(google.unwrap().is_none());
+    }
 }
 
 #[test]

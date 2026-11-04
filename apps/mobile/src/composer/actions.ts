@@ -15,7 +15,11 @@ import {
   type ComposerAttachmentSubmitFormat,
 } from "@/composer/attachments/submit";
 import { createUserMessage, generateMessageId, type UserMessageItem } from "@/types/stream";
-import type { MessageSubmissionRejectionOutcome } from "@/composer/submission/model";
+import {
+  isDeliveredSendError,
+  markDeliveredSendError,
+  type MessageSubmissionRejectionOutcome,
+} from "@/composer/submission/model";
 import type { PickedImageAttachmentInput } from "@/hooks/image-attachment-picker";
 import { i18n } from "@/i18n/i18next";
 import { type EncodedSendImage, type ImageSendContext } from "@/attachments/image-send";
@@ -232,7 +236,9 @@ export async function dispatchComposerAgentMessage(
     });
     input.submission.accept(input.agentId, clientMessageId);
   } catch (error) {
-    input.submission.reject(input.agentId, clientMessageId);
+    if (input.submission.reject(input.agentId, clientMessageId) === "accepted") {
+      markDeliveredSendError(error);
+    }
     throw error;
   }
 }
@@ -326,11 +332,13 @@ export async function sendQueuedComposerMessageNow(
     await input.submitMessage({ text: item.text, attachments: item.attachments });
     return { status: "submitted" };
   } catch (error) {
-    input.queue.write((prev) => {
-      const next = new Map(prev);
-      next.set(input.agentId, [item, ...(prev.get(input.agentId) ?? [])]);
-      return next;
-    });
+    if (!isDeliveredSendError(error)) {
+      input.queue.write((prev) => {
+        const next = new Map(prev);
+        next.set(input.agentId, [item, ...(prev.get(input.agentId) ?? [])]);
+        return next;
+      });
+    }
     return {
       status: "failed",
       errorMessage:

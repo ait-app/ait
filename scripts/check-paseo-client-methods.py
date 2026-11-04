@@ -10,8 +10,8 @@ from rust_method_specs import read_method_specs
 ROOT = Path(__file__).resolve().parents[1]
 expected = read_method_specs()
 client = "\n".join(
-    (ROOT / "apps/mobile/src/runtime/rust-daemon" / file).read_text()
-    for file in ["methods.ts", "relay-methods.ts", "transport.ts"]
+    (ROOT / "packages/client/src/protocol" / file).read_text()
+    for file in ["methods.ts", "relay-methods.ts", "connection.ts"]
 )
 actual = {
     name: (kind, method)

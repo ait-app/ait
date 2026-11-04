@@ -635,3 +635,41 @@ fn listed_agent_ids_are_extracted() {
     assert_eq!(cleanup::agent_ids(&listed), vec!["a", "b"]);
     assert!(cleanup::agent_ids(&json!({})).is_empty());
 }
+
+#[tokio::test]
+async fn terminal_tracking_keeps_live_owners_and_prunes_only_confirmed_exits() {
+    let shares = shares(None);
+    let group = Uuid::new_v4();
+    let share = Uuid::new_v4();
+    shares.set(set("w", group, &[])).await.unwrap();
+    shares.apply(accepted(&shares, "w", group, share));
+    let registration = shares
+        .admit(&visitor(share, group, Uuid::new_v4()))
+        .unwrap();
+    assert!(registration.record_terminal("long-running".into()));
+    for index in 0..256 {
+        let id = format!("short-{index}");
+        assert!(registration.record_terminal(id.clone()));
+        let before = shares.terminal_ids();
+        assert!(registration.owns_terminal("long-running"));
+        assert!(registration.record_terminal("newer".into()));
+        let stale = before
+            .into_iter()
+            .filter(|candidate| candidate == &id)
+            .collect::<Vec<_>>();
+        shares.forget_terminals(&stale);
+        assert!(registration.owns_terminal("newer"));
+        assert!(!registration.owns_terminal(&id));
+    }
+    assert_eq!(shares.terminal_ids().len(), 2);
+    // Recording is idempotent; repeated responses cannot inflate the registry.
+    assert!(registration.record_terminal("long-running".into()));
+    assert_eq!(shares.terminal_ids().len(), 2);
+    assert!(shares.grants(registration.grant()));
+    shares
+        .remove(ResourceKind::Workspace, "w", group)
+        .await
+        .unwrap();
+    assert!(!shares.grants(registration.grant()));
+    assert!(shares.terminal_ids().is_empty());
+}

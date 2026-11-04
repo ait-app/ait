@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
+import { i18n } from "./i18next";
 import { ar } from "./resources/ar";
 import { en } from "./resources/en";
 import { es } from "./resources/es";
@@ -33,6 +34,40 @@ function flattenStrings(value: unknown, prefix = ""): Record<string, string> {
       Object.entries(flattenStrings(child, prefix ? `${prefix}.${key}` : key)),
     ),
   );
+}
+
+const englishPluralCategories = new Set(
+  new Intl.PluralRules("en").resolvedOptions().pluralCategories,
+);
+
+function localeOnlyPluralCategories(locale: string): string[] {
+  return new Intl.PluralRules(locale)
+    .resolvedOptions()
+    .pluralCategories.filter((category) => !englishPluralCategories.has(category));
+}
+
+/** Drops plural-category keys a locale needs but English has no counterpart for. */
+function withoutLocalePluralVariants(keys: string[], locale: string): string[] {
+  const englishKeys = new Set(flattenKeys(en));
+  const extraSuffixes = localeOnlyPluralCategories(locale).map((category) => `_${category}`);
+  return keys.filter((key) => {
+    const suffix = extraSuffixes.find((candidate) => key.endsWith(candidate));
+    return !suffix || !englishKeys.has(`${key.slice(0, -suffix.length)}_other`);
+  });
+}
+
+function findMissingTranslatedPluralForms(resource: unknown, locale: string): string[] {
+  const englishStrings = flattenStrings(en);
+  const localeStrings = flattenStrings(resource);
+  const categories = new Intl.PluralRules(locale).resolvedOptions().pluralCategories;
+  return Object.keys(englishStrings)
+    .filter((key) => key.endsWith("_other") && localeStrings[key] !== englishStrings[key])
+    .flatMap((key) => {
+      const base = key.slice(0, -"_other".length);
+      return categories
+        .map((category) => `${base}_${category}`)
+        .filter((pluralKey) => localeStrings[pluralKey] === undefined);
+    });
 }
 
 function countMatchingEnglishStrings(resource: unknown): number {
@@ -106,13 +141,13 @@ function findUntranslatedConnectionErrors(): string[] {
 describe("translation resources", () => {
   it("keeps all supported language keys in sync with English", () => {
     const englishKeys = flattenKeys(en).sort();
-    expect(flattenKeys(ar).sort()).toEqual(englishKeys);
+    expect(withoutLocalePluralVariants(flattenKeys(ar), "ar").sort()).toEqual(englishKeys);
     expect(flattenKeys(es).sort()).toEqual(englishKeys);
     expect(flattenKeys(fr).sort()).toEqual(englishKeys);
     expect(flattenKeys(ja).sort()).toEqual(englishKeys);
     expect(flattenKeys(ko).sort()).toEqual(englishKeys);
     expect(flattenKeys(ptBR).sort()).toEqual(englishKeys);
-    expect(flattenKeys(ru).sort()).toEqual(englishKeys);
+    expect(withoutLocalePluralVariants(flattenKeys(ru), "ru").sort()).toEqual(englishKeys);
     expect(flattenKeys(zhCN).sort()).toEqual(englishKeys);
   });
 
@@ -136,6 +171,21 @@ describe("translation resources", () => {
         en.panels.pullRequest.emptyDescription,
       );
     }
+  });
+
+  it("provides every CLDR plural form for translated Russian and Arabic plural keys", () => {
+    expect(findMissingTranslatedPluralForms(ru, "ru")).toEqual([]);
+    expect(findMissingTranslatedPluralForms(ar, "ar")).toEqual([]);
+  });
+
+  it("resolves Russian and Arabic plural counts without falling back to English", () => {
+    const key = "workspaceLabels.manage.deleteMessage";
+    const tRu = i18n.getFixedT("ru");
+    const tAr = i18n.getFixedT("ar");
+    expect(tRu(key, { count: 3 })).toContain("рабочих пространств");
+    expect(tRu(key, { count: 5 })).toContain("рабочих пространств");
+    expect(tAr(key, { count: 2 })).toContain("مساحتَي عمل");
+    expect(tAr(key, { count: 0 })).toContain("مساحة عمل");
   });
 
   it("preserves interpolation placeholders in every language", () => {

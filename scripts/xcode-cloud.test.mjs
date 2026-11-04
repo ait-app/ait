@@ -5,9 +5,33 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
+import { getNativeReleaseVersion } from "../apps/mobile/native-release-version.js";
 
 const ios = new URL("../apps/mobile/ios/", import.meta.url);
 const read = (file) => readFileSync(new URL(file, ios), "utf8");
+
+test("committed iOS versions match the mobile release version", () => {
+  const { version } = JSON.parse(
+    readFileSync(new URL("../apps/mobile/package.json", import.meta.url), "utf8"),
+  );
+  const expected = getNativeReleaseVersion(version);
+  const plist = read("Ait/Info.plist");
+  for (const [key, value] of [
+    ["CFBundleShortVersionString", expected.appVersion],
+    ["CFBundleVersion", expected.iosBuildNumber],
+  ]) {
+    const actual = plist.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]+)</string>`))?.[1];
+    assert.equal(actual, value, `Run Expo prebuild with the release identity and commit ${key}`);
+  }
+});
+
+test("Podfile.lock pins the local ExpoTwoWayAudio package version", () => {
+  const { version } = JSON.parse(
+    readFileSync(new URL("../packages/expo-two-way-audio/package.json", import.meta.url), "utf8"),
+  );
+  const locked = read("Podfile.lock").match(/^  - ExpoTwoWayAudio \(([^)]+)\):$/m)?.[1];
+  assert.equal(locked, version, "Run the pinned CocoaPods install and commit Podfile.lock");
+});
 
 test("Podfile.lock matches the committed Podfile checksum", () => {
   const checksum = createHash("sha1").update(read("Podfile")).digest("hex");

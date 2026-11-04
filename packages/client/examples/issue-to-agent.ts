@@ -1,4 +1,4 @@
-import { createPaseoClient, type PaseoClient } from "@ait/client";
+import { createPaseoClient, type PaseoClient, type PaseoClientConfig } from "@ait/client";
 
 interface Issue {
   id: string;
@@ -30,6 +30,6 @@ export async function startIssue(client: PaseoClient, issue: Issue) {
   return { workspaceId: workspace.id, agentId: agent.id };
 }
 
-export function createClient(url: string): PaseoClient {
-  return createPaseoClient({ url });
+export function createClient(config: PaseoClientConfig): PaseoClient {
+  return createPaseoClient(config);
 }

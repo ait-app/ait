@@ -7,6 +7,26 @@ use serde_json::{Value, json};
 use super::PROVIDER;
 use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
+const KNOWN_THINKING_OPTIONS: [(&str, &str, &str); 7] = [
+    (
+        "off",
+        "Off",
+        "Request Pi's Off level; endpoint behavior is not verified",
+    ),
+    ("minimal", "Minimal", "Light reasoning"),
+    ("low", "Low", "Faster reasoning"),
+    ("medium", "Medium", "Balanced reasoning"),
+    ("high", "High", "Deeper reasoning"),
+    ("xhigh", "XHigh", "Very deep reasoning"),
+    ("max", "Max", "Extreme reasoning"),
+];
+
+// IDs are opaque to Ait: Pi validates or clamps them, including future and imported levels.
+/// Accept nonempty opaque levels up to 512 bytes without control characters.
+pub(super) fn valid_thinking_level_id(level: &str) -> bool {
+    !level.is_empty() && level.len() <= 512 && !level.chars().any(char::is_control)
+}
+
 /// Validate host settings, rejecting unsupported selections before native admission.
 /// The retired `default` mode remains accepted only for persisted Agent compatibility.
 /// Returns `Rejected` for settings this adapter cannot represent.
@@ -19,7 +39,10 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             .model
             .as_deref()
             .is_some_and(|model| split_model(model).is_none())
-        || config.thinking_option_id.is_some()
+        || config
+            .thinking_option_id
+            .as_deref()
+            .is_some_and(|level| !valid_thinking_level_id(level))
         || config.system_prompt.is_some()
         || config
             .tool_policy
@@ -53,6 +76,12 @@ pub(super) fn split_model(model: &str) -> Option<(&str, &str)> {
     .then_some((provider, id))
 }
 
+/// Read a native model's provider and ID, ignoring other metadata.
+/// Returns `None` when either identity field is missing or is not a string.
+pub(super) fn model_identity(model: &Value) -> Option<(&str, &str)> {
+    model["provider"].as_str().zip(model["id"].as_str())
+}
+
 /// Require an existing absolute working directory, otherwise return `Rejected`.
 pub(super) fn directory(cwd: &str) -> Result<(), AgentSessionError> {
     if !Path::new(cwd).is_absolute() || !Path::new(cwd).is_dir() {
@@ -73,7 +102,52 @@ pub(super) fn spec(spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
 
 /// Project native model facts into the catalog, omitting endpoints and credentials.
 /// Returns `Failed` for malformed, duplicate or oversized model identities.
-pub(super) fn models(data: &Value) -> Result<Vec<Value>, AgentSessionError> {
+pub(super) fn models(data: &Value, state: &Value) -> Result<Vec<Value>, AgentSessionError> {
+    let entries = model_entries(data)?;
+    data["models"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .zip(entries)
+        .enumerate()
+        .map(|(index, (model, (qualified, label)))| {
+            let options = catalog_thinking_options(model);
+            // Seed every model from the ambient level, clamped to its own capabilities.
+            let default = state["thinkingLevel"]
+                .as_str()
+                .filter(|level| valid_thinking_level_id(level))
+                .and_then(|level| {
+                    default_thinking_option(options.clone().map(|(id, _, _)| id), level)
+                });
+            let options: Vec<_> = options
+                .map(|(id, label, description)| {
+                    let mut option = json!({"id":id,"label":label,"description":description});
+                    if default == Some(id) {
+                        option["isDefault"] = json!(true);
+                    }
+                    option
+                })
+                .collect();
+            let mut projected = json!({"provider":PROVIDER,"id":qualified,"label":label,
+                "isSelectable":true,
+                "isDefault":index == 0,
+                "thinkingOptions":options});
+            if let Some(default) = default {
+                projected["defaultThinkingOptionId"] = json!(default);
+            }
+            Ok(projected)
+        })
+        .collect()
+}
+
+/// Validate the native catalog and return only qualified IDs, without projecting options.
+/// Returns `Failed` for malformed, duplicate or oversized identities or invalid labels.
+pub(super) fn model_ids(data: &Value) -> Result<Vec<String>, AgentSessionError> {
+    Ok(model_entries(data)?.into_iter().map(|(id, _)| id).collect())
+}
+
+// Validate once and retain labels so projection cannot reinterpret the name/ID fallback.
+fn model_entries(data: &Value) -> Result<Vec<(String, &str)>, AgentSessionError> {
     let models = data["models"]
         .as_array()
         .filter(|models| models.len() <= 4096)
@@ -82,10 +156,7 @@ pub(super) fn models(data: &Value) -> Result<Vec<Value>, AgentSessionError> {
     models
         .iter()
         .map(|model| {
-            let provider = model["provider"]
-                .as_str()
-                .ok_or(AgentSessionError::Failed)?;
-            let id = model["id"].as_str().ok_or(AgentSessionError::Failed)?;
+            let (provider, id) = model_identity(model).ok_or(AgentSessionError::Failed)?;
             let qualified = format!("{provider}/{id}");
             if split_model(&qualified).is_none() || !seen.insert(qualified.clone()) {
                 return Err(AgentSessionError::Failed);
@@ -97,8 +168,62 @@ pub(super) fn models(data: &Value) -> Result<Vec<Value>, AgentSessionError> {
                     !name.is_empty() && name.len() <= 1024 && !name.chars().any(char::is_control)
                 })
                 .ok_or(AgentSessionError::Failed)?;
-            Ok(json!({"provider":PROVIDER,"id":qualified,"label":label,
-            "isSelectable":true,"thinkingOptions":[]}))
+            Ok((qualified, label))
         })
         .collect()
+}
+
+fn default_thinking_option<'a>(
+    mut options: impl Iterator<Item = &'a str> + Clone,
+    level: &str,
+) -> Option<&'a str> {
+    let supported = |id: &str| options.clone().find(|option| *option == id);
+    let clamped = supported(level).or_else(|| {
+        let index = KNOWN_THINKING_OPTIONS
+            .iter()
+            .position(|(id, _, _)| *id == level)?;
+        // Pi tries higher levels first, then lower levels in descending order.
+        KNOWN_THINKING_OPTIONS[index..]
+            .iter()
+            .chain(KNOWN_THINKING_OPTIONS[..index].iter().rev())
+            .find_map(|(id, _, _)| supported(id))
+    });
+    clamped.or_else(|| options.next())
+}
+
+/// Clamp `level` to `model`'s supported ladder; non-reasoning models use off.
+/// Preserve the seed for Pi to validate when reasoning capabilities are unknown.
+/// Returns `None` only when known reasoning capabilities exclude every selectable level.
+pub(super) fn clamp_thinking_level(model: &Value, level: &str) -> Option<String> {
+    match model["reasoning"].as_bool() {
+        Some(false) => Some("off".to_owned()),
+        Some(true) => default_thinking_option(thinking_options(model).map(|(id, _, _)| id), level)
+            .map(str::to_owned),
+        None => Some(level.to_owned()),
+    }
+}
+
+fn thinking_options(
+    model: &Value,
+) -> impl Iterator<Item = (&'static str, &'static str, &'static str)> + Clone + '_ {
+    KNOWN_THINKING_OPTIONS
+        .iter()
+        .copied()
+        .filter(|_| model["reasoning"] == true)
+        .filter(|(id, _, _)| match model["thinkingLevelMap"].get(*id) {
+            Some(Value::Null) => false,
+            None => !matches!(*id, "xhigh" | "max"),
+            Some(_) => true,
+        })
+}
+
+// This conservative picker hint is not a delivery capability or a native clamping rule.
+fn catalog_thinking_options(
+    model: &Value,
+) -> impl Iterator<Item = (&'static str, &'static str, &'static str)> + Clone + '_ {
+    let offer_off = match model["thinkingLevelMap"].get("off") {
+        Some(value) => value.as_str().is_some_and(|level| !level.is_empty()),
+        None => model["api"] != "openai-completions",
+    };
+    thinking_options(model).filter(move |(id, _, _)| offer_off || *id != "off")
 }

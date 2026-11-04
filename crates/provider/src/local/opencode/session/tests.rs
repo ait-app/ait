@@ -5,6 +5,34 @@ use super::*;
 use crate::local::opencode::tests::{event, fixture, requests};
 
 #[tokio::test]
+async fn replacing_the_native_process_cancels_its_observed_background_children() {
+    let (_root, client, spec) = fixture("normal");
+    let mut session = open(&client, &spec, None).await.unwrap();
+    session
+        .children
+        .lock()
+        .unwrap()
+        .consume(&json!({
+            "method":"opencode/session/child_update","params":{"rootSessionId":session.id,
+            "childSessionId":"child","parentSessionId":session.id,"depth":1,
+            "type":"status","status":"running"}
+        }))
+        .unwrap();
+    let mut connection = session.connection.take().unwrap();
+    let selected = StoredAgentConfig {
+        system_prompt: Some("Replacement configuration".into()),
+        ..spec.config.clone()
+    };
+
+    session.prepare(&mut connection, &selected).await.unwrap();
+
+    assert_eq!(session.subagents()[0].descriptor["status"], "canceled");
+    assert!(!session.children.lock().unwrap().running());
+    session.connection = Some(connection);
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn delayed_host_polling_keeps_an_already_settled_native_outcome() {
     let (_root, client, spec) = fixture("normal");
     let mut session = open(&client, &spec, None).await.unwrap();

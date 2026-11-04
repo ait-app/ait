@@ -10,8 +10,8 @@ import { useProviderSubagentStore } from "./provider-store";
 import { markObservedSubagentsStale } from "./unified";
 import { useSessionStore, type Agent } from "@/stores/session-store";
 import { parseServerInfoStatusPayload } from "@ait/protocol/messages";
-import { serverInfo } from "@/runtime/rust-daemon/messages";
-import { object } from "@/runtime/rust-daemon/types";
+import { serverInfo } from "@ait/client/internal/protocol/messages";
+import { object } from "@ait/client/internal/protocol/types";
 
 const SERVER_ID = "server-1";
 const AGENT_TIMESTAMP = new Date("2026-03-08T10:00:00.000Z");
@@ -85,7 +85,7 @@ describe("selectSubagentsForParent", () => {
         "agent.provider_subagents.timeline.get.request",
       ]),
     );
-    const info = parseServerInfoStatusPayload(object(object(envelope.message).payload));
+    const info = parseServerInfoStatusPayload(object(object(envelope).payload));
     const supported = info?.features?.providerSubagents === true;
     const nestingSupported = info?.features?.providerSubagentNesting === true;
     const store = useProviderSubagentStore.getState();

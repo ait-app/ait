@@ -67,18 +67,23 @@ fn read(path: &Path) -> anyhow::Result<Option<SecretString>> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
+        // No group or other permission bits (`mode & 0o077 == 0`), in clippy's preferred form.
         ensure!(
             metadata.permissions().mode().trailing_zeros() >= 6,
             "local API credential must be private (chmod 600 local-api.token)"
         );
     }
     let mut token = String::new();
-    file.take(257)
+    // Read one byte past the longest valid credential plus a CRLF so oversized files are rejected.
+    file.take(259)
         .read_to_string(&mut token)
         .context("read local API credential")?;
+    // Tolerate the line ending an editor adds when the credential is replaced by hand.
+    let length = token.trim_end_matches(['\n', '\r']).len();
+    token.truncate(length);
     ensure!(
         (32..=256).contains(&token.len()) && token.bytes().all(|byte| (33..=126).contains(&byte)),
-        "invalid saved local API credential"
+        "invalid saved local API credential: expected 32-256 printable ASCII characters"
     );
     Ok(Some(token.into()))
 }

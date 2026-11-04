@@ -20,6 +20,20 @@ use crate::ports::diagnostics::{Category, Diagnostic};
 use crate::protocol::prompt::AgentPrompt;
 
 const ABORT_SETTLEMENT_TIMEOUT: Duration = Duration::from_secs(10);
+const MAX_STATE_READS: usize = 3;
+
+#[derive(Clone, Copy)]
+enum Synchronization {
+    Opening,
+    Prompt,
+    Handled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConfigurationState {
+    Applied,
+    Pending,
+}
 
 /// One owned native writer and its stable resume identity.
 #[derive(Debug)]
@@ -29,7 +43,10 @@ pub(super) struct Session {
     cwd: String,
     native_cwd: String,
     state: Value,
+    runtime_changed: bool,
     config: StoredAgentConfig,
+    configuration_state: ConfigurationState,
+    rejected_thinking: Option<String>,
     images: crate::local::images::ImageStore,
     active: Option<String>,
     stream: Stream,
@@ -97,23 +114,38 @@ pub(super) async fn open(
             .unwrap_or(&spec.cwd)
             .to_owned(),
         state: Value::Null,
-        config: spec.config.clone(),
+        runtime_changed: false,
+        config: StoredAgentConfig::default(),
+        configuration_state: ConfigurationState::Applied,
+        rejected_thinking: None,
         images: client.images.clone(),
         active: None,
         stream: Stream::default(),
         has_input,
         closed: false,
     };
-    let state = session
-        .transport
-        .request(json!({"type":"get_state"}))
-        .await?;
-    session.verify_session_identity(&state).await?;
-    if state["isStreaming"] != false || state["isCompacting"] != false {
+    if session.synchronize(Synchronization::Opening).await? {
         return Err(AgentSessionError::Failed);
     }
-    session.state = state;
-    session.configure(&spec.config).await?;
+    session.runtime_changed = false;
+    match session
+        .configure(&spec.config, Synchronization::Opening)
+        .await
+    {
+        Err(AgentSessionError::Rejected)
+            if session
+                .transport
+                .diagnostics
+                .failure()
+                .is_some_and(|diagnostic| diagnostic.source == "thinking_configuration") =>
+        {
+            // Keep the writer and its explanation until prompt admission can publish the
+            // normal failure notice. Opening errors otherwise discard session diagnostics.
+        }
+        result => {
+            result?;
+        }
+    }
     Ok(session)
 }
 
@@ -131,21 +163,122 @@ impl Session {
         Err(AgentSessionError::Failed)
     }
 
-    async fn configure(&mut self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+    async fn configure(
+        &mut self,
+        config: &StoredAgentConfig,
+        synchronization: Synchronization,
+    ) -> Result<bool, AgentSessionError> {
         config::validate(config)?;
-        let Some(model) = &config.model else {
-            self.config.clone_from(config);
-            return Ok(());
+        let pending = self.configuration_state == ConfigurationState::Pending;
+        let model_changed = config.model.as_deref().is_some_and(|model| {
+            if pending {
+                config::split_model(model) != config::model_identity(&self.state["model"])
+            } else {
+                self.config.model != config.model
+            }
+        });
+        let thinking_changed = self.config.thinking_option_id != config.thinking_option_id
+            || self.rejected_thinking.is_some();
+        // set_model resets Pi's thinking to the destination model's saved default.
+        // Prefer the requested level so a previous clamp does not become permanent.
+        // Without an override, preserve the current native level, including extension changes.
+        let restoration_seed = if model_changed && !thinking_changed {
+            config
+                .thinking_option_id
+                .as_deref()
+                .or_else(|| self.state["thinkingLevel"].as_str())
+                .map(str::to_owned)
+        } else {
+            None
         };
-        let (provider, model_id) = config::split_model(model).ok_or(AgentSessionError::Rejected)?;
-        self.transport
-            .request(json!({"type":"set_model","provider":provider,"modelId":model_id}))
-            .await?;
-        let state = self.transport.request(json!({"type":"get_state"})).await?;
-        self.verify_session_identity(&state).await?;
-        self.state = state;
+        // A rejected second control can leave the model changed. Pending model comparisons
+        // use native identity so reverting restores it without resending an unchanged model.
+        self.configuration_state = ConfigurationState::Pending;
+        if model_changed && let Some(model) = &config.model {
+            let (provider, model_id) =
+                config::split_model(model).ok_or(AgentSessionError::Rejected)?;
+            let model = self
+                .transport
+                .request(json!({"type":"set_model","provider":provider,"modelId":model_id}))
+                .await?;
+            self.runtime_changed |=
+                config::model_identity(&self.state["model"]) != config::model_identity(&model);
+            self.state["model"] = model;
+            // The model response does not include its reset thinking level. Never publish
+            // the previous model's level if the following control or readback fails.
+            self.runtime_changed |= !self.state["thinkingLevel"].is_null();
+            self.state["thinkingLevel"] = Value::Null;
+        }
+        // Restore the preferred level against the destination capabilities. Pi has no unset
+        // RPC, so clearing an override tries medium as a best-effort seed (ADR-156).
+        let thinking_seed = if thinking_changed {
+            config.thinking_option_id.is_none().then_some("medium")
+        } else {
+            restoration_seed.as_deref()
+        };
+        // Opening preferences can come from another model's saved or imported history.
+        // Clamp against native capabilities while retaining the original requested seed.
+        let fallback_thinking = if matches!(synchronization, Synchronization::Opening) {
+            config.thinking_option_id.as_deref().or(thinking_seed)
+        } else {
+            thinking_seed
+        }
+        .and_then(|level| config::clamp_thinking_level(&self.state["model"], level));
+        let thinking = if thinking_changed && !matches!(synchronization, Synchronization::Opening) {
+            config
+                .thinking_option_id
+                .as_deref()
+                .or(fallback_thinking.as_deref())
+        } else {
+            fallback_thinking.as_deref()
+        };
+        if let Some(level) = thinking {
+            let result = self
+                .transport
+                .request(json!({"type":"set_thinking_level","level":level}))
+                .await;
+            match result {
+                Ok(_) => {}
+                Err(AgentSessionError::Rejected) => {
+                    if config.thinking_option_id.is_some() {
+                        self.rejected_thinking
+                            .clone_from(&config.thinking_option_id);
+                        self.transport.diagnostics.clear();
+                        // Ambiguous thinking preserves the known control rejection, but a
+                        // broken readback must retain its diagnostic and retire the writer.
+                        if let Err(error) = self.synchronize(synchronization).await
+                            && error != AgentSessionError::Rejected
+                        {
+                            self.closed = true;
+                            let _ = self.transport.close().await;
+                            return Err(error);
+                        }
+                        // This definitive control rejection has a known explanation. Native
+                        // wording must not give its guessed category precedence over it.
+                        self.transport.diagnostics.clear();
+                        self.transport.diagnostics.observe_failure(
+                            Diagnostic::new(Category::Unknown, "thinking_configuration"),
+                            "Pi rejected the thinking level. Choose a supported level before retrying. The prompt was not submitted.",
+                            "set_thinking_level",
+                        );
+                        return Err(AgentSessionError::Rejected);
+                    }
+                    // With no override the seed is ours. Release the override even if Pi
+                    // refuses that seed, then read back and retain its actual native level.
+                    self.transport.diagnostics.clear();
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        let busy = if model_changed || thinking.is_some() {
+            self.synchronize(synchronization).await?
+        } else {
+            false
+        };
+        self.rejected_thinking = None;
         self.config.clone_from(config);
-        Ok(())
+        self.configuration_state = ConfigurationState::Applied;
+        Ok(busy)
     }
 
     async fn start(
@@ -168,19 +301,30 @@ impl Session {
             .into_iter()
             .filter(|block| block["type"] == "image")
             .collect();
-        if self.config != *config {
-            self.configure(config).await?;
+        if self
+            .rejected_thinking
+            .as_deref()
+            .is_some_and(|level| config.thinking_option_id.as_deref() == Some(level))
+        {
+            return Err(AgentSessionError::Rejected);
+        }
+        self.transport.diagnostics.clear();
+        // Check native work before any control mutation, including extension-owned turns.
+        if self.synchronize(Synchronization::Prompt).await? {
+            return Err(AgentSessionError::Busy);
+        }
+        let configured =
+            self.config != *config || self.configuration_state == ConfigurationState::Pending;
+        // Configuration's final readback also drains prior native notifications and checks
+        // for work started during the controls, serving as the prompt ordering barrier.
+        if configured && self.configure(config, Synchronization::Prompt).await? {
+            return Err(AgentSessionError::Busy);
         }
         if !images.is_empty()
             && !self.state["model"]["input"]
                 .as_array()
                 .is_some_and(|types| types.iter().any(|kind| kind == "image"))
         {
-            return Err(AgentSessionError::Rejected);
-        }
-        // This ordering barrier drains notifications from prior/independent native work.
-        // Never let a stale settlement attach itself to the next host turn.
-        if self.synchronize(false).await? {
             return Err(AgentSessionError::Rejected);
         }
         let turn = Uuid::new_v4().to_string();
@@ -194,6 +338,7 @@ impl Session {
             .prompt(
                 json!({"type":"prompt","message":text,"images":images}),
                 |event| {
+                    observe_thinking(&mut self.state, &mut self.runtime_changed, event);
                     self.stream.consume(event).map(|_| ()).map_err(|_| {
                         let diagnostic = self
                             .stream
@@ -244,12 +389,13 @@ impl Session {
 
     async fn finish_handled_admission(&mut self) -> Result<bool, AgentSessionError> {
         let result = tokio::time::timeout(self.transport.admission_deadline, async {
-            let mut busy = self.synchronize(true).await?;
+            let mut busy = self.synchronize(Synchronization::Handled).await?;
             while busy && !self.stream.running {
                 let event = self.transport.receive().await?;
+                observe_thinking(&mut self.state, &mut self.runtime_changed, &event);
                 self.stream.consume(&event)?;
                 if event["type"] == "compaction_end" || self.stream.settled {
-                    busy = self.synchronize(true).await?;
+                    busy = self.synchronize(Synchronization::Handled).await?;
                 }
             }
             Ok(busy)
@@ -276,26 +422,90 @@ impl Session {
         }
     }
 
-    async fn synchronize(&mut self, admission: bool) -> Result<bool, AgentSessionError> {
-        let state = self.transport.request(json!({"type":"get_state"})).await?;
+    async fn synchronize(
+        &mut self,
+        synchronization: Synchronization,
+    ) -> Result<bool, AgentSessionError> {
+        let mut busy = false;
+        let admission = matches!(synchronization, Synchronization::Handled);
+        // Completed controls precede this barrier and are superseded by its snapshots.
+        self.consume_pending(admission, None)?;
+        let mut observed_level = None;
+        for _ in 0..MAX_STATE_READS {
+            let thinking_conflict;
+            (busy, thinking_conflict) = self
+                .synchronize_snapshot(admission, &mut observed_level)
+                .await?;
+            if !thinking_conflict {
+                return Ok(busy);
+            }
+        }
+        // Only prompt admission needs stable thinking state. Opening and already accepted
+        // work can report the latest verified snapshot while extensions keep changing it.
+        if matches!(synchronization, Synchronization::Prompt) {
+            self.transport.diagnostics.observe_failure(
+                Diagnostic::new(Category::Protocol, "thinking_conflict"),
+                "Pi's thinking level kept changing while preparing the prompt. The prompt was not submitted; retry after native settings settle.",
+                "get_state",
+            );
+            Err(AgentSessionError::Rejected)
+        } else {
+            Ok(busy)
+        }
+    }
+
+    async fn synchronize_snapshot(
+        &mut self,
+        admission: bool,
+        observed_level: &mut Option<String>,
+    ) -> Result<(bool, bool), AgentSessionError> {
+        let mut state = self.transport.request(json!({"type":"get_state"})).await?;
         self.verify_session_identity(&state).await?;
-        let busy = state["isStreaming"]
+        if !state["thinkingLevel"]
+            .as_str()
+            .is_some_and(config::valid_thinking_level_id)
+        {
+            state["thinkingLevel"] = Value::Null;
+        }
+        let streaming = state["isStreaming"]
             .as_bool()
-            .ok_or(AgentSessionError::Failed)?
-            || state["isCompacting"]
-                .as_bool()
-                .ok_or(AgentSessionError::Failed)?
-            || state["pendingMessageCount"].as_u64().unwrap_or_default() > 0;
+            .ok_or(AgentSessionError::Failed)?;
+        let compacting = state["isCompacting"]
+            .as_bool()
+            .ok_or(AgentSessionError::Failed)?;
+        self.consume_pending(admission, Some(observed_level))?;
+        // Retain the latest mid-read notification until a snapshot agrees, even if Pi
+        // announces it only once while its state reads continue to lag.
+        let thinking_conflict = state["thinkingLevel"]
+            .as_str()
+            .zip(observed_level.as_deref())
+            .is_some_and(|(snapshot, observed)| snapshot != observed);
+        self.runtime_changed |= self.state["thinkingLevel"] != state["thinkingLevel"]
+            || config::model_identity(&self.state["model"])
+                != config::model_identity(&state["model"]);
+        self.state = state;
+        Ok((streaming || compacting, thinking_conflict))
+    }
+
+    fn consume_pending(
+        &mut self,
+        admission: bool,
+        mut observed_level: Option<&mut Option<String>>,
+    ) -> Result<(), AgentSessionError> {
         let pending: Vec<_> = self.transport.drain_pending().collect();
         for event in pending {
+            if let Some(observed_level) = observed_level.as_deref_mut()
+                && let Some(level) = thinking_notification(&event)
+            {
+                *observed_level = Some(level.to_owned());
+            }
             if admission {
                 self.stream.consume(&event)?;
             } else {
-                self.consume(&event)?;
+                self.consume_stream(&event)?;
             }
         }
-        self.state = state;
-        Ok(busy)
+        Ok(())
     }
 
     fn report_failure(&self) {
@@ -307,6 +517,11 @@ impl Session {
     }
 
     fn consume(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        observe_thinking(&mut self.state, &mut self.runtime_changed, event);
+        self.consume_stream(event)
+    }
+
+    fn consume_stream(&mut self, event: &Value) -> Result<(), AgentSessionError> {
         if self.active.is_none() {
             if matches!(
                 event["type"].as_str(),
@@ -322,6 +537,39 @@ impl Session {
         self.report_failure();
         Ok(())
     }
+
+    fn info(&self) -> StoredAgentRuntimeInfo {
+        StoredAgentRuntimeInfo {
+            provider: PROVIDER.to_owned(),
+            session_id: Some(self.id.clone()),
+            model: config::model_identity(&self.state["model"])
+                .map(|(provider, id)| format!("{provider}/{id}")),
+            thinking_option_id: self.state["thinkingLevel"].as_str().map(str::to_owned),
+            mode_id: None,
+            extra: None,
+        }
+    }
+}
+
+fn observe_thinking(state: &mut Value, changed: &mut bool, event: &Value) {
+    let Some(level) = thinking_notification(event) else {
+        return;
+    };
+    if state["thinkingLevel"] == level {
+        return;
+    }
+    state["thinkingLevel"] = json!(level);
+    *changed = true;
+}
+
+fn thinking_notification(event: &Value) -> Option<&str> {
+    if event["type"] != "thinking_level_changed" {
+        return None;
+    }
+    // Native metadata may evolve independently of the host's selectable controls.
+    event["level"]
+        .as_str()
+        .filter(|level| config::valid_thinking_level_id(level))
 }
 
 #[async_trait::async_trait]
@@ -360,18 +608,7 @@ impl AgentSession for Session {
     }
 
     async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
-        let model = &self.state["model"];
-        Ok(StoredAgentRuntimeInfo {
-            provider: PROVIDER.to_owned(),
-            session_id: Some(self.id.clone()),
-            model: model["provider"]
-                .as_str()
-                .zip(model["id"].as_str())
-                .map(|(provider, id)| format!("{provider}/{id}")),
-            thinking_option_id: None,
-            mode_id: None,
-            extra: None,
-        })
+        Ok(self.info())
     }
 
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
@@ -404,6 +641,9 @@ impl AgentSession for Session {
     }
 
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
+        if std::mem::take(&mut self.runtime_changed) {
+            return Ok(Some(AgentTurnEvent::RuntimeInfo(self.info())));
+        }
         if let Some(event) = self.stream.pop() {
             return Ok(Some(event));
         }
@@ -423,6 +663,9 @@ impl AgentSession for Session {
             self.closed = true;
             self.active = None;
             self.stream.fail();
+        }
+        if std::mem::take(&mut self.runtime_changed) {
+            return Ok(Some(AgentTurnEvent::RuntimeInfo(self.info())));
         }
         Ok(self.stream.pop())
     }

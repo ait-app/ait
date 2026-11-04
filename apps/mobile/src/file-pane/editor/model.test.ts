@@ -355,6 +355,66 @@ describe("FileEditorModel", () => {
     });
   });
 
+  test("keeps saving through edits and autosaves them from the written version", async () => {
+    const { model, session, clock } = makeModel();
+    session.holdNextWrite();
+    model.edit("saving");
+
+    const save = model.save();
+    model.edit("newer edit");
+    expect(model.getSnapshot().status).toBe("saving");
+    // No autosave is armed while the first write is in flight.
+    clock.fire();
+    // The watcher echo of the in-flight write is buffered, not treated as a conflict.
+    observeFile(model, {
+      content: "saving",
+      hasBom: false,
+      version: ready("2026-07-18T00:00:01.000Z", 6),
+    });
+    expect(model.getSnapshot().status).toBe("saving");
+    session.finishHeldWrite({
+      status: "written",
+      modifiedAt: "2026-07-18T00:00:01.000Z",
+      size: 6,
+    });
+    await save;
+    expect(model.getSnapshot()).toMatchObject({ status: "dirty", content: "newer edit" });
+
+    clock.fire();
+    await Promise.resolve();
+
+    expect(session.writes).toEqual([
+      { content: "saving", expectedModifiedAt: "2026-07-18T00:00:00.000Z" },
+      { content: "newer edit", expectedModifiedAt: "2026-07-18T00:00:01.000Z" },
+    ]);
+    expect(model.getSnapshot().status).toBe("clean");
+  });
+
+  test("chains a manual save after the in-flight write instead of writing stale", async () => {
+    const { model, session } = makeModel();
+    session.holdNextWrite();
+    model.edit("saving");
+
+    const first = model.save();
+    model.edit("newer edit");
+    const second = model.save();
+    await Promise.resolve();
+    expect(session.writes).toHaveLength(1);
+
+    session.finishHeldWrite({
+      status: "written",
+      modifiedAt: "2026-07-18T00:00:01.000Z",
+      size: 6,
+    });
+    await Promise.all([first, second]);
+
+    expect(session.writes).toEqual([
+      { content: "saving", expectedModifiedAt: "2026-07-18T00:00:00.000Z" },
+      { content: "newer edit", expectedModifiedAt: "2026-07-18T00:00:01.000Z" },
+    ]);
+    expect(model.getSnapshot()).toMatchObject({ status: "clean", modified: false });
+  });
+
   test("autosaves the latest edit after inactivity", async () => {
     const { model, session, clock } = makeModel();
 

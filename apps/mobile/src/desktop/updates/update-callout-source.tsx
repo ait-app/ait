@@ -57,10 +57,9 @@ export function UpdateCalloutSource() {
   const retry = useStableEvent(() => {
     void checkForUpdates();
   });
+  // useDesktopAppUpdater already runs the mount-time check; this only adds the periodic one.
   useEffect(() => {
     if (!isDesktopApp) return;
-
-    void checkForUpdates({ intent: "automatic", silent: true });
 
     intervalRef.current = setInterval(() => {
       void checkForUpdates({ intent: "automatic", silent: true });

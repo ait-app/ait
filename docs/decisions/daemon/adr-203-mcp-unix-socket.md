@@ -2,6 +2,7 @@
 
 - 状态：接受
 - 日期：2026-10-30
+- 修订：2026-11-04，绑定前验证私有父目录，避免初始 socket 权限窗口。
 
 本机客户端需要通过 socket 文件访问 Ait MCP。daemon 在原 TCP 监听之外提供可选 Unix domain
 socket，在其上复用 ADR-148 的无状态 HTTP MCP，而不新增 JSON-RPC 分帧或业务分发实现。
@@ -9,7 +10,8 @@ socket，在其上复用 ADR-148 的无状态 HTTP MCP，而不新增 JSON-RPC �
 仅接受普通 HTTP URL 的客户端需要桥接。
 
 - 启动配置为 `--mcp-socket`、`AIT_SERVER_MCP_SOCKET` 或 TOML `mcp_socket`，依次优先。
-  默认关闭；路径必须是绝对文件路径，父目录须存在，非 Unix 平台拒绝启用。
+  默认关闭；路径必须是绝对文件路径，父目录须存在、不是符号链接、由当前用户拥有且权限为 `0700`，
+  非 Unix 平台拒绝启用。绑定前验证目录，不通过进程级 umask 修改影响其他并发文件操作。
 - socket 仅提供 `/mcp/agents`，HTTP authority 使用 `localhost`。复用 Bearer、Origin、
   查询参数禁用和 `mcp.enabled` 规则；原 daemon 凭证与 MCP 专用凭证均可用。
   不把 HTTP 主机名校验绑定到 TCP 的地址或端口，也不在 socket 上公开其他 daemon 路由。

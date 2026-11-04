@@ -136,7 +136,7 @@ Tokio current-thread 本身允许多个异步任务交错执行。拆分后，re
 - [x] 检查 scope 切换、并发 refetch 与推送的覆盖顺序，旧响应不能回滚已应用的新快照；需要新增协议字段时同步 Rust、TS schema、SDK 和能力协商。
 - [x] 模型选择与创建表单继续验证实际 Provider 能力，不能把临时 loading 误当成永久 unavailable。
 
-涉及：[providers-snapshot.ts](../../../apps/mobile/src/data/providers-snapshot.ts)、[use-providers-snapshot.ts](../../../apps/mobile/src/hooks/use-providers-snapshot.ts)、[rust-daemon/messages.ts](../../../apps/mobile/src/runtime/rust-daemon/messages.ts)、[client daemon-client.ts](../../../packages/client/src/daemon-client.ts)、[protocol/provider.rs](../../../crates/provider/src/protocol/provider.rs)。
+涉及：[providers-snapshot.ts](../../../apps/mobile/src/data/providers-snapshot.ts)、[use-providers-snapshot.ts](../../../apps/mobile/src/hooks/use-providers-snapshot.ts)、[rust-daemon/messages.ts](../../../packages/client/src/protocol/messages.ts)、[client daemon-client.ts](../../../packages/client/src/daemon-client.ts)、[protocol/provider.rs](../../../crates/provider/src/protocol/provider.rs)。
 
 验收：首次 loading 后收到 ready/error；手动刷新有明确完成或失败状态；切换目录不串用模型，旧 GET 不覆盖新推送。
 

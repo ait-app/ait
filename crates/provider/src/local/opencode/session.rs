@@ -520,6 +520,10 @@ impl Session {
             };
             config::apply(&mut transport, &self.id, &mut options, selected).await?;
             connection.transport.close().await?;
+            self.children
+                .lock()
+                .map_err(|_| AgentSessionError::Failed)?
+                .stopped();
             connection.options = options;
             connection.capabilities = capabilities;
             connection.command_lifecycle = command_lifecycle;

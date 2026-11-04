@@ -62,3 +62,32 @@ fn aliases_share_the_lock_and_state_symlinks_are_rejected() {
         assert!(InstanceLease::acquire(other.path()).is_err());
     }
 }
+
+#[test]
+fn held_probe_reports_a_live_lease_without_creating_state() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("server");
+    assert!(!InstanceLease::held(&directory));
+    assert!(!directory.exists());
+    let lease = InstanceLease::acquire(&directory).unwrap();
+    assert!(InstanceLease::held(&directory));
+    drop(lease);
+    assert!(!InstanceLease::held(&directory));
+    assert!(InstanceLease::acquire(&directory).is_ok());
+}
+
+#[test]
+fn restarting_runtime_keeps_the_directory_locked_until_all_generations_drop() {
+    let directory = tempfile::tempdir().unwrap();
+    let process = InstanceLease::acquire(directory.path()).unwrap();
+    let first = process.next_runtime().unwrap();
+    let second = process.next_runtime().unwrap();
+    assert_eq!(first.server_id, second.server_id);
+    assert_ne!(first.instance_id, second.instance_id);
+    drop(process);
+    drop(first);
+    assert!(InstanceLease::held(directory.path()));
+    assert!(InstanceLease::acquire(directory.path()).is_err());
+    drop(second);
+    assert!(InstanceLease::acquire(directory.path()).is_ok());
+}

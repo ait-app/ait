@@ -13,7 +13,10 @@ interface KeyboardShortcutsState {
   altDown: boolean;
   cmdOrCtrlDown: boolean;
   showShortcutBadges: boolean;
-  /** Sidebar-visible workspace targets (up to 9), in top-to-bottom visual order. */
+  /**
+   * All sidebar-visible workspace targets in top-to-bottom visual order. Digit shortcuts
+   * use the first nine; next/previous workspace navigation walks the whole list.
+   */
   sidebarShortcutWorkspaceTargets: SidebarShortcutWorkspaceTarget[];
 
   setCommandCenterOpen: (open: boolean, scope?: CommandCenterScope) => void;

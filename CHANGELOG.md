@@ -1,5 +1,13 @@
 # Ait changelog
 
+## 0.1.28 - 2026-11-04
+
+- Apply Pi reasoning preferences before prompts and keep provider controls consistent with native sessions.
+- Keep shared-resource sessions consistent across browser and desktop clients.
+- Improve daemon recovery, host publication, guest access scopes, and shared-resource cleanup.
+- Fix schedule editing, background-task access, sidebar press feedback, and transient notices.
+- Synchronize iOS native versions and the local CocoaPods lockfile for subsequent Xcode Cloud builds.
+
 ## 0.1.25 - 2026-11-01
 
 - Keep the existing daemon running when a readiness probe fails, and reconnect to the same process after recovery.

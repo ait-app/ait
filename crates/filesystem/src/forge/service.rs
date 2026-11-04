@@ -14,6 +14,20 @@ pub struct Forge {
 }
 
 impl Forge {
+    /// Whether the requested `owner` and repository `name` belong to `cwd`'s origin.
+    /// Used to confine guest reads made with the Host's forge credentials.
+    ///
+    /// # Errors
+    /// Returns local Git or remote resolution failures.
+    pub fn admits_repository(
+        &self,
+        cwd: &str,
+        owner: &str,
+        name: &str,
+    ) -> Result<bool, ForgeRuntimeError> {
+        self.runtime.admits_repository(cwd, owner, name)
+    }
+
     /// Compose forge use cases.
     #[must_use]
     pub fn new(runtime: Box<dyn ForgeRuntime>) -> Self {

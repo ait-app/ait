@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   write: vi.fn(),
   share: vi.fn(),
   stream: vi.fn(),
+  directDownload: vi.fn(),
   failOpen: false,
   platform: "android",
 }));
@@ -21,11 +22,17 @@ vi.mock("react-native", () => ({
 vi.mock("@/desktop/host", () => ({ getDesktopHost: () => undefined }));
 vi.mock("@/constants/platform", () => ({ isWeb: false }));
 vi.mock("@/i18n/i18next", () => ({ i18n: { t: (key: string) => key } }));
-vi.mock("expo-file-system/legacy", () => ({}));
+vi.mock("expo-file-system/legacy", () => ({
+  createDownloadResumable: (url: string, uri: string) => ({
+    downloadAsync: () => mocks.directDownload(url, uri),
+  }),
+}));
 vi.mock("expo-sharing", () => ({ isAvailableAsync: async () => true, shareAsync: mocks.share }));
-vi.mock("@/utils/daemon-endpoints", () => ({ buildDaemonWebSocketUrl: vi.fn() }));
+vi.mock("@/utils/daemon-endpoints", () => ({
+  buildDaemonWebSocketUrl: () => "ws://remote.test:6767/ws",
+}));
 vi.mock("@/utils/open-external-url", () => ({ openExternalUrl: vi.fn() }));
-vi.mock("@/runtime/rust-daemon/native-account-download", () => ({
+vi.mock("@/runtime/daemon-transport/native-account-download", () => ({
   streamNativeAccountDownload: mocks.stream,
 }));
 vi.mock("expo-file-system", () => ({
@@ -64,17 +71,21 @@ beforeEach(() => {
   useDownloadStore.setState({ downloads: new Map(), activeDownloadId: null });
 });
 
-async function download() {
+const relayConnection = {
+  id: "relay",
+  type: "accountRelay",
+  hostId: "host",
+  center: "https://center.test/api",
+} as const;
+const directConnection = { id: "direct", type: "directTcp", endpoint: "remote.test:6767" } as const;
+
+async function download(connection: HostProfile["connections"][number] = relayConnection) {
   await useDownloadStore.getState().startDownload({
     serverId: "server",
     scopeId: "workspace",
     fileName: "report.txt",
     path: "report.txt",
-    daemonProfile: {
-      connections: [
-        { id: "relay", type: "accountRelay", hostId: "host", center: "https://center.test/api" },
-      ],
-    } as HostProfile,
+    daemonProfile: { connections: [connection] } as HostProfile,
     requestFileDownloadToken: async () => ({
       token: "once",
       fileName: "report.txt",
@@ -115,5 +126,45 @@ describe("native mobile relay download files", () => {
     expect(mocks.files.size).toBe(0);
     expect(mocks.share).not.toHaveBeenCalled();
     expect(mocks.close).toHaveBeenCalledTimes(failure === "interrupted" ? 1 : 0);
+  });
+
+  it("gives concurrent downloads of the same name distinct files", async () => {
+    mocks.platform = "ios";
+    const pending: Array<() => void> = [];
+    mocks.stream.mockImplementation(
+      () => new Promise<void>((resolve) => pending.push(() => resolve())),
+    );
+    const first = download();
+    const second = download();
+    await vi.waitFor(() => expect(pending).toHaveLength(2));
+    for (const finish of pending) finish();
+    await Promise.all([first, second]);
+    expect(mocks.files).toEqual(
+      new Set(["file:///cache/report.txt", "file:///cache/report (1).txt"]),
+    );
+  });
+});
+
+describe("native mobile direct-host download files", () => {
+  it("shares a successful download", async () => {
+    mocks.directDownload.mockImplementation(async (_url: string, uri: string) => {
+      mocks.files.add(uri);
+      return { uri, status: 200, headers: {} };
+    });
+    expect(await download(directConnection)).toMatchObject({ status: "complete" });
+    expect(mocks.share).toHaveBeenCalledWith("file:///cache/report.txt", expect.anything());
+  });
+
+  it("removes an HTTP error body instead of sharing it as the file", async () => {
+    mocks.directDownload.mockImplementation(async (_url: string, uri: string) => {
+      mocks.files.add(uri);
+      return { uri, status: 404, headers: {} };
+    });
+    expect(await download(directConnection)).toMatchObject({
+      status: "error",
+      message: "downloads.failed (HTTP 404)",
+    });
+    expect(mocks.files.size).toBe(0);
+    expect(mocks.share).not.toHaveBeenCalled();
   });
 });

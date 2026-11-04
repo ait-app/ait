@@ -1,5 +1,5 @@
 import { supportsBrowserAccount } from "@/runtime/browser-account";
-import { downloadBrowserAccountFile } from "@/runtime/rust-daemon/browser-account-relay";
+import { downloadBrowserAccountFile } from "@/runtime/daemon-transport/browser-account-relay";
 import { create } from "zustand";
 import { getDesktopHost } from "@/desktop/host";
 import { File as FSFile, Paths } from "expo-file-system";
@@ -11,7 +11,7 @@ import { openExternalUrl } from "@/utils/open-external-url";
 import { isWeb } from "@/constants/platform";
 import { i18n } from "@/i18n/i18next";
 import { Platform } from "react-native";
-import { streamNativeAccountDownload } from "@/runtime/rust-daemon/native-account-download";
+import { streamNativeAccountDownload } from "@/runtime/daemon-transport/native-account-download";
 
 interface DownloadProgress {
   percent: number;
@@ -126,7 +126,7 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
           if (tokenResponse.error || !tokenResponse.token) {
             throw new Error(tokenResponse.error ?? i18n.t("downloads.requestTokenFailed"));
           }
-          const target = resolveDownloadTargetFile(tokenResponse.fileName ?? fileName);
+          const target = reserveDownloadTargetFile(tokenResponse.fileName ?? fileName);
           const temporary = new FSFile(`${target.uri}.${id}.part`);
           let complete = false;
           try {
@@ -159,6 +159,7 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
             if (!complete) {
               if (temporary.exists) temporary.delete();
             }
+            reservedDownloadTargets.delete(target.uri);
           }
           get().completeDownload(id);
           if (await Sharing.isAvailableAsync()) {
@@ -270,7 +271,7 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
       }
 
       const downloadStartTime = Date.now();
-      const targetFile = resolveDownloadTargetFile(resolvedFileName);
+      const targetFile = reserveDownloadTargetFile(resolvedFileName);
       const downloadResumable = LegacyFileSystem.createDownloadResumable(
         downloadUrl,
         targetFile.uri,
@@ -301,9 +302,19 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
         },
       );
 
-      const result = await downloadResumable.downloadAsync();
-      if (!result) {
-        throw new Error(i18n.t("downloads.cancelled"));
+      let result: Awaited<ReturnType<typeof downloadResumable.downloadAsync>>;
+      try {
+        result = await downloadResumable.downloadAsync();
+        if (!result) {
+          throw new Error(i18n.t("downloads.cancelled"));
+        }
+        // The legacy downloader resolves on HTTP errors and saves the error body as the file.
+        if (result.status < 200 || result.status >= 300) {
+          if (targetFile.exists) targetFile.delete();
+          throw new Error(`${i18n.t("downloads.failed")} (HTTP ${result.status})`);
+        }
+      } finally {
+        reservedDownloadTargets.delete(targetFile.uri);
       }
 
       get().completeDownload(id);
@@ -478,7 +489,11 @@ function triggerBrowserDownload(url: string, fileName: string) {
   link.remove();
 }
 
-function resolveDownloadTargetFile(fileName: string): FSFile {
+/** Target paths claimed by native downloads that have not finished writing yet. */
+const reservedDownloadTargets = new Set<string>();
+
+/** Pick an unused target path and claim it until the caller releases the reservation. */
+function reserveDownloadTargetFile(fileName: string): FSFile {
   const directory = Paths.cache ?? Paths.document;
   if (!directory) {
     throw new Error("No download directory available.");
@@ -489,11 +504,12 @@ function resolveDownloadTargetFile(fileName: string): FSFile {
   let targetFile = new FSFile(directory, safeName);
   let suffix = 1;
 
-  while (targetFile.exists) {
+  while (targetFile.exists || reservedDownloadTargets.has(targetFile.uri)) {
     targetFile = new FSFile(directory, `${split.base} (${suffix})${split.ext}`);
     suffix += 1;
   }
 
+  reservedDownloadTargets.add(targetFile.uri);
   return targetFile;
 }
 

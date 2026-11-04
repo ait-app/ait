@@ -9,6 +9,7 @@
 
 ## Daemon 与协议
 
+- [Plans 待办核查与修复（2026-11-04）](daemon/plans-todo-followup-2026-11-04.md)
 - [Cargo workspace 依赖整理与警告清理：PR 验证](daemon/cargo-workspace-pr-validation-2026-10-04.md)
 - [Crate 边界整合到最新 main 的验证](daemon/crate-boundaries-main-rebase-2026-10-07.md)
 - [Rust workspace 每 crate 95% 覆盖率验证](daemon/crate-coverage-95-2026-10-14.md)
@@ -138,6 +139,7 @@
 - [MCP 自动注入：Paseo 与 Ait 对照](providers/paseo-mcp-injection-comparison-2026-10-28.md)
 - [MCP 注入复核：参考 Paseo 当前实现](providers/paseo-mcp-injection-review-2026-10-30.md)
 - [Pi mode removal validation](providers/pi-mode-removal-2026-10-24.md)
+- [Pi reasoning controls validation](providers/pi-reasoning-controls-2026-11-03.md)
 - [Pi native session import validation](providers/pi-session-import-2026-10-20.md)
 - [Pi unavailable diagnostics validation](providers/pi-unavailable-diagnostics-2026-10-30.md)
 - [Pi user-image projection validation](providers/pi-user-image-projection-2026-10-21.md)

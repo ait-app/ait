@@ -1,8 +1,8 @@
 {
   "name": "@ait/client",
-  "version": "0.1.27",
+  "version": "0.1.28",
   "private": true,
-  "description": "Ait repository-local client and compatibility SDK",
+  "description": "Ait repository-local client with native daemon protocol support",
   "files": [
     "dist",
     "!dist/**/*.map",
@@ -37,6 +37,10 @@
     "./internal/hub": {
       "types": "./dist/hub/index.d.ts",
       "default": "./dist/hub/index.js"
+    },
+    "./internal/protocol/*": {
+      "types": "./dist/protocol/*.d.ts",
+      "default": "./dist/protocol/*.js"
     }
   },
   "scripts": {
@@ -54,8 +58,10 @@
   },
   "devDependencies": {
     "@types/node": "^20.9.0",
+    "@types/ws": "^8.5.14",
     "tsx": "4.23.13",
     "typescript": "^5.2.2",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.6",
+    "ws": "^8.14.2"
   }
 }

@@ -627,6 +627,14 @@ impl Session {
         if let Some(id) = event["id"].as_str()
             && let Some(turn) = self.input_requests.remove(id)
         {
+            if self.active.as_deref() != Some(&turn)
+                || event["command"] != "steer"
+                || event["success"] != true
+            {
+                self.stream
+                    .pending_inputs
+                    .retain(|(request, _)| request != id);
+            }
             if self.active.as_deref() != Some(&turn) {
                 return Ok(true);
             }
@@ -785,11 +793,8 @@ impl Session {
 
     fn finish(&mut self) {
         if self.active.take().is_some() {
-            if let Some(id) = self.prompt_id.take() {
-                self.stream
-                    .pending_inputs
-                    .retain(|(request, _)| request != &id);
-            }
+            self.prompt_id = None;
+            self.stream.pending_inputs.clear();
             self.native_bridge.callbacks.clear();
             self.phase = TurnPhase::Idle;
             self.cancellation_started = None;

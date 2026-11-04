@@ -47,10 +47,78 @@ explicitly cancelled. Notification-only extension UI records
 UI methods fail immediately with a protocol diagnostic (`extension_method`). This can cause extensions requiring interaction to decline their operation.
 
 Rewind, live steering, host-provided MCP/tool policies,
-custom system prompts, thinking-level selection, structured output and auxiliary summaries
+custom system prompts, structured output and auxiliary summaries
 are not exposed by this adapter. Unsupported settings are rejected instead of ignored.
 Existing native history changed outside Ait is not automatically re-imported into the Ait
 display timeline; use explicit history refresh.
+
+## Reasoning controls
+
+For `openai-completions` reasoning models, the picker conservatively lists Off only when
+`thinkingLevelMap.off` is a nonempty string, such as `"none"`. This metadata hint does not prove
+whether Pi or the endpoint can disable reasoning. For every API, an explicit null, empty or
+non-string Off mapping hides the picker option. Absent mappings retain the native baseline for
+other APIs. This hint can omit a working native Off control.
+Saved and explicit Off requests are still forwarded to Pi during creation, resume and live
+updates; the picker does not reject them or change the native restoration ladder. Ait does
+not mirror Pi's internal provider, endpoint or format detection. Actual native rejections
+retain the `thinking_configuration` diagnostic and prevent prompt submission.
+
+`runtimeInfo.thinkingOptionId` is Pi's reported native level. An `off` value confirms local
+native state, not a generated request field or disabled endpoint reasoning. Pi's current RPC
+does not provide that delivery evidence. For endpoints supporting `reasoning_effort:"none"`,
+an explicit `thinkingLevelMap.off:"none"` in Pi's `models.json` addresses the known missing-field
+case. Verify the value against the endpoint, then restart the writer and refresh the catalog.
+
+Thinking choices come from each model's native reasoning capabilities. During discovery, Ait
+reads Pi's current native thinking level and clamps it to each model's advertised options to
+seed that model's catalog default. A supported level is retained; otherwise higher levels are
+tried first, then lower levels. The dropdown keeps its original ladder order. These defaults
+carry the current preference across models rather than reproducing each target's saved native
+default, and do not replace existing saved selections. Missing or malformed state leaves defaults
+unspecified; models without thinking options have no thinking selection. A failed discovery state
+read or one exceeding its one-second budget still returns the model catalog without defaults.
+Creation and resume clamp explicit thinking preferences to the selected model's native ladder
+before applying them, including stale levels from imported history. Stored requests remain
+unchanged. Later model or thinking changes are saved
+immediately and applied before the next prompt, after checking that Pi is idle. A running host
+turn keeps its existing controls. Pi has no atomic idle-check/configure/prompt transaction.
+
+Pi owns validation and clamping. Saved preferences remain the user's request. The reported
+native level is published separately in `runtimeInfo.thinkingOptionId`, including extension
+changes, using the same runtime contract as other providers. Shared client controls keep their
+existing presentation. A model-only change clamps the saved requested thinking level, falling
+back to the current native level when no override is set, to the destination model's supported
+ladder before restoring it on creation, resume and live updates. Returning to a model that
+supports the requested level restores that request instead of retaining a previous clamp.
+Non-reasoning models use Off; known capabilities excluding every selectable level skip the
+thinking RPC. When a model reply omits reasoning capabilities, Ait sends the seed unchanged for
+Pi to validate or clamp; rejection of an explicit override blocks the prompt and leaves
+configuration pending. An unspecified level on creation or resume preserves Pi's initial or
+restored level. Clearing a live
+override requests Medium clamped to the destination model's supported levels, or Off for a
+non-reasoning model. Without an override these host-selected seeds are best effort: if Pi
+definitively refuses one, Ait retains the read-back native level and continues without retrying
+the seed on unchanged turns. Transport failures still block admission. If known capabilities
+provide no supported baseline, no thinking RPC is sent.
+Clearing while dormant follows the restored native state without a persisted reset command.
+
+Notifications from completed controls, including a model's default thinking reset, are drained
+before the state request and superseded by its snapshot. If notifications received during state
+reads keep disagreeing with the snapshots after three reads,
+Ait rejects the next prompt admission with a diagnostic. A rejected thinking control identifies
+the setting, even when Pi's error wording suggests another failure category. A thinking rejection
+while opening remains attached to that preference until it changes; unrelated configuration
+changes do not resend the rejected level. Admission rejection persists the error and failure
+notice through the existing terminal failure path, which closes the writer. This also applies
+to ambiguous thinking snapshots after the reread budget. A corrected preference or retry after
+native state settles uses a resumed writer. No prompt is automatically retried. Creation and
+resume can still open the session and report the latest verified snapshot.
+Native streaming and compaction block admission and retain the latest native runtime facts for
+the client; queued messages alone do not.
+
+The existing session and configuration boundaries are preserved; see
+[ADR-211](../decisions/providers/adr-211-pi-next-turn-reasoning-controls.md).
 
 ## Import an existing session
 
@@ -58,6 +126,8 @@ Open the existing session import flow and select a Pi conversation. Ait resolves
 session location using Pi's normal precedence: `PI_CODING_AGENT_SESSION_DIR`, global/project
 `settings.sessionDir`, then `sessions` under `PI_CODING_AGENT_DIR` or `~/.pi/agent`. It reads that
 location without launching a Pi writer or modifying Pi's session file, settings, or credentials.
+Import carries the selected branch's latest recorded model and thinking level into its runtime
+facts. Missing or malformed thinking levels remain unspecified.
 This is read-only only with respect to Pi-owned state: listing does not materialize images, but
 inspection, import, and refresh decode embedded image data into private content-addressed files
 under Ait's daemon data directory at `agents/provider-images`. Existing absolute-path and HTTP(S)
@@ -183,13 +253,22 @@ cargo test -p provider local::pi --lib
 cargo test -p provider composition::tests --lib
 ```
 
-Optional installed-Pi test (isolated temporary configuration and a loopback fake model;
+Optional installed-Pi tests (isolated temporary configuration and a loopback fake model;
 no real model service or user credentials):
 
 ```sh
 cargo test -p provider local::pi::tests::installed --lib -- --ignored
 ```
 
+The control-only contract test checks model-reset notification ordering and compares native
+clamping with host restoration and catalog defaults across all seven native levels, the unknown
+`ultra` seed (including an explicit map entry), capability gaps, and non-reasoning models.
+Pi 1.2 clamps `ultra` as an unknown level; it is not advertised as a catalog option. This test
+sends no inference requests. The loopback thinking test also imports Pi's actual
+`thinking_level_change` / `thinkingLevel` history records.
+
 Implementation decision: [ADR-156](../decisions/providers/adr-156-pi-native-rpc-provider.md).
+Reasoning controls and installed-Pi contract results:
+[2026-11-03 report](../reports/providers/pi-reasoning-controls-2026-11-03.md).
 Focused user-image projection results and validation limits:
 [2026-10-21 report](../reports/providers/pi-user-image-projection-2026-10-21.md).

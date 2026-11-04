@@ -79,9 +79,9 @@ import { useMemo, useSyncExternalStore } from "react";
 import { z } from "zod";
 import {
   buildAccountRelayClientConfig,
-  buildRustClientConfig,
-  buildRustSshClientConfig,
-} from "./rust-daemon/connection";
+  buildDaemonClientConfig,
+  buildSshDaemonClientConfig,
+} from "./daemon-transport/connection";
 
 export type HostRuntimeConnectionStatus = "idle" | "connecting" | "online" | "offline" | "error";
 export type HostRegistryStatus = "loading" | "ready";
@@ -542,7 +542,7 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
       if (connection.type === "remoteSsh") {
         return new DaemonClient({
           ...base,
-          ...buildRustSshClientConfig(connection, desktopTransportFactory),
+          ...buildSshDaemonClientConfig(connection, desktopTransportFactory),
         });
       }
       if (connection.type === "accountRelay") {
@@ -551,7 +551,7 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
       if (connection.type === "directTcp") {
         return new DaemonClient({
           ...base,
-          ...buildRustClientConfig(connection, desktopTransportFactory),
+          ...buildDaemonClientConfig(connection, desktopTransportFactory),
         });
       }
       throw new Error("Unsupported host connection");
@@ -597,6 +597,8 @@ export class HostRuntimeController {
   private unsubscribeClientHandlers: (() => void) | null = null;
   private probeIntervalHandle: ReturnType<typeof setInterval> | null = null;
   private started = false;
+  /** Set once stop() runs, so late async work cannot revive a removed host. */
+  private stopped = false;
   private connectionFirstSeenAt = new Map<string, number>();
   private connectionLastProbedAt = new Map<string, number>();
   private switchCandidateConnectionId: string | null = null;
@@ -652,14 +654,17 @@ export class HostRuntimeController {
       return;
     }
     this.started = true;
+    this.stopped = false;
     this.trackConnectionFirstSeen();
     if (options?.initialConnection) {
       await this.switchToConnection({
         connectionId: options.initialConnection.connectionId,
         existingClient: options.initialConnection.existingClient,
       });
+      if (this.stopped) return;
     }
     await this.runProbeCycleNow();
+    if (this.stopped) return;
     if (options?.autoProbe !== false) {
       this.probeIntervalHandle = setInterval(() => {
         void this.runProbeCycleNow();
@@ -671,6 +676,7 @@ export class HostRuntimeController {
     this.switchRequestVersion += 1;
     this.probeRequestVersion += 1;
     this.started = false;
+    this.stopped = true;
     if (this.probeIntervalHandle) {
       clearInterval(this.probeIntervalHandle);
       this.probeIntervalHandle = null;
@@ -826,6 +832,7 @@ export class HostRuntimeController {
   }
 
   private async runProbeCycle(): Promise<void> {
+    if (this.stopped) return;
     const requestVersion = ++this.probeRequestVersion;
     if (this.host.connections.length === 0) {
       if (!this.isCurrentProbeRequest(requestVersion)) {
@@ -1264,7 +1271,7 @@ export class HostRuntimeController {
     existingClient?: DaemonClient;
   }): Promise<void> {
     const { connectionId, expectedProbeVersion, existingClient } = input;
-    if (!this.canProceedForProbe(expectedProbeVersion)) {
+    if (this.stopped || !this.canProceedForProbe(expectedProbeVersion)) {
       await this.abortSwitchWithClient(existingClient);
       return;
     }
@@ -2071,11 +2078,9 @@ export class HostRuntimeStore {
     apply: (host: HostProfile) => HostProfile,
   ): Promise<void> {
     const updatedAt = new Date().toISOString();
-    const next = this.hosts.map((host) =>
-      host.serverId === serverId ? { ...apply(host), updatedAt } : host,
+    await this.commitHosts((hosts) =>
+      hosts.map((host) => (host.serverId === serverId ? { ...apply(host), updatedAt } : host)),
     );
-    await this.persistHosts(next);
-    this.setHostsAndSync(next);
   }
 
   async removeHost(serverId: string): Promise<void> {
@@ -2084,13 +2089,12 @@ export class HostRuntimeStore {
       throw new Error("Shared connections are managed by the sharing owner.");
     }
     await this.revokePushNotifications({ client: this.getClient(serverId), serverId });
-    const remaining = this.hosts.filter((daemon) => daemon.serverId !== serverId);
-    await this.persistHosts(remaining);
-    for (const connection of this.hosts.find((host) => host.serverId === serverId)?.connections ??
-      [])
+    const replaced = await this.commitHosts((hosts) =>
+      hosts.filter((daemon) => daemon.serverId !== serverId),
+    );
+    for (const connection of replaced.find((host) => host.serverId === serverId)?.connections ?? [])
       if (connection.type === "accountRelay")
         this.removedAccountRelayConnections.add(connection.id);
-    this.setHostsAndSync(remaining);
   }
 
   async removeConnection(serverId: string, connectionId: string): Promise<void> {
@@ -2103,29 +2107,29 @@ export class HostRuntimeStore {
       return;
     }
     const now = new Date().toISOString();
-    const next = this.hosts
-      .map((daemon) => {
-        if (daemon.serverId !== serverId) return daemon;
-        const remaining = daemon.connections.filter((conn) => conn.id !== connectionId);
-        if (remaining.length === 0) {
-          return null;
-        }
-        const preferred =
-          daemon.preferredConnectionId === connectionId
-            ? (remaining[0]?.id ?? null)
-            : daemon.preferredConnectionId;
-        return {
-          ...daemon,
-          connections: remaining,
-          preferredConnectionId: preferred,
-          updatedAt: now,
-        } satisfies HostProfile;
-      })
-      .filter((entry): entry is HostProfile => entry !== null);
-    await this.persistHosts(next);
+    await this.commitHosts((hosts) =>
+      hosts
+        .map((daemon) => {
+          if (daemon.serverId !== serverId) return daemon;
+          const remaining = daemon.connections.filter((conn) => conn.id !== connectionId);
+          if (remaining.length === 0) {
+            return null;
+          }
+          const preferred =
+            daemon.preferredConnectionId === connectionId
+              ? (remaining[0]?.id ?? null)
+              : daemon.preferredConnectionId;
+          return {
+            ...daemon,
+            connections: remaining,
+            preferredConnectionId: preferred,
+            updatedAt: now,
+          } satisfies HostProfile;
+        })
+        .filter((entry): entry is HostProfile => entry !== null),
+    );
     const removed = host?.connections.find((connection) => connection.id === connectionId);
     if (removed?.type === "accountRelay") this.removedAccountRelayConnections.add(removed.id);
-    this.setHostsAndSync(next);
   }
 
   private async upsertHostConnection(input: {
@@ -2177,6 +2181,24 @@ export class HostRuntimeStore {
     this.hosts = hosts;
     this.syncHosts(hosts, options);
     this.emitHostList();
+  }
+
+  /**
+   * Persist a host-list change before publishing it. A change made while storage was pending
+   * (a rename, shared hosts) is kept by recomputing from the newer list. Returns the replaced list.
+   */
+  private async commitHosts(
+    apply: (hosts: HostProfile[]) => HostProfile[],
+  ): Promise<HostProfile[]> {
+    for (;;) {
+      const previous = this.hosts;
+      const next = apply(previous);
+      if (next === previous) return previous;
+      await this.persistHosts(next);
+      if (this.hosts !== previous) continue;
+      this.setHostsAndSync(next);
+      return previous;
+    }
   }
 
   private async persistHosts(hosts = this.hosts): Promise<void> {
@@ -2247,15 +2269,15 @@ export class HostRuntimeStore {
     selected: { host_id: string; server_id: string; name: string },
     center: string,
   ): Promise<void> {
-    const next = upsertHostConnectionInProfiles({
-      profiles: this.hosts,
-      serverId: selected.server_id,
-      label: selected.name,
-      connection: createAccountRelayHostConnection({ hostId: selected.host_id, center }),
-    });
-    if (next === this.hosts) return;
-    await this.persistHosts(next);
-    this.setHostsAndSync(next);
+    const connection = createAccountRelayHostConnection({ hostId: selected.host_id, center });
+    await this.commitHosts((hosts) =>
+      upsertHostConnectionInProfiles({
+        profiles: hosts,
+        serverId: selected.server_id,
+        label: selected.name,
+        connection,
+      }),
+    );
   }
 
   /**

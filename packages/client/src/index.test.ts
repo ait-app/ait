@@ -115,8 +115,6 @@ async function connectClient(
   const hello = parseSentFrame(ws.sent.at(-1));
   expect(hello).toMatchObject({
     type: "hello",
-    clientType: "cli",
-    protocolVersion: 1,
   });
   expect(hello.clientId).toEqual(expect.stringMatching(/^paseo-sdk-/));
   ws.message(
@@ -1717,3 +1715,9 @@ test("canceled timeline handles and captured state are collectible while their A
   );
   expect(result.stdout).toContain('"phase":"API alive"');
 }, 20000);
+
+// These tests cover SDK business behavior; protocol tests use real Rust wire frames.
+vi.mock("./protocol/connection.js", async () => {
+  const { createProtocolStub } = await import("./test-support/protocol-stub.js");
+  return { createDaemonConnection: createProtocolStub };
+});

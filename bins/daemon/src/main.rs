@@ -31,19 +31,34 @@ async fn main() -> ExitCode {
         };
     }
     let cli = config::Cli::parse();
-    match run(cli).await {
+    let mut collector = None;
+    match run(cli, &mut collector).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             let _ = tracing_subscriber::fmt()
                 .with_writer(std::io::stderr)
                 .try_init();
             tracing::error!(error = %format!("{error:#}"), "daemon stopped");
+            if let Some((diagnostics, _instance)) = collector {
+                diagnostics.flush(FLUSH_TIMEOUT);
+            }
             ExitCode::FAILURE
         }
     }
 }
 
-async fn run(mut cli: config::Cli) -> anyhow::Result<()> {
+/// How long a failing daemon waits for its final incident to be saved before exiting.
+const FLUSH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Run one CLI command. Once the daemon's evidence collector starts it is stored in `collector`,
+/// so the caller can save the incident for a fatal error before the process exits.
+async fn run(
+    mut cli: config::Cli,
+    collector: &mut Option<(
+        diagnostics::Diagnostics,
+        std::sync::Arc<instance::InstanceLease>,
+    )>,
+) -> anyhow::Result<()> {
     if let Some(config::Command::OmpAcp { omp_bin }) = cli
         .command
         .take_if(|command| matches!(command, config::Command::OmpAcp { .. }))
@@ -66,15 +81,21 @@ async fn run(mut cli: config::Cli) -> anyhow::Result<()> {
         command @ (Some(config::Command::Run) | None) => cli.command = command,
     }
 
-    let config = config::Config::load(
-        cli,
-        |name| std::env::var_os(name),
-        |token| api::validate_token(token).map_err(Into::into),
-        |origin| api::validate_browser_origin(origin).map_err(Into::into),
-    )
+    let (config, startup) = tokio::task::spawn_blocking(move || {
+        config::Config::load_guarded(
+            cli,
+            |name| std::env::var_os(name),
+            |token| api::validate_token(token).map_err(Into::into),
+            |origin| api::validate_browser_origin(origin).map_err(Into::into),
+            host::Startup::bind,
+        )
+    })
+    .await
+    .context("join daemon startup preparation")?
     .context("load daemon configuration")?;
     let diagnostics = diagnostics::Diagnostics::start(config.data_dir.join("diagnostics"))
         .context("start diagnostic collector")?;
+    *collector = Some((diagnostics.clone(), startup.lease()));
     tracing_subscriber::registry()
         .with(diagnostics.clone().filtered())
         .with(
@@ -86,11 +107,12 @@ async fn run(mut cli: config::Cli) -> anyhow::Result<()> {
         .try_init()
         .map_err(|error| anyhow::anyhow!("initialize logging: {error}"))?;
     loop {
-        let server = host::Server::bind_with_diagnostics(
-            config.clone(),
-            std::sync::Arc::new(diagnostics.clone()),
-        )
-        .await?;
+        let server = startup
+            .server(
+                config.clone(),
+                Some(std::sync::Arc::new(diagnostics.clone())),
+            )
+            .await?;
         tracing::info!(listen = %server.address(), "daemon ready");
         match server.serve(shutdown_signal()?).await? {
             Some(model::LifecycleIntent::Restart { reason }) => {

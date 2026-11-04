@@ -1,3 +1,4 @@
+import { isDeliveredSendError } from "@/composer/submission/model";
 import { i18n } from "@/i18n/i18next";
 
 export type AgentInputSubmitResult = "noop" | "queued" | "submitted" | "failed";
@@ -14,12 +15,23 @@ export interface AgentInputSubmitActionInput<TAttachment> {
   queueMessage: (input: { message: string; attachments: TAttachment[] }) => void;
   submitMessage: (input: { message: string; attachments: TAttachment[] }) => Promise<void>;
   clearDraft: (lifecycle: "sent" | "abandoned") => void;
+  /**
+   * Reads what the user entered after the composer was cleared for this send.
+   * A failed send restores its message ahead of that content instead of
+   * replacing it.
+   */
+  readCurrentDraft?: () => { text: string; attachments: TAttachment[] };
   setUserInput: (text: string) => void;
   setAttachments: (attachments: TAttachment[]) => void;
   setSendError: (message: string | null) => void;
   setIsProcessing: (isProcessing: boolean) => void;
   onSubmitError?: (error: unknown) => void;
   failedToSendMessage?: string;
+}
+
+/** Places restored message text ahead of whatever the composer holds now. */
+export function joinRestoredText(restored: string, current: string): string {
+  return [restored, current.trim() ? current : ""].filter(Boolean).join("\n\n");
 }
 
 export async function submitAgentInput<TAttachment>(
@@ -63,14 +75,20 @@ export async function submitAgentInput<TAttachment>(
 
   try {
     await input.submitMessage({ message, attachments });
-    input.clearDraft("sent");
+    // A cleared composer stays editable while the send is in flight; clearing
+    // the draft again here would drop whatever the user entered meanwhile.
+    if (!shouldClearOnSubmit) {
+      input.clearDraft("sent");
+    }
     input.setIsProcessing(false);
     return "submitted";
   } catch (error) {
     input.onSubmitError?.(error);
-    if (shouldClearOnSubmit) {
-      input.setUserInput(message);
-      input.setAttachments(attachments);
+    // A delivered message is already in the timeline; restoring it invites a duplicate send.
+    if (shouldClearOnSubmit && !isDeliveredSendError(error)) {
+      const current = input.readCurrentDraft?.();
+      input.setUserInput(joinRestoredText(message, current?.text ?? ""));
+      input.setAttachments([...attachments, ...(current?.attachments ?? [])]);
     }
     input.setSendError(
       error instanceof Error

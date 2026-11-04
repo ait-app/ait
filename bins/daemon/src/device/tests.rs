@@ -312,5 +312,35 @@ async fn rejects_competing_or_invalid_logins_and_clears_local_state_when_center_
 
 mod polling;
 mod restoration;
+mod status;
 
 mod receipts;
+
+#[test]
+fn status_probe_distinguishes_live_and_exited_processes() {
+    assert_eq!(process_alive(std::process::id()), Some(true));
+    let mut child = std::process::Command::new("true").spawn().unwrap();
+    let exited = child.id();
+    child.wait().unwrap();
+    assert_eq!(process_alive(exited), Some(false));
+    assert_eq!(process_alive(u32::MAX), None);
+}
+
+#[test]
+fn stale_status_snapshots_are_removed_without_touching_other_files() {
+    let directory = tempfile::tempdir().unwrap();
+    let stale = directory
+        .path()
+        .join(format!("status-{}.tmp", Uuid::new_v4()));
+    let kept = [
+        directory.path().join("status.json"),
+        directory.path().join("status-not-a-uuid.tmp"),
+        directory.path().join(".env"),
+    ];
+    for path in kept.iter().chain([&stale]) {
+        std::fs::write(path, "{}").unwrap();
+    }
+    remove_stale_snapshots(directory.path());
+    assert!(!stale.exists());
+    assert!(kept.iter().all(|path| path.exists()));
+}

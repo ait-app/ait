@@ -135,12 +135,26 @@ impl Config {
     /// Both policies are injected by the host, keeping transport dependencies outside this crate.
     /// # Errors
     /// Returns missing credentials, validation, file, TOML, address, or logging errors.
+    #[cfg(test)]
     pub(crate) fn load(
         cli: Cli,
         env: impl Fn(&str) -> Option<OsString>,
         validate_token: impl Fn(&str) -> anyhow::Result<()>,
         validate_origin: impl Fn(&str) -> anyhow::Result<()>,
     ) -> anyhow::Result<Self> {
+        Self::load_guarded(cli, env, validate_token, validate_origin, |_, _| Ok(()))
+            .map(|(config, ())| config)
+    }
+
+    /// Validate configuration, acquire `guard` for the data directory and listener, then load secrets.
+    /// Returns the resolved config and guard, or validation, guard acquisition, or storage errors.
+    pub(crate) fn load_guarded<T>(
+        cli: Cli,
+        env: impl Fn(&str) -> Option<OsString>,
+        validate_token: impl Fn(&str) -> anyhow::Result<()>,
+        validate_origin: impl Fn(&str) -> anyhow::Result<()>,
+        guard: impl FnOnce(&std::path::Path, SocketAddr) -> anyhow::Result<T>,
+    ) -> anyhow::Result<(Self, T)> {
         let explicit_token = env("AIT_SERVER_TOKEN")
             .map(|value| value.into_string().map(SecretString::from))
             .transpose()
@@ -208,6 +222,8 @@ impl Config {
         }
         let hub_notifications =
             parse_hub_notifications(env("AIT_SERVER_HUB_NOTIFICATIONS").as_deref())?;
+        // No credentials or diagnostic cleanup may touch a directory owned by another process.
+        let guard = guard(&data_dir, listen)?;
         // Persist credentials only after all non-secret startup settings have been validated.
         let token = if let Some(token) = explicit_token {
             token
@@ -216,15 +232,18 @@ impl Config {
             validate_token(token.expose_secret())?;
             token
         };
-        Ok(Self {
-            data_dir,
-            listen,
-            mcp_socket,
-            token,
-            log_level,
-            web_origins,
-            hub_notifications,
-        })
+        Ok((
+            Self {
+                data_dir,
+                listen,
+                mcp_socket,
+                token,
+                log_level,
+                web_origins,
+                hub_notifications,
+            },
+            guard,
+        ))
     }
 }
 

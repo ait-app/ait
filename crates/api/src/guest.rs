@@ -233,7 +233,7 @@ impl Session {
             Reach::Project { root, known, .. } => (root, Some(known)),
         };
         let path = Path::new(cwd);
-        if !path.is_absolute() {
+        if cwd != cwd.trim() || !path.is_absolute() {
             return Ok(false);
         }
         let Ok(resolved) = tokio::fs::canonicalize(path).await else {
@@ -305,7 +305,7 @@ impl Session {
             Reach::Project { known, .. } => known,
         };
         let path = Path::new(cwd);
-        if !path.is_absolute() {
+        if cwd != cwd.trim() || !path.is_absolute() {
             return Ok(false);
         }
         let Ok(resolved) = tokio::fs::canonicalize(path).await else {

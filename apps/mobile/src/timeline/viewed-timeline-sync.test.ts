@@ -1,6 +1,6 @@
 import { expect, test, vi } from "vitest";
-import { DaemonClient, type DaemonTransport } from "@ait/client/internal/daemon-client";
-import type { SessionInboundMessage, SessionOutboundMessage } from "@ait/protocol/messages";
+import { DaemonClient } from "@ait/client/internal/daemon-client";
+import { SessionInboundMessageSchema, type SessionInboundMessage } from "@ait/protocol/messages";
 import type { ProjectedTimelineForwardFetchPlan } from "./timeline-sync-plan";
 import {
   consumeForcedTimelineTailReplacement,
@@ -582,46 +582,94 @@ test("established membership releases its host slot before subscribing the lates
 
 test("an eviction starts and acknowledges B before A returns its late subscription ID", async () => {
   const requests: SessionInboundMessage[] = [];
-  let receive!: (data: unknown, isBinary: boolean) => void;
-  let open!: () => void;
-  const reply = (message: SessionOutboundMessage) =>
-    receive(JSON.stringify({ type: "session", message }), false);
-  const transport: DaemonTransport = {
-    send(data) {
-      if (typeof data !== "string") throw new Error("No binary request expected");
-      const frame = JSON.parse(data);
-      if (frame.type === "ping") receive(JSON.stringify({ type: "pong" }), false);
-      if (frame.type !== "session") return;
-      requests.push(frame.message);
-      if (frame.message.type === "subscription.release.request")
-        reply({
-          type: "subscription.release.response",
-          payload: {
-            requestId: frame.message.requestId,
-            subscriptionId: frame.message.subscriptionId,
-          },
-        });
-    },
-    close() {},
-    onMessage(handler) {
-      receive = handler;
-      return () => {};
-    },
-    onOpen(handler) {
-      open = handler;
-      return () => {};
-    },
-    onClose() {
-      return () => {};
-    },
-    onError() {
-      return () => {};
-    },
+  const openChannels: (() => void)[] = [];
+  const pending = new Map<string, (result: Record<string, unknown>) => void>();
+  const capabilities = [
+    "connection.ping",
+    "agent.timeline.set_subscription.request",
+    "subscription.release.request",
+  ];
+  const reply = (requestId: string, result: Record<string, unknown>) => {
+    const respond = pending.get(requestId);
+    if (!respond) throw new Error(`No pending request ${requestId}`);
+    pending.delete(requestId);
+    respond(result);
   };
   const client = new DaemonClient({
-    url: "ws://timeline-fixture",
+    url: "ws://timeline-fixture/v1/ws",
     clientId: "timeline-replacement",
-    transportFactory: () => transport,
+    transportFactory: () => {
+      let receive = (_data: unknown, _isBinary: boolean) => {};
+      let open = () => {};
+      openChannels.push(() => open());
+      return {
+        send(data) {
+          if (typeof data !== "string") throw new Error("No binary request expected");
+          const frame = JSON.parse(data);
+          if (frame.type === "hello") {
+            receive(
+              JSON.stringify({
+                type: "server_info",
+                info: {
+                  server_id: "timeline-fixture",
+                  instance_id: "timeline-instance",
+                  protocol: { major: 1, minor: 0 },
+                  implemented_capabilities: capabilities,
+                },
+                negotiated_capabilities: frame.capabilities.filter((capability: string) =>
+                  capabilities.includes(capability),
+                ),
+              }),
+              false,
+            );
+            return;
+          }
+          expect(frame.type).toBe("request");
+          pending.set(frame.request_id, (result) =>
+            receive(
+              JSON.stringify({
+                type: "response",
+                request_id: frame.request_id,
+                result,
+              }),
+              false,
+            ),
+          );
+          if (frame.method === "connection.ping") {
+            reply(frame.request_id, frame.params);
+            return;
+          }
+          requests.push(
+            SessionInboundMessageSchema.parse({
+              type: frame.method,
+              requestId: frame.request_id,
+              ...frame.params,
+            }),
+          );
+          if (frame.method === "subscription.release.request")
+            reply(frame.request_id, { subscriptionId: frame.params.subscriptionId });
+        },
+        close() {},
+        onMessage(handler) {
+          receive = handler;
+          return () => {
+            receive = () => {};
+          };
+        },
+        onOpen(handler) {
+          open = handler;
+          return () => {
+            open = () => {};
+          };
+        },
+        onClose() {
+          return () => {};
+        },
+        onError() {
+          return () => {};
+        },
+      };
+    },
     reconnect: { enabled: false },
   });
   const world = new TimelineWorld((agentIds) => client.observeTimeline(agentIds));
@@ -629,17 +677,8 @@ test("an eviction starts and acknowledges B before A returns its late subscripti
     requests.filter((request) => request.type === "agent.timeline.set_subscription.request");
   try {
     const connected = client.connect();
-    open();
-    reply({
-      type: "status",
-      payload: {
-        status: "server_info",
-        serverId: "timeline-fixture",
-        hostname: null,
-        version: null,
-        features: { ownedSubscriptions: true },
-      },
-    });
+    expect(openChannels).toHaveLength(4);
+    for (const open of openChannels) open();
     await connected;
     world.sync.replaceVisibleAgentIds("workspace", [
       "agent-a",
@@ -656,16 +695,16 @@ test("an eviction starts and acknowledges B before A returns its late subscripti
     world.sync.replaceVisibleAgentIds("workspace", ["agent-f"]);
     await vi.waitFor(() => expect(membershipRequests()).toHaveLength(2));
     const b = membershipRequests()[1]!;
-    reply({
-      type: "agent.timeline.set_subscription.response",
-      payload: { requestId: b.requestId, agentIds: b.agentIds, subscriptionId: "server-b" },
+    reply(b.requestId, {
+      agentIds: b.agentIds,
+      subscriptionId: "server-b",
     });
     const catchUps = await Promise.all(b.agentIds.map((agentId) => world.nextFetch(agentId)));
     for (const catchUp of catchUps) catchUp.respond({ hasNewer: false });
     await vi.waitFor(() => expect(world.sync.getAgentTimelineStatus("agent-f")).toBe("ready"));
-    reply({
-      type: "agent.timeline.set_subscription.response",
-      payload: { requestId: a.requestId, agentIds: a.agentIds, subscriptionId: "server-a-late" },
+    reply(a.requestId, {
+      agentIds: a.agentIds,
+      subscriptionId: "server-a-late",
     });
     await vi.waitFor(() =>
       expect(requests.filter((request) => request.type === "subscription.release.request")).toEqual(

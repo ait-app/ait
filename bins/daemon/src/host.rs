@@ -74,24 +74,69 @@ pub(super) struct Server {
     publication: hub::Worker,
 }
 
+/// Process-owned listener and data-directory lease, retained across runtime restarts and diagnostics.
+#[derive(Debug)]
+pub(crate) struct Startup {
+    listener: std::net::TcpListener,
+    instance: Arc<InstanceLease>,
+}
+
+impl Startup {
+    /// Reserve `listen` before creating state in `directory`, then acquire its exclusive lease.
+    /// Returns listener or directory-lock errors without touching state on a port failure.
+    pub(crate) fn bind(directory: &std::path::Path, listen: SocketAddr) -> anyhow::Result<Self> {
+        let listener = match std::net::TcpListener::bind(listen) {
+            Ok(listener) => listener,
+            Err(_) if InstanceLease::held(directory) => {
+                anyhow::bail!("server data directory is already in use")
+            }
+            Err(error) => return Err(error).context("bind server listener"),
+        };
+        listener
+            .set_nonblocking(true)
+            .context("configure server listener")?;
+        let instance = Arc::new(InstanceLease::acquire(directory)?);
+        Ok(Self { listener, instance })
+    }
+
+    /// Retain only the directory lease for diagnostics after the TCP listener has closed.
+    pub(crate) fn lease(&self) -> Arc<InstanceLease> {
+        self.instance.clone()
+    }
+
+    /// Assemble a new runtime over the reserved listener while retaining the process lease.
+    /// Returns descriptor, storage, capability-assembly, or MCP-listener errors.
+    pub(crate) async fn server(
+        &self,
+        config: Config,
+        diagnostics: Option<Arc<dyn metadata::daemon::ports::DaemonDiagnostics>>,
+    ) -> anyhow::Result<Server> {
+        let listener = self
+            .listener
+            .try_clone()
+            .context("retain server listener")?;
+        let listener = TcpListener::from_std(listener).context("adopt server listener")?;
+        let instance = Arc::new(self.instance.next_runtime()?);
+        Server::assemble(config, diagnostics, listener, instance).await
+    }
+}
+
 impl Server {
     #[cfg(test)]
     pub(crate) async fn bind(config: Config) -> anyhow::Result<Self> {
-        Self::bind_optional_diagnostics(config, None).await
+        let directory = config.data_dir.clone();
+        let listen = config.listen;
+        let startup = tokio::task::spawn_blocking(move || Startup::bind(&directory, listen))
+            .await
+            .context("join server instance acquisition")??;
+        startup.server(config, None).await
     }
 
-    /// Bind the daemon with the host's bounded evidence collector.
-    /// Returns a ready server, or configuration, listener, storage or assembly errors.
-    pub(crate) async fn bind_with_diagnostics(
-        config: Config,
-        diagnostics: Arc<dyn metadata::daemon::ports::DaemonDiagnostics>,
-    ) -> anyhow::Result<Self> {
-        Self::bind_optional_diagnostics(config, Some(diagnostics)).await
-    }
-
-    async fn bind_optional_diagnostics(
+    async fn assemble(
         config: Config,
         diagnostics: Option<Arc<dyn metadata::daemon::ports::DaemonDiagnostics>>,
+        listener: TcpListener,
+        instance: Arc<InstanceLease>,
     ) -> anyhow::Result<Self> {
         let data_dir = config.data_dir.clone();
         #[cfg(not(unix))]
@@ -101,23 +146,19 @@ impl Server {
         );
         #[cfg(unix)]
         let mcp_socket_path = config.mcp_socket.clone();
-        let listener = TcpListener::bind(config.listen)
-            .await
-            .context("bind server listener")?;
         let token = config.token.clone();
         let web_origins = config.web_origins.clone();
         let hub_notifications = config.hub_notifications;
         let address = listener
             .local_addr()
             .context("read server listener address")?;
+        anyhow::ensure!(
+            address.ip() == config.listen.ip()
+                && (config.listen.port() == 0 || address.port() == config.listen.port()),
+            "reserved server listener does not match startup configuration"
+        );
         let mcp_token = secrecy::SecretString::from(uuid::Uuid::new_v4().to_string());
         let launch_mcp_token = mcp_token.clone();
-        let instance_directory = data_dir.clone();
-        let instance =
-            tokio::task::spawn_blocking(move || InstanceLease::acquire(&instance_directory))
-                .await
-                .context("join server instance acquisition")??;
-        let instance = Arc::new(instance);
         #[cfg(unix)]
         let mcp_socket = match mcp_socket_path {
             Some(path) => Some(mcp_socket::McpSocket::bind(&path).await?),
@@ -155,7 +196,7 @@ impl Server {
         let relay = crate::device::StatusRelay::new(
             api.claim_managed_relay()?,
             &data_dir,
-            instance.instance_id,
+            instance.clone(),
         );
         let managed = host_link::service::Service::new(
             crate::device::HttpCenter::new()?,
@@ -263,16 +304,21 @@ impl Server {
         }
         .await;
         cancel.cancel();
-        tokio::time::timeout(Duration::from_secs(15), manager)
-            .await
-            .context("publication manager shutdown exceeded deadline")?
-            .context("join publication manager")?;
+        let manager_result = match tokio::time::timeout(Duration::from_secs(15), manager).await {
+            Ok(joined) => joined.context("join publication manager"),
+            Err(_) => Err(anyhow::anyhow!(
+                "publication manager shutdown exceeded deadline"
+            )),
+        };
         let lifecycle_intent = api.lifecycle_intent();
+        // Always flush publication, even when serving or the manager failed.
         publication.shutdown().await;
         // Drop routers and application storage before the data-directory instance lease.
         drop(api);
         drop(instance);
+        // The serving error explains a failed shutdown better than its consequences.
         result?;
+        manager_result?;
         Ok(lifecycle_intent)
     }
 }

@@ -1,6 +1,10 @@
-//! Guest requests executed once without subscriptions so their replies can be confined.
+//! Guest replies confined through private dispatch, with tracked creation and progress forwarding.
 
-use model::ErrorCode;
+use std::future::Future;
+use std::sync::Arc;
+
+use model::outbound::Outbound;
+use model::{ErrorCode, Request};
 use serde_json::{Value, json};
 
 use super::super::Reach;
@@ -16,6 +20,8 @@ pub(crate) enum Private {
     ProjectList,
     /// Remember the created terminal so revocation can end it.
     TerminalCreate,
+    /// Cancel a newly created Agent if its guest lost authorization during creation.
+    AgentCreate,
     /// Bind the issued download token to the visitor, so no other account can redeem it.
     Download,
 }
@@ -147,11 +153,28 @@ fn matching<'a>(items: &'a Value, field: &str, id: &str) -> Vec<&'a Value> {
 /// Returns the dispatch error of the underlying request.
 pub(crate) async fn execute(
     session: &Session,
-    state: &Shared,
+    state: &Arc<Shared>,
     method: &str,
     params: Value,
     private: Private,
 ) -> Result<Value, ErrorCode> {
+    if matches!(private, Private::TerminalCreate | Private::AgentCreate) {
+        let reply = create(
+            session,
+            state,
+            Creation {
+                method: method.to_owned(),
+                params,
+                private,
+                observer: None,
+            },
+        )
+        .await?;
+        if let Some(id) = reply["terminal"]["id"].as_str() {
+            session.remember_terminal(id);
+        }
+        return Ok(reply);
+    }
     let keep = Keep::of(session);
     let reply = match (private, keep) {
         (Private::WorkspaceList, Some(Keep::Workspace(id))) => {
@@ -162,19 +185,13 @@ pub(crate) async fn execute(
     match (private, keep) {
         (Private::WorkspaceList, Some(keep)) => Ok(filter_workspaces(&reply, keep)),
         (Private::ProjectList, Some(Keep::Project(id))) => Ok(filter_projects(&reply, id)),
-        (Private::WorkspaceList | Private::ProjectList, _) => Err(ErrorCode::Forbidden),
-        (Private::TerminalCreate, _) => {
-            let Some(id) = reply["terminal"]["id"].as_str() else {
-                return Ok(reply);
-            };
-            if !session.registration.record_terminal(id.to_owned()) {
-                // The share was revoked while the terminal started.
-                terminal::dispatch::revoke(&state.terminal, vec![id.to_owned()]).await?;
-                return Err(ErrorCode::Forbidden);
-            }
-            session.remember_terminal(id);
-            Ok(reply)
-        }
+        (
+            Private::WorkspaceList
+            | Private::ProjectList
+            | Private::TerminalCreate
+            | Private::AgentCreate,
+            _,
+        ) => Err(ErrorCode::Forbidden),
         (Private::Download, _) => {
             let Some(token) = reply["token"].as_str().map(str::to_owned) else {
                 return Ok(reply);
@@ -196,3 +213,139 @@ pub(crate) async fn execute(
         }
     }
 }
+
+struct Creation {
+    method: String,
+    params: Value,
+    private: Private,
+    observer: Option<(Outbound, usize)>,
+}
+
+/// Preserve creation progress on the guest connection while detached work owns cleanup.
+/// # Errors
+/// Returns creation errors or `Forbidden` when the grant is revoked during creation.
+pub(crate) async fn create_observed(
+    session: &Session,
+    state: &Arc<Shared>,
+    request: Request,
+    observer: (Outbound, usize),
+) -> Result<Value, ErrorCode> {
+    create(
+        session,
+        state,
+        Creation {
+            method: request.method,
+            params: request.params,
+            private: Private::AgentCreate,
+            observer: Some(observer),
+        },
+    )
+    .await
+}
+
+/// Finish admitted creation and its revocation check even if the connection is dropped.
+async fn create(
+    session: &Session,
+    state: &Arc<Shared>,
+    creation: Creation,
+) -> Result<Value, ErrorCode> {
+    let state = state.clone();
+    let grant = session.registration.grant();
+    let cancellation = session.cancellation().clone();
+    state
+        .runtime
+        .tasks
+        .clone()
+        .spawn(async move {
+            if cancellation.is_cancelled() || !state.shares.grants(grant) {
+                return Err(ErrorCode::Forbidden);
+            }
+            let reply = crate::connection::rpc::execute_observed(
+                &state,
+                &creation.method,
+                creation.params,
+                creation.observer,
+            )
+            .await?;
+            match creation.private {
+                Private::TerminalCreate => {
+                    if let Some(id) = reply["terminal"]["id"].as_str() {
+                        if cancellation.is_cancelled()
+                            || !state.shares.record_terminal(grant, id.to_owned())
+                        {
+                            terminal::dispatch::revoke(&state.terminal, vec![id.to_owned()])
+                                .await?;
+                            return Err(ErrorCode::Forbidden);
+                        }
+                        prune_terminals(&state).await;
+                    }
+                }
+                Private::AgentCreate => {
+                    finish_agent(
+                        &reply,
+                        !cancellation.is_cancelled() && state.shares.grants(grant),
+                        |id| async move {
+                            crate::connection::rpc::execute(
+                                &state,
+                                "agent.cancel.request",
+                                json!({"agentId": id}),
+                            )
+                            .await
+                            .map(|_| ())
+                        },
+                    )
+                    .await?;
+                }
+                Private::WorkspaceList | Private::ProjectList | Private::Download => {
+                    return Err(ErrorCode::Forbidden);
+                }
+            }
+            Ok(reply)
+        })
+        .await
+        .map_err(|_| ErrorCode::ServerDraining)?
+}
+
+/// Remove only previously recorded IDs that a later terminal listing confirms are gone.
+/// IDs added during the listing remain tracked, avoiding races with concurrent creation.
+async fn prune_terminals(state: &Shared) {
+    let recorded = state.shares.terminal_ids();
+    let Ok(listed) =
+        crate::connection::rpc::execute(state, "terminal.list.request", json!({})).await
+    else {
+        return;
+    };
+    let Some(terminals) = listed["terminals"].as_array() else {
+        return;
+    };
+    let exited = recorded
+        .into_iter()
+        .filter(|id| {
+            !terminals
+                .iter()
+                .any(|terminal| terminal["id"] == id.as_str())
+        })
+        .collect::<Vec<_>>();
+    state.shares.forget_terminals(&exited);
+}
+
+/// Cancel a creation that completed after revocation, including an embedded Workspace Agent.
+async fn finish_agent<F, R>(reply: &Value, authorized: bool, cancel: F) -> Result<(), ErrorCode>
+where
+    F: FnOnce(String) -> R,
+    R: Future<Output = Result<(), ErrorCode>>,
+{
+    if authorized {
+        return Ok(());
+    }
+    if let Some(id) = reply["agentId"]
+        .as_str()
+        .or_else(|| reply["agent"]["id"].as_str())
+    {
+        cancel(id.to_owned()).await?;
+    }
+    Err(ErrorCode::Forbidden)
+}
+
+#[cfg(test)]
+mod tests;

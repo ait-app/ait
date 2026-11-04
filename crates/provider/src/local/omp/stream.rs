@@ -34,6 +34,7 @@ pub(super) enum Error {
 pub(super) struct Stream {
     pub(super) events: VecDeque<AgentTurnEvent>,
     pub(super) input_ids: BTreeMap<String, Value>,
+    /// Native request identity and optional client identity, in input admission order.
     pub(super) pending_inputs: VecDeque<(String, Option<String>)>,
     pub(super) failed: bool,
     pub(super) aborted: bool,

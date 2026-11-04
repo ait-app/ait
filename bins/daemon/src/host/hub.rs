@@ -1,10 +1,12 @@
 //! Host publication application: bounded ingress, durable retry and directory projection.
 
 mod events;
+mod markers;
 mod outbox;
 mod shares;
 pub(super) mod sources;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -16,7 +18,8 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, watch};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use events::Event;
-use outbox::{DIRECTORY, EVENTS, Job, Outbox};
+use markers::{Marker, Markers};
+use outbox::{DIRECTORY, EVENTS, Job, Outbox, OutboxFull};
 use sources::Sources;
 
 const INGRESS_EVENTS: usize = 256;
@@ -38,6 +41,8 @@ struct Ingress {
     bytes: Arc<Semaphore>,
     changes: model::changes::Changes,
     native: bool,
+    /// Set while ingress is rejecting events, so one overflow logs one error.
+    overflowing: AtomicBool,
 }
 
 impl EventPublisher for Ingress {
@@ -66,11 +71,15 @@ impl EventPublisher for Ingress {
                 })
                 .is_ok()
         });
-        if !accepted {
+        if accepted {
+            self.overflowing.store(false, Ordering::Relaxed);
+        } else {
             self.changes.notify();
-            tracing::error!(
-                "Host publication ingress full or closed; resynchronizing committed state"
-            );
+            if !self.overflowing.swap(true, Ordering::Relaxed) {
+                tracing::error!(
+                    "Host publication ingress full or closed; resynchronizing committed state"
+                );
+            }
         }
         // Selecting the center route must never also invoke legacy APNs/FCM.
         attention && self.native
@@ -82,6 +91,7 @@ struct Application {
     sources: Sources,
     server: String,
     outbox: Arc<Mutex<Outbox>>,
+    markers: Mutex<Markers>,
     changed: tokio::sync::Notify,
     cancel: CancellationToken,
     native: bool,
@@ -125,6 +135,7 @@ pub(super) async fn start(
         bytes: Arc::new(Semaphore::new(INGRESS_BYTES)),
         changes: sources.changes.clone(),
         native,
+        overflowing: AtomicBool::new(false),
     };
     let cancel = CancellationToken::new();
     let tasks = TaskTracker::new();
@@ -133,6 +144,7 @@ pub(super) async fn start(
         sources,
         server: lifetime.server_id.to_string(),
         outbox: Arc::new(Mutex::new(outbox)),
+        markers: Mutex::default(),
         changed: tokio::sync::Notify::new(),
         cancel: cancel.clone(),
         native,
@@ -197,20 +209,7 @@ impl Application {
                         }
                     }
                 }
-                Some(event) = incoming.recv() => {
-                    while let Err(error) = self.store_event(&event).await {
-                        tracing::warn!(%error, "Host publication journal enqueue will retry");
-                        tokio::select! {
-                            () = self.cancel.cancelled() => {
-                                if let Err(error) = self.store_event(&event).await {
-                                    tracing::error!(%error, "Host event flush failed at shutdown");
-                                }
-                                break;
-                            }
-                            () = tokio::time::sleep(RETRY) => {}
-                        }
-                    }
-                }
+                Some(event) = incoming.recv() => self.admit(&event).await,
                 result = changes.changed() => {
                     if result.is_err() { return; }
                     if !dirty { reconcile_at = tokio::time::Instant::now() + COALESCE; }
@@ -220,10 +219,39 @@ impl Application {
         }
     }
 
+    /// Store one ingress event, retrying storage failures until shutdown.
+    /// A full journal drops the event instead: retrying cannot succeed until delivery drains it,
+    /// and the resynchronization it triggers recovers current attention later.
+    async fn admit(&self, event: &Incoming) {
+        loop {
+            let Err(error) = self.store_event(event).await else {
+                return;
+            };
+            if error.is::<OutboxFull>() {
+                tracing::warn!("Host event outbox full; dropping event and resynchronizing");
+                self.sources.changes.notify();
+                return;
+            }
+            tracing::warn!(%error, "Host publication journal enqueue will retry");
+            tokio::select! {
+                () = self.cancel.cancelled() => {
+                    if let Err(error) = self.store_event(event).await {
+                        tracing::error!(%error, "Host event flush failed at shutdown");
+                    }
+                    return;
+                }
+                () = tokio::time::sleep(RETRY) => {}
+            }
+        }
+    }
+
     async fn store_event(&self, incoming: &Incoming) -> anyhow::Result<()> {
         let current = self.center.state().borrow().clone();
         if current.scope.as_ref() != Some(&incoming.scope) {
             return Ok(());
+        }
+        if incoming.event.timeline() {
+            return self.remember(incoming);
         }
         let sources = self.sources.clone();
         let server = self.server.clone();
@@ -248,6 +276,27 @@ impl Application {
         Ok(())
     }
 
+    /// Keep a Timeline marker in memory; journaling every committed item would rewrite and sync
+    /// the whole journal per item, while only the newest marker per Agent matters to clients.
+    fn remember(&self, incoming: &Incoming) -> anyhow::Result<()> {
+        let publication = incoming
+            .event
+            .publication(&self.sources, &self.server, self.native)?;
+        let Some(agent) = publication["resourceId"].as_str().map(str::to_owned) else {
+            return Ok(());
+        };
+        self.lock_markers()?
+            .insert(&incoming.scope, Marker { agent, publication });
+        self.changed.notify_one();
+        Ok(())
+    }
+
+    fn lock_markers(&self) -> anyhow::Result<std::sync::MutexGuard<'_, Markers>> {
+        self.markers
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Host Timeline markers poisoned"))
+    }
+
     async fn reconcile(&self, state: LinkState, force: bool) -> anyhow::Result<()> {
         let Some(scope) = state.scope.clone() else {
             return Ok(());
@@ -262,6 +311,9 @@ impl Application {
                 .lock()
                 .map_err(|_| anyhow::anyhow!("Host publication journal poisoned"))?;
             outbox.activate(&scope, now)?;
+            if force {
+                outbox.unblock()?;
+            }
             if state.supports(DIRECTORY) {
                 for (kind, items) in sources.snapshots()? {
                     outbox.snapshot(kind, items, force, now)?;
@@ -273,7 +325,15 @@ impl Application {
                         method: "agent_attention_required".to_owned(),
                         params,
                     };
-                    outbox.enqueue(&scope, event.publication(&sources, &server, native)?, now)?;
+                    let publication = event.publication(&sources, &server, native)?;
+                    match outbox.enqueue(&scope, publication, now) {
+                        Ok(()) => {}
+                        Err(error) if error.is::<OutboxFull>() => {
+                            tracing::warn!("Host event outbox full; attention recovery deferred");
+                            break;
+                        }
+                        Err(error) => return Err(error),
+                    }
                 }
             }
             Ok(())
@@ -321,19 +381,18 @@ impl Application {
             return Ok(false);
         };
         let outbox = self.outbox.clone();
+        let methods = state.methods.clone();
+        let marker_scope = scope.clone();
         let job = blocking(move || {
             let outbox = outbox
                 .lock()
                 .map_err(|_| anyhow::anyhow!("Host publication journal poisoned"))?;
-            Ok(outbox.next(&scope, Utc::now().timestamp_millis()))
+            Ok(outbox.next(&scope, &methods, Utc::now().timestamp_millis()))
         })
         .await?;
         let Some(job) = job else {
-            return Ok(false);
+            return self.deliver_marker(marker_scope, &state.methods).await;
         };
-        if !state.methods.iter().any(|method| method == job.method) {
-            return Ok(false);
-        }
         let sources = self.sources.clone();
         let server = self.server.clone();
         let params = job.entry.params.clone();
@@ -381,6 +440,31 @@ impl Application {
         .await?;
         Ok(true)
     }
+
+    /// Deliver one in-memory Timeline marker after journal entries; failures return it for retry.
+    async fn deliver_marker(&self, scope: Scope, methods: &[String]) -> anyhow::Result<bool> {
+        if !methods.iter().any(|method| method == EVENTS) {
+            return Ok(false);
+        }
+        let Some(marker) = self.lock_markers()?.take(&scope) else {
+            return Ok(false);
+        };
+        let result = tokio::select! {
+            () = self.cancel.cancelled() => return Ok(false),
+            result = self.center.call(scope.clone(), EVENTS, marker.publication.clone()) => result,
+        };
+        let failure = match result {
+            Ok(value) if valid_events_result(&value) => return Ok(true),
+            Ok(_) => anyhow::anyhow!("invalid center publication result"),
+            Err(CallError::Rejected(code)) if permanent(&code) => {
+                tracing::warn!(code, "Host Timeline marker rejected; dropping it");
+                return Ok(true);
+            }
+            Err(error) => error.into(),
+        };
+        self.lock_markers()?.restore(&scope, marker);
+        Err(failure)
+    }
 }
 
 fn permanent(code: &str) -> bool {
@@ -399,12 +483,16 @@ fn permanent(code: &str) -> bool {
 
 fn validate_result(job: &Job, value: &Value) -> anyhow::Result<()> {
     let valid = if job.method == EVENTS {
-        value["cursor"].is_u64() && value["inserted"].is_boolean()
+        valid_events_result(value)
     } else {
         value["revision"] == job.entry.params["revision"]
     };
     anyhow::ensure!(valid, "invalid center publication result");
     Ok(())
+}
+
+fn valid_events_result(value: &Value) -> bool {
+    value["cursor"].is_u64() && value["inserted"].is_boolean()
 }
 
 async fn blocking<T: Send + 'static>(

@@ -96,4 +96,32 @@ describe("subscribeToRelativeTimeTick", () => {
 
     unsubSurvivor();
   });
+
+  it("installs no interval when the only listener leaves during the first tick", () => {
+    let unsubSelf = () => {};
+    const quitter = vi.fn(() => unsubSelf());
+    unsubSelf = subscribeToRelativeTimeTick("minute", quitter);
+
+    vi.advanceTimersByTime(MINUTE);
+    expect(quitter).toHaveBeenCalledTimes(1);
+    expect(activeRelativeTimeTickerCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("keeps one timer when a listener hands off to a new subscriber during the first tick", () => {
+    const successor = vi.fn();
+    let unsubSuccessor = () => {};
+    let unsubSelf = () => {};
+    const quitter = vi.fn(() => {
+      unsubSelf();
+      unsubSuccessor = subscribeToRelativeTimeTick("minute", successor);
+    });
+    unsubSelf = subscribeToRelativeTimeTick("minute", quitter);
+
+    vi.advanceTimersByTime(MINUTE);
+    expect(vi.getTimerCount()).toBe(1);
+
+    unsubSuccessor();
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });

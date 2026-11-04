@@ -106,6 +106,30 @@ afterEach(() => {
 });
 
 describe("Bot input receipts", () => {
+  it("reads a shared Bot conversation without opening it or exposing write actions", async () => {
+    botRequest.mockImplementation(async (method: string) => {
+      if (method === "bot.conversation.list.request") return { conversations: [conversation] };
+      if (method === "bot.history.get.request")
+        return { turns: [{ ...receipt, status: "running" }], nextSequence: 1 };
+      throw new Error(`Unexpected write: ${method}`);
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <BotChat serverId="shared:grant" bot={bot} interactive />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText("reply");
+    expect(screen.queryByTestId("bot-message-input")).toBeNull();
+    expect(screen.queryByTestId("bot-message-send")).toBeNull();
+    expect(screen.queryByText("bots.cancel")).toBeNull();
+    expect(screen.queryByText("bots.reset")).toBeNull();
+    expect(botRequest.mock.calls.map(([method]) => method)).toEqual([
+      "bot.conversation.list.request",
+      "bot.history.get.request",
+    ]);
+  });
+
   it("keeps text and reuses message identity after a lost acceptance response", async () => {
     let sends = 0;
     botRequest.mockImplementation(async (method: string) => {

@@ -1,4 +1,5 @@
 import { groupHosts } from "@/hosts/host-groups";
+import { canManageBackgroundTasks } from "@/hosts/background-task-access";
 import { useTranslation } from "react-i18next";
 import equal from "fast-deep-equal";
 import {
@@ -88,7 +89,11 @@ export function WorkspaceScheduleForm({
   onClose: () => void;
   schedule?: ScheduleSummary;
   onSaved?: (schedule: ScheduleSummary) => void;
-}): ReactElement {
+}): ReactElement | null {
+  const hosts = useHosts();
+  if (!canManageBackgroundTasks(hosts.find((host) => host.serverId === serverId) ?? serverId)) {
+    return null;
+  }
   return (
     <ScheduleFormContent
       serverId={serverId}
@@ -277,7 +282,11 @@ function ScheduleFormScope(props: ScheduleFormSheetProps & { onDismiss?: () => v
   const hostOptions = useMemo(
     () =>
       groupHosts(
-        hosts.filter((host) => props.mode !== "edit" || host.serverId === props.serverId),
+        hosts.filter(
+          (host) =>
+            canManageBackgroundTasks(host) &&
+            (props.mode !== "edit" || host.serverId === props.serverId),
+        ),
       ).map((host) => ({
         id: host.serverId,
         value: host.serverId,
@@ -325,7 +334,12 @@ function ScheduleFormScope(props: ScheduleFormSheetProps & { onDismiss?: () => v
     [eligibleWorkspaces],
   );
   const workspace = ownedId
-    ? workspaces.find((item) => item.id === ownedId && item.serverId === props.serverId)
+    ? workspaces.find(
+        (item) =>
+          item.id === ownedId &&
+          item.serverId === props.serverId &&
+          hostOptions.some((host) => host.memberServerIds.includes(item.serverId)),
+      )
     : eligibleWorkspaces.find((item) => item.id === placement.workspaceId);
   const selectHost = useCallback((serverId: string) => {
     setPlacement((current) =>
@@ -453,7 +467,7 @@ function ScheduleFormContent({
   const allHostProfiles = useHosts();
   const hostProfiles = useMemo(
     () =>
-      groupHosts(allHostProfiles).map((host) =>
+      groupHosts(allHostProfiles.filter(canManageBackgroundTasks)).map((host) =>
         host.memberServerIds.includes(serverId ?? "")
           ? (allHostProfiles.find((profile) => profile.serverId === serverId) ?? host)
           : host,
@@ -514,6 +528,9 @@ function ScheduleFormContent({
   const state = useSyncExternalStore(model.subscribe, model.getState, model.getState);
   const providerSnapshot = useScheduleFormProviderSnapshot(model, state);
   const mutationServerId = state.selectedServerId ?? serverId ?? "";
+  const canManage = canManageBackgroundTasks(
+    allHostProfiles.find((host) => host.serverId === mutationServerId) ?? mutationServerId,
+  );
   const { createSchedule, updateSchedule, isCreating, isUpdating } = useScheduleMutations({
     serverId: mutationServerId,
   });
@@ -559,7 +576,12 @@ function ScheduleFormContent({
         ? t("schedules.form.expiryAfterStart")
         : null;
   const canSubmit =
-    state.canSubmit && !cadenceError && !startAtError && !expiresAtError && !isSubmitting;
+    canManage &&
+    state.canSubmit &&
+    !cadenceError &&
+    !startAtError &&
+    !expiresAtError &&
+    !isSubmitting;
 
   const persistPreferences = useCallback(async () => {
     const provider = state.selectedProvider;
@@ -701,19 +723,21 @@ function ScheduleFormContent({
         >
           {t("common.actions.cancel")}
         </Button>
-        <Button
-          style={styles.footerButton}
-          variant="default"
-          onPress={handleSubmitPress}
-          disabled={!canSubmit}
-          loading={isSubmitting}
-          testID="schedule-form-submit"
-        >
-          {t(mode === "edit" ? "schedules.save" : "schedules.create")}
-        </Button>
+        {canManage ? (
+          <Button
+            style={styles.footerButton}
+            variant="default"
+            onPress={handleSubmitPress}
+            disabled={!canSubmit}
+            loading={isSubmitting}
+            testID="schedule-form-submit"
+          >
+            {t(mode === "edit" ? "schedules.save" : "schedules.create")}
+          </Button>
+        ) : null}
       </View>
     ),
-    [canSubmit, handleSubmitPress, isSubmitting, mode, onClose, t],
+    [canManage, canSubmit, handleSubmitPress, isSubmitting, mode, onClose, t],
   );
 
   const fields = (

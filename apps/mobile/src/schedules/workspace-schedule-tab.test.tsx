@@ -26,7 +26,7 @@ vi.mock("@/hooks/use-schedule-mutations", () => ({
 }));
 vi.mock("@/hooks/use-aggregated-agents", () => ({ useAggregatedAgents: () => ({ agents: [] }) }));
 vi.mock("@/components/schedules/schedule-form-sheet", () => ({
-  WorkspaceScheduleForm: () => null,
+  WorkspaceScheduleForm: () => <div data-testid="schedule-editor" />,
 }));
 
 const task: StoredSchedule = {
@@ -47,7 +47,10 @@ const task: StoredSchedule = {
   expiresAt: null,
 };
 const clients: QueryClient[] = [];
-function open(list = false) {
+function open(
+  list = false,
+  overrides: Partial<React.ComponentProps<typeof WorkspaceScheduleTab>> = {},
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
   return render(
@@ -62,6 +65,7 @@ function open(list = false) {
         onEditTask={vi.fn()}
         onCreate={vi.fn()}
         onOpenAgent={vi.fn()}
+        {...overrides}
       />
     </QueryClientProvider>,
   );
@@ -78,6 +82,37 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   clients.splice(0).forEach((client) => client.clear());
+});
+
+it("restores a guest edit tab as readable details without task controls", () => {
+  open(false, { serverId: "shared:grant", view: "edit" });
+  expect(screen.getByTestId("workspace-schedule-details")).toBeTruthy();
+  expect(screen.getByText("Review changes")).toBeTruthy();
+  for (const id of [
+    "schedule-editor",
+    "schedule-run-now",
+    "schedule-toggle-status",
+    "schedule-edit",
+    "schedule-delete",
+    "workspace-schedules-new",
+  ]) {
+    expect(screen.queryByTestId(id)).toBeNull();
+  }
+  expect(mocks.run).not.toHaveBeenCalled();
+  expect(mocks.pause).not.toHaveBeenCalled();
+});
+
+it("restores a guest create tab as a list whose rows open readable details", () => {
+  const onOpen = vi.fn();
+  const onEditTask = vi.fn();
+  mocks.list = [{ ...task, nextRunAt: new Date(Date.now() + 3_600_000).toISOString() }];
+  open(true, { serverId: "shared:grant", view: "create", onOpen, onEditTask });
+  expect(screen.getByTestId("workspace-schedules-list")).toBeTruthy();
+  expect(screen.queryByTestId("schedule-editor")).toBeNull();
+  expect(screen.queryByTestId("workspace-schedules-new")).toBeNull();
+  fireEvent.click(screen.getByTestId("workspace-schedule-task-a"));
+  expect(onOpen).toHaveBeenCalledWith("task-a");
+  expect(onEditTask).not.toHaveBeenCalled();
 });
 
 it("prevents displaying or running a task from another workspace", () => {

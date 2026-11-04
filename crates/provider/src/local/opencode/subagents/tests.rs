@@ -37,6 +37,34 @@ fn notification(id: &str, parent: &str, depth: u64, event: Value) -> Value {
 }
 
 #[test]
+fn unknown_child_frames_and_statuses_leave_observed_children_unchanged() {
+    let mut live = live::Live::new("root".into(), "/work".into(), ImageStore::default());
+    live.consume(&notification(
+        "child",
+        "root",
+        1,
+        json!({"type":"status","status":"created"}),
+    ))
+    .unwrap();
+    let children = live.list();
+
+    for event in [
+        json!({"type":"future_event"}),
+        json!({"type":"status","status":"future_status"}),
+    ] {
+        for (child, parent, depth) in [("child", "root", 1), ("unknown", "missing", 2)] {
+            let (handled, events) = live
+                .consume(&notification(child, parent, depth, event.clone()))
+                .unwrap();
+            assert!(handled);
+            assert!(events.is_empty());
+            assert_eq!(live.list(), children);
+        }
+    }
+    assert!(live.running());
+}
+
+#[test]
 fn live_children_buffer_early_descendants_and_reject_conflicting_or_foreign_ownership() {
     let mut live = live::Live::new("root".into(), "/work".into(), ImageStore::default());
     let created = json!({"type":"status","status":"created"});

@@ -1,4 +1,5 @@
 import { getHostGroupServerIds, groupHosts } from "@/hosts/host-groups";
+import { canManageBackgroundTasks } from "@/hosts/background-task-access";
 import {
   useCallback,
   useEffect,
@@ -110,9 +111,18 @@ function SchedulesScreenContent(): ReactElement {
   }, [hosts, selectedHost]);
 
   const openCreate = useCallback(() => setForm({ mode: "create" }), []);
-  const openEdit = useCallback((schedule: AggregatedSchedule) => {
-    setForm({ mode: "edit", serverId: schedule.serverId, schedule });
-  }, []);
+  const openEdit = useCallback(
+    (schedule: AggregatedSchedule) => {
+      if (
+        !canManageBackgroundTasks(
+          hosts.find((host) => host.serverId === schedule.serverId) ?? schedule.serverId,
+        )
+      )
+        return;
+      setForm({ mode: "edit", serverId: schedule.serverId, schedule });
+    },
+    [hosts],
+  );
   const closeForm = useCallback(() => setForm({ mode: "closed" }), []);
 
   const agentsByKey = useMemo(() => {
@@ -181,6 +191,11 @@ function SchedulesScreenContent(): ReactElement {
 
   const showLoadError = isError && loadState.status !== "loaded";
   const showHostFilter = groupHosts(hosts).length > 1;
+  const canCreate = hosts.some(
+    (host) =>
+      canManageBackgroundTasks(host) &&
+      (selectedHost === ALL_HOSTS_OPTION_ID || selectedHost === host.serverId),
+  );
 
   return (
     <View style={styles.container}>
@@ -196,6 +211,7 @@ function SchedulesScreenContent(): ReactElement {
         selectedHost={selectedHost}
         onSelectHost={setSelectedHost}
         onCreate={openCreate}
+        canCreate={canCreate}
         onEdit={openEdit}
       />
       <ScheduleFormSheet
@@ -219,6 +235,7 @@ function SchedulesScreenBody({
   selectedHost,
   onSelectHost,
   onCreate,
+  canCreate,
   onEdit,
 }: {
   runnableRows: ScheduleRowView[];
@@ -230,6 +247,7 @@ function SchedulesScreenBody({
   selectedHost: string;
   onSelectHost: (serverId: string) => void;
   onCreate: () => void;
+  canCreate: boolean;
   onEdit: (schedule: AggregatedSchedule) => void;
 }): ReactElement {
   const { t } = useTranslation();
@@ -257,15 +275,17 @@ function SchedulesScreenBody({
             />
           ) : null}
         </View>
-        <Button
-          variant="outline"
-          leftIcon={Plus}
-          onPress={onCreate}
-          size="sm"
-          testID="schedules-new"
-        >
-          {t("schedules.new")}
-        </Button>
+        {canCreate ? (
+          <Button
+            variant="outline"
+            leftIcon={Plus}
+            onPress={onCreate}
+            size="sm"
+            testID="schedules-new"
+          >
+            {t("schedules.new")}
+          </Button>
+        ) : null}
       </View>
       <ScrollView
         style={styles.scroll}
@@ -287,15 +307,17 @@ function SchedulesScreenBody({
                 hint={t("schedules.emptyDescription")}
                 testID="schedules-empty"
               >
-                <Button
-                  variant="outline"
-                  leftIcon={Plus}
-                  size="sm"
-                  onPress={onCreate}
-                  testID="schedules-empty-new"
-                >
-                  {t("schedules.new")}
-                </Button>
+                {canCreate ? (
+                  <Button
+                    variant="outline"
+                    leftIcon={Plus}
+                    size="sm"
+                    onPress={onCreate}
+                    testID="schedules-empty-new"
+                  >
+                    {t("schedules.new")}
+                  </Button>
+                ) : null}
               </SettingsRow>
             </SettingsCard>
           )}

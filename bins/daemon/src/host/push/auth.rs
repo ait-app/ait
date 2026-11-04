@@ -128,13 +128,35 @@ pub(super) struct Google {
 }
 
 impl Google {
-    /// Load an optional service account through `environment`; return sanitized credential errors.
+    /// Load an optional service account through `environment`.
+    ///
+    /// An explicit `AIT_FCM_SERVICE_ACCOUNT_FILE` must be valid. The ambient
+    /// `GOOGLE_APPLICATION_CREDENTIALS` fallback is often set for unrelated tools, so an unusable
+    /// file there only disables FCM with a warning instead of stopping the daemon.
+    /// # Errors
+    /// Returns sanitized read, parse or key errors for the explicit setting only.
     pub(super) fn from_environment(
         environment: &dyn Fn(&str) -> Option<String>,
     ) -> anyhow::Result<Option<Self>> {
-        let path = environment("AIT_FCM_SERVICE_ACCOUNT_FILE")
-            .or_else(|| environment("GOOGLE_APPLICATION_CREDENTIALS"));
-        let Some(path) = path else { return Ok(None) };
+        if let Some(path) = environment("AIT_FCM_SERVICE_ACCOUNT_FILE") {
+            return Self::load(&path).map(Some);
+        }
+        let Some(path) = environment("GOOGLE_APPLICATION_CREDENTIALS") else {
+            return Ok(None);
+        };
+        match Self::load(&path) {
+            Ok(google) => Ok(Some(google)),
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    "GOOGLE_APPLICATION_CREDENTIALS is not an FCM service account; FCM disabled"
+                );
+                Ok(None)
+            }
+        }
+    }
+
+    fn load(path: &str) -> anyhow::Result<Self> {
         let contents = SecretString::from(
             std::fs::read_to_string(path)
                 .map_err(|_| anyhow::anyhow!("cannot read FCM service account"))?,
@@ -147,13 +169,13 @@ impl Google {
         );
         let key = EncodingKey::from_rsa_pem(account.private_key.expose_secret().as_bytes())
             .map_err(|_| anyhow::anyhow!("invalid FCM RSA signing key"))?;
-        Ok(Some(Self {
+        Ok(Self {
             project_id: account.project_id,
             email: account.client_email,
             key,
             cached: Mutex::new(None),
             token_url: GOOGLE_TOKEN_URL.to_owned(),
-        }))
+        })
     }
 
     /// Return the validated Firebase project identifier used in the provider URL.

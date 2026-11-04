@@ -2,6 +2,7 @@
 //!
 //! Agent history is kept; only active turns and pending permission requests are cancelled.
 
+use std::future::Future;
 use std::sync::{Arc, Weak};
 
 use provider::service::agent_execution::AgentExecution;
@@ -65,24 +66,43 @@ impl Owners {
 }
 
 async fn cancel_agents(execution: &AgentExecution, grant: Grant) {
-    let filter = json!({"filter":{"labels":{
-        GUEST_SHARE_LABEL: grant.share_id.to_string(),
-        GUEST_USER_LABEL: grant.user_id.to_string(),
-    }}});
-    let listed = match execution.execute("agent.list.request", filter).await {
-        Ok(listed) => listed,
-        Err(code) => {
-            tracing::error!(?code, "revoked guest Agents could not be listed");
+    cancel_pages(|method, params| execution.execute(method, params), grant).await;
+}
+
+async fn cancel_pages<F, R>(mut execute: F, grant: Grant)
+where
+    F: FnMut(&'static str, Value) -> R,
+    R: Future<Output = Result<Value, provider::rpc::ErrorCode>>,
+{
+    let mut params = json!({
+        "filter": {"labels": {
+            GUEST_SHARE_LABEL: grant.share_id.to_string(),
+            GUEST_USER_LABEL: grant.user_id.to_string(),
+        }},
+        // Cancellation changes updated_at; use an immutable ordering across pages.
+        "sort": [{"key": "created_at", "direction": "asc"}],
+        "page": {"limit": 200},
+    });
+    loop {
+        let listed = match execute("agent.list.request", params.clone()).await {
+            Ok(listed) => listed,
+            Err(code) => {
+                tracing::error!(?code, "revoked guest Agents could not be listed");
+                return;
+            }
+        };
+        for id in agent_ids(&listed) {
+            if let Err(code) = execute("agent.cancel.request", json!({"agentId": id})).await {
+                tracing::warn!(?code, "revoked guest Agent turn could not be cancelled");
+            }
+        }
+        let Some(cursor) = listed["pageInfo"]["nextCursor"].as_str() else {
+            return;
+        };
+        if listed["pageInfo"]["hasMore"] != true || params["page"]["cursor"] == cursor {
             return;
         }
-    };
-    for id in agent_ids(&listed) {
-        if let Err(code) = execution
-            .execute("agent.cancel.request", json!({"agentId": id}))
-            .await
-        {
-            tracing::warn!(?code, "revoked guest Agent turn could not be cancelled");
-        }
+        params["page"]["cursor"] = json!(cursor);
     }
 }
 
@@ -159,3 +179,6 @@ pub(super) fn agent_ids(listed: &Value) -> Vec<&str> {
         })
         .unwrap_or_default()
 }
+
+#[cfg(test)]
+mod tests;

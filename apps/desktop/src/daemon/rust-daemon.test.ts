@@ -1,13 +1,10 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir, networkInterfaces, uptime } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RustDaemonManager, resolveDesktopDaemonHome, rotateDaemonLog } from "./rust-daemon";
 
-const { version: expectedVersion } = JSON.parse(
-  readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
-);
 const managers: RustDaemonManager[] = [];
 const homes: string[] = [];
 function create(
@@ -108,7 +105,11 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
     expect(a).toEqual(b);
     expect(a.status).toBe("running");
     expect(a.serverId).not.toBe("");
-    expect(a.version).toBe(expectedVersion);
+    // Source builds have a Git version; verify the handshake against the supplied binary.
+    const version = execFileSync(process.env.AIT_SERVER_BIN!, ["--version"], {
+      encoding: "utf8",
+    }).trim();
+    expect(version).toBe(`daemon ${a.version}`);
     const token = manager.authorization(`ws://${a.listen}/v1/ws`)!;
     expect(token).toHaveLength(64);
     expect(manager.authorization(`ws://localhost:${a.listen!.split(":").at(-1)}/v1/ws`)).toBe(
@@ -124,7 +125,7 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
     expect(manager.status().status).toBe("running");
     const restarted = await manager.restart();
     expect(restarted.serverId).toBe(a.serverId);
-    expect(restarted.version).toBe(expectedVersion);
+    expect(restarted.version).toBe(a.version);
     expect(restarted.listen).toBe(a.listen);
     expect(restarted.pid).not.toBe(a.pid);
     expect(manager.authorization(`ws://${restarted.listen}/v1/ws`)).toBe(token);

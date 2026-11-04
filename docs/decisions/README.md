@@ -96,6 +96,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 - [ADR-211：OMP 会话命令目录与参数补全](providers/adr-211-omp-command-catalog-and-completion.md)
 - [ADR-212：由 Provider 拥有原生编辑器补全](providers/adr-212-native-editor-completion.md)
 
+- [ADR-211：Pi 推理偏好在下一条 prompt 前应用](providers/adr-211-pi-next-turn-reasoning-controls.md)
 - [ADR-210：Agent 目录共享已提交的不可变记录](providers/adr-210-committed-runtime-read-snapshots.md)
 
 - [ADR-209：通过只读登记统一子 Agent 展示](providers/adr-209-observed-subagent-normalization.md)
@@ -182,6 +183,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 - [ADR-027：独立 AgentSession 与 AgentManager 生命周期边界](providers/adr-027-independent-agent-session-manager.md)
 
 ## 客户端、连接与品牌
+
+- [ADR-211：SDK 原生使用 daemon 协议](clients/adr-211-sdk-native-daemon-protocol.md)
 
 - [ADR-207：桌面 daemon 就绪探测与进程生命周期分离](clients/adr-207-desktop-daemon-readiness-ownership.md)
 

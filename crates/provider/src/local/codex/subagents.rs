@@ -34,13 +34,15 @@ impl Live {
         events: &mut Vec<AgentTurnEvent>,
     ) -> Result<(), AgentSessionError> {
         let item = &params["item"];
+        let kind = item["kind"].as_str().ok_or(AgentSessionError::Failed)?;
+        if !matches!(kind, "started" | "interacted" | "interrupted" | "completed") {
+            tracing::debug!("Ignoring an unknown Codex subagent activity kind");
+            return Ok(());
+        }
         let sender = super::native_sessions::text(params, "threadId")?;
         let receiver = super::native_sessions::text(item, "agentThreadId")?;
         let id = super::native_sessions::text(item, "id")?;
-        let kind = item["kind"].as_str().ok_or(AgentSessionError::Failed)?;
-        if receiver == sender
-            || !matches!(kind, "started" | "interacted" | "interrupted" | "completed")
-        {
+        if receiver == sender {
             return Err(AgentSessionError::Failed);
         }
         // Communication can target an ancestor or peer; only a start proves child ancestry.

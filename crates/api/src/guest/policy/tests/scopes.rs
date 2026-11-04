@@ -395,7 +395,7 @@ async fn project_terminals_and_agents_need_a_project_workspace() {
     }
 
     let created = guest
-        .forwarded(
+        .creation_params(
             "agent.create.request",
             json!({"config": {"provider": "codex", "cwd": guest.outside()},
                 "workspaceId": sibling}),
@@ -495,7 +495,7 @@ async fn node_shares_reach_every_project_and_host_management() {
         assert_eq!(guest.refused(method, json!({})).await, ErrorCode::Forbidden);
     }
     let created = guest
-        .forwarded(
+        .creation_params(
             "workspace.create.request",
             json!({"source": {"kind": "directory", "path": guest.root()},
             "agent": {"config": {"provider": "codex"}}}),
@@ -508,7 +508,7 @@ async fn node_shares_reach_every_project_and_host_management() {
 async fn node_shares_manage_all_agents_and_keep_creation_attribution() {
     let guest = Guest::with(ResourceKind::Node).await;
     let created = guest
-        .forwarded(
+        .creation_params(
             "agent.create.request",
             json!({"config": {"provider": "codex", "cwd": guest.outside()},
                 "workspaceId": guest.fixture.other, "worktree": {"mode": "new"}}),
@@ -524,7 +524,7 @@ async fn node_shares_manage_all_agents_and_keep_creation_attribution() {
         json!({"config": {"provider": "codex", "providerOptions": {}}}),
         json!({"config": {"provider": "codex"}, "callerAgentId": "owner-agent"}),
     ] {
-        let created = guest.forwarded("agent.create.request", params).await;
+        let created = guest.creation_params("agent.create.request", params).await;
         assert!(created["labels"][GUEST_SHARE].is_string());
     }
     assert_eq!(

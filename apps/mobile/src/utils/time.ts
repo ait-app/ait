@@ -105,6 +105,13 @@ function isSameLocalDay(a: Date, b: Date): boolean {
   );
 }
 
+/** Whole local calendar days from `a` to `b`; DST-length days still count as one. */
+function localCalendarDaysBetween(a: Date, b: Date): number {
+  const startOfA = new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime();
+  const startOfB = new Date(b.getFullYear(), b.getMonth(), b.getDate()).getTime();
+  return Math.round((startOfB - startOfA) / (1000 * 60 * 60 * 24));
+}
+
 // Cached Intl formatter. Explicitly carrying `hourCycle` from the resolved
 // options is what makes the runtime respect the user's OS-level 12h/24h
 // preference rather than the locale's default cycle.
@@ -126,7 +133,7 @@ function getTimeFormatter(): Intl.DateTimeFormat {
 /**
  * Format a chat-message timestamp for hover-revealed UI.
  * - Same day: "10:11 PM" or "22:11" depending on user preference
- * - Within ~6 days: "Wednesday 10:11 PM"
+ * - 1-6 calendar days ago: "Wednesday 10:11 PM"
  * - Older: "14 May 2026, 10:11 PM"
  */
 export function formatMessageTimestamp(date: Date, now: Date = new Date()): string {
@@ -136,9 +143,10 @@ export function formatMessageTimestamp(date: Date, now: Date = new Date()): stri
     return time;
   }
 
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays >= 0 && diffDays < 7) {
+  // Calendar days, not 24h blocks: a message from last Wednesday must not read as "Wednesday"
+  // when today is also Wednesday.
+  const diffDays = localCalendarDaysBetween(date, now);
+  if (diffDays >= 1 && diffDays <= 6) {
     const weekday = date.toLocaleDateString(undefined, { weekday: "long" });
     return `${weekday} ${time}`;
   }

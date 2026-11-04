@@ -15,6 +15,7 @@ vi.mock("./account-state", () => ({
 }));
 
 const toast = { show: vi.fn(), error: vi.fn(), copied: vi.fn() };
+const dismiss = vi.fn();
 const reconnecting = "Restoring connection…";
 const unavailable = "Connecting to the online service…";
 
@@ -44,6 +45,7 @@ beforeEach(() => {
   useAccountState.setState({ status: "online" });
   useHubServices.setState({ connection: null, snapshot: null });
   vi.clearAllMocks();
+  toast.show.mockReturnValue(dismiss);
 });
 afterEach(cleanup);
 
@@ -58,6 +60,7 @@ describe("online service connection notice", () => {
     expect(toast.show).toHaveBeenCalledOnce();
 
     setState("online");
+    expect(dismiss).toHaveBeenCalledOnce();
     setState("reconnecting");
     expect(toast.show).toHaveBeenCalledTimes(2);
     expect(toast.error).not.toHaveBeenCalled();
@@ -99,7 +102,18 @@ describe("online service connection notice", () => {
     setState("unavailable");
     mount();
     expect(shown(unavailable)).toHaveLength(1);
+    expect(dismiss).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("dismisses the notice on logout and unmount", () => {
+    const view = mount();
+    setState("reconnecting");
+    act(() => useAccountState.setState({ status: "logged_out" }));
+    expect(dismiss).toHaveBeenCalledOnce();
+    act(() => useAccountState.setState({ status: "online" }));
+    view.unmount();
+    expect(dismiss).toHaveBeenCalledTimes(2);
   });
 
   it("does not report intentional shutdown or stale connection state after sign-out", () => {

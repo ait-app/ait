@@ -246,6 +246,7 @@ async fn websocket_restart_rebuilds_server_and_shutdown_exits_process() {
 
     let second_address = wait_for_restart(&mut process, &log).await;
     let second_info = info(&second_address).await;
+    assert_eq!(first_address, second_address);
     assert_eq!(first_info["server_id"], second_info["server_id"]);
     assert_ne!(first_info["instance_id"], second_info["instance_id"]);
 

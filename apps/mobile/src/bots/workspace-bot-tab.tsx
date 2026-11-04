@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { BotLoadingSpinner } from "./loading";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
+import { canManageBackgroundTasks } from "@/hosts/background-task-access";
 import { BotForm } from "./bot-form";
 import { BotChat } from "./bot-chat";
 import { BotSettings } from "./bot-settings";
@@ -91,7 +92,7 @@ export function WorkspaceBotTab(props: WorkspaceBotTabProps) {
     workspaceId,
     cwd,
     botId,
-    view,
+    view: requestedView,
     interactive,
     onBrowse,
     onCreate,
@@ -99,6 +100,8 @@ export function WorkspaceBotTab(props: WorkspaceBotTabProps) {
     onSettings,
   } = props;
   const { t } = useTranslation();
+  const readOnly = !canManageBackgroundTasks(serverId);
+  const view = readOnly ? (requestedView === "create" ? "list" : undefined) : requestedView;
   const detail = useBotDetail(serverId, botId, interactive);
   // Persisted tabs may outlive workspace placement; never expose another workspace's Bot.
   const bot = detail.data?.workspaceId === workspaceId ? detail.data : undefined;
@@ -123,16 +126,18 @@ export function WorkspaceBotTab(props: WorkspaceBotTabProps) {
             >
               {t("bots.chat")}
             </Button>
-            <Button
-              variant={view === "settings" ? "outline" : "ghost"}
-              size="sm"
-              onPress={() => onSettings(bot.id)}
-              testID="bot-show-settings"
-            >
-              {t("bots.settings")}
-            </Button>
+            {!readOnly ? (
+              <Button
+                variant={view === "settings" ? "outline" : "ghost"}
+                size="sm"
+                onPress={() => onSettings(bot.id)}
+                testID="bot-show-settings"
+              >
+                {t("bots.settings")}
+              </Button>
+            ) : null}
           </>
-        ) : (
+        ) : !readOnly ? (
           <Button
             size="sm"
             onPress={onCreate}
@@ -141,7 +146,7 @@ export function WorkspaceBotTab(props: WorkspaceBotTabProps) {
           >
             {t("bots.new")}
           </Button>
-        )}
+        ) : null}
       </View>
       {bot && view !== "settings" ? (
         <BotChat key={bot.id} serverId={serverId} bot={bot} interactive={interactive} />
