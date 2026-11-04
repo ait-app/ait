@@ -54,6 +54,42 @@ async function hostCommand(
 
 // Retain the same issuance identity across a lost daemon response; never consume codes here.
 const handoffs = new Map<string, DeviceAuthorization>();
+// Daemon work in flight per host, so refreshes and actions never overlap.
+const pending = new Map<string, Promise<void>>();
+
+/**
+ * Run daemon work for one host after any work already in flight.
+ * Only `visible` work marks the host busy; a background refresh that overlaps other work is skipped,
+ * so periodic polling never flickers the controls.
+ */
+async function exclusive(
+  serverId: string,
+  visible: boolean,
+  work: (current: number) => Promise<void>,
+): Promise<void> {
+  const running = pending.get(serverId);
+  if (visible ? useOnlineServiceHostSync.getState().hosts[serverId]?.busy : running) return;
+  const current = generation;
+  if (visible) update(serverId, { busy: true, error: null });
+  const task = (async () => {
+    await running?.catch(() => undefined);
+    try {
+      await work(current);
+    } catch (error) {
+      if (current === generation)
+        update(serverId, {
+          error: error instanceof Error ? error.message : "Host synchronization failed.",
+        });
+    }
+  })();
+  pending.set(serverId, task);
+  try {
+    await task;
+  } finally {
+    if (pending.get(serverId) === task) pending.delete(serverId);
+    if (visible && current === generation) update(serverId, { busy: false });
+  }
+}
 
 function publicationState(publication: PublicationStatus): Partial<HostSyncState> {
   return {
@@ -82,19 +118,18 @@ export async function synchronizeOnlineServiceHost(
   enable = false,
   options?: { automatic?: boolean },
 ): Promise<void> {
-  const previous = useOnlineServiceHostSync.getState().hosts[serverId] ?? EMPTY_STATE;
-  if (previous.busy) return;
   const client = getHostRuntimeStore().getClient(serverId);
   if (!client?.isConnected) return;
-  const current = generation;
-  update(serverId, { busy: true, error: null });
-  try {
+  const previous = useOnlineServiceHostSync.getState().hosts[serverId] ?? EMPTY_STATE;
+  // Explicit actions and the first status load show progress; later refreshes stay quiet.
+  const visible = (enable && !options?.automatic) || (!previous.status && !previous.error);
+  await exclusive(serverId, visible, async (current) => {
     const status = await client.getOnlineServiceStatus();
     if (status.serverId !== serverId)
       throw new Error("The host identity has changed. Reconnect first.");
     if (current !== generation) return;
     if (!status.management?.autonomous) {
-      update(serverId, { status, enabled: false, publication: undefined });
+      update(serverId, { status, enabled: false, publication: undefined, error: null });
       if (enable) throw new Error("Update the host to use daemon-owned publication.");
       return;
     }
@@ -137,23 +172,14 @@ export async function synchronizeOnlineServiceHost(
         handoffs.delete(serverId);
       }
     }
-    if (current === generation) update(serverId, publicationState(publication));
-  } catch (error) {
-    if (current === generation)
-      update(serverId, {
-        error: error instanceof Error ? error.message : "Host synchronization failed.",
-      });
-  } finally {
-    if (current === generation) update(serverId, { busy: false });
-  }
+    if (current === generation) update(serverId, { ...publicationState(publication), error: null });
+  });
 }
 
 export async function disconnectOnlineServiceHost(serverId: string): Promise<void> {
   const client = getHostRuntimeStore().getClient(serverId);
-  if (useOnlineServiceHostSync.getState().hosts[serverId]?.busy || !client?.isConnected) return;
-  const current = generation;
-  update(serverId, { busy: true, error: null });
-  try {
+  if (!client?.isConnected) return;
+  await exclusive(serverId, true, async (current) => {
     const currentStatus = await client.getOnlineServiceStatus();
     if (currentStatus.serverId !== serverId)
       throw new Error("The host identity has changed. Reconnect first.");
@@ -164,14 +190,7 @@ export async function disconnectOnlineServiceHost(serverId: string): Promise<voi
     if (current !== generation) return;
     const publication = await client.disconnectPublication();
     if (current === generation) update(serverId, publicationState(publication));
-  } catch (error) {
-    if (current === generation)
-      update(serverId, {
-        error: error instanceof Error ? error.message : "Host synchronization failed.",
-      });
-  } finally {
-    if (current === generation) update(serverId, { busy: false });
-  }
+  });
 }
 
 /** Publish the built-in desktop daemon by default, respecting a persisted manual stop. */
@@ -231,6 +250,7 @@ export function OnlineServiceHostSyncLifecycle() {
 export function reconcileOnlineServiceHostsAfterLogout(serverIds: readonly string[]): void {
   generation += 1;
   handoffs.clear();
+  pending.clear();
   useOnlineServiceHostSync.setState(({ hosts }) => ({
     hosts: Object.fromEntries(
       Object.entries(hosts).map(([serverId, state]) => [
