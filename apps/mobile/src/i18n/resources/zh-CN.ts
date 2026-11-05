@@ -85,6 +85,7 @@ export const zhCN: TranslationResources = {
     memoryHint: "Bot 每次回复前读取的偏好，例如 PR 标题语言、回复风格。",
     saveMemory: "保存记忆",
     memoryConflict: "记忆已在其他地方修改，请重新加载后再保存。",
+    resumeToEdit: "恢复 Bot 后才能修改。",
     reload: "重新加载",
     pause: "暂停",
     remove: "移除 Bot",

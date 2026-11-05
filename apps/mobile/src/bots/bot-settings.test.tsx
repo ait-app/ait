@@ -233,17 +233,59 @@ describe("BotSettings", () => {
     );
   });
 
-  it("hides pause and remove and disables edits for read-only users", async () => {
+  it("hides pause, remove and save actions and disables edits for read-only users", async () => {
     canManage.mockReturnValue(false);
-    renderSettings();
+    renderSettings({ ...bot, state: { kind: "paused", reason: "user" } });
     expect(screen.queryByText("bots.pause")).toBeNull();
+    expect(screen.queryByText("bots.resume")).toBeNull();
     expect(screen.queryByText("bots.remove")).toBeNull();
     expect((screen.getByTestId("bot-provider") as HTMLSelectElement).disabled).toBe(true);
-    expect((screen.getByTestId("bot-settings-save") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByTestId("bot-settings-save")).toBeNull();
     expect((await screen.findByTestId("bot-memory")) as HTMLTextAreaElement).toHaveProperty(
       "disabled",
       true,
     );
-    expect((screen.getByTestId("bot-memory-save") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByTestId("bot-memory-save")).toBeNull();
+    expect(screen.queryByText("bots.resumeToEdit")).toBeNull();
+  });
+
+  it("disables memory saves until a paused Bot is resumed", async () => {
+    renderSettings({ ...bot, state: { kind: "paused", reason: "user" } });
+    fireEvent.change(await screen.findByTestId("bot-memory"), { target: { value: "new" } });
+    expect(screen.getByTestId("bot-memory-save")).toHaveProperty("disabled", true);
+    expect(screen.getAllByText("bots.resumeToEdit").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("bot-settings-save")).toHaveProperty("disabled", false);
+  });
+
+  it("explains a save refused because the Bot was paused elsewhere", async () => {
+    const paused: BotView = { ...bot, state: { kind: "paused", reason: "user" } };
+    botRequest.mockImplementation(async (method: string) => {
+      if (method === "bot.memory.get.request") return { text: "memo", revision: "r1" };
+      if (method === "bot.memory.update.request")
+        throw Object.assign(new Error("Bot conflict"), { code: "bot_conflict" });
+      if (method === "bot.get.request") return { bot: paused };
+      throw new Error(`unexpected ${method}`);
+    });
+    renderSettings();
+    fireEvent.change(await screen.findByTestId("bot-memory"), { target: { value: "new" } });
+    fireEvent.click(screen.getByTestId("bot-memory-save"));
+    expect(await screen.findByText("bots.resumeToEdit")).toBeTruthy();
+    expect(screen.queryByText("bots.memoryConflict")).toBeNull();
+    expect(queryClient.getQueryData(botKeys.bot("host", "workspace"))).toEqual(paused);
+  });
+
+  it("reports a memory revision conflict while the Bot is active", async () => {
+    botRequest.mockImplementation(async (method: string) => {
+      if (method === "bot.memory.get.request") return { text: "memo", revision: "r1" };
+      if (method === "bot.memory.update.request")
+        throw Object.assign(new Error("Bot conflict"), { code: "bot_conflict" });
+      if (method === "bot.get.request") return { bot };
+      throw new Error(`unexpected ${method}`);
+    });
+    renderSettings();
+    fireEvent.change(await screen.findByTestId("bot-memory"), { target: { value: "new" } });
+    fireEvent.click(screen.getByTestId("bot-memory-save"));
+    expect(await screen.findByText("bots.memoryConflict")).toBeTruthy();
+    expect(screen.queryByText("bots.resumeToEdit")).toBeNull();
   });
 });

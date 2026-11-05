@@ -94,6 +94,7 @@ export const en = {
       "Preferences the Bot reads before every reply, such as PR title language or reply style.",
     saveMemory: "Save memory",
     memoryConflict: "The memory changed elsewhere. Reload it before saving again.",
+    resumeToEdit: "Resume the Bot to make changes.",
     reload: "Reload",
     pause: "Pause",
     remove: "Remove Bot",

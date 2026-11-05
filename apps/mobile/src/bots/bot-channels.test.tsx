@@ -5,16 +5,17 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BotChannels } from "./bot-channels";
 
-const { botRequest, confirmDialog } = vi.hoisted(() => ({
+const { botRequest, confirmDialog, randomUUID } = vi.hoisted(() => ({
   botRequest: vi.fn(),
   confirmDialog: vi.fn(async (_options: unknown) => true),
+  randomUUID: vi.fn(() => "33333333-3333-4333-8333-333333333333"),
 }));
 vi.mock("@/runtime/host-runtime", () => ({ useHostRuntimeClient: () => ({ botRequest }) }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("./styles", () => ({ botStyles: {} }));
 vi.mock("./loading", () => ({ BotLoadingSpinner: () => null }));
 vi.mock("@/utils/confirm-dialog", () => ({ confirmDialog }));
-vi.mock("expo-crypto", () => ({ randomUUID: () => "33333333-3333-4333-8333-333333333333" }));
+vi.mock("expo-crypto", () => ({ randomUUID }));
 vi.mock("@/components/ui/select-field", () => ({
   SelectField: ({
     value,
@@ -131,7 +132,7 @@ const channels = [
 ];
 let queryClient: QueryClient;
 
-function renderChannels(readOnly = false) {
+function renderChannels({ readOnly = false, active = true } = {}) {
   return render(
     <QueryClientProvider client={queryClient}>
       <BotChannels
@@ -140,6 +141,7 @@ function renderChannels(readOnly = false) {
         builtinChannelId={ID_A}
         interactive
         readOnly={readOnly}
+        active={active}
       />
     </QueryClientProvider>,
   );
@@ -262,6 +264,67 @@ describe("BotChannels", () => {
     expect(await screen.findByText("account already in use")).toBeTruthy();
   });
 
+  it("keeps the channel id across retries of one form and renews it for the next form", async () => {
+    randomUUID
+      .mockReturnValueOnce("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+      .mockReturnValueOnce("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    let creates = 0;
+    const fallback = botRequest.getMockImplementation()!;
+    botRequest.mockImplementation(async (method: string, params: Record<string, unknown>) => {
+      if (method === "bot.channel.create.request" && ++creates < 3)
+        throw new Error("Response lost");
+      return fallback(method, params);
+    });
+    renderChannels();
+    fireEvent.click(await screen.findByText("bots.addChannel"));
+    await screen.findByLabelText("bots.tokenRef");
+    typeInto("bots.tokenRef", "env:AIT_SERVER_CREDENTIAL_TELEGRAM");
+    typeInto("bots.allowedSenders", "42");
+    fireEvent.click(submitButton());
+    await screen.findByText("Response lost");
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(creates).toBe(2));
+    await waitFor(() => expect(submitButton()).toHaveProperty("disabled", false));
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(screen.queryByTestId("bot-channel-form")).toBeNull());
+    const ids = () =>
+      botRequest.mock.calls
+        .filter(([method]) => method === "bot.channel.create.request")
+        .map(([, params]) => params.channelId);
+    expect(ids()).toEqual([
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    ]);
+
+    fireEvent.click(screen.getByText("bots.addChannel"));
+    await screen.findByLabelText("bots.tokenRef");
+    typeInto("bots.tokenRef", "env:AIT_SERVER_CREDENTIAL_TELEGRAM");
+    typeInto("bots.allowedSenders", "43");
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(ids()).toHaveLength(4));
+    expect(ids()[3]).toBe("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+  });
+
+  it("disables adding and toggling while the Bot is paused", async () => {
+    renderChannels({ active: false });
+    await screen.findByTestId(`bot-channel-${ID_B}`);
+    expect(await screen.findByText("bots.resumeToEdit")).toBeTruthy();
+    expect(screen.getByTestId("bot-channel-add")).toHaveProperty("disabled", true);
+    expect(screen.getByTestId(`bot-channel-enabled-${ID_B}`)).toHaveProperty("disabled", true);
+    expect(screen.getByTestId(`bot-channel-delete-${ID_B}`)).toHaveProperty("disabled", false);
+  });
+
+  it("hides the resume hint from guests and while the Bot is active", async () => {
+    renderChannels();
+    await screen.findByTestId(`bot-channel-${ID_B}`);
+    expect(screen.queryByText("bots.resumeToEdit")).toBeNull();
+    cleanup();
+    renderChannels({ readOnly: true, active: false });
+    await screen.findByTestId(`bot-channel-${ID_B}`);
+    expect(screen.queryByText("bots.resumeToEdit")).toBeNull();
+  });
+
   it("lists only external channels and toggles enabled", async () => {
     renderChannels();
     expect(await screen.findByTestId(`bot-channel-${ID_B}`)).toBeTruthy();
@@ -292,7 +355,7 @@ describe("BotChannels", () => {
   });
 
   it("is read-only for guests", async () => {
-    renderChannels(true);
+    renderChannels({ readOnly: true });
     await screen.findByTestId(`bot-channel-${ID_B}`);
     expect(screen.queryByText("bots.addChannel")).toBeNull();
     expect(screen.queryByTestId(`bot-channel-delete-${ID_B}`)).toBeNull();

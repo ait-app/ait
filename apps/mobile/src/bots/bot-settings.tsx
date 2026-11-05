@@ -11,19 +11,22 @@ import { BotLoadingSpinner } from "./loading";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { BotExecutionFields, executionDraft, resolveExecution, useBotProviders } from "./bot-setup";
-import { botKeys } from "./queries";
+import { botKeys, isBotConflict } from "./queries";
 import { botStyles as styles } from "./styles";
 
 function BotMemoryEditor({
   serverId,
   workspaceId,
   readOnly,
+  active,
   memory,
   onReload,
 }: {
   serverId: string;
   workspaceId: string;
   readOnly: boolean;
+  /** The host accepts memory updates only while the Bot is active. */
+  active: boolean;
   memory: { text: string; revision: string };
   onReload: () => Promise<{ text: string; revision: string } | undefined>;
 }) {
@@ -45,9 +48,14 @@ function BotMemoryEditor({
         });
         return { text: draft.text, revision };
       } catch (cause) {
-        if (cause instanceof Error && "code" in cause && cause.code === "bot_conflict")
-          throw new Error(t("bots.memoryConflict"));
-        throw cause;
+        if (!isBotConflict(cause)) throw cause;
+        // A Bot paused elsewhere refuses updates with the same error as a stale revision.
+        const { bot } = await client.botRequest("bot.get.request", { workspaceId });
+        if (bot?.state.kind !== "active") {
+          queryClient.setQueryData(botKeys.bot(serverId, workspaceId), bot);
+          throw new Error(t("bots.resumeToEdit"));
+        }
+        throw new Error(t("bots.memoryConflict"));
       }
     },
     onSuccess: (updated) => {
@@ -79,16 +87,19 @@ function BotMemoryEditor({
           testID="bot-memory"
         />
       </Field>
+      {!readOnly && !active ? <Text style={styles.hint}>{t("bots.resumeToEdit")}</Text> : null}
       {save.error ? <Text style={styles.error}>{save.error.message}</Text> : null}
       {reload.error ? <Text style={styles.error}>{reload.error.message}</Text> : null}
       <View style={styles.row}>
-        <Button
-          onPress={() => save.mutate()}
-          disabled={save.isPending || reload.isPending || readOnly || draft.text === memory.text}
-          testID="bot-memory-save"
-        >
-          {t("bots.saveMemory")}
-        </Button>
+        {!readOnly ? (
+          <Button
+            onPress={() => save.mutate()}
+            disabled={save.isPending || reload.isPending || !active || draft.text === memory.text}
+            testID="bot-memory-save"
+          >
+            {t("bots.saveMemory")}
+          </Button>
+        ) : null}
         <Button
           variant="outline"
           disabled={save.isPending || reload.isPending}
@@ -143,13 +154,15 @@ function BotModelSection({
       />
       <Text style={styles.hint}>{t("bots.configurationHint")}</Text>
       {save.error ? <Text style={styles.error}>{save.error.message}</Text> : null}
-      <Button
-        onPress={() => save.mutate()}
-        disabled={disabled || !execution.provider}
-        testID="bot-settings-save"
-      >
-        {t("bots.save")}
-      </Button>
+      {!readOnly ? (
+        <Button
+          onPress={() => save.mutate()}
+          disabled={disabled || !execution.provider}
+          testID="bot-settings-save"
+        >
+          {t("bots.save")}
+        </Button>
+      ) : null}
     </View>
   );
 }
@@ -249,6 +262,7 @@ export function BotSettings({
           serverId={serverId}
           workspaceId={workspaceId}
           readOnly={readOnly}
+          active={bot.state.kind === "active"}
           memory={memory.data}
           onReload={async () => {
             const result = await memory.refetch({ throwOnError: true });
@@ -262,6 +276,7 @@ export function BotSettings({
         builtinChannelId={bot.builtinChannelId}
         interactive={interactive}
         readOnly={readOnly}
+        active={bot.state.kind === "active"}
       />
       {remove.error ? <Text style={styles.error}>{remove.error.message}</Text> : null}
       {!readOnly ? (

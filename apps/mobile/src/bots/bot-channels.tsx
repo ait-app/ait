@@ -49,6 +49,7 @@ function ChannelRow({
   channel,
   interactive,
   readOnly,
+  active,
   onChanged,
 }: {
   serverId: string;
@@ -57,6 +58,7 @@ function ChannelRow({
   channel: BotChannel;
   interactive: boolean;
   readOnly: boolean;
+  active: boolean;
   onChanged: () => void;
 }) {
   const { t } = useTranslation();
@@ -129,7 +131,7 @@ function ChannelRow({
         <Switch
           value={channel.enabled}
           onValueChange={(enabled) => toggle.mutate(enabled)}
-          disabled={readOnly || !interactive || busy}
+          disabled={readOnly || !active || !interactive || busy}
           accessibilityLabel={t("bots.channelEnabled")}
           testID={`bot-channel-enabled-${channel.id}`}
         />
@@ -154,15 +156,19 @@ function ChannelForm({
   serverId,
   workspaceId,
   kinds,
+  active,
   onDone,
 }: {
   serverId: string;
   workspaceId: string;
   kinds: ExternalKind[];
+  active: boolean;
   onDone: () => void;
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
+  // One id per opened form: a retry after a lost response must not create a second channel.
+  const [channelId] = useState(() => randomUUID());
   const [kind, setKind] = useState<ExternalKind>(kinds[0] ?? "telegram");
   const [tokenRef, setTokenRef] = useState("");
   const [appId, setAppId] = useState("");
@@ -181,7 +187,7 @@ function ChannelForm({
       if (!client) throw new Error(t("bots.disconnected"));
       await client.botRequest("bot.channel.create.request", {
         workspaceId,
-        channelId: randomUUID(),
+        channelId,
         enabled: false,
         config:
           kind === "telegram"
@@ -279,7 +285,7 @@ function ChannelForm({
       <View style={styles.row}>
         <Button
           onPress={() => create.mutate()}
-          disabled={!valid || create.isPending}
+          disabled={!valid || !active || create.isPending}
           testID="bot-channel-submit"
         >
           {t("bots.addChannel")}
@@ -298,12 +304,15 @@ export function BotChannels({
   builtinChannelId,
   interactive,
   readOnly,
+  active,
 }: {
   serverId: string;
   workspaceId: string;
   builtinChannelId: string;
   interactive: boolean;
   readOnly: boolean;
+  /** The host accepts channel creation and toggles only while the Bot is active. */
+  active: boolean;
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
@@ -339,6 +348,7 @@ export function BotChannels({
       <Text style={styles.title}>{t("bots.channels")}</Text>
       {list.isPending && enabled ? <BotLoadingSpinner /> : null}
       {list.error ? <Text style={styles.error}>{list.error.message}</Text> : null}
+      {!readOnly && !active ? <Text style={styles.hint}>{t("bots.resumeToEdit")}</Text> : null}
       {external.map((channel) => (
         <ChannelRow
           key={channel.id}
@@ -348,6 +358,7 @@ export function BotChannels({
           channel={channel}
           interactive={interactive}
           readOnly={readOnly}
+          active={active}
           onChanged={refresh}
         />
       ))}
@@ -356,6 +367,7 @@ export function BotChannels({
           serverId={serverId}
           workspaceId={workspaceId}
           kinds={kinds}
+          active={active}
           onDone={() => {
             setAdding(false);
             void refresh();
@@ -365,7 +377,7 @@ export function BotChannels({
       {!readOnly && !adding && kinds.length > 0 ? (
         <Button
           variant="outline"
-          disabled={!interactive}
+          disabled={!interactive || !active}
           onPress={() => setAdding(true)}
           testID="bot-channel-add"
         >
