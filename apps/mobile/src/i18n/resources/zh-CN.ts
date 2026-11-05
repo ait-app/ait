@@ -90,6 +90,8 @@ export const zhCN: TranslationResources = {
     archive: "归档 Bot",
     archiveConfirm: "归档此 Bot？消息和记忆会保留。",
     paused: "已暂停",
+    resume: "恢复",
+    directoryMissing: "Workspace 目录缺失，Bot 已暂停。请恢复目录后再点击恢复。",
     requestFailed: "请求失败",
     tooLong: "消息不能超过 16 KiB。",
     memoryTooLong: "记忆不能超过 32 KiB。",

@@ -98,6 +98,9 @@ export const en = {
     archive: "Archive Bot",
     archiveConfirm: "Archive this Bot? Messages and memory will be retained.",
     paused: "Paused",
+    resume: "Resume",
+    directoryMissing:
+      "The workspace directory is missing, so the Bot is paused. Restore the directory, then resume.",
     requestFailed: "Request failed",
     tooLong: "Messages must be at most 16 KiB.",
     memoryTooLong: "Memory must be at most 32 KiB.",
