@@ -60,10 +60,18 @@ pub fn sessions(root: &Path) -> Vec<(SessionOwner, String)> {
 
 /// Close every session recorded in the legacy store, then delete the store directory.
 ///
-/// Failures are logged by count and error kind only, never with conversation content.
+/// Filesystem reads and the removal run on the blocking pool. If the store cannot be listed,
+/// it is kept so its sessions are not orphaned. Failures are logged by count and error kind
+/// only, never with conversation content.
 pub async fn discard(root: &Path, executor: &dyn Executor) {
+    let root = root.to_path_buf();
+    let listed = root.clone();
+    let Ok(sessions) = tokio::task::spawn_blocking(move || sessions(&listed)).await else {
+        tracing::warn!("failed to list legacy Bot sessions");
+        return;
+    };
     let mut failed = 0_usize;
-    for (owner, agent_id) in sessions(root) {
+    for (owner, agent_id) in sessions {
         if executor
             .execute(owner, Action::Close { agent_id })
             .await
@@ -75,10 +83,13 @@ pub async fn discard(root: &Path, executor: &dyn Executor) {
     if failed > 0 {
         tracing::warn!(failed, "failed to close legacy Bot sessions");
     }
-    match std::fs::remove_dir_all(root) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => tracing::warn!(kind = ?error.kind(), "failed to remove legacy Bot store"),
+    match tokio::task::spawn_blocking(move || std::fs::remove_dir_all(root)).await {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Ok(Err(error)) => {
+            tracing::warn!(kind = ?error.kind(), "failed to remove legacy Bot store");
+        }
+        Err(_) => tracing::warn!("legacy Bot store removal did not finish"),
     }
 }
 

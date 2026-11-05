@@ -114,6 +114,36 @@ fn capacity_counts_only_live_bots_and_channels() {
 }
 
 #[test]
+fn setup_that_cannot_save_the_catalog_keeps_memory() {
+    let fixture = Fixture::new();
+    fixture.store.save_memory(WORKSPACE, "prefs").unwrap();
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(OTHER_WORKSPACE))
+        .unwrap();
+    let template = state.catalog.clone();
+    for index in 1..128 {
+        let mut bot = template.bots[0].clone();
+        bot.id = BotId::generate();
+        bot.workspace_id = format!("wks_{index:016x}");
+        bot.builtin_channel_id = ChannelId::generate();
+        let mut channel = template.channels[0].clone();
+        channel.id = bot.builtin_channel_id;
+        channel.bot_id = bot.id;
+        state.catalog.bots.push(bot);
+        state.catalog.channels.push(channel);
+    }
+    let mut cleared = setup(WORKSPACE);
+    cleared["clearMemory"] = json!(true);
+
+    assert_eq!(
+        state.execute("bot.setup.request", cleared),
+        Err(ErrorCode::ResourceExhausted)
+    );
+    assert_eq!(fixture.store.memory(WORKSPACE).unwrap(), "prefs");
+}
+
+#[test]
 fn bot_configuration_updates_apply_to_new_sessions_and_retired_bots_reject_edits() {
     let fixture = Fixture::new();
     let mut state = fixture.state();

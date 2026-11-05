@@ -13,7 +13,15 @@ use crate::execution::Run;
 use crate::protocol::TurnRequest;
 
 impl State {
-    pub(crate) fn stop_bot(&mut self, bot: BotId, retire: bool) -> Result<(), ErrorCode> {
+    /// Cancel the Bot's running and queued turns and close or release its native sessions.
+    ///
+    /// `cancellation` becomes the error text of every queued turn cancelled here.
+    pub(crate) fn stop_bot(
+        &mut self,
+        bot: BotId,
+        retire: bool,
+        cancellation: Option<&str>,
+    ) -> Result<(), ErrorCode> {
         let conversations: Vec<_> = self
             .conversations
             .values()
@@ -41,7 +49,12 @@ impl State {
                 .map(|(_, id)| *id)
                 .collect();
             for id in queued {
-                self.progress(id, TurnStatus::Cancelled, None, None)?;
+                self.progress(
+                    id,
+                    TurnStatus::Cancelled,
+                    None,
+                    cancellation.map(str::to_owned),
+                )?;
             }
         }
         Ok(())

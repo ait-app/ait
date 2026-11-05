@@ -46,10 +46,14 @@ pub(super) fn compose<
         credentials: Arc::new(Environment),
     })
     .context("start Bot service")?;
-    let legacy = data.join("bots");
-    tokio::runtime::Handle::current().spawn(async move {
-        bot::legacy::discard(&legacy, &execution).await;
-    });
+    if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+        let legacy = data.join("bots");
+        runtime.spawn(async move {
+            bot::legacy::discard(&legacy, &execution).await;
+        });
+    } else {
+        tracing::warn!("no async runtime; skipped discarding the legacy Bot store");
+    }
     Ok(bots)
 }
 

@@ -148,10 +148,6 @@ impl State {
             return Err(ErrorCode::BotConflict);
         }
         validate_execution(&request.execution)?;
-        if request.clear_memory && self.store.delete_memory(&request.workspace_id).is_err() {
-            self.frozen = true;
-            return Err(ErrorCode::BotIo);
-        }
         let bot = Bot {
             id: BotId::generate(),
             workspace_id: request.workspace_id,
@@ -170,8 +166,14 @@ impl State {
             deleted: false,
         });
         let view = super::view(&bot);
+        let workspace_id = bot.workspace_id.clone();
         catalog.bots.push(bot);
         self.save_catalog(catalog)?;
+        // Memory is cleared only once the new Bot is durable, so a refused setup keeps it.
+        if request.clear_memory && self.store.delete_memory(&workspace_id).is_err() {
+            self.frozen = true;
+            return Err(ErrorCode::BotIo);
+        }
         Ok(json!({"bot":view,"created":true}))
     }
     pub(super) fn update(&mut self, request: Update) -> Result<Value, ErrorCode> {
@@ -220,8 +222,12 @@ impl State {
     /// Persist `reason` as the Bot's pause cause, then cancel its queued work and release
     /// its native sessions.
     pub(super) fn pause_bot(&mut self, id: BotId, reason: PauseReason) -> Result<Value, ErrorCode> {
+        let cancellation = match reason {
+            PauseReason::DirectoryMissing => Some("Workspace directory missing; Bot paused"),
+            PauseReason::User => None,
+        };
         let view = self.set_state(id, BotState::Paused { reason })?;
-        self.stop_bot(id, false)?;
+        self.stop_bot(id, false, cancellation)?;
         Ok(view)
     }
     /// Retire `bots`, release their external channel accounts, and close their native
@@ -240,7 +246,7 @@ impl State {
         }
         self.save_catalog(catalog)?;
         for bot in bots {
-            self.stop_bot(*bot, true)?;
+            self.stop_bot(*bot, true, None)?;
         }
         Ok(())
     }

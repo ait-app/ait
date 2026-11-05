@@ -404,7 +404,9 @@ fn pause_cancels_queued_turns_and_resume_reactivates() {
         json!({"kind":"paused","reason":"user"})
     );
     assert!(running.cancel.is_cancelled());
-    assert_eq!(state.turn(queued.id).unwrap().status, TurnStatus::Cancelled);
+    let cancelled = state.turn(queued.id).unwrap();
+    assert_eq!(cancelled.status, TurnStatus::Cancelled);
+    assert_eq!(cancelled.error, None);
     assert!(
         state.session_actions.iter().any(
             |(_, action)| matches!(action, Action::Release { agent_id } if agent_id == &session)
@@ -528,6 +530,7 @@ fn missing_directory_pauses_and_cancels_queued_turns() {
     state
         .execute("bot.setup.request", setup(WORKSPACE))
         .unwrap();
+    create_telegram(&mut state, ChannelId::generate()).unwrap();
     let queued = admit(&mut state, WORKSPACE, "first");
     std::fs::remove_dir(&directory).unwrap();
 
@@ -538,7 +541,13 @@ fn missing_directory_pauses_and_cancels_queued_turns() {
         bot_state(&mut state),
         json!({"kind":"paused","reason":"directory_missing"})
     );
-    assert_eq!(state.turn(queued.id).unwrap().status, TurnStatus::Cancelled);
+    let cancelled = state.turn(queued.id).unwrap();
+    assert_eq!(cancelled.status, TurnStatus::Cancelled);
+    assert_eq!(
+        cancelled.error.as_deref(),
+        Some("Workspace directory missing; Bot paused")
+    );
+    assert!(state.channels().is_empty());
     assert!(
         !state
             .session_actions
