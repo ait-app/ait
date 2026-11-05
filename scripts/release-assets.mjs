@@ -46,7 +46,7 @@ export function releaseAssetNames(platform, version, buildLabel) {
 
 // Standalone headless daemon archives; the target suffix keeps them apart from desktop tarballs.
 const daemonTargets = { linux: "linux-x64", mac: "macos-arm64" };
-export const daemonExecutable = "ait-daemon";
+export const daemonExecutable = "aitd";
 
 // Nightly archives carry the build label, like the nightly desktop packages.
 export function daemonAssetName(platform, version, buildLabel) {

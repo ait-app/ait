@@ -1,7 +1,7 @@
 # 当前 Ait 架构
 
 本页描述当前组件关系；决策背景和历史取舍见 [ADR 索引](../decisions/README.md)。
-Rust 服务入口是 `bins/daemon`，Cargo package 和可执行文件均为 `daemon`；独立发布归档将它命名为 `ait-daemon`。
+Rust 服务入口是 `bins/daemon`，Cargo package 和可执行文件均为 `daemon`；桌面安装包与独立发布归档将它命名为 `aitd`。
 Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端共享界面；SDK 与协议在 `packages/`。
 
 ## Rust 能力边界

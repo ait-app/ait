@@ -20,7 +20,7 @@ Intel 是 x64。Rust binary 和 Electron 必须同架构，不支持直接生成
 `AIT_SERVER_BIN` 可指定已有的同架构 binary；默认从当前仓库编译。
 
 输出：`apps/desktop/release/Ait-<version>-local-<arch>.dmg`，其中包含 `Ait.app`。
-Rust daemon 位于 App 的 `Contents/Resources/bin/daemon`，Web 页面位于 `app-dist`。
+Rust daemon 位于 App 的 `Contents/Resources/bin/aitd`，Web 页面位于 `app-dist`。
 本地构建使用 ad-hoc 签名，关闭 notarization 和上游自动更新源；适合本机验证，不等同于
 通过 Gatekeeper 公证的正式分发包。构建始终传入 `--publish never`。
 

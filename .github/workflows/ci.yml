@@ -438,7 +438,7 @@ jobs:
         run: |
           gh release create nightly release-assets/* --verify-tag --target "$GITHUB_SHA" \
             --title "Ait Nightly $NIGHTLY_BUILD_LABEL" --prerelease --latest=false \
-            --notes "Development build from $GITHUB_SHA. Replaced on the next successful main build. macOS is ad-hoc signed and not notarized. If macOS blocks the standalone ait-daemon after a browser download, run \`xattr -d com.apple.quarantine ait-daemon\` in the extracted folder. <!-- ait-nightly-run: $GITHUB_RUN_NUMBER --> <!-- ait-nightly-workflow: ci.yml -->" \
+            --notes "Development build from $GITHUB_SHA. Replaced on the next successful main build. macOS is ad-hoc signed and not notarized. If macOS blocks the standalone aitd after a browser download, run \`xattr -d com.apple.quarantine aitd\` in the extracted folder. <!-- ait-nightly-run: $GITHUB_RUN_NUMBER --> <!-- ait-nightly-workflow: ci.yml -->" \
             --repo "$GITHUB_REPOSITORY"
           echo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/nightly" >> "$GITHUB_STEP_SUMMARY"
       - name: Cancel older builds after successful publication

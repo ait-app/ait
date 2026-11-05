@@ -26,10 +26,18 @@ function fixture(t, version, name = "daemon") {
 test("staging removes stale sidecars and copies only the matching daemon", (t) => {
   const input = fixture(t, "0.0.7");
   mkdirSync(input.directory);
-  for (const name of ["ait-daemon", "ait-worker", "paseo", "server", "server.exe", "daemon.exe"])
+  for (const name of [
+    "daemon",
+    "ait-daemon",
+    "ait-worker",
+    "paseo",
+    "server",
+    "server.exe",
+    "daemon.exe",
+  ])
     writeFileSync(path.join(input.directory, name), "stale");
   const staged = stageDaemon(input);
-  assert.deepEqual(readdirSync(input.directory), ["daemon"]);
+  assert.deepEqual(readdirSync(input.directory), ["aitd"]);
   assert.deepEqual(readFileSync(staged), readFileSync(input.binary));
 });
 

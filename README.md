@@ -51,7 +51,7 @@ Android 和 iOS 作为客户端连接电脑，不在手机上运行 daemon。
 
 ### 在 Linux/macOS 上独立运行 daemon
 
-没有桌面环境的服务器可以使用 Release 中的独立 `ait-daemon` 归档；也可以从源码构建：
+没有桌面环境的服务器可以使用 Release 中的独立 daemon 归档（可执行文件 `aitd`）；也可以从源码构建：
 
 ```sh
 cargo build --locked --release -p daemon --bin daemon

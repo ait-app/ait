@@ -69,7 +69,7 @@ test("nightly packages both standalone daemons and explains the macOS quarantine
   const publish = workflow.jobs["nightly-publish"].steps.find(
     (step) => step.name === "Publish latest nightly",
   );
-  assert.match(publish.run, /xattr -d com\.apple\.quarantine ait-daemon/);
+  assert.match(publish.run, /xattr -d com\.apple\.quarantine aitd/);
 });
 
 const context = { repo: { owner: "ait-app", repo: "ait" }, sha: "current", runId: 42 };

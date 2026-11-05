@@ -15,7 +15,7 @@ The display name is Ait. Release builds use Ait's `dev.ait.desktop` application 
 Ait uses its own profile directories and the `ait://` link protocol.
 
 Official releases build this app for Linux x64, macOS arm64 and Windows x64.
-Linux and macOS bundle only `resources/bin/daemon`; Windows ships without a daemon.
+Linux and macOS bundle only `resources/bin/aitd` (the Cargo `daemon` binary); Windows ships without a daemon.
 No legacy daemon, worker or CLI shim is shipped. See [release operations](../../docs/operations/releasing.md).
 
 macOS checks for updates through AIT Server at `https://aitapp.cn/api/v1/updates/macos/`.

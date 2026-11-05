@@ -265,7 +265,7 @@ jobs:
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/standalone-daemon"
-          keychain="$RUNNER_TEMP/ait-daemon-signing.keychain-db"
+          keychain="$RUNNER_TEMP/aitd-signing.keychain-db"
           keychain_password=$(openssl rand -hex 24)
           mkdir -p "$work/bin"
           trap 'security delete-keychain "$keychain" >/dev/null 2>&1 || true; rm -f "$work/certificate.p12"' EXIT
@@ -282,12 +282,12 @@ jobs:
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
           identity=$(security find-identity -v -p codesigning "$keychain" | awk -F'"' '/Developer ID Application/ { print $2; exit }')
           test -n "$identity"
-          cp "$DAEMON_BIN" "$work/bin/ait-daemon"
+          cp "$DAEMON_BIN" "$work/bin/aitd"
           codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" \
-            --keychain "$keychain" --sign "$identity" "$work/bin/ait-daemon"
-          codesign --verify --strict --verbose=2 "$work/bin/ait-daemon"
-          ditto -c -k --keepParent "$work/bin/ait-daemon" "$work/ait-daemon.zip"
-          xcrun notarytool submit "$work/ait-daemon.zip" \
+            --keychain "$keychain" --sign "$identity" "$work/bin/aitd"
+          codesign --verify --strict --verbose=2 "$work/bin/aitd"
+          ditto -c -k --keepParent "$work/bin/aitd" "$work/aitd.zip"
+          xcrun notarytool submit "$work/aitd.zip" \
             --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID" \
             --wait --timeout 30m --output-format json > "$work/notarization.json"
           status=$(plutil -extract status raw -o - "$work/notarization.json")
@@ -297,7 +297,7 @@ jobs:
             echo "Standalone daemon notarization status: $status" >&2
             exit 1
           fi
-          echo "STANDALONE_DAEMON_BIN=$work/bin/ait-daemon" >> "$GITHUB_ENV"
+          echo "STANDALONE_DAEMON_BIN=$work/bin/aitd" >> "$GITHUB_ENV"
 
       - name: Package standalone daemon
         env:
