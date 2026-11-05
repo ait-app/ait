@@ -1273,7 +1273,11 @@ describe("Rust v1 connection", () => {
       h.ready();
       await connected;
       const clone = client.cloneGithubProject(
-        { repo: "https://github.com/acme/app.git", targetDirectory: "/repo/app" },
+        {
+          repo: "https://github.com/acme/app.git",
+          targetDirectory: "/repo/app",
+          progress: true,
+        },
         "clone",
       );
       const outcome = clone.then(
@@ -1283,6 +1287,11 @@ describe("Rust v1 connection", () => {
       await vi.advanceTimersByTimeAsync(0);
       const cloneRequest = h.last(1);
       expect(cloneRequest.method).toBe("project.github.clone.request");
+      expect(cloneRequest.params).toMatchObject({
+        repo: "https://github.com/acme/app.git",
+        targetDirectory: "/repo/app",
+        progress: true,
+      });
       client.ensureConnected({ verify: true });
       await vi.advanceTimersByTimeAsync(0);
       const ping = h.last(0);

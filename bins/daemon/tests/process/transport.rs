@@ -78,3 +78,16 @@ pub(super) async fn creation(
     }
     (next, progress)
 }
+
+/// GitHub clone progress belongs to the requesting connection and arrives before its response.
+pub(super) async fn clone_with_progress(socket: &mut Socket, params: Value) -> (Value, Vec<Value>) {
+    let mut next = request(socket, "project.github.clone.request", params).await;
+    let mut progress = Vec::new();
+    while next["type"] == "event" {
+        if next["method"] == "project.github.clone.progress" {
+            progress.push(next);
+        }
+        next = receive(socket).await;
+    }
+    (next, progress)
+}

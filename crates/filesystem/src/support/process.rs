@@ -22,6 +22,11 @@ const NETWORK_SUBCOMMANDS: [&str; 5] = ["clone", "fetch", "ls-remote", "pull", "
 const BATCH_SSH_COMMAND: &str = "ssh -oBatchMode=yes";
 /// Budget for reading local Git configuration before a network command.
 const CONFIG_TIMEOUT: Duration = Duration::from_secs(10);
+/// Stack buffer used to forward new standard-error bytes to a caller tap.
+const TAP_BUFFER_BYTES: usize = 16 * 1024;
+
+/// Callback receiving newly written standard-error bytes while a command runs.
+pub(crate) type StderrTap<'a> = &'a mut dyn FnMut(&[u8]);
 
 /// Lifetime and captured-output bounds of one child process.
 #[derive(Debug, Clone, Copy)]
@@ -118,6 +123,23 @@ pub(crate) fn run_bounded(
     bounds: Bounds,
     cancellation: Option<&CancellationToken>,
 ) -> Result<Output, RunError> {
+    run_bounded_tapping(command, bounds, cancellation, None)
+}
+
+/// [`run_bounded`] that also forwards every new standard-error byte to `stderr_tap`.
+///
+/// The tap runs on the polling thread, so it must only do bounded synchronous work (for
+/// example parsing Git progress lines). Reading uses positional I/O and never moves the
+/// child's write offset.
+///
+/// # Errors
+/// Returns the same failures as [`run_bounded`], plus standard-error read failures.
+pub(crate) fn run_bounded_tapping(
+    command: &mut Command,
+    bounds: Bounds,
+    cancellation: Option<&CancellationToken>,
+    mut stderr_tap: Option<StderrTap<'_>>,
+) -> Result<Output, RunError> {
     if cancellation.is_some_and(CancellationToken::is_cancelled) {
         return Err(RunError::Cancelled);
     }
@@ -134,6 +156,8 @@ pub(crate) fn run_bounded(
     }
     let mut child = command.spawn().map_err(RunError::Spawn)?;
     let deadline = Instant::now() + bounds.timeout;
+    let mut tapped = 0_u64;
+    let mut tap_buffer = [0_u8; TAP_BUFFER_BYTES];
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
@@ -142,6 +166,9 @@ pub(crate) fn run_bounded(
                 terminate(&mut child);
                 return Err(RunError::Io(error));
             }
+        }
+        if let Some(tap) = stderr_tap.as_mut() {
+            tap_stderr(&stderr, &mut tapped, &mut tap_buffer, &mut **tap)?;
         }
         let failure = if cancellation.is_some_and(CancellationToken::is_cancelled) {
             Some(RunError::Cancelled)
@@ -160,6 +187,9 @@ pub(crate) fn run_bounded(
         }
         std::thread::sleep(POLL_INTERVAL);
     };
+    if let Some(tap) = stderr_tap.as_mut() {
+        tap_stderr(&stderr, &mut tapped, &mut tap_buffer, &mut **tap)?;
+    }
     let stdout = read_limited(&mut stdout, bounds.stdout_limit)?;
     if stdout.len() as u64 > bounds.stdout_limit {
         return Err(RunError::StdoutExceeded);
@@ -171,6 +201,40 @@ pub(crate) fn run_bounded(
         stdout,
         stderr,
     })
+}
+
+/// Forward standard-error bytes written since `offset` and advance it.
+fn tap_stderr(
+    file: &File,
+    offset: &mut u64,
+    buffer: &mut [u8],
+    tap: &mut dyn FnMut(&[u8]),
+) -> Result<(), RunError> {
+    let length = file.metadata().map_err(RunError::Io)?.len();
+    while *offset < length {
+        let read = read_at(file, buffer, *offset).map_err(RunError::Io)?;
+        if read == 0 {
+            break;
+        }
+        tap(&buffer[..read]);
+        *offset += read as u64;
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn read_at(file: &File, buffer: &mut [u8], offset: u64) -> std::io::Result<usize> {
+    std::os::unix::fs::FileExt::read_at(file, buffer, offset)
+}
+
+#[cfg(windows)]
+fn read_at(file: &File, buffer: &mut [u8], offset: u64) -> std::io::Result<usize> {
+    std::os::windows::fs::FileExt::seek_read(file, buffer, offset)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn read_at(_file: &File, _buffer: &mut [u8], _offset: u64) -> std::io::Result<usize> {
+    Ok(0)
 }
 
 fn within_limit(file: &File, limit: u64) -> bool {

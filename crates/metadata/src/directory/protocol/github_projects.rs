@@ -93,6 +93,9 @@ pub(crate) struct ProjectGithubCloneRequest {
     pub(crate) clone_protocol: Option<GithubCloneProtocol>,
     /// Parent directory; `~` and relative paths follow host resolution.
     pub(crate) target_directory: String,
+    /// Whether the caller wants live progress events on its connection.
+    #[serde(default)]
+    pub(crate) progress: Option<bool>,
 }
 
 /// Completed clone and Project registration, or an inline business error.

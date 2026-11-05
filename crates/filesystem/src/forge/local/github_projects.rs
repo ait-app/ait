@@ -6,12 +6,14 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use crate::forge::local::forge::run_bounded_command;
+use crate::forge::local::forge::{run_bounded_command, run_bounded_command_with_progress};
 use crate::forge::ports::ForgeFailureKind;
 use domain::workspace::provisioning::{
-    GithubProjectsError, GithubRepository, GithubRepositoryVisibility,
+    GithubCloneProgress, GithubProjectsError, GithubRepository, GithubRepositoryVisibility,
 };
 use model::workspace::provisioning::GithubProjectsRuntime;
+
+mod progress;
 
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
 const CLONE_TIMEOUT: Duration = Duration::from_secs(300);
@@ -138,6 +140,7 @@ impl GithubProjectsRuntime for LocalGithubProjects {
         clone_url: &str,
         target_directory: &str,
         name: &str,
+        progress: &mut dyn FnMut(GithubCloneProgress),
     ) -> Result<String, GithubProjectsError> {
         let reported_checkout = self.checkout_path(target_directory, name)?;
         let parent = expand_target(target_directory)?;
@@ -157,7 +160,7 @@ impl GithubProjectsRuntime for LocalGithubProjects {
         command
             .arg("--no-optional-locks")
             .args(["-c", "core.fsmonitor=false", "-c", "color.ui=false"])
-            .args(["clone", "--"])
+            .args(["clone", "--progress", "--"])
             .arg(clone_url)
             .arg(staging.path())
             .current_dir(&parent);
@@ -167,8 +170,11 @@ impl GithubProjectsRuntime for LocalGithubProjects {
             }
         }
         command.env("GIT_TERMINAL_PROMPT", "0");
-        run_bounded_command(command, CLONE_TIMEOUT, false)
-            .map_err(|_| GithubProjectsError::CloneFailed)?;
+        let mut parser = progress::GitCloneProgressParser::default();
+        run_bounded_command_with_progress(command, CLONE_TIMEOUT, false, &mut |bytes| {
+            parser.push(bytes, progress);
+        })
+        .map_err(|_| GithubProjectsError::CloneFailed)?;
         std::fs::rename(staging.path(), &checkout).map_err(|error| {
             if error.kind() == std::io::ErrorKind::AlreadyExists {
                 GithubProjectsError::TargetExists

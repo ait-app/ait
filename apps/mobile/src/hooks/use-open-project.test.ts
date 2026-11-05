@@ -3,7 +3,9 @@ import {
   cloneGithubProjectDirectly,
   getOpenProjectFailureReason,
   openProjectDirectly,
+  type GithubCloneProgressListener,
 } from "@/hooks/open-project";
+import type { ProjectGithubCloneProgressMessage } from "@ait/protocol/messages";
 import type { ProjectDescriptor } from "@/stores/session-store";
 
 const SERVER_ID = "server-1";
@@ -32,6 +34,7 @@ interface RecordedClone {
   repo: string;
   targetDirectory: string;
   cloneProtocol?: "https" | "ssh";
+  progress?: boolean;
 }
 
 function createFakeSession() {
@@ -49,14 +52,47 @@ function createFakeSession() {
   };
 }
 
-function createFakeGithubCloneClient(project: ReturnType<typeof buildProjectPayload> | null) {
+function createFakeGithubCloneClient(project: ReturnType<typeof buildProjectPayload> | null): {
+  clones: RecordedClone[];
+  listenerCount: () => number;
+  listenForProgress: GithubCloneProgressListener;
+  cloneGithubProject: (
+    input: RecordedClone,
+    requestId?: string,
+  ) => Promise<{
+    requestId: string;
+    repo: string;
+    checkoutPath: string;
+    error: string | null;
+    project: ReturnType<typeof buildProjectPayload> | null;
+  }>;
+} {
   const clones: RecordedClone[] = [];
+  const listeners = new Set<(message: ProjectGithubCloneProgressMessage) => void>();
+  const progressMessage = (
+    requestId: string,
+    percent: number,
+  ): ProjectGithubCloneProgressMessage => ({
+    type: "project.github.clone.progress",
+    payload: { requestId, repo: "owner/project", phase: "receiving", percent },
+  });
   return {
     clones,
-    cloneGithubProject: async (input: RecordedClone) => {
+    listenerCount: () => listeners.size,
+    listenForProgress: (handler) => {
+      listeners.add(handler);
+      return () => {
+        listeners.delete(handler);
+      };
+    },
+    cloneGithubProject: async (input: RecordedClone, requestId?: string) => {
       clones.push(input);
+      for (const listener of listeners) {
+        listener(progressMessage("another-request", 10));
+        if (requestId) listener(progressMessage(requestId, 44));
+      }
       return {
-        requestId: "request-3",
+        requestId: requestId ?? "request-3",
         repo: "owner/project",
         checkoutPath: PROJECT_PATH,
         error: project ? null : "Project registration failed",
@@ -223,6 +259,36 @@ describe("cloneGithubProjectDirectly", () => {
     });
     expect(session.projects).toEqual([]);
     expect(session.hydrated).toEqual([]);
+  });
+
+  it("reports only its own live clone progress and unsubscribes afterwards", async () => {
+    const session = createFakeSession();
+    const projectPayload = buildProjectPayload();
+    const github = createFakeGithubCloneClient(projectPayload);
+    const progress: string[] = [];
+
+    const result = await cloneGithubProjectDirectly({
+      serverId: SERVER_ID,
+      repo: "owner/project",
+      targetDirectory: "~/workspace",
+      isConnected: true,
+      client: github,
+      listenForProgress: github.listenForProgress,
+      onProgress: (update) => progress.push(`${update.phase}:${update.percent}`),
+      upsertProject: session.upsertProject,
+      setHasHydratedWorkspaces: session.setHasHydratedWorkspaces,
+    });
+
+    expect(result).toEqual({ ok: true, project: projectPayload });
+    expect(github.clones).toEqual([
+      {
+        repo: "owner/project",
+        targetDirectory: "~/workspace",
+        progress: true,
+      },
+    ]);
+    expect(progress).toEqual(["receiving:44"]);
+    expect(github.listenerCount()).toBe(0);
   });
 });
 

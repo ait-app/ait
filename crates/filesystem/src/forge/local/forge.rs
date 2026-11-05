@@ -18,7 +18,7 @@ use crate::forge::ports::{
     PullRequestStatus, PullRequestStatusRead, PullRequestTimeline, PullRequestTimelineItem,
     TimelineCommentLocation, TimelineError, TimelineErrorKind, TimelineReviewState,
 };
-use crate::support::process::{self, Bounds, RunError};
+use crate::support::process::{self, Bounds, RunError, StderrTap};
 
 mod gitlab;
 mod resolver;
@@ -29,6 +29,8 @@ const READ_TIMEOUT: Duration = Duration::from_secs(30);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(120);
 const OUTPUT_LIMIT: u64 = 4 * 1024 * 1024;
 const STDERR_LIMIT: u64 = 64 * 1024;
+/// Progress-enabled commands retain their update stream beyond the diagnostic limit.
+const PROGRESS_STDERR_LIMIT: u64 = 1024 * 1024;
 const CHECK_ANNOTATION_LIMIT: usize = 20;
 const CHECK_JOB_LIMIT: usize = 100;
 const FAILED_JOB_LIMIT: usize = 5;
@@ -661,33 +663,70 @@ pub(crate) fn run_bounded_command(
     run_command(command, timeout, family).map(|output| output.stdout)
 }
 
+/// Run a bounded command while forwarding its standard-error stream to `stderr_tap`.
+///
+/// The tap is used for machine-readable progress that the command only emits while it runs.
+///
+/// # Errors
+/// Returns the same categorized failures as [`run_bounded_command`].
+pub(crate) fn run_bounded_command_with_progress(
+    mut command: Command,
+    timeout: Duration,
+    github_cli: bool,
+    stderr_tap: &mut dyn FnMut(&[u8]),
+) -> Result<String, ForgeRuntimeError> {
+    let family = if github_cli {
+        CommandFamily::Forge
+    } else {
+        CommandFamily::Git
+    };
+    run_command_with_codes_tapping(&mut command, timeout, family, &[0], Some(stderr_tap))
+        .map(|output| output.stdout)
+}
+
 fn run_command_with_codes(
     command: &mut Command,
     timeout: Duration,
     family: CommandFamily,
     accepted_codes: &[i32],
 ) -> Result<CommandOutput, ForgeRuntimeError> {
+    run_command_with_codes_tapping(command, timeout, family, accepted_codes, None)
+}
+
+fn run_command_with_codes_tapping(
+    command: &mut Command,
+    timeout: Duration,
+    family: CommandFamily,
+    accepted_codes: &[i32],
+    stderr_tap: Option<StderrTap<'_>>,
+) -> Result<CommandOutput, ForgeRuntimeError> {
     let bounds = Bounds {
         timeout,
         stdout_limit: OUTPUT_LIMIT,
-        stderr_limit: STDERR_LIMIT,
+        stderr_limit: if stderr_tap.is_some() {
+            PROGRESS_STDERR_LIMIT
+        } else {
+            STDERR_LIMIT
+        },
     };
-    let output = process::run_bounded(command, bounds, None).map_err(|error| match error {
-        RunError::Spawn(error)
-            if error.kind() == std::io::ErrorKind::NotFound
-                && matches!(family, CommandFamily::Forge) =>
-        {
-            forge_error(ForgeFailureKind::CliMissing, "Forge CLI is not installed")
-        }
-        RunError::Spawn(error) | RunError::Io(error) => io_error(&error),
-        RunError::StdoutExceeded => forge_error(
-            ForgeFailureKind::Unknown,
-            "Forge command output exceeded the configured limit",
-        ),
-        RunError::TimedOut | RunError::StderrExceeded | RunError::Cancelled => {
-            forge_error(ForgeFailureKind::Unknown, "Forge command timed out")
-        }
-    })?;
+    let output = process::run_bounded_tapping(command, bounds, None, stderr_tap).map_err(
+        |error| match error {
+            RunError::Spawn(error)
+                if error.kind() == std::io::ErrorKind::NotFound
+                    && matches!(family, CommandFamily::Forge) =>
+            {
+                forge_error(ForgeFailureKind::CliMissing, "Forge CLI is not installed")
+            }
+            RunError::Spawn(error) | RunError::Io(error) => io_error(&error),
+            RunError::StdoutExceeded => forge_error(
+                ForgeFailureKind::Unknown,
+                "Forge command output exceeded the configured limit",
+            ),
+            RunError::TimedOut | RunError::StderrExceeded | RunError::Cancelled => {
+                forge_error(ForgeFailureKind::Unknown, "Forge command timed out")
+            }
+        },
+    )?;
     let code = output.code();
     if !accepted_codes.contains(&code) {
         let diagnostic = String::from_utf8_lossy(&output.stderr)
