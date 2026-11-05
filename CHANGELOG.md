@@ -1,9 +1,12 @@
 # Ait changelog
 
-## Unreleased
+## 0.1.30 - 2026-11-05
 
 - Breaking: Workspace Bots are now one manager Bot per Workspace, addressed by `workspaceId` through the `workspace-bots-v2` interface (replacing `workspace-bots-v1`; `bot.create`, `bot.list`, `bot.archive` and `bot.permission.resolve` are removed). Existing Bots, Channels, and history from earlier versions are discarded at startup, and the Bot tab shows an upgrade prompt until the matching client ships.
 - Store Bot memory under the daemon data directory instead of the workspace; archiving a workspace deletes it, removing a Bot keeps it, and a missing workspace directory pauses the Bot until resumed.
+- Rename the packaged daemon executable to `aitd`, both in desktop resources and standalone archives. Update existing service commands and scripts when upgrading from `ait-daemon`; archive filenames stay the same.
+- Hide cached workspaces for unavailable online hosts in the sidebar while preserving pinned host filters.
+- Consolidate CI jobs and keep nightly publication gated on all configured checks.
 
 ## 0.1.29 - 2026-11-05
 
