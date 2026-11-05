@@ -22,13 +22,83 @@ concurrency:
   group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+  # Every build job checks out this ref; release tooling always comes from the workflow commit.
+  SOURCE_REF: ${{ inputs.source_commit || inputs.tag || github.ref }}
+  SOURCE_COMMIT: ${{ inputs.source_commit }}
+
 jobs:
+  # Windows ships without a daemon, so it needs neither Rust nor the release tooling checkout.
   windows:
     name: Build Windows x64
-    uses: ./.github/workflows/windows-desktop.yml
-    with:
-      source_ref: ${{ inputs.source_commit || inputs.tag || github.ref }}
-      release_tag: ${{ inputs.tag || github.ref_name }}
+    runs-on: windows-2025
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI: "1"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - &validate-source
+        name: Validate rebuild source
+        if: env.SOURCE_COMMIT != ''
+        run: |
+          [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+
+      - &checkout-source
+        name: Check out release source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SOURCE_REF }}
+
+      - &setup-node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - &verify-version
+        name: Verify release version
+        run: node scripts/verify-release-version.mjs "$RELEASE_TAG"
+
+      - run: npm ci
+
+      - name: Build Windows desktop without daemon
+        run: npm run build:windows
+
+      - name: Smoke packaged Windows desktop
+        run: node apps/desktop/e2e/windows-startup.e2e.mjs
+
+      - name: Collect installers and updater assets
+        run: node scripts/release-assets.mjs collect win "${RELEASE_TAG#v}" apps/desktop/release release-assets
+
+      - name: Record Windows build source
+        run: |
+          node <<'NODE'
+          const { execFileSync } = require('node:child_process');
+          const { writeFileSync } = require('node:fs');
+          const info = {
+            version: process.env.RELEASE_TAG.replace(/^v/, ''),
+            releaseTag: process.env.RELEASE_TAG,
+            sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+            workflowCommit: process.env.GITHUB_WORKFLOW_SHA,
+            workflowRunUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            platform: 'win32',
+            arch: 'x64',
+            bundledDaemon: false,
+          };
+          writeFileSync('release-assets/BUILD-INFO-windows.json', JSON.stringify(info, null, 2) + '\n');
+          NODE
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ait-windows-x64
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 7
 
   # ADR-188: the hosted browser client image is deployed at the site root by ait-server.
   web-client:
@@ -39,33 +109,13 @@ jobs:
       contents: read
       packages: write
     env:
-      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
       IMAGE: ghcr.io/ait-app/ait-web-client
     steps:
-      - name: Validate rebuild source
-        env:
-          SOURCE_COMMIT: ${{ inputs.source_commit }}
-        run: |
-          if [ -n "$SOURCE_COMMIT" ]; then
-            [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || exit 1
-          fi
-
-      - name: Check out release source
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.source_commit || inputs.tag || github.ref }}
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Verify release version
-        run: node scripts/verify-release-version.mjs "$RELEASE_TAG"
-
-      - name: Install workspace dependencies
-        run: npm ci
+      - *validate-source
+      - *checkout-source
+      - *setup-node
+      - *verify-version
+      - run: npm ci
 
       - name: Export web client
         run: npm run build:web-console --workspace=@ait/mobile
@@ -111,7 +161,6 @@ jobs:
             platform: mac
             artifact: ait-macos-arm64
     env:
-      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
       CARGO_TERM_COLOR: always
       CI: "1"
       EXPO_NO_TELEMETRY: "1"
@@ -119,20 +168,11 @@ jobs:
       # Old immutable tags still use the former name in their packaging hooks.
       PASEO_DESKTOP_SMOKE: "1"
     steps:
-      - name: Validate rebuild source
-        env:
-          SOURCE_COMMIT: ${{ inputs.source_commit }}
-        run: |
-          if [ -n "$SOURCE_COMMIT" ]; then
-            [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || exit 1
-          fi
+      - *validate-source
+      - *checkout-source
 
-      - name: Check out release source
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.source_commit || inputs.tag || github.ref }}
-
-      - name: Check out release tooling
+      - &checkout-tooling
+        name: Check out release tooling
         uses: actions/checkout@v5
         with:
           ref: ${{ github.workflow_sha }}
@@ -142,17 +182,9 @@ jobs:
         with:
           targets: ${{ matrix.rust_target }}
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Verify release version
-        run: node scripts/verify-release-version.mjs "$RELEASE_TAG"
-
-      - name: Install workspace dependencies
-        run: npm ci
+      - *setup-node
+      - *verify-version
+      - run: npm ci
 
       - name: Validate release tooling
         run: node --test .tmp/release-tools/scripts/release-assets.test.mjs .tmp/release-tools/scripts/release-layout.test.mjs .tmp/release-tools/scripts/release-workflow.test.mjs .tmp/release-tools/scripts/prepare-desktop-daemon.test.mjs .tmp/release-tools/scripts/verify-packaged-resources.test.cjs
@@ -185,21 +217,6 @@ jobs:
           AIT_SERVER_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/${{ steps.layout.outputs.binary }}
         run: npm run package:linux
 
-      - name: Validate Apple signing secrets
-        if: matrix.platform == 'mac'
-        env:
-          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_BUILD_APP_SECRET }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          test -n "$CSC_LINK"
-          test -n "$CSC_KEY_PASSWORD"
-          test -n "$APPLE_ID"
-          test -n "$APPLE_APP_SPECIFIC_PASSWORD"
-          test -n "$APPLE_TEAM_ID"
-
       - name: Package, sign, and notarize macOS desktop
         if: matrix.platform == 'mac'
         env:
@@ -209,7 +226,14 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_BUILD_APP_SECRET }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run package:mac
+        run: |
+          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Apple signing secret for $name is not configured"
+              exit 1
+            fi
+          done
+          npm run package:mac
 
       - name: Collect installers and updater assets
         run: node .tmp/release-tools/scripts/release-assets.mjs collect "${{ matrix.platform }}" "${RELEASE_TAG#v}" "${{ steps.layout.outputs.desktop }}/release" release-assets
@@ -241,7 +265,7 @@ jobs:
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/standalone-daemon"
-          keychain="$RUNNER_TEMP/ait-daemon-signing.keychain-db"
+          keychain="$RUNNER_TEMP/aitd-signing.keychain-db"
           keychain_password=$(openssl rand -hex 24)
           mkdir -p "$work/bin"
           trap 'security delete-keychain "$keychain" >/dev/null 2>&1 || true; rm -f "$work/certificate.p12"' EXIT
@@ -258,12 +282,12 @@ jobs:
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
           identity=$(security find-identity -v -p codesigning "$keychain" | awk -F'"' '/Developer ID Application/ { print $2; exit }')
           test -n "$identity"
-          cp "$DAEMON_BIN" "$work/bin/ait-daemon"
+          cp "$DAEMON_BIN" "$work/bin/aitd"
           codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" \
-            --keychain "$keychain" --sign "$identity" "$work/bin/ait-daemon"
-          codesign --verify --strict --verbose=2 "$work/bin/ait-daemon"
-          ditto -c -k --keepParent "$work/bin/ait-daemon" "$work/ait-daemon.zip"
-          xcrun notarytool submit "$work/ait-daemon.zip" \
+            --keychain "$keychain" --sign "$identity" "$work/bin/aitd"
+          codesign --verify --strict --verbose=2 "$work/bin/aitd"
+          ditto -c -k --keepParent "$work/bin/aitd" "$work/aitd.zip"
+          xcrun notarytool submit "$work/aitd.zip" \
             --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID" \
             --wait --timeout 30m --output-format json > "$work/notarization.json"
           status=$(plutil -extract status raw -o - "$work/notarization.json")
@@ -273,7 +297,7 @@ jobs:
             echo "Standalone daemon notarization status: $status" >&2
             exit 1
           fi
-          echo "STANDALONE_DAEMON_BIN=$work/bin/ait-daemon" >> "$GITHUB_ENV"
+          echo "STANDALONE_DAEMON_BIN=$work/bin/aitd" >> "$GITHUB_ENV"
 
       - name: Package standalone daemon
         env:
@@ -297,17 +321,9 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
-      - name: Check out release source
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.source_commit || inputs.tag || github.ref }}
-      - name: Check out release tooling
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: .tmp/release-tools
+      - *checkout-source
+      - *checkout-tooling
       - uses: actions/setup-node@v5
         with:
           node-version: 24

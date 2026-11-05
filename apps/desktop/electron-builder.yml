@@ -40,8 +40,8 @@ publish:
   channel: "${channel}"
 mac:
   extraResources:
-    - from: release-resources/daemon/daemon
-      to: bin/daemon
+    - from: release-resources/daemon/aitd
+      to: bin/aitd
   publish:
     provider: generic
     url: https://aitapp.cn/api/v1/updates/macos/
@@ -55,7 +55,7 @@ mac:
   hardenedRuntime: true
   notarize: true
   binaries:
-    - Contents/Resources/bin/daemon
+    - Contents/Resources/bin/aitd
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.inherit.plist
   target:
@@ -63,8 +63,8 @@ mac:
     - zip
 linux:
   extraResources:
-    - from: release-resources/daemon/daemon
-      to: bin/daemon
+    - from: release-resources/daemon/aitd
+      to: bin/aitd
   category: Development
   icon: assets
   artifactName: "Ait-${version}-linux-${arch}.${ext}"

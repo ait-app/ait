@@ -175,6 +175,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## 客户端、连接与品牌
 
+- [ADR-212：打包的 daemon 可执行文件统一命名为 aitd](clients/adr-212-packaged-daemon-name-aitd.md)
+
 - [ADR-211：SDK 原生使用 daemon 协议](clients/adr-211-sdk-native-daemon-protocol.md)
 
 - [ADR-207：桌面 daemon 就绪探测与进程生命周期分离](clients/adr-207-desktop-daemon-readiness-ownership.md)

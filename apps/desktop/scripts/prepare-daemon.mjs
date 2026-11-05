@@ -15,7 +15,8 @@ export function stageDaemon({ binary, directory, version }) {
   // This directory is generated packaging input. Never carry old sidecars forward.
   rmSync(directory, { recursive: true, force: true });
   mkdirSync(directory, { recursive: true });
-  const staged = path.join(directory, "daemon");
+  // Cargo builds `daemon`; packages ship it as `aitd` (ADR-212).
+  const staged = path.join(directory, "aitd");
   copyFileSync(binary, staged);
   chmodSync(staged, 0o755);
   return staged;

@@ -51,7 +51,7 @@ function getRustDaemon(): RustDaemonManager {
         ? path.join(
             process.resourcesPath,
             "bin",
-            process.platform === "win32" ? "daemon.exe" : "daemon",
+            process.platform === "win32" ? "aitd.exe" : "aitd",
           )
         : path.resolve(
             __dirname,

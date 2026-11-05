@@ -509,7 +509,7 @@ test("desktop-only verification is the default and Android requires an explicit 
   assert.notEqual(verify("--andriod").status, 0, "unknown options must fail closed");
 });
 
-test("standalone daemon archives package ait-daemon and the license per target", async (t) => {
+test("standalone daemon archives package aitd and the license per target", async (t) => {
   assert.equal(daemonAssetName("linux", "0.0.7"), "Ait-0.0.7-daemon-linux-x64.tar.gz");
   assert.equal(
     daemonAssetName("mac", "0.0.8-beta.1"),
@@ -535,7 +535,7 @@ test("standalone daemon archives package ait-daemon and the license per target",
   const entries = listing.stdout.trim().split("\n");
   assert.deepEqual(
     entries.map((line) => line.split(/\s+/).at(-1)),
-    ["ait-daemon", "LICENSE"],
+    ["aitd", "LICENSE"],
   );
   assert.match(entries[0], /^-rwxr-xr-x/);
   const stale = await fakeDaemon(t, "daemon 0.0.6");
@@ -808,10 +808,10 @@ test("release workflow builds only the daemon and packages the resolved desktop 
   );
   for (const platform of ["mac", "linux"]) {
     assert.deepEqual(config[platform].extraResources, [
-      { from: "release-resources/daemon/daemon", to: "bin/daemon" },
+      { from: "release-resources/daemon/aitd", to: "bin/aitd" },
     ]);
   }
-  assert.deepEqual(config.mac.binaries, ["Contents/Resources/bin/daemon"]);
+  assert.deepEqual(config.mac.binaries, ["Contents/Resources/bin/aitd"]);
   assert.deepEqual(config.win.target, ["nsis", "zip"]);
   assert.equal(config.win.extraResources, undefined);
   assert.deepEqual(config.linux.target, ["AppImage", "tar.gz", "deb", "rpm"]);

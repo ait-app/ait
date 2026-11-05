@@ -66,16 +66,13 @@ macOS nightly 使用 ad-hoc 签名，未公证。
 
 nightly 同样附带独立 daemon 归档，例如 `Ait-38fb6054-2026-10-08-daemon-linux-x64.tar.gz`，
 与桌面包共用同一次构建的 daemon。macOS 归档只有 ad-hoc 签名、未公证；用浏览器下载后若被拦截，
-在解压目录执行 `xattr -d com.apple.quarantine ait-daemon`。见 [ADR-163](../decisions/clients/adr-163-nightly-standalone-daemon.md)。
+在解压目录执行 `xattr -d com.apple.quarantine aitd`。见 [ADR-163](../decisions/clients/adr-163-nightly-standalone-daemon.md)。
 
 ## PR CI
 
-创建或更新 PR 会运行适用的 Rust、UI、文档和格式检查。Linux x86_64 与 macOS Apple Silicon
-桌面打包，以及 nightly 的准入、发布和产物清理任务均跳过。
-影响桌面、共享界面、依赖或 Windows/Release 工作流的 PR 会运行
-[Windows desktop](../../.github/workflows/windows-desktop.yml)：构建未签名 x64 NSIS 安装包和 ZIP，
-实际启动打包客户端验证欢迎页及无内置 daemon，并保留 `ait-windows-x64` CI 产物 7 天。
-该任务只有读取仓库的权限，不上传 GitHub Release。
+创建或更新 PR 会运行适用的 Rust、UI、Web 客户端检查，以及全仓库的文档与格式检查。
+Linux x86_64 与 macOS Apple Silicon 桌面打包，以及 nightly 的准入和发布任务均跳过；
+Windows 只在 [Release Ait](../../.github/workflows/release.yml) 中构建。
 
 合并到 `main` 后，由 main CI 构建并发布 nightly 安装包；合并前如需验证安装包，
 可按[桌面端构建说明](../../apps/desktop/README.md)在本地打包。
@@ -103,7 +100,7 @@ Google Play 和 iOS TestFlight 不随 PR 或 main CI 构建，均使用各自的
 
 AppImage 文件名保持稳定，版本体现在 Release 标签和应用内部。deb 与 rpm 的包名为
 `ait-desktop`，安装到 `/opt/Ait`，并列入 `latest-linux.yml` 供原生更新器使用。Linux/macOS
-安装包 `resources/bin/` 中只有 `daemon`；Windows 不附带 daemon，仅连接远程主机。
+安装包 `resources/bin/` 中只有 `aitd`；Windows 不附带 daemon，仅连接远程主机。
 Windows Release 构建运行在 `windows-2025`，不安装 Rust 工具链、不构建独立 daemon。
 未配置 Windows 代码签名证书时产物未签名。Electron 主程序与 Helper 是必需运行时。
 GitHub 仍自动提供标签对应的源码归档。
@@ -114,8 +111,8 @@ Windows 构建来源单独记录，原 `BUILD-INFO.json` 继续描述既有平�
 `--windows` 强制要求完整 Windows 产物集；历史版本校验仍允许不含 Windows 的旧版本。
 
 独立 daemon 归档供没有桌面环境的主机运行 [无人值守 daemon](headless-daemon.md)，与桌面包使用
-同一次构建的 Rust `daemon`。归档内为可执行文件 `ait-daemon` 和 `LICENSE`；文件改名是为了放入
-`PATH` 时不与系统同名程序冲突，`--help` 中的程序名仍为 `daemon`。macOS 版本单独用 Developer ID
+同一次构建的 Rust `daemon`。归档内为可执行文件 `aitd` 和 `LICENSE`，与桌面包内的文件同名；改名是为了
+放入 `PATH` 时不与系统同名程序冲突，`--help` 中的程序名仍为 `daemon`。见 [ADR-212](../decisions/clients/adr-212-packaged-daemon-name-aitd.md)。macOS 版本单独用 Developer ID
 签名（hardened runtime）并公证；裸可执行文件无法 staple 公证票据，Gatekeeper 首次运行时在线核验。
 Linux daemon 在 `ubuntu-24.04` runner 上通过 [`build-linux-daemon.sh`](../../scripts/build-linux-daemon.sh) 于 `manylinux_2_28` 容器内编译，桌面包与独立归档共用；构建后检查不超过 `GLIBC_2.28` 与 `GLIBCXX_3.4.25`，支持 Ubuntu 20.04、Debian 10、RHEL 8 及更新版本。
 正式版、beta 和 nightly 都包含这两个归档；nightly 版本见上文 [main CI Nightly](#main-ci-nightly)。
@@ -158,11 +155,11 @@ Git 工作区，不用于 `makepkg --source` 或单独发布到 AUR；AUR 二进
   `--devel` 获取新提交。AUR 规定不能提交只改 `pkgver` 的 VCS 包更新，因此只有配方本身变化时才更新，
   由维护者在本机用自己的 AUR SSH key 运行 `build`（完整编译验证）后再 `publish`。
 
-`ait-bin` 每次更新分两个 job，由 [`aur-package.yml`](../../.github/workflows/aur-package.yml) 执行：
+`ait-bin` 每次更新在 [`publish-aur.yml`](../../.github/workflows/publish-aur.yml) 中分两个 job 执行：
 
 1. 构建：在 `archlinux:base-devel` 容器中完整运行 `makepkg`。构建会执行上游 npm/Cargo 依赖的代码，
    因此此 job 不接触 AUR 私钥。
-2. 发布：构建成功后在另一台 runner 上运行，不构建，只生成 `.SRCINFO`，提交并推送到 AUR。
+2. 发布：构建成功后在另一台 runner 上运行，不构建，沿用构建 job 解析出的版本，只生成 `.SRCINFO`，提交并推送到 AUR。
 
 `.SRCINFO` 不提交到本仓库。也可手动运行工作流，`tag` 留空时使用最新正式版。
 

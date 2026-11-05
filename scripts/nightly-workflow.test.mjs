@@ -3,11 +3,9 @@ import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createHash } from "node:crypto";
 import test from "node:test";
 import yaml from "yaml";
 import control from "./nightly-control.cjs";
-import { recordPrBuild } from "./pr-build-info.mjs";
 import { nightlyBuilderArgs } from "./nightly-build.mjs";
 
 const workflow = yaml.parse(
@@ -21,12 +19,21 @@ const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 test("UI CI checks changed lint, delegates formatting and runs the shared client suite", () => {
   const steps = workflow.jobs.ui.steps;
   assert.equal(steps.find((step) => step.uses === "actions/checkout@v5").with["fetch-depth"], 0);
-  const check = steps.find((step) => step.name === "Check changed UI lint");
-  assert.equal(check.run, 'npm run check:ui -- "$UI_DIFF_BASE"');
+  const check = steps.find((step) => step.name === "Lint changed UI");
+  assert.match(check.run, /^npm run check:ui -- "\$UI_DIFF_BASE"$/m);
+  assert.match(check.run, /^node --test scripts\/check-ui\.test\.mjs$/m);
   assert.match(check.env.UI_DIFF_BASE, /pull_request.base.sha.*github.event.before/);
-  assert.ok(steps.some((step) => step.run === "node --test scripts/check-ui.test.mjs"));
-  assert.match(workflow.jobs.format.steps.at(-1).run, /oxfmt@.*--check \./);
-  assert.ok(steps.some((step) => step.run === "npm run test --workspace=@ait/client"));
+  const lint = workflow.jobs.lint.steps;
+  assert.match(lint.find((step) => step.name === "Check formatting").run, /oxfmt@.*--check \./);
+  assert.equal(lint.find((step) => step.name === "Check docs").run, "npm run check:docs");
+  const runs = steps.map((step) => step.run ?? "");
+  assert.ok(runs.some((run) => /^npm run test .*--workspace=@ait\/client/.test(run)));
+  // The SDK is built once by build:desktop-main; test:sdk would rebuild and rerun the same suites.
+  assert.ok(!runs.some((run) => run.includes("test:sdk")));
+  assert(
+    runs.indexOf("npm run build:desktop-main") <
+      runs.findIndex((run) => run.includes("@ait/client")),
+  );
 });
 
 test("nightly Linux desktop builds its daemon on the release glibc baseline", () => {
@@ -50,7 +57,6 @@ test("nightly packages both standalone daemons and explains the macOS quarantine
   const steps = workflow.jobs.desktop.steps;
   const names = steps.map((step) => step.name);
   const pack = steps.find((step) => step.name === "Package standalone daemon");
-  assert.equal(pack.if, "env.NIGHTLY_BUILD_LABEL != ''");
   assert.match(pack.env.DAEMON_BIN, /target\/\$\{\{ matrix.rust_target \}\}\/release\/daemon$/);
   assert.match(
     pack.run,
@@ -63,7 +69,7 @@ test("nightly packages both standalone daemons and explains the macOS quarantine
   const publish = workflow.jobs["nightly-publish"].steps.find(
     (step) => step.name === "Publish latest nightly",
   );
-  assert.match(publish.run, /xattr -d com\.apple\.quarantine ait-daemon/);
+  assert.match(publish.run, /xattr -d com\.apple\.quarantine aitd/);
 });
 
 const context = { repo: { owner: "ait-app", repo: "ait" }, sha: "current", runId: 42 };
@@ -98,10 +104,7 @@ test("main builds run independently while admission and publication share a queu
     "${{ steps.window.outputs.admitted }}",
   );
   assert.equal(workflow.jobs.desktop.needs, "nightly-prepare");
-  assert.equal(
-    workflow.jobs.desktop.if,
-    "${{ !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.nightly-prepare.outputs.admitted == 'true' }}",
-  );
+  assert.equal(workflow.jobs.desktop.if, "needs.nightly-prepare.outputs.admitted == 'true'");
   assert.deepEqual(workflow.jobs.desktop.concurrency, {
     group: "${{ format('desktop-run-{0}-{1}', github.run_id, matrix.platform) }}",
     "cancel-in-progress": false,
@@ -114,22 +117,22 @@ test("main builds run independently while admission and publication share a queu
   assert.equal(workflow.jobs["nightly-publish"].permissions.actions, "write");
   const platforms = workflow.jobs.desktop.strategy.matrix.include.map((entry) => entry.platform);
   assert.equal(new Set(platforms).size, platforms.length);
-  assert.deepEqual(workflow.jobs["nightly-publish"].needs, [
-    "nightly-prepare",
-    "changes",
-    "desktop",
-    "rust",
-    "ui",
-    "docs",
-    "format",
-  ]);
+  // Publication must wait for every other job in the workflow.
+  assert.deepEqual(
+    [...workflow.jobs["nightly-publish"].needs].sort(),
+    Object.keys(workflow.jobs)
+      .filter((job) => job !== "nightly-publish")
+      .sort(),
+  );
   assert.deepEqual(workflow.jobs["nightly-publish"].concurrency, {
     group: "nightly-main-control",
     queue: "max",
     "cancel-in-progress": false,
   });
-  assert.deepEqual(workflow.jobs["nightly-cleanup"].needs, ["desktop", "nightly-publish"]);
-  assert.match(workflow.jobs["nightly-cleanup"].if, /always\(\)/);
+  // Artifact cleanup is the last publication step, so a failed publish keeps both platforms.
+  const publishSteps = workflow.jobs["nightly-publish"].steps;
+  assert.equal(publishSteps.at(-1).name, "Remove temporary nightly artifacts");
+  assert.equal(publishSteps.at(-1).if, undefined);
   for (const job of Object.values(workflow.jobs)) {
     for (const step of job.steps) {
       if (!step.run) continue;
@@ -139,10 +142,16 @@ test("main builds run independently while admission and publication share a queu
   }
 });
 
+// Evaluates a job condition like GitHub: without a status function, success() is implied.
 function condition(expression, github, needs = {}, cancelled = false) {
-  const code = expression
+  let code = expression
     .replace(/^\s*\$\{\{|\}\}\s*$/g, "")
-    .replaceAll("needs.nightly-prepare", 'needs["nightly-prepare"]');
+    .replaceAll("needs.*.result", "Object.values(needs).map((need) => need.result)")
+    .replace(/needs\.([\w-]+)/g, (_, job) => `needs[${JSON.stringify(job)}]`);
+  if (!/\b(?:always|cancelled|success|failure)\(/.test(code)) {
+    const succeeded = !cancelled && Object.values(needs).every((need) => need.result === "success");
+    code = `${succeeded} && (${code})`;
+  }
   return new Function(
     "github",
     "needs",
@@ -168,20 +177,25 @@ test("PR CI skips desktop packaging and every nightly job", () => {
   assert.deepEqual(workflow.jobs.desktop.permissions, { contents: "read" });
   for (const ref of ["refs/pull/123/merge", "refs/heads/main"]) {
     const github = { event_name: "pull_request", ref };
-    const needs = { "nightly-prepare": { outputs: { admitted: "true" } } };
-    for (const job of ["desktop", "nightly-prepare", "nightly-publish", "nightly-cleanup"])
-      assert.equal(condition(workflow.jobs[job].if, github, needs), false, job);
+    assert.equal(condition(workflow.jobs["nightly-prepare"].if, github), false);
+    // A skipped admission skips desktop packaging, which in turn blocks publication.
+    const prepare = { "nightly-prepare": { result: "skipped", outputs: {} } };
+    assert.equal(condition(workflow.jobs.desktop.if, github, prepare), false);
+    const needs = { ...prepare, desktop: { result: "skipped" } };
+    assert.equal(condition(workflow.jobs["nightly-publish"].if, github, needs), false);
+    // Publication rechecks the event even if every dependency reports success.
+    const forged = { desktop: { result: "success" } };
+    assert.equal(condition(workflow.jobs["nightly-publish"].if, github, forged), false);
   }
   const upload = workflow.jobs.desktop.steps.find((step) =>
     step.uses?.startsWith("actions/upload-artifact@"),
   );
   assert.equal(upload.with.overwrite, true);
-  assert.match(upload.with.name, /pull_request.number/);
-  assert.match(upload.with.name, /pull_request.head.sha/);
   assert.equal(
-    upload.with["retention-days"],
-    "${{ github.event_name == 'pull_request' && 14 || 1 }}",
+    upload.with.name,
+    "nightly-${{ needs.nightly-prepare.outputs.label }}-${{ matrix.platform }}",
   );
+  assert.equal(upload.with["retention-days"], 1);
   const checkout = workflow.jobs.desktop.steps.find((step) =>
     step.uses?.startsWith("actions/checkout@"),
   );
@@ -195,15 +209,15 @@ test("PR CI skips desktop packaging and every nightly job", () => {
 test("desktop packaging requires an admitted main push that has not been cancelled", () => {
   const github = { event_name: "push", ref: "refs/heads/main" };
   for (const admitted of ["true", "false", undefined]) {
-    const needs = { "nightly-prepare": { outputs: { admitted } } };
+    const needs = { "nightly-prepare": { result: "success", outputs: { admitted } } };
     assert.equal(condition(workflow.jobs.desktop.if, github, needs), admitted === "true");
   }
-  const needs = { "nightly-prepare": { outputs: { admitted: "true" } } };
+  const needs = { "nightly-prepare": { result: "success", outputs: { admitted: "true" } } };
   assert.equal(condition(workflow.jobs.desktop.if, github, needs, true), false);
-  assert.equal(
-    condition(workflow.jobs.desktop.if, { ...github, ref: "refs/heads/dev" }, needs),
-    false,
-  );
+  const failed = { "nightly-prepare": { result: "failure", outputs: { admitted: "true" } } };
+  assert.equal(condition(workflow.jobs.desktop.if, github, failed), false);
+  const dev = { ...github, ref: "refs/heads/dev" };
+  assert.equal(condition(workflow.jobs["nightly-prepare"].if, dev), false);
 });
 
 test("PR CI cleanup runs only after a merge to main and never executes PR code", () => {
@@ -308,24 +322,28 @@ test("PR CI cleanup tolerates runs completing during cancellation and continues"
 
 test("main publishing requires desktop and applicable CI checks to pass", () => {
   const github = { event_name: "push", ref: "refs/heads/main" };
-  const needs = {
-    changes: { result: "success" },
-    desktop: { result: "success" },
-    docs: { result: "success" },
-    format: { result: "success" },
-    rust: { result: "skipped" },
-    ui: { result: "success" },
-  };
+  const needs = Object.fromEntries(
+    workflow.jobs["nightly-publish"].needs.map((job) => [job, { result: "success" }]),
+  );
+  needs.rust = { result: "skipped" };
+  needs["headless-macos"] = { result: "skipped" };
   assert.equal(condition(workflow.jobs["nightly-publish"].if, github, needs), true);
-  for (const job of ["changes", "desktop", "docs", "format", "rust", "ui"]) {
-    assert.equal(
-      condition(workflow.jobs["nightly-publish"].if, github, {
-        ...needs,
-        [job]: { result: "failure" },
-      }),
-      false,
-    );
+  for (const job of Object.keys(needs)) {
+    for (const result of ["failure", "cancelled"]) {
+      assert.equal(
+        condition(workflow.jobs["nightly-publish"].if, github, { ...needs, [job]: { result } }),
+        false,
+        `${job} ${result}`,
+      );
+    }
   }
+  assert.equal(
+    condition(workflow.jobs["nightly-publish"].if, github, {
+      ...needs,
+      desktop: { result: "skipped" },
+    }),
+    false,
+  );
   // A failed change filter skips both checks; publication must not treat that as a pass.
   assert.equal(
     condition(workflow.jobs["nightly-publish"].if, github, {
@@ -352,7 +370,7 @@ test("Google Play publishing remains manual only", async () => {
   assert.deepEqual(Object.keys(mobile.on), ["workflow_dispatch"]);
 });
 
-test("packaging shell passes nightly names literally and keeps default names without a label", async (t) => {
+test("packaging shell passes nightly names literally", async (t) => {
   const directory = await mkdtemp(path.join(tmpdir(), "ait-nightly-args-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await writeFile(
@@ -362,7 +380,7 @@ test("packaging shell passes nightly names literally and keeps default names wit
   );
   const step = workflow.jobs.desktop.steps.find((step) => step.name === "Package desktop preview");
   for (const platform of ["linux", "mac"]) {
-    for (const label of ["", "abcdef01-2026-10-08"]) {
+    for (const label of ["abcdef01-2026-10-08", "01234567-2026-11-05"]) {
       const result = spawnSync("bash", ["-e", "-o", "pipefail", "-c", step.run], {
         cwd: new URL("../apps/desktop", import.meta.url),
         env: {
@@ -378,13 +396,7 @@ test("packaging shell passes nightly names literally and keeps default names wit
       });
       assert.equal(result.status, 0, result.stderr);
       const args = JSON.parse(result.stdout);
-      if (label) {
-        for (const arg of nightlyBuilderArgs(label)) assert.ok(args.includes(arg), arg);
-      } else {
-        assert.ok(
-          args.every((arg) => !arg.includes("artifactName=") && !arg.includes("publish.channel=")),
-        );
-      }
+      for (const arg of nightlyBuilderArgs(label)) assert.ok(args.includes(arg), arg);
     }
   }
   assert.equal(
@@ -399,39 +411,6 @@ test("packaging shell passes nightly names literally and keeps default names wit
     (step) => step.name === "Publish latest nightly",
   );
   assert.match(publish.run, /--title "Ait Nightly \$NIGHTLY_BUILD_LABEL"/);
-});
-
-test("PR package records both source and merge commits and checksums all downloaded files", async (t) => {
-  const directory = await mkdtemp(path.join(tmpdir(), "ait-pr-assets-"));
-  t.after(() => rm(directory, { recursive: true, force: true }));
-  await writeFile(path.join(directory, "Ait.dmg"), "test package");
-  const env = {
-    PR_NUMBER: "123",
-    PR_HEAD_SHA: "a".repeat(40),
-    PR_BASE_SHA: "b".repeat(40),
-    GITHUB_SHA: "c".repeat(40),
-    PLATFORM: "mac",
-    GITHUB_SERVER_URL: "https://github.com",
-    GITHUB_REPOSITORY: "ait-app/ait",
-    GITHUB_RUN_ID: "456",
-  };
-  const info = await recordPrBuild(directory, env);
-  assert.equal(info.pullRequest, 123);
-  assert.equal(info.headCommit, env.PR_HEAD_SHA);
-  assert.equal(info.sourceCommit, env.GITHUB_SHA);
-  assert.equal(info.baseCommit, env.PR_BASE_SHA);
-  assert.equal(info.channel, "pull-request");
-  const sums = await readFile(path.join(directory, "SHA256SUMS"), "utf8");
-  for (const file of ["Ait.dmg", "BUILD-INFO.json"]) {
-    const hash = createHash("sha256")
-      .update(await readFile(path.join(directory, file)))
-      .digest("hex");
-    assert.ok(sums.includes(`${hash}  ${file}\n`));
-  }
-  await assert.rejects(
-    recordPrBuild(directory, { ...env, GITHUB_SHA: "unknown" }),
-    /Invalid GITHUB_SHA/,
-  );
 });
 
 const releaseStep = workflow.jobs["nightly-publish"].steps.find((step) => step.id === "release");
@@ -508,7 +487,10 @@ test("cleanup queries only its own run and preserves unrelated artifacts", async
       ];
     },
   };
-  await runScript(workflow.jobs["nightly-cleanup"].steps[0], github);
+  const cleanup = workflow.jobs["nightly-publish"].steps.find(
+    (step) => step.name === "Remove temporary nightly artifacts",
+  );
+  await runScript(cleanup, github);
   assert.deepEqual(deleted, [
     { ...context.repo, artifact_id: 1 },
     { ...context.repo, artifact_id: 2 },
