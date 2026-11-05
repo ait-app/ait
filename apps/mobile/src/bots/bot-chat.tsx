@@ -189,6 +189,7 @@ export function BotChat({
             size="sm"
             disabled={resume.isPending}
             onPress={() => resume.mutate()}
+            testID="bot-resume"
           >
             {t("bots.resume")}
           </Button>
