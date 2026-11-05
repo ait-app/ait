@@ -6,14 +6,14 @@ use sha2::{Digest, Sha256};
 
 use super::{State, project_conversation};
 use crate::channels::Incoming;
-use crate::protocol::{BotRequest, ConversationRequest, History, MemoryUpdate, Send};
+use crate::protocol::{ConversationRequest, History, MemoryUpdate, Send, WorkspaceRequest};
 
 /// Queued and running turns admitted across all Bots before channel input must wait.
 const MAX_BACKLOG: usize = 512;
 
 impl State {
-    pub(super) fn open(&mut self, request: BotRequest) -> Result<Value, ErrorCode> {
-        let bot = self.bot(request.bot_id)?;
+    pub(super) fn open(&mut self, request: &WorkspaceRequest) -> Result<Value, ErrorCode> {
+        let bot = self.current(&request.workspace_id)?;
         self.workspace(bot)?;
         let incoming = Incoming {
             channel_id: bot.builtin_channel_id,
@@ -60,19 +60,16 @@ impl State {
             session_id: uuid::Uuid::new_v4().to_string(),
             generation: 0,
             execution: bot.execution.clone(),
-            instructions: bot.instructions.clone(),
             next_sequence: 1,
         };
         self.save_conversation(conversation.clone())?;
         Ok(conversation)
     }
     pub(super) fn send(&mut self, request: Send) -> Result<Value, ErrorCode> {
-        let conversation = self
-            .conversation(request.bot_id, request.conversation_id)?
-            .clone();
+        let bot = self.current(&request.workspace_id)?.id;
+        let conversation = self.conversation(bot, request.conversation_id)?.clone();
         if !matches!(
-            self.channel(request.bot_id, conversation.channel_id)?
-                .config,
+            self.channel(bot, conversation.channel_id)?.config,
             ChannelConfig::Builtin
         ) {
             return Err(ErrorCode::BotConflict);
@@ -177,11 +174,11 @@ impl State {
             .insert((incoming.channel_id, turn.message_id.clone()), turn.id);
         Ok(json!({"turn":turn,"accepted":true,"duplicate":false}))
     }
-    pub(super) fn reset(&mut self, request: ConversationRequest) -> Result<Value, ErrorCode> {
-        self.workspace(self.bot(request.bot_id)?)?;
-        let mut conversation = self
-            .conversation(request.bot_id, request.conversation_id)?
-            .clone();
+    pub(super) fn reset(&mut self, request: &ConversationRequest) -> Result<Value, ErrorCode> {
+        let bot = self.current(&request.workspace_id)?;
+        self.workspace(bot)?;
+        let bot = bot.id;
+        let mut conversation = self.conversation(bot, request.conversation_id)?.clone();
         if self.running.contains_key(&conversation.id) {
             return Err(ErrorCode::BotConflict);
         }
@@ -207,14 +204,15 @@ impl State {
             .generation
             .checked_add(1)
             .ok_or(ErrorCode::ResourceExhausted)?;
-        let bot = self.bot(request.bot_id)?;
-        conversation.execution = bot.execution.clone();
-        conversation.instructions.clone_from(&bot.instructions);
+        conversation.execution = self.bot(bot)?.execution.clone();
         self.save_conversation(conversation.clone())?;
         Ok(json!({"conversation":project_conversation(&conversation)}))
     }
-    pub(super) fn history(&self, request: History) -> Result<Value, ErrorCode> {
-        self.conversation(request.bot_id, request.conversation_id)?;
+    pub(super) fn history(&self, request: &History) -> Result<Value, ErrorCode> {
+        self.conversation(
+            self.current(&request.workspace_id)?.id,
+            request.conversation_id,
+        )?;
         let limit = request.limit.unwrap_or(20);
         if limit == 0 || limit > 50 {
             return Err(ErrorCode::InvalidMessage);
@@ -243,21 +241,21 @@ impl State {
         }
         Ok(json!({"turns":turns,"nextSequence":turns.last().map(|turn| turn.sequence)}))
     }
-    pub(super) fn memory(&self, request: BotRequest) -> Result<Value, ErrorCode> {
-        let bot = self.bot(request.bot_id)?;
-        let cwd = self.active_workspace(&bot.workspace_id)?;
+    pub(super) fn memory(&self, request: &WorkspaceRequest) -> Result<Value, ErrorCode> {
+        let bot = self.current(&request.workspace_id)?;
+        self.active_workspace(&bot.workspace_id)?;
         let text = self
             .store
-            .memory(&cwd, &bot.workspace_id, bot.id)
+            .memory(&bot.workspace_id)
             .map_err(|_| ErrorCode::BotIo)?;
         Ok(json!({"text":text,"revision":revision(&text)}))
     }
     pub(super) fn update_memory(&mut self, request: &MemoryUpdate) -> Result<Value, ErrorCode> {
-        let bot = self.bot(request.bot_id)?;
-        let cwd = self.workspace(bot)?;
+        let bot = self.current(&request.workspace_id)?;
+        self.workspace(bot)?;
         let text = self
             .store
-            .memory(&cwd, &bot.workspace_id, bot.id)
+            .memory(&bot.workspace_id)
             .map_err(|_| ErrorCode::BotIo)?;
         if revision(&text) != request.expected {
             return Err(ErrorCode::BotConflict);
@@ -267,7 +265,7 @@ impl State {
         }
         if self
             .store
-            .save_memory(&cwd, &bot.workspace_id, bot.id, &request.text)
+            .save_memory(&bot.workspace_id, &request.text)
             .is_err()
         {
             self.frozen = true;

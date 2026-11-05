@@ -1,6 +1,6 @@
 use super::*;
 use domain::bot::{Channel, ChannelConfig, DeliveryStatus, TurnStatus};
-use domain::{BotTurnId, ChannelId};
+use domain::{BotId, BotTurnId, ChannelId};
 
 #[test]
 fn atomic_catalog_routes_receipts_and_bounded_memory_survive_reopening() {
@@ -37,7 +37,6 @@ fn atomic_catalog_routes_receipts_and_bounded_memory_survive_reopening() {
             mode_id: None,
             thinking: None,
         },
-        instructions: String::new(),
         next_sequence: 2,
     };
     store.save_conversation(&conversation).unwrap();
@@ -65,16 +64,13 @@ fn atomic_catalog_routes_receipts_and_bounded_memory_survive_reopening() {
         b"{",
     )
     .unwrap();
-    let cwd = root.path().to_str().unwrap();
-    assert_eq!(store.memory(cwd, "workspace-1", bot).unwrap(), "");
-    store
-        .save_memory(cwd, "workspace-1", bot, "remember")
-        .unwrap();
-    assert_eq!(store.memory(cwd, "workspace-1", bot).unwrap(), "remember");
-    assert_eq!(store.memory(cwd, "workspace-2", bot).unwrap(), "");
+    assert_eq!(store.memory("workspace-1").unwrap(), "");
+    store.save_memory("workspace-1", "remember").unwrap();
+    assert_eq!(store.memory("workspace-1").unwrap(), "remember");
+    assert_eq!(store.memory("workspace-2").unwrap(), "");
     assert!(
         store
-            .save_memory(cwd, "workspace-1", bot, &"a".repeat(32769))
+            .save_memory("workspace-1", &"a".repeat(32769))
             .is_err()
     );
     let reopened = FileStore::new(root.path().join("store"));
@@ -87,27 +83,39 @@ fn atomic_catalog_routes_receipts_and_bounded_memory_survive_reopening() {
     assert_eq!(reopened.turn(conversation.id, turn.id).unwrap(), turn);
 }
 
-#[cfg(unix)]
 #[test]
-fn memory_rejects_symlink_directory_and_file_escape() {
+fn memory_is_stored_under_the_store_root_by_workspace() {
     let root = tempfile::tempdir().unwrap();
-    let outside = tempfile::tempdir().unwrap();
-    let store = FileStore::new(root.path().join("store"));
-    let bot = BotId::generate();
-    let cwd = root.path().to_str().unwrap();
-    std::os::unix::fs::symlink(outside.path(), root.path().join(".ait")).unwrap();
-    assert!(store.save_memory(cwd, "workspace", bot, "escape").is_err());
-    assert!(store.memory(cwd, "workspace", bot).is_err());
-    fs::remove_file(root.path().join(".ait")).unwrap();
-    store.save_memory(cwd, "workspace", bot, "local").unwrap();
-    let file = root.path().join(model::bot::memory_path("workspace", bot));
-    fs::remove_file(&file).unwrap();
-    let target = outside.path().join("outside.md");
-    fs::write(&target, "private").unwrap();
-    std::os::unix::fs::symlink(&target, &file).unwrap();
-    assert!(store.memory(cwd, "workspace", bot).is_err());
-    store
-        .save_memory(cwd, "workspace", bot, "replacement")
-        .unwrap();
-    assert_eq!(fs::read_to_string(target).unwrap(), "private");
+    let store = FileStore::new(root.path().join("workspace-bots"));
+    assert_eq!(store.memory("wks_a").unwrap(), "");
+    store.save_memory("wks_a", "PR titles in Chinese").unwrap();
+    assert_eq!(store.memory("wks_a").unwrap(), "PR titles in Chinese");
+    assert_eq!(store.memory("wks_b").unwrap(), "");
+    let file = root
+        .path()
+        .join("workspace-bots/memory")
+        .join(format!("{:x}.md", Sha256::digest(b"wks_a")));
+    assert!(file.is_file());
+}
+
+#[test]
+fn delete_memory_is_idempotent() {
+    let root = tempfile::tempdir().unwrap();
+    let store = FileStore::new(root.path().join("workspace-bots"));
+    store.delete_memory("wks_a").unwrap();
+    store.save_memory("wks_a", "x").unwrap();
+    store.delete_memory("wks_a").unwrap();
+    assert_eq!(store.memory("wks_a").unwrap(), "");
+}
+
+#[test]
+fn memory_rejects_oversize_and_nul() {
+    let root = tempfile::tempdir().unwrap();
+    let store = FileStore::new(root.path().join("workspace-bots"));
+    assert!(
+        store
+            .save_memory("wks_a", &"x".repeat(32 * 1024 + 1))
+            .is_err()
+    );
+    assert!(store.save_memory("wks_a", "a\0b").is_err());
 }

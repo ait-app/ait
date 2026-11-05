@@ -4,7 +4,8 @@ import { expect, test } from "../support/fixtures";
 import { gotoWorkspace } from "../support/helpers/launcher";
 import { seedWorkspace } from "../support/helpers/seed-client";
 
-test("experimental Bot creation, conversation, settings and persistence", async ({ page }) => {
+// v1 Bot API removed by ADR-213; rewritten in Bot redesign phase 2.
+test.skip("experimental Bot creation, conversation, settings and persistence", async ({ page }) => {
   test.setTimeout(120_000);
   const workspace = await seedWorkspace({ repoPrefix: "bot-ui-" });
   const client = workspace.client as unknown as DaemonClient;
@@ -81,7 +82,8 @@ test("experimental Bot creation, conversation, settings and persistence", async 
   }
 });
 
-test("Bot denies approvals automatically and protects memory from stale edits", async ({
+// v1 Bot API removed by ADR-213; rewritten in Bot redesign phase 2.
+test.skip("Bot denies approvals automatically and protects memory from stale edits", async ({
   page,
 }) => {
   const workspace = await seedWorkspace({ repoPrefix: "bot-approval-" });

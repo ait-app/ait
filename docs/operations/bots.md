@@ -1,19 +1,26 @@
 # Workspace Bot
 
-Bot 是 Workspace 内长期存在的对话实体，使用独占 Channel 和隐藏 Provider session。
-当前支持内置对话、Telegram 与中国区飞书；Email 尚未实现。通过实验性 Workspace Bot tab 使用，
-入口见 [ADR-141](../decisions/clients/adr-141-experimental-workspace-bots.md)。
+每个 Workspace 至多一个管理者 Bot，使用独占 Channel 和隐藏 Provider session，由用户显式设置；未设置时不产生任何记录、会话、轮询或模型调用。
+当前支持内置对话、Telegram 与中国区飞书；Email 尚未实现。设计见 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)。
+现有实验性 Bot 标签页（[ADR-141](../decisions/clients/adr-141-experimental-workspace-bots.md)）仍要求 `workspace-bots-v1`，
+在客户端阶段 2 落地前会显示升级提示。
 
 ## 使用与生命周期
 
-创建 Bot 时指定 Workspace、名称、人格 instructions 和 Provider 配置；创建同时生成内置 Channel。
+通过 `bot.setup` 指定 `workspaceId` 与 Provider 执行配置设置 Bot，同时生成内置 Channel；Bot 行为由内置管理者指令决定，不再有自定义人格。
+相同配置重复设置幂等（`created:false`），配置不同且已有非退役 Bot 返回 `BotConflict`；用 `bot.update` 修改执行配置。
+`clearMemory:true` 仅在新建 Bot 时清空记忆，幂等重复调用时忽略。
 打开内置对话后发送消息，以稳定 `messageId` 重试可避免重复接纳。相同 ID 的目标或内容不同会返回冲突。
 新建外部 Channel 默认停用，配置完成后显式启用，并检查 Channel 状态。
 
 - 同一 Conversation 串行执行，不同发送者/线程的外部对话分开维护上下文。
 - Provider 会话从创建起隐藏，普通 Agent API 无法接管；关闭界面不停止 Bot。
 - 配置在新 Conversation 或显式 reset 后生效。reset 前先完成或取消正在执行的轮次；排队中的输入随 reset 取消；旧历史保留。
-- 暂停取消排队和执行中的输入，保留可恢复会话；归档才退役会话。Workspace 归档先停用 Bot。
+- 状态为 `active`、`paused`（原因 `user` 或 `directory_missing`）、`retired`。暂停取消排队和执行中的输入并停止外部轮询；
+  恢复要求 Workspace 目录存在，否则返回 `WorkspaceNotFound`。Workspace 目录缺失会在轮次可运行时检测，Bot 暂停为 `directory_missing`，需用户显式恢复。
+- `bot.remove` 使 Bot 退役、保留记忆，并释放其 Telegram／飞书账号（外部 Channel 标记为已删除）；Workspace 归档同样退役并删除记忆。
+- 退役 Bot 的对话与历史仍留在磁盘上，但 v2 接口只读取当前未退役的 Bot，因此无法再查看；
+  重新 `bot.setup` 从空的对话历史开始，记忆除非 `clearMemory:true` 否则保留。清理或只读访问退役历史留待后续工作。
 - 所有 Provider 权限请求自动拒绝，不等待用户审批；Bot 内禁用原生自动审核，见
   [ADR-145](../decisions/bot/adr-145-bot-permission-denial.md)。
 
@@ -56,15 +63,23 @@ Telegram 使用 getUpdates 长轮询。已有 webhook 会报告冲突，不会�
 
 ## 记忆与接口
 
-每个 Bot 的共享记忆位于 `<workspace.cwd>/.ait/bots/<sha256(workspaceId)>/<botId>/MEMORY.md`，
-限制 32 KiB。每轮读取并提供给原生会话；客户端更新使用 revision 防止覆盖旧内容。
-外部文件工具直接编辑不受这个 revision 保护；删除 worktree 也会删除其中的记忆。
+Bot 记忆位于 `<data>/workspace-bots/memory/<sha256(workspaceId)>.md`，限制 32 KiB，不再写入 Workspace 目录。
+每轮读取并提供给原生会话；客户端通过 `bot.memory.update` 更新，revision 防止覆盖旧内容。
+Bot 自身暂时不能写记忆（工具在后续阶段加入）。移除 Bot 保留记忆，Workspace 归档删除记忆。
 
-接口通过认证 WebSocket 协商 `workspace-bots-v1`。常用流程为
-`bot.create.request` → `bot.conversation.open.request` → `bot.message.send.request`，
-再以 `bot.turn.get.request` / `bot.history.get.request` 读取执行与投递状态。
+接口通过认证 WebSocket 协商 `workspace-bots-v2`，所有方法以 `workspaceId` 寻址，客户端 JSON 不含内部 `botId`。常用流程为
+`bot.setup.request` → `bot.conversation.open.request` → `bot.message.send.request`，
+再以 `bot.turn.get.request` / `bot.history.get.request` 读取执行与投递状态；`bot.get` 在未配置时返回 `null`。
+其余方法：`bot.update`、`bot.pause`、`bot.resume`、`bot.remove`、`bot.channel.*`、`bot.conversation.{list,reset}`、
+`bot.turn.cancel`、`bot.memory.get`。`bot.create`、`bot.list`、`bot.archive`、`bot.permission.resolve` 已删除。
 Channel 能力以 `bot.channel.types.request` 为准；完整参数见
 [`protocol.rs`](../../crates/bot/src/protocol.rs)，实现归属见
+[ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md) 与
 [ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md)。
+
+## 从旧版升级
+
+旧版多 Bot 数据不迁移：daemon 启动时关闭 `<data>/bots/` 中记录的隐藏会话并删除该目录，之后用 `bot.setup` 重新设置。
+旧版写在 `<workspace>/.ait/bots/` 的记忆文件不再读取，可手动删除。
 
 旧设计、完整 RPC 示例与历史验证见[归档](../archive/plans/bot-backend.md)，未实现能力见[计划索引](../plans/README.md)。

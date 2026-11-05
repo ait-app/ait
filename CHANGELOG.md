@@ -1,5 +1,10 @@
 # Ait changelog
 
+## Unreleased
+
+- Breaking: Workspace Bots are now one manager Bot per Workspace, addressed by `workspaceId` through the `workspace-bots-v2` interface (replacing `workspace-bots-v1`; `bot.create`, `bot.list`, `bot.archive` and `bot.permission.resolve` are removed). Existing Bots, Channels, and history from earlier versions are discarded at startup, and the Bot tab shows an upgrade prompt until the matching client ships.
+- Store Bot memory under the daemon data directory instead of the workspace; archiving a workspace deletes it, removing a Bot keeps it, and a missing workspace directory pauses the Bot until resumed.
+
 ## 0.1.29 - 2026-11-05
 
 - Improve connection recovery and release desktop transports when windows close or reload.

@@ -3,11 +3,12 @@
 use model::methods::MethodSpec;
 
 pub(crate) const METHODS: &[MethodSpec] = &[
-    MethodSpec::request("bot.create.request"),
-    MethodSpec::request("bot.list.request"),
     MethodSpec::request("bot.get.request"),
+    MethodSpec::request("bot.setup.request"),
     MethodSpec::request("bot.update.request"),
-    MethodSpec::request("bot.archive.request"),
+    MethodSpec::request("bot.pause.request"),
+    MethodSpec::request("bot.resume.request"),
+    MethodSpec::request("bot.remove.request"),
     MethodSpec::request("bot.channel.list.request"),
     MethodSpec::request("bot.channel.types.request"),
     MethodSpec::request("bot.channel.create.request"),
@@ -21,7 +22,6 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("bot.history.get.request"),
     MethodSpec::request("bot.turn.get.request"),
     MethodSpec::request("bot.turn.cancel.request"),
-    MethodSpec::request("bot.permission.resolve.request"),
     MethodSpec::request("bot.memory.get.request"),
     MethodSpec::request("bot.memory.update.request"),
 ];

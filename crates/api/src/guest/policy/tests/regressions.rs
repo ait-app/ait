@@ -10,13 +10,16 @@ async fn node_guests_can_read_but_cannot_start_persistent_automation() {
         "schedule.update.request",
         "schedule.resume.request",
         "schedule.run_once.request",
-        "bot.create.request",
+        "bot.setup.request",
         "bot.update.request",
         "bot.channel.create.request",
         "bot.channel.update.request",
         "bot.message.send.request",
         "bot.conversation.open.request",
-        "bot.permission.resolve.request",
+        "bot.pause.request",
+        "bot.resume.request",
+        "bot.remove.request",
+        "bot.memory.update.request",
     ] {
         assert_eq!(
             guest.refused(method, json!({})).await,
@@ -27,10 +30,37 @@ async fn node_guests_can_read_but_cannot_start_persistent_automation() {
     for method in [
         "schedule.list.request",
         "schedule.inspect.request",
-        "bot.list.request",
         "bot.get.request",
     ] {
         guest.forwarded(method, json!({})).await;
+    }
+}
+
+#[tokio::test]
+async fn guest_bot_access_is_read_only_v2() {
+    let guest = Guest::with(ResourceKind::Node).await;
+    for method in [
+        "bot.get.request",
+        "bot.channel.list.request",
+        "bot.channel.types.request",
+        "bot.channel.status.request",
+        "bot.conversation.list.request",
+        "bot.history.get.request",
+        "bot.turn.get.request",
+        "bot.memory.get.request",
+    ] {
+        guest.forwarded(method, json!({})).await;
+    }
+    for method in [
+        "bot.list.request",
+        "bot.channel.delete.request",
+        "bot.conversation.reset.request",
+    ] {
+        assert_eq!(
+            guest.refused(method, json!({})).await,
+            ErrorCode::Forbidden,
+            "{method}"
+        );
     }
 }
 

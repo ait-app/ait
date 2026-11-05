@@ -4,20 +4,19 @@ use axum::{Json, Router, routing::post};
 use model::bot::Store;
 
 use super::*;
-use crate::test_support::{Fixture, creation};
+use crate::test_support::{Fixture, WORKSPACE, setup};
 
 #[tokio::test]
 async fn polling_acknowledges_only_after_input_and_cursor_commit() {
     let fixture = Fixture::new();
     fixture.native.hold.store(true, Ordering::SeqCst);
     let bots = fixture.bots();
-    let bot = BotId::generate();
     let id = ChannelId::generate();
-    bots.execute("bot.create.request", creation(bot))
+    bots.execute("bot.setup.request", setup(WORKSPACE))
         .await
         .unwrap();
-    let created = bots.execute("bot.channel.create.request",json!({"botId":bot,"channelId":id,"enabled":true,"config":{"kind":"telegram","tokenRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":["1"],"allowGroups":true}})).await.unwrap();
-    let channel: Channel = serde_json::from_value(created["channel"].clone()).unwrap();
+    let created = bots.execute("bot.channel.create.request",json!({"workspaceId":WORKSPACE,"channelId":id,"enabled":true,"config":{"kind":"telegram","tokenRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":["1"],"allowGroups":true}})).await.unwrap();
+    let channel: Channel = fixture.channel(&created["channel"]);
     let cancel = CancellationToken::new();
     let server_cancel = cancel.clone();
     let store = fixture.store.clone();
@@ -80,13 +79,12 @@ async fn refused_update_is_skipped_without_blocking_later_updates() {
     let fixture = Fixture::new();
     fixture.native.hold.store(true, Ordering::SeqCst);
     let bots = fixture.bots();
-    let bot = BotId::generate();
     let id = ChannelId::generate();
-    bots.execute("bot.create.request", creation(bot))
+    bots.execute("bot.setup.request", setup(WORKSPACE))
         .await
         .unwrap();
-    let created = bots.execute("bot.channel.create.request",json!({"botId":bot,"channelId":id,"enabled":true,"config":{"kind":"telegram","tokenRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":["1"],"allowGroups":true}})).await.unwrap();
-    let channel: Channel = serde_json::from_value(created["channel"].clone()).unwrap();
+    let created = bots.execute("bot.channel.create.request",json!({"workspaceId":WORKSPACE,"channelId":id,"enabled":true,"config":{"kind":"telegram","tokenRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":["1"],"allowGroups":true}})).await.unwrap();
+    let channel: Channel = fixture.channel(&created["channel"]);
     let cancel = CancellationToken::new();
     let server_cancel = cancel.clone();
     let store = fixture.store.clone();
@@ -147,13 +145,12 @@ async fn saturated_conversation_drops_with_a_notice_without_blocking_other_chats
     let fixture = Fixture::new();
     fixture.native.hold.store(true, Ordering::SeqCst);
     let bots = fixture.bots();
-    let bot = BotId::generate();
     let id = ChannelId::generate();
-    bots.execute("bot.create.request", creation(bot))
+    bots.execute("bot.setup.request", setup(WORKSPACE))
         .await
         .unwrap();
-    let created = bots.execute("bot.channel.create.request",json!({"botId":bot,"channelId":id,"enabled":true,"config":{"kind":"telegram","tokenRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":["1"],"allowGroups":true}})).await.unwrap();
-    let channel: Channel = serde_json::from_value(created["channel"].clone()).unwrap();
+    let created = bots.execute("bot.channel.create.request",json!({"workspaceId":WORKSPACE,"channelId":id,"enabled":true,"config":{"kind":"telegram","tokenRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":["1"],"allowGroups":true}})).await.unwrap();
+    let channel: Channel = fixture.channel(&created["channel"]);
     let cancel = CancellationToken::new();
     let server_cancel = cancel.clone();
     let store = fixture.store.clone();

@@ -76,8 +76,22 @@ pub(crate) struct Fixture {
 }
 impl Fixture {
     pub(crate) fn new() -> Self {
+        Self::build(false)
+    }
+    /// Fixture whose [`WORKSPACE`] directory is `root/ws`, so tests can delete it.
+    pub(crate) fn with_workspace_subdir() -> Self {
+        Self::build(true)
+    }
+    fn build(workspace_subdir: bool) -> Self {
         let root = tempfile::tempdir().unwrap();
         let cwd = root.path().to_str().unwrap();
+        let workspace_dir = if workspace_subdir {
+            let dir = root.path().join("ws");
+            std::fs::create_dir(&dir).unwrap();
+            dir
+        } else {
+            root.path().to_path_buf()
+        };
         let projects = Arc::new(FileBackedProjectRegistry::new(
             root.path().join("projects.json"),
         ));
@@ -85,7 +99,14 @@ impl Fixture {
         let workspaces = Arc::new(FileBackedWorkspaceRegistry::new(
             root.path().join("workspaces.json"),
         ));
-        workspaces.upsert(&serde_json::from_value(json!({"workspaceId":"wks_0123456789abcdef","projectId":"project-1","cwd":cwd,"kind":"local_checkout","displayName":"workspace", "createdAt":"2026-10-12T00:00:00Z","updatedAt":"2026-10-12T00:00:00Z","archivedAt":null})).unwrap(), domain::workspace::registry::WorkspaceMutationContext::default()).unwrap();
+        let other = root.path().join("other");
+        std::fs::create_dir(&other).unwrap();
+        for (id, cwd) in [
+            (WORKSPACE, workspace_dir.to_str().unwrap()),
+            (OTHER_WORKSPACE, other.to_str().unwrap()),
+        ] {
+            workspaces.upsert(&serde_json::from_value(json!({"workspaceId":id,"projectId":"project-1","cwd":cwd,"kind":"local_checkout","displayName":"workspace", "createdAt":"2026-10-12T00:00:00Z","updatedAt":"2026-10-12T00:00:00Z","archivedAt":null})).unwrap(), domain::workspace::registry::WorkspaceMutationContext::default()).unwrap();
+        }
         Self {
             store: Arc::new(FileStore::new(root.path().join("bots"))),
             root,
@@ -102,6 +123,15 @@ impl Fixture {
         )
         .unwrap()
     }
+    /// The persisted domain channel behind a client channel view, which omits the owner.
+    pub(crate) fn channel(&self, view: &Value) -> domain::bot::Channel {
+        let id = view["id"].as_str().unwrap();
+        self.state()
+            .channels()
+            .into_iter()
+            .find(|channel| channel.id.to_string() == id)
+            .unwrap()
+    }
     pub(crate) fn bots(&self) -> Bots {
         Bots::spawn(Dependencies {
             store: self.store.clone(),
@@ -113,6 +143,11 @@ impl Fixture {
         .unwrap()
     }
 }
-pub(crate) fn creation(id: domain::BotId) -> Value {
-    json!({"botId":id,"workspaceId":"wks_0123456789abcdef","name":"assistant","instructions":"help", "execution":{"provider":"test","model":null,"modeId":null,"thinking":null}})
+/// Workspace registered by every [`Fixture`].
+pub(crate) const WORKSPACE: &str = "wks_0123456789abcdef";
+/// Second registered workspace, for isolation between Workspace Bots.
+pub(crate) const OTHER_WORKSPACE: &str = "wks_fedcba9876543210";
+
+pub(crate) fn setup(workspace: &str) -> Value {
+    json!({"workspaceId":workspace,"execution":{"provider":"test","model":null,"modeId":null,"thinking":null}})
 }

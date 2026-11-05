@@ -25,7 +25,6 @@ pub(super) fn allows(method: &str, kind: InboundKind) -> bool {
             "schedule.list.request"
                 | "schedule.inspect.request"
                 | "schedule.logs.request"
-                | "bot.list.request"
                 | "bot.get.request"
                 | "bot.channel.list.request"
                 | "bot.channel.types.request"

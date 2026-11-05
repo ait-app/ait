@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use domain::bot::{
-    Bot, Catalog, Channel, Conversation, DeliveryStatus, SessionOwner, Turn, TurnStatus,
+    Bot, BotState, Catalog, Channel, Conversation, DeliveryStatus, SessionOwner, Turn, TurnStatus,
 };
 use domain::{BotId, BotTurnId, ChannelId, ConversationId};
 use model::ErrorCode;
@@ -128,59 +128,65 @@ impl State {
                     json!({"supported":["builtin","telegram","feishu"],"email":{"supported":false,"planned":true}}),
                 )
             }
-            "bot.create.request" => self.create(decode(params)?),
-            "bot.list.request" => {
-                let request: protocol::List = decode(params)?;
-                Ok(
-                    json!({"bots":self.catalog.bots.iter().filter(|bot| bot.workspace_id == request.workspace_id)
-                    .map(|bot| json!({"id":bot.id,"workspaceId":bot.workspace_id,"name":bot.name,"execution":bot.execution,
-                        "enabled":bot.enabled,"archivedAt":bot.archived_at,"builtinChannelId":bot.builtin_channel_id,"createdAt":bot.created_at})).collect::<Vec<_>>()}),
-                )
-            }
             "bot.get.request" => {
-                let request: protocol::BotRequest = decode(params)?;
-                Ok(json!({"bot":self.bot(request.bot_id)?}))
+                let request: protocol::WorkspaceRequest = decode(params)?;
+                Ok(json!({"bot":self.current(&request.workspace_id).ok().map(view)}))
             }
+            "bot.setup.request" => self.setup(decode(params)?),
             "bot.update.request" => self.update(decode(params)?),
-            "bot.archive.request" => self.archive(decode(params)?),
+            "bot.pause.request" => self.pause(&decode(params)?),
+            "bot.resume.request" => self.resume(&decode(params)?),
+            "bot.remove.request" => self.remove(&decode(params)?),
             "bot.channel.create.request" => self.create_channel(decode(params)?),
             "bot.channel.update.request" => self.update_channel(decode(params)?),
-            "bot.channel.delete.request" => self.delete_channel(decode(params)?),
+            "bot.channel.delete.request" => self.delete_channel(&decode(params)?),
             "bot.channel.list.request" => {
-                let request: protocol::BotRequest = decode(params)?;
-                self.bot(request.bot_id)?;
+                let request: protocol::WorkspaceRequest = decode(params)?;
+                let bot = self.current(&request.workspace_id)?.id;
                 Ok(
-                    json!({"channels":self.catalog.channels.iter().filter(|channel| channel.bot_id == request.bot_id && !channel.deleted).collect::<Vec<_>>()}),
+                    json!({"channels":self.catalog.channels.iter().filter(|channel| channel.bot_id == bot && !channel.deleted).map(project_channel).collect::<Vec<_>>()}),
                 )
             }
             "bot.channel.status.request" => {
                 let request: protocol::ChannelRequest = decode(params)?;
-                let channel = self.channel(request.bot_id, request.channel_id)?;
+                let bot = self.current(&request.workspace_id)?.id;
+                let channel = self.channel(bot, request.channel_id)?;
                 Ok(
                     json!({"channelId":channel.id,"enabled":channel.enabled,"connection":self.channel_status.get(&channel.id)}),
                 )
             }
-            "bot.conversation.open.request" => self.open(decode(params)?),
+            "bot.conversation.open.request" => self.open(&decode(params)?),
             "bot.conversation.list.request" => {
-                let request: protocol::BotRequest = decode(params)?;
-                self.bot(request.bot_id)?;
+                let request: protocol::WorkspaceRequest = decode(params)?;
+                let bot = self.current(&request.workspace_id)?.id;
                 Ok(
-                    json!({"conversations":self.conversations.values().filter(|conversation| conversation.bot_id == request.bot_id).map(project_conversation).collect::<Vec<_>>()}),
+                    json!({"conversations":self.conversations.values().filter(|conversation| conversation.bot_id == bot).map(project_conversation).collect::<Vec<_>>()}),
                 )
             }
-            "bot.conversation.reset.request" => self.reset(decode(params)?),
+            "bot.conversation.reset.request" => self.reset(&decode(params)?),
             "bot.message.send.request" => self.send(decode(params)?),
-            "bot.history.get.request" => self.history(decode(params)?),
+            "bot.history.get.request" => self.history(&decode(params)?),
             "bot.turn.get.request" => {
                 let request: protocol::TurnRequest = decode(params)?;
-                Ok(json!({"turn":self.owned_turn(request.bot_id, request.turn_id)?}))
+                let bot = self.current(&request.workspace_id)?.id;
+                Ok(json!({"turn":self.owned_turn(bot, request.turn_id)?}))
             }
-            "bot.memory.get.request" => self.memory(decode(params)?),
+            "bot.memory.get.request" => self.memory(&decode(params)?),
             "bot.memory.update.request" => self.update_memory(&decode(params)?),
             _ => Err(ErrorCode::MethodNotFound),
         }
     }
 
+    /// The Workspace's single non-retired Bot.
+    fn current(&self, workspace: &str) -> Result<&Bot, ErrorCode> {
+        self.catalog
+            .bots
+            .iter()
+            .find(|bot| {
+                bot.workspace_id == workspace && !matches!(bot.state, BotState::Retired { .. })
+            })
+            .ok_or(ErrorCode::BotNotFound)
+    }
     fn bot(&self, id: BotId) -> Result<&Bot, ErrorCode> {
         self.catalog
             .bots
@@ -196,7 +202,7 @@ impl State {
             .ok_or(ErrorCode::BotNotFound)
     }
     fn workspace(&self, bot: &Bot) -> Result<String, ErrorCode> {
-        if !bot.enabled || bot.archived_at.is_some() {
+        if !matches!(bot.state, BotState::Active) {
             return Err(ErrorCode::BotConflict);
         }
         self.active_workspace(&bot.workspace_id)
@@ -337,8 +343,21 @@ impl State {
     }
 }
 
+/// Client projection of a Bot; the internal storage identity is never exposed.
+fn view(bot: &Bot) -> Value {
+    json!({"workspaceId":bot.workspace_id,"execution":bot.execution,
+        "builtinChannelId":bot.builtin_channel_id,"state":bot.state,"createdAt":bot.created_at})
+}
+
+/// Client projection of a channel; the owning Bot's storage identity is never exposed.
+fn project_channel(channel: &Channel) -> Value {
+    json!({"id":channel.id,"config":channel.config,"enabled":channel.enabled,
+        "cursor":channel.cursor,"deleted":channel.deleted})
+}
+
+/// Client projection of a conversation without the owning Bot or native session identity.
 fn project_conversation(conversation: &Conversation) -> Value {
-    json!({"id":conversation.id,"botId":conversation.bot_id,"channelId":conversation.channel_id,
+    json!({"id":conversation.id,"channelId":conversation.channel_id,
         "peer":conversation.peer,"sender":conversation.sender,"thread":conversation.thread,"generation":conversation.generation,"nextSequence":conversation.next_sequence})
 }
 
