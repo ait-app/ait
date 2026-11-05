@@ -38,14 +38,19 @@ pub(super) fn compose<
     projects: &P,
     execution: AgentExecution,
 ) -> anyhow::Result<Bots> {
-    Bots::spawn(Dependencies {
-        store: Arc::new(FileStore::new(data.join("bots"))),
+    let bots = Bots::spawn(Dependencies {
+        store: Arc::new(FileStore::new(data.join("workspace-bots"))),
         workspaces: Arc::new(workspaces.clone()),
         projects: Arc::new(projects.clone()),
-        executor: Arc::new(execution),
+        executor: Arc::new(execution.clone()),
         credentials: Arc::new(Environment),
     })
-    .context("start Bot service")
+    .context("start Bot service")?;
+    let legacy = data.join("bots");
+    tokio::runtime::Handle::current().spawn(async move {
+        bot::legacy::discard(&legacy, &execution).await;
+    });
+    Ok(bots)
 }
 
 #[cfg(test)]

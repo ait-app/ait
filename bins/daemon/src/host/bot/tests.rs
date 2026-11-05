@@ -53,3 +53,24 @@ fn environment_credentials_validate_references_and_bound_secret_values() {
         );
     }
 }
+
+#[tokio::test]
+async fn startup_ignores_and_discards_malformed_legacy_store_root() {
+    let root = tempfile::tempdir().unwrap();
+    let legacy = root.path().join("bots");
+    std::fs::create_dir_all(legacy.join("conversations")).unwrap();
+    std::fs::write(legacy.join("catalog.json"), "{not json").unwrap();
+    std::fs::write(legacy.join("conversations/truncated.json"), "{\"id\"").unwrap();
+    let server = crate::host::Server::bind(crate::host::tests::config(root.path()))
+        .await
+        .unwrap();
+    for _ in 0..100 {
+        if !legacy.exists() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(!legacy.exists(), "legacy Bot store must be discarded");
+    server.api.begin_shutdown();
+    server.api.wait_closed().await;
+}
