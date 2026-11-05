@@ -2,7 +2,7 @@
 
 - 状态：已实现
 - 日期：2026-10-12
-- 关系：延续 [ADR-139](../bot/adr-139-workspace-bots-and-owned-channels.md)。
+- 关系：延续 [ADR-139](../bot/adr-139-workspace-bots-and-owned-channels.md)；标签页身份与能力名（`workspace-bots-v1`）由 [ADR-213](../bot/adr-213-single-workspace-manager-bot.md) 修订，客户端在阶段 2 更新。
 
 ## 背景
 

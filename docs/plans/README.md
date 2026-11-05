@@ -13,7 +13,7 @@
 | [远程 Workspace 打开性能](remote-workspace-open-performance.md) | 已有并发隔离、目标读取与页级投影；仍需实网基线和剩余优化                                                                                       |
 | [客户端登录续期](relay-client-session-persistence.md)           | 凭据可持久化；用户会话自动续期尚未实现                                                                                                         |
 | 移除 `paseo` 工具名别名（0.2.0）                                | 0.2.0 发布时从 TS `AIT_TOOL_NAMESPACES`、移动端 `DIRECT_AIT_TOOL_PREFIXES` 与 Rust fork context 中删除 legacy `paseo` 命名空间，并更新相关测试 |
-| [Workspace Bot 管理者重设计](workspace-bot-manager.md)          | 设计已批准；[阶段 1 计划](workspace-bot-manager-phase-1.md)（单 Bot 核心模型）待实施，阶段 2–4 待细化                                          |
+| [Workspace Bot 管理者重设计](workspace-bot-manager.md)          | 设计已批准；[阶段 1](workspace-bot-manager-phase-1.md)（单 Bot 核心模型，[ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)）已实现、待合并；阶段 2–4（客户端、权限与 MCP、来源与通知）待实施                                          |
 | Bot 后续能力                                                    | [内置、Telegram、飞书已接入](../operations/bots.md)；真实平台验收仍需独立记录，Email、流式订阅及 uncertain 投递恢复未实现                      |
 
 Bot 的 Email 线程、去重和防循环约束保留在[原方案](../archive/plans/bot-backend.md#email-可行性)。
