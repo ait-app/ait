@@ -143,7 +143,7 @@ fn pause_preserves_session_identity_and_archive_retires_it() {
 }
 
 #[test]
-fn unreadable_memory_fails_only_its_bot_and_does_not_start_native_execution() {
+fn unreadable_workspace_memory_fails_its_turns_and_does_not_start_native_execution() {
     let fixture = Fixture::new();
     let mut state = fixture.state();
     let broken = BotId::generate();
@@ -156,16 +156,19 @@ fn unreadable_memory_fails_only_its_bot_and_does_not_start_native_execution() {
         .unwrap();
     let failed = admit(&mut state, broken, "first");
     let successful = admit(&mut state, healthy, "first");
-    let path = fixture
-        .root
-        .path()
-        .join(model::bot::memory_path("wks_0123456789abcdef", broken));
+    let path = fixture.root.path().join("bots/memory").join(format!(
+        "{:x}.md",
+        <sha2::Sha256 as sha2::Digest>::digest(b"wks_0123456789abcdef")
+    ));
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, vec![b'a'; 32769]).unwrap();
     let ready = state.ready().unwrap();
-    assert_eq!(ready.len(), 1);
-    assert_eq!(ready[0].turn.id, successful.id);
+    assert!(ready.is_empty());
     assert_eq!(state.turn(failed.id).unwrap().status, TurnStatus::Failed);
+    assert_eq!(
+        state.turn(successful.id).unwrap().status,
+        TurnStatus::Failed
+    );
     assert!(!state.frozen);
 }
 

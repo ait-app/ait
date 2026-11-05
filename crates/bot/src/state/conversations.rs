@@ -245,19 +245,19 @@ impl State {
     }
     pub(super) fn memory(&self, request: BotRequest) -> Result<Value, ErrorCode> {
         let bot = self.bot(request.bot_id)?;
-        let cwd = self.active_workspace(&bot.workspace_id)?;
+        self.active_workspace(&bot.workspace_id)?;
         let text = self
             .store
-            .memory(&cwd, &bot.workspace_id, bot.id)
+            .memory(&bot.workspace_id)
             .map_err(|_| ErrorCode::BotIo)?;
         Ok(json!({"text":text,"revision":revision(&text)}))
     }
     pub(super) fn update_memory(&mut self, request: &MemoryUpdate) -> Result<Value, ErrorCode> {
         let bot = self.bot(request.bot_id)?;
-        let cwd = self.workspace(bot)?;
+        self.workspace(bot)?;
         let text = self
             .store
-            .memory(&cwd, &bot.workspace_id, bot.id)
+            .memory(&bot.workspace_id)
             .map_err(|_| ErrorCode::BotIo)?;
         if revision(&text) != request.expected {
             return Err(ErrorCode::BotConflict);
@@ -267,7 +267,7 @@ impl State {
         }
         if self
             .store
-            .save_memory(&cwd, &bot.workspace_id, bot.id, &request.text)
+            .save_memory(&bot.workspace_id, &request.text)
             .is_err()
         {
             self.frozen = true;
