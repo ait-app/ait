@@ -115,19 +115,41 @@ it("setup_sends_clear_memory_only_when_checked", async () => {
   expect(secondParams).not.toHaveProperty("botId");
 });
 
-it("setup_drops_conversation_memory_and_channels_cached_for_a_removed_bot", async () => {
+it("setup_drops_cached_memory_only_when_clearing_it", async () => {
   botRequest.mockResolvedValue({ bot, created: true });
   const { queryClient, onConfigured } = renderSetup();
-  const stale = [
-    botKeys.conversation("server", "workspace"),
-    botKeys.memory("server", "workspace"),
-    botKeys.channels("server", "workspace"),
-  ];
-  for (const key of stale) queryClient.setQueryData(key, { stale: true });
+  const memoryKey = botKeys.memory("server", "workspace");
+  queryClient.setQueryData(memoryKey, { text: "kept", revision: "r1" });
 
   fireEvent.click(screen.getByTestId("bot-setup-submit"));
-  await waitFor(() => expect(onConfigured).toHaveBeenCalledWith(bot));
-  for (const key of stale) expect(queryClient.getQueryData(key)).toBeUndefined();
+  await waitFor(() => expect(onConfigured).toHaveBeenCalledTimes(1));
+  expect(queryClient.getQueryData(memoryKey)).toEqual({ text: "kept", revision: "r1" });
+
+  fireEvent.click(screen.getByTestId("bot-clear-memory"));
+  fireEvent.click(screen.getByTestId("bot-setup-submit"));
+  await waitFor(() => expect(onConfigured).toHaveBeenCalledTimes(2));
+  expect(queryClient.getQueryData(memoryKey)).toBeUndefined();
+});
+
+it("setup_conflict_refreshes_the_existing_bot", async () => {
+  botRequest.mockRejectedValue(Object.assign(new Error("Bot conflict"), { code: "bot_conflict" }));
+  const { queryClient, onConfigured } = renderSetup();
+  queryClient.setQueryData(botKeys.bot("server", "workspace"), null);
+
+  fireEvent.click(screen.getByTestId("bot-setup-submit"));
+  expect(await screen.findByText("Bot conflict")).toBeTruthy();
+  expect(queryClient.getQueryState(botKeys.bot("server", "workspace"))?.isInvalidated).toBe(true);
+  expect(onConfigured).not.toHaveBeenCalled();
+});
+
+it("setup_other_errors_leave_the_bot_query_alone", async () => {
+  botRequest.mockRejectedValue(new Error("offline"));
+  const { queryClient } = renderSetup();
+  queryClient.setQueryData(botKeys.bot("server", "workspace"), null);
+
+  fireEvent.click(screen.getByTestId("bot-setup-submit"));
+  expect(await screen.findByText("offline")).toBeTruthy();
+  expect(queryClient.getQueryState(botKeys.bot("server", "workspace"))?.isInvalidated).toBe(false);
 });
 
 it("defaults to the first ready provider and leaves clear memory unchecked", () => {

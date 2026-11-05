@@ -11,7 +11,7 @@ import { SelectField } from "@/components/ui/select-field";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import type { Theme } from "@/styles/theme";
-import { botKeys } from "./queries";
+import { botKeys, isBotConflict } from "./queries";
 import { botStyles as styles } from "./styles";
 
 const ThemedCheck = withUnistyles(Check);
@@ -176,25 +176,26 @@ export function BotSetup({
   const { providers, error } = useBotProviders(serverId, cwd, interactive);
   const execution = resolveExecution(draft, providers);
   const mutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (clearingMemory: boolean) => {
       if (!client) throw new Error(t("bots.disconnected"));
       const { bot } = await client.botRequest("bot.setup.request", {
         workspaceId,
         execution,
-        ...(clearMemory ? { clearMemory: true } : {}),
+        ...(clearingMemory ? { clearMemory: true } : {}),
       });
       return bot;
     },
-    onSuccess: (bot) => {
-      // A new Bot has a new conversation and channels; drop what a removed Bot left cached.
-      for (const key of [
-        botKeys.conversation(serverId, workspaceId),
-        botKeys.memory(serverId, workspaceId),
-        botKeys.channels(serverId, workspaceId),
-      ])
-        queryClient.removeQueries({ queryKey: key });
+    onSuccess: (bot, clearedMemory) => {
+      // Conversation and channel caches are keyed by builtin channel; memory outlives a Bot.
+      if (clearedMemory)
+        queryClient.removeQueries({ queryKey: botKeys.memory(serverId, workspaceId) });
       queryClient.setQueryData(botKeys.bot(serverId, workspaceId), bot);
       onConfigured(bot);
+    },
+    onError: (cause) => {
+      // Another device configured a Bot first; show it instead of the wizard.
+      if (isBotConflict(cause))
+        void queryClient.invalidateQueries({ queryKey: botKeys.bot(serverId, workspaceId) });
     },
   });
   const disabled = mutation.isPending || !interactive;
@@ -230,7 +231,7 @@ export function BotSetup({
         </Text>
       ) : null}
       <Button
-        onPress={() => mutation.mutate()}
+        onPress={() => mutation.mutate(clearMemory)}
         disabled={disabled || !execution.provider}
         testID="bot-setup-submit"
       >

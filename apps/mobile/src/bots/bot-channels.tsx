@@ -45,6 +45,7 @@ function connectionSummary(connection: unknown, fallback: string): string {
 function ChannelRow({
   serverId,
   workspaceId,
+  builtinChannelId,
   channel,
   interactive,
   readOnly,
@@ -52,6 +53,7 @@ function ChannelRow({
 }: {
   serverId: string;
   workspaceId: string;
+  builtinChannelId: string;
   channel: BotChannel;
   interactive: boolean;
   readOnly: boolean;
@@ -60,7 +62,12 @@ function ChannelRow({
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const status = useQuery({
-    queryKey: [...botKeys.channels(serverId, workspaceId), "status", channel.id, channel.enabled],
+    queryKey: [
+      ...botKeys.channels(serverId, workspaceId, builtinChannelId),
+      "status",
+      channel.id,
+      channel.enabled,
+    ],
     enabled: interactive && Boolean(client),
     refetchInterval: 15_000,
     queryFn: async () => {
@@ -288,11 +295,13 @@ function ChannelForm({
 export function BotChannels({
   serverId,
   workspaceId,
+  builtinChannelId,
   interactive,
   readOnly,
 }: {
   serverId: string;
   workspaceId: string;
+  builtinChannelId: string;
   interactive: boolean;
   readOnly: boolean;
 }) {
@@ -302,7 +311,7 @@ export function BotChannels({
   const [adding, setAdding] = useState(false);
   const enabled = interactive && Boolean(client);
   const list = useQuery({
-    queryKey: botKeys.channels(serverId, workspaceId),
+    queryKey: botKeys.channels(serverId, workspaceId, builtinChannelId),
     enabled,
     queryFn: async () => {
       if (!client) throw new Error(t("bots.disconnected"));
@@ -310,7 +319,7 @@ export function BotChannels({
     },
   });
   const types = useQuery({
-    queryKey: [...botKeys.channels(serverId, workspaceId), "types"],
+    queryKey: [...botKeys.channels(serverId, workspaceId, builtinChannelId), "types"],
     enabled,
     queryFn: async () => {
       if (!client) throw new Error(t("bots.disconnected"));
@@ -318,7 +327,9 @@ export function BotChannels({
     },
   });
   const refresh = () =>
-    queryClient.invalidateQueries({ queryKey: botKeys.channels(serverId, workspaceId) });
+    queryClient.invalidateQueries({
+      queryKey: botKeys.channels(serverId, workspaceId, builtinChannelId),
+    });
   const external = (list.data ?? []).filter(
     (channel) => !channel.deleted && channel.config.kind !== "builtin",
   );
@@ -333,6 +344,7 @@ export function BotChannels({
           key={channel.id}
           serverId={serverId}
           workspaceId={workspaceId}
+          builtinChannelId={builtinChannelId}
           channel={channel}
           interactive={interactive}
           readOnly={readOnly}

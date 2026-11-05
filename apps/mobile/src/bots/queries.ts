@@ -3,12 +3,17 @@ import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import type { BotTurn, BotView } from "@ait/protocol/bot/types";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 
+/**
+ * Query keys for the Workspace Bot. Conversation and channel keys carry the Bot's builtin
+ * channel id, so a Bot replaced on another device never reuses what its predecessor cached.
+ */
 export const botKeys = {
   bot: (serverId: string, workspaceId: string) => ["bot", serverId, workspaceId],
-  conversation: (serverId: string, workspaceId: string) => [
+  conversation: (serverId: string, workspaceId: string, builtinChannelId: string) => [
     "bot-conversation",
     serverId,
     workspaceId,
+    builtinChannelId,
   ],
   history: (serverId: string, workspaceId: string, conversationId?: string) => [
     "bot-history",
@@ -17,8 +22,18 @@ export const botKeys = {
     conversationId,
   ],
   memory: (serverId: string, workspaceId: string) => ["bot-memory", serverId, workspaceId],
-  channels: (serverId: string, workspaceId: string) => ["bot-channels", serverId, workspaceId],
+  channels: (serverId: string, workspaceId: string, builtinChannelId: string) => [
+    "bot-channels",
+    serverId,
+    workspaceId,
+    builtinChannelId,
+  ],
 };
+
+/** Whether a Bot request failed with the host's `BotConflict` error. */
+export function isBotConflict(cause: unknown): boolean {
+  return cause instanceof Error && "code" in cause && cause.code === "bot_conflict";
+}
 
 export function isBotTurnPending(turn: BotTurn): boolean {
   return ["queued", "sending", "running", "needs_approval"].includes(turn.status);

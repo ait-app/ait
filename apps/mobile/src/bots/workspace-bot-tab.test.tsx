@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { BotView } from "@ait/protocol/bot/types";
 import { WorkspaceBotTab } from "./workspace-bot-tab";
@@ -12,6 +12,21 @@ const { workspaceBot, canManage } = vi.hoisted(() => ({
 
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("./styles", () => ({ botStyles: {} }));
+vi.mock("@/components/ui/button", () => ({
+  Button: ({
+    children,
+    onPress,
+    testID,
+  }: {
+    children: React.ReactNode;
+    onPress: () => void;
+    testID?: string;
+  }) => (
+    <button data-testid={testID} onClick={onPress}>
+      {children}
+    </button>
+  ),
+}));
 vi.mock("./loading", () => ({ BotLoadingSpinner: () => <div data-testid="bot-loading" /> }));
 vi.mock("@/hosts/background-task-access", () => ({ canManageBackgroundTasks: canManage }));
 vi.mock("./queries", () => ({ useWorkspaceBot: workspaceBot }));
@@ -27,12 +42,17 @@ const activeBot: BotView = {
   createdAt: "2026-11-06",
 };
 
-function mockWorkspaceBot(result: { data?: BotView | null; isPending?: boolean }) {
+function mockWorkspaceBot(result: {
+  data?: BotView | null;
+  isPending?: boolean;
+  error?: Error | null;
+  refetch?: () => void;
+}) {
   workspaceBot.mockReturnValue({
     data: result.data,
     isPending: result.isPending ?? false,
-    error: null,
-    refetch: vi.fn(),
+    error: result.error ?? null,
+    refetch: result.refetch ?? vi.fn(),
   });
 }
 
@@ -112,4 +132,14 @@ it("lets guests view settings of a configured bot", () => {
   mockCanManage(false);
   renderTab("settings");
   expect(screen.getByTestId("bot-settings-editor")).toBeTruthy();
+});
+
+it("surfaces a failed Bot refresh above the chat with a reload action", () => {
+  const refetch = vi.fn();
+  mockWorkspaceBot({ data: activeBot, error: new Error("Host unreachable"), refetch });
+  renderTab();
+  expect(screen.getByTestId("bot-history")).toBeTruthy();
+  expect(screen.getByText("Host unreachable")).toBeTruthy();
+  fireEvent.click(screen.getByText("bots.reload"));
+  expect(refetch).toHaveBeenCalledTimes(1);
 });

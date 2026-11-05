@@ -259,6 +259,7 @@ export function BotSettings({
       <BotChannels
         serverId={serverId}
         workspaceId={workspaceId}
+        builtinChannelId={bot.builtinChannelId}
         interactive={interactive}
         readOnly={readOnly}
       />

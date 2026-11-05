@@ -26,6 +26,22 @@ export function WorkspaceBotTab(props: WorkspaceBotTabProps) {
   const { t } = useTranslation();
   const detail = useWorkspaceBot(serverId, workspaceId, interactive);
   const bot = detail.data;
+  // A failed refresh keeps the last Bot on screen, so report it in either view.
+  const refreshError = detail.error ? (
+    <View style={styles.card}>
+      <Text style={styles.error} accessibilityRole="alert">
+        {detail.error.message}
+      </Text>
+      <Button
+        variant="outline"
+        onPress={() => {
+          void detail.refetch();
+        }}
+      >
+        {t("bots.reload")}
+      </Button>
+    </View>
+  ) : null;
   return (
     <View style={styles.root} testID="workspace-bot-tab">
       <View style={styles.toolbar}>
@@ -54,30 +70,21 @@ export function WorkspaceBotTab(props: WorkspaceBotTabProps) {
         ) : null}
       </View>
       {bot && view !== "settings" ? (
-        <BotChat
-          key={bot.builtinChannelId}
-          serverId={serverId}
-          workspaceId={workspaceId}
-          bot={bot}
-          interactive={interactive}
-        />
+        <>
+          {refreshError}
+          <BotChat
+            key={bot.builtinChannelId}
+            serverId={serverId}
+            workspaceId={workspaceId}
+            bot={bot}
+            interactive={interactive}
+          />
+        </>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <WorkspaceBotBody {...props} bot={bot} />
           {detail.isPending ? <BotLoadingSpinner /> : null}
-          {detail.error ? (
-            <View style={styles.card}>
-              <Text style={styles.error}>{detail.error.message}</Text>
-              <Button
-                variant="outline"
-                onPress={() => {
-                  void detail.refetch();
-                }}
-              >
-                {t("bots.reload")}
-              </Button>
-            </View>
-          ) : null}
+          {refreshError}
         </ScrollView>
       )}
     </View>

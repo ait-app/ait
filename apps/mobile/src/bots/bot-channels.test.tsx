@@ -134,7 +134,13 @@ let queryClient: QueryClient;
 function renderChannels(readOnly = false) {
   return render(
     <QueryClientProvider client={queryClient}>
-      <BotChannels serverId="host" workspaceId="workspace" interactive readOnly={readOnly} />
+      <BotChannels
+        serverId="host"
+        workspaceId="workspace"
+        builtinChannelId={ID_A}
+        interactive
+        readOnly={readOnly}
+      />
     </QueryClientProvider>,
   );
 }

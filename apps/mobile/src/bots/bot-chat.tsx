@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 import { FlatList, Text, View } from "react-native";
 import { randomUUID } from "expo-crypto";
 import { useTranslation } from "react-i18next";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BotTurn, BotView } from "@ait/protocol/bot/types";
 import { Button } from "@/components/ui/button";
 import { FormTextInput } from "@/components/ui/form-field";
@@ -85,13 +85,21 @@ export function BotChat({
   const attempt = useRef<{ text: string; conversationId: string; messageId: string } | null>(null);
   const list = useRef<FlatList<BotTurn>>(null);
   const atBottom = useRef(true);
+  // Only an active Bot accepts `open`; otherwise read the builtin conversation if it exists.
+  // The access mode is part of the key, so resuming opens the conversation without a remount.
+  const writable = !readOnly && bot.state.kind === "active";
+  const conversationKey = [
+    ...botKeys.conversation(serverId, workspaceId, bot.builtinChannelId),
+    writable ? "open" : "read",
+  ];
   const conversation = useQuery({
-    queryKey: botKeys.conversation(serverId, workspaceId),
+    queryKey: conversationKey,
     enabled: interactive && Boolean(client),
     staleTime: 0,
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       if (!client) throw new Error(t("bots.disconnected"));
-      if (bot.state.kind === "retired" || readOnly) {
+      if (!writable) {
         const { conversations } = await client.botRequest("bot.conversation.list.request", {
           workspaceId,
         });
@@ -154,7 +162,7 @@ export function BotChat({
     },
     onSuccess: (updated) => {
       if (updated) {
-        queryClient.setQueryData(botKeys.conversation(serverId, workspaceId), updated);
+        queryClient.setQueryData(conversationKey, updated);
         refresh();
       }
     },
@@ -178,7 +186,11 @@ export function BotChat({
         ? t("bots.directoryMissing")
         : t("bots.paused");
   const disabled =
-    !interactive || bot.state.kind !== "active" || !conversation.data || reset.isPending;
+    !interactive ||
+    !writable ||
+    !conversation.data ||
+    conversation.isPlaceholderData ||
+    reset.isPending;
   return (
     <View style={styles.root} testID="bot-chat">
       <View style={styles.toolbar}>
