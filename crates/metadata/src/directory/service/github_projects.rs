@@ -1,7 +1,10 @@
 //! GitHub search and clone with shared Project registration.
 
 use domain::workspace::identity::parse_remote;
-use domain::workspace::provisioning::{GithubCloneProtocol, GithubProjectsError, GithubRepository};
+use domain::workspace::provisioning::{
+    GithubClonePhase, GithubCloneProgress, GithubCloneProtocol, GithubProjectsError,
+    GithubRepository,
+};
 use domain::workspace::records::PersistedProjectRecord;
 use model::workspace::provisioning::GithubProjectsRuntime;
 
@@ -47,7 +50,8 @@ impl GithubProjects {
     /// Clone a GitHub repository, then register its completed checkout as a Project.
     ///
     /// The checkout remains on disk if Project registration fails, matching Paseo's observable
-    /// response with a non-null `checkoutPath` and null `project`.
+    /// response with a non-null `checkoutPath` and null `project`. `progress` receives the
+    /// normalized repository and each distinct phase transition while the operation runs.
     #[must_use]
     pub(crate) fn clone_github_project(
         &self,
@@ -55,6 +59,7 @@ impl GithubProjects {
         protocol: Option<GithubCloneProtocol>,
         target_directory: &str,
         timestamp: &str,
+        progress: &mut dyn FnMut(&str, GithubCloneProgress),
     ) -> GithubCloneOutcome {
         let original_repo = repo.trim().to_owned();
         let Some((name, display_name, clone_url)) = normalize_clone_repository(repo, protocol)
@@ -67,20 +72,30 @@ impl GithubProjects {
             };
         };
         let checkout_path = self.github.checkout_path(target_directory, &name).ok();
-        let checkout_path = match self
-            .github
-            .clone_repository(&clone_url, target_directory, &name)
-        {
-            Ok(path) => path,
-            Err(error) => {
-                return GithubCloneOutcome {
-                    repo: display_name,
-                    checkout_path,
-                    project: None,
-                    error: Some(error.to_string()),
-                };
-            }
-        };
+        progress(
+            &display_name,
+            GithubCloneProgress::new(GithubClonePhase::Starting, None),
+        );
+        let checkout_path =
+            match self
+                .github
+                .clone_repository(&clone_url, target_directory, &name, &mut |update| {
+                    progress(&display_name, update);
+                }) {
+                Ok(path) => path,
+                Err(error) => {
+                    return GithubCloneOutcome {
+                        repo: display_name,
+                        checkout_path,
+                        project: None,
+                        error: Some(error.to_string()),
+                    };
+                }
+            };
+        progress(
+            &display_name,
+            GithubCloneProgress::new(GithubClonePhase::Registering, None),
+        );
         match self.directory.add_project(&checkout_path, timestamp) {
             Ok(project) => GithubCloneOutcome {
                 repo: display_name,

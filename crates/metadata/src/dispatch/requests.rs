@@ -1,6 +1,6 @@
 //! Request branches tried in order by this crate; each owns recognition and consumption.
 
-use model::{Context, DispatchError, ErrorCode};
+use model::{Context, DispatchError, ErrorCode, ServerMessage};
 
 use super::{Completion, State};
 use crate::connection::Connection;
@@ -354,6 +354,9 @@ pub(super) async fn github_projects(
     }) else {
         return Err(DispatchError::NotImplemented);
     };
+    if context.request.method == "project.github.clone.request" {
+        return clone_github_project(context, state).await;
+    }
     context
         .rpc(
             state.github_projects.clone(),
@@ -364,4 +367,48 @@ pub(super) async fn github_projects(
         )
         .await
         .map_err(Into::into)
+}
+
+/// Run one clone on the shared blocking budget and relay its opt-in progress events.
+async fn clone_github_project(
+    mut context: Context<'_>,
+    state: &State,
+) -> Result<(), DispatchError> {
+    let outbound = context.outbound.clone();
+    let request_id = context.request.id.clone();
+    let method = std::mem::take(&mut context.request.method);
+    let params = std::mem::take(&mut context.request.params);
+    let result = state
+        .runtime
+        .run_queued(
+            state.github_projects.clone(),
+            ErrorCode::RegistryIo,
+            move |service| {
+                crate::directory::rpc::github_projects::execute_with_progress(
+                    service,
+                    &method,
+                    params,
+                    &mut |repo, progress| {
+                        let params = crate::directory::rpc::github_projects::progress_payload(
+                            &request_id,
+                            repo,
+                            progress,
+                        );
+                        if let Err(error) = outbound.send(&ServerMessage::Event {
+                            method: crate::directory::rpc::github_projects::PROGRESS_EVENT
+                                .to_owned(),
+                            params,
+                        }) {
+                            tracing::debug!(
+                                %error,
+                                "GitHub clone progress could not be delivered"
+                            );
+                        }
+                    },
+                )
+                .map_err(Into::into)
+            },
+        )
+        .await;
+    context.respond(result).map_err(Into::into)
 }

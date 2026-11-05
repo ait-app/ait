@@ -1,5 +1,6 @@
 use std::process::Command;
 
+use domain::workspace::provisioning::{GithubClonePhase, GithubCloneProgress};
 use serde_json::json;
 
 use super::*;
@@ -163,6 +164,7 @@ fn clone_stages_local_git_repository_and_never_replaces_target() {
             source.to_str().expect("source text"),
             parent.to_str().expect("parent text"),
             "copied",
+            &mut |_| {},
         )
         .expect("clone");
 
@@ -171,7 +173,8 @@ fn clone_stages_local_git_repository_and_never_replaces_target() {
         runtime.clone_repository(
             source.to_str().expect("source text"),
             parent.to_str().expect("parent text"),
-            "copied"
+            "copied",
+            &mut |_| {},
         ),
         Err(GithubProjectsError::TargetExists)
     );
@@ -192,8 +195,63 @@ fn failed_clone_cleans_staging_directory() {
         "/definitely/missing/repository",
         parent.to_str().expect("parent text"),
         "uncloned",
+        &mut |_| {},
     );
 
     assert_eq!(result, Err(GithubProjectsError::CloneFailed));
     assert_eq!(std::fs::read_dir(parent).expect("entries").count(), 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn clone_reports_monotonic_git_progress_while_running() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = tempfile::tempdir().expect("root");
+    let git = root.path().join("git");
+    std::fs::write(
+        &git,
+        r#"#!/bin/sh
+for last; do :; done
+printf 'Receiving objects:  50%% (1/2), 1.00 MiB | 1.00 MiB/s\r' >&2
+printf 'Receiving objects: 100%% (2/2), 2.00 MiB | 2.00 MiB/s, done.\r' >&2
+printf 'Resolving deltas: 100%% (1/1), done.\r' >&2
+mkdir -p "$last"
+"#,
+    )
+    .expect("git script");
+    let mut permissions = std::fs::metadata(&git).expect("metadata").permissions();
+    permissions.set_mode(0o700);
+    std::fs::set_permissions(&git, permissions).expect("permissions");
+    let parent = root.path().join("checkouts");
+    let runtime =
+        LocalGithubProjects::with_executables(PathBuf::from("gh"), git, root.path().to_path_buf());
+    let mut updates = Vec::new();
+
+    let checkout = runtime
+        .clone_repository(
+            "https://github.com/owner/repo",
+            parent.to_str().expect("parent text"),
+            "repo",
+            &mut |update| updates.push(update),
+        )
+        .expect("clone");
+
+    assert!(PathBuf::from(&checkout).is_dir());
+    assert!(updates.iter().any(|update| {
+        update.phase == GithubClonePhase::Receiving && update.phase_percent == Some(50)
+    }));
+    assert_eq!(
+        updates.last(),
+        Some(&GithubCloneProgress::new(
+            GithubClonePhase::Resolving,
+            Some(100)
+        ))
+    );
+    assert!(
+        updates
+            .windows(2)
+            .all(|pair| pair[0].overall_percent() <= pair[1].overall_percent()),
+        "progress must never move backwards: {updates:?}"
+    );
 }

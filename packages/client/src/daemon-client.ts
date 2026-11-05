@@ -2674,6 +2674,7 @@ export class DaemonClient {
       repo: string;
       targetDirectory: string;
       cloneProtocol?: ProjectGithubCloneProtocol;
+      progress?: boolean;
     },
     requestId?: string,
   ): Promise<ProjectGithubClonePayload> {
@@ -2682,6 +2683,7 @@ export class DaemonClient {
       repo: input.repo,
       targetDirectory: input.targetDirectory,
       ...(input.cloneProtocol ? { cloneProtocol: input.cloneProtocol } : {}),
+      ...(input.progress ? { progress: true } : {}),
     } as const;
     return this.sendNamespacedCorrelatedSessionRequest<"project.github.clone.response">({
       requestId,
