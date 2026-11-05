@@ -18,26 +18,48 @@ pub struct ExecutionConfig {
     pub thinking: Option<String>,
 }
 
-/// Bot configuration, independent of any transport or native session.
+/// Why a Workspace Bot stopped admitting work while keeping its configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PauseReason {
+    /// The user paused the Bot explicitly.
+    User,
+    /// The Workspace directory disappeared; the user must resume explicitly.
+    DirectoryMissing,
+}
+
+/// Lifecycle of a Workspace's single Bot.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum BotState {
+    /// Admits input and runs turns.
+    Active,
+    /// Keeps configuration and history but admits no input.
+    Paused {
+        /// Cause of the pause.
+        reason: PauseReason,
+    },
+    /// Permanently replaced or removed; history is kept for audit only.
+    Retired {
+        /// UTC retirement timestamp.
+        at: String,
+    },
+}
+
+/// A Workspace's Bot configuration, independent of any transport or native session.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Bot {
-    /// Stable workspace tab identity.
+    /// Internal storage and generation key; clients address the Bot by Workspace.
     pub id: BotId,
     /// Owning workspace, which must be active for execution.
     pub workspace_id: String,
-    /// Display name.
-    pub name: String,
-    /// Persona and behavior instructions.
-    pub instructions: String,
     /// Provider selection for new conversations.
     pub execution: ExecutionConfig,
     /// Built-in Ait channel allocated atomically with the Bot.
     pub builtin_channel_id: ChannelId,
-    /// Whether this Bot admits incoming messages.
-    pub enabled: bool,
-    /// Archive timestamp, retaining history and memory.
-    pub archived_at: Option<String>,
+    /// Lifecycle state; at most one non-retired Bot exists per Workspace.
+    pub state: BotState,
     /// UTC creation timestamp.
     pub created_at: String,
 }
@@ -130,8 +152,6 @@ pub struct Conversation {
     pub generation: u64,
     /// Native configuration fixed for this generation.
     pub execution: ExecutionConfig,
-    /// Persona fixed for this generation.
-    pub instructions: String,
     /// Next ordered input sequence; gaps after failed persistence are permitted.
     pub next_sequence: u64,
 }

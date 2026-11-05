@@ -7,18 +7,17 @@ use model::bot::Store;
 use tokio::sync::Notify;
 
 use super::*;
-use crate::test_support::{Fixture, creation};
+use crate::test_support::{Fixture, WORKSPACE, setup};
 
 async fn registered_channel(bots: &Bots) -> Channel {
-    let bot = BotId::generate();
-    bots.execute("bot.create.request", creation(bot))
+    bots.execute("bot.setup.request", setup(WORKSPACE))
         .await
         .unwrap();
     let value = bots
         .execute(
             "bot.channel.create.request",
             json!({
-                "botId":bot,"channelId":ChannelId::generate(),"enabled":true,
+                "workspaceId":WORKSPACE,"channelId":ChannelId::generate(),"enabled":true,
                 "config":{"kind":"telegram","tokenRef":"env:AIT_SERVER_CREDENTIAL_TEST",
                     "allowedSenders":["1"],"allowGroups":true}
             }),

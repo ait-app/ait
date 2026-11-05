@@ -1,19 +1,36 @@
+use domain::BotId;
+use domain::bot::BotState;
+
 use super::*;
+
+fn push_bot(catalog: &mut domain::bot::Catalog, state: BotState) {
+    let mut bot = catalog.bots[0].clone();
+    bot.id = BotId::generate();
+    bot.builtin_channel_id = ChannelId::generate();
+    bot.state = state;
+    let mut channel = catalog.channels[0].clone();
+    channel.id = bot.builtin_channel_id;
+    channel.bot_id = bot.id;
+    catalog.bots.push(bot);
+    catalog.channels.push(channel);
+}
 
 #[test]
 fn catalog_rejects_duplicate_owners_missing_builtin_channels_and_invalid_configuration() {
     let fixture = Fixture::new();
     let mut state = fixture.state();
-    let bot = BotId::generate();
-    state.execute("bot.create.request", creation(bot)).unwrap();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
     let original = state.catalog.clone();
     for case in [
         "duplicate_bot",
         "missing_builtin",
         "duplicate_channel",
         "deleted_builtin",
-        "invalid_name",
+        "invalid_provider",
         "invalid_workspace",
+        "second_live_bot",
     ] {
         let mut catalog = original.clone();
         match case {
@@ -21,8 +38,9 @@ fn catalog_rejects_duplicate_owners_missing_builtin_channels_and_invalid_configu
             "missing_builtin" => catalog.channels.clear(),
             "duplicate_channel" => catalog.channels.push(catalog.channels[0].clone()),
             "deleted_builtin" => catalog.channels[0].deleted = true,
-            "invalid_name" => catalog.bots[0].name.clear(),
+            "invalid_provider" => catalog.bots[0].execution.provider.clear(),
             "invalid_workspace" => catalog.bots[0].workspace_id.clear(),
+            "second_live_bot" => push_bot(&mut catalog, BotState::Active),
             _ => unreachable!("fixed fixture case"),
         }
         assert_eq!(
@@ -31,6 +49,14 @@ fn catalog_rejects_duplicate_owners_missing_builtin_channels_and_invalid_configu
             "{case}"
         );
     }
+    let mut retired = original.clone();
+    push_bot(
+        &mut retired,
+        BotState::Retired {
+            at: "2026-01-01T00:00:00Z".into(),
+        },
+    );
+    assert_eq!(crate::state::catalog::validate(&retired), Ok(()));
     let mut oversized = original;
     oversized.bots = vec![oversized.bots[0].clone(); 129];
     assert_eq!(
@@ -44,16 +70,19 @@ fn capacity_counts_only_live_bots_and_channels() {
     let fixture = Fixture::new();
     let mut state = fixture.state();
     state
-        .execute("bot.create.request", creation(BotId::generate()))
+        .execute("bot.setup.request", setup(WORKSPACE))
         .unwrap();
     let template = state.catalog.clone();
     let mut catalog = domain::bot::Catalog::default();
     for index in 0..200 {
         let mut bot = template.bots[0].clone();
         bot.id = BotId::generate();
+        bot.workspace_id = format!("wks_{index:016x}");
         bot.builtin_channel_id = ChannelId::generate();
         if index >= 128 {
-            bot.archived_at = Some("2026-01-01T00:00:00Z".into());
+            bot.state = BotState::Retired {
+                at: "2026-01-01T00:00:00Z".into(),
+            };
         }
         let mut channel = template.channels[0].clone();
         channel.id = bot.builtin_channel_id;
@@ -77,7 +106,7 @@ fn capacity_counts_only_live_bots_and_channels() {
         });
     }
     assert_eq!(crate::state::catalog::validate(&catalog), Ok(()));
-    catalog.bots[128].archived_at = None;
+    catalog.bots[128].state = BotState::Active;
     assert_eq!(
         crate::state::catalog::validate(&catalog),
         Err(ErrorCode::ResourceExhausted)
@@ -85,27 +114,34 @@ fn capacity_counts_only_live_bots_and_channels() {
 }
 
 #[test]
-fn bot_configuration_updates_apply_to_new_sessions_and_archived_bots_reject_edits() {
+fn bot_configuration_updates_apply_to_new_sessions_and_retired_bots_reject_edits() {
     let fixture = Fixture::new();
     let mut state = fixture.state();
-    let bot = BotId::generate();
-    state.execute("bot.create.request", creation(bot)).unwrap();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
     let updated = state
         .execute(
             "bot.update.request",
-            json!({"botId":bot,
-        "instructions":"new instructions","execution":{"provider":"other-fixture"}}),
+            json!({"workspaceId":WORKSPACE,"execution":{"provider":"other-fixture"}}),
         )
         .unwrap();
-    assert_eq!(updated["bot"]["instructions"], "new instructions");
     assert_eq!(updated["bot"]["execution"]["provider"], "other-fixture");
     assert_eq!(updated["configurationAppliesToNewSessions"], true);
-    state
-        .execute("bot.archive.request", json!({"botId":bot}))
-        .unwrap();
     assert_eq!(
-        state.execute("bot.update.request", json!({"botId":bot,"name":"renamed"})),
-        Err(ErrorCode::BotConflict)
+        state.execute(
+            "bot.update.request",
+            json!({"workspaceId":WORKSPACE,"name":"renamed","execution":{"provider":"test"}})
+        ),
+        Err(ErrorCode::InvalidMessage)
+    );
+    state.retire(&[WORKSPACE.into()]).unwrap();
+    assert_eq!(
+        state.execute(
+            "bot.update.request",
+            json!({"workspaceId":WORKSPACE,"execution":{"provider":"test"}})
+        ),
+        Err(ErrorCode::BotNotFound)
     );
 }
 
@@ -113,10 +149,11 @@ fn bot_configuration_updates_apply_to_new_sessions_and_archived_bots_reject_edit
 fn channel_creation_is_idempotent_and_account_identity_cannot_change_in_place() {
     let fixture = Fixture::new();
     let mut state = fixture.state();
-    let bot = BotId::generate();
-    state.execute("bot.create.request", creation(bot)).unwrap();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
     let id = ChannelId::generate();
-    let request = json!({"botId":bot,"channelId":id,"enabled":true,
+    let request = json!({"workspaceId":WORKSPACE,"channelId":id,"enabled":true,
         "config":{"kind":"feishu","appId":"app-1","secretRef":"env:AIT_SERVER_CREDENTIAL_TEST",
             "allowedSenders":["sender"]}});
     assert_eq!(
@@ -144,7 +181,7 @@ fn channel_creation_is_idempotent_and_account_identity_cannot_change_in_place() 
         assert_eq!(
             state.execute(
                 "bot.channel.update.request",
-                json!({"botId":bot,"channelId":id,"enabled":true,"config":config})
+                json!({"workspaceId":WORKSPACE,"channelId":id,"enabled":true,"config":config})
             ),
             Err(ErrorCode::BotConflict)
         );
@@ -154,7 +191,7 @@ fn channel_creation_is_idempotent_and_account_identity_cannot_change_in_place() 
     let updated = state
         .execute(
             "bot.channel.update.request",
-            json!({"botId":bot,"channelId":id,"enabled":true,"config":config}),
+            json!({"workspaceId":WORKSPACE,"channelId":id,"enabled":true,"config":config}),
         )
         .unwrap();
     assert_eq!(

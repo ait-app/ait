@@ -4,13 +4,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use domain::bot::{Channel, Conversation, DeliveryStatus, SessionOwner, Turn, TurnStatus};
+use domain::bot::{Channel, Conversation, DeliveryStatus, Turn, TurnStatus};
 use domain::{BotTurnId, ChannelId, ConversationId};
 use model::ErrorCode;
 use model::bot::Store;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
-use provider::service::bot_execution::Action;
-use serde_json::{Value, json};
+use serde_json::Value;
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -66,7 +65,6 @@ enum Operation {
     Finished(ConversationId),
     DeliveryNext(ChannelId),
     Delivery(BotTurnId, DeliveryStatus),
-    Permission(crate::protocol::DecisionRequest),
     Retire(Vec<String>),
 }
 /// Outcome of channel input that the Bot did not refuse.
@@ -124,14 +122,6 @@ impl Bots {
     /// # Errors
     /// Returns validation, ownership, resource, persistence or lifecycle failures.
     pub async fn execute(&self, method: &str, params: Value) -> Result<Value, ErrorCode> {
-        if method == "bot.permission.resolve.request" {
-            let request = crate::protocol::decode(params)?;
-            let value = self.call(Operation::Permission(request)).await?;
-            let owner: SessionOwner = crate::protocol::decode(value["owner"].clone())?;
-            let action: Action = crate::protocol::decode(value["action"].clone())?;
-            self.0.executor.execute(owner, action).await?;
-            return Ok(json!({"resolved":true}));
-        }
         self.call(Operation::Rpc(method.to_owned(), params)).await
     }
 
@@ -140,7 +130,7 @@ impl Bots {
         self.0.cancellation.cancel();
     }
 
-    /// Disable Bots and stop their owned work before archived workspace directories are removed.
+    /// Retire the Workspaces' Bots and stop their work before archived directories are removed.
     /// # Errors
     /// Returns configuration persistence or worker lifecycle failures.
     pub async fn retire(&self, workspaces: &[String]) -> Result<(), ErrorCode> {
@@ -339,7 +329,7 @@ fn apply(
 ) -> Result<Value, ErrorCode> {
     match operation {
         Operation::Rpc(method, params) if method == "bot.turn.cancel.request" => {
-            state.cancel(crate::protocol::decode(params)?)
+            state.cancel(&crate::protocol::decode(params)?)
         }
         Operation::Rpc(method, params) => state.execute(&method, params),
         Operation::Accept(incoming) => state.accept_channel(incoming),
@@ -381,10 +371,6 @@ fn apply(
             serde_json::to_value(pending).map_err(|_| ErrorCode::BotIo)
         }
         Operation::Delivery(turn, status) => state.delivery(turn, status).map(|()| Value::Null),
-        Operation::Permission(request) => {
-            let (owner, action) = state.permission(request)?;
-            Ok(json!({"owner":owner,"action":action}))
-        }
         Operation::Retire(workspaces) => state.retire(&workspaces).map(|()| Value::Null),
     }
 }

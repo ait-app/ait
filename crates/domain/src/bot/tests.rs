@@ -38,3 +38,35 @@ fn bot_identities_roundtrip_and_reject_nil_or_malformed_values() {
         assert!(serde_json::from_str::<BotId>(invalid).is_err());
     }
 }
+
+#[test]
+fn bot_state_serializes_as_kind_tagged_snake_case() {
+    use super::{BotState, PauseReason};
+    use serde_json::json;
+
+    for (state, expected) in [
+        (BotState::Active, json!({"kind":"active"})),
+        (
+            BotState::Paused {
+                reason: PauseReason::User,
+            },
+            json!({"kind":"paused","reason":"user"}),
+        ),
+        (
+            BotState::Paused {
+                reason: PauseReason::DirectoryMissing,
+            },
+            json!({"kind":"paused","reason":"directory_missing"}),
+        ),
+        (
+            BotState::Retired {
+                at: "2026-11-05T00:00:00Z".into(),
+            },
+            json!({"kind":"retired","at":"2026-11-05T00:00:00Z"}),
+        ),
+    ] {
+        assert_eq!(serde_json::to_value(&state).unwrap(), expected);
+        assert_eq!(serde_json::from_value::<BotState>(expected).unwrap(), state);
+    }
+    assert!(serde_json::from_value::<BotState>(json!({"kind":"enabled"})).is_err());
+}

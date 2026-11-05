@@ -27,7 +27,6 @@ async fn node_guests_can_read_but_cannot_start_persistent_automation() {
     for method in [
         "schedule.list.request",
         "schedule.inspect.request",
-        "bot.list.request",
         "bot.get.request",
     ] {
         guest.forwarded(method, json!({})).await;

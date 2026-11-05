@@ -37,7 +37,6 @@ fn atomic_catalog_routes_receipts_and_bounded_memory_survive_reopening() {
             mode_id: None,
             thinking: None,
         },
-        instructions: String::new(),
         next_sequence: 2,
     };
     store.save_conversation(&conversation).unwrap();

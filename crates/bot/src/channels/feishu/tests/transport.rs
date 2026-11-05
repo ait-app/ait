@@ -4,11 +4,11 @@ use axum::{
     Json, Router,
     routing::{get, post},
 };
-use domain::{BotId, ChannelId};
+use domain::ChannelId;
 use model::bot::Store;
 
 use super::super::*;
-use crate::test_support::{Fixture, creation};
+use crate::test_support::{Fixture, WORKSPACE, setup};
 
 #[tokio::test]
 async fn tenant_token_is_cached_and_native_reply_uses_the_original_chat() {
@@ -61,14 +61,14 @@ async fn tenant_token_is_cached_and_native_reply_uses_the_original_chat() {
     });
     let fixture = Fixture::new();
     let mut state = fixture.state();
-    let bot = BotId::generate();
-    let id = ChannelId::generate();
-    state.execute("bot.create.request", creation(bot)).unwrap();
-    let value = state.execute("bot.channel.create.request",json!({"botId":bot,"channelId":id,"enabled":true,"config":{"kind":"feishu","appId":"app-1","secretRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":["ou_alice"]}})).unwrap();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    let value = state.execute("bot.channel.create.request",json!({"workspaceId":WORKSPACE,"channelId":ChannelId::generate(),"enabled":true,"config":{"kind":"feishu","appId":"app-1","secretRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":["ou_alice"]}})).unwrap();
     let channel: Channel = serde_json::from_value(value["channel"].clone()).unwrap();
     let input = state
         .accept(Incoming {
-            channel_id: id,
+            channel_id: channel.id,
             peer: "oc_original".into(),
             sender: "ou_alice".into(),
             thread: None,
@@ -119,12 +119,11 @@ async fn websocket_events_are_acknowledged_after_durable_admission_and_deduplica
     let fixture = Fixture::new();
     fixture.native.hold.store(true, Ordering::SeqCst);
     let bots = fixture.bots();
-    let bot = BotId::generate();
     let id = ChannelId::generate();
-    bots.execute("bot.create.request", creation(bot))
+    bots.execute("bot.setup.request", setup(WORKSPACE))
         .await
         .unwrap();
-    let value = bots.execute("bot.channel.create.request",json!({"botId":bot,"channelId":id,"enabled":true,"config":{"kind":"feishu","appId":"app-1","secretRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":["ou_alice"]}})).await.unwrap();
+    let value = bots.execute("bot.channel.create.request",json!({"workspaceId":WORKSPACE,"channelId":id,"enabled":true,"config":{"kind":"feishu","appId":"app-1","secretRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":["ou_alice"]}})).await.unwrap();
     let channel: Channel = serde_json::from_value(value["channel"].clone()).unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();

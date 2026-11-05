@@ -1,12 +1,11 @@
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use domain::BotId;
 use model::ErrorCode;
 use serde_json::{Value, json};
 
 use crate::service::Bots;
-use crate::test_support::{Fixture, creation};
+use crate::test_support::{Fixture, OTHER_WORKSPACE, WORKSPACE, setup};
 
 #[tokio::test]
 async fn provider_failures_are_durable_and_ambiguous_statuses_require_explicit_recovery() {
@@ -18,26 +17,28 @@ async fn provider_failures_are_durable_and_ambiguous_statuses_require_explicit_r
         let fixture = Fixture::new();
         *fixture.native.status.lock().unwrap() = Some(status);
         let bots = fixture.bots();
-        let bot = BotId::generate();
-        let conversation = setup(&bots, bot).await;
+        let conversation = open(&bots, WORKSPACE).await;
         let turn = bots
             .execute(
                 "bot.message.send.request",
-                json!({"botId":bot,
+                json!({"workspaceId":WORKSPACE,
             "conversationId":conversation,"messageId":"failure","text":"fixture"}),
             )
             .await
             .unwrap()["turn"]["id"]
             .clone();
 
-        let settled = wait(&bots, bot, &turn, expected).await;
+        let settled = wait(&bots, WORKSPACE, &turn, expected).await;
 
         assert!(settled["turn"]["reply"].is_null());
         assert!(settled["turn"]["error"].as_str().is_some());
         bots.shutdown().await.unwrap();
         let recovered = fixture.bots();
         let persisted = recovered
-            .execute("bot.turn.get.request", json!({"botId":bot,"turnId":turn}))
+            .execute(
+                "bot.turn.get.request",
+                json!({"workspaceId":WORKSPACE,"turnId":turn}),
+            )
             .await
             .unwrap();
         assert_eq!(persisted["turn"]["status"], expected);
@@ -51,12 +52,11 @@ async fn failed_permission_denial_cancels_native_execution_and_fails_the_turn() 
     fixture.native.approval.store(true, Ordering::SeqCst);
     fixture.native.fail_denial.store(true, Ordering::SeqCst);
     let bots = fixture.bots();
-    let bot = BotId::generate();
-    let conversation = setup(&bots, bot).await;
+    let conversation = open(&bots, WORKSPACE).await;
     let turn = bots.execute("bot.message.send.request", json!({
-        "botId":bot,"conversationId":conversation,"messageId":"denial-failure","text":"request"
+        "workspaceId":WORKSPACE,"conversationId":conversation,"messageId":"denial-failure","text":"request"
     })).await.unwrap()["turn"]["id"].clone();
-    let failed = wait(&bots, bot, &turn, "failed").await;
+    let failed = wait(&bots, WORKSPACE, &turn, "failed").await;
     assert_eq!(failed["turn"]["pendingPermissions"], json!([]));
     assert!(
         fixture
@@ -75,20 +75,26 @@ async fn failed_permission_denial_cancels_native_execution_and_fails_the_turn() 
     bots.shutdown().await.unwrap();
 }
 
-async fn setup(bots: &Bots, id: BotId) -> Value {
-    bots.execute("bot.create.request", creation(id))
+async fn open(bots: &Bots, workspace: &str) -> Value {
+    bots.execute("bot.setup.request", setup(workspace))
         .await
         .unwrap();
-    bots.execute("bot.conversation.open.request", json!({"botId":id}))
-        .await
-        .unwrap()["conversation"]["id"]
+    bots.execute(
+        "bot.conversation.open.request",
+        json!({"workspaceId":workspace}),
+    )
+    .await
+    .unwrap()["conversation"]["id"]
         .clone()
 }
-async fn wait(bots: &Bots, bot: BotId, turn: &Value, status: &str) -> Value {
+async fn wait(bots: &Bots, workspace: &str, turn: &Value, status: &str) -> Value {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             let value = bots
-                .execute("bot.turn.get.request", json!({"botId":bot,"turnId":turn}))
+                .execute(
+                    "bot.turn.get.request",
+                    json!({"workspaceId":workspace,"turnId":turn}),
+                )
                 .await
                 .unwrap();
             if value["turn"]["status"] == status {
@@ -106,24 +112,24 @@ async fn builtin_turns_are_durable_idempotent_isolated_and_recoverable() {
     let fixture = Fixture::new();
     assert!(fixture.root.path().is_dir());
     let bots = fixture.bots();
-    let first = BotId::generate();
-    let second = BotId::generate();
-    let conversation = setup(&bots, first).await;
-    let other = setup(&bots, second).await;
+    let conversation = open(&bots, WORKSPACE).await;
+    let other = open(&bots, OTHER_WORKSPACE).await;
     assert_eq!(
-        bots.execute("bot.conversation.open.request", json!({"botId":first}))
-            .await
-            .unwrap()["conversation"]["id"],
+        bots.execute(
+            "bot.conversation.open.request",
+            json!({"workspaceId":WORKSPACE})
+        )
+        .await
+        .unwrap()["conversation"]["id"],
         conversation
     );
-    let input =
-        json!({"botId":first,"conversationId":conversation,"messageId":"stable-1","text":"hello"});
+    let input = json!({"workspaceId":WORKSPACE,"conversationId":conversation,"messageId":"stable-1","text":"hello"});
     let accepted = bots
         .execute("bot.message.send.request", input.clone())
         .await
         .unwrap();
     let id = accepted["turn"]["id"].clone();
-    let completed = wait(&bots, first, &id, "completed").await;
+    let completed = wait(&bots, WORKSPACE, &id, "completed").await;
     assert_eq!(completed["turn"]["reply"], "reply:hello");
     assert_eq!(completed["turn"]["delivery"], "delivered");
     assert_eq!(
@@ -132,18 +138,21 @@ async fn builtin_turns_are_durable_idempotent_isolated_and_recoverable() {
             .unwrap()["turn"]["id"],
         id
     );
-    assert_eq!(bots.execute("bot.message.send.request", json!({"botId":first,"conversationId":conversation,"messageId":"stable-1","text":"changed"})).await, Err(ErrorCode::IdempotencyConflict));
+    assert_eq!(bots.execute("bot.message.send.request", json!({"workspaceId":WORKSPACE,"conversationId":conversation,"messageId":"stable-1","text":"changed"})).await, Err(ErrorCode::IdempotencyConflict));
     assert_eq!(
         bots.execute(
             "bot.history.get.request",
-            json!({"botId":second,"conversationId":conversation})
+            json!({"workspaceId":OTHER_WORKSPACE,"conversationId":conversation})
         )
         .await,
         Err(ErrorCode::BotNotFound)
     );
     assert_eq!(
-        bots.execute("bot.turn.get.request", json!({"botId":second,"turnId":id}))
-            .await,
+        bots.execute(
+            "bot.turn.get.request",
+            json!({"workspaceId":OTHER_WORKSPACE,"turnId":id})
+        )
+        .await,
         Err(ErrorCode::BotNotFound)
     );
     assert_ne!(conversation, other);
@@ -153,7 +162,7 @@ async fn builtin_turns_are_durable_idempotent_isolated_and_recoverable() {
         restarted
             .execute(
                 "bot.history.get.request",
-                json!({"botId":first,"conversationId":conversation})
+                json!({"workspaceId":WORKSPACE,"conversationId":conversation})
             )
             .await
             .unwrap()["turns"]
@@ -179,10 +188,7 @@ async fn builtin_turns_are_durable_idempotent_isolated_and_recoverable() {
     restarted.shutdown().await.unwrap();
     assert_eq!(
         restarted
-            .execute(
-                "bot.list.request",
-                json!({"workspaceId":"wks_0123456789abcdef"})
-            )
+            .execute("bot.get.request", json!({"workspaceId":WORKSPACE}))
             .await,
         Err(ErrorCode::ServerDraining)
     );
@@ -194,38 +200,33 @@ async fn automatic_denial_queue_cancellation_memory_and_workspace_retirement() {
     fixture.native.approval.store(true, Ordering::SeqCst);
     fixture.native.hold.store(true, Ordering::SeqCst);
     let bots = fixture.bots();
-    let bot = BotId::generate();
-    let conversation = setup(&bots, bot).await;
+    let conversation = open(&bots, WORKSPACE).await;
     let first = bots
         .execute(
             "bot.message.send.request",
-            json!({"botId":bot,"conversationId":conversation,"messageId":"1","text":"first"}),
+            json!({"workspaceId":WORKSPACE,"conversationId":conversation,"messageId":"1","text":"first"}),
         )
         .await
         .unwrap()["turn"]["id"]
         .clone();
-    wait(&bots, bot, &first, "running").await;
-    assert_eq!(
-        bots.execute("bot.permission.resolve.request", json!({"botId":bot,"turnId":first,"permissionId":"approval-1","response":{"behavior":"allow"}})).await,
-        Err(ErrorCode::InvalidMessage),
-    );
+    wait(&bots, WORKSPACE, &first, "running").await;
     let queued = bots
         .execute(
             "bot.message.send.request",
-            json!({"botId":bot,"conversationId":conversation,"messageId":"2","text":"queued"}),
+            json!({"workspaceId":WORKSPACE,"conversationId":conversation,"messageId":"2","text":"queued"}),
         )
         .await
         .unwrap()["turn"]["id"]
         .clone();
     bots.execute(
         "bot.turn.cancel.request",
-        json!({"botId":bot,"turnId":queued}),
+        json!({"workspaceId":WORKSPACE,"turnId":queued}),
     )
     .await
     .unwrap();
-    wait(&bots, bot, &queued, "cancelled").await;
+    wait(&bots, WORKSPACE, &queued, "cancelled").await;
     fixture.native.hold.store(false, Ordering::SeqCst);
-    let completed = wait(&bots, bot, &first, "completed").await;
+    let completed = wait(&bots, WORKSPACE, &first, "completed").await;
     assert_eq!(completed["turn"]["pendingPermissions"], json!([]));
     let responses: Vec<_> = fixture
         .native
@@ -243,13 +244,13 @@ async fn automatic_denial_queue_cancellation_memory_and_workspace_retirement() {
         .collect();
     assert_eq!(responses, [json!({"behavior":"deny"})]);
     let memory = bots
-        .execute("bot.memory.get.request", json!({"botId":bot}))
+        .execute("bot.memory.get.request", json!({"workspaceId":WORKSPACE}))
         .await
         .unwrap();
     let changed = bots
         .execute(
             "bot.memory.update.request",
-            json!({"botId":bot,"text":"durable knowledge","expected":memory["revision"]}),
+            json!({"workspaceId":WORKSPACE,"text":"durable knowledge","expected":memory["revision"]}),
         )
         .await
         .unwrap();
@@ -257,25 +258,25 @@ async fn automatic_denial_queue_cancellation_memory_and_workspace_retirement() {
     assert_eq!(
         bots.execute(
             "bot.memory.update.request",
-            json!({"botId":bot,"text":"overwrite","expected":memory["revision"]})
+            json!({"workspaceId":WORKSPACE,"text":"overwrite","expected":memory["revision"]})
         )
         .await,
         Err(ErrorCode::BotConflict)
     );
     bots.execute(
         "bot.conversation.reset.request",
-        json!({"botId":bot,"conversationId":conversation}),
+        json!({"workspaceId":WORKSPACE,"conversationId":conversation}),
     )
     .await
     .unwrap();
-    bots.retire(&["wks_0123456789abcdef".into()]).await.unwrap();
+    bots.retire(&[WORKSPACE.into()]).await.unwrap();
     assert_eq!(
         bots.execute(
             "bot.message.send.request",
-            json!({"botId":bot,"conversationId":conversation,"messageId":"3","text":"stopped"})
+            json!({"workspaceId":WORKSPACE,"conversationId":conversation,"messageId":"3","text":"stopped"})
         )
         .await,
-        Err(ErrorCode::BotConflict)
+        Err(ErrorCode::BotNotFound)
     );
     bots.shutdown().await.unwrap();
 }

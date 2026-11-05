@@ -1,6 +1,5 @@
 use ::bot::ports::{Credentials, Executor};
 use ::bot::service::{Bots, Dependencies};
-use domain::BotId;
 use domain::bot::SessionOwner;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use persistence::storage::bot::FileStore;
@@ -67,20 +66,25 @@ async fn installed_bot_rpc_survives_ui_disconnect_and_returns_durable_history() 
     })
     .await;
     let mut socket = connect(&fixture).await;
-    let id = BotId::generate();
-    let created = request(&mut socket,"bot.create.request",json!({"botId":id,"workspaceId":"wks_0123456789abcdef","name":"assistant","execution":{"provider":"test"}})).await;
+    let workspace = "wks_0123456789abcdef";
+    let created = request(
+        &mut socket,
+        "bot.setup.request",
+        json!({"workspaceId":workspace,"execution":{"provider":"test"}}),
+    )
+    .await;
     assert_eq!(created["type"], "response");
     let opened = request(
         &mut socket,
         "bot.conversation.open.request",
-        json!({"botId":id}),
+        json!({"workspaceId":workspace}),
     )
     .await;
     let conversation = opened["result"]["conversation"]["id"].clone();
     let accepted = request(
         &mut socket,
         "bot.message.send.request",
-        json!({"botId":id,"conversationId":conversation,"messageId":"stable","text":"hello"}),
+        json!({"workspaceId":workspace,"conversationId":conversation,"messageId":"stable","text":"hello"}),
     )
     .await;
     assert_eq!(accepted["result"]["accepted"], true);
@@ -91,7 +95,7 @@ async fn installed_bot_rpc_survives_ui_disconnect_and_returns_durable_history() 
             let value = request(
                 &mut restored,
                 "bot.history.get.request",
-                json!({"botId":id,"conversationId":conversation}),
+                json!({"workspaceId":workspace,"conversationId":conversation}),
             )
             .await;
             if value["result"]["turns"][0]["status"] == "completed" {

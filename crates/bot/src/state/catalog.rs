@@ -1,18 +1,18 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use domain::ChannelId;
-use domain::bot::{Bot, Catalog, Channel, ChannelConfig, ExecutionConfig};
+use domain::bot::{Bot, BotState, Catalog, Channel, ChannelConfig, ExecutionConfig};
+use domain::{BotId, ChannelId};
 use model::ErrorCode;
 use serde_json::{Value, json};
 
 use super::State;
-use crate::protocol::{BotRequest, ChannelCreate, ChannelRequest, ChannelUpdate, Create, Update};
+use crate::protocol::{ChannelCreate, ChannelRequest, ChannelUpdate, Setup, Update};
 
-/// Most Bots that are not archived.
+/// Most Bots that are not retired.
 const LIVE_BOTS: usize = 128;
-/// Most undeleted Channels owned by Bots that are not archived.
+/// Most undeleted Channels owned by Bots that are not retired.
 const LIVE_CHANNELS: usize = 256;
-/// Hard cap on stored Bots; archived Bots keep their history, so it exceeds the live limit.
+/// Hard cap on stored Bots; retired Bots keep their history, so it exceeds the live limit.
 const STORED_BOTS: usize = 4096;
 /// Hard cap on stored Channels; deleted Channels keep their history, so it exceeds the live limit.
 const STORED_CHANNELS: usize = 8192;
@@ -21,22 +21,18 @@ fn validate_capacity(catalog: &Catalog) -> Result<(), ErrorCode> {
     if catalog.bots.len() > STORED_BOTS || catalog.channels.len() > STORED_CHANNELS {
         return Err(ErrorCode::ResourceExhausted);
     }
-    let archived: BTreeSet<_> = catalog
+    let retired_bots: BTreeSet<_> = catalog
         .bots
         .iter()
-        .filter(|bot| bot.archived_at.is_some())
+        .filter(|bot| retired(bot))
         .map(|bot| bot.id)
         .collect();
     let live_channels = catalog
         .channels
         .iter()
-        .filter(|channel| !channel.deleted && !archived.contains(&channel.bot_id))
+        .filter(|channel| !channel.deleted && !retired_bots.contains(&channel.bot_id))
         .count();
-    let live_bots = catalog
-        .bots
-        .iter()
-        .filter(|bot| bot.archived_at.is_none())
-        .count();
+    let live_bots = catalog.bots.len() - retired_bots.len();
     if live_bots > LIVE_BOTS || live_channels > LIVE_CHANNELS {
         return Err(ErrorCode::ResourceExhausted);
     }
@@ -46,9 +42,13 @@ fn validate_capacity(catalog: &Catalog) -> Result<(), ErrorCode> {
 pub(super) fn validate(catalog: &Catalog) -> Result<(), ErrorCode> {
     validate_capacity(catalog)?;
     let mut bots = BTreeMap::new();
+    let mut workspaces = BTreeSet::new();
     for bot in &catalog.bots {
-        validate_bot(&bot.name, &bot.instructions, &bot.execution)?;
-        if !model::valid_id(&bot.workspace_id) || bots.insert(bot.id, bot).is_some() {
+        validate_execution(&bot.execution)?;
+        if !model::valid_id(&bot.workspace_id)
+            || bots.insert(bot.id, bot).is_some()
+            || (!retired(bot) && !workspaces.insert(bot.workspace_id.as_str()))
+        {
             return Err(ErrorCode::InvalidMessage);
         }
     }
@@ -81,17 +81,12 @@ pub(super) fn validate(catalog: &Catalog) -> Result<(), ErrorCode> {
     Ok(())
 }
 
-fn validate_bot(
-    name: &str,
-    instructions: &str,
-    execution: &ExecutionConfig,
-) -> Result<(), ErrorCode> {
-    if name.trim().is_empty()
-        || name.len() > 256
-        || name.chars().any(char::is_control)
-        || instructions.len() > 16 * 1024
-        || instructions.contains('\0')
-        || !model::valid_id(&execution.provider)
+fn retired(bot: &Bot) -> bool {
+    matches!(bot.state, BotState::Retired { .. })
+}
+
+fn validate_execution(execution: &ExecutionConfig) -> Result<(), ErrorCode> {
+    if !model::valid_id(&execution.provider)
         || [&execution.model, &execution.mode_id, &execution.thinking]
             .into_iter()
             .flatten()
@@ -141,30 +136,28 @@ fn account(config: &ChannelConfig) -> Option<(&'static str, &str)> {
 }
 
 impl State {
-    pub(super) fn create(&mut self, request: Create) -> Result<Value, ErrorCode> {
-        if let Ok(bot) = self.bot(request.bot_id) {
-            if bot.workspace_id == request.workspace_id
-                && bot.name == request.name
-                && bot.instructions == request.instructions
-                && bot.execution == request.execution
-            {
-                return Ok(json!({"bot":bot,"created":false}));
-            }
-            return Err(ErrorCode::IdempotencyConflict);
-        }
+    pub(super) fn setup(&mut self, request: Setup) -> Result<Value, ErrorCode> {
         self.active_workspace(&request.workspace_id)?;
-        let mut catalog = self.catalog.clone();
+        if let Ok(bot) = self.current(&request.workspace_id) {
+            if bot.execution == request.execution {
+                return Ok(json!({"bot":super::view(bot),"created":false}));
+            }
+            return Err(ErrorCode::BotConflict);
+        }
+        validate_execution(&request.execution)?;
+        if request.clear_memory && self.store.delete_memory(&request.workspace_id).is_err() {
+            self.frozen = true;
+            return Err(ErrorCode::BotIo);
+        }
         let bot = Bot {
-            id: request.bot_id,
+            id: BotId::generate(),
             workspace_id: request.workspace_id,
-            name: request.name,
-            instructions: request.instructions,
             execution: request.execution,
             builtin_channel_id: ChannelId::generate(),
-            enabled: true,
-            archived_at: None,
+            state: BotState::Active,
             created_at: chrono::Utc::now().to_rfc3339(),
         };
+        let mut catalog = self.catalog.clone();
         catalog.channels.push(Channel {
             id: bot.builtin_channel_id,
             bot_id: bot.id,
@@ -173,57 +166,29 @@ impl State {
             cursor: None,
             deleted: false,
         });
-        catalog.bots.push(bot.clone());
+        let view = super::view(&bot);
+        catalog.bots.push(bot);
         self.save_catalog(catalog)?;
-        Ok(json!({"bot":bot,"created":true}))
+        Ok(json!({"bot":view,"created":true}))
     }
     pub(super) fn update(&mut self, request: Update) -> Result<Value, ErrorCode> {
-        let mut bot = self.bot(request.bot_id)?.clone();
-        if bot.archived_at.is_some() {
-            return Err(ErrorCode::BotConflict);
-        }
-        self.active_workspace(&bot.workspace_id)?;
-        if let Some(name) = request.name {
-            bot.name = name;
-        }
-        if let Some(instructions) = request.instructions {
-            bot.instructions = instructions;
-        }
-        if let Some(execution) = request.execution {
-            bot.execution = execution;
-        }
-        if let Some(enabled) = request.enabled {
-            bot.enabled = enabled;
-        }
-        let mut catalog = self.catalog.clone();
-        *catalog
-            .bots
-            .iter_mut()
-            .find(|entry| entry.id == bot.id)
-            .ok_or(ErrorCode::BotNotFound)? = bot.clone();
-        self.save_catalog(catalog)?;
-        if !bot.enabled {
-            self.stop_bot(bot.id, false)?;
-        }
-        Ok(json!({"bot":bot,"configurationAppliesToNewSessions":true}))
-    }
-    pub(super) fn archive(&mut self, request: BotRequest) -> Result<Value, ErrorCode> {
-        self.bot(request.bot_id)?;
+        let id = self.current(&request.workspace_id)?.id;
+        self.active_workspace(&request.workspace_id)?;
         let mut catalog = self.catalog.clone();
         let bot = catalog
             .bots
             .iter_mut()
-            .find(|bot| bot.id == request.bot_id)
+            .find(|entry| entry.id == id)
             .ok_or(ErrorCode::BotNotFound)?;
-        bot.enabled = false;
-        bot.archived_at
-            .get_or_insert_with(|| chrono::Utc::now().to_rfc3339());
+        bot.execution = request.execution;
+        let view = super::view(bot);
         self.save_catalog(catalog)?;
-        self.stop_bot(request.bot_id, true)?;
-        Ok(json!({"bot":self.bot(request.bot_id)?}))
+        Ok(json!({"bot":view,"configurationAppliesToNewSessions":true}))
     }
     pub(super) fn create_channel(&mut self, request: ChannelCreate) -> Result<Value, ErrorCode> {
-        self.workspace(self.bot(request.bot_id)?)?;
+        let bot = self.current(&request.workspace_id)?;
+        self.workspace(bot)?;
+        let bot = bot.id;
         if matches!(request.config, ChannelConfig::Builtin) {
             return Err(ErrorCode::BotConflict);
         }
@@ -233,7 +198,7 @@ impl State {
             .iter()
             .find(|channel| channel.id == request.channel_id)
         {
-            if channel.bot_id == request.bot_id
+            if channel.bot_id == bot
                 && channel.config == request.config
                 && channel.enabled == request.enabled
                 && !channel.deleted
@@ -246,7 +211,7 @@ impl State {
             .catalog
             .channels
             .iter()
-            .filter(|channel| channel.bot_id == request.bot_id && !channel.deleted)
+            .filter(|channel| channel.bot_id == bot && !channel.deleted)
             .count()
             >= 16
         {
@@ -254,7 +219,7 @@ impl State {
         }
         let channel = Channel {
             id: request.channel_id,
-            bot_id: request.bot_id,
+            bot_id: bot,
             config: request.config,
             enabled: request.enabled,
             cursor: None,
@@ -266,8 +231,9 @@ impl State {
         Ok(json!({"channel":channel,"created":true}))
     }
     pub(super) fn update_channel(&mut self, request: ChannelUpdate) -> Result<Value, ErrorCode> {
-        self.workspace(self.bot(request.bot_id)?)?;
-        let mut channel = self.channel(request.bot_id, request.channel_id)?.clone();
+        let bot = self.current(&request.workspace_id)?;
+        self.workspace(bot)?;
+        let mut channel = self.channel(bot.id, request.channel_id)?.clone();
         if matches!(channel.config, ChannelConfig::Builtin) || channel.deleted {
             return Err(ErrorCode::BotConflict);
         }
@@ -289,8 +255,9 @@ impl State {
         self.save_catalog(catalog)?;
         Ok(json!({"channel":channel}))
     }
-    pub(super) fn delete_channel(&mut self, request: ChannelRequest) -> Result<Value, ErrorCode> {
-        let channel = self.channel(request.bot_id, request.channel_id)?;
+    pub(super) fn delete_channel(&mut self, request: &ChannelRequest) -> Result<Value, ErrorCode> {
+        let bot = self.current(&request.workspace_id)?.id;
+        let channel = self.channel(bot, request.channel_id)?;
         if matches!(channel.config, ChannelConfig::Builtin) {
             return Err(ErrorCode::BotConflict);
         }
