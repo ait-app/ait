@@ -6,17 +6,18 @@ export const BotExecutionSchema = z.strictObject({
   modeId: z.string().nullable(),
   thinking: z.string().nullable(),
 });
-export const BotSummarySchema = z.object({
-  id: z.guid(),
+export const BotStateSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("active") }),
+  z.object({ kind: z.literal("paused"), reason: z.enum(["user", "directory_missing"]) }),
+  z.object({ kind: z.literal("retired"), at: z.string() }),
+]);
+export const BotViewSchema = z.object({
   workspaceId: z.string(),
-  name: z.string(),
   execution: BotExecutionSchema,
   builtinChannelId: z.guid(),
-  enabled: z.boolean(),
-  archivedAt: z.string().nullable(),
+  state: BotStateSchema,
   createdAt: z.string(),
 });
-export const BotSchema = BotSummarySchema.extend({ instructions: z.string() });
 export const BotChannelConfigSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("builtin") }),
   z.strictObject({
@@ -35,7 +36,6 @@ export const BotChannelConfigSchema = z.discriminatedUnion("kind", [
 ]);
 export const BotChannelSchema = z.object({
   id: z.guid(),
-  botId: z.guid(),
   config: BotChannelConfigSchema,
   enabled: z.boolean(),
   cursor: z.number().nullable(),
@@ -43,7 +43,6 @@ export const BotChannelSchema = z.object({
 });
 export const BotConversationSchema = z.object({
   id: z.guid(),
-  botId: z.guid(),
   channelId: z.guid(),
   peer: z.string(),
   sender: z.string(),
@@ -76,8 +75,8 @@ export const BotTurnSchema = z.object({
   createdAt: z.string(),
 });
 
-export type Bot = z.infer<typeof BotSchema>;
-export type BotSummary = z.infer<typeof BotSummarySchema>;
+export type BotView = z.infer<typeof BotViewSchema>;
+export type BotState = z.infer<typeof BotStateSchema>;
 export type BotExecution = z.infer<typeof BotExecutionSchema>;
 export type BotConversation = z.infer<typeof BotConversationSchema>;
 export type BotTurn = z.infer<typeof BotTurnSchema>;

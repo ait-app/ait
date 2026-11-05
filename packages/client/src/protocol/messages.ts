@@ -79,7 +79,7 @@ export function serverInfo(
             : []),
         ],
     features: {
-      workspaceBots: features.has("workspace-bots-v1") && BOT_METHODS.every(has),
+      workspaceBots: features.has("workspace-bots-v2") && BOT_METHODS.every(has),
       ownedSubscriptions: has("subscription.release.request"),
       explicitEventSubscriptions: !scopedGuest && has("session.events.set_subscription.request"),
       providersSnapshot: has("provider.snapshot.get.request"),
