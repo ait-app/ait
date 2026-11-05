@@ -2059,6 +2059,18 @@ export const en = {
       cloning: "Cloning project...",
       creating: "Creating directory...",
       adding: "Adding project...",
+      phases: {
+        starting: "Starting clone...",
+        counting: "Counting objects...",
+        compressing: "Compressing objects...",
+        receiving: "Receiving objects...",
+        resolving: "Resolving deltas...",
+        checkout: "Checking out files...",
+        registering: "Registering project...",
+      },
+      percent: "{{percent}}%",
+      destination: "{{repository}} into {{path}}",
+      elapsed: "{{seconds}}s",
     },
     empty: {
       hosts: "No connected hosts",

@@ -74,12 +74,17 @@ import {
   type ProjectPickerOption,
 } from "@/components/project-picker-options";
 import { Shortcut } from "@/components/ui/shortcut";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
 import { getIsElectronRuntime } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 import { pickDirectory } from "@/desktop/pick-directory";
 import { useFetchQuery } from "@/data/query";
-import { getOpenProjectFailureReason, registerProjectDescriptor } from "@/hooks/open-project";
+import {
+  getOpenProjectFailureReason,
+  registerProjectDescriptor,
+  type GithubCloneProgress,
+} from "@/hooks/open-project";
 import { useIsLocalDaemon, useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useCloneGithubProject, useOpenProject } from "@/hooks/use-open-project";
 import {
@@ -131,6 +136,7 @@ const MutedFlowIcon = withUnistyles(FlowIcon, (theme) => ({
   color: theme.colors.foregroundMuted,
 }));
 const ThemedArrowLeft = withUnistyles(ArrowLeft);
+const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedTextInput = withUnistyles(TextInput, (theme) => ({
   placeholderTextColor: theme.colors.foregroundMuted,
 }));
@@ -186,6 +192,61 @@ function progressText(page: AddProjectPage, t: TFunction): string {
   if (page.kind === "github-location") return t("addProjectFlow.progress.cloning");
   if (page.kind === "new-directory-name") return t("addProjectFlow.progress.creating");
   return t("addProjectFlow.progress.adding");
+}
+
+interface CloneProgressViewProps {
+  progress: GithubCloneProgress | null;
+  repository: string;
+  destination: string;
+  t: TFunction;
+}
+
+function CloneProgressView({ progress, repository, destination, t }: CloneProgressViewProps) {
+  const startedAt = useRef(Date.now());
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt.current) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const percent = progress?.percent ?? null;
+  const phase = progress?.phase ?? "starting";
+  const percentWidth: `${number}%` | null = percent === null ? null : `${percent}%`;
+
+  return (
+    <View style={styles.progressBlock} testID="add-project-flow-progress">
+      <View style={styles.progressHeader}>
+        <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+        <Text style={styles.progressLabel} numberOfLines={1}>
+          {t(`addProjectFlow.progress.phases.${phase}`)}
+        </Text>
+        {percent === null ? null : (
+          <Text style={styles.progressPercent} testID="add-project-flow-progress-percent">
+            {t("addProjectFlow.progress.percent", { percent })}
+          </Text>
+        )}
+      </View>
+      {percentWidth === null ? null : (
+        <View
+          style={styles.progressTrack}
+          testID="add-project-flow-progress-bar"
+          accessibilityRole="progressbar"
+          accessibilityValue={{ min: 0, max: 100, now: percent ?? 0 }}
+        >
+          <View style={[styles.progressFill, { width: percentWidth }]} />
+        </View>
+      )}
+      <View style={styles.progressMeta}>
+        <Text style={styles.progressDetail} numberOfLines={1}>
+          {t("addProjectFlow.progress.destination", { repository, path: destination })}
+        </Text>
+        <Text style={styles.progressElapsed} testID="add-project-flow-progress-elapsed">
+          {t("addProjectFlow.progress.elapsed", { seconds: elapsedSeconds })}
+        </Text>
+      </View>
+    </View>
+  );
 }
 
 function emptyText(page: AddProjectPage, host: AddProjectHost | null, t: TFunction): string {
@@ -386,6 +447,10 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
     [],
   );
   const setHasHydratedWorkspaces = useSessionStore((store) => store.setHasHydratedWorkspaces);
+  const [cloneState, setCloneState] = useState<{
+    parentPath: string;
+    progress: GithubCloneProgress | null;
+  } | null>(null);
   const inputRef = useRef<EditingTextInputHandle>(null);
   const submissionInFlightRef = useRef(false);
   const browseInFlightRef = useRef(false);
@@ -555,6 +620,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
     async (locationPage: GithubLocationPage, parentPath: string) => {
       if (submissionInFlightRef.current) return;
       submissionInFlightRef.current = true;
+      setCloneState({ parentPath, progress: null });
       setState((current) =>
         setPageStatus(current, "github-location", { isSubmitting: true, error: null }),
       );
@@ -563,6 +629,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
           locationPage.repository.cloneUrl,
           parentPath,
           locationPage.repository.cloneProtocol,
+          (progress) => setCloneState((current) => (current ? { ...current, progress } : current)),
         );
         if (result.ok) {
           lastCloneParentByHost.set(locationPage.hostId, parentPath);
@@ -939,9 +1006,28 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
               </Text>
             ) : null}
             {isSubmitting ? (
-              <Text style={styles.stateText} testID="add-project-flow-progress">
-                {progressText(page, t)}
-              </Text>
+              page.kind === "github-location" ? (
+                <CloneProgressView
+                  progress={cloneState?.progress ?? null}
+                  repository={page.repository.nameWithOwner}
+                  destination={shortenPath(
+                    cloneState
+                      ? joinDirectoryPath(
+                          cloneState.parentPath,
+                          pathBaseName(page.repository.nameWithOwner),
+                        )
+                      : page.repository.nameWithOwner,
+                  )}
+                  t={t}
+                />
+              ) : (
+                <View style={styles.progressBlock} testID="add-project-flow-progress">
+                  <View style={styles.progressHeader}>
+                    <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+                    <Text style={styles.progressLabel}>{progressText(page, t)}</Text>
+                  </View>
+                </View>
+              )
             ) : null}
             {!isSubmitting && page.error ? (
               <Text style={styles.errorText} testID="add-project-flow-error">
@@ -1094,6 +1180,54 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[4],
+  },
+  progressBlock: {
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[4],
+  },
+  progressHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  progressLabel: {
+    flex: 1,
+    minWidth: 0,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+  },
+  progressPercent: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    fontVariant: ["tabular-nums"],
+  },
+  progressTrack: {
+    height: theme.spacing[1],
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.colors.surface2,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.colors.accent,
+  },
+  progressMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+  },
+  progressDetail: {
+    flex: 1,
+    minWidth: 0,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  progressElapsed: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    fontVariant: ["tabular-nums"],
   },
   errorText: {
     color: theme.colors.destructive,

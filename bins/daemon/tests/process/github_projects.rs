@@ -4,7 +4,7 @@ use std::process::Command;
 
 use serde_json::json;
 
-use super::transport::{connect, method_names, request};
+use super::transport::{clone_with_progress, connect, method_names, request};
 use super::{ready, start_with_path, terminate};
 
 #[tokio::test]
@@ -41,16 +41,38 @@ async fn binary_searches_and_clones_github_project_with_local_git_transport() {
     assert_eq!(unauthenticated["result"]["status"], "unauthenticated");
     assert_eq!(unauthenticated["result"]["available"], false);
     let target = root.path().join("checkouts");
-    let cloned = request(
+    let (cloned, progress) = clone_with_progress(
         &mut socket,
-        "project.github.clone.request",
-        json!({"repo":"owner/repo","cloneProtocol":"https","targetDirectory":target}),
+        json!({
+            "repo":"owner/repo",
+            "cloneProtocol":"https",
+            "targetDirectory":target,
+            "progress":true
+        }),
     )
     .await;
     assert_eq!(cloned["result"]["repo"], "owner/repo");
     assert_eq!(cloned["result"]["project"]["projectKind"], "git");
     assert!(cloned["result"]["error"].is_null());
     assert!(target.join("repo/.git").is_dir());
+    assert!(
+        !progress.is_empty(),
+        "the opted-in clone must report progress"
+    );
+    assert_eq!(progress[0]["params"]["repo"], "owner/repo");
+    assert_eq!(progress[0]["params"]["phase"], "starting");
+    assert_eq!(
+        progress
+            .last()
+            .map(|event| event["params"]["phase"].as_str()),
+        Some(Some("registering"))
+    );
+    assert!(
+        progress.windows(2).all(|pair| {
+            pair[0]["params"]["percent"].as_u64() <= pair[1]["params"]["percent"].as_u64()
+        }),
+        "progress must never move backwards: {progress:?}"
+    );
     let collision = request(
         &mut socket,
         "project.github.clone.request",

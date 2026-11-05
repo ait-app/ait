@@ -6632,6 +6632,48 @@ test("does not reject a request for an invalid correlated progress event", async
   });
 });
 
+test("delivers validated GitHub clone progress to its listener", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger: noopLogger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const updates: Array<{
+    requestId: string;
+    repo: string;
+    phase: string;
+    percent: number;
+  }> = [];
+  const unsubscribe = client.on("project.github.clone.progress", (message) => {
+    updates.push(message.payload);
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "project.github.clone.progress",
+      payload: {
+        requestId: "clone-1",
+        repo: "owner/repo",
+        phase: "receiving",
+        percent: 44,
+      },
+    }),
+  );
+  unsubscribe();
+
+  expect(updates).toEqual([
+    { requestId: "clone-1", repo: "owner/repo", phase: "receiving", percent: 44 },
+  ]);
+});
+
 test("sends subscribe/unsubscribe terminals messages", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

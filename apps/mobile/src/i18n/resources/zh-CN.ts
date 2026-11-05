@@ -2004,6 +2004,18 @@ export const zhCN: TranslationResources = {
       cloning: "正在克隆项目...",
       creating: "正在创建目录...",
       adding: "正在添加项目...",
+      phases: {
+        starting: "正在开始克隆...",
+        counting: "正在统计对象...",
+        compressing: "正在压缩对象...",
+        receiving: "正在接收对象...",
+        resolving: "正在解析差异...",
+        checkout: "正在检出文件...",
+        registering: "正在注册项目...",
+      },
+      percent: "{{percent}}%",
+      destination: "{{repository}} 克隆到 {{path}}",
+      elapsed: "{{seconds}} 秒",
     },
     empty: {
       hosts: "没有已连接的主机",

@@ -29,6 +29,17 @@ request/response envelope；Paseo 顶层 `requestId` 不复制到业务 payload�
 `Directory` 通过 `DirectoryDependencies` 组合 registry、文件和 GitHub port；宿主在启动时
 组装全新的本地 adapter。两个方法只有生产组装完成才进入 `implemented_capabilities`。
 
+## 进展反馈
+
+克隆请求新增可选 `progress` 字段。只有显式请求的调用者才会在发起连接上收到
+`project.github.clone.progress` 事件，携带既有 `requestId`、规范化的 `repo`、阶段
+（`starting`、`counting`、`compressing`、`receiving`、`resolving`、`checkout`、
+`registering`）与跨阶段加权后的 `percent`（0–100）。adapter 通过
+`git clone --progress` 的 stderr 解析 Git 阶段，应用层补充开始与注册阶段。
+
+这是尽力而为的瞬时通知，不改变最终响应：旧 daemon 忽略未知字段并只返回结果，旧客户端
+不发送该字段，因此不会收到无法识别的连接事件。
+
 ## 已知差异
 
 Paseo 的 remote parser 也可接受其他已识别 Forge host；本次 GitHub 专用入口只允许

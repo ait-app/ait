@@ -1,10 +1,12 @@
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useCallback } from "react";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import type { ProjectGithubCloneProgressMessage } from "@ait/protocol/messages";
 import { useSessionStore } from "@/stores/session-store";
 import {
   cloneGithubProjectDirectly,
   openProjectDirectly,
+  type GithubCloneProgress,
   type OpenProjectResult,
   type ProjectGithubCloneProtocol,
 } from "@/hooks/open-project";
@@ -62,6 +64,7 @@ export function useCloneGithubProject(
   repo: string,
   targetDirectory: string,
   cloneProtocol?: ProjectGithubCloneProtocol,
+  onProgress?: (progress: GithubCloneProgress) => void,
 ) => Promise<OpenProjectResult> {
   const normalizedServerId = serverId?.trim() ?? "";
   const client = useHostRuntimeClient(normalizedServerId);
@@ -78,12 +81,24 @@ export function useCloneGithubProject(
   const setHasHydratedWorkspaces = useSessionStore((state) => state.setHasHydratedWorkspaces);
 
   return useCallback(
-    async (repo: string, targetDirectory: string, cloneProtocol?: ProjectGithubCloneProtocol) => {
+    async (
+      repo: string,
+      targetDirectory: string,
+      cloneProtocol?: ProjectGithubCloneProtocol,
+      onProgress?: (progress: GithubCloneProgress) => void,
+    ) => {
+      const listenForProgress =
+        onProgress && client
+          ? (handler: (message: ProjectGithubCloneProgressMessage) => void) =>
+              client.on("project.github.clone.progress", handler)
+          : undefined;
       return cloneGithubProjectDirectly({
         serverId: normalizedServerId,
         repo,
         targetDirectory,
         ...(cloneProtocol ? { cloneProtocol } : {}),
+        ...(onProgress ? { onProgress } : {}),
+        ...(listenForProgress ? { listenForProgress } : {}),
         isConnected,
         client,
         upsertProject,

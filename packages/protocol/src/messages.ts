@@ -2598,6 +2598,7 @@ export const ProjectGithubCloneRequestSchema = z.object({
   repo: z.string().trim().min(MIN_REPOSITORY_PATH_LENGTH),
   cloneProtocol: ProjectGithubCloneProtocolSchema.optional(),
   targetDirectory: z.string().trim().min(1),
+  progress: z.boolean().optional(),
   requestId: z.string(),
 });
 
@@ -4446,6 +4447,31 @@ export const ProjectGithubCloneResponseSchema = z.object({
     error: z.string().nullable(),
   }),
 });
+
+export const ProjectGithubCloneProgressPhaseSchema = z.enum([
+  "starting",
+  "counting",
+  "compressing",
+  "receiving",
+  "resolving",
+  "checkout",
+  "registering",
+]);
+
+export const ProjectGithubCloneProgressMessageSchema = z.object({
+  type: z.literal("project.github.clone.progress"),
+  payload: z.object({
+    requestId: z.string(),
+    repo: z.string().trim().min(MIN_REPOSITORY_PATH_LENGTH),
+    phase: ProjectGithubCloneProgressPhaseSchema,
+    percent: z.number().int().min(0).max(100),
+  }),
+});
+
+export type ProjectGithubCloneProgressMessage = z.infer<
+  typeof ProjectGithubCloneProgressMessageSchema
+>;
+export type ProjectGithubCloneProgressPhase = z.infer<typeof ProjectGithubCloneProgressPhaseSchema>;
 
 const WorkspaceScriptOperationPayloadSchema = z.object({
   requestId: z.string(),
@@ -6542,6 +6568,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   OpenProjectResponseMessageSchema,
   WorkspaceGithubSearchRepositoriesResponseSchema,
   ProjectGithubCloneResponseSchema,
+  ProjectGithubCloneProgressMessageSchema,
   WorkspaceScriptListResponseMessageSchema,
   WorkspaceScriptStartResponseMessageSchema,
   WorkspaceScriptStopResponseMessageSchema,
