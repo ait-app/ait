@@ -1,5 +1,10 @@
 # Ait changelog
 
+## Unreleased
+
+- Add the Workspace Bot tab for `workspace-bots-v2` hosts: one Bot tab per Workspace with a setup wizard, chat, and settings for model, pause and resume, memory, Telegram and Feishu channels, and removal. It remains behind the experimental features setting, and guests get read-only access.
+- Migrate existing Bot tabs automatically: saved per-Bot tabs collapse into a single Bot tab per pane.
+
 ## 0.1.30 - 2026-11-05
 
 - Breaking: Workspace Bots are now one manager Bot per Workspace, addressed by `workspaceId` through the `workspace-bots-v2` interface (replacing `workspace-bots-v1`; `bot.create`, `bot.list`, `bot.archive` and `bot.permission.resolve` are removed). Existing Bots, Channels, and history from earlier versions are discarded at startup, and the Bot tab shows an upgrade prompt until the matching client ships.

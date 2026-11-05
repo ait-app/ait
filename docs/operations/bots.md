@@ -2,8 +2,7 @@
 
 每个 Workspace 至多一个管理者 Bot，使用独占 Channel 和隐藏 Provider session，由用户显式设置；未设置时不产生任何记录、会话、轮询或模型调用。
 当前支持内置对话、Telegram 与中国区飞书；Email 尚未实现。设计见 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)。
-现有实验性 Bot 标签页（[ADR-141](../decisions/clients/adr-141-experimental-workspace-bots.md)）仍要求 `workspace-bots-v1`，
-在客户端阶段 2 落地前会显示升级提示。
+客户端 Bot 标签页见 [ADR-214](../decisions/clients/adr-214-workspace-bot-tab-v2.md)，使用方式见下文“在 Ait 中使用”。
 
 ## 使用与生命周期
 
@@ -28,6 +27,18 @@
 重启时结果不明的运行输入标记 `uncertain`，阻止同 generation 的后续输入，需显式 reset；
 不会自动重做可能产生副作用的输入。正在发送但未确认的回复也标记 `uncertain`，不盲目重发。
 当前通过持久查询读取结果，尚无 Bot 流式事件订阅。
+
+## 在 Ait 中使用
+
+Bot 标签页仍在“设置 → 关于”的测试功能开关之后，且要求 Host 支持 `workspace-bots-v2`，否则显示升级提示。
+
+1. 开启测试功能后，在 Workspace 新建菜单选择 Bot；每个 Workspace 只有一个 Bot 标签页，重复打开会聚焦已有标签页。
+2. 未设置时显示设置向导：选择 Provider、模型、权限模式与推理强度后提交；可勾选“清除已保存记忆”，否则保留之前移除的 Bot 留下的记忆。
+   访客只看到未配置提示。
+3. 设置完成后进入对话。Bot 暂停时输入框停用，有管理权限的成员可点击恢复；目录缺失导致的暂停会说明原因；被取消的轮次显示取消原因。
+4. 在设置页可修改模型（对新会话生效）、暂停或恢复、按 revision 编辑记忆、管理 Telegram 与飞书 Channel、移除 Bot。
+   Channel 的凭据只填写环境变量引用，并配置允许的发送者；新建 Channel 默认停用，确认配置与状态后再启用。移除需要确认。
+5. 访客在所有视图中只读。重新设置被移除的 Bot 得到空的对话与 Channel，已缓存的旧内容会被丢弃。
 
 ## Telegram 与飞书配置
 
