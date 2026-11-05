@@ -100,6 +100,14 @@ test("workspace bot setup, conversation, settings and persistence", async ({ pag
     await expect(page.getByTestId("bot-chat")).toContainText("Paused");
     await expect(page.getByTestId("bot-message-input")).not.toBeEditable();
     await expect(page.getByTestId("bot-message-send")).toBeDisabled();
+    // A fresh load reads the paused Bot's history without reopening its conversation.
+    await page.reload();
+    await expect(page.getByTestId("bot-chat")).toContainText("Echo: Hello Bot", {
+      timeout: 30_000,
+    });
+    await expect(page.getByTestId("bot-chat")).toContainText("Paused");
+    await expect(page.getByTestId("bot-message-input")).not.toBeEditable();
+    await expect(page.getByTestId("bot-message-send")).toBeDisabled();
     await page.getByTestId("bot-resume").click();
     await expect.poll(async () => (await getBot())?.state.kind).toBe("active");
     await expect(page.getByTestId("bot-message-input")).toBeEditable();
