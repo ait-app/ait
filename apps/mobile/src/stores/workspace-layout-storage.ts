@@ -29,6 +29,7 @@ const WorkspaceTabTargetStorageSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("pull_request") }),
   z.strictObject({
     kind: z.literal("bot"),
+    // Legacy fields are accepted so old layouts load; identity normalization drops them.
     botId: z.string().trim().min(1).optional(),
     view: z.enum(["list", "create", "settings"]).optional(),
   }),

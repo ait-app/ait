@@ -119,9 +119,8 @@ const manifests = {
     kind: "bot",
     supportedHosts: ["main", "explorer"],
     showCloseButton: true,
-    singleton: false,
-    resourceKey: (target) =>
-      target.botId ? `bot_${target.botId}` : target.view === "create" ? "bot_create" : "bot_list",
+    singleton: true,
+    resourceKey: () => "bot",
   },
   schedule: {
     compactSheet: null,

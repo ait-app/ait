@@ -1,34 +1,39 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
-import type { BotTurn } from "@ait/protocol/bot/types";
+import type { BotTurn, BotView } from "@ait/protocol/bot/types";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 
 export const botKeys = {
-  list: (serverId: string, workspaceId: string) => ["bots", serverId, workspaceId],
-  detail: (serverId: string, botId?: string) => ["bot", serverId, botId],
-  conversation: (serverId: string, botId: string) => ["bot-conversation", serverId, botId],
-  history: (serverId: string, botId: string, conversationId?: string) => [
+  bot: (serverId: string, workspaceId: string) => ["bot", serverId, workspaceId],
+  conversation: (serverId: string, workspaceId: string) => [
+    "bot-conversation",
+    serverId,
+    workspaceId,
+  ],
+  history: (serverId: string, workspaceId: string, conversationId?: string) => [
     "bot-history",
     serverId,
-    botId,
+    workspaceId,
     conversationId,
   ],
-  memory: (serverId: string, botId: string) => ["bot-memory", serverId, botId],
+  memory: (serverId: string, workspaceId: string) => ["bot-memory", serverId, workspaceId],
+  channels: (serverId: string, workspaceId: string) => ["bot-channels", serverId, workspaceId],
 };
 
 export function isBotTurnPending(turn: BotTurn): boolean {
   return ["queued", "sending", "running", "needs_approval"].includes(turn.status);
 }
 
-export function useBotDetail(serverId: string, botId?: string, enabled = true) {
+export function useWorkspaceBot(serverId: string, workspaceId: string, enabled: boolean) {
   const client = useHostRuntimeClient(serverId);
   return useQuery({
-    queryKey: botKeys.detail(serverId, botId),
-    enabled: Boolean(enabled && botId && client),
-    staleTime: 10_000,
-    queryFn: async () => {
-      if (!client || !botId) throw new Error("Bot unavailable");
-      return (await client.botRequest("bot.get.request", { botId })).bot;
+    queryKey: botKeys.bot(serverId, workspaceId),
+    enabled: Boolean(enabled && client),
+    staleTime: 5_000,
+    refetchInterval: (query) => (query.state.data === null ? 5_000 : 10_000),
+    queryFn: async (): Promise<BotView | null> => {
+      if (!client) throw new Error("Bot unavailable");
+      return (await client.botRequest("bot.get.request", { workspaceId })).bot;
     },
   });
 }
@@ -36,7 +41,7 @@ export function useBotDetail(serverId: string, botId?: string, enabled = true) {
 /** Refresh pending receipts and read only new inputs after the cached sequence. */
 export async function fetchBotHistory(
   client: Pick<DaemonClient, "botRequest">,
-  botId: string,
+  workspaceId: string,
   conversationId: string,
   cached: BotTurn[] = [],
 ): Promise<BotTurn[]> {
@@ -45,7 +50,7 @@ export async function fetchBotHistory(
       .filter(isBotTurnPending)
       .map(
         async (turn) =>
-          (await client.botRequest("bot.turn.get.request", { botId, turnId: turn.id })).turn,
+          (await client.botRequest("bot.turn.get.request", { workspaceId, turnId: turn.id })).turn,
       ),
   );
   const merged = new Map(cached.map((turn) => [turn.id, turn]));
@@ -53,7 +58,7 @@ export async function fetchBotHistory(
   let afterSequence = cached.reduce((last, turn) => Math.max(last, turn.sequence), 0);
   for (;;) {
     const page = await client.botRequest("bot.history.get.request", {
-      botId,
+      workspaceId,
       conversationId,
       afterSequence,
       limit: 50,
@@ -68,13 +73,13 @@ export async function fetchBotHistory(
 
 export function useBotHistory(
   serverId: string,
-  botId: string,
+  workspaceId: string,
   conversationId: string | undefined,
   enabled: boolean,
 ) {
   const client = useHostRuntimeClient(serverId);
   const queryClient = useQueryClient();
-  const queryKey = botKeys.history(serverId, botId, conversationId);
+  const queryKey = botKeys.history(serverId, workspaceId, conversationId);
   return useQuery({
     queryKey,
     enabled: Boolean(enabled && conversationId && client),
@@ -82,7 +87,7 @@ export function useBotHistory(
     queryFn: async () => {
       if (!client || !conversationId) throw new Error("Bot unavailable");
       const cached = queryClient.getQueryData<BotTurn[]>(queryKey);
-      const fetched = await fetchBotHistory(client, botId, conversationId, cached);
+      const fetched = await fetchBotHistory(client, workspaceId, conversationId, cached);
       // A message may have been accepted while the history read was in flight.
       const latest = queryClient.getQueryData<BotTurn[]>(queryKey) ?? [];
       const merged = new Map(latest.map((turn) => [turn.id, turn]));
