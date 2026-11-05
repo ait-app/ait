@@ -3,7 +3,8 @@
 - 状态：接受（阶段 1 已实现，待合并）
 - 日期：2026-11-05
 - 关系：取代 [ADR-139](adr-139-workspace-bots-and-owned-channels.md) 中多 Bot、人格和 `botId` 寻址（第 1、2、5 条相关部分）以及记忆位置（第 7 条）；
-  修订 [ADR-141](../clients/adr-141-experimental-workspace-bots.md) 的标签页身份与能力名（客户端在阶段 2 落地）；[ADR-145](adr-145-bot-permission-denial.md) 继续有效。
+  修订 [ADR-141](../clients/adr-141-experimental-workspace-bots.md) 的标签页身份与能力名（客户端在阶段 2 落地）；
+  取代 [ADR-145](adr-145-bot-permission-denial.md) 第 3 条（删除 `bot.permission.resolve`），其第 1、2、4、5 条的自动拒绝规则继续有效。
 - 计划：[Workspace Bot 管理者重设计](../../plans/workspace-bot-manager.md)、[阶段 1 计划](../../plans/workspace-bot-manager-phase-1.md)。
 
 ## 背景
@@ -22,6 +23,8 @@
    - 用户移除：进入 `retired`，保留记忆，释放该 Bot 的 Telegram／飞书账号，外部 Channel 标记为已删除。
    - Workspace 归档：进入 `retired` 并删除该 Workspace 的 Bot 记忆。
    - 目录缺失在某个轮次变为可运行时检测，Bot 进入 `paused(directory_missing)`，由用户显式恢复。
+   - 退役 Bot（移除或归档）的 Conversation 与历史仍保存在磁盘上，但 v2 接口的所有读取只解析当前非 `retired` 的 Bot，
+     因此无法再读取退役 Bot 的历史。重新设置得到新的 Bot，对话历史为空；记忆除非 `clearMemory:true` 否则保留。
 3. **`bot.setup` 语义。** 参数为 `workspaceId`、`execution` 和可选 `clearMemory`。执行配置相同时幂等返回 `created:false`；
    已有非 `retired` Bot 且配置不同返回 `BotConflict`，因此并发设置不会产生两个活跃 Bot。
    `clearMemory:true` 仅在确实新建 Bot 时生效，幂等重复调用时忽略。重新设置时默认保留已移除 Bot 的记忆。
@@ -43,6 +46,7 @@
 - 阶段 2（客户端标签页与设置向导）、阶段 3（权限与 MCP 工具、Bot 写记忆）、阶段 4（来源标记与通知）尚未实现。
   在此之前 [ADR-145](adr-145-bot-permission-denial.md) 的权限请求自动拒绝仍然适用。
 - 记忆脱离 Workspace 目录后不再随 worktree 删除，也不会进入版本控制；其生命周期由移除与归档规则管理。
+- 退役 Bot 的历史留在磁盘上但不可通过接口访问；清理这些历史或提供只读访问留待后续工作。
 
 ## 验证
 

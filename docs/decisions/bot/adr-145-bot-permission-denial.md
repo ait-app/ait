@@ -3,6 +3,7 @@
 - 状态：已实现
 - 日期：2026-10-13
 - 关系：修订 [ADR-139](adr-139-workspace-bots-and-owned-channels.md) 与 [ADR-141](../clients/adr-141-experimental-workspace-bots.md) 的 Bot 审批行为。
+- 后续修订：[ADR-213](adr-213-single-workspace-manager-bot.md) 删除 `bot.permission.resolve.request`，取代第 3 条；第 1、2、4、5 条继续有效。
 
 ## 背景
 

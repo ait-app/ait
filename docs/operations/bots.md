@@ -19,6 +19,8 @@
 - 状态为 `active`、`paused`（原因 `user` 或 `directory_missing`）、`retired`。暂停取消排队和执行中的输入并停止外部轮询；
   恢复要求 Workspace 目录存在，否则返回 `WorkspaceNotFound`。Workspace 目录缺失会在轮次可运行时检测，Bot 暂停为 `directory_missing`，需用户显式恢复。
 - `bot.remove` 使 Bot 退役、保留记忆，并释放其 Telegram／飞书账号（外部 Channel 标记为已删除）；Workspace 归档同样退役并删除记忆。
+- 退役 Bot 的对话与历史仍留在磁盘上，但 v2 接口只读取当前未退役的 Bot，因此无法再查看；
+  重新 `bot.setup` 从空的对话历史开始，记忆除非 `clearMemory:true` 否则保留。清理或只读访问退役历史留待后续工作。
 - 所有 Provider 权限请求自动拒绝，不等待用户审批；Bot 内禁用原生自动审核，见
   [ADR-145](../decisions/bot/adr-145-bot-permission-denial.md)。
 
