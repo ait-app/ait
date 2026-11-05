@@ -123,6 +123,15 @@ impl Fixture {
         )
         .unwrap()
     }
+    /// The persisted domain channel behind a client channel view, which omits the owner.
+    pub(crate) fn channel(&self, view: &Value) -> domain::bot::Channel {
+        let id = view["id"].as_str().unwrap();
+        self.state()
+            .channels()
+            .into_iter()
+            .find(|channel| channel.id.to_string() == id)
+            .unwrap()
+    }
     pub(crate) fn bots(&self) -> Bots {
         Bots::spawn(Dependencies {
             store: self.store.clone(),

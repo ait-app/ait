@@ -52,6 +52,12 @@ async fn connect(fixture: &Fixture) -> Socket {
         reply["info"]["features"]
             .as_array()
             .unwrap()
+            .contains(&json!("workspace-bots-v2"))
+    );
+    assert!(
+        !reply["info"]["features"]
+            .as_array()
+            .unwrap()
             .contains(&json!("workspace-bots-v1"))
     );
     socket

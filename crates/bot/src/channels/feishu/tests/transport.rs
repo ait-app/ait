@@ -65,7 +65,7 @@ async fn tenant_token_is_cached_and_native_reply_uses_the_original_chat() {
         .execute("bot.setup.request", setup(WORKSPACE))
         .unwrap();
     let value = state.execute("bot.channel.create.request",json!({"workspaceId":WORKSPACE,"channelId":ChannelId::generate(),"enabled":true,"config":{"kind":"feishu","appId":"app-1","secretRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":["ou_alice"]}})).unwrap();
-    let channel: Channel = serde_json::from_value(value["channel"].clone()).unwrap();
+    let channel: Channel = fixture.channel(&value["channel"]);
     let input = state
         .accept(Incoming {
             channel_id: channel.id,
@@ -124,7 +124,7 @@ async fn websocket_events_are_acknowledged_after_durable_admission_and_deduplica
         .await
         .unwrap();
     let value = bots.execute("bot.channel.create.request",json!({"workspaceId":WORKSPACE,"channelId":id,"enabled":true,"config":{"kind":"feishu","appId":"app-1","secretRef":"env:AIT_SERVER_CREDENTIAL_TEST","allowedSenders":["ou_alice"]}})).await.unwrap();
-    let channel: Channel = serde_json::from_value(value["channel"].clone()).unwrap();
+    let channel: Channel = fixture.channel(&value["channel"]);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let cancel = CancellationToken::new();

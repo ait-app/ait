@@ -144,7 +144,7 @@ impl State {
                 let request: protocol::WorkspaceRequest = decode(params)?;
                 let bot = self.current(&request.workspace_id)?.id;
                 Ok(
-                    json!({"channels":self.catalog.channels.iter().filter(|channel| channel.bot_id == bot && !channel.deleted).collect::<Vec<_>>()}),
+                    json!({"channels":self.catalog.channels.iter().filter(|channel| channel.bot_id == bot && !channel.deleted).map(project_channel).collect::<Vec<_>>()}),
                 )
             }
             "bot.channel.status.request" => {
@@ -349,8 +349,15 @@ fn view(bot: &Bot) -> Value {
         "builtinChannelId":bot.builtin_channel_id,"state":bot.state,"createdAt":bot.created_at})
 }
 
+/// Client projection of a channel; the owning Bot's storage identity is never exposed.
+fn project_channel(channel: &Channel) -> Value {
+    json!({"id":channel.id,"config":channel.config,"enabled":channel.enabled,
+        "cursor":channel.cursor,"deleted":channel.deleted})
+}
+
+/// Client projection of a conversation without the owning Bot or native session identity.
 fn project_conversation(conversation: &Conversation) -> Value {
-    json!({"id":conversation.id,"botId":conversation.bot_id,"channelId":conversation.channel_id,
+    json!({"id":conversation.id,"channelId":conversation.channel_id,
         "peer":conversation.peer,"sender":conversation.sender,"thread":conversation.thread,"generation":conversation.generation,"nextSequence":conversation.next_sequence})
 }
 

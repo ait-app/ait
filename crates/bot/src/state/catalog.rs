@@ -274,7 +274,7 @@ impl State {
                 && channel.enabled == request.enabled
                 && !channel.deleted
             {
-                return Ok(json!({"channel":channel,"created":false}));
+                return Ok(json!({"channel":super::project_channel(channel),"created":false}));
             }
             return Err(ErrorCode::IdempotencyConflict);
         }
@@ -299,7 +299,7 @@ impl State {
         let mut catalog = self.catalog.clone();
         catalog.channels.push(channel.clone());
         self.save_catalog(catalog)?;
-        Ok(json!({"channel":channel,"created":true}))
+        Ok(json!({"channel":super::project_channel(&channel),"created":true}))
     }
     pub(super) fn update_channel(&mut self, request: ChannelUpdate) -> Result<Value, ErrorCode> {
         let bot = self.current(&request.workspace_id)?;
@@ -324,7 +324,7 @@ impl State {
             .find(|entry| entry.id == channel.id)
             .ok_or(ErrorCode::BotNotFound)? = channel.clone();
         self.save_catalog(catalog)?;
-        Ok(json!({"channel":channel}))
+        Ok(json!({"channel":super::project_channel(&channel)}))
     }
     pub(super) fn delete_channel(&mut self, request: &ChannelRequest) -> Result<Value, ErrorCode> {
         let bot = self.current(&request.workspace_id)?.id;

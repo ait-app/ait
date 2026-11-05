@@ -12,7 +12,7 @@ use tokio::sync::Notify;
 use super::super::*;
 use crate::test_support::{Fixture, WORKSPACE, setup};
 
-async fn registered_channel(bots: &Bots) -> Channel {
+async fn registered_channel(fixture: &Fixture, bots: &Bots) -> Channel {
     bots.execute("bot.setup.request", setup(WORKSPACE))
         .await
         .unwrap();
@@ -21,7 +21,7 @@ async fn registered_channel(bots: &Bots) -> Channel {
         "config":{"kind":"feishu","appId":"app-1","secretRef":"env:AIT_SERVER_CREDENTIAL_TEST",
             "allowedSenders":["ou_alice"],"allowGroups":true}
     })).await.unwrap();
-    serde_json::from_value(value["channel"].clone()).unwrap()
+    fixture.channel(&value["channel"])
 }
 
 fn api(endpoint: Value, delivered: Arc<Notify>) -> Router {
@@ -66,7 +66,7 @@ fn api(endpoint: Value, delivered: Arc<Notify>) -> Router {
 async fn feishu_lifecycle_authenticates_connects_and_delivers_a_durable_reply() {
     let fixture = Fixture::new();
     let bots = fixture.bots();
-    let channel = registered_channel(&bots).await;
+    let channel = registered_channel(&fixture, &bots).await;
     let delivered = Arc::new(Notify::new());
     let app = api(
         json!({"code":0,"data":{"URL":"wss://fixture.feishu.cn/ws?service_id=7",
@@ -156,7 +156,7 @@ async fn untrusted_feishu_endpoints_never_reach_the_websocket_dialer() {
     ] {
         let fixture = Fixture::new();
         let bots = fixture.bots();
-        let channel = registered_channel(&bots).await;
+        let channel = registered_channel(&fixture, &bots).await;
         let app = api(endpoint, Arc::new(Notify::new()));
         let http = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = http.local_addr().unwrap();

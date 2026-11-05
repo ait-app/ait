@@ -128,6 +128,8 @@ fn channel_capabilities_status_and_conversations_are_scoped_to_the_bot() {
         opened["conversation"]["id"]
     );
     assert!(!conversations.to_string().contains("sessionId"));
+    assert!(!conversations.to_string().contains("botId"));
+    assert!(!opened.to_string().contains("botId"));
     assert_eq!(
         state.execute(
             "bot.conversation.list.request",
@@ -169,12 +171,25 @@ fn catalog_crud_requires_exclusive_ownership_and_retains_deleted_history() {
     );
     let channel = ChannelId::generate();
     let config = json!({"kind":"telegram","tokenRef":"env:AIT_SERVER_CREDENTIAL_TELEGRAM","allowedSenders":["alice","bob"]});
-    state
+    let created_channel = state
         .execute(
             "bot.channel.create.request",
             json!({"workspaceId":WORKSPACE,"channelId":channel,"config":config,"enabled":true}),
         )
         .unwrap();
+    assert!(!created_channel.to_string().contains("botId"));
+    assert_eq!(created_channel["channel"]["id"], json!(channel));
+    let listed = state
+        .execute("bot.channel.list.request", json!({"workspaceId":WORKSPACE}))
+        .unwrap();
+    assert!(!listed.to_string().contains("botId"));
+    let updated = state
+        .execute(
+            "bot.channel.update.request",
+            json!({"workspaceId":WORKSPACE,"channelId":channel,"enabled":true}),
+        )
+        .unwrap();
+    assert!(!updated.to_string().contains("botId"));
     assert_eq!(
         state.execute(
             "bot.channel.create.request",

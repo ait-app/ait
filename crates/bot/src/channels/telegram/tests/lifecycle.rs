@@ -9,7 +9,7 @@ use tokio::sync::Notify;
 use super::*;
 use crate::test_support::{Fixture, WORKSPACE, setup};
 
-async fn registered_channel(bots: &Bots) -> Channel {
+async fn registered_channel(fixture: &Fixture, bots: &Bots) -> Channel {
     bots.execute("bot.setup.request", setup(WORKSPACE))
         .await
         .unwrap();
@@ -24,14 +24,14 @@ async fn registered_channel(bots: &Bots) -> Channel {
         )
         .await
         .unwrap();
-    serde_json::from_value(value["channel"].clone()).unwrap()
+    fixture.channel(&value["channel"])
 }
 
 #[tokio::test]
 async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thread() {
     let fixture = Fixture::new();
     let bots = fixture.bots();
-    let channel = registered_channel(&bots).await;
+    let channel = registered_channel(&fixture, &bots).await;
     let delivered = Arc::new(Notify::new());
     let observed = delivered.clone();
     let app = Router::new()
@@ -108,7 +108,7 @@ async fn telegram_lifecycle_authenticates_polls_and_delivers_to_the_original_thr
 async fn existing_telegram_webhook_preserves_polling_cursor_and_waits_for_shutdown() {
     let fixture = Fixture::new();
     let bots = fixture.bots();
-    let channel = registered_channel(&bots).await;
+    let channel = registered_channel(&fixture, &bots).await;
     let webhook_checked = Arc::new(Notify::new());
     let observed = webhook_checked.clone();
     let app = Router::new()

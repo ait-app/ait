@@ -146,7 +146,7 @@ fn methods_are_classified_by_default_deny() {
         "relay.start.request",
         "publication.status.request",
         "schedule.create.request",
-        "bot.create.request",
+        "bot.setup.request",
         "browser.tunnel.open.request",
         "voice.mode.set.request",
         "dictation.stream.start",
