@@ -1,12 +1,15 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
-use domain::bot::{Bot, BotState, Catalog, Channel, ChannelConfig, ExecutionConfig};
+use domain::bot::{Bot, BotState, Catalog, Channel, ChannelConfig, ExecutionConfig, PauseReason};
 use domain::{BotId, ChannelId};
 use model::ErrorCode;
 use serde_json::{Value, json};
 
 use super::State;
-use crate::protocol::{ChannelCreate, ChannelRequest, ChannelUpdate, Setup, Update};
+use crate::protocol::{
+    ChannelCreate, ChannelRequest, ChannelUpdate, Setup, Update, WorkspaceRequest,
+};
 
 /// Most Bots that are not retired.
 const LIVE_BOTS: usize = 128;
@@ -184,6 +187,74 @@ impl State {
         let view = super::view(bot);
         self.save_catalog(catalog)?;
         Ok(json!({"bot":view,"configurationAppliesToNewSessions":true}))
+    }
+    /// Pause the Workspace's active Bot at the user's request.
+    pub(super) fn pause(&mut self, request: &WorkspaceRequest) -> Result<Value, ErrorCode> {
+        let bot = self.current(&request.workspace_id)?;
+        if !matches!(bot.state, BotState::Active) {
+            return Err(ErrorCode::BotConflict);
+        }
+        let view = self.pause_bot(bot.id, PauseReason::User)?;
+        Ok(json!({"bot":view}))
+    }
+    /// Reactivate a paused Bot once its Workspace is active and its directory exists.
+    pub(super) fn resume(&mut self, request: &WorkspaceRequest) -> Result<Value, ErrorCode> {
+        let bot = self.current(&request.workspace_id)?;
+        if !matches!(bot.state, BotState::Paused { .. }) {
+            return Err(ErrorCode::BotConflict);
+        }
+        let id = bot.id;
+        let cwd = self.active_workspace(&request.workspace_id)?;
+        if !Path::new(&cwd).is_dir() {
+            return Err(ErrorCode::WorkspaceNotFound);
+        }
+        let view = self.set_state(id, BotState::Active)?;
+        Ok(json!({"bot":view}))
+    }
+    /// Retire the Workspace's Bot at the user's request; its memory is kept for a later setup.
+    pub(super) fn remove(&mut self, request: &WorkspaceRequest) -> Result<Value, ErrorCode> {
+        let id = self.current(&request.workspace_id)?.id;
+        self.retire_bots(&BTreeSet::from([id]))?;
+        Ok(json!({"bot":super::view(self.bot(id)?)}))
+    }
+    /// Persist `reason` as the Bot's pause cause, then cancel its queued work and release
+    /// its native sessions.
+    pub(super) fn pause_bot(&mut self, id: BotId, reason: PauseReason) -> Result<Value, ErrorCode> {
+        let view = self.set_state(id, BotState::Paused { reason })?;
+        self.stop_bot(id, false)?;
+        Ok(view)
+    }
+    /// Retire `bots`, release their external channel accounts, and close their native
+    /// sessions. Builtin channels stay so retired history keeps its routing.
+    pub(super) fn retire_bots(&mut self, bots: &BTreeSet<BotId>) -> Result<(), ErrorCode> {
+        let at = chrono::Utc::now().to_rfc3339();
+        let mut catalog = self.catalog.clone();
+        for bot in catalog.bots.iter_mut().filter(|bot| bots.contains(&bot.id)) {
+            bot.state = BotState::Retired { at: at.clone() };
+        }
+        for channel in catalog.channels.iter_mut().filter(|channel| {
+            bots.contains(&channel.bot_id) && !matches!(channel.config, ChannelConfig::Builtin)
+        }) {
+            channel.enabled = false;
+            channel.deleted = true;
+        }
+        self.save_catalog(catalog)?;
+        for bot in bots {
+            self.stop_bot(*bot, true)?;
+        }
+        Ok(())
+    }
+    fn set_state(&mut self, id: BotId, state: BotState) -> Result<Value, ErrorCode> {
+        let mut catalog = self.catalog.clone();
+        let bot = catalog
+            .bots
+            .iter_mut()
+            .find(|entry| entry.id == id)
+            .ok_or(ErrorCode::BotNotFound)?;
+        bot.state = state;
+        let view = super::view(bot);
+        self.save_catalog(catalog)?;
+        Ok(view)
     }
     pub(super) fn create_channel(&mut self, request: ChannelCreate) -> Result<Value, ErrorCode> {
         let bot = self.current(&request.workspace_id)?;

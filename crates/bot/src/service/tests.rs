@@ -2,6 +2,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use model::ErrorCode;
+use model::bot::Store;
 use serde_json::{Value, json};
 
 use crate::service::Bots;
@@ -270,6 +271,7 @@ async fn automatic_denial_queue_cancellation_memory_and_workspace_retirement() {
     .await
     .unwrap();
     bots.retire(&[WORKSPACE.into()]).await.unwrap();
+    assert_eq!(fixture.store.memory(WORKSPACE).unwrap(), "");
     assert_eq!(
         bots.execute(
             "bot.message.send.request",

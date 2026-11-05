@@ -76,8 +76,22 @@ pub(crate) struct Fixture {
 }
 impl Fixture {
     pub(crate) fn new() -> Self {
+        Self::build(false)
+    }
+    /// Fixture whose [`WORKSPACE`] directory is `root/ws`, so tests can delete it.
+    pub(crate) fn with_workspace_subdir() -> Self {
+        Self::build(true)
+    }
+    fn build(workspace_subdir: bool) -> Self {
         let root = tempfile::tempdir().unwrap();
         let cwd = root.path().to_str().unwrap();
+        let workspace_dir = if workspace_subdir {
+            let dir = root.path().join("ws");
+            std::fs::create_dir(&dir).unwrap();
+            dir
+        } else {
+            root.path().to_path_buf()
+        };
         let projects = Arc::new(FileBackedProjectRegistry::new(
             root.path().join("projects.json"),
         ));
@@ -87,7 +101,10 @@ impl Fixture {
         ));
         let other = root.path().join("other");
         std::fs::create_dir(&other).unwrap();
-        for (id, cwd) in [(WORKSPACE, cwd), (OTHER_WORKSPACE, other.to_str().unwrap())] {
+        for (id, cwd) in [
+            (WORKSPACE, workspace_dir.to_str().unwrap()),
+            (OTHER_WORKSPACE, other.to_str().unwrap()),
+        ] {
             workspaces.upsert(&serde_json::from_value(json!({"workspaceId":id,"projectId":"project-1","cwd":cwd,"kind":"local_checkout","displayName":"workspace", "createdAt":"2026-10-12T00:00:00Z","updatedAt":"2026-10-12T00:00:00Z","archivedAt":null})).unwrap(), domain::workspace::registry::WorkspaceMutationContext::default()).unwrap();
         }
         Self {

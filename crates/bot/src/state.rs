@@ -134,6 +134,9 @@ impl State {
             }
             "bot.setup.request" => self.setup(decode(params)?),
             "bot.update.request" => self.update(decode(params)?),
+            "bot.pause.request" => self.pause(&decode(params)?),
+            "bot.resume.request" => self.resume(&decode(params)?),
+            "bot.remove.request" => self.remove(&decode(params)?),
             "bot.channel.create.request" => self.create_channel(decode(params)?),
             "bot.channel.update.request" => self.update_channel(decode(params)?),
             "bot.channel.delete.request" => self.delete_channel(&decode(params)?),

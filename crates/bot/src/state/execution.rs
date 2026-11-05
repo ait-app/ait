@@ -1,5 +1,8 @@
-use domain::bot::{BotState, ChannelConfig, DeliveryStatus, TurnStatus};
-use domain::{BotTurnId, ConversationId};
+use std::collections::BTreeSet;
+use std::path::Path;
+
+use domain::bot::{BotState, ChannelConfig, DeliveryStatus, PauseReason, TurnStatus};
+use domain::{BotId, BotTurnId, ConversationId};
 use model::ErrorCode;
 use provider::service::bot_execution::Action;
 use serde_json::{Value, json};
@@ -10,7 +13,7 @@ use crate::execution::Run;
 use crate::protocol::TurnRequest;
 
 impl State {
-    pub(crate) fn stop_bot(&mut self, bot: domain::BotId, retire: bool) -> Result<(), ErrorCode> {
+    pub(crate) fn stop_bot(&mut self, bot: BotId, retire: bool) -> Result<(), ErrorCode> {
         let conversations: Vec<_> = self
             .conversations
             .values()
@@ -43,21 +46,28 @@ impl State {
         }
         Ok(())
     }
+    /// Retire the archived Workspaces' Bots and delete those Workspaces' Bot memory.
     pub(crate) fn retire(&mut self, workspaces: &[String]) -> Result<(), ErrorCode> {
-        let mut catalog = self.catalog.clone();
-        let mut bots = Vec::new();
-        let at = chrono::Utc::now().to_rfc3339();
-        for bot in &mut catalog.bots {
-            if workspaces.contains(&bot.workspace_id)
-                && !matches!(bot.state, BotState::Retired { .. })
-            {
-                bot.state = BotState::Retired { at: at.clone() };
-                bots.push(bot.id);
-            }
+        self.ensure_writable()?;
+        let workspaces: BTreeSet<&str> = workspaces.iter().map(String::as_str).collect();
+        let bots: BTreeSet<BotId> = self
+            .catalog
+            .bots
+            .iter()
+            .filter(|bot| {
+                workspaces.contains(bot.workspace_id.as_str())
+                    && !matches!(bot.state, BotState::Retired { .. })
+            })
+            .map(|bot| bot.id)
+            .collect();
+        if !bots.is_empty() {
+            self.retire_bots(&bots)?;
         }
-        self.save_catalog(catalog)?;
-        for bot in bots {
-            self.stop_bot(bot, true)?;
+        for workspace in workspaces {
+            if self.store.delete_memory(workspace).is_err() {
+                self.frozen = true;
+                return Err(ErrorCode::BotIo);
+            }
         }
         Ok(())
     }
@@ -67,7 +77,8 @@ impl State {
         }
         let mut ready = Vec::new();
         let mut failed = Vec::new();
-        let mut blocked = std::collections::BTreeSet::new();
+        let mut missing = BTreeSet::new();
+        let mut blocked = BTreeSet::new();
         for ((conversation, _), id) in &self.pending {
             let receipt = self.receipts.get(id).ok_or(ErrorCode::BotIo)?;
             if self
@@ -99,7 +110,14 @@ impl State {
                 .ok_or(ErrorCode::BotIo)?
                 .clone();
             let bot = self.bot(conversation.bot_id)?.clone();
-            if self.workspace(&bot).is_err() {
+            if missing.contains(&bot.id) {
+                continue;
+            }
+            let Ok(cwd) = self.workspace(&bot) else {
+                continue;
+            };
+            if !Path::new(&cwd).is_dir() {
+                missing.insert(bot.id);
                 continue;
             }
             let channel = self.channel(bot.id, conversation.channel_id)?;
@@ -121,6 +139,9 @@ impl State {
         }
         for id in failed {
             self.progress(id, TurnStatus::Failed, None, Some("Workspace memory could not be read; repair the memory file before sending again".into()))?;
+        }
+        for bot in missing {
+            self.pause_bot(bot, PauseReason::DirectoryMissing)?;
         }
         for run in &mut ready {
             run.turn.status = TurnStatus::Sending;

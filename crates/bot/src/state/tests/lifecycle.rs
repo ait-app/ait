@@ -328,3 +328,238 @@ fn catalog_and_conversation_write_failures_freeze_admission_until_restart() {
         assert!(state.ready().unwrap().is_empty());
     }
 }
+
+fn bot_state(state: &mut super::super::State) -> serde_json::Value {
+    state
+        .execute("bot.get.request", json!({"workspaceId":WORKSPACE}))
+        .unwrap()["bot"]["state"]
+        .clone()
+}
+
+fn remember(state: &mut super::super::State, text: &str) {
+    let revision = state
+        .execute("bot.memory.get.request", json!({"workspaceId":WORKSPACE}))
+        .unwrap()["revision"]
+        .clone();
+    state
+        .execute(
+            "bot.memory.update.request",
+            json!({"workspaceId":WORKSPACE,"text":text,"expected":revision}),
+        )
+        .unwrap();
+}
+
+fn recalled(state: &mut super::super::State) -> serde_json::Value {
+    state
+        .execute("bot.memory.get.request", json!({"workspaceId":WORKSPACE}))
+        .unwrap()["text"]
+        .clone()
+}
+
+fn create_telegram(
+    state: &mut super::super::State,
+    channel: ChannelId,
+) -> Result<serde_json::Value, ErrorCode> {
+    state.execute(
+        "bot.channel.create.request",
+        json!({"workspaceId":WORKSPACE,"channelId":channel,"enabled":true,"config":{"kind":"telegram","tokenRef":"env:AIT_SERVER_CREDENTIAL_TELEGRAM","allowedSenders":["alice"]}}),
+    )
+}
+
+fn send(
+    state: &mut super::super::State,
+    conversation: ConversationId,
+    message: &str,
+) -> Result<serde_json::Value, ErrorCode> {
+    state.execute(
+        "bot.message.send.request",
+        json!({"workspaceId":WORKSPACE,"conversationId":conversation,"messageId":message,"text":"hello"}),
+    )
+}
+
+#[test]
+fn pause_cancels_queued_turns_and_resume_reactivates() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    create_telegram(&mut state, ChannelId::generate()).unwrap();
+    admit(&mut state, WORKSPACE, "first");
+    let running = state.ready().unwrap().remove(0);
+    let queued = admit(&mut state, WORKSPACE, "second");
+    let session = running.conversation.session_id.clone();
+    assert_eq!(state.channels().len(), 2);
+
+    let paused = state
+        .execute("bot.pause.request", json!({"workspaceId":WORKSPACE}))
+        .unwrap();
+
+    assert_eq!(
+        paused["bot"]["state"],
+        json!({"kind":"paused","reason":"user"})
+    );
+    assert_eq!(
+        bot_state(&mut state),
+        json!({"kind":"paused","reason":"user"})
+    );
+    assert!(running.cancel.is_cancelled());
+    assert_eq!(state.turn(queued.id).unwrap().status, TurnStatus::Cancelled);
+    assert!(
+        state.session_actions.iter().any(
+            |(_, action)| matches!(action, Action::Release { agent_id } if agent_id == &session)
+        )
+    );
+    assert_eq!(
+        send(&mut state, queued.conversation_id, "third"),
+        Err(ErrorCode::BotConflict)
+    );
+    assert!(state.channels().is_empty());
+    assert_eq!(
+        state.execute("bot.pause.request", json!({"workspaceId":WORKSPACE})),
+        Err(ErrorCode::BotConflict)
+    );
+
+    let resumed = state
+        .execute("bot.resume.request", json!({"workspaceId":WORKSPACE}))
+        .unwrap();
+
+    assert_eq!(resumed["bot"]["state"], json!({"kind":"active"}));
+    assert_eq!(bot_state(&mut state), json!({"kind":"active"}));
+    assert_eq!(
+        send(&mut state, queued.conversation_id, "third").unwrap()["turn"]["status"],
+        "queued"
+    );
+    assert_eq!(state.channels().len(), 2);
+    assert_eq!(
+        state.execute("bot.resume.request", json!({"workspaceId":WORKSPACE})),
+        Err(ErrorCode::BotConflict)
+    );
+}
+
+#[test]
+fn remove_then_setup_keeps_memory_unless_cleared() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    let created = state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    remember(&mut state, "prefs");
+    create_telegram(&mut state, ChannelId::generate()).unwrap();
+    let old = admit(&mut state, WORKSPACE, "first");
+    let session = state.conversations[&old.conversation_id].session_id.clone();
+
+    let removed = state
+        .execute("bot.remove.request", json!({"workspaceId":WORKSPACE}))
+        .unwrap();
+
+    assert_eq!(removed["bot"]["state"]["kind"], "retired");
+    assert!(
+        state.session_actions.iter().any(
+            |(_, action)| matches!(action, Action::Close { agent_id } if agent_id == &session)
+        )
+    );
+    assert_eq!(
+        state
+            .execute("bot.get.request", json!({"workspaceId":WORKSPACE}))
+            .unwrap(),
+        json!({"bot":null})
+    );
+    assert_eq!(state.turn(old.id).unwrap().status, TurnStatus::Cancelled);
+    assert!(state.channels().is_empty());
+    assert_eq!(
+        state.execute("bot.remove.request", json!({"workspaceId":WORKSPACE})),
+        Err(ErrorCode::BotNotFound)
+    );
+
+    let recreated = state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+
+    assert_eq!(recreated["created"], true);
+    assert_eq!(recalled(&mut state), "prefs");
+    assert_ne!(
+        recreated["bot"]["builtinChannelId"],
+        created["bot"]["builtinChannelId"]
+    );
+    assert_eq!(
+        send(&mut state, old.conversation_id, "second"),
+        Err(ErrorCode::BotNotFound)
+    );
+    create_telegram(&mut state, ChannelId::generate()).unwrap();
+
+    state
+        .execute("bot.remove.request", json!({"workspaceId":WORKSPACE}))
+        .unwrap();
+    let mut cleared = setup(WORKSPACE);
+    cleared["clearMemory"] = json!(true);
+    state.execute("bot.setup.request", cleared).unwrap();
+
+    assert_eq!(recalled(&mut state), "");
+}
+
+#[test]
+fn archive_retires_and_deletes_memory() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    remember(&mut state, "prefs");
+    fixture.store.save_memory(OTHER_WORKSPACE, "other").unwrap();
+
+    state.retire(&[WORKSPACE.into()]).unwrap();
+
+    assert_eq!(
+        state
+            .execute("bot.get.request", json!({"workspaceId":WORKSPACE}))
+            .unwrap(),
+        json!({"bot":null})
+    );
+    assert_eq!(fixture.store.memory(WORKSPACE).unwrap(), "");
+    assert_eq!(fixture.store.memory(OTHER_WORKSPACE).unwrap(), "other");
+}
+
+#[test]
+fn missing_directory_pauses_and_cancels_queued_turns() {
+    let fixture = Fixture::with_workspace_subdir();
+    let directory = fixture.root.path().join("ws");
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    let queued = admit(&mut state, WORKSPACE, "first");
+    std::fs::remove_dir(&directory).unwrap();
+
+    let ready = state.ready().unwrap();
+
+    assert!(ready.is_empty());
+    assert_eq!(
+        bot_state(&mut state),
+        json!({"kind":"paused","reason":"directory_missing"})
+    );
+    assert_eq!(state.turn(queued.id).unwrap().status, TurnStatus::Cancelled);
+    assert!(
+        !state
+            .session_actions
+            .iter()
+            .any(|(_, action)| matches!(action, Action::Send { .. }))
+    );
+    assert_eq!(
+        send(&mut state, queued.conversation_id, "second"),
+        Err(ErrorCode::BotConflict)
+    );
+    assert_eq!(
+        state.execute("bot.resume.request", json!({"workspaceId":WORKSPACE})),
+        Err(ErrorCode::WorkspaceNotFound)
+    );
+
+    std::fs::create_dir(&directory).unwrap();
+    let resumed = state
+        .execute("bot.resume.request", json!({"workspaceId":WORKSPACE}))
+        .unwrap();
+
+    assert_eq!(resumed["bot"]["state"], json!({"kind":"active"}));
+    send(&mut state, queued.conversation_id, "second").unwrap();
+    assert_eq!(state.ready().unwrap().len(), 1);
+}
