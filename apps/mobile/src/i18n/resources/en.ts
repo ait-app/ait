@@ -71,7 +71,6 @@ export const en = {
     mode: "Permission mode",
     thinking: "Reasoning",
     defaultOption: "Provider default",
-    enabled: "Enabled",
     save: "Save",
     setupTitle: "Set up the workspace Bot",
     setupHint: "The Bot manages this workspace and keeps running after you close this tab.",
@@ -89,14 +88,17 @@ export const en = {
     resetConfirm:
       "Start a new conversation? Existing messages are retained, and the latest Bot settings will take effect.",
     configurationHint:
-      "Instructions and model changes apply to new conversations. Start a new conversation to use them here.",
+      "Model changes apply to new conversations. Start a new conversation to use them here.",
     memory: "Memory",
-    memoryHint: "Shared memory read by the Bot before each message.",
+    memoryHint:
+      "Preferences the Bot reads before every reply, such as PR title language or reply style.",
     saveMemory: "Save memory",
     memoryConflict: "The memory changed elsewhere. Reload it before saving again.",
     reload: "Reload",
-    archive: "Archive Bot",
-    archiveConfirm: "Archive this Bot? Messages and memory will be retained.",
+    pause: "Pause",
+    remove: "Remove Bot",
+    removeConfirm:
+      "Remove this Bot? Its conversation history will no longer be visible, its memory is kept, and Telegram and Feishu connections will be disconnected.",
     paused: "Paused",
     resume: "Resume",
     directoryMissing:
