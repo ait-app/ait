@@ -35,9 +35,8 @@ Windows 包不包含 Rust daemon，不构建 Rust，不自动创建或启动默�
 内置 daemon 管理入口；通过账号、TCP 或 SSH 连接远端主机。账号与桌面功能继续使用
 Electron 主进程。该命令不发布产物；未配置 Windows 代码签名证书时生成未签名构建。
 参见 [Windows 客户端边界](../../docs/decisions/clients/adr-184-windows-desktop-without-daemon.md)。
-Release CI 和相关 PR 共用 [Windows 工作流](../../.github/workflows/windows-desktop.yml)，
-在 Windows runner 上构建并运行 `node apps/desktop/e2e/windows-startup.e2e.mjs`，
-验证打包后的客户端可在没有 daemon 的情况下进入欢迎页。PR 仅上传 CI 产物。
+[Release 工作流](../../.github/workflows/release.yml)的 Windows job 在 Windows runner 上构建并运行
+`node apps/desktop/e2e/windows-startup.e2e.mjs`，验证打包后的客户端可在没有 daemon 的情况下进入欢迎页。
 
 The bundled daemon owns machine authorization, Host registration, renewal and Hub reconnects, just like
 standalone `daemon run`. Desktop approves a device authorization once and hands it to the daemon;

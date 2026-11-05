@@ -55,10 +55,7 @@ jobs:
               - 'tsconfig.base.json'
               - '.oxfmtrc.json'
               - 'crates/provider/tests/fixtures/**'
-              - '.github/workflows/ci.yml'
-              - '.github/workflows/cancel-merged-pr-ci.yml'
-              - '.github/workflows/release.yml'
-              - '.github/workflows/release-android-play.yml'
+              - '.github/workflows/**'
             web_client:
               - 'apps/mobile/**'
               - 'packages/**'
@@ -71,20 +68,9 @@ jobs:
               - '.github/workflows/ci.yml'
               - '.github/workflows/release.yml'
 
-  docs:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-      # Source moves can break documentation links even without Markdown edits.
-      # These scripts use only Node built-ins and do not need npm ci.
-      - run: node --test scripts/check-docs.test.mjs
-      - run: node scripts/check-docs.mjs
-
-  # Formatting covers Markdown, workflows and TOML as well as code, so it runs on every change.
-  format:
+  # Formatting and doc links span the whole repository, so they run on every change.
+  # Neither needs npm ci: the docs check uses Node built-ins and the formatter is pinned.
+  lint:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -92,8 +78,10 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      # Run the pinned formatter directly instead of installing the full workspace.
-      - run: npx --yes "oxfmt@$(node -p 'require("./package.json").devDependencies.oxfmt')" --check .
+      - name: Check docs
+        run: npm run check:docs
+      - name: Check formatting
+        run: npx --yes "oxfmt@$(node -p 'require("./package.json").devDependencies.oxfmt')" --check .
 
   headless-macos:
     needs: changes
@@ -103,17 +91,22 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@1.98.1
-      - uses: Swatinem/rust-cache@v2
+      - &rust-cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          # PRs restore main's cache without saving their own, which keeps main's entries warm.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       # rust-cache prunes non-Cargo files under target, leaving empty prebuilt lib directories.
       # sherpa checks only whether lib/ exists; reset both its build record and partial download.
-      - name: Reset cached sherpa native artifacts
+      - &reset-sherpa
+        name: Reset cached sherpa native artifacts
         run: |
           cargo clean --package sherpa-onnx-sys
           rm -rf target/sherpa-onnx-prebuilt
-      - run: "cargo test --locked -p daemon --bin daemon device::"
-      - run: "cargo test --locked -p daemon --bin daemon config::"
-      - run: cargo test --locked -p daemon --bin daemon host::tests::publication
-      - run: cargo test --locked -p host-link
+      - name: Test macOS host integration
+        run: |
+          cargo test --locked -p daemon --bin daemon -- device:: config:: host::tests::publication
+          cargo test --locked -p host-link
 
   rust:
     needs: changes
@@ -126,26 +119,24 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.98.1
         with:
           components: clippy,rustfmt
-      - uses: Swatinem/rust-cache@v2
-      # rust-cache prunes non-Cargo files under target, leaving empty prebuilt lib directories.
-      # sherpa checks only whether lib/ exists; reset both its build record and partial download.
-      - name: Reset cached sherpa native artifacts
-        run: |
-          cargo clean --package sherpa-onnx-sys
-          rm -rf target/sherpa-onnx-prebuilt
+      - *rust-cache
+      - *reset-sherpa
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
-      - run: cargo fmt --all --check
+      # Static checks run first so they fail before the long compile.
+      - name: Check formatting and method specs
+        run: |
+          cargo fmt --all --check
+          # ADR-094: client method names must match the Rust component declarations.
+          python3 scripts/check-paseo-client-methods.py
+          python3 scripts/rust_method_specs_test.py
+          python3 scripts/check-crate-coverage.test.py
       # --locked keeps a stale Cargo.lock from passing here and failing only at release time.
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - run: cargo nextest run --locked --workspace --profile ci
       # nextest does not execute doctests.
       - run: cargo test --locked --workspace --doc
-      # ADR-094: client method names must match the Rust component declarations.
-      - run: python3 scripts/check-paseo-client-methods.py
-      - run: python3 scripts/rust_method_specs_test.py
-      - run: python3 scripts/check-crate-coverage.test.py
 
   ui:
     needs: changes
@@ -156,34 +147,35 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v5
+      - &setup-node
+        uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
-      - run: npx oxlint
-      - run: node --test scripts/check-ui.test.mjs
-      # Formatting is already checked repository-wide by the format job.
-      - name: Check changed UI lint
+      # Formatting is already checked repository-wide by the lint job.
+      - name: Lint changed UI
         env:
           UI_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: npm run check:ui -- "$UI_DIFF_BASE"
-      - run: npm run verify:local-packages
-      - run: npm run verify:release
-      - run: npm run test:release
-      - run: npm run test:mobile-release
+        run: |
+          npx oxlint
+          node --test scripts/check-ui.test.mjs
+          npm run check:ui -- "$UI_DIFF_BASE"
+      - name: Verify packages and release tooling
+        run: |
+          npm run verify:local-packages
+          npm run verify:release
+          npm run test:release
+          npm run test:mobile-release
+      # Also builds the SDK and highlight packages that the tests below import.
       - run: npm run build:desktop-main
-      - run: npm run test --workspace=@ait/mobile -- src/components/question-form-card-core.test.ts
-      - run: npm run test --workspace=@ait/protocol
-      - run: npm run test --workspace=@ait/client
-      - run: npm run test --workspace=@ait/mobile -- src/runtime/host-runtime.test.ts
       - run: npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
+      - run: npm run test --workspace=@ait/protocol --workspace=@ait/client --workspace=@ait/highlight
       - run: npm test --workspace=@ait/desktop
-      - run: npm run test:sdk
-      - run: npm run test --workspace=@ait/highlight
       - run: >-
           npm run test --workspace=@ait/mobile --
+          src/components/question-form-card-core.test.ts src/runtime/host-runtime.test.ts
           src/i18n/resources.test.ts src/runtime/daemon-transport maestro/support native-release-version.test.ts
           src/timeline src/types/stream.test.ts src/runtime/replica-cache
           src/runtime/directory-sync src/screens/workspace/workspace-route-state.test.ts
@@ -199,11 +191,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
+      - *setup-node
       - run: npm ci
       - run: npm run build:web-console --workspace=@ait/mobile
       - run: docker build --tag ait-web-client:ci apps/mobile/web-console
@@ -212,13 +200,15 @@ jobs:
           docker run --rm --detach --name ait-web-client --publish 127.0.0.1:8080:80 ait-web-client:ci
           bash apps/mobile/web-console/check-routes.sh http://127.0.0.1:8080
 
+  # Nightly: every main push packages Linux and macOS desktops and replaces the `nightly` release.
+  # Admission and publication share a queued lock so cancellation cannot interrupt uploads;
+  # scripts/nightly-control.cjs keeps only the two newest builds.
   nightly-prepare:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       actions: write
-    # Admission and publication share a lock so cancellation cannot interrupt uploads.
     concurrency:
       group: nightly-main-control
       cancel-in-progress: false
@@ -243,13 +233,13 @@ jobs:
 
   desktop:
     needs: nightly-prepare
-    if: ${{ !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.nightly-prepare.outputs.admitted == 'true' }}
+    # Only an admitted main push sets this output; a skipped or failed admission skips packaging.
+    if: needs.nightly-prepare.outputs.admitted == 'true'
     name: Desktop ${{ matrix.label }}
     permissions:
       contents: read
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
-    # Only admitted main pushes package desktop; nightly admission stays in nightly-control.
     concurrency:
       group: ${{ format('desktop-run-{0}-{1}', github.run_id, matrix.platform) }}
       cancel-in-progress: false
@@ -278,18 +268,15 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
+      # Linux compiles the daemon inside the manylinux container, which installs its own toolchain.
       - uses: dtolnay/rust-toolchain@1.98.1
+        if: matrix.platform == 'mac'
         with:
           targets: ${{ matrix.rust_target }}
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
+      - *setup-node
       - run: npm ci
-      - name: Validate release tooling and version
-        run: |
-          npm run test:release
-          npm run verify:release
+      # Release tooling tests run in the ui job whenever scripts or workflows change.
+      - run: npm run verify:release
       - name: Install Linux packaging dependencies
         if: matrix.platform == 'linux'
         run: |
@@ -326,10 +313,8 @@ jobs:
           if [ "$PLATFORM" = mac ]; then
             args+=(-c.mac.identity=- -c.mac.notarize=false)
           fi
-          if [ -n "$NIGHTLY_BUILD_LABEL" ]; then
-            nightly_args=$(node ../../scripts/nightly-build.mjs builder-args "$NIGHTLY_BUILD_LABEL")
-            while IFS= read -r arg; do args+=("$arg"); done <<< "$nightly_args"
-          fi
+          nightly_args=$(node ../../scripts/nightly-build.mjs builder-args "$NIGHTLY_BUILD_LABEL")
+          while IFS= read -r arg; do args+=("$arg"); done <<< "$nightly_args"
           npm exec -- electron-builder --config electron-builder.yml \
             "--$PLATFORM" "--$ARCH" --publish never \
             -c.publish.owner="${GITHUB_REPOSITORY_OWNER}" \
@@ -339,12 +324,9 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
         run: |
           version=$(node -p 'require("./package.json").version')
-          args=()
-          if [ -n "$NIGHTLY_BUILD_LABEL" ]; then args+=(--nightly "$NIGHTLY_BUILD_LABEL"); fi
-          node scripts/release-assets.mjs collect "$PLATFORM" "$version" apps/desktop/release release-assets "${args[@]}"
+          node scripts/release-assets.mjs collect "$PLATFORM" "$version" apps/desktop/release release-assets --nightly "$NIGHTLY_BUILD_LABEL"
       # Same binary as the desktop bundle. macOS keeps the linker's ad-hoc signature and is not notarized.
       - name: Package standalone daemon
-        if: env.NIGHTLY_BUILD_LABEL != ''
         env:
           PLATFORM: ${{ matrix.platform }}
           DAEMON_BIN: ${{ github.workspace }}/target/${{ matrix.rust_target }}/release/daemon
@@ -364,49 +346,27 @@ jobs:
           # Ubuntu names runtime libraries the Debian way; rpm still installs the real payload and scriptlets.
           sudo rpm --install --nodeps release/*.rpm
           node e2e/linux-artifact-smoke.js
-      - name: Record PR build source
-        if: github.event_name == 'pull_request'
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PLATFORM: ${{ matrix.platform }}
-        run: node scripts/pr-build-info.mjs release-assets
       - uses: actions/upload-artifact@v6
-        id: artifact
         with:
-          name: ${{ github.event_name == 'pull_request' && format('pr-{0}-{1}-{2}', github.event.pull_request.number, matrix.platform, github.event.pull_request.head.sha) || format('nightly-{0}-{1}', needs.nightly-prepare.outputs.label, matrix.platform) }}
+          name: nightly-${{ needs.nightly-prepare.outputs.label }}-${{ matrix.platform }}
           path: release-assets/*
           if-no-files-found: error
           overwrite: true
-          retention-days: ${{ github.event_name == 'pull_request' && 14 || 1 }}
-      - name: Link PR download
-        if: github.event_name == 'pull_request'
-        env:
-          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
-          PLATFORM: ${{ matrix.platform }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          printf '### PR #%s — %s\n\n[Download test package](%s)\n\nPR commit: `%s`\n\nTested merge: `%s`\n' \
-            "$PR_NUMBER" "$PLATFORM" "$ARTIFACT_URL" "$PR_HEAD_SHA" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          retention-days: 1
 
   nightly-publish:
+    needs: [nightly-prepare, changes, lint, rust, headless-macos, ui, web-client, desktop]
+    # Unchanged code may skip checks, but any failed or cancelled check blocks publication.
+    # A failed change filter skips the checks it gates, so its own failure also blocks.
     if: >-
       ${{ !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-          && needs.desktop.result == 'success' && needs.docs.result == 'success'
-          && needs.format.result == 'success'
-          && needs.changes.result == 'success'
-          && contains(fromJSON('["success","skipped"]'), needs.rust.result)
-          && contains(fromJSON('["success","skipped"]'), needs.ui.result) }}
-    needs: [nightly-prepare, changes, desktop, rust, ui, docs, format]
+          && needs.desktop.result == 'success'
+          && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     env:
       NIGHTLY_BUILD_LABEL: ${{ needs.nightly-prepare.outputs.label }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    # Unchanged code may skip Rust/UI checks; failures must still block publication.
-    # A failed change filter also skips both checks, so it must succeed explicitly.
-    # Use the admission lock while replacing and uploading the release.
+    # Hold the admission lock while replacing and uploading the release.
     concurrency:
       group: nightly-main-control
       cancel-in-progress: false
@@ -481,7 +441,6 @@ jobs:
             --notes "Development build from $GITHUB_SHA. Replaced on the next successful main build. macOS is ad-hoc signed and not notarized. If macOS blocks the standalone ait-daemon after a browser download, run \`xattr -d com.apple.quarantine ait-daemon\` in the extracted folder. <!-- ait-nightly-run: $GITHUB_RUN_NUMBER --> <!-- ait-nightly-workflow: ci.yml -->" \
             --repo "$GITHUB_REPOSITORY"
           echo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/nightly" >> "$GITHUB_STEP_SUMMARY"
-
       - name: Cancel older builds after successful publication
         if: steps.release.outputs.publish == 'true'
         uses: actions/github-script@v8
@@ -489,19 +448,12 @@ jobs:
           script: |
             const { cancelOlderBuilds } = require('./scripts/nightly-control.cjs');
             await cancelOlderBuilds({ github, context, core });
-
-  nightly-cleanup:
-    name: Remove temporary nightly artifacts
-    needs: [desktop, nightly-publish]
-    # Keep artifacts after a failed publish so "Re-run failed jobs" can still verify both platforms.
-    if: >-
-      ${{ always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-          && needs.nightly-publish.result == 'success' }}
-    runs-on: ubuntu-24.04
-    permissions:
-      actions: write
-    steps:
-      - uses: actions/github-script@v8
+      # Runs only after every step above succeeds, so a failed publish keeps both platforms'
+      # artifacts for "Re-run failed jobs". A cleanup error must not fail the job and invite a
+      # rerun that would republish an already live nightly; the artifacts expire after a day.
+      - name: Remove temporary nightly artifacts
+        continue-on-error: true
+        uses: actions/github-script@v8
         with:
           script: |
             const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {

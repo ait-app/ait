@@ -70,12 +70,9 @@ nightly 同样附带独立 daemon 归档，例如 `Ait-38fb6054-2026-10-08-daemo
 
 ## PR CI
 
-创建或更新 PR 会运行适用的 Rust、UI、文档和格式检查。Linux x86_64 与 macOS Apple Silicon
-桌面打包，以及 nightly 的准入、发布和产物清理任务均跳过。
-影响桌面、共享界面、依赖或 Windows/Release 工作流的 PR 会运行
-[Windows desktop](../../.github/workflows/windows-desktop.yml)：构建未签名 x64 NSIS 安装包和 ZIP，
-实际启动打包客户端验证欢迎页及无内置 daemon，并保留 `ait-windows-x64` CI 产物 7 天。
-该任务只有读取仓库的权限，不上传 GitHub Release。
+创建或更新 PR 会运行适用的 Rust、UI、Web 客户端检查，以及全仓库的文档与格式检查。
+Linux x86_64 与 macOS Apple Silicon 桌面打包，以及 nightly 的准入和发布任务均跳过；
+Windows 只在 [Release Ait](../../.github/workflows/release.yml) 中构建。
 
 合并到 `main` 后，由 main CI 构建并发布 nightly 安装包；合并前如需验证安装包，
 可按[桌面端构建说明](../../apps/desktop/README.md)在本地打包。
@@ -158,11 +155,11 @@ Git 工作区，不用于 `makepkg --source` 或单独发布到 AUR；AUR 二进
   `--devel` 获取新提交。AUR 规定不能提交只改 `pkgver` 的 VCS 包更新，因此只有配方本身变化时才更新，
   由维护者在本机用自己的 AUR SSH key 运行 `build`（完整编译验证）后再 `publish`。
 
-`ait-bin` 每次更新分两个 job，由 [`aur-package.yml`](../../.github/workflows/aur-package.yml) 执行：
+`ait-bin` 每次更新在 [`publish-aur.yml`](../../.github/workflows/publish-aur.yml) 中分两个 job 执行：
 
 1. 构建：在 `archlinux:base-devel` 容器中完整运行 `makepkg`。构建会执行上游 npm/Cargo 依赖的代码，
    因此此 job 不接触 AUR 私钥。
-2. 发布：构建成功后在另一台 runner 上运行，不构建，只生成 `.SRCINFO`，提交并推送到 AUR。
+2. 发布：构建成功后在另一台 runner 上运行，不构建，沿用构建 job 解析出的版本，只生成 `.SRCINFO`，提交并推送到 AUR。
 
 `.SRCINFO` 不提交到本仓库。也可手动运行工作流，`tag` 留空时使用最新正式版。
 
