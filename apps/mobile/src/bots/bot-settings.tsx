@@ -6,6 +6,7 @@ import type { BotView } from "@ait/protocol/bot/types";
 import { Button } from "@/components/ui/button";
 import { canManageBackgroundTasks } from "@/hosts/background-task-access";
 import { Field, FormTextInput } from "@/components/ui/form-field";
+import { BotChannels } from "./bot-channels";
 import { BotLoadingSpinner } from "./loading";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { confirmDialog } from "@/utils/confirm-dialog";
@@ -255,7 +256,12 @@ export function BotSettings({
           }}
         />
       ) : null}
-      {/* Task 6: render <BotChannels serverId workspaceId interactive readOnly /> here. */}
+      <BotChannels
+        serverId={serverId}
+        workspaceId={workspaceId}
+        interactive={interactive}
+        readOnly={readOnly}
+      />
       {remove.error ? <Text style={styles.error}>{remove.error.message}</Text> : null}
       {!readOnly ? (
         <Button
