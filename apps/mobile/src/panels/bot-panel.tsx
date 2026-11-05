@@ -20,8 +20,8 @@ const WorkspaceBotTab = lazy(() =>
 const ThemedBot = withUnistyles(Bot);
 const presentation = {
   label: (t) => t("bots.title"),
-  subtitle: (t) => t("bots.browse"),
-  tooltip: (t) => t("bots.browse"),
+  subtitle: (t) => t("bots.title"),
+  tooltip: (t) => t("bots.title"),
   icon: ThemedBot,
 } satisfies PanelPresentation;
 

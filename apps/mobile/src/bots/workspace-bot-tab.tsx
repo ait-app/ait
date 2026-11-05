@@ -1,12 +1,13 @@
 import React from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
+import type { BotView } from "@ait/protocol/bot/types";
 import { Button } from "@/components/ui/button";
-import { BotLoadingSpinner } from "./loading";
 import { canManageBackgroundTasks } from "@/hosts/background-task-access";
-import { BotForm } from "./bot-form";
 import { BotChat } from "./bot-chat";
 import { BotSettings } from "./bot-settings";
+import { BotSetup } from "./bot-setup";
+import { BotLoadingSpinner } from "./loading";
 import { useWorkspaceBot } from "./queries";
 import { botStyles as styles } from "./styles";
 
@@ -21,11 +22,10 @@ export interface WorkspaceBotTabProps {
 }
 
 export function WorkspaceBotTab(props: WorkspaceBotTabProps) {
-  const { serverId, workspaceId, cwd, view, interactive, onChat, onSettings } = props;
+  const { serverId, workspaceId, view, interactive, onChat, onSettings } = props;
   const { t } = useTranslation();
-  const readOnly = !canManageBackgroundTasks(serverId);
   const detail = useWorkspaceBot(serverId, workspaceId, interactive);
-  const bot = detail.data ?? undefined;
+  const bot = detail.data;
   return (
     <View style={styles.root} testID="workspace-bot-tab">
       <View style={styles.toolbar}>
@@ -42,33 +42,28 @@ export function WorkspaceBotTab(props: WorkspaceBotTabProps) {
             >
               {t("bots.chat")}
             </Button>
-            {!readOnly ? (
-              <Button
-                variant={view === "settings" ? "outline" : "ghost"}
-                size="sm"
-                onPress={onSettings}
-                testID="bot-show-settings"
-              >
-                {t("bots.settings")}
-              </Button>
-            ) : null}
+            <Button
+              variant={view === "settings" ? "outline" : "ghost"}
+              size="sm"
+              onPress={onSettings}
+              testID="bot-show-settings"
+            >
+              {t("bots.settings")}
+            </Button>
           </>
         ) : null}
       </View>
       {bot && view !== "settings" ? (
-        <BotChat key={bot.id} serverId={serverId} bot={bot} interactive={interactive} />
+        <BotChat
+          key={bot.builtinChannelId}
+          serverId={serverId}
+          workspaceId={workspaceId}
+          bot={bot}
+          interactive={interactive}
+        />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
-          {!bot && !detail.isPending && !detail.error && !readOnly ? (
-            <BotForm
-              key={`${serverId}:${workspaceId}`}
-              serverId={serverId}
-              workspaceId={workspaceId}
-              cwd={cwd}
-              interactive={interactive}
-              onSaved={onChat}
-            />
-          ) : null}
+          <WorkspaceBotBody {...props} bot={bot} />
           {detail.isPending ? <BotLoadingSpinner /> : null}
           {detail.error ? (
             <View style={styles.card}>
@@ -83,20 +78,44 @@ export function WorkspaceBotTab(props: WorkspaceBotTabProps) {
               </Button>
             </View>
           ) : null}
-          {bot && view === "settings" ? (
-            <BotSettings
-              key={bot.id}
-              serverId={serverId}
-              workspaceId={workspaceId}
-              cwd={cwd}
-              bot={bot}
-              interactive={interactive}
-              onSaved={onChat}
-              onArchived={onChat}
-            />
-          ) : null}
         </ScrollView>
       )}
     </View>
+  );
+}
+
+/** Settings of a configured Bot, or the setup wizard once the host reports no Bot. */
+function WorkspaceBotBody({
+  serverId,
+  workspaceId,
+  cwd,
+  interactive,
+  onChat,
+  bot,
+}: WorkspaceBotTabProps & { bot: BotView | null | undefined }) {
+  const { t } = useTranslation();
+  if (bot)
+    return (
+      <BotSettings
+        key={bot.builtinChannelId}
+        serverId={serverId}
+        workspaceId={workspaceId}
+        cwd={cwd}
+        bot={bot}
+        interactive={interactive}
+        onRemoved={onChat}
+      />
+    );
+  if (bot === undefined) return null;
+  if (!canManageBackgroundTasks(serverId))
+    return <Text style={styles.hint}>{t("bots.notConfigured")}</Text>;
+  return (
+    <BotSetup
+      serverId={serverId}
+      workspaceId={workspaceId}
+      cwd={cwd}
+      interactive={interactive}
+      onConfigured={onChat}
+    />
   );
 }
