@@ -186,6 +186,13 @@ export function BotSetup({
       return bot;
     },
     onSuccess: (bot) => {
+      // A new Bot has a new conversation and channels; drop what a removed Bot left cached.
+      for (const key of [
+        botKeys.conversation(serverId, workspaceId),
+        botKeys.memory(serverId, workspaceId),
+        botKeys.channels(serverId, workspaceId),
+      ])
+        queryClient.removeQueries({ queryKey: key });
       queryClient.setQueryData(botKeys.bot(serverId, workspaceId), bot);
       onConfigured(bot);
     },

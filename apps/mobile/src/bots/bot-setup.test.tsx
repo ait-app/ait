@@ -115,6 +115,21 @@ it("setup_sends_clear_memory_only_when_checked", async () => {
   expect(secondParams).not.toHaveProperty("botId");
 });
 
+it("setup_drops_conversation_memory_and_channels_cached_for_a_removed_bot", async () => {
+  botRequest.mockResolvedValue({ bot, created: true });
+  const { queryClient, onConfigured } = renderSetup();
+  const stale = [
+    botKeys.conversation("server", "workspace"),
+    botKeys.memory("server", "workspace"),
+    botKeys.channels("server", "workspace"),
+  ];
+  for (const key of stale) queryClient.setQueryData(key, { stale: true });
+
+  fireEvent.click(screen.getByTestId("bot-setup-submit"));
+  await waitFor(() => expect(onConfigured).toHaveBeenCalledWith(bot));
+  for (const key of stale) expect(queryClient.getQueryData(key)).toBeUndefined();
+});
+
 it("defaults to the first ready provider and leaves clear memory unchecked", () => {
   renderSetup();
   expect((screen.getByTestId("bot-provider") as HTMLSelectElement).value).toBe("claude");
