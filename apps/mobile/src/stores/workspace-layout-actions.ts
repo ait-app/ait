@@ -381,7 +381,11 @@ function normalizeWorkspaceTab(value: unknown): WorkspaceTab | null {
   if (!persistedTabId && target.kind === "new_tab") {
     return null;
   }
-  const tabId = persistedTabId ?? buildDeterministicWorkspaceTabId(target);
+  // Bot tabs are per-workspace singletons; legacy ids (bot_<id>, bot_list) collapse to "bot".
+  const tabId =
+    target.kind === "bot"
+      ? buildDeterministicWorkspaceTabId(target)
+      : (persistedTabId ?? buildDeterministicWorkspaceTabId(target));
   if (!tabId) {
     return null;
   }
@@ -686,10 +690,16 @@ function normalizePaneNode(rawPane: SplitPaneInternal | undefined): SplitNodeInt
           target: { kind: "draft", draftId: tabId } as WorkspaceTabTarget,
           createdAt: Date.now(),
         }));
+  const rawFocusedTabId = trimNonEmpty(rawPane?.focusedTabId) ?? null;
+  const focusedBotTab = Array.isArray(rawPane?.tabs)
+    ? (rawPane.tabs as WorkspaceTab[]).find(
+        (tab) => tab?.tabId === rawFocusedTabId && tab?.target?.kind === "bot",
+      )
+    : undefined;
   return createPaneNode({
     id: paneId,
     tabs: mergedTabs,
-    focusedTabId: trimNonEmpty(rawPane?.focusedTabId) ?? null,
+    focusedTabId: focusedBotTab ? "bot" : rawFocusedTabId,
     hidden: rawPane?.hidden === true,
   });
 }

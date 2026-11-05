@@ -22,6 +22,7 @@ import {
   type SplitNode,
   type SplitPane,
 } from "@/stores/workspace-layout-store";
+import { openTabInLayoutFocused } from "@/stores/workspace-layout-actions";
 import { createViewedTimelineSync } from "@/timeline/viewed-timeline-sync";
 import { buildWorkspaceTabPersistenceKey, type WorkspaceTab } from "@/workspace-tabs/model";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -5149,5 +5150,44 @@ describe("compact workspace sheet", () => {
     stop();
 
     expect(received).toEqual([[], ["child"], []]);
+  });
+});
+
+describe("legacy Bot tab restore", () => {
+  const legacyLayout = {
+    root: {
+      kind: "pane",
+      pane: {
+        id: "main",
+        tabIds: ["bot_list", "bot_b1", "bot_b2"],
+        focusedTabId: "bot_b2",
+        tabs: [
+          { tabId: "bot_list", target: { kind: "bot", view: "list" }, createdAt: 1 },
+          { tabId: "bot_b1", target: { kind: "bot", botId: "b1" }, createdAt: 2 },
+          { tabId: "bot_b2", target: { kind: "bot", botId: "b2", view: "settings" }, createdAt: 3 },
+        ],
+      },
+    },
+    focusedPaneId: "main",
+  };
+
+  it("collapses legacy bot tabs to one tab with the canonical id", () => {
+    const layout = normalizeLayout(legacyLayout);
+    const tabs = collectAllTabs(layout.root);
+    expect(tabs.map((tab) => [tab.tabId, tab.target])).toEqual([["bot", { kind: "bot" }]]);
+    expect(findPaneById(layout.root, "main")?.focusedTabId).toBe("bot");
+  });
+
+  it("reuses the surviving tab when the launcher opens the Bot tab again", () => {
+    const layout = normalizeLayout(legacyLayout);
+    const result = openTabInLayoutFocused({
+      layout,
+      target: { kind: "bot" },
+      now: 10,
+      placement: FOCUSED_PANE_PLACEMENT,
+      explorerSidebarPaneId: null,
+    });
+    expect(result?.tabId).toBe("bot");
+    expect(collectAllTabs(result!.layout.root)).toHaveLength(1);
   });
 });
