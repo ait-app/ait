@@ -6,7 +6,6 @@ import { withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import invariant from "tiny-invariant";
 import { botStyles } from "@/bots/styles";
-import { useBotDetail } from "@/bots/queries";
 import { useAppSettings } from "@/hooks/use-settings";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import { definePanel, type PanelPresentation } from "@/panels/panel-registry";
@@ -21,8 +20,8 @@ const WorkspaceBotTab = lazy(() =>
 const ThemedBot = withUnistyles(Bot);
 const presentation = {
   label: (t) => t("bots.title"),
-  subtitle: (t) => t("bots.browse"),
-  tooltip: (t) => t("bots.browse"),
+  subtitle: (t) => t("bots.title"),
+  tooltip: (t) => t("bots.title"),
   icon: ThemedBot,
 } satisfies PanelPresentation;
 
@@ -65,13 +64,10 @@ function BotPanel() {
         serverId={serverId}
         workspaceId={workspaceId}
         cwd={cwd}
-        botId={target.botId}
         view={target.view}
         interactive={isInteractive}
-        onBrowse={() => retargetCurrentTab({ kind: "bot", view: "list" })}
-        onCreate={() => retargetCurrentTab({ kind: "bot", view: "create" })}
-        onOpen={(botId) => retargetCurrentTab({ kind: "bot", botId })}
-        onSettings={(botId) => retargetCurrentTab({ kind: "bot", botId, view: "settings" })}
+        onChat={() => retargetCurrentTab({ kind: "bot" })}
+        onSettings={() => retargetCurrentTab({ kind: "bot", view: "settings" })}
       />
     </Suspense>
   );
@@ -80,13 +76,9 @@ function BotPanel() {
 export const botPanelRegistration = definePanel("bot", {
   component: BotPanel,
   presentation,
-  useDescriptor(target, context) {
+  useDescriptor() {
     const { t } = useTranslation();
-    const { data } = useBotDetail(context.serverId, target.botId, false);
-    const label =
-      data?.workspaceId === context.workspaceId
-        ? data.name
-        : t(target.view === "create" ? "bots.new" : "bots.title");
+    const label = t("bots.title");
     return {
       label,
       subtitle: label,

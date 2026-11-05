@@ -225,6 +225,12 @@ describe("Rust v1 connection", () => {
       await client.close();
     }
   });
+  it("does not enable Bot features for the v1-only capability", () => {
+    const h = harness();
+    h.ready(undefined, ["workspace-bots-v1"]);
+    const info = h.received.find((message) => object(message).type === "status");
+    expect(object(object(info).payload).features).toMatchObject({ workspaceBots: false });
+  });
   it.each(["workspace", "project"] as const)(
     "keeps %s guests on scoped directories through hello and later server-info updates",
     (scope) => {
@@ -341,20 +347,20 @@ describe("Rust v1 connection", () => {
   });
   it("negotiates Bot capabilities and maps their requests and results on the execution channel", () => {
     const h = harness();
-    h.ready(undefined, ["workspace-bots-v1"]);
+    h.ready(undefined, ["workspace-bots-v2"]);
     const info = h.received.find((message) => object(message).type === "status");
     expect(object(object(info).payload).features).toMatchObject({ workspaceBots: true });
-    h.send({ type: "bot.list.request", requestId: "bot-list", workspaceId: "workspace-a" });
+    h.send({ type: "bot.get.request", requestId: "bot-list", workspaceId: "workspace-a" });
     expect(h.last(3)).toMatchObject({
       type: "request",
-      method: "bot.list.request",
+      method: "bot.get.request",
       request_id: "bot-list",
       params: { workspaceId: "workspace-a" },
     });
-    h.sockets[3].message({ type: "response", request_id: "bot-list", result: { bots: [] } });
+    h.sockets[3].message({ type: "response", request_id: "bot-list", result: { bot: null } });
     expect(h.received.at(-1)).toEqual({
-      type: "bot.list.response",
-      payload: { requestId: "bot-list", bots: [] },
+      type: "bot.get.response",
+      payload: { requestId: "bot-list", bot: null },
     });
   });
   it.each([

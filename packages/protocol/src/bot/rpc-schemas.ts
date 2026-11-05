@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
-  BotSchema,
-  BotSummarySchema,
+  BotViewSchema,
   BotExecutionSchema,
   BotChannelSchema,
   BotChannelConfigSchema,
@@ -9,46 +8,52 @@ import {
   BotTurnSchema,
 } from "./types.js";
 
+const WorkspaceIdSchema = z.string().trim().min(1);
+
 export const BOT_REQUEST_SCHEMAS = [
   z.strictObject({
-    type: z.literal("bot.create.request"),
+    type: z.literal("bot.get.request"),
     requestId: z.string(),
-    botId: z.guid(),
-    workspaceId: z.string().trim().min(1),
-    name: z.string().trim().min(1),
-    instructions: z.string().optional(),
-    execution: BotExecutionSchema,
+    workspaceId: WorkspaceIdSchema,
   }),
   z.strictObject({
-    type: z.literal("bot.list.request"),
+    type: z.literal("bot.setup.request"),
     requestId: z.string(),
-    workspaceId: z.string().trim().min(1),
+    workspaceId: WorkspaceIdSchema,
+    execution: BotExecutionSchema,
+    clearMemory: z.boolean().optional(),
   }),
-  z.strictObject({ type: z.literal("bot.get.request"), requestId: z.string(), botId: z.guid() }),
   z.strictObject({
     type: z.literal("bot.update.request"),
     requestId: z.string(),
-    botId: z.guid(),
-    name: z.string().trim().min(1).optional(),
-    instructions: z.string().optional(),
-    execution: BotExecutionSchema.optional(),
-    enabled: z.boolean().optional(),
+    workspaceId: WorkspaceIdSchema,
+    execution: BotExecutionSchema,
   }),
   z.strictObject({
-    type: z.literal("bot.archive.request"),
+    type: z.literal("bot.pause.request"),
     requestId: z.string(),
-    botId: z.guid(),
+    workspaceId: WorkspaceIdSchema,
+  }),
+  z.strictObject({
+    type: z.literal("bot.resume.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+  }),
+  z.strictObject({
+    type: z.literal("bot.remove.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
   }),
   z.strictObject({
     type: z.literal("bot.channel.list.request"),
     requestId: z.string(),
-    botId: z.guid(),
+    workspaceId: WorkspaceIdSchema,
   }),
   z.strictObject({ type: z.literal("bot.channel.types.request"), requestId: z.string() }),
   z.strictObject({
     type: z.literal("bot.channel.create.request"),
     requestId: z.string(),
-    botId: z.guid(),
+    workspaceId: WorkspaceIdSchema,
     channelId: z.guid(),
     config: BotChannelConfigSchema,
     enabled: z.boolean().optional(),
@@ -56,7 +61,7 @@ export const BOT_REQUEST_SCHEMAS = [
   z.strictObject({
     type: z.literal("bot.channel.update.request"),
     requestId: z.string(),
-    botId: z.guid(),
+    workspaceId: WorkspaceIdSchema,
     channelId: z.guid(),
     config: BotChannelConfigSchema.optional(),
     enabled: z.boolean(),
@@ -64,35 +69,35 @@ export const BOT_REQUEST_SCHEMAS = [
   z.strictObject({
     type: z.literal("bot.channel.delete.request"),
     requestId: z.string(),
-    botId: z.guid(),
+    workspaceId: WorkspaceIdSchema,
     channelId: z.guid(),
   }),
   z.strictObject({
     type: z.literal("bot.channel.status.request"),
     requestId: z.string(),
-    botId: z.guid(),
+    workspaceId: WorkspaceIdSchema,
     channelId: z.guid(),
   }),
   z.strictObject({
     type: z.literal("bot.conversation.list.request"),
     requestId: z.string(),
-    botId: z.guid(),
+    workspaceId: WorkspaceIdSchema,
   }),
   z.strictObject({
     type: z.literal("bot.conversation.open.request"),
     requestId: z.string(),
-    botId: z.guid(),
+    workspaceId: WorkspaceIdSchema,
   }),
   z.strictObject({
     type: z.literal("bot.conversation.reset.request"),
     requestId: z.string(),
-    botId: z.guid(),
+    workspaceId: WorkspaceIdSchema,
     conversationId: z.guid(),
   }),
   z.strictObject({
     type: z.literal("bot.message.send.request"),
     requestId: z.string(),
-    botId: z.guid(),
+    workspaceId: WorkspaceIdSchema,
     conversationId: z.guid(),
     messageId: z.string().min(1),
     text: z.string().min(1),
@@ -100,7 +105,7 @@ export const BOT_REQUEST_SCHEMAS = [
   z.strictObject({
     type: z.literal("bot.history.get.request"),
     requestId: z.string(),
-    botId: z.guid(),
+    workspaceId: WorkspaceIdSchema,
     conversationId: z.guid(),
     afterSequence: z.number().int().nonnegative().optional(),
     limit: z.number().int().min(1).max(50).optional(),
@@ -108,32 +113,24 @@ export const BOT_REQUEST_SCHEMAS = [
   z.strictObject({
     type: z.literal("bot.turn.get.request"),
     requestId: z.string(),
-    botId: z.guid(),
+    workspaceId: WorkspaceIdSchema,
     turnId: z.guid(),
   }),
   z.strictObject({
     type: z.literal("bot.turn.cancel.request"),
     requestId: z.string(),
-    botId: z.guid(),
+    workspaceId: WorkspaceIdSchema,
     turnId: z.guid(),
-  }),
-  z.strictObject({
-    type: z.literal("bot.permission.resolve.request"),
-    requestId: z.string(),
-    botId: z.guid(),
-    turnId: z.guid(),
-    permissionId: z.string().min(1),
-    response: z.unknown(),
   }),
   z.strictObject({
     type: z.literal("bot.memory.get.request"),
     requestId: z.string(),
-    botId: z.guid(),
+    workspaceId: WorkspaceIdSchema,
   }),
   z.strictObject({
     type: z.literal("bot.memory.update.request"),
     requestId: z.string(),
-    botId: z.guid(),
+    workspaceId: WorkspaceIdSchema,
     text: z.string(),
     expected: z.string(),
   }),
@@ -141,24 +138,32 @@ export const BOT_REQUEST_SCHEMAS = [
 
 export const BOT_RESPONSE_SCHEMAS = [
   z.object({
-    type: z.literal("bot.create.response"),
-    payload: z.object({ requestId: z.string(), bot: BotSchema, created: z.boolean() }),
-  }),
-  z.object({
-    type: z.literal("bot.list.response"),
-    payload: z.object({ requestId: z.string(), bots: z.array(BotSummarySchema) }),
-  }),
-  z.object({
     type: z.literal("bot.get.response"),
-    payload: z.object({ requestId: z.string(), bot: BotSchema }),
+    payload: z.object({ requestId: z.string(), bot: BotViewSchema.nullable() }),
+  }),
+  z.object({
+    type: z.literal("bot.setup.response"),
+    payload: z.object({ requestId: z.string(), bot: BotViewSchema, created: z.boolean() }),
   }),
   z.object({
     type: z.literal("bot.update.response"),
-    payload: z.object({ requestId: z.string(), bot: BotSchema }),
+    payload: z.object({
+      requestId: z.string(),
+      bot: BotViewSchema,
+      configurationAppliesToNewSessions: z.boolean(),
+    }),
   }),
   z.object({
-    type: z.literal("bot.archive.response"),
-    payload: z.object({ requestId: z.string(), bot: BotSchema }),
+    type: z.literal("bot.pause.response"),
+    payload: z.object({ requestId: z.string(), bot: BotViewSchema }),
+  }),
+  z.object({
+    type: z.literal("bot.resume.response"),
+    payload: z.object({ requestId: z.string(), bot: BotViewSchema }),
+  }),
+  z.object({
+    type: z.literal("bot.remove.response"),
+    payload: z.object({ requestId: z.string(), bot: BotViewSchema }),
   }),
   z.object({
     type: z.literal("bot.channel.list.response"),
@@ -232,10 +237,6 @@ export const BOT_RESPONSE_SCHEMAS = [
       z.object({ requestId: z.string(), turn: BotTurnSchema }),
       z.object({ requestId: z.string(), cancellationRequested: z.boolean() }),
     ]),
-  }),
-  z.object({
-    type: z.literal("bot.permission.resolve.response"),
-    payload: z.object({ requestId: z.string(), resolved: z.boolean() }),
   }),
   z.object({
     type: z.literal("bot.memory.get.response"),

@@ -1,9 +1,9 @@
 # ADR-213：单 Workspace 管理者 Bot 与 v2 接口
 
-- 状态：接受（阶段 1 已实现，待合并）
+- 状态：接受（阶段 1 已随 0.1.30 发布；阶段 2 客户端见 ADR-214）
 - 日期：2026-11-05
 - 关系：取代 [ADR-139](adr-139-workspace-bots-and-owned-channels.md) 中多 Bot、人格和 `botId` 寻址（第 1、2、5 条相关部分）以及记忆位置（第 7 条）；
-  修订 [ADR-141](../clients/adr-141-experimental-workspace-bots.md) 的标签页身份与能力名（客户端在阶段 2 落地）；
+  修订 [ADR-141](../clients/adr-141-experimental-workspace-bots.md) 的标签页身份与能力名（客户端见 [ADR-214](../clients/adr-214-workspace-bot-tab-v2.md)）；
   取代 [ADR-145](adr-145-bot-permission-denial.md) 第 3 条（删除 `bot.permission.resolve`），其第 1、2、4、5 条的自动拒绝规则继续有效。
 - 计划：[Workspace Bot 管理者重设计](../../plans/workspace-bot-manager.md)、[阶段 1 计划](../../plans/workspace-bot-manager-phase-1.md)。
 
@@ -42,8 +42,8 @@
 ## 后果
 
 - 这是不兼容变更：升级后旧 Bot、Channel、Conversation 与历史全部丢失，需要通过 `bot.setup` 重新配置。
-- 当前移动端 Bot 标签页要求 `workspace-bots-v1`，在阶段 2 的客户端落地前会显示升级提示。
-- 阶段 2（客户端标签页与设置向导）、阶段 3（权限与 MCP 工具、Bot 写记忆）、阶段 4（来源标记与通知）尚未实现。
+- 客户端 Bot 标签页已按 `workspace-bots-v2` 重写，见 [ADR-214](../clients/adr-214-workspace-bot-tab-v2.md)；旧 Host 只提供 v1 时客户端显示升级提示。
+- 阶段 2（客户端标签页与设置向导）已实现；阶段 3（权限与 MCP 工具、Bot 写记忆）、阶段 4（来源标记与通知）尚未实现。
   在此之前 [ADR-145](adr-145-bot-permission-denial.md) 的权限请求自动拒绝仍然适用。
 - 记忆脱离 Workspace 目录后不再随 worktree 删除，也不会进入版本控制；其生命周期由移除与归档规则管理。
 - 退役 Bot 的历史留在磁盘上但不可通过接口访问；清理这些历史或提供只读访问留待后续工作。

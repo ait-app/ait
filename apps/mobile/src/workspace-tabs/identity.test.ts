@@ -4,6 +4,7 @@ import {
   normalizeWorkspaceTabTarget,
   workspaceTabTargetsEqual,
 } from "./identity";
+import { getPanelManifest, panelResourceKey } from "@/panels/panel-manifest";
 
 describe("New tab identity", () => {
   it("stays outside deterministic target identity", () => {
@@ -219,24 +220,33 @@ it("normalizes and separates schedule list, creation and edit navigation", () =>
 });
 
 describe("Bot tab identity", () => {
-  it("restores list, create and settings without private session identities", () => {
-    expect(normalizeWorkspaceTabTarget({ kind: "bot" })).toEqual({ kind: "bot", view: "list" });
-    expect(normalizeWorkspaceTabTarget({ kind: "bot", view: "create" })).toEqual({
+  it("legacy_bot_targets_normalize_to_singleton", () => {
+    expect(
+      normalizeWorkspaceTabTarget({ kind: "bot", botId: "b1", view: "list" } as never),
+    ).toEqual({ kind: "bot" });
+    expect(normalizeWorkspaceTabTarget({ kind: "bot", view: "create" } as never)).toEqual({
       kind: "bot",
-      view: "create",
+    });
+    expect(normalizeWorkspaceTabTarget({ kind: "bot", botId: "b1" } as never)).toEqual({
+      kind: "bot",
     });
     expect(
-      normalizeWorkspaceTabTarget({ kind: "bot", botId: " bot-a ", view: "settings" }),
-    ).toEqual({ kind: "bot", botId: "bot-a", view: "settings" });
-    expect(buildDeterministicWorkspaceTabId({ kind: "bot", botId: "bot-a" })).toBe(
-      buildDeterministicWorkspaceTabId({ kind: "bot", botId: "bot-a", view: "settings" }),
+      normalizeWorkspaceTabTarget({ kind: "bot", botId: "b1", view: "settings" } as never),
+    ).toEqual({ kind: "bot", view: "settings" });
+    expect(getPanelManifest("bot").singleton).toBe(true);
+    expect(getPanelManifest("bot").resourceKey({ kind: "bot", view: "settings" })).toBe("bot");
+    expect(panelResourceKey({ kind: "bot", view: "settings" })).toBe(
+      panelResourceKey({ kind: "bot" }),
     );
-    expect(
-      workspaceTabTargetsEqual(
-        { kind: "bot", botId: "bot-a" },
-        { kind: "bot", botId: "bot-a", view: "settings" },
-      ),
-    ).toBe(false);
-    expect(workspaceTabTargetsEqual({ kind: "bot" }, { kind: "bot", view: "list" })).toBe(true);
+  });
+
+  it("shares one tab id and distinguishes chat from settings", () => {
+    expect(buildDeterministicWorkspaceTabId({ kind: "bot" })).toBe(
+      buildDeterministicWorkspaceTabId({ kind: "bot", view: "settings" }),
+    );
+    expect(workspaceTabTargetsEqual({ kind: "bot" }, { kind: "bot", view: "settings" })).toBe(
+      false,
+    );
+    expect(workspaceTabTargetsEqual({ kind: "bot" }, { kind: "bot" })).toBe(true);
   });
 });

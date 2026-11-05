@@ -31,7 +31,7 @@ describe("Bot receipt history", () => {
           ? { turn: turn(2, "completed") }
           : { turns: [turn(3, "queued")], nextSequence: 3 },
       );
-    const result = await fetchBotHistory({ botRequest }, "bot", "conversation", [
+    const result = await fetchBotHistory({ botRequest }, "ws", "conversation", [
       turn(1, "completed"),
       turn(2, "running"),
     ]);
@@ -41,16 +41,20 @@ describe("Bot receipt history", () => {
       [3, "queued"],
     ]);
     expect(botRequest).toHaveBeenCalledWith("bot.turn.get.request", {
-      botId: "bot",
+      workspaceId: "ws",
       turnId: "turn-2",
     });
     expect(botRequest).toHaveBeenCalledWith("bot.history.get.request", {
-      botId: "bot",
+      workspaceId: "ws",
       conversationId: "conversation",
       afterSequence: 2,
       limit: 50,
     });
     expect(botRequest).toHaveBeenCalledTimes(2);
+    for (const [, params] of botRequest.mock.calls) {
+      expect(params).toHaveProperty("workspaceId", "ws");
+      expect(params).not.toHaveProperty("botId");
+    }
   });
   it("restores history across server pages and stops at the final page", async () => {
     const botRequest = vi
@@ -60,7 +64,7 @@ describe("Bot receipt history", () => {
         nextSequence: 50,
       })
       .mockResolvedValueOnce({ turns: [turn(51, "completed")], nextSequence: 51 });
-    expect(await fetchBotHistory({ botRequest }, "bot", "conversation")).toHaveLength(51);
+    expect(await fetchBotHistory({ botRequest }, "ws", "conversation")).toHaveLength(51);
     expect(botRequest.mock.calls[1][1]).toMatchObject({ afterSequence: 50 });
     expect(botRequest).toHaveBeenCalledTimes(2);
   });

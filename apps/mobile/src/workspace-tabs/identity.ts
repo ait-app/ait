@@ -60,12 +60,8 @@ function normalizeSimpleWorkspaceTabTarget(value: WorkspaceTabTarget): Workspace
     case "pull_request":
       return { kind: value.kind };
     case "bot": {
-      const botId = trimNonEmpty(value.botId);
-      if (botId)
-        return value.view === "settings"
-          ? { kind: "bot", botId, view: "settings" }
-          : { kind: "bot", botId };
-      return { kind: "bot", view: value.view === "create" ? "create" : "list" };
+      // Legacy persisted targets carried botId and list/create views; only settings survives.
+      return value.view === "settings" ? { kind: "bot", view: "settings" } : { kind: "bot" };
     }
     case "schedule": {
       const scheduleId = trimNonEmpty(value.scheduleId);
@@ -169,15 +165,7 @@ function secondaryWorkspaceTabTargetsEqual(
     return true;
   }
   if (left.kind === "bot" && right.kind === "bot") {
-    const view = (target: Extract<WorkspaceTabTarget, { kind: "bot" }>) =>
-      target.botId
-        ? target.view === "settings"
-          ? "settings"
-          : "chat"
-        : target.view === "create"
-          ? "create"
-          : "list";
-    return left.botId === right.botId && view(left) === view(right);
+    return left.view === right.view;
   }
   if (left.kind === "schedule" && right.kind === "schedule") {
     const view = (target: Extract<WorkspaceTabTarget, { kind: "schedule" }>) =>
@@ -256,11 +244,7 @@ export function buildDeterministicWorkspaceTabId(target: WorkspaceTabTarget): st
     return `commit_diff_${target.sha}`;
   }
   if (target.kind === "bot") {
-    return target.botId
-      ? `bot_${target.botId}`
-      : target.view === "create"
-        ? "bot_create"
-        : "bot_list";
+    return "bot";
   }
   if (target.kind === "schedule") {
     return target.scheduleId

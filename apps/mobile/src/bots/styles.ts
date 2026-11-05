@@ -30,4 +30,15 @@ export const botStyles = StyleSheet.create((theme) => ({
   composer: { padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: theme.colors.border },
   messageInput: { minHeight: 70, maxHeight: 180, textAlignVertical: "top" },
   empty: { padding: 24, alignItems: "center", gap: 16 },
+  disabled: { opacity: theme.opacity[50] },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
 }));

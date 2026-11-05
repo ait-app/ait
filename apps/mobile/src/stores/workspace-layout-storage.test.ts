@@ -3,6 +3,8 @@ import { WorkspaceLayoutPersistedStateSchema } from "./workspace-layout-storage"
 
 describe("Bot layout persistence", () => {
   it.each([
+    { kind: "bot" },
+    { kind: "bot", view: "settings" },
     { kind: "bot", view: "list" },
     { kind: "bot", view: "create" },
     { kind: "bot", botId: "bot-a" },

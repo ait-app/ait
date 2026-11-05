@@ -381,7 +381,11 @@ function normalizeWorkspaceTab(value: unknown): WorkspaceTab | null {
   if (!persistedTabId && target.kind === "new_tab") {
     return null;
   }
-  const tabId = persistedTabId ?? buildDeterministicWorkspaceTabId(target);
+  // Bot tabs are per-workspace singletons; legacy ids (bot_<id>, bot_list) collapse to "bot".
+  const tabId =
+    target.kind === "bot"
+      ? buildDeterministicWorkspaceTabId(target)
+      : (persistedTabId ?? buildDeterministicWorkspaceTabId(target));
   if (!tabId) {
     return null;
   }
@@ -686,10 +690,16 @@ function normalizePaneNode(rawPane: SplitPaneInternal | undefined): SplitNodeInt
           target: { kind: "draft", draftId: tabId } as WorkspaceTabTarget,
           createdAt: Date.now(),
         }));
+  const rawFocusedTabId = trimNonEmpty(rawPane?.focusedTabId) ?? null;
+  const focusedBotTab = Array.isArray(rawPane?.tabs)
+    ? (rawPane.tabs as WorkspaceTab[]).find(
+        (tab) => tab?.tabId === rawFocusedTabId && tab?.target?.kind === "bot",
+      )
+    : undefined;
   return createPaneNode({
     id: paneId,
     tabs: mergedTabs,
-    focusedTabId: trimNonEmpty(rawPane?.focusedTabId) ?? null,
+    focusedTabId: focusedBotTab ? "bot" : rawFocusedTabId,
     hidden: rawPane?.hidden === true,
   });
 }
@@ -1021,13 +1031,52 @@ function insertSplitInternal(input: InsertSplitInternalInput): InsertSplitIntern
   };
 }
 
+/**
+ * Keep the first Bot tab in pane order and drop later ones: legacy layouts may hold Bot tabs
+ * in several panes, which all collapse to the singleton id "bot". A pane that loses its
+ * focused tab falls back like any other pane.
+ */
+function keepFirstBotTab(node: SplitNodeInternal, seen = { bot: false }): SplitNodeInternal {
+  if (node.kind === "pane") {
+    const tabs = node.pane.tabs.filter((tab) => {
+      if (tab.target.kind !== "bot") {
+        return true;
+      }
+      const first = !seen.bot;
+      seen.bot = true;
+      return first;
+    });
+    if (tabs.length === node.pane.tabs.length) {
+      return node;
+    }
+    return createPaneNode({
+      id: node.pane.id,
+      tabs,
+      focusedTabId: node.pane.focusedTabId,
+      hidden: node.pane.hidden,
+    });
+  }
+  const children = node.group.children.map((child) => keepFirstBotTab(child, seen));
+  if (children.every((child, index) => child === node.group.children[index])) {
+    return node;
+  }
+  return createGroupNode({
+    id: node.group.id,
+    direction: node.group.direction,
+    children,
+    sizes: node.group.sizes,
+  });
+}
+
 export function normalizeLayout(layout: unknown): WorkspaceLayout {
   if (!layout || typeof layout !== "object") {
     return createDefaultLayout();
   }
 
   const rawLayout = layout as WorkspaceLayout;
-  const root = normalizeNode(rawLayout.root) ?? asInternalNode(createDefaultLayout().root);
+  const root = keepFirstBotTab(
+    normalizeNode(rawLayout.root) ?? asInternalNode(createDefaultLayout().root),
+  );
   const focusedPaneId =
     rawLayout.focusedPaneId === null ? null : trimNonEmpty(rawLayout.focusedPaneId);
   const resolvedFocusedPaneId =
