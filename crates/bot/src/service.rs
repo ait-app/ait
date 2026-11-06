@@ -68,7 +68,6 @@ enum Operation {
     Progress(BotTurnId, TurnStatus, Option<String>, Option<String>),
     Finished(ConversationId),
     Rotate(ConversationId, BotTurnId),
-    InstructionsDelivered(ConversationId, u64, String),
     DeliveryNext(ChannelId),
     Delivery(BotTurnId, DeliveryStatus),
     Retire(Vec<String>),
@@ -254,21 +253,6 @@ impl Bots {
     ) -> Result<Conversation, ErrorCode> {
         crate::protocol::decode(self.send(Operation::Rotate(conversation, turn)).await?)
     }
-    /// Persist that the instructions with `digest` reached `generation`'s native session.
-    pub(crate) async fn instructions_delivered(
-        &self,
-        conversation: ConversationId,
-        generation: u64,
-        digest: String,
-    ) -> Result<(), ErrorCode> {
-        self.send(Operation::InstructionsDelivered(
-            conversation,
-            generation,
-            digest,
-        ))
-        .await
-        .map(|_| ())
-    }
     pub(crate) async fn finished(&self, conversation: ConversationId) -> Result<(), ErrorCode> {
         self.send(Operation::Finished(conversation))
             .await
@@ -415,9 +399,6 @@ fn apply(
             Ok(Value::Null)
         }
         Operation::Rotate(conversation, turn) => state.rotate(conversation, turn),
-        Operation::InstructionsDelivered(conversation, generation, digest) => state
-            .instructions_delivered(conversation, generation, digest)
-            .map(|()| Value::Null),
         Operation::DeliveryNext(channel) => {
             let pending = state.pending_delivery(channel)?;
             if let Some((turn, _)) = &pending {

@@ -345,7 +345,7 @@ fn sent_texts(fixture: &Fixture) -> Vec<String> {
 }
 
 #[tokio::test]
-async fn turn_prefix_instructions_are_sent_once_per_digest() {
+async fn turn_prefix_instructions_are_sent_on_every_turn() {
     let fixture = Fixture::new();
     let bots = fixture.bots();
     let conversation = open(&bots, WORKSPACE).await;
@@ -354,8 +354,6 @@ async fn turn_prefix_instructions_are_sent_once_per_digest() {
         session(false, "turn_prefix"),
         session(false, "turn_prefix"),
         session(false, "turn_prefix"),
-        session(false, "turn_prefix"),
-        session(true, "turn_prefix"),
         session(true, "system_prompt"),
     ]);
 
@@ -375,16 +373,14 @@ async fn turn_prefix_instructions_are_sent_once_per_digest() {
     reset(&bots, &conversation).await;
     settle(&bots, &conversation, "fourth", "completed").await;
     settle(&bots, &conversation, "fifth", "completed").await;
-    settle(&bots, &conversation, "sixth", "completed").await;
-    settle(&bots, &conversation, "seventh", "completed").await;
 
     let sent = sent_texts(&fixture);
-    assert_eq!(sent.len(), 7);
+    assert_eq!(sent.len(), 5);
     for (text, user) in [
         (&sent[0], "first"),
+        (&sent[1], "second"),
         (&sent[2], "third"),
         (&sent[3], "fourth"),
-        (&sent[5], "sixth"),
     ] {
         assert!(text.starts_with(PREFIX), "{text}");
         assert!(
@@ -392,11 +388,9 @@ async fn turn_prefix_instructions_are_sent_once_per_digest() {
             "{text}"
         );
     }
-    assert!(sent[0].contains("(no saved preferences)"));
+    assert!(sent[1].contains("(no saved preferences)"));
     assert!(sent[2].contains("durable knowledge"));
-    assert_eq!(sent[1], "second");
     assert_eq!(sent[4], "fifth");
-    assert_eq!(sent[6], "seventh");
     bots.shutdown().await.unwrap();
 }
 

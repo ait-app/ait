@@ -48,10 +48,9 @@ async fn perform(
     let Some(created) = prepare(bots, executor, run).await? else {
         return Ok(());
     };
-    let digest = crate::state::sha256_hex(&run.instructions);
-    let prefixed = created.instruction_delivery == InstructionDelivery::TurnPrefix
-        && (created.created || run.conversation.instructions_digest.as_ref() != Some(&digest));
-    let text = if prefixed {
+    // Without an updatable system prompt the instructions ride on every input: a resumed native
+    // session may not retain an earlier prefix, so no delivery is assumed.
+    let text = if created.instruction_delivery == InstructionDelivery::TurnPrefix {
         crate::instructions::prefix(&run.instructions, &run.turn.text)
     } else {
         run.turn.text.clone()
@@ -67,10 +66,6 @@ async fn perform(
     tokio::select! {
         () = run.cancel.cancelled() => return cancel(bots, executor, run).await,
         result = send => { result?; }
-    }
-    if prefixed {
-        bots.instructions_delivered(run.conversation.id, run.conversation.generation, digest)
-            .await?;
     }
     bots.progress(run.turn.id, TurnStatus::Running, None, None)
         .await?;

@@ -175,8 +175,9 @@ pub struct Conversation {
     pub execution: ExecutionConfig,
     /// Next ordered input sequence; gaps after failed persistence are permitted.
     pub next_sequence: u64,
-    /// SHA-256 hex digest of the instructions last prefixed to an input of this generation,
-    /// for providers whose instructions are delivered as a turn prefix.
+    /// Unused: earlier builds recorded the digest of the instructions last prefixed to an input.
+    /// Instructions delivered as a turn prefix now ride on every input, so nothing reads or
+    /// writes this; it remains so conversations stored by those builds still load.
     #[serde(default)]
     pub instructions_digest: Option<String>,
 }

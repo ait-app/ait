@@ -45,13 +45,14 @@ const FENCE_CLOSE: &str = "</workspace-memory>";
 
 /// Composes the full system instructions from the workspace memory and the Bot's permissions.
 ///
-/// The memory is fenced between `<workspace-memory>` tags; a closing tag inside it is escaped so
-/// the memory cannot end the fence early.
+/// The memory is fenced between `<workspace-memory>` tags. Every `</` inside it is escaped to
+/// `<\/`, so no closing tag in any spelling can end this fence or the `<ait-bot-instructions>`
+/// wrapper added by [`prefix`].
 pub(crate) fn compose(memory: &str, permissions: &BotPermissions) -> String {
     let memory = if memory.trim().is_empty() {
         NO_PREFERENCES.to_owned()
     } else {
-        memory.replace(FENCE_CLOSE, "<\\/workspace-memory>")
+        memory.replace("</", "<\\/")
     };
     let mut sections = vec![MANAGER_ROLE, WORKFLOW];
     if permissions.groups.contains(&ToolGroup::Schedules) {

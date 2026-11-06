@@ -170,3 +170,25 @@ fn recorded_worktree_workspaces_are_bounded_and_persisted() {
         64
     );
 }
+
+#[test]
+fn legacy_mode_is_normalized_on_load_and_identical_setup_is_idempotent() {
+    let fixture = Fixture::new();
+    let mut request = setup(WORKSPACE);
+    request["execution"]["provider"] = json!("codex");
+    fixture
+        .state()
+        .execute("bot.setup.request", request.clone())
+        .unwrap();
+    let mut legacy = fixture.store.catalog().unwrap();
+    legacy.bots[0].execution.mode_id = Some("full-access".into());
+    fixture.store.save_catalog(&legacy).unwrap();
+
+    let mut state = fixture.state();
+
+    assert_eq!(state.catalog.bots[0].execution.mode_id, None);
+    assert_eq!(
+        state.execute("bot.setup.request", request).unwrap()["created"],
+        false
+    );
+}

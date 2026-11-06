@@ -218,24 +218,6 @@ impl State {
         }
         serde_json::to_value(renewed).map_err(|_| ErrorCode::BotIo)
     }
-    /// Record that the instructions with `digest` reached `generation`'s native session.
-    pub(crate) fn instructions_delivered(
-        &mut self,
-        conversation: ConversationId,
-        generation: u64,
-        digest: String,
-    ) -> Result<(), ErrorCode> {
-        let Some(current) = self
-            .conversations
-            .get(&conversation)
-            .filter(|current| current.generation == generation)
-        else {
-            return Ok(());
-        };
-        let mut next = current.clone();
-        next.instructions_digest = Some(digest);
-        self.save_conversation(next)
-    }
     fn queued(&self, conversation: ConversationId) -> Vec<BotTurnId> {
         self.pending
             .range((conversation, 0)..=(conversation, u64::MAX))
@@ -258,7 +240,6 @@ impl State {
             .checked_add(1)
             .ok_or(ErrorCode::ResourceExhausted)?;
         conversation.execution = self.bot(conversation.bot_id)?.execution.clone();
-        conversation.instructions_digest = None;
         self.save_conversation(conversation.clone())
     }
     pub(super) fn history(&self, request: &History) -> Result<Value, ErrorCode> {

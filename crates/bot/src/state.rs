@@ -51,8 +51,13 @@ impl State {
         projects: Arc<dyn ProjectRegistry>,
         scopes: Arc<Scopes>,
     ) -> Result<Self, ErrorCode> {
-        let catalog = store.catalog().map_err(|_| ErrorCode::BotIo)?;
+        let mut catalog = store.catalog().map_err(|_| ErrorCode::BotIo)?;
         catalog::validate(&catalog)?;
+        // Bots run in their provider's read-only mode; a mode stored by an earlier build is
+        // dropped here and persisted with the next catalog save.
+        for bot in &mut catalog.bots {
+            bot.execution.mode_id = None;
+        }
         scopes.publish(&catalog);
         let mut state = Self {
             store,
