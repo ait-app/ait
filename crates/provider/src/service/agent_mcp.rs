@@ -8,6 +8,8 @@ use model::storage::daemon_config::DaemonConfigStore;
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::json;
 
+use crate::ports::mcp_scope::{McpAccess, McpScopes, McpSubject};
+
 /// Label carrying the share identity of an Agent created by a guest session.
 ///
 /// Such Agents never receive the daemon MCP, which reaches every Workspace on this Host.
@@ -22,14 +24,27 @@ pub struct AgentMcp {
     url: String,
     token: SecretString,
     config: Arc<dyn DaemonConfigStore>,
+    scopes: Option<Arc<dyn McpScopes>>,
 }
 
-/// Connection captured when opening a native session; never serialized or persisted.
-#[derive(Debug, Clone)]
-pub(crate) struct Binding {
-    url: String,
-    token: SecretString,
-    agent_id: String,
+/// Session-lifetime MCP decision, re-applied to every effective config (launch, inputs, config
+/// updates); never serialized or persisted.
+#[derive(Debug)]
+pub(crate) enum Binding {
+    /// Shared token; an existing user `ait` entry wins (ADR-202).
+    Shared {
+        url: String,
+        token: SecretString,
+        agent_id: String,
+    },
+    /// Scoped credential; always replaces any `ait` entry.
+    Scoped {
+        url: String,
+        token: SecretString,
+        agent_id: String,
+    },
+    /// No daemon MCP; always removes any `ait` entry.
+    Strip,
 }
 
 impl AgentMcp {
@@ -50,50 +65,112 @@ impl AgentMcp {
             url: format!("http://{}/mcp/agents", SocketAddr::new(ip, address.port())),
             token,
             config,
+            scopes: None,
         }
     }
 
+    /// Issue Bot-session and subtree credentials from `scopes` when sessions open.
+    ///
+    /// Without scopes every session uses the shared token.
+    #[must_use]
+    pub fn with_scopes(mut self, scopes: Arc<dyn McpScopes>) -> Self {
+        self.scopes = Some(scopes);
+        self
+    }
+
+    /// Decide the session's binding from the current policy and the subject's credential.
+    ///
+    /// `None` keeps the configuration unchanged: a shared session whose policy disables
+    /// injection or whose user configured an `ait` entry. A scoped credential that the policy
+    /// does not inject is revoked at once and the session is stripped instead.
     pub(crate) fn bind(
         &self,
-        agent_id: &str,
+        subject: &McpSubject<'_>,
         config: &StoredAgentConfig,
     ) -> Result<Option<Binding>, model::ErrorCode> {
-        if config
-            .mcp_servers
-            .as_ref()
-            .is_some_and(|servers| servers.contains_key("ait"))
-        {
-            return Ok(None);
-        }
         let policy = self.config.get().map_err(|_| model::ErrorCode::DaemonIo)?;
-        if policy["mcp"]["enabled"] == false || policy["mcp"]["injectIntoAgents"] == false {
-            return Ok(None);
+        let enabled = policy["mcp"]["enabled"] != false;
+        let inject = enabled && policy["mcp"]["injectIntoAgents"] != false;
+        let Some(scopes) = &self.scopes else {
+            return Ok(self.shared(subject.agent_id, config, inject));
+        };
+        Ok(match scopes.access(subject) {
+            McpAccess::Shared => self.shared(subject.agent_id, config, inject),
+            McpAccess::Denied => Some(Binding::Strip),
+            McpAccess::Scoped { token, bot_session } if enabled && (bot_session || inject) => {
+                Some(Binding::Scoped {
+                    url: self.url.clone(),
+                    token,
+                    agent_id: subject.agent_id.to_owned(),
+                })
+            }
+            McpAccess::Scoped { .. } => {
+                scopes.release(subject.agent_id);
+                Some(Binding::Strip)
+            }
+        })
+    }
+
+    /// Revoke the scoped credential held by a session that left this manager.
+    pub(crate) fn release(&self, agent_id: &str) {
+        if let Some(scopes) = &self.scopes {
+            scopes.release(agent_id);
         }
-        Ok(Some(Binding {
+    }
+
+    fn shared(&self, agent_id: &str, config: &StoredAgentConfig, inject: bool) -> Option<Binding> {
+        (inject && !has_ait(config)).then(|| Binding::Shared {
             url: self.url.clone(),
             token: self.token.clone(),
             agent_id: agent_id.to_owned(),
-        }))
+        })
     }
 }
 
 impl Binding {
+    /// Whether this binding holds a scoped credential that must be released with its session.
+    pub(crate) const fn is_scoped(&self) -> bool {
+        matches!(self, Self::Scoped { .. })
+    }
+
     pub(crate) fn apply(&self, effective: &mut StoredAgentConfig) {
-        if effective
-            .mcp_servers
-            .as_ref()
-            .is_some_and(|servers| servers.contains_key("ait"))
-        {
-            return;
-        }
+        let (url, token, agent_id) = match self {
+            Self::Shared { .. } if has_ait(effective) => return,
+            Self::Shared {
+                url,
+                token,
+                agent_id,
+            }
+            | Self::Scoped {
+                url,
+                token,
+                agent_id,
+            } => (url, token, agent_id),
+            Self::Strip => {
+                if let Some(servers) = &mut effective.mcp_servers {
+                    servers.remove("ait");
+                    if servers.is_empty() {
+                        effective.mcp_servers = None;
+                    }
+                }
+                return;
+            }
+        };
         effective.mcp_servers.get_or_insert_default().insert(
             "ait".to_owned(),
-            json!({"type":"http","url":self.url,"headers":{
-                "Authorization":format!("Bearer {}", self.token.expose_secret()),
-                "X-Ait-Agent-Id":self.agent_id
+            json!({"type":"http","url":url,"headers":{
+                "Authorization":format!("Bearer {}", token.expose_secret()),
+                "X-Ait-Agent-Id":agent_id
             }}),
         );
     }
+}
+
+fn has_ait(config: &StoredAgentConfig) -> bool {
+    config
+        .mcp_servers
+        .as_ref()
+        .is_some_and(|servers| servers.contains_key("ait"))
 }
 
 #[cfg(test)]
