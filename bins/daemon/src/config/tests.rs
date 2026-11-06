@@ -56,7 +56,7 @@ fn defaults_are_isolated_and_secrets_are_redacted() {
     let config = load(Cli::parse_from(["server"]), environment).unwrap();
     assert_eq!(
         config.data_dir,
-        PathBuf::from("/unused-home-for-config-test/.ait-server")
+        PathBuf::from("/unused-home-for-config-test/.ait")
     );
     assert_eq!(
         config.listen,
@@ -344,7 +344,7 @@ fn invalid_startup_configuration_does_not_create_credentials() {
 fn omp_acp_arguments_preserve_executable_paths_without_daemon_configuration() {
     let cli = Cli::try_parse_from(["daemon", "omp-acp", "--omp-bin", "/tmp/official omp"]).unwrap();
     assert!(
-        matches!(cli.command,Some(Command::OmpAcp{omp_bin:Some(path)}) if path==std::path::Path::new("/tmp/official omp"))
+        matches!(cli.command,Some(Command::OmpAcp{omp_bin:Some(path)}) if path==Path::new("/tmp/official omp"))
     );
     let cli = Cli::try_parse_from(["daemon", "omp-acp"]).unwrap();
     assert!(matches!(

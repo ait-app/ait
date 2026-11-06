@@ -16,7 +16,7 @@ cargo run -p daemon --bin daemon -- --listen 127.0.0.1:7316
 
 | 参数                   | 环境变量                | 默认值                                 |
 | ---------------------- | ----------------------- | -------------------------------------- |
-| `--data-dir`           | `AIT_SERVER_DATA_DIR`   | `~/.ait-server`                        |
+| `--data-dir`           | `AIT_SERVER_DATA_DIR`   | `~/.ait`，见下文旧目录查找顺序         |
 | `--listen`             | `AIT_SERVER_LISTEN`     | `127.0.0.1:7316`                       |
 | `--mcp-socket`         | `AIT_SERVER_MCP_SOCKET` | 不监听 Unix socket                     |
 | `--config`             | 无                      | `<data-dir>/config.toml`，不存在则跳过 |
@@ -41,8 +41,9 @@ web_origins = ["http://localhost:8081", "http://127.0.0.1:8081"]
 `--mcp-socket` 在现有 TCP 监听之外增加 MCP 专用 Unix socket，使用 `0600` 权限及相同 Bearer
 鉴权。socket 上只暴露 `/mcp/agents`，连接示例和清理规则见 [MCP 手册](mcp.md#unix-socket-监听)。
 
-`AIT_SERVER_*` 和已有数据目录是兼容名称。桌面默认数据位于 `~/.ait-server-desktop`；
-开发桌面默认使用 `.tmp/ait/server`，开发 Web 默认使用 `.tmp/app/server`。
+`AIT_SERVER_*` 是兼容名称。未显式指定数据目录时，独立 daemon 与桌面依次使用已存在的
+`~/.ait`、`~/.ait-server-desktop`、`~/.ait-server`；都不存在时创建 `~/.ait`，旧目录不会被移动
+（[ADR-216](../decisions/clients/adr-216-default-data-directory-ait.md)）。开发桌面默认使用 `.tmp/ait/server`，开发 Web 默认使用 `.tmp/app/server`。
 `AIT_SERVER_BIN` 可指定已构建的 daemon；新默认构建产物为 `target/debug/daemon`。
 
 ### Hub 事件与中心原生通知

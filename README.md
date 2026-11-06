@@ -60,7 +60,7 @@ cargo build --locked --release -p daemon --bin daemon
 ```
 
 先在主机上安装并认证需要的 Agent。首次登录按终端提示完成网页授权，之后 daemon 自行续租和重连。
-默认数据目录为 `~/.ait-server`，默认监听 `127.0.0.1:7316`；本地 API token 会自动生成并保存。
+默认数据目录为 `~/.ait`（未创建时依次沿用已有的 `~/.ait-server-desktop`、`~/.ait-server`），默认监听 `127.0.0.1:7316`；本地 API token 会自动生成并保存。
 长期运行可交给 systemd 或 launchd。下载、凭据恢复和运行中授权见[无人值守 daemon 指南](docs/operations/headless-daemon.md)。
 
 ## 本地开发
