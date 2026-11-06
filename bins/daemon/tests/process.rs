@@ -40,7 +40,14 @@ fn help_and_invalid_credentials_do_not_create_state() {
     assert!(help.status.success());
     let help_text = String::from_utf8_lossy(&help.stdout);
     assert!(help_text.contains("--data-dir"));
-    assert!(help_text.contains("Usage: daemon"));
+    assert!(help_text.contains("Usage: aitd [OPTIONS] [COMMAND]"));
+    let subcommand_help = Command::new(env!("CARGO_BIN_EXE_daemon"))
+        .args(["login", "--help"])
+        .env_remove("AIT_SERVER_TOKEN")
+        .output()
+        .unwrap();
+    assert!(subcommand_help.status.success());
+    assert!(String::from_utf8_lossy(&subcommand_help.stdout).contains("Usage: aitd login"));
     let version = Command::new(env!("CARGO_BIN_EXE_daemon"))
         .arg("--version")
         .env_remove("AIT_SERVER_TOKEN")
@@ -49,7 +56,7 @@ fn help_and_invalid_credentials_do_not_create_state() {
     assert!(version.status.success());
     assert_eq!(
         String::from_utf8_lossy(&version.stdout).trim(),
-        format!("daemon {}", model::BUILD_VERSION)
+        format!("aitd {}", model::BUILD_VERSION)
     );
     let failure = Command::new(env!("CARGO_BIN_EXE_daemon"))
         .args(["--data-dir", state.to_str().unwrap()])

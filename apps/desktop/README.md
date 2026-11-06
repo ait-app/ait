@@ -39,7 +39,7 @@ Electron 主进程。该命令不发布产物；未配置 Windows 代码签名�
 `node apps/desktop/e2e/windows-startup.e2e.mjs`，验证打包后的客户端可在没有 daemon 的情况下进入欢迎页。
 
 The bundled daemon owns machine authorization, Host registration, renewal and Hub reconnects, just like
-standalone `daemon run`. Desktop approves a device authorization once and hands it to the daemon;
+standalone `aitd run`. Desktop approves a device authorization once and hands it to the daemon;
 signing out or closing Desktop does not revoke it. Explicit host disconnection closes both Hub and Relay,
 clears the shared machine authorization, and requires a fresh login even after restart.
 When no `AIT_SERVER_TOKEN` is inherited, Desktop

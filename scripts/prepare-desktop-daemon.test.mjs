@@ -14,7 +14,7 @@ import path from "node:path";
 import test from "node:test";
 import { stageDaemon } from "../apps/desktop/scripts/prepare-daemon.mjs";
 
-function fixture(t, version, name = "daemon") {
+function fixture(t, version, name = "aitd") {
   const root = mkdtempSync(path.join(tmpdir(), "ait-stage-daemon-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const binary = path.join(root, "compiled-daemon");
@@ -43,12 +43,12 @@ test("staging removes stale sidecars and copies only the matching daemon", (t) =
 
 test("staging rejects an old daemon even when AIT_SERVER_BIN points to it", (t) => {
   const input = fixture(t, "0.0.6");
-  assert.throws(() => stageDaemon(input), /Expected daemon 0\.0\.7/);
+  assert.throws(() => stageDaemon(input), /Expected aitd 0\.0\.7/);
   assert(!existsSync(input.directory));
 });
 
 test("staging rejects the old server binary even when its version matches", (t) => {
   const input = fixture(t, "0.0.7", "server");
-  assert.throws(() => stageDaemon(input), /Expected daemon 0\.0\.7, received server 0\.0\.7/);
+  assert.throws(() => stageDaemon(input), /Expected aitd 0\.0\.7, received server 0\.0\.7/);
   assert(!existsSync(input.directory));
 });

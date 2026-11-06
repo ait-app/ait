@@ -108,7 +108,7 @@ Windows 构建来源单独记录，原 `BUILD-INFO.json` 继续描述既有平�
 
 独立 daemon 归档供没有桌面环境的主机运行 [无人值守 daemon](headless-daemon.md)，与桌面包使用
 同一次构建的 Rust `daemon`。归档内为可执行文件 `aitd` 和 `LICENSE`，与桌面包内的文件同名；改名是为了
-放入 `PATH` 时不与系统同名程序冲突，`--help` 中的程序名仍为 `daemon`。见 [ADR-212](../decisions/clients/adr-212-packaged-daemon-name-aitd.md)。macOS 版本单独用 Developer ID
+放入 `PATH` 时不与系统同名程序冲突；`--help` 和 `--version` 中的程序名也统一为 `aitd`。见 [ADR-212](../decisions/clients/adr-212-packaged-daemon-name-aitd.md)。macOS 版本单独用 Developer ID
 签名（hardened runtime）并公证；裸可执行文件无法 staple 公证票据，Gatekeeper 首次运行时在线核验。
 Linux daemon 在 `ubuntu-24.04` runner 上通过 [`build-linux-daemon.sh`](../../scripts/build-linux-daemon.sh) 于 `manylinux_2_28` 容器内编译，桌面包与独立归档共用；构建后检查不超过 `GLIBC_2.28` 与 `GLIBCXX_3.4.25`，支持 Ubuntu 20.04、Debian 10、RHEL 8 及更新版本。
 正式版、beta 和 dev build 都包含这两个归档；dev build 见上文 [Dev build](#dev-build)。

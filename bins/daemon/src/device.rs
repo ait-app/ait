@@ -64,7 +64,7 @@ async fn login_with_center(data: &Path, options: Login, center: HttpCenter) -> a
     // The center already holds the name sent with an unfinished approval.
     if explicit_name && unfinished && !options.force {
         bail!(
-            "--name cannot rename an unfinished authorization; rerun daemon login to finish it or add --force to start a new one"
+            "--name cannot rename an unfinished authorization; rerun aitd login to finish it or add --force to start a new one"
         );
     }
     let name = options.name.unwrap_or_else(|| {
@@ -112,7 +112,7 @@ async fn login_with_center(data: &Path, options: Login, center: HttpCenter) -> a
     }
     let cancel = CancellationToken::new();
     tokio::select! {
-        () = crate::shutdown_signal()? => bail!("authorization interrupted; rerun daemon login to recover"),
+        () = crate::shutdown_signal()? => bail!("authorization interrupted; rerun aitd login to recover"),
         result = authenticate(&center, &store, &mut state, (supplied, options.force), &cancel) => result?,
     }
     let binding = &state
@@ -122,7 +122,7 @@ async fn login_with_center(data: &Path, options: Login, center: HttpCenter) -> a
         .binding;
     writeln!(
         std::io::stdout(),
-        "Authorized Host {}. Start with daemon run.",
+        "Authorized Host {}. Start with aitd run.",
         binding.host_id
     )?;
     Ok(())
@@ -147,7 +147,7 @@ async fn authenticate(
         }
     } else if state.pending.is_some() && !force {
         bail!(
-            "an unfinished operation exists; rerun daemon login to recover or use daemon login --force to start a new authorization"
+            "an unfinished operation exists; rerun aitd login to recover or use aitd login --force to start a new authorization"
         );
     }
     state.disconnected = false;

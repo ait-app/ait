@@ -125,7 +125,7 @@ pub enum Error {
     #[error("access token was refused")]
     AccessRejected,
     /// Device revoked, expired, or unauthorized. Human reauthorization is required.
-    #[error("device authorization is invalid; run daemon login")]
+    #[error("device authorization is invalid; run aitd login")]
     Unauthorized,
     /// A running instance already owns this identity.
     #[error("Host runtime conflict; stop the other instance or wait for its lease")]
