@@ -228,33 +228,62 @@ async fn connect(
     Ok((transport, state, tiers))
 }
 
-pub(super) async fn open(
+/// Session prelude recovered before the native process starts: the journal to replay,
+/// the path to resume from, and the creation timestamp the transcript reports.
+struct Restored {
+    journal: Option<history::Journal>,
+    replayed: Option<Stream>,
+    resume: Option<String>,
+    created_at: String,
+}
+
+async fn restore(
     client: &OmpClient,
     spec: &AgentSessionSpec,
     handle: Option<&AgentPersistenceHandle>,
-) -> Result<Session, AgentSessionError> {
-    config::validate_spec(spec)?;
-    let (mut journal, replayed) = match handle {
+) -> Result<Restored, AgentSessionError> {
+    let (journal, replayed) = match handle {
         Some(handle) => {
             let (journal, replayed) = history::resume(client, handle, &spec.cwd).await?;
             (Some(journal), replayed)
         }
         None => (None, None),
     };
-    let path = journal
+    let resume = journal
         .as_ref()
         .map(|journal| journal.path.to_str().ok_or(AgentSessionError::Failed))
-        .transpose()?;
-    let persisted = replayed.is_some();
+        .transpose()?
+        .map(str::to_owned);
     let created_at = journal
         .as_ref()
         .and_then(|journal| journal.header["timestamp"].as_str())
         .map_or_else(|| chrono::Utc::now().to_rfc3339(), str::to_owned);
+    Ok(Restored {
+        journal,
+        replayed,
+        resume,
+        created_at,
+    })
+}
+
+pub(super) async fn open(
+    client: &OmpClient,
+    spec: &AgentSessionSpec,
+    handle: Option<&AgentPersistenceHandle>,
+) -> Result<Session, AgentSessionError> {
+    config::validate_spec(spec)?;
+    let Restored {
+        mut journal,
+        replayed,
+        resume,
+        created_at,
+    } = restore(client, spec, handle).await?;
+    let persisted = replayed.is_some();
     let (role_catalog, tiers) = client.role_settings(spec).await?;
     let (mut transport, state, service_tiers) = connect(
         client,
         spec,
-        path.filter(|_| persisted),
+        resume.as_deref().filter(|_| persisted),
         &role_catalog,
         tiers,
     )

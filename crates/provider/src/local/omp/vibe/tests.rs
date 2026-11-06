@@ -1,7 +1,7 @@
 use super::*;
 use serde_json::json;
 
-fn greeting(version: u64, sdk: Value, vibe: Value) -> Value {
+fn greeting(version: u64, sdk: &Value, vibe: &Value) -> Value {
     json!({
         "type": "ait_native_host_hello",
         "bridgeVersion": version,
@@ -33,7 +33,7 @@ fn worker_frame(id: &str, parent: &str, status: &str) -> Value {
 #[test]
 fn decodes_supported_greeting() {
     assert_eq!(
-        hello(&greeting(1, json!("0.4.2"), json!(true))),
+        hello(&greeting(1, &json!("0.4.2"), &json!(true))),
         Some(Capability {
             bridge_version: 1,
             sdk_version: "0.4.2".to_owned(),
@@ -44,14 +44,14 @@ fn decodes_supported_greeting() {
 
 #[test]
 fn disables_vibe_on_unknown_bridge_version() {
-    let capability = hello(&greeting(2, json!("0.4.2"), json!(true))).unwrap();
+    let capability = hello(&greeting(2, &json!("0.4.2"), &json!(true))).unwrap();
     assert_eq!(capability.bridge_version, 2);
     assert!(!capability.vibe);
 }
 
 #[test]
 fn keeps_handshake_when_vibe_is_unavailable() {
-    let capability = hello(&greeting(1, json!("0.5.0"), json!(false))).unwrap();
+    let capability = hello(&greeting(1, &json!("0.5.0"), &json!(false))).unwrap();
     assert_eq!(capability.sdk_version, "0.5.0");
     assert!(!capability.vibe);
 }
@@ -60,9 +60,9 @@ fn keeps_handshake_when_vibe_is_unavailable() {
 fn rejects_foreign_and_malformed_frames() {
     assert!(hello(&json!({"type": "ready"})).is_none());
     assert!(hello(&json!({"type": "ait_native_host_hello"})).is_none());
-    assert!(hello(&greeting(1, json!(4), json!(true))).is_none());
-    assert!(hello(&greeting(1, json!("0.4.2"), json!("yes"))).is_none());
-    assert!(hello(&greeting(1, json!("0.4.2"), json!(null))).is_none());
+    assert!(hello(&greeting(1, &json!(4), &json!(true))).is_none());
+    assert!(hello(&greeting(1, &json!("0.4.2"), &json!("yes"))).is_none());
+    assert!(hello(&greeting(1, &json!("0.4.2"), &json!(null))).is_none());
     assert!(
         hello(&json!({
             "type": "ait_native_host_hello",

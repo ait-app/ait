@@ -113,59 +113,7 @@ impl Transport {
         let reader_vibe = vibe_state.clone();
         let (sender, messages) = mpsc::channel(2);
         let reader = tokio::spawn(async move {
-            let mut output = BufReader::new(output);
-            let mut decoder = super::framing::Decoder::default();
-            let mut frame_bytes = 0;
-            let failure = loop {
-                let mut bytes = Vec::new();
-                let read = (&mut output)
-                    .take((MAX_FRAME + 1) as u64)
-                    .read_until(b'\n', &mut bytes)
-                    .await;
-                if bytes.len() > MAX_FRAME {
-                    break Diagnostic::new(Category::Protocol, "frame_limit");
-                }
-                match read {
-                    Ok(0) => break Diagnostic::new(Category::Closed, "stdout"),
-                    Err(_) => break Diagnostic::new(Category::Closed, "stdout_read"),
-                    Ok(_) if bytes.last() != Some(&b'\n') => {
-                        break Diagnostic::new(Category::Protocol, "incomplete_frame");
-                    }
-                    Ok(_) => {}
-                }
-                if bytes.iter().all(u8::is_ascii_whitespace) {
-                    continue;
-                }
-                let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
-                    break Diagnostic::new(Category::Protocol, "invalid_json");
-                };
-                if !value["type"].is_string() {
-                    break Diagnostic::new(Category::Protocol, "missing_frame_type");
-                }
-                frame_bytes += bytes.len();
-                match decoder.push(value) {
-                    Ok(Some(value)) => {
-                        let bytes = std::mem::take(&mut frame_bytes);
-                        if let Some(capability) = super::vibe::hello(&value) {
-                            if let Ok(mut state) = reader_capability.write() {
-                                *state = Some(capability);
-                            }
-                            continue;
-                        }
-                        if super::vibe::is_frame(&value) {
-                            if let Ok(mut frames) = reader_vibe.write() {
-                                super::vibe::store(&mut frames, &value);
-                            }
-                            continue;
-                        }
-                        if sender.send(Record { value, bytes }).await.is_err() {
-                            return;
-                        }
-                    }
-                    Ok(None) => {}
-                    Err(_) => break Diagnostic::new(Category::Protocol, "invalid_chunks"),
-                }
-            };
+            let failure = read_frames(output, &sender, &reader_capability, &reader_vibe).await;
             let _ = tokio::time::timeout(Duration::from_millis(100), stderr_finished).await;
             reader_diagnostics.observe(failure, "read");
         });
@@ -458,6 +406,69 @@ impl Transport {
             .map_err(|_| AgentSessionError::Failed)?;
         self.configuration.take();
         Ok(())
+    }
+}
+
+/// Read newline-delimited native frames until a protocol or pipe failure, routing the
+/// private host greeting and Vibe frames away from the public session stream.
+async fn read_frames(
+    output: tokio::process::ChildStdout,
+    sender: &mpsc::Sender<Record>,
+    capability: &RwLock<Option<super::vibe::Capability>>,
+    vibe: &RwLock<Vec<Value>>,
+) -> Diagnostic {
+    let mut output = BufReader::new(output);
+    let mut decoder = super::framing::Decoder::default();
+    let mut frame_bytes = 0;
+    loop {
+        let mut bytes = Vec::new();
+        let read = (&mut output)
+            .take((MAX_FRAME + 1) as u64)
+            .read_until(b'\n', &mut bytes)
+            .await;
+        if bytes.len() > MAX_FRAME {
+            return Diagnostic::new(Category::Protocol, "frame_limit");
+        }
+        match read {
+            Ok(0) => return Diagnostic::new(Category::Closed, "stdout"),
+            Err(_) => return Diagnostic::new(Category::Closed, "stdout_read"),
+            Ok(_) if bytes.last() != Some(&b'\n') => {
+                return Diagnostic::new(Category::Protocol, "incomplete_frame");
+            }
+            Ok(_) => {}
+        }
+        if bytes.iter().all(u8::is_ascii_whitespace) {
+            continue;
+        }
+        let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
+            return Diagnostic::new(Category::Protocol, "invalid_json");
+        };
+        if !value["type"].is_string() {
+            return Diagnostic::new(Category::Protocol, "missing_frame_type");
+        }
+        frame_bytes += bytes.len();
+        match decoder.push(value) {
+            Ok(Some(value)) => {
+                let bytes = std::mem::take(&mut frame_bytes);
+                if let Some(greeting) = super::vibe::hello(&value) {
+                    if let Ok(mut state) = capability.write() {
+                        *state = Some(greeting);
+                    }
+                    continue;
+                }
+                if super::vibe::is_frame(&value) {
+                    if let Ok(mut frames) = vibe.write() {
+                        super::vibe::store(&mut frames, &value);
+                    }
+                    continue;
+                }
+                if sender.send(Record { value, bytes }).await.is_err() {
+                    return Diagnostic::new(Category::Closed, "session_reader");
+                }
+            }
+            Ok(None) => {}
+            Err(_) => return Diagnostic::new(Category::Protocol, "invalid_chunks"),
+        }
     }
 }
 

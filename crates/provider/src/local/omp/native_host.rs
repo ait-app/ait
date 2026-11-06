@@ -30,11 +30,13 @@ pub struct NativeHost {
 
 impl NativeHost {
     /// Bundled Bun executable that starts the patched SDK.
+    #[must_use]
     pub fn bun(&self) -> &Path {
         &self.bun
     }
 
     /// Patched official SDK entrypoint, passed to Bun as its first argument.
+    #[must_use]
     pub fn entrypoint(&self) -> &Path {
         &self.entrypoint
     }

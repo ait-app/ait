@@ -397,7 +397,19 @@ pub(super) fn validate(
         .as_array()
         .and_then(|items| items.iter().find(|item| item["id"] == action))
         .ok_or(AgentSessionError::Rejected)?;
-    let fields = spec["fields"].as_array().ok_or(AgentSessionError::Failed)?;
+    let mut result = declared_arguments(&spec["fields"], arguments)?;
+    match action {
+        "goal" => validate_goal(&result)?,
+        "vibe_control" => validate_vibe_control(&mut result)?,
+        _ => {}
+    }
+    generated(&mut result, action, cwd);
+    Ok(result)
+}
+
+/// Reject undeclared fields and coerce each declared value to its wire type.
+fn declared_arguments(fields: &Value, arguments: &Value) -> Result<Value, AgentSessionError> {
+    let fields = fields.as_array().ok_or(AgentSessionError::Failed)?;
     let values = arguments
         .as_object()
         .filter(|values| values.len() <= fields.len())
@@ -449,80 +461,91 @@ pub(super) fn validate(
             _ => json!(value),
         };
     }
-    if action == "goal" {
-        if result["op"] == "create" {
-            if result["objective"]
-                .as_str()
-                .is_none_or(|text| text.trim().is_empty())
-            {
-                return Err(AgentSessionError::Rejected);
-            }
-        } else if result.get("objective").is_some() || result.get("token_budget").is_some() {
-            return Err(AgentSessionError::Rejected);
-        }
-    }
-    if action == "vibe_control" {
-        let operation = result["operation"]
+    Ok(result)
+}
+
+/// A goal may only carry a non-empty objective when it creates one.
+fn validate_goal(result: &Value) -> Result<(), AgentSessionError> {
+    if result["op"] == "create" {
+        if result["objective"]
             .as_str()
-            .ok_or(AgentSessionError::Rejected)?
-            .to_owned();
-        let allowed: &[&str] = match operation.as_str() {
-            "toggle" => &["enabled"],
-            "list" => &[],
-            "spawn" => &["cli", "prompt", "name"],
-            "send" => &["sessionId", "message"],
-            "kill" => &["sessionId"],
-            "wait" => &["sessions", "timeout"],
-            _ => return Err(AgentSessionError::Rejected),
-        };
-        if result.as_object().is_some_and(|fields| {
-            fields
-                .keys()
-                .any(|key| key != "operation" && !allowed.contains(&key.as_str()))
-        }) {
+            .is_none_or(|text| text.trim().is_empty())
+        {
             return Err(AgentSessionError::Rejected);
         }
-        if let Some(sessions) = result.get_mut("sessions")
-            && let Some(text) = sessions.as_str()
-        {
-            let ids: Vec<_> = text
-                .split(',')
-                .map(str::trim)
-                .filter(|id| !id.is_empty())
-                .map(str::to_owned)
-                .collect();
-            if ids.len() > 256 {
-                return Err(AgentSessionError::Rejected);
-            }
-            *sessions = json!(ids);
-        }
-        if let Some(timeout) = result.get_mut("timeout")
-            && let Some(text) = timeout.as_str()
-        {
-            *timeout = json!(
-                text.parse::<f64>()
-                    .ok()
-                    .filter(|seconds| seconds.is_finite() && *seconds > 0.0 && *seconds <= 600.0)
-                    .ok_or(AgentSessionError::Rejected)?
-            );
-        }
-        // Worker references travel as Ait subagent IDs; the native observer resolves them.
-        let present = |key: &str| {
-            result
-                .get(key)
-                .and_then(Value::as_str)
-                .is_some_and(|text| !text.trim().is_empty())
-        };
-        let required: &[&str] = match operation.as_str() {
-            "spawn" => &["cli", "prompt"],
-            "send" => &["sessionId", "message"],
-            "kill" => &["sessionId"],
-            _ => &[],
-        };
-        if required.iter().any(|key| !present(key)) {
-            return Err(AgentSessionError::Rejected);
-        }
+    } else if result.get("objective").is_some() || result.get("token_budget").is_some() {
+        return Err(AgentSessionError::Rejected);
     }
+    Ok(())
+}
+
+/// Bound native Vibe control to the arguments each operation actually accepts.
+fn validate_vibe_control(result: &mut Value) -> Result<(), AgentSessionError> {
+    let operation = result["operation"]
+        .as_str()
+        .ok_or(AgentSessionError::Rejected)?
+        .to_owned();
+    let allowed: &[&str] = match operation.as_str() {
+        "toggle" => &["enabled"],
+        "list" => &[],
+        "spawn" => &["cli", "prompt", "name"],
+        "send" => &["sessionId", "message"],
+        "kill" => &["sessionId"],
+        "wait" => &["sessions", "timeout"],
+        _ => return Err(AgentSessionError::Rejected),
+    };
+    if result.as_object().is_some_and(|fields| {
+        fields
+            .keys()
+            .any(|key| key != "operation" && !allowed.contains(&key.as_str()))
+    }) {
+        return Err(AgentSessionError::Rejected);
+    }
+    if let Some(sessions) = result.get_mut("sessions")
+        && let Some(text) = sessions.as_str()
+    {
+        let ids: Vec<_> = text
+            .split(',')
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .map(str::to_owned)
+            .collect();
+        if ids.len() > 256 {
+            return Err(AgentSessionError::Rejected);
+        }
+        *sessions = json!(ids);
+    }
+    if let Some(timeout) = result.get_mut("timeout")
+        && let Some(text) = timeout.as_str()
+    {
+        *timeout = json!(
+            text.parse::<f64>()
+                .ok()
+                .filter(|seconds| seconds.is_finite() && *seconds > 0.0 && *seconds <= 600.0)
+                .ok_or(AgentSessionError::Rejected)?
+        );
+    }
+    // Worker references travel as Ait subagent IDs; the native observer resolves them.
+    let present = |key: &str| {
+        result
+            .get(key)
+            .and_then(Value::as_str)
+            .is_some_and(|text| !text.trim().is_empty())
+    };
+    let required: &[&str] = match operation.as_str() {
+        "spawn" => &["cli", "prompt"],
+        "send" => &["sessionId", "message"],
+        "kill" => &["sessionId"],
+        _ => &[],
+    };
+    if required.iter().any(|key| !present(key)) {
+        return Err(AgentSessionError::Rejected);
+    }
+    Ok(())
+}
+
+/// Supply the host-generated identifier an action cannot receive from the client.
+fn generated(result: &mut Value, action: &str, cwd: &str) {
     if action == "export_html" {
         result["outputPath"] = json!(
             std::path::Path::new(cwd).join(format!("ait-export-{}.html", uuid::Uuid::new_v4()))
@@ -530,7 +553,6 @@ pub(super) fn validate(
     } else if action == "dictation_start" {
         result["captureId"] = json!(uuid::Uuid::new_v4().to_string());
     }
-    Ok(result)
 }
 
 fn display(value: &Value) -> String {
