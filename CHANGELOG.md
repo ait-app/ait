@@ -1,5 +1,11 @@
 # Ait changelog
 
+## 0.2.0 - 2026-11-07
+
+- Standardize the standalone daemon CLI name as `aitd`, including command help, errors, desktop launches and service examples. Existing scripts that invoke the old `daemon` command must use `aitd`.
+- Use `~/.ait` for new installations. Without an explicit data directory, reuse the first existing directory in this order: `~/.ait`, `~/.ait-server-desktop`, `~/.ait-server`; existing directories are not moved or renamed. If both legacy directories exist, pin `--data-dir` to keep using a specific one.
+- Separate manual development builds from CI checks. PR and main CI run checks; development installers use the manual Dev Build workflow, while version tags continue to produce official Release Drafts.
+
 ## 0.1.31 - 2026-11-06
 
 - Let a Workspace Bot manage its Workspace within the permissions you grant: it can start and prompt Agents, manage schedules, and optionally run scripts, terminals and worktrees through scoped Ait MCP credentials, with a per-provider mode cap. The setup wizard and settings add permission groups and mode caps.
