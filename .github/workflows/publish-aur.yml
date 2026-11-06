@@ -20,7 +20,7 @@ permissions:
 jobs:
   build:
     name: Build ait-bin
-    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.release.prerelease && github.event.release.tag_name != 'nightly') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.release.prerelease && github.event.release.tag_name != 'dev') }}
     runs-on: ubuntu-24.04
     container: archlinux:base-devel
     timeout-minutes: 120

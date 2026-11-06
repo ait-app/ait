@@ -11,8 +11,8 @@
 国内 COS 镜像；内含可执行文件 `aitd`（0.1.29 及更早版本为 `ait-daemon`，升级时需同步更新
 systemd/launchd 等服务配置中的路径）。下载、校验、安装与 systemd/launchd 示例见官网
 [独立 daemon](https://ait-app.com/zh/docs/daemon/) 文档，发布方式见 [发布说明](releasing.md)。
-[nightly 预发布](https://github.com/ait-app/ait/releases/tag/nightly) 也附带同名格式的
-`Ait-<构建标识>-daemon-<平台>.tar.gz`，对应 main 最新一次成功构建。macOS nightly 归档未公证，
+[dev build 预发布](https://github.com/ait-app/ait/releases/tag/dev) 也附带同名格式的
+`Ait-<构建标识>-daemon-<平台>.tar.gz`，对应 main 最新一次成功构建。macOS dev build 归档未公证，
 用浏览器下载后需在解压目录执行 `xattr -d com.apple.quarantine aitd` 才能运行。
 
 下文命令中的 `daemon` 对应归档中的 `aitd` 或源码构建的 `target/release/daemon`。

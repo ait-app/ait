@@ -10,7 +10,7 @@ afterEach(() => {
   Constants.expoConfig!.extra = {};
 });
 
-it("displays the nightly identity ahead of the release package version", () => {
+it("displays the dev build identity ahead of the release package version", () => {
   vi.stubEnv("EXPO_PUBLIC_AIT_BUILD_VERSION", "2026-10-25-01234567");
   expect(resolveAppVersion()).toBe("2026-10-25-01234567");
 });

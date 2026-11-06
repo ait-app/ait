@@ -64,7 +64,7 @@ test("Git installs use source date and hash even on a release tag", () => {
   withBuildEnvironment({}, () => assert.equal(sourceVersion("0.1.12", directory), expected));
 });
 
-test("explicit nightly and release builds retain their supplied identity", () => {
+test("explicit dev and release builds retain their supplied identity", () => {
   withBuildEnvironment({ AIT_BUILD_VERSION: "2026-10-25-01234567", RELEASE_TAG: "v0.1.12" }, () =>
     assert.equal(sourceVersion("0.1.12", directory), "2026-10-25-01234567"),
   );
@@ -94,10 +94,10 @@ test("date-based package versions are valid SemVer, including numeric hashes", (
   assert.equal(packagedVersion("git-2026-01-02-01234567"), "2026.1.2-git.g01234567");
 });
 
-test("nightly CLI uses the UTC build day instead of the source commit day", () => {
-  const output = path.join(directory, "nightly-output");
+test("dev build CLI uses the UTC build day instead of the source commit day", () => {
+  const output = path.join(directory, "dev-output");
   const before = new Date().toISOString().slice(0, 10);
-  execFileSync(process.execPath, [path.join(root, "scripts/nightly-build.mjs"), "identity"], {
+  execFileSync(process.execPath, [path.join(root, "scripts/dev-build.mjs"), "identity"], {
     cwd: directory,
     env: { ...process.env, GITHUB_SHA: git("rev-parse", "HEAD"), GITHUB_OUTPUT: output },
   });
@@ -140,7 +140,7 @@ test("desktop builder loads date-based package and display metadata", async () =
   assert.equal(config.extraMetadata.name, "@ait/desktop");
 });
 
-test("Rust build identity agrees with the desktop for Git, nightly and releases", () => {
+test("Rust build identity agrees with the desktop for Git, dev builds and releases", () => {
   const binary = path.join(directory, "build-version");
   execFileSync(
     "rustc",
