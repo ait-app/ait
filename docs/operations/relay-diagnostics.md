@@ -8,7 +8,7 @@
 
 1. 从客户端导出[应用诊断](diagnostics.md)，记录时间、主机、平台和故障操作。
 2. 在目标主机使用本地 API token 查询 `GET /api/device/authorization`，区分机器授权、Hub 和下载 Relay 状态。
-   `daemon status --json` 是带时间戳的本地缓存，不能证明此刻在线。
+   `aitd status --json` 是带时间戳的本地缓存，不能证明此刻在线。
 3. 检查 daemon `info` 日志。桌面管理的日志在数据目录的 `daemon.log`；独立服务由启动脚本收集 stdout/stderr。
 4. 将同一时间窗口的客户端、daemon 与中心日志按下表关联，再定位最早失败事件。
 

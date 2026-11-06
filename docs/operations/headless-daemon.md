@@ -15,7 +15,7 @@ systemd/launchd 等服务配置中的路径）。下载、校验、安装与 sys
 `Ait-<构建标识>-daemon-<平台>.tar.gz`，对应 main 最新一次成功构建。macOS dev build 归档未公证，
 用浏览器下载后需在解压目录执行 `xattr -d com.apple.quarantine aitd` 才能运行。
 
-下文命令中的 `daemon` 对应归档中的 `aitd` 或源码构建的 `target/release/daemon`。
+下文命令使用归档中的 `aitd`；从源码构建时，将 `aitd` 替换为 `./target/release/daemon`。
 
 ## 登录与运行
 
@@ -23,14 +23,14 @@ systemd/launchd 等服务配置中的路径）。下载、校验、安装与 sys
 `--data-dir` 或 `AIT_SERVER_DATA_DIR` 指定。login/logout 之前先用既有脚本停止同目录 daemon。
 
 ```sh
-daemon login --name build-linux
+aitd login --name build-linux
 ```
 
-`daemon login` 优先读取本机保存的机器凭据并向中心续期，成功时无需再次打开浏览器。
+`aitd login` 优先读取本机保存的机器凭据并向中心续期，成功时无需再次打开浏览器。
 只有没有凭据、凭据已过期或中心明确拒绝授权时，才发起新的网页授权。网络或服务故障
 保留凭据及恢复请求，可稍后重试；不会因为暂时断网而清除登录。
 
-需要主动重新授权时执行 `daemon login --force`；配合 `--token-stdin` 可替换旧的未完成授权。
+需要主动重新授权时执行 `aitd login --force`；配合 `--token-stdin` 可替换旧的未完成授权。
 该选项放弃旧请求的恢复并开始新授权，不删除机器身份或工作区数据。
 
 需要网页授权时，终端显示固定网页地址和验证码。在任意设备的浏览器登录原有账号，输入验证码，核对机器并确认。
@@ -39,7 +39,7 @@ daemon login --name build-linux
 也可在网页 Host 详情签发一次性接入 JWT，通过 stdin 输入：
 
 ```sh
-daemon login --token-stdin --name build-linux
+aitd login --token-stdin --name build-linux
 ```
 
 stdin 读取到 EOF。脚本可以把已有秘密输入流连接到该命令。也支持 `--token '<JWT>'`，参数可能进入
@@ -51,15 +51,15 @@ shell 历史或进程列表，脚本优先使用 stdin。两种 token 参数互�
 既有脚本的启动命令改为：
 
 ```sh
-daemon run
+aitd run
 ```
 
-未显式断开时，再次启动 `daemon run` 会读取已保存的 refresh token，恢复未完成的刷新并自动连接，
+未显式断开时，再次启动 `aitd run` 会读取已保存的 refresh token，恢复未完成的刷新并自动连接，
 不需要再次登录。若授权确实失效，状态变为 `reauthorization_required`；可以通过下文 API 写入新授权，
-或先停止服务再执行 `daemon login`。后台运行不会自动打开交互登录。
+或先停止服务再执行 `aitd login`。后台运行不会自动打开交互登录。
 
 默认监听 `127.0.0.1:7316`，无需显示器、桌面应用或持续的 SSH 会话。没有 `service install` 子命令。
-直接 `daemon`、`daemon run` 与 Desktop 启动使用同一流程。`--headless` 已删除，既有脚本需移除该参数。
+直接 `aitd`、`aitd run` 与 Desktop 启动使用同一流程。`--headless` 已删除，既有脚本需移除该参数。
 未登录时本地 API 正常运行并报告 `unauthorized`，授权写入后自动发布。
 现有 listen/config/log-level/web-origin 参数继续可用，不提供中心参数。
 
@@ -100,7 +100,7 @@ WebSocket/Hub 客户端协商 `publication.status.request`、`publication.author
 登录产生一份机器授权与节点会话，由 Hub/Relay 共同使用；两条链路的协议票据分别领取，不可互换。
 断开会取消取票、注册、续租、刷新，关闭两条链路及数据通道，清除已保存和内存中的机器凭据、
 enrollment/device code 与待恢复请求。仅保留机器身份和不含秘密的 `disconnected` 标记；重启和
-Desktop 自动同步不会重新授权。重新连接需要显式授权，或停止 daemon 后执行 `daemon login`。
+Desktop 自动同步不会重新授权。重新连接需要显式授权，或停止 daemon 后执行 `aitd login`。
 本地 API token、任务和工作区数据保留。Desktop 退出/账号退出本身不触发这个断开操作。
 
 断开时尝试关闭中心会话及撤销机器授权，每项最多等 5 秒；中心不可达不阻止本地凭据清除。
@@ -110,7 +110,7 @@ Desktop 自动同步不会重新授权。重新连接需要显式授权，或停
 ## 恢复、查看与退出
 
 ```sh
-daemon status --json
+aitd status --json
 ```
 
 status 不要求本地 API token，不创建文件，不争用运行中服务的凭据锁。输出稳定 ID、是否存在
@@ -120,8 +120,8 @@ status 不要求本地 API token，不创建文件，不争用运行中服务的
 
 授权成功后保存 `<data-dir>/device/.env`，权限 `0600`，目录 `0700`。文件是私有凭据 snapshot，
 不要编辑、共享、复制到另一安装或提交到 Git。access JWT 只存内存，刷新 token 自动轮换。
-Web/enrollment 的中断可重新执行不带 token 的 `daemon login` 恢复原请求；尚未完成的 refresh
-由 `daemon run` 恢复。保留 pending UUID，不能手动改 ID 后重试旧 refresh token。
+Web/enrollment 的中断可重新执行不带 token 的 `aitd login` 恢复原请求；尚未完成的 refresh
+由 `aitd run` 恢复。保留 pending UUID，不能手动改 ID 后重试旧 refresh token。
 中心回执恢复窗口为 10 分钟；已消费的 device code 即使超过批准期限，仍使用原请求 ID 向中心尝试恢复。
 初次领取受原凭据期限约束，无法恢复时需要重新授权。
 
@@ -136,7 +136,7 @@ JWT 或租约到期先关闭远程通道；运行冲突等待旧租约释放并�
 
 ```sh
 # 先通过既有脚本停止 daemon，再执行：
-daemon logout
+aitd logout
 ```
 
 logout 尝试中心撤销并清除本地凭据。中心不可达、或初次领取结果未知时，CLI 提示在网页 Host

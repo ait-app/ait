@@ -1,6 +1,6 @@
 # daemon：启动、配置与连接
 
-`daemon` 是 Ait 唯一的 Rust 服务入口。它负责 Project/Workspace、原生 Provider 会话、
+`aitd` 是 Ait 唯一的 Rust 服务入口。它负责 Project/Workspace、原生 Provider 会话、
 Git/文件、终端、语音、调度和浏览器能力。源码边界见 [当前架构](../architecture/README.md)。
 标准 MCP 客户端通过 `/mcp/agents` 使用编排工具，配置和用法见 [MCP 手册](mcp.md)。
 
@@ -160,12 +160,12 @@ npm run dev:mobile
 原生 Provider 凭据由对应程序保存。Ait 连接 token 与 Provider 凭据用途不同。
 更多行为边界见 [分类 ADR](../decisions/README.md)，验证范围见 [报告索引](../reports/README.md)。
 
-Linux 无人值守运行支持 `daemon login` 和 `daemon run`，
+Linux 无人值守运行支持 `aitd login` 和 `aitd run`，
 接入条件与命令见 [无人值守 daemon](headless-daemon.md)。
 
 ## 统一发布与本地 API 凭据
 
-直接启动、`daemon run` 和 Desktop 内置 daemon 使用同一发布流程：daemon 持有机器授权，
+直接启动、`aitd run` 和 Desktop 内置 daemon 使用同一发布流程：daemon 持有机器授权，
 自行注册节点、续租与重连。未登录时仍提供本地 API。在线业务只使用 Hub，下载使用独立 Relay。
 
 本地 API token 的生成与覆盖规则见[启动与配置](#启动与配置)。机器授权的登录、运行中交接、

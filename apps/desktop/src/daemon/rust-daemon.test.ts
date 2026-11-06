@@ -109,7 +109,7 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
     const version = execFileSync(process.env.AIT_SERVER_BIN!, ["--version"], {
       encoding: "utf8",
     }).trim();
-    expect(version).toBe(`daemon ${a.version}`);
+    expect(version).toBe(`aitd ${a.version}`);
     const token = manager.authorization(`ws://${a.listen}/v1/ws`)!;
     expect(token).toHaveLength(64);
     expect(manager.authorization(`ws://localhost:${a.listen!.split(":").at(-1)}/v1/ws`)).toBe(
