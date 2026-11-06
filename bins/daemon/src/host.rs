@@ -721,7 +721,8 @@ fn compose_provider(
         .with_timeline(timeline)
         .with_creations(directory.creations())
         .with_summary_generation(generator)
-        .with_workspace_names(Arc::new(names));
+        .with_workspace_names(Arc::new(names))
+        .with_workspaces(Arc::new(workspace_registry.clone()));
     providers.register(&mut manager)?;
     AgentExecution::spawn(ExecutionDependencies {
         manager,

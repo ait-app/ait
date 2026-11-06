@@ -337,7 +337,15 @@ fn launch_command(
     spec: &AgentSessionSpec,
     binding: Option<(&str, bool)>,
 ) -> Result<(Command, Option<tempfile::NamedTempFile>), AgentSessionError> {
-    let mut command = Command::new(&client.program);
+    let mut command = crate::local::sandbox::command(
+        &client.program,
+        spec.confinement.as_ref(),
+        crate::local::sandbox::CLAUDE_STATE,
+        &|name| match (name, &client.config_dir) {
+            ("CLAUDE_CONFIG_DIR", Some(directory)) => directory.to_str().map(str::to_owned),
+            _ => client.environment.variable(name),
+        },
+    )?;
     command
         .args([
             "--print",
@@ -361,7 +369,10 @@ fn launch_command(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    command.args(crate::local::configuration::claude(&spec.config)?);
+    command.args(crate::local::configuration::claude(
+        &spec.config,
+        spec.confinement.is_some(),
+    )?);
     let mcp_config = crate::local::configuration::claude_mcp(&spec.config)
         .map(|document| mcp_config_file(&document))
         .transpose()?;

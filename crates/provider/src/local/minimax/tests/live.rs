@@ -24,6 +24,7 @@ async fn installed_mcode_creates_sessions_for_every_selectable_model() {
                 thinking_option_id: model["defaultThinkingOptionId"].as_str().map(str::to_owned),
                 ..StoredAgentConfig::default()
             },
+            confinement: None,
         };
         let mut session = client.create_session(&spec).await.unwrap();
         assert_eq!(
@@ -65,6 +66,7 @@ async fn installed_latest_mcode_tools_and_cancel() {
             )])),
             ..Default::default()
         },
+        confinement: None,
     };
     let mut session = client.create_session(&spec).await.unwrap();
     session
@@ -170,6 +172,7 @@ async fn installed_latest_mcode_confirms_model_thinking_mode_and_permission_choi
             )])),
             ..Default::default()
         },
+        confinement: None,
     };
     let mut session = client.create_session(&spec).await.unwrap();
     let runtime = session.runtime_info().await.unwrap();

@@ -71,3 +71,34 @@ fn only_nonempty_archive_timestamps_mark_records_archived() {
         assert_eq!(workspace.is_archived(), archived);
     }
 }
+
+#[test]
+fn sandbox_level_is_optional_for_legacy_records_and_round_trips_when_present() {
+    let legacy = json!({"workspaceId":"wks_1","projectId":"prj_1","cwd":"/wt","kind":"worktree",
+        "displayName":"feature","createdAt":"c","updatedAt":"u","archivedAt":null});
+
+    let record: PersistedWorkspaceRecord = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(record.sandbox, None);
+    assert!(
+        serde_json::to_value(&record)
+            .unwrap()
+            .get("sandbox")
+            .is_none()
+    );
+
+    let mut sandboxed = legacy;
+    sandboxed["sandbox"] = json!("worktree_writes");
+    let record: PersistedWorkspaceRecord = serde_json::from_value(sandboxed).unwrap();
+    assert_eq!(
+        record.sandbox,
+        Some(crate::workspace::sandbox::WorkspaceSandbox::WorktreeWrites)
+    );
+    assert_eq!(
+        serde_json::to_value(&record).unwrap()["sandbox"],
+        "worktree_writes"
+    );
+
+    let mut unknown = serde_json::to_value(&record).unwrap();
+    unknown["sandbox"] = json!("network_off");
+    assert!(serde_json::from_value::<PersistedWorkspaceRecord>(unknown).is_err());
+}

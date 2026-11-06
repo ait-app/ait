@@ -110,6 +110,10 @@ impl AgentClient for ClaudeClient {
         true
     }
 
+    fn supports_write_confinement(&self) -> bool {
+        true
+    }
+
     fn bot_session_support(&self) -> BotSessionSupport {
         BotSessionSupport {
             instructions: InstructionDelivery::SystemPrompt,
@@ -212,6 +216,7 @@ impl AgentClient for ClaudeClient {
                 provider: "claude".to_owned(),
                 cwd: cwd.to_owned(),
                 config: StoredAgentConfig::default(),
+                confinement: None,
             })
             .await?;
         Ok(Details {

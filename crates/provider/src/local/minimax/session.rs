@@ -53,7 +53,12 @@ pub(super) async fn open(
     {
         return Err(AgentSessionError::Rejected);
     }
-    let mut command = tokio::process::Command::new(&client.program);
+    let mut command = crate::local::sandbox::command(
+        &client.program,
+        spec.confinement.as_ref(),
+        crate::local::sandbox::MINIMAX_STATE,
+        &|name| client.environment.variable(name),
+    )?;
     command.arg("acp").envs(client.environment.entries());
     if let Some(prompt) = &spec.config.system_prompt {
         command.arg("--append-system-prompt").arg(prompt);

@@ -12,4 +12,5 @@ pub mod provisioning;
 pub mod records;
 pub mod registry;
 pub mod runtime;
+pub mod sandbox;
 pub mod worktrees;

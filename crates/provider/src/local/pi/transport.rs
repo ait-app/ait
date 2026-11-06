@@ -195,15 +195,22 @@ pub(super) struct Transport {
 }
 
 impl Transport {
-    /// Start the configured executable in `cwd` with additional native `args`.
+    /// Start the configured executable in `cwd` with additional native `args`, under
+    /// `confinement` for an Agent in a sandboxed Workspace.
     /// Returns unavailable on launch failure or failed for missing process pipes.
     pub(super) fn spawn(
         client: &PiClient,
         cwd: &str,
         args: &[OsString],
+        confinement: Option<&domain::workspace::sandbox::WriteConfinement>,
     ) -> Result<Self, AgentSessionError> {
         let diagnostics = Diagnostics::new(PROVIDER);
-        let mut command = Command::new(&client.program);
+        let mut command = crate::local::sandbox::command(
+            &client.program,
+            confinement,
+            crate::local::sandbox::PI_STATE,
+            &|name| client.environment.variable(name),
+        )?;
         command
             .args(["--mode", "rpc"])
             .args(args)

@@ -44,6 +44,7 @@ async fn installed_pi_streams_and_resumes_with_loopback_model() {
             model: Some("ait-fixture/fixture-model".into()),
             ..StoredAgentConfig::default()
         },
+        confinement: None,
     };
     let details = client.discover(&spec.cwd).await.unwrap();
     assert!(

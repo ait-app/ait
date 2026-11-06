@@ -66,6 +66,8 @@ pub struct WorktreeCreation {
     pub first_agent_prompt: Option<String>,
     /// Whether an initial Agent will follow creation.
     pub expects_initial_agent: bool,
+    /// Optional OS-enforced Agent write confinement recorded with the Workspace.
+    pub sandbox: Option<crate::workspace::sandbox::WorkspaceSandbox>,
 }
 
 /// Registered workspace and its owning project.

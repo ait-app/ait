@@ -107,7 +107,7 @@ pub(super) async fn open(
     }
     transport::version(client).await?;
     let mut session = Session {
-        transport: Transport::spawn(client, &spec.cwd, &args)?,
+        transport: Transport::spawn(client, &spec.cwd, &args, spec.confinement.as_ref())?,
         id,
         cwd: spec.cwd.clone(),
         native_cwd: handle

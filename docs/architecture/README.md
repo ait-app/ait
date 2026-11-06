@@ -43,7 +43,8 @@ Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端�
   功能服务负责流程，daemon 注入具体适配器；共享契约不执行文件 I/O。
 - `metadata` 拥有 Project/Workspace 登记、setup、worktree/recovery/GitHub provisioning RPC；
   本地 Git、Forge 与目录操作由 `filesystem` 通过 model 端口提供。
-- `provider` 拥有原生历史适配、Timeline SQLite 展示索引和 preset catalog；
+- `provider` 拥有原生历史适配、Timeline SQLite 展示索引和 preset catalog；沙箱 Workspace 的写入
+  confinement 由 agent manager 解析，`provider::local::sandbox` 负责生成平台 profile（[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)）；
   原生 Provider 的认证、工具和会话仍由各原生程序持有，不能合并为一个通用数据库入口。
 
 依赖与数据归属见 [ADR-102](../decisions/providers/adr-102-provider-metadata-independence.md)、

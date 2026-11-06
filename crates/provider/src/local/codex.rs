@@ -29,6 +29,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
+use domain::workspace::sandbox::WriteConfinement;
 use serde_json::{Value, json};
 use transport::Transport;
 
@@ -52,7 +53,26 @@ pub(crate) struct CodexClient {
 
 impl CodexClient {
     fn launch_transport(&self, cwd: &str, goals: bool) -> Result<Transport, AgentSessionError> {
-        Transport::spawn(&self.program, cwd, self.deadline, goals, &self.environment)
+        self.launch_confined(cwd, goals, None)
+    }
+
+    /// Launch an app-server for an Agent session, under `confinement` when it is sandboxed.
+    fn launch_confined(
+        &self,
+        cwd: &str,
+        goals: bool,
+        confinement: Option<&WriteConfinement>,
+    ) -> Result<Transport, AgentSessionError> {
+        Transport::spawn(
+            &self.program,
+            transport::Launch {
+                cwd,
+                goals,
+                confinement,
+            },
+            self.deadline,
+            &self.environment,
+        )
     }
 
     /// Use `program` directly without invoking a shell. Requests have a twenty-second deadline.
@@ -96,15 +116,19 @@ impl CodexClient {
         }
     }
 
-    async fn initialized_transport(&self, cwd: &str) -> Result<Transport, AgentSessionError> {
-        let mut transport = self.launch_transport(cwd, false)?;
+    async fn initialized_transport(
+        &self,
+        cwd: &str,
+        confinement: Option<&WriteConfinement>,
+    ) -> Result<Transport, AgentSessionError> {
+        let mut transport = self.launch_confined(cwd, false, confinement)?;
         let result = async {
             transport.initialize().await?;
             self.inspect_workflows(&mut transport).await?;
             self.ensure_models(&mut transport).await?;
             if self.goals() {
                 transport.close().await?;
-                transport = self.launch_transport(cwd, true)?;
+                transport = self.launch_confined(cwd, true, confinement)?;
                 transport.initialize().await?;
             }
             Ok(())
@@ -123,13 +147,16 @@ impl CodexClient {
         resume: Option<(&AgentPersistenceHandle, AgentResumePurpose)>,
     ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         self.validate_remote(spec).await?;
-        let mut transport = self.initialized_transport(&spec.cwd).await?;
+        let confined = spec.confinement.is_some();
+        let mut transport = self
+            .initialized_transport(&spec.cwd, spec.confinement.as_ref())
+            .await?;
         let result = async {
             let history = resume.is_some_and(|(_, purpose)| purpose == AgentResumePurpose::History);
             let mut sandbox = if history {
                 sandbox::Sandbox::default()
             } else {
-                sandbox::Sandbox::load(&mut transport, &spec.cwd).await?
+                sandbox::Sandbox::load(&mut transport, &spec.cwd, confined).await?
             };
             let (method, mut params) = if let Some((handle, _)) = resume {
                 if handle.provider != "codex" || handle.session_id.trim().is_empty() {
@@ -148,7 +175,7 @@ impl CodexClient {
             };
             if !history {
                 params["cwd"] = json!(spec.cwd);
-                let (approval, sandbox, _) = controls::policy(&spec.config);
+                let (approval, sandbox, _) = controls::policy(&spec.config, confined);
                 params["approvalPolicy"] = json!(approval);
                 params["sandbox"] = json!(sandbox);
                 params["approvalsReviewer"] = json!(workflows::reviewer(&spec.config));
@@ -191,6 +218,7 @@ impl CodexClient {
                     last_failure: None,
                     history,
                     cwd: spec.cwd.clone(),
+                    confinement: spec.confinement.clone(),
                     permissions: std::collections::BTreeMap::new(),
                     questions: async_questions::Questions::restore(saved(
                         resume,
@@ -222,6 +250,10 @@ impl CodexClient {
 #[async_trait::async_trait]
 impl AgentClient for CodexClient {
     fn supports_agent_mcp(&self) -> bool {
+        true
+    }
+
+    fn supports_write_confinement(&self) -> bool {
         true
     }
 
@@ -533,6 +565,7 @@ struct CodexSession {
     last_failure: Option<String>,
     history: bool,
     cwd: String,
+    confinement: Option<WriteConfinement>,
     permissions: std::collections::BTreeMap<String, permissions::Pending>,
     questions: async_questions::Questions,
     pending_plan: Option<plans::Plan>,
@@ -677,13 +710,17 @@ impl CodexSession {
         }
         // Thread-level MCP/config changes require a new native process; resuming an
         // already-loaded thread can return its cached configuration unchanged.
-        let mut transport = self
-            .client
-            .launch_transport(&self.cwd, self.client.goals())?;
+        let confined = self.confinement.is_some();
+        let mut transport = self.client.launch_confined(
+            &self.cwd,
+            self.client.goals(),
+            self.confinement.as_ref(),
+        )?;
         let result = async {
             transport.initialize().await?;
-            let mut resolved_sandbox = sandbox::Sandbox::load(&mut transport, &self.cwd).await?;
-            let (approval, sandbox, _) = controls::policy(config);
+            let mut resolved_sandbox =
+                sandbox::Sandbox::load(&mut transport, &self.cwd, confined).await?;
+            let (approval, sandbox, _) = controls::policy(config, confined);
             let response = native_sessions::resume(
                 &mut transport,
                 json!({"threadId":self.id,
@@ -892,7 +929,7 @@ impl AgentSession for CodexSession {
         }
 
         self.apply_configuration(config).await?;
-        let (approval, _, _) = controls::policy(config);
+        let (approval, _, _) = controls::policy(config, self.confinement.is_some());
         let sandbox = self.sandbox.policy(config);
         let transport = self.transport.as_mut().ok_or(AgentSessionError::Failed)?;
         let input = commands::input(transport, &self.cwd, prompt, &self.client.environment).await?;

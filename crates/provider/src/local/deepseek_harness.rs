@@ -264,6 +264,7 @@ impl AgentClient for DeepSeekHarnessClient {
             provider: PROVIDER.to_owned(),
             cwd: cwd.to_owned(),
             config: StoredAgentConfig::default(),
+            confinement: None,
         })
         .await
     }

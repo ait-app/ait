@@ -51,6 +51,10 @@ impl AgentClient for MiniMaxClient {
         true
     }
 
+    fn supports_write_confinement(&self) -> bool {
+        true
+    }
+
     fn provider(&self) -> &'static str {
         PROVIDER
     }
@@ -86,6 +90,7 @@ impl AgentClient for MiniMaxClient {
             provider: PROVIDER.to_owned(),
             cwd: cwd.to_owned(),
             config: StoredAgentConfig::default(),
+            confinement: None,
         };
         let mut session = session::open(self, &spec, None).await?;
         let details = tokio::time::timeout(self.deadline, session.discover())

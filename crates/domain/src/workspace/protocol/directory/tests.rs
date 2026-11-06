@@ -157,3 +157,24 @@ fn parses_and_validates_worktree_creation_source() {
         );
     }
 }
+
+#[test]
+fn worktree_source_accepts_an_optional_sandbox_level() {
+    let plain: WorkspaceCreateSource =
+        serde_json::from_value(serde_json::json!({"kind":"worktree","cwd":"/repo"})).unwrap();
+    let sandboxed: WorkspaceCreateSource = serde_json::from_value(
+        serde_json::json!({"kind":"worktree","cwd":"/repo","sandbox":"worktree_writes"}),
+    )
+    .unwrap();
+
+    let (WorkspaceCreateSource::Worktree(plain), WorkspaceCreateSource::Worktree(sandboxed)) =
+        (plain, sandboxed)
+    else {
+        panic!("worktree sources");
+    };
+    assert_eq!(plain.sandbox, None);
+    assert_eq!(
+        sandboxed.sandbox,
+        Some(crate::workspace::sandbox::WorkspaceSandbox::WorktreeWrites)
+    );
+}

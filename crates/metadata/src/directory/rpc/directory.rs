@@ -621,6 +621,7 @@ fn workspace_create_worktree(
                 .as_ref()
                 .and_then(|context| context.prompt.clone()),
             expects_initial_agent: request.first_agent_context.is_some(),
+            sandbox: source.sandbox,
         },
         &now_timestamp(),
     );

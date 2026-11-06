@@ -247,6 +247,7 @@ pub(super) fn fresh_history(
             provider: "claude".into(),
             cwd: cwd.to_owned(),
             config: StoredAgentConfig::default(),
+            confinement: None,
         },
     );
     created.clone_into(&mut history.created_at);

@@ -201,6 +201,7 @@ async fn installed_acp_project_catalogs_and_defaults_do_not_leak_between_directo
                 .to_string_lossy()
                 .into_owned(),
             config: StoredAgentConfig::default(),
+            confinement: None,
         });
     }
     let (alpha, beta, gamma, delta) = tokio::join!(

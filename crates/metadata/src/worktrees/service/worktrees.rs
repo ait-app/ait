@@ -22,6 +22,10 @@ use crate::worktrees::ports::WorktreeArchiveCleanup;
 
 pub mod provisioning;
 
+/// Business rejection for sandboxed worktrees on platforms without an OS write sandbox.
+const SANDBOX_UNSUPPORTED: &str =
+    "Sandboxed worktree isolation requires macOS; this host cannot confine Agent writes";
+
 /// Create action independent of the transport schema.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CreateAction {
@@ -58,6 +62,8 @@ pub struct CreateWorktree {
     pub first_agent_prompt: Option<String>,
     /// Whether the caller supplied any first-Agent context.
     pub expects_initial_agent: bool,
+    /// Optional OS-enforced Agent write confinement recorded with the Workspace.
+    pub sandbox: Option<domain::workspace::sandbox::WorkspaceSandbox>,
 }
 
 /// Registered worktree creation result.
@@ -246,6 +252,9 @@ impl Worktrees {
         input: &CreateWorktree,
         timestamp: &str,
     ) -> Result<CreatedWorkspace, WorktreesError> {
+        if input.sandbox.is_some() && !cfg!(target_os = "macos") {
+            return Err(WorktreeError::Invalid(SANDBOX_UNSUPPORTED.to_owned()).into());
+        }
         if let Some(workspace_id) = &input.workspace_id
             && self
                 .workspaces
@@ -509,6 +518,7 @@ impl Worktrees {
                 }
             }),
             untrusted_source,
+            sandbox: input.sandbox,
         };
         self.workspaces
             .upsert(

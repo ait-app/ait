@@ -455,6 +455,7 @@ impl ExecutionState {
                     provider: request.config.provider,
                     cwd: request.config.cwd,
                     config: request.config.stored,
+                    confinement: None,
                 },
                 AgentRegistration {
                     workspace_id: Some(workspace_id.clone()),
@@ -709,6 +710,7 @@ const fn map_manager(error: &AgentManagerError) -> ErrorCode {
         AgentManagerError::NotFound(_) => ErrorCode::AgentNotFound,
         AgentManagerError::ProviderUnavailable(_)
         | AgentManagerError::MissingPersistence(_)
+        | AgentManagerError::ConfinementUnsupported(_)
         | AgentManagerError::Busy => ErrorCode::UnsupportedCapability,
         AgentManagerError::InvalidRequest
         | AgentManagerError::AlreadyExists(_)

@@ -70,6 +70,7 @@ fn spec() -> AgentSessionSpec {
         provider: "minimal".into(),
         cwd: "/repo".into(),
         config: StoredAgentConfig::default(),
+        confinement: None,
     }
 }
 

@@ -37,6 +37,7 @@ fn workspace(labels: Option<Vec<String>>, updated_at: &str) -> PersistedWorkspac
         labels,
         auto_name: None,
         untrusted_source: None,
+        sandbox: None,
     }
 }
 

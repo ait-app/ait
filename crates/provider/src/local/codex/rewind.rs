@@ -12,7 +12,7 @@ impl CodexClient {
         message: &str,
     ) -> Result<SessionHistory, AgentSessionError> {
         super::validate(spec)?;
-        let mut transport = self.launch_transport(&spec.cwd, false)?;
+        let mut transport = self.launch_confined(&spec.cwd, false, spec.confinement.as_ref())?;
         let result = async {
             transport.initialize().await?;
             rewind(&mut transport, id, spec, message, &self.images).await
@@ -58,7 +58,7 @@ async fn rewind(
         return Err(AgentSessionError::Rejected);
     }
     let index = targets[0].0;
-    let (approval, sandbox, _) = controls::policy(&spec.config);
+    let (approval, sandbox, _) = controls::policy(&spec.config, spec.confinement.is_some());
     let mut params = json!({"threadId":id,"cwd":spec.cwd,"model":spec.config.model,
         "approvalPolicy":approval,"sandbox":sandbox,"excludeTurns":false,
         "beforeTurnId":turns[index]["id"],

@@ -249,7 +249,13 @@ pub(super) fn complete_codex_approval(approval: &mut Value) {
 }
 
 /// Native Claude CLI argument pairs, without a shell or interpolation.
-pub(super) fn claude(config: &StoredAgentConfig) -> Result<Vec<String>, AgentSessionError> {
+///
+/// A `confined` process already runs under the Workspace's OS write sandbox, which refuses
+/// Claude Code's nested Seatbelt profile, so Claude's own Bash sandbox is turned off.
+pub(super) fn claude(
+    config: &StoredAgentConfig,
+    confined: bool,
+) -> Result<Vec<String>, AgentSessionError> {
     validate(config, "claude")?;
     let empty = BTreeMap::new();
     let options = config.provider_options.as_ref().unwrap_or(&empty);
@@ -301,6 +307,9 @@ pub(super) fn claude(config: &StoredAgentConfig) -> Result<Vec<String>, AgentSes
         .unwrap_or_else(|| json!({}));
     if let Some(sandbox) = options.get("sandbox") {
         merge(&mut settings["sandbox"], sandbox);
+    }
+    if confined {
+        merge(&mut settings["sandbox"], &json!({"enabled": false}));
     }
     if let Some(fast) = config
         .feature_values

@@ -36,6 +36,7 @@ impl AgentManager {
             provider: record.provider.clone(),
             cwd: record.cwd.clone(),
             config: record.config.clone().unwrap_or_default(),
+            confinement: None,
         };
         validate_identity(&id, &spec)?;
         if let Some(workspace) = &record.workspace_id {
@@ -57,6 +58,7 @@ impl AgentManager {
             &spec,
             AgentResumePurpose::Interactive,
         )?;
+        let launch = self.confine(launch, record.workspace_id.as_deref())?;
         let session = super::execution::native(
             &spec.provider,
             "resume",
@@ -114,6 +116,7 @@ impl AgentManager {
             provider: record.provider.clone(),
             cwd: record.cwd.clone(),
             config: record.config.clone().unwrap_or_default(),
+            confinement: None,
         };
         validate_identity(agent_id, &spec)?;
         self.available_client(&record.provider)
@@ -140,6 +143,7 @@ impl AgentManager {
             &spec,
             AgentResumePurpose::Interactive,
         )?;
+        let launch = self.confine(launch, record.workspace_id.as_deref())?;
         let session = super::execution::native(
             &spec.provider,
             "restore",

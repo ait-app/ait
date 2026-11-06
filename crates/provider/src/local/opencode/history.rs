@@ -259,6 +259,7 @@ pub(super) async fn inspect(
         provider: PROVIDER.into(),
         cwd: cwd.into(),
         config: StoredAgentConfig::default(),
+        confinement: None,
     };
     config::validate_spec(&spec)?;
     let (mut transport, _, source) = launcher::observed(client, cwd, &spec.config).await?;

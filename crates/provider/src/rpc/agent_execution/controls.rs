@@ -238,6 +238,7 @@ impl ExecutionState {
                         provider: record.provider,
                         cwd: record.cwd,
                         config: record.config.unwrap_or_default(),
+                        confinement: None,
                     },
                 )
             }
@@ -249,6 +250,7 @@ impl ExecutionState {
                         provider: draft.provider,
                         cwd: canonical(&draft.cwd)?,
                         config: draft.stored,
+                        confinement: None,
                     },
                 )
             }

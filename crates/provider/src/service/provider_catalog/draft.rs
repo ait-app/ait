@@ -26,6 +26,7 @@ pub(super) async fn features(
                     provider: config.provider,
                     cwd,
                     config: config.stored,
+                    confinement: None,
                 })
                 .await
             {
