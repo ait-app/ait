@@ -38,6 +38,8 @@
 - [Agent 共享读视图](decisions/providers/adr-210-committed-runtime-read-snapshots.md)：已提交记录、目录与 Hub 读取的性能边界。
 - [daemon 启动与发布](decisions/daemon/adr-201-daemon-owned-publication.md)：实例锁覆盖本地令牌、诊断采集和运行时重启；
   [访客资源边界](decisions/daemon/adr-208-workspace-share-guests.md)说明撤销清理、配置保护及后台自动化的只读权限。
+- [默认数据目录](decisions/clients/adr-216-default-data-directory-ait.md)：依次使用已存在的 `~/.ait`、
+  `~/.ait-server-desktop`、`~/.ait-server`，都不存在时创建 `~/.ait`，不移动旧目录。
 - [桌面进程交接](decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)：退出交接要求已收到就绪日志；
   [MCP Unix socket](decisions/daemon/adr-203-mcp-unix-socket.md)要求绑定前验证私有父目录。
 - [移动端 E2E](../apps/mobile/e2e/README.md)、[Maestro](../apps/mobile/maestro/README.md)。

@@ -7,6 +7,7 @@ import {
 import { spawn, type ChildProcess } from "node:child_process";
 import {
   closeSync,
+  existsSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -21,8 +22,14 @@ import { hostname, homedir, uptime } from "node:os";
 import path from "node:path";
 import { WebSocket } from "ws";
 
-export function resolveDesktopDaemonHome(env: NodeJS.ProcessEnv): string {
-  return path.resolve(env.AIT_SERVER_DATA_DIR || path.join(homedir(), ".ait-server-desktop"));
+// Lookup order under the user's home: the current default, then the retired Desktop-managed and
+// standalone daemon defaults. Existing directories are used in place and never moved.
+const DAEMON_HOME_DIRNAMES = [".ait", ".ait-server-desktop", ".ait-server"] as const;
+
+export function resolveDesktopDaemonHome(env: NodeJS.ProcessEnv, userHome = homedir()): string {
+  if (env.AIT_SERVER_DATA_DIR) return path.resolve(env.AIT_SERVER_DATA_DIR);
+  const candidates = DAEMON_HOME_DIRNAMES.map((name) => path.resolve(userHome, name));
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
 
 const DAEMON_LOG_ROTATE_BYTES = 10 * 1024 * 1024;

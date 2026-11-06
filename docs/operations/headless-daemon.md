@@ -19,7 +19,7 @@ systemd/launchd 等服务配置中的路径）。下载、校验、安装与 sys
 
 ## 登录与运行
 
-以运行服务的相同账号和数据目录完成一次授权。默认数据目录沿用 `~/.ait-server`，可通过
+以运行服务的相同账号和数据目录完成一次授权。默认数据目录为 `~/.ait`（已有 `~/.ait-server-desktop` 或 `~/.ait-server` 时依次沿用），可通过
 `--data-dir` 或 `AIT_SERVER_DATA_DIR` 指定。login/logout 之前先用既有脚本停止同目录 daemon。
 
 ```sh
