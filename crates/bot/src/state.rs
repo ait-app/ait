@@ -15,6 +15,7 @@ use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
+use crate::mcp::Scopes;
 use crate::protocol::{self, decode};
 
 #[derive(Debug)]
@@ -28,6 +29,7 @@ pub(crate) struct State {
     pub(crate) store: Arc<dyn Store>,
     workspaces: Arc<dyn WorkspaceRegistry>,
     projects: Arc<dyn ProjectRegistry>,
+    scopes: Arc<Scopes>,
     catalog: Catalog,
     conversations: BTreeMap<ConversationId, Conversation>,
     receipts: BTreeMap<BotTurnId, Receipt>,
@@ -47,13 +49,16 @@ impl State {
         store: Arc<dyn Store>,
         workspaces: Arc<dyn WorkspaceRegistry>,
         projects: Arc<dyn ProjectRegistry>,
+        scopes: Arc<Scopes>,
     ) -> Result<Self, ErrorCode> {
         let catalog = store.catalog().map_err(|_| ErrorCode::BotIo)?;
         catalog::validate(&catalog)?;
+        scopes.publish(&catalog);
         let mut state = Self {
             store,
             workspaces,
             projects,
+            scopes,
             catalog,
             conversations: BTreeMap::new(),
             receipts: BTreeMap::new(),
@@ -239,6 +244,7 @@ impl State {
             self.frozen = true;
             return Err(ErrorCode::BotIo);
         }
+        self.scopes.publish(&catalog);
         self.catalog = catalog;
         Ok(())
     }

@@ -59,7 +59,8 @@ impl State {
         }
         Ok(())
     }
-    /// Retire the archived Workspaces' Bots and delete those Workspaces' Bot memory.
+    /// Retire the archived Workspaces' Bots, drop them from every Bot's created worktrees and
+    /// delete those Workspaces' Bot memory.
     pub(crate) fn retire(&mut self, workspaces: &[String]) -> Result<(), ErrorCode> {
         self.ensure_writable()?;
         let workspaces: BTreeSet<&str> = workspaces.iter().map(String::as_str).collect();
@@ -73,8 +74,22 @@ impl State {
             })
             .map(|bot| bot.id)
             .collect();
-        if !bots.is_empty() {
-            self.retire_bots(&bots)?;
+        let archived = |created: &String| workspaces.contains(created.as_str());
+        let pruned = self
+            .catalog
+            .bots
+            .iter()
+            .any(|bot| bot.workspaces.iter().any(archived));
+        if pruned || !bots.is_empty() {
+            let mut catalog = self.catalog.clone();
+            for bot in &mut catalog.bots {
+                bot.workspaces.retain(|created| !archived(created));
+            }
+            if bots.is_empty() {
+                self.save_catalog(catalog)?;
+            } else {
+                self.retire_bots(catalog, &bots)?;
+            }
         }
         for workspace in workspaces {
             if self.store.delete_memory(workspace).is_err() {

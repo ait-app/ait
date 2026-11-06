@@ -359,6 +359,7 @@ fn compose_services(
         &storage.projects,
         &storage.agents,
     );
+    let scopes = ::bot::mcp::Scopes::new();
     let agent_mcp = AgentMcp::new(address, mcp_token, Arc::new(config_store.clone()));
     let daemon = compose_daemon(config_store, address, &server_id)?;
     let workspace_automation = Arc::new(Mutex::new(workspace_automation));
@@ -394,8 +395,7 @@ fn compose_services(
         config,
         &agent_execution,
         (&storage.workspaces, &storage.projects),
-        &directory,
-        &worktrees,
+        (&directory, &worktrees, scopes),
     )?;
     let metadata = metadata::Service::new(metadata::Dependencies {
         workspace_names,
@@ -445,14 +445,14 @@ fn compose_background(
     config: &Config,
     execution: &AgentExecution,
     registries: (&FileBackedWorkspaceRegistry, &FileBackedProjectRegistry),
-    directory: &Directory,
-    worktrees: &Arc<Mutex<Worktrees>>,
+    (directory, worktrees, scopes): (&Directory, &Arc<Mutex<Worktrees>>, Arc<::bot::mcp::Scopes>),
 ) -> anyhow::Result<(::schedule::service::Schedules, ::bot::service::Bots)> {
     let bots = bot::compose(
         &config.data_dir,
         registries.0,
         registries.1,
         execution.clone(),
+        scopes,
     )?;
     let schedules = schedule::compose(
         &config.data_dir,

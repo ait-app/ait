@@ -34,6 +34,7 @@ fn bots(root: &std::path::Path) -> Bots {
         projects: Arc::new(projects),
         executor: Arc::new(Native),
         credentials: Arc::new(Native),
+        scopes: ::bot::mcp::Scopes::new(),
     })
     .unwrap()
 }

@@ -15,6 +15,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 use crate::channels::Incoming;
+use crate::mcp::Scopes;
 use crate::ports::{Credentials, Executor};
 use crate::state::State;
 
@@ -30,6 +31,8 @@ pub struct Dependencies {
     pub executor: Arc<dyn Executor>,
     /// Host environment credential resolver.
     pub credentials: Arc<dyn Credentials>,
+    /// Daemon-wide scoped MCP credential registry, refreshed on every catalog change.
+    pub scopes: Arc<Scopes>,
 }
 
 /// Safe startup or worker-lifecycle failure.
@@ -49,6 +52,7 @@ struct Worker {
     cancellation: CancellationToken,
     closed: watch::Receiver<bool>,
     executor: Arc<dyn Executor>,
+    scopes: Arc<Scopes>,
 }
 
 /// Cloneable application service; conversations outlive UI connections.
@@ -93,6 +97,7 @@ impl Bots {
             dependencies.store,
             dependencies.workspaces,
             dependencies.projects,
+            dependencies.scopes.clone(),
         )
         .map_err(|_| Error::Initialization)?;
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -107,6 +112,7 @@ impl Bots {
             cancellation,
             closed: observed,
             executor: dependencies.executor,
+            scopes: dependencies.scopes,
         }));
         let worker = bots.clone();
         std::thread::Builder::new()
@@ -124,6 +130,12 @@ impl Bots {
     /// Returns validation, ownership, resource, persistence or lifecycle failures.
     pub async fn execute(&self, method: &str, params: Value) -> Result<Value, ErrorCode> {
         self.call(Operation::Rpc(method.to_owned(), params)).await
+    }
+
+    /// The scoped MCP credential registry this service publishes authorization into.
+    #[must_use]
+    pub fn scopes(&self) -> &Arc<Scopes> {
+        &self.0.scopes
     }
 
     /// Stop admission and signal channel receivers and active turns to shut down.

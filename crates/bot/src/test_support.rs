@@ -11,6 +11,7 @@ use provider::service::bot_execution::Action;
 use secrecy::SecretString;
 use serde_json::{Value, json};
 
+use crate::mcp::Scopes;
 use crate::ports::{Credentials, Executor};
 use crate::service::{Bots, Dependencies};
 use crate::state::State;
@@ -73,6 +74,7 @@ pub(crate) struct Fixture {
     pub(crate) workspaces: Arc<FileBackedWorkspaceRegistry>,
     pub(crate) projects: Arc<FileBackedProjectRegistry>,
     pub(crate) native: Arc<Native>,
+    pub(crate) scopes: Arc<Scopes>,
 }
 impl Fixture {
     pub(crate) fn new() -> Self {
@@ -113,6 +115,7 @@ impl Fixture {
             workspaces,
             projects,
             native: Arc::default(),
+            scopes: Scopes::new(),
         }
     }
     pub(crate) fn state(&self) -> State {
@@ -120,6 +123,7 @@ impl Fixture {
             self.store.clone(),
             self.workspaces.clone(),
             self.projects.clone(),
+            self.scopes.clone(),
         )
         .unwrap()
     }
@@ -139,6 +143,7 @@ impl Fixture {
             projects: self.projects.clone(),
             executor: self.native.clone(),
             credentials: Arc::new(NoCredentials),
+            scopes: self.scopes.clone(),
         })
         .unwrap()
     }

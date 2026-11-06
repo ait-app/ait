@@ -284,7 +284,7 @@ impl State {
     /// Retire the Workspace's Bot at the user's request; its memory is kept for a later setup.
     pub(super) fn remove(&mut self, request: &WorkspaceRequest) -> Result<Value, ErrorCode> {
         let id = self.current(&request.workspace_id)?.id;
-        self.retire_bots(&BTreeSet::from([id]))?;
+        self.retire_bots(self.catalog.clone(), &BTreeSet::from([id]))?;
         Ok(json!({"bot":super::view(self.bot(id)?)}))
     }
     /// Persist `reason` as the Bot's pause cause, then cancel its queued work and release
@@ -298,11 +298,14 @@ impl State {
         self.stop_bot(id, false, cancellation)?;
         Ok(view)
     }
-    /// Retire `bots`, release their external channel accounts, and close their native
-    /// sessions. Builtin channels stay so retired history keeps its routing.
-    pub(super) fn retire_bots(&mut self, bots: &BTreeSet<BotId>) -> Result<(), ErrorCode> {
+    /// Save `catalog` with `bots` retired and their external channel accounts released, then
+    /// close their native sessions. Builtin channels stay so retired history keeps its routing.
+    pub(super) fn retire_bots(
+        &mut self,
+        mut catalog: Catalog,
+        bots: &BTreeSet<BotId>,
+    ) -> Result<(), ErrorCode> {
         let at = chrono::Utc::now().to_rfc3339();
-        let mut catalog = self.catalog.clone();
         for bot in catalog.bots.iter_mut().filter(|bot| bots.contains(&bot.id)) {
             bot.state = BotState::Retired { at: at.clone() };
         }

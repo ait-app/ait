@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Context;
+use bot::mcp::Scopes;
 use bot::ports::Credentials;
 use bot::service::{Bots, Dependencies};
 use model::ErrorCode;
@@ -37,6 +38,7 @@ pub(super) fn compose<
     workspaces: &W,
     projects: &P,
     execution: AgentExecution,
+    scopes: Arc<Scopes>,
 ) -> anyhow::Result<Bots> {
     let bots = Bots::spawn(Dependencies {
         store: Arc::new(FileStore::new(data.join("workspace-bots"))),
@@ -44,6 +46,7 @@ pub(super) fn compose<
         projects: Arc::new(projects.clone()),
         executor: Arc::new(execution.clone()),
         credentials: Arc::new(Environment),
+        scopes,
     })
     .context("start Bot service")?;
     if let Ok(runtime) = tokio::runtime::Handle::try_current() {
