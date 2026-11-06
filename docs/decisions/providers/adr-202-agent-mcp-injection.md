@@ -3,6 +3,7 @@
 - 状态：接受
 - 日期：2026-10-29
 - 修订：[ADR-148](../daemon/adr-148-daemon-mcp.md) 的 Provider 自动注入范围与专用路由认证。
+- 后续修订：[ADR-215](../bot/adr-215-bot-permissions-and-scoped-mcp.md) 为 Bot 会话及其启动的 Agent 签发作用域凭据：覆盖用户的 `ait` 项，Bot 会话不受 `injectIntoAgents` 控制，无法交付时移除 `ait` 项而不回退到共享令牌。
 
 daemon 已经提供 MCP Server，Skill 也已自动分发。连接应由原生客户端建立，因此由 host
 将实际监听地址、进程级 MCP 专用令牌和共享配置存储交给 provider 的 `AgentMcp` 模块。

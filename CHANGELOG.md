@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Let a Workspace Bot manage its Workspace within the permissions you grant: it can start and prompt Agents, manage schedules, and optionally run scripts, terminals and worktrees through scoped Ait MCP credentials, with a per-provider mode cap. The setup wizard and settings add permission groups and mode caps.
+- Existing Bots upgrade with the default groups but an empty mode cap, so configure modes in Bot settings before the Bot can start Agents.
+- Bot models from providers other than Codex and Claude degrade by capability (instructions on the first input, default native mode, no preapproved tools) and settings describe the difference. Agents that can run commands can still read local daemon credentials, as the settings warning explains.
 - Add the Workspace Bot tab for `workspace-bots-v2` hosts: one Bot tab per Workspace with a setup wizard, chat, and settings for model, pause and resume, memory, Telegram and Feishu channels, and removal. It remains behind the experimental features setting, and guests get read-only access.
 - Migrate existing Bot tabs automatically: saved per-Bot tabs collapse into a single Bot tab per pane.
 
