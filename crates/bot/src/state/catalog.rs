@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use domain::bot::permissions::BotPermissions;
 use domain::bot::{Bot, BotState, Catalog, Channel, ChannelConfig, ExecutionConfig, PauseReason};
 use domain::{BotId, ChannelId};
 use model::ErrorCode;
@@ -9,13 +8,16 @@ use serde_json::{Value, json};
 
 use super::State;
 use crate::protocol::{
-    ChannelCreate, ChannelRequest, ChannelUpdate, Setup, Update, WorkspaceRequest,
+    ChannelCreate, ChannelRequest, ChannelUpdate, PermissionsUpdate, Setup, Update,
+    WorkspaceRequest,
 };
 
 /// Most Bots that are not retired.
 const LIVE_BOTS: usize = 128;
 /// Most undeleted Channels owned by Bots that are not retired.
 const LIVE_CHANNELS: usize = 256;
+/// Most worktree Workspaces a Bot may have created and still own.
+const BOT_WORKSPACES: usize = 64;
 /// Hard cap on stored Bots; retired Bots keep their history, so it exceeds the live limit.
 const STORED_BOTS: usize = 4096;
 /// Hard cap on stored Channels; deleted Channels keep their history, so it exceeds the live limit.
@@ -49,6 +51,10 @@ pub(super) fn validate(catalog: &Catalog) -> Result<(), ErrorCode> {
     let mut workspaces = BTreeSet::new();
     for bot in &catalog.bots {
         validate_execution(&bot.execution)?;
+        bot.permissions
+            .clone()
+            .normalized()
+            .map_err(|_| ErrorCode::InvalidMessage)?;
         if !model::valid_id(&bot.workspace_id)
             || bots.insert(bot.id, bot).is_some()
             || (!retired(bot) && !workspaces.insert(bot.workspace_id.as_str()))
@@ -101,6 +107,13 @@ fn validate_execution(execution: &ExecutionConfig) -> Result<(), ErrorCode> {
     Ok(())
 }
 
+/// Validate `execution` and drop the mode: a Bot's native mode is chosen by the server.
+fn normalized_execution(mut execution: ExecutionConfig) -> Result<ExecutionConfig, ErrorCode> {
+    validate_execution(&execution)?;
+    execution.mode_id = None;
+    Ok(execution)
+}
+
 fn validate_channel(config: &ChannelConfig) -> Result<(), ErrorCode> {
     let (reference, senders) = match config {
         ChannelConfig::Builtin => return Ok(()),
@@ -142,21 +155,26 @@ fn account(config: &ChannelConfig) -> Option<(&'static str, &str)> {
 impl State {
     pub(super) fn setup(&mut self, request: Setup) -> Result<Value, ErrorCode> {
         self.active_workspace(&request.workspace_id)?;
+        let execution = normalized_execution(request.execution)?;
+        let permissions = request
+            .permissions
+            .unwrap_or_default()
+            .normalized()
+            .map_err(|_| ErrorCode::InvalidMessage)?;
         if let Ok(bot) = self.current(&request.workspace_id) {
-            if bot.execution == request.execution {
+            if bot.execution == execution && bot.permissions == permissions {
                 return Ok(json!({"bot":super::view(bot),"created":false}));
             }
             return Err(ErrorCode::BotConflict);
         }
-        validate_execution(&request.execution)?;
         let bot = Bot {
             id: BotId::generate(),
             workspace_id: request.workspace_id,
-            execution: request.execution,
+            execution,
             builtin_channel_id: ChannelId::generate(),
             state: BotState::Active,
             created_at: chrono::Utc::now().to_rfc3339(),
-            permissions: BotPermissions::default(),
+            permissions,
             workspaces: BTreeSet::new(),
         };
         let mut catalog = self.catalog.clone();
@@ -188,10 +206,57 @@ impl State {
             .iter_mut()
             .find(|entry| entry.id == id)
             .ok_or(ErrorCode::BotNotFound)?;
-        bot.execution = request.execution;
+        bot.execution = normalized_execution(request.execution)?;
         let view = super::view(bot);
         self.save_catalog(catalog)?;
         Ok(json!({"bot":view,"configurationAppliesToNewSessions":true}))
+    }
+    /// Replace the current Bot's tool groups and mode caps; the next turn reads them.
+    pub(super) fn update_permissions(
+        &mut self,
+        request: PermissionsUpdate,
+    ) -> Result<Value, ErrorCode> {
+        let id = self.current(&request.workspace_id)?.id;
+        let permissions = request
+            .permissions
+            .normalized()
+            .map_err(|_| ErrorCode::InvalidMessage)?;
+        let mut catalog = self.catalog.clone();
+        let bot = catalog
+            .bots
+            .iter_mut()
+            .find(|entry| entry.id == id)
+            .ok_or(ErrorCode::BotNotFound)?;
+        bot.permissions = permissions;
+        let view = super::view(bot);
+        self.save_catalog(catalog)?;
+        Ok(json!({"bot":view,"appliesToNextTurn":true}))
+    }
+    /// Record a worktree Workspace created by the Workspace's current Bot.
+    ///
+    /// # Errors
+    /// `BotNotFound` without a current Bot, `ResourceExhausted` beyond 64 recorded
+    /// Workspaces, or a persistence failure.
+    pub(crate) fn record_workspace(
+        &mut self,
+        origin: &str,
+        created: &str,
+    ) -> Result<(), ErrorCode> {
+        let id = self.current(origin)?.id;
+        let mut catalog = self.catalog.clone();
+        let bot = catalog
+            .bots
+            .iter_mut()
+            .find(|entry| entry.id == id)
+            .ok_or(ErrorCode::BotNotFound)?;
+        if bot.workspaces.contains(created) {
+            return Ok(());
+        }
+        if bot.workspaces.len() >= BOT_WORKSPACES {
+            return Err(ErrorCode::ResourceExhausted);
+        }
+        bot.workspaces.insert(created.to_owned());
+        self.save_catalog(catalog)
     }
     /// Pause the Workspace's active Bot at the user's request.
     pub(super) fn pause(&mut self, request: &WorkspaceRequest) -> Result<Value, ErrorCode> {

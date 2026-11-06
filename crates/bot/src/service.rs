@@ -66,6 +66,7 @@ enum Operation {
     DeliveryNext(ChannelId),
     Delivery(BotTurnId, DeliveryStatus),
     Retire(Vec<String>),
+    RecordWorkspace(String, String),
 }
 /// Outcome of channel input that the Bot did not refuse.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -137,6 +138,19 @@ impl Bots {
         self.call(Operation::Retire(workspaces.to_vec()))
             .await
             .map(|_| ())
+    }
+
+    /// Record a worktree Workspace created by `origin`'s current Bot.
+    /// # Errors
+    /// `BotNotFound` without a current Bot, `ResourceExhausted` beyond 64 recorded
+    /// Workspaces, or persistence and worker lifecycle failures.
+    pub async fn record_workspace(&self, origin: &str, created: &str) -> Result<(), ErrorCode> {
+        self.call(Operation::RecordWorkspace(
+            origin.to_owned(),
+            created.to_owned(),
+        ))
+        .await
+        .map(|_| ())
     }
 
     /// Wait for all channel tasks and native turn cancellations after stopping admission.
@@ -372,6 +386,9 @@ fn apply(
         }
         Operation::Delivery(turn, status) => state.delivery(turn, status).map(|()| Value::Null),
         Operation::Retire(workspaces) => state.retire(&workspaces).map(|()| Value::Null),
+        Operation::RecordWorkspace(origin, created) => state
+            .record_workspace(&origin, &created)
+            .map(|()| Value::Null),
     }
 }
 

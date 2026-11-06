@@ -134,6 +134,7 @@ impl State {
             }
             "bot.setup.request" => self.setup(decode(params)?),
             "bot.update.request" => self.update(decode(params)?),
+            "bot.permissions.update.request" => self.update_permissions(decode(params)?),
             "bot.pause.request" => self.pause(&decode(params)?),
             "bot.resume.request" => self.resume(&decode(params)?),
             "bot.remove.request" => self.remove(&decode(params)?),
@@ -346,7 +347,8 @@ impl State {
 /// Client projection of a Bot; the internal storage identity is never exposed.
 fn view(bot: &Bot) -> Value {
     json!({"workspaceId":bot.workspace_id,"execution":bot.execution,
-        "builtinChannelId":bot.builtin_channel_id,"state":bot.state,"createdAt":bot.created_at})
+        "builtinChannelId":bot.builtin_channel_id,"state":bot.state,"createdAt":bot.created_at,
+        "permissions":bot.permissions})
 }
 
 /// Client projection of a channel; the owning Bot's storage identity is never exposed.
