@@ -390,6 +390,7 @@ impl Scoped {
             TOKEN.into(),
             Services {
                 bot: Some(bots),
+                filesystem: Some(chunks::filesystem_service::service(&data)),
                 metadata: Some(metadata(&data, &registries, directory)),
                 provider: Some(provider(&base, &registries)),
                 schedule: Some(schedules),

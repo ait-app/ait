@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use domain::bot::{BotState, ChannelConfig, DeliveryStatus, PauseReason, TurnStatus};
+use domain::bot::{Bot, BotState, ChannelConfig, DeliveryStatus, PauseReason, TurnStatus};
 use domain::{BotId, BotTurnId, ConversationId};
 use model::ErrorCode;
 use provider::service::bot_execution::Action;
@@ -152,7 +152,7 @@ impl State {
             if !channel.enabled || channel.deleted {
                 continue;
             }
-            let Ok(instructions) = self.instructions(&bot.workspace_id) else {
+            let Ok(instructions) = self.instructions(&bot) else {
                 failed.push(*id);
                 continue;
             };
@@ -180,9 +180,12 @@ impl State {
         }
         Ok(ready)
     }
-    fn instructions(&self, workspace: &str) -> Result<String, ErrorCode> {
-        let memory = self.store.memory(workspace).map_err(|_| ErrorCode::BotIo)?;
-        Ok(crate::instructions::compose(&memory))
+    fn instructions(&self, bot: &Bot) -> Result<String, ErrorCode> {
+        let memory = self
+            .store
+            .memory(&bot.workspace_id)
+            .map_err(|_| ErrorCode::BotIo)?;
+        Ok(crate::instructions::compose(&memory, &bot.permissions))
     }
     pub(crate) fn progress(
         &mut self,

@@ -10,7 +10,7 @@ mod confinement;
 mod schedules;
 mod support;
 
-use support::{BOT_SESSION, Scoped, codex_modes, rejected, succeeded};
+use support::{BOT_SESSION, Scoped, codex_modes, rejected, structured, succeeded};
 
 #[tokio::test]
 async fn scoped_credential_lists_only_granted_tools() {
@@ -23,6 +23,9 @@ async fn scoped_credential_lists_only_granted_tools() {
         "list_schedules",
         "cancel_agent",
         "list_agents",
+        "workspace_overview",
+        "bot_memory_read",
+        "bot_memory_update",
     ] {
         assert!(bot.contains(granted), "{granted}: {bot:?}");
     }
@@ -37,10 +40,13 @@ async fn scoped_credential_lists_only_granted_tools() {
         assert!(!bot.contains(withheld), "{withheld}");
     }
     let defaults = BotPermissions::default();
+    let bot_only = ["bot_memory_read", "bot_memory_update", "workspace_overview"];
+    assert!(bot_only.iter().all(|tool| !host.contains(*tool)));
     let expected: BTreeSet<_> = host
         .iter()
         .filter(|tool| defaults.allows(tool, true))
         .cloned()
+        .chain(bot_only.map(str::to_owned))
         .collect();
     assert_eq!(bot, expected);
     scoped.stop().await;
@@ -249,4 +255,101 @@ async fn scoped_credential_is_limited_to_the_mcp_route() {
         StatusCode::OK
     );
     scoped.stop().await;
+}
+
+#[tokio::test]
+async fn bot_memory_tools_are_revision_checked_and_bot_only() {
+    let scoped = Scoped::start().await;
+    scoped.setup(Value::Null).await;
+    let credential = scoped.bot_credential();
+    let read = scoped
+        .call(&credential, None, "bot_memory_read", json!({}))
+        .await;
+    let first = structured(&read)["revision"].as_str().unwrap().to_owned();
+    assert_eq!(structured(&read)["text"], "");
+    let update = |text: &str, expected: &str| json!({"text":text,"expected":expected});
+    let saved = scoped
+        .call(
+            &credential,
+            None,
+            "bot_memory_update",
+            update("PR titles in Chinese", &first),
+        )
+        .await;
+    let second = structured(&saved)["revision"].as_str().unwrap().to_owned();
+    assert_ne!(second, first);
+    let stale = scoped
+        .call(
+            &credential,
+            None,
+            "bot_memory_update",
+            update("lost", &first),
+        )
+        .await;
+    assert_eq!(stale["result"]["isError"], true, "{stale}");
+    assert!(
+        stale["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("bot_memory_read"),
+        "{stale}"
+    );
+    let reread = scoped
+        .call(&credential, None, "bot_memory_read", json!({}))
+        .await;
+    assert_eq!(structured(&reread)["text"], "PR titles in Chinese");
+    assert_eq!(structured(&reread)["revision"], second.as_str());
+    let oversized = scoped
+        .call(
+            &credential,
+            None,
+            "bot_memory_update",
+            update(&"x".repeat(32 * 1024 + 1), &second),
+        )
+        .await;
+    rejected(&oversized, "Arguments do not match the tool input schema");
+    let overview = scoped
+        .call(&credential, None, "workspace_overview", json!({}))
+        .await;
+    let overview = structured(&overview);
+    assert_eq!(overview["workspace"]["id"], scoped.workspace.as_str());
+    assert_eq!(overview["workspace"]["branch"], "main");
+    assert_eq!(overview["memory"]["revision"], second.as_str());
+    assert_eq!(overview["memory"]["bytes"], 20);
+    assert_eq!(overview["botAgents"], json!([]));
+    assert!(overview["notifications"].is_null());
+    let child = scoped.subtree_agent().await;
+    let other = scoped
+        .agent_in(&scoped.other, &scoped.other_cwd, json!({}), None)
+        .await;
+    let overview = scoped
+        .call(&credential, None, "workspace_overview", json!({}))
+        .await;
+    let overview = structured(&overview);
+    let listed: Vec<_> = overview["botAgents"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|agent| agent["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(listed, [child.as_str()]);
+    assert!(!overview.to_string().contains(&other));
+    let subtree = scoped.subtree_credential(&child);
+    assert!(scoped.tools(TOKEN).await.is_disjoint(&bot_only_names()));
+    assert!(scoped.tools(&subtree).await.is_disjoint(&bot_only_names()));
+    for token in [TOKEN, subtree.as_str()] {
+        for tool in bot_only_names() {
+            rejected(
+                &scoped.call(token, None, &tool, json!({})).await,
+                "Unknown or unavailable tool",
+            );
+        }
+    }
+    scoped.stop().await;
+}
+
+fn bot_only_names() -> BTreeSet<String> {
+    ["bot_memory_read", "bot_memory_update", "workspace_overview"]
+        .map(str::to_owned)
+        .into()
 }

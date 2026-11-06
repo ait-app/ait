@@ -11,6 +11,7 @@ use super::catalog::Tool;
 use super::scope::{self, Failure};
 
 pub(super) mod creation;
+mod overview;
 mod queries;
 mod schedules;
 
@@ -32,6 +33,9 @@ pub(super) async fn execute(
             scope::reserved_labels(&arguments)?;
         }
         None => {}
+    }
+    if overview::handles(&tool.name) {
+        return overview::execute(state, &tool.name, arguments, scope).await;
     }
     let mut result = dispatch(state, tool, arguments, scope, caller).await?;
     if let Some(scope) = scope {
