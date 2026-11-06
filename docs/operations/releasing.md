@@ -5,7 +5,7 @@
 | 产物                                            | 入口                                            | 操作说明                                            |
 | ----------------------------------------------- | ----------------------------------------------- | --------------------------------------------------- |
 | Linux/macOS/Windows 桌面、独立 daemon、Web 镜像 | 标签或手动 `release.yml`                        | [创建 Release](#创建-release)                       |
-| Linux/macOS nightly 与独立 daemon               | 手动 `nightly.yml`                              | [Nightly](#nightly)                                 |
+| Linux/macOS Dev build 与独立 daemon             | 手动 `dev-build.yml`                            | [Dev build](#dev-build)                             |
 | Android Google Play AAB                         | 手动 `release-android-play.yml`                 | [Google Play 指南](google-play-internal-testing.md) |
 | iOS 内部 TestFlight                             | Xcode Cloud `Default` 手动构建                  | [内部测试](#apple-testflight-ios-手动发布)          |
 | iOS 外部 TestFlight / App Store 构建            | Xcode Cloud `Release iOS to App Store` 手动构建 | [App Store 构建](#app-store-ios-手动发布)           |
@@ -31,36 +31,36 @@ ait-realease 发布编排核对 `SHA256SUMS`，将相同文件上传至 COS 的 
 已安装的旧版本仍从 GitHub 获取首次升级，安装包含新配置的版本后才使用 AIT Server。
 本地开发不检查更新，正式交付时需验证公开清单、文件跳转和真实签名安装包升级。
 
-## Nightly
+## Dev build
 
-[Nightly](../../.github/workflows/nightly.yml) 工作流只能在 Actions 中对 `main` 手动触发，
+[dev-build.yml](../../.github/workflows/dev-build.yml) 工作流只能在 Actions 中对 `main` 手动触发，
 不会定时或随推送运行。每次运行发布 `main` 当前提交的 Linux x86_64 和 Apple Silicon 安装包，替换固定的
-[nightly 预发布](https://github.com/ait-app/ait/releases/tag/nightly)。CI 本身只负责检查，不打包也不发布。
+[dev 预发布](https://github.com/ait-app/ait/releases/tag/dev)。CI 本身只负责检查，不打包也不发布。
 
 - 准入：等待该提交在 `main` 上的 CI 结束（最长一小时），只有 CI 成功才构建；CI 失败、被取消或
   超时时保留上一版，并在运行中给出警告。对已发布的提交再次触发会重新构建并替换。
-- 构建：两个平台全部成功后才发布。同一时间只运行一个 nightly，后触发的运行排队等待，
-  不会中断正在进行的上传。每次运行都发布触发时 `main` 的提交，因此 nightly 不会回退。
-- 发布：先把 `nightly` 标签移到本次提交，再替换 Release；标签移动失败时已发布的 nightly
+- 构建：两个平台全部成功后才发布。同一时间只运行一个 dev build，后触发的运行排队等待，
+  不会中断正在进行的上传。每次运行都发布触发时 `main` 的提交，因此 dev build 不会回退。
+- 发布：先把 `dev` 标签移到本次提交，再替换 Release；标签移动失败时已发布的 dev build
   保持不变。如果 ruleset 保护该标签（422 “Cannot update this protected ref”），标签留在原提交，
   Release 仍发布本次构建并给出警告；要让标签跟随构建，需要把 GitHub Actions 加入该 ruleset
   的 bypass 列表。
 - 无需创建版本标签。每次运行只清理自身的临时产物。
 
-nightly 的公开构建标识统一为 `<8位提交hash>-<构建UTC日期>`，例如 `38fb6054-2026-10-08`。
-Release 标题为 `Ait Nightly 38fb6054-2026-10-08`，安装包名例如
+dev build 的公开构建标识统一为 `<8位提交hash>-<构建UTC日期>`，例如 `38fb6054-2026-10-08`。
+Release 标题为 `Ait Dev 38fb6054-2026-10-08`，安装包名例如
 `Ait-38fb6054-2026-10-08-macos-arm64.dmg`、`Ait-38fb6054-2026-10-08-linux-x86_64.AppImage`。
 ZIP、tar.gz、blockmap、CI 产物和 `BUILD-INFO.json` 使用同一标识；同次运行的两平台共用准备步骤生成的标识；日期来自构建时间，重跑准备步骤可能改变日期。
 更新元数据沿用更新器识别的 `latest` / `beta` 入口文件名，内部引用对应的新安装包名。
 应用与 daemon 显示 `YYYY-MM-DD-<8位hash>`；更新器使用日期型 SemVer，在构建信息中记作 `packagedVersion`。
-命名规则以 [`nightly-build.mjs`](../../scripts/nightly-build.mjs) 和 [`source-version.cjs`](../../scripts/source-version.cjs) 为准。
-固定下载地址仍使用 `nightly` 标签；正式版本继续使用版本命名。
+命名规则以 [`dev-build.mjs`](../../scripts/dev-build.mjs) 和 [`source-version.cjs`](../../scripts/source-version.cjs) 为准。
+固定下载地址仍使用 `dev` 标签；正式版本继续使用版本命名。
 
 Release 说明记录源码提交；`BUILD-INFO.json` 记录源码提交、
 运行序号和运行链接，可用于确认安装包是否包含指定修复。
-macOS nightly 使用 ad-hoc 签名，未公证。
+macOS dev build 使用 ad-hoc 签名，未公证。
 
-nightly 同样附带独立 daemon 归档，例如 `Ait-38fb6054-2026-10-08-daemon-linux-x64.tar.gz`，
+dev build 同样附带独立 daemon 归档，例如 `Ait-38fb6054-2026-10-08-daemon-linux-x64.tar.gz`，
 与桌面包共用同一次构建的 daemon。macOS 归档只有 ad-hoc 签名、未公证；用浏览器下载后若被拦截，
 在解压目录执行 `xattr -d com.apple.quarantine aitd`。见 [ADR-163](../decisions/clients/adr-163-nightly-standalone-daemon.md)。
 
@@ -70,10 +70,10 @@ nightly 同样附带独立 daemon 归档，例如 `Ait-38fb6054-2026-10-08-daemo
 推送到 `main` 也只运行同样的检查。CI 不打包桌面端，也不发布任何产物；
 Windows 只在 [Release Ait](../../.github/workflows/release.yml) 中构建。
 
-nightly 安装包只在手动触发 [Nightly](#nightly) 工作流时构建；合并前如需验证安装包，
+dev build 安装包只在手动触发 [Dev build](#dev-build) 工作流时构建；合并前如需验证安装包，
 可按[桌面端构建说明](../../apps/desktop/README.md)在本地打包。
 
-Google Play 和 iOS TestFlight 不随 PR、main CI 或 Nightly 构建，均使用各自的手动发布入口。
+Google Play 和 iOS TestFlight 不随 PR、main CI 或 Dev build 构建，均使用各自的手动发布入口。
 独立 APK 构建入口已移除。main/PR CI 不调用 EAS 构建或提交。
 
 ## 发布产物
@@ -111,7 +111,7 @@ Windows 构建来源单独记录，原 `BUILD-INFO.json` 继续描述既有平�
 放入 `PATH` 时不与系统同名程序冲突，`--help` 中的程序名仍为 `daemon`。见 [ADR-212](../decisions/clients/adr-212-packaged-daemon-name-aitd.md)。macOS 版本单独用 Developer ID
 签名（hardened runtime）并公证；裸可执行文件无法 staple 公证票据，Gatekeeper 首次运行时在线核验。
 Linux daemon 在 `ubuntu-24.04` runner 上通过 [`build-linux-daemon.sh`](../../scripts/build-linux-daemon.sh) 于 `manylinux_2_28` 容器内编译，桌面包与独立归档共用；构建后检查不超过 `GLIBC_2.28` 与 `GLIBCXX_3.4.25`，支持 Ubuntu 20.04、Debian 10、RHEL 8 及更新版本。
-正式版、beta 和 nightly 都包含这两个归档；nightly 版本见上文 [Nightly](#nightly)。
+正式版、beta 和 dev build 都包含这两个归档；dev build 见上文 [Dev build](#dev-build)。
 
 ## Arch Linux 本地源码安装
 
@@ -142,7 +142,7 @@ Git 工作区，不用于 `makepkg --source` 或单独发布到 AUR；AUR 二进
 [`publish-aur.yml`](../../.github/workflows/publish-aur.yml) 自动发布，`ait-git` 由维护者手动发布：
 
 - `ait-bin`：使用对应 GitHub Release 的 `Ait-linux-x86_64.AppImage`。正式版 Release 发布（`release: published`，
-  跳过 beta 和 nightly）后自动把 `pkgver` 设为该版本、`pkgrel` 重置为 `1`，校验值取自 Release 的
+  跳过 beta 和 dev build）后自动把 `pkgver` 设为该版本、`pkgrel` 重置为 `1`，校验值取自 Release 的
   `SHA256SUMS`，`ait.desktop` 的校验值按文件重新计算。仓库内 `pkgver`、`pkgrel` 和校验值以 AUR 为准，
   无需手动修改。只在正式版 Release 发布或手动运行时执行，推送 tag 时 Release 仍是草稿，不触发；
   合并到 `main` 和 PR 都不运行。同版本修改配方后手动运行工作流，会先完整构建验证，再自动递增

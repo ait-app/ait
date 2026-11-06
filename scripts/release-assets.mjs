@@ -16,13 +16,13 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { nightlyDisplayVersion, nightlyPackagedVersion } from "./nightly-build.mjs";
+import { devDisplayVersion, devPackagedVersion } from "./dev-build.mjs";
 import { releaseChannel } from "./release-version.mjs";
 
 export function releaseAssetNames(platform, version, buildLabel) {
   const channel = buildLabel ? "latest" : releaseChannel(version);
   if (buildLabel !== undefined)
-    assert.match(buildLabel, /^[0-9a-f]{8}-\d{4}-\d{2}-\d{2}$/, "Invalid nightly build label");
+    assert.match(buildLabel, /^[0-9a-f]{8}-\d{4}-\d{2}-\d{2}$/, "Invalid dev build label");
   const label = buildLabel ?? version;
   if (platform === "linux")
     return [
@@ -48,11 +48,11 @@ export function releaseAssetNames(platform, version, buildLabel) {
 const daemonTargets = { linux: "linux-x64", mac: "macos-arm64" };
 export const daemonExecutable = "aitd";
 
-// Nightly archives carry the build label, like the nightly desktop packages.
+// Dev build archives carry the build label, like the dev desktop packages.
 export function daemonAssetName(platform, version, buildLabel) {
   releaseChannel(version);
   if (buildLabel !== undefined)
-    assert.match(buildLabel, /^[0-9a-f]{8}-\d{4}-\d{2}-\d{2}$/, "Invalid nightly build label");
+    assert.match(buildLabel, /^[0-9a-f]{8}-\d{4}-\d{2}-\d{2}$/, "Invalid dev build label");
   assert(daemonTargets[platform], `Unsupported daemon platform: ${platform}`);
   return `Ait-${buildLabel ?? version}-daemon-${daemonTargets[platform]}.tar.gz`;
 }
@@ -75,7 +75,7 @@ export async function packDaemonAsset({
   }).trim();
   assert.equal(
     reported.split(/\s+/).at(-1),
-    buildLabel ? nightlyDisplayVersion(buildLabel) : version,
+    buildLabel ? devDisplayVersion(buildLabel) : version,
     `Daemon binary reports ${reported}`,
   );
   const staging = await mkdtemp(path.join(tmpdir(), "ait-daemon-"));
@@ -111,7 +111,7 @@ export async function collectReleaseAssets({ platform, version, source, destinat
   const metadata = parse(await readFile(path.join(source, names.at(-1)), "utf8"));
   assert.equal(
     metadata.version,
-    buildLabel ? nightlyPackagedVersion(buildLabel) : version,
+    buildLabel ? devPackagedVersion(buildLabel) : version,
     "Updater metadata version differs from release",
   );
   assert(
@@ -160,8 +160,8 @@ export async function verifyReleaseAssets({
   includeWindows = false,
   buildLabel,
 }) {
-  assert(!(includeAndroid && buildLabel), "Nightly builds support desktop platforms only");
-  assert(!(includeWindows && buildLabel), "Windows nightly builds are not configured");
+  assert(!(includeAndroid && buildLabel), "Dev builds support desktop platforms only");
+  assert(!(includeWindows && buildLabel), "Windows dev builds are not configured");
   const names = (await readdir(directory)).filter((name) => name !== "SHA256SUMS").sort();
   const windows = buildLabel ? [] : releaseAssetNames("win", version);
   const windowsBlockmaps = windows
@@ -178,7 +178,7 @@ export async function verifyReleaseAssets({
   const required = [
     ...desktop,
     ...(includeAndroid ? releaseAssetNames("android", version) : []),
-    // Nightly always carries both daemons; releases opt in, so Android repairs can skip them.
+    // Dev builds always carry both daemons; releases opt in, so Android repairs can skip them.
     ...(includeDaemon || buildLabel ? daemonAssetNames(version, buildLabel) : []),
   ];
   // Android repairs re-verify stable releases that may or may not carry daemon archives.
@@ -200,13 +200,13 @@ export async function verifyReleaseAssets({
     );
     assert.equal(
       info.releaseTag,
-      buildLabel ? "nightly" : `v${version}`,
+      buildLabel ? "dev" : `v${version}`,
       "Build information tag differs from release",
     );
     if (buildLabel)
       assert.equal(
         info.packagedVersion,
-        nightlyPackagedVersion(buildLabel),
+        devPackagedVersion(buildLabel),
         "Packaged version differs from release",
       );
     assert.match(info.sourceCommit, /^[0-9a-f]{40}$/, "Build source must be a full commit SHA");
@@ -232,7 +232,7 @@ export async function verifyReleaseAssets({
 async function main() {
   const [command, ...args] = process.argv.slice(2);
   let buildLabel;
-  if (args.at(-2) === "--nightly") {
+  if (args.at(-2) === "--dev") {
     buildLabel = args.pop();
     args.pop();
   }
@@ -279,7 +279,7 @@ async function main() {
     );
   } else {
     throw new Error(
-      "Usage: release-assets.mjs collect linux|mac|win VERSION SOURCE DEST [--nightly LABEL] | daemon linux|mac VERSION BINARY DEST [--nightly LABEL] | verify VERSION DIRECTORY [--android] [--daemon] [--windows] | verify VERSION DIRECTORY --nightly LABEL",
+      "Usage: release-assets.mjs collect linux|mac|win VERSION SOURCE DEST [--dev LABEL] | daemon linux|mac VERSION BINARY DEST [--dev LABEL] | verify VERSION DIRECTORY [--android] [--daemon] [--windows] | verify VERSION DIRECTORY --dev LABEL",
     );
   }
 }

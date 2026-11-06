@@ -3,7 +3,8 @@
 - 状态：Accepted
 - 日期：2026-10-19
 - 修订：ADR-158（原规定 nightly 不发布独立 daemon）
-- 后续修订：[ADR-212](adr-212-packaged-daemon-name-aitd.md) 将归档内可执行文件改名为 `aitd`
+- 后续修订：[ADR-212](adr-212-packaged-daemon-name-aitd.md) 将归档内可执行文件改名为 `aitd`；
+  nightly 通道已更名为 [Dev build](../../operations/releasing.md#dev-build)，下文保留当时的名字
 
 ## 背景
 
@@ -16,18 +17,18 @@ nightly 的 Linux daemon 现已与正式版一样在 `manylinux_2_28` 容器中�
 
 ## 决策
 
-- Nightly 工作流发布 nightly 时附带 `Ait-<构建标识>-daemon-linux-x64.tar.gz` 与
+- Dev build 工作流发布时附带 `Ait-<构建标识>-daemon-linux-x64.tar.gz` 与
   `Ait-<构建标识>-daemon-macos-arm64.tar.gz`。归档与桌面包共用同一次构建的 daemon，
   内容与正式版相同（`ait-daemon` 和 `LICENSE`）；打包时仍核对 `--version` 等于 `packagedVersion`。
-- nightly 的资产校验必须包含这两个归档并纳入 `SHA256SUMS`，不接受以版本号命名的 daemon 归档。
+- dev build 的资产校验必须包含这两个归档并纳入 `SHA256SUMS`，不接受以版本号命名的 daemon 归档。
 - macOS daemon 只保留链接器生成的 ad-hoc 签名，不使用 Developer ID 签名，也不公证。
-  nightly Release 说明提示：浏览器下载后若被 Gatekeeper 拦截，在解压目录执行
+  dev build Release 说明提示：浏览器下载后若被 Gatekeeper 拦截，在解压目录执行
   `xattr -d com.apple.quarantine ait-daemon`。
 - 正式版与 beta 的签名、公证和校验规则不变。
 
 ## 影响
 
-- 不需要向 main CI 开放 Apple 签名密钥，nightly 也不等待公证。
-- macOS 用户使用 nightly daemon 时需要手动移除 quarantine 属性；用 `curl` 等命令行工具下载
+- 不需要向 main CI 开放 Apple 签名密钥，dev build 也不等待公证。
+- macOS 用户使用 dev build daemon 时需要手动移除 quarantine 属性；用 `curl` 等命令行工具下载
   不会附加该属性。
-- nightly 的 Linux 打包时间包含 manylinux 容器内的 Rust 安装与编译。
+- dev build 的 Linux 打包时间包含 manylinux 容器内的 Rust 安装与编译。

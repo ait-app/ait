@@ -1,6 +1,6 @@
-// Admission and tag handling for the manual .github/workflows/nightly.yml. Runs are serialized
+// Admission and tag handling for the manual .github/workflows/dev-build.yml. Runs are serialized
 // by the workflow's concurrency group, and each one publishes main's commit at trigger time, so
-// the published nightly only moves forward.
+// the published dev build only moves forward.
 
 const CI_WORKFLOW = "ci.yml";
 const POLL_INTERVAL_MS = 30_000;
@@ -33,7 +33,7 @@ async function admit({ github, context, core, wait = sleep, attempts = POLL_ATTE
     const result = await ciResult({ github, context });
     if (result === "success") return true;
     if (result !== "pending" || attempt >= attempts) {
-      core.warning(`CI on ${context.sha} is ${result}; the previous nightly stays published.`);
+      core.warning(`CI on ${context.sha} is ${result}; the previous dev build stays published.`);
       return false;
     }
     await wait(POLL_INTERVAL_MS);
@@ -45,12 +45,12 @@ function protectedRef(error) {
   return error.status === 422 && /rule violation|protected ref/i.test(error.message ?? "");
 }
 
-// Point the `nightly` tag at this build before the published release is touched, so a refused
+// Point the `dev` tag at this build before the published release is touched, so a refused
 // ref update can never leave the channel without a release. When a rule protects the tag, it
 // stays where it is and the release still publishes this build; the notes and BUILD-INFO.json
 // record the actual source commit.
 async function moveTag({ github, context, core }) {
-  const ref = { ...context.repo, ref: "tags/nightly" };
+  const ref = { ...context.repo, ref: "tags/dev" };
   let current;
   try {
     ({ data: current } = await github.rest.git.getRef(ref));
@@ -58,7 +58,7 @@ async function moveTag({ github, context, core }) {
     if (error.status !== 404) throw error;
     await github.rest.git.createRef({
       ...context.repo,
-      ref: "refs/tags/nightly",
+      ref: "refs/tags/dev",
       sha: context.sha,
     });
     return;
@@ -69,7 +69,7 @@ async function moveTag({ github, context, core }) {
   } catch (error) {
     if (!protectedRef(error)) throw error;
     core.warning(
-      `A ruleset protects the nightly tag, so it stays at ${current.object?.sha}. ` +
+      `A ruleset protects the dev tag, so it stays at ${current.object?.sha}. ` +
         `The release still publishes ${context.sha}. Allow GitHub Actions to bypass the rule ` +
         "to keep the tag on the published build.",
     );

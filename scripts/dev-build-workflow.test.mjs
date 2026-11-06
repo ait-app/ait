@@ -5,13 +5,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import yaml from "yaml";
-import control from "./nightly-control.cjs";
-import { nightlyBuilderArgs } from "./nightly-build.mjs";
+import control from "./dev-build-control.cjs";
+import { devBuilderArgs } from "./dev-build.mjs";
 
 const readWorkflow = async (name) =>
   yaml.parse(await readFile(new URL(`../.github/workflows/${name}`, import.meta.url), "utf8"));
 const ci = await readWorkflow("ci.yml");
-const nightly = await readWorkflow("nightly.yml");
+const devBuild = await readWorkflow("dev-build.yml");
 const prCleanup = await readWorkflow("cancel-merged-pr-ci.yml");
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const context = { repo: { owner: "ait-app", repo: "ait" }, sha: "a".repeat(40), runId: 42 };
@@ -36,8 +36,8 @@ test("UI CI checks changed lint, delegates formatting and runs the shared client
   );
 });
 
-test("nightly Linux desktop builds its daemon on the release glibc baseline", () => {
-  const steps = nightly.jobs.desktop.steps;
+test("dev Linux desktop builds its daemon on the release glibc baseline", () => {
+  const steps = devBuild.jobs.desktop.steps;
   const mac = steps.find((step) => step.name === "Build daemon");
   assert.equal(mac.if, "matrix.platform == 'mac'");
   const linux = steps.find((step) => step.name === "Build daemon (glibc 2.28 baseline)");
@@ -53,20 +53,19 @@ test("nightly Linux desktop builds its daemon on the release glibc baseline", ()
   );
 });
 
-test("nightly packages both standalone daemons and explains the macOS quarantine", () => {
-  const steps = nightly.jobs.desktop.steps;
+test("dev builds package both standalone daemons and explain the macOS quarantine", () => {
+  const steps = devBuild.jobs.desktop.steps;
   const names = steps.map((step) => step.name);
   const pack = steps.find((step) => step.name === "Package standalone daemon");
   assert.match(pack.env.DAEMON_BIN, /target\/\$\{\{ matrix.rust_target \}\}\/release\/daemon$/);
-  assert.match(
-    pack.run,
-    /release-assets\.mjs daemon .* release-assets --nightly "\$NIGHTLY_BUILD_LABEL"/,
-  );
+  assert.match(pack.run, /release-assets\.mjs daemon .* release-assets --dev "\$DEV_BUILD_LABEL"/);
   assert.match(pack.run, /codesign --verify/);
   // The archive must be in release-assets before the artifact upload picks it up.
   const upload = steps.findIndex((step) => step.uses?.startsWith("actions/upload-artifact@"));
   assert(names.indexOf("Package standalone daemon") < upload);
-  const publish = nightly.jobs.publish.steps.find((step) => step.name === "Publish latest nightly");
+  const publish = devBuild.jobs.publish.steps.find(
+    (step) => step.name === "Publish latest dev build",
+  );
   assert.match(publish.run, /xattr -d com\.apple\.quarantine aitd/);
 });
 
@@ -109,7 +108,7 @@ async function runScript(step, github, warnings = []) {
       },
     },
     (name) => {
-      assert.equal(name, "./scripts/nightly-control.cjs");
+      assert.equal(name, "./scripts/dev-build-control.cjs");
       return control;
     },
   );
@@ -120,29 +119,29 @@ test("CI only checks code: it never packages, publishes or writes to the reposit
   assert.deepEqual(Object.keys(ci.on).sort(), ["pull_request", "push"]);
   assert.deepEqual(ci.permissions, { contents: "read" });
   for (const [name, job] of Object.entries(ci.jobs)) {
-    assert.doesNotMatch(name, /nightly|desktop|publish/);
+    assert.doesNotMatch(name, /nightly|dev|desktop|publish/);
     assert.notEqual(job.permissions?.contents, "write", name);
     assert.equal(job.permissions?.actions, undefined, name);
   }
-  assert.doesNotMatch(JSON.stringify(ci), /nightly-control|gh release|upload-artifact/);
+  assert.doesNotMatch(JSON.stringify(ci), /dev-build-control|gh release|upload-artifact/);
 });
 
-test("nightly runs only when triggered manually, one at a time, only from main", () => {
-  assert.deepEqual(Object.keys(nightly.on), ["workflow_dispatch"]);
-  assert.equal(nightly.on.workflow_dispatch, null);
-  assert.deepEqual(nightly.permissions, { contents: "read" });
-  assert.deepEqual(nightly.concurrency, { group: "nightly", "cancel-in-progress": false });
-  assert.equal(nightly.jobs.prepare.if, "github.ref == 'refs/heads/main'");
-  assert.deepEqual(nightly.jobs.prepare.permissions, { contents: "read", actions: "read" });
-  assert.deepEqual(nightly.jobs.desktop.permissions, { contents: "read" });
-  assert.deepEqual(nightly.jobs.publish.permissions, { contents: "write", actions: "write" });
-  const platforms = nightly.jobs.desktop.strategy.matrix.include.map((entry) => entry.platform);
+test("dev builds run only when triggered manually, one at a time, only from main", () => {
+  assert.deepEqual(Object.keys(devBuild.on), ["workflow_dispatch"]);
+  assert.equal(devBuild.on.workflow_dispatch, null);
+  assert.deepEqual(devBuild.permissions, { contents: "read" });
+  assert.deepEqual(devBuild.concurrency, { group: "dev-build", "cancel-in-progress": false });
+  assert.equal(devBuild.jobs.prepare.if, "github.ref == 'refs/heads/main'");
+  assert.deepEqual(devBuild.jobs.prepare.permissions, { contents: "read", actions: "read" });
+  assert.deepEqual(devBuild.jobs.desktop.permissions, { contents: "read" });
+  assert.deepEqual(devBuild.jobs.publish.permissions, { contents: "write", actions: "write" });
+  const platforms = devBuild.jobs.desktop.strategy.matrix.include.map((entry) => entry.platform);
   assert.deepEqual(platforms, ["linux", "mac"]);
   assert.doesNotMatch(
-    JSON.stringify(nightly.jobs.desktop),
+    JSON.stringify(devBuild.jobs.desktop),
     /secrets\.|GH_TOKEN|EXPO_TOKEN|eas build/,
   );
-  for (const job of Object.values(nightly.jobs)) {
+  for (const job of Object.values(devBuild.jobs)) {
     for (const step of job.steps) {
       if (!step.run) continue;
       const result = spawnSync("bash", ["-n", "-c", step.run], { encoding: "utf8" });
@@ -158,28 +157,25 @@ test("packaging and publication follow an admitted prepare job only", () => {
     [undefined, false],
   ]) {
     const prepare = { prepare: { result: "success", outputs: { publish } } };
-    assert.equal(condition(nightly.jobs.desktop.if, {}, prepare), admitted);
+    assert.equal(condition(devBuild.jobs.desktop.if, {}, prepare), admitted);
     const needs = { ...prepare, desktop: { result: "success" } };
-    assert.equal(condition(nightly.jobs.publish.if, {}, needs), admitted);
+    assert.equal(condition(devBuild.jobs.publish.if, {}, needs), admitted);
   }
   const admitted = { prepare: { result: "success", outputs: { publish: "true" } } };
   for (const result of ["failure", "cancelled", "skipped"]) {
     const needs = { ...admitted, desktop: { result } };
-    assert.equal(condition(nightly.jobs.publish.if, {}, needs), false, result);
+    assert.equal(condition(devBuild.jobs.publish.if, {}, needs), false, result);
   }
-  assert.equal(condition(nightly.jobs.desktop.if, {}, admitted, true), false);
-  assert.deepEqual(nightly.jobs.publish.needs, ["prepare", "desktop"]);
-  const upload = nightly.jobs.desktop.steps.find((step) =>
+  assert.equal(condition(devBuild.jobs.desktop.if, {}, admitted, true), false);
+  assert.deepEqual(devBuild.jobs.publish.needs, ["prepare", "desktop"]);
+  const upload = devBuild.jobs.desktop.steps.find((step) =>
     step.uses?.startsWith("actions/upload-artifact@"),
   );
-  assert.equal(
-    upload.with.name,
-    "nightly-${{ needs.prepare.outputs.label }}-${{ matrix.platform }}",
-  );
+  assert.equal(upload.with.name, "dev-${{ needs.prepare.outputs.label }}-${{ matrix.platform }}");
   assert.equal(upload.with["retention-days"], 1);
   // Artifact cleanup is the last publication step, so a failed publish keeps both platforms.
-  const steps = nightly.jobs.publish.steps;
-  assert.equal(steps.at(-1).name, "Remove temporary nightly artifacts");
+  const steps = devBuild.jobs.publish.steps;
+  assert.equal(steps.at(-1).name, "Remove temporary dev build artifacts");
   assert.equal(steps.at(-1).if, undefined);
 });
 
@@ -252,7 +248,7 @@ test("a running or not yet listed CI run is awaited before admission", async () 
   assert.deepEqual(result.waits, [30_000, 30_000]);
 });
 
-test("failed, cancelled or never finishing CI keeps the previous nightly", async () => {
+test("failed, cancelled or never finishing CI keeps the previous dev build", async () => {
   for (const runs of [
     [[run({ conclusion: "failure" })]],
     [[run({ conclusion: "cancelled" })]],
@@ -261,7 +257,7 @@ test("failed, cancelled or never finishing CI keeps the previous nightly", async
     const result = await decide(admission({ runs }));
     assert.equal(result.publish, false);
     assert.equal(result.warnings.length, 1);
-    assert.match(result.warnings[0], /previous nightly stays published/);
+    assert.match(result.warnings[0], /previous dev build stays published/);
   }
 });
 
@@ -289,8 +285,8 @@ const ruleViolation = () =>
     new Error("Repository rule violations found\n\nCannot update this protected ref.\n\n"),
     { status: 422 },
   );
-const releaseStep = nightly.jobs.publish.steps.find(
-  (step) => step.name === "Move tag and remove previous nightly release",
+const releaseStep = devBuild.jobs.publish.steps.find(
+  (step) => step.name === "Move tag and remove previous dev release",
 );
 
 // Record ref and release mutations in order; `tag` is the current tag commit or null.
@@ -321,13 +317,13 @@ function publication({ tag, release = true, updateError = null }) {
   return { calls, github };
 }
 
-const update = ["update", { ...context.repo, ref: "tags/nightly", sha: context.sha, force: true }];
-const create = ["create", { ...context.repo, ref: "refs/tags/nightly", sha: context.sha }];
+const update = ["update", { ...context.repo, ref: "tags/dev", sha: context.sha, force: true }];
+const create = ["create", { ...context.repo, ref: "refs/tags/dev", sha: context.sha }];
 const removeRelease = ["delete", { ...context.repo, release_id: 9 }];
 
 for (const [name, state, expected] of [
-  ["an older nightly tag is moved before", { tag: "previous" }, [update, removeRelease]],
-  ["an absent nightly tag is created before", { tag: null }, [create, removeRelease]],
+  ["an older dev tag is moved before", { tag: "previous" }, [update, removeRelease]],
+  ["an absent dev tag is created before", { tag: null }, [create, removeRelease]],
   ["a tag already on this build is kept before", { tag: context.sha }, [removeRelease]],
   ["a first publication creates the tag without", { tag: null, release: false }, [create]],
 ]) {
@@ -350,7 +346,9 @@ test("a ruleset-protected tag stays put while the release still publishes this b
   assert.equal(warnings.length, 1);
   assert.match(warnings[0], /stays at previous/);
   assert.match(warnings[0], new RegExp(`publishes ${context.sha}`));
-  const publish = nightly.jobs.publish.steps.find((step) => step.name === "Publish latest nightly");
+  const publish = devBuild.jobs.publish.steps.find(
+    (step) => step.name === "Publish latest dev build",
+  );
   assert.match(publish.run, /--verify-tag/);
   assert.match(publish.run, /Development build from \$GITHUB_SHA/);
 });
@@ -368,7 +366,9 @@ test("other tag failures stop before the published release is deleted", async ()
 });
 
 test("published notes record the source commit", () => {
-  const publish = nightly.jobs.publish.steps.find((step) => step.name === "Publish latest nightly");
+  const publish = devBuild.jobs.publish.steps.find(
+    (step) => step.name === "Publish latest dev build",
+  );
   const body = publish.run.match(/--notes "([^"]*)"/)[1].replaceAll("$GITHUB_SHA", context.sha);
   assert.match(body, /Development build from ([0-9a-f]{40})\b/);
 });
@@ -483,15 +483,15 @@ test("Google Play publishing remains manual only", async () => {
   assert.deepEqual(Object.keys(mobile.on), ["workflow_dispatch"]);
 });
 
-test("packaging shell passes nightly names literally", async (t) => {
-  const directory = await mkdtemp(path.join(tmpdir(), "ait-nightly-args-"));
+test("packaging shell passes dev build names literally", async (t) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "ait-dev-args-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await writeFile(
     path.join(directory, "npm"),
     "#!/usr/bin/env node\nconsole.log(JSON.stringify(process.argv.slice(2)));\n",
     { mode: 0o755 },
   );
-  const step = nightly.jobs.desktop.steps.find((step) => step.name === "Package desktop preview");
+  const step = devBuild.jobs.desktop.steps.find((step) => step.name === "Package desktop preview");
   for (const platform of ["linux", "mac"]) {
     for (const label of ["abcdef01-2026-10-08", "01234567-2026-11-05"]) {
       const result = spawnSync("bash", ["-e", "-o", "pipefail", "-c", step.run], {
@@ -499,7 +499,7 @@ test("packaging shell passes nightly names literally", async (t) => {
         env: {
           ...process.env,
           PATH: `${directory}:${process.env.PATH}`,
-          NIGHTLY_BUILD_LABEL: label,
+          DEV_BUILD_LABEL: label,
           PLATFORM: platform,
           ARCH: platform === "mac" ? "arm64" : "x64",
           GITHUB_REPOSITORY: "ait-app/ait",
@@ -509,16 +509,18 @@ test("packaging shell passes nightly names literally", async (t) => {
       });
       assert.equal(result.status, 0, result.stderr);
       const args = JSON.parse(result.stdout);
-      for (const arg of nightlyBuilderArgs(label)) assert.ok(args.includes(arg), arg);
+      for (const arg of devBuilderArgs(label)) assert.ok(args.includes(arg), arg);
     }
   }
-  assert.equal(nightly.jobs.desktop.env.NIGHTLY_BUILD_LABEL, "${{ needs.prepare.outputs.label }}");
+  assert.equal(devBuild.jobs.desktop.env.DEV_BUILD_LABEL, "${{ needs.prepare.outputs.label }}");
   assert.equal(
-    nightly.jobs.publish.env.NIGHTLY_BUILD_LABEL,
-    nightly.jobs.desktop.env.NIGHTLY_BUILD_LABEL,
+    devBuild.jobs.publish.env.DEV_BUILD_LABEL,
+    devBuild.jobs.desktop.env.DEV_BUILD_LABEL,
   );
-  const publish = nightly.jobs.publish.steps.find((step) => step.name === "Publish latest nightly");
-  assert.match(publish.run, /--title "Ait Nightly \$NIGHTLY_BUILD_LABEL"/);
+  const publish = devBuild.jobs.publish.steps.find(
+    (step) => step.name === "Publish latest dev build",
+  );
+  assert.match(publish.run, /--title "Ait Dev \$DEV_BUILD_LABEL"/);
 });
 
 test("cleanup queries only its own run and preserves unrelated artifacts", async () => {
@@ -535,14 +537,14 @@ test("cleanup queries only its own run and preserves unrelated artifacts", async
       assert.equal(endpoint, listWorkflowRunArtifacts);
       assert.deepEqual(args, { ...context.repo, run_id: context.runId, per_page: 100 });
       return [
-        { id: 1, name: "nightly-01234567-2026-10-08-linux" },
-        { id: 2, name: "nightly-01234567-2026-10-08-mac" },
+        { id: 1, name: "dev-01234567-2026-10-08-linux" },
+        { id: 2, name: "dev-01234567-2026-10-08-mac" },
         { id: 3, name: "diagnostics" },
       ];
     },
   };
-  const cleanup = nightly.jobs.publish.steps.find(
-    (step) => step.name === "Remove temporary nightly artifacts",
+  const cleanup = devBuild.jobs.publish.steps.find(
+    (step) => step.name === "Remove temporary dev build artifacts",
   );
   await runScript(cleanup, github);
   assert.deepEqual(deleted, [
