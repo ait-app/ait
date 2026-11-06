@@ -22,6 +22,7 @@ impl Timeline {
             Some("assistant_message" | "reasoning" | "tool_call" | "voice")
         ) || !entry.key.starts_with("native:")
             || observation.is_empty()
+            || additive(entry) && !entry.item["text"].is_string()
         {
             return Err(ErrorCode::InvalidMessage);
         }
@@ -107,6 +108,9 @@ pub(super) fn completion(
     let mut projected = entry.clone();
     if !additive(entry) {
         return Ok(projected);
+    }
+    if !entry.item["text"].is_string() {
+        return Err(ErrorCode::InvalidMessage);
     }
     let mut query = database
         .prepare("SELECT entry FROM progress WHERE agent=? AND native_key=? ORDER BY seq")

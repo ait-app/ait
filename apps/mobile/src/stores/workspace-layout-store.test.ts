@@ -22,6 +22,7 @@ import {
   type SplitNode,
   type SplitPane,
 } from "@/stores/workspace-layout-store";
+import { openTabInLayoutFocused } from "@/stores/workspace-layout-actions";
 import { createViewedTimelineSync } from "@/timeline/viewed-timeline-sync";
 import { buildWorkspaceTabPersistenceKey, type WorkspaceTab } from "@/workspace-tabs/model";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -5149,5 +5150,94 @@ describe("compact workspace sheet", () => {
     stop();
 
     expect(received).toEqual([[], ["child"], []]);
+  });
+});
+
+describe("legacy Bot tab restore", () => {
+  const legacyLayout = {
+    root: {
+      kind: "pane",
+      pane: {
+        id: "main",
+        tabIds: ["bot_list", "bot_b1", "bot_b2"],
+        focusedTabId: "bot_b2",
+        tabs: [
+          { tabId: "bot_list", target: { kind: "bot", view: "list" }, createdAt: 1 },
+          { tabId: "bot_b1", target: { kind: "bot", botId: "b1" }, createdAt: 2 },
+          { tabId: "bot_b2", target: { kind: "bot", botId: "b2", view: "settings" }, createdAt: 3 },
+        ],
+      },
+    },
+    focusedPaneId: "main",
+  };
+
+  it("collapses legacy bot tabs to one tab with the canonical id", () => {
+    const layout = normalizeLayout(legacyLayout);
+    const tabs = collectAllTabs(layout.root);
+    expect(tabs.map((tab) => [tab.tabId, tab.target])).toEqual([["bot", { kind: "bot" }]]);
+    expect(findPaneById(layout.root, "main")?.focusedTabId).toBe("bot");
+  });
+
+  it("keeps only the first Bot tab when legacy Bot tabs sit in several panes", () => {
+    const layout = normalizeLayout({
+      root: {
+        kind: "group",
+        group: {
+          id: "split",
+          direction: "horizontal",
+          sizes: [0.5, 0.5],
+          children: [
+            {
+              kind: "pane",
+              pane: {
+                id: "left",
+                tabIds: ["agent_a", "bot_b1"],
+                focusedTabId: "agent_a",
+                tabs: [
+                  { tabId: "agent_a", target: { kind: "agent", agentId: "a" }, createdAt: 1 },
+                  { tabId: "bot_b1", target: { kind: "bot", botId: "b1" }, createdAt: 2 },
+                ],
+              },
+            },
+            {
+              kind: "pane",
+              pane: {
+                id: "right",
+                tabIds: ["agent_b", "bot_b2"],
+                focusedTabId: "bot_b2",
+                tabs: [
+                  { tabId: "agent_b", target: { kind: "agent", agentId: "b" }, createdAt: 3 },
+                  {
+                    tabId: "bot_b2",
+                    target: { kind: "bot", botId: "b2", view: "settings" },
+                    createdAt: 4,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+      focusedPaneId: "right",
+    });
+    const botTabs = collectAllTabs(layout.root).filter((tab) => tab.target.kind === "bot");
+    expect(botTabs.map((tab) => tab.tabId)).toEqual(["bot"]);
+    expect(findPaneById(layout.root, "left")?.tabIds).toEqual(["agent_a", "bot"]);
+    expect(findPaneById(layout.root, "left")?.focusedTabId).toBe("agent_a");
+    expect(findPaneById(layout.root, "right")?.tabIds).toEqual(["agent_b"]);
+    expect(findPaneById(layout.root, "right")?.focusedTabId).toBe("agent_b");
+  });
+
+  it("reuses the surviving tab when the launcher opens the Bot tab again", () => {
+    const layout = normalizeLayout(legacyLayout);
+    const result = openTabInLayoutFocused({
+      layout,
+      target: { kind: "bot" },
+      now: 10,
+      placement: FOCUSED_PANE_PLACEMENT,
+      explorerSidebarPaneId: null,
+    });
+    expect(result?.tabId).toBe("bot");
+    expect(collectAllTabs(result!.layout.root)).toHaveLength(1);
   });
 });

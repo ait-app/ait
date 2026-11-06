@@ -36,5 +36,6 @@ fn metadata_failures_keep_public_codes_and_retry_semantics() {
         let error = ErrorCode::from(business);
         assert_eq!(serde_json::to_value(error).unwrap(), code);
         assert_eq!(error.retryable(), retryable);
+        assert_eq!(MetadataError::from(error), business);
     }
 }

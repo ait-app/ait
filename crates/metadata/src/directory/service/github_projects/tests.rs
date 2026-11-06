@@ -10,7 +10,7 @@ use persistence::storage::registry::FileBackedProjectRegistry;
 use persistence::storage::registry::FileBackedWorkspaceRegistry;
 
 use super::*;
-use crate::directory::rpc::github_projects::execute;
+use crate::directory::rpc::github_projects::{execute, execute_with_progress, progress_payload};
 use crate::directory::service::directory::DirectoryDependencies;
 use crate::support::error::ErrorCode;
 
@@ -140,6 +140,7 @@ impl ProjectIconStore for NoIcons {
 #[derive(Debug, Default)]
 struct Github {
     search_error: Option<GithubProjectsError>,
+    clone_updates: Vec<GithubCloneProgress>,
 }
 
 impl GithubProjectsRuntime for Github {
@@ -175,7 +176,11 @@ impl GithubProjectsRuntime for Github {
         _clone_url: &str,
         target_directory: &str,
         name: &str,
+        progress: &mut dyn FnMut(GithubCloneProgress),
     ) -> Result<String, GithubProjectsError> {
+        for update in &self.clone_updates {
+            progress(*update);
+        }
         if name == "exists" {
             return Err(GithubProjectsError::TargetExists);
         }
@@ -227,6 +232,7 @@ fn repository_search_preserves_availability_and_authentication_error_categories(
     ] {
         service.github = Box::new(Github {
             search_error: Some(error),
+            clone_updates: Vec::new(),
         });
         let result = execute(
             &service,
@@ -249,6 +255,7 @@ fn github_clone_normalizes_repo_and_registers_project_without_workspace() {
         Some(GithubCloneProtocol::Ssh),
         "/tmp/projects",
         "2026-09-23T00:00:00Z",
+        &mut |_, _| {},
     );
 
     assert_eq!(outcome.repo, "owner/repo");
@@ -283,7 +290,8 @@ fn github_clone_rejects_unsafe_input_without_launching_or_registering() {
         "https://evil.example/owner/repo",
         "owner/repo",
     ] {
-        let outcome = service.clone_github_project(repo, None, "/tmp/projects", "time");
+        let outcome =
+            service.clone_github_project(repo, None, "/tmp/projects", "time", &mut |_, _| {});
         assert!(outcome.checkout_path.is_none(), "{repo}");
         assert!(outcome.project.is_none(), "{repo}");
         assert!(outcome.error.is_some(), "{repo}");
@@ -300,6 +308,7 @@ fn github_clone_preserves_completed_checkout_on_registration_failure() {
         Some(GithubCloneProtocol::Https),
         "/tmp/projects",
         "time",
+        &mut |_, _| {},
     );
 
     assert_eq!(
@@ -318,6 +327,7 @@ fn github_clone_reports_planned_checkout_path_when_clone_fails() {
         Some(GithubCloneProtocol::Https),
         "/tmp/projects",
         "time",
+        &mut |_, _| {},
     );
 
     assert_eq!(
@@ -339,6 +349,7 @@ fn clone_registers_the_completed_checkout_in_the_shared_directory_once() {
         Some(GithubCloneProtocol::Https),
         "/projects",
         "now",
+        &mut |_, _| {},
     );
     assert!(outcome.error.is_none());
     let project = outcome.project.unwrap();
@@ -355,6 +366,7 @@ fn clone_registers_the_completed_checkout_in_the_shared_directory_once() {
         Some(GithubCloneProtocol::Https),
         "/projects",
         "later",
+        &mut |_, _| {},
     );
     assert_eq!(reused.project.unwrap().project_id, project.project_id);
     for repo in ["owner/exists", "owner/../unsafe"] {
@@ -363,8 +375,104 @@ fn clone_registers_the_completed_checkout_in_the_shared_directory_once() {
             Some(GithubCloneProtocol::Https),
             "/projects",
             "later",
+            &mut |_, _| {},
         );
         assert!(outcome.error.is_some(), "{repo}");
     }
     assert_eq!(service.directory.list_projects().unwrap().len(), 1);
+}
+
+#[test]
+fn github_clone_reports_starting_runtime_and_registration_progress() {
+    let (_root, mut service) = service();
+    service.github = Box::new(Github {
+        search_error: None,
+        clone_updates: vec![GithubCloneProgress::new(
+            GithubClonePhase::Receiving,
+            Some(50),
+        )],
+    });
+    let mut events = Vec::new();
+
+    let outcome = service.clone_github_project(
+        "owner/repo",
+        Some(GithubCloneProtocol::Https),
+        "/projects",
+        "now",
+        &mut |repo, update| events.push((repo.to_owned(), update)),
+    );
+
+    assert!(outcome.error.is_none());
+    assert_eq!(
+        events.first(),
+        Some(&(
+            "owner/repo".to_owned(),
+            GithubCloneProgress::new(GithubClonePhase::Starting, None)
+        ))
+    );
+    assert!(events.contains(&(
+        "owner/repo".to_owned(),
+        GithubCloneProgress::new(GithubClonePhase::Receiving, Some(50))
+    )));
+    assert_eq!(
+        events.last(),
+        Some(&(
+            "owner/repo".to_owned(),
+            GithubCloneProgress::new(GithubClonePhase::Registering, None)
+        ))
+    );
+}
+
+#[test]
+fn clone_progress_is_opt_in_and_projects_a_bounded_connection_payload() {
+    let (_root, mut service) = service();
+    service.github = Box::new(Github {
+        search_error: None,
+        clone_updates: vec![GithubCloneProgress::new(
+            GithubClonePhase::Receiving,
+            Some(50),
+        )],
+    });
+    let mut enabled = Vec::new();
+    execute_with_progress(
+        &service,
+        "project.github.clone.request",
+        serde_json::json!({
+            "repo":"owner/repo",
+            "cloneProtocol":"https",
+            "targetDirectory":"/projects",
+            "progress":true
+        }),
+        &mut |repo, update| enabled.push((repo.to_owned(), update)),
+    )
+    .unwrap();
+
+    assert!(!enabled.is_empty());
+    let starting = progress_payload("request-1", &enabled[0].0, enabled[0].1);
+    assert_eq!(starting["requestId"], "request-1");
+    assert_eq!(starting["phase"], "starting");
+    assert_eq!(starting["percent"], 0);
+    let receiving = enabled
+        .iter()
+        .find(|(_, update)| update.phase == GithubClonePhase::Receiving)
+        .expect("receiving progress");
+    let payload = progress_payload("request-1", &receiving.0, receiving.1);
+    assert_eq!(payload["repo"], "owner/repo");
+    assert_eq!(payload["phase"], "receiving");
+    assert_eq!(payload["percent"], 44);
+
+    let mut disabled = Vec::new();
+    execute_with_progress(
+        &service,
+        "project.github.clone.request",
+        serde_json::json!({
+            "repo":"owner/repo",
+            "cloneProtocol":"https",
+            "targetDirectory":"/projects"
+        }),
+        &mut |repo, update| disabled.push((repo.to_owned(), update)),
+    )
+    .unwrap();
+
+    assert!(disabled.is_empty());
 }

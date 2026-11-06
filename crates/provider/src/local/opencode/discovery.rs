@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
 
-use super::{OpenCodeClient, PROVIDER, config, launcher, summary::Temporary};
+use super::{PROVIDER, client::OpenCodeClient, config, launcher, summary::Temporary};
+use crate::local::acp_config;
 use crate::{ports::agent_session::AgentSessionError, protocol::provider::Details};
 
 /// Query native options without a prompt, deleting the temporary session before returning.
@@ -50,16 +51,17 @@ pub(super) async fn discover(
                 client.startup_timeout,
             )
             .await?;
-        let id = config::text(&created, "sessionId")?.to_owned();
+        let id = acp_config::text(&created, "sessionId")?.to_owned();
         temporary.id = Some(id.clone());
-        let mut options = config::state(&created)?;
-        let model_option = config::option(&options, "model").ok_or(AgentSessionError::Failed)?;
-        let default = config::text(model_option, "currentValue")?.to_owned();
+        let mut options = acp_config::state(&created)?;
+        let model_option =
+            acp_config::option(&options, "model").ok_or(AgentSessionError::Failed)?;
+        let default = acp_config::text(model_option, "currentValue")?.to_owned();
         let mut models = BTreeMap::new();
         loop {
             let model_option =
-                config::option(&options, "model").ok_or(AgentSessionError::Failed)?;
-            let choice = config::choices(model_option)?
+                acp_config::option(&options, "model").ok_or(AgentSessionError::Failed)?;
+            let choice = acp_config::choices(model_option)?
                 .into_iter()
                 .find(|choice| {
                     choice["value"]
@@ -76,22 +78,23 @@ pub(super) async fn discover(
                 &id,
                 &mut options,
                 "model",
-                config::text(&choice, "value")?,
+                acp_config::text(&choice, "value")?,
             )
             .await?;
             models.insert(
-                config::text(&choice, "value")?.to_owned(),
+                acp_config::text(&choice, "value")?.to_owned(),
                 model(&choice, &options, &default)?,
             );
         }
         // Native discovery can add or remove models while options are being inspected.
         // Publish the final catalog in native order, with efforts from each selected model.
-        let model_option = config::option(&options, "model").ok_or(AgentSessionError::Failed)?;
-        let models = config::choices(model_option)?
+        let model_option =
+            acp_config::option(&options, "model").ok_or(AgentSessionError::Failed)?;
+        let models = acp_config::choices(model_option)?
             .into_iter()
             .map(|choice| {
                 let mut model = models
-                    .remove(config::text(choice, "value")?)
+                    .remove(acp_config::text(choice, "value")?)
                     .ok_or(AgentSessionError::Failed)?;
                 model["label"] = choice["name"].clone();
                 model["description"] = choice["description"].clone();
@@ -110,9 +113,9 @@ pub(super) async fn discover(
 }
 
 fn model(choice: &Value, options: &Value, default: &str) -> Result<Value, AgentSessionError> {
-    let thinking = config::option(options, "thought_level");
+    let thinking = acp_config::option(options, "thought_level");
     let efforts = thinking
-        .map(config::choices)
+        .map(acp_config::choices)
         .transpose()?
         .unwrap_or_default()
         .into_iter()

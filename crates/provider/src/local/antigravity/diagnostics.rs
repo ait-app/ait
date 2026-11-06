@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::io::AsyncRead;
 
 /// Classified native failures; raw stderr never enters snapshots, logs or Debug output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -83,21 +83,8 @@ impl Diagnostics {
         }
     }
 
-    pub(super) async fn drain(&self, mut output: impl AsyncRead + Unpin) {
-        const MAX_DIAGNOSTIC: usize = 32 * 1024;
-        let mut chunk = [0; 4096];
-        let mut line = Vec::with_capacity(4096);
-        while let Ok(count @ 1..) = output.read(&mut chunk).await {
-            for byte in &chunk[..count] {
-                if *byte == b'\n' {
-                    self.observe_line(&line);
-                    line.clear();
-                } else if line.len() < MAX_DIAGNOSTIC {
-                    line.push(*byte);
-                }
-            }
-        }
-        self.observe_line(&line);
+    pub(super) async fn drain(&self, output: impl AsyncRead + Unpin) {
+        crate::local::diagnostics::drain_lines(output, |line| self.observe_line(line)).await;
     }
 
     fn observe_line(&self, line: &[u8]) {

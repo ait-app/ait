@@ -100,6 +100,37 @@ fn orphan_and_admission_failure_notices_are_retained_without_a_native_turn() {
 }
 
 #[test]
+fn host_command_results_survive_native_replacement_repeated_reads_and_storage_reopen() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("timeline.sqlite");
+    let timeline = Timeline::open(&path).unwrap();
+    let mut command = item("host:provider-command:omp:query", "");
+    command.turn_id = None;
+    command.item = json!({"type":"provider_command","id":"query","command":"usage",
+        "status":"success","text":"Native usage"});
+    timeline
+        .append(
+            "agent",
+            "omp",
+            &[item("native:one", "old"), command.clone()],
+        )
+        .unwrap();
+    timeline
+        .reconcile("agent", "omp", &[item("native:two", "rewritten")])
+        .unwrap();
+    for _ in 0..2 {
+        timeline.reconcile("agent", "omp", &[]).unwrap();
+        assert_eq!(timeline.read("agent").unwrap().1.len(), 1);
+        assert_eq!(timeline.read("agent").unwrap().1[0].entry, command);
+    }
+    drop(timeline);
+    let reopened = Timeline::open(&path).unwrap();
+    reopened.reconcile("agent", "omp", &[]).unwrap();
+    assert_eq!(reopened.read("agent").unwrap().1.len(), 1);
+    assert_eq!(reopened.read("agent").unwrap().1[0].entry, command);
+}
+
+#[test]
 fn committed_rows_and_epoch_survive_restart_and_replay_is_immutable() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("timeline.sqlite3");
@@ -356,5 +387,51 @@ fn native_commands_use_the_same_compatible_envelope_in_live_events_and_history_p
     assert_eq!(
         timeline.read("agent").unwrap().1[0].entry.item,
         cases[0]["native"]
+    );
+}
+
+#[test]
+fn forget_removes_every_row_of_one_agent_and_keeps_other_agents() {
+    let timeline = Timeline::memory().unwrap();
+    let prompt = crate::protocol::prompt::AgentPrompt::text("hello");
+    for agent in ["agent", "other"] {
+        timeline
+            .append(agent, "codex", &[item("one", "first")])
+            .unwrap();
+        timeline
+            .reserve_input(agent, "message", &prompt, "queue")
+            .unwrap();
+    }
+    let epoch = timeline
+        .reconcile("agent", "codex", &[item("two", "rewritten")])
+        .unwrap();
+
+    timeline.forget("agent").unwrap();
+
+    assert!(!timeline.has_entries("agent").unwrap());
+    assert_eq!(
+        timeline
+            .input_receipt("agent", "message", &prompt, "queue")
+            .unwrap(),
+        None
+    );
+    assert_ne!(timeline.generation("agent").unwrap(), epoch);
+    let retired: u64 = timeline
+        .database
+        .lock()
+        .unwrap()
+        .query_row(
+            "SELECT count(*) FROM retired_entries WHERE agent='agent'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(retired, 0);
+    assert!(timeline.has_entries("other").unwrap());
+    assert!(
+        timeline
+            .input_receipt("other", "message", &prompt, "queue")
+            .unwrap()
+            .is_some()
     );
 }

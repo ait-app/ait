@@ -3,12 +3,10 @@
 mod worktree_checkout;
 
 use std::collections::BTreeMap;
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use chrono::DateTime;
 use serde_json::Value;
@@ -20,6 +18,7 @@ use crate::forge::ports::{
     PullRequestStatus, PullRequestStatusRead, PullRequestTimeline, PullRequestTimelineItem,
     TimelineCommentLocation, TimelineError, TimelineErrorKind, TimelineReviewState,
 };
+use crate::support::process::{self, Bounds, RunError, StderrTap};
 
 mod gitlab;
 mod resolver;
@@ -30,6 +29,8 @@ const READ_TIMEOUT: Duration = Duration::from_secs(30);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(120);
 const OUTPUT_LIMIT: u64 = 4 * 1024 * 1024;
 const STDERR_LIMIT: u64 = 64 * 1024;
+/// Progress-enabled commands retain their update stream beyond the diagnostic limit.
+const PROGRESS_STDERR_LIMIT: u64 = 1024 * 1024;
 const CHECK_ANNOTATION_LIMIT: usize = 20;
 const CHECK_JOB_LIMIT: usize = 100;
 const FAILED_JOB_LIMIT: usize = 5;
@@ -428,16 +429,17 @@ impl ForgeRuntime for LocalForge {
         let cwd = require_git_directory(cwd)?;
         let context = self.forge_context(&cwd)?;
         if context.kind == ForgeKind::Gitlab {
-            return gitlab::timeline(self, &cwd, &context, pr_number);
+            return gitlab::timeline::timeline(self, &cwd, &context, pr_number);
         }
         let arguments = vec![
             "api".to_owned(),
             "graphql".to_owned(),
             "-f".to_owned(),
             format!("query={TIMELINE_QUERY}"),
-            "-F".to_owned(),
+            // `-f` keeps names as strings; `-F` would coerce "2048" or read "@file".
+            "-f".to_owned(),
             format!("owner={repo_owner}"),
-            "-F".to_owned(),
+            "-f".to_owned(),
             format!("name={repo_name}"),
             "-F".to_owned(),
             format!("number={pr_number}"),
@@ -477,7 +479,7 @@ impl ForgeRuntime for LocalForge {
         let cwd = require_git_directory(cwd)?;
         let context = self.forge_context(&cwd)?;
         if context.kind == ForgeKind::Gitlab {
-            return gitlab::check_details(self, &cwd, &context, query);
+            return gitlab::pipeline::check_details(self, &cwd, &context, query);
         }
         let crate::forge::ports::CheckDetailsQuery {
             repo_owner,
@@ -514,11 +516,12 @@ impl ForgeRuntime for LocalForge {
         let annotations = parse_annotations(&parse_json(&self.gh(
             &cwd,
             &context,
+            // Query parameters stay in the path: `gh api` turns `-f` fields into a POST body.
             &strings(&[
                 "api",
-                &format!("{repo}/check-runs/{check_run_id}/annotations"),
-                "-f",
-                &format!("per_page={CHECK_ANNOTATION_LIMIT}"),
+                &format!(
+                    "{repo}/check-runs/{check_run_id}/annotations?per_page={CHECK_ANNOTATION_LIMIT}"
+                ),
             ]),
             READ_TIMEOUT,
         )?)?)?;
@@ -533,9 +536,7 @@ impl ForgeRuntime for LocalForge {
                 &context,
                 &strings(&[
                     "api",
-                    &format!("{repo}/actions/runs/{run_id}/jobs"),
-                    "-f",
-                    &format!("per_page={CHECK_JOB_LIMIT}"),
+                    &format!("{repo}/actions/runs/{run_id}/jobs?per_page={CHECK_JOB_LIMIT}"),
                 ]),
                 READ_TIMEOUT,
             )?)?)?,
@@ -597,35 +598,8 @@ fn unavailable_search(auth_state: ForgeAuthState) -> ForgeSearch {
 }
 
 fn require_git_directory(value: &str) -> Result<PathBuf, ForgeRuntimeError> {
-    let path = if value == "~" {
-        std::env::var_os("HOME").map(PathBuf::from).ok_or_else(|| {
-            forge_error(
-                ForgeFailureKind::NotAllowed,
-                "Home directory is unavailable",
-            )
-        })?
-    } else if let Some(relative) = value.strip_prefix("~/") {
-        std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .ok_or_else(|| {
-                forge_error(
-                    ForgeFailureKind::NotAllowed,
-                    "Home directory is unavailable",
-                )
-            })?
-            .join(relative)
-    } else {
-        PathBuf::from(value)
-    };
-    let path = path
-        .canonicalize()
+    let path = crate::support::directory::existing_directory(value)
         .map_err(|error| forge_error(ForgeFailureKind::NotAllowed, error.to_string()))?;
-    if !path.is_dir() {
-        return Err(forge_error(
-            ForgeFailureKind::NotAllowed,
-            "Checkout cwd is not a directory",
-        ));
-    }
     if git_optional(&path, &["rev-parse", "--show-toplevel"], READ_TIMEOUT)?.is_none() {
         return Err(forge_error(
             ForgeFailureKind::NotGitRepository,
@@ -659,18 +633,12 @@ fn git_required(
 }
 
 fn git_command(cwd: &Path, arguments: &[&str]) -> Command {
-    let mut command = Command::new("git");
+    let mut command = process::git_command(cwd);
     command
         .arg("--no-optional-locks")
         .args(["-c", "core.fsmonitor=false"])
         .args(["-c", "color.ui=false"])
-        .args(arguments)
-        .current_dir(cwd);
-    for (name, _) in std::env::vars_os() {
-        if name.to_string_lossy().starts_with("GIT_") {
-            command.env_remove(name);
-        }
-    }
+        .args(arguments);
     command
 }
 
@@ -695,54 +663,73 @@ pub(crate) fn run_bounded_command(
     run_command(command, timeout, family).map(|output| output.stdout)
 }
 
+/// Run a bounded command while forwarding its standard-error stream to `stderr_tap`.
+///
+/// The tap is used for machine-readable progress that the command only emits while it runs.
+///
+/// # Errors
+/// Returns the same categorized failures as [`run_bounded_command`].
+pub(crate) fn run_bounded_command_with_progress(
+    mut command: Command,
+    timeout: Duration,
+    github_cli: bool,
+    stderr_tap: &mut dyn FnMut(&[u8]),
+) -> Result<String, ForgeRuntimeError> {
+    let family = if github_cli {
+        CommandFamily::Forge
+    } else {
+        CommandFamily::Git
+    };
+    run_command_with_codes_tapping(&mut command, timeout, family, &[0], Some(stderr_tap))
+        .map(|output| output.stdout)
+}
+
 fn run_command_with_codes(
     command: &mut Command,
     timeout: Duration,
     family: CommandFamily,
     accepted_codes: &[i32],
 ) -> Result<CommandOutput, ForgeRuntimeError> {
-    let mut stdout = tempfile::tempfile().map_err(|error| io_error(&error))?;
-    let mut stderr = tempfile::tempfile().map_err(|error| io_error(&error))?;
-    command
-        .stdin(Stdio::null())
-        .stdout(stdout.try_clone().map_err(|error| io_error(&error))?)
-        .stderr(stderr.try_clone().map_err(|error| io_error(&error))?);
-    let mut child = command.spawn().map_err(|error| {
-        if error.kind() == std::io::ErrorKind::NotFound && matches!(family, CommandFamily::Forge) {
-            forge_error(ForgeFailureKind::CliMissing, "Forge CLI is not installed")
+    run_command_with_codes_tapping(command, timeout, family, accepted_codes, None)
+}
+
+fn run_command_with_codes_tapping(
+    command: &mut Command,
+    timeout: Duration,
+    family: CommandFamily,
+    accepted_codes: &[i32],
+    stderr_tap: Option<StderrTap<'_>>,
+) -> Result<CommandOutput, ForgeRuntimeError> {
+    let bounds = Bounds {
+        timeout,
+        stdout_limit: OUTPUT_LIMIT,
+        stderr_limit: if stderr_tap.is_some() {
+            PROGRESS_STDERR_LIMIT
         } else {
-            io_error(&error)
-        }
-    })?;
-    let deadline = Instant::now() + timeout;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None)
-                if Instant::now() < deadline
-                    && within_limit(&stdout, OUTPUT_LIMIT)
-                    && within_limit(&stderr, STDERR_LIMIT) =>
-            {
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            Ok(None) | Err(_) => {
-                let too_large = !within_limit(&stdout, OUTPUT_LIMIT);
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(forge_error(
-                    ForgeFailureKind::Unknown,
-                    if too_large {
-                        "Forge command output exceeded the configured limit"
-                    } else {
-                        "Forge command timed out"
-                    },
-                ));
-            }
-        }
+            STDERR_LIMIT
+        },
     };
-    let code = status.code().unwrap_or(-1);
+    let output = process::run_bounded_tapping(command, bounds, None, stderr_tap).map_err(
+        |error| match error {
+            RunError::Spawn(error)
+                if error.kind() == std::io::ErrorKind::NotFound
+                    && matches!(family, CommandFamily::Forge) =>
+            {
+                forge_error(ForgeFailureKind::CliMissing, "Forge CLI is not installed")
+            }
+            RunError::Spawn(error) | RunError::Io(error) => io_error(&error),
+            RunError::StdoutExceeded => forge_error(
+                ForgeFailureKind::Unknown,
+                "Forge command output exceeded the configured limit",
+            ),
+            RunError::TimedOut | RunError::StderrExceeded | RunError::Cancelled => {
+                forge_error(ForgeFailureKind::Unknown, "Forge command timed out")
+            }
+        },
+    )?;
+    let code = output.code();
     if !accepted_codes.contains(&code) {
-        let diagnostic = read_bounded(&mut stderr, STDERR_LIMIT)?
+        let diagnostic = String::from_utf8_lossy(&output.stderr)
             .trim()
             .replace(['\r', '\n'], " ");
         let kind = classify_command_error(family, &diagnostic);
@@ -756,29 +743,8 @@ fn run_command_with_codes(
         ));
     }
     Ok(CommandOutput {
-        stdout: read_bounded(&mut stdout, OUTPUT_LIMIT)?,
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
     })
-}
-
-fn within_limit(file: &File, limit: u64) -> bool {
-    file.metadata()
-        .is_ok_and(|metadata| metadata.len() <= limit)
-}
-
-fn read_bounded(file: &mut File, limit: u64) -> Result<String, ForgeRuntimeError> {
-    file.seek(SeekFrom::Start(0))
-        .map_err(|error| io_error(&error))?;
-    let mut bytes = Vec::new();
-    file.take(limit + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|error| io_error(&error))?;
-    if bytes.len() as u64 > limit {
-        return Err(forge_error(
-            ForgeFailureKind::Unknown,
-            "Forge command output exceeded the configured limit",
-        ));
-    }
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 fn classify_command_error(family: CommandFamily, message: &str) -> ForgeFailureKind {
@@ -817,23 +783,17 @@ fn classify_command_error(family: CommandFamily, message: &str) -> ForgeFailureK
 
 fn parse_remote(remote: &str) -> Option<RemoteLocation> {
     let remote = remote.trim();
-    let (host, path) = if let Some(rest) = remote.strip_prefix("https://") {
-        rest.split_once('/')?
-    } else if let Some(rest) = remote.strip_prefix("http://") {
-        rest.split_once('/')?
-    } else if let Some(rest) = remote.strip_prefix("ssh://") {
-        let (_, location) = rest.rsplit_once('@').unwrap_or(("", rest));
-        location.split_once('/')?
-    } else if let Some((authority, path)) = remote.split_once(':') {
-        (
-            authority
-                .rsplit_once('@')
-                .map_or(authority, |(_, host)| host),
-            path,
-        )
-    } else {
-        return None;
+    let url = ["https://", "http://", "ssh://"]
+        .iter()
+        .find_map(|scheme| remote.strip_prefix(scheme));
+    let (authority, path) = match url {
+        Some(rest) => rest.split_once('/')?,
+        None => remote.split_once(':')?,
     };
+    // Drop userinfo, such as an SSH user or an access token embedded in an HTTPS URL.
+    let host = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
     let host = host.split(':').next()?.trim();
     let project_path = path.trim_matches('/').trim_end_matches(".git");
     if host.is_empty()

@@ -186,6 +186,12 @@ function openAssistantFileLink(input: {
       capturedServerId: capturedConfig.serverId,
       capturedWorkspaceRoot: capturedConfig.workspaceRoot,
       context: input.context,
+    }).catch((error: unknown) => {
+      // The platform opener rejects when no app can handle the link.
+      input.context.configRef.current.toast?.show(
+        error instanceof Error ? error.message : String(error),
+        { variant: "error" },
+      );
     });
     return;
   }

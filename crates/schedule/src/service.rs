@@ -81,9 +81,11 @@ impl Schedules {
         })))
     }
     /// Execute one canonical schedule request without holding the scheduler lane during a run.
+    ///
+    /// `schedule.run_once.request` resolves once the occurrence has settled.
     /// # Errors
     /// Returns admission, validation, storage, or missing-schedule errors.
-    pub(crate) async fn execute(&self, method: &str, params: Value) -> Result<Value, Error> {
+    pub async fn execute(&self, method: &str, params: Value) -> Result<Value, Error> {
         if self.0.cancel.is_cancelled() {
             return Err(Error::Conflict);
         }

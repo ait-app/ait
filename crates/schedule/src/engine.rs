@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use domain::schedule::{Cadence, Run, RunStatus, Schedule, Status, Target};
 use domain::storage::schedule::Error;
 use model::storage::schedule::Store;
+use serde::Serialize;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -29,10 +30,15 @@ impl Engine {
                 return Err(Error::Storage);
             }
             validate(&schedule.prompt, &schedule.target, schedule.max_runs)?;
-            if let Some(id) = &schedule.workspace_id {
+            for id in [&schedule.workspace_id, &schedule.bot_scope]
+                .into_iter()
+                .flatten()
+            {
                 validate_workspace_id(id)?;
             }
-            cadence::next(&schedule.cadence, now)?;
+            if schedule.status != Status::Completed {
+                cadence::upcoming(&schedule.cadence, now)?;
+            }
             for run in &mut schedule.runs {
                 if run.status == RunStatus::Running {
                     run.status = RunStatus::Failed;
@@ -50,11 +56,10 @@ impl Engine {
                 && schedule.next_run_at.is_some_and(|at| at <= now)
                 && !matches!(schedule.cadence, Cadence::Once { .. })
             {
-                schedule.next_run_at = Some(advance(
-                    &schedule.cadence,
-                    schedule.next_run_at.unwrap_or(now),
-                    now,
-                )?);
+                match advance(&schedule.cadence, schedule.next_run_at.unwrap_or(now), now)? {
+                    Some(at) => schedule.next_run_at = Some(at),
+                    None => complete(schedule, now),
+                }
                 schedule.updated_at = now;
                 dirty = true;
             }
@@ -65,17 +70,22 @@ impl Engine {
         }
         Ok(result)
     }
-    fn commit(&mut self, records: Vec<Schedule>) -> Result<(), Error> {
-        self.store.save(&records)?;
-        self.records = records;
-        Ok(())
+    /// Persists the in-memory records, applying `undo` to restore them when the write fails.
+    fn commit(&mut self, undo: impl FnOnce(&mut Vec<Schedule>)) -> Result<(), Error> {
+        let result = self.store.save(&self.records);
+        if result.is_err() {
+            undo(&mut self.records);
+        }
+        result
     }
-    pub(crate) fn inspect(&self, id: &str) -> Result<Schedule, Error> {
+    fn find(&self, id: &str) -> Result<&Schedule, Error> {
         self.records
             .iter()
             .find(|s| s.id == id)
-            .cloned()
             .ok_or(Error::NotFound)
+    }
+    pub(crate) fn inspect(&self, id: &str) -> Result<Schedule, Error> {
+        self.find(id).cloned()
     }
     pub(crate) fn request(
         &mut self,
@@ -92,15 +102,19 @@ impl Engine {
                 .get("workspaceId")
                 .map(|value| value.as_str().ok_or(Error::Invalid))
                 .transpose()?;
-            let mut records = self.records.clone();
             if let Some(id) = workspace_id {
                 validate_workspace_id(id)?;
-                records.retain(|record| record.workspace_id.as_deref() == Some(id));
             }
+            let mut records: Vec<_> = self
+                .records
+                .iter()
+                .filter(|record| {
+                    workspace_id.is_none_or(|id| record.workspace_id.as_deref() == Some(id))
+                })
+                .collect();
             records.sort_by_key(|s| std::cmp::Reverse(s.created_at));
-            return Ok(
-                json!({"schedules":records.iter().map(summary).collect::<Result<Vec<_>,_>>()?,"error":null}),
-            );
+            let schedules: Vec<_> = records.into_iter().map(summary).collect();
+            return Ok(json!({"schedules":schedules,"error":null}));
         }
         if method == "schedule.update.request" {
             return self.update(&params, now);
@@ -117,16 +131,17 @@ impl Engine {
             }) {
                 return Err(Error::Conflict);
             }
-            let mut records = self.records.clone();
-            records.retain(|s| s.id != id);
-            self.commit(records)?;
+            if let Some(index) = self.records.iter().position(|s| s.id == id) {
+                let removed = self.records.remove(index);
+                self.commit(|records| records.insert(index, removed))?;
+            }
             return Ok(json!({"scheduleId":id,"error":null}));
         }
-        let mut record = self.inspect(id)?;
         match method {
-            "schedule.inspect.request" => return Ok(json!({"schedule":record,"error":null})),
-            "schedule.logs.request" => return Ok(json!({"runs":record.runs,"error":null})),
+            "schedule.inspect.request" => Ok(json!({"schedule":self.find(id)?,"error":null})),
+            "schedule.logs.request" => Ok(json!({"runs":self.find(id)?.runs,"error":null})),
             "schedule.pause.request" | "schedule.resume.request" => {
+                let mut record = self.inspect(id)?;
                 if record.status == Status::Completed {
                     return Err(Error::Conflict);
                 }
@@ -150,15 +165,18 @@ impl Engine {
                     };
                     self.replace(record.clone())?;
                 }
+                Ok(json!({"schedule":summary(&record),"error":null}))
             }
-            _ => return Err(Error::Invalid),
+            _ => Err(Error::Invalid),
         }
-        Ok(json!({"schedule":summary(&record)?,"error":null}))
     }
     fn create(&mut self, params: Value, now: DateTime<Utc>) -> Result<Value, Error> {
         let request: Create = serde_json::from_value(params).map_err(|_| Error::Invalid)?;
         validate(&request.prompt, &request.target, request.max_runs)?;
         validate_workspace_id(&request.workspace_id)?;
+        if let Some(root) = &request.bot_scope {
+            validate_workspace_id(root)?;
+        }
         validate_trigger(&request.cadence, request.start_at, now)?;
         if request.start_at.is_some_and(|at| at < now) {
             return Err(Error::Invalid);
@@ -181,6 +199,7 @@ impl Engine {
         let record = Schedule {
             id: Uuid::new_v4().to_string(),
             workspace_id: Some(request.workspace_id),
+            bot_scope: request.bot_scope,
             name: normalize_name(request.name),
             prompt: request.prompt.trim().to_owned(),
             cadence: request.cadence,
@@ -196,20 +215,21 @@ impl Engine {
             max_runs: request.max_runs,
             runs: vec![],
         };
-        let value = summary(&record)?;
-        let mut records = self.records.clone();
-        records.push(record);
-        self.commit(records)?;
-        Ok(json!({"schedule":value,"error":null}))
+        let value = json!({"schedule":summary(&record),"error":null});
+        self.records.push(record);
+        self.commit(|records| {
+            records.pop();
+        })?;
+        Ok(value)
     }
     fn replace(&mut self, record: Schedule) -> Result<(), Error> {
-        let mut records = self.records.clone();
-        let index = records
+        let index = self
+            .records
             .iter()
             .position(|s| s.id == record.id)
             .ok_or(Error::NotFound)?;
-        records[index] = record;
-        self.commit(records)
+        let previous = std::mem::replace(&mut self.records[index], record);
+        self.commit(|records| records[index] = previous)
     }
     fn update(&mut self, params: &Value, now: DateTime<Utc>) -> Result<Value, Error> {
         let record = self.preview_update(params, now)?;
@@ -333,15 +353,20 @@ impl Engine {
                 due.push(schedule.id.clone());
             }
         }
-        // Copy the records only when one must be committed as completed.
+        // Back up only the records that must be committed as completed.
         if expired {
-            let mut records = self.records.clone();
-            for schedule in &mut records {
+            let mut previous = Vec::new();
+            for (index, schedule) in self.records.iter_mut().enumerate() {
                 if schedulable(schedule) && complete_due(schedule, now) {
+                    previous.push((index, schedule.clone()));
                     complete(schedule, now);
                 }
             }
-            self.commit(records)?;
+            self.commit(|records| {
+                for (index, schedule) in previous {
+                    records[index] = schedule;
+                }
+            })?;
         }
         Ok(due)
     }
@@ -432,23 +457,23 @@ impl Engine {
         if outcome.target_gone || schedule.runs.len() >= 4096 || complete_due(&schedule, now) {
             complete(&mut schedule, now);
         } else if !manual && schedule.status == Status::Active {
-            schedule.next_run_at = Some(advance(
-                &schedule.cadence,
-                schedule.next_run_at.unwrap_or(now),
-                now,
-            )?);
+            match advance(&schedule.cadence, schedule.next_run_at.unwrap_or(now), now)? {
+                Some(at) => schedule.next_run_at = Some(at),
+                None => complete(&mut schedule, now),
+            }
         }
         self.replace(schedule)
     }
 }
+/// Returns the next slot after `now`, or `None` when the cadence never fires again.
 fn advance(
     cadence: &Cadence,
     anchor: DateTime<Utc>,
     now: DateTime<Utc>,
-) -> Result<DateTime<Utc>, Error> {
+) -> Result<Option<DateTime<Utc>>, Error> {
     // An in-flight run can finish after an edit/resume has already scheduled a future slot.
     if anchor > now {
-        return Ok(anchor);
+        return Ok(Some(anchor));
     }
     if let Cadence::Every { every_ms } = cadence {
         let delta = now.signed_duration_since(anchor).num_milliseconds().max(0);
@@ -460,14 +485,52 @@ fn advance(
             .checked_add_signed(chrono::Duration::milliseconds(
                 steps.checked_mul(*every_ms).ok_or(Error::Invalid)?,
             ))
+            .map(Some)
             .ok_or(Error::Invalid);
     }
-    cadence::next(cadence, now)
+    cadence::upcoming(cadence, now)
 }
-fn summary(schedule: &Schedule) -> Result<Value, Error> {
-    let mut value = serde_json::to_value(schedule).map_err(|_| Error::Storage)?;
-    value.as_object_mut().ok_or(Error::Storage)?.remove("runs");
-    Ok(value)
+/// Schedule fields published by list and state-change replies; run history is omitted.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Summary<'a> {
+    id: &'a str,
+    workspace_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bot_scope: Option<&'a str>,
+    name: Option<&'a str>,
+    prompt: &'a str,
+    cadence: &'a Cadence,
+    start_at: Option<DateTime<Utc>>,
+    target: &'a Target,
+    status: Status,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    next_run_at: Option<DateTime<Utc>>,
+    last_run_at: Option<DateTime<Utc>>,
+    paused_at: Option<DateTime<Utc>>,
+    expires_at: Option<DateTime<Utc>>,
+    max_runs: Option<u64>,
+}
+fn summary(schedule: &Schedule) -> Summary<'_> {
+    Summary {
+        id: &schedule.id,
+        workspace_id: schedule.workspace_id.as_deref(),
+        bot_scope: schedule.bot_scope.as_deref(),
+        name: schedule.name.as_deref(),
+        prompt: &schedule.prompt,
+        cadence: &schedule.cadence,
+        start_at: schedule.start_at,
+        target: &schedule.target,
+        status: schedule.status,
+        created_at: schedule.created_at,
+        updated_at: schedule.updated_at,
+        next_run_at: schedule.next_run_at,
+        last_run_at: schedule.last_run_at,
+        paused_at: schedule.paused_at,
+        expires_at: schedule.expires_at,
+        max_runs: schedule.max_runs,
+    }
 }
 fn normalize_name(name: Option<String>) -> Option<String> {
     name.map(|s| s.trim().to_owned()).filter(|s| !s.is_empty())

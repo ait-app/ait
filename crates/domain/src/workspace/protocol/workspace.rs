@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Number;
 
 mod checkout;
-mod serde_fields;
+pub(crate) mod serde_fields;
 pub use checkout::ProjectCheckoutLitePayload;
 use serde_fields::{optional_positive_integer, present, required_nullable};
 
@@ -439,6 +439,9 @@ pub struct WorkspaceDescriptorPayload {
     pub(crate) project_kind: ProjectKind,
     /// Paseo `workspaceKind` field; see the pinned source schema.
     pub(crate) workspace_kind: WorkspaceKind,
+    /// OS-enforced Agent write confinement layered on the worktree, when enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox: Option<crate::workspace::sandbox::WorkspaceSandbox>,
     /// Paseo `name` field; see the pinned source schema.
     pub name: String,
     /// Paseo `title` field; see the pinned source schema.
@@ -528,6 +531,9 @@ struct WorkspaceDescriptorInput {
     project_kind: ProjectKind,
     /// Paseo `workspaceKind` field; see the pinned source schema.
     workspace_kind: WorkspaceKind,
+    /// OS-enforced Agent write confinement layered on the worktree, when enabled.
+    #[serde(default)]
+    sandbox: Option<crate::workspace::sandbox::WorkspaceSandbox>,
     /// Paseo `name` field; see the pinned source schema.
     name: String,
     /// Paseo `title` field; see the pinned source schema.
@@ -599,6 +605,7 @@ impl From<WorkspaceDescriptorInput> for WorkspaceDescriptorPayload {
             initial_branch: input.initial_branch,
             project_kind: input.project_kind,
             workspace_kind: input.workspace_kind,
+            sandbox: input.sandbox,
             name: input.name,
             title: input.title,
             pinned_at: input.pinned_at,

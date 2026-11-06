@@ -16,7 +16,8 @@ pub(super) struct Event {
 }
 
 impl Event {
-    pub(super) fn project(method: &str, params: &Value) -> Option<Self> {
+    /// Project a committed session event, returning it with its encoded `params` length.
+    pub(super) fn project(method: &str, params: &Value) -> Option<(Self, usize)> {
         let (method, params) = match method {
             "agent.create.update" | "workspace.create.update" => (
                 "creation.update",
@@ -49,13 +50,20 @@ impl Event {
             | "status.server_info" => (method, params.clone()),
             _ => return None,
         };
-        if !params.is_object() || serde_json::to_vec(&params).ok()?.len() > 64 * 1024 {
+        if !params.is_object() {
             return None;
         }
-        Some(Self {
-            method: method.to_owned(),
-            params,
-        })
+        let size = serde_json::to_vec(&params).ok()?.len();
+        if size > 64 * 1024 {
+            return None;
+        }
+        Some((
+            Self {
+                method: method.to_owned(),
+                params,
+            },
+            size,
+        ))
     }
 
     pub(super) fn publication(

@@ -17,6 +17,7 @@ vi.mock("@/stores/session-store", () => ({
 }));
 vi.mock("@/utils/open-external-url", () => ({ openExternalUrl: fixture.open }));
 vi.mock("./provider-native-actions", () => ({ ProviderNativeActions: () => null }));
+vi.mock("./provider-side-questions", () => ({ ProviderSideQuestions: () => null }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: () => "Open in browser" }) }));
 afterEach(() => {
   cleanup();

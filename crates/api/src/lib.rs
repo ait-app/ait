@@ -29,7 +29,8 @@ use axum::{Json, Router};
 use browser::broker::Broker;
 use metadata::automation::service::WorkspaceAutomation;
 use metadata::directory::service::directory::Directory;
-use metadata::worktrees::service::worktrees::{WorkspaceWorktrees, Worktrees};
+use metadata::worktrees::service::worktrees::Worktrees;
+use metadata::worktrees::service::worktrees::provisioning::WorkspaceWorktrees;
 use model::server::{Lifecycle, Limits, ServerInfo, VERSION};
 use model::{LifecycleIntent, Runtime};
 use provider::service::agent_execution::AgentExecution;
@@ -561,7 +562,7 @@ impl IntoResponse for ApiError {
 
 async fn guard(
     State(state): State<Arc<Shared>>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Result<Response, ApiError> {
     let destination_authorities;
@@ -605,7 +606,8 @@ async fn guard(
             }
             state.browser_auth.consume(request.headers())?;
         } else if request.uri().path() == mcp::PATH {
-            mcp::authenticate(&state, request.headers())?;
+            let principal = mcp::authenticate(&state, request.headers())?;
+            request.extensions_mut().insert(principal);
         } else {
             auth::authenticate(request.headers(), &state.token)?;
         }
@@ -911,17 +913,13 @@ fn compose_automation_events(
                     .unwrap_or_default()
                     .to_owned();
                 let state = (summary["status"].clone(), summary["hasCommands"].clone());
-                let changed = {
-                    let mut summaries = summaries
+                let changed = record_setup_summary(
+                    &mut summaries
                         .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    let changed = summaries.get(&key) != Some(&state);
-                    if summaries.len() >= 4096 {
-                        summaries.pop_first();
-                    }
-                    summaries.insert(key, state);
-                    changed
-                };
+                        .unwrap_or_else(std::sync::PoisonError::into_inner),
+                    key,
+                    state,
+                );
                 if changed {
                     events.publish(SessionEventKind::WorkspaceSetupStatus, &summary);
                 }
@@ -929,6 +927,34 @@ fn compose_automation_events(
             events.publish(kind, &payload);
         }));
     Ok(())
+}
+
+/// Most Workspace setup summaries remembered to suppress unchanged status events.
+const SETUP_SUMMARY_LIMIT: usize = 4096;
+
+/// Remember the setup summary `state` of Workspace `key`; whether it differs from the last.
+/// A full cache evicts its first entry only to make room for a new key.
+fn record_setup_summary<S: PartialEq>(
+    summaries: &mut std::collections::BTreeMap<String, S>,
+    key: String,
+    state: S,
+) -> bool {
+    match summaries.entry(key) {
+        std::collections::btree_map::Entry::Occupied(mut entry) => {
+            if *entry.get() == state {
+                return false;
+            }
+            entry.insert(state);
+        }
+        std::collections::btree_map::Entry::Vacant(entry) => {
+            let key = entry.into_key();
+            if summaries.len() >= SETUP_SUMMARY_LIMIT {
+                summaries.pop_first();
+            }
+            summaries.insert(key, state);
+        }
+    }
+    true
 }
 
 fn shared_service<S>(service: S) -> Arc<Mutex<S>> {

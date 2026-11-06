@@ -62,6 +62,8 @@ pub(crate) fn archive(
 }
 
 /// Archive every Agent owned by a Workspace, retaining children placed in other Workspaces.
+/// Observed children cannot be detached from their verified parent, so they are archived with
+/// it, as in [`archive`], and are included in the returned IDs.
 pub(crate) fn archive_workspaces(
     registry: &dyn AgentRuntimeRegistry,
     workspaces: &[String],
@@ -69,29 +71,37 @@ pub(crate) fn archive_workspaces(
 ) -> Result<Vec<String>, AgentRuntimeError> {
     let workspaces: BTreeSet<_> = workspaces.iter().map(String::as_str).collect();
     let records = registry.list().map_err(map_agent_registry)?;
-    let selected: BTreeSet<_> = records
-        .iter()
-        .filter(|record| {
-            record
-                .workspace_id
-                .as_deref()
-                .is_some_and(|id| workspaces.contains(id))
-        })
-        .map(|record| record.id.clone())
-        .collect();
+    let mut archived = BTreeSet::new();
+    let mut children = BTreeMap::<&str, Vec<&PersistedAgentRuntimeRecord>>::new();
     for record in &records {
-        if selected.contains(&record.id) {
-            archive_one(registry, &record.id, timestamp)?;
-        } else if record.archived_at.is_none()
-            && record
-                .labels
-                .get(PARENT_AGENT_ID_LABEL)
-                .is_some_and(|parent| selected.contains(parent))
+        if record
+            .workspace_id
+            .as_deref()
+            .is_some_and(|id| workspaces.contains(id))
         {
-            detach(registry, &record.id, timestamp)?;
+            archived.insert(record.id.clone());
+        } else if record.archived_at.is_none()
+            && let Some(parent) = record.labels.get(PARENT_AGENT_ID_LABEL)
+        {
+            children.entry(parent).or_default().push(record);
         }
     }
-    Ok(selected.into_iter().collect())
+    for id in &archived {
+        archive_one(registry, id, timestamp)?;
+    }
+    let mut pending: Vec<_> = archived.iter().cloned().collect();
+    while let Some(parent) = pending.pop() {
+        for child in children.remove(parent.as_str()).unwrap_or_default() {
+            if child.observation.is_some() {
+                archive_one(registry, &child.id, timestamp)?;
+                archived.insert(child.id.clone());
+                pending.push(child.id.clone());
+            } else {
+                detach(registry, &child.id, timestamp)?;
+            }
+        }
+    }
+    Ok(archived.into_iter().collect())
 }
 
 fn archive_one(

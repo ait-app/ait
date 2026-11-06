@@ -2,6 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use model::methods::InboundKind;
 use model::{Context, DispatchError, ErrorCode, Runtime};
 
 /// Services installed for this capability crate, sharing server-wide runtime resources.
@@ -42,18 +43,9 @@ pub async fn dispatch(
         return Ok(());
     }
     let Some(context) = context.take_if(|context| {
-        matches!(
-            context.request.method.as_str(),
-            "terminal.list.request"
-                | "terminal.list.subscribe.request"
-                | "terminal.list.unsubscribe.request"
-                | "terminal.create.request"
-                | "terminal.rename.request"
-                | "terminal.subscribe.request"
-                | "terminal.unsubscribe.request"
-                | "terminal.kill.request"
-                | "terminal.capture.request"
-        )
+        crate::connection::METHODS.iter().any(|method| {
+            method.kind == InboundKind::Request && method.name == context.request.method
+        })
     }) else {
         return Err(DispatchError::NotImplemented);
     };

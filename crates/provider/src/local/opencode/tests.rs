@@ -4,6 +4,7 @@ use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
+use super::client::OpenCodeClient;
 use super::*;
 use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
@@ -150,6 +151,7 @@ pub(super) fn fixture(scenario: &str) -> (TempDir, OpenCodeClient, AgentSessionS
             mode_id: Some("build".into()),
             ..StoredAgentConfig::default()
         },
+        confinement: None,
     };
     (root, client, spec)
 }

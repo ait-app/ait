@@ -1,10 +1,12 @@
 //! Composition of Workspace provisioning and the initial native Agent under one receipt.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use domain::creation::protocol::Kind;
+use domain::creation::protocol::{Kind, Snapshot};
 use metadata::directory::rpc::directory::WorkspaceCreated;
+use model::creation::Creations;
 use model::events::Subscription;
+use model::outbound::Outbound;
 use model::{Context, DispatchError, ErrorCode};
 use serde_json::{Value, json};
 
@@ -72,16 +74,14 @@ async fn prepare(context: &mut Context<'_>, state: &Shared) -> Result<Input, Err
     validate_agent_identity(state, &agent, &key).await?;
     context.request.params["idempotencyKey"] = json!(key);
     let subscription = if observe {
-        let creations = state.metadata.creations.clone();
+        let creations = Arc::new(state.metadata.creations.clone());
         let outbound = context.outbound.clone();
         Some(
             context
                 .runtime
-                .run(
-                    Some(Arc::new(Mutex::new(creations))),
-                    ErrorCode::RegistryIo,
-                    move |creations| creations.observe(Kind::Workspace, &key, outbound),
-                )
+                .run_shared(Some(creations), ErrorCode::RegistryIo, move |creations| {
+                    creations.observe(Kind::Workspace, &key, outbound)
+                })
                 .await?,
         )
     } else {
@@ -103,15 +103,13 @@ async fn validate_agent_identity(
     let Some(id) = agent["agentId"].as_str().map(str::to_owned) else {
         return Ok(());
     };
-    let creations = state.metadata.creations.clone();
+    let creations = Arc::new(state.metadata.creations.clone());
     let key = key.to_owned();
     let existing = state
         .runtime
-        .run(
-            Some(Arc::new(Mutex::new(creations))),
-            ErrorCode::RegistryIo,
-            move |creations| creations.snapshot(Kind::Workspace, &key),
-        )
+        .run_shared(Some(creations), ErrorCode::RegistryIo, move |creations| {
+            creations.snapshot(Kind::Workspace, &key)
+        })
         .await?;
     if existing.is_none() && provider::dispatch::contains_identity(&state.provider, id).await? {
         return Err(ErrorCode::IdempotencyConflict);
@@ -166,25 +164,10 @@ async fn create(
 }
 
 async fn await_replay(state: &Shared, created: &mut WorkspaceCreated) -> Result<(), ErrorCode> {
-    let mut snapshot: domain::creation::protocol::Snapshot =
-        serde_json::from_value(created.value["creation"].clone())
-            .map_err(|_| ErrorCode::RegistryIo)?;
-    let service = Arc::new(Mutex::new(state.metadata.creations.clone()));
-    while !matches!(snapshot.phase.as_str(), "completed" | "failed") {
-        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
-        let key = snapshot.idempotency_key.clone();
-        snapshot = state
-            .runtime
-            .run_queued(
-                Some(service.clone()),
-                ErrorCode::RegistryIo,
-                move |creations| {
-                    creations
-                        .snapshot(Kind::Workspace, &key)?
-                        .ok_or(ErrorCode::RegistryIo)
-                },
-            )
-            .await?;
+    let mut snapshot: Snapshot = serde_json::from_value(created.value["creation"].clone())
+        .map_err(|_| ErrorCode::RegistryIo)?;
+    if !finished(&snapshot) {
+        snapshot = await_finished(state, snapshot.idempotency_key).await?;
     }
     super::creation_receipts::validate_agent(state, &snapshot).await?;
     created.value["agent"] = json!(snapshot.agent);
@@ -193,11 +176,65 @@ async fn await_replay(state: &Shared, created: &mut WorkspaceCreated) -> Result<
     Ok(())
 }
 
+/// Wait for the in-flight creation that owns `key` to reach a terminal phase.
+///
+/// Every committed transition is published to observers, so this re-reads the receipt only
+/// after progress instead of polling the store.
+async fn await_finished(state: &Shared, key: String) -> Result<Snapshot, ErrorCode> {
+    let creations = Arc::new(state.metadata.creations.clone());
+    let (outbound, mut progress) = Outbound::new();
+    let failed = outbound.failure();
+    let first_key = key.clone();
+    // Observe before reading so no later transition goes unnoticed.
+    let (progress_guard, mut snapshot) = state
+        .runtime
+        .run_shared_queued(
+            Some(creations.clone()),
+            ErrorCode::RegistryIo,
+            move |creations| {
+                let guard = creations.observe(Kind::Workspace, &first_key, outbound)?;
+                Ok((guard, current(creations, &first_key)?))
+            },
+        )
+        .await?;
+    progress_guard
+        .activate()
+        .map_err(|_| ErrorCode::RegistryIo)?;
+    while !finished(&snapshot) {
+        tokio::select! {
+            progressed = progress.recv() => {
+                progressed.ok_or(ErrorCode::RegistryIo)?;
+            }
+            () = failed.cancelled() => return Err(ErrorCode::RegistryIo),
+        }
+        let key = key.clone();
+        snapshot = state
+            .runtime
+            .run_shared_queued(
+                Some(creations.clone()),
+                ErrorCode::RegistryIo,
+                move |creations| current(creations, &key),
+            )
+            .await?;
+    }
+    Ok(snapshot)
+}
+
+fn current(creations: &Creations, key: &str) -> Result<Snapshot, ErrorCode> {
+    creations
+        .snapshot(Kind::Workspace, key)?
+        .ok_or(ErrorCode::RegistryIo)
+}
+
+fn finished(snapshot: &Snapshot) -> bool {
+    matches!(snapshot.phase.as_str(), "completed" | "failed")
+}
+
 async fn finish(
     state: &Shared,
     input: &Input,
     created: &mut WorkspaceCreated,
-    receipt: domain::creation::protocol::Snapshot,
+    receipt: Snapshot,
 ) -> Result<(), ErrorCode> {
     let execution = state
         .provider
@@ -212,29 +249,27 @@ async fn finish(
             }),
         )
         .await;
-    let creations = state.metadata.creations.clone();
+    let creations = Arc::new(state.metadata.creations.clone());
     let snapshot = state
         .runtime
-        .run_queued(
-            Some(Arc::new(Mutex::new(creations))),
-            ErrorCode::RegistryIo,
-            move |creations| {
-                let mut snapshot = creations
-                    .snapshot(Kind::Workspace, &receipt.idempotency_key)?
-                    .ok_or(ErrorCode::RegistryIo)?;
-                if let Err(error) = result
-                    && snapshot.phase != "failed"
-                    && snapshot.phase != "completed"
-                {
-                    snapshot =
-                        creations.advance(&snapshot, "failed", None, Some(error.to_string()))?;
-                }
-                Ok(snapshot)
-            },
-        )
+        .run_shared_queued(Some(creations), ErrorCode::RegistryIo, move |creations| {
+            let mut snapshot = creations
+                .snapshot(Kind::Workspace, &receipt.idempotency_key)?
+                .ok_or(ErrorCode::RegistryIo)?;
+            if let Err(error) = result
+                && snapshot.phase != "failed"
+                && snapshot.phase != "completed"
+            {
+                snapshot = creations.advance(&snapshot, "failed", None, Some(error.to_string()))?;
+            }
+            Ok(snapshot)
+        })
         .await?;
     created.value["agent"] = json!(snapshot.agent);
     created.value["error"] = json!(snapshot.error);
     created.value["creation"] = json!(snapshot);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

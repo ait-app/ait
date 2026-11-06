@@ -1,5 +1,7 @@
 //! Compact, bounded read projections for external MCP callers.
 
+use std::collections::BTreeSet;
+
 use model::ErrorCode;
 use serde_json::{Value, json};
 
@@ -26,10 +28,15 @@ pub(super) async fn status(state: &Shared, arguments: Value) -> Result<Value, Er
     Ok(json!({"status":value["agent"]["status"],"snapshot":value["agent"]}))
 }
 
-/// Return a compact Agent directory page filtered and bounded by `arguments` in `state`.
+/// Return a compact Agent directory page filtered and bounded by `arguments` in `state`,
+/// limited to `workspaces` when given.
 /// # Errors
 /// Returns invalid filters, pagination or directory failures.
-pub(super) async fn agents(state: &Shared, arguments: &Value) -> Result<Value, ErrorCode> {
+pub(super) async fn agents(
+    state: &Shared,
+    arguments: &Value,
+    workspaces: Option<&BTreeSet<String>>,
+) -> Result<Value, ErrorCode> {
     let mut params = json!({
         "filter":{"includeArchived":arguments["includeArchived"].as_bool().unwrap_or(false)},
         "sort":[{"key":"updated_at","direction":"desc"}],
@@ -41,6 +48,7 @@ pub(super) async fn agents(state: &Shared, arguments: &Value) -> Result<Value, E
     if let Some(cursor) = arguments.get("cursor") {
         params["page"]["cursor"] = cursor.clone();
     }
+    within(&mut params, workspaces);
     let value = rpc::execute(state, "agent.list.request", params).await?;
     let entries = value["entries"]
         .as_array()
@@ -67,11 +75,17 @@ pub(super) async fn workspaces(state: &Shared, arguments: &Value) -> Result<Valu
     Ok(json!({"workspaces":value["entries"],"nextCursor":value["pageInfo"]["nextCursor"]}))
 }
 
-/// Read all visible pending permissions through bounded directory pages in `state`.
+/// Read all visible pending permissions through bounded directory pages in `state`, limited to
+/// Agents in `workspaces` when given; entries carry only Agent ids, so they are filtered at the
+/// source.
 /// # Errors
 /// Returns existing directory or malformed result errors.
-pub(super) async fn permissions(state: &Shared) -> Result<Value, ErrorCode> {
+pub(super) async fn permissions(
+    state: &Shared,
+    workspaces: Option<&BTreeSet<String>>,
+) -> Result<Value, ErrorCode> {
     let mut params = json!({"page":{"limit":200}});
+    within(&mut params, workspaces);
     let mut permissions = Vec::new();
     loop {
         let value = rpc::execute(state, "agent.list.request", params.clone()).await?;
@@ -94,6 +108,13 @@ pub(super) async fn permissions(state: &Shared) -> Result<Value, ErrorCode> {
         params["page"]["cursor"] = value["pageInfo"]["nextCursor"].clone();
     }
     Ok(json!({"permissions":permissions}))
+}
+
+/// Restrict directory `params` to `workspaces` when given.
+fn within(params: &mut Value, workspaces: Option<&BTreeSet<String>>) {
+    if let Some(workspaces) = workspaces {
+        params["filter"]["workspaceIds"] = json!(workspaces);
+    }
 }
 
 /// Return saved daemon profiles from `state`, or an empty array when none are configured.

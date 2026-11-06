@@ -6,13 +6,14 @@ mod injection;
 use super::native::NativeFixture;
 use super::{TOKEN, ready, start_with_path, terminate};
 
-struct Client {
-    http: reqwest::Client,
-    url: String,
+/// Ait MCP client authenticated with the host token.
+pub(super) struct Client {
+    pub(super) http: reqwest::Client,
+    pub(super) url: String,
 }
 
 impl Client {
-    fn new(address: &str) -> Self {
+    pub(super) fn new(address: &str) -> Self {
         Self {
             http: reqwest::Client::builder()
                 .no_proxy()
@@ -23,7 +24,7 @@ impl Client {
         }
     }
 
-    async fn rpc(&self, method: &str, params: Value, caller: Option<&str>) -> Value {
+    pub(super) async fn rpc(&self, method: &str, params: Value, caller: Option<&str>) -> Value {
         let mut request = self
             .http
             .post(&self.url)
@@ -39,7 +40,7 @@ impl Client {
         response.json().await.unwrap()
     }
 
-    async fn tool(&self, name: &str, arguments: Value, caller: Option<&str>) -> Value {
+    pub(super) async fn tool(&self, name: &str, arguments: Value, caller: Option<&str>) -> Value {
         let response = self
             .rpc(
                 "tools/call",

@@ -67,7 +67,9 @@ async fn manage(
         );
     }
     if let Some(thinking) = &selection.thinking_option_id {
-        values.insert("modelPresetThinking".to_owned(), json!(thinking));
+        values
+            .entry("modelPresetThinking".to_owned())
+            .or_insert_with(|| json!(thinking));
     }
     let expected = if operation == "save" {
         let base = super::super::read(client, cwd, &["config", "list", "--json"]).await?;

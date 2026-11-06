@@ -48,3 +48,50 @@ test("semantic operation requests and detached receipts retain their wire fields
   };
   expect(validateWSOutboundMessage(message)).toEqual({ success: true, data: message });
 });
+
+test("optional side questions preserve legacy snapshots and bound native thread previews", () => {
+  const base = { statuses: [], widgets: [], title: null, editor: null, link: null };
+  const topic = {
+    id: "topic",
+    question: "Question",
+    createdAt: 1,
+    truncated: false,
+    turns: [
+      {
+        question: "Question",
+        answer: "Partial",
+        status: "running",
+        createdAt: 1,
+        updatedAt: 2,
+        error: null,
+      },
+    ],
+  };
+  const state = {
+    ...base,
+    sideQuestions: {
+      records: [topic],
+      omitted: 0,
+      error: null,
+      runningId: "topic",
+      reveal: "topic:1",
+    },
+  };
+  expect(ProviderUiStateSchema.parse(base)).toEqual(base);
+  expect(ProviderUiStateSchema.parse(state)).toEqual(state);
+  expect(
+    ProviderUiStateSchema.safeParse({
+      ...state,
+      sideQuestions: { ...state.sideQuestions, records: Array.from({ length: 9 }, () => topic) },
+    }).success,
+  ).toBe(false);
+  expect(
+    ProviderUiStateSchema.safeParse({
+      ...state,
+      sideQuestions: {
+        ...state.sideQuestions,
+        records: [{ ...topic, turns: [{ ...topic.turns[0], answer: "x".repeat(48 * 1024 + 1) }] }],
+      },
+    }).success,
+  ).toBe(false);
+});

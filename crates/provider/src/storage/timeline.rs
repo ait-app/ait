@@ -79,15 +79,16 @@ impl Timeline {
             .query_row("PRAGMA application_id", [], |row| row.get(0))
             .map_err(io)?;
         let tables: i64 = database.query_row("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", [], |row|row.get(0)).map_err(io)?;
-        if !(version == 0 && application == 0 && tables == 0
-            || version == 1 && application == 0x4154_544C && tables == 2
-            || version == 2 && application == 0x4154_544C && tables == 3
-            || version == 3 && application == 0x4154_544C && tables == 4)
-            && !(version == 4 && application == 0x4154_544C && tables == 5)
-            && !(version == 5 && application == 0x4154_544C && tables == 6)
-            && !(version == 6 && application == 0x4154_544C && tables == 10)
-            && !(version == 7 && application == 0x4154_544C && tables == 10)
-        {
+        if !matches!(
+            (version, application, tables),
+            (0, 0, 0)
+                | (1, 0x4154_544C, 2)
+                | (2, 0x4154_544C, 3)
+                | (3, 0x4154_544C, 4)
+                | (4, 0x4154_544C, 5)
+                | (5, 0x4154_544C, 6)
+                | (6 | 7, 0x4154_544C, 10)
+        ) {
             return Err(ErrorCode::UnsupportedFormat);
         }
         database
@@ -210,7 +211,7 @@ impl Timeline {
         Ok(None)
     }
 
-    /// Reconcile native history, retaining host diagnostics, plugin rows and retired generations.
+    /// Reconcile native history, retaining host diagnostics/control cards, plugins and old generations.
     /// An unchanged native prefix keeps its cursor; rewrites retire the old generation and publish
     /// a replacement event only after the transaction commits. No domain Message is changed.
     /// # Errors
@@ -227,7 +228,7 @@ impl Timeline {
         let previous = read_rows(&transaction, agent)?;
         let native: Vec<_> = previous
             .iter()
-            .filter(|row| row.entry.item["type"] != "plugin" && !host_diagnostic(&row.entry))
+            .filter(|row| row.entry.item["type"] != "plugin" && !host_owned(&row.entry))
             .collect();
         let prefix = progress::covered(&transaction, agent, entries)?
             && native.len() <= entries.len()
@@ -243,7 +244,7 @@ impl Timeline {
             return Ok(old_epoch);
         }
         let entries = progress::retain_timestamps(&transaction, agent, &previous, entries)?;
-        let entries = retain_diagnostics(entries, &previous);
+        let entries = retain_host_entries(entries, &previous);
         transaction.execute(
             "INSERT INTO retired_entries SELECT agent,?,seq,identity,provider,entry FROM entries WHERE agent=?",
             params![old_epoch,agent],
@@ -287,6 +288,30 @@ impl Timeline {
             );
         }
         Ok(replacement)
+    }
+
+    /// Delete every display generation, incremental item, input receipt and native child
+    /// descriptor owned by a deleted Agent in one transaction, so a later Agent reusing its ID
+    /// starts empty. Child timelines stay under their own scopes for observed children.
+    /// # Errors
+    /// Returns storage errors; nothing is deleted when any statement fails.
+    pub(crate) fn forget(&self, agent: &str) -> Result<(), ErrorCode> {
+        let mut database = self.database.lock().map_err(io)?;
+        let transaction = database.transaction().map_err(io)?;
+        for table in [
+            "timelines",
+            "entries",
+            "retired_entries",
+            "progress",
+            "input_receipts",
+            "provider_subagents",
+        ] {
+            transaction
+                .execute(&format!("DELETE FROM {table} WHERE agent=?"), [agent])
+                .map_err(io)?;
+        }
+        projection::clear(&transaction, agent)?;
+        transaction.commit().map_err(io)
     }
 
     /// Atomically append new source identities, deduplicating replay without rewriting old rows.
@@ -350,13 +375,15 @@ impl Timeline {
     }
 }
 
-fn host_diagnostic(entry: &NativeItem) -> bool {
-    entry.key.starts_with("host:provider-failure:") && entry.item["type"] == "error"
+fn host_owned(entry: &NativeItem) -> bool {
+    (entry.key.starts_with("host:provider-failure:") && entry.item["type"] == "error")
+        || (entry.key.starts_with("host:provider-command:")
+            && entry.item["type"] == "provider_command")
 }
 
-fn retain_diagnostics(entries: Vec<NativeItem>, previous: &[Row]) -> Vec<NativeItem> {
+fn retain_host_entries(entries: Vec<NativeItem>, previous: &[Row]) -> Vec<NativeItem> {
     use std::collections::BTreeMap;
-    if !previous.iter().any(|row| host_diagnostic(&row.entry)) {
+    if !previous.iter().any(|row| host_owned(&row.entry)) {
         return entries;
     }
     let mut keys = BTreeMap::new();
@@ -370,7 +397,7 @@ fn retain_diagnostics(entries: Vec<NativeItem>, previous: &[Row]) -> Vec<NativeI
     let mut retained: BTreeMap<usize, Vec<NativeItem>> = BTreeMap::new();
     let mut predecessor = None;
     for row in previous {
-        if host_diagnostic(&row.entry) {
+        if host_owned(&row.entry) {
             let position = row
                 .entry
                 .turn_id
@@ -392,8 +419,8 @@ fn retain_diagnostics(entries: Vec<NativeItem>, previous: &[Row]) -> Vec<NativeI
     let count = retained.values().map(Vec::len).sum::<usize>();
     let mut merged = Vec::with_capacity(entries.len() + count);
     for (index, entry) in entries.into_iter().enumerate() {
-        if let Some(diagnostics) = retained.remove(&index) {
-            merged.extend(diagnostics);
+        if let Some(host_entries) = retained.remove(&index) {
+            merged.extend(host_entries);
         }
         merged.push(entry);
     }

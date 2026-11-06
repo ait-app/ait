@@ -4,9 +4,10 @@ use std::io::{self, Write};
 
 use serde_json::{Value, json};
 
+use super::MARKER;
+
 const INPUT_BYTES: usize = 64 * 1024;
 const OUTPUT_BYTES: usize = 512 * 1024;
-const MARKER: &str = "\n[Output truncated; full output remains in the native transcript.]";
 
 /// Project MCP arguments and results, retaining JSON structure within each display budget.
 ///
@@ -24,7 +25,11 @@ pub(super) fn error(value: &Value) -> Value {
     bounded(value, INPUT_BYTES)
 }
 
-fn bounded(value: &Value, limit: usize) -> Value {
+/// Retain `value` when its JSON encoding fits `limit` bytes.
+///
+/// Larger values become a marked text preview of their JSON encoding; the preview's own
+/// JSON encoding also fits `limit`.
+pub(super) fn bounded(value: &Value, limit: usize) -> Value {
     // A serialized JSON prefix can double in size when encoded again as a string.
     let prefix_limit = ((limit - MARKER.len() - 2) / 2).min(super::PREVIEW_BYTES);
     let mut preview = JsonPreview {

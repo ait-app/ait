@@ -589,7 +589,13 @@ const fn auth_state_for_error(error: &port::ForgeRuntimeError) -> port::ForgeAut
         port::ForgeFailureKind::CliMissing => port::ForgeAuthState::CliMissing,
         port::ForgeFailureKind::Unauthenticated => port::ForgeAuthState::Unauthenticated,
         port::ForgeFailureKind::NoRemote => port::ForgeAuthState::NoRemote,
-        _ => port::ForgeAuthState::Error,
+        port::ForgeFailureKind::NotGitRepository
+        | port::ForgeFailureKind::NotAllowed
+        | port::ForgeFailureKind::MergeConflict
+        | port::ForgeFailureKind::NotFound
+        | port::ForgeFailureKind::Forbidden
+        | port::ForgeFailureKind::Invalid
+        | port::ForgeFailureKind::Unknown => port::ForgeAuthState::Error,
     }
 }
 
@@ -599,7 +605,13 @@ fn protocol_error(error: port::ForgeRuntimeError) -> CheckoutError {
             port::ForgeFailureKind::NotGitRepository => CheckoutErrorCode::NotGitRepo,
             port::ForgeFailureKind::NotAllowed => CheckoutErrorCode::NotAllowed,
             port::ForgeFailureKind::MergeConflict => CheckoutErrorCode::MergeConflict,
-            _ => CheckoutErrorCode::Unknown,
+            port::ForgeFailureKind::CliMissing
+            | port::ForgeFailureKind::Unauthenticated
+            | port::ForgeFailureKind::NoRemote
+            | port::ForgeFailureKind::NotFound
+            | port::ForgeFailureKind::Forbidden
+            | port::ForgeFailureKind::Invalid
+            | port::ForgeFailureKind::Unknown => CheckoutErrorCode::Unknown,
         },
         message: error.message,
     }

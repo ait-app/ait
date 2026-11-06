@@ -30,9 +30,7 @@ steered_inputs = []
 voice_history = []
 agent_mcp = None
 
-def probe_agent_mcp():
-    if agent_mcp is None:
-        return "mcp-not-injected"
+def agent_mcp_client():
     assert urlsplit(agent_mcp["url"]).hostname in ("127.0.0.1", "::1", "localhost")
     headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream",
                "MCP-Protocol-Version": "2025-11-25", **agent_mcp.get("http_headers", {})}
@@ -48,6 +46,45 @@ def probe_agent_mcp():
     rpc("initialize", {"protocolVersion": "2025-11-25", "capabilities": {},
                        "clientInfo": {"name": "offline-native", "version": "1"}})
     rpc("notifications/initialized", {}, notification=True)
+    return headers, rpc
+
+def tool(name, arguments):
+    return ("tools/call", {"name": name, "arguments": arguments})
+
+CHILD = {"provider": "codex/offline-model", "title": "Bot child", "initialPrompt": "child task"}
+# Each probe records the session's own identity and raw credential, then one response per call.
+SCOPE_PROBES = {
+    "ait-bot-probe": ("bot-probe", [
+        ("tools/list", {}),
+        tool("create_agent", {**CHILD, "settings": {"modeId": "full-access"}}),
+        tool("create_agent", CHILD),
+        tool("create_schedule", {"provider": "codex/offline-model", "prompt": "scheduled task",
+                                 "cron": "0 9 * * *"}),
+    ]),
+    "ait-scope-probe": ("scope-probe", [
+        tool("respond_to_permission", {"agentId": "agent", "requestId": "request", "response": {}}),
+        tool("archive_workspace", {"workspaceId": "workspace"}),
+        tool("create_agent", {**CHILD, "settings": {"modeId": "full-access"}}),
+        tool("list_agents", {}),
+    ]),
+}
+
+def probe_scope(text):
+    if agent_mcp is None:
+        return "mcp-not-injected"
+    name, calls = SCOPE_PROBES[text]
+    headers, rpc = agent_mcp_client()
+    with (root / (name + ".jsonl")).open("a") as output:
+        output.write(json.dumps({"self": {"agentId": headers["X-Ait-Agent-Id"],
+                                          "authorization": headers["Authorization"]}}) + "\n")
+        for method, params in calls:
+            output.write(json.dumps(rpc(method, params)) + "\n")
+    return name + "-ok"
+
+def probe_agent_mcp():
+    if agent_mcp is None:
+        return "mcp-not-injected"
+    headers, rpc = agent_mcp_client()
     catalog = rpc("tools/list", {})
     assert any(tool["name"] == "rename_workspace" for tool in catalog["result"]["tools"])
     renamed = rpc("tools/call", {"name": "rename_workspace", "arguments": {"title": "Renamed through injected MCP"}})
@@ -378,6 +415,9 @@ for line in sys.stdin:
         turn_content = params["input"]
         if text == "ait-mcp-probe":
             complete(pending, probe_agent_mcp())
+            continue
+        if text in SCOPE_PROBES:
+            complete(pending, probe_scope(text))
             continue
         if text == "usage":
             emit({"method":"thread/tokenUsage/updated", "params":{"threadId":thread_id,

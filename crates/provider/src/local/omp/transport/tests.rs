@@ -9,7 +9,7 @@ async fn slow_native_startup_preserves_the_connected_control_deadline() {
     std::fs::write(root.path().join("agent/negotiate-delay"), "0.8").unwrap();
     client.deadline = Duration::from_millis(200);
     assert!(client.discovery_timeout() > STARTUP_TIMEOUT);
-    let mut transport = Transport::spawn(&client, &spec.cwd, &[]).unwrap();
+    let mut transport = Transport::spawn(&client, &spec.cwd, &[], None).unwrap();
     transport.initialize().await.unwrap();
     assert_eq!(
         transport

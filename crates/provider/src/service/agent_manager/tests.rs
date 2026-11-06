@@ -116,6 +116,7 @@ struct FakeState {
     mcp_support: mcp::Support,
     create_specs: Vec<AgentSessionSpec>,
     start_configs: Vec<StoredAgentConfig>,
+    validate_configs: Vec<StoredAgentConfig>,
     available: bool,
     fail_info: bool,
     runtime_info: Option<StoredAgentRuntimeInfo>,
@@ -146,6 +147,7 @@ impl Default for FakeState {
             mcp_support: mcp::Support::Unsupported,
             create_specs: Vec::new(),
             start_configs: Vec::new(),
+            validate_configs: Vec::new(),
             available: true,
             fail_info: false,
             runtime_info: None,
@@ -278,10 +280,15 @@ impl AgentSession for FakeSession {
         self.0.lock().unwrap().failure_message.map(Cow::Borrowed)
     }
 
+    fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+        self.0.lock().unwrap().validate_configs.push(config.clone());
+        Ok(())
+    }
+
     async fn start_turn(
         &mut self,
         _text: &str,
-        config: &domain::agent_runtime::StoredAgentConfig,
+        config: &StoredAgentConfig,
     ) -> Result<String, AgentSessionError> {
         let mut state = self.0.lock().unwrap();
         state.start_calls += 1;
@@ -379,6 +386,7 @@ fn spec() -> AgentSessionSpec {
             model: Some("gpt-6".to_owned()),
             ..StoredAgentConfig::default()
         },
+        confinement: None,
     }
 }
 
@@ -1036,4 +1044,84 @@ async fn active_turn_cadence_tracks_accepted_native_work_only() {
     assert!(manager.has_sessions());
     assert!(!manager.has_active_turns());
     manager.close_all().await.unwrap();
+}
+
+#[tokio::test]
+async fn deterministic_event_rejection_fails_the_turn_instead_of_wedging_the_lane() {
+    let (mut manager, registry, client) = make_manager();
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    manager.send("agent-1", "hello").await.unwrap();
+    client
+        .0
+        .lock()
+        .unwrap()
+        .events
+        .push_back(AgentTurnEvent::Started("another-turn".to_owned()));
+
+    manager.poll().await.unwrap();
+
+    assert!(manager.live_snapshot("agent-1").is_none());
+    assert_eq!(client.0.lock().unwrap().close_calls, 1);
+    assert_eq!(
+        registry.get("agent-1").unwrap().unwrap().last_status,
+        AgentRuntimeStatus::Error
+    );
+}
+
+#[tokio::test]
+async fn invalid_native_handle_fails_the_turn_and_never_blocks_close() {
+    let (mut manager, registry, client) = make_manager();
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    manager.send("agent-1", "hello").await.unwrap();
+    client.0.lock().unwrap().handle_session_id = String::new();
+
+    manager.poll().await.unwrap();
+
+    assert!(manager.live_snapshot("agent-1").is_none());
+    assert_eq!(client.0.lock().unwrap().close_calls, 1);
+    assert_eq!(
+        registry.get("agent-1").unwrap().unwrap().last_status,
+        AgentRuntimeStatus::Error
+    );
+
+    client.0.lock().unwrap().handle_session_id = "native-1".to_owned();
+    manager.resume("agent-1").await.unwrap();
+    client.0.lock().unwrap().handle_session_id = String::new();
+    manager.close("agent-1").await.unwrap();
+    assert!(manager.live_snapshot("agent-1").is_none());
+    assert_eq!(client.0.lock().unwrap().close_calls, 2);
+    assert_eq!(
+        registry.get("agent-1").unwrap().unwrap().last_status,
+        AgentRuntimeStatus::Closed
+    );
+}
+
+#[tokio::test]
+async fn transient_registry_failure_keeps_a_changed_handle_and_close_retryable() {
+    let (mut manager, registry, client) = make_manager();
+    manager
+        .create("agent-1", &spec(), AgentRegistration::default())
+        .await
+        .unwrap();
+    client.0.lock().unwrap().handle_session_id = "native-2".to_owned();
+    registry.0.lock().unwrap().fail_update = true;
+
+    assert_eq!(
+        manager.close("agent-1").await,
+        Err(AgentManagerError::Registry)
+    );
+    assert!(manager.live_snapshot("agent-1").is_some());
+    assert_eq!(client.0.lock().unwrap().close_calls, 0);
+
+    registry.0.lock().unwrap().fail_update = false;
+    manager.close("agent-1").await.unwrap();
+    assert_eq!(client.0.lock().unwrap().close_calls, 1);
+    let record = registry.get("agent-1").unwrap().unwrap();
+    assert_eq!(record.persistence.unwrap().session_id, "native-2");
 }

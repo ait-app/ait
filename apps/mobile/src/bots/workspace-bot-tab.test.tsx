@@ -1,61 +1,145 @@
 // @vitest-environment jsdom
 import React from "react";
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import type { BotView } from "@ait/protocol/bot/types";
 import { WorkspaceBotTab } from "./workspace-bot-tab";
+
+const { workspaceBot, canManage } = vi.hoisted(() => ({
+  workspaceBot: vi.fn(),
+  canManage: vi.fn(),
+}));
 
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("./styles", () => ({ botStyles: {} }));
-vi.mock("./loading", () => ({ BotLoadingSpinner: () => null }));
-vi.mock("@/runtime/host-runtime", () => ({ useHostRuntimeClient: () => null }));
-vi.mock("@tanstack/react-query", () => ({
-  useQuery: () => ({ data: [], isPending: false, error: null }),
+vi.mock("@/components/ui/button", () => ({
+  Button: ({
+    children,
+    onPress,
+    testID,
+  }: {
+    children: React.ReactNode;
+    onPress: () => void;
+    testID?: string;
+  }) => (
+    <button data-testid={testID} onClick={onPress}>
+      {children}
+    </button>
+  ),
 }));
-vi.mock("./queries", () => ({
-  botKeys: { list: () => ["bots"] },
-  useBotDetail: (_serverId: string, botId?: string) => ({
-    data: botId ? { id: botId, workspaceId: "workspace", name: "Helper" } : undefined,
-    isPending: false,
-  }),
-}));
-vi.mock("./bot-form", () => ({ BotForm: () => <div data-testid="bot-editor" /> }));
+vi.mock("./loading", () => ({ BotLoadingSpinner: () => <div data-testid="bot-loading" /> }));
+vi.mock("@/hosts/background-task-access", () => ({ canManageBackgroundTasks: canManage }));
+vi.mock("./queries", () => ({ useWorkspaceBot: workspaceBot }));
+vi.mock("./bot-setup", () => ({ BotSetup: () => <div data-testid="bot-setup" /> }));
 vi.mock("./bot-settings", () => ({ BotSettings: () => <div data-testid="bot-settings-editor" /> }));
 vi.mock("./bot-chat", () => ({ BotChat: () => <div data-testid="bot-history" /> }));
 
-afterEach(cleanup);
+const activeBot: BotView = {
+  workspaceId: "workspace",
+  execution: { provider: "codex", model: null, modeId: null, thinking: null },
+  builtinChannelId: "22222222-2222-4222-8222-222222222222",
+  state: { kind: "active" },
+  createdAt: "2026-11-06",
+};
 
-function open(serverId: string, view: "create" | "settings") {
-  render(
+function mockWorkspaceBot(result: {
+  data?: BotView | null;
+  isPending?: boolean;
+  error?: Error | null;
+  refetch?: () => void;
+}) {
+  workspaceBot.mockReturnValue({
+    data: result.data,
+    isPending: result.isPending ?? false,
+    error: result.error ?? null,
+    refetch: result.refetch ?? vi.fn(),
+  });
+}
+
+function mockCanManage(value: boolean) {
+  canManage.mockReturnValue(value);
+}
+
+function tabElement(view?: "settings") {
+  return (
     <WorkspaceBotTab
-      serverId={serverId}
+      serverId="server"
       workspaceId="workspace"
       cwd="/repo"
-      botId={view === "settings" ? "bot" : undefined}
       view={view}
       interactive
-      onBrowse={vi.fn()}
-      onCreate={vi.fn()}
-      onOpen={vi.fn()}
+      onChat={vi.fn()}
       onSettings={vi.fn()}
-    />,
+    />
   );
 }
 
-it("restores a shared Bot create tab as a list without a creation action", () => {
-  open("shared:grant", "create");
-  expect(screen.getByText("bots.empty")).toBeTruthy();
-  expect(screen.queryByTestId("bot-editor")).toBeNull();
-  expect(screen.queryByTestId("bot-create-new")).toBeNull();
+function renderTab(view?: "settings") {
+  return render(tabElement(view));
+}
+
+beforeEach(() => {
+  mockCanManage(true);
 });
 
-it("restores shared Bot settings as conversation history", () => {
-  open("shared:grant", "settings");
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+it("shows a spinner while the workspace bot loads", () => {
+  mockWorkspaceBot({ isPending: true });
+  renderTab();
+  expect(screen.getByTestId("bot-loading")).toBeTruthy();
+  expect(screen.queryByTestId("bot-setup")).toBeNull();
+});
+
+it("shows the setup wizard when the workspace has no bot", () => {
+  mockWorkspaceBot({ data: null });
+  renderTab();
+  expect(screen.getByTestId("bot-setup")).toBeTruthy();
+  expect(screen.queryByTestId("bot-show-chat")).toBeNull();
+});
+
+it("shows a read-only hint instead of the wizard for guests", () => {
+  mockWorkspaceBot({ data: null });
+  mockCanManage(false);
+  renderTab();
+  expect(screen.queryByTestId("bot-setup")).toBeNull();
+  expect(screen.getByText("bots.notConfigured")).toBeTruthy();
+});
+
+it("wizard_switches_to_chat_when_bot_appears", () => {
+  mockWorkspaceBot({ data: null });
+  const { rerender } = renderTab();
+  mockWorkspaceBot({ data: activeBot });
+  rerender(tabElement());
   expect(screen.getByTestId("bot-history")).toBeTruthy();
-  expect(screen.queryByTestId("bot-settings-editor")).toBeNull();
-  expect(screen.queryByTestId("bot-show-settings")).toBeNull();
+  expect(screen.queryByTestId("bot-setup")).toBeNull();
 });
 
-it.each(["create", "settings"] as const)("keeps the owner %s editor", (view) => {
-  open("owner", view);
-  expect(screen.getByTestId(view === "create" ? "bot-editor" : "bot-settings-editor")).toBeTruthy();
+it("shows settings for the settings view and toggles between chat and settings", () => {
+  mockWorkspaceBot({ data: activeBot });
+  renderTab("settings");
+  expect(screen.getByTestId("bot-settings-editor")).toBeTruthy();
+  expect(screen.queryByTestId("bot-history")).toBeNull();
+  expect(screen.getByTestId("bot-show-chat")).toBeTruthy();
+  expect(screen.getByTestId("bot-show-settings")).toBeTruthy();
+});
+
+it("lets guests view settings of a configured bot", () => {
+  mockWorkspaceBot({ data: activeBot });
+  mockCanManage(false);
+  renderTab("settings");
+  expect(screen.getByTestId("bot-settings-editor")).toBeTruthy();
+});
+
+it("surfaces a failed Bot refresh above the chat with a reload action", () => {
+  const refetch = vi.fn();
+  mockWorkspaceBot({ data: activeBot, error: new Error("Host unreachable"), refetch });
+  renderTab();
+  expect(screen.getByTestId("bot-history")).toBeTruthy();
+  expect(screen.getByText("Host unreachable")).toBeTruthy();
+  fireEvent.click(screen.getByText("bots.reload"));
+  expect(refetch).toHaveBeenCalledTimes(1);
 });

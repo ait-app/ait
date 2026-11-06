@@ -113,6 +113,13 @@ export function normalizeAgentModelCatalog(models: AgentModelDefinition[]): Agen
   return unique.length === models.length ? models : unique;
 }
 
+export interface BotSessionSupport {
+  instructions: "system_prompt" | "turn_prefix";
+  readOnlyMode: string | null;
+  toolPreapproval: boolean;
+  aitTools: boolean;
+}
+
 export interface ProviderSnapshotEntry {
   /** Provider-native realtime audio, independent of host speech engines. */
   supportsRealtimeVoice?: boolean;
@@ -130,6 +137,7 @@ export interface ProviderSnapshotEntry {
   description?: string;
   iconSvg?: string;
   defaultModeId?: string | null;
+  botSession?: BotSessionSupport;
 }
 
 export interface AgentFeatureToggle {

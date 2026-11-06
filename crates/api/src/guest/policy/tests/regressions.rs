@@ -10,13 +10,17 @@ async fn node_guests_can_read_but_cannot_start_persistent_automation() {
         "schedule.update.request",
         "schedule.resume.request",
         "schedule.run_once.request",
-        "bot.create.request",
+        "bot.setup.request",
         "bot.update.request",
+        "bot.permissions.update.request",
         "bot.channel.create.request",
         "bot.channel.update.request",
         "bot.message.send.request",
         "bot.conversation.open.request",
-        "bot.permission.resolve.request",
+        "bot.pause.request",
+        "bot.resume.request",
+        "bot.remove.request",
+        "bot.memory.update.request",
     ] {
         assert_eq!(
             guest.refused(method, json!({})).await,
@@ -27,10 +31,37 @@ async fn node_guests_can_read_but_cannot_start_persistent_automation() {
     for method in [
         "schedule.list.request",
         "schedule.inspect.request",
-        "bot.list.request",
         "bot.get.request",
     ] {
         guest.forwarded(method, json!({})).await;
+    }
+}
+
+#[tokio::test]
+async fn guest_bot_access_is_read_only_v2() {
+    let guest = Guest::with(ResourceKind::Node).await;
+    for method in [
+        "bot.get.request",
+        "bot.channel.list.request",
+        "bot.channel.types.request",
+        "bot.channel.status.request",
+        "bot.conversation.list.request",
+        "bot.history.get.request",
+        "bot.turn.get.request",
+        "bot.memory.get.request",
+    ] {
+        guest.forwarded(method, json!({})).await;
+    }
+    for method in [
+        "bot.list.request",
+        "bot.channel.delete.request",
+        "bot.conversation.reset.request",
+    ] {
+        assert_eq!(
+            guest.refused(method, json!({})).await,
+            ErrorCode::Forbidden,
+            "{method}"
+        );
     }
 }
 
@@ -83,25 +114,32 @@ async fn scoped_file_mutations_cannot_replace_project_configuration() {
     for kind in [ResourceKind::Workspace, ResourceKind::Project] {
         let guest = Guest::with(kind).await;
         std::fs::write(guest.fixture.shared_path().join("file.txt"), "content").unwrap();
-        for (method, params) in [
-            (
-                "fs.file.write.request",
-                json!({"cwd": guest.root(), "path": "ait.json"}),
-            ),
-            (
-                "fs.entry.create.request",
-                json!({"cwd": guest.root(), "parentPath": ".", "name": "ait.json"}),
-            ),
-            (
-                "fs.entry.rename.request",
-                json!({"cwd": guest.root(), "path": "file.txt", "name": "ait.json"}),
-            ),
-            (
-                "fs.entry.delete.request",
-                json!({"cwd": guest.root(), "path": "ait.json"}),
-            ),
-        ] {
-            assert_eq!(guest.refused(method, params).await, ErrorCode::Forbidden);
+        // The config store falls back to `paseo.json` when `ait.json` is missing.
+        for config in ["ait.json", "paseo.json"] {
+            for (method, params) in [
+                (
+                    "fs.file.write.request",
+                    json!({"cwd": guest.root(), "path": config}),
+                ),
+                (
+                    "fs.entry.create.request",
+                    json!({"cwd": guest.root(), "parentPath": ".", "name": config}),
+                ),
+                (
+                    "fs.entry.rename.request",
+                    json!({"cwd": guest.root(), "path": "file.txt", "name": config}),
+                ),
+                (
+                    "fs.entry.delete.request",
+                    json!({"cwd": guest.root(), "path": config}),
+                ),
+            ] {
+                assert_eq!(
+                    guest.refused(method, params).await,
+                    ErrorCode::Forbidden,
+                    "{method} {config}"
+                );
+            }
         }
         guest
             .forwarded(

@@ -119,8 +119,8 @@ fn prepare(
     let revision = cache.generation;
     cache.snapshots.entry(key).or_insert_with(|| Snapshot {
         entries: clients
-            .keys()
-            .map(|provider| (provider.clone(), initial(provider)))
+            .iter()
+            .map(|(provider, client)| (provider.clone(), initial(provider, client.as_ref())))
             .collect(),
         fetched: Instant::now(),
         cancellation: cancellation.child_token(),
@@ -129,10 +129,11 @@ fn prepare(
     });
 }
 
-fn initial(provider: &str) -> Entry {
+fn initial(provider: &str, client: &dyn AgentClient) -> Entry {
     Entry {
         value: json!({"provider":provider,"status":"loading","enabled":true,
-            "source":"builtin","models":[],"modes":[],"fetchedAt":chrono::Utc::now().to_rfc3339()}),
+            "source":"builtin","models":[],"modes":[],"botSession":client.bot_session_support(),
+            "fetchedAt":chrono::Utc::now().to_rfc3339()}),
         features: Vec::new(),
         fetched: None,
         generation: 0,
@@ -164,7 +165,7 @@ async fn run(catalog: Catalog, load: Load, events: SessionEvents) {
             () = load.cancellation.cancelled() => break,
             result = tokio::time::timeout(load.client.discovery_timeout(), probe) => result,
         };
-        let result = result.unwrap_or_else(|_| failure(&load.provider));
+        let result = result.unwrap_or_else(|_| failure(&load.provider, load.client.as_ref()));
         let Some((snapshot, again)) = commit(&catalog, &load, result) else {
             break;
         };
@@ -222,8 +223,8 @@ fn freshness(entry: &Entry, success_ttl: Duration) -> Duration {
     }
 }
 
-fn failure(provider: &str) -> Entry {
-    let mut entry = initial(provider);
+fn failure(provider: &str, client: &dyn AgentClient) -> Entry {
+    let mut entry = initial(provider, client);
     entry.value["status"] = Value::String("error".to_owned());
     entry.value["error"] = Value::String("Provider discovery timed out".to_owned());
     entry.fetched = Some(Instant::now());

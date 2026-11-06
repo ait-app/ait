@@ -74,7 +74,7 @@ export function NewTabLauncherProvider({
 
 const BUILT_IN_SELECTIONS = {
   agent: { kind: "agent" },
-  bot: { kind: "target", target: { kind: "bot", view: "list" } },
+  bot: { kind: "target", target: { kind: "bot" } },
   terminal: { kind: "terminal" },
   changes: { kind: "target", target: { kind: "changes_tree" } },
   diff: { kind: "target", target: { kind: "working_diff" } },

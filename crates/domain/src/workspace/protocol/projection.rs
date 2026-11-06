@@ -73,6 +73,7 @@ pub fn workspace_descriptor(
             |project| project_kind(project.kind),
         ),
         workspace_kind: workspace_kind(workspace.kind),
+        sandbox: workspace.sandbox,
         name: workspace.display_name().to_owned(),
         title: workspace.title.clone(),
         pinned_at: workspace.pinned_at.clone(),

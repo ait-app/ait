@@ -190,3 +190,44 @@ fn explicit_native_rule_selection_preserves_destination_and_exact_rule() {
     let plan = request("ExitPlanMode", &json!({"plan":"Implement"}));
     assert_eq!(plan.request["kind"], "plan");
 }
+
+#[test]
+fn large_tool_inputs_show_bounded_previews_and_approve_the_complete_native_input() {
+    let input = json!({"file_path":"/tmp/large.rs","content":"x".repeat(1024 * 1024)});
+    let pending = request("Write", &input);
+    let shown = &pending.request["input"];
+    assert_eq!(shown["file_path"], "/tmp/large.rs");
+    assert!(
+        shown["content"]
+            .as_str()
+            .unwrap()
+            .contains("Output truncated")
+    );
+    assert!(pending.request.to_string().len() < 192 * 1024);
+    for response in [
+        json!({"behavior":"allow"}),
+        // A host that echoes the displayed preview still approves the native input unchanged.
+        json!({"behavior":"allow","updatedInput":shown}),
+        json!({"behavior":"allow","updatedInput":input}),
+    ] {
+        let reply = permissions::resolve(&pending, &response).unwrap();
+        assert_eq!(reply["response"]["response"]["updatedInput"], input);
+    }
+    // Edits of a truncated preview would write the truncation marker instead of the content.
+    let mut retargeted = shown.clone();
+    retargeted["file_path"] = json!("/tmp/other.rs");
+    for edited in [
+        json!({"file_path":"/tmp/large.rs","content":"edited"}),
+        retargeted,
+    ] {
+        assert_eq!(
+            permissions::resolve(&pending, &json!({"behavior":"allow","updatedInput":edited})),
+            Err(AgentSessionError::Rejected)
+        );
+    }
+    let small = request("Write", &json!({"file_path":"/tmp/small.rs","content":"x"}));
+    let edited = json!({"file_path":"/tmp/small.rs","content":"edited"});
+    let reply =
+        permissions::resolve(&small, &json!({"behavior":"allow","updatedInput":edited})).unwrap();
+    assert_eq!(reply["response"]["response"]["updatedInput"], edited);
+}

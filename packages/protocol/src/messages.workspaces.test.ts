@@ -482,6 +482,48 @@ describe("workspace message schemas", () => {
     expect(response.payload.project?.projectId).toBe("project-b");
   });
 
+  test("parses opt-in GitHub clone progress messages", () => {
+    const request = SessionInboundMessageSchema.parse({
+      type: "project.github.clone.request",
+      repo: "a/b",
+      cloneProtocol: "https",
+      targetDirectory: "~/workspace",
+      progress: true,
+      requestId: "req-clone",
+    });
+    const progress = SessionOutboundMessageSchema.parse({
+      type: "project.github.clone.progress",
+      payload: {
+        requestId: "req-clone",
+        repo: "a/b",
+        phase: "receiving",
+        percent: 44,
+      },
+    });
+
+    expect(request).toMatchObject({ progress: true });
+    expect(progress).toEqual({
+      type: "project.github.clone.progress",
+      payload: {
+        requestId: "req-clone",
+        repo: "a/b",
+        phase: "receiving",
+        percent: 44,
+      },
+    });
+    expect(
+      SessionOutboundMessageSchema.safeParse({
+        type: "project.github.clone.progress",
+        payload: {
+          requestId: "req-clone",
+          repo: "a/b",
+          phase: "receiving",
+          percent: 101,
+        },
+      }).success,
+    ).toBe(false);
+  });
+
   test("rejects invalid project GitHub clone protocols", () => {
     const request = SessionInboundMessageSchema.safeParse({
       type: "project.github.clone.request",

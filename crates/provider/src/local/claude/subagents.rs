@@ -143,7 +143,7 @@ fn tree(
                 .map(|call| (child.native_id.clone(), call.clone()))
         })
         .collect();
-    let mut result = workflow::histories(client, (cwd, root), &parent_history, &parent)?;
+    let mut result = workflow::replay::histories(client, (cwd, root), &parent_history, &parent)?;
     for child in children {
         let Some(call) = &child.call else {
             continue;

@@ -15,6 +15,7 @@ fn spec(cwd: &std::path::Path) -> AgentSessionSpec {
         provider: "claude".to_owned(),
         cwd: cwd.to_str().unwrap().to_owned(),
         config: StoredAgentConfig::default(),
+        confinement: None,
     }
 }
 

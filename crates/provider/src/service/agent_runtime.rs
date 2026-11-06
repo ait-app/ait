@@ -531,8 +531,7 @@ fn placement(
     let is_git = project.kind == PersistedProjectKind::Git
         || workspace.kind != PersistedWorkspaceKind::Directory;
     AgentPlacement {
-        active: workspace.archived_at.as_ref().is_none_or(String::is_empty)
-            && project.archived_at.as_ref().is_none_or(String::is_empty),
+        active: !workspace.is_archived() && !project.is_archived(),
         project_key: project
             .project_key
             .clone()

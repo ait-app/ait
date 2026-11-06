@@ -42,6 +42,7 @@ impl Fixture {
             provider: "codex".to_owned(),
             cwd: self.cwd.to_str().unwrap().to_owned(),
             config: StoredAgentConfig::default(),
+            confinement: None,
         }
     }
 

@@ -90,9 +90,16 @@ export function useSidebarWorkspacesList(options?: {
   enabled?: boolean;
 }): SidebarWorkspacesListResult {
   const runtime = getHostRuntimeStore();
+  // Filters reconcile against every saved host, but only available hosts contribute workspaces:
+  // a saved relay host the account no longer reports must not keep showing its cached workspaces.
   const allHosts = useHosts();
+  const availableHosts = useHosts({ availableOnly: true });
   const hostRegistryLoaded = useHostRegistryLoaded();
   const allServerIds = useMemo(() => allHosts.map((host) => host.serverId), [allHosts]);
+  const availableServerIds = useMemo(
+    () => availableHosts.map((host) => host.serverId),
+    [availableHosts],
+  );
 
   const storeHostFilters = useSidebarViewStore((state) => state.hostFilters);
   const hostFilters = options?.hostFilters ?? storeHostFilters;
@@ -101,17 +108,17 @@ export function useSidebarWorkspacesList(options?: {
 
   const serverIds = useMemo(() => {
     if (hostFilters.length === 0) {
-      return allServerIds;
+      return availableServerIds;
     }
     const selected = new Set(hostFilters.flatMap((id) => getHostGroupServerIds(allHosts, id)));
-    const matched = allServerIds.filter((id) => selected.has(id));
     // Registry has settled but none of the pinned hosts still exist — fall back to every
-    // host rather than leaving the sidebar empty.
-    if (hostRegistryLoaded && matched.length === 0) {
-      return allServerIds;
+    // host rather than leaving the sidebar empty. A pinned host that is only unavailable
+    // keeps its filter and shows nothing until it returns.
+    if (hostRegistryLoaded && !allServerIds.some((id) => selected.has(id))) {
+      return availableServerIds;
     }
-    return matched;
-  }, [allHosts, allServerIds, hostFilters, hostRegistryLoaded]);
+    return availableServerIds.filter((id) => selected.has(id));
+  }, [allHosts, allServerIds, availableServerIds, hostFilters, hostRegistryLoaded]);
   useEffect(() => {
     if (!isActive) return;
     const releases = serverIds.map((serverId) => runtime.acquireDirectoryDemand(serverId));

@@ -3,6 +3,39 @@ use super::*;
 const CATALOG: &str = include_str!("../../../../tests/fixtures/omp_commands.json");
 
 #[tokio::test]
+async fn native_completion_masks_host_controls_without_filtering_argument_values() {
+    let (root, client, spec) = fixture();
+    std::fs::create_dir_all(root.path().join("agent")).unwrap();
+    let path = root.path().join("agent/completion.json");
+    std::fs::write(&path,json!({"supported":true,"items":[
+        {"id":"blocked","label":"Model preset","insertText":"/modelpreset","replaceRange":{"start":0,"end":2}},
+        {"id":"query","label":"Usage","insertText":"/usage","replaceRange":{"start":0,"end":2}}
+    ]}).to_string()).unwrap();
+    let mut session = client.create_session(&spec).await.unwrap();
+    let result = session
+        .complete_commands(&crate::protocol::commands::CompletionInput {
+            text: "/m".to_owned(),
+            cursor: 2,
+        })
+        .await
+        .unwrap();
+    assert_eq!(result.items.len(), 1);
+    assert_eq!(result.items[0].id, "query");
+    std::fs::write(&path,json!({"supported":true,"items":[
+        {"id":"argument","label":"/modelpreset","insertText":"/modelpreset","replaceRange":{"start":9,"end":9}}
+    ]}).to_string()).unwrap();
+    let result = session
+        .complete_commands(&crate::protocol::commands::CompletionInput {
+            text: "/advisor ".to_owned(),
+            cursor: 9,
+        })
+        .await
+        .unwrap();
+    assert_eq!(result.items[0].id, "argument");
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn local_command_result_cannot_take_the_next_model_inputs_client_identity() {
     let (_root, client, spec) = fixture();
     let mut session = client.create_session(&spec).await.unwrap();
@@ -160,7 +193,9 @@ async fn live_command_metadata_tracks_native_updates_including_an_empty_catalog(
         assert!(matches!(events.last(), Some(AgentTurnEvent::Completed(_))));
         assert_eq!(
             session.commands().unwrap(),
-            config::commands(&json!({"commands":commands})).unwrap()
+            super::super::commands::visible(
+                &config::commands(&json!({"commands":commands})).unwrap()
+            )
         );
     }
     session.close().await.unwrap();
@@ -214,7 +249,8 @@ async fn command_queries_use_the_live_execution_lane_without_starting_another_om
         json!({"agentId":id}),
     )
     .await;
-    assert_eq!(response["commands"], json!([]));
+    assert_eq!(response["commands"].as_array().unwrap().len(), 1);
+    assert_eq!(response["commands"][0]["name"], "btw");
     assert_eq!(std::fs::read_to_string(&calls).unwrap(), before);
     execution.shutdown().await.unwrap();
 }

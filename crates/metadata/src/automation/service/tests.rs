@@ -308,6 +308,7 @@ fn workspace(id: &str, blocked: bool, archived: bool) -> PersistedWorkspaceRecor
             number: 42,
             head_repository: "fork/repo".to_owned(),
         }),
+        sandbox: None,
     }
 }
 

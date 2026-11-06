@@ -2,5 +2,6 @@
 
 /// Business failure code returned by public request entry points.
 pub mod error;
+pub(crate) mod random;
 pub(crate) mod rpc;
 pub(crate) mod time;

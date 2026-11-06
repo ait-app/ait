@@ -50,7 +50,7 @@ pub(super) fn features(services: &Services) -> Vec<String> {
         "client-message-chunks-v1".to_owned(),
     ];
     if services.bot.is_some() {
-        features.push("workspace-bots-v1".to_owned());
+        features.push("workspace-bots-v2".to_owned());
     }
     if services.metadata.is_some() {
         features.push("workspace-setup-events-v1".to_owned());

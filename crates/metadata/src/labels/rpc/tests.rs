@@ -66,7 +66,7 @@ fn all_palette_colors_roundtrip_and_incremental_sync_reports_deletion() {
 }
 
 #[test]
-fn deleting_a_label_before_subscription_activation_replaces_its_buffered_upsert() {
+fn changes_before_subscription_activation_are_delivered_in_sequence_order() {
     let labels = labels();
     let events = Arc::new(Mutex::new(Vec::new()));
     let received = events.clone();
@@ -89,10 +89,12 @@ fn deleting_a_label_before_subscription_activation_replaces_its_buffered_upsert(
     labels.delete("Urgent", "deleted").unwrap();
     let (_, _listener) = subscription.activate().unwrap();
     let events = events.lock().unwrap();
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0]["kind"], "remove");
-    assert!(events[0].get("label").is_none());
-    assert_eq!(events[0]["name"], "Urgent");
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["kind"], "upsert");
+    assert_eq!(events[1]["kind"], "remove");
+    assert!(events[1].get("label").is_none());
+    assert_eq!(events[1]["name"], "Urgent");
+    assert!(events[0]["seq"].as_u64() < events[1]["seq"].as_u64());
 }
 
 fn change(name: &str, seq: u64) -> SequencedWorkspaceLabelChange {
@@ -154,19 +156,25 @@ fn live_update_uses_the_connection_subscription_and_sequence() {
     let outbound: super::EventSink = Arc::new(|_| Ok(()));
     let mut delivery = Delivery {
         ready: false,
+        overflowed: false,
         pending: Vec::new(),
         outbound,
         subscription_id: "subscription-one".to_owned(),
     };
-    delivery.accept(change("A", 1));
-    delivery.accept(change("B", 2));
-    delivery.accept(change("A", 3));
+    let mut renamed = change("B", 1);
+    if let WorkspaceLabelChange::Upsert { previous_name, .. } = &mut renamed.change {
+        *previous_name = Some("A".to_owned());
+    }
+    delivery.accept(renamed.clone());
+    delivery.accept(change("C", 2));
+    delivery.accept(change("B", 3));
     let buffered = delivery
         .pending
         .iter()
-        .map(|(key, change)| (key.as_str(), change.seq))
+        .map(|change| change.seq)
         .collect::<Vec<_>>();
-    assert_eq!(buffered, vec![("a", 3), ("b", 2)]);
+    assert_eq!(buffered, vec![1, 2, 3]);
+    assert_eq!(delivery.pending[0], renamed);
 }
 
 #[derive(Debug)]
@@ -266,4 +274,36 @@ fn activation_reports_sink_failure_and_releases_the_listener() {
         .update("Blocked", Some("Silent"), None, "after-failure")
         .unwrap();
     assert_eq!(*attempts.lock().unwrap(), 1);
+}
+
+#[test]
+fn changes_beyond_the_journal_before_activation_fail_it_for_a_cursor_resync() {
+    let labels = labels();
+    let attempts = Arc::new(Mutex::new(0));
+    let delivered = attempts.clone();
+    let sink: super::EventSink = Arc::new(move |_| {
+        *delivered.lock().unwrap() += 1;
+        Ok(())
+    });
+    let dispatch = super::execute(
+        &labels,
+        "workspace.label.list.request",
+        json!({"subscribe":{}}),
+        sink,
+    )
+    .unwrap();
+    for index in 0..=crate::labels::service::JOURNAL_LIMIT {
+        let color = if index % 2 == 0 {
+            WorkspaceLabelColor::Blue
+        } else {
+            WorkspaceLabelColor::Red
+        };
+        labels.update("Urgent", None, Some(color), "now").unwrap();
+    }
+
+    assert!(matches!(
+        dispatch.subscription.unwrap().activate(),
+        Err(super::DeliveryError::Closed)
+    ));
+    assert_eq!(*attempts.lock().unwrap(), 0);
 }

@@ -4,7 +4,7 @@ use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
 use super::{aliases, mapping};
-use crate::local::omp::{OmpClient, config, history, session};
+use crate::local::omp::{OmpClient, PROVIDER, config, history, session};
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
@@ -399,9 +399,10 @@ impl Engine {
             None
         };
         let spec = AgentSessionSpec {
-            provider: "omp".to_owned(),
+            provider: PROVIDER.to_owned(),
             cwd: config::text(params, "cwd")?.to_owned(),
             config: alias.as_ref().map_or(config, |alias| alias.config.clone()),
+            confinement: None,
         };
         let handle = if let Some(alias) = alias {
             Some(alias.handle)
@@ -416,7 +417,7 @@ impl Engine {
                     .map_err(|_| AgentSessionError::Rejected)?
                 } else {
                     AgentPersistenceHandle {
-                        provider: "omp".to_owned(),
+                        provider: PROVIDER.to_owned(),
                         session_id: config::text(params, "sessionId")?.to_owned(),
                         native_handle: None,
                         metadata: None,

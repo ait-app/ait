@@ -1,5 +1,6 @@
 //! Schedule request dispatch with bounded, connection-independent execution.
 use domain::storage::schedule::Error;
+use model::methods::InboundKind;
 use model::{Context, DispatchError, ErrorCode};
 
 use crate::service::Schedules;
@@ -29,18 +30,9 @@ pub async fn dispatch(
         return Ok(());
     }
     let Some(mut context) = context.take_if(|context| {
-        matches!(
-            context.request.method.as_str(),
-            "schedule.create.request"
-                | "schedule.list.request"
-                | "schedule.inspect.request"
-                | "schedule.logs.request"
-                | "schedule.update.request"
-                | "schedule.pause.request"
-                | "schedule.resume.request"
-                | "schedule.delete.request"
-                | "schedule.run_once.request"
-        )
+        crate::service::METHODS.iter().any(|method| {
+            method.kind == InboundKind::Request && method.name == context.request.method
+        })
     }) else {
         return Err(DispatchError::NotImplemented);
     };

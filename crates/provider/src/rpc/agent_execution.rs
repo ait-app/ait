@@ -104,23 +104,24 @@ impl ExecutionState {
             Operation::List if params.get("sync").is_some_and(|sync| !sync.is_null()) => {
                 self.synchronized_agents(params)
             }
-            Operation::VoiceSend | Operation::VoiceStatus | Operation::VoiceCancel => {
-                self.voice(method.as_str(), params).await
+            Operation::VoiceSend => self.voice_send(params).await,
+            Operation::VoiceStatus | Operation::VoiceCancel => {
+                self.voice_turn(method, params).await
             }
-            Operation::Rewind
-            | Operation::Commands
-            | Operation::CompleteCommands
-            | Operation::NativeAction
-            | Operation::Permission
-            | Operation::Subagents
-            | Operation::ChildTimeline
-            | Operation::Diagnostic
-            | Operation::Usage => self.controls(method.as_str(), params).await,
-            Operation::RecentSessions
-            | Operation::Import
-            | Operation::Refresh
-            | Operation::ForkContext => self.native_sessions(method.as_str(), params).await,
+            Operation::Rewind => self.rewind(params).await,
+            Operation::Commands => self.commands(params).await,
+            Operation::Permission => self.permission(params).await,
+            Operation::Subagents | Operation::ChildTimeline => self.subagents(method, params).await,
+            Operation::Diagnostic => self.diagnostic(params).await,
+            Operation::Usage => self.usage(params).await,
+            Operation::RecentSessions => self.recent_sessions(params).await,
+            Operation::Import => self.import(params).await,
+            Operation::Refresh => self.refresh(params).await,
+            Operation::ForkContext => self.fork_context(params).await,
             Operation::Create => Box::pin(self.create(params)).await,
+            Operation::CompleteCommands | Operation::NativeAction => {
+                self.controls(method.as_str(), params).await
+            }
             Operation::Available
             | Operation::Models
             | Operation::Modes
@@ -131,17 +132,17 @@ impl ExecutionState {
                 .read_providers(method.as_str(), params)
                 .await
                 .map_err(Into::into),
-            Operation::Timeline
-            | Operation::SearchTimeline
-            | Operation::Prompts
-            | Operation::AppendTimeline => self.timeline(method.as_str(), params).await,
+            Operation::Timeline => self.timeline_get(params).await,
+            Operation::SearchTimeline => self.timeline_search(params).await,
+            Operation::Prompts => self.timeline_prompts(params).await,
+            Operation::AppendTimeline => self.timeline_append(params).await,
             Operation::Resume => self.resume(params).await,
             Operation::Send => self.send(params).await,
-            Operation::Model
-            | Operation::Thinking
-            | Operation::Configure
-            | Operation::Mode
-            | Operation::Feature => self.configure(method.as_str(), &params).await,
+            Operation::Model => self.configure("modelId", &params).await,
+            Operation::Thinking => self.configure("thinkingOptionId", &params).await,
+            Operation::Configure => self.configure("config", &params).await,
+            Operation::Mode => self.configure("modeId", &params).await,
+            Operation::Feature => self.configure("value", &params).await,
             Operation::Cancel => {
                 only(&params, &["agentId"])?;
                 let request: AgentIdRequest = decode(params)?;
@@ -233,10 +234,10 @@ impl ExecutionState {
     /// Returns request, identity or storage errors; unfinished native replacement stays strict.
     pub(crate) fn can_read_cached_timeline(
         &self,
-        method: &str,
+        method: Operation,
         params: &Value,
     ) -> Result<bool, ErrorCode> {
-        if method != "agent.timeline.get.request" || params["allowCached"] != true {
+        if method != Operation::Timeline || params["allowCached"] != true {
             return Ok(false);
         }
         let request: crate::protocol::timeline::FetchRequest = decode(params.clone())?;
@@ -246,7 +247,7 @@ impl ExecutionState {
     async fn timeline_scope(
         &mut self,
         id: &str,
-        method: &str,
+        method: Operation,
         params: &Value,
     ) -> Result<String, ErrorCode> {
         let record = self
@@ -259,7 +260,7 @@ impl ExecutionState {
             crate::service::agent_manager::observed::scope,
         );
         if record.observation.is_some() {
-            if method == "internal.timeline.append" {
+            if method == Operation::AppendTimeline {
                 return Err(ErrorCode::UnsupportedCapability);
             }
             if !self.manager.history_loaded(id) && !self.can_read_cached_timeline(method, params)? {
@@ -274,93 +275,102 @@ impl ExecutionState {
         Ok(scope)
     }
 
-    async fn timeline(&mut self, method: &str, params: Value) -> Result<Value, ErrorCode> {
-        use crate::protocol::timeline::{AppendRequest, FetchRequest, SearchRequest};
-        let plugin = params
-            .get("plugin")
-            .and_then(Value::as_str)
-            .map(str::to_owned);
-        let params = if method == "internal.timeline.append" {
-            params["request"].clone()
-        } else {
-            params
-        };
+    /// Resolve the requested Agent, prepare its committed timeline scope and return the store.
+    async fn timeline_target(
+        &mut self,
+        method: Operation,
+        params: &Value,
+    ) -> Result<(String, String, crate::storage::timeline::Timeline), ErrorCode> {
         let identifier = params["agentId"]
             .as_str()
             .ok_or(ErrorCode::InvalidMessage)?;
         let id = self.resolve(identifier)?;
-        let scope = self.timeline_scope(&id, method, &params).await?;
+        let scope = self.timeline_scope(&id, method, params).await?;
         let timeline = self
             .manager
             .timeline()
             .ok_or(ErrorCode::UnsupportedCapability)?;
-        match method {
-            "agent.timeline.get.request" => {
-                let mut request: FetchRequest = decode(params)?;
-                request.agent_id.clone_from(&id);
-                let history_needs_refresh = request
-                    .allow_cached
-                    .filter(|allowed| *allowed)
-                    .map(|_| !self.manager.history_loaded(&id));
-                super::timeline::fetch_stored(
-                    &request,
-                    &timeline,
-                    &scope,
-                    &self.snapshot(&id)?,
-                    history_needs_refresh,
-                )
-                .map_err(Into::into)
-            }
-            "agent.timeline.search.request" => {
-                let mut request: SearchRequest = decode(params)?;
-                request.agent_id = id;
-                let (epoch, rows) = timeline.read(&scope)?;
-                super::timeline::search(&request, &epoch, &rows).map_err(Into::into)
-            }
-            "agent.timeline.list_prompts.request" => {
-                only(&params, &["agentId"])?;
-                let (epoch, rows) = timeline.read(&scope)?;
-                super::timeline::prompts(&id, &epoch, &rows).map_err(Into::into)
-            }
-            "internal.timeline.append" => {
-                let plugin = plugin.ok_or(ErrorCode::UnsupportedCapability)?;
-                let request: AppendRequest = decode(params)?;
-                if request.item.r#type != "plugin"
-                    || request.item.version == 0
-                    || !model::valid_id(&request.item.id)
-                    || !model::valid_id(&request.item.kind)
-                    || serde_json::to_vec(&request.item.data)
-                        .map_err(|_| ErrorCode::InvalidMessage)?
-                        .len()
-                        > 65536
-                {
-                    return Err(ErrorCode::InvalidMessage);
-                }
-                let key = format!("plugin:{plugin}:{}", request.item.id);
-                let mut item =
-                    serde_json::to_value(request.item).map_err(|_| ErrorCode::InvalidMessage)?;
-                item["pluginId"] = json!(plugin);
-                let entry = crate::protocol::timeline::NativeItem {
-                    key,
-                    turn_id: None,
-                    timestamp: chrono::Utc::now().to_rfc3339(),
-                    item,
-                };
-                let provider = self
-                    .registry
-                    .get(&id)
-                    .map_err(|_| ErrorCode::AgentIo)?
-                    .ok_or(ErrorCode::AgentNotFound)?
-                    .provider;
-                let (epoch, positions) = timeline.append(&id, &provider, &[entry])?;
-                Ok(json!({"epoch":epoch,"seq":positions.first()}))
-            }
-            _ => Err(ErrorCode::MethodNotFound),
+        Ok((id, scope, timeline))
+    }
+
+    async fn timeline_get(&mut self, params: Value) -> Result<Value, ErrorCode> {
+        let (id, scope, timeline) = self.timeline_target(Operation::Timeline, &params).await?;
+        let mut request: crate::protocol::timeline::FetchRequest = decode(params)?;
+        request.agent_id.clone_from(&id);
+        let history_needs_refresh = request
+            .allow_cached
+            .filter(|allowed| *allowed)
+            .map(|_| !self.manager.history_loaded(&id));
+        super::timeline::fetch_stored(
+            &request,
+            &timeline,
+            &scope,
+            &self.snapshot(&id)?,
+            history_needs_refresh,
+        )
+        .map_err(Into::into)
+    }
+
+    async fn timeline_search(&mut self, params: Value) -> Result<Value, ErrorCode> {
+        let (id, scope, timeline) = self
+            .timeline_target(Operation::SearchTimeline, &params)
+            .await?;
+        let mut request: crate::protocol::timeline::SearchRequest = decode(params)?;
+        request.agent_id = id;
+        let (epoch, rows) = timeline.read(&scope)?;
+        super::timeline::search(&request, &epoch, &rows).map_err(Into::into)
+    }
+
+    async fn timeline_prompts(&mut self, params: Value) -> Result<Value, ErrorCode> {
+        let (id, scope, timeline) = self.timeline_target(Operation::Prompts, &params).await?;
+        only(&params, &["agentId"])?;
+        let (epoch, rows) = timeline.read(&scope)?;
+        super::timeline::prompts(&id, &epoch, &rows).map_err(Into::into)
+    }
+
+    async fn timeline_append(&mut self, params: Value) -> Result<Value, ErrorCode> {
+        let plugin = params
+            .get("plugin")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let params = params["request"].clone();
+        let (id, _, timeline) = self
+            .timeline_target(Operation::AppendTimeline, &params)
+            .await?;
+        let plugin = plugin.ok_or(ErrorCode::UnsupportedCapability)?;
+        let request: crate::protocol::timeline::AppendRequest = decode(params)?;
+        if request.item.r#type != "plugin"
+            || request.item.version == 0
+            || !model::valid_id(&request.item.id)
+            || !model::valid_id(&request.item.kind)
+            || serde_json::to_vec(&request.item.data)
+                .map_err(|_| ErrorCode::InvalidMessage)?
+                .len()
+                > 65536
+        {
+            return Err(ErrorCode::InvalidMessage);
         }
+        let key = format!("plugin:{plugin}:{}", request.item.id);
+        let mut item = serde_json::to_value(request.item).map_err(|_| ErrorCode::InvalidMessage)?;
+        item["pluginId"] = json!(plugin);
+        let entry = crate::protocol::timeline::NativeItem {
+            key,
+            turn_id: None,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            item,
+        };
+        let provider = self
+            .registry
+            .get(&id)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .ok_or(ErrorCode::AgentNotFound)?
+            .provider;
+        let (epoch, positions) = timeline.append(&id, &provider, &[entry])?;
+        Ok(json!({"epoch":epoch,"seq":positions.first()}))
     }
 
     async fn create(&mut self, params: Value) -> Result<Value, ErrorCode> {
-        let (mut request, intent) = parse_creation(params)?;
+        let (mut request, prompt, intent) = parse_creation(params)?;
         self.manager
             .validate_provider(&request.config.provider)
             .map_err(|error| map_manager(&error))?;
@@ -416,13 +426,20 @@ impl ExecutionState {
                 return Err(error);
             }
         };
-        self.register_creation(request, &admission.snapshot, workspace_id, created_worktree)
-            .await
+        self.register_creation(
+            request,
+            prompt,
+            &admission.snapshot,
+            workspace_id,
+            created_worktree,
+        )
+        .await
     }
 
     async fn register_creation(
         &mut self,
         request: CreateRequest,
+        prompt: Option<crate::protocol::prompt::AgentPrompt>,
         admission: &domain::creation::protocol::Snapshot,
         workspace_id: String,
         created_worktree: bool,
@@ -444,6 +461,7 @@ impl ExecutionState {
                     provider: request.config.provider,
                     cwd: request.config.cwd,
                     config: request.config.stored,
+                    confinement: None,
                 },
                 AgentRegistration {
                     workspace_id: Some(workspace_id.clone()),
@@ -498,16 +516,6 @@ impl ExecutionState {
         if request.auto_archive {
             self.arm_auto_archive(&id, &workspace_id, created_worktree)?;
         }
-        let prompt = (request.initial_prompt.is_some()
-            || !request.images.is_empty()
-            || !request.attachments.is_empty())
-        .then(|| crate::protocol::prompt::AgentPrompt {
-            text: request.initial_prompt.unwrap_or_default(),
-            images: request.images,
-            attachments: request.attachments,
-            client_message_id: request.client_message_id,
-            output_schema: request.output_schema,
-        });
         self.finish_creation(&id, admission, prompt).await
     }
 
@@ -619,7 +627,7 @@ impl ExecutionState {
                 .map_err(|_| ErrorCode::RegistryIo)?
                 .into_iter()
                 .filter(|workspace| {
-                    workspace.archived_at.as_ref().is_none_or(String::is_empty)
+                    !workspace.is_archived()
                         && std::fs::canonicalize(&workspace.cwd).ok().as_ref() == Some(&canonical)
                 })
                 .min_by(|left, right| {
@@ -749,6 +757,7 @@ const fn map_manager(error: &AgentManagerError) -> ErrorCode {
         AgentManagerError::NotFound(_) => ErrorCode::AgentNotFound,
         AgentManagerError::ProviderUnavailable(_)
         | AgentManagerError::MissingPersistence(_)
+        | AgentManagerError::ConfinementUnsupported(_)
         | AgentManagerError::Busy => ErrorCode::UnsupportedCapability,
         AgentManagerError::InvalidRequest
         | AgentManagerError::AlreadyExists(_)
@@ -759,7 +768,19 @@ const fn map_manager(error: &AgentManagerError) -> ErrorCode {
     }
 }
 
-fn parse_creation(params: Value) -> Result<(CreateRequest, Value), ErrorCode> {
+/// Decode and validate a creation request, returning its initial input and secret-free intent.
+/// # Errors
+/// Rejects unknown fields, invalid placement, initial input, title or labels.
+fn parse_creation(
+    params: Value,
+) -> Result<
+    (
+        CreateRequest,
+        Option<crate::protocol::prompt::AgentPrompt>,
+        Value,
+    ),
+    ErrorCode,
+> {
     only(
         &params,
         &[
@@ -808,21 +829,21 @@ fn parse_creation(params: Value) -> Result<(CreateRequest, Value), ErrorCode> {
             *environment = json!({"sha256":format!("{:x}", sha2::Sha256::digest(environment.to_string().as_bytes()))});
         }
     }
-    let request: CreateRequest = decode(params)?;
+    let mut request: CreateRequest = decode(params)?;
     worktrees::intent(&request)?;
-    if request.initial_prompt.is_some()
+    // Worktree setup still reads the initial text; the remaining input moves into the prompt.
+    let prompt = (request.initial_prompt.is_some()
         || !request.images.is_empty()
-        || !request.attachments.is_empty()
-    {
-        crate::protocol::prompt::AgentPrompt {
-            text: request.initial_prompt.clone().unwrap_or_default(),
-            images: request.images.clone(),
-            attachments: request.attachments.clone(),
-            client_message_id: request.client_message_id.clone(),
-            output_schema: request.output_schema.clone(),
-        }
-        .validate()
-        .map_err(|_| ErrorCode::InvalidMessage)?;
+        || !request.attachments.is_empty())
+    .then(|| crate::protocol::prompt::AgentPrompt {
+        text: request.initial_prompt.clone().unwrap_or_default(),
+        images: std::mem::take(&mut request.images),
+        attachments: std::mem::take(&mut request.attachments),
+        client_message_id: request.client_message_id.take(),
+        output_schema: request.output_schema.take(),
+    });
+    if let Some(prompt) = &prompt {
+        prompt.validate().map_err(|_| ErrorCode::InvalidMessage)?;
     }
     if request
         .config
@@ -837,5 +858,5 @@ fn parse_creation(params: Value) -> Result<(CreateRequest, Value), ErrorCode> {
     {
         return Err(ErrorCode::InvalidMessage);
     }
-    Ok((request, intent))
+    Ok((request, prompt, intent))
 }

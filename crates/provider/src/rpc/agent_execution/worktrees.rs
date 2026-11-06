@@ -21,6 +21,7 @@ pub(super) fn intent(request: &CreateRequest) -> Result<Option<WorktreeCreation>
         checkout_source: None,
         first_agent_prompt: request.initial_prompt.clone(),
         expects_initial_agent: true,
+        sandbox: None,
     };
     match &request.worktree {
         Some(WorktreeTarget::BranchOff { new_branch, base }) => {

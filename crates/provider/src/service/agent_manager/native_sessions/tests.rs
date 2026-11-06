@@ -255,8 +255,10 @@ async fn recent_sessions_keep_non_pi_provider_filters_canonical() {
     use std::os::unix::fs::symlink;
 
     let directory = tempfile::tempdir().unwrap();
-    let project = directory.path().join("project");
-    let linked_project = directory.path().join("linked-project");
+    // Non-Pi filters are canonical; resolve platform temp symlinks such as macOS /var.
+    let root = directory.path().canonicalize().unwrap();
+    let project = root.join("project");
+    let linked_project = root.join("linked-project");
     std::fs::create_dir(&project).unwrap();
     symlink(&project, &linked_project).unwrap();
     let lookup_cwd = linked_project.to_str().unwrap().to_owned();
@@ -294,8 +296,10 @@ async fn recent_sessions_keep_non_pi_provider_filters_canonical() {
 #[tokio::test]
 async fn recent_sessions_reject_candidates_if_the_requested_cwd_vanishes_during_listing() {
     let directory = tempfile::tempdir().unwrap();
-    let project = directory.path().join("project");
-    let missing_session_cwd = directory.path().join("missing-session-cwd");
+    // Non-Pi filters are canonical; resolve platform temp symlinks such as macOS /var.
+    let root = directory.path().canonicalize().unwrap();
+    let project = root.join("project");
+    let missing_session_cwd = root.join("missing-session-cwd");
     std::fs::create_dir(&project).unwrap();
     let lookup_cwd = project.to_str().unwrap().to_owned();
     let mut manager = AgentManager::new(Box::new(super::super::tests::MemoryRegistry::default()));

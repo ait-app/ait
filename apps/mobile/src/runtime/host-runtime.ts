@@ -1377,10 +1377,18 @@ export class HostRuntimeController {
 
   private resolveClientId(): Promise<string> {
     if (!this.clientIdPromise) {
-      this.clientIdPromise = this.deps.getClientId().then((value) => {
-        this.clientIdHash = hashForLog(value);
-        return value;
-      });
+      const request = this.deps.getClientId().then(
+        (value) => {
+          this.clientIdHash = hashForLog(value);
+          return value;
+        },
+        (error: unknown) => {
+          // A transient storage failure must not permanently block later connection attempts.
+          if (this.clientIdPromise === request) this.clientIdPromise = null;
+          throw error;
+        },
+      );
+      this.clientIdPromise = request;
     }
     return this.clientIdPromise;
   }
@@ -1658,7 +1666,9 @@ export class HostRuntimeStore {
       projectIconCache.setHosts(profiles.map((profile) => profile.serverId));
       await projectIconCache.restore();
       await this.restoreLastAvailableAccountRelayHosts(profiles);
-      this.syncHosts(profiles);
+      // Shared resources can be added while the restores above await storage; syncing the
+      // captured list would stop their runtimes while they remain in the host list.
+      this.syncHosts(this.hosts);
       for (const profile of profiles) {
         void this.directorySyncByServer
           .get(profile.serverId)

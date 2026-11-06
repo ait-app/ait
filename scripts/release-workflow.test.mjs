@@ -10,12 +10,33 @@ const workflow = parse(
   readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
 );
 
-test("release publication waits for the reusable Windows build and requires its assets", () => {
-  assert.equal(workflow.jobs.windows.uses, "./.github/workflows/windows-desktop.yml");
-  assert.equal(
-    workflow.jobs.windows.with.source_ref,
-    "${{ inputs.source_commit || inputs.tag || github.ref }}",
-  );
+test("every release job builds the requested source with validated rebuild input", () => {
+  assert.equal(workflow.env.SOURCE_REF, "${{ inputs.source_commit || inputs.tag || github.ref }}");
+  assert.equal(workflow.env.RELEASE_TAG, "${{ inputs.tag || github.ref_name }}");
+  for (const name of ["windows", "web-client", "build", "release"]) {
+    const steps = workflow.jobs[name].steps;
+    const checkout = steps.find((step) => step.name === "Check out release source");
+    assert.equal(checkout.with.ref, "${{ env.SOURCE_REF }}", name);
+    if (name === "release") continue;
+    const index = steps.findIndex((step) => step.name === "Validate rebuild source");
+    assert(index >= 0 && index < steps.indexOf(checkout), name);
+    const validate = steps[index];
+    assert.equal(validate.if, "env.SOURCE_COMMIT != ''", name);
+    for (const [commit, status] of [
+      ["a".repeat(40), 0],
+      ["main", 1],
+      [`${"a".repeat(40)}\nmain`, 1],
+    ]) {
+      const result = spawnSync("bash", ["-e", "-c", validate.run], {
+        env: { SOURCE_COMMIT: commit },
+        encoding: "utf8",
+      });
+      assert.equal(result.status, status, `${name}: ${commit}`);
+    }
+  }
+});
+
+test("release publication waits for the Windows build and requires its assets", () => {
   assert.deepEqual(workflow.jobs.release.needs, ["build", "windows"]);
   assert.match(workflow.jobs.release.if, /needs\.windows\.result == 'success'/);
   const verify = workflow.jobs.release.steps.find(
@@ -24,20 +45,18 @@ test("release publication waits for the reusable Windows build and requires its 
   assert.match(verify.run, /--windows/);
 });
 
-test("Windows packaging only runs as a reusable release workflow and smokes the native client", () => {
-  const windows = parse(
-    readFileSync(new URL("../.github/workflows/windows-desktop.yml", import.meta.url), "utf8"),
-  );
-  assert.deepEqual(Object.keys(windows.on), ["workflow_call"]);
-  assert.equal(windows.permissions.contents, "read");
-  const job = windows.jobs.build;
+test("Windows packaging builds no daemon and smokes the native client", () => {
+  assert.equal(workflow.permissions.contents, "read");
+  const job = workflow.jobs.windows;
   assert.equal(job["runs-on"], "windows-2025");
+  assert.equal(job.permissions, undefined);
   const commands = job.steps.map((step) => step.run ?? "").join("\n");
   assert.match(commands, /npm run build:windows/);
   assert.match(commands, /windows-startup\.e2e\.mjs/);
   assert.match(commands, /release-assets\.mjs collect win/);
   assert.doesNotMatch(commands, /cargo|prepare-daemon|gh release/);
   assert(!job.steps.some((step) => step.uses?.includes("rust-toolchain")));
+  assert(!JSON.stringify(job).includes("secrets."));
   assert.equal(
     job.steps.find((step) => step.uses?.startsWith("actions/upload-artifact")).with.name,
     "ait-windows-x64",

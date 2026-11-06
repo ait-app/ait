@@ -15,11 +15,14 @@ use tokio::{
 use tokio_util::task::AbortOnDropHandle;
 
 use super::{
-    OpenCodeClient, PROVIDER, config, history, interactions, launcher,
+    PROVIDER,
+    client::OpenCodeClient,
+    config, history, interactions, launcher,
     observation::{Observation, Source},
     streaming::Stream,
     subagents::live::Live,
 };
+use crate::local::acp_config;
 use crate::ports::diagnostics::{Category, Diagnostic};
 use crate::{
     local::{
@@ -160,7 +163,7 @@ pub(super) async fn open(
         &spec.config
     };
     let (mut transport, capabilities, source, command_lifecycle) =
-        launcher::observed(client, &spec.cwd, selected).await?;
+        launcher::session(client, spec, selected).await?;
     let (id, mut options, mut identities, clients, location, children) =
         if let Some((handle, _)) = binding {
             if capabilities["loadSession"] != true {
@@ -186,8 +189,8 @@ pub(super) async fn open(
                 )
                 .await?;
             (
-                config::text(&result, "sessionId")?.to_owned(),
-                config::state(&result)?,
+                acp_config::text(&result, "sessionId")?.to_owned(),
+                acp_config::state(&result)?,
                 BTreeSet::new(),
                 BTreeMap::new(),
                 spec.cwd.clone(),
@@ -494,7 +497,7 @@ impl Session {
             || (selected.system_prompt.is_some() && selected.mode_id != self.spec.config.mode_id)
         {
             let (mut transport, capabilities, source, command_lifecycle) =
-                launcher::observed(&self.client, &self.spec.cwd, selected).await?;
+                launcher::session(&self.client, &self.spec, selected).await?;
             let location = &connection.location;
             let mut options = if capabilities["sessionCapabilities"]["resume"].is_object() {
                 let result = transport
@@ -504,7 +507,7 @@ impl Session {
                         self.client.startup_timeout,
                     )
                     .await?;
-                config::state(&result)?
+                acp_config::state(&result)?
             } else if capabilities["loadSession"] == true {
                 history::replay(
                     &mut transport,
@@ -625,7 +628,7 @@ impl Session {
                         && message["params"]["update"]["sessionUpdate"]
                             == "config_option_update" =>
                 {
-                    connection.options = config::state(&message["params"]["update"])?;
+                    connection.options = acp_config::state(&message["params"]["update"])?;
                     self.info = config::runtime(&self.id, &connection.options);
                     self.initial
                         .push_back(AgentTurnEvent::RuntimeInfo(self.info.clone()));
@@ -677,7 +680,7 @@ fn register_pending(
     pending: &Pending,
     captured: acp_permissions::Pending,
 ) -> Result<Value, AgentSessionError> {
-    let id = config::text(&captured.request, "id")?.to_owned();
+    let id = acp_config::text(&captured.request, "id")?.to_owned();
     let request = captured.request.clone();
     let mut pending = pending.lock().map_err(|_| AgentSessionError::Failed)?;
     if pending.len() >= 128
@@ -784,7 +787,7 @@ impl Execution {
             connection.reported_usage |= update["used"].as_u64().is_some_and(|used| used > 0);
         }
         if update["sessionUpdate"] == "config_option_update" {
-            connection.options = config::state(update)?;
+            connection.options = acp_config::state(update)?;
             self.emit(AgentTurnEvent::RuntimeInfo(config::runtime(
                 &self.id,
                 &connection.options,
@@ -1021,7 +1024,7 @@ impl Execution {
             // Background children may still be waiting on this callback; never leave it unanswered.
             connection
                 .transport
-                .send(&interactions::cancelled(&request))
+                .send(&acp_permissions::cancelled(&request))
                 .await?;
             self.emit(AgentTurnEvent::PermissionResolved(id)).await?;
         }

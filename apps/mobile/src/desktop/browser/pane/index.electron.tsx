@@ -633,6 +633,8 @@ export function BrowserPane({
   // Screenshot is captured at selection time (overlay already torn down, no
   // scroll drift) and reused when the annotation card is submitted.
   const pendingScreenshotRef = useRef<AttachmentMetadata | undefined>(undefined);
+  // Identifies the selection whose screenshot capture may still fill pendingScreenshotRef.
+  const pendingScreenshotRequestRef = useRef(0);
   const [draftUrl, setDraftUrl] = useState(browser?.url ?? DEFAULT_BROWSER_URL);
   const workspaceAttachmentScopeKey = useMemo(
     () => buildBrowserAttachmentScopeKey({ cwd, serverId, workspaceId }),
@@ -1187,9 +1189,12 @@ export function BrowserPane({
         return;
       }
       pendingScreenshotRef.current = undefined;
+      const screenshotRequest = ++pendingScreenshotRequestRef.current;
       setPendingSelection(selection);
       void captureElementScreenshot(selection).then((screenshot) => {
-        pendingScreenshotRef.current = screenshot;
+        if (pendingScreenshotRequestRef.current === screenshotRequest) {
+          pendingScreenshotRef.current = screenshot;
+        }
         return undefined;
       });
     },

@@ -21,27 +21,25 @@ async fn daemon_bot_uses_private_native_execution_and_keeps_conversation_after_r
         json!({"cwd":fixture.cwd}),
     )
     .await;
-    let bot_id = domain::BotId::generate();
+    let workspace_id = workspace["result"]["workspace"]["id"].clone();
     let created = request(
         &mut socket,
-        "bot.create.request",
-        json!({"botId":bot_id,
-        "workspaceId":workspace["result"]["workspace"]["id"],"name":"fixture bot",
-        "execution":{"provider":"codex"}}),
+        "bot.setup.request",
+        json!({"workspaceId":workspace_id,"execution":{"provider":"codex"}}),
     )
     .await;
     assert_eq!(created["type"], "response", "{created}");
     let opened = request(
         &mut socket,
         "bot.conversation.open.request",
-        json!({"botId":bot_id}),
+        json!({"workspaceId":workspace_id}),
     )
     .await;
     let conversation = opened["result"]["conversation"]["id"].clone();
     let sent = request(
         &mut socket,
         "bot.message.send.request",
-        json!({"botId":bot_id,
+        json!({"workspaceId":workspace_id,
         "conversationId":conversation,"messageId":"fixture-message","text":"bot hello"}),
     )
     .await;
@@ -53,7 +51,7 @@ async fn daemon_bot_uses_private_native_execution_and_keeps_conversation_after_r
             let turn = request(
                 &mut restored,
                 "bot.turn.get.request",
-                json!({"botId":bot_id,
+                json!({"workspaceId":workspace_id,
                 "turnId":sent["result"]["turn"]["id"]}),
             )
             .await;
@@ -71,7 +69,7 @@ async fn daemon_bot_uses_private_native_execution_and_keeps_conversation_after_r
     let history = request(
         &mut restored,
         "bot.history.get.request",
-        json!({"botId":bot_id,
+        json!({"workspaceId":workspace_id,
         "conversationId":conversation}),
     )
     .await;

@@ -97,6 +97,10 @@ export function normalizeBrowserUrl(value: string | null | undefined): string {
   if (/^(localhost|\d{1,3}(?:\.\d{1,3}){3}|\[[\da-fA-F:.]+])(?::\d+)?(?:[/?#]|$)/.test(trimmed)) {
     return `http://${trimmed}`;
   }
+  // `host:port` also parses as a scheme; a port-only remainder means it is a host.
+  if (/^[a-zA-Z\d-]+(?:\.[a-zA-Z\d-]+)*:\d{1,5}(?:[/?#]|$)/.test(trimmed)) {
+    return `https://${trimmed}`;
+  }
   if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(trimmed)) {
     return trimmed;
   }

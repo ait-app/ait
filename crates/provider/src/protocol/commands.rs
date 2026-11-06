@@ -89,6 +89,11 @@ pub(crate) struct CompletionResult {
 pub(crate) struct ValidatedCompletion(CompletionResult);
 
 impl ValidatedCompletion {
+    /// Remove candidates by adapter policy without adding edits or revalidating trusted items.
+    pub(crate) fn retain(mut self, predicate: impl FnMut(&CompletionItem) -> bool) -> Self {
+        self.0.items.retain(predicate);
+        self
+    }
     /// Decode and validate untrusted native output against its original editor state.
     /// Returns failed for malformed data or invalid edits; preserves native errors at the caller.
     pub(crate) fn parse(

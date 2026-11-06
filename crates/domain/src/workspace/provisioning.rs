@@ -51,6 +51,72 @@ pub enum GithubCloneProtocol {
     Ssh,
 }
 
+/// Observed stage of a running GitHub clone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GithubClonePhase {
+    /// Preparing the staged checkout.
+    Starting,
+    /// Counting objects in the remote repository.
+    Counting,
+    /// Compressing objects in the remote repository.
+    Compressing,
+    /// Receiving objects from the remote repository.
+    Receiving,
+    /// Resolving received objects into deltas.
+    Resolving,
+    /// Writing the working tree.
+    Checkout,
+    /// Registering the completed checkout as a Project.
+    Registering,
+}
+
+impl GithubClonePhase {
+    /// Fraction of the overall clone this phase spans, as `(start, end)` percentages.
+    const fn bounds(self) -> (u8, u8) {
+        match self {
+            Self::Starting => (0, 0),
+            Self::Counting => (1, 4),
+            Self::Compressing => (4, 8),
+            Self::Receiving => (8, 80),
+            Self::Resolving => (80, 92),
+            Self::Checkout => (92, 98),
+            Self::Registering => (99, 99),
+        }
+    }
+}
+
+/// One bounded progress observation for a running GitHub clone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GithubCloneProgress {
+    /// Stage reported by Git or by Project registration.
+    pub phase: GithubClonePhase,
+    /// Completion within `phase`, when the source reported one.
+    pub phase_percent: Option<u8>,
+}
+
+impl GithubCloneProgress {
+    /// Build an observation, clamping any phase percent to `0..=100`.
+    #[must_use]
+    pub fn new(phase: GithubClonePhase, phase_percent: Option<u8>) -> Self {
+        Self {
+            phase,
+            phase_percent: phase_percent.map(|percent| percent.min(100)),
+        }
+    }
+
+    /// Overall completion in `0..=100`, weighted across the clone phases.
+    #[must_use]
+    pub fn overall_percent(self) -> u8 {
+        let (start, end) = self.phase.bounds();
+        let Some(percent) = self.phase_percent else {
+            return start;
+        };
+        let span = u16::from(end - start);
+        let offset = u8::try_from(span * u16::from(percent) / 100).unwrap_or(u8::MAX);
+        start + offset
+    }
+}
+
 /// Normalized repository row returned by GitHub CLI discovery.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GithubRepository {
@@ -101,3 +167,6 @@ pub enum GithubProjectsError {
     #[error("GitHub repository clone failed")]
     CloneFailed,
 }
+
+#[cfg(test)]
+mod tests;

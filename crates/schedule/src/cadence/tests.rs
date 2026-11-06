@@ -177,3 +177,35 @@ fn timezone_less_cron_omits_absent_zone_in_protocol_output() {
         })
     );
 }
+
+#[test]
+fn cron_finds_matches_more_than_a_year_away() {
+    assert_eq!(
+        next(&cron("0 9 13 * 5", None), time("2027-08-13T09:00:00Z")).unwrap(),
+        time("2028-10-13T09:00:00Z")
+    );
+    assert_eq!(
+        next(&cron("0 9 29 2 *", None), time("2028-03-01T00:00:00Z")).unwrap(),
+        time("2032-02-29T09:00:00Z")
+    );
+    assert_eq!(
+        next(
+            &cron("0 9 29 2 1", Some("America/New_York")),
+            time("2016-03-01T00:00:00Z")
+        )
+        .unwrap(),
+        time("2044-02-29T14:00:00Z")
+    );
+}
+
+#[test]
+fn cron_without_any_future_match_reports_none() {
+    assert_eq!(
+        upcoming(&cron("0 0 31 2 *", None), time("2026-01-01T00:00:00Z")),
+        Ok(None)
+    );
+    assert_eq!(
+        upcoming(&cron("* * * * *", None), time("2026-01-01T00:00:00Z")),
+        Ok(Some(time("2026-01-01T00:01:00Z")))
+    );
+}

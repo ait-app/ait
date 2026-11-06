@@ -99,10 +99,19 @@ impl AgentManager {
             .get(agent)
             .map_err(|_| ErrorCode::AgentIo)?
             .ok_or(ErrorCode::AgentNotFound)?;
-        let out_of_band = self
+        let declared = self
             .clients
             .get(&record.provider)
             .is_some_and(|client| client.handles_out_of_band(&prompt.text));
+        // A static declaration can wake an inactive owner, but its actual catalog has final say.
+        if declared && !self.live.contains_key(agent) && record.archived_at.is_none() {
+            self.resume(agent).await.map_err(|_| ErrorCode::AgentIo)?;
+        }
+        let out_of_band = self
+            .live
+            .get(agent)
+            .and_then(|live| live.session.handles_out_of_band(&prompt.text))
+            .unwrap_or(declared);
         let policy = if out_of_band {
             "answer"
         } else {
@@ -122,18 +131,10 @@ impl AgentManager {
         if record.archived_at.is_some() || self.live.get(agent).is_some_and(|live| live.exclusive) {
             return Err(ErrorCode::CatalogBusy);
         }
-        if self
-            .clients
-            .get(&record.provider)
-            .is_some_and(|client| client.handles_out_of_band(&prompt.text))
-        {
+        if out_of_band {
             return self.deliver_command(agent, prompt).await;
         }
         let timeline = self.timeline.clone().ok_or(ErrorCode::AgentIo)?;
-        let policy = match behavior {
-            ActiveTurnBehavior::Interrupt => "interrupt",
-            ActiveTurnBehavior::Steer => "steer",
-        };
         let message = prompt
             .client_message_id
             .clone()

@@ -1,5 +1,7 @@
 const assert = require("node:assert/strict");
-const { execFileSync } = require("node:child_process");
+const { execFileSync, spawnSync } = require("node:child_process");
+const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { test } = require("node:test");
 const { configureSceneAppDelegate, configureSceneManifest } = require("./with-ios-scene-lifecycle");
@@ -88,4 +90,37 @@ test("an unsupported template fails prebuild instead of generating an applicatio
       configureSceneAppDelegate(template.replace("factory.startReactNative(", "factory.start(")),
     /Unsupported Expo AppDelegate/,
   );
+});
+
+test("scene connection forwards notification clicks alongside links before the JS emitter attaches", (t) => {
+  if (spawnSync("swiftc", ["--version"]).status !== 0) {
+    t.skip("Swift compiler is unavailable");
+    return;
+  }
+  const generated = configureSceneAppDelegate(template);
+  const start = generated.indexOf("  private func forward(_ options: UIScene.ConnectionOptions)");
+  const end = generated.indexOf("  func scene(_ scene: UIScene, openURLContexts", start);
+  assert.ok(start >= 0 && end > start, "Scene connection forwarding must be available");
+  // Execute the generated forwarding method with platform doubles. No iOS SDK is needed:
+  // the regression is losing the response before Expo can queue it for its JS emitter.
+  const fixture = fs.readFileSync(
+    path.join(__dirname, "ios/tests/scene-connection-forwarding.swift"),
+    "utf8",
+  );
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ait-scene-notification-"));
+  try {
+    const source = path.join(directory, "main.swift");
+    const executable = path.join(directory, "scene-test");
+    fs.writeFileSync(source, fixture.replace("// FORWARD_METHOD", generated.slice(start, end)));
+    execFileSync("swiftc", [
+      "-module-cache-path",
+      path.join(directory, "cache"),
+      source,
+      "-o",
+      executable,
+    ]);
+    execFileSync(executable);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });

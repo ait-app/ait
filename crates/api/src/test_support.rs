@@ -51,7 +51,9 @@ impl Workspaces {
             icon_store: Box::new(LocalProjectIconStore::new(registry.join("icons"))),
             server_id: "test-server".into(),
         });
-        let path = |name: &str| root.path().join(name).to_str().unwrap().to_owned();
+        // Register canonical paths so macOS temp directories under the `/var` symlink match.
+        let base = root.path().canonicalize().unwrap();
+        let path = |name: &str| base.join(name).to_str().unwrap().to_owned();
         let open = |name: &str| {
             directory
                 .open_workspace(&path(name), "2026-10-30T00:00:00Z")

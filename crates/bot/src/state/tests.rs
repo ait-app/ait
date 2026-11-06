@@ -1,23 +1,106 @@
 use domain::bot::{ChannelConfig, TurnStatus};
-use domain::{BotId, BotTurnId, ChannelId, ConversationId};
+use domain::{BotTurnId, ChannelId, ConversationId};
 use model::ErrorCode;
 use model::bot::Store;
 use serde_json::json;
 
 use crate::channels::Incoming;
-use crate::test_support::{Fixture, creation};
+use crate::test_support::{Fixture, OTHER_WORKSPACE, WORKSPACE, setup};
 
 mod catalog_validation;
+mod lifecycle;
+mod permissions;
+
+#[test]
+fn unconfigured_workspace_has_no_bot_and_no_session_actions() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    let got = state
+        .execute("bot.get.request", json!({"workspaceId":WORKSPACE}))
+        .unwrap();
+    assert_eq!(got, json!({"bot":null}));
+    assert!(state.session_actions.is_empty());
+    assert!(fixture.store.catalog().unwrap().bots.is_empty());
+}
+
+#[test]
+fn setup_is_idempotent_and_single_per_workspace() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    let first = state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    assert_eq!(first["created"], true);
+    assert_eq!(first["bot"]["state"], json!({"kind":"active"}));
+    assert!(first["bot"].get("id").is_none());
+    let again = state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    assert_eq!(again["created"], false);
+    let mut other = setup(WORKSPACE);
+    other["execution"]["provider"] = json!("other");
+    assert_eq!(
+        state.execute("bot.setup.request", other),
+        Err(ErrorCode::BotConflict)
+    );
+    assert_eq!(fixture.store.catalog().unwrap().bots.len(), 1);
+}
+
+#[test]
+fn removed_v1_methods_are_unknown() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    for method in [
+        "bot.create.request",
+        "bot.list.request",
+        "bot.archive.request",
+        "bot.permission.resolve.request",
+    ] {
+        assert_eq!(
+            state.execute(method, json!({})),
+            Err(ErrorCode::MethodNotFound)
+        );
+    }
+}
+
+#[test]
+fn setup_clears_memory_only_when_requested_for_a_new_bot() {
+    let fixture = Fixture::new();
+    fixture.store.save_memory(WORKSPACE, "prefs").unwrap();
+    let mut state = fixture.state();
+    let mut cleared = setup(WORKSPACE);
+    cleared["clearMemory"] = json!(true);
+    let mut invalid = cleared.clone();
+    invalid["execution"]["provider"] = json!("");
+
+    assert_eq!(
+        state.execute("bot.setup.request", invalid),
+        Err(ErrorCode::InvalidMessage)
+    );
+    assert_eq!(fixture.store.memory(WORKSPACE).unwrap(), "prefs");
+    state.execute("bot.setup.request", cleared.clone()).unwrap();
+    assert_eq!(fixture.store.memory(WORKSPACE).unwrap(), "");
+    fixture.store.save_memory(WORKSPACE, "kept").unwrap();
+    assert_eq!(
+        state.execute("bot.setup.request", cleared).unwrap()["created"],
+        false
+    );
+    assert_eq!(fixture.store.memory(WORKSPACE).unwrap(), "kept");
+}
 
 #[test]
 fn channel_capabilities_status_and_conversations_are_scoped_to_the_bot() {
     let fixture = Fixture::new();
     let mut state = fixture.state();
-    let bot = BotId::generate();
-    let created = state.execute("bot.create.request", creation(bot)).unwrap();
+    let created = state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
     let channel = created["bot"]["builtinChannelId"].clone();
     let opened = state
-        .execute("bot.conversation.open.request", json!({"botId":bot}))
+        .execute(
+            "bot.conversation.open.request",
+            json!({"workspaceId":WORKSPACE}),
+        )
         .unwrap();
 
     assert_eq!(
@@ -29,13 +112,16 @@ fn channel_capabilities_status_and_conversations_are_scoped_to_the_bot() {
     let status = state
         .execute(
             "bot.channel.status.request",
-            json!({"botId":bot,"channelId":channel}),
+            json!({"workspaceId":WORKSPACE,"channelId":channel}),
         )
         .unwrap();
     assert_eq!(status["enabled"], true);
     assert_eq!(status["connection"], serde_json::Value::Null);
     let conversations = state
-        .execute("bot.conversation.list.request", json!({"botId":bot}))
+        .execute(
+            "bot.conversation.list.request",
+            json!({"workspaceId":WORKSPACE}),
+        )
         .unwrap();
     assert_eq!(conversations["conversations"].as_array().unwrap().len(), 1);
     assert_eq!(
@@ -43,15 +129,16 @@ fn channel_capabilities_status_and_conversations_are_scoped_to_the_bot() {
         opened["conversation"]["id"]
     );
     assert!(!conversations.to_string().contains("sessionId"));
+    assert!(!conversations.to_string().contains("botId"));
+    assert!(!opened.to_string().contains("botId"));
     assert_eq!(
         state.execute(
             "bot.conversation.list.request",
-            json!({"botId":BotId::generate()})
+            json!({"workspaceId":OTHER_WORKSPACE})
         ),
         Err(ErrorCode::BotNotFound)
     );
 }
-mod lifecycle;
 
 fn external(channel: ChannelId, sender: &str, message: &str) -> Incoming {
     Incoming {
@@ -69,64 +156,71 @@ fn external(channel: ChannelId, sender: &str, message: &str) -> Incoming {
 fn catalog_crud_requires_exclusive_ownership_and_retains_deleted_history() {
     let fixture = Fixture::new();
     let mut state = fixture.state();
-    let bot = BotId::generate();
-    let other = BotId::generate();
-    let created = state.execute("bot.create.request", creation(bot)).unwrap();
-    state
-        .execute("bot.create.request", creation(other))
+    let created = state
+        .execute("bot.setup.request", setup(WORKSPACE))
         .unwrap();
-    assert_eq!(
-        state.execute("bot.create.request", creation(bot)).unwrap()["created"],
-        false
-    );
-    let mut changed = creation(bot);
-    changed["name"] = json!("different");
-    assert_eq!(
-        state.execute("bot.create.request", changed),
-        Err(ErrorCode::IdempotencyConflict)
-    );
+    state
+        .execute("bot.setup.request", setup(OTHER_WORKSPACE))
+        .unwrap();
     let builtin = created["bot"]["builtinChannelId"].clone();
     assert_eq!(
         state.execute(
             "bot.channel.delete.request",
-            json!({"botId":bot,"channelId":builtin})
+            json!({"workspaceId":WORKSPACE,"channelId":builtin})
         ),
         Err(ErrorCode::BotConflict)
     );
     let channel = ChannelId::generate();
     let config = json!({"kind":"telegram","tokenRef":"env:AIT_SERVER_CREDENTIAL_TELEGRAM","allowedSenders":["alice","bob"]});
-    state
+    let created_channel = state
         .execute(
             "bot.channel.create.request",
-            json!({"botId":bot,"channelId":channel,"config":config,"enabled":true}),
+            json!({"workspaceId":WORKSPACE,"channelId":channel,"config":config,"enabled":true}),
         )
         .unwrap();
+    assert!(!created_channel.to_string().contains("botId"));
+    assert_eq!(created_channel["channel"]["id"], json!(channel));
+    let listed = state
+        .execute("bot.channel.list.request", json!({"workspaceId":WORKSPACE}))
+        .unwrap();
+    assert!(!listed.to_string().contains("botId"));
+    let updated = state
+        .execute(
+            "bot.channel.update.request",
+            json!({"workspaceId":WORKSPACE,"channelId":channel,"enabled":true}),
+        )
+        .unwrap();
+    assert!(!updated.to_string().contains("botId"));
     assert_eq!(
         state.execute(
             "bot.channel.create.request",
-            json!({"botId":other,"channelId":ChannelId::generate(),"config":config})
+            json!({"workspaceId":OTHER_WORKSPACE,"channelId":ChannelId::generate(),"config":config})
         ),
         Err(ErrorCode::BotConflict)
     );
     assert_eq!(
         state.execute(
             "bot.channel.update.request",
-            json!({"botId":other,"channelId":channel,"enabled":false})
+            json!({"workspaceId":OTHER_WORKSPACE,"channelId":channel,"enabled":false})
         ),
         Err(ErrorCode::BotNotFound)
     );
-    assert_channel_history(&fixture, &mut state, bot, channel);
+    assert_channel_history(&fixture, &mut state, channel);
 }
 
 #[test]
 fn interrupted_turns_block_replay_until_explicit_reset_and_history_is_paginated() {
     let fixture = Fixture::new();
     let mut state = fixture.state();
-    let bot = BotId::generate();
-    state.execute("bot.create.request", creation(bot)).unwrap();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
     let conversation: ConversationId = serde_json::from_value(
         state
-            .execute("bot.conversation.open.request", json!({"botId":bot}))
+            .execute(
+                "bot.conversation.open.request",
+                json!({"workspaceId":WORKSPACE}),
+            )
             .unwrap()["conversation"]["id"]
             .clone(),
     )
@@ -134,7 +228,7 @@ fn interrupted_turns_block_replay_until_explicit_reset_and_history_is_paginated(
     let receipt = state
         .execute(
             "bot.message.send.request",
-            json!({"botId":bot,"conversationId":conversation,"messageId":"one","text":"first"}),
+            json!({"workspaceId":WORKSPACE,"conversationId":conversation,"messageId":"one","text":"first"}),
         )
         .unwrap();
     let turn: BotTurnId = serde_json::from_value(receipt["turn"]["id"].clone()).unwrap();
@@ -145,13 +239,13 @@ fn interrupted_turns_block_replay_until_explicit_reset_and_history_is_paginated(
     restarted
         .execute(
             "bot.conversation.reset.request",
-            json!({"botId":bot,"conversationId":conversation}),
+            json!({"workspaceId":WORKSPACE,"conversationId":conversation}),
         )
         .unwrap();
     restarted
         .execute(
             "bot.message.send.request",
-            json!({"botId":bot,"conversationId":conversation,"messageId":"two","text":"second"}),
+            json!({"workspaceId":WORKSPACE,"conversationId":conversation,"messageId":"two","text":"second"}),
         )
         .unwrap();
     let ready = restarted.ready().unwrap();
@@ -160,32 +254,17 @@ fn interrupted_turns_block_replay_until_explicit_reset_and_history_is_paginated(
     let history = restarted
         .execute(
             "bot.history.get.request",
-            json!({"botId":bot,"conversationId":conversation,"limit":1}),
+            json!({"workspaceId":WORKSPACE,"conversationId":conversation,"limit":1}),
         )
         .unwrap();
     assert_eq!(history["turns"][0]["text"], "first");
-    assert_eq!(restarted.execute("bot.history.get.request", json!({"botId":bot,"conversationId":conversation,"afterSequence":history["nextSequence"],"limit":1})).unwrap()["turns"][0]["text"], "second");
+    assert_eq!(restarted.execute("bot.history.get.request", json!({"workspaceId":WORKSPACE,"conversationId":conversation,"afterSequence":history["nextSequence"],"limit":1})).unwrap()["turns"][0]["text"], "second");
     assert_eq!(
         restarted.execute(
             "bot.history.get.request",
-            json!({"botId":bot,"conversationId":conversation,"limit":51})
+            json!({"workspaceId":WORKSPACE,"conversationId":conversation,"limit":51})
         ),
         Err(ErrorCode::InvalidMessage)
-    );
-    restarted
-        .execute(
-            "bot.update.request",
-            json!({"botId":bot,"name":"renamed","enabled":false}),
-        )
-        .unwrap();
-    restarted
-        .execute("bot.archive.request", json!({"botId":bot}))
-        .unwrap();
-    assert_eq!(
-        restarted
-            .execute("bot.get.request", json!({"botId":bot}))
-            .unwrap()["bot"]["name"],
-        "renamed"
     );
 }
 
@@ -193,21 +272,20 @@ fn interrupted_turns_block_replay_until_explicit_reset_and_history_is_paginated(
 fn unvalidated_credentials_and_missing_workspaces_fail_before_persistence() {
     let fixture = Fixture::new();
     let mut state = fixture.state();
-    let bot = BotId::generate();
-    let mut missing = creation(bot);
-    missing["workspaceId"] = json!("missing");
     assert_eq!(
-        state.execute("bot.create.request", missing),
+        state.execute("bot.setup.request", setup("missing")),
         Err(ErrorCode::WorkspaceNotFound)
     );
-    state.execute("bot.create.request", creation(bot)).unwrap();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
     for reference in [
         "raw-secret",
         "env:HOME",
         "env:AIT_SERVER_CREDENTIAL_bad",
         "env:AIT_SERVER_CREDENTIAL_",
     ] {
-        assert_eq!(state.execute("bot.channel.create.request", json!({"botId":bot,"channelId":ChannelId::generate(),"config":{"kind":"telegram","tokenRef":reference,"allowedSenders":["1"]}})), Err(ErrorCode::InvalidMessage));
+        assert_eq!(state.execute("bot.channel.create.request", json!({"workspaceId":WORKSPACE,"channelId":ChannelId::generate(),"config":{"kind":"telegram","tokenRef":reference,"allowedSenders":["1"]}})), Err(ErrorCode::InvalidMessage));
     }
     assert_eq!(
         state.execute("unknown", json!({})),
@@ -215,12 +293,7 @@ fn unvalidated_credentials_and_missing_workspaces_fail_before_persistence() {
     );
 }
 
-fn assert_channel_history(
-    fixture: &Fixture,
-    state: &mut super::State,
-    bot: BotId,
-    channel: ChannelId,
-) {
+fn assert_channel_history(fixture: &Fixture, state: &mut super::State, channel: ChannelId) {
     let alice = state.accept(external(channel, "alice", "a1")).unwrap();
     let bob = state.accept(external(channel, "bob", "b1")).unwrap();
     assert_ne!(
@@ -240,13 +313,13 @@ fn assert_channel_history(
     state
         .execute(
             "bot.channel.update.request",
-            json!({"botId":bot,"channelId":channel,"enabled":false}),
+            json!({"workspaceId":WORKSPACE,"channelId":channel,"enabled":false}),
         )
         .unwrap();
     state
         .execute(
             "bot.channel.delete.request",
-            json!({"botId":bot,"channelId":channel}),
+            json!({"workspaceId":WORKSPACE,"channelId":channel}),
         )
         .unwrap();
     assert_eq!(
@@ -263,7 +336,7 @@ fn assert_channel_history(
     );
     assert_eq!(
         state
-            .execute("bot.channel.list.request", json!({"botId":bot}))
+            .execute("bot.channel.list.request", json!({"workspaceId":WORKSPACE}))
             .unwrap()["channels"]
             .as_array()
             .unwrap()
@@ -271,18 +344,14 @@ fn assert_channel_history(
         1
     );
     let mut reloaded = fixture.state();
-    assert_eq!(
-        reloaded
-            .execute(
-                "bot.list.request",
-                json!({"workspaceId":"wks_0123456789abcdef"})
-            )
-            .unwrap()["bots"]
-            .as_array()
-            .unwrap()
-            .len(),
-        2
-    );
+    for workspace in [WORKSPACE, OTHER_WORKSPACE] {
+        assert_eq!(
+            reloaded
+                .execute("bot.get.request", json!({"workspaceId":workspace}))
+                .unwrap()["bot"]["workspaceId"],
+            workspace
+        );
+    }
     assert!(matches!(
         fixture.store.catalog().unwrap().channels[0].config,
         ChannelConfig::Builtin

@@ -2,7 +2,11 @@
 //! These identities and timestamps intentionally remain strings, including legacy IDs.
 //! Rust translation and modifications: see third-party/paseo/NOTICE and LICENSE.
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
+
+use crate::workspace::protocol::workspace::serde_fields::{
+    positive_integer, present, required_nullable,
+};
 
 /// The two persisted project kinds; the wire protocol separately accepts `directory`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,6 +65,14 @@ impl PersistedProjectRecord {
     #[must_use]
     pub fn display_name(&self) -> &str {
         self.custom_name.as_deref().unwrap_or(&self.display_name)
+    }
+
+    /// Whether the project is archived; an empty archive timestamp counts as active.
+    #[must_use]
+    pub fn is_archived(&self) -> bool {
+        self.archived_at
+            .as_ref()
+            .is_some_and(|value| !value.is_empty())
     }
 }
 
@@ -143,6 +155,9 @@ pub struct PersistedWorkspaceRecord {
         skip_serializing_if = "Option::is_none"
     )]
     pub untrusted_source: Option<UntrustedWorkspaceSource>,
+    /// OS-enforced Agent write confinement; absent for every unsandboxed or legacy record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox: Option<crate::workspace::sandbox::WorkspaceSandbox>,
 }
 
 /// Durable eligibility for first-prompt workspace naming, cleared by a manual title edit.
@@ -159,33 +174,13 @@ impl PersistedWorkspaceRecord {
     pub fn display_name(&self) -> &str {
         self.title.as_deref().unwrap_or(&self.display_name)
     }
-}
 
-fn required_nullable<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    D: Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    Option::deserialize(deserializer)
-}
-
-fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    D: Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    T::deserialize(deserializer).map(Some)
-}
-
-fn positive_integer<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
-    let value = f64::deserialize(deserializer)?;
-    if value.is_finite() && (1.0..=9_007_199_254_740_991.0).contains(&value) && value.fract() == 0.0
-    {
-        format!("{value:.0}")
-            .parse()
-            .map_err(serde::de::Error::custom)
-    } else {
-        Err(serde::de::Error::custom("expected a positive safe integer"))
+    /// Whether the workspace is archived; an empty archive timestamp counts as active.
+    #[must_use]
+    pub fn is_archived(&self) -> bool {
+        self.archived_at
+            .as_ref()
+            .is_some_and(|value| !value.is_empty())
     }
 }
 

@@ -6,12 +6,16 @@ pub const METHODS: &[MethodSpec] = &[
     MethodSpec::request("project.github.clone.request"),
 ];
 
+/// Connection event emitted for each requested GitHub clone progress observation.
+pub(crate) const PROGRESS_EVENT: &str = "project.github.clone.progress";
+
 use domain::workspace::protocol::projection::project_descriptor;
 use model::methods::MethodSpec;
 use serde_json::Value;
 
 use domain::workspace::provisioning::{
-    GithubCloneProtocol, GithubProjectsError, GithubRepositoryVisibility,
+    GithubClonePhase, GithubCloneProgress, GithubCloneProtocol, GithubProjectsError,
+    GithubRepositoryVisibility,
 };
 
 use crate::directory::protocol::github_projects::{
@@ -34,12 +38,53 @@ pub(crate) fn execute(
     method: &str,
     params: Value,
 ) -> Result<Value, ErrorCode> {
+    execute_with_progress(directory, method, params, &mut |_, _| {})
+}
+
+/// Execute a GitHub request and forward clone progress for the normalized repository.
+///
+/// # Errors
+/// Rejects unknown methods, invalid parameters, or result encoding failures.
+pub(crate) fn execute_with_progress(
+    directory: &GithubProjects,
+    method: &str,
+    params: Value,
+    progress: &mut dyn FnMut(&str, GithubCloneProgress),
+) -> Result<Value, ErrorCode> {
     match method {
-        "project.github.clone.request" => project_github_clone(directory, &decode(params)?),
+        "project.github.clone.request" => {
+            project_github_clone(directory, &decode(params)?, progress)
+        }
         "workspace.github.search_repositories.request" => {
             github_repository_search(directory, &decode(params)?)
         }
         _ => Err(ErrorCode::MethodNotFound),
+    }
+}
+
+/// Build the connection-event payload for one clone progress observation.
+pub(crate) fn progress_payload(
+    request_id: &str,
+    repo: &str,
+    progress: GithubCloneProgress,
+) -> Value {
+    serde_json::json!({
+        "requestId": request_id,
+        "repo": repo,
+        "phase": phase_name(progress.phase),
+        "percent": progress.overall_percent(),
+    })
+}
+
+const fn phase_name(phase: GithubClonePhase) -> &'static str {
+    match phase {
+        GithubClonePhase::Starting => "starting",
+        GithubClonePhase::Counting => "counting",
+        GithubClonePhase::Compressing => "compressing",
+        GithubClonePhase::Receiving => "receiving",
+        GithubClonePhase::Resolving => "resolving",
+        GithubClonePhase::Checkout => "checkout",
+        GithubClonePhase::Registering => "registering",
     }
 }
 fn github_repository_search(
@@ -109,6 +154,7 @@ fn github_repository_search(
 fn project_github_clone(
     directory: &GithubProjects,
     request: &ProjectGithubCloneRequest,
+    progress: &mut dyn FnMut(&str, GithubCloneProgress),
 ) -> Result<Value, ErrorCode> {
     if request.repo.trim().len() < 3 || request.target_directory.trim().is_empty() {
         return Err(ErrorCode::InvalidMessage);
@@ -117,11 +163,18 @@ fn project_github_clone(
         WireCloneProtocol::Https => GithubCloneProtocol::Https,
         WireCloneProtocol::Ssh => GithubCloneProtocol::Ssh,
     });
+    let wants_progress = request.progress == Some(true);
+    let mut report = |repo: &str, update: GithubCloneProgress| {
+        if wants_progress {
+            progress(repo, update);
+        }
+    };
     let outcome = directory.clone_github_project(
         &request.repo,
         protocol,
         &request.target_directory,
         &now_timestamp(),
+        &mut report,
     );
     encode(
         ProjectGithubCloneResult {

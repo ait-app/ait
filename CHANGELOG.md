@@ -1,5 +1,41 @@
 # Ait changelog
 
+## Unreleased
+
+- Add OMP model-role presets and private next-turn configuration, with explicit native preset save/delete controls.
+- Support native OMP side questions with streaming, cancellation, follow-up and restored history in an independent panel.
+- Keep read-only OMP commands separate from active answers; reject host-conflicting and terminal-only builtins without invoking a model, and preserve query result cards across history reloads.
+
+## 0.1.31 - 2026-11-06
+
+- Let a Workspace Bot manage its Workspace within the permissions you grant: it can start and prompt Agents, manage schedules, and optionally run scripts, terminals and worktrees through scoped Ait MCP credentials, with a per-provider mode cap. The setup wizard and settings add permission groups and mode caps.
+- Existing Bots upgrade with the default groups but an empty mode cap, so configure modes in Bot settings before the Bot can start Agents.
+- Bot models from providers other than Codex and Claude degrade by capability (instructions prepended to each input, default native mode, no preapproved tools) and settings describe the difference. Agents that can run commands can still read local daemon credentials, as the settings warning explains.
+- Add opt-in sandboxed worktrees on macOS through MCP, restricting supported Provider processes to writes in the worktree and required runtime paths while leaving reads and network access unchanged.
+- Fail closed for unsupported platforms and Providers; document the write-confinement limitations and the loss of enforcement when downgrading to older daemons.
+
+## 0.1.30 - 2026-11-05
+
+- Rebuilt on 2026-11-06 with the matching Workspace Bot v2 client and live GitHub clone progress.
+- Add the Workspace Bot tab for `workspace-bots-v2` hosts: one Bot tab per Workspace with a setup wizard, chat, and settings for model, pause and resume, memory, Telegram and Feishu channels, and removal. It remains behind the experimental features setting, and guests get read-only access.
+- Migrate existing Bot tabs automatically: saved per-Bot tabs collapse into a single Bot tab per pane.
+- Breaking: Workspace Bots are now one manager Bot per Workspace, addressed by `workspaceId` through the `workspace-bots-v2` interface (replacing `workspace-bots-v1`; `bot.create`, `bot.list`, `bot.archive` and `bot.permission.resolve` are removed). Existing Bots, Channels, and history from earlier versions are discarded at startup.
+- Store Bot memory under the daemon data directory instead of the workspace; archiving a workspace deletes it, removing a Bot keeps it, and a missing workspace directory pauses the Bot until resumed.
+- Rename the packaged daemon executable to `aitd`, both in desktop resources and standalone archives. Update existing service commands and scripts when upgrading from `ait-daemon`; archive filenames stay the same.
+- Hide cached workspaces for unavailable online hosts in the sidebar while preserving pinned host filters.
+- Consolidate CI jobs and keep nightly publication gated on all configured checks.
+
+## 0.1.29 - 2026-11-05
+
+- Improve connection recovery and release desktop transports when windows close or reload.
+- Preserve drafts, queued messages, workspace creation intent, and host-specific session state across retries.
+- Harden guest access, share revocation, workspace persistence, Git operations, and resource cleanup.
+- Fix scheduling edge cases, bot queue recovery, native provider cancellation, and resumed session history.
+- Bound large provider payloads and permission previews while preserving complete native approval input.
+- Align Agent tool names with the ait namespace while retaining compatibility with older transcripts.
+- Fix terminal keyboard handling, editor saves, downloads, and browser lifecycle issues.
+- Restore iOS notification tap callbacks and keep host synchronization buttons stable during background refresh.
+
 ## 0.1.28 - 2026-11-04
 
 - Apply Pi reasoning preferences before prompts and keep provider controls consistent with native sessions.

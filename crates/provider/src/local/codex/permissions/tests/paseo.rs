@@ -23,6 +23,7 @@ fn session() -> CodexSession {
         last_failure: None,
         history: false,
         cwd: "/offline-fixture".to_owned(),
+        confinement: None,
         permissions: std::collections::BTreeMap::new(),
         stream: crate::local::codex::streaming::Stream::default(),
         terminal: crate::local::codex::terminal::Terminal::default(),

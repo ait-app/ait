@@ -40,7 +40,7 @@ function createPackagedApp(root: string) {
   );
   expect(archive.status, archive.stderr).toBe(0);
   writeFileSync(join(resources, "app-dist", "index.html"), "<!doctype html><title>Ait</title>");
-  writeFileSync(join(resources, "bin", "daemon"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  writeFileSync(join(resources, "bin", "aitd"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   writeFileSync(
     join(app, "Ait"),
     `#!${process.execPath}\nconsole.log(JSON.stringify(process.argv.slice(2)));\n`,
@@ -63,7 +63,7 @@ test("validates Linux package resources before installing the launcher on any ho
     const original = readFileSync(executable);
     const legacyBin = join(context.appOutDir, "resources", "bin", "ait-worker");
     writeFileSync(legacyBin, "obsolete sidecar");
-    await expect(afterPack(context)).rejects.toThrow("must contain only daemon");
+    await expect(afterPack(context)).rejects.toThrow("must contain only aitd");
     expect(existsSync(`${executable}.bin`)).toBe(false);
     expect(readFileSync(executable)).toEqual(original);
 

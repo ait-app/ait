@@ -18,6 +18,7 @@ async fn installed_pi_clamping_and_model_resets_match_host_projection() {
             "--model".into(),
             "baseline".into(),
         ],
+        None,
     )
     .unwrap();
     let data = transport

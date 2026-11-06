@@ -12,6 +12,8 @@ use tokio::task::JoinHandle;
 
 use super::{PROVIDER, PiClient};
 use crate::local::diagnostics::Diagnostics;
+use crate::local::metadata_process::Process;
+use crate::local::process_group::{self, Signal};
 use crate::ports::{
     agent_session::AgentSessionError,
     diagnostics::{Category, Diagnostic},
@@ -111,53 +113,34 @@ pub(super) async fn version(client: &PiClient) -> Result<(), AgentSessionError> 
 
 async fn probe_version(client: &PiClient) -> Result<Version, VersionError> {
     let diagnostics = &client.version.diagnostics;
-    let mut child = Command::new(&client.program)
-        .arg("--version")
-        .envs(client.environment.entries())
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|error| {
-            diagnostics.spawn_error(&error);
-            VersionError::Spawn {
-                kind: error.kind(),
-                os_error: error.raw_os_error(),
-            }
-        })?;
-    let mut stdout = child
-        .stdout
-        .take()
-        .ok_or(VersionError::Failed)?
-        .take((MAX_VERSION_BYTES + 1) as u64);
-    let result = tokio::time::timeout(VERSION_TIMEOUT.min(client.deadline), async {
-        let mut bytes = Vec::new();
-        stdout
-            .read_to_end(&mut bytes)
-            .await
-            .map_err(|_| AgentSessionError::Failed)?;
-        let version = parse_version(&bytes)?;
-        if !child
-            .wait()
-            .await
-            .map_err(|_| AgentSessionError::Failed)?
-            .success()
-        {
-            return Err(AgentSessionError::Failed);
+    let process = Process::spawn(
+        Command::new(&client.program)
+            .arg("--version")
+            .envs(client.environment.entries()),
+    )
+    .map_err(|error| {
+        diagnostics.spawn_error(&error);
+        VersionError::Spawn {
+            kind: error.kind(),
+            os_error: error.raw_os_error(),
         }
-        Ok(version)
-    })
+    })?;
+    // Dropping the process on timeout or failure kills its whole process group.
+    let result = tokio::time::timeout(
+        VERSION_TIMEOUT.min(client.deadline),
+        process.output(MAX_VERSION_BYTES as u64),
+    )
     .await;
     let category = if result.is_err() {
         Category::Timeout
     } else {
         Category::Protocol
     };
-    let result = result.unwrap_or(Err(AgentSessionError::Failed));
+    let result = result
+        .unwrap_or(Err(AgentSessionError::Failed))
+        .and_then(|output| parse_version(output.as_bytes()));
     if result.is_err() {
         diagnostics.observe(Diagnostic::new(category, "version"), "version");
-        let _ = child.kill().await;
     }
     result.map_err(|_| VersionError::Failed)
 }
@@ -212,15 +195,22 @@ pub(super) struct Transport {
 }
 
 impl Transport {
-    /// Start the configured executable in `cwd` with additional native `args`.
+    /// Start the configured executable in `cwd` with additional native `args`, under
+    /// `confinement` for an Agent in a sandboxed Workspace.
     /// Returns unavailable on launch failure or failed for missing process pipes.
     pub(super) fn spawn(
         client: &PiClient,
         cwd: &str,
         args: &[OsString],
+        confinement: Option<&domain::workspace::sandbox::WriteConfinement>,
     ) -> Result<Self, AgentSessionError> {
         let diagnostics = Diagnostics::new(PROVIDER);
-        let mut command = Command::new(&client.program);
+        let mut command = crate::local::sandbox::command(
+            &client.program,
+            confinement,
+            crate::local::sandbox::PI_STATE,
+            &|name| client.environment.variable(name),
+        )?;
         command
             .args(["--mode", "rpc"])
             .args(args)
@@ -541,7 +531,7 @@ fn shutdown(
     let (finished, completion) = oneshot::channel();
     // A Tokio task can be cancelled during runtime shutdown, invoking kill_on_drop too early.
     std::thread::spawn(move || {
-        signal_group(group, "-TERM");
+        process_group::signal(group, Signal::Terminate);
         // Keep stdin alive on Unix: EOF can exit Pi before its signal handler cleans up tools.
         #[cfg(not(unix))]
         if let Ok(mut input) = input.try_lock() {
@@ -556,7 +546,7 @@ fn shutdown(
                 Ok(None) => {}
             }
             if !forced && Instant::now() >= deadline {
-                signal_group(group, "-KILL");
+                process_group::signal(group, Signal::Kill);
                 if child.start_kill().is_err() {
                     break Err(AgentSessionError::Failed);
                 }
@@ -568,18 +558,4 @@ fn shutdown(
         let _ = finished.send(result);
     });
     completion
-}
-
-/// Signal an owned process group, ignoring an already-exited group.
-fn signal_group(group: Option<u32>, signal: &str) {
-    #[cfg(unix)]
-    if let Some(group) = group {
-        let _ = std::process::Command::new("/bin/kill")
-            .args([signal, "--", &format!("-{group}")])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-    }
-    #[cfg(not(unix))]
-    let _ = (group, signal);
 }

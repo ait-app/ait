@@ -3,7 +3,7 @@
 use std::fmt::Debug;
 
 use domain::workspace::provisioning::{
-    Checkout, DirectorySourceError, GithubProjectsError, GithubRepository,
+    Checkout, DirectorySourceError, GithubCloneProgress, GithubProjectsError, GithubRepository,
 };
 
 /// Blocking adapter for local directory and lightweight Git inspection.
@@ -63,7 +63,8 @@ pub trait GithubProjectsRuntime: Debug + Send + Sync {
     ///
     /// The adapter creates missing parent directories, stages the clone, and atomically renames
     /// the completed checkout. It checks for an existing target before the rename; simultaneous
-    /// cross-process creation still needs a future no-replace primitive.
+    /// cross-process creation still needs a future no-replace primitive. Each distinct Git
+    /// progress update is reported through `progress` while the clone runs.
     ///
     /// # Errors
     /// Returns a categorized path, collision, or clone failure.
@@ -72,5 +73,6 @@ pub trait GithubProjectsRuntime: Debug + Send + Sync {
         clone_url: &str,
         target_directory: &str,
         name: &str,
+        progress: &mut dyn FnMut(GithubCloneProgress),
     ) -> Result<String, GithubProjectsError>;
 }

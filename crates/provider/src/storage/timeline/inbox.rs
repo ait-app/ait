@@ -1,6 +1,6 @@
 //! Durable admission receipts. A claimed native write is never automatically replayed.
 
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use sha2::{Digest, Sha256};
 
 use super::{ErrorCode, Timeline, io};
@@ -35,34 +35,10 @@ impl Timeline {
         prompt: &AgentPrompt,
         policy: &str,
     ) -> Result<Option<Receipt>, ErrorCode> {
-        let fingerprint = format!(
-            "{:x}",
-            Sha256::digest(format!(
-                "{policy}\n{}",
-                serde_json::to_string(prompt).map_err(io)?
-            ))
-        );
+        let fingerprint = fingerprint(policy, &serde_json::to_string(prompt).map_err(io)?);
         let database = self.database.lock().map_err(io)?;
-        let existing: Option<(String, String)> = database
-            .query_row(
-                "SELECT fingerprint,state FROM input_receipts WHERE agent=? AND message=?",
-                params![agent, message],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .optional()
-            .map_err(io)?;
-        existing
-            .map(|(previous, state)| {
-                if previous != fingerprint {
-                    return Err(ErrorCode::IdempotencyConflict);
-                }
-                match state.as_str() {
-                    "queued" | "accepted" => Ok(Receipt::Accepted),
-                    "claimed" | "uncertain" => Ok(Receipt::Uncertain),
-                    "rejected" | "cancelled" => Ok(Receipt::Rejected),
-                    _ => Err(ErrorCode::UnsupportedFormat),
-                }
-            })
+        existing_receipt(&database, agent, message, &fingerprint)?
+            .map(|state| receipt(&state))
             .transpose()
     }
 
@@ -76,21 +52,10 @@ impl Timeline {
     ) -> Result<Receipt, ErrorCode> {
         prompt.validate().map_err(|_| ErrorCode::InvalidMessage)?;
         let encoded = serde_json::to_string(prompt).map_err(io)?;
-        let fingerprint = format!("{:x}", Sha256::digest(format!("answer\n{encoded}")));
+        let fingerprint = fingerprint("answer", &encoded);
         let mut database = self.database.lock().map_err(io)?;
         let tx = database.transaction().map_err(io)?;
-        let existing: Option<(String, String)> = tx
-            .query_row(
-                "SELECT fingerprint,state FROM input_receipts WHERE agent=? AND message=?",
-                params![agent, message],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .optional()
-            .map_err(io)?;
-        if let Some((previous, state)) = existing {
-            if previous != fingerprint {
-                return Err(ErrorCode::IdempotencyConflict);
-            }
+        if let Some(state) = existing_receipt(&tx, agent, message, &fingerprint)? {
             match state.as_str() {
                 "accepted" => return Ok(Receipt::Accepted),
                 "claimed" | "uncertain" => return Ok(Receipt::Uncertain),
@@ -121,27 +86,11 @@ impl Timeline {
     ) -> Result<Receipt, ErrorCode> {
         prompt.validate().map_err(|_| ErrorCode::InvalidMessage)?;
         let encoded = serde_json::to_string(prompt).map_err(io)?;
-        let fingerprint = format!("{:x}", Sha256::digest(format!("{policy}\n{encoded}")));
+        let fingerprint = fingerprint(policy, &encoded);
         let mut database = self.database.lock().map_err(io)?;
         let tx = database.transaction().map_err(io)?;
-        let existing: Option<(String, String)> = tx
-            .query_row(
-                "SELECT fingerprint,state FROM input_receipts WHERE agent=? AND message=?",
-                params![agent, message],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .optional()
-            .map_err(io)?;
-        if let Some((previous, state)) = existing {
-            if previous != fingerprint {
-                return Err(ErrorCode::IdempotencyConflict);
-            }
-            return Ok(match state.as_str() {
-                "queued" | "accepted" => Receipt::Accepted,
-                "claimed" | "uncertain" => Receipt::Uncertain,
-                "rejected" | "cancelled" => Receipt::Rejected,
-                _ => return Err(ErrorCode::UnsupportedFormat),
-            });
+        if let Some(state) = existing_receipt(&tx, agent, message, &fingerprint)? {
+            return receipt(&state);
         }
         let (count, bytes): (u64, u64) = tx
             .query_row(
@@ -325,6 +274,54 @@ impl Timeline {
             )
             .map_err(io)?;
         Ok(())
+    }
+}
+
+/// Fingerprint a submission so a reused client message ID with different content is detected.
+fn fingerprint(policy: &str, encoded_prompt: &str) -> String {
+    format!(
+        "{:x}",
+        Sha256::digest(format!("{policy}\n{encoded_prompt}"))
+    )
+}
+
+/// Return the stored state of an existing receipt for `message`.
+/// # Errors
+/// Returns an idempotency conflict for a different fingerprint, or storage failures.
+fn existing_receipt(
+    database: &Connection,
+    agent: &str,
+    message: &str,
+    fingerprint: &str,
+) -> Result<Option<String>, ErrorCode> {
+    let existing: Option<(String, String)> = database
+        .query_row(
+            "SELECT fingerprint,state FROM input_receipts WHERE agent=? AND message=?",
+            params![agent, message],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(io)?;
+    existing
+        .map(|(previous, state)| {
+            if previous == fingerprint {
+                Ok(state)
+            } else {
+                Err(ErrorCode::IdempotencyConflict)
+            }
+        })
+        .transpose()
+}
+
+/// Map a stored ordinary-input state to its admission outcome.
+/// # Errors
+/// Returns unsupported format for an unknown persisted state.
+fn receipt(state: &str) -> Result<Receipt, ErrorCode> {
+    match state {
+        "queued" | "accepted" => Ok(Receipt::Accepted),
+        "claimed" | "uncertain" => Ok(Receipt::Uncertain),
+        "rejected" | "cancelled" => Ok(Receipt::Rejected),
+        _ => Err(ErrorCode::UnsupportedFormat),
     }
 }
 

@@ -2,6 +2,8 @@
 
 mod actions;
 mod bridge;
+mod btw;
+mod commands;
 mod completion;
 mod config;
 mod framing;
@@ -36,6 +38,10 @@ struct RoleSnapshot {
     default_details: Option<Details>,
     updated: Instant,
 }
+/// Stable provider identity recorded on handles, descriptors and host requests.
+const PROVIDER: &str = "omp";
+/// Product name shown in descriptors and diagnostics.
+const LABEL: &str = "Oh My Pi";
 
 /// Installed OMP executable with bounded RPC startup and discovery.
 #[derive(Debug, Clone)]
@@ -211,6 +217,9 @@ where
 
 #[async_trait::async_trait]
 impl AgentClient for OmpClient {
+    fn handles_out_of_band(&self, text: &str) -> bool {
+        commands::is_btw(text) || commands::is_query(text)
+    }
     fn discovery_cache_ttl(&self) -> Duration {
         Duration::MAX
     }
@@ -237,7 +246,15 @@ impl AgentClient for OmpClient {
             return Ok(crate::protocol::commands::ValidatedCompletion::default());
         }
         let mut probe = session::probe(self, &spec.cwd, spec.config.model.as_deref()).await?;
-        let result = completion::complete(&mut probe, input).await;
+        let result = async {
+            let native = if probe.command_completion() {
+                config::commands(&probe.request("get_available_commands", json!({})).await?)?
+            } else {
+                Vec::new()
+            };
+            completion::complete(&mut probe, input, &native).await
+        }
+        .await;
         let closed = probe.close().await;
         let result = result?;
         closed?;
@@ -248,7 +265,11 @@ impl AgentClient for OmpClient {
     }
 
     fn provider(&self) -> &'static str {
-        "omp"
+        PROVIDER
+    }
+
+    fn supports_write_confinement(&self) -> bool {
+        true
     }
 
     fn supports_session_import(&self) -> bool {
@@ -390,7 +411,7 @@ impl AgentClient for OmpClient {
         let closed = probe.close().await;
         let result = result?;
         closed?;
-        config::commands(&result)
+        config::commands(&result).map(|native| commands::visible(&native))
     }
 
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {

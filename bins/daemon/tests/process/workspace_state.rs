@@ -176,6 +176,7 @@ fn workspace(
         labels: None,
         auto_name: None,
         untrusted_source: None,
+        sandbox: None,
     }
 }
 

@@ -1,6 +1,5 @@
 use ::bot::ports::{Credentials, Executor};
 use ::bot::service::{Bots, Dependencies};
-use domain::BotId;
 use domain::bot::SessionOwner;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use persistence::storage::bot::FileStore;
@@ -13,8 +12,11 @@ use super::*;
 struct Native;
 #[async_trait::async_trait]
 impl Executor for Native {
-    async fn execute(&self, _: SessionOwner, _: Action) -> Result<Value, model::ErrorCode> {
-        Ok(json!({"status":"idle","lastMessage":"Bot answer"}))
+    async fn execute(&self, _: SessionOwner, action: Action) -> Result<Value, model::ErrorCode> {
+        Ok(match action {
+            Action::Create { .. } => json!({"created":true,"instructionDelivery":"system_prompt"}),
+            _ => json!({"status":"idle","lastMessage":"Bot answer"}),
+        })
     }
 }
 impl Credentials for Native {
@@ -35,6 +37,7 @@ fn bots(root: &std::path::Path) -> Bots {
         projects: Arc::new(projects),
         executor: Arc::new(Native),
         credentials: Arc::new(Native),
+        scopes: ::bot::mcp::Scopes::new(),
     })
     .unwrap()
 }
@@ -53,6 +56,12 @@ async fn connect(fixture: &Fixture) -> Socket {
         reply["info"]["features"]
             .as_array()
             .unwrap()
+            .contains(&json!("workspace-bots-v2"))
+    );
+    assert!(
+        !reply["info"]["features"]
+            .as_array()
+            .unwrap()
             .contains(&json!("workspace-bots-v1"))
     );
     socket
@@ -67,20 +76,25 @@ async fn installed_bot_rpc_survives_ui_disconnect_and_returns_durable_history() 
     })
     .await;
     let mut socket = connect(&fixture).await;
-    let id = BotId::generate();
-    let created = request(&mut socket,"bot.create.request",json!({"botId":id,"workspaceId":"wks_0123456789abcdef","name":"assistant","execution":{"provider":"test"}})).await;
+    let workspace = "wks_0123456789abcdef";
+    let created = request(
+        &mut socket,
+        "bot.setup.request",
+        json!({"workspaceId":workspace,"execution":{"provider":"test"}}),
+    )
+    .await;
     assert_eq!(created["type"], "response");
     let opened = request(
         &mut socket,
         "bot.conversation.open.request",
-        json!({"botId":id}),
+        json!({"workspaceId":workspace}),
     )
     .await;
     let conversation = opened["result"]["conversation"]["id"].clone();
     let accepted = request(
         &mut socket,
         "bot.message.send.request",
-        json!({"botId":id,"conversationId":conversation,"messageId":"stable","text":"hello"}),
+        json!({"workspaceId":workspace,"conversationId":conversation,"messageId":"stable","text":"hello"}),
     )
     .await;
     assert_eq!(accepted["result"]["accepted"], true);
@@ -91,7 +105,7 @@ async fn installed_bot_rpc_survives_ui_disconnect_and_returns_durable_history() 
             let value = request(
                 &mut restored,
                 "bot.history.get.request",
-                json!({"botId":id,"conversationId":conversation}),
+                json!({"workspaceId":workspace,"conversationId":conversation}),
             )
             .await;
             if value["result"]["turns"][0]["status"] == "completed" {

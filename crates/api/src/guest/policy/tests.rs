@@ -146,7 +146,7 @@ fn methods_are_classified_by_default_deny() {
         "relay.start.request",
         "publication.status.request",
         "schedule.create.request",
-        "bot.create.request",
+        "bot.setup.request",
         "browser.tunnel.open.request",
         "voice.mode.set.request",
         "dictation.stream.start",
@@ -449,6 +449,7 @@ async fn agent_creation_is_forced_into_the_workspace() {
         json!({"config": {"provider": "codex", "mcpServers": {"x": {}}}}),
         json!({"config": {"provider": "codex", "providerOptions": {}}}),
         json!({"config": {"provider": "codex"}, "labels": {GUEST_SHARE: "forged"}}),
+        json!({"config": {"provider": "codex"}, "labels": {"ait.bot.scope": "forged"}}),
         json!({"config": {"provider": "codex"}, "callerAgentId": "owner-agent"}),
     ] {
         assert_eq!(

@@ -47,18 +47,20 @@ struct Ingress {
 
 impl EventPublisher for Ingress {
     fn publish(&self, method: &str, params: &Value) -> bool {
-        let state = self.state.borrow();
-        if !state.supports(EVENTS) {
-            return false;
-        }
-        let Some(scope) = state.scope.clone() else {
+        let scope = {
+            let state = self.state.borrow();
+            state
+                .supports(EVENTS)
+                .then(|| state.scope.clone())
+                .flatten()
+        };
+        let Some(scope) = scope else {
             return false;
         };
-        let Some(event) = Event::project(method, params) else {
+        let Some((event, size)) = Event::project(method, params) else {
             return false;
         };
         let attention = event.attention();
-        let size = serde_json::to_vec(&event.params).map_or(usize::MAX, |bytes| bytes.len());
         let permit = u32::try_from(size)
             .ok()
             .and_then(|size| self.bytes.clone().try_acquire_many_owned(size).ok());

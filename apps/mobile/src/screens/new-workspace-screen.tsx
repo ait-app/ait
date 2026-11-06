@@ -140,7 +140,10 @@ import {
 import { captureWorkspaceDraftCleanup } from "./new-workspace/background-handoff";
 import { useNewWorkspaceScreenPresence } from "./new-workspace/screen-presence";
 import { createSharedProjectAgent } from "./new-workspace/shared-project-agent";
-import { buildWorkspaceCreationRequestKey } from "./new-workspace/creation-request-key";
+import {
+  buildWorkspaceCreationRequestKey,
+  canReuseCreatedWorkspace,
+} from "./new-workspace/creation-request-key";
 
 const ThemedFolderPlus = withUnistyles(FolderPlus);
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -2117,7 +2120,14 @@ export function NewWorkspaceScreen({
         isolation: createsWorktree ? "worktree" : "local",
         selectedItem,
       });
-      if (creationResult.workspace && creationResult.requestKey === requestKey) {
+      if (
+        creationResult.workspace &&
+        canReuseCreatedWorkspace({
+          cachedRequestKey: creationResult.requestKey,
+          requestKey,
+          createsAgent: Boolean(input.agent),
+        })
+      ) {
         return creationResult;
       }
       const connectedClient = withConnectedClient();

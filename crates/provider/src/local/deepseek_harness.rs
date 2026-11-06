@@ -81,7 +81,7 @@ impl DeepSeekHarnessClient {
 
     async fn probe(&self, spec: &AgentSessionSpec) -> Result<Details, AgentSessionError> {
         if self.interactive {
-            let mut session = native::preview(self, spec).await?;
+            let mut session = native::session::preview(self, spec).await?;
             let details = session.details();
             let closed = session.close().await;
             let details = details?;
@@ -113,7 +113,7 @@ impl AgentClient for DeepSeekHarnessClient {
         if !self.interactive {
             return Err(AgentSessionError::Unavailable);
         }
-        let mut session = native::preview(self, spec).await?;
+        let mut session = native::session::preview(self, spec).await?;
         let commands = session
             .commands()
             .map(<[Value]>::to_vec)
@@ -226,7 +226,7 @@ impl AgentClient for DeepSeekHarnessClient {
 
     fn validate_config(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         if self.interactive {
-            native::validate(config)
+            native::config::validate(config)
         } else {
             config::validate(config)
         }
@@ -253,7 +253,7 @@ impl AgentClient for DeepSeekHarnessClient {
         if !self.interactive {
             return Ok(Vec::new());
         }
-        let mut details = native::discover(self, &spec.cwd).await?;
+        let mut details = native::discovery::discover(self, &spec.cwd).await?;
         if let Some(value) = spec
             .config
             .feature_values
@@ -294,12 +294,13 @@ impl AgentClient for DeepSeekHarnessClient {
 
     async fn discover(&self, cwd: &str) -> Result<Details, AgentSessionError> {
         if self.interactive {
-            return native::discover(self, cwd).await;
+            return native::discovery::discover(self, cwd).await;
         }
         self.probe(&AgentSessionSpec {
             provider: PROVIDER.to_owned(),
             cwd: cwd.to_owned(),
             config: StoredAgentConfig::default(),
+            confinement: None,
         })
         .await
     }
@@ -307,8 +308,8 @@ impl AgentClient for DeepSeekHarnessClient {
     async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
         if self.interactive {
             self.validate_config(&spec.config)?;
-            let details = native::discover(self, &spec.cwd).await?;
-            return native::validate_selection(&details, &spec.config);
+            let details = native::discovery::discover(self, &spec.cwd).await?;
+            return native::presets::validate_selection(&details, &spec.config);
         }
         self.probe(spec).await.map(|_| ())
     }
@@ -318,7 +319,7 @@ impl AgentClient for DeepSeekHarnessClient {
         spec: &AgentSessionSpec,
     ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         if self.interactive {
-            Ok(Box::new(native::open(self, spec, None).await?) as Box<dyn AgentSession>)
+            Ok(Box::new(native::session::open(self, spec, None).await?) as Box<dyn AgentSession>)
         } else {
             Ok(Box::new(session::open(self, spec, None).await?) as Box<dyn AgentSession>)
         }
@@ -344,7 +345,10 @@ impl AgentClient for DeepSeekHarnessClient {
             return Err(AgentSessionError::Unavailable);
         }
         if self.interactive {
-            Ok(Box::new(native::open(self, spec, Some(handle)).await?) as Box<dyn AgentSession>)
+            Ok(
+                Box::new(native::session::open(self, spec, Some(handle)).await?)
+                    as Box<dyn AgentSession>,
+            )
         } else {
             if handle
                 .metadata

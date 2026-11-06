@@ -23,7 +23,7 @@ impl Sources {
             .list()
             .context("read Hub project projection")?
             .into_iter()
-            .filter(|record| record.archived_at.is_none())
+            .filter(|record| !record.is_archived())
             .map(|record| {
                 json!({
                     "id": record.project_id,
@@ -41,7 +41,7 @@ impl Sources {
             .list()
             .context("read Hub workspace projection")?
             .into_iter()
-            .filter(|record| record.archived_at.is_none())
+            .filter(|record| !record.is_archived())
             .map(|record| {
                 json!({
                     "id": record.workspace_id,

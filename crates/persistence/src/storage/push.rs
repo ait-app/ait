@@ -1,13 +1,14 @@
 //! Private atomic JSON persistence for push tokens.
 
 use std::fs;
-use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use serde_json::Value;
 
 use domain::storage::push::PushError;
 use model::storage::push::TokenStore;
+
+const MAX_DOCUMENT_BYTES: u64 = 32 * 1024 * 1024;
 
 /// File adapter owned by the server's exclusively leased data directory.
 #[derive(Debug)]
@@ -37,35 +38,35 @@ impl FileTokenStore {
 impl TokenStore for FileTokenStore {
     fn load(&self) -> Result<Value, PushError> {
         self.check_file()?;
-        let file = match fs::File::open(&self.path) {
-            Ok(file) => file,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(serde_json::json!({}));
-            }
-            Err(_) => return Err(PushError::Io),
-        };
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            file.set_permissions(fs::Permissions::from_mode(0o600))
-                .map_err(|_| PushError::Io)?;
+            match fs::set_permissions(&self.path, fs::Permissions::from_mode(0o600)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    return Ok(serde_json::json!({}));
+                }
+                Err(_) => return Err(PushError::Io),
+            }
         }
-        let mut bytes = Vec::new();
-        file.take(32 * 1024 * 1024 + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|_| PushError::Io)?;
-        if bytes.len() > 32 * 1024 * 1024 {
-            return Err(PushError::Capacity);
-        }
+        let bytes = match crate::File::new(&self.path).read_limited(MAX_DOCUMENT_BYTES) {
+            Ok(bytes) => bytes,
+            Err(crate::Error::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(serde_json::json!({}));
+            }
+            Err(crate::Error::Io(_)) => return Err(PushError::Io),
+            Err(crate::Error::TooLarge) => return Err(PushError::Capacity),
+        };
         serde_json::from_slice(&bytes).map_err(|_| PushError::Invalid)
     }
 
     fn save(&self, document: &Value) -> Result<(), PushError> {
         self.check_file()?;
-        let bytes = serde_json::to_vec_pretty(document).map_err(|_| PushError::Invalid)?;
-        if bytes.len() >= 32 * 1024 * 1024 {
+        let mut bytes = serde_json::to_vec_pretty(document).map_err(|_| PushError::Invalid)?;
+        if u64::try_from(bytes.len()).map_or(true, |size| size >= MAX_DOCUMENT_BYTES) {
             return Err(PushError::Capacity);
         }
+        bytes.push(b'\n');
         let parent = self
             .path
             .parent()
@@ -78,12 +79,9 @@ impl TokenStore for FileTokenStore {
             fs::set_permissions(parent, fs::Permissions::from_mode(0o700))
                 .map_err(|_| PushError::Io)?;
         }
-        let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(|_| PushError::Io)?;
-        temporary.write_all(&bytes).map_err(|_| PushError::Io)?;
-        temporary.write_all(b"\n").map_err(|_| PushError::Io)?;
-        temporary.as_file().sync_all().map_err(|_| PushError::Io)?;
-        temporary.persist(&self.path).map_err(|_| PushError::Io)?;
-        Ok(())
+        crate::File::new(&self.path)
+            .write(&bytes)
+            .map_err(|_| PushError::Io)
     }
 }
 

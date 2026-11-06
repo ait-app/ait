@@ -102,7 +102,8 @@ export class AccountBrowserProfiles {
       const current = profile;
       owner.once("destroyed", () => {
         current.owners.delete(owner.id);
-        if (!current.owners.size) {
+        // A failed initialization may have been replaced by a retry under the same partition.
+        if (!current.owners.size && this.profiles.get(partition) === current) {
           current.network.close();
           this.profiles.delete(partition);
         }

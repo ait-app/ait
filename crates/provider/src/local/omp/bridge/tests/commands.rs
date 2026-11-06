@@ -36,10 +36,14 @@ async fn acp_preserves_command_metadata_and_publishes_live_native_changes() {
         advisor["_meta"]["aliases"],
         native["commands"][0]["aliases"]
     );
-    assert_eq!(
-        advisor["_meta"]["subcommands"],
-        native["commands"][0]["subcommands"]
-    );
+    let headless_subcommands = native["commands"][0]["subcommands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|command| command["name"] != "configure")
+        .cloned()
+        .collect::<Vec<_>>();
+    assert_eq!(advisor["_meta"]["subcommands"], json!(headless_subcommands));
     assert_eq!(
         advisor["input"]["hint"],
         native["commands"][0]["input"]["hint"]
@@ -67,9 +71,8 @@ async fn acp_preserves_command_metadata_and_publishes_live_native_changes() {
         })
         .collect();
     assert_eq!(updates.len(), 1);
-    assert_eq!(
-        updates[0]["params"]["update"]["availableCommands"],
-        json!([])
-    );
+    let commands = &updates[0]["params"]["update"]["availableCommands"];
+    assert_eq!(commands.as_array().unwrap().len(), 1);
+    assert_eq!(commands[0]["name"], "btw");
     engine.close().await.unwrap();
 }

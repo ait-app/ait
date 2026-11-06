@@ -170,7 +170,7 @@ async fn pending_native_replacement_is_excluded_from_cached_reads() {
     assert!(
         !reader
             .can_read_cached_timeline(
-                "agent.timeline.get.request",
+                operation::Operation::Timeline,
                 &json!({"agentId":id,"allowCached":true}),
             )
             .unwrap()

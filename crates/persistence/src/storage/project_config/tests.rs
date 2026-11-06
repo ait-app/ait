@@ -97,3 +97,17 @@ fn config_path_reports_uninspectable_roots_without_selecting_legacy() {
     std::fs::write(&blocker, "file").unwrap();
     assert!(LocalProjectConfigStore.config_path(&blocker).is_err());
 }
+
+#[test]
+fn oversized_documents_are_rejected_without_parsing() {
+    let fixture = tempfile::tempdir().unwrap();
+    let path = fixture.path().join(PROJECT_CONFIG_FILE_NAME);
+    File::create(&path)
+        .unwrap()
+        .set_len(u64::from(MAX_CONFIG_BYTES) + 1)
+        .unwrap();
+    assert_eq!(
+        LocalProjectConfigStore.read(fixture.path().to_str().unwrap()),
+        Err(ProjectConfigStoreError::Invalid)
+    );
+}

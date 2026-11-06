@@ -69,6 +69,7 @@ async fn installed_existing_session_import_and_resume_preserve_history() {
         provider: PROVIDER.into(),
         cwd: before.descriptor.cwd.clone(),
         config: before.config.clone(),
+        confinement: None,
     };
     let mut session = client
         .resume_session(&handle, &spec, AgentResumePurpose::Interactive)

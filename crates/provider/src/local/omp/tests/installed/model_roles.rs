@@ -11,6 +11,7 @@ async fn installed_omp_roles_resolve_inside_native_extensions_and_survive_reopen
     let (defaults, models) = native_profile(&agent, &base_url);
     let client = OmpClient {
         environment: AgentEnvironment::try_from(BTreeMap::from([
+            ("HOME".to_owned(), root.path().to_str().unwrap().to_owned()),
             (
                 "PI_CODING_AGENT_DIR".to_owned(),
                 agent.to_str().unwrap().to_owned(),
@@ -22,6 +23,7 @@ async fn installed_omp_roles_resolve_inside_native_extensions_and_survive_reopen
         ..OmpClient::new(program.into())
     };
     let mut spec = AgentSessionSpec {
+        confinement: None,
         provider: "omp".to_owned(),
         cwd: root.path().to_str().unwrap().to_owned(),
         config: selected_roles(),
@@ -33,6 +35,7 @@ async fn installed_omp_roles_resolve_inside_native_extensions_and_survive_reopen
             .any(|feature| feature["id"] == "modelRole.custom")
     );
     let mut session = client.create_session(&spec).await.unwrap();
+    assert_native_cwd(session.as_mut(), &spec).await;
     assert_eq!(
         session.runtime_info().await.unwrap().model,
         Some(json!(["ait-role-fixture", "fast"]).to_string())
@@ -92,6 +95,18 @@ async fn installed_omp_roles_resolve_inside_native_extensions_and_survive_reopen
     );
 }
 
+async fn assert_native_cwd(session: &mut dyn AgentSession, spec: &AgentSessionSpec) {
+    session
+        .start_turn("/ait-cwd-check", &spec.config)
+        .await
+        .unwrap();
+    assert!(
+        complete(session).await.iter().any(|event| matches!(event,
+                AgentTurnEvent::Timeline(entry) if entry.item["text"] == spec.cwd)),
+        "explicit workspace cwd must survive OMP's home-directory startup guard"
+    );
+}
+
 fn assert_native_roles(events: &[AgentTurnEvent], advisor: &str) {
     let expected = json!({"default":"ait-role-fixture/fast","smol":"ait-role-fixture/fast",
         "vision":"ait-role-fixture/vision","advisor":advisor,"custom":"ait-role-fixture/vision"});
@@ -107,12 +122,7 @@ async fn installed_presets_resolve_aliases_and_manage_only_named_global_entries(
     std::fs::create_dir_all(agent.join("extensions")).unwrap();
     let (defaults, _) = native_profile(&agent, "http://127.0.0.1:9/v1");
     let global: Value = serde_json::from_str(&defaults).unwrap();
-    std::fs::create_dir_all(root.path().join(".omp")).unwrap();
-    let project = json!({"modelPresets":{"work":{"modelRoles":{
-        "default":"@smol","smol":"ait-role-fixture/fast","vision":"ait-role-fixture/vision",
-        "advisor":"ait-role-fixture/advisor:high","custom":"ait-role-fixture/vision"},
-        "defaultThinkingLevel":"high"}}});
-    std::fs::write(root.path().join(".omp/config.yml"), project.to_string()).unwrap();
+    let project = create_project_preset(root.path());
     let client = OmpClient {
         environment: AgentEnvironment::try_from(BTreeMap::from([
             (
@@ -130,6 +140,7 @@ async fn installed_presets_resolve_aliases_and_manage_only_named_global_entries(
         )
     };
     let mut spec = AgentSessionSpec {
+        confinement: None,
         provider: "omp".to_owned(),
         cwd: root.path().to_str().unwrap().to_owned(),
         config: StoredAgentConfig {
@@ -204,6 +215,16 @@ async fn installed_presets_resolve_aliases_and_manage_only_named_global_entries(
     owner.close().await.unwrap();
 }
 
+fn create_project_preset(root: &std::path::Path) -> Value {
+    std::fs::create_dir_all(root.join(".omp")).unwrap();
+    let project = json!({"modelPresets":{"work":{"modelRoles":{
+        "default":"@smol","smol":"ait-role-fixture/fast","vision":"ait-role-fixture/vision",
+        "advisor":"ait-role-fixture/advisor:high","custom":"ait-role-fixture/vision"},
+        "defaultThinkingLevel":"high"}}});
+    std::fs::write(root.join(".omp/config.yml"), project.to_string()).unwrap();
+    project
+}
+
 /// Write an isolated native model profile for official runtime acceptance tests.
 pub(super) fn native_profile(agent: &std::path::Path, base_url: &str) -> (String, Value) {
     let entries = ["main","fast","vision","advisor"].map(|id|json!({"id":id,"name":id,"reasoning":true,
@@ -222,6 +243,10 @@ pub(super) fn native_profile(agent: &std::path::Path, base_url: &str) -> (String
     // A normal public extension resolves the same role aliases used by native advisor/task tools.
     std::fs::write(agent.join("extensions/role-check.ts"),r#"
 export default function(pi) {
+    pi.registerCommand("ait-cwd-check", {
+        description: "Report the native working directory without inference",
+        handler: async (_args,ctx) => { await pi.sendMessage({customType:"cwd-check",content:ctx.cwd,display:true}); }
+    });
     pi.registerCommand("ait-role-check", {
         description: "Report native role resolution without model inference",
         handler: async (_args,ctx) => {

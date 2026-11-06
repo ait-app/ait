@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 
+use crate::service::bot_execution::{BotSessionSupport, InstructionDelivery};
 /// A sendable provider operation or detached native receipt.
 pub(crate) type AgentSessionFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, AgentSessionError>> + Send + 'a>>;
@@ -44,6 +45,8 @@ pub(crate) struct AgentSessionSpec {
     pub(crate) cwd: String,
     /// Persistable provider configuration.
     pub(crate) config: StoredAgentConfig,
+    /// OS write confinement for the native process tree; never persisted with the Agent.
+    pub(crate) confinement: Option<domain::workspace::sandbox::WriteConfinement>,
 }
 
 /// Whether a resumed native session may accept a new foreground turn.
@@ -96,6 +99,12 @@ pub(crate) enum AgentTurnEvent {
 /// Shared account inspection must produce sendable futures, so sessions are also `Sync`.
 #[async_trait::async_trait]
 pub(crate) trait AgentSession: Debug + Send + Sync {
+    /// Classify controls using this live owner's current catalog before input scheduling.
+    /// `Some` is authoritative, including a normal command owned by an extension (`false`).
+    /// `None` retains the client-level declaration for adapters without live classification.
+    fn handles_out_of_band(&self, _text: &str) -> Option<bool> {
+        None
+    }
     /// Complete editor input without admitting a prompt or executing a command.
     /// Returns unsupported for adapters without native completion; native errors remain errors.
     async fn complete_commands(
@@ -391,6 +400,26 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
     /// Whether this adapter accepts a session-private HTTP MCP connection.
     fn supports_agent_mcp(&self) -> bool {
         false
+    }
+
+    /// Whether this adapter launches its native process under `AgentSessionSpec::confinement`.
+    ///
+    /// Adapters that ignore the field must keep the default so sandboxed launches fail closed.
+    fn supports_write_confinement(&self) -> bool {
+        false
+    }
+
+    /// How a Bot's own hidden session is configured on this adapter.
+    ///
+    /// The default delivers instructions as a turn prefix, uses the provider's default mode
+    /// and preapproves nothing, so approval-gated `ait` tools are denied automatically.
+    fn bot_session_support(&self) -> BotSessionSupport {
+        BotSessionSupport {
+            instructions: InstructionDelivery::TurnPrefix,
+            read_only_mode: None,
+            tool_preapproval: false,
+            ait_tools: self.supports_agent_mcp(),
+        }
     }
 
     /// Return the total catalog budget, including queueing and availability checks.

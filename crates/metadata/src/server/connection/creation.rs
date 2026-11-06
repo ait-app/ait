@@ -48,21 +48,20 @@ pub(crate) async fn dispatch(
             },
         )
         .await;
-    deliver(context, result, connection, None)
+    deliver(context, result, connection)
 }
 
 fn deliver(
     context: Context<'_>,
     result: Result<(Value, Option<Subscription>), ErrorCode>,
     connection: &mut Connection,
-    event: Option<Value>,
 ) -> Result<(), QueueError> {
     match result {
         Ok((mut value, subscription)) => {
             if let Some(subscription) = &subscription {
                 value["subscriptionId"] = json!(subscription.id());
             }
-            context.workspace(value, event)?;
+            context.respond(Ok(value))?;
             if let Some(subscription) = subscription {
                 subscription.activate()?;
                 connection

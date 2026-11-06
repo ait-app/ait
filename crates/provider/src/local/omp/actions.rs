@@ -291,12 +291,15 @@ fn account_actions() -> Vec<Value> {
         action(
             "btw",
             "Ask a side question",
-            vec![field("question", "Question", &[], true)],
+            vec![
+                field("question", "Question", &[], true),
+                field("recordId", "Topic ID (follow-up, optional)", &[], false),
+            ],
         ),
         action(
             "btw_cancel",
             "Cancel a side question",
-            vec![field("recordId", "Question ID", &[], true)],
+            vec![field("recordId", "Question ID (optional)", &[], false)],
         ),
     ]
 }

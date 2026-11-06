@@ -17,6 +17,7 @@ fn fixture() -> (tempfile::TempDir, MiniMaxClient, AgentSessionSpec) {
         provider: PROVIDER.into(),
         cwd: root.path().to_str().unwrap().into(),
         config: StoredAgentConfig::default(),
+        confinement: None,
     };
     (root, client, spec)
 }
@@ -213,6 +214,47 @@ async fn permission_callbacks_require_explicit_choices_and_resolve_once() {
         assert!(session.pending_permissions().is_empty());
         session.close().await.unwrap();
     }
+}
+
+#[tokio::test]
+async fn cancellation_withdraws_pending_permissions_before_cancelling_the_prompt() {
+    let (root, client, spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    let turn = session.start_turn("approve", &spec.config).await.unwrap();
+    let permission = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if let Some(AgentTurnEvent::PermissionRequested(permission)) =
+                session.poll_turn().unwrap()
+            {
+                break permission;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    session.cancel_turn(&turn).await.unwrap();
+    assert!(session.pending_permissions().is_empty());
+    let events = finish(session.as_mut()).await;
+    assert!(events.contains(&AgentTurnEvent::PermissionResolved(
+        permission["id"].as_str().unwrap().to_owned()
+    )));
+    assert_eq!(events.last(), Some(&AgentTurnEvent::Cancelled));
+    let requests: Vec<Value> = std::fs::read_to_string(root.path().join("requests.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let withdrawn = requests
+        .iter()
+        .position(|request| request["result"]["outcome"]["outcome"] == "cancelled")
+        .unwrap();
+    let cancelled = requests
+        .iter()
+        .position(|request| request["method"] == "session/cancel")
+        .unwrap();
+    assert!(withdrawn < cancelled);
+    session.close().await.unwrap();
 }
 
 #[tokio::test]

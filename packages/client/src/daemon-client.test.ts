@@ -3969,6 +3969,94 @@ test("reconnects after the server replaces a connection", async () => {
   }
 });
 
+test("one transport failure reported as error then close schedules a single retry", async () => {
+  useHeartbeatClock();
+  const first = createMockTransport();
+  const second = createMockTransport();
+  const factory = vi.fn().mockReturnValueOnce(first.transport).mockReturnValue(second.transport);
+  const states: string[] = [];
+  const client = new DaemonClient({
+    url: "ws://server.test/v1/ws",
+    clientId: "single-retry",
+    logger: noopLogger,
+    reconnect: { enabled: true, baseDelayMs: 1_000, maxDelayMs: 10_000 },
+    transportFactory: factory,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  first.triggerOpen();
+  await connected;
+  client.subscribeConnectionStatus((state) => states.push(state.status));
+  states.length = 0;
+
+  // The SDK connection reports each failure to both error and close listeners.
+  first.triggerError(new Error("network lost"));
+  first.triggerClose({ code: 1006, reason: "network lost" });
+  expect(states).toEqual(["disconnected"]);
+
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(factory).toHaveBeenCalledTimes(2);
+  expect(client.getConnectionState().status).toBe("connecting");
+});
+
+test("close rejects a connect that is still waiting for the handshake", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "close-during-connect",
+    logger: noopLogger,
+    reconnect: { enabled: true },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  const settled = connected.then(
+    () => "resolved",
+    (error: Error) => error.message,
+  );
+  await client.close();
+  expect(await settled).toBe("Daemon client closed");
+});
+
+test("a throwing event subscriber does not block RPC responses or later subscribers", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "throwing-subscriber",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connected = client.connect();
+  mock.triggerOpen();
+  await connected;
+  client.subscribe(() => {
+    throw new Error("subscriber bug");
+  });
+  const seen: string[] = [];
+  client.subscribe((event) => seen.push(event.type));
+
+  const deleted = client.deleteAgent("agent-1");
+  const request = parseSentFrame(mock.sent[0]);
+  expect(() =>
+    mock.triggerMessage(
+      wrapSessionMessage({
+        type: "agent.delete.response",
+        payload: { agentId: "agent-1", requestId: request.requestId },
+      }),
+    ),
+  ).not.toThrow();
+
+  await expect(deleted).resolves.toBeUndefined();
+  expect(seen).toEqual(["agent.delete.response"]);
+  expect(logger.error).toHaveBeenCalledWith(
+    expect.objectContaining({ eventType: "agent.delete.response" }),
+    "Daemon event handler failed",
+  );
+});
+
 test("requires non-empty clientId", () => {
   expect(() => {
     const _client = new DaemonClient({
@@ -6544,6 +6632,48 @@ test("does not reject a request for an invalid correlated progress event", async
   });
 });
 
+test("delivers validated GitHub clone progress to its listener", async () => {
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger: noopLogger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const updates: Array<{
+    requestId: string;
+    repo: string;
+    phase: string;
+    percent: number;
+  }> = [];
+  const unsubscribe = client.on("project.github.clone.progress", (message) => {
+    updates.push(message.payload);
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "project.github.clone.progress",
+      payload: {
+        requestId: "clone-1",
+        repo: "owner/repo",
+        phase: "receiving",
+        percent: 44,
+      },
+    }),
+  );
+  unsubscribe();
+
+  expect(updates).toEqual([
+    { requestId: "clone-1", repo: "owner/repo", phase: "receiving", percent: 44 },
+  ]);
+});
+
 test("sends subscribe/unsubscribe terminals messages", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -7216,26 +7346,26 @@ test("Bot requests validate params, correlate results and release errors", async
   const connected = client.connect();
   mock.triggerOpen();
   await connected;
-  const pending = client.botRequest("bot.list.request", { workspaceId: "workspace-a" });
+  const pending = client.botRequest("bot.get.request", { workspaceId: "workspace-a" });
   const request = parseSentFrame(mock.sent[0]);
-  expect(request).toMatchObject({ type: "bot.list.request", workspaceId: "workspace-a" });
+  expect(request).toMatchObject({ type: "bot.get.request", workspaceId: "workspace-a" });
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "bot.list.response",
-      payload: { requestId: "other-request", bots: [] },
+      type: "bot.get.response",
+      payload: { requestId: "other-request", bot: null },
     }),
   );
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "bot.list.response",
-      payload: { requestId: request.requestId, bots: [] },
+      type: "bot.get.response",
+      payload: { requestId: request.requestId, bot: null },
     }),
   );
-  await expect(pending).resolves.toMatchObject({ bots: [] });
-  await expect(client.botRequest("bot.get.request", { botId: "invalid" })).rejects.toThrow();
+  await expect(pending).resolves.toMatchObject({ bot: null });
+  await expect(client.botRequest("bot.get.request", { workspaceId: " " })).rejects.toThrow();
   expect(mock.sent).toHaveLength(1);
   const failed = client.botRequest("bot.memory.get.request", {
-    botId: "11111111-1111-4111-8111-111111111111",
+    workspaceId: "workspace-a",
   });
   const failure = parseSentFrame(mock.sent[1]);
   const rejection = expect(failed).rejects.toThrow("Bot not found");

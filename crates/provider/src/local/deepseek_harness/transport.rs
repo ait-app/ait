@@ -1,7 +1,7 @@
 //! `DeepSeek` Harness launcher for the shared bounded ACP transport.
 
 use super::DeepSeekHarnessClient;
-pub(super) use crate::local::acp_transport::{Transport, response};
+use crate::local::acp_transport::Transport;
 use crate::ports::agent_session::AgentSessionError;
 
 pub(super) fn spawn(

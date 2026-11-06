@@ -108,6 +108,11 @@ export class TerminalInputModeTracker {
     }
 
     const tail = text.slice(consumedUntil);
+    if (tail.endsWith(ESC)) {
+      // The chunk boundary split ESC from its `[`; keep it for the next feed.
+      this.pending = ESC;
+      return { changed, responses };
+    }
     const pendingStart = tail.lastIndexOf(`${ESC}[`);
     if (pendingStart >= 0) {
       const pending = tail.slice(pendingStart);
@@ -176,7 +181,17 @@ export class TerminalInputModeTracker {
       }
       case "=": {
         const mode = parseSecondParam(params) ?? 1;
-        this.kittyKeyboardFlags = mode === 0 ? 0 : (parseFirstParam(params) ?? 0);
+        const flags = parseFirstParam(params) ?? 0;
+        // Kitty: mode 1 replaces the flags, 2 sets the given bits, 3 clears them.
+        if (mode === 0) {
+          this.kittyKeyboardFlags = 0;
+        } else if (mode === 2) {
+          this.kittyKeyboardFlags |= flags;
+        } else if (mode === 3) {
+          this.kittyKeyboardFlags &= ~flags;
+        } else {
+          this.kittyKeyboardFlags = flags;
+        }
         break;
       }
       case "<": {

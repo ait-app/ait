@@ -107,7 +107,7 @@ async fn drain_observations(
     id: &str,
     agent: &mut super::LiveAgent,
 ) -> Result<(), AgentManagerError> {
-    persist_handle(registry, id, agent)?;
+    checkpoint_handle(registry, id, agent)?;
     persist_input(registry, id, agent)?;
     for _ in 0..128 {
         if agent.pending.is_none() {
@@ -151,7 +151,7 @@ async fn drain_observations(
                         break;
                     }
                     agent.pending = None;
-                    persist_handle(registry, id, agent)?;
+                    checkpoint_handle(registry, id, agent)?;
                     continue;
                 }
                 super::controls::publish_permission(registry, timeline, events, agent, request)?;
@@ -187,14 +187,19 @@ async fn drain_observations(
                     agent.turn = Some(turn);
                 }
             }
-            Err(model::ErrorCode::IdempotencyConflict | model::ErrorCode::ResourceExhausted) => {
+            // Storage I/O may succeed on the next poll, so the event stays pending for retry.
+            Err(model::ErrorCode::AgentIo) => return Err(AgentManagerError::Registry),
+            // Any other rejection is deterministic for this event; retrying it would wedge the
+            // lane, so the turn fails and the native session is settled instead.
+            Err(error) => {
+                tracing::warn!(provider = %agent.record.provider, agent_id = %id,
+                    error_code = ?error, "Native provider event was rejected");
                 agent.pending = Some(AgentTurnEvent::Failed);
                 break;
             }
-            Err(_) => return Err(AgentManagerError::Registry),
         }
     }
-    persist_handle(registry, id, agent)?;
+    checkpoint_handle(registry, id, agent)?;
     if matches!(agent.pending, Some(AgentTurnEvent::Failed)) {
         settle_failure(registry, timeline, events, id, agent).await?;
     }
@@ -523,6 +528,25 @@ pub(super) fn persist_input(
         .map_err(super::map_registry)?;
     agent.pending_input_at = None;
     Ok(())
+}
+
+/// Record the native handle during a drain, failing the turn on a deterministic rejection.
+/// # Errors
+/// Returns registry I/O failures so the handle is retried on the next poll.
+fn checkpoint_handle(
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
+    agent_id: &str,
+    agent: &mut super::LiveAgent,
+) -> Result<(), AgentManagerError> {
+    match persist_handle(registry, agent_id, agent) {
+        Err(error @ (AgentManagerError::Session | AgentManagerError::NotFound(_))) => {
+            tracing::warn!(provider = %agent.record.provider, agent_id = %agent_id,
+                error_kind = %error, "Native provider handle could not be recorded");
+            agent.pending = Some(AgentTurnEvent::Failed);
+            Ok(())
+        }
+        result => result,
+    }
 }
 
 pub(super) fn persist_handle(

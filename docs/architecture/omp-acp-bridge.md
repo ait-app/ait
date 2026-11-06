@@ -51,6 +51,11 @@ flowchart LR
 不会被客户端的归档/新建命令截获。文本编辑器保留 prefill、空答案和原文空白。
 决策及限制见 [ADR-211](../decisions/providers/adr-211-omp-command-catalog-and-completion.md)。
 
+宿主冲突和 TUI-only builtin 由 owning adapter 明确拒绝，第三方同名命令仍以 live 目录归属为准。
+只读查询使用独立请求关联与宿主控制结果卡，不覆盖主回合；BTW 流式记录使用可选侧问答视图，
+由原生 sidecar 恢复。宿主控制卡在原生历史协调时保留，原生日志仍只有一个 writer。详见
+[ADR-221](../decisions/providers/adr-221-omp-headless-commands-and-side-questions.md)。
+
 客户端在 initialize 的 `clientCapabilities._meta` 中设置 `ompNative: true`，
 桥接层以 `_meta.ompNative.version: 1` 宣告支持；这不是 OMP 的扩展要求。
 

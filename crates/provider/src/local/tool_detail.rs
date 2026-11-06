@@ -5,6 +5,18 @@ use std::borrow::Cow;
 use serde_json::{Value, json};
 
 const PREVIEW_BYTES: usize = 128 * 1024;
+/// Per-field budget for copied Claude text arguments such as file contents and edits.
+/// Two fields and a result preview stay below the Claude stream's 192 KiB item limit.
+const CLAUDE_FIELD_BYTES: usize = 32 * 1024;
+/// Budget for unrecognized Claude tool arguments and for their results.
+const CLAUDE_UNKNOWN_BYTES: usize = 64 * 1024;
+/// Permission prompt arguments that fit this budget are shown unchanged.
+const PERMISSION_INPUT_BYTES: usize = 64 * 1024;
+/// Per-field budget once permission prompt arguments exceed their budget.
+const PERMISSION_FIELD_BYTES: usize = 16 * 1024;
+/// Notice ending a shortened display preview whose complete value stays in the native transcript.
+pub(super) const MARKER: &str =
+    "\n[Output truncated; full output remains in the native transcript.]";
 
 mod command_actions;
 mod mcp;
@@ -87,18 +99,19 @@ pub(super) fn codex_error(native: &Value, failed: bool) -> Value {
 
 /// Project recognized native arguments into typed display fields.
 /// Process resources retain their native input instead of appearing as filesystem operations.
+///
+/// Copied text arguments such as commands, file contents, edits and plans are bounded display
+/// previews; complete arguments remain in the native transcript.
 pub(super) fn claude(name: &str, input: &Value) -> Value {
     if matches!(name, "Read" | "Edit" | "Write")
         && input["file_path"]
             .as_str()
             .is_some_and(|path| path.starts_with("proc://"))
     {
-        return unknown(input);
+        return claude_unknown(input);
     }
     let mut detail = match name {
-        "Bash" if input["command"].is_string() => {
-            json!({"type":"shell","command":input["command"]})
-        }
+        "Bash" if input["command"].is_string() => json!({"type":"shell"}),
         "Read" if input["file_path"].is_string() => {
             json!({"type":"read","filePath":input["file_path"]})
         }
@@ -116,10 +129,12 @@ pub(super) fn claude(name: &str, input: &Value) -> Value {
         }
         "WebFetch" if input["url"].is_string() => json!({"type":"fetch","url":input["url"]}),
         "Agent" | "Task" | "Workflow" => json!({"type":"sub_agent","log":"","actions":[]}),
-        "ExitPlanMode" if input["plan"].is_string() => json!({"type":"plan","text":input["plan"]}),
-        _ => return json!({"type":"unknown","input":input,"output":null}),
+        "ExitPlanMode" if input["plan"].is_string() => json!({"type":"plan"}),
+        _ => return claude_unknown(input),
     };
     for (source, target) in [
+        ("command", "command"),
+        ("plan", "text"),
         ("cwd", "cwd"),
         ("old_string", "oldString"),
         ("new_string", "newString"),
@@ -129,7 +144,7 @@ pub(super) fn claude(name: &str, input: &Value) -> Value {
         ("subagent_type", "subAgentType"),
     ] {
         if let Some(value) = input.get(source).and_then(Value::as_str) {
-            detail[target] = json!(value);
+            detail[target] = json!(truncate(value, CLAUDE_FIELD_BYTES, MARKER));
         }
     }
     for field in ["offset", "limit"] {
@@ -140,24 +155,57 @@ pub(super) fn claude(name: &str, input: &Value) -> Value {
     detail
 }
 
+/// Add a bounded display preview of a Claude tool `result` to its typed `detail`.
 pub(super) fn claude_result(detail: &mut Value, result: &Value) {
-    let output = output_text(result);
     let field = match detail["type"].as_str() {
         Some("shell") => "output",
         Some("read" | "search") => "content",
         Some("fetch") => "result",
         Some("sub_agent") => "log",
         Some("unknown") => {
-            detail["output"] = if result.is_string() {
-                json!(output)
-            } else {
-                result.clone()
+            detail["output"] = match result.as_str() {
+                Some(text) => json!(truncate(text, CLAUDE_UNKNOWN_BYTES, MARKER)),
+                None => mcp::bounded(result, CLAUDE_UNKNOWN_BYTES),
             };
             return;
         }
         _ => return,
     };
-    detail[field] = json!(output);
+    detail[field] = json!(output_text(result));
+}
+
+/// Project native tool arguments for a host permission prompt within a display budget.
+///
+/// # Arguments
+///
+/// * `input` - Complete native arguments; callers retain them to answer the native request.
+///
+/// # Returns
+///
+/// `input` unchanged when it fits. Larger objects keep every top-level field, with marked text
+/// prefixes and marked JSON previews, so the prompt still names the path or command it approves.
+/// Any other oversized shape becomes one marked JSON preview.
+pub(super) fn input_preview(input: &Value) -> Value {
+    let bounded = mcp::bounded(input, PERMISSION_INPUT_BYTES);
+    let (true, Some(fields)) = (bounded.is_string(), input.as_object()) else {
+        return bounded;
+    };
+    let projected = fields
+        .iter()
+        .map(|(key, value)| {
+            let preview = match value.as_str() {
+                Some(text) => json!(truncate(text, PERMISSION_FIELD_BYTES, MARKER)),
+                None => mcp::bounded(value, PERMISSION_FIELD_BYTES),
+            };
+            (key.clone(), preview)
+        })
+        .collect();
+    // Many fields can still exceed the prompt budget; bound the whole projection as a last resort.
+    mcp::bounded(&Value::Object(projected), 2 * PERMISSION_INPUT_BYTES)
+}
+
+fn claude_unknown(input: &Value) -> Value {
+    json!({"type":"unknown","input":mcp::bounded(input, CLAUDE_UNKNOWN_BYTES),"output":null})
 }
 
 pub(super) fn codex(native: &Value) -> Value {
@@ -244,15 +292,26 @@ fn output_text(value: &Value) -> String {
 }
 
 fn preview(text: &str) -> Cow<'_, str> {
-    const MARKER: &str = "\n[Output truncated; full output remains in the native transcript.]";
-    if text.len() <= PREVIEW_BYTES {
+    truncate(text, PREVIEW_BYTES, MARKER)
+}
+
+/// Bound `text` to `limit` bytes, ending a shortened prefix with `marker`.
+///
+/// # Arguments
+///
+/// * `text` - Complete display text.
+/// * `limit` - Maximum UTF-8 byte length of the result, including `marker`.
+/// * `marker` - Notice appended when `text` is shortened; it should fit within `limit`.
+///
+/// # Returns
+///
+/// `text` unchanged when it fits, otherwise its longest char-aligned prefix plus `marker`.
+pub(super) fn truncate<'a>(text: &'a str, limit: usize, marker: &str) -> Cow<'a, str> {
+    if text.len() <= limit {
         return Cow::Borrowed(text);
     }
-    let mut end = PREVIEW_BYTES - MARKER.len();
-    while !text.is_char_boundary(end) {
-        end -= 1;
-    }
-    Cow::Owned(format!("{}{MARKER}", &text[..end]))
+    let end = text.floor_char_boundary(limit.saturating_sub(marker.len()));
+    Cow::Owned(format!("{}{marker}", &text[..end]))
 }
 
 #[cfg(test)]

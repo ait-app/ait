@@ -11,7 +11,8 @@ async fn fixture(ignore_term: bool) -> (tempfile::TempDir, Transport, u32) {
         std::fs::write(directory.path().join("ignore-term"), "").unwrap();
     }
     let client = PiClient::new(program);
-    let mut transport = Transport::spawn(&client, directory.path().to_str().unwrap(), &[]).unwrap();
+    let mut transport =
+        Transport::spawn(&client, directory.path().to_str().unwrap(), &[], None).unwrap();
     let ready = tokio::time::timeout(Duration::from_secs(5), transport.receive())
         .await
         .unwrap()

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useSessionStore } from "@/stores/session-store";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { ProviderNativeActions } from "./provider-native-actions";
+import { ProviderSideQuestions } from "./provider-side-questions";
 
 // Remember native editor deliveries across navigation without caching their text or auth URLs.
 const appliedEditors = new Map<string, string>();
@@ -47,7 +48,12 @@ export function ProviderRuntimePanel({
   const widgets = state.widgets.filter((widget) => widget.placement === placement);
   if (
     !widgets.length &&
-    (!above || (!state.title && !state.statuses.length && !state.link && !state.actions?.length))
+    (!above ||
+      (!state.title &&
+        !state.statuses.length &&
+        !state.link &&
+        !state.actions?.length &&
+        !state.sideQuestions))
   )
     return null;
   return (
@@ -64,6 +70,15 @@ export function ProviderRuntimePanel({
         />
       ) : null}
       {above && state.title ? <Text style={styles.title}>{state.title}</Text> : null}
+      {above && state.sideQuestions ? (
+        <ProviderSideQuestions
+          key={`${serverId}:${agentId}`}
+          state={state.sideQuestions}
+          serverId={serverId}
+          agentId={agentId}
+          disabled={blocked}
+        />
+      ) : null}
       {above &&
         state.statuses.map((status) => (
           <Text key={status.key} style={styles.text} selectable>

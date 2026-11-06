@@ -1,6 +1,6 @@
 # 原生附件、ZIP 交付与 OMP 模型角色配置
 
-日期：2026-11-02 开始，最终复验跨至 2026-11-03。范围：`ac8e7e33` 加当前工作树；Linux x86_64。
+日期：2026-11-02 开始，补充复验至 2026-11-06。范围：各节标明的提交及当前工作树；Linux x86_64。
 
 ## DSH 与 OpenCode 补充交付
 
@@ -279,8 +279,182 @@ Provider Clippy、前端类型、协议/SDK 构建、oxlint、格式和文档链
 预设追加检查：OMP 与配置补丁 134 通过、16 忽略，后续管理专项 5 通过；前端 41 通过。
 官方 18.14.0 发行二进制经官方 SHA256SUMS 验证，预设专项 1 项通过；系统官方 18.17.0 的
 角色/预设专项 2 项通过。上述检查范围有重叠，不累加为覆盖率。类型、Clippy、格式与文档检查通过。
-新增预设界面的桌面端到端证据待最终整合后补齐；此前桌面证据不冒充本次新界面验收。
+这一早期追加检查尚未包含新增预设界面的桌面验收；最终整合后的真实模型与预设界面证据见下文，
+不以此前 loopback 验收冒充本轮真实模型调用。
 本轮覆盖率 **not measured**：未请求；如需测量，限定 OMP、配置补丁及对应前端范围。
 
 补充：官方 OMP 18.14.0 的模型角色解析、继承重置与重新打开真实专项 1 项通过；原生 UI/卡片
 组件 8 项通过。使用隔离 profile 与 loopback 模型，不调用真实账户模型或修改用户全局配置。
+
+## 2026-11-06：完整宿主命令审计
+
+对应 [ADR-221](../../decisions/providers/adr-221-omp-headless-commands-and-side-questions.md)。
+审计固定官方 OMP 18.14.0 源码
+[`31147f9d`](https://github.com/can1357/oh-my-pi/tree/31147f9d1a76608549821c3759f8487b4d66c72d/packages/coding-agent/src/slash-commands)
+及已核对发行摘要的官方二进制，不使用系统中可能有补丁的副本。完整注册表包含 **88 个根命令、
+9 个别名、136 个声明子命令**，包括单独导入的 `seance` 与计算得到的三个 compact 模式；
+此前临时记录中的 78/87 均不是完整数量。官方 RPC 目录实际导出其中 46 个 builtin。
+
+### 根命令与别名的完整分组
+
+下表覆盖全部根命令；“允许”不是任意参数已实测成功的承诺。只读形式使用独立控制通道，
+其他原生写操作仍经过普通调度和原生校验。未知新增 builtin 默认拒绝，真实第三方 owner 优先。
+
+| 策略                      | 官方根命令                                                                                                                                                                                                                                                                                                  |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 允许的 26 个文本 handler  | advisor、export、dump、todo、session、jobs、usage、changelog、tools、context、mcp、compact、retry、memory、pin、marketplace、plugins、reload-plugins、add-dir、remove-dir、dirs、forget-approvals、skillful、extended-context、computer、ratchet                                                            |
+| 宿主冲突或外部服务：20 个 | security、model、switch、fast、slow、prewalk、modelpreset、effort、trace、share、browser、stats、ssh、fresh、shake、handoff、rename、move、wt、force                                                                                                                                                        |
+| 未导出 TUI handler：41 个 | settings、setup、plan、plan-review、vibe、goal、guided-goal、loop、queue、collab、join、leave、copy、open、hotkeys、extensions、agents、git、local、hub、branch、fork、tree、login、logout、new、clear、delete、seance、resume、tan、omfg、cleanse、debug、exit、restart、skills、live、record、pause、quit |
+| 专门 RPC 适配：1 个       | btw；文本 TUI handler 不透传，改用官方 btw / btw_cancel / get_btw_history                                                                                                                                                                                                                                   |
+
+九个别名逐项跟随实际 owner：`setup → providers`、`model → models`、
+`extensions → status`、`hub → subagents`、`branch → rewind`、`wt → worktree`、
+`force → force:`、`quit → q` 拒绝；`plugins → plugin` 保留。
+真实 extension/custom 注册同名 `/usage` 或 `/advisor status` 时不套用 builtin 的只读名单。
+绝对路径、未知普通斜杠文本和参数中的同名值不被误判为根命令。
+
+### 子命令审计
+
+所有 136 项声明均按其根 handler 审阅；根命令拒绝时其全部子命令也拒绝。允许根命令中另拒绝：
+`advisor configure`；`session delete/pin`；`todo edit/expand/collapse`；
+`mcp unauth/smithery-login/smithery-logout/reconnect/notifications`。
+这些入口分别依赖终端界面或绕过宿主会话/账号所有权；菜单、手工输入和已协商补全均使用同一边界。
+保留其他原生子命令及参数，不声称逐个执行了 destructive、网络安装、OAuth 或设备操作。
+裸 `/advisor` 会切换开关，**不是**并行只读查询；`/advisor status/dump` 才进入独立控制通道。
+`/prewalk` 会切换用途模型，`/trace` 会启动统计服务，不能因它们导出了文本 handler 就放行。
+
+### 官方二进制安全执行：27 个形式
+
+通过隔离 HOME、原生配置、无凭据环境和独立 cwd，禁用工具、扩展、技能和上下文发现。
+仅提供指向本机关闭端口的模型元数据使 RPC 能启动，没有运行模型服务器或 mock 模型，
+没有发送推理请求。以下 **26 个允许根命令及 plugin 别名**均实际经过官方 prompt handler，
+回执全部为 `agentInvoked: false`，未观察到模型启动；这属于原生 handler 审计，**不是 LLM 验收**。
+
+| 实际输入                                                    | 实际结果及限制                                                                                                                                                               |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/advisor status`                                           | 返回 advisor disabled。                                                                                                                                                      |
+| `/export audit.html`                                        | 本轮 ephemeral 审计明确返回不能导出 in-memory session；持久会话 HTML 成功证据见上文“最终桌面验收”：Electron 实际写盘 46,529 字节并与原生导出摘要一致。不把本次拒绝计为成功。 |
+| `/dump`                                                     | 返回当前原生 transcript；不公开完整系统提示或运行数据。                                                                                                                      |
+| `/todo`                                                     | 返回当前没有 todos。                                                                                                                                                         |
+| `/session info`                                             | 返回真实隔离 session ID 与 cwd。                                                                                                                                             |
+| `/jobs`                                                     | 返回没有后台任务。                                                                                                                                                           |
+| `/usage show`                                               | 返回零用量报告。                                                                                                                                                             |
+| `/changelog last 1`                                         | 返回 18.14.0 发布记录。                                                                                                                                                      |
+| `/tools`                                                    | 返回实际启用工具目录；没有执行工具。                                                                                                                                         |
+| `/context`                                                  | 返回实际上下文用量。                                                                                                                                                         |
+| `/mcp list`                                                 | 返回没有已配置 MCP server。                                                                                                                                                  |
+| `/compact snapcompact unexpected-focus`                     | 明确拒绝不允许的 focus 参数；不算完成压缩。                                                                                                                                  |
+| `/retry`                                                    | 返回 Nothing to retry；没有伪造可重试回合。                                                                                                                                  |
+| `/memory view`                                              | 返回 memory payload 为空。                                                                                                                                                   |
+| `/pin ait-audit-nonexistent-session`                        | 明确返回 session not found；没有更改用户会话。                                                                                                                               |
+| `/marketplace help`                                         | 返回原生帮助，不访问 marketplace。                                                                                                                                           |
+| `/plugins list`、`/plugin list`                             | 两种形式均返回没有安装插件。                                                                                                                                                 |
+| `/reload-plugins`                                           | 返回 Plugins reloaded，作用域仅隔离 profile。                                                                                                                                |
+| `/add-dir <隔离目录>/extra`、`/remove-dir <隔离目录>/extra` | 另行实际添加再移除临时目录，两次 `/dirs` 分别确认存在与消失；只修改隔离 profile，四个回执均 `agentInvoked:false`。                                                           |
+| `/dirs`                                                     | 仅返回实际隔离 cwd。                                                                                                                                                         |
+| `/forget-approvals`                                         | 清理隔离 profile 的空授权记录，用户配置不变。                                                                                                                                |
+| `/skillful status`                                          | 返回实际 skill listing 状态。                                                                                                                                                |
+| `/extended-context status`                                  | 返回 off。                                                                                                                                                                   |
+| `/computer status`                                          | 返回 disabled；没有访问显示器。                                                                                                                                              |
+| `/ratchet`                                                  | 明确返回缺少 eval/task 工具；不算执行实验或推理。                                                                                                                            |
+
+运行命令为 `python /tmp/ait-pr568-command-audit.py`。完整私有结果保存在
+`target/provider-parity-validation/2026-11-06/official-command-execution.json`，
+注册表审计在同目录 `official-command-matrix.json`；临时脚本和原生数据不提交。
+没有在真实用户 profile 执行 logout、新建/删除会话、切换 worktree、对外分享或权限写入。
+目录增删实测命令：`python /tmp/ait-pr568-command-audit.py --directories`；四步实际结果在同目录
+`official-command-directory-execution.json`。原生工作目录及用户 profile 未改动。
+
+### Test coverage
+
+**not measured**：未请求覆盖率。上述 handler 执行数量不是测试覆盖率，也不是模型调用成功数；
+如需测量，只限定 OMP 命令、侧问答和宿主时间线协调路径。
+
+## 2026-11-06 至 07：真实模型与新增界面
+
+Linux Electron、共享客户端和当前 Rust daemon，连接未经修改的官方 OMP 18.14.0。
+使用隔离 profile 中已有可用渠道的真实 `futureppo/deepseek-v4.1-flash`，不使用 mock、
+loopback 回复或合成侧答案。所有凭据及完整原生运行文件留在私有运行目录，不提交。
+
+| 场景                | 实际结果与精选截图                                                                                                                                                                                                                                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 真实模型与预设/角色 | `real_work` 的 default、vision、advisor 及 smol 绑定显示在真实会话设置；真实模型回答可见。[预设与角色](../../assets/providers/omp/real-model-roles-preset.png)、[真实回答](../../assets/providers/omp/real-model-response.png)。                                                                                                           |
+| 主任务与侧问答并行  | 主任务仍为 running，侧面板收到真实流式回答；主时间线仅保留主回答，未混入侧 topic。[并行截图](../../assets/providers/omp/real-main-side-parallel.png)。                                                                                                                                                                                     |
+| 侧问答取消          | 首个真实侧增量出现后取消，取消前后主任务仍为 running，turn ID 保持 `8da76ed6-acd3-4797-8dfc-07b256ba2cdb`。[取消截图](../../assets/providers/omp/real-side-cancel.png)。                                                                                                                                                                   |
+| 原生历史恢复与追问  | 实际重启隔离 daemon 后，runtime/persistence native ID 均保持 `01a1b16f-35c6-7793-a2f7-4ad22e33ff79`；恢复原生 sidecar，`FOLLOWUP_AFTER_RESTART_568` 返回完整真实回答。[恢复后追问](../../assets/providers/omp/real-side-followup.png)。本步经 SDK 直接发送 `/btw`，当时正常 slash 入口暴露的目录 schema 失败单独记录，不冒充该入口已通过。 |
+
+真实模型曾在侧回答中复述尚未完成的主上下文；原生 `get_btw_history` 包含同样文本，
+Ait 不删除或重写模型内容。单次 `SIDE_SHORT_568` 的原生 sidecar 为 `status: complete`、
+`answer: ""`，界面按原始记录显示完成但无正文，**该次不计模型回答成功**，不添加 fallback。
+
+恢复曾失败的原因是测试 HOME 等于 cwd：官方 OMP 自动切到 `/tmp`，而 Ait 正确拒绝不匹配的
+原生日志。所有 RPC 启动显式传入 `--cwd` 后，官方 HOME=cwd 两项定向检查通过；
+真实模型后的重启执行与侧问答历史也已核对。早期只看缓存 native ID 的离线截图不算恢复成功。
+
+### 预设表单与历史界面证据的范围
+
+2026-11-06 早期隔离桌面检查还覆盖预设保存后草稿继续可编辑、新建 Agent 草稿成套应用和
+Profile 同步模型/推理/角色。私有证据位于 `omp-roles-ui-X6ymTd/`：
+`06-preset-saved-on-disk.png`、`09-draft-preset-complete-configuration.png`、
+`10-profile-preset-atomic-selection.png`，另有保存/删除回执及 Profile 再打开截图。
+这些操作由真实官方 OMP 执行，但使用无真实账户的测试模型配置；不把它们称为真实 LLM 验收，
+也不使用原生恢复失败的早期截图证明重启成功。最终真实模型与角色证据在上一表单列。
+
+结构化 Goal 的历史实际模型截图已人工查看并确认不含凭据，按原始日期引用，
+不冒充当前工作树的全平台复验：
+
+- [结构化 DSH Goal 完成卡](../../assets/providers/omp/historical-dsh-goal-card.png)：
+  2026-10-31，Goal 状态、目标、轮数与操作按钮；原图显示实际 DeepSeek 模型会话。
+
+### 最终正常入口、查询隔离与真实压缩
+
+修复缺失 `subcommands` 被 Rust 可变索引写成 `null` 的实际 schema 错误后，Node SDK 命令目录
+为 35 项、零 null，真实 App 的正常 slash `/btw` 成功打开历史；没有放宽 schema 或依赖绕过入口。
+真实主任务的 `/usage` 前、完成后和 `/status` 拒绝后三次读取均为 running，
+同一 turn `fb63271e-d4dc-4ac3-b67b-3744e9960cfb`；usage 卡返回 56,165 tokens。
+`/status` 明确显示需要 TUI，原生 journal 没有该 user prompt，主任务继续执行。
+见[正常入口查询与拒绝](../../assets/providers/omp/real-live-usage-status.png)。
+
+独立真实模型会话经过正常用户输入及实际回答积累上下文后，`/compact` 实际成功：
+**28,023 → 26,845 tokens，减少 1,178**。此前小会话的 Nothing to compact 与非法 focus
+拒绝均不计成功；成功路径没有使用 mock 或修改原生模型回答。
+见[真实压缩完成](../../assets/providers/omp/real-compact-complete.png)。
+
+在已由真实模型产生持久记录的现有会话实际点击原生统计与 HTML 导出，均返回原生成功结果：
+[真实会话统计](../../assets/providers/omp/real-native-statistics.png)、
+[真实 HTML 导出](../../assets/providers/omp/real-native-html-export.png)。
+没有为截图新增付费问答；最终评审图不再使用早期 loopback seed 图。
+HTML 的原始 Electron 写盘/摘要证据仍按其历史范围引用，不把本次导出入口截图等同下载校验。
+
+### 最终定向 Test execution
+
+- **225 通过、0 失败、16 忽略**：OMP adapter、宿主时间线、直接输入调度及 AgentSession 端口。
+  其中完整拒绝矩阵实际检查 61 个根命令、8 个别名及 11 个受限子命令均产生独立错误卡，
+  原生请求日志字节不变；不是复制 allowlist 常量后检查相等。
+- 官方 OMP 18.14.0 roles/preset 专项 **2 通过**，包括 HOME=cwd、原生角色/继承、持久恢复
+  和限定名称的预设管理；测试使用本地协议桩形成模型日志，**不计真实 LLM 验收**。
+- 同名 extension/custom 正常执行、inactive query 不创建主 turn、最终 ACK 后独立结果卡可见、
+  重复 timeline.get 与 daemon/存储恢复不丢失或复制卡片均通过。
+- 前端侧面板/原生 UI 组件 **6 通过**，Provider UI 协议 **3 通过**；本轮前端类型检查和
+  四个相关文件 oxlint **0 警告、0 错误**。这些是修改前端后的既有定向结果，不冒充重新运行。
+- daemon 构建、Rust fmt、Provider/API/daemon 全目标 Clippy `--no-deps` 通过；
+  本地工具链沿用既有 `assert_is_empty` 例外。仅依赖 filesystem 的已有 `fetch_update` 弃用警告。
+- 早期 **151 通过、2 失败、16 忽略** 是过时目录/argv 断言的失败记录，不作为最终通过；
+  后续 voice 幂等回执排序回归及缺失字段 schema 错误亦已修复并纳入最终检查。
+- 本地没有执行完整 Rust workspace 测试或覆盖率。
+
+```sh
+CARGO_TARGET_DIR=/home/KirisameLonnet/Developers/ait/target/provider-parity-build \
+  cargo test --locked -q -p provider --lib -- \
+  local::omp storage::timeline service::agent_execution::tests::delivery ports::agent_session
+CARGO_TARGET_DIR=/home/KirisameLonnet/Developers/ait/target/provider-parity-build \
+  AIT_TEST_OMP_BIN=/home/KirisameLonnet/Developers/ait/target/provider-parity-validation/2026-11-06/official-omp-18.14/omp-linux-x64 \
+  cargo test --locked -q -p provider --lib -- --ignored local::omp::tests::installed::model_roles
+CARGO_TARGET_DIR=/home/KirisameLonnet/Developers/ait/target/provider-parity-build \
+  cargo clippy --locked -q -p provider -p api -p daemon --all-targets --no-deps -- \
+  -D warnings -A clippy::assert_is_empty
+```
+
+本节源码为整合 `main@a8e8a24f` 的工作树，后续如只整合工作流变化，不重复上述 Rust 范围；
+PR/CI 以最终提交为准。观测命令与结果摘要保存在 `/tmp/ait-pr568-final-backend-verification.log`，
+不将摘要称为原始进程日志。覆盖率仍为 **not measured**：未请求，测试数量不代替覆盖率。

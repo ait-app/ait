@@ -125,4 +125,30 @@ describe("TerminalInputModeTracker", () => {
 
     expect(tracker.supportsModifiedEnter()).toBe(false);
   });
+
+  it("applies Kitty set-bits and clear-bits update modes", () => {
+    const tracker = new TerminalInputModeTracker();
+
+    tracker.feed("\x1b[=1u");
+    expect(tracker.getKittyKeyboardFlags()).toBe(1);
+
+    expect(tracker.feed("\x1b[=4;2u").changed).toBe(true);
+    expect(tracker.getKittyKeyboardFlags()).toBe(5);
+
+    expect(tracker.feed("\x1b[=1;3u").changed).toBe(true);
+    expect(tracker.getKittyKeyboardFlags()).toBe(4);
+
+    tracker.feed("\x1b[=4;3u");
+    expect(tracker.supportsModifiedEnter()).toBe(false);
+  });
+
+  it("tracks sequences split right after ESC", () => {
+    const tracker = new TerminalInputModeTracker();
+
+    tracker.feed("output\x1b");
+    const result = tracker.feed("[?2004h");
+
+    expect(result.changed).toBe(true);
+    expect(tracker.getState().bracketedPaste).toBe(true);
+  });
 });

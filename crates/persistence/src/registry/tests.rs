@@ -150,7 +150,10 @@ fn hooks_capture_locked_before_image_and_failed_post_commit_requires_owner_recov
         store.mutate_with(
             update,
             |before| {
-                assert_eq!(before, &[record("one", 1.0)]);
+                assert_eq!(
+                    before.values().map(AsRef::as_ref).collect::<Vec<_>>(),
+                    [&record("one", 1.0)]
+                );
                 Ok(())
             },
             || Err(Error::Io)

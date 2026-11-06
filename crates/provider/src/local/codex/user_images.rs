@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use serde_json::{Value, json};
 
-use crate::local::images::ImageStore;
+use crate::local::images::{ImageStore, UNAVAILABLE_IMAGE};
 use crate::ports::agent_session::AgentSessionError;
 
 const LAYOUT_HEADER: &str = "Image layout: overviews show the full image; detail crops preserve readable pixels and overlap. Crop coordinates refer to the top-left of the original image.";
@@ -38,7 +38,7 @@ pub(super) fn project(native: &Value, images: &ImageStore) -> Result<Value, Agen
             match images.source(part) {
                 Ok(source) => sources.push(source),
                 // Older native histories can omit the image URL entirely.
-                Err(_) => text.push("[Image attachment]"),
+                Err(_) => text.push(UNAVAILABLE_IMAGE),
             }
         } else if let Some(value) = part["text"].as_str() {
             text.push(value);

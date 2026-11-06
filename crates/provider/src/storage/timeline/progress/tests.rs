@@ -285,6 +285,25 @@ fn invalid_progress_and_oversized_fragments_are_rejected() {
 }
 
 #[test]
+fn text_less_deltas_and_completions_are_invalid_rather_than_storage_failures() {
+    let timeline = Timeline::memory().unwrap();
+    let mut textless = entry("unused");
+    textless.item.as_object_mut().unwrap().remove("text");
+    assert_eq!(
+        timeline.progress("a", "codex", "one", &textless),
+        Err(ErrorCode::InvalidMessage)
+    );
+    assert_eq!(
+        timeline.append("a", "codex", std::slice::from_ref(&textless)),
+        Err(ErrorCode::InvalidMessage)
+    );
+    timeline
+        .progress("a", "codex", "one", &entry("Hello"))
+        .unwrap();
+    assert_eq!(timeline.read("a").unwrap().1.len(), 1);
+}
+
+#[test]
 fn large_progress_and_accumulated_unicode_text_survive_completion() {
     let timeline = Timeline::memory().unwrap();
     let text = "界".repeat(100 * 1024);

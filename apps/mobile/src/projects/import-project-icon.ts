@@ -8,6 +8,10 @@ const MAX_ICON_CANDIDATES = 8;
 type UploadSource = Extract<ProjectIconSource, { type: "upload" }>;
 type FetchIcon = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
+function isAllowedHttpUrl(url: URL): boolean {
+  return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password;
+}
+
 function parseHttpUrl(value: string): URL {
   let url: URL;
   try {
@@ -15,7 +19,7 @@ function parseHttpUrl(value: string): URL {
   } catch {
     throw new Error("Enter a valid website or image URL");
   }
-  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
+  if (!isAllowedHttpUrl(url)) {
     throw new Error("URL must use HTTP or HTTPS without credentials");
   }
   return url;
@@ -50,7 +54,9 @@ function iconCandidates(html: string, pageUrl: URL): URL[] {
     const type = parseTagAttribute(tag, "type")?.toLowerCase() ?? "";
     if (!href || !rel.includes("icon") || type.includes("svg") || href.endsWith(".svg")) continue;
     try {
-      candidates.push(new URL(href, pageUrl));
+      // The page is untrusted: its icon links get the same scheme policy as typed URLs.
+      const candidate = new URL(href, pageUrl);
+      if (isAllowedHttpUrl(candidate)) candidates.push(candidate);
     } catch {
       // Try the next declared icon and then the conventional fallback.
     }

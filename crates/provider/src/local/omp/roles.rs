@@ -456,6 +456,19 @@ pub(super) fn overrides(config: &StoredAgentConfig) -> BTreeMap<String, String> 
         .collect()
 }
 
+/// Whether two selections produce the same native role and default-thinking overlay.
+pub(super) fn same_overlay(left: &StoredAgentConfig, right: &StoredAgentConfig) -> bool {
+    let thinking = |config: &StoredAgentConfig| {
+        config
+            .feature_values
+            .as_ref()
+            .and_then(|values| values.get("modelPresetThinking"))
+            .filter(|value| !value.is_null())
+            .cloned()
+    };
+    overrides(left) == overrides(right) && thinking(left) == thinking(right)
+}
+
 /// Render persisted overrides before the native owner or catalog is available.
 pub(super) fn stored_features(config: &StoredAgentConfig) -> Vec<Value> {
     let mut roles: BTreeMap<String, String> = BUILTINS

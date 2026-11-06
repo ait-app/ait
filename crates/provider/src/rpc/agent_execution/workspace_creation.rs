@@ -8,6 +8,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::{CreateRequest, ErrorCode, ExecutionState, parse_creation};
+use crate::protocol::prompt::AgentPrompt;
 use crate::support::rpc::decode;
 
 /// Validate an embedded Agent before Workspace side effects and return its secret-free intent.
@@ -27,7 +28,7 @@ pub fn validate(params: &Value) -> Result<Value, ErrorCode> {
     {
         return Err(ErrorCode::InvalidMessage);
     }
-    let (request, intent) = parse_creation(params.clone())?;
+    let (request, _, intent) = parse_creation(params.clone())?;
     if let Some(id) = request.agent_id {
         uuid::Uuid::parse_str(&id).map_err(|_| ErrorCode::InvalidMessage)?;
     }
@@ -49,8 +50,8 @@ impl ExecutionState {
         let input: Input = decode(params)?;
         let request = self.workspace_agent_request(&input);
         let result = match request {
-            Ok((request, workspace)) => {
-                self.register_creation(request, &input.creation, workspace, false)
+            Ok((request, prompt, workspace)) => {
+                self.register_creation(request, prompt, &input.creation, workspace, false)
                     .await
             }
             Err(error) => Err(error),
@@ -79,8 +80,11 @@ impl ExecutionState {
         result
     }
 
-    fn workspace_agent_request(&self, input: &Input) -> Result<(CreateRequest, String), ErrorCode> {
-        let (mut request, _) = parse_creation(input.agent.clone())?;
+    fn workspace_agent_request(
+        &self,
+        input: &Input,
+    ) -> Result<(CreateRequest, Option<AgentPrompt>, String), ErrorCode> {
+        let (mut request, prompt, _) = parse_creation(input.agent.clone())?;
         let id = input
             .creation
             .workspace_id
@@ -138,7 +142,7 @@ impl ExecutionState {
                 .labels
                 .insert("paseo.parent-agent-id".into(), caller.id);
         }
-        Ok((request, id.clone()))
+        Ok((request, prompt, id.clone()))
     }
 }
 

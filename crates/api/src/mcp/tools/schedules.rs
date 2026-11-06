@@ -12,6 +12,7 @@ use crate::mcp::catalog::Tool;
 
 /// Create a Workspace-owned schedule from `arguments` and optional `caller` in `state`.
 /// `heartbeat` selects the calling Agent as target instead of a new Agent per occurrence.
+/// A `botScope` set by scoped confinement passes through to the scheduler unchanged.
 /// # Errors
 /// Returns invalid context, duration, provider settings or existing scheduler failures.
 pub(super) async fn create(
@@ -41,6 +42,10 @@ pub(super) async fn create(
         let mut config = json!({"provider":provider,"cwd":take(&mut arguments,"cwd")?});
         if let Some(model) = model {
             config["model"] = json!(model);
+        }
+        // Only scoped confinement supplies a mode; the tool schema does not accept one.
+        if let Some(mode) = take(&mut arguments, "modeId")? {
+            config["modeId"] = mode;
         }
         json!({"type":"new-agent","config":config})
     };

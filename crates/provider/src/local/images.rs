@@ -11,6 +11,9 @@ use sha2::{Digest, Sha256};
 
 use crate::ports::agent_session::AgentSessionError;
 
+/// Display text for a native image whose source is missing or can no longer be read.
+pub(super) const UNAVAILABLE_IMAGE: &str = "[Image attachment]";
+
 #[derive(Debug, Clone)]
 pub(super) struct ImageStore {
     directory: PathBuf,

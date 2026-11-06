@@ -24,3 +24,16 @@ export function buildWorkspaceCreationRequestKey(input: WorkspaceCreationRequest
       : null,
   ]);
 }
+
+/**
+ * Only a request that creates no agent alongside the workspace may reuse one. The cached result
+ * carries no agent (a failed terminal launch) or a previous request's agent, so an agent request
+ * served from it would fail with "returned no agent" or resolve to the wrong agent.
+ */
+export function canReuseCreatedWorkspace(input: {
+  cachedRequestKey: string | null;
+  requestKey: string;
+  createsAgent: boolean;
+}): boolean {
+  return !input.createsAgent && input.cachedRequestKey === input.requestKey;
+}

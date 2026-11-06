@@ -8,6 +8,7 @@ import time
 import uuid
 
 args = sys.argv[1:]
+btw_records = []
 cwd = os.getcwd()
 root = Path(os.environ['PI_CODING_AGENT_DIR'])
 root.mkdir(parents=True, exist_ok=True)
@@ -162,6 +163,9 @@ for line in sys.stdin:
     elif kind == 'complete':
         response(command, json.loads((root / 'completion.json').read_text()))
     elif kind == 'get_state':
+        if active and (root/'finish-wait').exists():
+            (root/'finish-wait').unlink()
+            finish()
         if pending_async and (root / 'release-settlement').exists():
             pending_async = False
             emit({'type': 'agent_start'})
@@ -205,8 +209,45 @@ for line in sys.stdin:
         response(command)
     elif kind == 'get_subagents':
         response(command, {'subagents': []})
+    elif kind == 'get_btw_history':
+        saved = root/'btw-history-fixture.json'
+        if saved.exists():
+            btw_records = json.loads(saved.read_text())
+        response(command, {'records':btw_records})
+    elif kind == 'btw':
+        previous = next((entry for entry in btw_records if entry['id'] == command.get('recordId')),None)
+        turn = {'question':command['question'],'answer':'','status':'running','createdAt':int(time.time()*1000),'updatedAt':int(time.time()*1000)}
+        if previous:
+            previous.setdefault('followUps',[]).append(turn)
+            record = previous
+        else:
+            record = {'id':str(uuid.uuid4()),**turn}
+            btw_records.insert(0,record)
+            turn = record
+        emit({'type':'btw_record','record':record})
+        response(command,{'record':record})
+        if not command['question'].startswith('hold'):
+            emit({'type':'btw_delta','recordId':record['id'],'delta':'Native side answer'})
+            turn['answer'] = 'Native side answer'
+            turn['status'] = 'complete'
+            turn['updatedAt'] += 1
+            emit({'type':'btw_record','record':record})
+        (root/'btw-history-fixture.json').write_text(json.dumps(btw_records))
+    elif kind == 'btw_cancel':
+        cancelled = False
+        for record in btw_records:
+            turn = record.get('followUps',[record])[-1]
+            if turn['status'] == 'running' and (not command.get('recordId') or command['recordId'] == record['id']):
+                turn['status'] = 'cancelled'
+                turn['updatedAt'] += 1
+                emit({'type':'btw_record','record':record})
+                cancelled = True
+        (root/'btw-history-fixture.json').write_text(json.dumps(btw_records))
+        response(command,{'cancelled':cancelled})
     elif kind == 'get_available_commands':
         commands = [{'name': 'review', 'description': 'Review', 'source': 'skill'}]
+        if (root/'side-commands').exists():
+            commands.extend([{'name':'usage','source':'builtin'},{'name':'status','source':'extension'}])
         if not (root/'missing-preset-builtin').exists():
             commands.append({'name':'modelpreset','description':'Model presets','source':'builtin'})
         if (root/'plugins.json').exists():
@@ -225,6 +266,10 @@ for line in sys.stdin:
         finish()
     elif kind == 'prompt':
         text = command['message']
+        if text == '/usage' and (root/'side-commands').exists():
+            emit({'type':'command_output','text':'Native usage: 123 tokens'})
+            response(command,{'agentInvoked':False})
+            continue
         current_prompt = text
         prompt_id = command.get('id')
         if text == '/ait-read-model-preset-default':
@@ -270,8 +315,12 @@ for line in sys.stdin:
             emit({'type':'extension_ui_request','id':'dialog-1',**dialog})
             continue
         plugins = json.loads((root/'plugins.json').read_text()) if (root/'plugins.json').exists() else []
-        plugin = next((entry for entry in plugins if text == '/'+entry['name']), None)
+        plugin = next((entry for entry in plugins if text == '/'+entry['name'] or text.startswith('/'+entry['name']+' ')), None)
         if plugin:
+            if 'directOutput' in plugin:
+                emit({'type':'command_output','text':plugin['directOutput']})
+                response(command, {'agentInvoked':False})
+                continue
             pending_plugin = (command, plugin)
             emit({'type':'extension_ui_request','id':'plugin-question','method':'select',
                   'title':plugin['description'],'options':['A, B','C']})

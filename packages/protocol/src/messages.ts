@@ -304,6 +304,13 @@ const AgentModelDefinitionSchema = z.object({
   defaultThinkingOptionId: z.string().optional(),
 }) satisfies z.ZodType<AgentModelDefinition>;
 
+export const BotSessionSupportSchema = z.object({
+  instructions: z.enum(["system_prompt", "turn_prefix"]),
+  readOnlyMode: z.string().nullable(),
+  toolPreapproval: z.boolean(),
+  aitTools: z.boolean(),
+});
+
 export const ProviderSnapshotEntrySchema = z.object({
   supportsRealtimeVoice: z.boolean().optional(),
   supportsSessionImport: z.boolean().optional(),
@@ -319,6 +326,8 @@ export const ProviderSnapshotEntrySchema = z.object({
   description: z.string().optional(),
   iconSvg: z.string().optional(),
   defaultModeId: z.string().nullable().optional(),
+  // Absent on hosts that predate Bot sessions.
+  botSession: BotSessionSupportSchema.optional(),
 });
 
 export const CompactProviderSnapshotModelSchema = AgentModelDefinitionSchema.omit({
@@ -885,6 +894,37 @@ const AgentActiveTurnPayloadSchema = z.object({
 });
 
 export const ProviderUiStateSchema = z.object({
+  sideQuestions: z
+    .object({
+      records: z
+        .array(
+          z.object({
+            id: z.string().min(1).max(256),
+            question: z.string().max(4096),
+            createdAt: z.number().int().nonnegative(),
+            truncated: z.boolean(),
+            turns: z
+              .array(
+                z.object({
+                  question: z.string().max(4096),
+                  answer: z.string().max(48 * 1024),
+                  status: z.enum(["running", "complete", "cancelled", "error"]),
+                  createdAt: z.number().int().nonnegative(),
+                  updatedAt: z.number().int().nonnegative(),
+                  error: z.string().max(4096).nullable(),
+                }),
+              )
+              .min(1)
+              .max(8),
+          }),
+        )
+        .max(8),
+      error: z.string().max(4096).nullable(),
+      omitted: z.number().int().nonnegative(),
+      reveal: z.string().max(1024).nullable(),
+      runningId: z.string().max(256).nullable(),
+    })
+    .optional(),
   actions: z
     .array(
       z.object({
@@ -2686,6 +2726,7 @@ export const ProjectGithubCloneRequestSchema = z.object({
   repo: z.string().trim().min(MIN_REPOSITORY_PATH_LENGTH),
   cloneProtocol: ProjectGithubCloneProtocolSchema.optional(),
   targetDirectory: z.string().trim().min(1),
+  progress: z.boolean().optional(),
   requestId: z.string(),
 });
 
@@ -3570,6 +3611,7 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceRequestReceipts: z.boolean().optional(),
         creationLifecycle: z.boolean().optional(),
         workspaceBots: z.boolean().optional(),
+        workspaceBotPermissions: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
         agentCommandCompletion: z.boolean().optional(),
         // COMPAT(providersSnapshotCwd): added in v0.3.2, remove gate after 2027-02-10.
@@ -4565,6 +4607,31 @@ export const ProjectGithubCloneResponseSchema = z.object({
     error: z.string().nullable(),
   }),
 });
+
+export const ProjectGithubCloneProgressPhaseSchema = z.enum([
+  "starting",
+  "counting",
+  "compressing",
+  "receiving",
+  "resolving",
+  "checkout",
+  "registering",
+]);
+
+export const ProjectGithubCloneProgressMessageSchema = z.object({
+  type: z.literal("project.github.clone.progress"),
+  payload: z.object({
+    requestId: z.string(),
+    repo: z.string().trim().min(MIN_REPOSITORY_PATH_LENGTH),
+    phase: ProjectGithubCloneProgressPhaseSchema,
+    percent: z.number().int().min(0).max(100),
+  }),
+});
+
+export type ProjectGithubCloneProgressMessage = z.infer<
+  typeof ProjectGithubCloneProgressMessageSchema
+>;
+export type ProjectGithubCloneProgressPhase = z.infer<typeof ProjectGithubCloneProgressPhaseSchema>;
 
 const WorkspaceScriptOperationPayloadSchema = z.object({
   requestId: z.string(),
@@ -6702,6 +6769,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   OpenProjectResponseMessageSchema,
   WorkspaceGithubSearchRepositoriesResponseSchema,
   ProjectGithubCloneResponseSchema,
+  ProjectGithubCloneProgressMessageSchema,
   WorkspaceScriptListResponseMessageSchema,
   WorkspaceScriptStartResponseMessageSchema,
   WorkspaceScriptStopResponseMessageSchema,

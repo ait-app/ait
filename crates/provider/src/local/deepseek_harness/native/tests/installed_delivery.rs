@@ -72,6 +72,7 @@ async fn installed_host_admits_native_image_and_file_receipts_and_delivers_real_
             .try_into()
             .unwrap();
     let spec = AgentSessionSpec {
+        confinement: None,
         provider: "deepseek-harness".into(),
         cwd: cwd.to_str().unwrap().into(),
         config: StoredAgentConfig::default(),

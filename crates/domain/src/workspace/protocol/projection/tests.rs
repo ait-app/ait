@@ -84,3 +84,24 @@ fn missing_projects_and_unmanaged_directories_keep_existing_fallbacks() {
         ProjectKind::NonGit
     );
 }
+
+#[test]
+fn descriptors_expose_the_sandbox_level_only_when_enabled() {
+    let mut record = workspace(PersistedWorkspaceKind::Worktree);
+    let plain = workspace_descriptor(&record, None);
+    assert_eq!(plain.sandbox, None);
+    assert!(
+        serde_json::to_value(&plain)
+            .unwrap()
+            .get("sandbox")
+            .is_none()
+    );
+
+    record.sandbox = Some(crate::workspace::sandbox::WorkspaceSandbox::WorktreeWrites);
+    let sandboxed = workspace_descriptor(&record, None);
+
+    let wire = serde_json::to_value(&sandboxed).unwrap();
+    assert_eq!(wire["sandbox"], "worktree_writes");
+    let decoded: WorkspaceDescriptorPayload = serde_json::from_value(wire).unwrap();
+    assert_eq!(decoded.sandbox, record.sandbox);
+}

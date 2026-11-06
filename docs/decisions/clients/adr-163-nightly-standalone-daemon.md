@@ -3,6 +3,7 @@
 - 状态：Accepted
 - 日期：2026-10-19
 - 修订：ADR-158（原规定 nightly 不发布独立 daemon）
+- 后续修订：[ADR-212](adr-212-packaged-daemon-name-aitd.md) 将归档内可执行文件改名为 `aitd`
 
 ## 背景
 

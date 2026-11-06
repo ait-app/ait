@@ -133,13 +133,8 @@ async fn legacy_owned_catalog_avoids_extra_cli_processes_and_native_sessions() {
     );
     assert_eq!(details.modes.len(), 3);
     assert!(!root.path().join("native-fixture.json").exists());
-    assert_eq!(
-        std::fs::read_to_string(root.path().join("pids.txt"))
-            .unwrap()
-            .lines()
-            .count(),
-        3
-    );
+    // Availability probes the daemon directory; discovery probes the project once for its child.
+    assert_eq!(process_count(&root), 3);
     let requests: Vec<Value> = std::fs::read_to_string(root.path().join("http-requests.jsonl"))
         .unwrap()
         .lines()
@@ -174,4 +169,51 @@ async fn legacy_owned_catalog_failure_falls_back_to_cli_without_creating_a_sessi
             .count()
             > 3
     );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn repeated_launches_reuse_the_directory_version_probe() {
+    let (root, mut client, spec) = fixture("normal");
+    client
+        .environment
+        .insert("AIT_ACP_VERSION".into(), "1.18.4".into());
+
+    client.discover(&spec.cwd).await.unwrap();
+    let first = process_count(&root);
+    client.discover(&spec.cwd).await.unwrap();
+
+    // The repeated launch starts only its ACP child; the project version stays cached.
+    assert_eq!(process_count(&root), first + 1);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn availability_reprobes_after_an_upgrade_and_resets_launch_versions() {
+    let (root, mut client, spec) = fixture("normal");
+    client
+        .environment
+        .insert("AIT_ACP_VERSION".into(), "2.0.20".into());
+    assert!(!client.is_available().await.unwrap());
+    assert!(matches!(
+        client.discover(&spec.cwd).await,
+        Err(AgentSessionError::Unavailable)
+    ));
+
+    client
+        .environment
+        .insert("AIT_ACP_VERSION".into(), "1.18.4".into());
+    assert!(client.is_available().await.unwrap());
+    let before = process_count(&root);
+    client.discover(&spec.cwd).await.unwrap();
+
+    // The upgraded project directory is probed again instead of reusing the stale 2.0.20 entry.
+    assert_eq!(process_count(&root), before + 2);
+}
+
+fn process_count(root: &TempDir) -> usize {
+    std::fs::read_to_string(root.path().join("pids.txt"))
+        .unwrap()
+        .lines()
+        .count()
 }

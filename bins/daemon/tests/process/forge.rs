@@ -191,9 +191,10 @@ elif [ "$1 $2" = "api graphql" ]; then
   echo '{"data":{"repository":{"pullRequest":{"number":3,"reviews":{"nodes":[{"id":"R1","state":"APPROVED","body":"ship","url":"https://example/review","submittedAt":"2026-01-01T00:00:00Z","author":{"login":"octo","url":null,"avatarUrl":null}}],"pageInfo":{"hasNextPage":false}},"comments":{"nodes":[],"pageInfo":{"hasNextPage":false}},"reviewThreads":{"nodes":[],"pageInfo":{"hasNextPage":false}}}}}}'
 elif [ "$1" = "api" ] && [ "$2" = "repos/acme/app/check-runs/9" ]; then
   echo '{"id":9,"name":"tests","status":"completed","conclusion":"success","html_url":"https://example/check","details_url":"https://example/details","check_suite":{"workflow_run":{"id":44}},"output":null}'
-elif [ "$1" = "api" ] && [ "$2" = "repos/acme/app/check-runs/9/annotations" ]; then
+# Query parameters must stay in the path; extra fields would turn `gh api` into a POST.
+elif [ "$#" -eq 2 ] && [ "$1" = "api" ] && [ "$2" = "repos/acme/app/check-runs/9/annotations?per_page=20" ]; then
   echo '[{"path":"src/lib.rs","start_line":1,"end_line":1,"annotation_level":"notice","message":"ok"}]'
-elif [ "$1" = "api" ] && [ "$2" = "repos/acme/app/actions/runs/44/jobs" ]; then
+elif [ "$#" -eq 2 ] && [ "$1" = "api" ] && [ "$2" = "repos/acme/app/actions/runs/44/jobs?per_page=100" ]; then
   echo '{"jobs":[]}'
 else
   echo "unexpected: $*" >&2

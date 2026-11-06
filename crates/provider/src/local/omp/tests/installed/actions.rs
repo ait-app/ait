@@ -19,6 +19,7 @@ async fn installed_omp_native_actions_commit_forks_tree_navigation_and_reopen() 
     let mut manager = AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone());
     manager.register_client(Box::new(client.clone())).unwrap();
     let spec = AgentSessionSpec {
+        confinement: None,
         provider: "omp".to_owned(),
         cwd: root.path().to_str().unwrap().to_owned(),
         config: StoredAgentConfig {

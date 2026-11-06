@@ -41,6 +41,7 @@ async fn installed_pi_off_catalog_hint_does_not_gate_native_sessions() {
                 thinking_option_id: Some("off".into()),
                 ..StoredAgentConfig::default()
             },
+            confinement: None,
         };
         let details = client.discover(&spec.cwd).await.unwrap();
         let model = details

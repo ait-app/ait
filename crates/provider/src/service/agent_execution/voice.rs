@@ -73,7 +73,8 @@ pub(super) async fn dispatch(
     } else {
         state.execute(method, params).await
     };
-    if abandoned() {
+    let cancelled = abandoned();
+    if cancelled {
         cancel_accepted(state, &result).await;
     }
     let _ = state.manager.reconcile().await;
@@ -88,6 +89,7 @@ pub(super) async fn dispatch(
     let _permit = permit;
     if let Err(result) = reply.send(result)
         && cancel.is_some()
+        && !cancelled
     {
         cancel_accepted(state, &result).await;
     }

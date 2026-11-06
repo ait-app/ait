@@ -27,6 +27,11 @@ fn fixture() -> (tempfile::TempDir, PiClient, PathBuf, String) {
     (directory, client, file, cwd)
 }
 
+/// Pi reports canonical session files; platform temp paths such as macOS /var are symlinks.
+fn canonical(file: &Path) -> Value {
+    json!(file.canonicalize().unwrap())
+}
+
 fn write(file: &Path, cwd: &str, entries: Vec<Value>) {
     let header = json!({"type":"session","version":3,"id":SESSION,"cwd":cwd,
         "timestamp":"2026-10-18T00:00:00Z"});
@@ -336,7 +341,7 @@ async fn lists_and_imports_only_current_branch_without_launching_pi() {
     assert_eq!(history.config.model.as_deref(), Some("fixture/model"));
     assert_eq!(history.config.thinking_option_id, None);
     assert_eq!(history.config.mode_id, None);
-    assert_eq!(history.resume_metadata["sessionFile"], json!(file));
+    assert_eq!(history.resume_metadata["sessionFile"], canonical(&file));
     assert_eq!(std::fs::read(&file).unwrap(), before);
     assert!(!client.program.exists());
 }
@@ -433,7 +438,7 @@ fn inspection_resolves_a_renamed_session_from_its_header_identity() {
     let history = inspect(&client, &imported_handle, &cwd).unwrap();
 
     assert_eq!(history.descriptor.provider_handle_id, SESSION);
-    assert_eq!(history.resume_metadata["sessionFile"], json!(renamed));
+    assert_eq!(history.resume_metadata["sessionFile"], canonical(&renamed));
 }
 
 #[test]
@@ -448,7 +453,7 @@ fn inspection_ignores_a_saved_file_outside_the_session_store() {
     let history = inspect(&client, &imported_handle, &cwd).unwrap();
 
     assert_eq!(history.entries[0].item["text"], "stored");
-    assert_eq!(history.resume_metadata["sessionFile"], json!(file));
+    assert_eq!(history.resume_metadata["sessionFile"], canonical(&file));
 }
 
 #[test]
@@ -514,7 +519,7 @@ fn inspection_reuses_the_saved_session_file() {
     let refreshed = inspect(&client, &imported_handle, &cwd).unwrap();
 
     assert_eq!(refreshed.entries[0].item["text"], "original");
-    assert_eq!(refreshed.resume_metadata["sessionFile"], json!(file));
+    assert_eq!(refreshed.resume_metadata["sessionFile"], canonical(&file));
 }
 
 #[cfg(unix)]
@@ -703,7 +708,10 @@ async fn symlink_lookup_survives_canonical_placement_resume_and_a_renamed_file()
     std::fs::rename(&file, &renamed).unwrap();
 
     let refreshed = inspect(&client, &imported, &cwd).unwrap();
-    assert_eq!(refreshed.resume_metadata["sessionFile"], json!(renamed));
+    assert_eq!(
+        refreshed.resume_metadata["sessionFile"],
+        canonical(&renamed)
+    );
     let program = directory.path().join("pi");
     std::fs::write(&program, include_str!("../tests/fixtures/pi.py")).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
@@ -712,13 +720,14 @@ async fn symlink_lookup_survives_canonical_placement_resume_and_a_renamed_file()
         provider: PROVIDER.into(),
         cwd,
         config: StoredAgentConfig::default(),
+        confinement: None,
     };
     let mut session = client
         .resume_session(&imported, &spec, AgentResumePurpose::Interactive)
         .await
         .unwrap();
     let persisted = session.persistence().unwrap();
-    assert_eq!(persisted.native_handle, Some(json!(renamed)));
+    assert_eq!(persisted.native_handle, Some(canonical(&renamed)));
     assert_eq!(
         persisted.metadata.as_ref().unwrap()["nativeCwd"],
         json!(linked)
@@ -730,7 +739,7 @@ async fn symlink_lookup_survives_canonical_placement_resume_and_a_renamed_file()
         inspect(&client, &persisted, &spec.cwd)
             .unwrap()
             .resume_metadata["sessionFile"],
-        json!(moved)
+        canonical(&moved)
     );
     let mut no_filename = persisted;
     no_filename.native_handle = None;
@@ -738,7 +747,7 @@ async fn symlink_lookup_survives_canonical_placement_resume_and_a_renamed_file()
         inspect(&client, &no_filename, &spec.cwd)
             .unwrap()
             .resume_metadata["sessionFile"],
-        json!(moved)
+        canonical(&moved)
     );
     let mut resumed = client
         .resume_session(&no_filename, &spec, AgentResumePurpose::Interactive)
@@ -2263,6 +2272,7 @@ async fn imported_session_refresh_uses_the_native_handle_after_resume() {
         provider: PROVIDER.into(),
         cwd,
         config: history.config,
+        confinement: None,
     };
     let mut session = client
         .resume_session(&imported, &spec, AgentResumePurpose::Interactive)
@@ -2270,7 +2280,7 @@ async fn imported_session_refresh_uses_the_native_handle_after_resume() {
         .unwrap();
     let resumed_handle = session.persistence().unwrap();
     assert_eq!(resumed_handle.session_id, SESSION);
-    assert_eq!(resumed_handle.native_handle, Some(json!(file)));
+    assert_eq!(resumed_handle.native_handle, Some(canonical(&file)));
     assert!(
         resumed_handle
             .metadata
@@ -2284,5 +2294,5 @@ async fn imported_session_refresh_uses_the_native_handle_after_resume() {
     let refreshed = inspect(&client, &resumed_handle, &spec.cwd).unwrap();
 
     assert_eq!(refreshed.entries[0].item["text"], "hi");
-    assert_eq!(refreshed.resume_metadata["sessionFile"], json!(file));
+    assert_eq!(refreshed.resume_metadata["sessionFile"], canonical(&file));
 }

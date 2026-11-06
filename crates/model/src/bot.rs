@@ -1,17 +1,7 @@
 //! Blocking storage and runtime-secret ports for the Bot application.
 
 use domain::bot::{Catalog, Conversation, Turn};
-use domain::{BotId, BotTurnId, ConversationId};
-use sha2::{Digest, Sha256};
-
-/// Relative workspace-local memory path, namespaced even when workspaces share one cwd.
-#[must_use]
-pub fn memory_path(workspace: &str, bot: BotId) -> std::path::PathBuf {
-    std::path::PathBuf::from(".ait/bots")
-        .join(format!("{:x}", Sha256::digest(workspace.as_bytes())))
-        .join(bot.to_string())
-        .join("MEMORY.md")
-}
+use domain::{BotTurnId, ConversationId};
 
 /// A safe Bot persistence failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -56,18 +46,16 @@ pub trait Store: std::fmt::Debug + Send + Sync {
     /// # Errors
     /// Returns write or sync failures.
     fn save_turn(&self, turn: &Turn) -> Result<(), StorageError>;
-    /// Read bounded Bot memory from the owning workspace's directory.
+    /// Read the bounded memory of one workspace's Bot; absent memory reads as empty.
     /// # Errors
-    /// Returns unsafe paths, oversized memory, or inaccessible storage errors.
-    fn memory(&self, cwd: &str, workspace: &str, bot: BotId) -> Result<String, StorageError>;
-    /// Atomically replace bounded Bot memory in the workspace directory.
+    /// Returns oversized memory, invalid text, or inaccessible storage errors.
+    fn memory(&self, workspace: &str) -> Result<String, StorageError>;
+    /// Atomically replace the bounded memory of one workspace's Bot.
     /// # Errors
-    /// Returns unsafe paths, oversized memory, or write failures.
-    fn save_memory(
-        &self,
-        cwd: &str,
-        workspace: &str,
-        bot: BotId,
-        text: &str,
-    ) -> Result<(), StorageError>;
+    /// Returns oversized or NUL-containing memory, or write failures.
+    fn save_memory(&self, workspace: &str, text: &str) -> Result<(), StorageError>;
+    /// Remove the memory of one workspace's Bot; absent memory is not an error.
+    /// # Errors
+    /// Returns inaccessible storage errors.
+    fn delete_memory(&self, workspace: &str) -> Result<(), StorageError>;
 }

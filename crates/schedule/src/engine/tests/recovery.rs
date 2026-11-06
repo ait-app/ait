@@ -172,6 +172,59 @@ fn duplicate_or_invalid_schedule_ids_are_rejected_before_recovery_writes() {
 }
 
 #[test]
+fn cron_without_a_future_slot_completes_and_restarts_cleanly() {
+    let (mut engine, store) = fixture();
+    let finished = create(&mut engine);
+    let restarted = create(&mut engine);
+    let never = Cadence::Cron {
+        expression: "0 0 31 2 *".into(),
+        timezone: None,
+    };
+    for record in &mut engine.records {
+        record.cadence = never.clone();
+    }
+    let (_, run) = engine.begin(&finished, false, now()).unwrap();
+    let later = now() + chrono::Duration::minutes(2);
+    engine
+        .finish(&finished, &run, false, Outcome::default(), later)
+        .unwrap();
+    assert_eq!(engine.inspect(&finished).unwrap().status, Status::Completed);
+    let recovered = Engine::open(Box::new(store), later).unwrap();
+    assert_eq!(
+        recovered.inspect(&finished).unwrap().status,
+        Status::Completed
+    );
+    let record = recovered.inspect(&restarted).unwrap();
+    assert_eq!(record.status, Status::Completed);
+    assert_eq!(record.next_run_at, None);
+}
+
+#[test]
+fn far_future_cron_slot_advances_after_a_run() {
+    let (mut engine, _) = fixture();
+    let mut params = input();
+    params["cadence"] = json!({"type":"cron","expression":"0 9 29 2 1"});
+    let id = engine
+        .request("schedule.create.request", params, now())
+        .unwrap()["schedule"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let first: DateTime<Utc> = "2044-02-29T09:00:00Z".parse().unwrap();
+    assert_eq!(engine.inspect(&id).unwrap().next_run_at, Some(first));
+    let (_, run) = engine.begin(&id, false, first).unwrap();
+    engine
+        .finish(&id, &run, false, Outcome::default(), first)
+        .unwrap();
+    let record = engine.inspect(&id).unwrap();
+    assert_eq!(record.status, Status::Active);
+    assert_eq!(
+        record.next_run_at,
+        Some("2072-02-29T09:00:00Z".parse().unwrap())
+    );
+}
+
+#[test]
 fn schedule_capacity_refuses_new_admission_without_overwriting_existing_records() {
     let (mut engine, store) = fixture();
     let id = create(&mut engine);

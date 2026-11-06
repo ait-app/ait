@@ -341,12 +341,14 @@ describe("tool call detail-level projection", () => {
       toolCall("4", unknownDetail, { name: "paseo_list_worktrees" }),
       toolCall("5", unknownDetail, { name: "paseo_list_worktrees" }),
       toolCall("6", unknownDetail, { name: "mcp__exa__web_search" }),
+      toolCall("7", unknownDetail, { name: "ait_list_agents" }),
+      toolCall("8", unknownDetail, { name: "mcp__ait__wait_for_agent" }),
     ];
 
     const result = project({ level: "overview", head: calls });
 
     expect(result.groupsByHostId.get("1")).toMatchObject({
-      summary: { searchCount: 3, otherToolCount: 0, paseoCallCount: 3 },
+      summary: { searchCount: 3, otherToolCount: 0, paseoCallCount: 5 },
     });
   });
 

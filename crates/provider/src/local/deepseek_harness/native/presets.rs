@@ -1,7 +1,7 @@
 //! Native plugin compositions are distinct from tool permission presets.
 use serde_json::{Value, json};
 
-use super::super::config::text;
+use crate::local::acp_config::text;
 use crate::ports::agent_session::AgentSessionError;
 
 pub(super) const PREFIX: &str = "agent-preset:";

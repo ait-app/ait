@@ -297,6 +297,31 @@ describe("Rust v1 connection", () => {
       await client.close();
     }
   });
+  it("gates Bot permissions on the permissions method independently of the core Bot set", () => {
+    const core = Object.values(METHODS)
+      .map((spec) => spec.method)
+      .filter((method) => method !== "bot.permissions.update.request");
+    const old = harness(core);
+    old.ready(undefined, ["workspace-bots-v2"]);
+    const oldInfo = old.received.find((message) => object(message).type === "status");
+    expect(object(object(oldInfo).payload).features).toMatchObject({
+      workspaceBots: true,
+      workspaceBotPermissions: false,
+    });
+    const current = harness();
+    current.ready(undefined, ["workspace-bots-v2"]);
+    const info = current.received.find((message) => object(message).type === "status");
+    expect(object(object(info).payload).features).toMatchObject({
+      workspaceBots: true,
+      workspaceBotPermissions: true,
+    });
+  });
+  it("does not enable Bot features for the v1-only capability", () => {
+    const h = harness();
+    h.ready(undefined, ["workspace-bots-v1"]);
+    const info = h.received.find((message) => object(message).type === "status");
+    expect(object(object(info).payload).features).toMatchObject({ workspaceBots: false });
+  });
   it.each(["workspace", "project"] as const)(
     "keeps %s guests on scoped directories through hello and later server-info updates",
     (scope) => {
@@ -413,20 +438,20 @@ describe("Rust v1 connection", () => {
   });
   it("negotiates Bot capabilities and maps their requests and results on the execution channel", () => {
     const h = harness();
-    h.ready(undefined, ["workspace-bots-v1"]);
+    h.ready(undefined, ["workspace-bots-v2"]);
     const info = h.received.find((message) => object(message).type === "status");
     expect(object(object(info).payload).features).toMatchObject({ workspaceBots: true });
-    h.send({ type: "bot.list.request", requestId: "bot-list", workspaceId: "workspace-a" });
+    h.send({ type: "bot.get.request", requestId: "bot-list", workspaceId: "workspace-a" });
     expect(h.last(3)).toMatchObject({
       type: "request",
-      method: "bot.list.request",
+      method: "bot.get.request",
       request_id: "bot-list",
       params: { workspaceId: "workspace-a" },
     });
-    h.sockets[3].message({ type: "response", request_id: "bot-list", result: { bots: [] } });
+    h.sockets[3].message({ type: "response", request_id: "bot-list", result: { bot: null } });
     expect(h.received.at(-1)).toEqual({
-      type: "bot.list.response",
-      payload: { requestId: "bot-list", bots: [] },
+      type: "bot.get.response",
+      payload: { requestId: "bot-list", bot: null },
     });
   });
   it.each([
@@ -953,9 +978,9 @@ describe("Rust v1 connection", () => {
     }
   });
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(205);
+    expect(Object.keys(METHODS)).toHaveLength(206);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(205);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(206);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);
@@ -1345,7 +1370,11 @@ describe("Rust v1 connection", () => {
       h.ready();
       await connected;
       const clone = client.cloneGithubProject(
-        { repo: "https://github.com/acme/app.git", targetDirectory: "/repo/app" },
+        {
+          repo: "https://github.com/acme/app.git",
+          targetDirectory: "/repo/app",
+          progress: true,
+        },
         "clone",
       );
       const outcome = clone.then(
@@ -1355,6 +1384,11 @@ describe("Rust v1 connection", () => {
       await vi.advanceTimersByTimeAsync(0);
       const cloneRequest = h.last(1);
       expect(cloneRequest.method).toBe("project.github.clone.request");
+      expect(cloneRequest.params).toMatchObject({
+        repo: "https://github.com/acme/app.git",
+        targetDirectory: "/repo/app",
+        progress: true,
+      });
       client.ensureConnected({ verify: true });
       await vi.advanceTimersByTimeAsync(0);
       const ping = h.last(0);

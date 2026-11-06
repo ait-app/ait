@@ -99,6 +99,7 @@ async fn installed_with_binary(question: bool, binary: String) -> Installed {
             model: Some("local/test-model".into()),
             ..Default::default()
         },
+        confinement: None,
     };
     Installed {
         root,

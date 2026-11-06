@@ -307,6 +307,7 @@ async fn installed_host_registry_and_native_goal_status_work_without_a_model_pro
     )]))
     .unwrap();
     let spec = crate::ports::agent_session::AgentSessionSpec {
+        confinement: None,
         provider: super::PROVIDER.into(),
         cwd: directory.path().to_str().unwrap().into(),
         config: super::StoredAgentConfig::default(),

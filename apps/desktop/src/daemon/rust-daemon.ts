@@ -111,6 +111,11 @@ function forgetRetainedDaemon(home: string): void {
   rmSync(retainedDaemonPath(home), { force: true });
 }
 
+/** The daemon tolerates a trailing line ending on its saved credential; match it here. */
+function readLocalApiToken(home: string): string {
+  return readFileSync(path.join(home, "local-api.token"), "utf8").replace(/[\r\n]+$/, "");
+}
+
 function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -347,7 +352,7 @@ export class RustDaemonManager {
       const pid = this.child?.pid ?? this.retained?.pid;
       if (pid && this.state.ownedByDesktop && !this.token) {
         try {
-          this.token = readFileSync(path.join(this.options.home, "local-api.token"), "utf8");
+          this.token = readLocalApiToken(this.options.home);
         } catch {
           return false;
         }
@@ -631,7 +636,7 @@ export class RustDaemonManager {
       throw new Error("Rust daemon exited before ready.");
     if (this.pendingReadiness) throw new Error("Timed out waiting for Rust daemon readiness.");
     // The daemon creates this private credential before reporting readiness.
-    this.token ??= readFileSync(path.join(this.options.home, "local-api.token"), "utf8");
+    this.token ??= readLocalApiToken(this.options.home);
     const { info } = await rustDaemonRequest(
       this.state.connectAddress!,
       this.token,

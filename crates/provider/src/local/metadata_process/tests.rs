@@ -28,3 +28,22 @@ async fn output_is_bounded_and_nonzero_status_is_rejected() {
             .is_err()
     );
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn bounded_output_returns_unsuccessful_status_with_stdout_within_its_limit() {
+    let (status, bytes) = bounded_output(
+        Command::new("/bin/sh").args(["-c", "printf signed-out; exit 1"]),
+        10,
+    )
+    .await
+    .unwrap();
+    assert!(!status.success());
+    assert_eq!(bytes, b"signed-out");
+    assert_eq!(
+        bounded_output(Command::new("/bin/sh").args(["-c", "printf 12345"]), 4)
+            .await
+            .unwrap_err(),
+        AgentSessionError::Failed
+    );
+}

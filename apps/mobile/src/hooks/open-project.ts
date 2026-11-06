@@ -1,13 +1,18 @@
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import type {
+  ProjectGithubCloneProgressMessage,
   ProjectGithubCloneProtocol,
   ProjectAddResponse,
   WorkspaceProjectDescriptorPayload,
 } from "@ait/protocol/messages";
 import { normalizeProjectDescriptor, type ProjectDescriptor } from "@/stores/session-store";
+import { generateMessageId } from "@/types/stream";
 
 type OpenProjectPayload = ProjectAddResponse["payload"];
 type OpenProjectErrorCode = NonNullable<OpenProjectPayload["errorCode"]>;
+
+/** Live stage and overall completion reported while a GitHub clone runs. */
+export type GithubCloneProgress = ProjectGithubCloneProgressMessage["payload"];
 
 export interface OpenProjectSuccess {
   ok: true;
@@ -75,7 +80,14 @@ export interface CloneGithubProjectDirectlyInput extends ProjectRegistrationCall
   targetDirectory: string;
   cloneProtocol?: ProjectGithubCloneProtocol;
   client: Pick<DaemonClient, "cloneGithubProject"> | null;
+  listenForProgress?: GithubCloneProgressListener;
+  onProgress?: (progress: GithubCloneProgress) => void;
 }
+
+/** Register one handler for clone progress events on the host connection. */
+export type GithubCloneProgressListener = (
+  handler: (message: ProjectGithubCloneProgressMessage) => void,
+) => () => void;
 
 export async function openProjectDirectly(
   input: OpenProjectDirectlyInput,
@@ -130,22 +142,39 @@ export async function cloneGithubProjectDirectly(
     return { ok: false, errorCode: null, error: null };
   }
 
-  const payload = await input.client.cloneGithubProject({
-    repo: trimmedRepo,
-    targetDirectory: trimmedTargetDirectory,
-    ...(input.cloneProtocol ? { cloneProtocol: input.cloneProtocol } : {}),
-  });
-  if (payload.error || !payload.project) {
-    return { ok: false, errorCode: null, error: payload.error };
-  }
+  const requestId = `github_clone_${generateMessageId()}`;
+  const onProgress = input.onProgress;
+  const unsubscribe =
+    onProgress && input.listenForProgress
+      ? input.listenForProgress((message) => {
+          if (message.payload.requestId !== requestId) return;
+          onProgress(message.payload);
+        })
+      : null;
+  try {
+    const payload = await input.client.cloneGithubProject(
+      {
+        repo: trimmedRepo,
+        targetDirectory: trimmedTargetDirectory,
+        ...(input.cloneProtocol ? { cloneProtocol: input.cloneProtocol } : {}),
+        ...(onProgress && input.listenForProgress ? { progress: true } : {}),
+      },
+      requestId,
+    );
+    if (payload.error || !payload.project) {
+      return { ok: false, errorCode: null, error: payload.error };
+    }
 
-  const registered = registerProjectDescriptor({
-    serverId: normalizedServerId,
-    project: payload.project,
-    upsertProject: input.upsertProject,
-    setHasHydratedWorkspaces: input.setHasHydratedWorkspaces,
-  });
-  return registered
-    ? { ok: true, project: payload.project }
-    : { ok: false, errorCode: null, error: "Unable to register project" };
+    const registered = registerProjectDescriptor({
+      serverId: normalizedServerId,
+      project: payload.project,
+      upsertProject: input.upsertProject,
+      setHasHydratedWorkspaces: input.setHasHydratedWorkspaces,
+    });
+    return registered
+      ? { ok: true, project: payload.project }
+      : { ok: false, errorCode: null, error: "Unable to register project" };
+  } finally {
+    unsubscribe?.();
+  }
 }

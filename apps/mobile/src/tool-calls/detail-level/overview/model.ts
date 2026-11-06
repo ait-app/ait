@@ -1,7 +1,11 @@
-import { isPaseoToolName } from "@ait/protocol/tool-name-normalization";
+import { isAitToolName } from "@ait/protocol/tool-name-normalization";
 import { describeToolCall, type ToolCallRun } from "../grouping";
 
-const DIRECT_PASEO_TOOL_PREFIX = "paseo_";
+/**
+ * Providers that flatten MCP names (`<server>_<tool>`) report daemon tools with these prefixes.
+ * TODO(0.2.0): drop the legacy `paseo_` prefix with the `paseo` namespace alias.
+ */
+const DIRECT_AIT_TOOL_PREFIXES = ["ait_", "paseo_"] as const;
 const DIRECT_SEARCH_TOOL_SUFFIX_PATTERN = /(?:^|[_.:/])(?:web_search|llm_context)$/;
 
 export interface OverviewSummary {
@@ -21,7 +25,10 @@ export interface OverviewToolCallGroup {
 }
 
 function isPaseoCall(name: string, normalizedName: string): boolean {
-  return isPaseoToolName(name) || normalizedName.startsWith(DIRECT_PASEO_TOOL_PREFIX);
+  return (
+    isAitToolName(name) ||
+    DIRECT_AIT_TOOL_PREFIXES.some((prefix) => normalizedName.startsWith(prefix))
+  );
 }
 
 function isSearchCall(name: string): boolean {

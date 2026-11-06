@@ -81,14 +81,24 @@ async function ensureNotificationPermission(): Promise<boolean> {
   if (permissionRequest) {
     return permissionRequest;
   }
-  permissionRequest = Promise.resolve(
-    NotificationConstructor.requestPermission
-      ? NotificationConstructor.requestPermission()
-      : "denied",
-  ).then((permission) => permission === "granted");
-  const result = await permissionRequest;
-  permissionRequest = null;
-  return result;
+  // A rejected request (e.g. one the browser refuses outside a user gesture) is
+  // "not granted", and the shared promise must be released either way so a
+  // later attempt can ask again instead of replaying a stale rejection.
+  permissionRequest = Promise.resolve()
+    .then(() =>
+      NotificationConstructor.requestPermission
+        ? NotificationConstructor.requestPermission()
+        : "denied",
+    )
+    .then(
+      (permission) => permission === "granted",
+      () => false,
+    );
+  try {
+    return await permissionRequest;
+  } finally {
+    permissionRequest = null;
+  }
 }
 
 export async function ensureOsNotificationPermission(): Promise<boolean> {

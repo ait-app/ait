@@ -11,26 +11,31 @@ use crate::ports::agent_session::AgentSessionError;
 pub(super) struct Sandbox {
     workspace_write: Value,
     effective: Option<Value>,
+    confined: bool,
 }
 
 impl Sandbox {
     /// Read inherited workspace permissions from the native configuration for `cwd`.
+    /// `confined` records that the process runs under the Workspace's OS write sandbox.
     /// Older servers may reject this optional inspection; transport failures propagate.
     pub(super) async fn load(
         transport: &mut Transport,
         cwd: &str,
+        confined: bool,
     ) -> Result<Self, AgentSessionError> {
-        match transport
+        let workspace_write = match transport
             .request("config/read", json!({"cwd":cwd,"includeLayers":false}))
             .await
         {
-            Ok(response) => Ok(Self {
-                workspace_write: response["config"]["sandbox_workspace_write"].clone(),
-                effective: None,
-            }),
-            Err(AgentSessionError::Rejected) => Ok(Self::default()),
-            Err(error) => Err(error),
-        }
+            Ok(response) => response["config"]["sandbox_workspace_write"].clone(),
+            Err(AgentSessionError::Rejected) => Value::Null,
+            Err(error) => return Err(error),
+        };
+        Ok(Self {
+            workspace_write,
+            effective: None,
+            confined,
+        })
     }
 
     /// Retain the authoritative sandbox returned by native thread start or resume.
@@ -49,7 +54,7 @@ impl Sandbox {
     /// Resolve a turn policy, preserving native settings for a matching permission mode.
     /// Explicit workspace options override inherited defaults when changing sandbox type.
     pub(super) fn policy(&self, config: &StoredAgentConfig) -> Value {
-        let mut policy = controls::policy(config).2;
+        let mut policy = controls::policy(config, self.confined).2;
         if let Some(effective) = &self.effective
             && effective["type"] == policy["type"]
         {

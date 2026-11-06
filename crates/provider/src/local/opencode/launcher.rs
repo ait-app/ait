@@ -1,18 +1,60 @@
 //! ACP launch configuration only; no project files or shared native configuration are written.
-use std::{path::Path, process::Stdio};
+use std::path::Path;
 
 use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Value, json};
-use tokio::{io::AsyncReadExt, process::Command, time::Instant};
+use tokio::{process::Command, time::Instant};
 
-use super::{OpenCodeClient, config, observation::Source};
-use crate::{local::acp_transport::Transport, ports::agent_session::AgentSessionError};
+use super::{client::OpenCodeClient, config, observation::Source};
+use crate::local::{acp_transport::Transport, metadata_process::Process};
+use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
-/// Read and validate the installed CLI version; unsupported releases return unavailable.
+const MAX_QUERY_BYTES: u64 = 8 * 1024 * 1024;
+
+/// Read and validate the CLI version a launch in `cwd` resolves, reusing an earlier probe there.
+/// Version managers can resolve a different release per directory, so the cache is per cwd.
+/// Unsupported releases return unavailable and are not cached; the next call probes again.
 pub(super) async fn version(
     client: &OpenCodeClient,
     cwd: &str,
 ) -> Result<String, AgentSessionError> {
+    let cached = client
+        .versions
+        .lock()
+        .map_err(|_| AgentSessionError::Failed)?
+        .get(cwd)
+        .cloned();
+    if let Some(version) = cached {
+        return Ok(version);
+    }
+    let version = probe_version(client, cwd).await?;
+    client
+        .versions
+        .lock()
+        .map_err(|_| AgentSessionError::Failed)?
+        .insert(cwd.to_owned(), version.clone());
+    Ok(version)
+}
+
+/// Probe the installed CLI version in `cwd` without the cache, for availability and diagnostics.
+/// Every cached directory is forgotten so later launches observe an upgraded or removed release.
+pub(super) async fn refresh_version(
+    client: &OpenCodeClient,
+    cwd: &str,
+) -> Result<String, AgentSessionError> {
+    let probed = probe_version(client, cwd).await;
+    let mut versions = client
+        .versions
+        .lock()
+        .map_err(|_| AgentSessionError::Failed)?;
+    versions.clear();
+    if let Ok(version) = &probed {
+        versions.insert(cwd.to_owned(), version.clone());
+    }
+    probed
+}
+
+async fn probe_version(client: &OpenCodeClient, cwd: &str) -> Result<String, AgentSessionError> {
     let output = read(client, cwd, &["--version"]).await?;
     let version = output
         .trim()
@@ -51,7 +93,7 @@ pub(super) async fn spawn(
     cwd: &str,
     selected: &StoredAgentConfig,
 ) -> Result<(Transport, Value), AgentSessionError> {
-    let (transport, capabilities, _, _) = launch(client, cwd, selected, false, false).await?;
+    let (transport, capabilities, _, _) = launch(client, cwd, selected, Launch::default()).await?;
     Ok((transport, capabilities))
 }
 
@@ -63,7 +105,35 @@ pub(super) async fn observed(
     cwd: &str,
     selected: &StoredAgentConfig,
 ) -> Result<(Transport, Value, Option<Source>, bool), AgentSessionError> {
-    launch(client, cwd, selected, false, true).await
+    launch(
+        client,
+        cwd,
+        selected,
+        Launch {
+            observe: true,
+            ..Launch::default()
+        },
+    )
+    .await
+}
+
+/// Initialize an Agent's interactive ACP child, confined when its Workspace is sandboxed.
+pub(super) async fn session(
+    client: &OpenCodeClient,
+    spec: &AgentSessionSpec,
+    selected: &StoredAgentConfig,
+) -> Result<(Transport, Value, Option<Source>, bool), AgentSessionError> {
+    launch(
+        client,
+        &spec.cwd,
+        selected,
+        Launch {
+            observe: true,
+            confinement: spec.confinement.as_ref(),
+            ..Launch::default()
+        },
+    )
+    .await
 }
 
 /// Initialize an owned tool-disabled ACP child; propagate configuration and launch failures.
@@ -72,16 +142,35 @@ pub(super) async fn auxiliary(
     cwd: &str,
     selected: &StoredAgentConfig,
 ) -> Result<(Transport, Value), AgentSessionError> {
-    let (transport, capabilities, _, _) = launch(client, cwd, selected, true, false).await?;
+    let (transport, capabilities, _, _) = launch(
+        client,
+        cwd,
+        selected,
+        Launch {
+            auxiliary: true,
+            ..Launch::default()
+        },
+    )
+    .await?;
     Ok((transport, capabilities))
+}
+
+/// Role and confinement of one native ACP child.
+#[derive(Debug, Clone, Copy, Default)]
+struct Launch<'a> {
+    /// Tool-disabled auxiliary model process.
+    auxiliary: bool,
+    /// Prepare the read-only metadata supplement.
+    observe: bool,
+    /// OS write confinement for an Agent in a sandboxed Workspace.
+    confinement: Option<&'a domain::workspace::sandbox::WriteConfinement>,
 }
 
 async fn launch(
     client: &OpenCodeClient,
     cwd: &str,
     selected: &StoredAgentConfig,
-    auxiliary: bool,
-    observe: bool,
+    role: Launch<'_>,
 ) -> Result<(Transport, Value, Option<Source>, bool), AgentSessionError> {
     let started = Instant::now();
     let deadline = started + client.startup_timeout;
@@ -97,9 +186,20 @@ async fn launch(
         "opencode.startup.version"
     );
     let legacy = version.starts_with("1.");
-    let mut command = Command::new(&client.program);
+    let mut command = crate::local::sandbox::command(
+        &client.program,
+        role.confinement,
+        crate::local::sandbox::OPENCODE_STATE,
+        &|name| {
+            client
+                .environment
+                .get(name)
+                .cloned()
+                .or_else(|| std::env::var(name).ok())
+        },
+    )?;
     command.arg("acp").envs(&client.environment);
-    let mut observation = if observe {
+    let mut observation = if role.observe {
         Source::prepare(&version, client.deadline)?
     } else {
         None
@@ -111,7 +211,7 @@ async fn launch(
         // Native 1.x excludes question in ACP. Do not enable an unanswerable native question.
         command.env("OPENCODE_ENABLE_QUESTION_TOOL", "false");
     }
-    configure_overlay(&mut command, client, selected, auxiliary, legacy)?;
+    configure_overlay(&mut command, client, selected, role.auxiliary, legacy)?;
     // Native 2.x standalone processes can race the shared SQLite schema bootstrap.
     // Hold the clone-shared gate only through initialization, never through a session or prompt.
     let queued = Instant::now();
@@ -289,45 +389,19 @@ pub(super) async fn read(
     if !Path::new(cwd).is_dir() {
         return Err(AgentSessionError::Rejected);
     }
-    let mut command = Command::new(&client.program);
-    command
-        .args(arguments)
-        .envs(&client.environment)
-        .current_dir(cwd)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true);
-    let mut child = command.spawn().map_err(|error| {
+    let process = Process::spawn(
+        Command::new(&client.program)
+            .args(arguments)
+            .envs(&client.environment)
+            .current_dir(cwd),
+    )
+    .map_err(|error| {
         tracing::warn!(error_kind = ?error.kind(), os_error = error.raw_os_error(), "OpenCode CLI query failed to start");
         AgentSessionError::Unavailable
     })?;
-    let mut stdout = child
-        .stdout
-        .take()
-        .ok_or(AgentSessionError::Failed)?
-        .take(8 * 1024 * 1024 + 1);
-    tokio::time::timeout(client.startup_timeout, async {
-        let mut bytes = Vec::new();
-        stdout
-            .read_to_end(&mut bytes)
-            .await
-            .map_err(|_| AgentSessionError::Failed)?;
-        if bytes.len() > 8 * 1024 * 1024 {
-            return Err(AgentSessionError::Failed);
-        }
-        if !child
-            .wait()
-            .await
-            .map_err(|_| AgentSessionError::Failed)?
-            .success()
-        {
-            return Err(AgentSessionError::Failed);
-        }
-        String::from_utf8(bytes).map_err(|_| AgentSessionError::Failed)
-    })
-    .await
-    .map_err(|_| AgentSessionError::Failed)?
+    tokio::time::timeout(client.startup_timeout, process.output(MAX_QUERY_BYTES))
+        .await
+        .map_err(|_| AgentSessionError::Failed)?
 }
 
 #[cfg(test)]

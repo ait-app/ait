@@ -7,10 +7,10 @@ function verifyDaemonDirectory(resources) {
   const directory = path.join(resources, "bin");
   assert.deepEqual(
     fs.readdirSync(directory).sort(),
-    ["daemon"],
-    "Packaged resources/bin must contain only daemon",
+    ["aitd"],
+    "Packaged resources/bin must contain only aitd",
   );
-  const daemon = path.join(directory, "daemon");
+  const daemon = path.join(directory, "aitd");
   assert(fs.lstatSync(daemon).isFile(), "Bundled daemon must be a regular file");
   fs.accessSync(daemon, fs.constants.X_OK);
 }
@@ -44,7 +44,7 @@ function verifyPackagedResources({ appOutDir, platform, version }) {
     "Legacy Node server/CLI must not be bundled",
   );
   console.log(
-    `Verified Ait ${version}: apps/desktop, exported UI, ${platform === "win32" ? "no bundled daemon" : "resources/bin/daemon only"}.`,
+    `Verified Ait ${version}: apps/desktop, exported UI, ${platform === "win32" ? "no bundled daemon" : "resources/bin/aitd only"}.`,
   );
 }
 

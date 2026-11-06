@@ -66,7 +66,15 @@ pub(crate) fn lifecycle(
     }))
 }
 
-/// Decode and execute one daemon metadata operation using host runtime facts.
+/// Daemon operation response and the configuration it changed, if any.
+pub(crate) struct Executed {
+    /// Serialized response.
+    pub(crate) value: Value,
+    /// Validated configuration after a set or reload, published to observers.
+    pub(crate) changed_config: Option<DaemonConfig>,
+}
+
+/// Decode and execute one daemon configuration or update operation.
 ///
 /// # Errors
 /// Returns validation or configuration storage errors.
@@ -74,21 +82,13 @@ pub(crate) fn execute(
     daemon: &mut Daemon,
     method: &str,
     params: Value,
-    capabilities: &[String],
-    lifecycle: Lifecycle,
-) -> Result<Value, ErrorCode> {
+) -> Result<Executed, ErrorCode> {
     match method {
-        "daemon.get_status.request" | "diagnostics.request" => {
-            snapshot(daemon, method, params, &[], (capabilities, lifecycle))
-        }
         "daemon.config.get.request" => {
             let _: EmptyRequest = decode(params)?;
-            encode(
-                DaemonConfigResult {
-                    config: config(daemon.get_config().map_err(error)?)?,
-                },
-                ErrorCode::DaemonIo,
-            )
+            unchanged(DaemonConfigResult {
+                config: config(daemon.get_config().map_err(error)?)?,
+            })
         }
         "daemon.config.set.request" => {
             let request: DaemonConfigSetRequest = decode(params)?;
@@ -98,41 +98,52 @@ pub(crate) fn execute(
                 .map_err(|_| ErrorCode::InvalidMessage)?;
             let patch =
                 serde_json::to_value(request.config).map_err(|_| ErrorCode::DaemonConfigInvalid)?;
-            encode(
-                DaemonConfigResult {
-                    config: config(daemon.set_config(&patch).map_err(error)?)?,
-                },
-                ErrorCode::DaemonIo,
-            )
+            let config = config(daemon.set_config(&patch).map_err(error)?)?;
+            Ok(Executed {
+                value: encode(
+                    DaemonConfigResult {
+                        config: config.clone(),
+                    },
+                    ErrorCode::DaemonIo,
+                )?,
+                changed_config: Some(config),
+            })
         }
         "daemon.config.reload.request" => {
             let _: EmptyRequest = decode(params)?;
             let reload = daemon.reload_config().map_err(error)?;
-            config(reload.config)?;
-            encode(
-                ConfigReloadResult {
-                    applied_paths: reload.applied_paths,
-                    restart_required_paths: reload.restart_required_paths,
-                    override_controlled_paths: reload.override_controlled_paths,
-                },
-                ErrorCode::DaemonIo,
-            )
+            let config = config(reload.config)?;
+            Ok(Executed {
+                value: encode(
+                    ConfigReloadResult {
+                        applied_paths: reload.applied_paths,
+                        restart_required_paths: reload.restart_required_paths,
+                        override_controlled_paths: reload.override_controlled_paths,
+                    },
+                    ErrorCode::DaemonIo,
+                )?,
+                changed_config: Some(config),
+            })
         }
         "daemon.update.request" => {
             let _: EmptyRequest = decode(params)?;
             let result = daemon.update_result();
-            encode(
-                DaemonUpdateResult {
-                    success: result.success,
-                    error: result.error,
-                    previous_version: result.previous_version,
-                    new_version: result.new_version,
-                },
-                ErrorCode::DaemonIo,
-            )
+            unchanged(DaemonUpdateResult {
+                success: result.success,
+                error: result.error,
+                previous_version: result.previous_version,
+                new_version: result.new_version,
+            })
         }
         _ => Err(ErrorCode::MethodNotFound),
     }
+}
+
+fn unchanged(result: impl serde::Serialize) -> Result<Executed, ErrorCode> {
+    Ok(Executed {
+        value: encode(result, ErrorCode::DaemonIo)?,
+        changed_config: None,
+    })
 }
 
 /// Build status or diagnostics from the availability supplied by the Provider owner.

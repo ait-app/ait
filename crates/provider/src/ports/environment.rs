@@ -48,6 +48,16 @@ impl AgentEnvironment {
         self.0.is_empty()
     }
 
+    /// Resolve `name` as the native process will see it: overrides first, then the daemon's.
+    ///
+    /// Callers must not log the returned value.
+    pub(crate) fn variable(&self, name: &str) -> Option<String> {
+        self.0.get(name).map_or_else(
+            || std::env::var(name).ok(),
+            |value| Some(value.expose_secret().to_owned()),
+        )
+    }
+
     /// Expose values only at native integration boundaries; callers must not log them.
     pub(crate) fn entries(&self) -> impl Iterator<Item = (&str, &str)> {
         self.0

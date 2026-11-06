@@ -36,6 +36,31 @@ fn forwards_only_children_announced_by_the_owned_native_process() {
 }
 
 #[test]
+fn unknown_child_status_and_unprojectable_child_events_do_not_fail_the_parent() {
+    let mut children = Children::default();
+    let images = ImageStore::default();
+    let started = json!({"type":"subagent_lifecycle","payload":{"id":"child","status":"running"}});
+    children.consume(&started, "root", "/tmp", &images).unwrap();
+    let unknown = json!({"type":"subagent_lifecycle","payload":{"id":"child","status":"paused"}});
+
+    let ignored = children.consume(&unknown, "root", "/tmp", &images).unwrap();
+    let invalid = json!({"type":"subagent_event","payload":{"id":"child","event":{"type":"message_end","message":{"role":"assistant","content":[]}}}});
+    let dropped = children.consume(&invalid, "root", "/tmp", &images).unwrap();
+
+    assert!(ignored.is_empty());
+    assert!(dropped.is_empty());
+    assert_eq!(children.list()[0].descriptor["status"], "running");
+    let message = json!({"type":"subagent_event","payload":{"id":"child","event":{"type":"message_end","message":{"role":"assistant","timestamp":1000,"content":[{"type":"text","text":"Hello"}]}}}});
+    assert_eq!(
+        children
+            .consume(&message, "root", "/tmp", &images)
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[test]
 fn child_images_use_the_native_blob_store() {
     use sha2::{Digest, Sha256};
     let root = tempfile::tempdir().unwrap();

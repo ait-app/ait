@@ -1,7 +1,5 @@
 //! Validated custom project icons and automatic icon discovery.
 
-use std::fs::File;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use domain::storage::project::{ProjectIcon, ProjectIconStoreError};
@@ -73,21 +71,9 @@ impl LocalProjectIconStore {
 impl ProjectIconStore for LocalProjectIconStore {
     fn write_custom(&self, project_id: &str, bytes: &[u8]) -> Result<(), ProjectIconStoreError> {
         validate_custom(bytes)?;
-        std::fs::create_dir_all(&self.icon_directory).map_err(|_| ProjectIconStoreError::Io)?;
-        let mut staged = tempfile::NamedTempFile::new_in(&self.icon_directory)
-            .map_err(|_| ProjectIconStoreError::Io)?;
-        staged
-            .write_all(bytes)
-            .and_then(|()| staged.as_file().sync_all())
-            .map_err(|_| ProjectIconStoreError::Io)?;
-        staged
-            .persist(self.path(project_id))
-            .map_err(|_| ProjectIconStoreError::Io)?;
-        #[cfg(unix)]
-        File::open(&self.icon_directory)
-            .and_then(|directory| directory.sync_all())
-            .map_err(|_| ProjectIconStoreError::Io)?;
-        Ok(())
+        crate::File::new(self.path(project_id))
+            .write(bytes)
+            .map_err(|_| ProjectIconStoreError::Io)
     }
 
     fn remove_custom(&self, project_id: &str) -> Result<(), ProjectIconStoreError> {

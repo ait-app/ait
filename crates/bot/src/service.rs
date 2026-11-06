@@ -4,18 +4,18 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use domain::bot::{Channel, Conversation, DeliveryStatus, SessionOwner, Turn, TurnStatus};
+use domain::bot::{Channel, Conversation, DeliveryStatus, Turn, TurnStatus};
 use domain::{BotTurnId, ChannelId, ConversationId};
 use model::ErrorCode;
 use model::bot::Store;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
-use provider::service::bot_execution::Action;
-use serde_json::{Value, json};
+use serde_json::Value;
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 use crate::channels::Incoming;
+use crate::mcp::Scopes;
 use crate::ports::{Credentials, Executor};
 use crate::state::State;
 
@@ -31,6 +31,8 @@ pub struct Dependencies {
     pub executor: Arc<dyn Executor>,
     /// Host environment credential resolver.
     pub credentials: Arc<dyn Credentials>,
+    /// Daemon-wide scoped MCP credential registry, refreshed on every catalog change.
+    pub scopes: Arc<Scopes>,
 }
 
 /// Safe startup or worker-lifecycle failure.
@@ -50,6 +52,7 @@ struct Worker {
     cancellation: CancellationToken,
     closed: watch::Receiver<bool>,
     executor: Arc<dyn Executor>,
+    scopes: Arc<Scopes>,
 }
 
 /// Cloneable application service; conversations outlive UI connections.
@@ -64,11 +67,21 @@ enum Operation {
     Account(ChannelId, String),
     Progress(BotTurnId, TurnStatus, Option<String>, Option<String>),
     Finished(ConversationId),
+    Rotate(ConversationId, BotTurnId),
     DeliveryNext(ChannelId),
     Delivery(BotTurnId, DeliveryStatus),
-    Permission(crate::protocol::DecisionRequest),
     Retire(Vec<String>),
+    RecordWorkspace(String, String),
 }
+/// Outcome of channel input that the Bot did not refuse.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Admission {
+    /// The message is durably queued (or was already queued under the same id).
+    Accepted,
+    /// The global turn backlog is full; the message was not stored and must be retried.
+    Backlogged,
+}
+
 struct Command {
     operation: Operation,
     reply: oneshot::Sender<Result<Value, ErrorCode>>,
@@ -85,6 +98,7 @@ impl Bots {
             dependencies.store,
             dependencies.workspaces,
             dependencies.projects,
+            dependencies.scopes.clone(),
         )
         .map_err(|_| Error::Initialization)?;
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -99,6 +113,7 @@ impl Bots {
             cancellation,
             closed: observed,
             executor: dependencies.executor,
+            scopes: dependencies.scopes,
         }));
         let worker = bots.clone();
         std::thread::Builder::new()
@@ -115,15 +130,13 @@ impl Bots {
     /// # Errors
     /// Returns validation, ownership, resource, persistence or lifecycle failures.
     pub async fn execute(&self, method: &str, params: Value) -> Result<Value, ErrorCode> {
-        if method == "bot.permission.resolve.request" {
-            let request = crate::protocol::decode(params)?;
-            let value = self.call(Operation::Permission(request)).await?;
-            let owner: SessionOwner = crate::protocol::decode(value["owner"].clone())?;
-            let action: Action = crate::protocol::decode(value["action"].clone())?;
-            self.0.executor.execute(owner, action).await?;
-            return Ok(json!({"resolved":true}));
-        }
         self.call(Operation::Rpc(method.to_owned(), params)).await
+    }
+
+    /// The scoped MCP credential registry this service publishes authorization into.
+    #[must_use]
+    pub fn scopes(&self) -> &Arc<Scopes> {
+        &self.0.scopes
     }
 
     /// Stop admission and signal channel receivers and active turns to shut down.
@@ -131,13 +144,26 @@ impl Bots {
         self.0.cancellation.cancel();
     }
 
-    /// Disable Bots and stop their owned work before archived workspace directories are removed.
+    /// Retire the Workspaces' Bots and stop their work before archived directories are removed.
     /// # Errors
     /// Returns configuration persistence or worker lifecycle failures.
     pub async fn retire(&self, workspaces: &[String]) -> Result<(), ErrorCode> {
         self.call(Operation::Retire(workspaces.to_vec()))
             .await
             .map(|_| ())
+    }
+
+    /// Record a worktree Workspace created by `origin`'s current Bot.
+    /// # Errors
+    /// `BotNotFound` without a current Bot, `ResourceExhausted` beyond 64 recorded
+    /// Workspaces, or persistence and worker lifecycle failures.
+    pub async fn record_workspace(&self, origin: &str, created: &str) -> Result<(), ErrorCode> {
+        self.call(Operation::RecordWorkspace(
+            origin.to_owned(),
+            created.to_owned(),
+        ))
+        .await
+        .map(|_| ())
     }
 
     /// Wait for all channel tasks and native turn cancellations after stopping admission.
@@ -172,8 +198,24 @@ impl Bots {
             .map_err(|_| ErrorCode::BotIo)?;
         result.await.map_err(|_| ErrorCode::BotIo)?
     }
-    pub(crate) async fn accept(&self, incoming: Incoming) -> Result<Value, ErrorCode> {
-        self.call(Operation::Accept(incoming)).await
+    /// Admit channel input, waiting for command capacity so a busy service never drops it.
+    ///
+    /// Returns [`Admission::Backlogged`] when the global turn backlog is full; the channel
+    /// keeps the message and retries later.
+    /// # Errors
+    /// `ResourceExhausted` reports a backlog owned by this message's conversation (or the
+    /// conversation catalog limit); `InvalidMessage` and `IdempotencyConflict` report a message
+    /// that can never be admitted; other codes report lifecycle or persistence failures.
+    pub(crate) async fn accept(&self, incoming: Incoming) -> Result<Admission, ErrorCode> {
+        if self.0.cancellation.is_cancelled() {
+            return Err(ErrorCode::ServerDraining);
+        }
+        let receipt = self.send(Operation::Accept(incoming)).await?;
+        Ok(if receipt["accepted"] == true {
+            Admission::Accepted
+        } else {
+            Admission::Backlogged
+        })
     }
     pub(crate) async fn cursor(&self, channel: ChannelId, cursor: i64) -> Result<(), ErrorCode> {
         self.call(Operation::Cursor(channel, cursor))
@@ -202,6 +244,14 @@ impl Bots {
         self.send(Operation::Progress(turn, status, reply, error))
             .await
             .map(|_| ())
+    }
+    /// Move `turn`'s conversation to a new native session and generation; see `State::rotate`.
+    pub(crate) async fn rotate(
+        &self,
+        conversation: ConversationId,
+        turn: BotTurnId,
+    ) -> Result<Conversation, ErrorCode> {
+        crate::protocol::decode(self.send(Operation::Rotate(conversation, turn)).await?)
     }
     pub(crate) async fn finished(&self, conversation: ConversationId) -> Result<(), ErrorCode> {
         self.send(Operation::Finished(conversation))
@@ -314,10 +364,10 @@ fn apply(
 ) -> Result<Value, ErrorCode> {
     match operation {
         Operation::Rpc(method, params) if method == "bot.turn.cancel.request" => {
-            state.cancel(crate::protocol::decode(params)?)
+            state.cancel(&crate::protocol::decode(params)?)
         }
         Operation::Rpc(method, params) => state.execute(&method, params),
-        Operation::Accept(incoming) => state.accept(incoming),
+        Operation::Accept(incoming) => state.accept_channel(incoming),
         Operation::Cursor(channel, cursor) => {
             state.advance_cursor(channel, cursor).map(|()| Value::Null)
         }
@@ -348,6 +398,7 @@ fn apply(
             state.finished(conversation);
             Ok(Value::Null)
         }
+        Operation::Rotate(conversation, turn) => state.rotate(conversation, turn),
         Operation::DeliveryNext(channel) => {
             let pending = state.pending_delivery(channel)?;
             if let Some((turn, _)) = &pending {
@@ -356,11 +407,10 @@ fn apply(
             serde_json::to_value(pending).map_err(|_| ErrorCode::BotIo)
         }
         Operation::Delivery(turn, status) => state.delivery(turn, status).map(|()| Value::Null),
-        Operation::Permission(request) => {
-            let (owner, action) = state.permission(request)?;
-            Ok(json!({"owner":owner,"action":action}))
-        }
         Operation::Retire(workspaces) => state.retire(&workspaces).map(|()| Value::Null),
+        Operation::RecordWorkspace(origin, created) => state
+            .record_workspace(&origin, &created)
+            .map(|()| Value::Null),
     }
 }
 

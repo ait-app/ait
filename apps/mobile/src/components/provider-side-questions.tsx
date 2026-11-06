@@ -1,0 +1,269 @@
+import { memo, useCallback, useEffect, useState } from "react";
+import { ScrollView, Text, TextInput, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import { StyleSheet } from "react-native-unistyles";
+import type { ProviderUiState } from "@ait/protocol/messages";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { useHostRuntimeClient } from "@/runtime/host-runtime";
+
+type State = NonNullable<ProviderUiState["sideQuestions"]>;
+type Topic = State["records"][number];
+
+export function ProviderSideQuestions({
+  state,
+  serverId,
+  agentId,
+  disabled,
+}: {
+  state: State;
+  serverId: string;
+  agentId: string;
+  disabled: boolean;
+}) {
+  const { t } = useTranslation();
+  const client = useHostRuntimeClient(serverId);
+  const [expanded, setExpanded] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (state.reveal) setExpanded(true);
+  }, [state.reveal]);
+  const run = useCallback(
+    async (action: string, arguments_: Record<string, string>) => {
+      if (!client) throw new Error(t("providerControl.sideQuestions.disconnected"));
+      return client.runNativeAction(agentId, action, arguments_);
+    },
+    [client, agentId, t],
+  );
+  const send = async () => {
+    if (disabled || sending || state.runningId || !draft.trim()) return;
+    const submitted = draft;
+    setSending(true);
+    setError(null);
+    try {
+      await run("btw", { question: submitted.trim(), ...(replyTo ? { recordId: replyTo } : {}) });
+      setDraft((current) => (current === submitted ? "" : current));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setSending(false);
+    }
+  };
+  const followUp = useCallback((id: string) => setReplyTo(id), []);
+  if (!state.records.length && !state.error && !state.reveal) return null;
+  return (
+    <View style={styles.panel} testID="provider-side-questions">
+      <Button variant="ghost" size="sm" onPress={() => setExpanded(!expanded)}>
+        <Text style={styles.title}>{t("providerControl.sideQuestions.title")}</Text>
+      </Button>
+      {expanded ? (
+        <>
+          <ScrollView style={styles.history} contentContainerStyle={styles.list}>
+            {!state.records.length ? (
+              <Text style={styles.caption}>{t("providerControl.sideQuestions.empty")}</Text>
+            ) : null}
+            {state.records.map((record) => (
+              <SideTopic
+                key={record.id}
+                record={record}
+                running={state.runningId === record.id}
+                disabled={disabled}
+                run={run}
+                onFollowUp={followUp}
+              />
+            ))}
+            {state.omitted ? (
+              <Text style={styles.caption}>
+                {t("providerControl.sideQuestions.older", { count: state.omitted })}
+              </Text>
+            ) : null}
+          </ScrollView>
+          {replyTo ? (
+            <View style={styles.row}>
+              <Text style={styles.caption} numberOfLines={1}>
+                {t("providerControl.sideQuestions.replyTo", {
+                  question:
+                    state.records.find((record) => record.id === replyTo)?.question ?? replyTo,
+                })}
+              </Text>
+              <Button variant="ghost" size="sm" onPress={() => setReplyTo(null)}>
+                <Text style={styles.caption}>{t("providerControl.sideQuestions.newQuestion")}</Text>
+              </Button>
+            </View>
+          ) : null}
+          <TextInput
+            accessibilityLabel={t("providerControl.sideQuestions.question")}
+            value={draft}
+            onChangeText={setDraft}
+            editable={!disabled}
+            multiline
+            style={styles.input}
+            testID="side-question-input"
+          />
+          <View style={styles.row}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={disabled || !client || sending || Boolean(state.runningId) || !draft.trim()}
+              onPress={() => void send()}
+              testID="side-question-send"
+            >
+              <Text style={styles.caption}>
+                {sending ? t("common.loading") : t("providerControl.sideQuestions.ask")}
+              </Text>
+            </Button>
+          </View>
+          {error || state.error ? (
+            <Text accessibilityRole="alert" style={styles.error}>
+              {error ?? state.error}
+            </Text>
+          ) : null}
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+const SideTopic = memo(
+  function SideTopic({
+    record,
+    running,
+    disabled,
+    run,
+    onFollowUp,
+  }: {
+    record: Topic;
+    running: boolean;
+    disabled: boolean;
+    run: (action: string, args: Record<string, string>) => Promise<unknown>;
+    onFollowUp: (id: string) => void;
+  }) {
+    const { t } = useTranslation();
+    const [pending, setPending] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const latest = record.turns[record.turns.length - 1]!;
+    const phase = latest.status === "running" && !running ? "interrupted" : latest.status;
+    const cancel = async () => {
+      setPending(true);
+      setError(null);
+      try {
+        await run("btw_cancel", { recordId: record.id });
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      } finally {
+        setPending(false);
+      }
+    };
+    return (
+      <View style={styles.topic} testID={`side-question-topic-${record.id}`}>
+        <View style={styles.row}>
+          <Text style={styles.title} numberOfLines={2}>
+            {record.question}
+          </Text>
+          <StatusBadge
+            variant={phase === "error" ? "error" : phase === "complete" ? "success" : "muted"}
+            label={t(`providerControl.sideQuestions.states.${phase}`)}
+          />
+        </View>
+        {record.turns.map((turn, index) => (
+          <View key={`${turn.createdAt}:${index}`} style={styles.turn}>
+            <Text style={styles.question} selectable>
+              {turn.question}
+            </Text>
+            {turn.answer ? (
+              <Text
+                style={styles.answer}
+                selectable
+                testID={`side-question-answer-${record.id}-${index}`}
+              >
+                {turn.answer}
+              </Text>
+            ) : null}
+            {turn.error ? <Text style={styles.error}>{turn.error}</Text> : null}
+          </View>
+        ))}
+        {record.truncated ? (
+          <Text style={styles.caption}>{t("providerControl.sideQuestions.shortened")}</Text>
+        ) : null}
+        <View style={styles.row}>
+          {running ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={disabled || pending}
+              onPress={() => void cancel()}
+            >
+              <Text style={styles.caption}>{t("providerControl.sideQuestions.cancel")}</Text>
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={disabled}
+              onPress={() => onFollowUp(record.id)}
+            >
+              <Text style={styles.caption}>{t("providerControl.sideQuestions.followUp")}</Text>
+            </Button>
+          )}
+        </View>
+        {error ? (
+          <Text accessibilityRole="alert" style={styles.error}>
+            {error}
+          </Text>
+        ) : null}
+      </View>
+    );
+  },
+  (before, after) =>
+    before.running === after.running &&
+    before.disabled === after.disabled &&
+    before.run === after.run &&
+    before.onFollowUp === after.onFollowUp &&
+    before.record.truncated === after.record.truncated &&
+    before.record.question === after.record.question &&
+    before.record.turns.length === after.record.turns.length &&
+    before.record.turns.every((turn, index) => {
+      const next = after.record.turns[index]!;
+      return (
+        turn.question === next.question &&
+        turn.answer === next.answer &&
+        turn.status === next.status &&
+        turn.error === next.error &&
+        turn.createdAt === next.createdAt &&
+        turn.updatedAt === next.updatedAt
+      );
+    }),
+);
+
+const styles = StyleSheet.create((theme) => ({
+  panel: { gap: 8 },
+  history: { maxHeight: 260 },
+  list: { gap: 12 },
+  row: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  topic: {
+    gap: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 10,
+  },
+  turn: { gap: 6 },
+  title: { color: theme.colors.foreground, fontSize: 13, fontWeight: "600", flexShrink: 1 },
+  question: { color: theme.colors.foregroundMuted, fontSize: 12 },
+  answer: { color: theme.colors.foreground, fontSize: 13, lineHeight: 19 },
+  caption: { color: theme.colors.foregroundMuted, fontSize: 12 },
+  input: {
+    color: theme.colors.foreground,
+    fontSize: 13,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 8,
+    minHeight: 52,
+    maxHeight: 120,
+  },
+  error: { color: theme.colors.statusDanger, fontSize: 12 },
+}));

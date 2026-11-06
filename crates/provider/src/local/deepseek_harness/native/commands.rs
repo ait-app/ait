@@ -87,11 +87,11 @@ pub(super) async fn catalog(
         .filter(|items| items.len() <= 4096)
         .ok_or(AgentSessionError::Failed)?;
     commands.iter().map(|command| {
-        let token = super::super::config::text(command, "name")?;
+        let token = crate::local::acp_config::text(command, "name")?;
         if token.len() > 256 || name(&format!("/{token}")) != Some(token) {
             return Err(AgentSessionError::Failed);
         }
-        let mut entry = json!({"name":token,"description":super::super::config::text(command,"description")?,
+        let mut entry = json!({"name":token,"description":crate::local::acp_config::text(command,"description")?,
             "argumentHint":command["input"]["hint"].as_str().unwrap_or_default(),
             "kind":"command","source":"extension",
             "acceptsAttachments":command["input"]["attachments"] == true});
@@ -109,7 +109,7 @@ pub(super) fn acknowledged(value: &Value) -> Result<(), AgentSessionError> {
     if value.is_null() {
         return Err(AgentSessionError::Rejected);
     }
-    super::super::config::text(value, "commandId")?;
+    crate::local::acp_config::text(value, "commandId")?;
     if !matches!(value["result"]["kind"].as_str(), Some("success" | "error")) {
         return Err(AgentSessionError::Failed);
     }

@@ -9,13 +9,17 @@ use tokio::{sync::oneshot, time::Instant};
 use uuid::Uuid;
 
 use super::{
-    OmpClient, config, history, interactions::Dialogs, stream::Stream, transport::Transport,
+    LABEL, OmpClient, PROVIDER, config, history, interactions::Dialogs, stream::Stream,
+    transport::Transport,
 };
+use crate::local::prompt_blocks;
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
 use crate::ports::diagnostics::{Category, Diagnostic};
 use crate::protocol::prompt::AgentPrompt;
+
+mod side_commands;
 
 const STATE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 const CANCEL_GRACE: Duration = Duration::from_secs(5);
@@ -50,6 +54,7 @@ pub(super) struct Session {
     client: OmpClient,
     transport: Transport,
     cwd: String,
+    confinement: Option<domain::workspace::sandbox::WriteConfinement>,
     state: Value,
     config: StoredAgentConfig,
     service_tiers: config::ServiceTiers,
@@ -76,6 +81,10 @@ pub(super) struct Session {
     created_at: String,
     native_bridge: NativeBridge,
     commands: Vec<Value>,
+    native_commands: Vec<Value>,
+    command_controls: super::commands::pending::Pending,
+    btw: super::btw::State,
+    active_builtin: bool,
     command_version: u64,
 }
 
@@ -110,9 +119,10 @@ pub(super) async fn probe_config_with_extension(
     extension: Option<&std::path::Path>,
 ) -> Result<Transport, AgentSessionError> {
     config::validate_spec(&AgentSessionSpec {
-        provider: "omp".to_owned(),
+        provider: PROVIDER.to_owned(),
         cwd: cwd.to_owned(),
         config: StoredAgentConfig::default(),
+        confinement: None,
     })?;
     let mut args = vec![
         "--mode".to_owned(),
@@ -152,7 +162,7 @@ pub(super) async fn probe_config_with_extension(
             model.clone(),
         ]);
     }
-    let mut transport = Transport::spawn(client, cwd, &args)?;
+    let mut transport = Transport::spawn(client, cwd, &args, None)?;
     transport.retain_configuration(configuration);
     transport.initialize().await?;
     let state = transport.request("get_state", json!({})).await?;
@@ -196,7 +206,7 @@ async fn connect(
             config::approval_mode(mode).to_owned(),
         ]);
     }
-    let mut transport = Transport::spawn(client, &spec.cwd, &args)?;
+    let mut transport = Transport::spawn(client, &spec.cwd, &args, spec.confinement.as_ref())?;
     transport.retain_configuration(configuration);
     transport.initialize().await?;
     let state = config::apply(&mut transport, &spec.config).await?;
@@ -223,16 +233,18 @@ pub(super) async fn open(
     handle: Option<&AgentPersistenceHandle>,
 ) -> Result<Session, AgentSessionError> {
     config::validate_spec(spec)?;
-    let mut journal = if let Some(handle) = handle {
-        Some(history::load(client, handle, &spec.cwd).await?)
-    } else {
-        None
+    let (mut journal, replayed) = match handle {
+        Some(handle) => {
+            let (journal, replayed) = history::resume(client, handle, &spec.cwd).await?;
+            (Some(journal), replayed)
+        }
+        None => (None, None),
     };
     let path = journal
         .as_ref()
         .map(|journal| journal.path.to_str().ok_or(AgentSessionError::Failed))
         .transpose()?;
-    let persisted = path.is_some_and(|path| std::path::Path::new(path).is_file());
+    let persisted = replayed.is_some();
     let created_at = journal
         .as_ref()
         .and_then(|journal| journal.header["timestamp"].as_str())
@@ -259,16 +271,31 @@ pub(super) async fn open(
     let navigation = journal
         .as_ref()
         .and_then(|journal| journal.navigation.clone());
-    let mut stream = match (journal, handle) {
-        (Some(journal), Some(handle)) if persisted => journal.project(client, handle)?.1,
-        _ => Stream::new(id.to_owned(), client.images.clone()),
+    let mut stream = if navigation.is_some() && persisted {
+        let client = client.clone();
+        let handle = handle.ok_or(AgentSessionError::Failed)?.clone();
+        tokio::task::spawn_blocking(move || {
+            journal
+                .ok_or(AgentSessionError::Failed)?
+                .project(&client, &handle)
+                .map(|(_, stream)| stream)
+        })
+        .await
+        .map_err(|_| AgentSessionError::Failed)??
+    } else {
+        replayed.unwrap_or_else(|| Stream::new(id.to_owned(), client.images.clone()))
     };
     stream = stream.with_blobs(history::root(client)?.with_file_name("blobs"));
     stream.set_context(&state);
+    let mut btw = super::btw::State::default();
+    if let Ok(history) = transport.request("get_btw_history", json!({})).await {
+        btw.restore(&history).unwrap_or_else(|_| btw.malformed());
+    }
     Ok(Session {
         client: client.clone(),
         transport,
         cwd: spec.cwd.clone(),
+        confinement: spec.confinement.clone(),
         state,
         config: spec.config.clone(),
         service_tiers,
@@ -294,7 +321,11 @@ pub(super) async fn open(
         submitted: false,
         created_at,
         native_bridge: NativeBridge::default(),
-        commands,
+        commands: super::commands::visible(&commands),
+        native_commands: commands,
+        command_controls: super::commands::pending::Pending::default(),
+        btw,
+        active_builtin: false,
         command_version: 1,
     })
 }
@@ -374,7 +405,7 @@ impl Session {
         }
         if self.config.mode_id == config.mode_id
             && self.config.system_prompt == config.system_prompt
-            && super::roles::overrides(&self.config) == super::roles::overrides(config)
+            && super::roles::same_overlay(&self.config, config)
         {
             self.state = config::apply(&mut self.transport, config).await?;
             let runtime = config::runtime(&self.state)?;
@@ -385,7 +416,10 @@ impl Session {
             self.stream.set_context(&self.state);
             self.config.clone_from(config);
         } else {
-            if super::roles::overrides(&self.config) != super::roles::overrides(config) {
+            if self.btw.running() || self.command_controls.status().is_some() {
+                return Err(AgentSessionError::Busy);
+            }
+            if !super::roles::same_overlay(&self.config, config) {
                 let state = self.transport.request("get_state", json!({})).await?;
                 if state["hasPendingAsyncWork"] != false
                     || state["isStreaming"] != false
@@ -398,9 +432,10 @@ impl Session {
             }
             let path = config::text(&self.state, "sessionFile")?.to_owned();
             let spec = AgentSessionSpec {
-                provider: "omp".to_owned(),
+                provider: PROVIDER.to_owned(),
                 cwd: self.cwd.clone(),
                 config: config.clone(),
+                confinement: self.confinement.clone(),
             };
             let (role_catalog, tiers) = self.client.role_settings(&spec).await?;
             self.transport.close().await?;
@@ -429,6 +464,13 @@ impl Session {
                 .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
             }
             self.transport = transport;
+            self.command_controls.close();
+            self.btw = super::btw::State::default();
+            if let Ok(history) = self.transport.request("get_btw_history", json!({})).await {
+                self.btw
+                    .restore(&history)
+                    .unwrap_or_else(|_| self.btw.malformed());
+            }
             self.state_check = None;
             self.cancel_requests.clear();
             self.input_requests.clear();
@@ -444,8 +486,9 @@ impl Session {
     }
 
     fn update_commands(&mut self, commands: Vec<Value>) {
-        if self.commands != commands {
-            self.commands = commands;
+        if self.native_commands != commands {
+            self.commands = super::commands::visible(&commands);
+            self.native_commands = commands;
             self.command_version = self.command_version.wrapping_add(1);
         }
     }
@@ -532,17 +575,20 @@ impl Session {
         {
             return Err(AgentSessionError::Rejected);
         }
+        if let Some(name) = super::commands::blocked(&prompt.text, &self.native_commands) {
+            let turn = Uuid::new_v4().to_string();
+            self.reject_command(prompt, name);
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::Completed(None));
+            return Ok(turn);
+        }
+        if super::commands::is_btw(&prompt.text) {
+            return Err(AgentSessionError::Rejected);
+        }
         self.configure(config).await?;
-        let blocks = prompt.blocks()?;
-        let text = blocks
-            .iter()
-            .filter_map(|block| block["text"].as_str())
-            .collect::<Vec<_>>()
-            .join("\n\n");
-        let images: Vec<_> = blocks
-            .into_iter()
-            .filter(|block| block["type"] == "image")
-            .collect();
+        self.active_builtin = super::commands::builtin(&prompt.text, &self.native_commands);
+        let (text, images) = prompt_blocks::split(prompt.blocks()?);
         self.transport.diagnostics.clear();
         let prompt_id = self
             .transport
@@ -688,7 +734,27 @@ impl Session {
         Ok(false)
     }
 
+    fn consume_side_control(&mut self, event: &Value) -> bool {
+        if self.btw.capture(event).is_err() {
+            self.btw.malformed();
+            tracing::warn!("OMP side-question payload was rejected");
+        }
+        match self.command_controls.capture(event) {
+            super::commands::pending::Capture::Unrelated => false,
+            super::commands::pending::Capture::Pending => true,
+            super::commands::pending::Capture::Finished(entry) => {
+                self.stream
+                    .events
+                    .push_back(AgentTurnEvent::Timeline(entry));
+                true
+            }
+        }
+    }
+
     fn consume(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        if self.consume_side_control(event) {
+            return Ok(());
+        }
         if event["type"] == "response" && self.actions.capture(event) {
             self.ui.capture(event)?;
             return Ok(());
@@ -700,12 +766,8 @@ impl Session {
         if event["type"] == "agent_start" {
             self.invalidate_state_check();
         }
-        if event["type"] == "message_end"
-            && matches!(event["message"]["role"].as_str(), Some("assistant"))
-        {
-            self.submitted = true;
-        }
         if event["type"] == "message_end" && event["message"]["role"] == "assistant" {
+            self.submitted = true;
             if event["message"]["stopReason"] == "error" {
                 self.transport.diagnostics.observe_native(
                     &event["message"]["errorMessage"],
@@ -814,6 +876,7 @@ impl Session {
 
     fn finish(&mut self) {
         if self.active.take().is_some() {
+            self.active_builtin = false;
             self.prompt_id = None;
             self.stream.pending_inputs.clear();
             self.native_bridge.callbacks.clear();
@@ -950,11 +1013,24 @@ impl Session {
 
 #[async_trait::async_trait]
 impl AgentSession for Session {
+    fn handles_out_of_band(&self, text: &str) -> Option<bool> {
+        Some(
+            super::commands::is_btw(text)
+                || super::commands::blocked(text, &self.native_commands).is_some()
+                || super::commands::read_only(text, &self.native_commands),
+        )
+    }
+    async fn out_of_band(&mut self, prompt: &AgentPrompt) -> Result<(), AgentSessionError> {
+        self.side_command(prompt).await
+    }
+    fn take_command_completion(&mut self) -> Option<AgentSessionFuture<'static, ()>> {
+        self.command_controls.take()
+    }
     async fn complete_commands(
         &mut self,
         input: &crate::protocol::commands::CompletionInput,
     ) -> Result<crate::protocol::commands::ValidatedCompletion, AgentSessionError> {
-        super::completion::complete(&mut self.transport, input).await
+        super::completion::complete(&mut self.transport, input, &self.native_commands).await
     }
     fn commands(&self) -> Option<&[Value]> {
         Some(&self.commands)
@@ -996,6 +1072,14 @@ impl AgentSession for Session {
         }
         let mut snapshot = self.ui.snapshot();
         snapshot["actions"] = super::actions::catalog();
+        snapshot["sideQuestions"] = self.btw.snapshot();
+        if let Some(status) = self.command_controls.status()
+            && let Some(statuses) = snapshot["statuses"]
+                .as_array_mut()
+                .filter(|statuses| statuses.len() < 32)
+        {
+            statuses.push(json!({"key":"ait-native-query","text":status}));
+        }
         Some(snapshot)
     }
     fn observation_committed(&mut self) {
@@ -1087,7 +1171,8 @@ impl AgentSession for Session {
                 } else {
                     self.navigation_target = None;
                 }
-                let (history, mut stream) = journal.project(&self.client, &handle)?;
+                let (history, mut stream) =
+                    history::project(&self.client, &handle, journal).await?;
                 stream.set_context(&self.state);
                 stream.events = std::mem::take(&mut self.stream.events);
                 stream.events.push_back(AgentTurnEvent::RuntimeInfo(info));
@@ -1122,11 +1207,11 @@ impl AgentSession for Session {
             "stdout_read" => "Ait could not read OMP stdout.",
             _ => diagnostic.category.message(),
         };
-        Some(Cow::Owned(format!("Oh My Pi: {reason}")))
+        Some(Cow::Owned(format!("{LABEL}: {reason}")))
     }
 
     fn provider(&self) -> &'static str {
-        "omp"
+        PROVIDER
     }
     async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
         // The manager asks immediately after submission, before polling any dialogs.
@@ -1149,6 +1234,8 @@ impl AgentSession for Session {
             }
             self.children = super::subagents::Children::default()
                 .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
+            self.btw = super::btw::State::default();
+            self.command_controls.close();
             self.created_at = chrono::Utc::now().to_rfc3339();
             self.submitted = false;
             self.navigation = None;
@@ -1165,7 +1252,7 @@ impl AgentSession for Session {
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
         let file = self.state["sessionFile"].as_str()?;
         Some(AgentPersistenceHandle {
-            provider: "omp".to_owned(),
+            provider: PROVIDER.to_owned(),
             session_id: self.state["sessionId"].as_str()?.to_owned(),
             native_handle: None,
             metadata: Some(BTreeMap::from([
@@ -1208,16 +1295,7 @@ impl AgentSession for Session {
         {
             return Err(AgentSessionError::Rejected);
         }
-        let blocks = prompt.blocks()?;
-        let text = blocks
-            .iter()
-            .filter_map(|block| block["text"].as_str())
-            .collect::<Vec<_>>()
-            .join("\n\n");
-        let images: Vec<_> = blocks
-            .into_iter()
-            .filter(|block| block["type"] == "image")
-            .collect();
+        let (text, images) = prompt_blocks::split(prompt.blocks()?);
         let id = self
             .transport
             .begin("steer", json!({"message":text,"images":images}))
@@ -1269,6 +1347,11 @@ impl AgentSession for Session {
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
         self.check_cancellation()?;
+        if let Some(entry) = self.command_controls.expired() {
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::Timeline(entry));
+        }
         if let Some(event) = self.stream.events.pop_front() {
             return Ok(Some(event));
         }
@@ -1302,6 +1385,7 @@ impl AgentSession for Session {
     async fn close(&mut self) -> Result<(), AgentSessionError> {
         self.closed = true;
         self.actions.close();
+        self.command_controls.close();
         self.stream.events.extend(self.dialogs.clear());
         self.transport.close().await
     }

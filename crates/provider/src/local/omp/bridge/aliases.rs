@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde::{Deserialize, Serialize};
 
-use crate::local::omp::{OmpClient, history};
+use crate::local::omp::{OmpClient, PROVIDER, history};
 use crate::ports::agent_session::AgentSessionError;
 
 const MAX_BYTES: u64 = 1024 * 1024;
@@ -62,7 +62,7 @@ pub(super) fn load(
         return Err(AgentSessionError::Rejected);
     }
     let alias: Alias = serde_json::from_slice(&bytes).map_err(|_| AgentSessionError::Failed)?;
-    if alias.cwd != cwd || alias.handle.provider != "omp" {
+    if alias.cwd != cwd || alias.handle.provider != PROVIDER {
         return Err(AgentSessionError::Rejected);
     }
     Ok(Some(alias))

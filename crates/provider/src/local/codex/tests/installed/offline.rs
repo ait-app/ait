@@ -84,6 +84,7 @@ async fn installed_codex_offline_turns_rewind_and_unarchive_use_the_current_prot
             model: Some("offline-model".into()),
             ..StoredAgentConfig::default()
         },
+        confinement: None,
     };
     let mut session = client.create_session(&spec).await.unwrap();
     let handle = session.persistence().unwrap();

@@ -7,7 +7,8 @@ use serde_json::{Value, json};
 
 use super::{history, runtime::Runtime};
 use crate::{
-    local::deepseek_harness::{DeepSeekHarnessClient, PROVIDER, config::text},
+    local::acp_config::text,
+    local::deepseek_harness::{DeepSeekHarnessClient, PROVIDER},
     ports::{
         agent_session::AgentSessionError,
         native_history::{ListOptions, SessionDescriptor, SessionHistory},

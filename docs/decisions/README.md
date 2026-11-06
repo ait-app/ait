@@ -8,6 +8,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## Bot
 
+- [ADR-215：Bot 权限与作用域 MCP 凭据](bot/adr-215-bot-permissions-and-scoped-mcp.md)
+- [ADR-213：单 Workspace 管理者 Bot 与 v2 接口](bot/adr-213-single-workspace-manager-bot.md)
 - [ADR-145：Bot 执行期间自动拒绝权限请求](bot/adr-145-bot-permission-denial.md)
 - [ADR-139：Workspace Bot 与独占 Channel](bot/adr-139-workspace-bots-and-owned-channels.md)
 
@@ -55,6 +57,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## 工作区、文件与 Git
 
+- [ADR-215：沙箱化 Worktree 隔离级别](workspace/adr-215-sandboxed-worktree-isolation.md)
 - [ADR-168：Setup 全局摘要与面板日志订阅分离](workspace/adr-168-scoped-setup-observation.md)
 
 - [ADR-146：Workspace 重置清除变更请求关联](workspace/adr-146-reset-workspace-change-request-association.md)
@@ -87,6 +90,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## Provider、Agent 与会话
 
+- [ADR-221：OMP 的宿主命令边界与独立侧问答](providers/adr-221-omp-headless-commands-and-side-questions.md)
 - [ADR-220：OMP 原生模型预设与 Ait 模型控件](providers/adr-220-omp-model-presets.md)
 
 - [ADR-218：原生临时界面与拥有者操作](providers/adr-218-native-ui-and-actions.md)
@@ -185,6 +189,9 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 - [ADR-027：独立 AgentSession 与 AgentManager 生命周期边界](providers/adr-027-independent-agent-session-manager.md)
 
 ## 客户端、连接与品牌
+
+- [ADR-214：客户端 Workspace Bot 标签页 v2](clients/adr-214-workspace-bot-tab-v2.md)
+- [ADR-212：打包的 daemon 可执行文件统一命名为 aitd](clients/adr-212-packaged-daemon-name-aitd.md)
 
 - [ADR-211：SDK 原生使用 daemon 协议](clients/adr-211-sdk-native-daemon-protocol.md)
 

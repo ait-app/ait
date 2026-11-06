@@ -20,6 +20,8 @@ use model::storage::project::{ProjectConfigStore, ProjectIconStore};
 use model::workspace::provisioning::DirectorySource;
 use model::workspace::registry::{MutationSubscription, ProjectRegistry, WorkspaceRegistry};
 
+use crate::support::random::random_hyphenated_id;
+
 mod activity;
 
 /// Safe application error for registry-backed directory operations.
@@ -483,28 +485,26 @@ impl Directory {
                 .cmp(&right.created_at)
                 .then_with(|| left.workspace_id.cmp(&right.workspace_id))
         });
-        if let Some(active) = matching
-            .iter()
-            .find(|workspace| workspace.archived_at.as_ref().is_none_or(String::is_empty))
+        if let Some(active) = matching.iter().find(|workspace| !workspace.is_archived())
+            && let Some(refreshed) = self.refresh_workspace(active, &checkout, timestamp)?
         {
-            return self.refresh_workspace(active, &checkout, timestamp);
+            return Ok(refreshed);
         }
-        if let Some(archived) = matching.iter().find(|workspace| {
-            workspace
-                .archived_at
-                .as_ref()
-                .is_some_and(|value| !value.is_empty())
-        }) && self
-            .projects
-            .get(&archived.project_id)
-            .map_err(map_error)?
-            .is_some_and(|project| project.archived_at.as_ref().is_none_or(String::is_empty))
+        if let Some(archived) = matching.iter().find(|workspace| workspace.is_archived())
+            && self
+                .projects
+                .get(&archived.project_id)
+                .map_err(map_error)?
+                .is_some_and(|project| !project.is_archived())
+            && let Some(restored) = self
+                .workspaces
+                .update(&archived.workspace_id, &|current| {
+                    let mut restored = placement(current.clone(), &checkout, timestamp);
+                    restored.archived_at = None;
+                    restored
+                })
+                .map_err(map_error)?
         {
-            let mut restored = placement(archived.clone(), &checkout, timestamp);
-            restored.archived_at = None;
-            self.workspaces
-                .upsert(&restored, WorkspaceMutationContext::default())
-                .map_err(map_error)?;
             self.refresh_project_for_workspace(&restored, &checkout, timestamp)?;
             return Ok(restored);
         }
@@ -524,6 +524,17 @@ impl Directory {
     /// Returns `DirectoryError::Registry` when the registry cannot be read.
     pub fn list_projects(&self) -> Result<Vec<PersistedProjectRecord>, DirectoryError> {
         self.projects.list().map_err(map_error)
+    }
+
+    /// Read one project record, including an archived one.
+    ///
+    /// # Errors
+    /// Returns `DirectoryError::Registry` when the registry cannot be read.
+    pub(crate) fn get_project(
+        &self,
+        project_id: &str,
+    ) -> Result<Option<PersistedProjectRecord>, DirectoryError> {
+        self.projects.get(project_id).map_err(map_error)
     }
 
     /// List all workspace records in registry insertion order.
@@ -722,10 +733,7 @@ impl Directory {
             .list()
             .map_err(map_error)?
             .into_iter()
-            .filter(|workspace| {
-                workspace.project_id == project_id
-                    && workspace.archived_at.as_ref().is_none_or(String::is_empty)
-            })
+            .filter(|workspace| workspace.project_id == project_id && !workspace.is_archived())
             .map(|workspace| workspace.workspace_id)
             .collect::<Vec<_>>();
         for workspace_id in &active_workspace_ids {
@@ -837,11 +845,7 @@ impl Directory {
             .get(project_id)
             .map_err(map_error)?
             .ok_or(DirectoryError::UnknownProject)?;
-        if project
-            .archived_at
-            .as_ref()
-            .is_some_and(|value| !value.is_empty())
-        {
+        if project.is_archived() {
             return Err(DirectoryError::ArchivedProject);
         }
         let checkout = if self
@@ -854,7 +858,8 @@ impl Directory {
                 .inspect(&project.root_path)
                 .map_err(map_source)?
         };
-        self.refresh_project(project, &checkout, timestamp)
+        self.refresh_project(project, &checkout, timestamp)?
+            .ok_or(DirectoryError::UnknownProject)
     }
 
     fn refresh_project_for_workspace(
@@ -880,40 +885,50 @@ impl Directory {
         Ok(())
     }
 
+    /// Apply the checkout-derived kind and key to the latest project record.
+    /// Returns none when the project was removed after it was read.
     fn refresh_project(
         &self,
         project: PersistedProjectRecord,
         checkout: &Checkout,
         timestamp: &str,
-    ) -> Result<PersistedProjectRecord, DirectoryError> {
+    ) -> Result<Option<PersistedProjectRecord>, DirectoryError> {
         let kind = project_kind(checkout);
         let key = Some(derive_project_key(checkout, &self.server_id));
         if project.kind == kind && project.project_key == key {
-            return Ok(project);
+            return Ok(Some(project));
         }
-        let mut updated = project;
-        updated.kind = kind;
-        updated.project_key = key;
-        timestamp.clone_into(&mut updated.updated_at);
-        self.projects.upsert(&updated).map_err(map_error)?;
-        Ok(updated)
+        self.projects
+            .update(&project.project_id, &|current| {
+                let mut updated = current.clone();
+                if updated.kind != kind || updated.project_key != key {
+                    updated.kind = kind;
+                    updated.project_key.clone_from(&key);
+                    timestamp.clone_into(&mut updated.updated_at);
+                }
+                updated
+            })
+            .map_err(map_error)
     }
 
+    /// Apply the checkout placement to the latest workspace record.
+    /// Returns none when the workspace was removed after it was read.
     fn refresh_workspace(
         &self,
         workspace: &PersistedWorkspaceRecord,
         checkout: &Checkout,
         timestamp: &str,
-    ) -> Result<PersistedWorkspaceRecord, DirectoryError> {
+    ) -> Result<Option<PersistedWorkspaceRecord>, DirectoryError> {
         self.refresh_project_for_workspace(workspace, checkout, timestamp)?;
         let updated = placement(workspace.clone(), checkout, timestamp);
         if updated == *workspace {
-            return Ok(updated);
+            return Ok(Some(updated));
         }
         self.workspaces
-            .upsert(&updated, WorkspaceMutationContext::default())
-            .map_err(map_error)?;
-        Ok(updated)
+            .update(&workspace.workspace_id, &|current| {
+                placement(current.clone(), checkout, timestamp)
+            })
+            .map_err(map_error)
     }
 
     fn resolve_active_project_root(&self, requested_root: &str) -> Result<String, DirectoryError> {
@@ -922,11 +937,7 @@ impl Directory {
             .canonical(requested_root)
             .map_err(|_| DirectoryError::UnknownProject)?;
         for project in self.projects.list().map_err(map_error)? {
-            if project
-                .archived_at
-                .as_ref()
-                .is_some_and(|value| !value.is_empty())
-            {
+            if project.is_archived() {
                 continue;
             }
             let Ok(root) = self.source.canonical(&project.root_path) else {
@@ -1061,6 +1072,7 @@ fn workspace_record(
         labels: None,
         auto_name: None,
         untrusted_source: None,
+        sandbox: None,
     }
 }
 
@@ -1114,7 +1126,8 @@ fn normalize_branch(branch: Option<String>) -> Option<String> {
         .filter(|branch| !branch.is_empty() && !branch.eq_ignore_ascii_case("HEAD"))
 }
 
-fn normalize_optional_text(text: Option<String>) -> Option<String> {
+/// Trim optional user text, treating blank text as absent.
+pub(crate) fn normalize_optional_text(text: Option<String>) -> Option<String> {
     text.map(|text| text.trim().to_owned())
         .filter(|text| !text.is_empty())
 }
@@ -1128,27 +1141,7 @@ fn generate_workspace_id() -> Result<String, DirectoryError> {
 }
 
 fn generate_icon_revision() -> Result<String, DirectoryError> {
-    let mut bytes = [0_u8; 16];
-    getrandom::fill(&mut bytes).map_err(|_| DirectoryError::ProjectIconStorage)?;
-    let encoded = hex(&bytes);
-    Ok(format!(
-        "{}-{}-{}-{}-{}",
-        &encoded[0..8],
-        &encoded[8..12],
-        &encoded[12..16],
-        &encoded[16..20],
-        &encoded[20..32]
-    ))
-}
-
-fn hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut result = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        result.push(char::from(HEX[usize::from(byte >> 4)]));
-        result.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    result
+    random_hyphenated_id().map_err(|_| DirectoryError::ProjectIconStorage)
 }
 
 #[cfg(test)]

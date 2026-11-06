@@ -344,6 +344,55 @@ impl DirectorySource for Source {
     }
 }
 
+/// Registries a racing source edits while it inspects a project root.
+type RacingRegistries = (Arc<dyn ProjectRegistry>, Arc<dyn WorkspaceRegistry>);
+
+/// Source that lands concurrent user edits while the project root is inspected.
+#[derive(Debug, Default)]
+struct RacingSource {
+    registries: Arc<std::sync::OnceLock<RacingRegistries>>,
+}
+
+impl DirectorySource for RacingSource {
+    fn inspect(&self, path: &str) -> Result<Checkout, DirectorySourceError> {
+        if path == "/tmp/alpha"
+            && let Some((projects, workspaces)) = self.registries.get()
+        {
+            projects
+                .update("prj_a", &|project| {
+                    let mut project = project.clone();
+                    project.custom_name = Some("Renamed".to_owned());
+                    project
+                })
+                .unwrap();
+            workspaces
+                .update("wks_a", &|workspace| {
+                    let mut workspace = workspace.clone();
+                    workspace.title = Some("Concurrent".to_owned());
+                    workspace
+                })
+                .unwrap();
+        }
+        Source.inspect(path)
+    }
+
+    fn create_child(&self, parent: &str, name: &str) -> Result<String, DirectorySourceError> {
+        Source.create_child(parent, name)
+    }
+
+    fn remove_empty(&self, path: &str) -> Result<(), DirectorySourceError> {
+        Source.remove_empty(path)
+    }
+
+    fn equivalent(&self, left: &str, right: &str) -> bool {
+        Source.equivalent(left, right)
+    }
+
+    fn canonical(&self, path: &str) -> Result<String, DirectorySourceError> {
+        Source.canonical(path)
+    }
+}
+
 #[derive(Debug, Default)]
 struct ConfigStore(Mutex<Option<(serde_json::Value, StoreConfigRevision)>>);
 
@@ -462,6 +511,7 @@ fn workspace() -> PersistedWorkspaceRecord {
         labels: None,
         auto_name: None,
         untrusted_source: None,
+        sandbox: None,
     }
 }
 
@@ -596,6 +646,39 @@ fn opening_reuses_active_and_restores_oldest_archived_workspace() {
     let restored = directory.open_workspace("/tmp/alpha", "restored").unwrap();
     assert_eq!(restored.workspace_id, "wks_a");
     assert!(restored.archived_at.is_none());
+}
+
+#[test]
+fn opening_refreshes_placement_without_clobbering_concurrent_edits() {
+    let registries = Arc::new(std::sync::OnceLock::new());
+    let mut nested = workspace();
+    nested.cwd = "/tmp/alpha/nested".to_owned();
+    let directory = Directory::new(DirectoryDependencies {
+        projects: Box::new(Projects {
+            records: Mutex::new(vec![project()]),
+            unavailable: false,
+        }),
+        workspaces: Box::new(Workspaces(Mutex::new(vec![nested]))),
+        source: Box::new(RacingSource {
+            registries: registries.clone(),
+        }),
+        config_store: Box::<ConfigStore>::default(),
+        icon_store: Box::<IconStore>::default(),
+        server_id: "server-test".to_owned(),
+    });
+    registries
+        .set((directory.projects.clone(), directory.workspaces.clone()))
+        .unwrap();
+
+    let opened = directory
+        .open_workspace("/tmp/alpha/nested", "later")
+        .unwrap();
+
+    assert_eq!(opened.title.as_deref(), Some("Concurrent"));
+    assert_eq!(opened.main_repo_root, None);
+    let project = directory.projects.get("prj_a").unwrap().unwrap();
+    assert_eq!(project.custom_name.as_deref(), Some("Renamed"));
+    assert!(project.project_key.is_some());
 }
 
 #[test]

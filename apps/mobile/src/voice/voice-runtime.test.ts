@@ -383,6 +383,35 @@ describe("voice runtime", () => {
     }
   });
 
+  it("handles a rejected host stop after a native playback failure", async () => {
+    const adapter = createSessionAdapter();
+    const engine = createAudioEngineMock();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const warnings = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.mocked(engine.play).mockRejectedValue(new Error("Playback unavailable"));
+    const { runtime } = createRuntime({ engine, supportsRealtimeVoice: () => true });
+    runtime.registerSession(adapter);
+    try {
+      await runtime.startVoice("server-1", "agent-1");
+      vi.mocked(adapter.setVoiceMode).mockRejectedValue(new Error("Host disconnected"));
+      runtime.handleAudioOutput(
+        "server-1",
+        createAudioPayload({ id: "failed", groupId: "failed", chunkIndex: 0, isLastChunk: true }),
+      );
+      await vi.waitFor(() => expect(runtime.getSnapshot().isVoiceMode).toBe(false));
+      await vi.waitFor(() =>
+        expect(warnings).toHaveBeenCalledWith(
+          "[VoiceRuntime] Failed to stop voice after playback failure:",
+          expect.any(Error),
+        ),
+      );
+    } finally {
+      errors.mockRestore();
+      warnings.mockRestore();
+      await runtime.destroy();
+    }
+  });
+
   it("leaves playback phase unchanged after assistant playback while the turn is still active", async () => {
     const adapter = createSessionAdapter();
     const { runtime, engine } = createRuntime();

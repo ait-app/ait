@@ -113,18 +113,26 @@ async fn manual_same_title_archive_and_failures_preserve_workspace() {
                 next
             })
             .unwrap();
+        let writes = Arc::new(AtomicUsize::new(0));
+        let observed = writes.clone();
+        let _subscription = registry.subscribe_to_mutations(Arc::new(move |_| {
+            observed.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }));
         generator.release.notify_one();
         names.inner.tasks.close();
         names.wait_closed().await;
         let after = registry.get("wks_test").unwrap().unwrap();
+        let generated = change == "directory";
         assert_eq!(
             after.title.as_deref(),
-            Some(if change == "directory" {
+            Some(if generated {
                 "Generated title"
             } else {
                 "Prompt"
             })
         );
+        assert_eq!(writes.load(Ordering::SeqCst), usize::from(generated));
         assert_eq!(branches.0.load(Ordering::SeqCst), 0);
     }
 }

@@ -134,7 +134,7 @@ pub(super) fn publish(
         .filter(|items| items.len() <= 4096)
         .ok_or(AgentSessionError::Failed)?;
     let items = commands.iter().map(|command| {
-        let name = super::config::text(command, "name")?;
+        let name = crate::local::acp_config::text(command, "name")?;
         if name.is_empty() || name.len() > 1024 || name.chars().any(char::is_control) {
             return Err(AgentSessionError::Failed);
         }
@@ -171,7 +171,7 @@ pub(super) async fn discover(
                 client.startup_timeout,
             )
             .await?;
-        let id = super::config::text(&created, "sessionId")?.to_owned();
+        let id = crate::local::acp_config::text(&created, "sessionId")?.to_owned();
         temporary.id = Some(id.clone());
         Catalog::new()
             .refresh(&id, Some((transport, &mut VecDeque::new())))

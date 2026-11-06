@@ -86,6 +86,24 @@ curl --fail-with-body --unix-socket /absolute/private-directory/mcp.sock \
 普通 HTTP URL 的客户端需通过本地代理或桥接接入，不能直接把 socket 文件路径作为 MCP URL。
 监听与生命周期约定见 [ADR-203](../decisions/daemon/adr-203-mcp-unix-socket.md)。
 
+## Bot 与子树凭据
+
+Workspace Bot 的隐藏会话，以及 Bot 通过 `create_agent` 启动的 Agent（带保留标签 `ait.bot.scope`），不使用共享令牌，而使用 daemon 签发的作用域凭据，
+会替换用户配置的 `ait` 项。Bot 会话不受 `injectIntoAgents` 控制，子树会话仍受其控制；无法交付凭据时移除 `ait` 项，不回退到共享令牌。
+凭据为 64 个十六进制字符，只在 daemon 内存中以 SHA-256 摘要保存，每次启动重新生成；同一 Agent 重新打开会话、Bot 暂停／移除／被取代、
+会话关闭或归档时作废。Claude 经属主专用（0600）临时 MCP 配置文件取得凭据，原生进程结束时删除；允许运行命令的 Agent 仍可能读到它，见 [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md) 的已接受风险。
+
+- 调用携带的 `X-Ait-Agent-Id` 若存在必须与凭据所属 Agent 一致，否则 `-32602`。共享令牌通过该头指向带 `ait.bot.scope` 的 Agent 同样被拒绝，该 Agent 必须使用自己的凭据。
+- 每次请求按 Workspace 当前 Bot 的授权过滤：未授权工具不出现在 `tools/list`，调用返回 `-32602 "Unknown or unavailable tool"`；
+  作用域或模式上限违规返回 `isError: true` 的 `Forbidden` 结果。
+- 目标限于 Bot 的作用域（Bot 所在 Workspace 与它创建的未归档 worktree），目标 id 解析为规范 id 后再执行；`cwd` 参数被拒绝。
+- `create_agent`、`set_agent_mode`、`update_agent`、`create_schedule`、`update_schedule` 的 Provider 与模式须在 Bot 的模式上限内；
+  `update_schedule` 只能编辑带 `botScope` 的定时任务。
+- 任何调用者都不能写入 `ait.bot.` 前缀的标签，作用域调用者不能写入任何 `ait.` 前缀的标签。`create_workspace` 只能创建当前项目的 worktree，不接受 `idempotencyKey`。
+- 没有非退役 Bot 时子树凭据降为只读观察。
+
+分组与工具对应关系见 [Workspace Bot](bots.md#权限)。
+
 ## Skill 使用指引
 
 daemon 内置并在启动时分发 [ait-orchestration Skill](../../skills/ait-orchestration/SKILL.md)，包含 Profile 选择、
@@ -107,7 +125,7 @@ Agent 编排、Workspace 隔离、终端与调度操作说明。默认允许自�
 | 权限               | `list_pending_permissions`, `respond_to_permission`                                                                                                                                             |
 
 准确参数由 `tools/list` 的 `inputSchema` 定义。部分能力未安装时，对应工具不出现在目录中。
-Bot 内部会话遵守已有可见性和权限规则。
+Bot 会话与其启动的 Agent 只能看到已授权的工具，见上文“Bot 与子树凭据”。
 
 ## 编排流程
 
@@ -139,7 +157,9 @@ Bot 内部会话遵守已有可见性和权限规则。
 Agent 调用可发送 `X-Ait-Agent-Id: <agent-id>`，继承调用者 cwd 和 Workspace 并记录父子关系。
 传入另一个 `workspaceId` 可以将子 Agent 放在另一个 Workspace。需要隔离时先
 `create_workspace`，选择 `isolation: "worktree"`，再使用返回的 Workspace ID。
-`mode` 支持 `branch-off`、`checkout-branch` 和 `checkout-pr`。
+`mode` 支持 `branch-off`、`checkout-branch` 和 `checkout-pr`。`isolation: "sandboxed-worktree"`
+接受同样的参数，并在 macOS 上把该 Workspace 中所有 Agent 进程的写入限制在 worktree 内，
+详见 [ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)；其他平台会拒绝创建。
 
 脚本位于 Workspace 的 `ait.json`，按 `scriptName` 启停。终端 `keys` 可以是 `Enter`、`C-c`
 等令牌；`literal: true` 发送原样文本。

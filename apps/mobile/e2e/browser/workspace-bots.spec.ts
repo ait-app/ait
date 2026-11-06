@@ -1,123 +1,190 @@
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
-import { randomUUID } from "node:crypto";
+import type { Page } from "@playwright/test";
 import { expect, test } from "../support/fixtures";
 import { gotoWorkspace } from "../support/helpers/launcher";
 import { seedWorkspace } from "../support/helpers/seed-client";
+import { clickSettingsBackToWorkspace, openSettingsSection } from "../support/helpers/settings";
 
-test("experimental Bot creation, conversation, settings and persistence", async ({ page }) => {
-  test.setTimeout(120_000);
+async function setExperimentalFeatures(page: Page, enabled: boolean): Promise<void> {
+  await page.goto("/settings/about");
+  const toggle = page.getByTestId("settings-experimental-features");
+  await expect(toggle).toHaveAttribute("aria-checked", String(!enabled));
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", String(enabled));
+}
+
+async function openNewTabMenu(page: Page): Promise<void> {
+  await page.getByTestId("workspace-new-tab-button").filter({ visible: true }).first().click();
+}
+
+async function openBotTab(page: Page): Promise<void> {
+  await openNewTabMenu(page);
+  await page.getByTestId("workspace-new-tab-menu-bot").filter({ visible: true }).click();
+  await expect(page.getByTestId("workspace-bot-tab")).toBeVisible();
+}
+
+async function submitSetupWithOfflineModel(page: Page): Promise<void> {
+  await expect(page.getByTestId("bot-setup")).toBeVisible();
+  await page.getByTestId("bot-model-trigger").click();
+  await page
+    .getByTestId("combobox-desktop-container")
+    .getByText("Offline model", { exact: true })
+    .click();
+  // The permission section shows the defaults and both risk warnings; submit keeps them.
+  await expect(page.getByTestId("bot-permissions")).toBeVisible();
+  await expect(page.getByTestId("bot-group-observe")).toBeVisible();
+  await expect(page.getByTestId("bot-group-agents")).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("bot-group-scripts")).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByTestId("bot-mode-cap-warning")).toBeVisible();
+  await expect(page.getByTestId("bot-command-reach-warning")).toBeVisible();
+  await page.getByTestId("bot-setup-submit").click();
+  await expect(page.getByTestId("bot-chat")).toBeVisible();
+}
+
+async function sendBotMessage(page: Page, text: string, reply: string): Promise<void> {
+  await page.getByTestId("bot-message-input").fill(text);
+  await page.getByTestId("bot-message-send").click();
+  await expect(page.getByTestId("bot-chat")).toContainText(reply, { timeout: 30_000 });
+  await expect(page.getByTestId("bot-message-input")).toHaveValue("");
+}
+
+test("workspace bot setup, conversation, settings and persistence", async ({ page }) => {
+  test.setTimeout(180_000);
   const workspace = await seedWorkspace({ repoPrefix: "bot-ui-" });
   const client = workspace.client as unknown as DaemonClient;
+  const { workspaceId } = workspace;
+  const getBot = async () => (await client.botRequest("bot.get.request", { workspaceId })).bot;
+  const getMemory = async () =>
+    (await client.botRequest("bot.memory.get.request", { workspaceId })).text;
   try {
-    await gotoWorkspace(page, workspace.workspaceId);
-    await page.getByTestId("workspace-new-tab-button").filter({ visible: true }).first().click();
+    await gotoWorkspace(page, workspaceId);
+    await openNewTabMenu(page);
     await expect(page.getByTestId("workspace-new-tab-menu-bot")).toHaveCount(0);
     await page.keyboard.press("Escape");
-    await page.goto("/settings/about");
-    const toggle = page.getByTestId("settings-experimental-features");
-    await expect(toggle).toHaveAttribute("aria-checked", "false");
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-checked", "true");
+    await setExperimentalFeatures(page, true);
     await page.reload();
-    await expect(toggle).toHaveAttribute("aria-checked", "true");
+    await expect(page.getByTestId("settings-experimental-features")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
 
-    await gotoWorkspace(page, workspace.workspaceId);
-    await page.getByTestId("workspace-new-tab-button").filter({ visible: true }).first().click();
-    await page.getByTestId("workspace-new-tab-menu-bot").filter({ visible: true }).click();
-    await page.getByTestId("bot-create-new").click();
-    await page.getByTestId("bot-name").fill("Workspace helper");
-    await page.getByTestId("bot-instructions").fill("Answer briefly.");
-    await page.getByTestId("bot-model-trigger").click();
-    await page
-      .getByTestId("combobox-desktop-container")
-      .getByText("Offline model", { exact: true })
-      .click();
-    await page.getByTestId("bot-save").click();
-    await expect(page.getByTestId("bot-chat")).toBeVisible();
-    const { bots } = await client.botRequest("bot.list.request", {
-      workspaceId: workspace.workspaceId,
+    // Opening the tab must not configure anything until the wizard is submitted.
+    await gotoWorkspace(page, workspaceId);
+    await openBotTab(page);
+    await expect(page.getByTestId("bot-setup")).toBeVisible();
+    expect(await getBot()).toBeNull();
+    await submitSetupWithOfflineModel(page);
+    await expect.poll(async () => (await getBot())?.state.kind).toBe("active");
+    expect((await getBot())?.execution).toMatchObject({
+      provider: "codex",
+      model: "offline-model",
     });
-    expect(bots).toHaveLength(1);
-    const botId = bots[0].id;
-    await page.getByTestId("bot-message-input").fill("Hello Bot");
-    await page.getByTestId("bot-message-send").click();
-    await expect(page.getByTestId("bot-chat")).toContainText("Echo: Hello Bot", {
-      timeout: 30_000,
-    });
-    await expect(page.getByTestId("bot-message-input")).toHaveValue("");
 
-    await page.getByTestId("bot-show-settings").click();
-    await page.getByTestId("bot-name").fill("Renamed helper");
-    await page.getByTestId("bot-instructions").fill("Use short answers.");
-    await page.getByTestId("bot-save").click();
-    await expect
-      .poll(async () => (await client.botRequest("bot.get.request", { botId })).bot.name)
-      .toBe("Renamed helper");
+    await sendBotMessage(page, "Hello Bot", "Echo: Hello Bot");
+
     await page.getByTestId("bot-show-settings").click();
     await page.getByTestId("bot-memory").fill("Remember this workspace.");
     await page.getByTestId("bot-memory-save").click();
-    await expect
-      .poll(async () => (await client.botRequest("bot.memory.get.request", { botId })).text)
-      .toBe("Remember this workspace.");
+    await expect.poll(getMemory).toBe("Remember this workspace.");
     await page.getByTestId("bot-show-chat").click();
+
+    // The restored tab is the same singleton Bot with its conversation intact.
     await page.reload();
     await expect(page.getByTestId("bot-chat")).toContainText("Echo: Hello Bot", {
       timeout: 30_000,
     });
+    await expect(page.getByTestId("workspace-tab-bot").filter({ visible: true })).toHaveCount(1);
+    // The singleton tab is already open, so the launcher no longer offers another Bot.
+    await openNewTabMenu(page);
+    await expect(page.getByTestId("workspace-new-tab-menu-bot")).toHaveCount(0);
+    await page.keyboard.press("Escape");
     await page.getByTestId("bot-show-settings").click();
-    await expect(page.getByTestId("bot-name")).toHaveValue("Renamed helper");
     await expect(page.getByTestId("bot-memory")).toHaveValue("Remember this workspace.");
-    await page.screenshot({ path: "/tmp/ait-bot-settings.png" });
 
-    await page.goto("/settings/about");
+    await page.getByTestId("bot-toggle-state").click();
+    await expect.poll(async () => (await getBot())?.state.kind).toBe("paused");
+    await page.getByTestId("bot-show-chat").click();
+    await expect(page.getByTestId("bot-chat")).toContainText("Paused");
+    await expect(page.getByTestId("bot-message-input")).not.toBeEditable();
+    await expect(page.getByTestId("bot-message-send")).toBeDisabled();
+    // A fresh load reads the paused Bot's history without reopening its conversation.
+    await page.reload();
+    await expect(page.getByTestId("bot-chat")).toContainText("Echo: Hello Bot", {
+      timeout: 30_000,
+    });
+    await expect(page.getByTestId("bot-chat")).toContainText("Paused");
+    await expect(page.getByTestId("bot-message-input")).not.toBeEditable();
+    await expect(page.getByTestId("bot-message-send")).toBeDisabled();
+    await page.getByTestId("bot-resume").click();
+    await expect.poll(async () => (await getBot())?.state.kind).toBe("active");
+    await expect(page.getByTestId("bot-message-input")).toBeEditable();
+    await sendBotMessage(page, "After resume", "Echo: After resume");
+
+    // Removing returns to the wizard; setting up again keeps memory but starts a new history.
+    await page.getByTestId("bot-show-settings").click();
+    page.once("dialog", (dialog) => void dialog.accept());
+    await page.getByTestId("bot-remove").click();
+    await expect(page.getByTestId("bot-setup")).toBeVisible();
+    expect(await getBot()).toBeNull();
+    await submitSetupWithOfflineModel(page);
+    await expect(page.getByTestId("bot-chat")).toContainText(
+      "Send a message to start a conversation.",
+    );
+    await expect(page.getByTestId("bot-chat")).not.toContainText("Echo: Hello Bot");
+    await page.getByTestId("bot-show-settings").click();
+    await expect(page.getByTestId("bot-memory")).toHaveValue("Remember this workspace.");
+    expect(await getMemory()).toBe("Remember this workspace.");
+
+    // Disabling the experiment disables the open tab without touching the server Bot. Toggle
+    // in-app: a cold load of a non-workspace route currently drops saved tab layouts.
+    await page.getByTestId("sidebar-settings").click();
+    await openSettingsSection(page, "about");
+    const toggle = page.getByTestId("settings-experimental-features");
+    await expect(toggle).toHaveAttribute("aria-checked", "true");
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-checked", "false");
-    await gotoWorkspace(page, workspace.workspaceId);
-    await page.getByTestId("workspace-new-tab-button").filter({ visible: true }).first().click();
+    await clickSettingsBackToWorkspace(page);
+    await expect(page.getByTestId("workspace-tab-bot").filter({ visible: true })).toHaveCount(1);
+    await expect(
+      page.getByText("Enable Experimental features in Settings → About to use Bots."),
+    ).toBeVisible();
+    await openNewTabMenu(page);
     await expect(page.getByTestId("workspace-new-tab-menu-bot")).toHaveCount(0);
-    expect((await client.botRequest("bot.get.request", { botId })).bot.name).toBe("Renamed helper");
+    expect((await getBot())?.state.kind).toBe("active");
   } finally {
     await workspace.cleanup();
   }
 });
 
-test("Bot denies approvals automatically and protects memory from stale edits", async ({
+test("bot denies approvals automatically and protects memory from stale edits", async ({
   page,
 }) => {
+  test.setTimeout(120_000);
   const workspace = await seedWorkspace({ repoPrefix: "bot-approval-" });
   const client = workspace.client as unknown as DaemonClient;
-  const botId = randomUUID();
+  const { workspaceId } = workspace;
   try {
-    await client.botRequest("bot.create.request", {
-      botId,
-      workspaceId: workspace.workspaceId,
-      name: "Approval helper",
-      instructions: "",
+    await client.botRequest("bot.setup.request", {
+      workspaceId,
       execution: { provider: "codex", model: "offline-model", modeId: null, thinking: null },
     });
-    await page.goto("/settings/about");
-    await page.getByTestId("settings-experimental-features").click();
-    await gotoWorkspace(page, workspace.workspaceId);
-    await page.getByTestId("workspace-new-tab-button").filter({ visible: true }).first().click();
-    await page.getByTestId("workspace-new-tab-menu-bot").filter({ visible: true }).click();
-    await page.getByTestId(`bot-open-${botId}`).click();
+    await setExperimentalFeatures(page, true);
+    await gotoWorkspace(page, workspaceId);
+    await openBotTab(page);
+    await expect(page.getByTestId("bot-chat")).toBeVisible();
     await page.getByTestId("bot-message-input").fill("permit-question");
     await page.getByTestId("bot-message-send").click();
-    await expect(page.getByTestId("bot-chat")).toContainText("Echo: denied", { timeout: 20_000 });
+    await expect(page.getByTestId("bot-chat")).toContainText("Echo: denied", { timeout: 30_000 });
     await expect(page.getByTestId("question-form-card")).toHaveCount(0);
-    await page.getByTestId("bot-message-input").fill("continue after denial");
-    await page.getByTestId("bot-message-send").click();
-    await expect(page.getByTestId("bot-chat")).toContainText("Echo: continue after denial", {
-      timeout: 20_000,
-    });
+    await sendBotMessage(page, "continue after denial", "Echo: continue after denial");
 
     await page.getByTestId("bot-show-settings").click();
     const editor = page.getByTestId("bot-memory");
     await expect(editor).toBeVisible();
-    const memory = await client.botRequest("bot.memory.get.request", { botId });
+    const memory = await client.botRequest("bot.memory.get.request", { workspaceId });
     await editor.fill("Stale local edit");
     await client.botRequest("bot.memory.update.request", {
-      botId,
+      workspaceId,
       text: "Changed elsewhere",
       expected: memory.revision,
     });
@@ -125,7 +192,7 @@ test("Bot denies approvals automatically and protects memory from stale edits", 
     await expect(
       page.getByText("The memory changed elsewhere. Reload it before saving again."),
     ).toBeVisible();
-    expect((await client.botRequest("bot.memory.get.request", { botId })).text).toBe(
+    expect((await client.botRequest("bot.memory.get.request", { workspaceId })).text).toBe(
       "Changed elsewhere",
     );
     await page.getByRole("button", { name: "Reload", exact: true }).click();
@@ -133,7 +200,7 @@ test("Bot denies approvals automatically and protects memory from stale edits", 
     await editor.fill("Current local edit");
     await page.getByTestId("bot-memory-save").click();
     await expect
-      .poll(async () => (await client.botRequest("bot.memory.get.request", { botId })).text)
+      .poll(async () => (await client.botRequest("bot.memory.get.request", { workspaceId })).text)
       .toBe("Current local edit");
   } finally {
     await workspace.cleanup();

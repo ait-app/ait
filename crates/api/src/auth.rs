@@ -93,20 +93,31 @@ fn ip_authority(value: &str) -> Option<SocketAddr> {
 }
 
 pub(super) fn authenticate(headers: &HeaderMap, expected: &SecretString) -> Result<(), ApiError> {
-    let authorization = single_header(headers, "authorization")?
-        .and_then(|value| value.split_once(' '))
-        .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("bearer"))
-        .map(|(_, value)| value)
-        .ok_or(ApiError(StatusCode::UNAUTHORIZED))?;
-    if bool::from(
-        authorization
-            .as_bytes()
-            .ct_eq(expected.expose_secret().as_bytes()),
-    ) {
+    if matches(bearer(headers)?, expected) {
         Ok(())
     } else {
         Err(ApiError(StatusCode::UNAUTHORIZED))
     }
+}
+
+/// Return the single Bearer credential presented in `headers`.
+/// # Errors
+/// Returns 400 for repeated or non-text headers and 401 when no Bearer credential is present.
+pub(super) fn bearer(headers: &HeaderMap) -> Result<&str, ApiError> {
+    single_header(headers, "authorization")?
+        .and_then(|value| value.split_once(' '))
+        .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("bearer"))
+        .map(|(_, value)| value)
+        .ok_or(ApiError(StatusCode::UNAUTHORIZED))
+}
+
+/// Compare `presented` with `expected` in constant time.
+pub(super) fn matches(presented: &str, expected: &SecretString) -> bool {
+    bool::from(
+        presented
+            .as_bytes()
+            .ct_eq(expected.expose_secret().as_bytes()),
+    )
 }
 
 #[cfg(test)]

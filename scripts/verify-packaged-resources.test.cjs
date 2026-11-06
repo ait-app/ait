@@ -14,8 +14,8 @@ function resources(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "ait-package-resources-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.mkdirSync(path.join(root, "bin"));
-  fs.writeFileSync(path.join(root, "bin", "daemon"), "daemon");
-  fs.chmodSync(path.join(root, "bin", "daemon"), 0o755);
+  fs.writeFileSync(path.join(root, "bin", "aitd"), "daemon");
+  fs.chmodSync(path.join(root, "bin", "aitd"), 0o755);
   return root;
 }
 
@@ -24,19 +24,20 @@ test("the packaged bin directory allows exactly one executable daemon", (t) => {
 });
 
 test("packaging fails if an old binary or CLI shim enters resources/bin", (t) => {
-  for (const name of ["ait-daemon", "ait-worker", "ait", "paseo"]) {
+  // The former bundled name `daemon` must not ship next to `aitd`.
+  for (const name of ["daemon", "ait-daemon", "ait-worker", "ait", "paseo"]) {
     const root = resources(t);
     fs.writeFileSync(path.join(root, "bin", name), "unwanted");
-    assert.throws(() => verifyDaemonDirectory(root), /only daemon/);
+    assert.throws(() => verifyDaemonDirectory(root), /only aitd/);
   }
 });
 
 test("packaging rejects a missing or non-executable daemon", (t) => {
   const root = resources(t);
-  fs.chmodSync(path.join(root, "bin", "daemon"), 0o644);
+  fs.chmodSync(path.join(root, "bin", "aitd"), 0o644);
   assert.throws(() => verifyDaemonDirectory(root));
-  fs.unlinkSync(path.join(root, "bin", "daemon"));
-  assert.throws(() => verifyDaemonDirectory(root), /only daemon/);
+  fs.unlinkSync(path.join(root, "bin", "aitd"));
+  assert.throws(() => verifyDaemonDirectory(root), /only aitd/);
 });
 
 test("packaging requires Ait's independent identity instead of the Paseo workspace name", (t) => {

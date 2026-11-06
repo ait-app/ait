@@ -1,5 +1,6 @@
 //! Exact-session Host waterfalls become bounded approvals and structured questions.
-use super::super::{PROVIDER, config::text};
+use super::super::PROVIDER;
+use crate::local::acp_config::text;
 use crate::ports::agent_session::AgentSessionError;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;

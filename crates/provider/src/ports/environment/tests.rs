@@ -41,3 +41,23 @@ fn malformed_and_unbounded_environment_values_are_rejected_before_launch() {
         assert!(serde_json::from_value::<AgentEnvironment>(value).is_err());
     }
 }
+
+#[test]
+fn variable_prefers_overrides_and_falls_back_to_the_daemon_environment() {
+    let environment: AgentEnvironment =
+        serde_json::from_value(json!({"HOME":"/override/home"})).unwrap();
+
+    assert_eq!(
+        environment.variable("HOME").as_deref(),
+        Some("/override/home")
+    );
+    assert_eq!(
+        environment.variable("PATH"),
+        std::env::var("PATH").ok(),
+        "unset overrides read the daemon environment"
+    );
+    assert_eq!(
+        environment.variable("AIT_SANDBOX_TEST_UNSET_VARIABLE_7F3A"),
+        None
+    );
+}

@@ -1,13 +1,17 @@
+use std::time::Duration;
+
 use domain::bot::{Channel, ChannelConfig};
 use model::ErrorCode;
 use secrecy::SecretString;
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
-use super::{Incoming, chunks, deliver, expose, json_response};
+use super::{BUSY_NOTICE, Disposition, Incoming, admit, chunks, deliver, expose, json_response};
 use crate::service::Bots;
 
 const API: &str = "https://api.telegram.org";
+/// Longest wait between admission attempts while the Bot's global backlog is full.
+const MAX_BACKLOG_RETRY: Duration = Duration::from_secs(30);
 
 pub(super) async fn run(
     bots: &Bots,
@@ -55,15 +59,12 @@ async fn run_at(
     let sending = deliver(bots, channel.id, cancel, |turn, conversation| async move {
         let text = turn.reply.as_deref().ok_or(ErrorCode::BotIo)?;
         for chunk in chunks(text, 3500) {
-            let mut body = json!({"chat_id":conversation.peer,"text":chunk});
-            if let Some(message) = &turn.reply_to {
-                body["reply_parameters"] =
-                    json!({"message_id":message.parse::<i64>().map_err(|_| ErrorCode::BotIo)?});
-            }
-            if let Some(thread) = &conversation.thread {
-                body["message_thread_id"] =
-                    json!(thread.parse::<i64>().map_err(|_| ErrorCode::BotIo)?);
-            }
+            let body = message_body(
+                &conversation.peer,
+                conversation.thread.as_deref(),
+                turn.reply_to.as_deref(),
+                chunk,
+            )?;
             call_at(client, token, "sendMessage", body, api).await?;
         }
         Ok(())
@@ -99,14 +100,78 @@ impl Receiver<'_> {
                 }
                 if let Some(incoming) =
                     incoming(self.channel, update, self.identity, self.username)?
+                    && !self.admit(incoming, cancel).await?
                 {
-                    self.bots.accept(incoming).await?;
+                    return Ok(());
                 }
                 cursor = id.checked_add(1).ok_or(ErrorCode::BotIo)?;
                 self.bots.cursor(self.channel.id, cursor).await?;
             }
         }
     }
+
+    /// Admit one update before its offset is committed; returns `false` when cancelled first.
+    /// A full Bot backlog is waited out without advancing the offset, while a saturated
+    /// conversation drops only its own message so other chats keep flowing.
+    async fn admit(
+        &self,
+        incoming: Incoming,
+        cancel: &CancellationToken,
+    ) -> Result<bool, ErrorCode> {
+        let mut backoff = Duration::from_secs(1);
+        loop {
+            match admit(self.bots, incoming.clone()).await? {
+                Disposition::Accepted | Disposition::Skip => return Ok(true),
+                Disposition::Busy => {
+                    self.notify_busy(&incoming).await;
+                    return Ok(true);
+                }
+                Disposition::Retry => {
+                    tokio::select! {
+                        () = cancel.cancelled() => return Ok(false),
+                        () = tokio::time::sleep(backoff) => {}
+                    }
+                    backoff = (backoff * 2).min(MAX_BACKLOG_RETRY);
+                }
+            }
+        }
+    }
+
+    /// Best-effort reply telling the sender their message was dropped; failures are only logged.
+    async fn notify_busy(&self, incoming: &Incoming) {
+        let sent = match message_body(
+            &incoming.peer,
+            incoming.thread.as_deref(),
+            incoming.reply_to.as_deref(),
+            BUSY_NOTICE,
+        ) {
+            Ok(body) => call_at(self.client, self.token, "sendMessage", body, self.api)
+                .await
+                .map(|_| ()),
+            Err(error) => Err(error),
+        };
+        if let Err(error) = sent {
+            tracing::warn!(channel = %self.channel.id, ?error, "Telegram busy notice failed");
+        }
+    }
+}
+
+/// Build a `sendMessage` body that replies in the original chat, topic and message thread.
+fn message_body(
+    peer: &str,
+    thread: Option<&str>,
+    reply_to: Option<&str>,
+    text: &str,
+) -> Result<Value, ErrorCode> {
+    let mut body = json!({"chat_id":peer,"text":text});
+    if let Some(message) = reply_to {
+        body["reply_parameters"] =
+            json!({"message_id":message.parse::<i64>().map_err(|_| ErrorCode::BotIo)?});
+    }
+    if let Some(thread) = thread {
+        body["message_thread_id"] = json!(thread.parse::<i64>().map_err(|_| ErrorCode::BotIo)?);
+    }
+    Ok(body)
 }
 
 fn incoming(
@@ -197,7 +262,7 @@ async fn call_at(
             && value["error_code"] == 429
             && let Some(seconds) = value["parameters"]["retry_after"].as_u64()
         {
-            tokio::time::sleep(std::time::Duration::from_secs(seconds.min(60))).await;
+            tokio::time::sleep(Duration::from_secs(seconds.min(60))).await;
             continue;
         }
         // The response may contain a token-bearing URL or personal data; discard it.

@@ -12,6 +12,7 @@ import type { DirectorySuggestionResult } from "./resolver";
 import { useFileLink } from "./use-file-link";
 import type { OpenFileDisposition } from "@/workspace/file-open";
 import { createAssistantMarkdownParser } from "@/utils/assistant-markdown-parser";
+import { openExternalUrl } from "@/utils/open-external-url";
 
 vi.mock("@/utils/open-external-url", () => ({
   openExternalUrl: vi.fn(async () => {}),
@@ -392,4 +393,27 @@ describe("directory link dispatch", () => {
       await waitFor(() => expect(openedFiles).toHaveLength(local ? 0 : 1));
     },
   );
+});
+
+describe("external link dispatch", () => {
+  it("reports a rejected platform opener instead of leaving it unhandled", async () => {
+    vi.mocked(openExternalUrl).mockRejectedValueOnce(new Error("No app can open this link"));
+    const toast = createToast();
+    const { result } = renderHook(
+      () => useFileLink({ href: "mailto:someone@example.com", markup: "link" }),
+      {
+        wrapper: createWrapper({
+          client: { getDirectorySuggestions: vi.fn(async () => resolvedSuggestions([])) },
+          openedFiles: [],
+          toast,
+        }),
+      },
+    );
+    await act(async () => {
+      result.current.onPress();
+    });
+    await waitFor(() =>
+      expect(toast.show).toHaveBeenCalledWith("No app can open this link", { variant: "error" }),
+    );
+  });
 });

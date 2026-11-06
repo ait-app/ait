@@ -298,3 +298,58 @@ describe("daemon-owned publication", () => {
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 });
+
+describe("background refresh", () => {
+  const busy = () => useOnlineServiceHostSync.getState().hosts.first?.busy;
+  /** Hold the next status reply until the returned function is called. */
+  const deferStatus = () => {
+    let release!: () => void;
+    mocks.status.mockReturnValueOnce(new Promise((resolve) => (release = () => resolve(status()))));
+    return release;
+  };
+
+  it("shows progress for the first load only, then refreshes without marking the host busy", async () => {
+    let release = deferStatus();
+    const first = synchronizeOnlineServiceHost("first", "SHLP");
+    expect(busy()).toBe(true);
+    release();
+    await first;
+    expect(busy()).toBe(false);
+    release = deferStatus();
+    const refresh = synchronizeOnlineServiceHost("first", "SHLP");
+    expect(busy()).toBe(false);
+    release();
+    await refresh;
+    expect(busy()).toBe(false);
+    expect(mocks.publication).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps an error visible during a refresh and clears it once the refresh succeeds", async () => {
+    mocks.status.mockRejectedValueOnce(new Error("Connection lost"));
+    await synchronizeOnlineServiceHost("first", "SHLP");
+    const release = deferStatus();
+    const refresh = synchronizeOnlineServiceHost("first", "SHLP");
+    expect(useOnlineServiceHostSync.getState().hosts.first).toMatchObject({
+      busy: false,
+      error: "Connection lost",
+    });
+    release();
+    await refresh;
+    expect(useOnlineServiceHostSync.getState().hosts.first?.error).toBeNull();
+  });
+
+  it("skips overlapping refreshes and runs an explicit action after the refresh in flight", async () => {
+    await synchronizeOnlineServiceHost("first", "SHLP");
+    const release = deferStatus();
+    const refresh = synchronizeOnlineServiceHost("first", "SHLP");
+    await synchronizeOnlineServiceHost("first", "SHLP");
+    const action = synchronizeOnlineServiceHost("first", "SHLP", true);
+    expect(busy()).toBe(true);
+    expect(mocks.status).toHaveBeenCalledTimes(2);
+    release();
+    await Promise.all([refresh, action]);
+    expect(mocks.status).toHaveBeenCalledTimes(3);
+    expect(mocks.authorize).toHaveBeenCalledExactlyOnceWith(authorization, "explicit");
+    expect(busy()).toBe(false);
+  });
+});

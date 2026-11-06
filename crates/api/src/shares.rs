@@ -107,22 +107,27 @@ impl Book {
 
     /// Whether `grant` is admitted now.
     fn grants(&self, grant: Grant) -> bool {
-        !self.denied.contains(&grant)
-            && self
-                .settings
-                .iter()
-                .any(|setting| setting.grants(grant.share_id, grant.user_id))
+        admits(&self.settings, &self.denied, grant)
     }
 
     /// End grants that no accepted setting admits any more.
     fn revoke_stale(&mut self) -> Vec<Revoked> {
-        let admitted: Vec<Grant> = self
-            .guests
-            .grants()
-            .filter(|grant| self.grants(*grant))
-            .collect();
-        self.guests.revoke(|grant| !admitted.contains(grant))
+        let Self {
+            settings,
+            denied,
+            guests,
+            ..
+        } = self;
+        guests.revoke(|grant| !admits(settings, denied, *grant))
     }
+}
+
+/// Whether `settings` admit `grant` and the center has not denied it.
+fn admits(settings: &[Setting], denied: &BTreeSet<Grant>, grant: Grant) -> bool {
+    !denied.contains(&grant)
+        && settings
+            .iter()
+            .any(|setting| setting.grants(grant.share_id, grant.user_id))
 }
 
 /// Persistence and cleanup left after one in-memory change.
@@ -145,7 +150,8 @@ impl Journal {
         if version <= *saved {
             return Ok(());
         }
-        self.store.save(document)?;
+        let bytes = serde_json::to_vec(document).map_err(|_| StoreError)?;
+        self.store.save(&bytes)?;
         *saved = version;
         Ok(())
     }
@@ -311,7 +317,15 @@ impl Shares {
     }
 
     /// Persist and clean up before returning, reporting a failed write.
+    ///
+    /// Cleanup runs as a tracked task, so it still finishes if the request is dropped.
     async fn finish(&self, commit: Commit) -> Result<(), ErrorCode> {
+        let cleanup = (!commit.revoked.is_empty())
+            .then(|| {
+                let handle = tokio::runtime::Handle::current();
+                self.owners.clone().spawn(commit.revoked, &handle)
+            })
+            .flatten();
         let saved = match (commit.save, self.journal.get()) {
             (Some((version, document)), Some(journal)) => {
                 let journal = journal.clone();
@@ -322,8 +336,10 @@ impl Shares {
             }
             _ => Ok(()),
         };
-        if !commit.revoked.is_empty() {
-            self.owners.clone().run(commit.revoked).await;
+        if let Some(cleanup) = cleanup
+            && cleanup.await.is_err()
+        {
+            tracing::error!("revoked guest cleanup failed");
         }
         saved
     }

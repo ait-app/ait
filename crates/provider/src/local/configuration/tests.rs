@@ -105,7 +105,7 @@ fn claude_merges_sandbox_settings_without_losing_permission_rules() {
         "toolPolicy":{"preapproved":[{"kind":"mcp","server":"docs","tool":"search"}]},
         "mcpServers":{"docs":{"type":"stdio","command":"node","args":["literal$(value)"]}}}),
     );
-    let args = claude(&config).unwrap();
+    let args = claude(&config, false).unwrap();
     assert!(args.contains(&"--allowedTools=Read,mcp__docs__search".to_owned()));
     assert!(args.contains(&"--disallowedTools=Bash".to_owned()));
     assert!(args.contains(&"--add-dir=/tmp/a b".to_owned()));
@@ -206,9 +206,30 @@ fn rejects_unknown_invalid_or_overbroad_advanced_configuration() {
 }
 
 #[test]
+fn empty_provider_options_are_accepted_for_every_provider() {
+    let empty = config(json!({"providerOptions":{}}));
+    for provider in [
+        "codex",
+        "claude",
+        "minimax-code",
+        "deepseek-harness",
+        "opencode",
+    ] {
+        assert_eq!(validate(&empty, provider), Ok(()), "{provider}");
+    }
+    assert_eq!(
+        validate(
+            &config(json!({"providerOptions":{"unknown":true}})),
+            "minimax-code"
+        ),
+        Err(AgentSessionError::Rejected)
+    );
+}
+
+#[test]
 fn empty_and_inherited_configuration_does_not_add_cli_arguments() {
     assert_eq!(
-        claude(&StoredAgentConfig::default()).unwrap(),
+        claude(&StoredAgentConfig::default(), false).unwrap(),
         [] as [String; 0]
     );
     assert_eq!(codex(&StoredAgentConfig::default()).unwrap(), json!({}));
@@ -216,5 +237,28 @@ fn empty_and_inherited_configuration_does_not_add_cli_arguments() {
         grants(&config(json!({"toolPolicy":null})))
             .unwrap()
             .is_empty()
+    );
+}
+
+#[test]
+fn confined_claude_disables_its_nested_bash_sandbox_and_keeps_other_settings() {
+    let config = config(json!({"providerOptions":{
+        "settings":{"permissions":{"ask":["Edit"]}},
+        "sandbox":{"enabled":true,"network":{"allowLocalBinding":true}}}}));
+
+    let args = claude(&config, true).unwrap();
+
+    let settings: Value = serde_json::from_str(
+        args.iter()
+            .find_map(|arg| arg.strip_prefix("--settings="))
+            .expect("settings argument"),
+    )
+    .unwrap();
+    assert_eq!(settings["sandbox"]["enabled"], false);
+    assert_eq!(settings["sandbox"]["network"]["allowLocalBinding"], true);
+    assert_eq!(settings["permissions"]["ask"], json!(["Edit"]));
+    assert_eq!(
+        claude(&StoredAgentConfig::default(), true).unwrap(),
+        [r#"--settings={"sandbox":{"enabled":false}}"#.to_owned()]
     );
 }

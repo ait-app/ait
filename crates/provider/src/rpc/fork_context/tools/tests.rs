@@ -59,10 +59,16 @@ fn summaries_follow_paseo_canonical_details_and_never_include_raw_input() {
 }
 
 #[test]
-fn tool_names_preserve_external_namespaces_and_humanize_paseo_tools() {
+fn tool_names_preserve_external_namespaces_and_humanize_ait_tools() {
     for (name, expected) in [
         ("exec_command", "Exec command"),
         ("read-file", "Read file"),
+        ("mcp__ait__create_agent", "Create agent"),
+        ("mcp__ait_host__wait_for_agent", "Wait for agent"),
+        ("ait.create_agent", "Create agent"),
+        ("ait_host.create_agent", "Create agent"),
+        ("mcp__ait__speak", "mcp__ait__speak"),
+        ("mcp__aitx__create_agent", "mcp__aitx__create_agent"),
         ("paseo__create_agent", "paseo__create_agent"),
         ("mcp__paseo__create_agent", "Create agent"),
         ("mcp__paseo_host__create_agent", "Create agent"),

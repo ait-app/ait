@@ -14,7 +14,10 @@ use domain::workspace::labels::{
 use domain::workspace::records::PersistedWorkspaceRecord;
 use model::workspace::label_store::WorkspaceLabelStore;
 
-const JOURNAL_LIMIT: usize = 256;
+use crate::support::random::random_hyphenated_id;
+
+/// Changes retained for cursor catch-up and buffered for a subscription awaiting activation.
+pub(crate) const JOURNAL_LIMIT: usize = 256;
 
 /// Incremental synchronization cursor.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -271,7 +274,7 @@ impl WorkspaceLabels {
             .workspaces
             .iter()
             .find(|workspace| workspace.workspace_id == workspace_id)
-            .filter(|workspace| !is_archived(workspace))
+            .filter(|workspace| !workspace.is_archived())
             .ok_or(WorkspaceLabelError::WorkspaceNotFound)?;
         let key = workspace_label_key(&name);
         let existing = snapshot
@@ -644,13 +647,6 @@ fn rewrite_assignments(
         .collect()
 }
 
-fn is_archived(workspace: &PersistedWorkspaceRecord) -> bool {
-    workspace
-        .archived_at
-        .as_deref()
-        .is_some_and(|archived_at| !archived_at.is_empty())
-}
-
 const fn map_store_error(error: WorkspaceLabelStoreError) -> WorkspaceLabelError {
     match error {
         WorkspaceLabelStoreError::WorkspaceNotFound => WorkspaceLabelError::WorkspaceNotFound,
@@ -662,21 +658,7 @@ const fn map_store_error(error: WorkspaceLabelStoreError) -> WorkspaceLabelError
 }
 
 fn generate_generation() -> Result<String, WorkspaceLabelError> {
-    let mut bytes = [0_u8; 16];
-    getrandom::fill(&mut bytes).map_err(|_| WorkspaceLabelError::Storage)?;
-    let encoded = bytes
-        .iter()
-        .flat_map(|byte| [byte >> 4, byte & 0x0f])
-        .map(|nibble| char::from(b"0123456789abcdef"[usize::from(nibble)]))
-        .collect::<String>();
-    Ok(format!(
-        "{}-{}-{}-{}-{}",
-        &encoded[0..8],
-        &encoded[8..12],
-        &encoded[12..16],
-        &encoded[16..20],
-        &encoded[20..32]
-    ))
+    random_hyphenated_id().map_err(|_| WorkspaceLabelError::Storage)
 }
 
 #[cfg(test)]

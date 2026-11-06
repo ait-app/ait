@@ -16,6 +16,26 @@ export const fr: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    sideQuestions: {
+      title: "Questions parallèles",
+      empty: "Aucune question parallèle.",
+      question: "Question parallèle",
+      ask: "Demander",
+      followUp: "Poursuivre",
+      newQuestion: "Nouvelle question",
+      cancel: "Annuler la question",
+      replyTo: "Suite : {{question}}",
+      older: "{{count}} sujets plus anciens restent dans l’historique natif.",
+      shortened: "Aperçu abrégé. OMP conserve l’historique complet.",
+      disconnected: "Connectez-vous à l’hôte pour poser une question.",
+      states: {
+        running: "En cours",
+        complete: "Terminée",
+        cancelled: "Annulée",
+        error: "Échec",
+        interrupted: "Interrompue",
+      },
+    },
     modelPreset: "Préréglage des modèles OMP",
     customModels: "Configuration personnalisée",
     unassignedModel: "Non attribué",
@@ -44,7 +64,114 @@ export const fr: TranslationResources = {
       clear: "Effacer",
     },
   },
-  bots: en.bots,
+  bots: {
+    modeCapWarning:
+      "Les modes qui permettent aux agents d'exécuter des commandes leur permettent aussi de lire les identifiants Ait de cet ordinateur et de contourner les limites Ait du Bot. N'autorisez-les que pour un travail que vous laisseriez un agent faire sans surveillance.",
+    commandReachWarning:
+      "Le Bot peut envoyer des instructions à chaque agent de cet espace de travail, y compris ceux que vous avez lancés, et modifier leurs réglages. Ces agents conservent leurs propres autorisations : une instruction du Bot peut donc atteindre des capacités au-delà des limites du Bot.",
+    terminalsWarning:
+      "Les terminaux exécutent des commandes sur cet ordinateur : ils peuvent donc lire ses identifiants Ait et contourner les limites Ait du Bot. Ne les activez que pour un travail que vous laisseriez un agent faire sans surveillance.",
+    noteInstructionsInInput:
+      "Ce fournisseur ne prend pas en charge un prompt système modifiable ; les instructions intégrées et la mémoire du Bot sont donc ajoutées à l'entrée de la conversation.",
+    noteNoReadOnlyMode:
+      "Ce fournisseur n'a pas de mode lecture seule ; le Bot s'exécute donc dans son mode par défaut. Les écritures qui nécessitent une approbation sont refusées automatiquement, mais les actions que le fournisseur autorise sans approbation ne sont pas bloquées, y compris la lecture des identifiants Ait de cet ordinateur et le contournement des limites Ait du Bot.",
+    noteToolsNeedApproval:
+      "Ce fournisseur ne peut pas pré-approuver les outils Ait ; les appels d'outils Ait qui nécessitent une approbation sont donc refusés automatiquement. Le Bot ne pourra peut-être que discuter, sans lancer ni gérer d'agents.",
+    noteNoAitTools:
+      "Ce fournisseur ne prend pas en charge la connexion aux outils Ait ; le Bot ne peut donc que discuter.",
+    permissions: "Autorisations",
+    permissionsHint: "Les changements d'autorisations prennent effet au prochain tour du Bot.",
+    groupObserve: "Observer (toujours actif) : voir les agents, l'activité et les fournisseurs",
+    groupAgents: "Agents : créer des agents, leur envoyer des instructions et les reconfigurer",
+    groupStop: "Arrêt : annuler et arrêter des agents",
+    groupSchedules: "Planifications : créer et gérer des planifications",
+    groupScripts: "Scripts : exécuter les scripts de l'espace de travail",
+    groupTerminals: "Terminaux : créer des terminaux et y saisir du texte",
+    groupWorkspaces: "Espaces de travail : créer des espaces worktree",
+    permissionRiskHint: "Peut exécuter des commandes ou créer des worktrees.",
+    modeCap: "Modes d'agent autorisés",
+    modeCapHint:
+      "Choisissez les modes que le Bot peut utiliser pour chaque fournisseur. Un fournisseur sans mode sélectionné est inutilisable. Le premier mode sélectionné est le mode par défaut.",
+    defaultMode: "Mode par défaut",
+    providerUnavailable: "{{provider}} (indisponible)",
+    readOnlyHint:
+      "Le Bot s'exécute dans le mode le plus strict de son fournisseur (pour Claude, le mode par défaut, où vos propres règles d'autorisation s'appliquent toujours) et laisse les modifications aux agents qu'il lance.",
+    title: "Bot",
+    chat: "Discussion",
+    settings: "Réglages",
+    provider: "Fournisseur",
+    model: "Modèle",
+    mode: "Mode d’autorisation",
+    thinking: "Raisonnement",
+    defaultOption: "Par défaut du fournisseur",
+    save: "Enregistrer",
+    setupTitle: "Configurer le Bot de l’espace de travail",
+    setupHint:
+      "Le Bot gère cet espace de travail et continue de fonctionner après la fermeture de cet onglet.",
+    setup: "Configurer le Bot",
+    clearMemory: "Effacer la mémoire enregistrée",
+    notConfigured:
+      "Cet espace de travail n’a pas encore de Bot. Seul le propriétaire de l’hôte peut en configurer un.",
+    disabled:
+      "Activez les fonctionnalités expérimentales dans Réglages → À propos pour utiliser les Bots.",
+    unsupported: "Mettez à jour cet hôte pour utiliser les Bots.",
+    disconnected: "Connectez-vous à cet hôte pour utiliser les Bots.",
+    message: "Message",
+    send: "Envoyer",
+    cancel: "Annuler le tour",
+    emptyChat: "Envoyez un message pour démarrer une conversation.",
+    reset: "Nouvelle conversation",
+    resetConfirm:
+      "Démarrer une nouvelle conversation ? Les messages existants sont conservés et les derniers réglages du Bot seront appliqués.",
+    configurationHint:
+      "Les changements de modèle s’appliquent aux nouvelles conversations. Démarrez une nouvelle conversation pour les utiliser ici.",
+    memory: "Mémoire",
+    memoryHint:
+      "Préférences que le Bot lit avant chaque réponse, comme la langue des titres de PR ou le style de réponse.",
+    saveMemory: "Enregistrer la mémoire",
+    memoryConflict:
+      "La mémoire a été modifiée ailleurs. Rechargez-la avant de l’enregistrer à nouveau.",
+    resumeToEdit: "Reprenez le Bot pour effectuer des modifications.",
+    reload: "Recharger",
+    pause: "Mettre en pause",
+    remove: "Supprimer le Bot",
+    removeConfirm:
+      "Supprimer ce Bot ? Son historique de conversation ne sera plus visible, sa mémoire est conservée et les connexions Telegram et Feishu seront déconnectées.",
+    paused: "En pause",
+    resume: "Reprendre",
+    directoryMissing:
+      "Le répertoire de l’espace de travail est introuvable, le Bot est donc en pause. Restaurez le répertoire, puis reprenez.",
+    requestFailed: "Échec de la requête",
+    tooLong: "Les messages ne doivent pas dépasser 16 Kio.",
+    memoryTooLong: "La mémoire ne doit pas dépasser 32 Kio.",
+    channels: "Canaux",
+    addChannel: "Ajouter un canal",
+    channelType: "Type de canal",
+    telegram: "Telegram",
+    feishu: "Feishu",
+    tokenRef: "Référence du jeton du Bot",
+    secretRef: "Référence du secret de l’application",
+    appId: "ID de l’application",
+    allowedSenders: "Expéditeurs autorisés (séparés par des virgules ou des retours à la ligne)",
+    allowGroups: "Autoriser les discussions de groupe",
+    channelRefHint:
+      "Les identifiants proviennent des variables d’environnement du processus qui démarre le daemon. Saisissez uniquement la référence de la variable, comme env:AIT_SERVER_CREDENTIAL_TELEGRAM, et au moins un expéditeur autorisé.",
+    channelEnabled: "Activé",
+    channelConnected: "Connecté",
+    channelIdle: "Inactif",
+    deleteChannel: "Supprimer le canal",
+    deleteChannelConfirm: "Supprimer ce canal ? Sa connexion externe sera déconnectée.",
+    status: {
+      queued: "En file d’attente",
+      sending: "Démarrage…",
+      running: "En cours…",
+      needs_approval: "Approbation requise",
+      completed: "Terminé",
+      failed: "Échec",
+      uncertain: "Interrompu : démarrez une nouvelle conversation pour continuer",
+      cancelled: "Annulé",
+    },
+  },
   paneFind: {
     searchFailed:
       "Impossible de rechercher dans cette conversation. Vérifiez la connexion à l’hôte et réessayez.",

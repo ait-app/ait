@@ -30,11 +30,11 @@ impl ProjectConfigStore for LocalProjectConfigStore {
                 revision: None,
             });
         };
-        if revision.size > f64::from(MAX_CONFIG_BYTES) {
-            return Err(ProjectConfigStoreError::Invalid);
-        }
-        let file = File::open(path).map_err(|_| ProjectConfigStoreError::Invalid)?;
-        let config = serde_json::from_reader(file).map_err(|_| ProjectConfigStoreError::Invalid)?;
+        let bytes = crate::File::new(path)
+            .read_limited(u64::from(MAX_CONFIG_BYTES))
+            .map_err(|_| ProjectConfigStoreError::Invalid)?;
+        let config =
+            serde_json::from_slice(&bytes).map_err(|_| ProjectConfigStoreError::Invalid)?;
         Ok(ProjectConfigDocument {
             config: Some(config),
             revision: Some(revision),

@@ -1,7 +1,7 @@
 # 当前 Ait 架构
 
 本页描述当前组件关系；决策背景和历史取舍见 [ADR 索引](../decisions/README.md)。
-Rust 服务入口是 `bins/daemon`，Cargo package 和可执行文件均为 `daemon`；独立发布归档将它命名为 `ait-daemon`。
+Rust 服务入口是 `bins/daemon`，Cargo package 和可执行文件均为 `daemon`；桌面安装包与独立发布归档将它命名为 `aitd`。
 Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端共享界面；SDK 与协议在 `packages/`。
 
 ## Rust 能力边界
@@ -43,7 +43,8 @@ Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端�
   功能服务负责流程，daemon 注入具体适配器；共享契约不执行文件 I/O。
 - `metadata` 拥有 Project/Workspace 登记、setup、worktree/recovery/GitHub provisioning RPC；
   本地 Git、Forge 与目录操作由 `filesystem` 通过 model 端口提供。
-- `provider` 拥有原生历史适配、Timeline SQLite 展示索引和 preset catalog；
+- `provider` 拥有原生历史适配、Timeline SQLite 展示索引和 preset catalog；沙箱 Workspace 的写入
+  confinement 由 agent manager 解析，`provider::local::sandbox` 负责生成平台 profile（[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)）；
   原生 Provider 的认证、工具和会话仍由各原生程序持有，不能合并为一个通用数据库入口。
 
 依赖与数据归属见 [ADR-102](../decisions/providers/adr-102-provider-metadata-independence.md)、
@@ -77,7 +78,7 @@ Pi 模型与推理偏好沿用配置持久化及下一条 prompt 前应用的流
 
 新定时任务保存固定 Workspace 身份，执行时校验归属，在该 Workspace 内选择或创建 Agent。
 新建 Agent 的收尾不归档 Workspace；旧未绑定任务保留兼容分支，见[任务手册](../operations/schedules.md)。
-Bot 持有独占 Channel 与隐藏 Provider session，普通 Agent API 不能接管；Workspace 归档先停用 Bot。
+Bot 持有独占 Channel 与隐藏 Provider session，普通 Agent API 不能接管；Workspace 归档使 Bot 退役（`retired`）并删除其记忆，见 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)。
 执行期间权限请求自动拒绝，重启后不重做结果不明的副作用输入，见[Bot 手册](../operations/bots.md)。
 
 ## 主机、连接与客户端

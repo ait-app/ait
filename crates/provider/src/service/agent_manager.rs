@@ -1,6 +1,7 @@
 //! Provider session registration and recovery for the independent server.
 
 pub(crate) mod auto_archive;
+mod confinement;
 mod controls;
 pub(crate) mod delivery;
 mod execution;
@@ -31,6 +32,7 @@ use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
     AgentTurnEvent,
 };
+use crate::ports::mcp_scope::McpSubject;
 use crate::protocol::agent_config::ConfigPatch;
 use crate::support::time::now_timestamp;
 
@@ -74,6 +76,11 @@ pub enum AgentManagerError {
     /// A turn is already active or the Agent is archived.
     #[error("Agent is busy or read-only")]
     Busy,
+    /// The provider cannot confine its native process inside a sandboxed Workspace.
+    #[error(
+        "provider {0} cannot run in a sandboxed worktree: it does not support OS write confinement"
+    )]
+    ConfinementUnsupported(String),
 }
 
 /// Metadata added when a new provider session is registered.
@@ -161,6 +168,7 @@ pub struct AgentManager {
     owner: Option<ownership::Owner>,
     generated_titles: generated_titles::Titles,
     workspace_names: Option<Arc<dyn model::workspace::lifecycle::WorkspaceNaming>>,
+    workspaces: Option<Arc<dyn model::workspace::registry::WorkspaceRegistry>>,
     auto_archives: auto_archive::AutoArchives,
     usage_cache: usage::UsageCache,
 }
@@ -192,6 +200,7 @@ impl AgentManager {
             owner: None,
             generated_titles: generated_titles::Titles::default(),
             workspace_names: None,
+            workspaces: None,
             auto_archives: auto_archive::AutoArchives::default(),
             usage_cache: usage::UsageCache::default(),
         }
@@ -241,6 +250,16 @@ impl AgentManager {
         names: Arc<dyn model::workspace::lifecycle::WorkspaceNaming>,
     ) -> Self {
         self.workspace_names = Some(names);
+        self
+    }
+
+    /// Read Workspace placement so launches in a sandboxed Workspace receive write confinement.
+    #[must_use]
+    pub fn with_workspaces(
+        mut self,
+        workspaces: Arc<dyn model::workspace::registry::WorkspaceRegistry>,
+    ) -> Self {
+        self.workspaces = Some(workspaces);
         self
     }
 
@@ -305,12 +324,7 @@ impl AgentManager {
             .persistence
             .as_ref()
             .ok_or_else(|| AgentManagerError::MissingPersistence(agent_id.to_owned()))?;
-        if handle
-            .metadata
-            .as_ref()
-            .and_then(|metadata| metadata.get(controls::REPLACEMENT_MARKER))
-            == Some(&json!(true))
-        {
+        if controls::replacement_pending(&record) {
             let history = self
                 .inspect_native(handle, &record.cwd)
                 .await
@@ -376,6 +390,20 @@ impl AgentManager {
         }
         self.clients.insert(provider, client.into());
         Ok(())
+    }
+
+    /// Bot-session capabilities of the `provider` adapter.
+    ///
+    /// # Errors
+    /// Returns `ProviderUnavailable` when no adapter is registered for `provider`.
+    pub(crate) fn bot_session_support(
+        &self,
+        provider: &str,
+    ) -> Result<crate::service::bot_execution::BotSessionSupport, AgentManagerError> {
+        self.clients
+            .get(provider)
+            .map(|client| client.bot_session_support())
+            .ok_or_else(|| AgentManagerError::ProviderUnavailable(provider.to_owned()))
     }
 
     /// Return the live session's latest registered snapshot, if this process owns it.
@@ -466,6 +494,7 @@ impl AgentManager {
             .get(&record.provider)
             .ok_or_else(|| AgentManagerError::ProviderUnavailable(record.provider.clone()))?;
         let spec = AgentSessionSpec {
+            confinement: None,
             provider: record.provider.clone(),
             cwd: record.cwd.clone(),
             config: proposed.clone(),
@@ -492,6 +521,7 @@ impl AgentManager {
                 provider: record.provider.clone(),
                 cwd: record.cwd.clone(),
                 config: effective,
+                confinement: None,
             })
             .await
             .map_err(|_| AgentManagerError::InvalidRequest)?;
@@ -568,18 +598,27 @@ impl AgentManager {
             ..spec.clone()
         };
         let (launch, binding) = self.prepare_mcp(
-            agent_id,
+            &McpSubject {
+                agent_id,
+                internal: registration.internal,
+                owner: registration.owner.as_ref(),
+                labels: &registration.labels,
+            },
             &spec,
             AgentResumePurpose::Interactive,
-            &registration.labels,
         )?;
+        let launch = self.confine(launch, registration.workspace_id.as_deref())?;
         let session = execution::native(
             &spec.provider,
             "create",
             client.create_session_with_environment(&launch, environment),
         )
         .await
-        .map_err(map_session)?;
+        .map_err(map_session);
+        let session = match session {
+            Ok(session) => session,
+            Err(error) => return self.retain_mcp(agent_id, Err(error), binding),
+        };
         let now = now_timestamp();
         let record = PersistedAgentRuntimeRecord {
             id: agent_id.to_owned(),
@@ -608,11 +647,12 @@ impl AgentManager {
             owner: registration.owner,
             observation: None,
         };
-        let record = self
+        let opened = self
             .register_session(agent_id, session, record, Registration::Create, permit)
-            .await?;
+            .await;
+        let record = self.retain_mcp(agent_id, opened, binding)?;
         self.mark_history_loaded(agent_id);
-        Ok(self.retain_mcp(record, binding))
+        Ok(record)
     }
 
     /// Resume a persisted provider session, using history-only mode for archived Agents.
@@ -654,13 +694,7 @@ impl AgentManager {
             .get(agent_id)
             .map_err(map_registry)?
             .ok_or_else(|| AgentManagerError::NotFound(agent_id.to_owned()))?;
-        if record
-            .persistence
-            .as_ref()
-            .and_then(|handle| handle.metadata.as_ref())
-            .and_then(|metadata| metadata.get(controls::REPLACEMENT_MARKER))
-            == Some(&json!(true))
-        {
+        if controls::replacement_pending(&record) {
             self.load_timeline_for_input(agent_id).await?;
             record = self
                 .registry
@@ -679,6 +713,7 @@ impl AgentManager {
             provider: record.provider.clone(),
             cwd: record.cwd.clone(),
             config: record.config.clone().unwrap_or_default(),
+            confinement: None,
         };
         validate_identity(agent_id, &spec)?;
         let purpose = if record.archived_at.is_some() {
@@ -687,29 +722,36 @@ impl AgentManager {
             AgentResumePurpose::Interactive
         };
         let client = self.available_client(&record.provider).await?;
-        let (launch, binding) = self.prepare_mcp(agent_id, &spec, purpose, &record.labels)?;
+        let (launch, binding) = self.prepare_mcp(&mcp_subject(&record), &spec, purpose)?;
+        let launch = self.confine(launch, record.workspace_id.as_deref())?;
         let session = execution::native(
             &spec.provider,
             "resume",
             client.resume_session(handle, &launch, purpose),
         )
         .await
-        .map_err(map_session)?;
+        .map_err(map_session);
         let registration = if recovering {
             Registration::Recovery
         } else {
             Registration::Read
         };
-        let record = self
-            .register_session(agent_id, session, record, registration, permit)
-            .await?;
-        Ok(self.retain_mcp(record, binding))
+        let opened = match session {
+            Ok(session) => {
+                self.register_session(agent_id, session, record, registration, permit)
+                    .await
+            }
+            Err(error) => Err(error),
+        };
+        self.retain_mcp(agent_id, opened, binding)
     }
 
     /// Close one live session while retaining its provider history and durable Agent record.
     ///
     /// A native close failure retains manager ownership so a later attempt can retry. Missing
-    /// live sessions are idempotent.
+    /// live sessions are idempotent. An invalid native handle, or one whose record vanished, is
+    /// logged and does not prevent the native session from closing; a registry failure keeps
+    /// the session live so the changed handle is not lost and close can be retried.
     ///
     /// # Errors
     /// Returns provider or registry failure.
@@ -717,24 +759,28 @@ impl AgentManager {
         let Some(agent) = self.live.get_mut(agent_id) else {
             return Ok(());
         };
+        // An unrecordable handle must not keep the native process open forever.
         if agent.registered {
-            streaming::persist_handle(self.registry.as_ref(), agent_id, agent)?;
+            match streaming::persist_handle(self.registry.as_ref(), agent_id, agent) {
+                Err(error @ (AgentManagerError::Session | AgentManagerError::NotFound(_))) => {
+                    tracing::warn!(provider = %agent.record.provider, agent_id = %agent_id,
+                        error_kind = %error,
+                        "Native provider handle could not be recorded before close");
+                }
+                result => result?,
+            }
         }
         agent.session.close().await.map_err(map_session)?;
         if agent.registered {
-            for child in agent.session.subagents() {
-                controls::publish_subagent(
-                    self.registry.as_ref(),
-                    self.timeline.as_ref(),
-                    &self.events,
-                    agent,
-                    &crate::ports::controls::SubagentEvent::Upsert(child),
-                )
-                .map_err(|_| AgentManagerError::Registry)?;
-            }
+            controls::publish_children(
+                self.registry.as_ref(),
+                self.timeline.as_ref(),
+                &self.events,
+                agent,
+            )?;
         }
         if !agent.registered {
-            self.live.remove(agent_id);
+            self.drop_live(agent_id);
             return Ok(());
         }
         // Metadata and attention may have changed through other narrow ports. Never replace
@@ -759,7 +805,7 @@ impl AgentManager {
                 next
             })
             .map_err(map_registry)?;
-        self.live.remove(agent_id);
+        self.drop_live(agent_id);
         Ok(())
     }
 
@@ -1013,7 +1059,7 @@ impl AgentManager {
                 publish_failure_activity(&self.events, &id, &now, record);
             }
             if failed {
-                self.live.remove(&id);
+                self.drop_live(&id);
             }
             self.auto_archives.completed(&id);
         }
@@ -1167,6 +1213,16 @@ impl AgentManager {
             );
         }
         AgentManagerError::Session
+    }
+}
+
+/// Session facts for MCP credential decisions, read from a durable record.
+fn mcp_subject(record: &PersistedAgentRuntimeRecord) -> McpSubject<'_> {
+    McpSubject {
+        agent_id: &record.id,
+        internal: record.internal,
+        owner: record.owner.as_ref(),
+        labels: &record.labels,
     }
 }
 

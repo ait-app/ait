@@ -34,7 +34,7 @@ describe("desktop packaging", () => {
 
   it("bundles the native daemon only on macOS and Linux", () => {
     const config = parse(readFileSync(join(packageRoot, "electron-builder.yml"), "utf8"));
-    const daemon = { from: "release-resources/daemon/daemon", to: "bin/daemon" };
+    const daemon = { from: "release-resources/daemon/aitd", to: "bin/aitd" };
     expect(config.mac.extraResources).toContainEqual(daemon);
     expect(config.linux.extraResources).toContainEqual(daemon);
     expect(config.extraResources).not.toContainEqual(daemon);

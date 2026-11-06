@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
 
-use super::super::config::text;
+use crate::local::acp_config::text;
 use crate::ports::agent_session::AgentSessionError;
 
 #[derive(Debug, Default)]

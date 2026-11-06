@@ -13,7 +13,7 @@ pub(in crate::host::push) fn apple() -> Apple {
         key_id: "test-key".to_owned(),
         team_id: "test-team".to_owned(),
         bundles: vec!["dev.ait.mobile".to_owned()],
-        cached: Mutex::new(None),
+        cached: TokenCache::default(),
     }
 }
 
@@ -22,10 +22,10 @@ pub(in crate::host::push) fn google(token_url: String) -> Google {
         project_id: "test-project".to_owned(),
         email: "test@example.invalid".to_owned(),
         key: EncodingKey::from_secret(b"not-a-signing-key"),
-        cached: Mutex::new(Some(Cached {
+        cached: TokenCache(Mutex::new(Some(Cached {
             value: SecretString::from("mock-access-token"),
             expires_at: i64::MAX,
-        })),
+        }))),
         token_url,
     }
 }
@@ -75,10 +75,10 @@ async fn authorization_reuses_unexpired_credentials_and_invalidates_them() {
         key_id: "key".to_owned(),
         team_id: "team".to_owned(),
         bundles: vec!["dev.ait.mobile".to_owned()],
-        cached: Mutex::new(Some(Cached {
+        cached: TokenCache(Mutex::new(Some(Cached {
             value: SecretString::from("cached-test-credential"),
             expires_at: i64::MAX,
-        })),
+        }))),
     };
     assert!(apple.allows("dev.ait.mobile"));
     assert!(!apple.allows("other.application"));
@@ -101,10 +101,10 @@ async fn authorization_reuses_unexpired_credentials_and_invalidates_them() {
         project_id: "test-project".to_owned(),
         email: "test@example.invalid".to_owned(),
         key: EncodingKey::from_secret(b"not-a-signing-key"),
-        cached: Mutex::new(Some(Cached {
+        cached: TokenCache(Mutex::new(Some(Cached {
             value: SecretString::from("cached-test-credential"),
             expires_at: i64::MAX,
-        })),
+        }))),
         token_url: GOOGLE_TOKEN_URL.to_owned(),
     };
     let client = reqwest::Client::new();

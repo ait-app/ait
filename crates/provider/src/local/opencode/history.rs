@@ -1,14 +1,13 @@
 //! ACP replay is the sole authoritative transcript; list/load never submit model input.
-mod previews;
+pub(super) mod previews;
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig};
 use serde_json::{Value, json};
 
-pub(super) use previews::populate;
-
-use super::{OpenCodeClient, PROVIDER, config, launcher, streaming::Stream};
+use super::{PROVIDER, client::OpenCodeClient, config, launcher, streaming::Stream};
+use crate::local::acp_config;
 use crate::{
     local::acp_transport::Transport,
     ports::{
@@ -130,7 +129,7 @@ async fn load(
         )
     }));
     stream.events = completed;
-    Ok((config::state(&result)?, stream))
+    Ok((acp_config::state(&result)?, stream))
 }
 
 /// Collect native inputs and standalone compactions before replay entries are drained.
@@ -202,7 +201,7 @@ pub(super) async fn list(
             .as_array()
             .ok_or(AgentSessionError::Failed)?;
         for row in rows.iter().take(options.scan_limit - results.len()) {
-            let id = config::text(row, "sessionId")?;
+            let id = acp_config::text(row, "sessionId")?;
             if !identities.insert(id.to_owned()) {
                 return Err(AgentSessionError::Failed);
             }
@@ -217,7 +216,7 @@ pub(super) async fn list(
             {
                 return Err(AgentSessionError::Failed);
             }
-            let updated = config::text(row, "updatedAt")?;
+            let updated = acp_config::text(row, "updatedAt")?;
             chrono::DateTime::parse_from_rfc3339(updated).map_err(|_| AgentSessionError::Failed)?;
             results.push(SessionDescriptor {
                 provider_id: PROVIDER.into(),
@@ -260,6 +259,7 @@ pub(super) async fn inspect(
         provider: PROVIDER.into(),
         cwd: cwd.into(),
         config: StoredAgentConfig::default(),
+        confinement: None,
     };
     config::validate_spec(&spec)?;
     let (mut transport, _, source, _) = launcher::observed(client, cwd, &spec.config).await?;

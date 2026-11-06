@@ -42,6 +42,7 @@ fn live_profile() -> (TempDir, OpenCodeClient, AgentSessionSpec) {
             model: Some(model),
             ..Default::default()
         },
+        confinement: None,
     };
     (root, client, spec)
 }

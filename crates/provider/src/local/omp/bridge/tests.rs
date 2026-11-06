@@ -202,7 +202,17 @@ async fn standard_acp_waits_for_native_background_settlement_and_deduplicates_ch
         })
         .collect::<Vec<_>>();
     assert_eq!(launches.len(), 1);
-    assert_eq!(launches[0]["args"][1], "rpc-ui");
+    let args = launches[0]["args"].as_array().unwrap();
+    assert!(
+        args.windows(2)
+            .any(|pair| pair[0] == "--mode" && pair[1] == "rpc-ui"),
+        "the bridge must use OMP's RPC UI mode: {args:?}"
+    );
+    assert!(
+        args.windows(2)
+            .any(|pair| pair[0] == "--cwd" && pair[1] == spec.cwd),
+        "the bridge must explicitly preserve the host-selected directory: {args:?}"
+    );
     peer.finish(&session).await;
 }
 

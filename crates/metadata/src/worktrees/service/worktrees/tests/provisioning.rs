@@ -2,6 +2,7 @@ use domain::workspace::worktrees::{WorktreeAction, WorktreeCreation};
 use model::workspace::worktrees::WorktreeProvisioning;
 
 use super::*;
+use crate::worktrees::service::worktrees::provisioning::WorkspaceWorktrees;
 
 #[test]
 fn legacy_directory_placement_normalizes_the_new_branch_before_using_the_git_owner() {
@@ -63,6 +64,7 @@ fn intent() -> WorktreeCreation {
         checkout_source: None,
         first_agent_prompt: Some("Prompt fallback".to_owned()),
         expects_initial_agent: true,
+        sandbox: None,
     }
 }
 

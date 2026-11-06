@@ -23,3 +23,17 @@ impl NativeFixture {
         Self { root, cwd, path }
     }
 }
+
+/// Native `thread/start` and `thread/resume` requests in `cwd` whose injected Ait MCP server
+/// identifies Agent `id`, in the order the offline Codex received them.
+pub(super) fn launches(cwd: &std::path::Path, id: &str) -> Vec<serde_json::Value> {
+    std::fs::read_to_string(cwd.join("native-requests.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .filter(|request| {
+            request["params"]["config"]["mcp_servers"]["ait"]["http_headers"]["X-Ait-Agent-Id"]
+                == id
+        })
+        .collect()
+}

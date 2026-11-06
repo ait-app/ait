@@ -12,7 +12,7 @@ use std::collections::VecDeque;
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
 
-use super::OmpClient;
+use super::{LABEL, OmpClient, PROVIDER};
 use crate::ports::agent_session::{
     AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
 };
@@ -25,7 +25,7 @@ pub(super) fn redact_event(event: &Value) -> Value {
     let safe_error = |error: &Value| {
         let mut failure = crate::local::diagnostics::failure::Failure::default();
         let diagnostic = crate::local::diagnostics::native(error, "omp_bridge");
-        failure.observe("Oh My Pi", error, diagnostic);
+        failure.observe(LABEL, error, diagnostic);
         json!(failure.message().unwrap_or("OMP native error"))
     };
     let mut event = event.clone();
@@ -155,6 +155,17 @@ impl Session {
 
 #[async_trait::async_trait]
 impl AgentSession for Session {
+    fn handles_out_of_band(&self, text: &str) -> Option<bool> {
+        self.engine
+            .native()
+            .and_then(|native| native.handles_out_of_band(text))
+    }
+    async fn out_of_band(&mut self, prompt: &AgentPrompt) -> Result<(), AgentSessionError> {
+        self.engine.native_mut()?.out_of_band(prompt).await
+    }
+    fn take_command_completion(&mut self) -> Option<AgentSessionFuture<'static, ()>> {
+        self.engine.native_mut().ok()?.take_command_completion()
+    }
     async fn complete_commands(
         &mut self,
         input: &crate::protocol::commands::CompletionInput,
@@ -165,7 +176,7 @@ impl AgentSession for Session {
         self.engine.native().and_then(AgentSession::commands)
     }
     fn provider(&self) -> &'static str {
-        "omp"
+        PROVIDER
     }
     fn control_settings(&self, config: &StoredAgentConfig) -> Option<Value> {
         self.engine

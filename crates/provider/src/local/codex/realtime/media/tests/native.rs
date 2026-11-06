@@ -19,6 +19,7 @@ async fn logged_in_codex_speaks_after_hangup_and_after_provider_restart() {
         provider: "codex".to_owned(),
         cwd: cwd.path().to_str().unwrap().to_owned(),
         config: domain::agent_runtime::StoredAgentConfig::default(),
+        confinement: None,
     };
     let client = CodexClient::new("codex".into());
     let mut native = client.create_session(&spec).await.unwrap();
@@ -126,8 +127,13 @@ async fn logged_in_codex_connects_the_provider_owned_media_peer() {
     let cwd = tempfile::tempdir().unwrap();
     let mut native = Transport::spawn(
         std::path::Path::new("codex"),
-        cwd.path().to_str().unwrap(),
+        crate::local::codex::transport::Launch {
+            cwd: cwd.path().to_str().unwrap(),
+            goals: false,
+            confinement: None,
+        },
         Duration::from_secs(25),
+        &crate::ports::environment::AgentEnvironment::default(),
     )
     .unwrap();
     native.initialize().await.unwrap();

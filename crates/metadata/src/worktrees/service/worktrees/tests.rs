@@ -129,7 +129,7 @@ impl ProjectRegistry for Projects {
         let mut records = self.0.lock().expect("projects");
         if let Some(project) = records
             .iter()
-            .find(|project| project.root_path == input.root_path && is_active_project(project))
+            .find(|project| project.root_path == input.root_path && !project.is_archived())
         {
             return Ok(project.clone());
         }
@@ -439,6 +439,7 @@ fn create_reuses_source_project_and_records_paseo_placement() {
                 checkout_source: None,
                 first_agent_prompt: Some("\n  Review   the change carefully\nmore".to_owned()),
                 expects_initial_agent: true,
+                sandbox: None,
             },
             "2026-01-02T00:00:00.000Z",
         )
@@ -674,7 +675,7 @@ fn worktree_scope_archives_all_descendant_workspaces_and_removes_directory() {
         .list()
         .expect("list")
         .into_iter()
-        .filter(is_active)
+        .filter(|workspace| !workspace.is_archived())
         .map(|workspace| workspace.workspace_id)
         .collect::<Vec<_>>();
     assert_eq!(active, ["other"]);
@@ -738,6 +739,64 @@ fn checkout_defaults_its_directory_name_to_the_selected_branch() {
     );
 }
 
+#[cfg(target_os = "macos")]
+#[test]
+fn sandboxed_creation_persists_and_projects_the_isolation_level() {
+    let projects = Projects::default();
+    let workspaces = Workspaces::default();
+    let managed = Managed::default();
+    let service = service(&projects, &workspaces, &managed);
+    let mut input = create_input(None);
+    input.sandbox = Some(domain::workspace::sandbox::WorkspaceSandbox::WorktreeWrites);
+
+    let created = service
+        .create(&input, "2026-01-02T00:00:00.000Z")
+        .expect("create sandboxed workspace");
+
+    assert_eq!(created.workspace.sandbox, input.sandbox);
+    assert_eq!(
+        workspaces.records.lock().expect("workspaces")[0].sandbox,
+        input.sandbox
+    );
+    let descriptor = domain::workspace::protocol::projection::workspace_descriptor(
+        &created.workspace,
+        Some(&created.project),
+    );
+    assert_eq!(descriptor.sandbox, input.sandbox);
+    assert_eq!(
+        serde_json::to_value(&descriptor).expect("descriptor")["sandbox"],
+        "worktree_writes"
+    );
+}
+
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn sandboxed_creation_is_rejected_before_git_work_without_an_os_sandbox() {
+    let projects = Projects::default();
+    let workspaces = Workspaces::default();
+    let managed = Managed::default();
+    let service = service(&projects, &workspaces, &managed);
+    let mut input = create_input(None);
+    input.sandbox = Some(domain::workspace::sandbox::WorkspaceSandbox::WorktreeWrites);
+
+    let error = service
+        .create(&input, "2026-01-02T00:00:00.000Z")
+        .expect_err("unsupported platform");
+
+    assert_eq!(
+        error,
+        WorktreeError::Invalid(SANDBOX_UNSUPPORTED.to_owned()).into()
+    );
+    assert!(
+        managed
+            .state
+            .lock()
+            .expect("managed")
+            .created_inputs
+            .is_empty()
+    );
+}
+
 fn service(projects: &Projects, workspaces: &Workspaces, managed: &Managed) -> Worktrees {
     Worktrees::new(
         Box::new(projects.clone()),
@@ -761,6 +820,7 @@ fn create_input(project_id: Option<&str>) -> CreateWorktree {
         checkout_source: None,
         first_agent_prompt: None,
         expects_initial_agent: false,
+        sandbox: None,
     }
 }
 
@@ -816,5 +876,6 @@ fn workspace(
         labels: None,
         auto_name: None,
         untrusted_source: None,
+        sandbox: None,
     }
 }

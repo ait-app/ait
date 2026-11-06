@@ -69,6 +69,28 @@ fn role_choices_follow_real_native_catalog_kinds_and_preserve_inherited_selector
 }
 
 #[test]
+fn changing_the_preset_default_thinking_requires_a_new_native_overlay() {
+    let mut left = config("default", "chat/text");
+    let mut right = left.clone();
+    left.feature_values
+        .as_mut()
+        .unwrap()
+        .insert("modelPresetThinking".to_owned(), json!("auto"));
+    right
+        .feature_values
+        .as_mut()
+        .unwrap()
+        .insert("modelPresetThinking".to_owned(), json!("high"));
+    assert!(!same_overlay(&left, &right));
+    right
+        .feature_values
+        .as_mut()
+        .unwrap()
+        .insert("modelPresetThinking".to_owned(), json!("auto"));
+    assert!(same_overlay(&left, &right));
+}
+
+#[test]
 fn role_assignments_reject_missing_models_unknown_roles_and_incompatible_kinds() {
     let catalog = catalog();
     for (role, selector) in [

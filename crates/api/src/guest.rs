@@ -184,7 +184,7 @@ async fn project_workspaces(
 }
 
 fn active(workspace: &PersistedWorkspaceRecord) -> bool {
-    workspace.archived_at.as_ref().is_none_or(String::is_empty)
+    !workspace.is_archived()
 }
 
 impl Session {

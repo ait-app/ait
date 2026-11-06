@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 
 use super::{ErrorCode, ExecutionState, map_manager, only};
+use crate::service::agent_execution::operation::Operation;
 use crate::support::rpc::decode;
 
 impl ExecutionState {
@@ -25,31 +26,37 @@ impl ExecutionState {
         Ok(json!({"supported":supported}))
     }
 
-    pub(super) async fn voice(&mut self, method: &str, params: Value) -> Result<Value, ErrorCode> {
-        if method == "internal.voice.send" {
-            only(&params, &["agentId", "text"])?;
-            let request: crate::protocol::agent_execution::SendRequest = decode(params)?;
-            let id = self.resolve(&request.agent_id)?;
-            let record = self
-                .registry
-                .get(&id)
-                .map_err(|_| ErrorCode::AgentIo)?
-                .ok_or(ErrorCode::AgentNotFound)?;
-            self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
-            let result = if self.manager.has_pending_input(&id)? {
-                Err(super::AgentManagerError::Busy)
-            } else {
-                self.manager.send_input(&id, &request.into_prompt()).await
-            };
-            let mut receipt = json!({"agentId":id,"accepted":result.is_ok(),"error":result.err().map(|error|error.to_string())});
-            if receipt["accepted"] == true {
-                self.manager.claim_exclusive_turn(&id)?;
-                let id = receipt["agentId"].as_str().ok_or(ErrorCode::AgentIo)?;
-                let turn = self.manager.active_turn(id).ok_or(ErrorCode::AgentIo)?;
-                receipt["turnId"] = json!(turn);
-            }
-            return Ok(receipt);
+    pub(super) async fn voice_send(&mut self, params: Value) -> Result<Value, ErrorCode> {
+        only(&params, &["agentId", "text"])?;
+        let request: crate::protocol::agent_execution::SendRequest = decode(params)?;
+        let id = self.resolve(&request.agent_id)?;
+        let record = self
+            .registry
+            .get(&id)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .ok_or(ErrorCode::AgentNotFound)?;
+        self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
+        let result = if self.manager.has_pending_input(&id)? {
+            Err(super::AgentManagerError::Busy)
+        } else {
+            self.manager.send_input(&id, &request.into_prompt()).await
+        };
+        let mut receipt = json!({"agentId":id,"accepted":result.is_ok(),"error":result.err().map(|error|error.to_string())});
+        if receipt["accepted"] == true {
+            self.manager.claim_exclusive_turn(&id)?;
+            let id = receipt["agentId"].as_str().ok_or(ErrorCode::AgentIo)?;
+            let turn = self.manager.active_turn(id).ok_or(ErrorCode::AgentIo)?;
+            receipt["turnId"] = json!(turn);
         }
+        Ok(receipt)
+    }
+
+    /// Report or cancel the voice turn named by `turnId`.
+    pub(super) async fn voice_turn(
+        &mut self,
+        method: Operation,
+        params: Value,
+    ) -> Result<Value, ErrorCode> {
         only(&params, &["agentId", "turnId"])?;
         let id = self.resolve(
             params["agentId"]
@@ -62,7 +69,7 @@ impl ExecutionState {
             .ok_or(ErrorCode::InvalidMessage)?;
         let owns_latest = self.manager.latest_turn(&id) == Some(turn);
         let owns_active = self.manager.active_turn(&id) == Some(turn);
-        if method == "internal.voice.cancel" {
+        if method == Operation::VoiceCancel {
             if owns_active {
                 self.manager
                     .cancel(&id)
