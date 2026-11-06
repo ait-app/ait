@@ -18,6 +18,10 @@ vi.mock("@/stores/session-store", () => ({
 vi.mock("@/utils/open-external-url", () => ({ openExternalUrl: fixture.open }));
 vi.mock("./provider-native-actions", () => ({ ProviderNativeActions: () => null }));
 vi.mock("./provider-side-questions", () => ({ ProviderSideQuestions: () => null }));
+vi.mock("@/hooks/use-settings", () => ({
+  useSettings: (selector: (state: unknown) => unknown) =>
+    selector({ openInSidePane: { subagents: false } }),
+}));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: () => "Open in browser" }) }));
 afterEach(() => {
   cleanup();
@@ -80,4 +84,54 @@ it("defers editor replacement during submit and delivers each revision once acro
   reopened.rerender(<ProviderRuntimePanel {...props} />);
   expect(onEditor).toHaveBeenLastCalledWith("");
   expect(onEditor).toHaveBeenCalledTimes(2);
+});
+
+it("shows native vibe workers and hides everything when the host omits them", () => {
+  fixture.state = {
+    statuses: [],
+    widgets: [],
+    title: null,
+    link: null,
+    editor: null,
+    vibe: {
+      enabled: true,
+      workers: [
+        {
+          id: "worker-fast",
+          parentId: "agent",
+          status: "running",
+          description: "Fast worker",
+          model: "deepseek-v4.1-flash",
+        },
+      ],
+    },
+  };
+  const view = render(
+    <ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />,
+  );
+  expect(screen.getByTestId("provider-vibe")).toBeTruthy();
+  expect(screen.getByText("worker-fast")).toBeTruthy();
+  view.unmount();
+
+  // An older daemon sends no `vibe` at all: the panel must stay hidden.
+  fixture.state = { statuses: [], widgets: [], title: null, link: null, editor: null };
+  const legacy = render(
+    <ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />,
+  );
+  expect(legacy.container.innerHTML).toBe("");
+  legacy.unmount();
+
+  // Disabled vibe with workers is still not a reason to render.
+  fixture.state = {
+    statuses: [],
+    widgets: [],
+    title: null,
+    link: null,
+    editor: null,
+    vibe: { enabled: false, workers: [] },
+  };
+  const disabled = render(
+    <ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />,
+  );
+  expect(disabled.container.innerHTML).toBe("");
 });

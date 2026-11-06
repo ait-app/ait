@@ -44,9 +44,21 @@ export const ru: TranslationResources = {
       },
     },
     modelPreset: "Набор моделей OMP",
+    modelRoles: "Роли моделей",
     customModels: "Своя конфигурация",
     unassignedModel: "Не назначено",
     presetUnavailable: "Набор моделей OMP недоступен; обновите каталог моделей",
+    vibe: {
+      title: "Vibe",
+      enabled: "Vibe включён",
+      states: {
+        running: "Выполняется",
+        completed: "Завершено",
+        failed: "Ошибка",
+        canceled: "Отменено",
+        unknown: "Неизвестно",
+      },
+    },
     nativeOperations: "Нативные операции",
     runOperation: "Выполнить",
     openBrowser: "Открыть в браузере",
@@ -1266,7 +1278,10 @@ export const ru: TranslationResources = {
     creating: "Создание…",
     name: "Название метки",
     updateHostUse: "Обновите этот хост, чтобы использовать метки.",
-    errors: { update: "Не удалось обновить метку", load: "Не удалось загрузить метки" },
+    errors: {
+      update: "Не удалось обновить метку",
+      load: "Не удалось загрузить метки",
+    },
     colors: {
       violet: "Фиолетовый",
       sky: "Голубой",

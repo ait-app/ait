@@ -171,6 +171,7 @@ pub(super) fn catalog() -> Value {
             let mut actions = session_actions();
             actions.extend(account_actions());
             actions.extend(runtime_actions());
+            actions.extend(vibe_actions());
             json!(actions)
         })
         .clone()
@@ -262,6 +263,45 @@ fn session_actions() -> Vec<Value> {
         ),
         action("export_html", "Export conversation as HTML", vec![]),
     ]
+}
+
+/// Native Vibe controls. Only a session whose bridge advertised `vibe` may execute them.
+fn vibe_actions() -> Vec<Value> {
+    vec![action(
+        "vibe_control",
+        "Control the native Vibe director and its workers",
+        vec![
+            field(
+                "operation",
+                "Operation",
+                &["list", "spawn", "send", "wait", "kill", "toggle"],
+                true,
+            ),
+            field(
+                "enabled",
+                "Toggle target (true enters)",
+                &["true", "false"],
+                false,
+            ),
+            field("cli", "Worker class (spawn)", &["fast", "good"], false),
+            field("prompt", "Initial worker prompt (spawn)", &[], false),
+            field("name", "Worker name (spawn, optional)", &[], false),
+            field(
+                "sessionId",
+                "Ait subagent ID of a verified worker (send/kill/wait)",
+                &[],
+                false,
+            ),
+            field("message", "Worker message (send)", &[], false),
+            field(
+                "sessions",
+                "Ait subagent IDs (wait, comma separated)",
+                &[],
+                false,
+            ),
+            field("timeout", "Wait timeout in seconds", &[], false),
+        ],
+    )]
 }
 
 fn account_actions() -> Vec<Value> {
@@ -393,7 +433,7 @@ pub(super) fn validate(
             return Err(AgentSessionError::Rejected);
         }
         result[key] = match key {
-            "muted" | "summarize" => json!(value == "true"),
+            "muted" | "summarize" | "enabled" => json!(value == "true"),
             "credentialId" => json!(
                 value
                     .parse::<u64>()
@@ -418,6 +458,68 @@ pub(super) fn validate(
                 return Err(AgentSessionError::Rejected);
             }
         } else if result.get("objective").is_some() || result.get("token_budget").is_some() {
+            return Err(AgentSessionError::Rejected);
+        }
+    }
+    if action == "vibe_control" {
+        let operation = result["operation"]
+            .as_str()
+            .ok_or(AgentSessionError::Rejected)?
+            .to_owned();
+        let allowed: &[&str] = match operation.as_str() {
+            "toggle" => &["enabled"],
+            "list" => &[],
+            "spawn" => &["cli", "prompt", "name"],
+            "send" => &["sessionId", "message"],
+            "kill" => &["sessionId"],
+            "wait" => &["sessions", "timeout"],
+            _ => return Err(AgentSessionError::Rejected),
+        };
+        if result.as_object().is_some_and(|fields| {
+            fields
+                .keys()
+                .any(|key| key != "operation" && !allowed.contains(&key.as_str()))
+        }) {
+            return Err(AgentSessionError::Rejected);
+        }
+        if let Some(sessions) = result.get_mut("sessions")
+            && let Some(text) = sessions.as_str()
+        {
+            let ids: Vec<_> = text
+                .split(',')
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .map(str::to_owned)
+                .collect();
+            if ids.len() > 256 {
+                return Err(AgentSessionError::Rejected);
+            }
+            *sessions = json!(ids);
+        }
+        if let Some(timeout) = result.get_mut("timeout")
+            && let Some(text) = timeout.as_str()
+        {
+            *timeout = json!(
+                text.parse::<f64>()
+                    .ok()
+                    .filter(|seconds| seconds.is_finite() && *seconds > 0.0 && *seconds <= 600.0)
+                    .ok_or(AgentSessionError::Rejected)?
+            );
+        }
+        // Worker references travel as Ait subagent IDs; the native observer resolves them.
+        let present = |key: &str| {
+            result
+                .get(key)
+                .and_then(Value::as_str)
+                .is_some_and(|text| !text.trim().is_empty())
+        };
+        let required: &[&str] = match operation.as_str() {
+            "spawn" => &["cli", "prompt"],
+            "send" => &["sessionId", "message"],
+            "kill" => &["sessionId"],
+            _ => &[],
+        };
+        if required.iter().any(|key| !present(key)) {
             return Err(AgentSessionError::Rejected);
         }
     }

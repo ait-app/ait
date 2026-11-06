@@ -269,3 +269,68 @@ async fn global_preset_management_saves_latest_next_turn_selection_and_preserves
     );
     owner.close().await.unwrap();
 }
+
+#[tokio::test]
+async fn a_directory_without_presets_advertises_no_preset_control() {
+    let (root, client, mut spec) = fixture();
+    let details = client.discover(&spec.cwd).await.unwrap();
+    assert!(
+        !details
+            .features
+            .iter()
+            .any(|feature| feature["id"] == "modelPreset"),
+        "{:?}",
+        details.features
+    );
+    // The draft a new Agent picks up and its role menus must stay free of the empty control too.
+    assert!(
+        !client
+            .draft_features(&spec)
+            .await
+            .unwrap()
+            .iter()
+            .any(|feature| feature["id"] == "modelPreset"),
+        "draft features must not offer an empty preset selector"
+    );
+    // A non-default draft takes the role-settings path rather than the cached discovery
+    // snapshot, so it must stay free of the empty control as well.
+    spec.config.model = Some(json!(["test", "model"]).to_string());
+    assert!(
+        !client
+            .draft_features(&spec)
+            .await
+            .unwrap()
+            .iter()
+            .any(|feature| feature["id"] == "modelPreset"),
+        "a role-settings draft must not offer an empty preset selector"
+    );
+    save(
+        root.path(),
+        "global",
+        &json!({"work":{"modelRoles":{"default":"test/model","advisor":"test/model"},"defaultThinkingLevel":"low"}}),
+    );
+    let features = client.discover(&spec.cwd).await.unwrap().features;
+    let control = features
+        .iter()
+        .find(|feature| feature["id"] == "modelPreset")
+        .expect("a named preset must advertise the selector");
+    assert_eq!(control["value"], "__custom__");
+    let options = control["options"].as_array().unwrap();
+    assert_eq!(options.len(), 2);
+    assert_eq!(options[0]["id"], "__custom__");
+    assert_eq!(options[1]["id"], "work");
+    assert_eq!(options[1]["description"], "global");
+    assert_eq!(
+        options[1]["metadata"]["configuration"]["modelId"],
+        json!(["test", "model"]).to_string()
+    );
+    assert_eq!(
+        options[1]["metadata"]["configuration"]["thinkingOptionId"],
+        "low"
+    );
+    spec.config.feature_values = Some(BTreeMap::from([("modelPreset".to_owned(), json!("work"))]));
+    assert_eq!(
+        client.resolve_selection(&spec).await.unwrap().model,
+        Some(json!(["test", "model"]).to_string())
+    );
+}

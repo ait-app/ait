@@ -24,9 +24,21 @@ export const zhCN: TranslationResources = {
       },
     },
     modelPreset: "OMP 模型预设",
+    modelRoles: "用途模型",
     customModels: "自定义配置",
     unassignedModel: "不分配",
     presetUnavailable: "OMP 模型预设不可用，请刷新模型目录",
+    vibe: {
+      title: "Vibe",
+      enabled: "Vibe 已启用",
+      states: {
+        running: "运行中",
+        completed: "已完成",
+        failed: "失败",
+        canceled: "已取消",
+        unknown: "未知",
+      },
+    },
     nativeOperations: "原生操作",
     runOperation: "执行",
     openBrowser: "在浏览器中打开",
@@ -44,7 +56,12 @@ export const zhCN: TranslationResources = {
       success: "已完成",
       error: "未成功",
     },
-    actions: { pause: "暂停", resume: "继续", edit: "编辑目标", clear: "清除" },
+    actions: {
+      pause: "暂停",
+      resume: "继续",
+      edit: "编辑目标",
+      clear: "清除",
+    },
   },
   sharing: {
     title: "共享",
@@ -99,7 +116,11 @@ export const zhCN: TranslationResources = {
     emptyOutgoingTitle: "你还没有分享任何资源",
     emptyOutgoingHint: "在工作区或项目菜单中发起分享，也可以在 Host 设置中共享整台主机。",
   },
-  voiceTimeline: { started: "语音对话已开始", ended: "语音对话已结束", failed: "语音对话已中断" },
+  voiceTimeline: {
+    started: "语音对话已开始",
+    ended: "语音对话已结束",
+    failed: "语音对话已中断",
+  },
   bots: {
     modeCapWarning:
       "允许 Agent 运行命令的模式，也让这些 Agent 能够读取本机的 Ait 凭据，从而绕过 Bot 的 Ait 权限限制。只为你愿意让 Agent 无人值守完成的工作开启这些模式。",
@@ -1795,7 +1816,11 @@ export const zhCN: TranslationResources = {
     timeline: {
       back: "返回计划列表",
       hint: "按下一次触发时间排列，点击计划即可编辑。",
-      filters: { upcoming: "即将执行", paused: "已暂停", completed: "已结束" },
+      filters: {
+        upcoming: "即将执行",
+        paused: "已暂停",
+        completed: "已结束",
+      },
       today: "今天",
       tomorrow: "明天",
       due: "即将触发",
@@ -1974,7 +1999,13 @@ export const zhCN: TranslationResources = {
       timezone: "IANA 时区",
       invalidTimezone: "请输入有效的 IANA 时区，例如 Asia/Shanghai。",
       invalidInterval: "请输入正整数间隔。",
-      units: { milliseconds: "毫秒", seconds: "秒", minutes: "分钟", hours: "小时", days: "天" },
+      units: {
+        milliseconds: "毫秒",
+        seconds: "秒",
+        minutes: "分钟",
+        hours: "小时",
+        days: "天",
+      },
       label: "执行频率",
       select: "选择执行频率",
       empty: "没有可用的执行频率",
@@ -2872,7 +2903,10 @@ export const zhCN: TranslationResources = {
       connectedHosts: "已连接的主机",
       offline: "离线",
       versionDiffers: "版本与此设备不同",
-      experimentalFeatures: { label: "测试功能", description: "启用正在测试的新功能，例如 Bot。" },
+      experimentalFeatures: {
+        label: "测试功能",
+        description: "启用正在测试的新功能，例如 Bot。",
+      },
       releaseChannel: {
         label: "发布通道",
         description: "切换到 Beta 可更早获取更新并参与改进",

@@ -34,6 +34,7 @@ import {
 import { formatAgentFeatureLabel, formatThinkingOptionLabel } from "@/agent-controls/labels";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
+import { ModelFeatureControls } from "@/components/model-feature-controls";
 import {
   buildProviderSelectorProviders,
   buildSelectableProviderSelectorProviders,
@@ -106,7 +107,11 @@ import {
 } from "@/agent-profiles";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 import { mergeRoleChoices } from "./role-choices";
-import { modelPresetConfiguration, withModelPresetSelection } from "@/agent-controls/model-presets";
+import {
+  isModelConfigurationFeature,
+  modelPresetConfiguration,
+  withModelPresetSelection,
+} from "@/agent-controls/model-presets";
 
 interface AgentControlOption {
   id: string;
@@ -534,9 +539,15 @@ function ControlledAgentControls({
             label,
             options: feature.options.map((option) => {
               if (feature.id === "modelPreset" && option.id === "__custom__")
-                return { ...option, label: t("providerControl.customModels") };
+                return {
+                  ...option,
+                  label: t("providerControl.customModels"),
+                };
               if (feature.id.startsWith("modelRole.") && option.id === "unset")
-                return { ...option, label: t("providerControl.unassignedModel") };
+                return {
+                  ...option,
+                  label: t("providerControl.unassignedModel"),
+                };
               return option;
             }),
           };
@@ -566,6 +577,17 @@ function ControlledAgentControls({
   const canSelectThinking = Boolean(
     onSelectThinkingOption && thinkingOptions && thinkingOptions.length > 0,
   );
+  const modelFeatures = useMemo(
+    () => (canSelectModel ? (features ?? []).filter(isModelConfigurationFeature) : []),
+    [canSelectModel, features],
+  );
+  const visibleFeatures = useMemo(
+    () =>
+      canSelectModel
+        ? features?.filter((feature) => !isModelConfigurationFeature(feature))
+        : features,
+    [canSelectModel, features],
+  );
 
   const displayProvider = findOptionLabel(
     providerOptions,
@@ -591,7 +613,7 @@ function ControlledAgentControls({
   });
   const featureControls = useMemo(
     () =>
-      (features ?? []).map((feature) => {
+      (visibleFeatures ?? []).map((feature) => {
         if (feature.type === "toggle") return { type: "toggle" as const };
         const selectedOption = feature.options.find((option) => option.id === feature.value);
         return {
@@ -599,7 +621,7 @@ function ControlledAgentControls({
           label: selectedOption?.label ?? feature.label,
         };
       }),
-    [features],
+    [visibleFeatures],
   );
   const controlPresence = useMemo(
     () => ({
@@ -815,7 +837,8 @@ function ControlledAgentControls({
             selectedModelId={selectedModelId}
             thinkingOptions={formattedThinkingOptions}
             selectedThinkingOptionId={selectedThinkingOptionId}
-            features={features}
+            features={visibleFeatures}
+            modelFeatures={modelFeatures}
             onSetFeature={handleSetFeature}
             onApplyAgentProfile={onApplyAgentProfile}
             onEditAgentProfiles={onEditAgentProfiles}
@@ -864,7 +887,8 @@ function ControlledAgentControls({
             provider={provider}
             selectedModelId={selectedModelId}
             selectedThinkingOptionId={selectedThinkingOptionId}
-            features={features}
+            features={visibleFeatures}
+            modelFeatures={modelFeatures}
             onSetFeature={handleSetFeature}
             onApplyAgentProfile={onApplyAgentProfile}
             onEditAgentProfiles={onEditAgentProfiles}
@@ -911,6 +935,7 @@ interface DesktopAgentControlsContentProps {
   thinkingOptions?: AgentControlOption[];
   selectedThinkingOptionId?: string;
   features?: AgentFeature[];
+  modelFeatures: AgentFeature[];
   onSetFeature?: (featureId: string, value: unknown) => void;
   onApplyAgentProfile?: (profileId: string) => void;
   onEditAgentProfiles?: () => void;
@@ -973,6 +998,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     thinkingOptions,
     selectedThinkingOptionId,
     features,
+    modelFeatures,
     onSetFeature,
     onApplyAgentProfile,
     onEditAgentProfiles,
@@ -1078,6 +1104,25 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                 desktopPlacement="top-start"
                 desktopMinWidth={360}
                 toolbar={modelToolbar}
+                modelConfiguration={
+                  modelFeatures.length > 0 ? (
+                    <ModelFeatureControls
+                      features={modelFeatures}
+                      disabled={disabled}
+                      onCatalogAccess={onModelSelectorOpen}
+                      renderFeature={(feature) => (
+                        <SheetFeatureItem
+                          key={feature.id}
+                          feature={feature}
+                          disabled={disabled}
+                          openSelector={openSelector}
+                          handleOpenChange={handleNestedOpenChange}
+                          onSetFeature={onSetFeature}
+                        />
+                      )}
+                    />
+                  ) : undefined
+                }
               />
             </View>
           </TooltipTrigger>
@@ -1183,6 +1228,7 @@ interface SheetAgentControlsContentProps {
   selectedModelId?: string;
   selectedThinkingOptionId?: string;
   features?: AgentFeature[];
+  modelFeatures: AgentFeature[];
   onSetFeature?: (featureId: string, value: unknown) => void;
   onApplyAgentProfile?: (profileId: string) => void;
   onEditAgentProfiles?: () => void;
@@ -1227,6 +1273,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
     selectedModelId,
     selectedThinkingOptionId,
     features,
+    modelFeatures,
     onSetFeature,
     onApplyAgentProfile,
     onEditAgentProfiles,
@@ -1310,6 +1357,21 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
 
       {modeControl ? <AgentModeControl {...modeControl} surface="sheet" /> : null}
 
+      <ModelFeatureControls
+        features={modelFeatures}
+        disabled={disabled}
+        onCatalogAccess={onModelSelectorOpen}
+        renderFeature={(feature) => (
+          <SheetFeatureItem
+            key={feature.id}
+            feature={feature}
+            disabled={disabled}
+            openSelector={openSelector}
+            handleOpenChange={handleOpenChange}
+            onSetFeature={onSetFeature}
+          />
+        )}
+      />
       {(features ?? []).map((feature) => (
         <SheetFeatureItem
           key={`feature-${feature.id}`}
@@ -1418,7 +1480,10 @@ function DesktopFeatureItem({
   const comboboxOptions = useMemo<ComboboxOption[]>(
     () =>
       feature.type === "select"
-        ? feature.options.map((option) => ({ id: option.id, label: option.label }))
+        ? feature.options.map((option) => ({
+            id: option.id,
+            label: option.label,
+          }))
         : [],
     [feature],
   );
@@ -1551,7 +1616,10 @@ function SheetFeatureItem({
   );
   const comboboxOptions = useMemo<ComboboxOption[]>(() => {
     if (feature.type === "select") {
-      return feature.options.map((option) => ({ id: option.id, label: option.label }));
+      return feature.options.map((option) => ({
+        id: option.id,
+        label: option.label,
+      }));
     }
     return [
       { id: "true", label: t("agentControls.features.on") },
@@ -1711,7 +1779,10 @@ export const AgentControls = memo(function AgentControls({
     staleTime: Infinity,
     queryFn: async () => {
       if (!client || !agent?.cwd) throw new Error("Host unavailable");
-      const result = await client.listProviderFeatures({ provider: "omp", cwd: agent.cwd });
+      const result = await client.listProviderFeatures({
+        provider: "omp",
+        cwd: agent.cwd,
+      });
       if (result.error) throw new Error(result.error);
       return result.features ?? [];
     },
@@ -1757,7 +1828,10 @@ export const AgentControls = memo(function AgentControls({
   });
 
   const modelOptions = useMemo<AgentControlOption[]>(() => {
-    return (models ?? []).map((model) => ({ id: model.id, label: model.label }));
+    return (models ?? []).map((model) => ({
+      id: model.id,
+      label: model.label,
+    }));
   }, [models]);
 
   const thinkingOptions = useMemo<AgentControlOption[]>(() => {

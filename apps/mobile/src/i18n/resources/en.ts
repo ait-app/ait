@@ -21,9 +21,21 @@ export const en = {
       },
     },
     modelPreset: "OMP model preset",
+    modelRoles: "Model roles",
     customModels: "Custom configuration",
     unassignedModel: "Unassigned",
     presetUnavailable: "OMP model preset is unavailable; refresh the model catalog",
+    vibe: {
+      title: "Vibe",
+      enabled: "Vibe active",
+      states: {
+        running: "Running",
+        completed: "Completed",
+        failed: "Failed",
+        canceled: "Canceled",
+        unknown: "Unknown",
+      },
+    },
     nativeOperations: "Native operations",
     runOperation: "Run",
     openBrowser: "Open in browser",
@@ -41,7 +53,12 @@ export const en = {
       success: "Done",
       error: "Failed",
     },
-    actions: { pause: "Pause", resume: "Resume", edit: "Edit goal", clear: "Clear" },
+    actions: {
+      pause: "Pause",
+      resume: "Resume",
+      edit: "Edit goal",
+      clear: "Clear",
+    },
   },
   sharing: {
     title: "Shared",
@@ -1361,7 +1378,10 @@ export const en = {
     creating: "Creating…",
     name: "Label name",
     updateHostUse: "Update this host to use labels.",
-    errors: { update: "Unable to update label", load: "Unable to load labels" },
+    errors: {
+      update: "Unable to update label",
+      load: "Unable to load labels",
+    },
     colors: {
       violet: "Violet",
       sky: "Sky",
@@ -1842,7 +1862,11 @@ export const en = {
     timeline: {
       back: "Back to task list",
       hint: "Tasks are ordered by their next trigger. Select a task to edit it.",
-      filters: { upcoming: "Upcoming", paused: "Paused", completed: "Finished" },
+      filters: {
+        upcoming: "Upcoming",
+        paused: "Paused",
+        completed: "Finished",
+      },
       today: "Today",
       tomorrow: "Tomorrow",
       due: "Due now",
@@ -2840,7 +2864,11 @@ export const en = {
         errorTitle: "Unable to load plugin logs",
         empty: "No plugin output yet",
       },
-      status: { running: "running", disabled: "disabled", failed: "failed" },
+      status: {
+        running: "running",
+        disabled: "disabled",
+        failed: "failed",
+      },
       actions: {
         menu: "Actions for {{id}}",
         reload: "Reload",

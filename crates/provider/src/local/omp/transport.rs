@@ -45,6 +45,11 @@ pub(super) struct Transport {
     closed: bool,
     command_completion: bool,
     completion_support: Arc<RwLock<Option<bool>>>,
+    /// Latest native host greeting, refreshed from [`Self::capability_state`] on demand.
+    pub(super) capability: Option<super::vibe::Capability>,
+    capability_state: Arc<RwLock<Option<super::vibe::Capability>>>,
+    /// Bounded `ait_vibe_state`/`ait_vibe_worker` outbox filled by the reader.
+    vibe_state: Arc<RwLock<Vec<Value>>>,
     configuration: Option<tempfile::NamedTempFile>,
 }
 
@@ -59,12 +64,24 @@ impl Transport {
         confinement: Option<&domain::workspace::sandbox::WriteConfinement>,
     ) -> Result<Self, AgentSessionError> {
         let diagnostics = Diagnostics::new(LABEL);
+        // A verified private runtime replaces only the executable: same cwd, same args, same
+        // environment, and therefore the same OMP data directory, credentials and sessions.
+        let (launcher, leading) = match client.native_host() {
+            Some(host) => (
+                host.bun().to_path_buf(),
+                Some(host.entrypoint().to_path_buf()),
+            ),
+            None => (client.program.clone(), None),
+        };
         let mut command = crate::local::sandbox::command(
-            &client.program,
+            &launcher,
             confinement,
             crate::local::sandbox::OMP_STATE,
             &|name| client.environment.variable(name),
         )?;
+        if let Some(entrypoint) = &leading {
+            command.arg(entrypoint);
+        }
         command
             .args(["--cwd", cwd])
             .args(args)
@@ -90,6 +107,10 @@ impl Transport {
             let _ = stderr_done.send(());
         }));
         let reader_diagnostics = diagnostics.clone();
+        let capability_state: Arc<RwLock<Option<super::vibe::Capability>>> = Arc::default();
+        let reader_capability = capability_state.clone();
+        let vibe_state: Arc<RwLock<Vec<Value>>> = Arc::default();
+        let reader_vibe = vibe_state.clone();
         let (sender, messages) = mpsc::channel(2);
         let reader = tokio::spawn(async move {
             let mut output = BufReader::new(output);
@@ -125,6 +146,18 @@ impl Transport {
                 match decoder.push(value) {
                     Ok(Some(value)) => {
                         let bytes = std::mem::take(&mut frame_bytes);
+                        if let Some(capability) = super::vibe::hello(&value) {
+                            if let Ok(mut state) = reader_capability.write() {
+                                *state = Some(capability);
+                            }
+                            continue;
+                        }
+                        if super::vibe::is_frame(&value) {
+                            if let Ok(mut frames) = reader_vibe.write() {
+                                super::vibe::store(&mut frames, &value);
+                            }
+                            continue;
+                        }
                         if sender.send(Record { value, bytes }).await.is_err() {
                             return;
                         }
@@ -152,6 +185,9 @@ impl Transport {
             closed: false,
             command_completion: false,
             completion_support: client.completion_support.clone(),
+            capability: None,
+            capability_state,
+            vibe_state,
             configuration: None,
         })
     }
@@ -195,6 +231,24 @@ impl Transport {
     /// Native feature negotiated from the official runtime's ready frame.
     pub(super) fn command_completion(&self) -> bool {
         self.command_completion
+    }
+
+    /// Snapshot the native host greeting captured by the reader, if one has arrived.
+    pub(super) fn refresh_capability(&mut self) -> Option<&super::vibe::Capability> {
+        self.capability = self
+            .capability_state
+            .read()
+            .ok()
+            .and_then(|state| state.clone());
+        self.capability.as_ref()
+    }
+
+    /// Take the adapter frames the reader captured since the last call, in arrival order.
+    pub(super) fn take_vibe_frames(&mut self) -> Vec<Value> {
+        self.vibe_state
+            .write()
+            .map(|mut frames| std::mem::take(&mut *frames))
+            .unwrap_or_default()
     }
 
     pub(super) async fn send(&mut self, message: &Value) -> Result<(), AgentSessionError> {

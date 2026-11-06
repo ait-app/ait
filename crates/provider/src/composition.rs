@@ -90,7 +90,10 @@ impl Providers {
             .with_image_directory(images.clone());
         let pi =
             PiClient::new(program("AIT_SERVER_PI_BIN", "pi")).with_image_directory(images.clone());
+        // A verified private runtime shares this data directory, so OMP keeps one writer,
+        // one credential store and one session tree; without it the official binary runs.
         let omp = OmpClient::new(program("AIT_SERVER_OMP_BIN", "omp"))
+            .with_native_host(OmpClient::native_host_runtime(data_dir, &environment))
             .with_image_directory(images.clone());
         let minimax = MiniMaxClient::new(program("AIT_SERVER_MINIMAX_CODE_BIN", "mcode"))
             .with_image_directory(images);

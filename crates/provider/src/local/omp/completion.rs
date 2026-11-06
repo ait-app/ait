@@ -12,6 +12,7 @@ pub(super) async fn complete(
     transport: &mut Transport,
     input: &CompletionInput,
     native: &[Value],
+    vibe: bool,
 ) -> Result<ValidatedCompletion, AgentSessionError> {
     input.validate()?;
     if !transport.command_completion() {
@@ -29,6 +30,6 @@ pub(super) async fn complete(
             item.insert_text,
             &input.text[item.replace_range.end..]
         );
-        super::commands::blocked(&edited, native).is_none()
+        super::commands::blocked(&edited, native, vibe).is_none()
     }))
 }

@@ -1,8 +1,21 @@
 import type { ComponentType } from "react";
 import type { AgentFeature } from "@ait/protocol/agent-types";
 import {
+  AudioLines,
+  CircleCheck,
+  Database,
+  Feather,
+  GitCommitHorizontal,
+  MessageCircle,
+  Network,
+  PanelsTopLeft,
   Bot,
   Brain,
+  Eye,
+  Globe,
+  Image,
+  Layers,
+  Mic,
   Hammer,
   ListTodo,
   Minimize2,
@@ -49,6 +62,21 @@ const FEATURE_ICONS: Record<string, AgentControlIcon> = {
   "minimize-2": Minimize2,
   "rotate-ccw": RotateCcw,
   turtle: Turtle,
+  bot: Bot,
+  brain: Brain,
+  eye: Eye,
+  globe: Globe,
+  image: Image,
+  layers: Layers,
+  mic: Mic,
+  "audio-lines": AudioLines,
+  "circle-check": CircleCheck,
+  database: Database,
+  feather: Feather,
+  "git-commit-horizontal": GitCommitHorizontal,
+  "message-circle": MessageCircle,
+  network: Network,
+  "panels-top-left": PanelsTopLeft,
 };
 
 const FEATURE_ID_ICONS: Record<string, AgentControlIcon> = {
@@ -56,6 +84,23 @@ const FEATURE_ID_ICONS: Record<string, AgentControlIcon> = {
   autoRetry: RotateCcw,
   fastMode: Zap,
   slowMode: Turtle,
+  modelPreset: Layers,
+  "modelRole.default": Bot,
+  "modelRole.smol": Zap,
+  "modelRole.slow": Brain,
+  "modelRole.vision": Eye,
+  "modelRole.plan": ListTodo,
+  "modelRole.image": Image,
+  "modelRole.web": Globe,
+  "modelRole.dictation": Mic,
+  "modelRole.advisor": MessageCircle,
+  "modelRole.commit": GitCommitHorizontal,
+  "modelRole.memory": Database,
+  "modelRole.speech": AudioLines,
+  "modelRole.judge": CircleCheck,
+  "modelRole.widget": PanelsTopLeft,
+  "modelRole.tiny": Feather,
+  "modelRole.task": Network,
 };
 
 const PERMISSION_ICONS: Record<string, AgentControlIcon> = {
@@ -77,7 +122,7 @@ export function getAgentFeatureIcon(icon?: string, featureId?: string): AgentCon
   return (
     (icon ? FEATURE_ICONS[icon] : undefined) ??
     (featureId ? FEATURE_ID_ICONS[featureId] : undefined) ??
-    Settings2
+    (featureId?.startsWith("modelRole.") ? Bot : Settings2)
   );
 }
 

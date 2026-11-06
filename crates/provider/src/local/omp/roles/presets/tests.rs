@@ -75,3 +75,87 @@ fn expansion_consumes_the_request_and_preserves_unrelated_fields() {
         .insert("modelPreset".to_owned(), json!("custom"));
     assert_eq!(presets.resolve(&named_custom).unwrap().model, preset.model);
 }
+
+#[test]
+fn an_empty_preset_directory_exposes_no_preset_control() {
+    let presets = Presets::default();
+    let mut features = Vec::new();
+    presets.append_features(&StoredAgentConfig::default(), &mut features);
+    assert!(features.is_empty(), "{features:?}");
+    // A saved snapshot of a preset that no longer exists must not resurrect the empty control,
+    // while the roles it names stay selectable.
+    let config = StoredAgentConfig {
+        feature_values: Some(BTreeMap::from([(
+            "modelPresetRoles".to_owned(),
+            json!(r#"{"default":"test/model"}"#),
+        )])),
+        ..Default::default()
+    };
+    let mut features = Vec::new();
+    presets.append_features(&config, &mut features);
+    assert!(
+        !features
+            .iter()
+            .any(|feature| feature["id"] == "modelPreset"),
+        "{features:?}"
+    );
+    assert!(
+        features
+            .iter()
+            .any(|feature| feature["id"] == "modelRole.default")
+    );
+}
+
+#[test]
+fn named_presets_render_their_whole_option_list() {
+    let preset = StoredAgentConfig {
+        model: Some("test/model".to_owned()),
+        thinking_option_id: Some("high".to_owned()),
+        ..Default::default()
+    };
+    let presets = Presets {
+        entries: BTreeMap::from([
+            (
+                "work".to_owned(),
+                Entry {
+                    raw: json!({"modelRoles":{"default":"test/model"}}),
+                    source: "global",
+                    configuration: Ok(preset),
+                },
+            ),
+            (
+                "broken".to_owned(),
+                Entry {
+                    raw: json!({"modelRoles":false}),
+                    source: "project",
+                    configuration: Err("Invalid preset roles".to_owned()),
+                },
+            ),
+        ]),
+        basis: Value::Null,
+    };
+    let mut features = Vec::new();
+    presets.append_features(&StoredAgentConfig::default(), &mut features);
+    let control = features
+        .iter()
+        .find(|feature| feature["id"] == "modelPreset")
+        .unwrap();
+    assert_eq!(control["value"], "__custom__");
+    let options = control["options"].as_array().unwrap();
+    assert_eq!(options.len(), 3);
+    assert_eq!(options[0]["id"], "__custom__");
+    let work = options
+        .iter()
+        .find(|option| option["id"] == "work")
+        .expect("the valid preset must be offered");
+    assert_eq!(work["metadata"]["configuration"]["modelId"], "test/model");
+    assert_eq!(
+        work["metadata"]["configuration"]["thinkingOptionId"],
+        "high"
+    );
+    let broken = options
+        .iter()
+        .find(|option| option["id"] == "broken")
+        .expect("a malformed preset stays visible");
+    assert_eq!(broken["metadata"]["error"], "Invalid preset roles");
+}

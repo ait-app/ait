@@ -38,7 +38,9 @@ impl Session {
         {
             return Err(AgentSessionError::Rejected);
         }
-        if let Some(name) = commands::blocked(&prompt.text, &self.native_commands) {
+        if let Some(name) =
+            commands::blocked(&prompt.text, &self.native_commands, self.vibe.available)
+        {
             self.reject_command(prompt, name);
             return Ok(());
         }

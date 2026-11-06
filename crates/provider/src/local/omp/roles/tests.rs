@@ -30,7 +30,15 @@ fn config(role: &str, selector: &str) -> StoredAgentConfig {
 fn role_choices_follow_real_native_catalog_kinds_and_preserve_inherited_selectors() {
     let catalog = catalog();
     let features = catalog.features(&StoredAgentConfig::default());
-    assert_eq!(features.len(), 18);
+    // 16 builtin roles plus the tagged `custom` role; this directory defines no presets, so
+    // there is no preset selector on top.
+    assert_eq!(features.len(), 17);
+    assert!(
+        !features
+            .iter()
+            .any(|feature| feature["id"] == "modelPreset"),
+        "{features:?}"
+    );
     for (role, count) in [
         ("default", 2),
         ("smol", 2),

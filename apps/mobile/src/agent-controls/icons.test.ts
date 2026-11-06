@@ -1,13 +1,49 @@
 import { describe, expect, it, vi } from "vitest";
-import { Bot, Hammer, Minimize2, RotateCcw, Settings2, Turtle, Zap } from "lucide-react-native";
+import {
+  AudioLines,
+  CircleCheck,
+  Database,
+  Feather,
+  GitCommitHorizontal,
+  MessageCircle,
+  Network,
+  PanelsTopLeft,
+  Bot,
+  Brain,
+  Eye,
+  Globe,
+  Hammer,
+  Image,
+  Layers,
+  ListTodo,
+  Mic,
+  Minimize2,
+  RotateCcw,
+  Settings2,
+  Turtle,
+  Zap,
+} from "lucide-react-native";
 import type { AgentProviderDefinition } from "@ait/protocol/provider-manifest";
 import { getAgentFeatureIcon, getAgentFeatureValueIcon, getAgentModeIcon } from "./icons";
 
 vi.mock("lucide-react-native", () =>
   Object.fromEntries(
     [
+      "AudioLines",
+      "CircleCheck",
+      "Database",
+      "Feather",
+      "GitCommitHorizontal",
+      "MessageCircle",
+      "Network",
+      "PanelsTopLeft",
       "Bot",
       "Brain",
+      "Eye",
+      "Globe",
+      "Image",
+      "Layers",
+      "Mic",
       "Hammer",
       "ListTodo",
       "Minimize2",
@@ -32,7 +68,14 @@ const definitions: AgentProviderDefinition[] = [
     label: "OpenCode",
     description: "",
     defaultModeId: "build",
-    modes: [{ id: "build", label: "Build", icon: "Hammer", colorTier: "moderate" }],
+    modes: [
+      {
+        id: "build",
+        label: "Build",
+        icon: "Hammer",
+        colorTier: "moderate",
+      },
+    ],
   },
 ];
 
@@ -52,6 +95,23 @@ describe("OMP semantic icons", () => {
       ["autoRetry", RotateCcw],
       ["fastMode", Zap],
       ["slowMode", Turtle],
+      ["modelPreset", Layers],
+      ["modelRole.default", Bot],
+      ["modelRole.smol", Zap],
+      ["modelRole.slow", Brain],
+      ["modelRole.vision", Eye],
+      ["modelRole.plan", ListTodo],
+      ["modelRole.image", Image],
+      ["modelRole.web", Globe],
+      ["modelRole.dictation", Mic],
+      ["modelRole.advisor", MessageCircle],
+      ["modelRole.commit", GitCommitHorizontal],
+      ["modelRole.memory", Database],
+      ["modelRole.speech", AudioLines],
+      ["modelRole.judge", CircleCheck],
+      ["modelRole.widget", PanelsTopLeft],
+      ["modelRole.tiny", Feather],
+      ["modelRole.task", Network],
     ] as const) {
       expect(getAgentFeatureIcon(undefined, id)).toBe(icon);
       expect(getAgentFeatureValueIcon({ id }, false)).toBe(icon);
@@ -61,5 +121,7 @@ describe("OMP semantic icons", () => {
     expect(getAgentFeatureIcon("zap", "autoRetry")).toBe(Zap);
     expect(getAgentFeatureIcon(undefined, "custom")).toBe(Settings2);
     expect(getAgentFeatureIcon("unknown", "custom")).toBe(Settings2);
+    expect(getAgentFeatureIcon("zap", "modelRole.default")).toBe(Zap);
+    expect(getAgentFeatureIcon(undefined, "modelRole.project-specific")).toBe(Bot);
   });
 });

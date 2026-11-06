@@ -37,9 +37,21 @@ export const ko: TranslationResources = {
       },
     },
     modelPreset: "OMP 모델 사전 설정",
+    modelRoles: "용도별 모델",
     customModels: "사용자 지정 구성",
     unassignedModel: "미지정",
     presetUnavailable: "OMP 모델 사전 설정을 사용할 수 없습니다. 모델 목록을 새로 고치세요",
+    vibe: {
+      title: "Vibe",
+      enabled: "Vibe 활성",
+      states: {
+        running: "실행 중",
+        completed: "완료",
+        failed: "실패",
+        canceled: "취소됨",
+        unknown: "알 수 없음",
+      },
+    },
     nativeOperations: "네이티브 작업",
     runOperation: "실행",
     openBrowser: "브라우저에서 열기",
@@ -1242,7 +1254,10 @@ export const ko: TranslationResources = {
     creating: "만드는 중…",
     name: "레이블 이름",
     updateHostUse: "레이블을 사용하려면 호스트를 업데이트하세요.",
-    errors: { update: "레이블을 업데이트할 수 없습니다", load: "레이블을 불러올 수 없습니다" },
+    errors: {
+      update: "레이블을 업데이트할 수 없습니다",
+      load: "레이블을 불러올 수 없습니다",
+    },
     colors: {
       violet: "보라",
       sky: "하늘",

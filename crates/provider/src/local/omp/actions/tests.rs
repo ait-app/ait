@@ -113,3 +113,80 @@ async fn native_receipts_correlate_and_rejections_leave_other_controls_usable() 
     assert!(first.await.unwrap()["error"].is_string());
     pending.check_capacity().unwrap();
 }
+
+#[test]
+fn vibe_control_is_advertised_and_only_accepts_declared_fields_per_operation() {
+    let advertised = catalog()
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| item["id"] == "vibe_control");
+    assert!(advertised);
+    // Toggle accepts an optional boolean and nothing else.
+    assert_eq!(
+        validate(
+            "vibe_control",
+            &json!({"operation":"toggle","enabled":"true"}),
+            "/tmp"
+        )
+        .unwrap(),
+        json!({"operation":"toggle","enabled":true})
+    );
+    assert!(
+        validate(
+            "vibe_control",
+            &json!({"operation":"toggle","prompt":"x"}),
+            "/tmp"
+        )
+        .is_err()
+    );
+    // Spawn carries the worker class and prompt; wait carries an ID list and timeout.
+    assert!(
+        validate(
+            "vibe_control",
+            &json!({"operation":"spawn","cli":"fast","prompt":"inspect the parser"}),
+            "/tmp"
+        )
+        .is_ok()
+    );
+    assert!(
+        validate(
+            "vibe_control",
+            &json!({"operation":"spawn","cli":"slow","prompt":"x"}),
+            "/tmp"
+        )
+        .is_err()
+    );
+    assert_eq!(
+        validate(
+            "vibe_control",
+            &json!({"operation":"wait","sessions":"a,b","timeout":"30"}),
+            "/tmp"
+        )
+        .unwrap(),
+        json!({"operation":"wait","sessions":["a","b"],"timeout":30.0})
+    );
+    // Worker identity is an Ait subagent ID and is required for send/kill.
+    assert!(
+        validate(
+            "vibe_control",
+            &json!({"operation":"send","message":"x"}),
+            "/tmp"
+        )
+        .is_err()
+    );
+    assert!(
+        validate(
+            "vibe_control",
+            &json!({"operation":"kill","sessionId":"worker-id"}),
+            "/tmp"
+        )
+        .is_ok()
+    );
+    for bad in [
+        json!({"operation":"destroy"}),
+        json!({"operation":"list","sessionId":"x"}),
+    ] {
+        assert!(validate("vibe_control", &bad, "/tmp").is_err(), "{bad}");
+    }
+}

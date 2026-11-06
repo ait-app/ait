@@ -95,3 +95,35 @@ test("optional side questions preserve legacy snapshots and bound native thread 
     }).success,
   ).toBe(false);
 });
+
+test("optional vibe state preserves older snapshots and bounds native workers", () => {
+  const base = { statuses: [], widgets: [], title: null, editor: null, link: null };
+  const worker = {
+    id: "id",
+    parentId: "root",
+    status: "running" as const,
+    description: "Inspect the parser",
+    model: "gpt-5",
+  };
+  const state = { ...base, vibe: { enabled: true, workers: [worker] } };
+  expect(ProviderUiStateSchema.parse(base)).toEqual(base);
+  expect(ProviderUiStateSchema.parse(state)).toEqual(state);
+  expect(
+    ProviderUiStateSchema.safeParse({
+      ...state,
+      vibe: { enabled: true, workers: Array.from({ length: 257 }, () => worker) },
+    }).success,
+  ).toBe(false);
+  expect(
+    ProviderUiStateSchema.safeParse({
+      ...state,
+      vibe: { enabled: true, workers: [{ ...worker, status: "paused" }] },
+    }).success,
+  ).toBe(false);
+  expect(
+    ProviderUiStateSchema.safeParse({
+      ...state,
+      vibe: { enabled: true, workers: [{ ...worker, description: "x".repeat(4097) }] },
+    }).success,
+  ).toBe(false);
+});

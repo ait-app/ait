@@ -298,6 +298,11 @@ impl Presets {
                 ));
             }
         }
+        // Without named presets the selector would offer nothing but "Custom configuration",
+        // so a directory that defines none exposes no preset control at all.
+        if !self.has_entries() {
+            return;
+        }
         let mut options = vec![json!({"id":"__custom__","label":"Custom configuration"})];
         let mut selected = "__custom__";
         for (name, entry) in &self.entries {

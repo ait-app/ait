@@ -9,12 +9,14 @@ mod config;
 mod framing;
 mod history;
 mod interactions;
+pub(crate) mod native_host;
 mod roles;
 mod session;
 mod stream;
 mod subagents;
 mod transport;
 mod ui;
+mod vibe;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -53,6 +55,7 @@ pub(crate) struct OmpClient {
     completion_support: Arc<RwLock<Option<bool>>>,
     role_catalogs: Arc<RwLock<BTreeMap<String, RoleSnapshot>>>,
     metadata_loads: Arc<Mutex<BTreeMap<String, Weak<tokio::sync::Mutex<()>>>>>,
+    native_host: Option<native_host::NativeHost>,
 }
 
 impl OmpClient {
@@ -67,7 +70,35 @@ impl OmpClient {
             completion_support: Arc::default(),
             role_catalogs: Arc::default(),
             metadata_loads: Arc::default(),
+            native_host: None,
         }
+    }
+
+    /// Resolve the private runtime installed under `data_dir` for `environment`.
+    ///
+    /// Returns `None` when nothing is installed or verification fails, which keeps the
+    /// official binary and leaves the Vibe bridge capability unavailable.
+    pub(crate) fn native_host_runtime(
+        data_dir: &std::path::Path,
+        environment: &dyn Fn(&str) -> Option<std::ffi::OsString>,
+    ) -> Option<native_host::NativeHost> {
+        native_host::discover(data_dir, environment)
+    }
+
+    /// Adopt a verified private native host runtime instead of the official binary.
+    ///
+    /// The runtime keeps the same data directory, credentials and session files as the
+    /// official `omp`: only the process that speaks RPC changes. A runtime that fails
+    /// verification is never adopted, so the caller keeps the official binary.
+    #[must_use]
+    pub(crate) fn with_native_host(mut self, host: Option<native_host::NativeHost>) -> Self {
+        self.native_host = host;
+        self
+    }
+
+    /// Verified native host runtime for this client, if one is installed.
+    pub(crate) fn native_host(&self) -> Option<&native_host::NativeHost> {
+        self.native_host.as_ref()
     }
 
     /// Store rendered native image output in the daemon's private `directory`.
@@ -218,7 +249,9 @@ where
 #[async_trait::async_trait]
 impl AgentClient for OmpClient {
     fn handles_out_of_band(&self, text: &str) -> bool {
-        commands::is_btw(text) || commands::is_query(text)
+        // `/vibe` is declared here so an inactive owner can be woken for it; the live session
+        // decides whether the native host bridge can actually serve it.
+        commands::is_btw(text) || commands::is_vibe(text) || commands::is_query(text)
     }
     fn discovery_cache_ttl(&self) -> Duration {
         Duration::MAX
@@ -252,7 +285,8 @@ impl AgentClient for OmpClient {
             } else {
                 Vec::new()
             };
-            completion::complete(&mut probe, input, &native).await
+            // A metadata probe never owns adapter Vibe state, so `/vibe` stays filtered here.
+            completion::complete(&mut probe, input, &native, false).await
         }
         .await;
         let closed = probe.close().await;

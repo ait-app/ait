@@ -37,9 +37,21 @@ export const ja: TranslationResources = {
       },
     },
     modelPreset: "OMP モデルプリセット",
+    modelRoles: "用途別モデル",
     customModels: "カスタム設定",
     unassignedModel: "割り当てなし",
     presetUnavailable: "OMP モデルプリセットを利用できません。モデル一覧を更新してください",
+    vibe: {
+      title: "Vibe",
+      enabled: "Vibe 有効",
+      states: {
+        running: "実行中",
+        completed: "完了",
+        failed: "失敗",
+        canceled: "キャンセル済み",
+        unknown: "不明",
+      },
+    },
     nativeOperations: "ネイティブ操作",
     runOperation: "実行",
     openBrowser: "ブラウザーで開く",
@@ -1251,7 +1263,10 @@ export const ja: TranslationResources = {
     creating: "作成中…",
     name: "ラベル名",
     updateHostUse: "ラベルを使用するにはホストを更新してください。",
-    errors: { update: "ラベルを更新できません", load: "ラベルを読み込めません" },
+    errors: {
+      update: "ラベルを更新できません",
+      load: "ラベルを読み込めません",
+    },
     colors: {
       violet: "紫",
       sky: "空色",

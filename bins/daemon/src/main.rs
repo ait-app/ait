@@ -106,6 +106,9 @@ async fn run(
         )
         .try_init()
         .map_err(|error| anyhow::anyhow!("initialize logging: {error}"))?;
+    // Report (and, when an installer is reachable, prepare) the private OMP runtime. A missing
+    // runtime only degrades `/vibe`, so this never blocks startup.
+    host::native_host::ensure_runtime(&config.data_dir);
     loop {
         let server = startup
             .server(

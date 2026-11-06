@@ -8,6 +8,7 @@ mod catalog;
 mod hub;
 #[cfg(unix)]
 mod mcp_socket;
+pub(crate) mod native_host;
 mod push;
 mod schedule;
 mod voice;

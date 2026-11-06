@@ -1,12 +1,16 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { Button } from "@/components/ui/button";
 import { useSessionStore } from "@/stores/session-store";
+import { useSettings } from "@/hooks/use-settings";
+import { openWorkspaceTargetAtLocation } from "@/workspace-tabs/open-beside";
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { ProviderNativeActions } from "./provider-native-actions";
 import { ProviderSideQuestions } from "./provider-side-questions";
+import { ProviderVibe } from "./provider-vibe";
 
 // Remember native editor deliveries across navigation without caching their text or auth URLs.
 const appliedEditors = new Map<string, string>();
@@ -34,6 +38,22 @@ export function ProviderRuntimePanel({
   );
   const [error, setError] = useState<string | null>(null);
   const editor = state?.editor;
+  const openInSidePane = useSettings((settings) => settings.openInSidePane);
+  const workspaceKey = buildWorkspaceTabPersistenceKey({
+    serverId,
+    workspaceId: workspaceId ?? "",
+  });
+  const openVibeWorker = useCallback(
+    (workerId: string) => {
+      if (!workspaceKey) return;
+      openWorkspaceTargetAtLocation({
+        workspaceKey,
+        target: { kind: "provider_subagent", parentAgentId: agentId, subagentId: workerId },
+        location: openInSidePane.subagents ? "side" : "main",
+      });
+    },
+    [agentId, openInSidePane.subagents, workspaceKey],
+  );
   useEffect(() => {
     if (!editor || !onEditor || blocked) return;
     const key = `${serverId}:${agentId}`;
@@ -53,7 +73,8 @@ export function ProviderRuntimePanel({
         !state.statuses.length &&
         !state.link &&
         !state.actions?.length &&
-        !state.sideQuestions))
+        !state.sideQuestions &&
+        !state.vibe?.enabled))
   )
     return null;
   return (
@@ -78,6 +99,9 @@ export function ProviderRuntimePanel({
           agentId={agentId}
           disabled={blocked}
         />
+      ) : null}
+      {above && state.vibe ? (
+        <ProviderVibe state={state.vibe} onOpenWorker={(worker) => openVibeWorker(worker.id)} />
       ) : null}
       {above &&
         state.statuses.map((status) => (

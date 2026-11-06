@@ -16,7 +16,11 @@ vi.mock("@/agent-profiles", () => ({
 vi.mock("./model-sheet", () => ({
   CompactModelSheet: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
-vi.mock("@/components/combined-model-selector", () => ({ CombinedModelSelector: () => null }));
+vi.mock("@/components/combined-model-selector", () => ({
+  CombinedModelSelector: ({ modelConfiguration }: { modelConfiguration?: ReactNode }) => (
+    <div data-testid="model-picker-configuration">{modelConfiguration}</div>
+  ),
+}));
 vi.mock("@/components/ui/combobox", () => ({
   Combobox: ({
     open,
@@ -75,82 +79,111 @@ afterEach(async () => {
 });
 
 describe("OMP model settings presentation", () => {
-  it("offers native role selects and forwards each selection and inheritance reset separately", () => {
-    const onSetFeature = vi.fn();
-    const onModelSelectorOpen = vi.fn();
-    const features = [
-      "default",
-      "smol",
-      "vision",
-      "advisor",
-      "plan",
-      "commit",
-      "slow",
-      "tiny",
-      "memory",
-      "task",
-      "widget",
-      "image",
-      "web",
-      "speech",
-      "dictation",
-      "judge",
-    ].map((role) => ({
-      type: "select" as const,
-      id: `modelRole.${role}`,
-      label: `${role} model`,
-      value: "native",
-      options: [
-        { id: "native", label: "Use OMP setting", isDefault: true },
-        { id: "test/model", label: "Fixture model" },
-      ],
-    }));
-    const view = render(
-      <DraftAgentControls
-        selectedProvider="omp"
-        providerDefinitions={[]}
-        modeOptions={[]}
-        selectedMode=""
-        onSelectMode={vi.fn()}
-        models={[{ provider: "omp", id: "main", label: "Main" }]}
-        selectedModel="main"
-        onSelectModel={vi.fn()}
-        isModelLoading={false}
-        isAllModelsLoading={false}
-        onSelectProviderAndModel={vi.fn()}
-        onApplyAgentProfile={vi.fn()}
-        modelSelectorProviders={[]}
-        isCompactLayout
-        thinkingOptions={[]}
-        selectedThinkingOptionId=""
-        onSelectThinkingOption={vi.fn()}
-        features={features}
-        onSetFeature={onSetFeature}
-        onModelSelectorOpen={onModelSelectorOpen}
-      />,
-    );
-    for (const role of ["default", "smol", "vision", "advisor"]) {
-      fireEvent.click(view.getByTestId(`agent-feature-modelRole.${role}`));
-      fireEvent.change(view.getByRole("combobox", { name: "Role model" }), {
-        target: { value: "test/model" },
-      });
-      expect(onSetFeature).toHaveBeenLastCalledWith(`modelRole.${role}`, "test/model");
-      fireEvent.change(view.getByRole("combobox", { name: "Role model" }), {
-        target: { value: "native" },
-      });
-      expect(onSetFeature).toHaveBeenLastCalledWith(`modelRole.${role}`, "native");
-    }
-    for (const feature of features)
-      expect(view.getByTestId(`agent-feature-${feature.id}`)).toBeTruthy();
-    expect(onSetFeature).toHaveBeenCalledTimes(8);
-    // Each role open, model selection and inheritance reset starts background access work.
-    expect(onModelSelectorOpen).toHaveBeenCalledTimes(12);
-  });
+  it.each([true, false])(
+    "groups native roles in model settings and preserves independent edits (compact: %s)",
+    (isCompactLayout) => {
+      const onSetFeature = vi.fn();
+      const onModelSelectorOpen = vi.fn();
+      const features = [
+        "default",
+        "smol",
+        "vision",
+        "advisor",
+        "plan",
+        "commit",
+        "slow",
+        "tiny",
+        "memory",
+        "task",
+        "widget",
+        "image",
+        "web",
+        "speech",
+        "dictation",
+        "judge",
+      ].map((role) => ({
+        type: "select" as const,
+        id: `modelRole.${role}`,
+        label: `${role} model`,
+        value: "native",
+        options: [
+          { id: "native", label: "Use OMP setting", isDefault: true },
+          { id: "test/model", label: "Fixture model" },
+        ],
+      }));
+      const view = render(
+        <DraftAgentControls
+          selectedProvider="omp"
+          providerDefinitions={[]}
+          modeOptions={[]}
+          selectedMode=""
+          onSelectMode={vi.fn()}
+          models={[{ provider: "omp", id: "main", label: "Main" }]}
+          selectedModel="main"
+          onSelectModel={vi.fn()}
+          isModelLoading={false}
+          isAllModelsLoading={false}
+          onSelectProviderAndModel={vi.fn()}
+          onApplyAgentProfile={vi.fn()}
+          modelSelectorProviders={[]}
+          isCompactLayout={isCompactLayout}
+          thinkingOptions={[]}
+          selectedThinkingOptionId=""
+          onSelectThinkingOption={vi.fn()}
+          features={[
+            {
+              id: "modelPreset",
+              type: "select",
+              label: "Preset",
+              value: "__custom__",
+              options: [
+                { id: "__custom__", label: "Custom" },
+                {
+                  id: "work",
+                  label: "Work",
+                  metadata: {
+                    configuration: { modelId: "main" },
+                  },
+                },
+              ],
+            },
+            ...features,
+          ]}
+          onSetFeature={onSetFeature}
+          onModelSelectorOpen={onModelSelectorOpen}
+        />,
+      );
+      expect(view.getAllByTestId("agent-feature-modelPreset")).toHaveLength(1);
+      expect(view.queryByTestId("agent-controls-features")).toBeNull();
+      expect(view.queryByTestId("agent-feature-modelRole.default")).toBeNull();
+      fireEvent.click(view.getByTestId("model-role-settings"));
+      for (const role of ["default", "smol", "vision", "advisor"]) {
+        fireEvent.click(view.getByTestId(`agent-feature-modelRole.${role}`));
+        fireEvent.change(view.getByRole("combobox", { name: "Role model" }), {
+          target: { value: "test/model" },
+        });
+        expect(onSetFeature).toHaveBeenLastCalledWith(`modelRole.${role}`, "test/model");
+        fireEvent.change(view.getByRole("combobox", { name: "Role model" }), {
+          target: { value: "native" },
+        });
+        expect(onSetFeature).toHaveBeenLastCalledWith(`modelRole.${role}`, "native");
+      }
+      for (const feature of features)
+        expect(view.getByTestId(`agent-feature-${feature.id}`)).toBeTruthy();
+      expect(onSetFeature).toHaveBeenCalledTimes(8);
+      // Opening model roles and each existing role select starts background access work.
+      expect(onModelSelectorOpen).toHaveBeenCalledTimes(13);
+    },
+  );
 
   it("renders localized labels and semantic icons, then updates the existing controls on language change", async () => {
     const modes = [{ id: "full", label: "Full Access" }];
     const features = [
-      { id: "autoCompaction", label: "Automatic compaction", value: true },
+      {
+        id: "autoCompaction",
+        label: "Automatic compaction",
+        value: true,
+      },
       { id: "autoRetry", label: "Automatic retry", value: true },
       { id: "fastMode", label: "Fast service tier", value: false },
       { id: "slowMode", label: "Slow service tier", value: false },
@@ -200,7 +233,11 @@ describe("OMP model settings presentation", () => {
     });
     expect(view.getByText("Automatic compaction")).toBeTruthy();
     expect(view.getByRole("button", { name: "Select thinking option (Max)" })).toBeTruthy();
-    expect(view.getByRole("button", { name: "Select agent mode (Full access)" })).toBeTruthy();
+    expect(
+      view.getByRole("button", {
+        name: "Select agent mode (Full access)",
+      }),
+    ).toBeTruthy();
     expect(view.queryByText("自动压缩上下文")).toBeNull();
     expect(features[0].label).toBe("Automatic compaction");
   });

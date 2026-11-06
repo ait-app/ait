@@ -62,7 +62,6 @@ const TUI_ONLY: &[&str] = &[
     "providers",
     "plan",
     "plan-review",
-    "vibe",
     "goal",
     "guided-goal",
     "loop",
@@ -123,6 +122,11 @@ pub(super) fn split(text: &str) -> Option<(&str, &str)> {
 /// Recognize adapter controls before foreground admission, including manually typed blocked names.
 pub(super) fn is_btw(text: &str) -> bool {
     split(text).is_some_and(|(name, _)| name == "btw")
+}
+
+/// Recognize the native Vibe control, which the host owns once the adapter announces it.
+pub(super) fn is_vibe(text: &str) -> bool {
+    split(text).is_some_and(|(name, _)| name == "vibe")
 }
 
 /// Only query forms of known builtin handlers may execute beside a foreground model turn.
@@ -192,18 +196,40 @@ pub(super) fn note(
 }
 
 /// Check the current native catalog first so a real extension may own a TUI-only name.
-pub(super) fn blocked<'a>(text: &'a str, native: &[Value]) -> Option<&'a str> {
+///
+/// `vibe` is executable only when the native host announced the bridge *and* its catalog
+/// advertises a builtin `vibe`: the greeting alone says the runtime is patched, the catalog
+/// entry is the proof that the adapter actually wired the command table (a plain `--mode rpc`
+/// launch advertises no `vibe` entry at all). Until both hold the name stays a host refusal,
+/// so it can never silently become a model prompt.
+pub(super) fn blocked<'a>(text: &'a str, native: &[Value], bridge: bool) -> Option<&'a str> {
     let (name, args) = split(text)?;
     if name == "btw" {
         return None;
     }
     if let Some(entry) = native.iter().find(|entry| matches_name(entry, name)) {
-        return (entry["source"] == "builtin"
-            && (!exported(entry)
-                || !subcommand_exported(entry["name"].as_str().unwrap_or_default(), args)))
+        // A real extension, skill or file command owns its name, bridge or not.
+        if entry["source"] != "builtin" {
+            return None;
+        }
+        if name == "vibe" {
+            return (!bridge || !bridged(native)).then_some(name);
+        }
+        return (!exported(entry)
+            || !subcommand_exported(entry["name"].as_str().unwrap_or_default(), args))
         .then_some(name);
     }
+    if name == "vibe" {
+        return (!bridge || !bridged(native)).then_some(name);
+    }
     (TUI_ONLY.contains(&name) || MANAGED.contains(&name)).then_some(name)
+}
+
+/// The adapter advertises a builtin `/vibe` only when its command table is wired.
+fn bridged(native: &[Value]) -> bool {
+    native
+        .iter()
+        .any(|entry| matches_name(entry, "vibe") && entry["source"] == "builtin")
 }
 
 fn matches_name(entry: &Value, name: &str) -> bool {
@@ -265,6 +291,12 @@ pub(super) fn visible(native: &[Value]) -> Vec<Value> {
 
 /// Explain unavailable native behavior without replacing Ait's own controls or invoking a model.
 pub(super) fn rejection(name: &str) -> String {
+    if name == "vibe" {
+        return "OMP /vibe requires the Ait native host bridge. This runtime did not announce \
+                bridgeVersion 1 with the vibe capability, so the native Vibe mode is unavailable. \
+                Install the current OMP native host runtime, or use Ait's subagent controls."
+            .to_owned();
+    }
     if TUI_ONLY.contains(&name) {
         format!(
             "OMP /{name} requires its terminal UI and is not exposed through RPC. Use the corresponding Ait control or native operation."

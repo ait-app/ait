@@ -4,6 +4,14 @@ import { i18n } from "@/i18n/i18next";
 
 export const MODEL_PRESET_FIELDS = ["modelPresetThinking", "modelPresetRoles"] as const;
 
+/** Model configuration belongs to the existing model picker, not the general feature tray. */
+export function isModelConfigurationFeature(feature: AgentFeature): boolean {
+  return (
+    feature.type === "select" &&
+    (feature.id === "modelPreset" || feature.id.startsWith("modelRole."))
+  );
+}
+
 /** A native preset is one configuration change; it is never a sequence of role setters. */
 export function modelPresetConfiguration(
   features: readonly AgentFeature[] | undefined,

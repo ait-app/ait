@@ -925,6 +925,22 @@ export const ProviderUiStateSchema = z.object({
       runningId: z.string().max(256).nullable(),
     })
     .optional(),
+  vibe: z
+    .object({
+      enabled: z.boolean(),
+      workers: z
+        .array(
+          z.object({
+            id: z.string().min(1).max(256),
+            parentId: z.string().max(256),
+            status: z.enum(["running", "completed", "failed", "canceled", "unknown"]),
+            description: z.string().max(4096).nullable(),
+            model: z.string().max(512).nullable(),
+          }),
+        )
+        .max(256),
+    })
+    .optional(),
   actions: z
     .array(
       z.object({

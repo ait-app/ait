@@ -10,6 +10,7 @@ protocols:
   - name: Ait agent link
     schemes:
       - ait
+beforePack: ./scripts/before-pack.js
 afterPack: ./scripts/after-pack.js
 afterSign: ./scripts/after-sign.js
 directories:
@@ -33,6 +34,8 @@ extraResources:
     to: app-dist
   - from: assets/editor-targets
     to: editor-target-icons
+  - from: release-resources/provider-runtimes
+    to: provider-runtimes
 publish:
   provider: github
   owner: ait-app

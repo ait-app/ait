@@ -84,6 +84,7 @@ pub(super) struct Session {
     native_commands: Vec<Value>,
     command_controls: super::commands::pending::Pending,
     btw: super::btw::State,
+    vibe: super::vibe::State,
     active_builtin: bool,
     command_version: u64,
 }
@@ -291,6 +292,12 @@ pub(super) async fn open(
     if let Ok(history) = transport.request("get_btw_history", json!({})).await {
         btw.restore(&history).unwrap_or_else(|_| btw.malformed());
     }
+    let vibe = super::vibe::State {
+        available: transport
+            .refresh_capability()
+            .is_some_and(|capability| capability.vibe),
+        ..super::vibe::State::default()
+    };
     Ok(Session {
         client: client.clone(),
         transport,
@@ -325,6 +332,7 @@ pub(super) async fn open(
         native_commands: commands,
         command_controls: super::commands::pending::Pending::default(),
         btw,
+        vibe,
         active_builtin: false,
         command_version: 1,
     })
@@ -466,6 +474,13 @@ impl Session {
             self.transport = transport;
             self.command_controls.close();
             self.btw = super::btw::State::default();
+            self.vibe = super::vibe::State {
+                available: self
+                    .transport
+                    .refresh_capability()
+                    .is_some_and(|capability| capability.vibe),
+                ..super::vibe::State::default()
+            };
             if let Ok(history) = self.transport.request("get_btw_history", json!({})).await {
                 self.btw
                     .restore(&history)
@@ -575,7 +590,9 @@ impl Session {
         {
             return Err(AgentSessionError::Rejected);
         }
-        if let Some(name) = super::commands::blocked(&prompt.text, &self.native_commands) {
+        if let Some(name) =
+            super::commands::blocked(&prompt.text, &self.native_commands, self.vibe.available)
+        {
             let turn = Uuid::new_v4().to_string();
             self.reject_command(prompt, name);
             self.stream
@@ -732,6 +749,25 @@ impl Session {
             return Ok(true);
         }
         Ok(false)
+    }
+
+    /// Project adapter Vibe frames captured by the reader into host state and child events.
+    /// The native session id is required: a descendant's parent must be the root or a known worker.
+    fn drain_vibe(&mut self) -> Result<(), AgentSessionError> {
+        let frames = self.transport.take_vibe_frames();
+        if frames.is_empty() {
+            return Ok(());
+        }
+        let root = self.state["sessionId"]
+            .as_str()
+            .ok_or(AgentSessionError::Failed)?
+            .to_owned();
+        for frame in &frames {
+            if let Some(event) = self.vibe.capture(frame, &root, &self.cwd) {
+                self.stream.events.push_back(event);
+            }
+        }
+        Ok(())
     }
 
     fn consume_side_control(&mut self, event: &Value) -> bool {
@@ -1014,9 +1050,14 @@ impl Session {
 #[async_trait::async_trait]
 impl AgentSession for Session {
     fn handles_out_of_band(&self, text: &str) -> Option<bool> {
+        // A `/vibe` the bridge cannot serve is answered here, as a refusal card that never
+        // reaches a model. Once the native host announces the capability, `/vibe` is a normal
+        // prompt directive and must form a turn instead.
         Some(
             super::commands::is_btw(text)
-                || super::commands::blocked(text, &self.native_commands).is_some()
+                || (super::commands::is_vibe(text) && !self.vibe.available)
+                || super::commands::blocked(text, &self.native_commands, self.vibe.available)
+                    .is_some()
                 || super::commands::read_only(text, &self.native_commands),
         )
     }
@@ -1030,7 +1071,13 @@ impl AgentSession for Session {
         &mut self,
         input: &crate::protocol::commands::CompletionInput,
     ) -> Result<crate::protocol::commands::ValidatedCompletion, AgentSessionError> {
-        super::completion::complete(&mut self.transport, input, &self.native_commands).await
+        super::completion::complete(
+            &mut self.transport,
+            input,
+            &self.native_commands,
+            self.vibe.available,
+        )
+        .await
     }
     fn commands(&self) -> Option<&[Value]> {
         Some(&self.commands)
@@ -1073,6 +1120,9 @@ impl AgentSession for Session {
         let mut snapshot = self.ui.snapshot();
         snapshot["actions"] = super::actions::catalog();
         snapshot["sideQuestions"] = self.btw.snapshot();
+        if self.vibe.available {
+            snapshot["vibe"] = self.vibe.snapshot();
+        }
         if let Some(status) = self.command_controls.status()
             && let Some(statuses) = snapshot["statuses"]
                 .as_array_mut()
@@ -1111,6 +1161,15 @@ impl AgentSession for Session {
             return Err(AgentSessionError::Busy);
         }
         let fields = super::actions::validate(action, arguments, &self.cwd)?;
+        if action == "vibe_control" {
+            // Native Vibe controls exist only behind the bridge handshake; without it the
+            // catalog entry stays inert instead of reaching a runtime that cannot serve it.
+            if !self.vibe.available {
+                return Err(AgentSessionError::Unavailable);
+            }
+            let id = self.transport.begin("ait_vibe_control", fields).await?;
+            return Ok(self.actions.insert(id, "ait_vibe_control"));
+        }
         if matches!(action, "cancel_subagent" | "steer_subagent") {
             let owned = self.transport.request("get_subagents", json!({})).await?;
             super::actions::validate_child(&owned, &fields["subagentId"])?;
@@ -1247,7 +1306,19 @@ impl AgentSession for Session {
         Ok(info)
     }
     fn subagents(&self) -> Vec<crate::ports::controls::NativeSubagent> {
-        self.children.list()
+        let mut children = self.children.list();
+        // Vibe workers arrive through the adapter channel, not OMP's subagent events; the
+        // manager validates every published child against this list, so both must be visible.
+        for worker in self.vibe.workers.values() {
+            // Only workers with a known outcome are publishable: the shared wire status enum
+            // has no "unknown", and an unpublished child must not fail the parent's turn.
+            if worker.descriptor["status"] != "unknown"
+                && !children.iter().any(|child| child.id == worker.id)
+            {
+                children.push(worker.clone());
+            }
+        }
+        children
     }
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
         let file = self.state["sessionFile"].as_str()?;
@@ -1347,6 +1418,7 @@ impl AgentSession for Session {
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
         self.check_cancellation()?;
+        self.drain_vibe()?;
         if let Some(entry) = self.command_controls.expired() {
             self.stream
                 .events
