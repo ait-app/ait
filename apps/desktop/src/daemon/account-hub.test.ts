@@ -5,13 +5,16 @@ import { AccountHubBridge } from "./account-hub.js";
 import type { AccountTransportOwner } from "./account-transport.js";
 
 const SUB = "11111111-1111-4111-8111-111111111111";
-function fixture() {
+function fixture(features: string[] = []) {
   let event = (_event: HubAccountEvent) => {};
   const call = vi.fn(async () => ({}));
+  const reportPresence = vi.fn(async () => {});
   const releaseShares = vi.fn();
   const subscribeShares = vi.fn(() => releaseShares);
   const hub = {
     call,
+    reportPresence,
+    has: (feature: string) => features.includes(feature),
     subscribeShares,
     subscribe: vi.fn(),
     onEvent: (handler: typeof event) => {
@@ -27,6 +30,7 @@ function fixture() {
   return {
     bridge,
     call,
+    reportPresence,
     owner,
     releaseShares,
     subscribeShares,
@@ -83,6 +87,65 @@ describe("desktop account Hub boundary", () => {
       appVisible: false,
       deviceType: "web",
     });
+  });
+  it("merges windows into state frames when the link enabled state", async () => {
+    vi.useFakeTimers();
+    try {
+      const h = fixture(["state"]);
+      const first = h.owner();
+      const second = h.owner();
+      await h.bridge.call(first, "session.heartbeat", {
+        appVisible: true,
+        deviceType: "web",
+        focusedHostId: "host-a",
+        focusedAgentId: "agent-a",
+      });
+      vi.advanceTimersByTime(1000);
+      await h.bridge.call(second, "session.heartbeat", {
+        appVisible: true,
+        deviceType: "web",
+        focusedHostId: "host-b",
+      });
+      expect(h.reportPresence).toHaveBeenLastCalledWith({
+        appVisible: true,
+        deviceType: "web",
+        focusedHostId: "host-b",
+        focusedAgentId: null,
+        focusedTerminalId: null,
+      });
+      // A repeated heartbeat does not move focus; refocusing the first window does.
+      vi.advanceTimersByTime(1000);
+      await h.bridge.call(first, "session.heartbeat", {
+        appVisible: true,
+        deviceType: "web",
+        focusedHostId: "host-a",
+        focusedAgentId: "agent-a",
+      });
+      expect(h.reportPresence).toHaveBeenLastCalledWith(
+        expect.objectContaining({ focusedHostId: "host-b" }),
+      );
+      await h.bridge.call(first, "session.heartbeat", { appVisible: false, deviceType: "web" });
+      vi.advanceTimersByTime(1000);
+      await h.bridge.call(first, "session.heartbeat", {
+        appVisible: true,
+        deviceType: "web",
+        focusedHostId: "host-a",
+        focusedAgentId: "agent-a",
+      });
+      expect(h.reportPresence).toHaveBeenLastCalledWith(
+        expect.objectContaining({ focusedHostId: "host-a", focusedAgentId: "agent-a" }),
+      );
+      // Any visible window keeps the account visible; none hides it.
+      await h.bridge.call(first, "session.heartbeat", { appVisible: false, deviceType: "web" });
+      expect(h.reportPresence).toHaveBeenLastCalledWith(
+        expect.objectContaining({ appVisible: true, focusedHostId: "host-b" }),
+      );
+      second.emit("destroyed");
+      expect(h.reportPresence).toHaveBeenLastCalledWith({ appVisible: false, deviceType: "web" });
+      expect(h.call).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it("owns share presence subscriptions by renderer lifetime", () => {
     const h = fixture();

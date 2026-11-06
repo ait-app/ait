@@ -32,7 +32,8 @@ async function createAccount(): Promise<AccountSessionManager> {
     installationId = Crypto.randomUUID();
     await AsyncStorage.setItem(INSTALLATION_KEY, installationId);
   }
-  // One access link per signed-in account; it pauses with the account while backgrounded.
+  // One access link per signed-in account. In the background it drops only its socket and
+  // keeps the link and resume token: the foreground resumes within the grace period.
   let hubPaused = AppState.currentState === "background";
   const link = new HubLink({
     ticket: () => manager.openHubTicket(),
@@ -41,7 +42,8 @@ async function createAccount(): Promise<AccountSessionManager> {
     randomUUID: Crypto.randomUUID,
   });
   const syncHub = (status: AccountSnapshot["status"]) => {
-    if (status === "logged_out" || hubPaused) link.stop();
+    if (status === "logged_out") link.stop();
+    else if (hubPaused) link.pause();
     else link.start();
   };
   const manager = new AccountSessionManager({

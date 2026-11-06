@@ -186,3 +186,42 @@ describe("automatic account host discovery", () => {
     expect(store.getHosts()).toHaveLength(1);
   });
 });
+
+describe("desktop built-in daemon", () => {
+  it("never imports an account relay connection for the local daemon's Host", async () => {
+    await store.upsertConnectionFromListen({
+      listenAddress: "localhost:6767",
+      serverId: "first-server",
+      hostname: null,
+      desktopManaged: true,
+    });
+    await store.addDiscoveredAccountRelayHosts(discovered, center);
+    await store.addAccountRelayHost(discovered[0]!, center);
+    const [local, remote] = store.getHosts();
+    expect(local?.connections.map((connection) => connection.type)).not.toContain("accountRelay");
+    expect(remote?.connections[0]?.type).toBe("accountRelay");
+  });
+
+  it("prunes a relay connection imported before the local server id was known", async () => {
+    await store.addDiscoveredAccountRelayHosts(discovered, center);
+    expect(store.getHosts()[0]?.connections.map((connection) => connection.type)).toContain(
+      "accountRelay",
+    );
+    await store.upsertConnectionFromListen({
+      listenAddress: "localhost:6767",
+      serverId: "first-server",
+      hostname: null,
+      desktopManaged: true,
+    });
+    expect(
+      store.getHosts()[0]?.connections.some((connection) => connection.type === "accountRelay"),
+    ).toBe(false);
+    await vi.waitFor(() =>
+      expect(
+        JSON.parse(data.get(registryKey)!)[0].connections.map(
+          (connection: { type: string }) => connection.type,
+        ),
+      ).not.toContain("accountRelay"),
+    );
+  });
+});

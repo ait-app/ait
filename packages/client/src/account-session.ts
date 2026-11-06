@@ -1,8 +1,9 @@
 import { DeviceAuthorizationSchema, type DeviceAuthorization } from "@ait/protocol/publication";
 import { AccountChannel, type ChannelHost } from "./account-channel.js";
 import type { DaemonTransportFactory } from "./daemon-client-transport-types.js";
-import { HUB_PATH, HUB_PROTOCOL } from "./hub/frame.js";
+import { HUB_PATH, HUB_PROTOCOL, type HubHost } from "./hub/frame.js";
 import type { HubLink, HubTicket } from "./hub/link.js";
+import type { HubSession } from "./hub/session.js";
 import {
   createWebSocketTransportFactory,
   defaultWebSocketFactory,
@@ -39,6 +40,15 @@ interface NodeSession {
   node_session_id: string;
   host_id: string | null;
   control_required: boolean;
+}
+
+/** Hub fields of a registration; centers without them omit every field. */
+interface RegistrationHub {
+  hub_features?: unknown;
+  hub_ticket?: unknown;
+  hub_path?: unknown;
+  hub_expires_in_seconds?: unknown;
+  hub_ep?: unknown;
 }
 
 export interface SavedAccount {
@@ -125,6 +135,37 @@ export function normalizeCenter(value: string): string {
 
 /** A relay visit started during startup may wait this long for this device's registration. */
 const NODE_READY_WAIT_MS = 10_000;
+/** Use a registration's hub ticket only while comfortably inside its lifetime. */
+const TICKET_MARGIN_MS = 5000;
+
+/** `hub_features` of an HTTP response; null when an older center sent none. */
+function hubFeatures(value: unknown): string[] | null {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : null;
+}
+
+/** Map a `hosts` frame entry onto the channel snapshot shape the apps consume. */
+function accountHost(host: HubHost): AccountHost {
+  const online = host.state !== "offline";
+  return {
+    host_id: host.host_id,
+    node_id: host.node_id,
+    server_id: host.server_id,
+    instance_id: online ? host.instance_id : null,
+    name: host.name,
+    hostname: host.hostname,
+    platform: host.platform,
+    app_version: host.app_version,
+    relay_modes: [],
+    online,
+    status: "active",
+    last_seen_at: null,
+    offline_since: online ? null : host.offline_since,
+    hub_online: online,
+  };
+}
+
 function hubTicket(grant: { hub_ticket?: unknown; hub_path?: unknown; protocol?: unknown }) {
   if (
     grant.protocol !== HUB_PROTOCOL ||
@@ -177,6 +218,11 @@ export class AccountSessionManager {
   private closing = false;
   private hub: HubLink | null = null;
   private unsubscribeHub: (() => void) | null = null;
+  /** `hub_features` of the latest registration or hub ticket; null from older centers. */
+  private hubFeatures: readonly string[] | null = null;
+  /** One-use access ticket issued with the registration, for the link's first connection. */
+  private hubHosts = false;
+  private registeredTicket: { ticket: string; expiresAt: number; node: NodeSession } | null = null;
   private state: AccountSnapshot = {
     status: "logged_out",
     center: DEFAULT_ACCOUNT_CENTER,
@@ -196,7 +242,33 @@ export class AccountSessionManager {
   attachHub(hub: HubLink): void {
     this.unsubscribeHub?.();
     this.hub = hub;
-    this.unsubscribeHub = hub.subscribe(() => this.update({}));
+    this.unsubscribeHub = hub.subscribe(() => {
+      // A link with `hosts` replaces the status channel; without it the channel returns.
+      const hosts = this.hostsByHub();
+      if (hosts) this.closeChannel();
+      else if (this.hubHosts) this.schedule(0);
+      this.hubHosts = hosts;
+      this.update({});
+    });
+  }
+
+  /**
+   * The center advertised `hosts` and the link did not decline it: Host status comes from
+   * `hosts` frames and the `/relay/channel` connection is not opened.
+   */
+  private hostsByHub(): boolean {
+    const hub = this.hub;
+    return Boolean(
+      hub &&
+      hub.state !== "stopped" &&
+      this.hubFeatures?.includes("hosts") &&
+      (hub.features === null || hub.features.includes("hosts")),
+    );
+  }
+
+  /** The link holds this device's node lease (`lease`), so HTTP renewal stops. */
+  private leaseByHub(): boolean {
+    return Boolean(this.hub?.has("lease") && this.hub.centerUrl === this.account?.center);
   }
 
   snapshot(): AccountSnapshot {
@@ -204,6 +276,7 @@ export class AccountSessionManager {
     const ready = Boolean(
       this.account && !this.suspended && hub?.ready && hub.centerUrl === this.state.center,
     );
+    if (hub && this.account && this.hostsByHub()) return this.hubSnapshot(hub, ready);
     const confirmed = new Set(this.confirmedHosts);
     const cloneHost = (host: AccountHost): AccountHost => ({
       ...host,
@@ -218,6 +291,28 @@ export class AccountSessionManager {
       confirmedHostIds: [...confirmed],
       hosts,
       selected: this.state.selected ? cloneHost(this.state.selected) : null,
+      synchronizedHosts: [],
+      ...(this.account ? { accountId: accountSubject(this.account.token) } : {}),
+    };
+  }
+
+  /** Host list built from `hosts` frames; stale until the link has a full snapshot. */
+  private hubSnapshot(hub: HubLink, ready: boolean): AccountSnapshot {
+    const node = this.node;
+    const hosts = (hub.hosts ?? [])
+      .filter((host) => host.host_id !== node?.host_id && host.node_id !== node?.node_id)
+      .map(accountHost)
+      .sort((left, right) => left.host_id.localeCompare(right.host_id));
+    const selected = hosts.find((host) => host.host_id === this.state.selected?.host_id) ?? null;
+    return {
+      ...this.state,
+      ...(ready ? { status: "online" as const, error: null } : {}),
+      stale: !ready,
+      confirmedHostIds: ready
+        ? hosts.filter((host) => host.online).map((host) => host.host_id)
+        : [],
+      hosts,
+      selected,
       synchronizedHosts: [],
       ...(this.account ? { accountId: accountSubject(this.account.token) } : {}),
     };
@@ -441,6 +536,8 @@ export class AccountSessionManager {
     const node = this.node;
     this.account = null;
     this.node = null;
+    this.registeredTicket = null;
+    this.hubFeatures = null;
     this.registrationId = this.deps.randomUUID();
     this.nextChannel = this.nextRenew = this.nextRegistration = 0;
     this.channelFailures = this.registrationFailures = 0;
@@ -483,7 +580,8 @@ export class AccountSessionManager {
     }
     if (!this.account || !this.node)
       throw new Error("Sign in and wait for this device to register.");
-    const host = this.state.hosts.find((host) => host.host_id === hostId);
+    // Hosts come from the status channel or, with `hosts`, from the Hub link.
+    const host = this.snapshot().hosts.find((host) => host.host_id === hostId);
     if (!host || !host.online || !host.server_id || !host.instance_id)
       throw new Error("The target host is offline. Refresh the host list.");
     if (this.state.selected?.host_id !== hostId) {
@@ -611,7 +709,30 @@ export class AccountSessionManager {
     return { ...result, url: url.toString() };
   }
 
-  /** One-use access ticket for this device's hub link; waits briefly for registration. */
+  /**
+   * Open a download as a Hub session (`k:"download"`) when this link and the target Host both
+   * enabled `download`. Resolves null otherwise: the caller uses `openDownload` (the legacy
+   * `/relay-downloads` route). The session carries the relay download messages unchanged.
+   */
+  async openHubDownload(
+    hostId: string,
+    token: string,
+    expectedCenter: string,
+  ): Promise<HubSession | null> {
+    const hub = this.hub;
+    if (!hub || this.suspended || !this.account) return null;
+    if (normalizeCenter(expectedCenter) !== this.account.center) return null;
+    if (hub.pending) await hub.whenReady(NODE_READY_WAIT_MS / 2);
+    if (!hub.ready || hub.centerUrl !== this.account.center || !hub.has("download")) return null;
+    const host = hub.hostFor(hostId);
+    if (!host?.node_id || host.state !== "online" || !host.f.includes("download")) return null;
+    return hub.openDownload(host.node_id, token);
+  }
+
+  /**
+   * One-use access ticket for this device's hub link; waits briefly for registration. The first
+   * connection after a registration uses the ticket issued with it.
+   */
   async openHubTicket(): Promise<HubTicket> {
     if (!this.suspended && this.account && !this.node) await this.waitForNode(NODE_READY_WAIT_MS);
     if (this.suspended || !this.account || !this.node) {
@@ -619,13 +740,56 @@ export class AccountSessionManager {
     }
     const generation = this.generation;
     const center = this.account.center;
-    const grant = await this.api<{ hub_ticket: string; hub_path: string; protocol: string }>(
-      `/v1/node-sessions/${this.node.node_session_id}/hub-tickets`,
-      "POST",
-      { ep: "access" },
-    );
+    const node = this.node;
+    const registered = this.registeredTicket;
+    this.registeredTicket = null;
+    if (registered?.node === node && registered.expiresAt > Date.now())
+      return {
+        centerUrl: center,
+        ticket: registered.ticket,
+        ...(this.hubFeatures ? { features: this.hubFeatures } : {}),
+      };
+    let grant: { hub_ticket: string; hub_path: string; protocol: string; hub_features?: unknown };
+    try {
+      grant = await this.api(`/v1/node-sessions/${node.node_session_id}/hub-tickets`, "POST", {
+        ep: "access",
+      });
+    } catch (error) {
+      // With `lease` nothing else renews the node session; its expiry surfaces here.
+      if (generation === this.generation && this.node === node) this.nodeRejected(error);
+      throw error;
+    }
     if (generation !== this.generation) throw new Error("Connection cancelled.");
-    return { centerUrl: center, ticket: hubTicket(grant) };
+    const features = hubFeatures(grant.hub_features);
+    this.hubFeatures = features;
+    return {
+      centerUrl: center,
+      ticket: hubTicket(grant),
+      ...(features ? { features } : {}),
+    };
+  }
+
+  /** Recover from a rejected node session outside the tick: register again or sign out. */
+  private nodeRejected(error: unknown): void {
+    if (!(error instanceof AccountError)) return;
+    if (["node_session_expired", "registration_expired"].includes(error.code)) {
+      this.closeChannel();
+      this.node = null;
+      this.registeredTicket = null;
+      this.registrationId = this.deps.randomUUID();
+      this.nextRegistration = 0;
+      this.registrationFailures = 0;
+      this.update({ stale: true });
+      this.schedule(0);
+    } else if (error.status === 401) {
+      const generation = this.generation;
+      queueMicrotask(() => {
+        if (generation !== this.generation) return;
+        void this.logout().then(() => {
+          if (!this.account) this.update({ error: error.message });
+        });
+      });
+    }
   }
 
   async closeVisit(id: string): Promise<void> {
@@ -679,16 +843,39 @@ export class AccountSessionManager {
         throw new AccountError("Your session has expired. Sign in again.", 401, "unauthorized");
       if (!this.node) {
         if (Date.now() < this.nextRegistration) return;
-        const node = await this.api<NodeSession>("/v1/nodes/register", "POST", {
-          registration_id: this.registrationId,
-          installation_id: this.deps.installationId,
-          display_name: this.deps.deviceName,
-          platform: this.deps.platform,
-          app_version: this.deps.appVersion,
-          runtime: null,
-        });
+        const registered = await this.api<NodeSession & RegistrationHub>(
+          "/v1/nodes/register",
+          "POST",
+          {
+            registration_id: this.registrationId,
+            installation_id: this.deps.installationId,
+            display_name: this.deps.deviceName,
+            platform: this.deps.platform,
+            app_version: this.deps.appVersion,
+            runtime: null,
+          },
+        );
         if (generation !== this.generation || !this.account) return;
         this.closeChannel();
+        const { hub_features, hub_ticket, hub_path, hub_expires_in_seconds, hub_ep, ...node } =
+          registered;
+        this.hubFeatures = hubFeatures(hub_features);
+        // Centers with `hub_features` also issue the first access ticket with the registration.
+        this.registeredTicket =
+          hub_ep === "access" &&
+          hub_path === HUB_PATH &&
+          typeof hub_ticket === "string" &&
+          /^[0-9a-f]{64}$/i.test(hub_ticket)
+            ? {
+                ticket: hub_ticket,
+                expiresAt:
+                  Date.now() +
+                  (typeof hub_expires_in_seconds === "number" ? hub_expires_in_seconds : 30) *
+                    1000 -
+                  TICKET_MARGIN_MS,
+                node,
+              }
+            : null;
         this.node = node;
         this.registrationFailures = 0;
         this.nextRegistration = 0;
@@ -699,14 +886,15 @@ export class AccountSessionManager {
         this.update({ status: "online", error: null });
       }
       if (generation !== this.generation || !this.node) return;
-      if (Date.now() >= this.nextRenew) {
+      // With `lease` the center renews this session while the link is attached or in grace.
+      if (Date.now() >= this.nextRenew && !this.leaseByHub()) {
         await this.api(`/v1/node-sessions/${this.node.node_session_id}/renew`, "POST");
         if (generation !== this.generation) return;
         this.leaseRecoveryAttempted = false;
         this.nextRenew = Date.now() + 20_000;
       }
       if (generation !== this.generation) return;
-      if (!this.channel && Date.now() >= this.nextChannel) {
+      if (!this.channel && !this.hostsByHub() && Date.now() >= this.nextChannel) {
         try {
           await this.connectChannel(generation);
         } catch (error) {

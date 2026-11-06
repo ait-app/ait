@@ -1399,3 +1399,218 @@ describe("daemon authorization handoff", () => {
     );
   });
 });
+
+describe("hub features", () => {
+  const FEATURES = ["lease", "hosts", "state", "credit", "download"];
+  const hubHost = {
+    host_id: "remote",
+    node_id: "other",
+    server_id: "server",
+    instance_id: "instance",
+    name: "Workstation",
+    hostname: "ws",
+    platform: "linux",
+    app_version: "1.0",
+    state: "online",
+    offline_since: null,
+    f: ["credit", "download"],
+  };
+
+  /** A center that advertises `features` over HTTP (none for an older center). */
+  function featureFixture(features: string[] | null) {
+    const context = fixture();
+    const original = context.http.getMockImplementation()!;
+    let tickets = 0;
+    context.http.mockImplementation(async (url, options) => {
+      const path = String(url);
+      const hub = features ? { hub_features: features } : {};
+      if (path.endsWith("/nodes/register"))
+        return Response.json({
+          node_id: "client",
+          node_session_id: "lease",
+          host_id: null,
+          control_required: false,
+          ...(features
+            ? {
+                ...hub,
+                hub_ticket: "e".repeat(64),
+                hub_path: "/v1/hub",
+                hub_expires_in_seconds: 30,
+                hub_ep: "access",
+              }
+            : {}),
+        });
+      if (path.endsWith("/hub-tickets"))
+        return Response.json({
+          hub_ticket: (++tickets).toString(16).padStart(64, "0"),
+          hub_path: "/v1/hub",
+          protocol: "ait-hub-v1",
+          ...hub,
+        });
+      return original(url, options);
+    });
+    const h = hubFixture({ ticket: () => context.manager.openHubTicket() });
+    context.manager.attachHub(h.link);
+    // Like the apps, run the link while signed in.
+    context.deps.notify = vi.fn((snapshot) => {
+      if (snapshot.status === "logged_out") h.link.stop();
+      else h.link.start();
+    });
+    const calls = (suffix: string) =>
+      context.http.mock.calls.filter(([url]) => String(url).endsWith(suffix)).length;
+    return {
+      ...context,
+      h,
+      calls,
+      /** Sign in and complete the link's handshake. */
+      async online(welcome: Record<string, unknown> = {}) {
+        await context.login();
+        await h.flush();
+        const socket = h.socket();
+        socket.open();
+        socket.welcome({ ...(features ? { f: features } : {}), ...welcome });
+        return socket;
+      },
+    };
+  }
+
+  it("keeps renew, the status channel and presence when the center has no hub features", async () => {
+    const f = featureFixture(null);
+    const socket = await f.online();
+    expect(socket.frames("hello")).toEqual([{ t: "hello", v: 1, resume: null }]);
+    expect(f.calls("/hub-tickets")).toBe(1);
+    expect(f.calls("/channel-tickets")).toBe(1);
+    socket.presence(1, [
+      {
+        node_id: "other",
+        host_id: "remote",
+        name: "W",
+        platform: "linux",
+        app_version: "1",
+        state: "online",
+      },
+    ]);
+    expect(f.manager.snapshot().hosts[0]).toMatchObject({ host_id: "remote", hub_online: true });
+    const renewed = f.calls("/renew");
+    await vi.advanceTimersByTimeAsync(25_000);
+    expect(f.calls("/renew")).toBeGreaterThan(renewed);
+    f.h.link.stop();
+    await f.manager.logout();
+  });
+
+  it("uses the registration ticket first and announces the advertised features", async () => {
+    const f = featureFixture(FEATURES);
+    const socket = await f.online();
+    expect(f.calls("/hub-tickets")).toBe(0);
+    expect(socket.options?.headers?.Authorization).toBe(`Bearer ${"e".repeat(64)}`);
+    expect(socket.frames("hello")).toEqual([{ t: "hello", v: 1, resume: null, f: FEATURES }]);
+    // Reconnects after the link is lost use hub-tickets as before.
+    socket.receive({ t: "error", code: "resume_expired" });
+    await f.h.flush();
+    expect(f.calls("/hub-tickets")).toBe(1);
+    f.h.link.stop();
+    await f.manager.logout();
+  });
+
+  it("stops HTTP renewal while the link holds the lease and resumes it without one", async () => {
+    const f = featureFixture(FEATURES);
+    await f.online();
+    const renewed = f.calls("/renew");
+    await vi.advanceTimersByTimeAsync(65_000);
+    expect(f.calls("/renew")).toBe(renewed);
+    f.h.link.stop();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(f.calls("/renew")).toBeGreaterThan(renewed);
+    await f.manager.logout();
+  });
+
+  it("builds Hosts from hosts frames without the status channel", async () => {
+    const f = featureFixture(FEATURES);
+    const socket = await f.online();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.calls("/channel-tickets")).toBe(0);
+    expect(f.manager.snapshot()).toMatchObject({ stale: true, hosts: [] });
+    const own = { ...hubHost, host_id: "own", node_id: "client" };
+    const offline = {
+      ...hubHost,
+      host_id: "sleeping",
+      node_id: "sleeping-node",
+      state: "offline",
+      offline_since: "2026-01-01T00:00:00Z",
+      f: [],
+    };
+    socket.receive(
+      { t: "hosts", seq: 1, ver: 1, full: true },
+      JSON.stringify({ hosts: [hubHost, own, offline] }),
+    );
+    const snapshot = f.manager.snapshot();
+    expect(snapshot).toMatchObject({
+      status: "online",
+      stale: false,
+      confirmedHostIds: ["remote"],
+    });
+    expect(snapshot.hosts).toEqual([
+      {
+        host_id: "remote",
+        node_id: "other",
+        server_id: "server",
+        instance_id: "instance",
+        name: "Workstation",
+        hostname: "ws",
+        platform: "linux",
+        app_version: "1.0",
+        relay_modes: [],
+        online: true,
+        status: "active",
+        last_seen_at: null,
+        offline_since: null,
+        hub_online: true,
+      },
+      expect.objectContaining({
+        host_id: "sleeping",
+        online: false,
+        hub_online: false,
+        instance_id: null,
+        offline_since: "2026-01-01T00:00:00Z",
+      }),
+    ]);
+    await expect(f.manager.select("remote")).resolves.toMatchObject({
+      selected: { host_id: "remote" },
+    });
+    await expect(f.manager.select("sleeping")).rejects.toThrow("offline");
+    socket.receive(
+      { t: "hosts", seq: 2, ver: 2 },
+      JSON.stringify({ upsert: [{ ...hubHost, state: "reconnecting" }] }),
+    );
+    expect(f.manager.snapshot().hosts[0]).toMatchObject({ online: true, hub_online: true });
+    f.h.link.stop();
+    await f.manager.logout();
+  });
+
+  it("falls back to the status channel when the link declines hosts", async () => {
+    const f = featureFixture(FEATURES);
+    await f.online({ f: ["lease"] });
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(f.calls("/channel-tickets")).toBe(1);
+    f.h.link.stop();
+    await f.manager.logout();
+  });
+
+  it("registers again when the hub ticket reveals an expired node session", async () => {
+    const f = featureFixture(FEATURES);
+    await f.online();
+    const original = f.http.getMockImplementation()!;
+    f.http.mockImplementation(async (url, options) =>
+      String(url).endsWith("/hub-tickets")
+        ? Response.json({ error: { code: "node_session_expired" } }, { status: 401 })
+        : original(url, options),
+    );
+    const registered = f.calls("/nodes/register");
+    f.h.socket().receive({ t: "error", code: "revoked" });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(f.calls("/nodes/register")).toBeGreaterThan(registered);
+    expect(f.manager.snapshot().status).not.toBe("logged_out");
+    f.h.link.stop();
+    await f.manager.logout();
+  });
+});

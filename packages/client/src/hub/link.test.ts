@@ -227,7 +227,10 @@ describe("hub link liveness", () => {
     await expect(first).resolves.toBe(true);
     await vi.advanceTimersByTimeAsync(20_000);
     expect(socket.frames("ping")).toHaveLength(2);
-    await vi.advanceTimersByTimeAsync(3001);
+    // Periodic pings allow 15 s for the pong.
+    await vi.advanceTimersByTimeAsync(14_000);
+    expect(socket.close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1001);
     expect(socket.close).toHaveBeenCalledOnce();
     expect(h.link.state).toBe("reconnecting");
     expect(h.ticket).toHaveBeenCalledOnce();

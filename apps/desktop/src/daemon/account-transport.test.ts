@@ -24,9 +24,27 @@ function terminalFrames(count: number): Buffer[] {
   );
 }
 
-async function openHub(synchronousAck = false) {
-  const h = hubFixture();
-  const socket = await h.online();
+async function openHub(synchronousAck = false, credit = false) {
+  const h = hubFixture(
+    credit
+      ? {
+          ticket: async () => ({
+            centerUrl: "https://center.test/api",
+            ticket: "a".repeat(64),
+            features: ["credit"],
+          }),
+        }
+      : {},
+  );
+  let socket: ReturnType<typeof h.socket>;
+  if (credit) {
+    h.link.start();
+    await h.flush();
+    socket = h.socket();
+    socket.open();
+    socket.welcome({ f: ["credit"] });
+    socket.presence(1, [HOST]);
+  } else socket = await h.online();
   const account = {
     snapshot: () => ({ hosts: [{ host_id: HOST.host_id, server_id: "test-server" }] }),
   };
@@ -75,7 +93,7 @@ async function openHub(synchronousAck = false) {
   await h.flush();
   const open = socket.frames("open")[0];
   socket.receive(
-    { t: "accept", seq: 2, s: open.s },
+    { t: "accept", seq: 2, s: open.s, ...(credit ? { w: 1024 * 1024 } : {}) },
     JSON.stringify({
       type: "server_info",
       info: {
@@ -97,6 +115,7 @@ async function openHub(synchronousAck = false) {
   return {
     manager,
     owner,
+    socket,
     link: h.link,
     events,
     burst,
@@ -163,6 +182,20 @@ describe("desktop Hub terminal delivery", () => {
     // Once the queue drains, later Hub output must still arrive.
     relay.burst(frames.slice(0, 1));
     await vi.waitFor(() => expect(relay.frames()).toHaveLength(33));
+  });
+
+  it("grants Hub credit only for frames the renderer acknowledged", async () => {
+    const relay = await openHub(false, true);
+    relay.manualAck();
+    const frame = Buffer.alloc(300_000, 1);
+    relay.burst([frame, frame]);
+    await vi.waitFor(() => expect(relay.frames()).toHaveLength(2));
+    expect(relay.socket.frames("credit")).toEqual([]);
+    while (relay.pendingAcks.size) relay.acknowledge(relay.pendingAcks.values().next().value!);
+    // The accept's server_info is not counted; 600 000 message bytes pass half the window.
+    expect(relay.socket.frames("credit")).toEqual([
+      { t: "credit", s: expect.any(String), c: 600_000 },
+    ]);
   });
 
   it("still closes a stalled renderer and releases its queued output", async () => {

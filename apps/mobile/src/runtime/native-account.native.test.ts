@@ -442,11 +442,12 @@ describe("native mobile account storage and lifecycle", () => {
 });
 
 describe("native mobile hub link", () => {
-  it("runs one hub link while signed in and active, and stops it on suspension and sign-out", async () => {
+  it("runs one hub link while signed in, keeps it resumable in the background and stops it on sign-out", async () => {
     interface HubSocket {
       url: string;
       options?: { headers?: Record<string, string> };
       close: () => void;
+      send?: ReturnType<typeof vi.fn>;
       onopen?: (event: unknown) => void;
       onmessage?: (event: unknown) => void;
     }
@@ -535,12 +536,23 @@ describe("native mobile hub link", () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(hubSockets[0]!.close).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(60_000);
+    // Only the socket closes; the link and its resume token stay for the foreground.
     expect(hubSockets[0]!.close).toHaveBeenCalled();
-    expect((link as { state: string }).state).toBe("stopped");
+    expect((link as { state: string }).state).toBe("reconnecting");
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(hubSockets).toHaveLength(1);
 
     onState("active");
     await vi.advanceTimersByTimeAsync(10);
     expect(hubSockets).toHaveLength(2);
+    expect(hubSockets[1]).toMatchObject({
+      options: { headers: { Authorization: `Bearer ${"e".repeat(64)}` } },
+    });
+    hubSockets[1]!.onopen?.({});
+    const hello = hubSockets[1]!.send!.mock.calls[0]![0] as Uint8Array;
+    expect(
+      JSON.parse(new TextDecoder().decode(hello.subarray(2, 2 + ((hello[0] << 8) | hello[1])))),
+    ).toMatchObject({ t: "hello", resume: { link: "link" } });
     await manager.logout();
     expect(hubSockets[1]!.close).toHaveBeenCalled();
     expect((link as { state: string }).state).toBe("stopped");

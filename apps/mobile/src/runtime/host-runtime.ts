@@ -1408,12 +1408,12 @@ const LastAvailableAccountRelaySchema = z.strictObject({
 /** Drop matching account connections; hosts left without a connection are removed. */
 function withoutAccountRelayConnections(
   hosts: HostProfile[],
-  matches: (connection: AccountRelayHostConnection) => boolean,
+  matches: (connection: AccountRelayHostConnection, host: HostProfile) => boolean,
 ): HostProfile[] {
   let changed = false;
   const next = hosts.flatMap((host) => {
     const connections = host.connections.filter(
-      (connection) => connection.type !== "accountRelay" || !matches(connection),
+      (connection) => connection.type !== "accountRelay" || !matches(connection, host),
     );
     if (connections.length === host.connections.length) return [host];
     changed = true;
@@ -1426,6 +1426,28 @@ function withoutAccountRelayConnections(
     return [{ ...host, connections, preferredConnectionId, updatedAt: new Date().toISOString() }];
   });
   return changed ? next : hosts;
+}
+
+/** The built-in desktop daemon's Host; its connection id names the local server id. */
+function hasDesktopManagedConnection(host: HostProfile): boolean {
+  const id = `desktop-managed-${host.serverId}`;
+  return host.connections.some((connection) => connection.id === id);
+}
+
+/**
+ * The desktop reaches its own daemon only directly, never through the account relay (§9.1).
+ * Shared-resource connections use virtual server ids and are kept.
+ */
+function isSelfAccountRelay(connection: HostConnection, host: HostProfile): boolean {
+  return (
+    connection.type === "accountRelay" &&
+    connection.shareId === undefined &&
+    hasDesktopManagedConnection(host)
+  );
+}
+
+function withoutSelfAccountRelayConnections(hosts: HostProfile[]): HostProfile[] {
+  return withoutAccountRelayConnections(hosts, isSelfAccountRelay);
 }
 
 /** Account subject that owns the saved account hosts of each service. */
@@ -1643,6 +1665,11 @@ export class HostRuntimeStore {
         }
         profiles = normalizedProfiles.filter((entry) => !isPlaceholderServerId(entry.serverId));
         if (profiles.length !== normalizedProfiles.length) {
+          shouldPersistHosts = true;
+        }
+        const routable = withoutSelfAccountRelayConnections(profiles);
+        if (routable !== profiles) {
+          profiles = routable;
           shouldPersistHosts = true;
         }
       }
@@ -2149,13 +2176,16 @@ export class HostRuntimeStore {
     existingClient?: DaemonClient;
   }): Promise<HostProfile> {
     const now = new Date().toISOString();
-    const next = upsertHostConnectionInProfiles({
-      profiles: this.hosts,
-      serverId: input.serverId,
-      label: input.label,
-      connection: input.connection,
-      now,
-    });
+    // Admitting the managed daemon reveals the local server id; drop its relay route.
+    const next = withoutSelfAccountRelayConnections(
+      upsertHostConnectionInProfiles({
+        profiles: this.hosts,
+        serverId: input.serverId,
+        label: input.label,
+        connection: input.connection,
+        now,
+      }),
+    );
     this.setHostsAndSync(next, {
       initialConnectionByServerId: input.existingClient
         ? new Map([
@@ -2281,12 +2311,16 @@ export class HostRuntimeStore {
   ): Promise<void> {
     const connection = createAccountRelayHostConnection({ hostId: selected.host_id, center });
     await this.commitHosts((hosts) =>
-      upsertHostConnectionInProfiles({
-        profiles: hosts,
-        serverId: selected.server_id,
-        label: selected.name,
-        connection,
-      }),
+      hosts.some(
+        (host) => host.serverId === selected.server_id && hasDesktopManagedConnection(host),
+      )
+        ? hosts
+        : upsertHostConnectionInProfiles({
+            profiles: hosts,
+            serverId: selected.server_id,
+            label: selected.name,
+            connection,
+          }),
     );
   }
 
@@ -2304,7 +2338,7 @@ export class HostRuntimeStore {
     const update = this.accountDiscoveryTail.then(async () => {
       while (isCurrent()) {
         const previous = this.hosts;
-        let next = previous;
+        let next = withoutSelfAccountRelayConnections(previous);
         let owners: Record<string, string> | null = null;
         if (options?.accountId) {
           const saved = await this.readAccountRelayOwners();
@@ -2328,9 +2362,13 @@ export class HostRuntimeStore {
             next,
             (c) => c.shareId === undefined && c.center === center && !retained.has(c.hostId),
           );
+        const local = new Set(
+          next.filter(hasDesktopManagedConnection).map((profile) => profile.serverId),
+        );
         for (const host of discovered) {
           const connection = createAccountRelayHostConnection({ hostId: host.host_id, center });
-          if (this.removedAccountRelayConnections.has(connection.id)) continue;
+          if (this.removedAccountRelayConnections.has(connection.id) || local.has(host.server_id))
+            continue;
           next = upsertHostConnectionInProfiles({
             profiles: next,
             serverId: host.server_id,
@@ -2438,15 +2476,25 @@ export class HostRuntimeStore {
         connections: storedHost.connections.filter(
           (connection) =>
             !this.pendingDesktopConnections.has(connection.id) &&
+            !isSelfAccountRelay(connection, storedHost) &&
             (connection.type !== "accountRelay" ||
               (connection.shareId !== undefined && connection.center === this.accountRelayCenter) ||
               (connection.center === this.accountRelayCenter &&
                 this.availableAccountRelayServers.has(storedHost.serverId))),
         ),
       };
+      // The local daemon never falls back to relay: while the account would have offered one,
+      // keep connecting until the managed daemon is admitted.
+      const awaitingManagedDaemon =
+        storedHost.connections.some((connection) =>
+          this.pendingDesktopConnections.has(connection.id),
+        ) &&
+        (!this.accountRelayAvailabilityKnown ||
+          this.availableAccountRelayServers.has(storedHost.serverId));
       const awaitingAccountRelay =
-        !this.accountRelayAvailabilityKnown &&
-        storedHost.connections.some((connection) => connection.type === "accountRelay");
+        awaitingManagedDaemon ||
+        (!this.accountRelayAvailabilityKnown &&
+          storedHost.connections.some((connection) => connection.type === "accountRelay"));
       const initialConnection = options?.initialConnectionByServerId?.get(host.serverId);
       const existing = this.controllers.get(host.serverId);
       if (existing) {

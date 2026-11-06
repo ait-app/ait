@@ -68,6 +68,7 @@ function harness(
   };
   const base = vi.fn(factory);
   const transport = createDaemonConnection(base, {
+    mode: "split",
     guestScope,
     url,
     headers: { Authorization: "Bearer test" },
@@ -94,7 +95,9 @@ function harness(
           protocol: { major: 1, minor: 0 },
           implemented_capabilities: implemented,
         },
-        negotiated_capabilities: CHANNEL_CAPABILITIES[index],
+        // A single-connection socket negotiates every capability.
+        negotiated_capabilities:
+          sockets.length === 1 ? CHANNEL_CAPABILITIES.flat() : CHANNEL_CAPABILITIES[index],
       });
   }
   function send(message: Payload) {
@@ -134,22 +137,21 @@ describe("Rust v1 connection", () => {
     });
     try {
       const connected = client.connect();
-      expect(h.base).toHaveBeenCalledTimes(4);
+      // Current daemons carry every capability on one socket.
+      expect(h.base).toHaveBeenCalledOnce();
       expect(h.base).toHaveBeenCalledWith({
         url: "ws://127.0.0.1:7316/v1/ws",
         headers: { Authorization: "Bearer private-test-token" },
       });
       h.ready();
       await connected;
-      for (const [index, socket] of h.sockets.entries()) {
-        expect(JSON.parse(socket.send.mock.calls[0][0])).toEqual({
-          type: "hello",
-          client_id: "native-sdk",
-          protocol: { major: 1, min_minor: 0, max_minor: 0 },
-          capabilities: CHANNEL_CAPABILITIES[index],
-          required_capabilities: [],
-        });
-      }
+      expect(JSON.parse(h.sockets[0].send.mock.calls[0][0])).toEqual({
+        type: "hello",
+        client_id: "native-sdk",
+        protocol: { major: 1, min_minor: 0, max_minor: 0 },
+        capabilities: [...new Set(CHANNEL_CAPABILITIES.flat())],
+        required_capabilities: ["connection.single.v1"],
+      });
     } finally {
       await client.close();
     }
@@ -218,7 +220,7 @@ describe("Rust v1 connection", () => {
         "paseo.ws.frame.inbound",
         "paseo.ws.json.parse",
       ]) {
-        expect(beginSection.mock.calls.filter(([section]) => section === name)).toHaveLength(4);
+        expect(beginSection.mock.calls.filter(([section]) => section === name)).toHaveLength(1);
       }
       expect(endSection).toHaveBeenCalledTimes(beginSection.mock.calls.length);
     } finally {
@@ -505,8 +507,8 @@ describe("Rust v1 connection", () => {
       h.ready();
       await connected;
       const status = client.getOnlineServiceStatus();
-      const request = h.last(1);
-      h.sockets[1].message({
+      const request = h.last(0);
+      h.sockets[0].message({
         type: "response",
         request_id: request.request_id,
         method: request.method,
@@ -594,9 +596,9 @@ describe("Rust v1 connection", () => {
       ];
       for (const [method, call, params] of calls) {
         const pending = call();
-        const request = h.last(3);
+        const request = h.last(0);
         expect(request).toMatchObject({ method, params });
-        h.sockets[3].message({ type: "response", request_id: request.request_id, method, result });
+        h.sockets[0].message({ type: "response", request_id: request.request_id, method, result });
         await expect(pending).resolves.toMatchObject(result);
       }
     } finally {
@@ -624,9 +626,9 @@ describe("Rust v1 connection", () => {
       await connected;
       expect(client.getLastServerInfoMessage()?.features?.onlineServiceSync).toBe(true);
       const status = client.getOnlineServiceStatus();
-      const statusRequest = h.last(1);
+      const statusRequest = h.last(0);
       expect(statusRequest.method).toBe("relay.status.request");
-      h.sockets[1].message({
+      h.sockets[0].message({
         type: "response",
         request_id: statusRequest.request_id,
         method: statusRequest.method,
@@ -639,9 +641,9 @@ describe("Rust v1 connection", () => {
         node_session_id: "00000000-0000-4000-8000-000000000001",
       };
       const start = client.connectOnlineService(grant);
-      const startRequest = h.last(1);
+      const startRequest = h.last(0);
       expect(startRequest).toMatchObject({ method: "relay.start.request", params: grant });
-      h.sockets[1].message({
+      h.sockets[0].message({
         type: "response",
         request_id: startRequest.request_id,
         method: startRequest.method,
@@ -649,9 +651,9 @@ describe("Rust v1 connection", () => {
       });
       expect((await start).status.connecting).toBe(true);
       const stop = client.disconnectOnlineService();
-      const stopRequest = h.last(1);
+      const stopRequest = h.last(0);
       expect(stopRequest.method).toBe("relay.stop.request");
-      h.sockets[1].message({
+      h.sockets[0].message({
         type: "response",
         request_id: stopRequest.request_id,
         method: stopRequest.method,
@@ -661,7 +663,7 @@ describe("Rust v1 connection", () => {
       await client.close();
       await expect(client.connectOnlineService(grant)).rejects.toThrow();
       expect(
-        h.sockets[1].send.mock.calls.filter(
+        h.sockets[0].send.mock.calls.filter(
           ([message]) => JSON.parse(message).method === "relay.start.request",
         ),
       ).toHaveLength(1);
@@ -703,13 +705,13 @@ describe("Rust v1 connection", () => {
       h.ready();
       await connected;
       const first = client.readFile("/workspace", "one.rs", "file-one");
-      const firstId = h.last(2).request_id;
+      const firstId = h.last(0).request_id;
       const second = client.readFile("/workspace", "two.rs", "file-two-longer");
-      const secondId = h.last(2).request_id;
+      const secondId = h.last(0).request_id;
       void Promise.all([first, second]).then(completed, failed);
       expect([firstId, secondId]).toEqual(["file-one", "file-two-longer"]);
       for (const id of [firstId, secondId]) {
-        h.sockets[2].message(
+        h.sockets[0].message(
           encodeFileTransferFrame({
             opcode: FileTransferOpcode.FileBegin,
             requestId: id,
@@ -727,7 +729,7 @@ describe("Rust v1 connection", () => {
         [secondId, "two"],
         [firstId, "one"],
       ]) {
-        h.sockets[2].message(
+        h.sockets[0].message(
           encodeFileTransferFrame({
             opcode: FileTransferOpcode.FileChunk,
             requestId: id,
@@ -735,7 +737,7 @@ describe("Rust v1 connection", () => {
           }),
           true,
         );
-        h.sockets[2].message(
+        h.sockets[0].message(
           encodeFileTransferFrame({
             opcode: FileTransferOpcode.FileEnd,
             requestId: id,
@@ -1130,7 +1132,7 @@ describe("Rust v1 connection", () => {
       });
       const update = vi.fn();
       subscription.subscribe({ snapshot: () => {}, update });
-      const request = h.last(1);
+      const request = h.last(0);
       expect(request.method).toBe("terminal.list.subscribe.request");
       const snapshot = {
         subscriptionId: "terminal-list",
@@ -1138,13 +1140,13 @@ describe("Rust v1 connection", () => {
         workspaceId: "workspace",
         terminals: [],
       };
-      h.sockets[1].message({
+      h.sockets[0].message({
         type: "response",
         request_id: request.request_id,
         result: snapshot,
       });
       await expect(subscription.ready).resolves.toMatchObject(snapshot);
-      h.sockets[1].message({
+      h.sockets[0].message({
         type: "event",
         method: "terminal.list.changed",
         params: snapshot,
@@ -1156,10 +1158,10 @@ describe("Rust v1 connection", () => {
       expect(client.isConnected).toBe(true);
       expect(h.sockets.every((socket) => socket.close.mock.calls.length === 0)).toBe(true);
       const released = subscription.release();
-      await vi.waitFor(() => expect(h.last(1).method).toBe("subscription.release.request"));
-      h.sockets[1].message({
+      await vi.waitFor(() => expect(h.last(0).method).toBe("subscription.release.request"));
+      h.sockets[0].message({
         type: "response",
-        request_id: h.last(1).request_id,
+        request_id: h.last(0).request_id,
         result: { subscriptionId: "terminal-list", released: true },
       });
       await released;
@@ -1310,7 +1312,7 @@ describe("Rust v1 connection", () => {
         (error: Error) => ({ error: error.message }),
       );
       await vi.advanceTimersByTimeAsync(0);
-      const cloneRequest = h.last(1);
+      const cloneRequest = h.last(0);
       expect(cloneRequest.method).toBe("project.github.clone.request");
       expect(cloneRequest.params).toMatchObject({
         repo: "https://github.com/acme/app.git",
@@ -1334,7 +1336,7 @@ describe("Rust v1 connection", () => {
         projectRootPath: "/repo/app",
         projectKind: "git",
       };
-      h.sockets[1].message({
+      h.sockets[0].message({
         type: "response",
         request_id: cloneRequest.request_id,
         result: { repo: "acme/app", checkoutPath: "/repo/app", project, error: null },

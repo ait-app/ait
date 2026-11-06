@@ -677,7 +677,7 @@ test("an eviction starts and acknowledges B before A returns its late subscripti
     requests.filter((request) => request.type === "agent.timeline.set_subscription.request");
   try {
     const connected = client.connect();
-    expect(openChannels).toHaveLength(4);
+    expect(openChannels).toHaveLength(1);
     for (const open of openChannels) open();
     await connected;
     world.sync.replaceVisibleAgentIds("workspace", [
