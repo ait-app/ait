@@ -173,6 +173,18 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
         Err(AgentSessionError::Rejected)
     }
 
+    /// Begin an action using the latest saved next-turn selections rather than an old owner copy.
+    /// `config` comes from the registry; unsupported actions retain the ordinary owner path.
+    /// Returns a detached receipt or native validation/availability errors.
+    async fn begin_configured_action(
+        &mut self,
+        action: &str,
+        arguments: &serde_json::Value,
+        _config: &StoredAgentConfig,
+    ) -> Result<AgentSessionFuture<'static, serde_json::Value>, AgentSessionError> {
+        self.begin_action(action, arguments).await
+    }
+
     /// Validate a proposed configuration against this session's native constraints.
     /// `config` is the proposed configuration; success permits further catalog validation.
     /// # Errors
@@ -484,6 +496,16 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
     /// Returns unsupported settings or unavailable native discovery.
     async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
         self.validate_config(&spec.config)
+    }
+
+    /// Expand provider-owned grouped selections before validation and durable storage.
+    /// `spec` contains the proposed settings; unrelated fields must remain unchanged.
+    /// Returns malformed or unavailable selections without changing native configuration.
+    async fn resolve_selection(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<StoredAgentConfig, AgentSessionError> {
+        Ok(spec.config.clone())
     }
 
     /// Inspect launch and authentication availability without exposing credentials.

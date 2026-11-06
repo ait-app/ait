@@ -32,6 +32,12 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             value.is_empty() || value.len() > 128 || value.chars().any(char::is_control)
         })
         || config.feature_values.iter().flatten().any(|(key, value)| {
+            if matches!(
+                key.as_str(),
+                "modelPreset" | "modelPresetThinking" | "modelPresetRoles"
+            ) {
+                return !super::roles::valid_preset(key, value);
+            }
             if super::roles::is_key(key) {
                 return !super::roles::valid(key, value);
             }
@@ -151,6 +157,7 @@ pub(super) async fn apply(
     }
     for (id, value) in config.feature_values.iter().flatten() {
         let kind = match id.as_str() {
+            "modelPreset" | "modelPresetThinking" | "modelPresetRoles" => continue,
             id if super::roles::is_key(id) => continue,
             "transport" => continue,
             "autoCompaction" => "set_auto_compaction",

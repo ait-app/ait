@@ -298,6 +298,56 @@ impl Transport {
         }
     }
 
+    /// Execute a known local command on an isolated metadata reader, awaiting its final receipt.
+    /// Admission alone is insufficient for extension handlers. Agent work, rejection, oversized
+    /// output and missing completion remain errors; this must never run on a conversation owner.
+    pub(super) async fn local_command(
+        &mut self,
+        message: &str,
+    ) -> Result<Vec<Value>, AgentSessionError> {
+        let id = self.begin("prompt", json!({"message":message})).await?;
+        tokio::time::timeout(self.deadline, async {
+            let mut admitted = false;
+            let mut completed = false;
+            let mut events = Vec::new();
+            let mut bytes = 0;
+            while !admitted || !completed {
+                let event = match self.poll()? {
+                    Some(event) => event,
+                    None => self
+                        .messages
+                        .recv()
+                        .await
+                        .ok_or(AgentSessionError::Failed)?,
+                };
+                if event["type"] == "response" && event["id"] == id {
+                    if event["command"] != "prompt" || event["success"] != true {
+                        return Err(AgentSessionError::Rejected);
+                    }
+                    if event["data"]["agentInvoked"] == true {
+                        return Err(AgentSessionError::Rejected);
+                    }
+                    admitted = true;
+                    completed |= event["data"]["agentInvoked"] == false;
+                } else if event["type"] == "prompt_result" && event["id"] == id {
+                    if event["agentInvoked"] != false || event["status"] != "completed" {
+                        return Err(AgentSessionError::Rejected);
+                    }
+                    completed = true;
+                } else {
+                    bytes += event.to_string().len();
+                    if events.len() >= 4096 || bytes > MAX_BUFFER {
+                        return Err(AgentSessionError::Failed);
+                    }
+                    events.push(event);
+                }
+            }
+            Ok(events)
+        })
+        .await
+        .map_err(|_| AgentSessionError::Failed)?
+    }
+
     pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {
         if self.closed {
             return Ok(());

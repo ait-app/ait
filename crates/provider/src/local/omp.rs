@@ -283,6 +283,27 @@ impl AgentClient for OmpClient {
         Ok(())
     }
 
+    async fn resolve_selection(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<StoredAgentConfig, AgentSessionError> {
+        config::validate_spec(spec)?;
+        if !spec
+            .config
+            .feature_values
+            .as_ref()
+            .is_some_and(|values| values.get("modelPreset").is_some_and(Value::is_string))
+        {
+            return Ok(spec.config.clone());
+        }
+        if self.cached_roles(&spec.cwd)?.is_none() {
+            self.discover(&spec.cwd).await?;
+        }
+        self.cached_roles(&spec.cwd)?
+            .ok_or(AgentSessionError::Failed)?
+            .resolve_preset(&spec.config)
+    }
+
     fn settings(&self, config: &StoredAgentConfig) -> Value {
         let mut features = config::features(config, config::ServiceTiers::default());
         features.extend(roles::stored_features(config));

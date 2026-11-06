@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useFileDownload } from "@/hooks/use-file-download";
+import { useQueryClient } from "@tanstack/react-query";
+import { refreshOmpModelsOnAccess } from "@/data/providers-snapshot";
 
 function ActionChoice({
   value,
@@ -59,6 +61,7 @@ export function ProviderNativeActions({
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
+  const queryClient = useQueryClient();
   const download = useFileDownload({ serverId, workspaceId, workspaceRoot: cwd });
   const [expanded, setExpanded] = useState(false);
   const [actionId, setActionId] = useState(
@@ -88,6 +91,13 @@ export function ProviderNativeActions({
     } catch (cause) {
       const error = cause instanceof Error ? cause.message : String(cause);
       setOutcomes((current) => ({ ...current, [id]: { ...current[id], pending: false, error } }));
+    } finally {
+      if (id === "model_preset_save" || id === "model_preset_delete") {
+        void refreshOmpModelsOnAccess({ client, queryClient, serverId, cwd }).catch((cause) => {
+          const error = cause instanceof Error ? cause.message : String(cause);
+          setOutcomes((current) => ({ ...current, [id]: { ...current[id], error } }));
+        });
+      }
     }
   };
   return (

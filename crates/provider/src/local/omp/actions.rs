@@ -214,6 +214,21 @@ fn session_actions() -> Vec<Value> {
         action("get_entries", "Session entries", vec![]),
         action("get_branch_messages", "Branch points", vec![]),
         action(
+            "model_preset_save",
+            "Save current models as a global OMP preset",
+            vec![field(
+                "name",
+                "Preset name (overwrites a global preset of the same name)",
+                &[],
+                true,
+            )],
+        ),
+        action(
+            "model_preset_delete",
+            "Delete a global OMP model preset",
+            vec![field("name", "Preset name", &[], true)],
+        ),
+        action(
             "goal",
             "Native goal",
             vec![

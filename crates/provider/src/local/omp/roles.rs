@@ -1,11 +1,13 @@
 //! Native model-role discovery and per-session config overlays; user settings stay owned by OMP.
 
+mod presets;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Write,
 };
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::process::Command;
 
@@ -34,7 +36,7 @@ const BUILTINS: &[(&str, &str)] = &[
     ("judge", "Judge"),
 ];
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct Model {
     selector: String,
     name: String,
@@ -59,6 +61,7 @@ pub(super) struct Catalog {
     roles: Vec<Role>,
     inherited: BTreeMap<String, String>,
     models: Vec<Model>,
+    presets: presets::Presets,
 }
 
 impl Catalog {
@@ -71,12 +74,15 @@ impl Catalog {
         let models = read(client, cwd, &["models", "--kind", "all", "--json"]).await?;
         // Native list redacts credentials. Retain only this explicit configuration allowlist.
         let entry = |key: &str| json!({"key":key,"value":settings[key]["value"]});
-        Self::parse(
+        let mut catalog = Self::parse(
             &entry("modelRoles"),
             &entry("modelTags"),
             &entry("cycleOrder"),
             &models,
-        ).inspect_err(|error|tracing::warn!(phase="role_catalog",error=?error,"OMP native metadata validation failed"))
+        ).inspect_err(|error|tracing::warn!(phase="role_catalog",error=?error,"OMP native metadata validation failed"))?;
+        catalog.presets = presets::read(client, cwd, &settings, &catalog).await?;
+        catalog.check_size()?;
+        Ok(catalog)
     }
 
     fn parse(
@@ -169,6 +175,7 @@ impl Catalog {
             roles,
             inherited,
             models,
+            presets: presets::Presets::default(),
         };
         catalog.check_size()?;
         Ok(catalog)
@@ -189,15 +196,22 @@ impl Catalog {
     /// Validate explicit role assignments against this profile's real role and model pools.
     /// Inherited roles remain native; invalid models or incompatible catalog kinds reject.
     pub(super) fn validate(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+        let captured = captured_roles(config)?;
         for (key, value) in config.feature_values.iter().flatten() {
             let Some(role) = key.strip_prefix(PREFIX) else {
                 continue;
             };
-            if !self.roles.iter().any(|known| known.id == role) {
+            let value = value.as_str().ok_or(AgentSessionError::Rejected)?;
+            if !self.roles.iter().any(|known| known.id == role)
+                && !self.presets.has_role(role)
+                && !captured.contains_key(role)
+                && !matches!(value, INHERIT | "unset")
+            {
                 return Err(AgentSessionError::Rejected);
             }
-            let value = value.as_str().ok_or(AgentSessionError::Rejected)?;
-            if value != INHERIT
+            if !matches!(value, INHERIT | "unset")
+                && !self.presets.has_assignment(role, value)
+                && captured.get(role).map(String::as_str) != Some(value)
                 && !self
                     .models
                     .iter()
@@ -211,7 +225,8 @@ impl Catalog {
 
     /// Render standard select controls with actual native choices and explicit inheritance.
     pub(super) fn features(&self, config: &StoredAgentConfig) -> Vec<Value> {
-        self.roles
+        let mut features: Vec<_> = self
+            .roles
             .iter()
             .map(|role| {
                 let inherited = self.inherited.get(&role.id).map_or_else(
@@ -219,15 +234,36 @@ impl Catalog {
                     |selector| format!("Use OMP setting ({selector})"),
                 );
                 let mut options = vec![json!({"id":INHERIT,"label":inherited,"isDefault":true})];
+                if self.presets.has_entries()
+                    || config
+                        .feature_values
+                        .as_ref()
+                        .and_then(|values| values.get(&format!("{PREFIX}{}", role.id)))
+                        == Some(&json!("unset"))
+                {
+                    options.push(json!({"id":"unset","label":"Unassigned"}));
+                }
                 options.extend(
                     self.models
                         .iter()
                         .filter(|model| accepts(&role.id, model))
                         .flat_map(model_options),
                 );
+                self.presets.append_role_options(&role.id, &mut options);
                 feature(role, config, options)
             })
-            .collect()
+            .collect();
+        self.presets.append_features(config, &mut features);
+        features
+    }
+
+    /// Expand an explicit preset request into one stable, private next-turn configuration.
+    /// Missing, malformed or unavailable presets reject before any settings are persisted.
+    pub(super) fn resolve_preset(
+        &self,
+        config: &StoredAgentConfig,
+    ) -> Result<StoredAgentConfig, AgentSessionError> {
+        self.presets.resolve(config)
     }
 
     /// Append role controls without altering the current conversation's model catalog.
@@ -322,12 +358,75 @@ pub(super) fn is_key(key: &str) -> bool {
     key.starts_with(PREFIX)
 }
 
+/// Validate native preset feature values before an owning-directory lookup.
+pub(super) fn valid_preset(key: &str, value: &Value) -> bool {
+    match key {
+        "modelPreset" => {
+            value.is_null()
+                || value
+                    .as_str()
+                    .is_some_and(|name| name == "__custom__" || presets::valid_name(name))
+        }
+        "modelPresetThinking" => {
+            value.is_null() || value.as_str().is_some_and(presets::valid_thinking)
+        }
+        "modelPresetRoles" => value
+            .as_str()
+            .is_some_and(|value| parse_captured_roles(value).is_ok()),
+        _ => false,
+    }
+}
+
+fn parse_captured_roles(value: &str) -> Result<BTreeMap<String, String>, AgentSessionError> {
+    if value.len() > 65536 {
+        return Err(AgentSessionError::Rejected);
+    }
+    let roles: BTreeMap<String, String> =
+        serde_json::from_str(value).map_err(|_| AgentSessionError::Rejected)?;
+    if roles.len() > 128
+        || roles
+            .iter()
+            .any(|(role, selector)| !valid(&format!("{PREFIX}{role}"), &json!(selector)))
+    {
+        return Err(AgentSessionError::Rejected);
+    }
+    Ok(roles)
+}
+
+fn captured_roles(
+    config: &StoredAgentConfig,
+) -> Result<BTreeMap<String, String>, AgentSessionError> {
+    config
+        .feature_values
+        .as_ref()
+        .and_then(|values| values.get("modelPresetRoles"))
+        .and_then(Value::as_str)
+        .map(parse_captured_roles)
+        .transpose()
+        .map(Option::unwrap_or_default)
+}
+
+/// Run an explicit preset save/delete through an isolated official native owner.
+/// The future changes only the named global preset; role selection remains private to Ait.
+pub(super) fn manage_preset(
+    client: OmpClient,
+    cwd: String,
+    config: StoredAgentConfig,
+    action: &str,
+    arguments: &Value,
+) -> Result<crate::ports::agent_session::AgentSessionFuture<'static, Value>, AgentSessionError> {
+    presets::management::begin(client, cwd, config, action, arguments)
+}
+
 /// Validate one role feature's bounded shape before native lookup.
 pub(super) fn valid(key: &str, value: &Value) -> bool {
     key.strip_prefix(PREFIX).is_some_and(valid_role)
-        && value
-            .as_str()
-            .is_some_and(|value| value == INHERIT || valid_selector(value))
+        && value.as_str().is_some_and(|value| {
+            matches!(value, INHERIT | "unset")
+                || (!value.is_empty()
+                    && value.len() <= 2048
+                    && !value.chars().any(char::is_control))
+        })
 }
 
 fn valid_role(role: &str) -> bool {
@@ -396,11 +495,31 @@ pub(super) async fn overlay(
     config: &StoredAgentConfig,
 ) -> Result<Option<tempfile::NamedTempFile>, AgentSessionError> {
     let assignments = overrides(config);
-    if assignments.is_empty() {
+    let thinking = config
+        .feature_values
+        .as_ref()
+        .and_then(|values| values.get("modelPresetThinking"));
+    if assignments.is_empty() && thinking.is_none_or(Value::is_null) {
         return Ok(None);
     }
-    let bytes = serde_json::to_vec(&json!({"modelRoles":assignments}))
-        .map_err(|_| AgentSessionError::Rejected)?;
+    let assignments: BTreeMap<_, _> = assignments
+        .into_iter()
+        .map(|(role, selector)| {
+            (
+                role,
+                if selector == "unset" {
+                    Value::Null
+                } else {
+                    json!(selector)
+                },
+            )
+        })
+        .collect();
+    let mut overlay = json!({"modelRoles":assignments});
+    if let Some(thinking) = thinking.filter(|value| !value.is_null()) {
+        overlay["defaultThinkingLevel"] = thinking.clone();
+    }
+    let bytes = serde_json::to_vec(&overlay).map_err(|_| AgentSessionError::Rejected)?;
     tokio::task::spawn_blocking(move || {
         let mut file = tempfile::Builder::new()
             .prefix("ait-omp-roles-")

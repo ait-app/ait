@@ -38,6 +38,7 @@ const THINKING_LABEL_KEYS = new Map([
 ]);
 
 const FEATURE_LABEL_KEYS = new Map([
+  ["modelPreset", "providerControl.modelPreset"],
   ["autoCompaction", "agentControls.features.autoCompaction"],
   ["autoRetry", "agentControls.features.autoRetry"],
   ["fastMode", "agentControls.features.fastMode"],

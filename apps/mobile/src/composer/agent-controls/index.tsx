@@ -106,6 +106,7 @@ import {
 } from "@/agent-profiles";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 import { mergeRoleChoices } from "./role-choices";
+import { modelPresetConfiguration, withModelPresetSelection } from "@/agent-controls/model-presets";
 
 interface AgentControlOption {
   id: string;
@@ -524,6 +525,22 @@ function ControlledAgentControls({
     () =>
       nativeFeatures?.map((feature) => {
         const label = formatAgentFeatureLabel(feature, t);
+        if (
+          feature.type === "select" &&
+          (feature.id === "modelPreset" || feature.id.startsWith("modelRole."))
+        ) {
+          return {
+            ...feature,
+            label,
+            options: feature.options.map((option) => {
+              if (feature.id === "modelPreset" && option.id === "__custom__")
+                return { ...option, label: t("providerControl.customModels") };
+              if (feature.id.startsWith("modelRole.") && option.id === "unset")
+                return { ...option, label: t("providerControl.unassignedModel") };
+              return option;
+            }),
+          };
+        }
         return label === feature.label ? feature : { ...feature, label };
       }),
     [nativeFeatures, t],
@@ -667,6 +684,7 @@ function ControlledAgentControls({
       if (
         selector === "provider" ||
         selector === "thinking" ||
+        selector === "feature-modelPreset" ||
         selector.startsWith("feature-modelRole.")
       )
         onModelSelectorOpen?.();
@@ -774,7 +792,8 @@ function ControlledAgentControls({
 
   const handleSetFeature = useCallback(
     (featureId: string, value: unknown) => {
-      if (featureId.startsWith("modelRole.")) onModelSelectorOpen?.();
+      if (featureId.startsWith("modelRole.") || featureId === "modelPreset")
+        onModelSelectorOpen?.();
       onSetFeature?.(featureId, value);
     },
     [onModelSelectorOpen, onSetFeature],
@@ -1700,9 +1719,12 @@ export const AgentControls = memo(function AgentControls({
   const features = useMemo(
     () =>
       agent?.provider === "omp"
-        ? mergeRoleChoices(agent.features, roleChoices.data)
+        ? withModelPresetSelection(mergeRoleChoices(agent.features, roleChoices.data) ?? [], {
+            modelId: agent.model,
+            thinkingOptionId: agent.thinkingOptionId,
+          })
         : agent?.features,
-    [agent?.provider, agent?.features, roleChoices.data],
+    [agent?.provider, agent?.features, agent?.model, agent?.thinkingOptionId, roleChoices.data],
   );
 
   const models = filterSelectableModels(snapshotSelectedEntry?.models ?? null);
@@ -1768,7 +1790,7 @@ export const AgentControls = memo(function AgentControls({
         toast.error(toErrorMessage(error));
       }
     },
-    [agentId, agentProvider, client, toast, updatePreferences],
+    [agentId, agentProvider, client, toast, updatePreferences, features],
   );
   const handleSelectCommandCenterModel = useCallback(
     (_provider: AgentProvider, modelId: string) => handleSelectModel(modelId),
@@ -1830,6 +1852,19 @@ export const AgentControls = memo(function AgentControls({
   const handleSetFeature = useCallback(
     (featureId: string, value: unknown) => {
       if (!client || !agentProvider) {
+        return;
+      }
+      try {
+        const preset = modelPresetConfiguration(features, featureId, value);
+        if (preset) {
+          void client
+            .applyAgentConfig(agentId, preset)
+            .then((notice) => showProviderNoticeToast(toast, notice))
+            .catch((error) => toast.error(toErrorMessage(error)));
+          return;
+        }
+      } catch (error) {
+        toast.error(toErrorMessage(error));
         return;
       }
       void updatePreferences((current) =>

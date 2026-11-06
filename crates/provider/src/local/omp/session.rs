@@ -97,6 +97,18 @@ pub(super) async fn probe_config(
     model: Option<&str>,
     config: Option<&StoredAgentConfig>,
 ) -> Result<Transport, AgentSessionError> {
+    probe_config_with_extension(client, cwd, model, config, None).await
+}
+
+/// Load one temporary public extension in an isolated metadata reader.
+/// The caller retains `extension` until initialization and close have completed.
+pub(super) async fn probe_config_with_extension(
+    client: &OmpClient,
+    cwd: &str,
+    model: Option<&str>,
+    config: Option<&StoredAgentConfig>,
+    extension: Option<&std::path::Path>,
+) -> Result<Transport, AgentSessionError> {
     config::validate_spec(&AgentSessionSpec {
         provider: "omp".to_owned(),
         cwd: cwd.to_owned(),
@@ -108,6 +120,15 @@ pub(super) async fn probe_config(
         "--no-session".to_owned(),
     ];
     let route = model.map(config::model_route).transpose()?;
+    if let Some(extension) = extension {
+        args.push("--extension".to_owned());
+        args.push(
+            extension
+                .to_str()
+                .ok_or(AgentSessionError::Failed)?
+                .to_owned(),
+        );
+    }
     let configuration = if let Some(config) = config {
         super::roles::overlay(config).await?
     } else {
@@ -991,6 +1012,15 @@ impl AgentSession for Session {
         if self.closed {
             return Err(AgentSessionError::Unavailable);
         }
+        if matches!(action, "model_preset_save" | "model_preset_delete") {
+            return super::roles::manage_preset(
+                self.client.clone(),
+                self.cwd.clone(),
+                self.config.clone(),
+                action,
+                arguments,
+            );
+        }
         if (self.actions.changing_history() && action != "abort_branch_summary")
             || (super::actions::changes_history(action) && self.active.is_some())
         {
@@ -1008,6 +1038,27 @@ impl AgentSession for Session {
             self.navigation_target = target;
         }
         Ok(self.actions.insert(id, action))
+    }
+
+    async fn begin_configured_action(
+        &mut self,
+        action: &str,
+        arguments: &Value,
+        config: &StoredAgentConfig,
+    ) -> Result<AgentSessionFuture<'static, Value>, AgentSessionError> {
+        if self.closed {
+            return Err(AgentSessionError::Unavailable);
+        }
+        if matches!(action, "model_preset_save" | "model_preset_delete") {
+            return super::roles::manage_preset(
+                self.client.clone(),
+                self.cwd.clone(),
+                config.clone(),
+                action,
+                arguments,
+            );
+        }
+        self.begin_action(action, arguments).await
     }
 
     fn failure_diagnostic(&self) -> Option<Diagnostic> {

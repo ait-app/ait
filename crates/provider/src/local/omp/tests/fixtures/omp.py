@@ -19,7 +19,14 @@ if args[:1] in (['config'], ['models']):
     with (root / 'metadata-calls.jsonl').open('a') as output:
         output.write(json.dumps(args) + '\n')
 if args[:2] == ['config', 'list']:
-    values = {'modelRoles': roles, 'modelTags': {}, 'cycleOrder': ['smol', 'default', 'slow']}
+    def presets(scope):
+        file = root / (scope + '-presets.json')
+        return json.loads(file.read_text()) if file.exists() else {}
+    saved = {**presets('global'), **presets('project')}
+    if '--scope' in args:
+        saved = presets(args[args.index('--scope') + 1])
+    values = {'modelRoles': roles, 'modelTags': {}, 'cycleOrder': ['smol', 'default', 'slow'],
+              'modelPresets': saved, 'defaultThinkingLevel': 'off'}
     for key, name in [('modelTags', 'model-tags.json'), ('cycleOrder', 'cycle-order.json')]:
         file = root / name
         if file.exists():
@@ -34,10 +41,10 @@ if args[:1] == ['models']:
         *[{'selector': 'test/' + kind, 'name': kind, 'kind': kind} for kind in ['tiny', 'image', 'search', 'tts', 'stt', 'judge']]
     ]}))
     sys.exit(0)
-if '--config' in args:
-    roles.update(json.loads(Path(args[args.index('--config') + 1]).read_text()).get('modelRoles', {}))
+overlay = json.loads(Path(args[args.index('--config') + 1]).read_text()) if '--config' in args else {}
+roles.update(overlay.get('modelRoles', {}))
 with log.open('a') as output:
-    output.write(json.dumps({'args': args, 'modelRoles': roles}) + '\n')
+    output.write(json.dumps({'args': args, 'modelRoles': roles, 'defaultThinkingLevel': overlay.get('defaultThinkingLevel')}) + '\n')
 file = Path(args[args.index('--resume') + 1]) if '--resume' in args else None
 records = []
 if file and file.exists():
@@ -57,12 +64,21 @@ models = [
      'thinking': {'mode': 'effort', 'efforts': ['low', 'high', 'max']}, 'contextWindow': 32768},
 ]
 model = models[0]
-model = next((item for item in models if item['provider'] + '/' + item['id'] == roles.get('default')), model)
+default = roles.get('default')
+for _ in range(128):
+    if not isinstance(default, str) or not default.startswith('@'):
+        break
+    default = roles.get(default[1:])
+default = default or 'test/model'
+selector, separator, effort = default.rpartition(':')
+if not separator:
+    selector, effort = default, overlay.get('defaultThinkingLevel', 'off')
+model = next((item for item in models if item['provider'] + '/' + item['id'] == selector), model)
 if '--provider' in args and '--model' in args:
     provider = args[args.index('--provider') + 1]
     model_id = args[args.index('--model') + 1]
     model = next((item for item in models if item['provider'] == provider and item['id'] == model_id), model)
-level = 'off'
+level = effort
 active = False
 prompt_id = None
 pending_plugin = None
@@ -190,7 +206,14 @@ for line in sys.stdin:
     elif kind == 'get_subagents':
         response(command, {'subagents': []})
     elif kind == 'get_available_commands':
-        response(command, {'commands': [{'name': 'review', 'description': 'Review', 'source': 'skill'}, *json.loads((root/'plugins.json').read_text())] if (root/'plugins.json').exists() else [{'name': 'review', 'description': 'Review', 'source': 'skill'}]})
+        commands = [{'name': 'review', 'description': 'Review', 'source': 'skill'}]
+        if not (root/'missing-preset-builtin').exists():
+            commands.append({'name':'modelpreset','description':'Model presets','source':'builtin'})
+        if (root/'plugins.json').exists():
+            commands.extend(json.loads((root/'plugins.json').read_text()))
+        if '--extension' in args and not (root/'missing-preset-helper').exists():
+            commands.append({'name':'ait-read-model-preset-default','description':'Preset reader','source':'extension'})
+        response(command, {'commands':commands})
     elif kind in ('interactive_control', 'login'):
         pending_control=command
         if kind == 'login':
@@ -204,6 +227,30 @@ for line in sys.stdin:
         text = command['message']
         current_prompt = text
         prompt_id = command.get('id')
+        if text == '/ait-read-model-preset-default':
+            response(command)
+            resolved = next(([item['provider'],item['id']] for item in models if item['provider']+'/'+item['id'] == selector),None)
+            emit({'type':'extension_ui_request','id':'preset-default','method':'notify','message':json.dumps({'aitPresetDefault':resolved})})
+            emit({'type':'prompt_result','id':prompt_id,'agentInvoked':False,'status':'completed'})
+            continue
+        if text.startswith('/modelpreset '):
+            _, operation, name = text.split(' ',2)
+            saved_file = root/'global-presets.json'
+            saved = json.loads(saved_file.read_text()) if saved_file.exists() else {}
+            if operation == 'save':
+                saved[name] = {'modelRoles':{key:value for key,value in roles.items() if value},'defaultThinkingLevel':overlay.get('defaultThinkingLevel','off')}
+            elif operation == 'delete':
+                saved.pop(name,None)
+            if operation == 'save' and (root/'preset-write-delay').exists():
+                import threading
+                writer = threading.Timer(0.2,lambda: saved_file.write_text(json.dumps(saved)))
+                writer.daemon = True
+                writer.start()
+            else:
+                saved_file.write_text(json.dumps(saved))
+            emit({'type':'command_output','text':operation+' preset '+name})
+            response(command,{'agentInvoked':False})
+            continue
         if text in ('/fixture-ui', '/fixture-ui-clear'):
             clear = text.endswith('-clear')
             emit({'type':'extension_ui_request','id':'status','method':'setStatus','statusKey':'fixture',**({} if clear else {'statusText':'Ready'})})

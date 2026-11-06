@@ -8,7 +8,7 @@ export function mergeRoleChoices(
   if (!saved || !discovered) return saved;
   const roles = new Map(
     discovered
-      .filter((feature) => feature.id.startsWith("modelRole."))
+      .filter((feature) => feature.id.startsWith("modelRole.") || feature.id === "modelPreset")
       .map((feature) => [feature.id, feature]),
   );
   const merged = saved.map((feature) => {

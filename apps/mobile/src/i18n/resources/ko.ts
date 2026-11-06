@@ -16,6 +16,10 @@ export const ko: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    modelPreset: "OMP 모델 사전 설정",
+    customModels: "사용자 지정 구성",
+    unassignedModel: "미지정",
+    presetUnavailable: "OMP 모델 사전 설정을 사용할 수 없습니다. 모델 목록을 새로 고치세요",
     nativeOperations: "네이티브 작업",
     runOperation: "실행",
     openBrowser: "브라우저에서 열기",

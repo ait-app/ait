@@ -16,6 +16,10 @@ export const ja: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    modelPreset: "OMP モデルプリセット",
+    customModels: "カスタム設定",
+    unassignedModel: "割り当てなし",
+    presetUnavailable: "OMP モデルプリセットを利用できません。モデル一覧を更新してください",
     nativeOperations: "ネイティブ操作",
     runOperation: "実行",
     openBrowser: "ブラウザーで開く",

@@ -11,6 +11,7 @@ mod commands;
 mod diagnostics;
 mod installed;
 mod interactions;
+mod model_presets;
 mod model_roles;
 mod real;
 mod settlement;

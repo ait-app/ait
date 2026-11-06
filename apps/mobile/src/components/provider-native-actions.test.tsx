@@ -5,6 +5,10 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { ProviderNativeActions } from "./provider-native-actions";
 
 const fixture = vi.hoisted(() => ({ run: vi.fn(), download: vi.fn() }));
+vi.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({}) }));
+vi.mock("@/data/providers-snapshot", () => ({
+  refreshOmpModelsOnAccess: vi.fn().mockResolvedValue(null),
+}));
 vi.mock("react-native-unistyles", () => ({
   StyleSheet: {
     create: (factory: (theme: { colors: Record<string, string> }) => unknown) =>

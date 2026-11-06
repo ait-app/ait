@@ -26,7 +26,7 @@ async fn draft_tiers_follow_the_exact_model_without_persisting_native_settings()
         assert_eq!(
             features
                 .iter()
-                .filter(|feature| !feature["id"].as_str().unwrap().starts_with("modelRole."))
+                .filter(|feature| feature["type"] == "toggle")
                 .count(),
             expected
         );
@@ -59,7 +59,7 @@ async fn live_controls_do_not_offer_tiers_for_an_unsupported_model() {
                 .as_array()
                 .unwrap()
                 .iter()
-                .filter(|feature| !feature["id"].as_str().unwrap().starts_with("modelRole."))
+                .filter(|feature| feature["type"] == "toggle")
                 .count(),
             expected
         );
@@ -80,7 +80,7 @@ async fn live_tiers_are_refreshed_after_model_changes_and_never_reused_for_a_pen
                 .as_array()
                 .unwrap()
                 .iter()
-                .filter(|feature| !feature["id"].as_str().unwrap().starts_with("modelRole."))
+                .filter(|feature| feature["type"] == "toggle")
                 .count(),
             2
         );
@@ -92,7 +92,7 @@ async fn live_tiers_are_refreshed_after_model_changes_and_never_reused_for_a_pen
                 .as_array()
                 .unwrap()
                 .iter()
-                .filter(|feature| !feature["id"].as_str().unwrap().starts_with("modelRole."))
+                .filter(|feature| feature["type"] == "toggle")
                 .count(),
             expected
         );

@@ -1,5 +1,9 @@
 export const en = {
   providerControl: {
+    modelPreset: "OMP model preset",
+    customModels: "Custom configuration",
+    unassignedModel: "Unassigned",
+    presetUnavailable: "OMP model preset is unavailable; refresh the model catalog",
     nativeOperations: "Native operations",
     runOperation: "Run",
     openBrowser: "Open in browser",

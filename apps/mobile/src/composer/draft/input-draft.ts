@@ -279,6 +279,14 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
     modelId: effectiveModelId,
     thinkingOptionId: effectiveThinkingOptionId,
     initialFeatureValues: composerOptions?.initialFeatureValues,
+    onApplyModelPreset: (config) =>
+      formState.applyProfileFromUser({
+        provider: formState.selectedProvider ?? "omp",
+        modelId: config.modelId ?? "",
+        modeId: formState.selectedMode,
+        thinkingOptionId: config.thinkingOptionId ?? "",
+        featureValues: config.featureValues ?? {},
+      }),
   });
 
   const applyDraftAgentProfile = useCallback(

@@ -16,6 +16,10 @@ export const ptBR: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    modelPreset: "Predefinição de modelos OMP",
+    customModels: "Configuração personalizada",
+    unassignedModel: "Não atribuído",
+    presetUnavailable: "A predefinição OMP está indisponível; atualize o catálogo de modelos",
     nativeOperations: "Operações nativas",
     runOperation: "Executar",
     openBrowser: "Abrir no navegador",

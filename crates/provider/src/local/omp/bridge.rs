@@ -198,6 +198,17 @@ impl AgentSession for Session {
             .ok_or(AgentSessionError::Unavailable)?
             .validate_config_update(config)
     }
+    async fn begin_configured_action(
+        &mut self,
+        action: &str,
+        arguments: &Value,
+        config: &StoredAgentConfig,
+    ) -> Result<AgentSessionFuture<'static, Value>, AgentSessionError> {
+        self.engine
+            .native_mut()?
+            .begin_configured_action(action, arguments, config)
+            .await
+    }
     fn failure_diagnostic(&self) -> Option<Diagnostic> {
         self.engine
             .native()

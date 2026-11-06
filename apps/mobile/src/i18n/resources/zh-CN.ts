@@ -3,6 +3,10 @@ import { pluginSettings } from "./plugin-settings";
 
 export const zhCN: TranslationResources = {
   providerControl: {
+    modelPreset: "OMP 模型预设",
+    customModels: "自定义配置",
+    unassignedModel: "不分配",
+    presetUnavailable: "OMP 模型预设不可用，请刷新模型目录",
     nativeOperations: "原生操作",
     runOperation: "执行",
     openBrowser: "在浏览器中打开",

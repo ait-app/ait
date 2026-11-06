@@ -23,6 +23,10 @@ export const ru: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    modelPreset: "Набор моделей OMP",
+    customModels: "Своя конфигурация",
+    unassignedModel: "Не назначено",
+    presetUnavailable: "Набор моделей OMP недоступен; обновите каталог моделей",
     nativeOperations: "Нативные операции",
     runOperation: "Выполнить",
     openBrowser: "Открыть в браузере",

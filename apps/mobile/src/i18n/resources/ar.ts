@@ -25,6 +25,10 @@ export const ar: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    modelPreset: "إعداد نماذج OMP",
+    customModels: "إعداد مخصص",
+    unassignedModel: "غير معين",
+    presetUnavailable: "إعداد نماذج OMP غير متاح؛ حدّث دليل النماذج",
     nativeOperations: "العمليات الأصلية",
     runOperation: "تنفيذ",
     openBrowser: "فتح في المتصفح",

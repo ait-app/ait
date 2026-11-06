@@ -138,12 +138,17 @@ Ait 内部已使用同一引擎，不需要另外启动这个进程。
 决策见 [ADR-190](../decisions/providers/adr-190-omp-acp-settlement.md)，
 当前官方 CLI 与插件验证见[报告](../reports/providers/omp-acp-settlement-2026-10-25.md)。
 
-## 原生 model preset 的支持边界
+## 原生 model preset
 
-官方 OMP 18.14.0 提供 `/modelpreset list|save|switch|delete`。Ait 可通过原生命令通道
-转发这些命令；它们由 OMP 处理，原生 `save/delete/switch` 可以修改全局或项目配置。
+OMP 模型控件提供原生预设目录，读取全局与项目定义；同名项目预设整条优先。
+打开、查看或选择模型相关控件时，目录在后台刷新，保留现有缓存与输入能力。
+切换预设会一起更新当前聊天模型、各用途角色及思考强度，使用 Ait 会话的私有快照；
+随后单独改模型或角色时显示为自定义配置，预设删除后已应用的会话仍保留快照。
+这与 Ait Agent Profile 的保存机制相互独立，Profile 可以保存已展开的预设选择。
 
-当前 Ait 的完整适配是单个 `modelRole.*` 的模型、推理档位和继承设置。尚未完成原生 preset
-列表管理、成套应用后的角色/默认思考强度同步，以及 preset 与会话私有 `--config` 覆盖冲突的
-专项验收，因此不把原生 preset 管理列为完整支持。Ait Agent Profile 和 OMP 原生 preset 是
-不同的配置机制。
+“原生操作”中的保存和删除通过官方 `/modelpreset save/delete` 管理指定的全局条目；
+保存使用 Ait 最新的下一轮选择。项目中仍定义同名预设时会报告保留，请在项目配置中删除。
+这些操作不把项目预设复制进全局，也不改写全局或项目角色设置。
+原始 `/modelpreset switch` 仍遵循 OMP 自身的全局/项目写入规则，和 Ait 控件的私有应用范围不同。
+
+实现与约束见 [ADR-220](../decisions/providers/adr-220-omp-model-presets.md)。

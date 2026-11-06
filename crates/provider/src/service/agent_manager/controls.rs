@@ -43,10 +43,17 @@ impl AgentManager {
             }
             self.resume(id).await.map_err(|_| ErrorCode::AgentIo)?;
         }
+        let config = self
+            .registry
+            .get(id)
+            .map_err(|_| ErrorCode::AgentIo)?
+            .ok_or(ErrorCode::AgentNotFound)?
+            .config
+            .unwrap_or_default();
         let agent = self.live.get_mut(id).ok_or(ErrorCode::AgentNotFound)?;
         agent
             .session
-            .begin_action(action, arguments)
+            .begin_configured_action(action, arguments, &config)
             .await
             .map_err(|error| match error {
                 AgentSessionError::Rejected => ErrorCode::InvalidMessage,

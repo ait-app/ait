@@ -87,6 +87,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## Provider、Agent 与会话
 
+- [ADR-220：OMP 原生模型预设与 Ait 模型控件](providers/adr-220-omp-model-presets.md)
+
 - [ADR-218：原生临时界面与拥有者操作](providers/adr-218-native-ui-and-actions.md)
 - [ADR-217：OMP 模型角色配置](providers/adr-217-omp-model-roles.md)
 - [ADR-216：原生控制的延迟确认与文件交付](providers/adr-216-native-control-delivery.md)

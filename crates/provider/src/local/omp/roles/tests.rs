@@ -30,7 +30,7 @@ fn config(role: &str, selector: &str) -> StoredAgentConfig {
 fn role_choices_follow_real_native_catalog_kinds_and_preserve_inherited_selectors() {
     let catalog = catalog();
     let features = catalog.features(&StoredAgentConfig::default());
-    assert_eq!(features.len(), 17);
+    assert_eq!(features.len(), 18);
     for (role, count) in [
         ("default", 2),
         ("smol", 2),

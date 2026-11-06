@@ -35,6 +35,7 @@
 
 - [客户端协议归属](decisions/clients/adr-211-sdk-native-daemon-protocol.md)：SDK 原生使用 Rust v1，应用只选择平台传输。
 - [当前架构](architecture/README.md)：组件职责、依赖、存储和生命周期；[OMP ACP 桥接](architecture/omp-acp-bridge.md)。
+- [OMP 模型预设](decisions/providers/adr-220-omp-model-presets.md)：原生目录缓存、整套私有配置与模型控件同步。
 - [ADR 分类索引](decisions/README.md)：决策及修订关系，完整清单只在此维护。
 - [仓库约定](../AGENTS.md)、[Rust 规范](policy/rust.md)、[文档维护规范](policy/documentation.md)。
 - [Agent 共享读视图](decisions/providers/adr-210-committed-runtime-read-snapshots.md)：已提交记录、目录与 Hub 读取的性能边界。

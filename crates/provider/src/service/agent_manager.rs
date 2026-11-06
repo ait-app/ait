@@ -455,12 +455,27 @@ impl AgentManager {
         ) {
             return Err(AgentManagerError::InvalidRequest);
         }
-        let mut effective = patch.apply(
+        let proposed = patch.apply(
             record
                 .config
                 .as_ref()
                 .unwrap_or(&StoredAgentConfig::default()),
         );
+        let client = self
+            .clients
+            .get(&record.provider)
+            .ok_or_else(|| AgentManagerError::ProviderUnavailable(record.provider.clone()))?;
+        let spec = AgentSessionSpec {
+            provider: record.provider.clone(),
+            cwd: record.cwd.clone(),
+            config: proposed.clone(),
+        };
+        let resolved = client
+            .resolve_selection(&spec)
+            .await
+            .map_err(|_| AgentManagerError::InvalidRequest)?;
+        let patch = patch.resolved(&proposed, &resolved);
+        let mut effective = resolved;
         if let Some(agent) = self.live.get(agent_id) {
             if let Some(binding) = &agent.mcp {
                 binding.apply(&mut effective);
@@ -548,9 +563,13 @@ impl AgentManager {
         }
         let permit = self.reserve_session()?;
         let client = self.available_client(&spec.provider).await?;
+        let spec = AgentSessionSpec {
+            config: client.resolve_selection(spec).await.map_err(map_session)?,
+            ..spec.clone()
+        };
         let (launch, binding) = self.prepare_mcp(
             agent_id,
-            spec,
+            &spec,
             AgentResumePurpose::Interactive,
             &registration.labels,
         )?;
