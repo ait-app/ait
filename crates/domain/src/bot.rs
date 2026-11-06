@@ -13,6 +13,12 @@ pub mod permissions;
 /// Reserved label carrying the Bot scope of an Agent or schedule.
 pub const BOT_SCOPE_LABEL: &str = "ait.bot.scope";
 
+/// Label namespace no MCP caller or guest may write; `BOT_SCOPE_LABEL` lives in it.
+pub const BOT_LABEL_PREFIX: &str = "ait.bot.";
+
+/// Most worktree Workspaces one Bot may record as its own.
+pub const BOT_WORKSPACES: usize = 64;
+
 /// Native execution selection; credentials remain provider-owned.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

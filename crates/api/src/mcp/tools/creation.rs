@@ -178,7 +178,10 @@ fn worktree(arguments: &mut Value, path: Option<Value>) -> Result<Value, ErrorCo
 /// Return the resolved public Agent snapshot for `id` from `state`.
 /// # Errors
 /// Returns missing Agent or existing lookup failures.
-pub(super) async fn require_success(state: &Shared, id: &Value) -> Result<Value, ErrorCode> {
+pub(in crate::mcp) async fn require_success(
+    state: &Shared,
+    id: &Value,
+) -> Result<Value, ErrorCode> {
     let value = rpc::execute(state, "agent.get.request", json!({"agentId":id})).await?;
     if queries::failed(&value) || !value["agent"].is_object() {
         return Err(ErrorCode::InvalidMessage);

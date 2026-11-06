@@ -17,8 +17,8 @@ mod schedules;
 /// Execute `tool` with validated `arguments` using `state`, confining them to `scope` for scoped
 /// credentials and inheriting placement and parentage from the resolved `caller` Agent.
 /// # Errors
-/// Returns scope violations, invalid placement, unavailable services or existing capability RPC
-/// failures.
+/// Returns scope violations, reserved labels, invalid placement, unavailable services or existing
+/// capability RPC failures.
 pub(super) async fn execute(
     state: &Shared,
     tool: &Tool,
@@ -26,14 +26,38 @@ pub(super) async fn execute(
     scope: Option<&Scope>,
     caller: Option<&Value>,
 ) -> Result<Value, ErrorCode> {
-    if let Some(scope) = scope {
-        scope::confine(state, scope, &tool.name, &mut arguments).await?;
+    match scope {
+        Some(scope) => scope::confine(state, scope, &tool.name, &mut arguments, caller).await?,
+        None if matches!(tool.name.as_str(), "create_agent" | "update_agent") => {
+            scope::reserved_labels(&arguments)?;
+        }
+        None => {}
     }
+    let mut result = dispatch(state, tool, arguments, scope, caller).await?;
+    if let Some(scope) = scope {
+        scope::filter(scope, &tool.name, &mut result);
+    }
+    Ok(result)
+}
+
+async fn dispatch(
+    state: &Shared,
+    tool: &Tool,
+    mut arguments: Value,
+    scope: Option<&Scope>,
+    caller: Option<&Value>,
+) -> Result<Value, ErrorCode> {
+    let workspaces = scope.map(Scope::workspaces);
     match tool.name.as_str() {
         "create_agent" => creation::agent(state, arguments, caller).await,
         "create_workspace" => {
+            let project = arguments.get("projectId").cloned();
             let params = creation::workspace(arguments, caller)?;
-            rpc::execute(state, "workspace.create.request", params).await
+            let created = rpc::execute(state, "workspace.create.request", params).await?;
+            if let Some(scope) = scope {
+                scope::adopt(state, scope, project.as_ref(), &created).await?;
+            }
+            Ok(created)
         }
         "create_terminal" => {
             creation::directory(state, &mut arguments, caller).await?;
@@ -44,9 +68,9 @@ pub(super) async fn execute(
             rpc::execute(state, "agent.message.send.request", arguments).await
         }
         "get_agent_status" => queries::status(state, arguments).await,
-        "list_agents" => queries::agents(state, &arguments).await,
+        "list_agents" => queries::agents(state, &arguments, workspaces).await,
         "list_workspaces" => queries::workspaces(state, &arguments).await,
-        "list_pending_permissions" => queries::permissions(state).await,
+        "list_pending_permissions" => queries::permissions(state, workspaces).await,
         "list_profiles" => queries::profiles(state).await,
         "get_agent_activity" => queries::activity(state, arguments).await,
         "inspect_provider" => queries::provider(state, arguments, caller).await,

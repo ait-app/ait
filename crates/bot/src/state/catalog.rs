@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use domain::bot::{Bot, BotState, Catalog, Channel, ChannelConfig, ExecutionConfig, PauseReason};
+use domain::bot::{
+    BOT_WORKSPACES, Bot, BotState, Catalog, Channel, ChannelConfig, ExecutionConfig, PauseReason,
+};
 use domain::{BotId, ChannelId};
 use model::ErrorCode;
 use serde_json::{Value, json};
@@ -16,8 +18,6 @@ use crate::protocol::{
 const LIVE_BOTS: usize = 128;
 /// Most undeleted Channels owned by Bots that are not retired.
 const LIVE_CHANNELS: usize = 256;
-/// Most worktree Workspaces a Bot may have created and still own.
-const BOT_WORKSPACES: usize = 64;
 /// Hard cap on stored Bots; retired Bots keep their history, so it exceeds the live limit.
 const STORED_BOTS: usize = 4096;
 /// Hard cap on stored Channels; deleted Channels keep their history, so it exceeds the live limit.
