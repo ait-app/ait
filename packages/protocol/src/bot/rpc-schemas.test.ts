@@ -5,12 +5,43 @@ import {
   BotRequestSchema,
   BotResponseSchema,
 } from "./rpc-schemas.js";
+import { BotPermissionsSchema } from "./types.js";
 import { SessionInboundMessageSchema, SessionOutboundMessageSchema } from "../messages.js";
 
 describe("Bot wire contract", () => {
-  it("registers all 21 methods and accepts their results in the shared envelope", () => {
+  it("parses permission profiles and the update method", () => {
+    const parsed = BotRequestSchema.parse({
+      type: "bot.permissions.update.request",
+      requestId: "r",
+      workspaceId: "wks_1",
+      permissions: { groups: ["agents"], modes: { codex: ["auto"] } },
+    });
+    expect(parsed.type).toBe("bot.permissions.update.request");
+    expect(() => BotPermissionsSchema.parse({ groups: ["root"], modes: {} })).toThrow();
+    expect(() => BotPermissionsSchema.parse({ groups: [], modes: { codex: [] } })).toThrow();
+    expect(BOT_METHODS).not.toContain("bot.permissions.update.request");
+    expect(
+      BotResponseSchema.parse({
+        type: "bot.permissions.update.response",
+        payload: {
+          requestId: "r",
+          appliesToNextTurn: true,
+          bot: {
+            workspaceId: "wks_1",
+            execution: { provider: "codex", model: null, modeId: null, thinking: null },
+            builtinChannelId: crypto.randomUUID(),
+            state: { kind: "active" },
+            permissions: { groups: ["observe"], modes: {} },
+            createdAt: "2026-01-01T00:00:00Z",
+          },
+        },
+      }).type,
+    ).toBe("bot.permissions.update.response");
+  });
+
+  it("registers all 21 core methods and accepts their results in the shared envelope", () => {
     expect(new Set(BOT_METHODS).size).toBe(21);
-    expect(BOT_REQUEST_SCHEMAS).toHaveLength(21);
+    expect(BOT_REQUEST_SCHEMAS).toHaveLength(22);
     expect(
       SessionInboundMessageSchema.parse({
         type: "bot.conversation.open.request",

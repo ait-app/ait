@@ -1,4 +1,4 @@
-import { BOT_METHODS } from "@ait/protocol/bot/rpc-schemas";
+import { ALL_BOT_METHODS } from "@ait/protocol/bot/rpc-schemas";
 // Ait names declared by Rust capability components.
 // Verify with scripts/check-paseo-client-methods.py.
 import { RELAY_METHODS } from "./relay-methods.js";
@@ -54,7 +54,7 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     response: "share.remove.response",
   },
   ...Object.fromEntries(
-    BOT_METHODS.map((method) => [
+    ALL_BOT_METHODS.map((method) => [
       method,
       {
         method,
