@@ -1613,4 +1613,155 @@ describe("hub features", () => {
     f.h.link.stop();
     await f.manager.logout();
   });
+
+  describe("bulk downloads", () => {
+    const CENTER = "https://aitapp.cn/api";
+    const BULK = ["credit", "download"];
+
+    /** Signed in to a center with `bulk`, with the main link online and `remote` listed. */
+    async function bulkFixture(features = [...FEATURES, "bulk"]) {
+      const f = featureFixture(features);
+      const main = await f.online({ f: FEATURES, ping_seconds: 3600 });
+      main.receive(
+        { t: "hosts", seq: 1, ver: 1, full: true },
+        JSON.stringify({ hosts: [hubHost] }),
+      );
+      const tickets = () =>
+        f.http.mock.calls
+          .filter(([url]) => String(url).endsWith("/hub-tickets"))
+          .map(([, options]) => JSON.parse(String(options?.body)));
+      return { ...f, main, tickets };
+    }
+
+    /** Open a download and complete the handshake of the bulk link it creates. */
+    async function bulkDownload(f: Awaited<ReturnType<typeof bulkFixture>>, token = "token") {
+      const pending = f.manager.openHubDownload("remote", token, CENTER);
+      await vi.advanceTimersByTimeAsync(1);
+      const bulk = f.h.socket();
+      expect(bulk).not.toBe(f.main);
+      bulk.open();
+      bulk.welcome({ link: "bulk-1", f: BULK, ping_seconds: 3600 });
+      return { bulk, session: (await pending)! };
+    }
+
+    it("opens downloads on a bulk link and keeps RPC sessions on the main link", async () => {
+      const f = await bulkFixture();
+      expect(f.tickets()).toEqual([]);
+      const first = f.manager.openHubDownload("remote", "token-1", CENTER);
+      const second = f.manager.openHubDownload("remote", "token-2", CENTER);
+      await vi.advanceTimersByTimeAsync(1);
+      // Concurrent first downloads share one bulk link.
+      expect(f.tickets()).toEqual([{ ep: "access", lane: "bulk" }]);
+      expect(f.h.sockets).toHaveLength(2);
+      const bulk = f.h.socket();
+      expect(bulk.options?.headers?.Authorization).toBe(`Bearer ${"1".padStart(64, "0")}`);
+      bulk.open();
+      expect(bulk.frames("hello")).toEqual([{ t: "hello", v: 1, resume: null, f: BULK }]);
+      bulk.welcome({ link: "bulk-1", f: BULK, ping_seconds: 3600 });
+      const [a, b] = await Promise.all([first, second]);
+      expect(bulk.frames("open")).toEqual([
+        { t: "open", seq: 1, s: a!.id, to: { node: "other" }, k: "download", w: 1024 * 1024 },
+        { t: "open", seq: 2, s: b!.id, to: { node: "other" }, k: "download", w: 1024 * 1024 },
+      ]);
+      const rpc = f.h.link.openSession("other");
+      rpc.send("hello");
+      expect(f.main.frames("open")).toEqual([
+        { t: "open", seq: 1, s: rpc.id, to: { node: "other" }, w: 1024 * 1024 },
+      ]);
+      expect(bulk.frames().map((frame) => frame.t)).toEqual(["hello", "open", "open"]);
+      // Later downloads reuse the link.
+      await f.manager.openHubDownload("remote", "token-3", CENTER);
+      expect(f.tickets()).toHaveLength(1);
+      expect(bulk.frames("open")).toHaveLength(3);
+      f.h.link.stop();
+      await f.manager.logout();
+    });
+
+    it("closes the bulk link a minute after its last download and reopens it on demand", async () => {
+      const f = await bulkFixture();
+      const { bulk, session } = await bulkDownload(f);
+      bulk.receive({ t: "accept", seq: 1, s: session.id, w: 65_536 });
+      bulk.receive({ t: "close", seq: 2, s: session.id, code: "done" });
+      await vi.advanceTimersByTimeAsync(59_000);
+      expect(bulk.close).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(bulk.close).toHaveBeenCalled();
+      expect(f.main.close).not.toHaveBeenCalled();
+      const next = await bulkDownload(f);
+      expect(next.bulk).not.toBe(bulk);
+      expect(next.bulk.frames("open")).toEqual([expect.objectContaining({ s: next.session.id })]);
+      expect(f.tickets()).toEqual([
+        { ep: "access", lane: "bulk" },
+        { ep: "access", lane: "bulk" },
+      ]);
+      f.h.link.stop();
+      await f.manager.logout();
+    });
+
+    it.each(["ticket", "socket"])(
+      "opens the download on the main link when the bulk %s fails",
+      async (failure) => {
+        const f = await bulkFixture();
+        const original = f.http.getMockImplementation()!;
+        if (failure === "ticket")
+          f.http.mockImplementation(async (url, options) =>
+            String(options?.body).includes("bulk")
+              ? Response.json({ error: { code: "unavailable" } }, { status: 503 })
+              : original(url, options),
+          );
+        const pending = f.manager.openHubDownload("remote", "token", CENTER);
+        await vi.advanceTimersByTimeAsync(1);
+        if (failure === "socket") f.h.socket().fail();
+        const session = (await pending)!;
+        expect(f.main.frames("open")).toEqual([
+          {
+            t: "open",
+            seq: 1,
+            s: session.id,
+            to: { node: "other" },
+            k: "download",
+            w: 1024 * 1024,
+          },
+        ]);
+        // Downloads keep using the main link for a while instead of waiting on bulk again.
+        const sockets = f.h.sockets.length;
+        await f.manager.openHubDownload("remote", "token", CENTER);
+        expect(f.tickets()).toHaveLength(1);
+        expect(f.h.sockets).toHaveLength(sockets);
+        expect(f.main.frames("open")).toHaveLength(2);
+        f.h.link.stop();
+        await f.manager.logout();
+      },
+    );
+
+    it("keeps downloads on the main link for centers without bulk", async () => {
+      const f = await bulkFixture(FEATURES);
+      const session = (await f.manager.openHubDownload("remote", "token", CENTER))!;
+      expect(f.main.frames("open")).toEqual([
+        expect.objectContaining({ s: session.id, k: "download" }),
+      ]);
+      expect(f.tickets()).toEqual([]);
+      expect(f.h.sockets).toHaveLength(1);
+      f.h.link.stop();
+      await f.manager.logout();
+    });
+
+    it.each(["suspend", "logout", "stop"])("closes the bulk link on %s", async (action) => {
+      const f = await bulkFixture();
+      const { bulk, session } = await bulkDownload(f);
+      const closed = vi.fn();
+      session.onClose(closed);
+      if (action === "suspend") f.manager.suspend();
+      else if (action === "logout") await f.manager.logout();
+      else f.h.link.stop();
+      expect(bulk.close).toHaveBeenCalled();
+      expect(closed).toHaveBeenCalled();
+      // The bulk link does not reconnect.
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(f.tickets().filter((ticket) => ticket.lane)).toHaveLength(1);
+      expect(bulk.close).toHaveBeenCalledOnce();
+      f.h.link.stop();
+      await f.manager.logout();
+    });
+  });
 });

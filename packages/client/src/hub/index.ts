@@ -1,6 +1,7 @@
 export {
   decodeHubFrame,
   encodeHubFrame,
+  HUB_BULK_FEATURES,
   HUB_FEATURES,
   HUB_MAX_PAYLOAD,
   HUB_PATH,
@@ -8,6 +9,7 @@ export {
   type HubFeature,
   type HubFrame,
   type HubHost,
+  type HubLane,
   type HubPresenceState,
   type HubInboundHeader,
   type HubOutboundHeader,

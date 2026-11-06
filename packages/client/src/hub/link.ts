@@ -5,12 +5,14 @@ import { bindWsHandler, closeWebSocket } from "../daemon-client-websocket-transp
 import {
   decodeHubFrame,
   encodeHubFrame,
+  HUB_BULK_FEATURES,
   HUB_FEATURES,
   HUB_MAX_WINDOW,
   HUB_PATH,
   type HubFeature,
   type HubHost,
   type HubInboundHeader,
+  type HubLane,
   type HubOutboundHeader,
   type HubPresenceState,
   type HubWelcome,
@@ -73,6 +75,14 @@ export interface HubLinkOptions {
   logger?: HubLinkLogger;
   /** Features this endpoint implements; defaults to all of `HUB_FEATURES`. */
   features?: readonly HubFeature[];
+  /**
+   * `bulk`: a download-only link whose tickets are issued for that lane. It announces only
+   * `credit` and `download`, never calls, subscribes or reports state, and is ready without
+   * presence. Defaults to `main`.
+   */
+  lane?: HubLane;
+  /** Stop the link after this long without sessions; the next `start()` creates a new link. */
+  idleMs?: number;
 }
 
 interface LinkIdentity {
@@ -290,6 +300,7 @@ export class HubLink implements HubAccountConnection {
   private graceTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private shareTimer: ReturnType<typeof setTimeout> | null = null;
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly logger: HubLinkLogger;
   private readonly sessionLink: HubSessionLink = {
     recoverLiveness: () => this.recoverLiveness(),
@@ -299,6 +310,7 @@ export class HubLink implements HubAccountConnection {
     },
     release: (id) => {
       this.sessions.delete(id);
+      this.armIdle();
     },
   };
 
@@ -308,6 +320,20 @@ export class HubLink implements HubAccountConnection {
 
   get state(): HubLinkState {
     return this.current;
+  }
+
+  private get bulk(): boolean {
+    return this.options.lane === "bulk";
+  }
+
+  /**
+   * A download-only link (`lane: "bulk"`) with this link's transport, or null when this endpoint
+   * does not implement every bulk feature. `ticket` must issue bulk-lane tickets.
+   */
+  bulkLink(ticket: () => Promise<HubTicket>, idleMs?: number): HubLink | null {
+    const wanted = this.options.features ?? HUB_FEATURES;
+    if (!HUB_BULK_FEATURES.every((feature) => wanted.includes(feature))) return null;
+    return new HubLink({ ...this.options, ticket, lane: "bulk", idleMs });
   }
 
   /** Center of the current link, or null before the first welcome. */
@@ -328,6 +354,8 @@ export class HubLink implements HubAccountConnection {
   }
 
   call<T = unknown>(method: string, params: unknown): Promise<T> {
+    if (this.bulk)
+      return Promise.reject(new HubCallError("unsupported", "Bulk links carry only downloads."));
     if (this.current !== "online")
       return Promise.reject(new HubCallError("offline", "Center is not connected."));
     if (!this.link?.methods.includes(method))
@@ -376,6 +404,8 @@ export class HubLink implements HubAccountConnection {
    * changes and after every attach or resume; others call `session.heartbeat` as before.
    */
   async reportPresence(presence: HubPresence): Promise<void> {
+    // Visibility belongs to the main link; a bulk link would be rejected for it.
+    if (this.bulk) return;
     if (this.has("state")) {
       this.presenceState = presenceState(presence);
       this.sendState();
@@ -399,9 +429,12 @@ export class HubLink implements HubAccountConnection {
     return this.nodes;
   }
 
-  /** Online with a presence (or `hosts`) snapshot: new sessions can be routed by presence. */
+  /**
+   * Online with a presence (or `hosts`) snapshot: new sessions can be routed by presence. Bulk
+   * links never receive presence and are ready once online.
+   */
   get ready(): boolean {
-    return this.current === "online" && this.nodes !== null;
+    return this.current === "online" && (this.bulk || this.nodes !== null);
   }
 
   /** The serve endpoint publishing `hostId`, if presence lists one. */
@@ -444,6 +477,7 @@ export class HubLink implements HubAccountConnection {
   private syncShares(): void {
     const link = this.link;
     if (
+      this.bulk ||
       !this.shareInterest ||
       this.current !== "online" ||
       !link ||
@@ -485,6 +519,7 @@ export class HubLink implements HubAccountConnection {
     }
     if (this.current !== "stopped") return;
     this.setState("connecting");
+    this.armIdle();
     void this.connect();
   }
 
@@ -517,7 +552,19 @@ export class HubLink implements HubAccountConnection {
     this.closeSocket();
     this.clearTimer("retry");
     this.resetLink("stopped", false);
+    this.clearTimer("idle");
     this.setState("stopped");
+  }
+
+  /** With `idleMs`, stop once no session has been open for that long. */
+  private armIdle(): void {
+    const idleMs = this.options.idleMs;
+    if (idleMs === undefined || this.sessions.size || this.current === "stopped") return;
+    this.clearTimer("idle");
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = null;
+      if (!this.sessions.size) this.stop();
+    }, idleMs);
   }
 
   /** A connection attempt is in progress, or the link is online awaiting its first presence. */
@@ -626,12 +673,15 @@ export class HubLink implements HubAccountConnection {
     options: { share?: string; kind?: "rpc" | "download"; manualCredit?: boolean } = {},
   ): HubSession {
     if (this.current === "stopped") throw new Error("Hub link is stopped.");
+    if (this.bulk && options.kind !== "download")
+      throw new HubCallError("unsupported", "Bulk links carry only downloads.");
     // Older centers reject unknown header fields and would drop the whole link.
     if (options.share !== undefined && !this.sharesSupported)
       throw new HubCallError("unsupported", "Center does not support shares.");
     if (options.kind === "download" && !this.has("download"))
       throw new HubCallError("unsupported", "Center does not support Hub downloads.");
     if (this.sessions.size >= 16) throw new Error("Too many hub sessions.");
+    this.clearTimer("idle");
     const id = (this.options.randomUUID ?? (() => crypto.randomUUID()))();
     const session = new HubSession(this.sessionLink, id, nodeId, {
       share: options.share,
@@ -671,7 +721,9 @@ export class HubLink implements HubAccountConnection {
     for (const listener of this.listeners) listener();
   }
 
-  private clearTimer(name: "retry" | "handshake" | "ack" | "grace" | "heartbeat" | "share"): void {
+  private clearTimer(
+    name: "retry" | "handshake" | "ack" | "grace" | "heartbeat" | "share" | "idle",
+  ): void {
     const key = `${name}Timer` as const;
     const timer = this[key];
     if (timer) clearTimeout(timer);
@@ -701,6 +753,9 @@ export class HubLink implements HubAccountConnection {
         centerUrl = ticket.centerUrl;
         credential = ticket.ticket;
         advertised = Array.isArray(ticket.features) ? ticket.features : undefined;
+        // The center rejects a bulk hello without every bulk feature.
+        if (this.bulk && !HUB_BULK_FEATURES.every((feature) => advertised?.includes(feature)))
+          throw new Error("Center does not support bulk links.");
       } catch (error) {
         if (generation === this.generation) this.retry(error);
         return;
@@ -733,7 +788,9 @@ export class HubLink implements HubAccountConnection {
         if (generation !== this.generation) return;
         const resume = this.link ? { link: this.link.id, recv: this.recv } : null;
         // Announce only features the center advertised; a resume repeats the link's first set.
-        const wanted = this.options.features ?? HUB_FEATURES;
+        const wanted = (this.options.features ?? HUB_FEATURES).filter(
+          (feature) => !this.bulk || HUB_BULK_FEATURES.includes(feature),
+        );
         const requested = this.link
           ? this.link.requested
           : advertised && wanted.filter((feature) => advertised.includes(feature));
@@ -1152,6 +1209,7 @@ export class HubLink implements HubAccountConnection {
     const error = new Error(`Hub link reset (${reason}).`);
     this.calls.reset(reason);
     for (const session of sessions) session.fail(error);
+    this.armIdle();
     if (notify) this.emit();
   }
 }

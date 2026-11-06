@@ -14,6 +14,12 @@ export type HubPayloadType = "text" | "binary";
 export const HUB_FEATURES = ["lease", "hosts", "state", "credit", "download"] as const;
 export type HubFeature = (typeof HUB_FEATURES)[number];
 
+/** Features a bulk link (`lane: "bulk"`) must announce; it may announce no others. */
+export const HUB_BULK_FEATURES: readonly HubFeature[] = ["credit", "download"];
+
+/** `main` links carry everything; `bulk` links carry only download sessions. */
+export type HubLane = "main" | "bulk";
+
 /** Largest session window (`credit`); every message up to the payload limit fits it. */
 export const HUB_MAX_WINDOW = 1024 * 1024;
 

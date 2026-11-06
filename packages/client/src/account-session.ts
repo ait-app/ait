@@ -1,7 +1,7 @@
 import { DeviceAuthorizationSchema, type DeviceAuthorization } from "@ait/protocol/publication";
 import { AccountChannel, type ChannelHost } from "./account-channel.js";
 import type { DaemonTransportFactory } from "./daemon-client-transport-types.js";
-import { HUB_PATH, HUB_PROTOCOL, type HubHost } from "./hub/frame.js";
+import { HUB_PATH, HUB_PROTOCOL, type HubHost, type HubLane } from "./hub/frame.js";
 import type { HubLink, HubTicket } from "./hub/link.js";
 import type { HubSession } from "./hub/session.js";
 import {
@@ -137,6 +137,12 @@ export function normalizeCenter(value: string): string {
 const NODE_READY_WAIT_MS = 10_000;
 /** Use a registration's hub ticket only while comfortably inside its lifetime. */
 const TICKET_MARGIN_MS = 5000;
+/** A bulk link without download sessions for this long is closed. */
+const BULK_IDLE_MS = 60_000;
+/** A download waits this long for a new bulk link before opening on the main link. */
+const BULK_CONNECT_WAIT_MS = 5000;
+/** After a bulk link fails to connect, downloads use the main link for this long. */
+const BULK_RETRY_MS = 60_000;
 
 /** `hub_features` of an HTTP response; null when an older center sent none. */
 function hubFeatures(value: unknown): string[] | null {
@@ -218,6 +224,10 @@ export class AccountSessionManager {
   private closing = false;
   private hub: HubLink | null = null;
   private unsubscribeHub: (() => void) | null = null;
+  /** Download-only link (`lane: "bulk"`), created by the first download on centers with `bulk`. */
+  private bulk: HubLink | null = null;
+  private unsubscribeBulk: (() => void) | null = null;
+  private bulkRetryAt = 0;
   /** `hub_features` of the latest registration or hub ticket; null from older centers. */
   private hubFeatures: readonly string[] | null = null;
   /** One-use access ticket issued with the registration, for the link's first connection. */
@@ -241,8 +251,11 @@ export class AccountSessionManager {
   /** Share access presence with the existing account/Host list on every platform. */
   attachHub(hub: HubLink): void {
     this.unsubscribeHub?.();
+    this.closeBulk();
     this.hub = hub;
     this.unsubscribeHub = hub.subscribe(() => {
+      // The bulk link lives only as long as the main link.
+      if (hub.state === "stopped") this.closeBulk();
       // A link with `hosts` replaces the status channel; without it the channel returns.
       const hosts = this.hostsByHub();
       if (hosts) this.closeChannel();
@@ -531,6 +544,8 @@ export class AccountSessionManager {
     this.timer = null;
     for (const request of this.requests) request.abort();
     this.closeChannel();
+    this.closeBulk();
+    this.bulkRetryAt = 0;
     this.deps.closeTransports();
     const account = this.account;
     const node = this.node;
@@ -713,6 +728,8 @@ export class AccountSessionManager {
    * Open a download as a Hub session (`k:"download"`) when this link and the target Host both
    * enabled `download`. Resolves null otherwise: the caller uses `openDownload` (the legacy
    * `/relay-downloads` route). The session carries the relay download messages unchanged.
+   * Centers with `bulk` carry it on a separate bulk link, so download data never queues ahead
+   * of RPC responses; without one it opens on the main link.
    */
   async openHubDownload(
     hostId: string,
@@ -726,14 +743,68 @@ export class AccountSessionManager {
     if (!hub.ready || hub.centerUrl !== this.account.center || !hub.has("download")) return null;
     const host = hub.hostFor(hostId);
     if (!host?.node_id || host.state !== "online" || !host.f.includes("download")) return null;
+    if (this.bulkAdvertised()) {
+      const generation = this.generation;
+      const bulk = await this.bulkLink(hub);
+      if (generation !== this.generation || this.hub !== hub) return null;
+      if (bulk) {
+        try {
+          return bulk.openDownload(host.node_id, token);
+        } catch {
+          /* E.g. every bulk session is in use: the main link still carries downloads. */
+        }
+      }
+    }
     return hub.openDownload(host.node_id, token);
+  }
+
+  /** The center issues bulk tickets and a bulk link can announce the features they require. */
+  private bulkAdvertised(): boolean {
+    return ["bulk", "credit", "download"].every((feature) => this.hubFeatures?.includes(feature));
+  }
+
+  /**
+   * The bulk link, created and connected on first use; concurrent downloads share it. Resolves
+   * null when it cannot connect, and downloads use the main link for a while.
+   */
+  private async bulkLink(hub: HubLink): Promise<HubLink | null> {
+    let link = this.bulk;
+    if (!link) {
+      if (Date.now() < this.bulkRetryAt) return null;
+      link = hub.bulkLink(() => this.openHubTicket("bulk"), BULK_IDLE_MS);
+      if (!link) return null;
+      const created = link;
+      this.bulk = created;
+      // It stops itself when idle; the next download creates a new one.
+      this.unsubscribeBulk = created.subscribe(() => {
+        if (created.state === "stopped" && this.bulk === created) this.closeBulk();
+      });
+      created.start();
+    }
+    // A link welcomed once keeps its sessions while it resumes.
+    if (!link.has("download")) await link.whenReady(BULK_CONNECT_WAIT_MS);
+    if (this.bulk !== link) return null;
+    if (link.has("download") && link.centerUrl === this.account?.center) return link;
+    this.bulkRetryAt = Date.now() + BULK_RETRY_MS;
+    this.closeBulk();
+    return null;
+  }
+
+  /** Stop the bulk link and end its downloads. */
+  private closeBulk(): void {
+    const bulk = this.bulk;
+    this.bulk = null;
+    this.unsubscribeBulk?.();
+    this.unsubscribeBulk = null;
+    bulk?.stop();
   }
 
   /**
    * One-use access ticket for this device's hub link; waits briefly for registration. The first
-   * connection after a registration uses the ticket issued with it.
+   * main connection after a registration uses the ticket issued with it. `bulk` tickets are
+   * requested only from centers that advertise `bulk`; older ones reject the `lane` field.
    */
-  async openHubTicket(): Promise<HubTicket> {
+  async openHubTicket(lane: HubLane = "main"): Promise<HubTicket> {
     if (!this.suspended && this.account && !this.node) await this.waitForNode(NODE_READY_WAIT_MS);
     if (this.suspended || !this.account || !this.node) {
       throw new Error("Sign in and wait for this device to register.");
@@ -741,8 +812,8 @@ export class AccountSessionManager {
     const generation = this.generation;
     const center = this.account.center;
     const node = this.node;
-    const registered = this.registeredTicket;
-    this.registeredTicket = null;
+    const registered = lane === "main" ? this.registeredTicket : null;
+    if (lane === "main") this.registeredTicket = null;
     if (registered?.node === node && registered.expiresAt > Date.now())
       return {
         centerUrl: center,
@@ -751,9 +822,11 @@ export class AccountSessionManager {
       };
     let grant: { hub_ticket: string; hub_path: string; protocol: string; hub_features?: unknown };
     try {
-      grant = await this.api(`/v1/node-sessions/${node.node_session_id}/hub-tickets`, "POST", {
-        ep: "access",
-      });
+      grant = await this.api(
+        `/v1/node-sessions/${node.node_session_id}/hub-tickets`,
+        "POST",
+        lane === "bulk" ? { ep: "access", lane } : { ep: "access" },
+      );
     } catch (error) {
       // With `lease` nothing else renews the node session; its expiry surfaces here.
       if (generation === this.generation && this.node === node) this.nodeRejected(error);
@@ -804,6 +877,7 @@ export class AccountSessionManager {
     this.timer = null;
     for (const request of this.requests) request.abort();
     this.closeChannel();
+    this.closeBulk();
     this.deps.closeTransports();
     this.update({ stale: true });
     this.schedule(0);

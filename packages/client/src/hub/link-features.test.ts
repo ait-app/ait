@@ -347,3 +347,78 @@ describe("hub link pause", () => {
     expect(h.socket().frames("hello")[0]).toMatchObject({ resume: null });
   });
 });
+
+describe("hub bulk link", () => {
+  const BULK = ["credit", "download"];
+
+  function bulkFixture(features: readonly string[] = [...ALL, "bulk"]) {
+    let issued = 0;
+    const ticket = vi.fn(async () => ({
+      centerUrl: CENTER,
+      ticket: (++issued).toString(16).padStart(64, "0"),
+      features,
+    }));
+    const main = hubFixture({ ticket });
+    return { ...main, bulk: main.link.bulkLink(ticket, 60_000)! };
+  }
+
+  async function connect(h: ReturnType<typeof bulkFixture>) {
+    h.bulk.start();
+    await h.flush();
+    const socket = h.socket();
+    socket.open();
+    socket.welcome({ link: "bulk-1", f: BULK, ping_seconds: 3600 });
+    return socket;
+  }
+
+  it("announces only credit and download and carries nothing but downloads", async () => {
+    const h = bulkFixture();
+    const socket = await connect(h);
+    expect(socket.frames("hello")).toEqual([{ t: "hello", v: 1, resume: null, f: BULK }]);
+    // No presence or `hosts` arrives on a bulk link; it is ready once welcomed.
+    expect(h.bulk.ready).toBe(true);
+    await h.bulk.reportPresence({ appVisible: true, deviceType: "mobile" });
+    await expect(h.bulk.call("share.subscribe", {})).rejects.toThrow("only downloads");
+    h.bulk.subscribeShares();
+    expect(() => h.bulk.openSession(HOST.node_id)).toThrow("only downloads");
+    const download = h.bulk.openDownload(HOST.node_id, "token-1");
+    expect(socket.frames()).toEqual([
+      expect.objectContaining({ t: "hello" }),
+      {
+        t: "open",
+        seq: 1,
+        s: download.id,
+        to: { node: HOST.node_id },
+        k: "download",
+        w: 1024 * 1024,
+      },
+    ]);
+    h.bulk.stop();
+  });
+
+  it("is unavailable to endpoints or centers without every bulk feature", async () => {
+    expect(hubFixture({ features: ["lease", "download"] }).link.bulkLink(vi.fn())).toBeNull();
+    const h = bulkFixture(["lease", "download", "bulk"]);
+    h.bulk.start();
+    await h.flush();
+    expect(h.sockets).toHaveLength(0);
+    expect(h.bulk.state).toBe("unavailable");
+    h.bulk.stop();
+  });
+
+  it("stops after a minute without sessions", async () => {
+    const h = bulkFixture();
+    const socket = await connect(h);
+    await vi.advanceTimersByTimeAsync(30_000);
+    const download = h.bulk.openDownload(HOST.node_id, "token");
+    socket.receive({ t: "accept", seq: 1, s: download.id, w: 65_536 });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(h.bulk.state).toBe("online");
+    socket.receive({ t: "close", seq: 2, s: download.id, code: "done" });
+    await vi.advanceTimersByTimeAsync(59_000);
+    expect(socket.close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(socket.close).toHaveBeenCalled();
+    expect(h.bulk.state).toBe("stopped");
+  });
+});
