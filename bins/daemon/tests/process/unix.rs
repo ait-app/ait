@@ -84,6 +84,9 @@ mod agents;
 #[path = "bots.rs"]
 mod bots;
 
+#[path = "bot_scope.rs"]
+mod bot_scope;
+
 #[path = "agent_runtime.rs"]
 mod agent_runtime;
 
