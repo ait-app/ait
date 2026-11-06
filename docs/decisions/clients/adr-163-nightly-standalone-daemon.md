@@ -16,7 +16,7 @@ nightly 的 Linux daemon 现已与正式版一样在 `manylinux_2_28` 容器中�
 
 ## 决策
 
-- main CI 发布 nightly 时附带 `Ait-<构建标识>-daemon-linux-x64.tar.gz` 与
+- Nightly 工作流发布 nightly 时附带 `Ait-<构建标识>-daemon-linux-x64.tar.gz` 与
   `Ait-<构建标识>-daemon-macos-arm64.tar.gz`。归档与桌面包共用同一次构建的 daemon，
   内容与正式版相同（`ait-daemon` 和 `LICENSE`）；打包时仍核对 `--version` 等于 `packagedVersion`。
 - nightly 的资产校验必须包含这两个归档并纳入 `SHA256SUMS`，不接受以版本号命名的 daemon 归档。

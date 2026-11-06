@@ -1,82 +1,104 @@
-// Called only while holding the nightly-main-control job concurrency lock.
-async function listRuns({ github, context }) {
-  const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
-    ...context.repo,
-    workflow_id: "ci.yml",
-    branch: "main",
-    per_page: 100,
-  });
-  return runs
-    .filter(
-      (run) => run.head_branch === "main" && ["push", "workflow_dispatch"].includes(run.event),
-    )
-    .sort((a, b) => b.run_number - a.run_number);
-}
+// Admission and tag handling for .github/workflows/nightly.yml. Runs are serialized by the
+// workflow's concurrency group, and each one publishes main's commit at trigger time, so the
+// published nightly only moves forward.
 
-async function publishedNumber({ github, context }) {
-  let release;
+const CI_WORKFLOW = "ci.yml";
+const POLL_INTERVAL_MS = 30_000;
+// One hour of polling; the prepare job's timeout leaves room for the API calls around it.
+const POLL_ATTEMPTS = 120;
+
+const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+// The source commit recorded in the published nightly's notes, or null when none is published.
+async function publishedCommit({ github, context }) {
   try {
-    ({ data: release } = await github.rest.repos.getReleaseByTag({
+    const { data: release } = await github.rest.repos.getReleaseByTag({
       ...context.repo,
       tag: "nightly",
-    }));
+    });
+    return release.body?.match(/Development build from ([0-9a-f]{40})\b/)?.[1] ?? null;
   } catch (error) {
-    if (error.status === 404) return 0;
+    if (error.status === 404) return null;
     throw error;
   }
-  const marker = release.body?.match(/<!-- ait-nightly-run: (\d+) -->/);
-  if (marker && release.body.includes("<!-- ait-nightly-workflow: ci.yml -->")) {
-    return Number(marker[1]);
-  }
-  // The former dev nightly workflow has its own run-number sequence.
-  // Its watermark cannot be compared to CI; the first main publication replaces it.
-  if (marker && !release.body.includes("<!-- ait-nightly-workflow:")) return 0;
-
-  // Migrate the pre-window nightly using its recorded source commit.
-  const commit = release.body?.match(/Development build from ([0-9a-f]{40})\b/)?.[1];
-  if (commit && !release.body.includes("<!-- ait-nightly-workflow:")) return 0;
-  throw new Error("Cannot determine the published nightly build number; refusing to overwrite it.");
 }
 
-async function cancelRuns({ github, context, core }, runs) {
-  for (const run of runs) {
-    if (run.id === context.runId || run.status === "completed") continue;
-    try {
-      await github.rest.actions.cancelWorkflowRun({ ...context.repo, run_id: run.id });
-      core.notice(`Cancelled superseded nightly #${run.run_number}.`);
-    } catch (error) {
-      // The run may have finished since it was listed. Other errors must remain visible.
-      if (error.status !== 409) throw error;
-      core.notice(`Nightly #${run.run_number} is no longer cancellable.`);
+// The latest CI result for this commit's push to main: a conclusion, or "pending".
+async function ciResult({ github, context }) {
+  const { data } = await github.rest.actions.listWorkflowRuns({
+    ...context.repo,
+    workflow_id: CI_WORKFLOW,
+    head_sha: context.sha,
+    event: "push",
+    per_page: 20,
+  });
+  const [run] = data.workflow_runs
+    .filter((candidate) => candidate.head_branch === "main")
+    .sort((a, b) => b.run_number - a.run_number);
+  // A push's CI run can appear a moment after the push itself.
+  if (!run || run.status !== "completed") return "pending";
+  return run.conclusion;
+}
+
+// Whether this run should build and publish `context.sha`. An already published commit is
+// skipped unless `republish` is set; otherwise CI must have passed on the same commit.
+async function admit({
+  github,
+  context,
+  core,
+  republish = false,
+  wait = sleep,
+  attempts = POLL_ATTEMPTS,
+}) {
+  if (!republish && (await publishedCommit({ github, context })) === context.sha) {
+    core.notice(`${context.sha} is already the published nightly.`);
+    return false;
+  }
+  for (let attempt = 1; ; attempt += 1) {
+    const result = await ciResult({ github, context });
+    if (result === "success") return true;
+    if (result !== "pending" || attempt >= attempts) {
+      core.warning(`CI on ${context.sha} is ${result}; the previous nightly stays published.`);
+      return false;
     }
+    await wait(POLL_INTERVAL_MS);
   }
 }
 
-async function admitBuild(api) {
-  const runs = await listRuns(api);
-  const published = await publishedNumber(api);
-  const window = runs.slice(0, 2);
-  await cancelRuns(
-    api,
-    runs.filter((run) => !window.includes(run) || run.run_number < published),
-  );
-  return window.some((run) => run.id === api.context.runId && run.run_number >= published);
+// A repository or organization rule refused to change a protected ref.
+function protectedRef(error) {
+  return error.status === 422 && /rule violation|protected ref/i.test(error.message ?? "");
 }
 
-async function canPublish(api) {
-  const runs = await listRuns(api);
-  const current = runs.slice(0, 2).find((run) => run.id === api.context.runId);
-  return Boolean(current && current.run_number >= (await publishedNumber(api)));
+// Point the `nightly` tag at this build before the published release is touched, so a refused
+// ref update can never leave the channel without a release. When a rule protects the tag, it
+// stays where it is and the release still publishes this build; the notes and BUILD-INFO.json
+// record the actual source commit.
+async function moveTag({ github, context, core }) {
+  const ref = { ...context.repo, ref: "tags/nightly" };
+  let current;
+  try {
+    ({ data: current } = await github.rest.git.getRef(ref));
+  } catch (error) {
+    if (error.status !== 404) throw error;
+    await github.rest.git.createRef({
+      ...context.repo,
+      ref: "refs/tags/nightly",
+      sha: context.sha,
+    });
+    return;
+  }
+  if (current.object?.sha === context.sha) return;
+  try {
+    await github.rest.git.updateRef({ ...ref, sha: context.sha, force: true });
+  } catch (error) {
+    if (!protectedRef(error)) throw error;
+    core.warning(
+      `A ruleset protects the nightly tag, so it stays at ${current.object?.sha}. ` +
+        `The release still publishes ${context.sha}. Allow GitHub Actions to bypass the rule ` +
+        "to keep the tag on the published build.",
+    );
+  }
 }
 
-async function cancelOlderBuilds(api) {
-  const runs = await listRuns(api);
-  const current = runs.find((run) => run.id === api.context.runId);
-  if (!current) throw new Error("Current nightly run is missing from the workflow run list.");
-  await cancelRuns(
-    api,
-    runs.filter((run) => run.run_number < current.run_number),
-  );
-}
-
-module.exports = { admitBuild, canPublish, cancelOlderBuilds };
+module.exports = { admit, moveTag };
