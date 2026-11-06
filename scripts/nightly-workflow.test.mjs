@@ -127,10 +127,9 @@ test("CI only checks code: it never packages, publishes or writes to the reposit
   assert.doesNotMatch(JSON.stringify(ci), /nightly-control|gh release|upload-artifact/);
 });
 
-test("nightly runs daily or on demand, one at a time, only from main", () => {
-  assert.deepEqual(Object.keys(nightly.on).sort(), ["schedule", "workflow_dispatch"]);
-  assert.equal(nightly.on.schedule.length, 1);
-  assert.equal(nightly.on.workflow_dispatch.inputs.republish.type, "boolean");
+test("nightly runs only when triggered manually, one at a time, only from main", () => {
+  assert.deepEqual(Object.keys(nightly.on), ["workflow_dispatch"]);
+  assert.equal(nightly.on.workflow_dispatch, null);
   assert.deepEqual(nightly.permissions, { contents: "read" });
   assert.deepEqual(nightly.concurrency, { group: "nightly", "cancel-in-progress": false });
   assert.equal(nightly.jobs.prepare.if, "github.ref == 'refs/heads/main'");
@@ -184,23 +183,16 @@ test("packaging and publication follow an admitted prepare job only", () => {
   assert.equal(steps.at(-1).if, undefined);
 });
 
-// A fake GitHub API: `published` is the released commit, `runs` the CI runs listed in turn.
-function admission({ published = null, runs = [[]], releaseError = null } = {}) {
+// A fake GitHub API whose CI listing returns `runs` in turn, or fails with `listError`.
+function admission({ runs = [[]], listError = null } = {}) {
   const listed = [];
   let call = 0;
   const github = {
     rest: {
-      repos: {
-        getReleaseByTag: async (args) => {
-          assert.deepEqual(args, { ...context.repo, tag: "nightly" });
-          if (releaseError) throw releaseError;
-          if (!published) throw notFound();
-          return { data: { body: `Development build from ${published}. Replaced later.` } };
-        },
-      },
       actions: {
         listWorkflowRuns: async (args) => {
           listed.push(args);
+          if (listError) throw listError;
           return { data: { workflow_runs: runs[Math.min(call++, runs.length - 1)] } };
         },
       },
@@ -233,7 +225,7 @@ async function decide(state, options = {}) {
 }
 
 test("passing CI on main's commit admits the build", async () => {
-  const state = admission({ published: "b".repeat(40), runs: [[run()]] });
+  const state = admission({ runs: [[run()]] });
 
   const result = await decide(state);
 
@@ -247,17 +239,6 @@ test("passing CI on main's commit admits the build", async () => {
       per_page: 20,
     },
   ]);
-});
-
-test("an already published commit is skipped unless republishing is requested", async () => {
-  const skipped = await decide(admission({ published: context.sha, runs: [[run()]] }));
-  assert.equal(skipped.publish, false);
-  assert.match(skipped.notices[0], /already the published nightly/);
-
-  const forced = await decide(admission({ published: context.sha, runs: [[run()]] }), {
-    republish: true,
-  });
-  assert.equal(forced.publish, true);
 });
 
 test("a running or not yet listed CI run is awaited before admission", async () => {
@@ -297,9 +278,9 @@ test("the newest main push decides; reruns and other branches do not mask it", a
   assert.equal((await decide(admission({ runs: failing }))).publish, false);
 });
 
-test("release lookup errors fail the run instead of guessing", async () => {
+test("CI lookup errors fail the run instead of guessing", async () => {
   const error = Object.assign(new Error("Server error"), { status: 500 });
-  await assert.rejects(decide(admission({ releaseError: error })), error);
+  await assert.rejects(decide(admission({ listError: error })), error);
 });
 
 const notFound = () => Object.assign(new Error("Not found"), { status: 404 });
@@ -386,7 +367,7 @@ test("other tag failures stop before the published release is deleted", async ()
   }
 });
 
-test("published notes record the commit that admission compares against", () => {
+test("published notes record the source commit", () => {
   const publish = nightly.jobs.publish.steps.find((step) => step.name === "Publish latest nightly");
   const body = publish.run.match(/--notes "([^"]*)"/)[1].replaceAll("$GITHUB_SHA", context.sha);
   assert.match(body, /Development build from ([0-9a-f]{40})\b/);

@@ -1,6 +1,6 @@
-// Admission and tag handling for .github/workflows/nightly.yml. Runs are serialized by the
-// workflow's concurrency group, and each one publishes main's commit at trigger time, so the
-// published nightly only moves forward.
+// Admission and tag handling for the manual .github/workflows/nightly.yml. Runs are serialized
+// by the workflow's concurrency group, and each one publishes main's commit at trigger time, so
+// the published nightly only moves forward.
 
 const CI_WORKFLOW = "ci.yml";
 const POLL_INTERVAL_MS = 30_000;
@@ -8,20 +8,6 @@ const POLL_INTERVAL_MS = 30_000;
 const POLL_ATTEMPTS = 120;
 
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
-
-// The source commit recorded in the published nightly's notes, or null when none is published.
-async function publishedCommit({ github, context }) {
-  try {
-    const { data: release } = await github.rest.repos.getReleaseByTag({
-      ...context.repo,
-      tag: "nightly",
-    });
-    return release.body?.match(/Development build from ([0-9a-f]{40})\b/)?.[1] ?? null;
-  } catch (error) {
-    if (error.status === 404) return null;
-    throw error;
-  }
-}
 
 // The latest CI result for this commit's push to main: a conclusion, or "pending".
 async function ciResult({ github, context }) {
@@ -40,20 +26,9 @@ async function ciResult({ github, context }) {
   return run.conclusion;
 }
 
-// Whether this run should build and publish `context.sha`. An already published commit is
-// skipped unless `republish` is set; otherwise CI must have passed on the same commit.
-async function admit({
-  github,
-  context,
-  core,
-  republish = false,
-  wait = sleep,
-  attempts = POLL_ATTEMPTS,
-}) {
-  if (!republish && (await publishedCommit({ github, context })) === context.sha) {
-    core.notice(`${context.sha} is already the published nightly.`);
-    return false;
-  }
+// Whether this run should build and publish `context.sha`: CI must have passed on the same
+// commit. A CI run that is still in progress is awaited.
+async function admit({ github, context, core, wait = sleep, attempts = POLL_ATTEMPTS }) {
   for (let attempt = 1; ; attempt += 1) {
     const result = await ciResult({ github, context });
     if (result === "success") return true;

@@ -1,16 +1,9 @@
 name: Nightly
 
-# Publishes the current main commit as the rolling `nightly` prerelease once a day, after CI
-# has passed on that commit. CI itself never packages desktops or publishes releases.
+# Run manually on main to publish its current commit as the rolling `nightly` prerelease once
+# CI has passed on that commit. CI itself never packages desktops or publishes releases.
 on:
-  schedule:
-    - cron: "0 18 * * *"
   workflow_dispatch:
-    inputs:
-      republish:
-        description: Rebuild even if main's current commit is already the published nightly
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -43,13 +36,10 @@ jobs:
       - name: Require passing CI on this commit
         id: admit
         uses: actions/github-script@v8
-        env:
-          REPUBLISH: ${{ inputs.republish }}
         with:
           script: |
             const { admit } = require('./scripts/nightly-control.cjs');
-            const republish = process.env.REPUBLISH === 'true';
-            core.setOutput('publish', String(await admit({ github, context, core, republish })));
+            core.setOutput('publish', String(await admit({ github, context, core })));
 
   desktop:
     needs: prepare
@@ -234,7 +224,7 @@ jobs:
         run: |
           gh release create nightly release-assets/* --verify-tag --target "$GITHUB_SHA" \
             --title "Ait Nightly $NIGHTLY_BUILD_LABEL" --prerelease --latest=false \
-            --notes "Development build from $GITHUB_SHA. Replaced by the next daily build of a newer main commit. macOS is ad-hoc signed and not notarized. If macOS blocks the standalone aitd after a browser download, run \`xattr -d com.apple.quarantine aitd\` in the extracted folder." \
+            --notes "Development build from $GITHUB_SHA. Replaced by the next manually published nightly. macOS is ad-hoc signed and not notarized. If macOS blocks the standalone aitd after a browser download, run \`xattr -d com.apple.quarantine aitd\` in the extracted folder." \
             --repo "$GITHUB_REPOSITORY"
           echo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/nightly" >> "$GITHUB_STEP_SUMMARY"
       # Runs only after every step above succeeds, so a failed publish keeps both platforms'

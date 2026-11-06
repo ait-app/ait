@@ -5,7 +5,7 @@
 | 产物                                            | 入口                                            | 操作说明                                            |
 | ----------------------------------------------- | ----------------------------------------------- | --------------------------------------------------- |
 | Linux/macOS/Windows 桌面、独立 daemon、Web 镜像 | 标签或手动 `release.yml`                        | [创建 Release](#创建-release)                       |
-| Linux/macOS nightly 与独立 daemon               | 每日定时或手动 `nightly.yml`                    | [Nightly](#nightly)                                 |
+| Linux/macOS nightly 与独立 daemon               | 手动 `nightly.yml`                              | [Nightly](#nightly)                                 |
 | Android Google Play AAB                         | 手动 `release-android-play.yml`                 | [Google Play 指南](google-play-internal-testing.md) |
 | iOS 内部 TestFlight                             | Xcode Cloud `Default` 手动构建                  | [内部测试](#apple-testflight-ios-手动发布)          |
 | iOS 外部 TestFlight / App Store 构建            | Xcode Cloud `Release iOS to App Store` 手动构建 | [App Store 构建](#app-store-ios-手动发布)           |
@@ -33,13 +33,12 @@ ait-realease 发布编排核对 `SHA256SUMS`，将相同文件上传至 COS 的 
 
 ## Nightly
 
-[Nightly](../../.github/workflows/nightly.yml) 工作流每天 18:00 UTC 运行，也可以在 Actions 中对
-`main` 手动触发。每次运行发布 `main` 当前提交的 Linux x86_64 和 Apple Silicon 安装包，替换固定的
+[Nightly](../../.github/workflows/nightly.yml) 工作流只能在 Actions 中对 `main` 手动触发，
+不会定时或随推送运行。每次运行发布 `main` 当前提交的 Linux x86_64 和 Apple Silicon 安装包，替换固定的
 [nightly 预发布](https://github.com/ait-app/ait/releases/tag/nightly)。CI 本身只负责检查，不打包也不发布。
 
-- 准入：该提交已经是已发布的 nightly 时跳过；手动运行勾选 `republish` 可以强制重建。
-  否则等待该提交在 `main` 上的 CI 结束（最长一小时），只有 CI 成功才构建；CI 失败、被取消或
-  超时时保留上一版，并在运行中给出警告。
+- 准入：等待该提交在 `main` 上的 CI 结束（最长一小时），只有 CI 成功才构建；CI 失败、被取消或
+  超时时保留上一版，并在运行中给出警告。对已发布的提交再次触发会重新构建并替换。
 - 构建：两个平台全部成功后才发布。同一时间只运行一个 nightly，后触发的运行排队等待，
   不会中断正在进行的上传。每次运行都发布触发时 `main` 的提交，因此 nightly 不会回退。
 - 发布：先把 `nightly` 标签移到本次提交，再替换 Release；标签移动失败时已发布的 nightly
@@ -57,7 +56,7 @@ ZIP、tar.gz、blockmap、CI 产物和 `BUILD-INFO.json` 使用同一标识；�
 命名规则以 [`nightly-build.mjs`](../../scripts/nightly-build.mjs) 和 [`source-version.cjs`](../../scripts/source-version.cjs) 为准。
 固定下载地址仍使用 `nightly` 标签；正式版本继续使用版本命名。
 
-Release 说明记录源码提交，准入以此判断是否已发布；`BUILD-INFO.json` 记录源码提交、
+Release 说明记录源码提交；`BUILD-INFO.json` 记录源码提交、
 运行序号和运行链接，可用于确认安装包是否包含指定修复。
 macOS nightly 使用 ad-hoc 签名，未公证。
 
@@ -71,8 +70,8 @@ nightly 同样附带独立 daemon 归档，例如 `Ait-38fb6054-2026-10-08-daemo
 推送到 `main` 也只运行同样的检查。CI 不打包桌面端，也不发布任何产物；
 Windows 只在 [Release Ait](../../.github/workflows/release.yml) 中构建。
 
-nightly 安装包由每日的 [Nightly](#nightly) 工作流构建；合并前如需验证安装包，
-可按[桌面端构建说明](../../apps/desktop/README.md)在本地打包，或对 `main` 手动触发 Nightly。
+nightly 安装包只在手动触发 [Nightly](#nightly) 工作流时构建；合并前如需验证安装包，
+可按[桌面端构建说明](../../apps/desktop/README.md)在本地打包。
 
 Google Play 和 iOS TestFlight 不随 PR、main CI 或 Nightly 构建，均使用各自的手动发布入口。
 独立 APK 构建入口已移除。main/PR CI 不调用 EAS 构建或提交。
