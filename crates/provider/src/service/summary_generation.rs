@@ -85,6 +85,7 @@ impl Generation {
                     thinking_option_id: candidate.thinking_option_id,
                     ..StoredAgentConfig::default()
                 },
+                confinement: None,
             };
             // Match Paseo's two repair attempts; transport failures move to the next candidate.
             let attempts = if request.kind == domain::summary::SummaryKind::ChatHistory {

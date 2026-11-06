@@ -110,6 +110,7 @@ fn create(worktrees: &Worktrees, request: WorktreeCreateRequest) -> Result<Dispa
             }),
         first_agent_prompt: context.as_ref().and_then(|context| context.prompt.clone()),
         expects_initial_agent: context.is_some(),
+        sandbox: None,
     };
     match worktrees.create(&input, &now_timestamp()) {
         Ok(created) => {

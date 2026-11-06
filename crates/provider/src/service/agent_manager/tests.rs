@@ -379,6 +379,7 @@ fn spec() -> AgentSessionSpec {
             model: Some("gpt-6".to_owned()),
             ..StoredAgentConfig::default()
         },
+        confinement: None,
     }
 }
 

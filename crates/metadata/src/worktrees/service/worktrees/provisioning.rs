@@ -125,6 +125,7 @@ impl WorktreeProvisioning for WorkspaceWorktrees {
                     checkout_source: input.checkout_source.clone(),
                     first_agent_prompt: input.first_agent_prompt.clone(),
                     expects_initial_agent: input.expects_initial_agent,
+                    sandbox: input.sandbox,
                 },
                 timestamp,
             )

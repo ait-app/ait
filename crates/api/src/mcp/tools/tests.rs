@@ -53,6 +53,61 @@ fn creation_preserves_workspace_intent_and_rejects_conflicting_modes() {
 }
 
 #[test]
+fn sandboxed_worktree_reuses_worktree_arguments_and_records_confinement() {
+    let value = creation::workspace(
+        json!({"isolation":"sandboxed-worktree","path":"/repo","mode":"checkout-branch",
+            "branch":"existing","worktreeSlug":"task","projectId":"project"}),
+        None,
+    )
+    .unwrap();
+
+    let source = serde_json::from_value::<
+        domain::workspace::protocol::directory::WorkspaceCreateSource,
+    >(value["source"].clone())
+    .unwrap();
+    let domain::workspace::protocol::directory::WorkspaceCreateSource::Worktree(worktree) = source
+    else {
+        panic!("sandboxed isolation must create a worktree source");
+    };
+    assert_eq!(
+        worktree.sandbox,
+        Some(domain::workspace::sandbox::WorkspaceSandbox::WorktreeWrites)
+    );
+    assert_eq!(worktree.ref_name.as_deref(), Some("existing"));
+    assert_eq!(worktree.worktree_slug.as_deref(), Some("task"));
+    assert_eq!(worktree.project_id.as_deref(), Some("project"));
+    assert_eq!(value["source"]["sandbox"], "worktree_writes");
+}
+
+#[test]
+fn only_sandboxed_isolation_records_confinement() {
+    let caller = json!({"cwd":"/repo"});
+    for isolation in ["local", "worktree"] {
+        let value = creation::workspace(json!({"isolation":isolation}), Some(&caller)).unwrap();
+        assert!(value["source"].get("sandbox").is_none(), "{isolation}");
+    }
+}
+
+#[test]
+fn unknown_or_conflicting_isolation_is_an_invalid_message() {
+    for input in [
+        json!({"isolation":"sandboxed","path":"/repo"}),
+        json!({"isolation":"sandboxed-local","path":"/repo"}),
+        json!({"isolation":true,"path":"/repo"}),
+        json!({"isolation":"local","path":"/repo","mode":"branch-off"}),
+        json!({"isolation":"sandboxed-worktree","mode":"checkout-branch"}),
+        json!({"isolation":"sandboxed-worktree","path":"/repo","mode":"checkout-pr",
+            "branch":"bad","prNumber":12}),
+    ] {
+        assert_eq!(
+            creation::workspace(input.clone(), None),
+            Err(ErrorCode::InvalidMessage),
+            "{input}"
+        );
+    }
+}
+
+#[test]
 fn provider_pairs_keep_slashes_inside_model_names() {
     assert_eq!(
         creation::provider_model(&json!("codex/openai/model"), true).unwrap(),

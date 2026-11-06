@@ -13,6 +13,7 @@ async fn installed_codex_completes_a_native_turn_and_reopens_history() {
         provider: "codex".to_owned(),
         cwd: root.path().to_str().unwrap().to_owned(),
         config: StoredAgentConfig::default(),
+        confinement: None,
     };
     let mut session = client.create_session(&spec).await.unwrap();
     session

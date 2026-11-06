@@ -84,6 +84,7 @@ pub(super) async fn probe(
         provider: PROVIDER.to_owned(),
         cwd: cwd.to_owned(),
         config: StoredAgentConfig::default(),
+        confinement: None,
     })?;
     let mut args = vec![
         "--mode".to_owned(),
@@ -99,7 +100,7 @@ pub(super) async fn probe(
             model.clone(),
         ]);
     }
-    let mut transport = Transport::spawn(client, cwd, &args)?;
+    let mut transport = Transport::spawn(client, cwd, &args, None)?;
     transport.initialize().await?;
     let state = transport.request("get_state", json!({})).await?;
     if route.is_some_and(|[provider, model]| {
@@ -128,7 +129,7 @@ async fn connect(
             config::approval_mode(mode).to_owned(),
         ]);
     }
-    let mut transport = Transport::spawn(client, &spec.cwd, &args)?;
+    let mut transport = Transport::spawn(client, &spec.cwd, &args, spec.confinement.as_ref())?;
     transport.initialize().await?;
     let state = config::apply(&mut transport, &spec.config).await?;
     transport
@@ -256,6 +257,7 @@ impl Session {
                 provider: PROVIDER.to_owned(),
                 cwd: self.cwd.clone(),
                 config: config.clone(),
+                confinement: None,
             };
             let persisted = std::path::Path::new(&path).is_file();
             let (transport, state, service_tiers) =

@@ -163,8 +163,7 @@ pub(super) async fn open(
     } else {
         &spec.config
     };
-    let (mut transport, capabilities, source) =
-        launcher::observed(client, &spec.cwd, selected).await?;
+    let (mut transport, capabilities, source) = launcher::session(client, spec, selected).await?;
     let (id, mut options, mut identities, clients, location, children) =
         if let Some((handle, _)) = binding {
             if capabilities["loadSession"] != true {
@@ -437,7 +436,7 @@ impl Session {
             || (selected.system_prompt.is_some() && selected.mode_id != self.spec.config.mode_id)
         {
             let (mut transport, capabilities, source) =
-                launcher::observed(&self.client, &self.spec.cwd, selected).await?;
+                launcher::session(&self.client, &self.spec, selected).await?;
             let location = &connection.location;
             let mut options = if capabilities["sessionCapabilities"]["resume"].is_object() {
                 let result = transport

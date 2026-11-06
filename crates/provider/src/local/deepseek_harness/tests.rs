@@ -41,6 +41,7 @@ fn fixture() -> (TempDir, DeepSeekHarnessClient, AgentSessionSpec) {
         provider: PROVIDER.to_owned(),
         cwd: directory.path().to_str().unwrap().to_owned(),
         config: StoredAgentConfig::default(),
+        confinement: None,
     };
     (directory, client, spec)
 }

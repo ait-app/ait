@@ -64,6 +64,7 @@ fn intent() -> WorktreeCreation {
         checkout_source: None,
         first_agent_prompt: Some("Prompt fallback".to_owned()),
         expects_initial_agent: true,
+        sandbox: None,
     }
 }
 

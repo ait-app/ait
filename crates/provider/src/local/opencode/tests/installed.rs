@@ -94,6 +94,7 @@ async fn installed(question: bool) -> Installed {
             model: Some("local/test-model".into()),
             ..Default::default()
         },
+        confinement: None,
     };
     Installed {
         root,

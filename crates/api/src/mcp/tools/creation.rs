@@ -95,13 +95,22 @@ pub(super) fn provider_model(
 }
 
 /// Return a Workspace source from `arguments`, inheriting `caller`'s directory when omitted.
+///
+/// `isolation` is `local`, `worktree`, or `sandboxed-worktree`, which accepts every worktree
+/// argument and additionally records OS write confinement for the Workspace's Agents.
 /// # Errors
-/// Rejects missing directories and conflicting branch or change-request selections.
+/// Rejects unknown isolation, missing directories and conflicting branch or change-request
+/// selections.
 pub(super) fn workspace(mut arguments: Value, caller: Option<&Value>) -> Result<Value, ErrorCode> {
     let path = take(&mut arguments, "path")?
         .or_else(|| caller.and_then(|caller| caller.get("cwd")).cloned());
     let project = take(&mut arguments, "projectId")?;
     let isolation = take(&mut arguments, "isolation")?.ok_or(ErrorCode::InvalidMessage)?;
+    let sandboxed = match isolation.as_str() {
+        Some("local" | "worktree") => false,
+        Some("sandboxed-worktree") => true,
+        _ => return Err(ErrorCode::InvalidMessage),
+    };
     let mut source = if isolation == "local" {
         if [
             "mode",
@@ -121,6 +130,9 @@ pub(super) fn workspace(mut arguments: Value, caller: Option<&Value>) -> Result<
     } else {
         worktree(&mut arguments, path)?
     };
+    if sandboxed {
+        source["sandbox"] = json!(domain::workspace::sandbox::WorkspaceSandbox::WorktreeWrites);
+    }
     if let Some(project) = project {
         source["projectId"] = project;
     }

@@ -39,6 +39,7 @@ async fn installed_omp_discovers_and_opens_native_rpc_without_inference() {
             mode_id: Some("ask".to_owned()),
             ..StoredAgentConfig::default()
         },
+        confinement: None,
     };
     assert!(client.is_available().await.unwrap());
     let details = client.discover(&spec.cwd).await.unwrap();
@@ -95,6 +96,7 @@ async fn installed_omp_tiers_and_thinking_follow_model_without_changing_defaults
         provider: "omp".to_owned(),
         cwd: root.path().to_str().unwrap().to_owned(),
         config: StoredAgentConfig::default(),
+        confinement: None,
     };
     let details = client.discover(&spec.cwd).await.unwrap();
     assert_eq!(details.features.len(), 2);
@@ -354,6 +356,7 @@ async fn installed_with_plugins() -> Installed {
             model: Some(json!(["ait-local-fixture", "fixture"]).to_string()),
             ..StoredAgentConfig::default()
         },
+        confinement: None,
     };
     Installed {
         _root: root,

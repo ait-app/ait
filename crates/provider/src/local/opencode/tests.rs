@@ -148,6 +148,7 @@ pub(super) fn fixture(scenario: &str) -> (TempDir, OpenCodeClient, AgentSessionS
             mode_id: Some("build".into()),
             ..StoredAgentConfig::default()
         },
+        confinement: None,
     };
     (root, client, spec)
 }

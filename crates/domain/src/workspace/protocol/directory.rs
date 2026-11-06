@@ -111,6 +111,9 @@ pub struct WorkspaceWorktreeSource {
     pub checkout_source: Option<super::worktree_source::ChangeRequestCheckoutSource>,
     /// Legacy positive GitHub pull request number.
     pub github_pr_number: Option<std::num::NonZeroU64>,
+    /// Optional OS-enforced Agent write confinement for the new worktree.
+    #[serde(default)]
+    pub sandbox: Option<crate::workspace::sandbox::WorkspaceSandbox>,
 }
 
 /// Supported worktree actions in Paseo's wire format.

@@ -155,6 +155,9 @@ pub struct PersistedWorkspaceRecord {
         skip_serializing_if = "Option::is_none"
     )]
     pub untrusted_source: Option<UntrustedWorkspaceSource>,
+    /// OS-enforced Agent write confinement; absent for every unsandboxed or legacy record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox: Option<crate::workspace::sandbox::WorkspaceSandbox>,
 }
 
 /// Durable eligibility for first-prompt workspace naming, cleared by a manual title edit.

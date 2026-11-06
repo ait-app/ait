@@ -38,6 +38,7 @@ fn explicit_empty_branch_can_be_recovered_without_claiming_another_missing_sessi
         provider: "claude".into(),
         cwd: root.path().to_str().unwrap().into(),
         config: StoredAgentConfig::default(),
+        confinement: None,
     };
     let id = Uuid::new_v4().to_string();
     let branch = fresh(&id, &spec);

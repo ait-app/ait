@@ -1,6 +1,7 @@
 //! Provider session registration and recovery for the independent server.
 
 pub(crate) mod auto_archive;
+mod confinement;
 mod controls;
 mod delivery;
 mod execution;
@@ -74,6 +75,11 @@ pub enum AgentManagerError {
     /// A turn is already active or the Agent is archived.
     #[error("Agent is busy or read-only")]
     Busy,
+    /// The provider cannot confine its native process inside a sandboxed Workspace.
+    #[error(
+        "provider {0} cannot run in a sandboxed worktree: it does not support OS write confinement"
+    )]
+    ConfinementUnsupported(String),
 }
 
 /// Metadata added when a new provider session is registered.
@@ -161,6 +167,7 @@ pub struct AgentManager {
     owner: Option<ownership::Owner>,
     generated_titles: generated_titles::Titles,
     workspace_names: Option<Arc<dyn model::workspace::lifecycle::WorkspaceNaming>>,
+    workspaces: Option<Arc<dyn model::workspace::registry::WorkspaceRegistry>>,
     auto_archives: auto_archive::AutoArchives,
     usage_cache: usage::UsageCache,
 }
@@ -192,6 +199,7 @@ impl AgentManager {
             owner: None,
             generated_titles: generated_titles::Titles::default(),
             workspace_names: None,
+            workspaces: None,
             auto_archives: auto_archive::AutoArchives::default(),
             usage_cache: usage::UsageCache::default(),
         }
@@ -241,6 +249,16 @@ impl AgentManager {
         names: Arc<dyn model::workspace::lifecycle::WorkspaceNaming>,
     ) -> Self {
         self.workspace_names = Some(names);
+        self
+    }
+
+    /// Read Workspace placement so launches in a sandboxed Workspace receive write confinement.
+    #[must_use]
+    pub fn with_workspaces(
+        mut self,
+        workspaces: Arc<dyn model::workspace::registry::WorkspaceRegistry>,
+    ) -> Self {
+        self.workspaces = Some(workspaces);
         self
     }
 
@@ -472,6 +490,7 @@ impl AgentManager {
                 provider: record.provider.clone(),
                 cwd: record.cwd.clone(),
                 config: effective,
+                confinement: None,
             })
             .await
             .map_err(|_| AgentManagerError::InvalidRequest)?;
@@ -549,6 +568,7 @@ impl AgentManager {
             AgentResumePurpose::Interactive,
             &registration.labels,
         )?;
+        let launch = self.confine(launch, registration.workspace_id.as_deref())?;
         let session = execution::native(
             &spec.provider,
             "create",
@@ -649,6 +669,7 @@ impl AgentManager {
             provider: record.provider.clone(),
             cwd: record.cwd.clone(),
             config: record.config.clone().unwrap_or_default(),
+            confinement: None,
         };
         validate_identity(agent_id, &spec)?;
         let purpose = if record.archived_at.is_some() {
@@ -658,6 +679,7 @@ impl AgentManager {
         };
         let client = self.available_client(&record.provider).await?;
         let (launch, binding) = self.prepare_mcp(agent_id, &spec, purpose, &record.labels)?;
+        let launch = self.confine(launch, record.workspace_id.as_deref())?;
         let session = execution::native(
             &spec.provider,
             "resume",

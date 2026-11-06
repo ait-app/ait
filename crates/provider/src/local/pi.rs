@@ -68,7 +68,7 @@ impl PiClient {
     ) -> Result<(Value, Value), AgentSessionError> {
         config::directory(cwd)?;
         transport::version(self).await?;
-        let mut transport = transport::Transport::spawn(self, cwd, &["--no-session".into()])?;
+        let mut transport = transport::Transport::spawn(self, cwd, &["--no-session".into()], None)?;
         let result = async {
             let models = transport
                 .request(json!({"type":"get_available_models"}))
@@ -98,6 +98,10 @@ impl PiClient {
 #[async_trait::async_trait]
 impl AgentClient for PiClient {
     fn supports_session_import(&self) -> bool {
+        true
+    }
+
+    fn supports_write_confinement(&self) -> bool {
         true
     }
 

@@ -40,6 +40,7 @@ fn fixture(scenario: &str) -> (TempDir, PiClient, AgentSessionSpec) {
         provider: PROVIDER.into(),
         cwd: cwd.to_str().unwrap().into(),
         config: StoredAgentConfig::default(),
+        confinement: None,
     };
     (directory, client, spec)
 }

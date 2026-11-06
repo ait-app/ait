@@ -48,9 +48,9 @@ async fn remote_selection_checks_model_tier_and_skill_invocation_uses_native_inp
     assert!(client.validate_selection(&spec).await.is_err());
     spec.config.feature_values = None;
     client.validate_selection(&spec).await.unwrap();
-    assert_eq!(policy(&spec.config).0, "on-request");
+    assert_eq!(policy(&spec.config, false).0, "on-request");
     spec.config.mode_id = Some("full-access".to_owned());
-    assert_eq!(policy(&spec.config).1, "danger-full-access");
+    assert_eq!(policy(&spec.config, false).1, "danger-full-access");
 }
 
 #[cfg(unix)]

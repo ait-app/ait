@@ -77,6 +77,7 @@ impl OpenCodeClient {
             provider: PROVIDER.into(),
             cwd: cwd.clone(),
             config: StoredAgentConfig::default(),
+            confinement: None,
         })?;
         let (mut transport, capabilities) =
             launcher::spawn(self, &cwd, &StoredAgentConfig::default()).await?;
@@ -93,6 +94,10 @@ impl OpenCodeClient {
 
 #[async_trait::async_trait]
 impl AgentClient for OpenCodeClient {
+    fn supports_write_confinement(&self) -> bool {
+        true
+    }
+
     async fn subagents(
         &self,
         cwd: &str,
@@ -188,6 +193,7 @@ impl AgentClient for OpenCodeClient {
             provider: PROVIDER.into(),
             cwd: cwd.into(),
             config: StoredAgentConfig::default(),
+            confinement: None,
         })?;
         super::discovery::discover(self, cwd).await
     }

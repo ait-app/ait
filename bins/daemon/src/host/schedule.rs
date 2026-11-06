@@ -269,6 +269,7 @@ impl AgentRunner {
                                 checkout_source: None,
                                 first_agent_prompt: Some(prompt),
                                 expects_initial_agent: true,
+                                sandbox: None,
                             },
                             &now,
                         )

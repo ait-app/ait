@@ -35,6 +35,7 @@ impl AgentManager {
             provider: record.provider.clone(),
             cwd: record.cwd.clone(),
             config: record.config.clone().unwrap_or_default(),
+            confinement: None,
         };
         validate_identity(&id, &spec)?;
         if let Some(workspace) = &record.workspace_id {
@@ -53,6 +54,7 @@ impl AgentManager {
             .ok_or_else(|| AgentManagerError::MissingPersistence(id.clone()))?;
         let (launch, binding) =
             self.prepare_mcp(&id, &spec, AgentResumePurpose::Interactive, &record.labels)?;
+        let launch = self.confine(launch, record.workspace_id.as_deref())?;
         let session = super::execution::native(
             &spec.provider,
             "resume",
@@ -106,6 +108,7 @@ impl AgentManager {
             provider: record.provider.clone(),
             cwd: record.cwd.clone(),
             config: record.config.clone().unwrap_or_default(),
+            confinement: None,
         };
         validate_identity(agent_id, &spec)?;
         self.available_client(&record.provider)
@@ -133,6 +136,7 @@ impl AgentManager {
             AgentResumePurpose::Interactive,
             &record.labels,
         )?;
+        let launch = self.confine(launch, record.workspace_id.as_deref())?;
         let session = super::execution::native(
             &spec.provider,
             "restore",

@@ -201,6 +201,7 @@ impl ExecutionState {
                         system_prompt: Some(instructions),
                         ..StoredAgentConfig::default()
                     },
+                    confinement: None,
                 },
                 AgentRegistration {
                     workspace_id: Some(owner.workspace_id.clone()),

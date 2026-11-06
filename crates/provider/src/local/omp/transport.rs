@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin, Command};
+use tokio::process::{Child, ChildStdin};
 use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio_util::task::AbortOnDropHandle;
@@ -44,13 +44,22 @@ pub(super) struct Transport {
 }
 
 impl Transport {
+    /// Start the native RPC process in `cwd` with `args`, under `confinement` for an Agent
+    /// in a sandboxed Workspace.
+    /// Returns launch, confinement or missing-pipe failures.
     pub(super) fn spawn(
         client: &OmpClient,
         cwd: &str,
         args: &[String],
+        confinement: Option<&domain::workspace::sandbox::WriteConfinement>,
     ) -> Result<Self, AgentSessionError> {
         let diagnostics = Diagnostics::new(LABEL);
-        let mut command = Command::new(&client.program);
+        let mut command = crate::local::sandbox::command(
+            &client.program,
+            confinement,
+            crate::local::sandbox::OMP_STATE,
+            &|name| client.environment.variable(name),
+        )?;
         command
             .args(args)
             .current_dir(cwd)

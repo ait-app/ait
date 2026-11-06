@@ -198,6 +198,7 @@ fn real_fixture() -> (tempfile::TempDir, OmpClient, AgentSessionSpec) {
             feature_values: Some(BTreeMap::from([("autoRetry".to_owned(), json!(false))])),
             ..StoredAgentConfig::default()
         },
+        confinement: None,
     };
     (root, client, spec)
 }

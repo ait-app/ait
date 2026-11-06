@@ -730,5 +730,6 @@ fn workspace(id: &str, project_id: &str) -> PersistedWorkspaceRecord {
         labels: None,
         auto_name: None,
         untrusted_source: None,
+        sandbox: None,
     }
 }

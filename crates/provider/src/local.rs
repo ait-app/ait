@@ -21,6 +21,7 @@ pub(crate) mod opencode;
 pub(crate) mod pi;
 mod process_group;
 mod prompt_blocks;
+pub(crate) mod sandbox;
 mod summary_model;
 mod tool_detail;
 mod usage;

@@ -86,6 +86,10 @@ impl AgentClient for OmpClient {
         PROVIDER
     }
 
+    fn supports_write_confinement(&self) -> bool {
+        true
+    }
+
     fn supports_session_import(&self) -> bool {
         true
     }

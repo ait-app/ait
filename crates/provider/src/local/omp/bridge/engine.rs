@@ -383,6 +383,7 @@ impl Engine {
             provider: PROVIDER.to_owned(),
             cwd: config::text(params, "cwd")?.to_owned(),
             config: alias.as_ref().map_or(config, |alias| alias.config.clone()),
+            confinement: None,
         };
         let handle = if let Some(alias) = alias {
             Some(alias.handle)

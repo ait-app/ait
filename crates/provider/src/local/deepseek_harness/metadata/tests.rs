@@ -162,6 +162,7 @@ async fn installed_dsh_metadata_has_no_tools_or_persisted_session() {
             model: Some(json!(["deepseek-official", "deepseek-flash"]).to_string()),
             ..Default::default()
         },
+        confinement: None,
     };
     let result = tokio::time::timeout(
         Duration::from_secs(30),

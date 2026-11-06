@@ -17,6 +17,7 @@ fn fixture() -> (tempfile::TempDir, MiniMaxClient, AgentSessionSpec) {
         provider: PROVIDER.into(),
         cwd: root.path().to_str().unwrap().into(),
         config: StoredAgentConfig::default(),
+        confinement: None,
     };
     (root, client, spec)
 }

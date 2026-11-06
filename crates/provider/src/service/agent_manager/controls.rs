@@ -358,11 +358,15 @@ impl AgentManager {
             .persistence
             .as_ref()
             .ok_or(ErrorCode::UnsupportedCapability)?;
-        let spec = AgentSessionSpec {
-            provider: record.provider.clone(),
-            cwd: record.cwd.clone(),
-            config: record.config.clone().unwrap_or_default(),
-        };
+        let spec = self.confine_control(
+            AgentSessionSpec {
+                provider: record.provider.clone(),
+                cwd: record.cwd.clone(),
+                config: record.config.clone().unwrap_or_default(),
+                confinement: None,
+            },
+            record.workspace_id.as_deref(),
+        )?;
         let client = self
             .clients
             .get(&record.provider)
@@ -451,11 +455,15 @@ impl AgentManager {
             .persistence
             .as_ref()
             .ok_or(ErrorCode::UnsupportedCapability)?;
-        let spec = AgentSessionSpec {
-            provider: record.provider.clone(),
-            cwd: record.cwd.clone(),
-            config,
-        };
+        let spec = self.confine_control(
+            AgentSessionSpec {
+                provider: record.provider.clone(),
+                cwd: record.cwd.clone(),
+                config,
+                confinement: None,
+            },
+            record.workspace_id.as_deref(),
+        )?;
         self.clients
             .get(&record.provider)
             .ok_or(ErrorCode::UnsupportedCapability)?

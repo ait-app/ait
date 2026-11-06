@@ -62,6 +62,7 @@ async fn authenticated_multi_turn_and_resume() {
             mode_id: Some("plan".to_owned()),
             ..Default::default()
         },
+        confinement: None,
     };
     let mut session = client.create_session(&spec).await.unwrap();
     let handle = session.persistence().unwrap();

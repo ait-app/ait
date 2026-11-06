@@ -43,12 +43,11 @@ pub(super) struct Transport {
 impl Transport {
     pub(super) fn spawn(
         program: &Path,
-        cwd: &str,
+        launch: Launch<'_>,
         deadline: Duration,
-        goals: bool,
         environment: &crate::ports::environment::AgentEnvironment,
     ) -> Result<Self, AgentSessionError> {
-        let mut command = process(program, cwd, goals, environment);
+        let mut command = process(program, &launch, environment)?;
         let diagnostics = Diagnostics::new("codex");
         let mut child = command
             .spawn()
@@ -439,19 +438,34 @@ fn writer_conflict(error: &Value, thread: Option<&str>) -> bool {
         }) == thread
 }
 
+/// Placement of one native app-server process.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Launch<'a> {
+    /// Native working directory.
+    pub(super) cwd: &'a str,
+    /// Whether the native goals feature is enabled.
+    pub(super) goals: bool,
+    /// OS write confinement for an Agent in a sandboxed Workspace.
+    pub(super) confinement: Option<&'a domain::workspace::sandbox::WriteConfinement>,
+}
+
 fn process(
     program: &Path,
-    cwd: &str,
-    goals: bool,
+    launch: &Launch<'_>,
     environment: &crate::ports::environment::AgentEnvironment,
-) -> Command {
-    let mut command = Command::new(program);
+) -> Result<Command, AgentSessionError> {
+    let mut command = crate::local::sandbox::command(
+        program,
+        launch.confinement,
+        crate::local::sandbox::CODEX_STATE,
+        &|name| environment.variable(name),
+    )?;
     command.envs(environment.entries());
-    if goals {
+    if launch.goals {
         command.args(["--enable", "goals"]);
     }
     command.arg("app-server")
-        .current_dir(cwd)
+        .current_dir(launch.cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         // Native diagnostics may contain prompts, paths or authentication data.
@@ -459,7 +473,7 @@ fn process(
         .kill_on_drop(true);
     #[cfg(unix)]
     command.process_group(0);
-    command
+    Ok(command)
 }
 
 async fn write_response(

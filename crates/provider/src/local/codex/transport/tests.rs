@@ -65,9 +65,12 @@ impl Fixture {
         std::fs::write(script, source).unwrap();
         let transport = Transport::spawn(
             Path::new("python3"),
-            root.path().to_str().unwrap(),
+            Launch {
+                cwd: root.path().to_str().unwrap(),
+                goals: false,
+                confinement: None,
+            },
             Duration::from_secs(3),
-            false,
             &crate::ports::environment::AgentEnvironment::default(),
         )
         .unwrap();

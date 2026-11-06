@@ -7,7 +7,7 @@ use tokio::{process::Command, time::Instant};
 
 use super::{client::OpenCodeClient, config, observation::Source};
 use crate::local::{acp_transport::Transport, metadata_process::Process};
-use crate::ports::agent_session::AgentSessionError;
+use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 
 const MAX_QUERY_BYTES: u64 = 8 * 1024 * 1024;
 
@@ -93,7 +93,7 @@ pub(super) async fn spawn(
     cwd: &str,
     selected: &StoredAgentConfig,
 ) -> Result<(Transport, Value), AgentSessionError> {
-    let (transport, capabilities, _) = launch(client, cwd, selected, false, false).await?;
+    let (transport, capabilities, _) = launch(client, cwd, selected, Launch::default()).await?;
     Ok((transport, capabilities))
 }
 
@@ -103,7 +103,35 @@ pub(super) async fn observed(
     cwd: &str,
     selected: &StoredAgentConfig,
 ) -> Result<(Transport, Value, Option<Source>), AgentSessionError> {
-    launch(client, cwd, selected, false, true).await
+    launch(
+        client,
+        cwd,
+        selected,
+        Launch {
+            observe: true,
+            ..Launch::default()
+        },
+    )
+    .await
+}
+
+/// Initialize an Agent's interactive ACP child, confined when its Workspace is sandboxed.
+pub(super) async fn session(
+    client: &OpenCodeClient,
+    spec: &AgentSessionSpec,
+    selected: &StoredAgentConfig,
+) -> Result<(Transport, Value, Option<Source>), AgentSessionError> {
+    launch(
+        client,
+        &spec.cwd,
+        selected,
+        Launch {
+            observe: true,
+            confinement: spec.confinement.as_ref(),
+            ..Launch::default()
+        },
+    )
+    .await
 }
 
 /// Initialize an owned tool-disabled ACP child; propagate configuration and launch failures.
@@ -112,16 +140,35 @@ pub(super) async fn auxiliary(
     cwd: &str,
     selected: &StoredAgentConfig,
 ) -> Result<(Transport, Value), AgentSessionError> {
-    let (transport, capabilities, _) = launch(client, cwd, selected, true, false).await?;
+    let (transport, capabilities, _) = launch(
+        client,
+        cwd,
+        selected,
+        Launch {
+            auxiliary: true,
+            ..Launch::default()
+        },
+    )
+    .await?;
     Ok((transport, capabilities))
+}
+
+/// Role and confinement of one native ACP child.
+#[derive(Debug, Clone, Copy, Default)]
+struct Launch<'a> {
+    /// Tool-disabled auxiliary model process.
+    auxiliary: bool,
+    /// Prepare the read-only metadata supplement.
+    observe: bool,
+    /// OS write confinement for an Agent in a sandboxed Workspace.
+    confinement: Option<&'a domain::workspace::sandbox::WriteConfinement>,
 }
 
 async fn launch(
     client: &OpenCodeClient,
     cwd: &str,
     selected: &StoredAgentConfig,
-    auxiliary: bool,
-    observe: bool,
+    role: Launch<'_>,
 ) -> Result<(Transport, Value, Option<Source>), AgentSessionError> {
     let started = Instant::now();
     let deadline = started + client.startup_timeout;
@@ -137,9 +184,20 @@ async fn launch(
         "opencode.startup.version"
     );
     let legacy = version.starts_with("1.");
-    let mut command = Command::new(&client.program);
+    let mut command = crate::local::sandbox::command(
+        &client.program,
+        role.confinement,
+        crate::local::sandbox::OPENCODE_STATE,
+        &|name| {
+            client
+                .environment
+                .get(name)
+                .cloned()
+                .or_else(|| std::env::var(name).ok())
+        },
+    )?;
     command.arg("acp").envs(&client.environment);
-    let mut observation = if observe {
+    let mut observation = if role.observe {
         Source::prepare(&version, client.deadline)?
     } else {
         None
@@ -151,7 +209,7 @@ async fn launch(
         // Native 1.x excludes question in ACP. Do not enable an unanswerable native question.
         command.env("OPENCODE_ENABLE_QUESTION_TOOL", "false");
     }
-    configure_overlay(&mut command, client, selected, auxiliary, legacy)?;
+    configure_overlay(&mut command, client, selected, role.auxiliary, legacy)?;
     // Native 2.x standalone processes can race the shared SQLite schema bootstrap.
     // Hold the clone-shared gate only through initialization, never through a session or prompt.
     let queued = Instant::now();

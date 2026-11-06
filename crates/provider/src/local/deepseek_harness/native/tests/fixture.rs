@@ -97,6 +97,7 @@ impl Fixture {
                 provider: PROVIDER.into(),
                 cwd,
                 config: StoredAgentConfig::default(),
+                confinement: None,
             },
         }
     }

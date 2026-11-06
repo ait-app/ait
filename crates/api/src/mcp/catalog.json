@@ -307,13 +307,13 @@
   {
     "name": "create_workspace",
     "methods": ["workspace.create.request"],
-    "description": "Create an Ait workspace from an existing directory or an isolated managed worktree. Select branch-off, checkout-branch or checkout-pr. Reuse idempotencyKey on retries.",
+    "description": "Create an Ait workspace from an existing directory or an isolated managed worktree. Select branch-off, checkout-branch or checkout-pr. sandboxed-worktree also confines every Agent process to writing inside the worktree (macOS only). Reuse idempotencyKey on retries.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "isolation": {
           "type": "string",
-          "enum": ["local", "worktree"]
+          "enum": ["local", "worktree", "sandboxed-worktree"]
         },
         "path": {
           "type": "string",

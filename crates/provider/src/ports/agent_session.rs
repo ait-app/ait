@@ -38,6 +38,8 @@ pub(crate) struct AgentSessionSpec {
     pub(crate) cwd: String,
     /// Persistable provider configuration.
     pub(crate) config: StoredAgentConfig,
+    /// OS write confinement for the native process tree; never persisted with the Agent.
+    pub(crate) confinement: Option<domain::workspace::sandbox::WriteConfinement>,
 }
 
 /// Whether a resumed native session may accept a new foreground turn.
@@ -307,6 +309,13 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
 pub(crate) trait AgentClient: Debug + Send + Sync {
     /// Whether this adapter accepts a session-private HTTP MCP connection.
     fn supports_agent_mcp(&self) -> bool {
+        false
+    }
+
+    /// Whether this adapter launches its native process under `AgentSessionSpec::confinement`.
+    ///
+    /// Adapters that ignore the field must keep the default so sandboxed launches fail closed.
+    fn supports_write_confinement(&self) -> bool {
         false
     }
 

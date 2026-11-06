@@ -199,6 +199,7 @@ pub(super) fn fixture() -> (tempfile::TempDir, OmpClient, AgentSessionSpec) {
         provider: "omp".to_owned(),
         cwd: root.path().to_str().unwrap().to_owned(),
         config: StoredAgentConfig::default(),
+        confinement: None,
     };
     (root, client, spec)
 }

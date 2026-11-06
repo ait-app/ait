@@ -225,7 +225,12 @@ pub(super) fn modes() -> Vec<Value> {
     ]
 }
 
-pub(super) fn policy(config: &StoredAgentConfig) -> (Value, &str, Value) {
+/// Resolve native approval, sandbox mode and turn sandbox policy for `config`.
+///
+/// A `confined` process already runs under the Workspace's OS write sandbox, which refuses
+/// to apply Codex's nested Seatbelt profile; its tool commands therefore run with full
+/// access inside that outer boundary instead of failing.
+pub(super) fn policy(config: &StoredAgentConfig, confined: bool) -> (Value, &str, Value) {
     let (approval, sandbox) = match config.mode_id.as_deref().unwrap_or("read-only") {
         "auto" | "auto-review" => ("on-request", "workspace-write"),
         "full-access" => ("never", "danger-full-access"),
@@ -237,10 +242,14 @@ pub(super) fn policy(config: &StoredAgentConfig) -> (Value, &str, Value) {
         .cloned()
         .unwrap_or_else(|| json!(approval));
     crate::local::configuration::complete_codex_approval(&mut approval);
-    let sandbox = options
-        .and_then(|options| options.get("sandbox_mode"))
-        .and_then(Value::as_str)
-        .unwrap_or(sandbox);
+    let sandbox = if confined {
+        "danger-full-access"
+    } else {
+        options
+            .and_then(|options| options.get("sandbox_mode"))
+            .and_then(Value::as_str)
+            .unwrap_or(sandbox)
+    };
     let mut policy = match sandbox {
         "workspace-write" => json!({"type":"workspaceWrite","networkAccess":false}),
         "danger-full-access" => json!({"type":"dangerFullAccess"}),

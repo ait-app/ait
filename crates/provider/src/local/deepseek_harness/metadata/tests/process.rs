@@ -24,6 +24,7 @@ fn fixture() -> (tempfile::TempDir, DeepSeekHarnessClient, AgentSessionSpec) {
             model: Some(json!(["deepseek-official", "fixture-model"]).to_string()),
             ..Default::default()
         },
+        confinement: None,
     };
     (root, client, spec)
 }

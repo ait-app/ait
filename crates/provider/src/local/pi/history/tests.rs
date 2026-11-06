@@ -720,6 +720,7 @@ async fn symlink_lookup_survives_canonical_placement_resume_and_a_renamed_file()
         provider: PROVIDER.into(),
         cwd,
         config: StoredAgentConfig::default(),
+        confinement: None,
     };
     let mut session = client
         .resume_session(&imported, &spec, AgentResumePurpose::Interactive)
@@ -2271,6 +2272,7 @@ async fn imported_session_refresh_uses_the_native_handle_after_resume() {
         provider: PROVIDER.into(),
         cwd,
         config: history.config,
+        confinement: None,
     };
     let mut session = client
         .resume_session(&imported, &spec, AgentResumePurpose::Interactive)

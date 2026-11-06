@@ -35,6 +35,7 @@ async fn installed_host_discovers_switches_permissions_and_adopts_legacy_session
         provider: PROVIDER.into(),
         cwd: directory.path().to_str().unwrap().into(),
         config: StoredAgentConfig::default(),
+        confinement: None,
     };
     let details = client.discover(&spec.cwd).await.unwrap();
     assert!(

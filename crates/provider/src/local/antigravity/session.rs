@@ -146,6 +146,7 @@ impl Session {
                 provider: PROVIDER.to_owned(),
                 cwd: self.cwd.clone(),
                 config: config.clone(),
+                confinement: None,
             };
             let (transport, _, init) = connect(&self.client, &spec, Some(&self.id)).await?;
             self.transport = Some(transport);
