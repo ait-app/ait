@@ -2,7 +2,7 @@
 
 use std::ffi::OsString;
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, bail};
 use clap::{Args, Parser, Subcommand};
@@ -11,15 +11,16 @@ use secrecy::{ExposeSecret, SecretString};
 
 use serde::Deserialize;
 
+mod data_home;
 mod local_token;
 
 /// Daemon startup arguments; CLI values override environment and TOML settings.
 #[derive(Debug, Parser)]
-#[command(name = "daemon", version = model::BUILD_VERSION, about = "Ait local daemon")]
+#[command(name = "aitd", bin_name = "aitd", version = model::BUILD_VERSION, about = "Ait local daemon")]
 pub(crate) struct Cli {
     #[command(subcommand)]
     pub command: Option<Command>,
-    /// Daemon data directory (default: `AIT_SERVER_DATA_DIR` or ~/.ait-server).
+    /// Daemon data directory (default: `AIT_SERVER_DATA_DIR` or ~/.ait).
     #[arg(long, global = true)]
     pub data_dir: Option<PathBuf>,
     /// IP socket address (default: `AIT_SERVER_LISTEN`, config, or 127.0.0.1:7316).
@@ -84,6 +85,8 @@ fn parse_secret(value: &str) -> Result<SecretString, String> {
     Ok(value.to_owned().into())
 }
 
+/// Resolve the explicit data directory, or the first existing default under `HOME`.
+/// Returns an error when no directory can be chosen or it is empty.
 pub(super) fn data_directory(
     cli: &Cli,
     env: impl Fn(&str) -> Option<OsString>,
@@ -92,7 +95,7 @@ pub(super) fn data_directory(
         .data_dir
         .clone()
         .or_else(|| env("AIT_SERVER_DATA_DIR").map(PathBuf::from))
-        .or_else(|| env("HOME").map(|home| PathBuf::from(home).join(".ait-server")))
+        .or_else(|| env("HOME").map(|home| data_home::resolve(Path::new(&home))))
         .context("set --data-dir or AIT_SERVER_DATA_DIR when HOME is unavailable")?;
     if path.as_os_str().is_empty() {
         bail!("data directory must not be empty");
@@ -153,7 +156,7 @@ impl Config {
         env: impl Fn(&str) -> Option<OsString>,
         validate_token: impl Fn(&str) -> anyhow::Result<()>,
         validate_origin: impl Fn(&str) -> anyhow::Result<()>,
-        guard: impl FnOnce(&std::path::Path, SocketAddr) -> anyhow::Result<T>,
+        guard: impl FnOnce(&Path, SocketAddr) -> anyhow::Result<T>,
     ) -> anyhow::Result<(Self, T)> {
         let explicit_token = env("AIT_SERVER_TOKEN")
             .map(|value| value.into_string().map(SecretString::from))

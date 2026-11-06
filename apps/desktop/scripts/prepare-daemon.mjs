@@ -9,8 +9,8 @@ const root = path.resolve(desktop, "../..");
 
 export function stageDaemon({ binary, directory, version }) {
   const actual = execFileSync(binary, ["--version"], { encoding: "utf8" }).trim();
-  if (actual !== `daemon ${version}`) {
-    throw new Error(`Expected daemon ${version}, received ${actual}`);
+  if (actual !== `aitd ${version}`) {
+    throw new Error(`Expected aitd ${version}, received ${actual}`);
   }
   // This directory is generated packaging input. Never carry old sidecars forward.
   rmSync(directory, { recursive: true, force: true });

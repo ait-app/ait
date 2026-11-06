@@ -83,31 +83,6 @@ jobs:
       - name: Check formatting
         run: npx --yes "oxfmt@$(node -p 'require("./package.json").devDependencies.oxfmt')" --check .
 
-  headless-macos:
-    needs: changes
-    if: needs.changes.outputs.rust == 'true'
-    runs-on: macos-15
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@1.98.1
-      - &rust-cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          # PRs restore main's cache without saving their own, which keeps main's entries warm.
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      # rust-cache prunes non-Cargo files under target, leaving empty prebuilt lib directories.
-      # sherpa checks only whether lib/ exists; reset both its build record and partial download.
-      - &reset-sherpa
-        name: Reset cached sherpa native artifacts
-        run: |
-          cargo clean --package sherpa-onnx-sys
-          rm -rf target/sherpa-onnx-prebuilt
-      - name: Test macOS host integration
-        run: |
-          cargo test --locked -p daemon --bin daemon -- device:: config:: host::tests::publication
-          cargo test --locked -p host-link
-
   rust:
     needs: changes
     if: needs.changes.outputs.rust == 'true'
@@ -119,8 +94,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.98.1
         with:
           components: clippy,rustfmt
-      - *rust-cache
-      - *reset-sherpa
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # PRs restore main's cache without saving their own, which keeps main's entries warm.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # rust-cache prunes non-Cargo files under target, leaving empty prebuilt lib directories.
+      # sherpa checks only whether lib/ exists; reset both its build record and partial download.
+      - name: Reset cached sherpa native artifacts
+        run: |
+          cargo clean --package sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest

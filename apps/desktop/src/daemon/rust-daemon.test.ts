@@ -1,5 +1,13 @@
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir, networkInterfaces, uptime } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -109,7 +117,7 @@ describe.skipIf(!process.env.AIT_SERVER_BIN)("real Rust child lifecycle", () => 
     const version = execFileSync(process.env.AIT_SERVER_BIN!, ["--version"], {
       encoding: "utf8",
     }).trim();
-    expect(version).toBe(`daemon ${a.version}`);
+    expect(version).toBe(`aitd ${a.version}`);
     const token = manager.authorization(`ws://${a.listen}/v1/ws`)!;
     expect(token).toHaveLength(64);
     expect(manager.authorization(`ws://localhost:${a.listen!.split(":").at(-1)}/v1/ws`)).toBe(
@@ -303,4 +311,19 @@ it("keeps Rust desktop data separate from the legacy Paseo home", () => {
   expect(
     resolveDesktopDaemonHome({ AIT_SERVER_DATA_DIR: "/rust-desktop", PASEO_HOME: "/legacy-paseo" }),
   ).toBe("/rust-desktop");
+});
+
+it("reads existing default homes in order and falls back to ~/.ait without moving them", () => {
+  const userHome = mkdtempSync(path.join(tmpdir(), "ait-desktop-user-home-"));
+  homes.push(userHome);
+  const resolve = () => resolveDesktopDaemonHome({}, userHome);
+  expect(resolve()).toBe(path.join(userHome, ".ait"));
+  expect(existsSync(path.join(userHome, ".ait"))).toBe(false);
+  for (const name of [".ait-server", ".ait-server-desktop", ".ait"]) {
+    mkdirSync(path.join(userHome, name));
+    expect(resolve()).toBe(path.join(userHome, name));
+  }
+  for (const name of [".ait-server", ".ait-server-desktop"]) {
+    expect(statSync(path.join(userHome, name)).isDirectory()).toBe(true);
+  }
 });
