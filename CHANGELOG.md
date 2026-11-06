@@ -2,7 +2,7 @@
 
 ## 0.2.0 - 2026-11-07
 
-- Standardize the standalone daemon CLI name as `aitd`, including command help, errors, desktop launches and service examples. Existing scripts that invoke the old `daemon` command must use `aitd`.
+- Align daemon command help, errors, desktop version checks and service examples with the packaged `aitd` executable name; standalone archive filenames stay unchanged.
 - Use `~/.ait` for new installations. Without an explicit data directory, reuse the first existing directory in this order: `~/.ait`, `~/.ait-server-desktop`, `~/.ait-server`; existing directories are not moved or renamed. If both legacy directories exist, pin `--data-dir` to keep using a specific one.
 - Separate manual development builds from CI checks. PR and main CI run checks; development installers use the manual Dev Build workflow, while version tags continue to produce official Release Drafts.
 
