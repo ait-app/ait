@@ -273,7 +273,12 @@ impl Deployment {
                 .any(|path| path.ends_with("agents/agents.json"))
         );
         for path in files {
-            let bytes = std::fs::read(&path).unwrap();
+            let bytes = match std::fs::read(&path) {
+                Ok(bytes) => bytes,
+                // Transient files (e.g. atomic-write temporaries) can vanish after listing.
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => panic!("read {}: {error}", path.display()),
+            };
             for credential in credentials {
                 let secret = credential.trim_start_matches("Bearer ").as_bytes();
                 assert!(
