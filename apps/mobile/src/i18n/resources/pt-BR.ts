@@ -20,6 +20,8 @@ export const ptBR: TranslationResources = {
       "Os modos que permitem aos agentes executar comandos também permitem que eles leiam as credenciais do Ait deste computador e contornem os limites do Ait do Bot. Permita-os apenas para trabalho que você deixaria um agente fazer sem supervisão.",
     commandReachWarning:
       "O Bot pode enviar prompts a todos os agentes deste workspace, inclusive os que você iniciou, e alterar as configurações deles. Esses agentes mantêm as próprias permissões, então um prompt do Bot pode alcançar recursos além dos limites do próprio Bot.",
+    terminalsWarning:
+      "Os terminais executam comandos neste computador, então podem ler as credenciais do Ait dele e contornar os limites do Ait do Bot. Ative-os apenas para trabalho que você deixaria um agente fazer sem supervisão.",
     noteInstructionsInInput:
       "Este provedor não oferece suporte a um prompt de sistema atualizável, então as instruções integradas e a memória do Bot são adicionadas à entrada da conversa.",
     noteNoReadOnlyMode:
@@ -42,6 +44,7 @@ export const ptBR: TranslationResources = {
     modeCapHint:
       "Escolha os modos que o Bot pode usar em cada provedor. Um provedor sem modos selecionados não pode ser usado. O primeiro modo selecionado é o padrão.",
     defaultMode: "Modo padrão",
+    providerUnavailable: "{{provider}} (indisponível)",
     readOnlyHint:
       "O Bot é executado no modo mais restrito que o provedor oferece (no Claude, o modo padrão, em que suas próprias regras de permissão continuam valendo) e deixa as alterações para os agentes que ele inicia.",
     title: "Bot",

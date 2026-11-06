@@ -67,6 +67,8 @@ export const en = {
       "Modes that let agents run commands also let them read this computer's Ait credentials and bypass the Bot's Ait limits. Allow them only for work you would let an agent do unattended.",
     commandReachWarning:
       "The Bot can prompt and reconfigure every agent in this workspace, including ones you started. Those agents keep their own permissions, so a prompt from the Bot can reach capabilities beyond the Bot's own limits.",
+    terminalsWarning:
+      "Terminals run commands on this computer, so they can read its Ait credentials and bypass the Bot's Ait limits. Enable them only for work you would let an agent do unattended.",
     noteInstructionsInInput:
       "This provider does not support an updatable system prompt, so the Bot's built-in instructions and memory are added to the conversation input.",
     noteNoReadOnlyMode:
@@ -89,6 +91,7 @@ export const en = {
     modeCapHint:
       "Choose which modes the Bot may use for each provider. A provider with no modes selected cannot be used. The first selected mode is the default.",
     defaultMode: "Default mode",
+    providerUnavailable: "{{provider}} (unavailable)",
     readOnlyHint:
       "The Bot runs in the strictest mode its provider offers (for Claude, the default mode, where your own allow rules still apply) and leaves changes to the agents it starts.",
     title: "Bot",

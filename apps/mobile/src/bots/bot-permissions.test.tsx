@@ -103,3 +103,19 @@ it("disables every control when read-only", () => {
     "true",
   );
 });
+
+it("warns that terminals bypass the Bot's limits", () => {
+  renderFields();
+  const group = screen.getByTestId("bot-group-terminals").parentElement;
+  expect(group?.textContent).toContain("bots.terminalsWarning");
+  expect(screen.getAllByText("bots.terminalsWarning")).toHaveLength(1);
+});
+
+it("lists cap entries for providers missing from the snapshot so they can be removed", () => {
+  const onChange = renderFields({ ...defaults, modes: { ...defaults.modes, gone: ["plan"] } });
+  expect(screen.getByTestId("bot-modes-gone").textContent).toContain("bots.providerUnavailable");
+  const plan = screen.getByTestId("bot-mode-gone-plan");
+  expect(plan.getAttribute("aria-checked")).toBe("true");
+  fireEvent.click(plan);
+  expect(onChange).toHaveBeenCalledWith({ groups: defaults.groups, modes: defaults.modes });
+});

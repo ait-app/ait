@@ -61,6 +61,8 @@ export const zhCN: TranslationResources = {
       "允许 Agent 运行命令的模式，也让这些 Agent 能够读取本机的 Ait 凭据，从而绕过 Bot 的 Ait 权限限制。只为你愿意让 Agent 无人值守完成的工作开启这些模式。",
     commandReachWarning:
       "Bot 可以向本 Workspace 中的每个 Agent（包括你自己启动的）发送提示并修改其设置。这些 Agent 保留各自的权限，因此 Bot 的提示可能触及超出 Bot 自身限制的能力。",
+    terminalsWarning:
+      "终端会在本机运行命令，因此能够读取本机的 Ait 凭据，从而绕过 Bot 的 Ait 权限限制。只为你愿意让 Agent 无人值守完成的工作开启。",
     noteInstructionsInInput:
       "该 Provider 不支持可更新的系统提示，Bot 的内置指令与记忆会附加在对话输入中。",
     noteNoReadOnlyMode:
@@ -82,6 +84,7 @@ export const zhCN: TranslationResources = {
     modeCapHint:
       "为每个 Provider 选择 Bot 可使用的模式。未选择任何模式的 Provider 不可使用，第一个选中的模式为默认模式。",
     defaultMode: "默认模式",
+    providerUnavailable: "{{provider}}（不可用）",
     readOnlyHint:
       "Bot 以其 Provider 提供的最严格模式运行（Claude 为 default 模式，你自己的允许规则仍然生效），把改动交给它启动的 Agent。",
     title: "Bot",

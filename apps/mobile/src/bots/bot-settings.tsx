@@ -120,6 +120,7 @@ function BotModelSection({
   bot,
   interactive,
   readOnly,
+  showMode,
 }: {
   serverId: string;
   workspaceId: string;
@@ -127,6 +128,8 @@ function BotModelSection({
   bot: BotView;
   interactive: boolean;
   readOnly: boolean;
+  /** Hosts without Bot permissions still honor the Bot's own mode. */
+  showMode: boolean;
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
@@ -152,7 +155,7 @@ function BotModelSection({
         value={draft}
         onChange={setDraft}
         disabled={disabled}
-        showMode={false}
+        showMode={showMode}
       />
       <Text style={styles.hint}>{t("bots.configurationHint")}</Text>
       {save.error ? <Text style={styles.error}>{save.error.message}</Text> : null}
@@ -176,6 +179,8 @@ function BotPermissionsSection({
   permissions,
   interactive,
   readOnly,
+  saved,
+  onSaved,
 }: {
   serverId: string;
   workspaceId: string;
@@ -183,6 +188,9 @@ function BotPermissionsSection({
   permissions: BotPermissions;
   interactive: boolean;
   readOnly: boolean;
+  /** Whether this screen saved the current permissions; kept by the parent across re-keys. */
+  saved: boolean;
+  onSaved: (saved: boolean) => void;
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
@@ -198,6 +206,7 @@ function BotPermissionsSection({
       });
     },
     onSuccess: ({ bot }) => {
+      onSaved(true);
       queryClient.setQueryData(botKeys.bot(serverId, workspaceId), bot);
     },
   });
@@ -210,12 +219,13 @@ function BotPermissionsSection({
         value={draft}
         onChange={(next) => {
           save.reset();
+          onSaved(false);
           setDraft(next);
         }}
         disabled={disabled}
       />
       {save.error ? <Text style={styles.error}>{save.error.message}</Text> : null}
-      {save.isSuccess ? <Text style={styles.hint}>{t("bots.permissionsHint")}</Text> : null}
+      {saved ? <Text style={styles.hint}>{t("bots.permissionsHint")}</Text> : null}
       {!readOnly ? (
         <Button
           onPress={() => save.mutate()}
@@ -249,6 +259,7 @@ export function BotSettings({
   const queryClient = useQueryClient();
   const readOnly = !canManageBackgroundTasks(serverId);
   const supportsPermissions = useBotPermissionsSupported(serverId);
+  const [permissionsSaved, setPermissionsSaved] = useState(false);
   const memory = useQuery({
     queryKey: botKeys.memory(serverId, workspaceId),
     enabled: interactive && Boolean(client),
@@ -303,15 +314,20 @@ export function BotSettings({
         bot={bot}
         interactive={interactive}
         readOnly={readOnly}
+        showMode={!supportsPermissions}
       />
       {supportsPermissions && bot.permissions ? (
         <BotPermissionsSection
+          // A change saved elsewhere replaces the draft.
+          key={JSON.stringify(bot.permissions)}
           serverId={serverId}
           workspaceId={workspaceId}
           cwd={cwd}
           permissions={bot.permissions}
           interactive={interactive}
           readOnly={readOnly}
+          saved={permissionsSaved}
+          onSaved={setPermissionsSaved}
         />
       ) : null}
       {!readOnly && bot.state.kind !== "retired" ? (

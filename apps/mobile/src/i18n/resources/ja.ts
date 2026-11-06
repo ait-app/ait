@@ -20,6 +20,8 @@ export const ja: TranslationResources = {
       "エージェントがコマンドを実行できるモードでは、このコンピューターの Ait 認証情報を読み取り、Bot の Ait 制限を回避することもできます。エージェントに無人で任せてよい作業にのみ許可してください。",
     commandReachWarning:
       "Bot は、あなたが起動したものを含め、このワークスペース内のすべてのエージェントにプロンプトを送信し、設定を変更できます。これらのエージェントは各自の権限を保持するため、Bot のプロンプトは Bot 自身の制限を超える機能に及ぶ可能性があります。",
+    terminalsWarning:
+      "ターミナルはこのコンピューター上でコマンドを実行するため、その Ait 認証情報を読み取り、Bot の Ait 制限を回避できます。エージェントに無人で任せてよい作業にのみ有効にしてください。",
     noteInstructionsInInput:
       "このプロバイダーは更新可能なシステムプロンプトに対応していないため、Bot の組み込み指示とメモリは会話の入力に付加されます。",
     noteNoReadOnlyMode:
@@ -42,6 +44,7 @@ export const ja: TranslationResources = {
     modeCapHint:
       "プロバイダーごとに Bot が使えるモードを選択します。モードを選択しないプロバイダーは使用できません。最初に選択したモードがデフォルトです。",
     defaultMode: "デフォルトモード",
+    providerUnavailable: "{{provider}}（利用不可）",
     readOnlyHint:
       "Bot はプロバイダーが提供する最も厳格なモードで実行され（Claude ではデフォルトモードで、あなた自身の許可ルールは引き続き適用されます）、変更は Bot が起動するエージェントに任せます。",
     title: "Bot",

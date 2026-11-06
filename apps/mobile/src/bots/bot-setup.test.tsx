@@ -251,6 +251,16 @@ it("setup_omits_permissions_on_old_hosts", async () => {
   expect(botRequest.mock.calls[0][1]).not.toHaveProperty("permissions");
 });
 
+it("setup_keeps_the_mode_picker_on_old_hosts", async () => {
+  botRequest.mockResolvedValue({ bot, created: true });
+  renderSetup();
+  expect(screen.queryByText("bots.readOnlyHint")).toBeNull();
+  fireEvent.change(screen.getByTestId("bot-mode"), { target: { value: "plan" } });
+  fireEvent.click(screen.getByTestId("bot-setup-submit"));
+  await waitFor(() => expect(botRequest).toHaveBeenCalledTimes(1));
+  expect(botRequest.mock.calls[0][1].execution.modeId).toBe("plan");
+});
+
 it("degraded_bot_provider_shows_capability_notes", () => {
   snapshotEntries.current = [
     ...providerEntries(),

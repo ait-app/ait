@@ -20,6 +20,8 @@ export const es: TranslationResources = {
       "Los modos que permiten a los agentes ejecutar comandos también les permiten leer las credenciales de Ait de este equipo y eludir los límites de Ait del Bot. Permítelos solo para trabajo que dejarías hacer a un agente sin supervisión.",
     commandReachWarning:
       "El Bot puede enviar instrucciones a todos los agentes de este espacio de trabajo, incluidos los que iniciaste tú, y cambiar su configuración. Esos agentes conservan sus propios permisos, por lo que una instrucción del Bot puede alcanzar capacidades más allá de los límites del propio Bot.",
+    terminalsWarning:
+      "Las terminales ejecutan comandos en este equipo, por lo que pueden leer sus credenciales de Ait y eludir los límites de Ait del Bot. Actívalas solo para trabajo que dejarías hacer a un agente sin supervisión.",
     noteInstructionsInInput:
       "Este proveedor no admite un prompt de sistema actualizable, así que las instrucciones integradas y la memoria del Bot se añaden a la entrada de la conversación.",
     noteNoReadOnlyMode:
@@ -42,6 +44,7 @@ export const es: TranslationResources = {
     modeCapHint:
       "Elige los modos que el Bot puede usar con cada proveedor. Un proveedor sin modos seleccionados no se puede usar. El primer modo seleccionado es el predeterminado.",
     defaultMode: "Modo predeterminado",
+    providerUnavailable: "{{provider}} (no disponible)",
     readOnlyHint:
       "El Bot se ejecuta en el modo más estricto que ofrece su proveedor (en Claude, el modo predeterminado, donde tus propias reglas de permiso siguen aplicándose) y deja los cambios a los agentes que inicia.",
     title: "Bot",

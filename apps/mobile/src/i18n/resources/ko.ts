@@ -20,6 +20,8 @@ export const ko: TranslationResources = {
       "에이전트가 명령을 실행할 수 있는 모드는 이 컴퓨터의 Ait 자격 증명을 읽고 Bot의 Ait 제한을 우회하는 것도 허용합니다. 에이전트가 무인으로 처리해도 되는 작업에만 허용하세요.",
     commandReachWarning:
       "Bot은 직접 시작한 에이전트를 포함해 이 워크스페이스의 모든 에이전트에 프롬프트를 보내고 설정을 변경할 수 있습니다. 이러한 에이전트는 각자의 권한을 유지하므로 Bot의 프롬프트가 Bot 자체의 제한을 넘는 기능에 닿을 수 있습니다.",
+    terminalsWarning:
+      "터미널은 이 컴퓨터에서 명령을 실행하므로 이 컴퓨터의 Ait 자격 증명을 읽고 Bot의 Ait 제한을 우회할 수 있습니다. 에이전트가 무인으로 처리해도 되는 작업에만 사용하세요.",
     noteInstructionsInInput:
       "이 프로바이더는 업데이트 가능한 시스템 프롬프트를 지원하지 않으므로 Bot의 기본 지침과 메모리가 대화 입력에 추가됩니다.",
     noteNoReadOnlyMode:
@@ -42,6 +44,7 @@ export const ko: TranslationResources = {
     modeCapHint:
       "프로바이더별로 Bot이 사용할 수 있는 모드를 선택하세요. 모드를 선택하지 않은 프로바이더는 사용할 수 없습니다. 처음 선택한 모드가 기본값입니다.",
     defaultMode: "기본 모드",
+    providerUnavailable: "{{provider}} (사용할 수 없음)",
     readOnlyHint:
       "Bot은 프로바이더가 제공하는 가장 엄격한 모드로 실행되며(Claude는 기본 모드이고 직접 설정한 허용 규칙은 계속 적용됩니다) 변경은 Bot이 시작한 에이전트에 맡깁니다.",
     title: "Bot",

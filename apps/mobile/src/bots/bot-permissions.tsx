@@ -69,24 +69,58 @@ function Checkbox({
   );
 }
 
+/** One provider's mode choices; `modes` lists every mode the user may pick. */
+interface ProviderModeChoices {
+  provider: string;
+  label: string;
+  modes: readonly { id: string; label: string }[];
+}
+
+/**
+ * Mode choices for each provider in the snapshot, followed by cap entries whose provider is no
+ * longer available, so they stay visible and can be removed.
+ */
+function modeChoices(
+  providers: ProviderSnapshotEntry[],
+  modes: BotPermissions["modes"],
+  unavailableLabel: (provider: string) => string,
+): ProviderModeChoices[] {
+  const available = new Set(providers.map((entry) => entry.provider));
+  return [
+    ...providers.map((entry) => ({
+      provider: entry.provider,
+      label: entry.label || entry.provider,
+      modes: entry.modes ?? [],
+    })),
+    ...Object.entries(modes)
+      .filter(([provider]) => !available.has(provider))
+      .map(([provider, ids]) => ({
+        provider,
+        label: unavailableLabel(provider),
+        modes: ids.map((id) => ({ id, label: id })),
+      })),
+  ];
+}
+
 function ProviderModes({
-  entry,
+  choices,
   selected,
   disabled,
   onChange,
 }: {
-  entry: ProviderSnapshotEntry;
+  choices: ProviderModeChoices;
   selected: string[];
   disabled: boolean;
   onChange: (modes: string[]) => void;
 }) {
   const { t } = useTranslation();
-  const unattended = getUnattendedModeId(entry.provider);
+  const { provider } = choices;
+  const unattended = getUnattendedModeId(provider);
   const full = selected.length >= MAX_MODES_PER_PROVIDER;
   return (
-    <View style={styles.permissionBlock} testID={`bot-modes-${entry.provider}`}>
-      <Text style={styles.text}>{entry.label || entry.provider}</Text>
-      {(entry.modes ?? []).map((mode) => {
+    <View style={styles.permissionBlock} testID={`bot-modes-${provider}`}>
+      <Text style={styles.text}>{choices.label}</Text>
+      {choices.modes.map((mode) => {
         const checked = selected.includes(mode.id);
         const label = mode.id === unattended ? `⚠ ${mode.label}` : mode.label;
         return (
@@ -98,10 +132,10 @@ function ProviderModes({
               onPress={() =>
                 onChange(checked ? selected.filter((id) => id !== mode.id) : [...selected, mode.id])
               }
-              testID={`bot-mode-${entry.provider}-${mode.id}`}
+              testID={`bot-mode-${provider}-${mode.id}`}
             />
             {checked && selected[0] === mode.id ? (
-              <Text style={styles.hint} testID={`bot-mode-default-${entry.provider}-${mode.id}`}>
+              <Text style={styles.hint} testID={`bot-mode-default-${provider}-${mode.id}`}>
                 {t("bots.defaultMode")}
               </Text>
             ) : null}
@@ -111,7 +145,7 @@ function ProviderModes({
                 disabled={disabled}
                 accessibilityRole="button"
                 accessibilityLabel={`${t("bots.defaultMode")}: ${mode.label}`}
-                testID={`bot-mode-make-default-${entry.provider}-${mode.id}`}
+                testID={`bot-mode-make-default-${provider}-${mode.id}`}
               >
                 <Text style={[styles.hint, styles.link]}>{t("bots.defaultMode")}</Text>
               </Pressable>
@@ -167,6 +201,11 @@ export function BotPermissionFields({
               {t("bots.commandReachWarning")}
             </Text>
           ) : null}
+          {group === "terminals" ? (
+            <Text style={styles.warning} testID="bot-terminals-warning">
+              {t("bots.terminalsWarning")}
+            </Text>
+          ) : null}
         </View>
       ))}
       <Text style={styles.text}>{t("bots.modeCap")}</Text>
@@ -174,13 +213,15 @@ export function BotPermissionFields({
       <Text style={styles.warning} accessibilityRole="alert" testID="bot-mode-cap-warning">
         {t("bots.modeCapWarning")}
       </Text>
-      {providers.map((entry) => (
+      {modeChoices(providers, value.modes, (provider) =>
+        t("bots.providerUnavailable", { provider }),
+      ).map((choices) => (
         <ProviderModes
-          key={entry.provider}
-          entry={entry}
-          selected={value.modes[entry.provider] ?? []}
+          key={choices.provider}
+          choices={choices}
+          selected={value.modes[choices.provider] ?? []}
           disabled={disabled}
-          onChange={(modes) => setModes(entry.provider, modes)}
+          onChange={(modes) => setModes(choices.provider, modes)}
         />
       ))}
     </View>

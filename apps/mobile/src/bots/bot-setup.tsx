@@ -97,7 +97,10 @@ export function BotExecutionFields({
   disabled,
   showMode = true,
 }: {
-  /** The Bot runs in the strictest mode its provider offers, so Bot screens hide the picker. */
+  /**
+   * Hosts with Bot permissions run the Bot in the strictest mode its provider offers, so Bot
+   * screens hide the picker there; older hosts still honor the chosen mode.
+   */
   showMode?: boolean;
   providers: ProviderSnapshotEntry[];
   error: string | null;
@@ -236,7 +239,7 @@ export function BotSetup({
         value={draft}
         onChange={setDraft}
         disabled={disabled}
-        showMode={false}
+        showMode={!supportsPermissions}
       />
       {supportsPermissions ? (
         <BotPermissionFields

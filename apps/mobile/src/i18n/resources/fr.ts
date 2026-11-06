@@ -20,6 +20,8 @@ export const fr: TranslationResources = {
       "Les modes qui permettent aux agents d'exécuter des commandes leur permettent aussi de lire les identifiants Ait de cet ordinateur et de contourner les limites Ait du Bot. N'autorisez-les que pour un travail que vous laisseriez un agent faire sans surveillance.",
     commandReachWarning:
       "Le Bot peut envoyer des instructions à chaque agent de cet espace de travail, y compris ceux que vous avez lancés, et modifier leurs réglages. Ces agents conservent leurs propres autorisations : une instruction du Bot peut donc atteindre des capacités au-delà des limites du Bot.",
+    terminalsWarning:
+      "Les terminaux exécutent des commandes sur cet ordinateur : ils peuvent donc lire ses identifiants Ait et contourner les limites Ait du Bot. Ne les activez que pour un travail que vous laisseriez un agent faire sans surveillance.",
     noteInstructionsInInput:
       "Ce fournisseur ne prend pas en charge un prompt système modifiable ; les instructions intégrées et la mémoire du Bot sont donc ajoutées à l'entrée de la conversation.",
     noteNoReadOnlyMode:
@@ -42,6 +44,7 @@ export const fr: TranslationResources = {
     modeCapHint:
       "Choisissez les modes que le Bot peut utiliser pour chaque fournisseur. Un fournisseur sans mode sélectionné est inutilisable. Le premier mode sélectionné est le mode par défaut.",
     defaultMode: "Mode par défaut",
+    providerUnavailable: "{{provider}} (indisponible)",
     readOnlyHint:
       "Le Bot s'exécute dans le mode le plus strict de son fournisseur (pour Claude, le mode par défaut, où vos propres règles d'autorisation s'appliquent toujours) et laisse les modifications aux agents qu'il lance.",
     title: "Bot",

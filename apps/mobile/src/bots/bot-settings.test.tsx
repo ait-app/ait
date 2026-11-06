@@ -126,8 +126,8 @@ const bot: BotView = {
 let queryClient: QueryClient;
 const onRemoved = vi.fn();
 
-function renderSettings(view: BotView = bot) {
-  return render(
+function settings(view: BotView) {
+  return (
     <QueryClientProvider client={queryClient}>
       <BotSettings
         serverId="host"
@@ -137,8 +137,12 @@ function renderSettings(view: BotView = bot) {
         interactive
         onRemoved={onRemoved}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+}
+
+function renderSettings(view: BotView = bot) {
+  return render(settings(view));
 }
 
 beforeEach(() => {
@@ -183,7 +187,7 @@ describe("BotSettings permissions", () => {
         return { bot: saved, appliesToNextTurn: true };
       throw new Error(`unexpected ${method}`);
     });
-    renderSettings(withPermissions);
+    const { rerender } = renderSettings(withPermissions);
     expect(screen.getByText("bots.modeCapWarning")).toBeTruthy();
     fireEvent.click(screen.getByTestId("bot-group-schedules"));
     fireEvent.click(screen.getByTestId("bot-permissions-save"));
@@ -197,6 +201,30 @@ describe("BotSettings permissions", () => {
       expect(queryClient.getQueryData(botKeys.bot("host", "workspace"))).toEqual(saved),
     );
     expect(await screen.findByText("bots.permissionsHint")).toBeTruthy();
+    // The parent re-renders with the saved Bot from the cache; the hint stays visible.
+    rerender(settings(saved));
+    expect(screen.getByText("bots.permissionsHint")).toBeTruthy();
+    expect(screen.getByTestId("bot-group-schedules").getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("a_permission_change_from_elsewhere_replaces_the_draft", () => {
+    const { rerender } = renderSettings(withPermissions);
+    fireEvent.click(screen.getByTestId("bot-group-schedules"));
+    expect(screen.getByTestId("bot-group-schedules").getAttribute("aria-checked")).toBe("false");
+    const remote: BotView = {
+      ...withPermissions,
+      permissions: {
+        groups: ["observe", "agents", "stop", "schedules", "terminals"],
+        modes: { codex: ["auto"] },
+      },
+    };
+    queryClient.setQueryData(botKeys.bot("host", "workspace"), remote);
+    rerender(settings(remote));
+    expect(screen.getByTestId("bot-group-schedules").getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByTestId("bot-group-terminals").getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByTestId("bot-mode-codex-read-only").getAttribute("aria-checked")).toBe(
+      "false",
+    );
   });
 
   it("stays editable while the Bot is paused", () => {
@@ -218,6 +246,14 @@ describe("BotSettings permissions", () => {
     renderSettings(withPermissions);
     expect(screen.queryByTestId("bot-permissions-section")).toBeNull();
     expect(screen.getByTestId("bot-provider")).toBeTruthy();
+    expect(screen.getByTestId("bot-mode")).toBeTruthy();
+    expect(screen.queryByText("bots.readOnlyHint")).toBeNull();
+  });
+
+  it("hides the mode picker on hosts with the permissions method", () => {
+    renderSettings(withPermissions);
+    expect(screen.queryByTestId("bot-mode")).toBeNull();
+    expect(screen.getByText("bots.readOnlyHint")).toBeTruthy();
   });
 });
 
