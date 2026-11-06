@@ -45,6 +45,10 @@ ZIP、tar.gz、blockmap、CI 产物和 `BUILD-INFO.json` 使用同一标识；�
 应用与 daemon 显示 `YYYY-MM-DD-<8位hash>`；更新器使用日期型 SemVer，在构建信息中记作 `packagedVersion`。
 命名规则以 [`nightly-build.mjs`](../../scripts/nightly-build.mjs) 和 [`source-version.cjs`](../../scripts/source-version.cjs) 为准。
 固定下载地址仍使用 `nightly` 标签；正式版本继续使用版本命名。
+发布时先把 `nightly` 标签移到当前构建，再替换 Release，因此标签移动失败不会删除已发布的 nightly。
+如果仓库或组织的 ruleset 保护该标签（422 “Cannot update this protected ref”），标签留在原提交，
+Release 仍发布本次构建，并在任务中给出警告；实际源码提交以 Release 说明和 `BUILD-INFO.json` 为准。
+要让标签跟随构建，需要把 GitHub Actions 加入该 ruleset 的 bypass 列表。
 
 最多保留最新两次 main CI 并行运行，以整个工作流为单位（每次包含检查及 Linux、macOS 构建）；
 取消旧构建也会取消该次旧 CI 中尚未完成的检查，PR 不参与这个调度窗口：

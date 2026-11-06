@@ -405,30 +405,25 @@ jobs:
           writeFileSync('release-assets/BUILD-INFO.json', JSON.stringify(info, null, 2) + '\n');
           NODE
           node scripts/release-assets.mjs verify "$version" release-assets --nightly "$NIGHTLY_BUILD_LABEL"
-      - name: Replace previous nightly release and move tag
+      - name: Move tag and replace previous nightly release
         id: release
         uses: actions/github-script@v8
         with:
           script: |
             const repo = context.repo;
-            const { canPublish } = require('./scripts/nightly-control.cjs');
+            const { canPublish, moveTag } = require('./scripts/nightly-control.cjs');
             if (!await canPublish({ github, context, core })) {
               core.notice('This build is outside the two-build window or a newer nightly is already published.');
               core.setOutput('publish', 'false');
               return;
             }
+            // The tag moves first: a refused ref update must not delete the live release.
+            await moveTag({ github, context, core });
             try {
               const { data: release } = await github.rest.repos.getReleaseByTag({ ...repo, tag: 'nightly' });
               await github.rest.repos.deleteRelease({ ...repo, release_id: release.id });
             } catch (error) {
               if (error.status !== 404) throw error;
-            }
-            try {
-              await github.rest.git.getRef({ ...repo, ref: 'tags/nightly' });
-              await github.rest.git.updateRef({ ...repo, ref: 'tags/nightly', sha: context.sha, force: true });
-            } catch (error) {
-              if (error.status !== 404) throw error;
-              await github.rest.git.createRef({ ...repo, ref: 'refs/tags/nightly', sha: context.sha });
             }
             core.setOutput('publish', 'true');
       - name: Publish latest nightly

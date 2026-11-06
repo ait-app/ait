@@ -74,12 +74,15 @@ test("nightly packages both standalone daemons and explains the macOS quarantine
 
 const context = { repo: { owner: "ait-app", repo: "ait" }, sha: "current", runId: 42 };
 
-async function runScript(step, github, outputs = {}, controller = control) {
+async function runScript(step, github, outputs = {}, controller = control, warnings = []) {
   await new AsyncFunction("github", "context", "core", "require", step.with.script)(
     github,
     context,
     {
       notice() {},
+      warning(message) {
+        warnings.push(message);
+      },
       setOutput(key, value) {
         outputs[key] = value;
       },
@@ -431,41 +434,121 @@ test("a rejected publication cannot touch the release or tag", async () => {
   assert.equal(workflow.jobs["nightly-publish"].steps[cancelIndex].if, publish.if);
 });
 
-for (const existing of [true, false]) {
-  test(`current build publishes with an ${existing ? "existing" : "absent"} nightly tag`, async () => {
-    const calls = [];
-    const lookup = async (data) => {
-      if (!existing) throw Object.assign(new Error("Not found"), { status: 404 });
-      return { data };
-    };
-    const github = {
-      rest: {
-        repos: {
-          getBranch: async () => ({ data: { commit: { sha: context.sha } } }),
-          getReleaseByTag: () => lookup({ id: 9 }),
-          deleteRelease: async (args) => calls.push(["delete", args]),
+const notFound = () => Object.assign(new Error("Not found"), { status: 404 });
+const ruleViolation = () =>
+  Object.assign(
+    new Error("Repository rule violations found\n\nCannot update this protected ref.\n\n"),
+    { status: 422 },
+  );
+
+// Record ref and release mutations in order; `tag` is the current tag commit or null.
+function publication({ tag, release = true, updateError = null }) {
+  const calls = [];
+  const github = {
+    rest: {
+      repos: {
+        getReleaseByTag: async () => {
+          if (!release) throw notFound();
+          return { data: { id: 9 } };
         },
-        git: {
-          getRef: () => lookup({}),
-          updateRef: async (args) => calls.push(["update", args]),
-          createRef: async (args) => calls.push(["create", args]),
-        },
+        deleteRelease: async (args) => calls.push(["delete", args]),
       },
-    };
-    assert.deepEqual(await runScript(releaseStep, github, {}, { canPublish: async () => true }), {
-      publish: "true",
-    });
-    assert.deepEqual(
-      calls,
-      existing
-        ? [
-            ["delete", { ...context.repo, release_id: 9 }],
-            ["update", { ...context.repo, ref: "tags/nightly", sha: context.sha, force: true }],
-          ]
-        : [["create", { ...context.repo, ref: "refs/tags/nightly", sha: context.sha }]],
+      git: {
+        getRef: async () => {
+          if (tag === null) throw notFound();
+          return { data: { object: { sha: tag } } };
+        },
+        updateRef: async (args) => {
+          if (updateError) throw updateError;
+          calls.push(["update", args]);
+        },
+        createRef: async (args) => calls.push(["create", args]),
+      },
+    },
+  };
+  return { calls, github };
+}
+
+const update = ["update", { ...context.repo, ref: "tags/nightly", sha: context.sha, force: true }];
+const create = ["create", { ...context.repo, ref: "refs/tags/nightly", sha: context.sha }];
+const removeRelease = ["delete", { ...context.repo, release_id: 9 }];
+
+for (const [name, state, expected] of [
+  ["an older nightly tag is moved before", { tag: "previous" }, [update, removeRelease]],
+  ["an absent nightly tag is created before", { tag: null }, [create, removeRelease]],
+  ["a tag already on this build is kept before", { tag: context.sha }, [removeRelease]],
+  ["a first publication creates the tag without", { tag: null, release: false }, [create]],
+]) {
+  test(`${name} replacing the release`, async () => {
+    const { calls, github } = publication(state);
+    const warnings = [];
+
+    const outputs = await runScript(
+      releaseStep,
+      github,
+      {},
+      {
+        canPublish: async () => true,
+        moveTag: control.moveTag,
+      },
+      warnings,
     );
+
+    assert.deepEqual(outputs, { publish: "true" });
+    assert.deepEqual(calls, expected);
+    assert.deepEqual(warnings, []);
   });
 }
+
+test("a ruleset-protected tag stays put while the release still publishes this build", async () => {
+  const { calls, github } = publication({ tag: "previous", updateError: ruleViolation() });
+  const warnings = [];
+
+  const outputs = await runScript(
+    releaseStep,
+    github,
+    {},
+    {
+      canPublish: async () => true,
+      moveTag: control.moveTag,
+    },
+    warnings,
+  );
+
+  assert.deepEqual(outputs, { publish: "true" });
+  assert.deepEqual(calls, [removeRelease]);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /stays at previous/);
+  assert.match(warnings[0], /publishes current/);
+  const publish = workflow.jobs["nightly-publish"].steps.find(
+    (step) => step.name === "Publish latest nightly",
+  );
+  assert.match(publish.run, /--verify-tag/);
+  assert.match(publish.run, /Development build from \$GITHUB_SHA/);
+});
+
+test("other tag failures stop before the published release is deleted", async () => {
+  for (const updateError of [
+    Object.assign(new Error("Server error"), { status: 500 }),
+    Object.assign(new Error("Validation failed"), { status: 422 }),
+  ]) {
+    const { calls, github } = publication({ tag: "previous", updateError });
+
+    await assert.rejects(
+      runScript(
+        releaseStep,
+        github,
+        {},
+        {
+          canPublish: async () => true,
+          moveTag: control.moveTag,
+        },
+      ),
+      updateError,
+    );
+    assert.deepEqual(calls, []);
+  }
+});
 
 test("cleanup queries only its own run and preserves unrelated artifacts", async () => {
   const deleted = [];

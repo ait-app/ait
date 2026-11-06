@@ -79,4 +79,40 @@ async function cancelOlderBuilds(api) {
   );
 }
 
-module.exports = { admitBuild, canPublish, cancelOlderBuilds };
+// A repository or organization rule refused to change a protected ref.
+function protectedRef(error) {
+  return error.status === 422 && /rule violation|protected ref/i.test(error.message ?? "");
+}
+
+// Point the `nightly` tag at this build before the published release is touched, so a refused
+// ref update can never leave the channel without a release. When a rule protects the tag, it
+// stays where it is and the release still publishes this build; the notes and BUILD-INFO.json
+// record the actual source commit.
+async function moveTag({ github, context, core }) {
+  const ref = { ...context.repo, ref: "tags/nightly" };
+  let current;
+  try {
+    ({ data: current } = await github.rest.git.getRef(ref));
+  } catch (error) {
+    if (error.status !== 404) throw error;
+    await github.rest.git.createRef({
+      ...context.repo,
+      ref: "refs/tags/nightly",
+      sha: context.sha,
+    });
+    return;
+  }
+  if (current.object?.sha === context.sha) return;
+  try {
+    await github.rest.git.updateRef({ ...ref, sha: context.sha, force: true });
+  } catch (error) {
+    if (!protectedRef(error)) throw error;
+    core.warning(
+      `A ruleset protects the nightly tag, so it stays at ${current.object?.sha}. ` +
+        `The release still publishes ${context.sha}. Allow GitHub Actions to bypass the rule ` +
+        "to keep the tag on the published build.",
+    );
+  }
+}
+
+module.exports = { admitBuild, canPublish, cancelOlderBuilds, moveTag };
