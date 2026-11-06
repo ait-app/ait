@@ -78,37 +78,47 @@ impl AgentMcp {
         self
     }
 
-    /// Decide the session's binding from the current policy and the subject's credential.
+    /// Decide the session's binding from the subject's credential and the current policy.
     ///
-    /// `None` keeps the configuration unchanged: a shared session whose policy disables
-    /// injection or whose user configured an `ait` entry. A scoped credential that the policy
-    /// does not inject is revoked at once and the session is stripped instead.
+    /// `deliverable` is whether this session can receive the daemon MCP at all. `None` keeps
+    /// the configuration unchanged: a shared session that is not deliverable, whose policy
+    /// disables injection, or whose user configured an `ait` entry. Scoped and denied
+    /// sessions that do not receive a scoped credential are stripped, and an issued
+    /// credential that is not injected is revoked at once.
     pub(crate) fn bind(
         &self,
         subject: &McpSubject<'_>,
         config: &StoredAgentConfig,
+        deliverable: bool,
     ) -> Result<Option<Binding>, model::ErrorCode> {
-        let policy = self.config.get().map_err(|_| model::ErrorCode::DaemonIo)?;
-        let enabled = policy["mcp"]["enabled"] != false;
-        let inject = enabled && policy["mcp"]["injectIntoAgents"] != false;
+        let shared = deliverable && !has_ait(config);
         let Some(scopes) = &self.scopes else {
-            return Ok(self.shared(subject.agent_id, config, inject));
+            return self.shared(subject.agent_id, shared);
         };
-        Ok(match scopes.access(subject) {
-            McpAccess::Shared => self.shared(subject.agent_id, config, inject),
-            McpAccess::Denied => Some(Binding::Strip),
-            McpAccess::Scoped { token, bot_session } if enabled && (bot_session || inject) => {
-                Some(Binding::Scoped {
-                    url: self.url.clone(),
-                    token,
-                    agent_id: subject.agent_id.to_owned(),
-                })
+        match scopes.access(subject) {
+            McpAccess::Shared => self.shared(subject.agent_id, shared),
+            McpAccess::Denied => Ok(Some(Binding::Strip)),
+            McpAccess::Scoped { token, bot_session } => {
+                let policy = if deliverable {
+                    self.policy()
+                } else {
+                    Ok((false, false))
+                };
+                match policy {
+                    Ok((enabled, inject)) if enabled && (bot_session || inject) => {
+                        Ok(Some(Binding::Scoped {
+                            url: self.url.clone(),
+                            token,
+                            agent_id: subject.agent_id.to_owned(),
+                        }))
+                    }
+                    policy => {
+                        scopes.release(subject.agent_id);
+                        policy.map(|_| Some(Binding::Strip))
+                    }
+                }
             }
-            McpAccess::Scoped { .. } => {
-                scopes.release(subject.agent_id);
-                Some(Binding::Strip)
-            }
-        })
+        }
     }
 
     /// Revoke the scoped credential held by a session that left this manager.
@@ -118,12 +128,26 @@ impl AgentMcp {
         }
     }
 
-    fn shared(&self, agent_id: &str, config: &StoredAgentConfig, inject: bool) -> Option<Binding> {
-        (inject && !has_ait(config)).then(|| Binding::Shared {
+    /// Bind the shared token when `candidate` and the policy enables injection.
+    fn shared(&self, agent_id: &str, candidate: bool) -> Result<Option<Binding>, model::ErrorCode> {
+        if !candidate || !self.policy()?.1 {
+            return Ok(None);
+        }
+        Ok(Some(Binding::Shared {
             url: self.url.clone(),
             token: self.token.clone(),
             agent_id: agent_id.to_owned(),
-        })
+        }))
+    }
+
+    /// Read `(mcp.enabled, mcp.enabled && mcp.injectIntoAgents)` at session opening.
+    fn policy(&self) -> Result<(bool, bool), model::ErrorCode> {
+        let policy = self.config.get().map_err(|_| model::ErrorCode::DaemonIo)?;
+        let enabled = policy["mcp"]["enabled"] != false;
+        Ok((
+            enabled,
+            enabled && policy["mcp"]["injectIntoAgents"] != false,
+        ))
     }
 }
 

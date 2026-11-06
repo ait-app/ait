@@ -423,3 +423,104 @@ async fn closing_or_archiving_a_scoped_session_releases_its_credential() {
             .ends_with(&["access:broken".to_owned(), "release:broken".to_owned()])
     );
 }
+
+#[tokio::test]
+async fn scoped_sessions_without_http_mcp_strip_user_ait_entry() {
+    for (id, registration, bot_session) in [
+        ("bot-session", bot_registration(), true),
+        ("child", subtree_registration(), false),
+    ] {
+        let (mut manager, _, client, scopes) =
+            scoped(Grant::Scoped("c".repeat(64), bot_session), json!({}));
+        client.0.lock().unwrap().mcp_support = Support::Unsupported;
+        manager
+            .create(id, &user_ait_spec(), registration)
+            .await
+            .unwrap();
+        complete_turn(&mut manager, &client, id).await;
+        let state = client.0.lock().unwrap();
+        assert!(without_ait(&state.create_specs[0].config));
+        assert_eq!(state.start_configs.len(), 1);
+        assert!(state.start_configs.iter().all(without_ait));
+        assert_eq!(
+            scopes.calls(),
+            [format!("access:{id}"), format!("release:{id}")]
+        );
+    }
+}
+
+#[tokio::test]
+async fn restoring_a_live_scoped_agent_releases_before_reissuing() {
+    let (mut manager, _, client, scopes) = scoped(Grant::Scoped("c".repeat(64), false), json!({}));
+    manager
+        .create("child", &spec(), subtree_registration())
+        .await
+        .unwrap();
+    *scopes.grant.lock().unwrap() = Grant::Scoped("d".repeat(64), false);
+    manager
+        .restore(
+            "child",
+            &crate::protocol::resume::Overrides {
+                title: crate::protocol::agent_config::NullableSetting::Set("Renamed".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        scopes.calls(),
+        ["access:child", "release:child", "access:child"]
+    );
+    assert_eq!(
+        authorization(&client.0.lock().unwrap().resume_specs[0].config),
+        format!("Bearer {}", "d".repeat(64))
+    );
+}
+
+#[tokio::test]
+async fn imported_records_pass_their_labels_to_scoped_access() {
+    let (mut manager, _, client, scopes) = scoped(Grant::Scoped("c".repeat(64), false), json!({}));
+    let mut imported = stored_record();
+    imported.id = "imported".into();
+    imported.labels = subtree_registration().labels;
+    manager.restore_new(imported).await.unwrap();
+    assert_eq!(
+        scopes.subjects.lock().unwrap()[0].labels,
+        subtree_registration().labels
+    );
+    assert_eq!(
+        authorization(&client.0.lock().unwrap().resume_specs[0].config),
+        format!("Bearer {}", "c".repeat(64))
+    );
+}
+
+#[tokio::test]
+async fn failed_registration_releases_the_issued_credential() {
+    let (mut manager, registry, client, scopes) =
+        scoped(Grant::Scoped("c".repeat(64), false), json!({}));
+    client.0.lock().unwrap().fail_info = true;
+    assert!(
+        manager
+            .create("invalid", &spec(), subtree_registration())
+            .await
+            .is_err()
+    );
+    client.0.lock().unwrap().fail_info = false;
+    registry.0.lock().unwrap().fail_upsert = true;
+    assert!(
+        manager
+            .create("unstored", &spec(), subtree_registration())
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        scopes.calls(),
+        [
+            "access:invalid",
+            "release:invalid",
+            "access:unstored",
+            "release:unstored"
+        ]
+    );
+    assert!(manager.live_snapshot("invalid").is_none());
+}

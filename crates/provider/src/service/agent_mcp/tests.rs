@@ -129,7 +129,7 @@ fn connection_maps_listener_and_preserves_user_configuration() {
         let original = stored.clone();
         let labels = BTreeMap::new();
         let binding = source
-            .bind(&subject("agent-a", &labels), &stored)
+            .bind(&subject("agent-a", &labels), &stored, true)
             .unwrap()
             .unwrap();
         let mut effective = stored.clone();
@@ -163,7 +163,7 @@ fn flags_are_read_at_opening_and_existing_bindings_remain_stable() {
     let stored = StoredAgentConfig::default();
     let labels = BTreeMap::new();
     let binding = source
-        .bind(&subject("a", &labels), &stored)
+        .bind(&subject("a", &labels), &stored, true)
         .unwrap()
         .unwrap();
     for flags in [
@@ -173,7 +173,7 @@ fn flags_are_read_at_opening_and_existing_bindings_remain_stable() {
         *policy.0.lock().unwrap() = json!({"mcp":flags});
         assert!(
             source
-                .bind(&subject("b", &labels), &stored)
+                .bind(&subject("b", &labels), &stored, true)
                 .unwrap()
                 .is_none()
         );
@@ -183,7 +183,9 @@ fn flags_are_read_at_opening_and_existing_bindings_remain_stable() {
     }
     *policy.0.lock().unwrap() = Value::Null;
     assert_eq!(
-        source.bind(&subject("b", &labels), &stored).unwrap_err(),
+        source
+            .bind(&subject("b", &labels), &stored, true)
+            .unwrap_err(),
         model::ErrorCode::DaemonIo
     );
 }
@@ -197,7 +199,7 @@ fn explicit_ait_server_is_never_replaced() {
     );
     let labels = BTreeMap::new();
     let binding = source
-        .bind(&subject("a", &labels), &StoredAgentConfig::default())
+        .bind(&subject("a", &labels), &StoredAgentConfig::default(), true)
         .unwrap()
         .unwrap();
     for server in [
@@ -212,7 +214,7 @@ fn explicit_ait_server_is_never_replaced() {
         };
         assert!(
             source
-                .bind(&subject("a", &labels), &stored)
+                .bind(&subject("a", &labels), &stored, true)
                 .unwrap()
                 .is_none()
         );
@@ -282,7 +284,7 @@ fn scoped_and_denied_bindings_override_user_ait_entry_by_policy() {
         *scopes.grant.lock().unwrap() = grant;
         *policy.0.lock().unwrap() = json!({ "mcp": flags });
         scopes.calls.lock().unwrap().clear();
-        let binding = source.bind(&subject("a", &labels), &stored).unwrap();
+        let binding = source.bind(&subject("a", &labels), &stored, true).unwrap();
         assert_eq!(
             scopes.calls(),
             if released {
@@ -317,7 +319,7 @@ fn scoped_and_denied_bindings_override_user_ait_entry_by_policy() {
 }
 
 #[test]
-fn strip_removes_an_only_ait_entry_and_policy_failure_issues_nothing() {
+fn strip_removes_an_only_ait_entry_and_policy_failure_revokes_the_credential() {
     let mut only = StoredAgentConfig {
         mcp_servers: Some(BTreeMap::from([("ait".into(), json!({"type":"stdio"}))])),
         ..StoredAgentConfig::default()
@@ -334,9 +336,45 @@ fn strip_removes_an_only_ait_entry_and_policy_failure_issues_nothing() {
     let labels = BTreeMap::new();
     assert_eq!(
         source
-            .bind(&subject("a", &labels), &StoredAgentConfig::default())
+            .bind(&subject("a", &labels), &StoredAgentConfig::default(), true)
             .unwrap_err(),
         model::ErrorCode::DaemonIo
     );
-    assert!(scopes.calls().is_empty());
+    assert_eq!(scopes.calls(), ["access:a", "release:a"]);
+}
+
+#[test]
+fn undeliverable_sessions_strip_scoped_access_without_reading_policy() {
+    let unreadable = Arc::new(Policy(Mutex::new(Value::Null)));
+    let address = "127.0.0.1:7316".parse().unwrap();
+    let stored = user_servers();
+    let labels = BTreeMap::new();
+    let unscoped = AgentMcp::new(address, TOKEN.into(), unreadable.clone());
+    for deliverable in [true, false] {
+        assert!(
+            unscoped
+                .bind(&subject("a", &labels), &stored, deliverable)
+                .unwrap()
+                .is_none()
+        );
+    }
+    let scopes = FakeScopes::new(Grant::Shared);
+    let source = AgentMcp::new(address, TOKEN.into(), unreadable).with_scopes(scopes.clone());
+    for (grant, released, stripped) in [
+        (Grant::Scoped("s".repeat(64), true), true, true),
+        (Grant::Scoped("s".repeat(64), false), true, true),
+        (Grant::Denied, false, true),
+        (Grant::Shared, false, false),
+    ] {
+        *scopes.grant.lock().unwrap() = grant;
+        scopes.calls.lock().unwrap().clear();
+        let binding = source.bind(&subject("a", &labels), &stored, false).unwrap();
+        assert_eq!(matches!(binding, Some(Binding::Strip)), stripped);
+        assert_eq!(binding.is_none(), !stripped);
+        let mut expected = vec!["access:a".to_owned()];
+        if released {
+            expected.push("release:a".to_owned());
+        }
+        assert_eq!(scopes.calls(), expected);
+    }
 }

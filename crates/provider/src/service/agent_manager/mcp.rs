@@ -14,7 +14,8 @@ impl AgentManager {
     ///
     /// The daemon MCP reaches every Workspace on this Host, so an Agent labelled with
     /// [`crate::service::agent_mcp::GUEST_SHARE_LABEL`] never receives it, and any `ait`
-    /// entry it configured is removed.
+    /// entry it configured is removed. Bot and subtree sessions that cannot receive their
+    /// scoped credential (history, or no HTTP MCP support) are stripped as well.
     pub(super) fn prepare_mcp<'a>(
         &self,
         subject: &McpSubject<'_>,
@@ -26,20 +27,18 @@ impl AgentManager {
             .contains_key(crate::service::agent_mcp::GUEST_SHARE_LABEL)
         {
             Some(Binding::Strip)
-        } else if purpose == AgentResumePurpose::Interactive
-            && self
-                .clients
-                .get(&spec.provider)
-                .is_some_and(|client| client.supports_agent_mcp())
-        {
+        } else {
+            let deliverable = purpose == AgentResumePurpose::Interactive
+                && self
+                    .clients
+                    .get(&spec.provider)
+                    .is_some_and(|client| client.supports_agent_mcp());
             self.mcp
                 .as_ref()
-                .map(|mcp| mcp.bind(subject, &spec.config))
+                .map(|mcp| mcp.bind(subject, &spec.config, deliverable))
                 .transpose()
                 .map_err(|_| AgentManagerError::Registry)?
                 .flatten()
-        } else {
-            None
         };
         let mut launch = Cow::Borrowed(spec);
         if let Some(binding) = &binding {
