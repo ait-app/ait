@@ -64,6 +64,12 @@ impl Fixture {
         if managed {
             api.claim_managed_relay().unwrap();
         }
+        Self::serve(listener, api)
+    }
+
+    /// Serve `api`, which must have been built for `listener`'s address.
+    fn serve(listener: TcpListener, api: Api) -> Self {
+        let address = listener.local_addr().unwrap();
         let shutdown = api.clone();
         let router = api.router();
         let task = tokio::spawn(async move {

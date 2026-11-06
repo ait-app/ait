@@ -139,3 +139,47 @@ fn tool_errors_are_safe_and_visible_while_structured_results_keep_text() {
     }
     assert!(valid_id(&Value::Null, false));
 }
+
+#[test]
+fn every_catalog_tool_has_an_explicit_access_class() {
+    let table: std::collections::BTreeSet<_> = domain::bot::permissions::TOOLS
+        .iter()
+        .map(|(name, _)| *name)
+        .collect();
+    for tool in catalog::all() {
+        assert!(table.contains(tool.name.as_str()), "{}", tool.name);
+    }
+}
+
+#[test]
+fn caller_context_follows_the_credential_and_rejects_other_headers() {
+    let scoped = |kind| Scope {
+        caller: Caller {
+            root: "wks_root".to_owned(),
+            kind,
+        },
+        grant: bot::mcp::Grant {
+            permissions: domain::bot::permissions::BotPermissions::default(),
+            workspaces: std::collections::BTreeSet::new(),
+        },
+    };
+    assert_eq!(claimed(None, None), Ok(None));
+    assert_eq!(claimed(None, Some("agent")), Ok(Some("agent")));
+    let bot = scoped(CallerKind::Bot {
+        bot_id: domain::BotId::generate(),
+        session_id: "session".to_owned(),
+    });
+    assert_eq!(claimed(Some(&bot), None), Ok(None));
+    assert_eq!(claimed(Some(&bot), Some("session")), Ok(None));
+    let subtree = scoped(CallerKind::Subtree {
+        agent_id: "child".to_owned(),
+    });
+    assert_eq!(claimed(Some(&subtree), None), Ok(Some("child")));
+    assert_eq!(claimed(Some(&subtree), Some("child")), Ok(Some("child")));
+    for (scope, header) in [(&bot, "child"), (&subtree, "session")] {
+        assert_eq!(
+            claimed(Some(scope), Some(header)),
+            Err((-32602, "Caller does not match credential"))
+        );
+    }
+}

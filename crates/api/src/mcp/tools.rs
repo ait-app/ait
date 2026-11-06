@@ -6,38 +6,37 @@ use serde_json::{Value, json};
 use crate::Shared;
 use crate::connection::rpc;
 
+use super::Scope;
 use super::catalog::Tool;
+use super::scope;
 
-mod creation;
+pub(super) mod creation;
 mod queries;
 mod schedules;
 
-/// Execute `tool` with validated `arguments` using `state` and optional caller inheritance.
+/// Execute `tool` with validated `arguments` using `state`, confining them to `scope` for scoped
+/// credentials and inheriting placement and parentage from the resolved `caller` Agent.
 /// # Errors
-/// Returns invalid placement, unavailable services or existing capability RPC failures.
+/// Returns scope violations, invalid placement, unavailable services or existing capability RPC
+/// failures.
 pub(super) async fn execute(
     state: &Shared,
     tool: &Tool,
     mut arguments: Value,
-    caller_id: Option<&str>,
+    scope: Option<&Scope>,
+    caller: Option<&Value>,
 ) -> Result<Value, ErrorCode> {
-    let caller = if let Some(id) = caller_id {
-        let value = rpc::execute(state, "agent.get.request", json!({"agentId":id})).await?;
-        if !value["agent"].is_object() {
-            return Err(ErrorCode::InvalidMessage);
-        }
-        Some(value["agent"].clone())
-    } else {
-        None
-    };
+    if let Some(scope) = scope {
+        scope::confine(state, scope, &tool.name, &mut arguments).await?;
+    }
     match tool.name.as_str() {
-        "create_agent" => creation::agent(state, arguments, caller.as_ref()).await,
+        "create_agent" => creation::agent(state, arguments, caller).await,
         "create_workspace" => {
-            let params = creation::workspace(arguments, caller.as_ref())?;
+            let params = creation::workspace(arguments, caller)?;
             rpc::execute(state, "workspace.create.request", params).await
         }
         "create_terminal" => {
-            creation::directory(state, &mut arguments, caller.as_ref()).await?;
+            creation::directory(state, &mut arguments, caller).await?;
             rpc::execute(state, "terminal.create.request", arguments).await
         }
         "send_agent_prompt" => {
@@ -50,7 +49,7 @@ pub(super) async fn execute(
         "list_pending_permissions" => queries::permissions(state).await,
         "list_profiles" => queries::profiles(state).await,
         "get_agent_activity" => queries::activity(state, arguments).await,
-        "inspect_provider" => queries::provider(state, arguments, caller.as_ref()).await,
+        "inspect_provider" => queries::provider(state, arguments, caller).await,
         "update_agent" => update_agent(state, arguments).await,
         "kill_agent" => {
             let mut result = rpc::execute(
@@ -71,7 +70,6 @@ pub(super) async fn execute(
         "rename_workspace" => {
             if arguments.get("workspaceId").is_none() {
                 arguments["workspaceId"] = caller
-                    .as_ref()
                     .and_then(|caller| caller.get("workspaceId"))
                     .cloned()
                     .ok_or(ErrorCode::InvalidMessage)?;
@@ -86,18 +84,12 @@ pub(super) async fn execute(
         }
         "send_terminal_keys" => terminal_keys(state, &arguments).await,
         "create_schedule" | "create_heartbeat" => {
-            schedules::create(
-                state,
-                arguments,
-                caller.as_ref(),
-                tool.name == "create_heartbeat",
-            )
-            .await
+            schedules::create(state, arguments, caller, tool.name == "create_heartbeat").await
         }
         "list_schedules" => schedules::list(state).await,
         "inspect_schedule" | "pause_schedule" | "resume_schedule" | "delete_schedule"
         | "schedule_logs" | "run_schedule_once" | "update_schedule" | "delete_heartbeat" => {
-            schedules::operate(state, tool, arguments, caller.as_ref()).await
+            schedules::operate(state, tool, arguments, caller).await
         }
         _ => rpc::execute(state, &tool.methods[0], arguments).await,
     }

@@ -2,10 +2,13 @@
 
 use std::sync::OnceLock;
 
+use domain::bot::permissions::{ToolAccess, tool_access};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::Shared;
+
+use super::Scope;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -40,8 +43,22 @@ pub(super) fn all() -> &'static [Tool] {
     })
 }
 
+/// Iterate installed tools visible to a caller: the host sees every tool except Bot-only ones,
+/// a scoped caller only the tools its current grant allows.
+pub(super) fn granted<'a>(
+    state: &'a Shared,
+    scope: Option<&'a Scope>,
+) -> impl Iterator<Item = &'static Tool> + 'a {
+    installed(state).filter(move |tool| {
+        scope.map_or_else(
+            || tool_access(&tool.name) != ToolAccess::BotOnly,
+            |scope| scope.allows(&tool.name),
+        )
+    })
+}
+
 /// Iterate tools whose complete method set is implemented in `state`.
-pub(super) fn installed(state: &Shared) -> impl Iterator<Item = &'static Tool> + '_ {
+fn installed(state: &Shared) -> impl Iterator<Item = &'static Tool> + '_ {
     all().iter().filter(|tool| {
         tool.methods
             .iter()
