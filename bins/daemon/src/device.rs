@@ -430,8 +430,13 @@ impl host_link::ManagedRelay for StatusRelay {
     async fn active(&self) -> bool {
         self.inner.active().await
     }
-    async fn start_hub(&self, session: Uuid, ticket: host_link::HubTicket) -> Result<(), Error> {
-        self.inner.start_hub(session, ticket).await
+    async fn start_hub(
+        &self,
+        session: Uuid,
+        ticket: host_link::HubTicket,
+        bulk: Option<host_link::BulkTickets>,
+    ) -> Result<(), Error> {
+        self.inner.start_hub(session, ticket, bulk).await
     }
     async fn hub_lease(&self) -> bool {
         self.inner.hub_lease().await

@@ -1,40 +1,10 @@
 use serde_json::{Value, json};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
 use tokio::sync::{mpsc, watch};
 use uuid::Uuid;
 
 use super::super::{SessionKind, credit, run};
 use super::*;
-use crate::test_support::local;
-
-const BODY: usize = 128 * 1024 + 17;
-
-/// Serve one local download request; returns the request head it received.
-async fn local_file(status: u16) -> (std::net::SocketAddr, tokio::task::JoinHandle<String>) {
-    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
-    let address = listener.local_addr().expect("address");
-    let task = tokio::spawn(async move {
-        let (mut tcp, _) = listener.accept().await.expect("accept");
-        let mut request = Vec::new();
-        while !request.ends_with(b"\r\n\r\n") {
-            request.push(tcp.read_u8().await.expect("request"));
-        }
-        let body = if status == 200 {
-            vec![42_u8; BODY]
-        } else {
-            Vec::new()
-        };
-        let head = format!(
-            "HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nContent-Type: application/octet-stream\r\nConnection: close\r\n\r\n",
-            body.len()
-        );
-        tcp.write_all(head.as_bytes()).await.expect("head");
-        tcp.write_all(&body).await.expect("body");
-        String::from_utf8(request).expect("ascii request")
-    });
-    (address, task)
-}
+use crate::test_support::{FILE_SIZE, local, local_file};
 
 struct Download {
     inbound: mpsc::Sender<Frame>,
@@ -100,7 +70,7 @@ impl Download {
                     }
                     assert_eq!(
                         message,
-                        json!({"type":"download.headers","status":200,"content_length":BODY,
+                        json!({"type":"download.headers","status":200,"content_length":FILE_SIZE,
                             "content_type":"application/octet-stream"})
                     );
                 }
@@ -128,7 +98,7 @@ async fn streams_relay_download_messages_within_the_peer_window_then_closes_done
     );
 
     let (body, _) = download.receive(Some(&peer)).await;
-    assert_eq!(body, vec![42_u8; BODY]);
+    assert_eq!(body, vec![42_u8; FILE_SIZE]);
     download.complete().await;
 
     assert_eq!(download.next().await, Output::Closed("done"));

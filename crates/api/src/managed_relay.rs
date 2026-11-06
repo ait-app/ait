@@ -2,7 +2,7 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use host_link::{Binding, Error, HubTicket, ManagedRelay};
+use host_link::{Binding, BulkTickets, Error, HubTicket, ManagedRelay};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -13,6 +13,21 @@ pub struct ManagedRelayHandle {
     pub(super) relay: relay::Connector,
     pub(super) hub: relay::hub::Connector,
     pub(super) status: Arc<Mutex<Value>>,
+}
+
+/// Bulk lane tickets for the hub link, issued under the publication's current JWT.
+#[derive(Debug)]
+struct Bulk(BulkTickets);
+
+#[async_trait]
+impl relay::hub::bulk::Tickets for Bulk {
+    async fn bulk(&self) -> Option<relay::hub::bulk::Ticket> {
+        let ticket = self.0.request().await.ok()?;
+        Some(relay::hub::bulk::Ticket {
+            hub_ticket: ticket.ticket,
+            hub_features: ticket.features,
+        })
+    }
 }
 
 #[async_trait]
@@ -46,13 +61,20 @@ impl ManagedRelay for ManagedRelayHandle {
         self.hub.stop().await;
     }
 
-    async fn start_hub(&self, session: Uuid, ticket: HubTicket) -> Result<(), Error> {
+    async fn start_hub(
+        &self,
+        session: Uuid,
+        ticket: HubTicket,
+        bulk: Option<BulkTickets>,
+    ) -> Result<(), Error> {
         self.hub
             .start(relay::hub::Grant {
                 center_url: host_link::center(),
                 hub_ticket: ticket.ticket,
                 node_session_id: session,
                 hub_features: ticket.features,
+                tickets: bulk
+                    .map(|bulk| Arc::new(Bulk(bulk)) as Arc<dyn relay::hub::bulk::Tickets>),
             })
             .await
             .map_err(|_| Error::Unavailable)

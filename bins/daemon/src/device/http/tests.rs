@@ -369,3 +369,33 @@ async fn new_center_responses_declare_features_and_issue_a_serve_ticket_at_regis
     let ticket = fixture.center.hub_ticket(&tokens, served.id).await.unwrap();
     assert_eq!(ticket.features, Some(declared));
 }
+
+#[tokio::test]
+async fn bulk_lane_tickets_name_the_lane() {
+    let tokens = decode_tokens(response(&declaration())).unwrap();
+    let features = json!(["lease", "credit", "download", "bulk"]);
+    let fixture = Fixture::new(vec![(
+        StatusCode::OK,
+        json!({"hub_ticket":"a".repeat(64),"hub_path":"/v1/hub","expires_in_seconds":30,
+            "protocol":"ait-hub-v1","hub_features":features}),
+    )])
+    .await;
+    let session = Uuid::new_v4();
+
+    let ticket = fixture
+        .center
+        .hub_bulk_ticket(&tokens, session)
+        .await
+        .unwrap();
+
+    assert_eq!(ticket.ticket.expose_secret(), "a".repeat(64));
+    assert_eq!(ticket.features, serde_json::from_value(features).unwrap());
+    let seen = fixture.seen.lock().unwrap();
+    assert_eq!(
+        (seen.calls[0].0.as_str(), &seen.calls[0].1),
+        (
+            format!("/v1/node-sessions/{session}/hub-tickets").as_str(),
+            &json!({"ep":"serve","lane":"bulk"})
+        )
+    );
+}

@@ -113,6 +113,27 @@ impl HttpCenter {
         }
     }
 
+    /// Request a hub serve ticket; `body` selects the endpoint and lane.
+    async fn serve_ticket(
+        &self,
+        tokens: &Tokens,
+        session: Uuid,
+        body: Value,
+    ) -> Result<HubTicket, Error> {
+        let value = self
+            .request(
+                reqwest::Method::POST,
+                &format!("/v1/node-sessions/{session}/hub-tickets"),
+                Some(&tokens.access_token),
+                body,
+            )
+            .await?;
+        Ok(HubTicket::new(
+            ticket(&value, "hub_ticket")?,
+            hub_features(&value),
+        ))
+    }
+
     pub(crate) async fn authorize(&self, machine: &Machine) -> Result<Authorization, Error> {
         let value = self
             .request(
@@ -334,18 +355,12 @@ impl Center for HttpCenter {
         ticket(&value, "control_ticket")
     }
     async fn hub_ticket(&self, tokens: &Tokens, session: Uuid) -> Result<HubTicket, Error> {
-        let value = self
-            .request(
-                reqwest::Method::POST,
-                &format!("/v1/node-sessions/{session}/hub-tickets"),
-                Some(&tokens.access_token),
-                json!({"ep":"serve"}),
-            )
-            .await?;
-        Ok(HubTicket::new(
-            ticket(&value, "hub_ticket")?,
-            hub_features(&value),
-        ))
+        self.serve_ticket(tokens, session, json!({"ep":"serve"}))
+            .await
+    }
+    async fn hub_bulk_ticket(&self, tokens: &Tokens, session: Uuid) -> Result<HubTicket, Error> {
+        self.serve_ticket(tokens, session, json!({"ep":"serve","lane":"bulk"}))
+            .await
     }
     async fn close(&self, tokens: &Tokens, session: Uuid) -> Result<(), Error> {
         self.request(

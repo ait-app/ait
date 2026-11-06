@@ -123,7 +123,8 @@ async fn status_relay_rejects_invalid_tickets_and_cleans_failed_snapshot_publica
         relay
             .start_hub(
                 uuid::Uuid::new_v4(),
-                host_link::HubTicket::new("invalid-fixture-ticket".into(), None)
+                host_link::HubTicket::new("invalid-fixture-ticket".into(), None),
+                None,
             )
             .await
             .unwrap_err(),
@@ -134,6 +135,7 @@ async fn status_relay_rejects_invalid_tickets_and_cleans_failed_snapshot_publica
         .start_hub(
             uuid::Uuid::new_v4(),
             host_link::HubTicket::new("a".repeat(64).into(), None),
+            None,
         )
         .await
         .unwrap();

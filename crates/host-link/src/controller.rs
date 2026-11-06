@@ -140,6 +140,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
         let tokens = self.initial_tokens(cancel).await?;
         let (grants, receiver) = tokio::sync::watch::channel(None);
         let (errors, failures) = tokio::sync::mpsc::channel(2);
+        let (bulk, bulk_requests) = tokio::sync::mpsc::channel(1);
         let mut authority = authority::Authority {
             center: &self.center,
             store: &self.store,
@@ -149,6 +150,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
             active_session: &mut self.active_session,
             grants,
             errors: failures,
+            bulk,
         };
         let relay = links::maintain(
             &self.center,
@@ -157,6 +159,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
             errors.clone(),
             links::Kind::Relay,
         );
+        let bulk = links::serve_bulk(&self.center, receiver.clone(), bulk_requests);
         let hub = links::maintain(
             &self.center,
             &self.relay,
@@ -164,7 +167,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
             errors,
             links::Kind::Hub,
         );
-        // All three futures are scoped to this manager. On exit they are dropped before stop(),
+        // All four futures are scoped to this manager. On exit they are dropped before stop(),
         // so an outstanding ticket can never restart transport after shutdown.
         tokio::select! {
             // Revoke expired authority before polling a ticket that becomes ready at the deadline.
@@ -172,6 +175,8 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
             result = authority.maintain(tokens, cancel) => result,
             () = relay => Err(Error::Protocol),
             () = hub => Err(Error::Protocol),
+            // The authority holds a request sender, so this never ends first.
+            () = bulk => Err(Error::Protocol),
         }
     }
 }

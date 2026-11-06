@@ -8,6 +8,7 @@ use tokio_tungstenite::{WebSocketStream, accept_hdr_async};
 
 use super::*;
 
+mod bulk_lane;
 mod center_calls;
 mod features;
 
@@ -45,6 +46,19 @@ async fn next(center: &mut Center) -> (Value, Vec<u8>) {
             return (header, bytes[2 + length..].to_vec());
         }
     }
+}
+
+/// Wait until the Host processed every frame sent so far.
+async fn settle(center: &mut Center) {
+    center
+        .send(Message::Ping(Bytes::from_static(b"settle")))
+        .await
+        .expect("ping");
+    timeout(Duration::from_secs(3), async {
+        while !matches!(center.next().await, Some(Ok(Message::Pong(_)))) {}
+    })
+    .await
+    .expect("pong");
 }
 
 /// Accept one hub upgrade, recording its bearer credential.
@@ -117,9 +131,21 @@ async fn connector() -> (crate::Connector, Connector, TcpListener, Connections) 
 async fn connector_with(
     hub_features: Option<Vec<String>>,
 ) -> (crate::Connector, Connector, TcpListener, Connections) {
+    // Nothing serves files at this local address.
+    let local = "127.0.0.1:9".parse().expect("local address");
+    serving(local, hub_features, None).await
+}
+
+/// A connector for the local destination `local`, granted `hub_features` and
+/// bulk `tickets`.
+async fn serving(
+    local: std::net::SocketAddr,
+    hub_features: Option<Vec<String>>,
+    tickets: Option<Arc<dyn bulk::Tickets>>,
+) -> (crate::Connector, Connector, TcpListener, Connections) {
     let center = TcpListener::bind("127.0.0.1:0").await.expect("bind center");
     let relay = crate::Connector::new(
-        "127.0.0.1:9".parse().expect("local address"),
+        local,
         Uuid::new_v4().to_string(),
         Uuid::new_v4().to_string(),
     );
@@ -131,6 +157,7 @@ async fn connector_with(
         hub_ticket: SecretString::from(TICKET),
         node_session_id: Uuid::new_v4(),
         hub_features,
+        tickets,
     })
     .await
     .expect("start");
@@ -266,6 +293,7 @@ async fn malformed_grants_never_dial() {
             hub_ticket: SecretString::from(ticket),
             node_session_id: Uuid::new_v4(),
             hub_features: None,
+            tickets: None,
         };
         assert!(matches!(hub.start(grant).await, Err(Error::InvalidGrant)));
     }
@@ -275,6 +303,7 @@ async fn malformed_grants_never_dial() {
         hub_ticket: SecretString::from(TICKET),
         node_session_id: Uuid::new_v4(),
         hub_features: None,
+        tickets: None,
     };
     assert!(matches!(hub.start(grant).await, Err(Error::Transport)));
 }
@@ -322,6 +351,7 @@ async fn a_replaced_link_reports_why_and_yields_until_restarted() {
         hub_ticket: SecretString::from(TICKET),
         node_session_id: Uuid::new_v4(),
         hub_features: None,
+        tickets: None,
     })
     .await
     .expect("an explicit grant takes the link back");

@@ -15,17 +15,36 @@ pub(super) const MAX_PAYLOAD: usize = 1024 * 1024;
 pub(super) const MAX_FRAME: usize = 2 + MAX_HEADER + MAX_PAYLOAD;
 /// Optional link features this serve endpoint implements; `hello.f` offers the
 /// subset the center declared over HTTP.
-pub(super) const FEATURES: [&str; 3] = ["lease", "credit", "download"];
+pub(super) const FEATURES: [&str; 4] = ["lease", "credit", "download", BULK];
+/// Feature letting the center ask the main link for a download-only bulk link.
+pub(super) const BULK: &str = "bulk";
+/// The whole `hello.f` of a bulk link; the center requires both.
+const BULK_FEATURES: [&str; 2] = ["credit", "download"];
 
 /// Features to offer in `hello.f`: the center's declared set intersected with
 /// [`FEATURES`]. `None` (a center predating features) keeps the plain hello.
-pub(super) fn offer(declared: Option<&[String]>) -> Option<Vec<&'static str>> {
+/// `bulk` is offered only when the owner can obtain bulk tickets (`bulk_lane`)
+/// and a bulk link could be opened.
+pub(super) fn offer(declared: Option<&[String]>, bulk_lane: bool) -> Option<Vec<&'static str>> {
     declared.map(|declared| {
+        let bulk = bulk_lane && bulk_offer(declared).is_some();
         FEATURES
             .into_iter()
-            .filter(|feature| declared.iter().any(|name| name == feature))
+            .filter(|feature| declares(declared, feature) && (bulk || *feature != BULK))
             .collect()
     })
+}
+
+/// `hello.f` of a bulk link, or `None` when the center lacks a feature it requires.
+pub(super) fn bulk_offer(declared: &[String]) -> Option<Vec<&'static str>> {
+    BULK_FEATURES
+        .iter()
+        .all(|feature| declares(declared, feature))
+        .then(|| BULK_FEATURES.to_vec())
+}
+
+fn declares(declared: &[String], feature: &str) -> bool {
+    declared.iter().any(|name| name == feature)
 }
 
 /// Business WebSocket message type carried in a payload.
@@ -143,6 +162,10 @@ pub(super) enum Inbound {
     /// The peer's cumulative delivered bytes of a flow-controlled session.
     #[serde(rename = "credit")]
     Credit { s: Uuid, c: u64 },
+    /// Hint to open the link for `lane` (only `bulk` is defined); sent only to
+    /// a main link that declared `bulk`.
+    #[serde(rename = "lane")]
+    Lane { lane: String },
 }
 
 impl Inbound {
@@ -154,9 +177,11 @@ impl Inbound {
             | Self::Close { seq, .. }
             | Self::Reply { seq, .. }
             | Self::ShareStatus { seq } => Some(*seq),
-            Self::Welcome { .. } | Self::Ack { .. } | Self::Error { .. } | Self::Credit { .. } => {
-                None
-            }
+            Self::Welcome { .. }
+            | Self::Ack { .. }
+            | Self::Error { .. }
+            | Self::Credit { .. }
+            | Self::Lane { .. } => None,
         }
     }
 }

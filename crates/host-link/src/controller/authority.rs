@@ -39,6 +39,8 @@ pub(super) struct Authority<'a, C, S, R> {
     pub(super) active_session: &'a mut Option<(Tokens, Uuid)>,
     pub(super) grants: watch::Sender<Option<links::Grant>>,
     pub(super) errors: mpsc::Receiver<links::Failure>,
+    /// Handed to every grant for the hub link's bulk lane ticket requests.
+    pub(super) bulk: mpsc::Sender<crate::types::BulkRequest>,
 }
 
 impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
@@ -215,6 +217,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
                 acceptance: publication.acceptance.clone(),
                 features: session.hub_features.clone(),
                 issued: Arc::new(std::sync::Mutex::new(issued)),
+                bulk: self.bulk.clone(),
             }));
         }
     }

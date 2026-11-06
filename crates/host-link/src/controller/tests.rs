@@ -62,6 +62,10 @@ struct HubObserved {
     lease: bool,
     /// Tickets the link was started with.
     started: Vec<String>,
+    /// Bulk lane ticket source of the latest start.
+    bulk: Option<crate::BulkTickets>,
+    /// Access tokens presented for bulk lane tickets.
+    bulk_tokens: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -268,6 +272,16 @@ impl Center for Mock {
             seen.hub_features.clone(),
         ))
     }
+    async fn hub_bulk_ticket(&self, tokens: &Tokens, _: Uuid) -> Result<crate::HubTicket, Error> {
+        let mut seen = self.0.lock().unwrap();
+        seen.hub
+            .bulk_tokens
+            .push(tokens.access_token.expose_secret().to_owned());
+        Ok(crate::HubTicket::new(
+            "bulk-ticket-secret".into(),
+            seen.hub_features.clone(),
+        ))
+    }
     async fn close(&self, _: &Tokens, _: Uuid) -> Result<(), Error> {
         self.0.lock().unwrap().closes += 1;
         Ok(())
@@ -303,8 +317,14 @@ impl ManagedRelay for Mock {
         seen.active = false;
         seen.hub.active = false;
     }
-    async fn start_hub(&self, _: Uuid, ticket: crate::HubTicket) -> Result<(), Error> {
+    async fn start_hub(
+        &self,
+        _: Uuid,
+        ticket: crate::HubTicket,
+        bulk: Option<crate::BulkTickets>,
+    ) -> Result<(), Error> {
         let mut seen = self.0.lock().unwrap();
+        seen.hub.bulk = bulk;
         assert_eq!(ticket.features, seen.hub_features);
         seen.hub
             .started

@@ -4,6 +4,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use model::share::Visitor;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
 use tokio::sync::{OnceCell, Semaphore, mpsc};
 
 use crate::Local;
@@ -25,6 +27,35 @@ pub(crate) fn local(address: SocketAddr, api: Option<Arc<FakeApi>>) -> Arc<Local
         let _ = local.api.set(api);
     }
     Arc::new(local)
+}
+
+/// Body length of a file [`local_file`] serves.
+pub(crate) const FILE_SIZE: usize = 128 * 1024 + 17;
+
+/// Serve one local download request; returns the request head it received.
+pub(crate) async fn local_file(status: u16) -> (SocketAddr, tokio::task::JoinHandle<String>) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+    let address = listener.local_addr().expect("address");
+    let task = tokio::spawn(async move {
+        let (mut tcp, _) = listener.accept().await.expect("accept");
+        let mut request = Vec::new();
+        while !request.ends_with(b"\r\n\r\n") {
+            request.push(tcp.read_u8().await.expect("request"));
+        }
+        let body = if status == 200 {
+            vec![42_u8; FILE_SIZE]
+        } else {
+            Vec::new()
+        };
+        let head = format!(
+            "HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nContent-Type: application/octet-stream\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        tcp.write_all(head.as_bytes()).await.expect("head");
+        tcp.write_all(&body).await.expect("body");
+        String::from_utf8(request).expect("ascii request")
+    });
+    (address, task)
 }
 
 /// The test's end of one in-process connection.

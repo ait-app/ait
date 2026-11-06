@@ -159,6 +159,47 @@ impl HubTicket {
     }
 }
 
+/// A hub link's request for a `bulk` lane serve ticket of `session`.
+#[derive(Debug)]
+pub(crate) struct BulkRequest {
+    pub(crate) session: Uuid,
+    pub(crate) reply: tokio::sync::oneshot::Sender<Result<HubTicket, Error>>,
+}
+
+/// Lets the hub link of one node session obtain `bulk` lane serve tickets on
+/// demand. The controller answers with its current JWT while that session is
+/// still the published one.
+#[derive(Debug, Clone)]
+pub struct BulkTickets {
+    requests: tokio::sync::mpsc::Sender<BulkRequest>,
+    session: Uuid,
+}
+
+impl BulkTickets {
+    pub(crate) const fn new(
+        requests: tokio::sync::mpsc::Sender<BulkRequest>,
+        session: Uuid,
+    ) -> Self {
+        Self { requests, session }
+    }
+
+    /// Request a one-use `bulk` lane serve ticket.
+    /// # Errors
+    /// Returns `Unavailable` once the controller stopped or published another
+    /// session, or the center's refusal.
+    pub async fn request(&self) -> Result<HubTicket, Error> {
+        let (reply, response) = tokio::sync::oneshot::channel();
+        self.requests
+            .send(BulkRequest {
+                session: self.session,
+                reply,
+            })
+            .await
+            .map_err(|_| Error::Unavailable)?;
+        response.await.map_err(|_| Error::Unavailable)?
+    }
+}
+
 /// Sanitized failures: adapters must not embed responses, URLs or credentials.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum Error {

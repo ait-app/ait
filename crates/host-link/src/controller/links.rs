@@ -5,8 +5,8 @@ use std::time::Duration;
 use tokio::sync::{mpsc, watch};
 use uuid::Uuid;
 
-use crate::types::control_required;
-use crate::{Center, Error, HubTicket, ManagedRelay, Tokens};
+use crate::types::{BulkRequest, control_required};
+use crate::{BulkTickets, Center, Error, HubTicket, ManagedRelay, Tokens};
 
 const ATTEMPT_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -20,6 +20,8 @@ pub(super) struct Grant {
     pub(super) features: Option<Vec<String>>,
     /// Serve ticket issued with the registration under this JWT generation, used once.
     pub(super) issued: Arc<Mutex<Option<HubTicket>>>,
+    /// Bulk lane ticket requests, answered by [`serve_bulk`].
+    pub(super) bulk: mpsc::Sender<BulkRequest>,
 }
 
 impl Grant {
@@ -170,11 +172,39 @@ async fn connect<C: Center, R: ManagedRelay>(
                     None => center.hub_ticket(&grant.tokens, grant.session).await?,
                 };
                 grant.acceptance.flag(kind).store(true, Ordering::Relaxed);
-                relay.start_hub(grant.session, ticket).await?;
+                let bulk = BulkTickets::new(grant.bulk.clone(), grant.session);
+                relay.start_hub(grant.session, ticket, Some(bulk)).await?;
             }
         }
     }
     Ok(())
+}
+
+/// Answer the hub link's bulk lane ticket requests with the latest grant's JWT,
+/// so a link that outlived token rotation still presents a current one. Requests
+/// for a session that is no longer published are refused.
+pub(super) async fn serve_bulk<C: Center>(
+    center: &C,
+    grants: watch::Receiver<Option<Grant>>,
+    mut requests: mpsc::Receiver<BulkRequest>,
+) {
+    while let Some(request) = requests.recv().await {
+        let tokens = grants
+            .borrow()
+            .as_ref()
+            .filter(|grant| grant.session == request.session)
+            .map(|grant| grant.tokens.clone());
+        let result = match tokens {
+            Some(tokens) => tokio::time::timeout(
+                ATTEMPT_TIMEOUT,
+                center.hub_bulk_ticket(&tokens, request.session),
+            )
+            .await
+            .unwrap_or(Err(Error::Unavailable)),
+            None => Err(Error::Unavailable),
+        };
+        let _ = request.reply.send(result);
+    }
 }
 
 pub(super) async fn next_error(

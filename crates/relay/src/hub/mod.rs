@@ -2,9 +2,11 @@
 //! data connections. One persistent link to the center carries every remote
 //! session; each session is served in-process by the attached local API, or
 //! streams a file download. The link resumes after network loss without
-//! closing those sessions.
+//! closing those sessions. With feature `bulk`, downloads may instead arrive on
+//! a second, download-only link the center asks for.
 
 pub mod bridge;
+pub mod bulk;
 mod calls;
 mod credit;
 mod link;
@@ -13,6 +15,7 @@ mod wire;
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
@@ -67,6 +70,9 @@ pub struct Grant {
     /// centers predating them, which then receive a plain hello.
     #[serde(default)]
     pub hub_features: Option<Vec<String>>,
+    /// Source of bulk lane tickets; without one the link never declares `bulk`.
+    #[serde(skip)]
+    pub tickets: Option<Arc<dyn bulk::Tickets>>,
 }
 
 /// Public link state without credentials.
@@ -140,6 +146,21 @@ enum Ended {
     Stopped,
 }
 
+/// What a link carries.
+enum Role {
+    /// The main serve link of `generation`: it reports status and publication,
+    /// carries calls and every session kind, and opens the bulk link on `lane`
+    /// hints when it declared `bulk`.
+    Main {
+        generation: Uuid,
+        lane: Option<bulk::Lane>,
+    },
+    /// A download-only bulk link. The center closes it with `idle` when unused,
+    /// so a download is never routed to a link the Host is closing. It never
+    /// touches the connector's status, so an `idle` or `replaced` bulk link simply ends.
+    Bulk,
+}
+
 /// Why a link ended for good.
 #[derive(Debug)]
 enum Failure {
@@ -204,14 +225,30 @@ impl Connector {
         let connector = self.clone();
         let span =
             tracing::info_span!("hub_link", %generation, node_session_id = %grant.node_session_id);
+        let url = endpoint(&center, "v1/hub");
+        let offer = wire::offer(grant.hub_features.as_deref(), grant.tickets.is_some());
+        let lane = grant
+            .tickets
+            .filter(|_| {
+                offer
+                    .as_ref()
+                    .is_some_and(|offer| offer.contains(&wire::BULK))
+            })
+            .map(|tickets| bulk::Lane {
+                connector: self.clone(),
+                tickets,
+                url: url.clone(),
+                cancel: cancel.clone(),
+                open: Arc::new(AtomicBool::new(false)),
+            });
         tokio::spawn(
             async move {
-                let link = Link::new(wire::offer(grant.hub_features.as_deref()));
+                let role = Role::Main { generation, lane };
                 let result = connector
                     .run(
-                        &endpoint(&center, "v1/hub"),
-                        (grant.hub_ticket, link),
-                        generation,
+                        &url,
+                        (grant.hub_ticket, Link::new(offer)),
+                        &role,
                         &cancel,
                         &mut calls,
                     )
@@ -286,13 +323,52 @@ impl Connector {
         }
     }
 
+    /// Publish a welcomed main link; returns `false` once the link was superseded.
+    async fn welcomed(&self, generation: Uuid, link: Option<Uuid>, welcome: &mut Welcome) -> bool {
+        let features = std::mem::take(&mut welcome.features);
+        self.update(generation, |status| {
+            *status = Status {
+                online: true,
+                link,
+                features,
+                ..Status::default()
+            };
+        })
+        .await;
+        let state = self.state.lock().await;
+        if state.generation != generation {
+            return false;
+        }
+        let methods = std::mem::take(&mut welcome.methods);
+        self.publication.send_modify(|publication| {
+            publication.online = true;
+            publication.link = link;
+            publication.methods = methods;
+        });
+        true
+    }
+
+    /// Report a main link that lost its connection and is resuming.
+    async fn resuming(&self, generation: Uuid) {
+        self.update(generation, |status| {
+            status.online = false;
+            status.connecting = true;
+        })
+        .await;
+        let state = self.state.lock().await;
+        if state.generation == generation {
+            self.publication
+                .send_modify(|publication| publication.online = false);
+        }
+    }
+
     /// Keep one link alive: resume after loss until the center's grace period ends.
     /// The ticket is spent on the first connection; `link` carries the offered features.
     async fn run(
         &self,
         url: &str,
         (ticket, mut link): (SecretString, Link),
-        generation: Uuid,
+        role: &Role,
         cancel: &CancellationToken,
         calls: &mut calls::Calls,
     ) -> Result<(), Failure> {
@@ -302,6 +378,11 @@ impl Connector {
             output: output_tx,
             routes: HashMap::new(),
             shares: self.shares.clone(),
+            downloads_only: matches!(role, Role::Bulk),
+        };
+        let lane = match role {
+            Role::Main { lane, .. } => lane.as_ref(),
+            Role::Bulk => None,
         };
         let mut credential = ticket;
         let mut grace = Duration::MAX;
@@ -314,7 +395,7 @@ impl Connector {
                 joined = join(&self.local, url, &credential, &mut link) => joined,
             };
             match joined {
-                Ok(welcome) => {
+                Ok(mut welcome) => {
                     if welcome.fresh {
                         sessions.routes.clear();
                         calls.fresh();
@@ -322,26 +403,11 @@ impl Connector {
                     grace = welcome.grace;
                     lost = None;
                     failures = 0;
-                    let id = link.id();
-                    self.update(generation, |status| {
-                        *status = Status {
-                            online: true,
-                            link: id,
-                            features: welcome.features,
-                            ..Status::default()
-                        };
-                    })
-                    .await;
-                    let state = self.state.lock().await;
-                    if state.generation != generation {
+                    if let Role::Main { generation, .. } = role
+                        && !self.welcomed(*generation, link.id(), &mut welcome).await
+                    {
                         return Ok(());
                     }
-                    self.publication.send_modify(|publication| {
-                        publication.online = true;
-                        publication.link = id;
-                        publication.methods = welcome.methods;
-                    });
-                    drop(state);
                     // Empty on a fresh link, whose sessions are gone.
                     let credits = sessions_credit(&sessions);
                     let mut pump = Pump {
@@ -349,20 +415,14 @@ impl Connector {
                         sessions: &mut sessions,
                         outputs: &mut output_rx,
                         calls,
+                        lane,
                     };
                     match pump.run(welcome.socket, credits, cancel).await? {
                         Ended::Stopped => return Ok(()),
                         Ended::Lost => {}
                     }
-                    self.update(generation, |status| {
-                        status.online = false;
-                        status.connecting = true;
-                    })
-                    .await;
-                    let state = self.state.lock().await;
-                    if state.generation == generation {
-                        self.publication
-                            .send_modify(|publication| publication.online = false);
+                    if let Role::Main { generation, .. } = role {
+                        self.resuming(*generation).await;
                     }
                 }
                 Err(failure @ (Failure::Rejected(_) | Failure::Relay(Error::InvalidGrant))) => {
@@ -469,7 +529,8 @@ async fn join(
         | Inbound::Reply { .. }
         | Inbound::Close { .. }
         | Inbound::ShareStatus { .. }
-        | Inbound::Credit { .. } => Err(Error::Protocol.into()),
+        | Inbound::Credit { .. }
+        | Inbound::Lane { .. } => Err(Error::Protocol.into()),
     }
 }
 
@@ -489,6 +550,8 @@ struct Sessions {
     output: mpsc::Sender<(Uuid, Output)>,
     routes: HashMap<Uuid, Route>,
     shares: watch::Sender<Option<Outcome>>,
+    /// A bulk link refuses every session but downloads.
+    downloads_only: bool,
 }
 
 /// The link's handle on one session task.
@@ -528,7 +591,9 @@ impl Sessions {
         if self.routes.len() >= MAX_SESSIONS {
             return Err("capacity");
         }
-        if opening.kind == SessionKind::Unsupported {
+        if opening.kind == SessionKind::Unsupported
+            || (self.downloads_only && opening.kind != SessionKind::Download)
+        {
             return Err("unsupported");
         }
         let (credit, peer) = match opening.window {
@@ -624,6 +689,8 @@ struct Pump<'a> {
     sessions: &'a mut Sessions,
     outputs: &'a mut mpsc::Receiver<(Uuid, Output)>,
     calls: &'a mut calls::Calls,
+    /// Opens the bulk link on `lane` hints; only on a main link that declared `bulk`.
+    lane: Option<&'a bulk::Lane>,
 }
 
 impl Pump<'_> {
@@ -738,8 +805,22 @@ impl Pump<'_> {
                 self.sessions.routes.remove(&s);
                 None
             }
+            Inbound::Lane { lane } => {
+                // Unknown lanes are ignored; a link without bulk tickets never declared `bulk`.
+                if lane == wire::BULK
+                    && let Some(lane) = self.lane
+                {
+                    lane.hint();
+                }
+                return Ok(None);
+            }
             Inbound::Error { code } => {
-                tracing::warn!(code = code.as_str(), "Hub closed the link");
+                // The center closes unused bulk links as `idle`; that is routine.
+                if code == "idle" {
+                    tracing::info!("Hub closed the idle link");
+                } else {
+                    tracing::warn!(code = code.as_str(), "Hub closed the link");
+                }
                 return Err(Failure::Rejected(code));
             }
             Inbound::Welcome { .. } => return Err(Error::Protocol.into()),

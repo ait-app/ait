@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use secrecy::SecretString;
 use uuid::Uuid;
 
-use crate::{Binding, Error, HubTicket, Machine, Session, State, Tokens};
+use crate::{Binding, BulkTickets, Error, HubTicket, Machine, Session, State, Tokens};
 
 /// Private snapshot storage. Implementations synchronize files and parent directories.
 pub trait CredentialStore: Send + Sync {
@@ -58,6 +58,13 @@ pub trait Center: Send + Sync {
     async fn hub_ticket(&self, _tokens: &Tokens, _session: Uuid) -> Result<HubTicket, Error> {
         Err(Error::Unavailable)
     }
+    /// Obtain a one-use hub serve ticket for this runtime's download-only `bulk`
+    /// lane; only centers declaring the `bulk` feature issue one.
+    /// # Errors
+    /// Rejects expired or unauthorized sessions, and centers without the lane.
+    async fn hub_bulk_ticket(&self, _tokens: &Tokens, _session: Uuid) -> Result<HubTicket, Error> {
+        Err(Error::Unavailable)
+    }
     /// Revoke the shared machine authorization on explicit disconnect.
     /// # Errors
     /// May fail offline; local credential removal must still complete without retaining a retry secret.
@@ -83,10 +90,16 @@ pub trait ManagedRelay: Send + Sync {
     /// Close Relay, Hub and all reverse data channels immediately.
     async fn stop(&self);
     /// Begin the optional hub serve link with an ephemeral ticket, offering the
-    /// features declared with it.
+    /// features declared with it. `bulk` obtains tickets for the link's `bulk` lane;
+    /// without it the link never declares that feature.
     /// # Errors
     /// Rejects invalid tickets or unavailable local transport.
-    async fn start_hub(&self, session: Uuid, ticket: HubTicket) -> Result<(), Error>;
+    async fn start_hub(
+        &self,
+        session: Uuid,
+        ticket: HubTicket,
+        bulk: Option<BulkTickets>,
+    ) -> Result<(), Error>;
     /// Return whether the hub link is online, connecting, or yielding to another owner.
     async fn hub_active(&self) -> bool;
     /// Return whether the Hub handshake has succeeded, for resetting retry backoff.

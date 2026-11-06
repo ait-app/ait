@@ -101,10 +101,41 @@ fn decodes_guest_opens_and_share_status() {
 
 #[test]
 fn offers_only_implemented_features_the_center_declared() {
-    assert_eq!(offer(None), None);
+    assert_eq!(offer(None, true), None);
     let declared = ["hosts", "download", "lease", "future"].map(str::to_owned);
-    assert_eq!(offer(Some(&declared)), Some(vec!["lease", "download"]));
-    assert_eq!(offer(Some(&[])), Some(Vec::new()));
+    assert_eq!(
+        offer(Some(&declared), true),
+        Some(vec!["lease", "download"])
+    );
+    assert_eq!(offer(Some(&[]), true), Some(Vec::new()));
+}
+
+#[test]
+fn bulk_is_offered_only_when_a_bulk_link_can_be_opened() {
+    let declared = ["lease", "credit", "download", "bulk"].map(str::to_owned);
+    assert_eq!(
+        offer(Some(&declared), true),
+        Some(vec!["lease", "credit", "download", "bulk"])
+    );
+    // Without bulk tickets the main link never asks for a bulk link.
+    assert_eq!(
+        offer(Some(&declared), false),
+        Some(vec!["lease", "credit", "download"])
+    );
+    // A bulk link needs both `credit` and `download`.
+    let partial = ["download", "bulk"].map(str::to_owned);
+    assert_eq!(offer(Some(&partial), true), Some(vec!["download"]));
+    assert_eq!(bulk_offer(&partial), None);
+    assert_eq!(bulk_offer(&declared), Some(vec!["credit", "download"]));
+}
+
+#[test]
+fn decodes_lane_hints_as_unsequenced() {
+    let (hint, _) = decode(&raw(r#"{"t":"lane","lane":"bulk"}"#, b"")).expect("lane");
+    assert!(matches!(&hint, Inbound::Lane { lane } if lane == "bulk"));
+    assert_eq!(hint.seq(), None);
+    let (other, _) = decode(&raw(r#"{"t":"lane","lane":"future"}"#, b"")).expect("unknown lane");
+    assert!(matches!(other, Inbound::Lane { .. }));
 }
 
 #[test]

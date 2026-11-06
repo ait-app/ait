@@ -205,3 +205,38 @@ async fn registration_tickets_expire_locally() {
     tokio::time::advance(Duration::from_secs(30)).await;
     assert!(!ticket.usable());
 }
+
+#[tokio::test(start_paused = true)]
+async fn bulk_tickets_present_the_latest_token_until_the_manager_stops() {
+    let (controller, mock) = fixture();
+    declare(&mock, &["lease", "credit", "download", "bulk"], true);
+    // Two-minute tokens rotate about every minute while the link stays up.
+    mock.0.lock().unwrap().access_seconds = Some(120);
+    let cancel = CancellationToken::new();
+    let task = tokio::spawn(controller.run(cancel.clone()));
+    for _ in 0..200 {
+        tick().await;
+    }
+    let bulk = mock
+        .0
+        .lock()
+        .unwrap()
+        .hub
+        .bulk
+        .clone()
+        .expect("hub started");
+    let ticket = bulk.request().await.expect("bulk ticket");
+    assert_eq!(ticket.ticket.expose_secret(), "bulk-ticket-secret");
+    {
+        let seen = mock.0.lock().unwrap();
+        assert_eq!(seen.hub.starts, 1);
+        assert!(seen.refreshes.len() >= 3);
+        assert_eq!(
+            seen.hub.bulk_tokens,
+            [format!("device-access-secret-{}", seen.refreshes.len())]
+        );
+    }
+    cancel.cancel();
+    task.await.unwrap().unwrap();
+    assert_eq!(bulk.request().await.err(), Some(Error::Unavailable));
+}

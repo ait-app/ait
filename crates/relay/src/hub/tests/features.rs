@@ -6,19 +6,6 @@ fn declared() -> Vec<String> {
     DECLARED.map(str::to_owned).to_vec()
 }
 
-/// Wait until the Host processed every frame sent so far.
-async fn settle(center: &mut Center) {
-    center
-        .send(Message::Ping(Bytes::from_static(b"settle")))
-        .await
-        .expect("ping");
-    timeout(Duration::from_secs(3), async {
-        while !matches!(center.next().await, Some(Ok(Message::Pong(_)))) {}
-    })
-    .await
-    .expect("pong");
-}
-
 fn binary(seq: u64, s: Uuid, length: usize) -> Message {
     frame(
         &json!({"t":"msg","seq":seq,"s":s,"pt":"binary"}),

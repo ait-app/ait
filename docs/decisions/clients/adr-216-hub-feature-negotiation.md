@@ -4,13 +4,14 @@
 - 日期：2026-11-06
 - 修订：[ADR-204](adr-204-hub-only-online-business-transport.md)、[ADR-180](../daemon/adr-180-hub-serve-endpoint.md)
 
-`ait-hub-v1` 保持帧格式和版本号，新增五个由中心声明、双方协商的 feature：`lease`、`hosts`、`state`、`credit`、`download`。中心在 `register` 和 `hub-tickets` 响应中返回 `hub_features`；客户端只在收到该字段后在 `hello.f` 中带上交集，`welcome.f` 为最终结果，resume 必须保持相同集合。中心没有声明时，daemon 和客户端的行为与本 ADR 之前完全一致。
+`ait-hub-v1` 保持帧格式和版本号，新增六个由中心声明、双方协商的 feature：`lease`、`hosts`、`state`、`credit`、`download`、`bulk`。中心在 `register` 和 `hub-tickets` 响应中返回 `hub_features`；客户端只在收到该字段后在 `hello.f` 中带上交集，`welcome.f` 为最终结果，resume 必须保持相同集合。中心没有声明时，daemon 和客户端的行为与本 ADR 之前完全一致。
 
 - `lease`：Hub link 在线或处于宽限期时由中心续租，daemon 和客户端停止 HTTP renew。设备授权的 daemon 每次轮换 JWT 后仍发一次 renew，使授权期限前移。
 - `hosts`：访问端从 `hosts` 帧（全量 + 按 `ver` 连续的增量）取得 Host 列表与在线状态，不再连接 `/v1/relay/channel`；`select()` 使用同一列表。
 - `state`：可见性与焦点改为 link 级 `state` 帧，只在变化和重连后发送，不再调用 `session.heartbeat`；桌面主进程合并多个窗口。
 - `credit`：发起方和 serve 端都声明时，会话按窗口流控，发送方等待 credit 而不是因缓冲满失败；未启用时保留原有行为。
 - `download`：目标 Host 的 `hosts.f` 含 `download` 时，下载作为 `k:"download"` Hub 会话运行，消息沿用原下载协议，token 仍由 daemon RPC 签发；否则继续使用独立下载 Relay。
+- `bulk`：下载会话改走独立的 bulk link（票据 `lane:"bulk"`，`hello.f` 只含 `credit`、`download`），不再和 RPC 共用一条 TCP 和中心写队列。访问端第一次下载时才建立，60 秒没有下载就关闭；建立失败时下载退回 main link，60 秒内不再尝试。Host 的 main link 声明 `bulk`，收到中心的 `lane` 提示后才建立 bulk link；它由中心在空闲 60 秒后以 `idle` 关闭，Host 不自行关闭，避免中心把新下载派给正在关闭的连接；中心最多等 5 秒，超时就在 main link 上投递。
 
 中心同时声明 `lease` 和 `download` 时，daemon 不再建立 `/v1/relay/control`；中心负责让旧访问端照常看到该 Host 在线，并把旧下载请求桥接为 Hub 下载会话。中心未声明时 daemon 保留 relay control。
 
