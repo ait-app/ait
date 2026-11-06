@@ -12,8 +12,11 @@ use super::*;
 struct Native;
 #[async_trait::async_trait]
 impl Executor for Native {
-    async fn execute(&self, _: SessionOwner, _: Action) -> Result<Value, model::ErrorCode> {
-        Ok(json!({"status":"idle","lastMessage":"Bot answer"}))
+    async fn execute(&self, _: SessionOwner, action: Action) -> Result<Value, model::ErrorCode> {
+        Ok(match action {
+            Action::Create { .. } => json!({"created":true,"instructionDelivery":"system_prompt"}),
+            _ => json!({"status":"idle","lastMessage":"Bot answer"}),
+        })
     }
 }
 impl Credentials for Native {

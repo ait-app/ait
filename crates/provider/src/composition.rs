@@ -66,6 +66,7 @@ impl Providers {
     /// `data_dir` is the daemon's persistent storage root and `environment` resolves variables
     /// such as `AIT_SERVER_CODEX_BIN`, letting in-process hosts select offline native programs
     /// without mutating the process environment. Returns adapters without starting processes.
+    #[doc(hidden)]
     #[must_use]
     pub fn configured(data_dir: &Path, environment: impl Fn(&str) -> Option<OsString>) -> Self {
         let program = |name: &str, fallback: &str| {
