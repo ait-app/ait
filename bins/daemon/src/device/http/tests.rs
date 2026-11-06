@@ -274,3 +274,98 @@ fn original_expiry_is_preserved_for_recovery_receipts_and_invalid_tokens_rejecte
     }
     assert_eq!(HttpCenter::new().unwrap().base, host_link::center());
 }
+
+fn registration(machine: &Machine, wire: &Value, extra: &Value) -> Value {
+    let mut value = json!({"node_id":wire["node_id"],"host_id":wire["host_id"],
+        "server_id":machine.server_id,"node_session_id":Uuid::new_v4(),
+        "lease_duration_seconds":60,"renew_after_seconds":20,"control_required":true});
+    for (key, field) in extra.as_object().unwrap() {
+        value[key] = field.clone();
+    }
+    value
+}
+
+#[tokio::test]
+async fn old_center_responses_parse_without_hub_features_or_tickets() {
+    let machine = declaration();
+    let wire = response(&machine);
+    let tokens = decode_tokens(wire.clone()).unwrap();
+    let fixture = Fixture::new(vec![
+        (StatusCode::OK, registration(&machine, &wire, &json!({}))),
+        (
+            StatusCode::OK,
+            json!({"hub_ticket":"d".repeat(64),"hub_path":"/v1/hub","expires_in_seconds":30,
+                "protocol":"ait-hub-v1"}),
+        ),
+    ])
+    .await;
+
+    let session = fixture
+        .center
+        .register(&tokens, &machine, Uuid::new_v4(), Uuid::new_v4())
+        .await
+        .unwrap();
+    let ticket = fixture
+        .center
+        .hub_ticket(&tokens, session.id)
+        .await
+        .unwrap();
+
+    assert_eq!(session.hub_features, None);
+    assert!(session.hub_ticket.is_none());
+    assert_eq!(ticket.ticket.expose_secret(), "d".repeat(64));
+    assert_eq!(ticket.features, None);
+    assert!(ticket.expires_at.is_none());
+}
+
+#[tokio::test]
+async fn new_center_responses_declare_features_and_issue_a_serve_ticket_at_registration() {
+    let machine = declaration();
+    let wire = response(&machine);
+    let tokens = decode_tokens(wire.clone()).unwrap();
+    let features = json!(["lease", "hosts", "state", "credit", "download"]);
+    let ticket = json!({"hub_features":features,"hub_ticket":"e".repeat(64),"hub_path":"/v1/hub",
+        "hub_expires_in_seconds":30,"hub_ep":"serve"});
+    let fixture = Fixture::new(vec![
+        (StatusCode::OK, registration(&machine, &wire, &ticket)),
+        (
+            StatusCode::OK,
+            registration(
+                &machine,
+                &wire,
+                &json!({"hub_features":features,"hub_ticket":"e".repeat(64),
+                    "hub_path":"/v1/hub","hub_expires_in_seconds":30,"hub_ep":"access"}),
+            ),
+        ),
+        (
+            StatusCode::OK,
+            registration(&machine, &wire, &json!({"hub_features":"lease"})),
+        ),
+        (
+            StatusCode::OK,
+            json!({"hub_ticket":"f".repeat(64),"hub_path":"/v1/hub","expires_in_seconds":30,
+                "protocol":"ait-hub-v1","hub_features":features}),
+        ),
+    ])
+    .await;
+    let register = || {
+        fixture
+            .center
+            .register(&tokens, &machine, Uuid::new_v4(), Uuid::new_v4())
+    };
+    let declared: Vec<String> = serde_json::from_value(features.clone()).unwrap();
+
+    let served = register().await.unwrap();
+    let issued = served.hub_ticket.expect("registration ticket");
+    assert_eq!(served.hub_features.as_ref(), Some(&declared));
+    assert_eq!(issued.ticket.expose_secret(), "e".repeat(64));
+    assert_eq!(issued.features.as_ref(), Some(&declared));
+    assert!(issued.usable());
+    // Only a serve ticket is used; an unreadable declaration means none.
+    let access = register().await.unwrap();
+    assert!(access.hub_ticket.is_none());
+    assert_eq!(access.hub_features.as_ref(), Some(&declared));
+    assert_eq!(register().await.unwrap().hub_features, None);
+    let ticket = fixture.center.hub_ticket(&tokens, served.id).await.unwrap();
+    assert_eq!(ticket.features, Some(declared));
+}

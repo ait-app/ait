@@ -5,7 +5,7 @@ use futures_util::{SinkExt, StreamExt};
 use secrecy::{ExposeSecret, SecretString};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
-use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::{Bytes, Message};
 use tokio_util::sync::CancellationToken;
 use url::Url;
 use uuid::Uuid;
@@ -13,6 +13,9 @@ use uuid::Uuid;
 use crate::protocol::{DownloadAck, DownloadMessage, Pairing};
 use crate::transport::{MAX_MESSAGE, Socket, receive};
 use crate::{Error, Local, protocol};
+
+/// Largest binary body message of a download.
+pub(crate) const CHUNK: usize = 64 * 1024;
 
 /// Pair `session` using its relay ticket and stream the local file authorized by `token`.
 /// A guest download names its `visitor`, so only a token issued to that visitor is served.
@@ -36,15 +39,7 @@ pub(super) async fn run(
         .await
         .map_err(|_| Error::Transport)??;
     ready.verify(session)?;
-    let response = local_response(&local, token.expose_secret(), visitor).await?;
-    let headers = protocol::encode(&DownloadMessage::Headers {
-        status: response.status().as_u16(),
-        content_length: response.content_length(),
-        content_type: response
-            .headers()
-            .get("content-type")
-            .and_then(|h| h.to_str().ok()),
-    })?;
+    let (headers, response) = prepare(&local, token.expose_secret(), visitor).await?;
     let (mut sink, incoming) = socket.split();
     let (pong_tx, mut pong_rx) = mpsc::channel(1);
     let (complete_tx, complete_rx) = oneshot::channel();
@@ -71,8 +66,7 @@ pub(super) async fn run(
             };
             let Some(chunk) = chunk else { break };
             let bytes = chunk.map_err(|_| Error::Transport)?;
-            for start in (0..bytes.len()).step_by(64 * 1024) {
-                let chunk = bytes.slice(start..bytes.len().min(start + 64 * 1024));
+            for chunk in chunks(&bytes) {
                 let length = chunk.len() as u64;
                 timeout(Duration::from_secs(5), sink.send(Message::Binary(chunk)))
                     .await
@@ -83,9 +77,7 @@ pub(super) async fn run(
         }
         timeout(
             Duration::from_secs(5),
-            sink.send(Message::Text(
-                protocol::encode(&DownloadMessage::End { bytes: written })?.into(),
-            )),
+            sink.send(Message::Text(end(written)?.into())),
         )
         .await
         .map_err(|_| Error::Transport)?
@@ -105,6 +97,49 @@ pub(super) async fn run(
     };
     let ((), result) = tokio::join!(reader, completing);
     result
+}
+
+/// Validate `token`, request the local file it authorizes and encode the
+/// `download.headers` message announcing it. Shared by Relay and Hub downloads.
+///
+/// # Errors
+/// Rejects malformed tokens, unreachable local endpoints and unsuccessful responses.
+pub(crate) async fn prepare(
+    local: &Local,
+    token: &str,
+    visitor: Option<Uuid>,
+) -> Result<(String, reqwest::Response), Error> {
+    protocol::validate_download_token(token)?;
+    let response = local_response(local, token, visitor).await?;
+    let headers = protocol::encode(&DownloadMessage::Headers {
+        status: response.status().as_u16(),
+        content_length: response.content_length(),
+        content_type: response
+            .headers()
+            .get("content-type")
+            .and_then(|h| h.to_str().ok()),
+    })?;
+    Ok((headers, response))
+}
+
+/// Split one body read into binary messages of at most [`CHUNK`] bytes without copying.
+pub(crate) fn chunks(bytes: &Bytes) -> impl Iterator<Item = Bytes> + '_ {
+    (0..bytes.len())
+        .step_by(CHUNK)
+        .map(|start| bytes.slice(start..bytes.len().min(start + CHUNK)))
+}
+
+/// Encode the `download.end` message after `bytes` body bytes were sent.
+///
+/// # Errors
+/// Returns a protocol error if serialization fails.
+pub(crate) fn end(bytes: u64) -> Result<String, Error> {
+    protocol::encode(&DownloadMessage::End { bytes })
+}
+
+/// Whether `text` is the destination's final `download.complete` acknowledgement.
+pub(crate) fn completed(text: &str) -> bool {
+    protocol::decode::<DownloadAck>(text).is_ok()
 }
 
 async fn local_response(
@@ -160,7 +195,7 @@ async fn read_ack(
             }
             Some(Ok(Message::Pong(_))) => {}
             Some(Ok(Message::Text(value))) => {
-                if protocol::decode::<DownloadAck>(&value).is_ok() {
+                if completed(&value) {
                     let _ = complete_tx.send(());
                     return;
                 }

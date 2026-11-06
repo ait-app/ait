@@ -12,7 +12,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::StreamExt;
-use secrecy::SecretString;
 use tokio::sync::{Mutex, OnceCell, Semaphore};
 use tokio::task::JoinSet;
 use tokio::time::timeout;
@@ -47,11 +46,12 @@ struct Local {
     visits: Arc<Semaphore>,
     dialer: Dialer,
     url: String,
-    token: SecretString,
     server_id: String,
     instance_id: String,
     /// Local download client, built on first use and reused for every later download.
     downloads: OnceCell<reqwest::Client>,
+    /// In-process API serving Hub business sessions, attached once it can serve.
+    api: std::sync::OnceLock<Arc<dyn hub::bridge::LocalApi>>,
 }
 
 /// Connector failures deliberately omit URLs and credentials.
@@ -69,14 +69,9 @@ pub enum Error {
 }
 
 impl Connector {
-    /// Bind to this process's actual local address and credentials.
+    /// Bind to this process's actual local address and identity.
     #[must_use]
-    pub fn new(
-        address: SocketAddr,
-        token: SecretString,
-        server_id: String,
-        instance_id: String,
-    ) -> Self {
+    pub fn new(address: SocketAddr, server_id: String, instance_id: String) -> Self {
         let address = match address {
             SocketAddr::V4(mut address) => {
                 if address.ip().is_unspecified() {
@@ -96,10 +91,10 @@ impl Connector {
             visits: Arc::new(Semaphore::new(16)),
             dialer: Dialer::default(),
             url: format!("ws://{address}/v1/ws"),
-            token,
             server_id,
             instance_id,
             downloads: OnceCell::new(),
+            api: std::sync::OnceLock::new(),
         });
         Self {
             hub: hub::Connector::new(local.clone(), shutdown.clone()),
@@ -111,6 +106,12 @@ impl Connector {
             })),
             local,
         }
+    }
+
+    /// Serve Hub business sessions with `api`; the first attachment wins. Until
+    /// one is attached, sessions are refused as `unavailable`.
+    pub fn attach_api(&self, api: Arc<dyn hub::bridge::LocalApi>) {
+        let _ = self.local.api.set(api);
     }
 
     /// The optional hub serve link sharing this connector's local destination and shutdown.
@@ -369,5 +370,7 @@ fn endpoint(center: &Url, path: &str) -> String {
     url.to_string()
 }
 
+#[cfg(test)]
+mod test_support;
 #[cfg(test)]
 mod tests;

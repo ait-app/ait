@@ -14,15 +14,7 @@ async fn transfer_as(status: u16, ack: &str, visitor: Option<Uuid>) -> Result<()
     let center = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let local = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let session = Uuid::new_v4();
-    let destination = Arc::new(Local {
-        visits: Arc::new(tokio::sync::Semaphore::new(16)),
-        dialer: crate::transport::Dialer::default(),
-        url: format!("ws://{}/v1/ws", local.local_addr().unwrap()),
-        token: SecretString::from("local-bearer"),
-        server_id: "server".to_owned(),
-        instance_id: "instance".to_owned(),
-        downloads: tokio::sync::OnceCell::new(),
-    });
+    let destination = crate::test_support::local(local.local_addr().unwrap(), None);
     let body = vec![42_u8; 128 * 1024 + 17];
     let expected = body.clone();
     let local_task = tokio::spawn(async move {

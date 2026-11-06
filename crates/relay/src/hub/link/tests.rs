@@ -100,3 +100,20 @@ fn acknowledgements_are_coalesced_and_bound_replay_memory() {
     link.acked(link.next_seq).expect("ack all");
     assert!(link.has_room());
 }
+
+#[test]
+fn offered_features_survive_a_fresh_join_and_every_resume() {
+    let mut link = Link::new(Some(vec!["lease", "credit"]));
+    assert_eq!(
+        header(&link.hello().expect("hello"))["f"],
+        serde_json::json!(["lease", "credit"])
+    );
+    let id = Uuid::new_v4();
+    link.join(id, false, 0, Some("token".into()))
+        .expect("fresh");
+
+    let resume = header(&link.hello().expect("hello"));
+
+    assert_eq!(resume["f"], serde_json::json!(["lease", "credit"]));
+    assert_eq!(resume["resume"]["link"], serde_json::json!(id));
+}

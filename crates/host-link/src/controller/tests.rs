@@ -43,6 +43,10 @@ struct Observed {
     renew_delay: Duration,
     lease_seconds: Option<i64>,
     access_seconds: Option<i64>,
+    /// `hub_features` the register response declares.
+    hub_features: Option<Vec<String>>,
+    /// Issue a serve ticket with this prefix with each registration.
+    register_hub_ticket: Option<&'static str>,
 }
 
 #[derive(Default)]
@@ -54,6 +58,10 @@ struct HubObserved {
     ticket_delay: Duration,
     error: Option<Error>,
     errors: std::collections::VecDeque<Error>,
+    /// The link holds the lease while active.
+    lease: bool,
+    /// Tickets the link was started with.
+    started: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -197,10 +205,17 @@ impl Center for Mock {
         if let Some(error) = seen.register_error.take().or(seen.register_errors) {
             return Err(error);
         }
+        let hub_ticket = seen.register_hub_ticket.map(|prefix| crate::HubTicket {
+            ticket: format!("{prefix}-{}", seen.registrations.len()).into(),
+            features: seen.hub_features.clone(),
+            expires_at: Some(tokio::time::Instant::now() + Duration::from_secs(30)),
+        });
         Ok(Session {
             id: Uuid::new_v4(),
             lease_until: Utc::now() + chrono::Duration::seconds(60),
             renew_after_seconds: 1,
+            hub_features: seen.hub_features.clone(),
+            hub_ticket,
         })
     }
     async fn renew(&self, tokens: &Tokens, _: Uuid) -> Result<DateTime<Utc>, Error> {
@@ -235,7 +250,7 @@ impl Center for Mock {
         }
         Ok("ticket-secret".into())
     }
-    async fn hub_ticket(&self, tokens: &Tokens, session: Uuid) -> Result<SecretString, Error> {
+    async fn hub_ticket(&self, tokens: &Tokens, session: Uuid) -> Result<crate::HubTicket, Error> {
         let delay = {
             let mut seen = self.0.lock().unwrap();
             seen.hub_grants
@@ -248,7 +263,10 @@ impl Center for Mock {
         if let Some(error) = seen.hub.errors.pop_front().or(seen.hub.error) {
             return Err(error);
         }
-        Ok("hub-ticket-secret".into())
+        Ok(crate::HubTicket::new(
+            "hub-ticket-secret".into(),
+            seen.hub_features.clone(),
+        ))
     }
     async fn close(&self, _: &Tokens, _: Uuid) -> Result<(), Error> {
         self.0.lock().unwrap().closes += 1;
@@ -256,6 +274,7 @@ impl Center for Mock {
     }
 }
 
+mod hub_features;
 mod links;
 mod recovery;
 mod service;
@@ -284,9 +303,12 @@ impl ManagedRelay for Mock {
         seen.active = false;
         seen.hub.active = false;
     }
-    async fn start_hub(&self, _: Uuid, ticket: SecretString) -> Result<(), Error> {
-        assert_eq!(ticket.expose_secret(), "hub-ticket-secret");
+    async fn start_hub(&self, _: Uuid, ticket: crate::HubTicket) -> Result<(), Error> {
         let mut seen = self.0.lock().unwrap();
+        assert_eq!(ticket.features, seen.hub_features);
+        seen.hub
+            .started
+            .push(ticket.ticket.expose_secret().to_owned());
         seen.hub.starts += 1;
         seen.hub.active = true;
         Ok(())
@@ -294,6 +316,10 @@ impl ManagedRelay for Mock {
     async fn hub_active(&self) -> bool {
         let seen = self.0.lock().unwrap();
         seen.hub.active
+    }
+    async fn hub_lease(&self) -> bool {
+        let seen = self.0.lock().unwrap();
+        seen.hub.active && seen.hub.lease
     }
     async fn report(&self, phase: &'static str, _: Option<&Binding>) {
         self.0.lock().unwrap().reports.push(phase);

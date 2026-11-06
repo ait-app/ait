@@ -3,7 +3,9 @@ use std::time::Duration;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures_util::StreamExt;
-use host_link::{Binding, Center, Credential, Error, Machine, Session, Tokens, VERIFICATION_URI};
+use host_link::{
+    Binding, Center, Credential, Error, HubTicket, Machine, Session, Tokens, VERIFICATION_URI,
+};
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -152,6 +154,26 @@ fn ticket(value: &Value, field: &str) -> Result<SecretString, Error> {
     Ok(ticket.to_owned().into())
 }
 
+/// Optional `hub_features` of a center response. Centers predating them omit the
+/// field; an unreadable one is treated the same, keeping the original behavior.
+fn hub_features(value: &Value) -> Option<Vec<String>> {
+    serde_json::from_value(value["hub_features"].clone()).ok()
+}
+
+/// The serve ticket a registration may carry. It is only used for a `serve` Hub
+/// endpoint at the protocol path, within its stated lifetime.
+fn registration_ticket(value: &Value, features: Option<&[String]>) -> Option<HubTicket> {
+    if value["hub_ep"] != "serve" || value["hub_path"] != "/v1/hub" {
+        return None;
+    }
+    let lifetime = value["hub_expires_in_seconds"].as_u64()?;
+    Some(HubTicket {
+        ticket: ticket(value, "hub_ticket").ok()?,
+        features: features.map(<[String]>::to_vec),
+        expires_at: Some(tokio::time::Instant::now() + Duration::from_secs(lifetime)),
+    })
+}
+
 fn decode_tokens(value: Value) -> Result<Tokens, Error> {
     let wire: TokenResponse = serde_json::from_value(value).map_err(|_| Error::Protocol)?;
     let refresh = wire.refresh_token.expose_secret();
@@ -275,10 +297,13 @@ impl Center for HttpCenter {
         if id.is_nil() {
             return Err(Error::Protocol);
         }
+        let hub_features = hub_features(&value);
         Ok(Session {
             id,
             lease_until: Utc::now() + chrono::Duration::seconds(lease),
             renew_after_seconds: renew,
+            hub_ticket: registration_ticket(&value, hub_features.as_deref()),
+            hub_features,
         })
     }
     async fn renew(&self, tokens: &Tokens, session: Uuid) -> Result<DateTime<Utc>, Error> {
@@ -308,7 +333,7 @@ impl Center for HttpCenter {
             .await?;
         ticket(&value, "control_ticket")
     }
-    async fn hub_ticket(&self, tokens: &Tokens, session: Uuid) -> Result<SecretString, Error> {
+    async fn hub_ticket(&self, tokens: &Tokens, session: Uuid) -> Result<HubTicket, Error> {
         let value = self
             .request(
                 reqwest::Method::POST,
@@ -317,7 +342,10 @@ impl Center for HttpCenter {
                 json!({"ep":"serve"}),
             )
             .await?;
-        ticket(&value, "hub_ticket")
+        Ok(HubTicket::new(
+            ticket(&value, "hub_ticket")?,
+            hub_features(&value),
+        ))
     }
     async fn close(&self, tokens: &Tokens, session: Uuid) -> Result<(), Error> {
         self.request(

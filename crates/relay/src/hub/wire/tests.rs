@@ -98,3 +98,84 @@ fn decodes_guest_opens_and_share_status() {
     assert_eq!(status.seq(), Some(5));
     assert_eq!(payload.as_ref(), b"{}");
 }
+
+#[test]
+fn offers_only_implemented_features_the_center_declared() {
+    assert_eq!(offer(None), None);
+    let declared = ["hosts", "download", "lease", "future"].map(str::to_owned);
+    assert_eq!(offer(Some(&declared)), Some(vec!["lease", "download"]));
+    assert_eq!(offer(Some(&[])), Some(Vec::new()));
+}
+
+#[test]
+fn decodes_feature_fields_and_frames() {
+    let s = Uuid::new_v4();
+    let (open, _) = decode(&raw(
+        &format!(r#"{{"t":"open","seq":1,"s":"{s}","from":"{s}","k":"download","w":65536}}"#),
+        b"",
+    ))
+    .expect("open");
+    assert!(matches!(
+        open,
+        Inbound::Open {
+            k: SessionKind::Download,
+            w: Some(65_536),
+            ..
+        }
+    ));
+    let (open, _) = decode(&raw(
+        &format!(r#"{{"t":"open","seq":1,"s":"{s}","k":"tunnel"}}"#),
+        b"",
+    ))
+    .expect("unknown kinds decode");
+    assert!(matches!(
+        open,
+        Inbound::Open {
+            k: SessionKind::Unsupported,
+            w: None,
+            ..
+        }
+    ));
+    let (credit, _) =
+        decode(&raw(&format!(r#"{{"t":"credit","s":"{s}","c":7}}"#), b"")).expect("credit");
+    assert!(matches!(credit, Inbound::Credit { c: 7, .. }));
+    assert_eq!(credit.seq(), None);
+    let link = Uuid::new_v4();
+    let (welcome, _) = decode(&raw(
+        &format!(
+            r#"{{"t":"welcome","link":"{link}","resumed":false,"recv":0,"resume_token":"t","grace_seconds":120,"f":["lease"],"win":262144}}"#
+        ),
+        b"",
+    ))
+    .expect("welcome");
+    assert!(matches!(welcome, Inbound::Welcome { f, .. } if f == ["lease"]));
+}
+
+#[test]
+fn encodes_feature_fields_only_when_present() {
+    let s = Uuid::new_v4();
+    let header = |frame: &Bytes| -> serde_json::Value {
+        let length = usize::from(u16::from_be_bytes([frame[0], frame[1]]));
+        serde_json::from_slice(&frame[2..2 + length]).expect("json header")
+    };
+    let plain = encode(&Outbound::Accept { seq: 1, s, w: None }, b"").expect("accept");
+    assert_eq!(
+        header(&plain),
+        serde_json::json!({"t":"accept","seq":1,"s":s})
+    );
+    let windowed = encode(
+        &Outbound::Accept {
+            seq: 1,
+            s,
+            w: Some(65_536),
+        },
+        b"",
+    )
+    .expect("accept");
+    assert_eq!(header(&windowed)["w"], 65_536);
+    let credit = encode(&Outbound::Credit { s, c: 9 }, b"").expect("credit");
+    assert_eq!(
+        header(&credit),
+        serde_json::json!({"t":"credit","s":s,"c":9})
+    );
+}

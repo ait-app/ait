@@ -22,7 +22,6 @@ fn center_urls_require_tls_and_preserve_proxy_prefix() {
 async fn stop_is_idempotent_and_bad_tickets_never_start() {
     let connector = Connector::new(
         "127.0.0.1:12345".parse().unwrap(),
-        SecretString::from("local-only"),
         Uuid::new_v4().to_string(),
         Uuid::new_v4().to_string(),
     );
@@ -51,7 +50,6 @@ async fn control_ignores_tunnel_advertisements_and_still_streams_downloads() {
         let local = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let connector = Connector::new(
             local.local_addr().unwrap(),
-            "private-local-bearer".into(),
             "server".into(),
             "instance".into(),
         );

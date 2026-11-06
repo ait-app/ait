@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use secrecy::SecretString;
 use uuid::Uuid;
 
-use crate::{Binding, Error, Machine, Session, State, Tokens};
+use crate::{Binding, Error, HubTicket, Machine, Session, State, Tokens};
 
 /// Private snapshot storage. Implementations synchronize files and parent directories.
 pub trait CredentialStore: Send + Sync {
@@ -55,7 +55,7 @@ pub trait Center: Send + Sync {
     /// centers without it report `Unavailable`.
     /// # Errors
     /// Rejects expired or unauthorized sessions, and centers without a hub.
-    async fn hub_ticket(&self, _tokens: &Tokens, _session: Uuid) -> Result<SecretString, Error> {
+    async fn hub_ticket(&self, _tokens: &Tokens, _session: Uuid) -> Result<HubTicket, Error> {
         Err(Error::Unavailable)
     }
     /// Revoke the shared machine authorization on explicit disconnect.
@@ -82,14 +82,18 @@ pub trait ManagedRelay: Send + Sync {
     async fn online(&self) -> bool;
     /// Close Relay, Hub and all reverse data channels immediately.
     async fn stop(&self);
-    /// Begin the optional hub serve link with an ephemeral ticket.
+    /// Begin the optional hub serve link with an ephemeral ticket, offering the
+    /// features declared with it.
     /// # Errors
     /// Rejects invalid tickets or unavailable local transport.
-    async fn start_hub(&self, session: Uuid, ticket: SecretString) -> Result<(), Error>;
+    async fn start_hub(&self, session: Uuid, ticket: HubTicket) -> Result<(), Error>;
     /// Return whether the hub link is online, connecting, or yielding to another owner.
     async fn hub_active(&self) -> bool;
     /// Return whether the Hub handshake has succeeded, for resetting retry backoff.
     async fn hub_online(&self) -> bool;
+    /// Return whether the hub link, attached or resuming, holds the node session lease
+    /// (`lease` feature), so it must not be renewed over HTTP.
+    async fn hub_lease(&self) -> bool;
     /// Publish a sanitized manager state for local status queries.
     /// Waits for best-effort persistence without blocking the async runtime.
     async fn report(&self, phase: &'static str, binding: Option<&Binding>);

@@ -1,9 +1,12 @@
 //! Optional `ait-hub-v1` serve endpoint, independent of the legacy control and
 //! data connections. One persistent link to the center carries every remote
-//! session; each session gets its own WebSocket on the fixed local daemon.
-//! The link resumes after network loss without closing those sessions.
+//! session; each session is served in-process by the attached local API, or
+//! streams a file download. The link resumes after network loss without
+//! closing those sessions.
 
+pub mod bridge;
 mod calls;
+mod credit;
 mod link;
 mod session;
 mod wire;
@@ -26,14 +29,18 @@ use uuid::Uuid;
 
 use crate::transport::Socket;
 use crate::{Error, Local, center_url, diagnostics, endpoint, validate_ticket};
+use bridge::Frame;
 use link::{Joined, Link};
-use session::Output;
-use wire::{Inbound, Outbound};
+use session::{Output, Session};
+use wire::{Inbound, Outbound, SessionKind};
 
 /// Sessions per link; the center enforces the same bound.
 const MAX_SESSIONS: usize = 16;
 /// Buffered business messages per session before it is closed as `overflow`.
 const SESSION_QUEUE: usize = 64;
+/// Message bound of a flow-controlled session. Its window already bounds the
+/// bytes; this only guards against floods of empty messages.
+const CREDIT_QUEUE: usize = 4096;
 const WELCOME_TIMEOUT: Duration = Duration::from_secs(5);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 /// The center pings every 20 seconds; silence beyond this means the link is gone.
@@ -56,6 +63,10 @@ pub struct Grant {
     pub hub_ticket: SecretString,
     /// Node session the ticket was issued for.
     pub node_session_id: Uuid,
+    /// Features the center declared over HTTP with the ticket; absent from
+    /// centers predating them, which then receive a plain hello.
+    #[serde(default)]
+    pub hub_features: Option<Vec<String>>,
 }
 
 /// Public link state without credentials.
@@ -71,6 +82,17 @@ pub struct Status {
     pub error: Option<String>,
     /// Center error code that ended the last link, e.g. `replaced`.
     pub rejected: Option<String>,
+    /// Features the center enabled on the current link (`welcome.f`).
+    pub features: Vec<String>,
+}
+
+impl Status {
+    /// Whether the current link, attached or resuming, holds the node session
+    /// lease, so the owner must not renew it over HTTP.
+    #[must_use]
+    pub fn holds_lease(&self) -> bool {
+        self.link.is_some() && self.features.iter().any(|feature| feature == "lease")
+    }
 }
 
 #[derive(Debug)]
@@ -184,10 +206,11 @@ impl Connector {
             tracing::info_span!("hub_link", %generation, node_session_id = %grant.node_session_id);
         tokio::spawn(
             async move {
+                let link = Link::new(wire::offer(grant.hub_features.as_deref()));
                 let result = connector
                     .run(
                         &endpoint(&center, "v1/hub"),
-                        grant.hub_ticket,
+                        (grant.hub_ticket, link),
                         generation,
                         &cancel,
                         &mut calls,
@@ -264,15 +287,15 @@ impl Connector {
     }
 
     /// Keep one link alive: resume after loss until the center's grace period ends.
+    /// The ticket is spent on the first connection; `link` carries the offered features.
     async fn run(
         &self,
         url: &str,
-        ticket: SecretString,
+        (ticket, mut link): (SecretString, Link),
         generation: Uuid,
         cancel: &CancellationToken,
         calls: &mut calls::Calls,
     ) -> Result<(), Failure> {
-        let mut link = Link::default();
         let (output_tx, mut output_rx) = mpsc::channel(MAX_SESSIONS);
         let mut sessions = Sessions {
             local: self.local.clone(),
@@ -291,12 +314,12 @@ impl Connector {
                 joined = join(&self.local, url, &credential, &mut link) => joined,
             };
             match joined {
-                Ok((socket, fresh, link_grace, methods)) => {
-                    if fresh {
+                Ok(welcome) => {
+                    if welcome.fresh {
                         sessions.routes.clear();
                         calls.fresh();
                     }
-                    grace = link_grace;
+                    grace = welcome.grace;
                     lost = None;
                     failures = 0;
                     let id = link.id();
@@ -304,6 +327,7 @@ impl Connector {
                         *status = Status {
                             online: true,
                             link: id,
+                            features: welcome.features,
                             ..Status::default()
                         };
                     })
@@ -315,16 +339,18 @@ impl Connector {
                     self.publication.send_modify(|publication| {
                         publication.online = true;
                         publication.link = id;
-                        publication.methods = methods;
+                        publication.methods = welcome.methods;
                     });
                     drop(state);
+                    // Empty on a fresh link, whose sessions are gone.
+                    let credits = sessions_credit(&sessions);
                     let mut pump = Pump {
                         link: &mut link,
                         sessions: &mut sessions,
                         outputs: &mut output_rx,
                         calls,
                     };
-                    match pump.run(socket, cancel).await? {
+                    match pump.run(welcome.socket, credits, cancel).await? {
                         Ended::Stopped => return Ok(()),
                         Ended::Lost => {}
                     }
@@ -367,17 +393,28 @@ impl Connector {
     }
 }
 
+/// A connection the center welcomed.
+struct Welcome {
+    socket: Socket,
+    /// A new link: sessions of an earlier link are gone.
+    fresh: bool,
+    grace: Duration,
+    methods: Vec<String>,
+    /// `welcome.f`: features enabled on the link.
+    features: Vec<String>,
+}
+
 /// Dial, say hello and apply the welcome. Replays unacknowledged frames on resume.
 ///
-/// Returns whether the link is new, and its grace period. Returns `InvalidGrant`
-/// when the center refuses the credential, or `Rejected` when it answers with an
-/// error frame, so the caller stops and waits for a fresh grant.
+/// Returns `InvalidGrant` when the center refuses the credential, or `Rejected`
+/// when it answers with an error frame, so the caller stops and waits for a
+/// fresh grant.
 async fn join(
     local: &Local,
     url: &str,
     credential: &SecretString,
     link: &mut Link,
-) -> Result<(Socket, bool, Duration, Vec<String>), Failure> {
+) -> Result<Welcome, Failure> {
     let mut socket = local
         .dialer
         .connect_authorized(url, credential.expose_secret(), wire::MAX_FRAME)
@@ -403,6 +440,7 @@ async fn join(
             resume_token,
             grace_seconds,
             center_methods,
+            f,
         } => {
             let fresh = match link.join(id, resumed, recv, resume_token)? {
                 Joined::Fresh => true,
@@ -413,12 +451,13 @@ async fn join(
                     false
                 }
             };
-            Ok((
+            Ok(Welcome {
                 socket,
                 fresh,
-                Duration::from_secs(grace_seconds),
-                center_methods,
-            ))
+                grace: Duration::from_secs(grace_seconds),
+                methods: center_methods,
+                features: f,
+            })
         }
         Inbound::Error { code } => {
             tracing::warn!(code = code.as_str(), "Hub rejected the link");
@@ -429,7 +468,8 @@ async fn join(
         | Inbound::Msg { .. }
         | Inbound::Reply { .. }
         | Inbound::Close { .. }
-        | Inbound::ShareStatus { .. } => Err(Error::Protocol.into()),
+        | Inbound::ShareStatus { .. }
+        | Inbound::Credit { .. } => Err(Error::Protocol.into()),
     }
 }
 
@@ -447,18 +487,40 @@ async fn write(socket: &mut Socket, message: Message) -> Result<(), Error> {
 struct Sessions {
     local: Arc<Local>,
     output: mpsc::Sender<(Uuid, Output)>,
-    routes: HashMap<Uuid, mpsc::Sender<Message>>,
+    routes: HashMap<Uuid, Route>,
     shares: watch::Sender<Option<Outcome>>,
 }
 
+/// The link's handle on one session task.
+struct Route {
+    inbound: mpsc::Sender<Frame>,
+    /// Flow control of a session opened with a window.
+    credit: Option<RouteCredit>,
+}
+
+struct RouteCredit {
+    /// Latest cumulative credit from the peer; dropping it ends a waiting sender.
+    peer: watch::Sender<u64>,
+    /// Latest cumulative credit this Host announced, repeated after a resume.
+    granted: u64,
+}
+
+/// An `open` frame's session parameters.
+struct Opening<'a> {
+    visitor: Option<&'a Visitor>,
+    kind: SessionKind,
+    /// The opener's receive window; present only on flow-controlled sessions.
+    window: Option<u32>,
+}
+
 impl Sessions {
-    /// Start bridging a session, or return the close code that refuses it.
-    /// A `visitor` session is bridged as a guest of one shared resource.
+    /// Start a session, or return the close code that refuses it.
+    /// A `visitor` session is served as a guest of one shared resource.
     fn open(
         &mut self,
         id: Uuid,
-        hello: Bytes,
-        visitor: Option<&Visitor>,
+        payload: Bytes,
+        opening: &Opening<'_>,
     ) -> Result<(), &'static str> {
         if self.routes.contains_key(&id) {
             return Ok(());
@@ -466,24 +528,48 @@ impl Sessions {
         if self.routes.len() >= MAX_SESSIONS {
             return Err("capacity");
         }
-        let (inbound_tx, inbound_rx) = mpsc::channel(SESSION_QUEUE);
-        self.routes.insert(id, inbound_tx);
-        let span = tracing::info_span!("hub_session", session = %id);
-        tokio::spawn(
-            session::run(
-                self.local.clone(),
-                id,
-                hello,
-                visitor.map(Visitor::encode),
-                inbound_rx,
-                self.output.clone(),
-            )
-            .instrument(span),
+        if opening.kind == SessionKind::Unsupported {
+            return Err("unsupported");
+        }
+        let (credit, peer) = match opening.window {
+            Some(window) => {
+                let (peer, credit) = watch::channel(0);
+                (
+                    Some(credit::Outgoing::new(credit, window)),
+                    Some(RouteCredit { peer, granted: 0 }),
+                )
+            }
+            None => (None, None),
+        };
+        let queue = if peer.is_some() {
+            CREDIT_QUEUE
+        } else {
+            SESSION_QUEUE
+        };
+        let (inbound_tx, inbound_rx) = mpsc::channel(queue);
+        self.routes.insert(
+            id,
+            Route {
+                inbound: inbound_tx,
+                credit: peer,
+            },
         );
+        let span = tracing::info_span!("hub_session", session = %id);
+        let session = Session {
+            id,
+            local: self.local.clone(),
+            visitor: opening.visitor.cloned(),
+            inbound: inbound_rx,
+            output: self.output.clone(),
+            credit,
+        };
+        tokio::spawn(session::run(session, opening.kind, payload).instrument(span));
         Ok(())
     }
 
     /// Hand one business message to its session without blocking the link.
+    /// A flow-controlled session is bounded by its window instead of the
+    /// message count, so its peer is never closed for sending within credit.
     fn deliver(
         &mut self,
         id: Uuid,
@@ -494,16 +580,42 @@ impl Sessions {
             return Ok(());
         };
         let delivered = session::message(kind, payload).and_then(|message| {
-            route.try_send(message).map_err(|error| match error {
-                mpsc::error::TrySendError::Full(_) => "overflow",
-                mpsc::error::TrySendError::Closed(_) => "closed",
-            })
+            route
+                .inbound
+                .try_send(message)
+                .map_err(|error| match error {
+                    mpsc::error::TrySendError::Full(_) => "overflow",
+                    mpsc::error::TrySendError::Closed(_) => "closed",
+                })
         });
         if delivered.is_err() {
             self.routes.remove(&id);
         }
         delivered
     }
+
+    /// Record the peer's cumulative credit; it never decreases.
+    fn credit(&self, id: Uuid, credit: u64) {
+        if let Some(peer) = self.routes.get(&id).and_then(|route| route.credit.as_ref()) {
+            peer.peer.send_if_modified(|current| {
+                let raised = credit > *current;
+                if raised {
+                    *current = credit;
+                }
+                raised
+            });
+        }
+    }
+}
+
+/// Latest credit of every flow-controlled session, repeated once after a resume.
+fn sessions_credit(sessions: &Sessions) -> Vec<(Uuid, u64)> {
+    sessions
+        .routes
+        .iter()
+        .filter_map(|(id, route)| route.credit.as_ref().map(|credit| (*id, credit.granted)))
+        .filter(|(_, granted)| *granted > 0)
+        .collect()
 }
 
 /// Moves frames for one physical connection.
@@ -515,8 +627,24 @@ struct Pump<'a> {
 }
 
 impl Pump<'_> {
-    async fn run(&mut self, socket: Socket, cancel: &CancellationToken) -> Result<Ended, Failure> {
+    /// Move frames until the connection ends. `credits` holds the latest credit
+    /// of each flow-controlled session, announced again first after a resume.
+    async fn run(
+        &mut self,
+        socket: Socket,
+        credits: Vec<(Uuid, u64)>,
+        cancel: &CancellationToken,
+    ) -> Result<Ended, Failure> {
         let (mut sink, mut stream) = socket.split();
+        for (s, c) in credits {
+            let frame = wire::encode(&Outbound::Credit { s, c }, b"")?;
+            if !matches!(
+                timeout(WRITE_TIMEOUT, sink.send(Message::Binary(frame))).await,
+                Ok(Ok(()))
+            ) {
+                return Ok(Ended::Lost);
+            }
+        }
         let mut acks = tokio::time::interval(ACK_INTERVAL);
         acks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         let mut idle = Instant::now() + IDLE_TIMEOUT;
@@ -577,11 +705,23 @@ impl Pump<'_> {
                 self.calls.reply(id, &payload)?;
                 return Ok(None);
             }
-            Inbound::Open { s, visitor, .. } => self
-                .sessions
-                .open(s, payload, visitor.as_ref())
-                .err()
-                .map(|code| (s, code)),
+            Inbound::Open {
+                s, visitor, k, w, ..
+            } => {
+                let opening = Opening {
+                    visitor: visitor.as_ref(),
+                    kind: k,
+                    window: w,
+                };
+                self.sessions
+                    .open(s, payload, &opening)
+                    .err()
+                    .map(|code| (s, code))
+            }
+            Inbound::Credit { s, c } => {
+                self.sessions.credit(s, c);
+                return Ok(None);
+            }
             Inbound::ShareStatus { .. } => {
                 // A malformed outcome is ignored; the next publication repairs state.
                 if let Ok(outcome) = serde_json::from_slice::<Outcome>(&payload) {
@@ -615,21 +755,36 @@ impl Pump<'_> {
 
     /// Frame one session output; output of an already closed session is dropped.
     fn output(&mut self, id: Uuid, output: Output) -> Result<Option<Message>, Error> {
-        let frame = match output {
-            Output::Closed(code) => {
-                if self.sessions.routes.remove(&id).is_none() {
-                    return Ok(None);
-                }
-                self.link
-                    .push(|seq| Outbound::Close { seq, s: id, code }, b"")?
+        if let Output::Closed(code) = output {
+            if self.sessions.routes.remove(&id).is_none() {
+                return Ok(None);
             }
-            _ if !self.sessions.routes.contains_key(&id) => return Ok(None),
-            Output::Accept(info) => self
+            let frame = self
                 .link
-                .push(|seq| Outbound::Accept { seq, s: id }, &info)?,
+                .push(|seq| Outbound::Close { seq, s: id, code }, b"")?;
+            return Ok(Some(Message::Binary(frame)));
+        }
+        let Some(route) = self.sessions.routes.get_mut(&id) else {
+            return Ok(None);
+        };
+        let frame = match output {
+            // Answer a window with this Host's own; otherwise the session is not flow-controlled.
+            Output::Accept(info) => {
+                let w = route.credit.as_ref().map(|_| credit::WINDOW);
+                self.link
+                    .push(|seq| Outbound::Accept { seq, s: id, w }, &info)?
+            }
+            Output::Credit(c) => {
+                let Some(credit) = route.credit.as_mut() else {
+                    return Ok(None);
+                };
+                credit.granted = c;
+                wire::encode(&Outbound::Credit { s: id, c }, b"")?
+            }
             Output::Message(pt, body) => self
                 .link
                 .push(|seq| Outbound::Msg { seq, s: id, pt }, &body)?,
+            Output::Closed(_) => return Ok(None),
         };
         Ok(Some(Message::Binary(frame)))
     }

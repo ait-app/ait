@@ -2,7 +2,7 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use host_link::{Binding, Error, ManagedRelay};
+use host_link::{Binding, Error, HubTicket, ManagedRelay};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -46,12 +46,13 @@ impl ManagedRelay for ManagedRelayHandle {
         self.hub.stop().await;
     }
 
-    async fn start_hub(&self, session: Uuid, ticket: SecretString) -> Result<(), Error> {
+    async fn start_hub(&self, session: Uuid, ticket: HubTicket) -> Result<(), Error> {
         self.hub
             .start(relay::hub::Grant {
                 center_url: host_link::center(),
-                hub_ticket: ticket,
+                hub_ticket: ticket.ticket,
                 node_session_id: session,
+                hub_features: ticket.features,
             })
             .await
             .map_err(|_| Error::Unavailable)
@@ -61,6 +62,10 @@ impl ManagedRelay for ManagedRelayHandle {
         let status = self.hub.status().await;
         // A link another process took over is left to it for a while.
         status.online || status.connecting || self.hub.yielding().await
+    }
+
+    async fn hub_lease(&self) -> bool {
+        self.hub.status().await.holds_lease()
     }
 
     async fn report(&self, phase: &'static str, binding: Option<&Binding>) {

@@ -7,7 +7,7 @@ mod types;
 
 pub mod service;
 pub use ports::{Center, CredentialStore, ManagedRelay};
-pub use types::{Binding, Credential, Error, Machine, Pending, Session, State, Tokens};
+pub use types::{Binding, Credential, Error, HubTicket, Machine, Pending, Session, State, Tokens};
 
 /// The only production authority for unattended machines.
 pub const CENTER: &str = "https://aitapp.cn/api";

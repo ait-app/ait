@@ -17,7 +17,7 @@ use tokio_tungstenite::{
 
 use crate::{Error, diagnostics, protocol};
 
-/// Connected relay or fixed local daemon WebSocket.
+/// Connected relay or hub WebSocket.
 pub(super) type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 /// Maximum size of one application frame on a data connection.
 pub(super) const MAX_MESSAGE: usize = 1024 * 1024;
@@ -54,32 +54,17 @@ impl Default for Dialer {
 }
 
 impl Dialer {
-    /// Connect to the supplied fixed endpoint using a one-use ticket or local bearer token.
+    /// Connect to the supplied fixed endpoint using a one-use ticket.
     ///
     /// # Errors
-    /// Rejects invalid upgrade parameters, connection failures and a five-second setup timeout.
+    /// Returns `Error::InvalidGrant` for an unusable request and `Error::Transport` otherwise.
     pub(super) async fn connect(
         &self,
         url: &str,
         ticket: &str,
         max: usize,
     ) -> Result<Socket, Error> {
-        self.connect_as(url, ticket, None, max).await
-    }
-
-    /// Dial the local daemon, optionally as a guest confined by `guest`
-    /// (an encoded [`model::share::Visitor`] for [`model::share::GUEST_HEADER`]).
-    ///
-    /// # Errors
-    /// Returns `Error::InvalidGrant` for an unusable request and `Error::Transport` otherwise.
-    pub(super) async fn connect_as(
-        &self,
-        url: &str,
-        ticket: &str,
-        guest: Option<&str>,
-        max: usize,
-    ) -> Result<Socket, Error> {
-        self.dial_as(url, ticket, guest, max)
+        self.dial(url, ticket, max)
             .await
             .map_err(|error| match error {
                 Dial::Request => Error::InvalidGrant,
@@ -98,7 +83,7 @@ impl Dialer {
         credential: &str,
         max: usize,
     ) -> Result<Socket, Error> {
-        self.dial_as(url, credential, None, max)
+        self.dial(url, credential, max)
             .await
             .map_err(|error| match error {
                 Dial::Request | Dial::Refused => Error::InvalidGrant,
@@ -106,13 +91,7 @@ impl Dialer {
             })
     }
 
-    async fn dial_as(
-        &self,
-        url: &str,
-        ticket: &str,
-        guest: Option<&str>,
-        max: usize,
-    ) -> Result<Socket, Dial> {
+    async fn dial(&self, url: &str, ticket: &str, max: usize) -> Result<Socket, Dial> {
         let mut request = url.into_client_request().map_err(|_| Dial::Request)?;
         request.headers_mut().insert(
             "authorization",
@@ -120,12 +99,6 @@ impl Dialer {
                 .parse()
                 .map_err(|_| Dial::Request)?,
         );
-        if let Some(guest) = guest {
-            request.headers_mut().insert(
-                model::share::GUEST_HEADER,
-                guest.parse().map_err(|_| Dial::Request)?,
-            );
-        }
         let config = WebSocketConfig::default()
             .max_message_size(Some(max))
             .max_frame_size(Some(max));

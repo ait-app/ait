@@ -26,7 +26,6 @@ impl ControlFixture {
         Self {
             connector: Connector::new(
                 "127.0.0.1:1".parse().unwrap(),
-                "local-fixture".into(),
                 "server".into(),
                 "instance".into(),
             ),
@@ -164,12 +163,7 @@ fn wildcard_listeners_are_replaced_by_loopback_destinations() {
         ("0.0.0.0:7316", "ws://127.0.0.1:7316/v1/ws"),
         ("[::]:7316", "ws://[::1]:7316/v1/ws"),
     ] {
-        let connector = Connector::new(
-            listen.parse().unwrap(),
-            "fixture".into(),
-            "server".into(),
-            "instance".into(),
-        );
+        let connector = Connector::new(listen.parse().unwrap(), "server".into(), "instance".into());
         assert_eq!(connector.local.url, expected);
     }
 }

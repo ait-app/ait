@@ -2,19 +2,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::ws::WebSocket;
-use futures_util::{
-    StreamExt,
-    future::BoxFuture,
-    stream::{FuturesUnordered, SplitStream},
-};
+use futures_util::{StreamExt, future::BoxFuture, stream::FuturesUnordered};
 use model::outbound::{Outbound, QueueError};
 use model::server::SubscriptionReleaseRequest;
 use model::server::{ClientMessage, ErrorCode, valid_id};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
-use super::{ConnectionSubscriptions, Incoming, Peer, chunks, error, process_message};
+use super::{ConnectionSubscriptions, Frames, Incoming, Peer, chunks, error, process_message};
 use crate::Shared;
 
 // Workspace bootstrap sends several reads per group before the first response arrives.
@@ -26,7 +21,7 @@ enum Work {
 }
 
 pub(super) async fn read(
-    stream: SplitStream<WebSocket>,
+    stream: Frames,
     state: &Arc<Shared>,
     lanes: &[Outbound; 4],
     peer: Peer<'_>,
@@ -121,7 +116,7 @@ async fn worker(
 }
 
 async fn route(
-    mut stream: SplitStream<WebSocket>,
+    mut stream: Frames,
     context: &WorkerContext<'_>,
     senders: [mpsc::Sender<Work>; 4],
 ) -> Result<(), QueueError> {

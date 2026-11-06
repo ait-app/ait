@@ -13,6 +13,20 @@ pub(super) const VERSION: u32 = 1;
 const MAX_HEADER: usize = 4 * 1024;
 pub(super) const MAX_PAYLOAD: usize = 1024 * 1024;
 pub(super) const MAX_FRAME: usize = 2 + MAX_HEADER + MAX_PAYLOAD;
+/// Optional link features this serve endpoint implements; `hello.f` offers the
+/// subset the center declared over HTTP.
+pub(super) const FEATURES: [&str; 3] = ["lease", "credit", "download"];
+
+/// Features to offer in `hello.f`: the center's declared set intersected with
+/// [`FEATURES`]. `None` (a center predating features) keeps the plain hello.
+pub(super) fn offer(declared: Option<&[String]>) -> Option<Vec<&'static str>> {
+    declared.map(|declared| {
+        FEATURES
+            .into_iter()
+            .filter(|feature| declared.iter().any(|name| name == feature))
+            .collect()
+    })
+}
 
 /// Business WebSocket message type carried in a payload.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,12 +42,30 @@ pub(super) struct Resume {
     pub(super) recv: u64,
 }
 
+/// What an opened session carries; omitted on the wire for business sessions.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(super) enum SessionKind {
+    #[default]
+    Rpc,
+    Download,
+    /// A kind this Host does not implement; refused as `unsupported`.
+    #[serde(other)]
+    Unsupported,
+}
+
 /// Frames a serve endpoint sends. Sequenced kinds carry `seq`.
 #[derive(Debug, Serialize)]
 #[serde(tag = "t")]
 pub(super) enum Outbound {
+    /// `f` is present only when the center declared features over HTTP.
     #[serde(rename = "hello")]
-    Hello { v: u32, resume: Option<Resume> },
+    Hello {
+        v: u32,
+        resume: Option<Resume>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        f: Option<Vec<&'static str>>,
+    },
     #[serde(rename = "ack")]
     Ack { a: u64 },
     #[serde(rename = "call")]
@@ -42,8 +74,14 @@ pub(super) enum Outbound {
         id: Uuid,
         method: &'static str,
     },
+    /// `w` (this Host's receive window) only answers an `open` that carried one.
     #[serde(rename = "accept")]
-    Accept { seq: u64, s: Uuid },
+    Accept {
+        seq: u64,
+        s: Uuid,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        w: Option<u32>,
+    },
     #[serde(rename = "msg")]
     Msg { seq: u64, s: Uuid, pt: PayloadKind },
     #[serde(rename = "close")]
@@ -52,6 +90,9 @@ pub(super) enum Outbound {
         s: Uuid,
         code: &'static str,
     },
+    /// Cumulative payload bytes of session `s` delivered locally; unsequenced.
+    #[serde(rename = "credit")]
+    Credit { s: Uuid, c: u64 },
 }
 
 /// Frames the center sends to a serve endpoint. Unknown fields are tolerated
@@ -68,6 +109,9 @@ pub(super) enum Inbound {
         grace_seconds: u64,
         #[serde(default)]
         center_methods: Vec<String>,
+        /// Features enabled on this link; present only when the hello offered `f`.
+        #[serde(default)]
+        f: Vec<String>,
     },
     #[serde(rename = "ack")]
     Ack { a: u64 },
@@ -75,13 +119,18 @@ pub(super) enum Inbound {
     Reply { seq: u64, id: Uuid },
     #[serde(rename = "error")]
     Error { code: String },
-    /// `visitor` marks a guest session confined to one shared resource.
+    /// `visitor` marks a guest session confined to one shared resource; `w`, the
+    /// opener's receive window, is present only on flow-controlled sessions.
     #[serde(rename = "open")]
     Open {
         seq: u64,
         s: Uuid,
         #[serde(default)]
         visitor: Option<Visitor>,
+        #[serde(default)]
+        k: SessionKind,
+        #[serde(default)]
+        w: Option<u32>,
     },
     #[serde(rename = "msg")]
     Msg { seq: u64, s: Uuid, pt: PayloadKind },
@@ -91,6 +140,9 @@ pub(super) enum Inbound {
     /// Host called `hub.shares.publish` on the link.
     #[serde(rename = "share_status")]
     ShareStatus { seq: u64 },
+    /// The peer's cumulative delivered bytes of a flow-controlled session.
+    #[serde(rename = "credit")]
+    Credit { s: Uuid, c: u64 },
 }
 
 impl Inbound {
@@ -102,7 +154,9 @@ impl Inbound {
             | Self::Close { seq, .. }
             | Self::Reply { seq, .. }
             | Self::ShareStatus { seq } => Some(*seq),
-            Self::Welcome { .. } | Self::Ack { .. } | Self::Error { .. } => None,
+            Self::Welcome { .. } | Self::Ack { .. } | Self::Error { .. } | Self::Credit { .. } => {
+                None
+            }
         }
     }
 }

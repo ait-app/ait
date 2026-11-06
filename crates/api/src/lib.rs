@@ -129,7 +129,34 @@ pub struct Services {
     pub voice: Option<Speech>,
 }
 
+/// Resources one admitted business connection holds until it ends.
+type Admitted = (
+    tokio::sync::OwnedSemaphorePermit,
+    tokio_util::task::task_tracker::TaskTrackerToken,
+);
+
 impl Shared {
+    /// Admit one business connection unless draining or at the connection limit.
+    /// The admission lock orders it against shutdown closing the task tracker.
+    ///
+    /// # Errors
+    /// Returns `SERVICE_UNAVAILABLE` while draining and `TOO_MANY_REQUESTS` at capacity.
+    fn admit_connection(&self) -> Result<Admitted, StatusCode> {
+        let _guard = self
+            .admission
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.cancellation.is_cancelled() {
+            return Err(StatusCode::SERVICE_UNAVAILABLE);
+        }
+        let permit = self
+            .connections
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
+        Ok((permit, self.tasks.token()))
+    }
+
     fn relay_management(&self) -> serde_json::Value {
         let mut status = self
             .managed_status
@@ -315,12 +342,7 @@ impl Api {
         services: Services,
     ) -> Result<Self, ConfigError> {
         validate_listener(address, &token)?;
-        let relay = relay::Connector::new(
-            address,
-            token.clone(),
-            server_id.clone(),
-            instance_id.clone(),
-        );
+        let relay = relay::Connector::new(address, server_id.clone(), instance_id.clone());
         let runtime = runtime_info(address, server_id, instance_id, &services);
         let services = composition::Parts::from(services);
         let session_events = services
@@ -436,7 +458,13 @@ impl Api {
     }
 
     /// Build routes with origin checks, bounded HTTP handling, and metadata-only tracing.
+    ///
+    /// Serving starts here, so this also attaches the API to the Hub serve link:
+    /// its sessions are then served in-process with the same admission.
     pub fn router(&self) -> Router {
+        self.shared
+            .relay
+            .attach_api(Arc::new(connection::bridge::InProcess::new(&self.shared)));
         Router::new()
             .route("/healthz", get(health))
             .route("/readyz", get(ready))
@@ -744,20 +772,7 @@ async fn upgrade(
         ),
         None => None,
     };
-    let guard = state
-        .admission
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if state.cancellation.is_cancelled() {
-        return Err(ApiError(StatusCode::SERVICE_UNAVAILABLE));
-    }
-    let permit = state
-        .connections
-        .clone()
-        .try_acquire_owned()
-        .map_err(|_| ApiError(StatusCode::TOO_MANY_REQUESTS))?;
-    let tracking = state.tasks.token();
-    drop(guard);
+    let admitted = state.admit_connection().map_err(ApiError)?;
     let protocol = headers
         .get("sec-websocket-protocol")
         .and_then(|value| value.to_str().ok())
@@ -769,7 +784,7 @@ async fn upgrade(
         .write_buffer_size(0)
         .max_write_buffer_size(model::server::MAX_QUEUE_BYTES)
         .on_upgrade(move |socket| async move {
-            let (_tracking, _permit) = (tracking, permit);
+            let _admitted = admitted;
             Box::pin(connection::serve(socket, state, guest)).await;
         }))
 }

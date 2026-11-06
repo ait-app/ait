@@ -9,6 +9,10 @@ use uuid::Uuid;
 use super::{Publication, links, token_schedule};
 use crate::{Center, CredentialStore, Error, ManagedRelay, State, Tokens};
 
+/// Local lease extension while the Hub link holds the lease; the center renews
+/// such a lease to at most this long from its last batch renewal.
+const LINK_LEASE: Duration = Duration::from_secs(60);
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum AccessRecovery {
     Ready,
@@ -64,6 +68,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
             // an HTTP operation is in flight. Dropped refresh requests retain their persisted ID.
             let window = expires.checked_duration_since(now);
             let generation = self.grants.borrow().as_ref().map(|grant| grant.generation);
+            let held_by_hub = self.relay.hub_lease().await;
             // Split borrows so terminal transport errors can interrupt an authority request.
             let errors = &mut self.errors;
             let mut lease = Lease {
@@ -73,6 +78,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
                 instance: self.instance,
                 active_session: self.active_session,
                 access_recovery: &mut access_recovery,
+                held_by_hub,
             };
             let (attempt, rejected_link) = tokio::select! {
                 // Ready rejections must preempt routine lease work instead of racing another
@@ -105,7 +111,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
             };
             match attempt {
                 Ok(()) => {
-                    self.publish(&publication);
+                    self.publish(&mut publication);
                     self.report("running", &publication).await;
                     delay = 1;
                     session_expired = false;
@@ -173,7 +179,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
         self.relay.stop().await;
     }
 
-    fn publish(&self, publication: &Publication) {
+    fn publish(&self, publication: &mut Publication) {
         let now = tokio::time::Instant::now();
         if publication.access_until <= now
             || publication.lease_until.is_none_or(|until| until <= now)
@@ -189,11 +195,19 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
             return;
         }
         if let Some(session) = &publication.session {
+            // A registration ticket is presented only under the JWT generation that obtained it.
+            let issued = publication
+                .issued
+                .take()
+                .filter(|(generation, _)| *generation == publication.generation)
+                .map(|(_, ticket)| ticket);
             self.grants.send_replace(Some(links::Grant {
                 generation: publication.generation,
                 tokens: publication.tokens.clone(),
                 session: session.id,
                 acceptance: publication.acceptance.clone(),
+                features: session.hub_features.clone(),
+                issued: Arc::new(std::sync::Mutex::new(issued)),
             }));
         }
     }
@@ -213,6 +227,8 @@ impl Publication {
             generation: Uuid::new_v4(),
             acceptance: Arc::default(),
             expired_refresh: false,
+            issued: None,
+            renew_token: false,
         }
     }
 
@@ -244,6 +260,8 @@ struct Lease<'a, C, S> {
     instance: Uuid,
     active_session: &'a mut Option<(Tokens, Uuid)>,
     access_recovery: &'a mut AccessRecovery,
+    /// The Hub link holds the lease, so it is not renewed over HTTP.
+    held_by_hub: bool,
 }
 
 impl<C: Center, S: CredentialStore> Lease<'_, C, S> {
@@ -272,9 +290,10 @@ impl<C: Center, S: CredentialStore> Lease<'_, C, S> {
             }
             publication.expired_refresh = false;
             publication.next_renew = tokio::time::Instant::now();
+            publication.renew_token = true;
         }
         if publication.session.is_none() {
-            let session = self
+            let mut session = self
                 .center
                 .register(
                     &publication.tokens,
@@ -283,6 +302,10 @@ impl<C: Center, S: CredentialStore> Lease<'_, C, S> {
                     publication.registration,
                 )
                 .await?;
+            publication.issued = session
+                .hub_ticket
+                .take()
+                .map(|ticket| (publication.generation, ticket));
             // Registration recovery reports a duration, not the existing lease's absolute end.
             // Renew immediately to learn its authoritative deadline before opening transport.
             publication.next_renew = tokio::time::Instant::now();
@@ -290,14 +313,23 @@ impl<C: Center, S: CredentialStore> Lease<'_, C, S> {
         }
         let active = publication.session.as_mut().ok_or(Error::Protocol)?;
         *self.active_session = Some((publication.tokens.clone(), active.id));
+        let now = tokio::time::Instant::now();
+        let due = now >= publication.next_renew
+            || publication.lease_until.is_some_and(|until| until <= now);
+        // Once the first renewal learned the deadline, a Hub link holding the lease
+        // (`lease` feature) keeps it alive at the center; HTTP renewal resumes when
+        // the link no longer holds it.
+        if due && self.held_by_hub && !publication.renew_token && publication.lease_until.is_some()
+        {
+            publication.lease_until = Some(now + LINK_LEASE);
+            publication.next_renew = now + Duration::from_secs(active.renew_after_seconds);
+            return Ok(());
+        }
         // An ambiguous renewal may have committed at the center. Retry the known session
         // before creating a competing registration; only a terminal session error discards it.
-        if tokio::time::Instant::now() >= publication.next_renew
-            || publication
-                .lease_until
-                .is_some_and(|until| until <= tokio::time::Instant::now())
-        {
+        if due {
             active.lease_until = self.center.renew(&publication.tokens, active.id).await?;
+            publication.renew_token = false;
             if *self.access_recovery == AccessRecovery::Retried(None) {
                 *self.access_recovery = AccessRecovery::Ready;
             }

@@ -33,6 +33,12 @@ struct Publication {
     acceptance: Arc<links::Acceptance>,
     /// The previous refresh already returned an access token expired by the local clock.
     expired_refresh: bool,
+    /// Serve ticket issued with the registration and the JWT generation it accepted.
+    issued: Option<(Uuid, crate::HubTicket)>,
+    /// A rotated JWT has not been presented to the center yet. Only an HTTP renewal
+    /// advances a device-grant session's authorization deadline, so it runs even
+    /// while the Hub link holds the lease.
+    renew_token: bool,
 }
 
 impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {

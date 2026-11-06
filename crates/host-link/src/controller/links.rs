@@ -1,11 +1,12 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tokio::sync::{mpsc, watch};
 use uuid::Uuid;
 
-use crate::{Center, Error, ManagedRelay, Tokens};
+use crate::types::control_required;
+use crate::{Center, Error, HubTicket, ManagedRelay, Tokens};
 
 const ATTEMPT_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -15,6 +16,18 @@ pub(super) struct Grant {
     pub(super) tokens: Tokens,
     pub(super) session: Uuid,
     pub(super) acceptance: Arc<Acceptance>,
+    /// Hub features the center declared at registration.
+    pub(super) features: Option<Vec<String>>,
+    /// Serve ticket issued with the registration under this JWT generation, used once.
+    pub(super) issued: Arc<Mutex<Option<HubTicket>>>,
+}
+
+impl Grant {
+    /// Whether this grant runs `kind`: a center whose Hub holds the lease and serves
+    /// downloads needs no Relay control link.
+    fn runs(&self, kind: Kind) -> bool {
+        kind == Kind::Hub || control_required(self.features.as_deref())
+    }
 }
 
 #[derive(Debug)]
@@ -60,7 +73,9 @@ pub(super) async fn maintain<C: Center, R: ManagedRelay>(
 ) {
     loop {
         let grant = grants.borrow_and_update().clone();
-        let Some(grant) = grant else {
+        // A link this grant does not run idles until the grant changes, without
+        // ending the other link.
+        let Some(grant) = grant.filter(|grant| grant.runs(kind)) else {
             if grants.changed().await.is_err() {
                 return;
             }
@@ -144,7 +159,16 @@ async fn connect<C: Center, R: ManagedRelay>(
         }
         Kind::Hub => {
             if !relay.hub_active().await {
-                let ticket = center.hub_ticket(&grant.tokens, grant.session).await?;
+                let issued = grant
+                    .issued
+                    .lock()
+                    .ok()
+                    .and_then(|mut issued| issued.take())
+                    .filter(HubTicket::usable);
+                let ticket = match issued {
+                    Some(ticket) => ticket,
+                    None => center.hub_ticket(&grant.tokens, grant.session).await?,
+                };
                 grant.acceptance.flag(kind).store(true, Ordering::Relaxed);
                 relay.start_hub(grant.session, ticket).await?;
             }

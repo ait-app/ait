@@ -4,11 +4,12 @@ use serde_json::{Value, json};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::handshake::server::{ErrorResponse, Request, Response};
 use tokio_tungstenite::tungstenite::http::StatusCode;
-use tokio_tungstenite::{WebSocketStream, accept_async, accept_hdr_async};
+use tokio_tungstenite::{WebSocketStream, accept_hdr_async};
 
 use super::*;
 
 mod center_calls;
+mod features;
 
 const HELLO: &str = r#"{"type":"hello","client_id":"hub-test"}"#;
 const TICKET: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -81,25 +82,24 @@ fn welcome(link: Uuid, resumed: bool, recv: u64) -> Value {
     welcome
 }
 
-async fn daemon(listener: TcpListener) -> Vec<String> {
-    let (tcp, _) = listener.accept().await.expect("accept");
-    let mut socket = accept_async(tcp).await.expect("upgrade");
-    let hello = socket.next().await.expect("hello").expect("frame");
-    assert_eq!(hello.to_text().expect("text"), HELLO);
-    socket
-        .send(Message::Text("server info".into()))
-        .await
-        .expect("info");
-    socket
-        .send(Message::Binary(Bytes::from_static(&[1])))
+/// Serve one session like the local API: answer the hello, send an event and
+/// return the first two text messages before closing.
+async fn daemon(mut connections: Connections) -> Vec<String> {
+    let mut api = connections.recv().await.expect("session connects");
+    assert_eq!(
+        api.next().await,
+        Some(Frame::Text(Bytes::from_static(HELLO.as_bytes())))
+    );
+    api.reply("server info").await;
+    api.replies
+        .send(Frame::Binary(Bytes::from_static(&[1])))
         .await
         .expect("event");
     let mut received = Vec::new();
-    while let Some(Ok(message)) = socket.next().await {
-        if let Message::Text(text) = message {
-            received.push(text.to_string());
+    while let Some(frame) = api.next().await {
+        if let Frame::Text(text) = frame {
+            received.push(String::from_utf8(text.to_vec()).expect("utf-8"));
             if received.len() == 2 {
-                socket.close(None).await.expect("close");
                 break;
             }
         }
@@ -107,24 +107,34 @@ async fn daemon(listener: TcpListener) -> Vec<String> {
     received
 }
 
-async fn connector() -> (crate::Connector, Connector, TcpListener, TcpListener) {
+type Connections = mpsc::UnboundedReceiver<crate::test_support::Accepted>;
+
+async fn connector() -> (crate::Connector, Connector, TcpListener, Connections) {
+    connector_with(None).await
+}
+
+/// A connector whose link offers the features `hub_features` declares.
+async fn connector_with(
+    hub_features: Option<Vec<String>>,
+) -> (crate::Connector, Connector, TcpListener, Connections) {
     let center = TcpListener::bind("127.0.0.1:0").await.expect("bind center");
-    let local = TcpListener::bind("127.0.0.1:0").await.expect("bind local");
     let relay = crate::Connector::new(
-        local.local_addr().expect("local address"),
-        SecretString::from("local-token"),
+        "127.0.0.1:9".parse().expect("local address"),
         Uuid::new_v4().to_string(),
         Uuid::new_v4().to_string(),
     );
+    let (api, connections) = crate::test_support::FakeApi::new(false);
+    relay.attach_api(api);
     let hub = relay.hub().clone();
     hub.start(Grant {
         center_url: format!("http://{}", center.local_addr().expect("center address")),
         hub_ticket: SecretString::from(TICKET),
         node_session_id: Uuid::new_v4(),
+        hub_features,
     })
     .await
     .expect("start");
-    (relay, hub, center, local)
+    (relay, hub, center, connections)
 }
 
 #[tokio::test]
@@ -243,7 +253,6 @@ async fn refused_resume_ends_the_link_until_a_new_grant() {
 async fn malformed_grants_never_dial() {
     let relay = crate::Connector::new(
         "127.0.0.1:9".parse().expect("address"),
-        SecretString::from("local-token"),
         Uuid::new_v4().to_string(),
         Uuid::new_v4().to_string(),
     );
@@ -256,6 +265,7 @@ async fn malformed_grants_never_dial() {
             center_url: center_url.to_owned(),
             hub_ticket: SecretString::from(ticket),
             node_session_id: Uuid::new_v4(),
+            hub_features: None,
         };
         assert!(matches!(hub.start(grant).await, Err(Error::InvalidGrant)));
     }
@@ -264,6 +274,7 @@ async fn malformed_grants_never_dial() {
         center_url: "https://example.com".to_owned(),
         hub_ticket: SecretString::from(TICKET),
         node_session_id: Uuid::new_v4(),
+        hub_features: None,
     };
     assert!(matches!(hub.start(grant).await, Err(Error::Transport)));
 }
@@ -310,6 +321,7 @@ async fn a_replaced_link_reports_why_and_yields_until_restarted() {
         center_url: format!("http://{}", center.local_addr().expect("center address")),
         hub_ticket: SecretString::from(TICKET),
         node_session_id: Uuid::new_v4(),
+        hub_features: None,
     })
     .await
     .expect("an explicit grant takes the link back");
@@ -332,15 +344,13 @@ async fn rejections_before_welcome_end_the_link_without_yielding() {
     assert!(!hub.yielding().await);
 }
 
-/// A local daemon that accepts sessions and reads their hello but never answers.
-fn silent_daemon(listener: TcpListener) {
+/// A local API that accepts sessions and reads their hello but never answers.
+fn silent_daemon(mut connections: Connections) {
     tokio::spawn(async move {
         let mut held = Vec::new();
-        while let Ok((tcp, _)) = listener.accept().await {
-            if let Ok(mut socket) = accept_async(tcp).await {
-                let _ = socket.next().await;
-                held.push(socket);
-            }
+        while let Some(mut api) = connections.recv().await {
+            let _ = api.next().await;
+            held.push(api);
         }
     });
 }
@@ -551,7 +561,7 @@ async fn disconnect_discards_previous_owner_yield() {
 
 #[tokio::test]
 async fn share_status_frames_and_guest_opens_reach_the_daemon() {
-    let (_relay, hub, center, local) = connector().await;
+    let (_relay, hub, center, mut local) = connector().await;
     let mut status = model::hub::Center::share_status(&hub);
     let mut socket = online(&hub, &center, 120).await;
 
@@ -586,34 +596,18 @@ async fn share_status_frames_and_guest_opens_reach_the_daemon() {
         ))
         .await
         .expect("guest open");
-    let guest = accept_guest(&local).await.expect("guest header");
+    let guest = accept_guest(&mut local).await.expect("guest visitor");
     assert_eq!(
         (guest.share_id, guest.resource_key.as_str()),
         (share, "prj_1")
     );
 }
 
-/// Accept one bridged daemon connection and return its guest visitor, if any.
-#[expect(
-    clippy::result_large_err,
-    reason = "tungstenite's handshake callback fixes the error type"
-)]
-async fn accept_guest(local: &TcpListener) -> Option<Visitor> {
-    let (tcp, _) = timeout(Duration::from_secs(3), local.accept())
+/// Accept one bridged connection and return its guest visitor, if any.
+async fn accept_guest(connections: &mut Connections) -> Option<Visitor> {
+    timeout(Duration::from_secs(3), connections.recv())
         .await
-        .expect("bridge dials")
-        .expect("accept");
-    let seen = Arc::new(StdMutex::new(None));
-    let record = seen.clone();
-    let _socket = accept_hdr_async(tcp, move |request: &Request, response: Response| {
-        *record.lock().expect("record") = request
-            .headers()
-            .get(model::share::GUEST_HEADER)
-            .and_then(|value| value.to_str().ok())
-            .and_then(Visitor::decode);
-        Ok(response)
-    })
-    .await
-    .expect("upgrade");
-    seen.lock().expect("record").clone()
+        .expect("bridge connects")
+        .expect("connection")
+        .guest
 }

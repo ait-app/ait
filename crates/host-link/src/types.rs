@@ -113,6 +113,50 @@ pub struct Session {
     pub lease_until: DateTime<Utc>,
     /// Suggested renewal interval.
     pub renew_after_seconds: u64,
+    /// `ait-hub-v1` features the center declared; `None` from centers predating them.
+    pub hub_features: Option<Vec<String>>,
+    /// A serve ticket issued with the registration, saving the first ticket request.
+    pub hub_ticket: Option<HubTicket>,
+}
+
+/// Whether a center declaring `features` still needs the Relay control link: a
+/// center whose Hub holds the lease and serves downloads replaces it.
+pub(crate) fn control_required(features: Option<&[String]>) -> bool {
+    !features.is_some_and(|features| {
+        ["lease", "download"]
+            .iter()
+            .all(|required| features.iter().any(|feature| feature == required))
+    })
+}
+
+/// One-use `ait-hub-v1` serve credential and the features declared with it.
+#[derive(Debug, Clone)]
+pub struct HubTicket {
+    /// One-use 64-hex ticket for `/v1/hub`.
+    pub ticket: SecretString,
+    /// Features the center declared with the ticket; `None` from centers predating them.
+    pub features: Option<Vec<String>>,
+    /// Local expiry of a ticket issued ahead of use; `None` when used at once.
+    pub expires_at: Option<tokio::time::Instant>,
+}
+
+impl HubTicket {
+    /// A ticket for immediate use.
+    #[must_use]
+    pub fn new(ticket: SecretString, features: Option<Vec<String>>) -> Self {
+        Self {
+            ticket,
+            features,
+            expires_at: None,
+        }
+    }
+
+    /// Whether the ticket can still be presented.
+    #[must_use]
+    pub fn usable(&self) -> bool {
+        self.expires_at
+            .is_none_or(|expires| tokio::time::Instant::now() < expires)
+    }
 }
 
 /// Sanitized failures: adapters must not embed responses, URLs or credentials.

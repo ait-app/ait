@@ -6,7 +6,6 @@ use super::*;
 fn resources() -> (Connector, Runtime) {
     let connector = Connector::new(
         "127.0.0.1:7316".parse().unwrap(),
-        "local-only-test-token-at-least-32-characters".into(),
         "relay-server".to_owned(),
         "relay-instance".to_owned(),
     );
