@@ -18,6 +18,9 @@ pub const GUEST_SHARE_LABEL: &str = "ait.guest.share-id";
 /// Label carrying the visiting account of an Agent created by a guest session.
 pub const GUEST_USER_LABEL: &str = "ait.guest.user-id";
 
+/// Name of the injected daemon MCP server in a session's `mcp_servers` and `tool_policy`.
+pub(crate) const SERVER: &str = "ait";
+
 /// Host-owned connection facts and mutable injection policy shared by execution lanes.
 #[derive(Debug, Clone)]
 pub struct AgentMcp {
@@ -172,7 +175,7 @@ impl Binding {
             } => (url, token, agent_id),
             Self::Strip => {
                 if let Some(servers) = &mut effective.mcp_servers {
-                    servers.remove("ait");
+                    servers.remove(SERVER);
                     if servers.is_empty() {
                         effective.mcp_servers = None;
                     }
@@ -181,7 +184,7 @@ impl Binding {
             }
         };
         effective.mcp_servers.get_or_insert_default().insert(
-            "ait".to_owned(),
+            SERVER.to_owned(),
             json!({"type":"http","url":url,"headers":{
                 "Authorization":format!("Bearer {}", token.expose_secret()),
                 "X-Ait-Agent-Id":agent_id
@@ -194,7 +197,7 @@ fn has_ait(config: &StoredAgentConfig) -> bool {
     config
         .mcp_servers
         .as_ref()
-        .is_some_and(|servers| servers.contains_key("ait"))
+        .is_some_and(|servers| servers.contains_key(SERVER))
 }
 
 #[cfg(test)]

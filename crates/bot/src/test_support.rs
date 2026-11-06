@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -24,15 +24,20 @@ pub(crate) struct Native {
     pub(crate) approval: AtomicBool,
     pub(crate) fail_denial: AtomicBool,
     pub(crate) status: Mutex<Option<Value>>,
+    /// Scripted `Action::Create` results, in order; a new system-prompt session once exhausted.
+    pub(crate) creates: Mutex<VecDeque<Value>>,
 }
 #[async_trait::async_trait]
 impl Executor for Native {
     async fn execute(&self, owner: SessionOwner, action: Action) -> Result<Value, ErrorCode> {
         self.calls.lock().unwrap().push((owner, action.clone()));
         Ok(match action {
-            Action::Create { .. } | Action::Close { .. } | Action::Cancel { .. } => {
-                json!({"ok":true})
+            Action::Create { .. } => {
+                self.creates.lock().unwrap().pop_front().unwrap_or_else(
+                    || json!({"created":true,"instructionDelivery":"system_prompt"}),
+                )
             }
+            Action::Close { .. } | Action::Cancel { .. } => json!({"ok":true}),
             Action::Release { .. } => json!({"released":true}),
             Action::Send { agent_id, text, .. } => {
                 self.messages.lock().unwrap().insert(agent_id, text);

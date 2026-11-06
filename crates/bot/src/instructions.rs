@@ -27,3 +27,8 @@ pub(crate) fn compose(memory: &str) -> String {
     };
     format!("{MANAGER_ROLE}\n\n{PREFERENCES_HEADER}\n{memory}\n\n{CONDUCT}")
 }
+
+/// Prefixes `instructions` to `text` for providers without an updatable system prompt.
+pub(crate) fn prefix(instructions: &str, text: &str) -> String {
+    format!("<ait-bot-instructions>\n{instructions}\n</ait-bot-instructions>\n\n{text}")
+}

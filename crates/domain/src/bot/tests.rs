@@ -93,3 +93,23 @@ fn phase_two_bot_json_loads_with_default_permissions() {
         serde_json::json!({"groups": ["observe", "agents", "stop", "schedules"], "modes": {}})
     );
 }
+
+#[test]
+fn phase_two_conversation_json_loads_without_an_instructions_digest() {
+    let json = serde_json::json!({
+        "id": ConversationId::generate(),
+        "botId": BotId::generate(),
+        "channelId": ChannelId::generate(),
+        "peer": "owner",
+        "sender": "owner",
+        "thread": null,
+        "sessionId": "session-1",
+        "generation": 0,
+        "execution": {"provider": "codex", "model": null, "modeId": null, "thinking": null},
+        "nextSequence": 1,
+    });
+
+    let conversation: super::Conversation = serde_json::from_value(json).unwrap();
+
+    assert_eq!(conversation.instructions_digest, None);
+}

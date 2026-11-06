@@ -3,6 +3,8 @@ use crate::service::bot_execution::Action;
 use domain::bot::{ExecutionConfig, SessionOwner};
 use domain::{BotId, ConversationId};
 
+mod profile;
+
 #[tokio::test]
 async fn codex_bot_denies_commands_files_questions_and_computer_use() {
     for prompt in [
@@ -24,7 +26,7 @@ async fn codex_bot_denies_commands_files_questions_and_computer_use() {
                 .unwrap()
                 .mode_id
                 .as_deref(),
-            Some("auto")
+            Some("read-only")
         );
         assert_bot_reply(&execution, &owner, &id, prompt, "Echo: denied").await;
         assert_bot_reply(&execution, &owner, &id, "next", "Echo: next").await;
@@ -282,7 +284,7 @@ async fn assert_release_and_resume(
         .await
         .unwrap();
     assert!(registry.get(id).unwrap().unwrap().archived_at.is_none());
-    // An existing Bot created before automatic denial must lose its native reviewer on resume.
+    // An existing Bot created before its read-only profile is reconfigured on resume.
     registry
         .update(id, &|record| {
             let mut record = record.clone();
@@ -326,7 +328,7 @@ async fn assert_release_and_resume(
             .unwrap()
             .mode_id
             .as_deref(),
-        Some("auto")
+        Some("read-only")
     );
     execution
         .bot(

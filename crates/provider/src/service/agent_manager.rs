@@ -374,6 +374,20 @@ impl AgentManager {
         Ok(())
     }
 
+    /// Bot-session capabilities of the `provider` adapter.
+    ///
+    /// # Errors
+    /// Returns `ProviderUnavailable` when no adapter is registered for `provider`.
+    pub(crate) fn bot_session_support(
+        &self,
+        provider: &str,
+    ) -> Result<crate::service::bot_execution::BotSessionSupport, AgentManagerError> {
+        self.clients
+            .get(provider)
+            .map(|client| client.bot_session_support())
+            .ok_or_else(|| AgentManagerError::ProviderUnavailable(provider.to_owned()))
+    }
+
     /// Return the live session's latest registered snapshot, if this process owns it.
     #[must_use]
     pub(crate) fn live_snapshot(&self, agent_id: &str) -> Option<&PersistedAgentRuntimeRecord> {

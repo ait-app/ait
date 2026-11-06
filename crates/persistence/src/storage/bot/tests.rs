@@ -38,6 +38,7 @@ fn atomic_catalog_routes_receipts_and_bounded_memory_survive_reopening() {
             thinking: None,
         },
         next_sequence: 2,
+        instructions_digest: None,
     };
     store.save_conversation(&conversation).unwrap();
     let turn = Turn {

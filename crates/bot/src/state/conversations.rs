@@ -2,7 +2,6 @@ use domain::bot::{ChannelConfig, Conversation, DeliveryStatus, Turn, TurnStatus}
 use domain::{BotTurnId, ChannelId, ConversationId};
 use model::ErrorCode;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 
 use super::{State, project_conversation};
 use crate::channels::Incoming;
@@ -61,6 +60,7 @@ impl State {
             generation: 0,
             execution: bot.execution.clone(),
             next_sequence: 1,
+            instructions_digest: None,
         };
         self.save_conversation(conversation.clone())?;
         Ok(conversation)
@@ -182,17 +182,70 @@ impl State {
         if self.running.contains_key(&conversation.id) {
             return Err(ErrorCode::BotConflict);
         }
-        let owner = self.owner(&conversation)?;
         // Queued input of the old generation can never run after reset (and never runs while the
         // generation is uncertain), so it is cancelled rather than blocking the reset.
-        let queued: Vec<_> = self
-            .pending
-            .range((conversation.id, 0)..=(conversation.id, u64::MAX))
-            .map(|(_, id)| *id)
-            .collect();
-        for id in queued {
+        for id in self.queued(conversation.id) {
             self.progress(id, TurnStatus::Cancelled, None, None)?;
         }
+        self.renew(&mut conversation)?;
+        Ok(json!({"conversation":project_conversation(&conversation)}))
+    }
+    /// Move a running turn's conversation to a new native session and generation, carrying the
+    /// running turn and queued input along; used when the old session cannot reach the Bot's
+    /// safe profile. Returns the renewed conversation.
+    pub(crate) fn rotate(
+        &mut self,
+        conversation: ConversationId,
+        running: BotTurnId,
+    ) -> Result<Value, ErrorCode> {
+        let mut renewed = self
+            .conversations
+            .get(&conversation)
+            .ok_or(ErrorCode::BotNotFound)?
+            .clone();
+        let turn = self.turn(running)?;
+        if turn.conversation_id != conversation
+            || turn.generation != renewed.generation
+            || !self.running.contains_key(&conversation)
+        {
+            return Err(ErrorCode::BotConflict);
+        }
+        self.renew(&mut renewed)?;
+        for id in std::iter::once(running).chain(self.queued(conversation)) {
+            let mut turn = self.turn(id)?;
+            turn.generation = renewed.generation;
+            self.commit_turn(&turn)?;
+        }
+        serde_json::to_value(renewed).map_err(|_| ErrorCode::BotIo)
+    }
+    /// Record that the instructions with `digest` reached `generation`'s native session.
+    pub(crate) fn instructions_delivered(
+        &mut self,
+        conversation: ConversationId,
+        generation: u64,
+        digest: String,
+    ) -> Result<(), ErrorCode> {
+        let Some(current) = self
+            .conversations
+            .get(&conversation)
+            .filter(|current| current.generation == generation)
+        else {
+            return Ok(());
+        };
+        let mut next = current.clone();
+        next.instructions_digest = Some(digest);
+        self.save_conversation(next)
+    }
+    fn queued(&self, conversation: ConversationId) -> Vec<BotTurnId> {
+        self.pending
+            .range((conversation, 0)..=(conversation, u64::MAX))
+            .map(|(_, id)| *id)
+            .collect()
+    }
+    /// Close the conversation's native session and start a new generation with the Bot's
+    /// current execution settings, whose first input carries the instructions again.
+    fn renew(&mut self, conversation: &mut Conversation) -> Result<(), ErrorCode> {
+        let owner = self.owner(conversation)?;
         self.session_actions.push((
             owner,
             provider::service::bot_execution::Action::Close {
@@ -204,9 +257,9 @@ impl State {
             .generation
             .checked_add(1)
             .ok_or(ErrorCode::ResourceExhausted)?;
-        conversation.execution = self.bot(bot)?.execution.clone();
-        self.save_conversation(conversation.clone())?;
-        Ok(json!({"conversation":project_conversation(&conversation)}))
+        conversation.execution = self.bot(conversation.bot_id)?.execution.clone();
+        conversation.instructions_digest = None;
+        self.save_conversation(conversation.clone())
     }
     pub(super) fn history(&self, request: &History) -> Result<Value, ErrorCode> {
         self.conversation(
@@ -248,7 +301,7 @@ impl State {
             .store
             .memory(&bot.workspace_id)
             .map_err(|_| ErrorCode::BotIo)?;
-        Ok(json!({"text":text,"revision":revision(&text)}))
+        Ok(json!({"text":text,"revision":super::sha256_hex(&text)}))
     }
     pub(super) fn update_memory(&mut self, request: &MemoryUpdate) -> Result<Value, ErrorCode> {
         let bot = self.current(&request.workspace_id)?;
@@ -257,7 +310,7 @@ impl State {
             .store
             .memory(&bot.workspace_id)
             .map_err(|_| ErrorCode::BotIo)?;
-        if revision(&text) != request.expected {
+        if super::sha256_hex(&text) != request.expected {
             return Err(ErrorCode::BotConflict);
         }
         if request.text.len() > 32 * 1024 || request.text.contains('\0') {
@@ -271,7 +324,7 @@ impl State {
             self.frozen = true;
             return Err(ErrorCode::BotIo);
         }
-        Ok(json!({"revision":revision(&request.text)}))
+        Ok(json!({"revision":super::sha256_hex(&request.text)}))
     }
     pub(crate) fn advance_cursor(&mut self, id: ChannelId, cursor: i64) -> Result<(), ErrorCode> {
         let mut catalog = self.catalog.clone();
@@ -286,8 +339,4 @@ impl State {
         }
         Ok(())
     }
-}
-
-fn revision(text: &str) -> String {
-    format!("{:x}", Sha256::digest(text.as_bytes()))
 }

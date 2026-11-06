@@ -191,3 +191,47 @@ async fn native_import_support_does_not_require_an_installed_executable() {
         assert_eq!(entry.value["status"], "unavailable");
     }
 }
+
+#[tokio::test]
+async fn snapshot_entries_publish_bot_session_support() {
+    let clients: BTreeMap<String, Arc<dyn AgentClient>> = BTreeMap::from([(
+        "codex".to_owned(),
+        Arc::new(Client(true)) as Arc<dyn AgentClient>,
+    )]);
+    let cwd = tempfile::tempdir().unwrap();
+
+    let snapshot = Catalog::default()
+        .execute(
+            &clients,
+            &SessionEvents::default(),
+            "provider.snapshot.get.request",
+            json!({"cwd":cwd.path()}),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        snapshot["entries"][0]["botSession"],
+        json!({"instructions":"turn_prefix","readOnlyMode":null,
+            "toolPreapproval":false,"aitTools":false})
+    );
+    let missing = cwd.path().join("missing-provider");
+    for (client, mode) in [
+        (
+            Box::new(crate::local::codex::CodexClient::new(missing.clone()))
+                as Box<dyn AgentClient>,
+            "read-only",
+        ),
+        (
+            Box::new(crate::local::claude::ClaudeClient::new(missing)),
+            "default",
+        ),
+    ] {
+        let entry = discover(client.as_ref(), cwd.path().to_str().unwrap()).await;
+        assert_eq!(
+            entry.value["botSession"],
+            json!({"instructions":"system_prompt","readOnlyMode":mode,
+                "toolPreapproval":true,"aitTools":true})
+        );
+    }
+}

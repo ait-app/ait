@@ -350,6 +350,14 @@ impl State {
     }
 }
 
+/// Lowercase hex SHA-256 digest of `text`, used for memory revisions and instruction digests.
+pub(crate) fn sha256_hex(text: &str) -> String {
+    format!(
+        "{:x}",
+        <sha2::Sha256 as sha2::Digest>::digest(text.as_bytes())
+    )
+}
+
 /// Client projection of a Bot; the internal storage identity is never exposed.
 fn view(bot: &Bot) -> Value {
     json!({"workspaceId":bot.workspace_id,"execution":bot.execution,
