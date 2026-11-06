@@ -61,15 +61,16 @@ Bot 通过 Ait MCP 工具管理 Workspace，可用工具由用户授予的**分�
 
 **模式上限**按 Provider 列出 Bot 与它启动的 Agent 可使用的原生模式（每个 Provider 1–16 个，至多 32 个 Provider，第一项为默认模式）；
 未列出的 Provider 不能被使用。阶段 1／2 创建的 Bot 升级后得到默认分组但模式上限为空，不能启动 Agent，需在设置中配置。
-上限约束 Bot 与子树设置或创建的每一个模式。允许能运行命令的模式时，这些 Agent 可读取本机 daemon 凭据并绕过 Bot 的 Ait 限制，
-设置页与向导在模式上限部分显示此警告。
+上限约束 Bot 与子树设置或创建的每一个模式。允许能运行命令的模式或 `terminals` 分组时，这些 Agent 与终端命令可读取本机 daemon 凭据并绕过 Bot 的 Ait 限制，
+设置页与向导在模式上限部分和终端分组下显示此警告。只读模式不阻止读取：即使 Codex `read-only` 下的 Bot 也能读取 `local-api.token`（见 ADR-215）。
 
 **作用域**为 Bot 所在 Workspace，加上它通过 `create_workspace` 创建且未归档的 worktree（至多 64 个）。Bot 可向作用域内的任何 Agent
-发送提示、修改设置，也可修改任何定时任务（含用户启动和创建的），但受已授权分组与模式上限约束；
+发送提示、修改设置，也可运行、暂停、恢复或删除任何定时任务（含用户启动和创建的），但受已授权分组与模式上限约束；
+`update_schedule` 只能编辑 Bot 创建的定时任务，用户创建的任务需由用户自己修改；
 向用户启动的 Agent 发送提示可能触及超出 Bot 自身限制的能力，这是已接受的风险（见 ADR-215）。
 
 **Bot 模型的降级。** Bot 可使用任何 Provider。Codex 与 Claude 使用只读模式（Codex `read-only`；Claude `default`，仍把写入路由到审批的最严格模式，
-用户与项目的允许规则照常适用）、系统提示和 Ait 工具预授权。其他 Provider 使用默认模式，指令前置到首条输入，
+用户与项目的允许规则照常适用）、系统提示和 Ait 工具预授权。其他 Provider 使用默认模式，指令前置到每一条输入，
 需要审批的写入与 Ait 工具调用被自动拒绝；Provider 不经审批执行的写入不会被阻止，不支持 HTTP MCP 的 Provider 没有 Ait 工具。
 设置页以能力说明显示这些差异。已有会话无法达到安全配置时，Bot 自动轮换一次对话。
 
@@ -88,9 +89,13 @@ Bot 通过 Ait MCP 工具管理 Workspace，可用工具由用户授予的**分�
 
 ### Bot 启动的 Agent
 
-Bot 创建的 Agent 带保留标签 `ait.bot.scope`，其会话获得派生凭据，只能访问同一作用域并受同一模式上限约束，无 Bot 专属工具。
-Bot 暂停、移除或不再是当前 Bot 后，这些 Agent 降为只读观察。Bot 创建的定时任务记录 `botScope`，每次运行前按当前授权复核；
-不再被允许时该次运行失败，任务保持启用。Bot 运行、恢复或修改模式超出上限的任务会被拒绝，没有存储模式的用户任务需先用 `update_schedule` 设置允许的模式。
+Bot 创建的 Agent 带保留标签 `ait.bot.scope`，其会话获得派生凭据，只能访问同一作用域并受同一模式上限约束，无 Bot 专属工具；
+作用域调用者不能写入任何 `ait.` 前缀的标签。Bot 暂停期间这些 Agent 保留完整授权（只有 Bot 自身的凭据失效）；Bot 移除后降为只读观察；
+同一 Workspace 设置新 Bot 后，新 Bot 的授权适用于该 Workspace 已有的这些 Agent 与定时任务。
+
+Bot 创建的定时任务记录 `botScope`（根 Workspace，而不是某个 Bot），每次运行前按当前授权复核；不再被允许时该次运行失败，任务保持启用。
+没有当前 Bot 时（例如 Bot 已移除），这些任务的每次运行都以 `REVOKED` 错误失败；同一 Workspace 设置新 Bot 后，它们按新 Bot 的授权运行。
+Bot 运行或恢复模式超出上限的任务会被拒绝；没有存储模式的用户任务需由用户先设置允许的模式。
 凭据细节见 [MCP](mcp.md#bot-与子树凭据)。
 
 ## Telegram 与飞书配置

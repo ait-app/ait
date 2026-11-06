@@ -97,8 +97,9 @@ Workspace Bot 的隐藏会话，以及 Bot 通过 `create_agent` 启动的 Agent
 - 每次请求按 Workspace 当前 Bot 的授权过滤：未授权工具不出现在 `tools/list`，调用返回 `-32602 "Unknown or unavailable tool"`；
   作用域或模式上限违规返回 `isError: true` 的 `Forbidden` 结果。
 - 目标限于 Bot 的作用域（Bot 所在 Workspace 与它创建的未归档 worktree），目标 id 解析为规范 id 后再执行；`cwd` 参数被拒绝。
-- `create_agent`、`set_agent_mode`、`update_agent`、`create_schedule`、`update_schedule` 的 Provider 与模式须在 Bot 的模式上限内。
-- 任何调用者都不能写入 `ait.bot.` 前缀的标签。`create_workspace` 只能创建当前项目的 worktree，不接受 `idempotencyKey`。
+- `create_agent`、`set_agent_mode`、`update_agent`、`create_schedule`、`update_schedule` 的 Provider 与模式须在 Bot 的模式上限内；
+  `update_schedule` 只能编辑带 `botScope` 的定时任务。
+- 任何调用者都不能写入 `ait.bot.` 前缀的标签，作用域调用者不能写入任何 `ait.` 前缀的标签。`create_workspace` 只能创建当前项目的 worktree，不接受 `idempotencyKey`。
 - 没有非退役 Bot 时子树凭据降为只读观察。
 
 分组与工具对应关系见 [Workspace Bot](bots.md#权限)。
