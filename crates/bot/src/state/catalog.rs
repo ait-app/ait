@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use domain::bot::permissions::BotPermissions;
 use domain::bot::{Bot, BotState, Catalog, Channel, ChannelConfig, ExecutionConfig, PauseReason};
 use domain::{BotId, ChannelId};
 use model::ErrorCode;
@@ -155,6 +156,8 @@ impl State {
             builtin_channel_id: ChannelId::generate(),
             state: BotState::Active,
             created_at: chrono::Utc::now().to_rfc3339(),
+            permissions: BotPermissions::default(),
+            workspaces: BTreeSet::new(),
         };
         let mut catalog = self.catalog.clone();
         catalog.channels.push(Channel {

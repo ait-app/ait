@@ -1,8 +1,17 @@
 //! Workspace-owned Bots, exclusive channels and durable conversation receipts.
 
+use std::collections::BTreeSet;
+
 use serde::{Deserialize, Serialize};
 
+use self::permissions::BotPermissions;
+
 use crate::{BotId, BotTurnId, ChannelId, ConversationId};
+
+pub mod permissions;
+
+/// Reserved label carrying the Bot scope of an Agent or schedule.
+pub const BOT_SCOPE_LABEL: &str = "ait.bot.scope";
 
 /// Native execution selection; credentials remain provider-owned.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,6 +71,12 @@ pub struct Bot {
     pub state: BotState,
     /// UTC creation timestamp.
     pub created_at: String,
+    /// User-configured MCP tool groups and per-provider mode cap.
+    #[serde(default)]
+    pub permissions: BotPermissions,
+    /// Unarchived worktree Workspaces created by this Bot.
+    #[serde(default)]
+    pub workspaces: BTreeSet<String>,
 }
 
 /// Transport-specific configuration; secret values are never part of this record.
