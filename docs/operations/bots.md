@@ -81,7 +81,7 @@ Bot 通过 Ait MCP 工具管理 Workspace，可用工具由用户授予的**分�
   "workspaceId": "<workspaceId>",
   "permissions": {
     "groups": ["observe", "agents", "stop", "schedules", "scripts"],
-    "modes": { "codex": ["workspace-write", "read-only"], "claude": ["default"] }
+    "modes": { "codex": ["read-only", "auto"], "claude": ["default"] }
   }
 }
 ```
