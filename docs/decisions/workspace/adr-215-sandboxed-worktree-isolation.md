@@ -54,17 +54,17 @@ Seatbelt 按最后匹配的规则生效。不采用全部默认拒绝，因为�
 
 写入允许清单以 `@anthropic-ai/sandbox-runtime` 的 macOS profile 为参照：
 
-| 类别         | 路径                                                                                                                                              |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Worktree     | 记录的 worktree 根目录（realpath）                                                                                                                |
-| Git          | `.git` 文件指向的私有 gitdir 和 `commondir` 解析出的公共 Git 目录（realpath），保证 `git commit` 可用                                             |
+| 类别         | 路径                                                                                                                                                                                                              |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Worktree     | 记录的 worktree 根目录（realpath）                                                                                                                                                                                |
+| Git          | `.git` 文件指向的私有 gitdir 和 `commondir` 解析出的公共 Git 目录（realpath），保证 `git commit` 可用                                                                                                             |
 | 临时与设备   | `$TMPDIR`（realpath）、`/private/tmp`、`/private/var/folders`、`/dev/null`、`/dev/zero`、`/dev/{u,}random`、`/dev/dtracehelper`、`/dev/ptmx`、`/dev/stdout`、`/dev/stderr`、`^/dev/tty`、`^/dev/pty`、`^/dev/fd/` |
-| Claude Code  | `CLAUDE_CONFIG_DIR` 或 `~/.claude`；`~/.claude.json*` 前缀（含原子写入产生的 `.tmp.*` 兄弟文件）；`~/.cache/claude`、`~/Library/Caches/claude-cli-nodejs` |
-| Codex        | `CODEX_HOME` 或 `~/.codex`                                                                                                                        |
-| Pi           | `PI_CODING_AGENT_DIR` 或 `~/.pi/agent`；`PI_CODING_AGENT_SESSION_DIR`                                                                             |
-| Oh My Pi     | `PI_CONFIG_DIR` 或 `~/.omp`；`$XDG_DATA_HOME/omp`                                                                                                 |
-| OpenCode     | XDG data、state、cache、config 下的 `opencode` 目录                                                                                               |
-| MiniMax Code | `~/.minimax`                                                                                                                                      |
+| Claude Code  | `CLAUDE_CONFIG_DIR` 或 `~/.claude`；`~/.claude.json*` 前缀（含原子写入产生的 `.tmp.*` 兄弟文件）；`~/.cache/claude`、`~/Library/Caches/claude-cli-nodejs`                                                         |
+| Codex        | `CODEX_HOME` 或 `~/.codex`                                                                                                                                                                                        |
+| Pi           | `PI_CODING_AGENT_DIR` 或 `~/.pi/agent`；`PI_CODING_AGENT_SESSION_DIR`                                                                                                                                             |
+| Oh My Pi     | `PI_CONFIG_DIR` 或 `~/.omp`；`$XDG_DATA_HOME/omp`                                                                                                                                                                 |
+| OpenCode     | XDG data、state、cache、config 下的 `opencode` 目录                                                                                                                                                               |
+| MiniMax Code | `~/.minimax`                                                                                                                                                                                                      |
 
 环境变量先读 Agent 的覆盖值，再读 daemon 环境。尚不存在的状态目录按最近的已存在祖先解析 realpath；
 含 `..` 的状态路径直接拒绝。
