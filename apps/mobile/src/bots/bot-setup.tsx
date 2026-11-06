@@ -5,12 +5,14 @@ import { withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ProviderSnapshotEntry } from "@ait/protocol/agent-types";
-import type { BotExecution, BotView } from "@ait/protocol/bot/types";
+import type { BotExecution, BotPermissions, BotView } from "@ait/protocol/bot/types";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import type { Theme } from "@/styles/theme";
+import { BotPermissionFields, useBotPermissionsSupported } from "./bot-permissions";
+import { botSessionNotes, defaultBotPermissions, type BotSessionNote } from "./permissions";
 import { botKeys, isBotConflict } from "./queries";
 import { botStyles as styles } from "./styles";
 
@@ -79,14 +81,24 @@ export function useBotProviders(serverId: string, cwd: string, enabled: boolean)
   return { providers, error: snapshot.error };
 }
 
-/** Provider, model, permission mode and reasoning selectors shared by setup and settings. */
+const NOTE_KEYS: Record<BotSessionNote, string> = {
+  instructionsInInput: "bots.noteInstructionsInInput",
+  noReadOnlyMode: "bots.noteNoReadOnlyMode",
+  toolsNeedApproval: "bots.noteToolsNeedApproval",
+  noAitTools: "bots.noteNoAitTools",
+};
+
+/** Provider, model, optional permission mode and reasoning selectors shared by setup and settings. */
 export function BotExecutionFields({
   providers,
   error,
   value,
   onChange,
   disabled,
+  showMode = true,
 }: {
+  /** The Bot runs in the strictest mode its provider offers, so Bot screens hide the picker. */
+  showMode?: boolean;
   providers: ProviderSnapshotEntry[];
   error: string | null;
   value: BotExecutionDraft;
@@ -97,6 +109,7 @@ export function BotExecutionFields({
   const selectedProvider = value.provider || providers[0]?.provider || "";
   const entry = providers.find((candidate) => candidate.provider === selectedProvider);
   const defaultOption = { id: "", label: t("bots.defaultOption") };
+  const notes = botSessionNotes(entry?.botSession);
   const models = (entry?.models ?? []).filter((item) => item.isSelectable !== false);
   const selectedModel =
     models.find((item) => item.id === value.model) ?? models.find((item) => item.isDefault);
@@ -121,14 +134,23 @@ export function BotExecutionFields({
         disabled={disabled}
         testID="bot-model"
       />
-      <BotSelect
-        label={t("bots.mode")}
-        value={value.modeId}
-        options={[defaultOption, ...(entry?.modes ?? [])]}
-        onChange={(modeId) => onChange({ ...value, modeId })}
-        disabled={disabled}
-        testID="bot-mode"
-      />
+      {showMode ? (
+        <BotSelect
+          label={t("bots.mode")}
+          value={value.modeId}
+          options={[defaultOption, ...(entry?.modes ?? [])]}
+          onChange={(modeId) => onChange({ ...value, modeId })}
+          disabled={disabled}
+          testID="bot-mode"
+        />
+      ) : (
+        <Text style={styles.hint}>{t("bots.readOnlyHint")}</Text>
+      )}
+      {notes.map((note) => (
+        <Text key={note} style={styles.hint} testID={`bot-note-${note}`}>
+          {t(NOTE_KEYS[note])}
+        </Text>
+      ))}
       <BotSelect
         label={t("bots.thinking")}
         value={value.thinking}
@@ -173,14 +195,19 @@ export function BotSetup({
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState(() => executionDraft());
   const [clearMemory, setClearMemory] = useState(false);
+  const [permissionsDraft, setPermissionsDraft] = useState<BotPermissions | null>(null);
+  const supportsPermissions = useBotPermissionsSupported(serverId);
   const { providers, error } = useBotProviders(serverId, cwd, interactive);
   const execution = resolveExecution(draft, providers);
+  // Providers load after mount, so the default profile is derived until the user edits it.
+  const permissions = permissionsDraft ?? defaultBotPermissions(providers);
   const mutation = useMutation({
     mutationFn: async (clearingMemory: boolean) => {
       if (!client) throw new Error(t("bots.disconnected"));
       const { bot } = await client.botRequest("bot.setup.request", {
         workspaceId,
         execution,
+        ...(supportsPermissions ? { permissions } : {}),
         ...(clearingMemory ? { clearMemory: true } : {}),
       });
       return bot;
@@ -209,7 +236,16 @@ export function BotSetup({
         value={draft}
         onChange={setDraft}
         disabled={disabled}
+        showMode={false}
       />
+      {supportsPermissions ? (
+        <BotPermissionFields
+          providers={providers}
+          value={permissions}
+          onChange={setPermissionsDraft}
+          disabled={disabled}
+        />
+      ) : null}
       <Pressable
         style={[styles.row, disabled ? styles.disabled : null]}
         onPress={() => setClearMemory((checked) => !checked)}

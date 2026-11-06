@@ -2,23 +2,29 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { BotView } from "@ait/protocol/bot/types";
 import { BotSetup } from "./bot-setup";
 import { botKeys } from "./queries";
 
-const { botRequest } = vi.hoisted(() => ({ botRequest: vi.fn() }));
+const { botRequest, supported, snapshotEntries } = vi.hoisted(() => ({
+  botRequest: vi.fn(),
+  supported: { current: false },
+  snapshotEntries: { current: [] as unknown[] },
+}));
 vi.mock("@/runtime/host-runtime", () => ({ useHostRuntimeClient: () => ({ botRequest }) }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("./styles", () => ({ botStyles: {} }));
+vi.mock("@/stores/session-store", () => ({
+  useSessionStore: (select: (state: unknown) => unknown) =>
+    select({
+      sessions: {
+        server: { serverInfo: { features: { workspaceBotPermissions: supported.current } } },
+      },
+    }),
+}));
 vi.mock("@/hooks/use-providers-snapshot", () => ({
-  useProvidersSnapshot: () => ({
-    entries: [
-      { provider: "claude", label: "Claude", enabled: true, status: "ready", models: [] },
-      { provider: "codex", label: "Codex", enabled: true, status: "ready", models: [] },
-    ],
-    error: null,
-  }),
+  useProvidersSnapshot: () => ({ entries: snapshotEntries.current, error: null }),
 }));
 vi.mock("@/components/ui/select-field", () => ({
   SelectField: ({
@@ -66,6 +72,46 @@ const bot: BotView = {
   state: { kind: "active" },
   createdAt: "2026-11-06",
 };
+
+const claudeModes = [
+  { id: "default", label: "Default", colorTier: "safe" },
+  { id: "plan", label: "Plan", colorTier: "planning" },
+  { id: "bypassPermissions", label: "Bypass", colorTier: "dangerous" },
+];
+const fullSupport = {
+  instructions: "system_prompt",
+  readOnlyMode: "read-only",
+  toolPreapproval: true,
+  aitTools: true,
+};
+const providerEntries = () => [
+  {
+    provider: "claude",
+    label: "Claude",
+    enabled: true,
+    status: "ready",
+    models: [],
+    modes: claudeModes,
+    defaultModeId: "default",
+  },
+  {
+    provider: "codex",
+    label: "Codex",
+    enabled: true,
+    status: "ready",
+    models: [],
+    modes: [{ id: "read-only", label: "Read only", colorTier: "planning" }],
+    defaultModeId: "read-only",
+    botSession: fullSupport,
+  },
+  { provider: "minimax", label: "MiniMax", enabled: true, status: "ready", models: [] },
+  { provider: "off", label: "Off", enabled: true, status: "unavailable", models: [] },
+];
+
+beforeEach(() => {
+  supported.current = false;
+  snapshotEntries.current = providerEntries();
+});
 
 afterEach(() => {
   cleanup();
@@ -156,4 +202,84 @@ it("defaults to the first ready provider and leaves clear memory unchecked", () 
   renderSetup();
   expect((screen.getByTestId("bot-provider") as HTMLSelectElement).value).toBe("claude");
   expect(screen.getByTestId("bot-clear-memory").getAttribute("aria-checked")).toBe("false");
+});
+
+it("setup_sends_default_permissions_when_supported", async () => {
+  supported.current = true;
+  botRequest.mockResolvedValue({ bot, created: true });
+  renderSetup();
+  const providerOptions = Array.from(
+    (screen.getByTestId("bot-provider") as HTMLSelectElement).options,
+  ).map((option) => option.value);
+  expect(providerOptions).toEqual(["claude", "codex", "minimax"]);
+  expect(screen.getByText("bots.modeCapWarning")).toBeTruthy();
+  expect(screen.getByText("bots.commandReachWarning")).toBeTruthy();
+  expect(screen.queryByTestId("bot-mode")).toBeNull();
+  expect(screen.getByText("bots.readOnlyHint")).toBeTruthy();
+
+  fireEvent.click(screen.getByTestId("bot-setup-submit"));
+  await waitFor(() => expect(botRequest).toHaveBeenCalledTimes(1));
+  const [, params] = botRequest.mock.calls[0];
+  expect(params.execution.modeId).toBeNull();
+  expect(params.permissions).toEqual({
+    groups: ["observe", "agents", "stop", "schedules"],
+    modes: { claude: ["default", "plan"], codex: ["read-only"] },
+  });
+});
+
+it("setup_sends_edited_permissions", async () => {
+  supported.current = true;
+  botRequest.mockResolvedValue({ bot, created: true });
+  renderSetup();
+  fireEvent.click(screen.getByTestId("bot-group-schedules"));
+  fireEvent.click(screen.getByTestId("bot-mode-claude-plan"));
+  fireEvent.click(screen.getByTestId("bot-setup-submit"));
+  await waitFor(() => expect(botRequest).toHaveBeenCalledTimes(1));
+  expect(botRequest.mock.calls[0][1].permissions).toEqual({
+    groups: ["observe", "agents", "stop"],
+    modes: { claude: ["default"], codex: ["read-only"] },
+  });
+});
+
+it("setup_omits_permissions_on_old_hosts", async () => {
+  botRequest.mockResolvedValue({ bot, created: true });
+  renderSetup();
+  expect(screen.queryByTestId("bot-permissions")).toBeNull();
+  expect(screen.queryByText("bots.modeCapWarning")).toBeNull();
+  fireEvent.click(screen.getByTestId("bot-setup-submit"));
+  await waitFor(() => expect(botRequest).toHaveBeenCalledTimes(1));
+  expect(botRequest.mock.calls[0][1]).not.toHaveProperty("permissions");
+});
+
+it("degraded_bot_provider_shows_capability_notes", () => {
+  snapshotEntries.current = [
+    ...providerEntries(),
+    {
+      provider: "acp",
+      label: "ACP",
+      enabled: true,
+      status: "ready",
+      models: [],
+      botSession: {
+        instructions: "turn_prefix",
+        readOnlyMode: null,
+        toolPreapproval: false,
+        aitTools: true,
+      },
+    },
+  ];
+  renderSetup();
+  const notes = () =>
+    screen.queryAllByTestId(/^bot-note-/).map((node) => node.getAttribute("data-testid"));
+  fireEvent.change(screen.getByTestId("bot-provider"), { target: { value: "acp" } });
+  expect(notes()).toEqual([
+    "bot-note-instructionsInInput",
+    "bot-note-noReadOnlyMode",
+    "bot-note-toolsNeedApproval",
+  ]);
+  expect(screen.getByText("bots.noteNoReadOnlyMode")).toBeTruthy();
+  fireEvent.change(screen.getByTestId("bot-provider"), { target: { value: "codex" } });
+  expect(notes()).toEqual([]);
+  fireEvent.change(screen.getByTestId("bot-provider"), { target: { value: "minimax" } });
+  expect(notes()).toEqual([]);
 });

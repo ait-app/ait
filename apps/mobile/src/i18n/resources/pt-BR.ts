@@ -16,6 +16,34 @@ export const ptBR: TranslationResources = {
   },
   onlineService: en.onlineService,
   bots: {
+    modeCapWarning:
+      "Os modos que permitem aos agentes executar comandos também permitem que eles leiam as credenciais do Ait deste computador e contornem os limites do Ait do Bot. Permita-os apenas para trabalho que você deixaria um agente fazer sem supervisão.",
+    commandReachWarning:
+      "O Bot pode enviar prompts a todos os agentes deste workspace, inclusive os que você iniciou, e alterar as configurações deles. Esses agentes mantêm as próprias permissões, então um prompt do Bot pode alcançar recursos além dos limites do próprio Bot.",
+    noteInstructionsInInput:
+      "Este provedor não oferece suporte a um prompt de sistema atualizável, então as instruções integradas e a memória do Bot são adicionadas à entrada da conversa.",
+    noteNoReadOnlyMode:
+      "Este provedor não tem modo somente leitura, então o Bot é executado no modo padrão. Gravações que exigem aprovação são negadas automaticamente, mas ações que o provedor permite sem aprovação não são bloqueadas, incluindo ler as credenciais do Ait deste computador e contornar os limites do Ait do Bot.",
+    noteToolsNeedApproval:
+      "Este provedor não pode pré-aprovar ferramentas do Ait, então chamadas de ferramentas do Ait que exigem aprovação são negadas automaticamente. O Bot pode conseguir apenas conversar, sem iniciar nem gerenciar agentes.",
+    noteNoAitTools:
+      "Este provedor não oferece suporte à conexão com ferramentas do Ait, então o Bot só pode conversar.",
+    permissions: "Permissões",
+    permissionsHint: "As alterações de permissões entram em vigor no próximo turno do Bot.",
+    groupObserve: "Observar (sempre ativo): ver agentes, atividade e provedores",
+    groupAgents: "Agentes: criar agentes, enviar prompts e reconfigurá-los",
+    groupStop: "Parar: cancelar e parar agentes",
+    groupSchedules: "Agendamentos: criar e gerenciar agendamentos",
+    groupScripts: "Scripts: executar scripts do workspace",
+    groupTerminals: "Terminais: criar terminais e digitar neles",
+    groupWorkspaces: "Workspaces: criar workspaces worktree",
+    permissionRiskHint: "Pode executar comandos ou criar worktrees.",
+    modeCap: "Modos de agente permitidos",
+    modeCapHint:
+      "Escolha os modos que o Bot pode usar em cada provedor. Um provedor sem modos selecionados não pode ser usado. O primeiro modo selecionado é o padrão.",
+    defaultMode: "Modo padrão",
+    readOnlyHint:
+      "O Bot é executado no modo mais restrito que o provedor oferece (no Claude, o modo padrão, em que suas próprias regras de permissão continuam valendo) e deixa as alterações para os agentes que ele inicia.",
     title: "Bot",
     chat: "Chat",
     settings: "Configurações",

@@ -63,6 +63,34 @@ export const en = {
     failed: "Voice conversation interrupted",
   },
   bots: {
+    modeCapWarning:
+      "Modes that let agents run commands also let them read this computer's Ait credentials and bypass the Bot's Ait limits. Allow them only for work you would let an agent do unattended.",
+    commandReachWarning:
+      "The Bot can prompt and reconfigure every agent in this workspace, including ones you started. Those agents keep their own permissions, so a prompt from the Bot can reach capabilities beyond the Bot's own limits.",
+    noteInstructionsInInput:
+      "This provider does not support an updatable system prompt, so the Bot's built-in instructions and memory are added to the conversation input.",
+    noteNoReadOnlyMode:
+      "This provider has no read-only mode, so the Bot runs in its default mode. Writes that need approval are denied automatically, but actions the provider allows without approval are not blocked, including reading this computer's Ait credentials and bypassing the Bot's Ait limits.",
+    noteToolsNeedApproval:
+      "This provider cannot pre-approve Ait tools, so Ait tool calls that need approval are denied automatically. The Bot may only be able to chat, not start or manage agents.",
+    noteNoAitTools:
+      "This provider does not support Ait tool connections, so the Bot can only chat.",
+    permissions: "Permissions",
+    permissionsHint: "Permission changes take effect on the Bot's next turn.",
+    groupObserve: "Observe (always on): view agents, activity and providers",
+    groupAgents: "Agents: create agents and prompt or reconfigure them",
+    groupStop: "Stop: cancel and stop agents",
+    groupSchedules: "Schedules: create and manage schedules",
+    groupScripts: "Scripts: run workspace scripts",
+    groupTerminals: "Terminals: create terminals and type into them",
+    groupWorkspaces: "Workspaces: create worktree workspaces",
+    permissionRiskHint: "Can run commands or create worktrees.",
+    modeCap: "Allowed agent modes",
+    modeCapHint:
+      "Choose which modes the Bot may use for each provider. A provider with no modes selected cannot be used. The first selected mode is the default.",
+    defaultMode: "Default mode",
+    readOnlyHint:
+      "The Bot runs in the strictest mode its provider offers (for Claude, the default mode, where your own allow rules still apply) and leaves changes to the agents it starts.",
     title: "Bot",
     chat: "Chat",
     settings: "Settings",
