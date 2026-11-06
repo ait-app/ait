@@ -1,10 +1,10 @@
 # Ait Desktop
 
 Electron desktop app for Ait. Release versions follow the root workspace release.
-Nightly builds display `YYYY-MM-DD-<8-character hash>` using the UTC build date.
+Dev builds display `YYYY-MM-DD-<8-character hash>` using the UTC build date.
 Git installs display `git-YYYY-MM-DD-<8-character hash>` using the source commit date,
 including when building a checkout at a release tag. Desktop and daemon share this identity.
-Installer and updater metadata use a date-based SemVer (`2026.10.25-gabcdef01` for nightly,
+Installer and updater metadata use a date-based SemVer (`2026.10.25-gabcdef01` for dev builds,
 `2026.10.25-git.gabcdef01` for Git), without the workspace release number.
 `AIT_BUILD_VERSION` supplies an explicit build identity; official releases set `RELEASE_TAG`.
 Builds without Git metadata must supply one of these variables.

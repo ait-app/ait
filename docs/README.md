@@ -45,7 +45,7 @@
 
 ## 构建与发布
 
-- [发布指南](operations/releasing.md)：版本准备、桌面 Release、nightly、平台发布入口。
+- [发布指南](operations/releasing.md)：版本准备、桌面 Release、Dev build、平台发布入口。
 - [Apple 本地构建](operations/apple-builds.md)：DMG、iOS 模拟器与 IPA。
 - [Google Play 内部测试](operations/google-play-internal-testing.md)：Gradle AAB、签名、上传和验收。
 - 用户可见变更见 [CHANGELOG](../CHANGELOG.md)；历史发布证据见[报告索引](reports/README.md)。

@@ -37,18 +37,18 @@ import {
 } from "./release-assets.mjs";
 import { releaseChannel } from "./release-version.mjs";
 import {
-  nightlyBuildLabel,
-  nightlyBuilderArgs,
-  nightlyDisplayVersion,
-  nightlyPackagedVersion,
-} from "./nightly-build.mjs";
+  devBuildLabel,
+  devBuilderArgs,
+  devDisplayVersion,
+  devPackagedVersion,
+} from "./dev-build.mjs";
 
 async function builderPackager(platform, version, buildLabel) {
   const config = parse(
     await readFile(new URL("../apps/desktop/electron-builder.yml", import.meta.url), "utf8"),
   );
   if (buildLabel) {
-    for (const arg of nightlyBuilderArgs(buildLabel)) {
+    for (const arg of devBuilderArgs(buildLabel)) {
       const [, key, value] = arg.match(/^-c\.([^=]+)=(.*)$/);
       const parts = key.split(".");
       const property = parts.pop();
@@ -104,7 +104,7 @@ async function fixture(t, platform, version = "0.0.7", buildLabel) {
   }
   await writeFile(
     path.join(source, names.at(-1)),
-    stringify({ version: buildLabel ? nightlyPackagedVersion(buildLabel) : version, files }),
+    stringify({ version: buildLabel ? devPackagedVersion(buildLabel) : version, files }),
   );
   await writeFile(path.join(source, "old-server.exe"), "should never be collected");
   return { platform, version, source, destination, buildLabel };
@@ -242,18 +242,18 @@ test("macOS server feed distinguishes unpublished channels from service failures
   }
 });
 
-test("nightly identity uses eight hash characters and a UTC build date", () => {
+test("dev build identity uses eight hash characters and a UTC build date", () => {
   const sha = "abcdef01".repeat(5);
   const timestamp = Date.parse("2026-10-08T00:15:00+02:00") / 1000;
-  assert.equal(nightlyBuildLabel(sha, timestamp), "abcdef01-2026-10-07");
-  assert.equal(nightlyDisplayVersion("abcdef01-2026-10-07"), "2026-10-07-abcdef01");
-  assert.equal(nightlyPackagedVersion("01234567-2026-01-02"), "2026.1.2-g01234567");
-  assert.throws(() => nightlyBuildLabel("bad", timestamp));
-  assert.throws(() => nightlyBuildLabel(sha, NaN));
-  assert.throws(() => nightlyBuilderArgs("../../invalid"));
+  assert.equal(devBuildLabel(sha, timestamp), "abcdef01-2026-10-07");
+  assert.equal(devDisplayVersion("abcdef01-2026-10-07"), "2026-10-07-abcdef01");
+  assert.equal(devPackagedVersion("01234567-2026-01-02"), "2026.1.2-g01234567");
+  assert.throws(() => devBuildLabel("bad", timestamp));
+  assert.throws(() => devBuildLabel(sha, NaN));
+  assert.throws(() => devBuilderArgs("../../invalid"));
 });
 
-test("nightly builder names and update URLs use the build label on both platforms", async (t) => {
+test("dev builder names and update URLs use the build label on both platforms", async (t) => {
   const version = "0.0.23-beta.1";
   const buildLabel = "abcdef01-2026-10-08";
   const inputs = [];
@@ -278,7 +278,7 @@ test("nightly builder names and update URLs use the build label on both platform
     );
     assert.equal(tasks.length, 1);
     assert.equal(path.basename(tasks[0].file), `latest-${platform}.yml`);
-    assert.equal(tasks[0].info.version, nightlyPackagedVersion(buildLabel));
+    assert.equal(tasks[0].info.version, devPackagedVersion(buildLabel));
     assert.ok(tasks[0].info.files.every((file) => file.url.includes(buildLabel)));
     await writeFile(path.join(input.source, names[0] + ".blockmap"), "block map");
     await collectReleaseAssets(input);
@@ -295,8 +295,8 @@ test("nightly builder names and update URLs use the build label on both platform
   await addDaemonAssets(directory, version, buildLabel);
   const info = {
     version: buildLabel,
-    packagedVersion: nightlyPackagedVersion(buildLabel),
-    releaseTag: "nightly",
+    packagedVersion: devPackagedVersion(buildLabel),
+    releaseTag: "dev",
     sourceCommit: "abcdef01".repeat(5),
     workflowCommit: "abcdef01".repeat(5),
   };
@@ -318,7 +318,7 @@ test("nightly builder names and update URLs use the build label on both platform
       "verify",
       version,
       directory,
-      "--nightly",
+      "--dev",
       buildLabel,
     ],
     { encoding: "utf8" },
@@ -552,28 +552,19 @@ test("standalone daemon archives package aitd and the license per target", async
   const script = fileURLToPath(new URL("./release-assets.mjs", import.meta.url));
   const invalid = spawnSync(
     process.execPath,
-    [script, "daemon", "linux", "0.0.7", binary, destination, "--nightly", "abc"],
+    [script, "daemon", "linux", "0.0.7", binary, destination, "--dev", "abc"],
     { encoding: "utf8" },
   );
-  assert.notEqual(invalid.status, 0, "nightly daemons need a valid build label");
-  // Nightly archives require the daemon to report the build identity.
-  const nightlyBinary = (await fakeDaemon(t, "daemon 2026-10-08-abcdef01")).binary;
-  const nightly = spawnSync(
+  assert.notEqual(invalid.status, 0, "dev build daemons need a valid build label");
+  // Dev build archives require the daemon to report the build identity.
+  const devBinary = (await fakeDaemon(t, "daemon 2026-10-08-abcdef01")).binary;
+  const devBuild = spawnSync(
     process.execPath,
-    [
-      script,
-      "daemon",
-      "mac",
-      "0.0.7",
-      nightlyBinary,
-      destination,
-      "--nightly",
-      "abcdef01-2026-10-08",
-    ],
+    [script, "daemon", "mac", "0.0.7", devBinary, destination, "--dev", "abcdef01-2026-10-08"],
     { encoding: "utf8" },
   );
-  assert.equal(nightly.status, 0, nightly.stderr);
-  assert.equal(nightly.stdout.trim(), "Ait-abcdef01-2026-10-08-daemon-macos-arm64.tar.gz");
+  assert.equal(devBuild.status, 0, devBuild.stderr);
+  assert.equal(devBuild.stdout.trim(), "Ait-abcdef01-2026-10-08-daemon-macos-arm64.tar.gz");
   assert.equal(
     daemonAssetName("linux", "0.0.7", "abcdef01-2026-10-08"),
     "Ait-abcdef01-2026-10-08-daemon-linux-x64.tar.gz",
@@ -606,7 +597,7 @@ test("stable verification requires daemon archives only when requested", async (
     includeDaemon: false,
     includeAndroid: true,
   });
-  // Version-named daemon archives never belong in a nightly.
+  // Version-named daemon archives never belong in a dev build.
   await assert.rejects(
     verifyReleaseAssets({ ...options, includeAndroid: false, buildLabel: "38fb6054-2026-10-08" }),
     /Missing release asset|Unexpected release asset/,
@@ -663,10 +654,7 @@ test("desktop release verifies published desktop assets and any retained Android
     new URL("./release-version.mjs", import.meta.url),
     path.join(tooling, "release-version.mjs"),
   );
-  await copyFile(
-    new URL("./nightly-build.mjs", import.meta.url),
-    path.join(tooling, "nightly-build.mjs"),
-  );
+  await copyFile(new URL("./dev-build.mjs", import.meta.url), path.join(tooling, "dev-build.mjs"));
   await copyFile(
     new URL("./source-version.cjs", import.meta.url),
     path.join(tooling, "source-version.cjs"),
