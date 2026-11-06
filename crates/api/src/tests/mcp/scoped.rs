@@ -7,6 +7,7 @@ use domain::bot::permissions::{BotPermissions, ToolGroup};
 use super::*;
 
 mod confinement;
+mod schedules;
 mod support;
 
 use support::{BOT_SESSION, Scoped, codex_modes, rejected, succeeded};

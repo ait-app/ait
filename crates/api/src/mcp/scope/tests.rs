@@ -318,3 +318,77 @@ fn schedule_listing_keeps_only_scoped_workspaces() {
     filter(&scope, "list_agents", &mut untouched);
     assert_eq!(untouched["schedules"][0]["id"], "b");
 }
+
+#[test]
+fn schedule_patches_keep_the_effective_mode_within_the_cap() {
+    let permissions = capped(&["auto", "read-only"]);
+    let task = |config: Value| json!({"target":{"type":"new-agent","config":config}});
+    let unset = task(json!({"provider":"codex"}));
+    let escalated = task(json!({"provider":"codex","modeId":"full-access"}));
+    assert_eq!(cap_schedule(&permissions, &unset), Ok(()));
+    assert_eq!(
+        cap_schedule(&permissions, &escalated),
+        Err(ErrorCode::Forbidden)
+    );
+    let heartbeat = json!({"target":{"type":"agent","agentId":"agent"}});
+    assert_eq!(cap_schedule(&permissions, &heartbeat), Ok(()));
+
+    for (patch, mode) in [
+        (json!({"mode":null}), json!("auto")),
+        (json!({"mode":"read-only"}), json!("read-only")),
+        (json!({"provider":"codex/next"}), json!("auto")),
+        (json!({"model":"next"}), Value::Null),
+        (json!({"prompt":"changed"}), Value::Null),
+    ] {
+        let mut patched = patch.clone();
+        cap_schedule_update(&permissions, &unset, &mut patched).unwrap();
+        assert_eq!(patched["mode"], mode, "{patch}");
+    }
+    for patch in [
+        json!({"mode":"full-access"}),
+        json!({"provider":"claude"}),
+        json!({"provider":"claude/model","mode":"auto"}),
+    ] {
+        let mut patched = patch.clone();
+        assert_eq!(
+            cap_schedule_update(&permissions, &unset, &mut patched),
+            Err(ErrorCode::Forbidden),
+            "{patch}"
+        );
+    }
+}
+
+#[test]
+fn scoped_schedules_record_the_bot_scope_and_heartbeats_need_an_agent_caller() {
+    let bot = capped_scope(bot());
+    let mut arguments = json!({"provider":"codex/model"});
+    rewrite_create_schedule(&bot, None, &mut arguments).unwrap();
+    assert_eq!(arguments["modeId"], "auto");
+    assert_eq!(arguments["botScope"], ROOT);
+    let mut missing = json!({});
+    assert_eq!(
+        rewrite_create_schedule(&bot, None, &mut missing),
+        Err(ErrorCode::InvalidMessage)
+    );
+    let mut unlisted = json!({"provider":"claude"});
+    assert_eq!(
+        rewrite_create_schedule(&bot, None, &mut unlisted),
+        Err(ErrorCode::Forbidden)
+    );
+
+    let child = codex_agent("child", ROOT);
+    assert_eq!(
+        heartbeat_workspace(&bot, Some(&child)),
+        Err(ErrorCode::Forbidden)
+    );
+    let subtree = capped_scope(subtree());
+    assert_eq!(heartbeat_workspace(&subtree, Some(&child)), Ok(ROOT));
+    assert_eq!(
+        heartbeat_workspace(&subtree, Some(&codex_agent("child", "wks_other"))),
+        Err(ErrorCode::Forbidden)
+    );
+    assert_eq!(
+        heartbeat_workspace(&subtree, None),
+        Err(ErrorCode::InvalidMessage)
+    );
+}

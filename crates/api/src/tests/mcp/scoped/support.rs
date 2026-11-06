@@ -174,6 +174,8 @@ fn git_checkout(directory: &std::path::Path) {
             "user.name=Ait",
             "-c",
             "user.email=ait@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
             "commit",
             "--quiet",
             "--allow-empty",

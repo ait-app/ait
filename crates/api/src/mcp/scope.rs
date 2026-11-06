@@ -78,6 +78,14 @@ enum Rule {
     Terminal,
     /// One schedule target in a scoped Workspace.
     Schedule,
+    /// A schedule run or resumed only while its current provider and mode are within the cap.
+    ScheduleControl,
+    /// A schedule control whose patched provider and mode must also stay within the cap.
+    UpdateSchedule,
+    /// New-Agent schedule in a scoped Workspace, at the provider's default mode, in the Bot scope.
+    CreateSchedule,
+    /// Heartbeat targeting a subtree caller in a scoped Workspace; Bot sessions cannot be targets.
+    CreateHeartbeat,
     /// A worktree of the root project, recorded in the Bot's scope.
     CreateWorkspace,
 }
@@ -85,8 +93,8 @@ enum Rule {
 /// Return the rule of `tool`; tools must be registered here explicitly to be usable.
 fn rule(tool: &str) -> Option<Rule> {
     Some(match tool {
-        "list_profiles" | "list_providers" | "create_heartbeat" | "bot_memory_read"
-        | "bot_memory_update" | "workspace_overview" => Rule::Open,
+        "list_profiles" | "list_providers" | "bot_memory_read" | "bot_memory_update"
+        | "workspace_overview" => Rule::Open,
         "list_agents" | "list_pending_permissions" | "list_schedules" => Rule::Listing,
         "list_models" | "inspect_provider" => Rule::RootDirectory,
         "create_agent" => Rule::CreateAgent,
@@ -97,12 +105,14 @@ fn rule(tool: &str) -> Option<Rule> {
         "list_workspace_scripts" | "start_workspace_script" | "stop_workspace_script" => {
             Rule::Workspace
         }
-        "list_terminals" | "create_terminal" | "create_schedule" => Rule::RootWorkspace,
+        "list_terminals" | "create_terminal" => Rule::RootWorkspace,
         "kill_terminal" | "capture_terminal" | "send_terminal_keys" => Rule::Terminal,
-        "inspect_schedule" | "pause_schedule" | "resume_schedule" | "delete_schedule"
-        | "schedule_logs" | "run_schedule_once" | "update_schedule" | "delete_heartbeat" => {
-            Rule::Schedule
-        }
+        "inspect_schedule" | "pause_schedule" | "delete_schedule" | "schedule_logs"
+        | "delete_heartbeat" => Rule::Schedule,
+        "run_schedule_once" | "resume_schedule" => Rule::ScheduleControl,
+        "update_schedule" => Rule::UpdateSchedule,
+        "create_schedule" => Rule::CreateSchedule,
+        "create_heartbeat" => Rule::CreateHeartbeat,
         "create_workspace" => Rule::CreateWorkspace,
         _ => return None,
     })
@@ -113,10 +123,12 @@ fn rule(tool: &str) -> Option<Rule> {
 /// `context` is the resolved caller Agent of a subtree credential; Bot sessions have none.
 /// Targets are resolved through existing RPCs and replaced by their canonical ids; a target
 /// Workspace must be in the grant and unarchived. Directories always come from the server.
+/// Created schedules and heartbeats record the root as their Bot scope.
 /// # Errors
 /// Returns `Forbidden` for unlisted tools, `cwd`, foreign or archived Workspaces, reserved
-/// labels, features or modes outside the cap; `ResourceExhausted` when the Bot already owns its
-/// maximum of worktrees; and propagates target lookup failures.
+/// labels, features or modes outside the cap (including a schedule's current mode), and Bot
+/// heartbeats; `ResourceExhausted` when the Bot already owns its maximum of worktrees; and
+/// propagates target lookup failures.
 pub(super) async fn confine(
     state: &Shared,
     scope: &Scope,
@@ -155,16 +167,35 @@ pub(super) async fn confine(
             }
             active(state, &text(&agent["workspaceId"])?).await.map(drop)
         }
-        rule @ (Rule::Workspace | Rule::RootWorkspace) => {
-            if rule == Rule::RootWorkspace && arguments.get("workspaceId").is_none() {
+        rule @ (Rule::Workspace | Rule::RootWorkspace | Rule::CreateSchedule) => {
+            if rule != Rule::Workspace && arguments.get("workspaceId").is_none() {
                 arguments["workspaceId"] = json!(root);
             }
             let workspace = text(&arguments["workspaceId"])?;
             scope.contains(Some(&workspace))?;
+            if rule == Rule::CreateSchedule {
+                let inherited = context.map(|agent| &agent["provider"]);
+                rewrite_create_schedule(scope, inherited, arguments)?;
+            }
             active(state, &workspace).await.map(drop)
         }
+        Rule::CreateHeartbeat => {
+            let workspace = heartbeat_workspace(scope, context)?;
+            arguments["workspaceId"] = json!(workspace);
+            arguments["botScope"] = json!(root);
+            active(state, workspace).await.map(drop)
+        }
         Rule::Terminal => terminal(state, scope, arguments).await,
-        Rule::Schedule => schedule(state, scope, arguments).await,
+        rule @ (Rule::Schedule | Rule::ScheduleControl | Rule::UpdateSchedule) => {
+            let schedule = schedule(state, scope, arguments).await?;
+            if rule != Rule::Schedule {
+                cap_schedule(&scope.grant.permissions, &schedule)?;
+            }
+            if rule == Rule::UpdateSchedule {
+                cap_schedule_update(&scope.grant.permissions, &schedule, arguments)?;
+            }
+            Ok(())
+        }
         Rule::CreateWorkspace => {
             let root = active(state, root).await?;
             rewrite_create_workspace(scope, &root, arguments)
@@ -310,6 +341,94 @@ fn cap_mode(permissions: &BotPermissions, arguments: &mut Value) -> Result<(), E
     Ok(())
 }
 
+/// Place a scoped `create_schedule` at its provider's default mode and in the Bot scope.
+///
+/// The provider defaults to the subtree caller's own (`inherited`). The mode and scope are passed
+/// as `modeId` and `botScope`, which the tool schema does not let callers supply themselves.
+/// # Errors
+/// Returns `InvalidMessage` for a missing or malformed provider and `Forbidden` for a provider
+/// outside the cap.
+fn rewrite_create_schedule(
+    scope: &Scope,
+    inherited: Option<&Value>,
+    arguments: &mut Value,
+) -> Result<(), ErrorCode> {
+    if arguments.get("provider").is_none() {
+        arguments["provider"] = inherited
+            .filter(|provider| provider.is_string())
+            .cloned()
+            .ok_or(ErrorCode::InvalidMessage)?;
+    }
+    let (provider, _) = creation::provider_model(&arguments["provider"], false)?;
+    let mode = scope
+        .grant
+        .permissions
+        .mode(provider, None)
+        .map_err(|_| ErrorCode::Forbidden)?;
+    arguments["modeId"] = json!(mode);
+    arguments["botScope"] = json!(scope.caller.root);
+    Ok(())
+}
+
+/// Return the scoped Workspace of a heartbeat's target, the subtree caller Agent `context`.
+/// # Errors
+/// Returns `Forbidden` for Bot sessions, which have no targetable Agent, and for a caller
+/// outside the grant; `InvalidMessage` without caller context.
+fn heartbeat_workspace<'a>(
+    scope: &Scope,
+    context: Option<&'a Value>,
+) -> Result<&'a str, ErrorCode> {
+    if matches!(scope.caller.kind, CallerKind::Bot { .. }) {
+        return Err(ErrorCode::Forbidden);
+    }
+    let workspace = context
+        .and_then(|agent| agent["workspaceId"].as_str())
+        .ok_or(ErrorCode::InvalidMessage)?;
+    scope.contains(Some(workspace))?;
+    Ok(workspace)
+}
+
+/// Require a new-Agent `schedule`'s current provider and mode to be within `permissions`' cap.
+///
+/// A task without a stored mode counts as the provider's default mode. Heartbeats target an
+/// existing Agent and have no mode; schedule tools other than `delete_heartbeat` refuse them.
+/// # Errors
+/// Returns `Forbidden` outside the cap and `InvalidMessage` for a malformed task.
+fn cap_schedule(permissions: &BotPermissions, schedule: &Value) -> Result<(), ErrorCode> {
+    if schedule["target"]["type"] != "new-agent" {
+        return Ok(());
+    }
+    let config = &schedule["target"]["config"];
+    permissions
+        .mode(&text(&config["provider"])?, config["modeId"].as_str())
+        .map(drop)
+        .map_err(|_| ErrorCode::Forbidden)
+}
+
+/// Cap the provider and mode an `update_schedule` patch leaves on `schedule`.
+///
+/// `mode: null` and a provider change without a mode select the provider's default mode, which
+/// is written into the patch; patches without `mode` or `provider` keep the checked current mode.
+/// # Errors
+/// Returns `Forbidden` outside the cap and `InvalidMessage` for a malformed provider.
+fn cap_schedule_update(
+    permissions: &BotPermissions,
+    schedule: &Value,
+    arguments: &mut Value,
+) -> Result<(), ErrorCode> {
+    let provider = match arguments.get("provider") {
+        Some(patch) => creation::provider_model(patch, false)?.0.to_owned(),
+        None if arguments.get("mode").is_some() => text(&schedule["target"]["config"]["provider"])?,
+        None => return Ok(()),
+    };
+    let requested = arguments.get("mode").and_then(Value::as_str);
+    let mode = permissions
+        .mode(&provider, requested)
+        .map_err(|_| ErrorCode::Forbidden)?;
+    arguments["mode"] = json!(mode);
+    Ok(())
+}
+
 /// Refuse every `settings.features` entry except `fast_mode`.
 fn features(arguments: &Value) -> Result<(), ErrorCode> {
     let refused = arguments
@@ -378,15 +497,19 @@ async fn terminal(state: &Shared, scope: &Scope, arguments: &mut Value) -> Resul
     active(state, &workspace).await.map(drop)
 }
 
-/// Resolve schedule `arguments.id` and confine it to the scoped Workspaces.
-async fn schedule(state: &Shared, scope: &Scope, arguments: &mut Value) -> Result<(), ErrorCode> {
-    let snapshot = rpc::execute(
+/// Resolve schedule `arguments.id`, confine it to the scoped Workspaces and return its document.
+async fn schedule(
+    state: &Shared,
+    scope: &Scope,
+    arguments: &mut Value,
+) -> Result<Value, ErrorCode> {
+    let mut snapshot = rpc::execute(
         state,
         "schedule.inspect.request",
         json!({"scheduleId":arguments["id"]}),
     )
     .await?;
-    let schedule = &snapshot["schedule"];
+    let schedule = snapshot["schedule"].take();
     let id = text(&schedule["id"])?;
     retarget(
         scope,
@@ -395,9 +518,8 @@ async fn schedule(state: &Shared, scope: &Scope, arguments: &mut Value) -> Resul
         &id,
         arguments,
     )?;
-    active(state, &text(&schedule["workspaceId"])?)
-        .await
-        .map(drop)
+    active(state, &text(&schedule["workspaceId"])?).await?;
+    Ok(schedule)
 }
 
 /// Return the descriptor of unarchived Workspace `id`.

@@ -106,6 +106,11 @@ pub struct Schedule {
     /// Immutable owning Workspace. Absent only in documents created before Workspace ownership.
     #[serde(default)]
     pub workspace_id: Option<String>,
+    /// Root Workspace of the Bot whose scoped caller created the task; set only at creation.
+    ///
+    /// Every occurrence re-checks that Bot's current grant and runs new Agents in its scope.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bot_scope: Option<String>,
     /// Optional display name.
     pub name: Option<String>,
     /// Prompt submitted for every occurrence.

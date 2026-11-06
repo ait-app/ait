@@ -452,13 +452,14 @@ fn compose_background(
         registries.0,
         registries.1,
         execution.clone(),
-        scopes,
+        scopes.clone(),
     )?;
     let schedules = schedule::compose(
         &config.data_dir,
         execution.clone(),
         directory.clone(),
         worktrees.clone(),
+        scopes,
     )?;
     Ok((schedules, bots))
 }

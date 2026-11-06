@@ -284,3 +284,53 @@ fn list_sorts_newest_first_without_leaking_occurrence_history() {
             .all(|value| value.get("runs").is_none())
     );
 }
+
+#[test]
+fn bot_scope_is_persisted_and_immutable() {
+    let (mut engine, store) = fixture();
+    let mut params = input();
+    params["botScope"] = json!("wks_a");
+    let created = engine
+        .request("schedule.create.request", params, now())
+        .unwrap();
+    assert_eq!(created["schedule"]["botScope"], "wks_a");
+    let id = created["schedule"]["id"].as_str().unwrap().to_owned();
+    let inspected = engine
+        .request("schedule.inspect.request", json!({"scheduleId":id}), now())
+        .unwrap();
+    assert_eq!(inspected["schedule"]["botScope"], "wks_a");
+
+    for scope in [json!("wks_b"), Value::Null] {
+        assert!(matches!(
+            engine.request(
+                "schedule.update.request",
+                json!({"scheduleId":id,"botScope":scope}),
+                now()
+            ),
+            Err(Error::Invalid)
+        ));
+    }
+    let mut blank = input();
+    blank["botScope"] = json!(" ");
+    assert!(matches!(
+        engine.request("schedule.create.request", blank, now()),
+        Err(Error::Invalid)
+    ));
+
+    let reopened = Engine::open(Box::new(store.clone()), now()).unwrap();
+    assert_eq!(
+        reopened.inspect(&id).unwrap().bot_scope.as_deref(),
+        Some("wks_a")
+    );
+    let plain = create(&mut engine);
+    let listed = engine
+        .request("schedule.list.request", json!({}), now())
+        .unwrap();
+    let unscoped = listed["schedules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|schedule| schedule["id"] == plain.as_str())
+        .unwrap();
+    assert!(unscoped.get("botScope").is_none(), "{unscoped}");
+}
