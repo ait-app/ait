@@ -8,7 +8,7 @@ use crate::connection::rpc;
 
 use super::Scope;
 use super::catalog::Tool;
-use super::scope;
+use super::scope::{self, Failure};
 
 pub(super) mod creation;
 mod queries;
@@ -17,15 +17,15 @@ mod schedules;
 /// Execute `tool` with validated `arguments` using `state`, confining them to `scope` for scoped
 /// credentials and inheriting placement and parentage from the resolved `caller` Agent.
 /// # Errors
-/// Returns scope violations, reserved labels, invalid placement, unavailable services or existing
-/// capability RPC failures.
+/// Returns scope violations and guided scope refusals, reserved labels, invalid placement,
+/// unavailable services or existing capability RPC failures.
 pub(super) async fn execute(
     state: &Shared,
     tool: &Tool,
     mut arguments: Value,
     scope: Option<&Scope>,
     caller: Option<&Value>,
-) -> Result<Value, ErrorCode> {
+) -> Result<Value, Failure> {
     match scope {
         Some(scope) => scope::confine(state, scope, &tool.name, &mut arguments, caller).await?,
         None if matches!(tool.name.as_str(), "create_agent" | "update_agent") => {

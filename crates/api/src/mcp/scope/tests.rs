@@ -325,23 +325,38 @@ fn schedule_patches_keep_the_effective_mode_within_the_cap() {
     let task = |config: Value| json!({"target":{"type":"new-agent","config":config}});
     let unset = task(json!({"provider":"codex"}));
     let escalated = task(json!({"provider":"codex","modeId":"full-access"}));
-    assert_eq!(cap_schedule(&permissions, &unset), Ok(()));
+    let mut bot_unset = unset.clone();
+    bot_unset["botScope"] = json!(ROOT);
+    // Only a Bot-created task runs a missing mode at the cap's default.
+    assert_eq!(
+        cap_schedule(&permissions, &unset),
+        Err(Failure::Refused(UNSET_MODE))
+    );
+    assert_eq!(cap_schedule(&permissions, &bot_unset), Ok(()));
+    assert_eq!(
+        cap_schedule(&permissions, &task(json!({"provider":"claude"}))),
+        Err(Failure::Code(ErrorCode::Forbidden))
+    );
     assert_eq!(
         cap_schedule(&permissions, &escalated),
-        Err(ErrorCode::Forbidden)
+        Err(Failure::Code(ErrorCode::Forbidden))
     );
     let heartbeat = json!({"target":{"type":"agent","agentId":"agent"}});
     assert_eq!(cap_schedule(&permissions, &heartbeat), Ok(()));
 
-    for (patch, mode) in [
-        (json!({"mode":null}), json!("auto")),
-        (json!({"mode":"read-only"}), json!("read-only")),
-        (json!({"provider":"codex/next"}), json!("auto")),
-        (json!({"model":"next"}), Value::Null),
-        (json!({"prompt":"changed"}), Value::Null),
+    for (patch, checked, mode) in [
+        (json!({"mode":null}), true, json!("auto")),
+        (json!({"mode":"read-only"}), true, json!("read-only")),
+        (json!({"provider":"codex/next"}), true, json!("auto")),
+        (json!({"model":"next"}), false, Value::Null),
+        (json!({"prompt":"changed"}), false, Value::Null),
     ] {
         let mut patched = patch.clone();
-        cap_schedule_update(&permissions, &unset, &mut patched).unwrap();
+        assert_eq!(
+            cap_schedule_update(&permissions, &escalated, &mut patched),
+            Ok(checked),
+            "{patch}"
+        );
         assert_eq!(patched["mode"], mode, "{patch}");
     }
     for patch in [

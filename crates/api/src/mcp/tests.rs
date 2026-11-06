@@ -128,7 +128,7 @@ fn tool_errors_are_safe_and_visible_while_structured_results_keep_text() {
     ] {
         assert_eq!(tool_result(Ok(value))["isError"], true);
     }
-    let failure = tool_result(Err(model::ErrorCode::InvalidMessage));
+    let failure = tool_result(Err(model::ErrorCode::InvalidMessage.into()));
     assert_eq!(failure["isError"], true);
     assert!(failure.get("structuredContent").is_none());
     for id in [Value::Null, json!(true), json!(1.2), json!({})] {

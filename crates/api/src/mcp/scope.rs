@@ -19,6 +19,36 @@ use super::tools::creation;
 
 /// The only native feature a scoped caller may set; others can change execution permissions.
 const ALLOWED_FEATURE: &str = "fast_mode";
+/// Refusal for running or keeping a task without a stored mode, whose native default the cap
+/// cannot vouch for.
+const UNSET_MODE: &str = "This schedule has no explicit mode, so it would run at the \
+    provider's native default, which may exceed the Workspace Bot mode cap; set an allowed mode \
+    with update_schedule first";
+
+/// Why a tool call failed: a stable error code, or a scope refusal that guides the caller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Failure {
+    /// A stable error code; its message is the result text.
+    Code(ErrorCode),
+    /// A scope refusal whose text tells the caller how to proceed.
+    Refused(&'static str),
+}
+
+impl From<ErrorCode> for Failure {
+    fn from(code: ErrorCode) -> Self {
+        Self::Code(code)
+    }
+}
+
+impl Failure {
+    /// The text returned to the caller.
+    pub(super) fn message(self) -> &'static str {
+        match self {
+            Self::Code(code) => code.message(),
+            Self::Refused(text) => text,
+        }
+    }
+}
 
 /// A scoped credential's identity with the grant read once for the current request.
 #[derive(Debug)]
@@ -126,18 +156,19 @@ fn rule(tool: &str) -> Option<Rule> {
 /// Created schedules and heartbeats record the root as their Bot scope.
 /// # Errors
 /// Returns `Forbidden` for unlisted tools, `cwd`, foreign or archived Workspaces, reserved
-/// labels, features or modes outside the cap (including a schedule's current mode), and Bot
-/// heartbeats; `ResourceExhausted` when the Bot already owns its maximum of worktrees; and
-/// propagates target lookup failures.
+/// labels, features or modes outside the cap (including a schedule's effective mode), and Bot
+/// heartbeats; a guided refusal for running or keeping a mode-less schedule not created by a
+/// Bot; `ResourceExhausted` when the Bot already owns its maximum of worktrees; and propagates
+/// target lookup failures.
 pub(super) async fn confine(
     state: &Shared,
     scope: &Scope,
     tool: &str,
     arguments: &mut Value,
     context: Option<&Value>,
-) -> Result<(), ErrorCode> {
+) -> Result<(), Failure> {
     let root = scope.caller.root.as_str();
-    match admit(tool, arguments)? {
+    let confined = match admit(tool, arguments)? {
         Rule::Open | Rule::Listing => Ok(()),
         Rule::RootDirectory => {
             arguments["cwd"] = active(state, root).await?["workspaceDirectory"].take();
@@ -188,11 +219,16 @@ pub(super) async fn confine(
         Rule::Terminal => terminal(state, scope, arguments).await,
         rule @ (Rule::Schedule | Rule::ScheduleControl | Rule::UpdateSchedule) => {
             let schedule = schedule(state, scope, arguments).await?;
-            if rule != Rule::Schedule {
-                cap_schedule(&scope.grant.permissions, &schedule)?;
-            }
-            if rule == Rule::UpdateSchedule {
-                cap_schedule_update(&scope.grant.permissions, &schedule, arguments)?;
+            let permissions = &scope.grant.permissions;
+            match rule {
+                Rule::ScheduleControl => cap_schedule(permissions, &schedule)?,
+                // An update is checked by the configuration it leaves behind.
+                Rule::UpdateSchedule
+                    if !cap_schedule_update(permissions, &schedule, arguments)? =>
+                {
+                    cap_schedule(permissions, &schedule)?;
+                }
+                _ => {}
             }
             Ok(())
         }
@@ -200,7 +236,8 @@ pub(super) async fn confine(
             let root = active(state, root).await?;
             rewrite_create_workspace(scope, &root, arguments)
         }
-    }
+    };
+    Ok(confined?)
 }
 
 /// Record a worktree created by a scoped `create_workspace` in the Bot's scope.
@@ -390,43 +427,53 @@ fn heartbeat_workspace<'a>(
 
 /// Require a new-Agent `schedule`'s current provider and mode to be within `permissions`' cap.
 ///
-/// A task without a stored mode counts as the provider's default mode. Heartbeats target an
-/// existing Agent and have no mode; schedule tools other than `delete_heartbeat` refuse them.
+/// A Bot-created task (`botScope`) without a stored mode runs at the cap's default mode, so only
+/// its provider must be listed. Any other mode-less task would run at the provider's native
+/// default, which the cap cannot vouch for. Heartbeat targets have no mode and pass here;
+/// `operate` rejects them for running, resuming and updating.
 /// # Errors
-/// Returns `Forbidden` outside the cap and `InvalidMessage` for a malformed task.
-fn cap_schedule(permissions: &BotPermissions, schedule: &Value) -> Result<(), ErrorCode> {
+/// Returns `Forbidden` outside the cap, the `UNSET_MODE` refusal for a mode-less task not created
+/// by a Bot, and `InvalidMessage` for a malformed task.
+fn cap_schedule(permissions: &BotPermissions, schedule: &Value) -> Result<(), Failure> {
     if schedule["target"]["type"] != "new-agent" {
         return Ok(());
     }
     let config = &schedule["target"]["config"];
+    let mode = config["modeId"].as_str();
     permissions
-        .mode(&text(&config["provider"])?, config["modeId"].as_str())
-        .map(drop)
-        .map_err(|_| ErrorCode::Forbidden)
+        .mode(&text(&config["provider"])?, mode)
+        .map_err(|_| ErrorCode::Forbidden)?;
+    if mode.is_none() && schedule.get("botScope").is_none() {
+        return Err(Failure::Refused(UNSET_MODE));
+    }
+    Ok(())
 }
 
-/// Cap the provider and mode an `update_schedule` patch leaves on `schedule`.
+/// Cap the provider and mode an `update_schedule` patch sets on `schedule`.
 ///
 /// `mode: null` and a provider change without a mode select the provider's default mode, which
-/// is written into the patch; patches without `mode` or `provider` keep the checked current mode.
+/// is written into the patch, so a patched task always stores an allowed mode.
+/// # Returns
+/// Whether the patch sets a provider or mode and was checked; otherwise the current
+/// configuration stays in effect and must be checked by the caller.
 /// # Errors
 /// Returns `Forbidden` outside the cap and `InvalidMessage` for a malformed provider.
 fn cap_schedule_update(
     permissions: &BotPermissions,
     schedule: &Value,
     arguments: &mut Value,
-) -> Result<(), ErrorCode> {
+) -> Result<bool, ErrorCode> {
     let provider = match arguments.get("provider") {
         Some(patch) => creation::provider_model(patch, false)?.0.to_owned(),
         None if arguments.get("mode").is_some() => text(&schedule["target"]["config"]["provider"])?,
-        None => return Ok(()),
+        None => return Ok(false),
     };
     let requested = arguments.get("mode").and_then(Value::as_str);
     let mode = permissions
         .mode(&provider, requested)
         .map_err(|_| ErrorCode::Forbidden)?;
     arguments["mode"] = json!(mode);
-    Ok(())
+    Ok(true)
 }
 
 /// Refuse every `settings.features` entry except `fast_mode`.

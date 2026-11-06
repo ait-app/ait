@@ -23,7 +23,7 @@ mod socket;
 mod tools;
 mod validation;
 
-use scope::Scope;
+use scope::{Failure, Scope};
 
 /// Canonical agent orchestration endpoint on the existing daemon listener.
 pub(super) const PATH: &str = "/mcp/agents";
@@ -289,9 +289,9 @@ async fn call(
     state.tasks.spawn(async move {
         let _permit = permit;
         let result = tokio::select! {
-            () = task_state.cancellation.cancelled() => Ok(tool_result(Err(model::ErrorCode::ServerDraining))),
+            () = task_state.cancellation.cancelled() => Ok(tool_result(Err(model::ErrorCode::ServerDraining.into()))),
             result = tokio::time::timeout(CALL_TIMEOUT, invoke(&task_state, tool, arguments, scope.as_ref(), caller.as_deref())) => {
-                result.unwrap_or_else(|_| Ok(tool_result(Err(model::ErrorCode::ResourceExhausted))))
+                result.unwrap_or_else(|_| Ok(tool_result(Err(model::ErrorCode::ResourceExhausted.into()))))
             }
         };
         let _ = sender.send(result);
@@ -315,7 +315,7 @@ async fn invoke(
     let context = match caller {
         Some(id) => match context(state, id).await {
             Ok(agent) => Some(agent),
-            Err(error) => return Ok(tool_result(Err(error))),
+            Err(error) => return Ok(tool_result(Err(error.into()))),
         },
         None => None,
     };
@@ -364,7 +364,7 @@ async fn context(state: &Shared, id: &str) -> Result<Value, model::ErrorCode> {
     }
 }
 
-fn tool_result(result: Result<Value, model::ErrorCode>) -> Value {
+fn tool_result(result: Result<Value, Failure>) -> Value {
     match result {
         Ok(value) => {
             let failed = value.get("error").is_some_and(|error| !error.is_null())
