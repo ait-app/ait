@@ -8,8 +8,8 @@ use crate::ports::agent_session::AgentSessionSpec;
 use crate::protocol::agent_config::{ConfigPatch, NullableSetting};
 use crate::protocol::agent_execution::ActiveTurnBehavior;
 use crate::protocol::prompt::AgentPrompt;
-use crate::service::agent_manager::AgentRegistration;
-use crate::service::bot_execution::Action;
+use crate::service::agent_manager::{AgentManagerError, AgentRegistration};
+use crate::service::bot_execution::{Action, BotSessionSupport, Created, InstructionDelivery};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -29,14 +29,7 @@ impl ExecutionState {
                 config,
                 instructions,
             } => {
-                if let Some(record) = existing {
-                    if record.archived_at.is_some() {
-                        return Err(ErrorCode::InvalidMessage);
-                    }
-                    self.refresh_bot_config(&record, instructions).await?;
-                    return Ok(json!({"created":false}));
-                }
-                self.create_bot_session(request.owner, agent_id, config, instructions)
+                self.open_bot_session(request.owner, existing, agent_id, config, instructions)
                     .await
             }
             Action::Send {
@@ -106,34 +99,64 @@ impl ExecutionState {
         }
     }
 
+    /// Create the owner's session, or converge the existing one onto the provider's Bot profile.
+    async fn open_bot_session(
+        &mut self,
+        owner: SessionOwner,
+        existing: Option<PersistedAgentRuntimeRecord>,
+        agent: String,
+        config: ExecutionConfig,
+        instructions: String,
+    ) -> Result<Value, ErrorCode> {
+        let support = self
+            .manager
+            .bot_session_support(
+                existing
+                    .as_ref()
+                    .map_or(&config.provider, |record| &record.provider),
+            )
+            .map_err(|error| map_manager(&error))?;
+        let profile = Profile::new(&support, instructions);
+        let (created, reset_required) = if let Some(record) = existing {
+            if record.archived_at.is_some() {
+                return Err(ErrorCode::InvalidMessage);
+            }
+            (false, self.refresh_bot_config(&record, &profile).await?)
+        } else {
+            self.create_bot_session(owner, agent, config, profile)
+                .await?;
+            (true, false)
+        };
+        serde_json::to_value(Created {
+            created,
+            instruction_delivery: support.instructions,
+            reset_required,
+        })
+        .map_err(|_| ErrorCode::AgentIo)
+    }
+
+    /// Converge an existing session onto `profile`; returns whether only a reset can.
     async fn refresh_bot_config(
         &self,
         record: &PersistedAgentRuntimeRecord,
-        instructions: String,
-    ) -> Result<(), ErrorCode> {
-        let config = record.config.as_ref();
-        let mode = bot_mode_override(
-            &record.provider,
-            config.and_then(|config| config.mode_id.as_deref()),
-        );
-        if mode.is_none()
-            && config.and_then(|config| config.system_prompt.as_ref()) == Some(&instructions)
-        {
-            return Ok(());
+        profile: &Profile,
+    ) -> Result<bool, ErrorCode> {
+        let Some(patch) = profile.patch(
+            record
+                .config
+                .as_ref()
+                .unwrap_or(&StoredAgentConfig::default()),
+        ) else {
+            return Ok(true);
+        };
+        if patch == ConfigPatch::default() {
+            return Ok(false);
         }
-        self.manager
-            .configure(
-                &record.id,
-                &ConfigPatch {
-                    system_prompt: NullableSetting::Set(instructions),
-                    mode_id: mode.map_or(NullableSetting::Unchanged, |mode| {
-                        NullableSetting::Set(mode.into())
-                    }),
-                    ..ConfigPatch::default()
-                },
-            )
-            .await
-            .map_err(|error| map_manager(&error))
+        match self.manager.configure(&record.id, &patch).await {
+            Ok(()) => Ok(false),
+            Err(AgentManagerError::InvalidRequest) => Ok(true),
+            Err(error) => Err(map_manager(&error)),
+        }
     }
 
     fn validate_bot(
@@ -175,14 +198,9 @@ impl ExecutionState {
         &mut self,
         owner: SessionOwner,
         agent: String,
-        mut config: ExecutionConfig,
-        instructions: String,
-    ) -> Result<Value, ErrorCode> {
-        // Native auto-review can grant requests before they reach our permission callback.
-        // Route new requests through Bot denial instead of native automatic reviewers.
-        if let Some(mode) = bot_mode_override(&config.provider, config.mode_id.as_deref()) {
-            config.mode_id = Some(mode.into());
-        }
+        config: ExecutionConfig,
+        profile: Profile,
+    ) -> Result<(), ErrorCode> {
         let workspace = self
             .workspaces
             .get(&owner.workspace_id)
@@ -196,9 +214,10 @@ impl ExecutionState {
                     cwd: workspace.cwd,
                     config: StoredAgentConfig {
                         model: config.model,
-                        mode_id: config.mode_id,
+                        mode_id: profile.mode_id.map(str::to_owned),
                         thinking_option_id: config.thinking,
-                        system_prompt: Some(instructions),
+                        tool_policy: profile.tool_policy,
+                        system_prompt: profile.system_prompt,
                         ..StoredAgentConfig::default()
                     },
                     confinement: None,
@@ -215,7 +234,7 @@ impl ExecutionState {
             )
             .await
             .map_err(|error| map_manager(&error))?;
-        Ok(json!({"created":true}))
+        Ok(())
     }
     async fn close_bot_session(&mut self, agent: &str, exists: bool) -> Result<(), ErrorCode> {
         if exists {
@@ -236,12 +255,67 @@ impl ExecutionState {
     }
 }
 
-fn bot_mode_override(provider: &str, mode: Option<&str>) -> Option<&'static str> {
-    match (provider, mode) {
-        ("codex", Some("auto-review")) => Some("auto"),
-        ("claude", Some("auto")) => Some("default"),
-        _ => None,
+/// Native settings a Bot's own session must hold on its provider.
+///
+/// The Bot's `ExecutionConfig.mode_id` is ignored: the session runs in the provider's strictest
+/// read-only mode, or its default mode where none exists, so writes that need approval are
+/// denied automatically (ADR-145).
+#[derive(Debug)]
+struct Profile {
+    mode_id: Option<&'static str>,
+    tool_policy: Option<Value>,
+    system_prompt: Option<String>,
+}
+
+impl Profile {
+    fn new(support: &BotSessionSupport, instructions: String) -> Self {
+        Self {
+            mode_id: support.read_only_mode,
+            tool_policy: support.tool_preapproval.then(preapproved_ait_tools),
+            system_prompt: (support.instructions == InstructionDelivery::SystemPrompt)
+                .then_some(instructions),
+        }
     }
+
+    /// The patch converging `current` onto this profile, or `None` when only a new session can.
+    ///
+    /// A mode cannot be cleared through configuration, and turn-prefix providers may reject
+    /// prompt changes after opening, so their stored prompt is never patched.
+    fn patch(&self, current: &StoredAgentConfig) -> Option<ConfigPatch> {
+        let mode_id = if self.mode_id == current.mode_id.as_deref() {
+            NullableSetting::Unchanged
+        } else {
+            NullableSetting::Set(self.mode_id?.to_owned())
+        };
+        let tool_policy = if self.tool_policy == current.tool_policy {
+            NullableSetting::Unchanged
+        } else {
+            self.tool_policy
+                .clone()
+                .map_or(NullableSetting::Clear, NullableSetting::Set)
+        };
+        let system_prompt = match &self.system_prompt {
+            Some(prompt) if current.system_prompt.as_ref() != Some(prompt) => {
+                NullableSetting::Set(prompt.clone())
+            }
+            Some(_) | None => NullableSetting::Unchanged,
+        };
+        Some(ConfigPatch {
+            mode_id,
+            tool_policy,
+            system_prompt,
+            ..ConfigPatch::default()
+        })
+    }
+}
+
+/// Exact preapproval of every `ait` tool a Bot may ever be granted; MCP routing enforces the
+/// Bot's current grants on each request, so settings changes never rewrite this policy.
+fn preapproved_ait_tools() -> Value {
+    let preapproved: Vec<Value> = domain::bot::permissions::grantable_tools()
+        .map(|tool| json!({"kind":"mcp","server":crate::service::agent_mcp::SERVER,"tool":tool}))
+        .collect();
+    json!({"preapproved":preapproved})
 }
 
 #[cfg(test)]

@@ -70,3 +70,46 @@ fn bot_state_serializes_as_kind_tagged_snake_case() {
     }
     assert!(serde_json::from_value::<BotState>(json!({"kind":"enabled"})).is_err());
 }
+
+#[test]
+fn phase_two_bot_json_loads_with_default_permissions() {
+    let json = serde_json::json!({
+        "id": BotId::generate(),
+        "workspaceId": "w1",
+        "execution": {"provider": "codex", "model": null, "modeId": null, "thinking": null},
+        "builtinChannelId": ChannelId::generate(),
+        "state": {"kind": "active"},
+        "createdAt": "2026-01-01T00:00:00Z",
+    });
+    let bot: super::Bot = serde_json::from_value(json).unwrap();
+    assert_eq!(
+        bot.permissions,
+        super::permissions::BotPermissions::default()
+    );
+    assert!(bot.workspaces.is_empty());
+    let value = serde_json::to_value(&bot).unwrap();
+    assert_eq!(
+        value["permissions"],
+        serde_json::json!({"groups": ["observe", "agents", "stop", "schedules"], "modes": {}})
+    );
+}
+
+#[test]
+fn phase_two_conversation_json_loads_without_an_instructions_digest() {
+    let json = serde_json::json!({
+        "id": ConversationId::generate(),
+        "botId": BotId::generate(),
+        "channelId": ChannelId::generate(),
+        "peer": "owner",
+        "sender": "owner",
+        "thread": null,
+        "sessionId": "session-1",
+        "generation": 0,
+        "execution": {"provider": "codex", "model": null, "modeId": null, "thinking": null},
+        "nextSequence": 1,
+    });
+
+    let conversation: super::Conversation = serde_json::from_value(json).unwrap();
+
+    assert_eq!(conversation.instructions_digest, None);
+}

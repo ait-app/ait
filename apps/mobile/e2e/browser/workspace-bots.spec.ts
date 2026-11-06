@@ -30,6 +30,13 @@ async function submitSetupWithOfflineModel(page: Page): Promise<void> {
     .getByTestId("combobox-desktop-container")
     .getByText("Offline model", { exact: true })
     .click();
+  // The permission section shows the defaults and both risk warnings; submit keeps them.
+  await expect(page.getByTestId("bot-permissions")).toBeVisible();
+  await expect(page.getByTestId("bot-group-observe")).toBeVisible();
+  await expect(page.getByTestId("bot-group-agents")).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("bot-group-scripts")).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByTestId("bot-mode-cap-warning")).toBeVisible();
+  await expect(page.getByTestId("bot-command-reach-warning")).toBeVisible();
   await page.getByTestId("bot-setup-submit").click();
   await expect(page.getByTestId("bot-chat")).toBeVisible();
 }

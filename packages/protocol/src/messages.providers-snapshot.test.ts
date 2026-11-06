@@ -10,6 +10,23 @@ import {
 } from "./messages.js";
 
 describe("provider snapshot message schemas", () => {
+  test("keeps bot session support in provider snapshot entries", () => {
+    const entry = ProviderSnapshotEntrySchema.parse({
+      provider: "minimax",
+      status: "ready",
+      botSession: {
+        instructions: "turn_prefix",
+        readOnlyMode: null,
+        toolPreapproval: false,
+        aitTools: true,
+      },
+    });
+    expect(entry.botSession?.toolPreapproval).toBe(false);
+    expect(ProviderSnapshotEntrySchema.parse({ provider: "x", status: "ready" }).botSession).toBe(
+      undefined,
+    );
+  });
+
   test("preserves explicit native session import support", () => {
     for (const supportsSessionImport of [true, false]) {
       expect(

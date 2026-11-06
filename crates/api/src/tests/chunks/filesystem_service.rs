@@ -9,7 +9,7 @@ use filesystem::git::local::{checkout::LocalCheckout, git_fetch::LocalGitFetch};
 use filesystem::git::service::{checkout::Checkout, git_fetch::GitFetch};
 
 /// Install a complete filesystem service with all storage confined to the test `root`.
-pub(super) fn service(root: &Path) -> filesystem::Service {
+pub(in crate::tests) fn service(root: &Path) -> filesystem::Service {
     filesystem::Service::new(filesystem::Dependencies {
         checkout: Checkout::new(Box::new(LocalCheckout::new(root.join("worktrees")))),
         forge: Forge::new(Box::new(LocalForge::new())),

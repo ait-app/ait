@@ -1,10 +1,11 @@
 # ADR-213：单 Workspace 管理者 Bot 与 v2 接口
 
-- 状态：接受（阶段 1 已随 0.1.30 发布；阶段 2 客户端见 ADR-214）
+- 状态：接受（阶段 1 已随 0.1.30 发布；阶段 2 客户端见 ADR-214；阶段 3 权限与 MCP 见 ADR-215）
 - 日期：2026-11-05
 - 关系：取代 [ADR-139](adr-139-workspace-bots-and-owned-channels.md) 中多 Bot、人格和 `botId` 寻址（第 1、2、5 条相关部分）以及记忆位置（第 7 条）；
   修订 [ADR-141](../clients/adr-141-experimental-workspace-bots.md) 的标签页身份与能力名（客户端见 [ADR-214](../clients/adr-214-workspace-bot-tab-v2.md)）；
   取代 [ADR-145](adr-145-bot-permission-denial.md) 第 3 条（删除 `bot.permission.resolve`），其第 1、2、4、5 条的自动拒绝规则继续有效。
+- 后续修订：[ADR-215](adr-215-bot-permissions-and-scoped-mcp.md) 增加权限与作用域 MCP 工具，修订 ADR-145 第 4 条，并让 Bot 可写记忆（第 6 条）。
 - 计划：[Workspace Bot 管理者重设计](../../plans/workspace-bot-manager.md)、[阶段 1 计划](../../plans/workspace-bot-manager-phase-1.md)。
 
 ## 背景
@@ -35,7 +36,7 @@
    `bot.archive`、`bot.permission.resolve`。访客对 `bot.get`、`bot.history.get`、`bot.memory.get` 只读，其余写入方法被拒绝。
 5. **内置管理者指令。** 内置指令（`crates/bot/src/instructions.rs`）取代用户编写的人格；Conversation 不再保存 `instructions`。
 6. **记忆。** 存储于 `<data>/workspace-bots/memory/<sha256(workspaceId) 十六进制>.md`，上限 32 KiB，不再写入 Workspace 目录。
-   客户端通过 `bot.memory.update` 并携带 revision 更新。Bot 自身暂不能写记忆，工具在阶段 3 加入。
+   客户端通过 `bot.memory.update` 并携带 revision 更新。Bot 自身通过 `bot_memory_read`／`bot_memory_update` 读写记忆（见 ADR-215）。
 7. **旧数据丢弃。** 新存储根为 `<data>/workspace-bots/`。daemon 启动时关闭旧根 `<data>/bots/` 中记录的隐藏会话并删除该目录，
    不做迁移。Workspace 内旧的 `.ait/bots/` 记忆文件不再读取，用户可手动删除。
 
@@ -43,8 +44,8 @@
 
 - 这是不兼容变更：升级后旧 Bot、Channel、Conversation 与历史全部丢失，需要通过 `bot.setup` 重新配置。
 - 客户端 Bot 标签页已按 `workspace-bots-v2` 重写，见 [ADR-214](../clients/adr-214-workspace-bot-tab-v2.md)；旧 Host 只提供 v1 时客户端显示升级提示。
-- 阶段 2（客户端标签页与设置向导）已实现；阶段 3（权限与 MCP 工具、Bot 写记忆）、阶段 4（来源标记与通知）尚未实现。
-  在此之前 [ADR-145](adr-145-bot-permission-denial.md) 的权限请求自动拒绝仍然适用。
+- 阶段 2（客户端标签页与设置向导）与阶段 3（权限与 MCP 工具、Bot 写记忆，见 [ADR-215](adr-215-bot-permissions-and-scoped-mcp.md)）已实现；阶段 4（来源标记与通知）尚未实现。
+  [ADR-145](adr-145-bot-permission-denial.md) 的权限请求自动拒绝仍然适用。
 - 记忆脱离 Workspace 目录后不再随 worktree 删除，也不会进入版本控制；其生命周期由移除与归档规则管理。
 - 退役 Bot 的历史留在磁盘上但不可通过接口访问；清理这些历史或提供只读访问留待后续工作。
 

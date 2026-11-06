@@ -1,3 +1,4 @@
+use domain::bot::permissions::BotPermissions;
 use domain::bot::{ChannelConfig, ExecutionConfig};
 use domain::{BotTurnId, ChannelId, ConversationId};
 use serde::Deserialize;
@@ -14,6 +15,8 @@ pub(crate) struct Setup {
     pub(crate) execution: ExecutionConfig,
     #[serde(default)]
     pub(crate) clear_memory: bool,
+    #[serde(default)]
+    pub(crate) permissions: Option<BotPermissions>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -25,6 +28,12 @@ pub(crate) struct WorkspaceRequest {
 pub(crate) struct Update {
     pub(crate) workspace_id: String,
     pub(crate) execution: ExecutionConfig,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct PermissionsUpdate {
+    pub(crate) workspace_id: String,
+    pub(crate) permissions: BotPermissions,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

@@ -562,7 +562,7 @@ impl IntoResponse for ApiError {
 
 async fn guard(
     State(state): State<Arc<Shared>>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Result<Response, ApiError> {
     let destination_authorities;
@@ -606,7 +606,8 @@ async fn guard(
             }
             state.browser_auth.consume(request.headers())?;
         } else if request.uri().path() == mcp::PATH {
-            mcp::authenticate(&state, request.headers())?;
+            let principal = mcp::authenticate(&state, request.headers())?;
+            request.extensions_mut().insert(principal);
         } else {
             auth::authenticate(request.headers(), &state.token)?;
         }

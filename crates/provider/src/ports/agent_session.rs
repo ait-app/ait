@@ -9,6 +9,8 @@ use std::time::Duration;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 
+use crate::service::bot_execution::{BotSessionSupport, InstructionDelivery};
+
 /// Provider failure safe to expose at the application boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub(crate) enum AgentSessionError {
@@ -317,6 +319,19 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
     /// Adapters that ignore the field must keep the default so sandboxed launches fail closed.
     fn supports_write_confinement(&self) -> bool {
         false
+    }
+
+    /// How a Bot's own hidden session is configured on this adapter.
+    ///
+    /// The default delivers instructions as a turn prefix, uses the provider's default mode
+    /// and preapproves nothing, so approval-gated `ait` tools are denied automatically.
+    fn bot_session_support(&self) -> BotSessionSupport {
+        BotSessionSupport {
+            instructions: InstructionDelivery::TurnPrefix,
+            read_only_mode: None,
+            tool_preapproval: false,
+            ait_tools: self.supports_agent_mcp(),
+        }
     }
 
     /// Return the total catalog budget, including queueing and availability checks.

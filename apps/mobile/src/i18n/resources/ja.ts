@@ -16,6 +16,37 @@ export const ja: TranslationResources = {
   },
   onlineService: en.onlineService,
   bots: {
+    modeCapWarning:
+      "エージェントがコマンドを実行できるモードでは、このコンピューターの Ait 認証情報を読み取り、Bot の Ait 制限を回避することもできます。エージェントに無人で任せてよい作業にのみ許可してください。",
+    commandReachWarning:
+      "Bot は、あなたが起動したものを含め、このワークスペース内のすべてのエージェントにプロンプトを送信し、設定を変更できます。これらのエージェントは各自の権限を保持するため、Bot のプロンプトは Bot 自身の制限を超える機能に及ぶ可能性があります。",
+    terminalsWarning:
+      "ターミナルはこのコンピューター上でコマンドを実行するため、その Ait 認証情報を読み取り、Bot の Ait 制限を回避できます。エージェントに無人で任せてよい作業にのみ有効にしてください。",
+    noteInstructionsInInput:
+      "このプロバイダーは更新可能なシステムプロンプトに対応していないため、Bot の組み込み指示とメモリは会話の入力に付加されます。",
+    noteNoReadOnlyMode:
+      "このプロバイダーには読み取り専用モードがないため、Bot はデフォルトモードで実行されます。承認が必要な書き込みは自動的に拒否されますが、プロバイダーが承認なしで許可する操作はブロックされず、このコンピューターの Ait 認証情報の読み取りや Bot の Ait 制限の回避も含まれます。",
+    noteToolsNeedApproval:
+      "このプロバイダーは Ait ツールを事前承認できないため、承認が必要な Ait ツール呼び出しは自動的に拒否されます。Bot は会話のみ可能で、エージェントの起動や管理ができない場合があります。",
+    noteNoAitTools:
+      "このプロバイダーは Ait ツール接続に対応していないため、Bot は会話のみ可能です。",
+    permissions: "権限",
+    permissionsHint: "権限の変更は Bot の次のターンから反映されます。",
+    groupObserve: "監視（常に有効）：エージェント、アクティビティ、プロバイダーの表示",
+    groupAgents: "エージェント：エージェントの作成、プロンプト送信、設定変更",
+    groupStop: "停止：エージェントのキャンセルと停止",
+    groupSchedules: "スケジュール：スケジュールの作成と管理",
+    groupScripts: "スクリプト：ワークスペースのスクリプトの実行",
+    groupTerminals: "ターミナル：ターミナルの作成と入力",
+    groupWorkspaces: "ワークスペース：worktree ワークスペースの作成",
+    permissionRiskHint: "コマンドの実行や worktree の作成が可能です。",
+    modeCap: "許可するエージェントモード",
+    modeCapHint:
+      "プロバイダーごとに Bot が使えるモードを選択します。モードを選択しないプロバイダーは使用できません。最初に選択したモードがデフォルトです。",
+    defaultMode: "デフォルトモード",
+    providerUnavailable: "{{provider}}（利用不可）",
+    readOnlyHint:
+      "Bot はプロバイダーが提供する最も厳格なモードで実行され（Claude ではデフォルトモードで、あなた自身の許可ルールは引き続き適用されます）、変更は Bot が起動するエージェントに任せます。",
     title: "Bot",
     chat: "チャット",
     settings: "設定",

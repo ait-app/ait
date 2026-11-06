@@ -6,6 +6,7 @@ pub mod dispatch;
 mod execution;
 mod instructions;
 pub mod legacy;
+pub mod mcp;
 pub mod ports;
 mod protocol;
 pub mod service;

@@ -1,7 +1,8 @@
 use domain::agent_runtime::PersistedAgentRuntimeRecord;
 
 use super::{
-    AgentManager, AgentManagerError, Registration, map_registry, map_session, validate_identity,
+    AgentManager, AgentManagerError, Registration, map_registry, map_session, mcp_subject,
+    validate_identity,
 };
 use crate::ports::agent_session::{AgentResumePurpose, AgentSessionSpec};
 use crate::protocol::agent_config::NullableSetting;
@@ -52,8 +53,11 @@ impl AgentManager {
             .persistence
             .as_ref()
             .ok_or_else(|| AgentManagerError::MissingPersistence(id.clone()))?;
-        let (launch, binding) =
-            self.prepare_mcp(&id, &spec, AgentResumePurpose::Interactive, &record.labels)?;
+        let (launch, binding) = self.prepare_mcp(
+            &mcp_subject(&record),
+            &spec,
+            AgentResumePurpose::Interactive,
+        )?;
         let launch = self.confine(launch, record.workspace_id.as_deref())?;
         let session = super::execution::native(
             &spec.provider,
@@ -61,11 +65,15 @@ impl AgentManager {
             client.resume_session(handle, &launch, AgentResumePurpose::Interactive),
         )
         .await
-        .map_err(map_session)?;
-        let record = self
-            .register_session(&id, session, record, Registration::Create, permit)
-            .await?;
-        Ok(self.retain_mcp(record, binding))
+        .map_err(map_session);
+        let opened = match session {
+            Ok(session) => {
+                self.register_session(&id, session, record, Registration::Create, permit)
+                    .await
+            }
+            Err(error) => Err(error),
+        };
+        self.retain_mcp(&id, opened, binding)
     }
 
     /// Restore an explicitly selected Agent for interactive use, including archived Agents.
@@ -131,10 +139,9 @@ impl AgentManager {
             .ok_or_else(|| AgentManagerError::MissingPersistence(agent_id.to_owned()))?;
         let client = self.available_client(&record.provider).await?;
         let (launch, binding) = self.prepare_mcp(
-            agent_id,
+            &mcp_subject(&record),
             &spec,
             AgentResumePurpose::Interactive,
-            &record.labels,
         )?;
         let launch = self.confine(launch, record.workspace_id.as_deref())?;
         let session = super::execution::native(
@@ -143,17 +150,21 @@ impl AgentManager {
             client.resume_session(handle, &launch, AgentResumePurpose::Interactive),
         )
         .await
-        .map_err(map_session)?;
-        let record = self
-            .register_session(
-                agent_id,
-                session,
-                record,
-                Registration::Restore(overrides),
-                permit,
-            )
-            .await?;
-        Ok(self.retain_mcp(record, binding))
+        .map_err(map_session);
+        let opened = match session {
+            Ok(session) => {
+                self.register_session(
+                    agent_id,
+                    session,
+                    record,
+                    Registration::Restore(overrides),
+                    permit,
+                )
+                .await
+            }
+            Err(error) => Err(error),
+        };
+        self.retain_mcp(agent_id, opened, binding)
     }
 }
 

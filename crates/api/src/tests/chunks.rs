@@ -1,7 +1,7 @@
 use super::*;
 
 mod checkout_refresh;
-mod filesystem_service;
+pub(in crate::tests) mod filesystem_service;
 mod startup_burst;
 
 #[tokio::test]

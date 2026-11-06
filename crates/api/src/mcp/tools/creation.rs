@@ -30,18 +30,28 @@ pub(super) async fn directory(
         return Ok(());
     }
     if let Some(id) = arguments.get("workspaceId") {
-        let workspace =
-            rpc::execute(state, "workspace.get.request", json!({"workspaceId":id})).await?;
-        if !workspace["workspace"]["workspaceDirectory"].is_string() {
-            return Err(ErrorCode::InvalidMessage);
-        }
-        arguments["cwd"] = workspace["workspace"]["workspaceDirectory"].clone();
+        arguments["cwd"] = workspace_directory(state, id).await?;
     } else if let Some(cwd) = caller.and_then(|caller| caller.get("cwd")) {
         arguments["cwd"] = cwd.clone();
     } else {
         return Err(ErrorCode::InvalidMessage);
     }
     Ok(())
+}
+
+/// Return the directory of Workspace `id`.
+/// # Errors
+/// Returns `InvalidMessage` without a directory and propagates Workspace lookup failures.
+pub(in crate::mcp) async fn workspace_directory(
+    state: &Shared,
+    id: &Value,
+) -> Result<Value, ErrorCode> {
+    let mut workspace =
+        rpc::execute(state, "workspace.get.request", json!({"workspaceId":id})).await?;
+    match workspace.pointer_mut("/workspace/workspaceDirectory") {
+        Some(directory) if directory.is_string() => Ok(directory.take()),
+        _ => Err(ErrorCode::InvalidMessage),
+    }
 }
 
 /// Translate `arguments` into an Agent creation, inheriting `caller` context in `state`.
@@ -76,7 +86,7 @@ pub(super) async fn agent(
 /// Split `value` at its first slash, requiring a model when `required_model` is true.
 /// # Errors
 /// Rejects non-text, blank segments or a missing required model.
-pub(super) fn provider_model(
+pub(in crate::mcp) fn provider_model(
     value: &Value,
     required_model: bool,
 ) -> Result<(&str, Option<&str>), ErrorCode> {
@@ -180,7 +190,10 @@ fn worktree(arguments: &mut Value, path: Option<Value>) -> Result<Value, ErrorCo
 /// Return the resolved public Agent snapshot for `id` from `state`.
 /// # Errors
 /// Returns missing Agent or existing lookup failures.
-pub(super) async fn require_success(state: &Shared, id: &Value) -> Result<Value, ErrorCode> {
+pub(in crate::mcp) async fn require_success(
+    state: &Shared,
+    id: &Value,
+) -> Result<Value, ErrorCode> {
     let value = rpc::execute(state, "agent.get.request", json!({"agentId":id})).await?;
     if queries::failed(&value) || !value["agent"].is_object() {
         return Err(ErrorCode::InvalidMessage);

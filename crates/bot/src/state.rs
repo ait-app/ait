@@ -15,6 +15,7 @@ use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
+use crate::mcp::Scopes;
 use crate::protocol::{self, decode};
 
 #[derive(Debug)]
@@ -28,6 +29,7 @@ pub(crate) struct State {
     pub(crate) store: Arc<dyn Store>,
     workspaces: Arc<dyn WorkspaceRegistry>,
     projects: Arc<dyn ProjectRegistry>,
+    scopes: Arc<Scopes>,
     catalog: Catalog,
     conversations: BTreeMap<ConversationId, Conversation>,
     receipts: BTreeMap<BotTurnId, Receipt>,
@@ -47,13 +49,21 @@ impl State {
         store: Arc<dyn Store>,
         workspaces: Arc<dyn WorkspaceRegistry>,
         projects: Arc<dyn ProjectRegistry>,
+        scopes: Arc<Scopes>,
     ) -> Result<Self, ErrorCode> {
-        let catalog = store.catalog().map_err(|_| ErrorCode::BotIo)?;
+        let mut catalog = store.catalog().map_err(|_| ErrorCode::BotIo)?;
         catalog::validate(&catalog)?;
+        // Bots run in their provider's read-only mode; a mode stored by an earlier build is
+        // dropped here and persisted with the next catalog save.
+        for bot in &mut catalog.bots {
+            bot.execution.mode_id = None;
+        }
+        scopes.publish(&catalog);
         let mut state = Self {
             store,
             workspaces,
             projects,
+            scopes,
             catalog,
             conversations: BTreeMap::new(),
             receipts: BTreeMap::new(),
@@ -134,6 +144,7 @@ impl State {
             }
             "bot.setup.request" => self.setup(decode(params)?),
             "bot.update.request" => self.update(decode(params)?),
+            "bot.permissions.update.request" => self.update_permissions(decode(params)?),
             "bot.pause.request" => self.pause(&decode(params)?),
             "bot.resume.request" => self.resume(&decode(params)?),
             "bot.remove.request" => self.remove(&decode(params)?),
@@ -238,6 +249,7 @@ impl State {
             self.frozen = true;
             return Err(ErrorCode::BotIo);
         }
+        self.scopes.publish(&catalog);
         self.catalog = catalog;
         Ok(())
     }
@@ -343,10 +355,19 @@ impl State {
     }
 }
 
+/// Lowercase hex SHA-256 digest of `text`, used for memory revisions and instruction digests.
+pub(crate) fn sha256_hex(text: &str) -> String {
+    format!(
+        "{:x}",
+        <sha2::Sha256 as sha2::Digest>::digest(text.as_bytes())
+    )
+}
+
 /// Client projection of a Bot; the internal storage identity is never exposed.
 fn view(bot: &Bot) -> Value {
     json!({"workspaceId":bot.workspace_id,"execution":bot.execution,
-        "builtinChannelId":bot.builtin_channel_id,"state":bot.state,"createdAt":bot.created_at})
+        "builtinChannelId":bot.builtin_channel_id,"state":bot.state,"createdAt":bot.created_at,
+        "permissions":bot.permissions})
 }
 
 /// Client projection of a channel; the owning Bot's storage identity is never exposed.

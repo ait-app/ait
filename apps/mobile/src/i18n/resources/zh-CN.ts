@@ -57,6 +57,36 @@ export const zhCN: TranslationResources = {
   },
   voiceTimeline: { started: "语音对话已开始", ended: "语音对话已结束", failed: "语音对话已中断" },
   bots: {
+    modeCapWarning:
+      "允许 Agent 运行命令的模式，也让这些 Agent 能够读取本机的 Ait 凭据，从而绕过 Bot 的 Ait 权限限制。只为你愿意让 Agent 无人值守完成的工作开启这些模式。",
+    commandReachWarning:
+      "Bot 可以向本 Workspace 中的每个 Agent（包括你自己启动的）发送提示并修改其设置。这些 Agent 保留各自的权限，因此 Bot 的提示可能触及超出 Bot 自身限制的能力。",
+    terminalsWarning:
+      "终端会在本机运行命令，因此能够读取本机的 Ait 凭据，从而绕过 Bot 的 Ait 权限限制。只为你愿意让 Agent 无人值守完成的工作开启。",
+    noteInstructionsInInput:
+      "该 Provider 不支持可更新的系统提示，Bot 的内置指令与记忆会附加在对话输入中。",
+    noteNoReadOnlyMode:
+      "该 Provider 没有只读模式，Bot 以其默认模式运行。需要审批的写入会被自动拒绝，但 Provider 无需审批即可执行的操作不会被阻止，包括读取本机的 Ait 凭据并绕过 Bot 的 Ait 权限限制。",
+    noteToolsNeedApproval:
+      "该 Provider 不能预先批准 Ait 工具，需要审批的 Ait 工具调用会被自动拒绝，Bot 可能只能对话、无法启动或管理 Agent。",
+    noteNoAitTools: "该 Provider 不支持 Ait 工具连接，Bot 只能对话。",
+    permissions: "权限",
+    permissionsHint: "权限变更在 Bot 的下一轮对话生效。",
+    groupObserve: "观察（始终开启）：查看 Agent、活动与 Provider",
+    groupAgents: "Agent：创建 Agent，并向其发送提示或修改设置",
+    groupStop: "停止：取消并停止 Agent",
+    groupSchedules: "定时任务：创建和管理定时任务",
+    groupScripts: "脚本：运行 Workspace 脚本",
+    groupTerminals: "终端：创建终端并输入内容",
+    groupWorkspaces: "Workspace：创建 worktree Workspace",
+    permissionRiskHint: "可运行命令或创建 worktree。",
+    modeCap: "允许的 Agent 模式",
+    modeCapHint:
+      "为每个 Provider 选择 Bot 可使用的模式。未选择任何模式的 Provider 不可使用，第一个选中的模式为默认模式。",
+    defaultMode: "默认模式",
+    providerUnavailable: "{{provider}}（不可用）",
+    readOnlyHint:
+      "Bot 以其 Provider 提供的最严格模式运行（Claude 为 default 模式，你自己的允许规则仍然生效），把改动交给它启动的 Agent。",
     title: "Bot",
     chat: "对话",
     settings: "设置",

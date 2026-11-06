@@ -16,6 +16,37 @@ export const ko: TranslationResources = {
   },
   onlineService: en.onlineService,
   bots: {
+    modeCapWarning:
+      "에이전트가 명령을 실행할 수 있는 모드는 이 컴퓨터의 Ait 자격 증명을 읽고 Bot의 Ait 제한을 우회하는 것도 허용합니다. 에이전트가 무인으로 처리해도 되는 작업에만 허용하세요.",
+    commandReachWarning:
+      "Bot은 직접 시작한 에이전트를 포함해 이 워크스페이스의 모든 에이전트에 프롬프트를 보내고 설정을 변경할 수 있습니다. 이러한 에이전트는 각자의 권한을 유지하므로 Bot의 프롬프트가 Bot 자체의 제한을 넘는 기능에 닿을 수 있습니다.",
+    terminalsWarning:
+      "터미널은 이 컴퓨터에서 명령을 실행하므로 이 컴퓨터의 Ait 자격 증명을 읽고 Bot의 Ait 제한을 우회할 수 있습니다. 에이전트가 무인으로 처리해도 되는 작업에만 사용하세요.",
+    noteInstructionsInInput:
+      "이 프로바이더는 업데이트 가능한 시스템 프롬프트를 지원하지 않으므로 Bot의 기본 지침과 메모리가 대화 입력에 추가됩니다.",
+    noteNoReadOnlyMode:
+      "이 프로바이더에는 읽기 전용 모드가 없어 Bot이 기본 모드로 실행됩니다. 승인이 필요한 쓰기는 자동으로 거부되지만 프로바이더가 승인 없이 허용하는 작업은 차단되지 않으며, 여기에는 이 컴퓨터의 Ait 자격 증명을 읽고 Bot의 Ait 제한을 우회하는 것도 포함됩니다.",
+    noteToolsNeedApproval:
+      "이 프로바이더는 Ait 도구를 사전 승인할 수 없으므로 승인이 필요한 Ait 도구 호출은 자동으로 거부됩니다. Bot은 대화만 가능하고 에이전트를 시작하거나 관리하지 못할 수 있습니다.",
+    noteNoAitTools:
+      "이 프로바이더는 Ait 도구 연결을 지원하지 않으므로 Bot은 대화만 할 수 있습니다.",
+    permissions: "권한",
+    permissionsHint: "권한 변경은 Bot의 다음 턴부터 적용됩니다.",
+    groupObserve: "관찰(항상 켜짐): 에이전트, 활동, 프로바이더 보기",
+    groupAgents: "에이전트: 에이전트 생성, 프롬프트 전송 및 설정 변경",
+    groupStop: "중지: 에이전트 취소 및 중지",
+    groupSchedules: "일정: 일정 생성 및 관리",
+    groupScripts: "스크립트: 워크스페이스 스크립트 실행",
+    groupTerminals: "터미널: 터미널 생성 및 입력",
+    groupWorkspaces: "워크스페이스: worktree 워크스페이스 생성",
+    permissionRiskHint: "명령을 실행하거나 worktree를 만들 수 있습니다.",
+    modeCap: "허용할 에이전트 모드",
+    modeCapHint:
+      "프로바이더별로 Bot이 사용할 수 있는 모드를 선택하세요. 모드를 선택하지 않은 프로바이더는 사용할 수 없습니다. 처음 선택한 모드가 기본값입니다.",
+    defaultMode: "기본 모드",
+    providerUnavailable: "{{provider}} (사용할 수 없음)",
+    readOnlyHint:
+      "Bot은 프로바이더가 제공하는 가장 엄격한 모드로 실행되며(Claude는 기본 모드이고 직접 설정한 허용 규칙은 계속 적용됩니다) 변경은 Bot이 시작한 에이전트에 맡깁니다.",
     title: "Bot",
     chat: "채팅",
     settings: "설정",

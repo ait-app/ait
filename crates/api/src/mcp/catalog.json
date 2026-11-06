@@ -1016,5 +1016,55 @@
       "additionalProperties": false
     },
     "readOnly": false
+  },
+  {
+    "name": "bot_memory_read",
+    "methods": ["bot.memory.get.request"],
+    "description": "Read the Workspace Bot's long-term memory. Returns text and the revision to pass to bot_memory_update.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "bot_memory_update",
+    "methods": ["bot.memory.update.request"],
+    "description": "Replace the Workspace Bot's long-term memory (at most 32768 bytes) if its revision still equals expected. Fails when the memory changed; read it again and retry.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 32768
+        },
+        "expected": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["text", "expected"],
+      "additionalProperties": false
+    },
+    "readOnly": false
+  },
+  {
+    "name": "workspace_overview",
+    "methods": [
+      "agent.list.request",
+      "schedule.list.request",
+      "checkout.status.get.request",
+      "bot.memory.get.request"
+    ],
+    "description": "Bounded overview of the Workspace: checkout state, your agents, agents needing attention, schedules, memory revision and your permissions. Call it at the start of every turn.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "readOnly": true
   }
 ]

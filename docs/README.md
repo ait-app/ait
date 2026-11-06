@@ -26,7 +26,7 @@
 - [沙箱化 Worktree](decisions/workspace/adr-215-sandboxed-worktree-isolation.md)：macOS 上用 Seatbelt 把 Agent 进程的写入限制在 worktree 内。
 - [Agent Skill 分发](operations/agent-skills.md)：内置技能、更新、选择和卸载。
 - [查看子 Agent](decisions/providers/adr-209-observed-subagent-normalization.md)：统一会话入口、父子关系与只读观测边界。
-- [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)（客户端标签页见 [ADR-214](decisions/clients/adr-214-workspace-bot-tab-v2.md)）。
+- [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)（客户端标签页见 [ADR-214](decisions/clients/adr-214-workspace-bot-tab-v2.md)，权限与作用域 MCP 凭据见 [ADR-215](decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)）。
 - [语音与听写](operations/speech.md)、[移动端通知](operations/mobile-notifications.md)。
 
 ## 架构与工程规范

@@ -1,8 +1,8 @@
 # Workspace Bot 重设计：每个 Workspace 一个管理者
 
-- 状态：已批准，阶段 1 已发布（0.1.30）、阶段 2 已实现（[ADR-214](../decisions/clients/adr-214-workspace-bot-tab-v2.md)）；阶段 3–4 未实施（实施计划：[阶段 1](workspace-bot-manager-phase-1.md)、[阶段 2](workspace-bot-manager-phase-2.md)）
+- 状态：已批准，阶段 1 已发布（0.1.30）、阶段 2 已实现（[ADR-214](../decisions/clients/adr-214-workspace-bot-tab-v2.md)）、阶段 3 已实现（[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)）；阶段 4 未实施（实施计划：[阶段 1](workspace-bot-manager-phase-1.md)、[阶段 2](workspace-bot-manager-phase-2.md)、[阶段 3](workspace-bot-manager-phase-3.md)）
 - 日期：2026-11-05
-- 关系：实施时以新 ADR 取代 [ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md) 的多 Bot／人格模型、
+- 关系：已由 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)、[ADR-214](../decisions/clients/adr-214-workspace-bot-tab-v2.md)、[ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md) 实施：取代 [ADR-139](../decisions/bot/adr-139-workspace-bots-and-owned-channels.md) 的多 Bot／人格模型、
   修订 [ADR-141](../decisions/clients/adr-141-experimental-workspace-bots.md) 的标签页与
   [ADR-145](../decisions/bot/adr-145-bot-permission-denial.md) 的权限规则；现行行为见 [Workspace Bot](../operations/bots.md)。
 

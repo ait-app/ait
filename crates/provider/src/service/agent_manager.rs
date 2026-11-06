@@ -32,6 +32,7 @@ use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
     AgentTurnEvent,
 };
+use crate::ports::mcp_scope::McpSubject;
 use crate::protocol::agent_config::ConfigPatch;
 use crate::support::time::now_timestamp;
 
@@ -391,6 +392,20 @@ impl AgentManager {
         Ok(())
     }
 
+    /// Bot-session capabilities of the `provider` adapter.
+    ///
+    /// # Errors
+    /// Returns `ProviderUnavailable` when no adapter is registered for `provider`.
+    pub(crate) fn bot_session_support(
+        &self,
+        provider: &str,
+    ) -> Result<crate::service::bot_execution::BotSessionSupport, AgentManagerError> {
+        self.clients
+            .get(provider)
+            .map(|client| client.bot_session_support())
+            .ok_or_else(|| AgentManagerError::ProviderUnavailable(provider.to_owned()))
+    }
+
     /// Return the live session's latest registered snapshot, if this process owns it.
     #[must_use]
     pub(crate) fn live_snapshot(&self, agent_id: &str) -> Option<&PersistedAgentRuntimeRecord> {
@@ -563,10 +578,14 @@ impl AgentManager {
         let permit = self.reserve_session()?;
         let client = self.available_client(&spec.provider).await?;
         let (launch, binding) = self.prepare_mcp(
-            agent_id,
+            &McpSubject {
+                agent_id,
+                internal: registration.internal,
+                owner: registration.owner.as_ref(),
+                labels: &registration.labels,
+            },
             spec,
             AgentResumePurpose::Interactive,
-            &registration.labels,
         )?;
         let launch = self.confine(launch, registration.workspace_id.as_deref())?;
         let session = execution::native(
@@ -575,7 +594,11 @@ impl AgentManager {
             client.create_session_with_environment(&launch, environment),
         )
         .await
-        .map_err(map_session)?;
+        .map_err(map_session);
+        let session = match session {
+            Ok(session) => session,
+            Err(error) => return self.retain_mcp(agent_id, Err(error), binding),
+        };
         let now = now_timestamp();
         let record = PersistedAgentRuntimeRecord {
             id: agent_id.to_owned(),
@@ -604,11 +627,12 @@ impl AgentManager {
             owner: registration.owner,
             observation: None,
         };
-        let record = self
+        let opened = self
             .register_session(agent_id, session, record, Registration::Create, permit)
-            .await?;
+            .await;
+        let record = self.retain_mcp(agent_id, opened, binding)?;
         self.mark_history_loaded(agent_id);
-        Ok(self.retain_mcp(record, binding))
+        Ok(record)
     }
 
     /// Resume a persisted provider session, using history-only mode for archived Agents.
@@ -678,7 +702,7 @@ impl AgentManager {
             AgentResumePurpose::Interactive
         };
         let client = self.available_client(&record.provider).await?;
-        let (launch, binding) = self.prepare_mcp(agent_id, &spec, purpose, &record.labels)?;
+        let (launch, binding) = self.prepare_mcp(&mcp_subject(&record), &spec, purpose)?;
         let launch = self.confine(launch, record.workspace_id.as_deref())?;
         let session = execution::native(
             &spec.provider,
@@ -686,16 +710,20 @@ impl AgentManager {
             client.resume_session(handle, &launch, purpose),
         )
         .await
-        .map_err(map_session)?;
+        .map_err(map_session);
         let registration = if recovering {
             Registration::Recovery
         } else {
             Registration::Read
         };
-        let record = self
-            .register_session(agent_id, session, record, registration, permit)
-            .await?;
-        Ok(self.retain_mcp(record, binding))
+        let opened = match session {
+            Ok(session) => {
+                self.register_session(agent_id, session, record, registration, permit)
+                    .await
+            }
+            Err(error) => Err(error),
+        };
+        self.retain_mcp(agent_id, opened, binding)
     }
 
     /// Close one live session while retaining its provider history and durable Agent record.
@@ -732,7 +760,7 @@ impl AgentManager {
             )?;
         }
         if !agent.registered {
-            self.live.remove(agent_id);
+            self.drop_live(agent_id);
             return Ok(());
         }
         // Metadata and attention may have changed through other narrow ports. Never replace
@@ -757,7 +785,7 @@ impl AgentManager {
                 next
             })
             .map_err(map_registry)?;
-        self.live.remove(agent_id);
+        self.drop_live(agent_id);
         Ok(())
     }
 
@@ -1011,7 +1039,7 @@ impl AgentManager {
                 publish_failure_activity(&self.events, &id, &now, record);
             }
             if failed {
-                self.live.remove(&id);
+                self.drop_live(&id);
             }
             self.auto_archives.completed(&id);
         }
@@ -1165,6 +1193,16 @@ impl AgentManager {
             );
         }
         AgentManagerError::Session
+    }
+}
+
+/// Session facts for MCP credential decisions, read from a durable record.
+fn mcp_subject(record: &PersistedAgentRuntimeRecord) -> McpSubject<'_> {
+    McpSubject {
+        agent_id: &record.id,
+        internal: record.internal,
+        owner: record.owner.as_ref(),
+        labels: &record.labels,
     }
 }
 

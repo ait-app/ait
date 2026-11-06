@@ -25,6 +25,7 @@ use crate::ports::agent_session::{
 };
 use crate::ports::native_history::{ListOptions, SessionDescriptor, SessionHistory};
 use crate::protocol::{provider::Details, timeline::NativeItem};
+use crate::service::bot_execution::{BotSessionSupport, InstructionDelivery};
 
 /// Local Claude Code executable; credentials and native tools remain owned by Claude Code.
 #[derive(Debug, Clone)]
@@ -111,6 +112,15 @@ impl AgentClient for ClaudeClient {
 
     fn supports_write_confinement(&self) -> bool {
         true
+    }
+
+    fn bot_session_support(&self) -> BotSessionSupport {
+        BotSessionSupport {
+            instructions: InstructionDelivery::SystemPrompt,
+            read_only_mode: Some("default"),
+            tool_preapproval: true,
+            ait_tools: true,
+        }
     }
 
     fn supports_summary_generation(&self) -> bool {

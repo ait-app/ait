@@ -11,6 +11,8 @@ use serde::Deserialize;
 pub(crate) struct Create {
     /// Existing Workspace that owns the task and its execution.
     pub(crate) workspace_id: String,
+    /// Root Workspace of the creating Bot's scope; immutable afterwards.
+    pub(crate) bot_scope: Option<String>,
     /// Optional display name.
     pub(crate) name: Option<String>,
     /// Nonempty prompt.

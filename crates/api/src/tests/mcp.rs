@@ -1,6 +1,8 @@
 use super::*;
 
 #[cfg(unix)]
+mod scoped;
+#[cfg(unix)]
 mod socket;
 
 #[tokio::test]

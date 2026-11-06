@@ -37,6 +37,7 @@ use crate::ports::agent_session::{
     AgentClient, AgentResumePurpose, AgentSession, AgentSessionError, AgentSessionSpec,
     AgentTurnEvent,
 };
+use crate::service::bot_execution::{BotSessionSupport, InstructionDelivery};
 
 /// A native Codex executable. Authentication remains in Codex's own environment and storage.
 #[derive(Debug, Clone)]
@@ -254,6 +255,15 @@ impl AgentClient for CodexClient {
 
     fn supports_write_confinement(&self) -> bool {
         true
+    }
+
+    fn bot_session_support(&self) -> BotSessionSupport {
+        BotSessionSupport {
+            instructions: InstructionDelivery::SystemPrompt,
+            read_only_mode: Some("read-only"),
+            tool_preapproval: true,
+            ait_tools: true,
+        }
     }
 
     fn supports_summary_generation(&self) -> bool {

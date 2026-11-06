@@ -28,11 +28,12 @@ impl Api {
 
 async fn guard(
     State(state): State<Arc<Shared>>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Result<Response, ApiError> {
     auth::validate_source(request.headers(), &["localhost"], &state.browser_auth)?;
-    super::authenticate(&state, request.headers())?;
+    let principal = super::authenticate(&state, request.headers())?;
+    request.extensions_mut().insert(principal);
     if request.uri().query().is_some() {
         return Err(ApiError(StatusCode::BAD_REQUEST));
     }
