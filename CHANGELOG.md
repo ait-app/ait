@@ -1,16 +1,19 @@
 # Ait changelog
 
-## Unreleased
+## 0.1.31 - 2026-11-06
 
 - Let a Workspace Bot manage its Workspace within the permissions you grant: it can start and prompt Agents, manage schedules, and optionally run scripts, terminals and worktrees through scoped Ait MCP credentials, with a per-provider mode cap. The setup wizard and settings add permission groups and mode caps.
 - Existing Bots upgrade with the default groups but an empty mode cap, so configure modes in Bot settings before the Bot can start Agents.
-- Bot models from providers other than Codex and Claude degrade by capability (instructions on the first input, default native mode, no preapproved tools) and settings describe the difference. Agents that can run commands can still read local daemon credentials, as the settings warning explains.
-- Add the Workspace Bot tab for `workspace-bots-v2` hosts: one Bot tab per Workspace with a setup wizard, chat, and settings for model, pause and resume, memory, Telegram and Feishu channels, and removal. It remains behind the experimental features setting, and guests get read-only access.
-- Migrate existing Bot tabs automatically: saved per-Bot tabs collapse into a single Bot tab per pane.
+- Bot models from providers other than Codex and Claude degrade by capability (instructions prepended to each input, default native mode, no preapproved tools) and settings describe the difference. Agents that can run commands can still read local daemon credentials, as the settings warning explains.
+- Add opt-in sandboxed worktrees on macOS through MCP, restricting supported Provider processes to writes in the worktree and required runtime paths while leaving reads and network access unchanged.
+- Fail closed for unsupported platforms and Providers; document the write-confinement limitations and the loss of enforcement when downgrading to older daemons.
 
 ## 0.1.30 - 2026-11-05
 
-- Breaking: Workspace Bots are now one manager Bot per Workspace, addressed by `workspaceId` through the `workspace-bots-v2` interface (replacing `workspace-bots-v1`; `bot.create`, `bot.list`, `bot.archive` and `bot.permission.resolve` are removed). Existing Bots, Channels, and history from earlier versions are discarded at startup, and the Bot tab shows an upgrade prompt until the matching client ships.
+- Rebuilt on 2026-11-06 with the matching Workspace Bot v2 client and live GitHub clone progress.
+- Add the Workspace Bot tab for `workspace-bots-v2` hosts: one Bot tab per Workspace with a setup wizard, chat, and settings for model, pause and resume, memory, Telegram and Feishu channels, and removal. It remains behind the experimental features setting, and guests get read-only access.
+- Migrate existing Bot tabs automatically: saved per-Bot tabs collapse into a single Bot tab per pane.
+- Breaking: Workspace Bots are now one manager Bot per Workspace, addressed by `workspaceId` through the `workspace-bots-v2` interface (replacing `workspace-bots-v1`; `bot.create`, `bot.list`, `bot.archive` and `bot.permission.resolve` are removed). Existing Bots, Channels, and history from earlier versions are discarded at startup.
 - Store Bot memory under the daemon data directory instead of the workspace; archiving a workspace deletes it, removing a Bot keeps it, and a missing workspace directory pauses the Bot until resumed.
 - Rename the packaged daemon executable to `aitd`, both in desktop resources and standalone archives. Update existing service commands and scripts when upgrading from `ait-daemon`; archive filenames stay the same.
 - Hide cached workspaces for unavailable online hosts in the sidebar while preserving pinned host filters.
