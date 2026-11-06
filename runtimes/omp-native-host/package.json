@@ -2,9 +2,9 @@
   "name": "ait-omp-native-host",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
-  "license": "Apache-2.0",
   "description": "Private, isolated official OMP RPC UI runtime for Ait",
+  "license": "Apache-2.0",
+  "type": "module",
   "scripts": {
     "install:runtime": "node install.mjs",
     "test": "node --test install.test.mjs"

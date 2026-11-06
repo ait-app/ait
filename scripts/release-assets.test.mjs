@@ -131,17 +131,34 @@ async function fakeNativeHost(t, platform) {
   t.after(() => rm(root, { recursive: true, force: true }));
   const bunPath = `node_modules/@oven/bun-${platform === "mac" ? "darwin-aarch64" : "linux-x64"}/bin/bun`;
   const entrypoint = "node_modules/@oh-my-pi/pi-coding-agent/src/cli.ts";
-  for (const relative of [bunPath, entrypoint, "notices/oh-my-pi-LICENSE", "notices/bun-upstream.txt", "notices/bun-linked-dependencies.txt", "notices/dependencies.json", "notices/NOTICE.txt"]) {
+  for (const relative of [
+    bunPath,
+    entrypoint,
+    "node_modules/@oh-my-pi/pi-coding-agent/src/modes/rpc/ait-native-host-hello.ts",
+    "node_modules/@oh-my-pi/pi-coding-agent/src/modes/rpc/ait-native-host-bridge.ts",
+    "notices/oh-my-pi-LICENSE",
+    "notices/bun-upstream.txt",
+    "notices/bun-linked-dependencies.txt",
+    "notices/dependencies.json",
+    "notices/NOTICE.txt",
+  ]) {
     await mkdir(path.dirname(path.join(root, relative)), { recursive: true });
     await writeFile(path.join(root, relative), "fixture", { mode: 0o755 });
   }
-  await writeFile(path.join(root, "manifest.json"), JSON.stringify({
-    schemaVersion: 1, adapter: "ait-omp-native-host", adapterVersion: 1,
-    ompVersion: "18.17.0", bunVersion: "1.4.4", bunPath, entrypoint,
-  }));
+  await writeFile(
+    path.join(root, "manifest.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      adapter: "ait-omp-native-host",
+      adapterVersion: 1,
+      ompVersion: "18.17.0",
+      bunVersion: "1.4.4",
+      bunPath,
+      entrypoint,
+    }),
+  );
   return root;
 }
-
 
 test("release assets match electron-builder's target-specific architecture names", async () => {
   for (const version of ["0.0.7", "0.0.8-beta.1"]) {
@@ -555,12 +572,24 @@ test("standalone daemon archives package aitd, its private host and upstream not
     ["aitd", "LICENSE"],
   );
   assert.match(entries[0], /^-rwxr-xr-x/);
-  assert(entries.some((line) => line.endsWith("provider-runtimes/omp-native-host/1/manifest.json")));
-  assert(entries.some((line) => line.endsWith("provider-runtimes/omp-native-host/1/notices/bun-linked-dependencies.txt")));
-  await assert.rejects(packDaemonAsset({
-    platform: "linux", version: "0.0.7", binary, destination,
-    nativeHost: path.join(root, "missing-runtime"),
-  }), /ENOENT/);
+  assert(
+    entries.some((line) => line.endsWith("provider-runtimes/omp-native-host/1/manifest.json")),
+  );
+  assert(
+    entries.some((line) =>
+      line.endsWith("provider-runtimes/omp-native-host/1/notices/bun-linked-dependencies.txt"),
+    ),
+  );
+  await assert.rejects(
+    packDaemonAsset({
+      platform: "linux",
+      version: "0.0.7",
+      binary,
+      destination,
+      nativeHost: path.join(root, "missing-runtime"),
+    }),
+    /ENOENT/,
+  );
   const stale = await fakeDaemon(t, "daemon 0.0.6");
   await assert.rejects(
     packDaemonAsset({
@@ -583,7 +612,18 @@ test("standalone daemon archives package aitd, its private host and upstream not
   const devBinary = (await fakeDaemon(t, "daemon 2026-10-08-abcdef01")).binary;
   const devBuild = spawnSync(
     process.execPath,
-    [script, "daemon", "mac", "0.0.7", devBinary, destination, "--runtime", await fakeNativeHost(t, "mac"), "--dev", "abcdef01-2026-10-08"],
+    [
+      script,
+      "daemon",
+      "mac",
+      "0.0.7",
+      devBinary,
+      destination,
+      "--runtime",
+      await fakeNativeHost(t, "mac"),
+      "--dev",
+      "abcdef01-2026-10-08",
+    ],
     { encoding: "utf8" },
   );
   assert.equal(devBuild.status, 0, devBuild.stderr);
@@ -676,6 +716,10 @@ test("desktop release verifies published desktop assets and any retained Android
   await copyFile(
     new URL("./release-version.mjs", import.meta.url),
     path.join(tooling, "release-version.mjs"),
+  );
+  await copyFile(
+    new URL("./native-host-manifest.cjs", import.meta.url),
+    path.join(tooling, "native-host-manifest.cjs"),
   );
   await copyFile(new URL("./dev-build.mjs", import.meta.url), path.join(tooling, "dev-build.mjs"));
   await copyFile(
@@ -801,7 +845,10 @@ test("release workflow builds only the daemon and packages the resolved desktop 
   const pack = workflow.jobs.build.steps.find((step) => step.name === "Package standalone daemon");
   assert.match(pack.run, /release-assets\.mjs daemon/);
   assert.match(pack.run, /--runtime "\$NATIVE_HOST"/);
-  assert.match(pack.env.NATIVE_HOST, /release\/mac-arm64\/Ait\.app\/Contents\/Resources\/provider-runtimes\/omp-native-host\/1/);
+  assert.match(
+    pack.env.NATIVE_HOST,
+    /release\/mac-arm64\/Ait\.app\/Contents\/Resources\/provider-runtimes\/omp-native-host\/1/,
+  );
   assert(names.indexOf(sign.name) < names.indexOf(pack.name));
   const upload = workflow.jobs.build.steps.findIndex((step) =>
     step.uses?.startsWith("actions/upload-artifact@"),
@@ -816,9 +863,12 @@ test("release workflow builds only the daemon and packages the resolved desktop 
   );
   assert.equal(config.appId, "dev.ait.desktop");
   assert.equal(config.beforePack, "./scripts/before-pack.js");
-  assert(config.extraResources.some((entry) =>
-    entry.from === "release-resources/provider-runtimes" && entry.to === "provider-runtimes",
-  ));
+  assert(
+    config.extraResources.some(
+      (entry) =>
+        entry.from === "release-resources/provider-runtimes" && entry.to === "provider-runtimes",
+    ),
+  );
   assert.deepEqual(
     config.extraResources.filter((entry) => entry.to.startsWith("bin")),
     [],

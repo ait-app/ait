@@ -13,23 +13,41 @@ const {
 
 function nativeHost(resources, platform = "linux") {
   const root = path.join(resources, "provider-runtimes/omp-native-host/1");
-  const bunPath = platform === "win32"
-    ? "node_modules/@oven/bun-windows-x64/bin/bun.exe"
-    : "node_modules/@oven/bun-linux-x64/bin/bun";
+  const bunPath =
+    platform === "win32"
+      ? "node_modules/@oven/bun-windows-x64/bin/bun.exe"
+      : "node_modules/@oven/bun-linux-x64/bin/bun";
   const entrypoint = "node_modules/@oh-my-pi/pi-coding-agent/src/cli.ts";
   const patched = [
     "node_modules/@oh-my-pi/pi-coding-agent/src/modes/rpc/ait-native-host-hello.ts",
     "node_modules/@oh-my-pi/pi-coding-agent/src/modes/rpc/ait-native-host-bridge.ts",
   ];
-  for (const relative of [bunPath, entrypoint, ...patched, "notices/oh-my-pi-LICENSE", "notices/bun-upstream.txt", "notices/bun-linked-dependencies.txt", "notices/dependencies.json", "notices/NOTICE.txt"]) {
+  for (const relative of [
+    bunPath,
+    entrypoint,
+    ...patched,
+    "notices/oh-my-pi-LICENSE",
+    "notices/bun-upstream.txt",
+    "notices/bun-linked-dependencies.txt",
+    "notices/dependencies.json",
+    "notices/NOTICE.txt",
+  ]) {
     const filename = path.join(root, relative);
     fs.mkdirSync(path.dirname(filename), { recursive: true });
     fs.writeFileSync(filename, "fixture", { mode: 0o755 });
   }
-  fs.writeFileSync(path.join(root, "manifest.json"), JSON.stringify({
-    schemaVersion: 1, adapter: "ait-omp-native-host", adapterVersion: 1,
-    ompVersion: "18.17.0", bunVersion: "1.4.4", bunPath, entrypoint,
-  }));
+  fs.writeFileSync(
+    path.join(root, "manifest.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      adapter: "ait-omp-native-host",
+      adapterVersion: 1,
+      ompVersion: "18.17.0",
+      bunVersion: "1.4.4",
+      bunPath,
+      entrypoint,
+    }),
+  );
   return root;
 }
 
@@ -136,6 +154,11 @@ test("private native host packaging rejects wrong versions, missing notices and 
 test("packaging rejects a native host SDK that is not patched with the Ait bridge", (t) => {
   const root = nativeHost(resources(t));
   assert.doesNotThrow(() => verifyNativeHostDirectory(root, "linux"));
-  fs.unlinkSync(path.join(root, "node_modules/@oh-my-pi/pi-coding-agent/src/modes/rpc/ait-native-host-hello.ts"));
+  fs.unlinkSync(
+    path.join(
+      root,
+      "node_modules/@oh-my-pi/pi-coding-agent/src/modes/rpc/ait-native-host-hello.ts",
+    ),
+  );
   assert.throws(() => verifyNativeHostDirectory(root, "linux"), /Missing native host asset/);
 });

@@ -19,7 +19,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { devDisplayVersion, devPackagedVersion } from "./dev-build.mjs";
 import { releaseChannel } from "./release-version.mjs";
-import { verifyNativeHostDirectory } from "../apps/desktop/scripts/verify-packaged-resources.cjs";
+import { verifyNativeHostDirectory } from "./native-host-manifest.cjs";
 
 export function releaseAssetNames(platform, version, buildLabel) {
   const channel = buildLabel ? "latest" : releaseChannel(version);

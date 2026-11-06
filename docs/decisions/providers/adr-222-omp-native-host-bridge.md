@@ -41,8 +41,12 @@ ADR-218 排除的是**替换或伪造官方界面**的私有补丁。本决策�
 hello 帧是唯一的启用信号：
 
 ```json
-{"type":"ait_native_host_hello","bridgeVersion":1,"sdkVersion":"18.17.0",
- "capabilities":{"vibe":true,"vibeWorkerObservation":true,"vibeWorkerControl":true}}
+{
+  "type": "ait_native_host_hello",
+  "bridgeVersion": 1,
+  "sdkVersion": "18.17.0",
+  "capabilities": { "vibe": true, "vibeWorkerObservation": true, "vibeWorkerControl": true }
+}
 ```
 
 Rust 适配器只在 `bridgeVersion == 1` 且 `capabilities.vibe == true` 时认为 bridge
@@ -66,7 +70,7 @@ metadata 探针也会收到 hello，但探针不构造 Session 级 Vibe 状态�
 - `ait_vibe_control`（list/spawn/send/wait/kill/toggle）走同一条命令通道，
   worker 引用由 observer 从 Ait subagent ID 解析为 native id；
 - 进程关闭时 `close()` 停止观察定时器。
-仅 `rpc-ui` 且带 hello 时才构造桥；普通 `--mode rpc` 完全没有 Vibe 状态。
+  仅 `rpc-ui` 且带 hello 时才构造桥；普通 `--mode rpc` 完全没有 Vibe 状态。
 
 ### 4. 单 writer 与同目录归属
 
@@ -97,9 +101,9 @@ metadata 探针也会收到 hello，但探针不构造 Session 级 Vibe 状态�
   - 进程正常启动并输出合法 `ready` 帧，stderr 为空；
   - `get_state` 返回 `success:true` 且带恢复后的 model/sessionId；
   - `get_entries`（完整历史读取）返回 `success:true`。
-  即 18.14 **可以**读取被 18.17 追加过的 journal，降级回退不会导致会话不可读。
-  唯一保留：18.14 不认识 18.17 新增记录的语义（它把 `session_exit` 当普通 custom 记录），
-  因此回退后这些条目不参与行为，只作为历史存在。
+    即 18.14 **可以**读取被 18.17 追加过的 journal，降级回退不会导致会话不可读。
+    唯一保留：18.14 不认识 18.17 新增记录的语义（它把 `session_exit` 当普通 custom 记录），
+    因此回退后这些条目不参与行为，只作为历史存在。
 - 降级前置条件（2026-11-07 实测，对 18.14 与 18.17 一致）：`--resume` 要求该 journal
   引用的模型仍在配置中。缺少对应的 `models.yml`/`config.yml`（例如隔离环境或用户已删除
   该 provider）时，恢复直接失败于

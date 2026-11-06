@@ -5,12 +5,16 @@ const ARCH_MAP = { 1: "x64", 3: "arm64" };
 
 exports.default = async function beforePack(context) {
   const arch = ARCH_MAP[context.arch];
-  if (!arch) throw new Error(`OMP native host does not support Electron architecture ${context.arch}`);
+  if (!arch)
+    throw new Error(`OMP native host does not support Electron architecture ${context.arch}`);
   const { installRuntime } = await import(
     pathToFileURL(path.resolve(__dirname, "../../../runtimes/omp-native-host/install.mjs")).href
   );
   await installRuntime({
-    destination: path.resolve(__dirname, "../release-resources/provider-runtimes/omp-native-host/1"),
+    destination: path.resolve(
+      __dirname,
+      "../release-resources/provider-runtimes/omp-native-host/1",
+    ),
     platform: context.electronPlatformName,
     arch,
   });

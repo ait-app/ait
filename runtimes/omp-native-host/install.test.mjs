@@ -32,10 +32,21 @@ test("CLI maps Ait data dir to its managed version root without guessing user st
   assert.deepEqual(parseInstallArgs(["--data-dir", "/tmp/ait-data"]), {
     destination: path.resolve("/tmp/ait-data/providers/omp-native-host/1"),
   });
-  assert.deepEqual(parseInstallArgs(["--destination", "/tmp/host", "--platform", "win32", "--arch", "x64"]), {
-    destination: path.resolve("/tmp/host"), platform: "win32", arch: "x64",
-  });
-  for (const args of [[], ["--data-dir"], ["--data-dir", "/tmp/a", "--destination", "/tmp/b"], ["--platform", "linux"], ["--destination", "/tmp/a", "--unknown", "value"]]) {
+  assert.deepEqual(
+    parseInstallArgs(["--destination", "/tmp/host", "--platform", "win32", "--arch", "x64"]),
+    {
+      destination: path.resolve("/tmp/host"),
+      platform: "win32",
+      arch: "x64",
+    },
+  );
+  for (const args of [
+    [],
+    ["--data-dir"],
+    ["--data-dir", "/tmp/a", "--destination", "/tmp/b"],
+    ["--platform", "linux"],
+    ["--destination", "/tmp/a", "--unknown", "value"],
+  ]) {
     assert.throws(() => parseInstallArgs(args));
   }
 });
@@ -52,8 +63,14 @@ test("failed stage publication restores the complete previous installation", asy
   await mkdir(destination);
   await writeFile(path.join(destination, "manifest.json"), "previous manifest");
   await writeFile(path.join(destination, "host"), "previous host");
-  await assert.rejects(publishInstallation(path.join(root, "missing-stage"), destination), /ENOENT/);
-  assert.equal(await readFile(path.join(destination, "manifest.json"), "utf8"), "previous manifest");
+  await assert.rejects(
+    publishInstallation(path.join(root, "missing-stage"), destination),
+    /ENOENT/,
+  );
+  assert.equal(
+    await readFile(path.join(destination, "manifest.json"), "utf8"),
+    "previous manifest",
+  );
   assert.equal(await readFile(path.join(destination, "host"), "utf8"), "previous host");
   assert.deepEqual(await readdir(root), ["1"]);
 });
@@ -74,21 +91,37 @@ test("successful stage publication replaces rather than merges stale host files"
 test("the RPC patch refuses unverified SDK trees instead of skipping", async (t) => {
   const { patchOfficialRuntime } = await import("./rpc-patch.mjs");
   const root = await directory(t);
-  await assert.rejects(patchOfficialRuntime(path.join(root, "missing")), /package\.json is unreadable/);
+  await assert.rejects(
+    patchOfficialRuntime(path.join(root, "missing")),
+    /package\.json is unreadable/,
+  );
   const sdk = path.join(root, "sdk");
   await mkdir(sdk);
-  await writeFile(path.join(sdk, "package.json"), JSON.stringify({ name: "@oh-my-pi/pi-coding-agent", version: "18.17.0" }));
+  await writeFile(
+    path.join(sdk, "package.json"),
+    JSON.stringify({ name: "@oh-my-pi/pi-coding-agent", version: "18.17.0" }),
+  );
   await assert.rejects(patchOfficialRuntime(sdk), /import target is missing/);
   for (const file of [
-    "src/config/model-resolver.ts", "src/session/agent-session.ts", "src/slash-commands/available-commands.ts",
-    "src/vibe/runtime.ts", "src/vibe/lifecycle.ts", "src/registry/agent-registry.ts",
-    "src/session/session-loader.ts", "src/modes/rpc/rpc-subagents.ts", "src/modes/rpc/rpc-btw.ts",
-    "src/modes/rpc/rpc-mode.ts", "src/main.ts",
+    "src/config/model-resolver.ts",
+    "src/session/agent-session.ts",
+    "src/slash-commands/available-commands.ts",
+    "src/vibe/runtime.ts",
+    "src/vibe/lifecycle.ts",
+    "src/registry/agent-registry.ts",
+    "src/session/session-loader.ts",
+    "src/modes/rpc/rpc-subagents.ts",
+    "src/modes/rpc/rpc-btw.ts",
+    "src/modes/rpc/rpc-mode.ts",
+    "src/main.ts",
   ]) {
     await mkdir(path.dirname(path.join(sdk, file)), { recursive: true });
     await writeFile(path.join(sdk, file), "export {};\n");
   }
   await assert.rejects(patchOfficialRuntime(sdk), /not the expected 18\.17\.0 source/);
-  await writeFile(path.join(sdk, "package.json"), JSON.stringify({ name: "@oh-my-pi/pi-coding-agent", version: "18.18.0" }));
+  await writeFile(
+    path.join(sdk, "package.json"),
+    JSON.stringify({ name: "@oh-my-pi/pi-coding-agent", version: "18.18.0" }),
+  );
   await assert.rejects(patchOfficialRuntime(sdk), /Expected 18\.17\.0/);
 });
