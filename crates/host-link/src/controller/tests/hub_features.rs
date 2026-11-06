@@ -143,6 +143,31 @@ async fn a_rotated_token_is_renewed_once_while_the_link_holds_the_lease() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_freeze_past_the_local_lease_keeps_the_lease_holding_link() {
+    let (controller, mock) = fixture();
+    declare(&mock, &["lease", "credit", "download"], true);
+    let cancel = CancellationToken::new();
+    let task = tokio::spawn(controller.run(cancel.clone()));
+    for _ in 0..3 {
+        tick().await;
+    }
+    // A suspended laptop wakes 90 s later; the center still holds the link in grace.
+    tokio::time::advance(Duration::from_secs(90)).await;
+    for _ in 0..3 {
+        tick().await;
+    }
+    {
+        let seen = mock.0.lock().unwrap();
+        assert_eq!(seen.stops, 0, "transport stays up for the link to resume");
+        assert!(seen.hub.active);
+        assert_eq!(seen.registrations.len(), 1);
+        assert_eq!(seen.renewals, 1);
+    }
+    cancel.cancel();
+    task.await.unwrap().unwrap();
+}
+
+#[tokio::test(start_paused = true)]
 async fn hub_outages_without_relay_control_keep_the_manager_running() {
     let (controller, mock) = fixture();
     declare(&mock, &["lease", "download"], true);

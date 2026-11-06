@@ -60,7 +60,15 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
             // probe budget. Renewal success alone cannot hide a persistently rejected ticket.
             access_recovery.observe(&publication.acceptance);
             let now = tokio::time::Instant::now();
-            let expires = publication.expires();
+            // While the Hub link holds the lease, attached or resuming within the center's
+            // grace, the local lease deadline is not authoritative: a process frozen past it
+            // must resume the link instead of tearing transport down.
+            let held_by_hub = self.relay.hub_lease().await;
+            let expires = if held_by_hub {
+                publication.access_until
+            } else {
+                publication.expires()
+            };
             if expires <= now {
                 self.revoke(&mut publication).await;
             }
@@ -68,7 +76,6 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
             // an HTTP operation is in flight. Dropped refresh requests retain their persisted ID.
             let window = expires.checked_duration_since(now);
             let generation = self.grants.borrow().as_ref().map(|grant| grant.generation);
-            let held_by_hub = self.relay.hub_lease().await;
             // Split borrows so terminal transport errors can interrupt an authority request.
             let errors = &mut self.errors;
             let mut lease = Lease {
