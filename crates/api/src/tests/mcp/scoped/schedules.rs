@@ -36,6 +36,19 @@ fn unset_mode(response: &Value) {
         .as_str()
         .unwrap_or_default();
     assert!(text.contains("no explicit mode"), "{response}");
+    assert!(text.contains("ask the user"), "{response}");
+}
+
+/// Assert that a tool call was refused because the schedule was not created by the Bot.
+fn user_owned(response: &Value) {
+    assert_eq!(response["result"]["isError"], true, "{response}");
+    let text = response["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(
+        text.contains("Only schedules created by the Workspace Bot can be edited"),
+        "{response}"
+    );
 }
 
 fn schedule_id(response: &Value) -> String {
@@ -152,18 +165,30 @@ async fn scoped_update_schedule_enforces_mode_cap() {
     assert_eq!(stored["target"]["config"]["modeId"], "auto", "{stored}");
     assert_eq!(stored["botScope"], scoped.workspace.as_str());
 
-    // A user task without a stored mode runs the default; a provider change records it.
+    structured(&update(&own, json!({"prompt":"changed"})).await);
+    assert_eq!(scoped.stored(&own).await["prompt"], "changed");
+
+    // The user's own tasks are never edited, even within the cap.
     let user = scoped
-        .user_schedule(&scoped.workspace, json!({"provider":"codex"}))
+        .user_schedule(
+            &scoped.workspace,
+            json!({"provider":"codex","modeId":"auto"}),
+        )
         .await;
-    structured(&update(&user, json!({"provider":"codex/other-model"})).await);
+    for patch in [
+        json!({"prompt":"changed"}),
+        json!({"mode":"auto"}),
+        json!({"provider":"codex/other-model"}),
+    ] {
+        user_owned(&update(&user, patch).await);
+    }
     let stored = scoped.stored(&user).await;
+    assert_eq!(stored["prompt"], "report");
     assert_eq!(
         stored["target"]["config"],
-        json!({"provider":"codex","model":"other-model","modeId":"auto"}),
+        json!({"provider":"codex","modeId":"auto"}),
         "{stored}"
     );
-    assert!(stored.get("botScope").is_none(), "{stored}");
 
     let foreign = scoped
         .user_schedule(&scoped.other, json!({"provider":"codex","modeId":"auto"}))
@@ -199,7 +224,7 @@ async fn scoped_schedule_controls_check_target_mode() {
             .await;
         forbidden(&call("run_schedule_once", task, json!({})).await);
         forbidden(&call("resume_schedule", task, json!({})).await);
-        forbidden(&call("update_schedule", task, json!({"prompt":"changed"})).await);
+        user_owned(&call("update_schedule", task, json!({"prompt":"changed"})).await);
         let stored = scoped.stored(task).await;
         assert_eq!(stored["status"], "paused", "{stored}");
         assert_eq!(stored["prompt"], "report");
@@ -214,12 +239,12 @@ async fn scoped_schedule_controls_check_target_mode() {
             json!({"provider":"codex","modeId":"auto"}),
         )
         .await;
-    structured(&call("update_schedule", &allowed, json!({"prompt":"changed"})).await);
+    user_owned(&call("update_schedule", &allowed, json!({"prompt":"changed"})).await);
     structured(&call("pause_schedule", &allowed, json!({})).await);
     structured(&call("resume_schedule", &allowed, json!({})).await);
     structured(&call("run_schedule_once", &allowed, json!({})).await);
     let stored = scoped.stored(&allowed).await;
-    assert_eq!(stored["prompt"], "changed");
+    assert_eq!(stored["prompt"], "report");
     assert_eq!(stored["runs"].as_array().unwrap().len(), 1, "{stored}");
 
     // A user task without a stored mode would run at the provider's native default.
@@ -228,16 +253,20 @@ async fn scoped_schedule_controls_check_target_mode() {
         .await;
     unset_mode(&call("run_schedule_once", &unset, json!({})).await);
     unset_mode(&call("resume_schedule", &unset, json!({})).await);
-    unset_mode(&call("update_schedule", &unset, json!({"prompt":"changed"})).await);
-    unset_mode(&call("update_schedule", &unset, json!({"model":"other"})).await);
+    user_owned(&call("update_schedule", &unset, json!({"mode":"auto"})).await);
     let stored = scoped.stored(&unset).await;
     assert_eq!(stored["prompt"], "report");
     assert_eq!(stored["target"]["config"], json!({"provider":"codex"}));
     assert_eq!(stored["runs"], json!([]));
 
-    // Setting an allowed mode repairs a mode-less or escalated task, which may then run.
+    // Once the user sets an allowed mode, the Bot may run a mode-less or escalated task.
     for task in [&unset, &escalated] {
-        structured(&call("update_schedule", task, json!({"mode":"auto"})).await);
+        scoped
+            .rpc(
+                "schedule.update.request",
+                json!({"scheduleId":task,"newAgentConfig":{"modeId":"auto"}}),
+            )
+            .await;
         structured(&call("run_schedule_once", task, json!({})).await);
         let stored = scoped.stored(task).await;
         assert_eq!(stored["target"]["config"]["modeId"], "auto", "{stored}");

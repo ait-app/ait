@@ -30,7 +30,7 @@ pub(super) async fn execute(
     match scope {
         Some(scope) => scope::confine(state, scope, &tool.name, &mut arguments, caller).await?,
         None if matches!(tool.name.as_str(), "create_agent" | "update_agent") => {
-            scope::reserved_labels(&arguments)?;
+            scope::reserved_labels(&arguments, domain::bot::BOT_LABEL_PREFIX)?;
         }
         None => {}
     }

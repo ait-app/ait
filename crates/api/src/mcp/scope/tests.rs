@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use domain::BotId;
+use domain::bot::BOT_LABEL_PREFIX;
 use domain::bot::permissions::ToolGroup;
 
 use super::*;
@@ -222,11 +223,11 @@ fn unlisted_tools_reserved_labels_and_cwd_are_rejected() {
 
     let reserved = json!({"ait.bot.x":"y"});
     assert_eq!(
-        reserved_labels(&json!({"labels":reserved})),
+        reserved_labels(&json!({"labels":reserved}), BOT_LABEL_PREFIX),
         Err(ErrorCode::Forbidden)
     );
-    reserved_labels(&json!({"labels":{"ait.botany":"y"}})).unwrap();
-    reserved_labels(&json!({})).unwrap();
+    reserved_labels(&json!({"labels":{"ait.botany":"y"}}), BOT_LABEL_PREFIX).unwrap();
+    reserved_labels(&json!({}), BOT_LABEL_PREFIX).unwrap();
     let mut create = json!({"provider":"codex/gpt","labels":reserved});
     assert_eq!(
         rewrite_create_agent(&capped_scope(bot()), None, &mut create),
@@ -406,4 +407,29 @@ fn scoped_schedules_record_the_bot_scope_and_heartbeats_need_an_agent_caller() {
         heartbeat_workspace(&subtree, None),
         Err(ErrorCode::InvalidMessage)
     );
+}
+
+#[test]
+fn scoped_callers_cannot_write_any_ait_label() {
+    for label in ["ait.guest.owner", "ait.botany", "ait.x"] {
+        let labels = json!({ label: "y" });
+        let mut create = json!({"provider":"codex/gpt","labels":labels});
+        assert_eq!(
+            rewrite_create_agent(&capped_scope(bot()), None, &mut create),
+            Err(ErrorCode::Forbidden),
+            "{label}"
+        );
+        let update = json!({"agentId":"agent","labels":labels});
+        assert_eq!(
+            cap_update_agent(
+                &capped_scope(subtree()),
+                &codex_agent("agent", ROOT),
+                &update
+            ),
+            Err(ErrorCode::Forbidden),
+            "{label}"
+        );
+    }
+    let mut create = json!({"provider":"codex/gpt","labels":{"team":"ait"}});
+    rewrite_create_agent(&capped_scope(bot()), None, &mut create).unwrap();
 }

@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 
 use bot::mcp::{Caller, CallerKind, Grant};
 use domain::bot::permissions::BotPermissions;
-use domain::bot::{BOT_LABEL_PREFIX, BOT_SCOPE_LABEL, BOT_WORKSPACES};
+use domain::bot::{BOT_SCOPE_LABEL, BOT_WORKSPACES};
 use model::ErrorCode;
 use serde_json::{Map, Value, json};
 
@@ -17,13 +17,18 @@ use crate::connection::rpc;
 
 use super::tools::creation;
 
+/// Label namespace owned by Ait; scoped callers may write no label in it.
+const AIT_LABEL_PREFIX: &str = "ait.";
 /// The only native feature a scoped caller may set; others can change execution permissions.
 const ALLOWED_FEATURE: &str = "fast_mode";
 /// Refusal for running or keeping a task without a stored mode, whose native default the cap
 /// cannot vouch for.
 const UNSET_MODE: &str = "This schedule has no explicit mode, so it would run at the \
-    provider's native default, which may exceed the Workspace Bot mode cap; set an allowed mode \
-    with update_schedule first";
+    provider's native default, which may exceed the Workspace Bot mode cap; ask the user to set \
+    an allowed mode for it in Ait";
+/// Refusal for editing a task the user created; its prompt and configuration stay the user's.
+const USER_SCHEDULE: &str = "Only schedules created by the Workspace Bot can be edited; ask the \
+    user to change this schedule in Ait";
 
 /// Why a tool call failed: a stable error code, or a scope refusal that guides the caller.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -157,9 +162,9 @@ fn rule(tool: &str) -> Option<Rule> {
 /// # Errors
 /// Returns `Forbidden` for unlisted tools, `cwd`, foreign or archived Workspaces, reserved
 /// labels, features or modes outside the cap (including a schedule's effective mode), and Bot
-/// heartbeats; a guided refusal for running or keeping a mode-less schedule not created by a
-/// Bot; `ResourceExhausted` when the Bot already owns its maximum of worktrees; and propagates
-/// target lookup failures.
+/// heartbeats; a guided refusal for editing a schedule not created by a Bot or for running or
+/// resuming such a schedule without a stored mode; `ResourceExhausted` when the Bot already owns
+/// its maximum of worktrees; and propagates target lookup failures.
 pub(super) async fn confine(
     state: &Shared,
     scope: &Scope,
@@ -222,6 +227,9 @@ pub(super) async fn confine(
             let permissions = &scope.grant.permissions;
             match rule {
                 Rule::ScheduleControl => cap_schedule(permissions, &schedule)?,
+                Rule::UpdateSchedule if schedule.get("botScope").is_none() => {
+                    return Err(Failure::Refused(USER_SCHEDULE));
+                }
                 // An update is checked by the configuration it leaves behind.
                 Rule::UpdateSchedule
                     if !cap_schedule_update(permissions, &schedule, arguments)? =>
@@ -277,14 +285,15 @@ pub(super) fn filter(scope: &Scope, tool: &str, result: &mut Value) {
     }
 }
 
-/// Refuse labels in the reserved `ait.bot.` namespace, which no MCP caller may write.
+/// Refuse labels starting with the reserved `prefix`: no MCP caller may write `ait.bot.` labels,
+/// and scoped callers may write no `ait.` label at all.
 /// # Errors
 /// Returns `Forbidden` when `arguments.labels` names a reserved label.
-pub(super) fn reserved_labels(arguments: &Value) -> Result<(), ErrorCode> {
+pub(super) fn reserved_labels(arguments: &Value, prefix: &str) -> Result<(), ErrorCode> {
     let reserved = arguments
         .get("labels")
         .and_then(Value::as_object)
-        .is_some_and(|labels| labels.keys().any(|key| key.starts_with(BOT_LABEL_PREFIX)));
+        .is_some_and(|labels| labels.keys().any(|key| key.starts_with(prefix)));
     if reserved {
         Err(ErrorCode::Forbidden)
     } else {
@@ -328,7 +337,7 @@ fn rewrite_create_agent(
     arguments["workspaceId"] = json!(workspace);
     cap_mode(&scope.grant.permissions, arguments)?;
     features(arguments)?;
-    reserved_labels(arguments)?;
+    reserved_labels(arguments, AIT_LABEL_PREFIX)?;
     let labels = object(arguments, "labels")?;
     labels.insert(BOT_SCOPE_LABEL.to_owned(), json!(root));
     Ok(())
@@ -338,7 +347,7 @@ fn rewrite_create_agent(
 /// # Errors
 /// Returns `Forbidden` for reserved labels, features or a mode outside the cap.
 fn cap_update_agent(scope: &Scope, agent: &Value, arguments: &Value) -> Result<(), ErrorCode> {
-    reserved_labels(arguments)?;
+    reserved_labels(arguments, AIT_LABEL_PREFIX)?;
     features(arguments)?;
     match arguments.pointer("/settings/modeId") {
         Some(mode) => cap_target(&scope.grant.permissions, agent, mode),
