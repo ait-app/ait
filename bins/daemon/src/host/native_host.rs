@@ -41,15 +41,16 @@ pub(super) fn workspace(data_dir: &Path, environment: &dyn Fn(&str) -> Option<st
         return;
     }
     install(data_dir, environment);
-    match discover(data_dir, environment) {
-        Some(host) => tracing::info!(
+    if let Some(host) = discover(data_dir, environment) {
+        tracing::info!(
             entrypoint = %host.entrypoint().display(),
             "OMP native host runtime installed"
-        ),
-        None => tracing::warn!(
+        );
+    } else {
+        tracing::warn!(
             installed = %data_dir.join(MANAGED).display(),
             "OMP native host runtime is not installed; OMP will run the official binary and /vibe will be refused"
-        ),
+        );
     }
 }
 
