@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use domain::bot::{BotState, ChannelConfig, DeliveryStatus, PauseReason, TurnStatus};
+use domain::bot::{Bot, BotState, ChannelConfig, DeliveryStatus, PauseReason, TurnStatus};
 use domain::{BotId, BotTurnId, ConversationId};
 use model::ErrorCode;
 use provider::service::bot_execution::Action;
@@ -59,7 +59,8 @@ impl State {
         }
         Ok(())
     }
-    /// Retire the archived Workspaces' Bots and delete those Workspaces' Bot memory.
+    /// Retire the archived Workspaces' Bots, drop them from every Bot's created worktrees and
+    /// delete those Workspaces' Bot memory.
     pub(crate) fn retire(&mut self, workspaces: &[String]) -> Result<(), ErrorCode> {
         self.ensure_writable()?;
         let workspaces: BTreeSet<&str> = workspaces.iter().map(String::as_str).collect();
@@ -73,8 +74,22 @@ impl State {
             })
             .map(|bot| bot.id)
             .collect();
-        if !bots.is_empty() {
-            self.retire_bots(&bots)?;
+        let archived = |created: &String| workspaces.contains(created.as_str());
+        let pruned = self
+            .catalog
+            .bots
+            .iter()
+            .any(|bot| bot.workspaces.iter().any(archived));
+        if pruned || !bots.is_empty() {
+            let mut catalog = self.catalog.clone();
+            for bot in &mut catalog.bots {
+                bot.workspaces.retain(|created| !archived(created));
+            }
+            if bots.is_empty() {
+                self.save_catalog(catalog)?;
+            } else {
+                self.retire_bots(catalog, &bots)?;
+            }
         }
         for workspace in workspaces {
             if self.store.delete_memory(workspace).is_err() {
@@ -137,7 +152,7 @@ impl State {
             if !channel.enabled || channel.deleted {
                 continue;
             }
-            let Ok(instructions) = self.instructions(&bot.workspace_id) else {
+            let Ok(instructions) = self.instructions(&bot) else {
                 failed.push(*id);
                 continue;
             };
@@ -165,9 +180,12 @@ impl State {
         }
         Ok(ready)
     }
-    fn instructions(&self, workspace: &str) -> Result<String, ErrorCode> {
-        let memory = self.store.memory(workspace).map_err(|_| ErrorCode::BotIo)?;
-        Ok(crate::instructions::compose(&memory))
+    fn instructions(&self, bot: &Bot) -> Result<String, ErrorCode> {
+        let memory = self
+            .store
+            .memory(&bot.workspace_id)
+            .map_err(|_| ErrorCode::BotIo)?;
+        Ok(crate::instructions::compose(&memory, &bot.permissions))
     }
     pub(crate) fn progress(
         &mut self,

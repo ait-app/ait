@@ -15,6 +15,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 use crate::channels::Incoming;
+use crate::mcp::Scopes;
 use crate::ports::{Credentials, Executor};
 use crate::state::State;
 
@@ -30,6 +31,8 @@ pub struct Dependencies {
     pub executor: Arc<dyn Executor>,
     /// Host environment credential resolver.
     pub credentials: Arc<dyn Credentials>,
+    /// Daemon-wide scoped MCP credential registry, refreshed on every catalog change.
+    pub scopes: Arc<Scopes>,
 }
 
 /// Safe startup or worker-lifecycle failure.
@@ -49,6 +52,7 @@ struct Worker {
     cancellation: CancellationToken,
     closed: watch::Receiver<bool>,
     executor: Arc<dyn Executor>,
+    scopes: Arc<Scopes>,
 }
 
 /// Cloneable application service; conversations outlive UI connections.
@@ -63,9 +67,11 @@ enum Operation {
     Account(ChannelId, String),
     Progress(BotTurnId, TurnStatus, Option<String>, Option<String>),
     Finished(ConversationId),
+    Rotate(ConversationId, BotTurnId),
     DeliveryNext(ChannelId),
     Delivery(BotTurnId, DeliveryStatus),
     Retire(Vec<String>),
+    RecordWorkspace(String, String),
 }
 /// Outcome of channel input that the Bot did not refuse.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -92,6 +98,7 @@ impl Bots {
             dependencies.store,
             dependencies.workspaces,
             dependencies.projects,
+            dependencies.scopes.clone(),
         )
         .map_err(|_| Error::Initialization)?;
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -106,6 +113,7 @@ impl Bots {
             cancellation,
             closed: observed,
             executor: dependencies.executor,
+            scopes: dependencies.scopes,
         }));
         let worker = bots.clone();
         std::thread::Builder::new()
@@ -125,6 +133,12 @@ impl Bots {
         self.call(Operation::Rpc(method.to_owned(), params)).await
     }
 
+    /// The scoped MCP credential registry this service publishes authorization into.
+    #[must_use]
+    pub fn scopes(&self) -> &Arc<Scopes> {
+        &self.0.scopes
+    }
+
     /// Stop admission and signal channel receivers and active turns to shut down.
     pub fn stop(&self) {
         self.0.cancellation.cancel();
@@ -137,6 +151,19 @@ impl Bots {
         self.call(Operation::Retire(workspaces.to_vec()))
             .await
             .map(|_| ())
+    }
+
+    /// Record a worktree Workspace created by `origin`'s current Bot.
+    /// # Errors
+    /// `BotNotFound` without a current Bot, `ResourceExhausted` beyond 64 recorded
+    /// Workspaces, or persistence and worker lifecycle failures.
+    pub async fn record_workspace(&self, origin: &str, created: &str) -> Result<(), ErrorCode> {
+        self.call(Operation::RecordWorkspace(
+            origin.to_owned(),
+            created.to_owned(),
+        ))
+        .await
+        .map(|_| ())
     }
 
     /// Wait for all channel tasks and native turn cancellations after stopping admission.
@@ -217,6 +244,14 @@ impl Bots {
         self.send(Operation::Progress(turn, status, reply, error))
             .await
             .map(|_| ())
+    }
+    /// Move `turn`'s conversation to a new native session and generation; see `State::rotate`.
+    pub(crate) async fn rotate(
+        &self,
+        conversation: ConversationId,
+        turn: BotTurnId,
+    ) -> Result<Conversation, ErrorCode> {
+        crate::protocol::decode(self.send(Operation::Rotate(conversation, turn)).await?)
     }
     pub(crate) async fn finished(&self, conversation: ConversationId) -> Result<(), ErrorCode> {
         self.send(Operation::Finished(conversation))
@@ -363,6 +398,7 @@ fn apply(
             state.finished(conversation);
             Ok(Value::Null)
         }
+        Operation::Rotate(conversation, turn) => state.rotate(conversation, turn),
         Operation::DeliveryNext(channel) => {
             let pending = state.pending_delivery(channel)?;
             if let Some((turn, _)) = &pending {
@@ -372,6 +408,9 @@ fn apply(
         }
         Operation::Delivery(turn, status) => state.delivery(turn, status).map(|()| Value::Null),
         Operation::Retire(workspaces) => state.retire(&workspaces).map(|()| Value::Null),
+        Operation::RecordWorkspace(origin, created) => state
+            .record_workspace(&origin, &created)
+            .map(|()| Value::Null),
     }
 }
 

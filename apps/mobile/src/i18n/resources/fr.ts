@@ -16,6 +16,37 @@ export const fr: TranslationResources = {
   },
   onlineService: en.onlineService,
   bots: {
+    modeCapWarning:
+      "Les modes qui permettent aux agents d'exécuter des commandes leur permettent aussi de lire les identifiants Ait de cet ordinateur et de contourner les limites Ait du Bot. N'autorisez-les que pour un travail que vous laisseriez un agent faire sans surveillance.",
+    commandReachWarning:
+      "Le Bot peut envoyer des instructions à chaque agent de cet espace de travail, y compris ceux que vous avez lancés, et modifier leurs réglages. Ces agents conservent leurs propres autorisations : une instruction du Bot peut donc atteindre des capacités au-delà des limites du Bot.",
+    terminalsWarning:
+      "Les terminaux exécutent des commandes sur cet ordinateur : ils peuvent donc lire ses identifiants Ait et contourner les limites Ait du Bot. Ne les activez que pour un travail que vous laisseriez un agent faire sans surveillance.",
+    noteInstructionsInInput:
+      "Ce fournisseur ne prend pas en charge un prompt système modifiable ; les instructions intégrées et la mémoire du Bot sont donc ajoutées à l'entrée de la conversation.",
+    noteNoReadOnlyMode:
+      "Ce fournisseur n'a pas de mode lecture seule ; le Bot s'exécute donc dans son mode par défaut. Les écritures qui nécessitent une approbation sont refusées automatiquement, mais les actions que le fournisseur autorise sans approbation ne sont pas bloquées, y compris la lecture des identifiants Ait de cet ordinateur et le contournement des limites Ait du Bot.",
+    noteToolsNeedApproval:
+      "Ce fournisseur ne peut pas pré-approuver les outils Ait ; les appels d'outils Ait qui nécessitent une approbation sont donc refusés automatiquement. Le Bot ne pourra peut-être que discuter, sans lancer ni gérer d'agents.",
+    noteNoAitTools:
+      "Ce fournisseur ne prend pas en charge la connexion aux outils Ait ; le Bot ne peut donc que discuter.",
+    permissions: "Autorisations",
+    permissionsHint: "Les changements d'autorisations prennent effet au prochain tour du Bot.",
+    groupObserve: "Observer (toujours actif) : voir les agents, l'activité et les fournisseurs",
+    groupAgents: "Agents : créer des agents, leur envoyer des instructions et les reconfigurer",
+    groupStop: "Arrêt : annuler et arrêter des agents",
+    groupSchedules: "Planifications : créer et gérer des planifications",
+    groupScripts: "Scripts : exécuter les scripts de l'espace de travail",
+    groupTerminals: "Terminaux : créer des terminaux et y saisir du texte",
+    groupWorkspaces: "Espaces de travail : créer des espaces worktree",
+    permissionRiskHint: "Peut exécuter des commandes ou créer des worktrees.",
+    modeCap: "Modes d'agent autorisés",
+    modeCapHint:
+      "Choisissez les modes que le Bot peut utiliser pour chaque fournisseur. Un fournisseur sans mode sélectionné est inutilisable. Le premier mode sélectionné est le mode par défaut.",
+    defaultMode: "Mode par défaut",
+    providerUnavailable: "{{provider}} (indisponible)",
+    readOnlyHint:
+      "Le Bot s'exécute dans le mode le plus strict de son fournisseur (pour Claude, le mode par défaut, où vos propres règles d'autorisation s'appliquent toujours) et laisse les modifications aux agents qu'il lance.",
     title: "Bot",
     chat: "Discussion",
     settings: "Réglages",

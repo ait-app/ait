@@ -6,6 +6,8 @@ use std::{
 };
 
 use anyhow::Context;
+use bot::mcp::Scopes;
+use domain::bot::BOT_SCOPE_LABEL;
 use domain::schedule::{RunStatus, Schedule, Target};
 use domain::workspace::lifecycle::WorkspaceCreation;
 use domain::workspace::records::PersistedWorkspaceRecord;
@@ -16,17 +18,40 @@ use persistence::storage::schedule::FileStore;
 use provider::service::agent_execution::AgentExecution;
 use schedule::ports::{Outcome, Progress, Runner};
 use schedule::service::Schedules;
-use serde_json::json;
+use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
 /// Upper bound for one completion wait; pending permissions are re-checked after each wait.
 const FINISH_WAIT_MS: u64 = 1_000;
+/// Failure of an occurrence whose Bot no longer grants its schedule; the task stays active.
+const REVOKED: &str = "Workspace Bot permissions no longer allow this schedule";
+
+/// Agent RPCs a scheduled occurrence performs, served by the host's Agent execution.
+#[async_trait::async_trait]
+trait AgentRpc: Send + Sync + std::fmt::Debug {
+    /// Execute Agent RPC `method` with `params`.
+    async fn execute(&self, method: &str, params: Value)
+    -> Result<Value, provider::rpc::ErrorCode>;
+}
+
+#[async_trait::async_trait]
+impl AgentRpc for AgentExecution {
+    async fn execute(
+        &self,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, provider::rpc::ErrorCode> {
+        Self::execute(self, method, params).await
+    }
+}
 
 #[derive(Debug)]
 struct AgentRunner {
-    execution: AgentExecution,
+    execution: Arc<dyn AgentRpc>,
     directory: Directory,
     worktrees: Arc<Mutex<Worktrees>>,
+    /// Current Bot grants, re-read before every occurrence of a Bot-scoped task.
+    scopes: Arc<Scopes>,
 }
 struct Occurrence<'a> {
     run_id: &'a str,
@@ -34,11 +59,16 @@ struct Occurrence<'a> {
     cancel: &'a CancellationToken,
 }
 
+/// Start the schedule worker, running occurrences through `execution` in `directory`'s
+/// Workspaces; Bot-scoped tasks are re-checked against `scopes` before every occurrence.
+/// # Errors
+/// Returns data-directory, interrupted-run recovery or worker start failures.
 pub(super) fn compose(
     data: &Path,
     execution: AgentExecution,
     directory: Directory,
     worktrees: Arc<Mutex<Worktrees>>,
+    scopes: Arc<Scopes>,
 ) -> anyhow::Result<Schedules> {
     let data = data
         .canonicalize()
@@ -49,9 +79,10 @@ pub(super) fn compose(
     Schedules::spawn(
         Box::new(store),
         Arc::new(AgentRunner {
-            execution,
+            execution: Arc::new(execution),
             directory,
             worktrees,
+            scopes,
         }),
     )
     .context("start schedule worker")
@@ -113,7 +144,7 @@ fn recover_interrupted(
 }
 
 /// Archive a scheduled Agent; an Agent that no longer exists needs no cleanup.
-async fn archive_agent(execution: &AgentExecution, id: &str) {
+async fn archive_agent(execution: &dyn AgentRpc, id: &str) {
     match execution
         .execute("agent.archive.request", json!({"agentId":id}))
         .await
@@ -181,7 +212,7 @@ impl Runner for AgentRunner {
             && (outcome.agent_id.is_none() || config["archiveOnFinish"] != false)
         {
             if let Some(id) = &outcome.agent_id {
-                archive_agent(&self.execution, id).await;
+                archive_agent(self.execution.as_ref(), id).await;
             }
             if schedule.workspace_id.is_none()
                 && let Some(id) = outcome.workspace_id.clone()
@@ -220,10 +251,35 @@ impl AgentRunner {
         .await
         .map_err(|_| "Cannot load scheduled workspace")?
     }
+    /// Re-check Bot-scoped `schedule` against its root's current grant before it acts.
+    ///
+    /// Returns the mode a new Agent must run in: the stored mode, or the cap's default when the
+    /// task stores none. Tasks outside a Bot scope and heartbeats return `None`.
+    /// # Errors
+    /// Returns `REVOKED` when the grant no longer includes schedules or the task's mode.
+    fn authorize(&self, schedule: &Schedule) -> Result<Option<String>, &'static str> {
+        let Some(root) = &schedule.bot_scope else {
+            return Ok(None);
+        };
+        let permissions = self.scopes.grant(root).permissions;
+        if !permissions.allows("create_schedule", false) {
+            return Err(REVOKED);
+        }
+        match &schedule.target {
+            Target::Agent { .. } => Ok(None),
+            Target::NewAgent { config } => {
+                let provider = config["provider"].as_str().ok_or(REVOKED)?;
+                permissions
+                    .mode(provider, config["modeId"].as_str())
+                    .map(Some)
+                    .map_err(|_| REVOKED)
+            }
+        }
+    }
     async fn create_agent(
         &self,
         schedule: &Schedule,
-        config: &serde_json::Value,
+        mut config: Value,
         occurrence: &Occurrence<'_>,
         outcome: &mut Outcome,
     ) -> Result<(), &'static str> {
@@ -299,14 +355,19 @@ impl AgentRunner {
         if occurrence.cancel.is_cancelled() {
             return Err("Scheduled run canceled");
         }
-        let mut config = config.clone();
         let object = config
             .as_object_mut()
             .ok_or("Invalid agent configuration")?;
         object.remove("archiveOnFinish");
         object.remove("isolation");
         config["cwd"] = json!(workspace.cwd);
-        let created=self.execution.execute("agent.create.request",json!({"config":config,"workspaceId":workspace.workspace_id,"idempotencyKey":occurrence.run_id,"labels":{"paseo.schedule-id":schedule.id,"paseo.schedule-run":occurrence.run_id}})).await.map_err(|_|"Scheduled agent creation failed")?;
+        let mut labels =
+            json!({"paseo.schedule-id":schedule.id,"paseo.schedule-run":occurrence.run_id});
+        // Bot-scoped Agents receive derived credentials instead of the host token.
+        if let Some(root) = &schedule.bot_scope {
+            labels[BOT_SCOPE_LABEL] = json!(root);
+        }
+        let created=self.execution.execute("agent.create.request",json!({"config":config,"workspaceId":workspace.workspace_id,"idempotencyKey":occurrence.run_id,"labels":labels})).await.map_err(|_|"Scheduled agent creation failed")?;
         outcome.agent_id = created["agentId"].as_str().map(str::to_owned);
         if outcome.agent_id.is_none() {
             return Err("Scheduled agent creation failed");
@@ -332,6 +393,7 @@ impl AgentRunner {
         if cancel.is_cancelled() {
             return Err("Scheduled run canceled");
         }
+        let mode = self.authorize(schedule)?;
         let text = match &schedule.target {
             Target::Agent { agent_id } => {
                 if let Some(id) = &schedule.workspace_id {
@@ -387,6 +449,10 @@ impl AgentRunner {
                 )
             }
             Target::NewAgent { config } => {
+                let mut config = config.clone();
+                if let Some(mode) = mode {
+                    config["modeId"] = json!(mode);
+                }
                 self.create_agent(schedule, config, occurrence, outcome)
                     .await?;
                 schedule.prompt.clone()
@@ -453,7 +519,7 @@ impl AgentRunner {
     }
 }
 
-fn available_agent(value: &serde_json::Value) -> bool {
+fn available_agent(value: &Value) -> bool {
     value["agent"].is_object()
         && value["agent"]["archivedAt"].is_null()
         && value["agent"]["management"] != "observed"

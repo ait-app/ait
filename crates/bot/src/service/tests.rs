@@ -282,3 +282,175 @@ async fn automatic_denial_queue_cancellation_memory_and_workspace_retirement() {
     );
     bots.shutdown().await.unwrap();
 }
+
+const PREFIX: &str = "<ait-bot-instructions>\n";
+
+fn session(created: bool, delivery: &str) -> Value {
+    json!({"created":created,"instructionDelivery":delivery})
+}
+
+/// Send `text` to the built-in conversation and return the turn once it reaches `status`.
+async fn settle(bots: &Bots, conversation: &Value, text: &str, status: &str) -> Value {
+    let turn = bots
+        .execute(
+            "bot.message.send.request",
+            json!({"workspaceId":WORKSPACE,"conversationId":conversation,
+                "messageId":uuid::Uuid::new_v4().to_string(),"text":text}),
+        )
+        .await
+        .unwrap()["turn"]["id"]
+        .clone();
+    wait(bots, WORKSPACE, &turn, status).await["turn"].clone()
+}
+
+/// Reset `conversation` once its previous turn has finished running.
+async fn reset(bots: &Bots, conversation: &Value) {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            match bots
+                .execute(
+                    "bot.conversation.reset.request",
+                    json!({"workspaceId":WORKSPACE,"conversationId":conversation}),
+                )
+                .await
+            {
+                Err(ErrorCode::BotConflict) => tokio::time::sleep(Duration::from_millis(10)).await,
+                result => break result.unwrap(),
+            }
+        }
+    })
+    .await
+    .unwrap();
+}
+
+fn calls(fixture: &Fixture) -> Vec<provider::service::bot_execution::Action> {
+    fixture
+        .native
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(_, action)| action.clone())
+        .collect()
+}
+
+fn sent_texts(fixture: &Fixture) -> Vec<String> {
+    calls(fixture)
+        .into_iter()
+        .filter_map(|action| match action {
+            provider::service::bot_execution::Action::Send { text, .. } => Some(text),
+            _ => None,
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn turn_prefix_instructions_are_sent_on_every_turn() {
+    let fixture = Fixture::new();
+    let bots = fixture.bots();
+    let conversation = open(&bots, WORKSPACE).await;
+    fixture.native.creates.lock().unwrap().extend([
+        session(true, "turn_prefix"),
+        session(false, "turn_prefix"),
+        session(false, "turn_prefix"),
+        session(false, "turn_prefix"),
+        session(true, "system_prompt"),
+    ]);
+
+    settle(&bots, &conversation, "first", "completed").await;
+    settle(&bots, &conversation, "second", "completed").await;
+    let memory = bots
+        .execute("bot.memory.get.request", json!({"workspaceId":WORKSPACE}))
+        .await
+        .unwrap();
+    bots.execute(
+        "bot.memory.update.request",
+        json!({"workspaceId":WORKSPACE,"text":"durable knowledge","expected":memory["revision"]}),
+    )
+    .await
+    .unwrap();
+    settle(&bots, &conversation, "third", "completed").await;
+    reset(&bots, &conversation).await;
+    settle(&bots, &conversation, "fourth", "completed").await;
+    settle(&bots, &conversation, "fifth", "completed").await;
+
+    let sent = sent_texts(&fixture);
+    assert_eq!(sent.len(), 5);
+    for (text, user) in [
+        (&sent[0], "first"),
+        (&sent[1], "second"),
+        (&sent[2], "third"),
+        (&sent[3], "fourth"),
+    ] {
+        assert!(text.starts_with(PREFIX), "{text}");
+        assert!(
+            text.ends_with(&format!("\n</ait-bot-instructions>\n\n{user}")),
+            "{text}"
+        );
+    }
+    assert!(sent[1].contains("(no saved preferences)"));
+    assert!(sent[2].contains("durable knowledge"));
+    assert_eq!(sent[4], "fifth");
+    bots.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn reset_required_rotates_the_conversation_and_retries_once() {
+    let fixture = Fixture::new();
+    let bots = fixture.bots();
+    let conversation = open(&bots, WORKSPACE).await;
+    let rejected =
+        json!({"created":false,"instructionDelivery":"turn_prefix","resetRequired":true});
+    fixture
+        .native
+        .creates
+        .lock()
+        .unwrap()
+        .extend([rejected.clone(), session(true, "turn_prefix")]);
+
+    let turn = settle(&bots, &conversation, "migrate", "completed").await;
+
+    assert_eq!(turn["generation"], 1);
+    let actions = calls(&fixture);
+    let created: Vec<_> = actions
+        .iter()
+        .filter_map(|action| match action {
+            provider::service::bot_execution::Action::Create { agent_id, .. } => Some(agent_id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(created.len(), 2);
+    assert_ne!(created[0], created[1]);
+    assert!(actions.iter().any(|action| matches!(
+        action,
+        provider::service::bot_execution::Action::Close { agent_id } if agent_id == created[0]
+    )));
+    assert!(actions.iter().any(|action| matches!(
+        action,
+        provider::service::bot_execution::Action::Send { agent_id, text, .. }
+            if agent_id == created[1] && text.starts_with(PREFIX) && text.ends_with("migrate")
+    )));
+    let listed = bots
+        .execute(
+            "bot.conversation.list.request",
+            json!({"workspaceId":WORKSPACE}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(listed["conversations"][0]["generation"], 1);
+
+    fixture
+        .native
+        .creates
+        .lock()
+        .unwrap()
+        .extend([rejected.clone(), rejected]);
+    let failed = settle(&bots, &conversation, "again", "failed").await;
+
+    assert_eq!(
+        failed["error"],
+        "Bot session could not be switched to its safe mode; reset this conversation"
+    );
+    assert_eq!(sent_texts(&fixture).len(), 1);
+    bots.shutdown().await.unwrap();
+}

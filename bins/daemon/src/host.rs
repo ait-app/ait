@@ -359,7 +359,7 @@ fn compose_services(
         &storage.projects,
         &storage.agents,
     );
-    let agent_mcp = AgentMcp::new(address, mcp_token, Arc::new(config_store.clone()));
+    let (agent_mcp, scopes) = compose_agent_mcp(address, mcp_token, &config_store);
     let daemon = compose_daemon(config_store, address, &server_id)?;
     let workspace_automation = Arc::new(Mutex::new(workspace_automation));
     let timeline = open_timeline(&config.data_dir)?;
@@ -394,8 +394,7 @@ fn compose_services(
         config,
         &agent_execution,
         (&storage.workspaces, &storage.projects),
-        &directory,
-        &worktrees,
+        (&directory, &worktrees, scopes),
     )?;
     let metadata = metadata::Service::new(metadata::Dependencies {
         workspace_names,
@@ -432,6 +431,20 @@ fn compose_services(
     ))
 }
 
+/// Compose the injected Agent MCP and the scoped-credential registry it issues from.
+///
+/// The returned registry must be the one Bots and the scheduler use, so Bot sessions and
+/// Bot-scoped Agents receive credentials that the MCP route resolves.
+fn compose_agent_mcp(
+    address: SocketAddr,
+    token: secrecy::SecretString,
+    config: &FileDaemonConfigStore,
+) -> (AgentMcp, Arc<::bot::mcp::Scopes>) {
+    let scopes = ::bot::mcp::Scopes::new();
+    let mcp = AgentMcp::new(address, token, Arc::new(config.clone())).with_scopes(scopes.clone());
+    (mcp, scopes)
+}
+
 fn compose_workspace_labels(
     config: &Config,
     workspaces: &FileBackedWorkspaceRegistry,
@@ -445,20 +458,21 @@ fn compose_background(
     config: &Config,
     execution: &AgentExecution,
     registries: (&FileBackedWorkspaceRegistry, &FileBackedProjectRegistry),
-    directory: &Directory,
-    worktrees: &Arc<Mutex<Worktrees>>,
+    (directory, worktrees, scopes): (&Directory, &Arc<Mutex<Worktrees>>, Arc<::bot::mcp::Scopes>),
 ) -> anyhow::Result<(::schedule::service::Schedules, ::bot::service::Bots)> {
     let bots = bot::compose(
         &config.data_dir,
         registries.0,
         registries.1,
         execution.clone(),
+        scopes.clone(),
     )?;
     let schedules = schedule::compose(
         &config.data_dir,
         execution.clone(),
         directory.clone(),
         worktrees.clone(),
+        scopes,
     )?;
     Ok((schedules, bots))
 }

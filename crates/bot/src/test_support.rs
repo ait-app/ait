@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -11,6 +11,7 @@ use provider::service::bot_execution::Action;
 use secrecy::SecretString;
 use serde_json::{Value, json};
 
+use crate::mcp::Scopes;
 use crate::ports::{Credentials, Executor};
 use crate::service::{Bots, Dependencies};
 use crate::state::State;
@@ -23,15 +24,20 @@ pub(crate) struct Native {
     pub(crate) approval: AtomicBool,
     pub(crate) fail_denial: AtomicBool,
     pub(crate) status: Mutex<Option<Value>>,
+    /// Scripted `Action::Create` results, in order; a new system-prompt session once exhausted.
+    pub(crate) creates: Mutex<VecDeque<Value>>,
 }
 #[async_trait::async_trait]
 impl Executor for Native {
     async fn execute(&self, owner: SessionOwner, action: Action) -> Result<Value, ErrorCode> {
         self.calls.lock().unwrap().push((owner, action.clone()));
         Ok(match action {
-            Action::Create { .. } | Action::Close { .. } | Action::Cancel { .. } => {
-                json!({"ok":true})
+            Action::Create { .. } => {
+                self.creates.lock().unwrap().pop_front().unwrap_or_else(
+                    || json!({"created":true,"instructionDelivery":"system_prompt"}),
+                )
             }
+            Action::Close { .. } | Action::Cancel { .. } => json!({"ok":true}),
             Action::Release { .. } => json!({"released":true}),
             Action::Send { agent_id, text, .. } => {
                 self.messages.lock().unwrap().insert(agent_id, text);
@@ -73,6 +79,7 @@ pub(crate) struct Fixture {
     pub(crate) workspaces: Arc<FileBackedWorkspaceRegistry>,
     pub(crate) projects: Arc<FileBackedProjectRegistry>,
     pub(crate) native: Arc<Native>,
+    pub(crate) scopes: Arc<Scopes>,
 }
 impl Fixture {
     pub(crate) fn new() -> Self {
@@ -113,6 +120,7 @@ impl Fixture {
             workspaces,
             projects,
             native: Arc::default(),
+            scopes: Scopes::new(),
         }
     }
     pub(crate) fn state(&self) -> State {
@@ -120,6 +128,7 @@ impl Fixture {
             self.store.clone(),
             self.workspaces.clone(),
             self.projects.clone(),
+            self.scopes.clone(),
         )
         .unwrap()
     }
@@ -139,6 +148,7 @@ impl Fixture {
             projects: self.projects.clone(),
             executor: self.native.clone(),
             credentials: Arc::new(NoCredentials),
+            scopes: self.scopes.clone(),
         })
         .unwrap()
     }

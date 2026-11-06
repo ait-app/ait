@@ -6,6 +6,7 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("bot.get.request"),
     MethodSpec::request("bot.setup.request"),
     MethodSpec::request("bot.update.request"),
+    MethodSpec::request("bot.permissions.update.request"),
     MethodSpec::request("bot.pause.request"),
     MethodSpec::request("bot.resume.request"),
     MethodSpec::request("bot.remove.request"),

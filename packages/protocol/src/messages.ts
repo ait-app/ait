@@ -304,6 +304,13 @@ const AgentModelDefinitionSchema = z.object({
   defaultThinkingOptionId: z.string().optional(),
 }) satisfies z.ZodType<AgentModelDefinition>;
 
+export const BotSessionSupportSchema = z.object({
+  instructions: z.enum(["system_prompt", "turn_prefix"]),
+  readOnlyMode: z.string().nullable(),
+  toolPreapproval: z.boolean(),
+  aitTools: z.boolean(),
+});
+
 export const ProviderSnapshotEntrySchema = z.object({
   supportsRealtimeVoice: z.boolean().optional(),
   supportsSessionImport: z.boolean().optional(),
@@ -319,6 +326,8 @@ export const ProviderSnapshotEntrySchema = z.object({
   description: z.string().optional(),
   iconSvg: z.string().optional(),
   defaultModeId: z.string().nullable().optional(),
+  // Absent on hosts that predate Bot sessions.
+  botSession: BotSessionSupportSchema.optional(),
 });
 
 export const CompactProviderSnapshotModelSchema = AgentModelDefinitionSchema.omit({
@@ -3453,6 +3462,7 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceRequestReceipts: z.boolean().optional(),
         creationLifecycle: z.boolean().optional(),
         workspaceBots: z.boolean().optional(),
+        workspaceBotPermissions: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
         // COMPAT(providersSnapshotCwd): added in v0.3.2, remove gate after 2027-02-10.
         providersSnapshotCwd: z.boolean().optional(),

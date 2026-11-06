@@ -7,7 +7,8 @@ import type { BotView } from "@ait/protocol/bot/types";
 import { BotSettings } from "./bot-settings";
 import { botKeys } from "./queries";
 
-const { botRequest, canManage, confirmDialog } = vi.hoisted(() => ({
+const { botRequest, canManage, confirmDialog, supported } = vi.hoisted(() => ({
+  supported: { current: true },
   botRequest: vi.fn(),
   canManage: vi.fn(() => true),
   confirmDialog: vi.fn(async (_options: unknown) => true),
@@ -18,11 +19,29 @@ vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => k
 vi.mock("./styles", () => ({ botStyles: {} }));
 vi.mock("./loading", () => ({ BotLoadingSpinner: () => null }));
 vi.mock("@/utils/confirm-dialog", () => ({ confirmDialog }));
+vi.mock("@/stores/session-store", () => ({
+  useSessionStore: (select: (state: unknown) => unknown) =>
+    select({
+      sessions: {
+        host: { serverInfo: { features: { workspaceBotPermissions: supported.current } } },
+      },
+    }),
+}));
 vi.mock("@/hooks/use-providers-snapshot", () => ({
   useProvidersSnapshot: () => ({
     entries: [
       { provider: "claude", label: "Claude", enabled: true, status: "ready", models: [] },
-      { provider: "codex", label: "Codex", enabled: true, status: "ready", models: [] },
+      {
+        provider: "codex",
+        label: "Codex",
+        enabled: true,
+        status: "ready",
+        models: [],
+        modes: [
+          { id: "read-only", label: "Read only" },
+          { id: "auto", label: "Auto" },
+        ],
+      },
     ],
     error: null,
   }),
@@ -107,8 +126,8 @@ const bot: BotView = {
 let queryClient: QueryClient;
 const onRemoved = vi.fn();
 
-function renderSettings(view: BotView = bot) {
-  return render(
+function settings(view: BotView) {
+  return (
     <QueryClientProvider client={queryClient}>
       <BotSettings
         serverId="host"
@@ -118,8 +137,12 @@ function renderSettings(view: BotView = bot) {
         interactive
         onRemoved={onRemoved}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+}
+
+function renderSettings(view: BotView = bot) {
+  return render(settings(view));
 }
 
 beforeEach(() => {
@@ -132,12 +155,106 @@ beforeEach(() => {
     throw new Error(`unexpected ${method}`);
   });
   canManage.mockReturnValue(true);
+  supported.current = true;
   confirmDialog.mockClear();
   onRemoved.mockClear();
 });
 afterEach(() => {
   cleanup();
   queryClient.clear();
+});
+
+const withPermissions: BotView = {
+  ...bot,
+  permissions: {
+    groups: ["observe", "agents", "stop", "schedules"],
+    modes: { codex: ["read-only", "auto"] },
+  },
+};
+
+describe("BotSettings permissions", () => {
+  it("settings_saves_permissions_with_workspace_id", async () => {
+    const saved: BotView = {
+      ...withPermissions,
+      permissions: {
+        groups: ["observe", "agents", "stop"],
+        modes: withPermissions.permissions!.modes,
+      },
+    };
+    botRequest.mockImplementation(async (method: string) => {
+      if (method === "bot.memory.get.request") return { text: "memo", revision: "r1" };
+      if (method === "bot.permissions.update.request")
+        return { bot: saved, appliesToNextTurn: true };
+      throw new Error(`unexpected ${method}`);
+    });
+    const { rerender } = renderSettings(withPermissions);
+    expect(screen.getByText("bots.modeCapWarning")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("bot-group-schedules"));
+    fireEvent.click(screen.getByTestId("bot-permissions-save"));
+    await waitFor(() =>
+      expect(botRequest).toHaveBeenCalledWith("bot.permissions.update.request", {
+        workspaceId: "workspace",
+        permissions: saved.permissions,
+      }),
+    );
+    await waitFor(() =>
+      expect(queryClient.getQueryData(botKeys.bot("host", "workspace"))).toEqual(saved),
+    );
+    expect(await screen.findByText("bots.permissionsHint")).toBeTruthy();
+    // The parent re-renders with the saved Bot from the cache; the hint stays visible.
+    rerender(settings(saved));
+    expect(screen.getByText("bots.permissionsHint")).toBeTruthy();
+    expect(screen.getByTestId("bot-group-schedules").getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("a_permission_change_from_elsewhere_replaces_the_draft", () => {
+    const { rerender } = renderSettings(withPermissions);
+    fireEvent.click(screen.getByTestId("bot-group-schedules"));
+    expect(screen.getByTestId("bot-group-schedules").getAttribute("aria-checked")).toBe("false");
+    const remote: BotView = {
+      ...withPermissions,
+      permissions: {
+        groups: ["observe", "agents", "stop", "schedules", "terminals"],
+        modes: { codex: ["auto"] },
+      },
+    };
+    queryClient.setQueryData(botKeys.bot("host", "workspace"), remote);
+    rerender(settings(remote));
+    expect(screen.getByTestId("bot-group-schedules").getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByTestId("bot-group-terminals").getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByTestId("bot-mode-codex-read-only").getAttribute("aria-checked")).toBe(
+      "false",
+    );
+  });
+
+  it("stays editable while the Bot is paused", () => {
+    renderSettings({ ...withPermissions, state: { kind: "paused", reason: "user" } });
+    expect(screen.getByTestId("bot-group-agents").getAttribute("aria-disabled")).not.toBe("true");
+    expect(screen.getByTestId("bot-permissions-save")).toHaveProperty("disabled", false);
+  });
+
+  it("guest_sees_permissions_read_only", () => {
+    canManage.mockReturnValue(false);
+    renderSettings(withPermissions);
+    expect(screen.getByTestId("bot-group-agents").getAttribute("aria-disabled")).toBe("true");
+    expect(screen.getByTestId("bot-mode-codex-auto").getAttribute("aria-disabled")).toBe("true");
+    expect(screen.queryByTestId("bot-permissions-save")).toBeNull();
+  });
+
+  it("hides permissions on hosts without the permissions method", () => {
+    supported.current = false;
+    renderSettings(withPermissions);
+    expect(screen.queryByTestId("bot-permissions-section")).toBeNull();
+    expect(screen.getByTestId("bot-provider")).toBeTruthy();
+    expect(screen.getByTestId("bot-mode")).toBeTruthy();
+    expect(screen.queryByText("bots.readOnlyHint")).toBeNull();
+  });
+
+  it("hides the mode picker on hosts with the permissions method", () => {
+    renderSettings(withPermissions);
+    expect(screen.queryByTestId("bot-mode")).toBeNull();
+    expect(screen.getByText("bots.readOnlyHint")).toBeTruthy();
+  });
 });
 
 describe("BotSettings", () => {

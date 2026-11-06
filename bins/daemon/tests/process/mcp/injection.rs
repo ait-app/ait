@@ -1,18 +1,7 @@
 //! Host-to-native-client MCP discovery, invocation and daemon restart integration.
 
+use super::super::native::launches;
 use super::*;
-
-fn launches(cwd: &std::path::Path, id: &str) -> Vec<Value> {
-    std::fs::read_to_string(cwd.join("native-requests.jsonl"))
-        .unwrap()
-        .lines()
-        .map(|line| serde_json::from_str::<Value>(line).unwrap())
-        .filter(|request| {
-            request["params"]["config"]["mcp_servers"]["ait"]["http_headers"]["X-Ait-Agent-Id"]
-                == id
-        })
-        .collect()
-}
 
 async fn assert_child(client: &Client, cwd: &std::path::Path, id: &str, workspace: &str) {
     let child: Value = serde_json::from_str(

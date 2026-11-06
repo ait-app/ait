@@ -194,6 +194,10 @@ async fn slow_discovery_does_not_block_directory_reads_or_native_events() {
         .await
         .unwrap();
     assert_eq!(initial["entries"][0]["status"], "loading");
+    assert_eq!(
+        initial["entries"][0]["botSession"]["instructions"],
+        "turn_prefix"
+    );
     entered(&gate).await;
     let read = tokio::time::timeout(
         Duration::from_secs(5),

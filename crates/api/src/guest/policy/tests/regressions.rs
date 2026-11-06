@@ -12,6 +12,7 @@ async fn node_guests_can_read_but_cannot_start_persistent_automation() {
         "schedule.run_once.request",
         "bot.setup.request",
         "bot.update.request",
+        "bot.permissions.update.request",
         "bot.channel.create.request",
         "bot.channel.update.request",
         "bot.message.send.request",

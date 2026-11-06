@@ -1,14 +1,17 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use domain::bot::{Bot, BotState, Catalog, Channel, ChannelConfig, ExecutionConfig, PauseReason};
+use domain::bot::{
+    BOT_WORKSPACES, Bot, BotState, Catalog, Channel, ChannelConfig, ExecutionConfig, PauseReason,
+};
 use domain::{BotId, ChannelId};
 use model::ErrorCode;
 use serde_json::{Value, json};
 
 use super::State;
 use crate::protocol::{
-    ChannelCreate, ChannelRequest, ChannelUpdate, Setup, Update, WorkspaceRequest,
+    ChannelCreate, ChannelRequest, ChannelUpdate, PermissionsUpdate, Setup, Update,
+    WorkspaceRequest,
 };
 
 /// Most Bots that are not retired.
@@ -48,6 +51,10 @@ pub(super) fn validate(catalog: &Catalog) -> Result<(), ErrorCode> {
     let mut workspaces = BTreeSet::new();
     for bot in &catalog.bots {
         validate_execution(&bot.execution)?;
+        bot.permissions
+            .clone()
+            .normalized()
+            .map_err(|_| ErrorCode::InvalidMessage)?;
         if !model::valid_id(&bot.workspace_id)
             || bots.insert(bot.id, bot).is_some()
             || (!retired(bot) && !workspaces.insert(bot.workspace_id.as_str()))
@@ -100,6 +107,13 @@ fn validate_execution(execution: &ExecutionConfig) -> Result<(), ErrorCode> {
     Ok(())
 }
 
+/// Validate `execution` and drop the mode: a Bot's native mode is chosen by the server.
+fn normalized_execution(mut execution: ExecutionConfig) -> Result<ExecutionConfig, ErrorCode> {
+    validate_execution(&execution)?;
+    execution.mode_id = None;
+    Ok(execution)
+}
+
 fn validate_channel(config: &ChannelConfig) -> Result<(), ErrorCode> {
     let (reference, senders) = match config {
         ChannelConfig::Builtin => return Ok(()),
@@ -141,20 +155,27 @@ fn account(config: &ChannelConfig) -> Option<(&'static str, &str)> {
 impl State {
     pub(super) fn setup(&mut self, request: Setup) -> Result<Value, ErrorCode> {
         self.active_workspace(&request.workspace_id)?;
+        let execution = normalized_execution(request.execution)?;
+        let permissions = request
+            .permissions
+            .unwrap_or_default()
+            .normalized()
+            .map_err(|_| ErrorCode::InvalidMessage)?;
         if let Ok(bot) = self.current(&request.workspace_id) {
-            if bot.execution == request.execution {
+            if bot.execution == execution && bot.permissions == permissions {
                 return Ok(json!({"bot":super::view(bot),"created":false}));
             }
             return Err(ErrorCode::BotConflict);
         }
-        validate_execution(&request.execution)?;
         let bot = Bot {
             id: BotId::generate(),
             workspace_id: request.workspace_id,
-            execution: request.execution,
+            execution,
             builtin_channel_id: ChannelId::generate(),
             state: BotState::Active,
             created_at: chrono::Utc::now().to_rfc3339(),
+            permissions,
+            workspaces: BTreeSet::new(),
         };
         let mut catalog = self.catalog.clone();
         catalog.channels.push(Channel {
@@ -185,10 +206,57 @@ impl State {
             .iter_mut()
             .find(|entry| entry.id == id)
             .ok_or(ErrorCode::BotNotFound)?;
-        bot.execution = request.execution;
+        bot.execution = normalized_execution(request.execution)?;
         let view = super::view(bot);
         self.save_catalog(catalog)?;
         Ok(json!({"bot":view,"configurationAppliesToNewSessions":true}))
+    }
+    /// Replace the current Bot's tool groups and mode caps; the next turn reads them.
+    pub(super) fn update_permissions(
+        &mut self,
+        request: PermissionsUpdate,
+    ) -> Result<Value, ErrorCode> {
+        let id = self.current(&request.workspace_id)?.id;
+        let permissions = request
+            .permissions
+            .normalized()
+            .map_err(|_| ErrorCode::InvalidMessage)?;
+        let mut catalog = self.catalog.clone();
+        let bot = catalog
+            .bots
+            .iter_mut()
+            .find(|entry| entry.id == id)
+            .ok_or(ErrorCode::BotNotFound)?;
+        bot.permissions = permissions;
+        let view = super::view(bot);
+        self.save_catalog(catalog)?;
+        Ok(json!({"bot":view,"appliesToNextTurn":true}))
+    }
+    /// Record a worktree Workspace created by the Workspace's current Bot.
+    ///
+    /// # Errors
+    /// `BotNotFound` without a current Bot, `ResourceExhausted` beyond 64 recorded
+    /// Workspaces, or a persistence failure.
+    pub(crate) fn record_workspace(
+        &mut self,
+        origin: &str,
+        created: &str,
+    ) -> Result<(), ErrorCode> {
+        let id = self.current(origin)?.id;
+        let mut catalog = self.catalog.clone();
+        let bot = catalog
+            .bots
+            .iter_mut()
+            .find(|entry| entry.id == id)
+            .ok_or(ErrorCode::BotNotFound)?;
+        if bot.workspaces.contains(created) {
+            return Ok(());
+        }
+        if bot.workspaces.len() >= BOT_WORKSPACES {
+            return Err(ErrorCode::ResourceExhausted);
+        }
+        bot.workspaces.insert(created.to_owned());
+        self.save_catalog(catalog)
     }
     /// Pause the Workspace's active Bot at the user's request.
     pub(super) fn pause(&mut self, request: &WorkspaceRequest) -> Result<Value, ErrorCode> {
@@ -216,7 +284,7 @@ impl State {
     /// Retire the Workspace's Bot at the user's request; its memory is kept for a later setup.
     pub(super) fn remove(&mut self, request: &WorkspaceRequest) -> Result<Value, ErrorCode> {
         let id = self.current(&request.workspace_id)?.id;
-        self.retire_bots(&BTreeSet::from([id]))?;
+        self.retire_bots(self.catalog.clone(), &BTreeSet::from([id]))?;
         Ok(json!({"bot":super::view(self.bot(id)?)}))
     }
     /// Persist `reason` as the Bot's pause cause, then cancel its queued work and release
@@ -230,11 +298,14 @@ impl State {
         self.stop_bot(id, false, cancellation)?;
         Ok(view)
     }
-    /// Retire `bots`, release their external channel accounts, and close their native
-    /// sessions. Builtin channels stay so retired history keeps its routing.
-    pub(super) fn retire_bots(&mut self, bots: &BTreeSet<BotId>) -> Result<(), ErrorCode> {
+    /// Save `catalog` with `bots` retired and their external channel accounts released, then
+    /// close their native sessions. Builtin channels stay so retired history keeps its routing.
+    pub(super) fn retire_bots(
+        &mut self,
+        mut catalog: Catalog,
+        bots: &BTreeSet<BotId>,
+    ) -> Result<(), ErrorCode> {
         let at = chrono::Utc::now().to_rfc3339();
-        let mut catalog = self.catalog.clone();
         for bot in catalog.bots.iter_mut().filter(|bot| bots.contains(&bot.id)) {
             bot.state = BotState::Retired { at: at.clone() };
         }

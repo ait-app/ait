@@ -116,6 +116,7 @@ struct FakeState {
     mcp_support: mcp::Support,
     create_specs: Vec<AgentSessionSpec>,
     start_configs: Vec<StoredAgentConfig>,
+    validate_configs: Vec<StoredAgentConfig>,
     available: bool,
     fail_info: bool,
     runtime_info: Option<StoredAgentRuntimeInfo>,
@@ -146,6 +147,7 @@ impl Default for FakeState {
             mcp_support: mcp::Support::Unsupported,
             create_specs: Vec::new(),
             start_configs: Vec::new(),
+            validate_configs: Vec::new(),
             available: true,
             fail_info: false,
             runtime_info: None,
@@ -278,10 +280,15 @@ impl AgentSession for FakeSession {
         self.0.lock().unwrap().failure_message.map(Cow::Borrowed)
     }
 
+    fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+        self.0.lock().unwrap().validate_configs.push(config.clone());
+        Ok(())
+    }
+
     async fn start_turn(
         &mut self,
         _text: &str,
-        config: &domain::agent_runtime::StoredAgentConfig,
+        config: &StoredAgentConfig,
     ) -> Result<String, AgentSessionError> {
         let mut state = self.0.lock().unwrap();
         state.start_calls += 1;

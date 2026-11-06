@@ -3,34 +3,81 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::{DefaultBodyLimit, State};
+use axum::extract::{DefaultBodyLimit, Extension, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
+use bot::mcp::{Caller, CallerKind};
+use domain::bot::BOT_SCOPE_LABEL;
 use serde_json::{Value, json};
 use tower_http::timeout::TimeoutLayer;
 
+use crate::connection::rpc;
 use crate::{ApiError, Shared, auth};
 
 mod catalog;
+mod scope;
 #[cfg(unix)]
 mod socket;
 mod tools;
 mod validation;
+
+use scope::{Failure, Scope};
 
 /// Canonical agent orchestration endpoint on the existing daemon listener.
 pub(super) const PATH: &str = "/mcp/agents";
 const VERSIONS: &[&str] = &["2025-03-26", "2025-06-18", "2025-11-25"];
 const CALL_TIMEOUT: Duration = Duration::from_secs(60);
 
-pub(super) fn authenticate(state: &Shared, headers: &HeaderMap) -> Result<(), ApiError> {
-    auth::authenticate(headers, &state.token).or_else(|error| {
-        state
+/// Authenticated identity of one MCP request, inserted into its extensions by the guard.
+#[derive(Debug, Clone)]
+pub(super) enum Principal {
+    /// The daemon token or the shared Agent MCP token.
+    Host,
+    /// A Bot session or Bot-scoped Agent credential.
+    Scoped(Caller),
+}
+
+/// Authenticate an MCP request with the daemon token, the shared Agent MCP token or a scoped
+/// credential issued by the installed Bot service, in that order.
+/// # Errors
+/// Returns 400 for malformed authorization headers and 401 for unknown credentials.
+pub(super) fn authenticate(state: &Shared, headers: &HeaderMap) -> Result<Principal, ApiError> {
+    let presented = auth::bearer(headers)?;
+    if auth::matches(presented, &state.token)
+        || state
             .agent_mcp_token
             .as_ref()
-            .map_or(Err(error), |token| auth::authenticate(headers, token))
-    })
+            .is_some_and(|token| auth::matches(presented, token))
+    {
+        return Ok(Principal::Host);
+    }
+    state
+        .bot
+        .bots
+        .as_ref()
+        .and_then(|bots| bots.scopes().resolve(presented))
+        .map(Principal::Scoped)
+        .ok_or(ApiError(StatusCode::UNAUTHORIZED))
+}
+
+/// Read the current grant of a scoped `principal` once for the whole request.
+/// # Errors
+/// Returns 401 when the Bot service that issued the credential is not installed.
+fn scope(state: &Shared, principal: Principal) -> Result<Option<Scope>, ApiError> {
+    match principal {
+        Principal::Host => Ok(None),
+        Principal::Scoped(caller) => {
+            let grant = state
+                .bot
+                .bots
+                .as_ref()
+                .map(|bots| bots.scopes().grant(&caller.root))
+                .ok_or(ApiError(StatusCode::UNAUTHORIZED))?;
+            Ok(Some(Scope { caller, grant }))
+        }
+    }
 }
 
 /// Return stateless MCP routes; the parent API supplies shared state and authentication.
@@ -80,11 +127,13 @@ async fn method_not_allowed(State(state): State<Arc<Shared>>) -> Result<Response
 
 async fn handle(
     State(state): State<Arc<Shared>>,
+    Extension(principal): Extension<Principal>,
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> Result<Response, ApiError> {
     enabled(&state).await?;
     validate_headers(&headers)?;
+    let scope = scope(&state, principal)?;
     let message: Value = match serde_json::from_slice(&body) {
         Ok(message) => message,
         Err(_) => {
@@ -127,10 +176,10 @@ async fn handle(
         "initialize" => initialize(&params),
         "ping" => Ok(json!({})),
         "tools/list" if params.get("cursor").is_none() => Ok(
-            json!({"tools":catalog::installed(&state).map(catalog::Tool::descriptor).collect::<Vec<_>>()}),
+            json!({"tools":catalog::granted(&state, scope.as_ref()).map(catalog::Tool::descriptor).collect::<Vec<_>>()}),
         ),
         "tools/list" => Err((-32602, "This catalog has no continuation cursor")),
-        "tools/call" => call(state, &headers, params).await,
+        "tools/call" => call(state, scope, &headers, params).await,
         _ => Err((-32601, "Method not found")),
     };
     Ok(Json(match result {
@@ -203,13 +252,14 @@ fn initialize(params: &Value) -> Result<Value, (i32, &'static str)> {
 
 async fn call(
     state: Arc<Shared>,
+    scope: Option<Scope>,
     headers: &HeaderMap,
     params: Value,
 ) -> Result<Value, (i32, &'static str)> {
     let name = params["name"]
         .as_str()
         .ok_or((-32602, "Tool name is required"))?;
-    let tool = catalog::installed(&state)
+    let tool = catalog::granted(&state, scope.as_ref())
         .find(|tool| tool.name == name)
         .ok_or((-32602, "Unknown or unavailable tool"))?;
     let arguments = params
@@ -219,9 +269,9 @@ async fn call(
     if !validation::matches(&tool.input_schema, &arguments) {
         return Err((-32602, "Arguments do not match the tool input schema"));
     }
-    let caller = auth::single_header(headers, "x-ait-agent-id")
-        .map_err(|_| (-32602, "Invalid caller header"))?
-        .map(str::to_owned);
+    let header = auth::single_header(headers, "x-ait-agent-id")
+        .map_err(|_| (-32602, "Invalid caller header"))?;
+    let caller = claimed(scope.as_ref(), header)?.map(str::to_owned);
     let permit = state
         .connections
         .clone()
@@ -239,18 +289,82 @@ async fn call(
     state.tasks.spawn(async move {
         let _permit = permit;
         let result = tokio::select! {
-            () = task_state.cancellation.cancelled() => Err(model::ErrorCode::ServerDraining),
-            result = tokio::time::timeout(CALL_TIMEOUT, tools::execute(&task_state, tool, arguments, caller.as_deref())) => {
-                result.unwrap_or(Err(model::ErrorCode::ResourceExhausted))
+            () = task_state.cancellation.cancelled() => Ok(tool_result(Err(model::ErrorCode::ServerDraining.into()))),
+            result = tokio::time::timeout(CALL_TIMEOUT, invoke(&task_state, tool, arguments, scope.as_ref(), caller.as_deref())) => {
+                result.unwrap_or_else(|_| Ok(tool_result(Err(model::ErrorCode::ResourceExhausted.into()))))
             }
         };
-        let _ = sender.send(tool_result(result));
+        let _ = sender.send(result);
     });
     drop(admission);
-    receiver.await.map_err(|_| (-32603, "MCP execution failed"))
+    receiver
+        .await
+        .map_err(|_| (-32603, "MCP execution failed"))?
 }
 
-fn tool_result(result: Result<Value, model::ErrorCode>) -> Value {
+/// Resolve the `caller` Agent's context and execute `tool` as a tool result.
+/// # Errors
+/// Rejects host credentials naming a Bot-scoped Agent, which must use its own credential.
+async fn invoke(
+    state: &Shared,
+    tool: &catalog::Tool,
+    arguments: Value,
+    scope: Option<&Scope>,
+    caller: Option<&str>,
+) -> Result<Value, (i32, &'static str)> {
+    let context = match caller {
+        Some(id) => match context(state, id).await {
+            Ok(agent) => Some(agent),
+            Err(error) => return Ok(tool_result(Err(error.into()))),
+        },
+        None => None,
+    };
+    if scope.is_none()
+        && context
+            .as_ref()
+            .is_some_and(|agent| agent["labels"].get(BOT_SCOPE_LABEL).is_some())
+    {
+        return Err((-32602, "Bot-scoped agents must use their own credential"));
+    }
+    let result = tools::execute(state, tool, arguments, scope, context.as_ref()).await;
+    Ok(tool_result(result))
+}
+
+/// Return the Agent whose record supplies the caller context, given the `header` identity.
+///
+/// A Bot session has no public Agent record and gets no context; a subtree Agent always acts as
+/// itself; the host may name any Agent.
+/// # Errors
+/// Rejects a header naming another identity than the scoped credential.
+fn claimed<'a>(
+    scope: Option<&'a Scope>,
+    header: Option<&'a str>,
+) -> Result<Option<&'a str>, (i32, &'static str)> {
+    let Some(scope) = scope else {
+        return Ok(header);
+    };
+    let (own, context) = match &scope.caller.kind {
+        CallerKind::Bot { session_id, .. } => (session_id.as_str(), None),
+        CallerKind::Subtree { agent_id } => (agent_id.as_str(), Some(agent_id.as_str())),
+    };
+    if header.is_some_and(|header| header != own) {
+        return Err((-32602, "Caller does not match credential"));
+    }
+    Ok(context)
+}
+
+/// Resolve public Agent `id` as caller context; hidden internal records are not found.
+/// # Errors
+/// Returns `InvalidMessage` for unknown Agents and propagates lookup failures.
+async fn context(state: &Shared, id: &str) -> Result<Value, model::ErrorCode> {
+    let mut value = rpc::execute(state, "agent.get.request", json!({"agentId":id})).await?;
+    match value.get_mut("agent").map(Value::take) {
+        Some(agent) if agent.is_object() => Ok(agent),
+        _ => Err(model::ErrorCode::InvalidMessage),
+    }
+}
+
+fn tool_result(result: Result<Value, Failure>) -> Value {
     match result {
         Ok(value) => {
             let failed = value.get("error").is_some_and(|error| !error.is_null())

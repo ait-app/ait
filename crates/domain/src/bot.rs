@@ -1,8 +1,23 @@
 //! Workspace-owned Bots, exclusive channels and durable conversation receipts.
 
+use std::collections::BTreeSet;
+
 use serde::{Deserialize, Serialize};
 
+use self::permissions::BotPermissions;
+
 use crate::{BotId, BotTurnId, ChannelId, ConversationId};
+
+pub mod permissions;
+
+/// Reserved label carrying the Bot scope of an Agent or schedule.
+pub const BOT_SCOPE_LABEL: &str = "ait.bot.scope";
+
+/// Label namespace no MCP caller or guest may write; `BOT_SCOPE_LABEL` lives in it.
+pub const BOT_LABEL_PREFIX: &str = "ait.bot.";
+
+/// Most worktree Workspaces one Bot may record as its own.
+pub const BOT_WORKSPACES: usize = 64;
 
 /// Native execution selection; credentials remain provider-owned.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,6 +77,12 @@ pub struct Bot {
     pub state: BotState,
     /// UTC creation timestamp.
     pub created_at: String,
+    /// User-configured MCP tool groups and per-provider mode cap.
+    #[serde(default)]
+    pub permissions: BotPermissions,
+    /// Unarchived worktree Workspaces created by this Bot.
+    #[serde(default)]
+    pub workspaces: BTreeSet<String>,
 }
 
 /// Transport-specific configuration; secret values are never part of this record.
@@ -154,6 +175,11 @@ pub struct Conversation {
     pub execution: ExecutionConfig,
     /// Next ordered input sequence; gaps after failed persistence are permitted.
     pub next_sequence: u64,
+    /// Unused: earlier builds recorded the digest of the instructions last prefixed to an input.
+    /// Instructions delivered as a turn prefix now ride on every input, so nothing reads or
+    /// writes this; it remains so conversations stored by those builds still load.
+    #[serde(default)]
+    pub instructions_digest: Option<String>,
 }
 
 /// Durable execution state; uncertain work is never replayed automatically.

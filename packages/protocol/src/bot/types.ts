@@ -11,11 +11,27 @@ export const BotStateSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("paused"), reason: z.enum(["user", "directory_missing"]) }),
   z.object({ kind: z.literal("retired"), at: z.string() }),
 ]);
+export const BOT_TOOL_GROUPS = [
+  "observe",
+  "agents",
+  "stop",
+  "schedules",
+  "scripts",
+  "terminals",
+  "workspaces",
+] as const;
+export const BotToolGroupSchema = z.enum(BOT_TOOL_GROUPS);
+export const BotPermissionsSchema = z.strictObject({
+  groups: z.array(BotToolGroupSchema).max(7),
+  modes: z.record(z.string().min(1), z.array(z.string().min(1)).min(1).max(16)),
+});
 export const BotViewSchema = z.object({
   workspaceId: z.string(),
   execution: BotExecutionSchema,
   builtinChannelId: z.guid(),
   state: BotStateSchema,
+  // Absent on hosts that predate Bot permissions.
+  permissions: BotPermissionsSchema.optional(),
   createdAt: z.string(),
 });
 export const BotChannelConfigSchema = z.discriminatedUnion("kind", [
@@ -75,6 +91,8 @@ export const BotTurnSchema = z.object({
   createdAt: z.string(),
 });
 
+export type BotToolGroup = z.infer<typeof BotToolGroupSchema>;
+export type BotPermissions = z.infer<typeof BotPermissionsSchema>;
 export type BotView = z.infer<typeof BotViewSchema>;
 export type BotState = z.infer<typeof BotStateSchema>;
 export type BotExecution = z.infer<typeof BotExecutionSchema>;

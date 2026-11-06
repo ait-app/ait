@@ -2,7 +2,7 @@
 
 - 状态：接受
 - 日期：2026-10-14
-- 后续修订：[ADR-202](../providers/adr-202-agent-mcp-injection.md) 接入 Provider 运行时注入与 MCP 专用凭证。
+- 后续修订：[ADR-202](../providers/adr-202-agent-mcp-injection.md) 接入 Provider 运行时注入与 MCP 专用凭证；[ADR-215](../bot/adr-215-bot-permissions-and-scoped-mcp.md) 说明 `X-Ait-Agent-Id` 仍不是权限边界，Bot 作用域凭据才是。
 
 ## 背景
 

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   BotViewSchema,
+  BotPermissionsSchema,
   BotExecutionSchema,
   BotChannelSchema,
   BotChannelConfigSchema,
@@ -22,12 +23,19 @@ export const BOT_REQUEST_SCHEMAS = [
     workspaceId: WorkspaceIdSchema,
     execution: BotExecutionSchema,
     clearMemory: z.boolean().optional(),
+    permissions: BotPermissionsSchema.optional(),
   }),
   z.strictObject({
     type: z.literal("bot.update.request"),
     requestId: z.string(),
     workspaceId: WorkspaceIdSchema,
     execution: BotExecutionSchema,
+  }),
+  z.strictObject({
+    type: z.literal("bot.permissions.update.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    permissions: BotPermissionsSchema,
   }),
   z.strictObject({
     type: z.literal("bot.pause.request"),
@@ -154,6 +162,14 @@ export const BOT_RESPONSE_SCHEMAS = [
     }),
   }),
   z.object({
+    type: z.literal("bot.permissions.update.response"),
+    payload: z.object({
+      requestId: z.string(),
+      bot: BotViewSchema,
+      appliesToNextTurn: z.boolean(),
+    }),
+  }),
+  z.object({
     type: z.literal("bot.pause.response"),
     payload: z.object({ requestId: z.string(), bot: BotViewSchema }),
   }),
@@ -264,4 +280,9 @@ export type BotResult<M extends BotMethod> = Extract<
   BotResponse,
   { type: BotResponseType<M> }
 >["payload"];
-export const BOT_METHODS = BOT_REQUEST_SCHEMAS.map((schema) => schema.shape.type.value);
+/** Methods added after the core v2 Bot set; hosts without them keep the Bot tab. */
+export const BOT_PERMISSION_METHODS = ["bot.permissions.update.request"] as const;
+export const BOT_METHODS = BOT_REQUEST_SCHEMAS.map((schema) => schema.shape.type.value).filter(
+  (method) => !(BOT_PERMISSION_METHODS as readonly string[]).includes(method),
+);
+export const ALL_BOT_METHODS = BOT_REQUEST_SCHEMAS.map((schema) => schema.shape.type.value);

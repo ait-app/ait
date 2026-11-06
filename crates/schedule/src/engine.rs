@@ -30,7 +30,10 @@ impl Engine {
                 return Err(Error::Storage);
             }
             validate(&schedule.prompt, &schedule.target, schedule.max_runs)?;
-            if let Some(id) = &schedule.workspace_id {
+            for id in [&schedule.workspace_id, &schedule.bot_scope]
+                .into_iter()
+                .flatten()
+            {
                 validate_workspace_id(id)?;
             }
             if schedule.status != Status::Completed {
@@ -171,6 +174,9 @@ impl Engine {
         let request: Create = serde_json::from_value(params).map_err(|_| Error::Invalid)?;
         validate(&request.prompt, &request.target, request.max_runs)?;
         validate_workspace_id(&request.workspace_id)?;
+        if let Some(root) = &request.bot_scope {
+            validate_workspace_id(root)?;
+        }
         validate_trigger(&request.cadence, request.start_at, now)?;
         if request.start_at.is_some_and(|at| at < now) {
             return Err(Error::Invalid);
@@ -193,6 +199,7 @@ impl Engine {
         let record = Schedule {
             id: Uuid::new_v4().to_string(),
             workspace_id: Some(request.workspace_id),
+            bot_scope: request.bot_scope,
             name: normalize_name(request.name),
             prompt: request.prompt.trim().to_owned(),
             cadence: request.cadence,
@@ -489,6 +496,8 @@ fn advance(
 struct Summary<'a> {
     id: &'a str,
     workspace_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bot_scope: Option<&'a str>,
     name: Option<&'a str>,
     prompt: &'a str,
     cadence: &'a Cadence,
@@ -507,6 +516,7 @@ fn summary(schedule: &Schedule) -> Summary<'_> {
     Summary {
         id: &schedule.id,
         workspace_id: schedule.workspace_id.as_deref(),
+        bot_scope: schedule.bot_scope.as_deref(),
         name: schedule.name.as_deref(),
         prompt: &schedule.prompt,
         cadence: &schedule.cadence,
