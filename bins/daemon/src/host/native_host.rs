@@ -25,8 +25,11 @@ use provider::native_host::discover;
 const MANAGED: &str = "providers/omp-native-host/1/manifest.json";
 /// Installer entry point relative to the repository root in a development checkout.
 const SOURCE_INSTALLER: &str = "runtimes/omp-native-host/install.mjs";
-/// Upper bound on one installer run, so a stalled download cannot hold the caller.
-const INSTALL_TIMEOUT: Duration = Duration::from_secs(120);
+/// Upper bound on one installer run.
+///
+/// A cold `npm ci` on a slow link legitimately takes minutes, so the budget is generous; a run
+/// that overruns it is terminated and the next daemon start tries again.
+const INSTALL_TIMEOUT: Duration = Duration::from_secs(300);
 /// Time an installer's process group gets to exit before the whole group is killed outright.
 const TERMINATE_GRACE: Duration = Duration::from_secs(5);
 /// Poll interval while the installer runs, so termination never waits on a blocking call.
@@ -57,20 +60,27 @@ enum Completion {
     TimedOut,
 }
 
-/// Warn about a missing runtime and keep serving with the official OMP binary.
+/// Warn that an installation attempt failed: what happened, the user-visible impact and when
+/// the installer runs again.
+///
+/// Retrying is deliberately unconditional on the next daemon start rather than tied to a manifest
+/// change: a first install usually has no manifest yet, so a change-triggered retry could never
+/// fire and the runtime would stay unavailable forever.
 fn degraded(reason: impl std::fmt::Display) {
     tracing::warn!(
-        "OMP native host runtime unavailable: {reason}; OMP keeps using the official binary"
+        "OMP native host runtime unavailable: {reason}. OMP keeps the official binary, so only \
+         /vibe is unavailable; the installer runs again on the next daemon start"
     );
 }
 
 /// Warn that an existing installation failed verification and is left alone.
 ///
-/// Reinstalling here cannot decide which tree wins, so the verified degradation stands.
+/// Reinstalling here cannot decide which tree wins, so the documented degradation stands until a
+/// new runtime is installed or the current one is repaired.
 fn degraded_permanently(reason: impl std::fmt::Display) {
     tracing::warn!(
-        "OMP native host runtime unavailable: {reason}; OMP keeps using the official binary and \
-         will not reinstall over an unverified tree"
+        "OMP native host runtime unavailable: {reason}. OMP keeps the official binary, so only \
+         /vibe is unavailable; the installer will not reinstall over an unverified tree"
     );
 }
 

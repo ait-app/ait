@@ -8,6 +8,7 @@
 - Consolidate OMP presets and purpose-specific roles into existing model settings with semantic icons; keep native Run/Download controls compact without changing independent action progress or results.
 - Bridge OMP native Vibe mode: the private host greets the adapter, wires `/vibe` into the RPC command table so it enters/exits the native mode and turns an inline directive into a real turn, projects Vibe state and verified workers into host UI and subagent events, exposes list/spawn/send/wait/kill/toggle over native actions, and keeps `/vibe` blocked with an explicit card when the bridge is absent.
 - Keep the optional OMP native host install recoverable: it runs in its own process group so a timeout stops npm too, and a stale installation lock left by a killed installer is reclaimed instead of blocking every later daemon start.
+- Give the optional OMP native host installer a 300-second budget, since a cold `npm ci` on a slow link legitimately takes minutes; a failure degrades only `/vibe` and is retried on the next daemon start.
 
 ## 0.2.0 - 2026-11-07
 
