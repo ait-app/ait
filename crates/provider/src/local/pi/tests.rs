@@ -8,11 +8,13 @@ use tempfile::TempDir;
 use super::*;
 
 mod admission;
+mod commands;
 mod configuration;
 mod configuration_rejections;
 mod diagnostics;
 mod discovery;
 mod installed;
+mod notifications;
 mod preview;
 mod reasoning;
 mod review;
@@ -342,7 +344,7 @@ fn stream_does_not_finish_at_agent_end_and_bounds_display_output() {
     let mut stream = streaming::Stream::default();
     stream.begin("turn".into());
     assert!(!stream.consume(&json!({"type":"agent_end"})).unwrap());
-    assert!(stream.events.is_empty());
+    assert!(stream.events().is_empty());
     assert!(
         stream
             .consume(&json!({"type":"message_update","assistantMessageEvent":{

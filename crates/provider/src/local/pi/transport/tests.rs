@@ -44,7 +44,7 @@ async fn writes_distinguish_closed_input_from_timeout_and_frame_limit() {
 }
 
 #[tokio::test]
-async fn extension_notifications_are_ignored_but_unknown_methods_fail_explicitly() {
+async fn extension_notifications_need_no_reply_but_unknown_methods_fail_explicitly() {
     let input = Mutex::new(None);
     for method in [
         "notify",
@@ -100,3 +100,22 @@ fn numeric_short_versions_are_actionable_and_probes_remain_bounded() {
 
 #[cfg(unix)]
 mod shutdown;
+
+#[test]
+fn notice_classification_requires_both_native_type_and_method() {
+    for (value, expected) in [
+        (
+            json!({"type":"extension_ui_request", "method":"notify"}),
+            true,
+        ),
+        (
+            json!({"type":"extension_ui_request", "method":"input"}),
+            false,
+        ),
+        (json!({"type":"other", "method":"notify"}), false),
+        (json!({"method":"notify"}), false),
+        (json!({"type":"extension_ui_request"}), false),
+    ] {
+        assert_eq!(Record { value, bytes: 0 }.is_notice(), expected);
+    }
+}

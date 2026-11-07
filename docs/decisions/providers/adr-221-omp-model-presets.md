@@ -1,4 +1,4 @@
-# ADR-220：OMP 原生模型预设与 Ait 模型控件
+# ADR-221：OMP 原生模型预设与 Ait 模型控件
 
 状态：接受。日期：2026-11-04。扩展 [ADR-217](adr-217-omp-model-roles.md)。
 

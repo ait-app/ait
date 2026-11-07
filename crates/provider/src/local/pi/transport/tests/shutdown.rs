@@ -95,3 +95,60 @@ async fn close_forces_and_reaps_unresponsive_process() {
 
     assert_exited(process);
 }
+
+#[tokio::test]
+async fn timed_out_request_drops_transport_and_cleans_up_tools() {
+    let (directory, transport, tool) = fixture(false).await;
+    let request = async move {
+        let mut transport = transport;
+        transport.request(json!({"type":"get_commands"})).await
+    };
+    assert!(
+        tokio::time::timeout(Duration::from_millis(20), request)
+            .await
+            .is_err()
+    );
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !directory.path().join("cleaned").exists() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_exited(tool);
+}
+
+#[tokio::test]
+async fn probe_keeps_success_when_cleanup_exceeds_budget() {
+    let directory = tempfile::tempdir().unwrap();
+    let program = directory.path().join("pi");
+    std::fs::write(&program, include_str!("shutdown.py")).unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let client = PiClient::new(program);
+    let result = crate::local::pi::probe::run(
+        &client,
+        directory.path().to_str().unwrap(),
+        None,
+        Some(Duration::from_secs(2)),
+        |transport| {
+            Box::pin(async move {
+                let ready = transport.receive().await?;
+                // Advance only after the real subprocess has installed its signal handler.
+                tokio::time::pause();
+                tokio::time::advance(Duration::from_secs(2)).await;
+                Ok(ready)
+            })
+        },
+    )
+    .await;
+    tokio::time::resume();
+    let tool = u32::try_from(result.unwrap()["pid"].as_u64().unwrap()).unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !directory.path().join("cleaned").exists() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_exited(tool);
+}

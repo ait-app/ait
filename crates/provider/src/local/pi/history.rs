@@ -1068,9 +1068,13 @@ fn project_message(
             }
             stream.begin(id.into());
             let (text, sources) = user_content(client, &message["content"])?;
-            stream
-                .events
-                .extend(Stream::user_entries(id, None, &text, &sources));
+            // Historical input uses the history limit rather than the live queue capacity.
+            for event in Stream::user_entries(id, None, &text, &sources) {
+                if let AgentTurnEvent::Timeline(mut entry) = event {
+                    entry.timestamp = field(record, "timestamp")?.into();
+                    append_entry(history, entry)?;
+                }
+            }
             history.active = true;
         }
         "assistant" => {

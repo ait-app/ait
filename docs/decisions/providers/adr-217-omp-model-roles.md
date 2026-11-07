@@ -11,7 +11,7 @@ Ait 原先只有当前会话模型和服务档位选择，没有 OMP 的 default
 ## 决策
 
 由 OMP adapter 查询原生已脱敏的 `config list --json`，只保留 modelRoles、modelTags、
-cycleOrder；[模型预设](adr-220-omp-model-presets.md)另读取 modelPresets 与默认思考强度；通过 `models --kind all --json` 取得全类型目录。复用临时 `--no-session`
+cycleOrder；[模型预设](adr-221-omp-model-presets.md)另读取 modelPresets 与默认思考强度；通过 `models --kind all --json` 取得全类型目录。复用临时 `--no-session`
 RPC reader 读取聊天模型的 webSearch 和服务档位。客户端不接收凭据、端点或原始配置。
 
 通过既有 select feature 暴露 `modelRole.<role>`，覆盖 16 个内置角色，以及原生角色、标签和

@@ -153,7 +153,7 @@ OMP 模型控件提供原生预设目录，读取全局与项目定义；同名�
 原始 `/modelpreset` 命令不透传；请使用预设选择器和这两个显式保存/删除操作，避免原生写入规则与
 Ait 的私有配置范围混接。
 
-实现与约束见 [ADR-220](../decisions/providers/adr-220-omp-model-presets.md)。
+实现与约束见 [ADR-221](../decisions/providers/adr-221-omp-model-presets.md)。
 
 ## 查询命令与侧问答
 
@@ -167,4 +167,4 @@ TUI-only 入口不会发送给模型；例如 `/status` 是 OMP 扩展控制台�
 后的原生历史恢复。主输入框可继续编辑；侧问答错误不终止主任务。预览有大小上限，完整历史仍
 保存在 OMP 的 sidecar 中。官方 RPC 的 BTW 请求没有图片参数，不将带附件的输入悄悄降为纯文本。
 
-命令投影、并发与归属规则见 [ADR-221](../decisions/providers/adr-221-omp-headless-commands-and-side-questions.md)。
+命令投影、并发与归属规则见 [ADR-222](../decisions/providers/adr-222-omp-headless-commands-and-side-questions.md)。

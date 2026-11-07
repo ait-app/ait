@@ -139,6 +139,7 @@
 - [MCP 自动注入：Paseo 与 Ait 对照](providers/paseo-mcp-injection-comparison-2026-10-28.md)
 - [MCP 注入复核：参考 Paseo 当前实现](providers/paseo-mcp-injection-review-2026-10-30.md)
 - [Pi mode removal validation](providers/pi-mode-removal-2026-10-24.md)
+- [Pi slash commands and extension notifications validation](providers/pi-commands-notifications-2026-11-07.md)
 - [Pi reasoning controls validation](providers/pi-reasoning-controls-2026-11-03.md)
 - [Pi native session import validation](providers/pi-session-import-2026-10-20.md)
 - [Pi unavailable diagnostics validation](providers/pi-unavailable-diagnostics-2026-10-30.md)

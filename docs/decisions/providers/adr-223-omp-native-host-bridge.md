@@ -1,9 +1,9 @@
-# ADR-222：OMP 私有原生宿主桥接运行时
+# ADR-223：OMP 私有原生宿主桥接运行时
 
 状态：接受。日期：2026-11-07。修订 [ADR-218](adr-218-native-ui-and-actions.md) 中
 「未导出的任意 `custom()`、组件工厂、header/footer 和主题编辑不引入私有运行时补丁」的
 适用范围，并扩展 [ADR-180](adr-180-omp-native-rpc-provider.md)、
-[ADR-190](adr-190-omp-acp-settlement.md) 与 [ADR-221](adr-221-omp-headless-commands-and-side-questions.md)。
+[ADR-190](adr-190-omp-acp-settlement.md) 与 [ADR-222](adr-222-omp-headless-commands-and-side-questions.md)。
 
 ## 背景
 

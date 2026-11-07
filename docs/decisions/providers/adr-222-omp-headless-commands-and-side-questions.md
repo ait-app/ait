@@ -1,4 +1,4 @@
-# ADR-221：OMP 的宿主命令边界与独立侧问答
+# ADR-222：OMP 的宿主命令边界与独立侧问答
 
 状态：接受。日期：2026-11-06。扩展 [ADR-211](adr-211-omp-command-catalog-and-completion.md)、
 [ADR-213](adr-213-provider-native-command-ownership.md) 和 [ADR-218](adr-218-native-ui-and-actions.md)。

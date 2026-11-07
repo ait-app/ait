@@ -141,5 +141,5 @@ ACP、RPC、三级插件补全及表单等待期间的查询；系统安装的 O
 - [x] 官方 18.14.0 和当前系统 18.17.0 的隔离真实运行检查，不使用源码补丁或外部模型推理。
 - [x] 完成最终整合后的新增预设界面桌面验收；保存/草稿/Profile 与真实模型角色截图的不同范围见[验收报告](../reports/providers/native-delivery-and-omp-roles-2026-11-02.md#2026-11-06-至-07真实模型与新增界面)。
 
-实现见 [ADR-220](../decisions/providers/adr-220-omp-model-presets.md)；Ait Agent Profile 与 OMP
+实现见 [ADR-221](../decisions/providers/adr-221-omp-model-presets.md)；Ait Agent Profile 与 OMP
 原生 preset 保持不同保存机制，私有配置快照可通过 Profile 复用。

@@ -274,7 +274,7 @@ Provider Clippy、前端类型、协议/SDK 构建、oxlint、格式和文档链
 同步、最新下一轮选择的全局预设保存和删除。目录复用原模型缓存；模型变更时保留同 Host/cwd
 的候选和草稿，失败也不清空。预设删除后会话仍能通过已保存快照恢复。
 原生命令等待最终回执，保存还要确认全局条目实际写盘，避免原生异步写入尚未完成就关闭进程。
-旧版本未导出相应命令时拒绝操作，不把未知斜杠输入发给模型。见 [ADR-220](../../decisions/providers/adr-220-omp-model-presets.md)。
+旧版本未导出相应命令时拒绝操作，不把未知斜杠输入发给模型。见 [ADR-221](../../decisions/providers/adr-221-omp-model-presets.md)。
 
 预设追加检查：OMP 与配置补丁 134 通过、16 忽略，后续管理专项 5 通过；前端 41 通过。
 官方 18.14.0 发行二进制经官方 SHA256SUMS 验证，预设专项 1 项通过；系统官方 18.17.0 的
@@ -288,7 +288,7 @@ Provider Clippy、前端类型、协议/SDK 构建、oxlint、格式和文档链
 
 ## 2026-11-06：完整宿主命令审计
 
-对应 [ADR-221](../../decisions/providers/adr-221-omp-headless-commands-and-side-questions.md)。
+对应 [ADR-222](../../decisions/providers/adr-222-omp-headless-commands-and-side-questions.md)。
 审计固定官方 OMP 18.14.0 源码
 [`31147f9d`](https://github.com/can1357/oh-my-pi/tree/31147f9d1a76608549821c3759f8487b4d66c72d/packages/coding-agent/src/slash-commands)
 及已核对发行摘要的官方二进制，不使用系统中可能有补丁的副本。完整注册表包含 **88 个根命令、

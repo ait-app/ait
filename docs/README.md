@@ -21,6 +21,8 @@
 - Provider 配置：[Claude Code](operations/claude-code.md)、[DeepSeek Harness](operations/deepseek-harness.md)、
   [Antigravity](operations/antigravity.md)、[Pi](operations/pi.md)、[Oh My Pi](operations/oh-my-pi.md)、
   [MiniMax Code](operations/minimax-code.md)。Codex 和 OpenCode 的启动配置见 [daemon 手册](operations/daemon.md#provider-与扩展能力)。
+- [使用 Pi slash commands](operations/pi.md#slash-commands)：命令调用、项目信任、前端目录缓存与逐请求原生探测。
+- [Pi 扩展通知](decisions/providers/adr-220-pi-extension-notifications.md)：会话时间线持久化、通知级别与有界的尽力交付。
 - [Pi 推理偏好](decisions/providers/adr-211-pi-next-turn-reasoning-controls.md)：下一条 prompt 前应用模型与推理级别，区分请求偏好和原生运行事实。
 - [MCP 编排接口](operations/mcp.md)：HTTP、可选 Unix socket、认证和工具发现。
 - [沙箱化 Worktree](decisions/workspace/adr-215-sandboxed-worktree-isolation.md)：macOS 上用 Seatbelt 把 Agent 进程的写入限制在 worktree 内。
@@ -36,10 +38,10 @@
 
 - [客户端协议归属](decisions/clients/adr-211-sdk-native-daemon-protocol.md)：SDK 原生使用 Rust v1，应用只选择平台传输。
 - [当前架构](architecture/README.md)：组件职责、依赖、存储和生命周期；[OMP ACP 桥接](architecture/omp-acp-bridge.md)。
-- [OMP 模型预设](decisions/providers/adr-220-omp-model-presets.md)：原生目录缓存、整套私有配置与模型控件同步。
-- [OMP 命令与侧问答](decisions/providers/adr-221-omp-headless-commands-and-side-questions.md)：内置命令边界、并行查询与原生 BTW 历史。
-- [OMP 私有原生宿主桥接](decisions/providers/adr-222-omp-native-host-bridge.md)：Vibe 能力握手、单 writer 与同数据目录、未安装时降级；修订 ADR-218 的补丁边界。
-- [统一模型预设](decisions/providers/adr-223-claude-advisor-role-and-preset-expansion.md)：Claude `modelRole.advisor` 的三态与档位门控，以及一套编辑器背后的 native/Ait 双存储与合成规则。
+- [OMP 模型预设](decisions/providers/adr-221-omp-model-presets.md)：原生目录缓存、整套私有配置与模型控件同步。
+- [OMP 命令与侧问答](decisions/providers/adr-222-omp-headless-commands-and-side-questions.md)：内置命令边界、并行查询与原生 BTW 历史。
+- [OMP 私有原生宿主桥接](decisions/providers/adr-223-omp-native-host-bridge.md)：Vibe 能力握手、单 writer 与同数据目录、未安装时降级；修订 ADR-218 的补丁边界。
+- [统一模型预设](decisions/providers/adr-224-claude-advisor-role-and-preset-expansion.md)：Claude `modelRole.advisor` 的三态与档位门控，以及一套编辑器背后的 native/Ait 双存储与合成规则。
 - [ADR 分类索引](decisions/README.md)：决策及修订关系，完整清单只在此维护。
 - [仓库约定](../AGENTS.md)、[Rust 规范](policy/rust.md)、[文档维护规范](policy/documentation.md)。
 - [Agent 共享读视图](decisions/providers/adr-210-committed-runtime-read-snapshots.md)：已提交记录、目录与 Hub 读取的性能边界。

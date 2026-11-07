@@ -1,6 +1,6 @@
-# ADR-223：Claude 的 advisor 角色与统一模型预设的展开规则
+# ADR-224：Claude 的 advisor 角色与统一模型预设的展开规则
 
-状态：接受（阶段 A、B）。日期：2026-11-07。扩展 [ADR-220](adr-220-omp-model-presets.md)。
+状态：接受（阶段 A、B）。日期：2026-11-07。扩展 [ADR-221](adr-221-omp-model-presets.md)。
 
 ## 背景
 
