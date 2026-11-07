@@ -50,6 +50,8 @@ export function buildDraftAgentControls(input: {
     onRetryModelProvider: formState.refreshProviderModels,
     isRetryingModelProvider: formState.isProviderModelsRefreshing,
     modelSelectorServerId: formState.selectedServerId,
+    // A draft's preset store is scoped by its working directory.
+    workingDir: formState.workingDir,
   };
 }
 

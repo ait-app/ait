@@ -28,9 +28,11 @@ const PRESET_SNAP_POINTS = ["55%", "88%"];
 export function ProviderPresetsSection({
   provider,
   serverId,
+  cwd,
 }: {
   provider: string;
   serverId: string;
+  cwd?: string;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -48,8 +50,8 @@ export function ProviderPresetsSection({
     setLoading(true);
     try {
       const [described, listed] = await Promise.all([
-        client.describeProviderPresets(provider),
-        client.listProviderPresets(provider),
+        client.describeProviderPresets(provider, cwd),
+        client.listProviderPresets(provider, cwd),
       ]);
       setDescriptor(described.descriptor);
       setPresets(listed.presets);
@@ -59,7 +61,7 @@ export function ProviderPresetsSection({
     } finally {
       setLoading(false);
     }
-  }, [client, provider]);
+  }, [client, cwd, provider]);
 
   useEffect(() => {
     void load();

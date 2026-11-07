@@ -44,8 +44,9 @@ export function ModelPresetEmptyState({
 
   const handlePress = useCallback(() => {
     if (!serverId || !provider) return;
-    openProviderSettings({ serverId, provider, overlayParentLayer });
-  }, [openProviderSettings, overlayParentLayer, provider, serverId]);
+    // The editor must read the store this row just read, so its directory travels with it.
+    openProviderSettings({ serverId, provider, overlayParentLayer, cwd: cwd ?? null });
+  }, [openProviderSettings, overlayParentLayer, provider, serverId, cwd]);
 
   // No store answer means the host predates the preset RPCs; show nothing rather than a
   // button that cannot lead anywhere.

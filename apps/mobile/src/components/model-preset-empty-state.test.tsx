@@ -98,6 +98,8 @@ it("offers the editor entry when the provider has no presets and opens its setti
     provider: "claude",
     // The sheet must paint above the picker that launched it.
     overlayParentLayer: 40,
+    // And it must read the same directory this row read.
+    cwd: "/workspace",
   });
 });
 
@@ -116,6 +118,7 @@ it("points a native store at its own preset ability but still opens the same edi
     serverId: "host-a",
     provider: "omp",
     overlayParentLayer: 40,
+    cwd: "/workspace",
   });
 });
 
@@ -157,5 +160,6 @@ it("opens the provider editor from a profile surface, where no project directory
     serverId: "host-a",
     provider: "claude",
     overlayParentLayer: 40,
+    cwd: null,
   });
 });

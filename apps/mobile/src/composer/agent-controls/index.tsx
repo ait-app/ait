@@ -181,6 +181,8 @@ export interface DraftAgentControlsProps {
   isRetryingModelProvider?: boolean;
   disabled?: boolean;
   modelSelectorServerId?: string | null;
+  /** Working directory of the draft, used to scope its preset store. */
+  workingDir?: string | null;
   isCompactLayout?: boolean;
 }
 
@@ -2116,6 +2118,7 @@ export function DraftAgentControls({
   isRetryingModelProvider = false,
   disabled = false,
   modelSelectorServerId = null,
+  workingDir = null,
   isCompactLayout,
 }: DraftAgentControlsProps) {
   const { t } = useTranslation();
@@ -2190,7 +2193,14 @@ export function DraftAgentControls({
         isModelLoading={isAllModelsLoading}
         presetSettingsTarget={
           modelSelectorServerId && selectedProvider
-            ? { serverId: modelSelectorServerId, provider: selectedProvider, cwd: null }
+            ? {
+                serverId: modelSelectorServerId,
+                provider: selectedProvider,
+                // A draft's preset store is scoped by its working directory, so the editor it
+                // opens reads the same list the composer showed. A missing directory stays
+                // null, which the daemon already degrades to the harness state root.
+                cwd: workingDir?.trim() ? workingDir.trim() : null,
+              }
             : undefined
         }
         agentProfiles={agentProfiles}

@@ -38,6 +38,8 @@ interface ProviderDiagnosticSheetProps {
   visible: boolean;
   onClose: () => void;
   serverId: string;
+  /** Directory whose preset store this sheet manages; absent means the harness default. */
+  cwd?: string;
 }
 
 function rankModels<T>(items: T[], query: string, fields: (item: T) => string[]): T[] {
@@ -579,6 +581,7 @@ export function ProviderDiagnosticSheet({
   visible,
   onClose,
   serverId,
+  cwd,
 }: ProviderDiagnosticSheetProps) {
   const canConfigure = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.providerConfiguration !== false,
@@ -722,7 +725,7 @@ export function ProviderDiagnosticSheet({
         })}
         snapPoints={MAIN_SNAP_POINTS}
       >
-        <ProviderPresetsSection provider={provider} serverId={serverId} />
+        <ProviderPresetsSection provider={provider} serverId={serverId} cwd={cwd} />
         <ProviderModalBody
           discoveredCount={discoveredModels.length}
           additionalCount={additionalModels.length}
