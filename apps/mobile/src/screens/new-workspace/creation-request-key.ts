@@ -1,10 +1,12 @@
+import type { WorkspaceIsolation } from "@/create-agent-preferences/preferences";
 import { pickerOptionId, type PickerItem } from "../new-workspace-picker-item";
+import { createsWorktree } from "./isolation";
 
 export interface WorkspaceCreationRequestIdentity {
   serverId: string;
   projectId: string | null;
   sourceDirectory: string | null;
-  isolation: "local" | "worktree";
+  isolation: WorkspaceIsolation;
   selectedItem: PickerItem | null;
 }
 
@@ -19,7 +21,7 @@ export function buildWorkspaceCreationRequestKey(input: WorkspaceCreationRequest
     input.projectId,
     input.sourceDirectory,
     input.isolation,
-    input.isolation === "worktree" && input.selectedItem
+    createsWorktree(input.isolation) && input.selectedItem
       ? pickerOptionId(input.selectedItem)
       : null,
   ]);

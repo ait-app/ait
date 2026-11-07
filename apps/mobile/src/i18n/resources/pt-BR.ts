@@ -1428,6 +1428,7 @@ export const ptBR: TranslationResources = {
     isolation: {
       local: "Local",
       worktree: "Novo worktree",
+      sandboxedWorktree: "Worktree isolado",
       label: "Isolamento",
     },
     fields: {

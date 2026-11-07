@@ -29,6 +29,11 @@
    上写入 `sandbox: "worktree_writes"`。isolation 只有一个取值，“沙箱 + local”的组合无法表达；
    `local` 搭配任何 worktree 参数、以及未知的 isolation 值，都返回 `InvalidMessage`。此前未知值会被
    当作 worktree 处理。
+4. 客户端通过 `workspace.create.request` 的 worktree source 传 `sandbox: "worktree_writes"`，与 MCP
+   走同一条路径。旧 daemon 会忽略未知字段并创建不受限的 worktree，所以客户端只在 server info
+   声明 `workspace-sandbox-v1` 时提供“沙箱化 Worktree”选项；该 feature 只在装有 metadata 的
+   macOS daemon 上声明。记住的选项在不支持的主机上降级为普通 worktree，触发按钮显示实际级别；
+   Schedule 尚不能请求沙箱，同样以普通 worktree 作为初始值。
 
 ### 分层
 

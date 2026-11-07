@@ -1405,6 +1405,7 @@ export const ar: TranslationResources = {
     isolation: {
       local: "محلي",
       worktree: "شجرة عمل جديدة",
+      sandboxedWorktree: "شجرة عمل معزولة",
       label: "العزل",
     },
     fields: {

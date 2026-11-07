@@ -244,6 +244,12 @@ describe("create agent preferences", () => {
     expect(parseFormPreferences({ provider: "codex" }).isolation).toBeUndefined();
   });
 
+  it("keeps a remembered sandboxed worktree choice", () => {
+    expect(parseFormPreferences({ isolation: "sandboxed-worktree" }).isolation).toBe(
+      "sandboxed-worktree",
+    );
+  });
+
   it("rejects an unknown isolation value as invalid stored preferences", () => {
     expect(parseFormPreferences({ provider: "codex", isolation: "sandbox" })).toEqual({});
   });

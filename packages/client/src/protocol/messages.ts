@@ -156,6 +156,7 @@ export function serverInfo(
       agentRequestReceipts: features.has("creation-lifecycle-v1") && has("agent.create.request"),
       workspaceRequestReceipts:
         features.has("creation-lifecycle-v1") && has("workspace.create.request"),
+      workspaceSandbox: features.has("workspace-sandbox-v1") && has("workspace.create.request"),
       providerSubagents: supportsProviderSubagents,
       providerSubagentNesting: supportsProviderSubagents,
       unifiedSubagentAgents: has("agent.subagents.list.request"),

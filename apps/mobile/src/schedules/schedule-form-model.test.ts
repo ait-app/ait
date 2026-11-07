@@ -795,6 +795,26 @@ describe("schedule form model", () => {
       isolation: "worktree",
     });
   });
+
+  it("starts schedules on a plain worktree when the remembered choice is sandboxed", () => {
+    const initial = open({
+      mode: "create",
+      defaults: {
+        serverId: "host-a",
+        projectTargets: PROJECT_TARGETS,
+        preferences: { isolation: "sandboxed-worktree" },
+      },
+    });
+    expect(initial.getState().isolation).toBe("worktree");
+
+    const late = open({
+      mode: "create",
+      defaults: { serverId: "host-a", projectTargets: PROJECT_TARGETS, preferences: {} },
+    });
+    late.applyProviderSnapshot("host-a", providerSnapshot(ALL_MODELS));
+    applyPreferences(late, { isolation: "sandboxed-worktree" });
+    expect(late.getState().isolation).toBe("worktree");
+  });
 });
 
 it("defaults new tasks to one run while preserving an existing unlimited limit", () => {
