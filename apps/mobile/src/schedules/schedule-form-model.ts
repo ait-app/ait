@@ -472,7 +472,15 @@ function resolveInitialIsolation(input: {
   if (input.config) {
     return input.config.isolation ?? "local";
   }
-  return input.preferences?.isolation ?? "local";
+  return scheduleIsolation(input.preferences?.isolation) ?? "local";
+}
+
+// Schedules cannot request write confinement yet, so a remembered sandboxed choice
+// starts the form on the nearest placement it does support; the form shows that value.
+function scheduleIsolation(
+  isolation: FormPreferences["isolation"],
+): "local" | "worktree" | undefined {
+  return isolation === "sandboxed-worktree" ? "worktree" : isolation;
 }
 
 function resolveSelectedProjectOptionId(target: ScheduleProjectTarget | null): string {
@@ -975,7 +983,7 @@ export function openScheduleForm(snapshot: ScheduleFormSnapshot): ScheduleFormMo
       !userModified.isolation &&
       preferences?.isolation !== undefined
     ) {
-      resolved = { ...resolved, isolation: preferences.isolation };
+      resolved = { ...resolved, isolation: scheduleIsolation(preferences.isolation) ?? "local" };
     }
     if (providerEntries.length === 0 || resolved.targetKind !== "new-agent") {
       return resolved;

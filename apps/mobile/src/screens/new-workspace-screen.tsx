@@ -19,7 +19,14 @@ import { Pressable, Text, View } from "react-native";
 import type { PressableStateCallbackType } from "react-native";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Folder, FolderPlus, GitBranch, GitPullRequest } from "lucide-react-native";
+import {
+  ChevronDown,
+  Folder,
+  FolderPlus,
+  GitBranch,
+  GitPullRequest,
+  ShieldCheck,
+} from "lucide-react-native";
 import { Composer } from "@/composer";
 import { ComposerDock } from "@/composer/dock";
 import { useComposerEditingSession, useComposerFullscreen } from "@/composer/editing-session";
@@ -82,6 +89,7 @@ import {
 } from "@/stores/workspace-draft-submission-store";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionId } from "@/keyboard/keyboard-action-dispatcher";
+import type { WorkspaceIsolation } from "@/create-agent-preferences/preferences";
 import { useFormPreferences } from "@/hooks/use-form-preferences";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
@@ -140,6 +148,12 @@ import {
 import { captureWorkspaceDraftCleanup } from "./new-workspace/background-handoff";
 import { useNewWorkspaceScreenPresence } from "./new-workspace/screen-presence";
 import { createSharedProjectAgent } from "./new-workspace/shared-project-agent";
+import {
+  availableIsolations,
+  createsWorktree,
+  parseIsolationOptionId,
+  resolveEffectiveIsolation,
+} from "./new-workspace/isolation";
 import {
   buildWorkspaceCreationRequestKey,
   canReuseCreatedWorkspace,
@@ -435,6 +449,20 @@ function PickerOptionItem({
   );
 }
 
+function IsolationIcon({
+  isolation,
+  iconSize,
+  iconColor,
+}: {
+  isolation: WorkspaceIsolation;
+  iconSize: number;
+  iconColor: string;
+}) {
+  if (isolation === "sandboxed-worktree") return <ShieldCheck size={iconSize} color={iconColor} />;
+  if (isolation === "worktree") return <GitBranch size={iconSize} color={iconColor} />;
+  return <Folder size={iconSize} color={iconColor} />;
+}
+
 function IsolationOptionItem({
   optionId,
   label,
@@ -457,11 +485,11 @@ function IsolationOptionItem({
   const leadingSlot = useMemo(
     () => (
       <View style={styles.rowIconBox}>
-        {optionId === "worktree" ? (
-          <GitBranch size={iconSize} color={iconColor} />
-        ) : (
-          <Folder size={iconSize} color={iconColor} />
-        )}
+        <IsolationIcon
+          isolation={parseIsolationOptionId(optionId)}
+          iconSize={iconSize}
+          iconColor={iconColor}
+        />
       </View>
     ),
     [optionId, iconSize, iconColor],
@@ -661,7 +689,7 @@ function IsolationPickerTrigger({
   onPress: () => void;
   disabled: boolean;
   badgePressableStyle: React.ComponentProps<typeof Pressable>["style"];
-  isolation: "local" | "worktree";
+  isolation: WorkspaceIsolation;
   label: string;
   tooltipLabel: string;
   iconColor: string;
@@ -681,11 +709,7 @@ function IsolationPickerTrigger({
           accessibilityLabel="Workspace isolation"
         >
           <View style={styles.badgeIconBox}>
-            {isolation === "worktree" ? (
-              <GitBranch size={iconSize} color={iconColor} />
-            ) : (
-              <Folder size={iconSize} color={iconColor} />
-            )}
+            <IsolationIcon isolation={isolation} iconSize={iconSize} iconColor={iconColor} />
           </View>
           <Text style={styles.badgeText} numberOfLines={1}>
             {label}
@@ -711,10 +735,11 @@ function FormRow({ children }: { children: React.ReactNode }) {
 }
 
 interface WorkspaceIsolationState {
-  isolation: "local" | "worktree";
-  setIsolation: (value: "local" | "worktree") => void;
-  effectiveIsolation: "local" | "worktree";
+  isolation: WorkspaceIsolation;
+  setIsolation: (value: WorkspaceIsolation) => void;
+  effectiveIsolation: WorkspaceIsolation;
   canCreateWorktree: boolean;
+  canSandboxWorktree: boolean;
   showRefPicker: boolean;
 }
 
@@ -722,20 +747,25 @@ interface WorkspaceIsolationState {
 // the authoritative placement arrives, unsupported projects fall back to local.
 function useWorkspaceIsolation(input: {
   supportsMultiplicity: boolean;
+  supportsSandbox: boolean;
   worktreeSupport: "supported" | "unsupported" | "unknown";
 }): WorkspaceIsolationState {
-  const { supportsMultiplicity, worktreeSupport } = input;
+  const { supportsMultiplicity, supportsSandbox, worktreeSupport } = input;
   // The last isolation choice is remembered alongside the other New Workspace
   // form preferences (provider, model, mode). A manual in-screen pick overrides
   // the remembered default until the screen remounts.
   const { preferences, updatePreferences } = useFormPreferences();
-  const [manualIsolation, setManualIsolation] = useState<"local" | "worktree" | null>(null);
+  const [manualIsolation, setManualIsolation] = useState<WorkspaceIsolation | null>(null);
   const isolation = manualIsolation ?? preferences.isolation ?? "local";
   const canCreateWorktree = supportsMultiplicity && worktreeSupport !== "unsupported";
-  const isWorktree = isolation === "worktree" && canCreateWorktree;
+  const canSandboxWorktree = canCreateWorktree && supportsSandbox;
+  const effectiveIsolation = resolveEffectiveIsolation(isolation, {
+    canCreateWorktree,
+    canSandboxWorktree,
+  });
 
   const setIsolation = useCallback(
-    (value: "local" | "worktree") => {
+    (value: WorkspaceIsolation) => {
       setManualIsolation(value);
       void updatePreferences({ isolation: value });
     },
@@ -745,16 +775,17 @@ function useWorkspaceIsolation(input: {
   return {
     isolation,
     setIsolation,
-    effectiveIsolation: isWorktree ? "worktree" : "local",
+    effectiveIsolation,
     canCreateWorktree,
-    showRefPicker: !supportsMultiplicity || isWorktree,
+    canSandboxWorktree,
+    showRefPicker: !supportsMultiplicity || createsWorktree(effectiveIsolation),
   };
 }
 
-function isolationLabel(t: TFunction, isolation: "local" | "worktree"): string {
-  return isolation === "worktree"
-    ? t("newWorkspace.isolation.worktree")
-    : t("newWorkspace.isolation.local");
+function isolationLabel(t: TFunction, isolation: WorkspaceIsolation): string {
+  if (isolation === "sandboxed-worktree") return t("newWorkspace.isolation.sandboxedWorktree");
+  if (isolation === "worktree") return t("newWorkspace.isolation.worktree");
+  return t("newWorkspace.isolation.local");
 }
 
 function normalizeBranchDetails(
@@ -817,7 +848,7 @@ interface WorkspaceCreationResult {
 async function createMultiplicityWorkspace(input: {
   draftId: string;
   client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
-  isolation: "local" | "worktree";
+  isolation: WorkspaceIsolation;
   project: HostProjectListItem;
   sourceDirectory: string;
   checkoutRequest: PickerCheckoutRequest | undefined;
@@ -835,7 +866,7 @@ async function createMultiplicityWorkspace(input: {
 }): Promise<WorkspaceCreationResult> {
   const projectId = getHostProjectId(input.project, input.serverId);
   if (!projectId) throw new Error("Project is not available on the selected host");
-  const isWorktree = input.isolation === "worktree";
+  const isWorktree = createsWorktree(input.isolation);
   const firstAgentContext = buildFirstAgentContext({
     prompt: input.prompt,
     attachments: input.attachments,
@@ -848,6 +879,7 @@ async function createMultiplicityWorkspace(input: {
           cwd: input.sourceDirectory,
           projectId,
           ...input.checkoutRequest,
+          ...(input.isolation === "sandboxed-worktree" ? { sandbox: "worktree_writes" } : {}),
         }
       : {
           kind: "directory",
@@ -1435,7 +1467,7 @@ interface NewWorkspaceFormStackInput {
     onSelect: (id: string) => void;
   };
   isolation: FormPickerControl & {
-    effectiveIsolation: "local" | "worktree";
+    effectiveIsolation: WorkspaceIsolation;
     options: ComboboxOptionType[];
     onSelect: (id: string) => void;
     renderOption: RefPickerRenderOption;
@@ -1704,6 +1736,7 @@ export function NewWorkspaceScreen({
   // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
   const supportsWorkspaceMultiplicity = useHostFeature(selectedServerId, "workspaceMultiplicity");
   const supportsForgeSearch = useHostFeature(selectedServerId, "forgeSearch");
+  const supportsWorkspaceSandbox = useHostFeature(selectedServerId, "workspaceSandbox");
   const [creationDraftId] = useState(() => draftId?.trim() || generateDraftId());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [creationResult, setCreationResult] = useState<
@@ -1862,9 +1895,10 @@ export function NewWorkspaceScreen({
     ? getWorktreeSupportForHostProject({ project: selectedProject, serverId: selectedServerId })
     : "unsupported";
   const isPending = isNewWorkspacePending({ pendingAction, isDraftHandoffActive });
-  const { effectiveIsolation, setIsolation, canCreateWorktree, showRefPicker } =
+  const { effectiveIsolation, setIsolation, canCreateWorktree, canSandboxWorktree, showRefPicker } =
     useWorkspaceIsolation({
       supportsMultiplicity: supportsWorkspaceMultiplicity,
+      supportsSandbox: supportsWorkspaceSandbox,
       worktreeSupport,
     });
 
@@ -2034,17 +2068,20 @@ export function NewWorkspaceScreen({
     setIsolationPickerOpen(nextOpen);
   }, []);
 
-  // "New worktree" is omitted entirely (not disabled) when the project isn't a
-  // git checkout, since worktree isolation is impossible there.
-  const isolationOptions = useMemo<ComboboxOptionType[]>(() => {
-    const localOption = { id: "local", label: isolationLabel(t, "local") };
-    if (!canCreateWorktree) return [localOption];
-    return [localOption, { id: "worktree", label: isolationLabel(t, "worktree") }];
-  }, [canCreateWorktree, t]);
+  // Worktree levels are omitted entirely (not disabled) when the project isn't a
+  // git checkout, and the sandboxed level when the host cannot confine writes.
+  const isolationOptions = useMemo<ComboboxOptionType[]>(
+    () =>
+      availableIsolations({ canCreateWorktree, canSandboxWorktree }).map((id) => ({
+        id,
+        label: isolationLabel(t, id),
+      })),
+    [canCreateWorktree, canSandboxWorktree, t],
+  );
 
   const handleSelectIsolationOption = useCallback(
     (id: string) => {
-      const nextIsolation = id === "worktree" ? "worktree" : "local";
+      const nextIsolation = parseIsolationOptionId(id);
       setIsolation(nextIsolation);
       if (nextIsolation !== effectiveIsolation) {
         setErrorMessage(null);
@@ -2112,12 +2149,12 @@ export function NewWorkspaceScreen({
       if (!selectedSourceDirectory) {
         throw new Error("Choose a host for this project");
       }
-      const createsWorktree = !supportsWorkspaceMultiplicity || effectiveIsolation === "worktree";
+      const isolation = supportsWorkspaceMultiplicity ? effectiveIsolation : "worktree";
       const requestKey = buildWorkspaceCreationRequestKey({
         serverId: selectedServerId,
         projectId: getHostProjectId(selectedProject, selectedServerId),
         sourceDirectory: selectedSourceDirectory,
-        isolation: createsWorktree ? "worktree" : "local",
+        isolation,
         selectedItem,
       });
       if (
@@ -2131,7 +2168,7 @@ export function NewWorkspaceScreen({
         return creationResult;
       }
       const connectedClient = withConnectedClient();
-      const checkoutStatusForCreate = createsWorktree
+      const checkoutStatusForCreate = createsWorktree(isolation)
         ? await ensureCheckoutStatus({
             queryClient,
             client: connectedClient,
@@ -2147,7 +2184,7 @@ export function NewWorkspaceScreen({
       const normalizedWorkspace = await createMultiplicityWorkspace({
         draftId: creationDraftId,
         client: connectedClient,
-        isolation: createsWorktree ? "worktree" : "local",
+        isolation,
         project: selectedProject,
         sourceDirectory: selectedSourceDirectory,
         checkoutRequest,

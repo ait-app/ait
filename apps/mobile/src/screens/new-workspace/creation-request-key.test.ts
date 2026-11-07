@@ -30,6 +30,7 @@ describe("buildWorkspaceCreationRequestKey", () => {
     ["project", { projectId: "prj_2" }],
     ["source directory", { sourceDirectory: "/other" }],
     ["isolation", { isolation: "local" }],
+    ["sandbox", { isolation: "sandboxed-worktree" }],
     [
       "base branch",
       {

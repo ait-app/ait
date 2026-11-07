@@ -56,6 +56,13 @@ async fn workspace_initial_agent_preserves_subdirectories_receipts_environment_a
             .unwrap()
             .contains(&json!("creation-lifecycle-v1"))
     );
+    assert_eq!(
+        info["features"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("workspace-sandbox-v1")),
+        cfg!(target_os = "macos")
+    );
     let mut replies = Vec::new();
     for (key, source) in [
         (

@@ -1527,6 +1527,7 @@ export const en = {
     isolation: {
       local: "Local",
       worktree: "New worktree",
+      sandboxedWorktree: "Sandboxed worktree",
       label: "Isolation",
     },
     fields: {

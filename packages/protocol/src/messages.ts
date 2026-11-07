@@ -2617,6 +2617,11 @@ export const ArchiveWorkspaceRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// OS-enforced Agent write confinement layered on a Paseo-owned worktree (ADR-215).
+// `worktree_writes` limits every Agent process tree to the worktree, its Git
+// metadata, provider state and temporary directories.
+export const WorkspaceSandboxSchema = z.enum(["worktree_writes"]);
+
 // Create a new workspace record. Unlike open_project, this never deduplicates by
 // directory: it always produces a fresh workspace. The source discriminates
 // between an existing local directory and a newly created paseo worktree.
@@ -2658,6 +2663,9 @@ export const WorkspaceCreateRequestSchema = z.object({
       // the supported client floor is >= v0.2.0.
       githubPrNumber: z.number().int().positive().optional(),
       worktreeSlug: z.string().optional(),
+      // Send only when the host advertises `workspaceSandbox`; older daemons
+      // ignore the field and would create an unconfined worktree.
+      sandbox: WorkspaceSandboxSchema.optional(),
     }),
   ]),
 });
@@ -3588,6 +3596,8 @@ export const ServerInfoStatusPayloadSchema = z
         // Daemon advertises pluggable non-GitHub forge support (the forge registry);
         // the client gates non-GitHub setup UI on it.
         forgeProviders: z.boolean().optional(),
+        // Host can create sandboxed worktrees (macOS daemons from v0.2.1).
+        workspaceSandbox: z.boolean().optional(),
         // COMPAT(selectiveAgentTimeline): added in v0.1.106, remove after 2027-01-12.
         selectiveAgentTimeline: z.boolean().optional(),
         agentTimelineCachedReads: z.boolean().optional(),
@@ -3893,6 +3903,8 @@ export const WorkspaceDescriptorPayloadSchema = z
     projectKind: z.enum(["git", "non_git", "directory"]),
     // COMPAT(workspaces): keep legacy directory workspace kind parseable.
     workspaceKind: z.enum(["directory", "local_checkout", "checkout", "worktree"]),
+    // Present only for sandboxed worktrees; absent means Agents write unconfined.
+    sandbox: WorkspaceSandboxSchema.optional(),
     name: z.string(),
     // COMPAT(workspaceTitles): added in v0.1.97, drop the optional gate when floor >= v0.1.97.
     // When the user has titled a workspace, `name` carries the resolved value
