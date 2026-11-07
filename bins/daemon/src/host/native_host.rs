@@ -191,24 +191,28 @@ fn run(node: &Path, installer: &Path, data_dir: &Path, budget: Budget) {
             return;
         }
     };
-    let outcome = wait_for(&mut child, Instant::now() + budget.timeout);
-    let output = installer_output(&log);
-    match outcome {
+    match wait_for(&mut child, Instant::now() + budget.timeout) {
         Ok(Completion::Exited(status)) if status.success() => {}
         Ok(Completion::Exited(status)) => {
-            degraded(format_args!("the installer exited with {status}{output}"));
+            degraded(format_args!(
+                "the installer exited with {status}{}",
+                installer_output(&log)
+            ));
         }
         Ok(Completion::TimedOut) => {
+            // Read the log after the group is gone, so the tail covers the whole run.
             terminate(&mut child, budget.grace);
             degraded(format_args!(
-                "the installer exceeded its {}s budget and its process group was terminated{output}",
-                budget.timeout.as_secs()
+                "the installer exceeded its {}s budget and its process group was terminated{}",
+                budget.timeout.as_secs(),
+                installer_output(&log)
             ));
         }
         Err(error) => {
             terminate(&mut child, budget.grace);
             degraded(format_args!(
-                "the installer could not be observed: {error}{output}"
+                "the installer could not be observed: {error}{}",
+                installer_output(&log)
             ));
         }
     }
