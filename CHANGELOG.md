@@ -1,5 +1,14 @@
 # Ait changelog
 
+## 0.2.1 - 2026-11-08
+
+- Add Pi slash commands and extension notifications through its native provider integration.
+- Consolidate online sessions with Hub leases, credit-based flow control and on-demand bulk download connections. New clients require a center that declares the complete Hub feature set; older centers now produce an explicit compatibility error. Connections to older Hosts remain supported through their advertised capabilities.
+- Speed up desktop restarts by avoiding unchanged observed-Agent registry writes, resolving login-shell environment asynchronously and prestarting the built-in daemon while the interface loads.
+- Prefer the macOS Keychain for Claude usage credentials in the default configuration directory, with the credentials file as fallback; custom CLAUDE_CONFIG_DIR behavior is unchanged.
+- Sort sidebar projects by their most recent session activity and redirect signed-out browser clients to account login.
+- Upgrade Electron to 45.2.3 and make completed Git commands tolerate bounded trailing stderr diagnostics.
+
 ## 0.2.0 - 2026-11-07
 
 - Align daemon command help, errors, desktop version checks and service examples with the packaged `aitd` executable name; standalone archive filenames stay unchanged.
