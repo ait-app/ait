@@ -272,6 +272,9 @@ pub(super) async fn open(
     handle: Option<&AgentPersistenceHandle>,
 ) -> Result<Session, AgentSessionError> {
     config::validate_spec(spec)?;
+    // The daemon installs the private runtime in the background, so a client built before the
+    // installation completed adopts it here. This runs once per session, not per turn.
+    client.refresh_native_host();
     let Restored {
         mut journal,
         replayed,

@@ -85,6 +85,8 @@ fn vibe_stays_a_host_refusal_until_the_bridge_is_announced_and_wired() {
     // No bridge: blocked with a bridge-specific explanation.
     assert_eq!(blocked("/vibe start", &[], false), Some("vibe"));
     assert!(rejection("vibe").contains("native host bridge"));
+    // The refusal says what actually helps: the install is adopted without a daemon restart.
+    assert!(rejection("vibe").contains("next conversation starts"));
     // Greeting only, command table not wired: still blocked, never a model prompt.
     assert_eq!(blocked("/vibe start", &[], true), Some("vibe"));
     // Announced and advertised: the native runtime owns the command.

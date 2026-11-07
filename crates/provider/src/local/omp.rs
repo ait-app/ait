@@ -44,6 +44,11 @@ struct RoleSnapshot {
 const PROVIDER: &str = "omp";
 /// Product name shown in descriptors and diagnostics.
 const LABEL: &str = "Oh My Pi";
+/// Minimum gap between disk probes for a runtime that is still missing.
+///
+/// The daemon installs it once at startup, so one recheck per new session adopts that installation
+/// without letting a burst of sessions stat the same manifests repeatedly.
+const NATIVE_HOST_PROBE_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Installed OMP executable with bounded RPC startup and discovery.
 #[derive(Debug, Clone)]
@@ -55,7 +60,12 @@ pub(crate) struct OmpClient {
     completion_support: Arc<RwLock<Option<bool>>>,
     role_catalogs: Arc<RwLock<BTreeMap<String, RoleSnapshot>>>,
     metadata_loads: Arc<Mutex<BTreeMap<String, Weak<tokio::sync::Mutex<()>>>>>,
-    native_host: Option<native_host::NativeHost>,
+    /// Verified runtime; shared so a refresh on one clone is visible to the others.
+    native_host: Arc<RwLock<Option<native_host::NativeHost>>>,
+    /// Candidates rechecked while no runtime is adopted.
+    native_host_locations: Option<Arc<native_host::Locations>>,
+    /// When the last unsuccessful recheck ran, so a burst of sessions reads the disk once.
+    native_host_probe: Arc<RwLock<Option<Instant>>>,
 }
 
 impl OmpClient {
@@ -70,35 +80,73 @@ impl OmpClient {
             completion_support: Arc::default(),
             role_catalogs: Arc::default(),
             metadata_loads: Arc::default(),
-            native_host: None,
+            native_host: Arc::default(),
+            native_host_locations: None,
+            native_host_probe: Arc::default(),
         }
     }
 
-    /// Resolve the private runtime installed under `data_dir` for `environment`.
+    /// Adopt a runtime now and keep rechecking its installation candidates.
     ///
-    /// Returns `None` when nothing is installed or verification fails, which keeps the
-    /// official binary and leaves the Vibe bridge capability unavailable.
-    pub(crate) fn native_host_runtime(
-        data_dir: &std::path::Path,
-        environment: &dyn Fn(&str) -> Option<std::ffi::OsString>,
-    ) -> Option<native_host::NativeHost> {
-        native_host::discover(data_dir, environment)
-    }
-
-    /// Adopt a verified private native host runtime instead of the official binary.
-    ///
-    /// The runtime keeps the same data directory, credentials and session files as the
-    /// official `omp`: only the process that speaks RPC changes. A runtime that fails
-    /// verification is never adopted, so the caller keeps the official binary.
+    /// The daemon installs the runtime in the background after startup, so a client that only
+    /// probed once would keep refusing `/vibe` until the next daemon restart. Retaining the
+    /// candidates lets [`Self::refresh_native_host`] adopt the installation on the next new
+    /// session instead.
     #[must_use]
-    pub(crate) fn with_native_host(mut self, host: Option<native_host::NativeHost>) -> Self {
-        self.native_host = host;
+    pub(crate) fn watching_native_host(
+        mut self,
+        locations: native_host::Locations,
+        host: Option<native_host::NativeHost>,
+    ) -> Self {
+        self.native_host = Arc::new(RwLock::new(host));
+        self.native_host_locations = Some(Arc::new(locations));
         self
     }
 
+    /// Re-resolve the private runtime while none is adopted.
+    ///
+    /// Called once when a session starts, never per turn, so adopting a background installation
+    /// needs no daemon restart while steady state stays one lock read. Unsuccessful rechecks are
+    /// spaced by [`NATIVE_HOST_PROBE_INTERVAL`], so a burst of new sessions reads the disk once.
+    /// Adoption is one-way: the first verified runtime keeps serving this process, because
+    /// switching a live provider between the private and official binaries mid-daemon would
+    /// change the process that owns the same session files.
+    pub(crate) fn refresh_native_host(&self) {
+        if self.native_host.read().is_ok_and(|host| host.is_some()) {
+            return;
+        }
+        let Some(locations) = &self.native_host_locations else {
+            return;
+        };
+        let now = Instant::now();
+        let Ok(mut probed) = self.native_host_probe.write() else {
+            return;
+        };
+        if probed.is_some_and(|last| now.duration_since(last) < NATIVE_HOST_PROBE_INTERVAL) {
+            return;
+        }
+        *probed = Some(now);
+        drop(probed);
+        let Some(host) = locations.discover() else {
+            return;
+        };
+        if let Ok(mut current) = self.native_host.write()
+            && current.is_none()
+        {
+            tracing::info!(
+                entrypoint = %host.entrypoint().display(),
+                "OMP native host runtime adopted; /vibe is available in new sessions"
+            );
+            *current = Some(host);
+        }
+    }
+
     /// Verified native host runtime for this client, if one is installed.
-    pub(crate) fn native_host(&self) -> Option<&native_host::NativeHost> {
-        self.native_host.as_ref()
+    ///
+    /// Cloned rather than borrowed so a concurrent refresh cannot change the choice between
+    /// deciding how to launch a process and launching it.
+    pub(crate) fn native_host(&self) -> Option<native_host::NativeHost> {
+        self.native_host.read().ok().and_then(|host| host.clone())
     }
 
     /// Store rendered native image output in the daemon's private `directory`.

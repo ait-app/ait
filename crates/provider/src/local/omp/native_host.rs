@@ -56,38 +56,79 @@ pub fn discover(
     data_dir: &Path,
     environment: &dyn Fn(&str) -> Option<std::ffi::OsString>,
 ) -> Option<NativeHost> {
-    let mut candidates = Vec::new();
-    if let Some(explicit) = environment("AIT_OMP_NATIVE_HOST").map(PathBuf::from) {
-        candidates.push(manifest_of(&explicit));
+    Locations::new(data_dir, environment).discover()
+}
+
+/// The manifest candidates one provider client keeps rechecking.
+///
+/// Resolving the candidate paths once lets a long-lived client adopt a runtime that a background
+/// installer publishes later, without re-reading an injected environment that no longer exists.
+#[derive(Debug, Clone)]
+pub(crate) struct Locations {
+    data_dir: PathBuf,
+    explicit: Option<PathBuf>,
+    bundle: Option<PathBuf>,
+}
+
+impl Locations {
+    /// Capture the discovery inputs for `data_dir` from `environment`.
+    ///
+    /// Only the two path overrides are read, so a later [`Self::discover`] resolves exactly the
+    /// candidates the initial probe resolved.
+    pub(crate) fn new(
+        data_dir: &Path,
+        environment: &dyn Fn(&str) -> Option<std::ffi::OsString>,
+    ) -> Self {
+        Self {
+            data_dir: data_dir.to_path_buf(),
+            explicit: environment("AIT_OMP_NATIVE_HOST").map(PathBuf::from),
+            bundle: environment("AIT_SERVER_OMP_NATIVE_HOST_BUNDLE").map(PathBuf::from),
+        }
     }
-    candidates.push(data_dir.join(INSTALL_PATH.join("/")));
-    if let Some(bundle) = environment("AIT_SERVER_OMP_NATIVE_HOST_BUNDLE").map(PathBuf::from) {
-        candidates.push(manifest_of(&bundle));
-    }
-    candidates.extend(bundled());
-    for manifest in candidates {
-        match load(&manifest) {
-            Ok(host) => {
-                tracing::info!(
-                    manifest = %manifest.display(),
-                    "Using the OMP native host runtime"
-                );
-                return Some(host);
-            }
-            Err(reason) => {
-                // Only a manifest that exists represents a real installation attempt; a missing
-                // candidate is the ordinary "not installed" case and stays quiet.
-                if manifest.exists() {
-                    tracing::warn!(
+
+    /// Resolve the runtime from the captured candidates.
+    ///
+    /// Returns `None` when nothing verifies, like [`discover`]. Calling it again after an
+    /// installation publishes a manifest returns that installation.
+    pub(crate) fn discover(&self) -> Option<NativeHost> {
+        for manifest in self.manifests() {
+            match load(&manifest) {
+                Ok(host) => {
+                    tracing::info!(
                         manifest = %manifest.display(),
-                        reason,
-                        "Ignoring the OMP native host runtime; OMP will run the official binary without the Ait bridge"
+                        "Using the OMP native host runtime"
                     );
+                    return Some(host);
+                }
+                Err(reason) => {
+                    // Only a manifest that exists represents a real installation attempt; a
+                    // missing candidate is the ordinary "not installed" case and stays quiet.
+                    if manifest.exists() {
+                        tracing::warn!(
+                            manifest = %manifest.display(),
+                            reason,
+                            "Ignoring the OMP native host runtime; OMP will run the official binary without the Ait bridge"
+                        );
+                    }
                 }
             }
         }
+        None
     }
-    None
+
+    /// Candidate manifests in precedence order.
+    fn manifests(&self) -> Vec<PathBuf> {
+        let mut candidates = Vec::new();
+        if let Some(explicit) = &self.explicit {
+            candidates.push(manifest_of(explicit));
+        }
+        candidates.push(self.data_dir.join(INSTALL_PATH.join("/")));
+        if let Some(bundle) = &self.bundle {
+            candidates.push(manifest_of(bundle));
+        }
+        candidates.extend(bundled());
+        candidates
+    }
 }
 
 /// A directory resolves to its manifest; a file is treated as the manifest itself.

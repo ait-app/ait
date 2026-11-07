@@ -294,7 +294,9 @@ pub(super) fn rejection(name: &str) -> String {
     if name == "vibe" {
         return "OMP /vibe requires the Ait native host bridge. This runtime did not announce \
                 bridgeVersion 1 with the vibe capability, so the native Vibe mode is unavailable. \
-                Install the current OMP native host runtime, or use Ait's subagent controls."
+                Install the current OMP native host runtime; an install that finishes in the \
+                background is adopted when the next conversation starts. Ait's subagent \
+                controls remain available."
             .to_owned();
     }
     if TUI_ONLY.contains(&name) {

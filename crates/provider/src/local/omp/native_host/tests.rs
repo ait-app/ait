@@ -204,3 +204,37 @@ fn an_explicit_root_wins_over_both_managed_and_bundled_copies() {
             .starts_with(explicit.path().canonicalize().unwrap())
     );
 }
+
+#[test]
+fn retained_locations_adopt_a_runtime_installed_after_the_first_probe() {
+    let data = tempfile::tempdir().unwrap();
+    let locations = Locations::new(data.path(), &environment(&[]));
+    // Nothing is installed when the daemon composes its clients.
+    assert!(locations.discover().is_none());
+    // The background installer publishes the managed tree afterwards.
+    install(&managed(data.path()), &manifest(""), true);
+    let host = locations
+        .discover()
+        .expect("a published installation is adopted without restarting");
+    assert!(
+        host.bun()
+            .ends_with("node_modules/@oven/bun-linux-x64/bin/bun")
+    );
+}
+
+#[test]
+fn retained_locations_keep_the_environment_overrides_they_were_built_with() {
+    let data = tempfile::tempdir().unwrap();
+    let explicit = tempfile::tempdir().unwrap();
+    let locations = Locations::new(
+        data.path(),
+        &environment(&[("AIT_OMP_NATIVE_HOST", explicit.path().to_path_buf())]),
+    );
+    assert!(locations.discover().is_none());
+    install(explicit.path(), &manifest(""), true);
+    let host = locations.discover().unwrap();
+    assert!(
+        host.bun()
+            .starts_with(explicit.path().canonicalize().unwrap())
+    );
+}
