@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use super::*;
 
 fn save(root: &std::path::Path, scope: &str, value: &Value) {
@@ -367,7 +369,7 @@ async fn unified_editor_reads_native_presets_and_reports_no_rename() {
         name: "team".to_owned(),
         model: json!(["other", "model"]).to_string(),
         thinking_option_id: Some("high".to_owned()),
-        feature_values: std::collections::BTreeMap::new(),
+        feature_values: BTreeMap::default(),
     };
     std::fs::write(root.path().join("agent/preset-write-delay"), "").unwrap();
     client.save_native_preset(&cwd, &preset).await.unwrap();

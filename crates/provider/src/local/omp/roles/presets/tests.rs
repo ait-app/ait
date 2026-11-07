@@ -162,12 +162,14 @@ fn named_presets_render_their_whole_option_list() {
 
 #[test]
 fn a_settings_probe_falls_back_to_a_directory_omp_accepts() {
+    use super::editor::probe_cwd;
+
     // A provider sheet has no project, so the caller's cwd may be empty or unusable.
-    assert!(super::editor::probe_cwd("").starts_with('/'));
-    assert!(super::editor::probe_cwd("/definitely/not/a/directory").starts_with('/'));
+    assert!(probe_cwd("").starts_with('/'));
+    assert!(probe_cwd("/definitely/not/a/directory").starts_with('/'));
     // A real project directory is preserved so project-scoped presets keep their own scope.
-    assert_eq!(super::editor::probe_cwd("/tmp"), "/tmp");
+    assert_eq!(probe_cwd("/tmp"), "/tmp");
     // The daemon's own directory is the filesystem root under a launcher, where OMP refuses to
     // start; it must not be used as the probe directory.
-    assert_ne!(super::editor::probe_cwd("/"), "/");
+    assert_ne!(probe_cwd("/"), "/");
 }
