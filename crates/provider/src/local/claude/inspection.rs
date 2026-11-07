@@ -18,7 +18,13 @@ struct Credentials {
     token: SecretString,
     plan: Option<String>,
     expires_at: Option<i64>,
+    /// The CLI holds an unexpired refresh token and renews the access token on its next run.
+    renewable: bool,
 }
+
+/// Shown while the stored access token has lapsed but the CLI can still renew it unattended.
+const RENEWAL_PENDING: &str =
+    "Claude renews its sign-in the next time it runs. Plan usage updates after that.";
 
 #[derive(Deserialize)]
 struct CredentialFile {
@@ -33,6 +39,10 @@ struct OAuth {
     subscription_type: Option<String>,
     rate_limit_tier: Option<String>,
     expires_at: Option<i64>,
+    /// Presence only; the refresh secret is zeroized as soon as it has been checked.
+    #[serde(default, rename = "refreshToken", deserialize_with = "secret_present")]
+    has_refresh_token: bool,
+    refresh_token_expires_at: Option<i64>,
 }
 
 impl ClaudeClient {
@@ -105,6 +115,11 @@ impl ClaudeClient {
             .and_then(chrono::DateTime::from_timestamp_millis)
             .filter(|expiry| *expiry <= chrono::Utc::now())
         {
+            if credentials.renewable {
+                return Ok(unavailable(
+                    &json!({"kind":"no_quota","detail":RENEWAL_PENDING}),
+                ));
+            }
             return Ok(unavailable(
                 &json!({"kind":"expired","expiresAt":expiry.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),"refreshedBy":"claude /login"}),
             ));
@@ -135,6 +150,7 @@ impl ClaudeClient {
                 token,
                 plan: None,
                 expires_at: None,
+                renewable: false,
             }));
         }
         if self
@@ -231,11 +247,23 @@ fn decode(raw: &SecretString) -> Option<Credentials> {
             }
             label
         });
+    let renewable = oauth.has_refresh_token
+        && oauth
+            .refresh_token_expires_at
+            .is_none_or(|expiry| expiry > chrono::Utc::now().timestamp_millis());
     Some(Credentials {
         token: SecretString::from(oauth.access_token),
         plan,
         expires_at: oauth.expires_at,
+        renewable,
     })
+}
+
+/// Report whether an optional secret string is non-empty without retaining it.
+fn secret_present<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    Ok(Option::<String>::deserialize(deserializer)?
+        .map(SecretString::from)
+        .is_some_and(|secret| !secret.expose_secret().is_empty()))
 }
 
 fn read_file(path: &Path) -> Result<Option<Credentials>, AgentSessionError> {

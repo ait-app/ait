@@ -1851,6 +1851,8 @@ export const ptBR: TranslationResources = {
     nativePlanUnavailable: "Este login não informa o uso do plano. Entre pela CLI do provedor.",
     nativeText: {
       claudePlanSignIn: "Entre com claude /login para consultar o uso do plano.",
+      claudeRenewalPending:
+        "O Claude renova o login na próxima vez que for executado. O uso do plano é atualizado depois disso.",
       claudePlanUnavailable:
         "Este método de login não informa o uso do plano. Execute claude /login para entrar.",
       deepseekTotalBalance: "Saldo total do DeepSeek",
