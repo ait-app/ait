@@ -361,6 +361,7 @@ fn compose_services(
         &storage.agents,
     );
     let (agent_mcp, scopes) = compose_agent_mcp(address, mcp_token, &config_store);
+    let presets = provider::service::presets::PresetService::new(Arc::new(config_store.clone()));
     let daemon = compose_daemon(config_store, address, &server_id)?;
     let workspace_automation = Arc::new(Mutex::new(workspace_automation));
     let timeline = open_timeline(&config.data_dir)?;
@@ -390,6 +391,7 @@ fn compose_services(
             workspace_names.clone(),
             workspace_automation.clone(),
         ),
+        presets,
     )?;
     let (schedules, bots) = compose_background(
         config,
@@ -713,12 +715,14 @@ fn compose_provider(
         WorkspaceNames,
         Arc<Mutex<WorkspaceAutomation>>,
     ),
+    presets: provider::service::presets::PresetService,
 ) -> anyhow::Result<AgentExecution> {
     let (directory, generator, names, workspace_automation) = metadata;
     let (agent_runtime_registry, timeline, mcp) = agent_runtime;
     let (workspace_registry, project_registry) = registries;
     let mut manager = AgentManager::new(Box::new(agent_runtime_registry.clone()))
         .with_agent_mcp(mcp)
+        .with_presets(presets)
         .with_timeline(timeline)
         .with_creations(directory.creations())
         .with_summary_generation(generator)

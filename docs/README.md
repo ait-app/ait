@@ -39,6 +39,7 @@
 - [OMP 模型预设](decisions/providers/adr-220-omp-model-presets.md)：原生目录缓存、整套私有配置与模型控件同步。
 - [OMP 命令与侧问答](decisions/providers/adr-221-omp-headless-commands-and-side-questions.md)：内置命令边界、并行查询与原生 BTW 历史。
 - [OMP 私有原生宿主桥接](decisions/providers/adr-222-omp-native-host-bridge.md)：Vibe 能力握手、单 writer 与同数据目录、未安装时降级；修订 ADR-218 的补丁边界。
+- [Claude advisor 角色](decisions/providers/adr-223-claude-advisor-role-and-preset-expansion.md)：`modelRole.advisor` 的三态、档位门控与"新对话/compact 才完全生效"的限制。
 - [ADR 分类索引](decisions/README.md)：决策及修订关系，完整清单只在此维护。
 - [仓库约定](../AGENTS.md)、[Rust 规范](policy/rust.md)、[文档维护规范](policy/documentation.md)。
 - [Agent 共享读视图](decisions/providers/adr-210-committed-runtime-read-snapshots.md)：已提交记录、目录与 Hub 读取的性能边界。

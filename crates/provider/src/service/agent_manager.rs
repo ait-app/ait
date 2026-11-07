@@ -171,6 +171,7 @@ pub struct AgentManager {
     workspaces: Option<Arc<dyn model::workspace::registry::WorkspaceRegistry>>,
     auto_archives: auto_archive::AutoArchives,
     usage_cache: usage::UsageCache,
+    presets: Option<super::presets::PresetService>,
 }
 
 impl AgentManager {
@@ -203,7 +204,15 @@ impl AgentManager {
             workspaces: None,
             auto_archives: auto_archive::AutoArchives::default(),
             usage_cache: usage::UsageCache::default(),
+            presets: None,
         }
+    }
+
+    /// Install the unified preset editor, which routes each provider to its owning store.
+    #[must_use]
+    pub fn with_presets(mut self, presets: super::presets::PresetService) -> Self {
+        self.presets = Some(presets);
+        self
     }
 
     /// Install the host's private MCP connection policy before spawning execution lanes.

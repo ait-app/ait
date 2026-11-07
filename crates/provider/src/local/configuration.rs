@@ -321,6 +321,14 @@ pub(super) fn claude(
     if config.thinking_option_id.as_deref() == Some("ultracode") {
         settings["ultracode"] = json!(true);
     }
+    // Claude accepts the advisor as a launch flag or as the `advisorModel` setting, and rejects a
+    // null there. An empty `--advisor=` is treated as absent and cannot clear a user-level
+    // `advisorModel`, so the tool's documented off switch is the process environment instead.
+    if let crate::local::claude::config::Advisor::Model(model) =
+        crate::local::claude::config::advisor(config)
+    {
+        args.push(format!("--advisor={model}"));
+    }
     if settings
         .as_object()
         .is_some_and(|settings| !settings.is_empty())

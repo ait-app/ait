@@ -52,6 +52,7 @@ impl AgentManager {
             workspaces: self.workspaces.clone(),
             usage_cache: self.usage_cache.clone(),
             auto_archives: super::auto_archive::AutoArchives::default(),
+            presets: self.presets.clone(),
         }
     }
 

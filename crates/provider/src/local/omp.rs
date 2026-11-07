@@ -448,6 +448,34 @@ impl AgentClient for OmpClient {
         config::commands(&result).map(|native| commands::visible(&native))
     }
 
+    /// OMP owns its presets, so the unified editor is answered by the native store here.
+    async fn preset_descriptor(&self, cwd: &str) -> crate::ports::preset::PresetDescriptor {
+        roles::presets::editor::describe(self, cwd).await
+    }
+
+    async fn native_presets(
+        &self,
+        cwd: &str,
+    ) -> Result<Vec<crate::ports::preset::Preset>, crate::ports::preset::PresetError> {
+        roles::presets::editor::list(self, cwd).await
+    }
+
+    async fn save_native_preset(
+        &self,
+        cwd: &str,
+        preset: &crate::ports::preset::Preset,
+    ) -> Result<(), crate::ports::preset::PresetError> {
+        roles::presets::editor::save(self, cwd, preset).await
+    }
+
+    async fn delete_native_preset(
+        &self,
+        cwd: &str,
+        name: &str,
+    ) -> Result<(), crate::ports::preset::PresetError> {
+        roles::presets::editor::delete(self, cwd, name).await
+    }
+
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {
         if !self.is_available().await? {
             return Ok(

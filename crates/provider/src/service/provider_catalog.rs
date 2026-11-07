@@ -19,7 +19,7 @@ use crate::protocol::provider::{Details, ListRequest, RefreshRequest, SnapshotRe
 
 mod draft;
 mod loading;
-mod scope;
+pub(crate) mod scope;
 
 #[derive(Debug, Clone)]
 struct Entry {

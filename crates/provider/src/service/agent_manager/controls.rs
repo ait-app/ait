@@ -181,6 +181,20 @@ impl AgentManager {
                 snapshot["availableModes"] = controls["availableModes"].clone();
                 snapshot["features"] = controls["features"].clone();
             }
+            // The unified preset editor owns the non-native stores, so a provider without a
+            // native `modelPreset` gains one here and a provider with one keeps it untouched.
+            if let (Some(presets), Some(features)) = (
+                self.presets.as_ref(),
+                snapshot["features"].as_array_mut(),
+            ) {
+                let mut merged = std::mem::take(features);
+                presets.apply(
+                    &record.provider,
+                    &mut merged,
+                    &record.config.clone().unwrap_or_default(),
+                );
+                *features = merged;
+            }
             if let (Some(target), Some(flags)) = (
                 snapshot["capabilities"].as_object_mut(),
                 settings["capabilities"].as_object(),
@@ -202,6 +216,68 @@ impl AgentManager {
             },
             |agent| agent.session.pending_permissions()
         ));
+    }
+
+    /// Answer a unified preset request from the store that owns this provider.
+    ///
+    /// Native providers use their own commands; every other provider is served from daemon
+    /// configuration. The caller never needs to know which, so the editor is identical.
+    pub(crate) async fn presets(&self, method: &str, params: &Value) -> Result<Value, ErrorCode> {
+        let provider = params["provider"]
+            .as_str()
+            .filter(|provider| crate::service::presets::valid_provider(provider))
+            .ok_or(ErrorCode::InvalidMessage)?;
+        let service = self.presets.as_ref().ok_or(ErrorCode::UnsupportedCapability)?;
+        let client = self.clients.get(provider);
+        // Discovery validation already owns the cwd rule; an absent cwd simply means the
+        // daemon process directory, which is what a provider's own settings read uses.
+        let cwd = params
+            .get("cwd")
+            .and_then(Value::as_str)
+            .filter(|cwd| !cwd.is_empty())
+            .map_or_else(|| ".".to_owned(), str::to_owned);
+        match method {
+            "provider.presets.describe.request" => {
+                crate::rpc::agent_execution::only(params, &["provider", "cwd"])?;
+                let descriptor = service.describe(&cwd, client).await;
+                Ok(json!({"provider":provider,"descriptor":descriptor}))
+            }
+            "provider.presets.list.request" => {
+                crate::rpc::agent_execution::only(params, &["provider", "cwd"])?;
+                // A store failure is reported beside the list, not as a bare protocol code, so
+                // the editor can show why a provider has no readable presets.
+                match service.list(provider, &cwd, client).await {
+                    Ok(presets) => Ok(json!({"provider":provider,"presets":presets,"error":null})),
+                    Err(error) => {
+                        Ok(json!({"provider":provider,"presets":[],"error":error.message()}))
+                    }
+                }
+            }
+            "provider.presets.save.request" => {
+                crate::rpc::agent_execution::only(params, &["provider", "cwd", "preset"])?;
+                let preset: crate::ports::preset::Preset = serde_json::from_value(
+                    params["preset"].clone(),
+                )
+                .map_err(|_| ErrorCode::InvalidMessage)?;
+                match service.save(provider, &cwd, client, &preset).await {
+                    Ok(()) => Ok(json!({"provider":provider,"saved":preset.name,"error":null})),
+                    Err(error) => Ok(json!({"provider":provider,"saved":null,"error":error.message()})),
+                }
+            }
+            "provider.presets.delete.request" => {
+                crate::rpc::agent_execution::only(params, &["provider", "cwd", "name"])?;
+                let name = params["name"]
+                    .as_str()
+                    .ok_or(ErrorCode::InvalidMessage)?;
+                match service.delete(provider, &cwd, client, name).await {
+                    Ok(()) => Ok(json!({"provider":provider,"deleted":name,"error":null})),
+                    Err(error) => {
+                        Ok(json!({"provider":provider,"deleted":null,"error":error.message()}))
+                    }
+                }
+            }
+            _ => Err(ErrorCode::MethodNotFound),
+        }
     }
 
     pub(crate) async fn diagnostic(&self, provider: &str) -> Result<Value, ErrorCode> {

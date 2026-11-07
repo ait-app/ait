@@ -504,6 +504,54 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
         serde_json::json!({"availableModes":[],"features":[],"capabilities":{}})
     }
 
+    /// Report this provider's preset store and the operations it supports.
+    ///
+    /// Ait-managed presets are served by the caller, so adapters answer only for a native store.
+    /// The default reports no native store, which leaves the unified editor on the Ait backend.
+    async fn preset_descriptor(&self, _cwd: &str) -> super::preset::PresetDescriptor {
+        super::preset::PresetDescriptor::managed(super::preset::PresetBackend::Ait)
+    }
+
+    /// List this provider's **native** presets, when the harness owns them.
+    ///
+    /// Adapters without a native store return an empty list; the caller then reads its own.
+    /// # Errors
+    /// Returns a client-readable reason when the native store cannot be read.
+    async fn native_presets(
+        &self,
+        _cwd: &str,
+    ) -> Result<Vec<super::preset::Preset>, super::preset::PresetError> {
+        Ok(Vec::new())
+    }
+
+    /// Create or replace one native preset.
+    ///
+    /// # Errors
+    /// Returns a client-readable reason; nothing is written on rejection.
+    async fn save_native_preset(
+        &self,
+        _cwd: &str,
+        _preset: &super::preset::Preset,
+    ) -> Result<(), super::preset::PresetError> {
+        Err(super::preset::PresetError::Unavailable(
+            "This provider has no native preset store".to_owned(),
+        ))
+    }
+
+    /// Remove one native preset.
+    ///
+    /// # Errors
+    /// Returns a client-readable reason; nothing is written on rejection.
+    async fn delete_native_preset(
+        &self,
+        _cwd: &str,
+        _name: &str,
+    ) -> Result<(), super::preset::PresetError> {
+        Err(super::preset::PresetError::Unavailable(
+            "This provider has no native preset store".to_owned(),
+        ))
+    }
+
     /// Inspect the proposed configuration's features without registering a durable Agent.
     ///
     /// `spec` supplies a normalized directory and draft settings. Adapters may perform bounded

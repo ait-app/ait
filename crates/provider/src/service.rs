@@ -10,3 +10,4 @@ pub(crate) mod summary_generation;
 pub mod workspace_attention;
 
 pub(crate) mod provider_catalog;
+pub mod presets;

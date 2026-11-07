@@ -1,6 +1,6 @@
 //! Native model-role discovery and per-session config overlays; user settings stay owned by OMP.
 
-mod presets;
+pub(super) mod presets;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -264,6 +264,11 @@ impl Catalog {
         config: &StoredAgentConfig,
     ) -> Result<StoredAgentConfig, AgentSessionError> {
         self.presets.resolve(config)
+    }
+
+    /// Native presets as unified editor records; only acknowledged entries are listed.
+    pub(super) fn preset_records(&self) -> Vec<crate::ports::preset::Preset> {
+        self.presets.records()
     }
 
     /// Append role controls without altering the current conversation's model catalog.

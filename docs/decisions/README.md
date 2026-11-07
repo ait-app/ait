@@ -90,6 +90,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## Provider、Agent 与会话
 
+- [ADR-223：Claude 的 advisor 角色与统一模型预设的展开规则](providers/adr-223-claude-advisor-role-and-preset-expansion.md)
 - [ADR-222：OMP 私有原生宿主桥接运行时](providers/adr-222-omp-native-host-bridge.md)
 - [ADR-221：OMP 的宿主命令边界与独立侧问答](providers/adr-221-omp-headless-commands-and-side-questions.md)
 - [ADR-220：OMP 原生模型预设与 Ait 模型控件](providers/adr-220-omp-model-presets.md)

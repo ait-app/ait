@@ -6,6 +6,7 @@ pub mod bot;
 pub mod creation;
 pub mod directory_sync;
 pub mod pagination;
+pub mod preset;
 pub mod schedule;
 pub mod session;
 pub mod storage;

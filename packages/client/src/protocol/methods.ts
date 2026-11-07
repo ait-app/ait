@@ -592,6 +592,30 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "provider.diagnostic.response",
   },
+  "provider.presets.describe.request": {
+    method: "provider.presets.describe.request",
+    kind: "request",
+    channel: 0,
+    response: "provider.presets.describe.response",
+  },
+  "provider.presets.list.request": {
+    method: "provider.presets.list.request",
+    kind: "request",
+    channel: 0,
+    response: "provider.presets.list.response",
+  },
+  "provider.presets.save.request": {
+    method: "provider.presets.save.request",
+    kind: "request",
+    channel: 0,
+    response: "provider.presets.save.response",
+  },
+  "provider.presets.delete.request": {
+    method: "provider.presets.delete.request",
+    kind: "request",
+    channel: 0,
+    response: "provider.presets.delete.response",
+  },
   "provider.usage.list.request": {
     method: "provider.usage.list.request",
     kind: "request",

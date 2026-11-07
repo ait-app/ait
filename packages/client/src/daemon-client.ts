@@ -113,6 +113,10 @@ import type {
   GetProvidersSnapshotResponseMessage,
   RefreshProvidersSnapshotResponseMessage,
   ProviderDiagnosticResponseMessage,
+  ProviderPresetsDescribeResponseMessage,
+  ProviderPresetsListResponseMessage,
+  ProviderPresetsMutationResponseMessage,
+  type ProviderPreset,
   ProviderUsageListResponseMessage,
   DaemonGetStatusResponse,
   DaemonConfigReloadResponse,
@@ -502,6 +506,10 @@ type ListAvailableProvidersPayload = ListAvailableProvidersResponse["payload"];
 type GetProvidersSnapshotPayload = GetProvidersSnapshotResponseMessage["payload"];
 type RefreshProvidersSnapshotPayload = RefreshProvidersSnapshotResponseMessage["payload"];
 type ProviderDiagnosticPayload = ProviderDiagnosticResponseMessage["payload"];
+type ProviderPresetDescriptorPayload = ProviderPresetsDescribeResponseMessage["payload"];
+type ProviderPresetListPayload = ProviderPresetsListResponseMessage["payload"];
+type ProviderPresetMutationPayload = ProviderPresetsMutationResponseMessage["payload"];
+type ProviderPresetInput = ProviderPreset;
 type ProviderUsageListPayload = ProviderUsageListResponseMessage["payload"];
 type DaemonStatusPayload = DaemonGetStatusResponse["payload"];
 type DiagnosticsPayload = DiagnosticsResponse["payload"];
@@ -5390,6 +5398,79 @@ export class DaemonClient {
       },
       responseType: "provider.snapshot.refresh.response",
       timeout: 120000,
+    });
+  }
+
+  /** Describe the store behind one provider's presets and what it supports. */
+  async describeProviderPresets(
+    provider: AgentProvider,
+    cwd?: string,
+    options?: { requestId?: string },
+  ): Promise<ProviderPresetDescriptorPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.presets.describe.request",
+        provider,
+        ...(cwd ? { cwd } : {}),
+      },
+      responseType: "provider.presets.describe.response",
+      timeout: 120000,
+    });
+  }
+
+  async listProviderPresets(
+    provider: AgentProvider,
+    cwd?: string,
+    options?: { requestId?: string },
+  ): Promise<ProviderPresetListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.presets.list.request",
+        provider,
+        ...(cwd ? { cwd } : {}),
+      },
+      responseType: "provider.presets.list.response",
+      timeout: 180000,
+    });
+  }
+
+  async saveProviderPreset(
+    provider: AgentProvider,
+    preset: ProviderPresetInput,
+    cwd?: string,
+    options?: { requestId?: string },
+  ): Promise<ProviderPresetMutationPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.presets.save.request",
+        provider,
+        preset,
+        ...(cwd ? { cwd } : {}),
+      },
+      responseType: "provider.presets.save.response",
+      timeout: 660000,
+    });
+  }
+
+  async deleteProviderPreset(
+    provider: AgentProvider,
+    name: string,
+    cwd?: string,
+    options?: { requestId?: string },
+  ): Promise<ProviderPresetMutationPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.presets.delete.request",
+        provider,
+        name,
+        ...(cwd ? { cwd } : {}),
+      },
+      responseType: "provider.presets.delete.response",
+      timeout: 660000,
     });
   }
 

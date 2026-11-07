@@ -25,6 +25,10 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("agent.provider_subagents.timeline.get.request"),
     MethodSpec::request("provider.diagnostic.request"),
     MethodSpec::request("provider.usage.list.request"),
+    MethodSpec::request("provider.presets.describe.request"),
+    MethodSpec::request("provider.presets.list.request"),
+    MethodSpec::request("provider.presets.save.request"),
+    MethodSpec::request("provider.presets.delete.request"),
 ];
 
 use model::ErrorCode;

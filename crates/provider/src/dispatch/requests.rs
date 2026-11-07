@@ -157,6 +157,10 @@ pub(super) async fn execution(
                 | "agent.provider_subagents.timeline.get.request"
                 | "provider.diagnostic.request"
                 | "provider.usage.list.request"
+                | "provider.presets.describe.request"
+                | "provider.presets.list.request"
+                | "provider.presets.save.request"
+                | "provider.presets.delete.request"
         )
     }) else {
         return Err(DispatchError::NotImplemented);

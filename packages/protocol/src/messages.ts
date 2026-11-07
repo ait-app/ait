@@ -115,11 +115,25 @@ const MutableDaemonProviderModelSchema = z
   })
   .passthrough();
 
+/** One Ait-managed preset for a provider without a native preset store. */
+const MutableDaemonProviderPresetSchema = z
+  .object({
+    name: z.string().min(1).max(256),
+    model: z.string().min(1).max(256),
+    thinkingOptionId: z.string().min(1).max(256).optional(),
+    featureValues: z.record(z.string(), z.unknown()).optional(),
+  })
+  .passthrough();
+
 const MutableDaemonProviderConfigSchema = z
   .object({
     paseoTools: ProviderPaseoToolsPolicySchema.optional(),
     enabled: z.boolean().optional(),
     additionalModels: z.array(MutableDaemonProviderModelSchema).optional(),
+    modelPresets: z
+      .array(MutableDaemonProviderPresetSchema)
+      .max(64)
+      .optional(),
   })
   .passthrough();
 
@@ -6333,6 +6347,61 @@ export const ProviderDiagnosticResponseMessageSchema = z.object({
   }),
 });
 
+/** Where a provider's model presets live, and which operations its store supports. */
+export const ProviderPresetDescriptorSchema = z.object({
+  backend: z.enum(["native", "ait"]),
+  canCreate: z.boolean(),
+  canEdit: z.boolean(),
+  canDelete: z.boolean(),
+  canRename: z.boolean(),
+  reason: z.string().optional(),
+});
+
+/** One preset as the unified editor shows it. */
+export const ProviderPresetSchema = z.object({
+  name: z.string().min(1).max(256),
+  model: z.string().min(1).max(256),
+  thinkingOptionId: z.string().max(256).optional(),
+  featureValues: z.record(z.string(), z.unknown()).optional(),
+});
+
+export type ProviderPresetDescriptor = z.infer<typeof ProviderPresetDescriptorSchema>;
+export type ProviderPreset = z.infer<typeof ProviderPresetSchema>;
+
+export const ProviderPresetsDescribeResponseMessageSchema = z.object({
+  type: z.literal("provider.presets.describe.response"),
+  payload: z.object({
+    provider: AgentProviderSchema,
+    descriptor: ProviderPresetDescriptorSchema,
+    requestId: z.string(),
+  }),
+});
+
+export const ProviderPresetsListResponseMessageSchema = z.object({
+  type: z.literal("provider.presets.list.response"),
+  payload: z.object({
+    provider: AgentProviderSchema,
+    presets: z.array(ProviderPresetSchema),
+    error: z.string().nullable().optional(),
+    requestId: z.string(),
+  }),
+});
+
+/** Save and delete share one acknowledgement: the stored name or a readable reason. */
+export const ProviderPresetsMutationResponseMessageSchema = z.object({
+  type: z.union([
+    z.literal("provider.presets.save.response"),
+    z.literal("provider.presets.delete.response"),
+  ]),
+  payload: z.object({
+    provider: AgentProviderSchema,
+    saved: z.string().nullable().optional(),
+    deleted: z.string().nullable().optional(),
+    error: z.string().nullable().optional(),
+    requestId: z.string(),
+  }),
+});
+
 export const ProviderUsageToneSchema = z.enum(["default", "ok", "warning", "danger"]);
 export const ProviderUsageStatusSchema = z.enum(["available", "unavailable", "error"]);
 
@@ -6906,6 +6975,9 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProvidersSnapshotUpdateMessageSchema,
   RefreshProvidersSnapshotResponseMessageSchema,
   ProviderDiagnosticResponseMessageSchema,
+  ProviderPresetsDescribeResponseMessageSchema,
+  ProviderPresetsListResponseMessageSchema,
+  ProviderPresetsMutationResponseMessageSchema,
   ProviderUsageListResponseMessageSchema,
   ListCommandsResponseSchema,
   CompleteCommandsResponseSchema,
@@ -7085,6 +7157,15 @@ export type RefreshProvidersSnapshotResponseMessage = z.infer<
 >;
 export type ProviderDiagnosticResponseMessage = z.infer<
   typeof ProviderDiagnosticResponseMessageSchema
+>;
+export type ProviderPresetsDescribeResponseMessage = z.infer<
+  typeof ProviderPresetsDescribeResponseMessageSchema
+>;
+export type ProviderPresetsListResponseMessage = z.infer<
+  typeof ProviderPresetsListResponseMessageSchema
+>;
+export type ProviderPresetsMutationResponseMessage = z.infer<
+  typeof ProviderPresetsMutationResponseMessageSchema
 >;
 export type ProviderUsageTone = z.infer<typeof ProviderUsageToneSchema>;
 export type ProviderUsageStatus = z.infer<typeof ProviderUsageStatusSchema>;

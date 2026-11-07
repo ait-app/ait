@@ -1,5 +1,7 @@
 //! Native presets become private Ait selections, never global role mutations.
 
+pub(in crate::local::omp) mod editor;
+
 pub(super) mod management;
 mod resolution;
 
@@ -229,6 +231,26 @@ impl Presets {
     /// Whether this directory defines any named presets.
     pub(super) fn has_entries(&self) -> bool {
         !self.entries.is_empty()
+    }
+
+    /// Render the acknowledged native presets as unified editor records.
+    ///
+    /// Only entries whose private configuration was materialized are exposed: an entry the
+    /// adapter could not resolve has no model to show and must not appear as editable.
+    pub(super) fn records(&self) -> Vec<crate::ports::preset::Preset> {
+        self.entries
+            .iter()
+            .filter_map(|(name, entry)| {
+                let configuration = entry.configuration.as_ref().ok()?;
+                let model = configuration.model.clone()?;
+                Some(crate::ports::preset::Preset {
+                    name: name.clone(),
+                    model,
+                    thinking_option_id: configuration.thinking_option_id.clone(),
+                    feature_values: configuration.feature_values.clone().unwrap_or_default(),
+                })
+            })
+            .collect()
     }
 
     /// Whether a preset introduces this native role.

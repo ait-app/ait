@@ -1,6 +1,6 @@
 //! Native Claude Code sessions over the CLI's Agent SDK streaming control protocol.
 
-mod config;
+pub(in crate::local) mod config;
 mod history;
 mod inputs;
 mod inspection;
@@ -36,6 +36,8 @@ pub(crate) struct ClaudeClient {
     images: super::images::ImageStore,
     environment: crate::ports::environment::AgentEnvironment,
     resolved_models: std::sync::Arc<std::sync::RwLock<std::collections::BTreeMap<String, String>>>,
+    /// Last discovered catalog, used to render the advisor role without another probe.
+    catalog: std::sync::Arc<std::sync::RwLock<Vec<Value>>>,
 }
 
 impl ClaudeClient {
@@ -50,6 +52,7 @@ impl ClaudeClient {
             images: super::images::ImageStore::default(),
             environment: crate::ports::environment::AgentEnvironment::default(),
             resolved_models: std::sync::Arc::default(),
+            catalog: std::sync::Arc::default(),
         }
     }
 
@@ -72,7 +75,7 @@ impl ClaudeClient {
     }
 
     fn remember_models(&self, response: &Value) -> Result<(), AgentSessionError> {
-        config::models(response)?;
+        let catalog = config::models(response)?;
         let mut models = self
             .resolved_models
             .write()
@@ -88,7 +91,21 @@ impl ClaudeClient {
                 models.insert(alias.to_owned(), resolved.to_owned());
             }
         }
+        drop(models);
+        let mut cached = self
+            .catalog
+            .write()
+            .map_err(|_| AgentSessionError::Failed)?;
+        *cached = catalog;
         Ok(())
+    }
+
+    /// The last discovered catalog, or nothing before the first successful probe.
+    fn catalog(&self) -> Vec<Value> {
+        self.catalog
+            .read()
+            .map(|catalog| catalog.clone())
+            .unwrap_or_default()
     }
 
     fn resolved_config(&self, config: &StoredAgentConfig) -> StoredAgentConfig {
@@ -139,6 +156,7 @@ impl AgentClient for ClaudeClient {
         let mut client = self.clone();
         client.environment = environment.clone();
         client.resolved_models = std::sync::Arc::default();
+        client.catalog = std::sync::Arc::default();
         if let Some((_, directory)) = environment
             .entries()
             .find(|(key, _)| *key == "CLAUDE_CONFIG_DIR")
@@ -186,10 +204,30 @@ impl AgentClient for ClaudeClient {
     }
 
     fn settings(&self, config: &StoredAgentConfig) -> Value {
-        json!({"availableModes":config::modes(),"features":config::features(&self.resolved_config(config)),"capabilities":{
+        json!({"availableModes":config::modes(),"features":config::features(&self.resolved_config(config), &self.catalog()),"capabilities":{
             "supportsMcpServers":true,
             "supportsDynamicModes":true,"supportsRewindConversation":true,"supportsRewindFiles":true,"supportsRewindBoth":true,
             "supportsStreaming":true,"supportsReasoningStream":true,"supportsSessionListing":true}})
+    }
+
+    /// The advisor menu needs the catalog, and a daemon that never discovered Claude has none.
+    /// One bounded probe fills it; later drafts reuse the cached catalog without native work.
+    async fn draft_features(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<Vec<Value>, AgentSessionError> {
+        config::validate_spec(spec)?;
+        if self.catalog().is_empty() {
+            self.probe(&AgentSessionSpec {
+                config: StoredAgentConfig::default(),
+                ..spec.clone()
+            })
+            .await?;
+        }
+        Ok(
+            serde_json::from_value(self.settings(&spec.config)["features"].take())
+                .map_err(|_| AgentSessionError::Failed)?,
+        )
     }
 
     async fn is_available(&self) -> Result<bool, AgentSessionError> {
@@ -222,7 +260,10 @@ impl AgentClient for ClaudeClient {
         Ok(Details {
             models: config::models(&response)?,
             modes: config::modes(),
-            features: config::features(&self.resolved_config(&StoredAgentConfig::default())),
+            features: config::features(
+                &self.resolved_config(&StoredAgentConfig::default()),
+                &self.catalog(),
+            ),
         })
     }
 

@@ -113,6 +113,14 @@ impl ExecutionState {
             Operation::Permission => self.permission(params).await,
             Operation::Subagents | Operation::ChildTimeline => self.subagents(method, params).await,
             Operation::Diagnostic => self.diagnostic(params).await,
+            Operation::PresetDescribe
+            | Operation::PresetList
+            | Operation::PresetSave
+            | Operation::PresetDelete => self
+                .manager
+                .presets(method.as_str(), &params)
+                .await
+                .map_err(Into::into),
             Operation::Usage => self.usage(params).await,
             Operation::RecentSessions => self.recent_sessions(params).await,
             Operation::Import => self.import(params).await,
