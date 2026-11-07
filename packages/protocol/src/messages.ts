@@ -151,10 +151,7 @@ const MutableDaemonProviderConfigSchema = z
     paseoTools: ProviderPaseoToolsPolicySchema.optional(),
     enabled: z.boolean().optional(),
     additionalModels: z.array(MutableDaemonProviderModelSchema).optional(),
-    modelPresets: z
-      .array(MutableDaemonProviderPresetSchema)
-      .max(64)
-      .optional(),
+    modelPresets: z.array(MutableDaemonProviderPresetSchema).max(64).optional(),
   })
   .passthrough();
 

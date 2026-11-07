@@ -1785,17 +1785,15 @@ export const AgentControls = memo(function AgentControls({
   // Saved selections remain usable throughout discovery; this never resumes the conversation.
   // Role and preset choices come from the provider's own feature catalog, whatever the provider
   // is; no provider identity decides whether the control can exist.
-  const advertisesModelConfiguration = Boolean(
-    agent?.features?.some(isModelConfigurationFeature),
-  );
+  const advertisesModelConfiguration = Boolean(agent?.features?.some(isModelConfigurationFeature));
   const roleChoices = useQuery({
     queryKey: ["providerRoleChoices", serverId, agent?.cwd, snapshotSelectedEntry?.fetchedAt],
     enabled: Boolean(
       client &&
-        advertisesModelConfiguration &&
-        agent?.provider &&
-        agent.cwd &&
-        snapshotSelectedEntry?.status === "ready",
+      advertisesModelConfiguration &&
+      agent?.provider &&
+      agent.cwd &&
+      snapshotSelectedEntry?.status === "ready",
     ),
     staleTime: Infinity,
     queryFn: async () => {

@@ -126,10 +126,7 @@ function preset(name: string): ProviderPreset {
   return { name, model: "claude-opus-5" };
 }
 
-async function ready(
-  described: ProviderPresetDescriptor,
-  presets: ProviderPreset[] = [],
-) {
+async function ready(described: ProviderPresetDescriptor, presets: ProviderPreset[] = []) {
   client.describeProviderPresets.mockResolvedValue({ descriptor: described });
   client.listProviderPresets.mockResolvedValue({ presets });
 }
@@ -193,12 +190,8 @@ it("deletes through the same request and refreshes the list", async () => {
   renderSection(<ProviderPresetsSection provider="claude" serverId="host-a" />);
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
   fireEvent.click(screen.getByLabelText("settings.providers.presets.remove"));
-  await waitFor(() =>
-    expect(client.deleteProviderPreset).toHaveBeenCalledWith("claude", "team"),
-  );
-  await waitFor(() =>
-    expect(client.listProviderPresets.mock.calls.length).toBeGreaterThan(1),
-  );
+  await waitFor(() => expect(client.deleteProviderPreset).toHaveBeenCalledWith("claude", "team"));
+  await waitFor(() => expect(client.listProviderPresets.mock.calls.length).toBeGreaterThan(1));
 });
 
 it("never branches on the provider identity to decide which controls exist", async () => {

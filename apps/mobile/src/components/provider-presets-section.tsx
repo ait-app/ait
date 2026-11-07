@@ -227,7 +227,9 @@ function PresetEditorSubSheet({
   const trimmedName = name.trim();
   const trimmedModel = model.trim();
   const canSubmit =
-    trimmedName.length > 0 && trimmedModel.length > 0 && (canRename || isNew || trimmedName === preset.name);
+    trimmedName.length > 0 &&
+    trimmedModel.length > 0 &&
+    (canRename || isNew || trimmedName === preset.name);
 
   const handleSubmit = useCallback(() => {
     if (!canSubmit) return;

@@ -45,8 +45,10 @@ export const ru: TranslationResources = {
         interrupted: "Прерван",
       },
     },
-    presetEmptyNative: "No model presets yet; create one from the provider details with its native preset ability",
-    presetEmptyManaged: "No model presets yet; create one to switch with a single tap from the model picker",
+    presetEmptyNative:
+      "No model presets yet; create one from the provider details with its native preset ability",
+    presetEmptyManaged:
+      "No model presets yet; create one to switch with a single tap from the model picker",
     createPreset: "Create model preset",
     modelPreset: "Набор моделей OMP",
     modelRoles: "Роли моделей",
