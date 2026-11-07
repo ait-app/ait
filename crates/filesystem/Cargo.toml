@@ -27,6 +27,10 @@ two-face.workspace = true
 [target."cfg(unix)".dependencies]
 libc.workspace = true
 
+# FSEvents invalidation of cached Workspace checkout facts.
+[target."cfg(target_os = \"macos\")".dependencies]
+notify.workspace = true
+
 [lints]
 workspace = true
 

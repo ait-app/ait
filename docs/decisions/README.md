@@ -57,6 +57,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## 工作区、文件与 Git
 
+- [ADR-217：事件驱动的 Workspace 运行时事实与低能耗 Git 读取](workspace/adr-217-event-driven-workspace-runtime.md)
 - [ADR-215：沙箱化 Worktree 隔离级别](workspace/adr-215-sandboxed-worktree-isolation.md)
 - [ADR-168：Setup 全局摘要与面板日志订阅分离](workspace/adr-168-scoped-setup-observation.md)
 

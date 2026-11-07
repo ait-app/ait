@@ -53,3 +53,29 @@ fn directory_port_preserves_safe_business_failures() {
     assert_eq!(error.message, "unknown project");
     assert!(port.changes().is_none());
 }
+
+#[test]
+fn workspace_changes_observe_directory_changes_without_waking_other_projections() {
+    let changes = model::changes::Changes::default();
+    let mut agents = changes.subscribe();
+    let directory = directory().with_changes(changes);
+    let mut workspaces = directory.workspace_changes().unwrap().subscribe();
+
+    directory.changes().unwrap().notify();
+    assert!(
+        workspaces.has_changed().unwrap(),
+        "directory changes wake Workspaces"
+    );
+    assert!(
+        agents.has_changed().unwrap(),
+        "directory changes wake every projection"
+    );
+    workspaces.borrow_and_update();
+    agents.borrow_and_update();
+
+    // Runtime checkout facts are published on the Workspace signal only.
+    directory.workspace_changes().unwrap().notify();
+    assert!(workspaces.has_changed().unwrap());
+    assert!(!agents.has_changed().unwrap());
+    assert!(super::directory().workspace_changes().is_none());
+}

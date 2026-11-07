@@ -6,13 +6,19 @@
 
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use tokio_util::sync::CancellationToken;
 
-const POLL_INTERVAL: Duration = Duration::from_millis(10);
+/// First wait before checking a running child: most local Git reads finish within it.
+const POLL_START: Duration = Duration::from_millis(4);
+/// Longest wait between checks, so slow network commands rarely wake the polling thread.
+const POLL_MAX: Duration = Duration::from_millis(50);
+/// Wait between checks while a terminated process group runs its signal handlers.
+const TERMINATE_POLL: Duration = Duration::from_millis(10);
 /// Time a terminated process group gets to run signal handlers, such as Git removing its
 /// `index.lock`, before it is killed.
 const TERMINATE_GRACE: Duration = Duration::from_millis(250);
@@ -69,9 +75,12 @@ impl Output {
     }
 }
 
+/// Git executable resolved once per process; see [`resolve_git_program`].
+static GIT_PROGRAM: OnceLock<PathBuf> = OnceLock::new();
+
 /// Create a `git` command in `cwd` that ignores the server's own `GIT_*` environment.
 pub(crate) fn git_command(cwd: &Path) -> Command {
-    let mut command = Command::new("git");
+    let mut command = Command::new(git_program());
     command.current_dir(cwd);
     for (name, _) in std::env::vars_os() {
         if name.to_string_lossy().starts_with("GIT_") {
@@ -79,6 +88,52 @@ pub(crate) fn git_command(cwd: &Path) -> Command {
         }
     }
     command
+}
+
+/// Executable used to start Git, falling back to a `PATH` lookup if a resolved file disappears,
+/// for example after a developer tools update.
+fn git_program() -> &'static Path {
+    let program = GIT_PROGRAM.get_or_init(resolve_git_program);
+    if program.is_absolute() && !program.is_file() {
+        return Path::new("git");
+    }
+    program
+}
+
+/// On macOS, `/usr/bin/git` is an `xcrun` shim that locates the developer toolchain on every
+/// call, roughly doubling the cost of short reads; the toolchain's Git is resolved once instead.
+/// Any other `PATH` entry, and every other platform, keeps the ordinary `git` lookup.
+fn resolve_git_program() -> PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        const SHIM: &str = "/usr/bin/git";
+        let first = std::env::var_os("PATH").and_then(|path| {
+            std::env::split_paths(&path)
+                .map(|directory| directory.join("git"))
+                .find(|candidate| candidate.is_file())
+        });
+        if first.as_deref() == Some(Path::new(SHIM))
+            && let Some(resolved) = xcrun_git()
+        {
+            return resolved;
+        }
+    }
+    PathBuf::from("git")
+}
+
+/// Toolchain Git reported by `xcrun`, when it names an existing file.
+#[cfg(target_os = "macos")]
+fn xcrun_git() -> Option<PathBuf> {
+    let bounds = Bounds {
+        timeout: CONFIG_TIMEOUT,
+        stdout_limit: 4 * 1024,
+        stderr_limit: 4 * 1024,
+    };
+    let mut command = Command::new("/usr/bin/xcrun");
+    command.args(["--find", "git"]);
+    let output = run_bounded(&mut command, bounds, None).ok()?;
+    let path = PathBuf::from(String::from_utf8(output.stdout).ok()?.trim());
+    (output.status.success() && path.is_absolute() && path.is_file()).then_some(path)
 }
 
 /// Make a [`git_command`] for `arguments` in `cwd` fail instead of prompting.
@@ -158,6 +213,7 @@ pub(crate) fn run_bounded_tapping(
     let deadline = Instant::now() + bounds.timeout;
     let mut tapped = 0_u64;
     let mut tap_buffer = [0_u8; TAP_BUFFER_BYTES];
+    let mut poll = POLL_START;
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
@@ -185,7 +241,8 @@ pub(crate) fn run_bounded_tapping(
             terminate(&mut child);
             return Err(failure);
         }
-        std::thread::sleep(POLL_INTERVAL);
+        std::thread::sleep(poll);
+        poll = poll.saturating_mul(2).min(POLL_MAX);
     };
     if let Some(tap) = stderr_tap.as_mut() {
         tap_stderr(&stderr, &mut tapped, &mut tap_buffer, &mut **tap)?;
@@ -263,7 +320,7 @@ pub(crate) fn terminate(child: &mut Child) {
         signal_group("-TERM", &group);
         let deadline = Instant::now() + TERMINATE_GRACE;
         while Instant::now() < deadline && matches!(child.try_wait(), Ok(None)) {
-            std::thread::sleep(POLL_INTERVAL);
+            std::thread::sleep(TERMINATE_POLL);
         }
         signal_group("-KILL", &group);
     }

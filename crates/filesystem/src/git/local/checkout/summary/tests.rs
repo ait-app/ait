@@ -196,3 +196,158 @@ fn sidebar_untracked_statistics_fail_closed_when_the_read_budget_is_exhausted() 
     fs::write(&file, "").unwrap();
     assert_eq!(count_lines(&file, &mut 0).unwrap(), 0);
 }
+
+#[test]
+fn sidebar_porcelain_status_parses_branch_counts_renames_and_untracked_paths() {
+    let output = "# branch.oid 0123abcd\0# branch.head feature\0\
+        # branch.upstream origin/feature\0# branch.ab +3 -1\0\
+        2 R. N... 100644 100644 100644 a b R100 new name.rs\0old name.rs\0\
+        ? dir/untracked file.txt\0";
+    let status = WorkingStatus::parse(output);
+    assert_eq!(status.head.as_deref(), Some("0123abcd"));
+    assert_eq!(status.branch.as_deref(), Some("feature"));
+    assert_eq!(
+        status.upstream,
+        Some(AheadBehind {
+            ahead: 3,
+            behind: 1
+        })
+    );
+    assert!(status.dirty);
+    assert_eq!(status.untracked, ["dir/untracked file.txt"]);
+
+    let unborn = WorkingStatus::parse("# branch.oid (initial)\0# branch.head (detached)\0");
+    assert_eq!(unborn, WorkingStatus::default());
+}
+
+/// The sidebar must agree with the full status read on every field both report.
+fn assert_matches_status(repo: &Path, managed: &Path) {
+    let checkout = LocalCheckout::new(managed.to_path_buf());
+    let cwd = repo.to_str().unwrap();
+    let summary = checkout.sidebar_summary(cwd).unwrap().git.unwrap();
+    let status = checkout.status(cwd).unwrap();
+    assert_eq!(summary.current_branch, status.current_branch, "branch");
+    assert_eq!(summary.remote_url, status.remote_url, "remote");
+    assert_eq!(summary.is_managed_worktree, status.is_managed_worktree);
+    assert_eq!(summary.is_dirty, status.is_dirty, "dirty");
+    assert_eq!(
+        summary.ahead_behind,
+        status
+            .ahead_behind
+            .map(|counts| (counts.ahead, counts.behind)),
+        "default-branch counts"
+    );
+    assert_eq!(summary.ahead_of_origin, status.ahead_of_origin, "ahead");
+    assert_eq!(summary.behind_of_origin, status.behind_of_origin, "behind");
+}
+
+#[test]
+fn sidebar_summary_matches_full_status_across_remote_and_branch_layouts() {
+    let repo = repository();
+    let managed = repo.path().join("managed");
+    assert_matches_status(repo.path(), &managed);
+
+    git(
+        repo.path(),
+        &["remote", "add", "zeta", "https://example.com/zeta.git"],
+    );
+    git(repo.path(), &["remote", "add", "origin", "gh:owner/repo"]);
+    git(
+        repo.path(),
+        &["config", "url.https://github.com/.insteadOf", "gh:"],
+    );
+    git(
+        repo.path(),
+        &["update-ref", "refs/remotes/origin/main", "HEAD"],
+    );
+    // Local main moves ahead, so comparing against it instead of origin/main changes counts.
+    git(
+        repo.path(),
+        &["commit", "--allow-empty", "-m", "local main only"],
+    );
+    git(repo.path(), &["checkout", "-b", "feature"]);
+    fs::write(repo.path().join("tracked.txt"), "one\n").unwrap();
+    git(repo.path(), &["commit", "-am", "feature"]);
+    git(
+        repo.path(),
+        &["update-ref", "refs/remotes/origin/feature", "HEAD~1"],
+    );
+    git(repo.path(), &["branch", "--set-upstream-to=origin/feature"]);
+    fs::write(repo.path().join("untracked.txt"), "new\n").unwrap();
+    assert_matches_status(repo.path(), &managed);
+
+    // origin/HEAD names the default branch; a dangling target must still be honoured.
+    git(
+        repo.path(),
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ],
+    );
+    assert_matches_status(repo.path(), &managed);
+    git(
+        repo.path(),
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/trunk",
+        ],
+    );
+    assert_matches_status(repo.path(), &managed);
+
+    git(repo.path(), &["checkout", "--detach"]);
+    assert_matches_status(repo.path(), &managed);
+}
+
+#[test]
+fn sidebar_summary_reports_managed_worktree_directories() {
+    let repo = repository();
+    let managed = tempfile::tempdir().unwrap();
+    let worktree = managed.path().join("project").join("linked");
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "linked",
+            worktree.to_str().unwrap(),
+        ],
+    );
+    assert_matches_status(&worktree, managed.path());
+    let summary = LocalCheckout::new(managed.path().to_path_buf())
+        .sidebar_summary(worktree.to_str().unwrap())
+        .unwrap();
+    assert!(summary.git.unwrap().is_managed_worktree);
+    let dirs = summary.git_dirs.unwrap();
+    let common = repo.path().join(".git").canonicalize().unwrap();
+    assert_eq!(dirs.common_dir, common);
+    assert!(dirs.git_dir.starts_with(common.join("worktrees")));
+}
+
+#[test]
+fn sidebar_summary_from_a_subdirectory_counts_untracked_files_below_it() {
+    let repo = repository();
+    let sub = repo.path().join("sub");
+    fs::create_dir(&sub).unwrap();
+    fs::write(sub.join("inner.txt"), "a\nb\n").unwrap();
+    fs::write(repo.path().join("outer.txt"), "outside\n").unwrap();
+    fs::write(repo.path().join("tracked.txt"), "one\ntwo\nthree\n").unwrap();
+
+    // Tracked changes cover the repository; untracked files only the workspace directory.
+    assert_eq!(
+        summary(&sub).diff_stat,
+        Some(WorkspaceDiffStat {
+            additions: 3,
+            deletions: 0
+        })
+    );
+    assert_eq!(
+        summary(repo.path()).diff_stat,
+        Some(WorkspaceDiffStat {
+            additions: 4,
+            deletions: 0
+        })
+    );
+}

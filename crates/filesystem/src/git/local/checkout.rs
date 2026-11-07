@@ -71,15 +71,8 @@ impl LocalCheckout {
             SMALL_OUTPUT_LIMIT,
         )?;
         let common_dir = canonical_git_path(&common_dir)?;
-        let main_repo_root = common_dir
-            .file_name()
-            .is_some_and(|name| name == ".git")
-            .then(|| common_dir.parent().map(Path::to_path_buf))
-            .flatten();
-        let managed = is_below(&self.managed_worktrees_root, &repo_root)
-            && main_repo_root
-                .as_ref()
-                .is_some_and(|main| main != &repo_root);
+        let main_repo_root = main_repo_root(&common_dir);
+        let managed = self.is_managed_worktree(&repo_root, main_repo_root.as_ref());
         let current_branch = git_optional(&cwd, &["symbolic-ref", "--quiet", "--short", "HEAD"])?;
         let (dirty, has_conflicts) = working_tree_state(&cwd)?;
         let remotes = lines(&git_required(&cwd, &["remote"], SMALL_OUTPUT_LIMIT)?);
@@ -146,6 +139,23 @@ impl LocalCheckout {
             is_managed_worktree: managed,
         })
     }
+}
+
+impl LocalCheckout {
+    /// Whether `repo_root` is a linked worktree below the server-owned worktree root.
+    fn is_managed_worktree(&self, repo_root: &Path, main_repo_root: Option<&PathBuf>) -> bool {
+        is_below(&self.managed_worktrees_root, repo_root)
+            && main_repo_root.is_some_and(|main| main != repo_root)
+    }
+}
+
+/// Main checkout owning a canonical `common_dir`, when it is a non-bare `.git` directory.
+fn main_repo_root(common_dir: &Path) -> Option<PathBuf> {
+    common_dir
+        .file_name()
+        .is_some_and(|name| name == ".git")
+        .then(|| common_dir.parent().map(Path::to_path_buf))
+        .flatten()
 }
 
 impl CheckoutRuntime for LocalCheckout {
@@ -945,7 +955,7 @@ fn resolve_default_branch(
     cwd: &Path,
     current_branch: Option<&str>,
 ) -> Result<Option<String>, CheckoutRuntimeError> {
-    if let Some(remote) = git_optional(
+    let origin_head = git_optional(
         cwd,
         &[
             "symbolic-ref",
@@ -953,29 +963,37 @@ fn resolve_default_branch(
             "--short",
             "refs/remotes/origin/HEAD",
         ],
-    )? {
-        return Ok(Some(
-            remote.strip_prefix("origin/").unwrap_or(&remote).to_owned(),
-        ));
+    )?;
+    Ok(default_branch_from(
+        origin_head.as_deref(),
+        current_branch,
+        |reference| {
+            run_git(
+                cwd,
+                &["show-ref", "--verify", "--quiet", reference],
+                &[0],
+                SMALL_OUTPUT_LIMIT,
+            )
+            .is_ok()
+        },
+    ))
+}
+
+/// Default branch: the short `origin/HEAD` target without its remote, else the first existing
+/// local `main` or `master` reported by `local_exists`, else `current_branch`.
+fn default_branch_from(
+    origin_head: Option<&str>,
+    current_branch: Option<&str>,
+    mut local_exists: impl FnMut(&str) -> bool,
+) -> Option<String> {
+    if let Some(remote) = origin_head {
+        return Some(remote.strip_prefix("origin/").unwrap_or(remote).to_owned());
     }
-    for branch in ["main", "master"] {
-        if run_git(
-            cwd,
-            &[
-                "show-ref",
-                "--verify",
-                "--quiet",
-                &format!("refs/heads/{branch}"),
-            ],
-            &[0],
-            SMALL_OUTPUT_LIMIT,
-        )
-        .is_ok()
-        {
-            return Ok(Some(branch.to_owned()));
-        }
-    }
-    Ok(current_branch.map(str::to_owned))
+    ["main", "master"]
+        .into_iter()
+        .find(|branch| local_exists(&format!("refs/heads/{branch}")))
+        .or(current_branch)
+        .map(str::to_owned)
 }
 
 fn compare_refs(
@@ -1352,12 +1370,21 @@ fn most_ahead_base(cwd: &Path, base: &str) -> Result<String, CheckoutRuntimeErro
 }
 
 fn comparison_base(cwd: &Path, base: &str) -> Result<String, CheckoutRuntimeError> {
+    comparison_base_with(base, |reference| ref_exists(cwd, reference))
+}
+
+/// Comparison ref for `base`: full refs are kept, and a branch name prefers its origin tracking
+/// ref when `exists` reports it.
+fn comparison_base_with(
+    base: &str,
+    exists: impl FnOnce(&str) -> Result<bool, CheckoutRuntimeError>,
+) -> Result<String, CheckoutRuntimeError> {
     if base.starts_with("refs/heads/") || base.starts_with("refs/remotes/") {
         return Ok(base.to_owned());
     }
     let name = local_base_name(base)?;
     let origin = format!("origin/{name}");
-    if ref_exists(cwd, &format!("refs/remotes/{origin}"))? {
+    if exists(&format!("refs/remotes/{origin}"))? {
         Ok(origin)
     } else {
         Ok(name)
