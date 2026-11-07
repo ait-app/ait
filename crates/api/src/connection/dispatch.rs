@@ -113,6 +113,10 @@ async fn transport(context: &mut Option<Context<'_>>, state: &Shared) -> Result<
         Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "shares"),
         result => return result,
     }
+    match crate::automation::request(context, state) {
+        Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "automation"),
+        result => return result,
+    }
     match crate::publication::request(context, state).await {
         Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "publication"),
         result => return result,

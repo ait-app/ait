@@ -3,6 +3,8 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use tokio::time::timeout;
 
+use model::share::Visitor;
+
 use super::*;
 use crate::test_support::{Workspaces, address};
 
@@ -59,7 +61,7 @@ async fn owner_sessions_speak_the_business_protocol_in_both_connection_modes() {
     let fixture = Workspaces::new(address());
     let bridge = InProcess::new(&fixture.api.shared);
     for single in [false, true] {
-        let mut connection = bridge.connect(None).await.expect("admitted");
+        let mut connection = bridge.connect(Admission::Owner).await.expect("admitted");
         send(&connection, &hello(&json!(["connection.ping"]), single)).await;
         let info = receive(&mut connection).await;
         assert_eq!(info["type"], "server_info");
@@ -91,11 +93,14 @@ async fn guest_sessions_are_confined_and_end_when_their_share_is_revoked() {
         ..visitor.clone()
     };
     assert!(matches!(
-        bridge.connect(Some(&stranger)).await,
+        bridge.connect(Admission::Guest(&stranger)).await,
         Err(Refused)
     ));
 
-    let mut guest = bridge.connect(Some(&visitor)).await.expect("admitted");
+    let mut guest = bridge
+        .connect(Admission::Guest(&visitor))
+        .await
+        .expect("admitted");
     send(
         &guest,
         &hello(&json!(["connection.ping", "workspace.get.request"]), false),
@@ -112,7 +117,7 @@ async fn guest_sessions_are_confined_and_end_when_their_share_is_revoked() {
     let ping = request(&mut guest, "connection.ping", json!({"nonce":"g"})).await;
     assert_eq!(ping["result"]["nonce"], "g");
 
-    let mut owner = bridge.connect(None).await.expect("admitted");
+    let mut owner = bridge.connect(Admission::Owner).await.expect("admitted");
     send(&owner, &hello(&json!(["share.remove.request"]), false)).await;
     assert_eq!(receive(&mut owner).await["type"], "server_info");
     let removed = request(
@@ -127,7 +132,10 @@ async fn guest_sessions_are_confined_and_end_when_their_share_is_revoked() {
         closed(&mut guest.receiver).await,
         "revoked guest session stayed open"
     );
-    assert!(matches!(bridge.connect(Some(&visitor)).await, Err(Refused)));
+    assert!(matches!(
+        bridge.connect(Admission::Guest(&visitor)).await,
+        Err(Refused)
+    ));
 }
 
 #[tokio::test]
@@ -135,9 +143,15 @@ async fn draining_or_dropped_apis_refuse_sessions() {
     let fixture = Workspaces::new(address());
     let bridge = InProcess::new(&fixture.api.shared);
     fixture.api.begin_shutdown();
-    assert!(matches!(bridge.connect(None).await, Err(Refused)));
+    assert!(matches!(
+        bridge.connect(Admission::Owner).await,
+        Err(Refused)
+    ));
     drop(fixture);
-    assert!(matches!(bridge.connect(None).await, Err(Refused)));
+    assert!(matches!(
+        bridge.connect(Admission::Owner).await,
+        Err(Refused)
+    ));
 }
 
 #[test]
@@ -159,7 +173,7 @@ fn control_frames_have_no_in_process_equivalent() {
 async fn a_session_waiting_for_its_peer_is_not_closed_by_the_socket_write_deadline() {
     let fixture = Workspaces::new(address());
     let bridge = InProcess::new(&fixture.api.shared);
-    let mut connection = bridge.connect(None).await.expect("admitted");
+    let mut connection = bridge.connect(Admission::Owner).await.expect("admitted");
     send(&connection, &hello(&json!(["connection.ping"]), false)).await;
     assert_eq!(receive(&mut connection).await["type"], "server_info");
     let pings = QUEUE + 8;
@@ -183,3 +197,112 @@ async fn a_session_waiting_for_its_peer_is_not_closed_by_the_socket_write_deadli
 
 /// Longer than the WebSocket write deadline.
 const WRITE_STALL: Duration = Duration::from_secs(30);
+
+fn enable(fixture: &Workspaces, root: &std::path::Path) {
+    fixture
+        .api
+        .shared
+        .automation
+        .set(model::automation::Settings {
+            enabled: true,
+            roots: vec![model::automation::Root {
+                path: root.to_string_lossy().into_owned(),
+                label: None,
+            }],
+            providers: vec!["codex".to_owned()],
+        })
+        .expect("valid settings");
+}
+
+#[tokio::test]
+async fn automation_sessions_need_enabled_settings_and_end_when_disabled() {
+    let fixture = Workspaces::new(address());
+    let bridge = InProcess::new(&fixture.api.shared);
+    assert!(matches!(
+        bridge.connect(Admission::Automation).await,
+        Err(Refused)
+    ));
+    enable(&fixture, &fixture.shared_path());
+    let mut connection = bridge
+        .connect(Admission::Automation)
+        .await
+        .expect("admitted");
+    send(
+        &connection,
+        &hello(
+            &json!([
+                "connection.ping",
+                "share.list.request",
+                "automation.settings.set.request"
+            ]),
+            true,
+        ),
+    )
+    .await;
+    assert_eq!(receive(&mut connection).await["type"], "server_info");
+    for (method, params) in [
+        ("automation.settings.set.request", json!({"settings":{}})),
+        ("share.list.request", json!({})),
+    ] {
+        let refused = request(&mut connection, method, params).await;
+        assert_eq!(refused["code"], "forbidden", "{method}: {refused}");
+    }
+    send(
+        &connection,
+        &json!({"type":"event","method":"terminal.input","params":{}}),
+    )
+    .await;
+    assert_eq!(receive(&mut connection).await["code"], "forbidden");
+
+    fixture
+        .api
+        .shared
+        .automation
+        .set(model::automation::Settings::default())
+        .expect("disable");
+    let Connection {
+        sender: _sender,
+        mut receiver,
+    } = connection;
+    assert!(
+        closed(&mut receiver).await,
+        "disabling automation ends its sessions"
+    );
+}
+
+#[tokio::test]
+async fn owners_manage_automation_settings_over_rpc() {
+    let fixture = Workspaces::new(address());
+    let bridge = InProcess::new(&fixture.api.shared);
+    let mut owner = bridge.connect(Admission::Owner).await.expect("admitted");
+    send(
+        &owner,
+        &hello(
+            &json!([
+                "automation.settings.get.request",
+                "automation.settings.set.request"
+            ]),
+            true,
+        ),
+    )
+    .await;
+    receive(&mut owner).await;
+    let empty = request(&mut owner, "automation.settings.get.request", json!({})).await;
+    assert_eq!(empty["result"]["settings"]["enabled"], false);
+    let root = fixture.shared_path().to_string_lossy().into_owned();
+    let set = request(
+        &mut owner,
+        "automation.settings.set.request",
+        json!({"settings":{"enabled":true,"roots":[{"path":root}],"providers":[]}}),
+    )
+    .await;
+    assert_eq!(set["result"]["settings"]["roots"][0]["path"], json!(root));
+    let invalid = request(
+        &mut owner,
+        "automation.settings.set.request",
+        json!({"settings":{"enabled":true,"roots":[{"path":"relative"}]}}),
+    )
+    .await;
+    assert_eq!(invalid["code"], "invalid_message");
+    assert!(fixture.api.shared.automation.get().enabled);
+}

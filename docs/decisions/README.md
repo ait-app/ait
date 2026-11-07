@@ -15,6 +15,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## Daemon 与协议
 
+- [ADR-219：中心发起的 Hub 自动化会话](daemon/adr-219-hub-automation-sessions.md)
 - [ADR-208：群组内资源共享与访客会话](daemon/adr-208-workspace-share-guests.md)
 - [ADR-203：MCP 的可选 Unix socket 监听](daemon/adr-203-mcp-unix-socket.md)
 

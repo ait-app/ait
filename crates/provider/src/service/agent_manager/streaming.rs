@@ -120,12 +120,13 @@ pub(super) async fn drain(
                 persist_usage(registry, timeline, id, agent, usage)
             }
             Some(AgentTurnEvent::PermissionRequested(request)) => {
-                if agent.record.internal && agent.record.owner.is_some() {
+                if super::unattended(&agent.record) {
                     let Some(request_id) = request["id"].as_str() else {
                         agent.pending = Some(AgentTurnEvent::Failed);
                         break;
                     };
-                    // Bot turns cannot acquire permissions or wait for interactive approval.
+                    // Bot and automation turns cannot acquire permissions or wait for
+                    // interactive approval.
                     if agent
                         .session
                         .respond_permission(request_id, &serde_json::json!({"behavior":"deny"}))

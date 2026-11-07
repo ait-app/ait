@@ -98,6 +98,16 @@ pub(crate) struct AgentRegistration {
     pub(crate) owner: Option<serde_json::Value>,
 }
 
+/// Whether nobody approves this Agent's permission requests: an owned internal
+/// (Bot) session, or an Agent Hub automation created. Their requests are denied.
+pub(crate) fn unattended(record: &PersistedAgentRuntimeRecord) -> bool {
+    (record.internal && record.owner.is_some())
+        || record
+            .labels
+            .get(model::automation::ORIGIN_LABEL)
+            .is_some_and(|origin| origin == model::automation::ORIGIN)
+}
+
 #[derive(Debug)]
 struct LiveAgent {
     mcp: Option<super::agent_mcp::Binding>,

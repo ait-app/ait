@@ -10,7 +10,7 @@ use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Bytes;
 use uuid::Uuid;
 
-use super::bridge::{Connection, Frame};
+use super::bridge::{Admission, Connection, Frame};
 use super::credit;
 use super::wire::{self, PayloadKind, SessionKind};
 use crate::Local;
@@ -39,6 +39,8 @@ pub(super) struct Session {
     pub(super) id: Uuid,
     pub(super) local: Arc<Local>,
     pub(super) visitor: Option<Visitor>,
+    /// Whether the center opened this session for automation.
+    pub(super) automation: bool,
     /// Peer messages in link order; closed when the link drops the session.
     pub(super) inbound: mpsc::Receiver<Frame>,
     pub(super) output: mpsc::Sender<(Uuid, Output)>,
@@ -92,9 +94,19 @@ impl Outlet<'_> {
     }
 }
 
+/// The authority `session` runs with in the local API.
+fn admission(session: &Session) -> Admission<'_> {
+    match (&session.visitor, session.automation) {
+        (Some(visitor), _) => Admission::Guest(visitor),
+        (None, true) => Admission::Automation,
+        (None, false) => Admission::Owner,
+    }
+}
+
 /// Bridge a business session into the local API. A guest session is admitted
 /// with its visitor; the API confines it to the shared resource and ends it
-/// once the share is gone.
+/// once the share is gone. An automation session is admitted only while this
+/// Host has automation enabled, and confined to the automation policy.
 async fn bridge(session: &mut Session, hello: Bytes) -> Result<(), &'static str> {
     let text = std::str::from_utf8(&hello).map_err(|_| "invalid_hello")?;
     let _: ClientHello = protocol::decode(text).map_err(|_| "invalid_hello")?;
@@ -102,13 +114,14 @@ async fn bridge(session: &mut Session, hello: Bytes) -> Result<(), &'static str>
     let Connection {
         sender,
         mut receiver,
-    } = api.connect(session.visitor.as_ref()).await.map_err(|_| {
-        if session.visitor.is_some() {
-            "share_revoked"
-        } else {
-            "unavailable"
-        }
-    })?;
+    } = api
+        .connect(admission(session))
+        .await
+        .map_err(|_| match admission(session) {
+            Admission::Guest(_) => "share_revoked",
+            Admission::Automation => "forbidden",
+            Admission::Owner => "unavailable",
+        })?;
     sender
         .send(Frame::Text(hello))
         .await
