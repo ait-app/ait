@@ -104,6 +104,10 @@ interface LinkIdentity {
 
 const RECONNECT_BASE_MS = 300;
 const RECONNECT_MAX_MS = 8000;
+/**
+ * Slowest retry of a new link while the center answers with errors. A center that cannot be
+ * reached keeps `RECONNECT_MAX_MS`, so the link returns soon after the network does.
+ */
 const FRESH_RETRY_MAX_MS = 30_000;
 const UNAVAILABLE_RETRY_MS = 5 * 60_000;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
@@ -1156,10 +1160,11 @@ export class HubLink implements HubAccountConnection {
     this.closeSocket();
     this.resetLink(code);
     const resumeFailure = code === "resume_expired" || code === "invalid_resume";
-    this.retry(code, resumeFailure ? 0 : undefined);
+    this.retry(code, resumeFailure ? 0 : undefined, true);
   }
 
-  private retry(reason: unknown, delay?: number): void {
+  /** `rejected`: the center answered with an error frame; HTTP statuses count the same. */
+  private retry(reason: unknown, delay?: number, rejected = false): void {
     this.clearTimer("retry");
     if (this.current === "stopped") return;
     if (this.paused) {
@@ -1167,12 +1172,13 @@ export class HubLink implements HubAccountConnection {
       return;
     }
     const unavailable = status(reason) === 404;
+    const answered = rejected || status(reason) !== undefined;
     const wait =
       delay ??
       (unavailable
         ? UNAVAILABLE_RETRY_MS
         : Math.min(
-            this.link ? RECONNECT_MAX_MS : FRESH_RETRY_MAX_MS,
+            this.link || !answered ? RECONNECT_MAX_MS : FRESH_RETRY_MAX_MS,
             RECONNECT_BASE_MS * 2 ** Math.min(this.failures++, 10),
           ) *
           (0.8 + Math.random() * 0.4));

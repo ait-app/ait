@@ -139,6 +139,23 @@ describe("hub link failures", () => {
     ]);
   });
 
+  it("retries an unreachable center as fast as a resume, and a refusing one slower", async () => {
+    const waits = async (failure: () => Error) => {
+      const h = hubFixture({ ticket: () => Promise.reject(failure()) });
+      h.link.start();
+      for (let attempt = 0; attempt < 12; attempt += 1) await vi.advanceTimersByTimeAsync(30_000);
+      h.link.stop();
+      return h.logger.warn.mock.calls
+        .filter(([, message]) => message === "[Hub] connection attempt failed")
+        .map(([fields]) => (fields as { retryMs: number }).retryMs);
+    };
+    // A network that comes back is followed within a resume's pace.
+    expect(Math.max(...(await waits(() => new Error("This operation was aborted"))))).toBe(8000);
+    // A center answering with errors is not hammered.
+    const refused = await waits(() => Object.assign(new Error("busy"), { status: 503 }));
+    expect(Math.max(...refused)).toBe(30_000);
+  });
+
   it("logs through the console by default", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
