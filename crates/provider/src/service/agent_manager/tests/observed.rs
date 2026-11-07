@@ -222,6 +222,45 @@ fn unfinished_registration_recovers_without_allocating_another_identity() {
     assert_eq!(source.status, ObservedStatus::Running);
     assert_eq!(recovered.last_status, AgentRuntimeStatus::Closed);
     assert_eq!(registry.list().expect("records").len(), 2);
+
+    let stale = registry.get(&pending.id).expect("registry");
+    registry.0.lock().expect("registry").fail_update = true;
+    manager
+        .recover_observed()
+        .expect("already stale observations are not rewritten");
+    assert_eq!(registry.get(&pending.id).expect("registry"), stale);
+}
+
+#[test]
+fn recovery_keeps_archived_root_children_unavailable_without_rewriting_them() {
+    let (manager, registry, _) = make_manager();
+    let mut root = stored_record();
+    root.archived_at = Some("2026-10-31T00:00:00Z".to_owned());
+    registry.upsert(&root).expect("root");
+    let timeline = Timeline::memory().expect("timeline");
+    let native = &root.persistence.as_ref().expect("handle").session_id;
+    let ids = register_children(
+        &registry,
+        &timeline,
+        &root,
+        &[child("child", native, "running")],
+    )
+    .expect("register");
+    let observed = registry.get(&ids["child"]).expect("registry");
+    assert_eq!(
+        observed
+            .as_ref()
+            .and_then(|record| record.observation.as_ref())
+            .map(|source| source.health),
+        Some(ObservationHealth::Unavailable)
+    );
+
+    registry.0.lock().expect("registry").fail_update = true;
+    manager
+        .with_timeline(timeline)
+        .recover_observed()
+        .expect("unavailable observations are not rewritten");
+    assert_eq!(registry.get(&ids["child"]).expect("registry"), observed);
 }
 
 #[test]

@@ -8,6 +8,7 @@ log.transports.console.level = "info";
 log.initialize({ spyRendererConsole: true });
 import { configureDesktopProfile, desktopProfileOptions } from "./branding.js";
 import { inheritLoginShellEnv } from "./login-shell-env.js";
+import { afterEnvironment, runDesktopStartup } from "./desktop-startup.js";
 import {
   APP_SCHEME,
   buildAgentDeepLinkRoute,
@@ -39,6 +40,7 @@ import { AgentNavigationInbox, parseAgentDeepLinkFromArgv } from "./agent-naviga
 import { showWindowWhenReady } from "./window/show-when-ready.js";
 import {
   isDesktopManagedDaemonRunningSync,
+  prestartDesktopDaemon,
   registerDaemonManager,
   retainDesktopDaemonForNextSession,
   stopDesktopDaemon,
@@ -49,7 +51,6 @@ import {
   registerExternalQuitSignals,
   stopDesktopManagedDaemonOnQuitIfNeeded,
 } from "./daemon/quit-lifecycle.js";
-import { runDesktopStartup } from "./desktop-startup.js";
 import { installAppUpdateOnQuit } from "./features/auto-updater.js";
 import { registerBrowserAutomationIpc } from "./features/browser-automation/ipc.js";
 import { createBrowserCaptureService } from "./features/browser-capture.js";
@@ -633,6 +634,8 @@ function getDevBuildLabel(): string | null {
 }
 
 let cachedEffectiveIconPath: string | null = null;
+/** Settles once the login shell environment is applied; set when bootstrap begins. */
+let loginShellEnvReady: Promise<void> = Promise.resolve();
 
 async function getEffectiveAppIconPath(): Promise<string | null> {
   if (cachedEffectiveIconPath !== null) {
@@ -644,6 +647,8 @@ async function getEffectiveAppIconPath(): Promise<string | null> {
     return baseIconPath;
   }
   const devLabel = getDevBuildLabel();
+  // Stamping a dev label runs ImageMagick from the user's PATH.
+  if (devLabel) await loginShellEnvReady;
   cachedEffectiveIconPath = await resolveAppIconPath({
     isPackaged: false,
     baseIconPath,
@@ -951,12 +956,14 @@ function setupSingleInstanceLock(): boolean {
   return true;
 }
 
-async function bootstrap(): Promise<void> {
+async function bootstrap(environmentReady: Promise<void>): Promise<void> {
+  loginShellEnvReady = environmentReady;
   if (!setupSingleInstanceLock()) {
     return;
   }
 
   await app.whenReady();
+  const afterLoginShellEnv = afterEnvironment(ipcMain, environmentReady);
 
   const appDistDir = getAppDistDir();
   protocol.handle(APP_SCHEME, (request) => {
@@ -999,17 +1006,19 @@ async function bootstrap(): Promise<void> {
     },
   });
   ensureNotificationCenterRegistration();
-  registerDaemonManager(isAccountAppWindow);
+  registerDaemonManager(isAccountAppWindow, environmentReady);
   registerWindowManager({ mode: DESKTOP_WINDOW_CHROME_MODE });
   registerDialogHandlers();
   registerNotificationHandlers();
-  ipcMain.handle("paseo:opener:openDirectory", (_event, value: unknown) =>
+  afterLoginShellEnv.handle("paseo:opener:openDirectory", (_event, value: unknown) =>
     openDirectoryLink(value),
   );
-  ipcMain.handle("paseo:opener:openFile", (_event, value: unknown) => openPreviewFile(value));
+  afterLoginShellEnv.handle("paseo:opener:openFile", (_event, value: unknown) =>
+    openPreviewFile(value),
+  );
   const openExternalUrl = createExternalUrlOpener({ open: shell.openExternal });
   ipcMain.handle("paseo:opener:openUrl", (_event, value: unknown) => openExternalUrl(value));
-  registerEditorTargetHandlers();
+  registerEditorTargetHandlers({ ipc: afterLoginShellEnv });
   registerBrowserAutomationIpc();
 
   // In-app "Open in new window": opens a window that lands on the given project
@@ -1029,6 +1038,9 @@ async function bootstrap(): Promise<void> {
       console.error("Failed to restore a desktop window after activation", error);
     });
   });
+
+  // Boot the built-in daemon while the first window loads instead of after the renderer asks.
+  void environmentReady.then(() => prestartDesktopDaemon());
 
   // The first window of the session restores and persists saved geometry.
   const initialAgentNavigation = pendingAgentNavigation;

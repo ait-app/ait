@@ -27,6 +27,30 @@ fn completed_commands_return_status_and_truncated_diagnostics() {
 }
 
 #[test]
+fn commands_that_finish_after_overflowing_stderr_still_complete() {
+    // The overflow is observed while the shell is still running, well before it exits.
+    let mut command = Command::new("/bin/sh");
+    command.args(["-c", "printf 'diagnostic text' >&2; sleep 0.1; exit 3"]);
+
+    let output = run_bounded(&mut command, BOUNDS, None).unwrap();
+
+    assert_eq!(output.code(), 3);
+    assert_eq!(output.stderr, b"diagnost");
+}
+
+#[test]
+fn commands_that_keep_running_after_overflowing_stderr_are_stopped() {
+    let mut command = Command::new("/bin/sh");
+    command.args(["-c", "printf 'diagnostic text' >&2; sleep 30"]);
+    let started = Instant::now();
+
+    let error = run_bounded(&mut command, BOUNDS, None).unwrap_err();
+
+    assert!(matches!(error, RunError::StderrExceeded), "{error:?}");
+    assert!(started.elapsed() < BOUNDS.timeout);
+}
+
+#[test]
 fn pre_cancelled_commands_never_start() {
     let cancellation = CancellationToken::new();
     cancellation.cancel();

@@ -22,6 +22,9 @@ const TERMINATE_POLL: Duration = Duration::from_millis(10);
 /// Time a terminated process group gets to run signal handlers, such as Git removing its
 /// `index.lock`, before it is killed.
 const TERMINATE_GRACE: Duration = Duration::from_millis(250);
+/// Time a child that overflowed standard error gets to exit on its own before it is treated
+/// as a runaway writer; a child finishing just after its last diagnostic still completes.
+const STDERR_OVERFLOW_GRACE: Duration = Duration::from_millis(250);
 /// Git subcommands that may open an SSH connection to a remote.
 const NETWORK_SUBCOMMANDS: [&str; 5] = ["clone", "fetch", "ls-remote", "pull", "push"];
 /// Fails on any passphrase, password or unknown host key instead of asking for it.
@@ -231,7 +234,11 @@ pub(crate) fn run_bounded_tapping(
         } else if !within_limit(&stdout, bounds.stdout_limit) {
             Some(RunError::StdoutExceeded)
         } else if !within_limit(&stderr, bounds.stderr_limit) {
-            Some(RunError::StderrExceeded)
+            match exit_within(&mut child, STDERR_OVERFLOW_GRACE) {
+                Ok(Some(status)) => break status,
+                Ok(None) => Some(RunError::StderrExceeded),
+                Err(error) => Some(RunError::Io(error)),
+            }
         } else if Instant::now() >= deadline {
             Some(RunError::TimedOut)
         } else {
@@ -318,10 +325,7 @@ pub(crate) fn terminate(child: &mut Child) {
     {
         let group = format!("-{}", child.id());
         signal_group("-TERM", &group);
-        let deadline = Instant::now() + TERMINATE_GRACE;
-        while Instant::now() < deadline && matches!(child.try_wait(), Ok(None)) {
-            std::thread::sleep(TERMINATE_POLL);
-        }
+        let _ = exit_within(child, TERMINATE_GRACE);
         signal_group("-KILL", &group);
     }
     #[cfg(windows)]
@@ -332,6 +336,20 @@ pub(crate) fn terminate(child: &mut Child) {
         .status();
     let _ = child.kill();
     let _ = child.wait();
+}
+
+/// Wait up to `grace` for `child` to exit, returning its status, or `None` if it still runs.
+fn exit_within(child: &mut Child, grace: Duration) -> std::io::Result<Option<ExitStatus>> {
+    let deadline = Instant::now() + grace;
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(Some(status));
+        }
+        if Instant::now() >= deadline {
+            return Ok(None);
+        }
+        std::thread::sleep(TERMINATE_POLL);
+    }
 }
 
 #[cfg(unix)]

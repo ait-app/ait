@@ -1,5 +1,6 @@
 import { displayAppVersion } from "../app-version.js";
 import { app, ipcMain, powerMonitor } from "electron";
+import log from "electron-log/main";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
@@ -194,6 +195,23 @@ async function startDaemon(): Promise<DesktopDaemonStatus> {
   return getRustDaemon().start();
 }
 
+/**
+ * Start the built-in daemon from the main process at launch, so it boots while the renderer
+ * loads. The renderer's own start request later joins this one through the serialized
+ * manager; failures are left for that request to surface.
+ */
+export async function prestartDesktopDaemon(env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  // Development renderers may target another daemon through this build-time override.
+  if (!app.isPackaged && env.EXPO_PUBLIC_LOCAL_DAEMON?.trim()) return;
+  const settings = await getDesktopSettingsStore().get();
+  if (process.platform === "win32" || !settings.daemon.manageBuiltInDaemon) return;
+  try {
+    await getRustDaemon().start();
+  } catch (error) {
+    log.warn("[desktop daemon] early start failed; the renderer will retry", error);
+  }
+}
+
 export async function stopDesktopDaemon(
   _reason: DesktopDaemonStopReason = DEFAULT_DESKTOP_DAEMON_STOP_REASON,
   confirmedInstance?: { pid: number; startedAt: string },
@@ -331,11 +349,14 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
 
 export function registerDaemonManager(
   isAccountAppWindow: (contents: Electron.WebContents) => boolean,
+  environmentReady: Promise<void> = Promise.resolve(),
 ): void {
   const handlers = createDaemonCommandHandlers();
   const account = createAccountIpc(getRustDaemon, isAccountAppWindow);
 
   ipcMain.handle("ait:invoke", async (_event, command: string, args?: Record<string, unknown>) => {
+    // Daemon spawns, transports and data paths depend on the login shell environment.
+    await environmentReady;
     if (command.startsWith("account_")) return account(_event, command, args);
     const handler = Object.hasOwn(handlers, command) ? handlers[command] : undefined;
     if (!handler) {
