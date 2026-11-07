@@ -8,7 +8,7 @@ use super::*;
 /// Budget used by these tests so a timeout does not cost the suite a minute.
 const TEST_BUDGET: Budget = Budget {
     timeout: Duration::from_millis(600),
-    grace: Duration::from_secs(5),
+    grace: Duration::from_millis(300),
 };
 
 /// Write a fake installer (a POSIX shell script) and return its path.
@@ -169,4 +169,32 @@ fn a_stalled_installer_does_not_hold_the_probe_past_its_budget() {
     );
     // The probe returns after the budget and its bounded grace, not when the script would end.
     assert!(started.elapsed() < Duration::from_secs(30));
+}
+
+#[test]
+fn a_group_that_ignores_sigterm_is_killed_outright() {
+    let directory = tempfile::tempdir().unwrap();
+    // Both the leader and its child ignore SIGTERM, so only the escalation path can stop them.
+    let script = installer(
+        directory.path(),
+        "#!/bin/sh\ntrap '' TERM\nsh -c 'trap \"\" TERM; sleep 300' &\n\
+         echo $! > \"$2/grandchild.pid\"\necho $$ > \"$2/installer.pid\"\nwait\n",
+    );
+    workspace_within(
+        directory.path(),
+        &|name| match name {
+            "AIT_SERVER_OMP_NATIVE_HOST_INSTALLER" => Some(script.clone().into_os_string()),
+            "AIT_SERVER_NODE_BIN" => Some("/bin/sh".into()),
+            _ => None,
+        },
+        TEST_BUDGET,
+    );
+    for file in ["grandchild.pid", "installer.pid"] {
+        let pid: i32 = std::fs::read_to_string(directory.path().join(file))
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        assert!(gone(pid, Duration::from_secs(5)), "{file} survived SIGKILL");
+    }
 }
