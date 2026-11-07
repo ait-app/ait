@@ -175,8 +175,9 @@ describe("desktop Hub terminal delivery", () => {
     await vi.waitFor(() => expect(relay.frames()).toHaveLength(2));
     expect(relay.socket.frames("credit")).toEqual([]);
     while (relay.pendingAcks.size) relay.acknowledge(relay.pendingAcks.values().next().value!);
-    // The accept's server_info is not counted; 600 000 message bytes pass half the window.
+    // Each acknowledged frame is credited, cumulatively; the accept's server_info is not counted.
     expect(relay.socket.frames("credit")).toEqual([
+      { t: "credit", s: expect.any(String), c: 300_000 },
       { t: "credit", s: expect.any(String), c: 600_000 },
     ]);
   });

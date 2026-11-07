@@ -174,11 +174,15 @@ describe("hub session credit", () => {
     expect(socket.frames("msg")).toHaveLength(3);
     await Promise.resolve();
     expect(drained).toHaveBeenCalled();
-    // Inbound messages grant credit every half of our window.
+    // Each inbound message is credited at once, cumulatively: withholding 400,000 bytes would
+    // leave a following message of up to the payload limit waiting for credit forever.
     socket.receive({ t: "msg", seq: 3, s: session.id, pt: "binary" }, new Uint8Array(400_000));
-    expect(socket.frames("credit")).toEqual([]);
+    expect(socket.frames("credit")).toEqual([{ t: "credit", s: session.id, c: 400_000 }]);
     socket.receive({ t: "msg", seq: 4, s: session.id, pt: "binary" }, new Uint8Array(200_000));
-    expect(socket.frames("credit")).toEqual([{ t: "credit", s: session.id, c: 600_000 }]);
+    expect(socket.frames("credit")).toEqual([
+      { t: "credit", s: session.id, c: 400_000 },
+      { t: "credit", s: session.id, c: 600_000 },
+    ]);
     expect(messages).toHaveBeenCalledTimes(3);
     expect(errors).not.toHaveBeenCalled();
   });

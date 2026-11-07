@@ -198,7 +198,13 @@ async fn hub_sessions_are_served_in_process_by_this_api() {
     ))
     .await
     .unwrap();
-    let (header, reply) = hub_next(&mut link).await;
+    // The delivered request is credited at once, before or after the reply.
+    let (header, reply) = loop {
+        let (header, payload) = hub_next(&mut link).await;
+        if header["t"] != "credit" {
+            break (header, payload);
+        }
+    };
     assert_eq!(header, json!({"t":"msg","seq":2,"s":s,"pt":"text"}));
     let reply: Value = serde_json::from_slice(&reply).unwrap();
     assert_eq!(reply["result"]["nonce"], "hub");

@@ -160,20 +160,23 @@ async fn credit_sessions_honor_both_windows_and_repeat_credit_after_resume() {
         .expect("credit");
     assert_eq!(next(&mut first).await.0["seq"], 3);
 
-    // Half of this Host's window delivered locally is credited back.
+    // Each message delivered locally is credited back, cumulatively.
     for seq in 2..10 {
         first
             .send(binary(seq, s, 64 * 1024))
             .await
             .expect("visitor msg");
     }
-    for _ in 2..10 {
+    for delivered in 1..=8u64 {
         api.next().await.expect("delivered");
+        assert_eq!(
+            next(&mut first).await,
+            (
+                json!({"t":"credit","s":s,"c":delivered * 65_536}),
+                Vec::new()
+            )
+        );
     }
-    assert_eq!(
-        next(&mut first).await,
-        (json!({"t":"credit","s":s,"c":524_288}), Vec::new())
-    );
 
     first
         .send(frame(&json!({"t":"ack","a":3}), b""))

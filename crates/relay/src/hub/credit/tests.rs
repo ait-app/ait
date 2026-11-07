@@ -28,16 +28,27 @@ async fn sending_stays_within_the_latest_peer_credit_plus_its_window() {
 }
 
 #[test]
-fn credit_is_granted_after_half_a_window_was_delivered() {
-    let half = usize::try_from(WINDOW / 2).expect("window fits usize");
+fn every_delivery_is_granted_as_cumulative_credit() {
     let mut incoming = Incoming::default();
 
-    assert_eq!(incoming.delivered(half - 1), None);
-    assert_eq!(incoming.delivered(1), Some(u64::from(WINDOW / 2)));
-    assert_eq!(incoming.delivered(half - 1), None);
-    assert_eq!(
-        incoming.delivered(half),
-        Some(3 * u64::from(WINDOW / 2) - 1),
-        "the announced credit is cumulative"
-    );
+    assert_eq!(incoming.delivered(10), Some(10));
+    assert_eq!(incoming.delivered(0), None, "nothing new to grant");
+    assert_eq!(incoming.delivered(5), Some(15), "the credit is cumulative");
+}
+
+#[tokio::test]
+async fn a_large_message_after_a_small_one_never_waits_for_credit_that_never_comes() {
+    let (peer, credit) = watch::channel(0);
+    let mut outgoing = Outgoing::new(credit, WINDOW);
+    let mut incoming = Incoming::default();
+
+    outgoing.admit(400_000).await.expect("fits the window");
+    // The receiver delivers it; whatever it grants reaches the sender.
+    if let Some(granted) = incoming.delivered(400_000) {
+        peer.send_replace(granted);
+    }
+    timeout(Duration::from_secs(1), outgoing.admit(800_000))
+        .await
+        .expect("the second message is admitted")
+        .expect("admitted");
 }

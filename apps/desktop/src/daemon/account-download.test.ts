@@ -230,6 +230,31 @@ describe("account Hub downloads", () => {
     expect(hub.session.end).toHaveBeenCalledWith("closed");
   });
 
+  it("listens before the Host can answer, however slowly the file opens", async () => {
+    const opened = vi.mocked(open).getMockImplementation()!;
+    vi.mocked(open).mockImplementationOnce(async (...args) => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return opened(...args);
+    });
+    const hub = hubSession();
+    const local = hubManager(async () => {
+      // A fast Host answers in the next task; the session buffers nothing.
+      setTimeout(() => {
+        hub.text({ type: "download.headers", status: 200, content_length: 3 });
+        hub.binary(new Uint8Array([1, 2, 3]));
+        hub.text({ type: "download.end", bytes: 3 });
+      }, 0);
+      return hub.session;
+    });
+    const preparationId = await local.prepare(owner, input);
+    const downloading = local.download(owner, { preparationId, token: "token" });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(hub.session.send).toHaveBeenCalledWith('{"type":"download.complete"}');
+    hub.close("done");
+    await downloading;
+    expect(rename).toHaveBeenCalledWith(expect.any(String), "/chosen/report.txt");
+  });
+
   it("falls back to the relay route when the Host answers unsupported", async () => {
     const hub = hubSession();
     const local = hubManager(async () => hub.session);

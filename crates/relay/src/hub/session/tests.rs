@@ -96,6 +96,17 @@ async fn bridges_hello_replies_and_inbound_messages_then_reports_close() {
 }
 
 #[tokio::test]
+async fn a_reply_larger_than_a_frame_ends_only_its_session_without_credit() {
+    let mut harness = Harness::start(None, None, false);
+    let api = harness.accept().await;
+    api.replies
+        .send(Frame::Binary(vec![0; wire::MAX_PAYLOAD + 1].into()))
+        .await
+        .expect("reply");
+    assert_eq!(next(&mut harness.output).await, Output::Closed("overflow"));
+}
+
+#[tokio::test]
 async fn realtime_voice_controls_pcm_and_playback_confirmation_traverse_hub() {
     use serde_json::json;
 
@@ -306,20 +317,16 @@ async fn credit_sessions_wait_for_the_peer_window_and_grant_what_they_delivered(
         Output::Message(PayloadKind::Binary, _)
     ));
 
-    // Inbound bytes are credited once half of this Host's window was delivered.
-    let half = usize::try_from(credit::WINDOW / 2).expect("window fits usize");
-    for chunk in [half - 1, 1] {
+    // Every inbound message delivered locally is credited, cumulatively.
+    for (chunk, credit) in [(1000, 1000), (24, 1024)] {
         harness
             .inbound
             .send(Frame::Binary(vec![0; chunk].into()))
             .await
             .expect("deliver");
         assert!(api.next().await.is_some());
+        assert_eq!(next(&mut harness.output).await, Output::Credit(credit));
     }
-    assert_eq!(
-        next(&mut harness.output).await,
-        Output::Credit(u64::from(credit::WINDOW / 2))
-    );
 
     // A message larger than the whole peer window can never be admitted.
     api.replies

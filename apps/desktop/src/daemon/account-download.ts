@@ -216,29 +216,24 @@ export class AccountDownloadManager {
     setCancel: (cancel: () => void) => void,
   ): Promise<void> {
     if (isAborted() || owner.isDestroyed()) throw new Error("Download cancelled.");
-    // Hosts and links with Hub downloads stream over a Hub session; others use the relay route.
-    const hub =
-      (await this.account.openHubDownload?.(input.hostId, input.token, input.center)) ?? null;
-    const grant = hub
-      ? null
-      : await this.account.openDownload(input.hostId, input.token, input.center);
-    const release = async () => {
-      hub?.end("cancelled");
-      if (grant) await this.account.closeVisit(grant.relay_session_id);
-    };
+    // Open the file first: a Hub session does not buffer what the Host sends before
+    // `stream` listens, so nothing may be awaited between opening the session and it.
     const temporary = `${destination}.ait-${randomUUID()}.part`;
-    if (isAborted()) {
-      await release();
-      throw new Error("Download cancelled.");
-    }
-    const file = await open(temporary, "wx", 0o600).catch(async (error) => {
-      await release();
-      throw error;
-    });
+    const file = await open(temporary, "wx", 0o600);
     let completed = false;
-    let visit = grant?.relay_session_id ?? null;
+    let visit: string | null = null;
     try {
-      if (isAborted()) throw new Error("Download cancelled.");
+      // Hosts and links with Hub downloads stream over a Hub session; others use the relay route.
+      const hub =
+        (await this.account.openHubDownload?.(input.hostId, input.token, input.center)) ?? null;
+      const grant = hub
+        ? null
+        : await this.account.openDownload(input.hostId, input.token, input.center);
+      visit = grant?.relay_session_id ?? null;
+      if (isAborted()) {
+        hub?.end("cancelled");
+        throw new Error("Download cancelled.");
+      }
       try {
         await this.stream(
           owner,

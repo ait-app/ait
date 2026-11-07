@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use super::bridge::{Connection, Frame};
 use super::credit;
-use super::wire::{PayloadKind, SessionKind};
+use super::wire::{self, PayloadKind, SessionKind};
 use crate::Local;
 use crate::protocol::{self, ClientHello};
 
@@ -74,9 +74,14 @@ impl Outlet<'_> {
     /// Forward one message once the peer window admits it.
     ///
     /// # Errors
-    /// Returns `overflow` for a message no window could admit and `closed` once the
-    /// link dropped the session.
+    /// Returns `overflow` for a message no frame or window could carry, ending only
+    /// this session, and `closed` once the link dropped the session.
     async fn send(&mut self, kind: PayloadKind, body: Bytes) -> Result<(), &'static str> {
+        // Checked here for sessions without credit too: the link cannot encode it,
+        // and failing there would end every session on the link.
+        if body.len() > wire::MAX_PAYLOAD {
+            return Err("overflow");
+        }
         if let Some(credit) = self.credit.as_deref_mut() {
             credit.admit(body.len()).await?;
         }

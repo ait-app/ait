@@ -49,22 +49,21 @@ impl Outgoing {
     }
 }
 
-/// Receiving side: counts locally delivered bytes and decides when to grant credit.
+/// Receiving side: counts locally delivered bytes and grants them as credit.
 #[derive(Debug, Default)]
 pub(super) struct Incoming {
     delivered: u64,
-    granted: u64,
 }
 
 impl Incoming {
-    /// Count `length` delivered bytes; returns the cumulative credit to announce
-    /// once it grew by at least half of [`WINDOW`].
+    /// Count `length` delivered bytes; returns the cumulative credit to announce.
+    ///
+    /// Every delivery is granted at once. Holding back any amount could stall the
+    /// peer for good: with the window equal to the payload limit, a message that
+    /// does not fit beside the withheld bytes would wait for credit that never comes.
     pub(super) fn delivered(&mut self, length: usize) -> Option<u64> {
         self.delivered += length as u64;
-        (self.delivered - self.granted >= u64::from(WINDOW / 2)).then(|| {
-            self.granted = self.delivered;
-            self.granted
-        })
+        (length > 0).then_some(self.delivered)
     }
 }
 

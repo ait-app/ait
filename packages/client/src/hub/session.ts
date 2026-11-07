@@ -247,14 +247,16 @@ export class HubSession implements DaemonTransport {
   }
 
   /**
-   * Report message bytes the consumer finished with; grants credit every half window. Sessions
-   * with `manualCredit` call it after processing, e.g. a download after writing to disk.
+   * Report message bytes the consumer finished with and grant them as credit at once. Holding
+   * any back could stall the peer for good: with the window equal to the payload limit, a
+   * message that does not fit beside the withheld bytes would wait for credit that never
+   * comes. Sessions with `manualCredit` call it after processing, e.g. a download after
+   * writing to disk.
    */
   consumed(length: number): void {
     const credit = this.credit;
-    if (credit?.peerWindow == null || this.closed) return;
+    if (credit?.peerWindow == null || this.closed || length <= 0) return;
     credit.delivered += length;
-    if (credit.delivered - credit.granted < credit.window / 2) return;
     credit.granted = credit.delivered;
     this.link.credit(this.id, credit.granted);
   }
