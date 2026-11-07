@@ -110,6 +110,121 @@ function twoProjectInput(groupMode: "project" | "status") {
 }
 
 describe("buildSidebarProjection", () => {
+  it("orders project groups and shortcuts by their latest workspace activity and follows updates", () => {
+    const input = twoProjectInput("project");
+    const first = input.workspaceEntriesByKey.get("srv:first")!;
+    const second = input.workspaceEntriesByKey.get("srv:second")!;
+    first.statusEnteredAt = new Date("2026-01-01T00:00:00Z");
+    second.statusEnteredAt = new Date("2026-02-01T00:00:00Z");
+    const latest = makeWorkspace("latest", "done", [], "other-project");
+    latest.entry.statusEnteredAt = new Date("2026-03-01T00:00:00Z");
+    input.projects[1]!.workspaces.push(latest.placement);
+    input.workspaceEntriesByKey.set(latest.entry.workspaceKey, latest.entry);
+
+    const projection = buildSidebarProjection(input);
+
+    expect(projection.pinnedGroups.unpinnedProjects.map((project) => project.viewKey)).toEqual([
+      "other-project",
+      "project",
+    ]);
+    expect(projection.shortcutModel.shortcutTargets.map((target) => target.workspaceId)).toEqual([
+      "latest",
+      "second",
+      "first",
+    ]);
+    expect(input.projects.map((project) => project.viewKey)).toEqual(["project", "other-project"]);
+    expect(input.projects[1]!.workspaces.map((workspace) => workspace.workspaceId)).toEqual([
+      "second",
+      "latest",
+    ]);
+
+    const updated = buildSidebarProjection({
+      ...input,
+      workspaceEntriesByKey: new Map(input.workspaceEntriesByKey).set(first.workspaceKey, {
+        ...first,
+        statusEnteredAt: new Date("2026-04-01T00:00:00Z"),
+      }),
+    });
+
+    expect(updated.pinnedGroups.unpinnedProjects.map((project) => project.viewKey)).toEqual([
+      "project",
+      "other-project",
+    ]);
+    expect(updated.shortcutModel.shortcutTargets.map((target) => target.workspaceId)).toEqual([
+      "first",
+      "latest",
+      "second",
+    ]);
+  });
+
+  it("counts pinned workspace activity across hosts even when the sections are collapsed", () => {
+    const input = twoProjectInput("project");
+    const first = input.workspaceEntriesByKey.get("srv:first")!;
+    const second = input.workspaceEntriesByKey.get("srv:second")!;
+    first.statusEnteredAt = new Date("2026-02-01T00:00:00Z");
+    second.statusEnteredAt = new Date("2026-01-01T00:00:00Z");
+    const pinned = makeWorkspace("remote", "done", [], "other-project");
+    for (const workspace of [pinned.placement, pinned.entry]) {
+      workspace.serverId = "remote";
+      workspace.workspaceKey = "remote:remote";
+    }
+    pinned.entry.statusEnteredAt = new Date("2026-03-01T00:00:00Z");
+    input.projects[1]!.workspaces.push(pinned.placement);
+    input.workspaceEntriesByKey.set(pinned.entry.workspaceKey, pinned.entry);
+
+    const projection = buildSidebarProjection({
+      ...input,
+      pinnedKeys: {
+        pinnedWorkspaceKeys: [pinned.entry.workspaceKey],
+        pinnedAtByKey: { [pinned.entry.workspaceKey]: "2026-01-01T00:00:00Z" },
+      },
+      pinnedCollapsed: true,
+      collapsedProjectKeys: new Set(["other-project"]),
+    });
+
+    expect(projection.pinnedGroups.unpinnedProjects.map((project) => project.viewKey)).toEqual([
+      "other-project",
+      "project",
+    ]);
+    expect(projection.pinnedGroups.unpinnedProjects[0]?.workspaces).toEqual([
+      input.projects[1]!.workspaces[0],
+    ]);
+    expect(projection.pinnedGroups.pinnedChats).toEqual([pinned.placement]);
+    expect(projection.shortcutModel.shortcutTargets).toEqual([
+      { serverId: "srv", workspaceId: "first" },
+    ]);
+  });
+
+  it("keeps the original name order for tied activity and puts undated projects last", () => {
+    const workspaces = ["empty", "invalid", "missing", "null", "project2", "project10"].map((id) =>
+      makeWorkspace(id, "done", [], id),
+    );
+    const projects = workspaces.map(({ placement }) =>
+      makeProject(placement.workspaceId === "empty" ? [] : [placement], placement.projectViewKey),
+    );
+    const entries = new Map(workspaces.map(({ entry }) => [entry.workspaceKey, entry]));
+    entries.get("srv:invalid")!.statusEnteredAt = new Date("invalid");
+    entries.delete("srv:missing");
+    entries.get("srv:project2")!.statusEnteredAt = new Date("2026-01-01T00:00:00Z");
+    entries.get("srv:project10")!.statusEnteredAt = new Date("2026-01-01T00:00:00Z");
+
+    const projection = buildSidebarProjection({
+      ...projectionInput(),
+      projects,
+      pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
+      workspaceEntriesByKey: entries,
+    });
+
+    expect(projection.pinnedGroups.unpinnedProjects.map((project) => project.viewKey)).toEqual([
+      "project2",
+      "project10",
+      "empty",
+      "invalid",
+      "missing",
+      "null",
+    ]);
+  });
+
   it("orders project rows and shortcuts by status entry time across different statuses", () => {
     const older = makeWorkspace("a-older", "needs_input");
     const newer = makeWorkspace("z-newer", "done");

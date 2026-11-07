@@ -49,7 +49,8 @@ export interface SidebarProjectionInput {
 
 export function buildSidebarProjection(input: SidebarProjectionInput): SidebarProjection {
   const pinnedGroups = splitPinnedSidebarGroups({
-    projects: input.projects,
+    // Include pinned chats in project recency before moving them into their own section.
+    projects: input.groupMode === "project" ? orderProjectsByActivity(input) : input.projects,
     keys: input.pinnedKeys,
   });
   if (input.groupMode === "project") {
@@ -101,6 +102,29 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
     projectIconTargets: resolveSidebarProjectIconTargets(input.projects),
     shortcutModel: buildSidebarShortcutSections({ sections }),
   };
+}
+
+function orderProjectsByActivity(input: SidebarProjectionInput): SidebarProjectEntry[] {
+  return (
+    input.projects
+      .map((project) => {
+        let lastActivityAt = Number.NEGATIVE_INFINITY;
+        for (const workspace of project.workspaces) {
+          const timestamp = input.workspaceEntriesByKey
+            .get(workspace.workspaceKey)
+            ?.statusEnteredAt?.getTime();
+          if (timestamp !== undefined && Number.isFinite(timestamp)) {
+            lastActivityAt = Math.max(lastActivityAt, timestamp);
+          }
+        }
+        return { project, lastActivityAt };
+      })
+      // Stable ties retain the structure's name order, including projects without activity.
+      .sort((a, b) =>
+        a.lastActivityAt === b.lastActivityAt ? 0 : b.lastActivityAt - a.lastActivityAt,
+      )
+      .map(({ project }) => project)
+  );
 }
 
 /** Project mode keeps its project headers and groups nothing; status mode groups the rows. */
