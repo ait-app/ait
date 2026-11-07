@@ -30,7 +30,9 @@ pub(crate) async fn subscribe(
             ErrorCode::RegistryIo,
             move |directory| {
                 // Subscribe before the snapshot so no committed change is missed in between.
-                let changes = directory.changes().map(|changes| changes.subscribe());
+                let changes = directory
+                    .workspace_changes()
+                    .map(|changes| changes.subscribe());
                 crate::directory::rpc::directory::listing::prepare(directory, request, observer_id)
                     .map(|(value, observation)| (value, observation, changes))
                     .map_err(Into::into)

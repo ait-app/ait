@@ -6,10 +6,11 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use super::{Identity, Inner, Permit, forge};
+use super::{Identity, Inner, Permit, forge, watch};
 use crate::forge::ports::ForgeRuntime;
 
-const DEMAND_TTL: Duration = Duration::from_secs(5);
+/// Queued reads are skipped once no reader requested the checkout for this long.
+pub(super) const DEMAND_TTL: Duration = Duration::from_secs(5);
 
 #[derive(Debug)]
 /// One coalesced refresh admitted by the directory cache.
@@ -70,17 +71,20 @@ pub(super) fn enqueue(inner: &Arc<Inner>, job: Job) {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         for job in abandoned {
             if let Some(entry) = cache.get_mut(job.cwd()) {
-                if is_forge {
-                    entry.forge_read.finish();
+                let read = if is_forge {
+                    &mut entry.forge_read
                 } else {
-                    entry.git_read.finish();
-                }
+                    &mut entry.git_read
+                };
+                // Delay the retry, but keep the pending change visible to the next reader.
+                read.finish(false);
+                read.dirty = true;
             }
         }
     }
 }
 
-fn drain(inner: &Inner, is_forge: bool, permit: Permit) {
+fn drain(inner: &Arc<Inner>, is_forge: bool, permit: Permit) {
     let (jobs, _) = queue(inner, is_forge);
     loop {
         let mut jobs = jobs
@@ -113,14 +117,14 @@ fn has_demand(inner: &Inner, job: &Job) -> bool {
         return true;
     }
     if job.is_forge() {
-        entry.forge_read.running = false;
+        entry.forge_read.abandon();
     } else {
-        entry.git_read.running = false;
+        entry.git_read.abandon();
     }
     false
 }
 
-fn read_git(inner: &Inner, cwd: &std::path::Path) {
+fn read_git(inner: &Arc<Inner>, cwd: &std::path::Path) {
     let read = inner
         .checkout
         .sidebar_summary(&cwd.to_string_lossy())
@@ -146,14 +150,23 @@ fn read_git(inner: &Inner, cwd: &std::path::Path) {
         entry.value.forge = None;
         // In-flight/queued Forge reads retain admission; their identity check rejects old results.
         entry.forge_read.completed_at = None;
+        entry.forge_read.unchanged = 0;
     }
+    // The first completion also changes the published Forge placeholder for non-Git directories.
+    let changed = entry.git_read.completed_at.is_none()
+        || entry.head != read.head
+        || entry.value.git != read.git;
     entry.head = read.head;
     entry.value.git = read.git;
-    entry.git_read.finish();
+    entry.git_read.finish(changed);
+    let roots = Some(watch::WatchRoots::new(cwd, read.git_dirs));
+    let roots_changed = entry.roots != roots;
+    entry.roots = roots;
     drop(cache);
-    if let Some(changes) = &inner.changes {
-        changes.notify();
+    if roots_changed {
+        watch::sync(inner);
     }
+    notify_if(inner, changed);
 }
 
 fn read_forge(inner: &Inner, cwd: &std::path::Path, identity: &Identity) {
@@ -181,10 +194,18 @@ fn read_forge(inner: &Inner, cwd: &std::path::Path, identity: &Identity) {
             .as_ref()
             .and_then(|forge| forge.pull_request.clone());
     }
+    let changed = entry.value.forge.as_ref() != Some(&read);
     entry.value.forge = Some(read);
-    entry.forge_read.finish();
+    entry.forge_read.finish(changed);
     drop(cache);
-    if let Some(changes) = &inner.changes {
+    notify_if(inner, changed);
+}
+
+/// Wake directory observers only when a read changed published facts. Unchanged reads must stay
+/// silent: every wakeup re-projects all Workspace and Agent directories, which re-admits due
+/// reads and would otherwise keep refreshing every checkout back to back.
+fn notify_if(inner: &Inner, changed: bool) {
+    if changed && let Some(changes) = &inner.changes {
         changes.notify();
     }
 }
