@@ -486,12 +486,14 @@ impl AgentManager {
     }
 
     /// Restore durable child registrations and mark cached state stale without opening writers.
+    /// Each registry write replaces the whole file, so records already in their recovered state
+    /// are left untouched and repeated restarts write nothing for them.
     /// Returns persistence failures; source confirmation happens on later native reads.
     pub(crate) fn recover_observed(&self) -> Result<(), AgentManagerError> {
         let Some(timeline) = &self.timeline else {
             return Ok(());
         };
-        let records = self.registry.list().map_err(super::map_registry)?;
+        let records = self.registry.snapshot().map_err(super::map_registry)?;
         for root in records
             .iter()
             .filter(|record| record.observation.is_none() && record.persistence.is_some())
@@ -501,9 +503,13 @@ impl AgentManager {
                 .as_ref()
                 .ok_or(AgentManagerError::InvalidRequest)?
                 .session_id;
-            let children = timeline
+            let mut children = timeline
                 .subagents(&root.id)
                 .map_err(|_| AgentManagerError::Registry)?;
+            // Cached children await native confirmation, so project them as stale directly.
+            for child in &mut children {
+                child.descriptor["observationStale"] = serde_json::Value::Bool(true);
+            }
             let Ok(children) = super::controls::descendants(native, children) else {
                 tracing::warn!(agent_id = %root.id, "Cached native child ancestry could not be normalized");
                 continue;
@@ -516,17 +522,23 @@ impl AgentManager {
                 Err(_) => return Err(AgentManagerError::Registry),
             }
         }
-        for record in self.registry.list().map_err(super::map_registry)? {
-            if record.observation.is_none() {
+        let recovered = self.registry.snapshot().map_err(super::map_registry)?;
+        for record in recovered.iter() {
+            let Some(source) = &record.observation else {
+                continue;
+            };
+            if source.health != ObservationHealth::Current
+                && record.last_status == AgentRuntimeStatus::Closed
+            {
                 continue;
             }
             self.registry
                 .update(&record.id, &|current| {
                     let mut next = current.clone();
-                    if let Some(source) = &mut next.observation {
-                        if source.health != ObservationHealth::Stale {
-                            source.revision = source.revision.saturating_add(1);
-                        }
+                    if let Some(source) = &mut next.observation
+                        && source.health == ObservationHealth::Current
+                    {
+                        source.revision = source.revision.saturating_add(1);
                         source.health = ObservationHealth::Stale;
                     }
                     next.last_status = AgentRuntimeStatus::Closed;
