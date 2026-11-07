@@ -11,6 +11,8 @@ import {
 } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/contexts/toast-context";
+import { useQueryClient } from "@tanstack/react-query";
+import { invalidateProviderPresets } from "@/data/provider-presets";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { toErrorMessage } from "@/utils/error-messages";
 
@@ -32,6 +34,7 @@ export function ProviderPresetsSection({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
+  const queryClient = useQueryClient();
   const client = useHostRuntimeClient(serverId);
   const [descriptor, setDescriptor] = useState<ProviderPresetDescriptor | null>(null);
   const [presets, setPresets] = useState<ProviderPreset[]>([]);
@@ -69,9 +72,11 @@ export function ProviderPresetsSection({
       if (!client) return;
       const result = await client.saveProviderPreset(provider, preset);
       if (result.error) throw new Error(result.error);
+      // Every composer reads the same cached store, so the new preset must appear there too.
+      invalidateProviderPresets(queryClient, serverId, provider);
       await load();
     },
-    [client, load, provider],
+    [client, load, provider, queryClient, serverId],
   );
 
   const handleDelete = useCallback(
@@ -84,6 +89,7 @@ export function ProviderPresetsSection({
           toast.error(result.error);
           return;
         }
+        invalidateProviderPresets(queryClient, serverId, provider);
         await load();
       } catch (cause) {
         toast.error(toErrorMessage(cause));
@@ -91,7 +97,7 @@ export function ProviderPresetsSection({
         setDeleting((current) => (current === name ? null : current));
       }
     },
-    [client, load, provider, toast],
+    [client, load, provider, queryClient, serverId, toast],
   );
 
   return (

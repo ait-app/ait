@@ -106,6 +106,7 @@ import {
   type DraftAgentProfileControls,
 } from "@/agent-profiles";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
+import type { PresetSettingsTarget } from "@/data/provider-presets";
 import { mergeRoleChoices } from "./role-choices";
 import {
   isModelConfigurationFeature,
@@ -138,6 +139,8 @@ interface ControlledAgentControlsProps {
   isModelLoading?: boolean;
   modelSelectorProviders?: ProviderSelectorProvider[];
   agentProfiles?: AgentProfilePicker | null;
+  /** Host/provider/cwd whose preset editor the empty state opens. */
+  presetSettingsTarget?: PresetSettingsTarget;
   onApplyAgentProfile?: (profileId: string) => void;
   onEditAgentProfiles?: () => void;
   onCreateAgentProfile?: (seed: AgentProfileSeed) => void;
@@ -499,6 +502,7 @@ function ControlledAgentControls({
   providerOptions,
   selectedProviderId,
   onSelectProvider,
+  presetSettingsTarget,
   modelOptions,
   selectedModelId,
   onSelectModel,
@@ -851,6 +855,7 @@ function ControlledAgentControls({
             agentProfiles={agentProfiles}
             disabled={disabled}
             isModelLoading={isModelLoading}
+            presetSettingsTarget={presetSettingsTarget}
             canSelectProvider={canSelectProvider}
             canSelectModel={canSelectModel}
             canSelectThinking={canSelectThinking}
@@ -901,6 +906,7 @@ function ControlledAgentControls({
             agentProfiles={agentProfiles}
             disabled={disabled}
             isModelLoading={isModelLoading}
+            presetSettingsTarget={presetSettingsTarget}
             canSelectModel={canSelectModel}
             canSelectThinking={canSelectThinking}
             modelSelectorProviders={effectiveModelSelectorProviders}
@@ -948,6 +954,7 @@ interface DesktopAgentControlsContentProps {
   agentProfiles: AgentProfilePicker | null;
   disabled: boolean;
   isModelLoading: boolean;
+  presetSettingsTarget?: PresetSettingsTarget;
   canSelectProvider: boolean;
   canSelectModel: boolean;
   canSelectThinking: boolean;
@@ -1011,6 +1018,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     agentProfiles,
     disabled,
     isModelLoading,
+    presetSettingsTarget,
     canSelectProvider,
     canSelectModel,
     canSelectThinking,
@@ -1105,11 +1113,12 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                 desktopMinWidth={360}
                 toolbar={modelToolbar}
                 modelConfiguration={
-                  modelFeatures.length > 0 ? (
+                  modelFeatures.length > 0 || presetSettingsTarget ? (
                     <ModelFeatureControls
                       features={modelFeatures}
                       disabled={disabled}
                       onCatalogAccess={onModelSelectorOpen}
+                      settingsTarget={presetSettingsTarget}
                       renderFeature={(feature) => (
                         <SheetFeatureItem
                           key={feature.id}
@@ -1241,6 +1250,7 @@ interface SheetAgentControlsContentProps {
   agentProfiles: AgentProfilePicker | null;
   disabled: boolean;
   isModelLoading: boolean;
+  presetSettingsTarget?: PresetSettingsTarget;
   canSelectModel: boolean;
   canSelectThinking: boolean;
   modelSelectorProviders: ProviderSelectorProvider[];
@@ -1286,6 +1296,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
     agentProfiles,
     disabled,
     isModelLoading,
+    presetSettingsTarget,
     canSelectModel,
     canSelectThinking,
     modelSelectorProviders,
@@ -1361,6 +1372,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
         features={modelFeatures}
         disabled={disabled}
         onCatalogAccess={onModelSelectorOpen}
+        settingsTarget={presetSettingsTarget}
         renderFeature={(feature) => (
           <SheetFeatureItem
             key={feature.id}
@@ -2052,6 +2064,11 @@ export const AgentControls = memo(function AgentControls({
         modelOptions={modelOptions}
         selectedModelId={modelSelection.activeModelId ?? undefined}
         onSelectModel={handleSelectModel}
+        presetSettingsTarget={{
+          serverId,
+          provider: agent.provider,
+          cwd: agent.cwd,
+        }}
         agentProfiles={agentProfiles}
         onApplyAgentProfile={agentProfiles?.applyProfile}
         onEditAgentProfiles={handleEditAgentProfiles}
@@ -2173,6 +2190,11 @@ export function DraftAgentControls({
         onSelectModel={onSelectModel}
         onSelectProviderAndModel={onSelectProviderAndModel}
         isModelLoading={isAllModelsLoading}
+        presetSettingsTarget={
+          modelSelectorServerId && selectedProvider
+            ? { serverId: modelSelectorServerId, provider: selectedProvider, cwd: null }
+            : undefined
+        }
         agentProfiles={agentProfiles}
         onApplyAgentProfile={agentProfiles?.applyProfile}
         onEditAgentProfiles={handleEditAgentProfiles}

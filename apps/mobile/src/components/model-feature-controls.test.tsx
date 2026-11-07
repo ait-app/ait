@@ -17,6 +17,10 @@ vi.mock("react-native-unistyles", () => ({
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
+// The empty preset row is covered by its own suite; this one only groups features.
+vi.mock("@/components/model-preset-empty-state", () => ({
+  ModelPresetEmptyState: () => <div data-testid="model-preset-empty-state" />,
+}));
 vi.mock("@/components/ui/button", () => ({
   Button: ({
     children,

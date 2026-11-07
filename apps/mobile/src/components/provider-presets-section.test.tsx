@@ -2,6 +2,7 @@
 import React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ProviderPreset, ProviderPresetDescriptor } from "@ait/protocol/messages";
 import { ProviderPresetsSection } from "./provider-presets-section";
 
@@ -85,6 +86,22 @@ vi.mock("@/components/adaptive-modal-sheet", () => ({
   ),
 }));
 
+vi.mock("@/data/provider-presets", () => ({
+  invalidateProviderPresets: vi.fn(),
+  providerPresetsQueryKey: () => ["provider-presets"],
+  presetControlAvailable: (store: unknown) => store !== null && store !== undefined,
+  useProviderPresets: () => null,
+}));
+
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+});
+
+/** Render inside a query provider because saving invalidates the shared preset cache. */
+function renderSection(ui: React.ReactElement) {
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
+
 beforeEach(() => {
   vi.stubGlobal("React", React);
   for (const fn of Object.values(client)) fn.mockReset();
@@ -120,7 +137,7 @@ async function ready(
 it("lists presets and offers the same controls for a native and an Ait backend", async () => {
   for (const backend of ["native", "ait"] as const) {
     await ready(descriptor({ backend }), [preset("team")]);
-    const view = render(<ProviderPresetsSection provider="claude" serverId="host-a" />);
+    const view = renderSection(<ProviderPresetsSection provider="claude" serverId="host-a" />);
     await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
     expect(screen.getByTestId("provider-preset-team")).toBeTruthy();
     // Identical capability bits must render identical controls, whatever the store is.
@@ -141,7 +158,7 @@ it("disables exactly the operations the descriptor withholds", async () => {
     }),
     [preset("team")],
   );
-  render(<ProviderPresetsSection provider="omp" serverId="host-a" />);
+  renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
   expect(screen.queryByTestId("provider-presets-add")).toBeNull();
   expect(screen.getByTestId("provider-presets-reason").textContent).toContain("modelpreset");
@@ -153,7 +170,7 @@ it("disables exactly the operations the descriptor withholds", async () => {
 it("shows a create entry in the empty state and saves through the unified request", async () => {
   await ready(descriptor(), []);
   client.saveProviderPreset.mockResolvedValue({ saved: "team" });
-  render(<ProviderPresetsSection provider="claude" serverId="host-a" />);
+  renderSection(<ProviderPresetsSection provider="claude" serverId="host-a" />);
   await waitFor(() => expect(screen.getByTestId("provider-presets-empty")).toBeTruthy());
   fireEvent.click(screen.getByTestId("provider-presets-empty-create"));
   await waitFor(() => expect(screen.getByTestId("provider-preset-save")).toBeTruthy());
@@ -173,7 +190,7 @@ it("shows a create entry in the empty state and saves through the unified reques
 it("deletes through the same request and refreshes the list", async () => {
   await ready(descriptor(), [preset("team")]);
   client.deleteProviderPreset.mockResolvedValue({ deleted: "team" });
-  render(<ProviderPresetsSection provider="claude" serverId="host-a" />);
+  renderSection(<ProviderPresetsSection provider="claude" serverId="host-a" />);
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
   fireEvent.click(screen.getByLabelText("settings.providers.presets.remove"));
   await waitFor(() =>
@@ -187,13 +204,13 @@ it("deletes through the same request and refreshes the list", async () => {
 it("never branches on the provider identity to decide which controls exist", async () => {
   // Same capabilities plus the same list must render the same tree for two different providers.
   await ready(descriptor({ backend: "native" }), [preset("team")]);
-  const native = render(<ProviderPresetsSection provider="omp" serverId="host-a" />);
+  const native = renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
   const nativeMarkup = native.container.innerHTML;
   native.unmount();
 
   await ready(descriptor({ backend: "ait" }), [preset("team")]);
-  const managed = render(<ProviderPresetsSection provider="claude" serverId="host-a" />);
+  const managed = renderSection(<ProviderPresetsSection provider="claude" serverId="host-a" />);
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
   expect(managed.container.innerHTML).toBe(nativeMarkup);
 });
