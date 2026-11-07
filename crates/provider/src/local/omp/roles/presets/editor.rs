@@ -41,7 +41,8 @@ pub(in crate::local::omp) async fn list(
     client: &OmpClient,
     cwd: &str,
 ) -> Result<Vec<Preset>, PresetError> {
-    let catalog = roles::Catalog::read(client, cwd)
+    let cwd = probe_cwd(cwd);
+    let catalog = roles::Catalog::read(client, &cwd)
         .await
         .map_err(|_| PresetError::Unavailable("OMP presets could not be read".to_owned()))?;
     Ok(catalog.preset_records())
@@ -57,7 +58,7 @@ pub(in crate::local::omp) async fn save(
     preset: &Preset,
 ) -> Result<(), PresetError> {
     let selection = selection(preset)?;
-    write(client, cwd, "save", &preset.name, selection).await
+    write(client, &probe_cwd(cwd), "save", &preset.name, selection).await
 }
 
 /// Delete through OMP's own command; project definitions are reported, never silently kept.
@@ -66,7 +67,14 @@ pub(in crate::local::omp) async fn delete(
     cwd: &str,
     name: &str,
 ) -> Result<(), PresetError> {
-    write(client, cwd, "delete", name, StoredAgentConfig::default()).await
+    write(
+        client,
+        &probe_cwd(cwd),
+        "delete",
+        name,
+        StoredAgentConfig::default(),
+    )
+    .await
 }
 
 fn selection(preset: &Preset) -> Result<StoredAgentConfig, PresetError> {
@@ -127,8 +135,27 @@ async fn write(
     }
 }
 
+/// Probe the native command directory from a directory OMP accepts.
+///
+/// A provider settings sheet has no project yet, so the caller passes no working directory and
+/// the daemon would otherwise probe from `/`, where OMP refuses to start. The home directory is
+/// the harness's own state root and always works for a read-only command probe.
+pub(super) fn probe_cwd(cwd: &str) -> String {
+    if cwd.is_empty() || !std::path::Path::new(cwd).is_dir() {
+        return std::env::var_os("HOME")
+            .map(std::path::PathBuf::from)
+            .filter(|home| home.is_dir())
+            .map_or_else(
+                || cwd.to_owned(),
+                |home| home.to_string_lossy().into_owned(),
+            );
+    }
+    cwd.to_owned()
+}
+
 async fn presets_available(client: &OmpClient, cwd: &str) -> bool {
-    match session::probe_config(client, cwd, None, None).await {
+    let cwd = probe_cwd(cwd);
+    match session::probe_config(client, &cwd, None, None).await {
         Ok(mut probe) => {
             let commands = probe
                 .request("get_available_commands", serde_json::json!({}))

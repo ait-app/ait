@@ -326,6 +326,16 @@ pub struct Hello {
 }
 
 impl Hello {
+    /// The capability names this client offered, for diagnostics only.
+    #[must_use]
+    pub fn offered_capabilities(&self) -> Vec<&str> {
+        self.capabilities
+            .iter()
+            .chain(&self.required_capabilities)
+            .map(String::as_str)
+            .collect()
+    }
+
     /// Whether the client requires the single-connection workers.
     ///
     /// This selects a requested mode only; `negotiate_available` must still accept the offer.
