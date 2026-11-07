@@ -1,6 +1,7 @@
 //! Authenticated local HTTP and WebSocket transport for the independent server.
 
 mod auth;
+mod automation;
 mod browser_auth;
 mod capabilities;
 mod composition;
@@ -71,6 +72,9 @@ pub enum ConfigError {
     /// Stored share settings could not be read.
     #[error("share settings could not be loaded")]
     ShareStore,
+    /// Stored automation settings could not be read.
+    #[error("automation settings could not be loaded")]
+    AutomationStore,
 }
 
 #[derive(Debug)]
@@ -97,6 +101,7 @@ struct Shared {
     browser: browser::dispatch::State,
     workspace_names: Option<metadata::directory::service::workspace_names::WorkspaceNames>,
     shares: Arc<shares::Shares>,
+    automation: Arc<automation::Automation>,
 }
 
 impl std::ops::Deref for Shared {
@@ -256,6 +261,29 @@ impl Api {
             .open(store)
             .map_err(|_| ConfigError::ShareStore)?;
         Ok(self)
+    }
+
+    /// Load the automation settings from `store` and persist every later change there.
+    ///
+    /// Configure before serving this API. The daemon passes a file store at
+    /// `<data_dir>/hub/automation.json`.
+    /// # Errors
+    /// Returns `AutomationStore` for an unreadable document or a second attachment.
+    pub fn with_automation_store(
+        self,
+        store: Arc<dyn model::hub::OutboxStore>,
+    ) -> Result<Self, ConfigError> {
+        self.shared
+            .automation
+            .open(store)
+            .map_err(|_| ConfigError::AutomationStore)?;
+        Ok(self)
+    }
+
+    /// Observe the automation settings for the daemon's publication loop.
+    #[must_use]
+    pub fn automation_settings(&self) -> tokio::sync::watch::Receiver<model::automation::Settings> {
+        self.shared.automation.subscribe()
     }
 
     /// Restore guest grants from the labels of Agents guests created before a restart.
@@ -421,6 +449,7 @@ impl Api {
                 }),
                 workspace_names: services.workspace_names,
                 shares: Arc::new(shares::Shares::new(&terminal, &provider)),
+                automation: Arc::default(),
                 runtime,
                 metadata,
                 filesystem,

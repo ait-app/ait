@@ -25,8 +25,8 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         .implemented_capabilities
         .into_iter()
         .collect::<BTreeSet<_>>();
-    assert_eq!(published.len(), 216);
-    assert_eq!(implemented.len(), 215);
+    assert_eq!(published.len(), 218);
+    assert_eq!(implemented.len(), 217);
     assert!(implemented.contains("bot.message.send.request"));
     assert!(implemented.contains("workspace.get.request"));
     assert!(implemented.is_subset(&published));

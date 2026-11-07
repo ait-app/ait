@@ -129,14 +129,17 @@ pub(super) enum Inbound {
     Reply { seq: u64, id: Uuid },
     #[serde(rename = "error")]
     Error { code: String },
-    /// `visitor` marks a guest session confined to one shared resource; `w`, the
-    /// opener's receive window, is present only on flow-controlled sessions.
+    /// `visitor` marks a guest session confined to one shared resource, and
+    /// `service` one the center opened for itself; `w`, the opener's receive
+    /// window, is present only on flow-controlled sessions.
     #[serde(rename = "open")]
     Open {
         seq: u64,
         s: Uuid,
         #[serde(default)]
         visitor: Option<Visitor>,
+        #[serde(default)]
+        service: Option<Service>,
         #[serde(default)]
         k: SessionKind,
         #[serde(default)]
@@ -157,6 +160,20 @@ pub(super) enum Inbound {
     /// a main link that declared `bulk`.
     #[serde(rename = "lane")]
     Lane { lane: String },
+}
+
+/// A center-opened session; only `automation` is defined.
+#[derive(Debug, Deserialize)]
+pub(super) struct Service {
+    /// What the center opened the session for.
+    pub(super) kind: String,
+}
+
+impl Service {
+    /// Whether this is an automation session; other kinds are refused.
+    pub(super) fn is_automation(&self) -> bool {
+        self.kind == "automation"
+    }
 }
 
 impl Inbound {

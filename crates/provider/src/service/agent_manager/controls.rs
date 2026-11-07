@@ -156,7 +156,7 @@ impl AgentManager {
         if record.observation.is_some() {
             return Err(ErrorCode::UnsupportedCapability);
         }
-        if record.internal && record.owner.is_some() && response != &json!({"behavior":"deny"}) {
+        if super::unattended(&record) && response != &json!({"behavior":"deny"}) {
             return Err(ErrorCode::InvalidMessage);
         }
         self.resume(id).await.map_err(|_| ErrorCode::AgentIo)?;

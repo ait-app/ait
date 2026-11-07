@@ -192,6 +192,9 @@ impl Server {
         .with_browser_origins(web_origins)?
         .with_share_store(Arc::new(persistence::storage::hub::FileOutbox::new(
             data_dir.join("hub/shares.json"),
+        )))?
+        .with_automation_store(Arc::new(persistence::storage::hub::FileOutbox::new(
+            data_dir.join("hub/automation.json"),
         )))?;
         let (store, state) = device;
         let relay = crate::device::StatusRelay::new(
