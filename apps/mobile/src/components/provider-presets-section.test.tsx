@@ -78,12 +78,23 @@ vi.mock("@/components/adaptive-modal-sheet", () => ({
   AdaptiveTextInput: ({
     initialValue,
     onChangeText,
+    editable,
   }: {
     initialValue: string;
     onChangeText: (value: string) => void;
-  }) => (
-    <input defaultValue={initialValue} onChange={(event) => onChangeText(event.target.value)} />
-  ),
+    editable?: boolean;
+  }) => {
+    // `editable` defaults to true on the real input; only an explicit false makes it read-only.
+    const readOnly = editable === false;
+    return (
+      <input
+        defaultValue={initialValue}
+        readOnly={readOnly}
+        aria-readonly={readOnly}
+        onChange={(event) => onChangeText(event.target.value)}
+      />
+    );
+  },
 }));
 
 vi.mock("@/data/provider-presets", () => ({
@@ -185,6 +196,50 @@ it("shows a create entry in the empty state and saves through the unified reques
       {},
     ),
   );
+});
+
+it("edits the name and sends the original when the descriptor allows renaming", async () => {
+  await ready(descriptor({ canRename: true }), [preset("team")]);
+  client.saveProviderPreset.mockResolvedValue({ saved: "squad" });
+  renderSection(<ProviderPresetsSection provider="claude" serverId="host-a" />);
+  await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
+  fireEvent.click(screen.getByLabelText("settings.providers.presets.edit"));
+  await waitFor(() => expect(screen.getByTestId("provider-preset-save")).toBeTruthy());
+
+  const nameInput = screen.getAllByRole("textbox")[0] as HTMLInputElement;
+  expect(nameInput.readOnly).toBe(false);
+  expect(nameInput.value).toBe("team");
+  // No read-only explanation is shown when the operation is available.
+  expect(screen.queryByText("settings.providers.presets.noRename")).toBeNull();
+
+  fireEvent.change(nameInput, { target: { value: "squad" } });
+  fireEvent.click(screen.getByTestId("provider-preset-save"));
+  await waitFor(() =>
+    expect(client.saveProviderPreset).toHaveBeenCalledWith(
+      "claude",
+      { name: "squad", model: "claude-opus-5" },
+      undefined,
+      { original: "team" },
+    ),
+  );
+});
+
+it("keeps the name read-only and explains why when renaming is withheld", async () => {
+  await ready(
+    descriptor({ backend: "native", canRename: false, reason: "OMP has no rename command" }),
+    [preset("team")],
+  );
+  renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
+  await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
+  fireEvent.click(screen.getByLabelText("settings.providers.presets.edit"));
+  await waitFor(() => expect(screen.getByTestId("provider-preset-save")).toBeTruthy());
+
+  const nameInput = screen.getAllByRole("textbox")[0] as HTMLInputElement;
+  expect(nameInput.readOnly).toBe(true);
+  expect(nameInput.value).toBe("team");
+  // The sheet repeats the descriptor's reason rather than offering a dead control; the section
+  // header shows the same reason, so the text appears twice.
+  expect(screen.getAllByText("OMP has no rename command")).toHaveLength(2);
 });
 
 it("deletes through the same request and refreshes the list", async () => {

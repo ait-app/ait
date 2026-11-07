@@ -46,15 +46,17 @@ pub(crate) struct PresetDescriptor {
 impl PresetDescriptor {
     /// Every operation supported by one fully manageable store.
     ///
-    /// rename stays closed until the client sends the record's original name; without it a
-    /// rename is indistinguishable from "create another preset".
+    /// A rename is a single write that replaces one record under a new name. An Ait store does
+    /// that atomically and rejects a name already in use, so the editor may offer it. A native
+    /// harness only exposes save and delete, where a rename would be a non-atomic save-then-
+    /// delete, so the descriptor reports it closed and carries the reason instead.
     pub(crate) fn managed(backend: PresetBackend) -> Self {
         Self {
             backend,
             can_create: true,
             can_edit: true,
             can_delete: true,
-            can_rename: false,
+            can_rename: backend == PresetBackend::Ait,
             reason: None,
         }
     }

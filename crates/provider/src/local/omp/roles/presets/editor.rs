@@ -17,11 +17,11 @@ const UNAVAILABLE: &str =
 
 /// The native descriptor: create, edit and delete are the two official commands.
 ///
-/// `rename` stays false because the CLI has no rename operation; renaming means saving the new
-/// name and deleting the old one, which is not atomic and could lose the preset on failure.
+/// `managed` reports rename closed for a native store because the CLI has no rename operation;
+/// renaming there means saving the new name and deleting the old one, which is not atomic and
+/// could lose the preset on failure. This only adds the reason the editor displays.
 pub(super) fn descriptor() -> PresetDescriptor {
     let mut descriptor = PresetDescriptor::managed(PresetBackend::Native);
-    descriptor.can_rename = false;
     descriptor.reason =
         Some("OMP has no rename command; save the new name, then delete the old one".to_owned());
     descriptor
