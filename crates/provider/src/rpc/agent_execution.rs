@@ -49,6 +49,26 @@ pub(crate) struct ExecutionState {
 }
 
 impl ExecutionState {
+    /// Normalize the bounded identity list a caller asks about.
+    fn resolve_identities(&self, ids: &[String]) -> Result<Value, ErrorCode> {
+        if ids.len() > 32 {
+            return Err(ErrorCode::InvalidMessage);
+        }
+        let ids = ids
+            .iter()
+            .map(|id| self.resolve(id))
+            .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
+        Ok(json!(ids))
+    }
+
+    /// Route one preset request to the store that owns the provider's presets.
+    async fn presets(&mut self, method: &str, params: &Value) -> Result<Value, ErrorCode> {
+        self.manager
+            .presets(method, params)
+            .await
+            .map_err(Into::into)
+    }
+
     fn guard_observed_request(&self, method: &str, params: &Value) -> Result<(), ErrorCode> {
         if method == "agent.commands.list.request" && params.get("draftConfig").is_some() {
             return Ok(());
@@ -90,16 +110,8 @@ impl ExecutionState {
             Operation::RetireWorkspaces => self.retire_workspaces(params).await,
             Operation::PrepareDirectory => self.prepare_agent_directory(params),
             Operation::ResolveIdentities => {
-                only(&params, &["agentIds"])?;
                 let ids: Vec<String> = decode(params["agentIds"].clone())?;
-                if ids.len() > 32 {
-                    return Err(ErrorCode::InvalidMessage);
-                }
-                let ids = ids
-                    .iter()
-                    .map(|id| self.resolve(id))
-                    .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
-                Ok(json!(ids))
+                self.resolve_identities(&ids)
             }
             Operation::List if params.get("sync").is_some_and(|sync| !sync.is_null()) => {
                 self.synchronized_agents(params)
@@ -116,11 +128,7 @@ impl ExecutionState {
             Operation::PresetDescribe
             | Operation::PresetList
             | Operation::PresetSave
-            | Operation::PresetDelete => self
-                .manager
-                .presets(method.as_str(), &params)
-                .await
-                .map_err(Into::into),
+            | Operation::PresetDelete => self.presets(method.as_str(), &params).await,
             Operation::Usage => self.usage(params).await,
             Operation::RecentSessions => self.recent_sessions(params).await,
             Operation::Import => self.import(params).await,

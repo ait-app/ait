@@ -29,7 +29,10 @@ async fn ait_backend_creates_lists_replaces_and_deletes_across_restarts() {
     let root = tempfile::tempdir().unwrap();
     let (service, store) = service(&root);
     let cwd = root.path().to_str().unwrap();
-    assert_eq!(service.describe(cwd, None).await.backend, PresetBackend::Ait);
+    assert_eq!(
+        service.describe(cwd, None).await.backend,
+        PresetBackend::Ait
+    );
     service
         .save("claude", cwd, None, &preset("team", "opus"))
         .await
@@ -54,12 +57,7 @@ async fn ait_backend_creates_lists_replaces_and_deletes_across_restarts() {
 
     service.delete("claude", cwd, None, "team").await.unwrap();
     assert_eq!(service.list("claude", cwd, None).await.unwrap().len(), 1);
-    assert!(
-        service
-            .delete("claude", cwd, None, "team")
-            .await
-            .is_err()
-    );
+    assert!(service.delete("claude", cwd, None, "team").await.is_err());
 }
 
 #[tokio::test]

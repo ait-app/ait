@@ -1771,16 +1771,25 @@ export const AgentControls = memo(function AgentControls({
 
   // Read the completed background catalog, rather than caching its initial empty loading state.
   // Saved selections remain usable throughout discovery; this never resumes the conversation.
+  // Role and preset choices come from the provider's own feature catalog, whatever the provider
+  // is; no provider identity decides whether the control can exist.
+  const advertisesModelConfiguration = Boolean(
+    agent?.features?.some(isModelConfigurationFeature),
+  );
   const roleChoices = useQuery({
-    queryKey: ["ompRoleChoices", serverId, agent?.cwd, snapshotSelectedEntry?.fetchedAt],
+    queryKey: ["providerRoleChoices", serverId, agent?.cwd, snapshotSelectedEntry?.fetchedAt],
     enabled: Boolean(
-      client && agent?.provider === "omp" && agent.cwd && snapshotSelectedEntry?.status === "ready",
+      client &&
+        advertisesModelConfiguration &&
+        agent?.provider &&
+        agent.cwd &&
+        snapshotSelectedEntry?.status === "ready",
     ),
     staleTime: Infinity,
     queryFn: async () => {
       if (!client || !agent?.cwd) throw new Error("Host unavailable");
       const result = await client.listProviderFeatures({
-        provider: "omp",
+        provider: agent.provider,
         cwd: agent.cwd,
       });
       if (result.error) throw new Error(result.error);
@@ -1789,13 +1798,19 @@ export const AgentControls = memo(function AgentControls({
   });
   const features = useMemo(
     () =>
-      agent?.provider === "omp"
-        ? withModelPresetSelection(mergeRoleChoices(agent.features, roleChoices.data) ?? [], {
-            modelId: agent.model,
-            thinkingOptionId: agent.thinkingOptionId,
+      advertisesModelConfiguration
+        ? withModelPresetSelection(mergeRoleChoices(agent?.features, roleChoices.data) ?? [], {
+            modelId: agent?.model,
+            thinkingOptionId: agent?.thinkingOptionId,
           })
         : agent?.features,
-    [agent?.provider, agent?.features, agent?.model, agent?.thinkingOptionId, roleChoices.data],
+    [
+      advertisesModelConfiguration,
+      agent?.features,
+      agent?.model,
+      agent?.thinkingOptionId,
+      roleChoices.data,
+    ],
   );
 
   const models = filterSelectableModels(snapshotSelectedEntry?.models ?? null);

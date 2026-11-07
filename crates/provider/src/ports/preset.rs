@@ -21,6 +21,10 @@ pub(crate) enum PresetBackend {
 }
 
 /// What the preset store can do, so the editor disables exactly the missing operations.
+///
+/// The four flat booleans are the wire contract the editor reads; an operation set would only
+/// move the same four facts behind a translation layer.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PresetDescriptor {
@@ -129,8 +133,10 @@ pub(crate) fn synthesize(
         options.push(serde_json::json!({"id":preset.name,"label":preset.name,
             "metadata":{"source":"ait","configuration":Value::Object(configuration)}}));
     }
-    Some(serde_json::json!({"type":"select","id":"modelPreset","label":"Model preset",
-        "value":selected,"options":options}))
+    Some(
+        serde_json::json!({"type":"select","id":"modelPreset","label":"Model preset",
+        "value":selected,"options":options}),
+    )
 }
 
 /// Whether a stored preset describes exactly the current selection.

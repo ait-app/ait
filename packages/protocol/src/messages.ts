@@ -115,6 +115,27 @@ const MutableDaemonProviderModelSchema = z
   })
   .passthrough();
 
+/** Where a provider's model presets live, and which operations its store supports. */
+export const ProviderPresetDescriptorSchema = z.object({
+  backend: z.enum(["native", "ait"]),
+  canCreate: z.boolean(),
+  canEdit: z.boolean(),
+  canDelete: z.boolean(),
+  canRename: z.boolean(),
+  reason: z.string().optional(),
+});
+
+/** One preset as the unified editor shows it. */
+export const ProviderPresetSchema = z.object({
+  name: z.string().min(1).max(256),
+  model: z.string().min(1).max(256),
+  thinkingOptionId: z.string().max(256).optional(),
+  featureValues: z.record(z.string(), z.unknown()).optional(),
+});
+
+export type ProviderPresetDescriptor = z.infer<typeof ProviderPresetDescriptorSchema>;
+export type ProviderPreset = z.infer<typeof ProviderPresetSchema>;
+
 /** One Ait-managed preset for a provider without a native preset store. */
 const MutableDaemonProviderPresetSchema = z
   .object({
@@ -1901,6 +1922,37 @@ export const ProviderDiagnosticRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+/** Preset requests share one shape: the provider, plus an optional working directory. */
+export const ProviderPresetsDescribeRequestMessageSchema = z.object({
+  type: z.literal("provider.presets.describe.request"),
+  provider: AgentProviderSchema,
+  cwd: z.string().optional(),
+  requestId: z.string(),
+});
+
+export const ProviderPresetsListRequestMessageSchema = z.object({
+  type: z.literal("provider.presets.list.request"),
+  provider: AgentProviderSchema,
+  cwd: z.string().optional(),
+  requestId: z.string(),
+});
+
+export const ProviderPresetsSaveRequestMessageSchema = z.object({
+  type: z.literal("provider.presets.save.request"),
+  provider: AgentProviderSchema,
+  cwd: z.string().optional(),
+  preset: ProviderPresetSchema,
+  requestId: z.string(),
+});
+
+export const ProviderPresetsDeleteRequestMessageSchema = z.object({
+  type: z.literal("provider.presets.delete.request"),
+  provider: AgentProviderSchema,
+  cwd: z.string().optional(),
+  name: z.string().min(1).max(256),
+  requestId: z.string(),
+});
+
 export const ProviderUsageListRequestMessageSchema = z.object({
   type: z.literal("provider.usage.list.request"),
   agentId: z.string().optional(),
@@ -3335,6 +3387,10 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   GetProvidersSnapshotRequestMessageSchema,
   RefreshProvidersSnapshotRequestMessageSchema,
   ProviderDiagnosticRequestMessageSchema,
+  ProviderPresetsDescribeRequestMessageSchema,
+  ProviderPresetsListRequestMessageSchema,
+  ProviderPresetsSaveRequestMessageSchema,
+  ProviderPresetsDeleteRequestMessageSchema,
   ProviderUsageListRequestMessageSchema,
   ResumeAgentRequestMessageSchema,
   ImportAgentRequestMessageSchema,
@@ -6346,27 +6402,6 @@ export const ProviderDiagnosticResponseMessageSchema = z.object({
     requestId: z.string(),
   }),
 });
-
-/** Where a provider's model presets live, and which operations its store supports. */
-export const ProviderPresetDescriptorSchema = z.object({
-  backend: z.enum(["native", "ait"]),
-  canCreate: z.boolean(),
-  canEdit: z.boolean(),
-  canDelete: z.boolean(),
-  canRename: z.boolean(),
-  reason: z.string().optional(),
-});
-
-/** One preset as the unified editor shows it. */
-export const ProviderPresetSchema = z.object({
-  name: z.string().min(1).max(256),
-  model: z.string().min(1).max(256),
-  thinkingOptionId: z.string().max(256).optional(),
-  featureValues: z.record(z.string(), z.unknown()).optional(),
-});
-
-export type ProviderPresetDescriptor = z.infer<typeof ProviderPresetDescriptorSchema>;
-export type ProviderPreset = z.infer<typeof ProviderPresetSchema>;
 
 export const ProviderPresetsDescribeResponseMessageSchema = z.object({
   type: z.literal("provider.presets.describe.response"),

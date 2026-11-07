@@ -334,3 +334,49 @@ async fn a_directory_without_presets_advertises_no_preset_control() {
         Some(json!(["test", "model"]).to_string())
     );
 }
+
+#[tokio::test]
+async fn unified_editor_reads_native_presets_and_reports_no_rename() {
+    use crate::ports::preset::PresetBackend;
+
+    let (root, client, spec) = fixture();
+    save(
+        root.path(),
+        "global",
+        &json!({"team":{"modelRoles":{"default":"test/model","advisor":"test/model"},
+            "defaultThinkingLevel":"low"}}),
+    );
+    let cwd = spec.cwd.clone();
+    let descriptor = client.preset_descriptor(&cwd).await;
+    assert_eq!(descriptor.backend, PresetBackend::Native);
+    assert!(descriptor.can_create && descriptor.can_edit && descriptor.can_delete);
+    assert!(!descriptor.can_rename, "OMP has no rename command");
+    assert!(descriptor.reason.is_some(), "the rename limit is explained");
+
+    let listed = client.native_presets(&cwd).await.unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].name, "team");
+    assert_eq!(listed[0].thinking_option_id.as_deref(), Some("low"));
+    assert_eq!(
+        listed[0].feature_values.get("modelRole.advisor"),
+        Some(&json!("test/model"))
+    );
+
+    // The unified save forwards to the same official command and acknowledges the write.
+    let preset = crate::ports::preset::Preset {
+        name: "team".to_owned(),
+        model: json!(["other", "model"]).to_string(),
+        thinking_option_id: Some("high".to_owned()),
+        feature_values: std::collections::BTreeMap::new(),
+    };
+    std::fs::write(root.path().join("agent/preset-write-delay"), "").unwrap();
+    client.save_native_preset(&cwd, &preset).await.unwrap();
+    let global: Value = serde_json::from_slice(
+        &std::fs::read(root.path().join("agent/global-presets.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(global["team"]["modelRoles"]["default"], "other/model:high");
+
+    client.delete_native_preset(&cwd, "team").await.unwrap();
+    assert!(client.native_presets(&cwd).await.unwrap().is_empty());
+}

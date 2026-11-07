@@ -5,7 +5,11 @@ import type { AgentFeature, AgentProvider, AgentSessionConfig } from "@ait/proto
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { mergeProviderPreferences, useFormPreferences } from "./use-form-preferences";
 import { useProvidersSnapshot } from "./use-providers-snapshot";
-import { modelPresetConfiguration, withModelPresetSelection } from "@/agent-controls/model-presets";
+import {
+  isModelConfigurationFeature,
+  modelPresetConfiguration,
+  withModelPresetSelection,
+} from "@/agent-controls/model-presets";
 import type { AgentConfigApply } from "@ait/protocol/messages";
 import { useToast } from "@/contexts/toast-context";
 import {
@@ -112,12 +116,14 @@ export function useDraftAgentFeatures(input: {
     [availableFeatures, localFeatureValues, persistedFeatureValues],
   );
 
+  // Any provider that advertises the preset control gets the same label reconciliation, so a
+  // manual model edit falls back to "custom" for OMP and Ait-backed providers alike.
   const features = useMemo(() => {
     const applied = applyFeatureValues(availableFeatures, featureValues);
-    return provider === "omp"
+    return applied.some(isModelConfigurationFeature)
       ? withModelPresetSelection(applied, { modelId, thinkingOptionId, featureValues })
       : applied;
-  }, [availableFeatures, featureValues, provider, modelId, thinkingOptionId]);
+  }, [availableFeatures, featureValues, modelId, thinkingOptionId]);
 
   useEffect(() => {
     const previousProvider = previousProviderRef.current;

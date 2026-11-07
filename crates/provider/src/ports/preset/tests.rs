@@ -75,7 +75,10 @@ fn the_current_selection_selects_matching_preset_and_otherwise_custom() {
     ] {
         let features = BTreeMap::from([("modelRole.advisor".to_owned(), json!(role))]);
         let feature = synthesize(None, &stored, model, thinking, Some(&features)).unwrap();
-        assert_eq!(feature["value"], "__custom__", "{model:?} {thinking:?} {role}");
+        assert_eq!(
+            feature["value"], "__custom__",
+            "{model:?} {thinking:?} {role}"
+        );
     }
 }
 

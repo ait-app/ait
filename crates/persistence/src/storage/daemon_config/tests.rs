@@ -220,7 +220,10 @@ fn provider_model_presets_round_trip_without_touching_another_provider() {
         providers["claude"]["modelPresets"][0]["featureValues"]["modelRole.advisor"],
         "sonnet"
     );
-    assert_eq!(providers["claude"]["modelPresets"][0]["thinkingOptionId"], "high");
+    assert_eq!(
+        providers["claude"]["modelPresets"][0]["thinkingOptionId"],
+        "high"
+    );
     assert_eq!(providers["codex"]["modelPresets"][0]["model"], "gpt-5");
     assert_eq!(providers["codex"]["enabled"], true);
 }

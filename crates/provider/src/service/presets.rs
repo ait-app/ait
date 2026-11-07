@@ -4,14 +4,11 @@ pub(crate) mod ait;
 
 use std::sync::Arc;
 
-
 use model::storage::daemon_config::DaemonConfigStore;
 use serde_json::Value;
 
 use crate::ports::agent_session::AgentClient;
-use crate::ports::preset::{
-    Preset, PresetBackend, PresetDescriptor, PresetError, synthesize,
-};
+use crate::ports::preset::{Preset, PresetBackend, PresetDescriptor, PresetError, synthesize};
 
 /// Largest accepted provider identifier on a preset request.
 const MAX_PROVIDER: usize = 128;
@@ -158,7 +155,6 @@ impl PresetService {
             features.insert(0, feature);
         }
     }
-
 }
 
 fn reason(descriptor: &PresetDescriptor) -> String {

@@ -116,7 +116,7 @@ import type {
   ProviderPresetsDescribeResponseMessage,
   ProviderPresetsListResponseMessage,
   ProviderPresetsMutationResponseMessage,
-  type ProviderPreset,
+  ProviderPreset,
   ProviderUsageListResponseMessage,
   DaemonGetStatusResponse,
   DaemonConfigReloadResponse,

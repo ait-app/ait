@@ -7,8 +7,8 @@
 use domain::agent_runtime::StoredAgentConfig;
 use serde_json::Value;
 
-use crate::local::omp::{OmpClient, roles, session};
 use crate::local::omp::roles::presets;
+use crate::local::omp::{OmpClient, roles, session};
 use crate::ports::preset::{Preset, PresetBackend, PresetDescriptor, PresetError};
 
 /// Why the editor must stay read-only for this provider.
@@ -22,7 +22,8 @@ const UNAVAILABLE: &str =
 pub(super) fn descriptor() -> PresetDescriptor {
     let mut descriptor = PresetDescriptor::managed(PresetBackend::Native);
     descriptor.can_rename = false;
-    descriptor.reason = Some("OMP has no rename command; save the new name, then delete the old one".to_owned());
+    descriptor.reason =
+        Some("OMP has no rename command; save the new name, then delete the old one".to_owned());
     descriptor
 }
 
@@ -36,7 +37,10 @@ pub(in crate::local::omp) async fn describe(client: &OmpClient, cwd: &str) -> Pr
 }
 
 /// Read the acknowledged native presets without changing them.
-pub(in crate::local::omp) async fn list(client: &OmpClient, cwd: &str) -> Result<Vec<Preset>, PresetError> {
+pub(in crate::local::omp) async fn list(
+    client: &OmpClient,
+    cwd: &str,
+) -> Result<Vec<Preset>, PresetError> {
     let catalog = roles::Catalog::read(client, cwd)
         .await
         .map_err(|_| PresetError::Unavailable("OMP presets could not be read".to_owned()))?;
@@ -57,7 +61,11 @@ pub(in crate::local::omp) async fn save(
 }
 
 /// Delete through OMP's own command; project definitions are reported, never silently kept.
-pub(in crate::local::omp) async fn delete(client: &OmpClient, cwd: &str, name: &str) -> Result<(), PresetError> {
+pub(in crate::local::omp) async fn delete(
+    client: &OmpClient,
+    cwd: &str,
+    name: &str,
+) -> Result<(), PresetError> {
     write(client, cwd, "delete", name, StoredAgentConfig::default()).await
 }
 
@@ -65,9 +73,9 @@ fn selection(preset: &Preset) -> Result<StoredAgentConfig, PresetError> {
     let route = serde_json::from_str::<[String; 2]>(&preset.model)
         .ok()
         .filter(|route| {
-            route
-                .iter()
-                .all(|part| !part.is_empty() && part.len() <= 1024 && !part.chars().any(char::is_control))
+            route.iter().all(|part| {
+                !part.is_empty() && part.len() <= 1024 && !part.chars().any(char::is_control)
+            })
         })
         .ok_or_else(|| {
             PresetError::Rejected(
@@ -110,9 +118,9 @@ async fn write(
         &serde_json::json!({"name":name}),
     )
     .map_err(|_| PresetError::Unavailable("OMP rejected the preset operation".to_owned()))?;
-    let reply: Value = result
-        .await
-        .map_err(|_| PresetError::Unavailable("OMP did not complete the preset operation".to_owned()))?;
+    let reply: Value = result.await.map_err(|_| {
+        PresetError::Unavailable("OMP did not complete the preset operation".to_owned())
+    })?;
     match reply["error"].as_str() {
         None => Ok(()),
         Some(error) => Err(PresetError::Rejected(error.to_owned())),

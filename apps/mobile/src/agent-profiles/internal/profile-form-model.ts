@@ -441,20 +441,19 @@ export function openAgentProfileForm(snapshot: AgentProfileFormSnapshot): AgentP
     const featureRequestKey = buildFeatureRequestKey(featureRequest);
     const featuresAreCurrent =
       featureRequestKey !== null && featureRequestKey === resolvedFeatureKey;
-    const hasCachedPresets =
-      next.provider === "omp" && resolvedFeatures.some((feature) => feature.id === "modelPreset");
+    // Whether a preset control is cached decides reuse, not which provider supplied it.
+    const hasCachedPresets = resolvedFeatures.some((feature) => feature.id === "modelPreset");
     const appliedFeatures =
       featuresAreCurrent || hasCachedPresets
         ? applyFeatureValues(resolvedFeatures, next.featureValues)
         : [];
-    const features =
-      next.provider === "omp"
-        ? withModelPresetSelection(appliedFeatures, {
-            modelId: next.modelId,
-            thinkingOptionId: next.thinkingOptionId,
-            featureValues: next.featureValues,
-          })
-        : appliedFeatures;
+    const features = hasCachedPresets
+      ? withModelPresetSelection(appliedFeatures, {
+          modelId: next.modelId,
+          thinkingOptionId: next.thinkingOptionId,
+          featureValues: next.featureValues,
+        })
+      : appliedFeatures;
     const featureResolution = resolveFeatureStatus(featureRequestKey, featuresAreCurrent);
 
     const withOptions: AgentProfileFormState = {

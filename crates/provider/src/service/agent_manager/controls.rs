@@ -183,10 +183,9 @@ impl AgentManager {
             }
             // The unified preset editor owns the non-native stores, so a provider without a
             // native `modelPreset` gains one here and a provider with one keeps it untouched.
-            if let (Some(presets), Some(features)) = (
-                self.presets.as_ref(),
-                snapshot["features"].as_array_mut(),
-            ) {
+            if let (Some(presets), Some(features)) =
+                (self.presets.as_ref(), snapshot["features"].as_array_mut())
+            {
                 let mut merged = std::mem::take(features);
                 presets.apply(
                     &record.provider,
@@ -227,7 +226,10 @@ impl AgentManager {
             .as_str()
             .filter(|provider| crate::service::presets::valid_provider(provider))
             .ok_or(ErrorCode::InvalidMessage)?;
-        let service = self.presets.as_ref().ok_or(ErrorCode::UnsupportedCapability)?;
+        let service = self
+            .presets
+            .as_ref()
+            .ok_or(ErrorCode::UnsupportedCapability)?;
         let client = self.clients.get(provider);
         // Discovery validation already owns the cwd rule; an absent cwd simply means the
         // daemon process directory, which is what a provider's own settings read uses.
@@ -255,20 +257,19 @@ impl AgentManager {
             }
             "provider.presets.save.request" => {
                 crate::rpc::agent_execution::only(params, &["provider", "cwd", "preset"])?;
-                let preset: crate::ports::preset::Preset = serde_json::from_value(
-                    params["preset"].clone(),
-                )
-                .map_err(|_| ErrorCode::InvalidMessage)?;
+                let preset: crate::ports::preset::Preset =
+                    serde_json::from_value(params["preset"].clone())
+                        .map_err(|_| ErrorCode::InvalidMessage)?;
                 match service.save(provider, &cwd, client, &preset).await {
                     Ok(()) => Ok(json!({"provider":provider,"saved":preset.name,"error":null})),
-                    Err(error) => Ok(json!({"provider":provider,"saved":null,"error":error.message()})),
+                    Err(error) => {
+                        Ok(json!({"provider":provider,"saved":null,"error":error.message()}))
+                    }
                 }
             }
             "provider.presets.delete.request" => {
                 crate::rpc::agent_execution::only(params, &["provider", "cwd", "name"])?;
-                let name = params["name"]
-                    .as_str()
-                    .ok_or(ErrorCode::InvalidMessage)?;
+                let name = params["name"].as_str().ok_or(ErrorCode::InvalidMessage)?;
                 match service.delete(provider, &cwd, client, name).await {
                     Ok(()) => Ok(json!({"provider":provider,"deleted":name,"error":null})),
                     Err(error) => {

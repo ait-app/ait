@@ -520,9 +520,9 @@ fn invalid_provider_patch(value: &Value) -> bool {
     // Ait-managed model presets share the domain record and its exact bounds, so the file and
     // the unified editor cannot disagree about what a valid preset is.
     provider.get("modelPresets").is_some_and(|presets| {
-        let Ok(presets) = serde_json::from_value::<Vec<domain::preset::ProviderPreset>>(
-            presets.clone(),
-        ) else {
+        let Ok(presets) =
+            serde_json::from_value::<Vec<domain::preset::ProviderPreset>>(presets.clone())
+        else {
             return true;
         };
         domain::preset::validate_presets(&presets).is_err()
