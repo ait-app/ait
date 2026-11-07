@@ -8,6 +8,10 @@ import sys
 import time
 from pathlib import Path
 
+if "--version" in sys.argv:
+    print("1.2.0")
+    sys.exit(0)
+
 if Path("ignore-term").exists():
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     print(json.dumps({"type": "ready", "pid": os.getpid()}), flush=True)

@@ -78,6 +78,28 @@ fn handle() -> AgentPersistenceHandle {
 }
 
 #[test]
+fn imports_user_message_larger_than_the_live_queue_capacity() {
+    let (_directory, client, file, cwd) = fixture();
+    let text = "x".repeat(25 * 1024 * 1024);
+    write(&file, &cwd, vec![user("u", Value::Null, &text)]);
+
+    let history = inspect(&client, &handle(), &cwd).unwrap();
+
+    assert_eq!(history.entries.len(), 267);
+    let mut remaining = text.as_str();
+    for (index, entry) in history.entries.iter().enumerate() {
+        assert_eq!(entry.key, format!("native:pi:u:user:{index}"));
+        assert_eq!(entry.timestamp, "2026-10-18T01:00:00Z");
+        assert_eq!(entry.item["type"], "user_message");
+        let chunk = entry.item["text"].as_str().unwrap();
+        assert!(!chunk.is_empty());
+        remaining = remaining.strip_prefix(chunk).unwrap();
+    }
+    assert!(remaining.is_empty());
+    assert!(history.active);
+}
+
+#[test]
 fn listing_preserves_distinct_projects_with_colliding_session_directories() {
     let (directory, client, _, _) = fixture();
     let root = directory.path().canonicalize().unwrap();

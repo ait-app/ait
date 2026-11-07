@@ -1,7 +1,9 @@
 //! Pi's native JSONL RPC adapter. Authentication and sessions remain owned by Pi.
 
+mod commands;
 mod config;
 mod history;
+mod probe;
 mod session;
 mod streaming;
 mod transport;
@@ -59,6 +61,13 @@ impl PiClient {
         self
     }
 
+    fn with_environment(&self, environment: &AgentEnvironment) -> Self {
+        let mut client = self.clone();
+        client.environment = environment.clone();
+        client.version = Arc::default();
+        client
+    }
+
     /// Read the native catalog, optionally including defaults from the same process.
     /// Returns catalog errors; unavailable optional state leaves defaults unspecified.
     async fn discover_models(
@@ -67,31 +76,29 @@ impl PiClient {
         include_defaults: bool,
     ) -> Result<(Value, Value), AgentSessionError> {
         config::directory(cwd)?;
-        transport::version(self).await?;
-        let mut transport = transport::Transport::spawn(self, cwd, &["--no-session".into()], None)?;
-        let result = async {
-            let models = transport
-                .request(json!({"type":"get_available_models"}))
-                .await?;
-            // Capability discovery must remain usable when optional ambient defaults fail.
-            let state = if include_defaults {
-                match tokio::time::timeout(
-                    DISCOVERY_DEFAULTS_TIMEOUT,
-                    transport.request(json!({"type":"get_state"})),
-                )
-                .await
-                {
-                    Ok(Ok(state)) => state,
-                    Ok(Err(_)) | Err(_) => Value::Null,
-                }
-            } else {
-                Value::Null
-            };
-            Ok((models, state))
-        }
-        .await;
-        let closed = transport.close().await;
-        result.and_then(|models| closed.map(|()| models))
+        probe::run(self, cwd, None, None, |transport| {
+            Box::pin(async move {
+                let models = transport
+                    .request(json!({"type":"get_available_models"}))
+                    .await?;
+                // Capability discovery must remain usable when optional ambient defaults fail.
+                let state = if include_defaults {
+                    match tokio::time::timeout(
+                        DISCOVERY_DEFAULTS_TIMEOUT,
+                        transport.request(json!({"type":"get_state"})),
+                    )
+                    .await
+                    {
+                        Ok(Ok(state)) => state,
+                        Ok(Err(_)) | Err(_) => Value::Null,
+                    }
+                } else {
+                    Value::Null
+                };
+                Ok((models, state))
+            })
+        })
+        .await
     }
 }
 
@@ -184,6 +191,16 @@ impl AgentClient for PiClient {
         })
     }
 
+    async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {
+        if spec.provider != PROVIDER {
+            return Err(AgentSessionError::Rejected);
+        }
+        if !std::path::Path::new(&spec.cwd).is_absolute() {
+            return Err(AgentSessionError::Rejected);
+        }
+        commands::discover(self, &spec.cwd, spec.confinement.as_ref()).await
+    }
+
     async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
         config::spec(spec)?;
         // Pi validates or clamps opaque levels against the selected model on creation,
@@ -209,10 +226,9 @@ impl AgentClient for PiClient {
         spec: &AgentSessionSpec,
         environment: &AgentEnvironment,
     ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
-        let mut client = self.clone();
-        client.environment = environment.clone();
-        client.version = Arc::default();
-        client.create_session(spec).await
+        self.with_environment(environment)
+            .create_session(spec)
+            .await
     }
 
     async fn resume_session(

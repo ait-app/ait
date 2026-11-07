@@ -91,6 +91,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## Provider、Agent 与会话
 
+- [ADR-220：Pi 扩展通知与会话时间线](providers/adr-220-pi-extension-notifications.md)
+- [ADR-219：Pi 原生 slash-command 发现](providers/adr-219-pi-slash-command-discovery.md)
 - [ADR-211：Pi 推理偏好在下一条 prompt 前应用](providers/adr-211-pi-next-turn-reasoning-controls.md)
 - [ADR-210：Agent 目录共享已提交的不可变记录](providers/adr-210-committed-runtime-read-snapshots.md)
 

@@ -287,7 +287,7 @@ fn compaction_lifecycle_and_failure_cleanup_preserve_identity() {
         stream.consume(&end).unwrap();
         stream.consume(&end).unwrap();
         let entries: Vec<_> = stream
-            .events
+            .events()
             .iter()
             .filter_map(|event| {
                 if let AgentTurnEvent::Timeline(entry) = event {
@@ -313,9 +313,12 @@ fn compaction_lifecycle_and_failure_cleanup_preserve_identity() {
         .unwrap();
     stream.consume(&json!({"type":"tool_execution_start","toolCallId":"call","toolName":"bash","args":{"command":"test"}})).unwrap();
     stream.fail();
-    assert!(stream.events.iter().any(|event| matches!(event,AgentTurnEvent::Timeline(entry) if entry.item["type"]=="compaction" && entry.item["status"]=="failed" && entry.turn_id.is_none())));
-    assert!(stream.events.iter().any(|event| matches!(event,AgentTurnEvent::Timeline(entry) if entry.item["name"]=="bash" && entry.item["status"]=="failed")));
-    assert!(matches!(stream.events.back(), Some(AgentTurnEvent::Failed)));
+    assert!(stream.events().iter().any(|event| matches!(event,AgentTurnEvent::Timeline(entry) if entry.item["type"]=="compaction" && entry.item["status"]=="failed" && entry.turn_id.is_none())));
+    assert!(stream.events().iter().any(|event| matches!(event,AgentTurnEvent::Timeline(entry) if entry.item["name"]=="bash" && entry.item["status"]=="failed")));
+    assert!(matches!(
+        stream.events().back(),
+        Some(AgentTurnEvent::Failed)
+    ));
 
     for has_current_compaction in [false, true] {
         let mut stream = streaming::Stream::default();
@@ -331,7 +334,7 @@ fn compaction_lifecycle_and_failure_cleanup_preserve_identity() {
                 .is_err()
         );
 
-        stream.events.clear();
+        while stream.pop().is_some() {}
         stream.begin("second".into());
         if has_current_compaction {
             stream
@@ -344,7 +347,7 @@ fn compaction_lifecycle_and_failure_cleanup_preserve_identity() {
         stream.fail();
 
         let failures: Vec<_> = stream
-            .events
+            .events()
             .iter()
             .filter_map(|event| match event {
                 AgentTurnEvent::Timeline(entry)
@@ -378,13 +381,13 @@ fn event_and_final_text_budgets_cover_tiny_deltas_and_no_delta_messages() {
     let delta = json!({"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"x"}});
     assert!((0..300).any(|_| stream.consume(&delta).is_err()));
     stream.fail();
-    assert!(stream.events.len() <= 256);
+    assert!(stream.events().len() <= 256);
     let mut stream = streaming::Stream::default();
     stream.begin("turn".into());
     let end = json!({"type":"message_end","message":{"role":"assistant","content":vec![json!({"type":"thinking","thinking":"x"});300]}});
     assert!(stream.consume(&end).is_err());
     stream.fail();
-    assert!(stream.events.len() <= 256);
+    assert!(stream.events().len() <= 256);
     let mut stream = streaming::Stream::default();
     stream.begin("turn".into());
     let end = json!({"type":"message_end","message":{"role":"assistant","content":[{"type":"thinking","thinking":"x".repeat(96*1024)}]}});
@@ -394,7 +397,7 @@ fn event_and_final_text_budgets_cover_tiny_deltas_and_no_delta_messages() {
             failed = true;
             break;
         }
-        stream.events.clear();
+        while stream.pop().is_some() {}
     }
     assert!(failed);
 }

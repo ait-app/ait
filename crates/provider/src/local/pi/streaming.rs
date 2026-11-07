@@ -1,7 +1,9 @@
 use std::borrow::Cow;
 use std::collections::{BTreeMap, VecDeque};
+use std::sync::LazyLock;
 
 use chrono::Utc;
+use regex::Regex;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -15,12 +17,41 @@ use crate::protocol::{timeline::NativeItem, usage::AgentUsage};
 // Storage caps serialized NativeItem at 768 KiB. Sixfold JSON escaping of 96 KiB
 // leaves 192 KiB for metadata, matching OpenCode's conservative text allowance.
 const MAX_TEXT: usize = 96 * 1024;
+const MAX_NOTICE_BYTES: usize = 96 * 1024;
+const MAX_NOTICE_TYPE_BYTES: usize = 128;
 const MAX_ITEMS: usize = 4096;
 const MAX_EVENTS: usize = 256;
+const MAX_NOTICES: usize = 16;
 const MAX_ADMISSION_EVENTS: usize = 4096;
 const MAX_ADMISSION_BYTES: usize = 64 * 1024 * 1024;
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 const MAX_TOOLS: usize = 128;
+
+// Strip complete CSI and OSC sequences, including SGR colors and terminal hyperlinks.
+static NOTICE_ANSI: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?:\x1b\[|\x{009b})[0-?]*[ -/]*[@-~]|(?:\x1b\]|\x{009d})[^\x07\x1b\x{009c}]*(?:\x07|\x1b\\|\x{009c})")
+        .expect("notice ANSI pattern is valid")
+});
+
+fn notice_text(text: &str) -> Cow<'_, str> {
+    let stripped = NOTICE_ANSI.replace_all(text, "");
+    if stripped.chars().any(char::is_control) {
+        Cow::Owned(
+            stripped
+                .chars()
+                .map(|character| {
+                    if character.is_control() {
+                        ' '
+                    } else {
+                        character
+                    }
+                })
+                .collect(),
+        )
+    } else {
+        stripped
+    }
+}
 
 #[derive(Debug)]
 struct Tool {
@@ -40,7 +71,10 @@ struct Compaction {
 #[derive(Debug, Default)]
 pub(super) struct Stream {
     /// Events awaiting publication; insertion reserves room for terminal cleanup.
-    pub(super) events: VecDeque<AgentTurnEvent>,
+    events: VecDeque<AgentTurnEvent>,
+    input_position: usize,
+    // Admission records notice identity and turn once; removal never decrements counters.
+    queued_notices: BTreeMap<String, String>,
     turn: String,
     message: usize,
     observation: usize,
@@ -190,6 +224,8 @@ impl Stream {
         let queued_tools = std::mem::take(&mut self.queued_tools);
         let queued_tool_bytes = self.queued_tool_bytes;
         *self = Self {
+            input_position: events.len(),
+            queued_notices: std::mem::take(&mut self.queued_notices),
             events,
             turn,
             queued_tool_bytes,
@@ -200,6 +236,44 @@ impl Stream {
         };
     }
 
+    /// Insert accepted input before this turn's output, after surviving prior output.
+    /// Returns `Failed` if the whole batch cannot fit alongside terminal cleanup.
+    pub(super) fn insert_submitted(
+        &mut self,
+        submitted: Vec<AgentTurnEvent>,
+    ) -> Result<(), AgentSessionError> {
+        self.discard_notices_at_capacity(submitted.len() + 1);
+        if self.events.len() + self.tools.len() + 2 + submitted.len() > self.event_limit() {
+            return Err(self.display_limit());
+        }
+        for event in submitted {
+            self.events.insert(self.input_position, event);
+            self.input_position += 1;
+        }
+        Ok(())
+    }
+
+    fn retain_events(
+        &mut self,
+        mut keep: impl FnMut(&AgentTurnEvent, &BTreeMap<String, String>) -> bool,
+    ) {
+        let boundary = self.input_position;
+        let mut index = 0;
+        self.events.retain(|event| {
+            let retain = keep(event, &self.queued_notices);
+            if !retain {
+                if index < boundary {
+                    self.input_position -= 1;
+                }
+                if let AgentTurnEvent::Timeline(entry) = event {
+                    self.queued_notices.remove(&entry.key);
+                }
+            }
+            index += 1;
+            retain
+        });
+    }
+
     /// Reopen observed extension work without publishing an earlier intermediate settlement.
     pub(super) fn resume_running(&mut self) {
         if self.settled {
@@ -208,7 +282,7 @@ impl Stream {
             self.explanation.clear();
             self.last_text.clear();
         }
-        self.events.retain(|event| {
+        self.retain_events(|event, _| {
             !matches!(
                 event,
                 AgentTurnEvent::Completed(_) | AgentTurnEvent::Cancelled | AgentTurnEvent::Failed
@@ -240,9 +314,21 @@ impl Stream {
         self.bytes = 0;
     }
 
+    /// Inspect queued output without exposing mutation of the submitted-input position.
+    #[cfg(test)]
+    pub(super) fn events(&self) -> &VecDeque<AgentTurnEvent> {
+        &self.events
+    }
+
     /// Drain display output, restoring the ordinary queue cap once admission backlog fits.
     pub(super) fn pop(&mut self) -> Option<AgentTurnEvent> {
         let event = self.events.pop_front();
+        if event.is_some() {
+            self.input_position = self.input_position.saturating_sub(1);
+        }
+        if let Some(AgentTurnEvent::Timeline(entry)) = &event {
+            self.queued_notices.remove(&entry.key);
+        }
         if let Some(AgentTurnEvent::Progress { entry, .. } | AgentTurnEvent::Timeline(entry)) =
             &event
             && let Some(bytes) = self.queued_tools.remove(&entry.key)
@@ -270,10 +356,23 @@ impl Stream {
         AgentSessionError::Failed
     }
 
+    fn discard_notices_at_capacity(&mut self, reserved: usize) {
+        // Discard best-effort notices before they can displace required turn output.
+        if !self.queued_notices.is_empty()
+            && self.events.len() + self.tools.len() + reserved >= self.event_limit()
+        {
+            self.retain_events(|event, notices| {
+                !matches!(event,
+                AgentTurnEvent::Timeline(entry) if notices.contains_key(&entry.key))
+            });
+        }
+    }
+
     fn push(&mut self, event: AgentTurnEvent) -> Result<(), AgentSessionError> {
         if self.admission && self.coalesce(&event) {
             return Ok(());
         }
+        self.discard_notices_at_capacity(2);
         // Every pending tool, one compaction and the final status must fit even on failure.
         if self.events.len() + self.tools.len() + 2 >= self.event_limit() {
             return Err(self.display_limit());
@@ -289,7 +388,7 @@ impl Stream {
     fn coalesce(&mut self, event: &AgentTurnEvent) -> bool {
         match event {
             AgentTurnEvent::Timeline(entry) => {
-                self.events.retain(|pending| {
+                self.retain_events(|pending, _| {
                     !matches!(pending,
                     AgentTurnEvent::Progress { entry: prior, .. } if prior.key == entry.key)
                 });
@@ -350,7 +449,7 @@ impl Stream {
     }
 
     fn replace_tool_progress(&mut self, key: &str, bytes: usize) {
-        self.events.retain(|event| {
+        self.retain_events(|event, _| {
             !matches!(event,
             AgentTurnEvent::Progress { entry, .. } if entry.key == key)
         });
@@ -401,6 +500,54 @@ impl Stream {
     /// Malformed records and exceeded display budgets return `Failed`.
     pub(super) fn consume(&mut self, event: &Value) -> Result<bool, AgentSessionError> {
         match event["type"].as_str() {
+            Some("extension_ui_request") if event["method"] == "notify" => {
+                if self.turn.is_empty() || self.settled {
+                    return Ok(false);
+                }
+                let text = event["message"].as_str().unwrap_or_default();
+                // Notices have their own bounded allowance and never debit turn text budgets.
+                if !text.is_empty()
+                    && text.len() <= MAX_NOTICE_BYTES
+                    && self
+                        .queued_notices
+                        .values()
+                        .filter(|turn| *turn == &self.turn)
+                        .count()
+                        < MAX_NOTICES
+                    && self.events.len() + self.tools.len() + 2 < self.event_limit()
+                {
+                    let text = notice_text(text);
+                    if text.trim().is_empty() {
+                        return Ok(false);
+                    }
+                    // Keep the queue-wide memory bound without letting earlier turns
+                    // consume this turn's allowance. Reclaim old notices only when needed.
+                    if self.queued_notices.len() >= MAX_NOTICES {
+                        let turn = self.turn.clone();
+                        self.retain_events(|event, notices| {
+                            !matches!(event, AgentTurnEvent::Timeline(entry)
+                                if notices.get(&entry.key).is_some_and(|owner| owner != &turn))
+                        });
+                    }
+                    let notification_type = event["notifyType"]
+                        .as_str()
+                        .filter(|value| value.len() <= MAX_NOTICE_TYPE_BYTES);
+                    let level = match notification_type {
+                        Some("warning") => "warning",
+                        Some("error") => "error",
+                        _ => "info",
+                    };
+                    let entry = self.entry(
+                        &format!("notice:{}", Uuid::new_v4()),
+                        json!({"type":"notification","level":level,"message":text,
+                            "metadata":{"nativeType":"extension_ui_request",
+                                "notificationType":notification_type,"transient":true}}),
+                    );
+                    self.queued_notices
+                        .insert(entry.key.clone(), self.turn.clone());
+                    self.events.push_back(AgentTurnEvent::Timeline(entry));
+                }
+            }
             Some("agent_start") => {
                 // An extension may finish one run and start another before acknowledging its command.
                 self.resume_running();
@@ -625,6 +772,7 @@ impl Stream {
             .unwrap_or("unknown");
         let done = event["type"] == "tool_execution_end";
         if event["type"] == "tool_execution_start" {
+            self.discard_notices_at_capacity(3);
             if self.tools.len() >= MAX_TOOLS
                 || self.tools.contains_key(id)
                 || self
@@ -709,7 +857,7 @@ impl Stream {
 
     /// Retire pending tools/compactions within reserved queue capacity and fail once.
     pub(super) fn fail(&mut self) {
-        self.events.retain(|event| {
+        self.retain_events(|event, _| {
             !matches!(
                 event,
                 AgentTurnEvent::Completed(_) | AgentTurnEvent::Cancelled | AgentTurnEvent::Failed
@@ -849,3 +997,6 @@ fn edit_array_preview(edits: &[Value]) -> Option<(Value, usize)> {
     }
     Some(preview_with_size(&Value::String(diff)))
 }
+
+#[cfg(test)]
+mod tests;
