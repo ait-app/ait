@@ -2241,6 +2241,7 @@ export const zhCN: TranslationResources = {
     nativePlanUnavailable: "此登录方式不提供套餐用量。请通过提供方 CLI 登录。",
     nativeText: {
       claudePlanSignIn: "请运行 claude /login 登录以查看套餐用量。",
+      claudeRenewalPending: "Claude 会在下次运行时自动续期登录，之后套餐用量会更新。",
       claudePlanUnavailable: "此登录方式不提供套餐用量。请运行 claude /login 登录。",
       deepseekTotalBalance: "DeepSeek 总余额",
       deepseekRechargeBalance: "DeepSeek 充值余额",

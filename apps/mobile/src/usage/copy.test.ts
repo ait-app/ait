@@ -43,6 +43,12 @@ test("resolves labels and login remedies in the current language", async () => {
       detail: "This login does not report plan usage. Run claude /login to sign in.",
     }),
   ).toBe("此登录方式不提供套餐用量。请运行 claude /login 登录。");
+  expect(
+    usageCopy.problem({
+      kind: "no_quota",
+      detail: "Claude renews its sign-in the next time it runs. Plan usage updates after that.",
+    }),
+  ).toBe("Claude 会在下次运行时自动续期登录，之后套餐用量会更新。");
   expect(usageCopy.problem({ kind: "no_quota", detail: "No active coding plan" })).toBe(
     "No active coding plan",
   );

@@ -1859,6 +1859,8 @@ export const ru: TranslationResources = {
       "Этот способ входа не предоставляет использование плана. Войдите через CLI провайдера.",
     nativeText: {
       claudePlanSignIn: "Войдите с помощью claude /login, чтобы посмотреть использование тарифа.",
+      claudeRenewalPending:
+        "Claude продлит вход при следующем запуске. После этого использование тарифа обновится.",
       claudePlanUnavailable:
         "Этот способ входа не предоставляет данные об использовании тарифа. Выполните claude /login для входа.",
       deepseekTotalBalance: "Общий баланс DeepSeek",
