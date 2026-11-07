@@ -41,9 +41,9 @@ export function ModelFeatureControls({
     [features],
   );
   // A provider advertises the preset control either by emitting one or by having a preset
-  // store the editor can fill; either way the user must be able to reach the editor.
-  const showEmpty =
-    !preset && settingsTarget !== undefined && presets !== undefined;
+  // store the editor can fill; either way the user must be able to reach the editor. The row
+  // reads that store itself, so an unseeded caller still gets the entry.
+  const showEmpty = !preset && settingsTarget !== undefined;
   if (!preset && roles.length === 0 && !showEmpty) return null;
   return (
     <View style={styles.container} testID="model-feature-controls">

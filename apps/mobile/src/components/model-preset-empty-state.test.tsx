@@ -140,3 +140,22 @@ it("shows nothing when the host does not answer the preset request", () => {
   expect(screen.queryByTestId("model-preset-empty-state")).toBeNull();
   expect(open).not.toHaveBeenCalled();
 });
+
+it("opens the provider editor from a profile surface, where no project directory exists", () => {
+  // Profiles carry no cwd; the sheet must still open for that host and provider.
+  currentLayer = 40;
+  render(
+    <ModelPresetEmptyState
+      serverId="host-a"
+      provider="claude"
+      cwd={null}
+      presets={{ descriptor: descriptor("ait"), presets: [] }}
+    />,
+  );
+  fireEvent.click(screen.getByTestId("model-preset-create"));
+  expect(open).toHaveBeenCalledWith({
+    serverId: "host-a",
+    provider: "claude",
+    overlayParentLayer: 40,
+  });
+});

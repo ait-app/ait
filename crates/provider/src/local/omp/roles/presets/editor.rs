@@ -137,20 +137,27 @@ async fn write(
 
 /// Probe the native command directory from a directory OMP accepts.
 ///
-/// A provider settings sheet has no project yet, so the caller passes no working directory and
-/// the daemon would otherwise probe from `/`, where OMP refuses to start. The home directory is
-/// the harness's own state root and always works for a read-only command probe.
+/// A provider settings sheet has no project yet, so the caller passes no working directory; the
+/// daemon's own directory is `/` under a launcher, where OMP refuses to start. Those cases fall
+/// back to the home directory, which is the harness's own state root and always supports a
+/// read-only command probe. A real project directory is preserved so project-scoped presets keep
+/// their own scope.
 pub(super) fn probe_cwd(cwd: &str) -> String {
-    if cwd.is_empty() || !std::path::Path::new(cwd).is_dir() {
-        return std::env::var_os("HOME")
-            .map(std::path::PathBuf::from)
-            .filter(|home| home.is_dir())
-            .map_or_else(
-                || cwd.to_owned(),
-                |home| home.to_string_lossy().into_owned(),
-            );
+    let usable = !cwd.is_empty()
+        && std::path::Path::new(cwd).is_dir()
+        && std::path::Path::new(cwd)
+            .canonicalize()
+            .is_ok_and(|path| path != std::path::Path::new("/"));
+    if usable {
+        return cwd.to_owned();
     }
-    cwd.to_owned()
+    std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .filter(|home| home.is_dir())
+        .map_or_else(
+            || cwd.to_owned(),
+            |home| home.to_string_lossy().into_owned(),
+        )
 }
 
 async fn presets_available(client: &OmpClient, cwd: &str) -> bool {

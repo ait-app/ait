@@ -349,6 +349,9 @@ function OpenAgentProfileEditModal({
               features={modelFeatures}
               disabled={state.isSubmitting}
               onCatalogAccess={handleCatalogAccess}
+              // A profile has no working directory, so the preset store is read for the host and
+              // provider alone; the empty state still opens that provider's preset editor.
+              settingsTarget={{ serverId, provider: state.provider, cwd: null }}
               renderFeature={(feature, index) => (
                 <AgentProfileFeatureRow
                   key={feature.id}
