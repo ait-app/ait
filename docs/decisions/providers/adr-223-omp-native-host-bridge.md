@@ -169,10 +169,32 @@ metadata 探针也会收到 hello，但探针不构造 Session 级 Vibe 状态�
     （顺序：`AIT_OMP_NATIVE_HOST` → `<data_dir>/providers/omp-native-host/1` →
     `AIT_SERVER_OMP_NATIVE_HOST_BUNDLE` → 可执行文件旁的 `provider-runtimes/...`），
     只有都没有时才用 `AIT_SERVER_NODE_BIN` 跑一次
-    `runtimes/omp-native-host/install.mjs --data-dir <data_dir>`；任何失败只 warn。
+    `runtimes/omp-native-host/install.mjs --data-dir <data_dir>`；任何失败只 warn，并在
+    下一次 daemon 启动时重试（见「安装器生命周期」）。
   - 打包形态**不复制**运行时到用户数据目录：应用旁的 bundle 被原地使用，
     现场实测 daemon 启动日志为
     `Using the OMP native host runtime manifest=<resources>/provider-runtimes/...`，
     且 `<data-dir>/providers` 未被创建。
   - 独立 daemon 发布包：`scripts/release-assets.mjs daemon ... --runtime <dir>` 把
     `provider-runtimes` 一起打进 tarball，并由 CI 传入打包产物的实际路径。
+
+### 8. 安装器生命周期（2026-11-07 评审补齐）
+
+后台安装失败不会打断 daemon，但「失败后能否自愈」必须显式规定：
+
+- **进程树归属**：安装器在独立进程组里启动（Unix `process_group(0)`，与
+  `crates/provider/src/local/process_group.rs` 同一套语义）。它用 `execFileSync(npm, ...)`
+  起自己的子进程，所以超时或取消时向**整个进程组**发信号，npm 及其子进程一起退出，
+  不会留下继续写 staging 目录的孤儿。
+- **有界回收**：超时先 `SIGTERM` 组并等 5 秒，仍在则 `SIGKILL` 组再等；直接子进程始终
+  `wait`，不留僵尸。安装器输出写入临时文件而不是管道，避免无人读取的 stderr 写满后
+  在 deadline 之前就把安装器卡死。
+- **失效锁恢复**：锁文件不由 Rust 侧清扫，而由安装器自己在 `acquireLock` 里判定
+  「记录的持有者是否还活着」——`pid` + 内核 `starttime` + 命令名三者同时匹配才算活着
+  （只有 pid 会被复用骗过；非 Linux 平台退化为信号探测并叠加年龄上限）。记录用
+  `writeFile` + 硬链接发布，读者永远看不到写了一半的持有者；释放时只删除仍等于自己
+  记录内容的锁，避免误删别人刚接管的锁。判定为死锁后立刻重试获取，因此
+  「SIGKILL、机器重启、pid 复用」都能自愈。
+- **并发语义不变**：锁仍排他。活着的持有者会让后来者**排队等待**（上限低于 daemon 的
+  安装预算，避免一个 daemon 被另一个拖过自己的 deadline），而不是并行写同一棵树；
+  等到后重新探测 manifest 并直接使用已发布的安装。

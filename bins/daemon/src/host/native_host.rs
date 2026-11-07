@@ -11,10 +11,13 @@
 //!   checkout's runtime sources), the daemon runs it once and reports the outcome.
 //!
 //! A missing runtime only degrades `/vibe` to an explicit refusal card; it never stops the
-//! daemon.
+//! daemon. The installer owns the `.install-lock` file and reclaims one whose recorded holder is
+//! gone, so a killed or timed-out run cannot wedge every later daemon start.
 
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
+use std::process::{Child, Command, ExitStatus, Stdio};
+use std::time::{Duration, Instant};
 
 use provider::native_host::discover;
 
@@ -23,37 +26,73 @@ const MANAGED: &str = "providers/omp-native-host/1/manifest.json";
 /// Installer entry point relative to the repository root in a development checkout.
 const SOURCE_INSTALLER: &str = "runtimes/omp-native-host/install.mjs";
 /// Upper bound on one installer run, so a stalled download cannot hold the caller.
-const INSTALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+const INSTALL_TIMEOUT: Duration = Duration::from_secs(120);
+/// Time an installer's process group gets to exit before the whole group is killed outright.
+const TERMINATE_GRACE: Duration = Duration::from_secs(5);
+/// Poll interval while the installer runs, so termination never waits on a blocking call.
+const POLL: Duration = Duration::from_millis(50);
+/// Bytes of installer output kept for one diagnostic line.
+const OUTPUT_TAIL: usize = 512;
 
-/// Report the tail of a failed installer's stderr without unbounded reads.
-fn trace_installer_output(child: &mut std::process::Child) {
-    let Some(stderr) = child.stderr.take() else {
-        return;
-    };
-    let mut detail = Vec::new();
-    if stderr
-        .take(512)
-        .read_to_end(&mut detail)
-        .is_ok_and(|_| !detail.is_empty())
-    {
-        tracing::warn!(
-            detail = %String::from_utf8_lossy(&detail),
-            "OMP native host installer output"
-        );
-    }
+/// One installer run's time budget.
+#[derive(Debug, Clone, Copy)]
+struct Budget {
+    /// Total time the installer may run before its process group is terminated.
+    timeout: Duration,
+    /// Time the group gets to exit after `SIGTERM` before it is killed.
+    grace: Duration,
+}
+
+const BUDGET: Budget = Budget {
+    timeout: INSTALL_TIMEOUT,
+    grace: TERMINATE_GRACE,
+};
+
+/// How one supervised installer run ended.
+#[derive(Debug)]
+enum Completion {
+    /// The installer process exited with this status.
+    Exited(ExitStatus),
+    /// The installer was still running when its budget ran out.
+    TimedOut,
+}
+
+/// Warn about a missing runtime and keep serving with the official OMP binary.
+fn degraded(reason: impl std::fmt::Display) {
+    tracing::warn!(
+        "OMP native host runtime unavailable: {reason}; OMP keeps using the official binary"
+    );
+}
+
+/// Warn that an existing installation failed verification and is left alone.
+///
+/// Reinstalling here cannot decide which tree wins, so the verified degradation stands.
+fn degraded_permanently(reason: impl std::fmt::Display) {
+    tracing::warn!(
+        "OMP native host runtime unavailable: {reason}; OMP keeps using the official binary and \
+         will not reinstall over an unverified tree"
+    );
 }
 
 /// Resolve the runtime for `data_dir`, installing the managed copy when it is absent.
 ///
-/// Returns the verified runtime, which the provider composition rediscovers on its own; this
-/// probe exists so an operator sees the degradation in the daemon log instead of discovering it
-/// only when `/vibe` is refused.
+/// The probe exists so an operator sees the degradation in the daemon log instead of discovering
+/// it only when `/vibe` is refused. The provider composition rediscovers the runtime on its own.
 pub(crate) fn ensure_runtime(data_dir: &Path) {
     workspace(data_dir, &|name| std::env::var_os(name));
 }
 
 /// Probe with an explicit environment so startup and tests resolve identically.
 pub(super) fn workspace(data_dir: &Path, environment: &dyn Fn(&str) -> Option<std::ffi::OsString>) {
+    workspace_within(data_dir, environment, BUDGET);
+}
+
+/// Probe and install with an explicit budget so tests can exercise the timeout path.
+fn workspace_within(
+    data_dir: &Path,
+    environment: &dyn Fn(&str) -> Option<std::ffi::OsString>,
+    budget: Budget,
+) {
     if let Some(host) = discover(data_dir, environment) {
         tracing::info!(
             entrypoint = %host.entrypoint().display(),
@@ -61,96 +100,182 @@ pub(super) fn workspace(data_dir: &Path, environment: &dyn Fn(&str) -> Option<st
         );
         return;
     }
-    install(data_dir, environment);
+    install(data_dir, environment, budget);
     if let Some(host) = discover(data_dir, environment) {
         tracing::info!(
             entrypoint = %host.entrypoint().display(),
             "OMP native host runtime installed"
         );
     } else {
-        tracing::warn!(
-            installed = %data_dir.join(MANAGED).display(),
-            "OMP native host runtime is not installed; OMP will run the official binary and /vibe will be refused"
-        );
+        degraded(format_args!(
+            "{} did not verify after the installer run",
+            data_dir.join(MANAGED).display()
+        ));
     }
 }
 
 /// Run the installer once when a managed tree is missing and an installer is reachable.
 ///
 /// Any failure is a warning: the daemon keeps serving with the official OMP binary.
-fn install(data_dir: &Path, environment: &dyn Fn(&str) -> Option<std::ffi::OsString>) {
+fn install(
+    data_dir: &Path,
+    environment: &dyn Fn(&str) -> Option<std::ffi::OsString>,
+    budget: Budget,
+) {
     let managed = data_dir.join(MANAGED);
     if managed.exists() {
         // A manifest exists but did not verify; re-running the installer cannot decide which
         // tree wins, so the verified degradation is reported instead.
-        tracing::warn!(
-            manifest = %managed.display(),
-            "Installed OMP native host runtime failed verification; not reinstalling"
-        );
+        degraded_permanently(format_args!(
+            "the installed manifest {} failed verification",
+            managed.display()
+        ));
         return;
     }
     let Some(installer) = installer_path(environment) else {
+        tracing::debug!("No OMP native host installer is available beside this daemon");
         return;
     };
     let Some(node) = environment("AIT_SERVER_NODE_BIN").map(PathBuf::from) else {
-        tracing::warn!(
-            installer = %installer.display(),
-            "OMP native host installer needs Node.js; set AIT_SERVER_NODE_BIN to install it"
-        );
+        degraded(format_args!(
+            "{} needs Node.js; set AIT_SERVER_NODE_BIN to install it",
+            installer.display()
+        ));
         return;
     };
-    let mut child = match std::process::Command::new(node)
-        .arg(&installer)
+    run(&node, &installer, data_dir, budget);
+}
+
+/// Start the installer in its own process group and require a clean exit within `budget`.
+///
+/// The installer shells out to `npm ci`, which starts its own children, so the daemon owns a
+/// whole group instead of a single pid: a timeout then terminates npm too rather than orphaning
+/// it. Output goes to a temporary file because a piped stderr nobody drains can fill up and
+/// deadlock the installer long before the deadline.
+fn run(node: &Path, installer: &Path, data_dir: &Path, budget: Budget) {
+    let Ok(log) = tempfile::tempfile() else {
+        degraded("the installer log could not be created");
+        return;
+    };
+    let Ok(stderr) = log.try_clone() else {
+        degraded("the installer log could not be shared");
+        return;
+    };
+    let mut command = Command::new(node);
+    command
+        .arg(installer)
         .arg("--data-dir")
         .arg(data_dir)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::from(stderr));
+    #[cfg(unix)]
     {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    let mut child = match command.spawn() {
         Ok(child) => child,
         Err(error) => {
-            tracing::warn!(
-                %error,
-                "OMP native host installer could not run; OMP keeps using the official binary"
-            );
+            degraded(format_args!("the installer could not start: {error}"));
             return;
         }
     };
-    // An installer that waits on a network `npm ci` must not pin the caller forever.
-    let deadline = std::time::Instant::now() + INSTALL_TIMEOUT;
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) if status.success() => return,
-            Ok(Some(status)) => {
-                trace_installer_output(&mut child);
-                tracing::warn!(
-                    code = status.code(),
-                    "OMP native host installer failed; OMP keeps using the official binary"
-                );
-                return;
-            }
-            Ok(None) if std::time::Instant::now() < deadline => {
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            }
-            Ok(None) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                tracing::warn!(
-                    timeout_ms = INSTALL_TIMEOUT.as_millis(),
-                    "OMP native host installer timed out; OMP keeps using the official binary"
-                );
-                return;
-            }
-            Err(error) => {
-                let _ = child.kill();
-                tracing::warn!(
-                    %error,
-                    "OMP native host installer could not be observed; OMP keeps using the official binary"
-                );
-                return;
-            }
+    let outcome = wait_for(&mut child, Instant::now() + budget.timeout);
+    let output = installer_output(&log);
+    match outcome {
+        Ok(Completion::Exited(status)) if status.success() => {}
+        Ok(Completion::Exited(status)) => {
+            degraded(format_args!("the installer exited with {status}{output}"));
         }
+        Ok(Completion::TimedOut) => {
+            terminate(&mut child, budget.grace);
+            degraded(format_args!(
+                "the installer exceeded its {}s budget and its process group was terminated{output}",
+                budget.timeout.as_secs()
+            ));
+        }
+        Err(error) => {
+            terminate(&mut child, budget.grace);
+            degraded(format_args!(
+                "the installer could not be observed: {error}{output}"
+            ));
+        }
+    }
+}
+
+/// Wait for the installer until `deadline`, reaping it as soon as it exits.
+fn wait_for(child: &mut Child, deadline: Instant) -> std::io::Result<Completion> {
+    loop {
+        match child.try_wait()? {
+            Some(status) => return Ok(Completion::Exited(status)),
+            None if Instant::now() >= deadline => return Ok(Completion::TimedOut),
+            None => std::thread::sleep(POLL),
+        }
+    }
+}
+
+/// Wait at most `limit` for the direct child to exit.
+fn wait_within(child: &mut Child, limit: Duration) -> Option<ExitStatus> {
+    match wait_for(child, Instant::now() + limit) {
+        Ok(Completion::Exited(status)) => Some(status),
+        Ok(Completion::TimedOut) | Err(_) => None,
+    }
+}
+
+/// Stop the installer's whole process group and reap the direct child.
+///
+/// `SIGTERM` first so npm can clean up, then `SIGKILL` for a group that ignores it. Because the
+/// installer is a group leader, signaling the group also stops the processes it started; the
+/// direct child is always waited, so no zombie is left behind.
+fn terminate(child: &mut Child, grace: Duration) {
+    #[cfg(unix)]
+    let group = child.id();
+    #[cfg(unix)]
+    signal_group(group, rustix::process::Signal::TERM);
+    #[cfg(not(unix))]
+    let _ = child.kill();
+    if wait_within(child, grace).is_some() {
+        return;
+    }
+    #[cfg(unix)]
+    signal_group(group, rustix::process::Signal::KILL);
+    if wait_within(child, grace).is_none() {
+        // A leader that survived `SIGKILL` (uninterruptible sleep) still has to be reaped.
+        let _ = child.wait();
+    }
+}
+
+/// Deliver `signal` to process group `group`, ignoring a group that is already gone.
+#[cfg(unix)]
+fn signal_group(group: u32, signal: rustix::process::Signal) {
+    if let Ok(group) = i32::try_from(group)
+        && let Some(group) = rustix::process::Pid::from_raw(group)
+    {
+        let _ = rustix::process::kill_process_group(group, signal);
+    }
+}
+
+/// Last bytes of the installer log, formatted for a warning when the installer failed.
+fn installer_output(log: &std::fs::File) -> String {
+    let Ok(length) = log.metadata().map(|metadata| metadata.len()) else {
+        return String::new();
+    };
+    let limit = OUTPUT_TAIL as u64;
+    let start = length.saturating_sub(limit);
+    let mut reader = log;
+    let mut bytes = Vec::with_capacity(OUTPUT_TAIL);
+    if reader.seek(SeekFrom::Start(start)).is_err()
+        || reader.take(limit).read_to_end(&mut bytes).is_err()
+    {
+        return String::new();
+    }
+    let text = String::from_utf8_lossy(&bytes);
+    let text = text.trim();
+    if text.is_empty() {
+        String::new()
+    } else {
+        format!("; last installer output: {text}")
     }
 }
 

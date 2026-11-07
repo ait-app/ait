@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { mkdtemp, mkdir, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { bunPackage, parseInstallArgs, publishInstallation, validateLock } from "./install.mjs";
+import {
+  acquireLock,
+  bunPackage,
+  lockHolder,
+  parseInstallArgs,
+  publishInstallation,
+  reclaimLock,
+  validateLock,
+} from "./install.mjs";
 
 const pkg = JSON.parse(await readFile(new URL("./package.json", import.meta.url), "utf8"));
 const lock = JSON.parse(await readFile(new URL("./package-lock.json", import.meta.url), "utf8"));
@@ -124,4 +133,105 @@ test("the RPC patch refuses unverified SDK trees instead of skipping", async (t)
     JSON.stringify({ name: "@oh-my-pi/pi-coding-agent", version: "18.18.0" }),
   );
   await assert.rejects(patchOfficialRuntime(sdk), /Expected 18\.17\.0/);
+});
+
+/// Locks are the part that survives a killed installer, so they are exercised directly.
+test("a lock whose holder died is reclaimed instead of blocking every later install", async (t) => {
+  const root = await directory(t);
+  const lockPath = path.join(root, ".1.install-lock");
+  // A pid that has certainly exited: this test's process waited for it.
+  const dead = spawnSync(process.execPath, ["-e", "process.exit(0)"]);
+  await writeFile(
+    lockPath,
+    `${JSON.stringify({ pid: dead.pid, startedAt: Date.now(), boot: "0", command: "node" })}\n`,
+  );
+  assert.equal(await reclaimLock(lockPath), true);
+  await assert.rejects(readFile(lockPath), /ENOENT/);
+});
+
+test("a lock recorded with a recycled pid is not treated as alive", async (t) => {
+  const root = await directory(t);
+  const lockPath = path.join(root, ".1.install-lock");
+  // The pid is this live process, but the recorded start time belongs to another process.
+  const stat = await readFile(`/proc/${process.pid}/stat`, "utf8");
+  const close = stat.lastIndexOf(")");
+  const boot = stat.slice(close + 2).split(" ")[19];
+  await writeFile(
+    lockPath,
+    `${JSON.stringify({ pid: process.pid, startedAt: Date.now(), boot: `${boot}1`, command: "other" })}\n`,
+  );
+  assert.equal(await reclaimLock(lockPath), true);
+});
+
+test("a lock held by a live installer is never deleted", async (t) => {
+  const root = await directory(t);
+  const lockPath = path.join(root, ".1.install-lock");
+  const held = `${JSON.stringify(await lockHolder())}\n`;
+  await writeFile(lockPath, held);
+  assert.equal(await reclaimLock(lockPath), false);
+  assert.equal(await readFile(lockPath, "utf8"), held);
+});
+
+test("an aged lock is reclaimed even when its pid cannot be probed", async (t) => {
+  const root = await directory(t);
+  const lockPath = path.join(root, ".1.install-lock");
+  const staleAt = Date.now() - 60 * 60 * 1000;
+  await writeFile(
+    lockPath,
+    `${JSON.stringify({ pid: process.pid, startedAt: staleAt, boot: "", command: "" })}\n`,
+  );
+  assert.equal(await reclaimLock(lockPath), true);
+});
+
+test("an unreadable lock is only reclaimed once no install could still be running", async (t) => {
+  const root = await directory(t);
+  const lockPath = path.join(root, ".1.install-lock");
+  await writeFile(lockPath, "{");
+  assert.equal(await reclaimLock(lockPath), false);
+  const stale = new Date(Date.now() - 60 * 60 * 1000);
+  await utimes(lockPath, stale, stale);
+  assert.equal(await reclaimLock(lockPath), true);
+});
+
+test("a second installer waits for a live holder and then reuses the result", async (t) => {
+  const root = await directory(t);
+  const lockPath = path.join(root, ".1.install-lock");
+  const first = await acquireLock(lockPath);
+  assert.equal(await reclaimLock(lockPath), false, "an own lock is live");
+  let second = false;
+  const waiting = acquireLock(lockPath, 8000).then((guard) => {
+    second = true;
+    return guard;
+  });
+  // Still waiting while the first holder owns the lock.
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  assert.equal(second, false);
+  await first.handle.close();
+  await rm(lockPath, { force: true });
+  const guard = await waiting;
+  assert.equal(second, true);
+  await guard.handle.close();
+  await rm(lockPath, { force: true });
+});
+
+test("waiting for a live holder is bounded so one daemon cannot pin another", async (t) => {
+  const root = await directory(t);
+  const lockPath = path.join(root, ".1.install-lock");
+  const first = await acquireLock(lockPath);
+  await assert.rejects(acquireLock(lockPath, 100), /still holds/);
+  await first.handle.close();
+  await rm(lockPath, { force: true });
+});
+
+test("a release only removes the lock this run still owns", async (t) => {
+  const root = await directory(t);
+  const lockPath = path.join(root, ".1.install-lock");
+  const first = await acquireLock(lockPath);
+  // Another installer reclaimed and replaced the lock after the first run lost it.
+  await rm(lockPath, { force: true });
+  const replacement = `${JSON.stringify({ pid: 1, startedAt: Date.now(), boot: "", command: "" })}\n`;
+  await writeFile(lockPath, replacement);
+  await first.handle.close();
+  assert.notEqual(await readFile(lockPath, "utf8"), first.record);
+  assert.equal(await readFile(lockPath, "utf8"), replacement);
 });

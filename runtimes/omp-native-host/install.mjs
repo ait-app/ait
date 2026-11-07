@@ -5,6 +5,7 @@ import {
   access,
   chmod,
   copyFile,
+  link,
   lstat,
   mkdir,
   mkdtemp,
@@ -90,6 +91,190 @@ async function exists(file) {
     if (error.code === "ENOENT") return false;
     throw error;
   }
+}
+
+// A lock older than this was abandoned by a process that will never clean up: the longest
+// legitimate install is bounded by the daemon's own installer budget.
+const LOCK_HOLD_LIMIT_MS = 30 * 60 * 1000;
+// An unreadable lock is a truncated write or a file left by an older installer that never
+// recorded its holder. Both are only reclaimed after no real install could still be running.
+const LOCK_UNREADABLE_LIMIT_MS = 10 * 60 * 1000;
+// Poll interval while another installer holds the lock.
+const LOCK_POLL_MS = 500;
+
+/**
+ * Whether the process recorded in a lock file is still the one that wrote it.
+ *
+ * A pid alone is not enough: pids are recycled, so a stale lock would look alive whenever the
+ * number now belongs to something else. On Linux `/proc/<pid>` reports both the kernel start time
+ * and the command name, so both must still match the record. Elsewhere only a signal probe is
+ * available; the age limit covers the pid-reuse case there.
+ *
+ * @param {number} pid - Process id recorded in the lock.
+ * @param {string} boot - Kernel start time recorded for that pid (Linux only).
+ * @param {string} command - Command name recorded for that pid (Linux only).
+ * @returns {Promise<boolean>} `true` only when the recorded holder still runs.
+ */
+async function holderAlive(pid, boot, command) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  if (process.platform !== "linux") {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (error) {
+      // EPERM means the process exists but belongs to another user.
+      return error.code === "EPERM";
+    }
+  }
+  let stat;
+  try {
+    stat = await readFile(`/proc/${pid}/stat`, "utf8");
+  } catch {
+    return false;
+  }
+  // The command name is parenthesized and may itself contain spaces or parentheses.
+  const open = stat.indexOf("(");
+  const close = stat.lastIndexOf(")");
+  const fields = stat.slice(close + 2).split(" ");
+  // starttime is the 22nd field, and `fields[0]` is the 3rd.
+  const alive =
+    fields[19] === boot &&
+    stat.slice(open + 1, close) === command &&
+    // A zombie is dead for our purposes even though /proc still lists it.
+    fields[0] !== "Z" &&
+    fields[0] !== "X";
+  return alive;
+}
+
+/** Delete `lockPath` only if it still holds exactly `expected`. */
+async function removeUnchanged(lockPath, expected) {
+  try {
+    if ((await readFile(lockPath, "utf8")) !== expected) return;
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  await rm(lockPath, { force: true });
+}
+
+/**
+ * Remove a lock whose recorded holder is gone or whose timestamp is older than any real run.
+ *
+ * The removal re-checks the exact bytes first, so a lock another installer acquired in the
+ * meantime is never deleted.
+ *
+ * @param {string} lockPath - Lock file to inspect.
+ * @returns {Promise<boolean>} `true` when the lock is gone and may be recreated.
+ */
+export async function reclaimLock(lockPath) {
+  let content;
+  let age;
+  try {
+    content = await readFile(lockPath, "utf8");
+    age = Date.now() - (await stat(lockPath)).mtimeMs;
+  } catch (error) {
+    if (error.code === "ENOENT") return true;
+    throw error;
+  }
+  let record;
+  try {
+    record = JSON.parse(content);
+  } catch {
+    record = null;
+  }
+  if (record === null || typeof record !== "object") {
+    if (age < LOCK_UNREADABLE_LIMIT_MS) return false;
+  } else {
+    const startedAt = typeof record.startedAt === "number" ? record.startedAt : Number.NaN;
+    const aged = !Number.isFinite(startedAt) || Date.now() - startedAt > LOCK_HOLD_LIMIT_MS;
+    if (!aged && (await holderAlive(record.pid, record.boot, record.command))) return false;
+  }
+  await removeUnchanged(lockPath, content);
+  return true;
+}
+
+/**
+ * Take the installation lock, waiting for a live holder to finish.
+ *
+ * Concurrent daemons must not install into the same tree: the loser waits for the winner and
+ * then reuses its result instead of writing a second tree. A lock whose holder died, or one older
+ * than any real install, is reclaimed instead of blocking forever. Waiting is bounded well below
+ * the daemon's installer budget, so one daemon can never pin another past its own deadline; the
+ * daemon then reports the degradation and tries again on its next start.
+ *
+ * @param {string} lockPath - Lock file beside the destination.
+ * @param {number} [waitMs] - How long to wait for a live holder before failing.
+ * @returns {Promise<{handle: import("node:fs/promises").FileHandle, record: string}>} The
+ *   exclusive lock handle and the exact bytes it holds.
+ */
+export async function acquireLock(lockPath, waitMs = 60 * 1000) {
+  const record = `${JSON.stringify(await lockHolder())}\n`;
+  const candidate = `${lockPath}.${process.pid}.holder`;
+  await writeFile(candidate, record, { flag: "wx", mode: 0o600 });
+  const deadline = Date.now() + waitMs;
+  try {
+    for (;;) {
+      const handle = await publishLock(candidate, record, lockPath);
+      if (handle) return { handle, record };
+      if (await reclaimLock(lockPath)) continue;
+      if (Date.now() >= deadline) {
+        throw new Error(
+          `Another OMP native host install still holds ${lockPath}; this run leaves it alone`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_MS));
+    }
+  } finally {
+    await rm(candidate, { force: true });
+  }
+}
+
+/**
+ * Publish the holder record as the lock, or report that someone else owns it.
+ *
+ * A hard link is atomic and readers never observe a partly written holder. Filesystems without
+ * links fall back to an exclusive create: a reader may briefly see an empty lock, which it treats
+ * as a live install until the age limit rather than deleting.
+ *
+ * @param {string} candidate - File already holding `record`.
+ * @param {string} record - Exact lock contents.
+ * @param {string} lockPath - Lock to create.
+ * @returns {Promise<import("node:fs/promises").FileHandle|null>} Created lock handle, or `null`.
+ */
+async function publishLock(candidate, record, lockPath) {
+  try {
+    await link(candidate, lockPath);
+    return await open(lockPath, "r");
+  } catch (error) {
+    if (error.code === "EEXIST") return null;
+    if (!["EPERM", "ENOSYS", "EXDEV", "EMLINK", "ENOTSUP", "EOPNOTSUPP"].includes(error.code)) {
+      throw error;
+    }
+  }
+  try {
+    const handle = await open(lockPath, "wx", 0o600);
+    await handle.writeFile(record);
+    return handle;
+  } catch (error) {
+    if (error.code === "EEXIST") return null;
+    throw error;
+  }
+}
+
+/**
+ * Describe this process for the lock file so a later run can tell whether it is still alive.
+ *
+ * @returns {Promise<{pid: number, startedAt: number, boot: string, command: string}>} Holder id.
+ */
+export async function lockHolder() {
+  const holder = { pid: process.pid, startedAt: Date.now(), boot: "", command: "" };
+  if (process.platform === "linux") {
+    const stat = await readFile(`/proc/${process.pid}/stat`, "utf8").catch(() => "");
+    const close = stat.lastIndexOf(")");
+    holder.boot = stat.slice(close + 2).split(" ")[19] ?? "";
+    holder.command = stat.slice(stat.indexOf("(") + 1, close);
+  }
+  return holder;
 }
 
 // Only the final rename changes the active installation. Restore it if publication fails.
@@ -184,7 +369,7 @@ export async function installRuntime({
   const parent = path.dirname(destination);
   await mkdir(parent, { recursive: true });
   const lockPath = path.join(parent, `.${path.basename(destination)}.install-lock`);
-  const guard = await open(lockPath, "wx", 0o600);
+  const guard = await acquireLock(lockPath);
   let staging;
   try {
     const pkg = JSON.parse(await readFile(path.join(assets, "package.json"), "utf8"));
@@ -283,8 +468,9 @@ export async function installRuntime({
     return manifest;
   } finally {
     if (staging) await rm(staging, { recursive: true, force: true });
-    await guard.close();
-    await rm(lockPath);
+    await guard.handle.close();
+    // Only remove the lock this run still owns; a reclaimed lock may already belong elsewhere.
+    await removeUnchanged(lockPath, guard.record);
   }
 }
 

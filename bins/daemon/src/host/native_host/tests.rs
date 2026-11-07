@@ -55,3 +55,6 @@ fn an_invalid_installed_manifest_is_not_reinstalled_or_trusted() {
     );
     assert!(!managed.join("node_modules").exists());
 }
+
+#[cfg(unix)]
+mod supervised;
