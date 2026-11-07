@@ -89,9 +89,12 @@ export function ProviderPresetsSection({
       if (!client) return;
       // The list was read for `cwd`, so the write must use the same directory: a native store
       // would otherwise save into the daemon's own directory and miss project-scoped roles.
-      const result = await client.saveProviderPreset(provider, preset, cwd, {
-        ...(editing?.name ? { original: editing.name } : {}),
-      });
+      const result = await client.saveProviderPreset(
+        provider,
+        preset,
+        cwd,
+        editing?.name ? { original: editing.name } : {},
+      );
       if (result.error) throw new Error(result.error);
       await refreshAfterWrite();
     },

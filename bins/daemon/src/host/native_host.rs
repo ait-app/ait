@@ -13,6 +13,7 @@
 //! A missing runtime only degrades `/vibe` to an explicit refusal card; it never stops the
 //! daemon.
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use provider::native_host::discover;
@@ -26,10 +27,9 @@ const INSTALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120)
 
 /// Report the tail of a failed installer's stderr without unbounded reads.
 fn trace_installer_output(child: &mut std::process::Child) {
-    let Some(mut stderr) = child.stderr.take() else {
+    let Some(stderr) = child.stderr.take() else {
         return;
     };
-    use std::io::Read;
     let mut detail = Vec::new();
     if stderr
         .take(512)
