@@ -29,6 +29,18 @@ const patchedPackages = [
     patchPrefix: "@xterm+headless+",
     cwd: "apps/mobile",
   },
+  // Electron 45.2.3 rejects canvas fonts with leading whitespace. Keep xterm's
+  // non-italic glyphs at the requested font instead of the 10px canvas default.
+  // https://github.com/xtermjs/xterm.js/issues/6297
+  {
+    nodeModulesPath: "node_modules/@xterm/addon-webgl",
+    patchPrefix: "@xterm+addon-webgl+",
+  },
+  {
+    nodeModulesPath: "apps/mobile/node_modules/@xterm/addon-webgl",
+    patchPrefix: "@xterm+addon-webgl+",
+    cwd: "apps/mobile",
+  },
   {
     nodeModulesPath: "node_modules/react-native-enriched-markdown",
     patchPrefix: "react-native-enriched-markdown+",

@@ -53,7 +53,10 @@ export default defineConfig({
           include: ["src/**/*.browser.{test,spec}.{ts,tsx}"],
           browser: {
             enabled: true,
-            provider: playwright(),
+            provider: playwright({
+              // Exercise the real terminal renderer on headless machines without a GPU.
+              launchOptions: { args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] },
+            }),
             headless: true,
             connectTimeout: 180_000,
             instances: [{ browser: "chromium" }],
