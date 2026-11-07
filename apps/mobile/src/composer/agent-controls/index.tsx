@@ -1630,9 +1630,13 @@ function SheetFeatureItem({
   );
   const comboboxOptions = useMemo<ComboboxOption[]>(() => {
     if (feature.type === "select") {
+      // A provider attaches a reason to an option it cannot honour (for example an advisor the
+      // current main model cannot use). Keeping the description is the only way the user learns
+      // why a choice will not take effect.
       return feature.options.map((option) => ({
         id: option.id,
         label: option.label,
+        ...(option.description ? { description: option.description } : {}),
       }));
     }
     return [
@@ -1986,7 +1990,9 @@ export const AgentControls = memo(function AgentControls({
         toast.error(toErrorMessage(error));
       });
     },
-    [agentId, agentProvider, client, toast, updatePreferences],
+    // `features` resolves a preset option into a configuration; a stale closure would apply the
+    // previous catalog after a background refresh replaced it.
+    [agentId, agentProvider, client, features, toast, updatePreferences],
   );
 
   const commandCenterControls = useMemo<AgentControlCommandCenterSource>(

@@ -1939,6 +1939,8 @@ export const ProviderPresetsSaveRequestMessageSchema = z.object({
   provider: AgentProviderSchema,
   cwd: z.string().optional(),
   preset: ProviderPresetSchema,
+  /** Name of the record being edited, so renaming replaces it instead of adding another. */
+  original: z.string().min(1).max(256).optional(),
   requestId: z.string(),
 });
 

@@ -68,3 +68,40 @@ describe("OMP model presets", () => {
     expect(modelPresetConfiguration(features, "modelPreset", "__custom__")).toBeNull();
   });
 });
+
+describe("modelPresetConfiguration with a model-only preset", () => {
+  // A preset created from the settings editor may name only a model and an optional thinking
+  // level; the synthesized configuration then carries no feature map at all.
+  const modelOnly: AgentFeature = {
+    type: "select",
+    id: "modelPreset",
+    label: "Preset",
+    value: "__custom__",
+    options: [
+      { id: "__custom__", label: "Custom" },
+      {
+        id: "plain",
+        label: "Plain",
+        metadata: { configuration: { modelId: "claude-opus-5", thinkingOptionId: "high" } },
+      },
+    ],
+  };
+  const role: AgentFeature = {
+    type: "select",
+    id: "modelRole.advisor",
+    label: "Advisor",
+    value: "native",
+    options: [{ id: "native", label: "Use Claude setting" }],
+  };
+
+  it("applies instead of reporting the preset as unavailable", () => {
+    const applied = modelPresetConfiguration([modelOnly, role], "modelPreset", "plain");
+    expect(applied?.modelId).toBe("claude-opus-5");
+    expect(applied?.thinkingOptionId).toBe("high");
+  });
+
+  it("still blocks roles the preset does not name, so an old override cannot leak", () => {
+    const applied = modelPresetConfiguration([modelOnly, role], "modelPreset", "plain");
+    expect(applied?.featureValues).toEqual({ "modelRole.advisor": "unset" });
+  });
+});

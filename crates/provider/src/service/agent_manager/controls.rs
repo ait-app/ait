@@ -257,11 +257,20 @@ impl AgentManager {
                 }
             }
             "provider.presets.save.request" => {
-                crate::rpc::agent_execution::only(params, &["provider", "cwd", "preset"])?;
+                crate::rpc::agent_execution::only(
+                    params,
+                    &["provider", "cwd", "preset", "original"],
+                )?;
                 let preset: crate::ports::preset::Preset =
                     serde_json::from_value(params["preset"].clone())
                         .map_err(|_| ErrorCode::InvalidMessage)?;
-                match service.save(provider, &cwd, client, &preset).await {
+                // `original` names the record being edited, so a rename replaces it instead of
+                // creating a second preset (or overwriting an unrelated one).
+                let original = params["original"].as_str();
+                match service
+                    .save(provider, &cwd, client, &preset, original)
+                    .await
+                {
                     Ok(()) => Ok(json!({"provider":provider,"saved":preset.name,"error":null})),
                     Err(error) => {
                         Ok(json!({"provider":provider,"saved":null,"error":error.message()}))

@@ -24,9 +24,12 @@ export function modelPresetConfiguration(
     feature?.type === "select" ? feature.options.find((item) => item.id === value) : null;
   if (option?.metadata?.error) throw new Error(String(option.metadata.error));
   const parsed = AgentConfigApplySchema.safeParse(option?.metadata?.configuration);
-  if (!parsed.success || !parsed.data.featureValues || !parsed.data.modelId) {
+  if (!parsed.success || !parsed.data.modelId) {
     throw new Error(i18n.t("providerControl.presetUnavailable"));
   }
+  // A preset that only names a model carries no feature map; synthesizing an empty one keeps
+  // the role-defaulting rule below identical for native and Ait-backed presets.
+  parsed.data.featureValues ??= {};
   for (const field of features ?? []) {
     if (field.id.startsWith("modelRole.") && !(field.id in parsed.data.featureValues))
       parsed.data.featureValues[field.id] = "unset";

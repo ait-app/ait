@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/contexts/toast-context";
 import { useQueryClient } from "@tanstack/react-query";
-import { invalidateProviderPresets } from "@/data/provider-presets";
+import { invalidatePresetCaches } from "@/data/provider-presets";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { toErrorMessage } from "@/utils/error-messages";
 
@@ -69,16 +69,33 @@ export function ProviderPresetsSection({
 
   const canSave = descriptor?.canCreate === true || descriptor?.canEdit === true;
 
+  /**
+   * Drop dependent caches, then reread this list.
+   *
+   * A rejected invalidation must not hide the write that already succeeded, so the refresh runs
+   * either way.
+   */
+  const refreshAfterWrite = useCallback(async () => {
+    try {
+      await invalidatePresetCaches(queryClient, serverId, provider);
+    } catch (cause) {
+      console.warn("[presets] invalidate dependent caches failed", cause);
+    }
+    await load();
+  }, [load, provider, queryClient, serverId]);
+
   const handleSave = useCallback(
     async (preset: ProviderPreset) => {
       if (!client) return;
-      const result = await client.saveProviderPreset(provider, preset);
+      // The list was read for `cwd`, so the write must use the same directory: a native store
+      // would otherwise save into the daemon's own directory and miss project-scoped roles.
+      const result = await client.saveProviderPreset(provider, preset, cwd, {
+        ...(editing?.name ? { original: editing.name } : {}),
+      });
       if (result.error) throw new Error(result.error);
-      // Every composer reads the same cached store, so the new preset must appear there too.
-      invalidateProviderPresets(queryClient, serverId, provider);
-      await load();
+      await refreshAfterWrite();
     },
-    [client, load, provider, queryClient, serverId],
+    [client, cwd, editing?.name, refreshAfterWrite],
   );
 
   const handleDelete = useCallback(
@@ -86,20 +103,19 @@ export function ProviderPresetsSection({
       if (!client) return;
       setDeleting(name);
       try {
-        const result = await client.deleteProviderPreset(provider, name);
+        const result = await client.deleteProviderPreset(provider, name, cwd);
         if (result.error) {
           toast.error(result.error);
           return;
         }
-        invalidateProviderPresets(queryClient, serverId, provider);
-        await load();
+        await refreshAfterWrite();
       } catch (cause) {
         toast.error(toErrorMessage(cause));
       } finally {
         setDeleting((current) => (current === name ? null : current));
       }
     },
-    [client, load, provider, queryClient, serverId, toast],
+    [client, cwd, refreshAfterWrite, toast],
   );
 
   return (

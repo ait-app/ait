@@ -106,6 +106,7 @@ async fn a_managed_store_reaches_the_draft_feature_list() {
                     json!("claude-sonnet-5"),
                 )]),
             },
+            None,
         )
         .await
         .unwrap();
@@ -176,6 +177,7 @@ async fn a_native_store_keeps_its_own_presets_and_gains_no_ait_entries() {
                 thinking_option_id: None,
                 feature_values: BTreeMap::new(),
             },
+            None,
         )
         .await
         .unwrap();

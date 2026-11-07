@@ -18,15 +18,25 @@ export function providerPresetsQueryKey(
   return ["provider-presets", serverId ?? null, provider ?? null, cwd ?? null] as const;
 }
 
-/** Drop cached presets for one provider after the settings editor writes them. */
-export function invalidateProviderPresets(
+/**
+ * Drop every cache a preset write invalidates.
+ *
+ * The editor itself reads `provider-presets`, but the selectors that must show the new entry
+ * read the provider's feature projection: the draft form, the profile form and a live agent's
+ * role choices each own a separate query. Invalidating only the editor's own key would leave
+ * those pickers showing the old list, so all four are dropped together.
+ */
+export async function invalidatePresetCaches(
   queryClient: QueryClient,
   serverId: string,
   provider: string,
 ) {
-  void queryClient.invalidateQueries({
-    queryKey: ["provider-presets", serverId, provider],
-  });
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["provider-presets", serverId, provider] }),
+    queryClient.invalidateQueries({ queryKey: ["providerFeatures", serverId, provider] }),
+    queryClient.invalidateQueries({ queryKey: ["agentProfileFeatures", serverId] }),
+    queryClient.invalidateQueries({ queryKey: ["providerRoleChoices", serverId] }),
+  ]);
 }
 
 /**

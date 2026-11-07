@@ -87,7 +87,7 @@ vi.mock("@/components/adaptive-modal-sheet", () => ({
 }));
 
 vi.mock("@/data/provider-presets", () => ({
-  invalidateProviderPresets: vi.fn(),
+  invalidatePresetCaches: vi.fn(async () => undefined),
   providerPresetsQueryKey: () => ["provider-presets"],
   presetControlAvailable: (store: unknown) => store !== null && store !== undefined,
   useProviderPresets: () => null,
@@ -177,10 +177,13 @@ it("shows a create entry in the empty state and saves through the unified reques
   });
   fireEvent.click(screen.getByTestId("provider-preset-save"));
   await waitFor(() =>
-    expect(client.saveProviderPreset).toHaveBeenCalledWith("claude", {
-      name: "team",
-      model: "claude-opus-5",
-    }),
+    // A create carries no original name; the write also repeats the list's cwd.
+    expect(client.saveProviderPreset).toHaveBeenCalledWith(
+      "claude",
+      { name: "team", model: "claude-opus-5" },
+      undefined,
+      {},
+    ),
   );
 });
 
@@ -190,7 +193,9 @@ it("deletes through the same request and refreshes the list", async () => {
   renderSection(<ProviderPresetsSection provider="claude" serverId="host-a" />);
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
   fireEvent.click(screen.getByLabelText("settings.providers.presets.remove"));
-  await waitFor(() => expect(client.deleteProviderPreset).toHaveBeenCalledWith("claude", "team"));
+  await waitFor(() =>
+    expect(client.deleteProviderPreset).toHaveBeenCalledWith("claude", "team", undefined),
+  );
   await waitFor(() => expect(client.listProviderPresets.mock.calls.length).toBeGreaterThan(1));
 });
 

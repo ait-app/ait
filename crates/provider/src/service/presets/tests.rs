@@ -34,16 +34,16 @@ async fn ait_backend_creates_lists_replaces_and_deletes_across_restarts() {
         PresetBackend::Ait
     );
     service
-        .save("claude", cwd, None, &preset("team", "opus"))
+        .save("claude", cwd, None, &preset("team", "opus"), None)
         .await
         .unwrap();
     service
-        .save("claude", cwd, None, &preset("fast", "sonnet"))
+        .save("claude", cwd, None, &preset("fast", "sonnet"), None)
         .await
         .unwrap();
     // Same name replaces instead of appending.
     service
-        .save("claude", cwd, None, &preset("team", "claude-opus-5"))
+        .save("claude", cwd, None, &preset("team", "claude-opus-5"), None)
         .await
         .unwrap();
     let listed = service.list("claude", cwd, None).await.unwrap();
@@ -67,7 +67,7 @@ async fn an_invalid_preset_is_rejected_before_storage() {
     let cwd = root.path().to_str().unwrap();
     let mut bad = preset("team", "opus");
     bad.feature_values.insert("1bad".to_owned(), json!(true));
-    assert!(service.save("claude", cwd, None, &bad).await.is_err());
+    assert!(service.save("claude", cwd, None, &bad, None).await.is_err());
     assert!(
         store.get().unwrap()["providers"]["claude"].is_null(),
         "nothing was persisted"
@@ -81,7 +81,7 @@ async fn synthesis_prefers_a_native_feature_and_otherwise_uses_stored_presets() 
     let cwd = root.path().to_str().unwrap();
     let current = StoredAgentConfig::default();
     service
-        .save("claude", cwd, None, &preset("team", "claude-opus-5"))
+        .save("claude", cwd, None, &preset("team", "claude-opus-5"), None)
         .await
         .unwrap();
 
@@ -110,11 +110,11 @@ async fn a_native_store_never_receives_ait_entries_even_when_it_has_none() {
     let current = StoredAgentConfig::default();
     // Ait has presets for both providers; only the Ait-backed one may gain a select.
     service
-        .save("claude", cwd, None, &preset("team", "claude-opus-5"))
+        .save("claude", cwd, None, &preset("team", "claude-opus-5"), None)
         .await
         .unwrap();
     service
-        .save("omp", cwd, None, &preset("leaked", "futureppo/model"))
+        .save("omp", cwd, None, &preset("leaked", "futureppo/model"), None)
         .await
         .unwrap();
 
@@ -130,4 +130,88 @@ async fn a_native_store_never_receives_ait_entries_even_when_it_has_none() {
     service.apply("claude", false, &mut managed, &current);
     assert_eq!(managed.len(), 1);
     assert_eq!(managed[0]["id"], "modelPreset");
+}
+
+#[tokio::test]
+async fn renaming_replaces_the_named_record_and_refuses_an_occupied_name() {
+    let root = tempfile::tempdir().unwrap();
+    let (service, _store) = service(&root);
+    let cwd = root.path().to_str().unwrap();
+    for name in ["alpha", "beta"] {
+        service
+            .save("claude", cwd, None, &preset(name, "model/a"), None)
+            .await
+            .unwrap();
+    }
+
+    // Renaming alpha to gamma must move it, not create a third record.
+    service
+        .save(
+            "claude",
+            cwd,
+            None,
+            &preset("gamma", "model/b"),
+            Some("alpha"),
+        )
+        .await
+        .unwrap();
+    let listed = service.list("claude", cwd, None).await.unwrap();
+    let mut names: Vec<&str> = listed.iter().map(|preset| preset.name.as_str()).collect();
+    names.sort_unstable();
+    assert_eq!(names, ["beta", "gamma"]);
+    let renamed = listed.iter().find(|preset| preset.name == "gamma").unwrap();
+    assert_eq!(renamed.model, "model/b");
+
+    // Renaming beta onto gamma would destroy an existing preset, so it is refused.
+    assert!(
+        service
+            .save(
+                "claude",
+                cwd,
+                None,
+                &preset("gamma", "model/c"),
+                Some("beta")
+            )
+            .await
+            .is_err()
+    );
+    let listed = service.list("claude", cwd, None).await.unwrap();
+    assert_eq!(listed.len(), 2);
+    assert_eq!(
+        listed
+            .iter()
+            .find(|preset| preset.name == "gamma")
+            .unwrap()
+            .model,
+        "model/b",
+        "the refused rename left the target untouched"
+    );
+}
+
+#[tokio::test]
+async fn internal_patch_markers_never_reach_a_client_or_a_store() {
+    let root = tempfile::tempdir().unwrap();
+    let (service, _store) = service(&root);
+    let cwd = root.path().to_str().unwrap();
+    // A record echoed back from a native list carries its private overlay markers.
+    let mut echoed = preset("team", "model/a");
+    echoed
+        .feature_values
+        .insert("modelPreset".to_owned(), json!(null));
+    echoed
+        .feature_values
+        .insert("modelPresetThinking".to_owned(), json!("auto"));
+    echoed
+        .feature_values
+        .insert("modelRole.advisor".to_owned(), json!("model/b"));
+
+    service
+        .save("claude", cwd, None, &echoed, None)
+        .await
+        .expect("an internal marker must not make an otherwise valid preset unsavable");
+    let stored = service.list("claude", cwd, None).await.unwrap();
+    let values = &stored[0].feature_values;
+    assert!(!values.contains_key("modelPreset"));
+    assert!(!values.contains_key("modelPresetThinking"));
+    assert_eq!(values.get("modelRole.advisor"), Some(&json!("model/b")));
 }

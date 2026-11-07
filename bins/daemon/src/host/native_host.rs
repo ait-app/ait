@@ -21,6 +21,27 @@ use provider::native_host::discover;
 const MANAGED: &str = "providers/omp-native-host/1/manifest.json";
 /// Installer entry point relative to the repository root in a development checkout.
 const SOURCE_INSTALLER: &str = "runtimes/omp-native-host/install.mjs";
+/// Upper bound on one installer run, so a stalled download cannot hold the caller.
+const INSTALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// Report the tail of a failed installer's stderr without unbounded reads.
+fn trace_installer_output(child: &mut std::process::Child) {
+    let Some(mut stderr) = child.stderr.take() else {
+        return;
+    };
+    use std::io::Read;
+    let mut detail = Vec::new();
+    if stderr
+        .take(512)
+        .read_to_end(&mut detail)
+        .is_ok_and(|_| !detail.is_empty())
+    {
+        tracing::warn!(
+            detail = %String::from_utf8_lossy(&detail),
+            "OMP native host installer output"
+        );
+    }
+}
 
 /// Resolve the runtime for `data_dir`, installing the managed copy when it is absent.
 ///
@@ -78,25 +99,58 @@ fn install(data_dir: &Path, environment: &dyn Fn(&str) -> Option<std::ffi::OsStr
         );
         return;
     };
-    let result = std::process::Command::new(node)
+    let mut child = match std::process::Command::new(node)
         .arg(&installer)
         .arg("--data-dir")
         .arg(data_dir)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
-        .output();
-    match result {
-        Ok(output) if output.status.success() => {}
-        Ok(output) => tracing::warn!(
-            code = output.status.code(),
-            detail = %String::from_utf8_lossy(&output.stderr).chars().take(512).collect::<String>(),
-            "OMP native host installer failed; OMP keeps using the official binary"
-        ),
-        Err(error) => tracing::warn!(
-            %error,
-            "OMP native host installer could not run; OMP keeps using the official binary"
-        ),
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(error) => {
+            tracing::warn!(
+                %error,
+                "OMP native host installer could not run; OMP keeps using the official binary"
+            );
+            return;
+        }
+    };
+    // An installer that waits on a network `npm ci` must not pin the caller forever.
+    let deadline = std::time::Instant::now() + INSTALL_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) if status.success() => return,
+            Ok(Some(status)) => {
+                trace_installer_output(&mut child);
+                tracing::warn!(
+                    code = status.code(),
+                    "OMP native host installer failed; OMP keeps using the official binary"
+                );
+                return;
+            }
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                tracing::warn!(
+                    timeout_ms = INSTALL_TIMEOUT.as_millis(),
+                    "OMP native host installer timed out; OMP keeps using the official binary"
+                );
+                return;
+            }
+            Err(error) => {
+                let _ = child.kill();
+                tracing::warn!(
+                    %error,
+                    "OMP native host installer could not be observed; OMP keeps using the official binary"
+                );
+                return;
+            }
+        }
     }
 }
 

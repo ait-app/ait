@@ -45,13 +45,16 @@ pub(crate) struct PresetDescriptor {
 
 impl PresetDescriptor {
     /// Every operation supported by one fully manageable store.
+    ///
+    /// rename stays closed until the client sends the record's original name; without it a
+    /// rename is indistinguishable from "create another preset".
     pub(crate) fn managed(backend: PresetBackend) -> Self {
         Self {
             backend,
             can_create: true,
             can_edit: true,
             can_delete: true,
-            can_rename: true,
+            can_rename: false,
             reason: None,
         }
     }
@@ -88,6 +91,31 @@ impl PresetError {
             Self::Rejected(reason) | Self::Unavailable(reason) => reason,
         }
     }
+}
+
+/// Feature keys that describe a provider's own preset patch, never a user-editable selection.
+///
+/// OMP writes these into its private overlay (`modelPreset` is a null marker, the thinking and
+/// roles keys mirror the native preset entry). They must not travel back to the editor as
+/// editable feature values, and a preset built from them must not be validated against the
+/// user-facing rule that forbids nulls.
+const INTERNAL_FEATURE_KEYS: &[&str] = &["modelPreset", "modelPresetThinking", "modelPresetRoles"];
+
+/// Whether `key` is provider bookkeeping rather than an editable feature value.
+pub(crate) fn is_internal_feature(key: &str) -> bool {
+    INTERNAL_FEATURE_KEYS.contains(&key)
+}
+
+/// Strip internal patch markers and null placeholders from a preset before it is stored.
+///
+/// A native store returns its private overlay as feature values; a client editing that record
+/// echoes it back. Only the user-editable remainder is meaningful, so the conversion happens
+/// once here instead of in every backend.
+pub(crate) fn editable(mut preset: Preset) -> Preset {
+    preset
+        .feature_values
+        .retain(|key, value| !is_internal_feature(key) && !value.is_null());
+    preset
 }
 
 /// Render stored presets into the `modelPreset` select every client already understands.

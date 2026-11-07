@@ -5440,7 +5440,7 @@ export class DaemonClient {
     provider: AgentProvider,
     preset: ProviderPresetInput,
     cwd?: string,
-    options?: { requestId?: string },
+    options?: { requestId?: string; original?: string },
   ): Promise<ProviderPresetMutationPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId: options?.requestId,
@@ -5449,6 +5449,7 @@ export class DaemonClient {
         provider,
         preset,
         ...(cwd ? { cwd } : {}),
+        ...(options?.original ? { original: options.original } : {}),
       },
       responseType: "provider.presets.save.response",
       timeout: 660000,

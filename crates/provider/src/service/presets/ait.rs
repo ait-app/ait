@@ -68,18 +68,42 @@ impl AitPresets {
 
     /// Create or replace one preset, leaving other providers untouched.
     ///
+    /// `original` names the preset being edited. When it differs from `preset.name` this is a
+    /// rename: the old entry is replaced in the same write, and a different preset already
+    /// using the new name rejects instead of being silently overwritten.
+    ///
     /// # Errors
     /// Returns a client-readable rejection before writing anything.
-    pub(crate) fn save(&self, provider: &str, preset: &Preset) -> Result<(), String> {
+    pub(crate) fn save(
+        &self,
+        provider: &str,
+        preset: &Preset,
+        original: Option<&str>,
+    ) -> Result<(), String> {
         preset.validate()?;
         let mut presets = self.read(provider)?;
-        match presets
-            .iter_mut()
-            .find(|existing| existing.name == preset.name)
-        {
-            Some(existing) => *existing = preset.clone(),
-            None => presets.push(preset.clone()),
-        }
+        let existing = presets.iter().position(|stored| stored.name == preset.name);
+        let index = match original {
+            Some(original) if original != preset.name => {
+                // The record being edited must exist; the new name must not belong to another.
+                let source = presets
+                    .iter()
+                    .position(|stored| stored.name == original)
+                    .ok_or_else(|| format!("Preset {original:?} is not defined"))?;
+                if existing.is_some_and(|index| index != source) {
+                    return Err(format!("Preset {:?} already exists", preset.name));
+                }
+                source
+            }
+            _ => {
+                let Some(index) = existing else {
+                    presets.push(preset.clone());
+                    return self.write(provider, &presets);
+                };
+                index
+            }
+        };
+        presets[index] = preset.clone();
         self.write(provider, &presets)
     }
 

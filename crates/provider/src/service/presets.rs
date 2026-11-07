@@ -8,7 +8,9 @@ use model::storage::daemon_config::DaemonConfigStore;
 use serde_json::Value;
 
 use crate::ports::agent_session::AgentClient;
-use crate::ports::preset::{Preset, PresetBackend, PresetDescriptor, PresetError, synthesize};
+use crate::ports::preset::{
+    Preset, PresetBackend, PresetDescriptor, PresetError, editable, synthesize,
+};
 
 /// Largest accepted provider identifier on a preset request.
 const MAX_PROVIDER: usize = 128;
@@ -62,7 +64,12 @@ impl PresetService {
             let client = client.ok_or_else(|| {
                 PresetError::Unavailable("This provider is not installed on the host".to_owned())
             })?;
-            return client.native_presets(cwd).await;
+            // A native store reports its private overlay; the editor may only see what a user
+            // can actually edit.
+            return client
+                .native_presets(cwd)
+                .await
+                .map(|presets| presets.into_iter().map(editable).collect());
         }
         self.ait().list(provider).map_err(PresetError::Unavailable)
     }
@@ -77,7 +84,9 @@ impl PresetService {
         cwd: &str,
         client: Option<&Arc<dyn AgentClient>>,
         preset: &Preset,
+        original: Option<&str>,
     ) -> Result<(), PresetError> {
+        let preset = &editable(preset.clone());
         preset.validate().map_err(PresetError::Rejected)?;
         let descriptor = self.describe(cwd, client).await;
         if descriptor.backend == PresetBackend::Native {
@@ -90,7 +99,7 @@ impl PresetService {
             return client.save_native_preset(cwd, preset).await;
         }
         self.ait()
-            .save(provider, preset)
+            .save(provider, preset, original)
             .map_err(PresetError::Rejected)
     }
 

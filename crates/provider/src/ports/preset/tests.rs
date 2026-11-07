@@ -83,9 +83,12 @@ fn the_current_selection_selects_matching_preset_and_otherwise_custom() {
 }
 
 #[test]
-fn descriptors_report_a_native_store_as_unable_to_rename() {
+fn descriptors_keep_rename_closed_until_the_client_sends_the_original_name() {
     let managed = PresetDescriptor::managed(PresetBackend::Ait);
-    assert!(managed.can_create && managed.can_edit && managed.can_delete && managed.can_rename);
+    assert!(managed.can_create && managed.can_edit && managed.can_delete);
+    // rename needs the caller to name the record being edited; without it the request is
+    // indistinguishable from "create another preset".
+    assert!(!managed.can_rename);
     assert_eq!(managed.reason, None);
 
     let missing = PresetDescriptor::unavailable(PresetBackend::Native, "old OMP");
