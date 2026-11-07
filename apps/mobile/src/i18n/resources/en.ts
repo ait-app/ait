@@ -8,6 +8,8 @@ export const en = {
       followUp: "Follow up",
       newQuestion: "New question",
       cancel: "Cancel side question",
+      close: "Close side questions",
+      closeWhileRunning: "A side question is still running. Closing only hides this panel.",
       replyTo: "Follow-up: {{question}}",
       older: "{{count}} older topics remain in native history.",
       shortened: "This preview is shortened. OMP keeps the full history.",

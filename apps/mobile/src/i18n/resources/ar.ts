@@ -33,6 +33,8 @@ export const ar: TranslationResources = {
       followUp: "متابعة",
       newQuestion: "سؤال جديد",
       cancel: "إلغاء السؤال الجانبي",
+      close: "إغلاق الأسئلة الجانبية",
+      closeWhileRunning: "لا يزال سؤال جانبي قيد التنفيذ. الإغلاق يخفي هذه اللوحة فقط.",
       replyTo: "متابعة: {{question}}",
       older: "تبقى {{count}} مواضيع أقدم في السجل الأصلي.",
       shortened: "هذه معاينة مختصرة. يحتفظ OMP بالسجل الكامل.",

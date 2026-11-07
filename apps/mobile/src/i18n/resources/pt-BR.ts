@@ -24,6 +24,8 @@ export const ptBR: TranslationResources = {
       followUp: "Continuar",
       newQuestion: "Nova pergunta",
       cancel: "Cancelar pergunta",
+      close: "Fechar perguntas paralelas",
+      closeWhileRunning: "Uma pergunta ainda está em andamento. Fechar apenas oculta este painel.",
       replyTo: "Continuação: {{question}}",
       older: "{{count}} tópicos anteriores permanecem no histórico nativo.",
       shortened: "Prévia abreviada. OMP mantém o histórico completo.",

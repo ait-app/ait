@@ -1,5 +1,6 @@
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, Text, TextInput, View } from "react-native";
+import { X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import type { ProviderUiState } from "@ait/protocol/messages";
@@ -28,9 +29,23 @@ export function ProviderSideQuestions({
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+  const seenReveal = useRef(state.reveal);
+  const seenRunningId = useRef(state.runningId);
   useEffect(() => {
     if (state.reveal) setExpanded(true);
   }, [state.reveal]);
+  // Dismissing hides the panel locally only; native history stays untouched.
+  useEffect(() => {
+    if (seenReveal.current !== state.reveal) {
+      seenReveal.current = state.reveal;
+      if (state.reveal) setDismissed(false);
+    }
+    if (seenRunningId.current !== state.runningId) {
+      seenRunningId.current = state.runningId;
+      if (state.runningId) setDismissed(false);
+    }
+  }, [state.reveal, state.runningId]);
   const run = useCallback(
     async (action: string, arguments_: Record<string, string>) => {
       if (!client) throw new Error(t("providerControl.sideQuestions.disconnected"));
@@ -53,12 +68,32 @@ export function ProviderSideQuestions({
     }
   };
   const followUp = useCallback((id: string) => setReplyTo(id), []);
+  if (dismissed) return null;
   if (!state.records.length && !state.error && !state.reveal) return null;
   return (
     <View style={styles.panel} testID="provider-side-questions">
-      <Button variant="ghost" size="sm" onPress={() => setExpanded(!expanded)}>
-        <Text style={styles.title}>{t("providerControl.sideQuestions.title")}</Text>
-      </Button>
+      <View style={styles.header}>
+        <Button
+          variant="ghost"
+          size="sm"
+          style={styles.headerToggle}
+          onPress={() => setExpanded(!expanded)}
+          testID="side-question-toggle"
+        >
+          <Text style={styles.title}>{t("providerControl.sideQuestions.title")}</Text>
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          leftIcon={X}
+          accessibilityLabel={t("providerControl.sideQuestions.close")}
+          onPress={() => setDismissed(true)}
+          testID="side-question-close"
+        />
+      </View>
+      {state.runningId ? (
+        <Text style={styles.caption}>{t("providerControl.sideQuestions.closeWhileRunning")}</Text>
+      ) : null}
       {expanded ? (
         <>
           <ScrollView style={styles.history} contentContainerStyle={styles.list}>
@@ -240,6 +275,8 @@ const SideTopic = memo(
 
 const styles = StyleSheet.create((theme) => ({
   panel: { gap: 8 },
+  header: { flexDirection: "row", alignItems: "center", gap: 8 },
+  headerToggle: { flexShrink: 1 },
   history: { maxHeight: 260 },
   list: { gap: 12 },
   row: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },

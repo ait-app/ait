@@ -24,6 +24,8 @@ export const es: TranslationResources = {
       followUp: "Repreguntar",
       newQuestion: "Nueva pregunta",
       cancel: "Cancelar pregunta",
+      close: "Cerrar preguntas paralelas",
+      closeWhileRunning: "Una pregunta sigue en curso. Cerrar solo oculta este panel.",
       replyTo: "Continuación: {{question}}",
       older: "Hay {{count}} temas anteriores en el historial nativo.",
       shortened: "Vista abreviada. OMP conserva el historial completo.",

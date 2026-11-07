@@ -31,6 +31,8 @@ export const ru: TranslationResources = {
       followUp: "Уточнить",
       newQuestion: "Новый вопрос",
       cancel: "Отменить вопрос",
+      close: "Закрыть параллельные вопросы",
+      closeWhileRunning: "Параллельный вопрос ещё выполняется. Закрытие только скрывает панель.",
       replyTo: "Уточнение: {{question}}",
       older: "В исходной истории осталось более ранних тем: {{count}}.",
       shortened: "Предпросмотр сокращён. OMP хранит полную историю.",

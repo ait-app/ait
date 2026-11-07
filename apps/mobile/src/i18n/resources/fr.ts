@@ -24,6 +24,8 @@ export const fr: TranslationResources = {
       followUp: "Poursuivre",
       newQuestion: "Nouvelle question",
       cancel: "Annuler la question",
+      close: "Fermer les questions parallèles",
+      closeWhileRunning: "Une question est encore en cours. Fermer masque seulement ce panneau.",
       replyTo: "Suite : {{question}}",
       older: "{{count}} sujets plus anciens restent dans l’historique natif.",
       shortened: "Aperçu abrégé. OMP conserve l’historique complet.",

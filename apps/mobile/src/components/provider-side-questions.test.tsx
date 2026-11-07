@@ -152,3 +152,52 @@ it("failed side admission preserves its draft and a streamed final answer update
   );
   expect(screen.getByText("Updated native answer")).toBeTruthy();
 });
+
+it("closing hides the panel locally without touching native history", () => {
+  render(view(state()));
+  expect(screen.getByTestId("provider-side-questions")).toBeTruthy();
+  fireEvent.click(screen.getByTestId("side-question-close"));
+  expect(screen.queryByTestId("provider-side-questions")).toBeNull();
+  expect(runNativeAction).not.toHaveBeenCalled();
+});
+
+it("a fresh reveal reopens a closed panel", () => {
+  const value = state();
+  const mounted = render(view(value));
+  fireEvent.click(screen.getByTestId("side-question-close"));
+  expect(screen.queryByTestId("provider-side-questions")).toBeNull();
+  mounted.rerender(view({ ...value, reveal: "topic:2" }));
+  expect(screen.getByTestId("provider-side-questions")).toBeTruthy();
+  expect(runNativeAction).not.toHaveBeenCalled();
+});
+
+it("a new running side question reopens a closed panel without cancelling it", () => {
+  const value = state();
+  const mounted = render(view(value));
+  fireEvent.click(screen.getByTestId("side-question-close"));
+  expect(screen.queryByTestId("provider-side-questions")).toBeNull();
+  mounted.rerender(
+    view({
+      ...value,
+      runningId: "topic",
+      records: [{ ...topic, turns: [{ ...topic.turns[0]!, status: "running" }] }],
+    }),
+  );
+  expect(screen.getByTestId("provider-side-questions")).toBeTruthy();
+  expect(screen.getByText("providerControl.sideQuestions.closeWhileRunning")).toBeTruthy();
+  fireEvent.click(screen.getByTestId("side-question-close"));
+  expect(screen.queryByTestId("provider-side-questions")).toBeNull();
+  expect(runNativeAction).not.toHaveBeenCalled();
+});
+
+it("the dismiss control leaves collapse and expansion untouched", () => {
+  render(view(state()));
+  expect(screen.getByLabelText("providerControl.sideQuestions.question")).toBeTruthy();
+  fireEvent.click(screen.getByTestId("side-question-toggle"));
+  expect(screen.queryByLabelText("providerControl.sideQuestions.question")).toBeNull();
+  expect(screen.getByTestId("side-question-close")).toBeTruthy();
+  fireEvent.click(screen.getByTestId("side-question-toggle"));
+  expect(screen.getByLabelText("providerControl.sideQuestions.question")).toBeTruthy();
+  fireEvent.click(screen.getByTestId("side-question-close"));
+  expect(screen.queryByTestId("provider-side-questions")).toBeNull();
+});

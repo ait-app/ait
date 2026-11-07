@@ -24,6 +24,8 @@ export const ko: TranslationResources = {
       followUp: "추가 질문",
       newQuestion: "새 질문",
       cancel: "별도 질문 취소",
+      close: "별도 질문 닫기",
+      closeWhileRunning: "별도 질문이 아직 진행 중입니다. 닫아도 이 패널만 숨겨집니다.",
       replyTo: "추가 질문: {{question}}",
       older: "이전 주제 {{count}}개는 기본 기록에 남아 있습니다.",
       shortened: "축약된 미리 보기입니다. OMP에 전체 기록이 보관됩니다.",

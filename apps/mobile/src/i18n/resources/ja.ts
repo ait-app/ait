@@ -24,6 +24,8 @@ export const ja: TranslationResources = {
       followUp: "追加で質問",
       newQuestion: "新しい質問",
       cancel: "サイド質問を中止",
+      close: "サイド質問を閉じる",
+      closeWhileRunning: "サイド質問は実行中です。閉じてもパネルが隠れるだけです。",
       replyTo: "追加質問：{{question}}",
       older: "以前の {{count}} 件の話題はネイティブ履歴に保存されています。",
       shortened: "短縮したプレビューです。完全な履歴は OMP に保存されています。",

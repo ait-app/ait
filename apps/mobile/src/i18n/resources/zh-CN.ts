@@ -11,6 +11,8 @@ export const zhCN: TranslationResources = {
       followUp: "追问",
       newQuestion: "新问题",
       cancel: "取消侧问答",
+      close: "关闭侧问答",
+      closeWhileRunning: "侧问答仍在运行，关闭仅隐藏面板。",
       replyTo: "追问：{{question}}",
       older: "另有 {{count}} 个较早话题保留在原生历史中。",
       shortened: "此处为缩略预览，OMP 保留完整历史。",
