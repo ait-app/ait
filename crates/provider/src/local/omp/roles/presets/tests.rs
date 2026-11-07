@@ -173,3 +173,35 @@ fn a_settings_probe_falls_back_to_a_directory_omp_accepts() {
     // start; it must not be used as the probe directory.
     assert_ne!(probe_cwd("/"), "/");
 }
+
+#[test]
+fn a_relative_settings_directory_becomes_the_absolute_probe_directory() {
+    use super::editor::probe_cwd;
+    use std::path::Path;
+
+    // A settings request without `cwd` reaches the daemon as the relative `.`, which OMP's own
+    // spec validation rejects; the probe must resolve it instead of reporting the store missing.
+    for relative in [".", ".."] {
+        let resolved = probe_cwd(relative);
+        assert!(
+            Path::new(&resolved).is_absolute(),
+            "{relative} -> {resolved}"
+        );
+        assert_eq!(
+            Path::new(&resolved).canonicalize().ok().as_deref(),
+            Some(Path::new(&resolved)),
+            "{resolved} is not the canonical form"
+        );
+    }
+    // An absolute directory keeps its own scope but is reported in canonical form.
+    let absolute = std::env::temp_dir();
+    let canonical = absolute.canonicalize().unwrap();
+    assert_eq!(
+        probe_cwd(&absolute.to_string_lossy()),
+        canonical.to_string_lossy()
+    );
+    // Every directory the probe returns must exist, because OMP starts in it.
+    for requested in ["", "/", "/definitely/not/a/directory", ".", ".."] {
+        assert!(Path::new(&probe_cwd(requested)).is_dir(), "{requested}");
+    }
+}

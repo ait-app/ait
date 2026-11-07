@@ -142,14 +142,17 @@ async fn write(
 /// back to the home directory, which is the harness's own state root and always supports a
 /// read-only command probe. A real project directory is preserved so project-scoped presets keep
 /// their own scope.
+///
+/// The resolved directory is always absolute: a request without `cwd` reaches the daemon as the
+/// relative `.`, which OMP's own spec validation rejects before the native process starts, so a
+/// relative path that exists would otherwise report the store as unavailable.
 pub(super) fn probe_cwd(cwd: &str) -> String {
-    let usable = !cwd.is_empty()
-        && std::path::Path::new(cwd).is_dir()
-        && std::path::Path::new(cwd)
-            .canonicalize()
-            .is_ok_and(|path| path != std::path::Path::new("/"));
-    if usable {
-        return cwd.to_owned();
+    let canonical = std::path::Path::new(cwd)
+        .canonicalize()
+        .ok()
+        .filter(|path| path != std::path::Path::new("/"));
+    if let Some(canonical) = canonical {
+        return canonical.to_string_lossy().into_owned();
     }
     std::env::var_os("HOME")
         .map(std::path::PathBuf::from)
