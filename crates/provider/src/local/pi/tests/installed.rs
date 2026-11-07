@@ -6,6 +6,7 @@ use axum::{Json, Router, routing::post};
 use std::sync::{Arc, Mutex};
 use tokio_util::task::AbortOnDropHandle;
 
+mod commands;
 mod thinking_clamping;
 mod thinking_delivery;
 

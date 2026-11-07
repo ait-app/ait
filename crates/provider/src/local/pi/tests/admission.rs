@@ -25,9 +25,9 @@ fn resumed_settlement_discards_prior_failure_and_text() {
             assert!(!stream.settled);
             assert!(stream.failure.is_none());
             assert_eq!(stream.last_text, "");
-            assert_eq!(stream.events.len(), 1);
+            assert_eq!(stream.events().len(), 1);
             assert!(
-                matches!(stream.events.front(), Some(AgentTurnEvent::Timeline(entry))
+                matches!(stream.events().front(), Some(AgentTurnEvent::Timeline(entry))
                 if entry.item["text"] == "previous run")
             );
 
@@ -35,7 +35,7 @@ fn resumed_settlement_discards_prior_failure_and_text() {
                 .consume(&json!({"type":"agent_settled","aborted":false}))
                 .unwrap();
             assert!(
-                matches!(stream.events.back(), Some(AgentTurnEvent::Completed(Some(text)))
+                matches!(stream.events().back(), Some(AgentTurnEvent::Completed(Some(text)))
                 if text.is_empty())
             );
         }
@@ -61,7 +61,10 @@ fn resuming_running_work_preserves_current_failure_and_text() {
     stream
         .consume(&json!({"type":"agent_settled","aborted":false}))
         .unwrap();
-    assert!(matches!(stream.events.back(), Some(AgentTurnEvent::Failed)));
+    assert!(matches!(
+        stream.events().back(),
+        Some(AgentTurnEvent::Failed)
+    ));
 }
 
 #[test]
@@ -73,14 +76,14 @@ fn admission_coalesces_deltas_and_final_items_without_losing_text() {
     for _ in 0..5000 {
         stream.consume(&delta).unwrap();
     }
-    assert_eq!(stream.events.len(), 1);
+    assert_eq!(stream.events().len(), 1);
     assert!(
-        matches!(stream.events.front(), Some(AgentTurnEvent::Progress { entry, .. }) if entry.item["text"] == "é".repeat(5000))
+        matches!(stream.events().front(), Some(AgentTurnEvent::Progress { entry, .. }) if entry.item["text"] == "é".repeat(5000))
     );
     stream.consume(&json!({"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"authoritative"}]}})).unwrap();
-    assert_eq!(stream.events.len(), 1);
+    assert_eq!(stream.events().len(), 1);
     assert!(
-        matches!(stream.events.front(), Some(AgentTurnEvent::Timeline(entry)) if entry.item["text"] == "authoritative")
+        matches!(stream.events().front(), Some(AgentTurnEvent::Timeline(entry)) if entry.item["text"] == "authoritative")
     );
 }
 
@@ -96,16 +99,16 @@ fn admission_tool_snapshots_coalesce_to_distinct_completed_items() {
         event["partialResult"] = json!("latest output");
         stream.consume(&event).unwrap();
         assert!(
-            matches!(stream.events.back(), Some(AgentTurnEvent::Progress { entry, .. }) if entry.item["detail"]["output"] == "latest output")
+            matches!(stream.events().back(), Some(AgentTurnEvent::Progress { entry, .. }) if entry.item["detail"]["output"] == "latest output")
         );
         event["type"] = json!("tool_execution_end");
         event["result"] = json!("final output");
         stream.consume(&event).unwrap();
     }
-    assert_eq!(stream.events.len(), 1400);
+    assert_eq!(stream.events().len(), 1400);
     assert!(
         stream
-            .events
+            .events()
             .iter()
             .all(|event| matches!(event, AgentTurnEvent::Timeline(_)))
     );
@@ -157,9 +160,9 @@ fn long_tools_replace_pending_previews_and_drained_calls_do_not_accumulate_bytes
         for _ in 0..3000 {
             stream.consume(&update).unwrap();
         }
-        assert_eq!(stream.events.len(), 1);
+        assert_eq!(stream.events().len(), 1);
         stream.consume(&json!({"type":"tool_execution_end","toolCallId":"streaming","toolName":"bash","result":"final"})).unwrap();
-        assert_eq!(stream.events.len(), 1);
+        assert_eq!(stream.events().len(), 1);
         while stream.pop().is_some() {}
         for id in 0..1000 {
             stream.consume(&json!({"type":"tool_execution_start","toolCallId":id.to_string(),"toolName":"bash","args":"x".repeat(32*1024)})).unwrap();
@@ -205,5 +208,5 @@ fn duplicate_queued_tool_identity_cannot_overwrite_byte_accounting() {
     stream.consume(&start).unwrap();
     stream.consume(&json!({"type":"tool_execution_end","toolCallId":"same","toolName":"bash","result":"done"})).unwrap();
     assert!(stream.consume(&start).is_err());
-    assert_eq!(stream.events.len(), 1);
+    assert_eq!(stream.events().len(), 1);
 }

@@ -34,7 +34,7 @@ fn tool_events_match_the_shared_client_schema_fixtures() {
             stream.fail();
         }
         let items: Vec<_> = stream
-            .events
+            .events()
             .iter()
             .filter_map(|event| match event {
                 AgentTurnEvent::Progress { entry, .. } | AgentTurnEvent::Timeline(entry) => {
@@ -64,7 +64,7 @@ fn shell_results_extract_text_before_bounding_the_preview() {
         ],"details":{"metadata":"hidden"}},"isError":false}))
         .unwrap();
     let detail = stream
-        .events
+        .events()
         .iter()
         .find_map(|event| match event {
             AgentTurnEvent::Timeline(entry) => Some(&entry.item["detail"]),
@@ -90,7 +90,7 @@ fn large_edit_keeps_structured_changes_with_bounded_unicode_previews() {
         .unwrap();
     stream.fail();
     let detail = stream
-        .events
+        .events()
         .iter()
         .find_map(|event| match event {
             AgentTurnEvent::Timeline(entry) => Some(&entry.item["detail"]),
@@ -123,7 +123,7 @@ fn malformed_tool_metadata_degrades_without_failing_the_turn() {
             .consume(&json!({"type":"agent_settled","aborted":false}))
             .unwrap()
     );
-    let Some(AgentTurnEvent::Timeline(entry)) = stream.events.front() else {
+    let Some(AgentTurnEvent::Timeline(entry)) = stream.events().front() else {
         panic!("expected completed fallback card");
     };
     assert_eq!(entry.item["name"], "unknown");
@@ -133,7 +133,7 @@ fn malformed_tool_metadata_degrades_without_failing_the_turn() {
         "input":["unexpected"],"output":{"unexpected":"retained"}})
     );
     assert!(matches!(
-        stream.events.back(),
+        stream.events().back(),
         Some(AgentTurnEvent::Completed(_))
     ));
 }

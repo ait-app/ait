@@ -30,6 +30,7 @@ mount restrictions. Cached failures retain the same guidance until the next prob
 ## Supported behavior
 
 - Model discovery without creating persistent sessions or submitting prompts.
+- Native slash-command discovery for extensions, prompt templates and skills.
 - Native session creation and resume with stable IDs.
 - Native session discovery, import, and explicit history refresh from Pi's JSONL storage.
 - Text and attachment input, inline images accepted by the native model, streaming text
@@ -42,8 +43,16 @@ mount restrictions. Cached failures retain the same guidance until the next prob
 
 Pi owns its credentials, session files, tools, extensions and settings. Ait does not expose a
 Pi mode or add a permission sandbox. Extension select, confirm, input and editor dialogs are
-explicitly cancelled. Notification-only extension UI records
-(`notify`, `setStatus`, `setWidget`, `setTitle`, `set_editor_text`) are ignored. Unknown
+explicitly cancelled. Extension `notify` records received during a turn appear as timeline
+notifications with their info, warning or error level. They do not become assistant replies
+or fail the turn. Notices received during control requests retain their order and are
+shown if the turn is still active when consumed; idle notices are discarded. Control
+requests retain at most 16 notices totaling 2 MiB, separately from required events.
+During turns, notices over
+96 KiB or beyond the 16 queued-notice allowance are dropped; queued notices yield display
+capacity to required turn output and do not consume its text budget. The native frame limit
+still applies before decoding. Other notification-only extension UI records
+(`setStatus`, `setWidget`, `setTitle`, `set_editor_text`) are ignored. Unknown
 UI methods fail immediately with a protocol diagnostic (`extension_method`). This can cause extensions requiring interaction to decline their operation.
 
 Rewind, live steering, host-provided MCP/tool policies,
@@ -51,6 +60,77 @@ custom system prompts, structured output and auxiliary summaries
 are not exposed by this adapter. Unsupported settings are rejected instead of ignored.
 Existing native history changed outside Ait is not automatically re-imported into the Ait
 display timeline; use explicit history refresh.
+
+## Slash commands
+
+The slash menu reads Pi's native `get_commands` catalog. Select `/name` for extensions and
+prompt templates, or `/skill:name` for skills; arguments are passed unchanged to Pi. Built-in
+TUI commands such as `/settings` and `/hotkeys` are excluded by Pi's native catalog and
+are not supported through RPC. Ait relies on that native exclusion; the opt-in installed-Pi
+contract test checks it. Shared CI uses fixtures and does not check upstream releases.
+Discovery validates the working directory independently of the agent's session settings.
+
+An advertised extension command can still require Pi's interactive terminal. For example,
+`pi-btw` rejects RPC mode; invoking `/btw` displays its "requires interactive TUI mode"
+notification. Listing a command does not guarantee that its custom terminal UI works in Ait.
+
+Command discovery uses the registered provider's daemon environment, not per-agent `env`
+overrides. For example, an agent created with `PI_CODING_AGENT_DIR=/tmp/pi-alt` loads its
+resources from that directory, but its slash menu still lists the daemon environment's
+commands. The menu can therefore omit commands the session supports and advertise commands
+it cannot run. Refreshing the menu does not resolve this environment mismatch. You can type
+a known session command directly, or configure the same Pi resource environment for the
+daemon and recreate the agent without a conflicting override. Session-scoped command
+discovery is not currently implemented.
+
+Pi loads project-local `.pi/prompts` and `.pi/skills` only when the project is trusted. In an
+undecided or untrusted project, the menu may show user-level commands while omitting files
+present in the project. Establish trust through Pi's interactive CLI in that directory. Ait
+does not grant trust or modify Pi's trust store. Discovery starts Pi in the project directory,
+so trusted project extensions also load and execute their JavaScript. Opening the slash menu
+can therefore execute extension code even though no prompt or model request is sent, on a
+frontend cache miss or refresh. Model discovery also starts Pi this way.
+
+Slash-menu command probes and model-discovery probes run without the Workspace write sandbox,
+including for sandboxed Workspaces. Opening the menu once on a frontend cache miss can therefore let
+loaded extensions write outside the worktree, subject to the daemon user's OS permissions.
+Pi project trust controls which project extensions load; it does not confine their writes.
+
+Each backend command request starts a fresh probe in the canonical working directory, as
+with the other providers. Catalogs and command failures are not cached by the backend;
+requests from multiple agents in the same directory each launch Pi.
+Each command probe has a two-second deadline (or the configured control deadline if shorter),
+covering RPC startup, the command response, and graceful shutdown. Version discovery runs
+first under its own five-second bound (or the configured control deadline if shorter),
+retaining its success cache and five-second failure cooldown. On timeout, owned process
+cleanup continues in the background. A catalog already received remains usable when cleanup
+fails or times out; cleanup failures are logged. Command and model discovery share this rule.
+The shared slash-menu query retains its three retries with one-, two-, and four-second waits.
+Environment-scoped clients have separate version caches.
+
+Invalid or unrepresentable command names are omitted without discarding valid entries. Invalid
+names and malformed catalog failures produce diagnostics without logging native payloads.
+
+Pi uses the same frontend query behavior as other providers. Draft menus remain fresh while
+cached; existing-agent menus become eligible for a refresh after one minute. After resource
+or trust changes, reload the app for a draft or reopen a stale existing-agent menu. The next
+backend request discovers the current resources. There is no background polling or
+window-focus override. Recreate an existing Pi session if it has not loaded the changed
+resources. Refreshing the model catalog does not invalidate the frontend command query.
+
+Descriptions and argument hints are capped at 1024 UTF-8 bytes and omitted together for
+catalogs larger than 768 KiB. Their control characters become spaces. Names containing whitespace, slashes or quotes
+are omitted because the composer cannot represent them; duplicate names keep their first
+native entry. Retained names are preserved. A catalog still larger than the budget without
+descriptions and argument hints is rejected.
+Pi's 2 MiB native frame limit also applies. See
+[ADR-219](../decisions/providers/adr-219-pi-slash-command-discovery.md).
+
+The installed-Pi command contract test uses temporary resources and a loopback model only:
+
+```sh
+cargo test -p provider local::pi::tests::installed::commands --lib -- --ignored
+```
 
 ## Reasoning controls
 
@@ -252,6 +332,10 @@ Focused deterministic tests:
 cargo test -p provider local::pi --lib
 cargo test -p provider composition::tests --lib
 ```
+
+Pi follows the same CI convention as other providers: fixture tests run in the shared Rust
+suite, while tests requiring an installed native CLI remain ignored and opt-in. CI does not
+install Pi or track its latest release.
 
 Optional installed-Pi tests (isolated temporary configuration and a loopback fake model;
 no real model service or user credentials):

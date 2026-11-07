@@ -76,6 +76,9 @@ Pi 模型与推理偏好沿用配置持久化及下一条 prompt 前应用的流
 准入拒绝或 busy 时也在关闭 writer 前保存已知运行事实，见
 [ADR-211](../decisions/providers/adr-211-pi-next-turn-reasoning-controls.md)。
 
+Pi 扩展 `notify` 由 provider 投影为持久化的会话通知；通知队列独立限额并让位于必要输出，
+见 [ADR-220](../decisions/providers/adr-220-pi-extension-notifications.md)。
+
 新定时任务保存固定 Workspace 身份，执行时校验归属，在该 Workspace 内选择或创建 Agent。
 新建 Agent 的收尾不归档 Workspace；旧未绑定任务保留兼容分支，见[任务手册](../operations/schedules.md)。
 Bot 持有独占 Channel 与隐藏 Provider session，普通 Agent API 不能接管；Workspace 归档使 Bot 退役（`retired`）并删除其记忆，见 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)。

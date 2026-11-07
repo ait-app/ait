@@ -2,11 +2,13 @@
 
 - Status: Accepted (implemented).
 - Date: 2026-10-17.
-- Updated: 2026-11-03 for next-prompt reasoning controls.
+- Updated: 2026-11-06 for slash-command discovery and extension notifications.
 - Scope: `crates/provider`, `packages/protocol`; follows [ADR-089](adr-089-provider-owned-composition.md).
 - Amended by: [ADR-189](adr-189-pi-without-host-mode.md) for host modes.
 - Amended by: [ADR-185](adr-185-native-provider-failure-details.md) for native failure details.
 - Amended by: [ADR-211](adr-211-pi-next-turn-reasoning-controls.md) for next-prompt reasoning controls.
+- Amended by: [ADR-220](adr-220-pi-extension-notifications.md) for persisted extension notifications.
+- Amended by: [ADR-219](adr-219-pi-slash-command-discovery.md) for per-request native command discovery.
 
 ## Context
 
@@ -77,15 +79,19 @@ run from automatic retries and compaction recovery.
   and probe diagnostics. Initial version probing has a 5-second budget; ordinary control
   operations retain their 10-second budget. Discovery still starts an
   ephemeral RPC process; session creation starts its own writer. Catalog discovery uses
-  the existing 30-second total catalog budget. There is no additional process pool.
+  the existing 30-second total model-catalog budget. Slash-command discovery has its own
+  two-second RPC lifecycle budget, and discovery cleanup cannot replace a received RPC
+  result, as specified by [ADR-219](adr-219-pi-slash-command-discovery.md).
+  There is no additional process pool.
 - Prompt admission has a separate 120-second response budget; events are consumed during
   admission. A timeout is uncertain, closes the process and never replays the prompt.
   Foreground inference after admission has no host timeout. Abort settlement is bounded
   to 10 seconds. Own readers and child process groups through shutdown and drop.
 - Outbound records are limited to 64 MiB and inbound records to 2 MiB including LF;
   oversize input is rejected and oversize native frames produce a `frame_limit` protocol
-  diagnostic. The transport retains at most 128 intervening records / 8 MiB, accounting
-  original wire sizes once. Display events are capped at 256 with reserved cleanup slots.
+  diagnostic. The transport retains at most 128 required intervening records / 8 MiB, accounting
+  original wire sizes once. Extension notices have a separate best-effort allowance of
+  16 records / 2 MiB under [ADR-220](adr-220-pi-extension-notifications.md). Display events are capped at 256 with reserved cleanup slots.
   Undrainable admission uses a separate 4096-event / 64 MiB display-payload budget;
   afterward the normal 8 MiB budget applies once the backlog fits. Payload accounting
   combines cumulative text with currently queued tool previews. Tool progress always
@@ -129,8 +135,9 @@ run from automatic retries and compaction recovery.
 
 Pi can be selected and used through the existing Agent workflow without adding a new service
 boundary. Unsupported host configuration and structured output are rejected before prompt
-submission. Richer extension dialogs and
-additional provider-specific slash-command controls need separate implementations.
+submission. Native extension, prompt-template and skill command discovery and invocation
+are supported through [ADR-219](adr-219-pi-slash-command-discovery.md). Richer extension
+dialogs and TUI-only slash-command controls remain unsupported.
 
 Operations and current limitations: [Pi](../../operations/pi.md).
 Validation results and scope: [Pi native RPC provider validation](../../reports/providers/pi.md).

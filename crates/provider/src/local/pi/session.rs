@@ -324,7 +324,6 @@ impl Session {
         self.transport.diagnostics.clear();
         self.stream.begin(turn.clone());
         self.stream.admission = true;
-        let input_position = self.stream.events.len();
         let result = self
             .transport
             .prompt(
@@ -371,9 +370,7 @@ impl Session {
                 return Err(AgentSessionError::Failed);
             }
         }
-        for (index, event) in submitted.into_iter().enumerate() {
-            self.stream.events.insert(input_position + index, event);
-        }
+        self.stream.insert_submitted(submitted)?;
         self.stream.end_admission();
         self.report_failure();
         Ok(turn)
