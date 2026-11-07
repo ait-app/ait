@@ -8,12 +8,11 @@ use std::sync::{Arc, Weak};
 
 use axum::extract::ws::{Message, Utf8Bytes};
 use futures_util::{SinkExt, StreamExt, stream};
-use model::share::Visitor;
-use relay::hub::bridge::{Connection, Frame, LocalApi, Refused};
+use relay::hub::bridge::{Admission, Connection, Frame, LocalApi, Refused};
 use tokio::sync::mpsc;
 use tokio_util::sync::PollSender;
 
-use super::serve_frames;
+use super::{Admitted, serve_frames};
 use crate::Shared;
 
 /// Messages buffered in each direction of one in-process connection.
@@ -36,15 +35,18 @@ impl InProcess {
 
 #[async_trait::async_trait]
 impl LocalApi for InProcess {
-    async fn connect(&self, guest: Option<&Visitor>) -> Result<Connection, Refused> {
+    async fn connect(&self, admission: Admission<'_>) -> Result<Connection, Refused> {
         let state = self.shared.upgrade().ok_or(Refused)?;
-        let guest = match guest {
-            Some(visitor) => Some(
+        let role = match admission {
+            Admission::Owner => Admitted::Owner,
+            Admission::Guest(visitor) => Admitted::Guest(Box::new(
                 crate::guest::admit_visitor(&state, visitor)
                     .await
                     .map_err(|_| Refused)?,
-            ),
-            None => None,
+            )),
+            Admission::Automation => {
+                Admitted::Automation(state.automation.admit().map_err(|_| Refused)?)
+            }
         };
         let admitted = state.admit_connection().map_err(|_| Refused)?;
         let (sender, inbound) = mpsc::channel(QUEUE);
@@ -59,7 +61,7 @@ impl LocalApi for InProcess {
             PollSender::new(outbound).with_flat_map(|message| stream::iter(frame(message).map(Ok)));
         tokio::spawn(async move {
             let _admitted = admitted;
-            Box::pin(serve_frames(sink, frames, state, guest, None)).await;
+            Box::pin(serve_frames(sink, frames, state, role, None)).await;
         });
         Ok(Connection { sender, receiver })
     }

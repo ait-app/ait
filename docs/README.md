@@ -39,6 +39,8 @@
 - [Workspace 运行时能耗](decisions/workspace/adr-217-event-driven-workspace-runtime.md)：macOS 文件事件驱动侧边栏 Git 刷新，checkout 事实只唤醒 Workspace 目录。
 - [daemon 启动与发布](decisions/daemon/adr-201-daemon-owned-publication.md)：实例锁覆盖本地令牌、诊断采集和运行时重启；
   [访客资源边界](decisions/daemon/adr-208-workspace-share-guests.md)说明撤销清理、配置保护及后台自动化的只读权限。
+- [Hub 自动化会话](decisions/daemon/adr-219-hub-automation-sessions.md)：本地开关、目录与 Provider 白名单，
+  中心发起的会话只能创建和驱动自己的 Agent，执行期间权限请求自动拒绝。
 - [默认数据目录](decisions/clients/adr-216-default-data-directory-ait.md)：依次使用已存在的 `~/.ait`、
   `~/.ait-server-desktop`、`~/.ait-server`，都不存在时创建 `~/.ait`，不移动旧目录。
 - [桌面进程交接](decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)：退出交接要求已收到就绪日志；

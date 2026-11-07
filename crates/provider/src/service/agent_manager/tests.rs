@@ -11,6 +11,7 @@ use super::*;
 use crate::ports::agent_session::AgentSessionSpec;
 
 mod auto_archive;
+mod automation_permissions;
 mod bot_permissions;
 mod environment;
 mod generated_titles;
