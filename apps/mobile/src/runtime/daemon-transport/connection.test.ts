@@ -80,11 +80,11 @@ describe.each([
     "ait+desktop://ssh?host=build-box",
     "ait+desktop://ssh/?host=build-box",
     "wss://example.test/v1/ws",
-  ])("preserves four-channel transport for %s", (url) => {
+  ])("uses a single connection for %s", (url) => {
     const connect = vi.fn(socket);
     const transport = createDaemonConnection(connect, { url });
     try {
-      expect(connect).toHaveBeenCalledTimes(4);
+      expect(connect).toHaveBeenCalledOnce();
       expect(connect).toHaveBeenCalledWith({ url, headers: undefined });
     } finally {
       transport.close();

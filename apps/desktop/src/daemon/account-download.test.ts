@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import { open, rename } from "node:fs/promises";
 import { dialog, type WebContents } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HubSessionClosedError } from "@ait/client/internal/hub";
 import { AccountDownloadManager } from "./account-download.js";
 import type { AccountSessionManager } from "./account-session.js";
 
@@ -13,6 +14,10 @@ vi.mock("node:fs/promises", () => ({
   open: vi.fn(async () => ({
     sync: vi.fn(async () => undefined),
     close: vi.fn(async () => undefined),
+    truncate: vi.fn(async () => undefined),
+    write: vi.fn(async (chunk: Buffer, offset: number, length: number) => ({
+      bytesWritten: Math.min(length, chunk.length - offset),
+    })),
   })),
   rename: vi.fn(async () => undefined),
   unlink: vi.fn(async () => undefined),
@@ -168,5 +173,103 @@ describe("account download preparations", () => {
     await expect(manager.prepare(owner, input)).rejects.toThrow("Too many concurrent downloads.");
     manager.cancel(owner, ids[0]!);
     await expect(manager.prepare(owner, input)).resolves.toEqual(expect.any(String));
+  });
+});
+
+describe("account Hub downloads", () => {
+  function hubSession() {
+    const handlers = {
+      message: (_data: unknown, _binary: boolean) => {},
+      error: (_error: unknown) => {},
+    };
+    return {
+      session: {
+        send: vi.fn(),
+        consumed: vi.fn(),
+        end: vi.fn(),
+        onMessage: vi.fn((handler: typeof handlers.message) => {
+          handlers.message = handler;
+          return () => {};
+        }),
+        onError: vi.fn((handler: typeof handlers.error) => {
+          handlers.error = handler;
+          return () => {};
+        }),
+      },
+      text: (value: object) => handlers.message(JSON.stringify(value), false),
+      binary: (value: Uint8Array) => handlers.message(value, true),
+      close: (code: string) => handlers.error(new HubSessionClosedError(code)),
+    };
+  }
+
+  function hubManager(openHubDownload: () => Promise<unknown>) {
+    return new AccountDownloadManager({
+      snapshot: () => ({ status: "online", center: input.center, selected: null }),
+      openDownload,
+      openHubDownload: vi.fn(openHubDownload),
+      closeVisit: vi.fn(async () => undefined),
+    } as unknown as AccountSessionManager);
+  }
+
+  it("streams over a Hub session, grants credit after writes and finishes on done", async () => {
+    const hub = hubSession();
+    const local = hubManager(async () => hub.session);
+    const preparationId = await local.prepare(owner, input);
+    const downloading = local.download(owner, { preparationId, token: "token" });
+    await vi.advanceTimersByTimeAsync(0);
+    hub.text({ type: "download.headers", status: 200, content_length: 3 });
+    hub.binary(new Uint8Array([1, 2, 3]));
+    hub.text({ type: "download.end", bytes: 3 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(hub.session.consumed).toHaveBeenCalledWith(3);
+    expect(hub.session.send).toHaveBeenCalledWith('{"type":"download.complete"}');
+    hub.close("done");
+    await downloading;
+    expect(openDownload).not.toHaveBeenCalled();
+    expect(rename).toHaveBeenCalledWith(expect.any(String), "/chosen/report.txt");
+    expect(hub.session.end).toHaveBeenCalledWith("closed");
+  });
+
+  it("listens before the Host can answer, however slowly the file opens", async () => {
+    const opened = vi.mocked(open).getMockImplementation()!;
+    vi.mocked(open).mockImplementationOnce(async (...args) => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return opened(...args);
+    });
+    const hub = hubSession();
+    const local = hubManager(async () => {
+      // A fast Host answers in the next task; the session buffers nothing.
+      setTimeout(() => {
+        hub.text({ type: "download.headers", status: 200, content_length: 3 });
+        hub.binary(new Uint8Array([1, 2, 3]));
+        hub.text({ type: "download.end", bytes: 3 });
+      }, 0);
+      return hub.session;
+    });
+    const preparationId = await local.prepare(owner, input);
+    const downloading = local.download(owner, { preparationId, token: "token" });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(hub.session.send).toHaveBeenCalledWith('{"type":"download.complete"}');
+    hub.close("done");
+    await downloading;
+    expect(rename).toHaveBeenCalledWith(expect.any(String), "/chosen/report.txt");
+  });
+
+  it("falls back to the relay route when the Host answers unsupported", async () => {
+    const hub = hubSession();
+    const local = hubManager(async () => hub.session);
+    const preparationId = await local.prepare(owner, input);
+    const downloading = local.download(owner, { preparationId, token: "token" });
+    await vi.advanceTimersByTimeAsync(0);
+    hub.close("unsupported");
+    await downloading;
+    expect(openDownload).toHaveBeenCalledExactlyOnceWith("host", "token", input.center);
+  });
+
+  it("uses the relay route when the Host lacks Hub downloads", async () => {
+    const local = hubManager(async () => null);
+    const preparationId = await local.prepare(owner, input);
+    await local.download(owner, { preparationId, token: "token" });
+    expect(openDownload).toHaveBeenCalledOnce();
   });
 });

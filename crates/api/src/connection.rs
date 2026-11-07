@@ -3,7 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
-use futures_util::{SinkExt, StreamExt, stream::SplitStream};
+use futures_util::stream::BoxStream;
+use futures_util::{Sink, SinkExt, StreamExt};
 use model::methods::InboundKind;
 use model::outbound::{Frame, Outbound, QueueError};
 use model::server::{ClientMessage, ErrorCode, Hello, ServerMessage, valid_id};
@@ -15,6 +16,7 @@ use crate::Shared;
 use crate::guest::Session as Guest;
 use crate::guest::policy::{self, Decision, EventDecision};
 
+pub(super) mod bridge;
 mod chunks;
 mod creation_receipts;
 mod dispatch;
@@ -28,6 +30,9 @@ const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(1);
 pub(super) const MAX_SUBSCRIPTIONS: usize = 16;
+
+/// Inbound business messages of one connection: a WebSocket, or an in-process Hub session.
+type Frames = BoxStream<'static, Result<Message, axum::Error>>;
 
 #[derive(Default)]
 pub(super) struct ConnectionSubscriptions {
@@ -73,7 +78,27 @@ fn websocket_frame(frame: Frame) -> Message {
 }
 
 pub(super) async fn serve(socket: WebSocket, state: Arc<Shared>, guest: Option<Guest>) {
-    let (mut sink, mut stream) = socket.split();
+    let (sink, stream) = socket.split();
+    serve_frames(sink, stream.boxed(), state, guest, Some(WRITE_TIMEOUT)).await;
+}
+
+/// Serve one connection over any message transport. The WebSocket upgrade and
+/// the in-process Hub bridge share this, so both apply identical protocol and
+/// guest confinement.
+///
+/// A socket write failing to complete within `write_timeout` ends the connection.
+/// Without one (in-process Hub sessions, which wait for their peer's credit), a
+/// write waits until the connection stops; the bounded outbound queue still
+/// ends a connection that falls too far behind.
+pub(super) async fn serve_frames<K>(
+    mut sink: K,
+    mut stream: Frames,
+    state: Arc<Shared>,
+    guest: Option<Guest>,
+    write_timeout: Option<Duration>,
+) where
+    K: Sink<Message> + Unpin + Send,
+{
     let hello = tokio::select! {
         () = state.cancellation.cancelled() => return,
         result = timeout(HELLO_TIMEOUT, receive(&mut stream)) => if let Ok(Some(Ok(Incoming::Text(ClientMessage::Hello(hello), _)))) = result {
@@ -112,10 +137,16 @@ pub(super) async fn serve(socket: WebSocket, state: Arc<Shared>, guest: Option<G
                 () = stopped.cancelled() => break,
                 queued = receiver.recv() => match queued { Some(queued) => queued, None => break },
             };
-            if !matches!(
-                timeout(WRITE_TIMEOUT, sink.send(websocket_frame(queued.message))).await,
-                Ok(Ok(()))
-            ) {
+            let message = websocket_frame(queued.message);
+            let sent = if let Some(limit) = write_timeout {
+                matches!(timeout(limit, sink.send(message)).await, Ok(Ok(())))
+            } else {
+                tokio::select! {
+                    () = stopped.cancelled() => false,
+                    sent = sink.send(message) => sent.is_ok(),
+                }
+            };
+            if !sent {
                 break;
             }
         }
@@ -176,7 +207,7 @@ impl Receiver {
 }
 
 async fn read(
-    mut stream: SplitStream<WebSocket>,
+    mut stream: Frames,
     state: &Arc<Shared>,
     lanes: &[Outbound; 4],
     hello: Hello,
@@ -620,7 +651,7 @@ enum Incoming {
     Binary(Vec<u8>),
 }
 
-async fn receive(stream: &mut SplitStream<WebSocket>) -> Option<Result<Incoming, ErrorCode>> {
+async fn receive(stream: &mut Frames) -> Option<Result<Incoming, ErrorCode>> {
     loop {
         match stream.next().await? {
             Ok(Message::Text(text)) => {

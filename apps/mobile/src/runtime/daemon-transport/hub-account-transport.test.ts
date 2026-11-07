@@ -1,5 +1,5 @@
 import { DaemonClient } from "@ait/client/internal/daemon-client";
-import { HubLink } from "@ait/client/internal/hub";
+import { HUB_FEATURES, HubLink } from "@ait/client/internal/hub";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHubAccountRelayTransportFactory } from "./hub-account-transport";
 import { createDaemonConnection } from "@ait/client/internal/protocol/connection";
@@ -64,7 +64,9 @@ class CenterSocket {
   }
 }
 
-function harness(nodes: object[] = [{ node_id: "host-node", host_id: HOST_ID, state: "online" }]) {
+function harness(
+  hosts: object[] = [{ node_id: "host-node", host_id: HOST_ID, name: "Host", state: "online" }],
+) {
   vi.useFakeTimers();
   const sockets: CenterSocket[] = [];
   const link = new HubLink({
@@ -104,8 +106,9 @@ function harness(nodes: object[] = [{ node_id: "host-node", host_id: HOST_ID, st
       ping_seconds: 20,
       max_payload: 1024 * 1024,
       center_methods: ["share.subscribe"],
+      f: [...HUB_FEATURES],
     });
-    socket.receive({ t: "presence", seq: 1 }, JSON.stringify({ nodes }));
+    socket.receive({ t: "hosts", seq: 1, ver: 1, full: true }, JSON.stringify({ hosts }));
     return socket;
   };
   return { link, sockets, deps, closes, connect };
@@ -128,6 +131,7 @@ describe("native account relay path selection", () => {
       s: "session-1",
       to: { node: "guest-node" },
       share: SHARE_ID,
+      w: 1024 * 1024,
     });
 
     const offline = harness();
@@ -158,7 +162,13 @@ describe("native account relay path selection", () => {
     transport.onOpen(() => transport.send({ type: "hello", clientId: "android" }));
     await vi.advanceTimersByTimeAsync(0);
     const open = socket.sent.find((frame) => frame.header.t === "open")!;
-    expect(open.header).toEqual({ t: "open", seq: 1, s: "session-1", to: { node: "host-node" } });
+    expect(open.header).toEqual({
+      t: "open",
+      seq: 1,
+      s: "session-1",
+      to: { node: "host-node" },
+      w: 1024 * 1024,
+    });
     expect(JSON.parse(open.payload)).toMatchObject({
       type: "hello",
       client_id: "android",
@@ -271,10 +281,13 @@ describe("native account relay path selection", () => {
       grace_seconds: 120,
       ping_seconds: 20,
       max_payload: 1024 * 1024,
+      f: [...HUB_FEATURES],
     });
     socket.receive(
-      { t: "presence", seq: 1 },
-      JSON.stringify({ nodes: [{ node_id: "host-node", host_id: HOST_ID, state: "online" }] }),
+      { t: "hosts", seq: 1, ver: 1, full: true },
+      JSON.stringify({
+        hosts: [{ node_id: "host-node", host_id: HOST_ID, name: "Host", state: "online" }],
+      }),
     );
     await vi.advanceTimersByTimeAsync(0);
     expect(opened).toHaveBeenCalledOnce();

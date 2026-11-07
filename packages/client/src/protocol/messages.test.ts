@@ -242,6 +242,15 @@ describe("Ait host capabilities", () => {
     methods.delete("creation.subscribe.request");
     expect(read(["creation-lifecycle-v1"])?.creationLifecycle).toBe(false);
   });
+  it("offers sandboxed worktrees only when the host advertises confinement", () => {
+    const read = (features: string[], methods: string[]) =>
+      parseServerInfoStatusPayload(
+        object(object(serverInfo({ server_id: "ait", features }, new Set(methods))).payload),
+      )?.features?.workspaceSandbox;
+    expect(read(["workspace-sandbox-v1"], ["workspace.create.request"])).toBe(true);
+    expect(read([], ["workspace.create.request"])).toBe(false);
+    expect(read(["workspace-sandbox-v1"], [])).toBe(false);
+  });
   it("advertises native approval and child events only with the producer feature", () => {
     const read = (features: string[], methods: string[]) =>
       parseServerInfoStatusPayload(

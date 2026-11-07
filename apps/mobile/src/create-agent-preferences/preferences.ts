@@ -10,13 +10,18 @@ export interface ProviderPreferences {
   featureValues?: Record<string, unknown>;
 }
 
+/** New workspace isolation levels; `sandboxed-worktree` adds OS write confinement (ADR-215). */
+export const WORKSPACE_ISOLATIONS = ["local", "worktree", "sandboxed-worktree"] as const;
+
+export type WorkspaceIsolation = (typeof WORKSPACE_ISOLATIONS)[number];
+
 export type LaunchTarget = { kind: "chat" } | { kind: "terminal"; profileId: string };
 
 export interface FormPreferences {
   provider?: string;
   providerPreferences?: Record<string, ProviderPreferences>;
   favoriteModels?: Array<{ provider: string; modelId: string }>;
-  isolation?: "local" | "worktree";
+  isolation?: WorkspaceIsolation;
   launchTarget?: LaunchTarget;
 }
 
@@ -46,7 +51,7 @@ export const FormPreferencesSchema = z.strictObject({
       }),
     )
     .optional(),
-  isolation: z.enum(["local", "worktree"]).optional(),
+  isolation: z.enum(WORKSPACE_ISOLATIONS).optional(),
   // What the New workspace composer submits to: the chat agent (default) or a
   // terminal profile. See `@/new-workspace-launch` for resolution/fallback.
   launchTarget: launchTargetSchema.optional(),

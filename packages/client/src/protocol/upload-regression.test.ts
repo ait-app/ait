@@ -62,6 +62,7 @@ function harness(
   };
   const base = vi.fn(factory);
   const transport = createDaemonConnection(base, {
+    mode: "split",
     url,
     headers: { Authorization: "Bearer test" },
   });
@@ -87,7 +88,9 @@ function harness(
           protocol: { major: 1, minor: 0 },
           implemented_capabilities: implemented,
         },
-        negotiated_capabilities: CHANNEL_CAPABILITIES[index],
+        // A single-connection socket negotiates every capability.
+        negotiated_capabilities:
+          sockets.length === 1 ? CHANNEL_CAPABILITIES.flat() : CHANNEL_CAPABILITIES[index],
       });
   }
   function send(message: Payload) {

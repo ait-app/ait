@@ -76,6 +76,9 @@ export async function connectAccountHub(): Promise<{
               void desktop.invoke!("account_hub_shares", { active: false }).catch(() => {});
           };
         },
+        async reportPresence(presence) {
+          await desktop.invoke!("account_hub_presence", { presence });
+        },
         async call<T>(method: string, params: unknown): Promise<T> {
           const value = (await desktop.invoke!("account_hub_call", { method, params })) as {
             result: T;

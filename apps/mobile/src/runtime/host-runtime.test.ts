@@ -2060,9 +2060,10 @@ describe("HostRuntimeStore", () => {
         await vi.advanceTimersByTimeAsync(0);
         expect(startDesktopDaemon).toHaveBeenCalledOnce();
         expect(store.getHosts()).toHaveLength(1);
-        expect(store.getHosts()[0]?.connections.map((connection) => connection.id)).toEqual(
-          expect.arrayContaining([relay.id, managedId]),
-        );
+        // Admitting the managed daemon reveals the local server id: its relay route is dropped.
+        expect(store.getHosts()[0]?.connections.map((connection) => connection.id)).toEqual([
+          managedId,
+        ]);
         expect(store.getSnapshot(discovered.server_id)?.activeConnectionId).toBe(managedId);
 
         // A later latency spike must not send the local daemon back through relay.
@@ -2810,6 +2811,99 @@ describe("HostRuntimeStore", () => {
       await waitForHostOnline(store, remote.serverId);
       expect(probed).toEqual([remote.serverId]);
       expect(store.getSnapshot(managed.serverId)?.client).toBeNull();
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
+  it("never routes the local desktop daemon through its saved account relay", async () => {
+    useHostRuntimeClock();
+    (globalThis as { window?: unknown }).window = { paseoDesktop: {} };
+    const center = "https://center.test/api";
+    const managed: HostConnection = {
+      id: "desktop-managed-srv_test",
+      type: "directTcp",
+      endpoint: "localhost:1234",
+    };
+    const relay = createAccountRelayHostConnection({
+      hostId: "11111111-1111-4111-8111-111111111111",
+      center,
+    });
+    const host = makeHost({ connections: [managed, relay], preferredConnectionId: managed.id });
+    const probed: string[] = [];
+    const deps = makeDeps({ [managed.id]: 1, [relay.id]: 1 }, []);
+    const connect = deps.connectToDaemon;
+    deps.connectToDaemon = async (input) => {
+      probed.push(input.connection.id);
+      return connect(input);
+    };
+    const storage = createMemoryHostRuntimeStorage({
+      "@paseo:daemon-registry": JSON.stringify([host]),
+    });
+    const store = new HostRuntimeStore({ deps, storage });
+    try {
+      await store.boot();
+      // The saved self-relay is pruned from the registry and from storage.
+      expect(store.getHosts()[0]?.connections.map((connection) => connection.id)).toEqual([
+        managed.id,
+      ]);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(
+        JSON.parse((await storage.getItem("@paseo:daemon-registry"))!)[0].connections.map(
+          (connection: HostConnection) => connection.id,
+        ),
+      ).toEqual([managed.id]);
+      store.setAccountRelayCenter(center);
+      store.setAvailableAccountRelayHosts([host.serverId]);
+      // Discovery and manual selection cannot add it back.
+      await store.addDiscoveredAccountRelayHosts(
+        [{ host_id: relay.hostId, server_id: host.serverId, name: "Local" }],
+        center,
+      );
+      await store.addAccountRelayHost(
+        { host_id: relay.hostId, server_id: host.serverId, name: "Local" },
+        center,
+      );
+      expect(store.getHosts()[0]?.connections.map((connection) => connection.id)).toEqual([
+        managed.id,
+      ]);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(probed).toEqual([]);
+      expect(store.getSnapshot(host.serverId)?.connectionStatus).toBe("connecting");
+      await store.upsertConnectionFromListen({
+        serverId: host.serverId,
+        listenAddress: "localhost:1234",
+        hostname: null,
+        desktopManaged: true,
+      });
+      await waitForHostOnline(store, host.serverId);
+      await vi.advanceTimersByTimeAsync(360_000);
+      expect(new Set(probed)).toEqual(new Set([managed.id]));
+      expect(store.getSnapshot(host.serverId)?.activeConnectionId).toBe(managed.id);
+    } finally {
+      store.syncHosts([]);
+    }
+  });
+
+  it("keeps account relay for a Host without a managed daemon connection", async () => {
+    const center = "https://center.test/api";
+    const relay = createAccountRelayHostConnection({
+      hostId: "11111111-1111-4111-8111-111111111111",
+      center,
+    });
+    const host = makeHost({ connections: [relay], preferredConnectionId: relay.id });
+    const storage = createMemoryHostRuntimeStorage({
+      "@paseo:daemon-registry": JSON.stringify([host]),
+      "@paseo:e2e": "1",
+    });
+    const store = new HostRuntimeStore({ deps: makeDeps({ [relay.id]: 1 }, []), storage });
+    try {
+      await store.boot();
+      store.setAccountRelayCenter(center);
+      store.setAvailableAccountRelayHosts([host.serverId]);
+      await waitForHostOnline(store, host.serverId);
+      expect(store.getSnapshot(host.serverId)?.activeConnectionId).toBe(relay.id);
+      expect(store.getHosts()[0]?.connections).toEqual([relay]);
     } finally {
       store.syncHosts([]);
     }

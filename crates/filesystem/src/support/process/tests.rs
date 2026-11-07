@@ -4,7 +4,8 @@ use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 
 use super::{
-    Bounds, RunError, configured_ssh_command, disable_git_prompts, git_command, run_bounded,
+    Bounds, RunError, configured_ssh_command, disable_git_prompts, git_command, git_program,
+    run_bounded,
 };
 
 const BOUNDS: Bounds = Bounds {
@@ -130,4 +131,28 @@ fn network_git_commands_use_batch_ssh_unless_the_repository_configures_one() {
             .success()
     );
     assert_eq!(environment(&["push", "origin"]).0, None);
+}
+
+#[test]
+fn git_program_runs_git_without_the_macos_toolchain_shim() {
+    let program = git_program();
+    if cfg!(target_os = "macos") {
+        assert_ne!(program, std::path::Path::new("/usr/bin/git"));
+    }
+    let output = Command::new(program).arg("--version").output().unwrap();
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).starts_with("git version"));
+}
+
+#[test]
+fn slow_commands_complete_while_polling_backs_off() {
+    let mut command = Command::new("/bin/sh");
+    command.args(["-c", "sleep 0.3; printf done"]);
+    let started = Instant::now();
+
+    let output = run_bounded(&mut command, BOUNDS, None).unwrap();
+
+    assert_eq!(output.stdout, b"done");
+    // Polling is capped, so completion is noticed within one maximum interval.
+    assert!(started.elapsed() < Duration::from_millis(300) + Duration::from_secs(1));
 }

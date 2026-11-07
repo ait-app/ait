@@ -2,14 +2,12 @@
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use axum::extract::ws::WebSocket;
-use futures_util::stream::SplitStream;
 use model::outbound::Outbound;
 use model::server::ErrorCode;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::time::{Instant, timeout_at};
 
-use super::{Incoming, receive};
+use super::{Frames, Incoming, receive};
 
 const MAX_BYTES: usize = 64 * 1024 * 1024;
 const CHUNK_BYTES: usize = 256 * 1024;
@@ -104,7 +102,7 @@ impl Assembly {
 }
 
 pub(super) async fn next(
-    stream: &mut SplitStream<WebSocket>,
+    stream: &mut Frames,
     assembly: &mut Assembly,
     outbound: &Outbound,
 ) -> Option<Result<Incoming, ErrorCode>> {

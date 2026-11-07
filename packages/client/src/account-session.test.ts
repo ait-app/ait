@@ -1,4 +1,3 @@
-import { channelFixture, welcome } from "../test/account-channel.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AccountSessionManager,
@@ -8,7 +7,8 @@ import {
   type SavedAccount,
 } from "./account-session.js";
 import { createHash } from "node:crypto";
-import { hubFixture } from "../test/hub.js";
+import { centerLink, hubFixture } from "../test/hub.js";
+import { HUB_CENTER_FEATURES, HUB_FEATURES } from "./hub/frame.js";
 
 afterEach(() => vi.useRealTimers());
 
@@ -235,57 +235,13 @@ describe("account information", () => {
   });
 });
 
-it("discovers a Hub-only Host independently of its offline Relay route", async () => {
+it("does not import Hosts from a link to a different account center", async () => {
   const f = fixture();
-  Object.assign(f.host, { online: false, instance_id: null, relay_modes: [] });
-  const h = hubFixture({
-    ticket: async () => ({ centerUrl: "https://aitapp.cn/api", ticket: "a".repeat(64) }),
-  });
-  f.manager.attachHub(h.link);
-  await f.login();
-  const socket = await h.online([
-    {
-      node_id: "other",
-      host_id: "remote",
-      name: "Remote",
-      platform: "linux",
-      app_version: "test",
-      state: "online",
-    },
-  ]);
-  expect(f.manager.snapshot().hosts[0]).toMatchObject({
-    online: true,
-    hub_online: true,
-    instance_id: null,
-    relay_modes: [],
-  });
-  expect(f.deps.notify).toHaveBeenLastCalledWith(f.manager.snapshot());
-  // An old Relay snapshot must not override current Hub availability.
-  f.channel.sockets[0]!.receive({ type: "hosts.snapshot", hosts: [f.host], observed_at: "now" });
-  expect(f.manager.snapshot().hosts[0]?.online).toBe(true);
-  socket.presence(2, []);
-  expect(f.manager.snapshot().hosts[0]).toMatchObject({ online: false });
-  h.link.stop();
-  await f.manager.logout();
-});
-
-it("does not import presence from a different account center", async () => {
-  const f = fixture();
-  f.host.online = false;
   const h = hubFixture();
   f.manager.attachHub(h.link);
   await f.login();
-  await h.online([
-    {
-      node_id: "other",
-      host_id: "remote",
-      name: "Remote",
-      platform: "linux",
-      app_version: "test",
-      state: "online",
-    },
-  ]);
-  expect(f.manager.snapshot().hosts[0]?.online).toBe(false);
+  await h.online();
+  expect(f.manager.snapshot()).toMatchObject({ hosts: [], stale: true });
   h.link.stop();
   await f.manager.logout();
 });
@@ -367,23 +323,36 @@ describe("account center domain migration", () => {
   );
 });
 
-function fixture(autoChannel = true) {
+/** `hub_features` of the current center. */
+const CENTER_FEATURES = [...HUB_CENTER_FEATURES];
+
+/**
+ * A signed-out manager whose center advertises every Hub feature, with an attached Hub link run
+ * like the apps run it. With `autoHub` the center answers each new connection with a welcome and
+ * a full `hosts` snapshot of `hosts`; otherwise tests drive `sockets` themselves.
+ */
+function fixture(autoHub = true) {
   vi.useFakeTimers();
   const host = {
-    online: true,
-    status: "offline",
     host_id: "remote",
     node_id: "other",
     server_id: "server",
     instance_id: "instance",
     name: "Workstation",
+    hostname: "ws",
     platform: "linux",
-    relay_modes: ["ait-rust-single-v1"],
+    app_version: "1.0",
+    state: "online",
+    offline_since: null,
+    f: [] as string[],
   };
-  const channel = channelFixture(() => [host], autoChannel);
+  const hosts: object[] = [host];
+  const center = { features: CENTER_FEATURES as unknown };
   let leaseExpired = false;
+  let tickets = 0;
   const http = vi.fn(async (url: string | URL | Request, _options?: RequestInit) => {
     const path = String(url);
+    const features = center.features === undefined ? {} : { hub_features: center.features };
     if (path.endsWith("/auth/providers"))
       return Response.json({ authing_enabled: true, native_login_enabled: true });
     if (path.endsWith("/auth/client/exchange"))
@@ -392,26 +361,30 @@ function fixture(autoChannel = true) {
         expires_in: 3600,
         user: { email: "me@example.test" },
       });
-    if (path.endsWith("/nodes/register")) {
-      const runtime = JSON.parse(String(_options?.body)).runtime;
+    if (path.endsWith("/nodes/register"))
       return Response.json({
         node_id: "client",
-        node_session_id: runtime ? `lease-${runtime.server_id}` : "lease",
-        host_id: runtime ? `host-${runtime.server_id}` : null,
-        control_required: Boolean(runtime),
+        node_session_id: "lease",
+        host_id: null,
+        control_required: false,
+        ...features,
+        hub_ticket: "e".repeat(64),
+        hub_path: "/v1/hub",
+        hub_expires_in_seconds: 30,
+        hub_ep: "access",
       });
-    }
-    if (path.endsWith("/control-tickets")) return Response.json({ control_ticket: "a".repeat(64) });
-    if (path.endsWith("/channel-tickets"))
-      return Response.json({
-        channel_ticket: "one-use-channel",
-        channel_path: "/v1/relay/channel",
-        protocol: "ait-channel-v1",
-      });
-    if (path.endsWith("/renew") && leaseExpired) {
+    // An expired lease surfaces on whichever request uses the node session first.
+    if ((path.endsWith("/renew") || path.endsWith("/hub-tickets")) && leaseExpired) {
       leaseExpired = false;
       return Response.json({ error: { code: "node_session_expired" } }, { status: 401 });
     }
+    if (path.endsWith("/hub-tickets"))
+      return Response.json({
+        hub_ticket: (++tickets).toString(16).padStart(64, "0"),
+        hub_path: "/v1/hub",
+        protocol: "ait-hub-v1",
+        ...features,
+      });
     if (path.endsWith("/relay-downloads"))
       return Response.json({
         relay_session_id: "visit",
@@ -421,6 +394,12 @@ function fixture(autoChannel = true) {
       });
     return new Response(null, { status: 204 });
   });
+  let hubPaused = false;
+  const { link, sockets, socket, ...hub } = centerLink(
+    () => manager.openHubTicket(),
+    () => hosts,
+  );
+  hub.center.auto = autoHub;
   let sequence = 0;
   const deps: AccountDependencies = {
     installationId: "stable-mobile-installation",
@@ -429,7 +408,6 @@ function fixture(autoChannel = true) {
     appVersion: "test",
     randomUUID: () => `uuid-${++sequence}`,
     fetch: http,
-    channelTransport: channel.create,
     browserLogin: {
       randomSecret: () => "b".repeat(64),
       challenge: async (value) => createHash("sha256").update(value).digest("base64url"),
@@ -439,23 +417,47 @@ function fixture(autoChannel = true) {
       }),
     },
     save: vi.fn(async () => undefined),
-    notify: vi.fn(),
+    // Like the apps: the link runs while signed in and only pauses in the background.
+    notify: vi.fn((snapshot) => {
+      if (snapshot.status === "logged_out") link.stop();
+      else if (hubPaused) link.pause();
+      else link.start();
+    }),
     closeTransports: vi.fn(),
   };
   const manager = new AccountSessionManager(deps);
+  manager.attachHub(link);
   const login = async () => {
     await manager.loginWithBrowser("");
     await vi.advanceTimersByTimeAsync(1);
   };
+  const calls = (suffix: string) =>
+    http.mock.calls.filter(([url]) => String(url).endsWith(suffix)).length;
   return {
     manager,
     http,
     deps,
     host,
-    channel,
+    hosts,
+    center,
+    link,
+    sockets,
+    socket,
     login,
+    calls,
     expireLease: () => {
       leaseExpired = true;
+    },
+    /** The native app moving to the background: the socket closes and the account suspends. */
+    background() {
+      hubPaused = true;
+      link.pause();
+      manager.suspend();
+    },
+    foreground() {
+      hubPaused = false;
+      manager.resume();
+      link.start();
     },
   };
 }
@@ -701,13 +703,9 @@ describe("hosted account login", () => {
 
 describe("client-only account lifecycle", () => {
   it("keeps host downloads available when another host is selected or deselected", async () => {
-    const { manager, deps, login, channel, host } = fixture();
+    const { manager, deps, login, host, hosts } = fixture();
+    hosts.push({ ...host, host_id: "another", node_id: "another-node" });
     await login();
-    channel.sockets[0]!.receive({
-      type: "hosts.snapshot",
-      hosts: [host, { ...host, host_id: "another" }],
-      observed_at: "old",
-    });
     vi.mocked(deps.closeTransports).mockClear();
     const center = manager.snapshot().center;
     await manager.select("remote");
@@ -733,8 +731,8 @@ describe("client-only account lifecycle", () => {
     await manager.logout();
   });
 
-  it("registers Android without publishing a host, discovers and renews independently of visits", async () => {
-    const { manager, http, deps, login, host } = fixture();
+  it("registers Android without publishing a host and discovers hosts over the Hub link", async () => {
+    const { manager, http, deps, login, calls } = fixture();
     await login();
     const registration = http.mock.calls.find(([url]) => String(url).endsWith("/nodes/register"))!;
     expect(JSON.parse(String(registration[1]?.body))).toMatchObject({
@@ -746,12 +744,13 @@ describe("client-only account lifecycle", () => {
     expect(manager.snapshot()).toMatchObject({
       status: "online",
       hostOnline: false,
-      hosts: [host],
+      hosts: [{ host_id: "remote", online: true, hub_online: true }],
       selected: null,
     });
     expect(http.mock.calls.some(([url]) => String(url).includes("relay-sessions"))).toBe(false);
-    await vi.advanceTimersByTimeAsync(20_000);
-    expect(http.mock.calls.some(([url]) => String(url).endsWith("/renew"))).toBe(true);
+    // The link holds the node lease; nothing renews it over HTTP.
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(calls("/renew")).toBe(0);
     expect(JSON.stringify(manager.snapshot())).not.toContain("private-jwt");
     expect(JSON.stringify(vi.mocked(deps.save).mock.calls)).not.toContain(" secret ");
     await manager.logout();
@@ -820,26 +819,29 @@ describe("client-only account lifecycle", () => {
     expect(http.mock.calls.some(([url]) => String(url).endsWith("/relay-sessions"))).toBe(false);
   });
 
-  it("stops network activity in background and renews/re-registers an expired lease on resume", async () => {
-    const { manager, http, deps, login, expireLease } = fixture();
+  it("stops network activity in background and re-registers an expired lease on resume", async () => {
+    const { manager, http, deps, login, expireLease, background, foreground } = fixture();
     await login();
     await manager.select("remote");
     expect(manager.snapshot().stale).toBe(false);
-    manager.suspend();
+    background();
     expect(manager.snapshot().stale).toBe(true);
     const count = http.mock.calls.length;
-    await vi.advanceTimersByTimeAsync(120_000);
+    // Longer than the link's grace period: the center no longer renews the lease.
+    await vi.advanceTimersByTimeAsync(180_000);
     expect(http).toHaveBeenCalledTimes(count);
     await expect(
       manager.openDownload("remote", "download-token", manager.snapshot().center),
     ).rejects.toThrow();
     expect(deps.closeTransports).toHaveBeenCalled();
     expireLease();
-    manager.resume();
+    foreground();
     await vi.advanceTimersByTimeAsync(10);
     expect(http.mock.calls.filter(([url]) => String(url).endsWith("/nodes/register"))).toHaveLength(
       2,
     );
+    // The link reconnects after its retry delay with the new registration's ticket.
+    await vi.advanceTimersByTimeAsync(1000);
     expect(manager.snapshot()).toMatchObject({
       status: "online",
       stale: false,
@@ -849,8 +851,10 @@ describe("client-only account lifecycle", () => {
   });
 
   it("keeps registration backoff when recovery of an expired lease fails", async () => {
-    const { manager, http, login, expireLease } = fixture();
+    const { manager, http, login, expireLease, background, foreground } = fixture();
     await login();
+    background();
+    await vi.advanceTimersByTimeAsync(180_000);
     const original = http.getMockImplementation()!;
     http.mockImplementation((url, options) =>
       String(url).endsWith("/nodes/register")
@@ -860,7 +864,7 @@ describe("client-only account lifecycle", () => {
         : original(url, options),
     );
     expireLease();
-    manager.resume();
+    foreground();
     await vi.advanceTimersByTimeAsync(10);
     const registrations = () =>
       http.mock.calls.filter(([url]) => String(url).endsWith("/nodes/register"));
@@ -868,71 +872,6 @@ describe("client-only account lifecycle", () => {
     await vi.advanceTimersByTimeAsync(500);
     expect(registrations()).toHaveLength(2);
     expect(manager.snapshot().status).toBe("error");
-    await manager.shutdown();
-  });
-
-  it("backs off when the service repeatedly rejects newly registered leases", async () => {
-    const { manager, http, login, channel } = fixture();
-    const original = http.getMockImplementation()!;
-    http.mockImplementation((url, options) =>
-      String(url).endsWith("/channel-tickets")
-        ? Promise.resolve(
-            Response.json({ error: { code: "node_session_expired" } }, { status: 401 }),
-          )
-        : original(url, options),
-    );
-    await login();
-    await vi.advanceTimersByTimeAsync(500);
-    expect(http.mock.calls.filter(([url]) => String(url).endsWith("/nodes/register"))).toHaveLength(
-      2,
-    );
-    expect(channel.create).not.toHaveBeenCalled();
-    expect(manager.snapshot().status).toBe("error");
-    await manager.shutdown();
-  });
-
-  it("coalesces recovery requested during an in-flight tick and runs it without the polling delay", async () => {
-    const { manager, http, login, channel } = fixture();
-    const original = http.getMockImplementation()!;
-    let resolve!: (value: Response) => void;
-    http.mockImplementation((url, options) =>
-      String(url).endsWith("/channel-tickets")
-        ? new Promise((done) => {
-            resolve = done;
-          })
-        : original(url, options),
-    );
-    await login();
-    manager.resume();
-    manager.refresh();
-    await vi.advanceTimersByTimeAsync(1);
-    expect(channel.create).not.toHaveBeenCalled();
-    resolve(
-      Response.json({
-        channel_ticket: "fresh",
-        channel_path: "/v1/relay/channel",
-        protocol: "ait-channel-v1",
-      }),
-    );
-    await vi.advanceTimersByTimeAsync(10);
-    expect(channel.create).toHaveBeenCalledOnce();
-    expect(http.mock.calls.filter(([url]) => String(url).endsWith("/renew"))).toHaveLength(1);
-    expect(manager.snapshot().stale).toBe(false);
-    await manager.shutdown();
-  });
-
-  it("replaces a silent foreground status channel without adding normal retry backoff", async () => {
-    const { manager, login, channel } = fixture();
-    await login();
-    const old = channel.sockets[0]!;
-    old.reply = false;
-    manager.resume();
-    await vi.advanceTimersByTimeAsync(2_000);
-    manager.refresh();
-    await vi.advanceTimersByTimeAsync(1_010);
-    expect(old.transport.close).toHaveBeenCalledOnce();
-    expect(channel.create).toHaveBeenCalledTimes(2);
-    expect(manager.snapshot()).toMatchObject({ status: "online", stale: false });
     await manager.shutdown();
   });
 
@@ -1028,215 +967,34 @@ describe("account persistence across restarts", () => {
   });
 });
 
-describe("account status channel", () => {
-  it("uses a one-use ticket, retains the gateway and stops HTTP host polling", async () => {
-    const { manager, login, http, channel } = fixture();
-    await login();
-    expect(http).toHaveBeenCalledWith(
-      "https://aitapp.cn/api/v1/relay/channel-tickets",
-      expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: "Bearer private-jwt" }),
-        body: JSON.stringify({ source_node_session_id: "lease" }),
-      }),
-    );
-    expect(channel.create).toHaveBeenCalledWith({
-      url: "wss://aitapp.cn/api/v1/relay/channel",
-      protocols: ["ait.ticket.one-use-channel"],
-    });
-    await vi.advanceTimersByTimeAsync(80_000);
-    expect(channel.create).toHaveBeenCalledTimes(1);
-    expect(channel.sockets[0]!.transport.send).toHaveBeenCalledWith(
-      JSON.stringify({ type: "channel.heartbeat" }),
-    );
-    expect(http.mock.calls.some(([url]) => String(url).includes("/hosts/online"))).toBe(false);
-    expect(manager.snapshot().stale).toBe(false);
-    await manager.logout();
-  });
-
-  it("applies route events immediately while retaining offline and unbound hosts", async () => {
-    const { manager, login, channel, host } = fixture();
-    await login();
-    await manager.select("remote");
-    const socket = channel.sockets[0]!;
-    const offline = {
-      ...host,
-      online: false,
-      instance_id: null,
-      relay_modes: [],
-      offline_since: "2026-10-01T00:00:00Z",
-    };
-    const manual = { ...offline, host_id: "manual", node_id: null, server_id: null };
-    socket.receive({ type: "hosts.snapshot", hosts: [offline, manual], observed_at: "old" });
-    expect(manager.snapshot().hosts).toEqual([offline, manual]);
-    expect(manager.snapshot().selected).toEqual(offline);
-    await expect(manager.select("remote")).rejects.toThrow("offline");
-    socket.receive({
-      type: "node.online",
-      node_id: "other",
-      node_session_id: "s",
-      host_id: "remote",
-      host,
-      observed_at: "old",
-    });
-    expect(manager.snapshot().hosts.find((entry) => entry.host_id === "remote")).toEqual(host);
-    expect(manager.snapshot().selected).toEqual(host);
-    await expect(manager.select("remote")).resolves.toBeDefined();
-    socket.receive({
-      type: "node.offline",
-      node_id: "other",
-      node_session_id: "s",
-      host_id: "remote",
-      observed_at: "old",
-    });
-    expect(manager.snapshot().hosts.find((entry) => entry.host_id === "remote")).toMatchObject({
-      online: false,
-      instance_id: null,
-    });
-    await expect(manager.select("remote")).rejects.toThrow("offline");
-    // A previously unknown Host must also become selectable from the event alone.
-    const added = { ...host, host_id: "new-host", node_id: "new-node" };
-    socket.receive({
-      type: "node.online",
-      node_id: added.node_id,
-      node_session_id: "new-session",
-      host_id: added.host_id,
-      host: added,
-      observed_at: "new",
-    });
-    expect(manager.snapshot().hosts.find((entry) => entry.host_id === added.host_id)).toEqual(
-      added,
-    );
-    await expect(manager.select(added.host_id)).resolves.toBeDefined();
-    socket.receive({
-      type: "node.online",
-      node_id: added.node_id,
-      node_session_id: "new-session",
-      host_id: added.host_id,
-      host: added,
-      observed_at: "new",
-    });
-    expect(
-      manager.snapshot().hosts.filter((entry) => entry.host_id === added.host_id),
-    ).toHaveLength(1);
-    socket.receive({ type: "hosts.snapshot", hosts: [], observed_at: "old" });
-    expect(manager.snapshot()).toMatchObject({ hosts: [], selected: null });
-    await manager.logout();
-  });
-
-  it("marks disconnection stale and obtains a fresh ticket before replacing the cache", async () => {
-    const { manager, login, channel, http, host } = fixture();
-    await login();
-    await manager.select("remote");
-    const socket = channel.sockets[0]!;
-    socket.disconnect();
-    expect(manager.snapshot()).toMatchObject({ stale: true, hosts: [host], selected: host });
-    socket.receive({ type: "hosts.snapshot", hosts: [], observed_at: "old" });
-    expect(manager.snapshot().hosts).toEqual([host]);
-    await vi.advanceTimersByTimeAsync(4000);
-    expect(channel.create).toHaveBeenCalledTimes(2);
-    expect(
-      http.mock.calls.filter(([url]) => String(url).endsWith("/channel-tickets")),
-    ).toHaveLength(2);
-    expect(manager.snapshot().stale).toBe(false);
-    await manager.logout();
-    channel.sockets[1]!.snapshot();
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(manager.snapshot()).toMatchObject({ status: "logged_out", hosts: [] });
-    expect(channel.create).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not open a delayed ticket after suspension and reconnects after lease renewal", async () => {
-    const { manager, login, http, channel } = fixture();
-    const original = http.getMockImplementation()!;
-    let resolve!: (value: Response) => void;
-    http.mockImplementation((url, options) =>
-      String(url).endsWith("/channel-tickets")
-        ? new Promise((done) => {
-            resolve = done;
-          })
-        : original(url, options),
-    );
-    await login();
-    manager.suspend();
-    resolve(
-      Response.json({
-        channel_ticket: "late",
-        channel_path: "/v1/relay/channel",
-        protocol: "ait-channel-v1",
-      }),
-    );
-    await vi.advanceTimersByTimeAsync(1);
-    expect(channel.create).not.toHaveBeenCalled();
-    http.mockImplementation(original);
-    manager.resume();
-    await vi.advanceTimersByTimeAsync(1);
-    expect(channel.create).toHaveBeenCalledTimes(1);
-    expect(manager.snapshot().stale).toBe(false);
-    await manager.shutdown();
-  });
-
-  it.each([
-    "https://foreign.test/v1/relay/channel",
-    "//foreign.test/v1/relay/channel",
-    "/v1/relay/control",
-    "/v1/relay/channel?ticket=x",
-  ])("rejects unsafe or unsupported ticket path %s", async (path) => {
-    const { manager, login, http, channel } = fixture();
-    const original = http.getMockImplementation()!;
-    http.mockImplementation((url, options) =>
-      String(url).endsWith("/channel-tickets")
-        ? Promise.resolve(
-            Response.json({
-              channel_ticket: "ticket",
-              channel_path: path,
-              protocol: "ait-channel-v1",
-            }),
-          )
-        : original(url, options),
-    );
-    await login();
-    expect(channel.create).not.toHaveBeenCalled();
-    expect(manager.snapshot().stale).toBe(true);
-    await manager.logout();
-  });
-});
-
 it.each(["disconnect", "suspend", "logout"])(
-  "invalidates individually confirmed Hosts on %s before a full snapshot",
+  "invalidates confirmed Hosts on %s until the link has a full snapshot again",
   async (action) => {
-    const { manager, login, channel, host } = fixture(false);
+    const { manager, login, socket } = fixture();
     await login();
-    const socket = channel.sockets[0]!;
-    socket.receive(welcome);
-    const online = {
-      type: "node.online",
-      node_id: host.node_id,
-      node_session_id: "s",
-      host_id: host.host_id,
-      host,
-      observed_at: "now",
-    };
-    socket.receive(online);
     expect(manager.snapshot()).toMatchObject({
-      status: "connecting",
-      stale: true,
-      confirmedHostIds: [host.host_id],
+      status: "online",
+      stale: false,
+      confirmedHostIds: ["remote"],
     });
     manager.snapshot().confirmedHostIds!.push("untrusted");
-    expect(manager.snapshot().confirmedHostIds).toEqual([host.host_id]);
-    if (action === "disconnect") socket.disconnect();
+    expect(manager.snapshot().confirmedHostIds).toEqual(["remote"]);
+    if (action === "disconnect") socket().drop();
     else if (action === "suspend") manager.suspend();
     else await manager.logout();
     expect(manager.snapshot()).toMatchObject({ stale: true, confirmedHostIds: [] });
-    socket.receive(online);
-    expect(manager.snapshot().confirmedHostIds).toEqual([]);
     await manager.logout();
   },
 );
 
 describe("hub tickets", () => {
-  const hubGrant = { hub_ticket: "c".repeat(64), hub_path: "/v1/hub", protocol: "ait-hub-v1" };
-  function hubFixture(grant: object = hubGrant) {
+  const hubGrant = {
+    hub_ticket: "c".repeat(64),
+    hub_path: "/v1/hub",
+    protocol: "ait-hub-v1",
+    hub_features: CENTER_FEATURES,
+  };
+  function ticketFixture(grant: object = hubGrant) {
     const context = fixture();
     const original = context.http.getMockImplementation()!;
     context.http.mockImplementation((url, options) =>
@@ -1251,7 +1009,7 @@ describe("hub tickets", () => {
     http.mock.calls.filter(([url]) => String(url).endsWith("/hub-tickets"));
 
   it("issues an access ticket for this device's node session", async () => {
-    const { manager, http, login } = hubFixture();
+    const { manager, http, login } = ticketFixture();
     await expect(manager.openHubTicket()).rejects.toThrow("Sign in");
     await login();
     await expect(manager.openHubTicket()).resolves.toEqual({
@@ -1269,9 +1027,21 @@ describe("hub tickets", () => {
   });
 
   it("rejects a grant for another protocol", async () => {
-    const { manager, login } = hubFixture({ ...hubGrant, protocol: "ait-hub-v2" });
+    const { manager, login } = ticketFixture({ ...hubGrant, protocol: "ait-hub-v2" });
     await login();
     await expect(manager.openHubTicket()).rejects.toThrow("invalid hub ticket");
+    await manager.logout();
+  });
+
+  it.each([
+    [undefined, "lease, hosts, state, credit, download, bulk"],
+    [["lease", "hosts", "state", "credit", "download"], "bulk"],
+  ])("rejects a grant from a center advertising %j", async (features, missing) => {
+    const { manager, login } = ticketFixture({ ...hubGrant, hub_features: features });
+    await login();
+    await expect(manager.openHubTicket()).rejects.toThrow(
+      `The account service is too old for this app (missing Hub features: ${missing}).`,
+    );
     await manager.logout();
   });
 });
@@ -1397,5 +1167,317 @@ describe("daemon authorization handoff", () => {
     expect(http.mock.calls.some(([url]) => String(url).endsWith("/auth/device/approve"))).toBe(
       false,
     );
+  });
+});
+
+describe("hub features", () => {
+  const FEATURES = [...HUB_FEATURES];
+  const hubHost = {
+    host_id: "remote",
+    node_id: "other",
+    server_id: "server",
+    instance_id: "instance",
+    name: "Workstation",
+    hostname: "ws",
+    platform: "linux",
+    app_version: "1.0",
+    state: "online",
+    offline_since: null,
+    f: ["credit", "download"],
+  };
+
+  /** A center whose connections the test answers itself. */
+  function featureFixture() {
+    const f = fixture(false);
+    return {
+      ...f,
+      /** Sign in and complete the link's handshake. */
+      async online(welcome: Record<string, unknown> = {}) {
+        await f.login();
+        await vi.advanceTimersByTimeAsync(0);
+        const socket = f.socket();
+        socket.open();
+        socket.welcome(welcome);
+        return socket;
+      },
+    };
+  }
+
+  it.each([
+    [undefined, "lease, hosts, state, credit, download, bulk"],
+    [["lease", "hosts", "state", "credit", "download"], "bulk"],
+    [["lease", "hosts", "credit", "download", "bulk"], "state"],
+  ])("fails registration clearly when the center advertises %j", async (features, missing) => {
+    const f = featureFixture();
+    f.center.features = features;
+    await f.login();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.manager.snapshot()).toMatchObject({
+      status: "error",
+      error: `The account service is too old for this app (missing Hub features: ${missing}). Update the service.`,
+    });
+    // No Hub link, status channel or HTTP renewal stands in for the missing features.
+    expect(f.sockets).toEqual([]);
+    expect(f.calls("/channel-tickets")).toBe(0);
+    expect(f.calls("/renew")).toBe(0);
+    await f.manager.logout();
+  });
+
+  it("uses the registration ticket first and announces every feature", async () => {
+    const f = featureFixture();
+    const socket = await f.online();
+    expect(f.calls("/hub-tickets")).toBe(0);
+    expect(socket.options?.headers?.Authorization).toBe(`Bearer ${"e".repeat(64)}`);
+    expect(socket.frames("hello")).toEqual([{ t: "hello", v: 1, resume: null, f: FEATURES }]);
+    // Reconnects after the link is lost use hub-tickets as before.
+    socket.receive({ t: "error", code: "resume_expired" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.calls("/hub-tickets")).toBe(1);
+    f.link.stop();
+    await f.manager.logout();
+  });
+
+  it("stops HTTP renewal while the link holds the lease and resumes it without one", async () => {
+    const f = featureFixture();
+    await f.online();
+    const renewed = f.calls("/renew");
+    await vi.advanceTimersByTimeAsync(65_000);
+    expect(f.calls("/renew")).toBe(renewed);
+    f.link.stop();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(f.calls("/renew")).toBeGreaterThan(renewed);
+    await f.manager.logout();
+  });
+
+  it("builds Hosts from hosts frames", async () => {
+    const f = featureFixture();
+    const socket = await f.online();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.manager.snapshot()).toMatchObject({ stale: true, hosts: [] });
+    const own = { ...hubHost, host_id: "own", node_id: "client" };
+    const offline = {
+      ...hubHost,
+      host_id: "sleeping",
+      node_id: "sleeping-node",
+      state: "offline",
+      offline_since: "2026-01-01T00:00:00Z",
+      f: [],
+    };
+    socket.receive(
+      { t: "hosts", seq: 1, ver: 1, full: true },
+      JSON.stringify({ hosts: [hubHost, own, offline] }),
+    );
+    const snapshot = f.manager.snapshot();
+    expect(snapshot).toMatchObject({
+      status: "online",
+      stale: false,
+      confirmedHostIds: ["remote"],
+    });
+    expect(snapshot.hosts).toEqual([
+      {
+        host_id: "remote",
+        node_id: "other",
+        server_id: "server",
+        instance_id: "instance",
+        name: "Workstation",
+        hostname: "ws",
+        platform: "linux",
+        app_version: "1.0",
+        relay_modes: [],
+        online: true,
+        status: "active",
+        last_seen_at: null,
+        offline_since: null,
+        hub_online: true,
+      },
+      expect.objectContaining({
+        host_id: "sleeping",
+        online: false,
+        hub_online: false,
+        instance_id: null,
+        offline_since: "2026-01-01T00:00:00Z",
+      }),
+    ]);
+    await expect(f.manager.select("remote")).resolves.toMatchObject({
+      selected: { host_id: "remote" },
+    });
+    await expect(f.manager.select("sleeping")).rejects.toThrow("offline");
+    socket.receive(
+      { t: "hosts", seq: 2, ver: 2 },
+      JSON.stringify({ upsert: [{ ...hubHost, state: "reconnecting" }] }),
+    );
+    expect(f.manager.snapshot().hosts[0]).toMatchObject({ online: true, hub_online: true });
+    f.link.stop();
+    await f.manager.logout();
+  });
+
+  it("registers again when the hub ticket reveals an expired node session", async () => {
+    const f = featureFixture();
+    await f.online();
+    const original = f.http.getMockImplementation()!;
+    f.http.mockImplementation(async (url, options) =>
+      String(url).endsWith("/hub-tickets")
+        ? Response.json({ error: { code: "node_session_expired" } }, { status: 401 })
+        : original(url, options),
+    );
+    const registered = f.calls("/nodes/register");
+    f.socket().receive({ t: "error", code: "revoked" });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(f.calls("/nodes/register")).toBeGreaterThan(registered);
+    expect(f.manager.snapshot().status).not.toBe("logged_out");
+    f.link.stop();
+    await f.manager.logout();
+  });
+
+  describe("bulk downloads", () => {
+    const CENTER = "https://aitapp.cn/api";
+    const BULK = ["credit", "download"];
+
+    /** Signed in with the main link online and `remote` listed. */
+    async function bulkFixture() {
+      const f = featureFixture();
+      const main = await f.online({ ping_seconds: 3600 });
+      main.receive(
+        { t: "hosts", seq: 1, ver: 1, full: true },
+        JSON.stringify({ hosts: [hubHost] }),
+      );
+      const tickets = () =>
+        f.http.mock.calls
+          .filter(([url]) => String(url).endsWith("/hub-tickets"))
+          .map(([, options]) => JSON.parse(String(options?.body)));
+      return { ...f, main, tickets };
+    }
+
+    /** Open a download and complete the handshake of the bulk link it creates. */
+    async function bulkDownload(f: Awaited<ReturnType<typeof bulkFixture>>, token = "token") {
+      const pending = f.manager.openHubDownload("remote", token, CENTER);
+      await vi.advanceTimersByTimeAsync(1);
+      const bulk = f.socket();
+      expect(bulk).not.toBe(f.main);
+      bulk.open();
+      bulk.welcome({ link: "bulk-1", f: BULK, ping_seconds: 3600 });
+      return { bulk, session: (await pending)! };
+    }
+
+    it("opens downloads on a bulk link and keeps RPC sessions on the main link", async () => {
+      const f = await bulkFixture();
+      expect(f.tickets()).toEqual([]);
+      const first = f.manager.openHubDownload("remote", "token-1", CENTER);
+      const second = f.manager.openHubDownload("remote", "token-2", CENTER);
+      await vi.advanceTimersByTimeAsync(1);
+      // Concurrent first downloads share one bulk link.
+      expect(f.tickets()).toEqual([{ ep: "access", lane: "bulk" }]);
+      expect(f.sockets).toHaveLength(2);
+      const bulk = f.socket();
+      expect(bulk.options?.headers?.Authorization).toBe(`Bearer ${"1".padStart(64, "0")}`);
+      bulk.open();
+      expect(bulk.frames("hello")).toEqual([{ t: "hello", v: 1, resume: null, f: BULK }]);
+      bulk.welcome({ link: "bulk-1", f: BULK, ping_seconds: 3600 });
+      const [a, b] = await Promise.all([first, second]);
+      expect(bulk.frames("open")).toEqual([
+        { t: "open", seq: 1, s: a!.id, to: { node: "other" }, k: "download", w: 1024 * 1024 },
+        { t: "open", seq: 2, s: b!.id, to: { node: "other" }, k: "download", w: 1024 * 1024 },
+      ]);
+      const rpc = f.link.openSession("other");
+      rpc.send("hello");
+      expect(f.main.frames("open")).toEqual([
+        { t: "open", seq: 1, s: rpc.id, to: { node: "other" }, w: 1024 * 1024 },
+      ]);
+      expect(bulk.frames().map((frame) => frame.t)).toEqual(["hello", "open", "open"]);
+      // Later downloads reuse the link.
+      await f.manager.openHubDownload("remote", "token-3", CENTER);
+      expect(f.tickets()).toHaveLength(1);
+      expect(bulk.frames("open")).toHaveLength(3);
+      f.link.stop();
+      await f.manager.logout();
+    });
+
+    it("closes the bulk link a minute after its last download and reopens it on demand", async () => {
+      const f = await bulkFixture();
+      const { bulk, session } = await bulkDownload(f);
+      bulk.receive({ t: "accept", seq: 1, s: session.id, w: 65_536 });
+      bulk.receive({ t: "close", seq: 2, s: session.id, code: "done" });
+      await vi.advanceTimersByTimeAsync(59_000);
+      expect(bulk.close).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(bulk.close).toHaveBeenCalled();
+      expect(f.main.close).not.toHaveBeenCalled();
+      const next = await bulkDownload(f);
+      expect(next.bulk).not.toBe(bulk);
+      expect(next.bulk.frames("open")).toEqual([expect.objectContaining({ s: next.session.id })]);
+      expect(f.tickets()).toEqual([
+        { ep: "access", lane: "bulk" },
+        { ep: "access", lane: "bulk" },
+      ]);
+      f.link.stop();
+      await f.manager.logout();
+    });
+
+    it.each(["ticket", "socket"])(
+      "opens the download on the main link when the bulk %s fails",
+      async (failure) => {
+        const f = await bulkFixture();
+        const original = f.http.getMockImplementation()!;
+        if (failure === "ticket")
+          f.http.mockImplementation(async (url, options) =>
+            String(options?.body).includes("bulk")
+              ? Response.json({ error: { code: "unavailable" } }, { status: 503 })
+              : original(url, options),
+          );
+        const pending = f.manager.openHubDownload("remote", "token", CENTER);
+        await vi.advanceTimersByTimeAsync(1);
+        if (failure === "socket") f.socket().fail();
+        const session = (await pending)!;
+        expect(f.main.frames("open")).toEqual([
+          {
+            t: "open",
+            seq: 1,
+            s: session.id,
+            to: { node: "other" },
+            k: "download",
+            w: 1024 * 1024,
+          },
+        ]);
+        // Downloads keep using the main link for a while instead of waiting on bulk again.
+        const sockets = f.sockets.length;
+        await f.manager.openHubDownload("remote", "token", CENTER);
+        expect(f.tickets()).toHaveLength(1);
+        expect(f.sockets).toHaveLength(sockets);
+        expect(f.main.frames("open")).toHaveLength(2);
+        f.link.stop();
+        await f.manager.logout();
+      },
+    );
+
+    it("leaves downloads from a Host without `download` to the legacy route", async () => {
+      const f = await bulkFixture();
+      f.main.receive(
+        { t: "hosts", seq: 2, ver: 2 },
+        JSON.stringify({ upsert: [{ ...hubHost, f: ["credit"] }] }),
+      );
+      await expect(f.manager.openHubDownload("remote", "token", CENTER)).resolves.toBeNull();
+      expect(f.tickets()).toEqual([]);
+      expect(f.sockets).toHaveLength(1);
+      f.link.stop();
+      await f.manager.logout();
+    });
+
+    it.each(["suspend", "logout", "stop"])("closes the bulk link on %s", async (action) => {
+      const f = await bulkFixture();
+      const { bulk, session } = await bulkDownload(f);
+      const closed = vi.fn();
+      session.onClose(closed);
+      if (action === "suspend") f.manager.suspend();
+      else if (action === "logout") await f.manager.logout();
+      else f.link.stop();
+      expect(bulk.close).toHaveBeenCalled();
+      expect(closed).toHaveBeenCalled();
+      // The bulk link does not reconnect.
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(f.tickets().filter((ticket) => ticket.lane)).toHaveLength(1);
+      expect(bulk.close).toHaveBeenCalledOnce();
+      f.link.stop();
+      await f.manager.logout();
+    });
   });
 });

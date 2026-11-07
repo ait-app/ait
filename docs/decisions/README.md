@@ -57,6 +57,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## 工作区、文件与 Git
 
+- [ADR-217：事件驱动的 Workspace 运行时事实与低能耗 Git 读取](workspace/adr-217-event-driven-workspace-runtime.md)
 - [ADR-215：沙箱化 Worktree 隔离级别](workspace/adr-215-sandboxed-worktree-isolation.md)
 - [ADR-168：Setup 全局摘要与面板日志订阅分离](workspace/adr-168-scoped-setup-observation.md)
 
@@ -192,6 +193,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## 客户端、连接与品牌
 
+- [ADR-218：Hub feature 协商收敛在线连接](clients/adr-218-hub-feature-negotiation.md)
 - [ADR-216：默认数据目录统一为 `~/.ait`](clients/adr-216-default-data-directory-ait.md)
 - [ADR-214：客户端 Workspace Bot 标签页 v2](clients/adr-214-workspace-bot-tab-v2.md)
 - [ADR-212：打包的 daemon 可执行文件统一命名为 aitd](clients/adr-212-packaged-daemon-name-aitd.md)

@@ -1,4 +1,4 @@
-import { channelFixture } from "../../../../packages/client/test/account-channel";
+import { centerLink } from "../../../../packages/client/test/hub";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AccountSessionManager,
@@ -12,18 +12,15 @@ afterEach(() => vi.useRealTimers());
 function fixture() {
   vi.useFakeTimers();
   const host = {
-    online: true,
-    status: "offline",
     host_id: "remote",
     node_id: "other",
     server_id: "server-b",
     instance_id: "instance-b",
     name: "Office",
     platform: "linux",
-    relay_modes: ["ait-rust-single-v1"],
+    state: "online",
+    f: ["credit", "download"],
   };
-  const channel = channelFixture(() => [host]);
-  let discoveryFails = false;
   const http = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
     const path = String(url);
     if (path.endsWith("/auth/providers"))
@@ -40,17 +37,14 @@ function fixture() {
         host_id: "self",
         node_session_id: "activation",
         control_required: true,
+        hub_features: ["lease", "hosts", "state", "credit", "download", "bulk"],
+        hub_ticket: "e".repeat(64),
+        hub_path: "/v1/hub",
+        hub_expires_in_seconds: 30,
+        hub_ep: "access",
       });
     if (path.endsWith("/control-tickets"))
       return Response.json({ control_ticket: "short-lived-control-ticket" });
-    if (path.endsWith("/channel-tickets"))
-      return discoveryFails
-        ? Response.json({ error: { message: "Offline" } }, { status: 503 })
-        : Response.json({
-            channel_ticket: "channel-ticket",
-            channel_path: "/v1/relay/channel",
-            protocol: "ait-channel-v1",
-          });
     if (path.endsWith("/relay-downloads"))
       return Response.json({
         relay_session_id: "visit",
@@ -64,7 +58,6 @@ function fixture() {
     installationId: "stable-install",
     appVersion: "test",
     fetch: http as typeof fetch,
-    channelTransport: channel.create,
     browserLogin: {
       randomSecret: () => "b".repeat(64),
       challenge: async () => "test-challenge",
@@ -81,19 +74,28 @@ function fixture() {
     }),
     local: vi.fn(async () => ({ online: false, connecting: false })),
     save: vi.fn(async () => undefined),
-    notify: vi.fn(),
+    // Like account-ipc: the Hub link runs while signed in.
+    notify: vi.fn((snapshot) => {
+      if (snapshot.status === "logged_out") hub.link.stop();
+      else hub.link.start();
+    }),
     closeTransports: vi.fn(),
   };
   const manager = new AccountSessionManager(deps);
+  const hub = centerLink(
+    () => manager.openHubTicket(),
+    () => [host],
+  );
+  manager.attachHub(hub.link);
   return {
     manager,
     deps,
     http,
     host,
-    channel,
+    hub,
     failDiscovery: () => {
-      discoveryFails = true;
-      channel.sockets.at(-1)?.disconnect();
+      hub.center.reachable = false;
+      hub.socket().drop();
     },
   };
 }
@@ -115,7 +117,7 @@ describe("account activation", () => {
   });
 
   it("uses the default HTTPS gateway for login, access registration and data", async () => {
-    const { manager, http, deps, channel } = fixture();
+    const { manager, http, deps, hub } = fixture();
     expect(manager.snapshot().center).toBe(DEFAULT_ACCOUNT_CENTER);
     await manager.loginWithBrowser("");
     await vi.advanceTimersByTimeAsync(1);
@@ -126,10 +128,9 @@ describe("account activation", () => {
     expect(deps.save).toHaveBeenCalledWith(
       expect.objectContaining({ center: DEFAULT_ACCOUNT_CENTER }),
     );
-    expect(channel.create).toHaveBeenCalledWith({
-      url: "wss://aitapp.cn/api/v1/relay/channel",
-      headers: { Authorization: "Bearer channel-ticket" },
-    });
+    expect(hub.sockets.map((socket) => [socket.url, socket.options])).toEqual([
+      ["wss://aitapp.cn/api/v1/hub", { headers: { Authorization: `Bearer ${"e".repeat(64)}` } }],
+    ]);
     await manager.select("remote");
     expect(
       (await manager.openDownload("remote", "download-token", DEFAULT_ACCOUNT_CENTER)).url,
@@ -168,7 +169,6 @@ describe("account activation", () => {
     await manager.loginWithBrowser("http://127.0.0.1:3000");
     await vi.advanceTimersByTimeAsync(1);
     expect(manager.snapshot().hosts).toHaveLength(1);
-    expect(http.mock.calls.some(([url]) => String(url).endsWith("/channel-tickets"))).toBe(true);
     expect(http.mock.calls.some(([url]) => String(url).endsWith("/relay-sessions"))).toBe(false);
     expect(http.mock.calls.some(([url]) => String(url).includes("/credentials"))).toBe(false);
     expect(deps.local).not.toHaveBeenCalled();
@@ -246,68 +246,4 @@ describe("account activation", () => {
     expect(() => normalizeCenter("https://user:password@example.com")).toThrow();
     expect(() => normalizeCenter("https://example.com?token=secret")).toThrow();
   });
-});
-
-it("verifies and recovers the desktop status adapter over a real ticket-authenticated socket", async () => {
-  const { WebSocketServer } = await import("ws");
-  const { once } = await import("node:events");
-  const context = fixture();
-  vi.useRealTimers();
-  delete context.deps.channelTransport;
-  const manager = new AccountSessionManager(context.deps);
-  const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
-  await once(server, "listening");
-  const address = server.address();
-  if (!address || typeof address === "string") throw new Error("Missing test server port");
-  const center = `http://127.0.0.1:${address.port}/api`;
-  const upgrade = vi.fn();
-  const received = vi.fn();
-  let answerHeartbeats = true;
-  server.on("connection", (socket, request) => {
-    upgrade(request.url, request.headers.authorization, request.headers["sec-websocket-protocol"]);
-    socket.send(
-      JSON.stringify({
-        type: "channel.welcome",
-        protocol: "ait-channel-v1",
-        connection_id: "test",
-        heartbeat_interval_seconds: 20,
-        heartbeat_timeout_seconds: 60,
-      }),
-    );
-    const snapshot = () =>
-      socket.send(
-        JSON.stringify({ type: "hosts.snapshot", hosts: [context.host], observed_at: "old" }),
-      );
-    socket.on("message", (data) => {
-      received(JSON.parse(data.toString()));
-      if (answerHeartbeats) snapshot();
-    });
-    snapshot();
-  });
-  try {
-    await manager.loginWithBrowser(center);
-    await vi.waitFor(() => expect(manager.snapshot().stale).toBe(false));
-    expect(upgrade).toHaveBeenCalledWith(
-      "/api/v1/relay/channel",
-      "Bearer channel-ticket",
-      undefined,
-    );
-    expect(manager.snapshot().hosts).toEqual([context.host]);
-    context.host.name = "Verified host";
-    manager.refresh();
-    await vi.waitFor(() => expect(received).toHaveBeenCalledWith({ type: "channel.heartbeat" }));
-    await vi.waitFor(() => expect(manager.snapshot().hosts[0]?.name).toBe("Verified host"));
-    expect(received).not.toHaveBeenCalledWith(expect.objectContaining({ type: "control.hello" }));
-    expect(upgrade).toHaveBeenCalledOnce();
-    answerHeartbeats = false;
-    manager.refresh();
-    await vi.waitFor(() => expect(upgrade).toHaveBeenCalledTimes(2), { timeout: 4_000 });
-    await vi.waitFor(() => expect(manager.snapshot().stale).toBe(false));
-    expect(manager.snapshot().hosts).toEqual([context.host]);
-  } finally {
-    await manager.shutdown();
-    await new Promise<void>((resolve, reject) =>
-      server.close((error) => (error ? reject(error) : resolve())),
-    );
-  }
 });

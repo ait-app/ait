@@ -655,7 +655,7 @@ fn compose_directory(
     let creations =
         persistence::storage::creation::open(config.data_dir.join("creations/receipts.json"))
             .map_err(|_| anyhow::anyhow!("initialize creation receipts"))?;
-    Ok(Directory::new(DirectoryDependencies {
+    let directory = Directory::new(DirectoryDependencies {
         projects: Box::new(project_registry.clone()),
         workspaces: Box::new(workspace_registry.clone()),
         source: Box::new(LocalDirectorySource),
@@ -665,15 +665,18 @@ fn compose_directory(
         )),
         server_id,
     })
-    .with_changes(changes.clone())
-    .with_creations(creations)
-    .with_runtime_source(Arc::new(
-        LocalWorkspaceRuntime::new(
-            LocalCheckout::new(config.data_dir.join("worktrees")),
-            LocalForge::new(),
-        )
-        .with_changes(changes),
-    )))
+    .with_changes(changes)
+    .with_creations(creations);
+    // Checkout facts wake only Workspace directory observers, not Agent or Hub projections.
+    let runtime = LocalWorkspaceRuntime::new(
+        LocalCheckout::new(config.data_dir.join("worktrees")),
+        LocalForge::new(),
+    );
+    let runtime = match directory.workspace_changes() {
+        Some(workspace_changes) => runtime.with_changes(workspace_changes),
+        None => runtime,
+    };
+    Ok(directory.with_runtime_source(Arc::new(runtime)))
 }
 
 fn compose_worktrees(

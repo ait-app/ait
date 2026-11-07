@@ -43,6 +43,7 @@
 - [ADR 分类索引](decisions/README.md)：决策及修订关系，完整清单只在此维护。
 - [仓库约定](../AGENTS.md)、[Rust 规范](policy/rust.md)、[文档维护规范](policy/documentation.md)。
 - [Agent 共享读视图](decisions/providers/adr-210-committed-runtime-read-snapshots.md)：已提交记录、目录与 Hub 读取的性能边界。
+- [Workspace 运行时能耗](decisions/workspace/adr-217-event-driven-workspace-runtime.md)：macOS 文件事件驱动侧边栏 Git 刷新，checkout 事实只唤醒 Workspace 目录。
 - [daemon 启动与发布](decisions/daemon/adr-201-daemon-owned-publication.md)：实例锁覆盖本地令牌、诊断采集和运行时重启；
   [访客资源边界](decisions/daemon/adr-208-workspace-share-guests.md)说明撤销清理、配置保护及后台自动化的只读权限。
 - [默认数据目录](decisions/clients/adr-216-default-data-directory-ait.md)：依次使用已存在的 `~/.ait`、

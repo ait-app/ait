@@ -166,24 +166,18 @@ export function AccountHubLifecycle() {
   }, [signedIn, center, accountId]);
 
   useEffect(() => {
-    if (
-      !connection ||
-      !online ||
-      !signedIn ||
-      !connection.snapshot().methods.includes("session.heartbeat")
-    )
-      return;
+    if (!connection || !online || !signedIn) return;
     // The route determines focus; background Host providers cannot overwrite the active Host.
-    const heartbeat = () =>
-      void connection
-        .call("session.heartbeat", {
-          appVisible: visible && eventsActive,
-          deviceType: isWeb ? "web" : "mobile",
-          ...(focusedHostId ? { focusedHostId, focusedAgentId, focusedTerminalId } : {}),
-        })
-        .catch(() => {});
-    heartbeat();
-    const timer = setInterval(heartbeat, 15_000);
+    const presence = {
+      appVisible: visible && eventsActive,
+      deviceType: isWeb ? "web" : "mobile",
+      ...(focusedHostId ? { focusedHostId, focusedAgentId, focusedTerminalId } : {}),
+    };
+    // The link sends a state frame only when this changes or after a resume. The desktop main
+    // process merges its windows and treats one silent for a minute as hidden, so repeat it.
+    const report = () => void connection.reportPresence(presence).catch(() => {});
+    report();
+    const timer = setInterval(report, 15_000);
     return () => clearInterval(timer);
   }, [
     connection,

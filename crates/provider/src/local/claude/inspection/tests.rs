@@ -94,3 +94,36 @@ async fn native_quota_respects_session_credentials_and_reports_expiry_without_ne
         Err(AgentSessionError::Rejected)
     ));
 }
+
+#[tokio::test]
+async fn stored_credentials_prefer_the_default_keychain_over_a_stale_plaintext_copy() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join(".credentials.json"),
+        json!({"claudeAiOauth":{"accessToken":"offline-stale-file","expiresAt":1_700_000_000_000_i64,
+            "subscriptionType":"pro"}}).to_string()).unwrap();
+    let keychain = || {
+        std::future::ready(Ok(Some(Credentials {
+            token: SecretString::from("offline-live-keychain"),
+            plan: Some("Max".to_owned()),
+            expires_at: None,
+        })))
+    };
+
+    let default = stored(root.path(), true, keychain())
+        .await
+        .unwrap()
+        .unwrap();
+    let custom = stored(root.path(), false, keychain())
+        .await
+        .unwrap()
+        .unwrap();
+    let fallback = stored(root.path(), true, std::future::ready(Ok(None)))
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(default.token.expose_secret(), "offline-live-keychain");
+    assert_eq!(custom.token.expose_secret(), "offline-stale-file");
+    assert_eq!(fallback.token.expose_secret(), "offline-stale-file");
+    assert_eq!(fallback.plan.as_deref(), Some("Pro"));
+}

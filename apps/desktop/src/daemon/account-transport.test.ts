@@ -24,7 +24,8 @@ function terminalFrames(count: number): Buffer[] {
   );
 }
 
-async function openHub(synchronousAck = false) {
+/** `credit`: the Host answers the open with a window; without it the session runs uncontrolled. */
+async function openHub(synchronousAck = false, credit = false) {
   const h = hubFixture();
   const socket = await h.online();
   const account = {
@@ -75,7 +76,7 @@ async function openHub(synchronousAck = false) {
   await h.flush();
   const open = socket.frames("open")[0];
   socket.receive(
-    { t: "accept", seq: 2, s: open.s },
+    { t: "accept", seq: 2, s: open.s, ...(credit ? { w: 1024 * 1024 } : {}) },
     JSON.stringify({
       type: "server_info",
       info: {
@@ -97,6 +98,7 @@ async function openHub(synchronousAck = false) {
   return {
     manager,
     owner,
+    socket,
     link: h.link,
     events,
     burst,
@@ -165,6 +167,21 @@ describe("desktop Hub terminal delivery", () => {
     await vi.waitFor(() => expect(relay.frames()).toHaveLength(33));
   });
 
+  it("grants Hub credit only for frames the renderer acknowledged", async () => {
+    const relay = await openHub(false, true);
+    relay.manualAck();
+    const frame = Buffer.alloc(300_000, 1);
+    relay.burst([frame, frame]);
+    await vi.waitFor(() => expect(relay.frames()).toHaveLength(2));
+    expect(relay.socket.frames("credit")).toEqual([]);
+    while (relay.pendingAcks.size) relay.acknowledge(relay.pendingAcks.values().next().value!);
+    // Each acknowledged frame is credited, cumulatively; the accept's server_info is not counted.
+    expect(relay.socket.frames("credit")).toEqual([
+      { t: "credit", s: expect.any(String), c: 300_000 },
+      { t: "credit", s: expect.any(String), c: 600_000 },
+    ]);
+  });
+
   it("still closes a stalled renderer and releases its queued output", async () => {
     const relay = await openHub();
     relay.manualAck();
@@ -194,7 +211,7 @@ describe("desktop Hub data connections", () => {
     const socket = h.socket();
     socket.open();
     socket.welcome({ center_methods: ["share.subscribe"] });
-    socket.presence(1, [HOST]);
+    socket.hosts(1, [HOST]);
     const account = {
       openVisit: vi.fn(),
       closeVisit: vi.fn(),
@@ -243,7 +260,7 @@ describe("desktop Hub data connections", () => {
   });
 
   it.each(["instance", null, "stale-instance"])(
-    "opens through presence with Relay instance %s and preserves the logical session during resume",
+    "opens through the hosts list with Relay instance %s and preserves the logical session during resume",
     async (instanceId) => {
       const h = hubFixture();
       const socket = await h.online();
@@ -355,7 +372,7 @@ describe("desktop Hub availability", () => {
       });
       if (mode === "other-center" || mode === "no-serve") {
         const socket = await h.online();
-        if (mode === "no-serve") socket.presence(2, []);
+        if (mode === "no-serve") socket.hosts(2, []);
       }
       if (mode === "timeout") h.link.start();
       const events: Record<string, unknown>[] = [];

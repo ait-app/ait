@@ -142,6 +142,7 @@ pub struct Directory {
     icon_store: Arc<dyn ProjectIconStore>,
     server_id: String,
     changes: Option<model::changes::Changes>,
+    workspace_changes: Option<model::changes::Changes>,
     mutation_subscriptions: Arc<Mutex<Vec<Box<dyn MutationSubscription>>>>,
 }
 
@@ -181,6 +182,7 @@ impl Directory {
             icon_store: dependencies.icon_store.into(),
             server_id: dependencies.server_id,
             changes: None,
+            workspace_changes: None,
             mutation_subscriptions: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -204,6 +206,7 @@ impl Directory {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .extend(subscriptions);
+        self.workspace_changes = Some(changes.extend());
         self.changes = Some(changes);
         self
     }
@@ -250,6 +253,15 @@ impl Directory {
     #[must_use]
     pub fn changes(&self) -> Option<model::changes::Changes> {
         self.changes.clone()
+    }
+
+    /// Return the Workspace directory wakeup signal, when active push has been composed.
+    ///
+    /// It observes every [`Directory::changes`] notification; Workspace runtime sources notify
+    /// it directly so checkout facts never wake Agent or Hub projections.
+    #[must_use]
+    pub fn workspace_changes(&self) -> Option<model::changes::Changes> {
+        self.workspace_changes.clone()
     }
 
     /// Share the process generation and directory checkpoints with other projection owners.

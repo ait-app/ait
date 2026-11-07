@@ -1,8 +1,15 @@
 import type { DaemonTransport } from "../daemon-client-transport-types.js";
-import { HUB_MAX_PAYLOAD, type HubInboundHeader } from "./frame.js";
+import { HUB_MAX_PAYLOAD, type HubInboundHeader, type HubSessionKind } from "./frame.js";
 
 export type HubSessionHeader =
-  | { t: "open"; s: string; to: { node: string }; share?: string }
+  | {
+      t: "open";
+      s: string;
+      to: { node: string };
+      share?: string;
+      k?: HubSessionKind;
+      w?: number;
+    }
   | { t: "msg"; s: string; pt: "text" | "binary" }
   | { t: "close"; s: string; code: string };
 
@@ -10,7 +17,17 @@ export type HubSessionHeader =
 export interface HubSessionLink {
   recoverLiveness(): Promise<boolean>;
   send(header: HubSessionHeader, payload?: Uint8Array): void;
+  /** Grant cumulative credit; unsequenced, so the session resends it after a resume. */
+  credit(session: string, c: number): void;
   release(session: string): void;
+}
+
+/** The link's unacknowledged buffer cannot take this frame now; retry after acknowledgements. */
+export class HubBufferFullError extends Error {
+  constructor() {
+    super("Hub send buffer is full.");
+    this.name = "HubBufferFullError";
+  }
 }
 
 /** The center or peer ended the session; `code` is the hub close code, e.g. `share_revoked`. */
@@ -28,6 +45,18 @@ export interface HubSessionCloseEvent {
   hubCode?: string;
 }
 
+export interface HubSessionOptions {
+  /** Share ID for a guest session to a resource another account shares. */
+  share?: string;
+  kind?: HubSessionKind;
+  /** This side's receive window, announced in `open.w` (`credit`). */
+  window?: number;
+  /** Grant credit only for bytes reported through `consumed()`, e.g. after a disk write. */
+  manualCredit?: boolean;
+}
+
+/** Messages queued while the peer window or link buffer is full; a stalled peer fails beyond it. */
+const MAX_QUEUED_BYTES = 16 * 1024 * 1024;
 const ACCEPT_TIMEOUT_MS = 30_000;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -37,28 +66,61 @@ function bytes(data: string | Uint8Array | ArrayBuffer): Uint8Array {
   return data instanceof ArrayBuffer ? new Uint8Array(data) : data;
 }
 
+/** Per-session flow control state (`credit` feature). */
+interface Credit {
+  /** Our receive window, sent in `open.w`. */
+  window: number;
+  /** Peer window from `accept.w`; null until accepted. */
+  peerWindow: number | null;
+  /** Latest cumulative credit granted by the peer. */
+  peer: number;
+  /** Message payload bytes sent. */
+  sent: number;
+  /** Message payload bytes the consumer finished with. */
+  delivered: number;
+  /** Latest credit we granted. */
+  granted: number;
+}
+
 /**
  * One logical hub session carrying a daemon WebSocket connection. The first send is the business
  * hello and opens the session; the serve endpoint's accept payload is the business server_info.
  * Link reconnects within the grace period are invisible here: the session stays open and the
  * link replays frames in order.
+ *
+ * With `credit`, sends wait for the peer's credit instead of overrunning its window, and the
+ * session grants credit as the consumer receives messages. An accept without `w` (a Host without
+ * `credit`) keeps the uncontrolled behavior.
  */
 export class HubSession implements DaemonTransport {
   private readonly opens = new Set<() => void>();
   private readonly closes = new Set<(event?: unknown) => void>();
   private readonly errors = new Set<(event?: unknown) => void>();
   private readonly messages = new Set<(data: unknown, isBinary: boolean) => void>();
+  private readonly drains = new Set<() => void>();
   private stage: "hello" | "accept" | "ready" | "closed" = "hello";
   private timer: ReturnType<typeof setTimeout> | null = null;
   private code: string | null = null;
+  private credit: Credit | null;
+  private queue: { pt: "text" | "binary"; payload: Uint8Array }[] = [];
+  private queuedBytes = 0;
+  /** Share ID for a guest session to a resource another account shares. */
+  readonly share?: string;
+  readonly kind: HubSessionKind;
+  private readonly manualCredit: boolean;
 
   constructor(
     private readonly link: HubSessionLink,
     readonly id: string,
     readonly node: string,
-    /** Share ID for a guest session to a resource another account shares. */
-    readonly share?: string,
+    options: HubSessionOptions = {},
   ) {
+    this.share = options.share;
+    this.kind = options.kind ?? "rpc";
+    this.manualCredit = options.manualCredit ?? false;
+    this.credit = options.window
+      ? { window: options.window, peerWindow: null, peer: 0, sent: 0, delivered: 0, granted: 0 }
+      : null;
     // Handlers are attached synchronously after construction; announce readiness afterwards.
     queueMicrotask(() => {
       if (this.stage === "hello") for (const handler of this.opens) handler();
@@ -69,11 +131,22 @@ export class HubSession implements DaemonTransport {
     return this.stage === "closed";
   }
 
+  /** Both sides announced a window, so this session is flow-controlled. */
+  get flowControlled(): boolean {
+    return this.credit?.peerWindow != null;
+  }
+
+  /** Message bytes waiting for peer credit or link buffer space. */
+  get bufferedAmount(): number {
+    return this.queuedBytes;
+  }
+
   /**
    * Hub close code when the center ended the session (`peer_gone`, `unknown_share`,
-   * `share_revoked`, ...), otherwise null. Guest sessions closed with `share_revoked` or
-   * `unknown_share` lost their access and should not be reopened automatically; `peer_gone`
-   * means the sharing Host went away, so reopen once its share is `online` again.
+   * `share_revoked`, `done`, `unsupported`, ...), otherwise null. Guest sessions closed with
+   * `share_revoked` or `unknown_share` lost their access and should not be reopened
+   * automatically; `peer_gone` means the sharing Host went away, so reopen once its share is
+   * `online` again.
    */
   get closeCode(): string | null {
     return this.code;
@@ -101,9 +174,14 @@ export class HubSession implements DaemonTransport {
     if (this.stage === "hello") {
       if (typeof data !== "string") throw new Error("Expected the AIT hello before sending data.");
       this.link.send(
-        this.share
-          ? { t: "open", s: this.id, to: { node: this.node }, share: this.share }
-          : { t: "open", s: this.id, to: { node: this.node } },
+        {
+          t: "open",
+          s: this.id,
+          to: { node: this.node },
+          ...(this.share ? { share: this.share } : {}),
+          ...(this.kind === "download" ? { k: "download" as const } : {}),
+          ...(this.credit ? { w: this.credit.window } : {}),
+        },
         payload,
       );
       this.stage = "accept";
@@ -113,20 +191,105 @@ export class HubSession implements DaemonTransport {
       );
       return;
     }
-    this.link.send(
-      { t: "msg", s: this.id, pt: typeof data === "string" ? "text" : "binary" },
-      payload,
-    );
+    const pt = typeof data === "string" ? "text" : "binary";
+    if (!this.credit) {
+      this.link.send({ t: "msg", s: this.id, pt }, payload);
+      return;
+    }
+    // Whether flow control applies is known only after the accept; queue until then.
+    if (this.queuedBytes + payload.byteLength > MAX_QUEUED_BYTES) {
+      this.abort(new Error("Hub session send buffer is full."));
+      throw new Error("Hub session send buffer is full.");
+    }
+    this.queue.push({ pt, payload });
+    this.queuedBytes += payload.byteLength;
+    this.pump();
+  }
+
+  /** Resolve once queued messages were handed to the link, or the session ended. */
+  drain(): Promise<void> {
+    if (!this.queue.length || this.closed) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => {
+        this.drains.delete(done);
+        resolve();
+      };
+      this.drains.add(done);
+    });
+  }
+
+  /** Send queued messages the peer window and link buffer admit; the link calls it after acks. */
+  pump(): void {
+    const credit = this.credit;
+    if (this.stage !== "ready") return;
+    while (this.queue.length) {
+      const item = this.queue[0];
+      const length = item.payload.byteLength;
+      if (credit?.peerWindow != null) {
+        if (length > credit.peerWindow) {
+          this.abort(new Error("Hub message exceeds the peer window."));
+          return;
+        }
+        if (credit.sent + length > credit.peer + credit.peerWindow) break;
+      }
+      try {
+        this.link.send({ t: "msg", s: this.id, pt: item.pt }, item.payload);
+      } catch (error) {
+        if (error instanceof HubBufferFullError && credit) break;
+        this.abort(error instanceof Error ? error : new Error("Hub session send failed."));
+        return;
+      }
+      this.queue.shift();
+      this.queuedBytes -= length;
+      if (credit?.peerWindow != null) credit.sent += length;
+    }
+    if (!this.queue.length) for (const resolve of this.drains) resolve();
+  }
+
+  /**
+   * Report message bytes the consumer finished with and grant them as credit at once. Holding
+   * any back could stall the peer for good: with the window equal to the payload limit, a
+   * message that does not fit beside the withheld bytes would wait for credit that never
+   * comes. Sessions with `manualCredit` call it after processing, e.g. a download after
+   * writing to disk.
+   */
+  consumed(length: number): void {
+    const credit = this.credit;
+    if (credit?.peerWindow == null || this.closed || length <= 0) return;
+    credit.delivered += length;
+    credit.granted = credit.delivered;
+    this.link.credit(this.id, credit.granted);
+  }
+
+  /** Credit is unsequenced: after a link resume both sides resend their latest value. */
+  resendCredit(): void {
+    const credit = this.credit;
+    if (credit?.peerWindow == null || this.closed || !credit.delivered) return;
+    credit.granted = credit.delivered;
+    this.link.credit(this.id, credit.granted);
+  }
+
+  /** Peer credit forwarded by the center. */
+  receiveCredit(c: number): void {
+    const credit = this.credit;
+    if (credit?.peerWindow == null || this.closed || c <= credit.peer) return;
+    credit.peer = c;
+    this.pump();
   }
 
   /** Business close: tell the peer and release the session without emitting events. */
   close(): void {
+    this.end("closed");
+  }
+
+  /** Close with a hub close code, e.g. `cancelled` for a download the user stopped. */
+  end(code: string): void {
     if (this.stage === "closed") return;
     const opened = this.stage !== "hello";
     this.dispose();
     if (opened) {
       try {
-        this.link.send({ t: "close", s: this.id, code: "closed" });
+        this.link.send({ t: "close", s: this.id, code });
       } catch {
         /* A stopped link already ended every session. */
       }
@@ -144,11 +307,11 @@ export class HubSession implements DaemonTransport {
   }
 
   /** End the session locally (sign-out, suspension or a local failure) and tell the peer. */
-  abort(error?: Error): void {
+  abort(error?: Error, code?: string): void {
     if (this.stage === "closed") return;
     if (this.stage !== "hello") {
       try {
-        this.link.send({ t: "close", s: this.id, code: error ? "failed" : "closed" });
+        this.link.send({ t: "close", s: this.id, code: code ?? (error ? "failed" : "closed") });
       } catch {
         /* A stopped link already ended every session. */
       }
@@ -173,12 +336,17 @@ export class HubSession implements DaemonTransport {
       this.stage = "ready";
       if (this.timer) clearTimeout(this.timer);
       this.timer = null;
+      // An accept without a window means the Host has no `credit`.
+      if (this.credit && header.w === undefined) this.credit = null;
+      else if (this.credit) this.credit.peerWindow = header.w!;
       if (payload.byteLength) this.deliver(decoder.decode(payload), false);
+      this.pump();
       return;
     }
     if (header.t === "msg") {
       if (header.pt === "text") this.deliver(decoder.decode(payload), false);
       else this.deliver(payload.slice(), true);
+      if (!this.manualCredit) this.consumed(payload.byteLength);
     }
   }
 
@@ -191,6 +359,9 @@ export class HubSession implements DaemonTransport {
 
   private dispose(): void {
     this.stage = "closed";
+    this.queue = [];
+    this.queuedBytes = 0;
+    for (const resolve of this.drains) resolve();
     this.release();
   }
 

@@ -1,8 +1,17 @@
 import { vi } from "vitest";
 import type { WebSocketLike } from "../src/daemon-client-transport-types.js";
-import { HubLink, type HubLinkOptions } from "../src/hub/link.js";
+import { HUB_CENTER_FEATURES } from "../src/hub/frame.js";
+import { HubLink, type HubLinkOptions, type HubTicket } from "../src/hub/link.js";
 
 export const CENTER = "https://center.test/api";
+/** Hub fields of a current center's node registration: its features and the link's first ticket. */
+export const REGISTRATION_HUB = {
+  hub_features: [...HUB_CENTER_FEATURES],
+  hub_ticket: "e".repeat(64),
+  hub_path: "/v1/hub",
+  hub_expires_in_seconds: 30,
+  hub_ep: "access",
+};
 export const RESUME_TOKEN = "r".repeat(64);
 
 interface Sent {
@@ -67,6 +76,7 @@ export class FakeHubSocket implements WebSocketLike {
     this.emit("message", { data: frame.buffer });
   }
 
+  /** A welcome enabling every feature of this connection's hello unless `overrides.f` says otherwise. */
   welcome(overrides: Record<string, unknown> = {}): void {
     this.receive({
       t: "welcome",
@@ -79,12 +89,14 @@ export class FakeHubSocket implements WebSocketLike {
       grace_seconds: 120,
       ping_seconds: 20,
       max_payload: 1024 * 1024,
+      f: this.frames("hello").at(-1)?.f,
       ...overrides,
     });
   }
 
-  presence(seq: number, nodes: object[]): void {
-    this.receive({ t: "presence", seq }, JSON.stringify({ nodes }));
+  /** A full `hosts` snapshot; its version defaults to `seq`. */
+  hosts(seq: number, hosts: object[], ver = seq): void {
+    this.receive({ t: "hosts", seq, ver, full: true }, JSON.stringify({ hosts }));
   }
 
   drop(): void {
@@ -151,15 +163,90 @@ export function hubFixture(options: Partial<HubLinkOptions> = {}) {
     logger,
     flush,
     socket: () => sockets.at(-1)!,
-    /** Start the link and complete a fresh handshake with one presence snapshot. */
-    async online(nodes: object[] = [HOST]) {
+    /** Start the link and complete a fresh handshake with one full `hosts` snapshot. */
+    async online(hosts: object[] = [HOST]) {
       link.start();
       await flush();
       const socket = sockets.at(-1)!;
       socket.open();
       socket.welcome();
-      socket.presence(1, nodes);
+      socket.hosts(1, hosts);
       return socket;
     },
   };
+}
+
+/**
+ * A link to a center that answers each new connection with a welcome and a full `hosts` snapshot
+ * of `hosts()`, like the current center. While `center.reachable` is false, connections fail;
+ * while `center.auto` is false, tests drive `sockets` themselves.
+ */
+export function centerLink(
+  ticket: () => Promise<HubTicket>,
+  hosts: () => object[],
+  options: Partial<HubLinkOptions> = {},
+) {
+  const sockets: FakeHubSocket[] = [];
+  const center = { auto: true, reachable: true };
+  let links = 0;
+  let sessions = 0;
+  const link = new HubLink({
+    ticket,
+    webSocketFactory: (url, socketOptions) => {
+      if (!center.reachable) throw new Error("offline");
+      const socket = new FakeHubSocket(url, socketOptions);
+      sockets.push(socket);
+      if (center.auto)
+        queueMicrotask(() => {
+          socket.open();
+          socket.welcome({ link: `link-${++links}` });
+          socket.hosts(1, hosts());
+        });
+      return socket;
+    },
+    randomUUID: () => `session-${++sessions}`,
+    logger: { info: vi.fn(), warn: vi.fn() },
+    ...options,
+  });
+  return { link, sockets, center, socket: () => sockets.at(-1)! };
+}
+
+/**
+ * A global `WebSocket` stand-in for the production adapters (`new WebSocket(url, protocols,
+ * { headers })`), answering each connection like the current center: a welcome enabling every
+ * announced feature and a full `hosts` snapshot of `HubWebSocket.hosts`. Call `reset()` per test.
+ */
+export class HubWebSocket extends FakeHubSocket {
+  static instances: HubWebSocket[] = [];
+  static hosts: object[] = [];
+  private static links = 0;
+
+  static reset(hosts: object[] = []): void {
+    HubWebSocket.instances = [];
+    HubWebSocket.hosts = hosts;
+    HubWebSocket.links = 0;
+  }
+  /** Answer pings, like a connection that is alive. */
+  answerPings = true;
+
+  constructor(url: string, protocols?: string[], options?: { headers?: Record<string, string> }) {
+    super(url, { protocols, headers: options?.headers });
+    HubWebSocket.instances.push(this);
+    queueMicrotask(() => {
+      this.open();
+      const resume = this.frames("hello").at(-1)?.resume as { link: string } | null | undefined;
+      if (resume) {
+        this.welcome({ resumed: true, link: resume.link, resume_token: undefined });
+        return;
+      }
+      this.welcome({ link: `link-${++HubWebSocket.links}` });
+      this.hosts(1, HubWebSocket.hosts);
+    });
+  }
+
+  override send(data: string | Uint8Array | ArrayBuffer): void {
+    super.send(data);
+    const ping = this.sent.at(-1)!.header;
+    if (this.answerPings && ping.t === "ping") this.receive({ t: "pong", n: ping.n });
+  }
 }

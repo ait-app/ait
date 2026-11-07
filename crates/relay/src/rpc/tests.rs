@@ -6,7 +6,6 @@ use super::*;
 fn resources() -> (Connector, Runtime) {
     let connector = Connector::new(
         "127.0.0.1:7316".parse().unwrap(),
-        "local-only-test-token-at-least-32-characters".into(),
         "relay-server".to_owned(),
         "relay-instance".to_owned(),
     );
@@ -57,12 +56,12 @@ async fn unrelated_requests_keep_their_context_and_consumed_requests_are_skipped
     let mut pending = Some(context("connection.ping", json!({}), &runtime, &outbound));
 
     assert!(matches!(
-        request(&mut pending, &connector, None).await,
+        request(&mut pending, &connector, None),
         Err(DispatchError::NotImplemented)
     ));
     assert_eq!(pending.as_ref().unwrap().request.method, "connection.ping");
     assert!(receiver.try_recv().is_err());
-    request(&mut None, &connector, None).await.unwrap();
+    request(&mut None, &connector, None).unwrap();
     assert!(receiver.try_recv().is_err());
 }
 
@@ -72,7 +71,7 @@ async fn status_and_stop_reply_once_with_only_the_connectors_public_identity_and
     let (outbound, mut receiver) = Outbound::new();
     for method in ["relay.status.request", "relay.stop.request"] {
         let mut pending = Some(context(method, json!({}), &runtime, &outbound));
-        request(&mut pending, &connector, None).await.unwrap();
+        request(&mut pending, &connector, None).unwrap();
 
         assert!(pending.is_none());
         assert_eq!(
@@ -89,60 +88,36 @@ async fn status_and_stop_reply_once_with_only_the_connectors_public_identity_and
                 }
             })
         );
-        request(&mut pending, &connector, None).await.unwrap();
+        request(&mut pending, &connector, None).unwrap();
         assert!(receiver.try_recv().is_err());
     }
 }
 
 #[tokio::test]
-async fn malformed_or_invalid_grants_return_correlated_errors_without_starting_a_connector() {
+async fn start_never_opens_a_relay_control_connection() {
     let (connector, runtime) = resources();
     let (outbound, mut receiver) = Outbound::new();
-    let grants = [
-        Value::Null,
-        json!({"center_url":"https://example.invalid/api", "control_ticket":"invalid",
-            "node_session_id":"00000000-0000-0000-0000-000000000001"}),
-        json!({"center_url":"http://example.invalid/api", "control_ticket":"a".repeat(64),
-            "node_session_id":"00000000-0000-0000-0000-000000000001"}),
-        json!({"center_url":"https://example.invalid/api", "control_ticket":"a".repeat(64),
-            "node_session_id":"00000000-0000-0000-0000-000000000001",
-            "local_url":"ws://other-host/api/ws"}),
-    ];
-    for grant in grants {
-        let mut pending = Some(context("relay.start.request", grant, &runtime, &outbound));
-        request(&mut pending, &connector, None).await.unwrap();
+    let grant = json!({"center_url":"https://example.invalid/api", "control_ticket":"a".repeat(64),
+        "node_session_id":"00000000-0000-0000-0000-000000000001"});
+    for (management, code) in [
+        (None, "not_implemented"),
+        (Some(json!({"mode":"managed"})), "relay_managed"),
+    ] {
+        let mut pending = Some(context(
+            "relay.start.request",
+            grant.clone(),
+            &runtime,
+            &outbound,
+        ));
+        request(&mut pending, &connector, management).unwrap();
 
         assert!(pending.is_none());
         let response = decode(receiver.try_recv().unwrap().message);
         assert_eq!(response["type"], "error");
         assert_eq!(response["request_id"], "relay-request");
-        assert_eq!(response["code"], "invalid_message");
+        assert_eq!(response["code"], code);
         assert!(!response.to_string().contains("control_ticket"));
-        assert!(!connector.status().await.connecting);
-        assert!(receiver.try_recv().is_err());
     }
-}
-
-#[tokio::test]
-async fn shutdown_rejects_start_with_a_stable_transport_error() {
-    let (connector, runtime) = resources();
-    let (outbound, mut receiver) = Outbound::new();
-    connector.begin_shutdown();
-    let mut pending = Some(context(
-        "relay.start.request",
-        json!({"center_url":"https://example.invalid/api", "control_ticket":"a".repeat(64),
-            "node_session_id":"00000000-0000-0000-0000-000000000001"}),
-        &runtime,
-        &outbound,
-    ));
-
-    request(&mut pending, &connector, None).await.unwrap();
-
-    assert!(pending.is_none());
-    let response = decode(receiver.try_recv().unwrap().message);
-    assert_eq!(response["request_id"], "relay-request");
-    assert_eq!(response["code"], "agent_io");
-    assert!(!connector.status().await.connecting);
 }
 
 #[tokio::test]
@@ -158,7 +133,7 @@ async fn delivery_failure_consumes_the_handled_request_and_stops_dispatch() {
     ));
 
     assert!(matches!(
-        request(&mut pending, &connector, None).await,
+        request(&mut pending, &connector, None),
         Err(DispatchError::Delivery(_))
     ));
     assert!(pending.is_none());

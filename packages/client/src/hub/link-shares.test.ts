@@ -33,13 +33,13 @@ const SHARE = {
   state: "online",
 };
 
-async function online(methods: string[] = METHODS) {
+async function online() {
   const h = hubFixture();
   h.link.start();
   await h.flush();
   const socket = h.socket();
   socket.open();
-  socket.welcome({ center_methods: methods });
+  socket.welcome({ center_methods: METHODS });
   return { h, socket };
 }
 
@@ -61,7 +61,6 @@ function accept(socket: FakeHubSocket, seq: number, result: object = { result: {
 describe("hub link group and share snapshots", () => {
   it("subscribes once and tracks sequenced snapshots", async () => {
     const { h, socket } = await online();
-    expect(h.link.sharesSupported).toBe(true);
     expect(h.link.groups).toBeNull();
     expect(h.link.shares).toBeNull();
     const changed = vi.fn();
@@ -171,18 +170,6 @@ describe("hub link group and share snapshots", () => {
     fresh.open();
     fresh.welcome({ link: "link-2", center_methods: METHODS });
     expect(fresh.frames("call")).toEqual([]);
-    h.link.stop();
-  });
-
-  it("does not subscribe on centers without shares", async () => {
-    const { h, socket } = await online(["push.register"]);
-    expect(h.link.sharesSupported).toBe(false);
-    h.link.subscribeShares();
-    await h.flush();
-    expect(socket.frames("call")).toEqual([]);
-    await expect(h.link.call("share.subscribe", {})).rejects.toMatchObject({
-      code: "unsupported",
-    });
     h.link.stop();
   });
 });

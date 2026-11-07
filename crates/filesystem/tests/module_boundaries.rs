@@ -12,6 +12,8 @@ use filesystem as _;
 use libc as _;
 use memchr as _;
 use model as _;
+#[cfg(target_os = "macos")]
+use notify as _;
 use persistence as _;
 use serde as _;
 use serde_json as _;

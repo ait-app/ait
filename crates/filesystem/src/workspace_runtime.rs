@@ -14,11 +14,25 @@ use crate::git::local::checkout::LocalCheckout;
 
 mod forge;
 mod reads;
+mod watch;
 
 const CACHE_CAPACITY: usize = 1024;
 const READ_CONCURRENCY: usize = 2;
-const GIT_TTL: Duration = Duration::from_secs(2);
-const FORGE_TTL: Duration = Duration::from_secs(30);
+/// Unwatched local checkouts refresh quickly while they change and back off while idle.
+const GIT_REFRESH: Refresh = Refresh {
+    base: Duration::from_secs(2),
+    max: Duration::from_secs(30),
+};
+/// Watched checkouts refresh after file events; polling only guards against missed events.
+const WATCHED_GIT_REFRESH: Refresh = Refresh {
+    base: GIT_REFRESH.base,
+    max: Duration::from_secs(300),
+};
+/// Forge reads use the network, so idle pull requests are polled least often.
+const FORGE_REFRESH: Refresh = Refresh {
+    base: Duration::from_secs(30),
+    max: Duration::from_secs(120),
+};
 
 /// Checkout facts shared across directory clones and physical client connections.
 ///
@@ -38,9 +52,39 @@ struct Inner {
     forge_reads: Arc<AtomicUsize>,
     git_jobs: Mutex<VecDeque<reads::Job>>,
     forge_jobs: Mutex<VecDeque<reads::Job>>,
-    git_ttl: Duration,
-    forge_ttl: Duration,
+    git_refresh: Refresh,
+    watched_git_refresh: Refresh,
+    forge_refresh: Refresh,
     changes: Option<model::changes::Changes>,
+    #[cfg(target_os = "macos")]
+    watch: watch::Watch,
+}
+
+impl Inner {
+    /// Git refresh policy for `entry`, relaxed once file events cover it.
+    fn git_refresh(&self, entry: &Entry) -> Refresh {
+        if entry.watched {
+            self.watched_git_refresh
+        } else {
+            self.git_refresh
+        }
+    }
+}
+
+/// Exponential refresh backoff: each read that leaves the cached value unchanged doubles the
+/// interval from `base` up to `max`, and any change returns it to `base`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Refresh {
+    base: Duration,
+    max: Duration,
+}
+
+impl Refresh {
+    fn interval(self, unchanged: u32) -> Duration {
+        self.base
+            .saturating_mul(2_u32.saturating_pow(unchanged))
+            .min(self.max)
+    }
 }
 
 #[derive(Debug)]
@@ -50,22 +94,54 @@ struct Entry {
     git_read: ReadState,
     forge_read: ReadState,
     accessed_at: Instant,
+    /// Watched paths learned from the latest Git read.
+    roots: Option<watch::WatchRoots>,
+    /// File events currently cover every root.
+    watched: bool,
 }
 
 #[derive(Debug, Default)]
 struct ReadState {
     completed_at: Option<Instant>,
     running: bool,
+    /// Consecutive completed reads that left the cached value unchanged.
+    unchanged: u32,
+    /// A file event arrived since the latest read started.
+    dirty: bool,
 }
 
 impl ReadState {
-    fn due(&self, ttl: Duration) -> bool {
-        !self.running && self.completed_at.is_none_or(|last| last.elapsed() >= ttl)
+    /// Whether a read should start: never read, idle past its backoff, or dirty past `base`.
+    fn due(&self, refresh: Refresh) -> bool {
+        !self.running
+            && self.completed_at.is_none_or(|last| {
+                let elapsed = last.elapsed();
+                elapsed >= refresh.interval(self.unchanged)
+                    || (self.dirty && elapsed >= refresh.base)
+            })
     }
 
-    fn finish(&mut self) {
+    /// Admit a read; events arriving while it runs mark the state dirty again.
+    fn start(&mut self) {
+        self.running = true;
+        self.dirty = false;
+    }
+
+    /// Release an admitted read that never ran, keeping it due for the next reader.
+    fn abandon(&mut self) {
+        self.running = false;
+        self.dirty = true;
+    }
+
+    /// Record a completed read; `changed` resets the backoff, otherwise it grows.
+    fn finish(&mut self, changed: bool) {
         self.running = false;
         self.completed_at = Some(Instant::now());
+        self.unchanged = if changed {
+            0
+        } else {
+            self.unchanged.saturating_add(1)
+        };
     }
 }
 
@@ -105,9 +181,12 @@ impl LocalWorkspaceRuntime {
                 forge_reads: Arc::default(),
                 git_jobs: Mutex::default(),
                 forge_jobs: Mutex::default(),
-                git_ttl: GIT_TTL,
-                forge_ttl: FORGE_TTL,
+                git_refresh: GIT_REFRESH,
+                watched_git_refresh: WATCHED_GIT_REFRESH,
+                forge_refresh: FORGE_REFRESH,
                 changes: None,
+                #[cfg(target_os = "macos")]
+                watch: watch::Watch::default(),
             }),
         }
     }
@@ -158,6 +237,7 @@ impl WorkspaceRuntimeSource for LocalWorkspaceRuntime {
             .cache
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut evicted = false;
         if !cache.contains_key(&cwd) && cache.len() >= CACHE_CAPACITY {
             let oldest = cache
                 .iter()
@@ -165,7 +245,9 @@ impl WorkspaceRuntimeSource for LocalWorkspaceRuntime {
                 .min_by_key(|(_, entry)| entry.accessed_at)
                 .map(|(cwd, _)| cwd.clone());
             if let Some(oldest) = oldest {
-                cache.remove(&oldest);
+                evicted = cache
+                    .remove(&oldest)
+                    .is_some_and(|entry| entry.roots.is_some());
             } else {
                 return WorkspaceRuntimeSnapshot::default();
             }
@@ -176,11 +258,13 @@ impl WorkspaceRuntimeSource for LocalWorkspaceRuntime {
             git_read: ReadState::default(),
             forge_read: ReadState::default(),
             accessed_at: Instant::now(),
+            roots: None,
+            watched: false,
         });
         entry.accessed_at = Instant::now();
-        let git_due = entry.git_read.due(self.inner.git_ttl);
+        let git_due = entry.git_read.due(self.inner.git_refresh(entry));
         if git_due {
-            entry.git_read.running = true;
+            entry.git_read.start();
         }
         let forge_due = if entry
             .value
@@ -188,7 +272,7 @@ impl WorkspaceRuntimeSource for LocalWorkspaceRuntime {
             .as_ref()
             .is_some_and(|git| git.remote_url.is_some())
         {
-            entry.forge_read.due(self.inner.forge_ttl)
+            entry.forge_read.due(self.inner.forge_refresh)
         } else {
             if entry.git_read.completed_at.is_some() {
                 entry.value.forge = Some(WorkspaceForgeSnapshot::default());
@@ -201,6 +285,9 @@ impl WorkspaceRuntimeSource for LocalWorkspaceRuntime {
         let identity = Identity::from_entry(entry);
         let snapshot = entry.value.clone();
         drop(cache);
+        if evicted {
+            watch::sync(&self.inner);
+        }
         if git_due {
             reads::enqueue(&self.inner, reads::Job::Git(cwd.clone()));
         }

@@ -33,6 +33,12 @@ struct Publication {
     acceptance: Arc<links::Acceptance>,
     /// The previous refresh already returned an access token expired by the local clock.
     expired_refresh: bool,
+    /// Serve ticket issued with the registration and the JWT generation it accepted.
+    issued: Option<(Uuid, crate::HubTicket)>,
+    /// A rotated JWT has not been presented to the center yet. Only an HTTP renewal
+    /// advances a device-grant session's authorization deadline, so it runs even
+    /// while the Hub link holds the lease.
+    renew_token: bool,
 }
 
 impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
@@ -134,6 +140,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
         let tokens = self.initial_tokens(cancel).await?;
         let (grants, receiver) = tokio::sync::watch::channel(None);
         let (errors, failures) = tokio::sync::mpsc::channel(2);
+        let (bulk, bulk_requests) = tokio::sync::mpsc::channel(1);
         let mut authority = authority::Authority {
             center: &self.center,
             store: &self.store,
@@ -143,29 +150,19 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
             active_session: &mut self.active_session,
             grants,
             errors: failures,
+            bulk,
         };
-        let relay = links::maintain(
-            &self.center,
-            &self.relay,
-            receiver.clone(),
-            errors.clone(),
-            links::Kind::Relay,
-        );
-        let hub = links::maintain(
-            &self.center,
-            &self.relay,
-            receiver,
-            errors,
-            links::Kind::Hub,
-        );
+        let bulk = links::serve_bulk(&self.center, receiver.clone(), bulk_requests);
+        let hub = links::maintain(&self.center, &self.relay, receiver, errors);
         // All three futures are scoped to this manager. On exit they are dropped before stop(),
         // so an outstanding ticket can never restart transport after shutdown.
         tokio::select! {
             // Revoke expired authority before polling a ticket that becomes ready at the deadline.
             biased;
             result = authority.maintain(tokens, cancel) => result,
-            () = relay => Err(Error::Protocol),
             () = hub => Err(Error::Protocol),
+            // The authority holds a request sender, so this never ends first.
+            () = bulk => Err(Error::Protocol),
         }
     }
 }

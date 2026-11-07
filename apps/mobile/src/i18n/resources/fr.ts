@@ -1508,6 +1508,7 @@ export const fr: TranslationResources = {
     isolation: {
       local: "Local",
       worktree: "Nouveau worktree",
+      sandboxedWorktree: "Worktree isolé",
       label: "Isolation",
     },
     fields: {

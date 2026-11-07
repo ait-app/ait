@@ -113,6 +113,80 @@ pub struct Session {
     pub lease_until: DateTime<Utc>,
     /// Suggested renewal interval.
     pub renew_after_seconds: u64,
+    /// A serve ticket issued with the registration, saving the first ticket request.
+    pub hub_ticket: Option<HubTicket>,
+}
+
+/// One-use `ait-hub-v1` serve credential and the features declared with it.
+#[derive(Debug, Clone)]
+pub struct HubTicket {
+    /// One-use 64-hex ticket for `/v1/hub`.
+    pub ticket: SecretString,
+    /// `hub_features` the center declared with the ticket. The Hub link refuses
+    /// to start when one it needs is missing.
+    pub features: Vec<String>,
+    /// Local expiry of a ticket issued ahead of use; `None` when used at once.
+    pub expires_at: Option<tokio::time::Instant>,
+}
+
+impl HubTicket {
+    /// A ticket for immediate use.
+    #[must_use]
+    pub fn new(ticket: SecretString, features: Vec<String>) -> Self {
+        Self {
+            ticket,
+            features,
+            expires_at: None,
+        }
+    }
+
+    /// Whether the ticket can still be presented.
+    #[must_use]
+    pub fn usable(&self) -> bool {
+        self.expires_at
+            .is_none_or(|expires| tokio::time::Instant::now() < expires)
+    }
+}
+
+/// A hub link's request for a `bulk` lane serve ticket of `session`.
+#[derive(Debug)]
+pub(crate) struct BulkRequest {
+    pub(crate) session: Uuid,
+    pub(crate) reply: tokio::sync::oneshot::Sender<Result<HubTicket, Error>>,
+}
+
+/// Lets the hub link of one node session obtain `bulk` lane serve tickets on
+/// demand. The controller answers with its current JWT while that session is
+/// still the published one.
+#[derive(Debug, Clone)]
+pub struct BulkTickets {
+    requests: tokio::sync::mpsc::Sender<BulkRequest>,
+    session: Uuid,
+}
+
+impl BulkTickets {
+    pub(crate) const fn new(
+        requests: tokio::sync::mpsc::Sender<BulkRequest>,
+        session: Uuid,
+    ) -> Self {
+        Self { requests, session }
+    }
+
+    /// Request a one-use `bulk` lane serve ticket.
+    /// # Errors
+    /// Returns `Unavailable` once the controller stopped or published another
+    /// session, or the center's refusal.
+    pub async fn request(&self) -> Result<HubTicket, Error> {
+        let (reply, response) = tokio::sync::oneshot::channel();
+        self.requests
+            .send(BulkRequest {
+                session: self.session,
+                reply,
+            })
+            .await
+            .map_err(|_| Error::Unavailable)?;
+        response.await.map_err(|_| Error::Unavailable)?
+    }
 }
 
 /// Sanitized failures: adapters must not embed responses, URLs or credentials.

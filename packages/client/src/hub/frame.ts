@@ -7,13 +7,54 @@ export const HUB_MAX_PAYLOAD = 1024 * 1024;
 
 export type HubPayloadType = "text" | "binary";
 
+/**
+ * `ait-hub-v1` features this client announces in every main link's `hello.f`. The center must
+ * enable all of them (`welcome.f`); this client does not work with centers that predate them.
+ */
+export const HUB_FEATURES = ["lease", "hosts", "state", "credit", "download"] as const;
+export type HubFeature = (typeof HUB_FEATURES)[number];
+
+/**
+ * `hub_features` the center must advertise over HTTP: everything links announce, plus `bulk`
+ * tickets for download links.
+ */
+export const HUB_CENTER_FEATURES: readonly string[] = [...HUB_FEATURES, "bulk"];
+
+/** Features a bulk link (`lane: "bulk"`) must announce; it may announce no others. */
+export const HUB_BULK_FEATURES: readonly HubFeature[] = ["credit", "download"];
+
+/** `main` links carry everything; `bulk` links carry only download sessions. */
+export type HubLane = "main" | "bulk";
+
+/** Largest session window (`credit`); every message up to the payload limit fits it. */
+export const HUB_MAX_WINDOW = 1024 * 1024;
+
+/** Session kind: business RPC (default) or a file download stream. */
+export type HubSessionKind = "rpc" | "download";
+
+/** Visibility and focus of an access endpoint, sent in `state` frames. */
+export interface HubPresenceState {
+  visible: boolean;
+  focus?: { host: string; agent?: string; terminal?: string };
+}
+
 /** Frames this client sends; sequenced kinds receive `seq` from the link. */
 export type HubOutboundHeader =
-  | { t: "hello"; v: 1; resume: { link: string; recv: number } | null }
+  | { t: "hello"; v: 1; resume: { link: string; recv: number } | null; f?: string[] }
   | { t: "ack"; a: number }
   | { t: "ping"; n: number }
+  | ({ t: "state" } & HubPresenceState)
+  | { t: "credit"; s: string; c: number }
   | { t: "call"; seq: number; id: string; method: string }
-  | { t: "open"; seq: number; s: string; to: { node: string }; share?: string }
+  | {
+      t: "open";
+      seq: number;
+      s: string;
+      to: { node: string };
+      share?: string;
+      k?: HubSessionKind;
+      w?: number;
+    }
   | { t: "msg"; seq: number; s: string; pt: HubPayloadType }
   | { t: "close"; seq: number; s: string; code: string };
 
@@ -29,6 +70,26 @@ export interface HubWelcome {
   ping_seconds: number;
   max_payload: number;
   center_methods?: string[];
+  /** Enabled features: those of `hello.f` the center supports. */
+  f?: string[];
+  /** Default session window; present only when `credit` is enabled. */
+  win?: number;
+}
+
+/** One Host of the account as pushed in `hosts` frames. */
+export interface HubHost {
+  host_id: string;
+  node_id: string | null;
+  server_id: string | null;
+  instance_id: string | null;
+  name: string;
+  hostname: string | null;
+  platform: string | null;
+  app_version: string | null;
+  state: "online" | "reconnecting" | "offline";
+  offline_since: string | null;
+  /** Features of the Host's current serve link; `[]` without one. */
+  f: string[];
 }
 
 /** Frames the center sends. Unknown kinds are ignored for forward compatibility. */
@@ -38,10 +99,11 @@ export type HubInboundHeader =
   | { t: "pong"; n: number }
   | { t: "error"; code: string }
   | { t: "open"; seq: number; s: string; from: string }
-  | { t: "accept"; seq: number; s: string }
+  | { t: "accept"; seq: number; s: string; w?: number }
   | { t: "msg"; seq: number; s?: string; from?: string; pt: HubPayloadType; ck?: string }
   | { t: "close"; seq: number; s: string; code: string }
-  | { t: "presence"; seq: number }
+  | { t: "credit"; s: string; c: number }
+  | { t: "hosts"; seq: number; ver: number; full?: boolean }
   | { t: "groups"; seq: number }
   | { t: "share_presence"; seq: number }
   | { t: "reply"; seq: number; id: string }
@@ -95,7 +157,9 @@ function valid(header: Record<string, unknown>): boolean {
         text(header.node_id) &&
         count(header.grace_seconds) &&
         (header.center_methods === undefined ||
-          (Array.isArray(header.center_methods) && header.center_methods.every(text)))
+          (Array.isArray(header.center_methods) && header.center_methods.every(text))) &&
+        (header.f === undefined || (Array.isArray(header.f) && header.f.every(text))) &&
+        (header.win === undefined || count(header.win))
       );
     case "ack":
       return count(header.a);
@@ -103,17 +167,25 @@ function valid(header: Record<string, unknown>): boolean {
       return count(header.n);
     case "error":
       return text(header.code);
-    case "open":
     case "accept":
+      return count(header.seq) && text(header.s) && (header.w === undefined || count(header.w));
+    case "open":
     case "close":
       return count(header.seq) && text(header.s);
+    case "credit":
+      return text(header.s) && count(header.c);
+    case "hosts":
+      return (
+        count(header.seq) &&
+        count(header.ver) &&
+        (header.full === undefined || typeof header.full === "boolean")
+      );
     case "msg":
       return (
         count(header.seq) &&
         (header.s === undefined || text(header.s)) &&
         (header.pt === "text" || header.pt === "binary")
       );
-    case "presence":
     case "groups":
     case "share_presence":
       return count(header.seq);

@@ -32,14 +32,24 @@ export interface HubAccountConnection {
   /** Subscribe to group and share snapshots when this connection supports resource sharing. */
   subscribeShares?(): () => void;
   call<T = unknown>(method: string, params: unknown): Promise<T>;
+  /** Report visibility and focus; the link sends them in `state` frames. */
+  reportPresence(presence: HubPresence): Promise<void>;
   onEvent(listener: (event: HubAccountEvent) => void): () => void;
+}
+
+/** Visibility and focus of this endpoint. */
+export interface HubPresence {
+  appVisible: boolean;
+  deviceType: string;
+  focusedHostId?: string;
+  focusedAgentId?: string | null;
+  focusedTerminalId?: string | null;
 }
 
 /** Only access-side services may be invoked by a renderer. */
 export const HUB_ACCESS_METHODS = [
   "push.register",
   "push.unregister.request",
-  "session.heartbeat",
   "session.events.set_subscription.request",
   "server.status.subscribe",
   "creation.subscribe.request",

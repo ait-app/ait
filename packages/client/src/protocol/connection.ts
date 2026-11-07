@@ -58,6 +58,29 @@ export interface DaemonConnection extends Omit<Transport, "send" | "onMessage"> 
   forget(requestId: string): void;
 }
 
+/** Hello capability that selects the daemon's single-socket mode (`connection.single.v1`). */
+const SINGLE_CONNECTION = "connection.single.v1";
+/** Server feature of daemons that accept `SINGLE_CONNECTION`. */
+const SINGLE_FEATURE = "ait-rust-single-v1";
+const ALL_CAPABILITIES = [...new Set(CHANNEL_CAPABILITIES.flat())];
+const MAX_SPLIT_ENDPOINTS = 64;
+/** Endpoints whose daemon rejected the single-connection hello; they reconnect with four sockets. */
+const splitEndpoints = new Set<string>();
+
+function rememberSplit(url: string): void {
+  splitEndpoints.delete(url);
+  splitEndpoints.add(url);
+  if (splitEndpoints.size > MAX_SPLIT_ENDPOINTS)
+    splitEndpoints.delete(splitEndpoints.values().next().value!);
+}
+
+/**
+ * - `auto`: one socket with `connection.single.v1`, falling back to four sockets for daemons
+ *   that reject it. Account relay sessions are always single.
+ * - `split`: the four-socket mode only.
+ */
+export type DaemonConnectionMode = "auto" | "split";
+
 export function createDaemonConnection(
   baseFactory: TransportFactory,
   {
@@ -65,18 +88,22 @@ export function createDaemonConnection(
     headers,
     guestScope,
     trace,
+    mode = "auto",
   }: {
     url: string;
     headers?: Record<string, string>;
     guestScope?: HubShareResourceKind;
     trace?: DaemonClientTrace;
+    mode?: DaemonConnectionMode;
   },
 ): DaemonConnection {
   const parsed = parseDaemonTransportUrl(url);
-  const single = parsed.protocol === "ait+desktop:" && parsed.hostname === "account-relay";
-  const capabilityGroups = single
-    ? [[...new Set(CHANNEL_CAPABILITIES.flat())]]
-    : CHANNEL_CAPABILITIES;
+  const relay = parsed.protocol === "ait+desktop:" && parsed.hostname === "account-relay";
+  // Direct, SSH and local daemons try one socket first; a rejection falls back to four
+  // sockets once and is remembered for this endpoint. A Hub session is always single.
+  let trial = !relay && mode === "auto" && !splitEndpoints.has(url);
+  let single = relay || trial;
+  let capabilityGroups = single ? [ALL_CAPABILITIES] : CHANNEL_CAPABILITIES;
   // SSH uses the desktop IPC URL; the main process validates its target and
   // opens only the Rust /v1/ws endpoint inside the authenticated tunnel.
   const ssh =
@@ -84,11 +111,11 @@ export function createDaemonConnection(
     parsed.hostname === "ssh" &&
     (parsed.pathname === "" || parsed.pathname === "/");
   if (
-    (!ssh && !single && !/^(ws|wss):$/.test(parsed.protocol)) ||
-    (!ssh && !single && parsed.pathname !== "/v1/ws") ||
+    (!ssh && !relay && !/^(ws|wss):$/.test(parsed.protocol)) ||
+    (!ssh && !relay && parsed.pathname !== "/v1/ws") ||
     parsed.username ||
     parsed.password ||
-    (!ssh && !single && parsed.search) ||
+    (!ssh && !relay && parsed.search) ||
     parsed.hash
   ) {
     throw new Error("Invalid Rust daemon WebSocket endpoint");
@@ -100,7 +127,8 @@ export function createDaemonConnection(
   const channels: Transport[] = [];
   const uploads = new UploadAcknowledgements(fail);
   const chunks = new ClientMessageChunks(channels, fail);
-  const cleanup: (() => void)[] = [];
+  /** Handlers of the current physical sockets; replaced when single mode falls back. */
+  let channelCleanup: (() => void)[] = [];
   const opened = new Set<number>();
   const negotiated = new Map<number, Set<string>>();
   const subscriptions = new Map<string, number>();
@@ -108,11 +136,12 @@ export function createDaemonConnection(
   let disposed = false;
   let ready = false;
   let helloSent = false;
+  let clientId = "";
   let info: Payload | null = null;
   let implemented = new Set<string>();
-  const setupTimer = setTimeout(
+  let setupTimer = setTimeout(
     () => fail(new Error("Rust daemon handshake timed out")),
-    single ? 45_000 : 10_000,
+    relay ? 45_000 : 10_000,
   );
 
   function traced<T>(name: string, args: Record<string, string>, run: () => T): T {
@@ -154,8 +183,58 @@ export function createDaemonConnection(
     chunks.dispose();
     uploads.dispose();
     subscriptions.clear();
-    for (const remove of cleanup) remove();
+    for (const remove of channelCleanup) remove();
     for (const channel of channels) channel.close(code, reason);
+  }
+
+  /**
+   * The daemon did not complete the single-connection hello: reopen with four sockets and
+   * resend the caller's hello there. The caller sees one open and one server_info.
+   */
+  function fallBack(rejected: boolean): void {
+    trial = false;
+    single = false;
+    capabilityGroups = CHANNEL_CAPABILITIES;
+    // An explicit rejection identifies an older daemon; a bare close may be transient.
+    if (rejected) rememberSplit(url);
+    for (const remove of channelCleanup) remove();
+    channelCleanup = [];
+    for (const channel of channels.splice(0)) {
+      try {
+        channel.close(1000, "Single connection unsupported");
+      } catch {
+        /* Already closed. */
+      }
+    }
+    opened.clear();
+    negotiated.clear();
+    info = null;
+    clearTimeout(setupTimer);
+    setupTimer = setTimeout(() => fail(new Error("Rust daemon handshake timed out")), 10_000);
+    openChannels();
+  }
+
+  /** Before the first server_info, an unanswered single hello may mean an older daemon. */
+  function canFallBack(): boolean {
+    return trial && helloSent && !ready && !disposed && negotiated.size === 0;
+  }
+
+  function sendHello(): void {
+    for (const [index, channel] of channels.entries()) {
+      channel.send(
+        JSON.stringify({
+          type: "hello",
+          client_id: clientId,
+          protocol: {
+            major: 1,
+            min_minor: 0,
+            max_minor: 0,
+          },
+          capabilities: capabilityGroups[index],
+          required_capabilities: single ? [SINGLE_CONNECTION] : [],
+        }),
+      );
+    }
   }
 
   function fail(error: Error): void {
@@ -222,6 +301,9 @@ export function createDaemonConnection(
         throw new Error("Rust daemon restarted during handshake");
       }
       info = nextInfo;
+      // An upgraded daemon behind a remembered endpoint gets single mode on the next connect.
+      if (!single && Array.isArray(info.features) && info.features.includes(SINGLE_FEATURE))
+        splitEndpoints.delete(url);
       implemented = new Set(strings(nextInfo.implemented_capabilities));
       negotiated.set(channel, new Set(strings(message.negotiated_capabilities)));
       if (negotiated.size === capabilityGroups.length) {
@@ -231,7 +313,14 @@ export function createDaemonConnection(
       }
       return;
     }
-    if (!ready) throw new Error(`Rust handshake rejected: ${String(message.code ?? message.type)}`);
+    if (!ready) {
+      // Older daemons reject the required capability (or the capability count) of a single hello.
+      if (message.type === "error" && canFallBack()) {
+        fallBack(message.code === "unsupported_capability" || message.code === "invalid_message");
+        return;
+      }
+      throw new Error(`Rust handshake rejected: ${String(message.code ?? message.type)}`);
+    }
     if (message.type === "event" && message.method === "connection.upload.ack") {
       const ack = object(message.params);
       uploads.acknowledge(ack.requestId, ack.opcode);
@@ -424,7 +513,7 @@ export function createDaemonConnection(
     }
   }
 
-  try {
+  function openChannels(): void {
     for (let index = 0; index < capabilityGroups.length; index += 1) {
       // Electron/native uses Bearer headers; browsers exchange them for one-use tickets.
       const raw = baseFactory({ url, headers });
@@ -446,12 +535,18 @@ export function createDaemonConnection(
         ...(raw.recoverLiveness ? { recoverLiveness: () => raw.recoverLiveness!() } : {}),
       };
       channels.push(channel);
-      cleanup.push(
+      channelCleanup.push(
         channel.onOpen(() => {
           opened.add(index);
-          if (opened.size === capabilityGroups.length && !disposed) {
-            for (const handler of openHandlers) handler();
-          }
+          if (opened.size !== capabilityGroups.length || disposed) return;
+          // After a fallback the caller's hello was already accepted; repeat it on the new sockets.
+          if (helloSent) {
+            try {
+              sendHello();
+            } catch (error) {
+              fail(error instanceof Error ? error : new Error("Rust daemon hello failed"));
+            }
+          } else for (const handler of openHandlers) handler();
         }),
         channel.onMessage((data, binary) => {
           try {
@@ -467,20 +562,32 @@ export function createDaemonConnection(
             fail(error instanceof Error ? error : new Error("Invalid Rust daemon response"));
           }
         }),
-        channel.onError((error) =>
+        channel.onError((error) => {
+          if (canFallBack()) {
+            fallBack(false);
+            return;
+          }
           fail(
             error instanceof Error
               ? error
               : new Error("Rust daemon transport failed; check address and Bearer token"),
-          ),
-        ),
+          );
+        }),
         channel.onClose((event) => {
           if (disposed) return;
+          if (canFallBack()) {
+            fallBack(false);
+            return;
+          }
           dispose();
           for (const handler of closeHandlers) handler(event);
         }),
       );
     }
+  }
+
+  try {
+    openChannels();
   } catch (error) {
     dispose();
     throw error;
@@ -511,21 +618,8 @@ export function createDaemonConnection(
           throw new Error("Unexpected client hello");
         if (typeof message.clientId !== "string") throw new Error("Client ID is required");
         helloSent = true;
-        for (const [index, channel] of channels.entries()) {
-          channel.send(
-            JSON.stringify({
-              type: "hello",
-              client_id: message.clientId,
-              protocol: {
-                major: 1,
-                min_minor: 0,
-                max_minor: 0,
-              },
-              capabilities: capabilityGroups[index],
-              required_capabilities: single ? ["connection.single.v1"] : [],
-            }),
-          );
-        }
+        clientId = message.clientId;
+        sendHello();
         return;
       }
       if (!ready) throw new Error("Rust daemon is not ready");
