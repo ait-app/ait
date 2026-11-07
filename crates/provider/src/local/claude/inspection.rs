@@ -149,14 +149,8 @@ impl ClaudeClient {
             .or_else(|| std::env::var_os("CLAUDE_HOME").map(PathBuf::from))
             .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".claude")))
             .ok_or(AgentSessionError::Unavailable)?;
-        if let Some(credentials) = read_file(&directory.join(".credentials.json"))? {
-            return Ok(Some(credentials));
-        }
         let default = std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".claude"));
-        if default.as_ref() != Some(&directory) {
-            return Ok(None);
-        }
-        keychain().await
+        stored(&directory, default.as_ref() == Some(&directory), keychain()).await
     }
 
     fn environment_value(&self, key: &str) -> Option<SecretString> {
@@ -166,6 +160,20 @@ impl ClaudeClient {
             .map(|(_, value)| SecretString::from(value.to_owned()))
             .or_else(|| std::env::var(key).ok().map(SecretString::from))
     }
+}
+
+/// Resolve stored OAuth credentials in the CLI's own order: for the default config directory the
+/// keychain is primary and `.credentials.json` is only a fallback, so a stale plaintext copy left
+/// by an earlier login cannot shadow the token the CLI keeps refreshing.
+async fn stored(
+    directory: &Path,
+    default_directory: bool,
+    keychain: impl Future<Output = Result<Option<Credentials>, AgentSessionError>>,
+) -> Result<Option<Credentials>, AgentSessionError> {
+    if default_directory && let Some(credentials) = keychain.await? {
+        return Ok(Some(credentials));
+    }
+    read_file(&directory.join(".credentials.json"))
 }
 
 fn unavailable(problem: &Value) -> Value {
