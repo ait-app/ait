@@ -2,56 +2,55 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use host_link::{Binding, Error, ManagedRelay};
-use secrecy::{ExposeSecret, SecretString};
+use host_link::{Binding, BulkTickets, Error, HubTicket, ManagedRelay};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-/// Internal exclusive Relay capability issued before the API is shared.
+/// Internal exclusive Hub capability issued before the API is shared.
 #[derive(Debug, Clone)]
 pub struct ManagedRelayHandle {
-    pub(super) relay: relay::Connector,
     pub(super) hub: relay::hub::Connector,
     pub(super) status: Arc<Mutex<Value>>,
 }
 
+/// Bulk lane tickets for the hub link, issued under the publication's current JWT.
+#[derive(Debug)]
+struct Bulk(BulkTickets);
+
+#[async_trait]
+impl relay::hub::bulk::Tickets for Bulk {
+    async fn bulk(&self) -> Option<relay::hub::bulk::Ticket> {
+        let ticket = self.0.request().await.ok()?;
+        Some(relay::hub::bulk::Ticket {
+            hub_ticket: ticket.ticket,
+        })
+    }
+}
+
 #[async_trait]
 impl ManagedRelay for ManagedRelayHandle {
-    async fn start(&self, session: Uuid, ticket: SecretString) -> Result<(), Error> {
-        self.relay
-            .start(relay::ControlGrant {
-                center_url: host_link::center(),
-                control_ticket: ticket.expose_secret().to_owned(),
-                node_session_id: session,
-            })
-            .await
-            .map_err(|_| Error::Unavailable)
-    }
-
-    async fn active(&self) -> bool {
-        let status = self.relay.status().await;
-        status.online || status.connecting
-    }
-
-    async fn online(&self) -> bool {
-        self.relay.status().await.online
-    }
-
     async fn hub_online(&self) -> bool {
         self.hub.status().await.online
     }
 
     async fn stop(&self) {
-        self.relay.stop().await;
         self.hub.stop().await;
     }
 
-    async fn start_hub(&self, session: Uuid, ticket: SecretString) -> Result<(), Error> {
+    async fn start_hub(
+        &self,
+        session: Uuid,
+        ticket: HubTicket,
+        bulk: Option<BulkTickets>,
+    ) -> Result<(), Error> {
         self.hub
             .start(relay::hub::Grant {
                 center_url: host_link::center(),
-                hub_ticket: ticket,
+                hub_ticket: ticket.ticket,
                 node_session_id: session,
+                hub_features: ticket.features,
+                tickets: bulk
+                    .map(|bulk| Arc::new(Bulk(bulk)) as Arc<dyn relay::hub::bulk::Tickets>),
             })
             .await
             .map_err(|_| Error::Unavailable)
@@ -61,6 +60,10 @@ impl ManagedRelay for ManagedRelayHandle {
         let status = self.hub.status().await;
         // A link another process took over is left to it for a while.
         status.online || status.connecting || self.hub.yielding().await
+    }
+
+    async fn hub_lease(&self) -> bool {
+        self.hub.status().await.holds_lease()
     }
 
     async fn report(&self, phase: &'static str, binding: Option<&Binding>) {

@@ -111,11 +111,22 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 /// Returns [`AdmissionError`] for malformed headers, refused visitors, or directory failures.
 pub(crate) async fn admit(state: &Shared, header: &str) -> Result<Session, AdmissionError> {
     let visitor = Visitor::decode(header).ok_or(AdmissionError::Malformed)?;
+    admit_visitor(state, &visitor).await
+}
+
+/// Admit a decoded `visitor`, as an in-process Hub session does; see [`admit`].
+///
+/// # Errors
+/// Returns [`AdmissionError`] for refused visitors or directory failures.
+pub(crate) async fn admit_visitor(
+    state: &Shared,
+    visitor: &Visitor,
+) -> Result<Session, AdmissionError> {
     let scope = visitor.scope().ok_or(AdmissionError::Forbidden)?;
     let reach = resolve(state, scope).await?;
     let registration = state
         .shares
-        .admit(&visitor)
+        .admit(visitor)
         .ok_or(AdmissionError::Forbidden)?;
     Ok(Session::new(reach, registration))
 }

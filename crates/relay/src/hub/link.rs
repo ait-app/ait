@@ -23,6 +23,8 @@ pub(super) enum Joined {
 
 #[derive(Debug, Default)]
 pub(super) struct Link {
+    /// `hello.f`, fixed for the link's lifetime so every resume offers the same set.
+    offer: Vec<&'static str>,
     id: Option<Uuid>,
     token: Option<SecretString>,
     recv: u64,
@@ -33,6 +35,19 @@ pub(super) struct Link {
 }
 
 impl Link {
+    /// A link that offers `offer` as `hello.f` on every connection.
+    pub(super) fn new(offer: Vec<&'static str>) -> Self {
+        Self {
+            offer,
+            ..Self::default()
+        }
+    }
+
+    /// Features this link offers in `hello.f`.
+    pub(super) fn offer(&self) -> &[&'static str] {
+        &self.offer
+    }
+
     /// Center-assigned identifier once a welcome was received.
     pub(super) const fn id(&self) -> Option<Uuid> {
         self.id
@@ -56,6 +71,7 @@ impl Link {
             &Outbound::Hello {
                 v: wire::VERSION,
                 resume,
+                f: self.offer.clone(),
             },
             b"",
         )
@@ -84,6 +100,7 @@ impl Link {
         }
         let token = token.ok_or(Error::Protocol)?;
         *self = Self {
+            offer: std::mem::take(&mut self.offer),
             id: Some(link),
             token: Some(SecretString::from(token)),
             ..Self::default()

@@ -1,155 +1,182 @@
-//! One hub session bridged to its own WebSocket on the fixed local daemon.
+//! One hub session served in-process: a business connection to the local API,
+//! or a file download.
 
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures_util::{SinkExt, StreamExt};
-use secrecy::ExposeSecret;
+use model::share::Visitor;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
-use tokio_tungstenite::tungstenite::{Bytes, Message, Utf8Bytes};
+use tokio_tungstenite::tungstenite::Bytes;
 use uuid::Uuid;
 
-use super::wire::PayloadKind;
+use super::bridge::{Connection, Frame};
+use super::credit;
+use super::wire::{self, PayloadKind, SessionKind};
+use crate::Local;
 use crate::protocol::{self, ClientHello};
-use crate::transport::{MAX_MESSAGE, send};
-use crate::{Local, diagnostics};
 
-/// The daemon must answer the business hello promptly.
+mod download;
+
+/// The local API must answer the business hello promptly.
 const FIRST_REPLY: Duration = Duration::from_secs(10);
-const WRITE: Duration = Duration::from_secs(5);
 
-/// Session output for the link, in daemon order.
+/// Session output for the link, in session order.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Output {
-    /// The daemon answered the hello; carries its first text reply.
+    /// The session was admitted; carries the accept payload (the API's first reply).
     Accept(Bytes),
     Message(PayloadKind, Bytes),
-    /// The bridge ended; the code is relayed to the access endpoint.
+    /// Cumulative inbound payload bytes delivered locally (flow-controlled sessions).
+    Credit(u64),
+    /// The session ended; the code is relayed to the access endpoint.
     Closed(&'static str),
 }
 
-/// Bridge session `id` until either side closes, then report the closure.
-///
-/// Dropping the sender of `inbound` closes the local daemon connection.
-pub(super) async fn run(
-    local: Arc<Local>,
-    id: Uuid,
-    hello: Bytes,
-    guest: Option<String>,
-    inbound: mpsc::Receiver<Message>,
-    output: mpsc::Sender<(Uuid, Output)>,
-) {
-    let code = bridge(&local, id, hello, guest.as_deref(), inbound, &output)
-        .await
-        .err()
-        .unwrap_or("closed");
-    let _ = output.send((id, Output::Closed(code))).await;
+/// Everything one session task owns.
+#[derive(Debug)]
+pub(super) struct Session {
+    pub(super) id: Uuid,
+    pub(super) local: Arc<Local>,
+    pub(super) visitor: Option<Visitor>,
+    /// Peer messages in link order; closed when the link drops the session.
+    pub(super) inbound: mpsc::Receiver<Frame>,
+    pub(super) output: mpsc::Sender<(Uuid, Output)>,
+    /// Peer window and credit for a flow-controlled session.
+    pub(super) credit: Option<credit::Outgoing>,
 }
 
-/// A guest session dials with the encoded visitor; the local API confines it to
-/// the shared resource and refuses it once the share is gone.
-async fn bridge(
-    local: &Local,
+/// Serve session `kind` until either side closes, then report the closure.
+/// `payload` is the `open` payload: the client hello, or the download request.
+pub(super) async fn run(mut session: Session, kind: SessionKind, payload: Bytes) {
+    let result = match kind {
+        SessionKind::Rpc => bridge(&mut session, payload).await.map(|()| "closed"),
+        SessionKind::Download => download::serve(&mut session, &payload)
+            .await
+            .map(|()| "done"),
+        SessionKind::Unsupported => Err("unsupported"),
+    };
+    let code = result.unwrap_or_else(|code| code);
+    let _ = session
+        .output
+        .send((session.id, Output::Closed(code)))
+        .await;
+}
+
+/// Messages to the peer, admitted by its window when the session is flow-controlled.
+struct Outlet<'a> {
     id: Uuid,
-    hello: Bytes,
-    guest: Option<&str>,
-    mut inbound: mpsc::Receiver<Message>,
-    output: &mpsc::Sender<(Uuid, Output)>,
-) -> Result<(), &'static str> {
-    let hello = Utf8Bytes::try_from(hello).map_err(|_| "invalid_hello")?;
-    let _: ClientHello = protocol::decode(&hello).map_err(|_| "invalid_hello")?;
-    let mut daemon = local
-        .dialer
-        .connect_as(&local.url, local.token.expose_secret(), guest, MAX_MESSAGE)
-        .await
-        .map_err(|_| {
-            if guest.is_some() {
-                "share_revoked"
-            } else {
-                "unavailable"
-            }
-        })?;
-    send(&mut daemon, Message::Text(hello))
+    output: &'a mpsc::Sender<(Uuid, Output)>,
+    credit: Option<&'a mut credit::Outgoing>,
+}
+
+impl Outlet<'_> {
+    /// Forward one message once the peer window admits it.
+    ///
+    /// # Errors
+    /// Returns `overflow` for a message no frame or window could carry, ending only
+    /// this session, and `closed` once the link dropped the session.
+    async fn send(&mut self, kind: PayloadKind, body: Bytes) -> Result<(), &'static str> {
+        // Checked here for sessions without credit too: the link cannot encode it,
+        // and failing there would end every session on the link.
+        if body.len() > wire::MAX_PAYLOAD {
+            return Err("overflow");
+        }
+        if let Some(credit) = self.credit.as_deref_mut() {
+            credit.admit(body.len()).await?;
+        }
+        self.output
+            .send((self.id, Output::Message(kind, body)))
+            .await
+            .map_err(|_| "closed")
+    }
+}
+
+/// Bridge a business session into the local API. A guest session is admitted
+/// with its visitor; the API confines it to the shared resource and ends it
+/// once the share is gone.
+async fn bridge(session: &mut Session, hello: Bytes) -> Result<(), &'static str> {
+    let text = std::str::from_utf8(&hello).map_err(|_| "invalid_hello")?;
+    let _: ClientHello = protocol::decode(text).map_err(|_| "invalid_hello")?;
+    let api = session.local.api.get().ok_or("unavailable")?;
+    let Connection {
+        sender,
+        mut receiver,
+    } = api.connect(session.visitor.as_ref()).await.map_err(|_| {
+        if session.visitor.is_some() {
+            "share_revoked"
+        } else {
+            "unavailable"
+        }
+    })?;
+    sender
+        .send(Frame::Text(hello))
         .await
         .map_err(|_| "unavailable")?;
-    let (mut sink, mut stream) = daemon.split();
-    let accept = timeout(FIRST_REPLY, async {
-        loop {
-            match stream.next().await {
-                Some(Ok(Message::Text(text))) => return Ok(Output::Accept(Bytes::from(text))),
-                Some(Ok(Message::Ping(body))) => {
-                    sink.send(Message::Pong(body))
-                        .await
-                        .map_err(|_| "unavailable")?;
-                }
-                Some(Ok(Message::Pong(_))) => {}
-                _ => return Err("unavailable"),
-            }
-        }
-    })
-    .await
-    .map_err(|_| "timeout")??;
-    if output.send((id, accept)).await.is_err() {
+    let accept = match timeout(FIRST_REPLY, receiver.recv()).await {
+        Ok(Some(Frame::Text(info))) => info,
+        Ok(Some(Frame::Binary(_)) | None) => return Err("unavailable"),
+        Err(_) => return Err("timeout"),
+    };
+    if session
+        .output
+        .send((session.id, Output::Accept(accept)))
+        .await
+        .is_err()
+    {
         return Ok(());
     }
-    loop {
-        tokio::select! {
-            message = stream.next() => {
-                let forwarded = match message {
-                    Some(Ok(Message::Text(text))) => Output::Message(PayloadKind::Text, Bytes::from(text)),
-                    Some(Ok(Message::Binary(body))) => Output::Message(PayloadKind::Binary, body),
-                    Some(Ok(Message::Ping(body))) => {
-                        write(&mut sink, Message::Pong(body)).await?;
-                        continue;
-                    }
-                    Some(Ok(Message::Pong(_))) => continue,
-                    Some(Err(error)) => {
-                        diagnostics::socket_error("hub_local_read", &error);
-                        return Err("unavailable");
-                    }
-                    Some(Ok(Message::Close(_) | Message::Frame(_))) | None => return Ok(()),
-                };
-                // Waiting here pauses local reads while the link applies backpressure.
-                if output.send((id, forwarded)).await.is_err() {
-                    return Ok(());
-                }
+    let (id, granting) = (session.id, session.credit.is_some());
+    let mut outlet = Outlet {
+        id,
+        output: &session.output,
+        credit: session.credit.as_mut(),
+    };
+    let to_peer = async {
+        while let Some(frame) = receiver.recv().await {
+            let (kind, body) = frame.into_parts();
+            outlet.send(kind, body).await?;
+        }
+        Ok(())
+    };
+    let (inbound, output) = (&mut session.inbound, &session.output);
+    let to_api = async {
+        let mut delivered = credit::Incoming::default();
+        // Closed when the link drops the session; returning drops `sender` and
+        // with it the local connection.
+        while let Some(frame) = inbound.recv().await {
+            let length = frame.len();
+            if sender.send(frame).await.is_err() {
+                return Ok(());
             }
-            message = inbound.recv() => {
-                let Some(message) = message else {
-                    let _ = timeout(Duration::from_secs(1), sink.close()).await;
-                    return Ok(());
-                };
-                write(&mut sink, message).await?;
+            if granting
+                && let Some(credit) = delivered.delivered(length)
+                && output.send((id, Output::Credit(credit))).await.is_err()
+            {
+                return Ok(());
             }
         }
+        Ok(())
+    };
+    tokio::select! {
+        result = to_peer => result,
+        result = to_api => result,
     }
 }
 
-async fn write(
-    sink: &mut futures_util::stream::SplitSink<crate::transport::Socket, Message>,
-    message: Message,
-) -> Result<(), &'static str> {
-    match timeout(WRITE, sink.send(message)).await {
-        Ok(Ok(())) => Ok(()),
-        Ok(Err(error)) => {
-            diagnostics::socket_error("hub_local_write", &error);
-            Err("unavailable")
-        }
-        Err(_) => Err("unavailable"),
-    }
-}
-
-/// Convert a hub payload into the business WebSocket message it carried.
+/// Convert a hub payload into the business message it carried.
 ///
 /// # Errors
 /// Returns `invalid_message` for text payloads that are not UTF-8.
-pub(super) fn message(kind: PayloadKind, payload: Bytes) -> Result<Message, &'static str> {
+pub(super) fn message(kind: PayloadKind, payload: Bytes) -> Result<Frame, &'static str> {
     match kind {
-        PayloadKind::Text => Utf8Bytes::try_from(payload)
-            .map(Message::Text)
-            .map_err(|_| "invalid_message"),
-        PayloadKind::Binary => Ok(Message::Binary(payload)),
+        PayloadKind::Text => {
+            if std::str::from_utf8(&payload).is_err() {
+                return Err("invalid_message");
+            }
+            Ok(Frame::Text(payload))
+        }
+        PayloadKind::Binary => Ok(Frame::Binary(payload)),
     }
 }
 

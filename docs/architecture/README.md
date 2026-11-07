@@ -93,12 +93,12 @@ Desktop/移动客户端批准 device authorization 后把待领取授权交给 d
 退出客户端账号不撤销 daemon 授权；显式断开清除机器凭据，重启后也不会自动恢复发布。
 见 [ADR-201](../decisions/daemon/adr-201-daemon-owned-publication.md)。
 
-| 通道                   | 当前用途                                 |
-| ---------------------- | ---------------------------------------- |
-| Hub access → Hub serve | 在线业务 RPC、终端、实时语音、浏览器隧道 |
-| 独立下载 Relay WSS     | 文件下载、完成确认与取消                 |
-| `ait-channel-v1`       | 账号 Host 快照、可连接状态与心跳         |
-| 直接 TCP / SSH         | 经认证的 daemon 直连                     |
+| 通道                   | 当前用途                                                                          |
+| ---------------------- | --------------------------------------------------------------------------------- |
+| Hub access → Hub serve | 在线业务 RPC、终端、实时语音、浏览器隧道；协商后承载租约、Host 列表、可见性和下载 |
+| 独立下载 Relay WSS     | 中心或 Host 未声明 `download` 时的文件下载、完成确认与取消                        |
+| `ait-channel-v1`       | 中心未声明 `hosts` 时的账号 Host 快照、可连接状态与心跳                           |
+| 直接 TCP / SSH         | 经认证的 daemon 直连，优先单连接                                                  |
 
 `@ait/client` 原生处理 Rust v1 握手、请求关联、订阅归属、消息分块和二进制路由。
 业务 API 直接传递对象给 SDK 内部协议模块，仅在物理传输处编码/解析 JSON。
@@ -108,6 +108,8 @@ Electron 的 `rust-daemon.ts` 继续只负责本机进程管理。见
 
 在线业务只使用 Hub，无传统 Relay/Yamux 回退，见
 [ADR-204](../decisions/clients/adr-204-hub-only-online-business-transport.md)。
+Hub feature 协商与旧版本兼容见
+[ADR-218](../decisions/clients/adr-218-hub-feature-negotiation.md)。
 Host 通过 `model::hub` 发布事件和目录摘要，`persistence` 保存发布 journal；中心方法由握手协商。
 Desktop 内置 daemon 默认启用 Hub 原生通知，独立 daemon 默认直发，可用 `AIT_SERVER_HUB_NOTIFICATIONS` 覆盖。
 通知配置和凭据归属见[移动端通知](../operations/mobile-notifications.md)。

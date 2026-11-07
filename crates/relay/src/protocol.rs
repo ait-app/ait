@@ -1,137 +1,26 @@
-//! Relay wire contracts. This module performs no network or filesystem I/O.
+//! Download and business-hello wire contracts shared with the Hub link. This
+//! module performs no network or filesystem I/O.
 
-use secrecy::SecretString;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::Error;
 
-/// A short-lived credential handed over by the trusted desktop account manager.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ControlGrant {
-    /// HTTPS center base URL; HTTP is accepted only for loopback development.
-    pub center_url: String,
-    /// One-use control ticket, never a user JWT.
-    pub control_ticket: String,
-    /// Node activation associated with this ticket.
-    pub node_session_id: Uuid,
-}
-
-/// Non-secret connector state exposed to the account manager.
+/// State of the retired Relay control connection, always offline. It keeps the
+/// shape of `relay.status.request` and `GET /api/relay/control` responses, which
+/// clients still read for the daemon's identity and management state; the Hub
+/// link reports its own state.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct Status {
-    /// Whether a control attempt is still in progress.
+    /// Always `false`: no control connection is attempted.
     pub connecting: bool,
-    /// Whether the center accepted this host's control hello.
+    /// Always `false`: no control connection exists.
     pub online: bool,
-    /// Last accepted routing generation, used only to replace the same instance.
-    pub(crate) epoch: Option<Uuid>,
-    /// Non-secret machine-readable failure category.
-    pub(crate) error: Option<String>,
-}
-
-/// Initial declaration of the local daemon's identity to the center.
-#[derive(Debug, Serialize)]
-#[serde(tag = "type", rename = "control.hello")]
-pub(super) struct ControlHello<'a> {
-    version: u8,
-    node_session_id: Uuid,
-    server_id: &'a str,
-    instance_id: &'a str,
-    resume_epoch: Option<Uuid>,
-}
-
-impl<'a> ControlHello<'a> {
-    /// Construct a version-one hello for the supplied node, daemon and optional previous epoch.
-    pub(super) fn new(
-        node_session_id: Uuid,
-        server_id: &'a str,
-        instance_id: &'a str,
-        resume_epoch: Option<Uuid>,
-    ) -> Self {
-        Self {
-            version: 1,
-            node_session_id,
-            server_id,
-            instance_id,
-            resume_epoch,
-        }
-    }
-}
-
-/// The only accepted response to the initial control hello.
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type")]
-pub(super) enum ControlWelcome {
-    /// Accepted routing generation for subsequent commands.
-    #[serde(rename = "control.welcome")]
-    Welcome { epoch: Uuid },
-}
-
-/// Commands admitted after the control handshake.
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type")]
-pub(super) enum ControlCommand {
-    /// Open one independent reverse data connection.
-    #[serde(rename = "open_data")]
-    OpenData(OpenData),
-    /// Cancel an existing reverse data connection.
-    #[serde(rename = "cancel_session")]
-    CancelSession { relay_session_id: Uuid },
-}
-
-/// A data grant whose mode determines which additional credentials are required.
-#[derive(Debug, Deserialize)]
-pub(super) struct OpenData {
-    /// Connection identity assigned by the center.
-    pub(crate) relay_session_id: Uuid,
-    /// Control generation that authorized this grant.
-    pub(crate) epoch: Uuid,
-    /// One-use credential for the daemon side of the data connection.
-    pub(crate) daemon_ticket: SecretString,
-    /// A scoped file download; business sessions require Hub.
-    #[serde(flatten)]
-    pub(crate) mode: DataMode,
-}
-
-/// Supported data modes and their mode-specific parameters.
-#[derive(Debug, Deserialize)]
-#[serde(tag = "mode")]
-pub(super) enum DataMode {
-    /// An independent download authorized by a local one-use file token.
-    #[serde(rename = "ait-download-v1")]
-    Download {
-        download_token: SecretString,
-        /// The visiting account of a guest download through a share, asserted by the
-        /// center; absent for the owner's own downloads and from older centers.
-        #[serde(default)]
-        visitor_user_id: Option<Uuid>,
-    },
-}
-
-/// Pairing acknowledgement for one specific reverse data connection.
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type")]
-pub(super) enum Pairing {
-    /// Both endpoints joined the named session.
-    #[serde(rename = "relay.ready")]
-    Ready { relay_session_id: Uuid },
-}
-
-impl Pairing {
-    /// Verify that the acknowledgement belongs to the expected data session.
-    ///
-    /// # Errors
-    /// Rejects acknowledgements for any other session.
-    pub(super) fn verify(self, expected: Uuid) -> Result<(), Error> {
-        let Self::Ready { relay_session_id } = self;
-        if relay_session_id != expected {
-            return Err(Error::Protocol);
-        }
-        Ok(())
-    }
+    /// Always `None`.
+    epoch: Option<Uuid>,
+    /// Always `None`.
+    error: Option<String>,
 }
 
 /// Only the envelope is inspected; the local daemon owns the business hello's fields.

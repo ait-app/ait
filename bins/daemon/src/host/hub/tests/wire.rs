@@ -134,7 +134,8 @@ async fn composed_host_publishes_current_attention_and_three_directories_over_se
         .bearer_auth("offline-host-test-token-at-least-32-characters")
         .json(
             &json!({"center_url":format!("http://{}",center.local_addr().unwrap()),
-            "hub_ticket":"a".repeat(64),"node_session_id":Uuid::new_v4()}),
+            "hub_ticket":"a".repeat(64),"node_session_id":Uuid::new_v4(),
+            "hub_features":["lease","credit","download"]}),
         )
         .send()
         .await
@@ -148,6 +149,7 @@ async fn composed_host_publishes_current_attention_and_three_directories_over_se
             &json!({
                 "t":"welcome","link":Uuid::new_v4(),"resumed":false,"recv":0,
                 "resume_token":"b".repeat(64),"grace_seconds":120,
+                "f":["lease","credit","download"],"win":262_144,
                 "center_methods":["hub.events.publish","hub.directory.publish"]
             }),
             &Value::Null,

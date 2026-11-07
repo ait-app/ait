@@ -25,7 +25,7 @@ async fn status(state: &Shared) -> Value {
         "hub": {
             "status": state.relay.hub().status().await,
         },
-        "relay": state.relay.status().await,
+        "relay": relay::Status::default(),
     })
 }
 
@@ -126,7 +126,7 @@ async fn execute(request: &model::Request, state: &Shared) -> Result<Value, Erro
             "serverId": state.info.server_id,
             "instanceId": state.info.instance_id,
             "platform": std::env::consts::OS,
-            "status": state.relay.status().await,
+            "status": relay::Status::default(),
             "management": state.relay_management(),
         }));
     }

@@ -1,4 +1,8 @@
-//! Hub business transport and independent Relay downloads with fixed local destinations.
+//! The `ait-hub-v1` serve link and the Hub downloads it carries, with a fixed
+//! local destination. The legacy Relay control and data connections are gone:
+//! this daemon only talks to centers whose Hub holds the node session lease and
+//! carries downloads (`hub_features`), and those centers bridge downloads of
+//! older clients onto the Hub link.
 mod diagnostics;
 mod download;
 pub mod hub;
@@ -6,37 +10,19 @@ mod protocol;
 pub mod rpc;
 mod transport;
 
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
 
-use futures_util::StreamExt;
-use secrecy::SecretString;
-use tokio::sync::{Mutex, OnceCell, Semaphore};
-use tokio::task::JoinSet;
-use tokio::time::timeout;
-use tokio_tungstenite::tungstenite::Message;
+use tokio::sync::OnceCell;
 use tokio_util::sync::CancellationToken;
-use tracing::Instrument;
 use url::Url;
-use uuid::Uuid;
 
-use protocol::{ControlCommand, ControlHello, ControlWelcome, DataMode};
-pub use protocol::{ControlGrant, Status};
-use transport::{Dialer, Socket, receive, send};
+pub use protocol::Status;
+use transport::Dialer;
 
-#[derive(Debug)]
-struct State {
-    status: Status,
-    generation: Uuid,
-    cancel: CancellationToken,
-}
-
-/// Owns at most one outbound control connection and its bounded independent data tasks.
+/// Owns the Hub serve link and its local destination.
 #[derive(Clone, Debug)]
 pub struct Connector {
-    state: Arc<Mutex<State>>,
     local: Arc<Local>,
     shutdown: CancellationToken,
     hub: hub::Connector,
@@ -44,14 +30,14 @@ pub struct Connector {
 
 #[derive(Debug)]
 struct Local {
-    visits: Arc<Semaphore>,
     dialer: Dialer,
     url: String,
-    token: SecretString,
     server_id: String,
     instance_id: String,
     /// Local download client, built on first use and reused for every later download.
     downloads: OnceCell<reqwest::Client>,
+    /// In-process API serving Hub business sessions, attached once it can serve.
+    api: std::sync::OnceLock<Arc<dyn hub::bridge::LocalApi>>,
 }
 
 /// Connector failures deliberately omit URLs and credentials.
@@ -63,20 +49,16 @@ pub enum Error {
     /// An upgrade or write failed or exceeded its deadline.
     #[error("relay transport unavailable")]
     Transport,
-    /// The center did not follow the agreed control or pairing protocol.
+    /// The center did not follow the agreed protocol, or lacks a Hub feature
+    /// this daemon requires.
     #[error("relay protocol rejected")]
     Protocol,
 }
 
 impl Connector {
-    /// Bind to this process's actual local address and credentials.
+    /// Bind to this process's actual local address and identity.
     #[must_use]
-    pub fn new(
-        address: SocketAddr,
-        token: SecretString,
-        server_id: String,
-        instance_id: String,
-    ) -> Self {
+    pub fn new(address: SocketAddr, server_id: String, instance_id: String) -> Self {
         let address = match address {
             SocketAddr::V4(mut address) => {
                 if address.ip().is_unspecified() {
@@ -93,242 +75,35 @@ impl Connector {
         };
         let shutdown = CancellationToken::new();
         let local = Arc::new(Local {
-            visits: Arc::new(Semaphore::new(16)),
             dialer: Dialer::default(),
             url: format!("ws://{address}/v1/ws"),
-            token,
             server_id,
             instance_id,
             downloads: OnceCell::new(),
+            api: std::sync::OnceLock::new(),
         });
         Self {
             hub: hub::Connector::new(local.clone(), shutdown.clone()),
             shutdown,
-            state: Arc::new(Mutex::new(State {
-                status: Status::default(),
-                generation: Uuid::new_v4(),
-                cancel: CancellationToken::new(),
-            })),
             local,
         }
     }
 
-    /// The optional hub serve link sharing this connector's local destination and shutdown.
+    /// Serve Hub business sessions with `api`; the first attachment wins. Until
+    /// one is attached, sessions are refused as `unavailable`.
+    pub fn attach_api(&self, api: Arc<dyn hub::bridge::LocalApi>) {
+        let _ = self.local.api.set(api);
+    }
+
+    /// The hub serve link sharing this connector's local destination and shutdown.
     #[must_use]
     pub fn hub(&self) -> &hub::Connector {
         &self.hub
     }
 
-    /// Start a new control attempt, cancelling all data work from the previous attempt.
-    ///
-    /// # Errors
-    /// Rejects non-TLS remote centers, malformed URLs and invalid one-use tickets.
-    pub async fn start(&self, grant: ControlGrant) -> Result<(), Error> {
-        if self.shutdown.is_cancelled() {
-            return Err(Error::Transport);
-        }
-        let center = center_url(&grant.center_url)?;
-        validate_ticket(&grant.control_ticket)?;
-        let generation = Uuid::new_v4();
-        let cancel = self.shutdown.child_token();
-        let resume = {
-            let mut state = self.state.lock().await;
-            state.cancel.cancel();
-            state.cancel = cancel.clone();
-            state.generation = generation;
-            state.status.connecting = true;
-            state.status.online = false;
-            state.status.error = None;
-            state.status.epoch
-        };
-        let connector = self.clone();
-        let span = tracing::info_span!("relay_control", %generation, node_session_id = %grant.node_session_id);
-        tokio::spawn(async move {
-            let result = tokio::select! {
-                () = cancel.cancelled() => {
-                    tracing::info!(%generation, reason = "cancelled", "Relay control stopped");
-                    Ok(())
-                },
-                result = connector.run(center, grant, generation, resume) => {
-                    if let Err(error) = &result {
-                        tracing::warn!(%generation, %error, "Relay control failed; active data sessions will close");
-                    }
-                    result
-                },
-            };
-            cancel.cancel();
-            let mut state = connector.state.lock().await;
-            if state.generation == generation {
-                state.status.connecting = false;
-                state.status.online = false;
-                state.status.error = result.err().map(|error| error.to_string());
-            }
-        }.instrument(span));
-        Ok(())
-    }
-
     /// Permanently close connector admission when the local runtime starts draining.
     pub fn begin_shutdown(&self) {
         self.shutdown.cancel();
-    }
-
-    /// Stop all control/data activity immediately; safe to call repeatedly on logout.
-    pub async fn stop(&self) {
-        let mut state = self.state.lock().await;
-        state.cancel.cancel();
-        state.generation = Uuid::new_v4();
-        state.status = Status::default();
-    }
-
-    /// Return current connector state without exposing credentials.
-    pub async fn status(&self) -> Status {
-        self.state.lock().await.status.clone()
-    }
-
-    async fn run(
-        &self,
-        center: Url,
-        grant: ControlGrant,
-        generation: Uuid,
-        resume: Option<Uuid>,
-    ) -> Result<(), Error> {
-        let mut control = self
-            .local
-            .dialer
-            .connect(
-                &endpoint(&center, "v1/relay/control"),
-                &grant.control_ticket,
-                16 * 1024,
-            )
-            .await?;
-        send(
-            &mut control,
-            Message::Text(
-                protocol::encode(&ControlHello::new(
-                    grant.node_session_id,
-                    &self.local.server_id,
-                    &self.local.instance_id,
-                    resume,
-                ))?
-                .into(),
-            ),
-        )
-        .await?;
-        let ControlWelcome::Welcome { epoch } =
-            timeout(Duration::from_secs(5), receive(&mut control))
-                .await
-                .map_err(|_| Error::Transport)??;
-        {
-            let mut state = self.state.lock().await;
-            if state.generation != generation {
-                return Ok(());
-            }
-            state.status = Status {
-                connecting: false,
-                online: true,
-                epoch: Some(epoch),
-                error: None,
-            };
-        }
-        self.serve_commands(&mut control, &center, epoch).await
-    }
-
-    async fn serve_commands(
-        &self,
-        control: &mut Socket,
-        center: &Url,
-        epoch: Uuid,
-    ) -> Result<(), Error> {
-        let mut tasks = JoinSet::new();
-        let mut active = HashMap::new();
-        let idle = tokio::time::sleep(Duration::from_secs(65));
-        tokio::pin!(idle);
-        loop {
-            let message = tokio::select! {
-                result = tasks.join_next(), if !tasks.is_empty() => {
-                    match result {
-                        Some(Ok(id)) => { active.remove(&id); },
-                        Some(Err(error)) => tracing::warn!(panicked = error.is_panic(), "Relay data task did not complete"),
-                        None => {},
-                    }
-                    continue;
-                },
-                () = &mut idle => return Err(Error::Transport),
-                message = control.next() => message,
-            };
-            idle.as_mut()
-                .reset(tokio::time::Instant::now() + Duration::from_secs(65));
-            let Some(message) = control_command(control, message).await? else {
-                continue;
-            };
-            match message {
-                ControlCommand::OpenData(grant) => {
-                    let id = grant.relay_session_id;
-                    if grant.epoch != epoch || active.contains_key(&id) || active.len() >= 16 {
-                        return Err(Error::Protocol);
-                    }
-                    let url = endpoint(center, &format!("v1/relay/sessions/{id}/daemon"));
-                    let local = self.local.clone();
-                    let cancel = CancellationToken::new();
-                    active.insert(id, cancel.clone());
-                    let span = tracing::info_span!("relay_session", relay_session_id = %id, %epoch);
-                    tasks.spawn(async move {
-                        let started = std::time::Instant::now();
-                        tokio::select! {
-                            () = cancel.cancelled() => {
-                                tracing::info!(reason = "center_cancelled", "Relay session cancelled");
-                            },
-                            result = async {
-                                // Cancellation of a just-ended stream may still be releasing its permit.
-                                let _permit = timeout(Duration::from_secs(5), local.visits.clone().acquire_owned())
-                                    .await.map_err(|_| Error::Transport)?.map_err(|_| Error::Transport)?;
-                                let DataMode::Download { download_token, visitor_user_id } = grant.mode;
-                                download::run(url, grant.daemon_ticket, download_token, visitor_user_id, local, id).await
-                            } => {
-                                if let Err(error) = result {
-                                    tracing::warn!(%error, "Relay session failed");
-                                }
-                            },
-                        }
-                        tracing::info!(elapsed_ms = started.elapsed().as_millis(), "Relay session finished");
-                        id
-                    }.instrument(span));
-                }
-                ControlCommand::CancelSession {
-                    relay_session_id: id,
-                } => {
-                    if let Some(cancel) = active.remove(&id) {
-                        cancel.cancel();
-                    }
-                }
-            }
-        }
-    }
-}
-
-async fn control_command(
-    control: &mut Socket,
-    message: Option<Result<Message, tokio_tungstenite::tungstenite::Error>>,
-) -> Result<Option<ControlCommand>, Error> {
-    match message {
-        Some(Ok(Message::Text(body))) => protocol::decode(&body).map(Some),
-        Some(Ok(Message::Ping(body))) => {
-            send(control, Message::Pong(body)).await?;
-            Ok(None)
-        }
-        Some(Ok(Message::Pong(_))) => Ok(None),
-        Some(Err(error)) => {
-            diagnostics::socket_error("control_read", &error);
-            Err(Error::Transport)
-        }
-        Some(Ok(Message::Close(frame))) => {
-            tracing::info!(
-                close_code = frame.as_ref().map(|f| u16::from(f.code)),
-                "Relay control closed"
-            );
-            Err(Error::Transport)
-        }
-        Some(Ok(Message::Binary(_) | Message::Frame(_))) | None => Err(Error::Transport),
     }
 }
 
@@ -369,5 +144,7 @@ fn endpoint(center: &Url, path: &str) -> String {
     url.to_string()
 }
 
+#[cfg(test)]
+mod test_support;
 #[cfg(test)]
 mod tests;

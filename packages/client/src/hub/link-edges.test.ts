@@ -77,12 +77,12 @@ describe("hub link failures", () => {
     ).toEqual(["invalid_welcome"]);
   });
 
-  it("ignores unknown frame kinds and invalid presence payloads", async () => {
+  it("ignores unknown frame kinds and invalid hosts payloads", async () => {
     const h = hubFixture();
     const socket = await h.online();
     socket.receive({ t: "future", seq: 2 });
-    socket.receive({ t: "presence", seq: 3 }, "not json");
-    expect(h.logger.warn).toHaveBeenCalledWith(expect.anything(), "[Hub] invalid presence ignored");
+    socket.receive({ t: "hosts", seq: 3, ver: 3, full: true }, "not json");
+    expect(h.logger.warn).toHaveBeenCalledWith(expect.anything(), "[Hub] invalid hosts ignored");
     expect(h.link.state).toBe("online");
     expect(h.link.serveFor(HOST.host_id)).toBeDefined();
   });
@@ -112,14 +112,14 @@ describe("hub link failures", () => {
     await h.flush();
     h.socket().open();
     h.socket().welcome({ grace_seconds: 1 });
-    h.socket().presence(1, [HOST]);
+    h.socket().hosts(1, [HOST]);
     // Reconnect attempts keep failing until the grace period is over.
     h.factory.mockImplementation(() => {
       throw new Error("offline");
     });
     h.socket().drop();
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(h.link.presence).toBeNull();
+    expect(h.link.hosts).toBeNull();
     expect(h.link.centerUrl).toBeNull();
     expect(h.link.state).toBe("connecting");
     await vi.advanceTimersByTimeAsync(5_000);
@@ -137,6 +137,23 @@ describe("hub link failures", () => {
       { t: "ack", a: 32 },
       { t: "ack", a: 40 },
     ]);
+  });
+
+  it("retries an unreachable center as fast as a resume, and a refusing one slower", async () => {
+    const waits = async (failure: () => Error) => {
+      const h = hubFixture({ ticket: () => Promise.reject(failure()) });
+      h.link.start();
+      for (let attempt = 0; attempt < 12; attempt += 1) await vi.advanceTimersByTimeAsync(30_000);
+      h.link.stop();
+      return h.logger.warn.mock.calls
+        .filter(([, message]) => message === "[Hub] connection attempt failed")
+        .map(([fields]) => (fields as { retryMs: number }).retryMs);
+    };
+    // A network that comes back is followed within a resume's pace.
+    expect(Math.max(...(await waits(() => new Error("This operation was aborted"))))).toBe(8000);
+    // A center answering with errors is not hammered.
+    const refused = await waits(() => Object.assign(new Error("busy"), { status: 503 }));
+    expect(Math.max(...refused)).toBe(30_000);
   });
 
   it("logs through the console by default", async () => {

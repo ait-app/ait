@@ -40,6 +40,9 @@ workspace = true
 
 [dev-dependencies]
 persistence.workspace = true
+# Advance write deadlines deterministically for in-process Hub sessions.
+tokio.workspace = true
+tokio.features = ["test-util"]
 # Isolated upload roots for transport contention regression tests.
 tempfile.workspace = true
 reqwest.workspace = true

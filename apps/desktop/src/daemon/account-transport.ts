@@ -24,8 +24,9 @@ interface Session {
   closed: boolean;
   expectedServerId: string | null;
   deadline: ReturnType<typeof setTimeout>;
-  pending: Map<number, { bytes: number; timer: ReturnType<typeof setTimeout> }>;
-  queued: Map<number, { bytes: Buffer; binary: boolean }>;
+  /** `credit` counts session messages only, not the accept's server_info. */
+  pending: Map<number, { bytes: number; credit: number; timer: ReturnType<typeof setTimeout> }>;
+  queued: Map<number, { bytes: Buffer; binary: boolean; credit: number }>;
   bufferedBytes: number;
   flushing: boolean;
   sequence: number;
@@ -94,7 +95,11 @@ export class AccountTransportManager {
       if (!guest && !target?.server_id) throw new Error("Host identity unavailable");
       // Hub authenticates the shared serve node; guests do not have its owner Host record.
       session.expectedServerId = target?.server_id ?? null;
-      const transport = this.link.openSession(node.node_id, guest ? { share: guest.shareId } : {});
+      // With `credit`, the Host may run ahead only as far as the renderer has acknowledged.
+      const transport = this.link.openSession(node.node_id, {
+        ...(guest ? { share: guest.shareId } : {}),
+        manualCredit: true,
+      });
       session.hub = transport;
       transport.onOpen(() => {
         if (!session.closed) this.emit(id, session, { kind: "open" });
@@ -117,6 +122,8 @@ export class AccountTransportManager {
 
   private message(id: string, session: Session, bytes: Buffer, binary: boolean): void {
     if (session.closed) return;
+    // The first message is the accept payload, which flow control does not count.
+    const credit = session.verified ? bytes.length : 0;
     if (!session.verified) {
       let message: {
         type?: string;
@@ -153,7 +160,7 @@ export class AccountTransportManager {
       return;
     }
     const sequence = ++session.sequence;
-    session.queued.set(sequence, { bytes, binary });
+    session.queued.set(sequence, { bytes, binary, credit });
     session.bufferedBytes += bytes.length;
     this.flush(id, session);
   }
@@ -162,11 +169,11 @@ export class AccountTransportManager {
     if (session.flushing || session.closed) return;
     session.flushing = true;
     try {
-      for (const [sequence, { bytes, binary }] of session.queued) {
+      for (const [sequence, { bytes, binary, credit }] of session.queued) {
         if (session.closed || session.pending.size >= MAX_PENDING_MESSAGES) break;
         session.queued.delete(sequence);
         const timer = setTimeout(() => this.finish(id, session, "Relay renderer stalled"), 5000);
-        session.pending.set(sequence, { bytes: bytes.length, timer });
+        session.pending.set(sequence, { bytes: bytes.length, credit, timer });
         this.emit(id, session, {
           kind: "message",
           sequence,
@@ -185,6 +192,7 @@ export class AccountTransportManager {
     clearTimeout(pending.timer);
     session.pending.delete(sequence);
     session.bufferedBytes -= pending.bytes;
+    if (pending.credit) session.hub?.consumed(pending.credit);
     this.flush(id, session);
   }
 

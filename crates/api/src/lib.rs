@@ -129,7 +129,34 @@ pub struct Services {
     pub voice: Option<Speech>,
 }
 
+/// Resources one admitted business connection holds until it ends.
+type Admitted = (
+    tokio::sync::OwnedSemaphorePermit,
+    tokio_util::task::task_tracker::TaskTrackerToken,
+);
+
 impl Shared {
+    /// Admit one business connection unless draining or at the connection limit.
+    /// The admission lock orders it against shutdown closing the task tracker.
+    ///
+    /// # Errors
+    /// Returns `SERVICE_UNAVAILABLE` while draining and `TOO_MANY_REQUESTS` at capacity.
+    fn admit_connection(&self) -> Result<Admitted, StatusCode> {
+        let _guard = self
+            .admission
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.cancellation.is_cancelled() {
+            return Err(StatusCode::SERVICE_UNAVAILABLE);
+        }
+        let permit = self
+            .connections
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
+        Ok((permit, self.tasks.token()))
+    }
+
     fn relay_management(&self) -> serde_json::Value {
         let mut status = self
             .managed_status
@@ -278,7 +305,6 @@ impl Api {
             .map_err(|_| ConfigError::SharedConfiguration)? =
             serde_json::json!({"mode":"managed", "phase":"starting"});
         Ok(managed_relay::ManagedRelayHandle {
-            relay: shared.relay.clone(),
             hub: shared.relay.hub().clone(),
             status: shared.managed_status.clone(),
         })
@@ -315,12 +341,7 @@ impl Api {
         services: Services,
     ) -> Result<Self, ConfigError> {
         validate_listener(address, &token)?;
-        let relay = relay::Connector::new(
-            address,
-            token.clone(),
-            server_id.clone(),
-            instance_id.clone(),
-        );
+        let relay = relay::Connector::new(address, server_id.clone(), instance_id.clone());
         let runtime = runtime_info(address, server_id, instance_id, &services);
         let services = composition::Parts::from(services);
         let session_events = services
@@ -436,7 +457,13 @@ impl Api {
     }
 
     /// Build routes with origin checks, bounded HTTP handling, and metadata-only tracing.
+    ///
+    /// Serving starts here, so this also attaches the API to the Hub serve link:
+    /// its sessions are then served in-process with the same admission.
     pub fn router(&self) -> Router {
+        self.shared
+            .relay
+            .attach_api(Arc::new(connection::bridge::InProcess::new(&self.shared)));
         Router::new()
             .route("/healthz", get(health))
             .route("/readyz", get(ready))
@@ -495,7 +522,6 @@ impl Api {
     /// Wait for all admitted upgrades and connections after calling `begin_shutdown`.
     /// The process host must bound this wait with its shutdown deadline.
     pub async fn wait_closed(&self) {
-        self.shared.relay.stop().await;
         self.shared.relay.hub().stop().await;
         self.shared.tasks.wait().await;
         if let Some(names) = &self.shared.workspace_names {
@@ -635,9 +661,12 @@ async fn health() -> Result<Response, ApiError> {
     Ok(Json(serde_json::json!({"status":"alive"})).into_response())
 }
 
+/// The retired Relay control endpoint. It no longer connects anywhere: its status
+/// is always offline, start is refused and stop has nothing to stop. It remains so
+/// local callers reading the management state, or disconnecting a managed daemon,
+/// keep working; the Hub link is controlled through `/api/hub/control`.
 async fn relay_status(State(state): State<Arc<Shared>>) -> Json<serde_json::Value> {
-    let status = state.relay.status().await;
-    let mut value = serde_json::to_value(status).unwrap_or_default();
+    let mut value = serde_json::to_value(relay::Status::default()).unwrap_or_default();
     value["management"] = state
         .managed_status
         .lock()
@@ -645,22 +674,16 @@ async fn relay_status(State(state): State<Arc<Shared>>) -> Json<serde_json::Valu
     Json(value)
 }
 
-async fn relay_start(
-    State(state): State<Arc<Shared>>,
-    Json(grant): Json<relay::ControlGrant>,
-) -> Result<StatusCode, ApiError> {
+/// Refuse every Relay control grant: managed daemons as before (`409`), others
+/// with `410 Gone`, since no control connection is ever opened.
+async fn relay_start(State(state): State<Arc<Shared>>) -> Result<StatusCode, ApiError> {
     if state.cancellation.is_cancelled() {
         return Err(ApiError(StatusCode::SERVICE_UNAVAILABLE));
     }
     if state.managed_relay {
         return Err(ApiError(StatusCode::CONFLICT));
     }
-    state
-        .relay
-        .start(grant)
-        .await
-        .map_err(|_| ApiError(StatusCode::BAD_REQUEST))?;
-    Ok(StatusCode::ACCEPTED)
+    Err(ApiError(StatusCode::GONE))
 }
 
 async fn relay_stop(State(state): State<Arc<Shared>>) -> Result<StatusCode, ApiError> {
@@ -674,7 +697,6 @@ async fn relay_stop(State(state): State<Arc<Shared>>) -> Result<StatusCode, ApiE
     if state.managed_relay {
         return Err(ApiError(StatusCode::CONFLICT));
     }
-    state.relay.stop().await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -744,20 +766,7 @@ async fn upgrade(
         ),
         None => None,
     };
-    let guard = state
-        .admission
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if state.cancellation.is_cancelled() {
-        return Err(ApiError(StatusCode::SERVICE_UNAVAILABLE));
-    }
-    let permit = state
-        .connections
-        .clone()
-        .try_acquire_owned()
-        .map_err(|_| ApiError(StatusCode::TOO_MANY_REQUESTS))?;
-    let tracking = state.tasks.token();
-    drop(guard);
+    let admitted = state.admit_connection().map_err(ApiError)?;
     let protocol = headers
         .get("sec-websocket-protocol")
         .and_then(|value| value.to_str().ok())
@@ -769,7 +778,7 @@ async fn upgrade(
         .write_buffer_size(0)
         .max_write_buffer_size(model::server::MAX_QUEUE_BYTES)
         .on_upgrade(move |socket| async move {
-            let (_tracking, _permit) = (tracking, permit);
+            let _admitted = admitted;
             Box::pin(connection::serve(socket, state, guest)).await;
         }))
 }

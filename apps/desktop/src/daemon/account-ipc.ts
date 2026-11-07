@@ -172,6 +172,9 @@ export function createAccountIpc(
         case "account_hub_call": {
           return hubBridge.call(event.sender, args.method, args.params);
         }
+        case "account_hub_presence":
+          await hubBridge.reportPresence(event.sender, args.presence);
+          return null;
         case "account_login_hosted": {
           if (args.center !== undefined && typeof args.center !== "string")
             throw new Error("Invalid service URL");

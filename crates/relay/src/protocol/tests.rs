@@ -1,22 +1,9 @@
-use secrecy::ExposeSecret;
 use serde_json::{Value, json};
 
 use super::*;
 
 #[test]
-fn control_hello_and_download_messages_keep_their_wire_shapes() {
-    let id = Uuid::nil();
-    let hello = ControlHello::new(id, "server", "instance", None);
-    assert_eq!(
-        serde_json::from_str::<Value>(&encode(&hello).unwrap()).unwrap(),
-        json!({"type":"control.hello","version":1,"node_session_id":id,
-            "server_id":"server","instance_id":"instance","resume_epoch":null})
-    );
-    let resumed = ControlHello::new(id, "server", "instance", Some(id));
-    assert_eq!(
-        serde_json::to_value(resumed).unwrap()["resume_epoch"],
-        id.to_string()
-    );
+fn download_messages_keep_their_wire_shapes() {
     for (message, expected) in [
         (
             DownloadMessage::Headers {
@@ -48,93 +35,7 @@ fn control_hello_and_download_messages_keep_their_wire_shapes() {
 }
 
 #[test]
-fn control_commands_require_mode_specific_fields_and_hide_credentials() {
-    let base = json!({"type":"open_data","relay_session_id":Uuid::nil(),
-        "epoch":Uuid::nil(),"daemon_ticket":"private-ticket","mode":"ait-download-v1","download_token":"private-download-token"});
-    let ControlCommand::OpenData(grant) = decode(&base.to_string()).unwrap() else {
-        panic!("expected open data");
-    };
-    assert!(matches!(grant.mode, DataMode::Download { .. }));
-    assert_eq!(grant.daemon_ticket.expose_secret(), "private-ticket");
-    assert!(!format!("{grant:?}").contains("private-ticket"));
-    let mut download = base.clone();
-    download.as_object_mut().unwrap().remove("download_token");
-    assert!(decode::<ControlCommand>(&download.to_string()).is_err());
-    download["download_token"] = json!("private-download-token");
-    let command: ControlCommand = decode(&download.to_string()).unwrap();
-    assert!(!format!("{command:?}").contains("private-download-token"));
-    let ControlCommand::OpenData(OpenData {
-        mode:
-            DataMode::Download {
-                download_token,
-                visitor_user_id,
-            },
-        ..
-    }) = command
-    else {
-        panic!("expected download grant");
-    };
-    assert_eq!(download_token.expose_secret(), "private-download-token");
-    // Owner downloads, and older centers, name no visitor.
-    assert_eq!(visitor_user_id, None);
-    let visitor = Uuid::new_v4();
-    download["visitor_user_id"] = json!(visitor);
-    download["future_field"] = json!(true);
-    let ControlCommand::OpenData(OpenData {
-        mode: DataMode::Download {
-            visitor_user_id, ..
-        },
-        ..
-    }) = decode(&download.to_string()).unwrap()
-    else {
-        panic!("expected download grant");
-    };
-    assert_eq!(visitor_user_id, Some(visitor));
-    download.as_object_mut().unwrap().remove("visitor_user_id");
-    download.as_object_mut().unwrap().remove("future_field");
-    for (field, value) in [
-        ("type", json!("future-command")),
-        ("mode", json!("future-mode")),
-        ("epoch", json!("invalid-uuid")),
-        ("relay_session_id", json!(null)),
-        ("daemon_ticket", json!(17)),
-    ] {
-        let mut invalid = base.clone();
-        invalid[field] = value;
-        assert!(matches!(
-            decode::<ControlCommand>(&invalid.to_string()),
-            Err(Error::Protocol)
-        ));
-    }
-    assert!(decode::<ControlCommand>("not-json").is_err());
-    let cancel = json!({"type":"cancel_session","relay_session_id":Uuid::nil(),"future":true});
-    assert!(
-        matches!(decode::<ControlCommand>(&cancel.to_string()).unwrap(),
-        ControlCommand::CancelSession { relay_session_id } if relay_session_id == Uuid::nil())
-    );
-}
-
-#[test]
-fn pairing_and_handshake_messages_reject_wrong_kinds_or_sessions() {
-    let id = Uuid::nil();
-    let ready = json!({"type":"relay.ready","relay_session_id":id});
-    decode::<Pairing>(&ready.to_string())
-        .unwrap()
-        .verify(id)
-        .unwrap();
-    assert!(
-        decode::<Pairing>(&ready.to_string())
-            .unwrap()
-            .verify(Uuid::new_v4())
-            .is_err()
-    );
-    assert!(decode::<Pairing>(r#"{"type":"relay.ready"}"#).is_err());
-    let welcome = json!({"type":"control.welcome","epoch":id,"future":true});
-    assert!(
-        matches!(decode::<ControlWelcome>(&welcome.to_string()).unwrap(),
-        ControlWelcome::Welcome { epoch } if epoch == id)
-    );
-    assert!(decode::<ControlWelcome>(&ready.to_string()).is_err());
+fn handshake_messages_reject_wrong_kinds() {
     assert!(decode::<ClientHello>(r#"{"type":"hello","future":{"extension":true}}"#).is_ok());
     assert!(decode::<ClientHello>(r#"{"type":"request"}"#).is_err());
     assert!(decode::<DownloadAck>(r#"{"type":"download.complete","future":true}"#).is_ok());
@@ -162,18 +63,9 @@ fn download_token_syntax_stays_bounded() {
 }
 
 #[test]
-fn retired_business_modes_and_tunnel_commands_are_rejected() {
-    let business = json!({"type":"open_data","relay_session_id":Uuid::nil(),
-        "epoch":Uuid::nil(),"daemon_ticket":"ticket","mode":"ait-rust-single-v1"});
-    assert!(decode::<ControlCommand>(&business.to_string()).is_err());
-    for kind in ["tunnel.grant", "tunnel.error"] {
-        assert!(
-            decode::<ControlCommand>(&json!({"type":kind,"request_id":Uuid::nil()}).to_string())
-                .is_err()
-        );
-    }
-    // A center can advertise its tunnel capability without triggering a request from this Host.
-    let welcome = json!({"type":"control.welcome","epoch":Uuid::nil(),
-        "supported_tunnel_protocols":["ait-relay-tunnel-v1"]});
-    assert!(decode::<ControlWelcome>(&welcome.to_string()).is_ok());
+fn the_retired_relay_status_is_always_offline() {
+    assert_eq!(
+        serde_json::to_value(Status::default()).unwrap(),
+        json!({"connecting":false,"online":false,"epoch":null,"error":null})
+    );
 }

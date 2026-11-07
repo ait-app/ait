@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HOST, hubFixture } from "../../test/hub.js";
+import { HUB_MAX_WINDOW as W } from "./frame.js";
 import { HubSessionClosedError } from "./session.js";
 
 afterEach(() => {
@@ -33,7 +34,7 @@ describe("hub session transport", () => {
     expect(() => transport.send(new Uint8Array([1]))).toThrow("Expected the AIT hello");
     transport.send('{"type":"hello","client_id":"android"}');
     expect(socket.frames("open")).toEqual([
-      { t: "open", seq: 1, s: transport.id, to: { node: HOST.node_id } },
+      { t: "open", seq: 1, s: transport.id, to: { node: HOST.node_id }, w: W },
     ]);
     expect(new TextDecoder().decode(socket.sent.at(-1)!.payload)).toBe(
       '{"type":"hello","client_id":"android"}',
@@ -81,22 +82,14 @@ describe("hub session transport", () => {
     own.send('{"type":"hello"}');
     guest.send('{"type":"hello"}');
     expect(socket.frames("open")).toEqual([
-      { t: "open", seq: 1, s: own.id, to: { node: HOST.node_id } },
-      { t: "open", seq: 2, s: guest.id, to: { node: "guest-node" }, share: "share-1" },
+      { t: "open", seq: 1, s: own.id, to: { node: HOST.node_id }, w: W },
+      { t: "open", seq: 2, s: guest.id, to: { node: "guest-node" }, share: "share-1", w: W },
     ]);
     expect(own.closeCode).toBeNull();
     socket.receive({ t: "close", seq: 1, s: guest.id, code: "share_revoked" });
     expect(guest.closeCode).toBe("share_revoked");
     expect(close).toHaveBeenCalledWith(expect.objectContaining({ hubCode: "share_revoked" }));
     expect(socket.frames("close")).toEqual([]);
-  });
-
-  it("refuses guest sessions on centers without shares instead of sending the field", async () => {
-    const { h, socket } = await session();
-    expect(() => h.link.openSession("guest-node", { share: "share-1" })).toThrow(
-      expect.objectContaining({ code: "unsupported" }),
-    );
-    expect(socket.frames("open")).toEqual([]);
   });
 
   it("does not report a hub code for local failures", async () => {
