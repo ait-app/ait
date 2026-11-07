@@ -2,6 +2,36 @@ use super::*;
 use crate::storage::timeline::{MAX_ENTRY_BYTES, Timeline};
 
 #[test]
+fn extension_notifications_survive_timeline_reopen_with_bounded_payloads() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = directory.path().join("timeline.sqlite");
+    let timeline = Timeline::open(&database).unwrap();
+    let mut stream = streaming::Stream::default();
+    stream.begin("turn".into());
+    let message = "\"".repeat(96 * 1024);
+    stream
+        .consume(&json!({"type":"extension_ui_request", "method":"notify",
+            "notifyType":"warning", "message":message}))
+        .unwrap();
+    let Some(AgentTurnEvent::Timeline(entry)) = stream.pop() else {
+        panic!("expected notification timeline entry");
+    };
+    assert!(serde_json::to_vec(&entry).unwrap().len() < MAX_ENTRY_BYTES);
+    let expected = entry.clone();
+    timeline.append("agent", "pi", &[entry]).unwrap();
+    drop(timeline);
+
+    let reopened = Timeline::open(&database).unwrap();
+    let (_, rows) = reopened.read("agent").unwrap();
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].entry, expected);
+    assert_eq!(rows[0].entry.item["type"], "notification");
+    assert_eq!(rows[0].entry.item["message"], message);
+    assert_eq!(rows[0].entry.item["metadata"]["transient"], true);
+}
+
+#[test]
 fn escaped_text_leaves_storage_headroom_for_progress_and_completion() {
     for kind in ["text", "thinking"] {
         let timeline = Timeline::memory().unwrap();
@@ -17,7 +47,7 @@ fn escaped_text_leaves_storage_headroom_for_progress_and_completion() {
                 }}))
                 .unwrap();
         }
-        assert_eq!(stream.events.len(), 1);
+        assert_eq!(stream.events().len(), 1);
         let AgentTurnEvent::Progress { observation, entry } = stream.pop().unwrap() else {
             panic!("expected coalesced progress");
         };
@@ -96,7 +126,7 @@ fn admission_chunk_rollover_preserves_order_and_observation_identity() {
             }}))
             .unwrap();
     }
-    assert_eq!(stream.events.len(), 2);
+    assert_eq!(stream.events().len(), 2);
     let timeline = Timeline::memory().unwrap();
     while let Some(AgentTurnEvent::Progress { observation, entry }) = stream.pop() {
         timeline

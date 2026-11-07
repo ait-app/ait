@@ -21,6 +21,8 @@
 - Provider 配置：[Claude Code](operations/claude-code.md)、[DeepSeek Harness](operations/deepseek-harness.md)、
   [Antigravity](operations/antigravity.md)、[Pi](operations/pi.md)、[Oh My Pi](operations/oh-my-pi.md)、
   [MiniMax Code](operations/minimax-code.md)。Codex 和 OpenCode 的启动配置见 [daemon 手册](operations/daemon.md#provider-与扩展能力)。
+- [使用 Pi slash commands](operations/pi.md#slash-commands)：命令调用、项目信任、前端目录缓存与逐请求原生探测。
+- [Pi 扩展通知](decisions/providers/adr-220-pi-extension-notifications.md)：会话时间线持久化、通知级别与有界的尽力交付。
 - [Pi 推理偏好](decisions/providers/adr-211-pi-next-turn-reasoning-controls.md)：下一条 prompt 前应用模型与推理级别，区分请求偏好和原生运行事实。
 - [MCP 编排接口](operations/mcp.md)：HTTP、可选 Unix socket、认证和工具发现。
 - [沙箱化 Worktree](decisions/workspace/adr-215-sandboxed-worktree-isolation.md)：macOS 上用 Seatbelt 把 Agent 进程的写入限制在 worktree 内。

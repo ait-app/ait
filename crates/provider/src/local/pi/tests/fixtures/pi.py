@@ -11,6 +11,8 @@ scenario = os.environ.get('PI_FIXTURE_SCENARIO', '')
 if '--version' in sys.argv:
     with Path(__file__).with_name('versions.log').open('a') as log:
         log.write('probe\n')
+    if scenario == 'version-slow':
+        time.sleep(3)
     if scenario == 'version-timeout':
         time.sleep(10)
     if scenario == 'version-exit':
@@ -107,6 +109,9 @@ for line in sys.stdin:
     if scenario == 'wrong-response':
         command['id'] = 'foreign'
     if kind == 'get_state':
+        if (root / 'handled-notice').exists():
+            (root / 'handled-notice').unlink()
+            emit({'type': 'extension_ui_request', 'method': 'notify', 'message': 'handled notice'})
         rejection_readback = (root / 'rejection-readback').read_text() if thinking_rejected and (root / 'rejection-readback').exists() else ''
         if rejection_readback == 'timeout':
             continue
@@ -210,6 +215,10 @@ for line in sys.stdin:
             elif scenario == 'idle-thinking-malformed':
                 event['level'] = 42
         response(command, state)
+        if scenario == 'idle-notices' and state_requests == 1:
+            for _ in range(2000):
+                emit({'type': 'extension_ui_request', 'method': 'notify', 'message': 'x' * 1024})
+            (root / 'notices-written').touch()
         if scenario.startswith('idle-thinking-') and state_requests == 1:
             emit(event)
         if compacting and scenario != 'compaction-hang':
@@ -221,6 +230,20 @@ for line in sys.stdin:
             emit({'type': 'message_start', 'message': {'role': 'assistant'}})
             emit({'type': 'message_end', 'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': 'Extension'}], 'stopReason': 'stop'}})
             emit({'type': 'agent_settled', 'aborted': False})
+    elif kind == 'get_commands':
+        if scenario == 'control-notices':
+            for _ in range(300):
+                emit({'type': 'extension_ui_request', 'method': 'notify', 'message': 'notice'})
+        (root / 'commands-started').touch()
+        while (root / 'commands-blocked').exists():
+            time.sleep(0.01)
+        if scenario == 'commands-rejected' or (root / 'commands-rejected').exists():
+            response(command, success=False)
+            continue
+        commands = [{'name': 'review', 'source': 'extension'},
+                    {'name': 'fix-tests', 'description': 'Fix tests', 'source': 'prompt'},
+                    {'name': 'skill:rust', 'description': 'Rust guidance', 'source': 'skill'}]
+        response(command, {'commands': None if scenario == 'commands-malformed' else commands})
     elif kind == 'get_available_models':
         if scenario == 'discovery-models-rejected':
             response(command, success=False)
@@ -328,6 +351,15 @@ for line in sys.stdin:
                 emit({'type': 'extension_ui_request', 'id': method, 'method': method})
             response(command, {'disposition': 'handled'})
             continue
+        if text == 'handled-control-notice':
+            (root / 'handled-notice').touch()
+            response(command, {'disposition': 'handled'})
+            continue
+        if text == 'ui-notification-error':
+            emit({'type': 'extension_ui_request', 'id': 'notice', 'method': 'notify',
+                  'notifyType': 'error', 'message': '/btw requires interactive TUI mode'})
+            response(command, {'disposition': 'handled'})
+            continue
         if text == 'handled-compaction':
             compacting = True
             emit({'type': 'compaction_start', 'reason': 'manual'})
@@ -411,6 +443,9 @@ for line in sys.stdin:
         emit({'type': 'agent_end', 'messages': []})
         emit({'type': 'agent_settled', 'aborted': False})
     elif kind == 'abort':
+        if scenario == 'control-notices':
+            for _ in range(300):
+                emit({'type': 'extension_ui_request', 'method': 'notify', 'message': 'notice'})
         if running:
             running = False
             emit({'type': 'tool_execution_end', 'toolCallId': 'pending', 'toolName': 'bash', 'result': {}, 'isError': True})

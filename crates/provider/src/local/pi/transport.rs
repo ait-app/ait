@@ -28,6 +28,8 @@ const MAX_PENDING: usize = 128;
 // Large native records fail explicitly with a frame_limit protocol diagnostic.
 const MAX_INBOUND_FRAME: usize = 2 * 1024 * 1024;
 const MAX_PENDING_BYTES: usize = 8 * 1024 * 1024;
+const MAX_PENDING_NOTICES: usize = 16;
+const MAX_PENDING_NOTICE_BYTES: usize = 2 * 1024 * 1024;
 
 /// Validated version string, cached for one configured client and its clones.
 #[derive(Debug)]
@@ -175,6 +177,24 @@ struct Record {
     bytes: usize,
 }
 
+impl Record {
+    fn is_notice(&self) -> bool {
+        self.value["type"] == "extension_ui_request" && self.value["method"] == "notify"
+    }
+
+    async fn forward(self, sender: &mpsc::Sender<Self>) -> bool {
+        if self.is_notice() {
+            // Notices are best-effort: an idle consumer must not block stdout.
+            matches!(
+                sender.try_send(self),
+                Ok(()) | Err(mpsc::error::TrySendError::Full(_))
+            )
+        } else {
+            sender.send(self).await.is_ok()
+        }
+    }
+}
+
 /// Owned JSONL process with bounded queues, request correlation and shutdown.
 #[derive(Debug)]
 pub(super) struct Transport {
@@ -185,6 +205,8 @@ pub(super) struct Transport {
     stderr: JoinHandle<()>,
     pending: VecDeque<Record>,
     pending_bytes: usize,
+    pending_notices: usize,
+    pending_notice_bytes: usize,
     sequence: u64,
     deadline: Duration,
     pub(super) admission_deadline: Duration,
@@ -265,16 +287,15 @@ impl Transport {
                     if let Err(failure) = extension_response(&writer, &message, deadline).await {
                         break failure;
                     }
-                    continue;
+                    if message["method"] != "notify" {
+                        continue;
+                    }
                 }
-                if sender
-                    .send(Record {
-                        value: message,
-                        bytes: bytes.len(),
-                    })
-                    .await
-                    .is_err()
-                {
+                let record = Record {
+                    value: message,
+                    bytes: bytes.len(),
+                };
+                if !record.forward(&sender).await {
                     return;
                 }
             };
@@ -291,6 +312,8 @@ impl Transport {
             stderr,
             pending: VecDeque::new(),
             pending_bytes: 0,
+            pending_notices: 0,
+            pending_notice_bytes: 0,
             sequence: 0,
             deadline,
             admission_deadline: client.admission_deadline,
@@ -372,9 +395,23 @@ impl Transport {
                         return Err(AgentSessionError::Failed);
                     }
                 } else {
-                    self.pending_bytes = self.pending_bytes.saturating_add(record.bytes);
-                    if self.pending.len() >= MAX_PENDING || self.pending_bytes > MAX_PENDING_BYTES {
-                        return Err(AgentSessionError::Failed);
+                    // Preserve notice ordering with a separate best-effort allowance so
+                    // notices cannot exhaust capacity needed by control events.
+                    if record.is_notice() {
+                        if self.pending_notices >= MAX_PENDING_NOTICES
+                            || self.pending_notice_bytes + record.bytes > MAX_PENDING_NOTICE_BYTES
+                        {
+                            continue;
+                        }
+                        self.pending_notices += 1;
+                        self.pending_notice_bytes += record.bytes;
+                    } else {
+                        self.pending_bytes += record.bytes;
+                        if self.pending.len() - self.pending_notices >= MAX_PENDING
+                            || self.pending_bytes > MAX_PENDING_BYTES
+                        {
+                            return Err(AgentSessionError::Failed);
+                        }
                     }
                     self.pending.push_back(record);
                 }
@@ -405,7 +442,12 @@ impl Transport {
 
     fn pending(&mut self) -> Option<Value> {
         let record = self.pending.pop_front()?;
-        self.pending_bytes -= record.bytes;
+        if record.is_notice() {
+            self.pending_notices -= 1;
+            self.pending_notice_bytes -= record.bytes;
+        } else {
+            self.pending_bytes -= record.bytes;
+        }
         Some(record.value)
     }
 
