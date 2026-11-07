@@ -189,6 +189,7 @@ impl AgentManager {
                 let mut merged = std::mem::take(features);
                 presets.apply(
                     &record.provider,
+                    client.owns_native_presets(),
                     &mut merged,
                     &record.config.clone().unwrap_or_default(),
                 );

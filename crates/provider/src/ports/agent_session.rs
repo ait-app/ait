@@ -504,6 +504,15 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
         serde_json::json!({"availableModes":[],"features":[],"capabilities":{}})
     }
 
+    /// Whether this adapter owns a preset store of its own.
+    ///
+    /// Declared statically so a caller can decide where presets come from without probing the
+    /// native process: the empty state and the draft feature list both need that answer on a
+    /// path that must stay cheap. The default reports no native store.
+    fn owns_native_presets(&self) -> bool {
+        false
+    }
+
     /// Report this provider's preset store and the operations it supports.
     ///
     /// Ait-managed presets are served by the caller, so adapters answer only for a native store.

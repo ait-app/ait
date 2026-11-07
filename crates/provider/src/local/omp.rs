@@ -448,6 +448,11 @@ impl AgentClient for OmpClient {
         config::commands(&result).map(|native| commands::visible(&native))
     }
 
+    /// OMP owns its presets, so it answers for the native store instead of the Ait one.
+    fn owns_native_presets(&self) -> bool {
+        true
+    }
+
     /// OMP owns its presets, so the unified editor is answered by the native store here.
     async fn preset_descriptor(&self, cwd: &str) -> crate::ports::preset::PresetDescriptor {
         roles::presets::editor::describe(self, cwd).await

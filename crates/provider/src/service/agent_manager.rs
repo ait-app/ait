@@ -211,6 +211,8 @@ impl AgentManager {
     /// Install the unified preset editor, which routes each provider to its owning store.
     #[must_use]
     pub fn with_presets(mut self, presets: super::presets::PresetService) -> Self {
+        // The draft feature path answers from the same catalog, so it must see the same store.
+        self.catalog.set_presets(presets.clone());
         self.presets = Some(presets);
         self
     }

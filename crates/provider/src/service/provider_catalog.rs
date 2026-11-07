@@ -67,6 +67,7 @@ pub(crate) struct Catalog {
     pending: Arc<Semaphore>,
     cancellation: CancellationToken,
     tasks: TaskTracker,
+    presets: Option<super::presets::PresetService>,
 }
 
 impl Default for Catalog {
@@ -77,11 +78,16 @@ impl Default for Catalog {
             pending: Arc::new(Semaphore::new(64)),
             cancellation: CancellationToken::new(),
             tasks: TaskTracker::new(),
+            presets: None,
         }
     }
 }
 
 impl Catalog {
+    /// Install the preset service so draft feature lists carry the unified preset select.
+    pub(crate) fn set_presets(&mut self, presets: super::presets::PresetService) {
+        self.presets = Some(presets);
+    }
     /// Run a catalog request and wait for discovery when the method requires a snapshot.
     /// # Errors
     /// Rejects invalid scopes, unsupported providers, shutdown and unavailable storage.
@@ -121,7 +127,7 @@ impl Catalog {
             return Err(ErrorCode::ServerDraining);
         }
         if method == "provider.features.list.request" && params.get("draftConfig").is_some() {
-            return draft::features(clients, decode(params)?).await;
+            return draft::features(clients, self.presets.as_ref(), decode(params)?).await;
         }
         let scope = parse(clients, method, params)?;
         let cwd = scope::discovery_cwd(scope.key.as_deref())?;

@@ -86,18 +86,48 @@ async fn synthesis_prefers_a_native_feature_and_otherwise_uses_stored_presets() 
         .unwrap();
 
     let mut features = vec![json!({"id":"fast_mode","type":"toggle","value":false})];
-    service.apply("claude", &mut features, &current);
+    service.apply("claude", false, &mut features, &current);
     assert_eq!(features[0]["id"], "modelPreset");
     assert_eq!(features[1]["id"], "fast_mode");
 
     // A provider with no stored presets gains nothing.
     let mut plain = vec![json!({"id":"fast_mode","type":"toggle","value":false})];
-    service.apply("codex", &mut plain, &current);
+    service.apply("codex", false, &mut plain, &current);
     assert_eq!(plain.len(), 1);
 
     // A native feature already present is preserved in place.
     let native = json!({"type":"select","id":"modelPreset","value":"gpt"});
     let mut native_features = vec![native.clone()];
-    service.apply("omp", &mut native_features, &current);
+    service.apply("omp", true, &mut native_features, &current);
     assert_eq!(native_features, vec![native]);
+}
+
+#[tokio::test]
+async fn a_native_store_never_receives_ait_entries_even_when_it_has_none() {
+    let root = tempfile::tempdir().unwrap();
+    let (service, _store) = service(&root);
+    let cwd = root.path().to_str().unwrap();
+    let current = StoredAgentConfig::default();
+    // Ait has presets for both providers; only the Ait-backed one may gain a select.
+    service
+        .save("claude", cwd, None, &preset("team", "claude-opus-5"))
+        .await
+        .unwrap();
+    service
+        .save("omp", cwd, None, &preset("leaked", "futureppo/model"))
+        .await
+        .unwrap();
+
+    let mut native = vec![json!({"id":"role","type":"select","value":"x"})];
+    service.apply("omp", true, &mut native, &current);
+    assert_eq!(
+        native,
+        vec![json!({"id":"role","type":"select","value":"x"})],
+        "a native store must not be shown Ait presets"
+    );
+
+    let mut managed = Vec::new();
+    service.apply("claude", false, &mut managed, &current);
+    assert_eq!(managed.len(), 1);
+    assert_eq!(managed[0]["id"], "modelPreset");
 }

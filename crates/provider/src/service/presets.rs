@@ -128,20 +128,28 @@ impl PresetService {
     /// Merge the unified preset select into one provider's feature list.
     ///
     /// A native `modelPreset` already in `features` wins untouched, so OMP keeps its exact
-    /// behavior; otherwise Ait's stored presets are synthesized, and neither store present
-    /// leaves the list unchanged so the client keeps its "not configured" empty state.
+    /// behavior. A provider that owns a native store never receives Ait entries on top, so the
+    /// two stores can never disagree. Only an Ait-backed provider gains the synthesized select;
+    /// with no stored presets the list is unchanged and the client keeps its empty state.
+    ///
+    /// `native_store` is the adapter's static capability, not the result of a probe, so this
+    /// stays cheap enough for the draft/features path.
     pub(crate) fn apply(
         &self,
         provider: &str,
+        native_store: bool,
         features: &mut Vec<Value>,
         current: &domain::agent_runtime::StoredAgentConfig,
     ) {
-        let index = features
+        // A feature the adapter already reports is left exactly where it is: the native store
+        // owns that control, and moving it would reorder the caller's list for no gain.
+        if features
             .iter()
-            .position(|feature| feature["id"] == "modelPreset");
-        let native = index.map(|index| features.remove(index));
-        if native.is_some() {
-            features.push(native.unwrap_or(Value::Null));
+            .any(|feature| feature["id"] == "modelPreset")
+        {
+            return;
+        }
+        if native_store {
             return;
         }
         let stored = self.ait().list(provider).unwrap_or_default();

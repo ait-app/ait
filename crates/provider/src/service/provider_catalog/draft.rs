@@ -7,9 +7,11 @@ use serde_json::{Value, json};
 
 use crate::ports::agent_session::{AgentClient, AgentSessionError, AgentSessionSpec};
 use crate::protocol::provider::FeaturesRequest;
+use crate::service::presets::PresetService;
 
-pub(super) async fn features(
+pub(crate) async fn features(
     clients: &BTreeMap<String, Arc<dyn AgentClient>>,
+    presets: Option<&PresetService>,
     request: FeaturesRequest,
 ) -> Result<Value, ErrorCode> {
     let mut config = request.draft_config;
@@ -23,14 +25,25 @@ pub(super) async fn features(
             });
             match client
                 .draft_features(&AgentSessionSpec {
-                    provider: config.provider,
+                    provider: config.provider.clone(),
                     cwd,
-                    config: config.stored,
+                    config: config.stored.clone(),
                     confinement: None,
                 })
                 .await
             {
-                Ok(features) => {
+                Ok(mut features) => {
+                    // A draft Agent has no snapshot to merge presets into, so the same store the
+                    // live composer reads is merged here. `apply` only touches daemon config or
+                    // an already-present native feature, so this adds no native probe.
+                    if let Some(presets) = presets {
+                        presets.apply(
+                            &config.provider,
+                            client.owns_native_presets(),
+                            &mut features,
+                            &config.stored,
+                        );
+                    }
                     response["features"] = json!(features);
                     None
                 }
