@@ -73,18 +73,12 @@ describe("native relay downloads", () => {
 describe("native Hub downloads", () => {
   async function hubDownload() {
     const h = nativeRelayHarness();
-    const hub = hubFixture({
-      ticket: async () => ({
-        centerUrl: CENTER,
-        ticket: "a".repeat(64),
-        features: ["download", "credit"],
-      }),
-    });
+    const hub = hubFixture({ ticket: async () => ({ centerUrl: CENTER, ticket: "a".repeat(64) }) });
     hub.link.start();
     await hub.flush();
     const socket = hub.socket();
     socket.open();
-    socket.welcome({ f: ["credit", "download"] });
+    socket.welcome();
     const account = {
       ...h.account,
       // The fixture link comes from the SDK sources; the app types use its build.

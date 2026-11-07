@@ -49,7 +49,7 @@ export interface HubSessionOptions {
   /** Share ID for a guest session to a resource another account shares. */
   share?: string;
   kind?: HubSessionKind;
-  /** This side's receive window, announced in `open.w` when the link enabled `credit`. */
+  /** This side's receive window, announced in `open.w` (`credit`). */
   window?: number;
   /** Grant credit only for bytes reported through `consumed()`, e.g. after a disk write. */
   manualCredit?: boolean;
@@ -89,8 +89,8 @@ interface Credit {
  * link replays frames in order.
  *
  * With `credit`, sends wait for the peer's credit instead of overrunning its window, and the
- * session grants credit as the consumer receives messages. An accept without `w` (an older Host
- * or center) keeps the uncontrolled behavior.
+ * session grants credit as the consumer receives messages. An accept without `w` (a Host without
+ * `credit`) keeps the uncontrolled behavior.
  */
 export class HubSession implements DaemonTransport {
   private readonly opens = new Set<() => void>();
@@ -334,7 +334,7 @@ export class HubSession implements DaemonTransport {
       this.stage = "ready";
       if (this.timer) clearTimeout(this.timer);
       this.timer = null;
-      // An accept without a window means the Host or center has no `credit`.
+      // An accept without a window means the Host has no `credit`.
       if (this.credit && header.w === undefined) this.credit = null;
       else if (this.credit) this.credit.peerWindow = header.w!;
       if (payload.byteLength) this.deliver(decoder.decode(payload), false);

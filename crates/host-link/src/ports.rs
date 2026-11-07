@@ -47,24 +47,14 @@ pub trait Center: Send + Sync {
     /// # Errors
     /// Returns authorization or session expiry failures without extending the lease locally.
     async fn renew(&self, tokens: &Tokens, session: Uuid) -> Result<DateTime<Utc>, Error>;
-    /// Obtain a one-use control ticket for this runtime.
+    /// Obtain a one-use hub serve ticket for this runtime.
     /// # Errors
-    /// Rejects expired or unauthorized sessions.
-    async fn ticket(&self, tokens: &Tokens, session: Uuid) -> Result<SecretString, Error>;
-    /// Obtain a one-use hub serve ticket for this runtime. The hub is optional;
-    /// centers without it report `Unavailable`.
+    /// Rejects expired or unauthorized sessions, and responses without `hub_features`.
+    async fn hub_ticket(&self, tokens: &Tokens, session: Uuid) -> Result<HubTicket, Error>;
+    /// Obtain a one-use hub serve ticket for this runtime's download-only `bulk` lane.
     /// # Errors
-    /// Rejects expired or unauthorized sessions, and centers without a hub.
-    async fn hub_ticket(&self, _tokens: &Tokens, _session: Uuid) -> Result<HubTicket, Error> {
-        Err(Error::Unavailable)
-    }
-    /// Obtain a one-use hub serve ticket for this runtime's download-only `bulk`
-    /// lane; only centers declaring the `bulk` feature issue one.
-    /// # Errors
-    /// Rejects expired or unauthorized sessions, and centers without the lane.
-    async fn hub_bulk_ticket(&self, _tokens: &Tokens, _session: Uuid) -> Result<HubTicket, Error> {
-        Err(Error::Unavailable)
-    }
+    /// Rejects expired or unauthorized sessions, and responses without `hub_features`.
+    async fn hub_bulk_ticket(&self, tokens: &Tokens, session: Uuid) -> Result<HubTicket, Error>;
     /// Revoke the shared machine authorization on explicit disconnect.
     /// # Errors
     /// May fail offline; local credential removal must still complete without retaining a retry secret.
@@ -75,25 +65,17 @@ pub trait Center: Send + Sync {
     async fn close(&self, tokens: &Tokens, session: Uuid) -> Result<(), Error>;
 }
 
-/// Exclusive internal Relay/Hub ownership. External adapters control the shared publication
+/// Exclusive internal Hub ownership. External adapters control the shared publication
 /// lifecycle; they cannot install independent transport grants while it is claimed.
 #[async_trait]
 pub trait ManagedRelay: Send + Sync {
-    /// Begin a control connection with an ephemeral ticket from the fixed authority.
-    /// # Errors
-    /// Rejects invalid tickets or unavailable local transport.
-    async fn start(&self, session: Uuid, ticket: SecretString) -> Result<(), Error>;
-    /// Return whether a connection is online or connecting.
-    async fn active(&self) -> bool;
-    /// Return whether the Relay handshake has succeeded (connecting alone is not success).
-    async fn online(&self) -> bool;
-    /// Close Relay, Hub and all reverse data channels immediately.
+    /// Close the Hub link and every session it carries immediately.
     async fn stop(&self);
-    /// Begin the optional hub serve link with an ephemeral ticket, offering the
-    /// features declared with it. `bulk` obtains tickets for the link's `bulk` lane;
-    /// without it the link never declares that feature.
+    /// Begin the hub serve link with an ephemeral ticket. `bulk` obtains tickets
+    /// for the link's `bulk` lane; without it the link never declares that feature.
     /// # Errors
-    /// Rejects invalid tickets or unavailable local transport.
+    /// Rejects invalid tickets, tickets whose `hub_features` lack a feature the
+    /// link needs, or unavailable local transport.
     async fn start_hub(
         &self,
         session: Uuid,
@@ -104,8 +86,8 @@ pub trait ManagedRelay: Send + Sync {
     async fn hub_active(&self) -> bool;
     /// Return whether the Hub handshake has succeeded, for resetting retry backoff.
     async fn hub_online(&self) -> bool;
-    /// Return whether the hub link, attached or resuming, holds the node session lease
-    /// (`lease` feature), so it must not be renewed over HTTP.
+    /// Return whether a hub link exists, attached or resuming: it then holds the node
+    /// session lease (`lease` feature), so the lease must not be renewed over HTTP.
     async fn hub_lease(&self) -> bool;
     /// Publish a sanitized manager state for local status queries.
     /// Waits for best-effort persistence without blocking the async runtime.

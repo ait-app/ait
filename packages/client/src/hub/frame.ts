@@ -8,11 +8,17 @@ export const HUB_MAX_PAYLOAD = 1024 * 1024;
 export type HubPayloadType = "text" | "binary";
 
 /**
- * Optional `ait-hub-v1` features this client implements. A link announces them in `hello.f`
- * only when the center advertised them over HTTP (`hub_features`); `welcome.f` is the result.
+ * `ait-hub-v1` features this client announces in every main link's `hello.f`. The center must
+ * enable all of them (`welcome.f`); this client does not work with centers that predate them.
  */
 export const HUB_FEATURES = ["lease", "hosts", "state", "credit", "download"] as const;
 export type HubFeature = (typeof HUB_FEATURES)[number];
+
+/**
+ * `hub_features` the center must advertise over HTTP: everything links announce, plus `bulk`
+ * tickets for download links.
+ */
+export const HUB_CENTER_FEATURES: readonly string[] = [...HUB_FEATURES, "bulk"];
 
 /** Features a bulk link (`lane: "bulk"`) must announce; it may announce no others. */
 export const HUB_BULK_FEATURES: readonly HubFeature[] = ["credit", "download"];
@@ -64,7 +70,7 @@ export interface HubWelcome {
   ping_seconds: number;
   max_payload: number;
   center_methods?: string[];
-  /** Enabled features; present only when `hello.f` was sent. */
+  /** Enabled features: those of `hello.f` the center supports. */
   f?: string[];
   /** Default session window; present only when `credit` is enabled. */
   win?: number;
@@ -98,7 +104,6 @@ export type HubInboundHeader =
   | { t: "close"; seq: number; s: string; code: string }
   | { t: "credit"; s: string; c: number }
   | { t: "hosts"; seq: number; ver: number; full?: boolean }
-  | { t: "presence"; seq: number }
   | { t: "groups"; seq: number }
   | { t: "share_presence"; seq: number }
   | { t: "reply"; seq: number; id: string }
@@ -181,7 +186,6 @@ function valid(header: Record<string, unknown>): boolean {
         (header.s === undefined || text(header.s)) &&
         (header.pt === "text" || header.pt === "binary")
       );
-    case "presence":
     case "groups":
     case "share_presence":
       return count(header.seq);

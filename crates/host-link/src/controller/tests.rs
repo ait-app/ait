@@ -15,7 +15,6 @@ struct Observed {
     enrollment_times: Vec<tokio::time::Instant>,
     enrollment_error: Option<Error>,
     reports: Vec<&'static str>,
-    starts: usize,
     stops: usize,
     hub: HubObserved,
     registrations: Vec<Uuid>,
@@ -25,9 +24,7 @@ struct Observed {
     revocations: Vec<String>,
     revoke_error: Option<Error>,
     revoke_delay: Duration,
-    relay_grants: Vec<(Binding, Uuid)>,
     hub_grants: Vec<(Binding, Uuid)>,
-    active: bool,
     save_fail_at: Option<usize>,
     refresh_error: Option<Error>,
     register_error: Option<Error>,
@@ -36,15 +33,11 @@ struct Observed {
     renew_errors: std::collections::VecDeque<Error>,
     mismatch: bool,
     expired_receipt: bool,
-    ticket_error: Option<Error>,
-    ticket_errors: std::collections::VecDeque<Error>,
-    ticket_delay: Duration,
-    ticket_requests: usize,
     renew_delay: Duration,
     lease_seconds: Option<i64>,
     access_seconds: Option<i64>,
-    /// `hub_features` the register response declares.
-    hub_features: Option<Vec<String>>,
+    /// `hub_features` declared with every Hub ticket.
+    hub_features: Vec<String>,
     /// Issue a serve ticket with this prefix with each registration.
     register_hub_ticket: Option<&'static str>,
 }
@@ -58,7 +51,8 @@ struct HubObserved {
     ticket_delay: Duration,
     error: Option<Error>,
     errors: std::collections::VecDeque<Error>,
-    /// The link holds the lease while active.
+    /// The link holds the lease while active, i.e. it was welcomed and has not
+    /// ended; otherwise it is still connecting or was replaced.
     lease: bool,
     /// Tickets the link was started with.
     started: Vec<String>,
@@ -96,10 +90,16 @@ fn state() -> State {
     }
 }
 
+/// Every feature the center declares.
+const DECLARED: [&str; 6] = ["lease", "hosts", "state", "credit", "download", "bulk"];
+
 fn fixture() -> (Controller<Mock, Mock, Mock>, Mock) {
     let state = state();
     let mock = Mock(
-        Arc::new(Mutex::new(Observed::default())),
+        Arc::new(Mutex::new(Observed {
+            hub_features: DECLARED.map(str::to_owned).to_vec(),
+            ..Observed::default()
+        })),
         state.credential.as_ref().unwrap().binding.clone(),
     );
     (
@@ -130,7 +130,7 @@ impl Center for Mock {
     async fn revoke(&self, token: &SecretString) -> Result<(), Error> {
         let (delay, error) = {
             let mut seen = self.0.lock().unwrap();
-            assert!(!seen.active && !seen.hub.active);
+            assert!(!seen.hub.active);
             seen.revocations.push(token.expose_secret().to_owned());
             (seen.revoke_delay, seen.revoke_error)
         };
@@ -218,7 +218,6 @@ impl Center for Mock {
             id: Uuid::new_v4(),
             lease_until: Utc::now() + chrono::Duration::seconds(60),
             renew_after_seconds: 1,
-            hub_features: seen.hub_features.clone(),
             hub_ticket,
         })
     }
@@ -236,23 +235,6 @@ impl Center for Mock {
             return Err(error);
         }
         Ok(Utc::now() + chrono::Duration::seconds(seen.lease_seconds.unwrap_or(60)))
-    }
-    async fn ticket(&self, tokens: &Tokens, session: Uuid) -> Result<SecretString, Error> {
-        let (error, delay) = {
-            let mut seen = self.0.lock().unwrap();
-            seen.relay_grants
-                .push((tokens.credential.binding.clone(), session));
-            seen.ticket_requests += 1;
-            (
-                seen.ticket_errors.pop_front().or(seen.ticket_error),
-                seen.ticket_delay,
-            )
-        };
-        tokio::time::sleep(delay).await;
-        if let Some(error) = error {
-            return Err(error);
-        }
-        Ok("ticket-secret".into())
     }
     async fn hub_ticket(&self, tokens: &Tokens, session: Uuid) -> Result<crate::HubTicket, Error> {
         let delay = {
@@ -288,25 +270,13 @@ impl Center for Mock {
     }
 }
 
-mod hub_features;
+mod lease;
 mod links;
 mod recovery;
 mod service;
 
 #[async_trait]
 impl ManagedRelay for Mock {
-    async fn start(&self, _: Uuid, _: SecretString) -> Result<(), Error> {
-        let mut seen = self.0.lock().unwrap();
-        seen.starts += 1;
-        seen.active = true;
-        Ok(())
-    }
-    async fn active(&self) -> bool {
-        self.0.lock().unwrap().active
-    }
-    async fn online(&self) -> bool {
-        self.0.lock().unwrap().active
-    }
     async fn hub_online(&self) -> bool {
         let seen = self.0.lock().unwrap();
         seen.hub.active && !seen.hub.connecting
@@ -314,7 +284,6 @@ impl ManagedRelay for Mock {
     async fn stop(&self) {
         let mut seen = self.0.lock().unwrap();
         seen.stops += 1;
-        seen.active = false;
         seen.hub.active = false;
     }
     async fn start_hub(
@@ -505,16 +474,17 @@ async fn runs_without_gui_renews_reconnects_and_closes_on_shutdown() {
     let cancel = CancellationToken::new();
     let task = tokio::spawn(controller.run(cancel.clone()));
     tick().await;
-    assert_eq!(mock.0.lock().unwrap().starts, 1);
-    mock.0.lock().unwrap().active = false;
     tick().await;
-    assert!(mock.0.lock().unwrap().starts >= 2);
+    assert_eq!(mock.0.lock().unwrap().hub.starts, 1);
+    mock.0.lock().unwrap().hub.active = false;
+    tick().await;
+    assert!(mock.0.lock().unwrap().hub.starts >= 2);
     assert!(mock.0.lock().unwrap().renewals >= 1);
     cancel.cancel();
     task.await.unwrap().unwrap();
     let seen = mock.0.lock().unwrap();
     assert_eq!(seen.closes, 1);
-    assert!(!seen.active);
+    assert!(!seen.hub.active);
     assert_eq!(seen.reports.last(), Some(&"stopped"));
 }
 
@@ -535,14 +505,14 @@ async fn clock_skew_backs_off_instead_of_rotating_every_second() {
             seen.refreshes.len()
         );
         assert_eq!(seen.reports.last(), Some(&"retrying"));
-        assert_eq!(seen.starts, 0);
+        assert_eq!(seen.hub.starts, 0);
     }
     cancel.cancel();
     task.await.unwrap().unwrap();
 }
 
 #[tokio::test(start_paused = true)]
-async fn optional_hub_link_starts_beside_relay_and_backs_off_on_failure() {
+async fn hub_link_backs_off_on_ticket_failure() {
     let (controller, mock) = fixture();
     mock.0.lock().unwrap().hub.error = Some(Error::Unavailable);
     let cancel = CancellationToken::new();
@@ -550,7 +520,7 @@ async fn optional_hub_link_starts_beside_relay_and_backs_off_on_failure() {
     tick().await;
     {
         let seen = mock.0.lock().unwrap();
-        assert_eq!((seen.starts, seen.hub.tickets, seen.hub.starts), (1, 1, 0));
+        assert_eq!((seen.hub.tickets, seen.hub.starts), (1, 0));
         assert_eq!(seen.reports.last(), Some(&"running"));
     }
     mock.0.lock().unwrap().hub.error = None;
@@ -579,60 +549,23 @@ async fn optional_hub_link_starts_beside_relay_and_backs_off_on_failure() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn relay_ticket_outage_does_not_block_hub_or_renewal_and_recovers() {
+async fn slow_hub_tickets_do_not_block_renewal() {
     let (controller, mock) = fixture();
-    mock.0.lock().unwrap().ticket_error = Some(Error::Unavailable);
+    mock.0.lock().unwrap().hub.ticket_delay = Duration::from_secs(5);
     let cancel = CancellationToken::new();
     let task = tokio::spawn(controller.run(cancel.clone()));
     tick().await;
-    assert!(mock.0.lock().unwrap().hub.active);
-    for _ in 0..10 {
+    assert!(!mock.0.lock().unwrap().hub.active);
+    for _ in 0..6 {
         tick().await;
     }
-    assert!(mock.0.lock().unwrap().renewals >= 10);
-    mock.0.lock().unwrap().ticket_error = None;
-    for _ in 0..31 {
-        tick().await;
+    {
+        let seen = mock.0.lock().unwrap();
+        assert!(seen.renewals >= 6);
+        assert!(seen.hub.active);
     }
-    assert!(mock.0.lock().unwrap().active);
     cancel.cancel();
     task.await.unwrap().unwrap();
-}
-
-#[tokio::test(start_paused = true)]
-async fn slow_tickets_do_not_block_the_other_link_or_renewal() {
-    for slow_hub in [false, true] {
-        let (controller, mock) = fixture();
-        {
-            let mut seen = mock.0.lock().unwrap();
-            if slow_hub {
-                seen.hub.ticket_delay = Duration::from_secs(5);
-            } else {
-                seen.ticket_delay = Duration::from_secs(5);
-            }
-        }
-        let cancel = CancellationToken::new();
-        let task = tokio::spawn(controller.run(cancel.clone()));
-        tick().await;
-        {
-            let seen = mock.0.lock().unwrap();
-            assert!(if slow_hub {
-                seen.active
-            } else {
-                seen.hub.active
-            });
-        }
-        for _ in 0..6 {
-            tick().await;
-        }
-        {
-            let seen = mock.0.lock().unwrap();
-            assert!(seen.renewals >= 6);
-            assert!(seen.active && seen.hub.active);
-        }
-        cancel.cancel();
-        task.await.unwrap().unwrap();
-    }
 }
 
 #[tokio::test(start_paused = true)]
@@ -663,7 +596,7 @@ async fn expired_session_registers_again_and_revocation_is_terminal() {
     tick().await;
     assert_eq!(task.await.unwrap(), Err(Error::Unauthorized));
     let seen = mock.0.lock().unwrap();
-    assert!(!seen.active);
+    assert!(!seen.hub.active);
     assert_eq!(seen.reports.last(), Some(&"reauthorization_required"));
 }
 
@@ -763,7 +696,7 @@ async fn initial_terminal_failures_close_relay_and_report_the_recovery_action() 
         let seen = mock.0.lock().unwrap();
         assert_eq!(seen.reports, ["connecting", phase]);
         assert_eq!(seen.stops, 1);
-        assert_eq!(seen.starts, 0);
+        assert_eq!(seen.hub.starts, 0);
         assert!(seen.registrations.is_empty());
         assert_eq!(seen.saved.len(), 1);
         assert!(matches!(seen.saved[0].pending, Some(Pending::Refresh(_))));

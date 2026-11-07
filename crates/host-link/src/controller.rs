@@ -152,28 +152,14 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Controller<C, S, R> {
             errors: failures,
             bulk,
         };
-        let relay = links::maintain(
-            &self.center,
-            &self.relay,
-            receiver.clone(),
-            errors.clone(),
-            links::Kind::Relay,
-        );
         let bulk = links::serve_bulk(&self.center, receiver.clone(), bulk_requests);
-        let hub = links::maintain(
-            &self.center,
-            &self.relay,
-            receiver,
-            errors,
-            links::Kind::Hub,
-        );
-        // All four futures are scoped to this manager. On exit they are dropped before stop(),
+        let hub = links::maintain(&self.center, &self.relay, receiver, errors);
+        // All three futures are scoped to this manager. On exit they are dropped before stop(),
         // so an outstanding ticket can never restart transport after shutdown.
         tokio::select! {
             // Revoke expired authority before polling a ticket that becomes ready at the deadline.
             biased;
             result = authority.maintain(tokens, cancel) => result,
-            () = relay => Err(Error::Protocol),
             () = hub => Err(Error::Protocol),
             // The authority holds a request sender, so this never ends first.
             () = bulk => Err(Error::Protocol),

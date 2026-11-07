@@ -24,27 +24,10 @@ function terminalFrames(count: number): Buffer[] {
   );
 }
 
+/** `credit`: the Host answers the open with a window; without it the session runs uncontrolled. */
 async function openHub(synchronousAck = false, credit = false) {
-  const h = hubFixture(
-    credit
-      ? {
-          ticket: async () => ({
-            centerUrl: "https://center.test/api",
-            ticket: "a".repeat(64),
-            features: ["credit"],
-          }),
-        }
-      : {},
-  );
-  let socket: ReturnType<typeof h.socket>;
-  if (credit) {
-    h.link.start();
-    await h.flush();
-    socket = h.socket();
-    socket.open();
-    socket.welcome({ f: ["credit"] });
-    socket.presence(1, [HOST]);
-  } else socket = await h.online();
+  const h = hubFixture();
+  const socket = await h.online();
   const account = {
     snapshot: () => ({ hosts: [{ host_id: HOST.host_id, server_id: "test-server" }] }),
   };
@@ -227,7 +210,7 @@ describe("desktop Hub data connections", () => {
     const socket = h.socket();
     socket.open();
     socket.welcome({ center_methods: ["share.subscribe"] });
-    socket.presence(1, [HOST]);
+    socket.hosts(1, [HOST]);
     const account = {
       openVisit: vi.fn(),
       closeVisit: vi.fn(),
@@ -276,7 +259,7 @@ describe("desktop Hub data connections", () => {
   });
 
   it.each(["instance", null, "stale-instance"])(
-    "opens through presence with Relay instance %s and preserves the logical session during resume",
+    "opens through the hosts list with Relay instance %s and preserves the logical session during resume",
     async (instanceId) => {
       const h = hubFixture();
       const socket = await h.online();
@@ -388,7 +371,7 @@ describe("desktop Hub availability", () => {
       });
       if (mode === "other-center" || mode === "no-serve") {
         const socket = await h.online();
-        if (mode === "no-serve") socket.presence(2, []);
+        if (mode === "no-serve") socket.hosts(2, []);
       }
       if (mode === "timeout") h.link.start();
       const events: Record<string, unknown>[] = [];

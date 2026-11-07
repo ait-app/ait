@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CENTER, HOST, hubFixture, RESUME_TOKEN } from "../../test/hub.js";
+import { HOST, hubFixture, RESUME_TOKEN } from "../../test/hub.js";
 import { HUB_FEATURES } from "./frame.js";
 
 afterEach(() => {
@@ -9,27 +9,17 @@ afterEach(() => {
 
 const ALL = [...HUB_FEATURES];
 
-/** A link whose ticket carries the center's HTTP `hub_features`. */
-function featureFixture(features: readonly string[] | null = ALL) {
-  let issued = 0;
-  const ticket = vi.fn(async () => ({
-    centerUrl: CENTER,
-    ticket: (++issued).toString(16).padStart(64, "0"),
-    ...(features ? { features } : {}),
-  }));
-  const h = hubFixture({ ticket });
+/** A link whose center enables every announced feature. */
+function featureFixture() {
+  const h = hubFixture();
   return {
     ...h,
-    ticket,
     async connect(welcome: Record<string, unknown> = {}) {
       h.link.start();
       await h.flush();
       const socket = h.socket();
       socket.open();
-      socket.welcome({
-        f: features ? ALL.filter((f) => features.includes(f)) : undefined,
-        ...welcome,
-      });
+      socket.welcome(welcome);
       return socket;
     },
   };
@@ -54,41 +44,18 @@ const HUB_HOST = {
 };
 
 describe("hub link features", () => {
-  it("sends no features and keeps presence and heartbeat calls for older centers", async () => {
-    const h = featureFixture(null);
-    const socket = await h.connect({ center_methods: ["session.heartbeat"] });
-    expect(socket.frames("hello")).toEqual([{ t: "hello", v: 1, resume: null }]);
-    expect(h.link.features).toEqual([]);
-    socket.presence(1, [HOST]);
-    expect(h.link.ready).toBe(true);
-    expect(h.link.serveFor(HOST.host_id)?.node_id).toBe(HOST.node_id);
-    void h.link.reportPresence({ appVisible: true, deviceType: "mobile" });
-    expect(socket.frames("state")).toEqual([]);
-    expect(socket.frames("call")).toEqual([
-      expect.objectContaining({ t: "call", method: "session.heartbeat" }),
-    ]);
-    const session = h.link.openSession(HOST.node_id);
-    session.send("hello");
-    expect(socket.frames("open")[0]).not.toHaveProperty("w");
-    expect(socket.frames("open")[0]).not.toHaveProperty("k");
-  });
-
-  it("announces the advertised features it implements and repeats them on every resume", async () => {
-    const h = featureFixture(["credit", "lease", "future", "hosts"]);
+  it("announces every feature and repeats them on every resume", async () => {
+    const h = featureFixture();
     const socket = await h.connect();
-    expect(socket.frames("hello")).toEqual([
-      { t: "hello", v: 1, resume: null, f: ["lease", "hosts", "credit"] },
-    ]);
-    expect(h.link.features).toEqual(["lease", "hosts", "credit"]);
-    expect(h.link.snapshot().features).toEqual(["lease", "hosts", "credit"]);
+    expect(socket.frames("hello")).toEqual([{ t: "hello", v: 1, resume: null, f: ALL }]);
     socket.drop();
     await h.flush();
     const resumed = h.socket();
     resumed.open();
     expect(resumed.frames("hello")).toEqual([
-      { t: "hello", v: 1, resume: { link: "link-1", recv: 0 }, f: ["lease", "hosts", "credit"] },
+      { t: "hello", v: 1, resume: { link: "link-1", recv: 0 }, f: ALL },
     ]);
-    // A resume that falls back to a fresh ticket still repeats the original set.
+    // A resume that falls back to a fresh ticket repeats the same set.
     resumed.drop();
     await vi.advanceTimersByTimeAsync(10_000);
     h.socket().drop();
@@ -97,7 +64,7 @@ describe("hub link features", () => {
     ticketed.open();
     expect(ticketed.frames("hello")[0]).toMatchObject({
       resume: { link: "link-1" },
-      f: ["lease", "hosts", "credit"],
+      f: ALL,
     });
   });
 
@@ -121,9 +88,6 @@ describe("hub link features", () => {
     expect(h.link.ready).toBe(true);
     expect(h.link.serveFor(HOST.host_id)).toMatchObject({ node_id: HOST.node_id, state: "online" });
     expect(h.link.hostFor(HOST.host_id)?.f).toEqual(["credit", "download"]);
-    // Presence is not consulted on a hosts link.
-    socket.presence(3, []);
-    expect(h.link.serveFor(HOST.host_id)).toBeDefined();
     const other = { ...HUB_HOST, host_id: "other", node_id: "other-node", f: [] };
     socket.receive({ t: "hosts", seq: 4, ver: 3 }, JSON.stringify({ upsert: [other] }));
     expect(h.link.hosts?.map((host) => host.host_id)).toEqual([HOST.host_id, "other"]);
@@ -146,7 +110,7 @@ describe("hub link features", () => {
 
   it("sends state frames on change and again after a resume", async () => {
     const h = featureFixture();
-    const socket = await h.connect({ center_methods: ["session.heartbeat"] });
+    const socket = await h.connect();
     await h.link.reportPresence({
       appVisible: true,
       deviceType: "mobile",
@@ -260,10 +224,10 @@ describe("hub session credit", () => {
     expect(errors).not.toHaveBeenCalled();
   });
 
-  it("still fails an uncontrolled send when the link buffer is full", async () => {
-    const h = featureFixture(null);
+  it("still fails a send to a Host without credit when the link buffer is full", async () => {
+    const h = featureFixture();
     const socket = await h.connect();
-    socket.presence(1, [HOST]);
+    socket.hosts(1, [HOST]);
     const session = h.link.openSession(HOST.node_id);
     session.send("hello");
     socket.receive({ t: "accept", seq: 2, s: session.id });
@@ -300,12 +264,6 @@ describe("hub session credit", () => {
     expect(socket.frames("close")).toEqual([
       { t: "close", seq: 2, s: download.id, code: "cancelled" },
     ]);
-  });
-
-  it("refuses download sessions on links without the feature", async () => {
-    const h = featureFixture(["lease"]);
-    await h.connect();
-    expect(() => h.link.openDownload(HOST.node_id, "token")).toThrow("Hub downloads");
   });
 });
 
@@ -351,15 +309,9 @@ describe("hub link pause", () => {
 describe("hub bulk link", () => {
   const BULK = ["credit", "download"];
 
-  function bulkFixture(features: readonly string[] = [...ALL, "bulk"]) {
-    let issued = 0;
-    const ticket = vi.fn(async () => ({
-      centerUrl: CENTER,
-      ticket: (++issued).toString(16).padStart(64, "0"),
-      features,
-    }));
-    const main = hubFixture({ ticket });
-    return { ...main, bulk: main.link.bulkLink(ticket, 60_000)! };
+  function bulkFixture() {
+    const main = hubFixture();
+    return { ...main, bulk: main.link.bulkLink(main.ticket, 60_000) };
   }
 
   async function connect(h: ReturnType<typeof bulkFixture>) {
@@ -393,16 +345,6 @@ describe("hub bulk link", () => {
         w: 1024 * 1024,
       },
     ]);
-    h.bulk.stop();
-  });
-
-  it("is unavailable to endpoints or centers without every bulk feature", async () => {
-    expect(hubFixture({ features: ["lease", "download"] }).link.bulkLink(vi.fn())).toBeNull();
-    const h = bulkFixture(["lease", "download", "bulk"]);
-    h.bulk.start();
-    await h.flush();
-    expect(h.sockets).toHaveLength(0);
-    expect(h.bulk.state).toBe("unavailable");
     h.bulk.stop();
   });
 

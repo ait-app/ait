@@ -305,7 +305,6 @@ impl Api {
             .map_err(|_| ConfigError::SharedConfiguration)? =
             serde_json::json!({"mode":"managed", "phase":"starting"});
         Ok(managed_relay::ManagedRelayHandle {
-            relay: shared.relay.clone(),
             hub: shared.relay.hub().clone(),
             status: shared.managed_status.clone(),
         })
@@ -523,7 +522,6 @@ impl Api {
     /// Wait for all admitted upgrades and connections after calling `begin_shutdown`.
     /// The process host must bound this wait with its shutdown deadline.
     pub async fn wait_closed(&self) {
-        self.shared.relay.stop().await;
         self.shared.relay.hub().stop().await;
         self.shared.tasks.wait().await;
         if let Some(names) = &self.shared.workspace_names {
@@ -663,9 +661,12 @@ async fn health() -> Result<Response, ApiError> {
     Ok(Json(serde_json::json!({"status":"alive"})).into_response())
 }
 
+/// The retired Relay control endpoint. It no longer connects anywhere: its status
+/// is always offline, start is refused and stop has nothing to stop. It remains so
+/// local callers reading the management state, or disconnecting a managed daemon,
+/// keep working; the Hub link is controlled through `/api/hub/control`.
 async fn relay_status(State(state): State<Arc<Shared>>) -> Json<serde_json::Value> {
-    let status = state.relay.status().await;
-    let mut value = serde_json::to_value(status).unwrap_or_default();
+    let mut value = serde_json::to_value(relay::Status::default()).unwrap_or_default();
     value["management"] = state
         .managed_status
         .lock()
@@ -673,22 +674,16 @@ async fn relay_status(State(state): State<Arc<Shared>>) -> Json<serde_json::Valu
     Json(value)
 }
 
-async fn relay_start(
-    State(state): State<Arc<Shared>>,
-    Json(grant): Json<relay::ControlGrant>,
-) -> Result<StatusCode, ApiError> {
+/// Refuse every Relay control grant: managed daemons as before (`409`), others
+/// with `410 Gone`, since no control connection is ever opened.
+async fn relay_start(State(state): State<Arc<Shared>>) -> Result<StatusCode, ApiError> {
     if state.cancellation.is_cancelled() {
         return Err(ApiError(StatusCode::SERVICE_UNAVAILABLE));
     }
     if state.managed_relay {
         return Err(ApiError(StatusCode::CONFLICT));
     }
-    state
-        .relay
-        .start(grant)
-        .await
-        .map_err(|_| ApiError(StatusCode::BAD_REQUEST))?;
-    Ok(StatusCode::ACCEPTED)
+    Err(ApiError(StatusCode::GONE))
 }
 
 async fn relay_stop(State(state): State<Arc<Shared>>) -> Result<StatusCode, ApiError> {
@@ -702,7 +697,6 @@ async fn relay_stop(State(state): State<Arc<Shared>>) -> Result<StatusCode, ApiE
     if state.managed_relay {
         return Err(ApiError(StatusCode::CONFLICT));
     }
-    state.relay.stop().await;
     Ok(StatusCode::NO_CONTENT)
 }
 

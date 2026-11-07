@@ -92,6 +92,9 @@ async fn publication_failure_preserves_local_http_and_shutdown_releases_device_s
     assert!(crate::device::Store::open(root.path()).is_ok());
 }
 
+/// Every feature a current center declares.
+const DECLARED: [&str; 6] = ["lease", "hosts", "state", "credit", "download", "bulk"];
+
 #[tokio::test]
 async fn status_relay_rejects_invalid_tickets_and_cleans_failed_snapshot_publication() {
     let root = tempfile::tempdir().unwrap();
@@ -108,22 +111,13 @@ async fn status_relay_rejects_invalid_tickets_and_cleans_failed_snapshot_publica
         root.path(),
         Arc::new(InstanceLease::acquire(root.path()).unwrap()),
     );
-    assert!(!relay.active().await);
-    assert!(!relay.online().await);
     assert!(!relay.hub_active().await);
     assert!(!relay.hub_online().await);
     assert_eq!(
         relay
-            .start(uuid::Uuid::new_v4(), "invalid-fixture-ticket".into())
-            .await
-            .unwrap_err(),
-        host_link::Error::Unavailable
-    );
-    assert_eq!(
-        relay
             .start_hub(
                 uuid::Uuid::new_v4(),
-                host_link::HubTicket::new("invalid-fixture-ticket".into(), None),
+                host_link::HubTicket::new("invalid-fixture-ticket".into(), Vec::new()),
                 None,
             )
             .await
@@ -134,11 +128,23 @@ async fn status_relay_rejects_invalid_tickets_and_cleans_failed_snapshot_publica
     relay
         .start_hub(
             uuid::Uuid::new_v4(),
-            host_link::HubTicket::new("a".repeat(64).into(), None),
+            host_link::HubTicket::new("a".repeat(64).into(), DECLARED.map(str::to_owned).to_vec()),
             None,
         )
         .await
         .unwrap();
+    // A center that does not declare what the link needs is refused, not downgraded for.
+    assert_eq!(
+        relay
+            .start_hub(
+                uuid::Uuid::new_v4(),
+                host_link::HubTicket::new("a".repeat(64).into(), vec!["lease".to_owned()]),
+                None,
+            )
+            .await
+            .unwrap_err(),
+        host_link::Error::Unavailable
+    );
     assert!(relay.hub_active().await);
     assert!(!relay.hub_online().await);
     assert!(!relay.hub_lease().await, "no welcome enabled the lease");

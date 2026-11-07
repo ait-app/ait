@@ -18,6 +18,15 @@ const RESUME: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 
 type Center = WebSocketStream<TcpStream>;
 
+/// Every feature the center declares (`hub_features`).
+const DECLARED: [&str; 6] = ["lease", "hosts", "state", "credit", "download", "bulk"];
+/// `hello.f` of a main link without bulk tickets, which the welcome enables.
+const MAIN: [&str; 3] = ["lease", "credit", "download"];
+
+fn declared(features: &[&str]) -> Vec<String> {
+    features.iter().map(|&feature| feature.to_owned()).collect()
+}
+
 fn frame(header: &Value, payload: &[u8]) -> Message {
     let header = serde_json::to_vec(header).expect("header");
     let mut bytes = u16::try_from(header.len())
@@ -89,7 +98,8 @@ async fn accept(listener: &TcpListener) -> (Center, String) {
 
 fn welcome(link: Uuid, resumed: bool, recv: u64) -> Value {
     let mut welcome = json!({"t":"welcome","v":1,"link":link,"resumed":resumed,"recv":recv,
-        "node_id":Uuid::new_v4(),"grace_seconds":120,"ping_seconds":20,"max_payload":1_048_576});
+        "node_id":Uuid::new_v4(),"grace_seconds":120,"ping_seconds":20,"max_payload":1_048_576,
+        "f":MAIN,"win":262_144});
     if !resumed {
         welcome["resume_token"] = json!(RESUME);
     }
@@ -123,24 +133,18 @@ async fn daemon(mut connections: Connections) -> Vec<String> {
 
 type Connections = mpsc::UnboundedReceiver<crate::test_support::Accepted>;
 
+/// A connector granted by a center declaring every feature, without bulk tickets.
 async fn connector() -> (crate::Connector, Connector, TcpListener, Connections) {
-    connector_with(None).await
-}
-
-/// A connector whose link offers the features `hub_features` declares.
-async fn connector_with(
-    hub_features: Option<Vec<String>>,
-) -> (crate::Connector, Connector, TcpListener, Connections) {
     // Nothing serves files at this local address.
     let local = "127.0.0.1:9".parse().expect("local address");
-    serving(local, hub_features, None).await
+    serving(local, declared(&DECLARED), None).await
 }
 
 /// A connector for the local destination `local`, granted `hub_features` and
 /// bulk `tickets`.
 async fn serving(
     local: std::net::SocketAddr,
-    hub_features: Option<Vec<String>>,
+    hub_features: Vec<String>,
     tickets: Option<Arc<dyn bulk::Tickets>>,
 ) -> (crate::Connector, Connector, TcpListener, Connections) {
     let center = TcpListener::bind("127.0.0.1:0").await.expect("bind center");
@@ -172,7 +176,7 @@ async fn sessions_survive_link_loss_and_unacknowledged_frames_are_replayed() {
     assert_eq!(credential, format!("Bearer {TICKET}"));
     assert_eq!(
         next(&mut first).await.0,
-        json!({"t":"hello","v":1,"resume":null})
+        json!({"t":"hello","v":1,"resume":null,"f":MAIN})
     );
     let link = Uuid::new_v4();
     first
@@ -209,7 +213,7 @@ async fn sessions_survive_link_loss_and_unacknowledged_frames_are_replayed() {
     assert_eq!(credential, format!("Bearer {RESUME}"));
     assert_eq!(
         next(&mut second).await.0,
-        json!({"t":"hello","v":1,"resume":{"link":link,"recv":2}})
+        json!({"t":"hello","v":1,"resume":{"link":link,"recv":2},"f":MAIN})
     );
     second
         .send(frame(&welcome(link, true, 1), b""))
@@ -292,7 +296,7 @@ async fn malformed_grants_never_dial() {
             center_url: center_url.to_owned(),
             hub_ticket: SecretString::from(ticket),
             node_session_id: Uuid::new_v4(),
-            hub_features: None,
+            hub_features: declared(&DECLARED),
             tickets: None,
         };
         assert!(matches!(hub.start(grant).await, Err(Error::InvalidGrant)));
@@ -302,7 +306,7 @@ async fn malformed_grants_never_dial() {
         center_url: "https://example.com".to_owned(),
         hub_ticket: SecretString::from(TICKET),
         node_session_id: Uuid::new_v4(),
-        hub_features: None,
+        hub_features: declared(&DECLARED),
         tickets: None,
     };
     assert!(matches!(hub.start(grant).await, Err(Error::Transport)));
@@ -350,7 +354,7 @@ async fn a_replaced_link_reports_why_and_yields_until_restarted() {
         center_url: format!("http://{}", center.local_addr().expect("center address")),
         hub_ticket: SecretString::from(TICKET),
         node_session_id: Uuid::new_v4(),
-        hub_features: None,
+        hub_features: declared(&DECLARED),
         tickets: None,
     })
     .await

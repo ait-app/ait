@@ -17,11 +17,11 @@ fn msg(s: Uuid) -> impl FnOnce(u64) -> Outbound {
 }
 
 #[test]
-fn fresh_link_sends_plain_hello_then_resumes_with_received_sequence() {
-    let mut link = Link::default();
+fn fresh_link_sends_hello_then_resumes_with_received_sequence() {
+    let mut link = Link::new(vec!["lease"]);
     assert_eq!(
         header(&link.hello().expect("hello")),
-        serde_json::json!({"t":"hello","v":1,"resume":null})
+        serde_json::json!({"t":"hello","v":1,"resume":null,"f":["lease"]})
     );
     let id = Uuid::new_v4();
 
@@ -103,7 +103,7 @@ fn acknowledgements_are_coalesced_and_bound_replay_memory() {
 
 #[test]
 fn offered_features_survive_a_fresh_join_and_every_resume() {
-    let mut link = Link::new(Some(vec!["lease", "credit"]));
+    let mut link = Link::new(vec!["lease", "credit"]);
     assert_eq!(
         header(&link.hello().expect("hello"))["f"],
         serde_json::json!(["lease", "credit"])

@@ -77,12 +77,12 @@ describe("hub link failures", () => {
     ).toEqual(["invalid_welcome"]);
   });
 
-  it("ignores unknown frame kinds and invalid presence payloads", async () => {
+  it("ignores unknown frame kinds and invalid hosts payloads", async () => {
     const h = hubFixture();
     const socket = await h.online();
     socket.receive({ t: "future", seq: 2 });
-    socket.receive({ t: "presence", seq: 3 }, "not json");
-    expect(h.logger.warn).toHaveBeenCalledWith(expect.anything(), "[Hub] invalid presence ignored");
+    socket.receive({ t: "hosts", seq: 3, ver: 3, full: true }, "not json");
+    expect(h.logger.warn).toHaveBeenCalledWith(expect.anything(), "[Hub] invalid hosts ignored");
     expect(h.link.state).toBe("online");
     expect(h.link.serveFor(HOST.host_id)).toBeDefined();
   });
@@ -112,14 +112,14 @@ describe("hub link failures", () => {
     await h.flush();
     h.socket().open();
     h.socket().welcome({ grace_seconds: 1 });
-    h.socket().presence(1, [HOST]);
+    h.socket().hosts(1, [HOST]);
     // Reconnect attempts keep failing until the grace period is over.
     h.factory.mockImplementation(() => {
       throw new Error("offline");
     });
     h.socket().drop();
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(h.link.presence).toBeNull();
+    expect(h.link.hosts).toBeNull();
     expect(h.link.centerUrl).toBeNull();
     expect(h.link.state).toBe("connecting");
     await vi.advanceTimersByTimeAsync(5_000);

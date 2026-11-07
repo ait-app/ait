@@ -1,106 +1,21 @@
-use std::sync::Arc;
+//! Local file downloads streamed as `download.*` messages; the Hub download
+//! session frames them.
+
 use std::time::Duration;
 
-use futures_util::{SinkExt, StreamExt};
-use secrecy::{ExposeSecret, SecretString};
-use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
-use tokio_tungstenite::tungstenite::{Bytes, Message};
-use tokio_util::sync::CancellationToken;
+use tokio_tungstenite::tungstenite::Bytes;
 use url::Url;
 use uuid::Uuid;
 
-use crate::protocol::{DownloadAck, DownloadMessage, Pairing};
-use crate::transport::{MAX_MESSAGE, Socket, receive};
+use crate::protocol::{DownloadAck, DownloadMessage};
 use crate::{Error, Local, protocol};
 
 /// Largest binary body message of a download.
 pub(crate) const CHUNK: usize = 64 * 1024;
 
-/// Pair `session` using its relay ticket and stream the local file authorized by `token`.
-/// A guest download names its `visitor`, so only a token issued to that visitor is served.
-///
-/// # Errors
-/// Rejects invalid grants or HTTP responses, failed I/O, and a missing destination acknowledgement.
-pub(super) async fn run(
-    url: String,
-    ticket: SecretString,
-    token: SecretString,
-    visitor: Option<Uuid>,
-    local: Arc<Local>,
-    session: Uuid,
-) -> Result<(), Error> {
-    protocol::validate_download_token(token.expose_secret())?;
-    let mut socket = local
-        .dialer
-        .connect(&url, ticket.expose_secret(), MAX_MESSAGE)
-        .await?;
-    let ready: Pairing = timeout(Duration::from_secs(30), receive(&mut socket))
-        .await
-        .map_err(|_| Error::Transport)??;
-    ready.verify(session)?;
-    let (headers, response) = prepare(&local, token.expose_secret(), visitor).await?;
-    let (mut sink, incoming) = socket.split();
-    let (pong_tx, mut pong_rx) = mpsc::channel(1);
-    let (complete_tx, complete_rx) = oneshot::channel();
-    let cancel = CancellationToken::new();
-    let reader = read_ack(incoming, pong_tx, complete_tx, &cancel);
-    let writer = async {
-        timeout(
-            Duration::from_secs(5),
-            sink.send(Message::Text(headers.into())),
-        )
-        .await
-        .map_err(|_| Error::Transport)?
-        .map_err(|_| Error::Transport)?;
-        let mut body = response.bytes_stream();
-        let mut written = 0_u64;
-        loop {
-            let chunk = tokio::select! {
-                () = cancel.cancelled() => return Err(Error::Transport),
-                Some(pong) = pong_rx.recv() => {
-                    timeout(Duration::from_secs(5), sink.send(pong)).await.map_err(|_| Error::Transport)?.map_err(|_| Error::Transport)?;
-                    continue;
-                },
-                next = timeout(Duration::from_secs(30), body.next()) => next.map_err(|_| Error::Transport)?,
-            };
-            let Some(chunk) = chunk else { break };
-            let bytes = chunk.map_err(|_| Error::Transport)?;
-            for chunk in chunks(&bytes) {
-                let length = chunk.len() as u64;
-                timeout(Duration::from_secs(5), sink.send(Message::Binary(chunk)))
-                    .await
-                    .map_err(|_| Error::Transport)?
-                    .map_err(|_| Error::Transport)?;
-                written += length;
-            }
-        }
-        timeout(
-            Duration::from_secs(5),
-            sink.send(Message::Text(end(written)?.into())),
-        )
-        .await
-        .map_err(|_| Error::Transport)?
-        .map_err(|_| Error::Transport)?;
-        // Do not close ahead of queued frames at the center. The destination
-        // acknowledges only after its final file write has completed.
-        timeout(Duration::from_secs(10), complete_rx)
-            .await
-            .map_err(|_| Error::Transport)?
-            .map_err(|_| Error::Transport)?;
-        Ok::<_, Error>(())
-    };
-    let completing = async {
-        let result = writer.await;
-        cancel.cancel();
-        result
-    };
-    let ((), result) = tokio::join!(reader, completing);
-    result
-}
-
 /// Validate `token`, request the local file it authorizes and encode the
-/// `download.headers` message announcing it. Shared by Relay and Hub downloads.
+/// `download.headers` message announcing it.
 ///
 /// # Errors
 /// Rejects malformed tokens, unreachable local endpoints and unsuccessful responses.
@@ -175,37 +90,3 @@ async fn local_response(
     }
     Ok(response)
 }
-
-async fn read_ack(
-    mut incoming: futures_util::stream::SplitStream<Socket>,
-    pong_tx: mpsc::Sender<Message>,
-    complete_tx: oneshot::Sender<()>,
-    cancel: &CancellationToken,
-) {
-    loop {
-        let frame = tokio::select! {
-            () = cancel.cancelled() => return,
-            frame = incoming.next() => frame,
-        };
-        match frame {
-            Some(Ok(Message::Ping(bytes))) => {
-                if pong_tx.try_send(Message::Pong(bytes)).is_err() {
-                    break;
-                }
-            }
-            Some(Ok(Message::Pong(_))) => {}
-            Some(Ok(Message::Text(value))) => {
-                if completed(&value) {
-                    let _ = complete_tx.send(());
-                    return;
-                }
-                break;
-            }
-            _ => break,
-        }
-    }
-    cancel.cancel();
-}
-
-#[cfg(test)]
-mod tests;

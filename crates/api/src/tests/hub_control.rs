@@ -4,8 +4,32 @@ fn grant(center: &str) -> Value {
     json!({
         "center_url":center,
         "hub_ticket":"a".repeat(64),
-        "node_session_id":uuid::Uuid::new_v4()
+        "node_session_id":uuid::Uuid::new_v4(),
+        "hub_features":["lease", "hosts", "state", "credit", "download", "bulk"]
     })
+}
+
+#[tokio::test]
+async fn hub_grant_without_the_required_features_is_refused() {
+    let fixture = Fixture::start().await;
+    let client = reqwest::Client::new();
+    let endpoint = fixture.url("/api/hub/control");
+    let mut missing = grant("http://127.0.0.1:9");
+    missing.as_object_mut().unwrap().remove("hub_features");
+    let mut partial = grant("http://127.0.0.1:9");
+    partial["hub_features"] = json!(["lease", "credit"]);
+    for body in [missing, partial] {
+        let response = client
+            .put(&endpoint)
+            .bearer_auth(TOKEN)
+            .json(&body)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+    assert!(!fixture.api.shared.relay.hub().status().await.connecting);
+    fixture.stop().await;
 }
 
 #[tokio::test]
@@ -54,10 +78,6 @@ async fn hub_link_is_controlled_over_authenticated_local_http() {
     assert_eq!(status["online"], false);
     assert_eq!(status["management"]["mode"], "external");
     assert!(!status.to_string().contains(&"a".repeat(64)));
-    assert!(
-        !fixture.api.shared.relay.status().await.connecting,
-        "the legacy relay is independent"
-    );
     let stopped = client
         .delete(&endpoint)
         .bearer_auth(TOKEN)
@@ -148,7 +168,7 @@ async fn hub_sessions_are_served_in_process_by_this_api() {
     );
     link.send(hub_frame(
         &json!({"t":"welcome","link":uuid::Uuid::new_v4(),"resumed":false,"recv":0,
-            "resume_token":"b".repeat(64),"grace_seconds":120,"f":["credit"],"win":262_144}),
+            "resume_token":"b".repeat(64),"grace_seconds":120,"f":["lease","credit","download"],"win":262_144}),
         b"",
     ))
     .await

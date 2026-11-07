@@ -19,7 +19,7 @@ export class AccountHubBridge {
   private readonly shareSubscriptions = new Map<AccountTransportOwner, () => void>();
   private readonly owners = new Map<AccountTransportOwner, () => void>();
   private link: string | null = null;
-  /** Latest heartbeat of each window; `focusedAt` is when it last became visible or refocused. */
+  /** Latest presence of each window; `focusedAt` is when it last became visible or refocused. */
   private readonly presence = new Map<
     AccountTransportOwner,
     { at: number; focusedAt: number; params: Record<string, unknown> }
@@ -59,35 +59,6 @@ export class AccountHubBridge {
       if (!HUB_ACCESS_METHODS.some((value) => value === method))
         throw new HubCallError("unsupported", "Unavailable account service");
       const name = method as string;
-      if (name === "session.heartbeat") {
-        if (
-          !params ||
-          typeof params !== "object" ||
-          !("appVisible" in params) ||
-          typeof params.appVisible !== "boolean"
-        )
-          throw new HubCallError("invalid_params", "Invalid account presence");
-        this.watch(owner);
-        const next = params as Record<string, unknown>;
-        const previous = this.presence.get(owner);
-        const refocused =
-          next.appVisible === true &&
-          (previous?.params.appVisible !== true ||
-            previous.params.focusedHostId !== next.focusedHostId ||
-            previous.params.focusedAgentId !== next.focusedAgentId ||
-            previous.params.focusedTerminalId !== next.focusedTerminalId);
-        this.presence.set(owner, {
-          at: Date.now(),
-          focusedAt: refocused || !previous ? Date.now() : previous.focusedAt,
-          params: next,
-        });
-        // Links with `state` carry visibility in state frames instead of this center call.
-        if (this.hub.has("state")) {
-          await this.hub.reportPresence(this.merged());
-          return { result: null };
-        }
-        return { result: await this.hub.call(name, this.heartbeat()) };
-      }
       const subscriptionId =
         params && typeof params === "object" && "subscriptionId" in params
           ? params.subscriptionId
@@ -119,6 +90,35 @@ export class AccountHubBridge {
     }
   }
 
+  /**
+   * Record one window's visibility and focus and report all windows, merged, in the link's
+   * `state` frames. Windows repeat theirs periodically; one silent for a minute counts as hidden.
+   */
+  async reportPresence(owner: AccountTransportOwner, params: unknown): Promise<void> {
+    if (
+      !params ||
+      typeof params !== "object" ||
+      !("appVisible" in params) ||
+      typeof params.appVisible !== "boolean"
+    )
+      throw new HubCallError("invalid_params", "Invalid account presence");
+    this.watch(owner);
+    const next = params as Record<string, unknown>;
+    const previous = this.presence.get(owner);
+    const refocused =
+      next.appVisible === true &&
+      (previous?.params.appVisible !== true ||
+        previous.params.focusedHostId !== next.focusedHostId ||
+        previous.params.focusedAgentId !== next.focusedAgentId ||
+        previous.params.focusedTerminalId !== next.focusedTerminalId);
+    this.presence.set(owner, {
+      at: Date.now(),
+      focusedAt: refocused || !previous ? Date.now() : previous.focusedAt,
+      params: next,
+    });
+    await this.hub.reportPresence(this.merged());
+  }
+
   /** Keep Hub share presence subscribed only while a renderer window consumes it. */
   setShareSubscription(owner: AccountTransportOwner, active: boolean): void {
     const current = this.shareSubscriptions.get(owner);
@@ -148,12 +148,7 @@ export class AccountHubBridge {
       this.owners.delete(owner);
       this.shareSubscriptions.get(owner)?.();
       this.shareSubscriptions.delete(owner);
-      if (this.presence.delete(owner))
-        void (
-          this.hub.has("state")
-            ? this.hub.reportPresence(this.merged())
-            : this.hub.call("session.heartbeat", this.heartbeat())
-        ).catch(() => {});
+      if (this.presence.delete(owner)) void this.hub.reportPresence(this.merged()).catch(() => {});
       for (const [subscriptionId, current] of this.subscriptions) {
         if (current !== owner) continue;
         this.subscriptions.delete(subscriptionId);
@@ -166,8 +161,8 @@ export class AccountHubBridge {
   }
 
   /**
-   * Visibility of all windows for `state` frames: visible when any window is, focused on the
-   * window that most recently became visible or changed its focus.
+   * Visibility of all windows: visible when any window is, focused on the window that most
+   * recently became visible or changed its focus.
    */
   private merged(): HubPresence {
     const visible = Array.from(this.presence.values()).filter(
@@ -188,15 +183,5 @@ export class AccountHubBridge {
           }
         : {}),
     };
-  }
-
-  private heartbeat(): Record<string, unknown> {
-    const fresh = Array.from(this.presence.values()).filter(
-      (value) => Date.now() - value.at < 60_000,
-    );
-    const visible = fresh.filter((value) => value.params.appVisible === true);
-    return (
-      visible.sort((a, b) => b.at - a.at)[0]?.params ?? { appVisible: false, deviceType: "web" }
-    );
   }
 }

@@ -13,38 +13,29 @@ pub(super) const VERSION: u32 = 1;
 const MAX_HEADER: usize = 4 * 1024;
 pub(super) const MAX_PAYLOAD: usize = 1024 * 1024;
 pub(super) const MAX_FRAME: usize = 2 + MAX_HEADER + MAX_PAYLOAD;
-/// Optional link features this serve endpoint implements; `hello.f` offers the
-/// subset the center declared over HTTP.
+/// Link features of a main serve link. The center must declare every one of
+/// them (`hub_features`); this daemon does not serve centers predating them.
 pub(super) const FEATURES: [&str; 4] = ["lease", "credit", "download", BULK];
 /// Feature letting the center ask the main link for a download-only bulk link.
 pub(super) const BULK: &str = "bulk";
 /// The whole `hello.f` of a bulk link; the center requires both.
-const BULK_FEATURES: [&str; 2] = ["credit", "download"];
+pub(super) const BULK_FEATURES: [&str; 2] = ["credit", "download"];
 
-/// Features to offer in `hello.f`: the center's declared set intersected with
-/// [`FEATURES`]. `None` (a center predating features) keeps the plain hello.
-/// `bulk` is offered only when the owner can obtain bulk tickets (`bulk_lane`)
-/// and a bulk link could be opened.
-pub(super) fn offer(declared: Option<&[String]>, bulk_lane: bool) -> Option<Vec<&'static str>> {
-    declared.map(|declared| {
-        let bulk = bulk_lane && bulk_offer(declared).is_some();
-        FEATURES
-            .into_iter()
-            .filter(|feature| declares(declared, feature) && (bulk || *feature != BULK))
-            .collect()
-    })
+/// `hello.f` of a main link. `bulk` is declared only when the owner can obtain
+/// bulk tickets (`bulk_lane`), since the link must open a bulk link on request.
+pub(super) fn offer(bulk_lane: bool) -> Vec<&'static str> {
+    FEATURES
+        .into_iter()
+        .filter(|feature| bulk_lane || *feature != BULK)
+        .collect()
 }
 
-/// `hello.f` of a bulk link, or `None` when the center lacks a feature it requires.
-pub(super) fn bulk_offer(declared: &[String]) -> Option<Vec<&'static str>> {
-    BULK_FEATURES
+/// The first feature of `offer` missing from `enabled`, if any.
+pub(super) fn missing(offer: &[&'static str], enabled: &[String]) -> Option<&'static str> {
+    offer
         .iter()
-        .all(|feature| declares(declared, feature))
-        .then(|| BULK_FEATURES.to_vec())
-}
-
-fn declares(declared: &[String], feature: &str) -> bool {
-    declared.iter().any(|name| name == feature)
+        .copied()
+        .find(|feature| !enabled.iter().any(|name| name == feature))
 }
 
 /// Business WebSocket message type carried in a payload.
@@ -77,13 +68,12 @@ pub(super) enum SessionKind {
 #[derive(Debug, Serialize)]
 #[serde(tag = "t")]
 pub(super) enum Outbound {
-    /// `f` is present only when the center declared features over HTTP.
+    /// `f` is the same on every connection of one link.
     #[serde(rename = "hello")]
     Hello {
         v: u32,
         resume: Option<Resume>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        f: Option<Vec<&'static str>>,
+        f: Vec<&'static str>,
     },
     #[serde(rename = "ack")]
     Ack { a: u64 },
@@ -128,7 +118,8 @@ pub(super) enum Inbound {
         grace_seconds: u64,
         #[serde(default)]
         center_methods: Vec<String>,
-        /// Features enabled on this link; present only when the hello offered `f`.
+        /// Features enabled on this link; absent only from centers predating
+        /// them, which this daemon refuses.
         #[serde(default)]
         f: Vec<String>,
     },

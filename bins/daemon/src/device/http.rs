@@ -130,7 +130,7 @@ impl HttpCenter {
             .await?;
         Ok(HubTicket::new(
             ticket(&value, "hub_ticket")?,
-            hub_features(&value),
+            hub_features(&value)?,
         ))
     }
 
@@ -175,22 +175,26 @@ fn ticket(value: &Value, field: &str) -> Result<SecretString, Error> {
     Ok(ticket.to_owned().into())
 }
 
-/// Optional `hub_features` of a center response. Centers predating them omit the
-/// field; an unreadable one is treated the same, keeping the original behavior.
-fn hub_features(value: &Value) -> Option<Vec<String>> {
-    serde_json::from_value(value["hub_features"].clone()).ok()
+/// The `hub_features` every Hub-capable center response declares. A response
+/// without them comes from a center predating this daemon's Hub link, which this
+/// daemon does not serve: fail instead of downgrading.
+fn hub_features(value: &Value) -> Result<Vec<String>, Error> {
+    serde_json::from_value(value["hub_features"].clone()).map_err(|_| {
+        tracing::error!("center response lacks hub_features; this daemon needs a newer center");
+        Error::Protocol
+    })
 }
 
 /// The serve ticket a registration may carry. It is only used for a `serve` Hub
 /// endpoint at the protocol path, within its stated lifetime.
-fn registration_ticket(value: &Value, features: Option<&[String]>) -> Option<HubTicket> {
+fn registration_ticket(value: &Value, features: &[String]) -> Option<HubTicket> {
     if value["hub_ep"] != "serve" || value["hub_path"] != "/v1/hub" {
         return None;
     }
     let lifetime = value["hub_expires_in_seconds"].as_u64()?;
     Some(HubTicket {
         ticket: ticket(value, "hub_ticket").ok()?,
-        features: features.map(<[String]>::to_vec),
+        features: features.to_vec(),
         expires_at: Some(tokio::time::Instant::now() + Duration::from_secs(lifetime)),
     })
 }
@@ -300,7 +304,6 @@ impl Center for HttpCenter {
         if value["node_id"] != binding.node_id.to_string()
             || value["host_id"] != binding.host_id.to_string()
             || value["server_id"] != machine.server_id.to_string()
-            || value["control_required"] != true
         {
             return Err(Error::Protocol);
         }
@@ -318,13 +321,12 @@ impl Center for HttpCenter {
         if id.is_nil() {
             return Err(Error::Protocol);
         }
-        let hub_features = hub_features(&value);
+        let hub_features = hub_features(&value)?;
         Ok(Session {
             id,
             lease_until: Utc::now() + chrono::Duration::seconds(lease),
             renew_after_seconds: renew,
-            hub_ticket: registration_ticket(&value, hub_features.as_deref()),
-            hub_features,
+            hub_ticket: registration_ticket(&value, &hub_features),
         })
     }
     async fn renew(&self, tokens: &Tokens, session: Uuid) -> Result<DateTime<Utc>, Error> {
@@ -342,17 +344,6 @@ impl Center for HttpCenter {
             return Err(Error::Protocol);
         }
         Ok(until)
-    }
-    async fn ticket(&self, tokens: &Tokens, session: Uuid) -> Result<SecretString, Error> {
-        let value = self
-            .request(
-                reqwest::Method::POST,
-                &format!("/v1/node-sessions/{session}/control-tickets"),
-                Some(&tokens.access_token),
-                json!({}),
-            )
-            .await?;
-        ticket(&value, "control_ticket")
     }
     async fn hub_ticket(&self, tokens: &Tokens, session: Uuid) -> Result<HubTicket, Error> {
         self.serve_ticket(tokens, session, json!({"ep":"serve"}))

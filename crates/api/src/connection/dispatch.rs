@@ -117,7 +117,7 @@ async fn transport(context: &mut Option<Context<'_>>, state: &Shared) -> Result<
         Err(DispatchError::NotImplemented) => Context::assert_unhandled(context, "publication"),
         result => return result,
     }
-    relay::rpc::request(context, &state.relay, Some(state.relay_management())).await
+    relay::rpc::request(context, &state.relay, Some(state.relay_management()))
 }
 
 async fn complete_metadata(

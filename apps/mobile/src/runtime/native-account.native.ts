@@ -1,7 +1,4 @@
-import {
-  createWebSocketTransportFactory,
-  nativeWebSocketFactory,
-} from "@ait/client/internal/daemon-client-websocket-transport";
+import { nativeWebSocketFactory } from "@ait/client/internal/daemon-client-websocket-transport";
 import { HubLink } from "@ait/client/internal/hub";
 import { AppState, Linking, Platform } from "react-native";
 import * as Crypto from "expo-crypto";
@@ -48,8 +45,6 @@ async function createAccount(): Promise<AccountSessionManager> {
   };
   const manager = new AccountSessionManager({
     installationId,
-    channelTransport: createWebSocketTransportFactory(nativeWebSocketFactory),
-    channelAuthentication: "bearer",
     deviceName: platform === "ios" ? "Ait iOS" : "Ait Android",
     platform,
     browserLogin: platform === "ios" ? iosBrowserLogin : androidBrowserLogin,

@@ -15,14 +15,13 @@ use super::link::Link;
 use super::{Connector, Failure, Role, calls, wire};
 use crate::validate_ticket;
 
-/// One-use bulk lane serve ticket and the features declared with it.
+/// One-use bulk lane serve ticket. The bulk link's `hello.f` is fixed
+/// (`credit`, `download`); a welcome that does not enable both ends the link.
 #[derive(Debug)]
 pub struct Ticket {
     /// One-use ticket from `POST /v1/node-sessions/{id}/hub-tickets` with
     /// `{"ep":"serve","lane":"bulk"}`.
     pub hub_ticket: SecretString,
-    /// Features the center declared with the ticket.
-    pub hub_features: Option<Vec<String>>,
 }
 
 /// Obtains bulk lane tickets for the main link's node session with the owner's
@@ -80,16 +79,8 @@ async fn serve(
         () = cancel.cancelled() => return,
         ticket = tickets.bulk() => ticket,
     };
-    let Some(Ticket {
-        hub_ticket,
-        hub_features,
-    }) = ticket
-    else {
+    let Some(Ticket { hub_ticket }) = ticket else {
         tracing::info!("Hub bulk ticket unavailable; downloads stay on the main link");
-        return;
-    };
-    let Some(offer) = hub_features.as_deref().and_then(wire::bulk_offer) else {
-        tracing::info!("Hub center cannot carry a bulk link");
         return;
     };
     if validate_ticket(hub_ticket.expose_secret()).is_err() {
@@ -98,7 +89,7 @@ async fn serve(
     }
     // A bulk link carries no center calls.
     let (_, mut calls) = calls::Calls::channel();
-    let link = (hub_ticket, Link::new(Some(offer)));
+    let link = (hub_ticket, Link::new(wire::BULK_FEATURES.to_vec()));
     match connector
         .run(url, link, &Role::Bulk, cancel, &mut calls)
         .await

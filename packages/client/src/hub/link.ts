@@ -9,7 +9,6 @@ import {
   HUB_FEATURES,
   HUB_MAX_WINDOW,
   HUB_PATH,
-  type HubFeature,
   type HubHost,
   type HubInboundHeader,
   type HubLane,
@@ -33,22 +32,13 @@ import type {
   HubShare,
 } from "./account.js";
 
-/** A one-use credential for `/v1/hub`, bound to the center that issued it. */
+/**
+ * A one-use credential for `/v1/hub`, bound to the center that issued it. The issuer has checked
+ * that the center advertises every feature in `HUB_CENTER_FEATURES`.
+ */
 export interface HubTicket {
   centerUrl: string;
   ticket: string;
-  /** `hub_features` the center advertised over HTTP; absent from older centers. */
-  features?: readonly string[];
-}
-
-/** One serve endpoint of the account, as reported by `presence`. */
-export interface HubPresenceNode {
-  node_id: string;
-  host_id: string | null;
-  name: string;
-  platform: string;
-  app_version: string;
-  state: "online" | "reconnecting";
 }
 
 /**
@@ -73,8 +63,6 @@ export interface HubLinkOptions {
   authentication?: "bearer" | "subprotocol";
   randomUUID?: () => string;
   logger?: HubLinkLogger;
-  /** Features this endpoint implements; defaults to all of `HUB_FEATURES`. */
-  features?: readonly HubFeature[];
   /**
    * `bulk`: a download-only link whose tickets are issued for that lane. It announces only
    * `credit` and `download`, never calls, subscribes or reports state, and is ready without
@@ -93,12 +81,6 @@ interface LinkIdentity {
   graceMs: number;
   lostAt: number | null;
   methods: readonly string[];
-  /** `hello.f` of the first connection; every resume must repeat it. */
-  requested: string[] | undefined;
-  /** `welcome.f`: features enabled on this link. */
-  features: readonly string[];
-  /** Session receive window when `credit` is enabled. */
-  window: number;
   pingMs: number;
 }
 
@@ -131,19 +113,6 @@ const consoleLogger: HubLinkLogger = {
 function status(error: unknown): number | undefined {
   const value = (error as { status?: unknown } | null)?.status;
   return typeof value === "number" ? value : undefined;
-}
-
-function presenceNodes(payload: Uint8Array): HubPresenceNode[] {
-  const value = JSON.parse(new TextDecoder().decode(payload)) as { nodes?: unknown };
-  if (!Array.isArray(value?.nodes)) throw new Error("Invalid hub presence.");
-  return value.nodes.filter(
-    (node): node is HubPresenceNode =>
-      !!node &&
-      typeof node === "object" &&
-      typeof node.node_id === "string" &&
-      (node.host_id === null || typeof node.host_id === "string") &&
-      (node.state === "online" || node.state === "reconnecting"),
-  );
 }
 
 function nullable(value: unknown): value is string | null {
@@ -274,7 +243,6 @@ export class HubLink implements HubAccountConnection {
   private failures = 0;
   private tokenFailures = 0;
   private useTicket = false;
-  private nodes: HubPresenceNode[] | null = null;
   /** Account Hosts from `hosts` frames, by host ID; null before the first full snapshot. */
   private hostMap: Map<string, HubHost> | null = null;
   private hostsVersion = 0;
@@ -290,8 +258,6 @@ export class HubLink implements HubAccountConnection {
   private nextPing = 0;
   /** Disconnected on purpose by `pause()`; no reconnect until `start()`. */
   private paused = false;
-  /** `hello.f` sent on the current connection attempt. */
-  private requested: string[] | undefined;
   private readonly pings = new Map<number, (ok: boolean) => void>();
   private verification: Promise<boolean> | null = null;
   private readonly sessions = new Map<string, HubSession>();
@@ -330,13 +296,13 @@ export class HubLink implements HubAccountConnection {
     return this.options.lane === "bulk";
   }
 
-  /**
-   * A download-only link (`lane: "bulk"`) with this link's transport, or null when this endpoint
-   * does not implement every bulk feature. `ticket` must issue bulk-lane tickets.
-   */
-  bulkLink(ticket: () => Promise<HubTicket>, idleMs?: number): HubLink | null {
-    const wanted = this.options.features ?? HUB_FEATURES;
-    if (!HUB_BULK_FEATURES.every((feature) => wanted.includes(feature))) return null;
+  /** `hello.f` of every connection: the same set for the whole life of a link. */
+  private get features(): readonly string[] {
+    return this.bulk ? HUB_BULK_FEATURES : HUB_FEATURES;
+  }
+
+  /** A download-only link (`lane: "bulk"`) with this link's transport; `ticket` issues bulk-lane tickets. */
+  bulkLink(ticket: () => Promise<HubTicket>, idleMs?: number): HubLink {
     return new HubLink({ ...this.options, ticket, lane: "bulk", idleMs });
   }
 
@@ -351,7 +317,6 @@ export class HubLink implements HubAccountConnection {
       linkId: this.link?.id ?? null,
       centerUrl: this.centerUrl,
       methods: this.link?.methods ?? [],
-      features: this.link?.features ?? [],
       groups: this.groupSnapshot,
       shares: this.shareSnapshot,
     };
@@ -383,17 +348,7 @@ export class HubLink implements HubAccountConnection {
     };
   }
 
-  /** Features enabled on the current link (`welcome.f`), or null before the first welcome. */
-  get features(): readonly string[] | null {
-    return this.link?.features ?? null;
-  }
-
-  /** The current link enabled `feature`. */
-  has(feature: HubFeature): boolean {
-    return this.link?.features.includes(feature) ?? false;
-  }
-
-  /** Account Hosts from `hosts` frames, or null without the feature or before the first one. */
+  /** Account Hosts from `hosts` frames, or null before the first full snapshot. */
   get hosts(): readonly HubHost[] | null {
     return this.hostMap ? [...this.hostMap.values()] : null;
   }
@@ -404,46 +359,39 @@ export class HubLink implements HubAccountConnection {
   }
 
   /**
-   * Report this endpoint's visibility and focus. Links with `state` send a `state` frame when it
-   * changes and after every attach or resume; others call `session.heartbeat` as before.
+   * Report this endpoint's visibility and focus: a `state` frame when it changes and after every
+   * attach or resume.
    */
   async reportPresence(presence: HubPresence): Promise<void> {
     // Visibility belongs to the main link; a bulk link would be rejected for it.
     if (this.bulk) return;
-    if (this.has("state")) {
-      this.presenceState = presenceState(presence);
-      this.sendState();
-      return;
-    }
-    if (this.link?.methods.includes("session.heartbeat"))
-      await this.call("session.heartbeat", presence);
+    this.presenceState = presenceState(presence);
+    this.sendState();
   }
 
   private sendState(): void {
     const state = this.presenceState;
-    if (!state || !this.welcomed || !this.has("state")) return;
+    if (!state || !this.welcomed) return;
     const encoded = JSON.stringify(state);
     if (encoded === this.sentState) return;
     this.sentState = encoded;
     this.write(this.generation, encodeHubFrame({ t: "state", ...state }));
   }
 
-  /** Latest presence snapshot of the current link, or null before the first one. */
-  get presence(): readonly HubPresenceNode[] | null {
-    return this.nodes;
-  }
-
   /**
-   * Online with a presence (or `hosts`) snapshot: new sessions can be routed by presence. Bulk
-   * links never receive presence and are ready once online.
+   * Online with a full `hosts` snapshot: new sessions can be routed to Hosts. Bulk links never
+   * receive `hosts` and are ready once online.
    */
   get ready(): boolean {
-    return this.current === "online" && (this.bulk || this.nodes !== null);
+    return this.current === "online" && (this.bulk || this.hostMap !== null);
   }
 
-  /** The serve endpoint publishing `hostId`, if presence lists one. */
-  serveFor(hostId: string): HubPresenceNode | undefined {
-    return this.nodes?.find((node) => node.host_id === hostId);
+  /** `hostId` while it has a serve endpoint (online or reconnecting) to open sessions to. */
+  serveFor(hostId: string): (HubHost & { node_id: string }) | undefined {
+    const host = this.hostMap?.get(hostId);
+    return host?.node_id && host.state !== "offline"
+      ? { ...host, node_id: host.node_id }
+      : undefined;
   }
 
   /** Groups of the account from the latest `groups` snapshot of this link, or null. */
@@ -456,15 +404,9 @@ export class HubLink implements HubAccountConnection {
     return this.shareSnapshot;
   }
 
-  /** The current center accepts `share.subscribe` and guest sessions. */
-  get sharesSupported(): boolean {
-    return this.link?.methods.includes(SHARE_SUBSCRIBE) ?? false;
-  }
-
   /**
    * Receive `groups` and `share_presence` snapshots while the returned disposer is not called.
    * The subscription belongs to the logical link, so it is renewed after every fresh link.
-   * Centers that do not advertise `share.subscribe` are not asked.
    */
   subscribeShares(): () => void {
     this.shareInterest += 1;
@@ -486,8 +428,7 @@ export class HubLink implements HubAccountConnection {
       this.current !== "online" ||
       !link ||
       this.shareLink === link.id ||
-      this.shareTimer ||
-      !link.methods.includes(SHARE_SUBSCRIBE)
+      this.shareTimer
     )
       return;
     this.shareLink = link.id;
@@ -571,7 +512,7 @@ export class HubLink implements HubAccountConnection {
     }, idleMs);
   }
 
-  /** A connection attempt is in progress, or the link is online awaiting its first presence. */
+  /** A connection attempt is in progress, or the link is online awaiting its first `hosts`. */
   get pending(): boolean {
     return (
       !this.ready &&
@@ -679,11 +620,6 @@ export class HubLink implements HubAccountConnection {
     if (this.current === "stopped") throw new Error("Hub link is stopped.");
     if (this.bulk && options.kind !== "download")
       throw new HubCallError("unsupported", "Bulk links carry only downloads.");
-    // Older centers reject unknown header fields and would drop the whole link.
-    if (options.share !== undefined && !this.sharesSupported)
-      throw new HubCallError("unsupported", "Center does not support shares.");
-    if (options.kind === "download" && !this.has("download"))
-      throw new HubCallError("unsupported", "Center does not support Hub downloads.");
     if (this.sessions.size >= 16) throw new Error("Too many hub sessions.");
     this.clearTimer("idle");
     const id = (this.options.randomUUID ?? (() => crypto.randomUUID()))();
@@ -691,8 +627,8 @@ export class HubLink implements HubAccountConnection {
       share: options.share,
       kind: options.kind,
       manualCredit: options.manualCredit,
-      // The window is announced only on links that enabled `credit`.
-      window: this.has("credit") ? this.link!.window : undefined,
+      // The largest window lets any single message up to the payload limit fit it.
+      window: HUB_MAX_WINDOW,
     });
     this.sessions.set(id, session);
     return session;
@@ -743,7 +679,6 @@ export class HubLink implements HubAccountConnection {
     this.setState(link ? "reconnecting" : "connecting");
     let centerUrl: string;
     let credential: string;
-    let advertised: readonly string[] | undefined;
     if (link?.token && !this.useTicket) {
       centerUrl = link.centerUrl;
       credential = link.token;
@@ -756,10 +691,6 @@ export class HubLink implements HubAccountConnection {
         if (this.link && ticket.centerUrl !== this.link.centerUrl) this.resetLink("center_changed");
         centerUrl = ticket.centerUrl;
         credential = ticket.ticket;
-        advertised = Array.isArray(ticket.features) ? ticket.features : undefined;
-        // The center rejects a bulk hello without every bulk feature.
-        if (this.bulk && !HUB_BULK_FEATURES.every((feature) => advertised?.includes(feature)))
-          throw new Error("Center does not support bulk links.");
       } catch (error) {
         if (generation === this.generation) this.retry(error);
         return;
@@ -791,18 +722,7 @@ export class HubLink implements HubAccountConnection {
       bindWsHandler(socket, "open", () => {
         if (generation !== this.generation) return;
         const resume = this.link ? { link: this.link.id, recv: this.recv } : null;
-        // Announce only features the center advertised; a resume repeats the link's first set.
-        const wanted = (this.options.features ?? HUB_FEATURES).filter(
-          (feature) => !this.bulk || HUB_BULK_FEATURES.includes(feature),
-        );
-        const requested = this.link
-          ? this.link.requested
-          : advertised && wanted.filter((feature) => advertised.includes(feature));
-        this.requested = requested;
-        this.write(
-          generation,
-          encodeHubFrame({ t: "hello", v: 1, resume, ...(requested ? { f: requested } : {}) }),
-        );
+        this.write(generation, encodeHubFrame({ t: "hello", v: 1, resume, f: [...this.features] }));
       }),
       bindWsHandler(socket, "message", (...args) => {
         if (generation !== this.generation) return;
@@ -871,7 +791,6 @@ export class HubLink implements HubAccountConnection {
       case "accept":
       case "msg":
       case "close":
-      case "presence":
       case "groups":
       case "share_presence":
       case "hosts":
@@ -909,18 +828,6 @@ export class HubLink implements HubAccountConnection {
     }
     if (header.t === "hosts") {
       this.hostsReceived(header.ver, header.full === true, payload);
-      return;
-    }
-    if (header.t === "presence") {
-      // `hosts` replaces presence; a center never sends both, but hosts stay authoritative.
-      if (this.has("hosts")) return;
-      try {
-        this.nodes = presenceNodes(payload);
-      } catch {
-        this.logger.warn({ link: this.link?.id }, "[Hub] invalid presence ignored");
-        return;
-      }
-      this.emit();
       return;
     }
     if (header.t === "groups" || header.t === "share_presence") {
@@ -970,24 +877,10 @@ export class HubLink implements HubAccountConnection {
     }
     this.hostMap = next;
     this.hostsVersion = version;
-    this.nodes = [...next.values()].flatMap((host) =>
-      host.node_id && host.state !== "offline"
-        ? [
-            {
-              node_id: host.node_id,
-              host_id: host.host_id,
-              name: host.name,
-              platform: host.platform ?? "",
-              app_version: host.app_version ?? "",
-              state: host.state,
-            },
-          ]
-        : [],
-    );
     this.emit();
   }
 
-  /** Newer snapshots replace older ones; malformed ones are ignored like presence. */
+  /** Newer snapshots replace older ones; malformed ones are ignored. */
   private snapshotReceived(kind: "groups" | "share_presence", payload: Uint8Array): void {
     let changed: boolean;
     try {
@@ -1009,7 +902,6 @@ export class HubLink implements HubAccountConnection {
 
   private welcome(generation: number, welcome: HubWelcome, centerUrl: string): void {
     this.clearTimer("handshake");
-    const requested = this.requested;
     if (!welcome.resumed) {
       // A new link replaces the old one: its sessions and sequence numbers are gone.
       if (this.link) this.resetLink("link_reset");
@@ -1017,7 +909,13 @@ export class HubLink implements HubAccountConnection {
         this.drop(generation, "invalid_welcome");
         return;
       }
-      const features = requested ? (welcome.f ?? []) : [];
+      // Without every announced feature there are no Hosts, leases or presence to rely on.
+      const missing = this.features.filter((feature) => !welcome.f?.includes(feature));
+      if (missing.length) {
+        this.logger.warn({ link: welcome.link, missing }, "[Hub] center lacks required features");
+        this.drop(generation, "missing_features");
+        return;
+      }
       this.link = {
         id: welcome.link,
         token: welcome.resume_token,
@@ -1026,10 +924,6 @@ export class HubLink implements HubAccountConnection {
         graceMs: welcome.grace_seconds * 1000,
         lostAt: null,
         methods: welcome.center_methods ?? [],
-        requested,
-        features,
-        // The largest window lets any single message up to the payload limit fit it.
-        window: HUB_MAX_WINDOW,
         pingMs:
           Number.isSafeInteger(welcome.ping_seconds) && welcome.ping_seconds > 0
             ? welcome.ping_seconds * 1000
@@ -1202,7 +1096,6 @@ export class HubLink implements HubAccountConnection {
     this.link = null;
     this.sent = this.recv = this.acked = this.unackedBytes = 0;
     this.unacked = [];
-    this.nodes = null;
     this.hostMap = null;
     this.hostsVersion = 0;
     this.groupSnapshot = null;

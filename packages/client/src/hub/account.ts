@@ -6,8 +6,6 @@ export interface HubAccountSnapshot {
   linkId: string | null;
   centerUrl: string | null;
   methods: readonly string[];
-  /** Features enabled on the link (`welcome.f`); absent from older desktop main processes. */
-  features?: readonly string[];
   /** Present after `share.subscribe`; optional for older desktop main processes. */
   groups?: readonly HubGroup[] | null;
   /** Resources other accounts share with this account. */
@@ -34,15 +32,12 @@ export interface HubAccountConnection {
   /** Subscribe to group and share snapshots when this connection supports resource sharing. */
   subscribeShares?(): () => void;
   call<T = unknown>(method: string, params: unknown): Promise<T>;
-  /**
-   * Report visibility and focus: `state` frames when the link enabled `state`, otherwise the
-   * `session.heartbeat` center call. Connections without it only support the call.
-   */
-  reportPresence?(presence: HubPresence): Promise<void>;
+  /** Report visibility and focus; the link sends them in `state` frames. */
+  reportPresence(presence: HubPresence): Promise<void>;
   onEvent(listener: (event: HubAccountEvent) => void): () => void;
 }
 
-/** Visibility and focus of this endpoint; the `session.heartbeat` parameters. */
+/** Visibility and focus of this endpoint. */
 export interface HubPresence {
   appVisible: boolean;
   deviceType: string;
@@ -55,7 +50,6 @@ export interface HubPresence {
 export const HUB_ACCESS_METHODS = [
   "push.register",
   "push.unregister.request",
-  "session.heartbeat",
   "session.events.set_subscription.request",
   "server.status.subscribe",
   "creation.subscribe.request",

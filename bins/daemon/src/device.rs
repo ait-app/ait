@@ -424,12 +424,6 @@ impl StatusRelay {
 
 #[async_trait::async_trait]
 impl host_link::ManagedRelay for StatusRelay {
-    async fn start(&self, session: Uuid, ticket: SecretString) -> Result<(), Error> {
-        self.inner.start(session, ticket).await
-    }
-    async fn active(&self) -> bool {
-        self.inner.active().await
-    }
     async fn start_hub(
         &self,
         session: Uuid,
@@ -443,9 +437,6 @@ impl host_link::ManagedRelay for StatusRelay {
     }
     async fn hub_active(&self) -> bool {
         self.inner.hub_active().await
-    }
-    async fn online(&self) -> bool {
-        self.inner.online().await
     }
     async fn hub_online(&self) -> bool {
         self.inner.hub_online().await

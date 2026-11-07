@@ -4,12 +4,7 @@ use super::*;
 use crate::test_support::{FILE_SIZE, local_file};
 
 const BULK_TICKET: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
-const DECLARED: [&str; 6] = ["lease", "hosts", "state", "credit", "download", "bulk"];
 const MAIN_FEATURES: [&str; 4] = ["lease", "credit", "download", "bulk"];
-
-fn declared(features: &[&str]) -> Vec<String> {
-    features.iter().map(|&feature| feature.to_owned()).collect()
-}
 
 /// Bulk tickets from the fixture center; each request is reported on `requests`.
 #[derive(Debug)]
@@ -23,7 +18,6 @@ impl bulk::Tickets for Tickets {
         self.requests.send(()).expect("test observes requests");
         Some(bulk::Ticket {
             hub_ticket: SecretString::from(BULK_TICKET),
-            hub_features: Some(declared(&DECLARED)),
         })
     }
 }
@@ -44,7 +38,7 @@ async fn fixture(local: std::net::SocketAddr) -> Fixture {
     let tickets: Arc<dyn bulk::Tickets> = Arc::new(Tickets {
         requests: requests_tx,
     });
-    let (relay, hub, center, _) = serving(local, Some(declared(&DECLARED)), Some(tickets)).await;
+    let (relay, hub, center, _) = serving(local, declared(&DECLARED), Some(tickets)).await;
     let (mut main, credential) = accept(&center).await;
     assert_eq!(credential, format!("Bearer {TICKET}"));
     assert_eq!(
@@ -263,21 +257,12 @@ async fn a_bulk_link_resumes_and_a_replaced_one_ends_without_yielding() {
 }
 
 #[tokio::test]
-async fn centers_without_bulk_get_no_declaration_and_hints_are_ignored() {
-    let (requests_tx, mut requests) = mpsc::unbounded_channel();
-    let tickets: Arc<dyn bulk::Tickets> = Arc::new(Tickets {
-        requests: requests_tx,
-    });
-    let (_relay, hub, center, _) = serving(
-        "127.0.0.1:9".parse().expect("address"),
-        Some(declared(&["lease", "credit", "download"])),
-        Some(tickets),
-    )
-    .await;
+async fn without_a_ticket_source_bulk_is_never_declared_and_hints_are_ignored() {
+    let (_relay, hub, center, _) = connector().await;
     let (mut main, _) = accept(&center).await;
     assert_eq!(
-        next(&mut main).await.0,
-        json!({"t":"hello","v":1,"resume":null,"f":["lease","credit","download"]})
+        next(&mut main).await.0["f"],
+        json!(["lease", "credit", "download"])
     );
     main.send(frame(&welcome(Uuid::new_v4(), false, 0), b""))
         .await
@@ -285,14 +270,11 @@ async fn centers_without_bulk_get_no_declaration_and_hints_are_ignored() {
     next_status(&hub, |status| status.online).await;
     hint(&mut main, "bulk").await;
     settle(&mut main).await;
-    // The ticket source was never used, only dropped.
-    assert_eq!(requests.try_recv(), Err(TryRecvError::Disconnected));
-
-    // Without a ticket source the main link never declares `bulk` either.
-    let (_relay, _hub, center, _) = connector_with(Some(declared(&DECLARED))).await;
-    let (mut main, _) = accept(&center).await;
-    assert_eq!(
-        next(&mut main).await.0["f"],
-        json!(["lease", "credit", "download"])
+    assert!(
+        timeout(Duration::from_millis(200), center.accept())
+            .await
+            .is_err(),
+        "no bulk link is opened"
     );
+    assert!(hub.status().await.online);
 }

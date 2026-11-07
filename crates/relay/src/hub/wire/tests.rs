@@ -100,33 +100,20 @@ fn decodes_guest_opens_and_share_status() {
 }
 
 #[test]
-fn offers_only_implemented_features_the_center_declared() {
-    assert_eq!(offer(None, true), None);
-    let declared = ["hosts", "download", "lease", "future"].map(str::to_owned);
-    assert_eq!(
-        offer(Some(&declared), true),
-        Some(vec!["lease", "download"])
-    );
-    assert_eq!(offer(Some(&[]), true), Some(Vec::new()));
+fn main_links_offer_every_feature_and_bulk_only_with_a_bulk_lane() {
+    assert_eq!(offer(true), ["lease", "credit", "download", "bulk"]);
+    // Without bulk tickets the main link never asks for a bulk link.
+    assert_eq!(offer(false), ["lease", "credit", "download"]);
 }
 
 #[test]
-fn bulk_is_offered_only_when_a_bulk_link_can_be_opened() {
-    let declared = ["lease", "credit", "download", "bulk"].map(str::to_owned);
-    assert_eq!(
-        offer(Some(&declared), true),
-        Some(vec!["lease", "credit", "download", "bulk"])
-    );
-    // Without bulk tickets the main link never asks for a bulk link.
-    assert_eq!(
-        offer(Some(&declared), false),
-        Some(vec!["lease", "credit", "download"])
-    );
-    // A bulk link needs both `credit` and `download`.
-    let partial = ["download", "bulk"].map(str::to_owned);
-    assert_eq!(offer(Some(&partial), true), Some(vec!["download"]));
-    assert_eq!(bulk_offer(&partial), None);
-    assert_eq!(bulk_offer(&declared), Some(vec!["credit", "download"]));
+fn finds_the_first_offered_feature_a_center_lacks() {
+    let all = ["lease", "credit", "download", "bulk", "hosts"].map(str::to_owned);
+    assert_eq!(missing(&offer(true), &all), None);
+    assert_eq!(missing(&BULK_FEATURES, &all), None);
+    let partial = ["lease", "download", "future"].map(str::to_owned);
+    assert_eq!(missing(&offer(false), &partial), Some("credit"));
+    assert_eq!(missing(&offer(true), &[]), Some("lease"));
 }
 
 #[test]

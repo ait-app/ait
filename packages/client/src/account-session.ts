@@ -1,13 +1,13 @@
 import { DeviceAuthorizationSchema, type DeviceAuthorization } from "@ait/protocol/publication";
-import { AccountChannel, type ChannelHost } from "./account-channel.js";
-import type { DaemonTransportFactory } from "./daemon-client-transport-types.js";
-import { HUB_PATH, HUB_PROTOCOL, type HubHost, type HubLane } from "./hub/frame.js";
+import {
+  HUB_CENTER_FEATURES,
+  HUB_PATH,
+  HUB_PROTOCOL,
+  type HubHost,
+  type HubLane,
+} from "./hub/frame.js";
 import type { HubLink, HubTicket } from "./hub/link.js";
 import type { HubSession } from "./hub/session.js";
-import {
-  createWebSocketTransportFactory,
-  defaultWebSocketFactory,
-} from "./daemon-client-websocket-transport.js";
 import {
   accountLoginError,
   parseAccountCallback,
@@ -17,7 +17,21 @@ import {
 /** API base includes the management gateway prefix; all relay URLs derive from it. */
 export const DEFAULT_ACCOUNT_CENTER = "https://aitapp.cn/api";
 
-export interface AccountHost extends ChannelHost {
+/** One Host of the account, built from the Hub link's `hosts` frames. */
+export interface AccountHost {
+  host_id: string;
+  node_id: string | null;
+  server_id: string | null;
+  instance_id: string | null;
+  name: string;
+  hostname?: string | null;
+  platform: string | null;
+  app_version?: string | null;
+  relay_modes: string[];
+  online: boolean;
+  status: string;
+  last_seen_at?: string | null;
+  offline_since?: string | null;
   /** Current access-link presence; independent of the legacy Relay route. */
   hub_online?: boolean;
 }
@@ -42,7 +56,7 @@ interface NodeSession {
   control_required: boolean;
 }
 
-/** Hub fields of a registration; centers without them omit every field. */
+/** Hub fields of a registration. */
 interface RegistrationHub {
   hub_features?: unknown;
   hub_ticket?: unknown;
@@ -67,7 +81,7 @@ export interface AccountSnapshot {
   hostOnline: boolean;
   hosts: AccountHost[];
   stale: boolean;
-  /** Hosts individually confirmed by online events on the current channel while the list is stale. */
+  /** Hosts the Hub link currently reports online; empty while the list is stale. */
   confirmedHostIds?: string[];
   error: string | null;
   selected: AccountHost | null;
@@ -89,9 +103,6 @@ export interface AccountDependencies {
   notify(snapshot: AccountSnapshot): void;
   closeTransports(): void;
   fetch?: typeof fetch;
-  channelTransport?: DaemonTransportFactory;
-  /** Browsers bind one-use tickets to their Origin via the WebSocket subprotocol. */
-  channelAuthentication?: "bearer" | "subprotocol";
   browserLogin?: AccountBrowserLogin;
   /** Opens a service page in the browser; services may require it to confirm account deletion. */
   openUrl?(url: string): Promise<unknown>;
@@ -144,14 +155,20 @@ const BULK_CONNECT_WAIT_MS = 5000;
 /** After a bulk link fails to connect, downloads use the main link for this long. */
 const BULK_RETRY_MS = 60_000;
 
-/** `hub_features` of an HTTP response; null when an older center sent none. */
-function hubFeatures(value: unknown): string[] | null {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string")
-    : null;
+/**
+ * Require every feature of `HUB_CENTER_FEATURES` in an HTTP response's `hub_features`. This client
+ * works only with centers that advertise them; the center stays compatible with older clients.
+ */
+function requireHubFeatures(value: unknown): void {
+  const advertised = Array.isArray(value) ? value : [];
+  const missing = HUB_CENTER_FEATURES.filter((feature) => !advertised.includes(feature));
+  if (missing.length)
+    throw new Error(
+      `The account service is too old for this app (missing Hub features: ${missing.join(", ")}). Update the service.`,
+    );
 }
 
-/** Map a `hosts` frame entry onto the channel snapshot shape the apps consume. */
+/** Map a `hosts` frame entry onto the Host shape the apps consume. */
 function accountHost(host: HubHost): AccountHost {
   const online = host.state !== "offline";
   return {
@@ -214,24 +231,17 @@ export class AccountSessionManager {
   private requests = new Set<AbortController>();
   private nodeWaiters = new Set<() => void>();
   private nextRenew = 0;
-  private channel: AccountChannel | null = null;
-  private confirmedHosts = new Set<string>();
-  private nextChannel = 0;
-  private channelFailures = 0;
   private nextRegistration = 0;
   private registrationFailures = 0;
   private leaseRecoveryAttempted = false;
   private closing = false;
   private hub: HubLink | null = null;
   private unsubscribeHub: (() => void) | null = null;
-  /** Download-only link (`lane: "bulk"`), created by the first download on centers with `bulk`. */
+  /** Download-only link (`lane: "bulk"`), created by the first download. */
   private bulk: HubLink | null = null;
   private unsubscribeBulk: (() => void) | null = null;
   private bulkRetryAt = 0;
-  /** `hub_features` of the latest registration or hub ticket; null from older centers. */
-  private hubFeatures: readonly string[] | null = null;
   /** One-use access ticket issued with the registration, for the link's first connection. */
-  private hubHosts = false;
   private registeredTicket: { ticket: string; expiresAt: number; node: NodeSession } | null = null;
   private state: AccountSnapshot = {
     status: "logged_out",
@@ -248,7 +258,7 @@ export class AccountSessionManager {
     this.registrationId = deps.randomUUID();
   }
 
-  /** Share access presence with the existing account/Host list on every platform. */
+  /** The account's Host list and this device's node lease come from the Hub link. */
   attachHub(hub: HubLink): void {
     this.unsubscribeHub?.();
     this.closeBulk();
@@ -256,63 +266,30 @@ export class AccountSessionManager {
     this.unsubscribeHub = hub.subscribe(() => {
       // The bulk link lives only as long as the main link.
       if (hub.state === "stopped") this.closeBulk();
-      // A link with `hosts` replaces the status channel; without it the channel returns.
-      const hosts = this.hostsByHub();
-      if (hosts) this.closeChannel();
-      else if (this.hubHosts) this.schedule(0);
-      this.hubHosts = hosts;
+      // A welcomed link holds the lease: the node session is evidently valid again.
+      if (this.leaseByHub()) this.leaseRecoveryAttempted = false;
       this.update({});
     });
   }
 
   /**
-   * The center advertised `hosts` and the link did not decline it: Host status comes from
-   * `hosts` frames and the `/relay/channel` connection is not opened.
+   * The link to this account's center exists (online or within its grace period), so the center
+   * renews this device's node lease (`lease`). Without one, e.g. while the link cannot connect,
+   * HTTP renewal keeps the node session (and Relay downloads from older Hosts) alive.
    */
-  private hostsByHub(): boolean {
-    const hub = this.hub;
-    return Boolean(
-      hub &&
-      hub.state !== "stopped" &&
-      this.hubFeatures?.includes("hosts") &&
-      (hub.features === null || hub.features.includes("hosts")),
-    );
-  }
-
-  /** The link holds this device's node lease (`lease`), so HTTP renewal stops. */
   private leaseByHub(): boolean {
-    return Boolean(this.hub?.has("lease") && this.hub.centerUrl === this.account?.center);
+    return Boolean(this.account && this.hub?.centerUrl === this.account.center);
   }
 
+  /** Host list built from `hosts` frames; stale until the link has a full snapshot. */
   snapshot(): AccountSnapshot {
     const hub = this.hub;
     const ready = Boolean(
       this.account && !this.suspended && hub?.ready && hub.centerUrl === this.state.center,
     );
-    if (hub && this.account && this.hostsByHub()) return this.hubSnapshot(hub, ready);
-    const confirmed = new Set(this.confirmedHosts);
-    const cloneHost = (host: AccountHost): AccountHost => ({
-      ...host,
-      relay_modes: [...host.relay_modes],
-      ...(ready && hub?.serveFor(host.host_id) ? { online: true, hub_online: true } : {}),
-    });
-    const hosts = this.state.hosts.map(cloneHost);
-    for (const host of hosts) if (host.hub_online) confirmed.add(host.host_id);
-    return {
-      ...this.state,
-      ...(ready ? { status: "online" as const, error: null } : {}),
-      confirmedHostIds: [...confirmed],
-      hosts,
-      selected: this.state.selected ? cloneHost(this.state.selected) : null,
-      synchronizedHosts: [],
-      ...(this.account ? { accountId: accountSubject(this.account.token) } : {}),
-    };
-  }
-
-  /** Host list built from `hosts` frames; stale until the link has a full snapshot. */
-  private hubSnapshot(hub: HubLink, ready: boolean): AccountSnapshot {
     const node = this.node;
-    const hosts = (hub.hosts ?? [])
+    const current = this.account && hub?.centerUrl === this.account.center;
+    const hosts = (current ? (hub.hosts ?? []) : [])
       .filter((host) => host.host_id !== node?.host_id && host.node_id !== node?.node_id)
       .map(accountHost)
       .sort((left, right) => left.host_id.localeCompare(right.host_id));
@@ -543,7 +520,6 @@ export class AccountSessionManager {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     for (const request of this.requests) request.abort();
-    this.closeChannel();
     this.closeBulk();
     this.bulkRetryAt = 0;
     this.deps.closeTransports();
@@ -552,10 +528,9 @@ export class AccountSessionManager {
     this.account = null;
     this.node = null;
     this.registeredTicket = null;
-    this.hubFeatures = null;
     this.registrationId = this.deps.randomUUID();
-    this.nextChannel = this.nextRenew = this.nextRegistration = 0;
-    this.channelFailures = this.registrationFailures = 0;
+    this.nextRenew = this.nextRegistration = 0;
+    this.registrationFailures = 0;
     this.leaseRecoveryAttempted = false;
     await this.running?.catch(() => undefined);
     if (account && node) {
@@ -572,7 +547,6 @@ export class AccountSessionManager {
       name: "",
       accountExpiresAt: null,
       hostOnline: false,
-      hosts: [],
       stale: true,
       error: null,
       selected: null,
@@ -595,7 +569,6 @@ export class AccountSessionManager {
     }
     if (!this.account || !this.node)
       throw new Error("Sign in and wait for this device to register.");
-    // Hosts come from the status channel or, with `hosts`, from the Hub link.
     const host = this.snapshot().hosts.find((host) => host.host_id === hostId);
     if (!host || !host.online || !host.server_id || !host.instance_id)
       throw new Error("The target host is offline. Refresh the host list.");
@@ -606,8 +579,6 @@ export class AccountSessionManager {
   }
 
   refresh(): void {
-    this.channel?.refresh({ verify: true });
-    this.nextChannel = 0;
     this.nextRegistration = 0;
     this.nextRenew = 0;
     this.schedule(0);
@@ -725,11 +696,11 @@ export class AccountSessionManager {
   }
 
   /**
-   * Open a download as a Hub session (`k:"download"`) when this link and the target Host both
-   * enabled `download`. Resolves null otherwise: the caller uses `openDownload` (the legacy
-   * `/relay-downloads` route). The session carries the relay download messages unchanged.
-   * Centers with `bulk` carry it on a separate bulk link, so download data never queues ahead
-   * of RPC responses; without one it opens on the main link.
+   * Open a download as a Hub session (`k:"download"`) when the target Host enabled `download`.
+   * Resolves null otherwise (an older Host): the caller uses `openDownload`, the legacy
+   * `/relay-downloads` route. The session carries the relay download messages unchanged. It runs
+   * on a separate bulk link, so download data never queues ahead of RPC responses; while no bulk
+   * link can connect it opens on the main link.
    */
   async openHubDownload(
     hostId: string,
@@ -740,27 +711,20 @@ export class AccountSessionManager {
     if (!hub || this.suspended || !this.account) return null;
     if (normalizeCenter(expectedCenter) !== this.account.center) return null;
     if (hub.pending) await hub.whenReady(NODE_READY_WAIT_MS / 2);
-    if (!hub.ready || hub.centerUrl !== this.account.center || !hub.has("download")) return null;
+    if (!hub.ready || hub.centerUrl !== this.account.center) return null;
     const host = hub.hostFor(hostId);
     if (!host?.node_id || host.state !== "online" || !host.f.includes("download")) return null;
-    if (this.bulkAdvertised()) {
-      const generation = this.generation;
-      const bulk = await this.bulkLink(hub);
-      if (generation !== this.generation || this.hub !== hub) return null;
-      if (bulk) {
-        try {
-          return bulk.openDownload(host.node_id, token);
-        } catch {
-          /* E.g. every bulk session is in use: the main link still carries downloads. */
-        }
+    const generation = this.generation;
+    const bulk = await this.bulkLink(hub);
+    if (generation !== this.generation || this.hub !== hub) return null;
+    if (bulk) {
+      try {
+        return bulk.openDownload(host.node_id, token);
+      } catch {
+        /* E.g. every bulk session is in use: the main link still carries downloads. */
       }
     }
     return hub.openDownload(host.node_id, token);
-  }
-
-  /** The center issues bulk tickets and a bulk link can announce the features they require. */
-  private bulkAdvertised(): boolean {
-    return ["bulk", "credit", "download"].every((feature) => this.hubFeatures?.includes(feature));
   }
 
   /**
@@ -772,7 +736,6 @@ export class AccountSessionManager {
     if (!link) {
       if (Date.now() < this.bulkRetryAt) return null;
       link = hub.bulkLink(() => this.openHubTicket("bulk"), BULK_IDLE_MS);
-      if (!link) return null;
       const created = link;
       this.bulk = created;
       // It stops itself when idle; the next download creates a new one.
@@ -782,9 +745,9 @@ export class AccountSessionManager {
       created.start();
     }
     // A link welcomed once keeps its sessions while it resumes.
-    if (!link.has("download")) await link.whenReady(BULK_CONNECT_WAIT_MS);
+    if (!link.centerUrl) await link.whenReady(BULK_CONNECT_WAIT_MS);
     if (this.bulk !== link) return null;
-    if (link.has("download") && link.centerUrl === this.account?.center) return link;
+    if (link.centerUrl && link.centerUrl === this.account?.center) return link;
     this.bulkRetryAt = Date.now() + BULK_RETRY_MS;
     this.closeBulk();
     return null;
@@ -801,8 +764,8 @@ export class AccountSessionManager {
 
   /**
    * One-use access ticket for this device's hub link; waits briefly for registration. The first
-   * main connection after a registration uses the ticket issued with it. `bulk` tickets are
-   * requested only from centers that advertise `bulk`; older ones reject the `lane` field.
+   * main connection after a registration uses the ticket issued with it. Fails when the center
+   * does not advertise every feature this client requires.
    */
   async openHubTicket(lane: HubLane = "main"): Promise<HubTicket> {
     if (!this.suspended && this.account && !this.node) await this.waitForNode(NODE_READY_WAIT_MS);
@@ -815,11 +778,7 @@ export class AccountSessionManager {
     const registered = lane === "main" ? this.registeredTicket : null;
     if (lane === "main") this.registeredTicket = null;
     if (registered?.node === node && registered.expiresAt > Date.now())
-      return {
-        centerUrl: center,
-        ticket: registered.ticket,
-        ...(this.hubFeatures ? { features: this.hubFeatures } : {}),
-      };
+      return { centerUrl: center, ticket: registered.ticket };
     let grant: { hub_ticket: string; hub_path: string; protocol: string; hub_features?: unknown };
     try {
       grant = await this.api(
@@ -833,20 +792,14 @@ export class AccountSessionManager {
       throw error;
     }
     if (generation !== this.generation) throw new Error("Connection cancelled.");
-    const features = hubFeatures(grant.hub_features);
-    this.hubFeatures = features;
-    return {
-      centerUrl: center,
-      ticket: hubTicket(grant),
-      ...(features ? { features } : {}),
-    };
+    requireHubFeatures(grant.hub_features);
+    return { centerUrl: center, ticket: hubTicket(grant) };
   }
 
   /** Recover from a rejected node session outside the tick: register again or sign out. */
   private nodeRejected(error: unknown): void {
     if (!(error instanceof AccountError)) return;
     if (["node_session_expired", "registration_expired"].includes(error.code)) {
-      this.closeChannel();
       this.node = null;
       this.registeredTicket = null;
       this.registrationId = this.deps.randomUUID();
@@ -876,7 +829,6 @@ export class AccountSessionManager {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     for (const request of this.requests) request.abort();
-    this.closeChannel();
     this.closeBulk();
     this.deps.closeTransports();
     this.update({ stale: true });
@@ -930,11 +882,10 @@ export class AccountSessionManager {
           },
         );
         if (generation !== this.generation || !this.account) return;
-        this.closeChannel();
         const { hub_features, hub_ticket, hub_path, hub_expires_in_seconds, hub_ep, ...node } =
           registered;
-        this.hubFeatures = hubFeatures(hub_features);
-        // Centers with `hub_features` also issue the first access ticket with the registration.
+        requireHubFeatures(hub_features);
+        // The registration also issues the link's first access ticket.
         this.registeredTicket =
           hub_ep === "access" &&
           hub_path === HUB_PATH &&
@@ -956,25 +907,15 @@ export class AccountSessionManager {
         this.account.nodeSessionId = node.node_session_id;
         await this.deps.save(this.account);
         this.nextRenew = Date.now() + 20_000;
-        this.nextChannel = 0;
         this.update({ status: "online", error: null });
       }
       if (generation !== this.generation || !this.node) return;
-      // With `lease` the center renews this session while the link is attached or in grace.
+      // The center renews this session while the link is attached or in grace (`lease`).
       if (Date.now() >= this.nextRenew && !this.leaseByHub()) {
         await this.api(`/v1/node-sessions/${this.node.node_session_id}/renew`, "POST");
         if (generation !== this.generation) return;
         this.leaseRecoveryAttempted = false;
         this.nextRenew = Date.now() + 20_000;
-      }
-      if (generation !== this.generation) return;
-      if (!this.channel && !this.hostsByHub() && Date.now() >= this.nextChannel) {
-        try {
-          await this.connectChannel(generation);
-        } catch (error) {
-          this.nextChannel = Date.now() + retryDelay(this.channelFailures++);
-          throw error;
-        }
       }
     } catch (error) {
       if (generation !== this.generation) return;
@@ -987,7 +928,6 @@ export class AccountSessionManager {
         // immediately; a failed registration still uses the normal backoff.
         registerImmediately = this.node !== null && !this.leaseRecoveryAttempted;
         this.leaseRecoveryAttempted = true;
-        this.closeChannel();
         this.deps.closeTransports();
         if (generation !== this.generation) return;
         this.node = null;
@@ -1008,119 +948,12 @@ export class AccountSessionManager {
       } else if (!this.node) {
         this.nextRegistration = Date.now() + retryDelay(this.registrationFailures++);
       }
-      this.confirmedHosts.clear();
       this.update({
         status: "error",
         error: error instanceof Error ? error.message : "Failed to connect to the account service.",
         stale: true,
       });
     }
-  }
-
-  private closeChannel(): void {
-    this.confirmedHosts.clear();
-    const channel = this.channel;
-    this.channel = null;
-    channel?.close();
-  }
-
-  private async connectChannel(generation: number): Promise<void> {
-    if (!this.account || !this.node) return;
-    const account = this.account;
-    const node = this.node;
-    const grant = await this.api<{
-      channel_ticket: string;
-      channel_path: string;
-      protocol: string;
-    }>("/v1/relay/channel-tickets", "POST", { source_node_session_id: node.node_session_id });
-    if (generation !== this.generation || this.node !== node || this.suspended || this.closing)
-      return;
-    if (
-      grant.protocol !== "ait-channel-v1" ||
-      grant.channel_path !== "/v1/relay/channel" ||
-      typeof grant.channel_ticket !== "string" ||
-      !/^[A-Za-z0-9_-]{1,512}$/.test(grant.channel_ticket)
-    )
-      throw new Error("The service returned an invalid account channel ticket.");
-    const url = new URL(`${account.center}${grant.channel_path}`);
-    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    const create =
-      this.deps.channelTransport ?? createWebSocketTransportFactory(defaultWebSocketFactory);
-    const transport = create({
-      url: url.toString(),
-      ...(this.deps.channelAuthentication === "bearer"
-        ? { headers: { Authorization: `Bearer ${grant.channel_ticket}` } }
-        : { protocols: [`ait.ticket.${grant.channel_ticket}`] }),
-    });
-    const channel = new AccountChannel(transport, {
-      snapshot: (hosts) => {
-        if (this.channel !== channel) return;
-        this.leaseRecoveryAttempted = false;
-        this.channelFailures = 0;
-        this.confirmedHosts.clear();
-        const visible = hosts.filter(
-          (host) => host.host_id !== node.host_id && host.node_id !== node.node_id,
-        );
-        this.update({
-          status: "online",
-          hosts: visible,
-          selected: visible.find((host) => host.host_id === this.state.selected?.host_id) ?? null,
-          stale: false,
-          error: null,
-        });
-      },
-      online: (host) => {
-        if (
-          this.channel !== channel ||
-          host.host_id === node.host_id ||
-          host.node_id === node.node_id
-        )
-          return;
-        this.confirmedHosts.add(host.host_id);
-        const hosts = this.state.hosts.filter((entry) => entry.host_id !== host.host_id);
-        hosts.push(host);
-        hosts.sort((left, right) => left.host_id.localeCompare(right.host_id));
-        this.update({
-          hosts,
-          selected: hosts.find((entry) => entry.host_id === this.state.selected?.host_id) ?? null,
-        });
-      },
-      offline: (hostId, observedAt) => {
-        if (this.channel !== channel) return;
-        this.confirmedHosts.delete(hostId);
-        const hosts = this.state.hosts.map((host) =>
-          host.host_id === hostId
-            ? {
-                ...host,
-                online: false,
-                instance_id: null,
-                relay_modes: [],
-                offline_since: host.offline_since ?? observedAt,
-              }
-            : host,
-        );
-        this.update({
-          hosts,
-          selected: hosts.find((host) => host.host_id === this.state.selected?.host_id) ?? null,
-        });
-      },
-      failed: (recoverImmediately) => {
-        if (this.channel !== channel) return;
-        this.closeChannel();
-        this.nextChannel = recoverImmediately ? 0 : Date.now() + retryDelay(this.channelFailures++);
-        this.nextRenew = 0;
-        this.update({
-          status: "error",
-          stale: true,
-          error: "Account status connection lost. Reconnecting.",
-        });
-        this.schedule(0);
-      },
-    });
-    this.channel = channel;
-    this.confirmedHosts.clear();
-    this.update({ status: "connecting", stale: true });
-    channel.start();
   }
 
   private api<T = unknown>(path: string, method = "GET", body?: unknown): Promise<T> {

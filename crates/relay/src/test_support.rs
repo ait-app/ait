@@ -6,7 +6,7 @@ use std::sync::Arc;
 use model::share::Visitor;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
-use tokio::sync::{OnceCell, Semaphore, mpsc};
+use tokio::sync::{OnceCell, mpsc};
 
 use crate::Local;
 use crate::hub::bridge::{Connection, Frame, LocalApi, Refused};
@@ -15,7 +15,6 @@ use crate::transport::Dialer;
 /// A local destination at `address` serving sessions with `api`, if any.
 pub(crate) fn local(address: SocketAddr, api: Option<Arc<FakeApi>>) -> Arc<Local> {
     let local = Local {
-        visits: Arc::new(Semaphore::new(16)),
         dialer: Dialer::default(),
         url: format!("ws://{address}/v1/ws"),
         server_id: "server".to_owned(),

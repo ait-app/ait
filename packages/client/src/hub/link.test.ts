@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CENTER, HOST, hubFixture, RESUME_TOKEN } from "../../test/hub.js";
+import { HUB_FEATURES, HUB_MAX_WINDOW } from "./frame.js";
+
+const F = [...HUB_FEATURES];
+const W = HUB_MAX_WINDOW;
 
 afterEach(() => {
   vi.useRealTimers();
@@ -20,7 +24,7 @@ async function acceptedSession(h: ReturnType<typeof hubFixture>, socket = h.sock
 }
 
 describe("hub link handshake", () => {
-  it("connects with a Bearer ticket, says hello and becomes ready on presence", async () => {
+  it("connects with a Bearer ticket, announces every feature and becomes ready on hosts", async () => {
     const h = hubFixture();
     const states: string[] = [];
     h.link.subscribe(() => states.push(h.link.state));
@@ -32,16 +36,33 @@ describe("hub link handshake", () => {
     expect(socket.options).toEqual({ headers: { Authorization: `Bearer ${"0".repeat(63)}1` } });
     expect(socket.binaryType).toBe("arraybuffer");
     socket.open();
-    expect(socket.frames()).toEqual([{ t: "hello", v: 1, resume: null }]);
+    expect(socket.frames()).toEqual([{ t: "hello", v: 1, resume: null, f: F }]);
     socket.welcome();
     expect(h.link.state).toBe("online");
     expect(h.link.ready).toBe(false);
-    socket.presence(1, [HOST]);
+    socket.hosts(1, [HOST]);
     expect(h.link.ready).toBe(true);
     expect(h.link.centerUrl).toBe(CENTER);
     expect(h.link.serveFor(HOST.host_id)).toMatchObject({ node_id: HOST.node_id });
     expect(h.link.serveFor("other")).toBeUndefined();
     expect(states).toEqual(["connecting", "online", "online"]);
+  });
+
+  it("does not use a link whose center enables only some of the features", async () => {
+    const h = hubFixture();
+    h.link.start();
+    await h.flush();
+    const socket = h.socket();
+    socket.open();
+    socket.welcome({ f: ["lease", "credit", "download"] });
+    expect(socket.close).toHaveBeenCalled();
+    expect(h.link.state).not.toBe("online");
+    expect(h.link.centerUrl).toBeNull();
+    expect(h.logger.warn).toHaveBeenCalledWith(
+      { link: "link-1", missing: ["hosts", "state"] },
+      "[Hub] center lacks required features",
+    );
+    h.link.stop();
   });
 
   it("carries the credential as a subprotocol for browsers", async () => {
@@ -58,7 +79,7 @@ describe("hub link handshake", () => {
     await h.flush();
     h.socket().open();
     h.socket().welcome();
-    h.socket().presence(1, []);
+    h.socket().hosts(1, []);
     await expect(ready).resolves.toBe(true);
 
     const old = hubFixture();
@@ -84,7 +105,7 @@ describe("hub link sequencing", () => {
     session.send("text");
     session.send(new Uint8Array([1, 2]));
     expect(socket.frames().slice(1)).toEqual([
-      { t: "open", seq: 1, s: session.id, to: { node: HOST.node_id } },
+      { t: "open", seq: 1, s: session.id, to: { node: HOST.node_id }, w: W },
       { t: "msg", seq: 2, s: session.id, pt: "text" },
       { t: "msg", seq: 3, s: session.id, pt: "binary" },
     ]);
@@ -115,7 +136,9 @@ describe("hub link sequencing", () => {
     expect(h.ticket).toHaveBeenCalledOnce();
     expect(second.options).toEqual({ headers: { Authorization: `Bearer ${RESUME_TOKEN}` } });
     second.open();
-    expect(second.frames()).toEqual([{ t: "hello", v: 1, resume: { link: "link-1", recv: 2 } }]);
+    expect(second.frames()).toEqual([
+      { t: "hello", v: 1, resume: { link: "link-1", recv: 2 }, f: F },
+    ]);
     second.welcome({ resumed: true, recv: 2, resume_token: undefined });
     expect(second.frames().slice(1)).toEqual([
       { t: "msg", seq: 3, s: session.id, pt: "text" },
@@ -157,15 +180,15 @@ describe("hub link sequencing", () => {
     const fresh = h.socket();
     expect(fresh.options).toEqual({ headers: { Authorization: `Bearer ${"0".repeat(63)}2` } });
     fresh.open();
-    expect(fresh.frames()).toEqual([{ t: "hello", v: 1, resume: null }]);
+    expect(fresh.frames()).toEqual([{ t: "hello", v: 1, resume: null, f: F }]);
     fresh.welcome({ link: "link-2" });
-    fresh.presence(1, [HOST]);
+    fresh.hosts(1, [HOST]);
     expect(h.link.ready).toBe(true);
     const next = h.link.openSession(HOST.node_id);
     await h.flush();
     next.send('{"type":"hello"}');
     expect(fresh.frames("open")).toEqual([
-      { t: "open", seq: 1, s: next.id, to: { node: HOST.node_id } },
+      { t: "open", seq: 1, s: next.id, to: { node: HOST.node_id }, w: W },
     ]);
   });
 
@@ -183,7 +206,7 @@ describe("hub link sequencing", () => {
     expect(h.ticket).toHaveBeenCalledTimes(2);
     ticketed.open();
     expect(ticketed.frames("hello")).toEqual([
-      { t: "hello", v: 1, resume: { link: "link-1", recv: 2 } },
+      { t: "hello", v: 1, resume: { link: "link-1", recv: 2 }, f: F },
     ]);
     // The center no longer had the link: a fresh link replaces it.
     ticketed.welcome({ link: "link-2" });
@@ -191,7 +214,7 @@ describe("hub link sequencing", () => {
       code: 1006,
       reason: "Hub link reset (link_reset).",
     });
-    expect(h.link.presence).toBeNull();
+    expect(h.link.hosts).toBeNull();
   });
 
   it("fails sessions once the grace period passes without a resume", async () => {
@@ -313,6 +336,6 @@ describe("hub link liveness", () => {
     h.link.start();
     await h.flush();
     h.socket().open();
-    expect(h.socket().frames()).toEqual([{ t: "hello", v: 1, resume: null }]);
+    expect(h.socket().frames()).toEqual([{ t: "hello", v: 1, resume: null, f: F }]);
   });
 });

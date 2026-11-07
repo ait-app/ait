@@ -1,9 +1,14 @@
-//! Optional `ait-hub-v1` serve endpoint, independent of the legacy control and
-//! data connections. One persistent link to the center carries every remote
-//! session; each session is served in-process by the attached local API, or
-//! streams a file download. The link resumes after network loss without
+//! `ait-hub-v1` serve endpoint. One persistent link to the center carries every
+//! remote session; each session is served in-process by the attached local API,
+//! or streams a file download. The link resumes after network loss without
 //! closing those sessions. With feature `bulk`, downloads may instead arrive on
 //! a second, download-only link the center asks for.
+//!
+//! The link always declares `lease`, `credit` and `download` (and `bulk` when
+//! the owner can obtain bulk tickets). A center that does not declare or enable
+//! all of them predates this daemon; the link fails instead of downgrading.
+//! Sessions still adapt to their opener: an `open` without `w` is served without
+//! flow control, one without `k` is an RPC session.
 
 pub mod bridge;
 pub mod bulk;
@@ -66,10 +71,9 @@ pub struct Grant {
     pub hub_ticket: SecretString,
     /// Node session the ticket was issued for.
     pub node_session_id: Uuid,
-    /// Features the center declared over HTTP with the ticket; absent from
-    /// centers predating them, which then receive a plain hello.
-    #[serde(default)]
-    pub hub_features: Option<Vec<String>>,
+    /// Features the center declared over HTTP with the ticket; it must include
+    /// every feature the link declares.
+    pub hub_features: Vec<String>,
     /// Source of bulk lane tickets; without one the link never declares `bulk`.
     #[serde(skip)]
     pub tickets: Option<Arc<dyn bulk::Tickets>>,
@@ -93,11 +97,12 @@ pub struct Status {
 }
 
 impl Status {
-    /// Whether the current link, attached or resuming, holds the node session
-    /// lease, so the owner must not renew it over HTTP.
+    /// Whether a link exists, attached or resuming; it then holds the node
+    /// session lease (`lease`, which every link enables), so the owner must not
+    /// renew it over HTTP.
     #[must_use]
-    pub fn holds_lease(&self) -> bool {
-        self.link.is_some() && self.features.iter().any(|feature| feature == "lease")
+    pub const fn holds_lease(&self) -> bool {
+        self.link.is_some()
     }
 }
 
@@ -168,6 +173,8 @@ enum Failure {
     Relay(Error),
     /// The center ended the link with `error{code}`.
     Rejected(String),
+    /// The center did not enable this feature the link declared.
+    Feature(&'static str),
 }
 
 impl From<Error> for Failure {
@@ -181,6 +188,7 @@ impl std::fmt::Display for Failure {
         match self {
             Self::Relay(error) => error.fmt(f),
             Self::Rejected(code) => write!(f, "hub rejected the link: {code}"),
+            Self::Feature(feature) => write!(f, "hub center lacks feature {feature}"),
         }
     }
 }
@@ -189,13 +197,24 @@ impl Connector {
     /// Start a new link, replacing any previous one and its sessions.
     ///
     /// # Errors
-    /// Rejects non-TLS remote centers, malformed URLs and malformed tickets.
+    /// Rejects non-TLS remote centers, malformed URLs and malformed tickets as
+    /// `InvalidGrant`, and a center that did not declare every feature the link
+    /// needs (a center predating them) as `Protocol`.
     pub async fn start(&self, grant: Grant) -> Result<(), Error> {
         if self.shutdown.is_cancelled() {
             return Err(Error::Transport);
         }
         let center = center_url(&grant.center_url)?;
         validate_ticket(grant.hub_ticket.expose_secret())?;
+        let offer = wire::offer(grant.tickets.is_some());
+        if let Some(feature) = wire::missing(&offer, &grant.hub_features) {
+            tracing::error!(
+                feature,
+                declared = ?grant.hub_features,
+                "Hub center lacks a required feature; this daemon needs a newer center"
+            );
+            return Err(Error::Protocol);
+        }
         let generation = Uuid::new_v4();
         let cancel = self.shutdown.child_token();
         let scope = Scope {
@@ -226,21 +245,13 @@ impl Connector {
         let span =
             tracing::info_span!("hub_link", %generation, node_session_id = %grant.node_session_id);
         let url = endpoint(&center, "v1/hub");
-        let offer = wire::offer(grant.hub_features.as_deref(), grant.tickets.is_some());
-        let lane = grant
-            .tickets
-            .filter(|_| {
-                offer
-                    .as_ref()
-                    .is_some_and(|offer| offer.contains(&wire::BULK))
-            })
-            .map(|tickets| bulk::Lane {
-                connector: self.clone(),
-                tickets,
-                url: url.clone(),
-                cancel: cancel.clone(),
-                open: Arc::new(AtomicBool::new(false)),
-            });
+        let lane = grant.tickets.map(|tickets| bulk::Lane {
+            connector: self.clone(),
+            tickets,
+            url: url.clone(),
+            cancel: cancel.clone(),
+            open: Arc::new(AtomicBool::new(false)),
+        });
         tokio::spawn(
             async move {
                 let role = Role::Main { generation, lane };
@@ -297,7 +308,7 @@ impl Connector {
         }
         let rejected = match &failure {
             Some(Failure::Rejected(code)) => Some(code.clone()),
-            Some(Failure::Relay(_)) | None => None,
+            Some(Failure::Relay(_) | Failure::Feature(_)) | None => None,
         };
         if rejected.as_deref() == Some("replaced") {
             state.replaced_at = Some(Instant::now());
@@ -425,7 +436,11 @@ impl Connector {
                         self.resuming(*generation).await;
                     }
                 }
-                Err(failure @ (Failure::Rejected(_) | Failure::Relay(Error::InvalidGrant))) => {
+                Err(
+                    failure @ (Failure::Rejected(_)
+                    | Failure::Feature(_)
+                    | Failure::Relay(Error::InvalidGrant)),
+                ) => {
                     return Err(failure);
                 }
                 Err(error) => {
@@ -466,9 +481,9 @@ struct Welcome {
 
 /// Dial, say hello and apply the welcome. Replays unacknowledged frames on resume.
 ///
-/// Returns `InvalidGrant` when the center refuses the credential, or `Rejected`
-/// when it answers with an error frame, so the caller stops and waits for a
-/// fresh grant.
+/// Returns `InvalidGrant` when the center refuses the credential, `Rejected`
+/// when it answers with an error frame, or `Feature` when its welcome does not
+/// enable every offered feature, so the caller stops and waits for a fresh grant.
 async fn join(
     local: &Local,
     url: &str,
@@ -477,7 +492,7 @@ async fn join(
 ) -> Result<Welcome, Failure> {
     let mut socket = local
         .dialer
-        .connect_authorized(url, credential.expose_secret(), wire::MAX_FRAME)
+        .connect(url, credential.expose_secret(), wire::MAX_FRAME)
         .await?;
     write(&mut socket, Message::Binary(link.hello()?)).await?;
     let frame = timeout(WELCOME_TIMEOUT, async {
@@ -502,6 +517,16 @@ async fn join(
             center_methods,
             f,
         } => {
+            // A center predating features ignores `hello.f`; never run a link
+            // whose lease or flow control the center does not honor.
+            if let Some(feature) = wire::missing(link.offer(), &f) {
+                tracing::error!(
+                    feature,
+                    enabled = ?f,
+                    "Hub welcome lacks a required feature; this daemon needs a newer center"
+                );
+                return Err(Failure::Feature(feature));
+            }
             let fresh = match link.join(id, resumed, recv, resume_token)? {
                 Joined::Fresh => true,
                 Joined::Resumed(frames) => {

@@ -1,10 +1,13 @@
-//! Control of a fixed local relay connector through shared RPC contracts.
+//! The retired Relay control methods. Clients, old ones included, still call
+//! `relay.status.request` for the daemon's identity and management state, so
+//! the methods stay negotiable; the control connection itself is gone and its
+//! status is always offline.
 
 use model::methods::MethodSpec;
 use model::{Context, DispatchError, ErrorCode};
 use serde_json::{Value, json};
 
-use crate::{Connector, Error};
+use crate::{Connector, Status};
 
 /// Relay request names and directions for host negotiation and envelope validation.
 pub const METHODS: &[MethodSpec] = &[
@@ -13,7 +16,9 @@ pub const METHODS: &[MethodSpec] = &[
     MethodSpec::request("relay.stop.request"),
 ];
 
-/// Handle an admitted relay request using the connector's fixed local destination.
+/// Handle an admitted relay request. `relay.start.request` never starts a
+/// connection: a managed host refuses it as `relay_managed`, any other as
+/// `not_implemented`; `relay.stop.request` has nothing left to stop.
 ///
 /// # Arguments
 /// * `context` - Negotiated, authenticated request; retained when its method is not recognized.
@@ -24,7 +29,7 @@ pub const METHODS: &[MethodSpec] = &[
 /// An already consumed context requires no further work.
 /// # Errors
 /// Returns `NotImplemented` for another method, or `Delivery` if outbound delivery fails.
-pub async fn request(
+pub fn request(
     context: &mut Option<Context<'_>>,
     connector: &Connector,
     management: Option<Value>,
@@ -40,11 +45,11 @@ pub async fn request(
     }) else {
         return Err(DispatchError::NotImplemented);
     };
-    let result = execute(&context.request, connector, management).await;
+    let result = execute(&context.request, connector, management);
     context.respond(result).map_err(Into::into)
 }
 
-async fn execute(
+fn execute(
     request: &model::Request,
     connector: &Connector,
     management: Option<Value>,
@@ -60,23 +65,15 @@ async fn execute(
         return Err(ErrorCode::RelayManaged);
     }
     match request.method.as_str() {
-        "relay.start.request" => {
-            let grant = serde_json::from_value(request.params.clone())
-                .map_err(|_| ErrorCode::InvalidMessage)?;
-            connector.start(grant).await.map_err(|error| match error {
-                Error::InvalidGrant => ErrorCode::InvalidMessage,
-                Error::Transport | Error::Protocol => ErrorCode::AgentIo,
-            })?;
-        }
-        "relay.stop.request" => connector.stop().await,
-        "relay.status.request" => {}
+        "relay.start.request" => return Err(ErrorCode::NotImplemented),
+        "relay.stop.request" | "relay.status.request" => {}
         _ => return Err(ErrorCode::MethodNotFound),
     }
     Ok(json!({
         "serverId": connector.local.server_id,
         "instanceId": connector.local.instance_id,
         "platform": std::env::consts::OS,
-        "status": connector.status().await,
+        "status": Status::default(),
         "management": management.unwrap_or_else(|| json!({"mode":"external"})),
     }))
 }

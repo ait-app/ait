@@ -13,18 +13,18 @@ use crate::{Center, CredentialStore, Error, ManagedRelay, State, Tokens};
 /// such a lease to at most this long from its last batch renewal.
 const LINK_LEASE: Duration = Duration::from_secs(60);
 
+/// Probe budget after an access JWT was refused. `true` marks a refusal by the
+/// hub ticket endpoint, `false` one by HTTP renewal.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum AccessRecovery {
     Ready,
-    Refreshing(Option<links::Kind>),
-    Retried(Option<links::Kind>),
+    Refreshing(bool),
+    Retried(bool),
 }
 
 impl AccessRecovery {
     fn observe(&mut self, acceptance: &links::Acceptance) {
-        if let Self::Retried(Some(kind)) = *self
-            && acceptance.accepted(kind)
-        {
+        if *self == Self::Retried(true) && acceptance.accepted() {
             *self = Self::Ready;
         }
     }
@@ -99,7 +99,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
                     if generation != Some(publication.generation) {
                         continue;
                     }
-                    (Err(failure.error), Some(failure.kind))
+                    (Err(failure.error), true)
                 },
                 result = async {
                     if tokio::time::Instant::now() < retry_at {
@@ -114,7 +114,7 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
                         lease.step(&mut publication).await
                     })
                 } => match result {
-                    Some(result) => (result, None),
+                    Some(result) => (result, false),
                     None => continue,
                 },
             };
@@ -215,7 +215,6 @@ impl<C: Center, S: CredentialStore, R: ManagedRelay> Authority<'_, C, S, R> {
                 tokens: publication.tokens.clone(),
                 session: session.id,
                 acceptance: publication.acceptance.clone(),
-                features: session.hub_features.clone(),
                 issued: Arc::new(std::sync::Mutex::new(issued)),
                 bulk: self.bulk.clone(),
             }));
@@ -282,7 +281,7 @@ impl<C: Center, S: CredentialStore> Lease<'_, C, S> {
             publication.tokens =
                 crate::authorization::restore(self.center, self.store, self.state).await?;
             *self.access_recovery = match self.access_recovery {
-                AccessRecovery::Refreshing(kind) => AccessRecovery::Retried(*kind),
+                AccessRecovery::Refreshing(by_link) => AccessRecovery::Retried(*by_link),
                 AccessRecovery::Ready | AccessRecovery::Retried(_) => AccessRecovery::Ready,
             };
             publication.generation = Uuid::new_v4();
@@ -340,7 +339,7 @@ impl<C: Center, S: CredentialStore> Lease<'_, C, S> {
         if due {
             active.lease_until = self.center.renew(&publication.tokens, active.id).await?;
             publication.renew_token = false;
-            if *self.access_recovery == AccessRecovery::Retried(None) {
+            if *self.access_recovery == AccessRecovery::Retried(false) {
                 *self.access_recovery = AccessRecovery::Ready;
             }
             publication.lease_until = Some(

@@ -2,6 +2,7 @@ export {
   decodeHubFrame,
   encodeHubFrame,
   HUB_BULK_FEATURES,
+  HUB_CENTER_FEATURES,
   HUB_FEATURES,
   HUB_MAX_PAYLOAD,
   HUB_PATH,
@@ -21,7 +22,6 @@ export {
   type HubLinkLogger,
   type HubLinkOptions,
   type HubLinkState,
-  type HubPresenceNode,
   type HubTicket,
 } from "./link.js";
 export {

@@ -49,7 +49,7 @@ async fn starts_without_credentials_and_persists_handoff_before_consumption() {
         assert_eq!(seen.saved[0].authorization_id, Some(id));
         assert!(seen.saved[0].pending.is_none());
         assert_eq!(seen.refreshes[0].0, "external-refresh-secret");
-        assert!(seen.active && seen.hub.active);
+        assert!(seen.hub.active);
     }
     // A lost HTTP response must never reinstall an already consumed refresh secret.
     control
@@ -64,7 +64,7 @@ async fn starts_without_credentials_and_persists_handoff_before_consumption() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn disconnect_clears_shared_authorization_and_stops_both_links_and_renewal() {
+async fn disconnect_clears_shared_authorization_and_stops_the_link_and_renewal() {
     let (service, mock) = service(true);
     let control = service.handle();
     let cancel = CancellationToken::new();
@@ -77,11 +77,15 @@ async fn disconnect_clears_shared_authorization_and_stops_both_links_and_renewal
     }
     {
         let seen = mock.0.lock().unwrap();
-        assert!(!seen.active && !seen.hub.active);
+        assert!(!seen.hub.active);
         assert_eq!(seen.renewals, renewals);
         assert_eq!(seen.closes, 1);
         assert_eq!(seen.revocations, ["new-refresh-secret"]);
-        assert_eq!(seen.relay_grants, seen.hub_grants);
+        assert!(
+            seen.hub_grants
+                .iter()
+                .all(|(binding, _)| *binding == mock.1)
+        );
         let saved = seen.saved.last().unwrap();
         assert!(saved.disconnected);
         assert!(
@@ -113,12 +117,11 @@ async fn disconnect_clears_shared_authorization_and_stops_both_links_and_renewal
 }
 
 #[tokio::test(start_paused = true)]
-async fn delayed_tickets_cannot_restart_either_link_after_disconnect() {
+async fn delayed_tickets_cannot_restart_the_link_after_disconnect() {
     let (service, mock) = service(true);
     {
         let mut seen = mock.0.lock().unwrap();
         seen.hub.ticket_delay = Duration::from_secs(3);
-        seen.ticket_delay = Duration::from_secs(3);
     }
     let control = service.handle();
     let cancel = CancellationToken::new();
@@ -129,7 +132,6 @@ async fn delayed_tickets_cannot_restart_either_link_after_disconnect() {
         tick().await;
     }
     assert_eq!(mock.0.lock().unwrap().hub.starts, 0);
-    assert_eq!(mock.0.lock().unwrap().starts, 0);
     cancel.cancel();
     task.await.unwrap();
 }
@@ -263,7 +265,7 @@ async fn enrollment_outage_past_one_attempt_window_keeps_retrying_the_durable_re
 }
 
 #[tokio::test(start_paused = true)]
-async fn fresh_login_after_disconnect_starts_both_links_with_the_same_authority() {
+async fn fresh_login_after_disconnect_starts_the_link_with_the_same_authority() {
     let (service, mock) = service(true);
     let control = service.handle();
     let cancel = CancellationToken::new();
@@ -282,9 +284,13 @@ async fn fresh_login_after_disconnect_starts_both_links_with_the_same_authority(
         let seen = mock.0.lock().unwrap();
         assert_eq!(seen.registrations.len(), 2);
         assert_eq!(seen.closes, 1);
-        assert!(seen.active && seen.hub.active);
+        assert!(seen.hub.active);
         assert_eq!(seen.hub.starts, 2);
-        assert_eq!(seen.relay_grants, seen.hub_grants);
+        assert!(
+            seen.hub_grants
+                .iter()
+                .all(|(binding, _)| *binding == mock.1)
+        );
         assert!(!seen.saved.last().unwrap().disconnected);
     }
     cancel.cancel();
@@ -368,7 +374,7 @@ async fn failed_durable_disconnect_reports_failure_but_never_resumes_in_memory()
     }
     assert_eq!(control.disconnect().await, Err(Error::Storage));
     tick().await;
-    assert!(!mock.0.lock().unwrap().active);
+    assert!(!mock.0.lock().unwrap().hub.active);
     assert!(!mock.0.lock().unwrap().hub.active);
     assert_eq!(
         mock.0.lock().unwrap().reports.last(),
@@ -404,7 +410,7 @@ async fn automatic_bootstrap_is_atomic_with_disconnect_and_preserves_existing_lo
         .await
         .unwrap();
     tick().await;
-    assert!(mock.0.lock().unwrap().active);
+    assert!(mock.0.lock().unwrap().hub.active);
     control
         .authorize(
             credential(&mock, Uuid::new_v4()),
@@ -425,7 +431,7 @@ async fn automatic_bootstrap_is_atomic_with_disconnect_and_preserves_existing_lo
     tick().await;
     assert_eq!(mock.0.lock().unwrap().saved.len(), saved);
     assert!(mock.0.lock().unwrap().saved.last().unwrap().disconnected);
-    assert!(!mock.0.lock().unwrap().active);
+    assert!(!mock.0.lock().unwrap().hub.active);
     control
         .authorize(
             credential(&mock, Uuid::new_v4()),
@@ -434,7 +440,7 @@ async fn automatic_bootstrap_is_atomic_with_disconnect_and_preserves_existing_lo
         .await
         .unwrap();
     tick().await;
-    assert!(mock.0.lock().unwrap().active);
+    assert!(mock.0.lock().unwrap().hub.active);
     assert!(mock.0.lock().unwrap().hub.active);
     cancel.cancel();
     task.await.unwrap();

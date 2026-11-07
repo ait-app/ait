@@ -42,16 +42,15 @@ async fn exchanges_poll_enrollment_and_refresh_without_user_api_access() {
 }
 
 #[tokio::test]
-async fn validates_runtime_binding_and_uses_latest_access_token_for_lease_and_ticket() {
+async fn validates_runtime_binding_and_uses_latest_access_token_for_lease_and_close() {
     let machine = declaration();
     let wire = response(&machine);
     let tokens = decode_tokens(wire.clone()).unwrap();
     let session = Uuid::new_v4();
     let fixture = Fixture::new(vec![
         (StatusCode::OK, json!({"node_id":wire["node_id"],"host_id":wire["host_id"],"server_id":machine.server_id,"node_session_id":session,
-            "lease_duration_seconds":60,"renew_after_seconds":20,"control_required":true})),
+            "lease_duration_seconds":60,"renew_after_seconds":20,"hub_features":["lease"]})),
         (StatusCode::OK, json!({"lease_until":Utc::now()+chrono::Duration::seconds(60),"renew_after_seconds":20})),
-        (StatusCode::OK, json!({"control_ticket":"c".repeat(64),"expires_in_seconds":30})),
         (StatusCode::NO_CONTENT, Value::Null),
     ]).await;
     let instance = Uuid::new_v4();
@@ -65,8 +64,6 @@ async fn validates_runtime_binding_and_uses_latest_access_token_for_lease_and_ti
         session
     );
     fixture.center.renew(&tokens, session).await.unwrap();
-    let ticket = fixture.center.ticket(&tokens, session).await.unwrap();
-    assert_eq!(ticket.expose_secret(), "c".repeat(64));
     fixture.center.close(&tokens, session).await.unwrap();
     let seen = fixture.seen.lock().unwrap();
     assert_eq!(
@@ -197,8 +194,8 @@ async fn rejects_untrusted_verification_uri_bindings_tickets_and_redirects() {
     let tokens = decode_tokens(response(&machine)).unwrap();
     let fixture = Fixture::new(vec![
         (StatusCode::OK, json!({"device_code":"b".repeat(64),"user_code":"ABCD-1234-EF56","verification_uri":"https://evil.test","expires_in":600,"interval":5})),
-        (StatusCode::OK, json!({"node_id":Uuid::new_v4(),"host_id":Uuid::new_v4(),"server_id":machine.server_id,"control_required":true})),
-        (StatusCode::OK, json!({"control_ticket":"bad"})),
+        (StatusCode::OK, json!({"node_id":Uuid::new_v4(),"host_id":Uuid::new_v4(),"server_id":machine.server_id,"hub_features":["lease"]})),
+        (StatusCode::OK, json!({"hub_ticket":"bad","hub_features":["lease"]})),
         (StatusCode::OK, json!({"lease_until":Utc::now()-chrono::Duration::seconds(1)})),
         (StatusCode::FOUND, json!({"secret":"never echoed"})),
         (StatusCode::OK, json!({"oversized":"x".repeat(65537)})),
@@ -218,7 +215,7 @@ async fn rejects_untrusted_verification_uri_bindings_tickets_and_redirects() {
     assert_eq!(
         fixture
             .center
-            .ticket(&tokens, Uuid::new_v4())
+            .hub_ticket(&tokens, Uuid::new_v4())
             .await
             .unwrap_err(),
         Error::Protocol
@@ -278,7 +275,7 @@ fn original_expiry_is_preserved_for_recovery_receipts_and_invalid_tokens_rejecte
 fn registration(machine: &Machine, wire: &Value, extra: &Value) -> Value {
     let mut value = json!({"node_id":wire["node_id"],"host_id":wire["host_id"],
         "server_id":machine.server_id,"node_session_id":Uuid::new_v4(),
-        "lease_duration_seconds":60,"renew_after_seconds":20,"control_required":true});
+        "lease_duration_seconds":60,"renew_after_seconds":20});
     for (key, field) in extra.as_object().unwrap() {
         value[key] = field.clone();
     }
@@ -286,36 +283,63 @@ fn registration(machine: &Machine, wire: &Value, extra: &Value) -> Value {
 }
 
 #[tokio::test]
-async fn old_center_responses_parse_without_hub_features_or_tickets() {
+async fn responses_without_hub_features_fail_instead_of_downgrading() {
     let machine = declaration();
     let wire = response(&machine);
     let tokens = decode_tokens(wire.clone()).unwrap();
     let fixture = Fixture::new(vec![
+        // A registration and a ticket from a center predating `hub_features`.
         (StatusCode::OK, registration(&machine, &wire, &json!({}))),
         (
             StatusCode::OK,
             json!({"hub_ticket":"d".repeat(64),"hub_path":"/v1/hub","expires_in_seconds":30,
                 "protocol":"ait-hub-v1"}),
         ),
+        (
+            StatusCode::OK,
+            json!({"hub_ticket":"d".repeat(64),"hub_path":"/v1/hub","expires_in_seconds":30,
+                "protocol":"ait-hub-v1"}),
+        ),
+        // An unreadable declaration is no better.
+        (
+            StatusCode::OK,
+            registration(&machine, &wire, &json!({"hub_features":"lease"})),
+        ),
     ])
     .await;
 
-    let session = fixture
-        .center
-        .register(&tokens, &machine, Uuid::new_v4(), Uuid::new_v4())
-        .await
-        .unwrap();
-    let ticket = fixture
-        .center
-        .hub_ticket(&tokens, session.id)
-        .await
-        .unwrap();
-
-    assert_eq!(session.hub_features, None);
-    assert!(session.hub_ticket.is_none());
-    assert_eq!(ticket.ticket.expose_secret(), "d".repeat(64));
-    assert_eq!(ticket.features, None);
-    assert!(ticket.expires_at.is_none());
+    assert_eq!(
+        fixture
+            .center
+            .register(&tokens, &machine, Uuid::new_v4(), Uuid::new_v4())
+            .await
+            .unwrap_err(),
+        Error::Protocol
+    );
+    assert_eq!(
+        fixture
+            .center
+            .hub_ticket(&tokens, Uuid::new_v4())
+            .await
+            .unwrap_err(),
+        Error::Protocol
+    );
+    assert_eq!(
+        fixture
+            .center
+            .hub_bulk_ticket(&tokens, Uuid::new_v4())
+            .await
+            .unwrap_err(),
+        Error::Protocol
+    );
+    assert_eq!(
+        fixture
+            .center
+            .register(&tokens, &machine, Uuid::new_v4(), Uuid::new_v4())
+            .await
+            .unwrap_err(),
+        Error::Protocol
+    );
 }
 
 #[tokio::test]
@@ -357,17 +381,15 @@ async fn new_center_responses_declare_features_and_issue_a_serve_ticket_at_regis
 
     let served = register().await.unwrap();
     let issued = served.hub_ticket.expect("registration ticket");
-    assert_eq!(served.hub_features.as_ref(), Some(&declared));
     assert_eq!(issued.ticket.expose_secret(), "e".repeat(64));
-    assert_eq!(issued.features.as_ref(), Some(&declared));
+    assert_eq!(issued.features, declared);
     assert!(issued.usable());
-    // Only a serve ticket is used; an unreadable declaration means none.
+    // Only a serve ticket is used; an unreadable declaration fails the registration.
     let access = register().await.unwrap();
     assert!(access.hub_ticket.is_none());
-    assert_eq!(access.hub_features.as_ref(), Some(&declared));
-    assert_eq!(register().await.unwrap().hub_features, None);
+    assert_eq!(register().await.unwrap_err(), Error::Protocol);
     let ticket = fixture.center.hub_ticket(&tokens, served.id).await.unwrap();
-    assert_eq!(ticket.features, Some(declared));
+    assert_eq!(ticket.features, declared);
 }
 
 #[tokio::test]
@@ -389,7 +411,10 @@ async fn bulk_lane_tickets_name_the_lane() {
         .unwrap();
 
     assert_eq!(ticket.ticket.expose_secret(), "a".repeat(64));
-    assert_eq!(ticket.features, serde_json::from_value(features).unwrap());
+    assert_eq!(
+        ticket.features,
+        serde_json::from_value::<Vec<String>>(features).unwrap()
+    );
     let seen = fixture.seen.lock().unwrap();
     assert_eq!(
         (seen.calls[0].0.as_str(), &seen.calls[0].1),

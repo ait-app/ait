@@ -1,10 +1,7 @@
+use crate::diagnostics::tests::Capture;
+use tracing::instrument::WithSubscriber;
+
 use super::*;
-
-const DECLARED: [&str; 5] = ["lease", "hosts", "state", "credit", "download"];
-
-fn declared() -> Vec<String> {
-    DECLARED.map(str::to_owned).to_vec()
-}
 
 fn binary(seq: u64, s: Uuid, length: usize) -> Message {
     frame(
@@ -14,20 +11,19 @@ fn binary(seq: u64, s: Uuid, length: usize) -> Message {
 }
 
 #[tokio::test]
-async fn declared_features_are_offered_and_the_welcome_enables_the_lease() {
-    let (_relay, hub, center, _local) = connector_with(Some(declared())).await;
+async fn the_link_declares_its_features_and_the_welcome_enables_the_lease() {
+    let (_relay, hub, center, _local) = connector().await;
     let (mut socket, _) = accept(&center).await;
     assert_eq!(
         next(&mut socket).await.0,
         json!({"t":"hello","v":1,"resume":null,"f":["lease","credit","download"]})
     );
     let mut header = welcome(Uuid::new_v4(), false, 0);
-    header["f"] = json!(["lease", "credit"]);
-    header["win"] = json!(262_144);
+    header["f"] = json!(["lease", "hosts", "credit", "download"]);
     socket.send(frame(&header, b"")).await.expect("welcome");
 
     let status = next_status(&hub, |status| status.online).await;
-    assert_eq!(status.features, ["lease", "credit"]);
+    assert_eq!(status.features, ["lease", "hosts", "credit", "download"]);
     assert!(status.holds_lease());
 
     // The lease is held while the link resumes, and released with the link.
@@ -39,25 +35,95 @@ async fn declared_features_are_offered_and_the_welcome_enables_the_lease() {
 }
 
 #[tokio::test]
-async fn an_empty_declaration_offers_no_features_and_old_welcomes_enable_none() {
-    let (_relay, hub, center, _local) = connector_with(Some(vec!["hosts".to_owned()])).await;
-    let (mut socket, _) = accept(&center).await;
-    assert_eq!(
-        next(&mut socket).await.0,
-        json!({"t":"hello","v":1,"resume":null,"f":[]})
-    );
-    socket
-        .send(frame(&welcome(Uuid::new_v4(), false, 0), b""))
-        .await
-        .expect("welcome");
-    let status = next_status(&hub, |status| status.online).await;
-    assert!(status.features.is_empty());
-    assert!(!status.holds_lease());
+async fn grants_from_centers_lacking_a_required_feature_fail_without_dialing() {
+    for features in [
+        Vec::new(),
+        declared(&["lease", "hosts", "state", "credit"]),
+        declared(&["lease", "credit", "download"]),
+    ] {
+        let center = TcpListener::bind("127.0.0.1:0").await.expect("bind center");
+        let relay = crate::Connector::new(
+            "127.0.0.1:9".parse().expect("address"),
+            Uuid::new_v4().to_string(),
+            Uuid::new_v4().to_string(),
+        );
+        let hub = relay.hub().clone();
+        // `bulk` is required only of a link that can open a bulk link.
+        let tickets: Arc<dyn bulk::Tickets> = Arc::new(NoTickets);
+        let capture = Capture::default();
+        let result = hub
+            .start(Grant {
+                center_url: format!("http://{}", center.local_addr().expect("address")),
+                hub_ticket: SecretString::from(TICKET),
+                node_session_id: Uuid::new_v4(),
+                hub_features: features.clone(),
+                tickets: Some(tickets),
+            })
+            .with_subscriber(capture.subscriber())
+            .await;
+        assert!(matches!(result, Err(Error::Protocol)), "{features:?}");
+        assert!(capture.text().contains("ERROR"), "{features:?}");
+        assert!(capture.text().contains("lacks a required feature"));
+        assert_eq!(hub.status().await, Status::default());
+        assert!(
+            timeout(Duration::from_millis(200), center.accept())
+                .await
+                .is_err(),
+            "never dials"
+        );
+    }
+}
+
+#[derive(Debug)]
+struct NoTickets;
+
+#[async_trait::async_trait]
+impl bulk::Tickets for NoTickets {
+    async fn bulk(&self) -> Option<bulk::Ticket> {
+        None
+    }
+}
+
+#[tokio::test]
+async fn a_welcome_without_a_required_feature_ends_the_link_for_good() {
+    // A center predating features ignores `hello.f`; one honoring only part of it is refused too.
+    for enabled in [None, Some(json!(["lease", "credit"]))] {
+        let (_relay, hub, center, _local) = connector().await;
+        let (mut socket, _) = accept(&center).await;
+        next(&mut socket).await;
+        let mut header = welcome(Uuid::new_v4(), false, 0);
+        match &enabled {
+            None => {
+                header.as_object_mut().expect("object").remove("f");
+            }
+            Some(features) => header["f"] = features.clone(),
+        }
+        socket.send(frame(&header, b"")).await.expect("welcome");
+
+        let status = next_status(&hub, |status| !status.connecting).await;
+        assert!(!status.online && !status.holds_lease(), "{enabled:?}");
+        let missing = if enabled.is_none() {
+            "lease"
+        } else {
+            "download"
+        };
+        assert_eq!(
+            status.error,
+            Some(format!("hub center lacks feature {missing}"))
+        );
+        assert_eq!(status.rejected, None);
+        // The link is not retried; the owner needs a new grant.
+        assert!(
+            timeout(Duration::from_millis(500), center.accept())
+                .await
+                .is_err()
+        );
+    }
 }
 
 #[tokio::test]
 async fn credit_sessions_honor_both_windows_and_repeat_credit_after_resume() {
-    let (_relay, hub, center, mut local) = connector_with(Some(declared())).await;
+    let (_relay, hub, center, mut local) = connector().await;
     let (mut first, _) = accept(&center).await;
     next(&mut first).await;
     let link = Uuid::new_v4();
@@ -133,7 +199,7 @@ async fn credit_sessions_honor_both_windows_and_repeat_credit_after_resume() {
 
 #[tokio::test]
 async fn sessions_without_a_window_keep_the_message_bound() {
-    let (_relay, hub, center, local) = connector_with(Some(declared())).await;
+    let (_relay, hub, center, local) = connector().await;
     silent_daemon(local);
     let mut socket = online(&hub, &center, 120).await;
     let s = Uuid::new_v4();
@@ -152,7 +218,7 @@ async fn sessions_without_a_window_keep_the_message_bound() {
 
 #[tokio::test]
 async fn download_and_unknown_session_kinds_are_routed_by_k() {
-    let (_relay, hub, center, _local) = connector_with(Some(declared())).await;
+    let (_relay, hub, center, _local) = connector().await;
     let mut socket = online(&hub, &center, 120).await;
     let (download, unknown) = (Uuid::new_v4(), Uuid::new_v4());
     // Nothing serves files at the fixture's local address.
@@ -181,7 +247,7 @@ async fn download_and_unknown_session_kinds_are_routed_by_k() {
 #[tokio::test]
 async fn flow_and_revoked_errors_end_the_link() {
     for code in ["flow", "revoked"] {
-        let (_relay, hub, center, _local) = connector_with(Some(declared())).await;
+        let (_relay, hub, center, _local) = connector().await;
         let mut socket = online(&hub, &center, 120).await;
         socket
             .send(frame(&json!({"t":"error","code":code}), b""))

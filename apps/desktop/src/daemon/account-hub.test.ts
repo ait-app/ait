@@ -5,7 +5,7 @@ import { AccountHubBridge } from "./account-hub.js";
 import type { AccountTransportOwner } from "./account-transport.js";
 
 const SUB = "11111111-1111-4111-8111-111111111111";
-function fixture(features: string[] = []) {
+function fixture() {
   let event = (_event: HubAccountEvent) => {};
   const call = vi.fn(async () => ({}));
   const reportPresence = vi.fn(async () => {});
@@ -14,7 +14,6 @@ function fixture(features: string[] = []) {
   const hub = {
     call,
     reportPresence,
-    has: (feature: string) => features.includes(feature),
     subscribeShares,
     subscribe: vi.fn(),
     onEvent: (handler: typeof event) => {
@@ -76,32 +75,40 @@ describe("desktop account Hub boundary", () => {
     const h = fixture();
     const visible = h.owner();
     const hidden = h.owner();
-    await h.bridge.call(visible, "session.heartbeat", { appVisible: true, focusedHostId: "host" });
-    await h.bridge.call(hidden, "session.heartbeat", { appVisible: false });
-    expect(h.call).toHaveBeenLastCalledWith("session.heartbeat", {
+    await h.bridge.reportPresence(visible, { appVisible: true, focusedHostId: "host" });
+    await h.bridge.reportPresence(hidden, { appVisible: false });
+    expect(h.reportPresence).toHaveBeenLastCalledWith({
       appVisible: true,
+      deviceType: "web",
       focusedHostId: "host",
+      focusedAgentId: null,
+      focusedTerminalId: null,
     });
     visible.emit("destroyed");
-    expect(h.call).toHaveBeenLastCalledWith("session.heartbeat", {
-      appVisible: false,
-      deviceType: "web",
+    expect(h.reportPresence).toHaveBeenLastCalledWith({ appVisible: false, deviceType: "web" });
+    // Presence is not a center call a renderer may make.
+    await expect(
+      h.bridge.call(hidden, "session.heartbeat", { appVisible: true }),
+    ).resolves.toMatchObject({ error: { code: "unsupported" } });
+    await expect(h.bridge.reportPresence(hidden, { appVisible: "yes" })).rejects.toMatchObject({
+      code: "invalid_params",
     });
+    expect(h.call).not.toHaveBeenCalled();
   });
-  it("merges windows into state frames when the link enabled state", async () => {
+  it("merges windows into the link's state frames", async () => {
     vi.useFakeTimers();
     try {
-      const h = fixture(["state"]);
+      const h = fixture();
       const first = h.owner();
       const second = h.owner();
-      await h.bridge.call(first, "session.heartbeat", {
+      await h.bridge.reportPresence(first, {
         appVisible: true,
         deviceType: "web",
         focusedHostId: "host-a",
         focusedAgentId: "agent-a",
       });
       vi.advanceTimersByTime(1000);
-      await h.bridge.call(second, "session.heartbeat", {
+      await h.bridge.reportPresence(second, {
         appVisible: true,
         deviceType: "web",
         focusedHostId: "host-b",
@@ -115,7 +122,7 @@ describe("desktop account Hub boundary", () => {
       });
       // A repeated heartbeat does not move focus; refocusing the first window does.
       vi.advanceTimersByTime(1000);
-      await h.bridge.call(first, "session.heartbeat", {
+      await h.bridge.reportPresence(first, {
         appVisible: true,
         deviceType: "web",
         focusedHostId: "host-a",
@@ -124,9 +131,9 @@ describe("desktop account Hub boundary", () => {
       expect(h.reportPresence).toHaveBeenLastCalledWith(
         expect.objectContaining({ focusedHostId: "host-b" }),
       );
-      await h.bridge.call(first, "session.heartbeat", { appVisible: false, deviceType: "web" });
+      await h.bridge.reportPresence(first, { appVisible: false, deviceType: "web" });
       vi.advanceTimersByTime(1000);
-      await h.bridge.call(first, "session.heartbeat", {
+      await h.bridge.reportPresence(first, {
         appVisible: true,
         deviceType: "web",
         focusedHostId: "host-a",
@@ -136,7 +143,7 @@ describe("desktop account Hub boundary", () => {
         expect.objectContaining({ focusedHostId: "host-a", focusedAgentId: "agent-a" }),
       );
       // Any visible window keeps the account visible; none hides it.
-      await h.bridge.call(first, "session.heartbeat", { appVisible: false, deviceType: "web" });
+      await h.bridge.reportPresence(first, { appVisible: false, deviceType: "web" });
       expect(h.reportPresence).toHaveBeenLastCalledWith(
         expect.objectContaining({ appVisible: true, focusedHostId: "host-b" }),
       );

@@ -3,14 +3,12 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use host_link::{Binding, BulkTickets, Error, HubTicket, ManagedRelay};
-use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-/// Internal exclusive Relay capability issued before the API is shared.
+/// Internal exclusive Hub capability issued before the API is shared.
 #[derive(Debug, Clone)]
 pub struct ManagedRelayHandle {
-    pub(super) relay: relay::Connector,
     pub(super) hub: relay::hub::Connector,
     pub(super) status: Arc<Mutex<Value>>,
 }
@@ -25,39 +23,17 @@ impl relay::hub::bulk::Tickets for Bulk {
         let ticket = self.0.request().await.ok()?;
         Some(relay::hub::bulk::Ticket {
             hub_ticket: ticket.ticket,
-            hub_features: ticket.features,
         })
     }
 }
 
 #[async_trait]
 impl ManagedRelay for ManagedRelayHandle {
-    async fn start(&self, session: Uuid, ticket: SecretString) -> Result<(), Error> {
-        self.relay
-            .start(relay::ControlGrant {
-                center_url: host_link::center(),
-                control_ticket: ticket.expose_secret().to_owned(),
-                node_session_id: session,
-            })
-            .await
-            .map_err(|_| Error::Unavailable)
-    }
-
-    async fn active(&self) -> bool {
-        let status = self.relay.status().await;
-        status.online || status.connecting
-    }
-
-    async fn online(&self) -> bool {
-        self.relay.status().await.online
-    }
-
     async fn hub_online(&self) -> bool {
         self.hub.status().await.online
     }
 
     async fn stop(&self) {
-        self.relay.stop().await;
         self.hub.stop().await;
     }
 
