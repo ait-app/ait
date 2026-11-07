@@ -102,7 +102,7 @@ describe("browser console account", () => {
     expect(localStorage.getItem("ait.access-token")).toBe("newer-login");
     expect(request).toHaveBeenCalledWith(
       `${location.origin}/api/v1/auth/logout`,
-      expect.objectContaining({ headers: { Authorization: `Bearer ${saved}` } }),
+      expect.objectContaining({ headers: { Authorization: `Bearer ${saved}` }, keepalive: true }),
     );
   });
 });

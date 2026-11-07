@@ -2,6 +2,7 @@ import { LucideProvider } from "lucide-react-native";
 import { ComposerEditingSessionsProvider } from "@/composer/editing-session";
 import { getNextThemePreference, ICON_STROKE_WIDTH } from "@/styles/theme";
 import { AccountRelayLifecycle } from "@/runtime/account-state";
+import { BrowserAccountGate } from "@/runtime/browser-account-gate";
 import { AccountHubLifecycle } from "@/runtime/account-hub-state";
 import { OnlineServiceHostSyncLifecycle } from "@/runtime/online-service-host-sync";
 import { legacyFavoriteProfileMigration } from "@/agent-profiles/migration";
@@ -987,7 +988,11 @@ export default function RootLayout() {
     return () => subscription.remove();
   }, []);
 
-  return <RootAppTree />;
+  return (
+    <BrowserAccountGate>
+      <RootAppTree />
+    </BrowserAccountGate>
+  );
 }
 
 const layoutStyles = StyleSheet.create((theme) => ({

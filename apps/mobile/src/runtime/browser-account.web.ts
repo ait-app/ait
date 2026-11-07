@@ -52,6 +52,8 @@ async function createAccount(): Promise<AccountSessionManager> {
             method: "POST",
             headers: { Authorization: `Bearer ${token}` },
             credentials: "omit",
+            // The website gate navigates away as soon as logout is published.
+            keepalive: true,
             signal: AbortSignal.timeout(10_000),
           }).catch(() => undefined);
         }
