@@ -8,7 +8,48 @@ const { uncache } = require("@electron/asar");
 const {
   verifyPackagedResources,
   verifyDaemonDirectory,
+  verifyNativeHostDirectory,
 } = require("../apps/desktop/scripts/verify-packaged-resources.cjs");
+
+function nativeHost(resources, platform = "linux") {
+  const root = path.join(resources, "provider-runtimes/omp-native-host/1");
+  const bunPath =
+    platform === "win32"
+      ? "node_modules/@oven/bun-windows-x64/bin/bun.exe"
+      : "node_modules/@oven/bun-linux-x64/bin/bun";
+  const entrypoint = "node_modules/@oh-my-pi/pi-coding-agent/src/cli.ts";
+  const patched = [
+    "node_modules/@oh-my-pi/pi-coding-agent/src/modes/rpc/ait-native-host-hello.ts",
+    "node_modules/@oh-my-pi/pi-coding-agent/src/modes/rpc/ait-native-host-bridge.ts",
+  ];
+  for (const relative of [
+    bunPath,
+    entrypoint,
+    ...patched,
+    "notices/oh-my-pi-LICENSE",
+    "notices/bun-upstream.txt",
+    "notices/bun-linked-dependencies.txt",
+    "notices/dependencies.json",
+    "notices/NOTICE.txt",
+  ]) {
+    const filename = path.join(root, relative);
+    fs.mkdirSync(path.dirname(filename), { recursive: true });
+    fs.writeFileSync(filename, "fixture", { mode: 0o755 });
+  }
+  fs.writeFileSync(
+    path.join(root, "manifest.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      adapter: "ait-omp-native-host",
+      adapterVersion: 1,
+      ompVersion: "18.17.0",
+      bunVersion: "1.4.4",
+      bunPath,
+      entrypoint,
+    }),
+  );
+  return root;
+}
 
 function resources(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "ait-package-resources-"));
@@ -47,6 +88,7 @@ test("packaging requires Ait's independent identity instead of the Paseo workspa
   fs.mkdirSync(path.join(destination, "app-dist"), { recursive: true });
   fs.writeFileSync(path.join(destination, "app-dist", "index.html"), "<!doctype html>");
   fs.cpSync(path.join(root, "bin"), path.join(destination, "bin"), { recursive: true });
+  nativeHost(destination);
   const source = path.join(root, "source");
   fs.mkdirSync(source);
   for (const name of ["@ait/desktop", "@getpaseo/desktop"]) {
@@ -72,6 +114,7 @@ test("Windows packages require the renderer and app archive but reject a bundled
   const destination = path.join(appOutDir, "resources");
   fs.mkdirSync(path.join(destination, "app-dist"), { recursive: true });
   fs.writeFileSync(path.join(destination, "app-dist", "index.html"), "<!doctype html>");
+  nativeHost(destination, "win32");
   const source = path.join(root, "source");
   fs.mkdirSync(source);
   fs.writeFileSync(
@@ -91,4 +134,31 @@ test("Windows packages require the renderer and app archive but reject a bundled
   fs.rmSync(path.join(destination, "bin"), { recursive: true });
   fs.unlinkSync(path.join(destination, "app-dist", "index.html"));
   assert.throws(verify, /UI is missing/);
+});
+
+test("private native host packaging rejects wrong versions, missing notices and path escapes", (t) => {
+  const root = nativeHost(resources(t));
+  assert.doesNotThrow(() => verifyNativeHostDirectory(root, "linux"));
+  assert.throws(() => verifyNativeHostDirectory(root, "win32"), /target differs/);
+  const manifestPath = path.join(root, "manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  fs.writeFileSync(manifestPath, JSON.stringify({ ...manifest, ompVersion: "18.14.0" }));
+  assert.throws(() => verifyNativeHostDirectory(root, "linux"));
+  fs.writeFileSync(manifestPath, JSON.stringify({ ...manifest, bunPath: "../../bun" }));
+  assert.throws(() => verifyNativeHostDirectory(root, "linux"));
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  fs.unlinkSync(path.join(root, "notices/bun-linked-dependencies.txt"));
+  assert.throws(() => verifyNativeHostDirectory(root, "linux"), /Missing native host asset/);
+});
+
+test("packaging rejects a native host SDK that is not patched with the Ait bridge", (t) => {
+  const root = nativeHost(resources(t));
+  assert.doesNotThrow(() => verifyNativeHostDirectory(root, "linux"));
+  fs.unlinkSync(
+    path.join(
+      root,
+      "node_modules/@oh-my-pi/pi-coding-agent/src/modes/rpc/ait-native-host-hello.ts",
+    ),
+  );
+  assert.throws(() => verifyNativeHostDirectory(root, "linux"), /Missing native host asset/);
 });

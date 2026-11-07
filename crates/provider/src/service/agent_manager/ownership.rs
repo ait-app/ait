@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 use super::auto_archive::Retirement;
 
 /// Committed control fields overlaid on independent directory reads.
-pub(crate) const RUNTIME_OVERLAY_FIELDS: [&str; 7] = [
+pub(crate) const RUNTIME_OVERLAY_FIELDS: [&str; 8] = [
     "status",
     "requiresAttention",
     "attentionReason",
@@ -22,6 +22,7 @@ pub(crate) const RUNTIME_OVERLAY_FIELDS: [&str; 7] = [
     "activeTurn",
     "providerUnavailable",
     "pendingPermissions",
+    "providerUi",
 ];
 
 #[derive(Debug)]

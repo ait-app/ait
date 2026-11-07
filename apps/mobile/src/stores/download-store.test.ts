@@ -70,9 +70,31 @@ describe("relay download preparation", () => {
     const { invoke, start, result } = fixture("direct");
     vi.mocked(buildDaemonWebSocketUrl).mockReturnValue("ws://remote.test:6767/v1/ws");
     await start();
-    expect(invoke).not.toHaveBeenCalled();
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("file_download", {
+      url: expect.stringMatching(/^http:\/\/remote\.test:6767\/api\/files\/download\?token=/),
+      fileName: "report.txt",
+      downloadId: expect.any(String),
+    });
     expect(buildDaemonWebSocketUrl).toHaveBeenCalledWith("remote.test:6767", { useTls: false });
     expect(result().status).toBe("complete");
+  });
+  it("keeps direct downloads pending until Electron finishes and preserves a real failure", async () => {
+    const { invoke, start, result, remove } = fixture("direct");
+    vi.mocked(buildDaemonWebSocketUrl).mockReturnValue("ws://remote.test:6767/v1/ws");
+    let reject!: (error: Error) => void;
+    invoke.mockImplementation(
+      () =>
+        new Promise((_resolve, fail) => {
+          reject = fail;
+        }),
+    );
+    const pending = start();
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledOnce());
+    expect(result().status).toBe("downloading");
+    reject(new Error("Download interrupted."));
+    await pending;
+    expect(result()).toMatchObject({ status: "error", message: "Download interrupted." });
+    expect(remove).toHaveBeenCalledOnce();
   });
   it("requests a fresh token only after a save dialog lasting longer than the token lifetime", async () => {
     vi.useFakeTimers();

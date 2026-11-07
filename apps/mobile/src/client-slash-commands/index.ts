@@ -43,11 +43,16 @@ for (const command of CLIENT_SLASH_COMMANDS) {
   }
 }
 
+export function preferProviderCommands(provider?: string | null): boolean {
+  return provider === "omp" || provider === "deepseek-harness" || provider === "opencode";
+}
+
 export function resolveClientSlashCommand(input: {
   text: string;
   hasAttachments: boolean;
+  provider?: string | null;
 }): ClientSlashCommand | null {
-  if (input.hasAttachments) {
+  if (input.hasAttachments || preferProviderCommands(input.provider)) {
     return null;
   }
 

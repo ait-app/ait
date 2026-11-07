@@ -38,9 +38,52 @@ fn record(id: &str, parent: Option<&str>, text: &str) -> Value {
 }
 
 #[test]
+fn navigation_projects_the_observed_leaf_and_new_native_writes_supersede_its_checkpoint() {
+    let mut journal = Journal {
+        path: PathBuf::from("/tmp/unused.jsonl"),
+        header: json!({"id":"session"}),
+        records: vec![
+            record("user", None, "request"),
+            record("answer", Some("user"), "old answer"),
+        ],
+        navigation: None,
+    };
+    assert_eq!(journal.branch().unwrap().len(), 2);
+    journal.set_navigation("user", &Value::Null).unwrap();
+    assert!(journal.branch().unwrap().is_empty());
+    let checkpoint = journal.navigation.take().unwrap();
+    journal.restore_navigation(Some(&checkpoint)).unwrap();
+    assert!(journal.branch().unwrap().is_empty());
+    journal.navigation = None;
+    journal
+        .records
+        .push(json!({"type":"custom","customType":"session_exit",
+        "id":"exit","parentId":"answer","data":{"kind":"normal","reason":"dispose"}}));
+    journal.restore_navigation(Some(&checkpoint)).unwrap();
+    assert!(journal.branch().unwrap().is_empty());
+    journal.navigation = None;
+    journal
+        .records
+        .push(json!({"type":"model_change","id":"model","parentId":"answer"}));
+    journal.restore_navigation(Some(&checkpoint)).unwrap();
+    assert!(journal.branch().unwrap().is_empty());
+    journal.navigation = None;
+    journal
+        .records
+        .push(record("new", Some("answer"), "external continuation"));
+    journal.restore_navigation(Some(&checkpoint)).unwrap();
+    assert_eq!(journal.branch().unwrap().len(), 3);
+    assert!(journal.navigation.is_none());
+    assert!(journal.set_navigation("foreign", &Value::Null).is_err());
+    assert!(journal.set_navigation("user", &json!("foreign")).is_err());
+    journal.set_navigation("answer", &json!("user")).unwrap();
+    assert_eq!(journal.branch().unwrap().len(), 1);
+}
+
+#[test]
 fn only_active_branch_is_projected_and_corrupt_links_are_rejected() {
     let root = tempfile::tempdir().unwrap();
-    let journal = Journal {
+    let mut journal = Journal {
         path: root.path().join("history.jsonl"),
         header: json!({"id":"id","cwd":"/tmp","timestamp":"2026-10-21T00:00:00Z"}),
         records: vec![
@@ -48,6 +91,7 @@ fn only_active_branch_is_projected_and_corrupt_links_are_rejected() {
             record("abandoned", Some("first"), "old"),
             record("current", Some("first"), "new"),
         ],
+        navigation: None,
     };
     let client = OmpClient::new("missing".into());
     let handle = AgentPersistenceHandle {
@@ -59,6 +103,15 @@ fn only_active_branch_is_projected_and_corrupt_links_are_rejected() {
     let (history, _) = journal.project(&client, &handle).unwrap();
     assert_eq!(history.entries.len(), 2);
     assert_eq!(history.entries[1].item["text"], "new");
+    journal
+        .set_navigation("abandoned", &json!("first"))
+        .unwrap();
+    let (history, _) = journal.project(&client, &handle).unwrap();
+    assert_eq!(history.entries.len(), 1);
+    assert_eq!(
+        history.resume_metadata["navigation"],
+        json!(journal.navigation)
+    );
     let corrupt = Journal {
         records: vec![record("self", Some("self"), "cycle")],
         ..journal
@@ -87,6 +140,7 @@ fn background_results_have_the_same_tool_identity_in_live_output_and_history() {
         path: root.path().join("history.jsonl"),
         header: json!({"id":"id","cwd":"/tmp","timestamp":"2026-10-21T00:00:00Z"}),
         records: vec![record("user", None, "request"), result.clone()],
+        navigation: None,
     };
     let handle = AgentPersistenceHandle {
         provider: "omp".into(),

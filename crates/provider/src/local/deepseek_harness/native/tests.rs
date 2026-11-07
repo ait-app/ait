@@ -8,8 +8,13 @@ use crate::{
 use domain::agent_runtime::StoredAgentConfig;
 use std::collections::BTreeMap;
 
+mod archive;
+mod command_attachments;
+mod commands;
+mod exports;
 mod fixture;
 mod imports;
+mod installed_delivery;
 mod installed_history;
 mod interactions;
 mod presets;
@@ -18,6 +23,7 @@ mod quota;
 mod recovery;
 mod session;
 mod sources;
+mod startup;
 mod validation;
 
 #[tokio::test]

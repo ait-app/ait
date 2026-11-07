@@ -71,6 +71,71 @@ function optionValues(options: readonly { value: string }[]): string[] {
 }
 
 describe("openAgentProfileForm", () => {
+  it("applies an OMP preset in one update and keeps its fields available during the next lookup", () => {
+    const model = openAgentProfileForm({ mode: "create" });
+    model.applyProviderCatalog([
+      {
+        ...CLAUDE,
+        provider: "omp",
+        models: [
+          {
+            provider: "omp",
+            id: "main",
+            label: "Main",
+            isDefault: true,
+            thinkingOptions: [{ id: "high", label: "High" }],
+          },
+          {
+            provider: "omp",
+            id: "fast",
+            label: "Fast",
+            thinkingOptions: [{ id: "high", label: "High" }],
+          },
+        ],
+      },
+    ]);
+    model.setProvider("omp", { label: "OMP" });
+    const configuration = {
+      modelId: "fast",
+      thinkingOptionId: "high",
+      featureValues: {
+        modelPreset: null,
+        modelPresetThinking: "high",
+        modelPresetRoles: '{"default":"test/fast"}',
+        "modelRole.default": "test/fast",
+      },
+    };
+    model.applyFeatures(model.getState().featureRequestKey ?? "", [
+      {
+        type: "select",
+        id: "modelPreset",
+        label: "Preset",
+        value: "__custom__",
+        options: [{ id: "work", label: "Work", metadata: { configuration } }],
+      },
+      {
+        type: "select",
+        id: "modelRole.default",
+        label: "Default",
+        value: "native",
+        options: [
+          { id: "native", label: "Native" },
+          { id: "test/fast", label: "Fast" },
+        ],
+      },
+    ]);
+    model.setFeatureValue("modelPreset", "work");
+    expect(model.getState()).toMatchObject({
+      modelId: "fast",
+      thinkingOptionId: "high",
+      featureValues: configuration.featureValues,
+    });
+    expect(model.getState().features).toHaveLength(2);
+    model.setModel("main", { label: "Main" });
+    expect(model.getState().features[0].value).toBe("__custom__");
+    model.close();
+  });
+
   it("starts a create form empty and cannot submit", () => {
     const model = openWithCatalog({ mode: "create" });
     const state = model.getState();

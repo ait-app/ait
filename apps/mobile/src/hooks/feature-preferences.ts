@@ -1,10 +1,17 @@
 import type { AgentFeature } from "@ait/protocol/agent-types";
+import { MODEL_PRESET_FIELDS } from "@/agent-controls/model-presets";
+
+function configurableIds(features: AgentFeature[]): Set<string> {
+  const ids = new Set(features.map((feature) => feature.id));
+  if (ids.has("modelPreset")) for (const key of MODEL_PRESET_FIELDS) ids.add(key);
+  return ids;
+}
 
 export function pruneFeatureValues(
   featureValues: Record<string, unknown>,
   features: AgentFeature[],
 ): Record<string, unknown> {
-  const allowedFeatureIds = new Set(features.map((feature) => feature.id));
+  const allowedFeatureIds = configurableIds(features);
   let changed = false;
   const next: Record<string, unknown> = {};
 
@@ -28,6 +35,7 @@ export function applyFeatureValues(
   }
 
   return features.map((feature) => {
+    if (feature.id === "modelPreset" && featureValues[feature.id] == null) return feature;
     if (!Object.prototype.hasOwnProperty.call(featureValues, feature.id)) {
       return feature;
     }
@@ -46,13 +54,13 @@ export function resolveFeatureValues(args: {
 }): Record<string, unknown> {
   const next: Record<string, unknown> = {};
 
-  for (const feature of args.features) {
-    if (Object.prototype.hasOwnProperty.call(args.localFeatureValues, feature.id)) {
-      next[feature.id] = args.localFeatureValues[feature.id];
+  for (const id of configurableIds(args.features)) {
+    if (Object.prototype.hasOwnProperty.call(args.localFeatureValues, id)) {
+      next[id] = args.localFeatureValues[id];
       continue;
     }
-    if (Object.prototype.hasOwnProperty.call(args.persistedFeatureValues, feature.id)) {
-      next[feature.id] = args.persistedFeatureValues[feature.id];
+    if (Object.prototype.hasOwnProperty.call(args.persistedFeatureValues, id)) {
+      next[id] = args.persistedFeatureValues[id];
     }
   }
 

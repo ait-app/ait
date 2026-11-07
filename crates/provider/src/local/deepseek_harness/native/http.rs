@@ -9,6 +9,9 @@ use serde_json::{Value, json};
 use crate::ports::agent_session::AgentSessionError;
 use crate::ports::diagnostics::{Category, Diagnostic};
 
+mod downloads;
+mod uploads;
+
 pub(super) const MAX_FRAME: usize = 2 * 1024 * 1024;
 
 #[derive(Clone)]
@@ -29,6 +32,15 @@ impl std::fmt::Debug for Api {
 }
 
 impl Api {
+    /// Reuse this authenticated transport with diagnostics isolated from model execution.
+    /// Control and catalog failures remain local to the request that caused them.
+    pub(super) fn control_scope(&self) -> Self {
+        Self {
+            diagnostics: crate::local::diagnostics::Diagnostics::new(super::super::PROVIDER),
+            ..self.clone()
+        }
+    }
+
     /// Exchange the owned runtime's launch URL for a cookie, rejecting non-loopback targets.
     pub(super) async fn connect(
         launch: &str,
@@ -167,8 +179,8 @@ impl Api {
             Some(true) => response["result"]
                 .get("value")
                 .cloned()
-                // DSH's event-result acknowledgement is void; JSON omits its undefined value.
-                .or_else(|| (endpoint == "$events/result").then_some(Value::Null))
+                // Void event acknowledgements and unmatched commands omit `value`.
+                .or_else(|| matches!(endpoint, "$events/result" | "commands/execute").then_some(Value::Null))
                 .map(Some)
                 .ok_or(AgentSessionError::Failed),
             Some(false) => {

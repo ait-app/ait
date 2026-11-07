@@ -44,6 +44,10 @@ async fn persistent_access_refusal_probes_refresh_once_then_stops() {
     assert_eq!(result, Err(Error::Unauthorized));
     let seen = mock.0.lock().unwrap();
     assert_eq!(seen.refreshes.len(), 2);
+    assert_eq!(
+        seen.renewals, 2,
+        "queued ticket rejection must be handled before another lease renewal"
+    );
     assert!(!seen.active && !seen.hub.active);
 }
 

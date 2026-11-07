@@ -7,8 +7,9 @@ import type { BotView } from "@ait/protocol/bot/types";
 import { BotSetup } from "./bot-setup";
 import { botKeys } from "./queries";
 
-const { botRequest, supported, snapshotEntries } = vi.hoisted(() => ({
+const { botRequest, supported, snapshotEntries, catalogAccess } = vi.hoisted(() => ({
   botRequest: vi.fn(),
+  catalogAccess: vi.fn(),
   supported: { current: false },
   snapshotEntries: { current: [] as unknown[] },
 }));
@@ -24,7 +25,11 @@ vi.mock("@/stores/session-store", () => ({
     }),
 }));
 vi.mock("@/hooks/use-providers-snapshot", () => ({
-  useProvidersSnapshot: () => ({ entries: snapshotEntries.current, error: null }),
+  useProvidersSnapshot: () => ({
+    entries: snapshotEntries.current,
+    error: null,
+    refetchIfStale: catalogAccess,
+  }),
 }));
 vi.mock("@/components/ui/select-field", () => ({
   SelectField: ({
@@ -32,13 +37,20 @@ vi.mock("@/components/ui/select-field", () => ({
     options,
     onChange,
     testID,
+    onOpen,
   }: {
     value: string;
     options: { id: string; label: string }[];
     onChange: (value: string) => void;
     testID: string;
+    onOpen?: () => void;
   }) => (
-    <select data-testid={testID} value={value} onChange={(event) => onChange(event.target.value)}>
+    <select
+      data-testid={testID}
+      value={value}
+      onMouseDown={onOpen}
+      onChange={(event) => onChange(event.target.value)}
+    >
       {options.map((option) => (
         <option key={option.id} value={option.id}>
           {option.label}
@@ -133,6 +145,30 @@ function renderSetup(onConfigured = vi.fn()) {
   );
   return { queryClient, onConfigured };
 }
+
+it("model_access_refreshes_in_background_without_resetting_the_bot_draft", () => {
+  snapshotEntries.current = [
+    {
+      provider: "omp",
+      enabled: true,
+      status: "ready",
+      models: [{ id: "main", label: "Main", thinkingOptions: [{ id: "high", label: "High" }] }],
+      modes: [{ id: "default", label: "Default" }],
+    },
+  ];
+  catalogAccess.mockReturnValue(new Promise(() => {}));
+  renderSetup();
+  fireEvent.mouseDown(screen.getByTestId("bot-model"));
+  expect(catalogAccess).toHaveBeenLastCalledWith("omp");
+  fireEvent.change(screen.getByTestId("bot-model"), { target: { value: "main" } });
+  fireEvent.mouseDown(screen.getByTestId("bot-thinking"));
+  fireEvent.change(screen.getByTestId("bot-thinking"), { target: { value: "high" } });
+  expect(screen.getByTestId("bot-model")).toHaveProperty("value", "main");
+  expect(screen.getByTestId("bot-thinking")).toHaveProperty("value", "high");
+  catalogAccess.mockClear();
+  fireEvent.mouseDown(screen.getByTestId("bot-mode"));
+  expect(catalogAccess).not.toHaveBeenCalled();
+});
 
 it("setup_sends_clear_memory_only_when_checked", async () => {
   botRequest.mockResolvedValue({ bot, created: true });

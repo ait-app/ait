@@ -5,6 +5,8 @@ import { StyleSheet } from "react-native-unistyles";
 import type { AgentFeature } from "@ait/protocol/agent-types";
 import type { AgentProfile } from "@ait/protocol/messages";
 import { formatAgentFeatureLabel } from "@/agent-controls/labels";
+import { isModelConfigurationFeature } from "@/agent-controls/model-presets";
+import { ModelFeatureControls } from "@/components/model-feature-controls";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { type FieldControlSize } from "@/components/ui/control-geometry";
@@ -136,13 +138,31 @@ function OpenAgentProfileEditModal({
   const { t } = useTranslation();
   const controlSize: FieldControlSize = useIsCompactFormFactor() ? "md" : "sm";
   const snapshot = useMemo(
-    () => ({ mode, ...(profile ? { profile } : {}), ...(seed ? { seed } : {}) }),
+    () => ({
+      mode,
+      ...(profile ? { profile } : {}),
+      ...(seed ? { seed } : {}),
+    }),
     [mode, profile, seed],
   );
   const model = useAgentProfileFormModel(snapshot);
   const state = useAgentProfileFormState(model);
-  useAgentProfileFormCatalog({ serverId, model });
-  useAgentProfileFormFeatures({ serverId, model, state });
+  const modelFeatures = useMemo(
+    () => state.features.filter(isModelConfigurationFeature),
+    [state.features],
+  );
+  const visibleFeatures = useMemo(
+    () => state.features.filter((feature) => !isModelConfigurationFeature(feature)),
+    [state.features],
+  );
+  const catalog = useAgentProfileFormCatalog({ serverId, model });
+  const catalogFetchedAt = catalog.entries?.find(
+    (entry) => entry.provider === state.featureRequest?.provider,
+  )?.fetchedAt;
+  useAgentProfileFormFeatures({ serverId, model, state, catalogFetchedAt });
+  const handleCatalogAccess = useCallback(() => {
+    catalog.refetchIfStale(state.featureRequest?.provider);
+  }, [catalog.refetchIfStale, state.featureRequest?.provider]);
 
   const sheetHeader = useMemo<SheetHeader>(
     () => ({
@@ -170,21 +190,29 @@ function OpenAgentProfileEditModal({
     [model],
   );
   const handleProviderChange = useCallback(
-    (value: string, display: SelectFieldDisplay) => model.setProvider(value, display),
-    [model],
+    (value: string, display: SelectFieldDisplay) => {
+      handleCatalogAccess();
+      model.setProvider(value, display);
+    },
+    [handleCatalogAccess, model],
   );
   const handleModelChange = useCallback(
-    (value: string, display: SelectFieldDisplay) => model.setModel(value, value ? display : null),
-    [model],
+    (value: string, display: SelectFieldDisplay) => {
+      handleCatalogAccess();
+      model.setModel(value, value ? display : null);
+    },
+    [handleCatalogAccess, model],
   );
   const handleModeChange = useCallback(
     (value: string, display: SelectFieldDisplay) => model.setMode(value, value ? display : null),
     [model],
   );
   const handleThinkingChange = useCallback(
-    (value: string, display: SelectFieldDisplay) =>
-      model.setThinking(value, value ? display : null),
-    [model],
+    (value: string, display: SelectFieldDisplay) => {
+      handleCatalogAccess();
+      model.setThinking(value, value ? display : null);
+    },
+    [handleCatalogAccess, model],
   );
 
   const handleSave = useCallback(async () => {
@@ -263,6 +291,7 @@ function OpenAgentProfileEditModal({
           value={state.provider || null}
           selectedDisplay={state.providerDisplay}
           options={providerOptions}
+          onOpen={handleCatalogAccess}
           onChange={handleProviderChange}
           placeholder={t("settings.host.agentProfiles.providerPlaceholder")}
           emptyText={t("settings.host.agentProfiles.noProviders")}
@@ -275,22 +304,67 @@ function OpenAgentProfileEditModal({
           triggerTestID="agent-profile-provider-trigger"
         />
 
-        {state.disclosure.showModelField ? (
-          <SelectField
-            label={t("settings.host.agentProfiles.modelLabel")}
-            value={state.modelId || UNSET_VALUE}
-            selectedDisplay={state.modelDisplay}
-            options={modelOptions}
-            onChange={handleModelChange}
-            placeholder={t("settings.host.agentProfiles.modelLabel")}
-            emptyText={t("settings.host.agentProfiles.noModels")}
-            disabled={state.isSubmitting}
-            searchable={modelOptions.length > 6}
-            title={t("settings.host.agentProfiles.modelLabel")}
-            size={controlSize}
-            testID="agent-profile-model-field"
-            triggerTestID="agent-profile-model-trigger"
-          />
+        {state.disclosure.showModelField ||
+        state.disclosure.showThinkingField ||
+        modelFeatures.length > 0 ? (
+          <View style={styles.modelConfiguration} testID="agent-profile-model-configuration">
+            {state.disclosure.showModelField ? (
+              <SelectField
+                label={t("settings.host.agentProfiles.modelLabel")}
+                value={state.modelId || UNSET_VALUE}
+                selectedDisplay={state.modelDisplay}
+                options={modelOptions}
+                onOpen={handleCatalogAccess}
+                onChange={handleModelChange}
+                placeholder={t("settings.host.agentProfiles.modelLabel")}
+                emptyText={t("settings.host.agentProfiles.noModels")}
+                disabled={state.isSubmitting}
+                searchable={modelOptions.length > 6}
+                title={t("settings.host.agentProfiles.modelLabel")}
+                size={controlSize}
+                testID="agent-profile-model-field"
+                triggerTestID="agent-profile-model-trigger"
+              />
+            ) : null}
+
+            {state.disclosure.showThinkingField ? (
+              <SelectField
+                label={t("settings.host.agentProfiles.thinkingLabel")}
+                value={state.thinkingOptionId || UNSET_VALUE}
+                selectedDisplay={state.thinkingDisplay}
+                options={thinkingOptions}
+                onOpen={handleCatalogAccess}
+                onChange={handleThinkingChange}
+                placeholder={t("settings.host.agentProfiles.thinkingLabel")}
+                emptyText={t("settings.host.agentProfiles.noThinkingOptions")}
+                disabled={state.isSubmitting}
+                searchable={thinkingOptions.length > 6}
+                title={t("settings.host.agentProfiles.thinkingLabel")}
+                size={controlSize}
+                testID="agent-profile-thinking-field"
+                triggerTestID="agent-profile-thinking-trigger"
+              />
+            ) : null}
+            <ModelFeatureControls
+              features={modelFeatures}
+              disabled={state.isSubmitting}
+              onCatalogAccess={handleCatalogAccess}
+              // A profile has no working directory, so the preset store is read for the host and
+              // provider alone; the empty state still opens that provider's preset editor.
+              settingsTarget={{ serverId, provider: state.provider, cwd: null }}
+              renderFeature={(feature, index) => (
+                <AgentProfileFeatureRow
+                  key={feature.id}
+                  feature={feature}
+                  isFirst={index === 0}
+                  disabled={state.isSubmitting}
+                  size={controlSize}
+                  model={model}
+                  onCatalogAccess={handleCatalogAccess}
+                />
+              )}
+            />
+          </View>
         ) : null}
 
         {state.disclosure.showModeField ? (
@@ -310,32 +384,13 @@ function OpenAgentProfileEditModal({
             triggerTestID="agent-profile-mode-trigger"
           />
         ) : null}
-
-        {state.disclosure.showThinkingField ? (
-          <SelectField
-            label={t("settings.host.agentProfiles.thinkingLabel")}
-            value={state.thinkingOptionId || UNSET_VALUE}
-            selectedDisplay={state.thinkingDisplay}
-            options={thinkingOptions}
-            onChange={handleThinkingChange}
-            placeholder={t("settings.host.agentProfiles.thinkingLabel")}
-            emptyText={t("settings.host.agentProfiles.noThinkingOptions")}
-            disabled={state.isSubmitting}
-            searchable={thinkingOptions.length > 6}
-            title={t("settings.host.agentProfiles.thinkingLabel")}
-            size={controlSize}
-            testID="agent-profile-thinking-field"
-            triggerTestID="agent-profile-thinking-trigger"
-          />
-        ) : null}
-
-        {state.disclosure.showFeaturesField ? (
+        {state.disclosure.showFeaturesField && visibleFeatures.length > 0 ? (
           <Field
             label={t("settings.host.agentProfiles.featuresLabel")}
             testID="agent-profile-features-field"
           >
             <View style={styles.featureCard} testID="agent-profile-features-card">
-              {state.features.map((feature, index) => (
+              {visibleFeatures.map((feature, index) => (
                 <AgentProfileFeatureRow
                   key={feature.id}
                   feature={feature}
@@ -343,6 +398,7 @@ function OpenAgentProfileEditModal({
                   disabled={state.isSubmitting}
                   size={controlSize}
                   model={model}
+                  onCatalogAccess={handleCatalogAccess}
                 />
               ))}
             </View>
@@ -407,12 +463,14 @@ function AgentProfileFeatureRow({
   disabled,
   size,
   model,
+  onCatalogAccess,
 }: {
   feature: AgentFeature;
   isFirst: boolean;
   disabled: boolean;
   size: FieldControlSize;
   model: AgentProfileFormModel;
+  onCatalogAccess: () => void;
 }): ReactElement {
   const { t } = useTranslation();
   const featureLabel = formatAgentFeatureLabel(feature, t);
@@ -425,8 +483,11 @@ function AgentProfileFeatureRow({
     [feature.id, model],
   );
   const handleSelect = useCallback(
-    (value: string) => model.setFeatureValue(feature.id, value),
-    [feature.id, model],
+    (value: string) => {
+      if (isModelConfigurationFeature(feature)) onCatalogAccess();
+      model.setFeatureValue(feature.id, value);
+    },
+    [feature.id, model, onCatalogAccess],
   );
   const selectOptions = useMemo<SelectFieldOption<string>[]>(
     () =>
@@ -457,6 +518,7 @@ function AgentProfileFeatureRow({
           value={feature.value}
           selectedDisplay={selectedDisplay}
           options={selectOptions}
+          onOpen={isModelConfigurationFeature(feature) ? onCatalogAccess : undefined}
           onChange={handleSelect}
           placeholder={featureLabel}
           emptyText={featureLabel}
@@ -495,6 +557,7 @@ function AgentProfileFeatureRow({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  modelConfiguration: { gap: theme.spacing[3] },
   body: {
     gap: theme.spacing[4],
     paddingBottom: theme.spacing[2],

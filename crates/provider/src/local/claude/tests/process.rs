@@ -751,3 +751,46 @@ async fn a_successful_native_retry_clears_its_intermediate_failure() {
     assert_eq!(session.failure_diagnostic(), None);
     session.close().await.unwrap();
 }
+
+#[tokio::test]
+async fn advisor_reaches_the_native_launch_and_the_opt_out_uses_the_tool_switch() {
+    let (root, client, mut spec) = fixture();
+    std::fs::write(root.path().join("capture-environment"), "").unwrap();
+    spec.config = serde_json::from_value(json!({"model":"sonnet",
+        "featureValues":{"modelRole.advisor":"opus"}}))
+    .unwrap();
+    let mut session = client.create_session(&spec).await.unwrap();
+    session.start_turn("advisor", &spec.config).await.unwrap();
+    finish(session.as_mut()).await;
+    let args: Vec<String> =
+        serde_json::from_slice(&std::fs::read(root.path().join("claude-args.json")).unwrap())
+            .unwrap();
+    assert!(args.contains(&"--advisor=opus".to_owned()), "{args:?}");
+    assert!(
+        std::fs::read_to_string(root.path().join("native-environment.jsonl"))
+            .unwrap()
+            .lines()
+            .all(|line| serde_json::from_str::<Value>(line).unwrap()["advisor_disabled"].is_null())
+    );
+
+    spec.config = serde_json::from_value(json!({"model":"sonnet",
+        "featureValues":{"modelRole.advisor":"unset"}}))
+    .unwrap();
+    session.start_turn("opt-out", &spec.config).await.unwrap();
+    finish(session.as_mut()).await;
+    let args: Vec<String> =
+        serde_json::from_slice(&std::fs::read(root.path().join("claude-args.json")).unwrap())
+            .unwrap();
+    assert!(
+        args.iter().all(|arg| !arg.starts_with("--advisor")),
+        "{args:?}"
+    );
+    assert!(
+        std::fs::read_to_string(root.path().join("native-environment.jsonl"))
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).unwrap())
+            .any(|row| row["advisor_disabled"] == "1")
+    );
+    session.close().await.unwrap();
+}

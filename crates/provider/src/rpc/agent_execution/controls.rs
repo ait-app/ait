@@ -6,7 +6,7 @@ use super::{ErrorCode, ExecutionState, decode, only};
 use crate::ports::agent_session::AgentSessionSpec;
 use crate::protocol::agent_config::ConfigPatch;
 use crate::protocol::controls::{
-    CommandsRequest, PermissionRequest, RewindRequest, SubagentRequest,
+    CommandsRequest, CompleteCommandsRequest, PermissionRequest, RewindRequest, SubagentRequest,
 };
 use crate::protocol::timeline::{FetchRequest, Projection};
 use crate::service::agent_execution::operation::Operation;
@@ -84,6 +84,38 @@ impl ExecutionState {
             .collect::<Result<Vec<_>, _>>()?;
         crate::rpc::timeline::bounded(json!({"parentAgentId":parent,"agents":agents,"error":null}))
             .map_err(Into::into)
+    }
+
+    pub(super) async fn controls(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, ErrorCode> {
+        match method {
+            "agent.native_action.request" => {
+                only(&params, &["agentId", "action", "arguments"])?;
+                let id = self.resolve(
+                    params["agentId"]
+                        .as_str()
+                        .ok_or(ErrorCode::InvalidMessage)?,
+                )?;
+                self.active_workspace(&id)?;
+                let action = params["action"].as_str().ok_or(ErrorCode::InvalidMessage)?;
+                let completion = self
+                    .manager
+                    .begin_action(&id, action, &params["arguments"])
+                    .await?;
+                self.pending_response = Some(Box::pin(async move {
+                    let result = completion.await.map_err(|_| ErrorCode::AgentIo)?;
+                    Ok(
+                        json!({"agentId":id,"text":result["text"],"file":result["file"],"error":result["error"]}),
+                    )
+                }));
+                Ok(Value::Null)
+            }
+            "agent.commands.complete.request" => self.complete_commands(params).await,
+            _ => Err(ErrorCode::MethodNotFound),
+        }
     }
 
     pub(super) async fn diagnostic(&self, params: Value) -> Result<Value, ErrorCode> {
@@ -205,34 +237,49 @@ impl ExecutionState {
         )
     }
 
-    pub(super) async fn commands(&self, params: Value) -> Result<Value, ErrorCode> {
-        if let Some(config) = params.get("draftConfig").filter(|value| !value.is_null()) {
-            only(
-                config,
-                &[
-                    "provider",
-                    "cwd",
-                    "title",
-                    "modeId",
-                    "model",
-                    "thinkingOptionId",
-                    "systemPrompt",
-                    "featureValues",
-                    "providerOptions",
-                    "mcpServers",
-                    "toolPolicy",
-                ],
-            )?;
-        }
+    pub(super) async fn commands(&mut self, params: Value) -> Result<Value, ErrorCode> {
+        validate_command_draft(&params)?;
         let request: CommandsRequest = decode(params)?;
-        let (id, spec) = match self.resolve(&request.agent_id) {
+        let (id, spec) = self.command_context(request)?;
+        let commands = if let Some(commands) = self.manager.refresh_commands(&id).await? {
+            commands
+        } else {
+            self.manager.commands(&spec).await?
+        };
+        crate::rpc::timeline::bounded(json!({"agentId":id,"commands":commands,"error":null}))
+            .map_err(Into::into)
+    }
+
+    async fn complete_commands(&mut self, params: Value) -> Result<Value, ErrorCode> {
+        validate_command_draft(&params)?;
+        let request: CompleteCommandsRequest = decode(params)?;
+        let input = crate::protocol::commands::CompletionInput {
+            text: request.text,
+            cursor: request.cursor,
+        };
+        input.validate().map_err(|_| ErrorCode::InvalidMessage)?;
+        let (id, spec) = self.command_context(CommandsRequest {
+            agent_id: request.agent_id,
+            draft_config: request.draft_config,
+        })?;
+        let result = self.manager.complete_commands(&id, &spec, &input).await?;
+        crate::rpc::timeline::bounded(json!({"agentId":id,
+            "supported":result.supported,"items":result.items}))
+        .map_err(Into::into)
+    }
+
+    fn command_context(
+        &self,
+        request: CommandsRequest,
+    ) -> Result<(String, AgentSessionSpec), ErrorCode> {
+        match self.resolve(&request.agent_id) {
             Ok(id) => {
                 let record = self
                     .registry
                     .get(&id)
                     .map_err(|_| ErrorCode::AgentIo)?
                     .ok_or(ErrorCode::AgentNotFound)?;
-                (
+                Ok((
                     id,
                     AgentSessionSpec {
                         provider: record.provider,
@@ -240,11 +287,11 @@ impl ExecutionState {
                         config: record.config.unwrap_or_default(),
                         confinement: None,
                     },
-                )
+                ))
             }
             Err(ErrorCode::AgentNotFound) => {
                 let draft = request.draft_config.ok_or(ErrorCode::AgentNotFound)?;
-                (
+                Ok((
                     request.agent_id,
                     AgentSessionSpec {
                         provider: draft.provider,
@@ -252,13 +299,10 @@ impl ExecutionState {
                         config: draft.stored,
                         confinement: None,
                     },
-                )
+                ))
             }
-            Err(error) => return Err(error),
-        };
-        let commands = self.manager.commands(&spec).await?;
-        crate::rpc::timeline::bounded(json!({"agentId":id,"commands":commands,"error":null}))
-            .map_err(Into::into)
+            Err(error) => Err(error),
+        }
     }
 
     pub(super) async fn subagents(
@@ -355,4 +399,26 @@ impl ExecutionState {
         self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
         Ok(())
     }
+}
+
+fn validate_command_draft(params: &Value) -> Result<(), ErrorCode> {
+    if let Some(config) = params.get("draftConfig").filter(|value| !value.is_null()) {
+        only(
+            config,
+            &[
+                "provider",
+                "cwd",
+                "title",
+                "modeId",
+                "model",
+                "thinkingOptionId",
+                "systemPrompt",
+                "featureValues",
+                "providerOptions",
+                "mcpServers",
+                "toolPolicy",
+            ],
+        )?;
+    }
+    Ok(())
 }

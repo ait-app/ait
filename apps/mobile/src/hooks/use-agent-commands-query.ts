@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
+import type { ListCommandsResponse } from "@ait/protocol/messages";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { agentCommandsQueryKey, type AgentCommandsDraftConfig } from "@/hooks/agent-commands-query";
@@ -8,12 +9,7 @@ import { agentCommandsQueryKey, type AgentCommandsDraftConfig } from "@/hooks/ag
 const DRAFT_COMMANDS_STALE_TIME = Number.POSITIVE_INFINITY;
 const SESSION_COMMANDS_STALE_TIME = 60_000;
 
-export interface AgentSlashCommand {
-  name: string;
-  description: string;
-  argumentHint: string;
-  kind?: string;
-}
+export type AgentSlashCommand = ListCommandsResponse["payload"]["commands"][number];
 
 export type DraftCommandConfig = AgentCommandsDraftConfig;
 
@@ -43,6 +39,7 @@ interface UseAgentCommandsQueryOptions {
   agentId: string;
   enabled?: boolean;
   draftConfig?: DraftCommandConfig;
+  refreshOnOpen?: boolean;
 }
 
 export function useAgentCommandsQuery({
@@ -50,6 +47,7 @@ export function useAgentCommandsQuery({
   agentId,
   enabled = true,
   draftConfig,
+  refreshOnOpen = false,
 }: UseAgentCommandsQueryOptions) {
   const { t } = useTranslation();
   const retainedPanelActive = useRetainedPanelActive();
@@ -66,7 +64,18 @@ export function useAgentCommandsQuery({
       return fetchAgentCommands({ client, agentId, draftConfig });
     },
     enabled: queryEnabled && !!client && isConnected && (!!agentId || !!draftConfig),
-    staleTime: draftConfig ? DRAFT_COMMANDS_STALE_TIME : SESSION_COMMANDS_STALE_TIME,
+    staleTime: draftConfig
+      ? DRAFT_COMMANDS_STALE_TIME
+      : refreshOnOpen
+        ? 0
+        : SESSION_COMMANDS_STALE_TIME,
+    refetchInterval: (query) =>
+      refreshOnOpen &&
+      !draftConfig &&
+      query.state.data !== undefined &&
+      query.state.status !== "error"
+        ? 1500
+        : false,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
   });

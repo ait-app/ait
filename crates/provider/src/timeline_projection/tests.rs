@@ -189,3 +189,24 @@ fn pagination_matches_all_recorded_paseo_cases() {
     }
     assert_eq!(count, 11);
 }
+
+#[test]
+fn native_control_wire_envelopes_preserve_canonical_items_and_source_ranges() {
+    let cases: Vec<Value> = serde_json::from_str(include_str!(
+        "../../tests/fixtures/provider_command_compat.json"
+    ))
+    .unwrap();
+    for case in cases {
+        assert_eq!(wire_item(&case["native"]).as_ref(), &case["wire"]);
+        let source = rows(
+            &json!({"rows":[{"seq":7,"turnId":"turn","timestamp":"2026-11-04T00:00:00Z","item":case["native"]}]}),
+        );
+        let projected = project(&source);
+        let encoded = serde_json::to_value(&projected[0]).unwrap();
+        assert_eq!(encoded["item"], case["wire"]);
+        let restored: Entry = serde_json::from_value(encoded).unwrap();
+        assert_eq!(restored.item, case["native"]);
+        assert_eq!(restored.seq_start, 7);
+        assert_eq!(project(&source), vec![restored]);
+    }
+}

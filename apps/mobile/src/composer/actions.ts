@@ -261,7 +261,7 @@ export function queueComposerMessage(input: QueueComposerMessageInput): QueueCom
   }
   const item: QueuedComposerMessage = {
     id: generateMessageId(),
-    text: trimmed,
+    text: trimmed.startsWith("/") ? input.text : trimmed,
     attachments: input.attachments,
   };
   input.queue.write((prev) => {

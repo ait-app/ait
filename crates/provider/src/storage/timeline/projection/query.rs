@@ -274,18 +274,19 @@ impl Read<'_> {
     }
 }
 
-// Old cache byte counts predate the process-resource wrapper. Recount only repaired entries;
+// Old caches predate process-resource and native-command wire wrappers. Recount affected entries;
 // ordinary pages keep their indexed byte accounting without serializing every payload again.
 fn compatibility_expansion(entry: &Entry, stored_bytes: usize) -> Result<usize, ErrorCode> {
     let detail = &entry.item["detail"];
-    if detail["type"] == "unknown"
-        && matches!(
-            detail["input"]["type"].as_str(),
-            Some("read" | "edit" | "write")
-        )
-        && detail["input"]["filePath"]
-            .as_str()
-            .is_some_and(|path| path.starts_with("proc://"))
+    if entry.item["type"] == "provider_command"
+        || (detail["type"] == "unknown"
+            && matches!(
+                detail["input"]["type"].as_str(),
+                Some("read" | "edit" | "write")
+            )
+            && detail["input"]["filePath"]
+                .as_str()
+                .is_some_and(|path| path.starts_with("proc://")))
     {
         return serde_json::to_vec(entry)
             .map(|bytes| bytes.len().saturating_sub(stored_bytes))

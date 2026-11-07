@@ -62,6 +62,42 @@ pub(crate) struct ConfigPatch {
 }
 
 impl ConfigPatch {
+    /// Incorporate the provider's grouped model selection without overwriting unrelated updates.
+    /// `proposed` is this patch's input; `resolved` is the adapter's expanded configuration.
+    pub(crate) fn resolved(
+        &self,
+        proposed: &StoredAgentConfig,
+        resolved: &StoredAgentConfig,
+    ) -> Self {
+        let mut patch = self.clone();
+        if proposed.model != resolved.model {
+            patch.model_id = resolved
+                .model
+                .clone()
+                .map_or(NullableSetting::Clear, NullableSetting::Set);
+        }
+        if proposed.thinking_option_id != resolved.thinking_option_id {
+            patch.thinking_option_id = resolved
+                .thinking_option_id
+                .clone()
+                .map_or(NullableSetting::Clear, NullableSetting::Set);
+        }
+        for (key, value) in resolved.feature_values.iter().flatten() {
+            if proposed
+                .feature_values
+                .as_ref()
+                .and_then(|values| values.get(key))
+                != Some(value)
+            {
+                patch
+                    .feature_values
+                    .get_or_insert_default()
+                    .insert(key.clone(), value.clone());
+            }
+        }
+        patch
+    }
+
     /// Apply only present fields to a copy of `current`, preserving unrelated configuration.
     #[must_use]
     pub(crate) fn apply(&self, current: &StoredAgentConfig) -> StoredAgentConfig {

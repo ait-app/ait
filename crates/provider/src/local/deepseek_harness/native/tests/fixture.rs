@@ -4,8 +4,9 @@ use crate::{
 };
 use axum::{
     Json, Router,
+    body::Bytes,
     extract::{
-        State, WebSocketUpgrade,
+        Query, State, WebSocketUpgrade,
         ws::{Message, WebSocket},
     },
     http::{HeaderMap, StatusCode},
@@ -19,7 +20,10 @@ use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
 };
-use tokio::{sync::broadcast, task::JoinHandle};
+use tokio::{
+    sync::{broadcast, oneshot},
+    task::JoinHandle,
+};
 
 #[derive(Clone)]
 struct Host {
@@ -33,6 +37,7 @@ struct Host {
     balance: Arc<Mutex<Value>>,
     replies: Arc<Mutex<BTreeMap<String, Value>>>,
     failure: Arc<Mutex<Option<(String, String)>>>,
+    command_gate: Arc<Mutex<Option<oneshot::Receiver<()>>>>,
 }
 
 pub(super) struct Fixture {
@@ -57,17 +62,20 @@ impl Fixture {
                 json!({"type":"event","event":{"seq":0,"type":"permission/preset","time":1_700_000_000_000_i64,"data":{"preset":"workspace-write"}}}),
             ])),
             frames: broadcast::channel(128).0,
-            sessions: Arc::new(Mutex::new(json!([]))),
+            sessions: Arc::new(Mutex::new(Value::Null)),
             snapshot_fields: Arc::new(Mutex::new(json!({}))),
             balance: Arc::new(Mutex::new(json!({"status":"ready",
                 "value":[{"currency":"CNY","balance":"12.34"}],
                 "bonusWallets":[{"currency":"USD","balance":"0.50"}]}))),
             replies: Arc::default(),
             failure: Arc::default(),
+            command_gate: Arc::default(),
         };
         let app = Router::new()
             .route("/", get(auth))
             .route("/api/remote.mux", get(upgrade))
+            .route("/api/session/uploadFileBinary", post(upload))
+            .route("/api/session.export", get(export))
             .route("/api/{*endpoint}", post(rpc))
             .with_state(host.clone());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -127,6 +135,19 @@ impl Fixture {
     pub(super) fn fail(&self, method: &str, scenario: &str) {
         *self.host.failure.lock().unwrap() = Some((method.into(), scenario.into()));
     }
+    /// Hold the next command response until the test has observed native admission.
+    pub(super) fn hold_command(&self) -> oneshot::Sender<()> {
+        let (release, gate) = oneshot::channel();
+        assert!(
+            self.host
+                .command_gate
+                .lock()
+                .unwrap()
+                .replace(gate)
+                .is_none()
+        );
+        release
+    }
     pub(super) fn history(&self, seq: u64, kind: &str, data: Value) {
         let mut frame = json!({"type":"item","streamId":"history","value":{"type":"event","event":{"seq":seq,"type":kind,"time":1_700_000_000_000_u64+seq}}});
         frame["value"]["event"]["data"] = data;
@@ -172,6 +193,90 @@ async fn auth() -> impl IntoResponse {
         ],
     )
 }
+
+async fn upload(
+    State(host): State<Host>,
+    headers: HeaderMap,
+    Query(query): Query<BTreeMap<String, String>>,
+    bytes: Bytes,
+) -> Response {
+    if headers.get("cookie").and_then(|value| value.to_str().ok()) != Some("dsh=fixture")
+        || headers
+            .get("content-type")
+            .and_then(|value| value.to_str().ok())
+            != Some("application/octet-stream")
+    {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    host.requests
+        .lock()
+        .unwrap()
+        .push(json!({"method":"file_upload","payload":{"args":{
+        "sessionId":query.get("sessionId"),"name":query.get("name"),"bytes":bytes.to_vec()}}}));
+    let failure = host.failure.lock().unwrap().clone();
+    if let Some((method, scenario)) = failure
+        && method == "file_upload"
+    {
+        return match scenario.as_str() {
+            "500" => (StatusCode::INTERNAL_SERVER_ERROR, "fixture-secret").into_response(),
+            "malformed" => "fixture-secret".into_response(),
+            "large" => "x".repeat(2 * 1024 * 1024 + 1).into_response(),
+            "rejected" => Json(json!({"ok":false,"error":{"code":"session/attachment-invalid"}}))
+                .into_response(),
+            _ => panic!("unknown upload failure"),
+        };
+    }
+    let value = host
+        .replies
+        .lock()
+        .unwrap()
+        .get("file_upload")
+        .cloned()
+        .unwrap_or_else(|| {
+            json!({"receiptId":"native-receipt","file":{"attachmentId":"sha256:fixture",
+            "name":query.get("name"),"bytes":bytes.len()}})
+        });
+    Json(json!({"ok":true,"value":value})).into_response()
+}
+
+async fn export(
+    State(host): State<Host>,
+    headers: HeaderMap,
+    Query(query): Query<BTreeMap<String, String>>,
+) -> Response {
+    if headers.get("cookie").and_then(|value| value.to_str().ok()) != Some("dsh=fixture") {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    host.requests
+        .lock()
+        .unwrap()
+        .push(json!({"method":"session_export","payload":{"args":query}}));
+    let failure = host.failure.lock().unwrap().clone();
+    if let Some((method, scenario)) = failure
+        && method == "session_export"
+    {
+        return match scenario.as_str() {
+            "500" => (StatusCode::INTERNAL_SERVER_ERROR, "fixture-secret").into_response(),
+            "html" => "<html>fixture-secret</html>".into_response(),
+            "truncated" => (
+                [("content-type", "application/zip")],
+                &super::archive::ARCHIVE[..40],
+            )
+                .into_response(),
+            "large" => Response::builder()
+                .header("content-type", "application/zip")
+                .header("content-length", (1024_u64 * 1024 * 1024 + 1).to_string())
+                .body(axum::body::Body::empty())
+                .unwrap(),
+            _ => panic!("unknown export failure"),
+        };
+    }
+    (
+        [("content-type", "application/zip")],
+        super::archive::ARCHIVE,
+    )
+        .into_response()
+}
 async fn upgrade(State(host): State<Host>, headers: HeaderMap, ws: WebSocketUpgrade) -> Response {
     if headers.get("cookie").and_then(|value| value.to_str().ok()) != Some("dsh=fixture") {
         return StatusCode::UNAUTHORIZED.into_response();
@@ -187,6 +292,8 @@ async fn stream(socket: WebSocket, host: Host) {
                 let Some(Ok(Message::Text(text)))=received else { break; };
                 let request:Value=serde_json::from_str(&text).unwrap();
                 if request["type"] == "cancel" { continue; }
+                host.requests.lock().unwrap().push(json!({
+                    "method":request["endpoint"],"payload":request["payload"]}));
                 let value=match request["endpoint"].as_str() {
                     Some("$events")=>json!({"type":"ready","clientId":"client"}),
                     Some("session/follow")=>snapshot(&host),
@@ -211,6 +318,14 @@ async fn rpc(State(host): State<Host>, headers: HeaderMap, Json(request): Json<V
         return StatusCode::UNAUTHORIZED.into_response();
     }
     host.requests.lock().unwrap().push(request.clone());
+    let command_gate = if request["method"] == "commands/execute" {
+        host.command_gate.lock().unwrap().take()
+    } else {
+        None
+    };
+    if let Some(gate) = command_gate {
+        let _ = gate.await;
+    }
     let failure = host.failure.lock().unwrap().clone();
     if let Some((method, scenario)) = failure
         && request["method"] == method
@@ -249,14 +364,20 @@ async fn rpc(State(host): State<Host>, headers: HeaderMap, Json(request): Json<V
         Some("permissionPresets/catalog") => {
             json!({"options":[{"value":"read-only","name":"Read only"},{"value":"workspace-write","name":"Workspace write"},{"value":"custom-policy","name":"Custom policy"}]})
         }
-        Some("session/list") => json!({"items":*host.sessions.lock().unwrap()}),
+        Some("session/list") => session_list(&host),
+        Some("session/projections") => {
+            let snapshot = snapshot(&host);
+            json!({"kind":"sequenced","asOfSeq":snapshot["cursor"],
+                "values":snapshot["projections"]["values"]})
+        }
         Some("session/modelCatalog") => {
             json!({"default":{"provider":"local","model":"test"},"groups":[{"id":"local","name":"Local","models":[{"id":"test","name":"Test","reasoning":{"defaultEffort":"low","efforts":[{"id":"low","name":"Low"},{"id":"high","name":"High"}]}}]}]})
         }
         Some("session/page") => {
-            let before = request["payload"]["args"]["request"]["beforeSeq"]
-                .as_u64()
-                .unwrap();
+            let args = &request["payload"]["args"]["request"];
+            let before = args["beforeSeq"].as_u64().unwrap_or_else(|| {
+                u64::try_from(args["throughSeq"].as_i64().unwrap() + 1).unwrap()
+            });
             page(&host, before)
         }
         Some("session/create") => {
@@ -273,7 +394,8 @@ async fn rpc(State(host): State<Host>, headers: HeaderMap, Json(request): Json<V
             model.as_object_mut().unwrap().remove("sessionId");
             json!({"selected":model})
         }
-        Some("commands/execute") => json!({"result":{"kind":"success"}}),
+        Some("commands/list") => json!([]),
+        Some("commands/execute") => json!({"commandId":"command-1","result":{"kind":"success"}}),
         Some("session/prompt" | "session/cancel") => json!({"accepted":true}),
         // DSH returns JavaScript undefined, so JSON serialization omits `value`.
         Some("$events/result") => {
@@ -303,6 +425,18 @@ pub(super) async fn next(session: &mut dyn AgentSession) -> AgentTurnEvent {
     .expect("native event should arrive")
 }
 
+fn session_list(host: &Host) -> Value {
+    let sessions = host.sessions.lock().unwrap().clone();
+    if !sessions.is_null() {
+        return json!({"items":sessions});
+    }
+    let snapshot = snapshot(host);
+    json!({"items":[{"sessionId":snapshot["header"]["id"],
+        "cwd":snapshot["header"]["cwd"],"origin":snapshot["header"]["origin"],
+        "parentSessionId":snapshot["header"]["parentSession"],
+        "updatedAt":1_700_000_000_000_i64,"blank":false}]})
+}
+
 fn page(host: &Host, before: u64) -> Value {
     let records = host.records.lock().unwrap();
     let end = records
@@ -318,8 +452,8 @@ fn snapshot(host: &Host) -> Value {
         .lock()
         .unwrap()
         .last()
-        .map_or(0, |r| r["event"]["seq"].as_u64().unwrap());
-    let page = page(host, cut + 1);
+        .map_or(-1, |r| r["event"]["seq"].as_i64().unwrap());
+    let page = page(host, u64::try_from(cut + 1).unwrap());
     let mut snapshot = json!({"type":"snapshot","header":{"id":"session","cwd":host.cwd,"createdAt":1_700_000_000_000_i64},"cursor":cut,"records":page["records"],"hasMore":page["hasMore"],"projections":{"values":{"permissions":{"options":[{"value":"read-only","name":"Read only"},{"value":"workspace-write","name":"Workspace write"},{"value":"danger-full-access","name":"Full access"}],"currentValue":"workspace-write"},"modelSelection":{"next":null}}}});
     snapshot.as_object_mut().unwrap().extend(
         host.snapshot_fields

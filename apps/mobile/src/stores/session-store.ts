@@ -35,6 +35,7 @@ import type {
 } from "@ait/protocol/agent-types";
 import type {
   ServerInfoStatusPayload,
+  ProviderUiState,
   ProjectPlacementPayload,
   ServerCapabilities,
   WorkspaceDescriptorPayload,
@@ -87,6 +88,7 @@ export interface Agent {
   pendingPermissions: AgentPermissionRequest[];
   persistence: AgentPersistenceHandle | null;
   runtimeInfo?: AgentRuntimeInfo;
+  providerUi?: ProviderUiState | null;
   lastUsage?: AgentUsage;
   lastError?: string | null;
   title: string | null;

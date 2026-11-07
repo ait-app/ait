@@ -3,7 +3,7 @@
 pub(crate) mod auto_archive;
 mod confinement;
 mod controls;
-mod delivery;
+pub(crate) mod delivery;
 mod execution;
 mod generated_titles;
 mod mcp;
@@ -171,6 +171,7 @@ pub struct AgentManager {
     workspaces: Option<Arc<dyn model::workspace::registry::WorkspaceRegistry>>,
     auto_archives: auto_archive::AutoArchives,
     usage_cache: usage::UsageCache,
+    presets: Option<super::presets::PresetService>,
 }
 
 impl AgentManager {
@@ -203,7 +204,17 @@ impl AgentManager {
             workspaces: None,
             auto_archives: auto_archive::AutoArchives::default(),
             usage_cache: usage::UsageCache::default(),
+            presets: None,
         }
+    }
+
+    /// Install the unified preset editor, which routes each provider to its owning store.
+    #[must_use]
+    pub fn with_presets(mut self, presets: super::presets::PresetService) -> Self {
+        // The draft feature path answers from the same catalog, so it must see the same store.
+        self.catalog.set_presets(presets.clone());
+        self.presets = Some(presets);
+        self
     }
 
     /// Install the host's private MCP connection policy before spawning execution lanes.
@@ -483,12 +494,28 @@ impl AgentManager {
         ) {
             return Err(AgentManagerError::InvalidRequest);
         }
-        let mut effective = patch.apply(
+        let proposed = patch.apply(
             record
                 .config
                 .as_ref()
                 .unwrap_or(&StoredAgentConfig::default()),
         );
+        let client = self
+            .clients
+            .get(&record.provider)
+            .ok_or_else(|| AgentManagerError::ProviderUnavailable(record.provider.clone()))?;
+        let spec = AgentSessionSpec {
+            confinement: None,
+            provider: record.provider.clone(),
+            cwd: record.cwd.clone(),
+            config: proposed.clone(),
+        };
+        let resolved = client
+            .resolve_selection(&spec)
+            .await
+            .map_err(|_| AgentManagerError::InvalidRequest)?;
+        let patch = patch.resolved(&proposed, &resolved);
+        let mut effective = resolved;
         if let Some(agent) = self.live.get(agent_id) {
             if let Some(binding) = &agent.mcp {
                 binding.apply(&mut effective);
@@ -577,6 +604,10 @@ impl AgentManager {
         }
         let permit = self.reserve_session()?;
         let client = self.available_client(&spec.provider).await?;
+        let spec = AgentSessionSpec {
+            config: client.resolve_selection(spec).await.map_err(map_session)?,
+            ..spec.clone()
+        };
         let (launch, binding) = self.prepare_mcp(
             &McpSubject {
                 agent_id,
@@ -584,7 +615,7 @@ impl AgentManager {
                 owner: registration.owner.as_ref(),
                 labels: &registration.labels,
             },
-            spec,
+            &spec,
             AgentResumePurpose::Interactive,
         )?;
         let launch = self.confine(launch, registration.workspace_id.as_deref())?;

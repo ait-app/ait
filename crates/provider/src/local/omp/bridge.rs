@@ -5,6 +5,7 @@ mod engine;
 mod mapping;
 mod protocol;
 
+use crate::ports::agent_session::AgentSessionFuture;
 use std::borrow::Cow;
 use std::collections::VecDeque;
 
@@ -154,6 +155,26 @@ impl Session {
 
 #[async_trait::async_trait]
 impl AgentSession for Session {
+    fn handles_out_of_band(&self, text: &str) -> Option<bool> {
+        self.engine
+            .native()
+            .and_then(|native| native.handles_out_of_band(text))
+    }
+    async fn out_of_band(&mut self, prompt: &AgentPrompt) -> Result<(), AgentSessionError> {
+        self.engine.native_mut()?.out_of_band(prompt).await
+    }
+    fn take_command_completion(&mut self) -> Option<AgentSessionFuture<'static, ()>> {
+        self.engine.native_mut().ok()?.take_command_completion()
+    }
+    async fn complete_commands(
+        &mut self,
+        input: &crate::protocol::commands::CompletionInput,
+    ) -> Result<crate::protocol::commands::ValidatedCompletion, AgentSessionError> {
+        self.engine.native_mut()?.complete_commands(input).await
+    }
+    fn commands(&self) -> Option<&[Value]> {
+        self.engine.native().and_then(AgentSession::commands)
+    }
     fn provider(&self) -> &'static str {
         PROVIDER
     }
@@ -162,8 +183,42 @@ impl AgentSession for Session {
             .native()
             .and_then(|session| session.control_settings(config))
     }
+    fn ui_state(&self) -> Option<Value> {
+        self.engine.native().and_then(AgentSession::ui_state)
+    }
+    fn observation_committed(&mut self) {
+        if self.events.is_empty()
+            && let Ok(native) = self.engine.native_mut()
+        {
+            native.observation_committed();
+        }
+    }
+    async fn begin_action(
+        &mut self,
+        action: &str,
+        arguments: &Value,
+    ) -> Result<AgentSessionFuture<'static, Value>, AgentSessionError> {
+        self.engine
+            .native_mut()?
+            .begin_action(action, arguments)
+            .await
+    }
     fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
-        super::config::validate(config)
+        self.engine
+            .native()
+            .ok_or(AgentSessionError::Unavailable)?
+            .validate_config_update(config)
+    }
+    async fn begin_configured_action(
+        &mut self,
+        action: &str,
+        arguments: &Value,
+        config: &StoredAgentConfig,
+    ) -> Result<AgentSessionFuture<'static, Value>, AgentSessionError> {
+        self.engine
+            .native_mut()?
+            .begin_configured_action(action, arguments, config)
+            .await
     }
     fn failure_diagnostic(&self) -> Option<Diagnostic> {
         self.engine
@@ -261,6 +316,9 @@ impl AgentSession for Session {
             self.consume(&message)?;
         }
         Ok(self.events.pop_front())
+    }
+    async fn service_realtime(&mut self) -> Result<(), AgentSessionError> {
+        self.engine.native_mut()?.service_realtime().await
     }
     async fn close(&mut self) -> Result<(), AgentSessionError> {
         self.request("session/close", json!({"sessionId":self.id}))

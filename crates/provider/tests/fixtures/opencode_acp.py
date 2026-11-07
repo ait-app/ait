@@ -52,6 +52,7 @@ if scenario == "custom-mode":
     mode = "review"
 active = None
 catalog_changed = False
+command_catalog_empty = False
 
 
 def session_path(identity):
@@ -261,6 +262,10 @@ for line in sys.stdin:
             for row in state()["history"]:
                 content(row)
         reply(identity, {"sessionId": session_id, "configOptions": options()})
+        if scenario == "command-catalog":
+            update({"sessionUpdate":"available_commands_update", "availableCommands":[] if command_catalog_empty else [
+                {"name":"native:review", "description":"Native namespaced command", "input":{"hint":"<topic>"}},
+                {"name":"compact", "description":"Native compaction"}]})
         if scenario == "subagents" and method == "session/load":
             update({"sessionUpdate":"available_commands_update","availableCommands":[]})
         if scenario == "subagents-detach" and method == "session/load" and (root / "prompt-owner").exists() \
@@ -307,6 +312,9 @@ for line in sys.stdin:
         session_id = params["sessionId"]
         state_path = session_path(session_id)
         active = identity
+        if scenario == "command-catalog":
+            command_catalog_empty = True
+            update({"sessionUpdate":"available_commands_update", "availableCommands":[]})
         if params["prompt"] == [{"type": "text", "text": "/compact"}]:
             value = state()
             compact_id = "compact-" + str(value["seq"])

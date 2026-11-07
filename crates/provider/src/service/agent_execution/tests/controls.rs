@@ -866,3 +866,35 @@ fn assert_has_review(commands: &Value) {
             .any(|command| command["name"] == "review")
     );
 }
+
+#[tokio::test]
+async fn completion_rejects_invalid_input_and_reports_unsupported_without_prompt_submission() {
+    let fixture = Fixture::new();
+    let (execution, _) = worker(&fixture);
+    let created = create(&execution, &fixture).await;
+    let id = created["agentId"].as_str().unwrap();
+    let completion = execution
+        .execute(
+            "agent.commands.complete.request",
+            json!({
+                "agentId":id, "text":"/review ", "cursor":8
+            }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(completion["supported"], false);
+    assert_eq!(completion["items"], json!([]));
+    assert_eq!(
+        execution
+            .execute(
+                "agent.commands.complete.request",
+                json!({
+                    "agentId":id, "text":"/review ", "cursor":99
+                })
+            )
+            .await
+            .unwrap_err(),
+        ErrorCode::InvalidMessage
+    );
+    execution.shutdown().await.unwrap();
+}

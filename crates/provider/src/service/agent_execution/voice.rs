@@ -58,9 +58,10 @@ pub(super) async fn dispatch(
         Reply,
         Option<CancellationToken>,
         Option<model::realtime::Endpoint>,
+        tokio::sync::OwnedSemaphorePermit,
     ),
 ) {
-    let (reply, cancel, realtime) = context;
+    let (reply, cancel, realtime, permit) = context;
     let abandoned = || {
         cancel.as_ref().is_some_and(CancellationToken::is_cancelled)
             || cancel.is_some() && reply.is_closed()
@@ -78,6 +79,14 @@ pub(super) async fn dispatch(
     }
     let _ = state.manager.reconcile().await;
     let _ = state.publish();
+    if let Some(pending) = state.pending_response.take() {
+        state.pending_responses.spawn(async move {
+            let _permit = permit;
+            let _ = reply.send(pending.await);
+        });
+        return;
+    }
+    let _permit = permit;
     if let Err(result) = reply.send(result)
         && cancel.is_some()
         && !cancelled

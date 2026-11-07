@@ -5,11 +5,16 @@
 
 use std::borrow::Cow;
 use std::fmt::Debug;
+use std::future::Future;
+use std::pin::Pin;
 use std::time::Duration;
 
 use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 
 use crate::service::bot_execution::{BotSessionSupport, InstructionDelivery};
+/// A sendable provider operation or detached native receipt.
+pub(crate) type AgentSessionFuture<'a, T> =
+    Pin<Box<dyn Future<Output = Result<T, AgentSessionError>> + Send + 'a>>;
 
 /// Provider failure safe to expose at the application boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -79,6 +84,9 @@ pub(crate) enum AgentTurnEvent {
     Usage(crate::protocol::usage::AgentUsage),
     /// Native initialization resolved the session's actual model or runtime settings.
     RuntimeInfo(StoredAgentRuntimeInfo),
+    /// Native commands changed acknowledged feature selections. Persist these values so later
+    /// prompts and toolbar snapshots retain the native choice, after adapter validation.
+    FeatureValuesUpdated(std::collections::BTreeMap<String, serde_json::Value>),
     /// The native provider drained its turn successfully.
     Completed(Option<String>),
     /// The native provider acknowledged interruption.
@@ -91,6 +99,34 @@ pub(crate) enum AgentTurnEvent {
 /// Shared account inspection must produce sendable futures, so sessions are also `Sync`.
 #[async_trait::async_trait]
 pub(crate) trait AgentSession: Debug + Send + Sync {
+    /// Classify controls using this live owner's current catalog before input scheduling.
+    /// `Some` is authoritative, including a normal command owned by an extension (`false`).
+    /// `None` retains the client-level declaration for adapters without live classification.
+    fn handles_out_of_band(&self, _text: &str) -> Option<bool> {
+        None
+    }
+    /// Complete editor input without admitting a prompt or executing a command.
+    /// Returns unsupported for adapters without native completion; native errors remain errors.
+    async fn complete_commands(
+        &mut self,
+        _input: &crate::protocol::commands::CompletionInput,
+    ) -> Result<crate::protocol::commands::ValidatedCompletion, AgentSessionError> {
+        Ok(crate::protocol::commands::ValidatedCompletion::default())
+    }
+    /// Latest command catalog from this native session, including aliases and argument metadata.
+    /// `None` asks discovery to use the provider client; an empty slice is authoritative.
+    fn commands(&self) -> Option<&[serde_json::Value]> {
+        None
+    }
+
+    /// Refresh the receiving session's native directory without submitting input or creating a writer.
+    /// Defaults to the last observed catalog; native lookup and validation failures are propagated.
+    async fn refresh_commands(
+        &mut self,
+    ) -> Result<Option<Vec<serde_json::Value>>, AgentSessionError> {
+        Ok(self.commands().map(<[serde_json::Value]>::to_vec))
+    }
+
     /// Attach a connection-owned native audio stream. Unsupported adapters reject it.
     async fn start_realtime(
         &mut self,
@@ -126,6 +162,36 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
     /// `config` includes pending user selections; `None` retains client-level controls.
     fn control_settings(&self, _config: &StoredAgentConfig) -> Option<serde_json::Value> {
         None
+    }
+
+    /// Return transient native UI state for connected clients; never persist it as history.
+    fn ui_state(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    /// Acknowledge that drained observations and the current native handle committed durably.
+    fn observation_committed(&mut self) {}
+
+    /// Begin an advertised semantic action without holding the session while it asks for input.
+    /// Returns a detached completion receipt, or rejects unsupported actions and arguments.
+    async fn begin_action(
+        &mut self,
+        _action: &str,
+        _arguments: &serde_json::Value,
+    ) -> Result<AgentSessionFuture<'static, serde_json::Value>, AgentSessionError> {
+        Err(AgentSessionError::Rejected)
+    }
+
+    /// Begin an action using the latest saved next-turn selections rather than an old owner copy.
+    /// `config` comes from the registry; unsupported actions retain the ordinary owner path.
+    /// Returns a detached receipt or native validation/availability errors.
+    async fn begin_configured_action(
+        &mut self,
+        action: &str,
+        arguments: &serde_json::Value,
+        _config: &StoredAgentConfig,
+    ) -> Result<AgentSessionFuture<'static, serde_json::Value>, AgentSessionError> {
+        self.begin_action(action, arguments).await
     }
 
     /// Validate a proposed configuration against this session's native constraints.
@@ -177,6 +243,13 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
         _prompt: &crate::protocol::prompt::AgentPrompt,
     ) -> Result<(), AgentSessionError> {
         Err(AgentSessionError::Rejected)
+    }
+
+    /// Take final admission for an accepted control whose attachments are still being checked.
+    /// The owned future permits continued session polling and permission responses while waiting.
+    /// Its error distinguishes native rejection from an uncertain transport outcome.
+    fn take_command_completion(&mut self) -> Option<AgentSessionFuture<'static, ()>> {
+        None
     }
     /// Current verified native descendants observed by this live session.
     fn subagents(&self) -> Vec<super::controls::NativeSubagent> {
@@ -309,6 +382,21 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
 /// Factory and availability boundary for one independent provider adapter.
 #[async_trait::async_trait]
 pub(crate) trait AgentClient: Debug + Send + Sync {
+    /// Complete a draft through isolated native discovery; never creates a foreground session.
+    /// Returns unsupported when the native runtime lacks the completion capability.
+    async fn complete_commands(
+        &self,
+        _spec: &AgentSessionSpec,
+        _input: &crate::protocol::commands::CompletionInput,
+    ) -> Result<crate::protocol::commands::ValidatedCompletion, AgentSessionError> {
+        Ok(crate::protocol::commands::ValidatedCompletion::default())
+    }
+    /// Whether command discovery for registered Agents should read their live session owner.
+    /// Other adapters keep isolated discovery so catalog reads cannot block their native turn.
+    fn supports_session_commands(&self) -> bool {
+        false
+    }
+
     /// Whether this adapter accepts a session-private HTTP MCP connection.
     fn supports_agent_mcp(&self) -> bool {
         false
@@ -337,6 +425,12 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
     /// Return the total catalog budget, including queueing and availability checks.
     fn discovery_timeout(&self) -> Duration {
         Duration::from_secs(30)
+    }
+
+    /// Retain successful discovery for this long before an implicit catalog read may refresh it.
+    /// Access-driven adapters return `Duration::MAX`; explicit refresh still probes native state.
+    fn discovery_cache_ttl(&self) -> Duration {
+        Duration::from_mins(5)
     }
 
     /// Whether this adapter implements native session listing and import inspection.
@@ -410,6 +504,63 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
         serde_json::json!({"availableModes":[],"features":[],"capabilities":{}})
     }
 
+    /// Whether this adapter owns a preset store of its own.
+    ///
+    /// Declared statically so a caller can decide where presets come from without probing the
+    /// native process: the empty state and the draft feature list both need that answer on a
+    /// path that must stay cheap. The default reports no native store.
+    fn owns_native_presets(&self) -> bool {
+        false
+    }
+
+    /// Report this provider's preset store and the operations it supports.
+    ///
+    /// Ait-managed presets are served by the caller, so adapters answer only for a native store.
+    /// The default reports no native store, which leaves the unified editor on the Ait backend.
+    async fn preset_descriptor(&self, _cwd: &str) -> super::preset::PresetDescriptor {
+        super::preset::PresetDescriptor::managed(super::preset::PresetBackend::Ait)
+    }
+
+    /// List this provider's **native** presets, when the harness owns them.
+    ///
+    /// Adapters without a native store return an empty list; the caller then reads its own.
+    /// # Errors
+    /// Returns a client-readable reason when the native store cannot be read.
+    async fn native_presets(
+        &self,
+        _cwd: &str,
+    ) -> Result<Vec<super::preset::Preset>, super::preset::PresetError> {
+        Ok(Vec::new())
+    }
+
+    /// Create or replace one native preset.
+    ///
+    /// # Errors
+    /// Returns a client-readable reason; nothing is written on rejection.
+    async fn save_native_preset(
+        &self,
+        _cwd: &str,
+        _preset: &super::preset::Preset,
+    ) -> Result<(), super::preset::PresetError> {
+        Err(super::preset::PresetError::Unavailable(
+            "This provider has no native preset store".to_owned(),
+        ))
+    }
+
+    /// Remove one native preset.
+    ///
+    /// # Errors
+    /// Returns a client-readable reason; nothing is written on rejection.
+    async fn delete_native_preset(
+        &self,
+        _cwd: &str,
+        _name: &str,
+    ) -> Result<(), super::preset::PresetError> {
+        Err(super::preset::PresetError::Unavailable(
+            "This provider has no native preset store".to_owned(),
+        ))
+    }
+
     /// Inspect the proposed configuration's features without registering a durable Agent.
     ///
     /// `spec` supplies a normalized directory and draft settings. Adapters may perform bounded
@@ -431,6 +582,16 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
     /// Returns unsupported settings or unavailable native discovery.
     async fn validate_selection(&self, spec: &AgentSessionSpec) -> Result<(), AgentSessionError> {
         self.validate_config(&spec.config)
+    }
+
+    /// Expand provider-owned grouped selections before validation and durable storage.
+    /// `spec` contains the proposed settings; unrelated fields must remain unchanged.
+    /// Returns malformed or unavailable selections without changing native configuration.
+    async fn resolve_selection(
+        &self,
+        spec: &AgentSessionSpec,
+    ) -> Result<StoredAgentConfig, AgentSessionError> {
+        Ok(spec.config.clone())
     }
 
     /// Inspect launch and authentication availability without exposing credentials.

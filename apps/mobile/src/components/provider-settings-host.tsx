@@ -8,6 +8,7 @@ export function ProviderSettingsHost() {
   const provider = useProviderSettingsStore((state) => state.provider);
   const visible = useProviderSettingsStore((state) => state.visible);
   const overlayParentLayer = useProviderSettingsStore((state) => state.overlayParentLayer);
+  const cwd = useProviderSettingsStore((state) => state.cwd);
   const close = useProviderSettingsStore((state) => state.close);
 
   const handleClose = useCallback(() => {
@@ -21,9 +22,10 @@ export function ProviderSettingsHost() {
   return (
     <OverlayLayerProvider layer={overlayParentLayer}>
       <ProviderDiagnosticSheet
-        key={`${serverId}:${provider}`}
+        key={`${serverId}:${provider}:${cwd ?? ""}`}
         provider={provider}
         serverId={serverId}
+        cwd={cwd ?? undefined}
         visible={visible}
         onClose={handleClose}
       />

@@ -5,12 +5,18 @@ use super::*;
 use crate::ports::agent_session::AgentTurnEvent;
 use crate::protocol::prompt::{AgentPrompt, PromptImage};
 
+mod actions;
 mod capabilities;
+mod command_policy;
+mod commands;
 mod diagnostics;
 mod installed;
 mod interactions;
+mod model_presets;
+mod model_roles;
 mod real;
 mod settlement;
+mod side_questions;
 
 #[tokio::test]
 async fn a_previous_settlement_never_finishes_the_next_prompt_or_its_background_work() {

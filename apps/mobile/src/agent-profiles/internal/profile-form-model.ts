@@ -9,6 +9,7 @@ import type { AgentProfile } from "@ait/protocol/messages";
 import { formatAgentModeLabel, formatThinkingOptionLabel } from "@/agent-controls/labels";
 import { applyFeatureValues, pruneFeatureValues } from "@/hooks/feature-preferences";
 import { filterSelectableModels } from "@/provider-selection/model-catalog";
+import { modelPresetConfiguration, withModelPresetSelection } from "@/agent-controls/model-presets";
 
 /**
  * The persisted profile minus the id; the list owns identity.
@@ -440,9 +441,19 @@ export function openAgentProfileForm(snapshot: AgentProfileFormSnapshot): AgentP
     const featureRequestKey = buildFeatureRequestKey(featureRequest);
     const featuresAreCurrent =
       featureRequestKey !== null && featureRequestKey === resolvedFeatureKey;
-    const features = featuresAreCurrent
-      ? applyFeatureValues(resolvedFeatures, next.featureValues)
-      : [];
+    // Whether a preset control is cached decides reuse, not which provider supplied it.
+    const hasCachedPresets = resolvedFeatures.some((feature) => feature.id === "modelPreset");
+    const appliedFeatures =
+      featuresAreCurrent || hasCachedPresets
+        ? applyFeatureValues(resolvedFeatures, next.featureValues)
+        : [];
+    const features = hasCachedPresets
+      ? withModelPresetSelection(appliedFeatures, {
+          modelId: next.modelId,
+          thinkingOptionId: next.thinkingOptionId,
+          featureValues: next.featureValues,
+        })
+      : appliedFeatures;
     const featureResolution = resolveFeatureStatus(featureRequestKey, featuresAreCurrent);
 
     const withOptions: AgentProfileFormState = {
@@ -599,10 +610,27 @@ export function openAgentProfileForm(snapshot: AgentProfileFormSnapshot): AgentP
     setThinking: (thinkingOptionId, display) =>
       publish((current) => ({ ...current, thinkingOptionId, thinkingDisplay: display })),
     setFeatureValue: (featureId, value) =>
-      publish((current) => ({
-        ...current,
-        featureValues: { ...current.featureValues, [featureId]: value },
-      })),
+      publish((current) => {
+        try {
+          const preset = modelPresetConfiguration(current.features, featureId, value);
+          return preset
+            ? {
+                ...current,
+                modelId: preset.modelId ?? "",
+                modelDisplay: null,
+                thinkingOptionId: preset.thinkingOptionId ?? "",
+                thinkingDisplay: null,
+                featureValues: { ...current.featureValues, ...preset.featureValues },
+                submitError: null,
+              }
+            : { ...current, featureValues: { ...current.featureValues, [featureId]: value } };
+        } catch (error) {
+          return {
+            ...current,
+            submitError: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }),
     setSubmitting: (value) => publish((current) => ({ ...current, isSubmitting: value })),
     setSubmitError: (value) => publish((current) => ({ ...current, submitError: value })),
   };

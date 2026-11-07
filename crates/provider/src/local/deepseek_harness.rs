@@ -30,13 +30,15 @@ pub(crate) struct DeepSeekHarnessClient {
     interactive: bool,
     native_profile: std::ffi::OsString,
     deadline: Duration,
+    startup_deadline: Duration,
     environment: AgentEnvironment,
     images: super::images::ImageStore,
+    exports: native::exports::Store,
 }
 
 impl DeepSeekHarnessClient {
     /// Launch the native interactive Web Host without a shell, inheriting Harness configuration.
-    /// Control operations have a thirty-second deadline; prompts have no duration limit.
+    /// Native startup allows sixty seconds, controls thirty; prompts have no duration limit.
     #[must_use]
     pub(crate) fn new(program: PathBuf) -> Self {
         Self {
@@ -45,8 +47,10 @@ impl DeepSeekHarnessClient {
             interactive: true,
             native_profile: "web".into(),
             deadline: Duration::from_secs(30),
+            startup_deadline: Duration::from_secs(60),
             environment: AgentEnvironment::default(),
             images: super::images::ImageStore::default(),
+            exports: native::exports::Store::default(),
         }
     }
 
@@ -70,13 +74,14 @@ impl DeepSeekHarnessClient {
     /// Materialize native image output in `directory` for live display and saved timelines.
     #[must_use]
     pub(crate) fn with_image_directory(mut self, directory: PathBuf) -> Self {
+        self.exports = native::exports::Store::new(directory.join("dsh-exports"));
         self.images = super::images::ImageStore::new(directory);
         self
     }
 
     async fn probe(&self, spec: &AgentSessionSpec) -> Result<Details, AgentSessionError> {
         if self.interactive {
-            let mut session = native::session::open(self, spec, None).await?;
+            let mut session = native::session::preview(self, spec).await?;
             let details = session.details();
             let closed = session.close().await;
             let details = details?;
@@ -94,6 +99,37 @@ impl DeepSeekHarnessClient {
 
 #[async_trait::async_trait]
 impl AgentClient for DeepSeekHarnessClient {
+    fn discovery_timeout(&self) -> Duration {
+        let startup = if self.interactive {
+            self.startup_deadline
+        } else {
+            // Legacy ACP initializes the process and then opens a native session.
+            self.startup_deadline.saturating_mul(2)
+        };
+        startup.saturating_add(self.deadline.saturating_mul(2))
+    }
+
+    async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {
+        if !self.interactive {
+            return Err(AgentSessionError::Unavailable);
+        }
+        let mut session = native::session::preview(self, spec).await?;
+        let commands = session
+            .commands()
+            .map(<[Value]>::to_vec)
+            .ok_or(AgentSessionError::Unavailable);
+        let closed = session.close().await;
+        closed?;
+        commands
+    }
+
+    fn supports_session_commands(&self) -> bool {
+        self.interactive
+    }
+
+    fn handles_out_of_band(&self, text: &str) -> bool {
+        self.interactive && native::commands::name(text).is_some()
+    }
     fn supports_agent_mcp(&self) -> bool {
         !self.interactive
     }

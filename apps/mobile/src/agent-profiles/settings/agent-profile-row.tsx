@@ -79,7 +79,7 @@ export function AgentProfileRow({
         </View>
         <View style={settingsStyles.rowContent}>
           <View style={styles.titleLine}>
-            <Text style={settingsStyles.rowTitle} numberOfLines={1}>
+            <Text style={[settingsStyles.rowTitle, styles.name]} numberOfLines={1}>
               {profile.name}
             </Text>
             <Text style={styles.summary} numberOfLines={1}>
@@ -164,6 +164,10 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "baseline",
     gap: theme.spacing[2],
     minWidth: 0,
+  },
+  /** Keep the profile name intact; the summary gives up width first. */
+  name: {
+    flexShrink: 0,
   },
   summary: {
     flexShrink: 1,

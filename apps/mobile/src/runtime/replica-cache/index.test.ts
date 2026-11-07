@@ -269,6 +269,31 @@ function deleteDirectory(cache: ReplicaCache, serverId: string): void {
 }
 
 describe("ReplicaCache", () => {
+  it("excludes native editor drafts and login links from durable replicas", async () => {
+    const storage = new MemoryStorage();
+    const cache = createCache(storage);
+    const baseline = directory();
+    const native = baseline.agents.get("agent-1")!;
+    native.providerUi = {
+      statuses: [],
+      widgets: [],
+      title: null,
+      editor: { id: "editor", text: "private-native-draft" },
+      link: {
+        url: "https://example.com/private-auth",
+        launchUrl: "https://example.com/private-auth",
+        instructions: null,
+      },
+    };
+    cache.replaceDirectoryBaseline(SERVER_ID, baseline);
+    await cache.flush();
+    const stored = JSON.stringify([...storage.rows.values()]);
+    expect(stored).not.toContain("private-native-draft");
+    expect(stored).not.toContain("private-auth");
+    expect(
+      (await createCache(storage).readDirectory(SERVER_ID)).agents.get("agent-1")?.providerUi,
+    ).toBeUndefined();
+  });
   it("rejects pre-baseline-fix checkpoints without discarding cached rows or timelines", async () => {
     const storage = new MemoryStorage();
     const writer = createCache(storage);
@@ -818,6 +843,41 @@ describe("ReplicaCache", () => {
     cache.commitTimeline(SERVER_ID, "agent-1", timeline("New"));
 
     expect((await cache.readTimeline(SERVER_ID, "agent-1"))?.items).toEqual([timelineItem("New")]);
+  });
+
+  it("retains native command cards and structured goal facts after restart", async () => {
+    const storage = new MemoryStorage();
+    const writer = createCache(storage);
+    const item: StreamItem = {
+      kind: "provider_command",
+      id: "provider-command:control",
+      timestamp: new Date("2026-10-31T00:00:00Z"),
+      timelineCursor: { epoch: "epoch", seq: 1 },
+      result: {
+        type: "provider_command",
+        id: "control",
+        command: "goal",
+        status: "success",
+        text: "Native details",
+        goal: {
+          id: "goal",
+          revision: 2,
+          phase: "paused",
+          objective: "Objective",
+          rounds: 1,
+          maxRounds: 256,
+        },
+        actions: [{ id: "resume", command: "/goal resume" }],
+      },
+    };
+    writer.commitTimeline(SERVER_ID, "agent-1", {
+      agentId: "agent-1",
+      items: [item],
+      range: { epoch: "epoch", startSeq: 1, endSeq: 1 },
+      hasOlder: false,
+    });
+    await writer.flush();
+    expect((await createCache(storage).readTimeline(SERVER_ID, "agent-1"))?.items).toEqual([item]);
   });
 
   it("round-trips plugin timeline items", async () => {

@@ -9,6 +9,8 @@ impl ExecutionState {
     /// Clone shared services while allocating no native session or per-Agent thread.
     pub(crate) fn fork(&self, owner: Option<Owner>) -> Self {
         Self {
+            pending_response: None,
+            pending_responses: tokio::task::JoinSet::new(),
             manager: self.manager.fork(owner),
             owners: self.owners.clone(),
             message_observers: BTreeMap::new(),

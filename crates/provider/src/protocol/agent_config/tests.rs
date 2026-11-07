@@ -42,3 +42,30 @@ fn advanced_patch_replaces_or_clears_only_present_configuration() {
     );
     assert_eq!(ConfigPatch::default().apply(&current), current);
 }
+
+#[test]
+fn resolved_selection_keeps_unrelated_changes_and_consumes_the_grouped_request() {
+    let original = StoredAgentConfig {
+        model: Some("old".to_owned()),
+        ..Default::default()
+    };
+    let patch: ConfigPatch =
+        serde_json::from_value(json!({"featureValues":{"modelPreset":"work"}})).unwrap();
+    let proposed = patch.apply(&original);
+    let mut resolved = proposed.clone();
+    resolved.model = Some("new".to_owned());
+    resolved.thinking_option_id = Some("high".to_owned());
+    let values = resolved.feature_values.as_mut().unwrap();
+    values.insert("modelPreset".to_owned(), json!(null));
+    values.insert("modelRole.advisor".to_owned(), json!("test/advisor"));
+    let expanded = patch.resolved(&proposed, &resolved);
+    let concurrent = StoredAgentConfig {
+        system_prompt: Some("later".to_owned()),
+        ..original
+    };
+    let applied = expanded.apply(&concurrent);
+    assert_eq!(applied.model, resolved.model);
+    assert_eq!(applied.thinking_option_id, resolved.thinking_option_id);
+    assert_eq!(applied.system_prompt, concurrent.system_prompt);
+    assert_eq!(applied.feature_values, resolved.feature_values);
+}

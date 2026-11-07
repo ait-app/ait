@@ -302,7 +302,8 @@ jobs:
       - name: Package standalone daemon
         env:
           DAEMON_BIN: ${{ env.STANDALONE_DAEMON_BIN || format('{0}/target/{1}/release/{2}', github.workspace, matrix.rust_target, steps.layout.outputs.binary) }}
-        run: node .tmp/release-tools/scripts/release-assets.mjs daemon "${{ matrix.platform }}" "${RELEASE_TAG#v}" "$DAEMON_BIN" release-assets
+          NATIVE_HOST: ${{ matrix.platform == 'mac' && format('{0}/release/mac-arm64/Ait.app/Contents/Resources/provider-runtimes/omp-native-host/1', steps.layout.outputs.desktop) || format('{0}/release-resources/provider-runtimes/omp-native-host/1', steps.layout.outputs.desktop) }}
+        run: node .tmp/release-tools/scripts/release-assets.mjs daemon "${{ matrix.platform }}" "${RELEASE_TAG#v}" "$DAEMON_BIN" release-assets --runtime "$NATIVE_HOST"
 
       - uses: actions/upload-artifact@v6
         with:

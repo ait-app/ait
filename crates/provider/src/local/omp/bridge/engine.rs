@@ -24,6 +24,7 @@ const METHODS: &[&str] = &[
     "_ait/respond_permission",
     "_omp/rpc",
     "_omp/respond",
+    "_omp/commands/complete",
 ];
 
 #[derive(Debug, Default)]
@@ -49,6 +50,7 @@ pub(super) struct Engine {
     mapping: mapping::Projection,
     outgoing: Vec<Value>,
     closed: bool,
+    command_version: u64,
 }
 
 impl Engine {
@@ -68,6 +70,7 @@ impl Engine {
             mapping: mapping::Projection::default(),
             outgoing: Vec::new(),
             closed: false,
+            command_version: 0,
         }
     }
 
@@ -76,7 +79,7 @@ impl Engine {
         self.native.as_ref()
     }
 
-    fn native_mut(&mut self) -> Result<&mut session::Session, AgentSessionError> {
+    pub(super) fn native_mut(&mut self) -> Result<&mut session::Session, AgentSessionError> {
         self.native.as_mut().ok_or(AgentSessionError::Rejected)
     }
 
@@ -160,6 +163,7 @@ impl Engine {
                 "agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":true,"embeddedContext":true},
                     "sessionCapabilities":{"resume":{},"close":{}}},
                 "authMethods":[],"_meta":{"ait":{"version":1},"ompNative":{"version":1},
+                    "ompCommandCompletion":{"version":1},
                     "steering":{"supported":true},"backend":{"name":"omp","protocol":"rpc"}}}),
         ))
     }
@@ -200,6 +204,7 @@ impl Engine {
                 Ok(Some(json!({})))
             }
             "_session/steering" => self.steer(params).await,
+            "_omp/commands/complete" => self.complete_commands(params).await.map(Some),
             "session/set_config_option" | "session/set_mode" => {
                 self.set_config(method, params).await
             }
@@ -260,6 +265,14 @@ impl Engine {
             }
             _ => Err(AgentSessionError::Rejected),
         }
+    }
+
+    async fn complete_commands(&mut self, params: &Value) -> Result<Value, AgentSessionError> {
+        let input: crate::protocol::commands::CompletionInput =
+            serde_json::from_value(json!({"text":params["text"],"cursor":params["cursor"]}))
+                .map_err(|_| AgentSessionError::Rejected)?;
+        let result = self.native_mut()?.complete_commands(&input).await?;
+        serde_json::to_value(result).map_err(|_| AgentSessionError::Failed)
     }
 
     async fn steer(&mut self, params: &Value) -> Result<Option<Value>, AgentSessionError> {
@@ -346,6 +359,12 @@ impl Engine {
                     .feature_values
                     .get_or_insert_default()
                     .insert(id.to_owned(), json!(enabled));
+            }
+            id if super::super::roles::is_key(id) => {
+                config
+                    .feature_values
+                    .get_or_insert_default()
+                    .insert(id.to_owned(), value.clone());
             }
             _ => return Err(AgentSessionError::Rejected),
         }
@@ -434,15 +453,33 @@ impl Engine {
                 );
             }
         }
-        let commands = self
-            .native_mut()?
-            .native_request("get_available_commands", json!({}))
-            .await?;
-        let commands = config::commands(&commands)?;
-        self.notify("session/update",json!({"sessionId":self.id,"update":{"sessionUpdate":"available_commands_update",
-            "availableCommands":commands.iter().map(|command|json!({"name":command["name"],"description":command["description"],
-                "input":{"hint":command["argumentHint"]},"_meta":{"kind":command["kind"]}})).collect::<Vec<_>>()}}));
+        self.publish_commands();
         Ok(json!({"sessionId":self.id,"configOptions":options}))
+    }
+
+    fn publish_commands(&mut self) {
+        let Some(native) = self.native.as_ref() else {
+            return;
+        };
+        if self.command_version == native.command_version() {
+            return;
+        }
+        self.command_version = native.command_version();
+        let commands = native.commands().unwrap_or_default();
+        let available: Vec<_> = commands
+            .iter()
+            .map(|command| {
+                json!({
+                    "name":command["name"],"description":command["description"],
+                    "input":{"hint":command["argumentHint"]},"_meta":command
+                })
+            })
+            .collect();
+        self.notify(
+            "session/update",
+            json!({"sessionId":self.id,"update":{
+            "sessionUpdate":"available_commands_update","availableCommands":available}}),
+        );
     }
 
     async fn options(&mut self) -> Result<Value, AgentSessionError> {
@@ -485,8 +522,27 @@ impl Engine {
             .as_array()
             .ok_or(AgentSessionError::Failed)?
         {
-            options.push(json!({"id":feature["id"],"name":feature["label"],"type":"select","currentValue":feature["value"].to_string(),
-                "options":[{"value":"true","name":"Enabled"},{"value":"false","name":"Disabled"}]}));
+            let (value, choices) = if feature["type"] == "select" {
+                let choices = feature["options"]
+                    .as_array()
+                    .ok_or(AgentSessionError::Failed)?;
+                (
+                    feature["value"].clone(),
+                    choices
+                        .iter()
+                        .map(|option| json!({"value":option["id"],"name":option["label"]}))
+                        .collect::<Vec<_>>(),
+                )
+            } else {
+                (
+                    json!(feature["value"].to_string()),
+                    vec![
+                        json!({"value":"true","name":"Enabled"}),
+                        json!({"value":"false","name":"Disabled"}),
+                    ],
+                )
+            };
+            options.push(json!({"id":feature["id"],"name":feature["label"],"type":"select","currentValue":value,"options":choices}));
         }
         Ok(json!(options))
     }
@@ -525,6 +581,7 @@ impl Engine {
                 self.outgoing.push(json!({"jsonrpc":"2.0","method":"_omp/event","params":{"sessionId":self.id,"frame":frame}}));
             }
         }
+        self.publish_commands();
         let event = match event {
             Ok(Some(event)) => event,
             Ok(None) => return Ok(std::mem::take(&mut self.outgoing)),

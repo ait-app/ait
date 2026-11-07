@@ -9,4 +9,5 @@ pub mod bot_execution;
 pub(crate) mod summary_generation;
 pub mod workspace_attention;
 
+pub mod presets;
 pub(crate) mod provider_catalog;

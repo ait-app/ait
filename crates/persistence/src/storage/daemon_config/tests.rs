@@ -195,3 +195,57 @@ fn concurrent_reload_never_installs_a_config_older_than_a_completed_patch() {
     });
     assert_eq!(stale_reads, 0);
 }
+
+#[test]
+fn provider_model_presets_round_trip_without_touching_another_provider() {
+    let root = tempfile::tempdir().unwrap();
+    let store = store(&root);
+    store
+        .patch(&json!({"providers":{"claude":{"modelPresets":[
+            {"name":"team","model":"opus","thinkingOptionId":"high",
+             "featureValues":{"modelRole.advisor":"sonnet"}}]}}}))
+        .unwrap();
+    store
+        .patch(&json!({"providers":{"codex":{"modelPresets":[
+            {"name":"fast","model":"gpt-5"}]}}}))
+        .unwrap();
+    let reopened = FileDaemonConfigStore::new(
+        root.path().join("config.json"),
+        json!({"relay":{"enabled":false},"mcp":{"enabled":true,"injectIntoAgents":false},
+            "browserTools":{"enabled":false},"providers":{},
+            "metadataGeneration":{"providers":[]}}),
+    );
+    let providers = reopened.get().unwrap()["providers"].clone();
+    assert_eq!(
+        providers["claude"]["modelPresets"][0]["featureValues"]["modelRole.advisor"],
+        "sonnet"
+    );
+    assert_eq!(
+        providers["claude"]["modelPresets"][0]["thinkingOptionId"],
+        "high"
+    );
+    assert_eq!(providers["codex"]["modelPresets"][0]["model"], "gpt-5");
+    assert_eq!(providers["codex"]["enabled"], true);
+}
+
+#[test]
+fn provider_model_presets_reject_malformed_entries() {
+    let root = tempfile::tempdir().unwrap();
+    let store = store(&root);
+    for preset in [
+        json!({"name":"","model":"opus"}),
+        json!({"name":"team"}),
+        json!({"name":"team","model":""}),
+        json!({"name":"team","model":"opus","featureValues":{"1bad":"x"}}),
+        json!({"name":"team","model":"opus","featureValues":{"modelRole.advisor":null}}),
+        json!({"name":"team","model":"opus","thinkingOptionId":""}),
+    ] {
+        assert!(
+            matches!(
+                store.patch(&json!({"providers":{"claude":{"modelPresets":[preset]}}})),
+                Err(DaemonConfigStoreError::Invalid)
+            ),
+            "{preset}"
+        );
+    }
+}

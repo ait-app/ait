@@ -185,7 +185,17 @@ async fn read(
     let outbound = &lanes[0];
     let capabilities = match hello.negotiate_available(&state.info.capabilities) {
         Ok(capabilities) => capabilities,
-        Err(code) => return error(outbound, None, code),
+        Err(code) => {
+            // A rejected hello is a client/protocol mismatch; log which side broke so a stale
+            // bundle or an unregistered capability is diagnosable without a debugger.
+            tracing::warn!(
+                ?code,
+                client_id = %hello.client_id,
+                negotiated = ?hello.offered_capabilities(),
+                "hello negotiation rejected"
+            );
+            return error(outbound, None, code);
+        }
     };
     let session = state.metadata.session_events.connect();
     outbound.send(&ServerMessage::ServerInfo {

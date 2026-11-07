@@ -400,9 +400,11 @@ export function createDaemonConnection(
           // Release the permission ID when its UI deadline expires so a user can retry.
           spec.method === "agent.permission.resolve.request"
             ? 5_000
-            : spec.method === "file.upload.request"
-              ? 30 * 60_000
-              : 300_000,
+            : spec.method === "agent.native_action.request"
+              ? 660_000
+              : spec.method === "file.upload.request"
+                ? 30 * 60_000
+                : 300_000,
         );
     pending.set(id, {
       request: message,

@@ -2,6 +2,7 @@
 
 mod bot;
 mod controls;
+mod deferred;
 mod native_sessions;
 mod placement;
 mod resume;
@@ -31,6 +32,8 @@ use crate::service::agent_runtime::AgentRuntimeDirectory;
 use crate::support::rpc::decode;
 
 pub(crate) struct ExecutionState {
+    pub(crate) pending_response: Option<deferred::Response>,
+    pub(crate) pending_responses: tokio::task::JoinSet<()>,
     pub(crate) manager: AgentManager,
     pub(crate) message_observers:
         std::collections::BTreeMap<String, tokio::sync::watch::Receiver<Option<String>>>,
@@ -46,6 +49,26 @@ pub(crate) struct ExecutionState {
 }
 
 impl ExecutionState {
+    /// Normalize the bounded identity list a caller asks about.
+    fn resolve_identities(&self, ids: &[String]) -> Result<Value, ErrorCode> {
+        if ids.len() > 32 {
+            return Err(ErrorCode::InvalidMessage);
+        }
+        let ids = ids
+            .iter()
+            .map(|id| self.resolve(id))
+            .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
+        Ok(json!(ids))
+    }
+
+    /// Route one preset request to the store that owns the provider's presets.
+    async fn presets(&mut self, method: &str, params: &Value) -> Result<Value, ErrorCode> {
+        self.manager
+            .presets(method, params)
+            .await
+            .map_err(Into::into)
+    }
+
     fn guard_observed_request(&self, method: &str, params: &Value) -> Result<(), ErrorCode> {
         if method == "agent.commands.list.request" && params.get("draftConfig").is_some() {
             return Ok(());
@@ -83,20 +106,12 @@ impl ExecutionState {
         match method {
             Operation::UnifiedSubagents => self.unified_subagents(params).await,
             Operation::Bot => self.bot(params).await,
-            Operation::WorkspaceCreate => self.create_workspace_agent(params).await,
+            Operation::WorkspaceCreate => Box::pin(self.create_workspace_agent(params)).await,
             Operation::RetireWorkspaces => self.retire_workspaces(params).await,
             Operation::PrepareDirectory => self.prepare_agent_directory(params),
             Operation::ResolveIdentities => {
-                only(&params, &["agentIds"])?;
                 let ids: Vec<String> = decode(params["agentIds"].clone())?;
-                if ids.len() > 32 {
-                    return Err(ErrorCode::InvalidMessage);
-                }
-                let ids = ids
-                    .iter()
-                    .map(|id| self.resolve(id))
-                    .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
-                Ok(json!(ids))
+                self.resolve_identities(&ids)
             }
             Operation::List if params.get("sync").is_some_and(|sync| !sync.is_null()) => {
                 self.synchronized_agents(params)
@@ -110,12 +125,19 @@ impl ExecutionState {
             Operation::Permission => self.permission(params).await,
             Operation::Subagents | Operation::ChildTimeline => self.subagents(method, params).await,
             Operation::Diagnostic => self.diagnostic(params).await,
+            Operation::PresetDescribe
+            | Operation::PresetList
+            | Operation::PresetSave
+            | Operation::PresetDelete => self.presets(method.as_str(), &params).await,
             Operation::Usage => self.usage(params).await,
             Operation::RecentSessions => self.recent_sessions(params).await,
             Operation::Import => self.import(params).await,
             Operation::Refresh => self.refresh(params).await,
             Operation::ForkContext => self.fork_context(params).await,
-            Operation::Create => self.create(params).await,
+            Operation::Create => Box::pin(self.create(params)).await,
+            Operation::CompleteCommands | Operation::NativeAction => {
+                self.controls(method.as_str(), params).await
+            }
             Operation::Available
             | Operation::Models
             | Operation::Modes
@@ -520,25 +542,58 @@ impl ExecutionState {
         prompt: Option<crate::protocol::prompt::AgentPrompt>,
     ) -> Result<Value, ErrorCode> {
         let creations = self.manager.creations();
-        let result = json!({"agent":self.snapshot(id)?});
+        let result = json!({"agent":deferred::creation_snapshot(self.snapshot(id)?)});
         let mut progress = creations.advance(admission, "agent_ready", Some(result), None)?;
+        let mut completion = None;
         if let Some(prompt) = prompt {
-            if let Err(error) = self.manager.send_input(id, &prompt).await {
-                creations.advance(&progress, "failed", None, Some(error.to_string()))?;
-                return Err(map_manager(&error));
+            match self
+                .manager
+                .deliver(
+                    id,
+                    &prompt,
+                    crate::protocol::agent_execution::ActiveTurnBehavior::Steer,
+                )
+                .await
+            {
+                Ok(crate::service::agent_manager::delivery::Admission::Accepted) => {}
+                Ok(crate::service::agent_manager::delivery::Admission::Pending(pending)) => {
+                    completion = Some(pending);
+                }
+                Err(error) => {
+                    creations.advance(
+                        &progress,
+                        "failed",
+                        None,
+                        Some(error.message().to_owned()),
+                    )?;
+                    return Err(error.into());
+                }
             }
             progress = creations.advance(&progress, "prompt_started", None, None)?;
         }
         let snapshot = self.snapshot(id)?;
-        progress = creations.advance(
-            &progress,
-            "completed",
-            Some(json!({"agent":snapshot})),
-            None,
-        )?;
-        Ok(
-            json!({"status":"agent_created","agentId":id,"agent":snapshot,"error":null,"creation":progress}),
-        )
+        let id = id.to_owned();
+        if let Some(completion) = completion {
+            self.pending_response = Some(Box::pin(async move {
+                let result = completion.await;
+                tokio::task::spawn_blocking(move || {
+                    if let Err(error) = result {
+                        creations.advance(
+                            &progress,
+                            "failed",
+                            None,
+                            Some(error.message().to_owned()),
+                        )?;
+                        return Err(error.into());
+                    }
+                    deferred::created(&creations, &progress, &id, snapshot)
+                })
+                .await
+                .map_err(|_| ErrorCode::AgentIo)?
+            }));
+            return Ok(Value::Null);
+        }
+        deferred::created(&creations, &progress, &id, snapshot)
     }
 
     async fn send(&mut self, params: Value) -> Result<Value, ErrorCode> {
@@ -564,10 +619,18 @@ impl ExecutionState {
         self.workspace(record.workspace_id.as_deref(), &record.cwd)?;
         let behavior = request.active_turn_behavior.unwrap_or_default();
         let prompt = request.into_prompt();
-        let result = self.manager.deliver(&id, &prompt, behavior).await;
-        Ok(
-            json!({"agentId":id,"accepted":result.is_ok(),"error":result.err().map(model::ErrorCode::message)}),
-        )
+        match self.manager.deliver(&id, &prompt, behavior).await {
+            Ok(crate::service::agent_manager::delivery::Admission::Pending(completion)) => {
+                self.pending_response = Some(Box::pin(async move {
+                    let result = completion.await;
+                    Ok(json!({"agentId":id,"accepted":result.is_ok(),
+                        "error":result.err().map(model::ErrorCode::message)}))
+                }));
+                Ok(Value::Null)
+            }
+            result => Ok(json!({"agentId":id,"accepted":result.is_ok(),
+                "error":result.err().map(model::ErrorCode::message)})),
+        }
     }
 
     pub(crate) fn workspace(&self, selected: Option<&str>, cwd: &str) -> Result<String, ErrorCode> {

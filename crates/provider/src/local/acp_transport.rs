@@ -23,7 +23,8 @@ pub(crate) struct Transport {
     child: Child,
     pub(crate) diagnostics: Diagnostics,
     _stderr: AbortOnDropHandle<()>,
-    input: ChildStdin,
+    input: Option<ChildStdin>,
+    group: Option<u32>,
     messages: mpsc::Receiver<Value>,
     reader: JoinHandle<()>,
     events: VecDeque<Value>,
@@ -89,10 +90,11 @@ impl Transport {
             }
         });
         Ok(Self {
+            group: child.id(),
             child,
             diagnostics,
             _stderr: stderr_task,
-            input,
+            input: Some(input),
             messages,
             reader,
             events: VecDeque::new(),
@@ -137,9 +139,10 @@ impl Transport {
             return Err(AgentSessionError::Rejected);
         }
         bytes.push(b'\n');
+        let input = self.input.as_mut().ok_or(AgentSessionError::Failed)?;
         let result = tokio::time::timeout(self.deadline, async {
-            self.input.write_all(&bytes).await?;
-            self.input.flush().await
+            input.write_all(&bytes).await?;
+            input.flush().await
         })
         .await;
         if matches!(result, Ok(Ok(()))) {
@@ -270,21 +273,43 @@ impl Transport {
         }
         self.diagnostics.flush();
         self.closed = true;
+        self.input.take();
+        let started = tokio::time::Instant::now();
+        let mut killed_at = None;
+        // Process exit can lag signal delivery under load. Reuse the connection's control
+        // budget, bounded to 2–10 seconds, rather than failing an acknowledged close at 2s.
+        let reap_budget = self
+            .deadline
+            .clamp(Duration::from_secs(2), Duration::from_secs(10));
+        // Observe exit before deadlines: a delayed runtime poll must not turn an already
+        // reaped peer into a timeout. The force budget begins when SIGKILL is actually sent.
+        let result = loop {
+            match self.child.try_wait() {
+                Ok(Some(_)) => break Ok(()),
+                Err(_) => break Err(AgentSessionError::Failed),
+                Ok(None) => {}
+            }
+            if killed_at.is_none() && started.elapsed() >= Duration::from_millis(100) {
+                process_group::signal(self.group, Signal::Kill);
+                let _ = self.child.start_kill();
+                killed_at = Some(tokio::time::Instant::now());
+            }
+            if killed_at.is_some_and(|at| at.elapsed() >= reap_budget) {
+                break Err(AgentSessionError::Failed);
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        };
         self.reader.abort();
-        process_group::signal(self.child.id(), Signal::Kill);
-        let _ = self.child.start_kill();
-        tokio::time::timeout(Duration::from_secs(2), self.child.wait())
-            .await
-            .map_err(|_| AgentSessionError::Failed)?
-            .map_err(|_| AgentSessionError::Failed)?;
-        Ok(())
+        process_group::signal(self.group, Signal::Kill);
+        self.group = None;
+        result
     }
 }
 
 impl Drop for Transport {
     fn drop(&mut self) {
         self.reader.abort();
-        process_group::signal(self.child.id(), Signal::Kill);
+        process_group::signal(self.group, Signal::Kill);
     }
 }
 
@@ -298,3 +323,6 @@ pub(crate) fn response(message: &Value) -> Result<Value, AgentSessionError> {
     }
     Err(AgentSessionError::Failed)
 }
+
+#[cfg(all(test, unix))]
+mod tests;

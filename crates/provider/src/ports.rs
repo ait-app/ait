@@ -9,3 +9,5 @@ pub(crate) mod environment;
 pub mod mcp_scope;
 /// Native history discovery and inspection facts.
 pub(crate) mod native_history;
+/// Provider-owned model presets behind one backend-agnostic descriptor.
+pub(crate) mod preset;

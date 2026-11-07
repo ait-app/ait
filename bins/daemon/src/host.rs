@@ -8,6 +8,7 @@ mod catalog;
 mod hub;
 #[cfg(unix)]
 mod mcp_socket;
+pub(crate) mod native_host;
 mod push;
 mod schedule;
 mod voice;
@@ -344,6 +345,7 @@ fn compose_services(
         config: config_store,
         generator: summary_generator,
         names: workspace_names,
+        presets,
     } = compose_metadata(&config.data_dir, &storage.workspaces, &providers);
     let worktrees = Arc::new(Mutex::new(
         compose_worktrees(config, &storage.projects, &storage.workspaces, &server_id)
@@ -364,20 +366,11 @@ fn compose_services(
     let workspace_automation = Arc::new(Mutex::new(workspace_automation));
     let timeline = open_timeline(&config.data_dir)?;
     let terminals = compose_terminals(&storage.workspaces, &storage.projects, &storage.changes);
-    let directory = compose_directory(
+    let directory = compose_host_directory(
         config,
-        &storage.projects,
-        &storage.workspaces,
-        server_id,
-        storage.changes,
-    )?
-    .with_worktrees(Arc::new(WorkspaceWorktrees::new(worktrees.clone())))
-    .with_workspace_names(workspace_names.clone())
-    .with_activity_source(Arc::new(
-        AgentWorkspaceAttention::new(Box::new(storage.agents.clone()))
-            .with_timeline(timeline.clone()),
-    ))
-    .with_activity_source(Arc::new(terminals.activity_source()));
+        (&storage, server_id),
+        (&worktrees, &workspace_names, &timeline, &terminals),
+    )?;
     let agent_execution = compose_provider(
         (storage.agents.clone(), timeline, agent_mcp),
         (&storage.workspaces, &storage.projects),
@@ -388,6 +381,7 @@ fn compose_services(
             summary_generator.clone(),
             workspace_names.clone(),
             workspace_automation.clone(),
+            presets,
         ),
     )?;
     let (schedules, bots) = compose_background(
@@ -596,6 +590,7 @@ struct MetadataServices {
     config: FileDaemonConfigStore,
     generator: Arc<dyn SummaryGenerator>,
     names: WorkspaceNames,
+    presets: provider::service::presets::PresetService,
 }
 
 fn compose_metadata(
@@ -612,11 +607,42 @@ fn compose_metadata(
         api::summary_source(summary_generator.clone()),
         Arc::new(LocalCheckout::new(data_dir.join("worktrees"))),
     );
+    let presets = provider::service::presets::PresetService::new(Arc::new(config_store.clone()));
     MetadataServices {
         config: config_store,
         generator: summary_generator,
         names: workspace_names,
+        presets,
     }
+}
+
+/// Build the host directory with its worktree, naming and attention projections attached.
+fn compose_host_directory(
+    config: &Config,
+    storage: (&Registries, String),
+    projections: (
+        &Arc<Mutex<Worktrees>>,
+        &WorkspaceNames,
+        &provider::storage::timeline::Timeline,
+        &terminal::service::Terminals,
+    ),
+) -> anyhow::Result<Directory> {
+    let (registries, server_id) = storage;
+    let (worktrees, workspace_names, timeline, terminals) = projections;
+    Ok(compose_directory(
+        config,
+        &registries.projects,
+        &registries.workspaces,
+        server_id,
+        registries.changes.clone(),
+    )?
+    .with_worktrees(Arc::new(WorkspaceWorktrees::new((*worktrees).clone())))
+    .with_workspace_names(workspace_names.clone())
+    .with_activity_source(Arc::new(
+        AgentWorkspaceAttention::new(Box::new(registries.agents.clone()))
+            .with_timeline(timeline.clone()),
+    ))
+    .with_activity_source(Arc::new(terminals.activity_source())))
 }
 
 fn compose_directory(
@@ -714,13 +740,15 @@ fn compose_provider(
         Arc<dyn SummaryGenerator>,
         WorkspaceNames,
         Arc<Mutex<WorkspaceAutomation>>,
+        provider::service::presets::PresetService,
     ),
 ) -> anyhow::Result<AgentExecution> {
-    let (directory, generator, names, workspace_automation) = metadata;
+    let (directory, generator, names, workspace_automation, presets) = metadata;
     let (agent_runtime_registry, timeline, mcp) = agent_runtime;
     let (workspace_registry, project_registry) = registries;
     let mut manager = AgentManager::new(Box::new(agent_runtime_registry.clone()))
         .with_agent_mcp(mcp)
+        .with_presets(presets)
         .with_timeline(timeline)
         .with_creations(directory.creations())
         .with_summary_generation(generator)

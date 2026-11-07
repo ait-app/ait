@@ -32,6 +32,7 @@ import type { ClientCapability } from "@ait/protocol/client-capabilities";
 import type { AgentAttentionNotificationPayload } from "@ait/protocol/agent-attention-notification";
 import {
   AgentCreateFailedStatusPayloadSchema,
+  AgentCreateRequestSchema,
   AgentRefreshedStatusPayloadSchema,
   AgentResumedStatusPayloadSchema,
   CheckoutRenameBranchResponseSchema,
@@ -104,6 +105,7 @@ import type {
   ArchiveWorkspaceResponseMessage,
   WorkspaceSetupStatusResponseMessage,
   ListCommandsResponse,
+  CompleteCommandsResponse,
   ListProviderFeaturesResponseMessage,
   ListProviderModelsResponseMessage,
   ListProviderModesResponseMessage,
@@ -111,6 +113,10 @@ import type {
   GetProvidersSnapshotResponseMessage,
   RefreshProvidersSnapshotResponseMessage,
   ProviderDiagnosticResponseMessage,
+  ProviderPresetsDescribeResponseMessage,
+  ProviderPresetsListResponseMessage,
+  ProviderPresetsMutationResponseMessage,
+  ProviderPreset,
   ProviderUsageListResponseMessage,
   DaemonGetStatusResponse,
   DaemonConfigReloadResponse,
@@ -500,6 +506,10 @@ type ListAvailableProvidersPayload = ListAvailableProvidersResponse["payload"];
 type GetProvidersSnapshotPayload = GetProvidersSnapshotResponseMessage["payload"];
 type RefreshProvidersSnapshotPayload = RefreshProvidersSnapshotResponseMessage["payload"];
 type ProviderDiagnosticPayload = ProviderDiagnosticResponseMessage["payload"];
+type ProviderPresetDescriptorPayload = ProviderPresetsDescribeResponseMessage["payload"];
+type ProviderPresetListPayload = ProviderPresetsListResponseMessage["payload"];
+type ProviderPresetMutationPayload = ProviderPresetsMutationResponseMessage["payload"];
+type ProviderPresetInput = ProviderPreset;
 type ProviderUsageListPayload = ProviderUsageListResponseMessage["payload"];
 type DaemonStatusPayload = DaemonGetStatusResponse["payload"];
 type DiagnosticsPayload = DiagnosticsResponse["payload"];
@@ -2889,9 +2899,15 @@ export class DaemonClient {
   });
 
   async createAgent(options: CreateAgentRequestOptions): Promise<AgentSnapshotPayload> {
-    const result = await this.creations.createAgent({
+    const { type: _type, ...request } = AgentCreateRequestSchema.parse({
       ...options,
+      type: "agent.create.request",
+      requestId: this.createRequestId(options.requestId),
       config: resolveAgentConfig(options),
+    });
+    const result = await this.creations.createAgent({
+      ...request,
+      onEvent: options.onEvent,
     });
     if (result.error || !result.agent) throw new Error(result.error ?? "Agent creation failed");
     return result.agent;
@@ -5385,6 +5401,79 @@ export class DaemonClient {
     });
   }
 
+  /** Describe the store behind one provider's presets and what it supports. */
+  async describeProviderPresets(
+    provider: AgentProvider,
+    cwd?: string,
+    options?: { requestId?: string },
+  ): Promise<ProviderPresetDescriptorPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.presets.describe.request",
+        provider,
+        ...(cwd ? { cwd } : {}),
+      },
+      responseType: "provider.presets.describe.response",
+      timeout: 120000,
+    });
+  }
+
+  async listProviderPresets(
+    provider: AgentProvider,
+    cwd?: string,
+    options?: { requestId?: string },
+  ): Promise<ProviderPresetListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.presets.list.request",
+        provider,
+        ...(cwd ? { cwd } : {}),
+      },
+      responseType: "provider.presets.list.response",
+      timeout: 180000,
+    });
+  }
+
+  async saveProviderPreset(
+    provider: AgentProvider,
+    preset: ProviderPresetInput,
+    cwd?: string,
+    options?: { requestId?: string },
+  ): Promise<ProviderPresetMutationPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.presets.save.request",
+        provider,
+        preset,
+        ...(cwd ? { cwd } : {}),
+      },
+      responseType: "provider.presets.save.response",
+      timeout: 660000,
+    });
+  }
+
+  async deleteProviderPreset(
+    provider: AgentProvider,
+    name: string,
+    cwd?: string,
+    options?: { requestId?: string },
+  ): Promise<ProviderPresetMutationPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.presets.delete.request",
+        provider,
+        name,
+        ...(cwd ? { cwd } : {}),
+      },
+      responseType: "provider.presets.delete.response",
+      timeout: 660000,
+    });
+  }
+
   async getProviderDiagnostic(
     provider: AgentProvider,
     options?: { requestId?: string },
@@ -5436,6 +5525,40 @@ export class DaemonClient {
         ...(options.draftConfig ? { draftConfig: options.draftConfig } : {}),
       },
       responseType: "agent.commands.list.response",
+    });
+  }
+
+  /** Execute one advertised provider action while native questions remain interactive. */
+  async runNativeAction(
+    agentId: string,
+    action: string,
+    arguments_: Record<string, string>,
+  ): Promise<{ text: string; file?: { path: string; fileName: string } | null }> {
+    const result = await this.sendCorrelatedSessionRequest({
+      message: { type: "agent.native_action.request", agentId, action, arguments: arguments_ },
+      responseType: "agent.native_action.response",
+      timeout: 660000,
+    });
+    if (result.error) throw new Error(result.error);
+    return result;
+  }
+
+  /** Query native editor completion without submitting a prompt or running a command. */
+  async completeCommands(
+    options: ListCommandsOptions & { text: string; cursor: number },
+  ): Promise<CompleteCommandsResponse["payload"]> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: options.requestId,
+      message: {
+        type: "agent.commands.complete.request",
+        agentId: options.agentId,
+        ...(options.draftConfig ? { draftConfig: options.draftConfig } : {}),
+        text: options.text,
+        cursor: options.cursor,
+      },
+      responseType: "agent.commands.complete.response",
+      // Drafts and inactive sessions may first start the provider's read-only runtime.
+      timeout: 30000,
     });
   }
 

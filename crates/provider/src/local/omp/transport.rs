@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::process::Stdio;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -18,6 +18,8 @@ use crate::ports::diagnostics::{Category, Diagnostic};
 
 const MAX_FRAME: usize = 1024 * 1024;
 const MAX_BUFFER: usize = 64 * 1024 * 1024;
+/// Cold native process/catalog initialization budget, independent of connected controls.
+pub(super) const STARTUP_TIMEOUT: Duration = Duration::from_mins(3);
 
 /// Decoded native frame with the wire bytes it occupied, counted once against buffer limits.
 #[derive(Debug)]
@@ -41,6 +43,14 @@ pub(super) struct Transport {
     sequence: u64,
     deadline: Duration,
     closed: bool,
+    command_completion: bool,
+    completion_support: Arc<RwLock<Option<bool>>>,
+    /// Latest native host greeting, refreshed from [`Self::capability_state`] on demand.
+    pub(super) capability: Option<super::vibe::Capability>,
+    capability_state: Arc<RwLock<Option<super::vibe::Capability>>>,
+    /// Bounded `ait_vibe_state`/`ait_vibe_worker` outbox filled by the reader.
+    vibe_state: Arc<RwLock<Vec<Value>>>,
+    configuration: Option<tempfile::NamedTempFile>,
 }
 
 impl Transport {
@@ -54,16 +64,30 @@ impl Transport {
         confinement: Option<&domain::workspace::sandbox::WriteConfinement>,
     ) -> Result<Self, AgentSessionError> {
         let diagnostics = Diagnostics::new(LABEL);
+        // A verified private runtime replaces only the executable: same cwd, same args, same
+        // environment, and therefore the same OMP data directory, credentials and sessions.
+        let (launcher, leading) = match client.native_host() {
+            Some(host) => (
+                host.bun().to_path_buf(),
+                Some(host.entrypoint().to_path_buf()),
+            ),
+            None => (client.program.clone(), None),
+        };
         let mut command = crate::local::sandbox::command(
-            &client.program,
+            &launcher,
             confinement,
             crate::local::sandbox::OMP_STATE,
             &|name| client.environment.variable(name),
         )?;
+        if let Some(entrypoint) = &leading {
+            command.arg(entrypoint);
+        }
         command
+            .args(["--cwd", cwd])
             .args(args)
             .current_dir(cwd)
             .envs(client.environment.entries())
+            .env("PI_RPC_EMIT_TITLE", "1")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -83,49 +107,13 @@ impl Transport {
             let _ = stderr_done.send(());
         }));
         let reader_diagnostics = diagnostics.clone();
+        let capability_state: Arc<RwLock<Option<super::vibe::Capability>>> = Arc::default();
+        let reader_capability = capability_state.clone();
+        let vibe_state: Arc<RwLock<Vec<Value>>> = Arc::default();
+        let reader_vibe = vibe_state.clone();
         let (sender, messages) = mpsc::channel(2);
         let reader = tokio::spawn(async move {
-            let mut output = BufReader::new(output);
-            let mut decoder = super::framing::Decoder::default();
-            let mut frame_bytes = 0;
-            let failure = loop {
-                let mut bytes = Vec::new();
-                let read = (&mut output)
-                    .take((MAX_FRAME + 1) as u64)
-                    .read_until(b'\n', &mut bytes)
-                    .await;
-                if bytes.len() > MAX_FRAME {
-                    break Diagnostic::new(Category::Protocol, "frame_limit");
-                }
-                match read {
-                    Ok(0) => break Diagnostic::new(Category::Closed, "stdout"),
-                    Err(_) => break Diagnostic::new(Category::Closed, "stdout_read"),
-                    Ok(_) if bytes.last() != Some(&b'\n') => {
-                        break Diagnostic::new(Category::Protocol, "incomplete_frame");
-                    }
-                    Ok(_) => {}
-                }
-                if bytes.iter().all(u8::is_ascii_whitespace) {
-                    continue;
-                }
-                let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
-                    break Diagnostic::new(Category::Protocol, "invalid_json");
-                };
-                if !value["type"].is_string() {
-                    break Diagnostic::new(Category::Protocol, "missing_frame_type");
-                }
-                frame_bytes += bytes.len();
-                match decoder.push(value) {
-                    Ok(Some(value)) => {
-                        let bytes = std::mem::take(&mut frame_bytes);
-                        if sender.send(Record { value, bytes }).await.is_err() {
-                            return;
-                        }
-                    }
-                    Ok(None) => {}
-                    Err(_) => break Diagnostic::new(Category::Protocol, "invalid_chunks"),
-                }
-            };
+            let failure = read_frames(output, &sender, &reader_capability, &reader_vibe).await;
             let _ = tokio::time::timeout(Duration::from_millis(100), stderr_finished).await;
             reader_diagnostics.observe(failure, "read");
         });
@@ -143,11 +131,22 @@ impl Transport {
             sequence: 0,
             deadline: client.deadline,
             closed: false,
+            command_completion: false,
+            completion_support: client.completion_support.clone(),
+            capability: None,
+            capability_state,
+            vibe_state,
+            configuration: None,
         })
     }
 
+    /// Retain the private role overlay until this native owner has exited.
+    pub(super) fn retain_configuration(&mut self, configuration: Option<tempfile::NamedTempFile>) {
+        self.configuration = configuration;
+    }
+
     pub(super) async fn initialize(&mut self) -> Result<(), AgentSessionError> {
-        let ready = tokio::time::timeout(self.deadline, self.messages.recv())
+        let ready = tokio::time::timeout(STARTUP_TIMEOUT.max(self.deadline), self.messages.recv())
             .await
             .map_err(|_| AgentSessionError::Failed)?
             .ok_or(AgentSessionError::Failed)?
@@ -159,13 +158,45 @@ impl Transport {
         {
             return Err(AgentSessionError::Rejected);
         }
+        let control_deadline = self.deadline;
+        self.deadline = STARTUP_TIMEOUT.max(control_deadline);
         let selected = self
             .request("negotiate_protocol", json!({"protocolVersion":2}))
-            .await?;
+            .await;
+        self.deadline = control_deadline;
+        let selected = selected?;
         if selected["protocolVersion"] != 2 {
             return Err(AgentSessionError::Failed);
         }
+        self.command_completion = ready["capabilities"]["commandCompletion"]["version"] == 1;
+        *self
+            .completion_support
+            .write()
+            .map_err(|_| AgentSessionError::Failed)? = Some(self.command_completion);
         Ok(())
+    }
+
+    /// Native feature negotiated from the official runtime's ready frame.
+    pub(super) fn command_completion(&self) -> bool {
+        self.command_completion
+    }
+
+    /// Snapshot the native host greeting captured by the reader, if one has arrived.
+    pub(super) fn refresh_capability(&mut self) -> Option<&super::vibe::Capability> {
+        self.capability = self
+            .capability_state
+            .read()
+            .ok()
+            .and_then(|state| state.clone());
+        self.capability.as_ref()
+    }
+
+    /// Take the adapter frames the reader captured since the last call, in arrival order.
+    pub(super) fn take_vibe_frames(&mut self) -> Vec<Value> {
+        self.vibe_state
+            .write()
+            .map(|mut frames| std::mem::take(&mut *frames))
+            .unwrap_or_default()
     }
 
     pub(super) async fn send(&mut self, message: &Value) -> Result<(), AgentSessionError> {
@@ -292,6 +323,58 @@ impl Transport {
         }
     }
 
+    /// Execute a known local command on an isolated metadata reader, awaiting its final receipt.
+    /// Admission alone is insufficient for extension handlers. Agent work, rejection, oversized
+    /// output and missing completion remain errors; this must never run on a conversation owner.
+    pub(super) async fn local_command(
+        &mut self,
+        message: &str,
+    ) -> Result<Vec<Value>, AgentSessionError> {
+        let id = self.begin("prompt", json!({"message":message})).await?;
+        tokio::time::timeout(self.deadline, async {
+            let mut admitted = false;
+            let mut completed = false;
+            let mut events = Vec::new();
+            let mut bytes = 0;
+            while !admitted || !completed {
+                let event = match self.poll()? {
+                    Some(event) => event,
+                    None => {
+                        self.messages
+                            .recv()
+                            .await
+                            .ok_or(AgentSessionError::Failed)?
+                            .value
+                    }
+                };
+                if event["type"] == "response" && event["id"] == id {
+                    if event["command"] != "prompt" || event["success"] != true {
+                        return Err(AgentSessionError::Rejected);
+                    }
+                    if event["data"]["agentInvoked"] == true {
+                        return Err(AgentSessionError::Rejected);
+                    }
+                    admitted = true;
+                    completed |= event["data"]["agentInvoked"] == false;
+                } else if event["type"] == "prompt_result" && event["id"] == id {
+                    if event["agentInvoked"] != false || event["status"] != "completed" {
+                        return Err(AgentSessionError::Rejected);
+                    }
+                    completed = true;
+                } else {
+                    bytes += event.to_string().len();
+                    if events.len() >= 4096 || bytes > MAX_BUFFER {
+                        return Err(AgentSessionError::Failed);
+                    }
+                    events.push(event);
+                }
+            }
+            Ok(events)
+        })
+        .await
+        .map_err(|_| AgentSessionError::Failed)?
+    }
+
     pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {
         if self.closed {
             return Ok(());
@@ -313,6 +396,7 @@ impl Transport {
         process_group::signal(self.group, Signal::Kill);
         self.group = None;
         if matches!(drained, Ok(Ok(_))) {
+            self.configuration.take();
             return Ok(());
         }
         let _ = self.child.start_kill();
@@ -320,7 +404,71 @@ impl Transport {
             .await
             .map_err(|_| AgentSessionError::Failed)?
             .map_err(|_| AgentSessionError::Failed)?;
+        self.configuration.take();
         Ok(())
+    }
+}
+
+/// Read newline-delimited native frames until a protocol or pipe failure, routing the
+/// private host greeting and Vibe frames away from the public session stream.
+async fn read_frames(
+    output: tokio::process::ChildStdout,
+    sender: &mpsc::Sender<Record>,
+    capability: &RwLock<Option<super::vibe::Capability>>,
+    vibe: &RwLock<Vec<Value>>,
+) -> Diagnostic {
+    let mut output = BufReader::new(output);
+    let mut decoder = super::framing::Decoder::default();
+    let mut frame_bytes = 0;
+    loop {
+        let mut bytes = Vec::new();
+        let read = (&mut output)
+            .take((MAX_FRAME + 1) as u64)
+            .read_until(b'\n', &mut bytes)
+            .await;
+        if bytes.len() > MAX_FRAME {
+            return Diagnostic::new(Category::Protocol, "frame_limit");
+        }
+        match read {
+            Ok(0) => return Diagnostic::new(Category::Closed, "stdout"),
+            Err(_) => return Diagnostic::new(Category::Closed, "stdout_read"),
+            Ok(_) if bytes.last() != Some(&b'\n') => {
+                return Diagnostic::new(Category::Protocol, "incomplete_frame");
+            }
+            Ok(_) => {}
+        }
+        if bytes.iter().all(u8::is_ascii_whitespace) {
+            continue;
+        }
+        let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
+            return Diagnostic::new(Category::Protocol, "invalid_json");
+        };
+        if !value["type"].is_string() {
+            return Diagnostic::new(Category::Protocol, "missing_frame_type");
+        }
+        frame_bytes += bytes.len();
+        match decoder.push(value) {
+            Ok(Some(value)) => {
+                let bytes = std::mem::take(&mut frame_bytes);
+                if let Some(greeting) = super::vibe::hello(&value) {
+                    if let Ok(mut state) = capability.write() {
+                        *state = Some(greeting);
+                    }
+                    continue;
+                }
+                if super::vibe::is_frame(&value) {
+                    if let Ok(mut frames) = vibe.write() {
+                        super::vibe::store(&mut frames, &value);
+                    }
+                    continue;
+                }
+                if sender.send(Record { value, bytes }).await.is_err() {
+                    return Diagnostic::new(Category::Closed, "session_reader");
+                }
+            }
+            Ok(None) => {}
+            Err(_) => return Diagnostic::new(Category::Protocol, "invalid_chunks"),
+        }
     }
 }
 
@@ -355,3 +503,6 @@ impl Drop for Transport {
         process_group::signal(self.group, Signal::Kill);
     }
 }
+
+#[cfg(all(test, unix))]
+mod tests;

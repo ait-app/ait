@@ -21,6 +21,7 @@ import {
   providersSnapshotQueryRoot,
   providersSnapshotRequestOptions,
   refreshAndApplyProvidersSnapshot,
+  waitForProvidersSnapshotRefresh,
 } from "@/data/providers-snapshot";
 
 describe("providers snapshot query scope", () => {
@@ -598,4 +599,153 @@ describe("provider snapshot publication identity", () => {
       queryClient.clear();
     }
   });
+});
+
+it("shares one refresh poller while each caller finishes only its selected providers", async () => {
+  vi.useFakeTimers();
+  const queryClient = new QueryClient();
+  let ompDone = false;
+  let dshDone = false;
+  const entries = [
+    { provider: "omp", enabled: true, status: "ready" as const },
+    { provider: "deepseek-harness", enabled: true, status: "ready" as const },
+  ];
+  const getProvidersSnapshot = vi
+    .fn()
+    .mockResolvedValueOnce({
+      requestId: "one",
+      generatedAt: "2026-11-04T00:00:00Z",
+      entries,
+      refreshing: ["omp", "deepseek-harness"],
+    })
+    .mockResolvedValueOnce({
+      requestId: "two",
+      generatedAt: "2026-11-04T00:00:01Z",
+      entries,
+      refreshing: ["deepseek-harness"],
+    })
+    .mockResolvedValue({
+      requestId: "three",
+      generatedAt: "2026-11-04T00:00:02Z",
+      entries,
+      refreshing: [],
+    });
+  const input = {
+    client: { getProvidersSnapshot, refreshProvidersSnapshot: vi.fn() },
+    queryClient,
+    serverId: "shared-owner",
+    cwd: null,
+    cache: createProviderSnapshotCache(createStorage()),
+  };
+  try {
+    const omp = waitForProvidersSnapshotRefresh({ ...input, providers: ["omp"] }).then(() => {
+      ompDone = true;
+    });
+    const dsh = waitForProvidersSnapshotRefresh({ ...input, providers: ["deepseek-harness"] }).then(
+      () => {
+        dshDone = true;
+      },
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getProvidersSnapshot).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(ompDone).toBe(true);
+    expect(dshDone).toBe(false);
+    expect(getProvidersSnapshot).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(200);
+    await Promise.all([omp, dsh]);
+    expect(getProvidersSnapshot).toHaveBeenCalledTimes(3);
+  } finally {
+    queryClient.clear();
+    vi.useRealTimers();
+  }
+});
+
+it("propagates a shared refresh read failure to every waiter without clearing cached choices", async () => {
+  const queryClient = new QueryClient();
+  const previous = {
+    requestId: "old",
+    generatedAt: "2026-11-04T00:00:00Z",
+    entries: [
+      {
+        provider: "omp",
+        enabled: true,
+        status: "ready" as const,
+        models: [{ provider: "omp", id: "retained", label: "Retained" }],
+      },
+    ],
+  };
+  queryClient.setQueryData(providersSnapshotQueryKey("failed-owner", null), previous);
+  const error = new Error("Catalog read unavailable");
+  const getProvidersSnapshot = vi.fn().mockRejectedValue(error);
+  const input = {
+    client: { getProvidersSnapshot, refreshProvidersSnapshot: vi.fn() },
+    queryClient,
+    serverId: "failed-owner",
+    cwd: null,
+    cache: createProviderSnapshotCache(createStorage()),
+  };
+  try {
+    const results = await Promise.allSettled([
+      waitForProvidersSnapshotRefresh({ ...input, providers: ["omp"] }),
+      waitForProvidersSnapshotRefresh(input),
+    ]);
+    expect(results).toEqual([
+      { status: "rejected", reason: error },
+      { status: "rejected", reason: error },
+    ]);
+    expect(getProvidersSnapshot).toHaveBeenCalledTimes(1);
+    expect(queryClient.getQueryData(providersSnapshotQueryKey("failed-owner", null))).toBe(
+      previous,
+    );
+  } finally {
+    queryClient.clear();
+  }
+});
+
+it("cancelling one refresh waiter does not cancel another provider's completion", async () => {
+  vi.useFakeTimers();
+  const queryClient = new QueryClient();
+  const controller = new AbortController();
+  const entries = [
+    { provider: "omp", enabled: true, status: "ready" as const },
+    { provider: "deepseek-harness", enabled: true, status: "ready" as const },
+  ];
+  const getProvidersSnapshot = vi
+    .fn()
+    .mockResolvedValueOnce({
+      requestId: "pending",
+      generatedAt: "2026-11-04T00:00:00Z",
+      entries,
+      refreshing: ["omp", "deepseek-harness"],
+    })
+    .mockResolvedValue({
+      requestId: "ready",
+      generatedAt: "2026-11-04T00:00:01Z",
+      entries,
+      refreshing: ["omp"],
+    });
+  const input = {
+    client: { getProvidersSnapshot, refreshProvidersSnapshot: vi.fn() },
+    queryClient,
+    serverId: "cancel-one",
+    cwd: null,
+    cache: createProviderSnapshotCache(createStorage()),
+  };
+  try {
+    const cancelled = waitForProvidersSnapshotRefresh(
+      { ...input, providers: ["omp"] },
+      controller.signal,
+    ).catch((error) => error);
+    const retained = waitForProvidersSnapshotRefresh({ ...input, providers: ["deepseek-harness"] });
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort();
+    expect(await cancelled).toBeInstanceOf(CancelledError);
+    await vi.advanceTimersByTimeAsync(200);
+    await retained;
+    expect(getProvidersSnapshot).toHaveBeenCalledTimes(2);
+  } finally {
+    queryClient.clear();
+    vi.useRealTimers();
+  }
 });

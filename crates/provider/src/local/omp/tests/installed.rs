@@ -1,7 +1,55 @@
 use super::*;
 
+mod actions;
+mod completion;
 mod interactions;
+mod model_roles;
 mod settlement;
+
+#[tokio::test]
+#[ignore = "requires AIT_TEST_OMP_BIN; reads isolated native command metadata without inference"]
+async fn installed_omp_commands_keep_native_aliases_arguments_and_local_execution() {
+    let fixture = installed_with_plugins().await;
+    let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
+    let catalog = session.commands().unwrap();
+    assert!(catalog.iter().any(|command| {
+        command["aliases"]
+            .as_array()
+            .is_some_and(|aliases| !aliases.is_empty())
+    }));
+    assert!(catalog.iter().any(|command| {
+        command["subcommands"]
+            .as_array()
+            .is_some_and(|commands| !commands.is_empty())
+    }));
+    let advisor = catalog
+        .iter()
+        .find(|command| command["name"] == "advisor")
+        .unwrap();
+    assert!(
+        advisor["subcommands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|command| command["name"] == "on" && command["description"].is_string())
+    );
+    session
+        .start_turn("/advisor status", &fixture.spec.config)
+        .await
+        .unwrap();
+    let events = complete(session.as_mut()).await;
+    assert!(
+        matches!(events.last(), Some(AgentTurnEvent::Completed(_))),
+        "{events:?}"
+    );
+    assert!(
+        events.iter().any(|event| matches!(event,
+        AgentTurnEvent::Timeline(entry) if entry.item["text"].as_str()
+            .is_some_and(|text| text.to_lowercase().contains("advisor")))),
+        "{events:?}"
+    );
+    session.close().await.unwrap();
+}
 
 #[tokio::test]
 #[ignore = "requires AIT_TEST_OMP_BIN; uses isolated configuration without model inference"]
@@ -99,7 +147,14 @@ async fn installed_omp_tiers_and_thinking_follow_model_without_changing_defaults
         confinement: None,
     };
     let details = client.discover(&spec.cwd).await.unwrap();
-    assert_eq!(details.features.len(), 2);
+    assert_eq!(
+        details
+            .features
+            .iter()
+            .filter(|feature| !feature["id"].as_str().unwrap().starts_with("modelRole."))
+            .count(),
+        2
+    );
     for id in ["gpt-5.4", "deepseek-v4.1-flash"] {
         let route = json!(["ait-local-fixture", id]).to_string();
         let model = details
@@ -314,8 +369,12 @@ async fn installed_omp_structured_ask_reaches_the_host_and_returns_answers_to_th
 }
 
 async fn installed_with_plugins() -> Installed {
-    let root = tempfile::tempdir().unwrap();
     let program = std::env::var_os("AIT_TEST_OMP_BIN").expect("set AIT_TEST_OMP_BIN");
+    installed_with_program(program).await
+}
+
+async fn installed_with_program(program: std::ffi::OsString) -> Installed {
+    let root = tempfile::tempdir().unwrap();
     let agent = root.path().join("agent");
     let extensions = agent.join("extensions");
     std::fs::create_dir_all(&extensions).unwrap();

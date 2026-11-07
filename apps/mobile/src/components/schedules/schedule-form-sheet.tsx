@@ -1068,9 +1068,10 @@ function ScheduleNewAgentFields({
   );
   const handleSelectThinking = useCallback(
     (thinkingOptionId: string) => {
+      providerSnapshot.refetchIfStale(state.selectedProvider);
       model.setThinking(thinkingOptionId);
     },
-    [model],
+    [model, providerSnapshot, state.selectedProvider],
   );
   const handleModelOpen = useCallback(() => {
     providerSnapshot.refetchIfStale(state.selectedProvider);
@@ -1181,7 +1182,7 @@ function ScheduleNewAgentFields({
             triggerFill
             serverId={mutationServerId}
             disabled={!state.selectedServerId}
-            onOpen={handleModelOpen}
+            onCatalogAccess={handleModelOpen}
             onRetryProvider={handleRetryProvider}
             isRetryingProvider={providerSnapshot.isRefreshing}
           />
@@ -1205,6 +1206,7 @@ function ScheduleNewAgentFields({
               : null
           }
           options={thinkingOptions}
+          onOpen={handleModelOpen}
           onChange={handleSelectThinking}
           placeholder={t("schedules.form.selectThinking")}
           emptyText={t("schedules.form.noThinking")}

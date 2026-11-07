@@ -2,6 +2,8 @@ use super::{AgentClient, SessionEvents, Value, json, watch};
 use super::{Arc, BTreeMap, CancellationToken, Duration, ErrorCode, Instant, Semaphore};
 use super::{Cache, Catalog, Entry, Snapshot, discover, response};
 
+const RETRY_TTL: Duration = Duration::from_secs(30);
+
 #[derive(Clone, Copy)]
 pub(super) struct Scope<'a> {
     pub(super) key: &'a Option<String>,
@@ -34,6 +36,9 @@ impl Catalog {
         prepare(&mut cache, scope.key.as_ref(), clients, &self.cancellation);
         let mut waits = Vec::with_capacity(scope.providers.len());
         for provider in scope.providers {
+            let client = clients
+                .get(provider)
+                .ok_or(ErrorCode::UnsupportedCapability)?;
             let limit = cache
                 .limits
                 .entry(provider.clone())
@@ -57,7 +62,7 @@ impl Catalog {
             if !scope.refresh
                 && entry
                     .fetched
-                    .is_some_and(|at| at.elapsed() < Duration::from_secs(60))
+                    .is_some_and(|at| at.elapsed() < freshness(entry, client.discovery_cache_ttl()))
             {
                 continue;
             }
@@ -75,10 +80,7 @@ impl Catalog {
                 key: scope.key.clone(),
                 provider: provider.clone(),
                 cwd: scope.cwd.to_owned(),
-                client: clients
-                    .get(provider)
-                    .ok_or(ErrorCode::UnsupportedCapability)?
-                    .clone(),
+                client: client.clone(),
                 limit,
                 cancellation: snapshot.cancellation.child_token(),
                 generation,
@@ -196,6 +198,13 @@ fn commit(catalog: &Catalog, load: &Load, mut result: Entry) -> Option<(Snapshot
         return None;
     }
     let again = current.refresh_again;
+    if result.value["status"] == "error" && current.value["status"] == "ready" {
+        // Failed background refreshes retain usable choices and their last successful timestamp.
+        let error = result.value["error"].clone();
+        result.value.clone_from(&current.value);
+        result.value["error"] = error;
+        result.features.clone_from(&current.features);
+    }
     result.generation = load.generation;
     if again {
         result.loading.clone_from(&current.loading);
@@ -204,6 +213,14 @@ fn commit(catalog: &Catalog, load: &Load, mut result: Entry) -> Option<(Snapshot
     snapshot.fetched = Instant::now();
     snapshot.revision = revision;
     Some((snapshot.clone(), again))
+}
+
+fn freshness(entry: &Entry, success_ttl: Duration) -> Duration {
+    if entry.value["status"] == "ready" && !entry.value["error"].is_string() {
+        success_ttl
+    } else {
+        RETRY_TTL
+    }
 }
 
 fn failure(provider: &str, client: &dyn AgentClient) -> Entry {

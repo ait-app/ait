@@ -98,6 +98,10 @@ DSH `0.2.1-rc.2` 的全新 profile 在未配置凭据时可返回空模型目录
 服务重启后 `agent.resume.request` 恢复已登记 handle。原生模式读取展示历史时，从 DSH 的完整记录
 恢复用户消息、助手消息和工具时间线；旧版本遗漏的用户气泡会在 daemon 重启后的首次历史加载时修复。
 此过程只读，不重新发送用户输入。记录不完整时保留 Ait 现有历史并报告读取失败。
+历史、导入和列表预览使用 `session/list`、`session/projections`、`session/page`，不使用
+会自动激活冷 Agent 的 `session/follow`；仅交互 owner 订阅 follow。分页固定在原生
+projection 的 `asOfSeq`，缺少只读基线时明确失败。原生只读目录不提供创建时间，导入
+使用观察时间，最后活动时间仍来自原生记录；见 [ADR-215](../decisions/providers/adr-215-dsh-non-activating-history.md)。
 工具参数的空字符串按 DSH 原生规则转为空对象；非法 JSON 原样交给工具校验。
 
 目前支持文本、附件、受 native capability 约束的图片输入、图片输出、工具生命周期、
@@ -110,7 +114,19 @@ DSH `0.2.1-rc.2` 的全新 profile 在未配置凭据时可返回空模型目录
 原生历史文件与工作目录分开保存，因此原目录删除后，会话仍可能出现在导入列表中。
 导入需要原工作目录存在且可访问；目录不可用时返回 `working_directory_unavailable`，
 界面显示原路径并提示恢复目录后重试。重新创建空目录只能恢复导入所需的路径，不能恢复原项目文件。
-暂不支持其他前端实时历史同步、steer、rewind、commands 和结构化输出约束。
+原生插件命令从当前 Agent 的 `commands/list` 发现，经 `commands/execute` 执行；
+支持命令结果及历史恢复，不把命令当模型提示词，也不借用 OMP 参数树。
+目标和命令结果显示为独立卡片；目标状态来自原生结构，最新卡片提供暂停、继续、编辑和清除，
+原始输出可展开查看。旧历史恢复时使用同一投影，不在客户端解析英文状态文字。
+未指定模型时，目录为空的新会话仍可使用控制命令；显式模型选择继续验证目录。
+恢复已有对话保留原生 ID，通过公开 `session/selectModel` 确认保存的模型并激活原 Agent；
+不再调用只复用空会话的 `session/create`。该恢复入口仍要求原生模型目录和对应配置可用。
+命令声明支持附件时，可发送图片和上传文件；文件通过同一 Agent 的认证上传取得原生 receipt。
+发送等待最终原生受理，拒绝时保留草稿，等待期间仍可回答问答和审批。
+首次组合原生 profile 的启动预算为 60 秒；连接后的控制请求仍使用 30 秒预算。
+原生 `/export` 成功后，完整 ZIP 会显示在结果卡中供下载，重启后仍可从该卡下载。
+Web 客户端专属业务弹层的限制见[逐项验证](../reports/providers/dsh-opencode-capability-adaptation-2026-10-30.md)。
+暂不支持其他前端实时历史同步、steer、rewind 和结构化输出约束。
 原生 Host 不接受 Ait 每会话 MCP override；请在 DSH web profile 中配置 MCP。
 显示按原生已落盘消息更新，不保证逐 token 输出。
 原生模型发现只读目录，不再创建 probe session；显式 ACP 模式仍需打开会话进行发现。

@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpSocket};
 
 use super::*;
 use crate::ports::diagnostics::Category;
@@ -21,9 +21,11 @@ fn api_at(address: SocketAddr) -> Api {
 
 #[tokio::test]
 async fn refused_loopback_connection_records_the_connect_stage() {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let api = api_at(listener.local_addr().unwrap());
-    drop(listener);
+    // Reserve the port without listening. Releasing an ephemeral listener permits another
+    // parallel fixture to reuse it before the request, changing refusal into an HTTP failure.
+    let reserved = TcpSocket::new_v4().unwrap();
+    reserved.bind("127.0.0.1:0".parse().unwrap()).unwrap();
+    let api = api_at(reserved.local_addr().unwrap());
 
     assert_eq!(
         api.call("permissionPresets/catalog", json!({})).await,

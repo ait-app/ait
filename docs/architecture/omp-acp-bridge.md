@@ -45,6 +45,17 @@ flowchart LR
 
 ## 通用原生扩展通道
 
+命令目录保留原生 aliases、source、subcommands 和 usage；已有 Agent 查询其所属执行 lane
+中最近观察到的目录，不启动替代 OMP。原生目录更新也发布为标准 ACP 命令更新，完整元数据
+保留在 \_meta；空目录同样生效。Composer 支持命令别名与声明式子命令参数补全，OMP 的命令
+不会被客户端的归档/新建命令截获。文本编辑器保留 prefill、空答案和原文空白。
+决策及限制见 [ADR-211](../decisions/providers/adr-211-omp-command-catalog-and-completion.md)。
+
+宿主冲突和 TUI-only builtin 由 owning adapter 明确拒绝，第三方同名命令仍以 live 目录归属为准。
+只读查询使用独立请求关联与宿主控制结果卡，不覆盖主回合；BTW 流式记录使用可选侧问答视图，
+由原生 sidecar 恢复。宿主控制卡在原生历史协调时保留，原生日志仍只有一个 writer。详见
+[ADR-221](../decisions/providers/adr-221-omp-headless-commands-and-side-questions.md)。
+
 客户端在 initialize 的 `clientCapabilities._meta` 中设置 `ompNative: true`，
 桥接层以 `_meta.ompNative.version: 1` 宣告支持；这不是 OMP 的扩展要求。
 
@@ -68,7 +79,9 @@ flowchart LR
 
 官方 RPC 不导出任意 TUI 组件工厂、主题、footer/header 或编辑器组件。
 这些内容无法仅凭协议远程复现；原生 notify/status/widget/editor 等已有帧则可以通过协商通道传递。
-Ait 当前界面仍以工具、问答和自定义消息展示为主，不能把通道透传等同于已实现所有 TUI 布局。
+Ait 已为这些公开事件提供独立状态、文本 widget、标题、编辑器和登录链接，并提供已导出
+操作的语义入口，见 [ADR-218](../decisions/providers/adr-218-native-ui-and-actions.md)。
+任意组件工厂及完整 TUI 布局仍不在官方远程接口的支持范围内。
 
 OMP 会延迟持久化没有 assistant 消息的原生会话；仅插件本地输出不保证已经产生 JSONL。
 Ait 不伪造原生落盘成功。验证使用用户授权的实际模型产生 assistant/tool 记录，再核对真实历史恢复。

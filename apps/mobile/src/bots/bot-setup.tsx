@@ -26,6 +26,7 @@ function BotSelect({
   onChange,
   disabled = false,
   testID,
+  onAccess,
 }: {
   label: string;
   value: string;
@@ -33,6 +34,7 @@ function BotSelect({
   onChange: (value: string) => void;
   disabled?: boolean;
   testID: string;
+  onAccess?: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -44,7 +46,11 @@ function BotSelect({
           options.find((option) => option.id === value)?.label || value || t("bots.defaultOption"),
       }}
       options={options.map((option) => ({ ...option, value: option.id }))}
-      onChange={onChange}
+      onOpen={onAccess}
+      onChange={(value) => {
+        onAccess?.();
+        onChange(value);
+      }}
       disabled={disabled}
       searchable
       placeholder={t("bots.defaultOption")}
@@ -78,7 +84,7 @@ export function useBotProviders(serverId: string, cwd: string, enabled: boolean)
   const providers = (snapshot.entries ?? []).filter(
     (entry) => entry.enabled && entry.status === "ready",
   );
-  return { providers, error: snapshot.error };
+  return { providers, error: snapshot.error, onCatalogAccess: snapshot.refetchIfStale };
 }
 
 const NOTE_KEYS: Record<BotSessionNote, string> = {
@@ -96,6 +102,7 @@ export function BotExecutionFields({
   onChange,
   disabled,
   showMode = true,
+  onCatalogAccess,
 }: {
   /**
    * Hosts with Bot permissions run the Bot in the strictest mode its provider offers, so Bot
@@ -107,6 +114,7 @@ export function BotExecutionFields({
   value: BotExecutionDraft;
   onChange: (value: BotExecutionDraft) => void;
   disabled: boolean;
+  onCatalogAccess?: (provider: string) => void;
 }) {
   const { t } = useTranslation();
   const selectedProvider = value.provider || providers[0]?.provider || "";
@@ -125,7 +133,11 @@ export function BotExecutionFields({
           id: item.provider,
           label: item.label || item.provider,
         }))}
-        onChange={(provider) => onChange({ provider, model: "", modeId: "", thinking: "" })}
+        onChange={(provider) => {
+          onCatalogAccess?.(provider);
+          onChange({ provider, model: "", modeId: "", thinking: "" });
+        }}
+        onAccess={() => onCatalogAccess?.(selectedProvider)}
         disabled={disabled}
         testID="bot-provider"
       />
@@ -136,6 +148,7 @@ export function BotExecutionFields({
         onChange={(model) => onChange({ ...value, model, thinking: "" })}
         disabled={disabled}
         testID="bot-model"
+        onAccess={() => onCatalogAccess?.(selectedProvider)}
       />
       {showMode ? (
         <BotSelect
@@ -161,6 +174,7 @@ export function BotExecutionFields({
         onChange={(thinking) => onChange({ ...value, thinking })}
         disabled={disabled}
         testID="bot-thinking"
+        onAccess={() => onCatalogAccess?.(selectedProvider)}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </>
@@ -200,7 +214,7 @@ export function BotSetup({
   const [clearMemory, setClearMemory] = useState(false);
   const [permissionsDraft, setPermissionsDraft] = useState<BotPermissions | null>(null);
   const supportsPermissions = useBotPermissionsSupported(serverId);
-  const { providers, error } = useBotProviders(serverId, cwd, interactive);
+  const { providers, error, onCatalogAccess } = useBotProviders(serverId, cwd, interactive);
   const execution = resolveExecution(draft, providers);
   // Providers load after mount, so the default profile is derived until the user edits it.
   const permissions = permissionsDraft ?? defaultBotPermissions(providers);
@@ -234,6 +248,7 @@ export function BotSetup({
       <Text style={styles.title}>{t("bots.setupTitle")}</Text>
       <Text style={styles.hint}>{t("bots.setupHint")}</Text>
       <BotExecutionFields
+        onCatalogAccess={onCatalogAccess}
         providers={providers}
         error={error}
         value={draft}

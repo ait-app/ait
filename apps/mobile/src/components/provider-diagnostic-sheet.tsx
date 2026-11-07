@@ -31,12 +31,15 @@ import {
   resolveProviderDiscoveredModels,
   type ProviderDiscoveredModelsCache,
 } from "./provider-diagnostic-models";
+import { ProviderPresetsSection } from "./provider-presets-section";
 
 interface ProviderDiagnosticSheetProps {
   provider: string;
   visible: boolean;
   onClose: () => void;
   serverId: string;
+  /** Directory whose preset store this sheet manages; absent means the harness default. */
+  cwd?: string;
 }
 
 function rankModels<T>(items: T[], query: string, fields: (item: T) => string[]): T[] {
@@ -250,11 +253,13 @@ function DiagnosticSubSheet({
   const { theme } = useUnistyles();
   const toast = useToast();
   const client = useHostRuntimeClient(serverId);
+  const { refetchIfStale } = useProvidersSnapshot(serverId, { refreshOnAccess: false });
   const [diagnostic, setDiagnostic] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const fetchDiagnostic = useCallback(async () => {
     if (!client) return;
+    refetchIfStale(provider);
     setLoading(true);
     try {
       const result = await client.getProviderDiagnostic(provider);
@@ -266,7 +271,7 @@ function DiagnosticSubSheet({
     } finally {
       setLoading(false);
     }
-  }, [client, provider, t]);
+  }, [client, provider, refetchIfStale, t]);
 
   useEffect(() => {
     if (visible) {
@@ -576,6 +581,7 @@ export function ProviderDiagnosticSheet({
   visible,
   onClose,
   serverId,
+  cwd,
 }: ProviderDiagnosticSheetProps) {
   const canConfigure = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.providerConfiguration !== false,
@@ -584,7 +590,12 @@ export function ProviderDiagnosticSheet({
   const { theme } = useUnistyles();
   const toast = useToast();
   const isCompact = useIsCompactFormFactor();
-  const { entries: snapshotEntries, refresh, isRefreshing } = useProvidersSnapshot(serverId);
+  const {
+    entries: snapshotEntries,
+    refresh,
+    isRefreshing,
+    refetchIfStale,
+  } = useProvidersSnapshot(serverId, { refreshOnAccess: visible });
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [query, setQuery] = useState("");
   const [addSheetOpen, setAddSheetOpen] = useState(false);
@@ -652,7 +663,10 @@ export function ProviderDiagnosticSheet({
     void refresh([provider]);
   }, [provider, refresh]);
 
-  const handleOpenAddSheet = useCallback(() => setAddSheetOpen(true), []);
+  const handleOpenAddSheet = useCallback(() => {
+    refetchIfStale(provider);
+    setAddSheetOpen(true);
+  }, [provider, refetchIfStale]);
   const handleCloseAddSheet = useCallback(() => setAddSheetOpen(false), []);
   const handleOpenDiagSheet = useCallback(() => setDiagSheetOpen(true), []);
   const handleCloseDiagSheet = useCallback(() => setDiagSheetOpen(false), []);
@@ -711,6 +725,7 @@ export function ProviderDiagnosticSheet({
         })}
         snapPoints={MAIN_SNAP_POINTS}
       >
+        <ProviderPresetsSection provider={provider} serverId={serverId} cwd={cwd} />
         <ProviderModalBody
           discoveredCount={discoveredModels.length}
           additionalCount={additionalModels.length}

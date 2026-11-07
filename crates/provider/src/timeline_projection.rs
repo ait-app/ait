@@ -1,5 +1,6 @@
 //! Read-only Paseo display projection over immutable source events.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -39,7 +40,10 @@ enum Collapse {
 pub(crate) struct Entry {
     provider: String,
     /// Final projected native item.
-    #[serde(deserialize_with = "deserialize_item")]
+    #[serde(
+        deserialize_with = "deserialize_item",
+        serialize_with = "serialize_item"
+    )]
     pub(crate) item: Value,
     timestamp: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -71,11 +75,39 @@ impl From<&Row> for Entry {
     }
 }
 
+/// Encode native results as an existing text variant with additive rich metadata.
+/// Older closed timeline unions retain readable text; current readers recover the native card.
+pub(crate) fn wire_item(item: &Value) -> Cow<'_, Value> {
+    if item["type"] != "provider_command" {
+        return Cow::Borrowed(item);
+    }
+    let details: serde_json::Map<String, Value> = item
+        .as_object()
+        .into_iter()
+        .flat_map(|object| object.iter())
+        .filter(|(key, _)| !matches!(key.as_str(), "type" | "text"))
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
+    Cow::Owned(json!({"type":"assistant_message", "text":item["text"],
+        "messageId":format!("provider-command:{}",item["id"].as_str().unwrap_or_default()),
+        "providerCommand":details}))
+}
+
+fn serialize_item<S: serde::Serializer>(item: &Value, serializer: S) -> Result<S::Ok, S::Error> {
+    wire_item(item).serialize(serializer)
+}
+
 fn deserialize_item<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Value, D::Error> {
     Value::deserialize(deserializer).map(normalize_item)
 }
 
 fn normalize_item(mut item: Value) -> Value {
+    if item["type"] == "assistant_message" && item["providerCommand"].is_object() {
+        let mut command = item["providerCommand"].take();
+        command["type"] = json!("provider_command");
+        command["text"] = item["text"].take();
+        return command;
+    }
     if item["type"] != "tool_call" {
         return item;
     }

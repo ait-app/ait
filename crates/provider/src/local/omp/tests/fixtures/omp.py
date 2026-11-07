@@ -8,12 +8,44 @@ import time
 import uuid
 
 args = sys.argv[1:]
+btw_records = []
 cwd = os.getcwd()
 root = Path(os.environ['PI_CODING_AGENT_DIR'])
 root.mkdir(parents=True, exist_ok=True)
 log = root / 'calls.jsonl'
+roles_file = root / 'model-roles.json'
+roles = json.loads(roles_file.read_text()) if roles_file.exists() else {
+    'default': 'test/model', 'smol': 'other/model', 'advisor': 'other/model:high'}
+if args[:1] in (['config'], ['models']):
+    with (root / 'metadata-calls.jsonl').open('a') as output:
+        output.write(json.dumps(args) + '\n')
+if args[:2] == ['config', 'list']:
+    def presets(scope):
+        file = root / (scope + '-presets.json')
+        return json.loads(file.read_text()) if file.exists() else {}
+    saved = {**presets('global'), **presets('project')}
+    if '--scope' in args:
+        saved = presets(args[args.index('--scope') + 1])
+    values = {'modelRoles': roles, 'modelTags': {}, 'cycleOrder': ['smol', 'default', 'slow'],
+              'modelPresets': saved, 'defaultThinkingLevel': 'off'}
+    for key, name in [('modelTags', 'model-tags.json'), ('cycleOrder', 'cycle-order.json')]:
+        file = root / name
+        if file.exists():
+            values[key] = json.loads(file.read_text())
+    print(json.dumps({key: {'value': value} for key, value in values.items()}))
+    sys.exit(0)
+if args[:1] == ['models']:
+    print(json.dumps({'models': [
+        {'selector': 'test/model', 'name': 'Fixture model', 'kind': 'chat', 'input': ['text', 'image'], 'thinking': ['low', 'high']},
+        {'selector': 'other/model', 'name': 'Other', 'kind': 'chat', 'input': ['text'], 'thinking': ['low', 'high', 'max']},
+        *(json.loads((root / 'extra-models.json').read_text()) if (root / 'extra-models.json').exists() else []),
+        *[{'selector': 'test/' + kind, 'name': kind, 'kind': kind} for kind in ['tiny', 'image', 'search', 'tts', 'stt', 'judge']]
+    ]}))
+    sys.exit(0)
+overlay = json.loads(Path(args[args.index('--config') + 1]).read_text()) if '--config' in args else {}
+roles.update(overlay.get('modelRoles', {}))
 with log.open('a') as output:
-    output.write(json.dumps({'args': args}) + '\n')
+    output.write(json.dumps({'args': args, 'modelRoles': roles, 'defaultThinkingLevel': overlay.get('defaultThinkingLevel')}) + '\n')
 file = Path(args[args.index('--resume') + 1]) if '--resume' in args else None
 records = []
 if file and file.exists():
@@ -29,15 +61,25 @@ leaf = records[-1].get('id') if len(records) > 1 else None
 models = [
     {'provider': 'test', 'id': 'model', 'name': 'Fixture model', 'reasoning': True,
      'thinking': {'mode': 'effort', 'efforts': ['low', 'high']}, 'contextWindow': 32768},
-    {'provider': 'other', 'id': 'model', 'name': 'Other', 'reasoning': True,
+    {'provider': 'other', 'id': 'model', 'name': 'Other', 'reasoning': True, 'webSearch': {},
      'thinking': {'mode': 'effort', 'efforts': ['low', 'high', 'max']}, 'contextWindow': 32768},
 ]
 model = models[0]
+default = roles.get('default')
+for _ in range(128):
+    if not isinstance(default, str) or not default.startswith('@'):
+        break
+    default = roles.get(default[1:])
+default = default or 'test/model'
+selector, separator, effort = default.rpartition(':')
+if not separator:
+    selector, effort = default, overlay.get('defaultThinkingLevel', 'off')
+model = next((item for item in models if item['provider'] + '/' + item['id'] == selector), model)
 if '--provider' in args and '--model' in args:
     provider = args[args.index('--provider') + 1]
     model_id = args[args.index('--model') + 1]
     model = next((item for item in models if item['provider'] == provider and item['id'] == model_id), model)
-level = 'off'
+level = effort
 active = False
 prompt_id = None
 pending_plugin = None
@@ -97,7 +139,11 @@ def finish(aborted=False, settled=True):
         emit({'type': 'agent_end', 'messages': []})
     emit({'type': 'session_settled'})
 
-emit({'type':'ready','protocolVersion':1,'supportedProtocolVersions':[1,2],'maxFrameBytes':1048576,'maxReassembledFrameBytes':67108864})
+if (root / 'ready-delay').exists():
+    time.sleep(float((root / 'ready-delay').read_text()))
+
+emit({'type':'ready','protocolVersion':1,'supportedProtocolVersions':[1,2],'maxFrameBytes':1048576,'maxReassembledFrameBytes':67108864,
+      'capabilities': {'commandCompletion': {'version': 1 if (root / 'completion.json').exists() else 0}}})
 
 for line in sys.stdin:
     command = json.loads(line)
@@ -107,9 +153,19 @@ for line in sys.stdin:
     if pending_dialog and kind in ('get_state', 'steer'):
         dialog_commands.append(command)
         continue
-    if kind == 'negotiate_protocol':
+    if kind == 'fixture_slow_control':
+        time.sleep(0.8)
+        response(command)
+    elif kind == 'negotiate_protocol':
+        if (root / 'negotiate-delay').exists():
+            time.sleep(float((root / 'negotiate-delay').read_text()))
         response(command, {'protocolVersion':2})
+    elif kind == 'complete':
+        response(command, json.loads((root / 'completion.json').read_text()))
     elif kind == 'get_state':
+        if active and (root/'finish-wait').exists():
+            (root/'finish-wait').unlink()
+            finish()
         if pending_async and (root / 'release-settlement').exists():
             pending_async = False
             emit({'type': 'agent_start'})
@@ -123,6 +179,10 @@ for line in sys.stdin:
                           'slowModeSupported': model['provider'] == 'test'}
         if current_prompt == 'missing-settlement-fact':
             state.pop('isSettled')
+        if (root / 'idle-busy').exists():
+            state.update({'hasPendingAsyncWork': True, 'isSettled': False})
+        if (root / 'idle-unknown').exists():
+            state.pop('isSettled', None)
         response(command, state)
     elif kind == 'fixture_new_context':
         session_id=str(uuid.uuid4())
@@ -149,10 +209,56 @@ for line in sys.stdin:
         response(command)
     elif kind == 'get_subagents':
         response(command, {'subagents': []})
+    elif kind == 'get_btw_history':
+        saved = root/'btw-history-fixture.json'
+        if saved.exists():
+            btw_records = json.loads(saved.read_text())
+        response(command, {'records':btw_records})
+    elif kind == 'btw':
+        previous = next((entry for entry in btw_records if entry['id'] == command.get('recordId')),None)
+        turn = {'question':command['question'],'answer':'','status':'running','createdAt':int(time.time()*1000),'updatedAt':int(time.time()*1000)}
+        if previous:
+            previous.setdefault('followUps',[]).append(turn)
+            record = previous
+        else:
+            record = {'id':str(uuid.uuid4()),**turn}
+            btw_records.insert(0,record)
+            turn = record
+        emit({'type':'btw_record','record':record})
+        response(command,{'record':record})
+        if not command['question'].startswith('hold'):
+            emit({'type':'btw_delta','recordId':record['id'],'delta':'Native side answer'})
+            turn['answer'] = 'Native side answer'
+            turn['status'] = 'complete'
+            turn['updatedAt'] += 1
+            emit({'type':'btw_record','record':record})
+        (root/'btw-history-fixture.json').write_text(json.dumps(btw_records))
+    elif kind == 'btw_cancel':
+        cancelled = False
+        for record in btw_records:
+            turn = record.get('followUps',[record])[-1]
+            if turn['status'] == 'running' and (not command.get('recordId') or command['recordId'] == record['id']):
+                turn['status'] = 'cancelled'
+                turn['updatedAt'] += 1
+                emit({'type':'btw_record','record':record})
+                cancelled = True
+        (root/'btw-history-fixture.json').write_text(json.dumps(btw_records))
+        response(command,{'cancelled':cancelled})
     elif kind == 'get_available_commands':
-        response(command, {'commands': [{'name': 'review', 'description': 'Review', 'source': 'skill'}, *json.loads((root/'plugins.json').read_text())] if (root/'plugins.json').exists() else [{'name': 'review', 'description': 'Review', 'source': 'skill'}]})
-    elif kind == 'interactive_control':
+        commands = [{'name': 'review', 'description': 'Review', 'source': 'skill'}]
+        if (root/'side-commands').exists():
+            commands.extend([{'name':'usage','source':'builtin'},{'name':'status','source':'extension'}])
+        if not (root/'missing-preset-builtin').exists():
+            commands.append({'name':'modelpreset','description':'Model presets','source':'builtin'})
+        if (root/'plugins.json').exists():
+            commands.extend(json.loads((root/'plugins.json').read_text()))
+        if '--extension' in args and not (root/'missing-preset-helper').exists():
+            commands.append({'name':'ait-read-model-preset-default','description':'Preset reader','source':'extension'})
+        response(command, {'commands':commands})
+    elif kind in ('interactive_control', 'login'):
         pending_control=command
+        if kind == 'login':
+            emit({'type':'extension_ui_request','id':'login-url','method':'open_url','url':'https://example.com/fixture-login'})
         emit({'type':'extension_ui_request','id':'control-question','method':'input','title':'Native control input'})
     elif kind == 'host_tool_update':
         pass
@@ -160,16 +266,61 @@ for line in sys.stdin:
         finish()
     elif kind == 'prompt':
         text = command['message']
+        if text == '/usage' and (root/'side-commands').exists():
+            emit({'type':'command_output','text':'Native usage: 123 tokens'})
+            response(command,{'agentInvoked':False})
+            continue
         current_prompt = text
         prompt_id = command.get('id')
+        if text == '/ait-read-model-preset-default':
+            response(command)
+            resolved = next(([item['provider'],item['id']] for item in models if item['provider']+'/'+item['id'] == selector),None)
+            emit({'type':'extension_ui_request','id':'preset-default','method':'notify','message':json.dumps({'aitPresetDefault':resolved})})
+            emit({'type':'prompt_result','id':prompt_id,'agentInvoked':False,'status':'completed'})
+            continue
+        if text.startswith('/modelpreset '):
+            _, operation, name = text.split(' ',2)
+            saved_file = root/'global-presets.json'
+            saved = json.loads(saved_file.read_text()) if saved_file.exists() else {}
+            if operation == 'save':
+                saved[name] = {'modelRoles':{key:value for key,value in roles.items() if value},'defaultThinkingLevel':overlay.get('defaultThinkingLevel','off')}
+            elif operation == 'delete':
+                saved.pop(name,None)
+            if operation == 'save' and (root/'preset-write-delay').exists():
+                import threading
+                writer = threading.Timer(0.2,lambda: saved_file.write_text(json.dumps(saved)))
+                writer.daemon = True
+                writer.start()
+            else:
+                saved_file.write_text(json.dumps(saved))
+            emit({'type':'command_output','text':operation+' preset '+name})
+            response(command,{'agentInvoked':False})
+            continue
+        if text in ('/fixture-ui', '/fixture-ui-clear'):
+            clear = text.endswith('-clear')
+            emit({'type':'extension_ui_request','id':'status','method':'setStatus','statusKey':'fixture',**({} if clear else {'statusText':'Ready'})})
+            emit({'type':'extension_ui_request','id':'widget','method':'setWidget','widgetKey':'fixture',**({} if clear else {'widgetLines':['Native widget']})})
+            emit({'type':'extension_ui_request','id':text,'method':'set_editor_text','text':'' if clear else 'Native draft'})
+            response(command)
+            emit({'type':'prompt_result','id':prompt_id,'agentInvoked':False,'status':'completed','sessionSettled':True})
+            continue
+        if text == '/fixture-command-update':
+            emit({'type':'available_commands_update','commands':json.loads((root/'catalog-update.json').read_text())})
+            emit({'type':'command_output','text':'Command catalog updated'})
+            response(command, {'agentInvoked': False})
+            continue
         if text == 'interactive-fixture':
             pending_dialog = command
             dialog = json.loads((root / 'dialog.json').read_text())
             emit({'type':'extension_ui_request','id':'dialog-1',**dialog})
             continue
         plugins = json.loads((root/'plugins.json').read_text()) if (root/'plugins.json').exists() else []
-        plugin = next((entry for entry in plugins if text == '/'+entry['name']), None)
+        plugin = next((entry for entry in plugins if text == '/'+entry['name'] or text.startswith('/'+entry['name']+' ')), None)
         if plugin:
+            if 'directOutput' in plugin:
+                emit({'type':'command_output','text':plugin['directOutput']})
+                response(command, {'agentInvoked':False})
+                continue
             pending_plugin = (command, plugin)
             emit({'type':'extension_ui_request','id':'plugin-question','method':'select',
                   'title':plugin['description'],'options':['A, B','C']})

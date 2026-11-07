@@ -262,7 +262,7 @@ pub(super) async fn inspect(
         confinement: None,
     };
     config::validate_spec(&spec)?;
-    let (mut transport, _, source) = launcher::observed(client, cwd, &spec.config).await?;
+    let (mut transport, _, source, _) = launcher::observed(client, cwd, &spec.config).await?;
     let result = async {
         let child = super::subagents::history::verify(&mut transport, client, handle, cwd).await?;
         let (options, mut stream, location) = replay(

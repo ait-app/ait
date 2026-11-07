@@ -78,6 +78,10 @@
 
 ## Provider、Agent 与会话
 
+- [原生附件、ZIP 交付与 OMP 模型角色](providers/native-delivery-and-omp-roles-2026-11-02.md)
+- [DSH / OpenCode 原生命令与能力适配](providers/dsh-opencode-capability-adaptation-2026-10-30.md)
+- [OMP 命令、参数补全与交互兼容验证](providers/omp-commands-and-completion-2026-10-30.md)
+
 - [性能交接报告修复验证（2026-11-03）](providers/performance-handoff-fixes-2026-11-03.md)
 
 - [统一子 Agent 展示：实施与验证](providers/unified-subagents-2026-10-31.md)

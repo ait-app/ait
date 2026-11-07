@@ -7045,6 +7045,7 @@ test("creation lifecycle sends the keyed agent and initial prompt as one intent"
     workspaceId: "wks_0123456789abcdef",
     initialPrompt: "Start once",
     clientMessageId: "first-message",
+    featureValues: { "modelRole.smol": "native" },
   });
   void creation.catch(() => undefined);
   const request = parseSentFrame(transport.sent[0]);
@@ -7053,7 +7054,11 @@ test("creation lifecycle sends the keyed agent and initial prompt as one intent"
     idempotencyKey: "draft-one",
     initialPrompt: "Start once",
     clientMessageId: "first-message",
+    config: { provider: "codex", cwd: "/project", featureValues: { "modelRole.smol": "native" } },
   });
+  expect(request).not.toHaveProperty("provider");
+  expect(request).not.toHaveProperty("cwd");
+  expect(request).not.toHaveProperty("featureValues");
   transport.triggerMessage(
     wrapSessionMessage({
       type: "agent.create.response",

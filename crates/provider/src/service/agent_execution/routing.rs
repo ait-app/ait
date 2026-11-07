@@ -220,6 +220,7 @@ fn plan(
     method: Operation,
     params: &Value,
 ) -> Result<(ExecutionState, Option<String>), ErrorCode> {
+    let session_commands = uses_command_owner(&state, method, params)?;
     let lane = if mutation::is_mutation(method) {
         None
     } else if method == Operation::Bot {
@@ -261,6 +262,7 @@ fn plan(
         method.access(),
         Access::Read | Access::Catalog | Access::Discovery
     ) && !(method == Operation::Usage && params.get("agentId").is_some())
+        && !session_commands
     {
         None
     } else if method == Operation::ClearAttention && params["agentId"].is_array() {
@@ -299,6 +301,25 @@ fn plan(
         state.manager = state.manager.fork(Some(state.owners.owner(lane.clone())));
     }
     Ok((state, lane))
+}
+
+fn uses_command_owner(
+    state: &ExecutionState,
+    method: Operation,
+    params: &Value,
+) -> Result<bool, ErrorCode> {
+    if !matches!(method, Operation::Commands | Operation::CompleteCommands) {
+        return Ok(false);
+    }
+    match state.resolve(
+        params["agentId"]
+            .as_str()
+            .ok_or(ErrorCode::InvalidMessage)?,
+    ) {
+        Ok(id) => state.manager.uses_session_commands(&id).map_err(Into::into),
+        Err(ErrorCode::AgentNotFound) => Ok(false),
+        Err(error) => Err(error),
+    }
 }
 
 fn existing_agent_lane(
@@ -398,7 +419,9 @@ fn canonicalize(
     method: Operation,
     params: &mut Value,
 ) -> Result<(), ErrorCode> {
-    if method == Operation::Commands && params.get("draftConfig").is_some() {
+    if matches!(method, Operation::Commands | Operation::CompleteCommands)
+        && params.get("draftConfig").is_some()
+    {
         return Ok(());
     }
     if let Some(target) = method.target()

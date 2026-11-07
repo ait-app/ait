@@ -66,6 +66,51 @@ fn runtime_and_commands_validate_native_facts() {
 }
 
 #[test]
+fn commands_preserve_native_aliases_sources_and_argument_descriptions() {
+    let native: Value =
+        serde_json::from_str(include_str!("../../../../tests/fixtures/omp_commands.json")).unwrap();
+    let catalog = commands(&native).unwrap();
+    for (native, command) in native["commands"].as_array().unwrap().iter().zip(&catalog) {
+        for field in ["name", "description", "source", "aliases", "subcommands"] {
+            assert_eq!(command.get(field), native.get(field), "{field}");
+        }
+        assert_eq!(
+            command["argumentHint"],
+            native["input"]["hint"].as_str().unwrap_or_default()
+        );
+        assert_eq!(
+            command["kind"],
+            if native["source"] == "skill" {
+                "skill"
+            } else {
+                "command"
+            }
+        );
+    }
+}
+
+#[test]
+fn commands_reject_malformed_argument_metadata_without_dropping_fields() {
+    for metadata in [
+        json!({"aliases":"alias"}),
+        json!({"aliases":[null]}),
+        json!({"aliases":[""]}),
+        json!({"subcommands":{}}),
+        json!({"subcommands":[{"name":""}]}),
+        json!({"subcommands":[{"name":"on","description":false}]}),
+        json!({"subcommands":[{"name":"run","usage":0}]}),
+        json!({"source":null}),
+    ] {
+        let mut command = json!({"name":"example"});
+        command
+            .as_object_mut()
+            .unwrap()
+            .extend(metadata.as_object().unwrap().clone());
+        assert!(commands(&json!({"commands":[command]})).is_err());
+    }
+}
+
+#[test]
 fn model_metadata_does_not_invent_or_accept_invalid_thinking_levels() {
     for model in [
         json!({}),

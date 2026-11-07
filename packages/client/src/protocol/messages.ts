@@ -87,6 +87,7 @@ export function serverInfo(
       ownedSubscriptions: has("subscription.release.request"),
       explicitEventSubscriptions: !scopedGuest && has("session.events.set_subscription.request"),
       providersSnapshot: has("provider.snapshot.get.request"),
+      agentCommandCompletion: has("agent.commands.complete.request"),
       importSessionWorkspaceTarget: has("agent.import.request"),
       importSessionSearch: has("provider.sessions.recent.list.request"),
       workspaceLabels: !scopedGuest && has("workspace.label.list.request"),

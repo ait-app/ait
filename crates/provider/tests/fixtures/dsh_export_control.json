@@ -1,0 +1,13 @@
+{
+  "type": "provider_command",
+  "id": "dsh:session:command:export-1",
+  "command": "export",
+  "status": "success",
+  "text": "Session log download requested.",
+  "file": {
+    "directory": "/private/ait/dsh-exports/command",
+    "fileName": "session.zip",
+    "size": 127,
+    "mimeType": "application/zip"
+  }
+}

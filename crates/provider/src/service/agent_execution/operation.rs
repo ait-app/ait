@@ -56,11 +56,17 @@ pub(crate) enum Operation {
     ForkContext,
     Rewind,
     Commands,
+    CompleteCommands,
+    NativeAction,
     Subagents,
     UnifiedSubagents,
     ChildTimeline,
     Diagnostic,
     Usage,
+    PresetDescribe,
+    PresetList,
+    PresetSave,
+    PresetDelete,
     Available,
     Models,
     Modes,
@@ -115,10 +121,16 @@ impl Operation {
             "agent.fork_context.request" => Ok(Self::ForkContext),
             "agent.rewind.request" => Ok(Self::Rewind),
             "agent.commands.list.request" => Ok(Self::Commands),
+            "agent.commands.complete.request" => Ok(Self::CompleteCommands),
+            "agent.native_action.request" => Ok(Self::NativeAction),
             "agent.provider_subagents.list.request" => Ok(Self::Subagents),
             "agent.subagents.list.request" => Ok(Self::UnifiedSubagents),
             "agent.provider_subagents.timeline.get.request" => Ok(Self::ChildTimeline),
             "provider.diagnostic.request" => Ok(Self::Diagnostic),
+            "provider.presets.describe.request" => Ok(Self::PresetDescribe),
+            "provider.presets.list.request" => Ok(Self::PresetList),
+            "provider.presets.save.request" => Ok(Self::PresetSave),
+            "provider.presets.delete.request" => Ok(Self::PresetDelete),
             "provider.usage.list.request" => Ok(Self::Usage),
             "provider.available.list.request" => Ok(Self::Available),
             "provider.models.list.request" => Ok(Self::Models),
@@ -173,10 +185,16 @@ impl Operation {
             Self::ForkContext => "agent.fork_context.request",
             Self::Rewind => "agent.rewind.request",
             Self::Commands => "agent.commands.list.request",
+            Self::CompleteCommands => "agent.commands.complete.request",
+            Self::NativeAction => "agent.native_action.request",
             Self::Subagents => "agent.provider_subagents.list.request",
             Self::UnifiedSubagents => "agent.subagents.list.request",
             Self::ChildTimeline => "agent.provider_subagents.timeline.get.request",
             Self::Diagnostic => "provider.diagnostic.request",
+            Self::PresetDescribe => "provider.presets.describe.request",
+            Self::PresetList => "provider.presets.list.request",
+            Self::PresetSave => "provider.presets.save.request",
+            Self::PresetDelete => "provider.presets.delete.request",
             Self::Usage => "provider.usage.list.request",
             Self::Available => "provider.available.list.request",
             Self::Models => "provider.models.list.request",
@@ -226,6 +244,7 @@ impl Operation {
             | Self::Refresh
             | Self::ForkContext
             | Self::Rewind
+            | Self::NativeAction
             | Self::Subagents
             | Self::UnifiedSubagents
             | Self::ChildTimeline
@@ -244,9 +263,15 @@ impl Operation {
             | Self::History
             | Self::PrepareDirectory
             | Self::ResolveIdentities => Access::Read,
-            Self::RecentSessions | Self::Commands | Self::Diagnostic | Self::Usage => {
-                Access::Discovery
-            }
+            Self::RecentSessions
+            | Self::Commands
+            | Self::CompleteCommands
+            | Self::Diagnostic
+            | Self::PresetDescribe
+            | Self::PresetList
+            | Self::PresetSave
+            | Self::PresetDelete
+            | Self::Usage => Access::Discovery,
             Self::Available
             | Self::Models
             | Self::Modes
@@ -278,6 +303,8 @@ impl Operation {
             | Self::ForkContext
             | Self::Rewind
             | Self::Commands
+            | Self::CompleteCommands
+            | Self::NativeAction
             | Self::Usage
             | Self::Get
             | Self::Update
@@ -300,6 +327,10 @@ impl Operation {
             | Self::RecentSessions
             | Self::Import
             | Self::Diagnostic
+            | Self::PresetDescribe
+            | Self::PresetList
+            | Self::PresetSave
+            | Self::PresetDelete
             | Self::Available
             | Self::Models
             | Self::Modes

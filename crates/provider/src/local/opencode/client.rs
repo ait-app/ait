@@ -94,6 +94,13 @@ impl OpenCodeClient {
 
 #[async_trait::async_trait]
 impl AgentClient for OpenCodeClient {
+    fn supports_session_commands(&self) -> bool {
+        true
+    }
+
+    async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {
+        super::commands::discover(self, spec).await
+    }
     fn supports_write_confinement(&self) -> bool {
         true
     }

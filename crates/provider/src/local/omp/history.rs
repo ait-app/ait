@@ -18,6 +18,7 @@ pub(super) struct Journal {
     pub(super) path: PathBuf,
     pub(super) header: Value,
     records: Vec<Value>,
+    pub(super) navigation: Option<Value>,
 }
 
 fn environment(client: &OmpClient, key: &str) -> Option<String> {
@@ -172,6 +173,7 @@ fn read(path: PathBuf) -> Result<Journal, AgentSessionError> {
         path,
         header,
         records,
+        navigation: None,
     })
 }
 
@@ -212,6 +214,7 @@ struct Lookup {
     id: String,
     cwd: String,
     empty: Option<String>,
+    navigation: Option<Value>,
 }
 
 impl Lookup {
@@ -244,6 +247,9 @@ impl Lookup {
             id: handle.session_id.clone(),
             cwd: cwd.to_owned(),
             empty,
+            navigation: metadata
+                .and_then(|metadata| metadata.get("navigation"))
+                .cloned(),
         })
     }
 
@@ -255,6 +261,7 @@ impl Lookup {
             id,
             cwd,
             empty,
+            navigation,
         } = self;
         let path = match known {
             Some(path) if path.is_absolute() => path,
@@ -277,14 +284,43 @@ impl Lookup {
                 path,
                 header: json!({"type":"session","version":3,"id":id,"cwd":cwd,"timestamp":created}),
                 records: Vec::new(),
+                navigation: None,
             });
         }
-        let journal = read(path)?;
+        let mut journal = read(path)?;
         if journal.header["id"] != id || !Workspace::new(&cwd).matches(&journal.header["cwd"]) {
             return Err(AgentSessionError::Rejected);
         }
+        journal.restore_navigation(navigation.as_ref())?;
         Ok(journal)
     }
+}
+
+/// Load a validated journal without materializing images on the async runtime.
+/// Returns foreign-handle, missing-journal, malformed-record and blocking-task failures.
+pub(super) async fn load(
+    client: &OmpClient,
+    handle: &AgentPersistenceHandle,
+    cwd: &str,
+) -> Result<Journal, AgentSessionError> {
+    let lookup = Lookup::new(client, handle, cwd)?;
+    tokio::task::spawn_blocking(move || lookup.load())
+        .await
+        .map_err(|_| AgentSessionError::Failed)?
+}
+
+/// Replay an already validated journal off the async runtime.
+/// Returns native-record, image materialization and blocking-task failures.
+pub(super) async fn project(
+    client: &OmpClient,
+    handle: &AgentPersistenceHandle,
+    journal: Journal,
+) -> Result<(SessionHistory, Stream), AgentSessionError> {
+    let client = client.clone();
+    let handle = handle.clone();
+    tokio::task::spawn_blocking(move || journal.project(&client, &handle))
+        .await
+        .map_err(|_| AgentSessionError::Failed)?
 }
 
 /// Load a resumable journal and, when it is persisted, replay it for the live stream.
@@ -328,6 +364,68 @@ fn record_message(record: &Value) -> Result<std::borrow::Cow<'_, Value>, AgentSe
 }
 
 impl Journal {
+    /// Record an observed native leaf without modifying the official journal.
+    /// Reject unknown target/leaf IDs; bind the checkpoint to this session and physical tip.
+    pub(super) fn set_navigation(
+        &mut self,
+        target: &str,
+        leaf: &Value,
+    ) -> Result<(), AgentSessionError> {
+        if !self.records.iter().any(|record| record["id"] == target)
+            || (!leaf.is_null()
+                && (!leaf.is_string() || !self.records.iter().any(|record| record["id"] == *leaf)))
+        {
+            return Err(AgentSessionError::Rejected);
+        }
+        self.navigation = Some(
+            json!({"sessionId":self.header["id"],"targetId":target,"leafId":leaf,
+            "tip":self.records.last().map(|record|&record["id"])}),
+        );
+        Ok(())
+    }
+
+    fn restore_navigation(&mut self, navigation: Option<&Value>) -> Result<(), AgentSessionError> {
+        let Some(navigation) = navigation.filter(|value| value.is_object()) else {
+            return Ok(());
+        };
+        // A native restart may append settings or usage without extending the conversation.
+        // New conversation or structural entries supersede the checkpoint instead of hiding them.
+        if navigation["sessionId"] != self.header["id"]
+            || !self.navigation_tip_is_current(&navigation["tip"])
+        {
+            return Ok(());
+        }
+        self.set_navigation(
+            config::text(navigation, "targetId")?,
+            navigation
+                .get("leafId")
+                .ok_or(AgentSessionError::Rejected)?,
+        )
+    }
+
+    fn navigation_tip_is_current(&self, tip: &Value) -> bool {
+        let suffix = if tip.is_null() {
+            self.records.as_slice()
+        } else if let Some(index) = self.records.iter().position(|record| record["id"] == *tip) {
+            &self.records[index + 1..]
+        } else {
+            return false;
+        };
+        suffix.iter().all(|record| {
+            matches!(
+                record["type"].as_str(),
+                Some(
+                    "model_change"
+                        | "thinking_level_change"
+                        | "service_tier_change"
+                        | "mode_change"
+                        | "model_usage"
+                        | "credential_pin"
+                )
+            ) || (record["type"] == "custom" && record["customType"] == "session_exit")
+        })
+    }
+
     fn branch(&self) -> Result<Vec<&Value>, AgentSessionError> {
         let mut index = BTreeMap::new();
         for record in &self.records {
@@ -337,14 +435,25 @@ impl Journal {
             }
         }
         let mut path = Vec::new();
-        let mut next = match self.records.last() {
-            Some(record) if record.get("activeLeafId").is_some() => {
-                match record["activeLeafId"].as_str() {
-                    Some(id) => Some(*index.get(id).ok_or(AgentSessionError::Failed)?),
-                    None => None,
-                }
+        let mut next = match self
+            .navigation
+            .as_ref()
+            .map(|navigation| &navigation["leafId"])
+        {
+            Some(Value::Null) => None,
+            Some(Value::String(id)) => {
+                Some(*index.get(id.as_str()).ok_or(AgentSessionError::Failed)?)
             }
-            last => last,
+            Some(_) => return Err(AgentSessionError::Failed),
+            None => match self.records.last() {
+                Some(record) if record.get("activeLeafId").is_some() => {
+                    match record["activeLeafId"].as_str() {
+                        Some(id) => Some(*index.get(id).ok_or(AgentSessionError::Failed)?),
+                        None => None,
+                    }
+                }
+                last => last,
+            },
         };
         let mut visited = BTreeSet::new();
         while let Some(record) = next {
@@ -487,6 +596,7 @@ impl Journal {
             ("cwd".to_owned(), self.header["cwd"].clone()),
             ("sessionFile".to_owned(), json!(self.path)),
             ("inputIds".to_owned(), json!(stream.input_ids)),
+            ("navigation".to_owned(), json!(self.navigation)),
         ]);
         let created_at = self.header["timestamp"]
             .as_str()

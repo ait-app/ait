@@ -51,6 +51,9 @@ struct Connection {
     identities: BTreeSet<String>,
     observation: Option<Observation>,
     reported_usage: bool,
+    catalog: watch::Sender<Option<Vec<Value>>>,
+    deferred: VecDeque<Value>,
+    command_lifecycle: bool,
 }
 
 #[derive(Debug)]
@@ -91,6 +94,7 @@ pub(super) struct Session {
     failed: bool,
     failure: Option<String>,
     diagnostics: crate::local::diagnostics::Diagnostics,
+    catalog: super::commands::Catalog,
 }
 
 /// Reject handles with a different provider or malformed native session identity.
@@ -151,19 +155,15 @@ pub(super) async fn open(
     spec: &AgentSessionSpec,
     binding: Option<(&AgentPersistenceHandle, AgentResumePurpose)>,
 ) -> Result<Session, AgentSessionError> {
-    config::validate_spec(spec)?;
-    if let Some((handle, _)) = binding {
-        validate_handle(handle)?;
-        clients(handle)?;
-    }
-    let history_only = binding.is_some_and(|(_, purpose)| purpose == AgentResumePurpose::History);
+    let history_only = validate_open(spec, binding)?;
     let inherited = StoredAgentConfig::default();
     let selected = if history_only {
         &inherited
     } else {
         &spec.config
     };
-    let (mut transport, capabilities, source) = launcher::session(client, spec, selected).await?;
+    let (mut transport, capabilities, source, command_lifecycle) =
+        launcher::session(client, spec, selected).await?;
     let (id, mut options, mut identities, clients, location, children) =
         if let Some((handle, _)) = binding {
             if capabilities["loadSession"] != true {
@@ -216,6 +216,7 @@ pub(super) async fn open(
         identities.extend(observation.users().iter().cloned());
     }
     let (_, events) = mpsc::channel(1);
+    let catalog = super::commands::Catalog::new();
     let mut live = Live::new(id.clone(), location.clone(), client.images.clone());
     live.restore(children)?;
     Ok(Session {
@@ -234,6 +235,9 @@ pub(super) async fn open(
             identities,
             observation,
             reported_usage: false,
+            catalog: catalog.sender(),
+            deferred: VecDeque::new(),
+            command_lifecycle,
         }),
         pending: Arc::default(),
         children: Arc::new(Mutex::new(live)),
@@ -249,7 +253,20 @@ pub(super) async fn open(
         closed: false,
         failed: false,
         failure: None,
+        catalog,
     })
+}
+
+fn validate_open(
+    spec: &AgentSessionSpec,
+    binding: Option<(&AgentPersistenceHandle, AgentResumePurpose)>,
+) -> Result<bool, AgentSessionError> {
+    config::validate_spec(spec)?;
+    if let Some((handle, _)) = binding {
+        validate_handle(handle)?;
+        clients(handle)?;
+    }
+    Ok(binding.is_some_and(|(_, purpose)| purpose == AgentResumePurpose::History))
 }
 
 /// Replay a bound native session; returns its options, accepted inputs and current location.
@@ -327,6 +344,46 @@ async fn observe(source: Option<Source>, id: &str, cwd: &str) -> Option<Observat
 }
 
 impl Session {
+    fn validate_command_lifecycle(
+        &mut self,
+        supported: bool,
+        text: &str,
+    ) -> Result<(), AgentSessionError> {
+        self.catalog.observe();
+        if !supported
+            && let Some(command) = text.trim_start().strip_prefix('/')
+            && let Some(name) = command.split_whitespace().next()
+            && name != "compact"
+            && self
+                .catalog
+                .items()
+                .is_some_and(|items| items.iter().any(|item| item["name"].as_str() == Some(name)))
+        {
+            self.failure = Some(
+                "OpenCode 2.1.3 ACP acknowledges custom commands before execution completes. \
+                 Native command lifecycle receipts are required to run them in Ait."
+                    .to_owned(),
+            );
+            return Err(AgentSessionError::Rejected);
+        }
+        Ok(())
+    }
+
+    fn prepare_command(
+        &mut self,
+        connection: &mut Connection,
+        text: &str,
+    ) -> Result<(), AgentSessionError> {
+        if !connection.command_lifecycle {
+            self.catalog.drain(
+                &self.id,
+                &mut connection.transport,
+                &mut connection.deferred,
+            )?;
+        }
+        self.validate_command_lifecycle(connection.command_lifecycle, text)
+    }
+
     async fn start(
         &mut self,
         prompt: &AgentPrompt,
@@ -357,6 +414,10 @@ impl Session {
         }
         if let Err(error) = self.prepare(&mut connection, selected).await {
             self.info = config::runtime(&self.id, &connection.options);
+            self.connection = Some(connection);
+            return Err(error);
+        }
+        if let Err(error) = self.prepare_command(&mut connection, &prompt.text) {
             self.connection = Some(connection);
             return Err(error);
         }
@@ -435,7 +496,7 @@ impl Session {
             || selected.system_prompt != self.spec.config.system_prompt
             || (selected.system_prompt.is_some() && selected.mode_id != self.spec.config.mode_id)
         {
-            let (mut transport, capabilities, source) =
+            let (mut transport, capabilities, source, command_lifecycle) =
                 launcher::session(&self.client, &self.spec, selected).await?;
             let location = &connection.location;
             let mut options = if capabilities["sessionCapabilities"]["resume"].is_object() {
@@ -468,6 +529,7 @@ impl Session {
                 .stopped();
             connection.options = options;
             connection.capabilities = capabilities;
+            connection.command_lifecycle = command_lifecycle;
             connection.transport = transport;
             connection.observation = observe(source, &self.id, &connection.location).await;
             if let Some(observation) = &connection.observation {
@@ -513,9 +575,17 @@ impl Session {
             return Ok(());
         };
         for _ in 0..32 {
-            let Some(message) = connection.transport.poll()? else {
+            let message = match connection.deferred.pop_front() {
+                Some(message) => Some(message),
+                None => connection.transport.poll()?,
+            };
+            let Some(message) = message else {
                 break;
             };
+            if super::commands::publish(&connection.catalog, &self.id, &message)? {
+                self.catalog.observe();
+                continue;
+            }
             let (handled, events) = self
                 .children
                 .lock()
@@ -701,6 +771,9 @@ impl Execution {
             return Err(AgentSessionError::Failed);
         }
         let update = &message["params"]["update"];
+        if super::commands::publish(&connection.catalog, &self.id, message)? {
+            return Ok(());
+        }
         if update["sessionUpdate"] == "usage_update" {
             if update["used"] == 0
                 && (connection.reported_usage
@@ -733,6 +806,9 @@ impl Execution {
         stream: &mut Stream,
     ) -> Result<Value, AgentSessionError> {
         loop {
+            if let Some(message) = connection.deferred.pop_front() {
+                return Ok(message);
+            }
             if self
                 .cancelled
                 .has_changed()
@@ -1076,6 +1152,17 @@ impl Execution {
 
 #[async_trait::async_trait]
 impl AgentSession for Session {
+    fn commands(&self) -> Option<&[Value]> {
+        self.catalog.items()
+    }
+
+    async fn refresh_commands(&mut self) -> Result<Option<Vec<Value>>, AgentSessionError> {
+        let connection = self
+            .connection
+            .as_mut()
+            .map(|connection| (&mut connection.transport, &mut connection.deferred));
+        self.catalog.refresh(&self.id, connection).await
+    }
     fn subagents(&self) -> Vec<crate::ports::controls::NativeSubagent> {
         self.children
             .lock()
@@ -1172,6 +1259,16 @@ impl AgentSession for Session {
     }
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
         self.check_cancellation()?;
+        if !self.closed {
+            if let Some(connection) = &mut self.connection {
+                self.catalog.drain(
+                    &self.id,
+                    &mut connection.transport,
+                    &mut connection.deferred,
+                )?;
+            }
+            self.catalog.observe();
+        }
         self.poll_idle()?;
         if let Some(event) = self.initial.pop_front() {
             return Ok(Some(event));

@@ -16,8 +16,9 @@ const HOME_SCOPE_CWD = "~";
 export function useAgentProfileFormCatalog(input: {
   serverId: string;
   model: AgentProfileFormModel;
-}): void {
-  const { entries } = useProvidersSnapshot(input.serverId, { cwd: null });
+}) {
+  const snapshot = useProvidersSnapshot(input.serverId, { cwd: null });
+  const { entries } = snapshot;
 
   useEffect(() => {
     if (!entries) {
@@ -25,12 +26,14 @@ export function useAgentProfileFormCatalog(input: {
     }
     input.model.applyProviderCatalog(entries);
   }, [entries, input.model]);
+  return snapshot;
 }
 
 export function useAgentProfileFormFeatures(input: {
   serverId: string;
   model: AgentProfileFormModel;
   state: AgentProfileFormState;
+  catalogFetchedAt?: string;
 }): void {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(input.serverId);
@@ -42,7 +45,7 @@ export function useAgentProfileFormFeatures(input: {
   // page's data while the next request is in flight, which would hand the
   // features of one provider/model combination to the key of another.
   const featuresQuery = useFetchQuery({
-    queryKey: ["agentProfileFeatures", input.serverId, requestKey],
+    queryKey: ["agentProfileFeatures", input.serverId, requestKey, input.catalogFetchedAt],
     dataShape: "value",
     staleTimeMs: 5 * 60 * 1000,
     enabled: Boolean(client && isConnected && request),

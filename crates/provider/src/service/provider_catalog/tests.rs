@@ -8,6 +8,7 @@ use domain::agent_runtime::AgentPersistenceHandle;
 
 mod concurrency;
 mod diagnostics;
+mod draft;
 mod paseo;
 
 #[derive(Debug)]

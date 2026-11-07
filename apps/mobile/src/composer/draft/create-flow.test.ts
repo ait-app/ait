@@ -311,7 +311,7 @@ describe("useDraftAgentCreateFlow", () => {
     rerender({ provider: "claude" });
     await act(async () => {
       await result.current.handleCreateFromInput({
-        text: "try again",
+        text: '/native "  argument  "\n  ',
         attachments: [],
         cwd: "/repo",
       });
@@ -323,7 +323,7 @@ describe("useDraftAgentCreateFlow", () => {
     expect(first.idempotencyKey).toBe(first.clientMessageId);
     expect(second.idempotencyKey).toBe(second.clientMessageId);
     expect(second.idempotencyKey).not.toBe(first.idempotencyKey);
-    expect(second.initialPrompt).toBe("try again");
+    expect(second.initialPrompt).toBe('/native "  argument  "\n  ');
     expect(second.config.provider).toBe("claude");
   });
 

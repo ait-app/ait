@@ -24,12 +24,48 @@ const { version } = require("../../package.json");
 beforeEach(() => vi.stubEnv("AIT_DESKTOP_SMOKE", "0"));
 afterEach(() => vi.unstubAllEnvs());
 
+// Packaging verifies the bundled private runtime, so every fixture app carries a minimal
+// manifest and the files the verifier requires.
+function createNativeHost(resources: string) {
+  const root = join(resources, "provider-runtimes/omp-native-host/1");
+  const bunPath = "node_modules/@oven/bun-linux-x64/bin/bun";
+  const entrypoint = "node_modules/@oh-my-pi/pi-coding-agent/src/cli.ts";
+  for (const relative of [
+    bunPath,
+    entrypoint,
+    "node_modules/@oh-my-pi/pi-coding-agent/src/modes/rpc/ait-native-host-hello.ts",
+    "node_modules/@oh-my-pi/pi-coding-agent/src/modes/rpc/ait-native-host-bridge.ts",
+    "notices/oh-my-pi-LICENSE",
+    "notices/bun-upstream.txt",
+    "notices/bun-linked-dependencies.txt",
+    "notices/dependencies.json",
+    "notices/NOTICE.txt",
+  ]) {
+    const filename = join(root, relative);
+    mkdirSync(join(filename, ".."), { recursive: true });
+    writeFileSync(filename, "fixture", { mode: 0o755 });
+  }
+  writeFileSync(
+    join(root, "manifest.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      adapter: "ait-omp-native-host",
+      adapterVersion: 1,
+      ompVersion: "18.17.0",
+      bunVersion: "1.4.4",
+      bunPath,
+      entrypoint,
+    }),
+  );
+}
+
 function createPackagedApp(root: string) {
   const app = join(root, "app with spaces");
   const resources = join(app, "resources");
   const source = join(root, "asar-source");
   mkdirSync(join(resources, "bin"), { recursive: true });
   mkdirSync(join(resources, "app-dist"));
+  createNativeHost(resources);
   mkdirSync(source);
   writeFileSync(join(source, "package.json"), JSON.stringify({ name: "@ait/desktop", version }));
   // The ASAR 3 API resolves before its output stream finishes; CLI exit waits for pending writes.

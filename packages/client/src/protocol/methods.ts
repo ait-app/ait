@@ -10,6 +10,12 @@ export interface MethodSpec {
 }
 
 export const METHODS: Readonly<Record<string, MethodSpec>> = {
+  "agent.native_action.request": {
+    method: "agent.native_action.request",
+    kind: "request",
+    channel: 3,
+    response: "agent.native_action.response",
+  },
   ...RELAY_METHODS,
   "publication.status.request": {
     method: "publication.status.request",
@@ -442,6 +448,12 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 0,
     response: "agent.commands.list.response",
   },
+  "agent.commands.complete.request": {
+    method: "agent.commands.complete.request",
+    kind: "request",
+    channel: 0,
+    response: "agent.commands.complete.response",
+  },
   "agent.mode.set.request": {
     method: "agent.mode.set.request",
     kind: "request",
@@ -579,6 +591,30 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     kind: "request",
     channel: 0,
     response: "provider.diagnostic.response",
+  },
+  "provider.presets.describe.request": {
+    method: "provider.presets.describe.request",
+    kind: "request",
+    channel: 3,
+    response: "provider.presets.describe.response",
+  },
+  "provider.presets.list.request": {
+    method: "provider.presets.list.request",
+    kind: "request",
+    channel: 3,
+    response: "provider.presets.list.response",
+  },
+  "provider.presets.save.request": {
+    method: "provider.presets.save.request",
+    kind: "request",
+    channel: 3,
+    response: "provider.presets.save.response",
+  },
+  "provider.presets.delete.request": {
+    method: "provider.presets.delete.request",
+    kind: "request",
+    channel: 3,
+    response: "provider.presets.delete.response",
   },
   "provider.usage.list.request": {
     method: "provider.usage.list.request",

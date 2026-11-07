@@ -387,6 +387,15 @@ fn launch_command(
         .env_remove("CLAUDECODE")
         .env("CLAUDE_CODE_ENTRYPOINT", "ait")
         .env("CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING", "true");
+    // An explicit "Unassigned" must survive a user-level `advisorModel` that `--setting-sources`
+    // would otherwise load; the advisor tool's documented environment switch is the only
+    // process-local way to refuse it.
+    match super::config::advisor(&spec.config) {
+        super::config::Advisor::Disabled => {
+            command.env("CLAUDE_CODE_DISABLE_ADVISOR_TOOL", "1");
+        }
+        super::config::Advisor::Native | super::config::Advisor::Model(_) => {}
+    }
     if let Some((id, resume)) = binding {
         command.arg(format!(
             "--{}={id}",

@@ -5,6 +5,7 @@ import { createReadStream } from "node:fs";
 import {
   chmod,
   copyFile,
+  cp,
   mkdir,
   mkdtemp,
   readdir,
@@ -18,6 +19,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { devDisplayVersion, devPackagedVersion } from "./dev-build.mjs";
 import { releaseChannel } from "./release-version.mjs";
+import { verifyNativeHostDirectory } from "./native-host-manifest.cjs";
 
 export function releaseAssetNames(platform, version, buildLabel) {
   const channel = buildLabel ? "latest" : releaseChannel(version);
@@ -67,6 +69,7 @@ export async function packDaemonAsset({
   destination,
   license,
   buildLabel,
+  nativeHost = path.resolve("apps/desktop/release-resources/provider-runtimes/omp-native-host/1"),
 }) {
   const name = daemonAssetName(platform, version, buildLabel);
   // Old immutable tags name the binary `server`; only the reported version must match.
@@ -78,6 +81,7 @@ export async function packDaemonAsset({
     buildLabel ? devDisplayVersion(buildLabel) : version,
     `Daemon binary reports ${reported}`,
   );
+  verifyNativeHostDirectory(nativeHost, platform === "mac" ? "darwin" : "linux");
   const staging = await mkdtemp(path.join(tmpdir(), "ait-daemon-"));
   try {
     await copyFile(binary, path.join(staging, daemonExecutable));
@@ -87,6 +91,10 @@ export async function packDaemonAsset({
       await copyFile(license, path.join(staging, "LICENSE"));
       files.push("LICENSE");
     }
+    const hostDestination = path.join(staging, "provider-runtimes/omp-native-host/1");
+    await mkdir(path.dirname(hostDestination), { recursive: true });
+    await cp(nativeHost, hostDestination, { recursive: true, verbatimSymlinks: true });
+    files.push("provider-runtimes");
     await mkdir(destination, { recursive: true });
     execFileSync("tar", ["-czf", path.resolve(destination, name), "-C", staging, ...files]);
   } finally {
@@ -236,6 +244,11 @@ async function main() {
     buildLabel = args.pop();
     args.pop();
   }
+  let nativeHost;
+  if (command === "daemon" && args.at(-2) === "--runtime") {
+    nativeHost = args.pop();
+    args.pop();
+  }
   const options = args.slice(2);
   if (command === "collect" && args.length === 4) {
     const [platform, version, source, destination] = args;
@@ -258,6 +271,7 @@ async function main() {
         destination,
         license: "LICENSE",
         buildLabel,
+        nativeHost,
       }),
     );
   } else if (
@@ -279,7 +293,7 @@ async function main() {
     );
   } else {
     throw new Error(
-      "Usage: release-assets.mjs collect linux|mac|win VERSION SOURCE DEST [--dev LABEL] | daemon linux|mac VERSION BINARY DEST [--dev LABEL] | verify VERSION DIRECTORY [--android] [--daemon] [--windows] | verify VERSION DIRECTORY --dev LABEL",
+      "Usage: release-assets.mjs collect linux|mac|win VERSION SOURCE DEST [--dev LABEL] | daemon linux|mac VERSION BINARY DEST [--runtime VERSION_ROOT] [--dev LABEL] | verify VERSION DIRECTORY [--android] [--daemon] [--windows] | verify VERSION DIRECTORY --dev LABEL",
     );
   }
 }

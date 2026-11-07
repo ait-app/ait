@@ -1,6 +1,7 @@
 //! `OpenCode` official ACP adapter. Native authentication, tools and storage remain `OpenCode` owned.
 
 mod client;
+mod commands;
 mod config;
 mod discovery;
 mod history;

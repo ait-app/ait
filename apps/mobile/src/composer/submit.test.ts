@@ -17,6 +17,76 @@ function createDeferredPromise<T>() {
 }
 
 describe("submitAgentInput", () => {
+  it.each([
+    { isAgentRunning: false, forceSend: false, expected: "submitted", prefix: "" },
+    { isAgentRunning: true, forceSend: false, expected: "queued", prefix: "" },
+    { isAgentRunning: true, forceSend: true, expected: "submitted", prefix: "" },
+    { isAgentRunning: false, forceSend: false, expected: "submitted", prefix: " \t" },
+    { isAgentRunning: true, forceSend: false, expected: "queued", prefix: " \t" },
+    { isAgentRunning: true, forceSend: true, expected: "submitted", prefix: " \t" },
+  ])(
+    "preserves command syntax when $expected (forceSend=$forceSend, prefix='$prefix')",
+    async (mode) => {
+      const message = `${mode.prefix}/goal edit \n  keep "quoted  text"\t \n`;
+      const attachments = [{ id: "file-1" }];
+      const queueMessage = vi.fn();
+      const submitMessage = vi.fn(async () => {});
+
+      await expect(
+        submitAgentInput({
+          ...mode,
+          message,
+          attachments,
+          canSubmit: true,
+          queueMessage,
+          submitMessage,
+          clearDraft: vi.fn(),
+          setUserInput: vi.fn(),
+          setAttachments: vi.fn(),
+          setSendError: vi.fn(),
+          setIsProcessing: vi.fn(),
+        }),
+      ).resolves.toBe(mode.expected);
+
+      const dispatch = mode.expected === "queued" ? queueMessage : submitMessage;
+      const unused = mode.expected === "queued" ? submitMessage : queueMessage;
+      expect(dispatch).toHaveBeenCalledExactlyOnceWith({ message, attachments });
+      expect(unused).not.toHaveBeenCalled();
+    },
+  );
+
+  it("restores the exact command and attachments after native rejection", async () => {
+    const message = " \t/goal edit \n  objective with trailing whitespace  \n";
+    const attachments = [{ id: "file-1" }];
+    const setUserInput = vi.fn();
+    const setAttachments = vi.fn();
+    const clearDraft = vi.fn();
+    const submitMessage = vi.fn(async () => {
+      throw new Error("Command rejected");
+    });
+
+    await expect(
+      submitAgentInput({
+        message,
+        attachments,
+        isAgentRunning: false,
+        canSubmit: true,
+        queueMessage: vi.fn(),
+        submitMessage,
+        clearDraft,
+        setUserInput,
+        setAttachments,
+        setSendError: vi.fn(),
+        setIsProcessing: vi.fn(),
+      }),
+    ).resolves.toBe("failed");
+
+    expect(submitMessage).toHaveBeenCalledExactlyOnceWith({ message, attachments });
+    expect(setUserInput).toHaveBeenNthCalledWith(2, message);
+    expect(setAttachments).toHaveBeenNthCalledWith(2, attachments);
+    expect(clearDraft).not.toHaveBeenCalled();
+  });
+
   it("clears the composer before an in-flight submit resolves", async () => {
     const deferred = createDeferredPromise<void>();
     const queueMessage = vi.fn();

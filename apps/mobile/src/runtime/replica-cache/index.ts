@@ -17,6 +17,7 @@ import {
   AgentStatusSchema,
   AgentTimelineItemPayloadSchema,
   CompactionTimelineItemPayloadSchema,
+  ProviderCommandTimelineItemSchema,
   WorkspaceGitHubRuntimePayloadSchema,
   VoiceTranscriptSchema,
   VoiceTimelineItemSchema,
@@ -115,6 +116,11 @@ const TaskActivitySchema = z.discriminatedUnion("type", [
 ]);
 
 const StoredTimelineItemSchema = z.discriminatedUnion("kind", [
+  z.strictObject({
+    ...TimelineItemBaseShape,
+    kind: z.literal("provider_command"),
+    result: ProviderCommandTimelineItemSchema,
+  }),
   z.strictObject({
     ...TimelineItemBaseShape,
     kind: z.literal("voice"),
@@ -453,6 +459,8 @@ function serializeAgentToolCall(data: AgentToolCallData): StoredToolCall {
 function serializeTimelineItem(item: StreamItem): StoredTimelineItem | null {
   const base = timelineBase(item);
   switch (item.kind) {
+    case "provider_command":
+      return { ...base, kind: item.kind, result: item.result };
     case "voice":
       return { ...base, kind: item.kind, payload: item.payload };
     case "user_message":
@@ -547,6 +555,8 @@ function deserializeBuiltinTimelineItem(
     timestamp: new Date(item.timestamp),
   };
   switch (item.kind) {
+    case "provider_command":
+      return { ...base, kind: item.kind, result: item.result };
     case "voice":
       return { ...base, kind: item.kind, payload: item.payload };
     case "user_message":

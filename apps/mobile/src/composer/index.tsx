@@ -1,4 +1,5 @@
 import { getFileTypeLabel } from "@/attachments/file-types";
+import { ProviderRuntimePanel } from "@/components/provider-runtime-panel";
 import {
   useComposerEditingSession,
   useComposerFullscreen,
@@ -1696,6 +1697,7 @@ function ComposerContentImpl({
       const clientSlashCommand = resolveClientSlashCommand({
         text: payload.text,
         hasAttachments: outgoingAttachments.length > 0,
+        provider: commandDraftConfig?.provider ?? agentState.provider,
       });
       if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
         return;
@@ -1711,6 +1713,8 @@ function ComposerContentImpl({
       blurOnSubmit,
       buildOutgoingAttachments,
       runClientSlashCommand,
+      commandDraftConfig?.provider,
+      agentState.provider,
 
       sendMessageWithContent,
     ],
@@ -1977,6 +1981,7 @@ function ComposerContentImpl({
       const clientSlashCommand = resolveClientSlashCommand({
         text: payload.text,
         hasAttachments: outgoingAttachments.length > 0,
+        provider: commandDraftConfig?.provider ?? agentState.provider,
       });
       if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
         return;
@@ -1989,6 +1994,8 @@ function ComposerContentImpl({
 
       queueMessage,
       runClientSlashCommand,
+      commandDraftConfig?.provider,
+      agentState.provider,
     ],
   );
 
@@ -2447,6 +2454,13 @@ function ComposerContentImpl({
           <View style={inputAreaContentStyle}>
             {isFullscreen ? null : queueList}
             {!isFullscreen && sendErrorNode}
+            <ProviderRuntimePanel
+              serverId={serverId}
+              agentId={agentId}
+              placement="aboveEditor"
+              blocked={readOnly || isSubmitLoadingVisible}
+              onEditor={replaceUserInput}
+            />
 
             <View ref={messageInputContainerRef} style={messageInputContainerStyle}>
               <ComposerAutocompleteBinding
@@ -2517,6 +2531,7 @@ function ComposerContentImpl({
                   submitLabel={submitLabel}
                 />
               </RenderProfile>
+              <ProviderRuntimePanel serverId={serverId} agentId={agentId} placement="belowEditor" />
               <Combobox
                 options={githubSearchOptions}
                 value=""

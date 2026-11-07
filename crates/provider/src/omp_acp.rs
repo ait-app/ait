@@ -11,5 +11,10 @@ use std::path::PathBuf;
 /// Returns bounded protocol, native startup, or pipe failures. Closing stdin releases the
 /// owned process and preserves its native history. User input is never automatically replayed.
 pub async fn serve(program: PathBuf) -> std::io::Result<()> {
-    crate::local::omp::serve_acp(program, tokio::io::stdin(), tokio::io::stdout()).await
+    Box::pin(crate::local::omp::serve_acp(
+        program,
+        tokio::io::stdin(),
+        tokio::io::stdout(),
+    ))
+    .await
 }

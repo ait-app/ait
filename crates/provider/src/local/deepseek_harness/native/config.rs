@@ -157,16 +157,41 @@ impl Selection {
         Ok(permission)
     }
 
-    /// Apply only explicitly requested, advertised selections; permission scope stays native.
+    /// Apply advertised selections; restoring an existing actor confirms its persisted model
+    /// through the native model-selection API, whose documented operation resumes that identity.
+    /// Never call session/create to adopt a nonempty conversation: it only reuses blank sessions.
     pub(super) async fn apply(
         &mut self,
         api: &Api,
         session: &str,
         config: &StoredAgentConfig,
+        restore: bool,
     ) -> Result<(), AgentSessionError> {
         validate(config)?;
-        let details = self.details()?;
         let permission = self.validate_controls(config)?;
+        if restore || config.model.is_some() || config.thinking_option_id.is_some() {
+            self.apply_model(api, session, config, restore).await?;
+        }
+        if let Some(mode) = permission
+            && self.permissions["currentValue"] != mode
+        {
+            let result = api.call("commands/execute",json!({"agentId":session,"line":format!("/permission {mode}"),"submittedAttachments":[]})).await?;
+            if result["result"]["kind"] != "success" {
+                return Err(AgentSessionError::Rejected);
+            }
+            self.permissions["currentValue"] = json!(mode);
+        }
+        Ok(())
+    }
+
+    async fn apply_model(
+        &mut self,
+        api: &Api,
+        session: &str,
+        config: &StoredAgentConfig,
+        restore: bool,
+    ) -> Result<(), AgentSessionError> {
+        let details = self.details()?;
         let id = config
             .model
             .clone()
@@ -202,7 +227,7 @@ impl Selection {
         {
             model["reasoningEffort"] = effort.clone();
         }
-        if model != self.model {
+        if restore || model != self.model {
             let mut request = model.clone();
             request["sessionId"] = json!(session);
             let result = api
@@ -223,15 +248,6 @@ impl Selection {
                 return Err(AgentSessionError::Failed);
             }
             self.model = acknowledged.clone();
-        }
-        if let Some(mode) = permission
-            && self.permissions["currentValue"] != mode
-        {
-            let result = api.call("commands/execute",json!({"agentId":session,"line":format!("/permission {mode}"),"submittedAttachments":[]})).await?;
-            if result["result"]["kind"] != "success" {
-                return Err(AgentSessionError::Rejected);
-            }
-            self.permissions["currentValue"] = json!(mode);
         }
         Ok(())
     }

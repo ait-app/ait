@@ -13,7 +13,7 @@ pub(super) async fn discover(
     client: &OpenCodeClient,
     cwd: &str,
 ) -> Result<Details, AgentSessionError> {
-    let (mut transport, capabilities, source) = launcher::observed(
+    let (mut transport, capabilities, source, _) = launcher::observed(
         client,
         cwd,
         &domain::agent_runtime::StoredAgentConfig::default(),

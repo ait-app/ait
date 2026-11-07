@@ -1,0 +1,16 @@
+{
+  "name": "ait-omp-native-host",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Private, isolated official OMP RPC UI runtime for Ait",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "install:runtime": "node install.mjs",
+    "test": "node --test install.test.mjs"
+  },
+  "dependencies": {
+    "@oh-my-pi/pi-coding-agent": "18.17.0",
+    "bun": "1.4.4"
+  }
+}

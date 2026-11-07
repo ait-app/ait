@@ -1,13 +1,21 @@
-import { CLIENT_SLASH_COMMANDS, type ClientSlashCommand } from "@/client-slash-commands";
+import {
+  CLIENT_SLASH_COMMANDS,
+  preferProviderCommands,
+  type ClientSlashCommand,
+} from "@/client-slash-commands";
 import type { AutocompleteOption } from "@/components/ui/autocomplete";
 import { orderAutocompleteOptions } from "@/components/ui/autocomplete-utils";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import {
   applySlashCommandReplacement,
+  applySlashCommandArgumentReplacement,
   filterAndRankCommandAutocompleteEntries,
   filterInlineSkillCommandEntries,
   findActiveSlashCommand,
+  findActiveSlashCommandArguments,
+  getCommandArgumentSuggestions,
+  type SlashCommandArgumentsRange,
   type SlashCommandRange,
 } from "@/utils/agent-command-autocomplete";
 import {
@@ -17,7 +25,10 @@ import {
 } from "@/utils/file-mention-autocomplete";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import type { CommandCompletionItem } from "@ait/protocol/messages";
+import { applyNativeCommandCompletion } from "@/utils/native-command-completion";
+import { useAgentCommandCompletionsQuery } from "./use-agent-command-completions-query";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   useAgentCommandsQuery,
@@ -29,7 +40,7 @@ import { useAutocomplete } from "./use-autocomplete";
 interface UseAgentAutocompleteInput {
   userInput: string;
   cursorIndex: number;
-  setUserInput: (nextValue: string) => void;
+  setUserInput: (nextValue: string, selection?: { start: number; end: number }) => void;
   serverId: string;
   agentId: string;
   draftConfig?: DraftCommandConfig;
@@ -50,8 +61,22 @@ interface AgentAutocompleteInputSnapshot {
 }
 
 type AgentAutocompleteOption =
-  | (AutocompleteOption & { type: "client_command"; command: ClientSlashCommand })
+  | (AutocompleteOption & {
+      type: "native_completion";
+      item: CommandCompletionItem;
+      inputText: string;
+      inputCursor: number;
+    })
+  | (AutocompleteOption & {
+      type: "client_command";
+      command: ClientSlashCommand;
+    })
   | (AutocompleteOption & { type: "provider_command" })
+  | (AutocompleteOption & {
+      type: "provider_argument";
+      commandName: string;
+      value: string;
+    })
   | (AutocompleteOption & {
       type: "workspace_entry";
       entryPath: string;
@@ -136,7 +161,7 @@ function normalizeDraftCommandConfig(
 }
 
 function mapDirectorySuggestionsToEntries(payload: {
-  entries?: Array<{ path: string; kind: string }>;
+  entries?: { path: string; kind: string }[];
   directories?: string[];
 }): DirectorySuggestionEntry[] {
   if (Array.isArray(payload.entries) && payload.entries.length > 0) {
@@ -190,6 +215,8 @@ interface BuildAutocompleteOptionsInput {
   isDraftContext: boolean;
   commandFilterQuery: string;
   activeSlashCommand: SlashCommandRange | null;
+  activeArguments: SlashCommandArgumentsRange | null;
+  preferProviderCommands: boolean;
   activeFileMention: FileMentionRange | null;
   fileSuggestions: DirectorySuggestionEntry[];
   t: TFunction;
@@ -201,6 +228,21 @@ function buildCommandAutocompleteOptions(input: BuildAutocompleteOptionsInput) {
   }
 
   if (input.mode === "command") {
+    if (input.activeArguments) {
+      const commandName = input.activeArguments.commandName;
+      return orderAutocompleteOptions(
+        getCommandArgumentSuggestions(input.commands, input.activeArguments),
+      ).map((suggestion) => ({
+        type: "provider_argument" as const,
+        id: `${commandName}:${suggestion.name}`,
+        label: suggestion.name,
+        detail: suggestion.usage,
+        description: suggestion.description,
+        kind: "command" as const,
+        commandName,
+        value: suggestion.name,
+      }));
+    }
     const providerCommands = input.commands.map((command) => ({
       source: "provider" as const,
       command,
@@ -209,10 +251,15 @@ function buildCommandAutocompleteOptions(input: BuildAutocompleteOptionsInput) {
       CLIENT_SLASH_COMMANDS.flatMap((command) => [command.name, ...(command.aliases ?? [])]),
     );
     const rootCommands: AvailableCommand[] = [
-      ...(!input.isDraftContext
-        ? CLIENT_SLASH_COMMANDS.map((command) => ({ source: "client" as const, command }))
+      ...(!input.isDraftContext && !input.preferProviderCommands
+        ? CLIENT_SLASH_COMMANDS.map((command) => ({
+            source: "client" as const,
+            command,
+          }))
         : []),
-      ...providerCommands.filter(({ command }) => !builtinNames.has(command.name)),
+      ...providerCommands.filter(
+        ({ command }) => input.preferProviderCommands || !builtinNames.has(command.name),
+      ),
     ];
     const availableCommands: AvailableCommand[] =
       input.activeSlashCommand?.position === "inline"
@@ -341,8 +388,16 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
       }),
     [cursorIndex, userInput],
   );
-  const showCommandAutocomplete = activeSlashCommand !== null;
-  const commandFilterQuery = activeSlashCommand?.query ?? "";
+  const activeArguments = useMemo(
+    () => findActiveSlashCommandArguments({ text: userInput, cursorIndex }),
+    [userInput, cursorIndex],
+  );
+  const nativeCommandContext = /^\s*\//u.test(userInput.slice(0, cursorIndex));
+  const showCommandAutocomplete =
+    activeSlashCommand !== null || activeArguments !== null || nativeCommandContext;
+  const commandFilterQuery = activeArguments
+    ? `${activeArguments.commandName} ${activeArguments.query}`
+    : (activeSlashCommand?.query ?? "");
 
   const activeFileMention = useMemo(
     () =>
@@ -368,10 +423,20 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
 
   const isDraftContext = normalizedDraftConfig !== undefined;
   const queryDraftConfig = normalizedDraftConfig;
-  const canLoadCommands = resolveCanLoadCommands({ serverId, agentId, isDraftContext });
+  const canLoadCommands = resolveCanLoadCommands({
+    serverId,
+    agentId,
+    isDraftContext,
+  });
 
   const agentCwd = useSessionStore(
     (state) => state.sessions[serverId]?.agents?.get(agentId)?.cwd ?? "",
+  );
+  const agentProvider = useSessionStore(
+    (state) => state.sessions[serverId]?.agents?.get(agentId)?.provider,
+  );
+  const prefersProviderCommands = preferProviderCommands(
+    queryDraftConfig?.provider ?? agentProvider,
   );
   const autocompleteCwd = useMemo(() => {
     if (isDraftContext) {
@@ -383,7 +448,13 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
 
-  const mode = resolveAutocompleteMode({ showFileAutocomplete, showCommandAutocomplete });
+  const mode =
+    prefersProviderCommands && nativeCommandContext
+      ? "command"
+      : resolveAutocompleteMode({
+          showFileAutocomplete,
+          showCommandAutocomplete,
+        });
   const canShowAutocomplete = resolveAutocompleteIsVisible({
     mode,
     canLoadCommands,
@@ -401,9 +472,48 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     agentId,
     enabled: mode === "command" && canLoadCommands,
     draftConfig: queryDraftConfig,
+    refreshOnOpen: prefersProviderCommands,
   });
 
-  const isVisible = canShowAutocomplete && !(mode === "command" && isCommandsLoading);
+  const [completionRevision, setCompletionRevision] = useState(0);
+  const native = useAgentCommandCompletionsQuery({
+    serverId,
+    agentId,
+    draftConfig: queryDraftConfig,
+    text: userInput,
+    cursor: cursorIndex,
+    enabled:
+      prefersProviderCommands && nativeCommandContext && canLoadCommands && !isCommandsLoading,
+    revision: completionRevision,
+  });
+  const useNative = native.active && native.result?.supported !== false;
+
+  const [dismissedInput, setDismissedInput] = useState<string | null>(null);
+  const dismissedInputRef = useRef<string | null>(null);
+  const dismissAutocomplete = useCallback((text: string) => {
+    dismissedInputRef.current = text;
+    setDismissedInput(text);
+  }, []);
+  useEffect(() => {
+    if (dismissedInputRef.current !== userInput) {
+      dismissedInputRef.current = null;
+      setDismissedInput(null);
+    }
+  }, [userInput]);
+  useEffect(() => {
+    dismissedInputRef.current = null;
+    setDismissedInput(null);
+  }, [serverId, agentId]);
+  const isVisible =
+    canShowAutocomplete &&
+    dismissedInput !== userInput &&
+    !(useNative && !native.isLoading && native.result?.items.length === 0) &&
+    !(
+      mode === "command" &&
+      !useNative &&
+      activeArguments &&
+      getCommandArgumentSuggestions(commands, activeArguments).length === 0
+    );
 
   const fileSuggestionsQuery = useQuery({
     queryKey: [
@@ -441,35 +551,102 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     placeholderData: keepPreviousData,
   });
 
-  const options = useMemo<AgentAutocompleteOption[]>(
-    () =>
-      buildCommandAutocompleteOptions({
-        activeFileMention,
-        commandFilterQuery,
-        commands,
-        activeSlashCommand,
-        fileSuggestions: fileSuggestionsQuery.data ?? [],
-        isDraftContext,
-        isVisible,
-        mode,
-        t,
-      }),
-    [
+  const options = useMemo<AgentAutocompleteOption[]>(() => {
+    if (useNative) {
+      if (!isVisible) return [];
+      return orderAutocompleteOptions(native.result?.items ?? []).map((item) => ({
+        type: "native_completion" as const,
+        id: item.id,
+        label: item.label,
+        description: item.description,
+        detail: item.detail ?? item.hint,
+        kind: "command" as const,
+        item,
+        inputText: userInput,
+        inputCursor: cursorIndex,
+      }));
+    }
+    return buildCommandAutocompleteOptions({
       activeFileMention,
-      activeSlashCommand,
       commandFilterQuery,
       commands,
-      fileSuggestionsQuery.data,
+      activeSlashCommand,
+      activeArguments,
+      preferProviderCommands: prefersProviderCommands,
+      fileSuggestions: fileSuggestionsQuery.data ?? [],
       isDraftContext,
       isVisible,
       mode,
       t,
-    ],
-  );
+    });
+  }, [
+    activeFileMention,
+    activeSlashCommand,
+    activeArguments,
+    prefersProviderCommands,
+    commandFilterQuery,
+    commands,
+    fileSuggestionsQuery.data,
+    isDraftContext,
+    isVisible,
+    mode,
+    t,
+    useNative,
+    native.result,
+    userInput,
+    cursorIndex,
+  ]);
 
   const onSelectOption = useCallback(
     (option: AutocompleteOption, snapshot?: AgentAutocompleteInputSnapshot) => {
       const selected = option as AgentAutocompleteOption;
+      if (selected.type === "native_completion") {
+        const text = snapshot?.text ?? userInput;
+        const selection = snapshot?.selection ?? {
+          start: cursorIndex,
+          end: cursorIndex,
+        };
+        if (
+          text !== selected.inputText ||
+          selection.start !== selected.inputCursor ||
+          selection.end !== selection.start
+        )
+          return;
+        const edited = applyNativeCommandCompletion(text, selected.item);
+        if (!edited) return;
+        setUserInput(edited.text, {
+          start: edited.cursor,
+          end: edited.cursor,
+        });
+        if (selected.item.triggerCompletion) setCompletionRevision((value) => value + 1);
+        else dismissAutocomplete(edited.text);
+        onAutocompleteApplied?.();
+        return;
+      }
+      if (selected.type === "provider_argument") {
+        const text = snapshot?.text ?? userInput;
+        const range = findActiveSlashCommandArguments({
+          text,
+          cursorIndex: snapshot?.selection.start ?? cursorIndex,
+        });
+        if (
+          !range ||
+          range.commandName !== selected.commandName ||
+          !getCommandArgumentSuggestions(commands, range).some(
+            (suggestion) => suggestion.name === selected.value,
+          )
+        )
+          return;
+        const nextInput = applySlashCommandArgumentReplacement({
+          text,
+          range,
+          value: selected.value,
+        });
+        const cursor = range.start + selected.value.length + 1;
+        setUserInput(nextInput, { start: cursor, end: cursor });
+        onAutocompleteApplied?.();
+        return;
+      }
       const current = resolveAgentAutocompleteSnapshot({
         input: snapshot,
         userInput,
@@ -525,6 +702,8 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
       cursorIndex,
       activeFileMention,
       activeSlashCommand,
+      commands,
+      dismissAutocomplete,
     ],
   );
 
@@ -540,22 +719,57 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     query: mode === "command" ? commandFilterQuery : fileFilterQuery,
     onSelectOption: selectOptionFromKeyPress,
     onEscape:
-      mode === "command" && activeSlashCommand?.position === "start"
-        ? () => setUserInput("")
-        : undefined,
+      activeArguments || prefersProviderCommands
+        ? () => dismissAutocomplete(userInput)
+        : mode === "command" && activeSlashCommand?.position === "start"
+          ? () => setUserInput("")
+          : undefined,
   });
+
+  const handleKeyPress = useCallback(
+    (event: AgentAutocompleteKeyPressEvent) => {
+      const text = event.input.text;
+      const cursor = event.input.selection.start;
+      const commandContext = /^\s*\//u.test(text.slice(0, cursor));
+      if (prefersProviderCommands && commandContext) {
+        if (dismissedInputRef.current === text) return false;
+        if (event.key === "Escape") {
+          event.preventDefault();
+          dismissAutocomplete(text);
+          return true;
+        }
+        if (
+          (event.key === "Tab" || event.key === "Enter") &&
+          (text !== userInput || cursor !== cursorIndex || isCommandsLoading || native.isLoading)
+        ) {
+          event.preventDefault();
+          return true;
+        }
+      }
+      return onKeyPress(event);
+    },
+    [
+      prefersProviderCommands,
+      dismissAutocomplete,
+      userInput,
+      cursorIndex,
+      isCommandsLoading,
+      native.isLoading,
+      onKeyPress,
+    ],
+  );
 
   const isLoading = resolveAutocompleteIsLoading({
     mode,
-    isCommandsLoading,
+    isCommandsLoading: useNative ? native.isLoading : isCommandsLoading,
     fileSuggestionsIsPending: fileSuggestionsQuery.isPending,
     fileSuggestionsIsLoading: fileSuggestionsQuery.isLoading,
     optionsLength: options.length,
   });
   const errorMessage = resolveAutocompleteErrorMessage({
     mode,
-    isCommandError: isError,
-    commandError: error,
+    isCommandError: useNative ? !!native.error : isError,
+    commandError: useNative ? native.error : error,
     fileSuggestionsError: fileSuggestionsQuery.error,
     t,
   });
@@ -576,6 +790,6 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     loadingText,
     emptyText,
     onSelectOption,
-    onKeyPress,
+    onKeyPress: handleKeyPress,
   };
 }

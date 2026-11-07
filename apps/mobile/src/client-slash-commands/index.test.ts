@@ -58,6 +58,14 @@ function createAgent(overrides: Partial<Agent> = {}): Agent {
 }
 
 describe("resolveClientSlashCommand", () => {
+  it.each(["/clear", "/new", "/exit", "/quit", "/q"])(
+    "leaves %s owned by providers with native command surfaces",
+    (text) => {
+      for (const provider of ["omp", "deepseek-harness", "opencode"]) {
+        expect(resolveClientSlashCommand({ text, hasAttachments: false, provider })).toBeNull();
+      }
+    },
+  );
   it("declares the exact canonical client commands with their aliases", () => {
     expect(
       CLIENT_SLASH_COMMANDS.map((command) => [

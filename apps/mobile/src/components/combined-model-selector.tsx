@@ -1,5 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  useWindowDimensions,
+  type PressableStateCallbackType,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { AgentProvider } from "@ait/protocol/agent-types";
@@ -16,6 +23,48 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 const EMPTY_COMBOBOX_OPTIONS: ComboboxOption[] = [];
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+
+/** Room reserved below the model list so preset/role rows stay readable. */
+const MODEL_CONFIGURATION_HEIGHT_RESERVE = 240;
+/** Floor for the whole panel when the list has not resolved a height yet. */
+const MODEL_CONFIGURATION_MIN_HEIGHT = 320;
+/** Minimum panel width that keeps preset and role values from truncating. */
+const MODEL_CONFIGURATION_MIN_WIDTH = 620;
+const MODEL_CONFIGURATION_NARROWEST_WIDTH = 320;
+const VIEWPORT_HORIZONTAL_GUTTER = 16;
+const VIEWPORT_VERTICAL_RESERVE = 96;
+
+/**
+ * Size the desktop picker so the model list keeps a bounded, scrollable viewport
+ * and the configuration block below it always has stable visible space.
+ * Unmeasured viewports (initial frame, tests) must not collapse the panel.
+ */
+export function resolveModelConfigurationFrame(input: {
+  desktopMinWidth: number | undefined;
+  /** Model list height; undefined until the browser resolves its view. */
+  browserFixedHeight: number | undefined;
+  windowWidth: number;
+  windowHeight: number;
+}): { desktopMinWidth: number; desktopFixedHeight: number } {
+  const preferredWidth = Math.max(input.desktopMinWidth ?? 0, MODEL_CONFIGURATION_MIN_WIDTH);
+  const widthCeiling =
+    input.windowWidth > 0 ? input.windowWidth - VIEWPORT_HORIZONTAL_GUTTER * 2 : preferredWidth;
+  const heightCeiling =
+    input.windowHeight > 0
+      ? input.windowHeight - VIEWPORT_VERTICAL_RESERVE
+      : Number.POSITIVE_INFINITY;
+  const listHeight = input.browserFixedHeight ?? 0;
+  return {
+    desktopMinWidth: Math.min(
+      preferredWidth,
+      Math.max(widthCeiling, MODEL_CONFIGURATION_NARROWEST_WIDTH),
+    ),
+    desktopFixedHeight: Math.min(
+      Math.max(listHeight + MODEL_CONFIGURATION_HEIGHT_RESERVE, MODEL_CONFIGURATION_MIN_HEIGHT),
+      heightCeiling,
+    ),
+  };
+}
 
 const foregroundMutedMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
@@ -43,6 +92,7 @@ interface CombinedModelSelectorProps {
     pressed: boolean;
   }) => React.ReactNode;
   onOpen?: () => void;
+  onCatalogAccess?: () => void;
   onClose?: () => void;
   onRetryProvider?: (provider: AgentProvider) => void;
   isRetryingProvider?: boolean;
@@ -50,6 +100,7 @@ interface CombinedModelSelectorProps {
   serverId?: string | null;
   desktopPlacement?: ComboboxProps["desktopPlacement"];
   desktopMinWidth?: number;
+  modelConfiguration?: ReactNode;
   /**
    * Render the custom trigger as a full-width form field: the outer Pressable
    * becomes a transparent passthrough that stretches its child edge-to-edge and
@@ -78,6 +129,7 @@ export function CombinedModelSelector({
   onEditProfile,
   renderTrigger,
   onOpen,
+  onCatalogAccess,
   onClose,
   onRetryProvider,
   isRetryingProvider = false,
@@ -85,12 +137,17 @@ export function CombinedModelSelector({
   serverId = null,
   desktopPlacement,
   desktopMinWidth,
+  modelConfiguration,
   triggerFill = false,
   toolbar,
 }: CombinedModelSelectorProps) {
   const { t } = useTranslation();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isCompact = useIsCompactFormFactor();
-  const modelBrowserScrolling = resolveModelBrowserScrolling({ isNative, isCompact });
+  const modelBrowserScrolling = resolveModelBrowserScrolling({
+    isNative,
+    isCompact,
+  });
   const anchorRef = useRef<View>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isContentReady, setIsContentReady] = useState(isWeb);
@@ -103,27 +160,36 @@ export function CombinedModelSelector({
     serverId,
   });
   const { prepareToOpen, reset } = browser;
-
+  const configurationFrame = modelConfiguration
+    ? resolveModelConfigurationFrame({
+        desktopMinWidth,
+        browserFixedHeight: browser.desktopFixedHeight,
+        windowWidth,
+        windowHeight,
+      })
+    : null;
   const handleOpenChange = useCallback(
     (open: boolean) => {
       setIsOpen(open);
       if (open) {
         prepareToOpen();
         onOpen?.();
+        onCatalogAccess?.();
         return;
       }
       reset();
       onClose?.();
     },
-    [onClose, onOpen, prepareToOpen, reset],
+    [onCatalogAccess, onClose, onOpen, prepareToOpen, reset],
   );
 
   const handleSelect = useCallback(
     (provider: string, modelId: string) => {
+      onCatalogAccess?.();
       onSelect(provider, modelId);
       handleOpenChange(false);
     },
-    [handleOpenChange, onSelect],
+    [handleOpenChange, onCatalogAccess, onSelect],
   );
 
   useEffect(() => {
@@ -273,21 +339,46 @@ export function CombinedModelSelector({
         onOpenChange={handleOpenChange}
         anchorRef={anchorRef}
         desktopPlacement={desktopPlacement}
-        desktopMinWidth={desktopMinWidth}
+        desktopMinWidth={configurationFrame?.desktopMinWidth ?? desktopMinWidth}
         desktopLockWidth
-        desktopFixedHeight={browser.desktopFixedHeight}
+        desktopFixedHeight={configurationFrame?.desktopFixedHeight ?? browser.desktopFixedHeight}
         desktopChildrenScrollEnabled={false}
         header={browser.header}
         mobileChildrenScrollEnabled={!browser.isProviderView || !isNative}
         mobileChildrenContentContainerStyle={styles.mobileBrowserContent}
       >
-        {selectorBody}
+        {modelConfiguration ? (
+          <View style={styles.configuredSelector}>
+            <View style={styles.configurationBrowser}>{selectorBody}</View>
+            <ScrollView
+              testID="model-configuration"
+              style={styles.configurationScroll}
+              contentContainerStyle={styles.configurationContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {modelConfiguration}
+            </ScrollView>
+          </View>
+        ) : (
+          selectorBody
+        )}
       </Combobox>
     </>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
+  configuredSelector: { flex: 1, minHeight: 0 },
+  configurationBrowser: { flex: 1, minHeight: 0 },
+  configurationScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+    minHeight: 120,
+    maxHeight: 240,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  configurationContent: { padding: 8 },
   mobileBrowserContent: {
     paddingHorizontal: 0,
   },

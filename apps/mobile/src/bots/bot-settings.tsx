@@ -135,7 +135,7 @@ function BotModelSection({
   const client = useHostRuntimeClient(serverId);
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState(() => executionDraft(bot.execution));
-  const { providers, error } = useBotProviders(serverId, cwd, interactive);
+  const { providers, error, onCatalogAccess } = useBotProviders(serverId, cwd, interactive);
   const execution = resolveExecution(draft, providers);
   const save = useMutation({
     mutationFn: async () => {
@@ -150,6 +150,7 @@ function BotModelSection({
   return (
     <View style={styles.card}>
       <BotExecutionFields
+        onCatalogAccess={onCatalogAccess}
         providers={providers}
         error={error}
         value={draft}

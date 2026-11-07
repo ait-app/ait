@@ -262,3 +262,32 @@ fn confined_claude_disables_its_nested_bash_sandbox_and_keeps_other_settings() {
         [r#"--settings={"sandbox":{"enabled":false}}"#.to_owned()]
     );
 }
+
+#[test]
+fn claude_forwards_an_explicit_advisor_and_never_invents_one() {
+    let advisor = |selection: &str| {
+        claude(
+            &config(json!({"model":"sonnet",
+                "featureValues":{"modelRole.advisor":selection}})),
+            false,
+        )
+        .unwrap()
+    };
+    assert!(advisor("opus").contains(&"--advisor=opus".to_owned()));
+    assert!(
+        advisor("claude-opus-5-5-20260601")
+            .contains(&"--advisor=claude-opus-5-5-20260601".to_owned())
+    );
+    // Inherited and explicitly unassigned sessions must not gain a flag of their own; the
+    // opt-out travels as the advisor tool's environment switch at spawn time.
+    for selection in ["native", "unset"] {
+        assert!(
+            advisor(selection)
+                .iter()
+                .all(|arg| !arg.starts_with("--advisor")),
+            "{selection}"
+        );
+    }
+    let settings = advisor("native");
+    assert!(settings.iter().all(|arg| !arg.starts_with("--settings=")));
+}

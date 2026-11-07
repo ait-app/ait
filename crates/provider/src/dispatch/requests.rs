@@ -147,6 +147,8 @@ pub(super) async fn execution(
                 | "agent.context.compact.request"
                 | "agent.rewind.request"
                 | "agent.commands.list.request"
+                | "agent.commands.complete.request"
+                | "agent.native_action.request"
                 | "agent.mode.set.request"
                 | "agent.feature.set.request"
                 | "agent.permission.resolve.request"
@@ -155,6 +157,10 @@ pub(super) async fn execution(
                 | "agent.provider_subagents.timeline.get.request"
                 | "provider.diagnostic.request"
                 | "provider.usage.list.request"
+                | "provider.presets.describe.request"
+                | "provider.presets.list.request"
+                | "provider.presets.save.request"
+                | "provider.presets.delete.request"
         )
     }) else {
         return Err(DispatchError::NotImplemented);

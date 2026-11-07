@@ -237,6 +237,33 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
         isWeb ? downloadTarget.authCredentials : null,
       );
 
+      const desktop = getDesktopHost();
+      if (desktop?.invoke) {
+        const remove = await desktop.events?.on?.("direct-download-progress", (raw) => {
+          const event = raw as { id: string; bytesWritten: number; totalBytes: number };
+          if (event.id !== id) return;
+          const speed =
+            event.bytesWritten / Math.max((Date.now() - download.startedAt) / 1000, 0.001);
+          get().updateProgress(id, {
+            ...event,
+            percent: event.totalBytes > 0 ? event.bytesWritten / event.totalBytes : 0,
+            speed,
+            eta: speed > 0 ? Math.max(0, event.totalBytes - event.bytesWritten) / speed : 0,
+          });
+        });
+        try {
+          await desktop.invoke("file_download", {
+            url: downloadUrl,
+            fileName: resolvedFileName,
+            downloadId: id,
+          });
+          get().completeDownload(id);
+        } finally {
+          remove?.();
+        }
+        return;
+      }
+
       if (isWeb) {
         triggerBrowserDownload(downloadUrl, resolvedFileName);
         get().completeDownload(id);

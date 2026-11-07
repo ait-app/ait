@@ -18,6 +18,7 @@ import {
 } from "../features/auto-updater.js";
 import { RustDaemonManager, resolveDesktopDaemonHome } from "./rust-daemon.js";
 import { createAccountIpc, stopAccountForExit } from "./account-ipc.js";
+import { DirectDownloadManager } from "./direct-download.js";
 
 import {
   closeLocalTransportSession,
@@ -334,8 +335,13 @@ export function registerDaemonManager(
 ): void {
   const handlers = createDaemonCommandHandlers();
   const account = createAccountIpc(getRustDaemon, isAccountAppWindow);
+  const downloads = new DirectDownloadManager();
 
   ipcMain.handle("ait:invoke", async (_event, command: string, args?: Record<string, unknown>) => {
+    if (command === "file_download") {
+      if (!isAccountAppWindow(_event.sender)) throw new Error("Invalid download window.");
+      return downloads.download(_event.sender, args);
+    }
     if (command.startsWith("account_")) return account(_event, command, args);
     const handler = Object.hasOwn(handlers, command) ? handlers[command] : undefined;
     if (!handler) {

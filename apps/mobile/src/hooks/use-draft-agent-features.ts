@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import type { AgentProvider, AgentSessionConfig } from "@ait/protocol/agent-types";
+import type { AgentFeature, AgentProvider, AgentSessionConfig } from "@ait/protocol/agent-types";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { mergeProviderPreferences, useFormPreferences } from "./use-form-preferences";
+import { useProvidersSnapshot } from "./use-providers-snapshot";
+import {
+  isModelConfigurationFeature,
+  modelPresetConfiguration,
+  withModelPresetSelection,
+} from "@/agent-controls/model-presets";
+import type { AgentConfigApply } from "@ait/protocol/messages";
+import { useToast } from "@/contexts/toast-context";
 import {
   applyFeatureValues,
   pruneFeatureValues,
@@ -23,8 +31,10 @@ export function useDraftAgentFeatures(input: {
   modelId: string | null | undefined;
   thinkingOptionId: string | null | undefined;
   initialFeatureValues?: Record<string, unknown>;
+  onApplyModelPreset?: (config: AgentConfigApply) => void;
 }) {
   const { t } = useTranslation();
+  const toast = useToast();
   const { serverId, provider, cwd, modeId, modelId, thinkingOptionId, initialFeatureValues } =
     input;
   const [localFeatureValues, setLocalFeatureValues] = useState<Record<string, unknown>>(
@@ -55,6 +65,12 @@ export function useDraftAgentFeatures(input: {
     };
   }, [modeId, modelId, normalizedCwd, normalizedProvider, thinkingOptionId]);
 
+  const { entries } = useProvidersSnapshot(serverId ?? null, {
+    cwd: normalizedCwd,
+    enabled: normalizedProvider === "omp",
+    refreshOnAccess: false,
+  });
+  const catalogFetchedAt = entries?.find((entry) => entry.provider === "omp")?.fetchedAt;
   const featuresQuery = useQuery({
     queryKey: [
       "providerFeatures",
@@ -64,6 +80,7 @@ export function useDraftAgentFeatures(input: {
       modeId ?? null,
       modelId ?? null,
       thinkingOptionId ?? null,
+      normalizedProvider === "omp" ? catalogFetchedAt : null,
     ],
     enabled: Boolean(serverId && client && isConnected && draftConfig),
     staleTime: 5 * 60 * 1000,
@@ -78,7 +95,16 @@ export function useDraftAgentFeatures(input: {
       return payload.features ?? [];
     },
   });
-  const availableFeaturesRaw = featuresQuery.data;
+  const featureScope = JSON.stringify([serverId ?? null, normalizedProvider, normalizedCwd]);
+  const retainedFeatures = useRef<{ scope: string; features: AgentFeature[] } | null>(null);
+  if (featuresQuery.data !== undefined) {
+    retainedFeatures.current = { scope: featureScope, features: featuresQuery.data };
+  }
+  const availableFeaturesRaw =
+    featuresQuery.data ??
+    (retainedFeatures.current?.scope === featureScope
+      ? retainedFeatures.current.features
+      : undefined);
   const availableFeatures = useMemo(() => availableFeaturesRaw ?? [], [availableFeaturesRaw]);
   const featureValues = useMemo(
     () =>
@@ -90,9 +116,14 @@ export function useDraftAgentFeatures(input: {
     [availableFeatures, localFeatureValues, persistedFeatureValues],
   );
 
+  // Any provider that advertises the preset control gets the same label reconciliation, so a
+  // manual model edit falls back to "custom" for OMP and Ait-backed providers alike.
   const features = useMemo(() => {
-    return applyFeatureValues(availableFeatures, featureValues);
-  }, [availableFeatures, featureValues]);
+    const applied = applyFeatureValues(availableFeatures, featureValues);
+    return applied.some(isModelConfigurationFeature)
+      ? withModelPresetSelection(applied, { modelId, thinkingOptionId, featureValues })
+      : applied;
+  }, [availableFeatures, featureValues, modelId, thinkingOptionId]);
 
   useEffect(() => {
     const previousProvider = previousProviderRef.current;
@@ -118,6 +149,18 @@ export function useDraftAgentFeatures(input: {
   const effectiveFeatureValues = Object.keys(featureValues).length > 0 ? featureValues : undefined;
   const setFeatureValue = useCallback(
     (featureId: string, value: unknown) => {
+      let preset: AgentConfigApply | null;
+      try {
+        preset = modelPresetConfiguration(features, featureId, value);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+        return;
+      }
+      if (preset) {
+        setLocalFeatureValues((current) => ({ ...current, ...preset.featureValues }));
+        input.onApplyModelPreset?.(preset);
+        return;
+      }
       setLocalFeatureValues((current) => {
         if (Object.is(current[featureId], value)) {
           return current;
@@ -142,7 +185,7 @@ export function useDraftAgentFeatures(input: {
         console.warn("[useDraftAgentFeatures] persist feature preference failed", error);
       });
     },
-    [provider, updatePreferences],
+    [provider, updatePreferences, features, input.onApplyModelPreset, toast],
   );
 
   const applyProfileFeatureValues = useCallback((values: Record<string, unknown>) => {

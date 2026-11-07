@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   applySlashCommandReplacement,
+  applySlashCommandArgumentReplacement,
   filterAndRankCommandAutocompleteEntries,
   filterInlineSkillCommandEntries,
   findActiveSlashCommand,
+  findActiveSlashCommandArguments,
+  getCommandArgumentSuggestions,
 } from "./agent-command-autocomplete";
 
 describe("filterAndRankCommandAutocompleteEntries", () => {
@@ -64,6 +67,15 @@ describe("findActiveSlashCommand", () => {
     });
   });
 
+  it("treats leading whitespace as a submitted command rather than an inline skill", () => {
+    expect(findActiveSlashCommand({ text: "  /adv", cursorIndex: 6 })).toEqual({
+      start: 2,
+      end: 6,
+      query: "adv",
+      position: "start",
+    });
+  });
+
   it("returns null when the cursor is outside the slash token", () => {
     expect(
       findActiveSlashCommand({
@@ -81,6 +93,61 @@ describe("findActiveSlashCommand", () => {
       }),
     ).toBeNull();
   });
+});
+
+describe("native command argument completion", () => {
+  const commands = [
+    {
+      name: "advisor",
+      aliases: ["adv"],
+      subcommands: [
+        { name: "on", description: "Enable the advisor" },
+        { name: "off", description: "Disable the advisor" },
+        { name: "status", description: "Show advisor status" },
+        { name: "configure", usage: "<settings>" },
+      ],
+    },
+  ];
+
+  it.each(["/advisor ", "  /advisor ", "/adv "])("offers declared arguments for %s", (text) => {
+    const range = findActiveSlashCommandArguments({ text, cursorIndex: text.length })!;
+    expect(getCommandArgumentSuggestions(commands, range)).toEqual(commands[0].subcommands);
+    expect(range.start).toBe(text.length);
+  });
+
+  it("matches a case-insensitive argument prefix in native order", () => {
+    const text = "/adv O";
+    const range = findActiveSlashCommandArguments({ text, cursorIndex: text.length })!;
+    expect(getCommandArgumentSuggestions(commands, range).map((item) => item.name)).toEqual([
+      "on",
+      "off",
+    ]);
+    expect(applySlashCommandArgumentReplacement({ text, range, value: "off" })).toBe("/adv off ");
+  });
+
+  it("replaces the whole argument around the cursor and preserves later arguments", () => {
+    const text = "/advisor off trailing";
+    const range = findActiveSlashCommandArguments({ text, cursorIndex: "/advisor o".length })!;
+    expect(range.query).toBe("o");
+    expect(applySlashCommandArgumentReplacement({ text, range, value: "on" })).toBe(
+      "/advisor on trailing",
+    );
+  });
+
+  it.each(["/unknown ", "/advisor off ", "/advisor configure setting", "/advisor z"])(
+    "does not offer unrelated or already-completed arguments for %s",
+    (text) => {
+      const range = findActiveSlashCommandArguments({ text, cursorIndex: text.length })!;
+      expect(getCommandArgumentSuggestions(commands, range)).toEqual([]);
+    },
+  );
+
+  it.each(["use /advisor ", "/tmp/project ", "hello\n/advisor ", "/advisor on\n"])(
+    "does not interpret prose, paths, or multiline prompts as argument completion: %s",
+    (text) => {
+      expect(findActiveSlashCommandArguments({ text, cursorIndex: text.length })).toBeNull();
+    },
+  );
 });
 
 describe("applySlashCommandReplacement", () => {

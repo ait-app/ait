@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   AgentFeature,
@@ -22,12 +22,14 @@ import {
 } from "./agent-control-contributions";
 import { getCommandCenterIcon } from "./icon";
 import { useCommandCenterActions } from "./provider";
+import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 
 export interface AgentControlCommandCenterSource {
   serverId: string;
   ownerKey: string;
   provider: string | null | undefined;
   providerDefinitions: AgentProviderDefinition[];
+  onCatalogAccess?: () => void;
   models: {
     providers: readonly ProviderSelectorProvider[];
     selectedProvider: string | null | undefined;
@@ -87,7 +89,11 @@ export function useAgentControlCommandCenterActions(input: {
 }): void {
   const { t } = useTranslation();
   const { controls } = input;
-  const { features, models, modes, thinking } = controls;
+  const { features, models, modes, thinking, onCatalogAccess } = controls;
+  const open = useKeyboardShortcutsStore((state) => state.commandCenterOpen);
+  useEffect(() => {
+    if (input.enabled && open) onCatalogAccess?.();
+  }, [input.enabled, onCatalogAccess, open]);
   const actions = useMemo(
     () =>
       buildAgentControlContributions({
@@ -110,12 +116,18 @@ export function useAgentControlCommandCenterActions(input: {
           providers: models.providers,
           selectedProvider: models.selectedProvider ?? null,
           selectedModelId: models.selectedModelId ?? null,
-          select: models.select,
+          select: (provider, modelId) => {
+            onCatalogAccess?.();
+            return models.select(provider, modelId);
+          },
         },
         thinking: {
           options: thinking.options ?? [],
           selectedId: thinking.selectedId ?? null,
-          select: thinking.select,
+          select: (optionId) => {
+            onCatalogAccess?.();
+            return thinking.select(optionId);
+          },
         },
         ...buildModeContributionSource(
           modes?.options,
@@ -125,7 +137,10 @@ export function useAgentControlCommandCenterActions(input: {
         ),
         features: {
           list: features.set ? (features.list ?? []) : [],
-          set: features.set ?? ignoreAgentFeatureChange,
+          set: (featureId, value) => {
+            if (featureId.startsWith("modelRole.")) onCatalogAccess?.();
+            return (features.set ?? ignoreAgentFeatureChange)(featureId, value);
+          },
         },
       }),
     [
@@ -139,6 +154,7 @@ export function useAgentControlCommandCenterActions(input: {
       models.select,
       models.selectedModelId,
       models.selectedProvider,
+      onCatalogAccess,
       modes?.options,
       modes?.select,
       modes?.selectedId,

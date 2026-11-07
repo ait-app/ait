@@ -91,6 +91,20 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## Provider、Agent 与会话
 
+- [ADR-223：统一模型预设与 Claude advisor 角色](providers/adr-223-claude-advisor-role-and-preset-expansion.md)
+- [ADR-222：OMP 私有原生宿主桥接运行时](providers/adr-222-omp-native-host-bridge.md)
+- [ADR-221：OMP 的宿主命令边界与独立侧问答](providers/adr-221-omp-headless-commands-and-side-questions.md)
+- [ADR-220：OMP 原生模型预设与 Ait 模型控件](providers/adr-220-omp-model-presets.md)
+
+- [ADR-218：原生临时界面与拥有者操作](providers/adr-218-native-ui-and-actions.md)
+- [ADR-217：OMP 模型角色配置](providers/adr-217-omp-model-roles.md)
+- [ADR-216：原生控制的延迟确认与文件交付](providers/adr-216-native-control-delivery.md)
+- [ADR-213：DSH 与 OpenCode 的原生命令所有权](providers/adr-213-provider-native-command-ownership.md)
+- [ADR-215：DSH 不激活 Agent 的历史读取](providers/adr-215-dsh-non-activating-history.md)
+- [ADR-214：原生控制结果使用独立时间线卡片](providers/adr-214-native-control-result-cards.md)
+- [ADR-211：OMP 会话命令目录与参数补全](providers/adr-211-omp-command-catalog-and-completion.md)
+- [ADR-212：由 Provider 拥有原生编辑器补全](providers/adr-212-native-editor-completion.md)
+
 - [ADR-211：Pi 推理偏好在下一条 prompt 前应用](providers/adr-211-pi-next-turn-reasoning-controls.md)
 - [ADR-210：Agent 目录共享已提交的不可变记录](providers/adr-210-committed-runtime-read-snapshots.md)
 

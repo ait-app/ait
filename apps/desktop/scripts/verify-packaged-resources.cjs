@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { extractFile, listPackage } = require("@electron/asar");
+const { verifyNativeHostDirectory } = require("../../../scripts/native-host-manifest.cjs");
 
 function verifyDaemonDirectory(resources) {
   const directory = path.join(resources, "bin");
@@ -29,6 +30,7 @@ function verifyPackagedResources({ appOutDir, platform, version }) {
   } else {
     verifyDaemonDirectory(resources);
   }
+  verifyNativeHostDirectory(path.join(resources, "provider-runtimes/omp-native-host/1"), platform);
   assert(
     fs.existsSync(path.join(resources, "app-dist", "index.html")),
     "Exported apps/mobile UI is missing",
@@ -48,4 +50,4 @@ function verifyPackagedResources({ appOutDir, platform, version }) {
   );
 }
 
-module.exports = { verifyPackagedResources, verifyDaemonDirectory };
+module.exports = { verifyPackagedResources, verifyDaemonDirectory, verifyNativeHostDirectory };

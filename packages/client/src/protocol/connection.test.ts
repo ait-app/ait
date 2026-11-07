@@ -121,6 +121,78 @@ function harness(
   };
 }
 describe("Rust v1 connection", () => {
+  it("keeps a native action open through the official OAuth dialog budget", () => {
+    vi.useFakeTimers();
+    const h = harness();
+    try {
+      h.ready();
+      h.send({
+        type: "agent.native_action.request",
+        requestId: "native-action",
+        agentId: "agent",
+        action: "login",
+        arguments: { providerId: "example" },
+      });
+      const id = h.last(3).request_id;
+      vi.advanceTimersByTime(600_001);
+      expect(h.received.some((frame) => frame.type === "rpc_error")).toBe(false);
+      h.sockets[3].message({
+        type: "response",
+        request_id: id,
+        result: { agentId: "agent", text: "Signed in", file: null, error: null },
+      });
+      expect(h.received.at(-1)).toMatchObject({
+        type: "agent.native_action.response",
+        payload: { requestId: "native-action", text: "Signed in" },
+      });
+    } finally {
+      h.transport.close();
+      vi.useRealTimers();
+    }
+  });
+
+  it("routes SDK native completions over the desktop agent channel", async () => {
+    const h = harness();
+    h.stopHello();
+    const client = new DaemonClient({
+      url: "ws://127.0.0.1:7316/v1/ws",
+      clientId: "native-completion-test",
+      transportFactory: h.base,
+      reconnect: { enabled: false },
+    });
+    try {
+      const connected = client.connect();
+      h.ready();
+      await connected;
+      const text = "/native first nested ";
+      const result = {
+        agentId: "agent-native",
+        supported: true,
+        items: [],
+      };
+      const pending = client.completeCommands({
+        agentId: result.agentId,
+        text,
+        cursor: text.length,
+        requestId: "native-completion",
+      });
+      expect(h.last(0)).toMatchObject({
+        method: "agent.commands.complete.request",
+        request_id: "native-completion",
+        params: { agentId: result.agentId, text, cursor: text.length },
+      });
+      h.sockets[0].message({
+        type: "response",
+        request_id: "native-completion",
+        result,
+      });
+      await expect(pending).resolves.toEqual({ ...result, requestId: "native-completion" });
+      expect(h.errors).not.toHaveBeenCalled();
+    } finally {
+      await client.close();
+    }
+  });
+
   it("connects the public SDK directly to raw Rust transports with Bearer authentication", async () => {
     const h = harness();
     h.stopHello();
@@ -906,9 +978,9 @@ describe("Rust v1 connection", () => {
     }
   });
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(204);
+    expect(Object.keys(METHODS)).toHaveLength(210);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(204);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(210);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);

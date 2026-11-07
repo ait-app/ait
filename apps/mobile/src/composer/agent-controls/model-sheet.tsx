@@ -37,6 +37,7 @@ interface CompactModelSheetProps {
   onCreateProfile?: (seed: AgentProfileSeed) => void;
   onEditProfile?: (profileId: string) => void;
   onOpen?: () => void;
+  onCatalogAccess?: () => void;
   onClose?: () => void;
   onRetryProvider?: (provider: AgentProvider) => void;
   isRetryingProvider?: boolean;
@@ -89,6 +90,7 @@ export function CompactModelSheet({
   onCreateProfile,
   onEditProfile,
   onOpen,
+  onCatalogAccess,
   onClose,
   onRetryProvider,
   isRetryingProvider = false,
@@ -153,7 +155,8 @@ export function CompactModelSheet({
     rootBrowser.showAll();
     setIsOpen(true);
     onOpen?.();
-  }, [onOpen, rootBrowser]);
+    onCatalogAccess?.();
+  }, [onCatalogAccess, onOpen, rootBrowser]);
 
   const close = useCallback(() => {
     setIsModelBrowserOpen(false);
@@ -165,14 +168,16 @@ export function CompactModelSheet({
 
   const handleSearchSelect = useCallback(
     (provider: string, modelId: string) => {
+      onCatalogAccess?.();
       onSelect(provider, modelId);
       Keyboard.dismiss();
       rootBrowser.showAll();
     },
-    [onSelect, rootBrowser],
+    [onCatalogAccess, onSelect, rootBrowser],
   );
 
   const openModelBrowser = useCallback(() => {
+    onCatalogAccess?.();
     Keyboard.dismiss();
     const destination = resolveModelSheetOpening({
       canSwitchProvider,
@@ -185,7 +190,7 @@ export function CompactModelSheet({
       modelBrowser.drillDown(destination.providerId, destination.providerLabel);
     }
     setIsModelBrowserOpen(true);
-  }, [availableProviders, canSwitchProvider, modelBrowser, selectedProvider]);
+  }, [availableProviders, canSwitchProvider, modelBrowser, onCatalogAccess, selectedProvider]);
 
   const closeModelBrowser = useCallback(() => {
     setIsModelBrowserOpen(false);
@@ -194,18 +199,20 @@ export function CompactModelSheet({
 
   const handleBrowserSelect = useCallback(
     (provider: string, modelId: string) => {
+      onCatalogAccess?.();
       onSelect(provider, modelId);
       closeModelBrowser();
     },
-    [closeModelBrowser, onSelect],
+    [closeModelBrowser, onCatalogAccess, onSelect],
   );
 
   const handleDesktopSelect = useCallback(
     (provider: string, modelId: string) => {
+      onCatalogAccess?.();
       onSelect(provider, modelId);
       close();
     },
-    [close, onSelect],
+    [close, onCatalogAccess, onSelect],
   );
 
   const handleApplyProfile = useCallback(

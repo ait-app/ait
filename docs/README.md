@@ -25,6 +25,9 @@
 - [MCP 编排接口](operations/mcp.md)：HTTP、可选 Unix socket、认证和工具发现。
 - [沙箱化 Worktree](decisions/workspace/adr-215-sandboxed-worktree-isolation.md)：macOS 上用 Seatbelt 把 Agent 进程的写入限制在 worktree 内。
 - [Agent Skill 分发](operations/agent-skills.md)：内置技能、更新、选择和卸载。
+- [OMP 模型角色与原生操作](operations/oh-my-pi.md)：角色配置、异步模型目录及官方已导出操作；
+  [原生 UI 与拥有者边界](decisions/providers/adr-218-native-ui-and-actions.md)、[验收报告](reports/providers/native-delivery-and-omp-roles-2026-11-02.md)。
+- [原生控制结果兼容](decisions/providers/adr-214-native-control-result-cards.md)：旧客户端文本封装与当前结果卡片共用实时及历史出口。
 - [查看子 Agent](decisions/providers/adr-209-observed-subagent-normalization.md)：统一会话入口、父子关系与只读观测边界。
 - [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)（客户端标签页见 [ADR-214](decisions/clients/adr-214-workspace-bot-tab-v2.md)，权限与作用域 MCP 凭据见 [ADR-215](decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)）。
 - [语音与听写](operations/speech.md)、[移动端通知](operations/mobile-notifications.md)。
@@ -33,6 +36,10 @@
 
 - [客户端协议归属](decisions/clients/adr-211-sdk-native-daemon-protocol.md)：SDK 原生使用 Rust v1，应用只选择平台传输。
 - [当前架构](architecture/README.md)：组件职责、依赖、存储和生命周期；[OMP ACP 桥接](architecture/omp-acp-bridge.md)。
+- [OMP 模型预设](decisions/providers/adr-220-omp-model-presets.md)：原生目录缓存、整套私有配置与模型控件同步。
+- [OMP 命令与侧问答](decisions/providers/adr-221-omp-headless-commands-and-side-questions.md)：内置命令边界、并行查询与原生 BTW 历史。
+- [OMP 私有原生宿主桥接](decisions/providers/adr-222-omp-native-host-bridge.md)：Vibe 能力握手、单 writer 与同数据目录、未安装时降级；修订 ADR-218 的补丁边界。
+- [统一模型预设](decisions/providers/adr-223-claude-advisor-role-and-preset-expansion.md)：Claude `modelRole.advisor` 的三态与档位门控，以及一套编辑器背后的 native/Ait 双存储与合成规则。
 - [ADR 分类索引](decisions/README.md)：决策及修订关系，完整清单只在此维护。
 - [仓库约定](../AGENTS.md)、[Rust 规范](policy/rust.md)、[文档维护规范](policy/documentation.md)。
 - [Agent 共享读视图](decisions/providers/adr-210-committed-runtime-read-snapshots.md)：已提交记录、目录与 Hub 读取的性能边界。

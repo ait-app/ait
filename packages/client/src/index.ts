@@ -11,6 +11,7 @@ import type {
   GetProvidersSnapshotResponseMessage,
   ListAvailableProvidersResponse,
   ListCommandsResponse,
+  CompleteCommandsResponse,
   ListProviderFeaturesRequestMessage,
   ListProviderFeaturesResponseMessage,
   ListProviderModelsResponseMessage,
@@ -304,6 +305,8 @@ export interface PaseoAgentCommandsOptions {
 
 export type PaseoAgentCommandsResult = ListCommandsResponse["payload"];
 
+export type PaseoAgentCompletionsResult = CompleteCommandsResponse["payload"];
+
 export type PaseoAgentUpdate = Extract<SessionOutboundMessage, { type: "agent.update" }>["payload"];
 
 export type PaseoAgentStream = Extract<SessionOutboundMessage, { type: "agent.stream" }>["payload"];
@@ -382,6 +385,8 @@ export interface PaseoAgentHandle {
    * rejecting.
    */
   commands(options?: PaseoAgentCommandsOptions): Promise<PaseoAgentCommandsResult>;
+  /** Read-only native editor completion; all offsets are UTF-16 code units. */
+  completeCommands(input: { text: string; cursor: number }): Promise<PaseoAgentCompletionsResult>;
   archive(): Promise<{ archivedAt: string }>;
   detach(): Promise<void>;
   subscribe(handler: (update: PaseoAgentUpdate) => void): () => void;
@@ -974,6 +979,7 @@ function createAgentHandleFactory(
         return result;
       },
       commands: (options) => daemonClient.listCommands({ agentId: id, ...options }),
+      completeCommands: (input) => daemonClient.completeCommands({ agentId: id, ...input }),
       archive: async () => {
         const result = await daemonClient.archiveAgent(id);
         if (current) {
