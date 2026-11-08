@@ -9,6 +9,15 @@
 - Bridge OMP native Vibe mode: the private host greets the adapter, wires `/vibe` into the RPC command table so it enters/exits the native mode and turns an inline directive into a real turn, projects Vibe state and verified workers into host UI and subagent events, exposes list/spawn/send/wait/kill/toggle over native actions, and keeps `/vibe` blocked with an explicit card when the bridge is absent.
 - Keep the optional OMP native host install recoverable: it runs in its own process group so a timeout stops npm too, a lock left by a killed installer is reclaimed instead of blocking every later start, the installer budget is 300 seconds, and a background install is adopted by the next conversation instead of requiring a daemon restart.
 
+## 0.2.1 - 2026-11-08
+
+- Add Pi slash commands and extension notifications through its native provider integration.
+- Consolidate online sessions with Hub leases, credit-based flow control and on-demand bulk download connections. New clients require a center that declares the complete Hub feature set; older centers now produce an explicit compatibility error. Connections to older Hosts remain supported through their advertised capabilities.
+- Speed up desktop restarts by avoiding unchanged observed-Agent registry writes, resolving login-shell environment asynchronously and prestarting the built-in daemon while the interface loads.
+- Prefer the macOS Keychain for Claude usage credentials in the default configuration directory, with the credentials file as fallback; custom CLAUDE_CONFIG_DIR behavior is unchanged.
+- Sort sidebar projects by their most recent session activity and redirect signed-out browser clients to account login.
+- Upgrade Electron to 45.2.3 and make completed Git commands tolerate bounded trailing stderr diagnostics.
+
 ## 0.2.0 - 2026-11-07
 
 - Align daemon command help, errors, desktop version checks and service examples with the packaged `aitd` executable name; standalone archive filenames stay unchanged.

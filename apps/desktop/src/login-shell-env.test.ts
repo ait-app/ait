@@ -12,7 +12,7 @@ const describeIfZsh = existsSync(zsh) ? describe : describe.skip;
 const basePath = "/usr/bin:/bin:/usr/sbin:/sbin";
 const fakeHome = path.join(os.tmpdir(), "paseo-login-shell-env-fake-home");
 type LoginShellEnvInput = NonNullable<Parameters<typeof inheritLoginShellEnv>[0]>;
-type LoginShellSpawnSync = NonNullable<LoginShellEnvInput["spawnSync"]>;
+type LoginShellRunner = NonNullable<LoginShellEnvInput["runShell"]>;
 
 interface TestClock {
   advance: (ms: number) => void;
@@ -112,13 +112,13 @@ async function createShellHome(): Promise<string> {
 }
 
 describe("login shell env retry behavior", () => {
-  it("applies the interactive env without retrying", () => {
+  it("applies the interactive env without retrying", async () => {
     const env = createEnv(fakeHome);
     const logger = new RecordingLoginShellLogger();
     const clock = createTestClock();
     const calls: RecordedSpawn[] = [];
     const interactivePath = "/interactive/bin:/usr/bin:/bin";
-    const spawnSync: LoginShellSpawnSync = (shell, args, options) => {
+    const runShell: LoginShellRunner = async (shell, args, options) => {
       const recordedArgs = Array.isArray(args) ? args.map(String) : [];
       calls.push({
         argv0: options?.argv0,
@@ -130,7 +130,7 @@ describe("login shell env retry behavior", () => {
       return successResult(String(recordedArgs.at(-1)), { ...env, PATH: interactivePath });
     };
 
-    inheritLoginShellEnv({ env, logger, now: clock.now, platform: "darwin", spawnSync });
+    await inheritLoginShellEnv({ env, logger, now: clock.now, platform: "darwin", runShell });
 
     expect(env.PATH).toBe(interactivePath);
     expect(calls).toHaveLength(1);
@@ -158,7 +158,7 @@ describe("login shell env retry behavior", () => {
     expect(logger.warnings).toEqual([]);
   });
 
-  it("retries non-interactively after an interactive timeout", () => {
+  it("retries non-interactively after an interactive timeout", async () => {
     const env = createEnv(fakeHome);
     const logger = new RecordingLoginShellLogger();
     const clock = createTestClock();
@@ -168,7 +168,7 @@ describe("login shell env retry behavior", () => {
       code: "ETIMEDOUT",
     });
     let timedOutStdout = "";
-    const spawnSync: LoginShellSpawnSync = (shell, args, options) => {
+    const runShell: LoginShellRunner = async (shell, args, options) => {
       const recordedArgs = Array.isArray(args) ? args.map(String) : [];
       calls.push({
         argv0: options?.argv0,
@@ -193,7 +193,7 @@ describe("login shell env retry behavior", () => {
       return successResult(String(recordedArgs.at(-1)), { ...env, PATH: nonInteractivePath });
     };
 
-    inheritLoginShellEnv({ env, logger, now: clock.now, platform: "darwin", spawnSync });
+    await inheritLoginShellEnv({ env, logger, now: clock.now, platform: "darwin", runShell });
 
     expect(env.PATH).toBe(nonInteractivePath);
     expect(calls).toHaveLength(2);
@@ -233,14 +233,14 @@ describe("login shell env retry behavior", () => {
     expectNoRawStdout(logger.warnings[0]?.fields ?? {});
   });
 
-  it("retries non-interactively when the interactive marker is missing", () => {
+  it("retries non-interactively when the interactive marker is missing", async () => {
     const env = createEnv(fakeHome);
     const logger = new RecordingLoginShellLogger();
     const clock = createTestClock();
     const calls: RecordedSpawn[] = [];
     const nonInteractivePath = "/profile/bin:/usr/bin:/bin";
     const missingMarkerStdout = "switched shells before command\n";
-    const spawnSync: LoginShellSpawnSync = (shell, args, options) => {
+    const runShell: LoginShellRunner = async (shell, args, options) => {
       const recordedArgs = Array.isArray(args) ? args.map(String) : [];
       calls.push({
         argv0: options?.argv0,
@@ -258,7 +258,7 @@ describe("login shell env retry behavior", () => {
       return successResult(String(recordedArgs.at(-1)), { ...env, PATH: nonInteractivePath });
     };
 
-    inheritLoginShellEnv({ env, logger, now: clock.now, platform: "darwin", spawnSync });
+    await inheritLoginShellEnv({ env, logger, now: clock.now, platform: "darwin", runShell });
 
     expect(env.PATH).toBe(nonInteractivePath);
     expect(calls).toHaveLength(2);
@@ -288,7 +288,7 @@ describe("login shell env retry behavior", () => {
     expectNoRawStdout(logger.warnings[0]?.fields ?? {});
   });
 
-  it("keeps the inherited env after both attempts fail", () => {
+  it("keeps the inherited env after both attempts fail", async () => {
     const env = createEnv(fakeHome);
     const logger = new RecordingLoginShellLogger();
     const clock = createTestClock();
@@ -296,7 +296,7 @@ describe("login shell env retry behavior", () => {
     const spawnError = Object.assign(new Error("spawnSync ENOENT"), {
       code: "ENOENT",
     });
-    const spawnSync: LoginShellSpawnSync = (shell, args, options) => {
+    const runShell: LoginShellRunner = async (shell, args, options) => {
       const recordedArgs = Array.isArray(args) ? args.map(String) : [];
       calls.push({
         argv0: options?.argv0,
@@ -318,7 +318,7 @@ describe("login shell env retry behavior", () => {
       });
     };
 
-    inheritLoginShellEnv({ env, logger, now: clock.now, platform: "darwin", spawnSync });
+    await inheritLoginShellEnv({ env, logger, now: clock.now, platform: "darwin", runShell });
 
     expect(env.PATH).toBe(basePath);
     expect(calls).toHaveLength(2);
@@ -359,7 +359,7 @@ describe("login shell env retry behavior", () => {
     expectNoRawStdout(logger.warnings[2]?.fields ?? {});
   });
 
-  it("uses the configured shell env timeout", () => {
+  it("uses the configured shell env timeout", async () => {
     const env = {
       ...createEnv(fakeHome),
       AIT_SHELL_ENV_TIMEOUT_MS: "1234",
@@ -368,7 +368,7 @@ describe("login shell env retry behavior", () => {
     const clock = createTestClock();
     const calls: RecordedSpawn[] = [];
     const configuredPath = "/configured/bin:/usr/bin:/bin";
-    const spawnSync: LoginShellSpawnSync = (shell, args, options) => {
+    const runShell: LoginShellRunner = async (shell, args, options) => {
       const recordedArgs = Array.isArray(args) ? args.map(String) : [];
       calls.push({
         argv0: options?.argv0,
@@ -380,7 +380,7 @@ describe("login shell env retry behavior", () => {
       return successResult(String(recordedArgs.at(-1)), { ...env, PATH: configuredPath });
     };
 
-    inheritLoginShellEnv({ env, logger, now: clock.now, platform: "darwin", spawnSync });
+    await inheritLoginShellEnv({ env, logger, now: clock.now, platform: "darwin", runShell });
 
     expect(env.PATH).toBe(configuredPath);
     expect(calls).toHaveLength(1);
@@ -397,7 +397,7 @@ describe("login shell env retry behavior", () => {
     });
   });
 
-  it("uses argv0 for the non-interactive tcsh login retry", () => {
+  it("uses argv0 for the non-interactive tcsh login retry", async () => {
     const env = {
       ...createEnv(fakeHome),
       SHELL: "/bin/tcsh",
@@ -406,7 +406,7 @@ describe("login shell env retry behavior", () => {
     const clock = createTestClock();
     const calls: RecordedSpawn[] = [];
     const nonInteractivePath = "/tcsh/login/bin:/usr/bin:/bin";
-    const spawnSync: LoginShellSpawnSync = (shell, args, options) => {
+    const runShell: LoginShellRunner = async (shell, args, options) => {
       const recordedArgs = Array.isArray(args) ? args.map(String) : [];
       calls.push({
         argv0: options?.argv0,
@@ -424,7 +424,7 @@ describe("login shell env retry behavior", () => {
       return successResult(String(recordedArgs.at(-1)), { ...env, PATH: nonInteractivePath });
     };
 
-    inheritLoginShellEnv({ env, logger, now: clock.now, platform: "darwin", spawnSync });
+    await inheritLoginShellEnv({ env, logger, now: clock.now, platform: "darwin", runShell });
 
     expect(env.PATH).toBe(nonInteractivePath);
     expect(calls).toHaveLength(2);
@@ -466,7 +466,7 @@ describeIfZsh("login shell env", () => {
     const env = createEnv(home);
     const logger = new RecordingLoginShellLogger();
 
-    inheritLoginShellEnv({ env, logger });
+    await inheritLoginShellEnv({ env, logger });
 
     expect(env.PATH?.split(path.delimiter)[0]).toBe(binDir);
     expect(logger.infos.map((entry) => entry.message)).toEqual([
@@ -489,6 +489,43 @@ describeIfZsh("login shell env", () => {
     });
   });
 
+  it("resolves without blocking the event loop", async () => {
+    const home = await createShellHome();
+    homes.add(home);
+    await writeFile(path.join(home, ".zprofile"), "sleep 0.3\nexport PASEO_TEST_SLOW=1\n");
+    const env = createEnv(home);
+    let resolved = false;
+
+    const lookup = inheritLoginShellEnv({ env, logger: new RecordingLoginShellLogger() }).then(
+      () => {
+        resolved = true;
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(resolved).toBe(false);
+    await lookup;
+    expect(env.PASEO_TEST_SLOW).toBe("1");
+  });
+
+  it("kills a shell that hangs in its startup files and keeps the inherited env", async () => {
+    const home = await createShellHome();
+    homes.add(home);
+    await writeFile(path.join(home, ".zprofile"), "sleep 5\n");
+    const env = { ...createEnv(home), AIT_SHELL_ENV_TIMEOUT_MS: "400" };
+    const logger = new RecordingLoginShellLogger();
+    const startedAt = Date.now();
+
+    await inheritLoginShellEnv({ env, logger });
+
+    expect(Date.now() - startedAt).toBeLessThan(4_000);
+    expect(env.PATH).toBe(basePath);
+    expect(new Set(logger.warnings.map((entry) => entry.fields.reason))).toEqual(
+      new Set(["timeout"]),
+    );
+    expect(logger.warnings.at(-1)?.message).toBe("[login-shell-env] failed; keeping inherited env");
+  });
+
   it("loads the user's zshrc while resolving the login shell env", async () => {
     const home = await createShellHome();
     homes.add(home);
@@ -496,7 +533,7 @@ describeIfZsh("login shell env", () => {
     const env = createEnv(home);
     const logger = new RecordingLoginShellLogger();
 
-    inheritLoginShellEnv({ env, logger });
+    await inheritLoginShellEnv({ env, logger });
 
     expect(env.PASEO_TEST_ZSHRC_LOADED).toBe("1");
     expect(logger.infos.map((entry) => entry.message)).toEqual([
@@ -514,7 +551,7 @@ describeIfZsh("login shell env", () => {
     const env = createEnv(home);
     const logger = new RecordingLoginShellLogger();
 
-    inheritLoginShellEnv({ env, logger });
+    await inheritLoginShellEnv({ env, logger });
 
     expect(env.PATH).toBe(basePath);
     expect(logger.infos.map((entry) => entry.message)).toEqual(["[login-shell-env] start"]);
@@ -566,7 +603,7 @@ describeIfZsh("login shell env", () => {
     const timeoutError = Object.assign(new Error("spawnSync ETIMEDOUT"), {
       code: "ETIMEDOUT",
     });
-    const spawnSync: LoginShellSpawnSync = (_shell, args) => {
+    const runShell: LoginShellRunner = async (_shell, args) => {
       const shellCommand = String(Array.isArray(args) ? args.at(-1) : "");
       const marker = markerFromShellCommand(shellCommand);
       stdout = `${marker}${JSON.stringify({ ...env, PATH: timedOutPath })}${marker}`;
@@ -582,7 +619,7 @@ describeIfZsh("login shell env", () => {
       } satisfies SpawnSyncReturns<string>;
     };
 
-    inheritLoginShellEnv({ env, logger, spawnSync });
+    await inheritLoginShellEnv({ env, logger, runShell });
 
     expect(env.PATH).toBe(basePath);
     expect(logger.infos.map((entry) => entry.message)).toEqual(["[login-shell-env] start"]);

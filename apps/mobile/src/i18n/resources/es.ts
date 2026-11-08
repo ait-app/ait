@@ -1934,6 +1934,8 @@ export const es: TranslationResources = {
       "Este inicio de sesión no informa del uso del plan. Inicia sesión con la CLI del proveedor.",
     nativeText: {
       claudePlanSignIn: "Inicia sesión con claude /login para consultar el uso del plan.",
+      claudeRenewalPending:
+        "Claude renovará su inicio de sesión la próxima vez que se ejecute. Después se actualizará el uso del plan.",
       claudePlanUnavailable:
         "Este método de inicio de sesión no informa del uso del plan. Ejecuta claude /login para iniciar sesión.",
       deepseekTotalBalance: "Saldo total de DeepSeek",

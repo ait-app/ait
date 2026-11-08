@@ -168,6 +168,14 @@ async fn replacing_an_upload_id_removes_old_bytes_and_uses_the_latest_request_me
     fixture.stop().await;
 }
 
+/// Replace `path` atomically: a plain write truncates first, so a poll landing in between
+/// would observe an empty file and report an extra update.
+fn replace(path: &std::path::Path, contents: &str) {
+    let staged = path.with_extension("staged");
+    fs::write(&staged, contents).unwrap();
+    fs::rename(&staged, path).unwrap();
+}
+
 #[tokio::test]
 async fn identical_file_observations_keep_independent_release_and_idle_peers_receive_no_updates() {
     let fixture = Fixture::start().await;
@@ -186,7 +194,7 @@ async fn identical_file_observations_keep_independent_release_and_idle_peers_rec
         assert_eq!(result["result"]["subscriptionId"], id);
         assert_eq!(result["result"]["initial"]["status"], "ready");
     }
-    fs::write(cwd.join("file.txt"), "updated").unwrap();
+    replace(&cwd.join("file.txt"), "updated");
     let both = [receive(&mut owner).await, receive(&mut owner).await];
     for id in ["first", "second"] {
         assert!(
@@ -200,7 +208,7 @@ async fn identical_file_observations_keep_independent_release_and_idle_peers_rec
         json!({"subscriptionId":"second"}),
     )
     .await;
-    fs::write(cwd.join("file.txt"), "surviving observer").unwrap();
+    replace(&cwd.join("file.txt"), "surviving observer");
     let remaining = receive(&mut owner).await;
     assert_eq!(remaining["params"]["subscriptionId"], "first");
     assert_eq!(remaining["params"]["version"]["size"], 18);

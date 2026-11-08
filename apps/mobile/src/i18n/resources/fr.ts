@@ -1942,6 +1942,8 @@ export const fr: TranslationResources = {
     nativeText: {
       claudePlanSignIn:
         "Connectez-vous avec claude /login pour consulter l’utilisation du forfait.",
+      claudeRenewalPending:
+        "Claude renouvellera sa connexion à sa prochaine exécution. L’utilisation du forfait sera mise à jour ensuite.",
       claudePlanUnavailable:
         "Ce mode de connexion ne fournit pas l’utilisation du forfait. Exécutez claude /login pour vous connecter.",
       deepseekTotalBalance: "Solde total DeepSeek",

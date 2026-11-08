@@ -1890,6 +1890,8 @@ export const ar: TranslationResources = {
       "طريقة تسجيل الدخول هذه لا تعرض استخدام الخطة. سجّل الدخول باستخدام واجهة سطر أوامر المزوّد.",
     nativeText: {
       claudePlanSignIn: "سجّل الدخول باستخدام claude /login للاطلاع على استخدام الخطة.",
+      claudeRenewalPending:
+        "سيجدّد Claude تسجيل الدخول في المرة التالية التي يعمل فيها. يتم تحديث استخدام الخطة بعد ذلك.",
       claudePlanUnavailable:
         "طريقة تسجيل الدخول هذه لا توفر بيانات استخدام الخطة. شغّل claude /login لتسجيل الدخول.",
       deepseekTotalBalance: "إجمالي رصيد DeepSeek",

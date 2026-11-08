@@ -2374,6 +2374,8 @@ export const en = {
     nativePlanUnavailable: "This login does not report plan usage. Sign in with the provider CLI.",
     nativeText: {
       claudePlanSignIn: "Sign in with claude /login to read plan usage.",
+      claudeRenewalPending:
+        "Claude renews its sign-in the next time it runs. Plan usage updates after that.",
       claudePlanUnavailable: "This login does not report plan usage. Run claude /login to sign in.",
       deepseekTotalBalance: "DeepSeek total balance",
       deepseekRechargeBalance: "DeepSeek recharge balance",

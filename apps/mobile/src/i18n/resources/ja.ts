@@ -1904,6 +1904,8 @@ export const ja: TranslationResources = {
       "このログイン方法ではプランの使用量を取得できません。プロバイダーの CLI でログインしてください。",
     nativeText: {
       claudePlanSignIn: "プラン使用量を確認するには claude /login でログインしてください。",
+      claudeRenewalPending:
+        "Claude は次回の実行時にサインインを自動更新します。その後プラン使用量が更新されます。",
       claudePlanUnavailable:
         "このログイン方法ではプラン使用量を取得できません。claude /login でログインしてください。",
       deepseekTotalBalance: "DeepSeek 合計残高",

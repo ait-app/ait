@@ -1893,6 +1893,8 @@ export const ko: TranslationResources = {
       "이 로그인 방식은 요금제 사용량을 제공하지 않습니다. 제공업체 CLI로 로그인하세요.",
     nativeText: {
       claudePlanSignIn: "요금제 사용량을 확인하려면 claude /login으로 로그인하세요.",
+      claudeRenewalPending:
+        "Claude는 다음 실행 시 로그인을 자동으로 갱신합니다. 그 후 플랜 사용량이 업데이트됩니다.",
       claudePlanUnavailable:
         "이 로그인 방식은 요금제 사용량을 제공하지 않습니다. claude /login으로 로그인하세요.",
       deepseekTotalBalance: "DeepSeek 총 잔액",

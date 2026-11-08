@@ -96,6 +96,54 @@ async fn native_quota_respects_session_credentials_and_reports_expiry_without_ne
 }
 
 #[tokio::test]
+async fn lapsed_access_token_waits_for_cli_renewal_unless_the_refresh_token_also_expired() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join(".credentials.json");
+    let mut client = ClaudeClient::new(root.path().join("unused-cli"));
+    client.config_dir = Some(root.path().to_owned());
+    client.environment = serde_json::from_value(json!({
+        "CLAUDE_CODE_OAUTH_TOKEN":"", "ANTHROPIC_API_KEY":""
+    }))
+    .unwrap();
+    let write = |refresh_token: Option<&str>, refresh_expiry: Option<i64>| {
+        std::fs::write(
+            &path,
+            json!({"claudeAiOauth":{"accessToken":"offline-lapsed-token",
+            "expiresAt":1_700_000_000_000_i64,"refreshToken":refresh_token,
+            "refreshTokenExpiresAt":refresh_expiry}})
+            .to_string(),
+        )
+        .unwrap();
+    };
+
+    let refresh = Some("offline-refresh-secret");
+    write(refresh, None);
+    let open_ended = client.native_usage().await.unwrap();
+    write(refresh, Some(i64::MAX));
+    let renewable = client.native_usage().await.unwrap();
+    write(refresh, Some(1_700_000_000_000));
+    let revoked = client.native_usage().await.unwrap();
+    write(None, None);
+    let null_refresh = client.native_usage().await.unwrap();
+    write(Some(""), None);
+    let empty_refresh = client.native_usage().await.unwrap();
+
+    for pending in [&open_ended, &renewable] {
+        assert_eq!(pending["status"], "unavailable");
+        assert_eq!(pending["problem"]["kind"], "no_quota");
+        assert_eq!(pending["problem"]["detail"], RENEWAL_PENDING);
+    }
+    for unrenewable in [&revoked, &null_refresh, &empty_refresh] {
+        assert_eq!(unrenewable["problem"]["kind"], "expired");
+        assert_eq!(unrenewable["problem"]["refreshedBy"], "claude /login");
+    }
+    for report in [&open_ended, &renewable, &revoked] {
+        let text = report.to_string();
+        assert!(!text.contains("offline-lapsed-token") && !text.contains("offline-refresh-secret"));
+    }
+}
+
+#[tokio::test]
 async fn stored_credentials_prefer_the_default_keychain_over_a_stale_plaintext_copy() {
     let root = tempfile::tempdir().unwrap();
     std::fs::write(root.path().join(".credentials.json"),
@@ -106,6 +154,7 @@ async fn stored_credentials_prefer_the_default_keychain_over_a_stale_plaintext_c
             token: SecretString::from("offline-live-keychain"),
             plan: Some("Max".to_owned()),
             expires_at: None,
+            renewable: false,
         })))
     };
 
