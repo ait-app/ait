@@ -24,6 +24,8 @@ export const zhCN: TranslationResources = {
     shareTitle: "共享 {{name}}",
     resourceTitle: "共享资源",
     intro: "分享者在线时，群组成员可以在 AIT 中打开并操作这个资源。",
+    projectHostHint: "共享所选 Host 上的这个项目及其工作区。",
+    hostUnavailable: "此 Host 当前不可用，请连接后管理共享。",
     scope: {
       node: "整台主机",
       project: "项目",

@@ -22,6 +22,8 @@ export const en = {
     shareTitle: "Share {{name}}",
     resourceTitle: "Share resource",
     intro: "Group members can open this resource in AIT while the sharing owner is online.",
+    projectHostHint: "Share this project and its workspaces on the selected Host.",
+    hostUnavailable: "This Host is unavailable. Connect to it to manage sharing.",
     scope: {
       node: "Node",
       project: "Project",

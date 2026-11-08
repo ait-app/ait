@@ -891,8 +891,9 @@ function ProjectHeaderRow({
       resourceKind: "project",
       resourceKey: settingsTarget.projectId,
       displayName,
+      projectHosts: project.hosts,
     });
-  }, [displayName, settingsTarget]);
+  }, [displayName, project.hosts, settingsTarget]);
   const handleCloseShare = useCallback(() => setShareTarget(null), []);
   const handleBeginWorkspaceSetup = useCallback(() => {
     if (!worktreeTarget) {
