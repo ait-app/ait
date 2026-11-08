@@ -1,6 +1,52 @@
 use super::*;
 
 #[tokio::test]
+async fn usage_response_slots_stay_bounded_until_delivery_and_reject_mutations() {
+    let fixture = Fixture::new();
+    let (execution, _) = worker(&fixture);
+    let mut responses = Vec::new();
+    for _ in 0..64 {
+        let mut response = execution
+            .admit_discovery(
+                "provider.usage.list.request",
+                json!({"providerId":"unknown"}),
+            )
+            .unwrap();
+        assert_eq!(
+            response.receive().await,
+            Err(ErrorCode::UnsupportedCapability)
+        );
+        responses.push(response);
+    }
+    assert!(matches!(
+        execution.admit_discovery("provider.usage.list.request", json!({})),
+        Err(ErrorCode::CatalogBusy)
+    ));
+    assert!(matches!(
+        execution.admit_discovery("agent.message.send.request", json!({})),
+        Err(ErrorCode::UnsupportedCapability)
+    ));
+    drop(responses.pop());
+    let mut admitted = execution
+        .admit_discovery(
+            "provider.usage.list.request",
+            json!({"providerId":"unknown"}),
+        )
+        .unwrap();
+    assert_eq!(
+        admitted.receive().await,
+        Err(ErrorCode::UnsupportedCapability)
+    );
+    drop(admitted);
+    drop(responses);
+    execution.shutdown().await.unwrap();
+    assert!(matches!(
+        execution.admit_discovery("provider.usage.list.request", json!({})),
+        Err(ErrorCode::AgentIo)
+    ));
+}
+
+#[tokio::test]
 async fn quota_reads_use_the_live_agent_account_and_validate_the_rpc_shape() {
     let fixture = Fixture::new();
     std::fs::write(

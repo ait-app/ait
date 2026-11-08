@@ -301,6 +301,11 @@ for line in sys.stdin:
     elif method == "account/read":
         result = {"account": {"type": "chatgpt", "email": os.environ.get("AIT_TEST_USAGE_ACCOUNT", "private@example.test"), "planType": "plus"}, "requiresOpenaiAuth": True}
     elif method == "account/rateLimits/read":
+        if (root / "hold-usage").exists():
+            (root / "usage-entered").write_text("")
+            deadline = time.monotonic() + 30
+            while not (root / "release-usage").exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
         result = {"rateLimits": {"planType": "plus", "primary": {"usedPercent": int(os.environ.get("AIT_TEST_USAGE_PERCENT", "25")), "resetsAt": 1900000000}, "secondary": {"usedPercent": 81}}}
     elif method == "skills/list":
         result = {"data": [{"cwd": params["cwds"][0], "errors": [], "skills": [
