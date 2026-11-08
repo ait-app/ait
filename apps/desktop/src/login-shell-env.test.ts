@@ -3,7 +3,11 @@ import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("electron-log/main", () => ({
+  default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { inheritLoginShellEnv } from "./login-shell-env";
 

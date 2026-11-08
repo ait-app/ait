@@ -11,6 +11,8 @@ import {
   type TransportWebSocket,
 } from "./local-transport";
 
+vi.mock("electron", () => ({}));
+
 const SESSION_INPUT = {
   sessionId: "local-session-test",
   bearerToken: "t".repeat(32),

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { detectRunningUnderARM64Translation } from "./arm64-translation";
 
+vi.mock("electron", () => ({}));
+
 describe("detectRunningUnderARM64Translation", () => {
   it("returns false outside macOS without probing sysctl", () => {
     const execFileSyncImpl = vi.fn();
