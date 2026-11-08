@@ -75,10 +75,12 @@ Seatbelt 按最后匹配的规则生效。不采用全部默认拒绝，因为�
 含 `..` 的状态路径直接拒绝。
 
 以下路径即使位于允许范围内也保持只读，因为之后不受限的进程会执行或遵从其中内容：worktree 的
-`.git` 指针文件、公共 Git 目录的 `config` 和 `hooks`、私有 gitdir 的 `config.worktree`、Claude 的
+`.git` 指针文件、公共 Git 目录的 `config` 和 `hooks`、私有 gitdir 的 `config.worktree` 和 `commondir`、Claude 的
 `settings.json` 与 `plugins`、Codex 的 `config.toml`、Pi 的 `settings.json`、OpenCode 的
 `opencode.json`／`opencode.jsonc`／`config.json`、MiniMax 的 `config.yaml`、`bin`、`plugins`、`shims`。
 因此 `git config`、`git push -u`、`git branch --set-upstream-to` 这类写配置的命令会失败。
+
+2026-11-08 的 Linux review 发现 `commondir` 曾遗漏保护：Agent 可以改写它，使后续启动把外部目录当作公共 Git 目录放行。共同策略现将该指针列为只读，包括拒绝创建原本缺失的指针；Linux 对缺失指针的挂载初始化见 ADR-223。
 
 Provider 状态目录没有改到每个 Workspace 独立的位置：认证信息就存放在这些目录里（Claude 在 macOS
 上的钥匙串条目还和配置目录绑定），恢复会话和读取原生历史也依赖它们，改到别处会让沙箱 Workspace

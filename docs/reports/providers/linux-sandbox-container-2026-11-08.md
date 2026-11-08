@@ -1,7 +1,7 @@
 # Linux 沙箱容器验证与 PR review 修复
 
 日期：2026-11-08。对应 [PR #622](https://github.com/ait-app/ait/pull/622)。
-测试源码为 `15bf72253e8c42dd0f8f858909d69fa3bf0f3436` 加入本报告同提交的 review 修复和测试，Linux x86_64、默认 features。
+首次测试源码为 `1ee000778e83764a29306aaf147686bb41271688`，Linux x86_64、默认 features。后续复查单独记录在文末，不能混用两轮二进制与测试数量。
 被测 Provider 测试二进制 SHA-256：`37429f8e89ca98a2b6801cdefa8f9b1e30e3dc29243d94161cbf4e49c8c3b3f3`。
 
 ## 结果
@@ -116,4 +116,19 @@ cat /lab/outside/data
 
 ## Test coverage
 
-**Not measured**：用户要求容器行为测试，未要求行覆盖率测量；没有生成覆盖率百分比或覆盖率附件。上面的执行结果只适用于本报告同提交的 Provider 沙箱及直接相关回归测试。若后续要求测量，使用 `cargo llvm-cov` 对这些定向筛选生成可审阅报告，不扩展为全工作区测试或覆盖率。
+**Not measured**：用户要求容器行为测试和复查，未要求行覆盖率测量；没有生成覆盖率百分比或覆盖率附件。执行结果只适用于各轮标明的源码及定向回归范围。若后续要求测量，使用 `cargo llvm-cov` 对这些定向筛选生成可审阅报告，不扩展为全工作区测试或覆盖率。
+
+## 第二轮 review：保护 commondir
+
+复查基线 `1ee000778e83764a29306aaf147686bb41271688` 的远端 CI 全部通过，但新增探针仍发现 P1 级策略绕过：私有 Git 目录的 `commondir` 文件可写，后续启动会重新解析该文件并放行它指定的公共目录。把指针改成外部 home 可以扩大下一次启动的可写范围。
+
+先以基线二进制运行新增探针，得到 `git-common-pointer: allowed`，测试失败。随后在共同 domain 策略中保护 `commondir`；Linux 对不存在的指针初始化为 `.\n`，保持原有 common-dir 语义；macOS 沿用受保护路径的拒绝规则。已有 linked worktree 指针不会被覆盖。
+
+修复源码为 `1ee000778e83764a29306aaf147686bb41271688` 加本节同提交的变更。新二进制 SHA-256：`f24be3d1de6bf042ced37bdf9d9f4058c73c935deca2d744e70f34a909184f05`。使用前述相同容器和运行命令：
+
+- Ubuntu 24.04 与 Debian 13 的 `sandbox` 筛选各 35 项通过，无失败或忽略；攻击探针增至 28 项，新增覆写、删除、重命名 `commondir`，并在攻击后重新解析策略，确认未放行 home。
+- 新增测试验证缺失 `commondir` 初始化后，真实 `git rev-parse --git-common-dir` 仍解析到原目录；linked worktree Git commit 回归仍通过。
+- `CARGO_INCREMENTAL=0 cargo test --locked -p domain workspace::sandbox::tests --lib`：7 项通过。
+- `CARGO_INCREMENTAL=0 cargo clippy --locked -p domain -p provider --all-targets -- -D warnings`、`CARGO_INCREMENTAL=0 cargo build --locked --workspace`、格式、文档链接与 diff 检查通过。
+
+没有运行全 workspace 测试或行覆盖率测量；macOS 渲染回归断言已更新，但本机没有执行 macOS 测试。原有跨边界硬链接限制仍然存在；共同 Git 目录内其他 worktree 元数据可写等 ADR-215 已声明的共享范围也未在此次修复中收窄。

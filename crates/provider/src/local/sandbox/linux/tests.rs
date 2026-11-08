@@ -66,6 +66,29 @@ fn unsupported_prefixes_fail_before_modifying_the_filesystem() {
 }
 
 #[test]
+fn sandbox_missing_commondir_keeps_the_original_git_directory() {
+    let root = scratch();
+    git(root.path(), &["init", "-q"]);
+    let git_dir = root.path().join(".git");
+    let pointer = git_dir.join("commondir");
+    assert!(!pointer.exists());
+    protect(&pointer).expect("protect absent pointer");
+    assert_eq!(fs::read_to_string(&pointer).expect("pointer"), ".\n");
+    let output = StdCommand::new("git")
+        .arg("-C")
+        .arg(root.path())
+        .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
+        .output()
+        .expect("resolve Git common directory");
+    assert!(output.status.success(), "{output:?}");
+    let resolved = String::from_utf8(output.stdout).expect("utf-8 path");
+    assert_eq!(
+        Path::new(resolved.trim()).canonicalize().expect("common"),
+        git_dir.canonicalize().expect("private")
+    );
+}
+
+#[test]
 fn claude_keeps_credentials_in_place_and_seeds_global_state_only_once() {
     let home = tempfile::tempdir().expect("home");
     let lookup = |name: &str| (name == "HOME").then(|| home.path().display().to_string());

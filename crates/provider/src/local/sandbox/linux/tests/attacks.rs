@@ -33,7 +33,7 @@ async fn linux_sandbox_blocks_filesystem_and_namespace_escape_attempts() {
     assert_eq!(report["unexpected"], serde_json::json!([]), "{report:#}");
     assert_eq!(
         report["denied"].as_array().expect("denied").len(),
-        25,
+        28,
         "{report:#}"
     );
     assert_eq!(
@@ -41,6 +41,13 @@ async fn linux_sandbox_blocks_filesystem_and_namespace_escape_attempts() {
         3,
         "{report:#}"
     );
+    // Re-resolve the next launch's policy, which must not have gained the home tree.
+    let next =
+        super::super::super::policy(&confinement, super::super::super::CODEX_STATE, &|name| {
+            (name == "HOME").then(|| home.display().to_string())
+        })
+        .expect("next launch policy");
+    assert!(!next.trees().iter().any(|tree| home.starts_with(tree)));
 }
 
 #[test]

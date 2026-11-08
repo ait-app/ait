@@ -83,6 +83,9 @@ for name, target in (
     ("git-pointer", worktree / ".git"),
 ):
     deny(name, lambda path=target: path.write_text("changed"))
+deny("git-common-pointer", lambda: (private / "commondir").write_text(str(home)))
+deny("delete-git-common-pointer", lambda: (private / "commondir").unlink())
+deny("rename-git-common-pointer", lambda: (private / "commondir").rename(private / "old-common"))
 deny("append", append)
 deny("truncate", lambda: os.truncate(home / "truncate", 0))
 deny("unlink", lambda: (home / "unlink").unlink())
@@ -101,4 +104,6 @@ deny_command("remount-root", ["mount", "-o", "remount,rw", "/"])
 for name in ("overwrite", "append", "truncate", "unlink", "rename", "chmod", "hardlink", "read"):
     if not (home / name).exists() or (home / name).read_text() != "original":
         report["unexpected"].append([name, "outside-content-changed"])
+if (private / "commondir").read_text() != "../..\n":
+    report["unexpected"].append(["git-common-pointer", "changed-next-launch-policy"])
 print(json.dumps(report, sort_keys=True))

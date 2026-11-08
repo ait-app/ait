@@ -117,7 +117,11 @@ fn protect(path: &Path) -> io::Result<()> {
     {
         return fs::create_dir_all(path);
     }
-    let initial = if path
+    // An absent commondir means the private Git directory is also the common one.
+    // Materialize that same meaning so bind mounting the pointer does not break Git.
+    let initial = if path.file_name().is_some_and(|name| name == "commondir") {
+        b".\n".as_slice()
+    } else if path
         .extension()
         .is_some_and(|extension| extension == "json" || extension == "jsonc" || extension == "yaml")
     {
