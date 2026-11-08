@@ -104,4 +104,26 @@ describe("modelPresetConfiguration with a model-only preset", () => {
     const applied = modelPresetConfiguration([modelOnly, role], "modelPreset", "plain");
     expect(applied?.featureValues).toEqual({ "modelRole.advisor": "unset" });
   });
+
+  it("falls back to custom once a role the preset never named is enabled by hand", () => {
+    // Applying the preset cleared the advisor; enabling it afterwards is a different
+    // configuration, so the preset name must not stay selected.
+    const applied = modelPresetConfiguration([modelOnly, role], "modelPreset", "plain")!;
+    expect(
+      withModelPresetSelection([modelOnly, role], {
+        modelId: applied.modelId,
+        thinkingOptionId: applied.thinkingOptionId,
+        featureValues: { ...applied.featureValues, ...{ "modelRole.advisor": "opus" } },
+      })[0].value,
+    ).toBe("__custom__");
+
+    // The untouched configuration still reads as the preset.
+    expect(
+      withModelPresetSelection([modelOnly, role], {
+        modelId: applied.modelId,
+        thinkingOptionId: applied.thinkingOptionId,
+        featureValues: applied.featureValues,
+      })[0].value,
+    ).toBe("plain");
+  });
 });

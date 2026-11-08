@@ -2999,6 +2999,7 @@ export const ptBR: TranslationResources = {
         loading: "Carregando predefinições...",
         saving: "Salvando...",
         noRename: "Este provedor não permite renomear; crie uma nova e exclua a antiga",
+        nameTaken: "Já existe um preset chamado \"{{name}}\"; abra-o para editá-lo",
       },
       models: {
         one: "1 modelo",

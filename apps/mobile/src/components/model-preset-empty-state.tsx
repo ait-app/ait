@@ -40,7 +40,7 @@ export function ModelPresetEmptyState({
     cwd,
     enabled: presetsProp === undefined,
   });
-  const presets = presetsProp ?? fallback;
+  const presets = presetsProp ?? fallback.snapshot;
 
   const handlePress = useCallback(() => {
     if (!serverId || !provider) return;

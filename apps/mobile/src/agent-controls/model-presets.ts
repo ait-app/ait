@@ -4,12 +4,39 @@ import { i18n } from "@/i18n/i18next";
 
 export const MODEL_PRESET_FIELDS = ["modelPresetThinking", "modelPresetRoles"] as const;
 
+/** Prefix that marks a native role selector, matching the adapter's own `modelRole.` keys. */
+const ROLE_PREFIX = "modelRole.";
+
+/** The selector that clears a role, so a preset's absent roles cannot leak the previous value. */
+const ROLE_CLEARED = "unset";
+
 /** Model configuration belongs to the existing model picker, not the general feature tray. */
 export function isModelConfigurationFeature(feature: AgentFeature): boolean {
   return (
     feature.type === "select" &&
     (feature.id === "modelPreset" || feature.id.startsWith("modelRole."))
   );
+}
+
+/**
+ * Expand one preset into the role configuration it actually applies.
+ *
+ * A preset only stores the roles it names. Applying it still clears every other role, so a preset
+ * written without an advisor must disable a leftover advisor rather than leave it in place. Both
+ * applying and matching go through this function: matching the narrow stored map instead would
+ * keep a preset selected after the user manually enabled a role it never named.
+ */
+function impliedFeatureValues(
+  features: readonly AgentFeature[] | undefined,
+  named: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const cleared: Record<string, unknown> = {};
+  for (const feature of features ?? []) {
+    if (feature.id.startsWith(ROLE_PREFIX) && !(named && feature.id in named)) {
+      cleared[feature.id] = ROLE_CLEARED;
+    }
+  }
+  return { ...cleared, ...named };
 }
 
 /** A native preset is one configuration change; it is never a sequence of role setters. */
@@ -27,13 +54,9 @@ export function modelPresetConfiguration(
   if (!parsed.success || !parsed.data.modelId) {
     throw new Error(i18n.t("providerControl.presetUnavailable"));
   }
-  // A preset that only names a model carries no feature map; synthesizing an empty one keeps
-  // the role-defaulting rule below identical for native and Ait-backed presets.
-  parsed.data.featureValues ??= {};
-  for (const field of features ?? []) {
-    if (field.id.startsWith("modelRole.") && !(field.id in parsed.data.featureValues))
-      parsed.data.featureValues[field.id] = "unset";
-  }
+  // The applied patch states every role, including the ones the preset does not name: an omitted
+  // field would keep the session's previous assignment instead of clearing it.
+  parsed.data.featureValues = impliedFeatureValues(features, parsed.data.featureValues);
   return parsed.data;
 }
 
@@ -56,15 +79,20 @@ export function withModelPresetSelection(
       const parsed = AgentConfigApplySchema.safeParse(option.metadata?.configuration);
       if (!parsed.success) return false;
       const config = parsed.data;
-      return (
-        config.modelId === current.modelId &&
-        (config.thinkingOptionId ?? null) === (current.thinkingOptionId || null) &&
-        Object.entries(config.featureValues ?? {}).every(
-          ([key, value]) =>
-            key === "modelPreset" ||
-            MODEL_PRESET_FIELDS.some((field) => field === key) ||
-            Object.is(values[key], value),
-        )
+      if (
+        config.modelId !== current.modelId ||
+        (config.thinkingOptionId ?? null) !== (current.thinkingOptionId || null)
+      ) {
+        return false;
+      }
+      // Compare what applying this preset would set, not the narrower stored map: a role the
+      // preset never named is cleared on apply, so it must also read as different from any
+      // value the user has since chosen by hand.
+      return Object.entries(impliedFeatureValues(features, config.featureValues)).every(
+        ([key, value]) =>
+          key === "modelPreset" ||
+          MODEL_PRESET_FIELDS.some((field) => field === key) ||
+          Object.is(values[key], value),
       );
     });
     return { ...feature, value: selected?.id ?? "__custom__" };

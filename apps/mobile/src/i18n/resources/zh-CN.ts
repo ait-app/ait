@@ -3414,6 +3414,7 @@ export const zhCN: TranslationResources = {
         loading: "正在加载预设...",
         saving: "正在保存...",
         noRename: "该提供方不支持改名，请用新名称新建后再删除旧预设",
+        nameTaken: "已存在名为“{{name}}”的预设；请改为编辑该预设",
       },
       models: {
         one: "1 个模型",

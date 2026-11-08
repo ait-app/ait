@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import type { ProviderUiState } from "@ait/protocol/messages";
@@ -27,6 +27,9 @@ const badgeVariant = (status: Worker["status"]) => {
  * Renders nothing when the host does not project `vibe` (older daemons) or when
  * Vibe is disabled; rows are read-only observations, so a worker without a
  * resolvable agent stays text instead of pretending to be openable.
+ *
+ * A fan-out can observe hundreds of workers, so the list scrolls inside a bounded panel instead
+ * of pushing the rest of the session off screen.
  */
 export const ProviderVibe = memo(function ProviderVibe({
   state,
@@ -43,36 +46,42 @@ export const ProviderVibe = memo(function ProviderVibe({
         <Text style={styles.title}>{t("providerControl.vibe.title")}</Text>
         <StatusBadge variant="warning" label={t("providerControl.vibe.enabled")} />
       </View>
-      {state.workers.map((worker) => (
-        <Pressable
-          key={worker.id}
-          disabled={!onOpenWorker}
-          onPress={() => onOpenWorker?.(worker)}
-          accessibilityRole={onOpenWorker ? "button" : "text"}
-          testID={`provider-vibe-worker-${worker.id}`}
-          style={styles.worker}
-        >
-          <View style={styles.row}>
-            <Text style={styles.workerId} numberOfLines={1}>
-              {worker.id}
-            </Text>
-            <StatusBadge
-              variant={badgeVariant(worker.status)}
-              label={t(`providerControl.vibe.states.${worker.status}`)}
-            />
-          </View>
-          {worker.description ? (
-            <Text style={styles.description} numberOfLines={3} selectable>
-              {worker.description}
-            </Text>
-          ) : null}
-          {worker.model ? (
-            <Text style={styles.caption} numberOfLines={1}>
-              {worker.model}
-            </Text>
-          ) : null}
-        </Pressable>
-      ))}
+      <ScrollView
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        nestedScrollEnabled
+      >
+        {state.workers.map((worker) => (
+          <Pressable
+            key={worker.id}
+            disabled={!onOpenWorker}
+            onPress={() => onOpenWorker?.(worker)}
+            accessibilityRole={onOpenWorker ? "button" : "text"}
+            testID={`provider-vibe-worker-${worker.id}`}
+            style={styles.worker}
+          >
+            <View style={styles.row}>
+              <Text style={styles.workerId} numberOfLines={1}>
+                {worker.id}
+              </Text>
+              <StatusBadge
+                variant={badgeVariant(worker.status)}
+                label={t(`providerControl.vibe.states.${worker.status}`)}
+              />
+            </View>
+            {worker.description ? (
+              <Text style={styles.description} numberOfLines={3} selectable>
+                {worker.description}
+              </Text>
+            ) : null}
+            {worker.model ? (
+              <Text style={styles.caption} numberOfLines={1}>
+                {worker.model}
+              </Text>
+            ) : null}
+          </Pressable>
+        ))}
+      </ScrollView>
     </View>
   );
 });
@@ -81,6 +90,10 @@ const styles = StyleSheet.create((theme) => ({
   panel: { gap: 8 },
   row: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   title: { color: theme.colors.foreground, fontSize: 13, fontWeight: "600", flexShrink: 1 },
+  // Bounded so a large fan-out never displaces the conversation; matches the other native
+  // operation lists in this panel.
+  list: { maxHeight: 280 },
+  listContent: { gap: 6 },
   worker: {
     gap: 6,
     padding: 10,

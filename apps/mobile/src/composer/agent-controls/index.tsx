@@ -107,11 +107,10 @@ import {
 } from "@/agent-profiles";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 import type { PresetSettingsTarget } from "@/data/provider-presets";
-import { mergeRoleChoices } from "./role-choices";
+import { liveAgentFeatures } from "./role-choices";
 import {
   isModelConfigurationFeature,
   modelPresetConfiguration,
-  withModelPresetSelection,
 } from "@/agent-controls/model-presets";
 
 interface AgentControlOption {
@@ -1790,16 +1789,13 @@ export const AgentControls = memo(function AgentControls({
   // Read the completed background catalog, rather than caching its initial empty loading state.
   // Saved selections remain usable throughout discovery; this never resumes the conversation.
   // Role and preset choices come from the provider's own feature catalog, whatever the provider
-  // is; no provider identity decides whether the control can exist.
-  const advertisesModelConfiguration = Boolean(agent?.features?.some(isModelConfigurationFeature));
+  // is; no provider identity or stored control decides whether the control can exist. A session
+  // persisted before a preset existed must still discover the new one, which is why the stored
+  // feature list is not a precondition here.
   const roleChoices = useQuery({
     queryKey: ["providerRoleChoices", serverId, agent?.cwd, snapshotSelectedEntry?.fetchedAt],
     enabled: Boolean(
-      client &&
-      advertisesModelConfiguration &&
-      agent?.provider &&
-      agent.cwd &&
-      snapshotSelectedEntry?.status === "ready",
+      client && agent?.provider && agent.cwd && snapshotSelectedEntry?.status === "ready",
     ),
     staleTime: Infinity,
     queryFn: async () => {
@@ -1812,21 +1808,16 @@ export const AgentControls = memo(function AgentControls({
       return result.features ?? [];
     },
   });
+  // Stored features keep their order and saved values; anything the catalog discovered since
+  // (including a preset created after this session was saved) is appended, and the preset label
+  // is recomputed from the effective selection.
   const features = useMemo(
     () =>
-      advertisesModelConfiguration
-        ? withModelPresetSelection(mergeRoleChoices(agent?.features, roleChoices.data) ?? [], {
-            modelId: agent?.model,
-            thinkingOptionId: agent?.thinkingOptionId,
-          })
-        : agent?.features,
-    [
-      advertisesModelConfiguration,
-      agent?.features,
-      agent?.model,
-      agent?.thinkingOptionId,
-      roleChoices.data,
-    ],
+      liveAgentFeatures(agent?.features, roleChoices.data, {
+        modelId: agent?.model,
+        thinkingOptionId: agent?.thinkingOptionId,
+      }),
+    [agent?.features, agent?.model, agent?.thinkingOptionId, roleChoices.data],
   );
 
   const models = filterSelectableModels(snapshotSelectedEntry?.models ?? null);

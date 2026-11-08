@@ -230,6 +230,7 @@ fn wait_for(child: &mut Child, deadline: Instant) -> std::io::Result<Completion>
 }
 
 /// Wait at most `limit` for the direct child to exit.
+#[cfg(not(unix))]
 fn wait_within(child: &mut Child, limit: Duration) -> Option<ExitStatus> {
     match wait_for(child, Instant::now() + limit) {
         Ok(Completion::Exited(status)) => Some(status),
@@ -237,11 +238,33 @@ fn wait_within(child: &mut Child, limit: Duration) -> Option<ExitStatus> {
     }
 }
 
+/// Wait at most `limit` for every process in `group` to disappear.
+///
+/// The leader is reaped on every poll: an unreaped zombie still belongs to its own group, which
+/// would keep the group observable after its last live member is gone. Returns `true` when the
+/// group is empty.
+#[cfg(unix)]
+fn wait_for_group(child: &mut Child, group: u32, limit: Duration) -> bool {
+    let deadline = Instant::now() + limit;
+    loop {
+        let _ = child.try_wait();
+        if !group_alive(group) {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(POLL);
+    }
+}
+
 /// Stop the installer's whole process group and reap the direct child.
 ///
-/// `SIGTERM` first so npm can clean up, then `SIGKILL` for a group that ignores it. Because the
-/// installer is a group leader, signaling the group also stops the processes it started; the
-/// direct child is always waited, so no zombie is left behind.
+/// `SIGTERM` first so npm can clean up, then `SIGKILL` for whatever is left. Because the
+/// installer is a group leader, signaling the group also stops the processes it started. The
+/// group's disappearance decides whether escalation is needed: a leader that answers `SIGTERM`
+/// can exit while a child that ignores it keeps running, so the leader's exit alone would skip
+/// the `SIGKILL` that child needs. The direct child is always waited, so no zombie is left.
 fn terminate(child: &mut Child, grace: Duration) {
     #[cfg(unix)]
     let group = child.id();
@@ -249,14 +272,38 @@ fn terminate(child: &mut Child, grace: Duration) {
     signal_group(group, rustix::process::Signal::TERM);
     #[cfg(not(unix))]
     let _ = child.kill();
-    if wait_within(child, grace).is_some() {
-        return;
-    }
     #[cfg(unix)]
-    signal_group(group, rustix::process::Signal::KILL);
-    if wait_within(child, grace).is_none() {
+    let stopped = wait_for_group(child, group, grace);
+    #[cfg(not(unix))]
+    let stopped = wait_within(child, grace).is_some();
+    if !stopped {
+        #[cfg(unix)]
+        signal_group(group, rustix::process::Signal::KILL);
+        #[cfg(not(unix))]
+        let _ = child.kill();
+        #[cfg(unix)]
+        wait_for_group(child, group, grace);
+        #[cfg(not(unix))]
+        let _ = wait_within(child, grace);
+    }
+    if child.try_wait().ok().flatten().is_none() {
         // A leader that survived `SIGKILL` (uninterruptible sleep) still has to be reaped.
         let _ = child.wait();
+    }
+}
+
+/// Whether `group` still has a live member: `kill(-group, 0)` succeeds until the group is empty.
+#[cfg(unix)]
+fn group_alive(group: u32) -> bool {
+    let Ok(raw) = i32::try_from(group) else {
+        return false;
+    };
+    let Some(group) = rustix::process::Pid::from_raw(raw) else {
+        return false;
+    };
+    match rustix::process::test_kill_process_group(group) {
+        Ok(()) => true,
+        Err(error) => error != rustix::io::Errno::SRCH,
     }
 }
 

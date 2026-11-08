@@ -15,6 +15,7 @@ const client = {
 
 vi.mock("@/runtime/host-runtime", () => ({
   useHostRuntimeClient: () => client,
+  useHostRuntimeIsConnected: () => true,
 }));
 vi.mock("@/contexts/toast-context", () => ({
   useToast: () => ({ error: vi.fn() }),
@@ -97,18 +98,14 @@ vi.mock("@/components/adaptive-modal-sheet", () => ({
   },
 }));
 
-vi.mock("@/data/provider-presets", () => ({
-  invalidatePresetCaches: vi.fn(async () => undefined),
-  providerPresetsQueryKey: () => ["provider-presets"],
-  presetControlAvailable: (store: unknown) => store !== null && store !== undefined,
-  useProviderPresets: () => null,
-}));
-
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 });
 
-/** Render inside a query provider because saving invalidates the shared preset cache. */
+/**
+ * Render inside a query provider because the section reads the shared preset store and saving
+ * invalidates it.
+ */
 function renderSection(ui: React.ReactElement) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
@@ -116,6 +113,8 @@ function renderSection(ui: React.ReactElement) {
 beforeEach(() => {
   vi.stubGlobal("React", React);
   for (const fn of Object.values(client)) fn.mockReset();
+  // The store is cached per host and provider, so each case starts from an empty cache.
+  queryClient.clear();
 });
 afterEach(() => {
   cleanup();
@@ -138,6 +137,8 @@ function preset(name: string): ProviderPreset {
 }
 
 async function ready(described: ProviderPresetDescriptor, presets: ProviderPreset[] = []) {
+  // The store is cached per host and provider; a scenario must not see the previous answer.
+  queryClient.clear();
   client.describeProviderPresets.mockResolvedValue({ descriptor: described });
   client.listProviderPresets.mockResolvedValue({ presets });
 }
@@ -252,6 +253,29 @@ it("deletes through the same request and refreshes the list", async () => {
     expect(client.deleteProviderPreset).toHaveBeenCalledWith("claude", "team", undefined),
   );
   await waitFor(() => expect(client.listProviderPresets.mock.calls.length).toBeGreaterThan(1));
+});
+
+it("refuses a create that reuses an existing name instead of overwriting it", async () => {
+  await ready(descriptor(), [preset("team")]);
+  renderSection(<ProviderPresetsSection provider="claude" serverId="host-a" />);
+  await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
+  fireEvent.click(screen.getByTestId("provider-presets-add"));
+  await waitFor(() => expect(screen.getByTestId("provider-preset-save")).toBeTruthy());
+
+  fireEvent.change(screen.getAllByRole("textbox")[0], { target: { value: "team" } });
+  fireEvent.change(screen.getAllByRole("textbox")[1], {
+    target: { value: "claude-opus-5" },
+  });
+  // The store would upsert, replacing the existing preset's roles and thinking level; the create
+  // entry explains the collision and sends nothing.
+  expect(screen.getByTestId("provider-preset-name-taken")).toBeTruthy();
+  expect(screen.getByTestId("provider-preset-save").hasAttribute("disabled")).toBe(true);
+  fireEvent.click(screen.getByTestId("provider-preset-save"));
+  expect(client.saveProviderPreset).not.toHaveBeenCalled();
+
+  // Renaming that record is still allowed, because the edit names it as `original`.
+  fireEvent.change(screen.getAllByRole("textbox")[0], { target: { value: "squad" } });
+  expect(screen.queryByTestId("provider-preset-name-taken")).toBeNull();
 });
 
 it("never branches on the provider identity to decide which controls exist", async () => {

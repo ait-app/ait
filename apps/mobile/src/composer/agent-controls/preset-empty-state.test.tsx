@@ -43,7 +43,13 @@ vi.mock("@/command-center/agent-control-registration", () => ({
 // The empty state reads its own store; this suite supplies the answer directly.
 vi.mock("@/data/provider-presets", async (importOriginal) => {
   const actual = await importOriginal<typeof ProviderPresetData>();
-  return { ...actual, useProviderPresets: () => presetsSnapshot };
+  return {
+    ...actual,
+    useProviderPresets: () =>
+      presetsSnapshot === null
+        ? { snapshot: null, isLoading: false, error: null }
+        : { snapshot: presetsSnapshot, isLoading: false, error: null },
+  };
 });
 vi.mock("@/lib/overlay-root", async (importOriginal) => {
   const actual = await importOriginal<typeof OverlayRoot>();
@@ -77,6 +83,7 @@ function emptyStore() {
       canRename: true,
     },
     presets: [],
+    error: null,
   };
 }
 

@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/contexts/toast-context";
 import { useQueryClient } from "@tanstack/react-query";
-import { invalidatePresetCaches } from "@/data/provider-presets";
+import { invalidatePresetCaches, useProviderPresets } from "@/data/provider-presets";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { toErrorMessage } from "@/utils/error-messages";
 
@@ -38,42 +38,25 @@ export function ProviderPresetsSection({
   const toast = useToast();
   const queryClient = useQueryClient();
   const client = useHostRuntimeClient(serverId);
-  const [descriptor, setDescriptor] = useState<ProviderPresetDescriptor | null>(null);
-  const [presets, setPresets] = useState<ProviderPreset[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  // The editor reads the same cache entry as every picker, so a write invalidates one entry and
+  // all readers refetch; there is no second manual read to keep in step.
+  const { snapshot, isLoading, error } = useProviderPresets({
+    serverId,
+    provider,
+    cwd,
+  });
+  const descriptor = snapshot?.descriptor ?? null;
+  const presets = snapshot?.presets ?? [];
   const [editing, setEditing] = useState<ProviderPreset | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    if (!client) return;
-    setLoading(true);
-    try {
-      const [described, listed] = await Promise.all([
-        client.describeProviderPresets(provider, cwd),
-        client.listProviderPresets(provider, cwd),
-      ]);
-      setDescriptor(described.descriptor);
-      setPresets(listed.presets);
-      setError(listed.error ?? null);
-    } catch (cause) {
-      setError(toErrorMessage(cause));
-    } finally {
-      setLoading(false);
-    }
-  }, [client, cwd, provider]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const canSave = descriptor?.canCreate === true || descriptor?.canEdit === true;
 
   /**
-   * Drop dependent caches, then reread this list.
+   * Drop dependent caches.
    *
-   * A rejected invalidation must not hide the write that already succeeded, so the refresh runs
-   * either way.
+   * The invalidation also refetches this section's own entry. A rejected invalidation must not
+   * hide the write that already succeeded, so the failure only warns.
    */
   const refreshAfterWrite = useCallback(async () => {
     try {
@@ -81,8 +64,7 @@ export function ProviderPresetsSection({
     } catch (cause) {
       console.warn("[presets] invalidate dependent caches failed", cause);
     }
-    await load();
-  }, [load, provider, queryClient, serverId]);
+  }, [provider, queryClient, serverId]);
 
   const handleSave = useCallback(
     async (preset: ProviderPreset) => {
@@ -98,7 +80,7 @@ export function ProviderPresetsSection({
       if (result.error) throw new Error(result.error);
       await refreshAfterWrite();
     },
-    [client, cwd, editing?.name, refreshAfterWrite],
+    [client, cwd, editing?.name, refreshAfterWrite, provider],
   );
 
   const handleDelete = useCallback(
@@ -118,7 +100,7 @@ export function ProviderPresetsSection({
         setDeleting((current) => (current === name ? null : current));
       }
     },
-    [client, cwd, refreshAfterWrite, toast],
+    [client, cwd, refreshAfterWrite, provider, toast],
   );
 
   return (
@@ -143,14 +125,13 @@ export function ProviderPresetsSection({
         </Text>
       ) : null}
       {error ? <Text style={styles.muted}>{error}</Text> : null}
-      {presets.length === 0 ? (
+      {isLoading ? (
+        <Text style={styles.muted}>{t("settings.providers.presets.loading")}</Text>
+      ) : null}
+      {!isLoading && snapshot && presets.length === 0 ? (
         <View style={styles.empty} testID="provider-presets-empty">
-          <Text style={styles.muted}>
-            {loading
-              ? t("settings.providers.presets.loading")
-              : t("settings.providers.presets.empty")}
-          </Text>
-          {canSave && !loading ? (
+          <Text style={styles.muted}>{t("settings.providers.presets.empty")}</Text>
+          {canSave ? (
             <Button
               variant="default"
               size="sm"
@@ -162,7 +143,8 @@ export function ProviderPresetsSection({
             </Button>
           ) : null}
         </View>
-      ) : (
+      ) : null}
+      {presets.length > 0 ? (
         <View style={styles.card}>
           {presets.map((preset) => (
             <View key={preset.name} style={styles.row} testID={`provider-preset-${preset.name}`}>
@@ -192,7 +174,7 @@ export function ProviderPresetsSection({
             </View>
           ))}
         </View>
-      )}
+      ) : null}
       {editing ? (
         <PresetEditorSubSheet
           descriptor={descriptor}
@@ -201,6 +183,7 @@ export function ProviderPresetsSection({
           onClose={() => setEditing(null)}
           onSave={handleSave}
           canRename={descriptor?.canRename === true}
+          existingNames={presets.map((preset) => preset.name)}
         />
       ) : null}
     </View>
@@ -220,6 +203,7 @@ function PresetEditorSubSheet({
   onClose,
   onSave,
   canRename,
+  existingNames,
 }: {
   descriptor: ProviderPresetDescriptor | null;
   visible: boolean;
@@ -227,6 +211,8 @@ function PresetEditorSubSheet({
   onClose: () => void;
   onSave: (preset: ProviderPreset) => Promise<void>;
   canRename: boolean;
+  /** Names already stored, so a create cannot silently take one over. */
+  existingNames: readonly string[];
 }) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
@@ -247,9 +233,17 @@ function PresetEditorSubSheet({
 
   const trimmedName = name.trim();
   const trimmedModel = model.trim();
+  // Creating under an existing name is an upsert in the store, which would replace that preset's
+  // roles and thinking level with whatever this form carries. A create therefore stops here; an
+  // edit already addresses its record through `original`.
+  const takenName =
+    isNew && existingNames.some((existing) => existing === trimmedName)
+      ? t("settings.providers.presets.nameTaken", { name: trimmedName })
+      : null;
   const canSubmit =
     trimmedName.length > 0 &&
     trimmedModel.length > 0 &&
+    takenName === null &&
     (canRename || isNew || trimmedName === preset.name);
 
   const handleSubmit = useCallback(() => {
@@ -302,6 +296,11 @@ function PresetEditorSubSheet({
           returnKeyType="next"
           style={styles.formInput}
         />
+        {takenName ? (
+          <Text style={styles.errorText} testID="provider-preset-name-taken">
+            {takenName}
+          </Text>
+        ) : null}
         {!canRename && !isNew ? (
           <Text style={styles.muted}>
             {descriptor?.reason ?? t("settings.providers.presets.noRename")}

@@ -24,17 +24,18 @@ fn installer(directory: &Path, script: &str) -> PathBuf {
     path
 }
 
-/// Whether `pid` is still observable by `/proc`. A zombie is reported as gone by `terminate`.
+/// Whether `pid` is still a live process.
+///
+/// `kill(pid, 0)` is the portable probe: it exists on macOS as well as Linux, unlike `/proc`. A
+/// zombie still answers, and the supervisor reaps what it signals, so the distinction does not
+/// matter here — a reported survivor only extends the wait.
 fn running(pid: i32) -> bool {
-    match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
-        Ok(stat) => {
-            let state = stat
-                .rsplit_once(") ")
-                .and_then(|(_, tail)| tail.split(' ').next())
-                .unwrap_or_default();
-            state != "Z" && state != "X"
-        }
-        Err(_) => false,
+    let Some(pid) = rustix::process::Pid::from_raw(pid) else {
+        return false;
+    };
+    match rustix::process::test_kill_process(pid) {
+        Ok(()) => true,
+        Err(error) => error != rustix::io::Errno::SRCH,
     }
 }
 
@@ -196,5 +197,38 @@ fn a_group_that_ignores_sigterm_is_killed_outright() {
             .parse()
             .unwrap();
         assert!(gone(pid, Duration::from_secs(5)), "{file} survived SIGKILL");
+    }
+}
+
+#[test]
+fn a_leader_that_dies_on_sigterm_does_not_mask_a_child_that_ignores_it() {
+    let directory = tempfile::tempdir().unwrap();
+    // The leader keeps the default `SIGTERM` action, so it exits at once, while its child ignores
+    // the signal. Judging teardown by the leader's exit would stop here and leave the child
+    // running, so only group liveness can decide that `SIGKILL` is still needed.
+    let script = installer(
+        directory.path(),
+        "#!/bin/sh\nsh -c 'trap \"\" TERM; sleep 300' &\n\
+         echo $! > \"$2/grandchild.pid\"\necho $$ > \"$2/installer.pid\"\nwait\n",
+    );
+    workspace_within(
+        directory.path(),
+        &|name| match name {
+            "AIT_SERVER_OMP_NATIVE_HOST_INSTALLER" => Some(script.clone().into_os_string()),
+            "AIT_SERVER_NODE_BIN" => Some("/bin/sh".into()),
+            _ => None,
+        },
+        TEST_BUDGET,
+    );
+    for file in ["grandchild.pid", "installer.pid"] {
+        let pid: i32 = std::fs::read_to_string(directory.path().join(file))
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        assert!(
+            gone(pid, Duration::from_secs(5)),
+            "{file} survived teardown"
+        );
     }
 }

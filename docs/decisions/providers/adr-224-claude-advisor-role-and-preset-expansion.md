@@ -72,7 +72,10 @@ advisor 是进程启动参数，因此沿用既有"配置变更 → 下一轮关
   `canRename=false`（CLI 无 rename；改名需 save 新名 + delete 旧名，非原子）。旧版 OMP
   缺 `modelpreset` 命令时 descriptor 全 false 并给出原因串。
 - **ait（Claude、Codex、OpenCode、MiniMax、Pi、Antigravity、DSH）**：读写 daemon config
-  `providers.<id>.modelPresets[]`，四项能力位全 true（改名是一次整体重写）。
+  `providers.<id>.modelPresets[]`，四项能力位全 true（改名是一次整体重写）。写入是**有意
+  的 upsert**：`original` 只表达"这次编辑的是哪条记录"，同名写入仍替换该记录。因此重名
+  必须在**新建入口**拦截——编辑器已持有当前列表，新建时输入的名字若已存在就在本地拒绝并
+  提示改名或改去编辑，不发请求；改名仍以 `original` 表达，撞名由服务端拒绝。
 
 ### 2. 存储与校验
 
@@ -91,7 +94,16 @@ featureValues?}`。`domain::preset::ProviderPreset` 拥有唯一的校验规则�
    两套存储不会打架）；
 2. 无原生 feature 且 Ait 侧有条目 → 合成
    `{type:"select", id:"modelPreset", value, options:[…, __custom__]}`，每个具名选项带
-   `metadata.configuration = {modelId, thinkingOptionId?, featureValues?}`，`source: "ait"`；
+   `metadata.configuration = {modelId, thinkingOptionId, featureValues?}`，`source: "ait"`。
+   `thinkingOptionId` **总是存在**：未指定思考强度时写显式 `null`。配置补丁语义是"缺省即
+   保持、`null` 才清除"，省略该键会把上一轮的强度带进预设；服务端 `matches_configuration`
+   与前端 `withModelPresetSelection` 因此都按 `null` 比较。
+
+   **应用与匹配共用同一套展开规则。** 预设只保存它点名的角色，应用时其余角色一律补
+   `unset`（阻断旧覆盖）。匹配因此也必须按展开后的结果比较，而不是只比较存储里的窄集合：
+   否则"应用不含 advisor 的预设 → 手动启用 advisor"后，界面仍会显示原预设名。两端各有一份
+   等价实现（`impliedFeatureValues` 与 `matches_configuration` 的补集检查），改动其中一侧
+   必须同时改另一侧。
 3. 两者都没有 → 不产生 feature，使用处保持"整块不渲染"，由空态引导去设置创建。
 
 当前值判定与客户端 `withModelPresetSelection` 同义：模型、思考强度一致且所有已存 feature
@@ -100,7 +112,14 @@ featureValues?}`。`domain::preset::ProviderPreset` 拥有唯一的校验规则�
 ### 4. 传输与前端
 
 新增 `provider.presets.describe|list|save|delete.request`，在 provider dispatch、operation
-与 daemon-client 中登记；写失败作为 `error` 字段随响应返回，编辑器可直接展示原因。
+与 daemon-client 中登记；写失败作为 `error` 字段随响应返回，编辑器可直接展示原因。读取只有
+一份缓存：设置分区与空态共用 `useProviderPresets`（按 host/provider/cwd 缓存），写入后
+`invalidatePresetCaches` 失效预设、feature 目录、Profile feature 与在线会话角色四类查询，
+活动查询自动重取，编辑器不再自己 `load()`。
+
+Ait 存储的 `save`/`delete` 是"读整份列表 → 改 → 写回"，而 `patch` 整体替换该数组；预设请求
+走可并行的 Discovery 通道，因此 `PresetService` 用一把进程内锁把**整个读改写**串行化，
+而不是只锁写入。原子写文件只能防止半份文档，防不住这种丢更新。
 `ProviderPresetsSection` 挂在 `ProviderDiagnosticSheet` 顶部，空态提供「去设置创建预设」，
 与既有 `ProviderSettingsAction` / `buildSettingsHostSectionRoute(serverId, "providers")`
 一致。5 处 `provider === "omp"` 门控改为「features 里是否有 modelPreset」，使新 provider
@@ -123,10 +142,12 @@ featureValues?}`。`domain::preset::ProviderPreset` 拥有唯一的校验规则�
 
 阶段 B 定向测试覆盖：daemon 配置的 preset round-trip、非法条目拒绝、单 provider 更新
 不影响别家；`PresetService` 的 Ait CRUD 与跨重启持久化、无效预设不落盘；合成规则三条
-分支与 `__custom__` 判定；descriptor 能力位；OMP 原生 descriptor 的 `canRename=false`、
-`native_presets` 读取与 save/delete 转发；前端分区的列表/新建/删除/空态、按钮随
-descriptor 变化，以及"同一能力位 + 同一列表下 native 与 ait 渲染完全一致"的 provider
-无关断言。
+分支与 `__custom__` 判定（含无思考强度时的显式 `null`）；应用后手动启用预设未点名的角色
+必须回落 `__custom__`；新建撞名在入口被拒绝且不发写入请求；两线程并发新建两条预设后两条
+都在（去掉串行化时该探针确定失败）；descriptor 能力位；OMP 原生 descriptor 的
+`canRename=false`、`native_presets` 读取与 save/delete 转发；前端分区的列表/新建/删除/
+空态、按钮随 descriptor 变化，以及"同一能力位 + 同一列表下 native 与 ait 渲染完全一致"
+的 provider 无关断言。
 
 ## Test coverage
 

@@ -19,12 +19,24 @@ const MAX_PROVIDER: usize = 128;
 #[derive(Debug, Clone)]
 pub struct PresetService {
     config: Arc<dyn DaemonConfigStore>,
+    /// Serializes Ait-store mutations.
+    ///
+    /// Saving or deleting a preset reads the provider's whole list and writes it back, and the
+    /// store's `patch` replaces that array wholesale. Two unserialized writes would each compute
+    /// their list from the same snapshot, so the second would drop the first's entry while both
+    /// still reported success. Preset requests run on the parallel discovery lane, so the whole
+    /// read-modify-write is fenced here instead. One `PresetService` is composed per daemon and
+    /// cloned into its consumers, which is what lets this lock span all of them.
+    writes: Arc<std::sync::Mutex<()>>,
 }
 
 impl PresetService {
     /// Serve Ait-managed presets from `config`.
     pub fn new(config: Arc<dyn DaemonConfigStore>) -> Self {
-        Self { config }
+        Self {
+            config,
+            writes: Arc::new(std::sync::Mutex::new(())),
+        }
     }
 
     fn ait(&self) -> ait::AitPresets {
@@ -98,6 +110,13 @@ impl PresetService {
             })?;
             return client.save_native_preset(cwd, preset).await;
         }
+        // The lock spans the read-modify-write, not just the write: two concurrent saves of
+        // different presets would otherwise both list the same store and the later one would
+        // publish a list that drops the other's entry, each still reporting success.
+        let _guard = self
+            .writes
+            .lock()
+            .map_err(|_| PresetError::Unavailable("Preset store is unavailable".to_owned()))?;
         self.ait()
             .save(provider, preset, original)
             .map_err(PresetError::Rejected)
@@ -129,6 +148,11 @@ impl PresetService {
             })?;
             return client.delete_native_preset(cwd, name).await;
         }
+        // Deleting is the same list-wide rewrite as saving, so it takes the same fence.
+        let _guard = self
+            .writes
+            .lock()
+            .map_err(|_| PresetError::Unavailable("Preset store is unavailable".to_owned()))?;
         self.ait()
             .delete(provider, name)
             .map_err(PresetError::Rejected)

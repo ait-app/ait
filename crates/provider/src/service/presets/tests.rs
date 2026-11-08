@@ -3,7 +3,7 @@ use std::sync::Arc;
 use domain::agent_runtime::StoredAgentConfig;
 use model::storage::daemon_config::DaemonConfigStore;
 use persistence::storage::daemon_config::FileDaemonConfigStore;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::PresetService;
 use crate::ports::preset::{Preset, PresetBackend};
@@ -214,4 +214,91 @@ async fn internal_patch_markers_never_reach_a_client_or_a_store() {
     assert!(!values.contains_key("modelPreset"));
     assert!(!values.contains_key("modelPresetThinking"));
     assert_eq!(values.get("modelRole.advisor"), Some(&json!("model/b")));
+}
+
+/// A configuration store whose reads take long enough for two writers to overlap.
+///
+/// The real store reads and writes in separate critical sections, so two concurrent saves can
+/// both observe the list from before either write. Widening that window here makes the lost
+/// update deterministic instead of a rare timing accident.
+#[derive(Debug, Clone)]
+struct SlowStore {
+    inner: Arc<std::sync::Mutex<Value>>,
+}
+
+impl DaemonConfigStore for SlowStore {
+    fn get(&self) -> Result<Value, domain::storage::daemon_config::DaemonConfigStoreError> {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        Ok(self.inner.lock().unwrap().clone())
+    }
+
+    fn patch(
+        &self,
+        patch: &Value,
+    ) -> Result<Value, domain::storage::daemon_config::DaemonConfigStoreError> {
+        let mut state = self.inner.lock().unwrap();
+        let providers = state["providers"]
+            .as_object_mut()
+            .ok_or(domain::storage::daemon_config::DaemonConfigStoreError::Invalid)?;
+        let patched = patch["providers"]
+            .as_object()
+            .ok_or(domain::storage::daemon_config::DaemonConfigStoreError::Invalid)?;
+        for (provider, entry) in patched {
+            providers.insert(provider.clone(), entry.clone());
+        }
+        Ok(state.clone())
+    }
+
+    fn reload(
+        &self,
+    ) -> Result<
+        domain::storage::daemon_config::DaemonConfigReload,
+        domain::storage::daemon_config::DaemonConfigStoreError,
+    > {
+        Err(domain::storage::daemon_config::DaemonConfigStoreError::Invalid)
+    }
+}
+
+#[test]
+fn concurrent_creates_all_survive_without_lost_updates() {
+    let store = SlowStore {
+        inner: Arc::new(std::sync::Mutex::new(json!({"providers":{}}))),
+    };
+    let service = PresetService::new(Arc::new(store));
+    let names = ["alpha", "beta"];
+    // Each save reads the whole list and writes it back, so the two writers must overlap to make
+    // the lost update reproducible. Two operating-system threads overlap for certain, whereas
+    // `save` has no yield point that would let two spawned tasks interleave inside one runtime.
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = names
+            .iter()
+            .map(|name| {
+                let service = service.clone();
+                scope.spawn(move || {
+                    tokio::runtime::Builder::new_current_thread()
+                        .build()
+                        .unwrap()
+                        .block_on(service.save("claude", ".", None, &preset(name, "model/a"), None))
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle
+                .join()
+                .unwrap()
+                .expect("a concurrent create must not fail");
+        }
+    });
+
+    let listed = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap()
+        .block_on(service.list("claude", ".", None))
+        .unwrap();
+    let mut stored: Vec<&str> = listed.iter().map(|preset| preset.name.as_str()).collect();
+    stored.sort_unstable();
+    assert_eq!(
+        stored, names,
+        "a lost update dropped a concurrently created preset"
+    );
 }

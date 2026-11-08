@@ -3017,6 +3017,7 @@ export const es: TranslationResources = {
         loading: "Cargando ajustes...",
         saving: "Guardando...",
         noRename: "Este proveedor no permite renombrar; crea uno nuevo y elimina el anterior",
+        nameTaken: "Ya existe un preajuste llamado \"{{name}}\"; ábrelo para editarlo",
       },
       models: {
         one: "1 modelo",

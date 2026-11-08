@@ -2985,6 +2985,8 @@ export const ja: TranslationResources = {
         saving: "保存中...",
         noRename:
           "このプロバイダーは名前変更に対応していません。新規作成してから古いものを削除してください",
+        nameTaken:
+          "「{{name}}」という名前のプリセットは既に存在します。それを開いて編集してください",
       },
       models: {
         one: "1つのモデル",

@@ -143,12 +143,16 @@ pub(crate) fn synthesize(
     for preset in stored {
         let mut configuration = serde_json::Map::new();
         configuration.insert("modelId".to_owned(), Value::String(preset.model.clone()));
-        if let Some(thinking) = &preset.thinking_option_id {
-            configuration.insert(
-                "thinkingOptionId".to_owned(),
-                Value::String(thinking.clone()),
-            );
-        }
+        // A preset that names no thinking level must still say so: the bundle treats an omitted
+        // field as "keep the current value" and only an explicit null as "clear it", so leaving
+        // the key out would carry a previous session level into the preset.
+        configuration.insert(
+            "thinkingOptionId".to_owned(),
+            preset
+                .thinking_option_id
+                .as_ref()
+                .map_or(Value::Null, |thinking| Value::String(thinking.clone())),
+        );
         if !preset.feature_values.is_empty() {
             configuration.insert(
                 "featureValues".to_owned(),
@@ -171,21 +175,30 @@ pub(crate) fn synthesize(
 
 /// Whether a stored preset describes exactly the current selection.
 ///
-/// Mirrors the client's `withModelPresetSelection`: model and thinking must match, and every
-/// stored feature must already be in effect. Preset bookkeeping keys are ignored.
+/// Mirrors the client's `withModelPresetSelection`, including how a preset expands into the roles
+/// it does not name: applying one clears them, so a role the preset omits only matches while the
+/// current selection has it cleared. Comparing just the stored map would keep a preset selected
+/// after the user manually enabled a role the preset never carried.
 fn matches_configuration(
     preset: &Preset,
     model: Option<&str>,
     thinking: Option<&str>,
     features: Option<&std::collections::BTreeMap<String, Value>>,
 ) -> bool {
+    let cleared = |key: &str, value: &Value| {
+        key.starts_with("modelRole.") && value != &Value::String("unset".to_owned())
+    };
     model == Some(preset.model.as_str())
         && thinking == preset.thinking_option_id.as_deref()
         && preset.feature_values.iter().all(|(key, value)| {
-            key == "modelPreset"
-                || key == "modelPresetThinking"
-                || key == "modelPresetRoles"
+            is_internal_feature(key)
                 || features.and_then(|features| features.get(key)) == Some(value)
+        })
+        && features.is_none_or(|features| {
+            features
+                .iter()
+                .filter(|(key, _)| !preset.feature_values.contains_key(key.as_str()))
+                .all(|(key, value)| !cleared(key, value))
         })
 }
 

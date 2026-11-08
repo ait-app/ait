@@ -36,7 +36,7 @@ vi.mock("@/runtime/host-runtime", () => ({
 // The store query only runs when the caller passes no snapshot; these cases always pass one.
 vi.mock("@/data/provider-presets", () => ({
   presetControlAvailable: (store: unknown) => store !== null && store !== undefined,
-  useProviderPresets: () => null,
+  useProviderPresets: () => ({ snapshot: null, isLoading: false, error: null }),
 }));
 vi.mock("@/lib/overlay-root", () => ({
   useCurrentOverlayLayer: () => currentLayer,

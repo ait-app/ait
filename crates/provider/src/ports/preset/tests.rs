@@ -33,10 +33,24 @@ fn stored_presets_are_synthesized_when_the_provider_has_no_native_feature() {
     assert_eq!(options.len(), 2);
     assert_eq!(options[0]["id"], "__custom__");
     assert_eq!(options[1]["id"], "team");
+    // The thinking level is stated even when the preset has none: an omitted key means "keep the
+    // current level" to the bundle, so only an explicit null clears it.
     assert_eq!(
         options[1]["metadata"]["configuration"],
-        json!({"modelId":"claude-opus-5"})
+        json!({"modelId":"claude-opus-5","thinkingOptionId":null})
     );
+}
+
+#[test]
+fn a_preset_without_a_thinking_level_clears_it_instead_of_omitting_the_key() {
+    let stored = vec![preset("team", "claude-opus-5")];
+    let feature = synthesize(None, &stored, Some("sonnet"), None, None).unwrap();
+    let configuration = &feature["options"][1]["metadata"]["configuration"];
+    assert!(
+        configuration.get("thinkingOptionId").is_some(),
+        "an omitted field would keep the previous level instead of clearing it"
+    );
+    assert_eq!(configuration["thinkingOptionId"], serde_json::Value::Null);
 }
 
 #[test]
@@ -80,6 +94,23 @@ fn the_current_selection_selects_matching_preset_and_otherwise_custom() {
             "{model:?} {thinking:?} {role}"
         );
     }
+}
+
+#[test]
+fn a_role_the_preset_never_named_must_be_cleared_for_it_to_stay_selected() {
+    // Applying this preset clears every role it does not name, so a current selection that
+    // enables one of those roles is a different configuration, not this preset.
+    let stored = vec![preset("team", "claude-opus-5")];
+    let enabled = BTreeMap::from([("modelRole.advisor".to_owned(), json!("opus"))]);
+    let synthesized =
+        synthesize(None, &stored, Some("claude-opus-5"), None, Some(&enabled)).unwrap();
+    assert_eq!(synthesized["value"], "__custom__");
+
+    // The same selection with that role cleared still matches the preset it applied.
+    let cleared = BTreeMap::from([("modelRole.advisor".to_owned(), json!("unset"))]);
+    let synthesized =
+        synthesize(None, &stored, Some("claude-opus-5"), None, Some(&cleared)).unwrap();
+    assert_eq!(synthesized["value"], "team");
 }
 
 #[test]

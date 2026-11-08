@@ -149,19 +149,25 @@ test("a lock whose holder died is reclaimed instead of blocking every later inst
   await assert.rejects(readFile(lockPath), /ENOENT/);
 });
 
-test("a lock recorded with a recycled pid is not treated as alive", async (t) => {
-  const root = await directory(t);
-  const lockPath = path.join(root, ".1.install-lock");
-  // The pid is this live process, but the recorded start time belongs to another process.
-  const stat = await readFile(`/proc/${process.pid}/stat`, "utf8");
-  const close = stat.lastIndexOf(")");
-  const boot = stat.slice(close + 2).split(" ")[19];
-  await writeFile(
-    lockPath,
-    `${JSON.stringify({ pid: process.pid, startedAt: Date.now(), boot: `${boot}1`, command: "other" })}\n`,
-  );
-  assert.equal(await reclaimLock(lockPath), true);
-});
+// Recycle detection reads the kernel start time and command from `/proc`, so it only exists on
+// Linux; elsewhere the record carries neither and the age limit covers pid reuse.
+test(
+  "a lock recorded with a recycled pid is not treated as alive",
+  { skip: process.platform !== "linux" },
+  async (t) => {
+    const root = await directory(t);
+    const lockPath = path.join(root, ".1.install-lock");
+    // The pid is this live process, but the recorded start time belongs to another process.
+    const stat = await readFile(`/proc/${process.pid}/stat`, "utf8");
+    const close = stat.lastIndexOf(")");
+    const boot = stat.slice(close + 2).split(" ")[19];
+    await writeFile(
+      lockPath,
+      `${JSON.stringify({ pid: process.pid, startedAt: Date.now(), boot: `${boot}1`, command: "other" })}\n`,
+    );
+    assert.equal(await reclaimLock(lockPath), true);
+  },
+);
 
 test("a lock held by a live installer is never deleted", async (t) => {
   const root = await directory(t);
