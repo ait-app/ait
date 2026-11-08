@@ -2,6 +2,7 @@
 
 /// Client methods implemented by this component; consumed by capability discovery.
 pub(crate) const METHODS: &[MethodSpec] = &[
+    MethodSpec::request("provider.usage.list.request"),
     MethodSpec::request("provider.available.list.request"),
     MethodSpec::request("provider.models.list.request"),
     MethodSpec::request("provider.modes.list.request"),
@@ -28,7 +29,7 @@ pub(super) fn request(context: Context<'_>, state: &State) -> Result<(), QueueEr
         return context.respond(Err(ErrorCode::UnsupportedCapability));
     };
     let mut response =
-        match execution.admit_catalog(&context.request.method, context.request.params) {
+        match execution.admit_discovery(&context.request.method, context.request.params) {
             Ok(response) => response,
             Err(error) => {
                 return context

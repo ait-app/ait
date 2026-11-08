@@ -130,7 +130,7 @@ async fn discovery_queue_is_bounded_and_shutdown_drains_accepted_requests() {
     for _ in 0..63 {
         replies.push(
             execution
-                .admit_catalog(
+                .admit_discovery(
                     "provider.models.list.request",
                     json!({"provider":"codex","cwd":fixture.cwd}),
                 )
@@ -245,7 +245,7 @@ async fn catalog_response_slots_remain_bounded_until_their_owners_are_dropped() 
     for _ in 0..63 {
         responses.push(
             execution
-                .admit_catalog(
+                .admit_discovery(
                     "provider.models.list.request",
                     json!({"provider":"codex","cwd":fixture.cwd}),
                 )
@@ -253,7 +253,7 @@ async fn catalog_response_slots_remain_bounded_until_their_owners_are_dropped() 
         );
     }
     assert!(matches!(
-        execution.admit_catalog(
+        execution.admit_discovery(
             "provider.models.list.request",
             json!({"provider":"codex","cwd":fixture.cwd})
         ),
@@ -265,13 +265,13 @@ async fn catalog_response_slots_remain_bounded_until_their_owners_are_dropped() 
         assert!(response.receive().await.unwrap()["models"].is_array());
     }
     let retained = execution
-        .admit_catalog(
+        .admit_discovery(
             "provider.models.list.request",
             json!({"provider":"codex","cwd":fixture.cwd}),
         )
         .unwrap();
     assert!(matches!(
-        execution.admit_catalog(
+        execution.admit_discovery(
             "provider.models.list.request",
             json!({"provider":"codex","cwd":fixture.cwd})
         ),

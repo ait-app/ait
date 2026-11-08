@@ -63,7 +63,7 @@ struct Worker {
     template: Arc<Mutex<ExecutionState>>,
     cancellation: CancellationToken,
     admission: Arc<Semaphore>,
-    catalog_responses: Arc<Semaphore>,
+    discovery_responses: Arc<Semaphore>,
     thread: Mutex<Option<JoinHandle<()>>>,
     events: SessionEvents,
     timeline: crate::storage::timeline::Timeline,
@@ -83,12 +83,12 @@ struct OwnedRuntime {
 pub struct AgentExecution(Arc<Worker>);
 
 /// Owns one discovery response slot through transport delivery, including after worker completion.
-pub(crate) struct CatalogResponse {
+pub(crate) struct DiscoveryResponse {
     receiver: oneshot::Receiver<Result<Value, ErrorCode>>,
     _permit: OwnedSemaphorePermit,
 }
 
-impl CatalogResponse {
+impl DiscoveryResponse {
     /// Wait for the admitted result without releasing the bounded response slot.
     pub(crate) async fn receive(&mut self) -> Result<Value, ErrorCode> {
         (&mut self.receiver).await.map_err(|_| ErrorCode::AgentIo)?
@@ -177,7 +177,7 @@ impl AgentExecution {
             template,
             cancellation,
             admission: Arc::new(Semaphore::new(64)),
-            catalog_responses: Arc::new(Semaphore::new(64)),
+            discovery_responses: Arc::new(Semaphore::new(64)),
             thread: Mutex::new(Some(thread)),
             events,
             timeline,
@@ -264,7 +264,7 @@ impl AgentExecution {
     }
 
     async fn catalog(&self, method: Operation, params: Value) -> Result<Value, ErrorCode> {
-        self.admit_catalog_operation(method, params)?
+        self.admit_discovery_operation(method, params)?
             .receive()
             .await
     }
@@ -272,21 +272,22 @@ impl AgentExecution {
     /// Synchronously reserve bounded discovery work before a transport spawns its response task.
     /// The returned owner retains its slot until delivery or caller cancellation.
     /// # Errors
-    /// Rejects non-catalog methods, shutdown, a closed worker or exhausted request/response slots.
-    pub(crate) fn admit_catalog(
+    /// Accepts catalog and account-usage reads; rejects other methods, shutdown, a closed worker
+    /// or exhausted request/response slots.
+    pub(crate) fn admit_discovery(
         &self,
         method: &str,
         params: Value,
-    ) -> Result<CatalogResponse, ErrorCode> {
-        self.admit_catalog_operation(Operation::parse(method)?, params)
+    ) -> Result<DiscoveryResponse, ErrorCode> {
+        self.admit_discovery_operation(Operation::parse(method)?, params)
     }
 
-    fn admit_catalog_operation(
+    fn admit_discovery_operation(
         &self,
         method: Operation,
         params: Value,
-    ) -> Result<CatalogResponse, ErrorCode> {
-        if method.access() != Access::Catalog {
+    ) -> Result<DiscoveryResponse, ErrorCode> {
+        if method.access() != Access::Catalog && method != Operation::Usage {
             return Err(ErrorCode::UnsupportedCapability);
         }
         if self.0.cancellation.is_cancelled() {
@@ -294,7 +295,7 @@ impl AgentExecution {
         }
         let permit = self
             .0
-            .catalog_responses
+            .discovery_responses
             .clone()
             .try_acquire_owned()
             .map_err(|_| ErrorCode::CatalogBusy)?;
@@ -320,7 +321,7 @@ impl AgentExecution {
                 mpsc::error::TrySendError::Full(_) => ErrorCode::CatalogBusy,
                 mpsc::error::TrySendError::Closed(_) => ErrorCode::AgentIo,
             })?;
-        Ok(CatalogResponse {
+        Ok(DiscoveryResponse {
             receiver,
             _permit: permit,
         })

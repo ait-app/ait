@@ -154,7 +154,6 @@ pub(super) async fn execution(
                 | "agent.subagents.list.request"
                 | "agent.provider_subagents.timeline.get.request"
                 | "provider.diagnostic.request"
-                | "provider.usage.list.request"
         )
     }) else {
         return Err(DispatchError::NotImplemented);
@@ -234,7 +233,8 @@ pub(super) fn catalog(
     let Some(context) = pending.take_if(|context| {
         matches!(
             context.request.method.as_str(),
-            "provider.available.list.request"
+            "provider.usage.list.request"
+                | "provider.available.list.request"
                 | "provider.models.list.request"
                 | "provider.modes.list.request"
                 | "provider.features.list.request"

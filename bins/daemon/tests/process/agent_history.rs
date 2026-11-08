@@ -6,6 +6,8 @@ use serde_json::json;
 mod catalog;
 #[path = "agent_history/paseo.rs"]
 mod paseo;
+#[path = "agent_history/usage.rs"]
+mod usage;
 
 const METHODS: &[&str] = &[
     "workspace.open.request",
