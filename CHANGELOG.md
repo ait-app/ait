@@ -9,6 +9,11 @@
 - Bridge OMP native Vibe mode: the private host greets the adapter, wires `/vibe` into the RPC command table so it enters/exits the native mode and turns an inline directive into a real turn, projects Vibe state and verified workers into host UI and subagent events, exposes list/spawn/send/wait/kill/toggle over native actions, and keeps `/vibe` blocked with an explicit card when the bridge is absent.
 - Keep the optional OMP native host install recoverable: it runs in its own process group so a timeout stops npm too, a lock left by a killed installer is reclaimed instead of blocking every later start, the installer budget is 300 seconds, and a background install is adopted by the next conversation instead of requiring a daemon restart.
 
+## 0.2.2 - 2026-11-08
+
+- Fix tiny terminal glyphs under Electron 45.2.3: the WebGL renderer now draws regular, bold and italic text with the configured font size and monospace family.
+- Show "renewal pending" for Claude usage when the stored access token has expired but a valid refresh token remains, instead of asking to run `claude /login`; the CLI renews the token on its next run.
+
 ## 0.2.1 - 2026-11-08
 
 - Add Pi slash commands and extension notifications through its native provider integration.
