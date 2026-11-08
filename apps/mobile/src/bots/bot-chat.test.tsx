@@ -7,11 +7,16 @@ import type { BotTurn, BotView } from "@ait/protocol/bot/types";
 import { BotChat } from "./bot-chat";
 import { botKeys } from "./queries";
 
-const { botRequest } = vi.hoisted(() => ({ botRequest: vi.fn() }));
+const { botRequest, closeBotSessionTab, openPreferredWorkspaceTarget } = vi.hoisted(() => ({
+  botRequest: vi.fn(),
+  closeBotSessionTab: vi.fn(),
+  openPreferredWorkspaceTarget: vi.fn(),
+}));
 vi.mock("@/runtime/host-runtime", () => ({ useHostRuntimeClient: () => ({ botRequest }) }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-vi.mock("./styles", () => ({ botStyles: {} }));
+vi.mock("./styles", () => ({ botStyles: {}, botChatStyles: {} }));
 vi.mock("./loading", () => ({ BotLoadingSpinner: () => null }));
+vi.mock("./session-tab", () => ({ closeBotSessionTab }));
 vi.mock("@/utils/confirm-dialog", () => ({ confirmDialog: vi.fn(async () => true) }));
 vi.mock("@/components/markdown/renderer", () => ({
   MarkdownRenderer: ({ text }: { text: string }) => <span>{text}</span>,
@@ -33,28 +38,112 @@ vi.mock("@/components/ui/button", () => ({
     </button>
   ),
 }));
-vi.mock("@/components/ui/form-field", () => ({
-  FormTextInput: ({
-    initialValue,
-    resetKey,
-    onChangeText,
-    editable,
+vi.mock("@/components/message", () => ({
+  UserMessage: ({ message }: { message: string }) => <p data-testid="user-message">{message}</p>,
+  AssistantMessage: ({ message }: { message: string }) => (
+    <p data-testid="assistant-message">{message}</p>
+  ),
+  AssistantTurnFooter: () => null,
+}));
+vi.mock("@/components/synced-loader", () => ({ SyncedLoader: () => null }));
+vi.mock("@/components/ui/icon-button-chrome", () => ({ mutedIconColorMapping: () => ({}) }));
+vi.mock("@/components/ui/pane-content-toolbar", () => ({
+  ToolbarButton: ({
+    label,
+    onPress,
+    disabled,
     testID,
   }: {
-    initialValue: string;
-    resetKey: number;
-    onChangeText: (text: string) => void;
-    editable: boolean;
-    testID: string;
+    label: string;
+    onPress: () => void;
+    disabled?: boolean;
+    testID?: string;
   }) => (
-    <textarea
-      key={resetKey}
-      data-testid={testID}
-      defaultValue={initialValue}
-      disabled={!editable}
-      onChange={(event) => onChangeText(event.target.value)}
-    />
+    <button data-testid={testID} disabled={disabled} onClick={onPress}>
+      {label}
+    </button>
   ),
+}));
+vi.mock("@/composer/dock", () => ({
+  ComposerDock: ({ children }: { children: React.ReactNode[] }) => <div>{children}</div>,
+}));
+vi.mock("@/composer/pill-styles", () => ({ resolveComposerTrackTailClearance: () => 40 }));
+vi.mock("@/composer/tracks", () => ({
+  ComposerTrackBar: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+vi.mock("@/constants/layout", () => ({ useIsCompactFormFactor: () => false }));
+vi.mock("@/hooks/use-settings", () => ({ useSettings: () => undefined }));
+vi.mock("@/panels/pane-context", () => ({ usePaneContext: () => ({ tabId: "bot" }) }));
+vi.mock("@/subagents/opens-in-sheet", () => ({ useSubagentOpensInSheet: () => () => false }));
+vi.mock("@/workspace-tabs/model", () => ({ buildWorkspaceTabPersistenceKey: () => "workspace" }));
+vi.mock("@/workspace-tabs/open-beside", () => ({ openPreferredWorkspaceTarget }));
+vi.mock("@/subagents/track", () => ({
+  SubagentsTrack: ({
+    rows,
+    onOpenSubagent,
+  }: {
+    rows: { id: string; title: string; status: string }[];
+    onOpenSubagent: (id: string) => void;
+  }) =>
+    rows.map((row) => (
+      <button
+        key={row.id}
+        data-testid={`subagent-${row.id}`}
+        data-status={row.status}
+        onClick={() => onOpenSubagent(row.id)}
+      >
+        {row.title}
+      </button>
+    )),
+}));
+vi.mock("@/composer/input/input", () => ({
+  MessageInput: React.forwardRef(function MessageInput(
+    {
+      onChangeText,
+      onSubmit,
+      disabled,
+      isSubmitDisabled,
+      submitButtonTestID,
+      leftContent,
+      beforeVoiceContent,
+      activeActionContent,
+    }: {
+      onChangeText: (text: string) => void;
+      onSubmit: (payload: { text: string; attachments: never[]; cwd: string }) => void;
+      disabled?: boolean;
+      isSubmitDisabled?: boolean;
+      submitButtonTestID: string;
+      leftContent: React.ReactNode;
+      beforeVoiceContent: React.ReactNode;
+      activeActionContent: React.ReactNode;
+    },
+    ref: React.Ref<{ replaceText: (text: string) => void }>,
+  ) {
+    const area = React.useRef<HTMLTextAreaElement>(null);
+    React.useImperativeHandle(ref, () => ({
+      replaceText: (text: string) => {
+        if (area.current) area.current.value = text;
+      },
+    }));
+    return (
+      <div>
+        <textarea
+          ref={area}
+          data-testid="bot-message-input"
+          disabled={disabled}
+          onChange={(event) => onChangeText(event.target.value)}
+        />
+        <button
+          data-testid={submitButtonTestID}
+          disabled={isSubmitDisabled}
+          onClick={() => onSubmit({ text: area.current?.value ?? "", attachments: [], cwd: "/w" })}
+        />
+        {leftContent}
+        {beforeVoiceContent}
+        {activeActionContent}
+      </div>
+    );
+  }),
 }));
 
 const bot: BotView = {
@@ -64,7 +153,9 @@ const bot: BotView = {
   state: { kind: "active" },
   createdAt: "2026-10-12",
 };
+const sessionAgentId = "88888888-8888-4888-8888-888888888888";
 const conversation = {
+  sessionAgentId,
   id: "33333333-3333-4333-8333-333333333333",
   channelId: bot.builtinChannelId,
   peer: "owner",
@@ -96,7 +187,7 @@ let queryClient: QueryClient;
 function renderChat({ bot: view = bot, serverId = "host" }: { bot?: BotView; serverId?: string }) {
   return render(
     <QueryClientProvider client={queryClient}>
-      <BotChat serverId={serverId} workspaceId="workspace" bot={view} interactive />
+      <BotChat serverId={serverId} workspaceId="workspace" cwd="/w" bot={view} interactive />
     </QueryClientProvider>,
   );
 }
@@ -108,7 +199,9 @@ function CachedBotChat() {
     queryFn: () => Promise.reject(new Error("Bot read unexpectedly")),
     staleTime: Infinity,
   });
-  return data ? <BotChat serverId="host" workspaceId="workspace" bot={data} interactive /> : null;
+  return data ? (
+    <BotChat serverId="host" workspaceId="workspace" cwd="/w" bot={data} interactive />
+  ) : null;
 }
 
 function renderCachedBotChat() {
@@ -124,6 +217,8 @@ beforeEach(() => {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   botRequest.mockReset();
+  openPreferredWorkspaceTarget.mockReset();
+  closeBotSessionTab.mockReset();
 });
 afterEach(() => {
   cleanup();
@@ -140,7 +235,7 @@ describe("Bot input receipts", () => {
     });
     render(
       <QueryClientProvider client={queryClient}>
-        <BotChat serverId="shared:grant" workspaceId="workspace" bot={bot} interactive />
+        <BotChat serverId="shared:grant" workspaceId="workspace" cwd="/w" bot={bot} interactive />
       </QueryClientProvider>,
     );
 
@@ -168,7 +263,7 @@ describe("Bot input receipts", () => {
     });
     render(
       <QueryClientProvider client={queryClient}>
-        <BotChat serverId="host" workspaceId="workspace" bot={bot} interactive />
+        <BotChat serverId="host" workspaceId="workspace" cwd="/w" bot={bot} interactive />
       </QueryClientProvider>,
     );
     const input = screen.getByTestId("bot-message-input") as HTMLTextAreaElement;
@@ -281,7 +376,7 @@ describe("Bot input receipts", () => {
     current = replacementConversation;
     rerender(
       <QueryClientProvider client={queryClient}>
-        <BotChat serverId="host" workspaceId="workspace" bot={replacement} interactive />
+        <BotChat serverId="host" workspaceId="workspace" cwd="/w" bot={replacement} interactive />
       </QueryClientProvider>,
     );
     await waitFor(() =>
@@ -336,6 +431,86 @@ describe("Bot input receipts", () => {
         conversationId: conversation.id,
         messageId: expect.any(String),
         text: "hello",
+      }),
+    );
+  });
+});
+
+describe("Bot conversation presentation", () => {
+  const withHistory = (turns: BotTurn[]) =>
+    botRequest.mockImplementation(async (method: string) => {
+      if (method === "bot.conversation.open.request") return { conversation };
+      if (method === "bot.history.get.request") return { turns, nextSequence: null };
+      if (method === "bot.turn.get.request") return { turn: turns[0] };
+      if (method === "bot.turn.cancel.request") return {};
+      throw new Error(`Unexpected ${method}`);
+    });
+
+  it("shows the prompt and the reply as separate messages", async () => {
+    withHistory([receipt]);
+    renderChat({});
+    expect((await screen.findByTestId("user-message")).textContent).toBe("hello");
+    const reply = await screen.findByTestId("assistant-message");
+    expect(reply.textContent).toBe("reply");
+    expect(screen.getByTestId("user-message").contains(reply)).toBe(false);
+  });
+
+  it("lists the hidden session as a subagent and opens it as an agent tab", async () => {
+    withHistory([{ ...receipt, status: "running" }]);
+    renderChat({});
+    const row = await screen.findByTestId(`subagent-${sessionAgentId}`);
+    expect(row.textContent).toBe("bots.session");
+    expect(row.getAttribute("data-status")).toBe("running");
+    fireEvent.click(row);
+    expect(openPreferredWorkspaceTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: { kind: "agent", agentId: sessionAgentId },
+        source: "subagents",
+      }),
+    );
+  });
+
+  it("omits the session row until the first turn creates the session", async () => {
+    withHistory([]);
+    renderChat({});
+    await waitFor(() =>
+      expect(screen.getByTestId("bot-message-input")).toHaveProperty("disabled", false),
+    );
+    expect(screen.queryByTestId(`subagent-${sessionAgentId}`)).toBeNull();
+  });
+
+  it("omits the session row after a reset until a new turn starts", async () => {
+    withHistory([{ ...receipt, generation: 0 }]);
+    renderChat({});
+    await screen.findByTestId("assistant-message");
+    expect(screen.queryByTestId(`subagent-${sessionAgentId}`)).toBeNull();
+  });
+
+  it("closes the retired session tab when a reset rotates the session", async () => {
+    botRequest.mockImplementation(async (method: string) => {
+      if (method === "bot.conversation.open.request") return { conversation };
+      if (method === "bot.history.get.request") return { turns: [receipt], nextSequence: null };
+      if (method === "bot.conversation.reset.request")
+        return { conversation: { ...conversation, generation: 2, sessionAgentId: "next" } };
+      throw new Error(`Unexpected ${method}`);
+    });
+    renderChat({});
+    await screen.findByTestId(`subagent-${sessionAgentId}`);
+    fireEvent.click(screen.getByTestId("bot-reset"));
+    await waitFor(() =>
+      expect(closeBotSessionTab).toHaveBeenCalledWith("host", "workspace", sessionAgentId),
+    );
+    expect(screen.queryByTestId(`subagent-${sessionAgentId}`)).toBeNull();
+  });
+
+  it("cancels the running turn from the composer", async () => {
+    withHistory([{ ...receipt, status: "running" }]);
+    renderChat({});
+    fireEvent.click(await screen.findByTestId("bot-cancel"));
+    await waitFor(() =>
+      expect(botRequest).toHaveBeenCalledWith("bot.turn.cancel.request", {
+        workspaceId: "workspace",
+        turnId: receipt.id,
       }),
     );
   });

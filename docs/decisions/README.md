@@ -8,6 +8,8 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## Bot
 
+- [ADR-222：每个 Provider 单一 Agent 模式，Bot 不创建 Workspace](bot/adr-222-single-agent-mode-no-bot-workspaces.md)
+- [ADR-221：以子 Agent 形式只读查看 Bot 内部会话](bot/adr-221-read-only-bot-session-inspection.md)
 - [ADR-215：Bot 权限与作用域 MCP 凭据](bot/adr-215-bot-permissions-and-scoped-mcp.md)
 - [ADR-213：单 Workspace 管理者 Bot 与 v2 接口](bot/adr-213-single-workspace-manager-bot.md)
 - [ADR-145：Bot 执行期间自动拒绝权限请求](bot/adr-145-bot-permission-denial.md)

@@ -357,7 +357,12 @@ fn claimed<'a>(
 /// # Errors
 /// Returns `InvalidMessage` for unknown Agents and propagates lookup failures.
 async fn context(state: &Shared, id: &str) -> Result<Value, model::ErrorCode> {
-    let mut value = rpc::execute(state, "agent.get.request", json!({"agentId":id})).await?;
+    let mut value = rpc::execute(
+        state,
+        "agent.get.request",
+        json!({"agentId":id,"publicOnly":true}),
+    )
+    .await?;
     match value.get_mut("agent").map(Value::take) {
         Some(agent) if agent.is_object() => Ok(agent),
         _ => Err(model::ErrorCode::InvalidMessage),

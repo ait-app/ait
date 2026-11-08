@@ -11,9 +11,9 @@ test("resolves labels and login remedies in the current language", async () => {
     kind: "no_quota",
     detail: "This login does not report plan usage. Sign in with the provider CLI.",
   } as const;
-  expect(usageCopy.refreshAll).toBe("Refresh all");
+  expect(usageCopy.refreshAll).toBe("Force refresh");
   await i18n.changeLanguage("zh-CN");
-  expect(usageCopy.refreshAll).toBe("全部刷新");
+  expect(usageCopy.refreshAll).toBe("强制刷新");
   expect(usageCopy.displayRemaining).toBe("剩余");
   expect(usageCopy.hostUnavailable("Laptop")).toBe("连接到 Laptop 以查看用量");
   expect(usageCopy.problem({ kind: "rejected", status: 403, refreshedBy: "codex login" })).toBe(
@@ -53,7 +53,7 @@ test("resolves labels and login remedies in the current language", async () => {
     "No active coding plan",
   );
   await i18n.changeLanguage("en");
-  expect(usageCopy.refreshAll).toBe("Refresh all");
+  expect(usageCopy.refreshAll).toBe("Force refresh");
   expect(usageCopy.problem(nativePlanUnavailable)).toBe(nativePlanUnavailable.detail);
 });
 

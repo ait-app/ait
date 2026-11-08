@@ -18,9 +18,13 @@
 
 ## Agent 与工作区
 
+- [共享套餐缓存与 Codex 查询进程](decisions/providers/adr-219-shared-account-usage-cache.md)：原生调用前的快读、后台刷新、账号失效与进程复用。
+
 - Provider 配置：[Claude Code](operations/claude-code.md)、[DeepSeek Harness](operations/deepseek-harness.md)、
   [Antigravity](operations/antigravity.md)、[Pi](operations/pi.md)、[Oh My Pi](operations/oh-my-pi.md)、
   [MiniMax Code](operations/minimax-code.md)。Codex 和 OpenCode 的启动配置见 [daemon 手册](operations/daemon.md#provider-与扩展能力)。
+- [Pi admission 与恢复](operations/pi.md#session-lifecycle-and-limits)：超时和拒绝后的进程生命周期、失败输入的时间线限制；
+  [ADR-156](decisions/providers/adr-156-pi-native-rpc-provider.md) 说明 `hasInput`、`observedWork` 与原生会话文件要求。
 - [使用 Pi slash commands](operations/pi.md#slash-commands)：命令调用、项目信任、前端目录缓存与逐请求原生探测。
 - [Pi 扩展通知](decisions/providers/adr-220-pi-extension-notifications.md)：会话时间线持久化、通知级别与有界的尽力交付。
 - [Pi 推理偏好](decisions/providers/adr-211-pi-next-turn-reasoning-controls.md)：下一条 prompt 前应用模型与推理级别，区分请求偏好和原生运行事实。
@@ -31,7 +35,7 @@
   [原生 UI 与拥有者边界](decisions/providers/adr-218-native-ui-and-actions.md)、[验收报告](reports/providers/native-delivery-and-omp-roles-2026-11-02.md)。
 - [原生控制结果兼容](decisions/providers/adr-214-native-control-result-cards.md)：旧客户端文本封装与当前结果卡片共用实时及历史出口。
 - [查看子 Agent](decisions/providers/adr-209-observed-subagent-normalization.md)：统一会话入口、父子关系与只读观测边界。
-- [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)（客户端标签页见 [ADR-214](decisions/clients/adr-214-workspace-bot-tab-v2.md)，权限与作用域 MCP 凭据见 [ADR-215](decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)）。
+- [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)（客户端标签页见 [ADR-214](decisions/clients/adr-214-workspace-bot-tab-v2.md)，权限与作用域 MCP 凭据见 [ADR-215](decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)，内部会话的只读查看见 [ADR-221](decisions/bot/adr-221-read-only-bot-session-inspection.md)，单一 Agent 模式与禁止创建 Workspace 见 [ADR-222](decisions/bot/adr-222-single-agent-mode-no-bot-workspaces.md)）。
 - [语音与听写](operations/speech.md)、[移动端通知](operations/mobile-notifications.md)。
 
 ## 架构与工程规范

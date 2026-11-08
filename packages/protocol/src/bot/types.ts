@@ -18,9 +18,9 @@ export const BOT_TOOL_GROUPS = [
   "schedules",
   "scripts",
   "terminals",
-  "workspaces",
 ] as const;
-export const BotToolGroupSchema = z.enum(BOT_TOOL_GROUPS);
+// `workspaces` is retired but may still appear in profiles saved earlier or sent by older hosts.
+export const BotToolGroupSchema = z.enum([...BOT_TOOL_GROUPS, "workspaces"]);
 export const BotPermissionsSchema = z.strictObject({
   groups: z.array(BotToolGroupSchema).max(7),
   modes: z.record(z.string().min(1), z.array(z.string().min(1)).min(1).max(16)),
@@ -65,6 +65,8 @@ export const BotConversationSchema = z.object({
   thread: z.string().nullable(),
   generation: z.number().int().nonnegative(),
   nextSequence: z.number().int().nonnegative(),
+  // Absent on hosts that predate read-only inspection of the Bot's session.
+  sessionAgentId: z.string().optional(),
 });
 export const BotTurnSchema = z.object({
   id: z.guid(),

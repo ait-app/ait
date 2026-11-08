@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Users } from "lucide-react-native";
@@ -7,7 +7,11 @@ import type { ShareGroup, ShareResourceKind, ShareSetting } from "@ait/protocol/
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Switch } from "@/components/ui/switch";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { HostPicker } from "@/components/hosts/host-picker";
+import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
+import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { isSharedResourceHost, useHostRuntimeClient, useHosts } from "@/runtime/host-runtime";
+import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 
 export interface ShareResourceTarget {
   serverId: string;
@@ -15,6 +19,7 @@ export interface ShareResourceTarget {
   resourceKey: string;
   displayName: string;
   projectName?: string;
+  projectHosts?: readonly { serverId: string; projectId: string }[];
 }
 
 function sameResource(setting: ShareSetting, target: ShareResourceTarget): boolean {
@@ -30,17 +35,7 @@ export function ShareManagerSheet({
   target: ShareResourceTarget | null;
   onClose: () => void;
 }) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const client = useHostRuntimeClient(target?.serverId ?? "");
-  const hosts = useHosts();
-  const host = hosts.find((candidate) => candidate.serverId === target?.serverId);
-  const isGuest = host ? isSharedResourceHost(host) : false;
-  const [groups, setGroups] = useState<ShareGroup[]>([]);
-  const [settings, setSettings] = useState<ShareSetting[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [pendingGroup, setPendingGroup] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const header = useMemo<SheetHeader>(
     () => ({
       title: target
@@ -59,8 +54,78 @@ export function ShareManagerSheet({
     [t, target],
   );
 
-  const load = useCallback(async () => {
-    if (!client || !target) return;
+  return (
+    <AdaptiveModalSheet
+      visible={visible}
+      header={header}
+      onClose={onClose}
+      desktopMaxWidth={480}
+      testID="share-manager-sheet"
+    >
+      {visible && target ? (
+        <ShareManagerContent
+          key={JSON.stringify([target.serverId, target.resourceKind, target.resourceKey])}
+          target={target}
+        />
+      ) : null}
+    </AdaptiveModalSheet>
+  );
+}
+
+function ShareManagerContent({ target: initialTarget }: { target: ShareResourceTarget }) {
+  const { theme } = useUnistyles();
+  const { t } = useTranslation();
+  const hosts = useHosts();
+  const activeWorkspace = useActiveWorkspaceSelection();
+  const localServerId = useLocalDaemonServerId();
+  const projectHosts = initialTarget.resourceKind === "project" ? initialTarget.projectHosts : null;
+  const hostOptions = useMemo(
+    () =>
+      hosts.filter(
+        (host) =>
+          !isSharedResourceHost(host) &&
+          projectHosts?.some((placement) => placement.serverId === host.serverId),
+      ),
+    [hosts, projectHosts],
+  );
+  const [selectedServerId, setSelectedServerId] = useState(() => {
+    const preferredIds = [activeWorkspace?.serverId, localServerId, initialTarget.serverId];
+    return (
+      preferredIds.find((id) => hostOptions.some((host) => host.serverId === id)) ??
+      hostOptions[0]?.serverId ??
+      initialTarget.serverId
+    );
+  });
+  const selectedHost =
+    hostOptions.find((host) => host.serverId === selectedServerId) ?? hostOptions[0];
+  const placement = projectHosts?.find((host) => host.serverId === selectedHost?.serverId);
+  const target = useMemo(
+    () =>
+      placement
+        ? { ...initialTarget, serverId: placement.serverId, resourceKey: placement.projectId }
+        : initialTarget,
+    [initialTarget, placement],
+  );
+  const client = useHostRuntimeClient(target.serverId);
+  const host = hosts.find((candidate) => candidate.serverId === target.serverId);
+  const isGuest = host ? isSharedResourceHost(host) : false;
+  const [hostPickerOpen, setHostPickerOpen] = useState(false);
+  const hostPickerAnchorRef = useRef<View>(null);
+  const [groups, setGroups] = useState<ShareGroup[]>([]);
+  const [settings, setSettings] = useState<ShareSetting[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pendingGroup, setPendingGroup] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const openHostPicker = useCallback(() => setHostPickerOpen(true), []);
+  const selectHost = useCallback(
+    (serverId: string) => {
+      if (pendingGroup === null) setSelectedServerId(serverId);
+    },
+    [pendingGroup],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     setError(null);
     setGroups([]);
@@ -70,29 +135,37 @@ export function ShareManagerSheet({
       setLoading(false);
       return;
     }
-    try {
-      const result = await client.listShares();
-      setGroups(result.groups);
-      setSettings(result.shares.filter((setting) => sameResource(setting, target)));
-    } catch (cause) {
-      const code = cause && typeof cause === "object" && "code" in cause ? cause.code : null;
-      setError(
-        t(
-          code === "forbidden"
-            ? "sharing.ownerOnly"
-            : code === "not_implemented"
-              ? "sharing.unsupported"
-              : "sharing.loadError",
-        ),
-      );
-    } finally {
+    if (!client) {
+      setError(t("sharing.hostUnavailable"));
       setLoading(false);
+      return;
     }
+    void (async () => {
+      try {
+        const result = await client.listShares();
+        if (cancelled) return;
+        setGroups(result.groups);
+        setSettings(result.shares.filter((setting) => sameResource(setting, target)));
+      } catch (cause) {
+        if (cancelled) return;
+        const code = cause && typeof cause === "object" && "code" in cause ? cause.code : null;
+        setError(
+          t(
+            code === "forbidden"
+              ? "sharing.ownerOnly"
+              : code === "not_implemented"
+                ? "sharing.unsupported"
+                : "sharing.loadError",
+          ),
+        );
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [client, isGuest, t, target]);
-
-  useEffect(() => {
-    if (visible) void load();
-  }, [load, visible]);
 
   const toggleGroup = useCallback(
     async (group: ShareGroup) => {
@@ -133,68 +206,91 @@ export function ShareManagerSheet({
   );
 
   return (
-    <AdaptiveModalSheet
-      visible={visible}
-      header={header}
-      onClose={onClose}
-      desktopMaxWidth={480}
-      testID="share-manager-sheet"
-    >
-      <View style={styles.body}>
-        <Text style={styles.description}>{t("sharing.intro")}</Text>
-        {loading ? (
-          <View style={styles.loading}>
-            <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
-          </View>
-        ) : groups.length ? (
-          <View style={styles.groupList}>
-            {groups.map((group) => {
-              const setting = settings.find(
-                (candidate) => candidate.groupId === group.groupId && candidate.state !== "revoked",
-              );
-              const selected = Boolean(setting);
-              return (
-                <View key={group.groupId} style={styles.groupRow}>
-                  <View style={styles.groupIcon}>
-                    <Users size={16} color={theme.colors.foregroundMuted} />
-                  </View>
-                  <View style={styles.groupCopy}>
-                    <Text style={styles.groupName}>{group.name}</Text>
-                    <Text style={styles.groupMeta}>
-                      {setting?.state === "accepted"
-                        ? t("sharing.status.shared")
-                        : setting?.state === "rejected"
-                          ? t("sharing.status.rejected", { code: setting.code ?? "rejected" })
-                          : setting
-                            ? t("sharing.status.waiting")
-                            : group.myRole === "admin"
-                              ? t("sharing.status.groupAdmin")
-                              : t("sharing.status.groupMember")}
-                    </Text>
-                  </View>
-                  {pendingGroup === group.groupId ? (
-                    <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
-                  ) : null}
-                  <Switch
-                    value={selected}
-                    disabled={pendingGroup !== null}
-                    onValueChange={() => void toggleGroup(group)}
-                    accessibilityLabel={group.name}
-                    testID={`share-group-${group.groupId}`}
-                  />
+    <View style={styles.body}>
+      <Text style={styles.description}>{t("sharing.intro")}</Text>
+      {hostOptions.length > 0 ? (
+        <View style={styles.hostField}>
+          <Text style={styles.groupName}>{t("hostPicker.host")}</Text>
+          <HostPicker
+            hosts={hostOptions}
+            value={target.serverId}
+            onSelect={selectHost}
+            open={hostPickerOpen && pendingGroup === null}
+            onOpenChange={setHostPickerOpen}
+            anchorRef={hostPickerAnchorRef}
+            searchable
+            hostOptionTestID={(serverId) => `share-host-${serverId}`}
+          >
+            <ComboboxTrigger
+              ref={hostPickerAnchorRef}
+              block
+              style={styles.hostTrigger}
+              onPress={openHostPicker}
+              disabled={pendingGroup !== null}
+              accessibilityRole="button"
+              accessibilityLabel={t("hostPicker.host")}
+              testID="share-host-picker"
+            >
+              <Text style={styles.hostName} numberOfLines={1}>
+                {selectedHost?.label}
+              </Text>
+            </ComboboxTrigger>
+          </HostPicker>
+          <Text style={styles.groupMeta}>{t("sharing.projectHostHint")}</Text>
+        </View>
+      ) : null}
+      {loading ? (
+        <View style={styles.loading}>
+          <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
+        </View>
+      ) : groups.length ? (
+        <View style={styles.groupList}>
+          {groups.map((group) => {
+            const setting = settings.find(
+              (candidate) => candidate.groupId === group.groupId && candidate.state !== "revoked",
+            );
+            const selected = Boolean(setting);
+            return (
+              <View key={group.groupId} style={styles.groupRow}>
+                <View style={styles.groupIcon}>
+                  <Users size={16} color={theme.colors.foregroundMuted} />
                 </View>
-              );
-            })}
-          </View>
-        ) : !error ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>{t("sharing.noGroupsTitle")}</Text>
-            <Text style={styles.emptyText}>{t("sharing.noGroupsHint")}</Text>
-          </View>
-        ) : null}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-      </View>
-    </AdaptiveModalSheet>
+                <View style={styles.groupCopy}>
+                  <Text style={styles.groupName}>{group.name}</Text>
+                  <Text style={styles.groupMeta}>
+                    {setting?.state === "accepted"
+                      ? t("sharing.status.shared")
+                      : setting?.state === "rejected"
+                        ? t("sharing.status.rejected", { code: setting.code ?? "rejected" })
+                        : setting
+                          ? t("sharing.status.waiting")
+                          : group.myRole === "admin"
+                            ? t("sharing.status.groupAdmin")
+                            : t("sharing.status.groupMember")}
+                  </Text>
+                </View>
+                {pendingGroup === group.groupId ? (
+                  <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
+                ) : null}
+                <Switch
+                  value={selected}
+                  disabled={pendingGroup !== null}
+                  onValueChange={() => void toggleGroup(group)}
+                  accessibilityLabel={group.name}
+                  testID={`share-group-${group.groupId}`}
+                />
+              </View>
+            );
+          })}
+        </View>
+      ) : !error ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>{t("sharing.noGroupsTitle")}</Text>
+          <Text style={styles.emptyText}>{t("sharing.noGroupsHint")}</Text>
+        </View>
+      ) : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+    </View>
   );
 }
 
@@ -211,6 +307,21 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
     lineHeight: 20,
+  },
+  hostField: {
+    gap: theme.spacing[2],
+  },
+  hostTrigger: {
+    padding: theme.spacing[3],
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface2,
+  },
+  hostName: {
+    flex: 1,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
   },
   loading: {
     minHeight: 120,

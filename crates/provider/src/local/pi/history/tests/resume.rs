@@ -140,6 +140,134 @@ async fn unknown_resume_preserves_symlink_spelling_from_metadata_and_overrides()
 }
 
 #[tokio::test]
+async fn observed_resume_recovers_renamed_history_by_session_id() {
+    for native_path in [false, true] {
+        let (directory, mut client, file, cwd) = fixture();
+        write(
+            &file,
+            &cwd,
+            vec![
+                user("u", Value::Null, "saved work"),
+                assistant("a", "u", json!([{"type":"text","text":"done"}])),
+                json!({"type":"thinking_level_change","id":"thinking","parentId":"a",
+                    "thinkingLevel":"low"}),
+            ],
+        );
+        let mut saved = handle();
+        saved.metadata = Some(BTreeMap::from([
+            ("cwd".into(), json!(cwd)),
+            ("nativeCwd".into(), json!(cwd)),
+            ("hasInput".into(), json!(false)),
+            ("observedWork".into(), json!(true)),
+            ("sessionFile".into(), json!(file)),
+        ]));
+        if native_path {
+            saved.native_handle = Some(json!(file));
+        }
+        let renamed = file.with_file_name("rotated.jsonl");
+        std::fs::rename(&file, &renamed).unwrap();
+        let saved_history = std::fs::read_to_string(&renamed).unwrap();
+        let program = directory.path().join("pi");
+        std::fs::write(&program, include_str!("../../tests/fixtures/pi.py")).unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+        client.program = program;
+        let spec = AgentSessionSpec {
+            provider: PROVIDER.into(),
+            cwd,
+            config: StoredAgentConfig::default(),
+            confinement: None,
+        };
+
+        let mut resumed = client
+            .resume_session(&saved, &spec, AgentResumePurpose::Interactive)
+            .await
+            .unwrap();
+
+        let arguments: Vec<String> = serde_json::from_str(
+            &std::fs::read_to_string(directory.path().join("arguments.json")).unwrap(),
+        )
+        .unwrap();
+        let session_arg = arguments
+            .iter()
+            .position(|argument| argument == "--session")
+            .expect("observed work was reopened without its renamed native history");
+        assert_eq!(
+            arguments[session_arg + 1],
+            renamed.canonicalize().unwrap().to_str().unwrap()
+        );
+        assert_eq!(
+            resumed
+                .runtime_info()
+                .await
+                .unwrap()
+                .thinking_option_id
+                .as_deref(),
+            Some("low")
+        );
+        let metadata = resumed.persistence().unwrap().metadata.unwrap();
+        assert_eq!(metadata["hasInput"], true);
+        assert!(!metadata.contains_key("observedWork"));
+        resumed.close().await.unwrap();
+        assert!(!file.exists());
+        assert_eq!(std::fs::read_to_string(&renamed).unwrap(), saved_history);
+
+        // Conflicting identities must fail instead of silently opening a new session.
+        std::fs::copy(&renamed, renamed.with_file_name("duplicate.jsonl")).unwrap();
+        assert!(matches!(
+            client
+                .resume_session(&saved, &spec, AgentResumePurpose::Interactive)
+                .await,
+            Err(AgentSessionError::Rejected)
+        ));
+    }
+}
+
+#[tokio::test]
+async fn observed_resume_without_saved_history_keeps_the_weaker_handle() {
+    let (directory, mut client, file, cwd) = fixture();
+    let program = directory.path().join("pi");
+    std::fs::write(&program, include_str!("../../tests/fixtures/pi.py")).unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    client.program = program;
+    let spec = AgentSessionSpec {
+        provider: PROVIDER.into(),
+        cwd: cwd.clone(),
+        config: StoredAgentConfig::default(),
+        confinement: None,
+    };
+    let mut saved = handle();
+    saved.native_handle = Some(json!(file));
+    saved.metadata = Some(BTreeMap::from([
+        ("cwd".into(), json!(cwd)),
+        ("hasInput".into(), json!(false)),
+        ("observedWork".into(), json!(true)),
+    ]));
+
+    let mut resumed = client
+        .resume_session(&saved, &spec, AgentResumePurpose::Interactive)
+        .await
+        .unwrap();
+
+    let metadata = resumed.persistence().unwrap().metadata.unwrap();
+    assert_eq!(metadata["hasInput"], false);
+    assert_eq!(metadata["observedWork"], true);
+    resumed.close().await.unwrap();
+    assert!(!file.exists());
+    // A required file remains mandatory even if observed-work evidence is also present.
+    saved
+        .metadata
+        .as_mut()
+        .unwrap()
+        .insert("hasInput".into(), json!(true));
+    assert!(matches!(
+        client
+            .resume_session(&saved, &spec, AgentResumePurpose::Interactive)
+            .await,
+        Err(AgentSessionError::Unavailable)
+    ));
+}
+
+#[tokio::test]
 async fn imported_thinking_from_an_earlier_model_is_clamped_before_the_first_prompt() {
     let (directory, mut client, file, cwd) = fixture();
     write(

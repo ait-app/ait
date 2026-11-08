@@ -1,6 +1,6 @@
 {
   "name": "@ait/desktop",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "description": "Ait desktop app (Electron wrapper)",
   "homepage": "https://ait-app.com",
@@ -21,7 +21,7 @@
     "dev:win": "powershell ./scripts/dev.ps1",
     "test:e2e:renderer": "cross-env E2E_DESKTOP_RUNTIME=1 playwright test --config=playwright.config.ts --project=desktop",
     "verify:electron-cdp": "node ./scripts/verify-electron-cdp.mjs",
-    "test": "install-electron && vitest run --exclude \"e2e/**\"",
+    "test": "vitest run --exclude \"e2e/**\"",
     "typecheck": "tsgo --noEmit -p tsconfig.json",
     "test:e2e:lifecycle": "npm run test:e2e:rust-startup",
     "test:e2e:server-listen": "install-electron && npm run build:main && node e2e/server-listen.e2e.mjs",

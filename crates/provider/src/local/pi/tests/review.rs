@@ -149,37 +149,6 @@ async fn native_stderr_and_frame_limits_have_safe_distinct_diagnostics() {
     }
 }
 
-#[tokio::test]
-async fn prompt_admission_uses_its_own_budget_and_never_replays_timeout() {
-    let (_directory, mut client, spec) = fixture("");
-    client.deadline = Duration::from_millis(300);
-    client.admission_deadline = Duration::from_secs(2);
-    let mut session = client.create_session(&spec).await.unwrap();
-    session.start_turn("slow", &spec.config).await.unwrap();
-    assert!(matches!(
-        terminal(session.as_mut()).await.last(),
-        Some(AgentTurnEvent::Completed(_))
-    ));
-    session.close().await.unwrap();
-    let (directory, mut client, spec) = fixture("");
-    client.admission_deadline = Duration::from_millis(100);
-    let mut session = client.create_session(&spec).await.unwrap();
-    assert!(session.start_turn("never-ack", &spec.config).await.is_err());
-    assert_eq!(
-        session.failure_diagnostic().unwrap().category,
-        Category::Timeout
-    );
-    assert!(session.start_turn("retry", &spec.config).await.is_err());
-    session.close().await.unwrap();
-    let log = std::fs::read_to_string(directory.path().join("requests.jsonl")).unwrap();
-    assert_eq!(
-        log.lines()
-            .filter(|line| serde_json::from_str::<Value>(line).unwrap()["type"] == "prompt")
-            .count(),
-        1
-    );
-}
-
 #[tokio::test(flavor = "current_thread")]
 async fn version_errors_are_bounded_and_old_installations_are_actionable() {
     for scenario in [
@@ -459,6 +428,12 @@ async fn invalid_handled_settlement_closes_native_writer_without_further_io() {
             .await
             .is_err()
     );
+    assert!(matches!(
+        session.poll_turn().unwrap(),
+        Some(AgentTurnEvent::Timeline(entry))
+            if entry.item["type"] == "user_message"
+                && entry.item["text"] == "handled-invalid-settlement"
+    ));
     assert!(matches!(
         session.poll_turn().unwrap(),
         Some(AgentTurnEvent::Failed)

@@ -55,13 +55,8 @@ async fn dispatch(
     match tool.name.as_str() {
         "create_agent" => creation::agent(state, arguments, caller).await,
         "create_workspace" => {
-            let project = arguments.get("projectId").cloned();
             let params = creation::workspace(arguments, caller)?;
-            let created = rpc::execute(state, "workspace.create.request", params).await?;
-            if let Some(scope) = scope {
-                scope::adopt(state, scope, project.as_ref(), &created).await?;
-            }
-            Ok(created)
+            rpc::execute(state, "workspace.create.request", params).await
         }
         "create_terminal" => {
             creation::directory(state, &mut arguments, caller).await?;

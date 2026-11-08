@@ -2063,7 +2063,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           {/* Toolbar left: attachment button + agent controls */}
           <View style={styles.leftButtonGroup}>
             <AttachmentDropdown
-              visible={mode.showAttachments}
+              visible={mode.showAttachments && attachmentMenuItems.length > 0}
               isConnected={isConnected}
               disabled={disabled}
               attachButtonStyle={attachButtonStyle}

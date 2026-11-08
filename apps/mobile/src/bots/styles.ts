@@ -3,14 +3,13 @@ import { StyleSheet } from "react-native-unistyles";
 export const botStyles = StyleSheet.create((theme) => ({
   root: { flex: 1, minHeight: 0, backgroundColor: theme.colors.surface0 },
   content: { padding: 20, gap: 18, maxWidth: 900, width: "100%", alignSelf: "center" },
-  toolbar: {
+  viewSwitch: {
+    flex: 1,
     flexDirection: "row",
-    flexWrap: "wrap",
     alignItems: "center",
-    gap: 8,
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    justifyContent: "flex-end",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
   },
   row: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12 },
   grow: { flex: 1, minWidth: 0 },
@@ -30,8 +29,6 @@ export const botStyles = StyleSheet.create((theme) => ({
   warning: { fontSize: theme.fontSize.sm, color: theme.colors.statusWarning },
   link: { textDecorationLine: "underline" },
   multiline: { minHeight: 130, textAlignVertical: "top" },
-  composer: { padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: theme.colors.border },
-  messageInput: { minHeight: 70, maxHeight: 180, textAlignVertical: "top" },
   empty: { padding: 24, alignItems: "center", gap: 16 },
   disabled: { opacity: theme.opacity[50] },
   checkbox: {
@@ -44,4 +41,36 @@ export const botStyles = StyleSheet.create((theme) => ({
     justifyContent: "center",
   },
   checkboxChecked: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
+}));
+
+/** The chat shares the session page's rail, so a Bot reads like any other conversation. */
+export const botChatStyles = StyleSheet.create((theme) => ({
+  transcript: { flex: 1, minHeight: 0, position: "relative" },
+  listContent: {
+    flexGrow: 1,
+    width: "100%",
+    maxWidth: theme.contentMaxWidth,
+    alignSelf: "center",
+    paddingHorizontal: { xs: theme.spacing[3], md: theme.spacing[4] },
+    paddingTop: theme.spacing[4],
+    paddingBottom: theme.spacing[4],
+  },
+  emptyChat: { flex: 1, alignItems: "center", justifyContent: "center" },
+  turnStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
+  },
+  turnStatusText: { fontSize: theme.fontSize.sm, color: theme.colors.foregroundMuted },
+  turnFooter: { paddingBottom: theme.spacing[4] },
+  composerRail: {
+    width: "100%",
+    maxWidth: theme.contentMaxWidth,
+    alignSelf: "center",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[4],
+    paddingBottom: theme.spacing[4],
+  },
+  notice: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
 }));

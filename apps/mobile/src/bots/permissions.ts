@@ -4,38 +4,22 @@ import { getUnattendedModeId } from "@ait/protocol/provider-manifest";
 
 const DEFAULT_GROUPS: BotToolGroup[] = ["observe", "agents", "stop", "schedules"];
 
-const TIERS: Record<string, number> = { planning: 0, safe: 1, moderate: 2, dangerous: 3 };
-
-function tierOf(colorTier: string | undefined): number {
-  // Unknown or custom tiers are treated as the most permissive.
-  return (colorTier ? TIERS[colorTier] : undefined) ?? 3;
-}
-
-/** Default profile: default groups and, per ready provider, its default and safer attended modes. */
+/** Default profile: default groups and, per ready provider, its default attended mode. */
 export function defaultBotPermissions(providers: ProviderSnapshotEntry[]): BotPermissions {
   const modes: Record<string, string[]> = {};
   for (const entry of providers) {
     if (entry.status !== "ready" || !entry.enabled) continue;
-    const cap = defaultModeCap(entry);
-    if (cap.length > 0) modes[entry.provider] = cap;
+    const mode = defaultAgentMode(entry);
+    if (mode) modes[entry.provider] = [mode];
   }
   return { groups: [...DEFAULT_GROUPS], modes };
 }
 
-/** Allowed modes ordered default-first; tiers planning=0, safe=1, moderate=2, dangerous=3; unattended excluded. */
-export function defaultModeCap(entry: ProviderSnapshotEntry): string[] {
+/** The provider's default mode, or its first attended one when the default is unattended. */
+export function defaultAgentMode(entry: ProviderSnapshotEntry): string | undefined {
   const unattended = getUnattendedModeId(entry.provider);
   const attended = (entry.modes ?? []).filter((mode) => mode.id !== unattended);
-  const fallback = attended[0];
-  const base = attended.find((mode) => mode.id === entry.defaultModeId) ?? fallback;
-  if (!base) return [];
-  const ceiling = tierOf(base.colorTier);
-  return [
-    base.id,
-    ...attended
-      .filter((mode) => mode.id !== base.id && tierOf(mode.colorTier) <= ceiling)
-      .map((mode) => mode.id),
-  ];
+  return (attended.find((mode) => mode.id === entry.defaultModeId) ?? attended[0])?.id;
 }
 
 export type BotSessionNote =

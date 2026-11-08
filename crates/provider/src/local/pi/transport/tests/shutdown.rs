@@ -85,6 +85,91 @@ async fn cancelled_close_still_finishes_native_cleanup() {
 }
 
 #[tokio::test]
+async fn repeated_close_waits_for_cancelled_shutdown() {
+    let (directory, mut transport, tool) = fixture(false).await;
+    assert!(
+        tokio::time::timeout(Duration::from_millis(20), transport.close())
+            .await
+            .is_err()
+    );
+
+    transport.close().await.unwrap();
+
+    assert!(directory.path().join("cleaned").exists());
+    assert_exited(tool);
+}
+
+#[tokio::test]
+async fn repeated_close_finishes_a_cancelled_stderr_drain() {
+    for expected_result in [Ok(()), Err(AgentSessionError::Failed)] {
+        let (directory, mut transport, tool) = fixture(false).await;
+        // Keep stderr pending independently of the native process's exit.
+        let stderr = tokio::spawn(std::future::pending());
+        let stderr_abort = stderr.abort_handle();
+        transport.stderr.replace(stderr).unwrap().abort();
+
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                // Drop each pending close, stopping once shutdown has completed and
+                // close has reached the pending stderr drain.
+                assert!(futures_util::poll!(Box::pin(transport.close())).is_pending());
+                if transport.shutdown_result.is_some() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(!stderr_abort.is_finished());
+
+        transport.shutdown_result = Some(expected_result);
+        // Cancellation must preserve an unreported failure until cleanup finishes.
+        assert!(futures_util::poll!(Box::pin(transport.close())).is_pending());
+        assert_eq!(transport.close().await, expected_result);
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !stderr_abort.is_finished() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("repeated close did not abort the pending stderr reader");
+        assert!(transport.stderr.is_none());
+        assert!(transport.input.lock().await.is_none());
+        transport.close().await.unwrap();
+        assert!(directory.path().join("cleaned").exists());
+        assert_exited(tool);
+    }
+}
+
+#[tokio::test]
+async fn shutdown_failure_still_releases_input_and_stderr() {
+    let (_directory, mut transport, tool) = fixture(false).await;
+    // Reap the real peer before simulating a failed shutdown completion.
+    shutdown(
+        transport.child.take().unwrap(),
+        transport.group.take(),
+        transport.input.clone(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    transport.closed = true;
+    transport.reader.abort();
+    let (finished, completion) = oneshot::channel();
+    finished.send(Err(AgentSessionError::Failed)).unwrap();
+    transport.shutdown = Some(completion);
+
+    assert_eq!(transport.close().await, Err(AgentSessionError::Failed));
+
+    assert!(transport.input.lock().await.is_none());
+    assert!(transport.stderr.is_none());
+    transport.close().await.unwrap();
+    assert_exited(tool);
+}
+
+#[tokio::test]
 async fn close_forces_and_reaps_unresponsive_process() {
     let (_directory, mut transport, process) = fixture(true).await;
 

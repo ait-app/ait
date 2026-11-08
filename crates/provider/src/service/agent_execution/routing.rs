@@ -204,9 +204,10 @@ impl Router {
         let handle = tokio::runtime::Handle::current();
         let closed = tokio::task::spawn_blocking(move || {
             let mut state = template.lock().map_err(|_| ErrorCode::AgentIo)?;
-            handle
-                .block_on(state.manager.close_all())
-                .map_err(|_| ErrorCode::AgentIo)
+            let sessions = handle.block_on(state.manager.close_all());
+            let usage = handle.block_on(state.manager.close_host_usage());
+            sessions.map_err(|_| ErrorCode::AgentIo)?;
+            usage.map_err(|_| ErrorCode::AgentIo)
         })
         .await
         .map_err(|_| ErrorCode::AgentIo)?;
@@ -329,7 +330,7 @@ fn existing_agent_lane(
     identifier: &str,
 ) -> Result<Option<String>, ErrorCode> {
     Ok({
-        let id = state.resolve(identifier)?;
+        let id = state.resolve_for(method, identifier)?;
         let record = state.registry.get(&id).map_err(|_| ErrorCode::AgentIo)?;
         if let Some(source) = record
             .as_ref()
@@ -427,7 +428,7 @@ fn canonicalize(
     if let Some(target) = method.target()
         && let Some(identifier) = params.pointer(target.pointer()).and_then(Value::as_str)
     {
-        let id = match state.resolve(identifier) {
+        let id = match state.resolve_for(method, identifier) {
             Ok(id) => id,
             Err(ErrorCode::AgentNotFound) if method == Operation::Get => return Ok(()),
             Err(error) => return Err(error),

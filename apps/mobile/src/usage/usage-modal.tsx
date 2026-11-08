@@ -18,7 +18,7 @@ interface UsageModalProps {
 
 /**
  * Usage over the current screen: a dialog on wide layouts, a bottom sheet on compact ones. It
- * shows the usage host's reports with pins, and the host filter, Refresh all, and Settings in its
+ * shows the usage host's reports with pins, and the host filter, Force refresh, and Settings in its
  * title row.
  */
 export function UsageModal(props: UsageModalProps) {

@@ -77,6 +77,17 @@ impl ClaudeClient {
         self.usage_with_credentials(endpoint, credentials).await
     }
 
+    /// Fingerprint the same native credential source used by quota preparation.
+    pub(super) async fn usage_credential_key(
+        &self,
+    ) -> Option<crate::ports::account_usage::UsageIdentity> {
+        let credentials = self.credentials().await.ok()??;
+        Some(crate::ports::account_usage::UsageIdentity::from_native(
+            "claude",
+            credentials.token.expose_secret().as_bytes(),
+        ))
+    }
+
     /// Capture the native OAuth credential once for cache identity and the later HTTPS poll.
     /// # Errors
     /// Returns safe credential-resolution failures.

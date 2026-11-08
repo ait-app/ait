@@ -28,6 +28,8 @@ rusqlite.workspace = true
 rusqlite.features = ["bundled", "backup"]
 serde.workspace = true
 serde_json.workspace = true
+# Respect Codex credential storage mode before reusing a native account.
+toml.workspace = true
 # Read DSH's native credential/configuration YAML without modifying its owned files.
 serde_yaml_ng.workspace = true
 sha2.workspace = true

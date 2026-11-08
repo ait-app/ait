@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("electron", () => ({}));
+
 import {
   applyMacWindowControlsUpdate,
   DEFAULT_WINDOW_HEIGHT,

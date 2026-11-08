@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { BotPermissions, BotView } from "@ait/protocol/bot/types";
+import type { BotConversation, BotPermissions, BotView } from "@ait/protocol/bot/types";
 import { Button } from "@/components/ui/button";
 import { canManageBackgroundTasks } from "@/hosts/background-task-access";
 import { Field, FormTextInput } from "@/components/ui/form-field";
@@ -13,6 +13,7 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import { BotPermissionFields, useBotPermissionsSupported } from "./bot-permissions";
 import { BotExecutionFields, executionDraft, resolveExecution, useBotProviders } from "./bot-setup";
 import { botKeys, isBotConflict } from "./queries";
+import { closeBotSessionTab } from "./session-tab";
 import { botStyles as styles } from "./styles";
 
 function BotMemoryEditor({
@@ -295,11 +296,18 @@ export function BotSettings({
         }))
       )
         return false;
+      // Read first: removal retires the sessions these conversations publish.
+      const { conversations } = await client
+        .botRequest("bot.conversation.list.request", { workspaceId })
+        .catch(() => ({ conversations: [] as BotConversation[] }));
       await client.botRequest("bot.remove.request", { workspaceId });
-      return true;
+      return conversations;
     },
     onSuccess: (removed) => {
       if (!removed) return;
+      removed.forEach(({ sessionAgentId }) => {
+        if (sessionAgentId) closeBotSessionTab(serverId, workspaceId, sessionAgentId);
+      });
       queryClient.setQueryData(botKeys.bot(serverId, workspaceId), null);
       onRemoved();
     },

@@ -278,7 +278,35 @@ The adapter requires `agent_settled` to finish a run; `agent_end` can be followe
 compaction work. Native inference after admission is not subject to a fixed host run timeout. Prompt
 admission has a separate 120-second limit; slow extension commands that exceed it are
 stopped with an uncertain outcome and are never automatically replayed. Ordinary controls
-and abort settlement have 10-second limits. A `handled` response is not itself completion:
+and abort settlement have 10-second limits. An admission timeout retires the live session:
+later turns on that session are rejected. Pending tools and compactions are finalized as
+failed, and one terminal failure is published. If native run activity was observed, the Pi
+adapter queues the submitted prompt before its work, even without an acknowledgement.
+The current host admission-error path discards these queued rows before saving the timeline;
+persisting them through that path remains unresolved. Explicit native history refresh can
+recover saved input and work when the file passes validation.
+The persistence handle's `hasInput` becomes true after a `started` acknowledgement, or
+non-rejected native run activity when the reported native session file has a valid version-three
+header matching the session UUID and canonical working directory. Only the first line is read;
+this verifies the file's identity, not that the complete prompt or history was saved. This includes
+activity that settled before admission failed. A negative header check while Pi is alive is
+provisional: the adapter retains observed-work evidence across later turns and rechecks after
+shutdown has reaped the writer. Until history is verified, the handle carries `observedWork: true`.
+On resume, the adapter rechecks that file before starting Pi and uses `--session` if its header
+matches. This preserves late history even when the manager saved its handle before closing
+the writer. Shutdown may still interrupt unsaved work; it does not guarantee a flush.
+A display-limit failure before acknowledgement
+does not create a native-file requirement when Pi has not saved a file. An existing true
+`hasInput` is never cleared, so lost previously accepted history is still rejected. Interactive
+resume then requires the saved native session file and opens it with `--session`; a missing
+file is rejected instead of creating empty history. Without an acknowledgement or observed
+run activity, an admission timeout leaves `hasInput` unchanged and adds no submitted-input row.
+A definitive prompt rejection adds no submitted-input row and contributes no observed-work
+evidence, even if unrelated extension work was observed. Earlier eligible work can still be
+verified during close. The Pi adapter itself remains usable after
+rejection. Ait's manager closes the writer on every admission error, including rejection;
+the next user turn opens another writer from the saved handle without replaying the rejected prompt.
+A `handled` response is not itself completion:
 Ait checks native state and drains ordered events before completing or accepting another turn.
 Handled commands running only manual compaction wait for its end and an idle state barrier,
 within a 120-second settlement limit.
@@ -288,7 +316,9 @@ Oversized native frames produce a protocol diagnostic with source `frame_limit`.
 queues normally hold at most 256 events, with reserved failure cleanup capacity. While
 prompt admission prevents the manager from draining events, a separate budget allows
 4096 events and 64 MiB of display payload. This combines cumulative text with currently
-queued tool previews. Text deltas merge in chunks of at most 96 KiB during admission;
+queued tool previews. Every admission exit releases this allowance, including settlement
+and display-limit failures; an existing backlog keeps its larger queue allowance until drained.
+Text deltas merge in chunks of at most 96 KiB during admission;
 tool progress always keeps only the latest unpublished snapshot per item, and final
 items replace their pending progress. Publishing a tool item releases its preview bytes.
 Repeated updates and already-published tools therefore do not consume a lifetime tool
@@ -356,3 +386,5 @@ Reasoning controls and installed-Pi contract results:
 [2026-11-03 report](../reports/providers/pi-reasoning-controls-2026-11-03.md).
 Focused user-image projection results and validation limits:
 [2026-10-21 report](../reports/providers/pi-user-image-projection-2026-10-21.md).
+Admission, shutdown and resume validation:
+[2026-11-08 report](../reports/providers/pi-admission-lifecycle-2026-11-08.md).

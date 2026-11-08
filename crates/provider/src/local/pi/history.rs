@@ -489,30 +489,12 @@ impl HistoryReader {
         }
         *byte_budget -= metadata.len();
         let mut reader = BufReader::new(file.take(metadata.len()));
-        let mut line = String::new();
-        reader
-            .read_line(&mut line)
-            .map_err(|_| AgentSessionError::Failed)?;
-        if !line.ends_with('\n') || line.len() as u64 > MAX_HISTORY {
-            return Err(AgentSessionError::Failed);
-        }
-        let header: Value = serde_json::from_str(&line).map_err(|_| AgentSessionError::Failed)?;
-        if header["type"] != "session"
-            || header["version"] != 3
-            || header["id"]
-                .as_str()
-                .is_none_or(|id| Uuid::parse_str(id).is_err())
-            || header["cwd"]
-                .as_str()
-                .is_none_or(|cwd| !Path::new(cwd).is_absolute())
-        {
-            return Err(AgentSessionError::Rejected);
-        }
+        let (header, header_bytes) = read_session_header(&mut reader)?;
         Ok(Some(Self {
             reader,
             metadata,
             header,
-            header_bytes: line.len(),
+            header_bytes,
         }))
     }
 
@@ -545,6 +527,29 @@ impl HistoryReader {
         }
         Ok(records)
     }
+}
+
+fn read_session_header(reader: &mut impl BufRead) -> Result<(Value, usize), AgentSessionError> {
+    let mut line = String::new();
+    reader
+        .read_line(&mut line)
+        .map_err(|_| AgentSessionError::Failed)?;
+    if !line.ends_with('\n') || line.len() as u64 > MAX_HISTORY {
+        return Err(AgentSessionError::Failed);
+    }
+    let header: Value = serde_json::from_str(&line).map_err(|_| AgentSessionError::Failed)?;
+    if header["type"] != "session"
+        || header["version"] != 3
+        || header["id"]
+            .as_str()
+            .is_none_or(|id| Uuid::parse_str(id).is_err())
+        || header["cwd"]
+            .as_str()
+            .is_none_or(|cwd| !Path::new(cwd).is_absolute())
+    {
+        return Err(AgentSessionError::Rejected);
+    }
+    Ok((header, line.len()))
 }
 
 fn field<'a>(value: &'a Value, key: &str) -> Result<&'a str, AgentSessionError> {
@@ -739,6 +744,53 @@ fn same_directory(left: &str, right: &str) -> bool {
         .is_some_and(|(left, right)| left == right)
 }
 
+fn is_session_file(path: &Path) -> bool {
+    path.is_absolute()
+        && path.extension() == Some(OsStr::new("jsonl"))
+        && path
+            .symlink_metadata()
+            .is_ok_and(|metadata| metadata.is_file())
+        && path.parent().is_some_and(|parent| {
+            parent
+                .symlink_metadata()
+                .is_ok_and(|metadata| metadata.is_dir())
+        })
+}
+
+/// Return whether a regular `.jsonl` file has a matching v3 header and canonical `cwd`.
+/// Reads only the header; relative paths, symlink files/parents and invalid history return false.
+pub(super) fn matches_session_header(path: &Path, session_id: &str, cwd: &str) -> bool {
+    if !is_session_file(path) {
+        return false;
+    }
+    let Ok(file) = File::open(path) else {
+        return false;
+    };
+    if !file.metadata().is_ok_and(|metadata| metadata.is_file()) {
+        return false;
+    }
+    // Bound the header read independently of the growing history body.
+    let mut reader = BufReader::new(file.take(MAX_HISTORY));
+    let Ok((header, _)) = read_session_header(&mut reader) else {
+        return false;
+    };
+    header["id"].as_str() == Some(session_id)
+        && header["cwd"]
+            .as_str()
+            .is_some_and(|native_cwd| same_directory(cwd, native_cwd))
+}
+
+/// Validate a saved handle's path and header, including store containment for metadata paths.
+/// Missing, unreadable or invalid history returns false without reading the history body.
+pub(super) fn matches_saved_session_header(
+    client: &PiClient,
+    handle: &AgentPersistenceHandle,
+    cwd: &str,
+) -> bool {
+    saved_session_file(client, handle, Path::new(cwd))
+        .is_some_and(|path| matches_session_header(&path, &handle.session_id, cwd))
+}
+
 fn saved_session_file(
     client: &PiClient,
     handle: &AgentPersistenceHandle,
@@ -748,21 +800,13 @@ fn saved_session_file(
     let path = PathBuf::from(
         native_path.or_else(|| handle.metadata.as_ref()?.get("sessionFile")?.as_str())?,
     );
-    let parent = path.parent()?;
-    let metadata = path.symlink_metadata().ok()?;
-    let parent_metadata = parent.symlink_metadata().ok()?;
-    if !path.is_absolute()
-        || path.extension() != Some(OsStr::new("jsonl"))
-        || !metadata.is_file()
-        || metadata.file_type().is_symlink()
-        || !parent_metadata.is_dir()
-        || parent_metadata.file_type().is_symlink()
-    {
+    if !is_session_file(&path) {
         return None;
     }
     if native_path.is_some() {
         return Some(path);
     }
+    let parent = path.parent()?;
     let layout = layout(client, cwd, true).ok()?;
     let candidate_directory = parent.canonicalize().ok()?;
     let contained = match layout {

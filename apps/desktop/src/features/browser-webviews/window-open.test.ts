@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { decideBrowserWindowOpenRequest, PendingBrowserWindowOpenRequests } from ".";
+import { decideBrowserWindowOpenRequest, PendingBrowserWindowOpenRequests } from "./window-open.js";
 
 describe("browser webview window-open requests", () => {
   it("routes foreground tabs to a Paseo workspace tab", () => {

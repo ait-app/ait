@@ -95,15 +95,10 @@ async fn permission_change_applies_on_next_request() {
         }
         arguments
     };
-    let full = scoped
-        .call(
-            &credential,
-            None,
-            "create_agent",
-            create(Some("full-access")),
-        )
+    let configured = scoped
+        .call(&credential, None, "create_agent", create(Some("auto")))
         .await;
-    assert!(succeeded(&full), "{full}");
+    assert!(succeeded(&configured), "{configured}");
     scoped
         .permissions(json!({"groups":["observe","stop"],"modes":{"codex":["auto","full-access"]}}))
         .await;

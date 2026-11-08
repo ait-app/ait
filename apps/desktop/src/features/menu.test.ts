@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { reloadActiveBrowserOrWindow } from "./menu.js";
+
+vi.mock("electron", () => ({}));
 
 class FakeWebContents {
   public readonly reloads: string[] = [];

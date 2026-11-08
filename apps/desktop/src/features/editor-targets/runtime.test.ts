@@ -1,5 +1,7 @@
 import type { SpawnOptions } from "node:child_process";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("electron", () => ({}));
 
 import { createEditorTargetRuntime } from "./runtime.js";
 

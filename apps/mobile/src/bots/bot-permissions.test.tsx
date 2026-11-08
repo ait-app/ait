@@ -9,6 +9,34 @@ import { BotPermissionFields } from "./bot-permissions";
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("./styles", () => ({ botStyles: {} }));
 vi.mock("@/stores/session-store", () => ({ useSessionStore: () => true }));
+vi.mock("@/components/ui/select-field", () => ({
+  SelectField: ({
+    value,
+    options,
+    onChange,
+    disabled,
+    testID,
+  }: {
+    value: string;
+    options: { id: string; label: string }[];
+    onChange: (value: string) => void;
+    disabled: boolean;
+    testID: string;
+  }) => (
+    <select
+      data-testid={testID}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      {options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  ),
+}));
 
 const providers = [
   {
@@ -26,7 +54,7 @@ const providers = [
 
 const defaults: BotPermissions = {
   groups: ["observe", "agents", "stop", "schedules"],
-  modes: { codex: ["read-only", "auto"] },
+  modes: { codex: ["read-only"] },
 };
 
 afterEach(cleanup);
@@ -55,7 +83,7 @@ it("observe_group_cannot_be_disabled", () => {
 
 it("toggles groups and flags risky ones", () => {
   const onChange = renderFields();
-  expect(screen.getAllByText("bots.permissionRiskHint")).toHaveLength(3);
+  expect(screen.getAllByText("bots.permissionRiskHint")).toHaveLength(2);
   fireEvent.click(screen.getByTestId("bot-group-scripts"));
   expect(onChange).toHaveBeenLastCalledWith({
     ...defaults,
@@ -74,34 +102,42 @@ it("shows both warnings", () => {
   expect(screen.getByText("bots.commandReachWarning")).toBeTruthy();
 });
 
-it("unchecking every mode removes the provider from the cap", () => {
-  const onChange = renderFields({ ...defaults, modes: { codex: ["auto"] } });
-  fireEvent.click(screen.getByTestId("bot-mode-codex-auto"));
-  expect(onChange).toHaveBeenCalledWith({ groups: defaults.groups, modes: {} });
+it("offers no way to grant workspace creation", () => {
+  renderFields();
+  expect(screen.queryByTestId("bot-group-workspaces")).toBeNull();
 });
 
-it("marks the first mode as default and moves a chosen one to the front", () => {
+it("has exactly one mode selector per provider showing the configured mode", () => {
+  renderFields({ ...defaults, modes: { codex: ["auto", "read-only"] } });
+  expect((screen.getByTestId("bot-mode-codex") as HTMLSelectElement).value).toBe("auto");
+  expect(screen.getAllByRole("combobox")).toHaveLength(1);
+  expect(screen.queryByRole("checkbox", { name: /Auto/ })).toBeNull();
+});
+
+it("stores the chosen mode as the provider's only mode", () => {
   const onChange = renderFields();
-  expect(screen.getByTestId("bot-mode-default-codex-read-only")).toBeTruthy();
-  fireEvent.click(screen.getByTestId("bot-mode-make-default-codex-auto"));
+  fireEvent.change(screen.getByTestId("bot-mode-codex"), { target: { value: "full-access" } });
   expect(onChange).toHaveBeenCalledWith({
     groups: defaults.groups,
-    modes: { codex: ["auto", "read-only"] },
+    modes: { codex: ["full-access"] },
   });
-  fireEvent.click(screen.getByTestId("bot-mode-codex-full-access"));
-  expect(onChange).toHaveBeenLastCalledWith({
-    groups: defaults.groups,
-    modes: { codex: ["read-only", "auto", "full-access"] },
-  });
+});
+
+it("keeps a saved mode the provider no longer lists", () => {
+  renderFields({ ...defaults, modes: { codex: ["retired-mode"] } });
+  expect((screen.getByTestId("bot-mode-codex") as HTMLSelectElement).value).toBe("retired-mode");
+});
+
+it("choosing not allowed removes the provider", () => {
+  const onChange = renderFields();
+  fireEvent.change(screen.getByTestId("bot-mode-codex"), { target: { value: "" } });
+  expect(onChange).toHaveBeenCalledWith({ groups: defaults.groups, modes: {} });
 });
 
 it("disables every control when read-only", () => {
   renderFields(defaults, true);
-  for (const id of ["bot-group-agents", "bot-mode-codex-auto", "bot-mode-codex-full-access"])
-    expect(screen.getByTestId(id).getAttribute("aria-disabled")).toBe("true");
-  expect(screen.getByTestId("bot-mode-make-default-codex-auto").getAttribute("aria-disabled")).toBe(
-    "true",
-  );
+  expect(screen.getByTestId("bot-group-agents").getAttribute("aria-disabled")).toBe("true");
+  expect(screen.getByTestId("bot-mode-codex")).toHaveProperty("disabled", true);
 });
 
 it("warns that terminals bypass the Bot's limits", () => {
@@ -111,11 +147,10 @@ it("warns that terminals bypass the Bot's limits", () => {
   expect(screen.getAllByText("bots.terminalsWarning")).toHaveLength(1);
 });
 
-it("lists cap entries for providers missing from the snapshot so they can be removed", () => {
+it("keeps a configured provider missing from the snapshot so it can be cleared", () => {
   const onChange = renderFields({ ...defaults, modes: { ...defaults.modes, gone: ["plan"] } });
-  expect(screen.getByTestId("bot-modes-gone").textContent).toContain("bots.providerUnavailable");
-  const plan = screen.getByTestId("bot-mode-gone-plan");
-  expect(plan.getAttribute("aria-checked")).toBe("true");
-  fireEvent.click(plan);
+  const select = screen.getByTestId("bot-mode-gone") as HTMLSelectElement;
+  expect(select.value).toBe("plan");
+  fireEvent.change(select, { target: { value: "" } });
   expect(onChange).toHaveBeenCalledWith({ groups: defaults.groups, modes: defaults.modes });
 });

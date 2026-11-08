@@ -259,7 +259,7 @@ it("setup_sends_default_permissions_when_supported", async () => {
   expect(params.execution.modeId).toBeNull();
   expect(params.permissions).toEqual({
     groups: ["observe", "agents", "stop", "schedules"],
-    modes: { claude: ["default", "plan"], codex: ["read-only"] },
+    modes: { claude: ["default"], codex: ["read-only"] },
   });
 });
 
@@ -268,12 +268,12 @@ it("setup_sends_edited_permissions", async () => {
   botRequest.mockResolvedValue({ bot, created: true });
   renderSetup();
   fireEvent.click(screen.getByTestId("bot-group-schedules"));
-  fireEvent.click(screen.getByTestId("bot-mode-claude-plan"));
+  fireEvent.change(screen.getByTestId("bot-mode-claude"), { target: { value: "plan" } });
   fireEvent.click(screen.getByTestId("bot-setup-submit"));
   await waitFor(() => expect(botRequest).toHaveBeenCalledTimes(1));
   expect(botRequest.mock.calls[0][1].permissions).toEqual({
     groups: ["observe", "agents", "stop"],
-    modes: { claude: ["default"], codex: ["read-only"] },
+    modes: { claude: ["plan"], codex: ["read-only"] },
   });
 });
 

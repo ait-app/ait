@@ -16,9 +16,6 @@ pub const BOT_SCOPE_LABEL: &str = "ait.bot.scope";
 /// Label namespace no MCP caller or guest may write; `BOT_SCOPE_LABEL` lives in it.
 pub const BOT_LABEL_PREFIX: &str = "ait.bot.";
 
-/// Most worktree Workspaces one Bot may record as its own.
-pub const BOT_WORKSPACES: usize = 64;
-
 /// Native execution selection; credentials remain provider-owned.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -80,7 +77,8 @@ pub struct Bot {
     /// User-configured MCP tool groups and per-provider mode cap.
     #[serde(default)]
     pub permissions: BotPermissions,
-    /// Unarchived worktree Workspaces created by this Bot.
+    /// Unarchived worktree Workspaces this Bot created before Bots lost `create_workspace`; they
+    /// stay in scope so the Agents already working there keep their access.
     #[serde(default)]
     pub workspaces: BTreeSet<String>,
 }
@@ -167,7 +165,8 @@ pub struct Conversation {
     pub sender: String,
     /// Optional platform thread identity.
     pub thread: Option<String>,
-    /// Hidden provider runtime identity, rotated when resetting the conversation.
+    /// Hidden Agent identity, published to clients for read-only inspection and rotated when
+    /// resetting the conversation.
     pub session_id: String,
     /// Conversation generation, incremented by an explicit reset.
     pub generation: u64,

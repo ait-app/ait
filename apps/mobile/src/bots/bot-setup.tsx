@@ -7,59 +7,17 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ProviderSnapshotEntry } from "@ait/protocol/agent-types";
 import type { BotExecution, BotPermissions, BotView } from "@ait/protocol/bot/types";
 import { Button } from "@/components/ui/button";
-import { SelectField } from "@/components/ui/select-field";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import type { Theme } from "@/styles/theme";
 import { BotPermissionFields, useBotPermissionsSupported } from "./bot-permissions";
+import { BotSelect } from "./bot-select";
 import { botSessionNotes, defaultBotPermissions, type BotSessionNote } from "./permissions";
 import { botKeys, isBotConflict } from "./queries";
 import { botStyles as styles } from "./styles";
 
 const ThemedCheck = withUnistyles(Check);
 const checkedIconMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
-
-function BotSelect({
-  label,
-  value,
-  options,
-  onChange,
-  disabled = false,
-  testID,
-  onAccess,
-}: {
-  label: string;
-  value: string;
-  options: { id: string; label: string }[];
-  onChange: (value: string) => void;
-  disabled?: boolean;
-  testID: string;
-  onAccess?: () => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <SelectField
-      label={label}
-      value={value}
-      selectedDisplay={{
-        label:
-          options.find((option) => option.id === value)?.label || value || t("bots.defaultOption"),
-      }}
-      options={options.map((option) => ({ ...option, value: option.id }))}
-      onOpen={onAccess}
-      onChange={(value) => {
-        onAccess?.();
-        onChange(value);
-      }}
-      disabled={disabled}
-      searchable
-      placeholder={t("bots.defaultOption")}
-      emptyText={t("bots.defaultOption")}
-      testID={testID}
-      triggerTestID={`${testID}-trigger`}
-    />
-  );
-}
 
 /** Editable execution choice; an empty string stands for the provider default. */
 export interface BotExecutionDraft {

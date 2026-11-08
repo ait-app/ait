@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProviderSnapshotEntry } from "@ait/protocol/agent-types";
-import { botSessionNotes, defaultBotPermissions, defaultModeCap } from "./permissions";
+import { botSessionNotes, defaultAgentMode, defaultBotPermissions } from "./permissions";
 
 const claude: ProviderSnapshotEntry = {
   provider: "claude",
@@ -26,14 +26,14 @@ const codex: ProviderSnapshotEntry = {
 };
 
 describe("bot permissions defaults", () => {
-  it("default_mode_cap_allows_default_and_safer_modes", () => {
-    expect(defaultModeCap(claude)).toEqual(["default", "plan"]);
-    expect(defaultModeCap(codex)).toEqual(["auto"]);
+  it("selects the provider's default attended mode", () => {
+    expect(defaultAgentMode(claude)).toBe("default");
+    expect(defaultAgentMode(codex)).toBe("auto");
   });
 
   it("falls back to the first attended mode without a default", () => {
-    expect(defaultModeCap({ ...codex, defaultModeId: null })).toEqual(["auto"]);
-    expect(defaultModeCap({ ...codex, modes: [] })).toEqual([]);
+    expect(defaultAgentMode({ ...codex, defaultModeId: null })).toBe("auto");
+    expect(defaultAgentMode({ ...codex, modes: [] })).toBeUndefined();
   });
 
   it("builds default groups and omits providers that are not ready", () => {
@@ -43,7 +43,7 @@ describe("bot permissions defaults", () => {
       { ...codex, provider: "opencode", status: "unavailable" },
     ]);
     expect(profile.groups).toEqual(["observe", "agents", "stop", "schedules"]);
-    expect(profile.modes).toEqual({ claude: ["default", "plan"], codex: ["auto"] });
+    expect(profile.modes).toEqual({ claude: ["default"], codex: ["auto"] });
   });
 
   it("bot_session_notes_describe_degraded_capabilities", () => {

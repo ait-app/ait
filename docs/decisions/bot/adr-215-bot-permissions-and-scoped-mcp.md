@@ -1,6 +1,7 @@
 # ADR-215：Bot 权限与作用域 MCP 凭据
 
 - 状态：已实现
+- 后续修订：[ADR-222](adr-222-single-agent-mode-no-bot-workspaces.md) 将模式上限改为每个 Provider 单一模式，并取消 `workspaces` 分组。
 - 日期：2026-11-06
 - 关系：延续 [ADR-213](adr-213-single-workspace-manager-bot.md)；
   修订 [ADR-145](adr-145-bot-permission-denial.md) 第 4 条（Bot 会话按 Provider 能力选择最严格模式，取代模式改写）；

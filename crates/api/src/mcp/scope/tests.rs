@@ -61,13 +61,13 @@ fn bot_only_tools_are_granted_to_bot_sessions_but_never_to_subtrees() {
 
 #[test]
 fn created_agent_modes_are_capped_and_defaulted() {
-    let permissions = capped(&["auto", "full-access"]);
+    let permissions = capped(&["auto"]);
     let mut omitted = json!({"provider":"codex/model","title":"Task"});
     cap_mode(&permissions, &mut omitted).unwrap();
     assert_eq!(omitted["settings"]["modeId"], "auto");
-    let mut explicit = json!({"provider":"codex/model","settings":{"modeId":"full-access"}});
+    let mut explicit = json!({"provider":"codex/model","settings":{"modeId":"auto"}});
     cap_mode(&permissions, &mut explicit).unwrap();
-    assert_eq!(explicit["settings"]["modeId"], "full-access");
+    assert_eq!(explicit["settings"]["modeId"], "auto");
     for (permissions, provider, mode) in [
         (capped(&["auto"]), "codex/model", "full-access"),
         (capped(&["auto"]), "claude/model", "auto"),
@@ -89,7 +89,7 @@ fn created_agent_modes_are_capped_and_defaulted() {
 const WORKTREE: &str = "wks_worktree";
 
 fn capped_scope(kind: CallerKind) -> Scope {
-    let mut scope = scope(kind, capped(&["auto", "read-only"]));
+    let mut scope = scope(kind, capped(&["auto"]));
     scope.grant.workspaces.insert(WORKTREE.to_owned());
     scope
 }
@@ -166,7 +166,7 @@ fn mode_cap_covers_every_execution_entry() {
             "{arguments}"
         );
     }
-    let allowed = json!({"agentId":"agent","settings":{"modeId":"read-only",
+    let allowed = json!({"agentId":"agent","settings":{"modeId":"auto",
         "features":{"fast_mode":false}},"name":"Renamed"});
     cap_update_agent(&bot, &target, &allowed).unwrap();
     // A pure display change never consults the target's provider cap.
@@ -184,12 +184,7 @@ fn mode_cap_covers_every_execution_entry() {
         cap_agent_mode(&bot, &claude, &json!({"agentId":"agent","modeId":"auto"})),
         Err(ErrorCode::Forbidden)
     );
-    cap_agent_mode(
-        &bot,
-        &target,
-        &json!({"agentId":"agent","modeId":"read-only"}),
-    )
-    .unwrap();
+    cap_agent_mode(&bot, &target, &json!({"agentId":"agent","modeId":"auto"})).unwrap();
 }
 
 #[test]
@@ -271,41 +266,6 @@ fn target_ids_are_rewritten_to_canonical_ids() {
 }
 
 #[test]
-fn bot_worktrees_are_placed_in_the_root_project_before_the_cap_is_reached() {
-    let root = json!({"id":ROOT,"projectId":"prj_root","workspaceDirectory":"/repo"});
-    let scope = capped_scope(bot());
-    let mut arguments = json!({"isolation":"worktree","path":"/elsewhere",
-        "projectId":"prj_other","title":"Task"});
-    rewrite_create_workspace(&scope, &root, &mut arguments).unwrap();
-    assert_eq!(
-        arguments,
-        json!({"isolation":"worktree","path":"/repo","projectId":"prj_root","title":"Task"})
-    );
-    for arguments in [
-        json!({"isolation":"local"}),
-        json!({"isolation":"worktree","idempotencyKey":"replayed"}),
-    ] {
-        let mut rewritten = arguments.clone();
-        assert_eq!(
-            rewrite_create_workspace(&scope, &root, &mut rewritten),
-            Err(ErrorCode::Forbidden),
-            "{arguments}"
-        );
-    }
-    let mut full = capped_scope(bot());
-    full.grant.workspaces = (0..BOT_WORKSPACES)
-        .map(|index| format!("wks_{index}"))
-        .chain([ROOT.to_owned()])
-        .collect();
-    assert_eq!(
-        rewrite_create_workspace(&full, &root, &mut json!({"isolation":"worktree"})),
-        Err(ErrorCode::ResourceExhausted)
-    );
-    full.grant.workspaces.remove("wks_0");
-    rewrite_create_workspace(&full, &root, &mut json!({"isolation":"worktree"})).unwrap();
-}
-
-#[test]
 fn schedule_listing_keeps_only_scoped_workspaces() {
     let scope = capped_scope(bot());
     let mut result = json!({"schedules":[{"id":"a","workspaceId":ROOT},
@@ -322,7 +282,7 @@ fn schedule_listing_keeps_only_scoped_workspaces() {
 
 #[test]
 fn schedule_patches_keep_the_effective_mode_within_the_cap() {
-    let permissions = capped(&["auto", "read-only"]);
+    let permissions = capped(&["auto"]);
     let task = |config: Value| json!({"target":{"type":"new-agent","config":config}});
     let unset = task(json!({"provider":"codex"}));
     let escalated = task(json!({"provider":"codex","modeId":"full-access"}));
@@ -347,7 +307,7 @@ fn schedule_patches_keep_the_effective_mode_within_the_cap() {
 
     for (patch, checked, mode) in [
         (json!({"mode":null}), true, json!("auto")),
-        (json!({"mode":"read-only"}), true, json!("read-only")),
+        (json!({"mode":"auto"}), true, json!("auto")),
         (json!({"provider":"codex/next"}), true, json!("auto")),
         (json!({"model":"next"}), false, Value::Null),
         (json!({"prompt":"changed"}), false, Value::Null),
@@ -362,6 +322,7 @@ fn schedule_patches_keep_the_effective_mode_within_the_cap() {
     }
     for patch in [
         json!({"mode":"full-access"}),
+        json!({"mode":"read-only"}),
         json!({"provider":"claude"}),
         json!({"provider":"claude/model","mode":"auto"}),
     ] {

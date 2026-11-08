@@ -18,7 +18,7 @@ export interface UsageHostSelection {
 
 /**
  * The controls on the right of every usage title row: the host filter when there is more than one
- * host, Refresh all, and the Settings cog. A host that cannot report usage keeps only the host filter.
+ * host, Force refresh, and the Settings cog. A host that cannot report usage keeps only the host filter.
  */
 export function UsageControls({
   view,

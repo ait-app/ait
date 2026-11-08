@@ -1,6 +1,10 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { PaseoBrowserWebviewRegistry } from "../browser-webviews/registry.js";
 import { BrowserKeyboard } from "./index.js";
+
+vi.mock("electron", () => ({
+  ipcMain: { handle: vi.fn(), on: vi.fn() },
+}));
 
 interface SentMessage {
   channel: string;
