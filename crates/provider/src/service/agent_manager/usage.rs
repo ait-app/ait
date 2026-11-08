@@ -23,6 +23,7 @@ pub(super) struct UsageCache {
     entries: Arc<Mutex<BTreeMap<String, CachedUsage>>>,
     flights: Arc<Mutex<BTreeMap<String, host::Flight>>>,
     budget: Arc<tokio::sync::Semaphore>,
+    tasks: tokio_util::task::TaskTracker,
 }
 
 impl Default for UsageCache {
@@ -31,6 +32,7 @@ impl Default for UsageCache {
             entries: Arc::default(),
             flights: Arc::default(),
             budget: Arc::new(tokio::sync::Semaphore::new(4)),
+            tasks: tokio_util::task::TaskTracker::new(),
         }
     }
 }
@@ -43,7 +45,7 @@ const MAX_AGE: Duration = Duration::from_secs(300);
 struct CachedUsage {
     fetched: Instant,
     source: Option<UsageIdentity>,
-    identity: UsageIdentity,
+    identity: Option<UsageIdentity>,
     value: Value,
     successful: Option<Value>,
 }
@@ -58,7 +60,7 @@ impl UsageCache {
             .ok()?
             .get(provider)
             .filter(|cached| {
-                &cached.identity == identity
+                cached.identity.as_ref() == Some(identity)
                     && cached.fetched.elapsed()
                         < if cached.value["status"] == "error" {
                             Duration::from_secs(15)
@@ -82,7 +84,7 @@ impl UsageCache {
         };
         let previous = cache
             .remove(provider)
-            .filter(|cached| Some(&cached.identity) == identity.as_ref());
+            .filter(|cached| identity.is_some() && cached.identity == identity);
         let available = value["status"] == "available";
         let successful = if available {
             let successful_at = now_timestamp();
@@ -117,7 +119,7 @@ impl UsageCache {
                 CachedUsage {
                     fetched: Instant::now(),
                     source: None,
-                    identity,
+                    identity: Some(identity),
                     value: value.clone(),
                     successful,
                 },
@@ -153,6 +155,20 @@ impl UsageCache {
 }
 
 impl AgentManager {
+    /// Drain shared quota work and reap provider query processes before the worker exits.
+    /// # Errors
+    /// Returns the first native close failure after attempting every client.
+    pub(crate) async fn close_host_usage(&self) -> Result<(), AgentSessionError> {
+        self.usage_cache.close().await?;
+        let mut failure = None;
+        for client in self.clients.values() {
+            if let Err(error) = client.close_usage().await {
+                failure.get_or_insert(error);
+            }
+        }
+        failure.map_or(Ok(()), Err)
+    }
+
     /// Read a live session's account or host Provider quotas, optionally refreshing one source.
     /// # Errors
     /// Returns unknown identity, invalid scope, registry failure or an oversized projection.

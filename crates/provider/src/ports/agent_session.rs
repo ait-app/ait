@@ -448,6 +448,13 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
         Err(AgentSessionError::Unavailable)
     }
 
+    /// Close and reap shared quota resources after the host has drained its usage tasks.
+    /// # Errors
+    /// Returns a native resource cleanup failure.
+    async fn close_usage(&self) -> Result<(), AgentSessionError> {
+        Ok(())
+    }
+
     /// Cheap local credential generation for host quota cache lookup, without network/process I/O.
     /// `None` keeps native identity inspection mandatory; implementations must change this key
     /// whenever login or launch authority changes and must never expose its source material.

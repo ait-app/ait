@@ -143,6 +143,14 @@ impl CodexClient {
         Ok(transport)
     }
 
+    // Every session owns its quota pool, regardless of create/resume/environment entry point.
+    fn session_client(&self) -> Self {
+        Self {
+            usage_connection: inspection::connection::Shared::default(),
+            ..self.clone()
+        }
+    }
+
     async fn open(
         &self,
         spec: &AgentSessionSpec,
@@ -238,7 +246,7 @@ impl CodexClient {
                     manual_compactions: 0,
                     pending_goal_start: false,
                     config: spec.config.clone(),
-                    client: self.clone(),
+                    client: self.session_client(),
                 }))
             }
             Err(error) => {
@@ -283,7 +291,6 @@ impl AgentClient for CodexClient {
     ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         let mut client = self.clone();
         client.environment = environment.clone();
-        client.usage_connection = inspection::connection::Shared::default();
         client.open(spec, None).await
     }
 
@@ -357,6 +364,10 @@ impl AgentClient for CodexClient {
 
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {
         self.native_diagnostic().await
+    }
+
+    async fn close_usage(&self) -> Result<(), AgentSessionError> {
+        self.usage_connection.close().await
     }
 
     async fn usage_cache_key(&self) -> Option<crate::ports::account_usage::UsageIdentity> {
@@ -1143,6 +1154,7 @@ impl AgentSession for CodexSession {
     }
 
     async fn close(&mut self) -> Result<(), AgentSessionError> {
+        let usage_closed = self.client.usage_connection.close().await;
         if let Some(transport) = &mut self.transport {
             if let Some(message) = transport.failure.take_message() {
                 self.last_failure = Some(message);
@@ -1155,7 +1167,7 @@ impl AgentSession for CodexSession {
         self.permissions.clear();
         self.children.stopped();
         self.stream = streaming::Stream::default();
-        Ok(())
+        usage_closed
     }
 }
 

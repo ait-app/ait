@@ -31,6 +31,19 @@ struct Process {
 }
 
 impl Shared {
+    /// Explicitly close and reap the pooled native process, retaining failed cleanup for retry.
+    /// # Errors
+    /// Returns native close failure.
+    pub(in crate::local::codex) async fn close(&self) -> Result<(), AgentSessionError> {
+        let mut slot = self.process.lock().await;
+        self.invalidate();
+        if let Some(process) = slot.as_mut() {
+            process.transport.close().await?;
+        }
+        *slot = None;
+        Ok(())
+    }
+
     /// Resolve an account, reusing metadata only while file-backed credentials are unchanged.
     pub(super) async fn account(
         &self,
@@ -45,12 +58,26 @@ impl Shared {
         if let Some(account) = self.cached(cwd, stamp.as_ref()) {
             return Ok(account);
         }
-        // Taking ownership makes cancellation close the old process as well.
-        drop(slot.take());
-        *self.account.lock().map_err(|_| AgentSessionError::Failed)? = None;
-        let mut transport = client.launch_transport(cwd, false)?;
-        transport.initialize().await?;
-        let response = transport
+        self.invalidate();
+        if let Some(process) = slot.as_mut() {
+            process.transport.close().await?;
+        }
+        *slot = None;
+        // Retain ownership even if initialization/account inspection is cancelled, so
+        // shutdown can explicitly wait for the child instead of relying on runtime drop.
+        *slot = Some(Process {
+            transport: client.launch_transport(cwd, false)?,
+            account: Account {
+                identity: None,
+                fingerprint: stamp.clone(),
+                cwd: cwd.to_owned(),
+                email: None,
+            },
+        });
+        let process = slot.as_mut().ok_or(AgentSessionError::Failed)?;
+        process.transport.initialize().await?;
+        let response = process
+            .transport
             .request("account/read", json!({"refreshToken":false}))
             .await?;
         let email = response
@@ -74,11 +101,8 @@ impl Shared {
             cwd: cwd.to_owned(),
             email,
         };
+        process.account = account.clone();
         *self.account.lock().map_err(|_| AgentSessionError::Failed)? = Some(account.clone());
-        *slot = Some(Process {
-            transport,
-            account: account.clone(),
-        });
         Ok(account)
     }
 
@@ -102,7 +126,7 @@ impl Shared {
         account: &Account,
     ) -> Result<Value, AgentSessionError> {
         let mut slot = self.process.lock().await;
-        let Some(mut process) = slot.take() else {
+        let Some(process) = slot.as_mut() else {
             self.invalidate();
             return Err(AgentSessionError::Failed);
         };
@@ -132,7 +156,6 @@ impl Shared {
             report["accountLabel"] = json!(email);
         }
         *self.account.lock().map_err(|_| AgentSessionError::Failed)? = Some(account.clone());
-        *slot = Some(process);
         attempt.completed = true;
         Ok(report)
     }

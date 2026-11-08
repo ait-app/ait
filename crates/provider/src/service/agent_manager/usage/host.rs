@@ -10,6 +10,7 @@ use uuid::Uuid;
 #[derive(Debug)]
 pub(super) struct Flight {
     generation: Uuid,
+    lane: Arc<tokio::sync::Mutex<()>>,
     source: Option<UsageIdentity>,
     result: watch::Receiver<Option<Value>>,
 }
@@ -23,6 +24,9 @@ impl UsageCache {
         started: Instant,
     ) -> Value {
         let provider = client.provider().to_owned();
+        if self.tasks.is_closed() {
+            return failure(&provider, AgentSessionError::Failed);
+        }
         let deadline = started + COLLECTION_TIMEOUT;
         let Ok(source) = tokio::time::timeout_at(deadline, client.usage_cache_key()).await else {
             return failure(&provider, AgentSessionError::Failed);
@@ -46,6 +50,18 @@ impl UsageCache {
         }
     }
 
+    /// Stop admitting refreshes and wait for their bounded native operations to finish.
+    /// # Errors
+    /// Returns a poisoned coordination-lock failure.
+    pub(super) async fn close(&self) -> Result<(), AgentSessionError> {
+        {
+            let _flights = self.flights.lock().map_err(|_| AgentSessionError::Failed)?;
+            self.tasks.close();
+        }
+        self.tasks.wait().await;
+        Ok(())
+    }
+
     fn snapshot(
         &self,
         provider: &str,
@@ -63,6 +79,59 @@ impl UsageCache {
         (entry.source.as_ref() == Some(source) && age < ttl).then(|| (entry.value.clone(), age))
     }
 
+    fn commit_host(
+        &self,
+        provider: &str,
+        source: Option<UsageIdentity>,
+        report: (Option<UsageIdentity>, Value, bool),
+        attempted: &str,
+    ) -> Value {
+        let (identity, value, changed) = report;
+        let value = if changed {
+            // Native labels may match across workspaces; history also belongs
+            // to the verified local credential/config generation.
+            if let Ok(mut entries) = self.entries.lock()
+                && entries
+                    .get(provider)
+                    .is_some_and(|entry| entry.source != source)
+            {
+                entries.remove(provider);
+            }
+            let unknown = identity.is_none();
+            let value = self.put(provider, identity, value, attempted);
+            // Verified local credentials also bound preparation failures. Keep
+            // this snapshot separate from native-account success/history.
+            if unknown
+                && source.is_some()
+                && value["status"] != "available"
+                && let Ok(mut entries) = self.entries.lock()
+            {
+                if entries.len() >= 64 {
+                    entries.pop_first();
+                }
+                entries.insert(
+                    provider.to_owned(),
+                    super::CachedUsage {
+                        fetched: Instant::now(),
+                        source: source.clone(),
+                        identity: None,
+                        value: value.clone(),
+                        successful: None,
+                    },
+                );
+            }
+            value
+        } else {
+            value
+        };
+        if let Ok(mut entries) = self.entries.lock()
+            && let Some(entry) = entries.get_mut(provider)
+        {
+            entry.source = source;
+        }
+        value
+    }
+
     fn refresh_host(
         &self,
         client: Arc<dyn AgentClient>,
@@ -72,33 +141,45 @@ impl UsageCache {
     ) -> Result<watch::Receiver<Option<Value>>, AgentSessionError> {
         let provider = client.provider().to_owned();
         let mut flights = self.flights.lock().map_err(|_| AgentSessionError::Failed)?;
+        if self.tasks.is_closed() {
+            return Err(AgentSessionError::Failed);
+        }
         if let Some(flight) = flights.get(&provider)
+            && source.is_some()
             && flight.source == source
             && flight.result.borrow().is_none()
             && flight.result.has_changed().is_ok()
         {
             return Ok(flight.result.clone());
         }
+        // Never coalesce unknown sources. Serialize preparation through polling so the
+        // next request verifies its own native account without replacing a prepared transport.
+        let lane = flights.get(&provider).map_or_else(
+            || Arc::new(tokio::sync::Mutex::new(())),
+            |flight| flight.lane.clone(),
+        );
         let generation = Uuid::new_v4();
         let (sender, result) = watch::channel(None);
         flights.insert(
             provider.clone(),
             Flight {
                 generation,
+                lane: lane.clone(),
                 source: source.clone(),
                 result: result.clone(),
             },
         );
         let cache = self.clone();
-        tokio::spawn(async move {
+        self.tasks.spawn(async move {
             let attempted = now_timestamp();
             let mut known_identity = cache.entries.lock().ok().and_then(|entries| {
                 entries
                     .get(&provider)
                     .filter(|entry| source.is_some() && entry.source == source)
-                    .map(|entry| entry.identity.clone())
+                    .and_then(|entry| entry.identity.clone())
             });
             let poll = async {
+                let _lane = lane.lock().await;
                 let _permit = cache
                     .budget
                     .acquire()
@@ -109,6 +190,11 @@ impl UsageCache {
                 // if native account labels match (for example another workspace).
                 if !force
                     && source.is_none()
+                    && cache.entries.lock().is_ok_and(|entries| {
+                        entries
+                            .get(&provider)
+                            .is_some_and(|entry| entry.source == source)
+                    })
                     && let Some(identity) = &prepared.identity
                     && let Some(value) = cache.get(&provider, identity, false)
                 {
@@ -133,7 +219,8 @@ impl UsageCache {
             let polled = tokio::time::timeout_at(deadline, poll).await;
             let (identity, value, changed) = match polled {
                 Ok(Ok(report)) => report,
-                _ => (
+                Ok(Err(error)) => (known_identity, failure(&provider, error), true),
+                Err(_) => (
                     known_identity,
                     failure(&provider, AgentSessionError::Failed),
                     true,
@@ -144,26 +231,7 @@ impl UsageCache {
                     .get(&provider)
                     .is_some_and(|flight| flight.generation == generation)
                 {
-                    let value = if changed {
-                        // Native labels may match across workspaces; history also belongs
-                        // to the verified local credential/config generation.
-                        if let Ok(mut entries) = cache.entries.lock()
-                            && entries
-                                .get(&provider)
-                                .is_some_and(|entry| entry.source != source)
-                        {
-                            entries.remove(&provider);
-                        }
-                        cache.put(&provider, identity, value, &attempted)
-                    } else {
-                        value
-                    };
-                    if let Ok(mut entries) = cache.entries.lock()
-                        && let Some(entry) = entries.get_mut(&provider)
-                    {
-                        entry.source = source;
-                    }
-                    value
+                    cache.commit_host(&provider, source, (identity, value, changed), &attempted)
                 } else {
                     failure(&provider, AgentSessionError::Failed)
                 }
