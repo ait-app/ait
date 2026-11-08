@@ -57,7 +57,7 @@ it("omits unavailable sources while retaining errors, zero quota, and zero balan
         providerId: "zero",
         status: "available",
         windows: [{ id: "primary", label: "Primary", usedPct: 0 }],
-        balances: [{ id: "credit", label: "Credit", remaining: 0 }],
+        balances: [{ id: "credit", label: "Credit", remaining: 0, unit: "credits" }],
       },
       {
         ...base,
