@@ -4,6 +4,8 @@ use std::process::Command as StdCommand;
 
 use super::*;
 
+mod attacks;
+
 fn scratch() -> tempfile::TempDir {
     tempfile::Builder::new()
         .prefix(".linux-sandbox-test-")
@@ -263,4 +265,38 @@ assert s.recv(2) == b'ok'",
         .expect("network probe");
     server.abort();
     assert!(output.status.success(), "{output:?}");
+}
+
+#[test]
+fn sandbox_rejects_protected_hardlinks_without_modifying_either_name() {
+    let root = tempfile::tempdir().expect("root");
+    let config = root.path().join("config.toml");
+    let alias = root.path().join("alias");
+    fs::write(&config, "original").expect("config");
+    fs::hard_link(&config, &alias).expect("hardlink");
+    assert!(protect(&config).is_err());
+    assert_eq!(fs::read_to_string(alias).expect("alias"), "original");
+}
+
+#[test]
+fn sandbox_seeding_publishes_complete_content_under_concurrent_launches() {
+    let root = tempfile::tempdir().expect("root");
+    let path = root.path().join(".claude.json");
+    let payload = vec![b'x'; 1024 * 1024];
+    let barrier = std::sync::Barrier::new(8);
+    std::thread::scope(|scope| {
+        for _ in 0..8 {
+            scope.spawn(|| {
+                barrier.wait();
+                seed(&path, &payload).expect("publish");
+                assert_eq!(fs::read(&path).expect("complete settings"), payload);
+            });
+        }
+    });
+    assert_eq!(fs::read_dir(root.path()).expect("entries").count(), 1);
+}
+
+#[test]
+fn sandbox_termination_does_not_signal_an_unavailable_process() {
+    assert!(process::terminate_native(u32::MAX).is_err());
 }

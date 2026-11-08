@@ -92,3 +92,32 @@ async fn sandboxed_claude_session_uses_the_config_override_and_native_environmen
     assert!(!rows.is_empty());
     assert!(rows.iter().all(|row| row["value"] == "sandbox-fixture"));
 }
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn sandboxed_home_only_override_seeds_existing_global_settings() {
+    let (root, mut client, mut spec) = fixture();
+    client.config_dir = None;
+    let home = root.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(root.path().join(".git")).unwrap();
+    std::fs::write(home.join(".claude.json"), "{\"fixtureSetting\":true}").unwrap();
+    let record = serde_json::from_value(json!({
+        "workspaceId":"wks_0123456789abcdef", "projectId":"prj_1", "kind":"worktree",
+        "cwd":root.path(), "worktreeRoot":root.path(), "displayName":"sandbox",
+        "createdAt":"2026-01-01T00:00:00Z", "updatedAt":"2026-01-01T00:00:00Z",
+        "sandbox":"worktree_writes", "archivedAt":null
+    }))
+    .unwrap();
+    spec.confinement = domain::workspace::sandbox::WriteConfinement::for_workspace(&record);
+    let environment = serde_json::from_value(json!({"HOME":home})).unwrap();
+    let mut session = client
+        .create_session_with_environment(&spec, &environment)
+        .await
+        .unwrap();
+    session.close().await.unwrap();
+    assert_eq!(
+        std::fs::read_to_string(home.join(".claude/.claude.json")).unwrap(),
+        "{\"fixtureSetting\":true}"
+    );
+}

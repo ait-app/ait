@@ -78,6 +78,8 @@
 
 ## Provider、Agent 与会话
 
+- [Linux 沙箱容器验证与 PR review 修复（2026-11-08）](providers/linux-sandbox-container-2026-11-08.md)
+
 - [性能交接报告修复验证（2026-11-03）](providers/performance-handoff-fixes-2026-11-03.md)
 
 - [统一子 Agent 展示：实施与验证](providers/unified-subagents-2026-10-31.md)

@@ -342,6 +342,7 @@ fn launch_command(
     let config_dir = if spec.confinement.is_some() {
         Some(
             crate::local::sandbox::linux::claude_config_dir(&|name| match (name, &config_dir) {
+                ("CLAUDE_CONFIG_DIR", _) if client.config_dir_from_home => None,
                 ("CLAUDE_CONFIG_DIR", Some(directory)) => directory.to_str().map(str::to_owned),
                 _ => client.environment.variable(name),
             })

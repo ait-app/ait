@@ -4,15 +4,17 @@
 //! read-only mounts for protected entries. No command is retried outside the sandbox.
 
 use std::ffi::OsStr;
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::io::{self, Write};
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use domain::workspace::sandbox::WritePolicy;
 use tokio::process::Command;
 
 use crate::ports::agent_session::AgentSessionError;
+
+pub(crate) mod process;
 
 const BWRAP: &str = "/usr/bin/bwrap";
 const PROTECTED_DIRECTORIES: [&str; 4] = ["hooks", "plugins", "bin", "shims"];
@@ -34,6 +36,7 @@ pub(super) fn command(program: &OsStr, policy: &WritePolicy) -> Result<Command, 
     let mut command = Command::new(BWRAP);
     command.args([
         "--die-with-parent",
+        "--new-session",
         "--unshare-user",
         "--unshare-pid",
         "--unshare-ipc",
@@ -126,28 +129,32 @@ fn protect(path: &Path) -> io::Result<()> {
 }
 
 fn regular_entry(metadata: &fs::Metadata) -> io::Result<()> {
-    if metadata.is_file() || metadata.is_dir() {
+    if (metadata.is_file() && metadata.nlink() == 1) || metadata.is_dir() {
         Ok(())
     } else {
         Err(io::Error::new(
             io::ErrorKind::Unsupported,
-            "protected entry must be a regular file or directory",
+            "protected entry must be a singly-linked regular file or directory",
         ))
     }
 }
 
 fn seed(path: &Path, contents: &[u8]) -> io::Result<()> {
-    match OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(path)
-    {
-        Ok(mut file) => file.write_all(contents),
-        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+    let parent = path.parent().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "seed destination has no parent",
+        )
+    })?;
+    let mut staging = tempfile::NamedTempFile::new_in(parent)?;
+    staging.write_all(contents)?;
+    staging.as_file().sync_all()?;
+    match staging.persist_noclobber(path) {
+        Ok(_) => Ok(()),
+        Err(error) if error.error.kind() == io::ErrorKind::AlreadyExists => {
             regular_entry(&fs::symlink_metadata(path)?)
         }
-        Err(error) => Err(error),
+        Err(error) => Err(error.error),
     }
 }
 
