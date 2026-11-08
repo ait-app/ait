@@ -1,15 +1,41 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { commands } from "vitest/browser";
 import { StyleSheet, UnistylesRuntime, withUnistyles } from "react-native-unistyles";
 import { EnrichedMarkdownText } from "react-native-enriched-markdown";
 import { parseMarkdown } from "react-native-enriched-markdown/src/web/parseMarkdown";
 import { darkTheme, lightTheme, REGISTERED_THEMES, type Theme } from "@/styles/theme";
 import { createMarkdownStyles } from "@/components/markdown/styles";
-// Only the fault injection uses internal APIs; rendering and recovery use public APIs.
-import { services } from "../../../../node_modules/react-native-unistyles/src/web/services";
 import { subscribeToSystemTheme } from "./system-theme-sync.web";
+
+// Install before Unistyles creates its media queries. Drop browser notifications without
+// changing live query values or importing the theme library's private implementation.
+const mediaNotifications = vi.hoisted(() => {
+  const originalMatchMedia = window.matchMedia;
+  const disposers: (() => void)[] = [];
+  const state = { suppressed: false };
+  window.matchMedia = (query) => {
+    const media = originalMatchMedia.call(window, query);
+    if (query.includes("prefers-color-scheme")) {
+      const intercept = (event: MediaQueryListEvent) => {
+        if (state.suppressed) event.stopImmediatePropagation();
+      };
+      media.addEventListener("change", intercept);
+      disposers.push(() => media.removeEventListener("change", intercept));
+    }
+    return media;
+  };
+  return {
+    state,
+    restore() {
+      window.matchMedia = originalMatchMedia;
+      disposers.forEach((dispose) => dispose());
+    },
+  };
+});
+
+afterAll(() => mediaNotifications.restore());
 
 declare module "vitest/browser" {
   interface BrowserCommands {
@@ -56,6 +82,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  mediaNotifications.state.suppressed = false;
   vi.restoreAllMocks();
   unsubscribe();
   await act(async () => root.unmount());
@@ -105,11 +132,11 @@ it.each(["focus", "pageshow", "visibilitychange"])(
 
     // Simulate losing just the return notification. The synchronizer's last visible
     // name remains light, but React consumers have received the intermediate dark theme.
-    const notification = vi.spyOn(services.listener, "emitChanges").mockImplementation(() => {});
+    mediaNotifications.state.suppressed = true;
     await switchSystemTheme("light");
     expect(UnistylesRuntime.themeName).toBe("light");
     expect(colors()).toEqual(palette(darkTheme));
-    notification.mockRestore();
+    mediaNotifications.state.suppressed = false;
     vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
 
     await act(async () => {

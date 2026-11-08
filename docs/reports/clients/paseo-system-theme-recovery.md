@@ -87,6 +87,7 @@ KDE 从深色切到浅色后，用户截图中主界面已变浅，但正文仍�
   三种恢复事件、固定主题。
 - `npm exec --workspace=@ait/mobile -- vitest run --project unit src/appearance/system-theme-sync.test.ts src/appearance/apply.test.ts src/components/appearance-style-boundary.test.ts`：24 项通过。
 - 修改文件的格式、Oxlint、ESLint 和 `git diff --check` 通过。
-- 工作区类型检查受本地复用依赖中的缺失模块与旧协议产物影响，未整体通过；本次修改文件无类型错误。
+- 初次本地类型检查受复用依赖影响，未整体通过；后续 CI 明确指出浏览器测试直接引用 Unistyles 内部源码，导致类型检查进入其缺少 `@react-native/normalize-colors` 声明的实现。
+- 已将通知丢失注入改为在库初始化前拦截浏览器媒体查询事件，移除内部源码引用。使用锁文件重新安装依赖后，`npm run build:desktop-main` 和 `npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile` 均通过；上述 29 项回归重新通过。
 
 未替换已安装的桌面包，也未在 KDE 上执行真实系统主题切换验收。
