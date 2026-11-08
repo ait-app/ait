@@ -1,8 +1,13 @@
 //! Native account quotas stay in provider; no credentials or quota cache are persisted.
 
+use crate::ports::account_usage::UsageIdentity;
+use crate::ports::agent_session::AgentClient;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use tokio::time::Instant;
+
+mod host;
 
 use futures_util::{StreamExt, stream};
 use model::ErrorCode;
@@ -13,33 +18,53 @@ use crate::ports::agent_session::AgentSessionError;
 use crate::support::time::now_timestamp;
 
 /// Bounded ephemeral facts, always scoped to one Host or one live session generation.
-#[derive(Debug, Clone, Default)]
-pub(super) struct UsageCache(Arc<Mutex<BTreeMap<String, CachedUsage>>>);
+#[derive(Debug, Clone)]
+pub(super) struct UsageCache {
+    entries: Arc<Mutex<BTreeMap<String, CachedUsage>>>,
+    flights: Arc<Mutex<BTreeMap<String, host::Flight>>>,
+    budget: Arc<tokio::sync::Semaphore>,
+}
+
+impl Default for UsageCache {
+    fn default() -> Self {
+        Self {
+            entries: Arc::default(),
+            flights: Arc::default(),
+            budget: Arc::new(tokio::sync::Semaphore::new(4)),
+        }
+    }
+}
+
+const COLLECTION_TIMEOUT: Duration = Duration::from_secs(25);
+const REFRESH_AFTER: Duration = Duration::from_secs(60);
+const MAX_AGE: Duration = Duration::from_secs(300);
 
 #[derive(Debug)]
 struct CachedUsage {
     fetched: Instant,
-    identity: crate::ports::account_usage::UsageIdentity,
+    source: Option<UsageIdentity>,
+    identity: UsageIdentity,
     value: Value,
     successful: Option<Value>,
 }
 
 impl UsageCache {
-    fn get(
-        &self,
-        provider: &str,
-        identity: &crate::ports::account_usage::UsageIdentity,
-        force: bool,
-    ) -> Option<Value> {
+    fn get(&self, provider: &str, identity: &UsageIdentity, force: bool) -> Option<Value> {
         if force {
             return None;
         }
-        self.0
+        self.entries
             .lock()
             .ok()?
             .get(provider)
             .filter(|cached| {
-                &cached.identity == identity && cached.fetched.elapsed() < Duration::from_secs(300)
+                &cached.identity == identity
+                    && cached.fetched.elapsed()
+                        < if cached.value["status"] == "error" {
+                            Duration::from_secs(15)
+                        } else {
+                            MAX_AGE
+                        }
             })
             .map(|cached| cached.value.clone())
     }
@@ -47,12 +72,12 @@ impl UsageCache {
     fn put(
         &self,
         provider: &str,
-        identity: Option<crate::ports::account_usage::UsageIdentity>,
+        identity: Option<UsageIdentity>,
         mut value: Value,
         attempted_at: &str,
     ) -> Value {
         value["fetchedAt"] = json!(attempted_at);
-        let Ok(mut cache) = self.0.lock() else {
+        let Ok(mut cache) = self.entries.lock() else {
             return value;
         };
         let previous = cache
@@ -91,6 +116,7 @@ impl UsageCache {
                 provider.to_owned(),
                 CachedUsage {
                     fetched: Instant::now(),
+                    source: None,
                     identity,
                     value: value.clone(),
                     successful,
@@ -139,7 +165,8 @@ impl AgentManager {
         if provider_id.is_some_and(|id| !self.clients.contains_key(id)) {
             return Err(ErrorCode::UnsupportedCapability);
         }
-        let providers = if let Some(id) = agent_id {
+        let started = Instant::now();
+        let mut providers = if let Some(id) = agent_id {
             let record = self
                 .registry
                 .get(id)
@@ -151,14 +178,18 @@ impl AgentManager {
             // A stopped/imported session has no current launch account. Never substitute the
             // daemon's login for a session created under an ephemeral environment.
             let value = if let Some(agent) = self.live.get(id) {
-                agent
-                    .usage_cache
-                    .read(
-                        &record.provider,
-                        agent.session.prepare_account_usage().await,
-                        force,
-                    )
-                    .await
+                tokio::time::timeout(COLLECTION_TIMEOUT, async {
+                    agent
+                        .usage_cache
+                        .read(
+                            &record.provider,
+                            agent.session.prepare_account_usage().await,
+                            force,
+                        )
+                        .await
+                })
+                .await
+                .unwrap_or_else(|_| failure(&record.provider, AgentSessionError::Failed))
             } else {
                 unavailable(
                     &record.provider,
@@ -171,10 +202,8 @@ impl AgentManager {
                 self.clients
                     .iter()
                     .filter(|(id, _)| provider_id.is_none_or(|provider| provider == id.as_str()))
-                    .map(|(id, client)| async move {
-                        self.usage_cache
-                            .read(id, client.prepare_usage().await, force)
-                            .await
+                    .map(|(_, client)| async move {
+                        self.usage_cache.host(client.clone(), force, started).await
                     }),
             )
             .buffer_unordered(4)
@@ -187,6 +216,7 @@ impl AgentManager {
             });
             providers
         };
+        providers.retain(|provider| provider["status"] != "unavailable");
         crate::rpc::timeline::bounded(json!({"fetchedAt":now_timestamp(),"providers":providers}))
     }
 }

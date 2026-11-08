@@ -97,7 +97,6 @@ async fn quota_reads_use_the_live_agent_account_and_validate_the_rpc_shape() {
         .execute("provider.usage.list.request", json!({"agentId":agents[0]}))
         .await
         .unwrap();
-    assert_eq!(report["providers"][0]["status"], "unavailable");
-    assert!(report["providers"][0].get("accountLabel").is_none());
+    assert_eq!(report["providers"], json!([]));
     restarted.shutdown().await.unwrap();
 }

@@ -1,5 +1,5 @@
 import { groupHosts } from "@/hosts/host-groups";
-import { toUsageReport } from "./native-report";
+import { toUsageReports } from "./native-report";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { useCallback, useMemo } from "react";
 import {
@@ -125,9 +125,9 @@ async function listUsageReports(
       ? { providerId: options.reportIds[0] }
       : {}),
   });
-  const reports = result.providers
-    .map((provider) => toUsageReport(provider, result.fetchedAt))
-    .filter((report) => !options.reportIds || options.reportIds.includes(report.id));
+  const reports = toUsageReports(result.providers, result.fetchedAt).filter(
+    (report) => !options.reportIds || options.reportIds.includes(report.id),
+  );
   reports.forEach((report) => onReport?.(report));
   return { reports };
 }

@@ -200,6 +200,10 @@ impl AgentClient for ClaudeClient {
         self.native_diagnostic().await
     }
 
+    async fn usage_cache_key(&self) -> Option<crate::ports::account_usage::UsageIdentity> {
+        self.usage_credential_key().await
+    }
+
     async fn prepare_usage(
         &self,
     ) -> Result<crate::ports::account_usage::PreparedUsage<'_>, AgentSessionError> {

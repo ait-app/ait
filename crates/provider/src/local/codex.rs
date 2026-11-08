@@ -48,6 +48,7 @@ pub(crate) struct CodexClient {
     capabilities: std::sync::Arc<std::sync::atomic::AtomicU8>,
     images: super::images::ImageStore,
     environment: crate::ports::environment::AgentEnvironment,
+    usage_connection: inspection::connection::Shared,
     speed_catalog: std::sync::Arc<std::sync::RwLock<Vec<Value>>>,
 }
 
@@ -85,6 +86,7 @@ impl CodexClient {
             capabilities: std::sync::Arc::default(),
             images: super::images::ImageStore::default(),
             environment: crate::ports::environment::AgentEnvironment::default(),
+            usage_connection: inspection::connection::Shared::default(),
             speed_catalog: std::sync::Arc::default(),
         }
     }
@@ -281,6 +283,7 @@ impl AgentClient for CodexClient {
     ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
         let mut client = self.clone();
         client.environment = environment.clone();
+        client.usage_connection = inspection::connection::Shared::default();
         client.open(spec, None).await
     }
 
@@ -354,6 +357,10 @@ impl AgentClient for CodexClient {
 
     async fn diagnostic(&self) -> Result<String, AgentSessionError> {
         self.native_diagnostic().await
+    }
+
+    async fn usage_cache_key(&self) -> Option<crate::ports::account_usage::UsageIdentity> {
+        inspection::connection::fingerprint(self).await
     }
 
     async fn prepare_usage(

@@ -18,6 +18,8 @@
 
 ## Agent 与工作区
 
+- [共享套餐缓存与 Codex 查询进程](decisions/providers/adr-219-shared-account-usage-cache.md)：原生调用前的快读、后台刷新、账号失效与进程复用。
+
 - Provider 配置：[Claude Code](operations/claude-code.md)、[DeepSeek Harness](operations/deepseek-harness.md)、
   [Antigravity](operations/antigravity.md)、[Pi](operations/pi.md)、[Oh My Pi](operations/oh-my-pi.md)、
   [MiniMax Code](operations/minimax-code.md)。Codex 和 OpenCode 的启动配置见 [daemon 手册](operations/daemon.md#provider-与扩展能力)。
