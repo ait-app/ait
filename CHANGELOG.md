@@ -1,5 +1,15 @@
 # Ait changelog
 
+## 0.2.3 - 2026-11-08
+
+- Bot chat now matches the session page, with separate prompt and reply messages and Stop and New conversation in the composer. The Bot's internal session opens read-only from a "Bot session" subagent pill.
+- Simplify Bot permissions to one mode per provider plus "Not allowed". A saved profile with several modes for a provider keeps only the first, and a Bot-created schedule stored with another mode is refused at run time until it is changed. Bots can no longer create workspaces or worktrees through Ait MCP; worktrees they already recorded stay in scope.
+- Share a project from a chosen Host when it exists on several Hosts.
+- Show the five most recently active workspaces per sidebar project, with "Show more" revealing up to ten more at a time.
+- Share Host usage data across the daemon with a global cache and background refresh, and add a "Force refresh" button to AIT usage.
+- Restore correct colors in retained UI, including chat message content, after the system theme changes.
+- Keep Pi sessions and native history consistent after a prompt admission failure, without automatically resending input.
+
 ## 0.2.2 - 2026-11-08
 
 - Fix tiny terminal glyphs under Electron 45.2.3: the WebGL renderer now draws regular, bold and italic text with the configured font size and monospace family.
