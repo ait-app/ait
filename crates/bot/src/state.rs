@@ -54,9 +54,13 @@ impl State {
         let mut catalog = store.catalog().map_err(|_| ErrorCode::BotIo)?;
         catalog::validate(&catalog)?;
         // Bots run in their provider's read-only mode; a mode stored by an earlier build is
-        // dropped here and persisted with the next catalog save.
+        // dropped here and persisted with the next catalog save, as are permission entries
+        // that no longer apply.
         for bot in &mut catalog.bots {
             bot.execution.mode_id = None;
+            bot.permissions = std::mem::take(&mut bot.permissions)
+                .normalized()
+                .map_err(|_| ErrorCode::BotIo)?;
         }
         scopes.publish(&catalog);
         let mut state = Self {
@@ -379,7 +383,8 @@ fn project_channel(channel: &Channel) -> Value {
 /// Client projection of a conversation without the owning Bot or native session identity.
 fn project_conversation(conversation: &Conversation) -> Value {
     json!({"id":conversation.id,"channelId":conversation.channel_id,
-        "peer":conversation.peer,"sender":conversation.sender,"thread":conversation.thread,"generation":conversation.generation,"nextSequence":conversation.next_sequence})
+        "peer":conversation.peer,"sender":conversation.sender,"thread":conversation.thread,"generation":conversation.generation,"nextSequence":conversation.next_sequence,
+        "sessionAgentId":conversation.session_id})
 }
 
 #[cfg(test)]

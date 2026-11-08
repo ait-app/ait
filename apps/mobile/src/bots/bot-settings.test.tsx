@@ -222,9 +222,7 @@ describe("BotSettings permissions", () => {
     rerender(settings(remote));
     expect(screen.getByTestId("bot-group-schedules").getAttribute("aria-checked")).toBe("true");
     expect(screen.getByTestId("bot-group-terminals").getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByTestId("bot-mode-codex-read-only").getAttribute("aria-checked")).toBe(
-      "false",
-    );
+    expect((screen.getByTestId("bot-mode-codex") as HTMLSelectElement).value).toBe("auto");
   });
 
   it("stays editable while the Bot is paused", () => {
@@ -237,7 +235,7 @@ describe("BotSettings permissions", () => {
     canManage.mockReturnValue(false);
     renderSettings(withPermissions);
     expect(screen.getByTestId("bot-group-agents").getAttribute("aria-disabled")).toBe("true");
-    expect(screen.getByTestId("bot-mode-codex-auto").getAttribute("aria-disabled")).toBe("true");
+    expect(screen.getByTestId("bot-mode-codex")).toHaveProperty("disabled", true);
     expect(screen.queryByTestId("bot-permissions-save")).toBeNull();
   });
 

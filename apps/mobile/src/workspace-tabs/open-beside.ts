@@ -19,6 +19,8 @@ interface OpenWorkspaceTargetInput {
   workspaceKey: string | null;
   target: WorkspaceTabTarget;
   parentTabId?: string | null;
+  /** Keep an Agent tab that the Agent directory does not list. */
+  pin?: boolean;
 }
 
 export interface OpenPreferredWorkspaceTargetInput extends OpenWorkspaceTargetInput {
@@ -93,6 +95,7 @@ export function openPreferredWorkspaceTarget(
     target: input.target,
     location: input.preferences[input.source] ? "side" : "main",
     parentTabId: input.parentTabId,
+    pin: input.pin,
   });
 }
 
@@ -123,6 +126,7 @@ export function openWorkspaceTargetAtLocation(
     intent: "reveal",
     placement,
     parentTabId: input.parentTabId ?? undefined,
+    ...(input.pin ? { pin: true } : {}),
   });
 }
 

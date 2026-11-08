@@ -94,7 +94,7 @@ impl ExecutionState {
                 }
                 let ids = ids
                     .iter()
-                    .map(|id| self.resolve(id))
+                    .map(|id| self.resolve_for(Operation::Timeline, id))
                     .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
                 Ok(json!(ids))
             }
@@ -278,7 +278,7 @@ impl ExecutionState {
         let identifier = params["agentId"]
             .as_str()
             .ok_or(ErrorCode::InvalidMessage)?;
-        let id = self.resolve(identifier)?;
+        let id = self.resolve_for(method, identifier)?;
         let scope = self.timeline_scope(&id, method, params).await?;
         let timeline = self
             .manager
@@ -615,21 +615,23 @@ impl ExecutionState {
         self.directory
             .get(identifier)
             .map(|resolved| resolved.agent.id)
-            .map_err(|error| match error {
-                crate::service::agent_runtime::AgentRuntimeError::NotFound(_) => {
-                    ErrorCode::AgentNotFound
-                }
-                crate::service::agent_runtime::AgentRuntimeError::Ambiguous(_)
-                | crate::service::agent_runtime::AgentRuntimeError::InvalidRequest => {
-                    ErrorCode::InvalidMessage
-                }
-                crate::service::agent_runtime::AgentRuntimeError::AgentRegistry => {
-                    ErrorCode::AgentIo
-                }
-                crate::service::agent_runtime::AgentRuntimeError::WorkspaceRegistry => {
-                    ErrorCode::RegistryIo
-                }
-            })
+            .map_err(|error| map_resolve_error(&error))
+    }
+
+    /// Resolve the target of `method`, admitting a Bot's hidden session only for inspection.
+    pub(crate) fn resolve_for(
+        &self,
+        method: Operation,
+        identifier: &str,
+    ) -> Result<String, ErrorCode> {
+        if method.inspects_agent() {
+            self.directory
+                .get_readable(identifier)
+                .map(|resolved| resolved.agent.id)
+                .map_err(|error| map_resolve_error(&error))
+        } else {
+            self.resolve(identifier)
+        }
     }
 
     fn snapshot(&self, id: &str) -> Result<Value, ErrorCode> {
@@ -694,6 +696,18 @@ impl ExecutionState {
             }
         }
         Ok(())
+    }
+}
+
+const fn map_resolve_error(error: &crate::service::agent_runtime::AgentRuntimeError) -> ErrorCode {
+    use crate::service::agent_runtime::AgentRuntimeError;
+    match error {
+        AgentRuntimeError::NotFound(_) => ErrorCode::AgentNotFound,
+        AgentRuntimeError::Ambiguous(_) | AgentRuntimeError::InvalidRequest => {
+            ErrorCode::InvalidMessage
+        }
+        AgentRuntimeError::AgentRegistry => ErrorCode::AgentIo,
+        AgentRuntimeError::WorkspaceRegistry => ErrorCode::RegistryIo,
     }
 }
 

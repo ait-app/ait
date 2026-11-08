@@ -85,12 +85,11 @@ export const en = {
     groupSchedules: "Schedules: create and manage schedules",
     groupScripts: "Scripts: run workspace scripts",
     groupTerminals: "Terminals: create terminals and type into them",
-    groupWorkspaces: "Workspaces: create worktree workspaces",
-    permissionRiskHint: "Can run commands or create worktrees.",
-    modeCap: "Allowed agent modes",
+    permissionRiskHint: "Can run commands.",
+    modeCap: "Default agent mode",
+    modeNotAllowed: "Not allowed",
     modeCapHint:
-      "Choose which modes the Bot may use for each provider. A provider with no modes selected cannot be used. The first selected mode is the default.",
-    defaultMode: "Default mode",
+      "Choose the mode of the agents the Bot starts for each provider. The Bot can only use this mode; choose Not allowed to stop it using a provider.",
     providerUnavailable: "{{provider}} (unavailable)",
     readOnlyHint:
       "The Bot runs in the strictest mode its provider offers (for Claude, the default mode, where your own allow rules still apply) and leaves changes to the agents it starts.",
@@ -112,9 +111,9 @@ export const en = {
     unsupported: "Update this host to use Bots.",
     disconnected: "Connect to this host to use Bots.",
     message: "Message",
-    send: "Send",
     cancel: "Cancel turn",
     emptyChat: "Send a message to start a conversation.",
+    session: "Bot session",
     reset: "New conversation",
     resetConfirm:
       "Start a new conversation? Existing messages are retained, and the latest Bot settings will take effect.",

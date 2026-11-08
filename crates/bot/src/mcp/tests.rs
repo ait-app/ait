@@ -253,8 +253,12 @@ fn archived_worktrees_leave_the_grant() {
     state
         .execute("bot.setup.request", setup(WORKSPACE))
         .unwrap();
-    state.record_workspace(WORKSPACE, "wks_worktree_a").unwrap();
-    state.record_workspace(WORKSPACE, "wks_worktree_b").unwrap();
+    drop(state);
+    let mut catalog = fixture.store.catalog().unwrap();
+    catalog.bots[0].workspaces =
+        BTreeSet::from(["wks_worktree_a".to_owned(), "wks_worktree_b".to_owned()]);
+    fixture.store.save_catalog(&catalog).unwrap();
+    let mut state = fixture.state();
     assert_eq!(fixture.scopes.grant(WORKSPACE).workspaces.len(), 3);
 
     state.retire(&["wks_worktree_a".to_owned()]).unwrap();

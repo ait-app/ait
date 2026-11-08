@@ -1,9 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use domain::bot::{
-    BOT_WORKSPACES, Bot, BotState, Catalog, Channel, ChannelConfig, ExecutionConfig, PauseReason,
-};
+use domain::bot::{Bot, BotState, Catalog, Channel, ChannelConfig, ExecutionConfig, PauseReason};
 use domain::{BotId, ChannelId};
 use model::ErrorCode;
 use serde_json::{Value, json};
@@ -231,32 +229,6 @@ impl State {
         let view = super::view(bot);
         self.save_catalog(catalog)?;
         Ok(json!({"bot":view,"appliesToNextTurn":true}))
-    }
-    /// Record a worktree Workspace created by the Workspace's current Bot.
-    ///
-    /// # Errors
-    /// `BotNotFound` without a current Bot, `ResourceExhausted` beyond 64 recorded
-    /// Workspaces, or a persistence failure.
-    pub(crate) fn record_workspace(
-        &mut self,
-        origin: &str,
-        created: &str,
-    ) -> Result<(), ErrorCode> {
-        let id = self.current(origin)?.id;
-        let mut catalog = self.catalog.clone();
-        let bot = catalog
-            .bots
-            .iter_mut()
-            .find(|entry| entry.id == id)
-            .ok_or(ErrorCode::BotNotFound)?;
-        if bot.workspaces.contains(created) {
-            return Ok(());
-        }
-        if bot.workspaces.len() >= BOT_WORKSPACES {
-            return Err(ErrorCode::ResourceExhausted);
-        }
-        bot.workspaces.insert(created.to_owned());
-        self.save_catalog(catalog)
     }
     /// Pause the Workspace's active Bot at the user's request.
     pub(super) fn pause(&mut self, request: &WorkspaceRequest) -> Result<Value, ErrorCode> {

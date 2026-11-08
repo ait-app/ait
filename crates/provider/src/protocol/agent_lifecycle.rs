@@ -311,6 +311,9 @@ pub(crate) struct AgentDirectoryResult {
 pub(crate) struct AgentGetRequest {
     /// Agent identifier accepted by Paseo resolution rules.
     pub(crate) agent_id: String,
+    /// Exclude a Bot's hidden session, for callers establishing an Agent's identity.
+    #[serde(default)]
+    pub(crate) public_only: bool,
 }
 
 /// One Agent lookup result.

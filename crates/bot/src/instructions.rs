@@ -78,9 +78,11 @@ fn granted(permissions: &BotPermissions) -> String {
     if permissions.modes.is_empty() {
         text.push_str(" No provider may start agents yet.");
     } else {
-        text.push_str(" Allowed agent modes per provider (the first is the default):");
+        text.push_str(" The only mode each provider may start agents in:");
         for (provider, modes) in &permissions.modes {
-            let _ = write!(text, " {provider}: {};", modes.join(", "));
+            if let Some(mode) = modes.first() {
+                let _ = write!(text, " {provider}: {mode};");
+            }
         }
     }
     text

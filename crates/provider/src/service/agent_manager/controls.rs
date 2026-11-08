@@ -71,14 +71,8 @@ impl AgentManager {
             }
             return;
         }
-        for flag in [
-            "supportsMessageSend",
-            "supportsCancel",
-            "supportsConfiguration",
-            "supportsDetach",
-            "supportsArchive",
-        ] {
-            snapshot["capabilities"][flag] = json!(true);
+        for flag in crate::rpc::agent_runtime::READ_ONLY_SESSION_FLAGS {
+            snapshot["capabilities"][flag] = json!(!record.internal);
         }
         if let Some(client) = self.clients.get(&record.provider) {
             let settings = client.settings(&record.config.clone().unwrap_or_default());

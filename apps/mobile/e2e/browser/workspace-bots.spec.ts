@@ -41,11 +41,15 @@ async function submitSetupWithOfflineModel(page: Page): Promise<void> {
   await expect(page.getByTestId("bot-chat")).toBeVisible();
 }
 
+function botInput(page: Page) {
+  return page.getByTestId("bot-chat").getByRole("textbox");
+}
+
 async function sendBotMessage(page: Page, text: string, reply: string): Promise<void> {
-  await page.getByTestId("bot-message-input").fill(text);
+  await botInput(page).fill(text);
   await page.getByTestId("bot-message-send").click();
   await expect(page.getByTestId("bot-chat")).toContainText(reply, { timeout: 30_000 });
-  await expect(page.getByTestId("bot-message-input")).toHaveValue("");
+  await expect(botInput(page)).toHaveValue("");
 }
 
 test("workspace bot setup, conversation, settings and persistence", async ({ page }) => {
@@ -82,6 +86,30 @@ test("workspace bot setup, conversation, settings and persistence", async ({ pag
 
     await sendBotMessage(page, "Hello Bot", "Echo: Hello Bot");
 
+    // The prompt and the reply are separate messages, as in a session.
+    const chat = page.getByTestId("bot-chat");
+    await expect(chat.getByTestId("user-message")).toContainText("Hello Bot");
+    await expect(chat.getByTestId("user-message")).not.toContainText("Echo: Hello Bot");
+    await expect(chat.getByTestId("assistant-message")).toContainText("Echo: Hello Bot");
+
+    // The hidden session is listed as a subagent and opens read-only.
+    const { conversations } = await client.botRequest("bot.conversation.list.request", {
+      workspaceId,
+    });
+    const sessionAgentId = conversations[0]?.sessionAgentId;
+    expect(sessionAgentId).toBeTruthy();
+    await chat.getByTestId("subagents-track-header").click();
+    await page.getByTestId(`subagents-track-row-${sessionAgentId}`).click();
+    const session = page.getByTestId("agent-conversation-panel").filter({ visible: true });
+    await expect(session).toContainText("Echo: Hello Bot", { timeout: 30_000 });
+    await expect(page.getByTestId("message-input-root").filter({ visible: true })).toHaveCount(0);
+    await page.getByTestId("workspace-tab-bot").filter({ visible: true }).click();
+    await expect(chat).toBeVisible();
+    // A finished hidden session must not claim attention and take the tab's focus on return.
+    await page.getByTestId("sidebar-settings").click();
+    await clickSettingsBackToWorkspace(page);
+    await expect(chat).toBeVisible();
+
     await page.getByTestId("bot-show-settings").click();
     await page.getByTestId("bot-memory").fill("Remember this workspace.");
     await page.getByTestId("bot-memory-save").click();
@@ -105,19 +133,19 @@ test("workspace bot setup, conversation, settings and persistence", async ({ pag
     await expect.poll(async () => (await getBot())?.state.kind).toBe("paused");
     await page.getByTestId("bot-show-chat").click();
     await expect(page.getByTestId("bot-chat")).toContainText("Paused");
-    await expect(page.getByTestId("bot-message-input")).not.toBeEditable();
-    await expect(page.getByTestId("bot-message-send")).toBeDisabled();
+    await expect(botInput(page)).not.toBeEditable();
+    await expect(page.getByTestId("bot-message-send")).toHaveCount(0);
     // A fresh load reads the paused Bot's history without reopening its conversation.
     await page.reload();
     await expect(page.getByTestId("bot-chat")).toContainText("Echo: Hello Bot", {
       timeout: 30_000,
     });
     await expect(page.getByTestId("bot-chat")).toContainText("Paused");
-    await expect(page.getByTestId("bot-message-input")).not.toBeEditable();
-    await expect(page.getByTestId("bot-message-send")).toBeDisabled();
+    await expect(botInput(page)).not.toBeEditable();
+    await expect(page.getByTestId("bot-message-send")).toHaveCount(0);
     await page.getByTestId("bot-resume").click();
     await expect.poll(async () => (await getBot())?.state.kind).toBe("active");
-    await expect(page.getByTestId("bot-message-input")).toBeEditable();
+    await expect(botInput(page)).toBeEditable();
     await sendBotMessage(page, "After resume", "Echo: After resume");
 
     // Removing returns to the wizard; setting up again keeps memory but starts a new history.
@@ -126,6 +154,8 @@ test("workspace bot setup, conversation, settings and persistence", async ({ pag
     await page.getByTestId("bot-remove").click();
     await expect(page.getByTestId("bot-setup")).toBeVisible();
     expect(await getBot()).toBeNull();
+    // The retired session's tab goes with its Bot.
+    await expect(page.getByTestId(`workspace-tab-agent_${sessionAgentId}`)).toHaveCount(0);
     await submitSetupWithOfflineModel(page);
     await expect(page.getByTestId("bot-chat")).toContainText(
       "Send a message to start a conversation.",
@@ -172,7 +202,7 @@ test("bot denies approvals automatically and protects memory from stale edits", 
     await gotoWorkspace(page, workspaceId);
     await openBotTab(page);
     await expect(page.getByTestId("bot-chat")).toBeVisible();
-    await page.getByTestId("bot-message-input").fill("permit-question");
+    await botInput(page).fill("permit-question");
     await page.getByTestId("bot-message-send").click();
     await expect(page.getByTestId("bot-chat")).toContainText("Echo: denied", { timeout: 30_000 });
     await expect(page.getByTestId("question-form-card")).toHaveCount(0);

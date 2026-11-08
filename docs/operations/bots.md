@@ -13,7 +13,7 @@
 新建外部 Channel 默认停用，配置完成后显式启用，并检查 Channel 状态。
 
 - 同一 Conversation 串行执行，不同发送者/线程的外部对话分开维护上下文。
-- Provider 会话从创建起隐藏，普通 Agent API 无法接管；关闭界面不停止 Bot。
+- Provider 会话从创建起隐藏，普通 Agent API 无法接管；Bot 标签页将其列为子 Agent，可按完整 ID 只读查看（[ADR-221](../decisions/bot/adr-221-read-only-bot-session-inspection.md)）；关闭界面不停止 Bot。
 - 配置在新 Conversation 或显式 reset 后生效。reset 前先完成或取消正在执行的轮次；排队中的输入随 reset 取消；旧历史保留。
 - 状态为 `active`、`paused`（原因 `user` 或 `directory_missing`）、`retired`。暂停取消排队和执行中的输入并停止外部轮询；
   恢复要求 Workspace 目录存在，否则返回 `WorkspaceNotFound`。Workspace 目录缺失会在轮次可运行时检测，Bot 暂停为 `directory_missing`，需用户显式恢复。
@@ -46,25 +46,24 @@ Bot 标签页仍在“设置 → 关于”的测试功能开关之后，且要�
 Bot 通过 Ait MCP 工具管理 Workspace，可用工具由用户授予的**分组**决定。分组整体替换保存，在 Bot 的下一次 MCP 请求生效，
 工具目录和指令在 Bot 下一轮刷新。
 
-| 分组         | 内容                                                                    | 默认 |
-| ------------ | ----------------------------------------------------------------------- | ---- |
-| `observe`    | 查看 Agent、定时任务、脚本、终端、Provider 与模型（总是开启，不可关闭） | 是   |
-| `agents`     | 创建 Agent、发送提示、修改 Agent 设置与模式                             | 是   |
-| `stop`       | 取消、归档、终止 Agent                                                  | 是   |
-| `schedules`  | 创建、修改、暂停、恢复、运行、删除定时任务与心跳                        | 是   |
-| `scripts`    | 启停 Workspace 脚本                                                     | 否   |
-| `terminals`  | 创建终端、发送按键、读取并终止终端                                      | 否   |
-| `workspaces` | 创建当前项目的 worktree Workspace                                       | 否   |
+| 分组        | 内容                                                                    | 默认 |
+| ----------- | ----------------------------------------------------------------------- | ---- |
+| `observe`   | 查看 Agent、定时任务、脚本、终端、Provider 与模型（总是开启，不可关闭） | 是   |
+| `agents`    | 创建 Agent、发送提示、修改 Agent 设置与模式                             | 是   |
+| `stop`      | 取消、归档、终止 Agent                                                  | 是   |
+| `schedules` | 创建、修改、暂停、恢复、运行、删除定时任务与心跳                        | 是   |
+| `scripts`   | 启停 Workspace 脚本                                                     | 否   |
+| `terminals` | 创建终端、发送按键、读取并终止终端                                      | 否   |
 
-`respond_to_permission`、`archive_workspace`、`rename_workspace`、`list_workspaces` 永不授予 Bot。
+`create_workspace`、`respond_to_permission`、`archive_workspace`、`rename_workspace`、`list_workspaces` 永不授予 Bot，Bot 不能通过 Ait MCP 创建 worktree 或 Workspace（[ADR-222](../decisions/bot/adr-222-single-agent-mode-no-bot-workspaces.md)）。
 `bot_memory_read`、`bot_memory_update`、`workspace_overview`（作用域概览，输出上限 24 KiB）只对 Bot 自己可见。
 
-**模式上限**按 Provider 列出 Bot 与它启动的 Agent 可使用的原生模式（每个 Provider 1–16 个，至多 32 个 Provider，第一项为默认模式）；
+**Agent 模式**为每个 Provider 选择一个原生模式（至多 32 个 Provider），Bot 与它启动的 Agent 只能使用该模式；
 未列出的 Provider 不能被使用。阶段 1／2 创建的 Bot 升级后得到默认分组但模式上限为空，不能启动 Agent，需在设置中配置。
 上限约束 Bot 与子树设置或创建的每一个模式。允许能运行命令的模式或 `terminals` 分组时，这些 Agent 与终端命令可读取本机 daemon 凭据并绕过 Bot 的 Ait 限制，
 设置页与向导在模式上限部分和终端分组下显示此警告。只读模式不阻止读取：即使 Codex `read-only` 下的 Bot 也能读取 `local-api.token`（见 ADR-215）。
 
-**作用域**为 Bot 所在 Workspace，加上它通过 `create_workspace` 创建且未归档的 worktree（至多 64 个）。Bot 可向作用域内的任何 Agent
+**作用域**为 Bot 所在 Workspace，加上此前已创建且未归档的 worktree（升级前的 Bot 可能留有记录）。Bot 可向作用域内的任何 Agent
 发送提示、修改设置，也可运行、暂停、恢复或删除任何定时任务（含用户启动和创建的），但受已授权分组与模式上限约束；
 `update_schedule` 只能编辑 Bot 创建的定时任务，用户创建的任务需由用户自己修改；
 向用户启动的 Agent 发送提示可能触及超出 Bot 自身限制的能力，这是已接受的风险（见 ADR-215）。

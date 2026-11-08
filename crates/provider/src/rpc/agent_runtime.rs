@@ -197,7 +197,12 @@ fn history(
 }
 
 fn get(directory: &AgentRuntimeDirectory, request: &AgentGetRequest) -> Result<Value, ErrorCode> {
-    let result = match directory.get(&request.agent_id) {
+    let resolved = if request.public_only {
+        directory.get(&request.agent_id)
+    } else {
+        directory.get_readable(&request.agent_id)
+    };
+    let result = match resolved {
         Ok(resolved) => get_result(&resolved),
         Err(error @ (AgentRuntimeError::NotFound(_) | AgentRuntimeError::Ambiguous(_))) => {
             AgentGetResult {
@@ -494,11 +499,22 @@ pub(crate) fn snapshot(record: &PersistedAgentRuntimeRecord) -> AgentSnapshotPay
             })
             .filter(crate::protocol::usage::AgentUsage::is_valid),
         last_error: None,
-        title: record.title.clone(),
+        // A hidden session never gets a generated title; its tab still needs a name.
+        title: record
+            .title
+            .clone()
+            .or_else(|| record.internal.then(|| "Bot session".to_owned())),
         labels: record.labels.clone(),
-        requires_attention: record.requires_attention,
-        attention_reason: record.attention_reason.map(protocol_attention),
-        attention_timestamp: record.attention_timestamp.clone(),
+        // A hidden session is inspected, never tracked: clients focus Agents that report attention.
+        requires_attention: record.requires_attention && !record.internal,
+        attention_reason: record
+            .attention_reason
+            .filter(|_| !record.internal)
+            .map(protocol_attention),
+        attention_timestamp: record
+            .attention_timestamp
+            .clone()
+            .filter(|_| !record.internal),
         archived_at: record.archived_at.clone(),
         provider_unavailable: true,
     }
@@ -520,6 +536,15 @@ fn project(placement: &AgentPlacement) -> ProjectPlacementPayload {
         },
     }
 }
+
+/// Controls withheld from a hidden session opened for inspection.
+pub(crate) const READ_ONLY_SESSION_FLAGS: [&str; 5] = [
+    "supportsMessageSend",
+    "supportsCancel",
+    "supportsConfiguration",
+    "supportsDetach",
+    "supportsArchive",
+];
 
 fn stored_capabilities(record: &PersistedAgentRuntimeRecord) -> AgentCapabilityFlags {
     let mut flags: AgentCapabilityFlags = [
@@ -548,6 +573,11 @@ fn stored_capabilities(record: &PersistedAgentRuntimeRecord) -> AgentCapabilityF
         }
         flags.insert("supportsArchive".to_owned(), source.status.is_terminal());
         flags.insert("supportsStreaming".to_owned(), true);
+    }
+    if record.internal {
+        for flag in READ_ONLY_SESSION_FLAGS {
+            flags.insert(flag.to_owned(), false);
+        }
     }
     flags
 }
