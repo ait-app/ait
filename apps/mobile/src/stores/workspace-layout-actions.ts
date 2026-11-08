@@ -7,6 +7,7 @@ import { defaultWorkspaceLayoutIds } from "@/stores/workspace-layout-ids";
 import type { WorkspaceLayoutNodeIdPrefix } from "@/stores/workspace-layout-ids";
 import {
   buildDeterministicWorkspaceTabId,
+  isWorkspaceSingletonTabTarget,
   normalizeWorkspaceTabTarget,
   workspaceTabTargetsEqual,
 } from "@/workspace-tabs/identity";
@@ -144,6 +145,11 @@ interface CreateTabInLayoutInput extends OpenTabInLayoutInput {
   state?: JsonValue;
 }
 
+interface RevealTargetInLayoutInput extends CreateTabInLayoutInput {
+  /** Reveal an open tab as it is, without navigating it to the requested target. */
+  keepExistingTarget?: boolean;
+}
+
 interface OpenTabInLayoutResult {
   layout: WorkspaceLayout;
   tabId: string;
@@ -156,10 +162,7 @@ interface RetargetTabInLayoutInput {
   target: WorkspaceTabTarget;
 }
 
-interface ReplaceTabTargetInLayoutInput extends Omit<
-  RetargetTabInLayoutInput,
-  "explorerSidebarPaneId"
-> {
+interface ReplaceTabTargetInLayoutInput extends RetargetTabInLayoutInput {
   createTabId: () => string;
   state?: JsonValue;
 }
@@ -381,11 +384,10 @@ function normalizeWorkspaceTab(value: unknown): WorkspaceTab | null {
   if (!persistedTabId && target.kind === "new_tab") {
     return null;
   }
-  // Bot tabs are per-workspace singletons; legacy ids (bot_<id>, bot_list) collapse to "bot".
-  const tabId =
-    target.kind === "bot"
-      ? buildDeterministicWorkspaceTabId(target)
-      : (persistedTabId ?? buildDeterministicWorkspaceTabId(target));
+  // Singleton tabs collapse legacy ids (bot_<id>, schedule_list, instance ids) to their kind.
+  const tabId = isWorkspaceSingletonTabTarget(target)
+    ? buildDeterministicWorkspaceTabId(target)
+    : (persistedTabId ?? buildDeterministicWorkspaceTabId(target));
   if (!tabId) {
     return null;
   }
@@ -691,15 +693,18 @@ function normalizePaneNode(rawPane: SplitPaneInternal | undefined): SplitNodeInt
           createdAt: Date.now(),
         }));
   const rawFocusedTabId = trimNonEmpty(rawPane?.focusedTabId) ?? null;
-  const focusedBotTab = Array.isArray(rawPane?.tabs)
+  const focusedSingletonTab = Array.isArray(rawPane?.tabs)
     ? (rawPane.tabs as WorkspaceTab[]).find(
-        (tab) => tab?.tabId === rawFocusedTabId && tab?.target?.kind === "bot",
+        (tab) =>
+          tab?.tabId === rawFocusedTabId &&
+          tab?.target &&
+          isWorkspaceSingletonTabTarget(tab.target),
       )
     : undefined;
   return createPaneNode({
     id: paneId,
     tabs: mergedTabs,
-    focusedTabId: focusedBotTab ? "bot" : rawFocusedTabId,
+    focusedTabId: focusedSingletonTab?.target.kind ?? rawFocusedTabId,
     hidden: rawPane?.hidden === true,
   });
 }
@@ -1032,18 +1037,21 @@ function insertSplitInternal(input: InsertSplitInternalInput): InsertSplitIntern
 }
 
 /**
- * Keep the first Bot tab in pane order and drop later ones: legacy layouts may hold Bot tabs
- * in several panes, which all collapse to the singleton id "bot". A pane that loses its
- * focused tab falls back like any other pane.
+ * Keep the first tab of each singleton kind in pane order and drop later ones: legacy layouts
+ * may hold Bot or Cron tabs in several panes, which all collapse to one singleton id. A pane
+ * that loses its focused tab falls back like any other pane.
  */
-function keepFirstBotTab(node: SplitNodeInternal, seen = { bot: false }): SplitNodeInternal {
+function keepFirstSingletonTabs(
+  node: SplitNodeInternal,
+  seen = new Set<string>(),
+): SplitNodeInternal {
   if (node.kind === "pane") {
     const tabs = node.pane.tabs.filter((tab) => {
-      if (tab.target.kind !== "bot") {
+      if (!isWorkspaceSingletonTabTarget(tab.target)) {
         return true;
       }
-      const first = !seen.bot;
-      seen.bot = true;
+      const first = !seen.has(tab.target.kind);
+      seen.add(tab.target.kind);
       return first;
     });
     if (tabs.length === node.pane.tabs.length) {
@@ -1056,7 +1064,7 @@ function keepFirstBotTab(node: SplitNodeInternal, seen = { bot: false }): SplitN
       hidden: node.pane.hidden,
     });
   }
-  const children = node.group.children.map((child) => keepFirstBotTab(child, seen));
+  const children = node.group.children.map((child) => keepFirstSingletonTabs(child, seen));
   if (children.every((child, index) => child === node.group.children[index])) {
     return node;
   }
@@ -1074,7 +1082,7 @@ export function normalizeLayout(layout: unknown): WorkspaceLayout {
   }
 
   const rawLayout = layout as WorkspaceLayout;
-  const root = keepFirstBotTab(
+  const root = keepFirstSingletonTabs(
     normalizeNode(rawLayout.root) ?? asInternalNode(createDefaultLayout().root),
   );
   const focusedPaneId =
@@ -1488,6 +1496,7 @@ export function openTabInLayoutFocused(input: OpenTabInLayoutInput): OpenTabInLa
         layout: nextLayout,
         tabId: existingTab.tabId,
         placement: input.placement,
+        explorerSidebarPaneId: input.explorerSidebarPaneId,
       }),
     };
   }
@@ -1505,15 +1514,20 @@ export function createTabInLayout(input: CreateTabInLayoutInput): OpenTabInLayou
 }
 
 /** Reveals an equivalent target, or creates it when absent. */
-export function revealTargetInLayout(input: CreateTabInLayoutInput): OpenTabInLayoutResult | null {
+export function revealTargetInLayout(
+  input: RevealTargetInLayoutInput,
+): OpenTabInLayoutResult | null {
   const existingTab = findExistingTabForTarget(asInternalLayout(input.layout).root, input.target);
   if (existingTab) {
     return {
       tabId: existingTab.tabId,
       layout: revealExistingTab({
-        layout: updateExistingTabTarget(input.layout, existingTab, input.target),
+        layout: input.keepExistingTarget
+          ? input.layout
+          : updateExistingTabTarget(input.layout, existingTab, input.target),
         tabId: existingTab.tabId,
         placement: input.placement,
+        explorerSidebarPaneId: input.explorerSidebarPaneId,
       }),
     };
   }
@@ -1531,6 +1545,7 @@ function revealExistingTab(input: {
   layout: WorkspaceLayout;
   tabId: string;
   placement: WorkspaceTabPlacement;
+  explorerSidebarPaneId: string | null;
 }): WorkspaceLayout {
   if (input.placement.mode === "pane") {
     const currentPane = findPaneContainingTab(asInternalNode(input.layout.root), input.tabId);
@@ -1539,6 +1554,7 @@ function revealExistingTab(input: {
         layout: input.layout,
         tabId: input.tabId,
         toPaneId: input.placement.paneId,
+        explorerSidebarPaneId: input.explorerSidebarPaneId,
       });
       if (moved) {
         return moved;
@@ -1788,7 +1804,10 @@ export function retargetTabInLayout(
   };
 }
 
-/** Replaces one pane-local slot and never claims an equivalent tab elsewhere. */
+/**
+ * Replaces one pane-local slot and never claims an equivalent tab elsewhere, except that a
+ * singleton target moves its open tab into the slot's pane and the slot closes.
+ */
 export function replaceTabTargetInLayout(
   input: ReplaceTabTargetInLayoutInput,
 ): RetargetTabInLayoutResult | null {
@@ -1811,6 +1830,29 @@ export function replaceTabTargetInLayout(
         focusedPaneId: layout.focusedPaneId,
         parentTabIdByTabId: input.layout.parentTabIdByTabId,
       }),
+    };
+  }
+  const openSingletonTab = isWorkspaceSingletonTabTarget(input.target)
+    ? collectAllTabs(layout.root).find(
+        (tab) => tab.tabId !== input.tabId && tab.target.kind === input.target.kind,
+      )
+    : undefined;
+  if (openSingletonTab) {
+    const paneId = findPaneContainingTab(layout.root, input.tabId)!.id;
+    const revealed = revealExistingTab({
+      layout: input.layout,
+      tabId: openSingletonTab.tabId,
+      placement: { mode: "pane", paneId },
+      explorerSidebarPaneId: input.explorerSidebarPaneId,
+    });
+    return {
+      tabId: openSingletonTab.tabId,
+      layout:
+        closeTabInLayout({
+          layout: revealed,
+          tabId: input.tabId,
+          explorerSidebarPaneId: input.explorerSidebarPaneId,
+        }) ?? revealed,
     };
   }
   let tabId = input.createTabId();

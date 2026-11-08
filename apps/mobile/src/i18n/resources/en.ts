@@ -1799,7 +1799,6 @@ export const en = {
     browse: "Workspace schedules",
     timeline: {
       back: "Back to task list",
-      hint: "Tasks are ordered by their next trigger. Select a task to edit it.",
       filters: { upcoming: "Upcoming", paused: "Paused", completed: "Finished" },
       today: "Today",
       tomorrow: "Tomorrow",
@@ -1812,6 +1811,11 @@ export const en = {
         upcoming: "No upcoming tasks. Create a schedule to get started.",
         paused: "No paused tasks.",
         completed: "No finished tasks.",
+      },
+      page: {
+        previous: "Previous",
+        next: "Next",
+        status: "Page {{page}} of {{pageCount}}",
       },
     },
     history: "Run history",

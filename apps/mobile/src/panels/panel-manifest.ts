@@ -127,13 +127,8 @@ const manifests = {
     kind: "schedule",
     supportedHosts: ["main", "explorer"],
     showCloseButton: true,
-    singleton: false,
-    resourceKey: (target) =>
-      target.scheduleId
-        ? `schedule_${target.scheduleId}`
-        : target.view === "create"
-          ? "schedule_create"
-          : "schedule_list",
+    singleton: true,
+    resourceKey: () => "schedule",
   },
   file: {
     kind: "file",

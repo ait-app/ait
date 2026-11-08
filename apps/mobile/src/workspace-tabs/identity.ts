@@ -218,6 +218,11 @@ function recordsShallowEqual(
   return true;
 }
 
+/** Bot and Cron tabs exist at most once per workspace, and their tab id is their kind. */
+export function isWorkspaceSingletonTabTarget(target: { kind: string }): boolean {
+  return target.kind === "bot" || target.kind === "schedule";
+}
+
 export function buildDeterministicWorkspaceTabId(target: WorkspaceTabTarget): string {
   if (target.kind === "new_tab") {
     throw new Error("New tabs do not have deterministic target identities");
@@ -247,11 +252,7 @@ export function buildDeterministicWorkspaceTabId(target: WorkspaceTabTarget): st
     return "bot";
   }
   if (target.kind === "schedule") {
-    return target.scheduleId
-      ? `schedule_${target.scheduleId}`
-      : target.view === "create"
-        ? "schedule_create"
-        : "schedule_list";
+    return "schedule";
   }
   if (target.kind === "working_diff") {
     return "working_diff";

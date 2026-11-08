@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { History } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -13,7 +13,11 @@ import { WorkspaceScheduleForm } from "./schedule-form-sheet";
 import { useAggregatedAgents } from "@/hooks/use-aggregated-agents";
 import { useScheduleMutations } from "@/hooks/use-schedule-mutations";
 import { useScheduleDetail, useWorkspaceSchedules } from "@/schedules/use-workspace-schedules";
-import { buildScheduleTimeline, type ScheduleTimelineFilter } from "@/schedules/schedule-timeline";
+import {
+  buildScheduleTimeline,
+  paginateScheduleTimeline,
+  type ScheduleTimelineFilter,
+} from "@/schedules/schedule-timeline";
 import type { ScheduleFormWorkspace } from "@/schedules/schedule-form-model";
 import { formatCadence, resolveScheduleTitle } from "@/utils/schedule-format";
 import { confirmDialog } from "@/utils/confirm-dialog";
@@ -44,6 +48,10 @@ export function WorkspaceScheduleTab(props: WorkspaceScheduleTabProps) {
     : props.view === "create" && !readOnly
       ? "create"
       : "list";
+  const filter = props.filter ?? "upcoming";
+  // Lives above the list so returning from a task lands on the same page; a new filter starts over.
+  const [listPage, setListPage] = useState({ filter, page: 1 });
+  if (listPage.filter !== filter) setListPage({ filter, page: 1 });
   const detail = useScheduleDetail(props.serverId, props.scheduleId, props.interactive);
   const list = useWorkspaceSchedules(
     props.serverId,
@@ -52,7 +60,14 @@ export function WorkspaceScheduleTab(props: WorkspaceScheduleTabProps) {
   );
   let content;
   if (view === "list") {
-    content = <ScheduleTimelineList {...props} query={list} />;
+    content = (
+      <ScheduleTimelineList
+        {...props}
+        query={list}
+        page={listPage.filter === filter ? listPage.page : 1}
+        onPageChange={(page) => setListPage({ filter, page })}
+      />
+    );
   } else if (view === "create") {
     content = (
       <WorkspaceScheduleForm
@@ -109,10 +124,8 @@ export function WorkspaceScheduleTab(props: WorkspaceScheduleTabProps) {
   }
   return (
     <View style={styles.container}>
-      <View style={styles.toolbar}>
-        {view === "list" ? (
-          <Text style={styles.cardTitle}>{t("schedules.browse")}</Text>
-        ) : (
+      {view === "list" ? null : (
+        <View style={styles.toolbar}>
           <Button
             size="sm"
             variant="ghost"
@@ -121,29 +134,24 @@ export function WorkspaceScheduleTab(props: WorkspaceScheduleTabProps) {
           >
             {t("schedules.timeline.back")}
           </Button>
-        )}
-        {view !== "create" && !readOnly ? (
-          <Button
-            size="sm"
-            variant="outline"
-            onPress={props.onCreate}
-            testID="workspace-schedules-new"
-          >
-            {t("schedules.new")}
-          </Button>
-        ) : null}
-      </View>
+        </View>
+      )}
       {content}
     </View>
   );
 }
 
 function ScheduleTimelineList(
-  props: WorkspaceScheduleTabProps & { query: ReturnType<typeof useWorkspaceSchedules> },
+  props: WorkspaceScheduleTabProps & {
+    query: ReturnType<typeof useWorkspaceSchedules>;
+    page: number;
+    onPageChange: (page: number) => void;
+  },
 ) {
   const { t, i18n } = useTranslation();
   const readOnly = !canManageBackgroundTasks(props.serverId);
   const filter = props.filter ?? "upcoming";
+  const scrollRef = useRef<ScrollView>(null);
   const groups = useMemo(
     () =>
       buildScheduleTimeline(
@@ -153,6 +161,11 @@ function ScheduleTimelineList(
       ),
     [props.query.data, props.query.dataUpdatedAt, props.workspace.id, filter],
   );
+  const timelinePage = paginateScheduleTimeline(groups, props.page);
+  const goToPage = (page: number) => {
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+    props.onPageChange(page);
+  };
   const filters = useMemo(
     () =>
       (["upcoming", "paused", "completed"] as const).map((value) => ({
@@ -163,17 +176,17 @@ function ScheduleTimelineList(
     [t],
   );
   return (
-    <ScrollView contentContainerStyle={styles.content} testID="workspace-schedules-list">
-      <View style={styles.listHeading}>
-        <Text style={styles.title}>{props.workspace.name}</Text>
-        <Text style={styles.muted}>{t("schedules.timeline.hint")}</Text>
-        <SegmentedControl
-          options={filters}
-          value={filter}
-          onValueChange={(filter) => props.onBrowse(filter)}
-          size="sm"
-        />
-      </View>
+    <ScrollView
+      ref={scrollRef}
+      contentContainerStyle={styles.content}
+      testID="workspace-schedules-list"
+    >
+      <SegmentedControl
+        options={filters}
+        value={filter}
+        onValueChange={(filter) => props.onBrowse(filter)}
+        size="sm"
+      />
       {props.query.isPending ? (
         <LoadingSpinner color={styles.muted.color} />
       ) : props.query.isError ? (
@@ -183,8 +196,8 @@ function ScheduleTimelineList(
             void props.query.refetch();
           }}
         />
-      ) : groups.length ? (
-        groups.map((group) => (
+      ) : timelinePage.groups.length ? (
+        timelinePage.groups.map((group) => (
           <View key={group.key} style={styles.timelineGroup}>
             <View style={styles.groupHeading}>
               <Text style={styles.cardTitle}>
@@ -262,13 +275,43 @@ function ScheduleTimelineList(
       ) : (
         <View style={styles.emptyList}>
           <Text style={styles.muted}>{t(`schedules.timeline.empty.${filter}`)}</Text>
-          {filter === "upcoming" && !readOnly ? (
-            <Button variant="outline" onPress={props.onCreate}>
-              {t("schedules.new")}
-            </Button>
-          ) : null}
         </View>
       )}
+      {!readOnly ? (
+        <View style={styles.listEnd}>
+          <Button variant="outline" onPress={props.onCreate} testID="workspace-schedules-new">
+            {t("schedules.new")}
+          </Button>
+        </View>
+      ) : null}
+      {timelinePage.pageCount > 1 ? (
+        <View style={styles.pager}>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={timelinePage.page === 1}
+            onPress={() => goToPage(timelinePage.page - 1)}
+            testID="workspace-schedules-page-previous"
+          >
+            {t("schedules.timeline.page.previous")}
+          </Button>
+          <Text style={styles.muted} testID="workspace-schedules-page-status">
+            {t("schedules.timeline.page.status", {
+              page: timelinePage.page,
+              pageCount: timelinePage.pageCount,
+            })}
+          </Text>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={timelinePage.page === timelinePage.pageCount}
+            onPress={() => goToPage(timelinePage.page + 1)}
+            testID="workspace-schedules-page-next"
+          >
+            {t("schedules.timeline.page.next")}
+          </Button>
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -563,7 +606,6 @@ const styles = StyleSheet.create((theme) => ({
     padding: theme.spacing[4],
     gap: theme.spacing[3],
   },
-  listHeading: { gap: theme.spacing[3] },
   timelineGroup: { gap: theme.spacing[2] },
   groupHeading: {
     paddingVertical: theme.spacing[2],
@@ -596,7 +638,14 @@ const styles = StyleSheet.create((theme) => ({
   },
   eventDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.foregroundMuted },
   eventBody: { flex: 1, minWidth: 0, gap: theme.spacing[1] },
-  emptyList: { alignItems: "center", gap: theme.spacing[4], paddingVertical: theme.spacing[8] },
+  emptyList: { alignItems: "center", paddingVertical: theme.spacing[8] },
+  listEnd: { alignItems: "center" },
+  pager: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[3],
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",

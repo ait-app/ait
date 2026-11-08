@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ScheduleSummary } from "@ait/protocol/schedule/types";
-import { buildScheduleTimeline } from "./schedule-timeline";
+import { buildScheduleTimeline, paginateScheduleTimeline } from "./schedule-timeline";
 const now = new Date(2030, 0, 1, 9).getTime();
 const iso = (hours: number) => new Date(now + hours * 3_600_000).toISOString();
 function task(
@@ -73,5 +73,37 @@ describe("schedule timeline", () => {
       buildScheduleTimeline([task("expired", null, "completed")], "completed", now)[0]?.events[0]
         ?.occursAt,
     ).toBe(iso(-1));
+  });
+});
+
+describe("paginateScheduleTimeline", () => {
+  const ids = (page: ReturnType<typeof paginateScheduleTimeline>) =>
+    page.groups.flatMap((group) => group.events.map((event) => event.schedule.id));
+  const pad = (index: number) => String(index).padStart(2, "0");
+  const today = Array.from({ length: 30 }, (_, index) => task(`a-${pad(index)}`, iso(1)));
+  const later = Array.from({ length: 15 }, (_, index) => task(`b-${pad(index)}`, iso(72)));
+  const groups = buildScheduleTimeline([...today, ...later], "upcoming", now);
+
+  it("limits a page to 20 tasks and repeats a split group's heading", () => {
+    const first = paginateScheduleTimeline(groups, 1);
+    expect(first.pageCount).toBe(3);
+    expect(ids(first)).toHaveLength(20);
+    const second = paginateScheduleTimeline(groups, 2);
+    expect(ids(second)[0]).toBe("a-20");
+    expect(ids(second)[10]).toBe("b-00");
+    expect(second.groups.map((group) => group.events.length)).toEqual([10, 10]);
+    expect(second.groups[0].key).toBe(first.groups[0].key);
+  });
+
+  it("clamps a page past the end after tasks disappear", () => {
+    const page = paginateScheduleTimeline(groups, 9);
+    expect(page.page).toBe(3);
+    expect(ids(page)).toHaveLength(5);
+  });
+
+  it("keeps a single page for an empty or exactly full list", () => {
+    expect(paginateScheduleTimeline([], 1)).toEqual({ groups: [], page: 1, pageCount: 1 });
+    const exact = buildScheduleTimeline(today.slice(0, 20), "upcoming", now);
+    expect(paginateScheduleTimeline(exact, 1).pageCount).toBe(1);
   });
 });
