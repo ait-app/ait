@@ -33,7 +33,7 @@ import {
 } from "./model";
 import type { UsageReportEntry, UsageView } from "./types";
 
-// Host reports use the daemon's five-minute cache; explicit refresh bypasses it.
+// Host reports use the daemon's shared cache; explicit refresh bypasses it.
 // Agent reports always read the live session's account and stay separate from host reports.
 const REPORTS_STALE_TIME_MS = 60_000;
 

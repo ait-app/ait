@@ -1,32 +1,23 @@
 import { RotateCw } from "lucide-react-native";
-import { withUnistyles } from "react-native-unistyles";
-import { extraMutedIconColorMapping } from "@/components/ui/icon-button-chrome";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { ToolbarButton, paneContentToolbarIconSize } from "@/components/ui/pane-content-toolbar";
+import { Button } from "@/components/ui/button";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useUsageCopy } from "./copy";
 
-const ThemedRotateCw = withUnistyles(RotateCw);
-const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-
-/** Refreshes every report on the host; spins while a refresh is in flight. */
+/** Bypasses the host quota cache for every provider; disables repeat presses while pending. */
 export function UsageRefreshButton({ busy, onRefresh }: { busy: boolean; onRefresh: () => void }) {
   const usageCopy = useUsageCopy();
   const compact = useIsCompactFormFactor();
-  const iconSize = paneContentToolbarIconSize(compact);
   return (
-    <ToolbarButton
-      label={usageCopy.refreshAll}
-      compact={compact}
-      disabled={busy}
+    <Button
+      variant="outline"
+      size={compact ? "sm" : "xs"}
+      accessibilityLabel={usageCopy.refreshAll}
+      loading={busy}
       onPress={onRefresh}
+      leftIcon={RotateCw}
       testID="usage-refresh-all"
     >
-      {busy ? (
-        <ThemedLoadingSpinner size={iconSize} uniProps={extraMutedIconColorMapping} />
-      ) : (
-        <ThemedRotateCw size={iconSize} uniProps={extraMutedIconColorMapping} />
-      )}
-    </ToolbarButton>
+      {busy ? usageCopy.refreshing : usageCopy.refreshAll}
+    </Button>
   );
 }

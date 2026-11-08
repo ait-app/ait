@@ -2275,7 +2275,7 @@ export const en = {
     summaryUsed: "{{source}} {{amount}} used",
     summaryRemaining: "{{source}} {{amount}} left",
     options: "Settings",
-    refreshAll: "Refresh all",
+    refreshAll: "Force refresh",
     refreshFailed: "Unable to refresh usage",
     noHosts: "No connected hosts",
     agentError: "Unable to load usage: {{reason}}",

@@ -1798,7 +1798,7 @@ export const ar: TranslationResources = {
     summaryUsed: "{{source}}، المستخدم {{amount}}",
     summaryRemaining: "{{source}}، المتبقي {{amount}}",
     options: "الإعدادات",
-    refreshAll: "تحديث الكل",
+    refreshAll: "تحديث إجباري",
     refreshFailed: "تعذر تحديث الاستخدام",
     noHosts: "لا توجد مضيفات متصلة",
     agentError: "تعذر تحميل الاستخدام: {{reason}}",

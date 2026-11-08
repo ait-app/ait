@@ -2217,7 +2217,7 @@ export const zhCN: TranslationResources = {
     summaryUsed: "{{source}} 已使用 {{amount}}",
     summaryRemaining: "{{source}} 剩余 {{amount}}",
     options: "设置",
-    refreshAll: "全部刷新",
+    refreshAll: "强制刷新",
     refreshFailed: "无法刷新用量",
     noHosts: "没有已连接的主机",
     agentError: "无法加载用量：{{reason}}",

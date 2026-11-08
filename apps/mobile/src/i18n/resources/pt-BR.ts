@@ -1827,7 +1827,7 @@ export const ptBR: TranslationResources = {
     summaryUsed: "{{source}} {{amount}} usado",
     summaryRemaining: "{{source}} {{amount}} restante",
     options: "Configurações",
-    refreshAll: "Atualizar tudo",
+    refreshAll: "Forçar atualização",
     refreshFailed: "Não foi possível atualizar o uso",
     noHosts: "Nenhum host conectado",
     agentError: "Não foi possível carregar o uso: {{reason}}",
