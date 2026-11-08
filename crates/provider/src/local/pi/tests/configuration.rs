@@ -321,7 +321,7 @@ async fn model_changes_restore_only_supported_thinking_levels() {
                 let mut history = std::fs::OpenOptions::new().append(true).open(path).unwrap();
                 writeln!(
                     history,
-                    "\n{}",
+                    "{}",
                     json!({"type":"thinking_level_change","thinkingLevel":seed})
                 )
                 .unwrap();

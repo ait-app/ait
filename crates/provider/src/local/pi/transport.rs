@@ -202,7 +202,7 @@ pub(super) struct Transport {
     input: Arc<Mutex<Option<ChildStdin>>>,
     messages: mpsc::Receiver<Record>,
     reader: JoinHandle<()>,
-    stderr: JoinHandle<()>,
+    stderr: Option<JoinHandle<()>>,
     pending: VecDeque<Record>,
     pending_bytes: usize,
     pending_notices: usize,
@@ -211,6 +211,9 @@ pub(super) struct Transport {
     deadline: Duration,
     pub(super) admission_deadline: Duration,
     closed: bool,
+    shutdown: Option<oneshot::Receiver<Result<(), AgentSessionError>>>,
+    // Keep the outcome through cancellation until a close finishes cleanup and returns it.
+    shutdown_result: Option<Result<(), AgentSessionError>>,
     group: Option<u32>,
     /// Safe bounded diagnostics shared with process readers and the session.
     pub(super) diagnostics: Diagnostics,
@@ -309,7 +312,7 @@ impl Transport {
             input,
             messages,
             reader,
-            stderr,
+            stderr: Some(stderr),
             pending: VecDeque::new(),
             pending_bytes: 0,
             pending_notices: 0,
@@ -318,6 +321,8 @@ impl Transport {
             deadline,
             admission_deadline: client.admission_deadline,
             closed: false,
+            shutdown: None,
+            shutdown_result: None,
             diagnostics,
         })
     }
@@ -481,34 +486,43 @@ impl Transport {
     }
 
     /// Allow native cleanup, then force termination if needed and reap the owned process.
-    /// Returns failure if shutdown cannot reap the process.
+    /// Repeated calls finish shutdown and reader cleanup started by a cancelled close.
+    /// Returns a shutdown failure once after cleanup; subsequent calls succeed.
     pub(super) async fn close(&mut self) -> Result<(), AgentSessionError> {
-        if self.closed {
-            return Ok(());
+        if !self.closed {
+            self.closed = true;
+            self.reader.abort();
+            if let Some(child) = self.child.take() {
+                self.shutdown = Some(shutdown(child, self.group.take(), self.input.clone()));
+            }
         }
-        self.closed = true;
-        self.reader.abort();
-        if let Some(child) = self.child.take() {
-            shutdown(child, self.group.take(), self.input.clone())
-                .await
-                .map_err(|_| AgentSessionError::Failed)??;
+        if let Some(completion) = self.shutdown.as_mut() {
+            let result = completion.await.unwrap_or(Err(AgentSessionError::Failed));
+            self.shutdown_result = Some(result);
+            self.shutdown = None;
         }
         self.input.lock().await.take();
-        if tokio::time::timeout(Duration::from_millis(100), &mut self.stderr)
-            .await
-            .is_err()
-        {
-            self.stderr.abort();
+        // Retain the handle across cancellation, but never poll a completed join twice.
+        if let Some(stderr) = self.stderr.as_mut() {
+            if tokio::time::timeout(Duration::from_millis(100), &mut *stderr)
+                .await
+                .is_err()
+            {
+                stderr.abort();
+            }
+            self.stderr = None;
         }
         self.diagnostics.flush();
-        Ok(())
+        self.shutdown_result.take().unwrap_or(Ok(()))
     }
 }
 
 impl Drop for Transport {
     fn drop(&mut self) {
         self.reader.abort();
-        self.stderr.abort();
+        if let Some(stderr) = &self.stderr {
+            stderr.abort();
+        }
         if let Some(child) = self.child.take() {
             // The worker owns the process until it is reaped, even without a live runtime.
             drop(shutdown(child, self.group.take(), self.input.clone()));
@@ -562,7 +576,7 @@ async fn write(
 }
 
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;
 
 /// Give native signal handlers time to terminate detached tools before forcing shutdown.
 fn shutdown(

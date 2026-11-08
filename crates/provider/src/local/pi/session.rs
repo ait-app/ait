@@ -23,6 +23,9 @@ use crate::protocol::prompt::AgentPrompt;
 const ABORT_SETTLEMENT_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_STATE_READS: usize = 3;
 
+#[cfg(all(test, unix))]
+mod tests;
+
 #[derive(Clone, Copy)]
 enum Synchronization {
     Opening,
@@ -34,6 +37,13 @@ enum Synchronization {
 enum ConfigurationState {
     Applied,
     Pending,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PersistenceState {
+    Empty,
+    Observed,
+    Required,
 }
 
 /// One owned native writer and its stable resume identity.
@@ -51,7 +61,7 @@ pub(super) struct Session {
     images: crate::local::images::ImageStore,
     active: Option<String>,
     stream: Stream,
-    has_input: bool,
+    persistence_state: PersistenceState,
     closed: bool,
 }
 
@@ -67,9 +77,19 @@ pub(super) async fn open(
         || Uuid::new_v4().to_string(),
         |handle| handle.session_id.clone(),
     );
-    let has_input = handle
-        .and_then(|handle| handle.metadata.as_ref())
-        .is_some_and(|data| data.get("hasInput") == Some(&Value::Bool(true)));
+    let metadata = handle.and_then(|handle| handle.metadata.as_ref());
+    let mut persistence_state = if metadata
+        .is_some_and(|data| data.get("hasInput") == Some(&Value::Bool(true)))
+    {
+        PersistenceState::Required
+    } else if metadata.is_some_and(|data| data.get("observedWork") == Some(&Value::Bool(true))) {
+        PersistenceState::Observed
+    } else {
+        PersistenceState::Empty
+    };
+    let native_cwd = metadata
+        .and_then(|data| data.get("nativeCwd")?.as_str())
+        .unwrap_or(&spec.cwd);
     let session_directory = match super::history::session_directory(client, Path::new(&spec.cwd)) {
         Ok(directory) => Some(directory),
         Err(AgentSessionError::Unavailable) => None,
@@ -88,13 +108,19 @@ pub(super) async fn open(
         {
             return Err(AgentSessionError::Rejected);
         }
-        if has_input {
-            let path = handle
-                .native_handle
-                .as_ref()
-                .and_then(Value::as_str)
-                .or_else(|| handle.metadata.as_ref()?.get("sessionFile")?.as_str())
-                .ok_or(AgentSessionError::Rejected)?;
+        let path = handle
+            .native_handle
+            .as_ref()
+            .and_then(Value::as_str)
+            .or_else(|| handle.metadata.as_ref()?.get("sessionFile")?.as_str());
+        // The manager may have saved this handle before Pi finished its shutdown write.
+        if persistence_state == PersistenceState::Observed
+            && saved_handle_matches(client, handle, native_cwd).await
+        {
+            persistence_state = PersistenceState::Required;
+        }
+        if persistence_state == PersistenceState::Required {
+            let path = path.ok_or(AgentSessionError::Rejected)?;
             if !Path::new(path).is_absolute() || !Path::new(path).is_file() {
                 return Err(AgentSessionError::Rejected);
             }
@@ -110,10 +136,7 @@ pub(super) async fn open(
         transport: Transport::spawn(client, &spec.cwd, &args, spec.confinement.as_ref())?,
         id,
         cwd: spec.cwd.clone(),
-        native_cwd: handle
-            .and_then(|handle| handle.metadata.as_ref()?.get("nativeCwd")?.as_str())
-            .unwrap_or(&spec.cwd)
-            .to_owned(),
+        native_cwd: native_cwd.to_owned(),
         state: Value::Null,
         runtime_changed: false,
         config: StoredAgentConfig::default(),
@@ -122,7 +145,7 @@ pub(super) async fn open(
         images: client.images.clone(),
         active: None,
         stream: Stream::default(),
-        has_input,
+        persistence_state,
         closed: false,
     };
     if session.synchronize(Synchronization::Opening).await? {
@@ -160,7 +183,7 @@ impl Session {
             "get_state",
         );
         self.closed = true;
-        self.transport.close().await?;
+        self.close_transport().await?;
         Err(AgentSessionError::Failed)
     }
 
@@ -251,7 +274,7 @@ impl Session {
                             && error != AgentSessionError::Rejected
                         {
                             self.closed = true;
-                            let _ = self.transport.close().await;
+                            let _ = self.close_transport().await;
                             return Err(error);
                         }
                         // This definitive control rejection has a known explanation. Native
@@ -325,38 +348,87 @@ impl Session {
         self.stream.begin(turn.clone());
         self.stream.admission = true;
         let result = self
-            .transport
-            .prompt(
+            .admit(
+                &turn,
                 json!({"type":"prompt","message":text,"images":images}),
-                |event| {
-                    observe_thinking(&mut self.state, &mut self.runtime_changed, event);
-                    self.stream.consume(event).map(|_| ()).map_err(|_| {
-                        let diagnostic = self
-                            .stream
-                            .failure
-                            .filter(|failure| failure.source == "display_limit")
-                            .unwrap_or(Diagnostic::new(Category::Protocol, "prompt_event"));
-                        self.stream.failure = Some(diagnostic);
-                        diagnostic
-                    })
-                },
+                submitted,
             )
-            .await?;
-        self.has_input |= self.stream.running || self.stream.settled;
+            .await;
+        if result.is_err() && (self.closed || matches!(result, Err(AgentSessionError::Failed))) {
+            self.closed = true;
+            self.active = None;
+            let _ = self.close_transport().await;
+            self.stream.fail();
+        } else {
+            // Check once after admission has consumed all native work and state readbacks.
+            self.observe_persisted_work().await;
+        }
+        self.stream.end_admission();
+        result?;
+        self.report_failure();
+        Ok(turn)
+    }
+
+    async fn admit(
+        &mut self,
+        turn: &str,
+        request: Value,
+        submitted: Vec<AgentTurnEvent>,
+    ) -> Result<(), AgentSessionError> {
+        let result = self
+            .transport
+            .prompt(request, |event| {
+                observe_thinking(&mut self.state, &mut self.runtime_changed, event);
+                self.stream.consume(event).map(|_| ()).map_err(|_| {
+                    let diagnostic = self
+                        .stream
+                        .failure
+                        .filter(|failure| failure.source == "display_limit")
+                        .unwrap_or(Diagnostic::new(Category::Protocol, "prompt_event"));
+                    self.stream.failure = Some(diagnostic);
+                    diagnostic
+                })
+            })
+            .await;
+        // A definitive rejection takes precedence over unrelated extension activity.
+        let observed_work = !matches!(result, Err(AgentSessionError::Rejected))
+            && (self.stream.running || self.stream.settled);
+        if result
+            .as_ref()
+            .is_ok_and(|response| response["disposition"] == "started")
+        {
+            self.persistence_state = PersistenceState::Required;
+        } else if observed_work {
+            self.observe_native_work();
+        }
+        // Uncertain admission retains the prompt ahead of observed work and cleanup.
+        if result.is_ok() || observed_work {
+            let failure = self.stream.failure;
+            let projection = self.stream.insert_submitted(submitted);
+            if result.is_ok() {
+                projection?;
+            } else {
+                // Input retention is best effort after admission has already failed.
+                self.stream.failure = failure;
+            }
+        }
+        let result = result?;
         match result["disposition"].as_str() {
             Some("started") => {
-                self.has_input = true;
                 if !self.stream.settled {
-                    self.active = Some(turn.clone());
+                    self.active = Some(turn.to_owned());
                 }
             }
             Some("handled") => {
-                let busy = self.finish_handled_admission().await?;
-                self.has_input |= self.stream.running || self.stream.settled;
+                let result = self.finish_handled_admission().await;
+                if self.stream.running || self.stream.settled {
+                    self.observe_native_work();
+                }
+                let busy = result?;
                 if busy || self.stream.running {
                     self.stream.resume_running();
-                    self.has_input = true;
-                    self.active = Some(turn.clone());
+                    self.observe_native_work();
+                    self.active = Some(turn.to_owned());
                 } else if !self.stream.settled {
                     self.stream.handled()?;
                 }
@@ -366,14 +438,37 @@ impl Session {
                     .diagnostics
                     .observe(Diagnostic::new(Category::Protocol, "disposition"), "prompt");
                 self.closed = true;
-                self.transport.close().await?;
+                self.close_transport().await?;
                 return Err(AgentSessionError::Failed);
             }
         }
-        self.stream.insert_submitted(submitted)?;
-        self.stream.end_admission();
-        self.report_failure();
-        Ok(turn)
+        Ok(())
+    }
+
+    fn observe_native_work(&mut self) {
+        if self.persistence_state == PersistenceState::Empty {
+            self.persistence_state = PersistenceState::Observed;
+        }
+    }
+
+    async fn observe_persisted_work(&mut self) {
+        if self.persistence_state != PersistenceState::Observed {
+            return;
+        }
+        let Some(path) = self.state["sessionFile"].as_str() else {
+            return;
+        };
+        // Pi assigns sessionFile before flushing history; verify the saved identity.
+        if saved_session_matches(path, &self.id, &self.native_cwd).await {
+            self.persistence_state = PersistenceState::Required;
+        }
+    }
+
+    async fn close_transport(&mut self) -> Result<(), AgentSessionError> {
+        let result = self.transport.close().await;
+        // A negative check while Pi was alive may have raced its final history write.
+        self.observe_persisted_work().await;
+        result
     }
 
     async fn finish_handled_admission(&mut self) -> Result<bool, AgentSessionError> {
@@ -394,8 +489,7 @@ impl Session {
             Ok(Ok(busy)) => Ok(busy),
             Ok(Err(error)) => {
                 self.closed = true;
-                let _ = self.transport.close().await;
-                self.stream.fail();
+                let _ = self.close_transport().await;
                 Err(error)
             }
             Err(_) => {
@@ -404,8 +498,7 @@ impl Session {
                     "prompt",
                 );
                 self.closed = true;
-                self.transport.close().await?;
-                self.stream.fail();
+                self.close_transport().await?;
                 Err(AgentSessionError::Failed)
             }
         }
@@ -540,6 +633,30 @@ impl Session {
     }
 }
 
+async fn saved_handle_matches(
+    client: &PiClient,
+    handle: &AgentPersistenceHandle,
+    cwd: &str,
+) -> bool {
+    let client = client.clone();
+    let handle = handle.clone();
+    let cwd = cwd.to_owned();
+    tokio::task::spawn_blocking(move || {
+        super::history::matches_saved_session_header(&client, &handle, &cwd)
+    })
+    .await
+    .unwrap_or(false)
+}
+
+async fn saved_session_matches(path: &str, id: &str, cwd: &str) -> bool {
+    let path = Path::new(path).to_owned();
+    let id = id.to_owned();
+    let cwd = cwd.to_owned();
+    tokio::task::spawn_blocking(move || super::history::matches_session_header(&path, &id, &cwd))
+        .await
+        .unwrap_or(false)
+}
+
 fn observe_thinking(state: &mut Value, changed: &mut bool, event: &Value) {
     let Some(level) = thinking_notification(event) else {
         return;
@@ -601,15 +718,22 @@ impl AgentSession for Session {
     }
 
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
+        let mut metadata = BTreeMap::from([
+            ("cwd".into(), json!(self.cwd)),
+            ("nativeCwd".into(), json!(self.native_cwd)),
+            (
+                "hasInput".into(),
+                json!(self.persistence_state == PersistenceState::Required),
+            ),
+        ]);
+        if self.persistence_state == PersistenceState::Observed {
+            metadata.insert("observedWork".into(), json!(true));
+        }
         Some(AgentPersistenceHandle {
             provider: PROVIDER.to_owned(),
             session_id: self.id.clone(),
             native_handle: self.state.get("sessionFile").cloned(),
-            metadata: Some(BTreeMap::from([
-                ("cwd".into(), json!(self.cwd)),
-                ("nativeCwd".into(), json!(self.native_cwd)),
-                ("hasInput".into(), json!(self.has_input)),
-            ])),
+            metadata: Some(metadata),
         })
     }
 
@@ -680,7 +804,7 @@ impl AgentSession for Session {
             );
             self.closed = true;
             self.active = None;
-            self.transport.close().await?;
+            self.close_transport().await?;
             self.stream.fail();
         }
         result
@@ -688,6 +812,6 @@ impl AgentSession for Session {
 
     async fn close(&mut self) -> Result<(), AgentSessionError> {
         self.closed = true;
-        self.transport.close().await
+        self.close_transport().await
     }
 }

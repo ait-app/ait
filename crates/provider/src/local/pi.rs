@@ -240,8 +240,12 @@ impl AgentClient for PiClient {
         if purpose == AgentResumePurpose::History {
             return Err(AgentSessionError::Unavailable);
         }
+        let required = handle
+            .metadata
+            .as_ref()
+            .is_some_and(|metadata| metadata.get("hasInput") == Some(&Value::Bool(true)));
         let needs_lookup = handle.metadata.as_ref().is_some_and(|metadata| {
-            metadata.get("hasInput") == Some(&Value::Bool(true))
+            (required || metadata.get("observedWork") == Some(&Value::Bool(true)))
                 && handle
                     .native_handle
                     .as_ref()
@@ -250,11 +254,17 @@ impl AgentClient for PiClient {
                     .is_none_or(|path| !std::path::Path::new(path).is_file())
         });
         let resolved = if needs_lookup {
-            let history = self.inspect_session(handle, &spec.cwd).await?;
-            let mut resolved = handle.clone();
-            resolved.native_handle = None;
-            resolved.metadata = Some(history.resume_metadata);
-            Cow::Owned(resolved)
+            match self.inspect_session(handle, &spec.cwd).await {
+                Ok(history) => {
+                    let mut resolved = handle.clone();
+                    resolved.native_handle = None;
+                    resolved.metadata = Some(history.resume_metadata);
+                    Cow::Owned(resolved)
+                }
+                // Observed work may never have been saved. A required file stays mandatory.
+                Err(AgentSessionError::Unavailable) if !required => Cow::Borrowed(handle),
+                Err(error) => return Err(error),
+            }
         } else {
             Cow::Borrowed(handle)
         };

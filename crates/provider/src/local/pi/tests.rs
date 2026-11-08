@@ -8,6 +8,7 @@ use tempfile::TempDir;
 use super::*;
 
 mod admission;
+mod admission_lifecycle;
 mod commands;
 mod configuration;
 mod configuration_rejections;
@@ -25,7 +26,8 @@ use crate::ports::agent_session::AgentTurnEvent;
 use crate::ports::diagnostics::Category;
 use crate::protocol::prompt::AgentPrompt;
 
-fn fixture(scenario: &str) -> (TempDir, PiClient, AgentSessionSpec) {
+/// Build an isolated native peer, client and session specification for `scenario`.
+pub(super) fn fixture(scenario: &str) -> (TempDir, PiClient, AgentSessionSpec) {
     let directory = tempfile::tempdir().unwrap();
     let cwd = directory.path().canonicalize().unwrap();
     let program = cwd.join("pi");

@@ -2,6 +2,7 @@
 """Deterministic Pi RPC peer; no model API or user credentials."""
 import json
 import os
+import signal
 import sys
 import time
 import uuid
@@ -32,6 +33,7 @@ elif '--session-id' in args:
     identity = args[args.index('--session-id') + 1]
 else:
     identity = str(uuid.uuid4())
+session_header = json.dumps({'type': 'session', 'version': 3, 'id': identity, 'cwd': str(root)}) + '\n'
 running = False
 finish_after_state = False
 compacting = False
@@ -98,6 +100,25 @@ def emit(value):
 
 def response(command, data=None, success=True, error=None):
     emit({'id': command['id'], 'type': 'response', 'command': command['type'], 'success': success, 'data': data, 'error': error})
+
+deferred_history = None
+
+def save_history(data):
+    global deferred_history
+    if scenario in ['history-on-shutdown', 'partial-history-on-shutdown']:
+        deferred_history = data
+        if scenario == 'partial-history-on-shutdown':
+            path.write_text(session_header[:len(session_header) // 2])
+    else:
+        path.write_text(data)
+
+def finish_history(_signal, _frame):
+    if deferred_history is not None:
+        path.write_text(deferred_history)
+    sys.exit(0)
+
+if scenario in ['history-on-shutdown', 'partial-history-on-shutdown']:
+    signal.signal(signal.SIGTERM, finish_history)
 
 for line in sys.stdin:
     command = json.loads(line)
@@ -317,14 +338,46 @@ for line in sys.stdin:
         if text == 'reject':
             response(command, success=False)
             continue
+        if text == 'unknown-disposition':
+            response(command, {'disposition': 'future'})
+            continue
+        if text in ['reject-running', 'reject-settled']:
+            save_history(session_header)
+            running = text == 'reject-running'
+            emit({'type': 'agent_start'})
+            emit({'type': 'tool_execution_start', 'toolCallId': 'extension',
+                  'toolName': 'bash', 'args': {'command': 'echo extension'}})
+            if not running:
+                emit({'type': 'tool_execution_end', 'toolCallId': 'extension',
+                      'toolName': 'bash', 'result': {}, 'isError': False})
+                emit({'type': 'agent_settled', 'aborted': False})
+            response(command, success=False)
+            continue
         if text == 'exit':
             sys.exit(2)
         if text == 'malformed':
             print('not json', flush=True)
             continue
-        if text == 'slow':
-            time.sleep(0.6)
+        if text in ['gated-admission', 'never-ack']:
+            (root / 'prompt-received').touch()
+        if text == 'gated-admission':
+            while not (root / 'admit-prompt').exists():
+                time.sleep(0.01)
         if text == 'never-ack':
+            continue
+        if text in ['unacknowledged-running', 'unacknowledged-settled']:
+            save_history(session_header + json.dumps(
+                {'type': 'thinking_level_change', 'thinkingLevel': 'low'}) + '\n')
+            emit({'type': 'agent_start'})
+            emit({'type': 'tool_execution_start', 'toolCallId': 'pending',
+                  'toolName': 'bash', 'args': {'command': 'echo saved'}})
+            if text == 'unacknowledged-settled':
+                emit({'type': 'tool_execution_end', 'toolCallId': 'pending',
+                      'toolName': 'bash', 'result': {}, 'isError': False})
+                emit({'type': 'agent_settled', 'aborted': False})
+            # The host reader queues preceding run events before writing this response.
+            emit({'type': 'extension_ui_request', 'id': 'admission-barrier',
+                  'method': 'confirm', 'title': 'Admission barrier'})
             continue
         if text.startswith('invalid-admission-'):
             events = {
@@ -393,14 +446,14 @@ for line in sys.stdin:
             response(command, {'disposition': 'handled'})
             continue
         if text == 'handled-running':
-            path.write_text(json.dumps({'id': identity}))
+            save_history(session_header)
             running = True
             finish_after_state = True
             emit({'type': 'agent_start'})
             response(command, {'disposition': 'handled'})
             continue
         if text in ['handled-before', 'handled-after']:
-            path.write_text(json.dumps({'id': identity}))
+            save_history(session_header)
             if text == 'handled-after':
                 response(command, {'disposition': 'handled'})
             emit({'type': 'agent_start'})
@@ -413,7 +466,7 @@ for line in sys.stdin:
         if text == 'handled':
             response(command, {'disposition': 'handled'})
             continue
-        path.write_text(json.dumps({'id': identity}))
+        save_history(session_header)
         # Fast native events may precede the admission response.
         emit({'type': 'agent_start'})
         response(command, {'disposition': 'started'})
@@ -454,6 +507,9 @@ for line in sys.stdin:
         response(command)
     elif kind == 'extension_ui_response':
         assert command['cancelled'] is True
+        if command['id'] == 'admission-barrier':
+            (root / 'prompt-received').touch()
+            continue
         emit({'type': 'agent_settled', 'aborted': False})
     else:
         response(command, success=False)
