@@ -85,3 +85,29 @@ describe("splitPinnedSidebarGroups", () => {
     ]);
   });
 });
+
+it("pins chats within their own project without hoisting or duplicating them", () => {
+  const projects = [
+    project("p1", [placement("regular"), placement("older"), placement("newer")]),
+    project("p2", [placement("other-regular"), placement("other-pin")]),
+  ];
+  const keys = {
+    pinnedWorkspaceKeys: ["older", "newer", "other-pin"],
+    pinnedAtByKey: { older: "2026-01-01", newer: "2026-02-01", "other-pin": "2026-03-01" },
+  };
+  const input = { projects, keys, keepInProjects: true };
+  const result = splitPinnedSidebarGroups(input);
+  expect(result.pinnedChats).toEqual([]);
+  expect(
+    result.unpinnedProjects.map((entry) => entry.workspaces.map((item) => item.workspaceKey)),
+  ).toEqual([
+    ["newer", "older", "regular"],
+    ["other-pin", "other-regular"],
+  ]);
+  expect(projects[0].workspaces[0].workspaceKey).toBe("regular");
+  const unpinned = splitPinnedSidebarGroups({
+    ...input,
+    keys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
+  });
+  expect(unpinned.unpinnedProjects).toBe(projects);
+});

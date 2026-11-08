@@ -187,9 +187,10 @@ describe("buildSidebarProjection", () => {
       "project",
     ]);
     expect(projection.pinnedGroups.unpinnedProjects[0]?.workspaces).toEqual([
+      pinned.placement,
       input.projects[1]!.workspaces[0],
     ]);
-    expect(projection.pinnedGroups.pinnedChats).toEqual([pinned.placement]);
+    expect(projection.pinnedGroups.pinnedChats).toEqual([]);
     expect(projection.shortcutModel.shortcutTargets).toEqual([
       { serverId: "srv", workspaceId: "first" },
     ]);
@@ -244,6 +245,7 @@ describe("buildSidebarProjection", () => {
     const projection = buildSidebarProjection(input);
 
     expect(projection.pinnedGroups.unpinnedProjects[0]?.workspaces).toEqual([
+      pinned.placement,
       newer.placement,
       older.placement,
     ]);
@@ -262,6 +264,7 @@ describe("buildSidebarProjection", () => {
       }),
     });
     expect(updated.pinnedGroups.unpinnedProjects[0]?.workspaces).toEqual([
+      pinned.placement,
       older.placement,
       newer.placement,
     ]);
@@ -350,11 +353,12 @@ describe("buildSidebarProjection", () => {
   it("uses one pin-aware projection for project rows and shortcut order", () => {
     const projection = buildSidebarProjection(projectionInput());
 
-    expect(projection.pinnedGroups.pinnedChats.map((entry) => entry.workspaceId)).toEqual([
-      "pinned",
-    ]);
+    expect(projection.pinnedGroups.pinnedChats).toEqual([]);
     const remainingProject = projection.pinnedGroups.unpinnedProjects[0];
-    expect(remainingProject?.workspaces.map((entry) => entry.workspaceId)).toEqual(["unpinned"]);
+    expect(remainingProject?.workspaces.map((entry) => entry.workspaceId)).toEqual([
+      "pinned",
+      "unpinned",
+    ]);
     expect(projection.shortcutModel.shortcutTargets).toEqual([
       { serverId: "srv", workspaceId: "pinned" },
       { serverId: "srv", workspaceId: "unpinned" },
@@ -383,4 +387,42 @@ describe("buildSidebarProjection", () => {
       { serverId: "srv", workspaceId: "unpinned" },
     ]);
   });
+});
+
+it("keeps pinned projects first and keyboard shortcuts in the same order", () => {
+  const input = projectionInput();
+  const first = makeWorkspace("first", "done", [], "first-project");
+  const second = makeWorkspace("second", "done", [], "second-project");
+  const projects = [
+    makeProject([first.placement], "first-project"),
+    makeProject([second.placement], "second-project"),
+  ];
+  const result = buildSidebarProjection({
+    ...input,
+    projects,
+    pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
+    pinnedProjectKeys: ["second-project"],
+    workspaceEntriesByKey: new Map([
+      [first.entry.workspaceKey, first.entry],
+      [second.entry.workspaceKey, second.entry],
+    ]),
+  });
+  expect(result.pinnedGroups.unpinnedProjects.map((project) => project.viewKey)).toEqual([
+    "second-project",
+    "first-project",
+  ]);
+  expect(result.shortcutModel.shortcutTargets).toEqual([
+    { serverId: "srv", workspaceId: "second" },
+    { serverId: "srv", workspaceId: "first" },
+  ]);
+  expect(projects[0].viewKey).toBe("first-project");
+  const reordered = buildSidebarProjection({
+    ...input,
+    projects: [...projects].reverse(),
+    pinnedProjectKeys: ["first-project", "second-project"],
+  });
+  expect(reordered.pinnedGroups.unpinnedProjects.map((project) => project.viewKey)).toEqual([
+    "first-project",
+    "second-project",
+  ]);
 });

@@ -39,6 +39,7 @@ export interface SidebarProjection {
 export interface SidebarProjectionInput {
   projects: SidebarProjectEntry[];
   pinnedKeys: PinnedSidebarKeys;
+  pinnedProjectKeys?: readonly string[];
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   projectNamesByViewKey: Map<string, string>;
   groupMode: SidebarGroupMode;
@@ -49,24 +50,37 @@ export interface SidebarProjectionInput {
 
 export function buildSidebarProjection(input: SidebarProjectionInput): SidebarProjection {
   const pinnedGroups = splitPinnedSidebarGroups({
-    // Include pinned chats in project recency before moving them into their own section.
+    // Include pinned chats when computing project recency.
     projects: input.groupMode === "project" ? orderProjectsByActivity(input) : input.projects,
     keys: input.pinnedKeys,
+    keepInProjects: input.groupMode === "project",
   });
   if (input.groupMode === "project") {
     pinnedGroups.unpinnedProjects = pinnedGroups.unpinnedProjects.map((project) => {
-      const workspaces = [...project.workspaces].sort((a, b) =>
-        compareSidebarWorkspaces(
-          input.workspaceEntriesByKey.get(a.workspaceKey) ?? a,
-          input.workspaceEntriesByKey.get(b.workspaceKey) ?? b,
-          input.projectNamesByViewKey,
-        ),
+      const workspaces = [...project.workspaces].sort(
+        (a, b) =>
+          Number(input.pinnedKeys.pinnedWorkspaceKeys.includes(b.workspaceKey)) -
+            Number(input.pinnedKeys.pinnedWorkspaceKeys.includes(a.workspaceKey)) ||
+          (input.pinnedKeys.pinnedAtByKey[b.workspaceKey] ?? "").localeCompare(
+            input.pinnedKeys.pinnedAtByKey[a.workspaceKey] ?? "",
+          ) ||
+          compareSidebarWorkspaces(
+            input.workspaceEntriesByKey.get(a.workspaceKey) ?? a,
+            input.workspaceEntriesByKey.get(b.workspaceKey) ?? b,
+            input.projectNamesByViewKey,
+          ),
       );
       return workspaces.every((workspace, index) => workspace === project.workspaces[index])
         ? project
         : { ...project, workspaces };
     });
   }
+  const projectPinRank = new Map((input.pinnedProjectKeys ?? []).map((key, index) => [key, index]));
+  pinnedGroups.unpinnedProjects = [...pinnedGroups.unpinnedProjects].sort(
+    (a, b) =>
+      (projectPinRank.get(a.viewKey) ?? projectPinRank.size) -
+      (projectPinRank.get(b.viewKey) ?? projectPinRank.size),
+  );
   const pinnedWorkspaceKeys = new Set(input.pinnedKeys.pinnedWorkspaceKeys);
   const unpinnedWorkspaces = Array.from(input.workspaceEntriesByKey.values()).filter(
     (workspace) => !pinnedWorkspaceKeys.has(workspace.workspaceKey),
