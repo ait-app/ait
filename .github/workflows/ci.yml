@@ -104,6 +104,17 @@ jobs:
         run: |
           cargo clean --package sherpa-onnx-sys
           rm -rf target/sherpa-onnx-prebuilt
+      # The sherpa build script downloads once, and GitHub Releases intermittently answers 504.
+      - name: Download sherpa native archive
+        run: |
+          version=$(awk '/^name = "sherpa-onnx-sys"$/ { getline; gsub(/[^0-9.]/, ""); print }' Cargo.lock)
+          archive="sherpa-onnx-v${version}-linux-x64-static-lib.tar.bz2"
+          mkdir -p "$RUNNER_TEMP/sherpa"
+          curl --fail --location --silent --show-error \
+            --connect-timeout 30 --retry 8 --retry-delay 15 --retry-all-errors \
+            --output "$RUNNER_TEMP/sherpa/$archive" \
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${version}/$archive"
+          echo "SHERPA_ONNX_ARCHIVE_DIR=$RUNNER_TEMP/sherpa" >> "$GITHUB_ENV"
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
