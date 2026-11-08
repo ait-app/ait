@@ -12,6 +12,35 @@ export interface ScheduleTimelineGroup {
   events: ScheduleTimelineEvent[];
 }
 
+export const SCHEDULE_TIMELINE_PAGE_SIZE = 20;
+
+export interface ScheduleTimelinePage {
+  groups: ScheduleTimelineGroup[];
+  page: number;
+  pageCount: number;
+}
+
+/** Slices the timeline by event; a date group split across pages repeats its heading. */
+export function paginateScheduleTimeline(
+  groups: readonly ScheduleTimelineGroup[],
+  page: number,
+  pageSize = SCHEDULE_TIMELINE_PAGE_SIZE,
+): ScheduleTimelinePage {
+  const eventCount = groups.reduce((count, group) => count + group.events.length, 0);
+  const pageCount = Math.max(1, Math.ceil(eventCount / pageSize));
+  const current = Math.min(Math.max(page, 1), pageCount);
+  const start = (current - 1) * pageSize;
+  const end = start + pageSize;
+  const visible: ScheduleTimelineGroup[] = [];
+  let offset = 0;
+  for (const group of groups) {
+    const events = group.events.slice(Math.max(start - offset, 0), Math.max(end - offset, 0));
+    offset += group.events.length;
+    if (events.length > 0) visible.push({ ...group, events });
+  }
+  return { groups: visible, page: current, pageCount };
+}
+
 function localDay(time: number): string {
   const date = new Date(time);
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;

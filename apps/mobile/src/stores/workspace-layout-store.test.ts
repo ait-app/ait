@@ -244,33 +244,85 @@ describe("workspace-layout-store helpers", () => {
       target: { kind: "schedule" },
       intent: "new",
     });
-    const second = source.getState().openTab({
-      workspaceKey,
-      target: { kind: "schedule" },
-      intent: "new",
-    });
-    expect(first).not.toBe(second);
     source
       .getState()
       .replaceTab(workspaceKey, first!, { kind: "schedule", view: "list", filter: "paused" });
-    source.getState().replaceTab(workspaceKey, second!, { kind: "schedule", view: "create" });
 
     const restored = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
     await restored.persist.rehydrate();
     const tabs = collectAllTabs(restored.getState().layoutByWorkspace[workspaceKey]!.root);
-    expect(tabs.filter((tab) => tab.target.kind === "schedule").map((tab) => tab.tabId)).toEqual([
-      first,
-      second,
-    ]);
     expect(tabs.find((tab) => tab.tabId === first)?.target).toEqual({
       kind: "schedule",
       view: "list",
       filter: "paused",
     });
-    expect(tabs.find((tab) => tab.tabId === second)?.target).toEqual({
-      kind: "schedule",
-      view: "create",
+  });
+
+  it("launches one Cron tab per workspace and keeps the view it is showing", () => {
+    const store = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
+    const workspaceKey = "host-a:cron-launch";
+    const scheduleTabs = () =>
+      collectAllTabs(store.getState().layoutByWorkspace[workspaceKey]!.root).filter(
+        (tab) => tab.target.kind === "schedule",
+      );
+    const first = store.getState().openTab({
+      workspaceKey,
+      target: { kind: "schedule" },
+      intent: "new",
     });
+    expect(first).toBe("schedule");
+    store.getState().replaceTab(workspaceKey, first!, {
+      kind: "schedule",
+      scheduleId: "task-1",
+      view: "edit",
+    });
+
+    const second = store.getState().openTab({
+      workspaceKey,
+      target: { kind: "schedule" },
+      intent: "new",
+    });
+
+    expect(second).toBe(first);
+    expect(scheduleTabs().map((tab) => tab.target)).toEqual([
+      { kind: "schedule", scheduleId: "task-1", view: "edit" },
+    ]);
+  });
+
+  it("keeps the main pane when Cron is launched into Explorer from a pane it fills", () => {
+    const store = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
+    const workspaceKey = "host-a:cron-explorer";
+    const layout = () => store.getState().layoutByWorkspace[workspaceKey]!;
+    const explorerPaneId = store.getState().showExplorerSidebar(workspaceKey)!;
+    const mainPane = collectAllPanes(layout().root).find((pane) => pane.id !== explorerPaneId)!;
+    store.getState().replaceTab(workspaceKey, mainPane.tabIds[0]!, { kind: "schedule" });
+    expect(findPaneById(layout().root, mainPane.id)?.tabIds).toEqual(["schedule"]);
+
+    store.getState().openTab({
+      workspaceKey,
+      target: { kind: "schedule" },
+      intent: "new",
+      placement: { mode: "pane", paneId: explorerPaneId },
+    });
+
+    expect(findPaneById(layout().root, explorerPaneId)?.tabIds).toContain("schedule");
+    expect(findPaneById(layout().root, mainPane.id)).toBeTruthy();
+  });
+
+  it("closes a launcher slot that picks Cron while a Cron tab is already open", () => {
+    const store = createWorkspaceLayoutStore(createDeterministicWorkspaceLayoutIds());
+    const workspaceKey = "host-a:cron-slot";
+    store.getState().openTab({ workspaceKey, target: { kind: "schedule" }, intent: "new" });
+    const slot = store
+      .getState()
+      .openTab({ workspaceKey, target: { kind: "new_tab" }, intent: "new" });
+
+    const replaced = store.getState().replaceTab(workspaceKey, slot!, { kind: "schedule" });
+
+    const tabs = collectAllTabs(store.getState().layoutByWorkspace[workspaceKey]!.root);
+    expect(replaced).toBe("schedule");
+    expect(tabs.filter((tab) => tab.target.kind === "schedule")).toHaveLength(1);
+    expect(tabs.some((tab) => tab.tabId === slot)).toBe(false);
   });
 
   it("seeds Files and Changes in the default Explorer sidebar", () => {
@@ -5150,6 +5202,69 @@ describe("compact workspace sheet", () => {
     stop();
 
     expect(received).toEqual([[], ["child"], []]);
+  });
+});
+
+describe("legacy Cron tab restore", () => {
+  it("keeps the first Cron tab across panes under the singleton id", () => {
+    const layout = normalizeLayout({
+      root: {
+        kind: "group",
+        group: {
+          id: "split",
+          direction: "horizontal",
+          sizes: [0.5, 0.5],
+          children: [
+            {
+              kind: "pane",
+              pane: {
+                id: "left",
+                tabIds: ["schedule_list", "tab_second"],
+                focusedTabId: "tab_second",
+                tabs: [
+                  {
+                    tabId: "schedule_list",
+                    target: { kind: "schedule", view: "list", filter: "paused" },
+                    createdAt: 1,
+                  },
+                  {
+                    tabId: "tab_second",
+                    target: { kind: "schedule", view: "create" },
+                    createdAt: 2,
+                  },
+                ],
+              },
+            },
+            {
+              kind: "pane",
+              pane: {
+                id: "right",
+                tabIds: ["agent_b", "schedule_task-1"],
+                focusedTabId: "schedule_task-1",
+                tabs: [
+                  { tabId: "agent_b", target: { kind: "agent", agentId: "b" }, createdAt: 3 },
+                  {
+                    tabId: "schedule_task-1",
+                    target: { kind: "schedule", scheduleId: "task-1" },
+                    createdAt: 4,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+      focusedPaneId: "right",
+    });
+    const scheduleTabs = collectAllTabs(layout.root).filter(
+      (tab) => tab.target.kind === "schedule",
+    );
+    expect(scheduleTabs.map((tab) => [tab.tabId, tab.target])).toEqual([
+      ["schedule", { kind: "schedule", view: "list", filter: "paused" }],
+    ]);
+    expect(findPaneById(layout.root, "left")?.focusedTabId).toBe("schedule");
+    expect(findPaneById(layout.root, "right")?.tabIds).toEqual(["agent_b"]);
+    expect(findPaneById(layout.root, "right")?.focusedTabId).toBe("agent_b");
   });
 });
 

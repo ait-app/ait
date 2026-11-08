@@ -1752,7 +1752,6 @@ export const zhCN: TranslationResources = {
     browse: "工作区计划",
     timeline: {
       back: "返回计划列表",
-      hint: "按下一次触发时间排列，点击计划即可编辑。",
       filters: { upcoming: "即将执行", paused: "已暂停", completed: "已结束" },
       today: "今天",
       tomorrow: "明天",
@@ -1765,6 +1764,11 @@ export const zhCN: TranslationResources = {
         upcoming: "暂无即将执行的计划，创建一个计划开始使用。",
         paused: "暂无已暂停的计划。",
         completed: "暂无已结束的计划。",
+      },
+      page: {
+        previous: "上一页",
+        next: "下一页",
+        status: "第 {{page}} / {{pageCount}} 页",
       },
     },
     history: "运行历史",

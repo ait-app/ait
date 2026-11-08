@@ -56,7 +56,10 @@ import {
   defaultWorkspaceLayoutIds,
   type WorkspaceLayoutIdSource,
 } from "@/stores/workspace-layout-ids";
-import { normalizeWorkspaceTabTarget } from "@/workspace-tabs/identity";
+import {
+  isWorkspaceSingletonTabTarget,
+  normalizeWorkspaceTabTarget,
+} from "@/workspace-tabs/identity";
 import type { WorkspaceTab, WorkspaceTabTarget } from "@/workspace-tabs/model";
 import type { JsonValue } from "@ait/protocol/agent-types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -1069,8 +1072,11 @@ export function createWorkspaceLayoutStore(
             normalizedTarget,
             input.placement,
           );
+          // A second launch of a singleton finds the open tab as the user left it.
+          const launchesSingleton =
+            input.intent === "new" && isWorkspaceSingletonTabTarget(normalizedTarget);
           let result;
-          if (input.intent === "new") {
+          if (input.intent === "new" && !launchesSingleton) {
             result = createTabInLayout({
               ...placement,
               insertionPosition: input.insertionPosition,
@@ -1093,6 +1099,7 @@ export function createWorkspaceLayoutStore(
               target: normalizedTarget,
               now: Date.now(),
               createTabId: createWorkspaceTabInstanceId,
+              keepExistingTarget: launchesSingleton,
             });
           }
           if (!result) {
@@ -1470,6 +1477,7 @@ export function createWorkspaceLayoutStore(
             target: normalizedTarget,
             createTabId: createWorkspaceTabInstanceId,
             state: tabState,
+            explorerSidebarPaneId: selectExplorerSidebarPaneId(get(), normalizedWorkspaceKey),
           });
           if (!result) return null;
           set((state) => ({

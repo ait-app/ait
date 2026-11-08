@@ -204,7 +204,9 @@ it("normalizes and separates schedule list, creation and edit navigation", () =>
     { kind: "schedule" as const, view: "create" as const },
     { kind: "schedule" as const, scheduleId: "task-1" },
   ];
-  expect(new Set(targets.map(buildDeterministicWorkspaceTabId)).size).toBe(3);
+  expect(new Set(targets.map(buildDeterministicWorkspaceTabId))).toEqual(new Set(["schedule"]));
+  expect(new Set(targets.map(panelResourceKey)).size).toBe(1);
+  expect(getPanelManifest("schedule").singleton).toBe(true);
   expect(workspaceTabTargetsEqual(targets[0], { kind: "schedule", view: "list" })).toBe(true);
   expect(
     workspaceTabTargetsEqual(targets[2], { kind: "schedule", scheduleId: "task-1", view: "edit" }),
