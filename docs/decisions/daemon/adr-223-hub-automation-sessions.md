@@ -16,6 +16,7 @@
 4. **策略**（`crates/api/src/automation/policy.rs`，默认拒绝）：
    - `agent.create.request`：只接受 `config`、`labels`、`idempotencyKey`（必填）。`config` 只能是 `provider`、`model`、`cwd`、`title`、`modeId`、`thinkingOptionId`、`mcpServers`。`cwd` 解析真实路径后必须位于某个 `roots` 之内，Provider 须在允许列表内，`mcpServers` 只能是名为 `ait_hub` 的 HTTP 服务；不能写 Bot 或访客标签；强制写入 `labels.origin = automation`。
    - `agent.message.send.request`（只允许文本，`messageId` 必填）、`agent.finish.wait.request`、`agent.cancel.request`、`agent.get.request`：目标 Agent 必须带 `origin = automation`，并固定为完整 ID。
+   - `agent.timeline.get.request`：同样只针对自动化 Agent，只接受 `agentId`、`direction`、`limit`，由策略直接应答，只返回 `epoch` 和 `window`（序号范围），不返回任何条目。中心据此判断 `idle_timeout`，看不到 Agent 的对话内容。
    - 其他请求、事件、响应和二进制帧一律 `forbidden`。这限制的是 RPC，不是沙箱：Agent 自己的进程以 Host 用户身份运行。
 5. **权限**：带 `origin = automation` 的 Agent 与 Bot 会话一样，执行期间的权限请求自动拒绝，也拒绝手动授权；它们仍是普通可见 Agent，用户可以在 Ait 中查看和继续对话。
 6. **幂等**：沿用已有机制。`idempotencyKey` 使重试的创建不产生第二个 Agent；`messageId` 由 timeline 收件回执保证同一消息只投递一次，无法确认时返回 `agent_io`，不会重发。

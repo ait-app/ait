@@ -1,9 +1,10 @@
 //! Default-deny request policy for automation sessions.
 //!
 //! The center may create Agents in the directories the owner allowed, drive the
-//! Agents it created, and nothing else: no terminals, files, settings, shares,
-//! Bots, permission decisions or daemon management. This limits RPCs, not what
-//! an Agent's own processes do on the Host.
+//! Agents it created, see whether their timelines grow (for its idle timeout, never
+//! their entries), and nothing else: no terminals, files, settings, shares, Bots,
+//! permission decisions or daemon management. This limits RPCs, not what an
+//! Agent's own processes do on the Host.
 
 use std::path::{Path, PathBuf};
 
@@ -27,6 +28,9 @@ const CONFIG_FIELDS: [&str; 7] = [
     "mcpServers",
 ];
 
+/// `agent.timeline.get.request` fields the center sends; the answer ignores their values.
+const ACTIVITY_FIELDS: [&str; 3] = ["agentId", "direction", "limit"];
+
 /// `agent.message.send.request` fields; text only, with a retry identity.
 const SEND_FIELDS: [&str; 4] = ["agentId", "text", "messageId", "activeTurnBehavior"];
 
@@ -37,11 +41,15 @@ const TOOL_SERVER: &str = "ait_hub";
 const RESERVED_LABEL_PREFIXES: [&str; 2] = ["ait.guest.", domain::bot::BOT_LABEL_PREFIX];
 
 /// Admit `request` from an automation session, rewriting its parameters in place.
+/// `Some` answers it here instead of forwarding it.
 ///
 /// # Errors
 /// Returns `Forbidden` for methods and arguments outside the automation policy, and
 /// `InvalidMessage` for malformed arguments.
-pub(crate) async fn request(state: &Shared, request: &mut Request) -> Result<(), ErrorCode> {
+pub(crate) async fn request(
+    state: &Shared,
+    request: &mut Request,
+) -> Result<Option<Value>, ErrorCode> {
     let settings = state.automation.get();
     if !settings.enabled {
         return Err(ErrorCode::Forbidden);
@@ -58,9 +66,31 @@ pub(crate) async fn request(state: &Shared, request: &mut Request) -> Result<(),
         "agent.finish.wait.request" | "agent.cancel.request" | "agent.get.request" => {
             owned(state, &mut request.params).await?;
         }
+        "agent.timeline.get.request" => {
+            only(&request.params, &ACTIVITY_FIELDS)?;
+            owned(state, &mut request.params).await?;
+            return activity(state, &request.params["agentId"]).await.map(Some);
+        }
         _ => return Err(ErrorCode::Forbidden),
     }
-    Ok(())
+    Ok(None)
+}
+
+/// The size of an Agent's timeline window, without any entry.
+async fn activity(state: &Shared, agent: &Value) -> Result<Value, ErrorCode> {
+    let execution = state
+        .provider
+        .agent_execution
+        .as_ref()
+        .ok_or(ErrorCode::Forbidden)?;
+    let page = execution
+        .execute(
+            "agent.timeline.get.request",
+            json!({"agentId":agent,"direction":"tail","limit":1}),
+        )
+        .await
+        .map_err(ErrorCode::from)?;
+    Ok(json!({"agentId":agent,"epoch":page["epoch"],"window":page["window"]}))
 }
 
 /// Reject any field outside `allowed`.

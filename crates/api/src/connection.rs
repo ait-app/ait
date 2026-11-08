@@ -632,10 +632,12 @@ async fn process_request(
         terminal_jobs_available = state.terminal_jobs.available_permits(),
     );
     let mut request = request;
-    if peer.automation
-        && let Err(code) = crate::automation::policy::request(state, &mut request).await
-    {
-        return span.in_scope(|| error(outbound, Some(request.id), code));
+    if peer.automation {
+        match crate::automation::policy::request(state, &mut request).await {
+            Ok(None) => {}
+            Ok(Some(answer)) => return outbound.respond(request.id, Ok(answer)),
+            Err(code) => return span.in_scope(|| error(outbound, Some(request.id), code)),
+        }
     }
     let request = match peer.guest {
         Some(guest) => match policy::request(guest, state, request).await {

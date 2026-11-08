@@ -45,7 +45,7 @@ async fn decide(fixture: &Workspaces, method: &str, params: Value) -> Result<Val
     };
     request(&fixture.api.shared, &mut incoming)
         .await
-        .map(|()| incoming.params)
+        .map(|answer| answer.unwrap_or(incoming.params))
 }
 
 #[tokio::test]
@@ -138,6 +138,7 @@ async fn only_automation_methods_on_known_agents_pass() {
         "agent.permission.resolve.request",
         "automation.settings.set.request",
         "workspace.archive.request",
+        "agent.timeline.search.request",
     ] {
         assert_eq!(
             decide(&fixture, method, json!({})).await,
@@ -174,6 +175,26 @@ async fn only_automation_methods_on_known_agents_pass() {
         .await,
         Err(ErrorCode::InvalidMessage),
         "a retry identity is required"
+    );
+    assert_eq!(
+        decide(
+            &fixture,
+            "agent.timeline.get.request",
+            json!({"agentId":"a1","direction":"tail","limit":1})
+        )
+        .await,
+        Err(ErrorCode::Forbidden),
+        "activity only of automation's Agents"
+    );
+    assert_eq!(
+        decide(
+            &fixture,
+            "agent.timeline.get.request",
+            json!({"agentId":"a1","cursor":{"epoch":"e","seq":0}})
+        )
+        .await,
+        Err(ErrorCode::Forbidden),
+        "no paging through entries"
     );
 }
 
