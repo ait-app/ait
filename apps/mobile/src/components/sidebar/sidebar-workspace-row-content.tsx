@@ -128,6 +128,11 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   return (
     <View style={styles.workspaceRowContent}>
       <View style={styles.workspaceRowMain}>
+        {workspace.pinnedAt != null ? (
+          <SidebarPinIndicator
+            testID={`sidebar-workspace-pin-indicator-${workspace.workspaceKey}`}
+          />
+        ) : null}
         {leadingProjectName ? (
           <ProjectStatusIndicator
             iconDataUri={leadingProjectIconDataUri}
@@ -151,11 +156,6 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             <Text style={workspaceBranchTextStyle} numberOfLines={1}>
               {workspaceLabel}
             </Text>
-            {workspace.pinnedAt != null ? (
-              <SidebarPinIndicator
-                testID={`sidebar-workspace-pin-indicator-${workspace.workspaceKey}`}
-              />
-            ) : null}
             <View style={sidebarWorkspaceRowStyles.rowRight}>{children}</View>
           </View>
           <WorkspaceMetaRow
