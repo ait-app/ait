@@ -58,7 +58,7 @@ const EDITS = Object.freeze({
     {
       find: "\theadless?: boolean;\n\tsubagentEventBus?: EventBus;\n",
       replace:
-        "\t/** Ait native host greeting written before \`ready\`; absent in plain RPC mode. */\n\tnativeHostHello?: object;\n\theadless?: boolean;\n\tsubagentEventBus?: EventBus;\n",
+        "\t/** Ait native host greeting written before `ready`; absent in plain RPC mode. */\n\tnativeHostHello?: object;\n\theadless?: boolean;\n\tsubagentEventBus?: EventBus;\n",
     },
     {
       find: "\t\theadless = false,\n\t\tsubagentEventBus,\n",
@@ -77,17 +77,17 @@ const EDITS = Object.freeze({
     {
       find: "\tconst btw = new RpcBtwController(session, output);\n",
       replace:
-        "\tconst btw = new RpcBtwController(session, output);\n\t// Ait native host: only a patched \`rpc-ui\` launch owns Vibe state.\n\tconst nativeHostBridge = nativeHostHello ? new AitNativeHostBridge(session, output) : undefined;\n",
+        "\tconst btw = new RpcBtwController(session, output);\n\t// Ait native host: only a patched `rpc-ui` launch owns Vibe state.\n\tconst nativeHostBridge = nativeHostHello ? new AitNativeHostBridge(session, output) : undefined;\n",
     },
     {
       find: "\tconst getAvailableCommands = async () => buildAvailableSlashCommands(session);\n",
       replace:
-        "\t// Ait native host: rehydrate Vibe scopes, then let the catalog advertise \`/vibe\`.\n\tif (nativeHostBridge) await nativeHostBridge.initialize();\n\t// The merged catalog is what input dispatch must search: \`/vibe\` exists only here.\n\tlet nativeHostCommands: Awaited<ReturnType<typeof buildAvailableSlashCommands>> = [];\n\tconst getAvailableCommands = async () => {\n\t\tconst commands = await buildAvailableSlashCommands(session);\n\t\tnativeHostCommands = nativeHostBridge ? nativeHostBridge.commands(commands) : commands;\n\t\treturn nativeHostCommands;\n\t};\n",
+        "\t// Ait native host: rehydrate Vibe scopes, then let the catalog advertise `/vibe`.\n\tif (nativeHostBridge) await nativeHostBridge.initialize();\n\t// The merged catalog is what input dispatch must search: `/vibe` exists only here.\n\tlet nativeHostCommands: Awaited<ReturnType<typeof buildAvailableSlashCommands>> = [];\n\tconst getAvailableCommands = async () => {\n\t\tconst commands = await buildAvailableSlashCommands(session);\n\t\tnativeHostCommands = nativeHostBridge ? nativeHostBridge.commands(commands) : commands;\n\t\treturn nativeHostCommands;\n\t};\n",
     },
     {
       find: '\t\t\tif (!isCurrent()) return "cancelled";\n\t\t\tif (!text.trim() && !images?.length) return "local";\n',
       replace:
-        '\t\t\tif (!isCurrent()) return "cancelled";\n\t\t\tif (nativeHostBridge) {\n\t\t\t\tconst directive = await nativeHostBridge.input(text, nativeHostCommands);\n\t\t\t\tif (!isCurrent()) return "cancelled";\n\t\t\t\t// \`null\` only toggled the mode; a string replaces the prompt with its inline directive.\n\t\t\t\tif (directive === null) return "local";\n\t\t\t\tif (directive !== undefined) text = directive;\n\t\t\t}\n\t\t\tif (!text.trim() && !images?.length) return "local";\n',
+        '\t\t\tif (!isCurrent()) return "cancelled";\n\t\t\tif (nativeHostBridge) {\n\t\t\t\tconst directive = await nativeHostBridge.input(text, nativeHostCommands);\n\t\t\t\tif (!isCurrent()) return "cancelled";\n\t\t\t\t// `null` only toggled the mode; a string replaces the prompt with its inline directive.\n\t\t\t\tif (directive === null) return "local";\n\t\t\t\tif (directive !== undefined) text = directive;\n\t\t\t}\n\t\t\tif (!text.trim() && !images?.length) return "local";\n',
     },
     {
       find: "\tconst handleCommandImpl = async (command: RpcCommand): Promise<RpcResponse> => {\n\t\tconst id = command.id;\n",

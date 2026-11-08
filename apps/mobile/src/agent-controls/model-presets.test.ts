@@ -113,7 +113,7 @@ describe("modelPresetConfiguration with a model-only preset", () => {
       withModelPresetSelection([modelOnly, role], {
         modelId: applied.modelId,
         thinkingOptionId: applied.thinkingOptionId,
-        featureValues: { ...applied.featureValues, ...{ "modelRole.advisor": "opus" } },
+        featureValues: { ...applied.featureValues, "modelRole.advisor": "opus" },
       })[0].value,
     ).toBe("__custom__");
 
