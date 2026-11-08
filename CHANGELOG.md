@@ -1,5 +1,11 @@
 # Ait changelog
 
+## 0.2.4 - 2026-11-09
+
+- Keep chat history and subscriptions loading while a slow provider usage lookup is still running. The host daemon must be upgraded for connected clients to benefit.
+- Allow one Cron tab per workspace. Launching Cron again reveals the open tab and keeps its current view, and saved layouts with several Cron tabs keep only the first. Bot tabs follow the same one-per-workspace rule.
+- Simplify the Cron list: the header is gone, a single New button sits at the end of the list, and the list shows at most 20 crons per page with Previous and Next.
+
 ## 0.2.3 - 2026-11-08
 
 - Bot chat now matches the session page, with separate prompt and reply messages and Stop and New conversation in the composer. The Bot's internal session opens read-only from a "Bot session" subagent pill.
