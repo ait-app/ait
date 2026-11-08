@@ -146,6 +146,28 @@ describe("daemon-manager commands", () => {
     );
   });
 
+  it("starts a direct download without waiting for the login shell environment", async () => {
+    const environment = Promise.withResolvers<void>();
+    registerDaemonManager(() => true, environment.promise);
+    const registration = vi
+      .mocked(ipcMain.handle)
+      .mock.calls.find(([channel]) => channel === "ait:invoke")!;
+    const sender = {} as Electron.WebContents;
+    // The renderer already holds a one-use, 60-second download token, and the transfer is a
+    // plain HTTP request through Electron, so the login shell lookup must not hold it back.
+    // Only the daemon commands below need the environment.
+    await expect(registration[1]({ sender }, "file_download", {})).rejects.toThrow(
+      "Invalid download URL.",
+    );
+    mocks.status.mockClear();
+    const pending = registration[1]({ sender }, "desktop_daemon_status");
+    await Promise.resolve();
+    expect(mocks.status).not.toHaveBeenCalled();
+    environment.resolve();
+    await expect(pending).resolves.toEqual(mocks.status());
+    expect(mocks.status).toHaveBeenCalled();
+  });
+
   it("binds local transport sessions to the requesting window", async () => {
     registerDaemonManager(() => true);
     const registration = vi
