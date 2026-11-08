@@ -1,5 +1,10 @@
 # Ait changelog
 
+## 0.2.2 - 2026-11-08
+
+- Fix tiny terminal glyphs under Electron 45.2.3: the WebGL renderer now draws regular, bold and italic text with the configured font size and monospace family.
+- Show "renewal pending" for Claude usage when the stored access token has expired but a valid refresh token remains, instead of asking to run `claude /login`; the CLI renews the token on its next run.
+
 ## 0.2.1 - 2026-11-08
 
 - Add Pi slash commands and extension notifications through its native provider integration.
