@@ -954,9 +954,6 @@ function ProjectHeaderRow({
   const rowChildren = (
     <>
       <View style={styles.projectRowLeft}>
-        {isPinned ? (
-          <SidebarPinIndicator testID={`sidebar-project-pin-indicator-${project.viewKey}`} />
-        ) : null}
         <ProjectLeadingVisual
           displayName={displayName}
           iconDataUri={iconDataUri}
@@ -976,6 +973,9 @@ function ProjectHeaderRow({
           <Text style={styles.projectTitle} numberOfLines={1}>
             {displayName}
           </Text>
+          {isPinned ? (
+            <SidebarPinIndicator testID={`sidebar-project-pin-indicator-${project.viewKey}`} />
+          ) : null}
         </View>
       </View>
       <ProjectRowTrailingActions

@@ -23,6 +23,7 @@ export function SidebarPinIndicator({ testID }: { testID: string }) {
 
 const styles = StyleSheet.create({
   indicator: {
+    width: 12,
     height: 20,
     flexShrink: 0,
     alignItems: "center",
