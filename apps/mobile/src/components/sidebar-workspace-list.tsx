@@ -150,6 +150,8 @@ import {
 } from "@/components/sharing/share-manager-sheet";
 
 const WORKSPACE_STATUS_DOT_WIDTH = 14;
+const INITIAL_VISIBLE_PROJECT_WORKSPACES = 5;
+const PROJECT_WORKSPACE_PAGE_SIZE = 10;
 const ThemedExternalLink = withUnistyles(ExternalLink);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedPlus = withUnistyles(Plus);
@@ -1487,6 +1489,42 @@ function WorkspaceRow({
   );
 }
 
+// Mounted only while the project is open, so collapsing it resets the visible count.
+function ProjectWorkspaceList({
+  projectViewKey,
+  workspaces,
+  renderWorkspaceRow,
+}: {
+  projectViewKey: string;
+  workspaces: readonly SidebarWorkspacePlacement[];
+  renderWorkspaceRow: (workspace: SidebarWorkspacePlacement) => ReactElement;
+}) {
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_PROJECT_WORKSPACES);
+  const showMore = useCallback(() => {
+    setVisibleCount((current) =>
+      Math.min(current + PROJECT_WORKSPACE_PAGE_SIZE, workspaces.length),
+    );
+  }, [workspaces.length]);
+
+  return (
+    <>
+      <View
+        testID={`sidebar-workspace-list-${projectViewKey}`}
+        style={styles.workspaceListContainer}
+      >
+        {workspaces.slice(0, visibleCount).map(renderWorkspaceRow)}
+      </View>
+      {visibleCount < workspaces.length ? (
+        <SidebarGroupToggleRow
+          expanded={false}
+          onPress={showMore}
+          testID={`sidebar-project-show-more-${projectViewKey}`}
+        />
+      ) : null}
+    </>
+  );
+}
+
 function ProjectBlock({
   project,
   workspaceEntriesByKey,
@@ -1524,12 +1562,6 @@ function ProjectBlock({
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
 }) {
-  const {
-    visibleItems: visibleWorkspaces,
-    expanded: workspacesExpanded,
-    canToggle: canToggleWorkspaces,
-    toggleExpanded: toggleWorkspacesExpanded,
-  } = useLimitedSidebarGroup(project.workspaces);
   const rowModel = useMemo(
     () =>
       buildSidebarProjectRowModel({
@@ -1652,21 +1684,11 @@ function ProjectBlock({
   if (!collapsed) {
     if (project.workspaces.length > 0) {
       projectChildren = (
-        <>
-          <View
-            testID={`sidebar-workspace-list-${project.viewKey}`}
-            style={styles.workspaceListContainer}
-          >
-            {visibleWorkspaces.map(renderWorkspaceRow)}
-          </View>
-          {canToggleWorkspaces ? (
-            <SidebarGroupToggleRow
-              expanded={workspacesExpanded}
-              onPress={toggleWorkspacesExpanded}
-              testID={`sidebar-project-show-more-${project.viewKey}`}
-            />
-          ) : null}
-        </>
+        <ProjectWorkspaceList
+          projectViewKey={project.viewKey}
+          workspaces={project.workspaces}
+          renderWorkspaceRow={renderWorkspaceRow}
+        />
       );
     } else if (rowModel.trailingAction.kind === "new_workspace") {
       projectChildren = (
