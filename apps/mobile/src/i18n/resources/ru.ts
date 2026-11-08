@@ -1834,7 +1834,7 @@ export const ru: TranslationResources = {
     summaryUsed: "{{source}}: использовано {{amount}}",
     summaryRemaining: "{{source}}: осталось {{amount}}",
     options: "Настройки",
-    refreshAll: "Обновить всё",
+    refreshAll: "Обновить принудительно",
     refreshFailed: "Не удалось обновить использование",
     noHosts: "Нет подключённых хостов",
     agentError: "Не удалось загрузить использование: {{reason}}",

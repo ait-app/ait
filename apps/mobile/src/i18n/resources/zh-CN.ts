@@ -24,6 +24,8 @@ export const zhCN: TranslationResources = {
     shareTitle: "共享 {{name}}",
     resourceTitle: "共享资源",
     intro: "分享者在线时，群组成员可以在 AIT 中打开并操作这个资源。",
+    projectHostHint: "共享所选 Host 上的这个项目及其工作区。",
+    hostUnavailable: "此 Host 当前不可用，请连接后管理共享。",
     scope: {
       node: "整台主机",
       project: "项目",
@@ -2217,7 +2219,7 @@ export const zhCN: TranslationResources = {
     summaryUsed: "{{source}} 已使用 {{amount}}",
     summaryRemaining: "{{source}} 剩余 {{amount}}",
     options: "设置",
-    refreshAll: "全部刷新",
+    refreshAll: "强制刷新",
     refreshFailed: "无法刷新用量",
     noHosts: "没有已连接的主机",
     agentError: "无法加载用量：{{reason}}",

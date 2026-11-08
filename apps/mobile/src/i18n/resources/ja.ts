@@ -1808,7 +1808,7 @@ export const ja: TranslationResources = {
     summaryUsed: "{{source}}：{{amount}} 使用済み",
     summaryRemaining: "{{source}}：残り {{amount}}",
     options: "設定",
-    refreshAll: "すべて更新",
+    refreshAll: "強制更新",
     refreshFailed: "使用量を更新できません",
     noHosts: "接続中のホストがありません",
     agentError: "使用量を読み込めません：{{reason}}",

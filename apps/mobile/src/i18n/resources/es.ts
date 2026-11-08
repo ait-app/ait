@@ -1841,7 +1841,7 @@ export const es: TranslationResources = {
     summaryUsed: "{{source}} {{amount}} usado",
     summaryRemaining: "{{source}} {{amount}} restante",
     options: "Configuración",
-    refreshAll: "Actualizar todo",
+    refreshAll: "Forzar actualización",
     refreshFailed: "No se pudo actualizar el uso",
     noHosts: "No hay hosts conectados",
     agentError: "No se pudo cargar el uso: {{reason}}",

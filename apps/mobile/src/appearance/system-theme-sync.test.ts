@@ -51,16 +51,16 @@ describe("system theme synchronization", () => {
   });
 
   it.each(["focus", "pageshow", "visibilitychange"])(
-    "recovers a missed media notification on %s without refreshing unchanged palettes",
+    "reconciles every %s even when the last observed theme name is unchanged",
     (event) => {
       const target = event === "visibilitychange" ? document : window;
       target.dispatchEvent(new Event(event));
-      expect(runtime.updateTheme).not.toHaveBeenCalled();
+      expect(runtime.updateTheme).toHaveBeenLastCalledWith("light", expect.any(Function));
 
       runtime.themeName = "dark";
       target.dispatchEvent(new Event(event));
       target.dispatchEvent(new Event(event));
-      expect(runtime.updateTheme).toHaveBeenCalledTimes(1);
+      expect(runtime.updateTheme).toHaveBeenCalledTimes(3);
       expect(runtime.updateTheme).toHaveBeenCalledWith("dark", expect.any(Function));
     },
   );
@@ -75,6 +75,21 @@ describe("system theme synchronization", () => {
     vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
     document.dispatchEvent(new Event("visibilitychange"));
     expect(runtime.updateTheme).toHaveBeenCalledWith("dark", expect.any(Function));
+  });
+
+  it("recovers a hidden round trip whose final name matches the last visible palette", () => {
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    // Unistyles consumers can see this intermediate theme even though our sync defers it.
+    runtime.themeName = "dark";
+    media.dispatchEvent(new Event("change"));
+    runtime.themeName = "light";
+    media.dispatchEvent(new Event("change"));
+    expect(runtime.updateTheme).not.toHaveBeenCalled();
+
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(runtime.updateTheme).toHaveBeenCalledWith("light", expect.any(Function));
+    expect(runtime.updateTheme.mock.calls[0][1](lightTheme)).toBe(lightTheme);
   });
 
   it("does not override a fixed theme or an unavailable theme", () => {

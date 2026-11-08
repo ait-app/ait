@@ -190,7 +190,7 @@ for line in sys.stdin:
         complete(params["turnId"], "raced")
         emit({"id": request["id"], "error": {"code": -32600, "message": "no active turn to interrupt"}})
         continue
-    if mode == "timeout":
+    if mode == "timeout" or (mode == "slow-quota" and method == "account/rateLimits/read"):
         time.sleep(60)
     if mode == "malformed":
         print("not json", flush=True)

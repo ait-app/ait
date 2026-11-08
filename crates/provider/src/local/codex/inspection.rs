@@ -1,3 +1,5 @@
+pub(super) mod connection;
+
 use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 
@@ -47,43 +49,13 @@ impl CodexClient {
         &'a self,
         cwd: &str,
     ) -> Result<crate::ports::account_usage::PreparedUsage<'a>, AgentSessionError> {
-        use crate::ports::account_usage::{PreparedUsage, UsageIdentity};
-        let mut transport = self.launch_transport(cwd, false)?;
-        transport.initialize().await?;
-        let account = transport
-            .request("account/read", json!({"refreshToken":false}))
-            .await
-            .ok();
-        let email = account
-            .as_ref()
-            .and_then(|account| account.pointer("/account/email"))
-            .and_then(Value::as_str)
-            .filter(|email| {
-                !email.is_empty() && email.len() <= 256 && !email.chars().any(char::is_control)
-            })
-            .map(str::to_owned);
-        let identity = email
-            .as_ref()
-            .and_then(|_| account.as_ref()?.get("account"))
-            .and_then(|account| serde_json::to_vec(account).ok())
-            .map(|account| UsageIdentity::from_native("codex", &account));
-        Ok(PreparedUsage {
-            identity,
-            report: Box::pin(async move {
-                let result = async {
-                    let response = transport
-                        .request("account/rateLimits/read", json!({}))
-                        .await?;
-                    let mut report = usage(&response)?;
-                    if let Some(email) = email {
-                        report["accountLabel"] = json!(email);
-                    }
-                    Ok(report)
-                }
-                .await;
-                transport.close().await?;
-                result
-            }),
+        let account = self.usage_connection.account(self, cwd).await?;
+        let cwd = cwd.to_owned();
+        Ok(crate::ports::account_usage::PreparedUsage {
+            identity: account.identity.clone(),
+            report: Box::pin(
+                async move { self.usage_connection.report(self, &cwd, &account).await },
+            ),
         })
     }
 

@@ -32,3 +32,10 @@ export function toUsageReport(provider: ProviderUsage, fetchedAt: string): Usage
     report,
   };
 }
+
+/** Hide unavailable sources, including responses from older daemons. */
+export function toUsageReports(providers: ProviderUsage[], fetchedAt: string): UsageReportEntry[] {
+  return providers
+    .filter((provider) => provider.status !== "unavailable")
+    .map((provider) => toUsageReport(provider, fetchedAt));
+}

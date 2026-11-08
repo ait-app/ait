@@ -45,18 +45,10 @@ async fn unknown_account_identity_bypasses_the_host_cache_and_handles_sign_out()
     assert_eq!(first["providers"][0]["status"], "available");
     fixture.set_balance(json!(null));
     let current = manager.usage(None, Some(PROVIDER), false).await.unwrap();
-    assert_eq!(current["providers"][0]["status"], "unavailable");
-    assert_eq!(current["providers"][0]["balances"], json!([]));
-    assert!(current["providers"][0].get("lastSuccessful").is_none());
+    assert_eq!(current["providers"], json!([]));
     assert_eq!(fixture.requests("account/getBalance").len(), 2);
     let refreshed = manager.usage(None, Some(PROVIDER), true).await.unwrap();
-    assert_eq!(refreshed["providers"][0]["status"], "unavailable");
-    assert!(
-        refreshed["providers"][0]["problem"]["detail"]
-            .as_str()
-            .unwrap()
-            .contains("DeepSeek")
-    );
+    assert_eq!(refreshed["providers"], json!([]));
     assert_eq!(fixture.requests("account/getBalance").len(), 3);
 }
 
@@ -105,7 +97,7 @@ async fn live_account_queries_keep_the_session_environment_and_do_not_fall_back_
         .usage(Some("quota-agent"), Some(PROVIDER), true)
         .await
         .unwrap();
-    assert_eq!(stopped["providers"][0]["status"], "unavailable");
+    assert_eq!(stopped["providers"], json!([]));
     assert_eq!(session.requests("account/getBalance").len(), 1);
     assert_eq!(
         host.requests("account/getBalance"),

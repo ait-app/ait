@@ -68,7 +68,7 @@ async fn logged_in_antigravity_host_and_session_quotas_use_native_command() {
         .usage(Some("quota-agent"), Some(PROVIDER), true)
         .await
         .unwrap();
-    assert_eq!(stopped["providers"][0]["status"], "unavailable");
+    assert_eq!(stopped["providers"], json!([]));
     let calls = logs(&directory);
     assert!(calls.iter().all(|call| call.get("input").is_none()));
     let quota_calls: Vec<_> = calls

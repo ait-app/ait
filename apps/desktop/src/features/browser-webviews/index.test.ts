@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { PASEO_BROWSER_PROFILE_PARTITION } from "../browser-profile.js";
 import {
   getPaseoBrowserIdForWebContents,
@@ -9,6 +9,8 @@ import {
   unregisterPaseoBrowser,
   unregisterPaseoBrowserFromHost,
 } from "./index.js";
+
+vi.mock("electron", () => ({}));
 
 class FakeRenderer {
   public constructor(public readonly id: number) {}

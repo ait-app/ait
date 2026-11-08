@@ -23,7 +23,13 @@ fn quota_cache_reuses_bounded_facts_and_force_refresh_bypasses_them() {
     assert!(cache.get("codex", &account, true).is_none());
     assert!(cache.get("other", &account, false).is_none());
     assert!(cache.get("codex", &identity("different"), false).is_none());
-    cache.0.lock().unwrap().get_mut("codex").unwrap().fetched = Instant::now()
+    cache
+        .entries
+        .lock()
+        .unwrap()
+        .get_mut("codex")
+        .unwrap()
+        .fetched = Instant::now()
         .checked_sub(Duration::from_secs(301))
         .unwrap();
     assert!(cache.get("codex", &account, false).is_none());
@@ -35,7 +41,7 @@ fn quota_cache_reuses_bounded_facts_and_force_refresh_bypasses_them() {
             "attempt",
         );
     }
-    assert!(cache.0.lock().unwrap().len() <= 64);
+    assert!(cache.entries.lock().unwrap().len() <= 64);
     assert!(cache.get("provider-64", &account, false).is_some());
 }
 
@@ -94,7 +100,7 @@ fn account_changes_unknown_identity_and_independent_lifetimes_clear_history() {
         "unknown",
     );
     assert!(unknown["lastSuccessful"].is_null());
-    assert!(host.0.lock().unwrap().is_empty());
+    assert!(host.entries.lock().unwrap().is_empty());
     host.put("codex", Some(identity("first")), available(), "host");
     let session = UsageCache::default();
     let resumed = UsageCache::default();
@@ -140,7 +146,7 @@ async fn cache_checks_identity_before_polling_and_force_preserves_failure_histor
         .read("codex", Err(AgentSessionError::Failed), true)
         .await;
     assert!(unresolved["lastSuccessful"].is_null());
-    assert!(cache.0.lock().unwrap().is_empty());
+    assert!(cache.entries.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
