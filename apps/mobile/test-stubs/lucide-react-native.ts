@@ -114,6 +114,7 @@ export const TriangleAlert = StubIcon;
 export const Undo2 = StubIcon;
 export const Unlink = StubIcon;
 export const Upload = StubIcon;
+export const Users = StubIcon;
 export const Wrench = StubIcon;
 export const X = StubIcon;
 export const XCircle = StubIcon;
