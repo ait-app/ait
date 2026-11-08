@@ -2968,8 +2968,7 @@ export const ko: TranslationResources = {
         saving: "저장 중...",
         noRename:
           "이 공급자는 이름 변경을 지원하지 않습니다. 새로 만든 뒤 이전 프리셋을 삭제하세요",
-        nameTaken:
-          "'{{name}}' 이름의 프리셋이 이미 있습니다. 해당 프리셋을 열어 편집하세요",
+        nameTaken: "'{{name}}' 이름의 프리셋이 이미 있습니다. 해당 프리셋을 열어 편집하세요",
       },
       models: {
         one: "모델 1개",

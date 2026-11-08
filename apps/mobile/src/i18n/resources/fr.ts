@@ -3029,8 +3029,7 @@ export const fr: TranslationResources = {
         saving: "Enregistrement...",
         noRename:
           "Ce fournisseur ne permet pas le renommage ; créez un préréglage puis supprimez l'ancien",
-        nameTaken:
-          "Un préréglage nommé « {{name}} » existe déjà ; ouvrez-le pour le modifier",
+        nameTaken: "Un préréglage nommé « {{name}} » existe déjà ; ouvrez-le pour le modifier",
       },
       models: {
         one: "1 modèle",

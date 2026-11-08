@@ -104,6 +104,7 @@ featureValues?}`。`domain::preset::ProviderPreset` 拥有唯一的校验规则�
    否则"应用不含 advisor 的预设 → 手动启用 advisor"后，界面仍会显示原预设名。两端各有一份
    等价实现（`impliedFeatureValues` 与 `matches_configuration` 的补集检查），改动其中一侧
    必须同时改另一侧。
+
 3. 两者都没有 → 不产生 feature，使用处保持"整块不渲染"，由空态引导去设置创建。
 
 当前值判定与客户端 `withModelPresetSelection` 同义：模型、思考强度一致且所有已存 feature

@@ -3549,7 +3549,7 @@ export const en = {
         loading: "Loading presets...",
         saving: "Saving...",
         noRename: "This provider cannot rename; create a new preset and delete the old one",
-        nameTaken: "A preset named \"{{name}}\" already exists; open it to edit it instead",
+        nameTaken: 'A preset named "{{name}}" already exists; open it to edit it instead',
       },
       models: {
         one: "1 model",
