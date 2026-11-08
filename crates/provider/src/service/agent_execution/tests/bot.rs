@@ -243,6 +243,28 @@ async fn assert_public_operations_hide(
             .await,
         Err(ErrorCode::AgentNotFound)
     );
+    // A timeline subscription may resolve the hidden session, because the Bot tab only observes
+    // it read-only; every operation that would act on it still refuses above.
+    assert_eq!(
+        execution
+            .execute(
+                "internal.agent.identities.resolve",
+                json!({"agentIds":[record.id]})
+            )
+            .await
+            .unwrap(),
+        json!([record.id])
+    );
+    // The identity request carries one field; anything else is not a shape this daemon serves.
+    assert_eq!(
+        execution
+            .execute(
+                "internal.agent.identities.resolve",
+                json!({"agentIds":[record.id],"includeArchived":true})
+            )
+            .await,
+        Err(ErrorCode::UnsupportedCapability)
+    );
 }
 
 async fn assert_execution_and_close(
