@@ -2,6 +2,7 @@
 
 - 状态：已接受
 - 日期：2026-11-06
+- Linux 扩展：[ADR-223](adr-223-linux-worktree-sandbox.md) 自 2026-11-08 起补充 Linux 后端；Linux 差异与部署要求以该 ADR 为准。
 - 关系：在 [ADR-060](adr-060-workspace-create-worktree.md) 的 Paseo 自有 worktree 之上增加隔离级别；
   Provider 测试归属沿用 [ADR-179](../providers/adr-179-provider-owned-tests.md)。
 
@@ -32,7 +33,7 @@
 4. 客户端通过 `workspace.create.request` 的 worktree source 传 `sandbox: "worktree_writes"`，与 MCP
    走同一条路径。旧 daemon 会忽略未知字段并创建不受限的 worktree，所以客户端只在 server info
    声明 `workspace-sandbox-v1` 时提供“沙箱化 Worktree”选项；该 feature 只在装有 metadata 的
-   macOS daemon 上声明。记住的选项在不支持的主机上降级为普通 worktree，触发按钮显示实际级别；
+   macOS/Linux daemon 上声明。记住的选项在不支持的主机上降级为普通 worktree，触发按钮显示实际级别；
    Schedule 尚不能请求沙箱，同样以普通 worktree 作为初始值。
 
 ### 分层
@@ -46,8 +47,7 @@
   `AgentClient::supports_write_confinement` 时返回 `ConfinementUnsupported`，失败关闭；Registry
   读取失败同样拒绝启动。
 - **适配器**（`provider::local::sandbox`）：解析真实路径和 Git 目录，生成平台 profile 并包装命令。
-  `sandbox::command` 是唯一的平台接缝。macOS 后端是 `sandbox::seatbelt`；其他平台的后端拒绝启动，
-  Linux bubblewrap 只需实现同一个 `WritePolicy` 的渲染。
+  `sandbox::command` 是唯一的平台接缝。macOS 后端是 `sandbox::seatbelt`，Linux 后端是 `sandbox::linux`（bubblewrap）；其他平台拒绝启动。
 
 ### macOS 机制
 
@@ -98,10 +98,10 @@ Unix socket：`allow default` 下 connect 不受影响；在允许清单以外�
   只读模式在这里不再生效。
 - Claude Code 通过 `--settings` 合并 `sandbox.enabled: false`，其他 sandbox 设置保留。
 
-### 非 macOS
+### 不支持的平台
 
-带 sandbox 的 worktree 创建请求会在任何 Git 操作之前被 `metadata` 拒绝，返回
-“Sandboxed worktree isolation requires macOS”。如果其他平台上已有沙箱记录，启动 Agent 时适配器
+macOS/Linux 以外的平台，带 sandbox 的 worktree 创建请求会在任何 Git 操作之前被 `metadata` 拒绝，返回
+“Sandboxed worktree isolation requires macOS or Linux”。如果 macOS/Linux 以外的平台上已有沙箱记录，启动 Agent 时适配器
 返回 `Unavailable` 并记录错误日志，不会退化为不受限运行。
 
 ### Provider 覆盖范围

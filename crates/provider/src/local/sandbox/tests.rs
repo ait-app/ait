@@ -9,7 +9,7 @@ use super::*;
 #[cfg(target_os = "macos")]
 mod enforcement;
 
-fn confinement(root: &Path) -> WriteConfinement {
+pub(super) fn confinement(root: &Path) -> WriteConfinement {
     let record: PersistedWorkspaceRecord = serde_json::from_value(serde_json::json!({
         "workspaceId": "wks_0123456789abcdef",
         "projectId": "prj_1",
@@ -164,10 +164,11 @@ fn state_locations_follow_overrides_defaults_prefixes_and_protections() {
         policy.trees().contains(&real_home.join(".claude")),
         "a missing state directory resolves through its existing parent"
     );
-    assert!(
+    assert_eq!(
         policy
             .trees()
-            .contains(&real_home.join("Library/Caches/claude-cli-nodejs"))
+            .contains(&real_home.join("Library/Caches/claude-cli-nodejs")),
+        cfg!(target_os = "macos")
     );
     assert!(
         policy.trees().contains(&real_override),

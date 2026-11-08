@@ -107,6 +107,15 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
+      - name: Prepare Linux sandbox tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bubblewrap
+          # GitHub's disposable runner must permit the user namespaces exercised by these tests.
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          bwrap --unshare-user --disable-userns --ro-bind / / --proc /proc --dev /dev -- /bin/true
       # Static checks run first so they fail before the long compile.
       - name: Check formatting and method specs
         run: |

@@ -251,7 +251,7 @@ pub(super) fn complete_codex_approval(approval: &mut Value) {
 /// Native Claude CLI argument pairs, without a shell or interpolation.
 ///
 /// A `confined` process already runs under the Workspace's OS write sandbox, which refuses
-/// Claude Code's nested Seatbelt profile, so Claude's own Bash sandbox is turned off.
+/// nested Seatbelt profiles or user namespaces, so Claude's own Bash sandbox is turned off.
 pub(super) fn claude(
     config: &StoredAgentConfig,
     confined: bool,

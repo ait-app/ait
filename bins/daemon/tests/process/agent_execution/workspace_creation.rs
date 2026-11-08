@@ -61,7 +61,7 @@ async fn workspace_initial_agent_preserves_subdirectories_receipts_environment_a
             .as_array()
             .unwrap()
             .contains(&json!("workspace-sandbox-v1")),
-        cfg!(target_os = "macos")
+        cfg!(any(target_os = "macos", target_os = "linux"))
     );
     let mut replies = Vec::new();
     for (key, source) in [

@@ -56,3 +56,39 @@ fn captured(root: &std::path::Path) -> Vec<Value> {
         .map(|line| serde_json::from_str(line).unwrap())
         .collect()
 }
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn sandboxed_claude_session_uses_the_config_override_and_native_environment() {
+    let (root, client, mut spec) = fixture();
+    std::fs::create_dir_all(root.path().join(".git")).unwrap();
+    std::fs::write(root.path().join("capture-environment"), "").unwrap();
+    let record = serde_json::from_value(json!({
+        "workspaceId":"wks_0123456789abcdef", "projectId":"prj_1", "kind":"worktree",
+        "cwd":root.path(), "worktreeRoot":root.path(), "displayName":"sandbox",
+        "createdAt":"2026-01-01T00:00:00Z", "updatedAt":"2026-01-01T00:00:00Z",
+        "sandbox":"worktree_writes", "archivedAt":null
+    }))
+    .unwrap();
+    spec.confinement = domain::workspace::sandbox::WriteConfinement::for_workspace(&record);
+    let environment = serde_json::from_value(json!({
+        "HOME":root.path().join("home"),
+        "CLAUDE_CONFIG_DIR":root.path().join("custom-config"),
+        "AIT_TEST_AGENT_ENV":"sandbox-fixture"
+    }))
+    .unwrap();
+    let mut session = client
+        .create_session_with_environment(&spec, &environment)
+        .await
+        .unwrap();
+    session
+        .start_turn("environment", &spec.config)
+        .await
+        .unwrap();
+    assert_eq!(finish(session.as_mut()).await, "Claude: environment");
+    session.close().await.unwrap();
+    assert!(root.path().join("custom-config/projects").is_dir());
+    let rows = captured(root.path());
+    assert!(!rows.is_empty());
+    assert!(rows.iter().all(|row| row["value"] == "sandbox-fixture"));
+}
