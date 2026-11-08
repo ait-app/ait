@@ -230,10 +230,7 @@ fn observed_agents_cannot_be_scheduled_or_reused_as_existing_targets() {
 async fn bot_schedule_agents_receive_derived_scope_and_mode_cap() {
     let fixture = Fixture::start();
     fixture
-        .bot(
-            "bot.setup.request",
-            permissions(GROUPS, &["auto", "read-only"]),
-        )
+        .bot("bot.setup.request", permissions(GROUPS, &["read-only"]))
         .await;
 
     let scoped = fixture.schedule(codex(Some("read-only")), true).await;
@@ -249,12 +246,13 @@ async fn bot_schedule_agents_receive_derived_scope_and_mode_cap() {
     assert_eq!(labels["paseo.schedule-id"], scoped.as_str());
     assert_eq!(created[0]["config"]["modeId"], "read-only");
 
-    // A Bot task whose stored mode was cleared runs at the cap's default mode.
+    // A Bot task whose stored mode was cleared runs in the configured mode.
     let cleared = fixture.schedule(codex(None), true).await;
-    fixture.run(&cleared).await;
+    let (run, _) = fixture.run(&cleared).await;
+    assert_eq!(run["status"], "succeeded", "{run}");
     assert_eq!(
         fixture.agents.calls("agent.create.request")[1]["config"]["modeId"],
-        "auto"
+        "read-only"
     );
 
     let user = fixture.schedule(codex(None), false).await;

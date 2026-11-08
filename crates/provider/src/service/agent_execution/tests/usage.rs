@@ -97,7 +97,23 @@ async fn quota_reads_use_the_live_agent_account_and_validate_the_rpc_shape() {
         .execute("provider.usage.list.request", json!({"agentId":agents[0]}))
         .await
         .unwrap();
-    assert_eq!(report["providers"][0]["status"], "unavailable");
-    assert!(report["providers"][0].get("accountLabel").is_none());
+    assert_eq!(report["providers"], json!([]));
     restarted.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn missing_provider_binary_is_omitted_from_host_usage_rpc() {
+    let fixture = Fixture::new();
+    let client = crate::local::codex::CodexClient::new(fixture.root.path().join("missing-codex"));
+    let (execution, _) = worker_with_client(
+        &fixture,
+        model::creation::Creations::default(),
+        Box::new(client),
+    );
+    let response = execution
+        .execute("provider.usage.list.request", json!({}))
+        .await
+        .unwrap();
+    assert_eq!(response["providers"], json!([]));
+    execution.shutdown().await.unwrap();
 }

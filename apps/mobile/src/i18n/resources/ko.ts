@@ -1798,7 +1798,7 @@ export const ko: TranslationResources = {
     summaryUsed: "{{source}} {{amount}} 사용됨",
     summaryRemaining: "{{source}} {{amount}} 남음",
     options: "설정",
-    refreshAll: "모두 새로고침",
+    refreshAll: "강제 새로고침",
     refreshFailed: "사용량을 새로고침할 수 없습니다",
     noHosts: "연결된 호스트가 없습니다",
     agentError: "사용량을 불러올 수 없습니다: {{reason}}",

@@ -1848,7 +1848,7 @@ export const fr: TranslationResources = {
     summaryUsed: "{{source}} {{amount}} utilisé",
     summaryRemaining: "{{source}} {{amount}} restant",
     options: "Paramètres",
-    refreshAll: "Tout actualiser",
+    refreshAll: "Forcer l’actualisation",
     refreshFailed: "Impossible d’actualiser l’utilisation",
     noHosts: "Aucun hôte connecté",
     agentError: "Impossible de charger l’utilisation : {{reason}}",

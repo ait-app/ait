@@ -204,9 +204,10 @@ impl Router {
         let handle = tokio::runtime::Handle::current();
         let closed = tokio::task::spawn_blocking(move || {
             let mut state = template.lock().map_err(|_| ErrorCode::AgentIo)?;
-            handle
-                .block_on(state.manager.close_all())
-                .map_err(|_| ErrorCode::AgentIo)
+            let sessions = handle.block_on(state.manager.close_all());
+            let usage = handle.block_on(state.manager.close_host_usage());
+            sessions.map_err(|_| ErrorCode::AgentIo)?;
+            usage.map_err(|_| ErrorCode::AgentIo)
         })
         .await
         .map_err(|_| ErrorCode::AgentIo)?;

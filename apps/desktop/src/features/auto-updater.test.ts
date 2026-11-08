@@ -36,6 +36,10 @@ vi.mock("electron-updater", () => ({
   autoUpdater: autoUpdaterMock,
 }));
 
+vi.mock("electron-log/main", () => ({
+  default: autoUpdaterMock.logger,
+}));
+
 import {
   bucketFromStagingUserId,
   checkForAppUpdate,
