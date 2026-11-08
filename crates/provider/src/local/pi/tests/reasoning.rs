@@ -600,7 +600,7 @@ async fn resume_preserves_recorded_thinking_unless_explicitly_overridden() {
         let mut file = std::fs::OpenOptions::new().append(true).open(path).unwrap();
         writeln!(
             file,
-            "\n{}",
+            "{}",
             json!({"type":"thinking_level_change","thinkingLevel":"low"})
         )
         .unwrap();

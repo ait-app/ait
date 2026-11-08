@@ -2,7 +2,7 @@
 
 - Status: Accepted.
 - Date: 2026-10-18.
-- Updated: 2026-11-03.
+- Updated: 2026-11-08.
 - Scope: `crates/provider`; extends [ADR-156](adr-156-pi-native-rpc-provider.md).
 - Amended by: [ADR-211](adr-211-pi-next-turn-reasoning-controls.md) for imported thinking preferences
   and next-prompt reasoning controls.
@@ -90,6 +90,17 @@ not start a native writer or submit input.
   before opening a writer, and unknown-handle resume retains the inspector's verified metadata.
   Legacy handles without `nativeCwd` use the supplied cwd spelling; a handle that has already lost
   both its filename and original spelling must be resumed with that spelling or re-imported.
+- Preserve unacknowledged native activity as `observedWork` in the provider handle, as specified by
+  [ADR-156](adr-156-pi-native-rpc-provider.md). Before interactive resume, recheck the saved regular
+  file's version-three header against the UUID and canonical cwd, using the same path and store
+  containment rules above. A matching header promotes the handle to `hasInput: true` and opens
+  that file with `--session`, including when Pi wrote it after the manager's last checkpoint.
+  This header-only check does not validate the history body or claim that the prompt was saved;
+  listing, inspection, import and refresh retain their full validation requirements. When the
+  filename is missing, use the existing project-scoped inspector lookup. An unavailable lookup
+  permits a handle with only `observedWork` to open without a native file, retaining that evidence;
+  malformed or conflicting history still fails lookup. An existing `hasInput: true` always keeps
+  the native-file requirement, even if `observedWork` is also present.
 - Keep automatic history replay disabled: live Pi events and saved entries use different
   identities. Explicit import/refresh reconciles native history; ordinary restart preserves
   Ait's durable timeline. Next-prompt thinking controls are added by

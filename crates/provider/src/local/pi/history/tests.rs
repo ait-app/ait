@@ -884,6 +884,111 @@ fn listing_keeps_messages_without_a_text_preview() {
 }
 
 #[test]
+fn session_header_matches_identity_without_reading_the_body() {
+    let (_directory, _client, file, cwd) = fixture();
+    write(&file, &cwd, Vec::new());
+    let header = std::fs::read_to_string(&file).unwrap();
+    std::fs::write(&file, format!("{header}unfinished body")).unwrap();
+    File::options()
+        .write(true)
+        .open(&file)
+        .unwrap()
+        .set_len(MAX_HISTORY + 1)
+        .unwrap();
+    let other_directory = tempfile::tempdir().unwrap();
+
+    assert!(matches_session_header(&file, SESSION, &cwd));
+    assert!(matches_session_header(&file, SESSION, &format!("{cwd}/.")));
+    assert!(!matches_session_header(
+        &file,
+        "019a0000-0000-7000-8000-000000000002",
+        &cwd
+    ));
+    assert!(!matches_session_header(
+        &file,
+        SESSION,
+        other_directory.path().to_str().unwrap()
+    ));
+}
+
+#[test]
+fn header_checks_and_saved_native_paths_share_file_validation() {
+    let (_directory, client, file, cwd) = fixture();
+    for path in [
+        file.clone(),
+        file.with_extension("txt"),
+        file.with_extension(""),
+    ] {
+        write(&path, &cwd, Vec::new());
+        let mut saved = handle();
+        saved.native_handle = Some(json!(path));
+        let expected = path == file;
+
+        assert_eq!(
+            matches_session_header(&path, SESSION, &cwd),
+            expected,
+            "{}",
+            path.display()
+        );
+        assert_eq!(
+            saved_session_file(&client, &saved, Path::new(&cwd)).is_some(),
+            expected
+        );
+        assert_eq!(
+            matches_saved_session_header(&client, &saved, &cwd),
+            expected
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn header_checks_and_saved_native_paths_reject_symlinks() {
+    use std::os::unix::fs::symlink;
+
+    let (directory, client, file, cwd) = fixture();
+    write(&file, &cwd, Vec::new());
+    let linked_file = directory.path().join("linked.jsonl");
+    symlink(&file, &linked_file).unwrap();
+    let linked_directory = directory.path().join("linked-directory");
+    symlink(file.parent().unwrap(), &linked_directory).unwrap();
+    let linked_parent = linked_directory.join(file.file_name().unwrap());
+
+    for path in [linked_file, linked_parent] {
+        let mut saved = handle();
+        saved.native_handle = Some(json!(path));
+
+        assert!(!matches_session_header(&path, SESSION, &cwd));
+        assert!(saved_session_file(&client, &saved, Path::new(&cwd)).is_none());
+        assert!(!matches_saved_session_header(&client, &saved, &cwd));
+    }
+}
+
+#[test]
+fn saved_header_checks_enforce_metadata_store_containment() {
+    let (directory, client, file, cwd) = fixture();
+    let outside = directory.path().join("outside.jsonl");
+    for path in [file.clone(), outside] {
+        write(&path, &cwd, Vec::new());
+        for native_path in [false, true] {
+            let mut saved = handle();
+            if native_path {
+                saved.native_handle = Some(json!(path));
+            } else {
+                saved.metadata = Some(BTreeMap::from([("sessionFile".into(), json!(path))]));
+            }
+
+            assert_eq!(
+                matches_saved_session_header(&client, &saved, &cwd),
+                native_path || path == file,
+                "native_path={native_path}, path={}",
+                path.display()
+            );
+        }
+    }
+}
+
+#[test]
 fn invalid_header_fields_consistently_report_rejected() {
     let (_directory, _client, file, cwd) = fixture();
     let valid = json!({"type":"session","version":3,"id":SESSION,"cwd":cwd,
@@ -892,6 +997,7 @@ fn invalid_header_fields_consistently_report_rejected() {
         let mut missing = valid.clone();
         missing.as_object_mut().unwrap().remove(key);
         std::fs::write(&file, format!("{missing}\n")).unwrap();
+        assert!(!matches_session_header(&file, SESSION, &cwd));
         assert_eq!(
             records(&file).unwrap_err(),
             AgentSessionError::Rejected,
@@ -901,6 +1007,7 @@ fn invalid_header_fields_consistently_report_rejected() {
             let mut header = valid.clone();
             header[key] = invalid;
             std::fs::write(&file, format!("{header}\n")).unwrap();
+            assert!(!matches_session_header(&file, SESSION, &cwd));
             assert_eq!(
                 records(&file).unwrap_err(),
                 AgentSessionError::Rejected,
@@ -917,6 +1024,7 @@ fn invalid_header_fields_consistently_report_rejected() {
         let mut header = valid.clone();
         header[key] = invalid;
         std::fs::write(&file, format!("{header}\n")).unwrap();
+        assert!(!matches_session_header(&file, SESSION, &cwd));
         assert_eq!(
             records(&file).unwrap_err(),
             AgentSessionError::Rejected,
@@ -924,15 +1032,18 @@ fn invalid_header_fields_consistently_report_rejected() {
         );
     }
     std::fs::write(&file, format!("{valid}\n")).unwrap();
+    assert!(matches_session_header(&file, SESSION, &cwd));
     assert_eq!(records(&file).unwrap(), vec![valid]);
 }
 
 #[test]
 fn unreadable_or_malformed_header_records_still_report_failed() {
-    let (_directory, _client, file, _cwd) = fixture();
+    let (_directory, _client, file, cwd) = fixture();
+    assert!(!matches_session_header(&file, SESSION, &cwd));
     assert_eq!(records(&file).unwrap_err(), AgentSessionError::Failed);
     for data in ["", "{\"type\":", "not json\n"] {
         std::fs::write(&file, data).unwrap();
+        assert!(!matches_session_header(&file, SESSION, &cwd));
         assert_eq!(records(&file).unwrap_err(), AgentSessionError::Failed);
     }
 }

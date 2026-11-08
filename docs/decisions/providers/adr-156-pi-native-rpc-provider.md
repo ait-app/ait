@@ -2,7 +2,7 @@
 
 - Status: Accepted (implemented).
 - Date: 2026-10-17.
-- Updated: 2026-11-06 for slash-command discovery and extension notifications.
+- Updated: 2026-11-08 for admission retirement, input retention and cleanup.
 - Scope: `crates/provider`, `packages/protocol`; follows [ADR-089](adr-089-provider-owned-composition.md).
 - Amended by: [ADR-189](adr-189-pi-without-host-mode.md) for host modes.
 - Amended by: [ADR-185](adr-185-native-provider-failure-details.md) for native failure details.
@@ -32,7 +32,19 @@ run from automatic retries and compaction recovery.
   subsequent interactive resume. Resolve the host-owned session directory and pass it with
   `--session-dir` as specified by [ADR-174](adr-174-pi-session-import.md), keeping writers and
   discovery aligned even when a per-Agent child environment overrides `HOME`. Validate provider,
-  identity and working directory and reject missing history after input was accepted. Pi owns
+  identity and working directory. The persistence handle's `hasInput` records either a
+  `started` acknowledgement or non-rejected native run activity with a valid version-three session
+  header matching the session UUID and canonical working directory, including settlement before
+  a failed acknowledgement. Read only the first line to verify identity, without asserting that
+  the complete prompt or history was saved. Treat a negative check while Pi is alive as
+  provisional, retain observed-work evidence across turns, and recheck after shutdown reaps
+  the writer. Persist pending evidence as `observedWork: true` in the provider handle.
+  Resume revalidates that file before starting Pi and uses `--session` for a matching header,
+  covering both explicit close and failure cleanup when the manager checkpoint precedes shutdown.
+  Shutdown does not guarantee that unsaved work is flushed. Unacknowledged work without a verified
+  native file leaves the previous value unchanged; never clear an existing true value.
+  Once true, interactive resume uses `--session` with the saved
+  native file and rejects missing history instead of recreating it. Pi owns
   credentials, tools, other settings, extensions and native session files. Ait does not rewrite
   those files.
 - Correlate command responses by ID. Prompt acceptance and `agent_end` are not completion;
@@ -84,7 +96,19 @@ run from automatic retries and compaction recovery.
   result, as specified by [ADR-219](adr-219-pi-slash-command-discovery.md).
   There is no additional process pool.
 - Prompt admission has a separate 120-second response budget; events are consumed during
-  admission. A timeout is uncertain, closes the process and never replays the prompt.
+  admission. A timeout is uncertain, closes the process and retires the live session:
+  later turns on that session are rejected, and the prompt is never automatically replayed.
+  Queue the submitted input ahead of observed native work in Pi's display projection even
+  when acknowledgement fails. Retire pending tools/compactions and publish one terminal
+  failure. The shared manager's admission-error path settles failure without draining these
+  queued rows; persisting them through that path remains unresolved. Explicit native history
+  refresh can recover saved input and work when the file passes validation.
+  With no acknowledgement or observed native run activity, leave `hasInput`
+  unchanged and do not project submitted input. A definitive prompt rejection never projects
+  the submitted input or contributes observed-work evidence, even with concurrent extension
+  activity. Earlier eligible work can still be verified during close. It
+  leaves the adapter usable, but the manager closes and drops writers on every admission
+  error, rejection included. The next user turn opens another writer from the saved handle.
   Foreground inference after admission has no host timeout. Abort settlement is bounded
   to 10 seconds. Own readers and child process groups through shutdown and drop.
 - Outbound records are limited to 64 MiB and inbound records to 2 MiB including LF;
@@ -93,7 +117,8 @@ run from automatic retries and compaction recovery.
   original wire sizes once. Extension notices have a separate best-effort allowance of
   16 records / 2 MiB under [ADR-220](adr-220-pi-extension-notifications.md). Display events are capped at 256 with reserved cleanup slots.
   Undrainable admission uses a separate 4096-event / 64 MiB display-payload budget;
-  afterward the normal 8 MiB budget applies once the backlog fits. Payload accounting
+  every exit ends admission, including settlement and display-limit errors. Afterward the
+  normal 8 MiB budget applies once the backlog fits. Payload accounting
   combines cumulative text with currently queued tool previews. Tool progress always
   replaces unpublished snapshots by key; final items replace pending progress, and
   publishing releases the queued preview bytes. Thus long tool-heavy turns have no
@@ -143,3 +168,5 @@ Operations and current limitations: [Pi](../../operations/pi.md).
 Validation results and scope: [Pi native RPC provider validation](../../reports/providers/pi.md).
 Executable inspection and version-probe validation:
 [Pi unavailable diagnostics](../../reports/providers/pi-unavailable-diagnostics-2026-10-30.md).
+Admission, shutdown and resume validation:
+[Pi admission lifecycle](../../reports/providers/pi-admission-lifecycle-2026-11-08.md).
