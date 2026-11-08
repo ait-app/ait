@@ -20,11 +20,13 @@ fn every_tool_has_one_access_class_and_never_tools_are_host_only() {
         "archive_workspace",
         "rename_workspace",
         "list_workspaces",
+        "create_workspace",
         "unknown",
     ] {
         assert_eq!(tool_access(tool), ToolAccess::HostOnly);
     }
     assert!(!grantable_tools().any(|tool| tool == "respond_to_permission"));
+    assert!(!grantable_tools().any(|tool| tool == "create_workspace"));
     assert!(grantable_tools().any(|tool| tool == "bot_memory_update"));
 }
 
@@ -38,6 +40,29 @@ fn observe_is_always_granted_and_bot_tools_only_for_bot() {
     assert!(!BotPermissions::default().allows("create_terminal", true));
     assert!(BotPermissions::default().allows("create_schedule", false));
     assert!(!BotPermissions::default().allows("respond_to_permission", true));
+}
+
+#[test]
+fn retired_workspaces_group_is_dropped_and_grants_nothing() {
+    let saved: BotPermissions =
+        serde_json::from_value(serde_json::json!({"groups":["workspaces"],"modes":{}})).unwrap();
+    assert!(!saved.allows("create_workspace", true));
+    assert_eq!(
+        saved.normalized().unwrap().groups,
+        BTreeSet::from([ToolGroup::Observe])
+    );
+}
+
+#[test]
+fn stored_profile_with_several_modes_enforces_only_the_first() {
+    let saved = with_modes(BTreeMap::from([(
+        "claude".into(),
+        vec!["default".into(), "plan".into()],
+    )]));
+    assert_eq!(
+        saved.mode("claude", Some("plan")),
+        Err(PermissionError::Mode)
+    );
 }
 
 #[test]
@@ -55,8 +80,16 @@ fn mode_cap_resolves_defaults_and_rejects_unlisted() {
     }
     .normalized()
     .unwrap();
+    assert_eq!(permissions.modes["claude"], vec!["default".to_owned()]);
     assert_eq!(permissions.mode("claude", None).unwrap(), "default");
-    assert_eq!(permissions.mode("claude", Some("plan")).unwrap(), "plan");
+    assert_eq!(
+        permissions.mode("claude", Some("default")).unwrap(),
+        "default"
+    );
+    assert_eq!(
+        permissions.mode("claude", Some("plan")),
+        Err(PermissionError::Mode)
+    );
     assert_eq!(
         permissions.mode("claude", Some("bypassPermissions")),
         Err(PermissionError::Mode)

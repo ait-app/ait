@@ -23,7 +23,7 @@ pub enum ToolGroup {
     Scripts,
     /// Create and drive terminals.
     Terminals,
-    /// Create worktree Workspaces.
+    /// Retired: still parsed so saved profiles load, but grants nothing and is dropped on save.
     Workspaces,
 }
 
@@ -39,7 +39,7 @@ pub enum ToolAccess {
 }
 
 use ToolAccess::{BotOnly, Group, HostOnly};
-use ToolGroup::{Agents, Observe, Schedules, Scripts, Stop, Terminals, Workspaces};
+use ToolGroup::{Agents, Observe, Schedules, Scripts, Stop, Terminals};
 
 /// Every daemon MCP tool name with its access class; unknown names are `HostOnly`.
 pub const TOOLS: &[(&str, ToolAccess)] = &[
@@ -78,10 +78,10 @@ pub const TOOLS: &[(&str, ToolAccess)] = &[
     ("send_terminal_keys", Group(Terminals)),
     ("capture_terminal", Group(Terminals)),
     ("kill_terminal", Group(Terminals)),
-    ("create_workspace", Group(Workspaces)),
     ("bot_memory_read", BotOnly),
     ("bot_memory_update", BotOnly),
     ("workspace_overview", BotOnly),
+    ("create_workspace", HostOnly),
     ("respond_to_permission", HostOnly),
     ("archive_workspace", HostOnly),
     ("rename_workspace", HostOnly),
@@ -125,7 +125,8 @@ pub enum PermissionError {
 pub struct BotPermissions {
     /// Granted tool groups.
     pub groups: BTreeSet<ToolGroup>,
-    /// Allowed native modes per provider; the first entry is the default.
+    /// Native mode per provider for the Agents a Bot starts. Only the first entry applies; the
+    /// list shape remains for profiles and clients that predate the single selector.
     pub modes: BTreeMap<String, Vec<String>>,
 }
 
@@ -150,7 +151,8 @@ fn valid_modes(modes: &[String]) -> bool {
 }
 
 impl BotPermissions {
-    /// Insert `Observe` and validate bounds and identifiers.
+    /// Insert `Observe`, drop the retired group, validate bounds and identifiers, and keep only
+    /// each provider's first mode.
     ///
     /// # Errors
     ///
@@ -159,12 +161,16 @@ impl BotPermissions {
     /// 128 bytes or contains control characters.
     pub fn normalized(mut self) -> Result<Self, PermissionError> {
         self.groups.insert(Observe);
+        self.groups.remove(&ToolGroup::Workspaces);
         let valid = self.modes.len() <= MAX_PROVIDERS
             && self
                 .modes
                 .iter()
                 .all(|(provider, modes)| valid_identifier(provider) && valid_modes(modes));
         if valid {
+            for modes in self.modes.values_mut() {
+                modes.truncate(1);
+            }
             Ok(self)
         } else {
             Err(PermissionError::Invalid)
@@ -181,25 +187,21 @@ impl BotPermissions {
         }
     }
 
-    /// Resolve the effective mode for `provider`; `None` selects the first allowed mode.
+    /// Resolve the mode for `provider`; `None` selects its configured mode.
     ///
     /// # Errors
     ///
-    /// Returns `PermissionError::Provider` when the provider has no allowed modes and
-    /// `PermissionError::Mode` when `requested` is not in its list.
+    /// Returns `PermissionError::Provider` when the provider has no configured mode and
+    /// `PermissionError::Mode` when `requested` differs from it.
     pub fn mode(&self, provider: &str, requested: Option<&str>) -> Result<String, PermissionError> {
-        let allowed = self
+        let configured = self
             .modes
             .get(provider)
-            .filter(|modes| !modes.is_empty())
+            .and_then(|modes| modes.first())
             .ok_or(PermissionError::Provider)?;
         match requested {
-            None => allowed.first().cloned().ok_or(PermissionError::Provider),
-            Some(mode) => allowed
-                .iter()
-                .find(|candidate| candidate.as_str() == mode)
-                .cloned()
-                .ok_or(PermissionError::Mode),
+            Some(mode) if mode != configured => Err(PermissionError::Mode),
+            _ => Ok(configured.clone()),
         }
     }
 

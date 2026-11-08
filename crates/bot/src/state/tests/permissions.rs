@@ -145,29 +145,37 @@ fn any_provider_can_back_the_bot() {
 }
 
 #[test]
-fn recorded_worktree_workspaces_are_bounded_and_persisted() {
+fn saved_permissions_are_normalized_on_load() {
     let fixture = Fixture::new();
-    let mut state = fixture.state();
-    assert_eq!(
-        state.record_workspace(WORKSPACE, "wks_created"),
-        Err(ErrorCode::BotNotFound)
-    );
-    state
-        .execute("bot.setup.request", setup(WORKSPACE))
+    let mut request = setup(WORKSPACE);
+    request["permissions"] = json!({"groups":["agents"],"modes":{"codex":["auto"]}});
+    fixture
+        .state()
+        .execute("bot.setup.request", request.clone())
         .unwrap();
-    for index in 0..64 {
-        state
-            .record_workspace(WORKSPACE, &format!("wks_created_{index}"))
-            .unwrap();
-    }
-    state.record_workspace(WORKSPACE, "wks_created_0").unwrap();
+    let mut saved = fixture.store.catalog().unwrap();
+    saved.bots[0]
+        .permissions
+        .groups
+        .insert(domain::bot::permissions::ToolGroup::Workspaces);
+    saved.bots[0]
+        .permissions
+        .modes
+        .insert("codex".into(), vec!["auto".into(), "read-only".into()]);
+    fixture.store.save_catalog(&saved).unwrap();
+
+    let mut state = fixture.state();
+
+    let view = state
+        .execute("bot.get.request", json!({"workspaceId":WORKSPACE}))
+        .unwrap();
     assert_eq!(
-        state.record_workspace(WORKSPACE, "wks_created_64"),
-        Err(ErrorCode::ResourceExhausted)
+        view["bot"]["permissions"],
+        json!({"groups":["observe","agents"],"modes":{"codex":["auto"]}})
     );
     assert_eq!(
-        fixture.store.catalog().unwrap().bots[0].workspaces.len(),
-        64
+        state.execute("bot.setup.request", request).unwrap()["created"],
+        false
     );
 }
 

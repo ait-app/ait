@@ -38,12 +38,11 @@ export const ptBR: TranslationResources = {
     groupSchedules: "Agendamentos: criar e gerenciar agendamentos",
     groupScripts: "Scripts: executar scripts do workspace",
     groupTerminals: "Terminais: criar terminais e digitar neles",
-    groupWorkspaces: "Workspaces: criar workspaces worktree",
-    permissionRiskHint: "Pode executar comandos ou criar worktrees.",
-    modeCap: "Modos de agente permitidos",
+    permissionRiskHint: "Can run commands.",
+    modeCap: "Default agent mode",
+    modeNotAllowed: "Not allowed",
     modeCapHint:
-      "Escolha os modos que o Bot pode usar em cada provedor. Um provedor sem modos selecionados não pode ser usado. O primeiro modo selecionado é o padrão.",
-    defaultMode: "Modo padrão",
+      "Choose the mode of the agents the Bot starts for each provider. The Bot can only use this mode; choose Not allowed to stop it using a provider.",
     providerUnavailable: "{{provider}} (indisponível)",
     readOnlyHint:
       "O Bot é executado no modo mais restrito que o provedor oferece (no Claude, o modo padrão, em que suas próprias regras de permissão continuam valendo) e deixa as alterações para os agentes que ele inicia.",
@@ -67,9 +66,9 @@ export const ptBR: TranslationResources = {
     unsupported: "Atualize este host para usar Bots.",
     disconnected: "Conecte-se a este host para usar Bots.",
     message: "Mensagem",
-    send: "Enviar",
     cancel: "Cancelar turno",
     emptyChat: "Envie uma mensagem para iniciar uma conversa.",
+    session: "Bot session",
     reset: "Nova conversa",
     resetConfirm:
       "Iniciar uma nova conversa? As mensagens existentes são mantidas e as configurações mais recentes do Bot serão aplicadas.",

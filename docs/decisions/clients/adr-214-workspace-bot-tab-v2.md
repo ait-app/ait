@@ -3,7 +3,7 @@
 - 状态：已实现
 - 日期：2026-11-06
 - 关系：修订 [ADR-141](adr-141-experimental-workspace-bots.md) 的标签身份与界面范围；延续 [ADR-213](../bot/adr-213-single-workspace-manager-bot.md)。
-- 后续修订：[ADR-215](../bot/adr-215-bot-permissions-and-scoped-mcp.md) 在向导与设置中增加权限与模式上限。
+- 后续修订：[ADR-215](../bot/adr-215-bot-permissions-and-scoped-mcp.md) 在向导与设置中增加权限与模式上限；[ADR-221](../bot/adr-221-read-only-bot-session-inspection.md) 将对话界面对齐会话页并列出内部会话。
 - 计划：[阶段 2 实施计划](../../plans/workspace-bot-manager-phase-2.md)、[Workspace Bot 管理者重设计](../../plans/workspace-bot-manager.md)。
 
 ## 背景

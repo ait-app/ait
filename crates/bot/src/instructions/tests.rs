@@ -56,7 +56,8 @@ fn compose_reports_modes_and_follows_the_granted_groups() {
     );
     let text = compose("", &permissions);
     assert!(text.contains("terminals"));
-    assert!(text.contains("codex: auto, read-only;"));
+    assert!(text.contains("codex: auto;"));
+    assert!(!text.contains("read-only"));
     assert!(!text.contains("create_schedule"));
     assert!(compose("", &BotPermissions::default()).contains("create_schedule"));
     assert!(text.contains("bot_memory_update"));

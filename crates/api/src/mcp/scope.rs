@@ -7,8 +7,8 @@
 use std::collections::BTreeSet;
 
 use bot::mcp::{Caller, CallerKind, Grant};
+use domain::bot::BOT_SCOPE_LABEL;
 use domain::bot::permissions::BotPermissions;
-use domain::bot::{BOT_SCOPE_LABEL, BOT_WORKSPACES};
 use model::ErrorCode;
 use serde_json::{Map, Value, json};
 
@@ -121,8 +121,6 @@ enum Rule {
     CreateSchedule,
     /// Heartbeat targeting a subtree caller in a scoped Workspace; Bot sessions cannot be targets.
     CreateHeartbeat,
-    /// A worktree of the root project, recorded in the Bot's scope.
-    CreateWorkspace,
 }
 
 /// Return the rule of `tool`; tools must be registered here explicitly to be usable.
@@ -148,7 +146,6 @@ fn rule(tool: &str) -> Option<Rule> {
         "update_schedule" => Rule::UpdateSchedule,
         "create_schedule" => Rule::CreateSchedule,
         "create_heartbeat" => Rule::CreateHeartbeat,
-        "create_workspace" => Rule::CreateWorkspace,
         _ => return None,
     })
 }
@@ -163,8 +160,7 @@ fn rule(tool: &str) -> Option<Rule> {
 /// Returns `Forbidden` for unlisted tools, `cwd`, foreign or archived Workspaces, reserved
 /// labels, features or modes outside the cap (including a schedule's effective mode), and Bot
 /// heartbeats; a guided refusal for editing a schedule not created by a Bot or for running or
-/// resuming such a schedule without a stored mode; `ResourceExhausted` when the Bot already owns
-/// its maximum of worktrees; and propagates target lookup failures.
+/// resuming such a schedule without a stored mode; and propagates target lookup failures.
 pub(super) async fn confine(
     state: &Shared,
     scope: &Scope,
@@ -240,39 +236,8 @@ pub(super) async fn confine(
             }
             Ok(())
         }
-        Rule::CreateWorkspace => {
-            let root = active(state, root).await?;
-            rewrite_create_workspace(scope, &root, arguments)
-        }
     };
     Ok(confined?)
-}
-
-/// Record a worktree created by a scoped `create_workspace` in the Bot's scope.
-///
-/// `project` is the root project `confine` placed the worktree in. Business failures without a
-/// Workspace pass through unchanged.
-/// # Errors
-/// Returns `Forbidden` when the created Workspace is not in `project`, and Bot service or
-/// recording failures, including `ResourceExhausted` once the Bot owns its maximum.
-pub(super) async fn adopt(
-    state: &Shared,
-    scope: &Scope,
-    project: Option<&Value>,
-    created: &Value,
-) -> Result<(), ErrorCode> {
-    let Some(workspace) = created.pointer("/workspace/id").and_then(Value::as_str) else {
-        return Ok(());
-    };
-    if project.is_none() || created.pointer("/workspace/projectId") != project {
-        return Err(ErrorCode::Forbidden);
-    }
-    let bots = state
-        .bot
-        .bots
-        .as_ref()
-        .ok_or(ErrorCode::UnsupportedCapability)?;
-    bots.record_workspace(&scope.caller.root, workspace).await
 }
 
 /// Remove out-of-scope entries from list results that cannot be filtered at the source.
@@ -511,30 +476,6 @@ fn retarget(
 ) -> Result<(), ErrorCode> {
     scope.contains(workspace)?;
     arguments[key] = json!(id);
-    Ok(())
-}
-
-/// Confine a `create_workspace` to a new worktree of the `root` Workspace's project.
-///
-/// Replaying an idempotency key could return an earlier creation and adopt an arbitrary
-/// Workspace, so keys are refused; the capacity is checked before anything is created.
-/// # Errors
-/// Returns `Forbidden` for non-worktree isolation or an idempotency key, `ResourceExhausted`
-/// when the Bot already records its maximum of worktrees.
-fn rewrite_create_workspace(
-    scope: &Scope,
-    root: &Value,
-    arguments: &mut Value,
-) -> Result<(), ErrorCode> {
-    if arguments["isolation"] != "worktree" || arguments.get("idempotencyKey").is_some() {
-        return Err(ErrorCode::Forbidden);
-    }
-    // The grant always contains the root itself besides the Bot's recorded worktrees.
-    if scope.grant.workspaces.len().saturating_sub(1) >= BOT_WORKSPACES {
-        return Err(ErrorCode::ResourceExhausted);
-    }
-    arguments["path"] = root["workspaceDirectory"].clone();
-    arguments["projectId"] = root["projectId"].clone();
     Ok(())
 }
 

@@ -16,7 +16,7 @@ impl ExecutionState {
                 self.registry
                     .get(id)
                     .map_err(|_| ErrorCode::RegistryIo)?
-                    .filter(|caller| caller.archived_at.is_none())
+                    .filter(|caller| caller.archived_at.is_none() && !caller.internal)
                     .ok_or(ErrorCode::AgentNotFound)
             })
             .transpose()?;

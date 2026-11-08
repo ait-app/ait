@@ -38,12 +38,11 @@ export const ja: TranslationResources = {
     groupSchedules: "スケジュール：スケジュールの作成と管理",
     groupScripts: "スクリプト：ワークスペースのスクリプトの実行",
     groupTerminals: "ターミナル：ターミナルの作成と入力",
-    groupWorkspaces: "ワークスペース：worktree ワークスペースの作成",
-    permissionRiskHint: "コマンドの実行や worktree の作成が可能です。",
-    modeCap: "許可するエージェントモード",
+    permissionRiskHint: "Can run commands.",
+    modeCap: "Default agent mode",
+    modeNotAllowed: "Not allowed",
     modeCapHint:
-      "プロバイダーごとに Bot が使えるモードを選択します。モードを選択しないプロバイダーは使用できません。最初に選択したモードがデフォルトです。",
-    defaultMode: "デフォルトモード",
+      "Choose the mode of the agents the Bot starts for each provider. The Bot can only use this mode; choose Not allowed to stop it using a provider.",
     providerUnavailable: "{{provider}}（利用不可）",
     readOnlyHint:
       "Bot はプロバイダーが提供する最も厳格なモードで実行され（Claude ではデフォルトモードで、あなた自身の許可ルールは引き続き適用されます）、変更は Bot が起動するエージェントに任せます。",
@@ -66,9 +65,9 @@ export const ja: TranslationResources = {
     unsupported: "Bot を使うには、このホストを更新してください。",
     disconnected: "Bot を使うには、このホストに接続してください。",
     message: "メッセージ",
-    send: "送信",
     cancel: "ターンをキャンセル",
     emptyChat: "メッセージを送信して会話を始めましょう。",
+    session: "Bot session",
     reset: "新しい会話",
     resetConfirm:
       "新しい会話を始めますか？既存のメッセージは保持され、最新の Bot 設定が適用されます。",

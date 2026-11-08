@@ -136,7 +136,7 @@ impl ExecutionState {
                 .registry
                 .get(parent)
                 .map_err(|_| ErrorCode::AgentIo)?
-                .filter(|caller| caller.archived_at.is_none())
+                .filter(|caller| caller.archived_at.is_none() && !caller.internal)
                 .ok_or(ErrorCode::AgentNotFound)?;
             request
                 .labels

@@ -167,12 +167,62 @@ async fn assert_public_operations_hide(
     fixture: &Fixture,
     record: &domain::agent_runtime::PersistedAgentRuntimeRecord,
 ) {
-    let hidden = execution
+    let inspected = execution
         .execute("agent.get.request", json!({"agentId":record.id}))
         .await
         .unwrap();
-    assert!(hidden["agent"].is_null());
-    assert!(hidden["error"].is_string());
+    assert_eq!(inspected["agent"]["id"], record.id);
+    assert_eq!(inspected["agent"]["title"], "Bot session");
+    assert_eq!(inspected["agent"]["requiresAttention"], false);
+    for flag in crate::rpc::agent_runtime::READ_ONLY_SESSION_FLAGS {
+        assert_eq!(inspected["agent"]["capabilities"][flag], false, "{flag}");
+    }
+    let by_prefix = execution
+        .execute("agent.get.request", json!({"agentId":&record.id[..12]}))
+        .await
+        .unwrap();
+    assert!(by_prefix["agent"].is_null());
+    assert_eq!(
+        execution
+            .execute(
+                "agent.message.send.request",
+                json!({"agentId":record.id,"messageId":"intrusion","text":"intrusion"})
+            )
+            .await,
+        Err(ErrorCode::AgentNotFound)
+    );
+    assert_eq!(
+        execution
+            .execute("agent.cancel.request", json!({"agentId":record.id}))
+            .await,
+        Err(ErrorCode::AgentNotFound)
+    );
+    let public_only = execution
+        .execute(
+            "agent.get.request",
+            json!({"agentId":record.id,"publicOnly":true}),
+        )
+        .await
+        .unwrap();
+    assert!(public_only["agent"].is_null());
+    assert_eq!(
+        execution
+            .execute(
+                "agent.attention.clear.request",
+                json!({"agentId":[record.id]})
+            )
+            .await,
+        Err(ErrorCode::AgentNotFound)
+    );
+    assert_eq!(
+        execution
+            .execute(
+                "agent.create.request",
+                json!({"callerAgentId":record.id,"config":{"provider":"codex","cwd":fixture.cwd}})
+            )
+            .await,
+        Err(ErrorCode::AgentNotFound)
+    );
     let listed = execution
         .execute("agent.list.request", json!({}))
         .await

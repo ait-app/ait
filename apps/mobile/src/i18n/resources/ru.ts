@@ -45,12 +45,11 @@ export const ru: TranslationResources = {
     groupSchedules: "Расписания: создание расписаний и управление ими",
     groupScripts: "Скрипты: запуск скриптов рабочего пространства",
     groupTerminals: "Терминалы: создание терминалов и ввод в них",
-    groupWorkspaces: "Рабочие пространства: создание рабочих пространств worktree",
-    permissionRiskHint: "Может выполнять команды или создавать worktree.",
-    modeCap: "Разрешённые режимы агентов",
+    permissionRiskHint: "Can run commands.",
+    modeCap: "Default agent mode",
+    modeNotAllowed: "Not allowed",
     modeCapHint:
-      "Выберите режимы, которые Bot может использовать для каждого провайдера. Провайдер без выбранных режимов использовать нельзя. Первый выбранный режим используется по умолчанию.",
-    defaultMode: "Режим по умолчанию",
+      "Choose the mode of the agents the Bot starts for each provider. The Bot can only use this mode; choose Not allowed to stop it using a provider.",
     providerUnavailable: "{{provider}} (недоступен)",
     readOnlyHint:
       "Bot работает в самом строгом режиме, который предлагает его провайдер (для Claude это режим по умолчанию, где ваши собственные правила разрешений по-прежнему действуют), а изменения оставляет запускаемым им агентам.",
@@ -75,9 +74,9 @@ export const ru: TranslationResources = {
     unsupported: "Обновите этот хост, чтобы использовать Ботов.",
     disconnected: "Подключитесь к этому хосту, чтобы использовать Ботов.",
     message: "Сообщение",
-    send: "Отправить",
     cancel: "Отменить ход",
     emptyChat: "Отправьте сообщение, чтобы начать разговор.",
+    session: "Bot session",
     reset: "Новый разговор",
     resetConfirm:
       "Начать новый разговор? Существующие сообщения сохранятся, будут применены последние настройки Бота.",

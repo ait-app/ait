@@ -527,35 +527,6 @@ impl Scoped {
             .to_owned()
     }
 
-    /// Archive `workspace` through the host RPC.
-    pub(super) async fn archive(&self, workspace: &str) {
-        self.rpc(
-            "workspace.archive.request",
-            json!({"workspaceId":workspace}),
-        )
-        .await;
-    }
-
-    /// Archive `workspace` in the directory only, as if the Bot grant had not been pruned yet.
-    pub(super) fn archive_unpruned(&self, workspace: &str) {
-        self.fixture
-            .api
-            .shared
-            .metadata
-            .directory
-            .as_ref()
-            .unwrap()
-            .lock()
-            .unwrap()
-            .archive_workspace(workspace, "2026-11-06T01:00:00Z")
-            .unwrap();
-    }
-
-    /// The installed Bot service.
-    pub(super) fn bots(&self) -> &Bots {
-        self.fixture.api.shared.bot.bots.as_ref().unwrap()
-    }
-
     pub(super) async fn subtree_agent(&self) -> String {
         self.agent(json!({BOT_SCOPE_LABEL:self.workspace})).await
     }

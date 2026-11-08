@@ -255,13 +255,7 @@ async fn command_tools_reach_every_agent_in_scope_only() {
         )
         .await,
     );
-    structured(
-        &call(
-            "set_agent_mode",
-            json!({"agentId":prefix,"modeId":"read-only"}),
-        )
-        .await,
-    );
+    structured(&call("set_agent_mode", json!({"agentId":prefix,"modeId":"auto"})).await);
     forbidden(
         &call(
             "set_agent_mode",
@@ -303,7 +297,7 @@ async fn command_tools_reach_every_agent_in_scope_only() {
 }
 
 #[tokio::test]
-async fn bot_created_worktree_extends_scope() {
+async fn bots_and_their_agents_cannot_create_workspaces() {
     let scoped = Scoped::start().await;
     scoped
         .setup(permissions(
@@ -312,85 +306,30 @@ async fn bot_created_worktree_extends_scope() {
         ))
         .await;
     let bot = scoped.bot_credential();
-    let call = |tool: &'static str, arguments: Value| scoped.call(&bot, None, tool, arguments);
-    forbidden(&call("create_workspace", json!({"isolation":"local"})).await);
-    forbidden(
-        &call(
-            "create_workspace",
-            json!({"isolation":"worktree","idempotencyKey":"replayed"}),
-        )
-        .await,
-    );
-    let created = call(
-        "create_workspace",
-        json!({"isolation":"worktree","path":scoped.other_cwd}),
-    )
-    .await;
-    let worktree = id(&created, "/workspace/id");
-    let unpruned = id(
-        &call("create_workspace", json!({"isolation":"worktree"})).await,
-        "/workspace/id",
-    );
-    assert_eq!(
-        structured(&created)["workspace"]["projectId"],
-        scoped
-            .rpc(
-                "workspace.get.request",
-                json!({"workspaceId":scoped.workspace})
-            )
-            .await["workspace"]["projectId"]
-    );
-    let mut placed = create("In worktree");
-    placed["workspaceId"] = json!(worktree);
-    structured(&call("create_agent", placed.clone()).await);
-
-    let unrelated = id(
-        &scoped
+    let before = scoped.workspace_count().await;
+    for isolation in ["local", "worktree", "sandboxed-worktree"] {
+        let refused = scoped
             .call(
-                TOKEN,
+                &bot,
                 None,
                 "create_workspace",
-                json!({"isolation":"worktree","path":scoped.cwd}),
+                json!({"isolation":isolation}),
             )
-            .await,
-        "/workspace/id",
-    );
-    let mut elsewhere = create("Elsewhere");
-    elsewhere["workspaceId"] = json!(unrelated);
-    forbidden(&call("create_agent", elsewhere).await);
-
-    scoped.archive(&worktree).await;
-    forbidden(&call("create_agent", placed).await);
-    let mut stale = create("Stale grant");
-    stale["workspaceId"] = json!(unpruned);
-    structured(&call("create_agent", stale.clone()).await);
-    scoped.archive_unpruned(&unpruned);
-    assert!(
-        scoped
-            .scopes
-            .grant(&scoped.workspace)
-            .workspaces
-            .contains(&unpruned)
-    );
-    forbidden(&call("create_agent", stale).await);
-
-    for index in 0..domain::bot::BOT_WORKSPACES {
-        let recorded = scoped
-            .bots()
-            .record_workspace(&scoped.workspace, &format!("wks_recorded_{index}"))
             .await;
-        if recorded == Err(model::ErrorCode::ResourceExhausted) {
-            break;
-        }
-        recorded.unwrap();
+        assert_eq!(
+            refused["error"]["message"], "Unknown or unavailable tool",
+            "{refused}"
+        );
     }
-    let before = scoped.workspace_count().await;
-    let exhausted = call("create_workspace", json!({"isolation":"worktree"})).await;
-    assert_eq!(exhausted["result"]["isError"], true, "{exhausted}");
-    assert_eq!(
-        exhausted["result"]["content"][0]["text"],
-        model::ErrorCode::ResourceExhausted.message()
-    );
     assert_eq!(scoped.workspace_count().await, before);
+    let created = scoped
+        .call(
+            TOKEN,
+            None,
+            "create_workspace",
+            json!({"isolation":"worktree","path":scoped.cwd}),
+        )
+        .await;
+    assert_eq!(scoped.workspace_count().await, before + 1, "{created}");
     scoped.stop().await;
 }

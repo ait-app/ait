@@ -8,6 +8,7 @@ use domain::agent_runtime::registry::{AgentRuntimeRegistry, AgentRuntimeRegistry
 use domain::agent_runtime::{
     AgentAttentionReason, AgentRuntimeStatus, PersistedAgentRuntimeRecord,
 };
+use domain::bot::SessionOwner;
 use domain::pagination::{Direction, Entry, Sort, SortValue};
 use domain::workspace::records::{
     PersistedProjectKind, PersistedProjectRecord, PersistedWorkspaceKind, PersistedWorkspaceRecord,
@@ -15,6 +16,7 @@ use domain::workspace::records::{
 use domain::workspace::registry::RegistryError;
 use model::pagination;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+use serde::Deserialize;
 
 pub(crate) mod archive;
 mod search;
@@ -273,11 +275,43 @@ impl AgentRuntimeDirectory {
                 _ => return Err(AgentRuntimeError::Ambiguous(identifier.to_owned())),
             }
         };
+        self.resolved(&record)
+    }
+
+    /// Resolve an identifier for read-only inspection.
+    ///
+    /// Extends [`Self::get`] with a Bot's current hidden session, matched by exact ID only so
+    /// that prefix and title lookups cannot discover it.
+    ///
+    /// # Errors
+    /// Returns an explicit missing/ambiguous result or registry failure.
+    pub(crate) fn get_readable(
+        &self,
+        identifier: &str,
+    ) -> Result<ResolvedAgent, AgentRuntimeError> {
+        match self.get(identifier) {
+            Err(AgentRuntimeError::NotFound(_)) => {
+                let identifier = identifier.trim();
+                let agents = self.agents.snapshot().map_err(map_agent_registry)?;
+                let record = agents
+                    .iter()
+                    .find(|record| record.id == identifier && is_readable_bot_session(record))
+                    .ok_or_else(|| AgentRuntimeError::NotFound(identifier.to_owned()))?;
+                self.resolved(record)
+            }
+            result => result,
+        }
+    }
+
+    fn resolved(
+        &self,
+        record: &PersistedAgentRuntimeRecord,
+    ) -> Result<ResolvedAgent, AgentRuntimeError> {
         let placement = self
             .placements()?
             .remove(&record.workspace_id.clone().unwrap_or_default());
         Ok(ResolvedAgent {
-            agent: record.as_ref().clone(),
+            agent: record.clone(),
             placement,
         })
     }
@@ -367,6 +401,15 @@ impl AgentRuntimeDirectory {
         agent_ids
             .iter()
             .map(|agent_id| {
+                // Hidden sessions are readable by ID, never writable through this directory.
+                if self
+                    .agents
+                    .get(agent_id)
+                    .map_err(map_agent_registry)?
+                    .is_some_and(|record| record.internal)
+                {
+                    return Err(AgentRuntimeError::NotFound(agent_id.clone()));
+                }
                 self.agents
                     .update(agent_id, &|current| {
                         let mut next = current.clone();
@@ -678,6 +721,16 @@ fn status_priority(record: &PersistedAgentRuntimeRecord) -> u8 {
         AgentRuntimeStatus::Initializing => 3,
         AgentRuntimeStatus::Idle | AgentRuntimeStatus::Error | AgentRuntimeStatus::Closed => 4,
     }
+}
+
+/// Whether `record` is a live hidden session owned by a Workspace Bot.
+fn is_readable_bot_session(record: &PersistedAgentRuntimeRecord) -> bool {
+    record.internal
+        && record.archived_at.is_none()
+        && record
+            .owner
+            .as_ref()
+            .is_some_and(|owner| SessionOwner::deserialize(owner).is_ok())
 }
 
 const fn map_agent_registry(_error: AgentRuntimeRegistryError) -> AgentRuntimeError {

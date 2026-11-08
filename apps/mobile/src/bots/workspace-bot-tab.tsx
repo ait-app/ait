@@ -3,6 +3,7 @@ import { ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import type { BotView } from "@ait/protocol/bot/types";
 import { Button } from "@/components/ui/button";
+import { PaneContentToolbar } from "@/components/ui/pane-content-toolbar";
 import { canManageBackgroundTasks } from "@/hosts/background-task-access";
 import { BotChat } from "./bot-chat";
 import { BotSettings } from "./bot-settings";
@@ -44,12 +45,9 @@ export function WorkspaceBotTab(props: WorkspaceBotTabProps) {
   ) : null;
   return (
     <View style={styles.root} testID="workspace-bot-tab">
-      <View style={styles.toolbar}>
-        <Text numberOfLines={1} style={[styles.title, styles.grow]}>
-          {t("bots.title")}
-        </Text>
-        {bot ? (
-          <>
+      {bot ? (
+        <PaneContentToolbar>
+          <View style={styles.viewSwitch}>
             <Button
               variant={view === "settings" ? "ghost" : "outline"}
               size="sm"
@@ -66,9 +64,9 @@ export function WorkspaceBotTab(props: WorkspaceBotTabProps) {
             >
               {t("bots.settings")}
             </Button>
-          </>
-        ) : null}
-      </View>
+          </View>
+        </PaneContentToolbar>
+      ) : null}
       {bot && view !== "settings" ? (
         <>
           {refreshError}
@@ -76,6 +74,7 @@ export function WorkspaceBotTab(props: WorkspaceBotTabProps) {
             key={bot.builtinChannelId}
             serverId={serverId}
             workspaceId={workspaceId}
+            cwd={props.cwd}
             bot={bot}
             interactive={interactive}
           />

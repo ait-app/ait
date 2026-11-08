@@ -262,6 +262,14 @@ impl Operation {
         }
     }
 
+    /// Whether this operation only reads an Agent, so it may address a Bot's hidden session.
+    pub(crate) const fn inspects_agent(self) -> bool {
+        matches!(
+            self,
+            Self::Get | Self::Timeline | Self::SearchTimeline | Self::Prompts
+        )
+    }
+
     /// Select the exact request identity, independently of operation naming conventions.
     pub(crate) const fn target(self) -> Option<Target> {
         match self {

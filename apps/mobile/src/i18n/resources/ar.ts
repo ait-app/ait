@@ -46,12 +46,11 @@ export const ar: TranslationResources = {
     groupSchedules: "الجداول: إنشاء الجداول وإدارتها",
     groupScripts: "النصوص البرمجية: تشغيل النصوص البرمجية لمساحة العمل",
     groupTerminals: "الطرفيات: إنشاء طرفيات والكتابة فيها",
-    groupWorkspaces: "مساحات العمل: إنشاء مساحات عمل worktree",
-    permissionRiskHint: "يمكنه تشغيل الأوامر أو إنشاء worktree.",
-    modeCap: "أوضاع الوكيل المسموح بها",
+    permissionRiskHint: "Can run commands.",
+    modeCap: "Default agent mode",
+    modeNotAllowed: "Not allowed",
     modeCapHint:
-      "اختر الأوضاع التي يمكن لـ Bot استخدامها لكل مزوّد. لا يمكن استخدام مزوّد لم يُحدَّد له أي وضع. أول وضع محدد هو الافتراضي.",
-    defaultMode: "الوضع الافتراضي",
+      "Choose the mode of the agents the Bot starts for each provider. The Bot can only use this mode; choose Not allowed to stop it using a provider.",
     providerUnavailable: "{{provider}} (غير متاح)",
     readOnlyHint:
       "يعمل Bot بأشد الأوضاع صرامة التي يوفرها مزوّده (في Claude هو الوضع الافتراضي، وتظل قواعد السماح الخاصة بك سارية) ويترك التغييرات للوكلاء الذين يبدأهم.",
@@ -73,9 +72,9 @@ export const ar: TranslationResources = {
     unsupported: "حدّث هذا المضيف لاستخدام Bot.",
     disconnected: "اتصل بهذا المضيف لاستخدام Bot.",
     message: "الرسالة",
-    send: "إرسال",
     cancel: "إلغاء الدور",
     emptyChat: "أرسل رسالة لبدء محادثة.",
+    session: "Bot session",
     reset: "محادثة جديدة",
     resetConfirm:
       "هل تريد بدء محادثة جديدة؟ ستبقى الرسائل الحالية محفوظة وسيتم تطبيق أحدث إعدادات Bot.",

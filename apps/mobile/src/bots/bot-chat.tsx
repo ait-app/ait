@@ -1,87 +1,190 @@
-import React, { useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Text, View } from "react-native";
 import { randomUUID } from "expo-crypto";
 import { useTranslation } from "react-i18next";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { RotateCcw, Square } from "lucide-react-native";
+import { withUnistyles } from "react-native-unistyles";
 import type { BotTurn, BotView } from "@ait/protocol/bot/types";
+import { AssistantMessage, AssistantTurnFooter, UserMessage } from "@/components/message";
+import { SyncedLoader } from "@/components/synced-loader";
 import { Button } from "@/components/ui/button";
-import { FormTextInput } from "@/components/ui/form-field";
-import { BotLoadingSpinner } from "./loading";
-import { MarkdownRenderer } from "@/components/markdown/renderer";
-import { useHostRuntimeClient } from "@/runtime/host-runtime";
+import { mutedIconColorMapping } from "@/components/ui/icon-button-chrome";
+import { ToolbarButton } from "@/components/ui/pane-content-toolbar";
+import { ComposerDock } from "@/composer/dock";
+import { MessageInput, type MessageInputRef } from "@/composer/input/input";
+import { resolveComposerTrackTailClearance } from "@/composer/pill-styles";
+import { ComposerTrackBar } from "@/composer/tracks";
+import type { MessagePayload, TextReplacement } from "@/composer/types";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { canManageBackgroundTasks } from "@/hosts/background-task-access";
+import { useSettings } from "@/hooks/use-settings";
+import { usePaneContext } from "@/panels/pane-context";
+import { useHostRuntimeClient } from "@/runtime/host-runtime";
+import { useSubagentOpensInSheet } from "@/subagents/opens-in-sheet";
+import type { PaseoSubagentRow } from "@/subagents/select";
+import { SubagentsTrack } from "@/subagents/track";
+import type { Theme } from "@/styles/theme";
+import { TURN_LIVENESS_IDLE, type TurnLiveness } from "@/timeline/turn-liveness";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { openPreferredWorkspaceTarget } from "@/workspace-tabs/open-beside";
+import { BotLoadingSpinner } from "./loading";
 import { botKeys, isBotTurnPending, useBotHistory } from "./queries";
-import { botStyles as styles } from "./styles";
+import { closeBotSessionTab } from "./session-tab";
+import { botChatStyles as chatStyles, botStyles as styles } from "./styles";
 
-function BotMessage({
-  workspaceId,
-  turn,
-  serverId,
-  onRefresh,
-}: {
-  workspaceId: string;
-  turn: BotTurn;
-  serverId: string;
-  onRefresh: () => void;
-}) {
+const ThemedSyncedLoader = withUnistyles(SyncedLoader);
+const ThemedRotateCcw = withUnistyles(RotateCcw);
+const ThemedSquare = withUnistyles(Square);
+const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const INITIAL_TEXT: TextReplacement = { kind: "initial", key: "bot-chat", text: "" };
+const NO_ATTACHMENTS: never[] = [];
+const NOOP = () => undefined;
+const RUNNING_TURN: TurnLiveness = {
+  phase: "open",
+  turnId: null,
+  startedAt: null,
+  cancellationRequestId: null,
+};
+
+/** One exchange: the prompt in a user bubble, then the Bot's reply as an assistant message. */
+function BotExchange({ turn, serverId, cwd }: { turn: BotTurn; serverId: string; cwd: string }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
-  const readOnly = !canManageBackgroundTasks(serverId);
-  const cancel = useMutation({
-    mutationFn: async () => {
-      if (readOnly) throw new Error(t("bots.requestFailed"));
-      if (!client) throw new Error(t("bots.disconnected"));
-      await client.botRequest("bot.turn.cancel.request", { workspaceId, turnId: turn.id });
-    },
-    onSuccess: onRefresh,
-  });
+  const createdAt = useMemo(() => new Date(turn.createdAt), [turn.createdAt]);
+  const getReply = useCallback(() => turn.reply ?? "", [turn.reply]);
+  const pending = isBotTurnPending(turn);
   return (
-    <View style={styles.card} testID={`bot-turn-${turn.id}`}>
-      <Text selectable style={styles.text}>
-        {turn.text}
-      </Text>
-      {turn.reply ? <MarkdownRenderer text={turn.reply} /> : null}
-      {turn.status !== "completed" ? (
-        <Text style={styles.hint}>{t(`bots.status.${turn.status}`)}</Text>
+    <View testID={`bot-turn-${turn.id}`}>
+      <UserMessage
+        serverId={serverId}
+        messageId={turn.messageId}
+        message={turn.text}
+        timestamp={createdAt.getTime()}
+        client={client}
+      />
+      {turn.reply ? (
+        <AssistantMessage
+          message={turn.reply}
+          timestamp={createdAt.getTime()}
+          serverId={serverId}
+          client={client}
+          workspaceRoot={cwd}
+          phase={pending ? "streaming" : "complete"}
+          occurrenceKey={turn.id}
+        />
+      ) : null}
+      {pending ? (
+        <View style={chatStyles.turnStatus} testID={`bot-turn-status-${turn.id}`}>
+          <ThemedSyncedLoader size={14} uniProps={foregroundColorMapping} />
+          <Text style={chatStyles.turnStatusText}>{t(`bots.status.${turn.status}`)}</Text>
+        </View>
+      ) : turn.status !== "completed" ? (
+        <Text style={chatStyles.turnStatusText}>{t(`bots.status.${turn.status}`)}</Text>
       ) : null}
       {turn.error ? (
         <Text selectable style={styles.error}>
           {turn.error}
         </Text>
       ) : null}
-      {!readOnly && isBotTurnPending(turn) ? (
-        <Button
-          size="sm"
-          variant="outline"
-          onPress={() => cancel.mutate()}
-          disabled={cancel.isPending}
-        >
-          {t("bots.cancel")}
-        </Button>
+      {turn.reply && !pending ? (
+        <View style={chatStyles.turnFooter}>
+          <AssistantTurnFooter getContent={getReply} />
+        </View>
       ) : null}
-      {cancel.error ? <Text style={styles.error}>{cancel.error.message}</Text> : null}
     </View>
+  );
+}
+
+/** Lists the Bot's own session in the subagent pill, as a session page lists its children. */
+function BotSessionTrack({
+  serverId,
+  workspaceId,
+  sessionAgentId,
+  provider,
+  busy,
+}: {
+  serverId: string;
+  workspaceId: string;
+  sessionAgentId: string;
+  provider: string;
+  busy: boolean;
+}) {
+  const { t } = useTranslation();
+  const { tabId } = usePaneContext();
+  const openInSidePane = useSettings((settings) => settings.openInSidePane);
+  const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
+  const opensInSheet = useSubagentOpensInSheet(workspaceKey);
+  const title = t("bots.session");
+  const rows = useMemo<PaseoSubagentRow[]>(
+    () => [
+      {
+        kind: "paseo",
+        id: sessionAgentId,
+        provider,
+        title,
+        description: null,
+        subtitle: null,
+        canArchive: false,
+        canDetach: false,
+        status: busy ? "running" : "idle",
+        turn: busy ? RUNNING_TURN : TURN_LIVENESS_IDLE,
+        requiresAttention: false,
+        createdAt: new Date(0),
+      },
+    ],
+    [busy, provider, sessionAgentId, title],
+  );
+  const openSession = useCallback(
+    (agentId: string) => {
+      if (!workspaceKey) return;
+      openPreferredWorkspaceTarget({
+        workspaceKey,
+        target: { kind: "agent", agentId },
+        source: "subagents",
+        preferences: openInSidePane,
+        parentTabId: tabId,
+        // The session never joins the Agent directory, which would otherwise prune its tab.
+        pin: true,
+      });
+    },
+    [openInSidePane, tabId, workspaceKey],
+  );
+  return (
+    <ComposerTrackBar>
+      <SubagentsTrack
+        serverId={serverId}
+        rows={rows}
+        onOpenSubagent={openSession}
+        onOpenProviderSubagent={NOOP}
+        opensInSheet={opensInSheet}
+        onArchiveSubagent={NOOP}
+      />
+    </ComposerTrackBar>
   );
 }
 
 export function BotChat({
   serverId,
   workspaceId,
+  cwd,
   bot,
   interactive,
 }: {
   serverId: string;
   workspaceId: string;
+  cwd: string;
   bot: BotView;
   interactive: boolean;
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const readOnly = !canManageBackgroundTasks(serverId);
+  const compact = useIsCompactFormFactor();
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
-  const [inputRevision, setInputRevision] = useState(0);
+  const input = useRef<MessageInputRef>(null);
   const attempt = useRef<{ text: string; conversationId: string; messageId: string } | null>(null);
   const list = useRef<FlatList<BotTurn>>(null);
   const atBottom = useRef(true);
@@ -114,16 +217,20 @@ export function BotChat({
     void history.refetch();
   };
   const send = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (message: string) => {
       if (readOnly) throw new Error(t("bots.requestFailed"));
       if (!client || !conversation.data) throw new Error(t("bots.disconnected"));
-      if (new TextEncoder().encode(text).length > 16 * 1024) throw new Error(t("bots.tooLong"));
+      if (new TextEncoder().encode(message).length > 16 * 1024) throw new Error(t("bots.tooLong"));
       // Keep the receipt identity after a timeout so retrying cannot duplicate input.
       if (
-        attempt.current?.text !== text ||
+        attempt.current?.text !== message ||
         attempt.current?.conversationId !== conversation.data.id
       ) {
-        attempt.current = { text, conversationId: conversation.data.id, messageId: randomUUID() };
+        attempt.current = {
+          text: message,
+          conversationId: conversation.data.id,
+          messageId: randomUUID(),
+        };
       }
       return client.botRequest("bot.message.send.request", { workspaceId, ...attempt.current });
     },
@@ -135,8 +242,8 @@ export function BotChat({
             (left, right) => left.sequence - right.sequence,
           ),
       );
+      input.current?.replaceText("");
       setText("");
-      setInputRevision((revision) => revision + 1);
       attempt.current = null;
       atBottom.current = true;
       refresh();
@@ -178,7 +285,16 @@ export function BotChat({
     },
   });
   const turns = history.data ?? [];
-  const busy = turns.some(isBotTurnPending);
+  const pendingTurn = turns.find(isBotTurnPending);
+  const busy = Boolean(pendingTurn);
+  const cancel = useMutation({
+    mutationFn: async (turnId: string) => {
+      if (readOnly) throw new Error(t("bots.requestFailed"));
+      if (!client) throw new Error(t("bots.disconnected"));
+      await client.botRequest("bot.turn.cancel.request", { workspaceId, turnId });
+    },
+    onSuccess: refresh,
+  });
   const pausedMessage =
     bot.state.kind !== "paused"
       ? null
@@ -191,32 +307,36 @@ export function BotChat({
     !conversation.data ||
     conversation.isPlaceholderData ||
     reset.isPending;
-  return (
-    <View style={styles.root} testID="bot-chat">
-      <View style={styles.toolbar}>
-        <Text style={[styles.hint, styles.grow]}>{pausedMessage}</Text>
-        {!readOnly && bot.state.kind === "paused" ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={resume.isPending}
-            onPress={() => resume.mutate()}
-            testID="bot-resume"
-          >
-            {t("bots.resume")}
-          </Button>
-        ) : null}
-        {!readOnly ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={disabled || busy || send.isPending}
-            onPress={() => reset.mutate()}
-          >
-            {t("bots.reset")}
-          </Button>
-        ) : null}
-      </View>
+  // A turn creates the hidden session when it starts running, and a reset rotates it, so only a
+  // started turn of the current generation proves the published session exists.
+  const sessionStarted = turns.some(
+    (turn) => turn.generation === conversation.data?.generation && turn.status !== "queued",
+  );
+  const sessionAgentId = sessionStarted ? conversation.data?.sessionAgentId : undefined;
+  // A reset retires the published session; its open tab could only show a load error.
+  const publishedSession = conversation.data?.sessionAgentId;
+  const previousSession = useRef(publishedSession);
+  useEffect(() => {
+    if (!publishedSession) return;
+    if (previousSession.current && previousSession.current !== publishedSession) {
+      closeBotSessionTab(serverId, workspaceId, previousSession.current);
+    }
+    previousSession.current = publishedSession;
+  }, [publishedSession, serverId, workspaceId]);
+  const handleSubmit = (payload: MessagePayload) => {
+    if (payload.text.trim()) send.mutate(payload.text);
+  };
+  const errors = [
+    conversation.error,
+    history.error,
+    send.error,
+    reset.error,
+    resume.error,
+    cancel.error,
+  ].filter(Boolean);
+  const paddingBottom = sessionAgentId ? resolveComposerTrackTailClearance(compact) : undefined;
+  const content = (
+    <View style={chatStyles.transcript}>
       {conversation.isPending && !conversation.data && bot.state.kind !== "retired" ? (
         <BotLoadingSpinner />
       ) : null}
@@ -224,16 +344,13 @@ export function BotChat({
         ref={list}
         data={turns}
         keyExtractor={(turn) => turn.id}
-        contentContainerStyle={styles.content}
-        renderItem={({ item }) => (
-          <BotMessage
-            workspaceId={workspaceId}
-            turn={item}
-            serverId={serverId}
-            onRefresh={refresh}
-          />
-        )}
-        ListEmptyComponent={<Text style={styles.hint}>{t("bots.emptyChat")}</Text>}
+        contentContainerStyle={[chatStyles.listContent, paddingBottom ? { paddingBottom } : null]}
+        renderItem={({ item }) => <BotExchange turn={item} serverId={serverId} cwd={cwd} />}
+        ListEmptyComponent={
+          <View style={chatStyles.emptyChat}>
+            <Text style={styles.hint}>{t("bots.emptyChat")}</Text>
+          </View>
+        }
         onScroll={({ nativeEvent }) => {
           atBottom.current =
             nativeEvent.contentSize.height -
@@ -246,37 +363,97 @@ export function BotChat({
           if (atBottom.current) list.current?.scrollToEnd({ animated: false });
         }}
       />
-      <View style={styles.composer}>
-        {[conversation.error, history.error, send.error, reset.error, resume.error]
-          .filter(Boolean)
-          .map((error, index) => (
-            <Text key={index} style={styles.error} accessibilityRole="alert">
-              {error?.message}
-            </Text>
-          ))}
-        {!readOnly ? (
-          <>
-            <FormTextInput
-              initialValue=""
-              resetKey={inputRevision}
-              onChangeText={setText}
-              multiline
-              style={styles.messageInput}
-              editable={!disabled && !send.isPending}
-              accessibilityLabel={t("bots.message")}
-              placeholder={t("bots.message")}
-              testID="bot-message-input"
-            />
+      {sessionAgentId ? (
+        <BotSessionTrack
+          serverId={serverId}
+          workspaceId={workspaceId}
+          sessionAgentId={sessionAgentId}
+          provider={bot.execution.provider}
+          busy={busy}
+        />
+      ) : null}
+    </View>
+  );
+  const composer = (
+    <View style={chatStyles.composerRail}>
+      {pausedMessage ? (
+        <View style={chatStyles.notice}>
+          <Text style={[styles.hint, styles.grow]}>{pausedMessage}</Text>
+          {!readOnly ? (
             <Button
-              onPress={() => send.mutate()}
-              disabled={disabled || !text.trim() || send.isPending}
-              testID="bot-message-send"
+              variant="outline"
+              size="sm"
+              disabled={resume.isPending}
+              onPress={() => resume.mutate()}
+              testID="bot-resume"
             >
-              {t("bots.send")}
+              {t("bots.resume")}
             </Button>
-          </>
-        ) : null}
-      </View>
+          ) : null}
+        </View>
+      ) : null}
+      {errors.map((error, index) => (
+        <Text key={index} style={styles.error} accessibilityRole="alert">
+          {error?.message}
+        </Text>
+      ))}
+      {!readOnly ? (
+        <MessageInput
+          ref={input}
+          value=""
+          onChangeText={setText}
+          onSubmit={handleSubmit}
+          submitButtonTestID="bot-message-send"
+          isSubmitDisabled={disabled || !text.trim() || send.isPending}
+          isSubmitLoading={send.isPending}
+          // The text stays until the host accepts it, so a failed send can be retried as is.
+          preserveHeightOnSubmit
+          attachments={NO_ATTACHMENTS}
+          cwd={cwd}
+          attachmentMenuItems={NO_ATTACHMENTS}
+          client={client}
+          placeholder={t("bots.message")}
+          disabled={disabled || send.isPending}
+          isAgentRunning={busy}
+          // A turn sent while another runs waits its turn on the host, so sending never blocks.
+          defaultSendBehavior="interrupt"
+          textReplacement={INITIAL_TEXT}
+          leftContent={
+            <Text style={styles.hint} numberOfLines={1} testID="bot-execution">
+              {bot.execution.model
+                ? `${bot.execution.provider} · ${bot.execution.model}`
+                : bot.execution.provider}
+            </Text>
+          }
+          beforeVoiceContent={
+            <ToolbarButton
+              label={t("bots.reset")}
+              onPress={() => reset.mutate()}
+              disabled={disabled || busy || send.isPending}
+              testID="bot-reset"
+            >
+              <ThemedRotateCcw size={14} uniProps={mutedIconColorMapping} />
+            </ToolbarButton>
+          }
+          activeActionContent={
+            pendingTurn ? (
+              <ToolbarButton
+                label={t("bots.cancel")}
+                onPress={() => cancel.mutate(pendingTurn.id)}
+                disabled={cancel.isPending}
+                testID="bot-cancel"
+              >
+                <ThemedSquare size={14} uniProps={mutedIconColorMapping} />
+              </ToolbarButton>
+            ) : null
+          }
+        />
+      ) : null}
+    </View>
+  );
+  return (
+    <View style={styles.root} testID="bot-chat">
+      <ComposerDock>{[content, composer]}</ComposerDock>
     </View>
   );
 }
