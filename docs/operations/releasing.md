@@ -101,6 +101,10 @@ Windows Release 构建运行在 `windows-2025`，不安装 Rust 工具链、不�
 未配置 Windows 代码签名证书时产物未签名。Electron 主程序与 Helper 是必需运行时。
 GitHub 仍自动提供标签对应的源码归档。
 
+Linux 的 deb、rpm 和 Arch 包声明 `bubblewrap >= 0.8.0` 为运行时依赖，安装时由包管理器处理。
+AppImage、桌面 tar.gz 和独立 daemon 归档不捆绑 `bwrap`，使用沙箱化 Worktree 前需自行安装同版本要求的
+bubblewrap，并确保主机允许非特权 user namespace；见 [Linux 沙箱说明](../decisions/workspace/adr-223-linux-worktree-sandbox.md)。
+
 向已发布版本追加 Windows 产物时，保持原标签和 Linux/macOS 文件不变；上传 EXE、ZIP、
 更新 YAML、blockmap 与 `BUILD-INFO-windows.json`，在原 `SHA256SUMS` 中追加这些文件的校验和。
 Windows 构建来源单独记录，原 `BUILD-INFO.json` 继续描述既有平台。Release CI 使用

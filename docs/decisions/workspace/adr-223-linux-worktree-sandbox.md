@@ -10,7 +10,7 @@ macOS 使用 Seatbelt 限制 Agent 进程树的文件写入。Linux 需要对应
 
 ## 决策
 
-Linux 的 `provider::local::sandbox::linux` 使用系统 `/usr/bin/bwrap`（bubblewrap），不增加 Rust 依赖或特权 daemon。要求 bubblewrap 支持 `--disable-userns`，且主机允许非特权 user namespace。创建和 feature 协商支持 Linux；feature 表示已实现后端，不保证主机已安装或允许运行 bubblewrap。缺少程序、挂载准备失败或内核拒绝 namespace 时拒绝启动，不重试为普通进程。
+Linux 的 `provider::local::sandbox::linux` 使用系统 `/usr/bin/bwrap`（bubblewrap），不增加 Rust 依赖或特权 daemon。要求 bubblewrap 0.8.0 或更新版本（支持 `--disable-userns`），且主机允许非特权 user namespace。deb、rpm 和 Arch 包将其声明为必装运行时依赖；AppImage、tar.gz 和独立 daemon 归档由用户自行安装。创建和 feature 协商支持 Linux；feature 表示已实现后端，不保证主机已安装或允许运行 bubblewrap。缺少程序、挂载准备失败或内核拒绝 namespace 时拒绝启动，不重试为普通进程。
 
 命令建立独立 user、PID、IPC 和 mount namespace，移除 capabilities 并禁止子进程新建 user namespace。根文件系统递归只读挂载，再按父目录优先顺序绑定策略允许的目录，最后把受保护路径重新绑定为只读。受保护路径在可写树内的祖先目录也绑定为挂载点，阻止通过重命名祖先移走保护后重建同名配置。沙箱使用自己的 `/proc` 和 `/dev`，保留网络 namespace、环境变量、读取权限和路径布局；`--die-with-parent` 约束进程生命周期。
 
@@ -39,3 +39,5 @@ Linux 测试运行真实 bubblewrap 和 shell，覆盖 worktree 写入、linked 
 ## 参考
 
 - [bubblewrap 官方选项文档](https://github.com/containers/bubblewrap/blob/main/bwrap.xml)：只读绑定、namespace 和进程生命周期选项。
+
+- [bubblewrap 0.8.0 发布说明](https://github.com/containers/bubblewrap/releases/tag/v0.8.0)：引入 `--disable-userns`。

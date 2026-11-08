@@ -8,7 +8,7 @@ arch=('x86_64')
 url='https://github.com/ait-app/ait'
 license=('Apache-2.0')
 depends=(
-  'alsa-lib' 'at-spi2-core' 'bash' 'cairo' 'coreutils' 'dbus' 'expat'
+  'alsa-lib' 'at-spi2-core' 'bash' 'bubblewrap>=0.8.0' 'cairo' 'coreutils' 'dbus' 'expat'
   'libgcc' 'libstdc++' 'git' 'glib2' 'glibc' 'grep' 'gtk3'
   'libcups' 'libxcb' 'libxcomposite' 'libxdamage' 'libxext'
   'libxfixes' 'libxkbcommon' 'libxrandr' 'libx11' 'mesa' 'nspr' 'nss'

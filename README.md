@@ -32,6 +32,7 @@ Agent 在你连接的电脑上运行。使用本机 Agent 时无需登录 Ait �
 3. 启动 Ait，选择本机或远端主机，添加项目、进入工作区，选择可用的 Agent 开始任务。
 
 macOS 和 Linux 桌面安装包内置 daemon，由应用自动启动。Windows 桌面作为客户端连接远端主机，不在本机运行 Agent。
+Linux 的 deb、rpm 和 Arch 包自动依赖 `bubblewrap >= 0.8.0`；AppImage、tar.gz 用户使用沙箱化 Worktree 前需自行安装该依赖，并允许非特权 user namespace。
 
 Arch Linux 用户也可以从 AUR 安装：[`ait-bin`](https://aur.archlinux.org/packages/ait-bin) 为正式版预编译包，[`ait-git`](https://aur.archlinux.org/packages/ait-git) 在本机从 `main` 源码编译，两者任选其一（例如 `paru -S ait-bin`）。
 
