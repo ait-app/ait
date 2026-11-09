@@ -75,3 +75,18 @@ it("keeps active controls until exit is acknowledged and permits retry on failur
   view.rerender(<ProviderVibe state={{ ...running, enabled: false }} onExit={onExit} />);
   expect(screen.queryByTestId("provider-vibe")).toBeNull();
 });
+
+it("explains a disabled exit without calling its handler", () => {
+  const onExit = vi.fn();
+  render(
+    <ProviderVibe
+      state={running}
+      disabled
+      disabledReason="Finish the main task first"
+      onExit={onExit}
+    />,
+  );
+  expect(screen.getByText("Finish the main task first")).toBeTruthy();
+  fireEvent.click(screen.getByTestId("provider-vibe-exit"));
+  expect(onExit).not.toHaveBeenCalled();
+});

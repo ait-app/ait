@@ -20,10 +20,12 @@ export const ProviderVibe = memo(function ProviderVibe({
   state,
   onExit,
   disabled = false,
+  disabledReason,
 }: {
   state: Vibe;
   onExit?: () => Promise<void>;
   disabled?: boolean;
+  disabledReason?: string;
 }) {
   const { t } = useTranslation();
   const [pending, setPending] = useState(false);
@@ -57,6 +59,7 @@ export const ProviderVibe = memo(function ProviderVibe({
           {t("providerControl.vibe.exit")}
         </Button>
       </View>
+      {disabledReason ? <Text style={styles.description}>{disabledReason}</Text> : null}
       {error ? (
         <Text accessibilityRole="alert" style={styles.description}>
           {error}

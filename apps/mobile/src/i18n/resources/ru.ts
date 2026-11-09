@@ -83,6 +83,10 @@ export const ru: TranslationResources = {
       op: "Действие",
     },
     tasks: {
+      enableVibe: "Включите Vibe перед работой с worker.",
+      enableVibeLabel: "Включить Vibe",
+      vibeNotReady: "Управление Vibe ещё не готово в этом подключении.",
+
       recentHistory:
         "Показана недавняя история; {{count}} старых записей остаются в исходном журнале.",
       finishTurn: "Завершите основную задачу перед этим действием.",

@@ -60,6 +60,10 @@ export const en = {
       op: "Action",
     },
     tasks: {
+      enableVibe: "Enable Vibe before using worker actions.",
+      enableVibeLabel: "Enable Vibe",
+      vibeNotReady: "Vibe controls are not ready on this connection.",
+
       recentHistory: "Showing recent history; {{count}} older entries remain in the native log.",
       finishTurn: "Finish the current main task before changing this state.",
       exitVibe: "Exit Vibe before switching conversation history.",

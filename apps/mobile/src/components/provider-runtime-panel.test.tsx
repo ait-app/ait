@@ -7,15 +7,29 @@ import { ProviderRuntimePanel } from "./provider-runtime-panel";
 
 const fixture = vi.hoisted(() => ({
   state: null as ProviderUiState | null,
+  mainTurnActive: false,
+  run: vi.fn(async () => ({ text: "Done" })),
   open: vi.fn(async () => {}),
 }));
 vi.mock("@/runtime/host-runtime", () => ({
-  useHostRuntimeClient: () => ({ runNativeAction: vi.fn() }),
+  useHostRuntimeClient: () => ({ runNativeAction: fixture.run }),
 }));
 vi.mock("@/stores/session-store", () => ({
   useSessionStore: (selector: (state: unknown) => unknown) =>
     selector({
-      sessions: { server: { agents: new Map([["agent", { providerUi: fixture.state }]]) } },
+      sessions: {
+        server: {
+          agents: new Map([
+            [
+              "agent",
+              {
+                providerUi: fixture.state,
+                turn: { phase: fixture.mainTurnActive ? "open" : "idle" },
+              },
+            ],
+          ]),
+        },
+      },
     }),
 }));
 vi.mock("@/utils/open-external-url", () => ({ openExternalUrl: fixture.open }));
@@ -30,6 +44,8 @@ vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: () => "Open in bro
 afterEach(() => {
   cleanup();
   fixture.open.mockClear();
+  fixture.run.mockClear();
+  fixture.mainTurnActive = false;
 });
 
 it("updates and removes native UI, preserves widget placement, and opens links on click", () => {
@@ -199,4 +215,25 @@ it("keeps exactly one side conversation as workers become active and finish repe
     expect(screen.getAllByTestId("mock-side-question-panel")).toHaveLength(1);
     expect(Boolean(screen.queryByTestId("provider-vibe"))).toBe(active);
   }
+});
+
+it("does not attempt to exit director mode while the main turn owns the session", () => {
+  fixture.mainTurnActive = true;
+  fixture.state = {
+    statuses: [],
+    widgets: [],
+    title: null,
+    link: null,
+    editor: null,
+    vibe: {
+      enabled: true,
+      workers: [
+        { id: "worker", parentId: "agent", status: "running", description: "Task", model: null },
+      ],
+    },
+  };
+  render(<ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />);
+  expect(screen.getByTestId("provider-vibe-exit")).toHaveProperty("disabled", true);
+  fireEvent.click(screen.getByTestId("provider-vibe-exit"));
+  expect(fixture.run).not.toHaveBeenCalled();
 });

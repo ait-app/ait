@@ -76,6 +76,10 @@ export const fr: TranslationResources = {
       op: "Action",
     },
     tasks: {
+      enableVibe: "Activez Vibe avant d’utiliser les workers.",
+      enableVibeLabel: "Activer Vibe",
+      vibeNotReady: "Les commandes Vibe ne sont pas prêtes sur cette connexion.",
+
       recentHistory:
         "Historique récent ; {{count}} entrées anciennes restent dans le journal natif.",
       finishTurn: "Terminez la tâche principale avant cette opération.",

@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, Text, TextInput, View } from "react-native";
-import { ChevronDown, ChevronRight, X } from "lucide-react-native";
+import { ChevronDown, ChevronRight, Plus, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import type { ProviderUiState } from "@ait/protocol/messages";
@@ -27,6 +27,8 @@ export function ProviderSideQuestions({
   const client = useHostRuntimeClient(serverId);
   const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState("");
+  const [composeOpen, setComposeOpen] = useState(state.records.length === 0);
+  const inputRef = useRef<TextInput>(null);
   const [topicId, setTopicId] = useState<string | null>(state.runningId);
   useEffect(() => {
     if (state.runningId) setTopicId(state.runningId);
@@ -75,7 +77,13 @@ export function ProviderSideQuestions({
       setSending(false);
     }
   };
-  const followUp = useCallback((id: string) => setReplyTo(id), []);
+  const followUp = useCallback((id: string) => {
+    setReplyTo(id);
+    setComposeOpen(true);
+  }, []);
+  useEffect(() => {
+    if (composeOpen && expanded) inputRef.current?.focus();
+  }, [composeOpen, expanded, replyTo]);
   if (dismissed) return null;
   if (!state.records.length && !state.error && !state.reveal) return null;
   return (
@@ -91,6 +99,19 @@ export function ProviderSideQuestions({
           testID="side-question-toggle"
         >
           <Text style={styles.title}>{t("providerControl.sideQuestions.title")}</Text>
+        </Button>
+        <Button
+          variant="ghost"
+          size="xs"
+          leftIcon={Plus}
+          onPress={() => {
+            setReplyTo(null);
+            setComposeOpen(true);
+            setExpanded(true);
+          }}
+          testID="side-question-new"
+        >
+          <Text style={styles.caption}>{t("providerControl.sideQuestions.newQuestion")}</Text>
         </Button>
         <Button
           variant="ghost"
@@ -142,46 +163,49 @@ export function ProviderSideQuestions({
               </Text>
             ) : null}
           </View>
-          {replyTo ? (
+          {composeOpen && replyTo ? (
             <View style={styles.row}>
               <Text style={styles.caption} numberOfLines={1}>
                 {t("providerControl.sideQuestions.replyTo", {
                   question:
-                    state.records.find((record) => record.id === replyTo)?.question ?? replyTo,
+                    state.records.find((record) => record.id === replyTo)?.question ??
+                    t("providerControl.sideQuestions.title"),
                 })}
               </Text>
-              <Button variant="ghost" size="sm" onPress={() => setReplyTo(null)}>
-                <Text style={styles.caption}>{t("providerControl.sideQuestions.newQuestion")}</Text>
+            </View>
+          ) : null}
+          {composeOpen ? (
+            <View style={styles.compose}>
+              <TextInput
+                ref={inputRef}
+                accessibilityLabel={t("providerControl.sideQuestions.question")}
+                placeholder={t(
+                  replyTo
+                    ? "providerControl.sideQuestions.followUpPlaceholder"
+                    : "providerControl.sideQuestions.newPlaceholder",
+                )}
+                value={draft}
+                onChangeText={setDraft}
+                editable={!disabled}
+                multiline
+                style={styles.input}
+                testID="side-question-input"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={
+                  disabled || !client || sending || Boolean(state.runningId) || !draft.trim()
+                }
+                onPress={() => void send()}
+                testID="side-question-send"
+              >
+                <Text style={styles.caption}>
+                  {sending ? t("common.loading") : t("providerControl.sideQuestions.ask")}
+                </Text>
               </Button>
             </View>
           ) : null}
-          <View style={styles.compose}>
-            <TextInput
-              accessibilityLabel={t("providerControl.sideQuestions.question")}
-              placeholder={t(
-                replyTo
-                  ? "providerControl.sideQuestions.followUpPlaceholder"
-                  : "providerControl.sideQuestions.newPlaceholder",
-              )}
-              value={draft}
-              onChangeText={setDraft}
-              editable={!disabled}
-              multiline
-              style={styles.input}
-              testID="side-question-input"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={disabled || !client || sending || Boolean(state.runningId) || !draft.trim()}
-              onPress={() => void send()}
-              testID="side-question-send"
-            >
-              <Text style={styles.caption}>
-                {sending ? t("common.loading") : t("providerControl.sideQuestions.ask")}
-              </Text>
-            </Button>
-          </View>
           {error || state.error ? (
             <Text accessibilityRole="alert" style={styles.error}>
               {error ?? state.error}
@@ -233,8 +257,6 @@ const SideTopic = memo(
             variant={phase === "error" ? "error" : phase === "complete" ? "success" : "muted"}
             label={t(`providerControl.sideQuestions.states.${phase}`)}
           />
-        </View>
-        <View style={styles.row}>
           {running ? (
             <Button
               variant="outline"
@@ -255,6 +277,7 @@ const SideTopic = memo(
             </Button>
           )}
         </View>
+
         <ScrollView
           style={styles.history}
           contentContainerStyle={styles.turns}

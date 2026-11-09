@@ -55,6 +55,11 @@ function state(): State {
 function view(value: State) {
   return <ProviderSideQuestions state={value} serverId="server" agentId="agent" disabled={false} />;
 }
+function questionInput() {
+  if (!screen.queryByLabelText("providerControl.sideQuestions.question"))
+    fireEvent.click(screen.getByTestId("side-question-new"));
+  return screen.getByLabelText("providerControl.sideQuestions.question");
+}
 beforeEach(() => {
   runNativeAction.mockResolvedValue({ text: "Accepted", error: null });
 });
@@ -72,28 +77,23 @@ it("side-question admission leaves the editor editable and preserves a newer dra
       }),
   );
   render(view(state()));
-  fireEvent.change(screen.getByLabelText("providerControl.sideQuestions.question"), {
+  fireEvent.change(questionInput(), {
     target: { value: "First question" },
   });
   fireEvent.click(screen.getByTestId("side-question-send"));
   expect(runNativeAction).toHaveBeenCalledWith("agent", "btw", { question: "First question" });
-  fireEvent.change(screen.getByLabelText("providerControl.sideQuestions.question"), {
+  fireEvent.change(questionInput(), {
     target: { value: "Newer draft" },
   });
   complete({ text: "Accepted", error: null });
-  await waitFor(() =>
-    expect(screen.getByLabelText("providerControl.sideQuestions.question")).toHaveProperty(
-      "value",
-      "Newer draft",
-    ),
-  );
+  await waitFor(() => expect(questionInput()).toHaveProperty("value", "Newer draft"));
 });
 
 it("follow-ups use the native topic id and cancellation stays outside the main turn", async () => {
   const value = state();
   const mounted = render(view(value));
   fireEvent.click(screen.getByText("providerControl.sideQuestions.followUp"));
-  fireEvent.change(screen.getByLabelText("providerControl.sideQuestions.question"), {
+  fireEvent.change(questionInput(), {
     target: { value: "Follow-up question" },
   });
   fireEvent.click(screen.getByTestId("side-question-send"));
@@ -124,7 +124,7 @@ it("reconnect shows an orphaned running preview as interrupted and allows a new 
     }),
   );
   expect(screen.getByText("providerControl.sideQuestions.states.interrupted")).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("providerControl.sideQuestions.question"), {
+  fireEvent.change(questionInput(), {
     target: { value: "New question" },
   });
   expect(screen.getByTestId("side-question-send")).toHaveProperty("disabled", false);
@@ -133,15 +133,12 @@ it("reconnect shows an orphaned running preview as interrupted and allows a new 
 it("failed side admission preserves its draft and a streamed final answer updates only the topic", async () => {
   runNativeAction.mockRejectedValue(new Error("Side provider failed"));
   const mounted = render(view(state()));
-  fireEvent.change(screen.getByLabelText("providerControl.sideQuestions.question"), {
+  fireEvent.change(questionInput(), {
     target: { value: "Keep this" },
   });
   fireEvent.click(screen.getByTestId("side-question-send"));
   await waitFor(() => expect(screen.getByText("Side provider failed")).toBeTruthy());
-  expect(screen.getByLabelText("providerControl.sideQuestions.question")).toHaveProperty(
-    "value",
-    "Keep this",
-  );
+  expect(questionInput()).toHaveProperty("value", "Keep this");
   mounted.rerender(
     view({
       ...state(),
@@ -195,12 +192,12 @@ it("a new running side question reopens a closed panel without cancelling it", (
 
 it("the dismiss control leaves collapse and expansion untouched", () => {
   render(view(state()));
-  expect(screen.getByLabelText("providerControl.sideQuestions.question")).toBeTruthy();
+  expect(questionInput()).toBeTruthy();
   fireEvent.click(screen.getByTestId("side-question-toggle"));
   expect(screen.queryByLabelText("providerControl.sideQuestions.question")).toBeNull();
   expect(screen.getByTestId("side-question-close")).toBeTruthy();
   fireEvent.click(screen.getByTestId("side-question-toggle"));
-  expect(screen.getByLabelText("providerControl.sideQuestions.question")).toBeTruthy();
+  expect(questionInput()).toBeTruthy();
   fireEvent.click(screen.getByTestId("side-question-close"));
   expect(screen.queryByTestId("provider-side-questions")).toBeNull();
 });
@@ -209,6 +206,8 @@ it("uses Markdown for answers, avoids repeating the initial question, and labels
   render(view(state()));
   expect(screen.getAllByText(topic.question)).toHaveLength(1);
   expect(screen.getByTestId("side-markdown").textContent).toBe("Side answer");
+  expect(screen.queryByLabelText("providerControl.sideQuestions.question")).toBeNull();
+  fireEvent.click(screen.getByTestId("side-question-new"));
   expect(screen.getByPlaceholderText("providerControl.sideQuestions.newPlaceholder")).toBeTruthy();
   fireEvent.click(screen.getByText("providerControl.sideQuestions.followUp"));
   expect(
@@ -238,4 +237,17 @@ it("keeps cancel/follow-up outside the answer scroll and shows one selected topi
       .getByTestId("side-question-answer-scroll-topic")
       .contains(screen.getByText("providerControl.sideQuestions.followUp")),
   ).toBe(false);
+});
+
+it("opens a second editor only for an explicit new question or follow-up", () => {
+  render(view(state()));
+  expect(screen.queryByTestId("side-question-input")).toBeNull();
+  expect(screen.getByTestId("side-markdown")).toBeTruthy();
+  fireEvent.click(screen.getByText("providerControl.sideQuestions.followUp"));
+  expect(
+    screen.getByPlaceholderText("providerControl.sideQuestions.followUpPlaceholder"),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByTestId("side-question-new"));
+  expect(screen.getByPlaceholderText("providerControl.sideQuestions.newPlaceholder")).toBeTruthy();
+  expect(runNativeAction).not.toHaveBeenCalled();
 });

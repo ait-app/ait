@@ -279,6 +279,7 @@ function mount(actions = all, surface: "composer" | "settings" = "composer") {
       cwd="/workspace"
       actions={actions}
       surface={surface}
+      vibeEnabled={actions.some((action) => action.id === "vibe_control")}
       disabled={false}
       workers={[
         {
@@ -314,7 +315,7 @@ it("groups task menus and never offers generic preset writes", () => {
   expect(screen.queryByRole("button", { name: "Delete preset" })).toBeNull();
   expect(fixture.run).not.toHaveBeenCalled();
 });
-it("preserves statistics while refreshing, then downloads an export in the original host scope", async () => {
+it("shows statistics and downloads an export in the original host scope", async () => {
   fixture.run.mockResolvedValueOnce({ text: "Statistics ready" }).mockResolvedValueOnce({
     text: "Exported",
     file: { path: "file.html", fileName: "file.html" },
@@ -422,7 +423,7 @@ it("list query failure blocks mutation and retry reloads choices", async () => {
   await act(async () => {});
   expect(submit().disabled).toBe(true);
   expect(screen.getByRole("alert").textContent).toBe("History unavailable");
-  await act(async () => fireEvent.click(screen.getByText("common.actions.refresh")));
+  await act(async () => fireEvent.click(screen.getByText("settings.providers.diagnostic.refresh")));
   select("entryId", "entry-1");
   expect(submit().disabled).toBe(false);
   expect(fixture.run.mock.calls.every((call) => call[1] === "get_entries")).toBe(true);
@@ -590,4 +591,104 @@ it("offers only user messages for branching and explains bounded recent history"
   expect(screen.queryByRole("option", { name: "Model changed" })).toBeNull();
   expect(screen.getByRole("option", { name: "Create a handoff card" })).toBeTruthy();
   expect(screen.getByText("providerControl.tasks.recentHistory")).toBeTruthy();
+});
+
+it("enables Vibe through its acknowledged control without losing the pending worker task", async () => {
+  fixture.run.mockResolvedValue({ text: "Accepted" });
+  const props = {
+    serverId: "server",
+    agentId: "agent",
+    cwd: "/workspace",
+    actions: [vibe],
+    disabled: false,
+  };
+  const result = render(<ProviderNativeActions {...props} vibeEnabled={false} />);
+  fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+  choose("Vibe");
+  select("operation", "spawn");
+  select("cli", "fast");
+  fireEvent.change(screen.getByLabelText("prompt"), {
+    target: { value: "Review the handoff card" },
+  });
+  expect(submit().disabled).toBe(true);
+  await act(async () => fireEvent.click(screen.getByTestId("native-enable-vibe")));
+  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "vibe_control", {
+    operation: "toggle",
+    enabled: "true",
+  });
+  expect(submit().disabled).toBe(true);
+  result.rerender(<ProviderNativeActions {...props} vibeEnabled />);
+  expect(screen.getByLabelText("prompt")).toHaveProperty("value", "Review the handoff card");
+  expect(submit().disabled).toBe(false);
+  await act(async () => fireEvent.click(submit()));
+  expect(fixture.run).toHaveBeenLastCalledWith("agent", "vibe_control", {
+    operation: "spawn",
+    cli: "fast",
+    prompt: "Review the handoff card",
+  });
+});
+
+it("does not dispatch Vibe controls when the daemon has no negotiated mode state", () => {
+  render(
+    <ProviderNativeActions
+      serverId="server"
+      agentId="agent"
+      cwd="/workspace"
+      actions={[vibe]}
+      disabled={false}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+  choose("Vibe");
+  select("operation", "list");
+  expect(screen.getByText("providerControl.tasks.vibeNotReady")).toBeTruthy();
+  expect(submit().disabled).toBe(true);
+  fireEvent.click(submit());
+  expect(fixture.run).not.toHaveBeenCalled();
+});
+
+it("keeps pending results independent, preserves a previous result during refresh, and restores it after reopening", async () => {
+  let finishRefresh!: (value: { text: string }) => void;
+  fixture.run
+    .mockResolvedValueOnce({ text: "Statistics ready" })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRefresh = resolve;
+        }),
+    )
+    .mockResolvedValueOnce({ text: "Export ready" });
+  const onClose = vi.fn();
+  render(
+    <ProviderNativeActions
+      serverId="server"
+      agentId="agent"
+      cwd="/workspace"
+      actions={[stats, exportAction]}
+      disabled={false}
+      onClose={onClose}
+    />,
+  );
+  const trigger = screen.getByRole("button", { name: "More actions" });
+  fireEvent.click(trigger);
+  choose("Statistics");
+  await act(async () => fireEvent.click(submit()));
+  fireEvent.click(submit());
+  expect(screen.getByText("Statistics ready")).toBeTruthy();
+  fireEvent.click(screen.getByText("Back"));
+  choose("Export");
+  await act(async () => fireEvent.click(submit()));
+  expect(screen.getByText("Export ready")).toBeTruthy();
+  fireEvent.click(screen.getByText("Back"));
+  choose("Statistics");
+  expect(submit().disabled).toBe(true);
+  expect(screen.getByText("Statistics ready")).toBeTruthy();
+  expect(screen.queryByText("Export ready")).toBeNull();
+  await act(async () => finishRefresh({ text: "New statistics" }));
+  fireEvent.click(screen.getByText("Close"));
+  expect(onClose).toHaveBeenCalledOnce();
+  fireEvent.click(trigger);
+  choose("Statistics");
+  expect(screen.getByText("New statistics")).toBeTruthy();
+  expect(fixture.run).toHaveBeenCalledTimes(3);
 });

@@ -76,6 +76,10 @@ export const ko: TranslationResources = {
       op: "동작",
     },
     tasks: {
+      enableVibe: "worker 작업 전에 Vibe를 켜세요.",
+      enableVibeLabel: "Vibe 켜기",
+      vibeNotReady: "이 연결에서는 Vibe 제어가 아직 준비되지 않았습니다.",
+
       recentHistory: "최근 기록을 표시합니다. 이전 {{count}}개 항목은 원본 로그에 남아 있습니다.",
       finishTurn: "현재 기본 작업을 마친 후 변경하세요.",
       exitVibe: "대화 기록을 변경하기 전에 Vibe를 종료하세요.",

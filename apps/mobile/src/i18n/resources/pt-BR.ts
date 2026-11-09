@@ -76,6 +76,10 @@ export const ptBR: TranslationResources = {
       op: "Ação",
     },
     tasks: {
+      enableVibe: "Ative o Vibe antes de usar os workers.",
+      enableVibeLabel: "Ativar Vibe",
+      vibeNotReady: "Os controles Vibe não estão prontos nesta conexão.",
+
       recentHistory: "Histórico recente; {{count}} entradas antigas permanecem no registro nativo.",
       finishTurn: "Conclua a tarefa principal antes desta ação.",
       exitVibe: "Saia do Vibe antes de alterar o histórico.",

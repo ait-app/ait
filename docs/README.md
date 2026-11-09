@@ -31,7 +31,7 @@
 - [MCP 编排接口](operations/mcp.md)：HTTP、可选 Unix socket、认证和工具发现。
 - [沙箱化 Worktree](decisions/workspace/adr-215-sandboxed-worktree-isolation.md)：macOS 使用 Seatbelt；[Linux 使用 bubblewrap](decisions/workspace/adr-223-linux-worktree-sandbox.md)，说明 Agent 写入限制、Git 指针保护和共享 inode 等边界。
 - [Agent Skill 分发](operations/agent-skills.md)：内置技能、更新、选择和卸载。
-- [OMP 模型角色与原生操作](operations/oh-my-pi.md)：角色配置、异步模型目录及官方已导出操作；
+- [OMP 模型角色与原生操作](operations/oh-my-pi.md)：齿轮内统一预设/账号设置、按对象执行原生操作、角色配置及异步模型目录；
   [原生 UI 与拥有者边界](decisions/providers/adr-218-native-ui-and-actions.md)、[验收报告](reports/providers/native-delivery-and-omp-roles-2026-11-02.md)。
 - [原生控制结果兼容](decisions/providers/adr-214-native-control-result-cards.md)：旧客户端文本封装与当前结果卡片共用实时及历史出口。
 - [查看子 Agent](decisions/providers/adr-209-observed-subagent-normalization.md)：统一会话入口、父子关系与只读观测边界。

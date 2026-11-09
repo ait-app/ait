@@ -76,6 +76,10 @@ export const ja: TranslationResources = {
       op: "操作",
     },
     tasks: {
+      enableVibe: "worker の操作前に Vibe を有効にしてください。",
+      enableVibeLabel: "Vibe を有効化",
+      vibeNotReady: "この接続では Vibe の操作をまだ利用できません。",
+
       recentHistory: "最近の履歴を表示中。古い {{count}} 件はネイティブログに残っています。",
       finishTurn: "現在のメインタスクを終了してから操作してください。",
       exitVibe: "会話履歴を切り替える前に Vibe を終了してください。",

@@ -38,7 +38,7 @@ export function ProviderNativeActions({
   surface = "composer",
   workers = [],
   turnActive = false,
-  vibeEnabled = false,
+  vibeEnabled,
 }: {
   serverId: string;
   agentId: string;
@@ -62,6 +62,7 @@ export function ProviderNativeActions({
   const [searchQuery, setSearchQuery] = useState("");
   const [drafts, setDrafts] = useState<Record<string, NativeArguments>>({});
   const [ready, setReady] = useState<Record<string, boolean>>({});
+  const [enablingVibe, setEnablingVibe] = useState(false);
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
   const visibleActions = actions.filter((item) => {
     const category = nativeActionGroup(item.id);
@@ -82,11 +83,16 @@ export function ProviderNativeActions({
     actionId,
   );
   const blockedReason =
-    turnActive && (changesHistory || (actionId === "vibe_control" && operation === "toggle"))
+    turnActive &&
+    (changesHistory || (actionId === "vibe_control" && (operation === "toggle" || !vibeEnabled)))
       ? "finishTurn"
       : changesHistory && vibeEnabled
         ? "exitVibe"
-        : null;
+        : actionId === "vibe_control" && typeof vibeEnabled !== "boolean"
+          ? "vibeNotReady"
+          : actionId === "vibe_control" && !vibeEnabled && operation !== "toggle"
+            ? "enableVibe"
+            : null;
   const valid =
     !blockedReason &&
     action &&
@@ -120,6 +126,25 @@ export function ProviderNativeActions({
   const runLabel = action
     ? t(`providerControl.operations.${operation ?? action.id}`, { defaultValue: action.label })
     : "";
+  const enableVibe = async () => {
+    if (!client || disabled || turnActive || enablingVibe) return;
+    const key = outcomeKey;
+    setEnablingVibe(true);
+    try {
+      await client.runNativeAction(agentId, "vibe_control", {
+        operation: "toggle",
+        enabled: "true",
+      });
+      setOutcomes((current) => ({ ...current, [key]: { ...current[key], error: undefined } }));
+    } catch (cause) {
+      setOutcomes((current) => ({
+        ...current,
+        [key]: { ...current[key], error: cause instanceof Error ? cause.message : String(cause) },
+      }));
+    } finally {
+      setEnablingVibe(false);
+    }
+  };
   const run = async () => {
     if (!client || !action || pending || disabled || !valid) return;
     const key = outcomeKey;
@@ -161,11 +186,15 @@ export function ProviderNativeActions({
           values={values}
           serverId={serverId}
           agentId={agentId}
-          workers={workers.map((worker) => ({
-            id: worker.id,
-            label: worker.description || t("providerControl.tasks.worker"),
-            description: worker.status,
-          }))}
+          workers={workers
+            .filter(
+              (worker) => operation !== "kill" || ["running", "unknown"].includes(worker.status),
+            )
+            .map((worker) => ({
+              id: worker.id,
+              label: worker.description || t("providerControl.tasks.worker"),
+              description: worker.status,
+            }))}
           onChange={(value) => setValue(field.id, value)}
           disabled={disabled || pending}
           onReady={(value) =>
@@ -179,6 +208,18 @@ export function ProviderNativeActions({
       ))}
       {blockedReason ? (
         <Text style={styles.caption}>{t(`providerControl.tasks.${blockedReason}`)}</Text>
+      ) : null}
+      {blockedReason === "enableVibe" ? (
+        <Button
+          variant="outline"
+          size="sm"
+          loading={enablingVibe}
+          disabled={disabled || !client || enablingVibe || turnActive}
+          onPress={() => void enableVibe()}
+          testID="native-enable-vibe"
+        >
+          {t("providerControl.tasks.enableVibeLabel")}
+        </Button>
       ) : null}
       {error ? (
         <Text accessibilityRole="alert" style={styles.error}>

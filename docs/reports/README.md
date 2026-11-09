@@ -80,6 +80,7 @@
 ## Provider、Agent 与会话
 
 - [PR #612 预设角色与原生控制体验复审修复（2026-11-09）](providers/pr612-provider-settings-ux-2026-11-09.md)
+- [PR #612 原生操作路径与 Tai 实景复查（2026-11-10）](providers/pr612-native-action-journeys-2026-11-10.md)
 
 - [PR #612 预设来源与 Vibe worker thinking 复审修复（2026-11-09）](providers/pr612-preset-ownership-and-vibe-thinking-2026-11-09.md)
 

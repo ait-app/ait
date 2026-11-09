@@ -63,6 +63,10 @@ export const zhCN: TranslationResources = {
       op: "操作",
     },
     tasks: {
+      enableVibe: "请先开启 Vibe，再执行 worker 操作。",
+      enableVibeLabel: "开启 Vibe",
+      vibeNotReady: "此连接尚未提供可用的 Vibe 控制。",
+
       recentHistory: "显示最近条目，另有 {{count}} 条较早记录保留在原生日志。",
       finishTurn: "请先结束当前主任务，再执行此操作。",
       exitVibe: "请先退出 Vibe，再切换会话历史。",

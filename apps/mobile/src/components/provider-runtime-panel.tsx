@@ -27,13 +27,17 @@ export function ProviderRuntimePanel({
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
+  const mainTurnActive = useSessionStore(
+    (store) => store.sessions[serverId]?.agents.get(agentId)?.turn?.phase === "open",
+  );
   const exitVibe = useCallback(async () => {
+    if (mainTurnActive) throw new Error(t("providerControl.tasks.finishTurn"));
     if (!client) throw new Error(t("workspace.terminal.hostDisconnected"));
     await client.runNativeAction(agentId, "vibe_control", {
       operation: "toggle",
       enabled: "false",
     });
-  }, [agentId, client, t]);
+  }, [agentId, client, mainTurnActive, t]);
   const state = useSessionStore(
     (store) => store.sessions[serverId]?.agents.get(agentId)?.providerUi,
   );
@@ -79,7 +83,8 @@ export function ProviderRuntimePanel({
           key={`vibe:${serverId}:${agentId}`}
           state={state.vibe}
           onExit={exitVibe}
-          disabled={blocked || !client}
+          disabled={blocked || !client || mainTurnActive}
+          disabledReason={mainTurnActive ? t("providerControl.tasks.finishTurn") : undefined}
         />
       ) : null}
       {above &&

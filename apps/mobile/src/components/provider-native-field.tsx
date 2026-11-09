@@ -199,7 +199,7 @@ export function ProviderNativeField({
             disabled={disabled || loading || !query}
             onPress={() => setRevision((n) => n + 1)}
           >
-            {t("common.actions.refresh")}
+            {t("settings.providers.diagnostic.refresh")}
           </Button>
         </View>
       ) : null}
