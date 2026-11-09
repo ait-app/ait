@@ -38,7 +38,7 @@ Bot 标签页仍在“设置 → 关于”的测试功能开关之后，且要�
 3. 设置完成后进入对话，轮次显示状态与错误。Bot 暂停时仍可查看对话历史（重新加载后也可），输入框停用，有管理权限的成员可点击恢复；
    目录缺失导致的暂停会说明原因。暂停期间记忆保存、Channel 新增与启停也停用，恢复后才能修改。
 4. 在设置页可修改模型（对新对话生效）、暂停或恢复、按 revision 编辑记忆、管理 Telegram 与飞书 Channel、移除 Bot。
-   Channel 的凭据只填写 `env:AIT_SERVER_CREDENTIAL_*` 环境变量引用，并配置允许的发送者；新建 Channel 默认停用，确认配置与状态后再启用。移除需要确认。
+   飞书 Channel 默认扫码接入，也可手动填写凭据，见下文“飞书接入”；Telegram 按页面引导粘贴 Token 并点击 Start，见下文“Telegram 接入”。两者都可改用 `env:AIT_SERVER_CREDENTIAL_*` 环境变量引用并配置允许的发送者；通过环境变量引用新建的 Channel 默认停用，确认配置与状态后再启用。移除需要确认。
 5. 访客在所有视图中只读。重新设置被移除的 Bot（包括在其他设备上）得到空的对话与 Channel，客户端不会显示旧 Bot 的缓存内容。
 
 ## 权限
@@ -99,7 +99,7 @@ Bot 运行或恢复模式超出上限的任务会被拒绝；没有存储模式�
 
 ## Telegram 与飞书配置
 
-凭据由启动 daemon 的宿主环境注入；Channel 仅保存引用，不保存明文 secret。
+飞书推荐扫码接入，Telegram 推荐引导接入，都无需下面的配置。使用环境变量时，凭据由启动 daemon 的宿主环境注入，Channel 仅保存引用。
 以下为非秘密配置示例，替换允许的用户 ID 后再启用。
 
 ```json
@@ -124,6 +124,20 @@ Telegram 使用 getUpdates 长轮询。已有 webhook 会报告冲突，不会�
 }
 ```
 
+### Telegram 接入
+
+在 Bot 设置页添加 Telegram Channel，按页面步骤在 BotFather 创建机器人并粘贴 Token，daemon 向 Telegram 验证后显示一个二维码和链接。打开后在机器人对话中点击 Start，你会成为唯一允许的发送者，Channel 随后自动启用；群聊需在继续前勾选。链接 10 分钟后过期，daemon 重启后需重新开始。
+配对期间发给该机器人的其他消息会被丢弃。Token 与飞书 App Secret 保存在同一位置，边界相同。
+
+### 飞书接入
+
+在 Bot 设置页添加飞书 Channel，点击“显示二维码”，用飞书 App 扫码并同意。daemon 直接向飞书创建应用，无需开发者后台操作；
+完成后 Channel 自动启用，只有扫码者可以给机器人发消息，群聊需在扫码前勾选。二维码由 daemon 按飞书返回的有效期管理，daemon 重启后需重新扫码。
+扫码不可用（例如企业禁止创建应用）时选择手动填写，按页面步骤创建应用，粘贴 App ID 与 App Secret，并填写发送者的 Open ID；daemon 向飞书验证后保存。也可填写 `env:` 引用。
+
+扫码或粘贴的 App Secret 保存在 `<data>/workspace-bots/credentials/<channelId>`（Unix 上仅所有者可读），删除 Channel 或移除 Bot 时一并删除；飞书上的应用需在开发者后台自行删除。
+同一用户运行的进程可以读取此文件，边界见 [ADR-224](../decisions/bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)。
+
 飞书使用自建应用机器人，配置 IM 接收/发送权限，订阅 `im.message.receive_v1` 并选择长连接。
 默认只接收允许列表中的发送者；群聊需显式开启并提及机器人。当前不支持 Lark 国际区域、富媒体和卡片流式回复。
 同一 daemon 内限制平台账号独占，无法阻止其他服务使用同一账号。
@@ -138,7 +152,7 @@ Bot 自身通过 `bot_memory_read`／`bot_memory_update` 读写记忆（携带 r
 接口通过认证 WebSocket 协商 `workspace-bots-v2`，所有方法以 `workspaceId` 寻址，客户端 JSON 不含内部 `botId`。常用流程为
 `bot.setup.request` → `bot.conversation.open.request` → `bot.message.send.request`，
 再以 `bot.turn.get.request` / `bot.history.get.request` 读取执行与投递状态；`bot.get` 在未配置时返回 `null`。
-其余方法：`bot.update`、`bot.pause`、`bot.resume`、`bot.remove`、`bot.channel.*`、`bot.conversation.{list,reset}`、
+其余方法：`bot.update`、`bot.pause`、`bot.resume`、`bot.remove`、`bot.channel.*`（含 `bot.channel.feishu.scan.{start,status,cancel}`、`bot.channel.feishu.connect` 与 `bot.channel.telegram.pair.{start,status,cancel}`）、`bot.conversation.{list,reset}`、
 `bot.turn.cancel`、`bot.memory.get`。`bot.create`、`bot.list`、`bot.archive`、`bot.permission.resolve` 已删除。
 Channel 能力以 `bot.channel.types.request` 为准；完整参数见
 [`protocol.rs`](../../crates/bot/src/protocol.rs)，实现归属见

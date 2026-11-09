@@ -395,8 +395,10 @@ version = "0.2.4"
 dependencies = [
  "async-trait",
  "axum",
+ "base64 0.22.1",
  "chrono",
  "domain",
+ "flate2",
  "futures-util",
  "model",
  "persistence",

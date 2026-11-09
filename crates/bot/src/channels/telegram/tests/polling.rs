@@ -263,3 +263,19 @@ async fn transport_errors_do_not_return_token_bearing_urls() {
     assert_eq!(result, Err(ErrorCode::BotIo));
     server.abort();
 }
+
+#[test]
+fn a_repeated_pairing_start_never_becomes_a_prompt() {
+    let channel = channel();
+    let code = uuid::Uuid::new_v4().simple();
+    let update = |text: String| {
+        json!({"update_id":5,"message":{"message_id":1,"text":text,
+            "chat":{"id":1,"type":"private"},"from":{"id":1,"is_bot":false}}})
+    };
+
+    let repeated = incoming(&channel, &update(format!("/start {code}")), 42, "bot").unwrap();
+    let ordinary = incoming(&channel, &update("/start".to_owned()), 42, "bot").unwrap();
+
+    assert!(repeated.is_none());
+    assert!(ordinary.is_some());
+}

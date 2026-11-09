@@ -1,5 +1,6 @@
-mod feishu;
-mod telegram;
+pub(crate) mod feishu;
+mod onboarding;
+pub(crate) mod telegram;
 
 use std::sync::Arc;
 use std::time::Duration;

@@ -120,3 +120,35 @@ fn memory_rejects_oversize_and_nul() {
     );
     assert!(store.save_memory("wks_a", "a\0b").is_err());
 }
+
+#[test]
+fn channel_secrets_are_private_replaceable_and_removable() {
+    let root = tempfile::tempdir().unwrap();
+    let secrets = SecretFiles::new(root.path().join("credentials"));
+    let channel = ChannelId::generate();
+
+    secrets.save(channel, "first").unwrap();
+    secrets.save(channel, "second").unwrap();
+
+    assert_eq!(secrets.load(channel).unwrap(), "second");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&root.path().join("credentials")), 0o700);
+        assert_eq!(mode(&secrets.path(channel)), 0o600);
+    }
+    secrets.delete(channel).unwrap();
+    assert!(secrets.load(channel).is_err());
+    secrets.delete(channel).unwrap();
+}
+
+#[test]
+fn oversized_channel_secrets_are_refused() {
+    let root = tempfile::tempdir().unwrap();
+    let secrets = SecretFiles::new(root.path().join("credentials"));
+    let channel = ChannelId::generate();
+
+    assert!(secrets.save(channel, &"x".repeat(4097)).is_err());
+    assert!(secrets.load(channel).is_err());
+}

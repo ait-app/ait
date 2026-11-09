@@ -111,6 +111,54 @@ export const ar: TranslationResources = {
     channelEnabled: "مفعّلة",
     channelConnected: "متصلة",
     channelIdle: "خاملة",
+    feishuScanHint:
+      "امسح رمز QR باستخدام تطبيق Feishu. سينشئ Feishu بوتًا لك وسيوصله Ait، ولن يتمكن أحد غيرك من مراسلته ما لم تغيّر ذلك.",
+    feishuScanStart: "عرض رمز QR",
+    feishuScanWaiting:
+      "امسح هذا الرمز باستخدام تطبيق Feishu ووافق على البوت الجديد. أبقِ هذه الصفحة مفتوحة حتى الانتهاء.",
+    feishuScanOpen: "فتح في Feishu",
+    feishuScanQrLabel: "رمز QR لإعداد Feishu",
+    feishuScanRetry: "إعادة المحاولة",
+    feishuScanDenied: "تم رفض الطلب في Feishu.",
+    feishuScanExpired: "انتهت صلاحية رمز QR. ابدأ من جديد للحصول على رمز آخر.",
+    feishuScanLark: "يبدو أن هذا حساب Lark. يدعم Ait تطبيق Feishu في الصين فقط.",
+    feishuScanUnavailable:
+      "تعذّر إكمال الإعداد مع Feishu. أعد المحاولة أو أدخل بيانات الاعتماد يدويًا.",
+    feishuManualEntry: "إدخال بيانات الاعتماد يدويًا",
+    feishuScanInstead: "مسح رمز QR بدلاً من ذلك",
+    feishuAppSecret: "App Secret",
+    feishuAppSecretHint:
+      "الصق App Secret. يتحقق منه Ait مع Feishu ويحفظه بشكل خاص على هذا المضيف. يمكن أيضًا استخدام مرجع env:AIT_SERVER_CREDENTIAL_*.",
+    feishuManualStep1: "أنشئ تطبيقًا مخصصًا على open.feishu.cn/app وفعّل إمكانية البوت.",
+    feishuManualStep2:
+      "ضمن الأذونات، أضف im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly.",
+    feishuManualStep3:
+      "انسخ App ID وApp Secret هنا، وأضف معرّف Open ID الخاص بك في Feishu (ou_...) كمرسل مسموح، ثم أضف القناة.",
+    feishuManualStep4:
+      "بعد ذلك، ضمن الأحداث وعمليات الاستدعاء في Feishu، اختر الاتصال الطويل واشترك في im.message.receive_v1. لا يمكن لـ Feishu حفظ ذلك إلا بعد اتصال القناة.",
+    feishuManualStep5: "انشر إصدارًا من التطبيق حتى يتمكن الآخرون من مراسلة البوت.",
+    telegramGuideStep1: "امسح هذا الرمز أو استخدم الزر لفتح BotFather في Telegram.",
+    telegramGuideStep2: "أرسل /newbot ثم اختر اسمًا واسم مستخدم ينتهي بـ bot.",
+    telegramGuideStep3: "انسخ الرمز المميز الذي يرسله BotFather والصقه أدناه.",
+    telegramBotFatherOpen: "فتح BotFather",
+    telegramBotFatherQrLabel: "رمز QR لفتح BotFather",
+    telegramToken: "الرمز المميز للبوت",
+    telegramTokenHint: "يتحقق Ait من الرمز المميز مع Telegram ويحفظه بشكل خاص على هذا المضيف.",
+    telegramContinue: "متابعة",
+    telegramPairWaiting:
+      "امسح هذا الرمز أو افتح الرابط، ثم اضغط Start في المحادثة مع @{{bot}} لتصبح المرسل المسموح به. أبقِ هذه الصفحة مفتوحة حتى الانتهاء.",
+    telegramPairOpen: "فتح في Telegram",
+    telegramPairQrLabel: "رمز QR لفتح البوت الجديد",
+    telegramInvalidToken: "رفض Telegram هذا الرمز المميز. انسخه مرة أخرى من BotFather.",
+    telegramAlreadyConnected:
+      "هذا البوت متصل بالفعل بقناة على هذا المضيف. احذف تلك القناة أولاً أو أنشئ بوتًا جديدًا.",
+    telegramWebhookConflict:
+      "تم إعداد webhook لهذا البوت. أزله باستخدام deleteWebhook ثم أعد المحاولة.",
+    telegramPollingConflict: "يتلقى برنامج آخر رسائل هذا البوت. أوقفه ثم أعد المحاولة.",
+    telegramExpired: "انتهت صلاحية هذا الرابط. تابع للحصول على رابط جديد.",
+    telegramUnavailable: "تعذّر الاتصال بـ Telegram. تحقق من اتصال هذا المضيف ثم أعد المحاولة.",
+    telegramUseEnvironment: "استخدام متغير بيئة بدلاً من ذلك",
+    telegramUseGuided: "استخدام الإعداد الموجّه بدلاً من ذلك",
     deleteChannel: "حذف القناة",
     deleteChannelConfirm: "هل تريد حذف هذه القناة؟ سيتم قطع اتصالها الخارجي.",
     status: {

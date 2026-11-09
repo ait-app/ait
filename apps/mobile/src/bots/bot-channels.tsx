@@ -1,10 +1,8 @@
 import React, { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { Check } from "lucide-react-native";
-import { withUnistyles } from "react-native-unistyles";
 import type { z } from "zod";
 import type { BotChannelSchema } from "@ait/protocol/bot/types";
 import { Button } from "@/components/ui/button";
@@ -12,15 +10,16 @@ import { Field, FormTextInput } from "@/components/ui/form-field";
 import { SelectField } from "@/components/ui/select-field";
 import { Switch } from "@/components/ui/switch";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import type { Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
+import { AllowGroupsCheckbox } from "./allow-groups-checkbox";
+import { FeishuManualGuide, FeishuScanSetup, useFeishuSetupSupported } from "./feishu-setup";
+import { TextLink } from "./channel-setup";
 import { BotLoadingSpinner } from "./loading";
 import { botKeys } from "./queries";
 import { botStyles as styles } from "./styles";
+import { TelegramGuidedSetup, useTelegramSetupSupported } from "./telegram-setup";
 
 type BotChannel = z.infer<typeof BotChannelSchema>;
-const ThemedCheck = withUnistyles(Check);
-const checkedIconMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
 
 const CREDENTIAL_REF = /^env:AIT_SERVER_CREDENTIAL_[A-Z0-9_]{1,96}$/;
 const MAX_SENDERS = 256;
@@ -169,22 +168,44 @@ function ChannelForm({
   const client = useHostRuntimeClient(serverId);
   // One id per opened form: a retry after a lost response must not create a second channel.
   const [channelId] = useState(() => randomUUID());
-  const [kind, setKind] = useState<ExternalKind>(kinds[0] ?? "telegram");
+  const feishuSetupSupported = useFeishuSetupSupported(serverId);
+  const [kind, setKind] = useState<ExternalKind>(
+    feishuSetupSupported && kinds.includes("feishu") ? "feishu" : (kinds[0] ?? "telegram"),
+  );
   const [tokenRef, setTokenRef] = useState("");
   const [appId, setAppId] = useState("");
   const [secretRef, setSecretRef] = useState("");
   const [senders, setSenders] = useState("");
   const [allowGroups, setAllowGroups] = useState(false);
+  const [enterManually, setEnterManually] = useState(false);
+  const scanning = kind === "feishu" && feishuSetupSupported && !enterManually;
+  const telegramSetupSupported = useTelegramSetupSupported(serverId);
+  const [useEnvironment, setUseEnvironment] = useState(false);
+  const telegramGuided = kind === "telegram" && telegramSetupSupported && !useEnvironment;
+  // Hosts with Feishu setup also accept a pasted App Secret; a reference still uses the variable.
+  const pastedSecret = kind === "feishu" && feishuSetupSupported && !CREDENTIAL_REF.test(secretRef);
   const allowedSenders = parseSenders(senders);
   const valid =
     allowedSenders.length > 0 &&
     allowedSenders.length <= MAX_SENDERS &&
     (kind === "telegram"
       ? CREDENTIAL_REF.test(tokenRef)
-      : appId.trim().length > 0 && CREDENTIAL_REF.test(secretRef));
+      : appId.trim().length > 0 &&
+        (CREDENTIAL_REF.test(secretRef) || (pastedSecret && secretRef.trim().length > 0)));
   const create = useMutation({
     mutationFn: async () => {
       if (!client) throw new Error(t("bots.disconnected"));
+      if (pastedSecret) {
+        await client.botRequest("bot.channel.feishu.connect.request", {
+          workspaceId,
+          channelId,
+          appId: appId.trim(),
+          appSecret: secretRef.trim(),
+          allowedSenders,
+          allowGroups,
+        });
+        return;
+      }
       await client.botRequest("bot.channel.create.request", {
         workspaceId,
         channelId,
@@ -197,24 +218,65 @@ function ChannelForm({
     },
     onSuccess: onDone,
   });
-  const showHint = (kind === "telegram" ? tokenRef : secretRef) !== "" && !valid;
+  const showHint = !pastedSecret && (kind === "telegram" ? tokenRef : secretRef) !== "" && !valid;
+  const typeField = (
+    <SelectField
+      label={t("bots.channelType")}
+      value={kind}
+      selectedDisplay={{ label: kind === "feishu" ? t("bots.feishu") : t("bots.telegram") }}
+      options={kinds.map((id) => ({
+        id,
+        value: id,
+        label: id === "feishu" ? t("bots.feishu") : t("bots.telegram"),
+      }))}
+      onChange={(value) => setKind(value as ExternalKind)}
+      disabled={create.isPending}
+      placeholder={t("bots.channelType")}
+      emptyText={t("bots.channelType")}
+      testID="bot-channel-type"
+    />
+  );
+  if (scanning) {
+    return (
+      <View style={styles.card} testID="bot-channel-form">
+        {typeField}
+        <FeishuScanSetup
+          serverId={serverId}
+          workspaceId={workspaceId}
+          active={active}
+          onDone={onDone}
+          onEnterManually={() => setEnterManually(true)}
+        />
+      </View>
+    );
+  }
+  if (telegramGuided) {
+    return (
+      <View style={styles.card} testID="bot-channel-form">
+        {typeField}
+        <TelegramGuidedSetup
+          serverId={serverId}
+          workspaceId={workspaceId}
+          active={active}
+          onDone={onDone}
+          onUseEnvironment={() => setUseEnvironment(true)}
+        />
+      </View>
+    );
+  }
   return (
     <View style={styles.card} testID="bot-channel-form">
-      <SelectField
-        label={t("bots.channelType")}
-        value={kind}
-        selectedDisplay={{ label: kind === "feishu" ? t("bots.feishu") : t("bots.telegram") }}
-        options={kinds.map((id) => ({
-          id,
-          value: id,
-          label: id === "feishu" ? t("bots.feishu") : t("bots.telegram"),
-        }))}
-        onChange={(value) => setKind(value as ExternalKind)}
-        disabled={create.isPending}
-        placeholder={t("bots.channelType")}
-        emptyText={t("bots.channelType")}
-        testID="bot-channel-type"
-      />
+      {typeField}
+      {kind === "telegram" && telegramSetupSupported ? (
+        <TextLink
+          label={t("bots.telegramUseGuided")}
+          onPress={() => setUseEnvironment(false)}
+          testID="bot-telegram-use-guided"
+        />
+      ) : null}
+      {kind === "feishu" && feishuSetupSupported ? (
+        <FeishuManualGuide onScanInstead={() => setEnterManually(false)} />
+      ) : null}
       {kind === "telegram" ? (
         <Field label={t("bots.tokenRef")} hint={t("bots.channelRefHint")}>
           <FormTextInput
@@ -238,12 +300,18 @@ function ChannelForm({
               autoCorrect={false}
             />
           </Field>
-          <Field label={t("bots.secretRef")} hint={t("bots.channelRefHint")}>
+          <Field
+            label={feishuSetupSupported ? t("bots.feishuAppSecret") : t("bots.secretRef")}
+            hint={feishuSetupSupported ? t("bots.feishuAppSecretHint") : t("bots.channelRefHint")}
+          >
             <FormTextInput
               initialValue={secretRef}
               onChangeText={setSecretRef}
               editable={!create.isPending}
-              accessibilityLabel={t("bots.secretRef")}
+              secureTextEntry={feishuSetupSupported}
+              accessibilityLabel={
+                feishuSetupSupported ? t("bots.feishuAppSecret") : t("bots.secretRef")
+              }
               autoCapitalize="none"
               autoCorrect={false}
             />
@@ -262,21 +330,11 @@ function ChannelForm({
           autoCorrect={false}
         />
       </Field>
-      <Pressable
-        style={[styles.row, create.isPending ? styles.disabled : null]}
-        onPress={() => setAllowGroups((checked) => !checked)}
+      <AllowGroupsCheckbox
+        checked={allowGroups}
         disabled={create.isPending}
-        accessibilityRole="checkbox"
-        accessibilityLabel={t("bots.allowGroups")}
-        accessibilityState={{ checked: allowGroups, disabled: create.isPending }}
-        aria-checked={allowGroups}
-        testID="bot-channel-allow-groups"
-      >
-        <View style={[styles.checkbox, allowGroups ? styles.checkboxChecked : null]}>
-          {allowGroups ? <ThemedCheck size={14} uniProps={checkedIconMapping} /> : null}
-        </View>
-        <Text style={styles.text}>{t("bots.allowGroups")}</Text>
-      </Pressable>
+        onToggle={() => setAllowGroups((checked) => !checked)}
+      />
       {create.error ? (
         <Text style={styles.error} accessibilityRole="alert">
           {create.error.message}

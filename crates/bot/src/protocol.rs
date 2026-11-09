@@ -3,6 +3,7 @@ use domain::bot::{ChannelConfig, ExecutionConfig};
 use domain::{BotTurnId, ChannelId, ConversationId};
 use serde::Deserialize;
 use serde_json::Value;
+use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -57,6 +58,46 @@ pub(crate) struct ChannelUpdate {
     pub(crate) channel_id: ChannelId,
     pub(crate) enabled: bool,
     pub(crate) config: Option<ChannelConfig>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct FeishuScanStart {
+    pub(crate) workspace_id: String,
+    #[serde(default)]
+    pub(crate) allow_groups: bool,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct FeishuScanRequest {
+    pub(crate) workspace_id: String,
+    pub(crate) scan_id: Uuid,
+}
+/// Manually entered Feishu credentials; deliberately not `Debug` because it holds a secret.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct FeishuConnect {
+    pub(crate) workspace_id: String,
+    pub(crate) channel_id: ChannelId,
+    pub(crate) app_id: String,
+    pub(crate) app_secret: String,
+    pub(crate) allowed_senders: Vec<String>,
+    #[serde(default)]
+    pub(crate) allow_groups: bool,
+}
+/// A pasted bot token; deliberately not `Debug` because it holds a secret.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct TelegramPairStart {
+    pub(crate) workspace_id: String,
+    pub(crate) token: String,
+    #[serde(default)]
+    pub(crate) allow_groups: bool,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct TelegramPairRequest {
+    pub(crate) workspace_id: String,
+    pub(crate) pairing_id: Uuid,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

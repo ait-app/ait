@@ -5,7 +5,8 @@
 - 修订：为 [ADR-104](../workspace/adr-104-filesystem-model-collaboration.md) 所述功能
   crate 独立依赖约定增加 `bot → provider` 单向边；其余能力边界保持原有约定。
 - 后续修订：[ADR-213](adr-213-single-workspace-manager-bot.md) 取代多 Bot、人格、`botId` 寻址与 Workspace 目录内的记忆位置，
-  改为每个 Workspace 一个管理者 Bot 并以 `workspaceId` 寻址。
+  改为每个 Workspace 一个管理者 Bot 并以 `workspaceId` 寻址；
+  [ADR-224](adr-224-feishu-scan-onboarding-and-stored-secrets.md) 允许 daemon 保存 Channel 的 Secret，修订第 8 条。
 
 ## 背景
 

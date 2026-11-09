@@ -107,6 +107,59 @@ export const es: TranslationResources = {
     channelEnabled: "Activado",
     channelConnected: "Conectado",
     channelIdle: "Inactivo",
+    feishuScanHint:
+      "Escanea un código QR con la app de Feishu. Feishu crea un bot para ti y Ait lo conecta; solo tú podrás escribirle hasta que lo cambies.",
+    feishuScanStart: "Mostrar código QR",
+    feishuScanWaiting:
+      "Escanea este código con la app de Feishu y aprueba el nuevo bot. Mantén esta página abierta hasta que termine.",
+    feishuScanOpen: "Abrir en Feishu",
+    feishuScanQrLabel: "Código QR de configuración de Feishu",
+    feishuScanRetry: "Reintentar",
+    feishuScanDenied: "La solicitud se rechazó en Feishu.",
+    feishuScanExpired: "Este código QR caducó. Empieza de nuevo para obtener otro.",
+    feishuScanLark: "Parece una cuenta de Lark. Ait solo admite Feishu en China.",
+    feishuScanUnavailable:
+      "No se pudo completar la configuración con Feishu. Reintenta o introduce las credenciales manualmente.",
+    feishuManualEntry: "Introducir credenciales manualmente",
+    feishuScanInstead: "Escanear un código QR",
+    feishuAppSecret: "App Secret",
+    feishuAppSecretHint:
+      "Pega el App Secret. Ait lo verifica con Feishu y lo guarda de forma privada en este host. También sirve una referencia env:AIT_SERVER_CREDENTIAL_*.",
+    feishuManualStep1:
+      "Crea una app personalizada en open.feishu.cn/app y activa la capacidad de bot.",
+    feishuManualStep2:
+      "En Permisos, añade im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly.",
+    feishuManualStep3:
+      "Copia aquí el App ID y el App Secret, añade tu Open ID de Feishu (ou_...) como remitente permitido y añade el canal.",
+    feishuManualStep4:
+      "Después, en Eventos y devoluciones de llamada de Feishu, elige Conexión larga y suscríbete a im.message.receive_v1. Feishu solo puede guardarlo cuando el canal está conectado.",
+    feishuManualStep5: "Publica una versión de la app para que se pueda escribir al bot.",
+    telegramGuideStep1: "Escanea este código o usa el botón para abrir BotFather en Telegram.",
+    telegramGuideStep2:
+      "Envía /newbot y elige un nombre y un nombre de usuario que termine en bot.",
+    telegramGuideStep3: "Copia el token que envía BotFather y pégalo abajo.",
+    telegramBotFatherOpen: "Abrir BotFather",
+    telegramBotFatherQrLabel: "Código QR que abre BotFather",
+    telegramToken: "Token del bot",
+    telegramTokenHint:
+      "Ait verifica el token con Telegram y lo guarda de forma privada en este host.",
+    telegramContinue: "Continuar",
+    telegramPairWaiting:
+      "Escanea este código o abre el enlace y pulsa Start en el chat con @{{bot}}. Así serás el remitente permitido. Mantén esta página abierta hasta que termine.",
+    telegramPairOpen: "Abrir en Telegram",
+    telegramPairQrLabel: "Código QR que abre tu nuevo bot",
+    telegramInvalidToken: "Telegram rechazó este token. Cópialo de nuevo desde BotFather.",
+    telegramAlreadyConnected:
+      "Este bot ya está conectado a un canal en este host. Elimina ese canal primero o crea un bot nuevo.",
+    telegramWebhookConflict:
+      "Este bot tiene un webhook configurado. Elimínalo con deleteWebhook y reintenta.",
+    telegramPollingConflict:
+      "Otro programa está recibiendo los mensajes de este bot. Detenlo y reintenta.",
+    telegramExpired: "Este enlace caducó. Pulsa Continuar para obtener otro.",
+    telegramUnavailable:
+      "No se pudo conectar con Telegram. Comprueba la conexión de este host y reintenta.",
+    telegramUseEnvironment: "Usar una variable de entorno",
+    telegramUseGuided: "Usar la configuración guiada",
     deleteChannel: "Eliminar canal",
     deleteChannelConfirm: "¿Eliminar este canal? Su conexión externa se desconectará.",
     status: {
