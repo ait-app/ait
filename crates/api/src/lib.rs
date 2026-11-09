@@ -1,6 +1,7 @@
 //! Authenticated local HTTP and WebSocket transport for the independent server.
 
 mod auth;
+mod automation;
 mod browser_auth;
 mod capabilities;
 mod composition;
@@ -97,6 +98,7 @@ struct Shared {
     browser: browser::dispatch::State,
     workspace_names: Option<metadata::directory::service::workspace_names::WorkspaceNames>,
     shares: Arc<shares::Shares>,
+    automation: Arc<automation::Automation>,
 }
 
 impl std::ops::Deref for Shared {
@@ -256,6 +258,13 @@ impl Api {
             .open(store)
             .map_err(|_| ConfigError::ShareStore)?;
         Ok(self)
+    }
+
+    /// Observe the Workspace Bots the Ait center may reach, for the daemon's publication;
+    /// `None` without the Bot service.
+    #[must_use]
+    pub fn hub_bots(&self) -> Option<tokio::sync::watch::Receiver<Vec<bot::service::HubBot>>> {
+        self.shared.bot.bots.as_ref().map(bot::service::Bots::hub)
     }
 
     /// Restore guest grants from the labels of Agents guests created before a restart.
@@ -421,6 +430,7 @@ impl Api {
                 }),
                 workspace_names: services.workspace_names,
                 shares: Arc::new(shares::Shares::new(&terminal, &provider)),
+                automation: Arc::default(),
                 runtime,
                 metadata,
                 filesystem,

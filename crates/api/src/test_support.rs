@@ -166,3 +166,62 @@ impl Workspaces {
 pub(crate) fn address() -> SocketAddr {
     "127.0.0.1:7316".parse().unwrap()
 }
+
+/// A Bot service over one Workspace (`wks_0123456789abcdef`, titled `workspace`) in
+/// `root`, whose provider answers every turn with `Bot answer`.
+pub(crate) mod bots {
+    use std::sync::Arc;
+
+    use ::bot::ports::{Credentials, Executor};
+    use ::bot::service::{Bots, Dependencies};
+    use domain::bot::SessionOwner;
+    use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+    use persistence::storage::bot::FileStore;
+    use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
+    use provider::service::bot_execution::Action;
+    use secrecy::SecretString;
+    use serde_json::{Value, json};
+
+    /// Workspace of the Bot fixture.
+    pub(crate) const WORKSPACE: &str = "wks_0123456789abcdef";
+
+    #[derive(Debug)]
+    struct Native;
+    #[async_trait::async_trait]
+    impl Executor for Native {
+        async fn execute(
+            &self,
+            _: SessionOwner,
+            action: Action,
+        ) -> Result<Value, model::ErrorCode> {
+            Ok(match action {
+                Action::Create { .. } => {
+                    json!({"created":true,"instructionDelivery":"system_prompt"})
+                }
+                _ => json!({"status":"idle","lastMessage":"Bot answer"}),
+            })
+        }
+    }
+    impl Credentials for Native {
+        fn resolve(&self, _: &str) -> Result<SecretString, model::ErrorCode> {
+            Err(model::ErrorCode::BotIo)
+        }
+    }
+
+    pub(crate) fn service(root: &std::path::Path) -> Bots {
+        let projects = FileBackedProjectRegistry::new(root.join("projects.json"));
+        let workspaces = FileBackedWorkspaceRegistry::new(root.join("workspaces.json"));
+        let cwd = root.to_str().unwrap();
+        projects.upsert(&serde_json::from_value(json!({"projectId":"project-1","rootPath":cwd,"kind":"non_git","displayName":"project","createdAt":"2026-10-12T00:00:00Z","updatedAt":"2026-10-12T00:00:00Z","archivedAt":null})).unwrap()).unwrap();
+        workspaces.upsert(&serde_json::from_value(json!({"workspaceId":WORKSPACE,"projectId":"project-1","cwd":cwd,"kind":"local_checkout","displayName":"workspace","createdAt":"2026-10-12T00:00:00Z","updatedAt":"2026-10-12T00:00:00Z","archivedAt":null})).unwrap(),domain::workspace::registry::WorkspaceMutationContext::default()).unwrap();
+        Bots::spawn(Dependencies {
+            store: Arc::new(FileStore::new(root.join("bots"))),
+            workspaces: Arc::new(workspaces),
+            projects: Arc::new(projects),
+            executor: Arc::new(Native),
+            credentials: Arc::new(Native),
+            scopes: ::bot::mcp::Scopes::new(),
+        })
+        .unwrap()
+    }
+}

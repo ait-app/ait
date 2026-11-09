@@ -106,6 +106,18 @@ impl Store for FileStore {
             conversation,
         )
     }
+    fn delete_conversation(&self, id: ConversationId) -> Result<(), StorageError> {
+        let absent = |result: std::io::Result<()>| match result {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(StorageError),
+            _ => Ok(()),
+        };
+        absent(fs::remove_file(
+            self.root.join("conversations").join(format!("{id}.json")),
+        ))?;
+        absent(fs::remove_dir_all(
+            self.root.join("turns").join(id.to_string()),
+        ))
+    }
     fn turns(&self, id: ConversationId) -> Result<Vec<Turn>, StorageError> {
         let mut turns = Vec::new();
         self.scan_turns(id, &mut |turn| {

@@ -1,5 +1,6 @@
 //! Host publication application: bounded ingress, durable retry and directory projection.
 
+mod automation;
 mod events;
 mod markers;
 mod outbox;
@@ -167,6 +168,15 @@ pub(super) async fn start(
         shares::run(shares_center, book, shares_cancel).await;
         drop(shares_lifetime);
     });
+    if let Some(bots) = api.hub_bots() {
+        let automation_center = application.center.clone();
+        let automation_cancel = cancel.clone();
+        let automation_lifetime = lifetime.clone();
+        tasks.spawn(async move {
+            automation::run(automation_center, bots, automation_cancel).await;
+            drop(automation_lifetime);
+        });
+    }
     tasks.spawn(async move {
         application.deliver().await;
         drop(lifetime);

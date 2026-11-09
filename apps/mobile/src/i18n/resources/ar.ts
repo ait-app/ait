@@ -227,6 +227,7 @@ export const ar: TranslationResources = {
     qqPairHint:
       "الرمز: {{code}}. أرسله إلى الروبوت في محادثة خاصة، أو أشر إلى الروبوت به في مجموعة QQ. يعمل مرة واحدة وتنتهي صلاحيته بعد 10 دقائق.",
     imessage: "iMessage",
+    hub: "Ait Hub",
     imessageGuideStep1: "أنشئ مشروع Photon Beta على app.beta.photon.codes.",
     imessageGuideStep2:
       "في هذا المشروع، أنشئ مفتاح API بالأذونات project:read, project:write, platforms:read وplatforms:write.",

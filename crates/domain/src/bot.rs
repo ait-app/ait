@@ -94,6 +94,9 @@ pub struct Bot {
 pub enum ChannelConfig {
     /// Ait's authenticated Bot tab.
     Builtin,
+    /// The Ait center's chat automation: the center's own Hub session posts input and
+    /// pulls replies, so the daemon runs no transport for it. At most one per Bot.
+    Hub,
     /// Telegram Bot API long polling.
     Telegram {
         /// Runtime environment reference, for example `env:AIT_SERVER_CREDENTIAL_TELEGRAM`.

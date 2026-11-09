@@ -3,6 +3,7 @@
 /// Build identity used by the daemon and its public protocols.
 pub const BUILD_VERSION: &str = env!("AIT_BUILD_VERSION");
 
+pub mod automation;
 pub mod bot;
 pub mod changes;
 mod context;

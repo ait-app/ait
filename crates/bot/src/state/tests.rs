@@ -8,6 +8,7 @@ use crate::channels::Incoming;
 use crate::test_support::{Fixture, OTHER_WORKSPACE, WORKSPACE, setup};
 
 mod catalog_validation;
+mod hub;
 mod lifecycle;
 mod permissions;
 

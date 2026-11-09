@@ -178,6 +178,7 @@ export const ko: TranslationResources = {
     qqPairHint:
       "코드: {{code}}. 비공개 채팅으로 봇에게 보내거나 QQ 그룹에서 봇을 @멘션하여 보내세요. 한 번만 사용할 수 있으며 10분 후 만료됩니다.",
     imessage: "iMessage",
+    hub: "Ait Hub",
     imessageGuideStep1: "app.beta.photon.codes에서 Photon Beta 프로젝트를 만드세요.",
     imessageGuideStep2:
       "해당 프로젝트에서 project:read, project:write, platforms:read, platforms:write 권한이 있는 API 키를 만드세요.",

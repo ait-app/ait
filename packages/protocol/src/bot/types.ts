@@ -69,6 +69,8 @@ export const BotChannelConfigSchema = z.discriminatedUnion("kind", [
     keyRef: z.string(),
     allowedSenders: z.array(z.string()),
   }),
+  // The Ait center relays chat messages through its own Hub session.
+  z.strictObject({ kind: z.literal("hub") }),
 ]);
 export const BotChannelSchema = z.object({
   id: z.guid(),

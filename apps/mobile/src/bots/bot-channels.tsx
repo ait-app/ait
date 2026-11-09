@@ -38,6 +38,7 @@ const KIND_LABELS = {
   weixin: "bots.weixin",
   qq: "bots.qq",
   photon_imessage: "bots.imessage",
+  hub: "bots.hub",
 } as const;
 
 function parseSenders(text: string): string[] {

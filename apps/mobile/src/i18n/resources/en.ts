@@ -230,6 +230,7 @@ export const en = {
     qqPairHint:
       "Code: {{code}}. Send it to the bot in a private chat, or @mention the bot with it in a QQ group. It works once and expires in 10 minutes.",
     imessage: "iMessage",
+    hub: "Ait Hub",
     imessageGuideStep1: "Create a Photon Beta project at app.beta.photon.codes.",
     imessageGuideStep2:
       "In that project, create an API key with project:read, project:write, platforms:read and platforms:write.",

@@ -26,6 +26,11 @@ pub trait Store: std::fmt::Debug + Send + Sync {
     /// # Errors
     /// Returns write or sync failures.
     fn save_conversation(&self, conversation: &Conversation) -> Result<(), StorageError>;
+    /// Remove one conversation and its receipts; an absent conversation is not an error.
+    /// The route goes first, so an interrupted removal leaves only unreachable receipts.
+    /// # Errors
+    /// Returns inaccessible storage errors.
+    fn delete_conversation(&self, id: ConversationId) -> Result<(), StorageError>;
     /// Load the durable receipts belonging to one conversation.
     /// # Errors
     /// Returns malformed or inaccessible storage errors.

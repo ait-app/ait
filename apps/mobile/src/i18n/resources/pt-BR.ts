@@ -203,6 +203,7 @@ export const ptBR: TranslationResources = {
     qqPairHint:
       "Código: {{code}}. Envie ao bot em uma conversa privada ou mencione o bot com ele em um grupo do QQ. Funciona uma vez e expira em 10 minutos.",
     imessage: "iMessage",
+    hub: "Ait Hub",
     imessageGuideStep1: "Crie um projeto Photon Beta em app.beta.photon.codes.",
     imessageGuideStep2:
       "Nesse projeto, crie uma chave de API com project:read, project:write, platforms:read e platforms:write.",

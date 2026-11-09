@@ -26,6 +26,20 @@ use crate::ports::{Credentials, Executor};
 use crate::protocol::decode;
 use crate::state::{State, StoredChannel};
 
+/// A Bot the center may reach through its enabled Hub channel.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HubBot {
+    /// Workspace the Bot manages.
+    pub workspace_id: String,
+    /// The Bot's Hub channel.
+    pub channel_id: ChannelId,
+    /// Workspace title shown to the account owner.
+    pub title: String,
+    /// `active` or `paused`.
+    pub state: &'static str,
+}
+
 /// Complete host dependencies; no concrete persistence adapter is required by this crate.
 pub struct Dependencies {
     /// Local atomic records and workspace-local memory.
@@ -65,6 +79,8 @@ struct Worker {
     weixin: WeixinOnboarding,
     qq: QqOnboarding,
     imessage: ImessageOnboarding,
+    /// Bots the Ait center may reach through an enabled Hub channel.
+    hub: watch::Sender<Vec<HubBot>>,
 }
 
 /// Cloneable application service; conversations outlive UI connections.
@@ -96,6 +112,7 @@ enum Operation {
     CreateStored(StoredChannel, SecretString),
     SyncToken(ChannelId, String),
     AddSender(ChannelId, String),
+    HubTurn(String, BotTurnId),
 }
 /// Outcome of channel input that the Bot did not refuse.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -132,6 +149,7 @@ impl Bots {
         let (sender, receiver) = mpsc::channel(64);
         let cancellation = CancellationToken::new();
         let (closed, observed) = watch::channel(false);
+        let hub = watch::Sender::new(state.hub_bots());
         let bots = Self(Arc::new(Worker {
             sender,
             cancellation,
@@ -143,6 +161,7 @@ impl Bots {
             weixin: WeixinOnboarding::default(),
             qq: QqOnboarding::default(),
             imessage: ImessageOnboarding::default(),
+            hub,
         }));
         let worker = bots.clone();
         std::thread::Builder::new()
@@ -219,6 +238,21 @@ impl Bots {
             "bot.channel.qq.pair.request" => qq.pair(self, decode(params)?).await,
             _ => self.call(Operation::Rpc(method.to_owned(), params)).await,
         }
+    }
+
+    /// Observe the Bots the Ait center may reach: each has an enabled Hub channel.
+    #[must_use]
+    pub fn hub(&self) -> watch::Receiver<Vec<HubBot>> {
+        self.0.hub.subscribe()
+    }
+
+    /// Refuse a turn that is not in the Workspace's enabled Hub channel.
+    /// # Errors
+    /// Returns `Forbidden` outside the Hub channel, or worker lifecycle failures.
+    pub async fn check_hub_turn(&self, workspace: &str, turn: BotTurnId) -> Result<(), ErrorCode> {
+        self.call(Operation::HubTurn(workspace.to_owned(), turn))
+            .await
+            .map(|_| ())
     }
 
     /// The scoped MCP credential registry this service publishes authorization into.
@@ -464,6 +498,7 @@ async fn serve(
             break;
         }
         let host_credentials = credentials.clone();
+        let hub = bots.clone();
         let processed = tokio::task::spawn_blocking(move || {
             if let Some(command) = command {
                 let result = apply(
@@ -472,8 +507,11 @@ async fn serve(
                     host_credentials.as_ref(),
                     command.operation,
                 );
+                // Before replying, so a caller sees the Hub channels its change produced.
+                publish_hub(&hub, &state, stopping);
                 let _ = command.reply.send(result);
             }
+            publish_hub(&hub, &state, stopping);
             for channel in std::mem::take(&mut state.released_credentials) {
                 if let Err(error) = host_credentials.delete(channel) {
                     tracing::warn!(%channel, ?error, "could not remove a deleted channel's secret");
@@ -593,7 +631,26 @@ fn apply(
         Operation::CreateStored(channel, secret) => {
             state.create_stored_channel(channel, &secret, credentials)
         }
+        Operation::HubTurn(workspace, turn) => {
+            state.hub_turn(&workspace, turn).map(|()| Value::Null)
+        }
     }
+}
+
+/// Publish the Bots the center may reach, if they changed; none while stopping or frozen.
+fn publish_hub(bots: &Bots, state: &State, stopping: bool) {
+    let hub = if stopping || state.frozen {
+        Vec::new()
+    } else {
+        state.hub_bots()
+    };
+    bots.0.hub.send_if_modified(|current| {
+        let changed = *current != hub;
+        if changed {
+            *current = hub;
+        }
+        changed
+    });
 }
 
 fn retain_enabled_accounts(state: &State, accounts: &mut BTreeMap<String, ChannelId>) {
@@ -622,8 +679,11 @@ fn refresh_channels(
         keep
     });
     for channel in desired {
-        if matches!(channel.config, domain::bot::ChannelConfig::Builtin)
-            || running.contains_key(&channel.id)
+        // The center pulls a Hub channel's replies; no transport runs for it.
+        if matches!(
+            channel.config,
+            domain::bot::ChannelConfig::Builtin | domain::bot::ChannelConfig::Hub
+        ) || running.contains_key(&channel.id)
         {
             continue;
         }

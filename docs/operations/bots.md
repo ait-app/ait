@@ -168,6 +168,13 @@ Channel 存在后回退到旧版 daemon 会导致 daemon 无法启动，即使 C
 同一 daemon 内限制平台账号独占，无法阻止其他服务使用同一账号。
 实际平台凭据和应用权限需要单独验收，历史模拟服务测试不能证明真实账号已验证。
 
+### Ait 中心 Channel
+
+Ait 中心（ait-server）可以把飞书、Slack、Telegram 中发给中心机器人的消息转给 Workspace Bot，见 [ADR-233](../decisions/bot/adr-233-hub-channel-center-automation.md)。
+用 `bot.channel.create.request` 创建 `{"kind":"hub"}` Channel 并启用，即允许本账号的中心访问这个 Bot；每个 Bot 至多一个，客户端添加入口尚未实现。
+daemon 不为它运行传输：中心通过自己的 Hub 会话投递消息、轮询 `bot.turn.get` 取回复，再用 `bot.hub.delivery.ack` 报告投递结果，会话结束时用 `bot.hub.conversation.close` 删除会话。
+中心会话只能使用这五个方法，且只能访问 Hub Channel 的轮次和会话；停用 Hub Channel、暂停或移除 Bot 后，中心会话立即断开。
+
 ## 记忆与接口
 
 Bot 记忆位于 `<data>/workspace-bots/memory/<sha256(workspaceId)>.md`，限制 32 KiB，不再写入 Workspace 目录。

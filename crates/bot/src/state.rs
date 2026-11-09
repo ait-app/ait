@@ -1,6 +1,7 @@
 mod catalog;
 mod conversations;
 mod execution;
+mod hub;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -206,6 +207,9 @@ impl State {
             }
             "bot.memory.get.request" => self.memory(&decode(params)?),
             "bot.memory.update.request" => self.update_memory(&decode(params)?),
+            "bot.hub.message.send.request" => self.hub_send(decode(params)?),
+            "bot.hub.delivery.ack.request" => self.hub_ack(&decode(params)?),
+            "bot.hub.conversation.close.request" => self.hub_close(&decode(params)?),
             _ => Err(ErrorCode::MethodNotFound),
         }
     }

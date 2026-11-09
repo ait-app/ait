@@ -645,3 +645,41 @@ async fn accept_guest(connections: &mut Connections) -> Option<Visitor> {
         .expect("connection")
         .guest
 }
+
+#[tokio::test]
+async fn automation_opens_reach_the_api_as_automation_and_odd_services_are_refused() {
+    let (_relay, hub, center, mut local) = connector().await;
+    let mut socket = online(&hub, &center, 120).await;
+    socket
+        .send(frame(
+            &json!({"t":"open","seq":1,"s":Uuid::new_v4(),"from":Uuid::nil(),
+                "service":{"kind":"automation"}}),
+            HELLO.as_bytes(),
+        ))
+        .await
+        .expect("automation open");
+    let accepted = timeout(Duration::from_secs(3), local.recv())
+        .await
+        .expect("bridge connects")
+        .expect("connection");
+    assert!(accepted.automation);
+    assert!(accepted.guest.is_none());
+
+    let unknown = Uuid::new_v4();
+    socket
+        .send(frame(
+            &json!({"t":"open","seq":2,"s":unknown,"from":Uuid::nil(),
+                "service":{"kind":"billing"}}),
+            HELLO.as_bytes(),
+        ))
+        .await
+        .expect("unknown service open");
+    loop {
+        let (header, _) = next(&mut socket).await;
+        if header["t"] == "close" {
+            assert_eq!(header["s"], json!(unknown));
+            assert_eq!(header["code"], "unsupported");
+            break;
+        }
+    }
+}

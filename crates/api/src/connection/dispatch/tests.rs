@@ -21,6 +21,7 @@ async fn binary_terminal_rejection_keeps_its_uncorrelated_error_envelope() {
             super::super::Peer {
                 capabilities: &capabilities,
                 guest: None,
+                automation: false,
             },
             &mut terminal::connection::TerminalConnection::default(),
         )

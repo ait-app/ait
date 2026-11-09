@@ -154,6 +154,32 @@ pub(crate) struct TurnRequest {
     pub(crate) workspace_id: String,
     pub(crate) turn_id: BotTurnId,
 }
+/// Input the Ait center posts into a Hub channel; `thread` is the center's conversation.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct HubSend {
+    pub(crate) workspace_id: String,
+    pub(crate) channel_id: ChannelId,
+    pub(crate) peer: String,
+    pub(crate) sender: String,
+    pub(crate) thread: String,
+    pub(crate) message_id: String,
+    pub(crate) text: String,
+}
+/// What the center reports after posting a Hub turn's reply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum HubDelivery {
+    Delivered,
+    Uncertain,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct HubAck {
+    pub(crate) workspace_id: String,
+    pub(crate) turn_id: BotTurnId,
+    pub(crate) status: HubDelivery,
+}
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct MemoryUpdate {

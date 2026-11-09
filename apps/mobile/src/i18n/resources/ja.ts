@@ -184,6 +184,7 @@ export const ja: TranslationResources = {
     qqPairHint:
       "コード: {{code}}。プライベートチャットでボットに送るか、QQ グループでボットを @ メンションして送信してください。1 回のみ有効で、10 分後に期限切れになります。",
     imessage: "iMessage",
+    hub: "Ait Hub",
     imessageGuideStep1: "app.beta.photon.codes で Photon Beta プロジェクトを作成します。",
     imessageGuideStep2:
       "そのプロジェクトで project:read, project:write, platforms:read、platforms:write の権限を持つ API キーを作成します。",

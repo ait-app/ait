@@ -43,6 +43,9 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("bot.turn.cancel.request"),
     MethodSpec::request("bot.memory.get.request"),
     MethodSpec::request("bot.memory.update.request"),
+    MethodSpec::request("bot.hub.message.send.request"),
+    MethodSpec::request("bot.hub.delivery.ack.request"),
+    MethodSpec::request("bot.hub.conversation.close.request"),
 ];
 
 /// Return every Bot-owned request method for envelope validation.

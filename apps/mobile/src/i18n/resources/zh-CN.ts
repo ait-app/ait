@@ -208,6 +208,7 @@ export const zhCN: TranslationResources = {
     qqPairHint:
       "配对码：{{code}}。私聊发给机器人，或在 QQ 群里 @ 机器人并发送它。仅可使用一次，10 分钟后过期。",
     imessage: "iMessage",
+    hub: "Ait 中心",
     imessageGuideStep1: "在 app.beta.photon.codes 创建 Photon Beta 项目。",
     imessageGuideStep2:
       "在该项目中创建 API Key，并授予 project:read, project:write, platforms:read 和 platforms:write 权限。",

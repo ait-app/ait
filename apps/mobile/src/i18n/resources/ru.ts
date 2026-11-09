@@ -228,6 +228,7 @@ export const ru: TranslationResources = {
     qqPairHint:
       "Код: {{code}}. Отправьте его боту в личном чате или упомяните бота с этим кодом в группе QQ. Код действует один раз и истекает через 10 минут.",
     imessage: "iMessage",
+    hub: "Ait Hub",
     imessageGuideStep1: "Создайте проект Photon Beta на app.beta.photon.codes.",
     imessageGuideStep2:
       "В этом проекте создайте API-ключ с разрешениями project:read, project:write, platforms:read и platforms:write.",
