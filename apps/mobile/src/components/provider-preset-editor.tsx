@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { formatThinkingOptionLabel } from "@/agent-controls/labels";
 import { getAgentFeatureIcon } from "@/agent-controls/icons";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { toErrorMessage } from "@/utils/error-messages";
 import {
   decodePresetRoles,
@@ -52,6 +53,7 @@ export function ProviderPresetEditor({
 }) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
+  const compact = useIsCompactFormFactor();
   const [name, setName] = useState(preset.name);
   const [model, setModel] = useState(preset.model);
   const [thinking, setThinking] = useState(preset.thinkingOptionId ?? "");
@@ -135,6 +137,35 @@ export function ProviderPresetEditor({
       setSaving(false);
     }
   };
+  const mainThinking = (
+    <SelectField
+      field={false}
+      size="sm"
+      label={t("settings.providers.presets.thinking")}
+      value={thinking}
+      selectedDisplay={{
+        label: thinking
+          ? formatThinkingOptionLabel(
+              efforts.find((item) => item.id === thinking) ?? { id: thinking },
+              t,
+            )
+          : t("providerControl.roleDefaultShort"),
+      }}
+      options={[
+        { id: "", value: "", label: t("providerControl.defaultThinking") },
+        ...efforts.map((item) => ({
+          id: item.id,
+          value: item.id,
+          label: formatThinkingOptionLabel(item, t),
+        })),
+      ]}
+      onChange={setThinking}
+      disabled={readOnly || saving}
+      placeholder={t("settings.providers.presets.thinking")}
+      emptyText={t("providerControl.defaultThinking")}
+      testID="provider-preset-thinking-options"
+    />
+  );
   const footer = (
     <View style={styles.actions}>
       <Button variant="secondary" size="sm" onPress={close} disabled={saving}>
@@ -192,7 +223,9 @@ export function ProviderPresetEditor({
         <View style={styles.tableHeader}>
           <Text style={styles.roleName}>{t("providerControl.role")}</Text>
           <Text style={styles.modelHeading}>{t("settings.providers.presets.model")}</Text>
-          <Text style={styles.effortHeading}>{t("providerControl.roleThinking")}</Text>
+          {!compact ? (
+            <Text style={styles.effortHeading}>{t("providerControl.roleThinking")}</Text>
+          ) : null}
           <View style={styles.removeSpace} />
         </View>
         <View style={styles.table}>
@@ -221,36 +254,14 @@ export function ProviderPresetEditor({
                 searchable
                 testID="provider-preset-model-options"
               />
+              {compact ? (
+                <View style={styles.compactThinking}>
+                  <Text style={styles.muted}>{t("providerControl.roleThinking")}</Text>
+                  {mainThinking}
+                </View>
+              ) : null}
             </View>
-            <View style={styles.effortCell}>
-              <SelectField
-                field={false}
-                size="sm"
-                label={t("settings.providers.presets.thinking")}
-                value={thinking}
-                selectedDisplay={{
-                  label: thinking
-                    ? formatThinkingOptionLabel(
-                        efforts.find((item) => item.id === thinking) ?? { id: thinking },
-                        t,
-                      )
-                    : t("providerControl.roleDefaultShort"),
-                }}
-                options={[
-                  { id: "", value: "", label: t("providerControl.defaultThinking") },
-                  ...efforts.map((item) => ({
-                    id: item.id,
-                    value: item.id,
-                    label: formatThinkingOptionLabel(item, t),
-                  })),
-                ]}
-                onChange={setThinking}
-                disabled={readOnly || saving}
-                placeholder={t("settings.providers.presets.thinking")}
-                emptyText={t("providerControl.defaultThinking")}
-                testID="provider-preset-thinking-options"
-              />
-            </View>
+            {!compact ? <View style={styles.effortCell}>{mainThinking}</View> : null}
             <View style={styles.removeSpace} />
           </View>
           {orderedRoles.map((row) => (
@@ -335,6 +346,7 @@ function RoleAssignment({
   onRemove: () => void;
 }) {
   const { t } = useTranslation();
+  const compact = useIsCompactFormFactor();
   const choices = roleModelChoices(feature, models);
   const inherited = nativeRolePreview(feature, models);
   const options = [
@@ -355,6 +367,32 @@ function RoleAssignment({
   if (row.thinking && !efforts.some((item) => item.id === row.thinking))
     efforts.push({ id: row.thinking, label: row.thinking });
   const effort = automatic ? (inherited?.thinking ?? "") : row.thinking;
+  const roleThinking = (
+    <SelectField
+      field={false}
+      size="sm"
+      label={t("settings.providers.presets.thinking")}
+      value={effort}
+      selectedDisplay={{
+        label: effort
+          ? formatThinkingOptionLabel({ id: effort }, t)
+          : t("providerControl.roleDefaultShort"),
+      }}
+      options={[
+        { id: "", value: "", label: t("providerControl.roleDefaultThinking") },
+        ...efforts.map((item) => ({
+          id: item.id,
+          value: item.id,
+          label: formatThinkingOptionLabel(item, t),
+        })),
+      ]}
+      onChange={(thinking) => onChange({ ...row, thinking })}
+      disabled={disabled || automatic || unassigned}
+      placeholder={t("settings.providers.presets.thinking")}
+      emptyText={t("providerControl.roleDefaultThinking")}
+      testID={`preset-role-thinking-${row.id}`}
+    />
+  );
   const Icon = getAgentFeatureIcon(undefined, row.role);
   return (
     <View style={styles.roleRow} testID={`provider-preset-role-${row.id}`}>
@@ -385,33 +423,14 @@ function RoleAssignment({
           emptyText={t("providerControl.noModels")}
           testID={`preset-role-model-${row.id}`}
         />
+        {compact ? (
+          <View style={styles.compactThinking}>
+            <Text style={styles.muted}>{t("providerControl.roleThinking")}</Text>
+            {roleThinking}
+          </View>
+        ) : null}
       </View>
-      <View style={styles.effortCell}>
-        <SelectField
-          field={false}
-          size="sm"
-          label={t("settings.providers.presets.thinking")}
-          value={effort}
-          selectedDisplay={{
-            label: effort
-              ? formatThinkingOptionLabel({ id: effort }, t)
-              : t("providerControl.roleDefaultShort"),
-          }}
-          options={[
-            { id: "", value: "", label: t("providerControl.roleDefaultThinking") },
-            ...efforts.map((item) => ({
-              id: item.id,
-              value: item.id,
-              label: formatThinkingOptionLabel(item, t),
-            })),
-          ]}
-          onChange={(thinking) => onChange({ ...row, thinking })}
-          disabled={disabled || automatic || unassigned}
-          placeholder={t("settings.providers.presets.thinking")}
-          emptyText={t("providerControl.roleDefaultThinking")}
-          testID={`preset-role-thinking-${row.id}`}
-        />
-      </View>
+      {!compact ? <View style={styles.effortCell}>{roleThinking}</View> : null}
       <View style={styles.removeSpace}>
         {!disabled ? (
           <Button
@@ -459,7 +478,8 @@ const styles = StyleSheet.create((theme) => ({
   roleCode: { color: theme.colors.foreground, fontSize: 11, fontWeight: "600", flexShrink: 1 },
   modelHeading: { flex: 1, color: theme.colors.foregroundMuted, fontSize: 12 },
   effortHeading: { width: 110, color: theme.colors.foregroundMuted, fontSize: 12 },
-  modelCell: { flex: 1, minWidth: 0 },
+  modelCell: { flex: 1, minWidth: 0, gap: 4 },
+  compactThinking: { flexDirection: "row", alignItems: "center", gap: 8 },
   effortCell: { width: 110 },
   removeSpace: { width: 26 },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, flex: 1 },

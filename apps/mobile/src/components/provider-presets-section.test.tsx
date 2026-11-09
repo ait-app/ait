@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ProviderPresetEntry, ProviderPresetDescriptor } from "@ait/protocol/messages";
 import { ProviderPresetsSection } from "./provider-presets-section";
 
+vi.mock("@/constants/layout", () => ({ useIsCompactFormFactor: () => false }));
 vi.mock("@/i18n/i18next", () => ({ i18n: { t: (key: string) => key } }));
 vi.mock("@/components/ui/select-field", () => ({
   SelectField: ({

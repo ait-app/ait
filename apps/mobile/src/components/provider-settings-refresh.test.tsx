@@ -214,9 +214,15 @@ it("picks up externally changed presets and remains busy until the list read fin
 
 it("refreshes role candidates only after the model catalog acknowledgement", async () => {
   let resolveModels!: () => void;
-  fixture.refresh.mockImplementationOnce(() => new Promise<void>((done) => { resolveModels = done; }));
+  fixture.refresh.mockImplementationOnce(
+    () =>
+      new Promise<void>((done) => {
+        resolveModels = done;
+      }),
+  );
   fixture.list.mockResolvedValue({ presets: [] });
-  mount(); await waitFor(() => expect(fixture.features).toHaveBeenCalledOnce());
+  mount();
+  await waitFor(() => expect(fixture.features).toHaveBeenCalledOnce());
   fireEvent.click(screen.getByText("settings.providers.diagnostic.refresh"));
   await waitFor(() => expect(fixture.list).toHaveBeenCalledTimes(2));
   expect(fixture.features).toHaveBeenCalledOnce();
@@ -226,10 +232,17 @@ it("refreshes role candidates only after the model catalog acknowledgement", asy
 
 it("reports an acknowledged catalog containing a provider error as a model failure", async () => {
   fixture.list.mockResolvedValue({ presets: [] });
-  queryClient.setQueryData(["snapshot", "host", "/project"], { entries: [{ provider: "omp", status: "error", error: "Model probe failed" }] });
-  mount(); await waitFor(() => expect(fixture.list).toHaveBeenCalledOnce());
+  queryClient.setQueryData(["snapshot", "host", "/project"], {
+    entries: [{ provider: "omp", status: "error", error: "Model probe failed" }],
+  });
+  mount();
+  await waitFor(() => expect(fixture.list).toHaveBeenCalledOnce());
   fireEvent.click(screen.getByText("settings.providers.diagnostic.refresh"));
   await screen.findByText("providerControl.presetsRefreshed");
-  expect(screen.getByTestId("provider-settings-refresh-result").textContent).toContain("providerControl.modelsRefreshFailed");
-  expect(screen.getByTestId("provider-settings-refresh-result").textContent).toContain("Model probe failed");
+  expect(screen.getByTestId("provider-settings-refresh-result").textContent).toContain(
+    "providerControl.modelsRefreshFailed",
+  );
+  expect(screen.getByTestId("provider-settings-refresh-result").textContent).toContain(
+    "Model probe failed",
+  );
 });
