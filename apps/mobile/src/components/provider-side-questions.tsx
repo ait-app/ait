@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, Text, TextInput, View } from "react-native";
-import { X } from "lucide-react-native";
+import { ChevronDown, ChevronRight, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import type { ProviderUiState } from "@ait/protocol/messages";
@@ -27,6 +27,13 @@ export function ProviderSideQuestions({
   const client = useHostRuntimeClient(serverId);
   const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState("");
+  const [topicId, setTopicId] = useState<string | null>(state.runningId);
+  useEffect(() => {
+    if (state.runningId) setTopicId(state.runningId);
+  }, [state.runningId]);
+  const selectedTopic =
+    state.records.find((record) => record.id === topicId) ??
+    state.records[state.records.length - 1];
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +85,8 @@ export function ProviderSideQuestions({
           variant="ghost"
           size="sm"
           style={styles.headerToggle}
+          leftIcon={expanded ? ChevronDown : ChevronRight}
+          accessibilityState={{ expanded }}
           onPress={() => setExpanded(!expanded)}
           testID="side-question-toggle"
         >
@@ -97,11 +106,27 @@ export function ProviderSideQuestions({
       ) : null}
       {expanded ? (
         <>
-          <ScrollView style={styles.history} contentContainerStyle={styles.list}>
+          {state.records.length > 1 ? (
+            <ScrollView horizontal style={styles.topicPicker} contentContainerStyle={styles.row}>
+              {state.records.map((record) => (
+                <Button
+                  key={record.id}
+                  size="xs"
+                  variant={record.id === selectedTopic?.id ? "secondary" : "ghost"}
+                  onPress={() => setTopicId(record.id)}
+                >
+                  <Text style={styles.topicLabel} numberOfLines={1}>
+                    {record.question}
+                  </Text>
+                </Button>
+              ))}
+            </ScrollView>
+          ) : null}
+          <View style={styles.list}>
             {!state.records.length ? (
               <Text style={styles.caption}>{t("providerControl.sideQuestions.empty")}</Text>
             ) : null}
-            {state.records.map((record) => (
+            {(selectedTopic ? [selectedTopic] : []).map((record) => (
               <SideTopic
                 key={record.id}
                 record={record}
@@ -116,7 +141,7 @@ export function ProviderSideQuestions({
                 {t("providerControl.sideQuestions.older", { count: state.omitted })}
               </Text>
             ) : null}
-          </ScrollView>
+          </View>
           {replyTo ? (
             <View style={styles.row}>
               <Text style={styles.caption} numberOfLines={1}>
@@ -130,21 +155,21 @@ export function ProviderSideQuestions({
               </Button>
             </View>
           ) : null}
-          <TextInput
-            accessibilityLabel={t("providerControl.sideQuestions.question")}
-            placeholder={t(
-              replyTo
-                ? "providerControl.sideQuestions.followUpPlaceholder"
-                : "providerControl.sideQuestions.newPlaceholder",
-            )}
-            value={draft}
-            onChangeText={setDraft}
-            editable={!disabled}
-            multiline
-            style={styles.input}
-            testID="side-question-input"
-          />
-          <View style={styles.row}>
+          <View style={styles.compose}>
+            <TextInput
+              accessibilityLabel={t("providerControl.sideQuestions.question")}
+              placeholder={t(
+                replyTo
+                  ? "providerControl.sideQuestions.followUpPlaceholder"
+                  : "providerControl.sideQuestions.newPlaceholder",
+              )}
+              value={draft}
+              onChangeText={setDraft}
+              editable={!disabled}
+              multiline
+              style={styles.input}
+              testID="side-question-input"
+            />
             <Button
               variant="outline"
               size="sm"
@@ -209,28 +234,6 @@ const SideTopic = memo(
             label={t(`providerControl.sideQuestions.states.${phase}`)}
           />
         </View>
-        {record.turns.map((turn, index) => (
-          <View key={`${turn.createdAt}:${index}`} style={styles.turn}>
-            {index > 0 || turn.question !== record.question ? (
-              <Text style={styles.question} selectable>
-                {turn.question}
-              </Text>
-            ) : null}
-            {turn.answer ? (
-              <View testID={`side-question-answer-${record.id}-${index}`}>
-                <MarkdownRenderer
-                  text={turn.answer}
-                  compact
-                  streaming={running && turn.status === "running"}
-                />
-              </View>
-            ) : null}
-            {turn.error ? <Text style={styles.error}>{turn.error}</Text> : null}
-          </View>
-        ))}
-        {record.truncated ? (
-          <Text style={styles.caption}>{t("providerControl.sideQuestions.shortened")}</Text>
-        ) : null}
         <View style={styles.row}>
           {running ? (
             <Button
@@ -252,6 +255,36 @@ const SideTopic = memo(
             </Button>
           )}
         </View>
+        <ScrollView
+          style={styles.history}
+          contentContainerStyle={styles.turns}
+          nestedScrollEnabled
+          testID={`side-question-answer-scroll-${record.id}`}
+        >
+          {record.turns.map((turn, index) => (
+            <View key={`${turn.createdAt}:${index}`} style={styles.turn}>
+              {index > 0 || turn.question !== record.question ? (
+                <Text style={styles.question} selectable>
+                  {turn.question}
+                </Text>
+              ) : null}
+              {turn.answer ? (
+                <View testID={`side-question-answer-${record.id}-${index}`}>
+                  <MarkdownRenderer
+                    text={turn.answer}
+                    compact
+                    streaming={running && turn.status === "running"}
+                  />
+                </View>
+              ) : null}
+              {turn.error ? <Text style={styles.error}>{turn.error}</Text> : null}
+            </View>
+          ))}
+        </ScrollView>
+        {record.truncated ? (
+          <Text style={styles.caption}>{t("providerControl.sideQuestions.shortened")}</Text>
+        ) : null}
+
         {error ? (
           <Text accessibilityRole="alert" style={styles.error}>
             {error}
@@ -285,7 +318,11 @@ const styles = StyleSheet.create((theme) => ({
   panel: { gap: 8 },
   header: { flexDirection: "row", alignItems: "center", gap: 8 },
   headerToggle: { flexShrink: 1 },
-  history: { maxHeight: 260 },
+  history: { maxHeight: 144 },
+  turns: { gap: 8 },
+  topicPicker: { maxHeight: 32 },
+  topicLabel: { color: theme.colors.foregroundMuted, fontSize: 12, maxWidth: 160 },
+  compose: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   list: { gap: 12 },
   row: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   topic: {
@@ -307,8 +344,9 @@ const styles = StyleSheet.create((theme) => ({
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: 8,
-    minHeight: 52,
-    maxHeight: 120,
+    flex: 1,
+    minHeight: 36,
+    maxHeight: 72,
   },
   error: { color: theme.colors.statusDanger, fontSize: 12 },
 }));

@@ -215,11 +215,17 @@ export function ProviderPresetEditor({
           placeholderTextColor={theme.colors.foregroundMuted}
           style={styles.input}
         />
+        {!canRename && !isNew ? (
+          <Text style={styles.muted} testID="preset-name-readonly-reason">
+            {t("settings.providers.presets.noRename")}
+          </Text>
+        ) : null}
         {takenName ? (
           <Text style={styles.error} testID="provider-preset-name-taken">
             {t("settings.providers.presets.nameTaken", { name })}
           </Text>
         ) : null}
+        <Text style={styles.muted}>{t("providerControl.roleRoutingHint")}</Text>
         <View style={styles.tableHeader}>
           <Text style={styles.roleName}>{t("providerControl.role")}</Text>
           <Text style={styles.modelHeading}>{t("settings.providers.presets.model")}</Text>
@@ -312,9 +318,6 @@ export function ProviderPresetEditor({
             {native ? (
               <Text style={styles.muted}>{t("providerControl.nativePresetDefaults")}</Text>
             ) : null}
-            {!canRename && !isNew ? (
-              <Text style={styles.muted}>{t("settings.providers.presets.noRename")}</Text>
-            ) : null}
           </View>
         ) : null}
         {!readOnly && !canSave ? (
@@ -398,13 +401,20 @@ function RoleAssignment({
     <View style={styles.roleRow} testID={`provider-preset-role-${row.id}`}>
       <View style={styles.roleIdentity}>
         <Icon size={12} color={styles.muted.color} />
-        <Text
-          style={styles.roleCode}
-          testID={`preset-role-name-${row.id}`}
-          accessibilityLabel={roleName(feature, row.role)}
-        >
-          {row.role.slice(10).toUpperCase()}
-        </Text>
+        <View style={styles.roleText}>
+          <Text
+            style={styles.roleCode}
+            testID={`preset-role-name-${row.id}`}
+            accessibilityLabel={roleName(feature, row.role)}
+          >
+            {row.role.slice(10).toUpperCase()}
+          </Text>
+          <Text style={styles.muted}>
+            {t(`providerControl.roleNames.${row.role.slice(10)}`, {
+              defaultValue: roleName(feature, row.role),
+            })}
+          </Text>
+        </View>
       </View>
       <View style={styles.modelCell}>
         <SelectField
@@ -473,8 +483,9 @@ const styles = StyleSheet.create((theme) => ({
     borderBottomWidth: 1,
     borderColor: theme.colors.border,
   },
-  roleName: { width: 86, color: theme.colors.foreground, fontSize: 12, fontWeight: "600" },
-  roleIdentity: { width: 86, flexDirection: "row", alignItems: "center", gap: 4 },
+  roleName: { width: 100, color: theme.colors.foreground, fontSize: 12, fontWeight: "600" },
+  roleText: { flex: 1, gap: 2 },
+  roleIdentity: { width: 100, flexDirection: "row", alignItems: "center", gap: 4 },
   roleCode: { color: theme.colors.foreground, fontSize: 11, fontWeight: "600", flexShrink: 1 },
   modelHeading: { flex: 1, color: theme.colors.foregroundMuted, fontSize: 12 },
   effortHeading: { width: 110, color: theme.colors.foregroundMuted, fontSize: 12 },

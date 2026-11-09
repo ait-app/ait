@@ -128,6 +128,7 @@ const EMPTY_AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [];
 
 interface ControlledAgentControlsProps {
   additionalControl?: ReactNode;
+  providerInternalSettings?: ReactNode;
   provider: string;
   providerOptions?: AgentControlOption[];
   selectedProviderId?: string;
@@ -506,6 +507,7 @@ function buildOpenChangeHandler(
 
 function ControlledAgentControls({
   additionalControl,
+  providerInternalSettings,
   provider,
   providerOptions,
   selectedProviderId,
@@ -849,6 +851,7 @@ function ControlledAgentControls({
       <View style={styles.container} onLayout={handleLayout}>
         {!isCompact ? (
           <DesktopAgentControlsContent
+            providerInternalSettings={providerInternalSettings}
             provider={provider}
             providerOptions={providerOptions}
             selectedProviderId={selectedProviderId}
@@ -904,6 +907,7 @@ function ControlledAgentControls({
           />
         ) : (
           <SheetAgentControlsContent
+            providerInternalSettings={providerInternalSettings}
             provider={provider}
             selectedModelId={selectedModelId}
             selectedThinkingOptionId={selectedThinkingOptionId}
@@ -949,6 +953,7 @@ function ControlledAgentControls({
 }
 
 interface DesktopAgentControlsContentProps {
+  providerInternalSettings?: ReactNode;
   provider: string;
   providerOptions?: AgentControlOption[];
   selectedProviderId?: string;
@@ -1014,6 +1019,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const {
+    providerInternalSettings,
     provider,
     providerOptions,
     selectedProviderId,
@@ -1130,23 +1136,26 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                 toolbar={modelToolbar}
                 cwd={presetSettingsTarget?.cwd}
                 providerSettings={
-                  modelFeatures.length > 0 ? (
-                    <ModelFeatureControls
-                      features={modelFeatures}
-                      disabled={disabled}
-                      onCatalogAccess={onModelSelectorOpen}
-                      renderFeature={(feature) => (
-                        <SheetFeatureItem
-                          key={feature.id}
-                          feature={feature}
-                          disabled={disabled}
-                          openSelector={openSelector}
-                          handleOpenChange={handleNestedOpenChange}
-                          onSetFeature={onSetFeature}
-                        />
-                      )}
-                    />
-                  ) : undefined
+                  <>
+                    {modelFeatures.length > 0 ? (
+                      <ModelFeatureControls
+                        features={modelFeatures}
+                        disabled={disabled}
+                        onCatalogAccess={onModelSelectorOpen}
+                        renderFeature={(feature) => (
+                          <SheetFeatureItem
+                            key={feature.id}
+                            feature={feature}
+                            disabled={disabled}
+                            openSelector={openSelector}
+                            handleOpenChange={handleNestedOpenChange}
+                            onSetFeature={onSetFeature}
+                          />
+                        )}
+                      />
+                    ) : undefined}
+                    {providerInternalSettings}
+                  </>
                 }
               />
             </View>
@@ -1249,6 +1258,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
 }
 
 interface SheetAgentControlsContentProps {
+  providerInternalSettings?: ReactNode;
   provider: string;
   selectedModelId?: string;
   selectedThinkingOptionId?: string;
@@ -1295,6 +1305,7 @@ interface SheetAgentControlsContentProps {
 function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
   const { t } = useTranslation();
   const {
+    providerInternalSettings,
     provider,
     selectedModelId,
     selectedThinkingOptionId,
@@ -1418,23 +1429,26 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
       serverId={modelSelectorServerId}
       cwd={presetSettingsTarget?.cwd}
       providerSettings={
-        modelFeatures.length > 0 ? (
-          <ModelFeatureControls
-            features={modelFeatures}
-            disabled={disabled}
-            onCatalogAccess={onModelSelectorOpen}
-            renderFeature={(feature) => (
-              <SheetFeatureItem
-                key={feature.id}
-                feature={feature}
-                disabled={disabled}
-                openSelector={openSelector}
-                handleOpenChange={handleOpenChange}
-                onSetFeature={onSetFeature}
-              />
-            )}
-          />
-        ) : null
+        <>
+          {modelFeatures.length > 0 ? (
+            <ModelFeatureControls
+              features={modelFeatures}
+              disabled={disabled}
+              onCatalogAccess={onModelSelectorOpen}
+              renderFeature={(feature) => (
+                <SheetFeatureItem
+                  key={feature.id}
+                  feature={feature}
+                  disabled={disabled}
+                  openSelector={openSelector}
+                  handleOpenChange={handleOpenChange}
+                  onSetFeature={onSetFeature}
+                />
+              )}
+            />
+          ) : null}
+          {providerInternalSettings}
+        </>
       }
       glyphSize={glyphSize}
       canSwitchProvider={canSwitchProvider}
@@ -1791,6 +1805,12 @@ export const AgentControls = memo(function AgentControls({
   const nativeActions = useSessionStore(
     (state) => state.sessions[serverId]?.agents.get(agentId)?.providerUi?.actions,
   );
+  const vibeState = useSessionStore(
+    (state) => state.sessions[serverId]?.agents.get(agentId)?.providerUi?.vibe,
+  );
+  const nativeTurnActive = useSessionStore(
+    (state) => state.sessions[serverId]?.agents.get(agentId)?.turn?.phase === "open",
+  );
   const workspaceId = useSessionStore(
     (state) => state.sessions[serverId]?.agents.get(agentId)?.workspaceId,
   );
@@ -2083,6 +2103,22 @@ export const AgentControls = memo(function AgentControls({
       {commandCenterRegistration}
       {profileEditor.element}
       <ControlledAgentControls
+        providerInternalSettings={
+          nativeActions?.length && agent.cwd ? (
+            <ProviderNativeActions
+              serverId={serverId}
+              agentId={agentId}
+              cwd={agent.cwd}
+              workspaceId={workspaceId}
+              actions={nativeActions}
+              workers={vibeState?.workers}
+              vibeEnabled={vibeState?.enabled}
+              turnActive={nativeTurnActive}
+              surface="settings"
+              disabled={!client || nativeActionsBlocked}
+            />
+          ) : null
+        }
         additionalControl={
           nativeActions?.length && agent.cwd ? (
             <ProviderNativeActions
@@ -2092,6 +2128,9 @@ export const AgentControls = memo(function AgentControls({
               cwd={agent.cwd}
               workspaceId={workspaceId}
               actions={nativeActions}
+              workers={vibeState?.workers}
+              vibeEnabled={vibeState?.enabled}
+              turnActive={nativeTurnActive}
               disabled={!client || nativeActionsBlocked}
               onClose={onDropdownClose}
             />

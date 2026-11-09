@@ -215,3 +215,27 @@ it("uses Markdown for answers, avoids repeating the initial question, and labels
     screen.getByPlaceholderText("providerControl.sideQuestions.followUpPlaceholder"),
   ).toBeTruthy();
 });
+
+it("keeps cancel/follow-up outside the answer scroll and shows one selected topic", () => {
+  const value = state();
+  const other = {
+    ...topic,
+    id: "other",
+    question: "Second topic",
+    turns: [{ ...topic.turns[0]!, question: "Second topic", answer: "Long answer\n".repeat(100) }],
+  };
+  const mounted = render(view({ ...value, records: [topic, other], runningId: "other" }));
+  const answerScroll = screen.getByTestId("side-question-answer-scroll-other");
+  const cancel = screen.getByText("providerControl.sideQuestions.cancel").closest("button")!;
+  expect(answerScroll.contains(cancel)).toBe(false);
+  expect(screen.queryByTestId("side-question-topic-topic")).toBeNull();
+  mounted.rerender(view({ ...value, records: [topic, other] }));
+  fireEvent.click(screen.getByRole("button", { name: "Native side question" }));
+  expect(screen.getByTestId("side-question-topic-topic")).toBeTruthy();
+  expect(screen.queryByTestId("side-question-topic-other")).toBeNull();
+  expect(
+    screen
+      .getByTestId("side-question-answer-scroll-topic")
+      .contains(screen.getByText("providerControl.sideQuestions.followUp")),
+  ).toBe(false);
+});

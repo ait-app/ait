@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ProviderNativeActions } from "./provider-native-actions";
 
-const fixture = vi.hoisted(() => ({ run: vi.fn(), download: vi.fn() }));
+const fixture = vi.hoisted(() => ({ run: vi.fn(), send: vi.fn(), download: vi.fn() }));
 vi.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({}) }));
 vi.mock("@/data/providers-snapshot", () => ({
   refreshOmpModelsOnAccess: vi.fn().mockResolvedValue(null),
@@ -61,7 +61,7 @@ vi.mock("react-native", () => ({
   ),
 }));
 vi.mock("@/runtime/host-runtime", () => ({
-  useHostRuntimeClient: () => ({ runNativeAction: fixture.run }),
+  useHostRuntimeClient: () => ({ runNativeAction: fixture.run, sendMessage: fixture.send }),
 }));
 vi.mock("@/hooks/use-file-download", () => ({
   useFileDownload: () => fixture.download,
@@ -73,18 +73,21 @@ vi.mock("@/components/ui/button", () => ({
     disabled,
     leftIcon,
     size,
+    testID,
   }: {
     children: React.ReactNode;
     onPress: () => void;
     disabled?: boolean;
     leftIcon?: unknown;
     size?: string;
+    testID?: string;
   }) => (
     <button
       onClick={onPress}
       disabled={disabled}
       data-has-icon={leftIcon ? "true" : undefined}
       data-size={size}
+      data-testid={testID}
     >
       {children}
     </button>
@@ -128,6 +131,7 @@ vi.mock("@/components/ui/combobox", () => ({
     onOpenChange,
     children,
     header,
+    footer,
     keepOpenOnSelect,
   }: {
     options: { id: string; label: string }[];
@@ -140,6 +144,7 @@ vi.mock("@/components/ui/combobox", () => ({
       back?: { onPress: () => void };
       search?: { onChange: (value: string) => void };
     };
+    footer?: React.ReactNode;
     keepOpenOnSelect?: boolean;
   }) =>
     open ? (
@@ -165,187 +170,266 @@ vi.mock("@/components/ui/combobox", () => ({
               {option.label}
             </button>
           ))}
+        {footer}
       </div>
     ) : null,
 }));
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string) =>
+    t: (key: string, options?: { defaultValue?: string }) =>
       ({
         "providerControl.moreActions": "More actions",
         "providerControl.runOperation": "Run",
         "common.loading": "Loading...",
         "panels.file.downloadFile": "Download",
-      })[key] ?? key,
+      })[key] ??
+      options?.defaultValue ??
+      key,
   }),
 }));
 beforeEach(() => {
   vi.stubGlobal("React", React);
   fixture.run.mockReset();
+  fixture.send.mockReset().mockResolvedValue(undefined);
   fixture.download.mockReset();
 });
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-const actions = [
-  { id: "get_session_stats", label: "Session statistics", fields: [] },
-  {
-    id: "login",
-    label: "Log in",
-    fields: [
-      {
-        id: "providerId",
-        label: "Provider",
-        options: [],
-        required: true,
-      },
-    ],
-  },
-];
 
-function chooseAction(label: string) {
-  const back = screen.queryByRole("button", { name: "Back" });
-  if (back) fireEvent.click(back);
+vi.mock("@/components/ui/select-field", () => ({
+  SelectField: ({
+    label,
+    value,
+    options,
+    disabled,
+    onChange,
+    testID,
+  }: {
+    label: string;
+    value: string;
+    options: { id: string; label: string }[];
+    disabled: boolean;
+    onChange: (value: string) => void;
+    testID: string;
+  }) => (
+    <select
+      aria-label={label}
+      data-testid={testID}
+      value={value ?? ""}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="">Select</option>
+      {options.map((item) => (
+        <option key={item.id} value={item.id}>
+          {item.label}
+        </option>
+      ))}
+    </select>
+  ),
+}));
+const fields = (ids: string[]) =>
+  ids.map((id) => ({
+    id,
+    label: id,
+    options:
+      id === "operation"
+        ? ["list", "spawn", "send", "wait", "kill", "toggle"]
+        : id === "op"
+          ? ["get", "create", "resume", "pause", "drop"]
+          : id === "cli"
+            ? ["fast", "good"]
+            : [],
+    required: id === "operation" || id === "op",
+  }));
+const vibe = {
+  id: "vibe_control",
+  label: "Vibe",
+  fields: fields([
+    "operation",
+    "enabled",
+    "cli",
+    "prompt",
+    "name",
+    "sessionId",
+    "message",
+    "sessions",
+    "timeout",
+  ]),
+};
+const goal = { id: "goal", label: "Goal", fields: fields(["op", "objective", "token_budget"]) };
+
+const stats = { id: "get_session_stats", label: "Statistics", fields: [] };
+const exportAction = { id: "export_html", label: "Export", fields: [] };
+const all = [
+  stats,
+  exportAction,
+  vibe,
+  goal,
+  { id: "model_preset_save", label: "Save preset", fields: [] },
+  { id: "model_preset_delete", label: "Delete preset", fields: [] },
+];
+function mount(actions = all, surface: "composer" | "settings" = "composer") {
+  const result = render(
+    <ProviderNativeActions
+      serverId="server"
+      agentId="agent"
+      cwd="/workspace"
+      actions={actions}
+      surface={surface}
+      disabled={false}
+      workers={[
+        {
+          id: "worker-1",
+          parentId: "agent",
+          status: "completed",
+          description: "Design task",
+          model: null,
+        },
+      ]}
+    />,
+  );
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: surface === "composer" ? "More actions" : "providerControl.tasks.providerSettings",
+    }),
+  );
+  return result;
+}
+function choose(label: string) {
+  fireEvent.change(screen.getByLabelText("Search actions"), { target: { value: label } });
   fireEvent.click(screen.getByRole("button", { name: label }));
 }
-
-it("keeps actions and results behind the icon and preserves results when reopened", async () => {
-  fixture.run.mockResolvedValue({ text: "Statistics ready" });
-  const onClose = vi.fn();
-  render(
-    <ProviderNativeActions
-      serverId="server"
-      agentId="agent"
-      cwd="/workspace"
-      actions={actions}
-      disabled={false}
-      onClose={onClose}
-    />,
-  );
-  const trigger = screen.getByRole("button", { name: "More actions" });
-  expect(trigger.textContent).toBe("…");
-  expect(trigger.getAttribute("aria-expanded")).toBe("false");
-  expect(screen.queryByRole("dialog")).toBeNull();
-  fireEvent.click(trigger);
-  expect(trigger.getAttribute("aria-expanded")).toBe("true");
-  expect(screen.queryByTestId("agent-action-form")).toBeNull();
-  fireEvent.change(screen.getByLabelText("Search actions"), { target: { value: "statistics" } });
-  expect(screen.queryByRole("button", { name: "Log in" })).toBeNull();
-  chooseAction("Session statistics");
+const submit = () => screen.getByTestId("native-action-submit") as HTMLButtonElement;
+function select(id: string, value: string) {
+  fireEvent.change(screen.getByTestId(`native-field-${id}`), { target: { value } });
+}
+it("groups task menus and never offers generic preset writes", () => {
+  mount();
+  expect(screen.getByRole("button", { name: "providerControl.groups.conversation" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Save preset" })).toBeNull();
+  fireEvent.change(screen.getByLabelText("Search actions"), { target: { value: "preset" } });
+  expect(screen.queryByRole("button", { name: "Delete preset" })).toBeNull();
   expect(fixture.run).not.toHaveBeenCalled();
-  await act(async () => {
-    fireEvent.click(screen.getByText("Run"));
-  });
-  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "get_session_stats", {});
-  expect(screen.getByText("Statistics ready")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Close" }));
-  expect(onClose).toHaveBeenCalledOnce();
-  expect(screen.queryByText("Statistics ready")).toBeNull();
-  expect(screen.queryByRole("dialog")).toBeNull();
-  fireEvent.click(trigger);
-  expect(screen.queryByTestId("agent-action-form")).toBeNull();
-  chooseAction("Session statistics");
-  expect(screen.getByText("Statistics ready")).toBeTruthy();
 });
-
-it("requires fields and preserves input for retry", async () => {
-  fixture.run
-    .mockRejectedValueOnce(new Error("Provider unavailable"))
-    .mockResolvedValueOnce({ text: "Signed in" });
-  render(
-    <ProviderNativeActions
-      serverId="server"
-      agentId="agent"
-      cwd="/workspace"
-      actions={actions}
-      disabled={false}
-    />,
-  );
-  fireEvent.click(screen.getByRole("button", { name: "More actions" }));
-  chooseAction("Log in");
-  expect(screen.getByText("Run").closest("button")?.disabled).toBe(true);
-  fireEvent.change(screen.getByLabelText("Provider"), {
-    target: { value: "test-provider" },
-  });
-  await act(async () => {
-    fireEvent.click(screen.getByText("Run"));
-  });
-  expect(screen.getByRole("alert").textContent).toBe("Provider unavailable");
-  expect((screen.getByLabelText("Provider") as HTMLInputElement).value).toBe("test-provider");
-  await act(async () => {
-    fireEvent.click(screen.getByText("Run"));
-  });
-  expect(screen.getByText("Signed in")).toBeTruthy();
-  expect(fixture.run).toHaveBeenNthCalledWith(2, "agent", "login", {
-    providerId: "test-provider",
-  });
-});
-
-it("keeps pending actions independent and preserves the previous result while refreshing", async () => {
-  let finishLogin!: (result: { text: string }) => void;
-  let finishRefresh!: (result: { text: string }) => void;
-  fixture.run
-    .mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishLogin = resolve;
-        }),
-    )
-    .mockResolvedValueOnce({ text: "Statistics ready" })
-    .mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishRefresh = resolve;
-        }),
-    );
-  render(
-    <ProviderNativeActions
-      serverId="server"
-      agentId="agent"
-      cwd="/workspace"
-      actions={actions}
-      disabled={false}
-    />,
-  );
-  fireEvent.click(screen.getByRole("button", { name: "More actions" }));
-  chooseAction("Log in");
-  fireEvent.change(screen.getByLabelText("Provider"), {
-    target: { value: "test-provider" },
-  });
-  fireEvent.click(screen.getByText("Run"));
-  expect(screen.getByText("Loading...").closest("button")?.disabled).toBe(true);
-  chooseAction("Session statistics");
-  await act(async () => {
-    fireEvent.click(screen.getByText("Run"));
-  });
-  expect(screen.getByText("Statistics ready")).toBeTruthy();
-  fireEvent.click(screen.getByText("Run"));
-  expect(screen.getByText("Statistics ready")).toBeTruthy();
-  chooseAction("Log in");
-  expect((screen.getByLabelText("Provider") as HTMLInputElement).value).toBe("test-provider");
-  expect(screen.queryByText("Statistics ready")).toBeNull();
-  await act(async () => {
-    finishRefresh({ text: "New statistics" });
-  });
-  expect(screen.getByText("Loading...").closest("button")?.disabled).toBe(true);
-  await act(async () => {
-    finishLogin({ text: "Signed in" });
-  });
-  expect(screen.getByText("Signed in")).toBeTruthy();
-  chooseAction("Session statistics");
-  expect(screen.getByText("New statistics")).toBeTruthy();
-});
-
-it("downloads the native export using its original host workspace scope", async () => {
-  fixture.run.mockResolvedValue({
+it("preserves statistics while refreshing, then downloads an export in the original host scope", async () => {
+  fixture.run.mockResolvedValueOnce({ text: "Statistics ready" }).mockResolvedValueOnce({
     text: "Exported",
-    file: {
-      path: "ait-export-test.html",
-      fileName: "ait-export-test.html",
-    },
+    file: { path: "file.html", fileName: "file.html" },
   });
-  render(
+  mount();
+  choose("Statistics");
+  await act(async () => fireEvent.click(submit()));
+  expect(fixture.run).toHaveBeenCalledWith("agent", "get_session_stats", {});
+  expect(screen.getByText("Statistics ready")).toBeTruthy();
+  fireEvent.click(screen.getByText("Back"));
+  choose("Export");
+  await act(async () => fireEvent.click(submit()));
+  fireEvent.click(screen.getByText("Download"));
+  expect(fixture.download).toHaveBeenCalledWith({ path: "file.html", fileName: "file.html" });
+});
+it("changing spawn to list removes old parameters and sends only list", async () => {
+  fixture.run.mockResolvedValue({ text: "Done" });
+  mount();
+  choose("Vibe");
+  select("operation", "spawn");
+  select("cli", "fast");
+  fireEvent.change(screen.getByLabelText("prompt"), { target: { value: "Build board" } });
+  expect(submit().disabled).toBe(false);
+  select("operation", "list");
+  expect(screen.queryByLabelText("prompt")).toBeNull();
+  await act(async () => fireEvent.click(submit()));
+  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "vibe_control", {
+    operation: "list",
+  });
+  select("operation", "spawn");
+  expect(submit().disabled).toBe(true);
+});
+it("spawn requires both class and task; send requires a selected worker and guidance", async () => {
+  mount();
+  choose("Vibe");
+  select("operation", "spawn");
+  expect(submit().disabled).toBe(true);
+  fireEvent.click(submit());
+  expect(fixture.run).not.toHaveBeenCalled();
+  select("cli", "fast");
+  expect(submit().disabled).toBe(true);
+  select("operation", "send");
+  expect(submit().disabled).toBe(true);
+  select("sessionId", "worker-1");
+  fireEvent.change(screen.getByLabelText("message"), { target: { value: "Review accessibility" } });
+  expect(submit().disabled).toBe(false);
+  fixture.run.mockResolvedValue({ text: "Accepted" });
+  await act(async () => fireEvent.click(submit()));
+  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "vibe_control", {
+    operation: "send",
+    sessionId: "worker-1",
+    message: "Review accessibility",
+  });
+});
+it("Goal switching drops objective and budget, validates create before RPC", async () => {
+  fixture.run.mockResolvedValue({ text: "Goal" });
+  mount();
+  choose("Goal");
+  select("op", "create");
+  expect(submit().disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("objective"), { target: { value: "Deliver board" } });
+  fireEvent.change(screen.getByLabelText("token_budget"), { target: { value: "-1" } });
+  expect(submit().disabled).toBe(true);
+  select("op", "get");
+  expect(screen.queryByLabelText("objective")).toBeNull();
+  await act(async () => fireEvent.click(submit()));
+  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "goal", { op: "get" });
+});
+it("selects history entries by content and submits their bound target without text IDs", async () => {
+  fixture.run
+    .mockResolvedValueOnce({
+      text: JSON.stringify({
+        entries: [{ id: "entry-17", message: { content: "Board requirements" } }],
+      }),
+    })
+    .mockResolvedValueOnce({ text: "Branched" });
+  mount([
+    {
+      id: "branch",
+      label: "Branch",
+      fields: [{ id: "entryId", label: "Entry", required: true, options: [] }],
+    },
+  ]);
+  choose("Branch");
+  expect(submit().disabled).toBe(true);
+  await act(async () => {});
+  expect(screen.getByRole("option", { name: "Board requirements" })).toBeTruthy();
+  select("entryId", "entry-17");
+  await act(async () => fireEvent.click(submit()));
+  expect(fixture.run).toHaveBeenLastCalledWith("agent", "branch", { entryId: "entry-17" });
+  expect(screen.queryByRole("textbox", { name: "Entry" })).toBeNull();
+});
+it("list query failure blocks mutation and retry reloads choices", async () => {
+  fixture.run.mockRejectedValueOnce(new Error("History unavailable")).mockResolvedValueOnce({
+    text: JSON.stringify({ entries: [{ id: "entry-1", label: "Request" }] }),
+  });
+  mount([
+    {
+      id: "branch",
+      label: "Branch",
+      fields: [{ id: "entryId", label: "Entry", required: true, options: [] }],
+    },
+  ]);
+  choose("Branch");
+  await act(async () => {});
+  expect(submit().disabled).toBe(true);
+  expect(screen.getByRole("alert").textContent).toBe("History unavailable");
+  await act(async () => fireEvent.click(screen.getByText("common.actions.refresh")));
+  select("entryId", "entry-1");
+  expect(submit().disabled).toBe(false);
+  expect(fixture.run.mock.calls.every((call) => call[1] === "get_entries")).toBe(true);
+});
+it("provider account actions are only available inside provider settings", () => {
+  const actions = [{ id: "logout", label: "Sign out", fields: [] }];
+  const result = render(
     <ProviderNativeActions
       serverId="server"
       agentId="agent"
@@ -354,22 +438,130 @@ it("downloads the native export using its original host workspace scope", async 
       disabled={false}
     />,
   );
+  expect(screen.queryByRole("button", { name: "More actions" })).toBeNull();
+  result.unmount();
+  mount(actions, "settings");
+  expect(screen.getByRole("button", { name: "providerControl.groups.accounts" })).toBeTruthy();
+});
+
+it("switching provider ignores late account results and binds sign out to the selected account", async () => {
+  let finishFirst!: (value: { text: string }) => void;
+  let finishSecond!: (value: { text: string }) => void;
+  fixture.run.mockImplementation((_agent, action, args) => {
+    if (action === "get_login_providers")
+      return Promise.resolve({
+        text: JSON.stringify({
+          providers: [
+            { id: "first", name: "First provider" },
+            { id: "second", name: "Second provider" },
+          ],
+        }),
+      });
+    if (action === "get_logout_accounts")
+      return new Promise((resolve) => {
+        if (args.providerId === "first") finishFirst = resolve;
+        else finishSecond = resolve;
+      });
+    return Promise.resolve({ text: "Signed out" });
+  });
+  mount(
+    [
+      {
+        id: "logout",
+        label: "Sign out",
+        fields: [
+          { id: "providerId", label: "Provider", required: true, options: [] },
+          { id: "credentialId", label: "Account", required: true, options: [] },
+        ],
+      },
+    ],
+    "settings",
+  );
+  choose("Sign out");
+  await act(async () => {});
+  select("providerId", "first");
+  expect(submit().disabled).toBe(true);
+  select("providerId", "second");
+  await act(async () =>
+    finishSecond({
+      text: JSON.stringify({ accounts: [{ credentialId: 8, label: "Team account" }] }),
+    }),
+  );
+  select("credentialId", "8");
+  await act(async () =>
+    finishFirst({
+      text: JSON.stringify({ accounts: [{ credentialId: 2, label: "Old account" }] }),
+    }),
+  );
+  expect(screen.queryByRole("option", { name: "Old account" })).toBeNull();
+  await act(async () => fireEvent.click(submit()));
+  expect(fixture.run).toHaveBeenLastCalledWith("agent", "logout", {
+    providerId: "second",
+    credentialId: "8",
+  });
+});
+
+it("treats a truncated native list as a read error and blocks mutation", async () => {
+  fixture.run.mockResolvedValue({ text: '{"entries":[' });
+  mount([
+    {
+      id: "branch",
+      label: "Branch",
+      fields: [{ id: "entryId", label: "Entry", required: true, options: [] }],
+    },
+  ]);
+  choose("Branch");
+  await act(async () => {});
+  expect(screen.getByRole("alert").textContent).toBe("providerControl.tasks.listIncomplete");
+  expect(submit().disabled).toBe(true);
+  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "get_entries", {});
+});
+
+it("opens side question history in the existing topic panel instead of displaying raw records", async () => {
+  mount([{ id: "get_btw_history", label: "Side question history", fields: [] }]);
+  choose("Side question history");
+  await act(async () => fireEvent.click(submit()));
+  expect(fixture.send).toHaveBeenCalledExactlyOnceWith("agent", "/btw");
+  expect(fixture.run).not.toHaveBeenCalled();
+  expect(screen.queryByTestId("agent-action-form")).toBeNull();
+});
+
+it("prevents history changes while a main turn or Vibe owns the conversation", async () => {
+  const branch = {
+    id: "branch",
+    label: "Branch",
+    fields: [{ id: "entryId", label: "Entry", required: true, options: [] }],
+  };
+  fixture.run.mockResolvedValue({
+    text: JSON.stringify({ entries: [{ id: "entry", label: "Request" }] }),
+  });
+  const result = render(
+    <ProviderNativeActions
+      serverId="server"
+      agentId="agent"
+      cwd="/workspace"
+      actions={[branch]}
+      disabled={false}
+      turnActive
+    />,
+  );
   fireEvent.click(screen.getByRole("button", { name: "More actions" }));
-  chooseAction("Session statistics");
-  await act(async () => {
-    fireEvent.click(screen.getByText("Run"));
-  });
-  expect(screen.getByText("Download")).toBeTruthy();
-  for (const label of ["Run", "Download"]) {
-    const button = screen.getByText(label).closest("button")!;
-    expect(button.dataset.size).toBe("sm");
-    expect(button.dataset.hasIcon).toBe("true");
-    expect(button.parentElement?.style.flexDirection).toBe("row");
-    expect(button.parentElement?.style.flexWrap).toBe("wrap");
-  }
-  fireEvent.click(screen.getByText("Download"));
-  expect(fixture.download).toHaveBeenCalledExactlyOnceWith({
-    path: "ait-export-test.html",
-    fileName: "ait-export-test.html",
-  });
+  choose("Branch");
+  await act(async () => {});
+  select("entryId", "entry");
+  expect(submit().disabled).toBe(true);
+  expect(screen.getByText("providerControl.tasks.finishTurn")).toBeTruthy();
+  result.rerender(
+    <ProviderNativeActions
+      serverId="server"
+      agentId="agent"
+      cwd="/workspace"
+      actions={[branch]}
+      disabled={false}
+      vibeEnabled
+    />,
+  );
+  expect(screen.getByText("providerControl.tasks.exitVibe")).toBeTruthy();
+  fireEvent.click(submit());
+  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "get_entries", {});
 });
