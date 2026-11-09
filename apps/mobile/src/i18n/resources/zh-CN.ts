@@ -142,7 +142,8 @@ export const zhCN: TranslationResources = {
     channelEnabled: "启用",
     channelConnected: "已连接",
     channelIdle: "空闲",
-    feishuScanHint: "用飞书 App 扫描二维码。飞书会为你创建机器人并由 Ait 连接；默认只有你可以给它发消息。",
+    feishuScanHint:
+      "用飞书 App 扫描二维码。飞书会为你创建机器人并由 Ait 连接；默认只有你可以给它发消息。",
     feishuScanStart: "显示二维码",
     feishuScanWaiting: "请用飞书 App 扫描此二维码并同意创建机器人。完成前请保持此页面打开。",
     feishuScanOpen: "在飞书中打开",
@@ -155,12 +156,37 @@ export const zhCN: TranslationResources = {
     feishuManualEntry: "手动填写凭据",
     feishuScanInstead: "改用扫码",
     feishuAppSecret: "App Secret",
-    feishuAppSecretHint: "粘贴 App Secret。Ait 会向飞书验证，并私密保存在此主机上。也可以填写 env:AIT_SERVER_CREDENTIAL_* 引用。",
+    feishuAppSecretHint:
+      "粘贴 App Secret。Ait 会向飞书验证，并私密保存在此主机上。也可以填写 env:AIT_SERVER_CREDENTIAL_* 引用。",
     feishuManualStep1: "在 open.feishu.cn/app 创建企业自建应用，并开启机器人能力。",
-    feishuManualStep2: "在权限管理中添加 im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly。",
-    feishuManualStep3: "将 App ID 和 App Secret 填到这里，把你的飞书 Open ID（ou_...）填为允许的发送者，然后添加 Channel。",
-    feishuManualStep4: "然后在飞书“事件与回调”中选择长连接并订阅 im.message.receive_v1。飞书要求 Channel 已连接后才能保存此设置。",
+    feishuManualStep2:
+      "在权限管理中添加 im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly。",
+    feishuManualStep3:
+      "将 App ID 和 App Secret 填到这里，把你的飞书 Open ID（ou_...）填为允许的发送者，然后添加 Channel。",
+    feishuManualStep4:
+      "然后在飞书“事件与回调”中选择长连接并订阅 im.message.receive_v1。飞书要求 Channel 已连接后才能保存此设置。",
     feishuManualStep5: "发布应用版本，之后大家才能给机器人发消息。",
+    telegramGuideStep1: "扫描此二维码或点击按钮，在 Telegram 中打开 BotFather。",
+    telegramGuideStep2: "发送 /newbot，然后设置名称和以 bot 结尾的用户名。",
+    telegramGuideStep3: "复制 BotFather 发来的 Token，粘贴到下方。",
+    telegramBotFatherOpen: "打开 BotFather",
+    telegramBotFatherQrLabel: "打开 BotFather 的二维码",
+    telegramToken: "Bot Token",
+    telegramTokenHint: "Ait 会向 Telegram 验证 Token，并私密保存在此主机上。",
+    telegramContinue: "继续",
+    telegramPairWaiting:
+      "扫描此二维码或打开链接，然后在与 @{{bot}} 的对话中点击 Start，你就会成为允许的发送者。完成前请保持此页面打开。",
+    telegramPairOpen: "在 Telegram 中打开",
+    telegramPairQrLabel: "打开新机器人的二维码",
+    telegramInvalidToken: "Telegram 拒绝了此 Token，请重新从 BotFather 复制。",
+    telegramAlreadyConnected:
+      "此机器人已连接到此主机上的一个 Channel。请先删除该 Channel，或创建新的机器人。",
+    telegramWebhookConflict: "此机器人已设置 webhook。请用 deleteWebhook 移除后重试。",
+    telegramPollingConflict: "另一个程序正在接收此机器人的消息。请停止该程序后重试。",
+    telegramExpired: "链接已过期，请点击继续获取新链接。",
+    telegramUnavailable: "无法连接 Telegram。请检查此主机的网络后重试。",
+    telegramUseEnvironment: "改用环境变量",
+    telegramUseGuided: "改用引导设置",
     deleteChannel: "删除 Channel",
     deleteChannelConfirm: "删除此 Channel？它的外部连接会断开。",
     status: {

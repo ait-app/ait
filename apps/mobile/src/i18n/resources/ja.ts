@@ -105,25 +105,58 @@ export const ja: TranslationResources = {
     channelEnabled: "有効",
     channelConnected: "接続済み",
     channelIdle: "待機中",
-    feishuScanHint: "Feishu アプリで QR コードをスキャンします。Feishu がボットを作成して Ait が接続します。変更するまでメッセージを送れるのはあなただけです。",
+    feishuScanHint:
+      "Feishu アプリで QR コードをスキャンします。Feishu がボットを作成して Ait が接続します。変更するまでメッセージを送れるのはあなただけです。",
     feishuScanStart: "QR コードを表示",
-    feishuScanWaiting: "Feishu アプリでこのコードをスキャンし、新しいボットを承認してください。完了するまでこのページを開いたままにしてください。",
+    feishuScanWaiting:
+      "Feishu アプリでこのコードをスキャンし、新しいボットを承認してください。完了するまでこのページを開いたままにしてください。",
     feishuScanOpen: "Feishu で開く",
     feishuScanQrLabel: "Feishu 設定用 QR コード",
     feishuScanRetry: "再試行",
     feishuScanDenied: "Feishu でリクエストが拒否されました。",
     feishuScanExpired: "この QR コードは期限切れです。もう一度開始してください。",
     feishuScanLark: "Lark アカウントのようです。Ait は中国版 Feishu のみ対応しています。",
-    feishuScanUnavailable: "Feishu の設定を完了できませんでした。再試行するか、認証情報を手動で入力してください。",
+    feishuScanUnavailable:
+      "Feishu の設定を完了できませんでした。再試行するか、認証情報を手動で入力してください。",
     feishuManualEntry: "認証情報を手動で入力",
     feishuScanInstead: "QR コードをスキャンする",
     feishuAppSecret: "App Secret",
-    feishuAppSecretHint: "App Secret を貼り付けます。Ait は Feishu で検証し、このホストに非公開で保存します。env:AIT_SERVER_CREDENTIAL_* 参照も使えます。",
+    feishuAppSecretHint:
+      "App Secret を貼り付けます。Ait は Feishu で検証し、このホストに非公開で保存します。env:AIT_SERVER_CREDENTIAL_* 参照も使えます。",
     feishuManualStep1: "open.feishu.cn/app でカスタムアプリを作成し、ボット機能を有効にします。",
-    feishuManualStep2: "権限管理で im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly を追加します。",
-    feishuManualStep3: "App ID と App Secret をここにコピーし、自分の Feishu Open ID（ou_...）を許可された送信者に追加して、チャンネルを追加します。",
-    feishuManualStep4: "次に Feishu の「イベントとコールバック」で長時間接続を選び、im.message.receive_v1 を購読します。チャンネルが接続されるまで Feishu はこの設定を保存できません。",
+    feishuManualStep2:
+      "権限管理で im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly を追加します。",
+    feishuManualStep3:
+      "App ID と App Secret をここにコピーし、自分の Feishu Open ID（ou_...）を許可された送信者に追加して、チャンネルを追加します。",
+    feishuManualStep4:
+      "次に Feishu の「イベントとコールバック」で長時間接続を選び、im.message.receive_v1 を購読します。チャンネルが接続されるまで Feishu はこの設定を保存できません。",
     feishuManualStep5: "アプリのバージョンを公開すると、ボットにメッセージを送れるようになります。",
+    telegramGuideStep1:
+      "このコードをスキャンするかボタンを押して、Telegram で BotFather を開きます。",
+    telegramGuideStep2: "/newbot を送信し、名前と bot で終わるユーザー名を決めます。",
+    telegramGuideStep3: "BotFather から届いたトークンをコピーして、下に貼り付けます。",
+    telegramBotFatherOpen: "BotFather を開く",
+    telegramBotFatherQrLabel: "BotFather を開く QR コード",
+    telegramToken: "ボットトークン",
+    telegramTokenHint: "Ait は Telegram でトークンを検証し、このホストに非公開で保存します。",
+    telegramContinue: "続行",
+    telegramPairWaiting:
+      "このコードをスキャンするかリンクを開き、@{{bot}} とのチャットで Start をタップすると、許可された送信者になります。完了するまでこのページを開いたままにしてください。",
+    telegramPairOpen: "Telegram で開く",
+    telegramPairQrLabel: "新しいボットを開く QR コード",
+    telegramInvalidToken:
+      "Telegram がこのトークンを拒否しました。BotFather からもう一度コピーしてください。",
+    telegramAlreadyConnected:
+      "このボットはこのホストのチャンネルに既に接続されています。先にそのチャンネルを削除するか、新しいボットを作成してください。",
+    telegramWebhookConflict:
+      "このボットには webhook が設定されています。deleteWebhook で削除してから再試行してください。",
+    telegramPollingConflict:
+      "別のプログラムがこのボットのメッセージを受信しています。停止してから再試行してください。",
+    telegramExpired: "このリンクは期限切れです。続行して新しいリンクを取得してください。",
+    telegramUnavailable:
+      "Telegram に接続できませんでした。このホストの接続を確認して再試行してください。",
+    telegramUseEnvironment: "環境変数を使用",
+    telegramUseGuided: "ガイド付き設定を使用",
     deleteChannel: "チャンネルを削除",
     deleteChannelConfirm: "このチャンネルを削除しますか？外部との接続は切断されます。",
     status: {

@@ -1,16 +1,16 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import React, { useState } from "react";
+import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { AllowGroupsCheckbox } from "./allow-groups-checkbox";
+import { TextLink, useLiveSetup } from "./channel-setup";
 import { QrCode } from "./qr-code";
 import { botStyles as styles } from "./styles";
 
-const STATUS_POLL_MS = 3000;
 const QR_SIZE = 240;
 const FAILURE_KEYS = {
   denied: "bots.feishuScanDenied",
@@ -33,22 +33,6 @@ export function useFeishuSetupSupported(serverId: string): boolean {
   );
 }
 
-function TextLink({
-  label,
-  onPress,
-  testID,
-}: {
-  label: string;
-  onPress: () => void;
-  testID: string;
-}) {
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button" testID={testID}>
-      <Text style={[styles.hint, styles.link]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 export function FeishuScanSetup({
   serverId,
   workspaceId,
@@ -66,8 +50,6 @@ export function FeishuScanSetup({
   const client = useHostRuntimeClient(serverId);
   const [allowGroups, setAllowGroups] = useState(false);
   const [scan, setScan] = useState<{ scanId: string; url: string } | null>(null);
-  // Leaving a live scan must cancel it, or a later approval would create an app with no channel.
-  const cancelLiveScan = useRef<(() => void) | null>(null);
   const start = useMutation({
     mutationFn: async () => {
       if (!client) throw new Error(t("bots.disconnected"));
@@ -76,37 +58,25 @@ export function FeishuScanSetup({
         allowGroups,
       });
     },
-    onSuccess: ({ scanId, url }) => {
-      cancelLiveScan.current = () => {
-        void client
-          ?.botRequest("bot.channel.feishu.scan.cancel.request", { workspaceId, scanId })
-          .catch(() => undefined);
-      };
-      setScan({ scanId, url });
-    },
+    onSuccess: ({ scanId, url }) => setScan({ scanId, url }),
   });
-  const scanId = scan?.scanId;
-  const status = useQuery({
-    queryKey: ["bot-feishu-scan", serverId, workspaceId, scanId],
-    enabled: Boolean(client && scanId),
-    gcTime: 0,
-    refetchInterval: (query) =>
-      query.state.data && query.state.data.state !== "waiting" ? false : STATUS_POLL_MS,
-    queryFn: async () => {
-      if (!client || !scanId) throw new Error(t("bots.disconnected"));
+  const { status, stop } = useLiveSetup({
+    queryKey: ["bot-feishu-scan", serverId, workspaceId],
+    sessionId: scan?.scanId,
+    getStatus: async (scanId) => {
+      if (!client) throw new Error(t("bots.disconnected"));
       return client.botRequest("bot.channel.feishu.scan.status.request", { workspaceId, scanId });
     },
+    cancel: (scanId) => {
+      void client
+        ?.botRequest("bot.channel.feishu.scan.cancel.request", { workspaceId, scanId })
+        .catch(() => undefined);
+    },
+    onDone,
   });
-  const state = status.data?.state;
-  useEffect(() => {
-    if (state !== "complete" && state !== "failed") return;
-    cancelLiveScan.current = null;
-    if (state === "complete") onDone();
-  }, [state, onDone]);
-  useEffect(() => () => cancelLiveScan.current?.(), []);
+  const state = status?.state;
   const cancelScan = () => {
-    cancelLiveScan.current?.();
-    cancelLiveScan.current = null;
+    stop();
     setScan(null);
   };
   const manualLink = (
@@ -121,7 +91,7 @@ export function FeishuScanSetup({
     return (
       <View style={styles.permissionBlock}>
         <Text style={styles.error} accessibilityRole="alert" testID="bot-feishu-scan-failed">
-          {t(FAILURE_KEYS[status.data?.reason ?? "unavailable"])}
+          {t(FAILURE_KEYS[status?.reason ?? "unavailable"])}
         </Text>
         <View style={styles.row}>
           <Button

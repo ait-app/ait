@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -151,7 +152,7 @@ impl Harness {
 
     /// Make the next status call ask Feishu instead of waiting out the poll interval.
     async fn due(&self) {
-        let scan = self.onboarding.scan(WORKSPACE).unwrap();
+        let scan = self.onboarding.scans.get(WORKSPACE).unwrap();
         scan.lock().await.next_poll = Instant::now();
     }
 
@@ -252,7 +253,7 @@ async fn slow_down_lengthens_the_poll_interval() {
 
     assert_eq!(harness.status(scan_id).await["state"], "waiting");
 
-    let scan = harness.onboarding.scan(WORKSPACE).unwrap();
+    let scan = harness.onboarding.scans.get(WORKSPACE).unwrap();
     assert_eq!(scan.lock().await.interval, Duration::from_secs(6));
 }
 
@@ -361,7 +362,7 @@ async fn expired_unknown_and_replaced_scans_report_expired() {
     let second = harness.start().await;
     assert_eq!(harness.status(first).await["reason"], "expired");
 
-    let scan = harness.onboarding.scan(WORKSPACE).unwrap();
+    let scan = harness.onboarding.scans.get(WORKSPACE).unwrap();
     scan.lock().await.deadline = Instant::now();
     assert_eq!(harness.status(second).await["reason"], "expired");
 }
@@ -384,7 +385,7 @@ async fn cancel_stops_a_status_already_holding_the_scan_from_creating_a_channel(
     let feishu = feishu(vec![(200, created())]).await;
     let harness = harness(&feishu, Memory::default()).await;
     let scan_id = harness.start().await;
-    let held = harness.onboarding.scan(WORKSPACE).unwrap();
+    let held = harness.onboarding.scans.get(WORKSPACE).unwrap();
 
     assert_eq!(
         harness.onboarding.cancel(request(scan_id)).await.unwrap(),

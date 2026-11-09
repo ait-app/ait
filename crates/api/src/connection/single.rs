@@ -336,8 +336,8 @@ fn lane(message: &Incoming) -> usize {
     {
         return 2;
     }
-    // Waits on Feishu's servers, which must not stall ordinary workspace requests.
-    if method.starts_with("bot.channel.feishu.") {
+    // Waits on external platforms, which must not stall ordinary workspace requests.
+    if method.starts_with("bot.channel.feishu.") || method.starts_with("bot.channel.telegram.") {
         return 2;
     }
     0

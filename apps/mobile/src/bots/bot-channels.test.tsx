@@ -5,8 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BotChannels } from "./bot-channels";
 
-const { botRequest, confirmDialog, randomUUID, feishuSetup } = vi.hoisted(() => ({
+const { botRequest, confirmDialog, randomUUID, feishuSetup, telegramSetup } = vi.hoisted(() => ({
   feishuSetup: { current: false },
+  telegramSetup: { current: false },
   botRequest: vi.fn(),
   confirmDialog: vi.fn(async (_options: unknown) => true),
   randomUUID: vi.fn(() => "33333333-3333-4333-8333-333333333333"),
@@ -16,7 +17,14 @@ vi.mock("@/stores/session-store", () => ({
   useSessionStore: (select: (state: unknown) => unknown) =>
     select({
       sessions: {
-        host: { serverInfo: { features: { workspaceBotFeishuSetup: feishuSetup.current } } },
+        host: {
+          serverInfo: {
+            features: {
+              workspaceBotFeishuSetup: feishuSetup.current,
+              workspaceBotTelegramSetup: telegramSetup.current,
+            },
+          },
+        },
       },
     }),
 }));
@@ -168,6 +176,7 @@ function submitButton() {
 
 beforeEach(() => {
   feishuSetup.current = false;
+  telegramSetup.current = false;
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -513,6 +522,148 @@ describe("BotChannels", () => {
 
       expect(await screen.findByLabelText("bots.secretRef")).toBeTruthy();
       expect(screen.queryByTestId("bot-feishu-scan-start")).toBeNull();
+    });
+  });
+
+  describe("guided Telegram setup", () => {
+    const PAIRING_ID = "77777777-7777-4777-8777-777777777777";
+    const TOKEN = "12345:abcdefghijklmnopqrstuvwxyz0123";
+    const LINK = "https://t.me/ait_test_bot?start=code";
+    function pairingResponses({
+      started = {
+        state: "waiting",
+        pairingId: PAIRING_ID,
+        botUsername: "ait_test_bot",
+        url: LINK,
+        expiresInSeconds: 600,
+      } as Record<string, unknown>,
+      status = { state: "waiting" } as Record<string, unknown>,
+    } = {}) {
+      const base = botRequest.getMockImplementation();
+      botRequest.mockImplementation(async (method: string, params: Record<string, unknown>) => {
+        if (method === "bot.channel.telegram.pair.start.request") return started;
+        if (method === "bot.channel.telegram.pair.status.request") return status;
+        if (method === "bot.channel.telegram.pair.cancel.request") return { cancelled: true };
+        return base?.(method, params);
+      });
+    }
+    async function openForm() {
+      telegramSetup.current = true;
+      renderChannels();
+      fireEvent.click(await screen.findByTestId("bot-channel-add"));
+      await screen.findByTestId("bot-telegram-guide");
+    }
+    function submitToken(token = TOKEN) {
+      typeInto("bots.telegramToken", token);
+      fireEvent.click(screen.getByTestId("bot-telegram-continue"));
+    }
+
+    it("guides through BotFather and shows the link to tap Start", async () => {
+      pairingResponses();
+      await openForm();
+      expect(screen.getByTestId("bot-telegram-botfather-qr")).toBeTruthy();
+      expect(screen.getByText("1. bots.telegramGuideStep1")).toBeTruthy();
+      submitToken(` ${TOKEN}\n`);
+
+      expect(await screen.findByTestId("bot-telegram-pair-qr")).toBeTruthy();
+      expect(botRequest).toHaveBeenCalledWith("bot.channel.telegram.pair.start.request", {
+        workspaceId: "workspace",
+        token: TOKEN,
+        allowGroups: false,
+      });
+      await waitFor(() =>
+        expect(botRequest).toHaveBeenCalledWith("bot.channel.telegram.pair.status.request", {
+          workspaceId: "workspace",
+          pairingId: PAIRING_ID,
+        }),
+      );
+    });
+
+    it("closes the form when pairing completes", async () => {
+      pairingResponses({ status: { state: "complete", channel: channels[1] } });
+      await openForm();
+      submitToken();
+
+      await waitFor(() => expect(screen.queryByTestId("bot-channel-form")).toBeNull());
+    });
+
+    it("keeps the form and explains a rejected token", async () => {
+      pairingResponses({ started: { state: "failed", reason: "invalidToken" } });
+      await openForm();
+      submitToken();
+
+      expect((await screen.findByTestId("bot-telegram-failure")).textContent).toBe(
+        "bots.telegramInvalidToken",
+      );
+      expect(screen.queryByTestId("bot-telegram-pair-qr")).toBeNull();
+    });
+
+    it("explains that a bot is already connected", async () => {
+      pairingResponses({ started: { state: "failed", reason: "alreadyConnected" } });
+      await openForm();
+      submitToken();
+
+      expect((await screen.findByTestId("bot-telegram-failure")).textContent).toBe(
+        "bots.telegramAlreadyConnected",
+      );
+    });
+
+    it("returns to the form when pairing fails", async () => {
+      pairingResponses({ status: { state: "failed", reason: "pollingConflict" } });
+      await openForm();
+      submitToken();
+
+      expect((await screen.findByTestId("bot-telegram-failure")).textContent).toBe(
+        "bots.telegramPollingConflict",
+      );
+    });
+
+    it("cancels a waiting pairing on the host", async () => {
+      pairingResponses();
+      await openForm();
+      submitToken();
+      fireEvent.click(await screen.findByTestId("bot-telegram-pair-cancel"));
+
+      await waitFor(() =>
+        expect(botRequest).toHaveBeenCalledWith("bot.channel.telegram.pair.cancel.request", {
+          workspaceId: "workspace",
+          pairingId: PAIRING_ID,
+        }),
+      );
+      expect(await screen.findByTestId("bot-telegram-guide")).toBeTruthy();
+    });
+
+    it("cancels a waiting pairing when the form closes", async () => {
+      pairingResponses();
+      feishuSetup.current = false;
+      await openForm();
+      submitToken();
+      await screen.findByTestId("bot-telegram-pair-qr");
+      fireEvent.change(screen.getByTestId("bot-channel-type"), { target: { value: "feishu" } });
+
+      await waitFor(() =>
+        expect(botRequest).toHaveBeenCalledWith("bot.channel.telegram.pair.cancel.request", {
+          workspaceId: "workspace",
+          pairingId: PAIRING_ID,
+        }),
+      );
+    });
+
+    it("can switch to the environment variable form and back", async () => {
+      await openForm();
+      fireEvent.click(screen.getByTestId("bot-telegram-use-environment"));
+      expect(await screen.findByLabelText("bots.tokenRef")).toBeTruthy();
+
+      fireEvent.click(screen.getByTestId("bot-telegram-use-guided"));
+      expect(await screen.findByTestId("bot-telegram-guide")).toBeTruthy();
+    });
+
+    it("keeps the original form on hosts without guided setup", async () => {
+      renderChannels();
+      fireEvent.click(await screen.findByTestId("bot-channel-add"));
+
+      expect(await screen.findByLabelText("bots.tokenRef")).toBeTruthy();
+      expect(screen.queryByTestId("bot-telegram-guide")).toBeNull();
     });
   });
 

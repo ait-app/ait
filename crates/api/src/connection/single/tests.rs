@@ -42,6 +42,7 @@ fn worker_lanes_keep_streams_and_subscriptions_with_their_connection_owner() {
         ("project.github.clone.request", 2),
         ("bot.channel.feishu.scan.status.request", 2),
         ("bot.channel.feishu.connect.request", 2),
+        ("bot.channel.telegram.pair.status.request", 2),
         ("bot.channel.create.request", 0),
         ("agent.list.request", 3),
         ("agent.timeline.set_subscription.request", 3),

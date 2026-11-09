@@ -84,6 +84,21 @@ pub(crate) struct FeishuConnect {
     #[serde(default)]
     pub(crate) allow_groups: bool,
 }
+/// A pasted bot token; deliberately not `Debug` because it holds a secret.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct TelegramPairStart {
+    pub(crate) workspace_id: String,
+    pub(crate) token: String,
+    #[serde(default)]
+    pub(crate) allow_groups: bool,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct TelegramPairRequest {
+    pub(crate) workspace_id: String,
+    pub(crate) pairing_id: Uuid,
+}
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ConversationRequest {

@@ -20,9 +20,16 @@
 6. 手动接入作为回退：客户端发送 App ID 和 App Secret，daemon 先向飞书验证再保存。Channel 删除或 Bot 退役后删除 Secret，每次启动重试已删除 Channel 的清理。
 7. 只支持中国区飞书；扫码账号属于 Lark 时明确失败，因为 Channel 传输只连接 `*.feishu.cn`。
 
+## Telegram 引导接入
+
+Telegram 使用相同的 Secret 保存和状态驱动模型，但不需要托管服务：用户按步骤在 BotFather 创建机器人并粘贴 Token，daemon 用 `getMe` 验证。
+随后展示 `https://t.me/<bot>?start=<一次性代码>`；在 Channel 创建前，daemon 在状态请求中读取机器人的更新，私聊中发送该代码的真人成为允许的发送者。
+配对读取的更新不会交给 Bot，代码消息在创建 Channel 前确认，不会成为第一条输入。已有 webhook 只报告冲突，不会自动删除。
+
 ## 后果
 
 - App Secret 以明文保存在 daemon 数据目录。文件权限防止其他系统用户读取，但不防止同一用户运行的进程；能执行命令的 Agent 可以读取它，这与 [ADR-215](adr-215-bot-permissions-and-scoped-mcp.md) 已接受的 `local-api.token` 风险相同。
 - 依赖未公开的 HTTP 交换，飞书修改后扫码会失败，手动接入不受影响。
 - 删除 Channel 不会删除飞书上已创建的应用，用户需在飞书开发者后台自行删除。
-- Telegram 的一键创建需要受信任的托管管理 Bot，而 `aitapp.cn` 能否访问 Telegram 尚未确认，不在本决策范围内。
+- Telegram 的真正一键创建需要受信任的托管管理 Bot，而 `aitapp.cn` 能否访问 Telegram 尚未确认，不在本决策范围内。
+- 配对期间发给该机器人的其他消息会被丢弃。

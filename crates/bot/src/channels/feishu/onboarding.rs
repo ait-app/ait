@@ -1,11 +1,8 @@
 //! Feishu channel onboarding: the daemon runs scan-to-create and clients only show the QR code.
 //!
-//! Progress is driven by client status requests, so an abandoned scan needs no background work.
 //! The registration exchange follows Feishu's SDK; see ADR-224.
 
-use std::collections::BTreeMap;
 use std::io::Write;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use base64::Engine;
@@ -17,11 +14,13 @@ use flate2::write::GzEncoder;
 use model::ErrorCode;
 use secrecy::SecretString;
 use serde_json::{Value, json};
-use tokio::sync::Mutex as ScanLock;
 use tokio::time::Instant;
 use uuid::Uuid;
 
 use super::API;
+use crate::channels::onboarding::{
+    FAILED_EXPIRED, FAILED_UNAVAILABLE, Sessions, failed, http_client, save_channel, waiting,
+};
 use crate::channels::{expose, json_response};
 use crate::ports::stored_credential_reference;
 use crate::protocol::{FeishuConnect, FeishuScanRequest, FeishuScanStart};
@@ -52,9 +51,7 @@ const LINK_KEYS: [&str; 7] = [
 ];
 
 const FAILED_DENIED: &str = "denied";
-const FAILED_EXPIRED: &str = "expired";
 const FAILED_LARK: &str = "larkUnsupported";
-const FAILED_UNAVAILABLE: &str = "unavailable";
 
 #[derive(Debug)]
 struct Scan {
@@ -78,12 +75,11 @@ impl Scan {
     }
 }
 
-/// One in-memory scan per Workspace; a daemon restart simply asks the user to scan again.
 #[derive(Debug)]
 pub(crate) struct Onboarding {
     accounts: String,
     open: String,
-    scans: Mutex<BTreeMap<String, Arc<ScanLock<Scan>>>>,
+    scans: Sessions<Scan>,
 }
 
 impl Default for Onboarding {
@@ -112,16 +108,8 @@ impl Onboarding {
         Self {
             accounts: accounts.to_owned(),
             open: open.to_owned(),
-            scans: Mutex::default(),
+            scans: Sessions::default(),
         }
-    }
-
-    fn scans(&self) -> MutexGuard<'_, BTreeMap<String, Arc<ScanLock<Scan>>>> {
-        self.scans.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-
-    fn scan(&self, workspace: &str) -> Option<Arc<ScanLock<Scan>>> {
-        self.scans().get(workspace).cloned()
     }
 
     /// Begin a scan, replacing any earlier scan for the Workspace.
@@ -179,8 +167,7 @@ impl Onboarding {
             registered: None,
             outcome: None,
         };
-        self.scans()
-            .insert(request.workspace_id, Arc::new(ScanLock::new(scan)));
+        self.scans.insert(request.workspace_id, scan);
         Ok(json!({"scanId":id,"url":url,"expiresInSeconds":expires}))
     }
 
@@ -191,7 +178,7 @@ impl Onboarding {
         bots: &Bots,
         request: FeishuScanRequest,
     ) -> Result<Value, ErrorCode> {
-        let Some(scan) = self.scan(&request.workspace_id) else {
+        let Some(scan) = self.scans.get(&request.workspace_id) else {
             return Ok(failed(FAILED_EXPIRED));
         };
         let mut scan = scan.lock().await;
@@ -242,7 +229,7 @@ impl Onboarding {
 
     /// Stop a scan so a later approval creates no channel; a finished channel is unaffected.
     pub(crate) async fn cancel(&self, request: FeishuScanRequest) -> Result<Value, ErrorCode> {
-        let Some(entry) = self.scan(&request.workspace_id) else {
+        let Some(entry) = self.scans.get(&request.workspace_id) else {
             return Ok(json!({"cancelled":false}));
         };
         {
@@ -253,13 +240,7 @@ impl Onboarding {
             scan.registered = None;
             scan.finish(failed(FAILED_EXPIRED));
         }
-        let mut scans = self.scans();
-        if scans
-            .get(&request.workspace_id)
-            .is_some_and(|current| Arc::ptr_eq(current, &entry))
-        {
-            scans.remove(&request.workspace_id);
-        }
+        self.scans.remove(&request.workspace_id, &entry);
         Ok(json!({"cancelled":true}))
     }
 
@@ -320,29 +301,13 @@ async fn save(bots: &Bots, scan: &mut Scan, workspace: String) -> Value {
         },
     };
     let secret = registered.secret.clone();
-    match bots.create_stored_channel(channel, secret).await {
-        Ok(created) => {
+    match save_channel(bots, channel, secret).await {
+        Some(outcome) => {
             scan.registered = None;
-            scan.finish(json!({"state":"complete","channel":created["channel"]}))
+            scan.finish(outcome)
         }
-        Err(error) if error.retryable() => {
-            tracing::warn!(?error, "will retry saving the Feishu app created by a scan");
-            waiting()
-        }
-        Err(error) => {
-            tracing::warn!(?error, "could not save the Feishu app created by a scan");
-            scan.registered = None;
-            scan.finish(failed(FAILED_UNAVAILABLE))
-        }
+        None => waiting(),
     }
-}
-
-fn waiting() -> Value {
-    json!({"state":"waiting"})
-}
-
-fn failed(reason: &str) -> Value {
-    json!({"state":"failed","reason":reason})
 }
 
 fn classify(response: &Value) -> Poll {
@@ -373,15 +338,6 @@ fn classify(response: &Value) -> Poll {
         // Includes transient gateway errors; the scan's deadline bounds the wait.
         _ => Poll::Waiting,
     }
-}
-
-fn http_client() -> Result<reqwest::Client, ErrorCode> {
-    reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(15))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .map_err(|_| ErrorCode::BotIo)
 }
 
 /// Post one registration step; Feishu reports a pending scan as a JSON error status.

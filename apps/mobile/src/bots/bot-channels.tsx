@@ -13,9 +13,11 @@ import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { AllowGroupsCheckbox } from "./allow-groups-checkbox";
 import { FeishuManualGuide, FeishuScanSetup, useFeishuSetupSupported } from "./feishu-setup";
+import { TextLink } from "./channel-setup";
 import { BotLoadingSpinner } from "./loading";
 import { botKeys } from "./queries";
 import { botStyles as styles } from "./styles";
+import { TelegramGuidedSetup, useTelegramSetupSupported } from "./telegram-setup";
 
 type BotChannel = z.infer<typeof BotChannelSchema>;
 
@@ -177,6 +179,9 @@ function ChannelForm({
   const [allowGroups, setAllowGroups] = useState(false);
   const [enterManually, setEnterManually] = useState(false);
   const scanning = kind === "feishu" && feishuSetupSupported && !enterManually;
+  const telegramSetupSupported = useTelegramSetupSupported(serverId);
+  const [useEnvironment, setUseEnvironment] = useState(false);
+  const telegramGuided = kind === "telegram" && telegramSetupSupported && !useEnvironment;
   // Hosts with Feishu setup also accept a pasted App Secret; a reference still uses the variable.
   const pastedSecret = kind === "feishu" && feishuSetupSupported && !CREDENTIAL_REF.test(secretRef);
   const allowedSenders = parseSenders(senders);
@@ -245,9 +250,30 @@ function ChannelForm({
       </View>
     );
   }
+  if (telegramGuided) {
+    return (
+      <View style={styles.card} testID="bot-channel-form">
+        {typeField}
+        <TelegramGuidedSetup
+          serverId={serverId}
+          workspaceId={workspaceId}
+          active={active}
+          onDone={onDone}
+          onUseEnvironment={() => setUseEnvironment(true)}
+        />
+      </View>
+    );
+  }
   return (
     <View style={styles.card} testID="bot-channel-form">
       {typeField}
+      {kind === "telegram" && telegramSetupSupported ? (
+        <TextLink
+          label={t("bots.telegramUseGuided")}
+          onPress={() => setUseEnvironment(false)}
+          testID="bot-telegram-use-guided"
+        />
+      ) : null}
       {kind === "feishu" && feishuSetupSupported ? (
         <FeishuManualGuide onScanInstead={() => setEnterManually(false)} />
       ) : null}

@@ -16,7 +16,8 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 use crate::channels::Incoming;
-use crate::channels::feishu::onboarding::Onboarding;
+use crate::channels::feishu::onboarding::Onboarding as FeishuOnboarding;
+use crate::channels::telegram::onboarding::Onboarding as TelegramOnboarding;
 use crate::mcp::Scopes;
 use crate::ports::{Credentials, Executor};
 use crate::protocol::decode;
@@ -56,7 +57,8 @@ struct Worker {
     closed: watch::Receiver<bool>,
     executor: Arc<dyn Executor>,
     scopes: Arc<Scopes>,
-    onboarding: Onboarding,
+    feishu: FeishuOnboarding,
+    telegram: TelegramOnboarding,
 }
 
 /// Cloneable application service; conversations outlive UI connections.
@@ -76,6 +78,7 @@ enum Operation {
     Delivery(BotTurnId, DeliveryStatus),
     Retire(Vec<String>),
     ChannelAdmission(String),
+    AccountAvailable(String),
     CreateStored(StoredChannel, SecretString),
 }
 /// Outcome of channel input that the Bot did not refuse.
@@ -119,7 +122,8 @@ impl Bots {
             closed: observed,
             executor: dependencies.executor,
             scopes: dependencies.scopes,
-            onboarding: Onboarding::default(),
+            feishu: FeishuOnboarding::default(),
+            telegram: TelegramOnboarding::default(),
         }));
         let worker = bots.clone();
         std::thread::Builder::new()
@@ -136,21 +140,30 @@ impl Bots {
     /// # Errors
     /// Returns validation, ownership, resource, persistence or lifecycle failures.
     pub async fn execute(&self, method: &str, params: Value) -> Result<Value, ErrorCode> {
-        let onboarding = &self.0.onboarding;
+        let (feishu, telegram) = (&self.0.feishu, &self.0.telegram);
         match method {
-            "bot.channel.feishu.scan.start.request" => {
-                onboarding.start(self, decode(params)?).await
-            }
-            // Detached so a client disconnecting mid-poll cannot discard an approved scan.
+            "bot.channel.feishu.scan.start.request" => feishu.start(self, decode(params)?).await,
+            // Status runs detached so a client disconnecting mid-poll cannot lose an approval.
             "bot.channel.feishu.scan.status.request" => {
                 let bots = self.clone();
                 let request = decode(params)?;
-                tokio::spawn(async move { bots.0.onboarding.status(&bots, request).await })
+                tokio::spawn(async move { bots.0.feishu.status(&bots, request).await })
                     .await
                     .map_err(|_| ErrorCode::BotIo)?
             }
-            "bot.channel.feishu.scan.cancel.request" => onboarding.cancel(decode(params)?).await,
-            "bot.channel.feishu.connect.request" => onboarding.connect(self, decode(params)?).await,
+            "bot.channel.feishu.scan.cancel.request" => feishu.cancel(decode(params)?).await,
+            "bot.channel.feishu.connect.request" => feishu.connect(self, decode(params)?).await,
+            "bot.channel.telegram.pair.start.request" => {
+                telegram.start(self, decode(params)?).await
+            }
+            "bot.channel.telegram.pair.status.request" => {
+                let bots = self.clone();
+                let request = decode(params)?;
+                tokio::spawn(async move { bots.0.telegram.status(&bots, request).await })
+                    .await
+                    .map_err(|_| ErrorCode::BotIo)?
+            }
+            "bot.channel.telegram.pair.cancel.request" => telegram.cancel(decode(params)?).await,
             _ => self.call(Operation::Rpc(method.to_owned(), params)).await,
         }
     }
@@ -231,6 +244,11 @@ impl Bots {
         self.call(Operation::ChannelAdmission(workspace))
             .await
             .map(|_| ())
+    }
+    /// Whether no enabled channel is already connected to the external account `identity`.
+    pub(crate) async fn account_available(&self, identity: String) -> Result<bool, ErrorCode> {
+        let available = self.call(Operation::AccountAvailable(identity)).await?;
+        Ok(available == true)
     }
     /// Durably store a verified secret and enable its channel, waiting for command capacity
     /// because the secret cannot be requested from the external account a second time.
@@ -411,13 +429,12 @@ fn apply(
             state.channel_status.insert(channel, value);
             Ok(Value::Null)
         }
+        Operation::AccountAvailable(identity) => {
+            retain_enabled_accounts(state, accounts);
+            Ok(Value::Bool(!accounts.contains_key(&identity)))
+        }
         Operation::Account(channel, identity) => {
-            let enabled: BTreeSet<_> = state
-                .channels()
-                .into_iter()
-                .map(|channel| channel.id)
-                .collect();
-            accounts.retain(|_, id| enabled.contains(id));
+            retain_enabled_accounts(state, accounts);
             if accounts
                 .get(&identity)
                 .is_some_and(|owner| *owner != channel)
@@ -451,6 +468,15 @@ fn apply(
             state.create_stored_channel(channel, &secret, credentials)
         }
     }
+}
+
+fn retain_enabled_accounts(state: &State, accounts: &mut BTreeMap<String, ChannelId>) {
+    let enabled: BTreeSet<_> = state
+        .channels()
+        .into_iter()
+        .map(|channel| channel.id)
+        .collect();
+    accounts.retain(|_, id| enabled.contains(id));
 }
 
 fn refresh_channels(

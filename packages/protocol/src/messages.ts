@@ -3472,6 +3472,7 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceBots: z.boolean().optional(),
         workspaceBotPermissions: z.boolean().optional(),
         workspaceBotFeishuSetup: z.boolean().optional(),
+        workspaceBotTelegramSetup: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
         // COMPAT(providersSnapshotCwd): added in v0.3.2, remove gate after 2027-02-10.
         providersSnapshotCwd: z.boolean().optional(),
