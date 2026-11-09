@@ -86,6 +86,12 @@ Ait 已为这些公开事件提供独立状态、文本 widget、标题、编辑
 OMP 会延迟持久化没有 assistant 消息的原生会话；仅插件本地输出不保证已经产生 JSONL。
 Ait 不伪造原生落盘成功。验证使用用户授权的实际模型产生 assistant/tool 记录，再核对真实历史恢复。
 OMP 可能用自身通用 deferred-tool 路由执行插件工具；桥接层保留原生名称与参数，不猜测或改写插件身份。
-当前不增加原先未提供的每会话 MCP 覆盖、宿主工具自动注册、文件回退或输出 schema。
+当前不增加原先未提供的每会话 MCP 覆盖、文件回退或输出 schema。
+
+Ait Vibe 编排在 Rust provider adapter 内拥有 director/worker，使用外部 OMP 的公开扩展和
+host-tool RPC。进入模式时注册五个工具，退出时撤销；协商原始 host-tool 通道的 ACP 客户端
+保留自己的工具所有权，不启用此编排。每个 worker 由独立外部进程单独写入原生日志，
+父子关系经原生 header 核对。取消与关闭收回进程，重启不自动续跑。
+边界、握手与兼容策略见 [ADR-223](../decisions/providers/adr-223-omp-native-host-bridge.md)。
 
 [官方版本、定向检查及插件验证](../reports/providers/omp-acp-settlement-2026-10-25.md)。

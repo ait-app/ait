@@ -47,6 +47,7 @@ const LABEL: &str = "Oh My Pi";
 #[derive(Debug, Clone)]
 pub(crate) struct OmpClient {
     program: PathBuf,
+    vibe_host: bool,
     deadline: Duration,
     environment: AgentEnvironment,
     images: super::images::ImageStore,
@@ -61,6 +62,7 @@ impl OmpClient {
     pub(crate) fn new(program: PathBuf) -> Self {
         Self {
             program,
+            vibe_host: true,
             deadline: Duration::from_secs(30),
             environment: AgentEnvironment::default(),
             images: super::images::ImageStore::default(),
@@ -409,12 +411,28 @@ impl AgentClient for OmpClient {
 
     async fn commands(&self, spec: &AgentSessionSpec) -> Result<Vec<Value>, AgentSessionError> {
         config::validate_spec(spec)?;
-        let mut probe = session::probe(self, &spec.cwd, None).await?;
+        let extension = self
+            .vibe_host
+            .then(vibe::host::Host::extension)
+            .transpose()?;
+        let mut probe = session::probe_config_with_extension(
+            self,
+            &spec.cwd,
+            None,
+            None,
+            extension.as_ref().map(tempfile::NamedTempFile::path),
+        )
+        .await?;
         let result = probe.request("get_available_commands", json!({})).await;
         let closed = probe.close().await;
-        let result = result?;
+        let native = config::commands(&result?)?;
         closed?;
-        config::commands(&result).map(|native| commands::visible(&native))
+        let available = extension.is_some()
+            && native
+                .iter()
+                .any(|entry| entry["name"] == vibe::host::COMMAND)
+            && !native.iter().any(|entry| entry["name"] == "vibe");
+        Ok(vibe::host::visible_commands(&native, available))
     }
 
     /// OMP owns its presets, so it answers for the native store instead of the Ait one.

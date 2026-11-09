@@ -5,6 +5,7 @@ mod completion;
 mod interactions;
 mod model_roles;
 mod settlement;
+mod vibe;
 
 #[tokio::test]
 #[ignore = "requires AIT_TEST_OMP_BIN; reads isolated native command metadata without inference"]
@@ -447,7 +448,9 @@ async fn mock_plugin_completion(
     let executing = request["messages"]
         .to_string()
         .contains("OMP_EXEC_APPROVAL_FIXTURE");
-    let delta = if tool_finished {
+    let delta = if let Some(delta) = vibe::completion(&request) {
+        delta
+    } else if tool_finished {
         let text = if asking || writing || executing {
             request["messages"]
                 .as_array()
@@ -485,7 +488,7 @@ async fn mock_plugin_completion(
     let first = json!({"id":"fixture","object":"chat.completion.chunk","created":0,"model":"fixture",
         "choices":[{"index":0,"delta":delta,"finish_reason":null}]});
     let last = json!({"id":"fixture","object":"chat.completion.chunk","created":0,"model":"fixture",
-        "choices":[{"index":0,"delta":{},"finish_reason":if tool_finished {"stop"} else {"tool_calls"}}],
+        "choices":[{"index":0,"delta":{},"finish_reason":if delta.get("tool_calls").is_some() {"tool_calls"} else {"stop"}}],
         "usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7}});
     (
         [("content-type", "text/event-stream")],
@@ -495,26 +498,20 @@ async fn mock_plugin_completion(
 
 #[tokio::test]
 #[ignore = "requires official AIT_TEST_OMP_BIN; isolated external RPC and no model inference"]
-async fn installed_external_omp_refuses_unnegotiated_vibe_without_inference() {
+async fn installed_external_omp_vibe_switches_tools_without_inference() {
     let fixture = installed_with_plugins().await;
-    // Any accidental model submission would fail against the stopped loopback-only endpoint.
     fixture.server.abort();
     let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
-    assert!(
-        session
-            .control_settings(&fixture.spec.config)
-            .unwrap()
-            .get("vibe")
-            .is_none()
-    );
-    while session.poll_turn().unwrap().is_some() {}
+    assert_eq!(session.ui_state().unwrap()["vibe"]["enabled"], false);
     session
-        .out_of_band(&AgentPrompt::text("/vibe inspect the project"))
+        .out_of_band(&AgentPrompt::text("/vibe"))
         .await
         .unwrap();
-    let event = next(session.as_mut()).await.unwrap();
-    assert!(matches!(event, AgentTurnEvent::Timeline(entry)
-        if entry.item["type"] == "provider_command" && entry.item["status"] == "error"
-        && entry.item["text"].as_str().is_some_and(|text| text.contains("Ait does not install or modify OMP"))));
+    assert_eq!(session.ui_state().unwrap()["vibe"]["enabled"], true);
+    session
+        .out_of_band(&AgentPrompt::text("/vibe"))
+        .await
+        .unwrap();
+    assert_eq!(session.ui_state().unwrap()["vibe"]["enabled"], false);
     session.close().await.unwrap();
 }

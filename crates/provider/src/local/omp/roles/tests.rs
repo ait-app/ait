@@ -229,3 +229,26 @@ fn malformed_native_role_catalogs_fail_without_publishing_guessed_choices() {
         .is_err()
     );
 }
+
+#[test]
+fn worker_thinking_follows_role_overrides_and_aliases_instead_of_the_director_level() {
+    let catalog = catalog();
+    let mut selection = config("default", "chat/vision:low");
+    selection.thinking_option_id = Some("high".to_owned());
+    assert_eq!(
+        catalog.worker_thinking(&selection, "smol").as_deref(),
+        Some("low")
+    );
+    assert_eq!(
+        catalog.worker_thinking(&config("smol", "local/tiny"), "smol"),
+        None
+    );
+    assert_eq!(
+        catalog.worker_thinking(&config("smol", "unset"), "smol"),
+        None
+    );
+    assert_eq!(
+        catalog.worker_thinking(&config("default", "@smol"), "smol"),
+        None
+    );
+}

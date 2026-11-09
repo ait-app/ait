@@ -28,6 +28,20 @@ struct Record {
     bytes: usize,
 }
 
+/// Cloneable access to the same serialized native stdin, used by detached host-tool receipts.
+#[derive(Debug, Clone)]
+pub(super) struct Writer {
+    input: Arc<Mutex<ChildStdin>>,
+    deadline: Duration,
+}
+
+impl Writer {
+    /// Write one bounded frame without creating another process or another session writer.
+    pub(super) async fn send(&self, frame: &Value) -> Result<(), AgentSessionError> {
+        write(&self.input, frame, self.deadline).await
+    }
+}
+
 #[derive(Debug)]
 pub(super) struct Transport {
     child: Child,
@@ -51,6 +65,7 @@ pub(super) struct Transport {
     /// Bounded `ait_vibe_state`/`ait_vibe_worker` outbox filled by the reader.
     vibe_state: Arc<RwLock<Vec<Value>>>,
     configuration: Option<tempfile::NamedTempFile>,
+    extension: Option<tempfile::NamedTempFile>,
 }
 
 impl Transport {
@@ -125,12 +140,30 @@ impl Transport {
             capability_state,
             vibe_state,
             configuration: None,
+            extension: None,
         })
     }
 
     /// Retain the private role overlay until this native owner has exited.
     pub(super) fn retain_configuration(&mut self, configuration: Option<tempfile::NamedTempFile>) {
         self.configuration = configuration;
+    }
+
+    /// Keep a public extension available for native reloads until this owner has closed.
+    pub(super) fn retain_extension(&mut self, extension: Option<tempfile::NamedTempFile>) {
+        self.extension = extension;
+    }
+
+    /// Borrow the connection's existing serialized input for an asynchronous host-tool result.
+    pub(super) fn writer(&self) -> Result<Writer, AgentSessionError> {
+        Ok(Writer {
+            input: self
+                .input
+                .as_ref()
+                .ok_or(AgentSessionError::Failed)?
+                .clone(),
+            deadline: self.deadline,
+        })
     }
 
     pub(super) async fn initialize(&mut self) -> Result<(), AgentSessionError> {
@@ -393,6 +426,7 @@ impl Transport {
             .map_err(|_| AgentSessionError::Failed)?
             .map_err(|_| AgentSessionError::Failed)?;
         self.configuration.take();
+        self.extension.take();
         Ok(())
     }
 }

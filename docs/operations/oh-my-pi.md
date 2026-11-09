@@ -173,8 +173,17 @@ TUI-only 入口不会发送给模型；例如 `/status` 是 OMP 扩展控制台�
 
 所有 RPC 会话启动用户安装的 `omp`（可用 `AIT_SERVER_OMP_BIN` 指定）。Ait 不附带、
 安装或修改 OMP/Bun，不采用历史私有宿主目录。原生会话和凭据仍由外部 OMP 管理。
-Vibe 需要外部进程同时提供兼容的桥接握手和 builtin `vibe` 命令；缺失任一项时
-`/vibe` 返回不可用卡片，不发送给模型。见 [ADR-223](../decisions/providers/adr-223-omp-native-host-bridge.md)。
+`/vibe` 切换 Ait 的 director/worker 编排模式，不调用模型；`/vibe <指令>` 进入模式并开始
+真实主回合。Director 通过 `vibe_spawn/send/wait/kill/list` 委派工作，worker 使用外部 OMP
+执行模型与工具，结果自动回到 director。`fast` 选择原生 `@smol` 模型，`good` 选择 `@task`；
+审批、认证与沙箱约束仍然生效。Worker 可在只读子会话查看，控制操作从父会话发起。
+
+这条链路使用公开扩展和 host-tool RPC，已在官方外部 OMP 18.17.0 验证；进入模式需要
+扩展、工具注册和模型路由三项确认。缺少接口时明确拒绝，不把 `/vibe` 当普通模型输入。
+它不启用 OMP TUI 的内部 sessionModes，也不要求私有 SDK/Bun。取消主任务、退出模式或
+关闭父会话会停止 worker；重启后模式关闭，重新进入可对原有 worker 继续追问。
+模式启用时不能原地切换历史，worker 运行或启动时不能变更父配置。
+详见 [ADR-223](../decisions/providers/adr-223-omp-native-host-bridge.md)。
 
 ## 模型预设与设置入口
 

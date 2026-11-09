@@ -3,6 +3,8 @@
 //! `ait_native_host_hello` is consumed by the transport reader; `ait_vibe_state` and
 //! `ait_vibe_worker` are folded into a bounded outbox and projected here into host state.
 
+pub(super) mod host;
+
 use std::collections::BTreeMap;
 
 use serde_json::{Value, json};

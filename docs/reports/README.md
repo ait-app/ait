@@ -78,6 +78,8 @@
 
 ## Provider、Agent 与会话
 
+- [外部 OMP Vibe 编排验证（2026-11-09）](providers/omp-external-vibe-2026-11-09.md)
+
 - [原生附件、ZIP 交付与 OMP 模型角色](providers/native-delivery-and-omp-roles-2026-11-02.md)
 - [DSH / OpenCode 原生命令与能力适配](providers/dsh-opencode-capability-adaptation-2026-10-30.md)
 - [OMP 命令、参数补全与交互兼容验证](providers/omp-commands-and-completion-2026-10-30.md)

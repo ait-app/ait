@@ -85,6 +85,7 @@ pub(super) struct Session {
     command_controls: super::commands::pending::Pending,
     btw: super::btw::State,
     vibe: super::vibe::State,
+    vibe_host: Option<super::vibe::host::Host>,
     active_builtin: bool,
     command_version: u64,
 }
@@ -185,6 +186,16 @@ async fn connect(
     roles.validate(&spec.config)?;
     let configuration = super::roles::overlay(&spec.config).await?;
     let mut args = vec!["--mode".to_owned(), "rpc-ui".to_owned()];
+    let extension = client
+        .vibe_host
+        .then(super::vibe::host::Host::extension)
+        .transpose()?;
+    if let Some(extension) = &extension {
+        args.extend([
+            "--extension".to_owned(),
+            extension.path().to_string_lossy().into_owned(),
+        ]);
+    }
     if let Some(configuration) = &configuration {
         args.extend([
             "--config".to_owned(),
@@ -209,6 +220,7 @@ async fn connect(
     }
     let mut transport = Transport::spawn(client, &spec.cwd, &args, spec.confinement.as_ref())?;
     transport.retain_configuration(configuration);
+    transport.retain_extension(extension);
     transport.initialize().await?;
     let state = config::apply(&mut transport, &spec.config).await?;
     transport
@@ -271,6 +283,37 @@ pub(super) async fn open(
     spec: &AgentSessionSpec,
     handle: Option<&AgentPersistenceHandle>,
 ) -> Result<Session, AgentSessionError> {
+    open_scoped(client, spec, handle, None).await
+}
+
+/// Open or resume an external worker under its verified parent's native journal.
+pub(super) async fn open_worker(
+    client: &OmpClient,
+    spec: &AgentSessionSpec,
+    parent: &str,
+    handle: Option<&AgentPersistenceHandle>,
+) -> Result<Session, AgentSessionError> {
+    if let Some(handle) = handle {
+        let journal = history::load(client, handle, &spec.cwd).await?;
+        if journal.header["parentSession"] != parent {
+            return Err(AgentSessionError::Rejected);
+        }
+    }
+    let session = open_scoped(client, spec, handle, Some(parent)).await?;
+    let identity = session.persistence().ok_or(AgentSessionError::Failed)?;
+    let journal = history::load(client, &identity, &spec.cwd).await?;
+    if journal.header["parentSession"] != parent {
+        return Err(AgentSessionError::Rejected);
+    }
+    Ok(session)
+}
+
+async fn open_scoped(
+    client: &OmpClient,
+    spec: &AgentSessionSpec,
+    handle: Option<&AgentPersistenceHandle>,
+    parent: Option<&str>,
+) -> Result<Session, AgentSessionError> {
     config::validate_spec(spec)?;
     let Restored {
         mut journal,
@@ -280,7 +323,7 @@ pub(super) async fn open(
     } = restore(client, spec, handle).await?;
     let persisted = replayed.is_some();
     let (role_catalog, tiers) = client.role_settings(spec).await?;
-    let (mut transport, state, service_tiers) = connect(
+    let (mut transport, mut state, service_tiers) = connect(
         client,
         spec,
         resume.as_deref().filter(|_| persisted),
@@ -288,6 +331,9 @@ pub(super) async fn open(
         tiers,
     )
     .await?;
+    if let Some(parent) = parent.filter(|_| handle.is_none()) {
+        state = new_worker(&mut transport, &spec.config, parent).await?;
+    }
     let commands = config::commands(
         &transport
             .request("get_available_commands", json!({}))
@@ -317,16 +363,13 @@ pub(super) async fn open(
     };
     stream = stream.with_blobs(history::root(client)?.with_file_name("blobs"));
     stream.set_context(&state);
-    let mut btw = super::btw::State::default();
-    if let Ok(history) = transport.request("get_btw_history", json!({})).await {
-        btw.restore(&history).unwrap_or_else(|_| btw.malformed());
-    }
-    let vibe = super::vibe::State {
-        available: transport
-            .refresh_capability()
-            .is_some_and(|capability| capability.vibe),
-        ..super::vibe::State::default()
+    let (btw, vibe) = native_controls(&mut transport).await;
+    let vibe_host = if vibe.available {
+        None
+    } else {
+        super::vibe::host::Host::discover(client, spec, &state, &commands, handle)?
     };
+    let visible_commands = super::vibe::host::visible_commands(&commands, vibe_host.is_some());
     Ok(Session {
         client: client.clone(),
         transport,
@@ -357,14 +400,43 @@ pub(super) async fn open(
         submitted: false,
         created_at,
         native_bridge: NativeBridge::default(),
-        commands: super::commands::visible(&commands),
+        commands: visible_commands,
         native_commands: commands,
         command_controls: super::commands::pending::Pending::default(),
         btw,
         vibe,
+        vibe_host,
         active_builtin: false,
         command_version: 1,
     })
+}
+
+async fn new_worker(
+    transport: &mut Transport,
+    config: &StoredAgentConfig,
+    parent: &str,
+) -> Result<Value, AgentSessionError> {
+    let changed = transport
+        .request("new_session", json!({"parentSession":parent}))
+        .await?;
+    if changed["cancelled"] == true {
+        return Err(AgentSessionError::Rejected);
+    }
+    config::apply(transport, config).await
+}
+
+async fn native_controls(transport: &mut Transport) -> (super::btw::State, super::vibe::State) {
+    let mut btw = super::btw::State::default();
+    if let Ok(history) = transport.request("get_btw_history", json!({})).await {
+        btw.restore(&history).unwrap_or_else(|_| btw.malformed());
+    }
+    let vibe = super::vibe::State {
+        available: transport
+            .refresh_capability()
+            .is_some_and(|capability| capability.vibe),
+        ..super::vibe::State::default()
+    };
+    (btw, vibe)
 }
 
 async fn restore_navigation(
@@ -440,6 +512,51 @@ impl Session {
         if self.config == *config {
             return Ok(());
         }
+        if self
+            .vibe_host
+            .as_ref()
+            .is_some_and(super::vibe::host::Host::running)
+        {
+            return Err(AgentSessionError::Busy);
+        }
+        let enabled = self
+            .vibe_host
+            .as_ref()
+            .is_some_and(super::vibe::host::Host::enabled);
+        let workers = self
+            .vibe_host
+            .as_ref()
+            .map(super::vibe::host::Host::persisted);
+        if let Some(host) = &mut self.vibe_host {
+            host.toggle(&mut self.transport, false).await?;
+        }
+        self.apply_connection_config(config).await?;
+        if self.vibe_host.is_some() {
+            let spec = AgentSessionSpec {
+                provider: PROVIDER.to_owned(),
+                cwd: self.cwd.clone(),
+                config: config.clone(),
+                confinement: self.confinement.clone(),
+            };
+            let mut host = super::vibe::host::Host::new(
+                &self.client,
+                &spec,
+                config::text(&self.state, "sessionId")?,
+                config::text(&self.state, "sessionFile")?,
+                workers.as_ref(),
+            );
+            if enabled {
+                host.toggle(&mut self.transport, true).await?;
+            }
+            self.vibe_host = Some(host);
+        }
+        Ok(())
+    }
+
+    async fn apply_connection_config(
+        &mut self,
+        config: &StoredAgentConfig,
+    ) -> Result<(), AgentSessionError> {
         if self.config.mode_id == config.mode_id
             && self.config.system_prompt == config.system_prompt
             && super::roles::same_overlay(&self.config, config)
@@ -531,7 +648,8 @@ impl Session {
 
     fn update_commands(&mut self, commands: Vec<Value>) {
         if self.native_commands != commands {
-            self.commands = super::commands::visible(&commands);
+            self.commands =
+                super::vibe::host::visible_commands(&commands, self.vibe_host.is_some());
             self.native_commands = commands;
             self.command_version = self.command_version.wrapping_add(1);
         }
@@ -567,6 +685,10 @@ impl Session {
     /// Enable a negotiated native event channel without changing OMP or its plugin loading.
     pub(super) fn forward_native_events(&mut self, enabled: bool) {
         self.native_bridge.enabled = enabled;
+        if enabled {
+            self.vibe_host.take();
+            self.commands = super::vibe::host::visible_commands(&self.native_commands, false);
+        }
     }
 
     /// Answer a currently owned native callback, preserving all plugin-defined payload fields.
@@ -619,6 +741,24 @@ impl Session {
         {
             return Err(AgentSessionError::Rejected);
         }
+        self.configure(config).await?;
+        let mut directive = None;
+        if super::commands::is_vibe(&prompt.text) && self.vibe_host.is_some() {
+            let (_, args) =
+                super::commands::split(&prompt.text).ok_or(AgentSessionError::Rejected)?;
+            if args.is_empty() {
+                return Err(AgentSessionError::Rejected);
+            }
+            self.vibe_host
+                .as_mut()
+                .ok_or(AgentSessionError::Unavailable)?
+                .toggle(&mut self.transport, true)
+                .await?;
+            let mut input = prompt.clone();
+            args.clone_into(&mut input.text);
+            directive = Some(input);
+        }
+        let prompt = directive.as_ref().unwrap_or(prompt);
         if let Some(name) =
             super::commands::blocked(&prompt.text, &self.native_commands, self.vibe.available)
         {
@@ -632,7 +772,6 @@ impl Session {
         if super::commands::is_btw(&prompt.text) {
             return Err(AgentSessionError::Rejected);
         }
-        self.configure(config).await?;
         self.active_builtin = super::commands::builtin(&prompt.text, &self.native_commands);
         let (text, images) = prompt_blocks::split(prompt.blocks()?);
         self.transport.diagnostics.clear();
@@ -655,6 +794,10 @@ impl Session {
     }
 
     fn observe_native_event(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        if event["type"] == "agent_start" {
+            self.invalidate_state_check();
+        }
+
         if self.native_bridge.enabled {
             if self.native_bridge.events.len() >= 128 {
                 return Err(AgentSessionError::Failed);
@@ -816,7 +959,25 @@ impl Session {
         }
     }
 
+    fn consume_vibe_tool(&mut self, event: &Value) -> Result<bool, AgentSessionError> {
+        if matches!(
+            event["type"].as_str(),
+            Some("host_tool_call" | "host_tool_cancel")
+        ) {
+            let writer = self.transport.writer()?;
+            if let Some(host) = &mut self.vibe_host
+                && host.tool(event, writer)?
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     fn consume(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        if self.consume_vibe_tool(event)? {
+            return Ok(());
+        }
         if self.consume_side_control(event) {
             return Ok(());
         }
@@ -828,9 +989,6 @@ impl Session {
             return Ok(());
         }
         self.observe_native_event(event)?;
-        if event["type"] == "agent_start" {
-            self.invalidate_state_check();
-        }
         if event["type"] == "message_end" && event["message"]["role"] == "assistant" {
             self.submitted = true;
             if event["message"]["stopReason"] == "error" {
@@ -1082,6 +1240,9 @@ impl AgentSession for Session {
         // A `/vibe` the bridge cannot serve is answered here, as a refusal card that never
         // reaches a model. Once the native host announces the capability, `/vibe` is a normal
         // prompt directive and must form a turn instead.
+        if self.vibe_host.is_some() && super::commands::is_vibe(text) {
+            return Some(super::commands::split(text).is_some_and(|(_, args)| args.is_empty()));
+        }
         Some(
             super::commands::is_btw(text)
                 || (super::commands::is_vibe(text) && !self.vibe.available)
@@ -1149,7 +1310,9 @@ impl AgentSession for Session {
         let mut snapshot = self.ui.snapshot();
         snapshot["actions"] = super::actions::catalog();
         snapshot["sideQuestions"] = self.btw.snapshot();
-        if self.vibe.available {
+        if let Some(host) = &self.vibe_host {
+            snapshot["vibe"] = host.snapshot();
+        } else if self.vibe.available {
             snapshot["vibe"] = self.vibe.snapshot();
         }
         if let Some(status) = self.command_controls.status()
@@ -1189,7 +1352,38 @@ impl AgentSession for Session {
         {
             return Err(AgentSessionError::Busy);
         }
+        if super::actions::changes_history(action)
+            && self
+                .vibe_host
+                .as_ref()
+                .is_some_and(super::vibe::host::Host::enabled)
+        {
+            return Err(AgentSessionError::Busy);
+        }
         let fields = super::actions::validate(action, arguments, &self.cwd)?;
+        if action == "vibe_control" && self.vibe_host.is_some() {
+            if fields["operation"] == "toggle" {
+                if self.active.is_some() {
+                    return Err(AgentSessionError::Busy);
+                }
+                let host = self
+                    .vibe_host
+                    .as_mut()
+                    .ok_or(AgentSessionError::Unavailable)?;
+                let enabled = fields["enabled"].as_bool().unwrap_or(!host.enabled());
+                host.toggle(&mut self.transport, enabled).await?;
+                let snapshot = host.snapshot();
+                return Ok(Box::pin(async move {
+                    Ok(json!({"text":snapshot.to_string(),"error":null}))
+                }));
+            }
+            return Ok(self
+                .vibe_host
+                .as_ref()
+                .ok_or(AgentSessionError::Unavailable)?
+                .control(&fields));
+        }
+
         if action == "vibe_control" {
             // Native Vibe controls exist only behind the bridge handshake; without it the
             // catalog entry stays inert instead of reaching a runtime that cannot serve it.
@@ -1323,6 +1517,21 @@ impl AgentSession for Session {
             self.children = super::subagents::Children::default()
                 .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
             self.btw = super::btw::State::default();
+            if self.vibe_host.is_some() {
+                let spec = AgentSessionSpec {
+                    provider: PROVIDER.to_owned(),
+                    cwd: self.cwd.clone(),
+                    config: self.config.clone(),
+                    confinement: self.confinement.clone(),
+                };
+                self.vibe_host = Some(super::vibe::host::Host::new(
+                    &self.client,
+                    &spec,
+                    id,
+                    config::text(&state, "sessionFile")?,
+                    None,
+                ));
+            }
             self.command_controls.close();
             self.created_at = chrono::Utc::now().to_rfc3339();
             self.submitted = false;
@@ -1347,6 +1556,9 @@ impl AgentSession for Session {
                 children.push(worker.clone());
             }
         }
+        if let Some(host) = &self.vibe_host {
+            children.extend(host.children());
+        }
         children
     }
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
@@ -1365,6 +1577,12 @@ impl AgentSession for Session {
                     json!(!self.submitted && !std::path::Path::new(file).is_file()),
                 ),
                 ("createdAt".to_owned(), json!(self.created_at)),
+                (
+                    "aitVibeWorkers".to_owned(),
+                    self.vibe_host
+                        .as_ref()
+                        .map_or_else(|| json!([]), super::vibe::host::Host::persisted),
+                ),
             ])),
         })
     }
@@ -1424,19 +1642,35 @@ impl AgentSession for Session {
             .transport
             .begin("abort_and_restore_queue", json!({}))
             .await?;
+        if let Some(host) = &mut self.vibe_host {
+            host.stop();
+        }
         self.cancel_requests.insert(id, turn.to_owned());
         self.cancellation_started = Some(Instant::now());
         self.next_state_check = Instant::now();
         Ok(())
     }
     fn pending_permissions(&self) -> Vec<Value> {
-        self.dialogs.pending()
+        let mut pending = self.dialogs.pending();
+        if let Some(host) = &self.vibe_host {
+            pending.extend(host.pending());
+        }
+        pending
     }
     async fn respond_permission(
         &mut self,
         id: &str,
         response: &Value,
     ) -> Result<(), AgentSessionError> {
+        if let Some(host) = &mut self.vibe_host
+            && host.owns_permission(id)
+        {
+            host.permission(id, response).await?;
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::PermissionResolved(id.to_owned()));
+            return Ok(());
+        }
         let native = self.dialogs.response(id, response)?;
         self.transport.send(&native).await?;
         self.dialogs.remove(id);
@@ -1448,6 +1682,11 @@ impl AgentSession for Session {
     fn poll_turn(&mut self) -> Result<Option<AgentTurnEvent>, AgentSessionError> {
         self.check_cancellation()?;
         self.drain_vibe()?;
+        if let Some(host) = &mut self.vibe_host {
+            self.stream
+                .events
+                .extend(host.poll(self.transport.writer()?));
+        }
         if let Some(entry) = self.command_controls.expired() {
             self.stream
                 .events
@@ -1485,6 +1724,7 @@ impl AgentSession for Session {
     }
     async fn close(&mut self) -> Result<(), AgentSessionError> {
         self.closed = true;
+        self.vibe_host.take();
         self.actions.close();
         self.command_controls.close();
         self.stream.events.extend(self.dialogs.clear());

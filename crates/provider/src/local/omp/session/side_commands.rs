@@ -38,6 +38,36 @@ impl Session {
         {
             return Err(AgentSessionError::Rejected);
         }
+        if commands::is_vibe(&prompt.text) && self.vibe_host.is_some() {
+            if self.active.is_some() {
+                return Err(AgentSessionError::Busy);
+            }
+            if !commands::split(&prompt.text).is_some_and(|(_, args)| args.is_empty()) {
+                return Err(AgentSessionError::Rejected);
+            }
+            let host = self
+                .vibe_host
+                .as_mut()
+                .ok_or(AgentSessionError::Unavailable)?;
+            host.toggle(&mut self.transport, !host.enabled()).await?;
+            let id = prompt
+                .client_message_id
+                .clone()
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::Timeline(commands::note(
+                    &id,
+                    "vibe",
+                    false,
+                    if host.enabled() {
+                        "Vibe director enabled"
+                    } else {
+                        "Vibe director disabled"
+                    },
+                )));
+            return Ok(());
+        }
         if let Some(name) =
             commands::blocked(&prompt.text, &self.native_commands, self.vibe.available)
         {

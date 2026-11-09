@@ -65,6 +65,23 @@ pub(super) struct Catalog {
 }
 
 impl Catalog {
+    /// Resolve a worker role's explicit thinking suffix, following bounded native role aliases.
+    /// Missing, unset or cyclic selections leave thinking to the worker model's native default.
+    pub(super) fn worker_thinking(&self, config: &StoredAgentConfig, role: &str) -> Option<String> {
+        let assignments = overrides(config);
+        let selector = |role: &str| assignments.get(role).or_else(|| self.inherited.get(role));
+        let mut current = selector(role)?;
+        for _ in 0..=self.roles.len() {
+            if let Some((_, effort)) = current.rsplit_once(':')
+                && presets::valid_thinking(effort)
+            {
+                return Some(effort.to_owned());
+            }
+            current = selector(current.strip_prefix('@')?)?;
+        }
+        None
+    }
+
     /// Query OMP's public machine-readable config and catalog commands without a conversation.
     /// Uses the exact cwd/environment; malformed, oversized or failed reads remain errors.
     pub(super) async fn read(client: &OmpClient, cwd: &str) -> Result<Self, AgentSessionError> {
