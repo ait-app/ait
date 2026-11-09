@@ -76,7 +76,7 @@ export function ProviderRuntimePanel({
       ) : null}
       {above && activeVibe && state.vibe ? (
         <ProviderVibe
-          key={`${serverId}:${agentId}`}
+          key={`vibe:${serverId}:${agentId}`}
           state={state.vibe}
           onExit={exitVibe}
           disabled={blocked || !client}

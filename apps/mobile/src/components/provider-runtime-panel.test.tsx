@@ -19,7 +19,9 @@ vi.mock("@/stores/session-store", () => ({
     }),
 }));
 vi.mock("@/utils/open-external-url", () => ({ openExternalUrl: fixture.open }));
-vi.mock("./provider-side-questions", () => ({ ProviderSideQuestions: () => null }));
+vi.mock("./provider-side-questions", () => ({
+  ProviderSideQuestions: () => <div data-testid="mock-side-question-panel">Side conversation</div>,
+}));
 vi.mock("@/hooks/use-settings", () => ({
   useSettings: (selector: (state: unknown) => unknown) =>
     selector({ openInSidePane: { subagents: false } }),
@@ -157,4 +159,44 @@ it("does not reserve message-area space for toolbar actions", () => {
     <ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />,
   );
   expect(view.container.innerHTML).toBe("");
+});
+
+it("keeps exactly one side conversation as workers become active and finish repeatedly", () => {
+  fixture.state = {
+    statuses: [],
+    widgets: [],
+    title: null,
+    link: null,
+    editor: null,
+    sideQuestions: {
+      records: [],
+      error: "Side conversation loaded",
+      omitted: 0,
+      reveal: null,
+      runningId: null,
+    },
+    vibe: { enabled: true, workers: [] },
+  };
+  const props = { serverId: "server", agentId: "agent", placement: "aboveEditor" as const };
+  const view = render(<ProviderRuntimePanel {...props} />);
+  for (const active of [true, false, true, false]) {
+    fixture.state = {
+      ...fixture.state,
+      vibe: {
+        enabled: true,
+        workers: [
+          {
+            id: "worker",
+            parentId: "agent",
+            status: active ? "running" : "completed",
+            description: "Worker",
+            model: "model",
+          },
+        ],
+      },
+    };
+    view.rerender(<ProviderRuntimePanel {...props} />);
+    expect(screen.getAllByTestId("mock-side-question-panel")).toHaveLength(1);
+    expect(Boolean(screen.queryByTestId("provider-vibe"))).toBe(active);
+  }
 });
