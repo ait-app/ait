@@ -167,3 +167,91 @@ it("displays a legacy single trigger as one run rather than unlimited", () => {
   open(true);
   expect(screen.getByTestId("workspace-schedule-task-a").textContent).toContain("1 run");
 });
+
+function upcomingTasks(count: number): StoredSchedule[] {
+  const nextRunAt = new Date(Date.now() + 3_600_000).toISOString();
+  return Array.from({ length: count }, (_, index) => ({
+    ...task,
+    id: `task-${String(index).padStart(2, "0")}`,
+    nextRunAt,
+  }));
+}
+
+function followsInDocument(earlier: Element, later: Element): boolean {
+  return Boolean(earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING);
+}
+
+it("has no header and ends the list with the only new button", () => {
+  mocks.list = upcomingTasks(1);
+  open(true);
+  expect(screen.queryByText("Workspace schedules")).toBeNull();
+  expect(screen.queryByText("Feature")).toBeNull();
+  expect(screen.getAllByTestId("workspace-schedules-new")).toHaveLength(1);
+  expect(
+    followsInDocument(
+      screen.getByTestId("workspace-schedule-task-00"),
+      screen.getByTestId("workspace-schedules-new"),
+    ),
+  ).toBe(true);
+});
+
+it("offers the new button on an empty filter and not in task details", () => {
+  open(true, { filter: "paused" });
+  expect(screen.getAllByTestId("workspace-schedules-new")).toHaveLength(1);
+  cleanup();
+  open();
+  expect(screen.queryByTestId("workspace-schedules-new")).toBeNull();
+  expect(screen.getByTestId("workspace-schedules-browse")).toBeTruthy();
+});
+
+it("shows 20 tasks per page with the new button on every page", () => {
+  mocks.list = upcomingTasks(21);
+  open(true);
+  expect(screen.getByTestId("workspace-schedule-task-19")).toBeTruthy();
+  expect(screen.queryByTestId("workspace-schedule-task-20")).toBeNull();
+  expect(screen.getByTestId("workspace-schedules-page-status").textContent).toBe("Page 1 of 2");
+
+  fireEvent.click(screen.getByTestId("workspace-schedules-page-next"));
+
+  expect(screen.getByTestId("workspace-schedule-task-20")).toBeTruthy();
+  expect(screen.queryByTestId("workspace-schedule-task-19")).toBeNull();
+  expect(screen.getByTestId("workspace-schedules-new")).toBeTruthy();
+  expect((screen.getByTestId("workspace-schedules-page-next") as HTMLButtonElement).disabled).toBe(
+    true,
+  );
+});
+
+it("hides the pager when one page holds every task", () => {
+  mocks.list = upcomingTasks(20);
+  open(true);
+  expect(screen.queryByTestId("workspace-schedules-page-status")).toBeNull();
+});
+
+it("starts over at page one after visiting another filter and back", () => {
+  mocks.list = upcomingTasks(21);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  clients.push(client);
+  const tab = (filter?: "paused") => (
+    <QueryClientProvider client={client}>
+      <WorkspaceScheduleTab
+        serverId="host-a"
+        workspace={{ id: "workspace-a", cwd: "/repo", name: "Feature" }}
+        filter={filter}
+        interactive
+        onBrowse={vi.fn()}
+        onOpen={vi.fn()}
+        onEditTask={vi.fn()}
+        onCreate={vi.fn()}
+        onOpenAgent={vi.fn()}
+      />
+    </QueryClientProvider>
+  );
+  const { rerender } = render(tab());
+  fireEvent.click(screen.getByTestId("workspace-schedules-page-next"));
+  expect(screen.getByTestId("workspace-schedules-page-status").textContent).toBe("Page 2 of 2");
+
+  rerender(tab("paused"));
+  rerender(tab());
+
+  expect(screen.getByTestId("workspace-schedules-page-status").textContent).toBe("Page 1 of 2");
+});
