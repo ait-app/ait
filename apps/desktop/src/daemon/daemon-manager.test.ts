@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ipcMain } from "electron";
@@ -184,6 +184,23 @@ describe("daemon-manager commands", () => {
       args,
     );
     expect(mocks.openTransport).toHaveBeenLastCalledWith(args, sender);
+  });
+
+  it("binds attachment creation and collection to the requesting window", async () => {
+    const handlers = createDaemonCommandHandlers();
+    const first = {
+      sender: { once: vi.fn(), isDestroyed: () => false },
+    } as unknown as Electron.IpcMainInvokeEvent;
+    const second = {
+      sender: { once: vi.fn(), isDestroyed: () => false },
+    } as unknown as Electron.IpcMainInvokeEvent;
+    const attachment = (await handlers.write_attachment_bytes(
+      { attachmentId: "owned", bytes: [7] },
+      first,
+    )) as { path: string };
+    expect(await handlers.garbage_collect_attachment_files({ referencedIds: [] }, second)).toBe(0);
+    expect(readFileSync(attachment.path)).toEqual(Buffer.from([7]));
+    expect(await handlers.garbage_collect_attachment_files({ referencedIds: [] }, first)).toBe(1);
   });
 
   it("starts the Rust owner and injects managed credentials only in the main process", async () => {

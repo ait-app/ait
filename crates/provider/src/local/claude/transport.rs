@@ -3,6 +3,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
+use domain::agent_runtime::StoredAgentConfig;
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
@@ -337,11 +338,25 @@ fn launch_command(
     spec: &AgentSessionSpec,
     binding: Option<(&str, bool)>,
 ) -> Result<(Command, Option<tempfile::NamedTempFile>), AgentSessionError> {
+    let config_dir = client.config_dir.clone();
+    #[cfg(target_os = "linux")]
+    let config_dir = if spec.confinement.is_some() {
+        Some(
+            crate::local::sandbox::linux::claude_config_dir(&|name| match (name, &config_dir) {
+                ("CLAUDE_CONFIG_DIR", _) if client.config_dir_from_home => None,
+                ("CLAUDE_CONFIG_DIR", Some(directory)) => directory.to_str().map(str::to_owned),
+                _ => client.environment.variable(name),
+            })
+            .map_err(|_| AgentSessionError::Failed)?,
+        )
+    } else {
+        config_dir
+    };
     let mut command = crate::local::sandbox::command(
         &client.program,
         spec.confinement.as_ref(),
         crate::local::sandbox::CLAUDE_STATE,
-        &|name| match (name, &client.config_dir) {
+        &|name| match (name, &config_dir) {
             ("CLAUDE_CONFIG_DIR", Some(directory)) => directory.to_str().map(str::to_owned),
             _ => client.environment.variable(name),
         },
@@ -379,23 +394,15 @@ fn launch_command(
     if let Some(file) = &mcp_config {
         command.arg("--mcp-config").arg(file.path());
     }
-    if let Some(path) = &client.config_dir {
+    command.envs(client.environment.entries());
+    if let Some(path) = &config_dir {
         command.env("CLAUDE_CONFIG_DIR", path);
     }
     command
-        .envs(client.environment.entries())
         .env_remove("CLAUDECODE")
         .env("CLAUDE_CODE_ENTRYPOINT", "ait")
         .env("CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING", "true");
-    // An explicit "Unassigned" must survive a user-level `advisorModel` that `--setting-sources`
-    // would otherwise load; the advisor tool's documented environment switch is the only
-    // process-local way to refuse it.
-    match super::config::advisor(&spec.config) {
-        super::config::Advisor::Disabled => {
-            command.env("CLAUDE_CODE_DISABLE_ADVISOR_TOOL", "1");
-        }
-        super::config::Advisor::Native | super::config::Advisor::Model(_) => {}
-    }
+    apply_advisor_environment(&mut command, &spec.config);
     if let Some((id, resume)) = binding {
         command.arg(format!(
             "--{}={id}",
@@ -429,6 +436,16 @@ fn launch_command(
     #[cfg(unix)]
     command.process_group(0);
     Ok((command, mcp_config))
+}
+
+/// Keep explicit advisor unassignment effective even when user settings enable an advisor.
+fn apply_advisor_environment(command: &mut Command, config: &StoredAgentConfig) {
+    if matches!(
+        super::config::advisor(config),
+        super::config::Advisor::Disabled
+    ) {
+        command.env("CLAUDE_CODE_DISABLE_ADVISOR_TOOL", "1");
+    }
 }
 
 /// Write `document` to a new owner-only temporary file so MCP credentials stay out of `ps`.

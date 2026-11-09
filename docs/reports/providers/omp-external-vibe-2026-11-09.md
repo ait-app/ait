@@ -1,7 +1,8 @@
 # 外部 OMP Vibe 编排验证（2026-11-09）
 
-源码范围：与本报告一同提交的 Rust 外部 OMP Vibe 实现；父提交为
-`8e3f6d2ded29eec059115069dc9264e1181b04b2`。平台：Linux x64，Rust 1.98.1，
+功能实现提交：`e6fee4ab04f7c952cbc85a0b70ad21f3b8f021c7`；随后集成 main
+`8831b7308ecc9e5fc758abb306870501455a19cf`，重新执行下述 OMP 检查。
+平台：Linux x64，Rust 1.98.1，
 用户安装的 `/usr/bin/omp` 18.17.0。架构边界见
 [ADR-223](../../decisions/providers/adr-223-omp-native-host-bridge.md)，操作见
 [Oh My Pi 手册](../../operations/oh-my-pi.md#外部-omp-与-vibe-能力)。
@@ -36,6 +37,16 @@ npx oxlint crates/provider/src/local/omp/vibe/host/extension.ts
 OMP 定向测试 184 通过、21 忽略；其中 5 项外部 Vibe 实装测试用第二条命令显式执行，
 5 项全部通过。其余忽略项属于其他外部能力或真实模型验收，本次未执行。
 Workspace 构建、Clippy、格式和文档链接检查通过。未执行完整 Rust workspace 测试。
+
+## 合入 main 的集成检查
+
+保留两侧 Provider 报告索引。Claude 启动函数拆出 advisor 环境配置，保持上游 Linux
+配置目录规则和 advisor opt-out 同时生效；`advisor` 过滤测试 6 项、Claude 环境测试
+3 项通过。草稿生命周期测试补齐 host、偏好、快照与 toast 依赖模拟，仍运行真实的
+草稿 feature hook；草稿与 feature hook 共 16 项通过。测试未降低并行度或放宽超时。
+
+桌面 daemon-manager 10 项、客户端 protocol/messages 45 项通过；重新构建 SDK，
+移动端及桌面 typecheck、改动文件 lint/格式和文档检查通过。
 
 ## Test coverage
 

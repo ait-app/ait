@@ -83,6 +83,7 @@ fn linked_worktree_policy_allows_common_dir_and_protects_executable_git_state() 
             PathBuf::from("/repo/.git/config"),
             PathBuf::from("/repo/.git/hooks"),
             PathBuf::from("/repo/.git/worktrees/wt/config.worktree"),
+            PathBuf::from("/repo/.git/worktrees/wt/commondir"),
         ]
     );
     assert!(policy.prefixes().is_empty());

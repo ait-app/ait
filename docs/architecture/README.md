@@ -44,7 +44,7 @@ Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端�
 - `metadata` 拥有 Project/Workspace 登记、setup、worktree/recovery/GitHub provisioning RPC；
   本地 Git、Forge 与目录操作由 `filesystem` 通过 model 端口提供。
 - `provider` 拥有原生历史适配、Timeline SQLite 展示索引和 preset catalog；沙箱 Workspace 的写入
-  confinement 由 agent manager 解析，`provider::local::sandbox` 负责生成平台 profile（[ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)）；
+  confinement 由 agent manager 解析，`provider::local::sandbox` 负责生成平台命令（Linux bubblewrap 见 [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)，macOS Seatbelt 见 [ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)）；
   原生 Provider 的认证、工具和会话仍由各原生程序持有，不能合并为一个通用数据库入口。
 
 依赖与数据归属见 [ADR-102](../decisions/providers/adr-102-provider-metadata-independence.md)、
@@ -120,6 +120,9 @@ Desktop 内置 daemon 默认启用 Hub 原生通知，独立 daemon 默认直发
 macOS/Linux Desktop 管理自己启动或验证接管的 daemon，Windows Desktop 只连接远端。
 就绪探测失败保留存活的自有进程供重试；退出时只交接已输出就绪日志的进程，未就绪进程被停止。
 见 [ADR-207](../decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)。
+一个桌面主进程管理多个窗口，Workspace 以主机与工作区身份在新窗口直接打开。
+窗口导航和当前布局独立，保存时按记录合并；聊天草稿在本地输入未变化时同步，附件由主进程聚合所有窗口引用后回收。
+见 [ADR-223](../decisions/clients/adr-223-desktop-workspace-windows.md)。
 桌面内置浏览器对本地 Workspace 直接联网，对远端 Workspace 的所有目标经对应 daemon 出站并解析 DNS，
 见 [ADR-186](../decisions/clients/adr-186-workspace-browser-egress.md)。
 浏览器直连先换取一次性 WebSocket 票据；连接所属订阅在关闭时释放。

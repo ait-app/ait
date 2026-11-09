@@ -2,6 +2,9 @@ use std::os::unix::fs::PermissionsExt;
 
 use super::*;
 
+#[cfg(target_os = "linux")]
+mod sandbox;
+
 async fn fixture(ignore_term: bool) -> (tempfile::TempDir, Transport, u32) {
     let directory = tempfile::tempdir().unwrap();
     let program = directory.path().join("pi");
@@ -151,6 +154,7 @@ async fn shutdown_failure_still_releases_input_and_stderr() {
         transport.child.take().unwrap(),
         transport.group.take(),
         transport.input.clone(),
+        transport.sandboxed,
     )
     .await
     .unwrap()

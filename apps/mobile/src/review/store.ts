@@ -152,7 +152,10 @@ export const useReviewDraftStore = create<ReviewDraftStore>()(
     {
       name: "@paseo:review-draft-store",
       version: STORE_VERSION,
-      storage: createValidatedPersistStorage(AsyncStorage, SerializedReviewDraftStateSchema),
+      storage: createValidatedPersistStorage(AsyncStorage, SerializedReviewDraftStateSchema, {
+        version: STORE_VERSION,
+        mergeRecordFields: ["drafts"],
+      }),
       partialize: (state) => serializeReviewDraftState(state),
       migrate: async (state) => normalizePersistedState(state),
     },

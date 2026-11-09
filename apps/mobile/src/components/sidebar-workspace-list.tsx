@@ -1,3 +1,5 @@
+import { useSidebarProjectPinStore } from "@/stores/sidebar-project-pin-store";
+import { SidebarPinIndicator } from "@/components/sidebar/sidebar-pin-indicator";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   View,
@@ -35,7 +37,16 @@ import { getSidebarRowBackdrop } from "@/components/sidebar/sidebar-row-backdrop
 import { ScrollView as GestureScrollView, type GestureType } from "react-native-gesture-handler";
 import { WorkspaceRenameModal } from "@/components/workspace-rename-modal";
 import { useWorkspaceClipboardActions } from "@/hooks/use-workspace-clipboard-actions";
-import { ExternalLink, Settings, MoreVertical, Plus, Share2, Trash2 } from "lucide-react-native";
+import {
+  ExternalLink,
+  Settings,
+  MoreVertical,
+  Plus,
+  Share2,
+  Trash2,
+  Pin,
+  PinOff,
+} from "lucide-react-native";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import type { PinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 import {
@@ -499,6 +510,9 @@ function ProjectKebabMenu({
   );
 }
 
+const ThemedProjectPin = withUnistyles(Pin);
+const ThemedProjectPinOff = withUnistyles(PinOff);
+
 type ProjectMenuSurface = "context" | "dropdown";
 
 function ProjectMenuItem({
@@ -533,6 +547,11 @@ function ProjectMenuItems({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
+  const isPinned = useSidebarProjectPinStore((state) =>
+    state.pinnedProjectKeys.includes(projectViewKey),
+  );
+  const toggleProjectPin = useSidebarProjectPinStore((state) => state.toggleProjectPin);
+  const PinIcon = isPinned ? ThemedProjectPinOff : ThemedProjectPin;
   const handleOpenProjectSettings = useCallback(() => {
     if (!settingsTarget) return;
     router.navigate(buildProjectSettingsRoute(settingsTarget.serverId, settingsTarget.projectId));
@@ -551,6 +570,14 @@ function ProjectMenuItems({
 
   return (
     <>
+      <ProjectMenuItem
+        surface={surface}
+        testID={`sidebar-project-menu-pin-${projectViewKey}`}
+        leading={<PinIcon size={14} uniProps={foregroundMutedColorMapping} />}
+        onSelect={() => toggleProjectPin(projectViewKey)}
+      >
+        {t(isPinned ? "sidebar.workspace.actions.unpin" : "sidebar.workspace.actions.pin")}
+      </ProjectMenuItem>
       {settingsTarget ? (
         <ProjectMenuItem
           surface={surface}
@@ -869,6 +896,9 @@ function ProjectHeaderRow({
   onRemoveProject,
   removeProjectStatus = "idle",
 }: ProjectHeaderRowProps) {
+  const isPinned = useSidebarProjectPinStore((state) =>
+    state.pinnedProjectKeys.includes(project.viewKey),
+  );
   const {
     isPressed,
     isHighlighted,
@@ -943,6 +973,9 @@ function ProjectHeaderRow({
           <Text style={styles.projectTitle} numberOfLines={1}>
             {displayName}
           </Text>
+          {isPinned ? (
+            <SidebarPinIndicator testID={`sidebar-project-pin-indicator-${project.viewKey}`} />
+          ) : null}
         </View>
       </View>
       <ProjectRowTrailingActions

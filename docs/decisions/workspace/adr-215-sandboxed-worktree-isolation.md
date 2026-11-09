@@ -2,6 +2,7 @@
 
 - 状态：已接受
 - 日期：2026-11-06
+- Linux 扩展：[ADR-223](adr-223-linux-worktree-sandbox.md) 自 2026-11-08 起补充 Linux 后端；Linux 差异与部署要求以该 ADR 为准。
 - 关系：在 [ADR-060](adr-060-workspace-create-worktree.md) 的 Paseo 自有 worktree 之上增加隔离级别；
   Provider 测试归属沿用 [ADR-179](../providers/adr-179-provider-owned-tests.md)。
 
@@ -32,7 +33,7 @@
 4. 客户端通过 `workspace.create.request` 的 worktree source 传 `sandbox: "worktree_writes"`，与 MCP
    走同一条路径。旧 daemon 会忽略未知字段并创建不受限的 worktree，所以客户端只在 server info
    声明 `workspace-sandbox-v1` 时提供“沙箱化 Worktree”选项；该 feature 只在装有 metadata 的
-   macOS daemon 上声明。记住的选项在不支持的主机上降级为普通 worktree，触发按钮显示实际级别；
+   macOS/Linux daemon 上声明。记住的选项在不支持的主机上降级为普通 worktree，触发按钮显示实际级别；
    Schedule 尚不能请求沙箱，同样以普通 worktree 作为初始值。
 
 ### 分层
@@ -46,8 +47,7 @@
   `AgentClient::supports_write_confinement` 时返回 `ConfinementUnsupported`，失败关闭；Registry
   读取失败同样拒绝启动。
 - **适配器**（`provider::local::sandbox`）：解析真实路径和 Git 目录，生成平台 profile 并包装命令。
-  `sandbox::command` 是唯一的平台接缝。macOS 后端是 `sandbox::seatbelt`；其他平台的后端拒绝启动，
-  Linux bubblewrap 只需实现同一个 `WritePolicy` 的渲染。
+  `sandbox::command` 是唯一的平台接缝。macOS 后端是 `sandbox::seatbelt`，Linux 后端是 `sandbox::linux`（bubblewrap）；其他平台拒绝启动。
 
 ### macOS 机制
 
@@ -75,10 +75,12 @@ Seatbelt 按最后匹配的规则生效。不采用全部默认拒绝，因为�
 含 `..` 的状态路径直接拒绝。
 
 以下路径即使位于允许范围内也保持只读，因为之后不受限的进程会执行或遵从其中内容：worktree 的
-`.git` 指针文件、公共 Git 目录的 `config` 和 `hooks`、私有 gitdir 的 `config.worktree`、Claude 的
+`.git` 指针文件、公共 Git 目录的 `config` 和 `hooks`、私有 gitdir 的 `config.worktree` 和 `commondir`、Claude 的
 `settings.json` 与 `plugins`、Codex 的 `config.toml`、Pi 的 `settings.json`、OpenCode 的
 `opencode.json`／`opencode.jsonc`／`config.json`、MiniMax 的 `config.yaml`、`bin`、`plugins`、`shims`。
 因此 `git config`、`git push -u`、`git branch --set-upstream-to` 这类写配置的命令会失败。
+
+2026-11-08 的 Linux review 发现 `commondir` 曾遗漏保护：Agent 可以改写它，使后续启动把外部目录当作公共 Git 目录放行。共同策略现将该指针列为只读，包括拒绝创建原本缺失的指针；Linux 对缺失指针的挂载初始化见 ADR-223。
 
 Provider 状态目录没有改到每个 Workspace 独立的位置：认证信息就存放在这些目录里（Claude 在 macOS
 上的钥匙串条目还和配置目录绑定），恢复会话和读取原生历史也依赖它们，改到别处会让沙箱 Workspace
@@ -98,10 +100,10 @@ Unix socket：`allow default` 下 connect 不受影响；在允许清单以外�
   只读模式在这里不再生效。
 - Claude Code 通过 `--settings` 合并 `sandbox.enabled: false`，其他 sandbox 设置保留。
 
-### 非 macOS
+### 不支持的平台
 
-带 sandbox 的 worktree 创建请求会在任何 Git 操作之前被 `metadata` 拒绝，返回
-“Sandboxed worktree isolation requires macOS”。如果其他平台上已有沙箱记录，启动 Agent 时适配器
+macOS/Linux 以外的平台，带 sandbox 的 worktree 创建请求会在任何 Git 操作之前被 `metadata` 拒绝，返回
+“Sandboxed worktree isolation requires macOS or Linux”。如果 macOS/Linux 以外的平台上已有沙箱记录，启动 Agent 时适配器
 返回 `Unavailable` 并记录错误日志，不会退化为不受限运行。
 
 ### Provider 覆盖范围

@@ -228,7 +228,7 @@ pub(super) fn modes() -> Vec<Value> {
 /// Resolve native approval, sandbox mode and turn sandbox policy for `config`.
 ///
 /// A `confined` process already runs under the Workspace's OS write sandbox, which refuses
-/// to apply Codex's nested Seatbelt profile; its tool commands therefore run with full
+/// nested Seatbelt profiles or user namespaces; its tool commands therefore run with full
 /// access inside that outer boundary instead of failing.
 pub(super) fn policy(config: &StoredAgentConfig, confined: bool) -> (Value, &str, Value) {
     let (approval, sandbox) = match config.mode_id.as_deref().unwrap_or("read-only") {

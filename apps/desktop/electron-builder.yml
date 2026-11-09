@@ -94,6 +94,8 @@ deb:
   afterInstall: scripts/linux-sandbox/after-install.tpl
   afterRemove: scripts/linux-sandbox/after-remove.tpl
   depends:
+    # Workspace write confinement uses bwrap --disable-userns (added in 0.8.0).
+    - bubblewrap (>= 0.8.0)
     - libgtk-3-0
     - libnotify4
     - libnss3
@@ -112,6 +114,7 @@ rpm:
   afterInstall: scripts/linux-sandbox/after-install.tpl
   afterRemove: scripts/linux-sandbox/after-remove.tpl
   depends:
+    - bubblewrap >= 0.8.0
     - gtk3
     - libnotify
     - nss

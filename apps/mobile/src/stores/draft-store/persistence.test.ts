@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { PersistStorage, StorageValue } from "zustand/middleware";
 import {
   createDraftPersistStorage,
@@ -37,7 +37,7 @@ function createDraftPersistence() {
       drafts.setItem("drafts", { state: { text } });
     },
     remove() {
-      drafts.removeItem("drafts");
+      return drafts.removeItem("drafts");
     },
     flush() {
       return drafts.flush();
@@ -57,7 +57,7 @@ function createDraftPersistence() {
 }
 
 describe("draft persistence", () => {
-  it("checkpoints the first change and the latest change in each interval", () => {
+  it("checkpoints the first change and the latest change in each interval", async () => {
     const drafts = createDraftPersistence();
 
     drafts.save("a");
@@ -69,31 +69,34 @@ describe("draft persistence", () => {
     expect(drafts.text()).toBe("a");
 
     drafts.advance(1);
+    await drafts.flush();
     expect(drafts.text()).toBe("abc");
   });
 
-  it("does not restore a pending draft after storage is cleared", () => {
+  it("does not restore a pending draft after storage is cleared", async () => {
     const drafts = createDraftPersistence();
 
     drafts.save("first checkpoint");
     drafts.save("pending checkpoint");
-    drafts.remove();
+    await drafts.remove();
     drafts.advance(DRAFT_PERSIST_INTERVAL_MS);
 
     expect(drafts.text()).toBeNull();
   });
 
-  it("continues checkpointing the latest change across consecutive intervals", () => {
+  it("continues checkpointing the latest change across consecutive intervals", async () => {
     const drafts = createDraftPersistence();
 
     drafts.save("first");
     drafts.save("first interval");
     drafts.advance(DRAFT_PERSIST_INTERVAL_MS);
+    await drafts.flush();
     expect(drafts.text()).toBe("first interval");
 
     drafts.save("second");
     drafts.save("second interval");
     drafts.advance(DRAFT_PERSIST_INTERVAL_MS);
+    await drafts.flush();
     expect(drafts.text()).toBe("second interval");
   });
 
@@ -105,5 +108,70 @@ describe("draft persistence", () => {
     await drafts.flush();
 
     expect(drafts.text()).toBe("pending checkpoint");
+  });
+
+  it("waits for a checkpoint already in flight before reporting a successful flush", async () => {
+    let finish!: () => void;
+    const drafts = createDraftPersistStorage<DraftState>({
+      getItem: () => null,
+      removeItem: () => {},
+      setItem: () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    });
+    drafts.setItem("drafts", { state: { text: "pending" } });
+    const settled = vi.fn();
+    const flush = drafts.flush().then(settled);
+    await Promise.resolve();
+    expect(settled).not.toHaveBeenCalled();
+    finish();
+    await flush;
+    expect(settled).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains the latest checkpoint for retry after a failed write", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    let attempts = 0;
+    let saved = "";
+    const drafts = createDraftPersistStorage<DraftState>({
+      getItem: () => null,
+      removeItem: () => {},
+      setItem: (_name, value) => {
+        if (++attempts <= 2) throw new Error("disk full");
+        saved = value.state.text;
+      },
+    });
+    try {
+      await drafts.setItem("drafts", { state: { text: "unsaved" } });
+      await expect(drafts.flush()).rejects.toThrow("disk full");
+      await drafts.flush();
+      expect(saved).toBe("unsaved");
+    } finally {
+      warning.mockRestore();
+    }
+  });
+
+  it("serializes a clear after queued saves so a delayed save cannot restore sent input", async () => {
+    let finish!: () => void;
+    let saved: string | null = null;
+    const drafts = createDraftPersistStorage<DraftState>({
+      getItem: () => null,
+      removeItem: () => {
+        saved = null;
+      },
+      setItem: async (_name, value) => {
+        await new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+        saved = value.state.text;
+      },
+    });
+    drafts.setItem("drafts", { state: { text: "before sending" } });
+    const clear = drafts.removeItem("drafts");
+    finish();
+    await clear;
+    await drafts.flush();
+    expect(saved).toBeNull();
   });
 });

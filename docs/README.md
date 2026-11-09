@@ -29,7 +29,7 @@
 - [Pi 扩展通知](decisions/providers/adr-220-pi-extension-notifications.md)：会话时间线持久化、通知级别与有界的尽力交付。
 - [Pi 推理偏好](decisions/providers/adr-211-pi-next-turn-reasoning-controls.md)：下一条 prompt 前应用模型与推理级别，区分请求偏好和原生运行事实。
 - [MCP 编排接口](operations/mcp.md)：HTTP、可选 Unix socket、认证和工具发现。
-- [沙箱化 Worktree](decisions/workspace/adr-215-sandboxed-worktree-isolation.md)：macOS 上用 Seatbelt 把 Agent 进程的写入限制在 worktree 内。
+- [沙箱化 Worktree](decisions/workspace/adr-215-sandboxed-worktree-isolation.md)：macOS 使用 Seatbelt；[Linux 使用 bubblewrap](decisions/workspace/adr-223-linux-worktree-sandbox.md)，说明 Agent 写入限制、Git 指针保护和共享 inode 等边界。
 - [Agent Skill 分发](operations/agent-skills.md)：内置技能、更新、选择和卸载。
 - [OMP 模型角色与原生操作](operations/oh-my-pi.md)：角色配置、异步模型目录及官方已导出操作；
   [原生 UI 与拥有者边界](decisions/providers/adr-218-native-ui-and-actions.md)、[验收报告](reports/providers/native-delivery-and-omp-roles-2026-11-02.md)。
@@ -56,6 +56,7 @@
   `~/.ait-server-desktop`、`~/.ait-server`，都不存在时创建 `~/.ait`，不移动旧目录。
 - [桌面进程交接](decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)：退出交接要求已收到就绪日志；
   [MCP Unix socket](decisions/daemon/adr-203-mcp-unix-socket.md)要求绑定前验证私有父目录。
+- [桌面多窗口](decisions/clients/adr-223-desktop-workspace-windows.md)：Workspace 精确路由、独立窗口布局与共享草稿、附件引用的保存边界。
 - [移动端 E2E](../apps/mobile/e2e/README.md)、[Maestro](../apps/mobile/maestro/README.md)。
 - [品牌资源](../assets/brand/README.md)、[Paseo 来源与许可证](../paseo/README.md)。
 

@@ -83,6 +83,7 @@
 - [原生附件、ZIP 交付与 OMP 模型角色](providers/native-delivery-and-omp-roles-2026-11-02.md)
 - [DSH / OpenCode 原生命令与能力适配](providers/dsh-opencode-capability-adaptation-2026-10-30.md)
 - [OMP 命令、参数补全与交互兼容验证](providers/omp-commands-and-completion-2026-10-30.md)
+- [Linux 沙箱容器验证与 PR review 修复（2026-11-08）](providers/linux-sandbox-container-2026-11-08.md)
 
 - [性能交接报告修复验证（2026-11-03）](providers/performance-handoff-fixes-2026-11-03.md)
 

@@ -51,9 +51,28 @@ export function createDraftPersistStorage<T>(
     return undefined;
   }
 
-  let pending: { name: string; value: Parameters<typeof storage.setItem>[1] } | null = null;
+  let pending: {
+    revision: number;
+    name: string;
+    value: Parameters<typeof storage.setItem>[1];
+  } | null = null;
   let timer: unknown = null;
   let lastWriteAt = -Infinity;
+  let revision = 0;
+  let inFlight: Promise<void> | null = null;
+
+  const enqueue = (operation: () => Promise<void>): Promise<void> => {
+    const result = inFlight ? inFlight.catch(() => undefined).then(operation) : operation();
+    inFlight = result;
+    const finish = () => {
+      if (inFlight === result) inFlight = null;
+    };
+    void result.then(finish, finish);
+    return result;
+  };
+  const report = (error: unknown) => {
+    console.warn("[DraftStore] Failed to persist draft checkpoint", error);
+  };
 
   const cancelTimer = () => {
     if (timer !== null) {
@@ -61,38 +80,44 @@ export function createDraftPersistStorage<T>(
       timer = null;
     }
   };
-  const flush = async (): Promise<void> => {
+  const flush = (): Promise<void> => {
     cancelTimer();
     const write = pending;
     pending = null;
     if (!write) {
-      return;
+      return inFlight ?? Promise.resolve();
     }
     lastWriteAt = scheduler.now();
-    try {
-      await storage.setItem(write.name, write.value);
-    } catch (error) {
-      console.warn("[DraftStore] Failed to persist draft checkpoint", error);
-    }
+    return enqueue(async () => {
+      try {
+        await storage.setItem(write.name, write.value);
+      } catch (error) {
+        if (revision === write.revision) pending = write;
+        throw error;
+      }
+    });
   };
 
   return {
     getItem: (name) => storage.getItem(name),
     setItem: (name, value) => {
-      pending = { name, value };
+      pending = { revision: ++revision, name, value };
       const delay = DRAFT_PERSIST_INTERVAL_MS - (scheduler.now() - lastWriteAt);
       if (delay <= 0) {
-        return flush();
+        return flush().catch(report);
       }
       timer ??= scheduler.schedule(() => {
-        void flush();
+        void flush().catch(report);
       }, delay);
     },
     removeItem: (name) => {
       cancelTimer();
       pending = null;
+      revision += 1;
       lastWriteAt = scheduler.now();
-      return storage.removeItem(name);
+      return enqueue(async () => {
+        await storage.removeItem(name);
+      });
     },
     flush,
   };

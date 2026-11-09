@@ -298,6 +298,19 @@ describe("Ait host capabilities", () => {
       directorySubscriptions: false,
     });
   });
+
+  it("enables workspace pinning only when the host implements the method", () => {
+    for (const supported of [false, true]) {
+      const info = serverInfo(
+        { server_id: "ait" },
+        new Set(supported ? ["workspace.pin.set.request"] : []),
+      );
+      expect(
+        parseServerInfoStatusPayload(object(object(info).payload))?.features?.workspacePinning,
+      ).toBe(supported);
+    }
+  });
+
   it("enables Workspace target reads only when the host implements the method", () => {
     for (const supported of [false, true]) {
       const info = serverInfo(

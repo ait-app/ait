@@ -21,7 +21,11 @@ import {
   resolveEffectiveComposerThinkingOptionId,
   type ProviderSelectionState,
 } from "@/provider-selection/provider-selection";
-import { useDraftStore } from "@/stores/draft-store";
+import {
+  registerDraftEditorPublication,
+  subscribeToSharedDraftState,
+  useDraftStore,
+} from "@/stores/draft-store";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { useShallow } from "zustand/shallow";
 import type { ComposerTextSource } from "@/composer/text-source";
@@ -157,6 +161,19 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
         useDraftStore.getState().editDraftText({ draftKey, text: nextText });
       }),
     [draftKey],
+  );
+
+  useEffect(() => registerDraftEditorPublication(() => textPublication.flush()), [textPublication]);
+  useEffect(
+    () =>
+      subscribeToSharedDraftState((previous, next) => {
+        const before = previous.drafts[draftKey];
+        const after = next.drafts[draftKey];
+        const previousText = before?.lifecycle === "active" ? before.input.text : "";
+        const nextText = after?.lifecycle === "active" ? after.input.text : "";
+        if (previousText !== nextText) publishTextReplacement("replace", nextText);
+      }),
+    [draftKey, publishTextReplacement],
   );
 
   const editText = useCallback(

@@ -92,7 +92,7 @@ import {
   useHostRuntimeIsConnected,
   useHosts,
 } from "@/runtime/host-runtime";
-import { flushDraftPersistStorage } from "@/stores/draft-store";
+import { flushDraftPersistStorage, observeSharedDraftState } from "@/stores/draft-store";
 import { usePanelStore } from "@/stores/panel-store";
 import { useSessionStore } from "@/stores/session-store";
 import { WorkspaceLayoutModePublisher } from "@/workspace-tabs/layout-mode-publisher";
@@ -980,12 +980,16 @@ function RootAppTree() {
 export default function RootLayout() {
   useEffect(() => installWebScrollbarStyles(), []);
   useEffect(() => {
+    const stopDraftSync = observeSharedDraftState();
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState !== "active") {
         void flushDraftPersistStorage();
       }
     });
-    return () => subscription.remove();
+    return () => {
+      stopDraftSync();
+      subscription.remove();
+    };
   }, []);
 
   return (

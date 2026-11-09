@@ -158,8 +158,8 @@ Agent 调用可发送 `X-Ait-Agent-Id: <agent-id>`，继承调用者 cwd 和 Wor
 传入另一个 `workspaceId` 可以将子 Agent 放在另一个 Workspace。需要隔离时先
 `create_workspace`，选择 `isolation: "worktree"`，再使用返回的 Workspace ID。
 `mode` 支持 `branch-off`、`checkout-branch` 和 `checkout-pr`。`isolation: "sandboxed-worktree"`
-接受同样的参数，并在 macOS 上把该 Workspace 中所有 Agent 进程的写入限制在 worktree 内，
-详见 [ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)；其他平台会拒绝创建。
+接受同样的参数，并在 macOS/Linux 上限制该 Workspace 中受支持 Agent 进程的写入范围，
+详见 [ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)；Linux 要求安装 bubblewrap 并允许非特权 user namespace，详见 [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)；macOS/Linux 以外的平台会拒绝创建。
 
 脚本位于 Workspace 的 `ait.json`，按 `scriptName` 启停。终端 `keys` 可以是 `Enter`、`C-c`
 等令牌；`literal: true` 发送原样文本。

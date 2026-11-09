@@ -1,3 +1,4 @@
+import { SidebarPinIndicator } from "@/components/sidebar/sidebar-pin-indicator";
 import { memo, useMemo, useState, type ReactNode } from "react";
 import { Text, View, type ViewProps, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -27,7 +28,7 @@ import {
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { StatusRing } from "@/components/status-ring";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
-import { TrailingActionScrim } from "@/components/ui/trailing-action-scrim";
+import { SCRIM_WIDTH, TrailingActionScrim } from "@/components/ui/trailing-action-scrim";
 import { useWorkspaceLabelDefinitions } from "@/workspace-labels";
 import { useSidebarRowHover } from "./use-sidebar-row-hover";
 
@@ -147,10 +148,24 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
         )}
         <View style={styles.workspaceContentColumn}>
           <View style={styles.workspaceTitleRow}>
-            <Text style={workspaceBranchTextStyle} numberOfLines={1}>
-              {workspaceLabel}
-            </Text>
-            <View style={sidebarWorkspaceRowStyles.rowRight}>{children}</View>
+            <View style={styles.workspaceTitleGroup}>
+              <Text style={workspaceBranchTextStyle} numberOfLines={1}>
+                {workspaceLabel}
+              </Text>
+              {workspace.pinnedAt != null ? (
+                <SidebarPinIndicator
+                  testID={`sidebar-workspace-pin-indicator-${workspace.workspaceKey}`}
+                />
+              ) : null}
+            </View>
+            <View
+              style={[
+                sidebarWorkspaceRowStyles.rowRight,
+                workspace.pinnedAt != null && styles.pinnedRowActions,
+              ]}
+            >
+              {children}
+            </View>
           </View>
           <WorkspaceMetaRow
             currentBranch={workspace.currentBranch}
@@ -464,6 +479,18 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "space-between",
     gap: theme.spacing[2],
   },
+  workspaceTitleGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    flex: 1,
+    minWidth: 0,
+  },
+  pinnedRowActions: {
+    // Keep the hover menu and its fading background clear of the pin.
+    minWidth: SCRIM_WIDTH,
+    justifyContent: "flex-end",
+  },
   shortcutBadgeOverlay: {
     position: "absolute",
     top: 1,
@@ -508,7 +535,7 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: "400",
     lineHeight: 20,
     opacity: 0.76,
-    flex: 1,
+    flexShrink: 1,
     minWidth: 0,
   },
   workspaceBranchTextCreating: {

@@ -3,14 +3,7 @@ import { app, ipcMain, powerMonitor } from "electron";
 import log from "electron-log/main";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import {
-  copyAttachmentFileToManagedStorage,
-  deleteManagedAttachmentFile,
-  garbageCollectManagedAttachmentFiles,
-  readManagedFileBase64,
-  writeAttachmentBase64,
-  writeAttachmentBytes,
-} from "../features/attachments.js";
+import { createManagedAttachmentFileCoordinator } from "../features/attachments.js";
 import {
   checkForAppUpdate,
   downloadAndInstallUpdate,
@@ -260,6 +253,7 @@ async function resolveRequestedReleaseChannel(
 // ---------------------------------------------------------------------------
 
 export function createDaemonCommandHandlers(): Record<string, DesktopCommandHandler> {
+  const attachments = createManagedAttachmentFileCoordinator();
   return {
     ...createDesktopSettingsCommandHandlers({ settingsStore: getDesktopSettingsStore() }),
     desktop_get_runtime_info: () => ({
@@ -286,12 +280,13 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
     desktop_update_diagnostics: () => getDesktopUpdaterDiagnostics(),
     desktop_get_system_idle_time: () => powerMonitor.getSystemIdleTime() * 1000,
     cli_daemon_status: () => getCliDaemonStatus(),
-    write_attachment_base64: (args) => writeAttachmentBase64(args ?? {}),
-    write_attachment_bytes: (args) => writeAttachmentBytes(args ?? {}),
-    copy_attachment_file: (args) => copyAttachmentFileToManagedStorage(args ?? {}),
-    read_file_base64: (args) => readManagedFileBase64(args ?? {}),
-    delete_attachment_file: (args) => deleteManagedAttachmentFile(args ?? {}),
-    garbage_collect_attachment_files: (args) => garbageCollectManagedAttachmentFiles(args ?? {}),
+    write_attachment_base64: (args, event) => attachments.writeBase64(args ?? {}, event?.sender),
+    write_attachment_bytes: (args, event) => attachments.writeBytes(args ?? {}, event?.sender),
+    copy_attachment_file: (args, event) => attachments.copyFile(args ?? {}, event?.sender),
+    read_file_base64: (args, event) => attachments.readBase64(args ?? {}, event?.sender),
+    delete_attachment_file: (args, event) => attachments.deleteFile(args ?? {}, event?.sender),
+    garbage_collect_attachment_files: (args, event) =>
+      attachments.garbageCollect(args ?? {}, event?.sender),
     open_local_daemon_transport: async (args, event) => {
       const target = args?.target as { transportType?: string; url?: string } | undefined;
       const token =

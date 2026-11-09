@@ -51,6 +51,18 @@ From the repository root, run `npm ci` and `npm run dev:desktop`. The launcher b
 shared packages, the daemon and Electron main process before starting the app.
 See the [root development guide](../../README.md#本地开发) for prerequisites.
 
+### Multiple windows
+
+Use File → New Window (`Cmd/Ctrl+Shift+N`) to open another window. In the sidebar,
+right-click a Workspace or use its three-dot menu and choose “Open in new window”
+to open that Workspace on the same Host. Windows share the account and existing daemon;
+their current navigation and layouts remain independent. Saved layouts merge by Workspace,
+and shared chat drafts refresh after another window saves or the window gains focus.
+See [the window state decision](../../docs/decisions/clients/adr-223-desktop-workspace-windows.md).
+
+After building desktop main, `node apps/desktop/e2e/multi-window.e2e.mjs` checks native
+window creation, Workspace routing and concurrent persistence in an isolated profile.
+
 ### Settings regression against Rust
 
 With the desktop development server running, run:

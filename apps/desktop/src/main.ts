@@ -95,6 +95,7 @@ import { getDesktopSettingsStore } from "./settings/desktop-settings-electron.js
 import { clampWindowStateToWorkAreas, createWindowStateStore } from "./settings/window-state.js";
 import { resolveDesktopWindowChromeMode, windowChromeModeArgument } from "./window/chrome.js";
 import { setupDarwinCompositorWatchdog } from "./window/compositor-watchdog/index.js";
+import { resolveNewWindowOptions } from "./window/open-new-window.js";
 import {
   createDesktopWindowOwner,
   type DesktopWindowOwner,
@@ -1021,16 +1022,12 @@ async function bootstrap(environmentReady: Promise<void>): Promise<void> {
   registerEditorTargetHandlers({ ipc: afterLoginShellEnv });
   registerBrowserAutomationIpc();
 
-  // In-app "Open in new window": opens a window that lands on the given project
-  // via the same open-project flow as a CLI launch (no move, no ownership).
-  ipcMain.handle("paseo:window:openNew", async (_event, options?: unknown) => {
-    const pendingPath =
-      options && typeof options === "object" && "pendingOpenProjectPath" in options
-        ? (options as { pendingOpenProjectPath?: unknown }).pendingOpenProjectPath
-        : null;
-    await desktopWindowOwner.openAdditional({
-      pendingProjectPath: typeof pendingPath === "string" ? pendingPath : null,
-    });
+  // Workspaces retain their host identity; project paths use the existing open-project flow.
+  ipcMain.handle("paseo:window:openNew", async (event, options?: unknown) => {
+    if (event.senderFrame !== event.sender.mainFrame || !isAccountAppWindow(event.sender)) {
+      throw new Error("Opening a window requires an AIT application window");
+    }
+    await desktopWindowOwner.openAdditional(resolveNewWindowOptions(options));
   });
 
   app.on("activate", () => {

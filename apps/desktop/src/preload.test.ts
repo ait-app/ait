@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   bridge: null as null | {
     invoke(command: string, args?: Record<string, unknown>): Promise<unknown>;
+    window: {
+      openNew(options?: { workspace?: { serverId: string; workspaceId: string } }): Promise<void>;
+    };
   },
   invoke: vi.fn(),
 }));
@@ -32,5 +35,13 @@ describe("desktop command bridge", () => {
       node_session_id: "lease",
     });
     expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith("ait:invoke", "account_host_sync", args);
+  });
+
+  it("forwards the workspace identity when opening another application window", async () => {
+    await import("./preload.js");
+    const options = { workspace: { serverId: "remote-host", workspaceId: "workspace-42" } };
+    mocks.invoke.mockResolvedValue(undefined);
+    await mocks.bridge?.window.openNew(options);
+    expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith("paseo:window:openNew", options);
   });
 });

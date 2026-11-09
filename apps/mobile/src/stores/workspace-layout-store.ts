@@ -2174,6 +2174,16 @@ export function createWorkspaceLayoutStore(
         version: WORKSPACE_LAYOUT_PERSIST_VERSION,
         storage: createValidatedPersistStorage(storage, WorkspaceLayoutPersistedStateSchema, {
           skipUnchanged: true,
+          version: WORKSPACE_LAYOUT_PERSIST_VERSION,
+          mergeRecordFields: [
+            "layoutByWorkspace",
+            "pinnedAgentIdsByWorkspace",
+            "splitSizesByWorkspace",
+            "explorerSidebarWidthByWorkspace",
+            "explorerPaneIdByWorkspace",
+            "sidePaneIdByWorkspace",
+            "pullRequestTabAutoOpenedByWorkspace",
+          ],
         }),
         migrate: (persistedState, version) =>
           migrateWorkspaceLayoutPersistedState(persistedState, version, ids),

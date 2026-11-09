@@ -1,3 +1,4 @@
+import { useSidebarProjectPinStore } from "@/stores/sidebar-project-pin-store";
 import React, { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import {
   useSidebarWorkspacesList,
@@ -66,6 +67,7 @@ export function SidebarModelProvider({
     (state) => state.collapsedWorkspaceGroupKeys,
   );
   const pinnedCollapsed = useSidebarCollapsedSectionsStore((state) => state.collapsedPinned);
+  const pinnedProjectKeys = useSidebarProjectPinStore((state) => state.pinnedProjectKeys);
   const toggleProjectCollapsed = useSidebarCollapsedSectionsStore(
     (state) => state.toggleProjectCollapsed,
   );
@@ -141,6 +143,7 @@ export function SidebarModelProvider({
     () => ({
       projects: filteredProjects,
       pinnedKeys,
+      pinnedProjectKeys,
       workspaceEntriesByKey: filteredWorkspaceEntriesByKey,
       projectNamesByViewKey: list.projectNamesByViewKey,
       groupMode,
@@ -156,6 +159,7 @@ export function SidebarModelProvider({
       filteredProjects,
       pinnedCollapsed,
       pinnedKeys,
+      pinnedProjectKeys,
       filteredWorkspaceEntriesByKey,
     ],
   );

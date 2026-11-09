@@ -24,7 +24,7 @@ pub mod provisioning;
 
 /// Business rejection for sandboxed worktrees on platforms without an OS write sandbox.
 const SANDBOX_UNSUPPORTED: &str =
-    "Sandboxed worktree isolation requires macOS; this host cannot confine Agent writes";
+    "Sandboxed worktree isolation requires macOS or Linux; this host cannot confine Agent writes";
 
 /// Create action independent of the transport schema.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -252,7 +252,7 @@ impl Worktrees {
         input: &CreateWorktree,
         timestamp: &str,
     ) -> Result<CreatedWorkspace, WorktreesError> {
-        if input.sandbox.is_some() && !cfg!(target_os = "macos") {
+        if input.sandbox.is_some() && !cfg!(any(target_os = "macos", target_os = "linux")) {
             return Err(WorktreeError::Invalid(SANDBOX_UNSUPPORTED.to_owned()).into());
         }
         if let Some(workspace_id) = &input.workspace_id
