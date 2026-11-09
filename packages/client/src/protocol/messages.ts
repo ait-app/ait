@@ -138,6 +138,7 @@ export function serverInfo(
       projectList: guestScope !== "workspace" && has("project.list.request"),
       stableProjectIdentity: has("project.list.request") && has("project.add.request"),
       workspaceMultiplicity: has("workspace.list.request"),
+      workspacePinning: has("workspace.pin.set.request"),
       workspaceTargetRead: has("workspace.get.request"),
       projectCreateDirectory: has("project.create_directory.request"),
       projectGithubClone: has("project.github.clone.request"),

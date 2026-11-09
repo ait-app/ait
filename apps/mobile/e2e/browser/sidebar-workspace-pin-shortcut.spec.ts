@@ -18,6 +18,10 @@ function workspaceRow(page: Page, workspaceId: string) {
   return page.getByTestId(`sidebar-workspace-row-${getServerId()}:${workspaceId}`);
 }
 
+function pinIndicator(page: Page, workspaceId: string) {
+  return page.getByTestId(`sidebar-workspace-pin-indicator-${getServerId()}:${workspaceId}`);
+}
+
 function pinnedSection(page: Page) {
   return page.getByTestId("sidebar-pinned-section");
 }
@@ -160,18 +164,18 @@ test.describe("Pin workspace shortcut", () => {
 
       await test.step("sends one RPC for each pin transition", async () => {
         await page.keyboard.press(PIN_SHORTCUT);
-        await expect(pinnedSection(page)).toBeVisible({ timeout: 10_000 });
+        await expect(pinIndicator(page, workspace.workspaceId)).toBeVisible({ timeout: 10_000 });
         expect(gate.sentCount()).toBe(1);
 
         await page.keyboard.press(PIN_SHORTCUT);
-        await expect(pinnedSection(page)).toHaveCount(0, { timeout: 10_000 });
+        await expect(pinIndicator(page, workspace.workspaceId)).toHaveCount(0, { timeout: 10_000 });
         expect(gate.sentCount()).toBe(2);
         await expect(workspaceRow(page, workspace.workspaceId)).toHaveCount(1);
       });
 
       await test.step("keeps the pinned project available to workspace creation", async () => {
         await page.keyboard.press(PIN_SHORTCUT);
-        await expect(pinnedSection(page)).toBeVisible({ timeout: 10_000 });
+        await expect(pinIndicator(page, workspace.workspaceId)).toBeVisible({ timeout: 10_000 });
         expect(gate.sentCount()).toBe(3);
 
         await openNewWorkspaceComposer(page, workspace);
@@ -192,18 +196,19 @@ test.describe("Pin workspace shortcut", () => {
 
       await page.keyboard.press(PIN_SHORTCUT);
 
-      await expect(pinnedSection(page)).toBeVisible({ timeout: 10_000 });
-      await expect(
-        pinnedSection(page).getByTestId(
-          `sidebar-workspace-row-${getServerId()}:${workspace.workspaceId}`,
-        ),
-      ).toBeVisible();
+      await expect(workspaceRow(page, workspace.workspaceId)).toHaveCount(0);
+      await page
+        .locator('[data-testid^="sidebar-project-row-"]')
+        .filter({ hasText: workspace.projectDisplayName })
+        .click();
+      await expect(pinIndicator(page, workspace.workspaceId)).toBeVisible({ timeout: 10_000 });
+      await expect(pinnedSection(page)).toHaveCount(0);
     } finally {
       await workspace.cleanup();
     }
   });
 
-  test("unpins the active workspace while the Pinned section is collapsed", async ({ page }) => {
+  test("unpins the active workspace while its project is collapsed", async ({ page }) => {
     const workspace = await seedWorkspace({ repoPrefix: "pin-shortcut-unpin-" });
 
     try {
@@ -211,14 +216,18 @@ test.describe("Pin workspace shortcut", () => {
       await openWorkspace(page, workspace.workspaceId);
 
       await page.keyboard.press(PIN_SHORTCUT);
-      await expect(pinnedSection(page)).toBeVisible({ timeout: 10_000 });
+      await expect(pinIndicator(page, workspace.workspaceId)).toBeVisible({ timeout: 10_000 });
 
-      await page.getByTestId("sidebar-pinned-section-header").click();
+      await collapseProjectSection(page, workspace);
       await expect(workspaceRow(page, workspace.workspaceId)).toHaveCount(0, { timeout: 10_000 });
 
       await page.keyboard.press(PIN_SHORTCUT);
-
-      await expect(pinnedSection(page)).toHaveCount(0, { timeout: 10_000 });
+      await page
+        .locator('[data-testid^="sidebar-project-row-"]')
+        .filter({ hasText: workspace.projectDisplayName })
+        .click();
+      await expect(workspaceRow(page, workspace.workspaceId)).toBeVisible();
+      await expect(pinIndicator(page, workspace.workspaceId)).toHaveCount(0, { timeout: 10_000 });
     } finally {
       await workspace.cleanup();
     }
@@ -262,14 +271,14 @@ test.describe("Pin workspace shortcut", () => {
       await expect(page.getByTestId("app-toast-message")).toContainText(PIN_REJECTION_MESSAGE, {
         timeout: 10_000,
       });
-      await expect(pinnedSection(page)).toHaveCount(0);
+      await expect(pinIndicator(page, workspace.workspaceId)).toHaveCount(0);
       await expect(workspaceRow(page, workspace.workspaceId)).toHaveCount(1);
 
       // The failure must leave the action usable: the in-flight guard has to release the key so a
       // retry is not swallowed. Without that release the workspace is unpinnable for the session.
       await page.keyboard.press(PIN_SHORTCUT);
 
-      await expect(pinnedSection(page)).toBeVisible({ timeout: 10_000 });
+      await expect(pinIndicator(page, workspace.workspaceId)).toBeVisible({ timeout: 10_000 });
       expect(gate.sentCount()).toBe(2);
     } finally {
       await workspace.cleanup();

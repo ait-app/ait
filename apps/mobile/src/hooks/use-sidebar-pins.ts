@@ -14,10 +14,9 @@ export interface PinnedSidebarKeys {
 }
 
 export interface PinnedSidebarGroups {
-  // Individually pinned chats, hoisted into the Pinned section and removed from their
-  // project below. Most recently pinned first.
+  // A separate Pinned section for flat grouping modes; empty in project mode.
   pinnedChats: SidebarWorkspacePlacement[];
-  // Everything else, with pinned chats removed. Feeds the project list.
+  // Project mode retains every chat under its parent, with pinned chats first.
   unpinnedProjects: SidebarProjectEntry[];
 }
 
@@ -108,11 +107,11 @@ export function usePinnedSidebarKeys(projects: SidebarProjectEntry[]): PinnedSid
   }, [projects, serverIds, workspaceMaps]);
 }
 
-// Splits the sidebar into a dedicated Pinned section (chats) and the regular list below.
-// Pinned chats are ordered most-recently-pinned first.
+// Project mode keeps chats under their owner. Flat modes use a separate Pinned section.
 export function splitPinnedSidebarGroups(input: {
   projects: SidebarProjectEntry[];
   keys: PinnedSidebarKeys;
+  keepInProjects?: boolean;
 }): PinnedSidebarGroups {
   const { projects, keys } = input;
   if (keys.pinnedWorkspaceKeys.length === 0) {
@@ -137,8 +136,24 @@ export function splitPinnedSidebarGroups(input: {
     ),
   );
 
-  return {
-    pinnedChats,
-    unpinnedProjects,
-  };
+  if (input.keepInProjects) {
+    return {
+      pinnedChats: [],
+      unpinnedProjects: projects.map((project) => {
+        const ownKeys = new Set(project.workspaces.map((workspace) => workspace.workspaceKey));
+        const pins = pinnedChats.filter((workspace) => ownKeys.has(workspace.workspaceKey));
+        if (pins.length === 0) return project;
+        return {
+          ...project,
+          workspaces: [
+            ...pins,
+            ...project.workspaces.filter(
+              (workspace) => !pinnedWorkspaceKeySet.has(workspace.workspaceKey),
+            ),
+          ],
+        };
+      }),
+    };
+  }
+  return { pinnedChats, unpinnedProjects };
 }
