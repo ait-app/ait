@@ -11,7 +11,7 @@ use crate::local::claude::ClaudeClient;
 use crate::local::codex::CodexClient;
 use crate::local::deepseek_harness::DeepSeekHarnessClient;
 use crate::local::minimax::MiniMaxClient;
-use crate::local::omp::{OmpClient, native_host as omp_runtime};
+use crate::local::omp::OmpClient;
 use crate::local::opencode::OpenCodeClient;
 use crate::local::pi::PiClient;
 use crate::ports::agent_session::AgentClient;
@@ -90,13 +90,7 @@ impl Providers {
             .with_image_directory(images.clone());
         let pi =
             PiClient::new(program("AIT_SERVER_PI_BIN", "pi")).with_image_directory(images.clone());
-        // A verified private runtime shares this data directory, so OMP keeps one writer,
-        // one credential store and one session tree; without it the official binary runs. The
-        // runtime may only appear after startup, so the client keeps its candidates and adopts
-        // the installation when the next session opens instead of requiring a daemon restart.
-        let omp_runtime = omp_runtime::Locations::new(data_dir, &environment);
         let omp = OmpClient::new(program("AIT_SERVER_OMP_BIN", "omp"))
-            .watching_native_host(omp_runtime.clone(), omp_runtime.discover())
             .with_image_directory(images.clone());
         let minimax = MiniMaxClient::new(program("AIT_SERVER_MINIMAX_CODE_BIN", "mcode"))
             .with_image_directory(images);

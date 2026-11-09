@@ -318,7 +318,7 @@ struct Installed {
     _root: tempfile::TempDir,
     client: OmpClient,
     spec: AgentSessionSpec,
-    _server: tokio_util::task::AbortOnDropHandle<()>,
+    server: tokio_util::task::AbortOnDropHandle<()>,
 }
 
 #[tokio::test]
@@ -421,7 +421,7 @@ async fn installed_with_program(program: std::ffi::OsString) -> Installed {
         _root: root,
         client,
         spec,
-        _server: server,
+        server,
     }
 }
 
@@ -491,4 +491,30 @@ async fn mock_plugin_completion(
         [("content-type", "text/event-stream")],
         format!("data: {first}\n\ndata: {last}\n\ndata: [DONE]\n\n"),
     )
+}
+
+#[tokio::test]
+#[ignore = "requires official AIT_TEST_OMP_BIN; isolated external RPC and no model inference"]
+async fn installed_external_omp_refuses_unnegotiated_vibe_without_inference() {
+    let fixture = installed_with_plugins().await;
+    // Any accidental model submission would fail against the stopped loopback-only endpoint.
+    fixture.server.abort();
+    let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
+    assert!(
+        session
+            .control_settings(&fixture.spec.config)
+            .unwrap()
+            .get("vibe")
+            .is_none()
+    );
+    while session.poll_turn().unwrap().is_some() {}
+    session
+        .out_of_band(&AgentPrompt::text("/vibe inspect the project"))
+        .await
+        .unwrap();
+    let event = next(session.as_mut()).await.unwrap();
+    assert!(matches!(event, AgentTurnEvent::Timeline(entry)
+        if entry.item["type"] == "provider_command" && entry.item["status"] == "error"
+        && entry.item["text"].as_str().is_some_and(|text| text.contains("Ait does not install or modify OMP"))));
+    session.close().await.unwrap();
 }

@@ -58,14 +58,7 @@ test("dev builds package both standalone daemons and explain the macOS quarantin
   const names = steps.map((step) => step.name);
   const pack = steps.find((step) => step.name === "Package standalone daemon");
   assert.match(pack.env.DAEMON_BIN, /target\/\$\{\{ matrix.rust_target \}\}\/release\/daemon$/);
-  assert.match(
-    pack.run,
-    /release-assets\.mjs daemon .* release-assets --runtime "\$native_host" --dev "\$DEV_BUILD_LABEL"/,
-  );
-  assert.match(
-    pack.run,
-    /release\/mac-arm64\/Ait\.app\/Contents\/Resources\/provider-runtimes\/omp-native-host\/1/,
-  );
+  assert.match(pack.run, /release-assets\.mjs daemon .* release-assets --dev "\$DEV_BUILD_LABEL"/);
   assert.match(pack.run, /codesign --verify/);
   // The archive must be in release-assets before the artifact upload picks it up.
   const upload = steps.findIndex((step) => step.uses?.startsWith("actions/upload-artifact@"));

@@ -198,9 +198,9 @@ pub(super) fn note(
 /// Check the current native catalog first so a real extension may own a TUI-only name.
 ///
 /// `vibe` is executable only when the native host announced the bridge *and* its catalog
-/// advertises a builtin `vibe`: the greeting alone says the runtime is patched, the catalog
-/// entry is the proof that the adapter actually wired the command table (a plain `--mode rpc`
-/// launch advertises no `vibe` entry at all). Until both hold the name stays a host refusal,
+/// advertises a builtin `vibe`: the greeting announces a compatible external protocol, while
+/// the catalog confirms that this connection can dispatch the command. Ait never modifies
+/// the external runtime. Until both hold the name stays a host refusal,
 /// so it can never silently become a model prompt.
 pub(super) fn blocked<'a>(text: &'a str, native: &[Value], bridge: bool) -> Option<&'a str> {
     let (name, args) = split(text)?;
@@ -292,11 +292,10 @@ pub(super) fn visible(native: &[Value]) -> Vec<Value> {
 /// Explain unavailable native behavior without replacing Ait's own controls or invoking a model.
 pub(super) fn rejection(name: &str) -> String {
     if name == "vibe" {
-        return "OMP /vibe requires the Ait native host bridge. This runtime did not announce \
-                bridgeVersion 1 with the vibe capability, so the native Vibe mode is unavailable. \
-                Install the current OMP native host runtime; an install that finishes in the \
-                background is adopted when the next conversation starts. Ait's subagent \
-                controls remain available."
+        return "OMP /vibe requires a compatible external native host bridge. The installed OMP \
+                did not announce bridgeVersion 1 with the vibe capability and a builtin vibe \
+                command, so native Vibe mode is unavailable. Ait does not install or modify OMP. \
+                Ait's subagent controls remain available."
             .to_owned();
     }
     if TUI_ONLY.contains(&name) {

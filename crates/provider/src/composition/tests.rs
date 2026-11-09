@@ -163,3 +163,22 @@ async fn configured_codex_and_claude_generate_summary_without_foreground_agents(
             .any(|arg| arg == "--no-session-persistence")
     );
 }
+
+#[test]
+fn omp_composition_never_discovers_a_private_runtime() {
+    let root = tempfile::tempdir().unwrap();
+    let providers = Providers::configured(root.path(), |name| {
+        assert!(
+            !name.contains("OMP_NATIVE_HOST"),
+            "unexpected runtime discovery: {name}"
+        );
+        None
+    });
+    assert!(
+        providers
+            .clients
+            .iter()
+            .any(|client| client.provider() == "omp")
+    );
+    assert!(!root.path().join("providers").exists());
+}

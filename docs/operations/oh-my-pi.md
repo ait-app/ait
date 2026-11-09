@@ -168,3 +168,10 @@ TUI-only 入口不会发送给模型；例如 `/status` 是 OMP 扩展控制台�
 保存在 OMP 的 sidecar 中。官方 RPC 的 BTW 请求没有图片参数，不将带附件的输入悄悄降为纯文本。
 
 命令投影、并发与归属规则见 [ADR-222](../decisions/providers/adr-222-omp-headless-commands-and-side-questions.md)。
+
+## 外部 OMP 与 Vibe 能力
+
+所有 RPC 会话启动用户安装的 `omp`（可用 `AIT_SERVER_OMP_BIN` 指定）。Ait 不附带、
+安装或修改 OMP/Bun，不采用历史私有宿主目录。原生会话和凭据仍由外部 OMP 管理。
+Vibe 需要外部进程同时提供兼容的桥接握手和 builtin `vibe` 命令；缺失任一项时
+`/vibe` 返回不可用卡片，不发送给模型。见 [ADR-223](../decisions/providers/adr-223-omp-native-host-bridge.md)。

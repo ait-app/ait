@@ -106,10 +106,6 @@ async fn run(
         )
         .try_init()
         .map_err(|error| anyhow::anyhow!("initialize logging: {error}"))?;
-    // Report (and, when an installer is reachable, prepare) the private OMP runtime off the
-    // critical path. A missing runtime only degrades `/vibe`, so serving must not wait for a
-    // package install; the provider composition rediscovers the runtime on its own.
-    spawn_runtime_preparation(&config.data_dir);
     loop {
         let server = startup
             .server(
@@ -124,20 +120,6 @@ async fn run(
             }
             Some(model::LifecycleIntent::Shutdown) | None => return Ok(()),
         }
-    }
-}
-
-/// Prepare the optional OMP runtime without holding daemon readiness.
-///
-/// The installer may run `npm ci` over the network, so it gets its own thread: a failure or a
-/// slow install is reported in the log and otherwise leaves the daemon serving.
-fn spawn_runtime_preparation(data_dir: &std::path::Path) {
-    let data_dir = data_dir.to_path_buf();
-    let spawned = std::thread::Builder::new()
-        .name("omp-native-host".to_owned())
-        .spawn(move || host::native_host::ensure_runtime(&data_dir));
-    if let Err(error) = spawned {
-        tracing::warn!(%error, "OMP native host preparation could not start");
     }
 }
 

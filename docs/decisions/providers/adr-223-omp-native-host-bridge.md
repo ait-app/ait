@@ -1,210 +1,36 @@
-# ADR-223：OMP 私有原生宿主桥接运行时
+# ADR-223：外部 OMP 能力桥接与运行时边界
 
-状态：接受。日期：2026-11-07。修订 [ADR-218](adr-218-native-ui-and-actions.md) 中
-「未导出的任意 `custom()`、组件工厂、header/footer 和主题编辑不引入私有运行时补丁」的
-适用范围，并扩展 [ADR-180](adr-180-omp-native-rpc-provider.md)、
-[ADR-190](adr-190-omp-acp-settlement.md) 与 [ADR-222](adr-222-omp-headless-commands-and-side-questions.md)。
+状态：Accepted（修订，撤销私有运行时例外）。日期：2026-11-09。
 
 ## 背景
 
-OMP 的 Vibe 模式（多 fast/good 原生 worker 的持久编排）只存在于官方 TUI 与官方工具的
-原生注册表中，RPC 模式不导出进入、退出、worker 生命周期控制，也不导出 worker 观测。
-`/vibe` 在纯 RPC 下只能作为被屏蔽的 TUI-only 命令返回错误卡片。
-
-ADR-218 排除的是**替换或伪造官方界面**的私有补丁。本决策只针对一类不同的需求：
-官方 SDK 的 RPC 路径缺少一个能力入口，而该入口所需的全部原语（`vibe_*` 工具、
-`VibeSessionRegistry`、`AgentRegistry`、session manager）都已在官方包内公开导出。
-因此补丁的边界是「在 RPC 入口挂接官方已存在的原语」，不是重写 OMP。
-
-同时必须解决一个真实风险：如果私有运行时使用自己的数据目录，`/vibe` 会变成一个影子
-系统——Ait 会话跑 18.14 官方二进制，Vibe 跑另一套存储。因此本决策的核心约束不是补丁
-本身，而是**单 writer / 同目录归属**。
+原方案为接通 Vibe 安装、补丁并交付固定 OMP SDK 与 Bun，且替换所有 RPC 会话的
+启动程序。该行为越过 Provider 适配器边界，也与 ADR-218 和能力补齐计划冲突。
+本修订撤销原方案；旧私有宿主的截图与报告仅代表历史实现，不证明当前外部 OMP 支持 Vibe。
 
 ## 决策
 
-### 1. 只在 RPC 入口挂接，不复制业务逻辑
+- Ait 不下载、安装、复制、修改或打包 OMP SDK、Bun 或私有 OMP 运行时。
+  桌面资源、独立 daemon 发布包、后台安装器和 manifest 优先替换均移除。
+  仅启动用户安装的 `omp`，或用户明确配置的 `AIT_SERVER_OMP_BIN`。
+  遗留的私有运行时目录和环境变量不再参与发现或启动；不删除用户磁盘上的历史数据。
+- 延续 ADR-218：桥接只在 Rust 适配器里转换已公开的外部 RPC 能力。
+  不注入上游源码，不依赖随 Ait 附带的修改版 OMP。当前没有为缺失的 Vibe RPC
+  另起影子会话或实现 TUI 工厂。
+- Vibe 属于可选外部能力。必须同时收到 `ait_native_host_hello` 的
+  `bridgeVersion: 1`、`capabilities.vibe: true` 和命令表里的 builtin `vibe`。
+  `sdkVersion` 仅记录外部实现版本；兼容性由桥接协议版本及命令目录决定，不按 SDK
+  版本字符串猜测。未知桥接版本、缺失握手或缺失 builtin 均明确拒绝 `/vibe`，
+  不转为模型 prompt。Ait 不承诺任意官方 OMP 版本都实现该可选协议。
+- 握手和 Vibe 状态仅属于当前连接，关闭即清除。会话的 cwd、环境、认证和数据目录
+  继续由用户安装的 OMP 解释；Ait 不迁移、覆写或直接追加原生日志。
+  同一会话只有既有 owner 的外部进程写入；恢复使用原生 session handle，
+  只读历史和 worker 观测不启动第二个写入者。worker 的 parentId 和原生 header
+  必须核对，用户操作仅经父会话的已协商命令路由。
 
-私有运行时由 `runtimes/omp-native-host/` 构建：
+## 后果与验证范围
 
-- `vibe-controller.ts` / `vibe-observer.ts` 是薄胶水，只调用官方 `vibe_*` 工具、
-  `VibeSessionRegistry` 与只读 `AgentRegistry`；不含 provider、权限、持久化或执行逻辑。
-- `rpc-patch.mjs` 对已安装的官方 SDK 做**锚定、哈希校验、幂等**的源码补丁：
-  补齐 hello 帧模块、在 `--mode rpc-ui` 的 `ready` 帧之前输出
-  `ait_native_host_hello`、把 controller 接入命令目录、prompt 输入、会话变更拦截与关闭。
-- 补丁前校验 `rpc-mode.ts` 与 `main.ts` 的 SHA-256 必须等于已发布 18.17.0 tarball；
-  任一不匹配即报错中止，绝不静默跳过或部分应用。重复执行为 no-op。
-- `install.mjs` 校验 lockfile 完整性、SDK/Bun 版本、Bun 二进制签名，并只通过一次
-  rename 发布，失败回滚。
-
-### 2. 能力握手
-
-hello 帧是唯一的启用信号：
-
-```json
-{
-  "type": "ait_native_host_hello",
-  "bridgeVersion": 1,
-  "sdkVersion": "18.17.0",
-  "capabilities": { "vibe": true, "vibeWorkerObservation": true, "vibeWorkerControl": true }
-}
-```
-
-Rust 适配器只在 `bridgeVersion == 1` 且 `capabilities.vibe == true` 时认为 bridge
-可用。即便如此，`/vibe` 仍需原生命令目录里存在 `source == "builtin"` 的 `vibe` 条目
-才放行——hello 只证明运行时有补丁，builtin 目录条目才证明命令表真的挂上了（普通
-`--mode rpc` 启动不广播该条目）。任一条件不满足时 `/vibe` 保持阻塞并返回说明缺少
-bridge 的独立卡片（不送模型），绝不当成 prompt 发给模型。
-真实扩展/技能/文件命令同名时仍归其原生 owner。hello 是连接内协商，不写历史；
-metadata 探针也会收到 hello，但探针不构造 Session 级 Vibe 状态。
-
-### 3. 命令表挂接
-
-私有运行时在 `--mode rpc-ui` 下构造一个 `AitNativeHostBridge`：
-
-- `ready` 之后调用 `initialize()`（rehydrate 持久 scope 与 worker 名册）；
-- 命令目录合并 `/vibe` 条目后，同一份合并目录才是输入派发查找所用，
-  否则 `/vibe` 永远匹配不到 builtin；
-- prompt 派发前调用 `controller.input(text, commands)`：返回字符串表示把该字符串作为
-  inline directive 继续走官方 prompt 路径（形成真实 turn），返回 `null` 表示仅切换模式；
-- `handleCommand` 先过 `assertRequest`，Vibe 模式下的会话变更命令被拒绝；
-- `ait_vibe_control`（list/spawn/send/wait/kill/toggle）走同一条命令通道，
-  worker 引用由 observer 从 Ait subagent ID 解析为 native id；
-- 进程关闭时 `close()` 停止观察定时器。
-  仅 `rpc-ui` 且带 hello 时才构造桥；普通 `--mode rpc` 完全没有 Vibe 状态。
-
-### 4. 单 writer 与同目录归属
-
-- 同一 OMP 会话永远只有一个写入进程。要么官方二进制，要么私有运行时，不并存。
-- 私有运行时**不改变**数据目录：沿用同一 `HOME`、`PI_CONFIG_DIR`/XDG 解析结果
-  （`sandbox::OMP_STATE`）与 `OmpClient` 的 environment 注入，因此
-  `~/.omp/agent`（`agent.db`、`sessions/`、`config.yml`、认证）与官方进程完全相同。
-- 私有运行时必须通过 manifest 校验才被采用（见下）；未通过则回退官方二进制，
-  并声明 bridge 能力不可用。不存在“装了但用不了还硬启动”的状态。
-- 运行时的启动形态只是替换可执行文件：`bun <sdk>/src/cli.ts --mode rpc-ui --cwd …`，
-  其余 argv、环境变量、cwd、进程组与沙箱策略不变。
-
-### 5. 版本边界与共存
-
-实测事实（2026-11-07，官方 18.17.0 tarball）：
-
-- 既有 165 个 native journal 的 header 记录 `runtime.version` 分别为 18.12.6（75）、18.14.0（75）
-  与 18.17.0（15）；官方 18.17 能解析全部旧 journal（列表与恢复都成功）。
-- 但**恢复旧会话会追加写入**：`--resume <旧 journal>` 立即追加 `session_exit` 与相关记录。
-  也就是说，任何 18.17 进程（官方或私有运行时）一旦恢复 18.14 会话，该文件就归 18.17 写入。
-  这不是补丁引入的问题，而是官方“恢复即接管”的语义。
-- 因此版本边界只能靠**单 writer**保证：同一 journal 在任一时刻只由一版进程写入。
-  Ait 侧现有的 `--resume` 已满足该约束（会话由当前 adapter 独占）；不得并行启动第二版进程读同一 journal。
-- 回退可用性已实测（2026-11-07）：取 18.12.6 时期的 journal，追加一条
-  `customType: "session_exit"` / `runtime.version: "18.17.0"` 记录后，用**官方 18.14.0**
-  （`@oh-my-pi/pi-coding-agent@18.14.0` 源码 + bun 启动）执行
-  `--mode rpc-ui --resume <journal>`：
-  - 进程正常启动并输出合法 `ready` 帧，stderr 为空；
-  - `get_state` 返回 `success:true` 且带恢复后的 model/sessionId；
-  - `get_entries`（完整历史读取）返回 `success:true`。
-    即 18.14 **可以**读取被 18.17 追加过的 journal，降级回退不会导致会话不可读。
-    唯一保留：18.14 不认识 18.17 新增记录的语义（它把 `session_exit` 当普通 custom 记录），
-    因此回退后这些条目不参与行为，只作为历史存在。
-- 降级前置条件（2026-11-07 实测，对 18.14 与 18.17 一致）：`--resume` 要求该 journal
-  引用的模型仍在配置中。缺少对应的 `models.yml`/`config.yml`（例如隔离环境或用户已删除
-  该 provider）时，恢复直接失败于
-  `SessionModelRestoreError: Could not restore model <provider>/<model>`，**与版本无关**。
-  回退二进制时若遇到该错误，应先恢复模型定义，而不是判定为 journal 格式不兼容。
-
-- 私有运行时锁定**一个**官方 SDK 版本（当前 18.17.0）与一个 Bun 版本（1.4.4）。
-  `manifest.json` 记录 `schemaVersion`、`adapter`、`adapterVersion`、`ompVersion`、
-  `bunVersion`、`bunPath`、`entrypoint`；适配器逐字段校验后才启动。
-- 磁盘上的 journal 格式由官方 SDK 决定。18.17 私有运行时读写的仍是同一
-  `sessions/` 目录与同一 `agent.db`；Ait 不建立第二套存储、不复制、不双写。
-- 版本升级只通过替换整个安装目录（新 staging → rename）完成；旧目录由
-  `publishInstallation` 备份后清理。Ait 不就地改动已安装运行时。
-- 若未来官方 SDK 变更使既有 journal 不兼容，处置顺序为：先拒绝采用该运行时
-  （manifest 版本不匹配 → 回退官方二进制），再给出迁移方案；**不得**让两个版本
-  同时对同一目录写入。
-
-### 6. 未安装时的降级
-
-未安装、manifest 损坏、哈希不符、SDK 未打补丁、路径逃逸或体积超限时：
-
-- 适配器继续使用官方二进制，OMP 其余功能不受影响；
-- 不声明 `vibe` 能力，`providerUi.vibe` 不出现，`/vibe` 返回明确错误卡片；
-- 记录一次 warn 级诊断（不含凭据），不做静默降级以外的任何隐式操作。
-
-### 7. 许可证与升级策略
-
-- 私有运行时随附官方 MIT 许可证、Bun 许可证与依赖清单（`install.mjs` 的 notices
-  阶段生成 `NOTICE.txt`、`dependencies.json`、`licenses/`）。
-- 补丁只修改已安装 SDK 的源码副本，且每次安装可复现；不重新分发修改后的 SDK 包。
-- 升级官方 SDK 版本需要同步更新 `EXPECTED_SHA256`、`COPIES` 与锚定编辑，并重新跑
-  `node --test runtimes/omp-native-host/install.test.mjs` 与真实 rpc-ui 冒烟。
-
-## 后果
-
-- `/vibe` 从「可宣布但不可执行」变为可执行，且 worker 观测与控制复用官方工具权限。
-- Ait 只新增一个能力面（hello → `providerUi.vibe` → 子 Agent 事件），protocol 侧
-  `vibe` 字段可选，旧客户端与旧快照保持兼容。
-- worker 只以可发布状态进入共享子 Agent 目录：共享 wire 状态枚举没有 `unknown`，
-  未定状态的 worker 仍显示在 `providerUi.vibe.workers`，但不作为子 Agent 发布，
-  也不得让父会话的 turn 因校验失败而中断。
-- 代价是引入了对官方 SDK 源码的构建期补丁，必须随 SDK 版本维护；这是 ADR-218 的
-  明确修订例外，范围仅限 RPC 入口挂接官方已有原语，不扩展到 UI 替换。
-- 探针回归已实测（2026-11-07）：把打补丁的运行时包装成单文件启动器后作为
-  `AIT_TEST_OMP_BIN`，跑 `local::omp::tests::installed` 全套（14 项，`--ignored`）：
-  10 passed / 4 failed。同样的 4 项在**未打补丁的系统 omp 18.17** 上同样失败
-  （completion 2 项需要 `AIT_TEST_OMP_COMPLETION_BIN` 指向带该能力的构建；
-  settlement 的 proxy 注入与 tiers 的特性计数在 18.17 上已漂移），
-  因此这 4 项是既有基线问题，不是“所有 OMP 进程改走 host”引入的回归。
-  角色、preset、目录发现、插件命令、动作、交互、结构化提问全部通过，
-  且启动器日志证明 metadata 探针（`config list --json`、`models --kind all --json`、
-  `--mode rpc-ui --no-session`）确实经由 host 启动。
-
-- 安装与打包落点（已实现）：
-  - 桌面：`apps/desktop/scripts/before-pack.js` 在打包前调用
-    `installRuntime({ destination: release-resources/provider-runtimes/omp-native-host/1 })`，
-    `electron-builder.yml` 的 `extraResources` 把 `provider-runtimes` 复制进应用资源；
-    macOS 额外把 bun 二进制登记进 `binaries` 以便签名。
-  - 校验：`verify-packaged-resources.cjs` 校验 manifest 字段、bun 可执行、notice 文件，
-    以及 **`ait-native-host-hello.ts` 与 `ait-native-host-bridge.ts` 必须存在**——
-    少了补丁标记的包会在打包阶段直接失败，而不是发出一个 `/vibe` 永远不可用的产物。
-  - Headless：daemon 启动时 `host::native_host::ensure_runtime(data_dir)` 先探测
-    （顺序：`AIT_OMP_NATIVE_HOST` → `<data_dir>/providers/omp-native-host/1` →
-    `AIT_SERVER_OMP_NATIVE_HOST_BUNDLE` → 可执行文件旁的 `provider-runtimes/...`），
-    只有都没有时才用 `AIT_SERVER_NODE_BIN` 跑一次
-    `runtimes/omp-native-host/install.mjs --data-dir <data_dir>`；任何失败只 warn，并在
-    下一次 daemon 启动时重试（见「安装器生命周期」）。
-  - 打包形态**不复制**运行时到用户数据目录：应用旁的 bundle 被原地使用，
-    现场实测 daemon 启动日志为
-    `Using the OMP native host runtime manifest=<resources>/provider-runtimes/...`，
-    且 `<data-dir>/providers` 未被创建。
-  - 独立 daemon 发布包：`scripts/release-assets.mjs daemon ... --runtime <dir>` 把
-    `provider-runtimes` 一起打进 tarball，并由 CI 传入打包产物的实际路径。
-
-### 8. 安装器生命周期（2026-11-07 评审补齐）
-
-后台安装失败不会打断 daemon，但「失败后能否自愈」与「装好后能否立刻生效」是两个必须显式
-规定的行为：
-
-- **进程树归属**：安装器在独立进程组里启动（Unix `process_group(0)`，与
-  `crates/provider/src/local/process_group.rs` 同一套语义）。它用 `execFileSync(npm, ...)`
-  起自己的子进程，所以超时或取消时向**整个进程组**发信号，npm 及其子进程一起退出，
-  不会留下继续写 staging 目录的孤儿。
-- **有界回收**：超时先 `SIGTERM` 组并等 5 秒，仍在则 `SIGKILL` 组再等；直接子进程始终
-  `wait`，不留僵尸。整个上限是 `INSTALL_TIMEOUT` = 300 秒：冷启动 `npm ci` 在慢网下
-  确实需要数分钟，早先的 120 秒会把合法安装误判为超时。
-- **失效锁恢复**：锁文件不由 Rust 侧清扫，而由安装器自己在 `acquireLock` 里判定
-  「记录的持有者是否还活着」——`pid` + 内核 `starttime` + 命令名三者同时匹配才算活着
-  （只有 pid 会被复用骗过；非 Linux 平台退化为信号探测并叠加年龄上限）。记录用
-  `writeFile` + 硬链接发布，读者永远看不到写了一半的持有者；释放时只删除仍等于自己
-  记录内容的锁，避免误删别人刚接管的锁。判定为死锁后立刻重试获取，因此
-  「SIGKILL、机器重启、pid 复用」都能自愈。
-- **并发语义不变**：锁仍排他。活着的持有者会让后来者**排队等待**（上限 60 秒，低于
-  daemon 自己的安装预算，避免一个 daemon 被另一个拖过自己的 deadline），而不是并行写
-  同一棵树；等到后会重新探测 manifest 并直接使用已发布的安装。
-- **没有基于 manifest 变化的退避**：首次安装通常还没有 manifest，用「manifest 变化」
-  作重试条件会让失败永久无法恢复。失败只记 warn，下一次 daemon 启动无条件重试。
-- **装好即可用，不需要重启 daemon**：`OmpClient` 不再在构造时固化 `Option<NativeHost>`；
-  它保留候选路径（`native_host::Locations`）并在**新会话启动时**重解析。仍是 `None`
-  时按 30 秒间隔限制磁盘探测，所以连开多个会话只读一次盘；一旦校验通过即采纳，且
-  本进程内保持采纳结果（不在 daemon 存活期间中途切回官方二进制，避免同一个 journal
-  被两版进程交替写入）。
-- **用户可见影响**：失败期间只有 `/vibe` 不可用，OMP 其余能力全部正常；拒绝卡片与
-  daemon 日志都写明「下次 daemon 启动会重试」以及「后台完成的安装在下一次对话开始时生效」。
+普通 RPC、原生预设和侧问答都继续使用同一外部可执行文件。缺少 Vibe 桥接时正常对话
+不受影响，Vibe 明确不可用。发布包不再有 OMP/Bun 资源或网络安装步骤。
+定向测试验证外部命令启动、协议门控、草稿查询及资源清单；真实 Vibe 验收必须使用
+用户安装且实际实现兼容协议的外部 OMP。此前私有宿主验收不能沿用。

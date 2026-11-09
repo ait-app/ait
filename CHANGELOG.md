@@ -6,8 +6,7 @@
 - Support native OMP side questions with streaming, cancellation, follow-up and restored history in an independent panel.
 - Keep read-only OMP commands separate from active answers; reject host-conflicting and terminal-only builtins without invoking a model, and preserve query result cards across history reloads.
 - Consolidate OMP presets and purpose-specific roles into existing model settings with semantic icons; keep native Run/Download controls compact without changing independent action progress or results.
-- Bridge OMP native Vibe mode: the private host greets the adapter, wires `/vibe` into the RPC command table so it enters/exits the native mode and turns an inline directive into a real turn, projects Vibe state and verified workers into host UI and subagent events, exposes list/spawn/send/wait/kill/toggle over native actions, and keeps `/vibe` blocked with an explicit card when the bridge is absent.
-- Keep the optional OMP native host install recoverable: it runs in its own process group so a timeout stops npm too, a lock left by a killed installer is reclaimed instead of blocking every later start, the installer budget is 300 seconds, and a background install is adopted by the next conversation instead of requiring a daemon restart.
+- Observe Vibe through the user-installed OMP process only when it announces a compatible bridge and native builtin command. Unsupported installations show an explicit unavailable result; Ait does not install, patch or bundle OMP or Bun.
 
 ## 0.2.4 - 2026-11-09
 

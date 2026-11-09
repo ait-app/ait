@@ -56,7 +56,7 @@ metadata 和 filesystem 内部按能力组组织，组间只引用 ports/protoco
 ## Provider 与工作区生命周期
 
 `provider::Providers` 组装 Codex、Claude Code、OpenCode、DeepSeek Harness、Antigravity、Pi、
-Oh My Pi 与 MiniMax Code。可用性、模型和原生版本支持由运行时发现；操作说明见[文档索引](../README.md#agent-与工作区)。
+Oh My Pi 与 MiniMax Code。OMP 只运行用户安装的外部可执行文件，不安装、补丁或打包私有 SDK/Bun；Vibe 按外部桥接能力协商，见 [ADR-223](../decisions/providers/adr-223-omp-native-host-bridge.md)。可用性、模型和原生版本支持由运行时发现；操作说明见[文档索引](../README.md#agent-与工作区)。
 每个稳定 Agent 身份的异步任务独占原生 session，不同身份独立执行；发现、已提交读取、完成等待
 使用独立路径，阻塞存储操作离开专用 Tokio reactor。全局预算限制接纳和原生资源数量。
 见 [ADR-091](../decisions/providers/adr-091-independent-session-execution.md)、

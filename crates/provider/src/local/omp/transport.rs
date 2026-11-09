@@ -64,24 +64,12 @@ impl Transport {
         confinement: Option<&domain::workspace::sandbox::WriteConfinement>,
     ) -> Result<Self, AgentSessionError> {
         let diagnostics = Diagnostics::new(LABEL);
-        // A verified private runtime replaces only the executable: same cwd, same args, same
-        // environment, and therefore the same OMP data directory, credentials and sessions.
-        let (launcher, leading) = match client.native_host() {
-            Some(host) => (
-                host.bun().to_path_buf(),
-                Some(host.entrypoint().to_path_buf()),
-            ),
-            None => (client.program.clone(), None),
-        };
         let mut command = crate::local::sandbox::command(
-            &launcher,
+            &client.program,
             confinement,
             crate::local::sandbox::OMP_STATE,
             &|name| client.environment.variable(name),
         )?;
-        if let Some(entrypoint) = &leading {
-            command.arg(entrypoint);
-        }
         command
             .args(["--cwd", cwd])
             .args(args)
@@ -410,7 +398,7 @@ impl Transport {
 }
 
 /// Read newline-delimited native frames until a protocol or pipe failure, routing the
-/// private host greeting and Vibe frames away from the public session stream.
+/// external bridge greeting and Vibe frames away from the public session stream.
 async fn read_frames(
     output: tokio::process::ChildStdout,
     sender: &mpsc::Sender<Record>,
