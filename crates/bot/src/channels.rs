@@ -1,5 +1,6 @@
 pub(crate) mod feishu;
 mod onboarding;
+pub(crate) mod photon;
 pub(crate) mod qq;
 pub(crate) mod telegram;
 pub(crate) mod weixin;
@@ -101,7 +102,10 @@ type Socket =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 /// Open a platform WebSocket with the frame limits every channel shares.
-async fn connect_socket(endpoint: String) -> Result<Socket, ErrorCode> {
+async fn connect_socket<R>(endpoint: R) -> Result<Socket, ErrorCode>
+where
+    R: tokio_tungstenite::tungstenite::client::IntoClientRequest + Unpin,
+{
     tokio_tungstenite::connect_async_with_config(
         endpoint,
         Some(
@@ -180,6 +184,7 @@ async fn attempt(
         ChannelConfig::Feishu { secret_ref, .. } | ChannelConfig::Qq { secret_ref, .. } => {
             secret_ref
         }
+        ChannelConfig::PhotonImessage { key_ref, .. } => key_ref,
     };
     let secret = credentials.resolve(reference)?;
     match &channel.config {
@@ -190,6 +195,9 @@ async fn attempt(
         ChannelConfig::Feishu { .. } => feishu::run(bots, channel, client, &secret, cancel).await,
         ChannelConfig::Weixin { .. } => weixin::run(bots, channel, client, &secret, cancel).await,
         ChannelConfig::Qq { .. } => qq::run(bots, channel, client, &secret, cancel).await,
+        ChannelConfig::PhotonImessage { .. } => {
+            photon::run(bots, channel, client, &secret, cancel).await
+        }
     }
 }
 

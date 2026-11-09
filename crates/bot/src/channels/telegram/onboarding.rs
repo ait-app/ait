@@ -20,7 +20,7 @@ use crate::channels::onboarding::{
 };
 use crate::channels::{expose, json_response};
 use crate::ports::stored_credential_reference;
-use crate::protocol::{TelegramPairRequest, TelegramPairStart};
+use crate::protocol::{PairRequest, TelegramPairStart};
 use crate::service::Bots;
 use crate::state::StoredChannel;
 
@@ -158,7 +158,7 @@ impl Onboarding {
     pub(crate) async fn status(
         &self,
         bots: &Bots,
-        request: TelegramPairRequest,
+        request: PairRequest,
     ) -> Result<Value, ErrorCode> {
         let Some(pairing) = self.pairings.get(&request.workspace_id) else {
             return Ok(failed(FAILED_EXPIRED));
@@ -253,7 +253,7 @@ impl Onboarding {
     }
 
     /// Stop a pairing so a later tap on Start creates no channel.
-    pub(crate) async fn cancel(&self, request: TelegramPairRequest) -> Result<Value, ErrorCode> {
+    pub(crate) async fn cancel(&self, request: PairRequest) -> Result<Value, ErrorCode> {
         let Some(entry) = self.pairings.get(&request.workspace_id) else {
             return Ok(json!({"cancelled":false}));
         };

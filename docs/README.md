@@ -32,7 +32,7 @@
 - [沙箱化 Worktree](decisions/workspace/adr-215-sandboxed-worktree-isolation.md)：macOS 使用 Seatbelt；[Linux 使用 bubblewrap](decisions/workspace/adr-223-linux-worktree-sandbox.md)，说明 Agent 写入限制、Git 指针保护和共享 inode 等边界。
 - [Agent Skill 分发](operations/agent-skills.md)：内置技能、更新、选择和卸载。
 - [查看子 Agent](decisions/providers/adr-209-observed-subagent-normalization.md)：统一会话入口、父子关系与只读观测边界。
-- [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)（客户端标签页见 [ADR-214](decisions/clients/adr-214-workspace-bot-tab-v2.md)，权限与作用域 MCP 凭据见 [ADR-215](decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)，内部会话的只读查看见 [ADR-221](decisions/bot/adr-221-read-only-bot-session-inspection.md)，单一 Agent 模式与禁止创建 Workspace 见 [ADR-222](decisions/bot/adr-222-single-agent-mode-no-bot-workspaces.md)，飞书扫码接入与 Secret 保存见 [ADR-224](decisions/bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)，微信与 QQ 接入见 [ADR-225](decisions/bot/adr-225-weixin-and-qq-channels.md)）。
+- [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)（客户端标签页见 [ADR-214](decisions/clients/adr-214-workspace-bot-tab-v2.md)，权限与作用域 MCP 凭据见 [ADR-215](decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)，内部会话的只读查看见 [ADR-221](decisions/bot/adr-221-read-only-bot-session-inspection.md)，单一 Agent 模式与禁止创建 Workspace 见 [ADR-222](decisions/bot/adr-222-single-agent-mode-no-bot-workspaces.md)，飞书扫码接入与 Secret 保存见 [ADR-224](decisions/bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)，微信与 QQ 接入见 [ADR-225](decisions/bot/adr-225-weixin-and-qq-channels.md)，通过 Photon Beta 2.0 接入 iMessage 见 [ADR-226](decisions/bot/adr-226-photon-imessage-channel.md)）。
 - [语音与听写](operations/speech.md)、[移动端通知](operations/mobile-notifications.md)。
 
 ## 架构与工程规范

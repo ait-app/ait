@@ -63,6 +63,12 @@ export const BotChannelConfigSchema = z.discriminatedUnion("kind", [
     allowedSenders: z.array(z.string()),
     allowGroups: z.boolean().default(false),
   }),
+  z.strictObject({
+    kind: z.literal("photon_imessage"),
+    projectId: z.string(),
+    keyRef: z.string(),
+    allowedSenders: z.array(z.string()),
+  }),
 ]);
 export const BotChannelSchema = z.object({
   id: z.guid(),

@@ -5,16 +5,29 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BotChannels } from "./bot-channels";
 
-const { botRequest, confirmDialog, randomUUID, feishuSetup, telegramSetup, scanSetup } = vi.hoisted(
-  () => ({
-    feishuSetup: { current: false },
-    telegramSetup: { current: false },
-    scanSetup: { current: false },
-    botRequest: vi.fn(),
-    confirmDialog: vi.fn(async (_options: unknown) => true),
-    randomUUID: vi.fn(() => "33333333-3333-4333-8333-333333333333"),
-  }),
-);
+const {
+  botRequest,
+  confirmDialog,
+  randomUUID,
+  feishuSetup,
+  telegramSetup,
+  scanSetup,
+  imessageSetup,
+  electron,
+  openExternalUrl,
+  openSmsUrl,
+} = vi.hoisted(() => ({
+  feishuSetup: { current: false },
+  telegramSetup: { current: false },
+  scanSetup: { current: false },
+  imessageSetup: { current: false },
+  electron: { current: false },
+  botRequest: vi.fn(),
+  confirmDialog: vi.fn(async (_options: unknown) => true),
+  randomUUID: vi.fn(() => "33333333-3333-4333-8333-333333333333"),
+  openExternalUrl: vi.fn(async (_url: string) => {}),
+  openSmsUrl: vi.fn(async (_url: string) => {}),
+}));
 vi.mock("@/runtime/host-runtime", () => ({ useHostRuntimeClient: () => ({ botRequest }) }));
 vi.mock("@/stores/session-store", () => ({
   useSessionStore: (select: (state: unknown) => unknown) =>
@@ -27,6 +40,7 @@ vi.mock("@/stores/session-store", () => ({
               workspaceBotTelegramSetup: telegramSetup.current,
               workspaceBotWeixinSetup: scanSetup.current,
               workspaceBotQqSetup: scanSetup.current,
+              workspaceBotImessageSetup: imessageSetup.current,
             },
           },
         },
@@ -36,7 +50,8 @@ vi.mock("@/stores/session-store", () => ({
 vi.mock("react-native-svg", () => ({
   SvgXml: ({ xml }: { xml: string }) => <span data-testid="qr-xml">{xml}</span>,
 }));
-vi.mock("@/utils/open-external-url", () => ({ openExternalUrl: vi.fn() }));
+vi.mock("@/utils/open-external-url", () => ({ openExternalUrl, openSmsUrl }));
+vi.mock("@/constants/platform", () => ({ getIsElectron: () => electron.current }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("./styles", () => ({ botStyles: {} }));
 vi.mock("./loading", () => ({ BotLoadingSpinner: () => null }));
@@ -115,13 +130,16 @@ vi.mock("@/components/ui/form-field", () => ({
     onChangeText,
     editable,
     accessibilityLabel,
+    secureTextEntry,
   }: {
     onChangeText: (text: string) => void;
     editable?: boolean;
     accessibilityLabel?: string;
+    secureTextEntry?: boolean;
   }) => (
     <input
       aria-label={accessibilityLabel}
+      type={secureTextEntry ? "password" : "text"}
       disabled={editable === false}
       onChange={(event) => onChangeText(event.target.value)}
     />
@@ -182,6 +200,10 @@ function submitButton() {
 beforeEach(() => {
   feishuSetup.current = false;
   telegramSetup.current = false;
+  imessageSetup.current = false;
+  electron.current = false;
+  openExternalUrl.mockClear();
+  openSmsUrl.mockClear();
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -782,6 +804,197 @@ describe("BotChannels", () => {
 
       expect(await screen.findByLabelText("bots.tokenRef")).toBeTruthy();
       expect(screen.queryByTestId("bot-telegram-guide")).toBeNull();
+    });
+  });
+
+  describe("guided iMessage setup", () => {
+    const PAIRING_ID = "88888888-8888-4888-8888-888888888888";
+    const API_KEY = "pho_sk_secret";
+    const SMS_URL = "sms:+14155550100&body=ait-abcd";
+    let channels: unknown[];
+    function respond({
+      supported = ["builtin", "telegram"],
+      started = {
+        state: "waiting",
+        pairingId: PAIRING_ID,
+        phoneNumber: "+14155550100",
+        code: "ait-abcd",
+        url: SMS_URL,
+        expiresInSeconds: 600,
+      } as Record<string, unknown>,
+      status = { state: "waiting" } as Record<string, unknown>,
+    } = {}) {
+      botRequest.mockImplementation(async (method: string) => {
+        if (method === "bot.channel.list.request") return { channels };
+        if (method === "bot.channel.types.request") return { supported };
+        if (method === "bot.channel.status.request") return { connection: null };
+        if (method === "bot.channel.imessage.pair.start.request") return started;
+        if (method === "bot.channel.imessage.pair.status.request") return status;
+        if (method === "bot.channel.imessage.pair.cancel.request") return { cancelled: true };
+        throw new Error(`unexpected ${method}`);
+      });
+    }
+    async function openForm() {
+      imessageSetup.current = true;
+      renderChannels();
+      fireEvent.click(await screen.findByTestId("bot-channel-add"));
+      fireEvent.change(await screen.findByTestId("bot-channel-type"), {
+        target: { value: "photon_imessage" },
+      });
+      await screen.findByTestId("bot-imessage-guide");
+    }
+    function submit() {
+      typeInto("bots.imessageProjectId", " project-1 ");
+      typeInto("bots.imessageApiKey", ` ${API_KEY}\n`);
+      typeInto("bots.imessageHandle", " +14155550123 ");
+      fireEvent.click(screen.getByTestId("bot-imessage-continue"));
+    }
+    async function optionsFor(supported: string[]) {
+      respond({ supported });
+      renderChannels();
+      fireEvent.click(await screen.findByTestId("bot-channel-add"));
+      const select = await screen.findByTestId("bot-channel-type");
+      return [...select.querySelectorAll("option")].map((option) => option.value);
+    }
+
+    beforeEach(() => {
+      channels = [];
+    });
+
+    it("offers iMessage only when the host advertises the pairing methods", async () => {
+      imessageSetup.current = true;
+      expect(await optionsFor(["builtin", "telegram"])).toEqual(["telegram", "photon_imessage"]);
+      cleanup();
+      queryClient.clear();
+      imessageSetup.current = false;
+      expect(await optionsFor(["builtin", "telegram"])).toEqual(["telegram"]);
+    });
+
+    it("explains Photon, keeps the key masked, and offers no group option", async () => {
+      respond();
+      await openForm();
+      expect(screen.getByText("1. bots.imessageGuideStep1")).toBeTruthy();
+      expect(screen.getByTestId("bot-imessage-privacy").textContent).toBe(
+        "bots.imessagePrivacyNotice",
+      );
+      expect(screen.getByLabelText("bots.imessageApiKey")).toHaveProperty("type", "password");
+      expect(screen.queryByText("bots.allowGroups")).toBeNull();
+      fireEvent.click(screen.getByTestId("bot-imessage-photon-open"));
+      expect(openExternalUrl).toHaveBeenCalledWith("https://app.beta.photon.codes");
+    });
+
+    it("requires every field before continuing", async () => {
+      respond();
+      await openForm();
+      const next = screen.getByTestId("bot-imessage-continue");
+      expect(next).toHaveProperty("disabled", true);
+      typeInto("bots.imessageProjectId", "project-1");
+      typeInto("bots.imessageApiKey", API_KEY);
+      expect(next).toHaveProperty("disabled", true);
+      typeInto("bots.imessageHandle", "me@example.test");
+      expect(next).toHaveProperty("disabled", false);
+    });
+
+    it("starts pairing with trimmed fields and shows how to send the code", async () => {
+      respond();
+      await openForm();
+      submit();
+
+      expect(await screen.findByTestId("bot-imessage-pair-qr")).toBeTruthy();
+      expect(botRequest).toHaveBeenCalledWith("bot.channel.imessage.pair.start.request", {
+        workspaceId: "workspace",
+        projectId: "project-1",
+        apiKey: API_KEY,
+        handle: "+14155550123",
+      });
+      expect(screen.getByTestId("bot-imessage-pair-number").textContent).toBe("+14155550100");
+      expect(screen.getByTestId("bot-imessage-pair-code").textContent).toBe("ait-abcd");
+      expect(screen.getByTestId("bot-imessage-pair-waiting").textContent).toBe(
+        "bots.imessagePairWaiting",
+      );
+      fireEvent.click(screen.getByTestId("bot-imessage-pair-open"));
+      expect(openSmsUrl).toHaveBeenCalledWith(SMS_URL);
+      await waitFor(() =>
+        expect(botRequest).toHaveBeenCalledWith("bot.channel.imessage.pair.status.request", {
+          workspaceId: "workspace",
+          pairingId: PAIRING_ID,
+        }),
+      );
+    });
+
+    it("leaves the QR as the way in on desktop, which cannot open sms links", async () => {
+      electron.current = true;
+      respond();
+      await openForm();
+      submit();
+      expect(await screen.findByTestId("bot-imessage-pair-qr")).toBeTruthy();
+      expect(screen.queryByTestId("bot-imessage-pair-open")).toBeNull();
+    });
+
+    it("closes the form when pairing completes", async () => {
+      respond({ status: { state: "complete", channel: {} } });
+      await openForm();
+      submit();
+      await waitFor(() => expect(screen.queryByTestId("bot-channel-form")).toBeNull());
+    });
+
+    it.each([
+      ["invalidKey", "bots.imessageInvalidKey"],
+      ["invalidHandle", "bots.imessageInvalidHandle"],
+      ["dedicatedLine", "bots.imessageDedicatedLine"],
+      ["alreadyConnected", "bots.imessageAlreadyConnected"],
+      ["unavailable", "bots.imessageUnavailable"],
+    ])("explains a %s rejection on the form", async (reason, message) => {
+      respond({ started: { state: "failed", reason } });
+      await openForm();
+      submit();
+      expect((await screen.findByTestId("bot-imessage-failure")).textContent).toBe(message);
+      expect(screen.queryByTestId("bot-imessage-pair-qr")).toBeNull();
+    });
+
+    it("returns to the form when the code expires", async () => {
+      respond({ status: { state: "failed", reason: "expired" } });
+      await openForm();
+      submit();
+      expect((await screen.findByTestId("bot-imessage-failure")).textContent).toBe(
+        "bots.imessageExpired",
+      );
+      expect(screen.queryByTestId("bot-imessage-pair-qr")).toBeNull();
+    });
+
+    it("cancels the pairing on the host", async () => {
+      respond();
+      await openForm();
+      submit();
+      fireEvent.click(await screen.findByTestId("bot-imessage-pair-cancel"));
+      await waitFor(() =>
+        expect(botRequest).toHaveBeenCalledWith("bot.channel.imessage.pair.cancel.request", {
+          workspaceId: "workspace",
+          pairingId: PAIRING_ID,
+        }),
+      );
+      expect(await screen.findByTestId("bot-imessage-guide")).toBeTruthy();
+    });
+
+    it("labels a connected channel as iMessage", async () => {
+      channels = [
+        {
+          id: ID_B,
+          config: {
+            kind: "photon_imessage",
+            projectId: "project-1",
+            keyRef: "env:AIT_SERVER_CREDENTIAL_STORED_X",
+            allowedSenders: ["+14155550123"],
+          },
+          enabled: true,
+          cursor: null,
+          deleted: false,
+        },
+      ];
+      respond();
+      imessageSetup.current = true;
+      renderChannels();
+      expect(await screen.findByText("bots.imessage")).toBeTruthy();
     });
   });
 

@@ -1,5 +1,6 @@
 import {
   BOT_FEISHU_SETUP_METHODS,
+  BOT_IMESSAGE_SETUP_METHODS,
   BOT_METHODS,
   BOT_PERMISSION_METHODS,
   BOT_QQ_SETUP_METHODS,
@@ -107,6 +108,10 @@ export function serverInfo(
         features.has("workspace-bots-v2") &&
         BOT_METHODS.every(has) &&
         BOT_QQ_SETUP_METHODS.every(has),
+      workspaceBotImessageSetup:
+        features.has("workspace-bots-v2") &&
+        BOT_METHODS.every(has) &&
+        BOT_IMESSAGE_SETUP_METHODS.every(has),
       ownedSubscriptions: has("subscription.release.request"),
       explicitEventSubscriptions: !scopedGuest && has("session.events.set_subscription.request"),
       providersSnapshot: has("provider.snapshot.get.request"),
