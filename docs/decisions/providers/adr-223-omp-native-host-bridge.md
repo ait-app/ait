@@ -39,6 +39,8 @@
   `fast` 使用原生 `@smol` 模型路由，`good` 使用 `@task`；无法解析时使用当前模型。
   Worker 继承父会话的工作目录、认证环境、审批、系统提示和沙箱约束；不继承 director 工具集。
   Thinking 使用 worker 角色的显式后缀（含角色别名）或模型的原生默认，不带入 director 的档位。
+  构造 worker 时还须清除父命名预设的 `feature_values.modelPresetThinking`，避免角色未指定
+  后缀时仍把父预设的值写成 worker 的原生 `defaultThinkingLevel`。
 - 每个 worker 是用户安装的 OMP 启动的独立 RPC 进程，执行真实模型调用和原生工具。
   Rust actor 是其唯一写入者。`send` 在空闲时继续同一会话，运行时发送 steering；
   `wait` 异步等待状态，不阻塞父会话审批。完成结果通过公开扩展消息回到 director，

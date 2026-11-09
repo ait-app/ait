@@ -6,6 +6,24 @@ pub(super) fn completion(request: &Value) -> Option<Value> {
             .iter()
             .any(|tool| tool["function"]["name"] == "vibe_spawn")
     });
+    if !director
+        && request["messages"]
+            .to_string()
+            .contains("AIT_VIBE_THINKING_FIXTURE")
+    {
+        let text = request["messages"].to_string();
+        let level = text
+            .split("AIT_NATIVE_THINKING=")
+            .nth(1)
+            .expect("native thinking hook ran");
+        let level: String = level
+            .chars()
+            .take_while(char::is_ascii_alphabetic)
+            .collect();
+        return Some(
+            json!({"role":"assistant","content":format!("Native worker thinking: {level}")}),
+        );
+    }
     if !request["messages"]
         .to_string()
         .contains("AIT_VIBE_DIRECTOR_FIXTURE")
@@ -437,4 +455,63 @@ async fn installed_external_omp_vibe_fast_model_does_not_inherit_incompatible_di
     );
     assert_eq!(worker.descriptor["status"], "completed");
     session.close().await.unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires official AIT_TEST_OMP_BIN; checks native worker thinking with a named parent preset"]
+async fn installed_external_omp_vibe_named_parent_preset_does_not_override_worker_native_thinking()
+{
+    let mut fixture = installed_with_plugins().await;
+    let agent = std::path::Path::new(&fixture.spec.cwd).join("agent");
+    let path = agent.join("models.yml");
+    let mut models: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let model = &mut models["providers"]["ait-local-fixture"]["models"][0];
+    model["reasoning"] = json!(true);
+    model["thinking"] = json!({"mode":"effort","efforts":["low","high"]});
+    std::fs::write(&path, models.to_string()).unwrap();
+    std::fs::write(agent.join("config.yml"), json!({"defaultThinkingLevel":"high",
+        "modelRoles":{"default":"ait-local-fixture/fixture","smol":"ait-local-fixture/fixture"},
+        "modelPresets":{"parent":{"modelRoles":{"default":"ait-local-fixture/fixture"},"defaultThinkingLevel":"low"}}
+    }).to_string()).unwrap();
+    fixture.spec.config.mode_id = Some("full".to_owned());
+    fixture.spec.config.feature_values = Some(BTreeMap::from([(
+        "modelPreset".to_owned(),
+        json!("parent"),
+    )]));
+    fixture.spec.config = fixture
+        .client
+        .resolve_selection(&fixture.spec)
+        .await
+        .unwrap();
+    assert_eq!(
+        fixture.spec.config.feature_values.as_ref().unwrap()["modelPresetThinking"],
+        "low"
+    );
+    for (selector, expected) in [("native", "high"), ("ait-local-fixture/fixture:low", "low")] {
+        fixture
+            .spec
+            .config
+            .feature_values
+            .as_mut()
+            .unwrap()
+            .insert("modelRole.smol".to_owned(), json!(selector));
+        let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
+        session
+            .out_of_band(&AgentPrompt::text("/vibe"))
+            .await
+            .unwrap();
+        let receipt = control(
+            session.as_mut(),
+            json!({"operation":"spawn","cli":"fast","prompt":"AIT_VIBE_THINKING_FIXTURE"}),
+        )
+        .await;
+        let id = receipt["session"].as_str().unwrap();
+        worker_done(session.as_mut(), id).await;
+        let listed = control(session.as_mut(), json!({"operation":"list"})).await;
+        assert_eq!(
+            listed["workers"][0]["answer"],
+            format!("Native worker thinking: {expected}")
+        );
+        session.close().await.unwrap();
+    }
 }

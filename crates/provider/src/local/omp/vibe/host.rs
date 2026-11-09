@@ -698,6 +698,9 @@ async fn spawn(
         .unwrap_or(&cli)
         .to_owned();
     let mut config = shared.spec.config.clone();
+    if let Some(values) = &mut config.feature_values {
+        values.remove("modelPresetThinking");
+    }
     config.thinking_option_id = shared
         .client
         .cached_roles(&shared.spec.cwd)?

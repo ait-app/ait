@@ -1,6 +1,14 @@
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 
 export default function (pi: ExtensionAPI) {
+  pi.on("before_agent_start", (event) =>
+    event.prompt === "AIT_VIBE_THINKING_FIXTURE"
+      ? {
+          systemPrompt: [...event.systemPrompt, `AIT_NATIVE_THINKING=${pi.getThinkingLevel()}`],
+        }
+      : undefined,
+  );
+
   for (const name of ["compat-vendor-alpha", "compat-other-command"]) {
     pi.registerCommand(name, {
       description: `Generic compatibility fixture ${name}`,
