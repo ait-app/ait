@@ -142,12 +142,15 @@ impl Fixture {
             .unwrap()
     }
     pub(crate) fn bots(&self) -> Bots {
+        self.bots_with(Arc::new(NoCredentials))
+    }
+    pub(crate) fn bots_with(&self, credentials: Arc<dyn Credentials>) -> Bots {
         Bots::spawn(Dependencies {
             store: self.store.clone(),
             workspaces: self.workspaces.clone(),
             projects: self.projects.clone(),
             executor: self.native.clone(),
-            credentials: Arc::new(NoCredentials),
+            credentials,
             scopes: self.scopes.clone(),
         })
         .unwrap()

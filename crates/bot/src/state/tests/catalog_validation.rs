@@ -229,3 +229,34 @@ fn channel_creation_is_idempotent_and_account_identity_cannot_change_in_place() 
         json!(["new-sender"])
     );
 }
+
+#[test]
+fn stored_credential_references_may_name_only_their_own_channel() {
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    let id = ChannelId::generate();
+    let other = ChannelId::generate();
+    let config = |reference: String| {
+        json!({"workspaceId":WORKSPACE,"channelId":id,"config":{"kind":"feishu","appId":"cli_a",
+            "secretRef":reference,"allowedSenders":["ou_a"]}})
+    };
+
+    assert_eq!(
+        state.execute(
+            "bot.channel.create.request",
+            config(crate::ports::stored_credential_reference(other))
+        ),
+        Err(ErrorCode::InvalidMessage)
+    );
+    assert!(
+        state
+            .execute(
+                "bot.channel.create.request",
+                config(crate::ports::stored_credential_reference(id))
+            )
+            .is_ok()
+    );
+}

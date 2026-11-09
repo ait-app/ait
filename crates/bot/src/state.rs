@@ -5,6 +5,7 @@ mod execution;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
+use domain::bot::ChannelConfig;
 use domain::bot::{
     Bot, BotState, Catalog, Channel, Conversation, DeliveryStatus, SessionOwner, Turn, TurnStatus,
 };
@@ -17,6 +18,13 @@ use tokio_util::sync::CancellationToken;
 
 use crate::mcp::Scopes;
 use crate::protocol::{self, decode};
+
+/// A verified external account whose secret the daemon stores on the channel's behalf.
+pub(crate) struct StoredChannel {
+    pub(crate) workspace_id: String,
+    pub(crate) channel_id: ChannelId,
+    pub(crate) config: ChannelConfig,
+}
 
 #[derive(Debug)]
 pub(crate) struct Receipt {
@@ -42,6 +50,8 @@ pub(crate) struct State {
     pub(crate) channel_status: BTreeMap<ChannelId, Value>,
     pub(crate) frozen: bool,
     pub(crate) session_actions: Vec<(SessionOwner, provider::service::bot_execution::Action)>,
+    /// Deleted channels whose stored secrets the runtime has yet to remove.
+    pub(crate) released_credentials: Vec<ChannelId>,
 }
 
 impl State {
@@ -63,6 +73,13 @@ impl State {
                 .map_err(|_| ErrorCode::BotIo)?;
         }
         scopes.publish(&catalog);
+        // Retried on every start so a crash after a deletion cannot strand its secret.
+        let released_credentials = catalog
+            .channels
+            .iter()
+            .filter(|channel| channel.deleted)
+            .map(|channel| channel.id)
+            .collect();
         let mut state = Self {
             store,
             workspaces,
@@ -80,6 +97,7 @@ impl State {
             channel_status: BTreeMap::new(),
             frozen: false,
             session_actions: Vec::new(),
+            released_credentials,
         };
         for conversation in state.store.conversations().map_err(|_| ErrorCode::BotIo)? {
             state.channel(conversation.bot_id, conversation.channel_id)?;

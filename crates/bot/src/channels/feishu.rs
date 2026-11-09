@@ -1,4 +1,5 @@
 mod frames;
+pub(crate) mod onboarding;
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};

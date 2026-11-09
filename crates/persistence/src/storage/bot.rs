@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use domain::bot::{Catalog, Conversation, Turn};
-use domain::{BotTurnId, ConversationId};
+use domain::{BotTurnId, ChannelId, ConversationId};
 use model::bot::{StorageError, Store};
 use serde::{Serialize, de::DeserializeOwned};
 use sha2::{Digest, Sha256};
@@ -13,6 +13,7 @@ use crate::{File, single::Error};
 
 const RECORD_LIMIT: u64 = 2 * 1024 * 1024;
 const MEMORY_LIMIT: u64 = 32 * 1024;
+const SECRET_LIMIT: u64 = 4096;
 
 /// Concrete local storage installed only by the daemon composition root.
 #[derive(Debug, Clone)]
@@ -25,6 +26,64 @@ impl FileStore {
     #[must_use]
     pub fn new(root: PathBuf) -> Self {
         Self { root }
+    }
+}
+
+/// Owner-only secret files, one per channel, installed by the daemon composition root.
+#[derive(Debug, Clone)]
+pub struct SecretFiles {
+    root: PathBuf,
+}
+
+impl SecretFiles {
+    /// Select a daemon-owned directory; no I/O is performed until a secret is used.
+    #[must_use]
+    pub fn new(root: PathBuf) -> Self {
+        Self { root }
+    }
+
+    fn path(&self, channel: ChannelId) -> PathBuf {
+        self.root.join(channel.to_string())
+    }
+
+    /// Atomically replace `channel`'s secret; the file and directory are owner-only on Unix.
+    /// # Errors
+    /// Returns a safe storage error without echoing the secret.
+    pub fn save(&self, channel: ChannelId, secret: &str) -> Result<(), StorageError> {
+        if u64::try_from(secret.len()).map_or(true, |length| length > SECRET_LIMIT) {
+            return Err(StorageError);
+        }
+        fs::create_dir_all(&self.root).map_err(|_| StorageError)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&self.root, fs::Permissions::from_mode(0o700))
+                .map_err(|_| StorageError)?;
+        }
+        File::new(self.path(channel))
+            .write(secret.as_bytes())
+            .map_err(|_| StorageError)
+    }
+
+    /// Read `channel`'s secret.
+    /// # Errors
+    /// Returns a safe storage error when the secret is absent, oversized or unreadable.
+    pub fn load(&self, channel: ChannelId) -> Result<String, StorageError> {
+        let bytes = File::new(self.path(channel))
+            .read_limited(SECRET_LIMIT)
+            .map_err(|_| StorageError)?;
+        String::from_utf8(bytes).map_err(|_| StorageError)
+    }
+
+    /// Remove `channel`'s secret; an absent secret is not an error.
+    /// # Errors
+    /// Returns a safe storage error when an existing secret cannot be removed.
+    pub fn delete(&self, channel: ChannelId) -> Result<(), StorageError> {
+        match fs::remove_file(self.path(channel)) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(_) => Err(StorageError),
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-mod feishu;
+pub(crate) mod feishu;
 mod telegram;
 
 use std::sync::Arc;
