@@ -121,7 +121,7 @@ export const es: TranslationResources = {
         unknown: "Desconocido",
       },
     },
-    nativeOperations: "Operaciones nativas",
+    moreActions: "Más acciones",
     runOperation: "Ejecutar",
     openBrowser: "Abrir en el navegador",
     goal: "Objetivo",

@@ -23,55 +23,40 @@ const running: Vibe = {
       description: "Fast worker: draft the change list",
       model: "deepseek-v4.1-flash",
     },
-    {
-      id: "worker-good",
-      parentId: "parent",
-      status: "completed",
-      description: null,
-      model: null,
-    },
   ],
 };
 
-it("lists enabled vibe workers with status, description and model", () => {
-  const view = render(<ProviderVibe state={running} />);
+it("shows director controls during worker execution without duplicating the shared subagent list", () => {
+  render(<ProviderVibe state={running} />);
   expect(screen.getByTestId("provider-vibe")).toBeTruthy();
   expect(screen.getByText("providerControl.vibe.enabled")).toBeTruthy();
-  expect(screen.getByText("worker-fast")).toBeTruthy();
-  expect(screen.getByText("providerControl.vibe.states.running")).toBeTruthy();
-  expect(screen.getByText("Fast worker: draft the change list")).toBeTruthy();
-  expect(screen.getByText("deepseek-v4.1-flash")).toBeTruthy();
-  expect(screen.getByText("worker-good")).toBeTruthy();
-  expect(screen.getByText("providerControl.vibe.states.completed")).toBeTruthy();
-  view.unmount();
+  expect(screen.queryByText("worker-fast")).toBeNull();
+  expect(screen.queryByText("Fast worker: draft the change list")).toBeNull();
 });
 
-it("keeps the live mode visible when disabled or without workers", () => {
-  const disabled = render(<ProviderVibe state={{ enabled: false, workers: running.workers }} />);
-  expect(screen.getByText("providerControl.vibe.disabled")).toBeTruthy();
-  disabled.unmount();
-  const empty = render(<ProviderVibe state={{ enabled: true, workers: [] }} />);
-  expect(screen.getByText("providerControl.vibe.enabled")).toBeTruthy();
-  expect(screen.getByTestId("provider-vibe-empty")).toBeTruthy();
-  empty.unmount();
+it.each([false, true])("hides an empty Vibe mode, enabled = %s", (enabled) => {
+  const view = render(<ProviderVibe state={{ enabled, workers: [] }} />);
+  expect(view.container.innerHTML).toBe("");
 });
 
-it("opens a worker only when a handler is supplied", () => {
-  const onOpenWorker = vi.fn();
-  const view = render(<ProviderVibe state={running} onOpenWorker={onOpenWorker} />);
-  fireEvent.click(screen.getByTestId("provider-vibe-worker-worker-fast"));
-  expect(onOpenWorker).toHaveBeenCalledExactlyOnceWith(running.workers[0]);
-  view.unmount();
+it.each(["completed", "failed", "canceled"] as const)(
+  "hides the director indicator when all workers are %s",
+  (status) => {
+    const view = render(
+      <ProviderVibe
+        state={{ enabled: true, workers: running.workers.map((worker) => ({ ...worker, status })) }}
+      />,
+    );
+    expect(view.container.innerHTML).toBe("");
+  },
+);
 
-  const readonly = render(<ProviderVibe state={running} />);
-  fireEvent.click(screen.getByTestId("provider-vibe-worker-worker-good"));
-  expect(onOpenWorker).toHaveBeenCalledTimes(1);
-  expect(readonly.getByTestId("provider-vibe-worker-worker-good").getAttribute("role")).not.toBe(
-    "button",
-  );
+it("hides disabled mode even when its worker history remains", () => {
+  const view = render(<ProviderVibe state={{ ...running, enabled: false }} />);
+  expect(view.container.innerHTML).toBe("");
 });
 
-it("offers an exit without workers, retains the active state until acknowledged, and shows errors", async () => {
+it("keeps active controls until exit is acknowledged and permits retry on failure", async () => {
   let reject!: (error: Error) => void;
   const onExit = vi.fn(
     () =>
@@ -79,7 +64,7 @@ it("offers an exit without workers, retains the active state until acknowledged,
         reject = fail;
       }),
   );
-  const mounted = render(<ProviderVibe state={{ enabled: true, workers: [] }} onExit={onExit} />);
+  const view = render(<ProviderVibe state={running} onExit={onExit} />);
   fireEvent.click(screen.getByTestId("provider-vibe-exit"));
   expect(onExit).toHaveBeenCalledOnce();
   expect(screen.getByText("providerControl.vibe.enabled")).toBeTruthy();
@@ -87,7 +72,6 @@ it("offers an exit without workers, retains the active state until acknowledged,
     reject(new Error("Cannot exit"));
   });
   expect(screen.getByText("Cannot exit")).toBeTruthy();
-  mounted.rerender(<ProviderVibe state={{ enabled: false, workers: [] }} onExit={onExit} />);
-  expect(screen.getByText("providerControl.vibe.disabled")).toBeTruthy();
-  expect(screen.queryByTestId("provider-vibe-exit")).toBeNull();
+  view.rerender(<ProviderVibe state={{ ...running, enabled: false }} onExit={onExit} />);
+  expect(screen.queryByTestId("provider-vibe")).toBeNull();
 });

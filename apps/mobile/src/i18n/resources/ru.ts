@@ -129,7 +129,7 @@ export const ru: TranslationResources = {
         unknown: "Неизвестно",
       },
     },
-    nativeOperations: "Нативные операции",
+    moreActions: "Другие действия",
     runOperation: "Выполнить",
     openBrowser: "Открыть в браузере",
     goal: "Цель",

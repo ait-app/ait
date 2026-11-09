@@ -122,7 +122,7 @@ export const fr: TranslationResources = {
         unknown: "Inconnu",
       },
     },
-    nativeOperations: "Opérations natives",
+    moreActions: "Autres actions",
     runOperation: "Exécuter",
     openBrowser: "Ouvrir dans le navigateur",
     goal: "Objectif",

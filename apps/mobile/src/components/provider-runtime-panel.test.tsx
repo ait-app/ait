@@ -19,7 +19,6 @@ vi.mock("@/stores/session-store", () => ({
     }),
 }));
 vi.mock("@/utils/open-external-url", () => ({ openExternalUrl: fixture.open }));
-vi.mock("./provider-native-actions", () => ({ ProviderNativeActions: () => null }));
 vi.mock("./provider-side-questions", () => ({ ProviderSideQuestions: () => null }));
 vi.mock("@/hooks/use-settings", () => ({
   useSettings: (selector: (state: unknown) => unknown) =>
@@ -89,7 +88,7 @@ it("defers editor replacement during submit and delivers each revision once acro
   expect(onEditor).toHaveBeenCalledTimes(2);
 });
 
-it("shows native vibe workers and hides everything when the host omits them", () => {
+it("shows active director controls and reserves no space for idle Vibe", () => {
   fixture.state = {
     statuses: [],
     widgets: [],
@@ -113,7 +112,8 @@ it("shows native vibe workers and hides everything when the host omits them", ()
     <ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />,
   );
   expect(screen.getByTestId("provider-vibe")).toBeTruthy();
-  expect(screen.getByText("worker-fast")).toBeTruthy();
+  expect(screen.queryByText("worker-fast")).toBeNull();
+  expect(screen.getByTestId("provider-vibe-exit")).toBeTruthy();
   view.unmount();
 
   // An older daemon sends no `vibe` at all: the panel must stay hidden.
@@ -133,6 +133,28 @@ it("shows native vibe workers and hides everything when the host omits them", ()
     editor: null,
     vibe: { enabled: false, workers: [] },
   };
-  render(<ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />);
-  expect(screen.getByTestId("provider-vibe")).toBeTruthy();
+  const disabled = render(
+    <ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />,
+  );
+  expect(disabled.container.innerHTML).toBe("");
+  fixture.state = { ...fixture.state, vibe: { enabled: true, workers: [] } };
+  disabled.rerender(
+    <ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />,
+  );
+  expect(disabled.container.innerHTML).toBe("");
+});
+
+it("does not reserve message-area space for toolbar actions", () => {
+  fixture.state = {
+    statuses: [],
+    widgets: [],
+    title: null,
+    link: null,
+    editor: null,
+    actions: [{ id: "get_session_stats", label: "Session statistics", fields: [] }],
+  };
+  const view = render(
+    <ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />,
+  );
+  expect(view.container.innerHTML).toBe("");
 });

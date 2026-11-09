@@ -103,7 +103,7 @@ export const zhCN: TranslationResources = {
         unknown: "未知",
       },
     },
-    nativeOperations: "原生操作",
+    moreActions: "更多操作",
     runOperation: "执行",
     openBrowser: "在浏览器中打开",
     goal: "目标",

@@ -122,7 +122,7 @@ export const ja: TranslationResources = {
         unknown: "不明",
       },
     },
-    nativeOperations: "ネイティブ操作",
+    moreActions: "その他の操作",
     runOperation: "実行",
     openBrowser: "ブラウザーで開く",
     goal: "目標",

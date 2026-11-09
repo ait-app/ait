@@ -104,7 +104,7 @@ export const en = {
         unknown: "Unknown",
       },
     },
-    nativeOperations: "Native operations",
+    moreActions: "More actions",
     runOperation: "Run",
     openBrowser: "Open in browser",
     goal: "Goal",

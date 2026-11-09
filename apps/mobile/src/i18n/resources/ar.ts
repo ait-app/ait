@@ -127,7 +127,7 @@ export const ar: TranslationResources = {
         unknown: "غير معروف",
       },
     },
-    nativeOperations: "العمليات الأصلية",
+    moreActions: "المزيد من الإجراءات",
     runOperation: "تنفيذ",
     openBrowser: "فتح في المتصفح",
     goal: "الهدف",

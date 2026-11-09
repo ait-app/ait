@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type ReactElement,
+  type ReactNode,
   type RefObject,
 } from "react";
 import { useTranslation } from "react-i18next";
@@ -35,6 +36,7 @@ import { formatAgentFeatureLabel, formatThinkingOptionLabel } from "@/agent-cont
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
 import { ModelFeatureControls } from "@/components/model-feature-controls";
+import { ProviderNativeActions } from "@/components/provider-native-actions";
 import {
   buildProviderSelectorProviders,
   buildSelectableProviderSelectorProviders,
@@ -84,6 +86,7 @@ import {
 import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import { isNative } from "@/constants/platform";
 import {
+  COMPOSER_TOOLBAR_GEOMETRY,
   resolveComposerControlDensity,
   resolveComposerControlPresentation,
   resolveComposerToolbarGlyphSize,
@@ -124,6 +127,7 @@ type AgentControlSelector = "provider" | "mode" | "model" | "thinking" | `featur
 const EMPTY_AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [];
 
 interface ControlledAgentControlsProps {
+  additionalControl?: ReactNode;
   provider: string;
   providerOptions?: AgentControlOption[];
   selectedProviderId?: string;
@@ -191,6 +195,7 @@ interface AgentControlsProps {
   serverId: string;
   onDropdownClose?: () => void;
   isCompactLayout?: boolean;
+  nativeActionsBlocked?: boolean;
 }
 
 function AgentControlCommandCenterRegistration({
@@ -500,6 +505,7 @@ function buildOpenChangeHandler(
 }
 
 function ControlledAgentControls({
+  additionalControl,
   provider,
   providerOptions,
   selectedProviderId,
@@ -640,6 +646,7 @@ function ControlledAgentControls({
     [canSelectModel, canSelectThinking, featureControls, fontScale, modeControl],
   );
   const presentation = useMemo(() => resolveComposerControlPresentation(density), [density]);
+  const hasAdditionalControl = Boolean(additionalControl);
   const layoutContextValue = useMemo(
     () => ({
       glyphSize: resolveComposerToolbarGlyphSize(isNative ? "native" : "web"),
@@ -651,7 +658,13 @@ function ControlledAgentControls({
   const updateDensityForWidth = useCallback(
     (availableWidth: number) => {
       const nextDensity = resolveComposerControlDensity({
-        availableWidth,
+        availableWidth: Math.max(
+          0,
+          availableWidth -
+            (hasAdditionalControl
+              ? COMPOSER_TOOLBAR_GEOMETRY.controlSize + COMPOSER_TOOLBAR_GEOMETRY.controlGap
+              : 0),
+        ),
         currentDensity: densityRef.current,
         controls: controlPresence,
       });
@@ -659,7 +672,7 @@ function ControlledAgentControls({
       densityRef.current = nextDensity;
       setDensity(nextDensity);
     },
-    [controlPresence],
+    [controlPresence, hasAdditionalControl],
   );
 
   const handleLayout = useCallback(
@@ -827,7 +840,7 @@ function ControlledAgentControls({
     [onModelSelectorOpen, onSetFeature],
   );
 
-  if (!hasAnyControl) {
+  if (!hasAnyControl && !additionalControl) {
     return null;
   }
 
@@ -929,6 +942,7 @@ function ControlledAgentControls({
             canSwitchProvider={Boolean(onSelectProviderAndModel)}
           />
         )}
+        {additionalControl}
       </View>
     </ComposerControlLayoutProvider>
   );
@@ -1766,6 +1780,7 @@ export const AgentControls = memo(function AgentControls({
   serverId,
   onDropdownClose,
   isCompactLayout,
+  nativeActionsBlocked = false,
 }: AgentControlsProps) {
   const { t } = useTranslation();
   const { updatePreferences } = useFormPreferences();
@@ -1773,6 +1788,12 @@ export const AgentControls = memo(function AgentControls({
     useShallow((state) => selectAgentControlsSlice(state, serverId, agentId)),
   );
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
+  const nativeActions = useSessionStore(
+    (state) => state.sessions[serverId]?.agents.get(agentId)?.providerUi?.actions,
+  );
+  const workspaceId = useSessionStore(
+    (state) => state.sessions[serverId]?.agents.get(agentId)?.workspaceId,
+  );
   const toast = useToast();
   const modeControl = useLiveAgentModeControl(serverId, agentId);
   const commandCenterModes = toCommandCenterModes(modeControl);
@@ -2062,6 +2083,20 @@ export const AgentControls = memo(function AgentControls({
       {commandCenterRegistration}
       {profileEditor.element}
       <ControlledAgentControls
+        additionalControl={
+          nativeActions?.length && agent.cwd ? (
+            <ProviderNativeActions
+              key={`${serverId}:${agentId}`}
+              serverId={serverId}
+              agentId={agentId}
+              cwd={agent.cwd}
+              workspaceId={workspaceId}
+              actions={nativeActions}
+              disabled={!client || nativeActionsBlocked}
+              onClose={onDropdownClose}
+            />
+          ) : null
+        }
         provider={agent.provider}
         modelSelectorProviders={agentModelSelectorProviders}
         modelOptions={modelOptions}

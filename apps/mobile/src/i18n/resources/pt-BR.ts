@@ -122,7 +122,7 @@ export const ptBR: TranslationResources = {
         unknown: "Desconhecido",
       },
     },
-    nativeOperations: "Operações nativas",
+    moreActions: "Mais ações",
     runOperation: "Executar",
     openBrowser: "Abrir no navegador",
     goal: "Objetivo",

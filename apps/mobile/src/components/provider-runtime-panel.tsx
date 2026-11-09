@@ -4,13 +4,9 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { Button } from "@/components/ui/button";
 import { useSessionStore } from "@/stores/session-store";
-import { useSettings } from "@/hooks/use-settings";
-import { openWorkspaceTargetAtLocation } from "@/workspace-tabs/open-beside";
-import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import { openExternalUrl } from "@/utils/open-external-url";
-import { ProviderNativeActions } from "./provider-native-actions";
 import { ProviderSideQuestions } from "./provider-side-questions";
-import { ProviderVibe } from "./provider-vibe";
+import { hasActiveVibeWorkers, ProviderVibe } from "./provider-vibe";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 
 // Remember native editor deliveries across navigation without caching their text or auth URLs.
@@ -41,28 +37,8 @@ export function ProviderRuntimePanel({
   const state = useSessionStore(
     (store) => store.sessions[serverId]?.agents.get(agentId)?.providerUi,
   );
-  const cwd = useSessionStore((store) => store.sessions[serverId]?.agents.get(agentId)?.cwd);
-  const workspaceId = useSessionStore(
-    (store) => store.sessions[serverId]?.agents.get(agentId)?.workspaceId,
-  );
   const [error, setError] = useState<string | null>(null);
   const editor = state?.editor;
-  const openInSidePane = useSettings((settings) => settings.openInSidePane);
-  const workspaceKey = buildWorkspaceTabPersistenceKey({
-    serverId,
-    workspaceId: workspaceId ?? "",
-  });
-  const openVibeWorker = useCallback(
-    (workerId: string) => {
-      if (!workspaceKey) return;
-      openWorkspaceTargetAtLocation({
-        workspaceKey,
-        target: { kind: "provider_subagent", parentAgentId: agentId, subagentId: workerId },
-        location: openInSidePane.subagents ? "side" : "main",
-      });
-    },
-    [agentId, openInSidePane.subagents, workspaceKey],
-  );
   useEffect(() => {
     if (!editor || !onEditor || blocked) return;
     const key = `${serverId}:${agentId}`;
@@ -74,31 +50,20 @@ export function ProviderRuntimePanel({
   }, [serverId, agentId, editor, onEditor, blocked]);
   if (!state) return null;
   const above = placement === "aboveEditor";
+  const activeVibe = hasActiveVibeWorkers(state.vibe);
+  const hasSideQuestions = Boolean(
+    state.sideQuestions &&
+    (state.sideQuestions.records.length || state.sideQuestions.error || state.sideQuestions.reveal),
+  );
   const widgets = state.widgets.filter((widget) => widget.placement === placement);
   if (
     !widgets.length &&
     (!above ||
-      (!state.title &&
-        !state.statuses.length &&
-        !state.link &&
-        !state.actions?.length &&
-        !state.sideQuestions &&
-        !state.vibe))
+      (!state.title && !state.statuses.length && !state.link && !hasSideQuestions && !activeVibe))
   )
     return null;
   return (
     <View style={styles.panel} testID={`provider-runtime-${placement}`}>
-      {above && state.actions?.length && cwd ? (
-        <ProviderNativeActions
-          key={`${serverId}:${agentId}`}
-          serverId={serverId}
-          agentId={agentId}
-          cwd={cwd}
-          workspaceId={workspaceId}
-          actions={state.actions}
-          disabled={blocked}
-        />
-      ) : null}
       {above && state.title ? <Text style={styles.title}>{state.title}</Text> : null}
       {above && state.sideQuestions ? (
         <ProviderSideQuestions
@@ -109,10 +74,10 @@ export function ProviderRuntimePanel({
           disabled={blocked}
         />
       ) : null}
-      {above && state.vibe ? (
+      {above && activeVibe && state.vibe ? (
         <ProviderVibe
+          key={`${serverId}:${agentId}`}
           state={state.vibe}
-          onOpenWorker={(worker) => openVibeWorker(worker.id)}
           onExit={exitVibe}
           disabled={blocked || !client}
         />

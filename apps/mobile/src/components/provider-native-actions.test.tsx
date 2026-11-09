@@ -20,8 +20,18 @@ vi.mock("react-native", () => ({
     OS: "web",
     select: (options: { web?: string; default?: string }) => options.web ?? options.default,
   },
-  View: ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => (
-    <div style={style}>{children}</div>
+  View: ({
+    children,
+    style,
+    testID,
+  }: {
+    children: React.ReactNode;
+    style?: React.CSSProperties;
+    testID?: string;
+  }) => (
+    <div style={style} data-testid={testID}>
+      {children}
+    </div>
   ),
   Text: ({
     children,
@@ -80,30 +90,89 @@ vi.mock("@/components/ui/button", () => ({
     </button>
   ),
 }));
+vi.mock("@/composer/agent-controls/control", () => ({
+  AgentControlTrigger: ({
+    onPress,
+    disabled,
+    accessibilityLabel,
+    accessibilityState,
+    testID,
+  }: {
+    onPress: () => void;
+    disabled?: boolean;
+    accessibilityLabel: string;
+    accessibilityState: { expanded: boolean };
+    testID: string;
+  }) => (
+    <button
+      onClick={onPress}
+      disabled={disabled}
+      aria-label={accessibilityLabel}
+      aria-expanded={accessibilityState.expanded}
+      data-testid={testID}
+    >
+      …
+    </button>
+  ),
+}));
+vi.mock("@/components/ui/tooltip", () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipContent: () => null,
+}));
 vi.mock("@/components/ui/combobox", () => ({
   Combobox: ({
-    value,
     options,
     onSelect,
+    open,
+    onOpenChange,
+    children,
+    header,
+    keepOpenOnSelect,
   }: {
-    value: string;
     options: { id: string; label: string }[];
     onSelect: (id: string) => void;
-  }) => (
-    <select aria-label="Operation" value={value} onChange={(event) => onSelect(event.target.value)}>
-      {options.map((option) => (
-        <option key={option.id} value={option.id}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  ),
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    children?: React.ReactNode;
+    header?: {
+      title: string;
+      back?: { onPress: () => void };
+      search?: { onChange: (value: string) => void };
+    };
+    keepOpenOnSelect?: boolean;
+  }) =>
+    open ? (
+      <div role="dialog">
+        {header?.back ? <button onClick={header.back.onPress}>Back</button> : null}
+        <span>{header?.title}</span>
+        {header?.search ? (
+          <input
+            aria-label="Search actions"
+            onChange={(e) => header.search!.onChange(e.target.value)}
+          />
+        ) : null}
+        <button onClick={() => onOpenChange(false)}>Close</button>
+        {children ??
+          options.map((option) => (
+            <button
+              key={option.id}
+              onClick={() => {
+                onSelect(option.id);
+                if (!keepOpenOnSelect) onOpenChange(false);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+      </div>
+    ) : null,
 }));
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) =>
       ({
-        "providerControl.nativeOperations": "Native operations",
+        "providerControl.moreActions": "More actions",
         "providerControl.runOperation": "Run",
         "common.loading": "Loading...",
         "panels.file.downloadFile": "Download",
@@ -135,6 +204,51 @@ const actions = [
   },
 ];
 
+function chooseAction(label: string) {
+  const back = screen.queryByRole("button", { name: "Back" });
+  if (back) fireEvent.click(back);
+  fireEvent.click(screen.getByRole("button", { name: label }));
+}
+
+it("keeps actions and results behind the icon and preserves results when reopened", async () => {
+  fixture.run.mockResolvedValue({ text: "Statistics ready" });
+  const onClose = vi.fn();
+  render(
+    <ProviderNativeActions
+      serverId="server"
+      agentId="agent"
+      cwd="/workspace"
+      actions={actions}
+      disabled={false}
+      onClose={onClose}
+    />,
+  );
+  const trigger = screen.getByRole("button", { name: "More actions" });
+  expect(trigger.textContent).toBe("…");
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.click(trigger);
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  expect(screen.queryByTestId("agent-action-form")).toBeNull();
+  fireEvent.change(screen.getByLabelText("Search actions"), { target: { value: "statistics" } });
+  expect(screen.queryByRole("button", { name: "Log in" })).toBeNull();
+  chooseAction("Session statistics");
+  expect(fixture.run).not.toHaveBeenCalled();
+  await act(async () => {
+    fireEvent.click(screen.getByText("Run"));
+  });
+  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "get_session_stats", {});
+  expect(screen.getByText("Statistics ready")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(screen.queryByText("Statistics ready")).toBeNull();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.click(trigger);
+  expect(screen.queryByTestId("agent-action-form")).toBeNull();
+  chooseAction("Session statistics");
+  expect(screen.getByText("Statistics ready")).toBeTruthy();
+});
+
 it("requires fields and preserves input for retry", async () => {
   fixture.run
     .mockRejectedValueOnce(new Error("Provider unavailable"))
@@ -148,10 +262,8 @@ it("requires fields and preserves input for retry", async () => {
       disabled={false}
     />,
   );
-  fireEvent.click(screen.getByText("Native operations"));
-  fireEvent.change(screen.getByLabelText("Operation"), {
-    target: { value: "login" },
-  });
+  fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+  chooseAction("Log in");
   expect(screen.getByText("Run").closest("button")?.disabled).toBe(true);
   fireEvent.change(screen.getByLabelText("Provider"), {
     target: { value: "test-provider" },
@@ -196,27 +308,21 @@ it("keeps pending actions independent and preserves the previous result while re
       disabled={false}
     />,
   );
-  fireEvent.click(screen.getByText("Native operations"));
-  fireEvent.change(screen.getByLabelText("Operation"), {
-    target: { value: "login" },
-  });
+  fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+  chooseAction("Log in");
   fireEvent.change(screen.getByLabelText("Provider"), {
     target: { value: "test-provider" },
   });
   fireEvent.click(screen.getByText("Run"));
   expect(screen.getByText("Loading...").closest("button")?.disabled).toBe(true);
-  fireEvent.change(screen.getByLabelText("Operation"), {
-    target: { value: "get_session_stats" },
-  });
+  chooseAction("Session statistics");
   await act(async () => {
     fireEvent.click(screen.getByText("Run"));
   });
   expect(screen.getByText("Statistics ready")).toBeTruthy();
   fireEvent.click(screen.getByText("Run"));
   expect(screen.getByText("Statistics ready")).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Operation"), {
-    target: { value: "login" },
-  });
+  chooseAction("Log in");
   expect((screen.getByLabelText("Provider") as HTMLInputElement).value).toBe("test-provider");
   expect(screen.queryByText("Statistics ready")).toBeNull();
   await act(async () => {
@@ -227,9 +333,7 @@ it("keeps pending actions independent and preserves the previous result while re
     finishLogin({ text: "Signed in" });
   });
   expect(screen.getByText("Signed in")).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Operation"), {
-    target: { value: "get_session_stats" },
-  });
+  chooseAction("Session statistics");
   expect(screen.getByText("New statistics")).toBeTruthy();
 });
 
@@ -250,7 +354,8 @@ it("downloads the native export using its original host workspace scope", async 
       disabled={false}
     />,
   );
-  fireEvent.click(screen.getByText("Native operations"));
+  fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+  chooseAction("Session statistics");
   await act(async () => {
     fireEvent.click(screen.getByText("Run"));
   });

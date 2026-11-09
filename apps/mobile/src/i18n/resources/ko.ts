@@ -119,7 +119,7 @@ export const ko: TranslationResources = {
         unknown: "알 수 없음",
       },
     },
-    nativeOperations: "네이티브 작업",
+    moreActions: "추가 작업",
     runOperation: "실행",
     openBrowser: "브라우저에서 열기",
     goal: "목표",

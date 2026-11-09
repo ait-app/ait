@@ -323,6 +323,7 @@ interface RenderLeftContentArgs {
   focusInput: () => void;
   isCompactLayout: boolean;
   showAgentControls: boolean;
+  nativeActionsBlocked: boolean;
 }
 
 function renderLeftContent(args: RenderLeftContentArgs): ReactElement | null {
@@ -337,6 +338,7 @@ function renderLeftContent(args: RenderLeftContentArgs): ReactElement | null {
       serverId={serverId}
       onDropdownClose={focusInput}
       isCompactLayout={isCompactLayout}
+      nativeActionsBlocked={args.nativeActionsBlocked}
     />
   );
 }
@@ -2236,6 +2238,13 @@ function ComposerContentImpl({
     [attachments, setSelectedAttachments, setGithubSearchQuery, setIsGithubPickerOpen],
   );
 
+  const isSubmitLoadingVisible =
+    isProcessing ||
+    isSubmitLoading ||
+    isStartingVoice ||
+    isUploadingFile ||
+    pendingNativeImagePastes > 0;
+
   const leftContent = useMemo(
     () =>
       renderLeftContent({
@@ -2245,8 +2254,18 @@ function ComposerContentImpl({
         focusInput,
         isCompactLayout,
         showAgentControls: mode.showAgentControls,
+        nativeActionsBlocked: readOnly || isSubmitLoadingVisible,
       }),
-    [agentControls, agentId, focusInput, isCompactLayout, mode.showAgentControls, serverId],
+    [
+      agentControls,
+      agentId,
+      focusInput,
+      isCompactLayout,
+      isSubmitLoadingVisible,
+      mode.showAgentControls,
+      readOnly,
+      serverId,
+    ],
   );
 
   const handleAttachButtonRef = useCallback((node: View | null) => {
@@ -2394,12 +2413,6 @@ function ComposerContentImpl({
   );
   const messageInputContainerRef = useRef<View>(null);
 
-  const isSubmitLoadingVisible =
-    isProcessing ||
-    isSubmitLoading ||
-    isStartingVoice ||
-    isUploadingFile ||
-    pendingNativeImagePastes > 0;
   const isSubmitDisabled =
     isSubmitLoadingVisible || (waitForForgeAutoAttachOnSubmit && isForgeResolving);
 
