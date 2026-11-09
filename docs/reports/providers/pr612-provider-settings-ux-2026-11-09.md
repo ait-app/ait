@@ -1,6 +1,6 @@
 # PR #612：角色表单、原生控制与 Tai 真实情景验收
 
-功能源码为 `458e250e`，已合入 main `1e9c0886`（#630、#631）；本报告及截图不再改变功能代码。
+功能源码为 `8d5c308e`，已合入 main `1e9c0886`（#630、#631），并整合原生操作入口／composer 的并行改动。
 Linux x64、Rust 1.98.1、用户安装的官方 OMP 18.17.0。PR 保持未合并，最终 head 和 CI 以 GitHub 为准。
 
 ## 真实任务及 API 边界
@@ -47,21 +47,38 @@ OMP 保存会物化当前默认模型，因此重新打开按实际存储记录�
 Ait 仅一个 actor/外部进程写入每份日志，只读观测不启动第二个 writer。
 director 记录中实际执行 `vibe_spawn` 两次，以及 `vibe_send`、`vibe_wait`、`vibe_list`。
 worker 实际读写文件并运行检查，最终均 completed，director 回到 idle。
-原生记录包含非零输入／输出 token 与费用，不是模拟输出；director 最后汇总费用约 $0.0599，
-这是该会话的记录，不能解释为包含所有 worker 和侧问答的总费用。
+原生记录包含非零输入／输出 token 与费用，不是模拟输出；首轮交付结束时 director 的会话费用约 $0.0599，
+这是该会话当时的记录，不能解释为包含所有 worker 和侧问答的总费用；整合后的追加只读复核会产生新用量。
 
-- [真实 Vibe worker 与父会话](../../assets/providers/omp/tai-vibe-workers.png)
+- [真实 Vibe worker 与父会话](../../assets/providers/omp/tai-vibe-active-integrated.png)
 - [从父会话打开只读 worker](../../assets/providers/omp/tai-worker-observed.png)
 - [Tai 真实侧问答 Markdown](../../assets/providers/omp/tai-side-markdown.png)
-- [原生统计摘要](../../assets/providers/omp/tai-native-statistics.png)
+- [原生统计摘要](../../assets/providers/omp/tai-session-statistics.png)
 
 侧问答在主任务运行时通过 Tai API 返回键盘流程、空态和代码建议，未修改任务文件；首问
 不在同一 topic 的正文重复，回答使用共享 Markdown，输入提示区分新问题和追问。
 统计默认显示 token、费用和上下文摘要，原始 JSON／完整路径在详情中；导出显示文件名。
-Vibe 当前开关一直可见，包括零 worker 空态和退出入口；旧 daemon 缺字段时仍隐藏。
-另用一个 Low 档位 Tai 会话实际回答简短验收问题，再发送裸 `/vibe`，确认零 worker 状态可见；
-实际点击退出后显示 off。两张图来自真实 API 回答后的会话：
-[启用空态](../../assets/providers/omp/tai-vibe-empty.png)、[退出后](../../assets/providers/omp/tai-vibe-off.png)。
+最终产品要求改为：没有运行中／unknown worker 时完全隐藏 Vibe 提示；有活跃 worker 时仅显示
+紧凑状态与退出，不另设 worker 卡片，历史和详情复用现有子 Agent 列表。
+任务结束收起提示，模式仍由原生命令或控制操作切换。整合后再次通过真实 Tai API 向已有 good worker 发送只读核验，实际确认运行时提示出现、结束后隐藏，统一子 Agent 历史仍可打开。四个产物的 SHA-256 均保持不变。早前常驻模式／零 worker 空态的截图
+已从最终 PR 说明移除，不作为当前交互验收。
+
+原生操作统一进入输入框底部的 `…` 菜单；可搜索，选择后填写参数、执行、查看结果，返回后
+选择其它操作，关闭时不在输入框上方保留统计面板。实际 Tai 任务的统计仍为非零 token 和费用。
+
+- [整合后的工具栏](../../assets/providers/omp/tai-composer-toolbar.png)
+- [桌面操作菜单](../../assets/providers/omp/tai-actions-menu.png)
+- [手机操作菜单](../../assets/providers/omp/tai-actions-menu-phone.png)
+- [统一子 Agent 列表](../../assets/providers/omp/tai-shared-subagents.png)
+- [手机统计](../../assets/providers/omp/tai-session-statistics-phone.png)
+
+## 真实运行中发现的整合回归
+
+侧问答与新增 Vibe 提示曾使用相同的 React key。worker 状态变为活跃再结束时，React
+重复保留侧问答，实际界面出现两个相同面板并挤压输入框。新增父面板状态切换探针先在
+旧代码下确定失败（期望 1，实际 2），再为 Vibe 使用独立 key 前缀。
+修复后运行时、Vibe 与侧问答 3 suites／22 项通过；真实 Tai worker 再次执行只读复核时，
+开始、运行和结束三个阶段均检查只有一个侧问答，运行提示正确出现并在完成后收起。
 
 ## 最终产物和外部浏览器检查
 
@@ -95,13 +112,15 @@ Vibe 当前开关一直可见，包括零 worker 空态和退出入口；旧 dae
 - [当前项目真实刷新反馈](../../assets/providers/omp/tai-provider-refresh.png)
 - [全局预设删除确认](../../assets/providers/omp/tai-preset-delete-confirmation.png)
 
-## 最新主线与定向检查
+## 最新主线与整合验证
 
 保留 #630 Photon 三个 RPC 与本 PR 原生／预设能力。初次合并使客户端一组 hello 达到 65 项；
 Photon 请求现映射到 daemon 已有的平台配对通道，四组恢复为 64／62／47／62。
 客户端 228 个方法，Rust 组件方法 239、发布能力 240、业务目录 220。
 
-- 前端 11 suites、143 项通过；窄屏角色布局调整后，编辑器和转换规则 27 项重新通过。
+- 整合后独立复跑前端 21 suites、192 项通过，涵盖 composer、原生操作菜单、运行时、Vibe、
+  统一子 Agent、角色表单、刷新、删除、侧问答、统计与九语种。新增 key 回归修复后
+  运行时／Vibe／侧问答 22 项再次通过，不把重复运行相加为用例总数。
 - 客户端 connection/messages 100 项通过；协议 Bot 7 项、预设回执 6 项通过。
 - Provider model_roles 11 项通过、2 项忽略，包含继承别名 metadata。
 - API 能力 10、连接校验 3、single lane 2、placeholder 过滤 5、HTTP readiness 1 项通过；
