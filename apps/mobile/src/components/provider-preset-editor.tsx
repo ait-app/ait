@@ -225,7 +225,7 @@ export function ProviderPresetEditor({
             {t("settings.providers.presets.nameTaken", { name })}
           </Text>
         ) : null}
-        <Text style={styles.muted}>{t("providerControl.roleRoutingHint")}</Text>
+        {native ? <Text style={styles.muted}>{t("providerControl.roleRoutingHint")}</Text> : null}
         <View style={styles.tableHeader}>
           <Text style={styles.roleName}>{t("providerControl.role")}</Text>
           <Text style={styles.modelHeading}>{t("settings.providers.presets.model")}</Text>
@@ -236,7 +236,12 @@ export function ProviderPresetEditor({
         </View>
         <View style={styles.table}>
           <View style={styles.roleRow}>
-            <Text style={styles.roleName}>DEFAULT</Text>
+            <View style={styles.roleIdentity}>
+              <View style={styles.roleText}>
+                <Text style={styles.roleCode}>DEFAULT</Text>
+                <Text style={styles.muted}>{t("providerControl.roleNames.default")}</Text>
+              </View>
+            </View>
             <View style={styles.modelCell}>
               <SelectField
                 field={false}

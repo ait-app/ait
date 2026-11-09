@@ -295,8 +295,10 @@ it("keeps the name read-only and explains why when renaming is withheld", async 
   const nameInput = screen.getAllByRole("textbox")[0] as HTMLInputElement;
   expect(nameInput.readOnly).toBe(true);
   expect(nameInput.value).toBe("team");
-  fireEvent.click(screen.getAllByText("providerControl.details").at(-1)!);
-  expect(screen.getByText("settings.providers.presets.noRename")).toBeTruthy();
+  expect(screen.getByTestId("preset-name-readonly-reason").textContent).toBe(
+    "settings.providers.presets.noRename",
+  );
+  expect(screen.getByText("providerControl.roleRoutingHint")).toBeTruthy();
 });
 
 it("deletes through the same request and refreshes the list", async () => {
@@ -710,4 +712,13 @@ it("starts native presets with a fixed roster of configured roles and resolved d
     target: { value: "modelRole.smol" },
   });
   expect(screen.getByTestId(/^preset-role-name-/).textContent).toBe("SMOL");
+});
+
+it("does not show OMP worker routing in an Ait-managed provider editor", async () => {
+  await ready(descriptor(), [preset("team")]);
+  renderSection(<ProviderPresetsSection provider="claude" serverId="host-a" />);
+  await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
+  fireEvent.click(screen.getByLabelText("settings.providers.presets.edit"));
+  await waitFor(() => expect(screen.getByTestId("provider-preset-save")).toBeTruthy());
+  expect(screen.queryByText("providerControl.roleRoutingHint")).toBeNull();
 });
