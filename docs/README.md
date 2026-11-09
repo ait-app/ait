@@ -35,7 +35,7 @@
   [原生 UI 与拥有者边界](decisions/providers/adr-218-native-ui-and-actions.md)、[验收报告](reports/providers/native-delivery-and-omp-roles-2026-11-02.md)。
 - [原生控制结果兼容](decisions/providers/adr-214-native-control-result-cards.md)：旧客户端文本封装与当前结果卡片共用实时及历史出口。
 - [查看子 Agent](decisions/providers/adr-209-observed-subagent-normalization.md)：统一会话入口、父子关系与只读观测边界。
-- [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)（客户端标签页见 [ADR-214](decisions/clients/adr-214-workspace-bot-tab-v2.md)，权限与作用域 MCP 凭据见 [ADR-215](decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)，内部会话的只读查看见 [ADR-221](decisions/bot/adr-221-read-only-bot-session-inspection.md)，单一 Agent 模式与禁止创建 Workspace 见 [ADR-222](decisions/bot/adr-222-single-agent-mode-no-bot-workspaces.md)，飞书扫码接入与 Secret 保存见 [ADR-224](decisions/bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)，微信与 QQ 接入见 [ADR-225](decisions/bot/adr-225-weixin-and-qq-channels.md)）。
+- [Workspace 定时任务](operations/schedules.md)、[Workspace Bot](operations/bots.md)（客户端标签页见 [ADR-214](decisions/clients/adr-214-workspace-bot-tab-v2.md)，权限与作用域 MCP 凭据见 [ADR-215](decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)，内部会话的只读查看见 [ADR-221](decisions/bot/adr-221-read-only-bot-session-inspection.md)，单一 Agent 模式与禁止创建 Workspace 见 [ADR-222](decisions/bot/adr-222-single-agent-mode-no-bot-workspaces.md)，飞书扫码接入与 Secret 保存见 [ADR-224](decisions/bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)，微信与 QQ 接入见 [ADR-225](decisions/bot/adr-225-weixin-and-qq-channels.md)，通过 Photon Beta 2.0 接入 iMessage 见 [ADR-226](decisions/bot/adr-226-photon-imessage-channel.md)）。
 - [语音与听写](operations/speech.md)、[移动端通知](operations/mobile-notifications.md)。
 
 ## 架构与工程规范

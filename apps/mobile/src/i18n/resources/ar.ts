@@ -311,6 +311,39 @@ export const ar: TranslationResources = {
     qqPairButton: "الحصول على رمز الاقتران",
     qqPairHint:
       "الرمز: {{code}}. أرسله إلى الروبوت في محادثة خاصة، أو أشر إلى الروبوت به في مجموعة QQ. يعمل مرة واحدة وتنتهي صلاحيته بعد 10 دقائق.",
+    imessage: "iMessage",
+    imessageGuideStep1: "أنشئ مشروع Photon Beta على app.beta.photon.codes.",
+    imessageGuideStep2:
+      "في هذا المشروع، أنشئ مفتاح API بالأذونات project:read, project:write, platforms:read وplatforms:write.",
+    imessageGuideStep3:
+      "أدخل أدناه Project ID ومفتاح API ورقم هاتفك أو بريدك الإلكتروني في iMessage.",
+    imessagePhotonOpen: "فتح Photon",
+    imessagePrivacyNotice:
+      "تمر الرسائل مع هذا البوت عبر خدمة Photon. الرسائل المباشرة فقط مدعومة، ولا تُدعم المحادثات الجماعية.",
+    imessageProjectId: "Project ID",
+    imessageApiKey: "مفتاح API",
+    imessageApiKeyHint: "يتحقق Ait من المفتاح مع Photon ويحفظه بشكل خاص على هذا المضيف.",
+    imessageHandle: "رقم هاتفك أو بريدك الإلكتروني في iMessage",
+    imessageHandleHint:
+      "العنوان الذي ترسل منه رسائل iMessage. اكتب أرقام الهاتف بالصيغة الدولية، مثل ‎+14155550123.",
+    imessageContinue: "متابعة",
+    imessagePairPhoneNumber: "أرسل إلى",
+    imessagePairCode: "الرمز",
+    imessagePairWaiting:
+      "أرسل هذا الرمز عبر iMessage وليس كرسالة نصية، ومن {{handle}} تحديدًا. يؤدي مسح رمز QR أو فتح الرابط إلى إدخال الرمز تلقائيًا. أبقِ هذه الصفحة مفتوحة حتى الانتهاء.",
+    imessagePairExpires: "مدة صلاحية الرمز بالدقائق: {{minutes}}.",
+    imessagePairOpen: "فتح في الرسائل",
+    imessagePairQrLabel: "رمز QR يفتح تطبيق الرسائل مع إدخال الرمز",
+    imessageInvalidKey:
+      "رفض Photon معرّف Project ID أو مفتاح API هذا. تحقق من كليهما ومن أن المفتاح يملك الأذونات الأربعة كلها.",
+    imessageInvalidHandle:
+      "أدخل رقم هاتف بالصيغة الدولية، مثل ‎+14155550123، أو بريدًا إلكترونيًا في iMessage.",
+    imessageDedicatedLine:
+      "يستخدم مشروع Photon هذا خطوطًا مخصصة، وهي غير مدعومة. استخدم مشروعًا بخطوط مشتركة.",
+    imessageAlreadyConnected:
+      "مشروع Photon هذا متصل بالفعل بقناة على هذا المضيف. احذف تلك القناة أولاً أو استخدم مشروعًا آخر.",
+    imessageExpired: "انتهت صلاحية هذا الرمز. تابع للحصول على رمز جديد.",
+    imessageUnavailable: "تعذّر الاتصال بـ Photon. تحقق من اتصال هذا المضيف ثم أعد المحاولة.",
     deleteChannel: "حذف القناة",
     deleteChannelConfirm: "هل تريد حذف هذه القناة؟ سيتم قطع اتصالها الخارجي.",
     status: {

@@ -321,6 +321,40 @@ export const fr: TranslationResources = {
     qqPairButton: "Obtenir un code d’appairage",
     qqPairHint:
       "Code : {{code}}. Envoyez-le au bot en discussion privée, ou mentionnez le bot avec ce code dans un groupe QQ. Il fonctionne une seule fois et expire dans 10 minutes.",
+    imessage: "iMessage",
+    imessageGuideStep1: "Créez un projet Photon Beta sur app.beta.photon.codes.",
+    imessageGuideStep2:
+      "Dans ce projet, créez une clé d'API avec project:read, project:write, platforms:read et platforms:write.",
+    imessageGuideStep3:
+      "Saisissez ci-dessous le Project ID, la clé d'API et votre propre numéro de téléphone ou e-mail iMessage.",
+    imessagePhotonOpen: "Ouvrir Photon",
+    imessagePrivacyNotice:
+      "Les messages échangés avec ce bot passent par le service de Photon. Seuls les messages directs sont pris en charge, pas les discussions de groupe.",
+    imessageProjectId: "Project ID",
+    imessageApiKey: "Clé d'API",
+    imessageApiKeyHint: "Ait vérifie la clé auprès de Photon et la conserve en privé sur cet hôte.",
+    imessageHandle: "Votre numéro de téléphone ou e-mail iMessage",
+    imessageHandleHint:
+      "L'adresse depuis laquelle vous envoyez des iMessages. Écrivez les numéros au format international, par exemple +14155550123.",
+    imessageContinue: "Continuer",
+    imessagePairPhoneNumber: "Envoyer à",
+    imessagePairCode: "Code",
+    imessagePairWaiting:
+      "Envoyez ce code par iMessage, et non par SMS, exactement depuis {{handle}}. Scanner le code QR ou ouvrir le lien le remplit pour vous. Gardez cette page ouverte jusqu'à la fin.",
+    imessagePairExpires: "Le code expire dans {{minutes}} min.",
+    imessagePairOpen: "Ouvrir dans Messages",
+    imessagePairQrLabel: "Code QR qui ouvre Messages avec le code déjà saisi",
+    imessageInvalidKey:
+      "Photon a refusé ce Project ID ou cette clé d'API. Vérifiez les deux, et que la clé dispose des quatre autorisations.",
+    imessageInvalidHandle:
+      "Saisissez un numéro au format international, par exemple +14155550123, ou un e-mail iMessage.",
+    imessageDedicatedLine:
+      "Ce projet Photon utilise des lignes dédiées, qui ne sont pas prises en charge. Utilisez un projet avec des lignes partagées.",
+    imessageAlreadyConnected:
+      "Ce projet Photon est déjà connecté à un canal sur cet hôte. Supprimez d'abord ce canal ou utilisez un autre projet.",
+    imessageExpired: "Ce code a expiré. Continuez pour en obtenir un nouveau.",
+    imessageUnavailable:
+      "Impossible de joindre Photon. Vérifiez la connexion de cet hôte, puis réessayez.",
     deleteChannel: "Supprimer le canal",
     deleteChannelConfirm: "Supprimer ce canal ? Sa connexion externe sera déconnectée.",
     status: {

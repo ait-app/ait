@@ -110,9 +110,18 @@ pub(crate) struct TelegramPairStart {
     #[serde(default)]
     pub(crate) allow_groups: bool,
 }
+/// Pasted Photon credentials; deliberately not `Debug` because it holds a secret.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ImessagePairStart {
+    pub(crate) workspace_id: String,
+    pub(crate) project_id: String,
+    pub(crate) api_key: String,
+    pub(crate) handle: String,
+}
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct TelegramPairRequest {
+pub(crate) struct PairRequest {
     pub(crate) workspace_id: String,
     pub(crate) pairing_id: Uuid,
 }

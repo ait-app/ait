@@ -7,7 +7,15 @@
 - Keep read-only OMP commands separate from active answers; reject host-conflicting and terminal-only builtins without invoking a model, and preserve query result cards across history reloads.
 - Move Provider presets and role settings behind the model picker gear, retaining host and project context; distinguish Ait Profiles from Provider Model Presets. Offer catalog models and reasoning levels in the preset editor with editable role overrides.
 - Keep cached Profile presets scoped to their Provider, consume Ait custom-selection placeholders locally, and allow native command completion for uncreated drafts without bypassing read-only session restrictions.
-- Observe Vibe through the user-installed OMP process only when it announces a compatible bridge and native builtin command. Unsupported installations show an explicit unavailable result; Ait does not install, patch or bundle OMP or Bun.
+- Run Vibe through Ait Rust orchestration and the user-installed OMP process after public-extension and host-tool capability confirmation. Unsupported installations show an explicit unavailable result; Ait does not install, patch or bundle OMP or Bun.
+
+## 0.2.5 - 2026-11-09
+
+- Open a workspace in its own window from the workspace menus, with independent navigation, tabs and layout. If two windows edit the same draft at once, the last save wins.
+- Pin sidebar project groups to the top and keep pinned sessions at the front of their group.
+- Add sandboxed worktrees on Linux through bubblewrap 0.8.0 or later, restricting writes while reads and network access stay open. The deb, rpm and Arch packages declare the dependency; AppImage, tar.gz and standalone daemon installs need bubblewrap installed separately, and the host must allow unprivileged user namespaces. Sandboxed Claude sessions keep their global settings in `~/.claude/.claude.json`, copied from `~/.claude.json` on first use and not synced back.
+- Test feature: connect Workspace Bots from the Bot tab with Feishu or WeChat QR scan, QQ QR scan or manual entry, guided Telegram pairing, and iMessage through Photon Beta. Secrets entered here are stored in plain text in the daemon data directory with owner-only file permissions, and iMessage content passes through Photon's cloud service.
+- After a WeChat, QQ or iMessage channel has been created, older daemons cannot load the Bot catalog and may fail to start, even if the channel was deleted. Roll back only by restoring a `<data>/workspace-bots` backup taken before the channel was created, or by giving up that Bot data. Clients that have not been upgraded cannot read a channel list containing these types.
 
 ## 0.2.4 - 2026-11-09
 

@@ -46,6 +46,7 @@ fn worker_lanes_keep_streams_and_subscriptions_with_their_connection_owner() {
         ("bot.channel.weixin.scan.status.request", 2),
         ("bot.channel.qq.scan.status.request", 2),
         ("bot.channel.qq.pair.request", 2),
+        ("bot.channel.imessage.pair.status.request", 2),
         ("bot.channel.create.request", 0),
         ("agent.list.request", 3),
         ("agent.timeline.set_subscription.request", 3),

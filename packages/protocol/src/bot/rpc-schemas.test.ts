@@ -49,6 +49,64 @@ describe("Bot wire contract", () => {
     ).toBe("bot.channel.weixin.scan.status.response");
   });
 
+  it("keeps iMessage setup optional and parses its pairing and channel", () => {
+    expect(BOT_METHODS).not.toContain("bot.channel.imessage.pair.start.request");
+    const start = BotRequestSchema.parse({
+      type: "bot.channel.imessage.pair.start.request",
+      requestId: "r",
+      workspaceId: "w",
+      projectId: "project",
+      apiKey: "pho_sk_test",
+      handle: "+14155550123",
+    });
+    expect(start.type).toBe("bot.channel.imessage.pair.start.request");
+    const waiting = BotResponseSchema.parse({
+      type: "bot.channel.imessage.pair.start.response",
+      payload: {
+        requestId: "r",
+        state: "waiting",
+        pairingId: crypto.randomUUID(),
+        phoneNumber: "+14155550100",
+        code: "ait-abcd",
+        url: "sms:+14155550100&body=ait-abcd",
+        expiresInSeconds: 600,
+      },
+    });
+    expect(waiting.type).toBe("bot.channel.imessage.pair.start.response");
+    for (const reason of ["invalidKey", "invalidHandle", "dedicatedLine"]) {
+      expect(
+        BotResponseSchema.parse({
+          type: "bot.channel.imessage.pair.status.response",
+          payload: { requestId: "r", state: "failed", reason },
+        }).type,
+      ).toBe("bot.channel.imessage.pair.status.response");
+    }
+    const channel = (config: unknown) => ({
+      type: "bot.channel.imessage.pair.status.response",
+      payload: {
+        requestId: "r",
+        state: "complete",
+        channel: {
+          id: crypto.randomUUID(),
+          config,
+          enabled: true,
+          cursor: null,
+          deleted: false,
+        },
+      },
+    });
+    const config = {
+      kind: "photon_imessage",
+      projectId: "project",
+      keyRef: "env:AIT_SERVER_CREDENTIAL_STORED_X",
+      allowedSenders: ["+14155550123"],
+    };
+    expect(BotResponseSchema.parse(channel(config)).type).toBe(
+      "bot.channel.imessage.pair.status.response",
+    );
+    expect(() => BotResponseSchema.parse(channel({ ...config, allowGroups: true }))).toThrow();
+  });
+
   it("parses permission profiles and the update method", () => {
     const parsed = BotRequestSchema.parse({
       type: "bot.permissions.update.request",
@@ -81,7 +139,7 @@ describe("Bot wire contract", () => {
 
   it("registers all 21 core methods and accepts their results in the shared envelope", () => {
     expect(new Set(BOT_METHODS).size).toBe(21);
-    expect(BOT_REQUEST_SCHEMAS).toHaveLength(37);
+    expect(BOT_REQUEST_SCHEMAS).toHaveLength(40);
     expect(
       SessionInboundMessageSchema.parse({
         type: "bot.conversation.open.request",

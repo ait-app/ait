@@ -305,6 +305,40 @@ export const ko: TranslationResources = {
     qqPairButton: "페어링 코드 받기",
     qqPairHint:
       "코드: {{code}}. 비공개 채팅으로 봇에게 보내거나 QQ 그룹에서 봇을 @멘션하여 보내세요. 한 번만 사용할 수 있으며 10분 후 만료됩니다.",
+    imessage: "iMessage",
+    imessageGuideStep1: "app.beta.photon.codes에서 Photon Beta 프로젝트를 만드세요.",
+    imessageGuideStep2:
+      "해당 프로젝트에서 project:read, project:write, platforms:read, platforms:write 권한이 있는 API 키를 만드세요.",
+    imessageGuideStep3:
+      "아래에 Project ID, API 키와 내 전화번호 또는 iMessage 이메일을 입력하세요.",
+    imessagePhotonOpen: "Photon 열기",
+    imessagePrivacyNotice:
+      "이 봇과 주고받는 메시지는 Photon 서비스를 거칩니다. 1:1 메시지만 지원하며 그룹 채팅은 지원하지 않습니다.",
+    imessageProjectId: "Project ID",
+    imessageApiKey: "API 키",
+    imessageApiKeyHint: "Ait가 Photon으로 키를 확인한 뒤 이 호스트에 비공개로 저장합니다.",
+    imessageHandle: "내 전화번호 또는 iMessage 이메일",
+    imessageHandleHint:
+      "iMessage를 보낼 때 쓰는 주소입니다. 전화번호는 +14155550123처럼 국제 형식으로 입력하세요.",
+    imessageContinue: "계속",
+    imessagePairPhoneNumber: "받는 사람",
+    imessagePairCode: "코드",
+    imessagePairWaiting:
+      "반드시 {{handle}}에서 문자 메시지가 아닌 iMessage로 이 코드를 보내세요. QR 코드를 스캔하거나 링크를 열면 코드가 자동으로 입력됩니다. 완료될 때까지 이 페이지를 열어 두세요.",
+    imessagePairExpires: "코드는 {{minutes}}분 후 만료됩니다.",
+    imessagePairOpen: "메시지에서 열기",
+    imessagePairQrLabel: "코드가 입력된 메시지를 여는 QR 코드",
+    imessageInvalidKey:
+      "Photon이 이 Project ID 또는 API 키를 거부했습니다. 둘 다 확인하고 키에 네 가지 권한이 모두 있는지 확인하세요.",
+    imessageInvalidHandle:
+      "+14155550123과 같은 국제 형식의 전화번호 또는 iMessage 이메일을 입력하세요.",
+    imessageDedicatedLine:
+      "이 Photon 프로젝트는 전용 회선을 사용하며 지원되지 않습니다. 공유 회선을 사용하는 프로젝트를 사용하세요.",
+    imessageAlreadyConnected:
+      "이 Photon 프로젝트는 이미 이 호스트의 채널에 연결되어 있습니다. 먼저 해당 채널을 삭제하거나 다른 프로젝트를 사용하세요.",
+    imessageExpired: "코드가 만료되었습니다. 계속을 눌러 새 코드를 받으세요.",
+    imessageUnavailable:
+      "Photon에 연결할 수 없습니다. 이 호스트의 연결을 확인한 뒤 다시 시도하세요.",
     deleteChannel: "채널 삭제",
     deleteChannelConfirm: "이 채널을 삭제할까요? 외부 연결이 해제됩니다.",
     status: {

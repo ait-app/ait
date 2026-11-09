@@ -139,6 +139,15 @@ pub enum ChannelConfig {
         #[serde(default)]
         allow_groups: bool,
     },
+    /// iMessage direct messages through a Photon Beta project's event stream.
+    PhotonImessage {
+        /// Photon project whose events this channel receives.
+        project_id: String,
+        /// Runtime reference to the project API key.
+        key_ref: String,
+        /// Phone numbers or iMessage emails allowed to invoke this Bot.
+        allowed_senders: Vec<String>,
+    },
 }
 
 /// An account instance owned exclusively by one Bot.
@@ -153,7 +162,7 @@ pub struct Channel {
     pub config: ChannelConfig,
     /// Whether receiving is enabled.
     pub enabled: bool,
-    /// Telegram's next durable update offset.
+    /// Durable stream position: Telegram's next update offset, or Photon's last handled sequence.
     pub cursor: Option<i64>,
     /// Opaque position in a channel's update stream, advanced after input is queued.
     #[serde(default, skip_serializing_if = "Option::is_none")]

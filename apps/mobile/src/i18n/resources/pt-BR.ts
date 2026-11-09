@@ -318,6 +318,41 @@ export const ptBR: TranslationResources = {
     qqPairButton: "Obter código de pareamento",
     qqPairHint:
       "Código: {{code}}. Envie ao bot em uma conversa privada ou mencione o bot com ele em um grupo do QQ. Funciona uma vez e expira em 10 minutos.",
+    imessage: "iMessage",
+    imessageGuideStep1: "Crie um projeto Photon Beta em app.beta.photon.codes.",
+    imessageGuideStep2:
+      "Nesse projeto, crie uma chave de API com project:read, project:write, platforms:read e platforms:write.",
+    imessageGuideStep3:
+      "Informe abaixo o Project ID, a chave de API e seu próprio número de telefone ou e-mail do iMessage.",
+    imessagePhotonOpen: "Abrir Photon",
+    imessagePrivacyNotice:
+      "As mensagens com este bot passam pelo serviço da Photon. Só há suporte a mensagens diretas, não a conversas em grupo.",
+    imessageProjectId: "Project ID",
+    imessageApiKey: "Chave de API",
+    imessageApiKeyHint:
+      "O Ait verifica a chave com a Photon e a guarda de forma privada neste host.",
+    imessageHandle: "Seu número de telefone ou e-mail do iMessage",
+    imessageHandleHint:
+      "O endereço usado para enviar iMessages. Escreva telefones no formato internacional, como +14155550123.",
+    imessageContinue: "Continuar",
+    imessagePairPhoneNumber: "Enviar para",
+    imessagePairCode: "Código",
+    imessagePairWaiting:
+      "Envie este código como iMessage, não como SMS, exatamente de {{handle}}. Escanear o QR code ou abrir o link preenche o código para você. Mantenha esta página aberta até terminar.",
+    imessagePairExpires: "O código expira em {{minutes}} min.",
+    imessagePairOpen: "Abrir no Mensagens",
+    imessagePairQrLabel: "QR code que abre o Mensagens com o código preenchido",
+    imessageInvalidKey:
+      "A Photon recusou este Project ID ou esta chave de API. Verifique ambos e se a chave tem as quatro permissões.",
+    imessageInvalidHandle:
+      "Informe um telefone no formato internacional, como +14155550123, ou um e-mail do iMessage.",
+    imessageDedicatedLine:
+      "Este projeto Photon usa linhas dedicadas, que não têm suporte. Use um projeto com linhas compartilhadas.",
+    imessageAlreadyConnected:
+      "Este projeto Photon já está conectado a um canal neste host. Exclua esse canal primeiro ou use outro projeto.",
+    imessageExpired: "Este código expirou. Continue para obter outro.",
+    imessageUnavailable:
+      "Não foi possível conectar à Photon. Verifique a conexão deste host e tente novamente.",
     deleteChannel: "Excluir canal",
     deleteChannelConfirm: "Excluir este canal? A conexão externa será desconectada.",
     status: {

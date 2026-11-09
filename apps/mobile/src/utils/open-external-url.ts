@@ -19,3 +19,12 @@ export async function openExternalUrl(url: string): Promise<void> {
 
   await Linking.openURL(url);
 }
+
+/**
+ * Opens a Messages compose link. Separate from `openExternalUrl`, whose callers pass links found
+ * in agent and terminal output and must not be able to start a text message.
+ */
+export async function openSmsUrl(url: string): Promise<void> {
+  if (!/^sms:/i.test(url)) return;
+  await Linking.openURL(url);
+}

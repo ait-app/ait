@@ -336,6 +336,34 @@ export const zhCN: TranslationResources = {
     qqPairButton: "获取配对码",
     qqPairHint:
       "配对码：{{code}}。私聊发给机器人，或在 QQ 群里 @ 机器人并发送它。仅可使用一次，10 分钟后过期。",
+    imessage: "iMessage",
+    imessageGuideStep1: "在 app.beta.photon.codes 创建 Photon Beta 项目。",
+    imessageGuideStep2:
+      "在该项目中创建 API Key，并授予 project:read, project:write, platforms:read 和 platforms:write 权限。",
+    imessageGuideStep3: "在下方填写 Project ID、API Key，以及你自己的手机号或 iMessage 邮箱。",
+    imessagePhotonOpen: "打开 Photon",
+    imessagePrivacyNotice: "与此机器人的消息会经过 Photon 的服务。仅支持单聊，不支持群聊。",
+    imessageProjectId: "Project ID",
+    imessageApiKey: "API Key",
+    imessageApiKeyHint: "Ait 会向 Photon 验证 Key，并私密保存在此主机上。",
+    imessageHandle: "你的手机号或 iMessage 邮箱",
+    imessageHandleHint: "即你用来发送 iMessage 的地址。手机号请使用国际格式，例如 +14155550123。",
+    imessageContinue: "继续",
+    imessagePairPhoneNumber: "发送至",
+    imessagePairCode: "配对码",
+    imessagePairWaiting:
+      "请务必从 {{handle}} 以 iMessage（而不是短信）发送此配对码。扫描二维码或打开链接后会自动填入。完成前请保持此页面打开。",
+    imessagePairExpires: "配对码将在 {{minutes}} 分钟后过期。",
+    imessagePairOpen: "在“信息”中打开",
+    imessagePairQrLabel: "打开“信息”并填入配对码的二维码",
+    imessageInvalidKey:
+      "Photon 拒绝了此 Project ID 或 API Key。请检查两者，并确认 Key 具备全部四项权限。",
+    imessageInvalidHandle: "请输入国际格式的手机号（例如 +14155550123）或 iMessage 邮箱。",
+    imessageDedicatedLine: "此 Photon 项目使用专用线路，目前不支持。请使用共享线路的项目。",
+    imessageAlreadyConnected:
+      "此 Photon 项目已连接到此主机上的一个 Channel。请先删除该 Channel，或使用其他项目。",
+    imessageExpired: "配对码已过期，请点击继续获取新配对码。",
+    imessageUnavailable: "无法连接 Photon。请检查此主机的网络后重试。",
     deleteChannel: "删除 Channel",
     deleteChannelConfirm: "删除此 Channel？它的外部连接会断开。",
     status: {

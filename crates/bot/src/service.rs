@@ -17,6 +17,7 @@ use tokio_util::task::TaskTracker;
 
 use crate::channels::Incoming;
 use crate::channels::feishu::onboarding::Onboarding as FeishuOnboarding;
+use crate::channels::photon::onboarding::Onboarding as ImessageOnboarding;
 use crate::channels::qq::onboarding::Onboarding as QqOnboarding;
 use crate::channels::telegram::onboarding::Onboarding as TelegramOnboarding;
 use crate::channels::weixin::onboarding::Onboarding as WeixinOnboarding;
@@ -63,6 +64,7 @@ struct Worker {
     telegram: TelegramOnboarding,
     weixin: WeixinOnboarding,
     qq: QqOnboarding,
+    imessage: ImessageOnboarding,
 }
 
 /// Cloneable application service; conversations outlive UI connections.
@@ -73,6 +75,8 @@ enum Operation {
     Rpc(String, Value),
     Accept(Incoming),
     Cursor(ChannelId, i64),
+    ChannelCursor(ChannelId),
+    PhotonProjectClaimed(String),
     ChannelStatus(ChannelId, Value),
     Account(ChannelId, String),
     Progress(BotTurnId, TurnStatus, Option<String>, Option<String>),
@@ -132,6 +136,7 @@ impl Bots {
             telegram: TelegramOnboarding::default(),
             weixin: WeixinOnboarding::default(),
             qq: QqOnboarding::default(),
+            imessage: ImessageOnboarding::default(),
         }));
         let worker = bots.clone();
         std::thread::Builder::new()
@@ -173,6 +178,19 @@ impl Bots {
                     .map_err(|_| ErrorCode::BotIo)?
             }
             "bot.channel.telegram.pair.cancel.request" => telegram.cancel(decode(params)?).await,
+            "bot.channel.imessage.pair.start.request" => {
+                self.0.imessage.start(self, decode(params)?).await
+            }
+            "bot.channel.imessage.pair.status.request" => {
+                let bots = self.clone();
+                let request = decode(params)?;
+                tokio::spawn(async move { bots.0.imessage.status(&bots, request).await })
+                    .await
+                    .map_err(|_| ErrorCode::BotIo)?
+            }
+            "bot.channel.imessage.pair.cancel.request" => {
+                self.0.imessage.cancel(decode(params)?).await
+            }
             "bot.channel.weixin.scan.start.request" => weixin.start(self, decode(params)?).await,
             "bot.channel.weixin.scan.status.request" => {
                 let bots = self.clone();
@@ -324,6 +342,19 @@ impl Bots {
         self.call(Operation::Cursor(channel, cursor))
             .await
             .map(|_| ())
+    }
+    /// Whether a channel not deleted already uses this Photon project.
+    pub(crate) async fn photon_project_claimed(&self, project: String) -> Result<bool, ErrorCode> {
+        let claimed = self.call(Operation::PhotonProjectClaimed(project)).await?;
+        Ok(claimed == true)
+    }
+    /// The channel's durably saved stream position, for resuming after a reconnect.
+    pub(crate) async fn channel_cursor(
+        &self,
+        channel: ChannelId,
+    ) -> Result<Option<i64>, ErrorCode> {
+        let cursor = self.call(Operation::ChannelCursor(channel)).await?;
+        Ok(cursor.as_i64())
     }
     pub(crate) async fn channel_status(&self, channel: ChannelId, status: Value) {
         let _ = self.call(Operation::ChannelStatus(channel, status)).await;
@@ -491,6 +522,10 @@ fn apply(
             .map(|()| Value::Null),
         Operation::Cursor(channel, cursor) => {
             state.advance_cursor(channel, cursor).map(|()| Value::Null)
+        }
+        Operation::ChannelCursor(channel) => state.channel_cursor(channel).map(Value::from),
+        Operation::PhotonProjectClaimed(project) => {
+            Ok(Value::Bool(state.photon_project_claimed(&project)))
         }
         Operation::ChannelStatus(channel, value) => {
             state.channel_status.insert(channel, value);

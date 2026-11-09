@@ -153,6 +153,17 @@ fn validate_channel(id: ChannelId, config: &ChannelConfig) -> Result<(), ErrorCo
             }
             (token_ref, allowed_senders)
         }
+        ChannelConfig::PhotonImessage {
+            project_id,
+            key_ref,
+            allowed_senders,
+        } => {
+            // The project ID is interpolated into request paths that carry the API key.
+            if !crate::channels::photon::valid_project_id(project_id) {
+                return Err(ErrorCode::InvalidMessage);
+            }
+            (key_ref, allowed_senders)
+        }
     };
     // A QQ channel connected with pasted credentials has no sender until one pairs.
     let needs_sender = !matches!(config, ChannelConfig::Qq { .. });
@@ -178,6 +189,7 @@ fn account(config: &ChannelConfig) -> Option<(&'static str, &str)> {
         ChannelConfig::Feishu { app_id, .. } => Some(("feishu", app_id)),
         ChannelConfig::Weixin { account_id, .. } => Some(("weixin", account_id)),
         ChannelConfig::Qq { app_id, .. } => Some(("qq", app_id)),
+        ChannelConfig::PhotonImessage { project_id, .. } => Some(("photon", project_id)),
     }
 }
 

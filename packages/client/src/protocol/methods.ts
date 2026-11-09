@@ -65,7 +65,9 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
       {
         method,
         kind: "request" as const,
-        channel: 3,
+        // Photon setup waits use the daemon's platform-onboarding lane. Keep the four
+        // split hellos below 64 capabilities after adding these methods and presets.
+        channel: method.startsWith("bot.channel.imessage.") ? 2 : 3,
         response: method.replace(/\.request$/, ".response"),
       },
     ]),

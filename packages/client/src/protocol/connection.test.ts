@@ -308,7 +308,8 @@ describe("Rust v1 connection", () => {
           !method.includes(".feishu.") &&
           !method.includes(".telegram.") &&
           !method.includes(".weixin.") &&
-          !method.includes(".qq."),
+          !method.includes(".qq.") &&
+          !method.includes(".imessage."),
       );
     const old = harness(core);
     old.ready(undefined, ["workspace-bots-v2"]);
@@ -320,6 +321,7 @@ describe("Rust v1 connection", () => {
       workspaceBotTelegramSetup: false,
       workspaceBotWeixinSetup: false,
       workspaceBotQqSetup: false,
+      workspaceBotImessageSetup: false,
     });
     const current = harness();
     current.ready(undefined, ["workspace-bots-v2"]);
@@ -331,6 +333,7 @@ describe("Rust v1 connection", () => {
       workspaceBotTelegramSetup: true,
       workspaceBotWeixinSetup: true,
       workspaceBotQqSetup: true,
+      workspaceBotImessageSetup: true,
     });
   });
   it("does not enable Bot features for the v1-only capability", () => {
@@ -995,9 +998,9 @@ describe("Rust v1 connection", () => {
     }
   });
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(225);
+    expect(Object.keys(METHODS)).toHaveLength(228);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(225);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(228);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);
@@ -1056,6 +1059,19 @@ describe("Rust v1 connection", () => {
     } finally {
       h.transport.close();
     }
+  });
+  it("routes Photon setup on the platform-onboarding channel alongside provider presets", () => {
+    for (const method of [
+      "bot.channel.imessage.pair.start.request",
+      "bot.channel.imessage.pair.status.request",
+      "bot.channel.imessage.pair.cancel.request",
+    ]) {
+      expect(METHODS[method]?.channel).toBe(2);
+      expect(CHANNEL_CAPABILITIES[2]).toContain(method);
+      expect(CHANNEL_CAPABILITIES[3]).not.toContain(method);
+    }
+    for (const operation of ["describe", "list", "save", "delete"])
+      expect(CHANNEL_CAPABILITIES[3]).toContain(`provider.presets.${operation}.request`);
   });
   it("routes the local workspace reset method on the Git channel", () => {
     const method = "checkout.reset_workspace.request";

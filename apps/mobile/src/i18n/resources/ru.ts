@@ -328,6 +328,40 @@ export const ru: TranslationResources = {
     qqPairButton: "Получить код сопряжения",
     qqPairHint:
       "Код: {{code}}. Отправьте его боту в личном чате или упомяните бота с этим кодом в группе QQ. Код действует один раз и истекает через 10 минут.",
+    imessage: "iMessage",
+    imessageGuideStep1: "Создайте проект Photon Beta на app.beta.photon.codes.",
+    imessageGuideStep2:
+      "В этом проекте создайте API-ключ с разрешениями project:read, project:write, platforms:read и platforms:write.",
+    imessageGuideStep3:
+      "Введите ниже Project ID, API-ключ и свой номер телефона или адрес электронной почты iMessage.",
+    imessagePhotonOpen: "Открыть Photon",
+    imessagePrivacyNotice:
+      "Сообщения этого бота проходят через сервис Photon. Поддерживаются только личные сообщения, групповые чаты не поддерживаются.",
+    imessageProjectId: "Project ID",
+    imessageApiKey: "API-ключ",
+    imessageApiKeyHint: "Ait проверит ключ в Photon и сохранит его в закрытом виде на этом хосте.",
+    imessageHandle: "Ваш номер телефона или адрес электронной почты iMessage",
+    imessageHandleHint:
+      "Адрес, с которого вы отправляете сообщения iMessage. Номера телефонов указывайте в международном формате, например +14155550123.",
+    imessageContinue: "Продолжить",
+    imessagePairPhoneNumber: "Получатель",
+    imessagePairCode: "Код",
+    imessagePairWaiting:
+      "Отправьте этот код через iMessage, а не SMS, именно с адреса {{handle}}. Если отсканировать QR-код или открыть ссылку, код подставится автоматически. Не закрывайте страницу до завершения.",
+    imessagePairExpires: "Срок действия кода истекает через {{minutes}} мин.",
+    imessagePairOpen: "Открыть в Сообщениях",
+    imessagePairQrLabel: "QR-код, открывающий Сообщения с готовым кодом",
+    imessageInvalidKey:
+      "Photon отклонил этот Project ID или API-ключ. Проверьте оба значения и убедитесь, что у ключа есть все четыре разрешения.",
+    imessageInvalidHandle:
+      "Введите номер телефона в международном формате, например +14155550123, или адрес электронной почты iMessage.",
+    imessageDedicatedLine:
+      "Этот проект Photon использует выделенные линии, которые не поддерживаются. Используйте проект с общими линиями.",
+    imessageAlreadyConnected:
+      "Этот проект Photon уже подключён к каналу на этом хосте. Сначала удалите этот канал или используйте другой проект.",
+    imessageExpired: "Срок действия кода истёк. Нажмите «Продолжить», чтобы получить новый.",
+    imessageUnavailable:
+      "Не удалось подключиться к Photon. Проверьте подключение этого хоста и повторите попытку.",
     deleteChannel: "Удалить канал",
     deleteChannelConfirm: "Удалить этот канал? Его внешнее подключение будет отключено.",
     status: {
