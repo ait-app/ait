@@ -228,7 +228,7 @@ export const ar: TranslationResources = {
       "الرمز: {{code}}. أرسله إلى الروبوت في محادثة خاصة، أو أشر إلى الروبوت به في مجموعة QQ. يعمل مرة واحدة وتنتهي صلاحيته بعد 10 دقائق.",
     imessage: "iMessage",
     hub: "Ait Hub",
-    webhook: "Webhook (عبر Ait Hub)",
+    webhook: "Webhook",
     webhookHint:
       "ينشئ Ait Hub عنوان HTTPS وسرًا لهذا البوت. يمكن لأي نظام يرسل طلبات HTTP استخدامهما لمراسلة البوت وقراءة رده.",
     webhookCreate: "إنشاء webhook",

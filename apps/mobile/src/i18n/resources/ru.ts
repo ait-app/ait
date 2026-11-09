@@ -229,7 +229,7 @@ export const ru: TranslationResources = {
       "Код: {{code}}. Отправьте его боту в личном чате или упомяните бота с этим кодом в группе QQ. Код действует один раз и истекает через 10 минут.",
     imessage: "iMessage",
     hub: "Ait Hub",
-    webhook: "Webhook (через Ait Hub)",
+    webhook: "Webhook",
     webhookHint:
       "Ait Hub создаст для этого бота HTTPS-адрес и секрет. Любая система, которая умеет отправлять HTTP-запросы, сможет с их помощью писать боту и получать его ответ.",
     webhookCreate: "Создать webhook",

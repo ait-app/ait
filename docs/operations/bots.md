@@ -175,7 +175,7 @@ Ait 中心（ait-server）可以把飞书、Slack、Telegram 中发给中心机�
 daemon 不为它运行传输：中心通过自己的 Hub 会话投递消息、轮询 `bot.turn.get` 取回复，再用 `bot.hub.delivery.ack` 报告投递结果，会话结束时用 `bot.hub.conversation.close` 删除会话。
 中心会话只能使用这五个方法，且只能访问中心 Channel（Hub 与 Webhook）的轮次和会话；最后一个中心 Channel 停用、或 Bot 暂停或移除后，中心会话立即断开。
 
-Webhook Channel 由中心托管一个 HTTPS 端点：在 Bot 设置页添加「Webhook（经 Ait 中心）」即创建，Host 需已接入支持 Webhook 的中心。
+Webhook Channel 由中心托管一个 HTTPS 端点：在 Bot 设置页添加「Webhook」即创建，Host 需已接入支持 Webhook 的中心。
 创建后只显示一次密钥；丢失后用「重新生成密钥」（`bot.channel.webhook.rotate`）换新，旧密钥立即失效。调用方 `POST` 文本到地址（`Authorization: Bearer <密钥>`），得到 202 和状态地址，再用同一密钥查询回复；同一 `thread` 的调用接着同一个会话。
 删除 Channel 会同时请中心删除端点；中心不可达时只在本地删除，中心不再把消息投给这个 Channel。
 

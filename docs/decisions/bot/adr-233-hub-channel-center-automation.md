@@ -64,7 +64,7 @@ Workspace Bot 已经具备所需的一切：按会话串行执行、`messageId` 
    - 中心不可用时两个方法都返回 `{state:"failed", reason}`，不报错：`centerOffline`（未接入中心、链路离线或 30 秒内无应答）、`centerUnsupported`（中心未声明方法）、`automationUnavailable`、`limitReached`、`centerError`。
    - 删除 Webhook Channel、移除 Bot 时，daemon 尽力调用 `hub.automation.webhook.delete`（`{channelId}`）。中心不可达时只在本地删除；中心只向 Host 已发布的 Channel 投递，残留端点不会再进 Bot。
 8. **端点地址**：`url` 只接受 `https`，或回环地址上的 `http`（本地中心）。它会被复制到其他系统，因此不能是任意明文地址。
-9. **客户端**：`bot.channel.types.request` 不列 `webhook`（同第 1 条）。客户端在两个新方法都可用时显示「Webhook（经 Ait 中心）」（`features.workspaceBotWebhookSetup`），创建后显示地址、一次性密钥和 curl 示例，均可复制；Channel 卡片显示地址和「重新生成密钥」。两个方法走文件操作通道，访客不可调用。
+9. **客户端**：`bot.channel.types.request` 不列 `webhook`（同第 1 条）。客户端在两个新方法都可用时显示「Webhook」（`features.workspaceBotWebhookSetup`），创建后显示地址、一次性密钥和 curl 示例，均可复制；Channel 卡片显示地址和「重新生成密钥」。两个方法走文件操作通道，访客不可调用。
 
 ## 后果
 

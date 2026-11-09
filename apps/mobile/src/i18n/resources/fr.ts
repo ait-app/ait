@@ -207,7 +207,7 @@ export const fr: TranslationResources = {
       "Code : {{code}}. Envoyez-le au bot en discussion privée, ou mentionnez le bot avec ce code dans un groupe QQ. Il fonctionne une seule fois et expire dans 10 minutes.",
     imessage: "iMessage",
     hub: "Ait Hub",
-    webhook: "Webhook (via Ait Hub)",
+    webhook: "Webhook",
     webhookHint:
       "Ait Hub crée une adresse HTTPS et un secret pour ce Bot. Tout système capable d’envoyer une requête HTTP peut les utiliser pour écrire au Bot et lire sa réponse.",
     webhookCreate: "Créer un webhook",
