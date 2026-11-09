@@ -237,17 +237,25 @@ impl Presets {
     ///
     /// Only entries whose private configuration was materialized are exposed: an entry the
     /// adapter could not resolve has no model to show and must not appear as editable.
-    pub(super) fn records(&self) -> Vec<crate::ports::preset::Preset> {
+    pub(super) fn records(&self) -> Vec<crate::ports::preset::PresetEntry> {
         self.entries
             .iter()
             .filter_map(|(name, entry)| {
                 let configuration = entry.configuration.as_ref().ok()?;
                 let model = configuration.model.clone()?;
-                Some(crate::ports::preset::Preset {
-                    name: name.clone(),
-                    model,
-                    thinking_option_id: configuration.thinking_option_id.clone(),
-                    feature_values: configuration.feature_values.clone().unwrap_or_default(),
+                Some(crate::ports::preset::PresetEntry {
+                    preset: crate::ports::preset::Preset {
+                        name: name.clone(),
+                        model,
+                        thinking_option_id: configuration.thinking_option_id.clone(),
+                        feature_values: configuration.feature_values.clone().unwrap_or_default(),
+                    },
+                    source: if entry.source == "project" {
+                        crate::ports::preset::PresetSource::Project
+                    } else {
+                        crate::ports::preset::PresetSource::Global
+                    },
+                    editable: entry.source == "global",
                 })
             })
             .collect()

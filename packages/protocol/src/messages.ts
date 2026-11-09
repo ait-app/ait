@@ -133,6 +133,13 @@ export const ProviderPresetSchema = z.object({
   featureValues: z.record(z.string(), z.unknown()).optional(),
 });
 
+/** List-only ownership from the same store read; missing metadata stays read-only. */
+export const ProviderPresetEntrySchema = ProviderPresetSchema.extend({
+  source: z.enum(["ait", "global", "project"]).optional(),
+  editable: z.boolean().optional(),
+});
+export type ProviderPresetEntry = z.infer<typeof ProviderPresetEntrySchema>;
+
 export type ProviderPresetDescriptor = z.infer<typeof ProviderPresetDescriptorSchema>;
 export type ProviderPreset = z.infer<typeof ProviderPresetSchema>;
 
@@ -6427,7 +6434,7 @@ export const ProviderPresetsListResponseMessageSchema = z.object({
   type: z.literal("provider.presets.list.response"),
   payload: z.object({
     provider: AgentProviderSchema,
-    presets: z.array(ProviderPresetSchema),
+    presets: z.array(ProviderPresetEntrySchema),
     error: z.string().nullable().optional(),
     requestId: z.string(),
   }),

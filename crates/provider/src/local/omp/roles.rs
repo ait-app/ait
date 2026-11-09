@@ -284,7 +284,7 @@ impl Catalog {
     }
 
     /// Native presets as unified editor records; only acknowledged entries are listed.
-    pub(super) fn preset_records(&self) -> Vec<crate::ports::preset::Preset> {
+    pub(super) fn preset_records(&self) -> Vec<crate::ports::preset::PresetEntry> {
         self.presets.records()
     }
 

@@ -3,6 +3,7 @@ import { pluginSettings } from "./plugin-settings";
 
 export const zhCN: TranslationResources = {
   providerControl: {
+    presetReadOnly: "预设来源尚未确认或为只读，请刷新后再编辑。",
     settingsSelection: "当前模型配置 · 作用于此会话或草稿",
     scopeDefault: "OMP 默认目录 · 包含全局预设",
     scopeGlobal: "OMP 全局预设",

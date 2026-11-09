@@ -16,6 +16,8 @@ export const es: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    presetReadOnly:
+      "El origen del ajuste no está confirmado o es de solo lectura. Actualiza antes de editar.",
     settingsSelection: "Selección actual · para esta conversación o borrador",
     scopeDefault: "Directorio predeterminado de OMP · incluye preajustes globales",
     scopeGlobal: "Preajustes globales de OMP",

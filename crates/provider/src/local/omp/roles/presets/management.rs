@@ -40,6 +40,11 @@ async fn manage(
     name: &str,
 ) -> Result<Value, AgentSessionError> {
     let metadata = client.metadata_gate(cwd)?.lock_owned().await;
+    if project_owned(client, cwd, name).await? {
+        return Ok(
+            json!({"text":"","error":"Project presets are read-only here; global presets with the same name were not changed"}),
+        );
+    }
     if operation == "delete" {
         let before = super::super::read(
             client,
@@ -87,6 +92,10 @@ async fn manage(
         }) {
             return Err(AgentSessionError::Unavailable);
         }
+        // Probe startup may be slow; do not rely on the ownership checked before it.
+        if project_owned(client, cwd, name).await? {
+            return Err(AgentSessionError::Rejected);
+        }
         let events = native
             .local_command(&format!("/modelpreset {operation} {name}"))
             .await?;
@@ -117,6 +126,24 @@ async fn manage(
     Ok(
         json!({"text":text,"error":if !completed {Some("OMP did not complete the requested preset change")} else if !refreshed {Some("Preset changed, but its model catalog could not refresh")} else {None}}),
     )
+}
+
+async fn project_owned(
+    client: &OmpClient,
+    cwd: &str,
+    name: &str,
+) -> Result<bool, AgentSessionError> {
+    let project = super::super::read(
+        client,
+        cwd,
+        &["config", "list", "--scope", "project", "--json"],
+    )
+    .await?;
+    let entries = &project["modelPresets"]["value"];
+    if !entries.is_null() && !entries.is_object() {
+        return Err(AgentSessionError::Failed);
+    }
+    Ok(entries.get(name).is_some_and(|entry| !entry.is_null()))
 }
 
 fn saved_configuration(base: &Value, selection: &StoredAgentConfig) -> Value {

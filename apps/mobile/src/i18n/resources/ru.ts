@@ -23,6 +23,8 @@ export const ru: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    presetReadOnly:
+      "Источник пресета не подтверждён или доступен только для чтения. Обновите перед редактированием.",
     settingsSelection: "Текущий выбор · для этого диалога или черновика",
     scopeDefault: "Каталог OMP по умолчанию · включая глобальные пресеты",
     scopeGlobal: "Глобальные пресеты OMP",

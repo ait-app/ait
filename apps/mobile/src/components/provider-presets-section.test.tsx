@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ProviderPreset, ProviderPresetDescriptor } from "@ait/protocol/messages";
+import type { ProviderPresetEntry, ProviderPresetDescriptor } from "@ait/protocol/messages";
 import { ProviderPresetsSection } from "./provider-presets-section";
 
 vi.mock("@/components/ui/select-field", () => ({
@@ -153,11 +153,11 @@ function descriptor(overrides: Partial<ProviderPresetDescriptor> = {}): Provider
   };
 }
 
-function preset(name: string): ProviderPreset {
-  return { name, model: "claude-opus-5" };
+function preset(name: string): ProviderPresetEntry {
+  return { name, model: "claude-opus-5", source: "global", editable: true };
 }
 
-async function ready(described: ProviderPresetDescriptor, presets: ProviderPreset[] = []) {
+async function ready(described: ProviderPresetDescriptor, presets: ProviderPresetEntry[] = []) {
   // The store is cached per host and provider; a scenario must not see the previous answer.
   queryClient.clear();
   client.describeProviderPresets.mockResolvedValue({ descriptor: described });
@@ -363,23 +363,10 @@ it("offers catalog models and reasoning levels while allowing role overrides to 
 });
 
 it("shows project scope and prevents global writes to an overriding project preset", async () => {
-  await ready(descriptor({ backend: "native" }), [preset("team")]);
-  renderSection(
-    <ProviderPresetsSection
-      provider="omp"
-      serverId="host-a"
-      cwd="/repo/project"
-      features={[
-        {
-          type: "select",
-          id: "modelPreset",
-          label: "Preset",
-          value: "team",
-          options: [{ id: "team", label: "Team", metadata: { source: "project" } }],
-        },
-      ]}
-    />,
-  );
+  await ready(descriptor({ backend: "native" }), [
+    { ...preset("team"), source: "project", editable: false },
+  ]);
+  renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" cwd="/repo/project" />);
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
   expect(screen.getByTestId("provider-presets-scope").textContent).toBe(
     "providerControl.scopeProject",
@@ -391,3 +378,111 @@ it("shows project scope and prevents global writes to an overriding project pres
   expect(client.saveProviderPreset).not.toHaveBeenCalled();
   expect(client.deleteProviderPreset).not.toHaveBeenCalled();
 });
+
+it("keeps native entries read-only when the list has no ownership metadata", async () => {
+  await ready(descriptor({ backend: "native" }), [{ name: "team", model: "opus" }]);
+  renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
+  await screen.findByText("team");
+  for (const action of screen.getByTestId("provider-preset-team").querySelectorAll("button")) {
+    expect(action.disabled).toBe(true);
+    fireEvent.click(action);
+  }
+  expect(client.deleteProviderPreset).not.toHaveBeenCalled();
+  expect(client.saveProviderPreset).not.toHaveBeenCalled();
+});
+
+it("disables an open editor while ownership refresh is delayed, then stays read-only on project ownership", async () => {
+  await ready(descriptor({ backend: "native" }), [preset("team")]);
+  renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
+  await screen.findByText("team");
+  fireEvent.click(screen.getByLabelText("settings.providers.presets.edit"));
+  const save = screen.getByTestId("provider-preset-save") as HTMLButtonElement;
+  let resolve: (value: { presets: ProviderPresetEntry[] }) => void = () => undefined;
+  client.listProviderPresets.mockImplementationOnce(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  );
+  let refreshed: Promise<void>;
+  await act(async () => {
+    refreshed = queryClient.invalidateQueries({ queryKey: ["provider-presets"] });
+  });
+  await waitFor(() => expect(save.disabled).toBe(true));
+  fireEvent.click(save);
+  expect(client.saveProviderPreset).not.toHaveBeenCalled();
+  await act(async () => {
+    resolve({ presets: [{ ...preset("team"), source: "project", editable: false }] });
+    await refreshed;
+  });
+  expect(save.disabled).toBe(true);
+  fireEvent.click(save);
+  expect(client.saveProviderPreset).not.toHaveBeenCalled();
+});
+
+it("keeps cached rows and an open editor read-only after an ownership query fails", async () => {
+  await ready(descriptor({ backend: "native" }), [preset("team")]);
+  renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
+  await screen.findByText("team");
+  fireEvent.click(screen.getByLabelText("settings.providers.presets.edit"));
+  client.listProviderPresets.mockRejectedValueOnce(new Error("Scope read failed"));
+  await act(async () => {
+    await queryClient.invalidateQueries({ queryKey: ["provider-presets"] });
+  });
+  await screen.findByText("Scope read failed");
+  const save = screen.getByTestId("provider-preset-save") as HTMLButtonElement;
+  expect(save.disabled).toBe(true);
+  fireEvent.click(save);
+  fireEvent.click(screen.getByLabelText("settings.providers.presets.remove"));
+  expect(client.saveProviderPreset).not.toHaveBeenCalled();
+  expect(client.deleteProviderPreset).not.toHaveBeenCalled();
+});
+
+it.each(["save", "delete"] as const)(
+  "rechecks ownership before %s when a project override appears during editing",
+  async (operation) => {
+    await ready(descriptor({ backend: "native" }), [preset("team")]);
+    renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
+    await screen.findByText("team");
+    if (operation === "save")
+      fireEvent.click(screen.getByLabelText("settings.providers.presets.edit"));
+    client.listProviderPresets.mockResolvedValueOnce({
+      presets: [{ ...preset("team"), source: "project", editable: false }],
+    });
+    fireEvent.click(
+      operation === "save"
+        ? screen.getByTestId("provider-preset-save")
+        : screen.getByLabelText("settings.providers.presets.remove"),
+    );
+    await waitFor(() => expect(client.listProviderPresets).toHaveBeenCalledTimes(2));
+    await act(async () => {});
+    expect(client.saveProviderPreset).not.toHaveBeenCalled();
+    expect(client.deleteProviderPreset).not.toHaveBeenCalled();
+  },
+);
+
+it.each(["save", "delete"] as const)(
+  "disables mutations when the final %s ownership check fails",
+  async (operation) => {
+    await ready(descriptor({ backend: "native" }), [preset("team")]);
+    renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
+    await screen.findByText("team");
+    if (operation === "save")
+      fireEvent.click(screen.getByLabelText("settings.providers.presets.edit"));
+    client.listProviderPresets.mockRejectedValueOnce(new Error("Ownership check failed"));
+    fireEvent.click(
+      operation === "save"
+        ? screen.getByTestId("provider-preset-save")
+        : screen.getByLabelText("settings.providers.presets.remove"),
+    );
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText("settings.providers.presets.remove") as HTMLButtonElement).disabled,
+      ).toBe(true),
+    );
+    if (operation === "save")
+      expect((screen.getByTestId("provider-preset-save") as HTMLButtonElement).disabled).toBe(true);
+    expect(client.saveProviderPreset).not.toHaveBeenCalled();
+    expect(client.deleteProviderPreset).not.toHaveBeenCalled();
+  },
+);

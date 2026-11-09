@@ -529,7 +529,7 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
     async fn native_presets(
         &self,
         _cwd: &str,
-    ) -> Result<Vec<super::preset::Preset>, super::preset::PresetError> {
+    ) -> Result<Vec<super::preset::PresetEntry>, super::preset::PresetError> {
         Ok(Vec::new())
     }
 

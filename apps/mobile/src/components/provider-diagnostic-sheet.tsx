@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import { AlertTriangle, Copy, FileText, Plus, RotateCw, Trash2 } from "lucide-react-native";
 import type { TFunction } from "i18next";
@@ -592,19 +591,6 @@ export function ProviderDiagnosticSheet({
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const toast = useToast();
-  const client = useHostRuntimeClient(serverId);
-  const featureCatalog = useQuery({
-    queryKey: ["providerFeatures", serverId, provider, cwd ?? null, "settings"],
-    enabled: visible && Boolean(client),
-    retry: false,
-    staleTime: 30_000,
-    queryFn: async () => {
-      if (!client) return [];
-      const result = await client.listProviderFeatures({ provider, cwd: cwd ?? "." });
-      if (result.error) throw new Error(result.error);
-      return result.features ?? [];
-    },
-  });
   const isCompact = useIsCompactFormFactor();
   const {
     entries: snapshotEntries,
@@ -752,7 +738,6 @@ export function ProviderDiagnosticSheet({
           serverId={serverId}
           cwd={cwd}
           models={discoveredModels}
-          features={featureCatalog.data}
         />
         <ProviderModalBody
           discoveredCount={discoveredModels.length}

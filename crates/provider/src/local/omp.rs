@@ -448,7 +448,7 @@ impl AgentClient for OmpClient {
     async fn native_presets(
         &self,
         cwd: &str,
-    ) -> Result<Vec<crate::ports::preset::Preset>, crate::ports::preset::PresetError> {
+    ) -> Result<Vec<crate::ports::preset::PresetEntry>, crate::ports::preset::PresetError> {
         roles::presets::editor::list(self, cwd).await
     }
 

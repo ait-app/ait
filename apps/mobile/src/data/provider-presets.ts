@@ -1,12 +1,12 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import type { AgentProvider } from "@ait/protocol/agent-types";
-import type { ProviderPreset, ProviderPresetDescriptor } from "@ait/protocol/messages";
+import type { ProviderPresetEntry, ProviderPresetDescriptor } from "@ait/protocol/messages";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 
 /** One provider's preset store, as the settings section reads it. */
 export interface ProviderPresetsSnapshot {
   descriptor: ProviderPresetDescriptor;
-  presets: ProviderPreset[];
+  presets: ProviderPresetEntry[];
 }
 
 /** One store answer: the cached list plus whatever the store itself reported. */
@@ -97,7 +97,7 @@ export function useProviderPresets(input: {
     // The descriptor survives a store that refused to list, so the editor can still explain the
     // store and withhold writes instead of showing an empty list with no reason.
     snapshot: query.data?.snapshot ?? null,
-    isLoading: available && query.isLoading,
+    isLoading: available && query.isFetching,
     // A store reason is part of a successful answer; a transport failure replaces it.
     error: query.error instanceof Error ? query.error.message : (query.data?.error ?? null),
   };

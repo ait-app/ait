@@ -224,7 +224,10 @@ async fn global_preset_management_saves_latest_next_turn_selection_and_preserves
         &std::fs::read(root.path().join("agent/global-presets.json")).unwrap(),
     )
     .unwrap();
-    assert!(global.get("team").is_none());
+    assert_eq!(
+        global["team"]["defaultThinkingLevel"], "high",
+        "a project override must not delete the global preset"
+    );
     assert!(
         std::fs::read_to_string(root.path().join("agent/project-presets.json"))
             .unwrap()
@@ -357,10 +360,12 @@ async fn unified_editor_reads_native_presets_and_reports_no_rename() {
 
     let listed = client.native_presets(&cwd).await.unwrap();
     assert_eq!(listed.len(), 1);
-    assert_eq!(listed[0].name, "team");
-    assert_eq!(listed[0].thinking_option_id.as_deref(), Some("low"));
+    assert_eq!(listed[0].preset.name, "team");
+    assert_eq!(listed[0].source, crate::ports::preset::PresetSource::Global);
+    assert!(listed[0].editable);
+    assert_eq!(listed[0].preset.thinking_option_id.as_deref(), Some("low"));
     assert_eq!(
-        listed[0].feature_values.get("modelRole.advisor"),
+        listed[0].preset.feature_values.get("modelRole.advisor"),
         Some(&json!("test/model"))
     );
 
@@ -381,4 +386,105 @@ async fn unified_editor_reads_native_presets_and_reports_no_rename() {
 
     client.delete_native_preset(&cwd, "team").await.unwrap();
     assert!(client.native_presets(&cwd).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn project_overrides_are_listed_read_only_and_never_modify_same_named_global_entries() {
+    let (root, client, spec) = fixture();
+    let global =
+        json!({"team":{"modelRoles":{"default":"test/model"},"defaultThinkingLevel":"low"}});
+    let project = json!({"team":{"modelRoles":{"default":"other/model"}}});
+    save(root.path(), "global", &global);
+    save(root.path(), "project", &project);
+    let listed = client.native_presets(&spec.cwd).await.unwrap();
+    assert_eq!(
+        listed[0].source,
+        crate::ports::preset::PresetSource::Project
+    );
+    assert!(!listed[0].editable);
+    let serialized = serde_json::to_value(&listed[0]).unwrap();
+    assert_eq!(serialized["name"], "team");
+    assert_eq!(serialized["source"], "project");
+    let preset = crate::ports::preset::Preset {
+        name: "team".to_owned(),
+        model: json!(["test", "model"]).to_string(),
+        thinking_option_id: Some("high".to_owned()),
+        feature_values: BTreeMap::new(),
+    };
+    assert!(client.save_native_preset(&spec.cwd, &preset).await.is_err());
+    assert!(
+        client
+            .delete_native_preset(&spec.cwd, "team")
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("agent/global-presets.json")).unwrap(),
+        global.to_string()
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("agent/project-presets.json")).unwrap(),
+        project.to_string()
+    );
+}
+
+#[tokio::test]
+async fn unreadable_project_ownership_rejects_preset_writes_before_mutating_global_settings() {
+    let (root, client, spec) = fixture();
+    let global = json!({"team":{"modelRoles":{"default":"test/model"}}});
+    save(root.path(), "global", &global);
+    std::fs::write(
+        root.path().join("agent/project-presets.json"),
+        "invalid JSON",
+    )
+    .unwrap();
+    let preset = crate::ports::preset::Preset {
+        name: "team".to_owned(),
+        model: json!(["test", "model"]).to_string(),
+        thinking_option_id: None,
+        feature_values: BTreeMap::new(),
+    };
+    assert!(client.save_native_preset(&spec.cwd, &preset).await.is_err());
+    assert!(
+        client
+            .delete_native_preset(&spec.cwd, "team")
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("agent/global-presets.json")).unwrap(),
+        global.to_string()
+    );
+}
+
+#[tokio::test]
+async fn project_ownership_is_rechecked_after_native_command_probe_before_writing() {
+    let (root, client, spec) = fixture();
+    let global = json!({"team":{"modelRoles":{"default":"test/model"}}});
+    for action in ["model_preset_save", "model_preset_delete"] {
+        save(root.path(), "global", &global);
+        save(root.path(), "project", &json!({}));
+        std::fs::write(
+            root.path().join("agent/project-presets-on-probe.json"),
+            json!({"team":{"modelRoles":{"default":"other/model"}}}).to_string(),
+        )
+        .unwrap();
+        let result = roles::manage_preset(
+            client.clone(),
+            spec.cwd.clone(),
+            spec.config.clone(),
+            action,
+            &json!({"name":"team"}),
+        )
+        .unwrap()
+        .await;
+        assert!(
+            result.is_err(),
+            "late project ownership must reject {action}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("agent/global-presets.json")).unwrap(),
+            global.to_string()
+        );
+    }
 }

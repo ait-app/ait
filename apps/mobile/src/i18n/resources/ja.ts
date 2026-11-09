@@ -16,6 +16,8 @@ export const ja: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    presetReadOnly:
+      "プリセットの保存元が未確認、または読み取り専用です。更新してから編集してください。",
     settingsSelection: "現在の設定 · この会話または下書きに適用",
     scopeDefault: "OMP 既定ディレクトリ · グローバル設定を含む",
     scopeGlobal: "OMP グローバルプリセット",

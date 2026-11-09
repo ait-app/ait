@@ -25,6 +25,7 @@ export const ar: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    presetReadOnly: "مصدر الإعداد المسبق غير مؤكد أو للقراءة فقط. حدّث قبل التعديل.",
     settingsSelection: "الاختيار الحالي · لهذه المحادثة أو المسودة",
     scopeDefault: "دليل OMP الافتراضي · يشمل الإعدادات العامة",
     scopeGlobal: "إعدادات OMP العامة",

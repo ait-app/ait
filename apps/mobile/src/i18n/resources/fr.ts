@@ -16,6 +16,8 @@ export const fr: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    presetReadOnly:
+      "L’origine du préréglage est inconnue ou en lecture seule. Actualisez avant de modifier.",
     settingsSelection: "Sélection actuelle · pour cette conversation ou ce brouillon",
     scopeDefault: "Dossier OMP par défaut · inclut les préréglages globaux",
     scopeGlobal: "Préréglages globaux OMP",

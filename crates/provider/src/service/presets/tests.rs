@@ -48,7 +48,9 @@ async fn ait_backend_creates_lists_replaces_and_deletes_across_restarts() {
         .unwrap();
     let listed = service.list("claude", cwd, None).await.unwrap();
     assert_eq!(listed.len(), 2);
-    assert_eq!(listed[0].model, "claude-opus-5");
+    assert_eq!(listed[0].source, crate::ports::preset::PresetSource::Ait);
+    assert!(listed[0].editable);
+    assert_eq!(listed[0].preset.model, "claude-opus-5");
 
     // A second service over the same file sees the persisted list.
     let reopened = PresetService::new(store.clone());
@@ -156,11 +158,17 @@ async fn renaming_replaces_the_named_record_and_refuses_an_occupied_name() {
         .await
         .unwrap();
     let listed = service.list("claude", cwd, None).await.unwrap();
-    let mut names: Vec<&str> = listed.iter().map(|preset| preset.name.as_str()).collect();
+    let mut names: Vec<&str> = listed
+        .iter()
+        .map(|preset| preset.preset.name.as_str())
+        .collect();
     names.sort_unstable();
     assert_eq!(names, ["beta", "gamma"]);
-    let renamed = listed.iter().find(|preset| preset.name == "gamma").unwrap();
-    assert_eq!(renamed.model, "model/b");
+    let renamed = listed
+        .iter()
+        .find(|preset| preset.preset.name == "gamma")
+        .unwrap();
+    assert_eq!(renamed.preset.model, "model/b");
 
     // Renaming beta onto gamma would destroy an existing preset, so it is refused.
     assert!(
@@ -180,8 +188,9 @@ async fn renaming_replaces_the_named_record_and_refuses_an_occupied_name() {
     assert_eq!(
         listed
             .iter()
-            .find(|preset| preset.name == "gamma")
+            .find(|preset| preset.preset.name == "gamma")
             .unwrap()
+            .preset
             .model,
         "model/b",
         "the refused rename left the target untouched"
@@ -210,7 +219,7 @@ async fn internal_patch_markers_never_reach_a_client_or_a_store() {
         .await
         .expect("an internal marker must not make an otherwise valid preset unsavable");
     let stored = service.list("claude", cwd, None).await.unwrap();
-    let values = &stored[0].feature_values;
+    let values = &stored[0].preset.feature_values;
     assert!(!values.contains_key("modelPreset"));
     assert!(!values.contains_key("modelPresetThinking"));
     assert_eq!(values.get("modelRole.advisor"), Some(&json!("model/b")));
@@ -295,7 +304,10 @@ fn concurrent_creates_all_survive_without_lost_updates() {
         .unwrap()
         .block_on(service.list("claude", ".", None))
         .unwrap();
-    let mut stored: Vec<&str> = listed.iter().map(|preset| preset.name.as_str()).collect();
+    let mut stored: Vec<&str> = listed
+        .iter()
+        .map(|preset| preset.preset.name.as_str())
+        .collect();
     stored.sort_unstable();
     assert_eq!(
         stored, names,

@@ -16,6 +16,8 @@ export const ptBR: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    presetReadOnly:
+      "A origem da predefinição não foi confirmada ou é só de leitura. Atualize antes de editar.",
     settingsSelection: "Seleção atual · para esta conversa ou rascunho",
     scopeDefault: "Diretório padrão do OMP · inclui predefinições globais",
     scopeGlobal: "Predefinições globais do OMP",

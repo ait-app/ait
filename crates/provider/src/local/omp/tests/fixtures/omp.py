@@ -245,6 +245,10 @@ for line in sys.stdin:
         (root/'btw-history-fixture.json').write_text(json.dumps(btw_records))
         response(command,{'cancelled':cancelled})
     elif kind == 'get_available_commands':
+        changed = root/'project-presets-on-probe.json'
+        if changed.exists():
+            (root/'project-presets.json').write_text(changed.read_text())
+            changed.unlink()
         commands = [{'name': 'review', 'description': 'Review', 'source': 'skill'}]
         if (root/'side-commands').exists():
             commands.extend([{'name':'usage','source':'builtin'},{'name':'status','source':'extension'}])

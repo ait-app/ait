@@ -9,7 +9,7 @@ use serde_json::Value;
 
 use crate::local::omp::roles::presets;
 use crate::local::omp::{OmpClient, roles, session};
-use crate::ports::preset::{Preset, PresetBackend, PresetDescriptor, PresetError};
+use crate::ports::preset::{Preset, PresetBackend, PresetDescriptor, PresetEntry, PresetError};
 
 /// Why the editor must stay read-only for this provider.
 const UNAVAILABLE: &str =
@@ -40,7 +40,7 @@ pub(in crate::local::omp) async fn describe(client: &OmpClient, cwd: &str) -> Pr
 pub(in crate::local::omp) async fn list(
     client: &OmpClient,
     cwd: &str,
-) -> Result<Vec<Preset>, PresetError> {
+) -> Result<Vec<PresetEntry>, PresetError> {
     let cwd = probe_cwd(cwd);
     let catalog = roles::Catalog::read(client, &cwd)
         .await

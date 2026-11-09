@@ -77,6 +77,30 @@ impl PresetDescriptor {
 /// One preset as the store returns it.
 pub(crate) type Preset = ProviderPreset;
 
+/// Owning layer of one listed preset, supplied by the same read as its configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum PresetSource {
+    /// Stored in Ait's daemon configuration.
+    Ait,
+    /// Stored in the native global configuration.
+    Global,
+    /// A project definition overrides the global name and is read-only in this editor.
+    Project,
+}
+
+/// Read projection for the editor; ownership metadata is never persisted as preset content.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub(crate) struct PresetEntry {
+    /// The editable configuration, flattened for backwards-compatible list responses.
+    #[serde(flatten)]
+    pub(crate) preset: Preset,
+    /// Layer that owns this exact listed definition.
+    pub(crate) source: PresetSource,
+    /// Whether this definition can be changed through the owning store's editor.
+    pub(crate) editable: bool,
+}
+
 /// A preset failure carried to the client as a readable reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PresetError {

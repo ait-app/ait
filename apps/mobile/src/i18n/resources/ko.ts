@@ -16,6 +16,7 @@ export const ko: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    presetReadOnly: "프리셋 출처를 확인할 수 없거나 읽기 전용입니다. 새로 고친 후 편집하세요.",
     settingsSelection: "현재 설정 · 이 대화 또는 초안에 적용",
     scopeDefault: "OMP 기본 디렉터리 · 전역 설정 포함",
     scopeGlobal: "OMP 전역 프리셋",

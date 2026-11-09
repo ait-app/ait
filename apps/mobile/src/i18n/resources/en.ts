@@ -1,5 +1,6 @@
 export const en = {
   providerControl: {
+    presetReadOnly: "Preset ownership is unconfirmed or read-only. Refresh before editing.",
     settingsSelection: "Current selection · applies to this conversation or draft",
     scopeDefault: "Default OMP directory · includes global presets",
     scopeGlobal: "Global OMP presets",

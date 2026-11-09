@@ -1,11 +1,15 @@
-import type { AgentFeature, AgentModelDefinition } from "@ait/protocol/agent-types";
+import type { AgentModelDefinition } from "@ait/protocol/agent-types";
 import { SelectField } from "@/components/ui/select-field";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Pencil, Plus, Trash2 } from "lucide-react-native";
-import type { ProviderPreset, ProviderPresetDescriptor } from "@ait/protocol/messages";
+import type {
+  ProviderPreset,
+  ProviderPresetEntry,
+  ProviderPresetDescriptor,
+} from "@ait/protocol/messages";
 import {
   AdaptiveModalSheet,
   AdaptiveTextInput,
@@ -14,7 +18,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/contexts/toast-context";
 import { useQueryClient } from "@tanstack/react-query";
-import { invalidatePresetCaches, useProviderPresets } from "@/data/provider-presets";
+import {
+  invalidatePresetCaches,
+  providerPresetsQueryKey,
+  useProviderPresets,
+  type ProviderPresetsSnapshot,
+} from "@/data/provider-presets";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { toErrorMessage } from "@/utils/error-messages";
 
@@ -23,7 +32,7 @@ const PRESET_SNAP_POINTS = ["55%", "88%"];
 /**
  * One preset editor for every provider.
  *
- * The descriptor alone decides which controls are enabled, so a native store (OMP) and an
+ * The store descriptor and each listed entry's ownership decide which controls are enabled, so a native store (OMP) and an
  * Ait-managed store look identical here. Creating, editing and deleting always go through the
  * same daemon request, and the difference in storage never reaches this component.
  */
@@ -32,20 +41,18 @@ export function ProviderPresetsSection({
   serverId,
   cwd,
   models = [],
-  features = [],
 }: {
   provider: string;
   serverId: string;
   cwd?: string;
   models?: readonly AgentModelDefinition[];
-  features?: readonly AgentFeature[];
 }) {
   const { t } = useTranslation();
   const toast = useToast();
   const queryClient = useQueryClient();
   const client = useHostRuntimeClient(serverId);
   // The editor reads the same cache entry as every picker, so a write invalidates one entry and
-  // all readers refetch; there is no second manual read to keep in step.
+  // all readers refetch. Mutation preflights publish fresh ownership back to this same cache.
   const { snapshot, isLoading, error } = useProviderPresets({
     serverId,
     provider,
@@ -56,12 +63,45 @@ export function ProviderPresetsSection({
   const [editing, setEditing] = useState<ProviderPreset | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  const presetFeature = features.find((feature) => feature.id === "modelPreset");
-  const sourceOf = (name: string) =>
-    presetFeature?.type === "select"
-      ? presetFeature.options.find((option) => option.id === name)?.metadata?.source
-      : undefined;
-  const canSave = descriptor?.canCreate === true || descriptor?.canEdit === true;
+  const ready = snapshot !== null && !isLoading && error === null;
+  const canSave = ready && descriptor?.canCreate === true;
+  const editingAllowed =
+    ready &&
+    (editing?.name
+      ? descriptor?.canEdit === true &&
+        writable(presets.find((preset) => preset.name === editing.name))
+      : descriptor?.canCreate === true);
+
+  const checkLatest = useCallback(
+    async (name: string, creating: boolean) => {
+      if (!client || !ready) throw new Error(t("providerControl.presetReadOnly"));
+      const key = providerPresetsQueryKey(serverId, provider, cwd);
+      type Store = { snapshot: ProviderPresetsSnapshot; error: string | null };
+      let listed: { presets: ProviderPresetEntry[]; error?: string | null };
+      try {
+        listed = await client.listProviderPresets(provider, cwd);
+        queryClient.setQueryData<Store>(key, (current) =>
+          current
+            ? {
+                snapshot: { ...current.snapshot, presets: listed.presets },
+                error: listed.error ?? null,
+              }
+            : current,
+        );
+      } catch (cause) {
+        queryClient.setQueryData<Store>(key, (current) =>
+          current ? { ...current, error: toErrorMessage(cause) } : current,
+        );
+        throw cause;
+      }
+      if (listed.error) throw new Error(listed.error);
+      const current = listed.presets.find((preset) => preset.name === name);
+      if (creating ? current !== undefined : !writable(current)) {
+        throw new Error(t("providerControl.presetReadOnly"));
+      }
+    },
+    [client, ready, t, provider, cwd, queryClient, serverId],
+  );
 
   /**
    * Drop dependent caches.
@@ -79,7 +119,8 @@ export function ProviderPresetsSection({
 
   const handleSave = useCallback(
     async (preset: ProviderPreset) => {
-      if (!client) return;
+      if (!client || !editingAllowed) throw new Error(t("providerControl.presetReadOnly"));
+      await checkLatest(editing?.name || preset.name, !editing?.name);
       // The list was read for `cwd`, so the write must use the same directory: a native store
       // would otherwise save into the daemon's own directory and miss project-scoped roles.
       const result = await client.saveProviderPreset(
@@ -91,14 +132,21 @@ export function ProviderPresetsSection({
       if (result.error) throw new Error(result.error);
       await refreshAfterWrite();
     },
-    [client, cwd, editing?.name, refreshAfterWrite, provider],
+    [client, cwd, editing?.name, editingAllowed, checkLatest, refreshAfterWrite, provider, t],
   );
 
   const handleDelete = useCallback(
     async (name: string) => {
-      if (!client) return;
+      if (
+        !client ||
+        !ready ||
+        !descriptor?.canDelete ||
+        !writable(presets.find((preset) => preset.name === name))
+      )
+        return;
       setDeleting(name);
       try {
+        await checkLatest(name, false);
         const result = await client.deleteProviderPreset(provider, name, cwd);
         if (result.error) {
           toast.error(result.error);
@@ -111,7 +159,17 @@ export function ProviderPresetsSection({
         setDeleting((current) => (current === name ? null : current));
       }
     },
-    [client, cwd, refreshAfterWrite, provider, toast],
+    [
+      client,
+      cwd,
+      ready,
+      descriptor?.canDelete,
+      presets,
+      checkLatest,
+      refreshAfterWrite,
+      provider,
+      toast,
+    ],
   );
 
   return (
@@ -172,12 +230,15 @@ export function ProviderPresetsSection({
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle}>{preset.name}</Text>
                 <Text style={styles.muted}>{preset.model}</Text>
-                {descriptor?.backend === "native" && sourceOf(preset.name) ? (
+                {descriptor?.backend === "native" && preset.source ? (
                   <Text style={styles.muted}>
-                    {sourceOf(preset.name) === "project"
+                    {preset.source === "project"
                       ? t("providerControl.scopeProject", { cwd: cwd ?? "" })
                       : t("providerControl.scopeGlobal")}
                   </Text>
+                ) : null}
+                {!ready || !writable(preset) ? (
+                  <Text style={styles.muted}>{t("providerControl.presetReadOnly")}</Text>
                 ) : null}
               </View>
               {descriptor?.canEdit ? (
@@ -185,8 +246,10 @@ export function ProviderPresetsSection({
                   variant="ghost"
                   size="sm"
                   leftIcon={Pencil}
-                  disabled={sourceOf(preset.name) === "project"}
-                  onPress={() => setEditing(preset)}
+                  disabled={!ready || !writable(preset)}
+                  onPress={() => {
+                    if (ready && writable(preset)) setEditing(preset);
+                  }}
                   accessibilityLabel={t("settings.providers.presets.edit", { name: preset.name })}
                 />
               ) : null}
@@ -195,7 +258,7 @@ export function ProviderPresetsSection({
                   variant="ghost"
                   size="sm"
                   leftIcon={Trash2}
-                  disabled={deleting === preset.name || sourceOf(preset.name) === "project"}
+                  disabled={deleting === preset.name || !ready || !writable(preset)}
                   onPress={() => void handleDelete(preset.name)}
                   accessibilityLabel={t("settings.providers.presets.remove", { name: preset.name })}
                 />
@@ -213,11 +276,17 @@ export function ProviderPresetsSection({
           onClose={() => setEditing(null)}
           onSave={handleSave}
           canRename={descriptor?.canRename === true}
+          canSave={editingAllowed}
           existingNames={presets.map((preset) => preset.name)}
         />
       ) : null}
     </View>
   );
+}
+
+/** Missing ownership on an older daemon or failed refresh must never grant write access. */
+function writable(preset: ProviderPresetEntry | undefined): boolean {
+  return preset?.editable === true && (preset.source === "global" || preset.source === "ait");
 }
 
 /**
@@ -234,6 +303,7 @@ function PresetEditorSubSheet({
   onClose,
   onSave,
   canRename,
+  canSave,
   existingNames,
 }: {
   descriptor: ProviderPresetDescriptor | null;
@@ -243,6 +313,7 @@ function PresetEditorSubSheet({
   onClose: () => void;
   onSave: (preset: ProviderPreset) => Promise<void>;
   canRename: boolean;
+  canSave: boolean;
   /** Names already stored, so a create cannot silently take one over. */
   existingNames: readonly string[];
 }) {
@@ -301,6 +372,7 @@ function PresetEditorSubSheet({
       ? t("settings.providers.presets.nameTaken", { name: trimmedName })
       : null;
   const canSubmit =
+    canSave &&
     trimmedName.length > 0 &&
     trimmedModel.length > 0 &&
     takenName === null &&
@@ -496,6 +568,9 @@ function PresetEditorSubSheet({
           style={styles.formInput}
           testID="provider-preset-roles"
         />
+        {!canSave ? (
+          <Text style={styles.errorText}>{t("providerControl.presetReadOnly")}</Text>
+        ) : null}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
         <View style={styles.formActions}>
           <Button variant="secondary" size="sm" onPress={onClose} disabled={saving}>

@@ -9,7 +9,8 @@ use serde_json::Value;
 
 use crate::ports::agent_session::AgentClient;
 use crate::ports::preset::{
-    Preset, PresetBackend, PresetDescriptor, PresetError, editable, synthesize,
+    Preset, PresetBackend, PresetDescriptor, PresetEntry, PresetError, PresetSource, editable,
+    synthesize,
 };
 
 /// Largest accepted provider identifier on a preset request.
@@ -70,7 +71,7 @@ impl PresetService {
         provider: &str,
         cwd: &str,
         client: Option<&Arc<dyn AgentClient>>,
-    ) -> Result<Vec<Preset>, PresetError> {
+    ) -> Result<Vec<PresetEntry>, PresetError> {
         let descriptor = self.describe(cwd, client).await;
         if descriptor.backend == PresetBackend::Native {
             let client = client.ok_or_else(|| {
@@ -78,12 +79,29 @@ impl PresetService {
             })?;
             // A native store reports its private overlay; the editor may only see what a user
             // can actually edit.
-            return client
-                .native_presets(cwd)
-                .await
-                .map(|presets| presets.into_iter().map(editable).collect());
+            return client.native_presets(cwd).await.map(|presets| {
+                presets
+                    .into_iter()
+                    .map(|mut entry| {
+                        entry.preset = editable(entry.preset);
+                        entry
+                    })
+                    .collect()
+            });
         }
-        self.ait().list(provider).map_err(PresetError::Unavailable)
+        self.ait()
+            .list(provider)
+            .map(|presets| {
+                presets
+                    .into_iter()
+                    .map(|preset| PresetEntry {
+                        preset,
+                        source: PresetSource::Ait,
+                        editable: true,
+                    })
+                    .collect()
+            })
+            .map_err(PresetError::Unavailable)
     }
 
     /// Create or replace one preset through the store that owns it.
