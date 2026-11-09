@@ -9,6 +9,7 @@
 
 ## Daemon 与协议
 
+- [PR #612：合入 main 与能力目录验证（2026-11-09）](providers/pr612-main-conflicts-2026-11-09.md)
 - [Plans 待办核查与修复（2026-11-04）](daemon/plans-todo-followup-2026-11-04.md)
 - [Cargo workspace 依赖整理与警告清理：PR 验证](daemon/cargo-workspace-pr-validation-2026-10-04.md)
 - [Crate 边界整合到最新 main 的验证](daemon/crate-boundaries-main-rebase-2026-10-07.md)

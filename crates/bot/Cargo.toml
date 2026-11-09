@@ -28,6 +28,11 @@ tokio-tungstenite.features = ["rustls-tls-webpki-roots"]
 url.workspace = true
 # Feishu's documented protobuf WebSocket frame; no code generator or SDK runtime.
 prost.workspace = true
+# Feishu scan-to-create encodes requested permissions as gzip and URL-safe base64.
+base64.workspace = true
+flate2.workspace = true
+# QQ scan-to-create returns the new bot's secret sealed with AES-256-GCM.
+ring.workspace = true
 async-trait.workspace = true
 
 [dev-dependencies]

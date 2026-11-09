@@ -113,6 +113,7 @@
     "micromark-extension-gfm-table": "2.1.2",
     "micromark-util-decode-string": "2.0.1",
     "mnemonic-id": "^3.2.7",
+    "qrcode-generator": "^2.0.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-freeze": "1.0.4",

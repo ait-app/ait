@@ -3712,6 +3712,10 @@ export const ServerInfoStatusPayloadSchema = z
         creationLifecycle: z.boolean().optional(),
         workspaceBots: z.boolean().optional(),
         workspaceBotPermissions: z.boolean().optional(),
+        workspaceBotFeishuSetup: z.boolean().optional(),
+        workspaceBotTelegramSetup: z.boolean().optional(),
+        workspaceBotWeixinSetup: z.boolean().optional(),
+        workspaceBotQqSetup: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
         agentCommandCompletion: z.boolean().optional(),
         // COMPAT(providersSnapshotCwd): added in v0.3.2, remove gate after 2027-02-10.
@@ -6442,10 +6446,7 @@ export const ProviderPresetsListResponseMessageSchema = z.object({
 
 /** Save and delete share one acknowledgement: the stored name or a readable reason. */
 export const ProviderPresetsMutationResponseMessageSchema = z.object({
-  type: z.union([
-    z.literal("provider.presets.save.response"),
-    z.literal("provider.presets.delete.response"),
-  ]),
+  type: z.literal(["provider.presets.save.response", "provider.presets.delete.response"]),
   payload: z.object({
     provider: AgentProviderSchema,
     saved: z.string().nullable().optional(),

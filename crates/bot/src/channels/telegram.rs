@@ -9,6 +9,8 @@ use tokio_util::sync::CancellationToken;
 use super::{BUSY_NOTICE, Disposition, Incoming, admit, chunks, deliver, expose, json_response};
 use crate::service::Bots;
 
+pub(crate) mod onboarding;
+
 const API: &str = "https://api.telegram.org";
 /// Longest wait between admission attempts while the Bot's global backlog is full.
 const MAX_BACKLOG_RETRY: Duration = Duration::from_secs(30);
@@ -196,10 +198,9 @@ fn incoming(
     if message["from"]["is_bot"] == true || !allowed_senders.contains(&sender) {
         return Ok(None);
     }
-    let Some(text) = message["text"]
-        .as_str()
-        .filter(|text| !text.trim().is_empty() && text.len() <= 16 * 1024)
-    else {
+    let Some(text) = message["text"].as_str().filter(|text| {
+        !text.trim().is_empty() && text.len() <= 16 * 1024 && !onboarding::is_pairing_start(text)
+    }) else {
         return Ok(None);
     };
     if message["chat"]["type"] != "private"

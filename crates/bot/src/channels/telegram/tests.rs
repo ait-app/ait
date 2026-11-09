@@ -9,6 +9,7 @@ fn channel() -> Channel {
         bot_id: BotId::generate(),
         enabled: true,
         cursor: None,
+        sync_token: None,
         deleted: false,
         config: ChannelConfig::Telegram {
             token_ref: "env:AIT_SERVER_CREDENTIAL_TELEGRAM".into(),

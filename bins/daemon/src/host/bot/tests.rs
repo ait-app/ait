@@ -7,10 +7,61 @@ use super::*;
 const CREDENTIAL_VARIABLE: &str = "AIT_SERVER_CREDENTIAL_DAEMON_COVERAGE_TEST";
 const CHILD_CASE: &str = "AIT_DAEMON_TEST_BOT_CASE";
 
+fn credentials_at(root: &Path) -> HostCredentials {
+    HostCredentials {
+        secrets: SecretFiles::new(root.join("credentials")),
+    }
+}
+
+/// Credentials for cases that only resolve environment references and never touch the files.
+fn environment() -> HostCredentials {
+    credentials_at(Path::new("/nonexistent"))
+}
+
+#[test]
+fn stored_credentials_round_trip_and_are_scoped_to_their_channel() {
+    let root = tempfile::tempdir().unwrap();
+    let credentials = credentials_at(root.path());
+    let channel = ChannelId::generate();
+    let stored = |id: ChannelId| {
+        let name = id.to_string().replace('-', "").to_ascii_uppercase();
+        format!("env:AIT_SERVER_CREDENTIAL_STORED_{name}")
+    };
+    let reference = stored(channel);
+
+    assert_eq!(
+        credentials.resolve(&reference).unwrap_err(),
+        ErrorCode::BotIo
+    );
+    credentials
+        .store(channel, &SecretString::from("stored-secret"))
+        .unwrap();
+    assert_eq!(
+        credentials.resolve(&reference).unwrap().expose_secret(),
+        "stored-secret"
+    );
+    assert_eq!(
+        credentials
+            .resolve(&stored(ChannelId::generate()))
+            .unwrap_err(),
+        ErrorCode::BotIo
+    );
+
+    credentials.delete(channel).unwrap();
+    assert_eq!(
+        credentials.resolve(&reference).unwrap_err(),
+        ErrorCode::BotIo
+    );
+    assert_eq!(
+        credentials.resolve("store:../../etc/passwd").unwrap_err(),
+        ErrorCode::InvalidMessage
+    );
+}
+
 #[test]
 fn environment_credentials_validate_references_and_bound_secret_values() {
     if let Ok(case) = std::env::var(CHILD_CASE) {
-        let result = Environment.resolve(&format!("env:{CREDENTIAL_VARIABLE}"));
+        let result = environment().resolve(&format!("env:{CREDENTIAL_VARIABLE}"));
         if case == "valid" {
             let secret = result.unwrap();
             assert_eq!(secret.expose_secret(), "fixture.bot.credential");
@@ -22,7 +73,7 @@ fn environment_credentials_validate_references_and_bound_secret_values() {
     }
     for reference in ["", "file:credentials", "env:", "env:bad-name"] {
         assert_eq!(
-            Environment.resolve(reference).unwrap_err(),
+            environment().resolve(reference).unwrap_err(),
             ErrorCode::InvalidMessage
         );
     }

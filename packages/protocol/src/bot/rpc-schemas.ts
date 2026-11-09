@@ -11,6 +11,17 @@ import {
 
 const WorkspaceIdSchema = z.string().trim().min(1);
 
+const TelegramPairFailureSchema = z.enum([
+  "invalidToken",
+  "alreadyConnected",
+  "webhookConflict",
+  "pollingConflict",
+  "expired",
+  "unavailable",
+]);
+
+const ChannelScanFailureSchema = z.enum(["expired", "alreadyConnected", "unavailable"]);
+
 export const BOT_REQUEST_SCHEMAS = [
   z.strictObject({
     type: z.literal("bot.get.request"),
@@ -85,6 +96,104 @@ export const BOT_REQUEST_SCHEMAS = [
     requestId: z.string(),
     workspaceId: WorkspaceIdSchema,
     channelId: z.guid(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.feishu.scan.start.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    allowGroups: z.boolean().optional(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.feishu.scan.status.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    scanId: z.guid(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.feishu.scan.cancel.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    scanId: z.guid(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.feishu.connect.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    channelId: z.guid(),
+    appId: z.string(),
+    appSecret: z.string(),
+    allowedSenders: z.array(z.string()),
+    allowGroups: z.boolean().optional(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.weixin.scan.start.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    allowGroups: z.boolean().optional(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.weixin.scan.status.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    scanId: z.guid(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.weixin.scan.cancel.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    scanId: z.guid(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.qq.scan.start.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    allowGroups: z.boolean().optional(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.qq.scan.status.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    scanId: z.guid(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.qq.scan.cancel.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    scanId: z.guid(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.qq.connect.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    channelId: z.guid(),
+    appId: z.string(),
+    appSecret: z.string(),
+    allowGroups: z.boolean().optional(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.qq.pair.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    channelId: z.guid(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.telegram.pair.start.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    token: z.string(),
+    allowGroups: z.boolean().optional(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.telegram.pair.status.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    pairingId: z.guid(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.telegram.pair.cancel.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    pairingId: z.guid(),
   }),
   z.strictObject({
     type: z.literal("bot.conversation.list.request"),
@@ -215,6 +324,109 @@ export const BOT_RESPONSE_SCHEMAS = [
     }),
   }),
   z.object({
+    type: z.literal("bot.channel.feishu.scan.start.response"),
+    payload: z.object({
+      requestId: z.string(),
+      scanId: z.guid(),
+      url: z.string(),
+      expiresInSeconds: z.number(),
+    }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.feishu.scan.status.response"),
+    payload: z.object({
+      requestId: z.string(),
+      state: z.enum(["waiting", "complete", "failed"]),
+      reason: z.enum(["denied", "expired", "larkUnsupported", "unavailable"]).optional(),
+      channel: BotChannelSchema.optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.feishu.scan.cancel.response"),
+    payload: z.object({ requestId: z.string(), cancelled: z.boolean() }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.feishu.connect.response"),
+    payload: z.object({ requestId: z.string(), channel: BotChannelSchema, created: z.boolean() }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.telegram.pair.start.response"),
+    payload: z.object({
+      requestId: z.string(),
+      state: z.enum(["waiting", "failed"]),
+      reason: TelegramPairFailureSchema.optional(),
+      pairingId: z.guid().optional(),
+      botUsername: z.string().optional(),
+      url: z.string().optional(),
+      expiresInSeconds: z.number().optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.telegram.pair.status.response"),
+    payload: z.object({
+      requestId: z.string(),
+      state: z.enum(["waiting", "complete", "failed"]),
+      reason: TelegramPairFailureSchema.optional(),
+      channel: BotChannelSchema.optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.telegram.pair.cancel.response"),
+    payload: z.object({ requestId: z.string(), cancelled: z.boolean() }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.weixin.scan.start.response"),
+    payload: z.object({
+      requestId: z.string(),
+      scanId: z.guid(),
+      url: z.string(),
+      expiresInSeconds: z.number(),
+    }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.weixin.scan.status.response"),
+    payload: z.object({
+      requestId: z.string(),
+      state: z.enum(["waiting", "complete", "failed"]),
+      reason: ChannelScanFailureSchema.optional(),
+      channel: BotChannelSchema.optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.weixin.scan.cancel.response"),
+    payload: z.object({ requestId: z.string(), cancelled: z.boolean() }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.qq.scan.start.response"),
+    payload: z.object({
+      requestId: z.string(),
+      scanId: z.guid(),
+      url: z.string(),
+      expiresInSeconds: z.number(),
+    }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.qq.scan.status.response"),
+    payload: z.object({
+      requestId: z.string(),
+      state: z.enum(["waiting", "complete", "failed"]),
+      reason: ChannelScanFailureSchema.optional(),
+      channel: BotChannelSchema.optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.qq.scan.cancel.response"),
+    payload: z.object({ requestId: z.string(), cancelled: z.boolean() }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.qq.connect.response"),
+    payload: z.object({ requestId: z.string(), channel: BotChannelSchema, created: z.boolean() }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.qq.pair.response"),
+    payload: z.object({ requestId: z.string(), code: z.string(), expiresInSeconds: z.number() }),
+  }),
+  z.object({
     type: z.literal("bot.conversation.list.response"),
     payload: z.object({ requestId: z.string(), conversations: z.array(BotConversationSchema) }),
   }),
@@ -282,7 +494,37 @@ export type BotResult<M extends BotMethod> = Extract<
 >["payload"];
 /** Methods added after the core v2 Bot set; hosts without them keep the Bot tab. */
 export const BOT_PERMISSION_METHODS = ["bot.permissions.update.request"] as const;
+export const BOT_FEISHU_SETUP_METHODS = [
+  "bot.channel.feishu.scan.start.request",
+  "bot.channel.feishu.scan.status.request",
+  "bot.channel.feishu.scan.cancel.request",
+  "bot.channel.feishu.connect.request",
+] as const;
+export const BOT_TELEGRAM_SETUP_METHODS = [
+  "bot.channel.telegram.pair.start.request",
+  "bot.channel.telegram.pair.status.request",
+  "bot.channel.telegram.pair.cancel.request",
+] as const;
+export const BOT_WEIXIN_SETUP_METHODS = [
+  "bot.channel.weixin.scan.start.request",
+  "bot.channel.weixin.scan.status.request",
+  "bot.channel.weixin.scan.cancel.request",
+] as const;
+export const BOT_QQ_SETUP_METHODS = [
+  "bot.channel.qq.scan.start.request",
+  "bot.channel.qq.scan.status.request",
+  "bot.channel.qq.scan.cancel.request",
+  "bot.channel.qq.connect.request",
+  "bot.channel.qq.pair.request",
+] as const;
+const OPTIONAL_BOT_METHODS: readonly string[] = [
+  ...BOT_PERMISSION_METHODS,
+  ...BOT_FEISHU_SETUP_METHODS,
+  ...BOT_TELEGRAM_SETUP_METHODS,
+  ...BOT_WEIXIN_SETUP_METHODS,
+  ...BOT_QQ_SETUP_METHODS,
+];
 export const BOT_METHODS = BOT_REQUEST_SCHEMAS.map((schema) => schema.shape.type.value).filter(
-  (method) => !(BOT_PERMISSION_METHODS as readonly string[]).includes(method),
+  (method) => !OPTIONAL_BOT_METHODS.includes(method),
 );
 export const ALL_BOT_METHODS = BOT_REQUEST_SCHEMAS.map((schema) => schema.shape.type.value);

@@ -335,8 +335,9 @@ function PresetEditorSubSheet({
       2,
     ),
   );
-  const showCustomModel = customModel || !models.some((entry) => entry.id === model);
-  const thinkingOptions = models.find((option) => option.id === model)?.thinkingOptions ?? [];
+  const selectedModel = models.find((option) => option.id === model);
+  const showCustomModel = customModel || !selectedModel;
+  const thinkingOptions = selectedModel?.thinkingOptions ?? [];
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -474,7 +475,11 @@ function PresetEditorSubSheet({
         <SelectField
           label={t("settings.providers.presets.model")}
           value={showCustomModel ? "__custom__" : model}
-          selectedDisplay={null}
+          selectedDisplay={{
+            label: showCustomModel
+              ? t("providerControl.customInput")
+              : (selectedModel?.label ?? model),
+          }}
           options={[
             ...models.map((entry) => ({ id: entry.id, value: entry.id, label: entry.label })),
             { id: "__custom__", value: "__custom__", label: t("providerControl.customInput") },
@@ -519,7 +524,16 @@ function PresetEditorSubSheet({
               ? "__custom__"
               : thinking
           }
-          selectedDisplay={null}
+          selectedDisplay={{
+            label: customThinking
+              ? t("providerControl.customInput")
+              : (thinkingOptions.find((option) => option.id === thinking)?.label ??
+                t(
+                  thinking
+                    ? "providerControl.customInput"
+                    : "settings.providers.presets.thinkingPlaceholder",
+                )),
+          }}
           options={[
             { id: "", value: "", label: t("settings.providers.presets.thinkingPlaceholder") },
             ...thinkingOptions.map((entry) => ({

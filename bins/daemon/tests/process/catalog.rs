@@ -25,8 +25,8 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         .implemented_capabilities
         .into_iter()
         .collect::<BTreeSet<_>>();
-    assert_eq!(published.len(), 222);
-    assert_eq!(implemented.len(), 221);
+    assert_eq!(published.len(), 237);
+    assert_eq!(implemented.len(), 236);
     assert!(implemented.contains("bot.message.send.request"));
     assert!(implemented.contains("workspace.get.request"));
     assert!(implemented.is_subset(&published));
@@ -54,7 +54,7 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         .chain(terminal::capabilities::implemented_methods())
         .map(|spec| (spec.name, spec.kind))
         .collect::<BTreeMap<_, _>>();
-    assert_eq!(catalog.len(), 202);
+    assert_eq!(catalog.len(), 217);
     for name in [
         "browser.tunnel.open.request",
         "browser.tunnel.read.request",
@@ -63,6 +63,8 @@ async fn production_installs_every_in_scope_method_without_placeholders() {
         "workspace.setup.subscribe.request",
         "agent.commands.complete.request",
         "agent.native_action.request",
+        "provider.presets.list.request",
+        "bot.channel.feishu.scan.start.request",
     ] {
         assert!(implemented.contains(name));
         assert_eq!(

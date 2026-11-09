@@ -15,6 +15,7 @@ bot = { path = "crates/bot" }
 browser = { path = "crates/browser" }
 domain = { path = "crates/domain" }
 filesystem = { path = "crates/filesystem" }
+flate2 = "1.1.10"
 metadata = { path = "crates/metadata" }
 model = { path = "crates/model" }
 persistence = { path = "crates/persistence" }
@@ -54,6 +55,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 # Preserve fractional-millisecond revision tokens across JSON request round trips.
 serde_json = { version = "1.0.151", features = ["float_roundtrip"] }
 serde_yaml_ng = "0.10.0"
+ring = "0.17.14"
 sha2 = "0.10.9"
 sherpa-onnx = "=1.13.8"
 subtle = "2.6.1"

@@ -9,15 +9,21 @@ use domain::{BotTurnId, ChannelId, ConversationId};
 use model::ErrorCode;
 use model::bot::Store;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
+use secrecy::SecretString;
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 use crate::channels::Incoming;
+use crate::channels::feishu::onboarding::Onboarding as FeishuOnboarding;
+use crate::channels::qq::onboarding::Onboarding as QqOnboarding;
+use crate::channels::telegram::onboarding::Onboarding as TelegramOnboarding;
+use crate::channels::weixin::onboarding::Onboarding as WeixinOnboarding;
 use crate::mcp::Scopes;
 use crate::ports::{Credentials, Executor};
-use crate::state::State;
+use crate::protocol::decode;
+use crate::state::{State, StoredChannel};
 
 /// Complete host dependencies; no concrete persistence adapter is required by this crate.
 pub struct Dependencies {
@@ -29,7 +35,7 @@ pub struct Dependencies {
     pub projects: Arc<dyn ProjectRegistry>,
     /// Provider-owned execution.
     pub executor: Arc<dyn Executor>,
-    /// Host environment credential resolver.
+    /// Host credential resolver and private secret storage.
     pub credentials: Arc<dyn Credentials>,
     /// Daemon-wide scoped MCP credential registry, refreshed on every catalog change.
     pub scopes: Arc<Scopes>,
@@ -53,6 +59,10 @@ struct Worker {
     closed: watch::Receiver<bool>,
     executor: Arc<dyn Executor>,
     scopes: Arc<Scopes>,
+    feishu: FeishuOnboarding,
+    telegram: TelegramOnboarding,
+    weixin: WeixinOnboarding,
+    qq: QqOnboarding,
 }
 
 /// Cloneable application service; conversations outlive UI connections.
@@ -71,6 +81,11 @@ enum Operation {
     DeliveryNext(ChannelId),
     Delivery(BotTurnId, DeliveryStatus),
     Retire(Vec<String>),
+    ChannelAdmission(String),
+    AccountAvailable(String),
+    CreateStored(StoredChannel, SecretString),
+    SyncToken(ChannelId, String),
+    AddSender(ChannelId, String),
 }
 /// Outcome of channel input that the Bot did not refuse.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -113,6 +128,10 @@ impl Bots {
             closed: observed,
             executor: dependencies.executor,
             scopes: dependencies.scopes,
+            feishu: FeishuOnboarding::default(),
+            telegram: TelegramOnboarding::default(),
+            weixin: WeixinOnboarding::default(),
+            qq: QqOnboarding::default(),
         }));
         let worker = bots.clone();
         std::thread::Builder::new()
@@ -129,7 +148,53 @@ impl Bots {
     /// # Errors
     /// Returns validation, ownership, resource, persistence or lifecycle failures.
     pub async fn execute(&self, method: &str, params: Value) -> Result<Value, ErrorCode> {
-        self.call(Operation::Rpc(method.to_owned(), params)).await
+        let (feishu, telegram) = (&self.0.feishu, &self.0.telegram);
+        let (weixin, qq) = (&self.0.weixin, &self.0.qq);
+        match method {
+            "bot.channel.feishu.scan.start.request" => feishu.start(self, decode(params)?).await,
+            // Status runs detached so a client disconnecting mid-poll cannot lose an approval.
+            "bot.channel.feishu.scan.status.request" => {
+                let bots = self.clone();
+                let request = decode(params)?;
+                tokio::spawn(async move { bots.0.feishu.status(&bots, request).await })
+                    .await
+                    .map_err(|_| ErrorCode::BotIo)?
+            }
+            "bot.channel.feishu.scan.cancel.request" => feishu.cancel(decode(params)?).await,
+            "bot.channel.feishu.connect.request" => feishu.connect(self, decode(params)?).await,
+            "bot.channel.telegram.pair.start.request" => {
+                telegram.start(self, decode(params)?).await
+            }
+            "bot.channel.telegram.pair.status.request" => {
+                let bots = self.clone();
+                let request = decode(params)?;
+                tokio::spawn(async move { bots.0.telegram.status(&bots, request).await })
+                    .await
+                    .map_err(|_| ErrorCode::BotIo)?
+            }
+            "bot.channel.telegram.pair.cancel.request" => telegram.cancel(decode(params)?).await,
+            "bot.channel.weixin.scan.start.request" => weixin.start(self, decode(params)?).await,
+            "bot.channel.weixin.scan.status.request" => {
+                let bots = self.clone();
+                let request = decode(params)?;
+                tokio::spawn(async move { bots.0.weixin.status(&bots, request).await })
+                    .await
+                    .map_err(|_| ErrorCode::BotIo)?
+            }
+            "bot.channel.weixin.scan.cancel.request" => weixin.cancel(decode(params)?).await,
+            "bot.channel.qq.scan.start.request" => qq.start(self, decode(params)?).await,
+            "bot.channel.qq.scan.status.request" => {
+                let bots = self.clone();
+                let request = decode(params)?;
+                tokio::spawn(async move { bots.0.qq.status(&bots, request).await })
+                    .await
+                    .map_err(|_| ErrorCode::BotIo)?
+            }
+            "bot.channel.qq.scan.cancel.request" => qq.cancel(decode(params)?).await,
+            "bot.channel.qq.connect.request" => qq.connect(self, decode(params)?).await,
+            "bot.channel.qq.pair.request" => qq.pair(self, decode(params)?).await,
+            _ => self.call(Operation::Rpc(method.to_owned(), params)).await,
+        }
     }
 
     /// The scoped MCP credential registry this service publishes authorization into.
@@ -203,6 +268,58 @@ impl Bots {
             Admission::Backlogged
         })
     }
+    /// Whether the Workspace's Bot could keep one more channel right now.
+    pub(crate) async fn check_channel_admission(&self, workspace: String) -> Result<(), ErrorCode> {
+        self.call(Operation::ChannelAdmission(workspace))
+            .await
+            .map(|_| ())
+    }
+    /// Whether no enabled channel is already connected to the external account `identity`.
+    pub(crate) async fn account_available(&self, identity: String) -> Result<bool, ErrorCode> {
+        let available = self.call(Operation::AccountAvailable(identity)).await?;
+        Ok(available == true)
+    }
+    /// Durably store a verified secret and enable its channel, waiting for command capacity
+    /// because the secret cannot be requested from the external account a second time.
+    pub(crate) async fn create_stored_channel(
+        &self,
+        channel: StoredChannel,
+        secret: SecretString,
+    ) -> Result<Value, ErrorCode> {
+        self.send(Operation::CreateStored(channel, secret)).await
+    }
+    /// Record a channel's stream position after the batch it covers has been queued.
+    pub(crate) async fn sync_token(
+        &self,
+        channel: ChannelId,
+        token: String,
+    ) -> Result<(), ErrorCode> {
+        self.call(Operation::SyncToken(channel, token))
+            .await
+            .map(|_| ())
+    }
+    /// Allow a QQ sender who presented the channel's pairing code.
+    pub(crate) async fn add_allowed_sender(
+        &self,
+        channel: ChannelId,
+        sender: String,
+    ) -> Result<(), ErrorCode> {
+        self.send(Operation::AddSender(channel, sender))
+            .await
+            .map(|_| ())
+    }
+    /// A channel's status, refusing a channel the requesting Workspace's Bot does not own.
+    pub(crate) async fn channel_status_for(&self, params: Value) -> Result<Value, ErrorCode> {
+        self.call(Operation::Rpc(
+            "bot.channel.status.request".to_owned(),
+            params,
+        ))
+        .await
+    }
+    /// Consume a QQ channel's pairing code if `text` presents it.
+    pub(crate) fn claim_qq_pairing(&self, channel: ChannelId, text: &str) -> bool {
+        self.0.qq.claim(channel, text)
+    }
     pub(crate) async fn cursor(&self, channel: ChannelId, cursor: i64) -> Result<(), ErrorCode> {
         self.call(Operation::Cursor(channel, cursor))
             .await
@@ -237,7 +354,7 @@ impl Bots {
         conversation: ConversationId,
         turn: BotTurnId,
     ) -> Result<Conversation, ErrorCode> {
-        crate::protocol::decode(self.send(Operation::Rotate(conversation, turn)).await?)
+        decode(self.send(Operation::Rotate(conversation, turn)).await?)
     }
     pub(crate) async fn finished(&self, conversation: ConversationId) -> Result<(), ErrorCode> {
         self.send(Operation::Finished(conversation))
@@ -252,7 +369,7 @@ impl Bots {
         if value.is_null() {
             Ok(None)
         } else {
-            crate::protocol::decode(value).map(Some)
+            decode(value).map(Some)
         }
     }
     pub(crate) async fn delivery(
@@ -291,10 +408,21 @@ async fn serve(
         if stopping && state.running.is_empty() {
             break;
         }
+        let host_credentials = credentials.clone();
         let processed = tokio::task::spawn_blocking(move || {
             if let Some(command) = command {
-                let result = apply(&mut state, &mut accounts, command.operation);
+                let result = apply(
+                    &mut state,
+                    &mut accounts,
+                    host_credentials.as_ref(),
+                    command.operation,
+                );
                 let _ = command.reply.send(result);
+            }
+            for channel in std::mem::take(&mut state.released_credentials) {
+                if let Err(error) = host_credentials.delete(channel) {
+                    tracing::warn!(%channel, ?error, "could not remove a deleted channel's secret");
+                }
             }
             let ready = if stopping {
                 Vec::new()
@@ -346,14 +474,21 @@ async fn serve(
 fn apply(
     state: &mut State,
     accounts: &mut BTreeMap<String, ChannelId>,
+    credentials: &dyn Credentials,
     operation: Operation,
 ) -> Result<Value, ErrorCode> {
     match operation {
         Operation::Rpc(method, params) if method == "bot.turn.cancel.request" => {
-            state.cancel(&crate::protocol::decode(params)?)
+            state.cancel(&decode(params)?)
         }
         Operation::Rpc(method, params) => state.execute(&method, params),
         Operation::Accept(incoming) => state.accept_channel(incoming),
+        Operation::SyncToken(channel, token) => {
+            state.advance_sync(channel, token).map(|()| Value::Null)
+        }
+        Operation::AddSender(channel, sender) => state
+            .add_allowed_sender(channel, sender)
+            .map(|()| Value::Null),
         Operation::Cursor(channel, cursor) => {
             state.advance_cursor(channel, cursor).map(|()| Value::Null)
         }
@@ -361,13 +496,12 @@ fn apply(
             state.channel_status.insert(channel, value);
             Ok(Value::Null)
         }
+        Operation::AccountAvailable(identity) => {
+            retain_enabled_accounts(state, accounts);
+            Ok(Value::Bool(!accounts.contains_key(&identity)))
+        }
         Operation::Account(channel, identity) => {
-            let enabled: BTreeSet<_> = state
-                .channels()
-                .into_iter()
-                .map(|channel| channel.id)
-                .collect();
-            accounts.retain(|_, id| enabled.contains(id));
+            retain_enabled_accounts(state, accounts);
             if accounts
                 .get(&identity)
                 .is_some_and(|owner| *owner != channel)
@@ -394,7 +528,22 @@ fn apply(
         }
         Operation::Delivery(turn, status) => state.delivery(turn, status).map(|()| Value::Null),
         Operation::Retire(workspaces) => state.retire(&workspaces).map(|()| Value::Null),
+        Operation::ChannelAdmission(workspace) => state
+            .check_channel_admission(&workspace)
+            .map(|()| Value::Null),
+        Operation::CreateStored(channel, secret) => {
+            state.create_stored_channel(channel, &secret, credentials)
+        }
     }
+}
+
+fn retain_enabled_accounts(state: &State, accounts: &mut BTreeMap<String, ChannelId>) {
+    let enabled: BTreeSet<_> = state
+        .channels()
+        .into_iter()
+        .map(|channel| channel.id)
+        .collect();
+    accounts.retain(|_, id| enabled.contains(id));
 }
 
 fn refresh_channels(

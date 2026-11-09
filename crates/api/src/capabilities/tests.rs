@@ -36,7 +36,7 @@ fn empty_host_keeps_only_builtin_api_methods() {
         ]
     );
     let registered = crate::registered_capabilities();
-    assert_eq!(registered.len(), 222);
+    assert_eq!(registered.len(), 237);
     assert!(
         !registered
             .iter()
@@ -68,15 +68,23 @@ fn merged_components_have_one_owner_per_method_and_keep_placeholders_separate() 
     let names: Vec<_> = specs.iter().map(|spec| spec.name).collect();
     let unique: BTreeSet<_> = names.iter().copied().collect();
     assert_eq!(names.len(), unique.len());
-    assert_eq!(names.len(), 221);
+    assert_eq!(names.len(), 236);
     assert!(unique.contains("workspace.get.request"));
     assert!(unique.contains("schedule.list.request"));
     assert!(!unique.contains("server.status.unsubscribe"));
     let registered = crate::registered_capabilities();
-    assert_eq!(registered.len(), 222);
+    assert_eq!(registered.len(), 237);
     for method in [
         "agent.commands.complete.request",
         "agent.native_action.request",
+        "provider.presets.describe.request",
+        "provider.presets.list.request",
+        "provider.presets.save.request",
+        "provider.presets.delete.request",
+        "bot.channel.feishu.scan.start.request",
+        "bot.channel.telegram.pair.start.request",
+        "bot.channel.weixin.scan.start.request",
+        "bot.channel.qq.scan.start.request",
     ] {
         let owners: Vec<_> = specs.iter().filter(|spec| spec.name == method).collect();
         assert_eq!(owners.len(), 1, "{method} must have one component owner");

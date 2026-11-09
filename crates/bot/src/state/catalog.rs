@@ -4,14 +4,18 @@ use std::path::Path;
 use domain::bot::{Bot, BotState, Catalog, Channel, ChannelConfig, ExecutionConfig, PauseReason};
 use domain::{BotId, ChannelId};
 use model::ErrorCode;
+use secrecy::SecretString;
 use serde_json::{Value, json};
 
-use super::State;
+use super::{State, StoredChannel};
+use crate::ports::Credentials;
 use crate::protocol::{
     ChannelCreate, ChannelRequest, ChannelUpdate, PermissionsUpdate, Setup, Update,
     WorkspaceRequest,
 };
 
+/// Most undeleted Channels one Bot may own.
+const MAX_CHANNELS: usize = 16;
 /// Most Bots that are not retired.
 const LIVE_BOTS: usize = 128;
 /// Most undeleted Channels owned by Bots that are not retired.
@@ -65,7 +69,7 @@ pub(super) fn validate(catalog: &Catalog) -> Result<(), ErrorCode> {
     let mut builtin = 0;
     for channel in &catalog.channels {
         let bot = bots.get(&channel.bot_id).ok_or(ErrorCode::InvalidMessage)?;
-        validate_channel(&channel.config)?;
+        validate_channel(channel.id, &channel.config)?;
         if !channels.insert(channel.id) {
             return Err(ErrorCode::InvalidMessage);
         }
@@ -112,7 +116,7 @@ fn normalized_execution(mut execution: ExecutionConfig) -> Result<ExecutionConfi
     Ok(execution)
 }
 
-fn validate_channel(config: &ChannelConfig) -> Result<(), ErrorCode> {
+fn validate_channel(id: ChannelId, config: &ChannelConfig) -> Result<(), ErrorCode> {
     let (reference, senders) = match config {
         ChannelConfig::Builtin => return Ok(()),
         ChannelConfig::Telegram {
@@ -125,15 +129,40 @@ fn validate_channel(config: &ChannelConfig) -> Result<(), ErrorCode> {
             secret_ref,
             allowed_senders,
             ..
+        }
+        | ChannelConfig::Qq {
+            app_id,
+            secret_ref,
+            allowed_senders,
+            ..
         } => {
             if !model::valid_id(app_id) {
                 return Err(ErrorCode::InvalidMessage);
             }
             (secret_ref, allowed_senders)
         }
+        ChannelConfig::Weixin {
+            account_id,
+            base_url,
+            token_ref,
+            allowed_senders,
+        } => {
+            // The base URL receives the bot token, so it must stay on WeChat's own hosts.
+            if !model::valid_id(account_id) || !crate::channels::weixin::trusted_base(base_url) {
+                return Err(ErrorCode::InvalidMessage);
+            }
+            (token_ref, allowed_senders)
+        }
     };
-    if !crate::ports::valid_credential_reference(reference)
-        || senders.is_empty()
+    // A QQ channel connected with pasted credentials has no sender until one pairs.
+    let needs_sender = !matches!(config, ChannelConfig::Qq { .. });
+    // A stored reference names only its own channel, so no client can borrow another's secret.
+    let reference_allowed = match crate::ports::stored_credential_channel(reference) {
+        Some(owner) => owner == id,
+        None => crate::ports::valid_credential_reference(reference),
+    };
+    if !reference_allowed
+        || (needs_sender && senders.is_empty())
         || senders.len() > 256
         || senders.iter().any(|sender| !model::valid_id(sender))
     {
@@ -147,6 +176,8 @@ fn account(config: &ChannelConfig) -> Option<(&'static str, &str)> {
         ChannelConfig::Builtin => None,
         ChannelConfig::Telegram { token_ref, .. } => Some(("telegram", token_ref)),
         ChannelConfig::Feishu { app_id, .. } => Some(("feishu", app_id)),
+        ChannelConfig::Weixin { account_id, .. } => Some(("weixin", account_id)),
+        ChannelConfig::Qq { app_id, .. } => Some(("qq", app_id)),
     }
 }
 
@@ -182,6 +213,7 @@ impl State {
             config: ChannelConfig::Builtin,
             enabled: true,
             cursor: None,
+            sync_token: None,
             deleted: false,
         });
         let view = super::view(&bot);
@@ -281,13 +313,16 @@ impl State {
         for bot in catalog.bots.iter_mut().filter(|bot| bots.contains(&bot.id)) {
             bot.state = BotState::Retired { at: at.clone() };
         }
+        let mut released = Vec::new();
         for channel in catalog.channels.iter_mut().filter(|channel| {
             bots.contains(&channel.bot_id) && !matches!(channel.config, ChannelConfig::Builtin)
         }) {
             channel.enabled = false;
             channel.deleted = true;
+            released.push(channel.id);
         }
         self.save_catalog(catalog)?;
+        self.released_credentials.extend(released);
         for bot in bots {
             self.stop_bot(*bot, true, None)?;
         }
@@ -327,28 +362,67 @@ impl State {
             }
             return Err(ErrorCode::IdempotencyConflict);
         }
-        if self
-            .catalog
-            .channels
-            .iter()
-            .filter(|channel| channel.bot_id == bot && !channel.deleted)
-            .count()
-            >= 16
-        {
-            return Err(ErrorCode::ResourceExhausted);
-        }
+        self.under_channel_limit(bot)?;
         let channel = Channel {
             id: request.channel_id,
             bot_id: bot,
             config: request.config,
             enabled: request.enabled,
             cursor: None,
+            sync_token: None,
             deleted: false,
         };
         let mut catalog = self.catalog.clone();
         catalog.channels.push(channel.clone());
         self.save_catalog(catalog)?;
         Ok(json!({"channel":super::project_channel(&channel),"created":true}))
+    }
+    fn under_channel_limit(&self, bot: BotId) -> Result<(), ErrorCode> {
+        let channels = self
+            .catalog
+            .channels
+            .iter()
+            .filter(|channel| channel.bot_id == bot && !channel.deleted)
+            .count();
+        if channels >= MAX_CHANNELS {
+            return Err(ErrorCode::ResourceExhausted);
+        }
+        Ok(())
+    }
+    /// Refuse before an external account is created for a channel the Bot could not keep.
+    pub(crate) fn check_channel_admission(&self, workspace: &str) -> Result<(), ErrorCode> {
+        let bot = self.current(workspace)?;
+        self.workspace(bot)?;
+        self.under_channel_limit(bot.id)
+    }
+    /// Store `secret`, then enable the channel that references it. A retry of an existing
+    /// channel never rewrites its secret; a refused new channel leaves no secret behind.
+    pub(crate) fn create_stored_channel(
+        &mut self,
+        channel: StoredChannel,
+        secret: &SecretString,
+        credentials: &dyn Credentials,
+    ) -> Result<Value, ErrorCode> {
+        let id = channel.channel_id;
+        let request = ChannelCreate {
+            workspace_id: channel.workspace_id,
+            channel_id: id,
+            config: channel.config,
+            enabled: true,
+        };
+        if self.catalog.channels.iter().any(|entry| entry.id == id) {
+            return self.create_channel(request);
+        }
+        credentials.store(id, secret)?;
+        let created = self.create_channel(request);
+        // A frozen state means the catalog write may have reached disk with this channel in it.
+        if created.is_err()
+            && !self.frozen
+            && let Err(error) = credentials.delete(id)
+        {
+            tracing::warn!(channel = %id, ?error, "could not remove a refused channel's secret");
+        }
+        created
     }
     pub(super) fn update_channel(&mut self, request: ChannelUpdate) -> Result<Value, ErrorCode> {
         let bot = self.current(&request.workspace_id)?;
@@ -390,6 +464,7 @@ impl State {
         channel.enabled = false;
         channel.deleted = true;
         self.save_catalog(catalog)?;
+        self.released_credentials.push(request.channel_id);
         Ok(json!({"deleted":true,"channelId":request.channel_id}))
     }
 }

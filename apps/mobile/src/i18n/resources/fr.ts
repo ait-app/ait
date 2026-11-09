@@ -191,6 +191,87 @@ export const fr: TranslationResources = {
     channelEnabled: "Activé",
     channelConnected: "Connecté",
     channelIdle: "Inactif",
+    feishuScanHint:
+      "Scannez un code QR avec l'application Feishu. Feishu crée un bot pour vous et Ait le connecte ; vous seul pouvez lui écrire tant que vous ne changez pas ce réglage.",
+    feishuScanStart: "Afficher le code QR",
+    feishuScanWaiting:
+      "Scannez ce code avec l'application Feishu et approuvez le nouveau bot. Gardez cette page ouverte jusqu'à la fin.",
+    feishuScanOpen: "Ouvrir dans Feishu",
+    feishuScanQrLabel: "Code QR de configuration Feishu",
+    feishuScanRetry: "Réessayer",
+    feishuScanDenied: "La demande a été refusée dans Feishu.",
+    feishuScanExpired: "Ce code QR a expiré. Recommencez pour en obtenir un nouveau.",
+    feishuScanLark: "Ceci semble être un compte Lark. Ait ne prend en charge que Feishu en Chine.",
+    feishuScanUnavailable:
+      "Impossible de terminer la configuration avec Feishu. Réessayez ou saisissez les identifiants manuellement.",
+    feishuManualEntry: "Saisir les identifiants manuellement",
+    feishuScanInstead: "Scanner un code QR",
+    feishuAppSecret: "App Secret",
+    feishuAppSecretHint:
+      "Collez l'App Secret. Ait le vérifie auprès de Feishu et le conserve en privé sur cet hôte. Une référence env:AIT_SERVER_CREDENTIAL_* fonctionne aussi.",
+    feishuManualStep1:
+      "Créez une application personnalisée sur open.feishu.cn/app et activez la capacité Bot.",
+    feishuManualStep2:
+      "Dans Autorisations, ajoutez im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly.",
+    feishuManualStep3:
+      "Copiez ici l'App ID et l'App Secret, ajoutez votre Open ID Feishu (ou_...) comme expéditeur autorisé, puis ajoutez le canal.",
+    feishuManualStep4:
+      "Ensuite, dans Événements et rappels de Feishu, choisissez Connexion longue et abonnez-vous à im.message.receive_v1. Feishu ne peut l'enregistrer qu'une fois le canal connecté.",
+    feishuManualStep5: "Publiez une version de l'application pour qu'on puisse écrire au bot.",
+    telegramGuideStep1:
+      "Scannez ce code ou utilisez le bouton pour ouvrir BotFather dans Telegram.",
+    telegramGuideStep2:
+      "Envoyez /newbot, puis choisissez un nom et un nom d'utilisateur se terminant par bot.",
+    telegramGuideStep3: "Copiez le jeton envoyé par BotFather et collez-le ci-dessous.",
+    telegramBotFatherOpen: "Ouvrir BotFather",
+    telegramBotFatherQrLabel: "Code QR qui ouvre BotFather",
+    telegramToken: "Jeton du bot",
+    telegramTokenHint:
+      "Ait vérifie le jeton auprès de Telegram et le conserve en privé sur cet hôte.",
+    telegramContinue: "Continuer",
+    telegramPairWaiting:
+      "Scannez ce code ou ouvrez le lien, puis appuyez sur Start dans la conversation avec @{{bot}}. Vous deviendrez l'expéditeur autorisé. Gardez cette page ouverte jusqu'à la fin.",
+    telegramPairOpen: "Ouvrir dans Telegram",
+    telegramPairQrLabel: "Code QR qui ouvre votre nouveau bot",
+    telegramInvalidToken: "Telegram a refusé ce jeton. Copiez-le à nouveau depuis BotFather.",
+    telegramAlreadyConnected:
+      "Ce bot est déjà connecté à un canal sur cet hôte. Supprimez d'abord ce canal ou créez un nouveau bot.",
+    telegramWebhookConflict:
+      "Ce bot a un webhook configuré. Supprimez-le avec deleteWebhook, puis réessayez.",
+    telegramPollingConflict:
+      "Un autre programme reçoit les messages de ce bot. Arrêtez-le, puis réessayez.",
+    telegramExpired: "Ce lien a expiré. Continuez pour en obtenir un nouveau.",
+    telegramUnavailable:
+      "Impossible de joindre Telegram. Vérifiez la connexion de cet hôte, puis réessayez.",
+    telegramUseEnvironment: "Utiliser une variable d'environnement",
+    telegramUseGuided: "Utiliser la configuration guidée",
+    weixin: "WeChat",
+    qq: "QQ",
+    weixinScanHint:
+      "Scannez un code QR avec WeChat pour connecter un bot. Vous seul pouvez lui écrire, en discussion privée.",
+    weixinScanWaiting:
+      "Scannez ce code avec WeChat et confirmez sur votre téléphone. Gardez cette page ouverte jusqu’à la fin.",
+    weixinScanOpen: "Ouvrir dans WeChat",
+    weixinScanQrLabel: "Code QR de configuration WeChat",
+    weixinScanUnavailable: "Impossible de terminer la configuration avec WeChat. Réessayez.",
+    qqScanHint:
+      "Scannez un code QR avec QQ. QQ crée un bot et Ait le connecte ; vous seul pouvez lui écrire jusqu’à ce que vous changiez cela.",
+    qqScanWaiting:
+      "Scannez ce code avec QQ et approuvez le nouveau bot. Gardez cette page ouverte jusqu’à la fin.",
+    qqScanOpen: "Ouvrir dans QQ",
+    qqScanQrLabel: "Code QR de configuration QQ",
+    qqScanUnavailable:
+      "Impossible de terminer la configuration avec QQ. Réessayez ou saisissez les identifiants manuellement.",
+    scanAlreadyConnected:
+      "Ce bot est déjà connecté à un canal sur cet hôte. Supprimez ce canal, puis réessayez.",
+    qqManualStep1: "Créez un bot sur q.qq.com et copiez ici son App ID et son App Secret.",
+    qqManualStep2:
+      "Après avoir ajouté le canal, obtenez un code d’appairage sur sa ligne et envoyez-le au bot dans QQ. Vous deviendrez un expéditeur autorisé.",
+    qqAppSecretHint:
+      "Ait vérifie l’App Secret auprès de QQ et le stocke de manière privée sur cet hôte.",
+    qqPairButton: "Obtenir un code d’appairage",
+    qqPairHint:
+      "Code : {{code}}. Envoyez-le au bot en discussion privée, ou mentionnez le bot avec ce code dans un groupe QQ. Il fonctionne une seule fois et expire dans 10 minutes.",
     deleteChannel: "Supprimer le canal",
     deleteChannelConfirm: "Supprimer ce canal ? Sa connexion externe sera déconnectée.",
     status: {

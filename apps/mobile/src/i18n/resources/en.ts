@@ -234,6 +234,81 @@ export const en = {
     channelEnabled: "Enabled",
     channelConnected: "Connected",
     channelIdle: "Idle",
+    feishuScanHint:
+      "Scan a QR code with the Feishu app. Feishu creates a bot for you and Ait connects it, and only you can message it until you change that.",
+    feishuScanStart: "Show QR code",
+    feishuScanWaiting:
+      "Scan this code with the Feishu app and approve the new bot. Keep this page open until it finishes.",
+    feishuScanOpen: "Open in Feishu",
+    feishuScanQrLabel: "Feishu setup QR code",
+    feishuScanRetry: "Try again",
+    feishuScanDenied: "The request was declined in Feishu.",
+    feishuScanExpired: "This QR code expired. Start again for a new one.",
+    feishuScanLark: "This looks like a Lark account. Ait only supports Feishu in China.",
+    feishuScanUnavailable:
+      "Could not finish setup with Feishu. Try again, or enter the credentials manually.",
+    feishuManualEntry: "Enter credentials manually",
+    feishuScanInstead: "Scan a QR code instead",
+    feishuAppSecret: "App Secret",
+    feishuAppSecretHint:
+      "Paste the App Secret. Ait stores it privately on this host and checks it with Feishu. An env:AIT_SERVER_CREDENTIAL_* reference also works.",
+    feishuManualStep1: "Create a custom app at open.feishu.cn/app and turn on the Bot capability.",
+    feishuManualStep2:
+      "Under Permissions, add im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly.",
+    feishuManualStep3:
+      "Copy the App ID and App Secret here, add your Feishu open ID (ou_...) as an allowed sender, and add the channel.",
+    feishuManualStep4:
+      "Then, under Events & Callbacks in Feishu, choose Long Connection and subscribe to im.message.receive_v1. Feishu can only save this once the channel is connected.",
+    feishuManualStep5: "Publish a version of the app so people can message the bot.",
+    telegramGuideStep1: "Scan this code or use the button to open BotFather in Telegram.",
+    telegramGuideStep2: "Send /newbot, then choose a name and a username ending in bot.",
+    telegramGuideStep3: "Copy the token BotFather sends and paste it below.",
+    telegramBotFatherOpen: "Open BotFather",
+    telegramBotFatherQrLabel: "QR code that opens BotFather",
+    telegramToken: "Bot token",
+    telegramTokenHint: "Ait checks the token with Telegram and stores it privately on this host.",
+    telegramContinue: "Continue",
+    telegramPairWaiting:
+      "Scan this code or open the link, then tap Start in the chat with @{{bot}}. That makes you the allowed sender. Keep this page open until it finishes.",
+    telegramPairOpen: "Open in Telegram",
+    telegramPairQrLabel: "QR code that opens your new bot",
+    telegramInvalidToken: "Telegram rejected this token. Copy it from BotFather again.",
+    telegramAlreadyConnected:
+      "This bot is already connected to a channel on this host. Delete that channel first, or create a new bot.",
+    telegramWebhookConflict:
+      "This bot has a webhook set. Remove it with deleteWebhook, then try again.",
+    telegramPollingConflict:
+      "Another program is receiving this bot's messages. Stop it, then try again.",
+    telegramExpired: "This link expired. Continue again for a new one.",
+    telegramUnavailable: "Could not reach Telegram. Check this host's connection, then try again.",
+    telegramUseEnvironment: "Use an environment variable instead",
+    telegramUseGuided: "Use guided setup instead",
+    weixin: "WeChat",
+    qq: "QQ",
+    weixinScanHint:
+      "Scan a QR code with WeChat to connect a bot. Only you can message it, in private chats.",
+    weixinScanWaiting:
+      "Scan this code with WeChat and confirm on your phone. Keep this page open until it finishes.",
+    weixinScanOpen: "Open in WeChat",
+    weixinScanQrLabel: "WeChat setup QR code",
+    weixinScanUnavailable: "Could not finish setup with WeChat. Try again.",
+    qqScanHint:
+      "Scan a QR code with QQ. QQ creates a bot for you and Ait connects it, and only you can message it until you change that.",
+    qqScanWaiting:
+      "Scan this code with QQ and approve the new bot. Keep this page open until it finishes.",
+    qqScanOpen: "Open in QQ",
+    qqScanQrLabel: "QQ setup QR code",
+    qqScanUnavailable:
+      "Could not finish setup with QQ. Try again, or enter the credentials manually.",
+    scanAlreadyConnected:
+      "This bot is already connected to a channel on this host. Delete that channel, then try again.",
+    qqManualStep1: "Create a bot at q.qq.com and copy its App ID and App Secret here.",
+    qqManualStep2:
+      "After adding the channel, get a pairing code from its row and send it to the bot in QQ. That makes you an allowed sender.",
+    qqAppSecretHint: "Ait checks the App Secret with QQ and stores it privately on this host.",
+    qqPairButton: "Get pairing code",
+    qqPairHint:
+      "Code: {{code}}. Send it to the bot in a private chat, or @mention the bot with it in a QQ group. It works once and expires in 10 minutes.",
     deleteChannel: "Delete channel",
     deleteChannelConfirm: "Delete this channel? Its external connection will be disconnected.",
     status: {

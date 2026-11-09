@@ -9,6 +9,46 @@ import { BotPermissionsSchema } from "./types.js";
 import { SessionInboundMessageSchema, SessionOutboundMessageSchema } from "../messages.js";
 
 describe("Bot wire contract", () => {
+  it("keeps WeChat and QQ setup optional and parses their channels", () => {
+    expect(BOT_METHODS).not.toContain("bot.channel.weixin.scan.start.request");
+    expect(BOT_METHODS).not.toContain("bot.channel.qq.pair.request");
+    const scan = BotResponseSchema.parse({
+      type: "bot.channel.qq.scan.status.response",
+      payload: { requestId: "r", state: "failed", reason: "alreadyConnected" },
+    });
+    expect(scan.type).toBe("bot.channel.qq.scan.status.response");
+    const channel = (config: unknown) => ({
+      type: "bot.channel.weixin.scan.status.response",
+      payload: {
+        requestId: "r",
+        state: "complete",
+        channel: {
+          id: crypto.randomUUID(),
+          config,
+          enabled: true,
+          cursor: null,
+          deleted: false,
+        },
+      },
+    });
+    const weixin = {
+      kind: "weixin",
+      accountId: "bot@im.bot",
+      baseUrl: "https://ilinkai.weixin.qq.com",
+      tokenRef: "env:AIT_SERVER_CREDENTIAL_STORED_X",
+      allowedSenders: ["alice@im.wechat"],
+    };
+    expect(BotResponseSchema.parse(channel(weixin)).type).toBe(
+      "bot.channel.weixin.scan.status.response",
+    );
+    expect(() => BotResponseSchema.parse(channel({ ...weixin, allowGroups: true }))).toThrow();
+    expect(
+      BotResponseSchema.parse(
+        channel({ kind: "qq", appId: "1", secretRef: "env:X", allowedSenders: [] }),
+      ).type,
+    ).toBe("bot.channel.weixin.scan.status.response");
+  });
+
   it("parses permission profiles and the update method", () => {
     const parsed = BotRequestSchema.parse({
       type: "bot.permissions.update.request",
@@ -41,7 +81,7 @@ describe("Bot wire contract", () => {
 
   it("registers all 21 core methods and accepts their results in the shared envelope", () => {
     expect(new Set(BOT_METHODS).size).toBe(21);
-    expect(BOT_REQUEST_SCHEMAS).toHaveLength(22);
+    expect(BOT_REQUEST_SCHEMAS).toHaveLength(37);
     expect(
       SessionInboundMessageSchema.parse({
         type: "bot.conversation.open.request",

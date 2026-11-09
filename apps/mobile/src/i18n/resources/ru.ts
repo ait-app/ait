@@ -197,6 +197,87 @@ export const ru: TranslationResources = {
     channelEnabled: "Включён",
     channelConnected: "Подключён",
     channelIdle: "Простаивает",
+    feishuScanHint:
+      "Отсканируйте QR-код в приложении Feishu. Feishu создаст бота, а Ait подключит его; писать ему сможете только вы, пока не измените это.",
+    feishuScanStart: "Показать QR-код",
+    feishuScanWaiting:
+      "Отсканируйте этот код в приложении Feishu и подтвердите создание бота. Не закрывайте страницу до завершения.",
+    feishuScanOpen: "Открыть в Feishu",
+    feishuScanQrLabel: "QR-код настройки Feishu",
+    feishuScanRetry: "Повторить",
+    feishuScanDenied: "Запрос отклонён в Feishu.",
+    feishuScanExpired: "Срок действия QR-кода истёк. Начните заново.",
+    feishuScanLark: "Похоже, это аккаунт Lark. Ait поддерживает только Feishu в Китае.",
+    feishuScanUnavailable:
+      "Не удалось завершить настройку Feishu. Повторите попытку или введите учётные данные вручную.",
+    feishuManualEntry: "Ввести учётные данные вручную",
+    feishuScanInstead: "Сканировать QR-код",
+    feishuAppSecret: "App Secret",
+    feishuAppSecretHint:
+      "Вставьте App Secret. Ait проверит его в Feishu и сохранит в закрытом виде на этом хосте. Подойдёт и ссылка env:AIT_SERVER_CREDENTIAL_*.",
+    feishuManualStep1:
+      "Создайте собственное приложение на open.feishu.cn/app и включите возможность бота.",
+    feishuManualStep2:
+      "В разделе разрешений добавьте im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly.",
+    feishuManualStep3:
+      "Скопируйте сюда App ID и App Secret, добавьте свой Open ID Feishu (ou_...) как разрешённого отправителя и добавьте канал.",
+    feishuManualStep4:
+      "Затем в разделе событий и обратных вызовов Feishu выберите постоянное соединение и подпишитесь на im.message.receive_v1. Feishu сохранит это только после подключения канала.",
+    feishuManualStep5: "Опубликуйте версию приложения, чтобы боту можно было писать.",
+    telegramGuideStep1:
+      "Отсканируйте этот код или нажмите кнопку, чтобы открыть BotFather в Telegram.",
+    telegramGuideStep2:
+      "Отправьте /newbot, затем задайте имя и имя пользователя, оканчивающееся на bot.",
+    telegramGuideStep3: "Скопируйте токен от BotFather и вставьте его ниже.",
+    telegramBotFatherOpen: "Открыть BotFather",
+    telegramBotFatherQrLabel: "QR-код для открытия BotFather",
+    telegramToken: "Токен бота",
+    telegramTokenHint:
+      "Ait проверит токен в Telegram и сохранит его в закрытом виде на этом хосте.",
+    telegramContinue: "Продолжить",
+    telegramPairWaiting:
+      "Отсканируйте этот код или откройте ссылку и нажмите Start в чате с @{{bot}}. Так вы станете разрешённым отправителем. Не закрывайте страницу до завершения.",
+    telegramPairOpen: "Открыть в Telegram",
+    telegramPairQrLabel: "QR-код для открытия нового бота",
+    telegramInvalidToken: "Telegram отклонил этот токен. Скопируйте его из BotFather ещё раз.",
+    telegramAlreadyConnected:
+      "Этот бот уже подключён к каналу на этом хосте. Сначала удалите этот канал или создайте нового бота.",
+    telegramWebhookConflict:
+      "У этого бота настроен webhook. Удалите его через deleteWebhook и повторите попытку.",
+    telegramPollingConflict:
+      "Другая программа получает сообщения этого бота. Остановите её и повторите попытку.",
+    telegramExpired: "Срок действия ссылки истёк. Нажмите «Продолжить», чтобы получить новую.",
+    telegramUnavailable:
+      "Не удалось подключиться к Telegram. Проверьте подключение этого хоста и повторите попытку.",
+    telegramUseEnvironment: "Использовать переменную окружения",
+    telegramUseGuided: "Использовать пошаговую настройку",
+    weixin: "WeChat",
+    qq: "QQ",
+    weixinScanHint:
+      "Отсканируйте QR-код в WeChat, чтобы подключить бота. Писать ему в личных чатах сможете только вы.",
+    weixinScanWaiting:
+      "Отсканируйте этот код в WeChat и подтвердите на телефоне. Не закрывайте страницу до завершения.",
+    weixinScanOpen: "Открыть в WeChat",
+    weixinScanQrLabel: "QR-код настройки WeChat",
+    weixinScanUnavailable: "Не удалось завершить настройку WeChat. Повторите попытку.",
+    qqScanHint:
+      "Отсканируйте QR-код в QQ. QQ создаст бота, а Ait подключит его; писать ему сможете только вы, пока не измените это.",
+    qqScanWaiting:
+      "Отсканируйте этот код в QQ и одобрите нового бота. Не закрывайте страницу до завершения.",
+    qqScanOpen: "Открыть в QQ",
+    qqScanQrLabel: "QR-код настройки QQ",
+    qqScanUnavailable:
+      "Не удалось завершить настройку QQ. Повторите попытку или введите учётные данные вручную.",
+    scanAlreadyConnected:
+      "Этот бот уже подключён к каналу на этом хосте. Удалите этот канал и повторите попытку.",
+    qqManualStep1: "Создайте бота на q.qq.com и скопируйте сюда его App ID и App Secret.",
+    qqManualStep2:
+      "После добавления канала получите код сопряжения в его строке и отправьте его боту в QQ. Так вы станете разрешённым отправителем.",
+    qqAppSecretHint:
+      "Ait проверит App Secret через QQ и сохранит его в закрытом виде на этом хосте.",
+    qqPairButton: "Получить код сопряжения",
+    qqPairHint:
+      "Код: {{code}}. Отправьте его боту в личном чате или упомяните бота с этим кодом в группе QQ. Код действует один раз и истекает через 10 минут.",
     deleteChannel: "Удалить канал",
     deleteChannelConfirm: "Удалить этот канал? Его внешнее подключение будет отключено.",
     status: {

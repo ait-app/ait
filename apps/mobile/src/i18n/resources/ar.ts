@@ -190,6 +190,79 @@ export const ar: TranslationResources = {
     channelEnabled: "مفعّلة",
     channelConnected: "متصلة",
     channelIdle: "خاملة",
+    feishuScanHint:
+      "امسح رمز QR باستخدام تطبيق Feishu. سينشئ Feishu بوتًا لك وسيوصله Ait، ولن يتمكن أحد غيرك من مراسلته ما لم تغيّر ذلك.",
+    feishuScanStart: "عرض رمز QR",
+    feishuScanWaiting:
+      "امسح هذا الرمز باستخدام تطبيق Feishu ووافق على البوت الجديد. أبقِ هذه الصفحة مفتوحة حتى الانتهاء.",
+    feishuScanOpen: "فتح في Feishu",
+    feishuScanQrLabel: "رمز QR لإعداد Feishu",
+    feishuScanRetry: "إعادة المحاولة",
+    feishuScanDenied: "تم رفض الطلب في Feishu.",
+    feishuScanExpired: "انتهت صلاحية رمز QR. ابدأ من جديد للحصول على رمز آخر.",
+    feishuScanLark: "يبدو أن هذا حساب Lark. يدعم Ait تطبيق Feishu في الصين فقط.",
+    feishuScanUnavailable:
+      "تعذّر إكمال الإعداد مع Feishu. أعد المحاولة أو أدخل بيانات الاعتماد يدويًا.",
+    feishuManualEntry: "إدخال بيانات الاعتماد يدويًا",
+    feishuScanInstead: "مسح رمز QR بدلاً من ذلك",
+    feishuAppSecret: "App Secret",
+    feishuAppSecretHint:
+      "الصق App Secret. يتحقق منه Ait مع Feishu ويحفظه بشكل خاص على هذا المضيف. يمكن أيضًا استخدام مرجع env:AIT_SERVER_CREDENTIAL_*.",
+    feishuManualStep1: "أنشئ تطبيقًا مخصصًا على open.feishu.cn/app وفعّل إمكانية البوت.",
+    feishuManualStep2:
+      "ضمن الأذونات، أضف im:message:send_as_bot, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly.",
+    feishuManualStep3:
+      "انسخ App ID وApp Secret هنا، وأضف معرّف Open ID الخاص بك في Feishu (ou_...) كمرسل مسموح، ثم أضف القناة.",
+    feishuManualStep4:
+      "بعد ذلك، ضمن الأحداث وعمليات الاستدعاء في Feishu، اختر الاتصال الطويل واشترك في im.message.receive_v1. لا يمكن لـ Feishu حفظ ذلك إلا بعد اتصال القناة.",
+    feishuManualStep5: "انشر إصدارًا من التطبيق حتى يتمكن الآخرون من مراسلة البوت.",
+    telegramGuideStep1: "امسح هذا الرمز أو استخدم الزر لفتح BotFather في Telegram.",
+    telegramGuideStep2: "أرسل /newbot ثم اختر اسمًا واسم مستخدم ينتهي بـ bot.",
+    telegramGuideStep3: "انسخ الرمز المميز الذي يرسله BotFather والصقه أدناه.",
+    telegramBotFatherOpen: "فتح BotFather",
+    telegramBotFatherQrLabel: "رمز QR لفتح BotFather",
+    telegramToken: "الرمز المميز للبوت",
+    telegramTokenHint: "يتحقق Ait من الرمز المميز مع Telegram ويحفظه بشكل خاص على هذا المضيف.",
+    telegramContinue: "متابعة",
+    telegramPairWaiting:
+      "امسح هذا الرمز أو افتح الرابط، ثم اضغط Start في المحادثة مع @{{bot}} لتصبح المرسل المسموح به. أبقِ هذه الصفحة مفتوحة حتى الانتهاء.",
+    telegramPairOpen: "فتح في Telegram",
+    telegramPairQrLabel: "رمز QR لفتح البوت الجديد",
+    telegramInvalidToken: "رفض Telegram هذا الرمز المميز. انسخه مرة أخرى من BotFather.",
+    telegramAlreadyConnected:
+      "هذا البوت متصل بالفعل بقناة على هذا المضيف. احذف تلك القناة أولاً أو أنشئ بوتًا جديدًا.",
+    telegramWebhookConflict:
+      "تم إعداد webhook لهذا البوت. أزله باستخدام deleteWebhook ثم أعد المحاولة.",
+    telegramPollingConflict: "يتلقى برنامج آخر رسائل هذا البوت. أوقفه ثم أعد المحاولة.",
+    telegramExpired: "انتهت صلاحية هذا الرابط. تابع للحصول على رابط جديد.",
+    telegramUnavailable: "تعذّر الاتصال بـ Telegram. تحقق من اتصال هذا المضيف ثم أعد المحاولة.",
+    telegramUseEnvironment: "استخدام متغير بيئة بدلاً من ذلك",
+    telegramUseGuided: "استخدام الإعداد الموجّه بدلاً من ذلك",
+    weixin: "WeChat",
+    qq: "QQ",
+    weixinScanHint:
+      "امسح رمز QR باستخدام WeChat لتوصيل روبوت. يمكنك أنت فقط مراسلته في المحادثات الخاصة.",
+    weixinScanWaiting:
+      "امسح هذا الرمز باستخدام WeChat وأكّد على هاتفك. أبقِ هذه الصفحة مفتوحة حتى يكتمل الإعداد.",
+    weixinScanOpen: "فتح في WeChat",
+    weixinScanQrLabel: "رمز QR لإعداد WeChat",
+    weixinScanUnavailable: "تعذّر إكمال الإعداد مع WeChat. حاول مرة أخرى.",
+    qqScanHint:
+      "امسح رمز QR باستخدام QQ. سينشئ QQ روبوتًا ويوصله Ait، ويمكنك أنت فقط مراسلته حتى تغيّر ذلك.",
+    qqScanWaiting:
+      "امسح هذا الرمز باستخدام QQ ووافق على الروبوت الجديد. أبقِ هذه الصفحة مفتوحة حتى يكتمل الإعداد.",
+    qqScanOpen: "فتح في QQ",
+    qqScanQrLabel: "رمز QR لإعداد QQ",
+    qqScanUnavailable: "تعذّر إكمال الإعداد مع QQ. حاول مرة أخرى أو أدخل بيانات الاعتماد يدويًا.",
+    scanAlreadyConnected:
+      "هذا الروبوت متصل بالفعل بقناة على هذا المضيف. احذف تلك القناة ثم حاول مرة أخرى.",
+    qqManualStep1: "أنشئ روبوتًا على q.qq.com وانسخ App ID وApp Secret هنا.",
+    qqManualStep2:
+      "بعد إضافة القناة، احصل على رمز الاقتران من صفها وأرسله إلى الروبوت في QQ. بذلك تصبح مرسلًا مسموحًا به.",
+    qqAppSecretHint: "يتحقق Ait من App Secret لدى QQ ويخزنه بشكل خاص على هذا المضيف.",
+    qqPairButton: "الحصول على رمز الاقتران",
+    qqPairHint:
+      "الرمز: {{code}}. أرسله إلى الروبوت في محادثة خاصة، أو أشر إلى الروبوت به في مجموعة QQ. يعمل مرة واحدة وتنتهي صلاحيته بعد 10 دقائق.",
     deleteChannel: "حذف القناة",
     deleteChannelConfirm: "هل تريد حذف هذه القناة؟ سيتم قطع اتصالها الخارجي.",
     status: {

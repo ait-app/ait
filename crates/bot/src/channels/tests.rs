@@ -33,3 +33,24 @@ async fn oversized_http_responses_are_rejected_without_echoing_the_body() {
     );
     server.abort();
 }
+
+#[tokio::test]
+async fn a_failed_receiver_ends_delivery_through_its_stop_token() {
+    let cancel = CancellationToken::new();
+    let stop = cancel.child_token();
+    let sending = async {
+        stop.cancelled().await;
+        Ok(())
+    };
+    let result = supervise(&cancel, &stop, async { Err(ErrorCode::BotIo) }, sending).await;
+    assert_eq!(result, Err(ErrorCode::BotIo));
+}
+
+#[tokio::test]
+async fn a_failed_delivery_loop_ends_the_channel() {
+    let cancel = CancellationToken::new();
+    let stop = cancel.child_token();
+    let receiving = std::future::pending();
+    let result = supervise(&cancel, &stop, receiving, async { Err(ErrorCode::BotIo) }).await;
+    assert_eq!(result, Err(ErrorCode::BotIo));
+}

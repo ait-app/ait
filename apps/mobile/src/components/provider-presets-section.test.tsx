@@ -12,13 +12,20 @@ vi.mock("@/components/ui/select-field", () => ({
     options,
     value,
     onChange,
+    selectedDisplay,
   }: {
     testID: string;
     options: { id: string; value: string; label: string }[];
     value: string;
     onChange: (value: string) => void;
+    selectedDisplay: { label: string } | null;
   }) => (
-    <select data-testid={testID} value={value} onChange={(event) => onChange(event.target.value)}>
+    <select
+      data-testid={testID}
+      aria-label={selectedDisplay?.label}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
       {options.map((option) => (
         <option key={option.id} value={option.value}>
           {option.label}
@@ -343,6 +350,8 @@ it("offers catalog models and reasoning levels while allowing role overrides to 
   fireEvent.change(screen.getByTestId("provider-preset-thinking-options"), {
     target: { value: "high" },
   });
+  expect(screen.getByRole("combobox", { name: "Opus" })).toBeTruthy();
+  expect(screen.getByRole("combobox", { name: "High" })).toBeTruthy();
   fireEvent.change(screen.getAllByRole("textbox")[1], {
     target: { value: '{"modelRole.advisor":"native"}' },
   });
