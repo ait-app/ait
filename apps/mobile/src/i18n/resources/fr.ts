@@ -16,6 +16,18 @@ export const fr: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    settingsSelection: "Sélection actuelle · pour cette conversation ou ce brouillon",
+    scopeDefault: "Dossier OMP par défaut · inclut les préréglages globaux",
+    scopeGlobal: "Préréglages globaux OMP",
+    scopeProject: "Projet : {{cwd}} · inclut les préréglages globaux",
+    scopeManaged: "Préréglages Ait · globaux sur cet hôte",
+    scopeOverride:
+      "Le projet remplace les préréglages globaux de même nom. Enregistrer/supprimer modifie uniquement les globaux ; ceux du projet sont en lecture seule ici.",
+    customInput: "Saisie personnalisée",
+    rolesEditable:
+      'Modifiez les rôles avec un objet JSON, par exemple {"modelRole.advisor":"native"}. Les rôles omis sont effacés lors de l’application.',
+    rolesInvalid:
+      "Saisissez un objet JSON avec des clés modelRole.* et des valeurs textuelles non vides.",
     sideQuestions: {
       title: "Questions parallèles",
       empty: "Aucune question parallèle.",

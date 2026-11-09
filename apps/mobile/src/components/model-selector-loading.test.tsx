@@ -2,10 +2,12 @@
 import React, { type ComponentProps } from "react";
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { i18n } from "@/i18n/i18next";
 import { buildSelectableProviderSelectorProviders } from "@/provider-selection/provider-selection";
+import { ProviderSettingsAction } from "./model-browser";
 import { CompactModelSheet } from "@/composer/agent-controls/model-sheet";
-import { CombinedModelSelector, resolveModelConfigurationFrame } from "./combined-model-selector";
+import { CombinedModelSelector } from "./combined-model-selector";
 import type { Combobox } from "./ui/combobox";
 import type { AdaptiveModalSheet } from "./adaptive-modal-sheet";
 
@@ -20,16 +22,28 @@ vi.mock("@/components/ui/combobox", () => ({
     children,
     desktopMinWidth,
     desktopFixedHeight,
+    header,
   }: ComponentProps<typeof Combobox>) =>
     open ? (
       <div role="dialog" data-min-width={desktopMinWidth} data-fixed-height={desktopFixedHeight}>
+        {header?.actions}
         {children}
       </div>
     ) : null,
 }));
 vi.mock("@/components/adaptive-modal-sheet", () => ({
-  AdaptiveModalSheet: ({ visible, children, testID }: ComponentProps<typeof AdaptiveModalSheet>) =>
-    visible ? <div data-testid={testID}>{children}</div> : null,
+  AdaptiveModalSheet: ({
+    visible,
+    children,
+    testID,
+    header,
+  }: ComponentProps<typeof AdaptiveModalSheet>) =>
+    visible ? (
+      <div data-testid={testID}>
+        {header?.actions}
+        {children}
+      </div>
+    ) : null,
 }));
 
 beforeEach(async () => {
@@ -106,63 +120,75 @@ describe.each(["combined", "compact"] as const)("%s model selector with slow OMP
   });
 });
 
-it("reserves visible space for model configuration next to a scrollable model list", () => {
-  layout.compact = false;
-  const action = vi.fn();
-  const view = render(
-    <CombinedModelSelector
-      providers={providers(true)}
-      selectedProvider="omp"
-      selectedModel="remembered-model"
-      isLoading={false}
-      onSelect={vi.fn()}
-      modelConfiguration={<button onClick={action}>Model roles</button>}
-    />,
-  );
-  fireEvent.click(view.getByTestId("combined-model-selector"));
-  const dialog = view.getByRole("dialog");
-  const configuration = within(dialog).getByText("Model roles").parentElement;
-  const list = within(dialog).getByTestId("compact-model-list");
-
-  // The configuration block lives inside a bounded scroll area, not in the list.
-  expect(configuration?.closest("[data-testid='model-configuration']")).toBeTruthy();
-  expect(list.contains(configuration)).toBe(false);
-  expect(within(dialog).getByTestId("model-row-omp-remembered-model")).toBeTruthy();
-
-  fireEvent.click(within(dialog).getByText("Model roles"));
-  expect(action).toHaveBeenCalledOnce();
+describe.each(["combined", "compact"] as const)("%s provider settings entry", (surface) => {
+  it("opens the gear with host, provider and project while keeping internal controls out of the picker", () => {
+    layout.compact = surface === "compact";
+    const props = {
+      providers: providers(true),
+      selectedProvider: "omp",
+      selectedModel: "remembered-model",
+      isLoading: false,
+      onSelect: vi.fn(),
+      serverId: "host-a",
+      cwd: "/project/a",
+      providerSettings: <span>Preset and role settings</span>,
+    };
+    const view = render(
+      surface === "compact" ? (
+        <CompactModelSheet {...props} thinkingLabel={null} glyphSize={20} canSwitchProvider>
+          {null}
+        </CompactModelSheet>
+      ) : (
+        <CombinedModelSelector {...props} />
+      ),
+    );
+    fireEvent.click(view.getByTestId("combined-model-selector"));
+    expect(view.queryByText("Preset and role settings")).toBeNull();
+    fireEvent.click(view.getByTestId("selector-header-settings-omp"));
+    expect(useProviderSettingsStore.getState()).toMatchObject({
+      serverId: "host-a",
+      provider: "omp",
+      cwd: "/project/a",
+      visible: true,
+    });
+    expect(useProviderSettingsStore.getState().configuration).toEqual(props.providerSettings);
+  });
 });
 
-it("keeps the configuration panel readable and scrollable at desktop widths", () => {
-  const narrow = resolveModelConfigurationFrame({
-    desktopMinWidth: 360,
-    browserFixedHeight: 400,
-    windowWidth: 700,
-    windowHeight: 900,
-  });
-  // Readable role labels need roughly 620 CSS px regardless of the trigger width.
-  expect(narrow.desktopMinWidth).toBe(620);
-  // The list keeps its own bounded height; the configuration reserve sits below it.
-  expect(narrow.desktopFixedHeight).toBe(640);
-
-  // A clamped window still leaves the roles block usable instead of hiding it.
-  const clamped = resolveModelConfigurationFrame({
-    desktopMinWidth: 360,
-    browserFixedHeight: 400,
-    windowWidth: 560,
-    windowHeight: 700,
-  });
-  expect(clamped.desktopMinWidth).toBe(528);
-  expect(clamped.desktopMinWidth).toBeGreaterThan(360);
-  expect(clamped.desktopFixedHeight).toBe(604);
-
-  // Unmeasured layout (first frame, tests) must not collapse the panel.
-  const unmeasured = resolveModelConfigurationFrame({
-    desktopMinWidth: 360,
-    browserFixedHeight: 240,
-    windowWidth: 0,
-    windowHeight: 0,
-  });
-  expect(unmeasured.desktopMinWidth).toBe(620);
-  expect(unmeasured.desktopFixedHeight).toBe(480);
+it("keeps settings controls current and closes their source when the project changes", () => {
+  const view = render(
+    <ProviderSettingsAction
+      serverId="host"
+      provider="omp"
+      cwd="/a"
+      accessibilityLabel="Settings"
+      configuration={<span>Before</span>}
+    />,
+  );
+  fireEvent.click(view.getByTestId("selector-header-settings-omp"));
+  const sourceId = useProviderSettingsStore.getState().sourceId!;
+  view.rerender(
+    <ProviderSettingsAction
+      serverId="host"
+      provider="omp"
+      cwd="/a"
+      accessibilityLabel="Settings"
+      configuration={<span>After</span>}
+    />,
+  );
+  expect(useProviderSettingsStore.getState().configuration).toEqual(<span>After</span>);
+  useProviderSettingsStore.getState().updateConfiguration("another-source", <span>Wrong</span>);
+  expect(useProviderSettingsStore.getState().configuration).toEqual(<span>After</span>);
+  view.rerender(
+    <ProviderSettingsAction
+      serverId="host"
+      provider="omp"
+      cwd="/b"
+      accessibilityLabel="Settings"
+      configuration={<span>Other project</span>}
+    />,
+  );
+  expect(useProviderSettingsStore.getState().visible).toBe(false);
+  useProviderSettingsStore.getState().updateConfiguration(sourceId, <span>Late</span>);
+  expect(useProviderSettingsStore.getState().configuration).toBeNull();
 });

@@ -16,6 +16,17 @@ export const es: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    settingsSelection: "Selección actual · para esta conversación o borrador",
+    scopeDefault: "Directorio predeterminado de OMP · incluye preajustes globales",
+    scopeGlobal: "Preajustes globales de OMP",
+    scopeProject: "Proyecto: {{cwd}} · incluye preajustes globales",
+    scopeManaged: "Preajustes de Ait · globales en este host",
+    scopeOverride:
+      "El proyecto prevalece sobre los preajustes globales del mismo nombre. Guardar/eliminar solo cambia los globales; los del proyecto son de solo lectura aquí.",
+    customInput: "Entrada personalizada",
+    rolesEditable:
+      'Edite los roles como un objeto JSON, por ejemplo {"modelRole.advisor":"native"}. Los roles omitidos se borran al aplicar el preajuste.',
+    rolesInvalid: "Introduzca un objeto JSON con claves modelRole.* y valores de texto no vacíos.",
     sideQuestions: {
       title: "Preguntas paralelas",
       empty: "Aún no hay preguntas paralelas.",

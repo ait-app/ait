@@ -17,10 +17,6 @@ vi.mock("react-native-unistyles", () => ({
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
-// The empty preset row is covered by its own suite; this one only groups features.
-vi.mock("@/components/model-preset-empty-state", () => ({
-  ModelPresetEmptyState: () => <div data-testid="model-preset-empty-state" />,
-}));
 vi.mock("@/components/ui/button", () => ({
   Button: ({
     children,
@@ -122,20 +118,7 @@ it("does not expose a second entry when there are no model features and respects
   expect(renderer).not.toHaveBeenCalled();
 });
 
-it("renders the preset empty entry for a settings target even when no snapshot is preloaded", () => {
-  // A profile has no project directory and never prefetches the store, so the row must exist
-  // from the target alone (it reads the store itself) or the user has no way to create presets.
-  render(
-    <ModelFeatureControls
-      features={[]}
-      renderFeature={() => null}
-      settingsTarget={{ serverId: "host-a", provider: "claude", cwd: null }}
-    />,
-  );
-  expect(screen.getByTestId("model-preset-empty-state")).toBeTruthy();
-});
-
-it("stays hidden when no settings target is known", () => {
+it("stays hidden when no model features exist", () => {
   render(<ModelFeatureControls features={[]} renderFeature={() => null} />);
   expect(screen.queryByTestId("model-feature-controls")).toBeNull();
   expect(screen.queryByTestId("model-preset-empty-state")).toBeNull();

@@ -3,6 +3,16 @@ import { pluginSettings } from "./plugin-settings";
 
 export const zhCN: TranslationResources = {
   providerControl: {
+    settingsSelection: "当前模型配置 · 作用于此会话或草稿",
+    scopeDefault: "OMP 默认目录 · 包含全局预设",
+    scopeGlobal: "OMP 全局预设",
+    scopeProject: "项目：{{cwd}} · 包含全局预设",
+    scopeManaged: "Ait 预设 · 当前主机全局",
+    scopeOverride: "项目同名预设覆盖全局预设。保存／删除只修改全局预设；项目条目在此只读。",
+    customInput: "自定义输入",
+    rolesEditable:
+      '角色覆盖可编辑为 JSON 对象，例如 {"modelRole.advisor":"native"}。应用预设时，未指定的角色将被清除。',
+    rolesInvalid: "请输入 JSON 对象，键为 modelRole.*，值为非空字符串。",
     sideQuestions: {
       title: "侧问答",
       empty: "暂无侧问答。",
@@ -2250,8 +2260,8 @@ export const zhCN: TranslationResources = {
     model: "模型",
     editProfiles: "编辑",
     editProfilesLabel: "编辑智能体配置文件",
-    createProfile: "创建配置文件",
-    createProfileFromModel: "从此模型创建配置文件",
+    createProfile: "创建 Ait Profile",
+    createProfileFromModel: "从此模型创建 Ait Profile",
     editProfileLabel: "编辑 {{name}}",
     editProfilesCount: "编辑配置文件 ({{count}})",
     modelCount: "{{count}} 个模型",

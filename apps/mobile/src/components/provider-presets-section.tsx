@@ -1,3 +1,5 @@
+import type { AgentFeature, AgentModelDefinition } from "@ait/protocol/agent-types";
+import { SelectField } from "@/components/ui/select-field";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -29,10 +31,14 @@ export function ProviderPresetsSection({
   provider,
   serverId,
   cwd,
+  models = [],
+  features = [],
 }: {
   provider: string;
   serverId: string;
   cwd?: string;
+  models?: readonly AgentModelDefinition[];
+  features?: readonly AgentFeature[];
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -50,6 +56,11 @@ export function ProviderPresetsSection({
   const [editing, setEditing] = useState<ProviderPreset | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
+  const presetFeature = features.find((feature) => feature.id === "modelPreset");
+  const sourceOf = (name: string) =>
+    presetFeature?.type === "select"
+      ? presetFeature.options.find((option) => option.id === name)?.metadata?.source
+      : undefined;
   const canSave = descriptor?.canCreate === true || descriptor?.canEdit === true;
 
   /**
@@ -119,6 +130,16 @@ export function ProviderPresetsSection({
           </Button>
         ) : null}
       </View>
+      <Text style={styles.muted} testID="provider-presets-scope">
+        {descriptor?.backend === "native"
+          ? cwd
+            ? t("providerControl.scopeProject", { cwd })
+            : t("providerControl.scopeDefault")
+          : t("providerControl.scopeManaged")}
+      </Text>
+      {descriptor?.backend === "native" ? (
+        <Text style={styles.muted}>{t("providerControl.scopeOverride")}</Text>
+      ) : null}
       {descriptor?.reason ? (
         <Text style={styles.muted} testID="provider-presets-reason">
           {descriptor.reason}
@@ -151,12 +172,20 @@ export function ProviderPresetsSection({
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle}>{preset.name}</Text>
                 <Text style={styles.muted}>{preset.model}</Text>
+                {descriptor?.backend === "native" && sourceOf(preset.name) ? (
+                  <Text style={styles.muted}>
+                    {sourceOf(preset.name) === "project"
+                      ? t("providerControl.scopeProject", { cwd: cwd ?? "" })
+                      : t("providerControl.scopeGlobal")}
+                  </Text>
+                ) : null}
               </View>
               {descriptor?.canEdit ? (
                 <Button
                   variant="ghost"
                   size="sm"
                   leftIcon={Pencil}
+                  disabled={sourceOf(preset.name) === "project"}
                   onPress={() => setEditing(preset)}
                   accessibilityLabel={t("settings.providers.presets.edit", { name: preset.name })}
                 />
@@ -166,7 +195,7 @@ export function ProviderPresetsSection({
                   variant="ghost"
                   size="sm"
                   leftIcon={Trash2}
-                  disabled={deleting === preset.name}
+                  disabled={deleting === preset.name || sourceOf(preset.name) === "project"}
                   onPress={() => void handleDelete(preset.name)}
                   accessibilityLabel={t("settings.providers.presets.remove", { name: preset.name })}
                 />
@@ -177,6 +206,7 @@ export function ProviderPresetsSection({
       ) : null}
       {editing ? (
         <PresetEditorSubSheet
+          models={models}
           descriptor={descriptor}
           visible
           preset={editing}
@@ -198,6 +228,7 @@ export function ProviderPresetsSection({
  */
 function PresetEditorSubSheet({
   descriptor,
+  models,
   visible,
   preset,
   onClose,
@@ -206,6 +237,7 @@ function PresetEditorSubSheet({
   existingNames,
 }: {
   descriptor: ProviderPresetDescriptor | null;
+  models: readonly AgentModelDefinition[];
   visible: boolean;
   preset: ProviderPreset;
   onClose: () => void;
@@ -219,6 +251,21 @@ function PresetEditorSubSheet({
   const [name, setName] = useState(preset.name);
   const [model, setModel] = useState(preset.model);
   const [thinking, setThinking] = useState(preset.thinkingOptionId ?? "");
+  const [customModel, setCustomModel] = useState(
+    !models.some((option) => option.id === preset.model),
+  );
+  const [customThinking, setCustomThinking] = useState(false);
+  const [roles, setRoles] = useState(
+    JSON.stringify(
+      Object.fromEntries(
+        Object.entries(preset.featureValues ?? {}).filter(([key]) => key.startsWith("modelRole.")),
+      ),
+      null,
+      2,
+    ),
+  );
+  const showCustomModel = customModel || !models.some((entry) => entry.id === model);
+  const thinkingOptions = models.find((option) => option.id === model)?.thinkingOptions ?? [];
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -228,6 +275,19 @@ function PresetEditorSubSheet({
     setName(preset.name);
     setModel(preset.model);
     setThinking(preset.thinkingOptionId ?? "");
+    setRoles(
+      JSON.stringify(
+        Object.fromEntries(
+          Object.entries(preset.featureValues ?? {}).filter(([key]) =>
+            key.startsWith("modelRole."),
+          ),
+        ),
+        null,
+        2,
+      ),
+    );
+    setCustomModel(false);
+    setCustomThinking(false);
     setError(null);
   }, [preset]);
 
@@ -248,21 +308,54 @@ function PresetEditorSubSheet({
 
   const handleSubmit = useCallback(() => {
     if (!canSubmit) return;
+    let roleValues: Record<string, string>;
+    try {
+      const parsed: unknown = JSON.parse(roles);
+      if (
+        !parsed ||
+        typeof parsed !== "object" ||
+        Array.isArray(parsed) ||
+        Object.entries(parsed).some(
+          ([key, value]) =>
+            !key.startsWith("modelRole.") || typeof value !== "string" || value.trim().length === 0,
+        )
+      )
+        throw new Error(t("providerControl.rolesInvalid"));
+      roleValues = parsed as Record<string, string>;
+    } catch {
+      setError(t("providerControl.rolesInvalid"));
+      return;
+    }
     setSaving(true);
     setError(null);
     const next: ProviderPreset = {
       name: trimmedName,
       model: trimmedModel,
       ...(thinking.trim() ? { thinkingOptionId: thinking.trim() } : {}),
-      ...(preset.featureValues && Object.keys(preset.featureValues).length > 0
-        ? { featureValues: preset.featureValues }
-        : {}),
+      featureValues: {
+        ...Object.fromEntries(
+          Object.entries(preset.featureValues ?? {}).filter(
+            ([key]) => !key.startsWith("modelRole."),
+          ),
+        ),
+        ...roleValues,
+      },
     };
     void onSave(next)
       .then(() => onClose())
       .catch((cause) => setError(toErrorMessage(cause)))
       .finally(() => setSaving(false));
-  }, [canSubmit, onClose, onSave, preset.featureValues, thinking, trimmedModel, trimmedName]);
+  }, [
+    canSubmit,
+    onClose,
+    onSave,
+    preset.featureValues,
+    roles,
+    t,
+    thinking,
+    trimmedModel,
+    trimmedName,
+  ]);
 
   const header = useMemo<SheetHeader>(
     () => ({
@@ -306,30 +399,102 @@ function PresetEditorSubSheet({
             {descriptor?.reason ?? t("settings.providers.presets.noRename")}
           </Text>
         ) : null}
-        <Text style={styles.formLabel}>{t("settings.providers.presets.model")}</Text>
-        <AdaptiveTextInput
-          initialValue={model}
-          resetKey={`preset-model-${preset.name}`}
-          onChangeText={setModel}
-          placeholder={t("settings.providers.presets.modelPlaceholder")}
-          placeholderTextColor={theme.colors.foregroundMuted}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="next"
-          style={styles.formInput}
+        <SelectField
+          label={t("settings.providers.presets.model")}
+          value={showCustomModel ? "__custom__" : model}
+          selectedDisplay={null}
+          options={[
+            ...models.map((entry) => ({ id: entry.id, value: entry.id, label: entry.label })),
+            { id: "__custom__", value: "__custom__", label: t("providerControl.customInput") },
+          ]}
+          onChange={(value) => {
+            if (value === "__custom__") {
+              setCustomModel(true);
+              return;
+            }
+            setModel(value);
+            setCustomModel(false);
+            if (
+              !models
+                .find((entry) => entry.id === value)
+                ?.thinkingOptions?.some((option) => option.id === thinking)
+            )
+              setThinking("");
+          }}
+          placeholder={t("settings.providers.presets.model")}
+          emptyText={t("settings.providers.presets.empty")}
+          searchable
+          testID="provider-preset-model-options"
         />
-        <Text style={styles.formLabel}>{t("settings.providers.presets.thinking")}</Text>
+        {showCustomModel ? (
+          <AdaptiveTextInput
+            initialValue={model}
+            resetKey={`preset-model-${preset.name}-${customModel}`}
+            onChangeText={setModel}
+            placeholder={t("settings.providers.presets.modelPlaceholder")}
+            placeholderTextColor={theme.colors.foregroundMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="next"
+            style={styles.formInput}
+          />
+        ) : null}
+        <SelectField
+          label={t("settings.providers.presets.thinking")}
+          value={
+            customThinking ||
+            (thinking !== "" && !thinkingOptions.some((entry) => entry.id === thinking))
+              ? "__custom__"
+              : thinking
+          }
+          selectedDisplay={null}
+          options={[
+            { id: "", value: "", label: t("settings.providers.presets.thinkingPlaceholder") },
+            ...thinkingOptions.map((entry) => ({
+              id: entry.id,
+              value: entry.id,
+              label: entry.label,
+            })),
+            { id: "__custom__", value: "__custom__", label: t("providerControl.customInput") },
+          ]}
+          onChange={(value) => {
+            if (value === "__custom__") {
+              setCustomThinking(true);
+              return;
+            }
+            setThinking(value);
+            setCustomThinking(false);
+          }}
+          placeholder={t("settings.providers.presets.thinking")}
+          emptyText={t("settings.providers.presets.empty")}
+          testID="provider-preset-thinking-options"
+        />
+        {customThinking ||
+        (thinking !== "" && !thinkingOptions.some((entry) => entry.id === thinking)) ? (
+          <AdaptiveTextInput
+            initialValue={thinking}
+            resetKey={`preset-thinking-${preset.name}`}
+            onChangeText={setThinking}
+            placeholder={t("settings.providers.presets.thinkingPlaceholder")}
+            placeholderTextColor={theme.colors.foregroundMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="done"
+            onSubmitEditing={handleSubmit}
+            style={styles.formInput}
+          />
+        ) : null}
+        <Text style={styles.formLabel}>{t("providerControl.modelRoles")}</Text>
+        <Text style={styles.muted}>{t("providerControl.rolesEditable")}</Text>
         <AdaptiveTextInput
-          initialValue={thinking}
-          resetKey={`preset-thinking-${preset.name}`}
-          onChangeText={setThinking}
-          placeholder={t("settings.providers.presets.thinkingPlaceholder")}
-          placeholderTextColor={theme.colors.foregroundMuted}
+          initialValue={roles}
+          resetKey={`preset-roles-${preset.name}`}
+          onChangeText={setRoles}
+          multiline
           autoCapitalize="none"
           autoCorrect={false}
-          returnKeyType="done"
-          onSubmitEditing={handleSubmit}
           style={styles.formInput}
+          testID="provider-preset-roles"
         />
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
         <View style={styles.formActions}>

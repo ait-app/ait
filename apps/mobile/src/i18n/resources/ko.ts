@@ -16,6 +16,17 @@ export const ko: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    settingsSelection: "현재 설정 · 이 대화 또는 초안에 적용",
+    scopeDefault: "OMP 기본 디렉터리 · 전역 설정 포함",
+    scopeGlobal: "OMP 전역 프리셋",
+    scopeProject: "프로젝트: {{cwd}} · 전역 설정 포함",
+    scopeManaged: "Ait 프리셋 · 이 호스트 전체",
+    scopeOverride:
+      "같은 이름의 프로젝트 프리셋이 우선합니다. 저장/삭제는 전역 프리셋만 변경하며 프로젝트 항목은 읽기 전용입니다.",
+    customInput: "직접 입력",
+    rolesEditable:
+      '역할 재정의는 JSON 객체로 편집합니다. 예: {"modelRole.advisor":"native"}. 지정하지 않은 역할은 적용 시 해제됩니다.',
+    rolesInvalid: "modelRole.* 키와 비어 있지 않은 문자열 값으로 JSON 객체를 입력하세요.",
     sideQuestions: {
       title: "별도 질문",
       empty: "별도 질문이 없습니다.",

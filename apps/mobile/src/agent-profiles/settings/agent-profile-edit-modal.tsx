@@ -1,3 +1,4 @@
+import { ProviderSettingsAction } from "@/components/model-browser";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -308,6 +309,33 @@ function OpenAgentProfileEditModal({
         state.disclosure.showThinkingField ||
         modelFeatures.length > 0 ? (
           <View style={styles.modelConfiguration} testID="agent-profile-model-configuration">
+            <ProviderSettingsAction
+              serverId={serverId}
+              provider={state.provider}
+              accessibilityLabel={t("modelSelector.openProviderSettings", {
+                provider: state.provider,
+              })}
+              configuration={
+                modelFeatures.length > 0 ? (
+                  <ModelFeatureControls
+                    features={modelFeatures}
+                    disabled={state.isSubmitting}
+                    onCatalogAccess={handleCatalogAccess}
+                    renderFeature={(feature, index) => (
+                      <AgentProfileFeatureRow
+                        key={feature.id}
+                        feature={feature}
+                        isFirst={index === 0}
+                        disabled={state.isSubmitting}
+                        size={controlSize}
+                        model={model}
+                        onCatalogAccess={handleCatalogAccess}
+                      />
+                    )}
+                  />
+                ) : null
+              }
+            />
             {state.disclosure.showModelField ? (
               <SelectField
                 label={t("settings.host.agentProfiles.modelLabel")}
@@ -345,25 +373,6 @@ function OpenAgentProfileEditModal({
                 triggerTestID="agent-profile-thinking-trigger"
               />
             ) : null}
-            <ModelFeatureControls
-              features={modelFeatures}
-              disabled={state.isSubmitting}
-              onCatalogAccess={handleCatalogAccess}
-              // A profile has no working directory, so the preset store is read for the host and
-              // provider alone; the empty state still opens that provider's preset editor.
-              settingsTarget={{ serverId, provider: state.provider, cwd: null }}
-              renderFeature={(feature, index) => (
-                <AgentProfileFeatureRow
-                  key={feature.id}
-                  feature={feature}
-                  isFirst={index === 0}
-                  disabled={state.isSubmitting}
-                  size={controlSize}
-                  model={model}
-                  onCatalogAccess={handleCatalogAccess}
-                />
-              )}
-            />
           </View>
         ) : null}
 

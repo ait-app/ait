@@ -16,6 +16,17 @@ export const ja: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    settingsSelection: "現在の設定 · この会話または下書きに適用",
+    scopeDefault: "OMP 既定ディレクトリ · グローバル設定を含む",
+    scopeGlobal: "OMP グローバルプリセット",
+    scopeProject: "プロジェクト：{{cwd}} · グローバル設定を含む",
+    scopeManaged: "Ait プリセット · このホスト全体",
+    scopeOverride:
+      "同名のプロジェクト設定が優先されます。保存・削除はグローバル設定のみ。プロジェクト設定はここでは読み取り専用です。",
+    customInput: "カスタム入力",
+    rolesEditable:
+      'ロール設定は JSON オブジェクトで編集できます。例：{"modelRole.advisor":"native"}。未指定のロールは適用時に解除されます。',
+    rolesInvalid: "modelRole.* キーと空でない文字列を含む JSON オブジェクトを入力してください。",
     sideQuestions: {
       title: "サイド質問",
       empty: "サイド質問はありません。",

@@ -105,7 +105,7 @@ featureValues?}`。`domain::preset::ProviderPreset` 拥有唯一的校验规则�
    等价实现（`impliedFeatureValues` 与 `matches_configuration` 的补集检查），改动其中一侧
    必须同时改另一侧。
 
-3. 两者都没有 → 不产生 feature，使用处保持"整块不渲染"，由空态引导去设置创建。
+3. 两者都没有 → 不产生 feature，模型列表不显示预设控件；从右上角齿轮进入设置，在预设管理空态创建。
 
 当前值判定与客户端 `withModelPresetSelection` 同义：模型、思考强度一致且所有已存 feature
 都在生效才选中该预设，否则回落 `__custom__`。
@@ -154,3 +154,19 @@ Ait 存储的 `save`/`delete` 是"读整份列表 → 改 → 写回"，而 `pat
 
 **not measured**：未请求覆盖率；如需测量，限定 `crates/provider/src/local/claude` 与
 `crates/provider/src/local/configuration` 的定向测试范围。
+
+## 2026-11-09 修订：设置入口与客户端上下文
+
+- Provider 内部设置集中到模型选择器右上角齿轮后的页面。当前选择的预设与角色配置、
+  预设管理和 Provider 模型目录在同一设置页；模型列表本身不展开 preset/role 控件。
+  Ait Profile 是单独的应用层配置，使用“创建 Ait Profile”区分原生 Model Presets。
+- 入口携带 serverId、provider 和 cwd；当前会话或草稿的角色编辑仍原子应用于原目标。
+  没有当前会话配置的入口只管理 Provider 存储。临时配置面板随来源关闭，不能把回调
+  带到其他 Provider 或项目。Profile 的缓存只在同 Provider 内复用，切换立即清除，
+  迟到或失败的查询不得恢复上一 Provider 的选项。
+- Ait 合成预设的 `__custom__` 仅为界面占位，Profile、草稿及现有会话都不将它写成
+  原生 feature；原生 OMP 控件保留自身更新语义。
+- 原生预设显示 cwd 与作用域，项目同名预设优先于全局。原生 save/delete 只写全局，
+  项目条目在编辑器中只读；Ait 存储为主机上的 Provider 全局设置。
+  编辑器优先提供模型和推理候选，同时允许自定义值；角色覆盖可以编辑和删除，
+  未指定角色仍按统一预设展开规则清除。

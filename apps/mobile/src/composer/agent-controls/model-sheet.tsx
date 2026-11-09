@@ -46,6 +46,8 @@ interface CompactModelSheetProps {
   glyphSize: number;
   canSwitchProvider: boolean;
   children: ReactNode;
+  providerSettings?: ReactNode;
+  cwd?: string | null;
 }
 
 function shortModelLabel(label: string): string {
@@ -99,6 +101,8 @@ export function CompactModelSheet({
   glyphSize,
   canSwitchProvider,
   children,
+  providerSettings,
+  cwd,
 }: CompactModelSheetProps) {
   const { t } = useTranslation();
   const usesBottomSheet = useIsCompactFormFactor();
@@ -122,6 +126,8 @@ export function CompactModelSheet({
     autoFocusSearch: isWeb && !usesBottomSheet,
     profiles,
     serverId,
+    cwd,
+    providerSettings,
   });
   const modelBrowser = useModelBrowser({
     providers: availableProviders,
@@ -131,6 +137,8 @@ export function CompactModelSheet({
     autoFocusSearch: isWeb && !usesBottomSheet,
     profiles,
     serverId,
+    cwd,
+    providerSettings,
   });
   const ProviderIcon =
     selectedProvider.trim().length > 0 ? getProviderIcon(selectedProvider, serverId) : null;

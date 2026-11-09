@@ -16,6 +16,17 @@ export const ptBR: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    settingsSelection: "Seleção atual · para esta conversa ou rascunho",
+    scopeDefault: "Diretório padrão do OMP · inclui predefinições globais",
+    scopeGlobal: "Predefinições globais do OMP",
+    scopeProject: "Projeto: {{cwd}} · inclui predefinições globais",
+    scopeManaged: "Predefinições Ait · globais neste host",
+    scopeOverride:
+      "O projeto substitui predefinições globais com o mesmo nome. Salvar/excluir altera apenas as globais; as do projeto são somente leitura aqui.",
+    customInput: "Entrada personalizada",
+    rolesEditable:
+      'Edite os papéis como objeto JSON, por exemplo {"modelRole.advisor":"native"}. Papéis omitidos são limpos ao aplicar.',
+    rolesInvalid: "Digite um objeto JSON com chaves modelRole.* e valores de texto não vazios.",
     sideQuestions: {
       title: "Perguntas paralelas",
       empty: "Ainda não há perguntas paralelas.",

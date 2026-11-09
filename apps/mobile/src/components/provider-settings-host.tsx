@@ -9,6 +9,7 @@ export function ProviderSettingsHost() {
   const visible = useProviderSettingsStore((state) => state.visible);
   const overlayParentLayer = useProviderSettingsStore((state) => state.overlayParentLayer);
   const cwd = useProviderSettingsStore((state) => state.cwd);
+  const configuration = useProviderSettingsStore((state) => state.configuration);
   const close = useProviderSettingsStore((state) => state.close);
 
   const handleClose = useCallback(() => {
@@ -27,6 +28,7 @@ export function ProviderSettingsHost() {
         serverId={serverId}
         cwd={cwd ?? undefined}
         visible={visible}
+        modelConfiguration={configuration}
         onClose={handleClose}
       />
     </OverlayLayerProvider>

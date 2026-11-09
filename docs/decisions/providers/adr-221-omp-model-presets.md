@@ -25,7 +25,7 @@ OMP adapter 从官方 `config list --json` 发现预设，并通过 `--scope glo
 校验，失败不写入；原有单字段入口同样经 Provider 的 grouped-selection 端口展开。
 配置补丁只增加展开导致的模型、思考强度及 feature 差量，不覆盖并行到达的无关设置。
 
-预设显示于现有模型选择器的配置区，紧邻默认收起的用途角色；不在通用 Features 重复列出。
+预设及用途角色通过现有模型选择器右上角齿轮进入 Provider 设置，不在模型列表或通用 Features 重复展开；入口约定见 [ADR-224](adr-224-claude-advisor-role-and-preset-expansion.md)。
 当前模型、思考强度和角色仍是不同配置字段，合并的是入口而不是原生语义。桌面、紧凑
 模型面板及 Profile 均复用原 setter，整套预设 metadata 的一次性应用保持不变。
 

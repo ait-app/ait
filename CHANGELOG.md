@@ -5,7 +5,8 @@
 - Add OMP model-role presets and private next-turn configuration, with explicit native preset save/delete controls.
 - Support native OMP side questions with streaming, cancellation, follow-up and restored history in an independent panel.
 - Keep read-only OMP commands separate from active answers; reject host-conflicting and terminal-only builtins without invoking a model, and preserve query result cards across history reloads.
-- Consolidate OMP presets and purpose-specific roles into existing model settings with semantic icons; keep native Run/Download controls compact without changing independent action progress or results.
+- Move Provider presets and role settings behind the model picker gear, retaining host and project context; distinguish Ait Profiles from Provider Model Presets. Offer catalog models and reasoning levels in the preset editor with editable role overrides.
+- Keep cached Profile presets scoped to their Provider, consume Ait custom-selection placeholders locally, and allow native command completion for uncreated drafts without bypassing read-only session restrictions.
 - Observe Vibe through the user-installed OMP process only when it announces a compatible bridge and native builtin command. Unsupported installations show an explicit unavailable result; Ait does not install, patch or bundle OMP or Bun.
 
 ## 0.2.4 - 2026-11-09

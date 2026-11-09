@@ -25,6 +25,17 @@ export const ar: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    settingsSelection: "الاختيار الحالي · لهذه المحادثة أو المسودة",
+    scopeDefault: "دليل OMP الافتراضي · يشمل الإعدادات العامة",
+    scopeGlobal: "إعدادات OMP العامة",
+    scopeProject: "المشروع: {{cwd}} · يشمل الإعدادات العامة",
+    scopeManaged: "إعدادات Ait · عامة على هذا المضيف",
+    scopeOverride:
+      "إعدادات المشروع تتجاوز العامة بالاسم نفسه. الحفظ والحذف يعدلان الإعدادات العامة فقط؛ إعدادات المشروع للقراءة فقط هنا.",
+    customInput: "إدخال مخصص",
+    rolesEditable:
+      'يمكن تعديل الأدوار ككائن JSON مثل {"modelRole.advisor":"native"}. تُمسح الأدوار غير المحددة عند التطبيق.',
+    rolesInvalid: "أدخل كائن JSON بمفاتيح modelRole.* وقيم نصية غير فارغة.",
     sideQuestions: {
       title: "أسئلة جانبية",
       empty: "لا توجد أسئلة جانبية بعد.",

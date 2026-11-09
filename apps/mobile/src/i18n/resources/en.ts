@@ -1,5 +1,16 @@
 export const en = {
   providerControl: {
+    settingsSelection: "Current selection · applies to this conversation or draft",
+    scopeDefault: "Default OMP directory · includes global presets",
+    scopeGlobal: "Global OMP presets",
+    scopeProject: "Project: {{cwd}} · includes global presets",
+    scopeManaged: "Ait presets · global on this host",
+    scopeOverride:
+      "Project presets override global presets with the same name. Save/delete modifies global presets only; project entries are read-only here.",
+    customInput: "Custom input",
+    rolesEditable:
+      'Edit role overrides as a JSON object, for example {"modelRole.advisor":"native"}. Omitted roles are cleared when this preset is applied.',
+    rolesInvalid: "Enter a JSON object with modelRole.* keys and non-empty string values.",
     sideQuestions: {
       title: "Side questions",
       empty: "No side questions yet.",
@@ -2303,8 +2314,8 @@ export const en = {
     model: "Model",
     editProfiles: "Edit",
     editProfilesLabel: "Edit agent profiles",
-    createProfile: "Create profile",
-    createProfileFromModel: "Create profile from this model",
+    createProfile: "Create Ait Profile",
+    createProfileFromModel: "Create Ait Profile from this model",
     editProfileLabel: "Edit {{name}}",
     editProfilesCount: "Edit profiles ({{count}})",
     modelCount: "{{count}} model",

@@ -1114,13 +1114,13 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                 desktopPlacement="top-start"
                 desktopMinWidth={360}
                 toolbar={modelToolbar}
-                modelConfiguration={
-                  modelFeatures.length > 0 || presetSettingsTarget ? (
+                cwd={presetSettingsTarget?.cwd}
+                providerSettings={
+                  modelFeatures.length > 0 ? (
                     <ModelFeatureControls
                       features={modelFeatures}
                       disabled={disabled}
                       onCatalogAccess={onModelSelectorOpen}
-                      settingsTarget={presetSettingsTarget}
                       renderFeature={(feature) => (
                         <SheetFeatureItem
                           key={feature.id}
@@ -1370,22 +1370,6 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
 
       {modeControl ? <AgentModeControl {...modeControl} surface="sheet" /> : null}
 
-      <ModelFeatureControls
-        features={modelFeatures}
-        disabled={disabled}
-        onCatalogAccess={onModelSelectorOpen}
-        settingsTarget={presetSettingsTarget}
-        renderFeature={(feature) => (
-          <SheetFeatureItem
-            key={feature.id}
-            feature={feature}
-            disabled={disabled}
-            openSelector={openSelector}
-            handleOpenChange={handleOpenChange}
-            onSetFeature={onSetFeature}
-          />
-        )}
-      />
       {(features ?? []).map((feature) => (
         <SheetFeatureItem
           key={`feature-${feature.id}`}
@@ -1418,6 +1402,26 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
       onRetryProvider={onRetryModelProvider}
       isRetryingProvider={isRetryingModelProvider}
       serverId={modelSelectorServerId}
+      cwd={presetSettingsTarget?.cwd}
+      providerSettings={
+        modelFeatures.length > 0 ? (
+          <ModelFeatureControls
+            features={modelFeatures}
+            disabled={disabled}
+            onCatalogAccess={onModelSelectorOpen}
+            renderFeature={(feature) => (
+              <SheetFeatureItem
+                key={feature.id}
+                feature={feature}
+                disabled={disabled}
+                openSelector={openSelector}
+                handleOpenChange={handleOpenChange}
+                onSetFeature={onSetFeature}
+              />
+            )}
+          />
+        ) : null
+      }
       glyphSize={glyphSize}
       canSwitchProvider={canSwitchProvider}
     >

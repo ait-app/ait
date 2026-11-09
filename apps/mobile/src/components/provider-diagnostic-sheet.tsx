@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import { AlertTriangle, Copy, FileText, Plus, RotateCw, Trash2 } from "lucide-react-native";
 import type { TFunction } from "i18next";
@@ -40,6 +41,7 @@ interface ProviderDiagnosticSheetProps {
   serverId: string;
   /** Directory whose preset store this sheet manages; absent means the harness default. */
   cwd?: string;
+  modelConfiguration?: React.ReactNode;
 }
 
 function rankModels<T>(items: T[], query: string, fields: (item: T) => string[]): T[] {
@@ -582,6 +584,7 @@ export function ProviderDiagnosticSheet({
   onClose,
   serverId,
   cwd,
+  modelConfiguration,
 }: ProviderDiagnosticSheetProps) {
   const canConfigure = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.providerConfiguration !== false,
@@ -589,13 +592,26 @@ export function ProviderDiagnosticSheet({
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const toast = useToast();
+  const client = useHostRuntimeClient(serverId);
+  const featureCatalog = useQuery({
+    queryKey: ["providerFeatures", serverId, provider, cwd ?? null, "settings"],
+    enabled: visible && Boolean(client),
+    retry: false,
+    staleTime: 30_000,
+    queryFn: async () => {
+      if (!client) return [];
+      const result = await client.listProviderFeatures({ provider, cwd: cwd ?? "." });
+      if (result.error) throw new Error(result.error);
+      return result.features ?? [];
+    },
+  });
   const isCompact = useIsCompactFormFactor();
   const {
     entries: snapshotEntries,
     refresh,
     isRefreshing,
     refetchIfStale,
-  } = useProvidersSnapshot(serverId, { refreshOnAccess: visible });
+  } = useProvidersSnapshot(serverId, { cwd, refreshOnAccess: visible });
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [query, setQuery] = useState("");
   const [addSheetOpen, setAddSheetOpen] = useState(false);
@@ -725,7 +741,19 @@ export function ProviderDiagnosticSheet({
         })}
         snapPoints={MAIN_SNAP_POINTS}
       >
-        <ProviderPresetsSection provider={provider} serverId={serverId} cwd={cwd} />
+        {modelConfiguration ? (
+          <View testID="provider-current-model-settings">
+            <Text style={sheetStyles.mutedText}>{t("providerControl.settingsSelection")}</Text>
+            {modelConfiguration}
+          </View>
+        ) : null}
+        <ProviderPresetsSection
+          provider={provider}
+          serverId={serverId}
+          cwd={cwd}
+          models={discoveredModels}
+          features={featureCatalog.data}
+        />
         <ProviderModalBody
           discoveredCount={discoveredModels.length}
           additionalCount={additionalModels.length}

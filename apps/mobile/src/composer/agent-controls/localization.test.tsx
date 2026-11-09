@@ -14,12 +14,33 @@ vi.mock("@/agent-profiles", () => ({
 
 // Keep the actual draft, mode and feature controls; replace the surrounding model browser.
 vi.mock("./model-sheet", () => ({
-  CompactModelSheet: ({ children }: { children: ReactNode }) => <>{children}</>,
+  CompactModelSheet: ({
+    children,
+    providerSettings,
+  }: {
+    children: ReactNode;
+    providerSettings?: ReactNode;
+  }) => {
+    const [open, setOpen] = React.useState(false);
+    return (
+      <>
+        {children}
+        <button onClick={() => setOpen(true)}>Provider settings</button>
+        {open ? providerSettings : null}
+      </>
+    );
+  },
 }));
 vi.mock("@/components/combined-model-selector", () => ({
-  CombinedModelSelector: ({ modelConfiguration }: { modelConfiguration?: ReactNode }) => (
-    <div data-testid="model-picker-configuration">{modelConfiguration}</div>
-  ),
+  CombinedModelSelector: ({ providerSettings }: { providerSettings?: ReactNode }) => {
+    const [open, setOpen] = React.useState(false);
+    return (
+      <>
+        <button onClick={() => setOpen(true)}>Provider settings</button>
+        {open ? providerSettings : null}
+      </>
+    );
+  },
 }));
 vi.mock("@/components/ui/combobox", () => ({
   Combobox: ({
@@ -153,6 +174,9 @@ describe("OMP model settings presentation", () => {
           onModelSelectorOpen={onModelSelectorOpen}
         />,
       );
+      expect(view.queryByTestId("agent-feature-modelPreset")).toBeNull();
+      expect(view.queryByTestId("model-role-settings")).toBeNull();
+      fireEvent.click(view.getByRole("button", { name: "Provider settings" }));
       expect(view.getAllByTestId("agent-feature-modelPreset")).toHaveLength(1);
       expect(view.queryByTestId("agent-controls-features")).toBeNull();
       expect(view.queryByTestId("agent-feature-modelRole.default")).toBeNull();

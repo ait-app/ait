@@ -3,7 +3,7 @@ import type { AgentProvider } from "@ait/protocol/agent-types";
 import type { ProviderPreset, ProviderPresetDescriptor } from "@ait/protocol/messages";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 
-/** One provider's preset store, as the composer and the settings section both read it. */
+/** One provider's preset store, as the settings section reads it. */
 export interface ProviderPresetsSnapshot {
   descriptor: ProviderPresetDescriptor;
   presets: ProviderPreset[];
@@ -36,7 +36,7 @@ export function providerPresetsQueryKey(
 /**
  * Drop every cache a preset write invalidates.
  *
- * The editor itself reads `provider-presets`, but the selectors that must show the new entry
+ * The editor itself reads `provider-presets`, but the configuration controls that must show the new entry
  * read the provider's feature projection: the draft form, the profile form and a live agent's
  * role choices each own a separate query. Invalidating only the editor's own key would leave
  * those pickers showing the old list, so all four are dropped together. Active queries refetch
@@ -58,7 +58,7 @@ export async function invalidatePresetCaches(
 /**
  * Read a provider's preset store once per host/provider/directory.
  *
- * The editor and the empty state share this entry, so opening a picker never repeats the
+ * The settings list and its empty state share this entry, so opening the page never repeats the
  * request and a write's invalidation reaches both. A provider whose host predates the preset
  * RPCs, or whose store cannot be read, yields `null` and callers render nothing rather than a
  * control that cannot work.
@@ -103,19 +103,7 @@ export function useProviderPresets(input: {
   };
 }
 
-/**
- * Whether the preset control must be shown for this provider at all.
- *
- * A store that exists but is empty still counts: the editor is the only way to fill it, and the
- * empty state is what points there.
- */
-export function presetControlAvailable(
-  snapshot: ProviderPresetsSnapshot | null | undefined,
-): boolean {
-  return snapshot !== null && snapshot !== undefined;
-}
-
-/** Host/provider/directory whose preset editor the empty state opens. */
+/** Host/provider/directory whose settings the model picker gear opens. */
 export interface PresetSettingsTarget {
   serverId: string | null | undefined;
   provider: AgentProvider | null | undefined;

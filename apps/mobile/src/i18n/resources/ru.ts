@@ -23,6 +23,17 @@ export const ru: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    settingsSelection: "Текущий выбор · для этого диалога или черновика",
+    scopeDefault: "Каталог OMP по умолчанию · включая глобальные пресеты",
+    scopeGlobal: "Глобальные пресеты OMP",
+    scopeProject: "Проект: {{cwd}} · включая глобальные пресеты",
+    scopeManaged: "Пресеты Ait · глобально на этом хосте",
+    scopeOverride:
+      "Пресет проекта заменяет одноимённый глобальный. Сохранение и удаление меняют только глобальные пресеты; проектные здесь доступны только для чтения.",
+    customInput: "Ввести вручную",
+    rolesEditable:
+      'Роли редактируются как JSON, например {"modelRole.advisor":"native"}. Неуказанные роли сбрасываются при применении.',
+    rolesInvalid: "Введите объект JSON с ключами modelRole.* и непустыми строковыми значениями.",
     sideQuestions: {
       title: "Параллельные вопросы",
       empty: "Параллельных вопросов пока нет.",

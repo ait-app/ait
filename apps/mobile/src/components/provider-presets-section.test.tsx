@@ -6,6 +6,27 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ProviderPreset, ProviderPresetDescriptor } from "@ait/protocol/messages";
 import { ProviderPresetsSection } from "./provider-presets-section";
 
+vi.mock("@/components/ui/select-field", () => ({
+  SelectField: ({
+    testID,
+    options,
+    value,
+    onChange,
+  }: {
+    testID: string;
+    options: { id: string; value: string; label: string }[];
+    value: string;
+    onChange: (value: string) => void;
+  }) => (
+    <select data-testid={testID} value={value} onChange={(event) => onChange(event.target.value)}>
+      {options.map((option) => (
+        <option key={option.id} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  ),
+}));
 const client = {
   describeProviderPresets: vi.fn(),
   listProviderPresets: vi.fn(),
@@ -192,7 +213,7 @@ it("shows a create entry in the empty state and saves through the unified reques
     // A create carries no original name; the write also repeats the list's cwd.
     expect(client.saveProviderPreset).toHaveBeenCalledWith(
       "claude",
-      { name: "team", model: "claude-opus-5" },
+      { name: "team", model: "claude-opus-5", featureValues: {} },
       undefined,
       {},
     ),
@@ -218,7 +239,7 @@ it("edits the name and sends the original when the descriptor allows renaming", 
   await waitFor(() =>
     expect(client.saveProviderPreset).toHaveBeenCalledWith(
       "claude",
-      { name: "squad", model: "claude-opus-5" },
+      { name: "squad", model: "claude-opus-5", featureValues: {} },
       undefined,
       { original: "team" },
     ),
@@ -283,11 +304,90 @@ it("never branches on the provider identity to decide which controls exist", asy
   await ready(descriptor({ backend: "native" }), [preset("team")]);
   const native = renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
-  const nativeMarkup = native.container.innerHTML;
+  const nativeActions = Array.from(native.container.querySelectorAll("button")).map(
+    (button) => button.getAttribute("aria-label") ?? button.textContent,
+  );
   native.unmount();
-
   await ready(descriptor({ backend: "ait" }), [preset("team")]);
   const managed = renderSection(<ProviderPresetsSection provider="claude" serverId="host-a" />);
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
-  expect(managed.container.innerHTML).toBe(nativeMarkup);
+  expect(
+    Array.from(managed.container.querySelectorAll("button")).map(
+      (button) => button.getAttribute("aria-label") ?? button.textContent,
+    ),
+  ).toEqual(nativeActions);
+});
+
+it("offers catalog models and reasoning levels while allowing role overrides to be edited", async () => {
+  await ready(descriptor(), []);
+  renderSection(
+    <ProviderPresetsSection
+      provider="claude"
+      serverId="host-a"
+      models={[
+        {
+          provider: "claude",
+          id: "opus",
+          label: "Opus",
+          thinkingOptions: [{ id: "high", label: "High" }],
+        },
+      ]}
+    />,
+  );
+  await waitFor(() => expect(screen.getByTestId("provider-presets-empty-create")).toBeTruthy());
+  fireEvent.click(screen.getByTestId("provider-presets-empty-create"));
+  fireEvent.change(screen.getAllByRole("textbox")[0], { target: { value: "catalog" } });
+  fireEvent.change(screen.getByTestId("provider-preset-model-options"), {
+    target: { value: "opus" },
+  });
+  fireEvent.change(screen.getByTestId("provider-preset-thinking-options"), {
+    target: { value: "high" },
+  });
+  fireEvent.change(screen.getAllByRole("textbox")[1], {
+    target: { value: '{"modelRole.advisor":"native"}' },
+  });
+  fireEvent.click(screen.getByTestId("provider-preset-save"));
+  await waitFor(() =>
+    expect(client.saveProviderPreset).toHaveBeenCalledWith(
+      "claude",
+      {
+        name: "catalog",
+        model: "opus",
+        thinkingOptionId: "high",
+        featureValues: { "modelRole.advisor": "native" },
+      },
+      undefined,
+      {},
+    ),
+  );
+});
+
+it("shows project scope and prevents global writes to an overriding project preset", async () => {
+  await ready(descriptor({ backend: "native" }), [preset("team")]);
+  renderSection(
+    <ProviderPresetsSection
+      provider="omp"
+      serverId="host-a"
+      cwd="/repo/project"
+      features={[
+        {
+          type: "select",
+          id: "modelPreset",
+          label: "Preset",
+          value: "team",
+          options: [{ id: "team", label: "Team", metadata: { source: "project" } }],
+        },
+      ]}
+    />,
+  );
+  await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
+  expect(screen.getByTestId("provider-presets-scope").textContent).toBe(
+    "providerControl.scopeProject",
+  );
+  expect(client.listProviderPresets).toHaveBeenCalledWith("omp", "/repo/project");
+  const actions = screen.getByTestId("provider-preset-team").querySelectorAll("button");
+  expect([...actions].every((button) => button.disabled)).toBe(true);
+  for (const button of actions) fireEvent.click(button);
+  expect(client.saveProviderPreset).not.toHaveBeenCalled();
+  expect(client.deleteProviderPreset).not.toHaveBeenCalled();
 });

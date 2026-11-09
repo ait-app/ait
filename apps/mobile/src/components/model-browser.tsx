@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useMemo, useReducer, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useReducer,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   FlatList,
@@ -71,20 +80,47 @@ const ThemedPlus = withUnistyles(Plus);
 const ThemedSearch = withUnistyles(Search);
 const ThemedSettings = withUnistyles(Settings);
 
-function ProviderSettingsAction({
+export function ProviderSettingsAction({
   accessibilityLabel,
   provider,
   serverId,
+  cwd,
+  configuration,
 }: {
   accessibilityLabel: string;
   provider: string;
   serverId: string | null;
+  cwd?: string | null;
+  configuration?: React.ReactNode;
 }) {
   const overlayParentLayer = useCurrentOverlayLayer();
+  const sourceId = useId();
+  useEffect(() => {
+    const settings = useProviderSettingsStore.getState();
+    if (settings.sourceId !== sourceId || !settings.visible) return;
+    if (
+      settings.serverId !== serverId ||
+      settings.provider !== provider ||
+      settings.cwd !== (cwd ?? null)
+    ) {
+      settings.close();
+      return;
+    }
+    settings.updateConfiguration(sourceId, configuration);
+  }, [configuration, cwd, provider, serverId, sourceId]);
+  useEffect(
+    () => () => {
+      const settings = useProviderSettingsStore.getState();
+      if (settings.sourceId === sourceId) settings.close();
+    },
+    [sourceId],
+  );
   const handlePress = useCallback(() => {
     if (!serverId) return;
-    useProviderSettingsStore.getState().open({ serverId, provider, overlayParentLayer });
-  }, [overlayParentLayer, provider, serverId]);
+    useProviderSettingsStore
+      .getState()
+      .open({ serverId, provider, cwd, configuration, sourceId, overlayParentLayer });
+  }, [overlayParentLayer, provider, serverId, cwd, configuration, sourceId]);
 
   return (
     <Pressable
@@ -149,6 +185,8 @@ interface ModelBrowserInput {
   /** Pinned above the provider list on the root view. `null` hides the section. */
   profiles?: AgentProfilePicker | null;
   serverId?: string | null;
+  cwd?: string | null;
+  providerSettings?: React.ReactNode;
 }
 
 export interface ModelBrowserState {
@@ -245,6 +283,8 @@ export function useModelBrowser({
   autoFocusSearch = isWeb,
   profiles = null,
   serverId = null,
+  cwd = null,
+  providerSettings,
 }: ModelBrowserInput): ModelBrowserState {
   const { t } = useTranslation();
   const [view, setView] = useState<ModelBrowserView>({ kind: "all" });
@@ -296,6 +336,17 @@ export function useModelBrowser({
     if (view.kind === "all") {
       return {
         title: t("modelSelector.title"),
+        actions: selectedProvider ? (
+          <ProviderSettingsAction
+            serverId={serverId}
+            provider={selectedProvider}
+            cwd={cwd}
+            configuration={providerSettings}
+            accessibilityLabel={t("modelSelector.openProviderSettings", {
+              provider: selectedProvider,
+            })}
+          />
+        ) : undefined,
         search: {
           onChange: handleSearchQueryChange,
           onFocus: () => setIsSearchFocused(true),
@@ -323,6 +374,8 @@ export function useModelBrowser({
           <ProviderSettingsAction
             serverId={serverId}
             provider={view.providerId}
+            cwd={cwd}
+            configuration={view.providerId === selectedProvider ? providerSettings : undefined}
             accessibilityLabel={t("modelSelector.openProviderSettings", {
               provider: view.providerLabel,
             })}
@@ -345,6 +398,9 @@ export function useModelBrowser({
     searchResetKey,
     serverId,
     singleProviderView,
+    cwd,
+    providerSettings,
+    selectedProvider,
     showAll,
     t,
     view,
