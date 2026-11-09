@@ -73,9 +73,10 @@ impl ExecutionState {
     }
 
     fn guard_observed_request(&self, method: &str, params: &Value) -> Result<(), ErrorCode> {
-        if method == "agent.commands.list.request" && params.get("draftConfig").is_some() {
-            return Ok(());
-        }
+        let command_draft = matches!(
+            method,
+            "agent.commands.list.request" | "agent.commands.complete.request"
+        ) && params.get("draftConfig").is_some_and(Value::is_object);
         if let Some(id) = params["agentId"].as_str()
             && !matches!(
                 method,
@@ -87,7 +88,10 @@ impl ExecutionState {
             )
             && !method.starts_with("agent.timeline.")
         {
-            let id = self.resolve(id)?;
+            let id = match self.resolve(id) {
+                Err(ErrorCode::AgentNotFound) if command_draft => return Ok(()),
+                resolved => resolved?,
+            };
             if self
                 .registry
                 .get(&id)

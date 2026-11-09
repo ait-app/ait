@@ -538,6 +538,21 @@ async fn assert_observed_read_only(
             "{method}"
         );
     }
+    for method in [
+        "agent.commands.list.request",
+        "agent.commands.complete.request",
+    ] {
+        let mut params =
+            json!({"agentId":child,"draftConfig":{"provider":"codex","cwd":fixture.cwd}});
+        if method == "agent.commands.complete.request" {
+            params["text"] = json!("/review ");
+            params["cursor"] = json!(8);
+        }
+        assert_eq!(
+            execution.execute(method, params).await.unwrap_err(),
+            ErrorCode::UnsupportedCapability
+        );
+    }
     assert!(
         execution
             .execute(
@@ -895,6 +910,40 @@ async fn completion_rejects_invalid_input_and_reports_unsupported_without_prompt
             .await
             .unwrap_err(),
         ErrorCode::InvalidMessage
+    );
+    execution.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn draft_completion_accepts_unknown_agent_without_creating_or_prompting() {
+    let fixture = Fixture::new();
+    let (execution, registry) = worker(&fixture);
+    let before = registry.list().unwrap();
+    let completion = execution
+        .execute(
+            "agent.commands.complete.request",
+            json!({
+                "agentId":"uncreated-draft", "text":"/review ", "cursor":8,
+                "draftConfig":{"provider":"codex","cwd":fixture.cwd}
+            }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(completion["supported"], false);
+    assert_eq!(completion["items"], json!([]));
+    assert_eq!(registry.list().unwrap(), before);
+    assert!(!fixture.cwd.join("native-requests.jsonl").exists());
+    assert_eq!(
+        execution
+            .execute(
+                "agent.commands.complete.request",
+                json!({
+                    "agentId":"uncreated-draft", "text":"/review ", "cursor":8
+                })
+            )
+            .await
+            .unwrap_err(),
+        ErrorCode::AgentNotFound
     );
     execution.shutdown().await.unwrap();
 }
