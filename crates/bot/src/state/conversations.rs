@@ -364,6 +364,24 @@ impl State {
         allowed_senders.push(sender);
         self.save_catalog(catalog)
     }
+    /// Whether any channel not deleted, enabled or not, already uses this Photon project.
+    pub(crate) fn photon_project_claimed(&self, project: &str) -> bool {
+        self.catalog.channels.iter().any(|channel| {
+            !channel.deleted
+                && matches!(
+                    &channel.config,
+                    ChannelConfig::PhotonImessage { project_id, .. } if project_id == project
+                )
+        })
+    }
+    pub(crate) fn channel_cursor(&self, id: ChannelId) -> Result<Option<i64>, ErrorCode> {
+        self.catalog
+            .channels
+            .iter()
+            .find(|channel| channel.id == id)
+            .map(|channel| channel.cursor)
+            .ok_or(ErrorCode::BotNotFound)
+    }
     pub(crate) fn advance_cursor(&mut self, id: ChannelId, cursor: i64) -> Result<(), ErrorCode> {
         let mut catalog = self.catalog.clone();
         let channel = catalog

@@ -120,8 +120,8 @@ fn start_request(token: &str) -> TelegramPairStart {
     }
 }
 
-fn request(pairing_id: Uuid) -> TelegramPairRequest {
-    TelegramPairRequest {
+fn request(pairing_id: Uuid) -> PairRequest {
+    PairRequest {
         workspace_id: WORKSPACE.into(),
         pairing_id,
     }

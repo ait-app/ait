@@ -183,6 +183,40 @@ export const ja: TranslationResources = {
     qqPairButton: "ペアリングコードを取得",
     qqPairHint:
       "コード: {{code}}。プライベートチャットでボットに送るか、QQ グループでボットを @ メンションして送信してください。1 回のみ有効で、10 分後に期限切れになります。",
+    imessage: "iMessage",
+    imessageGuideStep1: "app.beta.photon.codes で Photon Beta プロジェクトを作成します。",
+    imessageGuideStep2:
+      "そのプロジェクトで project:read, project:write, platforms:read、platforms:write の権限を持つ API キーを作成します。",
+    imessageGuideStep3:
+      "下に Project ID と API キー、自分の電話番号または iMessage のメールアドレスを入力します。",
+    imessagePhotonOpen: "Photon を開く",
+    imessagePrivacyNotice:
+      "このボットとのメッセージは Photon のサービスを経由します。ダイレクトメッセージのみ対応しており、グループチャットには対応していません。",
+    imessageProjectId: "Project ID",
+    imessageApiKey: "API キー",
+    imessageApiKeyHint: "Ait は Photon でキーを検証し、このホストに非公開で保存します。",
+    imessageHandle: "自分の電話番号または iMessage のメールアドレス",
+    imessageHandleHint:
+      "iMessage の送信に使うアドレスです。電話番号は +14155550123 のような国際形式で入力してください。",
+    imessageContinue: "続行",
+    imessagePairPhoneNumber: "送信先",
+    imessagePairCode: "コード",
+    imessagePairWaiting:
+      "必ず {{handle}} から、SMS ではなく iMessage でこのコードを送信してください。QR コードをスキャンするかリンクを開くと、コードが自動で入力されます。完了するまでこのページを開いたままにしてください。",
+    imessagePairExpires: "コードの有効期限は {{minutes}} 分です。",
+    imessagePairOpen: "メッセージで開く",
+    imessagePairQrLabel: "コードを入力した状態でメッセージを開く QR コード",
+    imessageInvalidKey:
+      "Photon がこの Project ID または API キーを拒否しました。両方を確認し、キーに 4 つの権限がすべてあることを確かめてください。",
+    imessageInvalidHandle:
+      "+14155550123 のような国際形式の電話番号、または iMessage のメールアドレスを入力してください。",
+    imessageDedicatedLine:
+      "この Photon プロジェクトは専用回線を使用しており、対応していません。共有回線のプロジェクトを使用してください。",
+    imessageAlreadyConnected:
+      "この Photon プロジェクトはこのホストのチャンネルに既に接続されています。先にそのチャンネルを削除するか、別のプロジェクトを使用してください。",
+    imessageExpired: "このコードは期限切れです。続行して新しいコードを取得してください。",
+    imessageUnavailable:
+      "Photon に接続できませんでした。このホストの接続を確認して再試行してください。",
     deleteChannel: "チャンネルを削除",
     deleteChannelConfirm: "このチャンネルを削除しますか？外部との接続は切断されます。",
     status: {

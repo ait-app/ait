@@ -22,6 +22,15 @@ const TelegramPairFailureSchema = z.enum([
 
 const ChannelScanFailureSchema = z.enum(["expired", "alreadyConnected", "unavailable"]);
 
+const ImessagePairFailureSchema = z.enum([
+  "invalidKey",
+  "invalidHandle",
+  "dedicatedLine",
+  "alreadyConnected",
+  "expired",
+  "unavailable",
+]);
+
 export const BOT_REQUEST_SCHEMAS = [
   z.strictObject({
     type: z.literal("bot.get.request"),
@@ -191,6 +200,26 @@ export const BOT_REQUEST_SCHEMAS = [
   }),
   z.strictObject({
     type: z.literal("bot.channel.telegram.pair.cancel.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    pairingId: z.guid(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.imessage.pair.start.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    projectId: z.string(),
+    apiKey: z.string(),
+    handle: z.string(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.imessage.pair.status.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    pairingId: z.guid(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.imessage.pair.cancel.request"),
     requestId: z.string(),
     workspaceId: WorkspaceIdSchema,
     pairingId: z.guid(),
@@ -427,6 +456,32 @@ export const BOT_RESPONSE_SCHEMAS = [
     payload: z.object({ requestId: z.string(), code: z.string(), expiresInSeconds: z.number() }),
   }),
   z.object({
+    type: z.literal("bot.channel.imessage.pair.start.response"),
+    payload: z.object({
+      requestId: z.string(),
+      state: z.enum(["waiting", "failed"]),
+      reason: ImessagePairFailureSchema.optional(),
+      pairingId: z.guid().optional(),
+      phoneNumber: z.string().optional(),
+      code: z.string().optional(),
+      url: z.string().optional(),
+      expiresInSeconds: z.number().optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.imessage.pair.status.response"),
+    payload: z.object({
+      requestId: z.string(),
+      state: z.enum(["waiting", "complete", "failed"]),
+      reason: ImessagePairFailureSchema.optional(),
+      channel: BotChannelSchema.optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.imessage.pair.cancel.response"),
+    payload: z.object({ requestId: z.string(), cancelled: z.boolean() }),
+  }),
+  z.object({
     type: z.literal("bot.conversation.list.response"),
     payload: z.object({ requestId: z.string(), conversations: z.array(BotConversationSchema) }),
   }),
@@ -517,12 +572,18 @@ export const BOT_QQ_SETUP_METHODS = [
   "bot.channel.qq.connect.request",
   "bot.channel.qq.pair.request",
 ] as const;
+export const BOT_IMESSAGE_SETUP_METHODS = [
+  "bot.channel.imessage.pair.start.request",
+  "bot.channel.imessage.pair.status.request",
+  "bot.channel.imessage.pair.cancel.request",
+] as const;
 const OPTIONAL_BOT_METHODS: readonly string[] = [
   ...BOT_PERMISSION_METHODS,
   ...BOT_FEISHU_SETUP_METHODS,
   ...BOT_TELEGRAM_SETUP_METHODS,
   ...BOT_WEIXIN_SETUP_METHODS,
   ...BOT_QQ_SETUP_METHODS,
+  ...BOT_IMESSAGE_SETUP_METHODS,
 ];
 export const BOT_METHODS = BOT_REQUEST_SCHEMAS.map((schema) => schema.shape.type.value).filter(
   (method) => !OPTIONAL_BOT_METHODS.includes(method),
