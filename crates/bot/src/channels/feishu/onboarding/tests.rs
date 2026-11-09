@@ -133,7 +133,7 @@ impl Harness {
             .onboarding
             .start(
                 &self.bots,
-                FeishuScanStart {
+                ScanStart {
                     workspace_id: WORKSPACE.into(),
                     allow_groups: true,
                 },
@@ -172,8 +172,8 @@ impl Harness {
     }
 }
 
-fn request(scan_id: Uuid) -> FeishuScanRequest {
-    FeishuScanRequest {
+fn request(scan_id: Uuid) -> ScanRequest {
+    ScanRequest {
         workspace_id: WORKSPACE.into(),
         scan_id,
     }
@@ -426,7 +426,7 @@ async fn a_scan_requires_an_active_bot() {
         .onboarding
         .start(
             &harness.bots,
-            FeishuScanStart {
+            ScanStart {
                 workspace_id: WORKSPACE.into(),
                 allow_groups: false,
             },

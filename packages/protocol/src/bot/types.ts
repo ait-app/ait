@@ -49,6 +49,20 @@ export const BotChannelConfigSchema = z.discriminatedUnion("kind", [
     allowedSenders: z.array(z.string()),
     allowGroups: z.boolean().default(false),
   }),
+  z.strictObject({
+    kind: z.literal("weixin"),
+    accountId: z.string(),
+    baseUrl: z.string(),
+    tokenRef: z.string(),
+    allowedSenders: z.array(z.string()),
+  }),
+  z.strictObject({
+    kind: z.literal("qq"),
+    appId: z.string(),
+    secretRef: z.string(),
+    allowedSenders: z.array(z.string()),
+    allowGroups: z.boolean().default(false),
+  }),
 ]);
 export const BotChannelSchema = z.object({
   id: z.guid(),

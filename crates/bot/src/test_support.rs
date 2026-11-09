@@ -73,6 +73,32 @@ impl Credentials for NoCredentials {
     }
 }
 
+/// Credentials port that keeps stored secrets in memory.
+#[derive(Debug, Default)]
+pub(crate) struct MemorySecrets(Mutex<BTreeMap<domain::ChannelId, String>>);
+impl MemorySecrets {
+    pub(crate) fn stored(&self) -> Vec<String> {
+        self.0.lock().unwrap().values().cloned().collect()
+    }
+}
+impl Credentials for MemorySecrets {
+    fn resolve(&self, _: &str) -> Result<SecretString, ErrorCode> {
+        Err(ErrorCode::BotIo)
+    }
+    fn store(&self, channel: domain::ChannelId, secret: &SecretString) -> Result<(), ErrorCode> {
+        use secrecy::ExposeSecret;
+        self.0
+            .lock()
+            .unwrap()
+            .insert(channel, secret.expose_secret().to_owned());
+        Ok(())
+    }
+    fn delete(&self, channel: domain::ChannelId) -> Result<(), ErrorCode> {
+        self.0.lock().unwrap().remove(&channel);
+        Ok(())
+    }
+}
+
 pub(crate) struct Fixture {
     pub(crate) root: tempfile::TempDir,
     pub(crate) store: Arc<FileStore>,

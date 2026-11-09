@@ -152,6 +152,31 @@ export const ko: TranslationResources = {
       "Telegram에 연결할 수 없습니다. 이 호스트의 연결을 확인한 뒤 다시 시도하세요.",
     telegramUseEnvironment: "환경 변수 사용",
     telegramUseGuided: "안내 설정 사용",
+    weixin: "WeChat",
+    qq: "QQ",
+    weixinScanHint:
+      "WeChat으로 QR 코드를 스캔해 봇을 연결합니다. 비공개 채팅에서 나만 메시지를 보낼 수 있습니다.",
+    weixinScanWaiting:
+      "WeChat으로 이 코드를 스캔하고 휴대폰에서 확인하세요. 완료될 때까지 이 페이지를 열어 두세요.",
+    weixinScanOpen: "WeChat에서 열기",
+    weixinScanQrLabel: "WeChat 설정 QR 코드",
+    weixinScanUnavailable: "WeChat 설정을 완료할 수 없습니다. 다시 시도하세요.",
+    qqScanHint:
+      "QQ로 QR 코드를 스캔합니다. QQ가 봇을 만들고 Ait가 연결하며, 변경하기 전까지 나만 메시지를 보낼 수 있습니다.",
+    qqScanWaiting:
+      "QQ로 이 코드를 스캔하고 새 봇을 승인하세요. 완료될 때까지 이 페이지를 열어 두세요.",
+    qqScanOpen: "QQ에서 열기",
+    qqScanQrLabel: "QQ 설정 QR 코드",
+    qqScanUnavailable: "QQ 설정을 완료할 수 없습니다. 다시 시도하거나 자격 증명을 직접 입력하세요.",
+    scanAlreadyConnected:
+      "이 봇은 이미 이 호스트의 채널에 연결되어 있습니다. 해당 채널을 삭제한 후 다시 시도하세요.",
+    qqManualStep1: "q.qq.com에서 봇을 만들고 App ID와 App Secret을 여기에 복사하세요.",
+    qqManualStep2:
+      "채널을 추가한 후 해당 행에서 페어링 코드를 받아 QQ에서 봇에게 보내세요. 그러면 허용된 발신자가 됩니다.",
+    qqAppSecretHint: "Ait는 QQ에서 App Secret을 확인하고 이 호스트에 비공개로 저장합니다.",
+    qqPairButton: "페어링 코드 받기",
+    qqPairHint:
+      "코드: {{code}}. 비공개 채팅으로 봇에게 보내거나 QQ 그룹에서 봇을 @멘션하여 보내세요. 한 번만 사용할 수 있으며 10분 후 만료됩니다.",
     deleteChannel: "채널 삭제",
     deleteChannelConfirm: "이 채널을 삭제할까요? 외부 연결이 해제됩니다.",
     status: {

@@ -160,6 +160,33 @@ export const es: TranslationResources = {
       "No se pudo conectar con Telegram. Comprueba la conexión de este host y reintenta.",
     telegramUseEnvironment: "Usar una variable de entorno",
     telegramUseGuided: "Usar la configuración guiada",
+    weixin: "WeChat",
+    qq: "QQ",
+    weixinScanHint:
+      "Escanea un código QR con WeChat para conectar un bot. Solo tú puedes escribirle, en chats privados.",
+    weixinScanWaiting:
+      "Escanea este código con WeChat y confirma en tu teléfono. Mantén esta página abierta hasta que termine.",
+    weixinScanOpen: "Abrir en WeChat",
+    weixinScanQrLabel: "Código QR de configuración de WeChat",
+    weixinScanUnavailable: "No se pudo completar la configuración con WeChat. Inténtalo de nuevo.",
+    qqScanHint:
+      "Escanea un código QR con QQ. QQ crea un bot y Ait lo conecta; solo tú puedes escribirle hasta que lo cambies.",
+    qqScanWaiting:
+      "Escanea este código con QQ y aprueba el nuevo bot. Mantén esta página abierta hasta que termine.",
+    qqScanOpen: "Abrir en QQ",
+    qqScanQrLabel: "Código QR de configuración de QQ",
+    qqScanUnavailable:
+      "No se pudo completar la configuración con QQ. Inténtalo de nuevo o introduce las credenciales manualmente.",
+    scanAlreadyConnected:
+      "Este bot ya está conectado a un canal en este host. Elimina ese canal e inténtalo de nuevo.",
+    qqManualStep1: "Crea un bot en q.qq.com y copia aquí su App ID y App Secret.",
+    qqManualStep2:
+      "Después de añadir el canal, obtén un código de vinculación en su fila y envíaselo al bot en QQ. Así serás un remitente permitido.",
+    qqAppSecretHint:
+      "Ait comprueba el App Secret con QQ y lo guarda de forma privada en este host.",
+    qqPairButton: "Obtener código de vinculación",
+    qqPairHint:
+      "Código: {{code}}. Envíaselo al bot en un chat privado o menciona al bot con él en un grupo de QQ. Funciona una vez y caduca en 10 minutos.",
     deleteChannel: "Eliminar canal",
     deleteChannelConfirm: "¿Eliminar este canal? Su conexión externa se desconectará.",
     status: {

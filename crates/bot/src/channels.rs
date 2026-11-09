@@ -1,6 +1,8 @@
 pub(crate) mod feishu;
 mod onboarding;
+pub(crate) mod qq;
 pub(crate) mod telegram;
+pub(crate) mod weixin;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -10,6 +12,7 @@ use domain::bot::{Channel, ChannelConfig, DeliveryStatus};
 use model::ErrorCode;
 use secrecy::SecretString;
 use serde_json::json;
+use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_util::sync::CancellationToken;
 
 use crate::ports::Credentials;
@@ -18,6 +21,8 @@ use crate::service::{Admission, Bots};
 /// Reply sent when a conversation's own backlog refuses a message, which is then dropped.
 const BUSY_NOTICE: &str =
     "This conversation is busy with earlier messages; please resend this one later.";
+/// Longest wait between admission attempts while the Bot's global backlog is full.
+const MAX_BACKLOG_RETRY: Duration = Duration::from_secs(30);
 
 /// What a receiver does with one inbound message after asking the Bot to admit it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,6 +57,63 @@ async fn admit(bots: &Bots, incoming: Incoming) -> Result<Disposition, ErrorCode
         }
         Err(error) => Err(error),
     }
+}
+
+/// Admit one message, waiting out a full Bot backlog; the result is never `Retry`.
+/// Callers run inside a cancellable `select!`, which drops this future on shutdown.
+async fn admit_waiting(bots: &Bots, incoming: Incoming) -> Result<Disposition, ErrorCode> {
+    let mut backoff = Duration::from_secs(1);
+    loop {
+        match admit(bots, incoming.clone()).await? {
+            Disposition::Retry => {
+                tokio::time::sleep(backoff).await;
+                backoff = (backoff * 2).min(MAX_BACKLOG_RETRY);
+            }
+            settled => return Ok(settled),
+        }
+    }
+}
+
+/// Run a receiver beside its delivery loop, which must watch `stop`. Ending delivery that way
+/// records an interrupted send as uncertain; dropping it would strand the turn as sending.
+async fn supervise<R, S>(
+    cancel: &CancellationToken,
+    stop: &CancellationToken,
+    receiving: R,
+    sending: S,
+) -> Result<(), ErrorCode>
+where
+    R: Future<Output = Result<(), ErrorCode>>,
+    S: Future<Output = Result<(), ErrorCode>>,
+{
+    tokio::pin!(sending);
+    let received = tokio::select! {
+        () = cancel.cancelled() => Ok(()),
+        result = receiving => result,
+        result = &mut sending => return result,
+    };
+    stop.cancel();
+    sending.await?;
+    received
+}
+
+type Socket =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+/// Open a platform WebSocket with the frame limits every channel shares.
+async fn connect_socket(endpoint: String) -> Result<Socket, ErrorCode> {
+    tokio_tungstenite::connect_async_with_config(
+        endpoint,
+        Some(
+            WebSocketConfig::default()
+                .max_message_size(Some(1024 * 1024))
+                .max_frame_size(Some(1024 * 1024)),
+        ),
+        false,
+    )
+    .await
+    .map(|(socket, _)| socket)
+    .map_err(|_| ErrorCode::BotIo)
 }
 
 #[derive(Clone, Debug)]
@@ -112,8 +174,12 @@ async fn attempt(
 ) -> Result<(), ErrorCode> {
     let reference = match &channel.config {
         ChannelConfig::Builtin => return Ok(()),
-        ChannelConfig::Telegram { token_ref, .. } => token_ref,
-        ChannelConfig::Feishu { secret_ref, .. } => secret_ref,
+        ChannelConfig::Telegram { token_ref, .. } | ChannelConfig::Weixin { token_ref, .. } => {
+            token_ref
+        }
+        ChannelConfig::Feishu { secret_ref, .. } | ChannelConfig::Qq { secret_ref, .. } => {
+            secret_ref
+        }
     };
     let secret = credentials.resolve(reference)?;
     match &channel.config {
@@ -122,6 +188,8 @@ async fn attempt(
             telegram::run(bots, channel, client, &secret, cancel).await
         }
         ChannelConfig::Feishu { .. } => feishu::run(bots, channel, client, &secret, cancel).await,
+        ChannelConfig::Weixin { .. } => weixin::run(bots, channel, client, &secret, cancel).await,
+        ChannelConfig::Qq { .. } => qq::run(bots, channel, client, &secret, cancel).await,
     }
 }
 

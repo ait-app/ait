@@ -8,6 +8,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## Bot
 
+- [ADR-225：微信与 QQ Channel 的扫码接入](bot/adr-225-weixin-and-qq-channels.md)
 - [ADR-224：飞书扫码接入与 daemon 保存的 Channel 凭据](bot/adr-224-feishu-scan-onboarding-and-stored-secrets.md)
 - [ADR-222：每个 Provider 单一 Agent 模式，Bot 不创建 Workspace](bot/adr-222-single-agent-mode-no-bot-workspaces.md)
 - [ADR-221：以子 Agent 形式只读查看 Bot 内部会话](bot/adr-221-read-only-bot-session-inspection.md)

@@ -203,6 +203,32 @@ export const en = {
     telegramUnavailable: "Could not reach Telegram. Check this host's connection, then try again.",
     telegramUseEnvironment: "Use an environment variable instead",
     telegramUseGuided: "Use guided setup instead",
+    weixin: "WeChat",
+    qq: "QQ",
+    weixinScanHint:
+      "Scan a QR code with WeChat to connect a bot. Only you can message it, in private chats.",
+    weixinScanWaiting:
+      "Scan this code with WeChat and confirm on your phone. Keep this page open until it finishes.",
+    weixinScanOpen: "Open in WeChat",
+    weixinScanQrLabel: "WeChat setup QR code",
+    weixinScanUnavailable: "Could not finish setup with WeChat. Try again.",
+    qqScanHint:
+      "Scan a QR code with QQ. QQ creates a bot for you and Ait connects it, and only you can message it until you change that.",
+    qqScanWaiting:
+      "Scan this code with QQ and approve the new bot. Keep this page open until it finishes.",
+    qqScanOpen: "Open in QQ",
+    qqScanQrLabel: "QQ setup QR code",
+    qqScanUnavailable:
+      "Could not finish setup with QQ. Try again, or enter the credentials manually.",
+    scanAlreadyConnected:
+      "This bot is already connected to a channel on this host. Delete that channel, then try again.",
+    qqManualStep1: "Create a bot at q.qq.com and copy its App ID and App Secret here.",
+    qqManualStep2:
+      "After adding the channel, get a pairing code from its row and send it to the bot in QQ. That makes you an allowed sender.",
+    qqAppSecretHint: "Ait checks the App Secret with QQ and stores it privately on this host.",
+    qqPairButton: "Get pairing code",
+    qqPairHint:
+      "Code: {{code}}. Send it to the bot in a private chat, or @mention the bot with it in a QQ group. It works once and expires in 10 minutes.",
     deleteChannel: "Delete channel",
     deleteChannelConfirm: "Delete this channel? Its external connection will be disconnected.",
     status: {

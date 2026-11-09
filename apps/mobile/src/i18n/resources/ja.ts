@@ -157,6 +157,32 @@ export const ja: TranslationResources = {
       "Telegram に接続できませんでした。このホストの接続を確認して再試行してください。",
     telegramUseEnvironment: "環境変数を使用",
     telegramUseGuided: "ガイド付き設定を使用",
+    weixin: "WeChat",
+    qq: "QQ",
+    weixinScanHint:
+      "WeChat で QR コードをスキャンしてボットを接続します。プライベートチャットであなただけがメッセージを送れます。",
+    weixinScanWaiting:
+      "WeChat でこのコードをスキャンし、スマートフォンで確認してください。完了するまでこのページを開いたままにしてください。",
+    weixinScanOpen: "WeChat で開く",
+    weixinScanQrLabel: "WeChat 設定用 QR コード",
+    weixinScanUnavailable: "WeChat の設定を完了できませんでした。もう一度お試しください。",
+    qqScanHint:
+      "QQ で QR コードをスキャンします。QQ がボットを作成して Ait が接続します。変更するまであなただけがメッセージを送れます。",
+    qqScanWaiting:
+      "QQ でこのコードをスキャンし、新しいボットを承認してください。完了するまでこのページを開いたままにしてください。",
+    qqScanOpen: "QQ で開く",
+    qqScanQrLabel: "QQ 設定用 QR コード",
+    qqScanUnavailable:
+      "QQ の設定を完了できませんでした。もう一度試すか、認証情報を手動で入力してください。",
+    scanAlreadyConnected:
+      "このボットはこのホストのチャンネルに既に接続されています。そのチャンネルを削除してからもう一度お試しください。",
+    qqManualStep1: "q.qq.com でボットを作成し、App ID と App Secret をここにコピーします。",
+    qqManualStep2:
+      "チャンネルを追加したら、その行でペアリングコードを取得し、QQ でボットに送信してください。これで許可された送信者になります。",
+    qqAppSecretHint: "Ait は App Secret を QQ で確認し、このホストに非公開で保存します。",
+    qqPairButton: "ペアリングコードを取得",
+    qqPairHint:
+      "コード: {{code}}。プライベートチャットでボットに送るか、QQ グループでボットを @ メンションして送信してください。1 回のみ有効で、10 分後に期限切れになります。",
     deleteChannel: "チャンネルを削除",
     deleteChannelConfirm: "このチャンネルを削除しますか？外部との接続は切断されます。",
     status: {

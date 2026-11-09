@@ -337,7 +337,10 @@ fn lane(message: &Incoming) -> usize {
         return 2;
     }
     // Waits on external platforms, which must not stall ordinary workspace requests.
-    if method.starts_with("bot.channel.feishu.") || method.starts_with("bot.channel.telegram.") {
+    if ["feishu", "telegram", "weixin", "qq"]
+        .iter()
+        .any(|platform| method.starts_with(&format!("bot.channel.{platform}.")))
+    {
         return 2;
     }
     0

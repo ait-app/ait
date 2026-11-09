@@ -10,6 +10,18 @@ use crate::protocol::{ConversationRequest, History, MemoryUpdate, Send, Workspac
 /// Queued and running turns admitted across all Bots before channel input must wait.
 const MAX_BACKLOG: usize = 512;
 
+/// Longest reply reference; conversation tokens can exceed the general identifier limit.
+const MAX_REPLY_REFERENCE: usize = 4096;
+/// Longest opaque update position kept in the catalog.
+const MAX_SYNC_TOKEN: usize = 64 * 1024;
+const MAX_ALLOWED_SENDERS: usize = 256;
+
+fn valid_reply_reference(reference: &str) -> bool {
+    !reference.is_empty()
+        && reference.len() <= MAX_REPLY_REFERENCE
+        && !reference.chars().any(char::is_control)
+}
+
 impl State {
     pub(super) fn open(&mut self, request: &WorkspaceRequest) -> Result<Value, ErrorCode> {
         let bot = self.current(&request.workspace_id)?;
@@ -114,7 +126,7 @@ impl State {
             || incoming
                 .reply_to
                 .as_ref()
-                .is_some_and(|id| !model::valid_id(id))
+                .is_some_and(|reference| !valid_reply_reference(reference))
         {
             return Err(ErrorCode::InvalidMessage);
         }
@@ -306,6 +318,51 @@ impl State {
             return Err(ErrorCode::BotIo);
         }
         Ok(json!({"revision":super::sha256_hex(&request.text)}))
+    }
+    pub(crate) fn advance_sync(&mut self, id: ChannelId, token: String) -> Result<(), ErrorCode> {
+        if token.len() > MAX_SYNC_TOKEN {
+            return Err(ErrorCode::InvalidMessage);
+        }
+        let mut catalog = self.catalog.clone();
+        let channel = catalog
+            .channels
+            .iter_mut()
+            .find(|channel| channel.id == id)
+            .ok_or(ErrorCode::BotNotFound)?;
+        if channel.sync_token.as_deref() != Some(token.as_str()) {
+            channel.sync_token = Some(token);
+            self.save_catalog(catalog)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn add_allowed_sender(
+        &mut self,
+        id: ChannelId,
+        sender: String,
+    ) -> Result<(), ErrorCode> {
+        if !model::valid_id(&sender) {
+            return Err(ErrorCode::InvalidMessage);
+        }
+        let mut catalog = self.catalog.clone();
+        let channel = catalog
+            .channels
+            .iter_mut()
+            .find(|channel| channel.id == id)
+            .ok_or(ErrorCode::BotNotFound)?;
+        let ChannelConfig::Qq {
+            allowed_senders, ..
+        } = &mut channel.config
+        else {
+            return Err(ErrorCode::InvalidMessage);
+        };
+        if allowed_senders.contains(&sender) {
+            return Ok(());
+        }
+        if allowed_senders.len() >= MAX_ALLOWED_SENDERS {
+            return Err(ErrorCode::ResourceExhausted);
+        }
+        allowed_senders.push(sender);
+        self.save_catalog(catalog)
     }
     pub(crate) fn advance_cursor(&mut self, id: ChannelId, cursor: i64) -> Result<(), ErrorCode> {
         let mut catalog = self.catalog.clone();

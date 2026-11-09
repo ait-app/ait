@@ -23,7 +23,7 @@ use crate::channels::onboarding::{
 };
 use crate::channels::{expose, json_response};
 use crate::ports::stored_credential_reference;
-use crate::protocol::{FeishuConnect, FeishuScanRequest, FeishuScanStart};
+use crate::protocol::{FeishuConnect, ScanRequest, ScanStart};
 use crate::service::Bots;
 use crate::state::StoredChannel;
 
@@ -113,11 +113,7 @@ impl Onboarding {
     }
 
     /// Begin a scan, replacing any earlier scan for the Workspace.
-    pub(crate) async fn start(
-        &self,
-        bots: &Bots,
-        request: FeishuScanStart,
-    ) -> Result<Value, ErrorCode> {
+    pub(crate) async fn start(&self, bots: &Bots, request: ScanStart) -> Result<Value, ErrorCode> {
         bots.check_channel_admission(request.workspace_id.clone())
             .await?;
         let client = http_client()?;
@@ -176,7 +172,7 @@ impl Onboarding {
     pub(crate) async fn status(
         &self,
         bots: &Bots,
-        request: FeishuScanRequest,
+        request: ScanRequest,
     ) -> Result<Value, ErrorCode> {
         let Some(scan) = self.scans.get(&request.workspace_id) else {
             return Ok(failed(FAILED_EXPIRED));
@@ -228,7 +224,7 @@ impl Onboarding {
     }
 
     /// Stop a scan so a later approval creates no channel; a finished channel is unaffected.
-    pub(crate) async fn cancel(&self, request: FeishuScanRequest) -> Result<Value, ErrorCode> {
+    pub(crate) async fn cancel(&self, request: ScanRequest) -> Result<Value, ErrorCode> {
         let Some(entry) = self.scans.get(&request.workspace_id) else {
             return Ok(json!({"cancelled":false}));
         };

@@ -163,6 +163,33 @@ export const fr: TranslationResources = {
       "Impossible de joindre Telegram. Vérifiez la connexion de cet hôte, puis réessayez.",
     telegramUseEnvironment: "Utiliser une variable d'environnement",
     telegramUseGuided: "Utiliser la configuration guidée",
+    weixin: "WeChat",
+    qq: "QQ",
+    weixinScanHint:
+      "Scannez un code QR avec WeChat pour connecter un bot. Vous seul pouvez lui écrire, en discussion privée.",
+    weixinScanWaiting:
+      "Scannez ce code avec WeChat et confirmez sur votre téléphone. Gardez cette page ouverte jusqu’à la fin.",
+    weixinScanOpen: "Ouvrir dans WeChat",
+    weixinScanQrLabel: "Code QR de configuration WeChat",
+    weixinScanUnavailable: "Impossible de terminer la configuration avec WeChat. Réessayez.",
+    qqScanHint:
+      "Scannez un code QR avec QQ. QQ crée un bot et Ait le connecte ; vous seul pouvez lui écrire jusqu’à ce que vous changiez cela.",
+    qqScanWaiting:
+      "Scannez ce code avec QQ et approuvez le nouveau bot. Gardez cette page ouverte jusqu’à la fin.",
+    qqScanOpen: "Ouvrir dans QQ",
+    qqScanQrLabel: "Code QR de configuration QQ",
+    qqScanUnavailable:
+      "Impossible de terminer la configuration avec QQ. Réessayez ou saisissez les identifiants manuellement.",
+    scanAlreadyConnected:
+      "Ce bot est déjà connecté à un canal sur cet hôte. Supprimez ce canal, puis réessayez.",
+    qqManualStep1: "Créez un bot sur q.qq.com et copiez ici son App ID et son App Secret.",
+    qqManualStep2:
+      "Après avoir ajouté le canal, obtenez un code d’appairage sur sa ligne et envoyez-le au bot dans QQ. Vous deviendrez un expéditeur autorisé.",
+    qqAppSecretHint:
+      "Ait vérifie l’App Secret auprès de QQ et le stocke de manière privée sur cet hôte.",
+    qqPairButton: "Obtenir un code d’appairage",
+    qqPairHint:
+      "Code : {{code}}. Envoyez-le au bot en discussion privée, ou mentionnez le bot avec ce code dans un groupe QQ. Il fonctionne une seule fois et expire dans 10 minutes.",
     deleteChannel: "Supprimer le canal",
     deleteChannelConfirm: "Supprimer ce canal ? Sa connexion externe sera déconnectée.",
     status: {

@@ -129,20 +129,40 @@ fn validate_channel(id: ChannelId, config: &ChannelConfig) -> Result<(), ErrorCo
             secret_ref,
             allowed_senders,
             ..
+        }
+        | ChannelConfig::Qq {
+            app_id,
+            secret_ref,
+            allowed_senders,
+            ..
         } => {
             if !model::valid_id(app_id) {
                 return Err(ErrorCode::InvalidMessage);
             }
             (secret_ref, allowed_senders)
         }
+        ChannelConfig::Weixin {
+            account_id,
+            base_url,
+            token_ref,
+            allowed_senders,
+        } => {
+            // The base URL receives the bot token, so it must stay on WeChat's own hosts.
+            if !model::valid_id(account_id) || !crate::channels::weixin::trusted_base(base_url) {
+                return Err(ErrorCode::InvalidMessage);
+            }
+            (token_ref, allowed_senders)
+        }
     };
+    // A QQ channel connected with pasted credentials has no sender until one pairs.
+    let needs_sender = !matches!(config, ChannelConfig::Qq { .. });
     // A stored reference names only its own channel, so no client can borrow another's secret.
     let reference_allowed = match crate::ports::stored_credential_channel(reference) {
         Some(owner) => owner == id,
         None => crate::ports::valid_credential_reference(reference),
     };
     if !reference_allowed
-        || senders.is_empty()
+        || (needs_sender && senders.is_empty())
         || senders.len() > 256
         || senders.iter().any(|sender| !model::valid_id(sender))
     {
@@ -156,6 +176,8 @@ fn account(config: &ChannelConfig) -> Option<(&'static str, &str)> {
         ChannelConfig::Builtin => None,
         ChannelConfig::Telegram { token_ref, .. } => Some(("telegram", token_ref)),
         ChannelConfig::Feishu { app_id, .. } => Some(("feishu", app_id)),
+        ChannelConfig::Weixin { account_id, .. } => Some(("weixin", account_id)),
+        ChannelConfig::Qq { app_id, .. } => Some(("qq", app_id)),
     }
 }
 
@@ -191,6 +213,7 @@ impl State {
             config: ChannelConfig::Builtin,
             enabled: true,
             cursor: None,
+            sync_token: None,
             deleted: false,
         });
         let view = super::view(&bot);
@@ -346,6 +369,7 @@ impl State {
             config: request.config,
             enabled: request.enabled,
             cursor: None,
+            sync_token: None,
             deleted: false,
         };
         let mut catalog = self.catalog.clone();

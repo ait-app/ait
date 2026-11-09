@@ -159,6 +159,34 @@ export const ptBR: TranslationResources = {
       "Não foi possível conectar ao Telegram. Verifique a conexão deste host e tente novamente.",
     telegramUseEnvironment: "Usar uma variável de ambiente",
     telegramUseGuided: "Usar a configuração guiada",
+    weixin: "WeChat",
+    qq: "QQ",
+    weixinScanHint:
+      "Escaneie um código QR com o WeChat para conectar um bot. Só você pode enviar mensagens a ele, em conversas privadas.",
+    weixinScanWaiting:
+      "Escaneie este código com o WeChat e confirme no celular. Mantenha esta página aberta até terminar.",
+    weixinScanOpen: "Abrir no WeChat",
+    weixinScanQrLabel: "Código QR de configuração do WeChat",
+    weixinScanUnavailable:
+      "Não foi possível concluir a configuração com o WeChat. Tente novamente.",
+    qqScanHint:
+      "Escaneie um código QR com o QQ. O QQ cria um bot e o Ait o conecta; só você pode enviar mensagens até mudar isso.",
+    qqScanWaiting:
+      "Escaneie este código com o QQ e aprove o novo bot. Mantenha esta página aberta até terminar.",
+    qqScanOpen: "Abrir no QQ",
+    qqScanQrLabel: "Código QR de configuração do QQ",
+    qqScanUnavailable:
+      "Não foi possível concluir a configuração com o QQ. Tente novamente ou insira as credenciais manualmente.",
+    scanAlreadyConnected:
+      "Este bot já está conectado a um canal neste host. Exclua esse canal e tente novamente.",
+    qqManualStep1: "Crie um bot em q.qq.com e copie aqui o App ID e o App Secret.",
+    qqManualStep2:
+      "Depois de adicionar o canal, obtenha um código de pareamento na linha dele e envie ao bot no QQ. Assim você se torna um remetente permitido.",
+    qqAppSecretHint:
+      "O Ait verifica o App Secret com o QQ e o armazena de forma privada neste host.",
+    qqPairButton: "Obter código de pareamento",
+    qqPairHint:
+      "Código: {{code}}. Envie ao bot em uma conversa privada ou mencione o bot com ele em um grupo do QQ. Funciona uma vez e expira em 10 minutos.",
     deleteChannel: "Excluir canal",
     deleteChannelConfirm: "Excluir este canal? A conexão externa será desconectada.",
     status: {

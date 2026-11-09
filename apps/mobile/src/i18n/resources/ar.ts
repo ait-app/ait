@@ -159,6 +159,31 @@ export const ar: TranslationResources = {
     telegramUnavailable: "تعذّر الاتصال بـ Telegram. تحقق من اتصال هذا المضيف ثم أعد المحاولة.",
     telegramUseEnvironment: "استخدام متغير بيئة بدلاً من ذلك",
     telegramUseGuided: "استخدام الإعداد الموجّه بدلاً من ذلك",
+    weixin: "WeChat",
+    qq: "QQ",
+    weixinScanHint:
+      "امسح رمز QR باستخدام WeChat لتوصيل روبوت. يمكنك أنت فقط مراسلته في المحادثات الخاصة.",
+    weixinScanWaiting:
+      "امسح هذا الرمز باستخدام WeChat وأكّد على هاتفك. أبقِ هذه الصفحة مفتوحة حتى يكتمل الإعداد.",
+    weixinScanOpen: "فتح في WeChat",
+    weixinScanQrLabel: "رمز QR لإعداد WeChat",
+    weixinScanUnavailable: "تعذّر إكمال الإعداد مع WeChat. حاول مرة أخرى.",
+    qqScanHint:
+      "امسح رمز QR باستخدام QQ. سينشئ QQ روبوتًا ويوصله Ait، ويمكنك أنت فقط مراسلته حتى تغيّر ذلك.",
+    qqScanWaiting:
+      "امسح هذا الرمز باستخدام QQ ووافق على الروبوت الجديد. أبقِ هذه الصفحة مفتوحة حتى يكتمل الإعداد.",
+    qqScanOpen: "فتح في QQ",
+    qqScanQrLabel: "رمز QR لإعداد QQ",
+    qqScanUnavailable: "تعذّر إكمال الإعداد مع QQ. حاول مرة أخرى أو أدخل بيانات الاعتماد يدويًا.",
+    scanAlreadyConnected:
+      "هذا الروبوت متصل بالفعل بقناة على هذا المضيف. احذف تلك القناة ثم حاول مرة أخرى.",
+    qqManualStep1: "أنشئ روبوتًا على q.qq.com وانسخ App ID وApp Secret هنا.",
+    qqManualStep2:
+      "بعد إضافة القناة، احصل على رمز الاقتران من صفها وأرسله إلى الروبوت في QQ. بذلك تصبح مرسلًا مسموحًا به.",
+    qqAppSecretHint: "يتحقق Ait من App Secret لدى QQ ويخزنه بشكل خاص على هذا المضيف.",
+    qqPairButton: "الحصول على رمز الاقتران",
+    qqPairHint:
+      "الرمز: {{code}}. أرسله إلى الروبوت في محادثة خاصة، أو أشر إلى الروبوت به في مجموعة QQ. يعمل مرة واحدة وتنتهي صلاحيته بعد 10 دقائق.",
     deleteChannel: "حذف القناة",
     deleteChannelConfirm: "هل تريد حذف هذه القناة؟ سيتم قطع اتصالها الخارجي.",
     status: {

@@ -11,10 +11,13 @@ use prost::Message;
 use secrecy::SecretString;
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
-use tokio_tungstenite::tungstenite::{Message as WsMessage, protocol::WebSocketConfig};
+use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tokio_util::sync::CancellationToken;
 
-use super::{BUSY_NOTICE, Disposition, Incoming, admit, chunks, deliver, expose, json_response};
+use super::{
+    BUSY_NOTICE, Disposition, Incoming, Socket, admit, chunks, connect_socket, deliver, expose,
+    json_response,
+};
 use crate::service::Bots;
 use frames::{Fragments, Frame, Header};
 
@@ -41,7 +44,7 @@ pub(super) async fn run(
     secret: &SecretString,
     cancel: &CancellationToken,
 ) -> Result<(), ErrorCode> {
-    run_at(bots, channel, (client, secret, API), cancel, connect).await
+    run_at(bots, channel, (client, secret, API), cancel, connect_socket).await
 }
 
 async fn run_at<F, Fut>(
@@ -138,29 +141,11 @@ where
     }
 }
 
-async fn connect(endpoint: String) -> Result<Socket, ErrorCode> {
-    tokio_tungstenite::connect_async_with_config(
-        endpoint,
-        Some(
-            WebSocketConfig::default()
-                .max_message_size(Some(1024 * 1024))
-                .max_frame_size(Some(1024 * 1024)),
-        ),
-        false,
-    )
-    .await
-    .map(|(socket, _)| socket)
-    .map_err(|_| ErrorCode::BotIo)
-}
-
 struct StreamOptions<'a> {
     service: i32,
     ping_interval: u64,
     bot_id: &'a str,
 }
-
-type Socket =
-    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 async fn receive(
     bots: &Bots,
