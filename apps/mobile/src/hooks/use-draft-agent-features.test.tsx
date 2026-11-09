@@ -103,3 +103,45 @@ it("keeps scoped role choices and drafts visible through a slow or failed model 
   expect(result.current.features).toHaveLength(0);
   client.clear();
 });
+
+it("never stores or applies a synthetic custom placeholder in a draft", async () => {
+  fixture.features.mockResolvedValue({
+    features: [
+      {
+        type: "select",
+        id: "modelPreset",
+        label: "Preset",
+        value: "__custom__",
+        options: [
+          {
+            id: "work",
+            label: "Work",
+            metadata: { source: "ait", configuration: { modelId: "opus" } },
+          },
+        ],
+      },
+    ],
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  const { result } = renderHook(
+    () =>
+      useDraftAgentFeatures({
+        serverId: "host",
+        provider: "claude",
+        cwd: "/project",
+        modelId: "opus",
+        modeId: null,
+        thinkingOptionId: null,
+        onApplyModelPreset: fixture.apply,
+      }),
+    { wrapper },
+  );
+  await waitFor(() => expect(result.current.features).toHaveLength(1));
+  act(() => result.current.setFeatureValue("modelPreset", "__custom__"));
+  expect(result.current.featureValues).toBeUndefined();
+  expect(fixture.apply).not.toHaveBeenCalled();
+  client.clear();
+});

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { AgentFeature } from "@ait/protocol/agent-types";
-import { modelPresetConfiguration, withModelPresetSelection } from "./model-presets";
+import {
+  isSyntheticPresetPlaceholder,
+  modelPresetConfiguration,
+  withModelPresetSelection,
+} from "./model-presets";
 import {
   applyFeatureValues,
   pruneFeatureValues,
@@ -126,4 +130,24 @@ describe("modelPresetConfiguration with a model-only preset", () => {
       })[0].value,
     ).toBe("plain");
   });
+});
+
+it("consumes only Ait synthetic custom values and preserves native OMP feature semantics", () => {
+  const managed: AgentFeature = {
+    type: "select",
+    id: "modelPreset",
+    label: "Preset",
+    value: "__custom__",
+    options: [
+      {
+        id: "work",
+        label: "Work",
+        metadata: { source: "ait", configuration: { modelId: "opus" } },
+      },
+    ],
+  };
+  expect(isSyntheticPresetPlaceholder([managed], "modelPreset", "__custom__")).toBe(true);
+  expect(isSyntheticPresetPlaceholder(features, "modelPreset", "__custom__")).toBe(false);
+  expect(isSyntheticPresetPlaceholder([managed], "modelPreset", "work")).toBe(false);
+  expect(isSyntheticPresetPlaceholder([managed], "modelRole.advisor", "__custom__")).toBe(false);
 });

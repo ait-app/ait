@@ -7,6 +7,7 @@ import { mergeProviderPreferences, useFormPreferences } from "./use-form-prefere
 import { useProvidersSnapshot } from "./use-providers-snapshot";
 import {
   isModelConfigurationFeature,
+  isSyntheticPresetPlaceholder,
   modelPresetConfiguration,
   withModelPresetSelection,
 } from "@/agent-controls/model-presets";
@@ -149,6 +150,7 @@ export function useDraftAgentFeatures(input: {
   const effectiveFeatureValues = Object.keys(featureValues).length > 0 ? featureValues : undefined;
   const setFeatureValue = useCallback(
     (featureId: string, value: unknown) => {
+      if (isSyntheticPresetPlaceholder(features, featureId, value)) return;
       let preset: AgentConfigApply | null;
       try {
         preset = modelPresetConfiguration(features, featureId, value);

@@ -541,3 +541,76 @@ describe("buildFeatureRequestKey", () => {
     );
   });
 });
+
+describe("provider-scoped preset cache", () => {
+  it.each(["slow", "failed"])(
+    "drops Claude presets immediately during a %s Codex query",
+    (query) => {
+      const model = openWithCatalog({ mode: "create" });
+      selectClaude(model);
+      model.setName("Scoped");
+      const key = model.getState().featureRequestKey!;
+      model.applyFeatures(key, [
+        {
+          type: "select",
+          id: "modelPreset",
+          label: "Preset",
+          value: "__custom__",
+          options: [
+            {
+              id: "claude-preset",
+              label: "Claude",
+              metadata: {
+                source: "ait",
+                configuration: {
+                  modelId: "claude-opus-5",
+                  featureValues: { "modelRole.advisor": "opus" },
+                },
+              },
+            },
+          ],
+        },
+      ]);
+      model.setProvider("codex", { label: "Codex" });
+      expect(model.getState().features).toEqual([]);
+      model.applyFeatures(key, [
+        { type: "select", id: "modelPreset", label: "Late Claude", value: "", options: [] },
+      ]);
+      if (query === "failed") model.applyFeaturesUnavailable(model.getState().featureRequestKey!);
+      model.setFeatureValue("modelPreset", "claude-preset");
+      expect(model.getState().modelId).toBe("gpt-5.2-codex");
+      expect(model.getState().featureValues).toEqual({});
+      expect(model.getState().submitValue).toMatchObject({
+        provider: "codex",
+        model: "gpt-5.2-codex",
+      });
+      model.close();
+    },
+  );
+
+  it("does not submit the Ait custom placeholder as a native feature", () => {
+    const model = openWithCatalog({ mode: "create" });
+    selectClaude(model);
+    model.setName("Custom");
+    model.applyFeatures(model.getState().featureRequestKey!, [
+      {
+        type: "select",
+        id: "modelPreset",
+        label: "Preset",
+        value: "__custom__",
+        options: [
+          { id: "__custom__", label: "Custom" },
+          {
+            id: "work",
+            label: "Work",
+            metadata: { source: "ait", configuration: { modelId: "claude-opus-5" } },
+          },
+        ],
+      },
+    ]);
+    model.setFeatureValue("modelPreset", "__custom__");
+    expect(model.getState().featureValues).toEqual({});
+    expect(model.getState().submitValue?.featureValues).toBeUndefined();
+    model.close();
+  });
+});

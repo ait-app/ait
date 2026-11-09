@@ -39,6 +39,21 @@ function impliedFeatureValues(
   return { ...cleared, ...named };
 }
 
+/** Ait owns this placeholder; it never names a native feature update. */
+export function isSyntheticPresetPlaceholder(
+  features: readonly AgentFeature[] | undefined,
+  featureId: string,
+  value: unknown,
+): boolean {
+  if (featureId !== "modelPreset" || value !== "__custom__") return false;
+  const feature = features?.find((item) => item.id === featureId);
+  return (
+    !feature ||
+    (feature.type === "select" &&
+      feature.options.some((option) => option.metadata?.source === "ait"))
+  );
+}
+
 /** A native preset is one configuration change; it is never a sequence of role setters. */
 export function modelPresetConfiguration(
   features: readonly AgentFeature[] | undefined,

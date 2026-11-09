@@ -9,7 +9,11 @@ import type { AgentProfile } from "@ait/protocol/messages";
 import { formatAgentModeLabel, formatThinkingOptionLabel } from "@/agent-controls/labels";
 import { applyFeatureValues, pruneFeatureValues } from "@/hooks/feature-preferences";
 import { filterSelectableModels } from "@/provider-selection/model-catalog";
-import { modelPresetConfiguration, withModelPresetSelection } from "@/agent-controls/model-presets";
+import {
+  isSyntheticPresetPlaceholder,
+  modelPresetConfiguration,
+  withModelPresetSelection,
+} from "@/agent-controls/model-presets";
 
 /**
  * The persisted profile minus the id; the list owns identity.
@@ -425,6 +429,7 @@ export function openAgentProfileForm(snapshot: AgentProfileFormSnapshot): AgentP
   let catalogResolution: AgentProfileResolutionStatus = "idle";
   let resolvedFeatureKey: string | null = null;
   let resolvedFeatures: AgentFeature[] = [];
+  let resolvedFeatureProvider: string | null = null;
   let listeners = new Set<() => void>();
   let closed = false;
 
@@ -441,8 +446,10 @@ export function openAgentProfileForm(snapshot: AgentProfileFormSnapshot): AgentP
     const featureRequestKey = buildFeatureRequestKey(featureRequest);
     const featuresAreCurrent =
       featureRequestKey !== null && featureRequestKey === resolvedFeatureKey;
-    // Whether a preset control is cached decides reuse, not which provider supplied it.
-    const hasCachedPresets = resolvedFeatures.some((feature) => feature.id === "modelPreset");
+    // Model changes may reuse this provider's presets, but never another provider's catalog.
+    const hasCachedPresets =
+      resolvedFeatureProvider === next.provider &&
+      resolvedFeatures.some((feature) => feature.id === "modelPreset");
     const appliedFeatures =
       featuresAreCurrent || hasCachedPresets
         ? applyFeatureValues(resolvedFeatures, next.featureValues)
@@ -548,6 +555,7 @@ export function openAgentProfileForm(snapshot: AgentProfileFormSnapshot): AgentP
       }
       resolvedFeatureKey = requestKey;
       resolvedFeatures = [...features];
+      resolvedFeatureProvider = state.provider;
       publish((current) => ({
         ...current,
         featureValues: pruneFeatureValues(current.featureValues, resolvedFeatures),
@@ -559,6 +567,7 @@ export function openAgentProfileForm(snapshot: AgentProfileFormSnapshot): AgentP
       }
       resolvedFeatureKey = requestKey;
       resolvedFeatures = [];
+      resolvedFeatureProvider = state.provider;
       publish((current) => current);
     },
     setName: (value) => publish((current) => ({ ...current, name: value })),
@@ -570,6 +579,9 @@ export function openAgentProfileForm(snapshot: AgentProfileFormSnapshot): AgentP
         if (current.provider === providerId) {
           return current;
         }
+        resolvedFeatureKey = null;
+        resolvedFeatureProvider = null;
+        resolvedFeatures = [];
         // Everything below the provider is provider-scoped: a model id, mode id,
         // thinking id or feature id from the old provider means nothing here.
         // Clearing them is enough — `derive` seeds the new provider's defaults.
@@ -611,6 +623,7 @@ export function openAgentProfileForm(snapshot: AgentProfileFormSnapshot): AgentP
       publish((current) => ({ ...current, thinkingOptionId, thinkingDisplay: display })),
     setFeatureValue: (featureId, value) =>
       publish((current) => {
+        if (isSyntheticPresetPlaceholder(current.features, featureId, value)) return current;
         try {
           const preset = modelPresetConfiguration(current.features, featureId, value);
           return preset

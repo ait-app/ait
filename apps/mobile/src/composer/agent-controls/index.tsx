@@ -110,6 +110,7 @@ import type { PresetSettingsTarget } from "@/data/provider-presets";
 import { liveAgentFeatures } from "./role-choices";
 import {
   isModelConfigurationFeature,
+  isSyntheticPresetPlaceholder,
   modelPresetConfiguration,
 } from "@/agent-controls/model-presets";
 
@@ -1950,6 +1951,7 @@ export const AgentControls = memo(function AgentControls({
       if (!client || !agentProvider) {
         return;
       }
+      if (isSyntheticPresetPlaceholder(features, featureId, value)) return;
       try {
         const preset = modelPresetConfiguration(features, featureId, value);
         if (preset) {
