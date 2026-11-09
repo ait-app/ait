@@ -1,7 +1,7 @@
 # Workspace Bot
 
 每个 Workspace 至多一个管理者 Bot，使用独占 Channel 和隐藏 Provider session，由用户显式设置；未设置时不产生任何记录、会话、轮询或模型调用。
-当前支持内置对话、Telegram 与中国区飞书；Email 尚未实现。设计见 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)，权限与 Ait 工具见 [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)。
+当前支持内置对话、Telegram、中国区飞书、微信（仅单聊）与 QQ（单聊和群聊）；Email 尚未实现。设计见 [ADR-213](../decisions/bot/adr-213-single-workspace-manager-bot.md)，权限与 Ait 工具见 [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md)。
 客户端 Bot 标签页见 [ADR-214](../decisions/clients/adr-214-workspace-bot-tab-v2.md)，使用方式见下文“在 Ait 中使用”。
 
 ## 使用与生命周期
@@ -129,6 +129,20 @@ Telegram 使用 getUpdates 长轮询。已有 webhook 会报告冲突，不会�
 在 Bot 设置页添加 Telegram Channel，按页面步骤在 BotFather 创建机器人并粘贴 Token，daemon 向 Telegram 验证后显示一个二维码和链接。打开后在机器人对话中点击 Start，你会成为唯一允许的发送者，Channel 随后自动启用；群聊需在继续前勾选。链接 10 分钟后过期，daemon 重启后需重新开始。
 配对期间发给该机器人的其他消息会被丢弃。Token 与飞书 App Secret 保存在同一位置，边界相同。
 
+### 微信接入
+
+在 Bot 设置页添加微信 Channel，点击“显示二维码”，用微信扫码并在手机上确认，Channel 随后自动启用。只有扫码者可以在单聊中给机器人发消息，不支持群聊，也没有手动接入。
+微信结束会话后 Channel 显示已过期，需删除后重新扫码。此流程依赖未公开的 iLink 接口，边界见 [ADR-225](../decisions/bot/adr-225-weixin-and-qq-channels.md)。
+
+### QQ 接入
+
+在 Bot 设置页添加 QQ Channel，点击“显示二维码”，用 QQ 扫码并同意，Channel 随后自动启用，只有扫码者可以私聊机器人；群聊需在扫码前勾选。
+扫码不可用时可选择手动填写 App ID 与 App Secret，daemon 向 QQ 验证后保存。
+
+手动接入的 Channel 起初没有允许的发送者，开启群聊的 Channel 也可能无法在群里识别扫码者。此时在该 Channel 所在行点击“获取配对码”，把配对码私聊发给机器人，或在群里 @ 机器人并发送它，发送者即加入允许列表。配对码只能使用一次，10 分钟后过期，daemon 重启后失效。
+
+QQ 限制被动回复的时间和次数，超出后 Ait 改用主动消息；在 QQ 中关闭机器人的“允许主动发送”后，这部分回复会发送失败。
+
 ### 飞书接入
 
 在 Bot 设置页添加飞书 Channel，点击“显示二维码”，用飞书 App 扫码并同意。daemon 直接向飞书创建应用，无需开发者后台操作；
@@ -152,7 +166,7 @@ Bot 自身通过 `bot_memory_read`／`bot_memory_update` 读写记忆（携带 r
 接口通过认证 WebSocket 协商 `workspace-bots-v2`，所有方法以 `workspaceId` 寻址，客户端 JSON 不含内部 `botId`。常用流程为
 `bot.setup.request` → `bot.conversation.open.request` → `bot.message.send.request`，
 再以 `bot.turn.get.request` / `bot.history.get.request` 读取执行与投递状态；`bot.get` 在未配置时返回 `null`。
-其余方法：`bot.update`、`bot.pause`、`bot.resume`、`bot.remove`、`bot.channel.*`（含 `bot.channel.feishu.scan.{start,status,cancel}`、`bot.channel.feishu.connect` 与 `bot.channel.telegram.pair.{start,status,cancel}`）、`bot.conversation.{list,reset}`、
+其余方法：`bot.update`、`bot.pause`、`bot.resume`、`bot.remove`、`bot.channel.*`（含 `bot.channel.feishu.scan.{start,status,cancel}`、`bot.channel.feishu.connect`、`bot.channel.telegram.pair.{start,status,cancel}`、`bot.channel.weixin.scan.{start,status,cancel}`、`bot.channel.qq.scan.{start,status,cancel}`、`bot.channel.qq.connect` 与 `bot.channel.qq.pair`）、`bot.conversation.{list,reset}`、
 `bot.turn.cancel`、`bot.memory.get`。`bot.create`、`bot.list`、`bot.archive`、`bot.permission.resolve` 已删除。
 Channel 能力以 `bot.channel.types.request` 为准；完整参数见
 [`protocol.rs`](../../crates/bot/src/protocol.rs)，实现归属见

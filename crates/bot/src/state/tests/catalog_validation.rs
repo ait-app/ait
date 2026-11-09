@@ -97,6 +97,7 @@ fn capacity_counts_only_live_bots_and_channels() {
             bot_id: owner,
             enabled: false,
             cursor: None,
+            sync_token: None,
             deleted: true,
             config: ChannelConfig::Telegram {
                 token_ref: "env:AIT_SERVER_CREDENTIAL_TEST".into(),
@@ -258,5 +259,43 @@ fn stored_credential_references_may_name_only_their_own_channel() {
                 config(crate::ports::stored_credential_reference(id))
             )
             .is_ok()
+    );
+}
+
+#[test]
+fn reply_references_may_exceed_the_identifier_limit_but_stay_bounded() {
+    use crate::channels::Incoming;
+
+    let fixture = Fixture::new();
+    let mut state = fixture.state();
+    state
+        .execute("bot.setup.request", setup(WORKSPACE))
+        .unwrap();
+    let channel = state
+        .execute(
+            "bot.channel.create.request",
+            json!({"workspaceId":WORKSPACE,"channelId":ChannelId::generate(),"enabled":true,
+                "config":{"kind":"telegram","tokenRef":"env:AIT_SERVER_CREDENTIAL_TEST",
+                    "allowedSenders":["1"]}}),
+        )
+        .unwrap();
+    let channel_id = fixture.channel(&channel["channel"]).id;
+    let incoming = |message: &str, reply_to: String| Incoming {
+        channel_id,
+        peer: "peer".into(),
+        sender: "1".into(),
+        thread: None,
+        message_id: message.into(),
+        text: "hello".into(),
+        reply_to: Some(reply_to),
+    };
+    assert!(state.accept(incoming("1", "t".repeat(4096))).is_ok());
+    assert_eq!(
+        state.accept(incoming("2", "t".repeat(4097))).err(),
+        Some(ErrorCode::InvalidMessage)
+    );
+    assert_eq!(
+        state.accept(incoming("3", String::new())).err(),
+        Some(ErrorCode::InvalidMessage)
     );
 }

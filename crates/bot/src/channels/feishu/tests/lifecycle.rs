@@ -196,7 +196,7 @@ async fn websocket_dialer_preserves_frames_with_the_production_size_limit() {
             .send(WsMessage::Text("x".repeat(1024 * 1024 + 1).into()))
             .await;
     });
-    let mut socket = connect(format!("ws://{address}")).await.unwrap();
+    let mut socket = connect_socket(format!("ws://{address}")).await.unwrap();
     assert_eq!(
         socket.next().await.unwrap().unwrap(),
         WsMessage::Text("fixture".into())
@@ -215,6 +215,7 @@ async fn feishu_adapter_rejects_builtin_channel_configuration_before_contacting_
         bot_id: BotId::generate(),
         enabled: true,
         cursor: None,
+        sync_token: None,
         deleted: false,
         config: ChannelConfig::Builtin,
     };

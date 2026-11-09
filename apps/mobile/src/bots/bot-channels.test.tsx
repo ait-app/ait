@@ -5,13 +5,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BotChannels } from "./bot-channels";
 
-const { botRequest, confirmDialog, randomUUID, feishuSetup, telegramSetup } = vi.hoisted(() => ({
-  feishuSetup: { current: false },
-  telegramSetup: { current: false },
-  botRequest: vi.fn(),
-  confirmDialog: vi.fn(async (_options: unknown) => true),
-  randomUUID: vi.fn(() => "33333333-3333-4333-8333-333333333333"),
-}));
+const { botRequest, confirmDialog, randomUUID, feishuSetup, telegramSetup, scanSetup } = vi.hoisted(
+  () => ({
+    feishuSetup: { current: false },
+    telegramSetup: { current: false },
+    scanSetup: { current: false },
+    botRequest: vi.fn(),
+    confirmDialog: vi.fn(async (_options: unknown) => true),
+    randomUUID: vi.fn(() => "33333333-3333-4333-8333-333333333333"),
+  }),
+);
 vi.mock("@/runtime/host-runtime", () => ({ useHostRuntimeClient: () => ({ botRequest }) }));
 vi.mock("@/stores/session-store", () => ({
   useSessionStore: (select: (state: unknown) => unknown) =>
@@ -22,6 +25,8 @@ vi.mock("@/stores/session-store", () => ({
             features: {
               workspaceBotFeishuSetup: feishuSetup.current,
               workspaceBotTelegramSetup: telegramSetup.current,
+              workspaceBotWeixinSetup: scanSetup.current,
+              workspaceBotQqSetup: scanSetup.current,
             },
           },
         },
@@ -522,6 +527,119 @@ describe("BotChannels", () => {
 
       expect(await screen.findByLabelText("bots.secretRef")).toBeTruthy();
       expect(screen.queryByTestId("bot-feishu-scan-start")).toBeNull();
+    });
+  });
+
+  describe("WeChat and QQ setup", () => {
+    const channelId = "11111111-1111-4111-8111-111111111111";
+    let channels: unknown[];
+    const respond = (method: string) => {
+      if (method === "bot.channel.list.request") return { channels };
+      if (method === "bot.channel.types.request")
+        return { supported: ["builtin", "telegram", "feishu"] };
+      if (method === "bot.channel.status.request") return { connection: null };
+      if (method.endsWith(".scan.start.request"))
+        return { scanId: "scan-1", url: "https://example.test/scan", expiresInSeconds: 600 };
+      if (method.endsWith(".scan.status.request")) return { state: "waiting" };
+      if (method === "bot.channel.qq.pair.request")
+        return { code: "ABCD2345", expiresInSeconds: 600 };
+      return {};
+    };
+    const openPicker = async (kind: "weixin" | "qq") => {
+      renderChannels();
+      fireEvent.click(await screen.findByText("bots.addChannel"));
+      fireEvent.change(await screen.findByTestId("bot-channel-type"), { target: { value: kind } });
+    };
+
+    beforeEach(() => {
+      scanSetup.current = true;
+      channels = [];
+      botRequest.mockImplementation(async (method: string) => respond(method));
+    });
+    afterEach(() => {
+      scanSetup.current = false;
+    });
+
+    it("hides both from hosts without the capability", async () => {
+      scanSetup.current = false;
+      renderChannels();
+      fireEvent.click(await screen.findByText("bots.addChannel"));
+      const options = (await screen.findByTestId("bot-channel-type")).querySelectorAll("option");
+      expect([...options].map((option) => option.value)).toEqual(["telegram", "feishu"]);
+    });
+
+    it("scans for WeChat with no group or manual option", async () => {
+      await openPicker("weixin");
+      expect(screen.queryByTestId("bot-scan-manual")).toBeNull();
+      fireEvent.click(await screen.findByTestId("bot-scan-start"));
+      await waitFor(() =>
+        expect(botRequest).toHaveBeenCalledWith("bot.channel.weixin.scan.start.request", {
+          workspaceId: "workspace",
+          allowGroups: undefined,
+        }),
+      );
+      expect(await screen.findByTestId("qr-xml")).toBeTruthy();
+    });
+
+    it("scans for QQ and sends the group choice", async () => {
+      await openPicker("qq");
+      fireEvent.click(await screen.findByTestId("bot-scan-start"));
+      await waitFor(() =>
+        expect(botRequest).toHaveBeenCalledWith("bot.channel.qq.scan.start.request", {
+          workspaceId: "workspace",
+          allowGroups: false,
+        }),
+      );
+    });
+
+    it("connects QQ with pasted credentials", async () => {
+      await openPicker("qq");
+      fireEvent.click(await screen.findByTestId("bot-scan-manual"));
+      await screen.findByTestId("bot-qq-manual");
+      typeInto("bots.appId", " 10001 ");
+      typeInto("bots.feishuAppSecret", " secret ");
+      fireEvent.click(screen.getByTestId("bot-qq-connect"));
+      await waitFor(() =>
+        expect(botRequest).toHaveBeenCalledWith("bot.channel.qq.connect.request", {
+          workspaceId: "workspace",
+          channelId: "33333333-3333-4333-8333-333333333333",
+          appId: "10001",
+          appSecret: "secret",
+          allowGroups: false,
+        }),
+      );
+    });
+
+    const qqChannel = (config: object) => ({
+      id: channelId,
+      config: { kind: "qq", appId: "1", secretRef: "env:X", ...config },
+      enabled: true,
+      cursor: null,
+      deleted: false,
+    });
+
+    it("issues a pairing code for a QQ channel that takes group messages", async () => {
+      channels = [qqChannel({ allowedSenders: ["a"], allowGroups: true })];
+      renderChannels();
+      fireEvent.click(await screen.findByTestId(`bot-qq-pair-${channelId}`));
+      await screen.findByTestId(`bot-qq-pair-code-${channelId}`);
+      expect(botRequest).toHaveBeenCalledWith("bot.channel.qq.pair.request", {
+        workspaceId: "workspace",
+        channelId,
+      });
+    });
+
+    it("offers pairing to a QQ channel with no senders yet", async () => {
+      channels = [qqChannel({ allowedSenders: [], allowGroups: false })];
+      renderChannels();
+      expect(await screen.findByTestId(`bot-qq-pair-${channelId}`)).toBeTruthy();
+    });
+
+    it("does not offer pairing to a private QQ channel with a sender", async () => {
+      channels = [qqChannel({ allowedSenders: ["a"], allowGroups: false })];
+      renderChannels();
+      await screen.findByTestId(`bot-channel-${channelId}`);
+      expect(screen.queryByTestId(`bot-qq-pair-${channelId}`)).toBeNull();
     });
   });
 

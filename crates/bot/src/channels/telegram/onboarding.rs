@@ -15,7 +15,8 @@ use uuid::Uuid;
 
 use super::API;
 use crate::channels::onboarding::{
-    FAILED_EXPIRED, FAILED_UNAVAILABLE, Sessions, failed, http_client, save_channel, waiting,
+    FAILED_ALREADY_CONNECTED, FAILED_EXPIRED, FAILED_UNAVAILABLE, Sessions, failed, http_client,
+    save_channel, waiting,
 };
 use crate::channels::{expose, json_response};
 use crate::ports::stored_credential_reference;
@@ -29,7 +30,6 @@ const POLL_INTERVAL: Duration = Duration::from_secs(2);
 const PAIRING_CODE_LENGTH: usize = 32;
 const UPDATES_PER_POLL: u8 = 50;
 
-const FAILED_ALREADY_CONNECTED: &str = "alreadyConnected";
 const FAILED_INVALID_TOKEN: &str = "invalidToken";
 const FAILED_POLLING_CONFLICT: &str = "pollingConflict";
 const FAILED_WEBHOOK_CONFLICT: &str = "webhookConflict";

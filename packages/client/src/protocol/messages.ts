@@ -2,7 +2,9 @@ import {
   BOT_FEISHU_SETUP_METHODS,
   BOT_METHODS,
   BOT_PERMISSION_METHODS,
+  BOT_QQ_SETUP_METHODS,
   BOT_TELEGRAM_SETUP_METHODS,
+  BOT_WEIXIN_SETUP_METHODS,
 } from "@ait/protocol/bot/rpc-schemas";
 import { ProviderSnapshotEntrySchema } from "@ait/protocol/messages";
 import { compactProviderSnapshot } from "@ait/protocol/provider-snapshot-codec";
@@ -97,6 +99,14 @@ export function serverInfo(
         features.has("workspace-bots-v2") &&
         BOT_METHODS.every(has) &&
         BOT_TELEGRAM_SETUP_METHODS.every(has),
+      workspaceBotWeixinSetup:
+        features.has("workspace-bots-v2") &&
+        BOT_METHODS.every(has) &&
+        BOT_WEIXIN_SETUP_METHODS.every(has),
+      workspaceBotQqSetup:
+        features.has("workspace-bots-v2") &&
+        BOT_METHODS.every(has) &&
+        BOT_QQ_SETUP_METHODS.every(has),
       ownedSubscriptions: has("subscription.release.request"),
       explicitEventSubscriptions: !scopedGuest && has("session.events.set_subscription.request"),
       providersSnapshot: has("provider.snapshot.get.request"),

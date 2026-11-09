@@ -116,6 +116,29 @@ pub enum ChannelConfig {
         #[serde(default)]
         allow_groups: bool,
     },
+    /// `iLink` bot long polling, for private chats only.
+    Weixin {
+        /// Bot identity issued by the QR login.
+        account_id: String,
+        /// API root issued by the QR login.
+        base_url: String,
+        /// Runtime reference to the bot token.
+        token_ref: String,
+        /// Explicit user IDs allowed to invoke this Bot.
+        allowed_senders: Vec<String>,
+    },
+    /// QQ official bot gateway connection.
+    Qq {
+        /// Public bot application identity.
+        app_id: String,
+        /// Runtime reference to the application secret.
+        secret_ref: String,
+        /// Sender IDs allowed to invoke this Bot; empty until a sender pairs with a code.
+        allowed_senders: Vec<String>,
+        /// Whether group @mentions are accepted.
+        #[serde(default)]
+        allow_groups: bool,
+    },
 }
 
 /// An account instance owned exclusively by one Bot.
@@ -132,6 +155,9 @@ pub struct Channel {
     pub enabled: bool,
     /// Telegram's next durable update offset.
     pub cursor: Option<i64>,
+    /// Opaque position in a channel's update stream, advanced after input is queued.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sync_token: Option<String>,
     /// Deleted channels retain their routing identity for historical receipts.
     #[serde(default)]
     pub deleted: bool,

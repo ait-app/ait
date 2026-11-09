@@ -14,6 +14,13 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import { AllowGroupsCheckbox } from "./allow-groups-checkbox";
 import { FeishuManualGuide, FeishuScanSetup, useFeishuSetupSupported } from "./feishu-setup";
 import { TextLink } from "./channel-setup";
+import {
+  ChannelScanSetup,
+  QqManualSetup,
+  QqPairing,
+  useQqSetupSupported,
+  useWeixinSetupSupported,
+} from "./scan-setup";
 import { BotLoadingSpinner } from "./loading";
 import { botKeys } from "./queries";
 import { botStyles as styles } from "./styles";
@@ -23,7 +30,13 @@ type BotChannel = z.infer<typeof BotChannelSchema>;
 
 const CREDENTIAL_REF = /^env:AIT_SERVER_CREDENTIAL_[A-Z0-9_]{1,96}$/;
 const MAX_SENDERS = 256;
-type ExternalKind = "telegram" | "feishu";
+type ExternalKind = "telegram" | "feishu" | "weixin" | "qq";
+const KIND_LABELS = {
+  telegram: "bots.telegram",
+  feishu: "bots.feishu",
+  weixin: "bots.weixin",
+  qq: "bots.qq",
+} as const;
 
 function parseSenders(text: string): string[] {
   return text
@@ -113,7 +126,11 @@ function ChannelRow({
     },
   });
   const busy = toggle.isPending || remove.isPending;
-  const kind = channel.config.kind === "feishu" ? t("bots.feishu") : t("bots.telegram");
+  const kind = channel.config.kind === "builtin" ? "" : t(KIND_LABELS[channel.config.kind]);
+  // Senders scanned in with QQ may have a different ID in groups, so groups need pairing too.
+  const pairable =
+    channel.config.kind === "qq" &&
+    (channel.config.allowGroups || channel.config.allowedSenders.length === 0);
   const connection = status.data
     ? connectionSummary(
         status.data,
@@ -145,6 +162,14 @@ function ChannelRow({
           </Button>
         ) : null}
       </View>
+      {pairable && !readOnly ? (
+        <QqPairing
+          serverId={serverId}
+          workspaceId={workspaceId}
+          channelId={channel.id}
+          disabled={!interactive || !active || !channel.enabled}
+        />
+      ) : null}
       {toggle.error ? <Text style={styles.error}>{toggle.error.message}</Text> : null}
       {remove.error ? <Text style={styles.error}>{remove.error.message}</Text> : null}
     </View>
@@ -181,6 +206,7 @@ function ChannelForm({
   const scanning = kind === "feishu" && feishuSetupSupported && !enterManually;
   const telegramSetupSupported = useTelegramSetupSupported(serverId);
   const [useEnvironment, setUseEnvironment] = useState(false);
+  const [enterQqManually, setEnterQqManually] = useState(false);
   const telegramGuided = kind === "telegram" && telegramSetupSupported && !useEnvironment;
   // Hosts with Feishu setup also accept a pasted App Secret; a reference still uses the variable.
   const pastedSecret = kind === "feishu" && feishuSetupSupported && !CREDENTIAL_REF.test(secretRef);
@@ -195,6 +221,8 @@ function ChannelForm({
   const create = useMutation({
     mutationFn: async () => {
       if (!client) throw new Error(t("bots.disconnected"));
+      // WeChat and QQ render their own setup and never reach this form's submit button.
+      if (kind === "weixin" || kind === "qq") return;
       if (pastedSecret) {
         await client.botRequest("bot.channel.feishu.connect.request", {
           workspaceId,
@@ -223,11 +251,11 @@ function ChannelForm({
     <SelectField
       label={t("bots.channelType")}
       value={kind}
-      selectedDisplay={{ label: kind === "feishu" ? t("bots.feishu") : t("bots.telegram") }}
+      selectedDisplay={{ label: t(KIND_LABELS[kind]) }}
       options={kinds.map((id) => ({
         id,
         value: id,
-        label: id === "feishu" ? t("bots.feishu") : t("bots.telegram"),
+        label: t(KIND_LABELS[id]),
       }))}
       onChange={(value) => setKind(value as ExternalKind)}
       disabled={create.isPending}
@@ -236,6 +264,37 @@ function ChannelForm({
       testID="bot-channel-type"
     />
   );
+  if (kind === "weixin" || (kind === "qq" && !enterQqManually)) {
+    return (
+      <View style={styles.card} testID="bot-channel-form">
+        {typeField}
+        <ChannelScanSetup
+          key={kind}
+          kind={kind}
+          serverId={serverId}
+          workspaceId={workspaceId}
+          active={active}
+          onDone={onDone}
+          onEnterManually={kind === "qq" ? () => setEnterQqManually(true) : undefined}
+        />
+      </View>
+    );
+  }
+  if (kind === "qq") {
+    return (
+      <View style={styles.card} testID="bot-channel-form">
+        {typeField}
+        <QqManualSetup
+          serverId={serverId}
+          workspaceId={workspaceId}
+          channelId={channelId}
+          active={active}
+          onDone={onDone}
+          onScanInstead={() => setEnterQqManually(false)}
+        />
+      </View>
+    );
+  }
   if (scanning) {
     return (
       <View style={styles.card} testID="bot-channel-form">
@@ -376,6 +435,8 @@ export function BotChannels({
   const client = useHostRuntimeClient(serverId);
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
+  const weixinSupported = useWeixinSetupSupported(serverId);
+  const qqSupported = useQqSetupSupported(serverId);
   const enabled = interactive && Boolean(client);
   const list = useQuery({
     queryKey: botKeys.channels(serverId, workspaceId, builtinChannelId),
@@ -400,7 +461,14 @@ export function BotChannels({
   const external = (list.data ?? []).filter(
     (channel) => !channel.deleted && channel.config.kind !== "builtin",
   );
-  const kinds = (types.data ?? []).filter((kind): kind is ExternalKind => kind !== "builtin");
+  // Older clients reject unknown values in `supported`, so hosts advertise these by capability.
+  const kinds: ExternalKind[] = types.data
+    ? [
+        ...types.data.filter((kind): kind is "telegram" | "feishu" => kind !== "builtin"),
+        ...(weixinSupported ? (["weixin"] as const) : []),
+        ...(qqSupported ? (["qq"] as const) : []),
+      ]
+    : [];
   return (
     <View style={styles.card} testID="bot-channels">
       <Text style={styles.title}>{t("bots.channels")}</Text>

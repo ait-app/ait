@@ -10,6 +10,7 @@ fn feishu_scopes_user_group_and_thread_before_admission() {
         bot_id: BotId::generate(),
         enabled: true,
         cursor: None,
+        sync_token: None,
         deleted: false,
         config: ChannelConfig::Feishu {
             app_id: "app-1".into(),

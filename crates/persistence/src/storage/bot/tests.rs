@@ -18,6 +18,7 @@ fn atomic_catalog_routes_receipts_and_bounded_memory_survive_reopening() {
             config: ChannelConfig::Builtin,
             enabled: true,
             cursor: None,
+            sync_token: None,
             deleted: false,
         }],
     };
