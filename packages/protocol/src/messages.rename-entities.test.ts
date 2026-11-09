@@ -9,7 +9,10 @@ function schemaWithoutMessageTypes(
   excludedTypes: string[],
 ) {
   const excluded = new Set(excludedTypes);
-  const options = schema.options.filter((option) => !excluded.has(option.shape.type.value));
+  const options = schema.options.filter((option) => {
+    const values = option.shape.type.values as ReadonlySet<string>;
+    return !Array.from(values).some((value) => excluded.has(value));
+  });
 
   return z.discriminatedUnion("type", options as [SessionMessageOption, ...SessionMessageOption[]]);
 }
@@ -136,5 +139,16 @@ describe("rename entity message schemas", () => {
         requestId: "request-kill",
       },
     });
+    for (const type of ["provider.presets.save.response", "provider.presets.delete.response"]) {
+      expect(
+        legacyOutboundSchema.parse({
+          type,
+          payload: { provider: "omp", requestId: "preset", error: "Read-only preset" },
+        }),
+      ).toEqual({
+        type,
+        payload: { provider: "omp", requestId: "preset", error: "Read-only preset" },
+      });
+    }
   });
 });
