@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useFileDownload } from "@/hooks/use-file-download";
 
+import { ProviderNativeResult } from "./provider-native-result";
+
 const actionIcons = { pause: Pause, resume: Play, edit: Pencil, clear: Trash2 };
 
 export function ProviderCommandCard({
@@ -94,10 +96,8 @@ export function ProviderCommandCard({
       ) : isGoal && result.status !== "error" ? (
         <Text style={styles.caption}>{t("providerControl.emptyGoal")}</Text>
       ) : null}
-      {(!isGoal || result.status === "error") && result.text ? (
-        <Text style={styles.output} selectable>
-          {result.text}
-        </Text>
+      {(!isGoal || result.status === "error") && result.text && !result.file ? (
+        <ProviderNativeResult text={result.text} />
       ) : null}
       {result.file ? (
         <View style={styles.body}>

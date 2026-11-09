@@ -129,6 +129,11 @@ async fn native_roles_and_custom_tags_are_discovered_without_creating_conversati
         json!(["cycle-only"]).to_string(),
     )
     .unwrap();
+    std::fs::write(
+        agent.join("model-roles.json"),
+        json!({"default":"test/model", "smol":"other/model:high", "advisor":"@smol"}).to_string(),
+    )
+    .unwrap();
     let details = client.discover(&spec.cwd).await.unwrap();
     assert_eq!(
         details.models.len(),
@@ -141,6 +146,15 @@ async fn native_roles_and_custom_tags_are_discovered_without_creating_conversati
         .filter(|feature| feature["id"].as_str().unwrap().starts_with("modelRole."))
         .collect();
     assert_eq!(roles.len(), 18);
+    let advisor = roles
+        .iter()
+        .find(|feature| feature["id"] == "modelRole.advisor")
+        .unwrap();
+    assert_eq!(advisor["options"][0]["metadata"]["nativeSelector"], "@smol");
+    assert_eq!(
+        advisor["options"][0]["metadata"]["resolvedSelector"],
+        "other/model:high"
+    );
     let web = roles
         .iter()
         .find(|feature| feature["id"] == "modelRole.web")

@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ProviderPresetEntry, ProviderPresetDescriptor } from "@ait/protocol/messages";
 import { ProviderPresetsSection } from "./provider-presets-section";
 
+vi.mock("@/i18n/i18next", () => ({ i18n: { t: (key: string) => key } }));
 vi.mock("@/components/ui/select-field", () => ({
   SelectField: ({
     testID,
@@ -13,15 +14,18 @@ vi.mock("@/components/ui/select-field", () => ({
     value,
     onChange,
     selectedDisplay,
+    disabled,
   }: {
     testID: string;
     options: { id: string; value: string; label: string }[];
     value: string;
     onChange: (value: string) => void;
     selectedDisplay: { label: string } | null;
+    disabled?: boolean;
   }) => (
     <select
       data-testid={testID}
+      disabled={disabled}
       aria-label={selectedDisplay?.label}
       value={value}
       onChange={(event) => onChange(event.target.value)}
@@ -39,6 +43,7 @@ const client = {
   listProviderPresets: vi.fn(),
   saveProviderPreset: vi.fn(),
   deleteProviderPreset: vi.fn(),
+  listProviderFeatures: vi.fn(),
 };
 
 vi.mock("@/runtime/host-runtime", () => ({
@@ -103,7 +108,20 @@ vi.mock("@/components/ui/button", () => ({
   ),
 }));
 vi.mock("@/components/adaptive-modal-sheet", () => ({
-  AdaptiveModalSheet: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AdaptiveModalSheet: ({
+    children,
+    footer,
+    testID,
+  }: {
+    children: React.ReactNode;
+    footer?: React.ReactNode;
+    testID?: string;
+  }) => (
+    <div data-testid={testID}>
+      {children}
+      {footer}
+    </div>
+  ),
   AdaptiveTextInput: ({
     initialValue,
     onChangeText,
@@ -135,7 +153,15 @@ const queryClient = new QueryClient({
  * invalidates it.
  */
 function renderSection(ui: React.ReactElement) {
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return render(
+    <QueryClientProvider client={queryClient}>
+      {React.cloneElement(ui as React.ReactElement<{ models?: unknown }>, {
+        models: (ui.props as { models?: unknown }).models ?? [
+          { provider: "claude", id: "claude-opus-5", label: "Opus" },
+        ],
+      })}
+    </QueryClientProvider>,
+  );
 }
 
 beforeEach(() => {
@@ -143,6 +169,7 @@ beforeEach(() => {
   for (const fn of Object.values(client)) fn.mockReset();
   // The store is cached per host and provider, so each case starts from an empty cache.
   queryClient.clear();
+  client.listProviderFeatures.mockResolvedValue({ features: [] });
 });
 afterEach(() => {
   cleanup();
@@ -198,6 +225,7 @@ it("disables exactly the operations the descriptor withholds", async () => {
   renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
   expect(screen.queryByTestId("provider-presets-add")).toBeNull();
+  fireEvent.click(screen.getByTestId("provider-presets-details"));
   expect(screen.getByTestId("provider-presets-reason").textContent).toContain("modelpreset");
   // A read-only row has neither edit nor delete affordances.
   expect(screen.queryByLabelText("settings.providers.presets.edit")).toBeNull();
@@ -212,7 +240,7 @@ it("shows a create entry in the empty state and saves through the unified reques
   fireEvent.click(screen.getByTestId("provider-presets-empty-create"));
   await waitFor(() => expect(screen.getByTestId("provider-preset-save")).toBeTruthy());
   fireEvent.change(screen.getAllByRole("textbox")[0], { target: { value: "team" } });
-  fireEvent.change(screen.getAllByRole("textbox")[1], {
+  fireEvent.change(screen.getByTestId("provider-preset-model-options"), {
     target: { value: "claude-opus-5" },
   });
   fireEvent.click(screen.getByTestId("provider-preset-save"));
@@ -266,9 +294,8 @@ it("keeps the name read-only and explains why when renaming is withheld", async 
   const nameInput = screen.getAllByRole("textbox")[0] as HTMLInputElement;
   expect(nameInput.readOnly).toBe(true);
   expect(nameInput.value).toBe("team");
-  // The sheet repeats the descriptor's reason rather than offering a dead control; the section
-  // header shows the same reason, so the text appears twice.
-  expect(screen.getAllByText("OMP has no rename command")).toHaveLength(2);
+  fireEvent.click(screen.getAllByText("providerControl.details").at(-1)!);
+  expect(screen.getByText("settings.providers.presets.noRename")).toBeTruthy();
 });
 
 it("deletes through the same request and refreshes the list", async () => {
@@ -277,6 +304,8 @@ it("deletes through the same request and refreshes the list", async () => {
   renderSection(<ProviderPresetsSection provider="claude" serverId="host-a" />);
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
   fireEvent.click(screen.getByLabelText("settings.providers.presets.remove"));
+  expect(client.deleteProviderPreset).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByTestId("provider-preset-confirm-delete"));
   await waitFor(() =>
     expect(client.deleteProviderPreset).toHaveBeenCalledWith("claude", "team", undefined),
   );
@@ -291,7 +320,7 @@ it("refuses a create that reuses an existing name instead of overwriting it", as
   await waitFor(() => expect(screen.getByTestId("provider-preset-save")).toBeTruthy());
 
   fireEvent.change(screen.getAllByRole("textbox")[0], { target: { value: "team" } });
-  fireEvent.change(screen.getAllByRole("textbox")[1], {
+  fireEvent.change(screen.getByTestId("provider-preset-model-options"), {
     target: { value: "claude-opus-5" },
   });
   // The store would upsert, replacing the existing preset's roles and thinking level; the create
@@ -327,6 +356,21 @@ it("never branches on the provider identity to decide which controls exist", asy
 
 it("offers catalog models and reasoning levels while allowing role overrides to be edited", async () => {
   await ready(descriptor(), []);
+  client.listProviderFeatures.mockResolvedValue({
+    features: [
+      {
+        type: "select",
+        id: "modelRole.advisor",
+        label: "Advisor",
+        value: "native",
+        options: [
+          { id: "native", label: "Native" },
+          { id: "unset", label: "Unset" },
+          { id: "opus", label: "Opus" },
+        ],
+      },
+    ],
+  });
   renderSection(
     <ProviderPresetsSection
       provider="claude"
@@ -351,10 +395,13 @@ it("offers catalog models and reasoning levels while allowing role overrides to 
     target: { value: "high" },
   });
   expect(screen.getByRole("combobox", { name: "Opus" })).toBeTruthy();
-  expect(screen.getByRole("combobox", { name: "High" })).toBeTruthy();
-  fireEvent.change(screen.getAllByRole("textbox")[1], {
-    target: { value: '{"modelRole.advisor":"native"}' },
+  expect(screen.getByRole("combobox", { name: "schedules.thinking.high" })).toBeTruthy();
+  fireEvent.change(screen.getByTestId("provider-preset-add-role"), {
+    target: { value: "modelRole.advisor" },
   });
+  expect(screen.getByTestId(/^preset-role-name-/).textContent).toBe("ADVISOR");
+  expect(screen.getByTestId(/^preset-role-name-/).tagName).toBe("SPAN");
+  expect(screen.queryByTestId("provider-preset-roles")).toBeNull();
   fireEvent.click(screen.getByTestId("provider-preset-save"));
   await waitFor(() =>
     expect(client.saveProviderPreset).toHaveBeenCalledWith(
@@ -378,12 +425,15 @@ it("shows project scope and prevents global writes to an overriding project pres
   renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" cwd="/repo/project" />);
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
   expect(screen.getByTestId("provider-presets-scope").textContent).toBe(
-    "providerControl.scopeProject",
+    "providerControl.scopeNativeShort",
   );
   expect(client.listProviderPresets).toHaveBeenCalledWith("omp", "/repo/project");
-  const actions = screen.getByTestId("provider-preset-team").querySelectorAll("button");
-  expect([...actions].every((button) => button.disabled)).toBe(true);
-  for (const button of actions) fireEvent.click(button);
+  expect(
+    (screen.getByLabelText("settings.providers.presets.remove") as HTMLButtonElement).disabled,
+  ).toBe(true);
+  fireEvent.click(screen.getByLabelText("providerControl.viewPreset"));
+  expect(screen.queryByTestId("provider-preset-save")).toBeNull();
+  expect(screen.getByText("providerControl.projectPresetReadOnly")).toBeTruthy();
   expect(client.saveProviderPreset).not.toHaveBeenCalled();
   expect(client.deleteProviderPreset).not.toHaveBeenCalled();
 });
@@ -392,10 +442,11 @@ it("keeps native entries read-only when the list has no ownership metadata", asy
   await ready(descriptor({ backend: "native" }), [{ name: "team", model: "opus" }]);
   renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
   await screen.findByText("team");
-  for (const action of screen.getByTestId("provider-preset-team").querySelectorAll("button")) {
-    expect(action.disabled).toBe(true);
-    fireEvent.click(action);
-  }
+  expect(
+    (screen.getByLabelText("settings.providers.presets.remove") as HTMLButtonElement).disabled,
+  ).toBe(true);
+  fireEvent.click(screen.getByLabelText("providerControl.viewPreset"));
+  expect(screen.queryByTestId("provider-preset-save")).toBeNull();
   expect(client.deleteProviderPreset).not.toHaveBeenCalled();
   expect(client.saveProviderPreset).not.toHaveBeenCalled();
 });
@@ -463,6 +514,8 @@ it.each(["save", "delete"] as const)(
         ? screen.getByTestId("provider-preset-save")
         : screen.getByLabelText("settings.providers.presets.remove"),
     );
+    if (operation === "delete")
+      fireEvent.click(screen.getByTestId("provider-preset-confirm-delete"));
     await waitFor(() => expect(client.listProviderPresets).toHaveBeenCalledTimes(2));
     await act(async () => {});
     expect(client.saveProviderPreset).not.toHaveBeenCalled();
@@ -484,6 +537,8 @@ it.each(["save", "delete"] as const)(
         ? screen.getByTestId("provider-preset-save")
         : screen.getByLabelText("settings.providers.presets.remove"),
     );
+    if (operation === "delete")
+      fireEvent.click(screen.getByTestId("provider-preset-confirm-delete"));
     await waitFor(() =>
       expect(
         (screen.getByLabelText("settings.providers.presets.remove") as HTMLButtonElement).disabled,
@@ -495,3 +550,163 @@ it.each(["save", "delete"] as const)(
     expect(client.deleteProviderPreset).not.toHaveBeenCalled();
   },
 );
+
+it("requires confirmation, allows cancel and shows deletion progress and completion", async () => {
+  await ready(descriptor(), [preset("team")]);
+  let resolve!: (value: unknown) => void;
+  client.deleteProviderPreset.mockImplementation(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  );
+  renderSection(<ProviderPresetsSection provider="claude" serverId="host-a" />);
+  await screen.findByText("team");
+  fireEvent.click(screen.getByLabelText("settings.providers.presets.remove"));
+  expect(client.deleteProviderPreset).not.toHaveBeenCalled();
+  expect(screen.getByTestId("provider-preset-delete-confirmation").textContent).toContain("team");
+  fireEvent.click(screen.getByText("common.actions.cancel"));
+  expect(screen.queryByTestId("provider-preset-confirm-delete")).toBeNull();
+  expect(client.deleteProviderPreset).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByLabelText("settings.providers.presets.remove"));
+  fireEvent.click(screen.getByTestId("provider-preset-confirm-delete"));
+  await waitFor(() => expect(client.deleteProviderPreset).toHaveBeenCalledOnce());
+  expect((screen.getByTestId("provider-preset-confirm-delete") as HTMLButtonElement).disabled).toBe(
+    true,
+  );
+  fireEvent.click(screen.getByTestId("provider-preset-confirm-delete"));
+  expect(client.deleteProviderPreset).toHaveBeenCalledOnce();
+  await act(async () => {
+    resolve({ deleted: "team" });
+  });
+  await waitFor(() => expect(screen.queryByTestId("provider-preset-confirm-delete")).toBeNull());
+  expect(screen.getByTestId("provider-presets-notice")).toBeTruthy();
+});
+
+it("creates and reopens a native preset using only model, role and effort choices", async () => {
+  const rows: ProviderPresetEntry[] = [];
+  await ready(descriptor({ backend: "native" }), rows);
+  client.listProviderPresets.mockImplementation(async () => ({ presets: [...rows] }));
+  client.listProviderFeatures.mockResolvedValue({
+    features: [
+      {
+        type: "select",
+        id: "modelRole.advisor",
+        label: "Advisor",
+        value: "native",
+        options: [
+          { id: "native", label: "Default" },
+          { id: "unset", label: "Unassigned" },
+          { id: "native/model", label: "Local model" },
+          { id: "native/model:high", label: "Local model high" },
+        ],
+      },
+    ],
+  });
+  client.saveProviderPreset.mockImplementation(async (_provider, stored) => {
+    rows.push({ ...stored, source: "global", editable: true });
+    return { saved: stored.name };
+  });
+  renderSection(
+    <ProviderPresetsSection
+      provider="omp"
+      serverId="host-a"
+      models={[
+        {
+          provider: "omp",
+          id: '["native","model"]',
+          label: "Local model",
+          thinkingOptions: [{ id: "high", label: "High" }],
+        },
+      ]}
+    />,
+  );
+  await screen.findByTestId("provider-presets-empty-create");
+  fireEvent.click(screen.getByTestId("provider-presets-empty-create"));
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "workflow" } });
+  fireEvent.change(screen.getByTestId("provider-preset-model-options"), {
+    target: { value: '["native","model"]' },
+  });
+  fireEvent.change(screen.getByTestId("provider-preset-thinking-options"), {
+    target: { value: "high" },
+  });
+  await waitFor(() =>
+    expect((screen.getByTestId("provider-preset-add-role") as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  );
+  fireEvent.change(screen.getByTestId("provider-preset-add-role"), {
+    target: { value: "modelRole.advisor" },
+  });
+  fireEvent.change(screen.getByTestId(/^preset-role-model-/), {
+    target: { value: "native/model" },
+  });
+  fireEvent.change(screen.getByTestId(/^preset-role-thinking-/), { target: { value: "high" } });
+  expect(screen.getByTestId(/^preset-role-name-/).textContent).toBe("ADVISOR");
+  expect(screen.getByTestId(/^preset-role-name-/).tagName).toBe("SPAN");
+  expect(screen.queryByTestId("provider-preset-roles")).toBeNull();
+  expect(screen.getAllByRole("textbox")).toHaveLength(1);
+  fireEvent.click(screen.getByTestId("provider-preset-save"));
+  await waitFor(() => expect(screen.queryByTestId("provider-preset-save")).toBeNull());
+  expect(rows[0]).toMatchObject({
+    model: '["native","model"]',
+    thinkingOptionId: "high",
+    featureValues: { "modelRole.advisor": "native/model:high" },
+  });
+  fireEvent.click(screen.getByLabelText("settings.providers.presets.edit"));
+  expect((screen.getByTestId("provider-preset-model-options") as HTMLSelectElement).value).toBe(
+    '["native","model"]',
+  );
+  expect((screen.getByTestId(/^preset-role-model-/) as HTMLSelectElement).value).toBe(
+    "native/model",
+  );
+  expect((screen.getByTestId(/^preset-role-thinking-/) as HTMLSelectElement).value).toBe("high");
+  fireEvent.click(screen.getByTestId(/^preset-role-remove-/));
+  expect(screen.queryByTestId(/^preset-role-model-/)).toBeNull();
+});
+
+it("starts native presets with a fixed roster of configured roles and resolved default previews", async () => {
+  await ready(descriptor({ backend: "native" }));
+  client.listProviderFeatures.mockResolvedValue({
+    features: [
+      {
+        type: "select",
+        id: "modelRole.smol",
+        label: "Fast model (smol)",
+        value: "native",
+        options: [
+          {
+            id: "native",
+            label: "Use native default",
+            metadata: {
+              nativeSelector: "provider/model:high",
+              resolvedSelector: "provider/model:high",
+            },
+          },
+          { id: "provider/model", label: "Model" },
+          { id: "provider/model:high", label: "Model (high)" },
+        ],
+      },
+    ],
+  });
+  renderSection(
+    <ProviderPresetsSection
+      provider="omp"
+      serverId="host-a"
+      models={[{ provider: "omp", id: '["provider","model"]', label: "Fast model" }]}
+    />,
+  );
+  await screen.findByTestId("provider-presets-empty-create");
+  fireEvent.click(screen.getByTestId("provider-presets-empty-create"));
+  const identity = await screen.findByTestId("preset-role-name-initial-modelRole.smol");
+  expect(identity.textContent).toBe("SMOL");
+  expect(identity.tagName).toBe("SPAN");
+  expect((screen.getByTestId(/^preset-role-model-/) as HTMLSelectElement).value).toBe("native");
+  expect((screen.getByTestId(/^preset-role-thinking-/) as HTMLSelectElement).disabled).toBe(true);
+  fireEvent.click(screen.getByTestId(/^preset-role-remove-/));
+  expect(screen.queryByTestId(/^preset-role-model-/)).toBeNull();
+  fireEvent.change(screen.getByTestId("provider-preset-add-role"), {
+    target: { value: "modelRole.smol" },
+  });
+  expect(screen.getByTestId(/^preset-role-name-/).textContent).toBe("SMOL");
+});

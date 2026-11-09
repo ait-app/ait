@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ProviderUiState } from "@ait/protocol/messages";
 import { ProviderVibe } from "./provider-vibe";
 
@@ -46,12 +46,14 @@ it("lists enabled vibe workers with status, description and model", () => {
   view.unmount();
 });
 
-it("renders nothing when vibe is disabled or has no workers", () => {
+it("keeps the live mode visible when disabled or without workers", () => {
   const disabled = render(<ProviderVibe state={{ enabled: false, workers: running.workers }} />);
-  expect(disabled.container.innerHTML).toBe("");
+  expect(screen.getByText("providerControl.vibe.disabled")).toBeTruthy();
   disabled.unmount();
   const empty = render(<ProviderVibe state={{ enabled: true, workers: [] }} />);
-  expect(empty.container.innerHTML).toBe("");
+  expect(screen.getByText("providerControl.vibe.enabled")).toBeTruthy();
+  expect(screen.getByTestId("provider-vibe-empty")).toBeTruthy();
+  empty.unmount();
 });
 
 it("opens a worker only when a handler is supplied", () => {
@@ -67,4 +69,25 @@ it("opens a worker only when a handler is supplied", () => {
   expect(readonly.getByTestId("provider-vibe-worker-worker-good").getAttribute("role")).not.toBe(
     "button",
   );
+});
+
+it("offers an exit without workers, retains the active state until acknowledged, and shows errors", async () => {
+  let reject!: (error: Error) => void;
+  const onExit = vi.fn(
+    () =>
+      new Promise<void>((_resolve, fail) => {
+        reject = fail;
+      }),
+  );
+  const mounted = render(<ProviderVibe state={{ enabled: true, workers: [] }} onExit={onExit} />);
+  fireEvent.click(screen.getByTestId("provider-vibe-exit"));
+  expect(onExit).toHaveBeenCalledOnce();
+  expect(screen.getByText("providerControl.vibe.enabled")).toBeTruthy();
+  await act(async () => {
+    reject(new Error("Cannot exit"));
+  });
+  expect(screen.getByText("Cannot exit")).toBeTruthy();
+  mounted.rerender(<ProviderVibe state={{ enabled: false, workers: [] }} onExit={onExit} />);
+  expect(screen.getByText("providerControl.vibe.disabled")).toBeTruthy();
+  expect(screen.queryByTestId("provider-vibe-exit")).toBeNull();
 });

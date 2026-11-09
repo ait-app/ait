@@ -6,6 +6,9 @@ import type { ProviderUiState } from "@ait/protocol/messages";
 import { ProviderSideQuestions } from "./provider-side-questions";
 
 const { runNativeAction } = vi.hoisted(() => ({ runNativeAction: vi.fn() }));
+vi.mock("@/components/markdown/renderer", () => ({
+  MarkdownRenderer: ({ text }: { text: string }) => <div data-testid="side-markdown">{text}</div>,
+}));
 vi.mock("@/runtime/host-runtime", () => ({ useHostRuntimeClient: () => ({ runNativeAction }) }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("@/components/ui/button", () => ({
@@ -200,4 +203,15 @@ it("the dismiss control leaves collapse and expansion untouched", () => {
   expect(screen.getByLabelText("providerControl.sideQuestions.question")).toBeTruthy();
   fireEvent.click(screen.getByTestId("side-question-close"));
   expect(screen.queryByTestId("provider-side-questions")).toBeNull();
+});
+
+it("uses Markdown for answers, avoids repeating the initial question, and labels the empty editor", () => {
+  render(view(state()));
+  expect(screen.getAllByText(topic.question)).toHaveLength(1);
+  expect(screen.getByTestId("side-markdown").textContent).toBe("Side answer");
+  expect(screen.getByPlaceholderText("providerControl.sideQuestions.newPlaceholder")).toBeTruthy();
+  fireEvent.click(screen.getByText("providerControl.sideQuestions.followUp"));
+  expect(
+    screen.getByPlaceholderText("providerControl.sideQuestions.followUpPlaceholder"),
+  ).toBeTruthy();
 });

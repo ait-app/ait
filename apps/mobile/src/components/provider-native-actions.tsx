@@ -11,6 +11,8 @@ import { useFileDownload } from "@/hooks/use-file-download";
 import { useQueryClient } from "@tanstack/react-query";
 import { refreshOmpModelsOnAccess } from "@/data/providers-snapshot";
 
+import { ProviderNativeResult } from "./provider-native-result";
+
 function ActionChoice({
   value,
   options,
@@ -201,9 +203,11 @@ export function ProviderNativeActions({
             </Text>
           ) : null}
           {result ? (
-            <Text selectable style={styles.text}>
-              {result.text}
-            </Text>
+            <ProviderNativeResult
+              key={actionId}
+              text={result.text}
+              fileName={result.file?.fileName}
+            />
           ) : null}
           {result?.file ? (
             <View style={styles.actions}>

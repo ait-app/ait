@@ -11,6 +11,7 @@ import { openExternalUrl } from "@/utils/open-external-url";
 import { ProviderNativeActions } from "./provider-native-actions";
 import { ProviderSideQuestions } from "./provider-side-questions";
 import { ProviderVibe } from "./provider-vibe";
+import { useHostRuntimeClient } from "@/runtime/host-runtime";
 
 // Remember native editor deliveries across navigation without caching their text or auth URLs.
 const appliedEditors = new Map<string, string>();
@@ -29,6 +30,14 @@ export function ProviderRuntimePanel({
   onEditor?: (text: string) => void;
 }) {
   const { t } = useTranslation();
+  const client = useHostRuntimeClient(serverId);
+  const exitVibe = useCallback(async () => {
+    if (!client) throw new Error(t("workspace.terminal.hostDisconnected"));
+    await client.runNativeAction(agentId, "vibe_control", {
+      operation: "toggle",
+      enabled: "false",
+    });
+  }, [agentId, client, t]);
   const state = useSessionStore(
     (store) => store.sessions[serverId]?.agents.get(agentId)?.providerUi,
   );
@@ -74,7 +83,7 @@ export function ProviderRuntimePanel({
         !state.link &&
         !state.actions?.length &&
         !state.sideQuestions &&
-        !state.vibe?.enabled))
+        !state.vibe))
   )
     return null;
   return (
@@ -101,7 +110,12 @@ export function ProviderRuntimePanel({
         />
       ) : null}
       {above && state.vibe ? (
-        <ProviderVibe state={state.vibe} onOpenWorker={(worker) => openVibeWorker(worker.id)} />
+        <ProviderVibe
+          state={state.vibe}
+          onOpenWorker={(worker) => openVibeWorker(worker.id)}
+          onExit={exitVibe}
+          disabled={blocked || !client}
+        />
       ) : null}
       {above &&
         state.statuses.map((status) => (

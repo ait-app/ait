@@ -18,20 +18,26 @@ import { isWeb } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
-import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
+import { providersSnapshotQueryKey, useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { settingsStyles } from "@/styles/settings";
 import { resolveProviderLabel } from "@/utils/provider-definitions";
 import { formatTimeAgo } from "@/utils/time";
 import { compareMatchScores, scoreTextFields } from "@ait/protocol/search/text-match";
-import type { AgentModelDefinition, AgentProvider } from "@ait/protocol/agent-types";
+import type {
+  AgentModelDefinition,
+  AgentProvider,
+  ProviderSnapshotEntry,
+} from "@ait/protocol/agent-types";
 import type { ProviderProfileModel } from "@ait/protocol/provider-config";
 import {
   resolveProviderDiscoveredModels,
   type ProviderDiscoveredModelsCache,
 } from "./provider-diagnostic-models";
 import { ProviderPresetsSection } from "./provider-presets-section";
+import { useQueryClient } from "@tanstack/react-query";
+import { refreshProviderPresetSettings } from "@/data/provider-presets";
 
 interface ProviderDiagnosticSheetProps {
   provider: string;
@@ -618,7 +624,17 @@ export function ProviderDiagnosticSheet({
     providerEntry?.status === "error"
       ? (providerEntry.error ?? t("settings.providers.diagnostic.unknownError"))
       : null;
-  const modelsRefreshing = isRefreshing || providerSnapshotRefreshing;
+  const queryClient = useQueryClient();
+  const refreshScope = JSON.stringify([serverId, provider, cwd]);
+  const [settingsRefresh, setSettingsRefresh] = useState<{
+    scope: string;
+    pending: boolean;
+    models?: string | null;
+    presets?: string | null;
+  } | null>(null);
+  const currentRefresh = settingsRefresh?.scope === refreshScope ? settingsRefresh : null;
+  const modelsRefreshing =
+    isRefreshing || providerSnapshotRefreshing || currentRefresh?.pending === true;
 
   const stableDiscoveredRef = useRef<ProviderDiscoveredModelsCache | null>(null);
   const currentModels = providerEntry?.models;
@@ -662,8 +678,31 @@ export function ProviderDiagnosticSheet({
   );
 
   const handleRefreshModels = useCallback(() => {
-    void refresh([provider]);
-  }, [provider, refresh]);
+    setSettingsRefresh({ scope: refreshScope, pending: true });
+    const modelsRefreshed = refresh([provider]).then(() => {
+      const snapshot = queryClient.getQueryData<{ entries: ProviderSnapshotEntry[] }>(
+        providersSnapshotQueryKey(serverId, cwd),
+      );
+      const refreshed = snapshot?.entries.find((entry) => entry.provider === provider);
+      if (refreshed?.status === "error")
+        throw new Error(refreshed.error ?? t("settings.providers.diagnostic.unknownError"));
+    });
+    void Promise.allSettled([
+      modelsRefreshed,
+      refreshProviderPresetSettings(queryClient, { serverId, provider, cwd }, modelsRefreshed),
+    ]).then(([models, presets]) => {
+      setSettingsRefresh((current) =>
+        current?.scope !== refreshScope
+          ? current
+          : {
+              scope: refreshScope,
+              pending: false,
+              models: models.status === "rejected" ? String(models.reason) : null,
+              presets: presets.status === "rejected" ? String(presets.reason) : null,
+            },
+      );
+    });
+  }, [cwd, provider, queryClient, refresh, refreshScope, serverId, t]);
 
   const handleOpenAddSheet = useCallback(() => {
     refetchIfStale(provider);
@@ -727,6 +766,26 @@ export function ProviderDiagnosticSheet({
         })}
         snapPoints={MAIN_SNAP_POINTS}
       >
+        {currentRefresh && !currentRefresh.pending ? (
+          <View accessibilityLiveRegion="polite" testID="provider-settings-refresh-result">
+            <Text style={currentRefresh.models ? sheetStyles.errorText : sheetStyles.mutedText}>
+              {t(
+                currentRefresh.models
+                  ? "providerControl.modelsRefreshFailed"
+                  : "providerControl.modelsRefreshed",
+              )}
+              {currentRefresh.models ? `: ${currentRefresh.models}` : ""}
+            </Text>
+            <Text style={currentRefresh.presets ? sheetStyles.errorText : sheetStyles.mutedText}>
+              {t(
+                currentRefresh.presets
+                  ? "providerControl.presetsRefreshFailed"
+                  : "providerControl.presetsRefreshed",
+              )}
+              {currentRefresh.presets ? `: ${currentRefresh.presets}` : ""}
+            </Text>
+          </View>
+        ) : null}
         {modelConfiguration ? (
           <View testID="provider-current-model-settings">
             <Text style={sheetStyles.mutedText}>{t("providerControl.settingsSelection")}</Text>

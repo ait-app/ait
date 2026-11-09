@@ -16,6 +16,54 @@ export const ptBR: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    roleThinking: "Raciocínio",
+    roleDefaultShort: "Padrão",
+    newRole: "+ Adicionar função…",
+    roleInheritedModel: "Padrão → {{model}}",
+
+    deletePreset: "Excluir",
+    nativePresetDefaults:
+      "OMP registra os modelos padrão atuais ao salvar. Ao reabrir, os modelos salvos são exibidos.",
+    resultAvailable: "Resultado disponível",
+    statistics: {
+      tokens: "Tokens",
+      input: "Entrada",
+      output: "Saída",
+      cost: "Custo",
+      context: "Contexto",
+    },
+    viewPreset: "Ver {{name}}",
+    noModels: "Nenhum modelo disponível. Atualize o provedor.",
+    defaultThinking: "Usar padrão do provedor",
+    roleFormHint:
+      "Os papéis ausentes ficam sem atribuição. Adicione um papel para escolher o padrão do provedor ou um modelo.",
+    addRole: "Adicionar papel",
+    roleNative: "Usar padrão do provedor",
+    roleUnset: "Sem atribuição",
+    roleDefaultThinking: "Não substituir raciocínio",
+    role: "Papel",
+    removeRole: "Remover este papel",
+    scopeNativeShort: "Predefinições OMP · globais e do projeto",
+    scopeManagedShort: "Predefinições Ait · globais neste host",
+    sourceProject: "Projeto · somente leitura",
+    sourceGlobal: "Global",
+    sourceUnknown: "Origem desconhecida",
+    projectPresetReadOnly:
+      "OMP gerencia as predefinições do projeto. Aqui você pode visualizá-las.",
+    presetLoadFailed: "Não foi possível ler as predefinições. Atualize.",
+    presetChecking: "Verificando permissões…",
+    presetOwnershipUnknown: "Origem não confirmada. Atualize antes de editar.",
+    roleChoicesFailed: "Não foi possível carregar os papéis. Atualize.",
+    deletePresetTitle: "Excluir a predefinição {{name}}?",
+    deletePresetScope: "Provedor: {{provider}} · Escopo global",
+    deletePresetWarning:
+      "Esta combinação de modelo, raciocínio e papéis será excluída permanentemente. Não é possível desfazer.",
+    deletingPreset: "Excluindo…",
+    presetDeleted: "Predefinição {{name}} excluída.",
+    modelsRefreshFailed: "Falha ao atualizar modelos",
+    modelsRefreshed: "Modelos atualizados",
+    presetsRefreshFailed: "Falha ao atualizar predefinições ou papéis",
+    presetsRefreshed: "Predefinições e papéis atualizados",
     presetReadOnly:
       "A origem da predefinição não foi confirmada ou é só de leitura. Atualize antes de editar.",
     settingsSelection: "Seleção atual · para esta conversa ou rascunho",
@@ -26,10 +74,9 @@ export const ptBR: TranslationResources = {
     scopeOverride:
       "O projeto substitui predefinições globais com o mesmo nome. Salvar/excluir altera apenas as globais; as do projeto são somente leitura aqui.",
     customInput: "Entrada personalizada",
-    rolesEditable:
-      'Edite os papéis como objeto JSON, por exemplo {"modelRole.advisor":"native"}. Papéis omitidos são limpos ao aplicar.',
-    rolesInvalid: "Digite um objeto JSON com chaves modelRole.* e valores de texto não vazios.",
     sideQuestions: {
+      newPlaceholder: "Nova pergunta paralela…",
+      followUpPlaceholder: "Continuar este tópico…",
       title: "Perguntas paralelas",
       empty: "Ainda não há perguntas paralelas.",
       question: "Pergunta paralela",
@@ -56,12 +103,15 @@ export const ptBR: TranslationResources = {
     presetEmptyManaged:
       "Ainda não há predefinições; crie uma para alternar com um toque no seletor de modelo",
     createPreset: "Criar predefinição de modelo",
-    modelPreset: "Predefinição de modelos OMP",
+    modelPreset: "Predefinição de modelo",
     modelRoles: "Funções dos modelos",
     customModels: "Configuração personalizada",
     unassignedModel: "Não atribuído",
-    presetUnavailable: "A predefinição OMP está indisponível; atualize o catálogo de modelos",
+    presetUnavailable: "N\u00e3o foi poss\u00edvel ler as predefini\u00e7\u00f5es. Atualize.",
     vibe: {
+      disabled: "Vibe desativado",
+      exit: "Sair do Vibe",
+      empty: "Nenhum worker. A próxima mensagem será executada no modo director.",
       title: "Vibe",
       enabled: "Vibe ativo",
       states: {
@@ -3089,7 +3139,7 @@ export const ptBR: TranslationResources = {
         empty: "Ainda não há predefinições de modelo",
         loading: "Carregando predefinições...",
         saving: "Salvando...",
-        noRename: "Este provedor não permite renomear; crie uma nova e exclua a antiga",
+        noRename: "Este provedor não permite renomear predefinições.",
         nameTaken: 'Já existe um preset chamado "{{name}}"; abra-o para editá-lo',
       },
       models: {

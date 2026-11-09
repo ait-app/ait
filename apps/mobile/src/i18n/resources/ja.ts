@@ -16,6 +16,53 @@ export const ja: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    roleThinking: "思考",
+    roleDefaultShort: "既定",
+    newRole: "+ ロールを追加…",
+    roleInheritedModel: "既定 → {{model}}",
+
+    deletePreset: "削除",
+    nativePresetDefaults:
+      "OMP は保存時の既定モデルを記録します。開き直すと保存されたモデルが表示されます。",
+    resultAvailable: "結果を取得しました",
+    statistics: {
+      tokens: "トークン",
+      input: "入力",
+      output: "出力",
+      cost: "費用",
+      context: "コンテキスト",
+    },
+    viewPreset: "{{name}} を表示",
+    noModels: "モデルがありません。プロバイダーを更新してください。",
+    defaultThinking: "プロバイダーの既定値を使用",
+    roleFormHint:
+      "一覧にない役割は未割り当てになります。役割を追加し、既定値またはモデルを選択してください。",
+    addRole: "役割を追加",
+    roleNative: "プロバイダーの既定値を使用",
+    roleUnset: "未割り当て",
+    roleDefaultThinking: "思考設定を上書きしない",
+    role: "役割",
+    removeRole: "役割設定を削除",
+    scopeNativeShort: "OMP プリセット · 全体とプロジェクト",
+    scopeManagedShort: "Ait プリセット · このホスト全体",
+    sourceProject: "プロジェクト · 読み取り専用",
+    sourceGlobal: "全体",
+    sourceUnknown: "不明なソース",
+    projectPresetReadOnly:
+      "プロジェクトのプリセットは OMP が管理します。ここでは表示のみ可能です。",
+    presetLoadFailed: "読み込みに失敗しました。更新してください。",
+    presetChecking: "権限を確認中…",
+    presetOwnershipUnknown: "ソース未確認です。編集前に更新してください。",
+    roleChoicesFailed: "役割候補の読み込みに失敗しました。更新してください。",
+    deletePresetTitle: "プリセット {{name}} を削除しますか？",
+    deletePresetScope: "プロバイダー: {{provider}} · 全体設定",
+    deletePresetWarning: "モデル、思考、役割の組み合わせを完全に削除します。元に戻せません。",
+    deletingPreset: "削除中…",
+    presetDeleted: "プリセット {{name}} を削除しました。",
+    modelsRefreshFailed: "モデル更新に失敗",
+    modelsRefreshed: "モデルを更新しました",
+    presetsRefreshFailed: "プリセットまたは役割の更新に失敗",
+    presetsRefreshed: "プリセットと役割候補を更新しました",
     presetReadOnly:
       "プリセットの保存元が未確認、または読み取り専用です。更新してから編集してください。",
     settingsSelection: "現在の設定 · この会話または下書きに適用",
@@ -26,10 +73,9 @@ export const ja: TranslationResources = {
     scopeOverride:
       "同名のプロジェクト設定が優先されます。保存・削除はグローバル設定のみ。プロジェクト設定はここでは読み取り専用です。",
     customInput: "カスタム入力",
-    rolesEditable:
-      'ロール設定は JSON オブジェクトで編集できます。例：{"modelRole.advisor":"native"}。未指定のロールは適用時に解除されます。',
-    rolesInvalid: "modelRole.* キーと空でない文字列を含む JSON オブジェクトを入力してください。",
     sideQuestions: {
+      newPlaceholder: "新しいサイド質問…",
+      followUpPlaceholder: "このトピックを続ける…",
       title: "サイド質問",
       empty: "サイド質問はありません。",
       question: "サイド質問の内容",
@@ -56,12 +102,16 @@ export const ja: TranslationResources = {
     presetEmptyManaged:
       "モデルプリセットがありません。作成するとモデル選択からワンタップで切り替えられます",
     createPreset: "モデルプリセットを作成",
-    modelPreset: "OMP モデルプリセット",
+    modelPreset: "モデルプリセット",
     modelRoles: "用途別モデル",
     customModels: "カスタム設定",
     unassignedModel: "割り当てなし",
-    presetUnavailable: "OMP モデルプリセットを利用できません。モデル一覧を更新してください",
+    presetUnavailable:
+      "\u8aad\u307f\u8fbc\u307f\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002\u66f4\u65b0\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     vibe: {
+      disabled: "Vibe 無効",
+      exit: "Vibe を終了",
+      empty: "ワーカーはまだありません。次のメッセージは director モードで実行されます。",
       title: "Vibe",
       enabled: "Vibe 有効",
       states: {
@@ -3073,8 +3123,7 @@ export const ja: TranslationResources = {
         empty: "モデルプリセットはまだありません",
         loading: "プリセットを読み込み中...",
         saving: "保存中...",
-        noRename:
-          "このプロバイダーは名前変更に対応していません。新規作成してから古いものを削除してください",
+        noRename: "このプロバイダーはプリセットの名前変更に対応していません。",
         nameTaken:
           "「{{name}}」という名前のプリセットは既に存在します。それを開いて編集してください",
       },

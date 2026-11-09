@@ -1,5 +1,52 @@
 export const en = {
   providerControl: {
+    roleThinking: "Thinking",
+    roleDefaultShort: "Default",
+    newRole: "+ New role…",
+    roleInheritedModel: "Default → {{model}}",
+
+    deletePreset: "Delete",
+    nativePresetDefaults:
+      "OMP records the current default models when saving. Reopening shows the models actually stored.",
+    resultAvailable: "Result available",
+    statistics: {
+      tokens: "Tokens",
+      input: "Input",
+      output: "Output",
+      cost: "Cost",
+      context: "Context",
+    },
+    viewPreset: "View {{name}}",
+    noModels: "No models available. Refresh the provider.",
+    defaultThinking: "Use provider default",
+    roleFormHint:
+      "Roles not listed here are unassigned when this preset is applied. Add a role to use the provider default or choose a model.",
+    addRole: "Add role",
+    roleNative: "Use provider default",
+    roleUnset: "Leave unassigned",
+    roleDefaultThinking: "Do not override thinking",
+    role: "Role",
+    removeRole: "Remove role",
+    scopeNativeShort: "OMP presets · global and project",
+    scopeManagedShort: "Ait presets · global on this host",
+    sourceProject: "Project · read-only",
+    sourceGlobal: "Global",
+    sourceUnknown: "Source unknown",
+    projectPresetReadOnly: "Project presets are managed by OMP. You can view this preset here.",
+    presetLoadFailed: "Could not read presets. Refresh to retry.",
+    presetChecking: "Checking permissions…",
+    presetOwnershipUnknown: "Source not confirmed. Refresh before editing.",
+    roleChoicesFailed: "Role choices could not load. Refresh to retry.",
+    deletePresetTitle: "Delete preset {{name}}?",
+    deletePresetScope: "Provider: {{provider}} · Global scope",
+    deletePresetWarning:
+      "This permanently removes the model, thinking and role combination. This cannot be undone.",
+    deletingPreset: "Deleting…",
+    presetDeleted: "Preset {{name}} deleted.",
+    modelsRefreshFailed: "Model refresh failed",
+    modelsRefreshed: "Models refreshed",
+    presetsRefreshFailed: "Preset or role refresh failed",
+    presetsRefreshed: "Presets and role choices refreshed",
     presetReadOnly: "Preset ownership is unconfirmed or read-only. Refresh before editing.",
     settingsSelection: "Current selection · applies to this conversation or draft",
     scopeDefault: "Default OMP directory · includes global presets",
@@ -9,10 +56,9 @@ export const en = {
     scopeOverride:
       "Project presets override global presets with the same name. Save/delete modifies global presets only; project entries are read-only here.",
     customInput: "Custom input",
-    rolesEditable:
-      'Edit role overrides as a JSON object, for example {"modelRole.advisor":"native"}. Omitted roles are cleared when this preset is applied.',
-    rolesInvalid: "Enter a JSON object with modelRole.* keys and non-empty string values.",
     sideQuestions: {
+      newPlaceholder: "Ask a new side question…",
+      followUpPlaceholder: "Continue this topic…",
       title: "Side questions",
       empty: "No side questions yet.",
       question: "Side question",
@@ -39,12 +85,15 @@ export const en = {
     presetEmptyManaged:
       "No model presets yet; create one to switch with a single tap from the model picker",
     createPreset: "Create model preset",
-    modelPreset: "OMP model preset",
+    modelPreset: "Model preset",
     modelRoles: "Model roles",
     customModels: "Custom configuration",
     unassignedModel: "Unassigned",
-    presetUnavailable: "OMP model preset is unavailable; refresh the model catalog",
+    presetUnavailable: "Model preset unavailable. Refresh provider settings.",
     vibe: {
+      disabled: "Vibe off",
+      exit: "Exit Vibe",
+      empty: "No workers yet. Your next message will run in director mode.",
       title: "Vibe",
       enabled: "Vibe active",
       states: {
@@ -3640,7 +3689,7 @@ export const en = {
         empty: "No model presets yet",
         loading: "Loading presets...",
         saving: "Saving...",
-        noRename: "This provider cannot rename; create a new preset and delete the old one",
+        noRename: "This provider does not support renaming presets.",
         nameTaken: 'A preset named "{{name}}" already exists; open it to edit it instead',
       },
       models: {

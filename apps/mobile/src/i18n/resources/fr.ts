@@ -16,6 +16,54 @@ export const fr: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    roleThinking: "Réflexion",
+    roleDefaultShort: "Par défaut",
+    newRole: "+ Ajouter un rôle…",
+    roleInheritedModel: "Par défaut → {{model}}",
+
+    deletePreset: "Supprimer",
+    nativePresetDefaults:
+      "OMP enregistre les modèles par défaut au moment de la sauvegarde. Leur valeur enregistrée est affichée à la réouverture.",
+    resultAvailable: "Résultat disponible",
+    statistics: {
+      tokens: "Tokens",
+      input: "Entrée",
+      output: "Sortie",
+      cost: "Coût",
+      context: "Contexte",
+    },
+    viewPreset: "Voir {{name}}",
+    noModels: "Aucun modèle disponible. Actualisez le fournisseur.",
+    defaultThinking: "Utiliser le réglage du fournisseur",
+    roleFormHint:
+      "Les rôles absents ne sont pas attribués. Ajoutez un rôle pour choisir le réglage du fournisseur ou un modèle.",
+    addRole: "Ajouter un rôle",
+    roleNative: "Utiliser le réglage du fournisseur",
+    roleUnset: "Ne pas attribuer",
+    roleDefaultThinking: "Ne pas remplacer le raisonnement",
+    role: "Rôle",
+    removeRole: "Retirer ce rôle",
+    scopeNativeShort: "Préréglages OMP · globaux et projet",
+    scopeManagedShort: "Préréglages Ait · globaux sur cet hôte",
+    sourceProject: "Projet · lecture seule",
+    sourceGlobal: "Global",
+    sourceUnknown: "Source inconnue",
+    projectPresetReadOnly:
+      "Les préréglages du projet sont gérés par OMP. Consultation possible ici.",
+    presetLoadFailed: "Lecture impossible. Actualisez pour réessayer.",
+    presetChecking: "Vérification des droits…",
+    presetOwnershipUnknown: "Source non confirmée. Actualisez avant de modifier.",
+    roleChoicesFailed: "Chargement des rôles impossible. Actualisez.",
+    deletePresetTitle: "Supprimer le préréglage {{name}} ?",
+    deletePresetScope: "Fournisseur : {{provider}} · Portée globale",
+    deletePresetWarning:
+      "Cette combinaison de modèle, raisonnement et rôles sera supprimée définitivement. Cette action est irréversible.",
+    deletingPreset: "Suppression…",
+    presetDeleted: "Préréglage {{name}} supprimé.",
+    modelsRefreshFailed: "Échec de mise à jour des modèles",
+    modelsRefreshed: "Modèles actualisés",
+    presetsRefreshFailed: "Échec de mise à jour des préréglages ou rôles",
+    presetsRefreshed: "Préréglages et rôles actualisés",
     presetReadOnly:
       "L’origine du préréglage est inconnue ou en lecture seule. Actualisez avant de modifier.",
     settingsSelection: "Sélection actuelle · pour cette conversation ou ce brouillon",
@@ -26,11 +74,9 @@ export const fr: TranslationResources = {
     scopeOverride:
       "Le projet remplace les préréglages globaux de même nom. Enregistrer/supprimer modifie uniquement les globaux ; ceux du projet sont en lecture seule ici.",
     customInput: "Saisie personnalisée",
-    rolesEditable:
-      'Modifiez les rôles avec un objet JSON, par exemple {"modelRole.advisor":"native"}. Les rôles omis sont effacés lors de l’application.',
-    rolesInvalid:
-      "Saisissez un objet JSON avec des clés modelRole.* et des valeurs textuelles non vides.",
     sideQuestions: {
+      newPlaceholder: "Poser une nouvelle question…",
+      followUpPlaceholder: "Poursuivre ce sujet…",
       title: "Questions parallèles",
       empty: "Aucune question parallèle.",
       question: "Question parallèle",
@@ -57,12 +103,15 @@ export const fr: TranslationResources = {
     presetEmptyManaged:
       "Aucun préréglage ; créez-en un pour changer d'un geste depuis le sélecteur de modèle",
     createPreset: "Créer un préréglage",
-    modelPreset: "Préréglage des modèles OMP",
+    modelPreset: "Préréglage de modèle",
     modelRoles: "Rôles des modèles",
     customModels: "Configuration personnalisée",
     unassignedModel: "Non attribué",
-    presetUnavailable: "Le préréglage OMP est indisponible ; actualisez le catalogue des modèles",
+    presetUnavailable: "Lecture impossible. Actualisez pour r\u00e9essayer.",
     vibe: {
+      disabled: "Vibe désactivé",
+      exit: "Quitter Vibe",
+      empty: "Aucun worker. Le prochain message sera exécuté en mode director.",
       title: "Vibe",
       enabled: "Vibe actif",
       states: {
@@ -3121,8 +3170,7 @@ export const fr: TranslationResources = {
         empty: "Aucun préréglage de modèle",
         loading: "Chargement des préréglages...",
         saving: "Enregistrement...",
-        noRename:
-          "Ce fournisseur ne permet pas le renommage ; créez un préréglage puis supprimez l'ancien",
+        noRename: "Ce fournisseur ne prend pas en charge le renommage des préréglages.",
         nameTaken: "Un préréglage nommé « {{name}} » existe déjà ; ouvrez-le pour le modifier",
       },
       models: {

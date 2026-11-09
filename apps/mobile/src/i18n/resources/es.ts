@@ -16,6 +16,53 @@ export const es: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    roleThinking: "Razonamiento",
+    roleDefaultShort: "Predeterminado",
+    newRole: "+ Añadir rol…",
+    roleInheritedModel: "Predeterminado → {{model}}",
+
+    deletePreset: "Eliminar",
+    nativePresetDefaults:
+      "OMP guarda los modelos predeterminados actuales. Al volver a abrir se muestran los modelos guardados.",
+    resultAvailable: "Resultado disponible",
+    statistics: {
+      tokens: "Tokens",
+      input: "Entrada",
+      output: "Salida",
+      cost: "Coste",
+      context: "Contexto",
+    },
+    viewPreset: "Ver {{name}}",
+    noModels: "No hay modelos disponibles. Actualiza el proveedor.",
+    defaultThinking: "Usar valor del proveedor",
+    roleFormHint:
+      "Los roles que no figuran quedan sin asignar. Añade un rol para elegir el valor del proveedor o un modelo.",
+    addRole: "Añadir rol",
+    roleNative: "Usar valor del proveedor",
+    roleUnset: "Sin asignar",
+    roleDefaultThinking: "No sobrescribir razonamiento",
+    role: "Rol",
+    removeRole: "Eliminar este rol",
+    scopeNativeShort: "Preajustes OMP · globales y del proyecto",
+    scopeManagedShort: "Preajustes Ait · globales en este host",
+    sourceProject: "Proyecto · solo lectura",
+    sourceGlobal: "Global",
+    sourceUnknown: "Origen desconocido",
+    projectPresetReadOnly: "OMP gestiona los preajustes del proyecto. Aquí puedes consultarlos.",
+    presetLoadFailed: "No se pudieron leer los preajustes. Actualiza.",
+    presetChecking: "Comprobando permisos…",
+    presetOwnershipUnknown: "Origen sin confirmar. Actualiza antes de editar.",
+    roleChoicesFailed: "No se pudieron cargar los roles. Actualiza.",
+    deletePresetTitle: "¿Eliminar el preajuste {{name}}?",
+    deletePresetScope: "Proveedor: {{provider}} · Ámbito global",
+    deletePresetWarning:
+      "Se eliminará permanentemente esta combinación de modelo, razonamiento y roles. No se puede deshacer.",
+    deletingPreset: "Eliminando…",
+    presetDeleted: "Preajuste {{name}} eliminado.",
+    modelsRefreshFailed: "Error al actualizar modelos",
+    modelsRefreshed: "Modelos actualizados",
+    presetsRefreshFailed: "Error al actualizar preajustes o roles",
+    presetsRefreshed: "Preajustes y roles actualizados",
     presetReadOnly:
       "El origen del ajuste no está confirmado o es de solo lectura. Actualiza antes de editar.",
     settingsSelection: "Selección actual · para esta conversación o borrador",
@@ -26,10 +73,9 @@ export const es: TranslationResources = {
     scopeOverride:
       "El proyecto prevalece sobre los preajustes globales del mismo nombre. Guardar/eliminar solo cambia los globales; los del proyecto son de solo lectura aquí.",
     customInput: "Entrada personalizada",
-    rolesEditable:
-      'Edite los roles como un objeto JSON, por ejemplo {"modelRole.advisor":"native"}. Los roles omitidos se borran al aplicar el preajuste.',
-    rolesInvalid: "Introduzca un objeto JSON con claves modelRole.* y valores de texto no vacíos.",
     sideQuestions: {
+      newPlaceholder: "Nueva pregunta lateral…",
+      followUpPlaceholder: "Continuar este tema…",
       title: "Preguntas paralelas",
       empty: "Aún no hay preguntas paralelas.",
       question: "Pregunta paralela",
@@ -56,12 +102,15 @@ export const es: TranslationResources = {
     presetEmptyManaged:
       "Aún no hay ajustes predefinidos; crea uno para cambiar con un solo toque desde el selector de modelo",
     createPreset: "Crear ajuste predefinido",
-    modelPreset: "Preajuste de modelos OMP",
+    modelPreset: "Preajuste de modelo",
     modelRoles: "Roles de modelos",
     customModels: "Configuración personalizada",
     unassignedModel: "Sin asignar",
-    presetUnavailable: "El preajuste OMP no está disponible; actualiza el catálogo de modelos",
+    presetUnavailable: "No se pudieron leer los preajustes. Actualiza.",
     vibe: {
+      disabled: "Vibe desactivado",
+      exit: "Salir de Vibe",
+      empty: "No hay workers. El próximo mensaje se ejecutará en modo director.",
       title: "Vibe",
       enabled: "Vibe activo",
       states: {
@@ -3108,7 +3157,7 @@ export const es: TranslationResources = {
         empty: "Aún no hay ajustes predefinidos",
         loading: "Cargando ajustes...",
         saving: "Guardando...",
-        noRename: "Este proveedor no permite renombrar; crea uno nuevo y elimina el anterior",
+        noRename: "Este proveedor no admite cambiar el nombre de los preajustes.",
         nameTaken: 'Ya existe un preajuste llamado "{{name}}"; ábrelo para editarlo',
       },
       models: {

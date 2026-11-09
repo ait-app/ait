@@ -23,6 +23,53 @@ export const ru: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    roleThinking: "Размышление",
+    roleDefaultShort: "По умолчанию",
+    newRole: "+ Добавить роль…",
+    roleInheritedModel: "По умолчанию → {{model}}",
+
+    deletePreset: "Удалить",
+    nativePresetDefaults:
+      "OMP сохраняет текущие модели по умолчанию. При повторном открытии отображаются сохранённые модели.",
+    resultAvailable: "Результат готов",
+    statistics: {
+      tokens: "Токены",
+      input: "Ввод",
+      output: "Вывод",
+      cost: "Стоимость",
+      context: "Контекст",
+    },
+    viewPreset: "Просмотр {{name}}",
+    noModels: "Нет доступных моделей. Обновите провайдер.",
+    defaultThinking: "Настройка провайдера",
+    roleFormHint:
+      "Роли вне списка не назначаются. Добавьте роль и выберите настройку провайдера или модель.",
+    addRole: "Добавить роль",
+    roleNative: "Настройка провайдера",
+    roleUnset: "Не назначать",
+    roleDefaultThinking: "Не переопределять рассуждение",
+    role: "Роль",
+    removeRole: "Удалить настройку роли",
+    scopeNativeShort: "Пресеты OMP · глобальные и проекта",
+    scopeManagedShort: "Пресеты Ait · глобальные для хоста",
+    sourceProject: "Проект · только чтение",
+    sourceGlobal: "Глобальный",
+    sourceUnknown: "Источник неизвестен",
+    projectPresetReadOnly: "Пресетами проекта управляет OMP. Здесь доступен просмотр.",
+    presetLoadFailed: "Не удалось прочитать пресеты. Обновите.",
+    presetChecking: "Проверка прав…",
+    presetOwnershipUnknown: "Источник не подтверждён. Обновите перед изменением.",
+    roleChoicesFailed: "Не удалось загрузить роли. Обновите.",
+    deletePresetTitle: "Удалить пресет {{name}}?",
+    deletePresetScope: "Провайдер: {{provider}} · Глобальная область",
+    deletePresetWarning:
+      "Сочетание модели, рассуждения и ролей будет удалено навсегда. Отменить нельзя.",
+    deletingPreset: "Удаление…",
+    presetDeleted: "Пресет {{name}} удалён.",
+    modelsRefreshFailed: "Ошибка обновления моделей",
+    modelsRefreshed: "Модели обновлены",
+    presetsRefreshFailed: "Ошибка обновления пресетов или ролей",
+    presetsRefreshed: "Пресеты и роли обновлены",
     presetReadOnly:
       "Источник пресета не подтверждён или доступен только для чтения. Обновите перед редактированием.",
     settingsSelection: "Текущий выбор · для этого диалога или черновика",
@@ -33,10 +80,9 @@ export const ru: TranslationResources = {
     scopeOverride:
       "Пресет проекта заменяет одноимённый глобальный. Сохранение и удаление меняют только глобальные пресеты; проектные здесь доступны только для чтения.",
     customInput: "Ввести вручную",
-    rolesEditable:
-      'Роли редактируются как JSON, например {"modelRole.advisor":"native"}. Неуказанные роли сбрасываются при применении.',
-    rolesInvalid: "Введите объект JSON с ключами modelRole.* и непустыми строковыми значениями.",
     sideQuestions: {
+      newPlaceholder: "Новый побочный вопрос…",
+      followUpPlaceholder: "Продолжить тему…",
       title: "Параллельные вопросы",
       empty: "Параллельных вопросов пока нет.",
       question: "Параллельный вопрос",
@@ -63,12 +109,16 @@ export const ru: TranslationResources = {
     presetEmptyManaged:
       "Пресетов нет; создайте пресет, чтобы переключаться одним касанием в выборе модели",
     createPreset: "Создать пресет модели",
-    modelPreset: "Набор моделей OMP",
+    modelPreset: "Пресет модели",
     modelRoles: "Роли моделей",
     customModels: "Своя конфигурация",
     unassignedModel: "Не назначено",
-    presetUnavailable: "Набор моделей OMP недоступен; обновите каталог моделей",
+    presetUnavailable:
+      "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u0442\u044c \u043f\u0440\u0435\u0441\u0435\u0442\u044b. \u041e\u0431\u043d\u043e\u0432\u0438\u0442\u0435.",
     vibe: {
+      disabled: "Vibe выключен",
+      exit: "Выйти из Vibe",
+      empty: "Исполнителей пока нет. Следующее сообщение будет выполнено в режиме director.",
       title: "Vibe",
       enabled: "Vibe включён",
       states: {
@@ -3111,8 +3161,7 @@ export const ru: TranslationResources = {
         empty: "Пресетов моделей пока нет",
         loading: "Загрузка пресетов...",
         saving: "Сохранение...",
-        noRename:
-          "Этот провайдер не поддерживает переименование; создайте новый пресет и удалите старый",
+        noRename: "Этот провайдер не поддерживает переименование пресетов.",
         nameTaken: "Пресет с именем «{{name}}» уже существует; откройте его для редактирования",
       },
       models: {

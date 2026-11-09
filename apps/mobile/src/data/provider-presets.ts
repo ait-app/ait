@@ -1,5 +1,5 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
-import type { AgentProvider } from "@ait/protocol/agent-types";
+import type { AgentFeature, AgentProvider } from "@ait/protocol/agent-types";
 import type { ProviderPresetEntry, ProviderPresetDescriptor } from "@ait/protocol/messages";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 
@@ -33,6 +33,71 @@ export function providerPresetsQueryKey(
   return ["provider-presets", serverId ?? null, provider ?? null, cwd ?? null] as const;
 }
 
+export function providerPresetFeaturesKey(serverId: string, provider: string, cwd?: string | null) {
+  return ["providerPresetFeatures", serverId, provider, cwd ?? null] as const;
+}
+
+/** Role candidates belong to the same provider and directory as the records being edited. */
+export function useProviderPresetFeatures(serverId: string, provider: string, cwd?: string) {
+  const client = useHostRuntimeClient(serverId);
+  const connected = useHostRuntimeIsConnected(serverId);
+  return useQuery({
+    queryKey: providerPresetFeaturesKey(serverId, provider, cwd),
+    enabled: Boolean(client && connected),
+    staleTime: 60_000,
+    retry: false,
+    queryFn: async (): Promise<AgentFeature[]> => {
+      if (!client) throw new Error("Host disconnected");
+      const result = await client.listProviderFeatures({ provider, cwd: cwd ?? "~" });
+      if (result.error) throw new Error(result.error);
+      return result.features ?? [];
+    },
+  });
+}
+
+/** Explicit refresh retries even failed stores and reports transport and native list failures. */
+export async function refreshProviderPresetSettings(
+  queryClient: QueryClient,
+  target: { serverId: string; provider: string; cwd?: string },
+  modelsRefreshed: Promise<unknown> = Promise.resolve(),
+) {
+  const { serverId, provider, cwd } = target;
+  const key = providerPresetsQueryKey(serverId, provider, cwd);
+  const [store] = await Promise.allSettled([
+    queryClient.invalidateQueries({ queryKey: key, exact: true }, { throwOnError: true }),
+    modelsRefreshed,
+  ]);
+  // Feature discovery must observe the acknowledged new model catalog, not race its push.
+  const results = await Promise.allSettled([
+    queryClient.invalidateQueries(
+      { queryKey: providerPresetFeaturesKey(serverId, provider, cwd), exact: true },
+      { throwOnError: true },
+    ),
+    queryClient.invalidateQueries(
+      { queryKey: ["providerFeatures", serverId, provider, cwd ?? null] },
+      { throwOnError: true },
+    ),
+    queryClient.invalidateQueries(
+      { queryKey: ["providerRoleChoices", serverId, cwd] },
+      { throwOnError: true },
+    ),
+    queryClient.invalidateQueries(
+      {
+        predicate: (query) =>
+          query.queryKey[0] === "agentProfileFeatures" &&
+          query.queryKey[1] === serverId &&
+          String(query.queryKey[2]).startsWith(`${provider}|`),
+      },
+      { throwOnError: true },
+    ),
+  ]);
+  if (store.status === "rejected") throw store.reason;
+  const failed = results.find((result) => result.status === "rejected");
+  if (failed?.status === "rejected") throw failed.reason;
+  const answer = queryClient.getQueryData<PresetStoreAnswer>(key);
+  if (answer?.error) throw new Error(answer.error);
+}
+
 /**
  * Drop every cache a preset write invalidates.
  *
@@ -49,6 +114,7 @@ export async function invalidatePresetCaches(
 ) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ["provider-presets", serverId, provider] }),
+    queryClient.invalidateQueries({ queryKey: ["providerPresetFeatures", serverId, provider] }),
     queryClient.invalidateQueries({ queryKey: ["providerFeatures", serverId, provider] }),
     queryClient.invalidateQueries({ queryKey: ["agentProfileFeatures", serverId] }),
     queryClient.invalidateQueries({ queryKey: ["providerRoleChoices", serverId] }),

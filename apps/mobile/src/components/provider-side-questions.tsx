@@ -7,6 +7,7 @@ import type { ProviderUiState } from "@ait/protocol/messages";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
+import { MarkdownRenderer } from "@/components/markdown/renderer";
 
 type State = NonNullable<ProviderUiState["sideQuestions"]>;
 type Topic = State["records"][number];
@@ -131,6 +132,11 @@ export function ProviderSideQuestions({
           ) : null}
           <TextInput
             accessibilityLabel={t("providerControl.sideQuestions.question")}
+            placeholder={t(
+              replyTo
+                ? "providerControl.sideQuestions.followUpPlaceholder"
+                : "providerControl.sideQuestions.newPlaceholder",
+            )}
             value={draft}
             onChangeText={setDraft}
             editable={!disabled}
@@ -205,17 +211,19 @@ const SideTopic = memo(
         </View>
         {record.turns.map((turn, index) => (
           <View key={`${turn.createdAt}:${index}`} style={styles.turn}>
-            <Text style={styles.question} selectable>
-              {turn.question}
-            </Text>
-            {turn.answer ? (
-              <Text
-                style={styles.answer}
-                selectable
-                testID={`side-question-answer-${record.id}-${index}`}
-              >
-                {turn.answer}
+            {index > 0 || turn.question !== record.question ? (
+              <Text style={styles.question} selectable>
+                {turn.question}
               </Text>
+            ) : null}
+            {turn.answer ? (
+              <View testID={`side-question-answer-${record.id}-${index}`}>
+                <MarkdownRenderer
+                  text={turn.answer}
+                  compact
+                  streaming={running && turn.status === "running"}
+                />
+              </View>
             ) : null}
             {turn.error ? <Text style={styles.error}>{turn.error}</Text> : null}
           </View>

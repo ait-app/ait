@@ -250,7 +250,17 @@ impl Catalog {
                     || "Use OMP setting".to_owned(),
                     |selector| format!("Use OMP setting ({selector})"),
                 );
-                let mut options = vec![json!({"id":INHERIT,"label":inherited,"isDefault":true})];
+                let mut resolved = self.inherited.get(&role.id);
+                for _ in 0..=self.roles.len() {
+                    let Some(alias) = resolved.and_then(|selector| selector.strip_prefix('@'))
+                    else {
+                        break;
+                    };
+                    resolved = self.inherited.get(alias);
+                }
+                let mut options = vec![json!({"id":INHERIT,"label":inherited,"isDefault":true,
+                    "metadata":{"nativeSelector":self.inherited.get(&role.id),
+                    "resolvedSelector":resolved.filter(|selector| !selector.starts_with('@'))}})];
                 if self.presets.has_entries()
                     || config
                         .feature_values

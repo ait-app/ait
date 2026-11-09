@@ -9,6 +9,9 @@ const fixture = vi.hoisted(() => ({
   state: null as ProviderUiState | null,
   open: vi.fn(async () => {}),
 }));
+vi.mock("@/runtime/host-runtime", () => ({
+  useHostRuntimeClient: () => ({ runNativeAction: vi.fn() }),
+}));
 vi.mock("@/stores/session-store", () => ({
   useSessionStore: (selector: (state: unknown) => unknown) =>
     selector({
@@ -130,8 +133,6 @@ it("shows native vibe workers and hides everything when the host omits them", ()
     editor: null,
     vibe: { enabled: false, workers: [] },
   };
-  const disabled = render(
-    <ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />,
-  );
-  expect(disabled.container.innerHTML).toBe("");
+  render(<ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />);
+  expect(screen.getByTestId("provider-vibe")).toBeTruthy();
 });
