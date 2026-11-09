@@ -54,8 +54,8 @@ pub(super) fn features(services: &Services) -> Vec<String> {
     }
     if services.metadata.is_some() {
         features.push("workspace-setup-events-v1".to_owned());
-        // Only macOS can confine Agent writes (ADR-215); other hosts reject sandboxed creation.
-        if cfg!(target_os = "macos") {
+        // macOS and Linux can confine Agent writes (ADR-215); other hosts reject sandboxed creation.
+        if cfg!(any(target_os = "macos", target_os = "linux")) {
             features.push("workspace-sandbox-v1".to_owned());
         }
     }

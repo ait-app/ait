@@ -32,6 +32,8 @@ use crate::service::bot_execution::{BotSessionSupport, InstructionDelivery};
 pub(crate) struct ClaudeClient {
     program: PathBuf,
     config_dir: Option<PathBuf>,
+    #[cfg(target_os = "linux")]
+    config_dir_from_home: bool,
     deadline: Duration,
     images: super::images::ImageStore,
     environment: crate::ports::environment::AgentEnvironment,
@@ -46,6 +48,8 @@ impl ClaudeClient {
         Self {
             program,
             config_dir: std::env::var_os("CLAUDE_CONFIG_DIR").map(PathBuf::from),
+            #[cfg(target_os = "linux")]
+            config_dir_from_home: false,
             deadline: Duration::from_secs(30),
             images: super::images::ImageStore::default(),
             environment: crate::ports::environment::AgentEnvironment::default(),
@@ -144,10 +148,18 @@ impl AgentClient for ClaudeClient {
             .find(|(key, _)| *key == "CLAUDE_CONFIG_DIR")
         {
             client.config_dir = Some(PathBuf::from(directory));
+            #[cfg(target_os = "linux")]
+            {
+                client.config_dir_from_home = false;
+            }
         } else if client.config_dir.is_none()
             && let Some((_, home)) = environment.entries().find(|(key, _)| *key == "HOME")
         {
             client.config_dir = Some(PathBuf::from(home).join(".claude"));
+            #[cfg(target_os = "linux")]
+            {
+                client.config_dir_from_home = true;
+            }
         }
         session::open(&client, spec, None).await
     }

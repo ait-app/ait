@@ -52,6 +52,7 @@ fn protected_paths_are_denied_after_the_allowances() {
         "/Users/dev/repo/.git/config",
         "/Users/dev/repo/.git/hooks",
         "/Users/dev/repo/.git/worktrees/wt/config.worktree",
+        "/Users/dev/repo/.git/worktrees/wt/commondir",
         "/Users/dev/.codex/config.toml",
     ] {
         assert!(

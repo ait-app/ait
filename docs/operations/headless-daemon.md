@@ -15,6 +15,9 @@ systemd/launchd 等服务配置中的路径）。下载、校验、安装与 sys
 `Ait-<构建标识>-daemon-<平台>.tar.gz`，对应 main 最新一次成功构建。macOS dev build 归档未公证，
 用浏览器下载后需在解压目录执行 `xattr -d com.apple.quarantine aitd` 才能运行。
 
+Linux 独立归档不包含 `bwrap`。使用沙箱化 Worktree 前需通过系统包管理器安装 `bubblewrap >= 0.8.0`，
+并允许非特权 user namespace；详见 [Linux 沙箱说明](../decisions/workspace/adr-223-linux-worktree-sandbox.md)。
+
 下文命令使用归档中的 `aitd`；从源码构建时，将 `aitd` 替换为 `./target/release/daemon`。
 
 ## 登录与运行

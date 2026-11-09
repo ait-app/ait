@@ -215,6 +215,7 @@ pub(super) struct Transport {
     // Keep the outcome through cancellation until a close finishes cleanup and returns it.
     shutdown_result: Option<Result<(), AgentSessionError>>,
     group: Option<u32>,
+    sandboxed: bool,
     /// Safe bounded diagnostics shared with process readers and the session.
     pub(super) diagnostics: Diagnostics,
 }
@@ -308,6 +309,7 @@ impl Transport {
         });
         Ok(Self {
             group: child.id(),
+            sandboxed: cfg!(target_os = "linux") && confinement.is_some(),
             child: Some(child),
             input,
             messages,
@@ -493,7 +495,12 @@ impl Transport {
             self.closed = true;
             self.reader.abort();
             if let Some(child) = self.child.take() {
-                self.shutdown = Some(shutdown(child, self.group.take(), self.input.clone()));
+                self.shutdown = Some(shutdown(
+                    child,
+                    self.group.take(),
+                    self.input.clone(),
+                    self.sandboxed,
+                ));
             }
         }
         if let Some(completion) = self.shutdown.as_mut() {
@@ -525,7 +532,12 @@ impl Drop for Transport {
         }
         if let Some(child) = self.child.take() {
             // The worker owns the process until it is reaped, even without a live runtime.
-            drop(shutdown(child, self.group.take(), self.input.clone()));
+            drop(shutdown(
+                child,
+                self.group.take(),
+                self.input.clone(),
+                self.sandboxed,
+            ));
         }
     }
 }
@@ -583,11 +595,12 @@ fn shutdown(
     mut child: Child,
     group: Option<u32>,
     input: Arc<Mutex<Option<ChildStdin>>>,
+    sandboxed: bool,
 ) -> oneshot::Receiver<Result<(), AgentSessionError>> {
     let (finished, completion) = oneshot::channel();
     // A Tokio task can be cancelled during runtime shutdown, invoking kill_on_drop too early.
     std::thread::spawn(move || {
-        process_group::signal(group, Signal::Terminate);
+        terminate(group, sandboxed);
         // Keep stdin alive on Unix: EOF can exit Pi before its signal handler cleans up tools.
         #[cfg(not(unix))]
         if let Ok(mut input) = input.try_lock() {
@@ -614,4 +627,20 @@ fn shutdown(
         let _ = finished.send(result);
     });
     completion
+}
+
+/// Keep a Linux sandbox monitor alive while its native child runs graceful cleanup.
+fn terminate(group: Option<u32>, sandboxed: bool) {
+    #[cfg(target_os = "linux")]
+    if sandboxed {
+        if let Some(monitor) = group
+            && let Err(error) = crate::local::sandbox::linux::process::terminate_native(monitor)
+        {
+            tracing::debug!(error_kind = ?error.kind(), "Native sandbox termination unavailable");
+        }
+        return;
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = sandboxed;
+    process_group::signal(group, Signal::Terminate);
 }

@@ -72,10 +72,10 @@ impl WritePolicy {
     /// # Returns
     ///
     /// A policy that allows all three trees and protects the worktree's `.git` pointer, the
-    /// shared configuration and hooks, and the worktree-private configuration.
+    /// shared configuration and hooks, and the private configuration and common-dir pointer.
     #[must_use]
     pub fn worktree(worktree: &Path, git_dir: &Path, common_dir: &Path) -> Self {
-        let mut protected = Vec::with_capacity(PROTECTED_GIT_ENTRIES.len() + 2);
+        let mut protected = Vec::with_capacity(PROTECTED_GIT_ENTRIES.len() + 3);
         protected.push(worktree.join(".git"));
         protected.extend(
             PROTECTED_GIT_ENTRIES
@@ -83,6 +83,7 @@ impl WritePolicy {
                 .map(|entry| common_dir.join(entry)),
         );
         protected.push(git_dir.join("config.worktree"));
+        protected.push(git_dir.join("commondir"));
         let mut trees = vec![worktree.to_path_buf(), common_dir.to_path_buf()];
         if !git_dir.starts_with(common_dir) {
             trees.push(git_dir.to_path_buf());

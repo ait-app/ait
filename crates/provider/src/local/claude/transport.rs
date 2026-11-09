@@ -337,11 +337,25 @@ fn launch_command(
     spec: &AgentSessionSpec,
     binding: Option<(&str, bool)>,
 ) -> Result<(Command, Option<tempfile::NamedTempFile>), AgentSessionError> {
+    let config_dir = client.config_dir.clone();
+    #[cfg(target_os = "linux")]
+    let config_dir = if spec.confinement.is_some() {
+        Some(
+            crate::local::sandbox::linux::claude_config_dir(&|name| match (name, &config_dir) {
+                ("CLAUDE_CONFIG_DIR", _) if client.config_dir_from_home => None,
+                ("CLAUDE_CONFIG_DIR", Some(directory)) => directory.to_str().map(str::to_owned),
+                _ => client.environment.variable(name),
+            })
+            .map_err(|_| AgentSessionError::Failed)?,
+        )
+    } else {
+        config_dir
+    };
     let mut command = crate::local::sandbox::command(
         &client.program,
         spec.confinement.as_ref(),
         crate::local::sandbox::CLAUDE_STATE,
-        &|name| match (name, &client.config_dir) {
+        &|name| match (name, &config_dir) {
             ("CLAUDE_CONFIG_DIR", Some(directory)) => directory.to_str().map(str::to_owned),
             _ => client.environment.variable(name),
         },
@@ -379,11 +393,11 @@ fn launch_command(
     if let Some(file) = &mcp_config {
         command.arg("--mcp-config").arg(file.path());
     }
-    if let Some(path) = &client.config_dir {
+    command.envs(client.environment.entries());
+    if let Some(path) = &config_dir {
         command.env("CLAUDE_CONFIG_DIR", path);
     }
     command
-        .envs(client.environment.entries())
         .env_remove("CLAUDECODE")
         .env("CLAUDE_CODE_ENTRYPOINT", "ait")
         .env("CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING", "true");

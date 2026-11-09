@@ -1,8 +1,8 @@
 //! OS write confinement for native provider processes launched in a sandboxed Workspace.
 //!
 //! [`command`] is the single platform seam: it resolves the domain [`WritePolicy`] for one
-//! launch and hands it to the platform backend. macOS uses Seatbelt; other platforms fail
-//! closed until a backend, such as bubblewrap on Linux, renders the same policy.
+//! launch and hands it to the platform backend. macOS uses Seatbelt and Linux uses
+//! bubblewrap; other platforms fail closed.
 
 use std::ffi::OsStr;
 use std::io;
@@ -13,6 +13,8 @@ use tokio::process::Command;
 
 use crate::ports::agent_session::AgentSessionError;
 
+#[cfg(target_os = "linux")]
+pub(crate) mod linux;
 #[cfg(target_os = "macos")]
 mod seatbelt;
 
@@ -73,6 +75,7 @@ pub(crate) const CLAUDE_STATE: &[StateLocation] = &[
         protected: &[],
     },
     StateLocation::tree(None, "", ".cache/claude", &[]),
+    #[cfg(target_os = "macos")]
     StateLocation::tree(None, "", "Library/Caches/claude-cli-nodejs", &[]),
 ];
 
@@ -185,10 +188,15 @@ fn confined(
 #[cfg(target_os = "macos")]
 use seatbelt::command as backend;
 
+#[cfg(target_os = "linux")]
+use linux::command as backend;
+
 /// Refuse to launch unconfined where no write sandbox backend exists yet.
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn backend(_program: &OsStr, _policy: &WritePolicy) -> Result<Command, AgentSessionError> {
-    tracing::error!("Sandboxed worktree Agents require macOS; refusing an unconfined launch");
+    tracing::error!(
+        "Sandboxed worktree Agents require macOS or Linux; refusing an unconfined launch"
+    );
     Err(AgentSessionError::Unavailable)
 }
 

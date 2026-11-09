@@ -739,7 +739,7 @@ fn checkout_defaults_its_directory_name_to_the_selected_branch() {
     );
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 #[test]
 fn sandboxed_creation_persists_and_projects_the_isolation_level() {
     let projects = Projects::default();
@@ -769,7 +769,7 @@ fn sandboxed_creation_persists_and_projects_the_isolation_level() {
     );
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 #[test]
 fn sandboxed_creation_is_rejected_before_git_work_without_an_os_sandbox() {
     let projects = Projects::default();
