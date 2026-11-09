@@ -73,6 +73,20 @@ describe("desktop window owner", () => {
     expect(h.sent).toEqual([{ id: "agent-7" }]);
   });
 
+  it("opens workspace routes in additional windows without reusing a window or reopening a project", async () => {
+    const h = harness();
+    await h.owner.openPrimary();
+    await h.owner.openAdditional({ initialRoute: "/h/remote/workspace/workspace-42" });
+    await h.owner.openAdditional({ initialRoute: "/h/remote/workspace/workspace-42" });
+    expect(h.launches).toEqual([
+      { initialRoute: null, restoreWindowState: true },
+      { initialRoute: "/h/remote/workspace/workspace-42", restoreWindowState: false },
+      { initialRoute: "/h/remote/workspace/workspace-42", restoreWindowState: false },
+    ]);
+    expect(h.owner.takePendingProject(2)).toBeNull();
+    expect(h.owner.takePendingProject(3)).toBeNull();
+  });
+
   it("removes pending routing state when a window closes", async () => {
     const h = harness();
     await h.owner.openAdditional({ pendingProjectPath: "/project/a" });

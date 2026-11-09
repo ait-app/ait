@@ -49,6 +49,7 @@
   `~/.ait-server-desktop`、`~/.ait-server`，都不存在时创建 `~/.ait`，不移动旧目录。
 - [桌面进程交接](decisions/clients/adr-207-desktop-daemon-readiness-ownership.md)：退出交接要求已收到就绪日志；
   [MCP Unix socket](decisions/daemon/adr-203-mcp-unix-socket.md)要求绑定前验证私有父目录。
+- [桌面多窗口](decisions/clients/adr-223-desktop-workspace-windows.md)：Workspace 精确路由、独立窗口布局与共享草稿、附件引用的保存边界。
 - [移动端 E2E](../apps/mobile/e2e/README.md)、[Maestro](../apps/mobile/maestro/README.md)。
 - [品牌资源](../assets/brand/README.md)、[Paseo 来源与许可证](../paseo/README.md)。
 

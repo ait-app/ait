@@ -119,7 +119,10 @@ export interface DesktopWindowBridge {
 }
 
 export interface DesktopWindowModuleBridge {
-  openNew?: (options?: { pendingOpenProjectPath?: string | null }) => Promise<void>;
+  openNew?: (options?: {
+    pendingOpenProjectPath?: string | null;
+    workspace?: { serverId: string; workspaceId: string };
+  }) => Promise<void>;
   getCurrentWindow?: () => DesktopWindowBridge;
 }
 

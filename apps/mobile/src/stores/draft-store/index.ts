@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { create, type StateCreator } from "zustand";
 import { persist } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { AttachmentMetadata, WorkspaceFileComposerAttachment } from "@/attachments/types";
@@ -18,6 +18,7 @@ import {
   collectQueuedMessageAttachmentIds,
   collectReferencedAttachmentIdsFromState,
   DRAFT_STORE_VERSION,
+  DraftStoreStateSchema,
   isAttachmentMetadata,
   isCanonicalDraftInput,
   isLegacyDraftImage,
@@ -37,6 +38,10 @@ import {
 } from "./migration";
 import { createDraftPersistStorage } from "./persistence";
 import { createValidatedPersistStorage } from "@/storage/validated-persist-storage";
+import {
+  observePersistedState,
+  refreshUnchangedPersistedState,
+} from "@/storage/sync-persisted-state";
 
 export type { DraftInput, DraftLifecycleState } from "./state";
 
@@ -66,12 +71,68 @@ interface DraftStoreRuntimeState {
 type DraftStore = DraftStoreState & DraftStoreRuntimeState & DraftStoreActions;
 
 let gcScheduled = false;
-const draftPersistStorage = createDraftPersistStorage(
-  createValidatedPersistStorage(AsyncStorage, PersistedDraftStoreSchema),
-);
+const sharedDraftStorage = createValidatedPersistStorage(AsyncStorage, PersistedDraftStoreSchema, {
+  version: DRAFT_STORE_VERSION,
+  mergeRecordFields: ["drafts"],
+});
+const draftPersistStorage = createDraftPersistStorage(sharedDraftStorage);
+
+const editorPublications = new Map<() => void, () => boolean>();
+let editorActivityRevision = 0;
+const sharedDraftListeners = new Set<(previous: DraftStoreState, next: DraftStoreState) => void>();
+
+/** Publish DOM-owned input before a checkpoint or a shared refresh can replace its draft. */
+export function registerDraftEditorPublication(
+  flush: () => void,
+  canRefresh: () => boolean = () => true,
+): () => void {
+  editorPublications.set(flush, canRefresh);
+  editorActivityRevision += 1;
+  return () => {
+    editorPublications.delete(flush);
+    editorActivityRevision += 1;
+  };
+}
+
+/** Only accepted external saves replace an editor's live text; local typing stays DOM-owned. */
+export function subscribeToSharedDraftState(
+  listener: (previous: DraftStoreState, next: DraftStoreState) => void,
+): () => void {
+  sharedDraftListeners.add(listener);
+  return () => {
+    sharedDraftListeners.delete(listener);
+  };
+}
+
+function publishDraftEditors(): void {
+  for (const publish of editorPublications.keys()) publish();
+}
+
+async function flushPendingDraftState(): Promise<void> {
+  publishDraftEditors();
+  await draftPersistStorage.flush();
+}
 
 export function flushDraftPersistStorage(): Promise<void> {
-  return draftPersistStorage?.flush() ?? Promise.resolve();
+  return flushPendingDraftState().catch((error) => {
+    console.warn("[DraftStore] Failed to flush draft checkpoint", error);
+  });
+}
+
+let applySharedDraftState: (state: DraftStoreState) => void;
+
+function captureDraftSetter<Persisted>(
+  initializer: StateCreator<DraftStore, [], [["zustand/persist", Persisted]]>,
+): StateCreator<DraftStore, [], [["zustand/persist", Persisted]]> {
+  return (set, get, api) => {
+    // External saves update the view without writing them back as local edits.
+    applySharedDraftState = (state) => {
+      const previous = get();
+      set(state);
+      for (const listener of sharedDraftListeners) listener(previous, state);
+    };
+    return initializer(set, get, api);
+  };
 }
 
 function createDraftRecord(input: {
@@ -237,196 +298,251 @@ async function migrateAllLegacyDrafts(): Promise<void> {
 }
 
 export const useDraftStore = create<DraftStore>()(
-  persist(
-    (set, get) => ({
-      drafts: {},
-      createModalDraft: null,
-      attachmentFocusRequestByDraftKey: {},
+  captureDraftSetter(
+    persist(
+      (set, get) => ({
+        drafts: {},
+        createModalDraft: null,
+        attachmentFocusRequestByDraftKey: {},
 
-      getDraftInput: (draftKey) => {
-        const record = get().drafts[draftKey];
-        return toDraftInputIfReady(record);
-      },
+        getDraftInput: (draftKey) => {
+          const record = get().drafts[draftKey];
+          return toDraftInputIfReady(record);
+        },
 
-      hydrateDraftInput: async ({ draftKey }) => {
-        const current = get().drafts[draftKey];
-        if (!current) {
-          return undefined;
-        }
-        if (current.lifecycle !== "active") {
-          return undefined;
-        }
-        const ready = toDraftInputIfReady(current);
-        if (ready) {
-          return ready;
-        }
-
-        const migratedDraft = await migrateDraftInput(
-          { rawInput: current.input },
-          { migrateLegacyImages },
-        );
-
-        set((state) => {
-          const existing = state.drafts[draftKey];
-          if (!existing || existing.version !== current.version) {
-            return state;
+        hydrateDraftInput: async ({ draftKey }) => {
+          const current = get().drafts[draftKey];
+          if (!current) {
+            return undefined;
           }
-          return {
-            drafts: {
-              ...state.drafts,
-              [draftKey]: createDraftRecord({
-                draft: migratedDraft,
-                lifecycle: existing.lifecycle,
-                previousVersion: existing.version,
-              }),
-            },
-          };
-        });
-
-        scheduleAttachmentGc();
-        return migratedDraft;
-      },
-
-      saveDraftInput: ({ draftKey, draft }) => {
-        set((state) => {
-          const existing = state.drafts[draftKey];
-          return {
-            drafts: {
-              ...state.drafts,
-              [draftKey]: createDraftRecord({
-                draft,
-                lifecycle: "active",
-                previousVersion: existing?.version,
-              }),
-            },
-          };
-        });
-        scheduleAttachmentGc();
-      },
-
-      editDraftText: ({ draftKey, text }) => {
-        set((state) => {
-          const previous = state.drafts[draftKey];
-          const next = editDraftRecordText(previous, text, Date.now());
-          return next === previous ? state : { drafts: { ...state.drafts, [draftKey]: next } };
-        });
-      },
-
-      markDraftLifecycle: ({ draftKey, lifecycle }) => {
-        set((state) => {
-          const existing = state.drafts[draftKey];
-          if (!existing || existing.lifecycle === lifecycle) {
-            return state;
+          if (current.lifecycle !== "active") {
+            return undefined;
           }
-          return {
-            drafts: {
-              ...state.drafts,
-              [draftKey]: {
-                ...existing,
-                lifecycle,
-                updatedAt: Date.now(),
-                version: existing.version + 1,
-              },
-            },
-          };
-        });
-        scheduleAttachmentGc();
-      },
-
-      clearDraftInput: ({ draftKey, lifecycle }) => {
-        set((state) => {
-          const existing = state.drafts[draftKey];
-          if (!existing) {
-            return state;
+          const ready = toDraftInputIfReady(current);
+          if (ready) {
+            return ready;
           }
-          const cleared = applyClearDraftRecord({
-            record: existing,
-            lifecycle,
-            nowMs: Date.now(),
-          });
-          if (cleared) {
+
+          const migratedDraft = await migrateDraftInput(
+            { rawInput: current.input },
+            { migrateLegacyImages },
+          );
+
+          set((state) => {
+            const existing = state.drafts[draftKey];
+            if (!existing || existing.version !== current.version) {
+              return state;
+            }
             return {
               drafts: {
                 ...state.drafts,
-                [draftKey]: cleared,
+                [draftKey]: createDraftRecord({
+                  draft: migratedDraft,
+                  lifecycle: existing.lifecycle,
+                  previousVersion: existing.version,
+                }),
               },
             };
-          }
-          const nextDrafts = { ...state.drafts };
-          delete nextDrafts[draftKey];
-          return { drafts: nextDrafts };
-        });
+          });
 
-        scheduleAttachmentGc();
-      },
-
-      attachWorkspaceFile: async ({ draftKey, attachment }) => {
-        await get().hydrateDraftInput({ draftKey });
-        set((state) => {
-          const existing = state.drafts[draftKey];
-          const draft = toDraftInputIfReady(existing) ?? { text: "", attachments: [] };
-          return {
-            drafts: {
-              ...state.drafts,
-              [draftKey]: createDraftRecord({
-                draft: {
-                  ...draft,
-                  attachments: appendWorkspaceFileAttachment(draft.attachments, attachment),
-                },
-                lifecycle: "active",
-                previousVersion: existing?.version,
-              }),
-            },
-            attachmentFocusRequestByDraftKey: {
-              ...state.attachmentFocusRequestByDraftKey,
-              [draftKey]: (state.attachmentFocusRequestByDraftKey[draftKey] ?? 0) + 1,
-            },
-          };
-        });
-        scheduleAttachmentGc();
-      },
-
-      getCreateModalDraft: () => {
-        const record = get().createModalDraft;
-        return toDraftInputIfReady(record) ?? null;
-      },
-
-      saveCreateModalDraft: (draft) => {
-        set((state) => {
-          if (!draft) {
-            return { createModalDraft: null };
-          }
-          return {
-            createModalDraft: createDraftRecord({
-              draft,
-              lifecycle: "active",
-              previousVersion: state.createModalDraft?.version,
-            }),
-          };
-        });
-        scheduleAttachmentGc();
-      },
-
-      collectActiveAttachmentIds: () => {
-        return Array.from(collectReferencedAttachmentIdsFromState(get()).values());
-      },
-    }),
-    {
-      name: "paseo-drafts",
-      version: DRAFT_STORE_VERSION,
-      storage: draftPersistStorage,
-      partialize: ({ drafts, createModalDraft }) => ({ drafts, createModalDraft }),
-      migrate: (state) =>
-        migratePersistedState(state, {
-          migrateLegacyImages,
-          nowMs: Date.now(),
-        }),
-      onRehydrateStorage: () => {
-        return () => {
-          void migrateAllLegacyDrafts();
           scheduleAttachmentGc();
-        };
+          return migratedDraft;
+        },
+
+        saveDraftInput: ({ draftKey, draft }) => {
+          set((state) => {
+            const existing = state.drafts[draftKey];
+            return {
+              drafts: {
+                ...state.drafts,
+                [draftKey]: createDraftRecord({
+                  draft,
+                  lifecycle: "active",
+                  previousVersion: existing?.version,
+                }),
+              },
+            };
+          });
+          scheduleAttachmentGc();
+        },
+
+        editDraftText: ({ draftKey, text }) => {
+          set((state) => {
+            const previous = state.drafts[draftKey];
+            const next = editDraftRecordText(previous, text, Date.now());
+            return next === previous ? state : { drafts: { ...state.drafts, [draftKey]: next } };
+          });
+        },
+
+        markDraftLifecycle: ({ draftKey, lifecycle }) => {
+          set((state) => {
+            const existing = state.drafts[draftKey];
+            if (!existing || existing.lifecycle === lifecycle) {
+              return state;
+            }
+            return {
+              drafts: {
+                ...state.drafts,
+                [draftKey]: {
+                  ...existing,
+                  lifecycle,
+                  updatedAt: Date.now(),
+                  version: existing.version + 1,
+                },
+              },
+            };
+          });
+          scheduleAttachmentGc();
+        },
+
+        clearDraftInput: ({ draftKey, lifecycle }) => {
+          set((state) => {
+            const existing = state.drafts[draftKey];
+            if (!existing) {
+              return state;
+            }
+            const cleared = applyClearDraftRecord({
+              record: existing,
+              lifecycle,
+              nowMs: Date.now(),
+            });
+            if (cleared) {
+              return {
+                drafts: {
+                  ...state.drafts,
+                  [draftKey]: cleared,
+                },
+              };
+            }
+            const nextDrafts = { ...state.drafts };
+            delete nextDrafts[draftKey];
+            return { drafts: nextDrafts };
+          });
+
+          scheduleAttachmentGc();
+        },
+
+        attachWorkspaceFile: async ({ draftKey, attachment }) => {
+          await get().hydrateDraftInput({ draftKey });
+          set((state) => {
+            const existing = state.drafts[draftKey];
+            const draft = toDraftInputIfReady(existing) ?? { text: "", attachments: [] };
+            return {
+              drafts: {
+                ...state.drafts,
+                [draftKey]: createDraftRecord({
+                  draft: {
+                    ...draft,
+                    attachments: appendWorkspaceFileAttachment(draft.attachments, attachment),
+                  },
+                  lifecycle: "active",
+                  previousVersion: existing?.version,
+                }),
+              },
+              attachmentFocusRequestByDraftKey: {
+                ...state.attachmentFocusRequestByDraftKey,
+                [draftKey]: (state.attachmentFocusRequestByDraftKey[draftKey] ?? 0) + 1,
+              },
+            };
+          });
+          scheduleAttachmentGc();
+        },
+
+        getCreateModalDraft: () => {
+          const record = get().createModalDraft;
+          return toDraftInputIfReady(record) ?? null;
+        },
+
+        saveCreateModalDraft: (draft) => {
+          set((state) => {
+            if (!draft) {
+              return { createModalDraft: null };
+            }
+            return {
+              createModalDraft: createDraftRecord({
+                draft,
+                lifecycle: "active",
+                previousVersion: state.createModalDraft?.version,
+              }),
+            };
+          });
+          scheduleAttachmentGc();
+        },
+
+        collectActiveAttachmentIds: () => {
+          return Array.from(collectReferencedAttachmentIdsFromState(get()).values());
+        },
+      }),
+      {
+        name: "paseo-drafts",
+        version: DRAFT_STORE_VERSION,
+        storage: draftPersistStorage,
+        partialize: ({ drafts, createModalDraft }) => ({ drafts, createModalDraft }),
+        migrate: (state) =>
+          migratePersistedState(state, {
+            migrateLegacyImages,
+            nowMs: Date.now(),
+          }),
+        onRehydrateStorage: () => {
+          return () => {
+            void migrateAllLegacyDrafts();
+            scheduleAttachmentGc();
+          };
+        },
       },
-    },
+    ),
   ),
 );
+
+export async function refreshSharedDraftState(): Promise<boolean> {
+  const editorRevision = editorActivityRevision;
+  const canRefresh = () => [...editorPublications.values()].every((accept) => accept());
+  if (!useDraftStore.persist.hasHydrated() || !canRefresh()) return false;
+  return refreshUnchangedPersistedState({
+    name: "paseo-drafts",
+    storage: sharedDraftStorage,
+    revision: useDraftStore.getState,
+    flush: flushPendingDraftState,
+    beforeAccept: publishDraftEditors,
+    accept: (value) => {
+      if (editorRevision !== editorActivityRevision || !canRefresh()) return false;
+      const result = DraftStoreStateSchema.safeParse(
+        value?.state ?? { drafts: {}, createModalDraft: null },
+      );
+      if (!result.success || (value && value.version !== DRAFT_STORE_VERSION)) {
+        throw new Error("Cannot refresh incompatible draft state");
+      }
+      applySharedDraftState(result.data);
+      return true;
+    },
+  });
+}
+
+/** App-shell lifecycle owns browser listeners, including the unpublished IME candidate guard. */
+export function observeSharedDraftState(): () => void {
+  if (typeof window === "undefined" || typeof document === "undefined") return () => {};
+  const composing = new Set<Node>();
+  const stopCompositionGuard = registerDraftEditorPublication(
+    () => {},
+    () => {
+      for (const node of composing) if (!node.isConnected) composing.delete(node);
+      return composing.size === 0;
+    },
+  );
+  const compositionChanged = (event: Event) => {
+    if (!(event.target instanceof Node)) return;
+    if (event.type === "compositionstart") composing.add(event.target);
+    else composing.delete(event.target);
+    editorActivityRevision += 1;
+  };
+  // Composition candidates are still DOM-owned and intentionally absent from onChangeText.
+  document.addEventListener("compositionstart", compositionChanged, true);
+  document.addEventListener("compositionend", compositionChanged, true);
+  const stop = observePersistedState({ name: "paseo-drafts", refresh: refreshSharedDraftState });
+  return () => {
+    stop();
+    stopCompositionGuard();
+    document.removeEventListener("compositionstart", compositionChanged, true);
+    document.removeEventListener("compositionend", compositionChanged, true);
+  };
+}

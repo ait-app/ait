@@ -155,25 +155,168 @@ export async function deleteManagedAttachmentFile(input: { path?: unknown }): Pr
   return true;
 }
 
-export async function garbageCollectManagedAttachmentFiles(input: {
-  referencedIds?: unknown;
-}): Promise<number> {
+export async function garbageCollectManagedAttachmentFiles(
+  input: { referencedIds?: unknown },
+  isReferenced?: (attachmentId: string) => boolean,
+): Promise<number> {
   const dirPath = await ensureAttachmentsDir();
-  const referencedIds = Array.isArray(input.referencedIds)
+  const referencedIds = normalizeReferencedIds(input.referencedIds);
+
+  const entries = await readdir(dirPath, { withFileTypes: true });
+  const deleted = await Promise.all(
+    entries.map(async (entry) => {
+      const id = path.parse(entry.name).name;
+      // A window can report fresh references while the directory read is in flight.
+      if (!entry.isFile() || referencedIds.has(id) || isReferenced?.(id)) return false;
+      await rm(path.join(dirPath, entry.name), { force: true });
+      return true;
+    }),
+  );
+  return deleted.filter(Boolean).length;
+}
+
+function normalizeReferencedIds(input: unknown): Set<string> {
+  return Array.isArray(input)
     ? new Set(
-        input.referencedIds
+        input
           .filter((value): value is string => typeof value === "string")
           .map((value) => value.trim())
           .filter((value) => ATTACHMENT_ID_PATTERN.test(value)),
       )
     : new Set<string>();
+}
 
-  const entries = await readdir(dirPath, { withFileTypes: true });
-  const toDelete = entries.filter(
-    (entry) => entry.isFile() && !referencedIds.has(path.parse(entry.name).name),
-  );
+export interface AttachmentOwner {
+  once(event: "destroyed", listener: () => void): unknown;
+  isDestroyed(): boolean;
+}
 
-  await Promise.all(toDelete.map((entry) => rm(path.join(dirPath, entry.name), { force: true })));
+interface OwnerReferences {
+  referenced: Set<string>;
+  created: Set<string>;
+  creating: Map<string, number>;
+  closed: boolean;
+}
 
-  return toDelete.length;
+const attachmentFileOperations = {
+  writeBase64: writeAttachmentBase64,
+  writeBytes: writeAttachmentBytes,
+  copyFile: copyAttachmentFileToManagedStorage,
+  readBase64: readManagedFileBase64,
+  deleteFile: deleteManagedAttachmentFile,
+  garbageCollect: garbageCollectManagedAttachmentFiles,
+};
+
+/** Keep a renderer's partial draft view from deleting another window's attachments. */
+export function createManagedAttachmentFileCoordinator(operations = attachmentFileOperations) {
+  const owners = new Map<AttachmentOwner, OwnerReferences>();
+  const closedWindowReferences = new Set<string>();
+  const fallbackOwner: AttachmentOwner = { once: () => {}, isDestroyed: () => false };
+  let tail = Promise.resolve();
+
+  const run = <T>(operation: () => Promise<T>): Promise<T> => {
+    const result = tail.then(operation);
+    tail = result.then(
+      () => {},
+      () => {},
+    );
+    return result;
+  };
+
+  const referencesFor = (owner = fallbackOwner): OwnerReferences => {
+    if (owner.isDestroyed()) throw new Error("Attachment window has been destroyed");
+    const existing = owners.get(owner);
+    if (existing) return existing;
+    const references: OwnerReferences = {
+      referenced: new Set(),
+      created: new Set(),
+      creating: new Map(),
+      closed: false,
+    };
+    owners.set(owner, references);
+    owner.once("destroyed", () => {
+      // Another window may still have an older draft snapshot. Preserve the closed window's
+      // persisted and not-yet-reported attachments until restart, when drafts hydrate together.
+      references.closed = true;
+      for (const id of [
+        ...references.referenced,
+        ...references.created,
+        ...references.creating.keys(),
+      ]) {
+        closedWindowReferences.add(id);
+      }
+      owners.delete(owner);
+    });
+    return references;
+  };
+
+  const isReferenced = (id: string): boolean => {
+    if (closedWindowReferences.has(id)) return true;
+    for (const references of owners.values()) {
+      if (
+        references.referenced.has(id) ||
+        references.created.has(id) ||
+        references.creating.has(id)
+      )
+        return true;
+    }
+    return false;
+  };
+
+  const create = (
+    attachmentId: unknown,
+    owner: AttachmentOwner | undefined,
+    operation: () => Promise<AttachmentFileResult>,
+  ): Promise<AttachmentFileResult> => {
+    const id = normalizeAttachmentId(attachmentId);
+    const references = referencesFor(owner);
+    references.creating.set(id, (references.creating.get(id) ?? 0) + 1);
+    return run(async () => {
+      try {
+        const result = await operation();
+        if (references.closed) closedWindowReferences.add(id);
+        else references.created.add(id);
+        return result;
+      } finally {
+        const remaining = (references.creating.get(id) ?? 1) - 1;
+        if (remaining > 0) references.creating.set(id, remaining);
+        else references.creating.delete(id);
+      }
+    });
+  };
+
+  return {
+    writeBase64: (input: Parameters<typeof writeAttachmentBase64>[0], owner?: AttachmentOwner) =>
+      create(input.attachmentId, owner, () => operations.writeBase64(input)),
+    writeBytes: (input: Parameters<typeof writeAttachmentBytes>[0], owner?: AttachmentOwner) =>
+      create(input.attachmentId, owner, () => operations.writeBytes(input)),
+    copyFile: (
+      input: Parameters<typeof copyAttachmentFileToManagedStorage>[0],
+      owner?: AttachmentOwner,
+    ) => create(input.attachmentId, owner, () => operations.copyFile(input)),
+    readBase64: (input: Parameters<typeof readManagedFileBase64>[0], owner?: AttachmentOwner) => {
+      const id = normalizeAttachmentId(path.parse(resolveManagedAttachmentPath(input.path)).name);
+      referencesFor(owner).created.add(id);
+      return run(() => operations.readBase64(input));
+    },
+    deleteFile: (
+      input: Parameters<typeof deleteManagedAttachmentFile>[0],
+      owner?: AttachmentOwner,
+    ) => {
+      const id = normalizeAttachmentId(path.parse(resolveManagedAttachmentPath(input.path)).name);
+      const references = referencesFor(owner);
+      references.referenced.delete(id);
+      references.created.delete(id);
+      return run(() => (isReferenced(id) ? Promise.resolve(true) : operations.deleteFile(input)));
+    },
+    garbageCollect: (
+      input: Parameters<typeof garbageCollectManagedAttachmentFiles>[0],
+      owner?: AttachmentOwner,
+    ) => {
+      const references = referencesFor(owner);
+      references.referenced = normalizeReferencedIds(input.referencedIds);
+      references.created.clear();
+      return run(() => operations.garbageCollect({ referencedIds: [] }, isReferenced));
+    },
+  };
 }

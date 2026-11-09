@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/context-menu";
 import { Shortcut } from "@/components/ui/shortcut";
 import { OpenInFileManagerMenuItem } from "@/workspace/open-in-file-manager/menu-item";
+import { OpenWorkspaceInNewWindowMenuItem } from "@/workspace/open-in-new-window/menu-item";
 import { resolveSidebarWorkspaceAccessibilityLabel } from "@/components/sidebar/sidebar-workspace-title";
 import {
   workspaceServiceLabelKey,
@@ -242,6 +243,12 @@ function SidebarWorkspaceMenuItems({
           {t("workspaceLabels.title")}
         </DropdownMenuSubTrigger>
       ) : null}
+      <OpenWorkspaceInNewWindowMenuItem
+        surface={surface}
+        serverId={serverId}
+        workspaceId={workspaceId}
+        testID={`sidebar-workspace-menu-open-new-window-${workspaceKey}`}
+      />
       <OpenInFileManagerMenuItem
         surface={surface}
         path={openInFileManagerPath}

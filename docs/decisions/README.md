@@ -183,6 +183,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180 在不
 
 ## 客户端、连接与品牌
 
+- [ADR-223：桌面多窗口与 Workspace 状态归属](clients/adr-223-desktop-workspace-windows.md)
 - [ADR-218：Hub feature 协商收敛在线连接](clients/adr-218-hub-feature-negotiation.md)
 - [ADR-216：默认数据目录统一为 `~/.ait`](clients/adr-216-default-data-directory-ait.md)
 - [ADR-214：客户端 Workspace Bot 标签页 v2](clients/adr-214-workspace-bot-tab-v2.md)
