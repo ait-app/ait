@@ -4,7 +4,7 @@ import {
   nativeActionFields,
   nativeActionGroup,
   nativeActionValid,
-  nativeObjectOptions,
+  nativeObjectList,
   type NativeAction,
 } from "./provider-native-action-model";
 const fields = (ids: string[]) =>
@@ -102,7 +102,7 @@ it("rejects invalid budgets and timeouts before sending native RPC", () => {
 });
 it("reads human entry/provider/account labels and keeps identifiers only in values", () => {
   expect(
-    nativeObjectOptions(
+    nativeObjectList(
       JSON.stringify({
         entries: [
           {
@@ -113,18 +113,19 @@ it("reads human entry/provider/account labels and keeps identifiers only in valu
         ],
       }),
       "entries",
-    ),
+    ).options,
   ).toEqual([{ id: "native-id", label: "Build a task board" }]);
   expect(
-    nativeObjectOptions(
+    nativeObjectList(
       '{"providers":[{"id":"openai","name":"OpenAI","available":true}]}',
       "providers",
-    ),
+    ).options,
   ).toEqual([{ id: "openai", label: "OpenAI" }]);
   expect(
-    nativeObjectOptions('{"accounts":[{"credentialId":42,"label":"Work account"}]}', "accounts"),
+    nativeObjectList('{"accounts":[{"credentialId":42,"label":"Work account"}]}', "accounts")
+      .options,
   ).toEqual([{ id: "42", label: "Work account" }]);
-  expect(() => nativeObjectOptions("invalid", "entries")).toThrow("Incomplete native object list");
+  expect(() => nativeObjectList("invalid", "entries")).toThrow("Incomplete native object list");
 });
 
 it("keeps subagent and topic mutations on their object rows, and only asks for a new side question", () => {
@@ -139,4 +140,13 @@ it("keeps subagent and topic mutations on their object rows, and only asks for a
   expect(
     nativeActionArguments(action, { question: "New question", recordId: "old topic" }),
   ).toEqual({ question: "New question" });
+});
+
+it("preserves role identity and omitted counts for the task-specific history picker", () => {
+  expect(
+    nativeObjectList(
+      '{"entries":[{"id":"user","label":"Request","role":"user"}],"omitted":42}',
+      "entries",
+    ),
+  ).toEqual({ options: [{ id: "user", label: "Request", role: "user" }], omitted: 42 });
 });

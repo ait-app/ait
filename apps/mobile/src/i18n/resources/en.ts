@@ -60,6 +60,7 @@ export const en = {
       op: "Action",
     },
     tasks: {
+      recentHistory: "Showing recent history; {{count}} older entries remain in the native log.",
       finishTurn: "Finish the current main task before changing this state.",
       exitVibe: "Exit Vibe before switching conversation history.",
 

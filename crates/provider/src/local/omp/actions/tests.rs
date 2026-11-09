@@ -190,3 +190,35 @@ fn vibe_control_is_advertised_and_only_accepts_declared_fields_per_operation() {
         assert!(validate("vibe_control", &bad, "/tmp").is_err(), "{bad}");
     }
 }
+
+#[tokio::test]
+async fn history_choice_receipts_do_not_cut_json_when_native_messages_are_long() {
+    let entries: Vec<_> = (0..8)
+        .map(|index| {
+            json!({"id":format!("entry-{index}"),"type":"message",
+            "message":{"role":"user","content":"Native task text ".repeat(2000)}})
+        })
+        .collect();
+    let event = json!({"id":"history","command":"get_entries","success":true,
+        "data":{"entries":entries,"leafId":"entry-7"}});
+    let mut pending = Pending::default();
+    let receipt = pending.insert("history".to_owned(), "get_entries");
+
+    assert!(pending.capture(&event));
+    let response = receipt.await.unwrap();
+    let text = response["text"].as_str().unwrap();
+    let choices: Value = serde_json::from_str(text).unwrap();
+
+    assert!(text.len() < 32768);
+    assert_eq!(choices["entries"].as_array().unwrap().len(), 8);
+    assert_eq!(choices["entries"][7]["id"], "entry-7");
+    assert_eq!(choices["entries"][7]["role"], "user");
+    assert_eq!(choices["omitted"], 0);
+    assert!(
+        event["data"]["entries"][0]["message"]["content"]
+            .as_str()
+            .unwrap()
+            .len()
+            > 30000
+    );
+}

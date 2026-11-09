@@ -63,6 +63,7 @@ export const zhCN: TranslationResources = {
       op: "操作",
     },
     tasks: {
+      recentHistory: "显示最近条目，另有 {{count}} 条较早记录保留在原生日志。",
       finishTurn: "请先结束当前主任务，再执行此操作。",
       exitVibe: "请先退出 Vibe，再切换会话历史。",
 

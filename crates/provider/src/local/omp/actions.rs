@@ -5,6 +5,8 @@ use tokio::sync::oneshot;
 
 use crate::ports::agent_session::{AgentSessionError, AgentSessionFuture};
 
+mod choices;
+
 type Receipt = oneshot::Sender<Result<Value, AgentSessionError>>;
 
 /// In-flight native controls, independent of foreground prompts and callback delivery.
@@ -79,7 +81,12 @@ impl Pending {
                 json!({"text":"","error":safe["error"].as_str().unwrap_or("Native operation rejected")}),
             )
         } else {
-            let mut result = json!({"text":display(&event["data"])});
+            let text = if action == "get_entries" {
+                choices::history(&event["data"]).unwrap_or_else(|| display(&event["data"]))
+            } else {
+                display(&event["data"])
+            };
+            let mut result = json!({"text":text});
             if action == "export_html"
                 && let Some(path) = event["data"]["path"].as_str()
                 && let Some(name) = std::path::Path::new(path)

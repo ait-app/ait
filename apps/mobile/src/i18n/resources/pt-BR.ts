@@ -76,6 +76,7 @@ export const ptBR: TranslationResources = {
       op: "Ação",
     },
     tasks: {
+      recentHistory: "Histórico recente; {{count}} entradas antigas permanecem no registro nativo.",
       finishTurn: "Conclua a tarefa principal antes desta ação.",
       exitVibe: "Saia do Vibe antes de alterar o histórico.",
 

@@ -83,6 +83,8 @@ export const ru: TranslationResources = {
       op: "Действие",
     },
     tasks: {
+      recentHistory:
+        "Показана недавняя история; {{count}} старых записей остаются в исходном журнале.",
       finishTurn: "Завершите основную задачу перед этим действием.",
       exitVibe: "Выйдите из Vibe перед сменой истории.",
 

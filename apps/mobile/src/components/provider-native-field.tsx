@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import {
-  nativeObjectOptions,
+  nativeObjectList,
   nativeObjectQuery,
   type NativeArguments,
   type NativeField,
@@ -58,6 +58,7 @@ export function ProviderNativeField({
   const clientRef = useRef(client);
   clientRef.current = client;
   const [options, setOptions] = useState<NativeObjectOption[]>([]);
+  const [omitted, setOmitted] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
@@ -91,6 +92,7 @@ export function ProviderNativeField({
     let active = true;
     const request = nativeObjectQuery(field.id, { providerId: provider ?? "" });
     setOptions([]);
+    setOmitted(0);
     setError(null);
     if (!request || !clientRef.current) {
       setLoading(false);
@@ -100,10 +102,20 @@ export function ProviderNativeField({
     void clientRef.current
       .runNativeAction(agentId, request.action, request.arguments)
       .then((result) => {
-        if (active)
-          setOptions(
-            nativeObjectOptions(result.text, request.collection, label, purpose !== "login"),
+        if (active) {
+          const list = nativeObjectList(
+            result.text,
+            request.collection,
+            label,
+            purpose !== "login",
           );
+          setOptions(
+            list.options.filter(
+              (item) => field.id !== "entryId" || purpose !== "branch" || item.role === "user",
+            ),
+          );
+          setOmitted(list.omitted);
+        }
       })
       .catch((cause: unknown) => {
         if (active)
@@ -190,6 +202,11 @@ export function ProviderNativeField({
             {t("common.actions.refresh")}
           </Button>
         </View>
+      ) : null}
+      {omitted > 0 ? (
+        <Text style={styles.caption}>
+          {t("providerControl.tasks.recentHistory", { count: omitted })}
+        </Text>
       ) : null}
       {error ? (
         <Text accessibilityRole="alert" style={styles.error}>

@@ -85,6 +85,7 @@ export const ar: TranslationResources = {
       op: "الإجراء",
     },
     tasks: {
+      recentHistory: "يُعرض السجل الحديث؛ تبقى {{count}} عناصر أقدم في السجل الأصلي.",
       finishTurn: "أنهِ المهمة الرئيسية قبل تنفيذ هذا الإجراء.",
       exitVibe: "اخرج من Vibe قبل تغيير سجل المحادثة.",
 

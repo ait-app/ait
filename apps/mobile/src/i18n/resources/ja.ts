@@ -76,6 +76,7 @@ export const ja: TranslationResources = {
       op: "操作",
     },
     tasks: {
+      recentHistory: "最近の履歴を表示中。古い {{count}} 件はネイティブログに残っています。",
       finishTurn: "現在のメインタスクを終了してから操作してください。",
       exitVibe: "会話履歴を切り替える前に Vibe を終了してください。",
 

@@ -387,7 +387,7 @@ it("selects history entries by content and submits their bound target without te
   fixture.run
     .mockResolvedValueOnce({
       text: JSON.stringify({
-        entries: [{ id: "entry-17", message: { content: "Board requirements" } }],
+        entries: [{ id: "entry-17", message: { role: "user", content: "Board requirements" } }],
       }),
     })
     .mockResolvedValueOnce({ text: "Branched" });
@@ -409,7 +409,7 @@ it("selects history entries by content and submits their bound target without te
 });
 it("list query failure blocks mutation and retry reloads choices", async () => {
   fixture.run.mockRejectedValueOnce(new Error("History unavailable")).mockResolvedValueOnce({
-    text: JSON.stringify({ entries: [{ id: "entry-1", label: "Request" }] }),
+    text: JSON.stringify({ entries: [{ id: "entry-1", label: "Request", role: "user" }] }),
   });
   mount([
     {
@@ -533,7 +533,7 @@ it("prevents history changes while a main turn or Vibe owns the conversation", a
     fields: [{ id: "entryId", label: "Entry", required: true, options: [] }],
   };
   fixture.run.mockResolvedValue({
-    text: JSON.stringify({ entries: [{ id: "entry", label: "Request" }] }),
+    text: JSON.stringify({ entries: [{ id: "entry", label: "Request", role: "user" }] }),
   });
   const result = render(
     <ProviderNativeActions
@@ -564,4 +564,30 @@ it("prevents history changes while a main turn or Vibe owns the conversation", a
   expect(screen.getByText("providerControl.tasks.exitVibe")).toBeTruthy();
   fireEvent.click(submit());
   expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "get_entries", {});
+});
+
+it("offers only user messages for branching and explains bounded recent history", async () => {
+  fixture.run.mockResolvedValue({
+    text: JSON.stringify({
+      omitted: 42,
+      entries: [
+        { id: "config", label: "Model changed", entryType: "model_change" },
+        { id: "answer", label: "Implementation response", role: "assistant", entryType: "message" },
+        { id: "request", label: "Create a handoff card", role: "user", entryType: "message" },
+      ],
+    }),
+  });
+  mount([
+    {
+      id: "branch",
+      label: "Branch",
+      fields: [{ id: "entryId", label: "Entry", required: true, options: [] }],
+    },
+  ]);
+  choose("Branch");
+  await act(async () => {});
+  expect(screen.queryByRole("option", { name: "Implementation response" })).toBeNull();
+  expect(screen.queryByRole("option", { name: "Model changed" })).toBeNull();
+  expect(screen.getByRole("option", { name: "Create a handoff card" })).toBeTruthy();
+  expect(screen.getByText("providerControl.tasks.recentHistory")).toBeTruthy();
 });

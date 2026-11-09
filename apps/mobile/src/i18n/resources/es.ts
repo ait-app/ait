@@ -76,6 +76,8 @@ export const es: TranslationResources = {
       op: "Acción",
     },
     tasks: {
+      recentHistory:
+        "Historial reciente; {{count}} entradas anteriores permanecen en el registro nativo.",
       finishTurn: "Finaliza la tarea principal antes de esta acción.",
       exitVibe: "Sal de Vibe antes de cambiar el historial.",
 

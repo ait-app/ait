@@ -133,7 +133,7 @@ export function nativeObjectQuery(
   }
 }
 
-export type NativeObjectOption = { id: string; label: string; description?: string };
+export type NativeObjectOption = { id: string; label: string; description?: string; role?: string };
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -142,12 +142,12 @@ function record(value: unknown): Record<string, unknown> | null {
 }
 
 /** Read native object lists without ever offering an editable internal identifier. */
-export function nativeObjectOptions(
+export function nativeObjectList(
   text: string,
   collection: string,
   fallbackLabel = "Item",
   includeUnavailable = true,
-): NativeObjectOption[] {
+): { options: NativeObjectOption[]; omitted: number } {
   let data: unknown;
   try {
     data = JSON.parse(text);
@@ -157,7 +157,7 @@ export function nativeObjectOptions(
   const container = record(data);
   const items = Array.isArray(data) ? data : container?.[collection];
   if (!Array.isArray(items)) throw new SyntaxError("Incomplete native object list");
-  return items.flatMap((value, index) => {
+  const options = items.flatMap((value, index) => {
     if (typeof value === "string" && collection === "providers")
       return [{ id: value, label: value }];
     const item = record(value);
@@ -188,7 +188,17 @@ export function nativeObjectOptions(
             ? label.replace(/\s+/g, " ").slice(0, 160)
             : `${fallbackLabel} ${index + 1}`,
         ...(typeof item.status === "string" ? { description: item.status } : {}),
+        ...(typeof (item.role ?? message?.role) === "string"
+          ? { role: (item.role ?? message?.role) as string }
+          : {}),
       },
     ];
   });
+  const omitted =
+    typeof container?.omitted === "number" &&
+    Number.isSafeInteger(container.omitted) &&
+    container.omitted > 0
+      ? container.omitted
+      : 0;
+  return { options, omitted };
 }

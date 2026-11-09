@@ -76,6 +76,8 @@ export const fr: TranslationResources = {
       op: "Action",
     },
     tasks: {
+      recentHistory:
+        "Historique récent ; {{count}} entrées anciennes restent dans le journal natif.",
       finishTurn: "Terminez la tâche principale avant cette opération.",
       exitVibe: "Quittez Vibe avant de changer l’historique.",
 
