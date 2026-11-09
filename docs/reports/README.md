@@ -79,6 +79,8 @@
 
 ## Provider、Agent 与会话
 
+- [PR #612 预设角色与原生控制体验复审修复（2026-11-09）](providers/pr612-provider-settings-ux-2026-11-09.md)
+
 - [PR #612 预设来源与 Vibe worker thinking 复审修复（2026-11-09）](providers/pr612-preset-ownership-and-vibe-thinking-2026-11-09.md)
 
 - [外部 OMP Vibe 编排验证（2026-11-09）](providers/omp-external-vibe-2026-11-09.md)
