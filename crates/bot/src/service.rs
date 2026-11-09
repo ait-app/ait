@@ -1,13 +1,14 @@
 //! Bounded, connection-independent Bot runtime and daemon lifecycle.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use domain::bot::{Channel, Conversation, DeliveryStatus, Turn, TurnMessage, TurnStatus};
 use domain::{BotTurnId, ChannelId, ConversationId};
 use model::ErrorCode;
 use model::bot::Store;
+use model::hub::Center;
 use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
 use secrecy::SecretString;
 use serde_json::Value;
@@ -23,21 +24,24 @@ use crate::channels::telegram::onboarding::Onboarding as TelegramOnboarding;
 use crate::channels::weixin::onboarding::Onboarding as WeixinOnboarding;
 use crate::mcp::Scopes;
 use crate::ports::{Credentials, Executor};
-use crate::protocol::decode;
+use crate::protocol::{ChannelCreate, decode};
 use crate::state::{State, StoredChannel};
 
-/// A Bot the center may reach through its enabled Hub channel.
+/// One enabled center channel of a Bot: its Hub channel or a webhook channel.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HubBot {
     /// Workspace the Bot manages.
     pub workspace_id: String,
-    /// The Bot's Hub channel.
+    /// The center channel.
     pub channel_id: ChannelId,
     /// Workspace title shown to the account owner.
     pub title: String,
     /// `active` or `paused`.
     pub state: &'static str,
+    /// `hub`, which the center's triggers address by Workspace, or `webhook`, which the
+    /// center addresses by channel.
+    pub kind: &'static str,
 }
 
 /// Complete host dependencies; no concrete persistence adapter is required by this crate.
@@ -79,8 +83,10 @@ struct Worker {
     weixin: WeixinOnboarding,
     qq: QqOnboarding,
     imessage: ImessageOnboarding,
-    /// Bots the Ait center may reach through an enabled Hub channel.
+    /// Enabled center channels of Bots the Ait center may reach.
     hub: watch::Sender<Vec<HubBot>>,
+    /// This Host's serve link, through which webhook endpoints are requested.
+    center: OnceLock<Arc<dyn Center>>,
 }
 
 /// Cloneable application service; conversations outlive UI connections.
@@ -113,6 +119,8 @@ enum Operation {
     SyncToken(ChannelId, String),
     AddSender(ChannelId, String),
     HubTurn(String, BotTurnId),
+    CreateWebhook(ChannelCreate),
+    WebhookChannel(String, ChannelId),
 }
 /// Outcome of channel input that the Bot did not refuse.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -162,6 +170,7 @@ impl Bots {
             qq: QqOnboarding::default(),
             imessage: ImessageOnboarding::default(),
             hub,
+            center: OnceLock::new(),
         }));
         let worker = bots.clone();
         std::thread::Builder::new()
@@ -236,19 +245,34 @@ impl Bots {
             "bot.channel.qq.scan.cancel.request" => qq.cancel(decode(params)?).await,
             "bot.channel.qq.connect.request" => qq.connect(self, decode(params)?).await,
             "bot.channel.qq.pair.request" => qq.pair(self, decode(params)?).await,
+            "bot.channel.webhook.create.request" => {
+                crate::channels::webhook::create(self, decode(params)?).await
+            }
+            "bot.channel.webhook.rotate.request" => {
+                crate::channels::webhook::rotate(self, decode(params)?).await
+            }
             _ => self.call(Operation::Rpc(method.to_owned(), params)).await,
         }
     }
 
-    /// Observe the Bots the Ait center may reach: each has an enabled Hub channel.
+    /// Use this Host's serve link for webhook endpoints; later attachments are ignored.
+    pub fn attach_center(&self, center: Arc<dyn Center>) {
+        let _ = self.0.center.set(center);
+    }
+
+    pub(crate) fn center(&self) -> Option<Arc<dyn Center>> {
+        self.0.center.get().cloned()
+    }
+
+    /// Observe the enabled center channels of Bots the Ait center may reach.
     #[must_use]
     pub fn hub(&self) -> watch::Receiver<Vec<HubBot>> {
         self.0.hub.subscribe()
     }
 
-    /// Refuse a turn that is not in the Workspace's enabled Hub channel.
+    /// Refuse a turn that is not in one of the Workspace's enabled center channels.
     /// # Errors
-    /// Returns `Forbidden` outside the Hub channel, or worker lifecycle failures.
+    /// Returns `Forbidden` outside those channels, or worker lifecycle failures.
     pub async fn check_hub_turn(&self, workspace: &str, turn: BotTurnId) -> Result<(), ErrorCode> {
         self.call(Operation::HubTurn(workspace.to_owned(), turn))
             .await
@@ -339,6 +363,23 @@ impl Bots {
     }
     /// Durably store a verified secret and enable its channel, waiting for command capacity
     /// because the secret cannot be requested from the external account a second time.
+    /// Save an enabled channel for an endpoint the center has issued.
+    pub(crate) async fn create_webhook_channel(
+        &self,
+        request: ChannelCreate,
+    ) -> Result<Value, ErrorCode> {
+        self.send(Operation::CreateWebhook(request)).await
+    }
+    /// Refuse unless `channel` is a live webhook channel of the Workspace's Bot.
+    pub(crate) async fn check_webhook_channel(
+        &self,
+        workspace: String,
+        channel: ChannelId,
+    ) -> Result<(), ErrorCode> {
+        self.call(Operation::WebhookChannel(workspace, channel))
+            .await
+            .map(|_| ())
+    }
     pub(crate) async fn create_stored_channel(
         &self,
         channel: StoredChannel,
@@ -545,6 +586,9 @@ async fn serve(
                 run,
             ));
         }
+        for channel in std::mem::take(&mut state.released_webhooks) {
+            tasks.spawn(crate::channels::webhook::release(bots.clone(), channel));
+        }
         for (owner, action) in std::mem::take(&mut state.session_actions) {
             let executor = bots.0.executor.clone();
             tasks.spawn(async move {
@@ -634,6 +678,10 @@ fn apply(
         Operation::HubTurn(workspace, turn) => {
             state.hub_turn(&workspace, turn).map(|()| Value::Null)
         }
+        Operation::CreateWebhook(request) => state.create_webhook_channel(request),
+        Operation::WebhookChannel(workspace, channel) => state
+            .check_webhook_channel(&workspace, channel)
+            .map(|()| Value::Null),
     }
 }
 
@@ -679,10 +727,12 @@ fn refresh_channels(
         keep
     });
     for channel in desired {
-        // The center pulls a Hub channel's replies; no transport runs for it.
+        // The center pulls a Hub or webhook channel's replies; no transport runs for it.
         if matches!(
             channel.config,
-            domain::bot::ChannelConfig::Builtin | domain::bot::ChannelConfig::Hub
+            domain::bot::ChannelConfig::Builtin
+                | domain::bot::ChannelConfig::Hub
+                | domain::bot::ChannelConfig::Webhook { .. }
         ) || running.contains_key(&channel.id)
         {
             continue;

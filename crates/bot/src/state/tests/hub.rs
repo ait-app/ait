@@ -218,3 +218,106 @@ fn closing_forgets_a_hub_conversation_for_good() {
         Err(ErrorCode::Forbidden)
     );
 }
+
+fn webhook(state: &mut State, endpoint: &str, url: &str) -> Result<ChannelId, ErrorCode> {
+    let id = ChannelId::generate();
+    state.create_webhook_channel(crate::protocol::decode(json!({
+        "workspaceId":WORKSPACE,"channelId":id,
+        "config":{"kind":"webhook","endpointId":endpoint,"url":url},"enabled":true,
+    }))?)?;
+    Ok(id)
+}
+
+#[test]
+fn only_the_center_creates_webhook_channels() {
+    let (_fixture, mut state, _, _) = hub_bot();
+    assert_eq!(
+        state.execute(
+            "bot.channel.create.request",
+            json!({"workspaceId":WORKSPACE,"channelId":ChannelId::generate(),"enabled":true,
+                "config":{"kind":"webhook","endpointId":"e1","url":"https://aitapp.cn/hook"}}),
+        ),
+        Err(ErrorCode::InvalidMessage)
+    );
+    for url in ["http://aitapp.cn/hook", "ftp://x", "not a url"] {
+        assert_eq!(
+            webhook(&mut state, "e1", url),
+            Err(ErrorCode::InvalidMessage),
+            "{url}"
+        );
+    }
+    webhook(&mut state, "e1", "http://127.0.0.1:8080/hook").unwrap();
+    assert_eq!(
+        webhook(&mut state, "e1", "https://aitapp.cn/other"),
+        Err(ErrorCode::BotConflict),
+        "one endpoint backs one channel"
+    );
+}
+
+#[test]
+fn webhook_channels_are_published_beside_the_hub_channel_and_reached_by_channel() {
+    let (_fixture, mut state, channel, builtin) = hub_bot();
+    let first = webhook(&mut state, "e1", "https://aitapp.cn/api/v1/hook/e1").unwrap();
+    let second = webhook(&mut state, "e2", "https://aitapp.cn/api/v1/hook/e2").unwrap();
+    let published: Vec<_> = state
+        .hub_bots()
+        .into_iter()
+        .map(|entry| (entry.channel_id, entry.kind))
+        .collect();
+    assert_eq!(
+        published,
+        [(channel, "hub"), (first, "webhook"), (second, "webhook")]
+    );
+    let receipt = send(&mut state, first, "c1", "automation:1").unwrap();
+    state.hub_turn(WORKSPACE, turn_id(&receipt)).unwrap();
+    assert_eq!(
+        send(&mut state, builtin, "c1", "automation:2"),
+        Err(ErrorCode::Forbidden)
+    );
+
+    // The endpoint is the center's: only the toggle changes.
+    assert_eq!(
+        state.execute(
+            "bot.channel.update.request",
+            json!({"workspaceId":WORKSPACE,"channelId":first,"enabled":true,
+                "config":{"kind":"webhook","endpointId":"e1","url":"https://evil.example/"}}),
+        ),
+        Err(ErrorCode::BotConflict)
+    );
+    state
+        .execute(
+            "bot.channel.update.request",
+            json!({"workspaceId":WORKSPACE,"channelId":first,"enabled":false}),
+        )
+        .unwrap();
+    assert_eq!(
+        send(&mut state, first, "c1", "automation:3"),
+        Err(ErrorCode::Forbidden),
+        "a disabled webhook channel takes no input"
+    );
+    assert_eq!(
+        state.hub_turn(WORKSPACE, turn_id(&receipt)),
+        Err(ErrorCode::Forbidden)
+    );
+    state.check_webhook_channel(WORKSPACE, first).unwrap();
+    assert_eq!(
+        state.check_webhook_channel(WORKSPACE, channel),
+        Err(ErrorCode::BotConflict)
+    );
+
+    state
+        .execute(
+            "bot.channel.delete.request",
+            json!({"workspaceId":WORKSPACE,"channelId":first}),
+        )
+        .unwrap();
+    assert_eq!(state.released_webhooks, [first]);
+    state
+        .execute("bot.remove.request", json!({"workspaceId":WORKSPACE}))
+        .unwrap();
+    assert_eq!(
+        state.released_webhooks,
+        [first, second],
+        "retiring the Bot releases its remaining endpoints once"
+    );
+}

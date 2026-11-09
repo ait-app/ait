@@ -22,6 +22,14 @@ const TelegramPairFailureSchema = z.enum([
 
 const ChannelScanFailureSchema = z.enum(["expired", "alreadyConnected", "unavailable"]);
 
+const WebhookFailureSchema = z.enum([
+  "centerOffline",
+  "centerUnsupported",
+  "automationUnavailable",
+  "limitReached",
+  "centerError",
+]);
+
 const ImessagePairFailureSchema = z.enum([
   "invalidKey",
   "invalidHandle",
@@ -181,6 +189,17 @@ export const BOT_REQUEST_SCHEMAS = [
   }),
   z.strictObject({
     type: z.literal("bot.channel.qq.pair.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    channelId: z.guid(),
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.webhook.create.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+  }),
+  z.strictObject({
+    type: z.literal("bot.channel.webhook.rotate.request"),
     requestId: z.string(),
     workspaceId: WorkspaceIdSchema,
     channelId: z.guid(),
@@ -377,6 +396,27 @@ export const BOT_RESPONSE_SCHEMAS = [
   z.object({
     type: z.literal("bot.channel.feishu.connect.response"),
     payload: z.object({ requestId: z.string(), channel: BotChannelSchema, created: z.boolean() }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.webhook.create.response"),
+    payload: z.object({
+      requestId: z.string(),
+      state: z.enum(["created", "failed"]),
+      reason: WebhookFailureSchema.optional(),
+      channel: BotChannelSchema.optional(),
+      // Shown once: the center keeps it and the host never stores it.
+      secret: z.string().optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.webhook.rotate.response"),
+    payload: z.object({
+      requestId: z.string(),
+      state: z.enum(["rotated", "failed"]),
+      reason: WebhookFailureSchema.optional(),
+      secret: z.string().optional(),
+      url: z.string().optional(),
+    }),
   }),
   z.object({
     type: z.literal("bot.channel.telegram.pair.start.response"),
@@ -577,6 +617,10 @@ export const BOT_IMESSAGE_SETUP_METHODS = [
   "bot.channel.imessage.pair.status.request",
   "bot.channel.imessage.pair.cancel.request",
 ] as const;
+export const BOT_WEBHOOK_SETUP_METHODS = [
+  "bot.channel.webhook.create.request",
+  "bot.channel.webhook.rotate.request",
+] as const;
 const OPTIONAL_BOT_METHODS: readonly string[] = [
   ...BOT_PERMISSION_METHODS,
   ...BOT_FEISHU_SETUP_METHODS,
@@ -584,6 +628,7 @@ const OPTIONAL_BOT_METHODS: readonly string[] = [
   ...BOT_WEIXIN_SETUP_METHODS,
   ...BOT_QQ_SETUP_METHODS,
   ...BOT_IMESSAGE_SETUP_METHODS,
+  ...BOT_WEBHOOK_SETUP_METHODS,
 ];
 export const BOT_METHODS = BOT_REQUEST_SCHEMAS.map((schema) => schema.shape.type.value).filter(
   (method) => !OPTIONAL_BOT_METHODS.includes(method),

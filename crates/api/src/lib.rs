@@ -351,6 +351,10 @@ impl Api {
     ) -> Result<Self, ConfigError> {
         validate_listener(address, &token)?;
         let relay = relay::Connector::new(address, server_id.clone(), instance_id.clone());
+        if let Some(bots) = &services.bot {
+            // Webhook channels request their endpoints over this Host's serve link.
+            bots.attach_center(Arc::new(relay.hub().clone()));
+        }
         let runtime = runtime_info(address, server_id, instance_id, &services);
         let services = composition::Parts::from(services);
         let session_events = services

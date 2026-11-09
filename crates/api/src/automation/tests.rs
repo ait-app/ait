@@ -9,6 +9,7 @@ fn only_an_active_bot_is_reachable() {
         channel_id: domain::ChannelId::generate(),
         title: "app".to_owned(),
         state,
+        kind: "hub",
     };
     assert!(!reachable(&[]));
     assert!(!reachable(&[bot("paused")]));

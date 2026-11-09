@@ -173,7 +173,11 @@ Channel 存在后回退到旧版 daemon 会导致 daemon 无法启动，即使 C
 Ait 中心（ait-server）可以把飞书、Slack、Telegram 中发给中心机器人的消息转给 Workspace Bot，见 [ADR-233](../decisions/bot/adr-233-hub-channel-center-automation.md)。
 用 `bot.channel.create.request` 创建 `{"kind":"hub"}` Channel 并启用，即允许本账号的中心访问这个 Bot；每个 Bot 至多一个，客户端添加入口尚未实现。
 daemon 不为它运行传输：中心通过自己的 Hub 会话投递消息、轮询 `bot.turn.get` 取回复，再用 `bot.hub.delivery.ack` 报告投递结果，会话结束时用 `bot.hub.conversation.close` 删除会话。
-中心会话只能使用这五个方法，且只能访问 Hub Channel 的轮次和会话；停用 Hub Channel、暂停或移除 Bot 后，中心会话立即断开。
+中心会话只能使用这五个方法，且只能访问中心 Channel（Hub 与 Webhook）的轮次和会话；最后一个中心 Channel 停用、或 Bot 暂停或移除后，中心会话立即断开。
+
+Webhook Channel 由中心托管一个 HTTPS 端点：在 Bot 设置页添加「Webhook（经 Ait 中心）」即创建，Host 需已接入支持 Webhook 的中心。
+创建后只显示一次密钥；丢失后用「重新生成密钥」（`bot.channel.webhook.rotate`）换新，旧密钥立即失效。调用方 `POST` 文本到地址（`Authorization: Bearer <密钥>`），得到 202 和状态地址，再用同一密钥查询回复；同一 `thread` 的调用接着同一个会话。
+删除 Channel 会同时请中心删除端点；中心不可达时只在本地删除，中心不再把消息投给这个 Channel。
 
 ## 记忆与接口
 
@@ -184,7 +188,7 @@ Bot 自身通过 `bot_memory_read`／`bot_memory_update` 读写记忆（携带 r
 接口通过认证 WebSocket 协商 `workspace-bots-v2`，所有方法以 `workspaceId` 寻址，客户端 JSON 不含内部 `botId`。常用流程为
 `bot.setup.request` → `bot.conversation.open.request` → `bot.message.send.request`，
 再以 `bot.turn.get.request` / `bot.history.get.request` 读取执行与投递状态；`bot.get` 在未配置时返回 `null`。
-其余方法：`bot.update`、`bot.pause`、`bot.resume`、`bot.remove`、`bot.channel.*`（含 `bot.channel.feishu.scan.{start,status,cancel}`、`bot.channel.feishu.connect`、`bot.channel.telegram.pair.{start,status,cancel}`、`bot.channel.weixin.scan.{start,status,cancel}`、`bot.channel.qq.scan.{start,status,cancel}`、`bot.channel.qq.connect`、`bot.channel.qq.pair` 与 `bot.channel.imessage.pair.{start,status,cancel}`）、`bot.conversation.{list,reset}`、
+其余方法：`bot.update`、`bot.pause`、`bot.resume`、`bot.remove`、`bot.channel.*`（含 `bot.channel.feishu.scan.{start,status,cancel}`、`bot.channel.feishu.connect`、`bot.channel.telegram.pair.{start,status,cancel}`、`bot.channel.weixin.scan.{start,status,cancel}`、`bot.channel.qq.scan.{start,status,cancel}`、`bot.channel.qq.connect`、`bot.channel.qq.pair`、`bot.channel.imessage.pair.{start,status,cancel}` 与 `bot.channel.webhook.{create,rotate}`）、`bot.conversation.{list,reset}`、
 `bot.turn.cancel`、`bot.memory.get`。`bot.create`、`bot.list`、`bot.archive`、`bot.permission.resolve` 已删除。
 Channel 能力以 `bot.channel.types.request` 为准；完整参数见
 [`protocol.rs`](../../crates/bot/src/protocol.rs)，实现归属见

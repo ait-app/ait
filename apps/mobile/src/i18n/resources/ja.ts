@@ -185,6 +185,31 @@ export const ja: TranslationResources = {
       "コード: {{code}}。プライベートチャットでボットに送るか、QQ グループでボットを @ メンションして送信してください。1 回のみ有効で、10 分後に期限切れになります。",
     imessage: "iMessage",
     hub: "Ait Hub",
+    webhook: "Webhook（Ait Hub 経由）",
+    webhookHint:
+      "Ait Hub がこの Bot 用の HTTPS アドレスとシークレットを作成します。HTTP リクエストを送れるシステムなら、これを使って Bot にメッセージを送り、返信を受け取れます。",
+    webhookCreate: "Webhook を作成",
+    webhookUrl: "アドレス",
+    webhookSecret: "シークレット",
+    webhookSecretOnce:
+      "シークレットは今回だけ表示されます。今すぐコピーしてください。紛失した場合は新しく作成できます。",
+    webhookExample: "例",
+    webhookExampleHint:
+      "呼び出すとステータスのアドレスが返ります。返信が届くまで、同じシークレットでそのアドレスを取得してください。同じ thread の呼び出しは同じ会話の続きになります。",
+    webhookCopy: "コピー",
+    webhookCopied: "コピーしました",
+    webhookDone: "完了",
+    webhookRotate: "新しいシークレットを作成",
+    webhookRotateConfirm:
+      "現在のシークレットはすぐに使えなくなります。使用中の呼び出し元は新しいシークレットに切り替える必要があります。",
+    webhookCenterOffline:
+      "このホストは Ait Hub に接続されていません。サインインして Hub 接続をオンにしてから、もう一度お試しください。",
+    webhookCenterUnsupported: "この Ait Hub はまだ Webhook に対応していません。",
+    webhookAutomationUnavailable: "この Ait Hub では自動化が有効になっていません。",
+    webhookLimitReached:
+      "アカウントの Webhook 数が上限に達しました。使っていないものを削除してから、もう一度お試しください。",
+    webhookCenterError:
+      "Ait Hub で Webhook を設定できませんでした。しばらくしてからもう一度お試しください。",
     imessageGuideStep1: "app.beta.photon.codes で Photon Beta プロジェクトを作成します。",
     imessageGuideStep2:
       "そのプロジェクトで project:read, project:write, platforms:read、platforms:write の権限を持つ API キーを作成します。",

@@ -119,6 +119,13 @@ fn normalized_execution(mut execution: ExecutionConfig) -> Result<ExecutionConfi
 fn validate_channel(id: ChannelId, config: &ChannelConfig) -> Result<(), ErrorCode> {
     let (reference, senders) = match config {
         ChannelConfig::Builtin | ChannelConfig::Hub => return Ok(()),
+        ChannelConfig::Webhook { endpoint_id, url } => {
+            return if model::valid_id(endpoint_id) && valid_webhook_url(url) {
+                Ok(())
+            } else {
+                Err(ErrorCode::InvalidMessage)
+            };
+        }
         ChannelConfig::Telegram {
             token_ref,
             allowed_senders,
@@ -182,9 +189,28 @@ fn validate_channel(id: ChannelId, config: &ChannelConfig) -> Result<(), ErrorCo
     Ok(())
 }
 
+/// The center's public endpoint: shown to the owner and copied into other systems, so
+/// only `https`, or `http` on loopback for a local center.
+fn valid_webhook_url(url: &str) -> bool {
+    if url.len() > 2048 {
+        return false;
+    }
+    let Ok(url) = url::Url::parse(url) else {
+        return false;
+    };
+    match (url.scheme(), url.host()) {
+        ("https", Some(_)) => true,
+        ("http", Some(url::Host::Domain(host))) => host == "localhost",
+        ("http", Some(url::Host::Ipv4(ip))) => ip.is_loopback(),
+        ("http", Some(url::Host::Ipv6(ip))) => ip.is_loopback(),
+        _ => false,
+    }
+}
+
 fn account(config: &ChannelConfig) -> Option<(&'static str, &str)> {
     match config {
         ChannelConfig::Builtin | ChannelConfig::Hub => None,
+        ChannelConfig::Webhook { endpoint_id, .. } => Some(("webhook", endpoint_id)),
         ChannelConfig::Telegram { token_ref, .. } => Some(("telegram", token_ref)),
         ChannelConfig::Feishu { app_id, .. } => Some(("feishu", app_id)),
         ChannelConfig::Weixin { account_id, .. } => Some(("weixin", account_id)),
@@ -326,15 +352,20 @@ impl State {
             bot.state = BotState::Retired { at: at.clone() };
         }
         let mut released = Vec::new();
+        let mut webhooks = Vec::new();
         for channel in catalog.channels.iter_mut().filter(|channel| {
             bots.contains(&channel.bot_id) && !matches!(channel.config, ChannelConfig::Builtin)
         }) {
+            if !channel.deleted && matches!(channel.config, ChannelConfig::Webhook { .. }) {
+                webhooks.push(channel.id);
+            }
             channel.enabled = false;
             channel.deleted = true;
             released.push(channel.id);
         }
         self.save_catalog(catalog)?;
         self.released_credentials.extend(released);
+        self.released_webhooks.extend(webhooks);
         for bot in bots {
             self.stop_bot(*bot, true, None)?;
         }
@@ -453,6 +484,10 @@ impl State {
             return Err(ErrorCode::BotConflict);
         }
         if let Some(config) = request.config {
+            // A webhook channel's endpoint is the center's; only its toggle changes here.
+            if matches!(channel.config, ChannelConfig::Webhook { .. }) && config != channel.config {
+                return Err(ErrorCode::BotConflict);
+            }
             if std::mem::discriminant(&config) != std::mem::discriminant(&channel.config)
                 || account(&config) != account(&channel.config)
             {
@@ -484,8 +519,36 @@ impl State {
             .ok_or(ErrorCode::BotNotFound)?;
         channel.enabled = false;
         channel.deleted = true;
+        let webhook = matches!(channel.config, ChannelConfig::Webhook { .. });
         self.save_catalog(catalog)?;
         self.released_credentials.push(request.channel_id);
+        if webhook {
+            self.released_webhooks.push(request.channel_id);
+        }
         Ok(json!({"deleted":true,"channelId":request.channel_id}))
+    }
+    /// Save a webhook channel for an endpoint the center issued; clients cannot create one.
+    pub(crate) fn create_webhook_channel(
+        &mut self,
+        request: ChannelCreate,
+    ) -> Result<Value, ErrorCode> {
+        if !matches!(request.config, ChannelConfig::Webhook { .. }) {
+            return Err(ErrorCode::InvalidMessage);
+        }
+        self.create_channel(request)
+    }
+    /// Refuse unless `channel` is a live webhook channel of the Workspace's current Bot.
+    pub(crate) fn check_webhook_channel(
+        &self,
+        workspace: &str,
+        channel: ChannelId,
+    ) -> Result<(), ErrorCode> {
+        let bot = self.current(workspace)?;
+        self.workspace(bot)?;
+        let channel = self.channel(bot.id, channel)?;
+        if channel.deleted || !matches!(channel.config, ChannelConfig::Webhook { .. }) {
+            return Err(ErrorCode::BotConflict);
+        }
+        Ok(())
     }
 }

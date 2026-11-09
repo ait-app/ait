@@ -207,6 +207,30 @@ export const fr: TranslationResources = {
       "Code : {{code}}. Envoyez-le au bot en discussion privée, ou mentionnez le bot avec ce code dans un groupe QQ. Il fonctionne une seule fois et expire dans 10 minutes.",
     imessage: "iMessage",
     hub: "Ait Hub",
+    webhook: "Webhook (via Ait Hub)",
+    webhookHint:
+      "Ait Hub crée une adresse HTTPS et un secret pour ce Bot. Tout système capable d’envoyer une requête HTTP peut les utiliser pour écrire au Bot et lire sa réponse.",
+    webhookCreate: "Créer un webhook",
+    webhookUrl: "Adresse",
+    webhookSecret: "Secret",
+    webhookSecretOnce:
+      "Le secret n’est affiché qu’une seule fois. Copiez-le maintenant ; en cas de perte, créez-en un nouveau.",
+    webhookExample: "Exemple",
+    webhookExampleHint:
+      "L’appel renvoie une adresse de statut. Interrogez-la avec le même secret jusqu’à ce que la réponse soit prête. Les appels avec le même thread poursuivent la même conversation.",
+    webhookCopy: "Copier",
+    webhookCopied: "Copié",
+    webhookDone: "Terminé",
+    webhookRotate: "Créer un nouveau secret",
+    webhookRotateConfirm:
+      "Le secret actuel cesse immédiatement de fonctionner. Les appelants qui l’utilisent devront passer au nouveau.",
+    webhookCenterOffline:
+      "Cet hôte n’est pas connecté à Ait Hub. Connectez-vous et activez la connexion au Hub, puis réessayez.",
+    webhookCenterUnsupported: "Cet Ait Hub ne prend pas encore en charge les webhooks.",
+    webhookAutomationUnavailable: "L’automatisation n’est pas activée sur cet Ait Hub.",
+    webhookLimitReached:
+      "Votre compte a atteint sa limite de webhooks. Supprimez-en un que vous n’utilisez plus, puis réessayez.",
+    webhookCenterError: "Ait Hub n’a pas pu configurer le webhook. Réessayez plus tard.",
     imessageGuideStep1: "Créez un projet Photon Beta sur app.beta.photon.codes.",
     imessageGuideStep2:
       "Dans ce projet, créez une clé d'API avec project:read, project:write, platforms:read et platforms:write.",

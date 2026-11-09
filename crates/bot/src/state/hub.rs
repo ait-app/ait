@@ -1,8 +1,9 @@
-//! The Ait center's Hub channel: the center posts input and pulls replies over its
-//! own Hub session, so a Hub channel has no transport in the daemon.
+//! The Ait center's channels: a Hub channel, and webhook channels whose endpoint the
+//! center hosts. The center posts input and pulls replies over its own Hub session, so
+//! these channels have no transport in the daemon.
 
 use domain::bot::{BotState, Channel, ChannelConfig, DeliveryStatus, TurnStatus};
-use domain::{BotTurnId, ConversationId};
+use domain::{BotId, BotTurnId, ChannelId, ConversationId};
 use model::ErrorCode;
 use serde_json::{Value, json};
 
@@ -12,7 +13,7 @@ use crate::protocol::{ConversationRequest, HubAck, HubDelivery, HubSend};
 use crate::service::HubBot;
 
 impl State {
-    /// Bots with an enabled Hub channel, in catalog order.
+    /// One entry per enabled center channel whose Bot is not retired, in catalog order.
     pub(crate) fn hub_bots(&self) -> Vec<HubBot> {
         self.catalog
             .channels
@@ -35,46 +36,48 @@ impl State {
                     channel_id: channel.id,
                     title,
                     state,
+                    kind: if matches!(channel.config, ChannelConfig::Webhook { .. }) {
+                        "webhook"
+                    } else {
+                        "hub"
+                    },
                 })
             })
             .collect()
     }
 
-    /// The Workspace's current Bot's enabled Hub channel.
-    fn hub_channel(&self, workspace: &str) -> Result<&Channel, ErrorCode> {
-        let bot = self
-            .current(workspace)
-            .map_err(|_| ErrorCode::Forbidden)?
-            .id;
+    /// The Workspace's current Bot.
+    fn hub_bot(&self, workspace: &str) -> Result<BotId, ErrorCode> {
+        self.current(workspace)
+            .map(|bot| bot.id)
+            .map_err(|_| ErrorCode::Forbidden)
+    }
+
+    /// `channel`, if it is an enabled center channel of `bot`.
+    fn hub_channel(&self, bot: BotId, channel: ChannelId) -> Result<&Channel, ErrorCode> {
         self.catalog
             .channels
             .iter()
-            .find(|channel| channel.bot_id == bot && is_open_hub(channel))
+            .find(|entry| entry.id == channel && entry.bot_id == bot && is_open_hub(entry))
             .ok_or(ErrorCode::Forbidden)
     }
 
-    /// Refuse a turn outside the Workspace's enabled Hub channel.
+    /// Refuse a turn outside the Workspace's enabled center channels.
     pub(crate) fn hub_turn(&self, workspace: &str, turn: BotTurnId) -> Result<(), ErrorCode> {
-        let channel = self.hub_channel(workspace)?;
+        let bot = self.hub_bot(workspace)?;
         let turn = self
-            .owned_turn(channel.bot_id, turn)
+            .owned_turn(bot, turn)
             .map_err(|_| ErrorCode::Forbidden)?;
         let conversation = self
             .conversations
             .get(&turn.conversation_id)
             .ok_or(ErrorCode::Forbidden)?;
-        if conversation.channel_id == channel.id {
-            Ok(())
-        } else {
-            Err(ErrorCode::Forbidden)
-        }
+        self.hub_channel(bot, conversation.channel_id).map(drop)
     }
 
     pub(super) fn hub_send(&mut self, request: HubSend) -> Result<Value, ErrorCode> {
-        let channel = self.hub_channel(&request.workspace_id)?.id;
-        if channel != request.channel_id {
-            return Err(ErrorCode::Forbidden);
-        }
+        let bot = self.hub_bot(&request.workspace_id)?;
+        let channel = self.hub_channel(bot, request.channel_id)?.id;
         self.accept_channel(Incoming {
             channel_id: channel,
             peer: request.peer,
@@ -106,8 +109,7 @@ impl State {
     /// Forget a Hub conversation: its queued input is cancelled, its native session closed,
     /// and its records removed, so it stops counting toward the conversation limit.
     pub(super) fn hub_close(&mut self, request: &ConversationRequest) -> Result<Value, ErrorCode> {
-        let channel = self.hub_channel(&request.workspace_id)?;
-        let (bot, channel) = (channel.bot_id, channel.id);
+        let bot = self.hub_bot(&request.workspace_id)?;
         let Some(conversation) = self
             .conversations
             .get(&request.conversation_id)
@@ -116,9 +118,7 @@ impl State {
         else {
             return Ok(json!({}));
         };
-        if conversation.channel_id != channel {
-            return Err(ErrorCode::Forbidden);
-        }
+        self.hub_channel(bot, conversation.channel_id)?;
         if self.running.contains_key(&conversation.id) {
             return Err(ErrorCode::BotConflict);
         }
@@ -156,6 +156,12 @@ impl State {
     }
 }
 
+/// An enabled channel the center reaches: the Hub channel or a webhook channel.
 fn is_open_hub(channel: &Channel) -> bool {
-    channel.enabled && !channel.deleted && matches!(channel.config, ChannelConfig::Hub)
+    channel.enabled
+        && !channel.deleted
+        && matches!(
+            channel.config,
+            ChannelConfig::Hub | ChannelConfig::Webhook { .. }
+        )
 }

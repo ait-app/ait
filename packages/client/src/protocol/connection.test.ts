@@ -237,7 +237,8 @@ describe("Rust v1 connection", () => {
           !method.includes(".telegram.") &&
           !method.includes(".weixin.") &&
           !method.includes(".qq.") &&
-          !method.includes(".imessage."),
+          !method.includes(".imessage.") &&
+          !method.includes(".webhook."),
       );
     const old = harness(core);
     old.ready(undefined, ["workspace-bots-v2"]);
@@ -250,6 +251,7 @@ describe("Rust v1 connection", () => {
       workspaceBotWeixinSetup: false,
       workspaceBotQqSetup: false,
       workspaceBotImessageSetup: false,
+      workspaceBotWebhookSetup: false,
     });
     const current = harness();
     current.ready(undefined, ["workspace-bots-v2"]);
@@ -262,6 +264,7 @@ describe("Rust v1 connection", () => {
       workspaceBotWeixinSetup: true,
       workspaceBotQqSetup: true,
       workspaceBotImessageSetup: true,
+      workspaceBotWebhookSetup: true,
     });
   });
   it("does not enable Bot features for the v1-only capability", () => {
@@ -926,9 +929,9 @@ describe("Rust v1 connection", () => {
     }
   });
   it("uses canonical names and stays within Rust's per-connection limits", () => {
-    expect(Object.keys(METHODS)).toHaveLength(224);
+    expect(Object.keys(METHODS)).toHaveLength(226);
     for (const [name, spec] of Object.entries(METHODS)) expect(spec.method).toBe(name);
-    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(224);
+    expect(new Set(Object.values(METHODS).map((spec) => spec.method)).size).toBe(226);
     for (const capabilities of CHANNEL_CAPABILITIES) {
       expect(capabilities.length).toBeLessThanOrEqual(64);
       expect(capabilities.some((name) => /^(hub|chat|loop|plugin)[./]/.test(name))).toBe(false);

@@ -45,6 +45,12 @@ pub(crate) struct ChannelCreate {
     #[serde(default)]
     pub(crate) enabled: bool,
 }
+/// A webhook channel the center hosts for the Workspace's Bot.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct WebhookCreate {
+    pub(crate) workspace_id: String,
+}
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ChannelRequest {

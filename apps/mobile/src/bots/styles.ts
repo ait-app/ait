@@ -27,6 +27,11 @@ export const botStyles = StyleSheet.create((theme) => ({
   },
   permissionBlock: { gap: 8 },
   warning: { fontSize: theme.fontSize.sm, color: theme.colors.statusWarning },
+  mono: {
+    fontFamily: theme.fontFamily.mono,
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foreground,
+  },
   link: { textDecorationLine: "underline" },
   multiline: { minHeight: 130, textAlignVertical: "top" },
   empty: { padding: 24, alignItems: "center", gap: 16 },

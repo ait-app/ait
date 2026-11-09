@@ -1,7 +1,7 @@
 //! Hub automation on this Host: the Ait center's own sessions, which reach only the
-//! Workspace Bots that have an enabled Hub channel.
+//! Workspace Bots that have an enabled center channel (a Hub or webhook channel).
 //!
-//! The owner opts in per Bot by enabling its Hub channel. A center session is
+//! The owner opts in per Bot by enabling such a channel. A center session is
 //! admitted while at least one active Bot has one and ends as soon as none does;
 //! [`policy`] decides every request it sends.
 

@@ -228,6 +228,28 @@ export const ar: TranslationResources = {
       "الرمز: {{code}}. أرسله إلى الروبوت في محادثة خاصة، أو أشر إلى الروبوت به في مجموعة QQ. يعمل مرة واحدة وتنتهي صلاحيته بعد 10 دقائق.",
     imessage: "iMessage",
     hub: "Ait Hub",
+    webhook: "Webhook (عبر Ait Hub)",
+    webhookHint:
+      "ينشئ Ait Hub عنوان HTTPS وسرًا لهذا البوت. يمكن لأي نظام يرسل طلبات HTTP استخدامهما لمراسلة البوت وقراءة رده.",
+    webhookCreate: "إنشاء webhook",
+    webhookUrl: "العنوان",
+    webhookSecret: "السر",
+    webhookSecretOnce: "يظهر السر هذه المرة فقط. انسخه الآن، وإذا فقدته فأنشئ سرًا جديدًا.",
+    webhookExample: "مثال",
+    webhookExampleHint:
+      "يعيد الاستدعاء عنوان حالة. اطلبه بالسر نفسه حتى يصبح الرد جاهزًا. الاستدعاءات التي لها thread نفسه تكمل المحادثة نفسها.",
+    webhookCopy: "نسخ",
+    webhookCopied: "تم النسخ",
+    webhookDone: "تم",
+    webhookRotate: "إنشاء سر جديد",
+    webhookRotateConfirm: "سيتوقف السر الحالي عن العمل فورًا، وسيحتاج من يستخدمه إلى السر الجديد.",
+    webhookCenterOffline:
+      "هذا المضيف غير متصل بـ Ait Hub. سجّل الدخول وفعّل الاتصال بـ Hub، ثم أعد المحاولة.",
+    webhookCenterUnsupported: "لا يدعم Ait Hub هذا webhooks بعد.",
+    webhookAutomationUnavailable: "الأتمتة غير مفعّلة في Ait Hub هذا.",
+    webhookLimitReached:
+      "وصل حسابك إلى الحد الأقصى من webhooks. احذف واحدًا لم تعد تستخدمه ثم أعد المحاولة.",
+    webhookCenterError: "تعذّر على Ait Hub إعداد webhook. أعد المحاولة لاحقًا.",
     imessageGuideStep1: "أنشئ مشروع Photon Beta على app.beta.photon.codes.",
     imessageGuideStep2:
       "في هذا المشروع، أنشئ مفتاح API بالأذونات project:read, project:write, platforms:read وplatforms:write.",

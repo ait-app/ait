@@ -391,3 +391,18 @@ async fn automation_sessions_reach_nothing_else_and_end_when_the_hub_channel_clo
     );
     assert!(api.hub_bots().expect("Bot service").borrow().is_empty());
 }
+
+#[tokio::test]
+async fn webhook_channels_ask_the_hosts_serve_link_for_their_endpoint() {
+    use crate::test_support::bots::WORKSPACE;
+    let (_root, _api, bots) = with_bot().await;
+    // The API attached its serve link; without a center session it is offline.
+    let created = bots
+        .execute(
+            "bot.channel.webhook.create.request",
+            json!({"workspaceId":WORKSPACE}),
+        )
+        .await
+        .expect("create");
+    assert_eq!(created, json!({"state":"failed","reason":"centerOffline"}));
+}

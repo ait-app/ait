@@ -167,7 +167,7 @@ describe("Bot wire contract", () => {
 
   it("registers all 21 core methods and accepts their results in the shared envelope", () => {
     expect(new Set(BOT_METHODS).size).toBe(21);
-    expect(BOT_REQUEST_SCHEMAS).toHaveLength(40);
+    expect(BOT_REQUEST_SCHEMAS).toHaveLength(42);
     expect(
       SessionInboundMessageSchema.parse({
         type: "bot.conversation.open.request",
@@ -200,6 +200,42 @@ describe("Bot wire contract", () => {
         type: "bot.get.request",
         requestId: "r",
         botId: crypto.randomUUID(),
+      }),
+    ).toThrow();
+  });
+  it("parses a webhook channel and its one-time secret", () => {
+    const channelId = crypto.randomUUID();
+    const created = BotResponseSchema.parse({
+      type: "bot.channel.webhook.create.response",
+      payload: {
+        requestId: "r",
+        state: "created",
+        secret: "s3cret",
+        channel: {
+          id: channelId,
+          config: {
+            kind: "webhook",
+            endpointId: "0193f2c4-7d1e-7a40-9c1b-5e2f8a6d3b11",
+            url: "https://aitapp.cn/api/v1/automation/ingress/webhook/0193f2c4",
+          },
+          enabled: true,
+          cursor: null,
+        },
+      },
+    });
+    expect(created.payload).toMatchObject({ secret: "s3cret", channel: { id: channelId } });
+    expect(
+      BotResponseSchema.parse({
+        type: "bot.channel.webhook.rotate.response",
+        payload: { requestId: "r", state: "failed", reason: "centerOffline" },
+      }).payload,
+    ).toMatchObject({ reason: "centerOffline" });
+    expect(() =>
+      BotRequestSchema.parse({
+        type: "bot.channel.webhook.rotate.request",
+        requestId: "r",
+        workspaceId: "wks_1",
+        channelId: "not-a-uuid",
       }),
     ).toThrow();
   });

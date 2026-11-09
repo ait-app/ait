@@ -26,12 +26,13 @@ import { BotLoadingSpinner } from "./loading";
 import { botKeys } from "./queries";
 import { botStyles as styles } from "./styles";
 import { TelegramGuidedSetup, useTelegramSetupSupported } from "./telegram-setup";
+import { WebhookDetails, WebhookSetup, useWebhookSetupSupported } from "./webhook-setup";
 
 type BotChannel = z.infer<typeof BotChannelSchema>;
 
 const CREDENTIAL_REF = /^env:AIT_SERVER_CREDENTIAL_[A-Z0-9_]{1,96}$/;
 const MAX_SENDERS = 256;
-type ExternalKind = "telegram" | "feishu" | "weixin" | "qq" | "photon_imessage";
+type ExternalKind = "telegram" | "feishu" | "weixin" | "qq" | "photon_imessage" | "webhook";
 const KIND_LABELS = {
   telegram: "bots.telegram",
   feishu: "bots.feishu",
@@ -39,6 +40,7 @@ const KIND_LABELS = {
   qq: "bots.qq",
   photon_imessage: "bots.imessage",
   hub: "bots.hub",
+  webhook: "bots.webhook",
 } as const;
 
 function parseSenders(text: string): string[] {
@@ -165,6 +167,15 @@ function ChannelRow({
           </Button>
         ) : null}
       </View>
+      {channel.config.kind === "webhook" && !readOnly ? (
+        <WebhookDetails
+          serverId={serverId}
+          workspaceId={workspaceId}
+          channelId={channel.id}
+          url={channel.config.url}
+          disabled={!interactive || busy}
+        />
+      ) : null}
       {pairable && !readOnly ? (
         <QqPairing
           serverId={serverId}
@@ -225,7 +236,8 @@ function ChannelForm({
     mutationFn: async () => {
       if (!client) throw new Error(t("bots.disconnected"));
       // These render their own setup and never reach this form's submit button.
-      if (kind === "weixin" || kind === "qq" || kind === "photon_imessage") return;
+      if (kind === "weixin" || kind === "qq" || kind === "photon_imessage" || kind === "webhook")
+        return;
       if (pastedSecret) {
         await client.botRequest("bot.channel.feishu.connect.request", {
           workspaceId,
@@ -294,6 +306,19 @@ function ChannelForm({
           active={active}
           onDone={onDone}
           onScanInstead={() => setEnterQqManually(false)}
+        />
+      </View>
+    );
+  }
+  if (kind === "webhook") {
+    return (
+      <View style={styles.card} testID="bot-channel-form">
+        {typeField}
+        <WebhookSetup
+          serverId={serverId}
+          workspaceId={workspaceId}
+          active={active}
+          onDone={onDone}
         />
       </View>
     );
@@ -454,6 +479,7 @@ export function BotChannels({
   const weixinSupported = useWeixinSetupSupported(serverId);
   const qqSupported = useQqSetupSupported(serverId);
   const imessageSupported = useImessageSetupSupported(serverId);
+  const webhookSupported = useWebhookSetupSupported(serverId);
   const enabled = interactive && Boolean(client);
   const list = useQuery({
     queryKey: botKeys.channels(serverId, workspaceId, builtinChannelId),
@@ -487,6 +513,7 @@ export function BotChannels({
         ...(weixinSupported ? (["weixin"] as const) : []),
         ...(qqSupported ? (["qq"] as const) : []),
         ...(imessageSupported ? (["photon_imessage"] as const) : []),
+        ...(webhookSupported ? (["webhook"] as const) : []),
       ]
     : [];
   return (
