@@ -288,7 +288,16 @@ export const usePanelStore = create<PanelState>()(
     {
       name: "panel-state",
       version: 16,
-      storage: createValidatedPersistStorage(AsyncStorage, PanelPersistedStateSchema),
+      storage: createValidatedPersistStorage(AsyncStorage, PanelPersistedStateSchema, {
+        version: 16,
+        mergeRecordFields: [
+          "desktop",
+          "explorerTabByCheckout",
+          "expandedPathsByWorkspace",
+          "diffCollapsedFoldersByWorkspace",
+          "collapsedFilePathsByWorkspace",
+        ],
+      }),
       migrate: (persistedState, version) => migratePanelState(persistedState, version),
       partialize: (state) => ({
         desktop: state.desktop,

@@ -126,3 +126,113 @@ it("saves the same state again after removal or rehydration clears invalid stora
   await storage.setItem("layout", value);
   expect(backing.getItem("layout")).toBe(JSON.stringify(value));
 });
+
+const SharedStateSchema = z.strictObject({
+  records: z.record(z.string(), z.strictObject({ text: z.string() })),
+  width: z.number(),
+});
+
+function sharedWindows() {
+  const backing = new MemoryStorage();
+  const createWindow = () =>
+    createValidatedPersistStorage(backing, SharedStateSchema, {
+      mergeRecordFields: ["records"],
+      version: 1,
+    });
+  const initial = { state: { records: { a: { text: "original" } }, width: 200 }, version: 1 };
+  backing.setItem("shared", JSON.stringify(initial));
+  return { backing, first: createWindow(), second: createWindow(), initial };
+}
+
+describe("shared persistence", () => {
+  it("serializes concurrent saves and preserves changes to separate records and fields", async () => {
+    const { backing, first, second, initial } = sharedWindows();
+    await Promise.all([first.getItem("shared"), second.getItem("shared")]);
+    await Promise.all([
+      first.setItem("shared", {
+        state: { records: { a: { text: "first" } }, width: 300 },
+        version: 1,
+      }),
+      second.setItem("shared", {
+        state: { ...initial.state, records: { ...initial.state.records, b: { text: "second" } } },
+        version: 1,
+      }),
+    ]);
+    expect(JSON.parse(backing.getItem("shared")!)).toEqual({
+      state: { records: { a: { text: "first" }, b: { text: "second" } }, width: 300 },
+      version: 1,
+    });
+  });
+
+  it("does not restore a deleted record when another window saves its unchanged stale copy", async () => {
+    const { backing, first, second, initial } = sharedWindows();
+    await Promise.all([first.getItem("shared"), second.getItem("shared")]);
+    await first.setItem("shared", { state: { records: {}, width: 200 }, version: 1 });
+    await second.setItem("shared", { state: { ...initial.state, width: 400 }, version: 1 });
+    expect(JSON.parse(backing.getItem("shared")!).state).toEqual({ records: {}, width: 400 });
+  });
+
+  it("keeps the local baseline across saves so later edits do not undo unseen remote changes", async () => {
+    const { backing, first, second, initial } = sharedWindows();
+    await Promise.all([first.getItem("shared"), second.getItem("shared")]);
+    await first.setItem("shared", { state: { ...initial.state, width: 300 }, version: 1 });
+    const local = { state: { ...initial.state, records: { a: { text: "second" } } }, version: 1 };
+    await second.setItem("shared", local);
+    await second.setItem("shared", {
+      ...local,
+      state: { ...local.state, records: { a: { text: "third" } } },
+    });
+    expect(JSON.parse(backing.getItem("shared")!).state.width).toBe(300);
+  });
+
+  it("preserves newer incompatible schemas before attempting to validate or clean up", async () => {
+    const { backing, first } = sharedWindows();
+    const newer = JSON.stringify({ state: { futureField: true }, version: 2 });
+    backing.setItem("shared", newer);
+    await expect(first.getItem("shared")).rejects.toThrow("newer version");
+    await expect(
+      first.setItem("shared", { state: { records: {}, width: 100 }, version: 1 }),
+    ).rejects.toThrow("newer version");
+    expect(backing.getItem("shared")).toBe(newer);
+  });
+
+  it("rejects invalid local saves without deleting shared data", async () => {
+    const { backing, first, initial } = sharedWindows();
+    await expect(
+      first.setItem("shared", { state: { records: {}, width: Number.NaN }, version: 1 }),
+    ).rejects.toThrow("Invalid persisted state");
+    expect(JSON.parse(backing.getItem("shared")!)).toEqual(initial);
+  });
+
+  it("leaves the baseline unchanged when a refresh is declined due to a local edit", async () => {
+    const { backing, first, second, initial } = sharedWindows();
+    await Promise.all([first.getItem("shared"), second.getItem("shared")]);
+    await first.setItem("shared", {
+      state: { records: { a: { text: "first" } }, width: 200 },
+      version: 1,
+    });
+    await expect(second.refresh("shared", () => false)).resolves.toBe(false);
+    await second.setItem("shared", { state: { ...initial.state, width: 400 }, version: 1 });
+    expect(JSON.parse(backing.getItem("shared")!).state).toEqual({
+      records: { a: { text: "first" } },
+      width: 400,
+    });
+  });
+
+  it("rebases the local baseline when a shared refresh is accepted", async () => {
+    const { backing, first, second } = sharedWindows();
+    await Promise.all([first.getItem("shared"), second.getItem("shared")]);
+    const refreshed = { state: { records: { a: { text: "first" } }, width: 200 }, version: 1 };
+    await first.setItem("shared", refreshed);
+    await second.refresh("shared", () => true);
+    await first.setItem("shared", {
+      state: { ...refreshed.state, records: { a: { text: "newer" } } },
+      version: 1,
+    });
+    await second.setItem("shared", { state: { ...refreshed.state, width: 400 }, version: 1 });
+    expect(JSON.parse(backing.getItem("shared")!).state).toEqual({
+      records: { a: { text: "newer" } },
+      width: 400,
+    });
+  });
+});

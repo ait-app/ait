@@ -2,8 +2,16 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { useDraftStore } from "@/stores/draft-store";
+import {
+  flushDraftPersistStorage,
+  observeSharedDraftState,
+  refreshSharedDraftState,
+  useDraftStore,
+} from "@/stores/draft-store";
+import { EditingTextInput } from "@/components/ui/text-input/text-input.web";
+import type { EditingTextInputHandle } from "@/components/ui/text-input";
 import type { AttachmentMetadata, ComposerAttachment } from "@/attachments/types";
 import { createWorkspaceFileAttachment } from "@/attachments/workspace-file";
 
@@ -123,6 +131,7 @@ afterEach(async () => {
   await act(async () => {
     for (const root of mountedRoots) root.unmount();
     mountedRoots.clear();
+    await flushDraftPersistStorage();
   });
 });
 
@@ -133,6 +142,7 @@ beforeAll(async () => {
   Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
     value: true,
     configurable: true,
+    writable: true,
   });
 
   ({ useAgentInputDraft } = await import("./input-draft"));
@@ -148,6 +158,251 @@ describe("useAgentInputDraft live contract", () => {
       createModalDraft: null,
       attachmentFocusRequestByDraftKey: {},
     });
+  });
+
+  async function mountDraftEditor(draftKey: string) {
+    let latest: ReturnType<typeof useAgentInputDraft>;
+    function Editor() {
+      const draft = useAgentInputDraft({ draftKey });
+      latest = draft;
+      const input = React.useRef<EditingTextInputHandle | null>(null);
+      // MessageInput applies this same replacement signal to its DOM-owned editor.
+      React.useEffect(() => {
+        input.current?.replaceText(draft.textReplacement.text);
+      }, [draft.textReplacement]);
+      return (
+        <EditingTextInput
+          ref={input}
+          initialValue={draft.textSource.getSnapshot()}
+          onChangeText={draft.editText}
+          multiline
+        />
+      );
+    }
+    const container = document.getElementById("root")!;
+    const root = createTestRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <Editor />
+        </QueryClientProvider>,
+      );
+    });
+    const textarea = container.querySelector("textarea")!;
+    return { textarea, getLatest: () => latest! };
+  }
+
+  function saveRemoteText(draftKey: string, text: string, lifecycle = "active") {
+    const saved = JSON.parse(asyncStorage.get("paseo-drafts")!);
+    const previous = saved.state.drafts[draftKey];
+    saved.state.drafts[draftKey] = {
+      input: { text, attachments: [] },
+      lifecycle,
+      updatedAt: (previous?.updatedAt ?? 0) + 1,
+      version: (previous?.version ?? 0) + 1,
+    };
+    asyncStorage.set("paseo-drafts", JSON.stringify(saved));
+  }
+
+  it("replaces mounted editor text after a shared save without turning local typing into replacements", async () => {
+    const editor = await mountDraftEditor("draft:shared");
+    await act(async () => {
+      editor.getLatest().replaceText("local draft");
+    });
+    await flushDraftPersistStorage();
+    const localReplacement = editor.getLatest().textReplacement;
+    saveRemoteText("draft:shared", "text saved in another window");
+
+    await act(async () => {
+      expect(await refreshSharedDraftState()).toBe(true);
+    });
+    expect(editor.textarea.value).toBe("text saved in another window");
+    expect(editor.getLatest().textReplacement).not.toBe(localReplacement);
+    const sharedReplacement = editor.getLatest().textReplacement;
+    fireEvent.change(editor.textarea, { target: { value: "continue editing" } });
+    await act(async () => {
+      await flushDraftPersistStorage();
+    });
+    expect(editor.getLatest().textSource.getSnapshot()).toBe("continue editing");
+    expect(editor.getLatest().textReplacement).toBe(sharedReplacement);
+  });
+
+  it("keeps pending DOM text when shared refresh happens before its after-paint publication", async () => {
+    const editor = await mountDraftEditor("draft:pending");
+    await act(async () => {
+      editor.getLatest().replaceText("original");
+    });
+    await flushDraftPersistStorage();
+    const replacement = editor.getLatest().textReplacement;
+    const frame = vi.spyOn(window, "requestAnimationFrame").mockReturnValue(7);
+    const cancel = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    try {
+      fireEvent.change(editor.textarea, { target: { value: "unpublished local input" } });
+      expect(editor.getLatest().textSource.getSnapshot()).toBe("original");
+      saveRemoteText("draft:pending", "remote input");
+      await act(async () => {
+        expect(await refreshSharedDraftState()).toBe(false);
+      });
+      expect(editor.textarea.value).toBe("unpublished local input");
+      expect(editor.getLatest().textSource.getSnapshot()).toBe("unpublished local input");
+      expect(editor.getLatest().textReplacement).toBe(replacement);
+      expect(
+        JSON.parse(asyncStorage.get("paseo-drafts")!).state.drafts["draft:pending"].input.text,
+      ).toBe("unpublished local input");
+    } finally {
+      frame.mockRestore();
+      cancel.mockRestore();
+    }
+  });
+
+  it("does not replace a mounted editor for another draft's shared save and clears it for a sent tombstone", async () => {
+    const editor = await mountDraftEditor("draft:current");
+    await act(async () => {
+      editor.getLatest().replaceText("current input");
+    });
+    await flushDraftPersistStorage();
+    const replacement = editor.getLatest().textReplacement;
+    saveRemoteText("draft:unrelated", "other draft");
+    await act(async () => {
+      expect(await refreshSharedDraftState()).toBe(true);
+    });
+    expect(editor.getLatest().textReplacement).toBe(replacement);
+    expect(editor.textarea.value).toBe("current input");
+    saveRemoteText("draft:current", "", "sent");
+    await act(async () => {
+      expect(await refreshSharedDraftState()).toBe(true);
+    });
+    expect(editor.textarea.value).toBe("");
+  });
+
+  it("keeps an IME candidate during shared refresh and resumes synchronization after composition", async () => {
+    const editor = await mountDraftEditor("draft:ime");
+    await act(async () => {
+      editor.getLatest().replaceText("original");
+    });
+    await flushDraftPersistStorage();
+    const stop = observeSharedDraftState();
+    try {
+      fireEvent.compositionStart(editor.textarea);
+      fireEvent.change(editor.textarea, { target: { value: "你好" } });
+      expect(editor.getLatest().textSource.getSnapshot()).toBe("original");
+      saveRemoteText("draft:ime", "另一窗口的草稿");
+      await act(async () => {
+        expect(await refreshSharedDraftState()).toBe(false);
+      });
+      expect(editor.textarea.value).toBe("你好");
+      fireEvent.compositionEnd(editor.textarea);
+      await act(async () => {
+        await flushDraftPersistStorage();
+      });
+      expect(editor.getLatest().textSource.getSnapshot()).toBe("你好");
+      saveRemoteText("draft:ime", "同步后的草稿");
+      await act(async () => {
+        expect(await refreshSharedDraftState()).toBe(true);
+      });
+      expect(editor.textarea.value).toBe("同步后的草稿");
+    } finally {
+      stop();
+    }
+  });
+
+  it("rejects a shared snapshot when DOM input is staged during the asynchronous storage read", async () => {
+    const editor = await mountDraftEditor("draft:read-pending");
+    await act(async () => {
+      editor.getLatest().replaceText("original");
+    });
+    await flushDraftPersistStorage();
+    saveRemoteText("draft:read-pending", "remote snapshot");
+    const storage = (await import("@react-native-async-storage/async-storage")).default;
+    const getItem = storage.getItem;
+    const started = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    let pause = true;
+    const read = vi.spyOn(storage, "getItem").mockImplementation(async (name) => {
+      const value = await getItem(name);
+      if (pause) {
+        pause = false;
+        started.resolve();
+        await resume.promise;
+      }
+      return value;
+    });
+    const frame = vi.spyOn(window, "requestAnimationFrame").mockReturnValue(7);
+    const cancel = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    try {
+      await act(async () => {
+        const refresh = refreshSharedDraftState();
+        await started.promise;
+        fireEvent.change(editor.textarea, { target: { value: "typed while reading" } });
+        expect(editor.getLatest().textSource.getSnapshot()).toBe("original");
+        resume.resolve();
+        expect(await refresh).toBe(false);
+        await flushDraftPersistStorage();
+      });
+      expect(editor.textarea.value).toBe("typed while reading");
+      expect(editor.getLatest().textSource.getSnapshot()).toBe("typed while reading");
+      expect(
+        JSON.parse(asyncStorage.get("paseo-drafts")!).state.drafts["draft:read-pending"].input.text,
+      ).toBe("typed while reading");
+    } finally {
+      resume.resolve();
+      read.mockRestore();
+      frame.mockRestore();
+      cancel.mockRestore();
+    }
+  });
+
+  it("checks for composition beginning during the asynchronous shared read", async () => {
+    const editor = await mountDraftEditor("draft:ime-read");
+    await act(async () => {
+      editor.getLatest().replaceText("original");
+    });
+    await flushDraftPersistStorage();
+    saveRemoteText("draft:ime-read", "remote");
+    const stop = observeSharedDraftState();
+    const storage = (await import("@react-native-async-storage/async-storage")).default;
+    const getItem = storage.getItem;
+    const read = vi.spyOn(storage, "getItem").mockImplementation(async (name) => {
+      const result = await getItem(name);
+      fireEvent.compositionStart(editor.textarea);
+      fireEvent.change(editor.textarea, { target: { value: "未完成" } });
+      return result;
+    });
+    try {
+      await act(async () => {
+        expect(await refreshSharedDraftState()).toBe(false);
+      });
+      expect(editor.textarea.value).toBe("未完成");
+      expect(editor.getLatest().textSource.getSnapshot()).toBe("original");
+    } finally {
+      read.mockRestore();
+      fireEvent.compositionEnd(editor.textarea);
+      stop();
+    }
+  });
+
+  it("releases the composition guard and browser listeners with the app lifecycle", () => {
+    const removeDocumentListener = vi.spyOn(document, "removeEventListener");
+    const removeWindowListener = vi.spyOn(window, "removeEventListener");
+    try {
+      const stop = observeSharedDraftState();
+      stop();
+      expect(removeDocumentListener).toHaveBeenCalledWith(
+        "compositionstart",
+        expect.any(Function),
+        true,
+      );
+      expect(removeDocumentListener).toHaveBeenCalledWith(
+        "compositionend",
+        expect.any(Function),
+        true,
+      );
+      expect(removeWindowListener).toHaveBeenCalledWith("storage", expect.any(Function));
+      expect(removeWindowListener).toHaveBeenCalledWith("focus", expect.any(Function));
+    } finally {
+      removeDocumentListener.mockRestore();
+      removeWindowListener.mockRestore();
+    }
   });
 
   it("hydrates persisted text and attachments and returns draft-mode composer state for a caller-provided key", async () => {
