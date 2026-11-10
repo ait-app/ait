@@ -1,5 +1,6 @@
 export const BUILTIN_SIDEBAR_NAV_IDS = [
   "new-workspace",
+  "tasks",
   "history",
   "search",
   "shared",
@@ -25,6 +26,7 @@ export type SidebarNavItem = BuiltinSidebarNavItem;
 
 const BUILTIN_LABEL_KEYS: Record<BuiltinSidebarNavId, string> = {
   "new-workspace": "sidebar.actions.newWorkspace",
+  tasks: "taskBoard.title",
   history: "sidebar.sections.sessions",
   search: "sidebar.sections.search",
   shared: "sharing.title",
@@ -43,6 +45,7 @@ export function builtinSidebarNavLabelKey(id: BuiltinSidebarNavId): string {
  */
 const BUILTIN_SHORTCUT_ACTIONS: Record<BuiltinSidebarNavId, string | null> = {
   "new-workspace": "new-workspace",
+  tasks: null,
   history: null,
   search: "toggle-command-center",
   shared: null,

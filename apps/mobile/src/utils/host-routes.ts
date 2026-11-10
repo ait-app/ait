@@ -392,6 +392,10 @@ export function buildSessionsRoute() {
   return "/sessions" as const;
 }
 
+export function buildTasksRoute() {
+  return "/tasks" as const;
+}
+
 export function buildSchedulesRoute() {
   return "/schedules" as const;
 }

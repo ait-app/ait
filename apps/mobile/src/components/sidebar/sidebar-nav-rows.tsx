@@ -15,10 +15,19 @@ import { useWorkspace } from "@/stores/session-store-hooks";
 import {
   buildNewWorkspaceRoute,
   buildSchedulesRoute,
+  buildTasksRoute,
   buildSessionsRoute,
 } from "@/utils/host-routes";
 import { router, usePathname, type Href } from "expo-router";
-import { Gauge, CalendarClock, History, Plus, Search, Users } from "lucide-react-native";
+import {
+  Gauge,
+  CalendarClock,
+  History,
+  LayoutDashboard,
+  Plus,
+  Search,
+  Users,
+} from "lucide-react-native";
 import { memo, useCallback, useMemo, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import { View, type StyleProp, type ViewStyle } from "react-native";
@@ -142,6 +151,25 @@ function SidebarSearchRow({ onBeforeNavigate }: SidebarNavRowProps) {
   );
 }
 
+function SidebarTasksRow({ onBeforeNavigate }: SidebarNavRowProps) {
+  const { t } = useTranslation();
+  const pathname = usePathname();
+  const handlePress = useCallback(() => {
+    onBeforeNavigate?.();
+    router.push(buildTasksRoute());
+  }, [onBeforeNavigate]);
+  return (
+    <SidebarHeaderRow
+      icon={LayoutDashboard}
+      label={t("taskBoard.title")}
+      onPress={handlePress}
+      isActive={pathname === "/tasks"}
+      testID="sidebar-tasks"
+      variant="compact"
+    />
+  );
+}
+
 function SidebarSchedulesRow({ onBeforeNavigate }: SidebarNavRowProps) {
   const { t } = useTranslation();
   const pathname = usePathname();
@@ -188,6 +216,7 @@ function SidebarSharedRow({ onBeforeNavigate }: SidebarNavRowProps) {
 
 const BUILTIN_ROWS: Record<BuiltinSidebarNavId, ComponentType<SidebarNavRowProps>> = {
   "new-workspace": SidebarNewWorkspaceRow,
+  tasks: SidebarTasksRow,
   history: SidebarHistoryRow,
   search: SidebarSearchRow,
   shared: SidebarSharedRow,
