@@ -133,9 +133,6 @@ vi.mock("@/components/combined-model-selector", () => ({
     onSelect: (provider: string, model: string) => void;
   }) => <button onClick={() => onSelect("mock", "model-a")}>Choose model</button>,
 }));
-vi.mock("@/components/schedules/cadence-editor", () => ({
-  CadenceEditor: () => <div>Cadence</div>,
-}));
 vi.mock("@/components/adaptive-modal-sheet", () => ({
   AdaptiveModalSheet: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
     <div data-testid={testID}>{children}</div>
@@ -202,6 +199,47 @@ vi.mock("@/components/ui/form-field", () => ({
   ),
 }));
 
+function openBlankSchedule() {
+  const blank = screen.queryByTestId("schedule-template-blank");
+  if (blank) fireEvent.click(blank);
+}
+
+function showSection(section: "content" | "execution") {
+  openBlankSchedule();
+  fireEvent.click(screen.getByTestId(`schedule-section-${section}`));
+}
+
+function chooseModel() {
+  showSection("execution");
+  fireEvent.click(screen.getByRole("button", { name: "Choose model" }));
+  showSection("content");
+}
+
+function getExecutionAgent() {
+  showSection("execution");
+  return screen.getByLabelText("Execution agent");
+}
+
+function getField(name: string) {
+  openBlankSchedule();
+  if (screen.queryByTestId("schedule-section-content")) {
+    showSection(
+      ["Max runs", "First trigger (optional)", "Stop after (optional)"].includes(name)
+        ? "execution"
+        : "content",
+    );
+  }
+  return screen.getByRole("textbox", { name });
+}
+
+function chooseTemplate(id: string) {
+  const back = screen.queryByTestId("schedule-template-back");
+  if (back) fireEvent.click(back);
+  const browse = screen.queryByTestId("schedule-template-browse");
+  if (browse) fireEvent.click(browse);
+  fireEvent.click(screen.getByTestId(`schedule-template-option-${id}`));
+}
+
 describe("workspace schedule form", () => {
   it("excludes shared Hosts from background task creation", () => {
     const original = [...hosts];
@@ -262,6 +300,24 @@ describe("workspace schedule form", () => {
     await i18n.changeLanguage("en");
   });
 
+  it("starts with grouped template cards and a separate manual entry", () => {
+    render(
+      <WorkspaceScheduleForm
+        serverId="host-a"
+        workspace={{ id: "workspace-a", name: "Feature", cwd: "/worktrees/feature" }}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Code & collaboration")).toBeTruthy();
+    expect(screen.getByText("Topic updates")).toBeTruthy();
+    expect(screen.getByText("Project upkeep")).toBeTruthy();
+    expect(screen.getAllByTestId(/^schedule-template-option-/)).toHaveLength(5);
+    expect(screen.queryByRole("textbox", { name: "Prompt" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create schedule" })).toBeNull();
+    openBlankSchedule();
+    expect(getField("Prompt")).toBeTruthy();
+  });
+
   it("submits from the inline workspace form using its directory without a project selection", async () => {
     const onClose = vi.fn();
     const { container } = render(
@@ -271,6 +327,7 @@ describe("workspace schedule form", () => {
         onClose={onClose}
       />,
     );
+    openBlankSchedule();
 
     expect(screen.getByText("Feature branch")).toBeTruthy();
     expect(screen.getByText("/worktrees/feature")).toBeTruthy();
@@ -278,8 +335,8 @@ describe("workspace schedule form", () => {
     expect(container.querySelector('[data-testid="schedule-host-trigger"]')).toBeNull();
     expect(container.querySelector('[data-testid="schedule-project-trigger"]')).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Choose model" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), {
+    chooseModel();
+    fireEvent.change(getField("Prompt"), {
       target: { value: "Check this workspace" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
@@ -312,24 +369,25 @@ describe("workspace schedule form", () => {
         onClose={vi.fn()}
       />,
     );
-    const selector = screen.getByLabelText("Execution agent");
+    openBlankSchedule();
+    getExecutionAgent();
     expect(screen.queryByText("Foreign agent")).toBeNull();
     expect(screen.queryByText("Archived agent")).toBeNull();
     expect(screen.queryByText("Other host agent")).toBeNull();
     expect(screen.queryByTestId("schedule-target-kind-trigger")).toBeNull();
     expect(screen.queryByTestId("schedule-agent-trigger")).toBeNull();
-    fireEvent.change(selector, { target: { value: agentId } });
+    fireEvent.change(getExecutionAgent(), { target: { value: agentId } });
     expect(screen.queryByRole("button", { name: "Choose model" })).toBeNull();
-    fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), {
+    fireEvent.change(getField("Prompt"), {
       target: { value: "Review the changes" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Max runs" }), {
+    fireEvent.change(getField("Max runs"), {
       target: { value: "2.5" },
     });
     expect(
       (screen.getByRole("button", { name: "Create schedule" }) as HTMLButtonElement).disabled,
     ).toBe(true);
-    fireEvent.change(screen.getByRole("textbox", { name: "Max runs" }), { target: { value: "2" } });
+    fireEvent.change(getField("Max runs"), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
     await waitFor(() => expect(createSchedule).toHaveBeenCalledOnce());
     expect(createSchedule).toHaveBeenCalledWith(
@@ -351,19 +409,18 @@ describe("workspace schedule form", () => {
         onClose={vi.fn()}
       />,
     );
-    const selector = screen.getByLabelText("Execution agent") as HTMLSelectElement;
+    openBlankSchedule();
+    const selector = getExecutionAgent() as HTMLSelectElement;
     expect(selector.value).toBe("new-agent");
-    fireEvent.click(screen.getByRole("button", { name: "Choose model" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), {
+    chooseModel();
+    fireEvent.change(getField("Prompt"), {
       target: { value: "Keep my review instructions" },
     });
-    fireEvent.change(selector, { target: { value: agentId } });
+    fireEvent.change(getExecutionAgent(), { target: { value: agentId } });
     expect(screen.queryByRole("button", { name: "Choose model" })).toBeNull();
-    fireEvent.change(selector, { target: { value: "new-agent" } });
+    fireEvent.change(getExecutionAgent(), { target: { value: "new-agent" } });
     expect(screen.getByRole("button", { name: "Choose model" })).toBeTruthy();
-    expect((screen.getByRole("textbox", { name: "Prompt" }) as HTMLInputElement).value).toBe(
-      "Keep my review instructions",
-    );
+    expect((getField("Prompt") as HTMLInputElement).value).toBe("Keep my review instructions");
     fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
     await waitFor(() =>
       expect(createSchedule).toHaveBeenCalledWith(
@@ -378,6 +435,110 @@ describe("workspace schedule form", () => {
     );
   });
 
+  it("fills the task from a template and submits it as an unlimited cron schedule", async () => {
+    render(
+      <WorkspaceScheduleForm
+        serverId="host-a"
+        workspace={{ id: "workspace-a", name: "Feature", cwd: "/worktrees/feature" }}
+        onClose={vi.fn()}
+      />,
+    );
+    openBlankSchedule();
+    chooseModel();
+    chooseTemplate("pr-gatekeeper");
+    expect((getField("Schedule name") as HTMLInputElement).value).toBe("PR risk review");
+    expect((getField("Max runs") as HTMLInputElement).value).toBe("");
+    expect((getField("Cron expression") as HTMLInputElement).value).toBe("0 10 * * 1-5");
+    const timezone = (getField("IANA timezone") as HTMLInputElement).value;
+    fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
+    await waitFor(() => expect(createSchedule).toHaveBeenCalledOnce());
+    expect(createSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "PR risk review",
+        prompt: expect.stringContaining("open PRs"),
+        cadence: { type: "cron", expression: "0 10 * * 1-5", timezone },
+        maxRuns: undefined,
+      }),
+    );
+  });
+
+  it("refreshes the displayed cadence across templates while preserving placement and editable fields", async () => {
+    render(
+      <WorkspaceScheduleForm
+        serverId="host-a"
+        workspace={{ id: "workspace-a", name: "Feature", cwd: "/worktrees/feature" }}
+        onClose={vi.fn()}
+      />,
+    );
+    openBlankSchedule();
+    fireEvent.change(getExecutionAgent(), { target: { value: agentId } });
+    fireEvent.change(getField("First trigger (optional)"), {
+      target: { value: "2035-01-01 09:00" },
+    });
+    chooseTemplate("nightly-test-heal");
+    fireEvent.change(getField("Cron expression"), {
+      target: { value: "15 4 * * *" },
+    });
+    chooseTemplate("weekly-work-draft");
+    expect((getField("Cron expression") as HTMLInputElement).value).toBe("0 16 * * 5");
+    expect((getExecutionAgent() as HTMLSelectElement).value).toBe(agentId);
+    expect((getField("First trigger (optional)") as HTMLInputElement).value).toBe(
+      "2035-01-01 09:00",
+    );
+    fireEvent.change(getField("Schedule name"), {
+      target: { value: "My weekly report" },
+    });
+    fireEvent.change(getField("Prompt"), {
+      target: { value: "Draft the report for my team" },
+    });
+    fireEvent.change(getField("Cron expression"), {
+      target: { value: "30 15 * * 5" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
+    await waitFor(() => expect(createSchedule).toHaveBeenCalledOnce());
+    expect(createSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "My weekly report",
+        prompt: "Draft the report for my team",
+        target: { type: "agent", agentId },
+        workspaceId: "workspace-a",
+        cadence: expect.objectContaining({ expression: "30 15 * * 5" }),
+        startAt: expect.any(String),
+      }),
+    );
+  });
+
+  it("applies a parameterized template only after its parameters are filled", () => {
+    render(
+      <WorkspaceScheduleForm
+        serverId="host-a"
+        workspace={{ id: "workspace-a", name: "Feature", cwd: "/worktrees/feature" }}
+        onClose={vi.fn()}
+      />,
+    );
+    openBlankSchedule();
+    chooseTemplate("domain-radar");
+    const apply = screen.getByRole("button", { name: "Fill in task" }) as HTMLButtonElement;
+    expect(apply.disabled).toBe(true);
+    expect(screen.queryByRole("textbox", { name: "Prompt" })).toBeNull();
+    fireEvent.change(getField("Briefing topic"), {
+      target: { value: "Rust async" },
+    });
+    chooseTemplate("domain-radar");
+    expect((getField("Briefing topic") as HTMLInputElement).value).toBe("Rust async");
+    expect(
+      (screen.getByRole("button", { name: "Fill in task" }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Fill in task" }));
+    expect((getField("Prompt") as HTMLInputElement).value).toContain("“Rust async”");
+    chooseTemplate("pr-gatekeeper");
+    chooseTemplate("domain-radar");
+    expect((getField("Briefing topic") as HTMLInputElement).value).toBe("");
+    expect(
+      (screen.getByRole("button", { name: "Fill in task" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
   it("keeps the created task in the workspace tab through the saved callback", async () => {
     const onSaved = vi.fn();
     const onClose = vi.fn();
@@ -389,8 +550,9 @@ describe("workspace schedule form", () => {
         onSaved={onSaved}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Choose model" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), {
+    openBlankSchedule();
+    chooseModel();
+    fireEvent.change(getField("Prompt"), {
       target: { value: "Check changes" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
@@ -406,13 +568,14 @@ describe("workspace schedule form", () => {
         onClose={vi.fn()}
       />,
     );
-    fireEvent.change(screen.getByLabelText("Execution agent"), { target: { value: agentId } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), {
+    openBlankSchedule();
+    fireEvent.change(getExecutionAgent(), { target: { value: agentId } });
+    fireEvent.change(getField("Prompt"), {
       target: { value: "Review changes" },
     });
     const submit = screen.getByRole("button", { name: "Create schedule" }) as HTMLButtonElement;
-    const start = screen.getByRole("textbox", { name: "First trigger (optional)" });
-    const stop = screen.getByRole("textbox", { name: "Stop after (optional)" });
+    const start = getField("First trigger (optional)");
+    const stop = getField("Stop after (optional)");
     fireEvent.change(start, { target: { value: "2000-01-01 09:00" } });
     expect(submit.disabled).toBe(true);
     fireEvent.change(start, { target: { value: "2035-01-01 09:00" } });
@@ -436,12 +599,13 @@ describe("workspace schedule form", () => {
         onClose={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Choose model" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), {
+    openBlankSchedule();
+    chooseModel();
+    fireEvent.change(getField("Prompt"), {
       target: { value: "Repeat checks" },
     });
-    expect((screen.getByRole("textbox", { name: "Max runs" }) as HTMLInputElement).value).toBe("1");
-    fireEvent.change(screen.getByRole("textbox", { name: "Max runs" }), { target: { value: "" } });
+    expect((getField("Max runs") as HTMLInputElement).value).toBe("1");
+    fireEvent.change(getField("Max runs"), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
     await waitFor(() =>
       expect(createSchedule).toHaveBeenCalledWith(expect.objectContaining({ maxRuns: undefined })),
@@ -529,10 +693,11 @@ describe("workspace schedule form", () => {
         onClose={vi.fn()}
       />,
     );
-    expect((screen.getByRole("textbox", { name: "Max runs" }) as HTMLInputElement).value).toBe("1");
-    expect((screen.getByLabelText("Execution agent") as HTMLSelectElement).value).toBe(agentId);
+    expect((getField("Max runs") as HTMLInputElement).value).toBe("1");
+    expect((getExecutionAgent() as HTMLSelectElement).value).toBe(agentId);
     expect(screen.queryByRole("button", { name: "Choose model" })).toBeNull();
-    fireEvent.change(screen.getByRole("textbox", { name: "Max runs" }), { target: { value: "2" } });
+    expect(screen.queryByTestId("schedule-template-gallery")).toBeNull();
+    fireEvent.change(getField("Max runs"), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
     await waitFor(() =>
       expect(updateSchedule).toHaveBeenCalledWith(
@@ -598,11 +763,12 @@ describe("global schedule placement", () => {
     expect(screen.queryByText("Other project workspace")).toBeNull();
     expect(screen.queryByText("Other host workspace")).toBeNull();
     fireEvent.change(screen.getByLabelText("Workspace"), { target: { value: "workspace-a" } });
+    openBlankSchedule();
     expect(screen.getAllByLabelText("Workspace")).toHaveLength(1);
     expect(screen.queryByTestId("schedule-workspace-target")).toBeNull();
-    fireEvent.change(screen.getByLabelText("Execution agent"), { target: { value: agentId } });
+    fireEvent.change(getExecutionAgent(), { target: { value: agentId } });
     expect(screen.queryByRole("button", { name: "Choose model" })).toBeNull();
-    fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), {
+    fireEvent.change(getField("Prompt"), {
       target: { value: "Review this selected workspace" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
@@ -623,15 +789,15 @@ describe("global schedule placement", () => {
     fireEvent.change(screen.getByLabelText("Host"), { target: { value: "host-a" } });
     fireEvent.change(screen.getByLabelText("Project"), { target: { value: "project-a" } });
     fireEvent.change(screen.getByLabelText("Workspace"), { target: { value: "workspace-a" } });
-    fireEvent.change(screen.getByLabelText("Execution agent"), { target: { value: agentId } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), {
+    fireEvent.change(getExecutionAgent(), { target: { value: agentId } });
+    fireEvent.change(getField("Prompt"), {
       target: { value: "Old workspace prompt" },
     });
     fireEvent.change(screen.getByLabelText("Project"), { target: { value: "project-b" } });
     expect((screen.getByLabelText("Workspace") as HTMLSelectElement).value).toBe("");
     expect(screen.queryByLabelText("Execution agent")).toBeNull();
     fireEvent.change(screen.getByLabelText("Workspace"), { target: { value: "workspace-b" } });
-    expect((screen.getByRole("textbox", { name: "Prompt" }) as HTMLInputElement).value).toBe("");
+    expect((getField("Prompt") as HTMLInputElement).value).toBe("");
     expect(screen.queryByText("My agent")).toBeNull();
     expect(screen.getByText("Foreign agent")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Host"), { target: { value: "host-b" } });
@@ -641,6 +807,7 @@ describe("global schedule placement", () => {
     expect(screen.queryByLabelText("Execution agent")).toBeNull();
     fireEvent.change(screen.getByLabelText("Project"), { target: { value: "project-a" } });
     fireEvent.change(screen.getByLabelText("Workspace"), { target: { value: "workspace-a" } });
+    getExecutionAgent();
     expect(screen.queryByText("My agent")).toBeNull();
     expect(screen.getByText("Other host agent")).toBeTruthy();
   });

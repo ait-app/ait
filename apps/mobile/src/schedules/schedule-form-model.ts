@@ -29,6 +29,7 @@ import { shortenPath } from "@/utils/shorten-path";
 import { formatLocalDateTime, isValidMaxRuns, parseLocalDateTime } from "./schedule-date-time";
 import { normalizeScheduleFormCadence, type ScheduleFormCadence } from "./schedule-cadence-options";
 import { PROJECT_OPTION_PREFIX, type ScheduleProjectTarget } from "./schedule-project-targets";
+import type { ScheduleTemplateDraft } from "./schedule-templates";
 
 export interface ScheduleFormDisplay {
   label: string;
@@ -158,6 +159,7 @@ export interface ScheduleFormModel {
   setPrompt: (value: string) => void;
   setMaxRuns: (value: string) => void;
   setCadence: (value: ScheduleFormCadence) => void;
+  applyTemplate: (draft: ScheduleTemplateDraft) => void;
   setIsolation: (value: "local" | "worktree") => void;
   setArchiveOnFinish: (value: boolean) => void;
   setSubmitError: (value: string | null) => void;
@@ -1208,6 +1210,17 @@ export function openScheduleForm(snapshot: ScheduleFormSnapshot): ScheduleFormMo
       const cadence = normalizeScheduleFormCadence(value, timezone);
       publish({
         ...state,
+        cadence,
+        submitCadence: cadence,
+      });
+    },
+    applyTemplate(draft) {
+      const cadence = normalizeScheduleFormCadence(draft.cadence, timezone);
+      publish({
+        ...state,
+        name: draft.name,
+        prompt: draft.prompt,
+        maxRuns: draft.maxRuns,
         cadence,
         submitCadence: cadence,
       });

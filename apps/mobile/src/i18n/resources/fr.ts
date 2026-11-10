@@ -1832,6 +1832,7 @@ export const fr: TranslationResources = {
   },
   hostPicker: en.hostPicker,
   schedules: {
+    templates: en.schedules.templates,
     workspaceUnavailable:
       "L’espace de travail propriétaire n’est pas disponible. Restaurez-le avant de modifier cette planification.",
     browse: "Planifications de l’espace de travail",

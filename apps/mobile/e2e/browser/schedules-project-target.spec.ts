@@ -22,18 +22,30 @@ async function openScheduleTab(page: Page) {
   await expect(page.getByTestId("workspace-schedules-list")).toBeVisible();
 }
 
+async function openManualEditor(page: Page) {
+  await page.getByTestId("schedule-template-blank").click();
+}
+
+async function showEditorSection(page: Page, section: "content" | "execution") {
+  await page.getByTestId(`schedule-section-${section}`).click();
+}
+
 async function selectExistingAgent(page: Page, agentId: string) {
+  await showEditorSection(page, "execution");
   await page.getByTestId("schedule-execution-agent-trigger").click();
   await page.getByTestId(`schedule-agent-option-${agentId}`).click();
   await expect(page.getByTestId(`schedule-agent-option-${agentId}`)).not.toBeVisible();
+  await showEditorSection(page, "content");
 }
 
 async function selectModel(page: Page, label = "Offline model") {
+  await showEditorSection(page, "execution");
   await page.getByTestId("schedule-model-trigger").click();
   const popup = page.getByTestId("combobox-desktop-container");
   await expect(popup).toBeVisible();
   await page.getByTestId("model-search-input").first().fill(label);
   await popup.getByText(label, { exact: true }).click();
+  await showEditorSection(page, "content");
 }
 
 async function selectPlacement(page: Page, workspace: SeededWorkspace, serverId = getServerId()) {
@@ -43,6 +55,7 @@ async function selectPlacement(page: Page, workspace: SeededWorkspace, serverId 
   await page.getByTestId(`schedule-project-option-${serverId}-${workspace.projectId}`).click();
   await page.getByTestId("schedule-workspace-trigger").click();
   await page.getByTestId(`schedule-workspace-option-${serverId}-${workspace.workspaceId}`).click();
+  await openManualEditor(page);
 }
 
 test.describe("Workspace scheduled tasks", () => {
@@ -79,6 +92,7 @@ test.describe("Workspace scheduled tasks", () => {
     await gotoWorkspace(page, workspace.workspaceId);
     await openScheduleTab(page);
     await page.getByTestId("workspace-schedules-new").click();
+    await openManualEditor(page);
     await expect(page.getByTestId("schedule-max-runs-input")).toHaveValue("1");
     await expect(page.getByTestId("schedule-workspace-target")).toContainText(
       workspace.workspaceName,
@@ -86,6 +100,7 @@ test.describe("Workspace scheduled tasks", () => {
     await selectModel(page);
     await expect(page.getByTestId("schedule-target-kind-trigger")).toHaveCount(0);
     await expect(page.getByTestId("schedule-agent-trigger")).toHaveCount(0);
+    await showEditorSection(page, "execution");
     await page.getByTestId("schedule-execution-agent-trigger").click();
     await expect(page.getByTestId("schedule-target-new-agent")).toBeVisible();
     await expect(page.getByTestId(`schedule-agent-option-${foreignAgent.id}`)).toHaveCount(0);
@@ -100,12 +115,15 @@ test.describe("Workspace scheduled tasks", () => {
       "Scheduled agent",
     );
     await expect(page.getByTestId("schedule-model-trigger")).toHaveCount(0);
+    await showEditorSection(page, "content");
     await page.getByTestId("schedule-name-input").fill("Workspace review");
+    await showEditorSection(page, "content");
     await page.getByTestId("schedule-prompt-input").fill("Review the current workspace.");
     await page.screenshot({
       path: "/tmp/schedule-existing-agent-form-desktop.png",
       fullPage: true,
     });
+    await showEditorSection(page, "execution");
     await page.getByTestId("schedule-execution-agent-trigger").click();
     await page.getByTestId("schedule-target-new-agent").click();
     await expect(page.getByTestId("schedule-model-trigger")).toContainText("Offline model");
@@ -113,8 +131,10 @@ test.describe("Workspace scheduled tasks", () => {
       "Review the current workspace.",
     );
     await selectExistingAgent(page, agent.id);
+    await showEditorSection(page, "execution");
     await page.getByTestId("schedule-max-runs-input").fill("1.5");
     await expect(page.getByTestId("schedule-form-submit")).toBeDisabled();
+    await showEditorSection(page, "execution");
     await page.getByTestId("schedule-max-runs-input").fill("2");
     await page.getByTestId("schedule-form-submit").click();
     const detail = page.getByTestId("workspace-schedule-details");
@@ -142,6 +162,7 @@ test.describe("Workspace scheduled tasks", () => {
     await expect(page.getByTestId("schedule-prompt-input")).toHaveValue(
       "Review the current workspace.",
     );
+    await showEditorSection(page, "content");
     await page.getByTestId("schedule-prompt-input").fill("Review the workspace again.");
     await page.getByTestId("schedule-form-submit").click();
     await expect(page.getByTestId(`workspace-schedule-${schedule.id}`)).toContainText(
@@ -200,13 +221,17 @@ test.describe("Workspace scheduled tasks", () => {
     await gotoWorkspace(page, workspace.workspaceId);
     await openScheduleTab(page);
     await page.getByTestId("workspace-schedules-new").click();
+    await openManualEditor(page);
     await expect(page.getByTestId("schedule-max-runs-input")).toHaveValue("1");
     await selectModel(page);
+    await showEditorSection(page, "content");
     await page.getByTestId("schedule-name-input").fill("New agent review");
+    await showEditorSection(page, "content");
     await page.getByTestId("schedule-prompt-input").fill("Say hello from a new scheduled agent.");
     await page.getByTestId("schedule-cadence-kind-trigger").click();
     await expect(page.getByTestId("schedule-cadence-kind-once")).toHaveCount(0);
     await page.getByTestId("schedule-cadence-kind-every").click();
+    await showEditorSection(page, "execution");
     await expect(page.getByTestId("schedule-start-at-input")).toBeVisible();
     await page.getByTestId("schedule-form-submit").click();
     const detail = page.getByTestId("workspace-schedule-details");
@@ -264,6 +289,7 @@ test.describe("Workspace scheduled tasks", () => {
     await page.screenshot({ path: "/tmp/schedule-global-placement-mobile.png", fullPage: true });
     await selectPlacement(page, workspace);
     await expect(page.getByTestId("schedule-form-sheet")).toBeVisible();
+    await showEditorSection(page, "execution");
     await page.getByTestId("schedule-execution-agent-trigger").click();
     await expect(page.getByPlaceholder("Search agents...")).toBeVisible();
     await expect(page.getByTestId(`schedule-agent-option-${agent.id}`)).toBeInViewport();
@@ -272,7 +298,9 @@ test.describe("Workspace scheduled tasks", () => {
       fullPage: true,
     });
     await page.getByTestId(`schedule-agent-option-${agent.id}`).click();
+    await showEditorSection(page, "content");
     await page.getByTestId("schedule-name-input").fill("Mobile review");
+    await showEditorSection(page, "content");
     await page.getByTestId("schedule-prompt-input").fill("Review on mobile.");
     await page.screenshot({ path: "/tmp/workspace-schedule-mobile.png", fullPage: true });
     await page.getByTestId("schedule-form-submit").click();
@@ -335,6 +363,7 @@ test.describe("Workspace scheduled tasks", () => {
     await page.getByTestId("schedules-empty-new").click();
     await selectPlacement(page, local);
     await selectExistingAgent(page, agent.id);
+    await showEditorSection(page, "content");
     await page.getByTestId("schedule-prompt-input").fill("Local draft");
 
     await page.getByTestId("schedule-project-trigger").click();
@@ -355,6 +384,7 @@ test.describe("Workspace scheduled tasks", () => {
     await page
       .getByTestId(`schedule-workspace-option-${getServerId()}-${otherProject.workspaceId}`)
       .click();
+    await openManualEditor(page);
     await expect(page.getByTestId("schedule-prompt-input")).toHaveValue("");
 
     await page.getByTestId("schedule-host-trigger").click();
@@ -371,15 +401,19 @@ test.describe("Workspace scheduled tasks", () => {
       .click();
     await page.getByTestId("schedule-workspace-trigger").click();
     await page.getByTestId(`schedule-workspace-option-${remote.serverId}-${worktree.id}`).click();
+    await openManualEditor(page);
     await expect(page.getByTestId("schedule-workspace-trigger")).toContainText(
       "Scheduled worktree",
     );
     await expect(page.getByTestId("schedule-max-runs-input")).toHaveValue("1");
+    await showEditorSection(page, "execution");
     await page.getByTestId("schedule-execution-agent-trigger").click();
     await expect(page.getByTestId(`schedule-agent-option-${agent.id}`)).toHaveCount(0);
     await page.getByTestId("schedule-target-new-agent").click();
     await selectModel(page, SECONDARY_MODEL_LABEL);
+    await showEditorSection(page, "content");
     await page.getByTestId("schedule-name-input").fill("Global worktree task");
+    await showEditorSection(page, "content");
     await page.getByTestId("schedule-prompt-input").fill("Review the selected worktree.");
     await page.getByTestId("schedule-host-trigger").scrollIntoViewIfNeeded();
     await page.screenshot({ path: "/tmp/schedule-global-placement-desktop.png", fullPage: true });
@@ -471,6 +505,7 @@ test.describe("Workspace scheduled tasks", () => {
     await page.getByTestId(`workspace-schedule-${earlier}`).click();
     await expect(page.getByTestId("schedule-prompt-input")).toHaveValue("Earlier review");
     await expect(page.getByTestId("schedule-max-runs-input")).toHaveValue("1");
+    await showEditorSection(page, "content");
     await page.getByTestId("schedule-name-input").fill("Edited earlier review");
     await page.getByTestId("schedule-form-submit").click();
     await expect(page.getByTestId(`workspace-schedule-${earlier}`)).toContainText(
