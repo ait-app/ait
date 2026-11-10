@@ -98,6 +98,21 @@ describe("quit-lifecycle", () => {
     expect(events).toEqual(["retain", "feedback", "stop"]);
   });
 
+  it("stops a daemon whose handover failed instead of leaving it unreachable", async () => {
+    const events: string[] = [];
+
+    const stopped = await stopDesktopManagedDaemonOnQuitIfNeeded({
+      ...quitDeps({ settings: SETTINGS_KEEP_RUNNING, running: true, events }),
+      retainDaemon: async () => {
+        events.push("retain");
+        throw new Error("Could not write the handover record");
+      },
+    });
+
+    expect(stopped).toBe(true);
+    expect(events).toEqual(["retain", "feedback", "stop"]);
+  });
+
   it("does not stop a manually started daemon on quit", async () => {
     const events: string[] = [];
 

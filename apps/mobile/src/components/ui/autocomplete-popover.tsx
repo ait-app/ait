@@ -25,29 +25,15 @@ import {
 import { useKeyboardShift } from "@/keyboard/shift";
 import { SPACING } from "@/styles/theme";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
+import { measureElement } from "@/components/ui/menu/menu-anchor";
 
 const OFFSET_FROM_ANCHOR = SPACING[3];
-
-interface Rect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
 
 interface RelativeAnchorRect {
   x: number;
   y: number;
   width: number;
   hostHeight: number;
-}
-
-function measureElement(element: View): Promise<Rect> {
-  return new Promise((resolve) => {
-    element.measureInWindow((x, y, width, height) => {
-      resolve({ x, y, width, height });
-    });
-  });
 }
 
 interface AutocompletePopoverProps {

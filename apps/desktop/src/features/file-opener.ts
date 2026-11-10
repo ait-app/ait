@@ -21,7 +21,7 @@ export async function openPreviewFile(value: unknown): Promise<void> {
     throw new Error("The file must be a downloaded preview.");
   }
   const executable =
-    /\.(exe|com|bat|cmd|msi|msp|ps1|psm1|vbs|vbe|js|jse|wsf|wsh|scr|pif|cpl|hta|lnk|url|reg|sh|bash|zsh|fish|run|appimage|desktop|command|tool|terminal|scpt|applescript|workflow|action|pkg|mpkg|dmg|fileloc|inetloc|webloc|jar|py|pl|rb)$/i.test(
+    /\.(exe|com|bat|cmd|msi|msp|ps1|psm1|vbs|vbe|js|jse|wsf|wsh|scr|pif|cpl|hta|lnk|url|reg|sh|bash|zsh|fish|run|appimage|desktop|command|tool|terminal|scpt|applescript|workflow|action|pkg|mpkg|dmg|fileloc|inetloc|webloc|jar|py|pl|rb|msc|ws|jnlp|appref-ms|msix|appinstaller)$/i.test(
       target,
     ) ||
     (process.platform !== "win32" && (entry.mode & 0o111) !== 0);
@@ -55,9 +55,10 @@ export async function openDirectoryLink(value: unknown): Promise<boolean> {
       : rawPath.startsWith("~/")
         ? path.join(os.homedir(), rawPath.slice(2))
         : rawPath;
-  const target = path.resolve(cwd, expanded);
-  const entry = await stat(target).catch(() => null);
-  if (!entry?.isDirectory()) return false;
+  // Resolve symlinks first so a link to a bundle cannot pass as an ordinary directory.
+  const target = await realpath(path.resolve(cwd, expanded)).catch(() => null);
+  const entry = target ? await stat(target).catch(() => null) : null;
+  if (!target || !entry?.isDirectory()) return false;
   if (isLaunchableBundle(target, process.platform)) {
     shell.showItemInFolder(target);
     return true;

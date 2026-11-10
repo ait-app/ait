@@ -29,7 +29,6 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
 
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [partialTranscript, setPartialTranscript] = useState("");
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<DictationStatus>("idle");
@@ -134,7 +133,6 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
   const clearStreamingState = useCallback(() => {
     senderRef.current?.clearAll();
     latestPartialTranscriptRef.current = "";
-    setPartialTranscript("");
   }, []);
 
   const startNewStream = useCallback(async (reason: string) => {
@@ -180,7 +178,6 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
       }
       const next = message.payload.text ?? "";
       latestPartialTranscriptRef.current = next;
-      setPartialTranscript(next);
       onPartialTranscriptRef.current?.(next, { requestId: generateMessageId() });
     });
   }, [client]);
@@ -265,7 +262,6 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
 
     actionGateRef.current.starting = true;
     setError(null);
-    setPartialTranscript("");
     setDuration(0);
     setIsProcessing(false);
     setStatus("recording");
@@ -430,18 +426,6 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
     clearStreamingState();
   }, [clearStreamingState]);
 
-  const reset = useCallback(() => {
-    setIsRecording(false);
-    isRecordingRef.current = false;
-    setIsProcessing(false);
-    isProcessingRef.current = false;
-    stopDurationTracking();
-    setDuration(0);
-    setError(null);
-    setStatus("idle");
-    clearStreamingState();
-  }, [clearStreamingState, stopDurationTracking]);
-
   useEffect(() => {
     const attemptGuard = attemptGuardRef.current;
     const audioStop = audioStopRef;
@@ -457,7 +441,6 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
     isRecording,
     isRecordingActive,
     isProcessing,
-    partialTranscript,
     volume: audio.volume,
     duration,
     error,
@@ -467,7 +450,6 @@ export function useDictation(options: UseDictationOptions): UseDictationResult {
     confirmDictation,
     retryFailedDictation,
     discardFailedDictation,
-    reset,
   };
 }
 

@@ -1,7 +1,10 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use domain::bot::{Bot, BotState, ChannelConfig, DeliveryStatus, PauseReason, TurnStatus};
+use domain::bot::{
+    Bot, BotState, ChannelConfig, DeliveryStatus, PauseReason, TurnMessage, TurnMessageStatus,
+    TurnStatus,
+};
 use domain::{BotId, BotTurnId, ConversationId};
 use model::ErrorCode;
 use provider::service::bot_execution::Action;
@@ -163,6 +166,7 @@ impl State {
                 conversation,
                 instructions,
                 cancel: CancellationToken::new(),
+                output_cursor: None,
             });
         }
         for id in failed {
@@ -194,6 +198,17 @@ impl State {
         reply: Option<String>,
         error: Option<String>,
     ) -> Result<(), ErrorCode> {
+        self.progress_with_messages(id, status, reply, None, error)
+    }
+
+    pub(crate) fn progress_with_messages(
+        &mut self,
+        id: BotTurnId,
+        status: TurnStatus,
+        reply: Option<String>,
+        messages: Option<Vec<TurnMessage>>,
+        error: Option<String>,
+    ) -> Result<(), ErrorCode> {
         let mut turn = self.turn(id)?;
         if matches!(
             turn.status,
@@ -204,12 +219,32 @@ impl State {
         ) {
             return Ok(());
         }
-        if turn.status == status && turn.reply == reply && turn.error == error {
+        let messages_changed = messages
+            .as_ref()
+            .is_some_and(|messages| turn.messages.as_slice() != messages.as_slice());
+        if turn.status == status && turn.reply == reply && turn.error == error && !messages_changed
+        {
             return Ok(());
         }
         turn.status = status;
         turn.reply = reply;
         turn.error = error;
+        if let Some(messages) = messages {
+            if messages.iter().any(|message| {
+                message.id.is_empty()
+                    || message.id.len() > 256
+                    || message.text.len() > 256 * 1024
+                    || message.text.contains('\0')
+            }) {
+                return Err(ErrorCode::InvalidMessage);
+            }
+            turn.messages = messages;
+        }
+        if status == TurnStatus::Completed {
+            for message in &mut turn.messages {
+                message.status = TurnMessageStatus::Completed;
+            }
+        }
         if status != TurnStatus::NeedsApproval {
             turn.pending_permissions.clear();
         }

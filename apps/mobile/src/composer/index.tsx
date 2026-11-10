@@ -75,10 +75,11 @@ import { resolveAgentControlsMode } from "@/composer/agent-controls/mode";
 import { droppedItemsToSelectedFiles } from "@/composer/attachments/drop";
 import { resolveComposerAttachmentSubmitFormat } from "@/composer/attachments/submit";
 import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
+import { restoreSentContextAttachments } from "@/composer/attachments/workspace-cleanup";
 import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/input-mode";
 import { ComposerKeyboardScopeProvider, useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
-import { joinRestoredText, submitAgentInput } from "@/composer/submit";
+import { joinRestoredText, readLiveDraftText, submitAgentInput } from "@/composer/submit";
 import { FOOTER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
@@ -1376,7 +1377,7 @@ function ComposerContentImpl({
   const [pendingFiles, setPendingFiles] = useState<PendingFileAttachment[]>([]);
   const nextPendingFileId = useRef(0);
   const isUploadingFile = pendingFiles.length > 0;
-  const [pendingNativeImagePastes, setPendingNativeImagePastes] = useState(0);
+  const [pendingImagePastes, setPendingImagePastes] = useState(0);
   const editingSession = useComposerEditingSession(inputMode, providedEditingSession);
   const isFullscreen = useComposerFullscreen(editingSession);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -1657,7 +1658,7 @@ function ComposerContentImpl({
         },
         clearDraft,
         readCurrentDraft: () => ({
-          text: textSource.getSnapshot(),
+          text: readLiveDraftText(messageInputRef.current, textSource),
           attachments: latestUserAttachmentsRef.current,
         }),
         setUserInput: replaceUserInput,
@@ -1772,7 +1773,7 @@ function ComposerContentImpl({
 
   const handleNativePasteImages = useCallback(
     (files: readonly NativePastedFile[]) => {
-      setPendingNativeImagePastes((pending) => pending + 1);
+      setPendingImagePastes((pending) => pending + 1);
       void pickAndPersistImages({
         pickImages: async () => normalizeNativePastedImages(files),
         persister: composerImageAttachmentPersister,
@@ -1788,11 +1789,18 @@ function ComposerContentImpl({
           toastErrorRef.current(t("composer.errors.pasteImageFailed"));
         })
         .finally(() => {
-          setPendingNativeImagePastes((pending) => Math.max(0, pending - 1));
+          setPendingImagePastes((pending) => Math.max(0, pending - 1));
         });
     },
     [addImages, t],
   );
+
+  const trackImagePasteSave = useCallback((save: Promise<unknown>) => {
+    setPendingImagePastes((pending) => pending + 1);
+    void save.finally(() => {
+      setPendingImagePastes((pending) => Math.max(0, pending - 1));
+    });
+  }, []);
 
   const uploadSelectedFiles = useCallback(
     async (files: SelectedFile[]) => {
@@ -1805,8 +1813,14 @@ function ComposerContentImpl({
       const placeholders = files.map((file) => ({ id: nextPendingFileId.current++, file }));
       setPendingFiles((pending) => [...pending, ...placeholders]);
       try {
-        const uploaded = await uploadFileAttachments({ client, files });
-        addFiles(uploaded);
+        const { attachments: uploaded, error } = await uploadFileAttachments({ client, files });
+        if (uploaded.length > 0) {
+          addFiles(uploaded);
+        }
+        if (error) {
+          console.error("[Composer] Failed to upload file:", error);
+          toastErrorRef.current(error.message);
+        }
       } catch (error) {
         console.error("[Composer] Failed to upload file:", error);
         toastErrorRef.current(
@@ -1954,8 +1968,19 @@ function ComposerContentImpl({
       // Pull the queued message in ahead of the current draft instead of replacing it.
       replaceUserInput(joinRestoredText(result.text, textSource.getSnapshot()));
       setSelectedAttachments([...result.attachments, ...latestUserAttachmentsRef.current]);
+      const restoreScopeKey = attachmentScopeKeys[0];
+      if (restoreScopeKey) {
+        restoreSentContextAttachments(result.workspaceAttachments, restoreScopeKey);
+      }
     },
-    [agentId, queueWriter, replaceUserInput, setSelectedAttachments, textSource],
+    [
+      agentId,
+      attachmentScopeKeys,
+      queueWriter,
+      replaceUserInput,
+      setSelectedAttachments,
+      textSource,
+    ],
   );
 
   const handleSendQueuedNow = useCallback(
@@ -2239,11 +2264,7 @@ function ComposerContentImpl({
   );
 
   const isSubmitLoadingVisible =
-    isProcessing ||
-    isSubmitLoading ||
-    isStartingVoice ||
-    isUploadingFile ||
-    pendingNativeImagePastes > 0;
+    isProcessing || isSubmitLoading || isStartingVoice || isUploadingFile || pendingImagePastes > 0;
 
   const leftContent = useMemo(
     () =>
@@ -2515,6 +2536,7 @@ function ComposerContentImpl({
                   onAttachButtonRef={handleAttachButtonRef}
                   onAddImages={addImages}
                   onPasteImages={handleNativePasteImages}
+                  trackImagePasteSave={trackImagePasteSave}
                   client={client}
                   isReadyForDictation={isDictationReady}
                   placeholder={messagePlaceholder}

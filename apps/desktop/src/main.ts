@@ -56,6 +56,7 @@ import { registerBrowserAutomationIpc } from "./features/browser-automation/ipc.
 import { createBrowserCaptureService } from "./features/browser-capture.js";
 import { BrowserKeyboard } from "./features/browser-keyboard/index.js";
 import {
+  applyBrowserGuestPermissionPolicy,
   clearPaseoBrowserProfile,
   getLegacyPaseoBrowserProfileSession,
   getPaseoBrowserProfileSession,
@@ -795,6 +796,7 @@ async function createWindow(
       event.preventDefault();
       return;
     }
+    applyBrowserGuestPermissionPolicy(session.fromPartition(params.partition));
     webPreferences.nodeIntegration = false;
     // The sandboxed keyboard preload must run in every frame so focused iframes keep
     // the same page-first shortcut boundary. Node integration remains disabled.

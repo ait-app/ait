@@ -53,7 +53,19 @@ function BotExchange({ turn, serverId, cwd }: { turn: BotTurn; serverId: string;
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const createdAt = useMemo(() => new Date(turn.createdAt), [turn.createdAt]);
-  const getReply = useCallback(() => turn.reply ?? "", [turn.reply]);
+  const messages = useMemo(
+    () =>
+      turn.messages.length > 0
+        ? turn.messages
+        : turn.reply
+          ? [{ id: "legacy", text: turn.reply, status: "completed" as const }]
+          : [],
+    [turn.messages, turn.reply],
+  );
+  const getReply = useCallback(
+    () => messages.map((message) => message.text).join("\n\n"),
+    [messages],
+  );
   const pending = isBotTurnPending(turn);
   return (
     <View testID={`bot-turn-${turn.id}`}>
@@ -64,17 +76,18 @@ function BotExchange({ turn, serverId, cwd }: { turn: BotTurn; serverId: string;
         timestamp={createdAt.getTime()}
         client={client}
       />
-      {turn.reply ? (
+      {messages.map((message) => (
         <AssistantMessage
-          message={turn.reply}
+          key={message.id}
+          message={message.text}
           timestamp={createdAt.getTime()}
           serverId={serverId}
           client={client}
           workspaceRoot={cwd}
-          phase={pending ? "streaming" : "complete"}
-          occurrenceKey={turn.id}
+          phase={message.status === "streaming" && pending ? "streaming" : "complete"}
+          occurrenceKey={`${turn.id}:${message.id}`}
         />
-      ) : null}
+      ))}
       {pending ? (
         <View style={chatStyles.turnStatus} testID={`bot-turn-status-${turn.id}`}>
           <ThemedSyncedLoader size={14} uniProps={foregroundColorMapping} />
@@ -88,7 +101,7 @@ function BotExchange({ turn, serverId, cwd }: { turn: BotTurn; serverId: string;
           {turn.error}
         </Text>
       ) : null}
-      {turn.reply && !pending ? (
+      {messages.length > 0 && !pending ? (
         <View style={chatStyles.turnFooter}>
           <AssistantTurnFooter getContent={getReply} />
         </View>

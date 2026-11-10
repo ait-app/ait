@@ -14,6 +14,12 @@ describe("projectDisplayNameFromProjectId", () => {
   it("shows the trailing directory name for local projects", () => {
     expect(projectDisplayNameFromProjectId("/Users/me/dev/paseo")).toBe("paseo");
   });
+
+  it("uses the last segment of POSIX and Windows paths", () => {
+    expect(projectDisplayNameFromProjectId("/Users/dev/projects/ait/")).toBe("ait");
+    expect(projectDisplayNameFromProjectId("C:\\Users\\dev\\projects\\ait")).toBe("ait");
+    expect(projectDisplayNameFromProjectId("C:\\Users\\dev/mixed\\ait\\")).toBe("ait");
+  });
 });
 
 describe("projectIconPlaceholderLabelFromDisplayName", () => {

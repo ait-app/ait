@@ -625,10 +625,17 @@ export function createVoiceRuntime(deps: VoiceRuntimeDeps): VoiceRuntime {
       return;
     }
 
+    const generation = state.generation;
     patchSnapshot((prev) => ({ ...prev, isVoiceSwitching: true }));
     try {
       await activeSession.adapter.setVoiceMode(true, state.snapshot.activeAgentId);
       state.transportReady = true;
+    } catch (error) {
+      console.error(`[VoiceRuntime#${instanceId}] Failed to resync voice mode:`, error);
+      // A dropped connection resyncs on the next reconnect, and a newer session owns the state.
+      if (state.generation !== generation || !activeSession.connected) return;
+      state.generation += 1;
+      await performLocalStop();
     } finally {
       patchSnapshot((prev) => ({ ...prev, isVoiceSwitching: false }));
     }

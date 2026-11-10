@@ -12,6 +12,7 @@ import {
   type DesktopUpdaterDiagnostics,
 } from "@/desktop/daemon/desktop-daemon";
 import { formatDiagnosticSection } from "./app-diagnostic-report";
+import { toErrorMessage } from "@/utils/error-messages";
 
 type DesktopDiagnosticStatus = "done" | "failed";
 
@@ -64,7 +65,7 @@ export async function collectDesktopDiagnosticSections(
     failed = true;
     sections.push(
       formatDiagnosticSection("Chromium sandbox", [
-        { label: "Error", value: toMessage(sandboxResult.reason) },
+        { label: "Error", value: toErrorMessage(sandboxResult.reason) },
       ]),
     );
   }
@@ -77,7 +78,7 @@ export async function collectDesktopDiagnosticSections(
     failed = true;
     sections.unshift(
       formatDiagnosticSection("Desktop", [
-        { label: "Error", value: toMessage(daemonResult.reason) },
+        { label: "Error", value: toErrorMessage(daemonResult.reason) },
       ]),
     );
   }
@@ -88,7 +89,7 @@ export async function collectDesktopDiagnosticSections(
     failed = true;
     sections.push(
       formatDiagnosticSection("Desktop app log tail", [
-        { label: "Error", value: toMessage(appLogsResult.reason) },
+        { label: "Error", value: toErrorMessage(appLogsResult.reason) },
       ]),
     );
   }
@@ -99,7 +100,7 @@ export async function collectDesktopDiagnosticSections(
     failed = true;
     sections.push(
       formatDiagnosticSection("Desktop updater", [
-        { label: "Error", value: toMessage(updaterResult.reason) },
+        { label: "Error", value: toErrorMessage(updaterResult.reason) },
       ]),
     );
   }
@@ -181,8 +182,4 @@ function indentBlock(value: string): string {
     .filter(Boolean)
     .map((line) => `  ${line}`)
     .join("\n");
-}
-
-function toMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

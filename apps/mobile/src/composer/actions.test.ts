@@ -1,3 +1,4 @@
+import { collectRetainedAttachmentIds } from "@/attachments/gc-retention";
 import type {
   AttachmentMetadata,
   ComposerAttachment,
@@ -417,6 +418,61 @@ describe("pickAndPersistImages", () => {
       { dataUrl, mimeType: "image/png", fileName: "clipboard.png" },
     ]);
     expect(result).toHaveLength(1);
+  });
+
+  it("releases a slow image that finishes after another image in the batch failed", async () => {
+    let finishSlowImage!: (attachment: AttachmentMetadata) => void;
+    const persistFromDataUrl = vi.fn(({ dataUrl }: { dataUrl: string }) =>
+      dataUrl === "bad"
+        ? Promise.reject(new Error("disk full"))
+        : new Promise<AttachmentMetadata>((resolve) => {
+            finishSlowImage = resolve;
+          }),
+    );
+
+    const pending = pickAndPersistImages({
+      pickImages: async () =>
+        ["bad", "slow"].map((dataUrl) => ({
+          source: { kind: "data_url" as const, dataUrl },
+          mimeType: "image/png",
+          fileName: null,
+        })),
+      persister: { ...createFakePersister(), persistFromDataUrl },
+    });
+    await vi.waitFor(() => expect(finishSlowImage).toBeDefined());
+    finishSlowImage({ id: "slow-after-failure" } as AttachmentMetadata);
+
+    await expect(pending).rejects.toThrow("disk full");
+    expect(collectRetainedAttachmentIds().size).toBe(0);
+  });
+
+  it("keeps finished images safe from garbage collection until the whole batch is saved", async () => {
+    let finishSlowImage!: (attachment: AttachmentMetadata) => void;
+    const fastImage = { id: "fast-image" } as AttachmentMetadata;
+    const slowImage = { id: "slow-image" } as AttachmentMetadata;
+    const persistFromDataUrl = vi.fn(({ dataUrl }: { dataUrl: string }) =>
+      dataUrl === "fast"
+        ? Promise.resolve(fastImage)
+        : new Promise<AttachmentMetadata>((resolve) => {
+            finishSlowImage = resolve;
+          }),
+    );
+
+    const pending = pickAndPersistImages({
+      pickImages: async () =>
+        ["fast", "slow"].map((dataUrl) => ({
+          source: { kind: "data_url" as const, dataUrl },
+          mimeType: "image/png",
+          fileName: null,
+        })),
+      persister: { ...createFakePersister(), persistFromDataUrl },
+    });
+
+    await vi.waitFor(() => expect(collectRetainedAttachmentIds().has("fast-image")).toBe(true));
+    finishSlowImage(slowImage);
+
+    await expect(pending).resolves.toEqual([fastImage, slowImage]);
+    expect(collectRetainedAttachmentIds().size).toBe(0);
   });
 });
 
@@ -839,7 +895,7 @@ describe("editQueuedComposerMessage", () => {
     expect(queue.state.get("agent")).toHaveLength(1);
   });
 
-  it("returns the text and only user attachments, removing the queued entry", () => {
+  it("returns user attachments and workspace attachments separately, removing the queued entry", () => {
     const review = reviewWorkspaceAttachment("Queued snapshot.");
     const image = imageWithId("img-queued-edit");
     const queue = createFakeQueue(
@@ -861,6 +917,7 @@ describe("editQueuedComposerMessage", () => {
     expect(result).toEqual({
       text: "queued draft",
       attachments: [{ kind: "image", metadata: image }],
+      workspaceAttachments: [review],
     });
     expect(queue.state.get("agent")).toEqual([]);
   });
@@ -1151,7 +1208,63 @@ describe("file upload preparation", () => {
       path: "/uploads/sample.bin",
     };
     acknowledge({ requestId: "req-1", file, error: null });
-    await expect(upload).resolves.toEqual([{ kind: "file", attachment: file }]);
+    await expect(upload).resolves.toEqual({
+      attachments: [{ kind: "file", attachment: file }],
+      error: null,
+    });
+  });
+
+  it("keeps files uploaded before a later file fails and returns the error", async () => {
+    const uploadedFile = {
+      type: "uploaded_file" as const,
+      id: "file-1",
+      fileName: "first.bin",
+      mimeType: "application/octet-stream",
+      size: 1,
+      path: "/uploads/first.bin",
+    };
+    const sent: string[] = [];
+    const result = await uploadFileAttachments({
+      client: {
+        sendAgentMessage: async () => {},
+        uploadFile: async ({ fileName }) => {
+          sent.push(fileName);
+          return fileName === "first.bin"
+            ? { requestId: "req-1", file: uploadedFile, error: null }
+            : { requestId: "req-2", file: null, error: "disk full" };
+        },
+      },
+      files: ["first.bin", "second.bin", "third.bin"].map((fileName) => ({
+        fileName,
+        mimeType: "application/octet-stream",
+        readBytes: async () => new Uint8Array([1]),
+      })),
+    });
+
+    expect(result.attachments).toEqual([{ kind: "file", attachment: uploadedFile }]);
+    expect(result.error?.message).toBe("disk full");
+    expect(sent).toEqual(["first.bin", "second.bin"]);
+  });
+
+  it("returns a transport failure with the files already uploaded", async () => {
+    const result = await uploadFileAttachments({
+      client: {
+        sendAgentMessage: async () => {},
+        uploadFile: async () => {
+          throw new Error("socket closed");
+        },
+      },
+      files: [
+        {
+          fileName: "only.bin",
+          mimeType: "application/octet-stream",
+          readBytes: async () => new Uint8Array([1]),
+        },
+      ],
+    });
+
+    expect(result.attachments).toEqual([]);
+    expect(result.error?.message).toBe("socket closed");
   });
 
   it.each(["unreadable", "oversized"])(

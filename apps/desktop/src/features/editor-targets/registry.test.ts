@@ -28,6 +28,7 @@ class FakeEditorTargets implements EditorTargetRuntime {
   readonly platform: NodeJS.Platform;
   private readonly paths = new Set<string>();
   private readonly directories = new Set<string>();
+  private readonly symlinks = new Map<string, string>();
   private readonly commands = new Map<string, string>();
   private readonly macApplications = new Set<string>();
 
@@ -45,6 +46,11 @@ class FakeEditorTargets implements EditorTargetRuntime {
     this.directories.add(targetPath);
   }
 
+  addDirectorySymlink(linkPath: string, targetPath: string): void {
+    this.addDirectory(linkPath);
+    this.symlinks.set(linkPath, targetPath);
+  }
+
   installCommand(command: string, executable = `/bin/${command}`): void {
     this.commands.set(command, executable);
   }
@@ -59,6 +65,10 @@ class FakeEditorTargets implements EditorTargetRuntime {
 
   isDirectory(targetPath: string): boolean {
     return this.directories.has(targetPath);
+  }
+
+  realPath(targetPath: string): string {
+    return this.symlinks.get(targetPath) ?? targetPath;
   }
 
   isAbsolutePath(targetPath: string): boolean {
@@ -345,6 +355,18 @@ describe("editor target registry", () => {
       ]),
     ).rejects.toThrow("must be a directory");
     expect(runtime.openedPaths).toEqual([]);
+  });
+
+  it("reveals a symlink to a macOS application bundle instead of launching it", async () => {
+    const runtime = new FakeEditorTargets("darwin");
+    runtime.addDirectorySymlink("/repo/link", "/opt/Evil.app");
+
+    await openEditorTarget({ editorId: "finder", workspacePath: "/repo/link" }, runtime, [
+      finderTarget,
+    ]);
+
+    expect(runtime.openedPaths).toEqual([]);
+    expect(runtime.revealedPaths).toEqual(["/opt/Evil.app"]);
   });
 
   it("reveals macOS application bundles instead of launching them", async () => {

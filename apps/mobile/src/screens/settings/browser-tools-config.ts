@@ -1,4 +1,5 @@
 import type { MutableDaemonConfig } from "@ait/protocol/messages";
+import { toErrorMessage } from "@/utils/error-messages";
 
 export const BROWSER_TOOLS_TITLE_KEY = "settings.host.agents.browserTools.title";
 export const BROWSER_TOOLS_WARNING_KEY = "settings.host.agents.browserTools.hint";
@@ -41,8 +42,4 @@ export function getBrowserToolsMutationViewState(input: {
     loadingKey: input.isPending ? "settings.host.agents.browserTools.updating" : null,
     errorText: input.error ? toErrorMessage(input.error) : null,
   };
-}
-
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -1,7 +1,18 @@
 import { isDeliveredSendError } from "@/composer/submission/model";
 import { i18n } from "@/i18n/i18next";
 
-export type AgentInputSubmitResult = "noop" | "queued" | "submitted" | "failed";
+export type AgentInputSubmitResult = "noop" | "queued" | "submitted" | "delivered" | "failed";
+
+/**
+ * On web, clearing the input publishes to the draft store only after paint. Prefer the mounted
+ * editor so a send that fails immediately does not read back the text it just cleared.
+ */
+export function readLiveDraftText(
+  editor: { getText: () => string } | null,
+  stored: { getSnapshot: () => string },
+): string {
+  return editor ? editor.getText() : stored.getSnapshot();
+}
 
 export interface AgentInputSubmitActionInput<TAttachment> {
   message: string;
@@ -96,6 +107,6 @@ export async function submitAgentInput<TAttachment>(
         : (input.failedToSendMessage ?? i18n.t("composer.errors.failedToSend")),
     );
     input.setIsProcessing(false);
-    return "failed";
+    return isDeliveredSendError(error) ? "delivered" : "failed";
   }
 }

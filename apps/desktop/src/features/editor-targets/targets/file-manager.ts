@@ -6,11 +6,13 @@ const launchFileManager: EditorTarget["launch"] = async (input, runtime) => {
     runtime.revealPath(input.filePath);
     return;
   }
-  if (isLaunchableBundle(input.workspacePath, runtime.platform)) {
-    runtime.revealPath(input.workspacePath);
+  // A symlink to a bundle would launch it just as the bundle itself would.
+  const workspacePath = runtime.realPath(input.workspacePath);
+  if (isLaunchableBundle(workspacePath, runtime.platform)) {
+    runtime.revealPath(workspacePath);
     return;
   }
-  await runtime.openPath(input.workspacePath);
+  await runtime.openPath(workspacePath);
 };
 
 export const finderTarget: EditorTarget = {

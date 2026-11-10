@@ -2,6 +2,8 @@ export const PASEO_BROWSER_PROFILE_PARTITION = "persist:ait-browser";
 const LEGACY_BROWSER_ID_PATTERN =
   /^(?:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|\d{13,}-[0-9a-f]+)$/i;
 const MAX_LEGACY_BROWSER_PROFILES = 1000;
+// Guest pages run with no prompt UI, so anything that reaches devices or user data is refused.
+const BROWSER_GUEST_ALLOWED_PERMISSIONS = new Set(["clipboard-sanitized-write", "fullscreen"]);
 
 const PASEO_BROWSER_STORAGE_TYPES = [
   "cookies",
@@ -45,6 +47,26 @@ interface ClearBrowserProfileInput {
 
 interface ElectronSessions {
   fromPartition(partition: string): BrowserProfileSession;
+}
+
+interface BrowserGuestPermissionSession {
+  setPermissionRequestHandler(
+    handler: (contents: unknown, permission: string, callback: (granted: boolean) => void) => void,
+  ): void;
+  setPermissionCheckHandler(handler: (contents: unknown, permission: string) => boolean): void;
+}
+
+export function isBrowserGuestPermissionAllowed(permission: string): boolean {
+  return BROWSER_GUEST_ALLOWED_PERMISSIONS.has(permission);
+}
+
+export function applyBrowserGuestPermissionPolicy(profile: BrowserGuestPermissionSession): void {
+  profile.setPermissionRequestHandler((_contents, permission, callback) => {
+    callback(isBrowserGuestPermissionAllowed(permission));
+  });
+  profile.setPermissionCheckHandler((_contents, permission) =>
+    isBrowserGuestPermissionAllowed(permission),
+  );
 }
 
 export function getPaseoBrowserProfileSession(sessions: ElectronSessions): BrowserProfileSession {

@@ -181,6 +181,77 @@ describe("agent task state", () => {
       todo.items,
     );
   });
+
+  describe("window replacement without a todo row", () => {
+    const tasks = [{ text: "Verify", status: "in_progress" as const, completed: false }];
+
+    function seedTasks(): void {
+      initializeTestSession();
+      useSessionStore.getState().applyAgentTimelineResponseState("test-server", "agent-1", {
+        items: [],
+        head: [],
+        range: { epoch: "epoch-1", startSeq: 1, endSeq: 10 },
+        older: "unchanged",
+        newer: false,
+        synchronized: true,
+        acknowledgedClientMessageIds: [],
+      });
+      useSessionStore
+        .getState()
+        .setAgentStreamState("test-server", "agent-1", { taskSnapshot: tasks });
+    }
+
+    function applyWindow(input: {
+      epoch: string;
+      older: "available" | "none" | "unchanged";
+      items?: StreamItem[];
+    }): void {
+      useSessionStore.getState().applyAgentTimelineResponseState("test-server", "agent-1", {
+        items: input.items ?? [],
+        head: [],
+        range: { epoch: input.epoch, startSeq: 51, endSeq: 90 },
+        older: input.older,
+        newer: false,
+        synchronized: true,
+        acknowledgedClientMessageIds: [],
+      });
+    }
+
+    const currentTasks = () =>
+      useSessionStore.getState().sessions["test-server"]?.agentTasks.get("agent-1");
+
+    it("keeps tasks when the window starts after the history that held them", () => {
+      seedTasks();
+      applyWindow({ epoch: "epoch-1", older: "available" });
+      expect(currentTasks()).toEqual(tasks);
+    });
+
+    it("clears tasks when the window reaches the start of history", () => {
+      seedTasks();
+      applyWindow({ epoch: "epoch-1", older: "none" });
+      expect(currentTasks()).toBeUndefined();
+    });
+
+    it("clears tasks when the epoch changed", () => {
+      seedTasks();
+      applyWindow({ epoch: "epoch-2", older: "available" });
+      expect(currentTasks()).toBeUndefined();
+    });
+
+    it("honors an explicitly empty todo row in the window", () => {
+      seedTasks();
+      const emptyTodo: StreamItem = {
+        kind: "todo_list",
+        id: "todo-empty",
+        provider: "codex",
+        timestamp: new Date("2026-08-11T10:00:00.000Z"),
+        activity: { type: "started", task: "Verify" },
+        items: [],
+      };
+      applyWindow({ epoch: "epoch-1", older: "available", items: [emptyTodo] });
+      expect(currentTasks()).toBeUndefined();
+    });
+  });
 });
 
 describe("agent timeline state", () => {

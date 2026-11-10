@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 use super::{
     BUSY_NOTICE, Disposition, Incoming, admit_waiting, chunks, deliver, expose, json_response,
-    supervise,
+    reply_parts, supervise,
 };
 use crate::service::Bots;
 
@@ -263,15 +263,22 @@ impl Connection<'_> {
     }
 
     async fn reply(&self, turn: Turn, conversation: Conversation) -> Result<(), ErrorCode> {
-        let text = turn.reply.as_deref().ok_or(ErrorCode::BotIo)?;
-        for (index, chunk) in chunks(text, MAX_CHUNK_UTF16).into_iter().enumerate() {
-            self.post_text(
-                &conversation.peer,
-                turn.reply_to.as_deref(),
-                chunk,
-                &format!("ait-{}-{index}", turn.id),
-            )
-            .await?;
+        let parts = reply_parts(&turn);
+        if parts.is_empty() {
+            return Err(ErrorCode::BotIo);
+        }
+        let mut index = 0;
+        for text in parts {
+            for chunk in chunks(text, MAX_CHUNK_UTF16) {
+                self.post_text(
+                    &conversation.peer,
+                    turn.reply_to.as_deref(),
+                    chunk,
+                    &format!("ait-{}-{index}", turn.id),
+                )
+                .await?;
+                index += 1;
+            }
         }
         Ok(())
     }

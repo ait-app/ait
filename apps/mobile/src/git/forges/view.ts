@@ -17,7 +17,3 @@ export const CLIENT_FORGE_VIEW_MODULES: readonly ClientForgeViewModule[] = [
   forgejoForgeView,
   codebergForgeView,
 ];
-
-export function getClientForgeViewModule(id: string): ClientForgeViewModule | null {
-  return CLIENT_FORGE_VIEW_MODULES.find((module) => module.id === id) ?? null;
-}

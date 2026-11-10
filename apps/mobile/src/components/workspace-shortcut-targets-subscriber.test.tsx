@@ -64,7 +64,8 @@ function hostProfile(serverId = "srv"): HostProfile {
     label: "Shortcut Host",
     appearance: defaultHostAppearance(),
     lifecycle: {},
-    connections: [],
+    // The sidebar lists only available hosts, and a host with no connection is never available.
+    connections: [{ id: `socket:${serverId}`, type: "directSocket", path: "/tmp/shortcuts.sock" }],
     preferredConnectionId: null,
     createdAt: now,
     updatedAt: now,

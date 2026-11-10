@@ -460,6 +460,19 @@ export class RustDaemonManager {
   }
 
   private async launch(): Promise<RustDaemonStatus> {
+    if (this.retained && !isProcessAlive(this.retained.pid)) {
+      this.retained = null;
+      this.token = null;
+      this.state = {
+        ...this.state,
+        status: "stopped",
+        pid: null,
+        listen: null,
+        connectAddress: null,
+        version: null,
+        ownedByDesktop: false,
+      };
+    }
     if ((this.child || this.retained) && this.state.status === "running") return this.status();
     try {
       // A failed probe must reconnect to the same owned child, never spawn a competitor.

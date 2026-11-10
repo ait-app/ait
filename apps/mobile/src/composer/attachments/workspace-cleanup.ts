@@ -63,6 +63,17 @@ function isSentContextAttachment(
   );
 }
 
+/** Returns context attachments that queueing cleared to the draft when the message is edited. */
+export function restoreSentContextAttachments(
+  attachments: readonly ComposerAttachment[],
+  scopeKey: string,
+): void {
+  const { addWorkspaceAttachment } = useWorkspaceAttachmentsStore.getState();
+  for (const attachment of attachments.filter(isSentContextAttachment)) {
+    addWorkspaceAttachment({ scopeKey, attachment });
+  }
+}
+
 export function removeSentContextAttachments(attachments: readonly ComposerAttachment[]): void {
   const sentContextKeys = attachments.filter(isSentContextAttachment).map(getAttachmentKey);
   for (const key of sentContextKeys) {

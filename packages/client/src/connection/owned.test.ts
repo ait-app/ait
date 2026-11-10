@@ -133,3 +133,43 @@ test("a late listener after bounded replay overflow gets a fresh snapshot", asyn
   expect(late).toEqual(["fresh", "update"]);
   await handle.release();
 });
+
+test("a release that rethrows still forgets the registration", async () => {
+  const failing = new OwnedSubscriptions({
+    release: async () => {
+      throw new Error("release failed");
+    },
+    failed: () => {},
+  });
+  failing.restore();
+  const handle = failing.observe<Snapshot>(async (accept) => {
+    const snapshot = { subscriptionId: "a", requestId: "request-1" };
+    accept(snapshot);
+    return snapshot;
+  });
+  await handle.ready;
+  await expect(handle.release()).rejects.toThrow("release failed");
+  expect(failing["registrations"].size).toBe(0);
+});
+
+test("close settles every registration even when one release rejects", async () => {
+  const released: string[] = [];
+  const failing = new OwnedSubscriptions({
+    release: async (id) => {
+      released.push(id);
+      if (id === "a") throw new Error("release failed");
+    },
+    failed: () => {},
+  });
+  failing.restore();
+  const observe = (subscriptionId: string) =>
+    failing.observe<Snapshot>(async (accept) => {
+      const snapshot = { subscriptionId, requestId: "request-1" };
+      accept(snapshot);
+      return snapshot;
+    });
+  const handles = [observe("a"), observe("b")];
+  await Promise.all(handles.map((handle) => handle.ready));
+  await expect(failing.close()).resolves.toBeUndefined();
+  expect(released).toEqual(["a", "b"]);
+});

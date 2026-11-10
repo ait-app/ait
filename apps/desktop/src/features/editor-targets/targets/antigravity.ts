@@ -1,19 +1,6 @@
-import type { EditorTarget, EditorTargetLaunchInput } from "../target.js";
+import { launchArgs, type EditorTarget } from "../target.js";
 
 const COMMANDS = ["agy", "antigravity"] as const;
-
-function location(input: EditorTargetLaunchInput): string {
-  if (!input.line) return input.filePath!;
-  return input.column
-    ? `${input.filePath}:${input.line}:${input.column}`
-    : `${input.filePath}:${input.line}`;
-}
-
-function launchArgs(input: EditorTargetLaunchInput): string[] {
-  if (!input.filePath) return [input.workspacePath];
-  if (!input.line) return [input.workspacePath, input.filePath];
-  return [input.workspacePath, "--goto", location(input)];
-}
 
 export const antigravityTarget: EditorTarget = {
   id: "antigravity",

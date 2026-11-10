@@ -11,6 +11,7 @@ import { createProjectIconTarget } from "@/projects/icon-target";
 import { settingsStyles } from "@/styles/settings";
 import { openProjectSettings } from "@/navigation/settings-navigation";
 import type { ProjectHostEntry, ProjectSummary } from "@/utils/projects";
+import { displayInitial } from "@/utils/display-initial";
 
 interface ProjectsScreenProps {
   serverId: string;
@@ -161,7 +162,7 @@ function ProjectRowIcon({
   projectName: string;
   projectViewKey: string;
 }) {
-  const initial = projectName.trim().charAt(0).toUpperCase() || "?";
+  const initial = displayInitial(projectName.trim()) || "?";
   return (
     <ProjectIconView
       iconDataUri={iconDataUri}

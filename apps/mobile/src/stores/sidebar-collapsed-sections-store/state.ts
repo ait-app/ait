@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { areSetsEqual } from "@/utils/set-equality";
 
 export interface CollapsedProjectsState {
   collapsedProjectKeys: Set<string>;
@@ -113,16 +114,4 @@ export function mergePersistedCollapsedProjects<S extends CollapsedProjectsState
 
 function deserializeCollapsedKeys(value: string[]): Set<string> {
   return new Set(value);
-}
-
-function areSetsEqual(left: Set<string>, right: Set<string>): boolean {
-  if (left.size !== right.size) {
-    return false;
-  }
-  for (const key of left) {
-    if (!right.has(key)) {
-      return false;
-    }
-  }
-  return true;
 }

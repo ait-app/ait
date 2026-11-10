@@ -15,8 +15,8 @@ import {
   normalizeBrowserUrl,
   removeBrowserFromIndex,
   sanitizeBrowsersForPersist,
-  trimNonEmpty,
 } from "./state";
+import { trimNonEmpty } from "@/utils/string";
 
 export {
   createFixedBrowserViewport,

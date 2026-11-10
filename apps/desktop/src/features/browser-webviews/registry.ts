@@ -176,17 +176,6 @@ export class PaseoBrowserWebviewRegistry {
     return this.activeBrowserIdsByHostWindow.get(hostWebContentsId)?.get(workspaceId) ?? null;
   }
 
-  public getMostRecentActiveBrowserIdForWorkspace(workspaceId: string): string | null {
-    const activeBrowserIdsByHostWindow = Array.from(this.activeBrowserIdsByHostWindow.values());
-    for (let index = activeBrowserIdsByHostWindow.length - 1; index >= 0; index -= 1) {
-      const browserId = activeBrowserIdsByHostWindow[index].get(workspaceId);
-      if (browserId) {
-        return browserId;
-      }
-    }
-    return null;
-  }
-
   private deleteActiveBrowserReferences(browserId: string): void {
     for (const [hostWebContentsId, activeBrowserIdsByWorkspace] of this
       .activeBrowserIdsByHostWindow) {

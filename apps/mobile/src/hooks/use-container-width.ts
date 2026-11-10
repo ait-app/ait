@@ -12,22 +12,6 @@ export function readMeasuredWidth(event: LayoutChangeEvent): number | null {
 }
 
 /**
- * Tracks the width of a container via onLayout.
- */
-export function useContainerWidth(): {
-  onLayout: (e: LayoutChangeEvent) => void;
-  width: number;
-} {
-  const [width, setWidth] = useState(0);
-  return {
-    onLayout: useCallback((e: LayoutChangeEvent) => {
-      setWidth(e.nativeEvent.layout.width);
-    }, []),
-    width,
-  };
-}
-
-/**
  * Tracks only whether a container is narrower than a threshold.
  */
 export function useContainerWidthBelow(

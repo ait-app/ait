@@ -34,6 +34,7 @@ use crate::ports::agent_session::{
 };
 use crate::ports::mcp_scope::McpSubject;
 use crate::protocol::agent_config::ConfigPatch;
+use crate::service::bot_execution::TimelineCursor;
 use crate::support::time::now_timestamp;
 
 enum Registration<'a> {
@@ -278,6 +279,25 @@ impl AgentManager {
     #[must_use]
     pub(crate) fn timeline(&self) -> Option<crate::storage::timeline::Timeline> {
         self.timeline.clone()
+    }
+
+    /// Read the visible assistant messages produced after a Bot turn's cursor.
+    ///
+    /// # Errors
+    /// Returns missing timeline, storage, or timeline-generation errors.
+    pub(crate) fn bot_messages(
+        &self,
+        agent_id: &str,
+        after: &TimelineCursor,
+    ) -> Result<Vec<(String, String)>, model::ErrorCode> {
+        let timeline = self.timeline.as_ref().ok_or(model::ErrorCode::AgentIo)?;
+        let (epoch, rows) = timeline.read(agent_id)?;
+        if epoch != after.epoch {
+            return Err(model::ErrorCode::BotConflict);
+        }
+        Ok(crate::timeline_projection::assistant_messages(
+            &rows, after.seq,
+        ))
     }
 
     /// Discover models and capabilities through the registered native adapters.

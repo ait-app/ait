@@ -127,10 +127,6 @@ export function setWorkspaceActivePaseoBrowserId(input: {
   browserRegistry.setWorkspaceActiveBrowser(input);
 }
 
-export function getWorkspaceActivePaseoBrowserId(workspaceId: string): string | null {
-  return browserRegistry.getMostRecentActiveBrowserIdForWorkspace(workspaceId);
-}
-
 export function getWorkspaceActivePaseoBrowserIdForHostWindow(
   workspaceId: string,
   hostWebContentsId: number,
@@ -161,22 +157,7 @@ export function getActivePaseoBrowserWebContentsForHostWindow(
   hostWebContentsId: number,
 ): WebContents | null {
   const browserId = browserRegistry.getActiveBrowserIdForHostWindow(hostWebContentsId);
-  if (!browserId) {
-    return null;
-  }
-  const contentsId = browserRegistry.getWebContentsIdForBrowserInHostWindow(
-    hostWebContentsId,
-    browserId,
-  );
-  if (contentsId === null) {
-    return null;
-  }
-  const contents = allWebContents.fromId(contentsId);
-  if (contents && !contents.isDestroyed()) {
-    return contents;
-  }
-  browserRegistry.unregisterWebContents(contentsId);
-  return null;
+  return browserId ? getPaseoBrowserWebContentsForHostWindow(browserId, hostWebContentsId) : null;
 }
 
 function preventUnsafeBrowserWebviewNavigation(

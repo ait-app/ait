@@ -1,12 +1,5 @@
 import type { WorkspaceDescriptor } from "@/stores/session-store";
-
-function trimNonEmpty(value: string | null | undefined): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
+import { trimNonEmpty } from "@/utils/string";
 
 export function normalizeWorkspaceOpaqueId(value: string | null | undefined): string | null {
   return trimNonEmpty(value);

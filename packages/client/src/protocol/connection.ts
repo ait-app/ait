@@ -184,7 +184,13 @@ export function createDaemonConnection(
     uploads.dispose();
     subscriptions.clear();
     for (const remove of channelCleanup) remove();
-    for (const channel of channels) channel.close(code, reason);
+    for (const channel of channels) {
+      try {
+        channel.close(code, reason);
+      } catch {
+        /* Already closed. */
+      }
+    }
   }
 
   /**

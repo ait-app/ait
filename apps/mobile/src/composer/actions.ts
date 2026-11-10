@@ -1,3 +1,4 @@
+import { retainAttachmentForGarbageCollection } from "@/attachments/gc-retention";
 import type { SelectedFile } from "@/attachments/selected-file";
 import type { ForgeSearchItem } from "@ait/protocol/messages";
 import type { ActiveTurnBehavior } from "@ait/protocol/messages";
@@ -5,6 +6,7 @@ import type {
   AttachmentMetadata,
   ComposerAttachment,
   UserComposerAttachment,
+  WorkspaceComposerAttachment,
 } from "@/attachments/types";
 import {
   isWorkspaceAttachment,
@@ -100,38 +102,61 @@ export async function pickAndPersistImages(input: {
 }): Promise<AttachmentMetadata[]> {
   const result = await input.pickImages();
   if (!result?.length) return [];
-  return await Promise.all(
-    result.map(async (picked) => {
-      const fileName = picked.fileName ?? null;
-      const mimeType = picked.mimeType;
-      if (picked.source.kind === "blob") {
-        return await input.persister.persistFromBlob({
-          blob: picked.source.blob,
-          mimeType,
-          fileName,
-        });
-      }
-      if (picked.source.kind === "data_url") {
-        return await input.persister.persistFromDataUrl({
-          dataUrl: picked.source.dataUrl,
-          mimeType,
-          fileName,
-        });
-      }
-      return await input.persister.persistFromFileUri({
-        uri: picked.source.uri,
+  const persist = async (picked: PickedImageAttachmentInput): Promise<AttachmentMetadata> => {
+    const fileName = picked.fileName ?? null;
+    const mimeType = picked.mimeType;
+    if (picked.source.kind === "blob") {
+      return await input.persister.persistFromBlob({
+        blob: picked.source.blob,
         mimeType,
         fileName,
       });
+    }
+    if (picked.source.kind === "data_url") {
+      return await input.persister.persistFromDataUrl({
+        dataUrl: picked.source.dataUrl,
+        mimeType,
+        fileName,
+      });
+    }
+    return await input.persister.persistFromFileUri({
+      uri: picked.source.uri,
+      mimeType,
+      fileName,
+    });
+  };
+  // Nothing references a saved image until the whole batch reaches the draft, so garbage
+  // collection could otherwise delete the fast ones while a slow one is still saving.
+  const releases: Array<() => void> = [];
+  // Wait for every save, even after a failure: a save finishing later would retain forever.
+  const settled = await Promise.allSettled(
+    result.map(async (picked) => {
+      const attachment = await persist(picked);
+      releases.push(retainAttachmentForGarbageCollection(attachment.id));
+      return attachment;
     }),
   );
+  for (const release of releases) release();
+  return settled.map((outcome) => {
+    if (outcome.status === "rejected") throw outcome.reason;
+    return outcome.value;
+  });
 }
 
+export interface UploadFileAttachmentsResult {
+  attachments: Extract<ComposerAttachment, { kind: "file" }>[];
+  error: Error | null;
+}
+
+/**
+ * Rejects if any file cannot be read, before anything is sent. Once uploads start, a failure
+ * stops the batch and is returned with the files that the daemon already holds.
+ */
 export async function uploadFileAttachments(input: {
   client: ComposerSendClient;
   files: SelectedFile[];
-}): Promise<Extract<ComposerAttachment, { kind: "file" }>[]> {
-  const result: Extract<ComposerAttachment, { kind: "file" }>[] = [];
+}): Promise<UploadFileAttachmentsResult> {
+  const attachments: UploadFileAttachmentsResult["attachments"] = [];
   const prepared: Array<{ fileName: string; mimeType: string; bytes: Uint8Array }> = [];
 
   for (const file of input.files) {
@@ -149,14 +174,21 @@ export async function uploadFileAttachments(input: {
   }
 
   for (const file of prepared) {
-    const response = await input.client.uploadFile(file);
-    if (response.error || !response.file) {
-      throw new Error(response.error ?? "Upload failed.");
+    try {
+      const response = await input.client.uploadFile(file);
+      if (response.error || !response.file) {
+        throw new Error(response.error ?? "Upload failed.");
+      }
+      attachments.push({ kind: "file", attachment: response.file });
+    } catch (error) {
+      return {
+        attachments,
+        error: error instanceof Error ? error : new Error(i18n.t("composer.errors.uploadFailed")),
+      };
     }
-    result.push({ kind: "file", attachment: response.file });
   }
 
-  return result;
+  return { attachments, error: null };
 }
 
 export function removeComposerAttachmentAtIndex<T extends ComposerAttachment>(input: {
@@ -281,6 +313,7 @@ export interface EditQueuedComposerMessageInput {
 export interface EditQueuedComposerMessageResult {
   text: string;
   attachments: UserComposerAttachment[];
+  workspaceAttachments: WorkspaceComposerAttachment[];
 }
 
 export function editQueuedComposerMessage(
@@ -299,6 +332,7 @@ export function editQueuedComposerMessage(
   return {
     text: item.text,
     attachments: userAttachmentsOnly(item.attachments),
+    workspaceAttachments: item.attachments.filter(isWorkspaceAttachment),
   };
 }
 

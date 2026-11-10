@@ -1125,7 +1125,7 @@ export class DaemonClient {
           responseType: "subscription.release.response",
         });
       } catch (error) {
-        this.disposeTransport(1001, "Subscription release failed");
+        this.disposeTransport(1000, "Subscription release failed");
         this.scheduleReconnect({ reason: "Subscription release failed" });
         throw error;
       }
@@ -1317,7 +1317,7 @@ export class DaemonClient {
           return;
         }
         this.lastErrorValue = "Connection timed out";
-        this.disposeTransport(1001, "Connection timed out");
+        this.disposeTransport(1000, "Connection timed out");
         this.scheduleReconnect({
           reason: "Connection timed out",
           event: "CONNECT_TIMEOUT",
@@ -1480,7 +1480,7 @@ export class DaemonClient {
       // Explicit recovery retries it immediately, but leaves a fresh attempt alone
       // when focus, app-state and network events arrive together.
       if (!options?.verify || Date.now() - this.connectStartedAt < 3_000) return;
-      this.disposeTransport(1001, "Retrying connection after resume");
+      this.disposeTransport(1000, "Retrying connection after resume");
       this.emitDisconnectedStateForReconnect("Retrying connection after resume", {
         event: "CONNECTION_RECOVERY",
         reasonCode: "connect_timeout",
@@ -1509,7 +1509,7 @@ export class DaemonClient {
     })
       .catch((error: unknown) => {
         if (this.transport !== transport || this.connectionState.status !== "connected") return;
-        this.disposeTransport(1001, "Connection verification failed");
+        this.disposeTransport(1000, "Connection verification failed");
         this.scheduleReconnect({
           reason: error instanceof Error ? error.message : String(error),
           event: "CONNECTION_VERIFICATION_FAILED",
@@ -2240,7 +2240,7 @@ export class DaemonClient {
         // Reject and release this handle before closing a source with an unknown bootstrap outcome.
         // Closing first would classify the failure as a reconnect and replay the failed request.
         if (resetSource) {
-          this.disposeTransport(1001, "Subscription request failed");
+          this.disposeTransport(1000, "Subscription request failed");
           this.scheduleReconnect({ reason: "Subscription request failed" });
         }
       },
@@ -6234,7 +6234,8 @@ export class DaemonClient {
     }
   }
 
-  private disposeTransport(code = 1001, reason = "Reconnecting"): void {
+  // Browsers throw InvalidAccessError for any close code but 1000 or 3000-4999.
+  private disposeTransport(code = 1000, reason = "Reconnecting"): void {
     this.owned.disconnected();
     this.providerSnapshotUpdates.clear();
     this.stopLivenessHeartbeat();
@@ -6608,7 +6609,7 @@ export class DaemonClient {
     }
     this.consecutiveLivenessFailures = 0;
     this.lastErrorValue = error.message;
-    this.disposeTransport(1001, "Liveness check timed out");
+    this.disposeTransport(1000, "Liveness check timed out");
     this.scheduleReconnect({
       reason: error.message,
       event: "LIVENESS_TIMEOUT",

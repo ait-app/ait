@@ -3,7 +3,6 @@ import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import type { ViewedTimelineOwner } from "@/timeline/viewed-timeline-sync";
-import type { AgentDirectoryEntry } from "@/types/agent-directory";
 import {
   appendSubmittedUserMessage,
   handoffCreatedAgentUserMessageToStream,
@@ -46,10 +45,8 @@ import {
   normalizeWorkspacePath,
   resolveWorkspaceMapKeyByIdentity,
 } from "@/utils/workspace-identity";
-import {
-  createAgentLastActivityCoalescer,
-  type AgentLastActivityCommitter,
-} from "@/runtime/activity";
+import { createAgentLastActivityCoalescer } from "@/runtime/activity/last-activity-coalescer";
+import type { AgentLastActivityCommitter } from "@/runtime/activity/types";
 import {
   buildWorkspaceAgentActivityIndex,
   type WorkspaceAgentActivity,
@@ -343,12 +340,12 @@ export function selectAgentTurnPresentation(
   );
 }
 
-function latestTasksFromStream(items: readonly StreamItem[]): TodoEntry[] {
+function latestTasksFromStream(items: readonly StreamItem[]): TodoEntry[] | undefined {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index];
     if (item?.kind === "todo_list") return item.items;
   }
-  return [];
+  return undefined;
 }
 
 function updateAgentTasks(
@@ -611,9 +608,6 @@ interface SessionStoreActions {
   setHasHydratedAgents: (serverId: string, hydrated: boolean) => void;
   setHasHydratedWorkspaces: (serverId: string, hydrated: boolean) => void;
   setHasWorkspaceDirectorySnapshot: (serverId: string, available: boolean) => void;
-
-  // Agent directory (derived from agents)
-  getAgentDirectory: (serverId: string) => AgentDirectoryEntry[] | undefined;
 }
 
 type SessionStore = SessionStoreState & SessionStoreActions;
@@ -1424,7 +1418,13 @@ export const useSessionStore = create<SessionStore>()(
             nextAuthoritative.set(agentId, true);
             nextSyncGeneration.set(agentId, session.historySyncGeneration);
           }
-          const tasks = latestTasksFromStream([...state.items, ...state.head]);
+          // A window that starts after the last todo row says nothing about the current tasks.
+          const isWholeHistory =
+            state.older === "none" ||
+            state.range?.epoch !== session.agentTimelineCursor.get(agentId)?.epoch;
+          const tasks =
+            latestTasksFromStream([...state.items, ...state.head]) ??
+            (isWholeHistory ? [] : (session.agentTasks.get(agentId) ?? []));
           const agentTasks = new Map(session.agentTasks);
           if (tasks.length > 0) agentTasks.set(agentId, tasks);
           else agentTasks.delete(agentId);
@@ -1850,50 +1850,6 @@ export const useSessionStore = create<SessionStore>()(
           };
         });
       },
-
-      // Agent directory - derived from agents (computed on-demand)
-      getAgentDirectory: (serverId) => {
-        const state = get();
-        const session = state.sessions[serverId];
-        if (!session) {
-          return undefined;
-        }
-
-        const entries: AgentDirectoryEntry[] = [];
-        for (const agent of session.agents.values()) {
-          // Get lastActivityAt from top-level slice, fallback to agent.lastActivityAt
-          const lastActivityAt = state.agentLastActivity.get(agent.id) ?? agent.lastActivityAt;
-          entries.push({
-            management: agent.management,
-            id: agent.id,
-            serverId,
-            title: agent.title ?? null,
-            status: agent.status,
-            turn: agent.turn,
-            lastActivityAt,
-            cwd: agent.cwd,
-            provider: agent.provider,
-            pendingPermissionCount: agent.pendingPermissions.length,
-            requiresAttention: agent.requiresAttention ?? false,
-            attentionReason: agent.attentionReason ?? null,
-            attentionTimestamp: agent.attentionTimestamp ?? null,
-            createdAt: agent.createdAt,
-            labels: agent.labels,
-          });
-        }
-        return entries;
-      },
     };
   }),
 );
-
-export function useWorkspaceRestoreStatus(
-  serverId: string | null,
-  workspaceId: string | null,
-): WorkspaceRestoreStatus | null {
-  return useSessionStore((state) =>
-    serverId && workspaceId
-      ? (state.sessions[serverId]?.restoringWorkspaces.get(workspaceId) ?? null)
-      : null,
-  );
-}

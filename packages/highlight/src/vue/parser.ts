@@ -9,6 +9,7 @@ import { parser as cssParser } from "@lezer/css";
 import { parser as htmlParser } from "@lezer/html";
 import { parser as jsParser } from "@lezer/javascript";
 import { findClosingBrace } from "../js-scanner.js";
+import { getOpenTagAttributes } from "../open-tag-attributes.js";
 
 interface Range {
   from: number;
@@ -44,22 +45,6 @@ function findDirectiveExpression(value: string): Range | null {
   if (!trimmed) return null;
   const from = (isQuoted ? 1 : 0) + inner.indexOf(trimmed);
   return { from, to: from + trimmed.length };
-}
-
-function getOpenTagAttributes(node: SyntaxNode, input: Input): Record<string, string> {
-  const attributes: Record<string, string> = Object.create(null);
-  const openTag = node.getChild("OpenTag");
-  if (!openTag) return attributes;
-
-  for (const attribute of openTag.getChildren("Attribute")) {
-    const name = attribute.getChild("AttributeName");
-    if (!name) continue;
-    const value =
-      attribute.getChild("AttributeValue") || attribute.getChild("UnquotedAttributeValue");
-    const key = input.read(name.from, name.to).toLowerCase();
-    attributes[key] = value ? input.read(value.from, value.to).replace(/^["']|["']$/g, "") : "";
-  }
-  return attributes;
 }
 
 function isDirectiveAttribute(attribute: string): boolean {

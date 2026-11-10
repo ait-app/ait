@@ -287,17 +287,6 @@ export function resetReviewDraftStore(): void {
   useReviewDraftStore.setState({ drafts: {} });
 }
 
-export function useReviewDraftCommentsForAttachment(input: {
-  key: string;
-  enabled: boolean;
-}): ReviewDraftComment[] {
-  return useReviewDraftStore((state) =>
-    input.enabled
-      ? (state.drafts[input.key] ?? EMPTY_REVIEW_DRAFT_COMMENTS)
-      : EMPTY_REVIEW_DRAFT_COMMENTS,
-  );
-}
-
 export function useReviewCommentCount(key: string): number {
   return useReviewDraftStore((state) => state.drafts[key]?.length ?? 0);
 }

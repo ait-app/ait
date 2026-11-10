@@ -2195,6 +2195,7 @@ test("tears down and reports a liveness timeout after the daemon goes silent for
     reason: "Liveness check timed out (15000ms)",
   });
   expect(session.teardownCount()).toBe(1);
+  expect(session.closesFromClient()).toEqual([{ code: 1000, reason: "Liveness check timed out" }]);
 });
 
 test("survives a single missed pong when answers resume", async () => {
@@ -7409,7 +7410,7 @@ test.each(["retry", "close", "reject"])(
     expect(recovery).toHaveBeenCalledOnce();
     if (action === "reject") {
       expect(daemon.closesFromClient()).toEqual([
-        { code: 1001, reason: "Connection verification failed" },
+        { code: 1000, reason: "Connection verification failed" },
       ]);
       return;
     }
@@ -7425,7 +7426,7 @@ test.each(["retry", "close", "reject"])(
       await vi.advanceTimersByTimeAsync(3000);
       expect(recovery).toHaveBeenCalledOnce();
       expect(daemon.closesFromClient()).toEqual([
-        { code: 1001, reason: "Connection verification failed" },
+        { code: 1000, reason: "Connection verification failed" },
       ]);
     }
   },

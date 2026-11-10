@@ -45,6 +45,8 @@ interface CloseBulkWorkspaceTabsInput {
   closeTab: (tabId: string, action: () => Promise<void>) => Promise<void>;
   closeWorkspaceTabWithCleanup: (input: CloseWorkspaceTabWithCleanupInput) => void;
   closeLayoutOnlyAgent: (agentId: string) => Promise<void>;
+  removeTerminalFromCache: (terminalId: string) => void;
+  onBulkCloseFailed: () => void;
   logLabel: string;
   warn?: (message: string, payload: object) => void;
 }
@@ -127,10 +129,16 @@ export async function closeBulkWorkspaceTabs(input: CloseBulkWorkspaceTabsInput)
     closeTab,
     closeWorkspaceTabWithCleanup,
     closeLayoutOnlyAgent,
+    removeTerminalFromCache,
+    onBulkCloseFailed,
     logLabel,
     warn,
   } = input;
   const hasDestructiveTabs = groups.archiveAgentTabs.length > 0 || groups.terminalTabs.length > 0;
+  const reportBulkCloseFailure = (error: unknown) => {
+    warn?.(`[WorkspaceScreen] Failed to bulk close tabs ${logLabel}`, { error });
+    onBulkCloseFailed();
+  };
 
   for (const { tabId, agentId } of groups.layoutOnlyAgentTabs) {
     await closeTab(tabId, async () => {
@@ -153,13 +161,9 @@ export async function closeBulkWorkspaceTabs(input: CloseBulkWorkspaceTabsInput)
         agentIds: groups.archiveAgentTabs.map((tab) => tab.agentId),
         terminalIds: groups.terminalTabs.map((tab) => tab.terminalId),
       })
-      .catch((error) => {
-        warn?.(`[WorkspaceScreen] Failed to bulk close tabs ${logLabel}`, { error });
-      });
+      .catch(reportBulkCloseFailure);
   } else if (hasDestructiveTabs) {
-    warn?.(`[WorkspaceScreen] Failed to bulk close tabs ${logLabel}`, {
-      error: new Error(i18n.t("common.errors.daemonClientUnavailable")),
-    });
+    reportBulkCloseFailure(new Error(i18n.t("common.errors.daemonClientUnavailable")));
   }
 
   await Promise.all([
@@ -173,6 +177,8 @@ export async function closeBulkWorkspaceTabs(input: CloseBulkWorkspaceTabsInput)
     ),
     ...groups.terminalTabs.map(({ tabId, terminalId }) =>
       closeTab(tabId, async () => {
+        // Reconcile reopens a tab whose terminal is still in the cached list.
+        removeTerminalFromCache(terminalId);
         closeWorkspaceTabWithCleanup({
           tabId,
           target: { kind: "terminal", terminalId },

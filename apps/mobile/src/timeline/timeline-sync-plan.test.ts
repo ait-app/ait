@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { TIMELINE_FETCH_PAGE_SIZE } from "@/timeline/timeline-fetch-policy";
 import {
-  isTimelineCatchUpComplete,
   isTimelineResumeSnapshotAuthoritative,
   planTimelineOlderFetch,
   planTimelinePromptJump,
@@ -51,12 +50,6 @@ describe("timeline sync planning", () => {
       projection: "projected",
       mergeWindow: true,
     });
-  });
-
-  test("catch-up finishes when the daemon reports no newer rows", () => {
-    expect(isTimelineCatchUpComplete({ direction: "after", hasNewer: false, error: null })).toBe(
-      true,
-    );
   });
 
   test("only tail and completed forward pages carry an authoritative resume snapshot", () => {

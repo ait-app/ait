@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, type ReactElement } from "react";
+import { useCallback, useMemo, type ReactElement } from "react";
 import type { GestureResponderEvent } from "react-native";
 import { Pressable, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { useMutation } from "@tanstack/react-query";
 import {
   ChevronDown,
   Copy,
@@ -16,8 +15,8 @@ import {
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
-import { useSessionStore } from "@/stores/session-store";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
+import { useWorkspaceScriptActions } from "@/screens/workspace/scripts/use-workspace-script-actions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -392,78 +391,14 @@ export function WorkspaceScriptsButton({
 }: WorkspaceScriptsButtonProps): ReactElement | null {
   const { t } = useTranslation();
   const toast = useToast();
-  const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   const activeConnection = useHostRuntimeSnapshot(serverId)?.activeConnection ?? null;
   const liveTerminalIdSet = useMemo(() => new Set(liveTerminalIds), [liveTerminalIds]);
-  const pendingRestartRef = useRef<Set<string>>(new Set());
-
-  const startScriptMutation = useMutation({
-    mutationFn: async (scriptName: string) => {
-      if (!client) {
-        throw new Error(t("common.errors.daemonClientUnavailable"));
-      }
-      const result = await client.startWorkspaceScript(workspaceId, scriptName);
-      if (result.error) {
-        throw new Error(result.error);
-      }
-      return result;
-    },
-    onError: (error, scriptName) => {
-      toast.show(
-        error instanceof Error
-          ? error.message
-          : t("workspace.scripts.states.startFailed", { scriptName }),
-        {
-          variant: "error",
-        },
-      );
-    },
-    onSuccess: (result) => {
-      if (result.script?.terminalId) {
-        onScriptTerminalStarted?.(result.script.terminalId);
-      }
-    },
+  const actions = useWorkspaceScriptActions({
+    serverId,
+    workspaceId,
+    scripts,
+    onScriptTerminalStarted,
   });
-  const startScript = startScriptMutation.mutate;
-
-  const stopScriptMutation = useMutation({
-    mutationFn: async (scriptName: string) => {
-      if (!client) {
-        throw new Error(t("common.errors.daemonClientUnavailable"));
-      }
-      const terminalId = scripts.find((s) => s.scriptName === scriptName)?.terminalId;
-      if (!terminalId) {
-        throw new Error(t("workspace.scripts.states.stopFailed", { scriptName }));
-      }
-      const result = await client.killTerminal(terminalId);
-      if (!result.success) {
-        throw new Error(t("workspace.scripts.states.stopFailed", { scriptName }));
-      }
-    },
-    onError: (error, scriptName) => {
-      pendingRestartRef.current.delete(scriptName);
-      toast.show(
-        error instanceof Error
-          ? error.message
-          : t("workspace.scripts.states.stopFailed", { scriptName }),
-        {
-          variant: "error",
-        },
-      );
-    },
-  });
-
-  // Restart = kill the script terminal, then start again once the daemon
-  // reports the script as stopped (it tears the runtime entry down on exit).
-  useEffect(() => {
-    const pending = pendingRestartRef.current;
-    if (pending.size === 0) return;
-    for (const script of scripts) {
-      if (!pending.has(script.scriptName) || script.lifecycle === "running") continue;
-      pending.delete(script.scriptName);
-      startScript(script.scriptName);
-    }
-  }, [scripts, startScript]);
 
   const triggerStyle = useCallback(
     ({ hovered, pressed, open }: { hovered: boolean; pressed: boolean; open: boolean }) => [
@@ -472,24 +407,6 @@ export function WorkspaceScriptsButton({
         (presentation === "ghost" ? styles.ghostButtonHovered : styles.splitButtonPrimaryHovered),
     ],
     [presentation],
-  );
-
-  const handleStartScript = useCallback(
-    (scriptName: string) => startScriptMutation.mutate(scriptName),
-    [startScriptMutation],
-  );
-
-  const handleStopScript = useCallback(
-    (scriptName: string) => stopScriptMutation.mutate(scriptName),
-    [stopScriptMutation],
-  );
-
-  const handleRestartScript = useCallback(
-    (scriptName: string) => {
-      pendingRestartRef.current.add(scriptName);
-      stopScriptMutation.mutate(scriptName);
-    },
-    [stopScriptMutation],
   );
 
   const handleCopyUrl = useCallback(
@@ -546,11 +463,11 @@ export function WorkspaceScriptsButton({
                 script={script}
                 liveTerminalIdSet={liveTerminalIdSet}
                 activeConnection={activeConnection}
-                isStartPending={startScriptMutation.isPending}
-                isStopPending={stopScriptMutation.isPending}
-                onStartScript={handleStartScript}
-                onStopScript={handleStopScript}
-                onRestartScript={handleRestartScript}
+                isStartPending={actions.isStartPending}
+                isStopPending={actions.isStopPending}
+                onStartScript={actions.start}
+                onStopScript={actions.stop}
+                onRestartScript={actions.restart}
                 onCopyUrl={handleCopyUrl}
                 onViewTerminal={onViewTerminal}
                 onOpenUrlInBrowserTab={onOpenUrlInBrowserTab}

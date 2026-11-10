@@ -24,6 +24,7 @@
   [ADR-145](../decisions/bot/adr-145-bot-permission-denial.md)；Bot 的 Ait 能力由下文“权限”授予。
 
 输入落盘后才确认平台消息或推进游标；模型完成与平台投递是独立状态。
+一次执行中的每条可见 assistant 消息都会进入同一个 turn 的 `messages` 数组并在运行期间更新；同一 `messageId` 的流式片段更新原消息，不同 `messageId` 保持独立。tool call、reasoning 和其他内部记录不会进入 Bot 对话。`reply` 仍保留为旧客户端读取最新消息的兼容字段。
 重启时结果不明的运行输入标记 `uncertain`，阻止同 generation 的后续输入，需显式 reset；
 不会自动重做可能产生副作用的输入。正在发送但未确认的回复也标记 `uncertain`，不盲目重发。
 当前通过持久查询读取结果，尚无 Bot 流式事件订阅。

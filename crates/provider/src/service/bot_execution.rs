@@ -31,6 +31,13 @@ pub enum Action {
         /// Bounded input text.
         text: String,
     },
+    /// Read the committed Bot status and visible assistant messages without waiting for idle.
+    Poll {
+        /// Owner's hidden runtime.
+        agent_id: String,
+        /// Timeline position immediately before the current Bot input was admitted.
+        after: TimelineCursor,
+    },
     /// Read committed execution and permission state.
     Status {
         /// Owner's hidden runtime.
@@ -60,6 +67,16 @@ pub enum Action {
         /// Must be exactly `{"behavior":"deny"}`; additional permissions are forbidden.
         response: Value,
     },
+}
+
+/// A Provider timeline position used to delimit one Bot turn's output.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TimelineCursor {
+    /// Timeline generation identity.
+    pub epoch: String,
+    /// Last source sequence observed before the Bot input.
+    pub seq: u64,
 }
 
 /// How the Bot's built-in instructions reach the native session.

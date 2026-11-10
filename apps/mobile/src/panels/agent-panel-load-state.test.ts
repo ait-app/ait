@@ -3,6 +3,8 @@ import type { AgentScreenMissingState } from "@/hooks/use-agent-screen-state-mac
 import {
   clearHistorySyncErrorAfterSuccessfulSync,
   reconcileMissingAgentStateWithPresentAgent,
+  shouldFetchAgentForLookup,
+  shouldRetryLookupOnConnectionChange,
 } from "./agent-panel-load-state";
 
 describe("reconcileMissingAgentStateWithPresentAgent", () => {
@@ -42,5 +44,34 @@ describe("clearHistorySyncErrorAfterSuccessfulSync", () => {
     const state: AgentScreenMissingState = { kind: "resolving" };
 
     expect(clearHistorySyncErrorAfterSuccessfulSync(state)).toBe(state);
+  });
+});
+
+describe("shouldFetchAgentForLookup", () => {
+  it("fetches only from idle so a failed lookup waits for Retry", () => {
+    expect(shouldFetchAgentForLookup("idle")).toBe(true);
+    expect(shouldFetchAgentForLookup("loading")).toBe(false);
+    expect(shouldFetchAgentForLookup("not_found")).toBe(false);
+    expect(shouldFetchAgentForLookup("error")).toBe(false);
+  });
+});
+
+describe("shouldRetryLookupOnConnectionChange", () => {
+  it("retries a failed lookup only on the reconnect edge", () => {
+    const retry = (wasConnected: boolean, isConnected: boolean) =>
+      shouldRetryLookupOnConnectionChange({ tag: "error", wasConnected, isConnected });
+    expect(retry(false, true)).toBe(true);
+    expect(retry(true, true)).toBe(false);
+    expect(retry(true, false)).toBe(false);
+  });
+
+  it("leaves a lookup that did not fail alone", () => {
+    expect(
+      shouldRetryLookupOnConnectionChange({
+        tag: "not_found",
+        wasConnected: false,
+        isConnected: true,
+      }),
+    ).toBe(false);
   });
 });

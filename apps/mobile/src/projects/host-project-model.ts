@@ -88,10 +88,6 @@ export function hostProjectFromWorkspace(input: {
   };
 }
 
-function projectCanCreateWorktree(project: HostProjectListItem): boolean {
-  return project.hosts.some((host) => host.worktreeSupport !== "unsupported");
-}
-
 function getHostProjectPlacement(
   project: HostProjectListItem,
   serverId: string,
@@ -252,36 +248,4 @@ export function resolveInitialWorkspaceProject(input: {
   }
 
   return input.projects[0] ?? null;
-}
-
-export function resolveInitialWorktreeProject(input: {
-  routeProject: HostProjectListItem | null;
-  lastActiveProject: HostProjectListItem | null;
-  projects: readonly HostProjectListItem[];
-}): HostProjectListItem | null {
-  if (input.routeProject && projectCanCreateWorktree(input.routeProject)) {
-    return input.routeProject;
-  }
-  if (input.lastActiveProject && projectCanCreateWorktree(input.lastActiveProject)) {
-    return input.lastActiveProject;
-  }
-  return input.projects.find((project) => projectCanCreateWorktree(project)) ?? null;
-}
-
-export function resolveSelectedHostProject(input: {
-  selectedViewKey: string | null;
-  projects: readonly HostProjectListItem[];
-  routeProject: HostProjectListItem | null;
-  lastActiveProject: HostProjectListItem | null;
-}): HostProjectListItem | null {
-  const selectedViewKey = input.selectedViewKey?.trim() ?? "";
-  if (!selectedViewKey) {
-    return null;
-  }
-
-  return (
-    input.projects.find((project) => project.viewKey === selectedViewKey) ??
-    (input.routeProject?.viewKey === selectedViewKey ? input.routeProject : null) ??
-    (input.lastActiveProject?.viewKey === selectedViewKey ? input.lastActiveProject : null)
-  );
 }

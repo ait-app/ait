@@ -30,6 +30,7 @@ import {
   splitComposerAttachmentsForSubmit,
 } from "@/composer/attachments/submit";
 import type { CreateAgentRequestOptions, DaemonClient } from "@ait/client/internal/daemon-client";
+import { displayInitial } from "@/utils/display-initial";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
@@ -397,7 +398,7 @@ export function WorkspaceSetupDialog() {
   const workspaceTitle = resolveWorkspaceTitle({ workspace, displayName, sourceDirectory });
 
   const placeholderLabel = projectIconPlaceholderLabelFromDisplayName(workspaceTitle);
-  const placeholderInitial = placeholderLabel.charAt(0).toUpperCase();
+  const placeholderInitial = displayInitial(placeholderLabel);
 
   const agentControlsWithDisabled = useMemo(
     () =>

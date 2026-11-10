@@ -25,6 +25,14 @@ const SHELL_FILE_COMMANDS = new Set([
 const SHELL_OPERATOR_PATTERN = /[|><&;`$()]/;
 const SHORT_FLAG_PATTERN = /^-[a-zA-Z]$/;
 
+function stripMatchingQuotes(token: string): string {
+  const first = token[0];
+  if (token.length >= 2 && (first === '"' || first === "'") && token.endsWith(first)) {
+    return token.slice(1, -1);
+  }
+  return token;
+}
+
 function extractFromShellCommand(command: string): string | null {
   const trimmed = command.trim();
   if (!trimmed || SHELL_OPERATOR_PATTERN.test(trimmed)) {
@@ -50,7 +58,7 @@ function extractFromShellCommand(command: string): string | null {
       }
     }
   }
-  return last;
+  return stripMatchingQuotes(last) || null;
 }
 
 export function extractToolCallFilePath(detail: ToolCallDetail | undefined): string | null {

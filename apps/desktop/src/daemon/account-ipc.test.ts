@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   unpublish: vi.fn(),
   info: vi.fn(),
   deleteAccount: vi.fn(),
+  encryptionAvailable: true,
   deps: null as AccountDependencies | null,
 }));
 
@@ -23,7 +24,7 @@ vi.mock("electron", () => ({
     fromWebContents: () => null,
   },
   safeStorage: {
-    isEncryptionAvailable: () => true,
+    isEncryptionAvailable: () => mocks.encryptionAvailable,
     getSelectedStorageBackend: () => "keychain",
     encryptString: (value: string) => Buffer.from(value),
     decryptString: (value: Buffer) => value.toString(),
@@ -85,6 +86,7 @@ const stored = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.userDataPath = mkdtempSync(path.join(tmpdir(), "ait-account-sync-"));
+  mocks.encryptionAvailable = true;
   mocks.publish.mockResolvedValue({ control_ticket: "one-use" });
   mocks.unpublish.mockResolvedValue(undefined);
 });
@@ -264,5 +266,62 @@ describe("desktop account login commands", () => {
     expect(stored()).toEqual(saved);
     expect(mocks.send).not.toHaveBeenCalled();
     await expect(command(event, "account_status")).resolves.toMatchObject({ status: "online" });
+  });
+});
+
+describe("desktop account credential persistence", () => {
+  const accountFile = () => path.join(mocks.userDataPath, "account-node.json");
+  const seedCredential = (ciphertext = "stored-ciphertext") =>
+    writeFileSync(
+      accountFile(),
+      JSON.stringify({
+        installationId: "00000000-0000-4000-8000-000000000001",
+        account: ciphertext,
+        syncBuiltInDaemon: true,
+      }),
+    );
+  const failDecryption = async () => {
+    const { safeStorage } = await import("electron");
+    vi.spyOn(safeStorage, "decryptString").mockImplementationOnce(() => {
+      throw new Error("Keychain locked");
+    });
+  };
+
+  it("keeps stored credentials when decryption fails at launch", async () => {
+    seedCredential();
+    await failDecryption();
+    await invoke()(event, "account_status");
+    expect(stored().account).toBe("stored-ciphertext");
+  });
+
+  it("keeps stored credentials when the keychain is unavailable at launch", async () => {
+    seedCredential();
+    mocks.encryptionAvailable = false;
+    await invoke()(event, "account_status");
+    expect(stored().account).toBe("stored-ciphertext");
+  });
+
+  it("keeps stored credentials through a preference change while they cannot be decrypted", async () => {
+    seedCredential();
+    await failDecryption();
+    const command = invoke();
+    await command(event, "account_host_disconnect", { serverId: "built-in" });
+    expect(stored()).toMatchObject({ account: "stored-ciphertext", syncBuiltInDaemon: false });
+  });
+
+  it("discards undecrypted credentials on an explicit sign-out", async () => {
+    seedCredential();
+    await failDecryption();
+    const command = invoke();
+    await command(event, "account_logout");
+    expect(stored().account).toBeNull();
+  });
+
+  it("keeps answering account commands after a startup persistence failure", async () => {
+    mkdirSync(`${accountFile()}.tmp`);
+    const command = invoke();
+    await expect(command(event, "account_status")).resolves.toMatchObject({
+      status: "logged_out",
+    });
   });
 });

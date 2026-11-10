@@ -32,21 +32,6 @@ export function readTurnLiveness(
   return turns.get(agentId) ?? TURN_LIVENESS_IDLE;
 }
 
-export function applyTurnLivenessTransition(
-  turns: ReadonlyMap<string, TurnLiveness>,
-  agentId: string,
-  transition: TurnLivenessTransition | readonly TurnLivenessTransition[],
-): Map<string, TurnLiveness> {
-  const current = readTurnLiveness(turns, agentId);
-  const transitions = Array.isArray(transition) ? transition : [transition];
-  const next = transitions.reduce(reduceTurnLiveness, current);
-  if (next === current) return turns as Map<string, TurnLiveness>;
-  const updated = new Map(turns);
-  if (next.phase === "idle" && next.cancellationRequestId === null) updated.delete(agentId);
-  else updated.set(agentId, next);
-  return updated;
-}
-
 export interface TurnPresentation {
   isActive: boolean;
   isCancelling: boolean;

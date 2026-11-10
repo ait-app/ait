@@ -33,6 +33,7 @@ import {
   replaceBrowserRouteWithCanonicalHostWorkspaceRoute,
   stripHostWorkspaceRouteEchoSearchFromBrowserUrlAfterCommit,
 } from "@/utils/host-route-browser";
+import { resolveOpenIntentConsumption } from "@/screens/workspace/workspace-open-intent-consumption";
 import { prepareWorkspaceTab } from "@/utils/workspace-navigation";
 import { isNative, isWeb } from "@/constants/platform";
 import { RenderProfile } from "@/utils/render-profiler";
@@ -128,6 +129,10 @@ function HostWorkspaceRouteContent() {
 
   useEffect(() => {
     if (!openValue) {
+      consumedIntentRef.current = resolveOpenIntentConsumption(
+        consumedIntentRef.current,
+        null,
+      ).consumedKey;
       return;
     }
     if (!rootNavigationState?.key) {
@@ -140,19 +145,13 @@ function HostWorkspaceRouteContent() {
       return;
     }
 
-    const consumptionKey = `${serverId}:${workspaceId}:${openValue}`;
-    if (consumedIntentRef.current === consumptionKey) {
-      clearConsumedOpenIntent({
-        navigation: navigation as unknown as {
-          setParams: (params: { open?: string | undefined }) => void;
-        },
-      });
-      setIntentConsumed(true);
-      return;
-    }
-    consumedIntentRef.current = consumptionKey;
+    const consumption = resolveOpenIntentConsumption(
+      consumedIntentRef.current,
+      `${serverId}:${workspaceId}:${openValue}`,
+    );
+    consumedIntentRef.current = consumption.consumedKey;
 
-    if (openIntent) {
+    if (consumption.shouldOpen && openIntent) {
       prepareWorkspaceTab({
         serverId,
         workspaceId,

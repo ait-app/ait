@@ -45,9 +45,10 @@ export interface TimelineCursor {
 // Side-effect discriminated unions
 // ---------------------------------------------------------------------------
 
-export type TimelineReducerSideEffect =
-  | { type: "catch_up"; cursor: { epoch: string; endSeq: number } }
-  | { type: "flush_pending_updates" };
+export type TimelineReducerSideEffect = {
+  type: "catch_up";
+  cursor: { epoch: string; endSeq: number };
+};
 
 export interface AgentStreamReducerSideEffect {
   type: "catch_up";
@@ -769,7 +770,13 @@ function mergePrependedCanonicalTail(olderTail: StreamItem[], currentTail: Strea
   const identityMerge = mergeTimelineIdentityBoundary(olderTail, currentTail);
   if (identityMerge) return identityMerge;
 
-  if (olderLast?.kind !== "assistant_message" || currentFirst?.kind !== "assistant_message") {
+  if (
+    olderLast?.kind !== "assistant_message" ||
+    currentFirst?.kind !== "assistant_message" ||
+    (olderLast.messageId !== undefined &&
+      currentFirst.messageId !== undefined &&
+      olderLast.messageId !== currentFirst.messageId)
+  ) {
     return [...olderTail, ...currentTail];
   }
 
@@ -1460,11 +1467,6 @@ export function processTimelineResponse(
   sideEffects.push(...timelineResult.sideEffects);
 
   // ------------------------------------------------------------------
-  // Flush pending agent updates side effect
-  // ------------------------------------------------------------------
-  sideEffects.push({ type: "flush_pending_updates" });
-
-  // ------------------------------------------------------------------
   // Init resolution
   // ------------------------------------------------------------------
   const shouldResolveDeferredInit = shouldResolveTimelineInit({
@@ -1616,7 +1618,17 @@ function processTimelineSequencingGate(input: {
       cursorChanged: true,
     };
   }
-  if (decision === "gap") {
+  if (decision === "drop_epoch" && seq === 1) {
+    return {
+      ...base,
+      nextTimelineCursor: { epoch, startSeq: seq, endSeq: seq },
+      cursorChanged: true,
+      resetLiveTimeline: true,
+    };
+  }
+  if (decision === "gap" || decision === "drop_epoch") {
+    // A foreign epoch means the replacement fetch has not landed (it may have failed); the
+    // daemon answers a cursor from another epoch with a resetting tail page.
     return {
       ...base,
       shouldApplyStreamEvent: false,
@@ -1628,14 +1640,6 @@ function processTimelineSequencingGate(input: {
             },
           ]
         : [],
-    };
-  }
-  if (decision === "drop_epoch" && seq === 1) {
-    return {
-      ...base,
-      nextTimelineCursor: { epoch, startSeq: seq, endSeq: seq },
-      cursorChanged: true,
-      resetLiveTimeline: true,
     };
   }
   return {
@@ -1720,8 +1724,9 @@ export function processAgentStreamEvent(
   return {
     tail,
     head,
-    changedTail,
-    changedHead,
+    // The reset replaced both lanes even when the event landed in only one of them.
+    changedTail: changedTail || sequencing.resetLiveTimeline,
+    changedHead: changedHead || sequencing.resetLiveTimeline,
     cursor: sequencing.nextTimelineCursor,
     cursorChanged: sequencing.cursorChanged,
     acknowledgedClientMessageIds: streamResult.acknowledgedClientMessageIds ?? [],

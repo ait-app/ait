@@ -189,7 +189,6 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import invariant from "tiny-invariant";
 import { useStoreWithEqualityFn } from "zustand/traditional";
@@ -217,11 +216,11 @@ import { WorkspacePaneContent } from "@/screens/workspace/workspace-pane-content
 import { workspaceTabTargetsEqual } from "@/workspace-tabs/identity";
 import { useIsFocused } from "@react-navigation/native";
 import { memo } from "react";
+import { safeDecodeURIComponent, trimNonEmpty } from "@/utils/string";
 const NO_SHEETS: readonly SheetTab[] = [];
 const WORKSPACE_FLOATING_PANEL_PORTAL_HOST_PREFIX = "workspace-floating-panels";
 const EMPTY_UI_TABS: WorkspaceTab[] = [];
 const EMPTY_WORKSPACE_SCRIPTS: WorkspaceDescriptor["scripts"] = [];
-const EMPTY_PINNED_AGENT_IDS = new Set<string>();
 const EMPTY_SET = new Set<string>();
 
 function getWorkspaceScripts(
@@ -270,22 +269,6 @@ type WorkspaceScreenContentProps = WorkspaceScreenProps & {
   isRouteFocused: boolean;
   recoveryRequested: boolean;
 };
-
-function trimNonEmpty(value: string | null | undefined): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function decodeSegment(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
 
 function useSyncWorkspaceActiveBrowser(input: {
   workspaceLayout: WorkspaceLayout | null;
@@ -1013,7 +996,6 @@ function WorkspaceScreenContent({
   recoveryRequested,
 }: WorkspaceScreenContentProps) {
   const { t } = useTranslation();
-  const _insets = useSafeAreaInsets();
   const toast = useToast();
   const isMobile = useIsCompactFormFactor();
   const hasMacTrafficLights = useHasWindowChromeObstruction("top-left");
@@ -1024,7 +1006,10 @@ function WorkspaceScreenContent({
   const isFocusModeEnabled = usePanelStore((state) => state.desktop.focusModeEnabled);
   const toggleFocusMode = usePanelStore((state) => state.toggleFocusMode);
 
-  const normalizedServerId = useMemo(() => trimNonEmpty(decodeSegment(serverId)) ?? "", [serverId]);
+  const normalizedServerId = useMemo(
+    () => trimNonEmpty(safeDecodeURIComponent(serverId)) ?? "",
+    [serverId],
+  );
 
   const normalizedWorkspaceId = useMemo(
     () => resolveWorkspaceRouteId({ routeWorkspaceId: workspaceId }) ?? "",
@@ -1406,14 +1391,6 @@ function WorkspaceScreenContent({
   const paneFocusSuppressedRef = useRef(false);
   const resizeWorkspaceSplit = useWorkspaceLayoutStore((state) => state.resizeSplit);
   const reorderWorkspaceTabsInPane = useWorkspaceLayoutStore((state) => state.reorderTabsInPane);
-  const _pinnedAgentIds = useWorkspaceLayoutStore((state) =>
-    persistenceKey
-      ? (state.pinnedAgentIdsByWorkspace[persistenceKey] ?? EMPTY_PINNED_AGENT_IDS)
-      : EMPTY_PINNED_AGENT_IDS,
-  );
-  const _hiddenAgentIds = useWorkspaceLayoutStore((state) =>
-    persistenceKey ? (state.hiddenAgentIdsByWorkspace[persistenceKey] ?? EMPTY_SET) : EMPTY_SET,
-  );
   const pendingByDraftId = useCreateFlowStore((state) => state.pendingByDraftId);
   const { closingTabIds, closeTab } = useCloseTabs();
   const closeWorkspaceTabWithCleanup = useCallback(
@@ -2379,6 +2356,8 @@ function WorkspaceScreenContent({
           }
           closeWorkspaceTabWithCleanup(cleanupInput);
         },
+        removeTerminalFromCache,
+        onBulkCloseFailed: invalidateTerminals,
         logLabel,
         warn: (message, payload) => {
           console.warn(message, payload);
@@ -2395,9 +2374,11 @@ function WorkspaceScreenContent({
       client,
       closeTab,
       closeWorkspaceTabWithCleanup,
+      invalidateTerminals,
       normalizedServerId,
       normalizedWorkspaceId,
       persistenceKey,
+      removeTerminalFromCache,
       t,
     ],
   );

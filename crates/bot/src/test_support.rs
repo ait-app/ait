@@ -50,7 +50,7 @@ impl Executor for Native {
                 self.approval.store(false, Ordering::SeqCst);
                 json!({"resolved":true})
             }
-            Action::Status { agent_id } => {
+            Action::Poll { agent_id, .. } | Action::Status { agent_id } => {
                 if let Some(status) = self.status.lock().unwrap().as_ref() {
                     return Ok(status.clone());
                 }

@@ -171,23 +171,6 @@ export function selectProject(
   return state.sessions[serverId]?.projects?.get(projectId) ?? null;
 }
 
-export function selectProjectIdForServer(
-  state: SessionsSnapshot,
-  input: {
-    sourceServerId: string;
-    projectId: string;
-    targetServerId: string;
-  },
-): string | null {
-  if (input.sourceServerId === input.targetServerId) return input.projectId;
-  const source = selectProject(state, input.sourceServerId, input.projectId);
-  if (!source?.projectKey) return null;
-  for (const project of state.sessions[input.targetServerId]?.projects?.values() ?? []) {
-    if (project.projectKey === source.projectKey) return project.projectId;
-  }
-  return null;
-}
-
 export function selectWorkspaceKeys(state: SessionsSnapshot, serverId: string | null): string[] {
   if (!serverId) {
     return EMPTY_WORKSPACE_KEYS;
