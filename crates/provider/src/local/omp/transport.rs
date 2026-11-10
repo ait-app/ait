@@ -66,6 +66,7 @@ pub(super) struct Transport {
     vibe_state: Arc<RwLock<Vec<Value>>>,
     configuration: Option<tempfile::NamedTempFile>,
     extension: Option<tempfile::NamedTempFile>,
+    startup: Option<mpsc::Sender<super::bootstrap::Frame>>,
 }
 
 impl Transport {
@@ -141,6 +142,7 @@ impl Transport {
             vibe_state,
             configuration: None,
             extension: None,
+            startup: None,
         })
     }
 
@@ -164,6 +166,25 @@ impl Transport {
                 .clone(),
             deadline: self.deadline,
         })
+    }
+
+    /// Publish startup UI through the owning Ait session while native initialization is pending.
+    /// Returns an unavailable error when the bootstrap receiver has gone away.
+    pub(super) async fn startup(
+        &mut self,
+        sender: mpsc::Sender<super::bootstrap::Frame>,
+    ) -> Result<(), AgentSessionError> {
+        sender
+            .send(super::bootstrap::Frame::Writer(self.writer()?))
+            .await
+            .map_err(|_| AgentSessionError::Unavailable)?;
+        self.startup = Some(sender);
+        Ok(())
+    }
+
+    /// Finish startup routing once the live session can consume and answer its own UI events.
+    pub(super) fn finish_startup(&mut self) {
+        self.startup.take();
     }
 
     pub(super) async fn initialize(&mut self) -> Result<(), AgentSessionError> {
@@ -305,6 +326,20 @@ impl Transport {
                         None => Err(AgentSessionError::Failed),
                     };
                 }
+                if value["type"] == "extension_ui_request"
+                    && let Some(sender) = &self.startup
+                {
+                    sender
+                        .send(super::bootstrap::Frame::Ui(value.clone()))
+                        .await
+                        .map_err(|_| AgentSessionError::Unavailable)?;
+                    if matches!(
+                        value["method"].as_str(),
+                        Some("select" | "confirm" | "input" | "editor" | "ask" | "cancel")
+                    ) {
+                        continue;
+                    }
+                }
                 self.buffered_bytes += record.bytes;
                 if self.events.len() >= 4096 || self.buffered_bytes > MAX_BUFFER {
                     return Err(AgentSessionError::Failed);
@@ -344,9 +379,46 @@ impl Transport {
         }
     }
 
+    /// Remove buffered observations superseded by an acknowledged snapshot on this ordered stream.
+    /// Unrelated turn and interaction frames keep their order and byte accounting.
+    pub(super) fn supersede_buffered(&mut self, kind: &str) {
+        self.events.retain(|record| {
+            if record.value["type"] == kind {
+                self.buffered_bytes -= record.bytes;
+                false
+            } else {
+                true
+            }
+        });
+    }
+
+    /// Restore unrelated frames consumed while a local control ran on its existing writer.
+    /// Returns a bounded-buffer failure before changing the queue; original order is retained.
+    pub(super) fn restore_events(&mut self, events: Vec<Value>) -> Result<(), AgentSessionError> {
+        let records: Vec<_> = events
+            .into_iter()
+            .map(|value| {
+                let bytes = value.to_string().len();
+                Record { value, bytes }
+            })
+            .collect();
+        let bytes = records
+            .iter()
+            .try_fold(self.buffered_bytes, |total, record| {
+                total.checked_add(record.bytes)
+            })
+            .filter(|bytes| *bytes <= MAX_BUFFER)
+            .ok_or(AgentSessionError::Failed)?;
+        for record in records.into_iter().rev() {
+            self.events.push_front(record);
+        }
+        self.buffered_bytes = bytes;
+        Ok(())
+    }
+
     /// Execute a known local command on an isolated metadata reader, awaiting its final receipt.
     /// Admission alone is insufficient for extension handlers. Agent work, rejection, oversized
-    /// output and missing completion remain errors; this must never run on a conversation owner.
+    /// output and missing completion remain errors. Owner controls must restore unrelated returned frames.
     pub(super) async fn local_command(
         &mut self,
         message: &str,

@@ -87,6 +87,14 @@ pub(crate) enum AgentTurnEvent {
     /// Native commands changed acknowledged feature selections. Persist these values so later
     /// prompts and toolbar snapshots retain the native choice, after adapter validation.
     FeatureValuesUpdated(std::collections::BTreeMap<String, serde_json::Value>),
+    /// A native extension acknowledged model or thinking changes. Application validates and
+    /// commits the patch before publishing its corresponding runtime observation.
+    ModelSelectionUpdated {
+        /// Native effective model selector; null restores provider inheritance.
+        model: Option<String>,
+        /// Native effective thinking level; null clears the host override.
+        thinking_option_id: Option<String>,
+    },
     /// The native provider drained its turn successfully.
     Completed(Option<String>),
     /// The native provider acknowledged interruption.

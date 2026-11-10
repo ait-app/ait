@@ -1,6 +1,7 @@
 //! Oh My Pi's native JSONL RPC adapter. OMP owns credentials, extensions, tools and session files.
 
 mod actions;
+mod bootstrap;
 mod bridge;
 mod btw;
 mod commands;
@@ -54,6 +55,7 @@ pub(crate) struct OmpClient {
     completion_support: Arc<RwLock<Option<bool>>>,
     role_catalogs: Arc<RwLock<BTreeMap<String, RoleSnapshot>>>,
     metadata_loads: Arc<Mutex<BTreeMap<String, Weak<tokio::sync::Mutex<()>>>>>,
+    startup: Arc<Mutex<Option<tokio::sync::mpsc::Sender<bootstrap::Frame>>>>,
 }
 
 impl OmpClient {
@@ -69,6 +71,7 @@ impl OmpClient {
             completion_support: Arc::default(),
             role_catalogs: Arc::default(),
             metadata_loads: Arc::default(),
+            startup: Arc::default(),
         }
     }
 
@@ -222,7 +225,10 @@ impl AgentClient for OmpClient {
     fn handles_out_of_band(&self, text: &str) -> bool {
         // `/vibe` is declared here so an inactive owner can be woken for it; the live session
         // decides whether the native host bridge can actually serve it.
-        commands::is_btw(text) || commands::is_vibe(text) || commands::is_query(text)
+        commands::is_btw(text)
+            || commands::is_vibe(text)
+            || commands::is_query(text)
+            || commands::split(text).is_some_and(|(name, _)| matches!(name, "goal" | "guided-goal"))
     }
     fn discovery_cache_ttl(&self) -> Duration {
         Duration::MAX
@@ -415,11 +421,9 @@ impl AgentClient for OmpClient {
             .vibe_host
             .then(vibe::host::Host::extension)
             .transpose()?;
-        let mut probe = session::probe_config_with_extension(
+        let mut probe = session::probe_commands(
             self,
             &spec.cwd,
-            None,
-            None,
             extension.as_ref().map(tempfile::NamedTempFile::path),
         )
         .await?;
@@ -511,7 +515,7 @@ impl AgentClient for OmpClient {
         &self,
         spec: &AgentSessionSpec,
     ) -> Result<Box<dyn AgentSession>, AgentSessionError> {
-        Ok(Box::new(bridge::Session::open(self, spec, None).await?) as Box<dyn AgentSession>)
+        bootstrap::open(self, spec, None).await
     }
 
     async fn create_session_with_environment(
@@ -544,10 +548,7 @@ impl AgentClient for OmpClient {
         if purpose == AgentResumePurpose::History {
             return Err(AgentSessionError::Unavailable);
         }
-        Ok(
-            Box::new(bridge::Session::open(self, spec, Some(handle)).await?)
-                as Box<dyn AgentSession>,
-        )
+        bootstrap::open(self, spec, Some(handle)).await
     }
 }
 

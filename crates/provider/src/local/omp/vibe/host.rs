@@ -235,10 +235,12 @@ impl Host {
         }
         self.delivery.take();
         let state = transport.request("get_state", json!({})).await?;
-        if state["isStreaming"] != false
-            || state["isCompacting"] != false
-            || state["hasPendingAsyncWork"] != false
-            || state["queuedMessageCount"].as_u64() != Some(0)
+        if enabled
+            && (state["isStreaming"] != false
+                || state["isCompacting"] != false
+                || state["hasPendingAsyncWork"] != false
+                || state["queuedMessageCount"].as_u64() != Some(0)
+                || !state["goal"].is_null())
         {
             return Err(AgentSessionError::Busy);
         }
@@ -260,11 +262,16 @@ impl Host {
             self.shared.enabled.store(true, Ordering::Release);
         } else {
             self.stop();
-            self.shared.enabled.store(false, Ordering::Release);
-            transport.local_command(&format!("/{COMMAND} off")).await?;
+            // Withdraw native queued inputs before aborting so teardown cannot replay them.
+            transport
+                .request("abort_and_restore_queue", json!({}))
+                .await?;
+            let events = transport.local_command(&format!("/{COMMAND} off")).await?;
+            transport.restore_events(events)?;
             transport
                 .request("set_host_tools", json!({"tools":[]}))
                 .await?;
+            self.shared.enabled.store(false, Ordering::Release);
         }
         Ok(())
     }
@@ -909,12 +916,31 @@ async fn wait(shared: Arc<Shared>, fields: &Value) -> Result<Value, AgentSession
 pub(in crate::local::omp) fn visible_commands(native: &[Value], available: bool) -> Vec<Value> {
     let mut commands = super::super::commands::visible(native);
     commands.retain(|entry| {
-        !entry["name"]
-            .as_str()
-            .is_some_and(|name| name.starts_with("ait-vibe-"))
+        !entry["name"].as_str().is_some_and(|name| {
+            matches!(
+                name,
+                "ait-vibe-mode-v1" | "ait-vibe-result-v1" | "ait-guided-goal-v1"
+            )
+        })
     });
     if available {
-        commands.push(json!({"name":"vibe","source":"extension","description":"Ait Vibe director using external OMP fast/good workers","argumentHint":"[instruction]","kind":"command"}));
+        commands.push(json!({"name":"vibe","source":"ait","description":"Ait Vibe director using external OMP fast/good workers","argumentHint":"[instruction]","kind":"command"}));
+        for (name, hint, description) in [
+            (
+                "goal",
+                "[objective]",
+                "Start or manage a native goal in this conversation",
+            ),
+            (
+                "guided-goal",
+                "[rough objective]",
+                "Clarify an objective in chat before creating a native goal",
+            ),
+        ] {
+            if !native.iter().any(|entry| entry["name"] == name) {
+                commands.push(json!({"name":name,"source":"ait","argumentHint":hint,"description":description,"kind":"command"}));
+            }
+        }
     }
     commands
 }

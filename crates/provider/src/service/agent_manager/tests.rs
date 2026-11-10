@@ -1125,3 +1125,54 @@ async fn transient_registry_failure_keeps_a_changed_handle_and_close_retryable()
     let record = registry.get("agent-1").unwrap().unwrap();
     assert_eq!(record.persistence.unwrap().session_id, "native-2");
 }
+
+#[tokio::test]
+async fn observed_model_selection_commits_without_overwriting_unrelated_configuration() {
+    let (mut manager, registry, client) = make_manager();
+    let mut specification = spec();
+    specification.config.feature_values = Some(BTreeMap::from([(
+        "preserved".to_owned(),
+        serde_json::json!(true),
+    )]));
+    manager
+        .create("agent-1", &specification, AgentRegistration::default())
+        .await
+        .unwrap();
+    client
+        .0
+        .lock()
+        .unwrap()
+        .events
+        .push_back(AgentTurnEvent::ModelSelectionUpdated {
+            model: Some("native-model".to_owned()),
+            thinking_option_id: Some("high".to_owned()),
+        });
+    manager.poll().await.unwrap();
+    let stored = registry.get("agent-1").unwrap().unwrap().config.unwrap();
+    assert_eq!(stored.model.as_deref(), Some("native-model"));
+    assert_eq!(stored.thinking_option_id.as_deref(), Some("high"));
+    assert_eq!(
+        stored.feature_values.unwrap()["preserved"],
+        serde_json::json!(true)
+    );
+    client
+        .0
+        .lock()
+        .unwrap()
+        .events
+        .push_back(AgentTurnEvent::ModelSelectionUpdated {
+            model: Some("native-model".to_owned()),
+            thinking_option_id: None,
+        });
+    manager.poll().await.unwrap();
+    assert!(
+        registry
+            .get("agent-1")
+            .unwrap()
+            .unwrap()
+            .config
+            .unwrap()
+            .thinking_option_id
+            .is_none()
+    );
+}

@@ -83,3 +83,35 @@ fn autonomous_completion_and_clear_are_visible_without_a_command_or_model_messag
     assert!(cleared["actions"].as_array().unwrap().is_empty());
     assert!(State::from_projection(&snapshot("invalid")).is_err());
 }
+
+#[test]
+fn current_goal_is_independent_of_history_and_tracks_controls_and_removal() {
+    let mut state = State::from_projection(&snapshot("active")).unwrap();
+    let current = state.current_goal("session").unwrap();
+    assert_eq!(current["goal"]["objective"], "Keep the objective intact");
+    assert_eq!(current["actions"][0]["id"], "pause");
+    state
+        .apply(
+            &json!({"type":"goal/change","seq":4,"data":snapshot("paused")}),
+            "session",
+        )
+        .unwrap();
+    assert_eq!(
+        state.current_goal("session").unwrap()["actions"][0]["id"],
+        "resume"
+    );
+    state
+        .apply(
+            &json!({"type":"goal/change","seq":5,"data":{"version":1,"operation":"clear"}}),
+            "session",
+        )
+        .unwrap();
+    assert!(state.current_goal("session").is_none());
+    let projection =
+        super::super::projection::State::from_projection(&json!({"goal":snapshot("active")}))
+            .unwrap();
+    assert_eq!(
+        projection.ui_state("session").unwrap()["goal"]["goal"]["phase"],
+        "active"
+    );
+}

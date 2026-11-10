@@ -6,106 +6,104 @@ pub(super) mod pending;
 
 /// Builtins whose text handlers preserve Ait's model, permission and conversation ownership.
 const EXPORTED: &[&str] = &[
-    "advisor",
-    "export",
-    "dump",
-    "todo",
-    "session",
-    "jobs",
     "usage",
     "changelog",
     "tools",
     "context",
-    "mcp",
-    "compact",
-    "retry",
-    "memory",
-    "pin",
-    "marketplace",
-    "plugins",
-    "reload-plugins",
-    "add-dir",
-    "remove-dir",
+    "jobs",
     "dirs",
-    "forget-approvals",
-    "skillful",
-    "extended-context",
-    "computer",
+    "session",
+    "memory",
+    "security",
+    "compact",
+    "handoff",
+    "force",
     "ratchet",
 ];
 
-/// TUI-only names and aliases from official OMP 18.14.0, never ordinary model prompts.
-const TUI_ONLY: &[&str] = &[
-    "collab",
-    "join",
-    "leave",
-    "copy",
-    "open",
-    "live",
-    "record",
-    "pause",
-    "quit",
-    "q",
-    "new",
-    "clear",
-    "delete",
-    "resume",
-    "tan",
-    "seance",
-    "omfg",
-    "cleanse",
-    "debug",
-    "exit",
-    "restart",
-    "settings",
-    "setup",
-    "providers",
-    "plan",
-    "plan-review",
-    "goal",
-    "guided-goal",
-    "loop",
-    "queue",
-    "hotkeys",
-    "extensions",
-    "status",
-    "agents",
-    "git",
-    "local",
-    "hub",
-    "subagents",
-    "branch",
-    "rewind",
-    "fork",
-    "tree",
-    "login",
-    "logout",
-    "skills",
-];
+/// Terminal-only builtins have no corresponding Ait action.
+const TUI_ONLY: &[&str] = &["record", "hotkeys", "quit", "q", "exit", "debug"];
 
+/// GUI-owned builtin names and aliases. Native interfaces remain callable by their owning GUI.
 const MANAGED: &[&str] = &[
-    "security",
     "model",
     "models",
     "switch",
-    "fast",
-    "slow",
     "modelpreset",
     "effort",
-    "share",
+    "agents",
+    "prewalk",
+    "advisor",
+    "fast",
+    "slow",
+    "skillful",
+    "extended-context",
+    "computer",
     "browser",
-    "stats",
-    "trace",
-    "ssh",
+    "settings",
+    "setup",
+    "providers",
+    "login",
+    "logout",
+    "todo",
+    "hub",
+    "subagents",
+    "plan-review",
+    "new",
+    "clear",
+    "delete",
     "fresh",
-    "shake",
-    "handoff",
+    "resume",
+    "pin",
+    "unpin",
     "rename",
     "move",
     "wt",
     "worktree",
-    "force",
-    "prewalk",
+    "branch",
+    "rewind",
+    "fork",
+    "tree",
+    "retry",
+    "restart",
+    "shake",
+    "mcp",
+    "skills",
+    "marketplace",
+    "plugins",
+    "plugin",
+    "reload-plugins",
+    "ssh",
+    "forget-approvals",
+    "add-dir",
+    "remove-dir",
+    "export",
+    "dump",
+    "copy",
+    "open",
+    "local",
+    "git",
+    "share",
+    "collab",
+    "join",
+    "leave",
+    "pause",
+    "live",
+    "annotate",
+    // These task flows must be dispatched by a host adapter, never ordinary inference.
+    "plan",
+    "goal",
+    "guided-goal",
+    "loop",
+    "queue",
+    "tan",
+    "omfg",
+    "cleanse",
+    "extensions",
+    "status",
+    "stats",
+    "trace",
+    "seance",
 ];
 
 /// Split a native slash name without treating absolute paths as commands.
@@ -157,7 +155,15 @@ fn query_form(name: &str, args: &str) -> bool {
         "jobs" => matches!(args, "" | "full"),
         "mcp" => matches!(args, "" | "list" | "status"),
         "plugins" | "marketplace" => matches!(args, "" | "list"),
-        "memory" => matches!(args, "" | "view" | "stats" | "diagnose" | "queue"),
+        "memory" => {
+            matches!(args, "" | "view" | "stats" | "diagnose" | "queue")
+                || args.strip_prefix("mm ").is_some_and(|args| {
+                    matches!(
+                        args.split_whitespace().next(),
+                        Some("list" | "show" | "history")
+                    )
+                })
+        }
         "changelog" => {
             args.is_empty()
                 || args == "full"
@@ -197,11 +203,9 @@ pub(super) fn note(
 
 /// Check the current native catalog first so a real extension may own a TUI-only name.
 ///
-/// `vibe` is executable only when the native host announced the bridge *and* its catalog
-/// advertises a builtin `vibe`: the greeting announces a compatible external protocol, while
-/// the catalog confirms that this connection can dispatch the command. Ait never modifies
-/// the external runtime. Until both hold the name stays a host refusal,
-/// so it can never silently become a model prompt.
+/// Legacy native Vibe requires both bridge negotiation and its builtin catalog entry.
+/// The external-OMP coordinator handles its announced task controls before this fallback.
+/// A real project/extension owner always retains native dispatch priority.
 pub(super) fn blocked<'a>(text: &'a str, native: &[Value], bridge: bool) -> Option<&'a str> {
     let (name, args) = split(text)?;
     if name == "btw" {
@@ -250,17 +254,34 @@ fn exported(entry: &Value) -> bool {
 }
 
 fn subcommand_exported(name: &str, args: &str) -> bool {
-    let verb = args.split_whitespace().next().unwrap_or_default();
     match name {
-        "advisor" => verb != "configure",
-        "session" => !matches!(verb, "delete" | "pin"),
-        "todo" => !matches!(verb, "edit" | "expand" | "collapse"),
-        "mcp" => !matches!(
-            verb,
-            "unauth" | "smithery-login" | "smithery-logout" | "reconnect" | "notifications"
-        ),
+        "session" => matches!(args.trim(), "" | "info"),
+        "memory" => {
+            let mut words = args.split_whitespace();
+            match words.next().unwrap_or_default() {
+                "" | "view" | "stats" | "diagnose" | "queue" => true,
+                "mm" => matches!(words.next(), Some("list" | "show" | "history")),
+                _ => false,
+            }
+        }
+        "usage" => matches!(args.trim(), "" | "show"),
         _ => true,
     }
+}
+
+/// Only the effective native owner may trigger a host-special command, including aliases.
+/// Missing builtins retain host fallback; project/extension commands keep their native semantics.
+pub(super) fn owns_control(text: &str, native: &[Value], control: &str) -> bool {
+    let Some((name, _)) = split(text) else {
+        return false;
+    };
+    if name != control {
+        return false;
+    }
+    native
+        .iter()
+        .find(|entry| matches_name(entry, name))
+        .is_none_or(|entry| entry["source"] == "builtin")
 }
 
 /// Project only supported builtin handlers, retaining extension/skill/file commands verbatim.
@@ -299,14 +320,21 @@ pub(super) fn rejection(name: &str) -> String {
             .to_owned();
     }
     if TUI_ONLY.contains(&name) {
-        format!(
-            "OMP /{name} requires its terminal UI and is not exposed through RPC. Use the corresponding Ait control or native operation."
-        )
-    } else {
-        format!(
-            "OMP /{name} changes a control owned by Ait or opens an external interface. Use Ait's model, permission, workspace or native-operation controls instead."
-        )
+        return format!("/{name} is available only in the OMP terminal.");
     }
+    let location = match name {
+        "model" | "models" | "switch" => "Ait's model selector",
+        "effort" => "Ait's thinking-level control",
+        "modelpreset" => "Model Presets in the model selector's provider settings",
+        "agents" | "advisor" | "prewalk" => "provider role settings",
+        "login" | "logout" | "session" => "the corresponding session or provider account controls",
+        "fast" | "slow" => "Ait's service-tier control",
+        "mcp" | "skills" | "marketplace" | "plugins" | "plugin" | "reload-plugins" => {
+            "provider integration settings"
+        }
+        _ => "the corresponding Ait session, workspace or provider control",
+    };
+    format!("Use {location}. The builtin /{name} command is disabled in Ait.")
 }
 
 #[cfg(test)]

@@ -97,6 +97,8 @@ pub(super) async fn drain(
         .service_realtime()
         .await
         .map_err(super::map_session)?;
+    checkpoint_handle(registry, id, agent)?;
+    persist_input(registry, id, agent)?;
     drain_observations(registry, timeline, events, id, agent).await
 }
 
@@ -107,8 +109,6 @@ async fn drain_observations(
     id: &str,
     agent: &mut super::LiveAgent,
 ) -> Result<(), AgentManagerError> {
-    checkpoint_handle(registry, id, agent)?;
-    persist_input(registry, id, agent)?;
     for _ in 0..128 {
         if agent.pending.is_none() {
             agent.pending = match agent.session.poll_turn() {
@@ -122,6 +122,16 @@ async fn drain_observations(
         }
         let result = match &agent.pending {
             Some(AgentTurnEvent::RuntimeInfo(info)) => persist_info(registry, id, agent, info),
+            Some(AgentTurnEvent::ModelSelectionUpdated {
+                model,
+                thinking_option_id,
+            }) => persist_model_selection(
+                registry,
+                id,
+                agent,
+                model.as_deref(),
+                thinking_option_id.as_deref(),
+            ),
             Some(AgentTurnEvent::FeatureValuesUpdated(values)) => {
                 persist_features(registry, id, agent, values)
             }
@@ -199,6 +209,16 @@ async fn drain_observations(
             }
         }
     }
+    finish_observations(registry, timeline, events, id, agent).await
+}
+
+async fn finish_observations(
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
+    timeline: Option<&crate::storage::timeline::Timeline>,
+    events: &model::session::SessionEvents,
+    id: &str,
+    agent: &mut super::LiveAgent,
+) -> Result<(), AgentManagerError> {
     checkpoint_handle(registry, id, agent)?;
     if matches!(agent.pending, Some(AgentTurnEvent::Failed)) {
         settle_failure(registry, timeline, events, id, agent).await?;
@@ -207,6 +227,30 @@ async fn drain_observations(
         agent.session.observation_committed();
     }
     Ok(())
+}
+
+fn persist_model_selection(
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
+    id: &str,
+    agent: &super::LiveAgent,
+    model: Option<&str>,
+    thinking: Option<&str>,
+) -> Result<(), model::ErrorCode> {
+    use crate::protocol::agent_config::{ConfigPatch, NullableSetting};
+    persist_configuration(
+        registry,
+        id,
+        agent,
+        &ConfigPatch {
+            model_id: model
+                .map(str::to_owned)
+                .map_or(NullableSetting::Clear, NullableSetting::Set),
+            thinking_option_id: thinking
+                .map(str::to_owned)
+                .map_or(NullableSetting::Clear, NullableSetting::Set),
+            ..ConfigPatch::default()
+        },
+    )
 }
 
 fn persist_info(
@@ -240,14 +284,23 @@ fn persist_features(
     if values.len() > 64 || serde_json::to_vec(values).map_or(true, |bytes| bytes.len() > 65536) {
         return Err(model::ErrorCode::InvalidMessage);
     }
-    let record = registry
-        .get(id)
-        .map_err(|_| model::ErrorCode::AgentIo)?
-        .ok_or(model::ErrorCode::AgentNotFound)?;
     let patch = crate::protocol::agent_config::ConfigPatch {
         feature_values: Some(values.clone()),
         ..Default::default()
     };
+    persist_configuration(registry, id, agent, &patch)
+}
+
+fn persist_configuration(
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
+    id: &str,
+    agent: &super::LiveAgent,
+    patch: &crate::protocol::agent_config::ConfigPatch,
+) -> Result<(), model::ErrorCode> {
+    let record = registry
+        .get(id)
+        .map_err(|_| model::ErrorCode::AgentIo)?
+        .ok_or(model::ErrorCode::AgentNotFound)?;
     let config = patch.apply(
         record
             .config

@@ -89,6 +89,16 @@ impl Session {
         Ok(session)
     }
 
+    /// Transfer already published startup callbacks to the same native session after initialization.
+    pub(super) fn adopt_startup(
+        &mut self,
+        dialogs: super::interactions::Dialogs,
+        ui: super::ui::State,
+    ) -> Result<(), AgentSessionError> {
+        self.engine.native_mut()?.adopt_startup(dialogs, ui);
+        Ok(())
+    }
+
     async fn request(&mut self, method: &str, params: Value) -> Result<Value, AgentSessionError> {
         self.sequence += 1;
         let id = json!(self.sequence);

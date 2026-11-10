@@ -1,98 +1,81 @@
 use super::*;
 
 #[test]
-fn catalog_keeps_exported_commands_and_real_extensions_without_builtin_collisions() {
-    let native = vec![
-        json!({"name":"usage","source":"builtin"}),
-        json!({"name":"model","aliases":["models"],"source":"builtin"}),
-        json!({"name":"future-host-control","source":"builtin"}),
-        json!({"name":"status","source":"extension"}),
-        json!({"name":"my:command","source":"file"}),
-    ];
-    let projected = visible(&native);
+fn builtin_configuration_names_and_aliases_are_never_dispatchable() {
+    for name in MANAGED.iter().chain(TUI_ONLY) {
+        let native = vec![json!({"name":name,"source":"builtin"})];
+        assert_eq!(
+            blocked(&format!("/{name} configure anything"), &native, false),
+            Some(*name)
+        );
+        assert!(visible(&native).iter().all(|entry| entry["name"] != *name));
+        assert!(!rejection(name).is_empty());
+    }
     assert_eq!(
-        projected[0], native[0],
-        "filtering must not insert null optional fields rejected by the shared wire schema"
-    );
-    let names: Vec<_> = projected
-        .iter()
-        .map(|item| item["name"].as_str().unwrap().to_owned())
-        .collect();
-    assert_eq!(names, ["usage", "status", "my:command", "btw"]);
-    assert_eq!(
-        blocked("/models other/model", &native, false),
+        blocked(
+            "/models x",
+            &[json!({"name":"model","source":"builtin","aliases":["models"]})],
+            false
+        ),
         Some("models")
     );
-    assert_eq!(blocked("/model:other/model", &native, false), Some("model"));
-    assert_eq!(
-        blocked("/future-host-control", &native, false),
-        Some("future-host-control")
-    );
-    assert!(blocked("/status", &native, false).is_none());
-    assert!(blocked("/my:command", &native, false).is_none());
 }
 
 #[test]
-fn manual_unexported_commands_never_become_inference_but_paths_and_unknown_text_survive() {
-    for name in TUI_ONLY.iter().chain(MANAGED) {
-        assert_eq!(blocked(&format!("/{name}"), &[], false), Some(*name));
-        assert!(!rejection(name).is_empty());
+fn effective_extensions_own_even_special_names_without_builtin_interception() {
+    for name in ["record", "model", "models", "btw", "vibe", "goal", "status"] {
+        for source in ["extension", "skill", "file", "mcp"] {
+            let native =
+                vec![json!({"name":name,"source":source,"argumentHint":"[native argument]"})];
+            assert!(blocked(&format!("/{name} argument"), &native, false).is_none());
+            assert!(!owns_control(&format!("/{name} argument"), &native, name));
+            assert!(visible(&native).contains(&native[0]));
+            assert!(!read_only(&format!("/{name}"), &native));
+        }
     }
-    for text in ["/etc/hosts explain this file", "/unknown question", "hello"] {
+    assert!(owns_control("/btw question", &[], "btw"));
+    assert!(owns_control("/vibe", &[], "vibe"));
+    assert!(!owns_control("/vibes", &[], "vibe"));
+}
+
+#[test]
+fn mixed_commands_allow_only_query_forms_without_configuration_bypasses() {
+    let native = vec![
+        json!({"name":"session","source":"builtin","subcommands":[{"name":"info"},{"name":"pin"},{"name":"delete"}]}),
+        json!({"name":"memory","source":"builtin"}),
+        json!({"name":"usage","source":"builtin"}),
+    ];
+    assert_eq!(visible(&native)[0]["subcommands"], json!([{"name":"info"}]));
+    for text in [
+        "/session delete",
+        "/session pin account",
+        "/memory clear",
+        "/memory mm delete x",
+        "/usage reset",
+    ] {
+        assert!(blocked(text, &native, false).is_some(), "{text}");
+    }
+    for text in [
+        "/session info",
+        "/memory view",
+        "/memory mm show x",
+        "/usage",
+    ] {
+        assert!(blocked(text, &native, false).is_none(), "{text}");
+    }
+}
+
+#[test]
+fn vibe_requires_a_bridge_but_project_commands_and_non_commands_keep_their_meaning() {
+    let wired = vec![json!({"name":"vibe","source":"builtin"})];
+    assert_eq!(blocked("/vibe task", &wired, false), Some("vibe"));
+    assert!(blocked("/vibe task", &wired, true).is_none());
+    assert!(rejection("vibe").contains("Ait does not install or modify OMP"));
+    for text in ["/etc/hosts explain", "/unknown task", "hello"] {
         assert!(blocked(text, &[], false).is_none());
-        assert!(!is_btw(text));
     }
     assert_eq!(
         split(" /btw What is this? "),
         Some(("btw", "What is this?"))
     );
-    assert!(is_btw("/btw"));
-    assert_eq!(visible(&[]).len(), 1);
-}
-
-#[test]
-fn terminal_only_subcommands_are_hidden_without_removing_native_data_arguments() {
-    let native = vec![
-        json!({"name":"advisor","source":"builtin","subcommands":[{"name":"status"},{"name":"configure"}]}),
-        json!({"name":"todo","source":"builtin","subcommands":[{"name":"edit"},{"name":"export"}]}),
-        json!({"name":"mcp","source":"builtin","subcommands":[{"name":"list"},{"name":"reconnect"}]}),
-    ];
-    assert_eq!(
-        visible(&native)[0]["subcommands"],
-        json!([{"name":"status"}])
-    );
-    assert_eq!(
-        visible(&native)[1]["subcommands"],
-        json!([{"name":"export"}])
-    );
-    assert_eq!(
-        blocked("/advisor configure", &native, false),
-        Some("advisor")
-    );
-    assert_eq!(blocked("/mcp reconnect", &native, false), Some("mcp"));
-    assert!(blocked("/todo export configure", &native, false).is_none());
-    assert!(read_only("/advisor status", &native));
-    assert!(!read_only("/todo import file.md", &native));
-}
-
-#[test]
-fn vibe_stays_a_host_refusal_until_the_bridge_is_announced_and_wired() {
-    let wired = vec![json!({"name":"vibe","source":"builtin","description":"Toggle native Vibe"})];
-    assert!(is_vibe("/vibe start"));
-    assert!(is_vibe(" /vibe"));
-    assert!(!is_vibe("/vibes"));
-    assert!(!is_vibe("please /vibe"));
-    // No bridge: blocked with a bridge-specific explanation.
-    assert_eq!(blocked("/vibe start", &[], false), Some("vibe"));
-    assert!(rejection("vibe").contains("native host bridge"));
-    // The refusal explains the external boundary without directing users to a private install.
-    assert!(rejection("vibe").contains("Ait does not install or modify OMP"));
-    assert!(!rejection("vibe").contains("Install the current"));
-    // Greeting only, command table not wired: still blocked, never a model prompt.
-    assert_eq!(blocked("/vibe start", &[], true), Some("vibe"));
-    // Announced and advertised: the native runtime owns the command.
-    assert!(blocked("/vibe start", &wired, true).is_none());
-    // A real extension still owns the name even without the bridge.
-    let extension = vec![json!({"name":"vibe","source":"extension"})];
-    assert!(blocked("/vibe start", &extension, false).is_none());
 }

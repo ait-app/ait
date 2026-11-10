@@ -19,7 +19,9 @@ use crate::ports::agent_session::{
 use crate::ports::diagnostics::{Category, Diagnostic};
 use crate::protocol::prompt::AgentPrompt;
 
+mod observed_settings;
 mod side_commands;
+mod tasks;
 
 const STATE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 const CANCEL_GRACE: Duration = Duration::from_secs(5);
@@ -37,6 +39,7 @@ struct StateCheck {
     id: String,
     // New work relinquishes ownership while retaining correlation for the delayed reply.
     turn: Option<String>,
+    refresh_settings: bool,
     written: Option<oneshot::Receiver<Result<(), AgentSessionError>>>,
 }
 
@@ -72,6 +75,7 @@ pub(super) struct Session {
     // An earlier prompt's uncorrelated session_settled can follow the next admission.
     phase: TurnPhase,
     state_check: Option<StateCheck>,
+    settings_refresh: observed_settings::Refresh,
     next_state_check: Instant,
     idle_without_outcome: Option<Instant>,
     cancellation_started: Option<Instant>,
@@ -108,7 +112,42 @@ pub(super) async fn probe_config(
     model: Option<&str>,
     config: Option<&StoredAgentConfig>,
 ) -> Result<Transport, AgentSessionError> {
-    probe_config_with_extension(client, cwd, model, config, None).await
+    probe_options(
+        client,
+        cwd,
+        Probe {
+            model,
+            config,
+            ..Probe::default()
+        },
+    )
+    .await
+}
+
+#[derive(Default)]
+struct Probe<'a> {
+    model: Option<&'a str>,
+    config: Option<&'a StoredAgentConfig>,
+    extension: Option<&'a std::path::Path>,
+    interactive: bool,
+}
+
+/// Discover commands without asking a user to answer a disposable metadata session's dialogs.
+/// Native project extensions still load; their documented headless fallback remains in control.
+pub(super) async fn probe_commands(
+    client: &OmpClient,
+    cwd: &str,
+    extension: Option<&std::path::Path>,
+) -> Result<Transport, AgentSessionError> {
+    probe_options(
+        client,
+        cwd,
+        Probe {
+            extension,
+            ..Probe::default()
+        },
+    )
+    .await
 }
 
 /// Load one temporary public extension in an isolated metadata reader.
@@ -120,6 +159,30 @@ pub(super) async fn probe_config_with_extension(
     config: Option<&StoredAgentConfig>,
     extension: Option<&std::path::Path>,
 ) -> Result<Transport, AgentSessionError> {
+    probe_options(
+        client,
+        cwd,
+        Probe {
+            model,
+            config,
+            extension,
+            interactive: true,
+        },
+    )
+    .await
+}
+
+async fn probe_options(
+    client: &OmpClient,
+    cwd: &str,
+    options: Probe<'_>,
+) -> Result<Transport, AgentSessionError> {
+    let Probe {
+        model,
+        config,
+        extension,
+        interactive,
+    } = options;
     config::validate_spec(&AgentSessionSpec {
         provider: PROVIDER.to_owned(),
         cwd: cwd.to_owned(),
@@ -128,9 +191,12 @@ pub(super) async fn probe_config_with_extension(
     })?;
     let mut args = vec![
         "--mode".to_owned(),
-        "rpc-ui".to_owned(),
+        if interactive { "rpc-ui" } else { "rpc" }.to_owned(),
         "--no-session".to_owned(),
     ];
+    if !interactive {
+        args.push("--no-ui".to_owned());
+    }
     let route = model.map(config::model_route).transpose()?;
     if let Some(extension) = extension {
         args.push("--extension".to_owned());
@@ -219,6 +285,15 @@ async fn connect(
         ]);
     }
     let mut transport = Transport::spawn(client, &spec.cwd, &args, spec.confinement.as_ref())?;
+    let startup = client
+        .startup
+        .lock()
+        .map_err(|_| AgentSessionError::Failed)?
+        .clone();
+    if let Some(startup) = startup {
+        transport.startup(startup).await?;
+    }
+
     transport.retain_configuration(configuration);
     transport.retain_extension(extension);
     transport.initialize().await?;
@@ -392,6 +467,7 @@ async fn open_scoped(
         prompt_id: None,
         phase: TurnPhase::Idle,
         state_check: None,
+        settings_refresh: observed_settings::Refresh::default(),
         next_state_check: Instant::now(),
         idle_without_outcome: None,
         cancellation_started: None,
@@ -646,6 +722,13 @@ impl Session {
         Ok(())
     }
 
+    /// Hand startup callbacks to the established native owner without replaying plugin input.
+    pub(super) fn adopt_startup(&mut self, dialogs: Dialogs, ui: super::ui::State) {
+        self.dialogs = dialogs;
+        self.ui = ui;
+        self.transport.finish_startup();
+    }
+
     fn update_commands(&mut self, commands: Vec<Value>) {
         if self.native_commands != commands {
             self.commands =
@@ -742,8 +825,15 @@ impl Session {
             return Err(AgentSessionError::Rejected);
         }
         self.configure(config).await?;
+        let mut task_directive = self.prepare_goal(prompt).await?;
+        if let Some(turn) = task_directive.native_turn.take() {
+            return Ok(turn);
+        }
+        let prompt = task_directive.prompt.as_ref().unwrap_or(prompt);
         let mut directive = None;
-        if super::commands::is_vibe(&prompt.text) && self.vibe_host.is_some() {
+        if super::commands::owns_control(&prompt.text, &self.native_commands, "vibe")
+            && self.vibe_host.is_some()
+        {
             let (_, args) =
                 super::commands::split(&prompt.text).ok_or(AgentSessionError::Rejected)?;
             if args.is_empty() {
@@ -769,7 +859,7 @@ impl Session {
                 .push_back(AgentTurnEvent::Completed(None));
             return Ok(turn);
         }
-        if super::commands::is_btw(&prompt.text) {
+        if super::commands::owns_control(&prompt.text, &self.native_commands, "btw") {
             return Err(AgentSessionError::Rejected);
         }
         self.active_builtin = super::commands::builtin(&prompt.text, &self.native_commands);
@@ -982,26 +1072,18 @@ impl Session {
             return Ok(());
         }
         if event["type"] == "response" && self.actions.capture(event) {
-            self.ui.capture(event)?;
+            self.publish_action_response(event)?;
             return Ok(());
         }
         if event["type"] == "response" && self.control_response(event)? {
             return Ok(());
         }
         self.observe_native_event(event)?;
-        if event["type"] == "message_end" && event["message"]["role"] == "assistant" {
-            self.submitted = true;
-            if event["message"]["stopReason"] == "error" {
-                self.transport.diagnostics.observe_native(
-                    &event["message"]["errorMessage"],
-                    "message_end",
-                    "turn",
-                );
-            } else {
-                self.transport.diagnostics.clear();
-            }
-        }
+        self.observe_assistant_result(event);
         match event["type"].as_str() {
+            Some("config_update") => self.observe_settings(event)?,
+            Some("model_changed" | "thinking_level_changed") => self.settings_refresh.mark(),
+            Some("goal_updated") => self.observe_goal(&event["state"]),
             Some("available_commands_update") => {
                 self.update_commands(config::commands(event)?);
             }
@@ -1076,6 +1158,38 @@ impl Session {
         Ok(())
     }
 
+    fn observe_assistant_result(&mut self, event: &Value) {
+        if event["type"] == "message_end" && event["message"]["role"] == "assistant" {
+            self.submitted = true;
+            if event["message"]["stopReason"] == "error" {
+                self.transport.diagnostics.observe_native(
+                    &event["message"]["errorMessage"],
+                    "message_end",
+                    "turn",
+                );
+            } else {
+                self.transport.diagnostics.clear();
+            }
+        }
+    }
+
+    fn publish_action_response(&mut self, event: &Value) -> Result<(), AgentSessionError> {
+        for values in self.actions.feature_updates() {
+            self.config
+                .feature_values
+                .get_or_insert_default()
+                .extend(values.clone());
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::FeatureValuesUpdated(values));
+        }
+        self.stream
+            .events
+            .extend(self.actions.notes().map(AgentTurnEvent::Timeline));
+        self.ui.capture(event)?;
+        Ok(())
+    }
+
     fn project(&mut self, event: &Value) -> Result<(), AgentSessionError> {
         self.stream.consume(event).map_err(|error| {
             self.transport.diagnostics.observe_failure(
@@ -1127,6 +1241,13 @@ impl Session {
     fn checked_state(&mut self, event: &Value) -> Result<(), AgentSessionError> {
         let check = self.state_check.take().ok_or(AgentSessionError::Failed)?;
         self.next_state_check = Instant::now() + STATE_CHECK_INTERVAL;
+        if check.refresh_settings && event["command"] == "get_state" && event["success"] == true {
+            let state = &event["data"];
+            if state["sessionId"] != self.state["sessionId"] {
+                return Err(AgentSessionError::Failed);
+            }
+            self.observe_settings(state)?;
+        }
         if check.turn.is_none() || self.active != check.turn {
             return Ok(());
         }
@@ -1209,15 +1330,16 @@ impl Session {
                 }
             }
         }
-        let Some(turn) = self.active.as_ref().filter(|_| {
+        let turn = self.active.as_ref().filter(|_| {
             matches!(
                 self.phase,
                 TurnPhase::Running | TurnPhase::AwaitingSettlement
             )
-        }) else {
-            return Ok(());
-        };
-        if self.state_check.is_some() || Instant::now() < self.next_state_check {
+        });
+        if self.state_check.is_some()
+            || (turn.is_none() && !self.settings_refresh.pending())
+            || (!self.settings_refresh.pending() && Instant::now() < self.next_state_check)
+        {
             return Ok(());
         }
         let (id, written) = match self.transport.check_state() {
@@ -1227,7 +1349,8 @@ impl Session {
         };
         self.state_check = Some(StateCheck {
             id,
-            turn: Some(turn.clone()),
+            turn: turn.cloned(),
+            refresh_settings: self.settings_refresh.take(),
             written: Some(written),
         });
         Ok(())
@@ -1237,15 +1360,21 @@ impl Session {
 #[async_trait::async_trait]
 impl AgentSession for Session {
     fn handles_out_of_band(&self, text: &str) -> Option<bool> {
+        if self.owns_goal(text) {
+            return Some(!tasks::starts_goal(text));
+        }
         // A `/vibe` the bridge cannot serve is answered here, as a refusal card that never
         // reaches a model. Once the native host announces the capability, `/vibe` is a normal
         // prompt directive and must form a turn instead.
-        if self.vibe_host.is_some() && super::commands::is_vibe(text) {
+        if self.vibe_host.is_some()
+            && super::commands::owns_control(text, &self.native_commands, "vibe")
+        {
             return Some(super::commands::split(text).is_some_and(|(_, args)| args.is_empty()));
         }
         Some(
-            super::commands::is_btw(text)
-                || (super::commands::is_vibe(text) && !self.vibe.available)
+            super::commands::owns_control(text, &self.native_commands, "btw")
+                || (super::commands::owns_control(text, &self.native_commands, "vibe")
+                    && !self.vibe.available)
                 || super::commands::blocked(text, &self.native_commands, self.vibe.available)
                     .is_some()
                 || super::commands::read_only(text, &self.native_commands),
@@ -1310,6 +1439,13 @@ impl AgentSession for Session {
         let mut snapshot = self.ui.snapshot();
         snapshot["actions"] = super::actions::catalog();
         snapshot["sideQuestions"] = self.btw.snapshot();
+        if self.state["goal"]["goal"].is_object() {
+            snapshot["goal"] = tasks::goal_item(
+                "current-goal",
+                &json!({"goal": self.state["goal"]["goal"], "state":self.state["goal"]}),
+            )
+            .item;
+        }
         if let Some(host) = &self.vibe_host {
             snapshot["vibe"] = host.snapshot();
         } else if self.vibe.available {
@@ -1360,17 +1496,40 @@ impl AgentSession for Session {
         {
             return Err(AgentSessionError::Busy);
         }
+        if action == "goal" && arguments.get("expectedGoalId").is_some() {
+            return self.current_goal_action(arguments).await;
+        }
+        let present = arguments.get("present").is_some();
+        let mut stripped;
+        let arguments = if present {
+            if arguments["present"] != "true"
+                || !matches!(
+                    action,
+                    "get_session_stats" | "get_login_providers" | "get_logout_accounts"
+                )
+            {
+                return Err(AgentSessionError::Rejected);
+            }
+            stripped = arguments.clone();
+            stripped
+                .as_object_mut()
+                .ok_or(AgentSessionError::Rejected)?
+                .remove("present");
+            &stripped
+        } else {
+            arguments
+        };
         let fields = super::actions::validate(action, arguments, &self.cwd)?;
         if action == "vibe_control" && self.vibe_host.is_some() {
             if fields["operation"] == "toggle" {
-                if self.active.is_some() {
-                    return Err(AgentSessionError::Busy);
-                }
                 let host = self
                     .vibe_host
                     .as_mut()
                     .ok_or(AgentSessionError::Unavailable)?;
                 let enabled = fields["enabled"].as_bool().unwrap_or(!host.enabled());
+                if enabled && self.active.is_some() {
+                    return Err(AgentSessionError::Busy);
+                }
                 host.toggle(&mut self.transport, enabled).await?;
                 let snapshot = host.snapshot();
                 return Ok(Box::pin(async move {
@@ -1399,11 +1558,16 @@ impl AgentSession for Session {
         }
         self.actions.check_capacity()?;
         let target = fields["entryId"].as_str().map(str::to_owned);
+        let feature =
+            super::actions::runtime_feature(action).map(|key| (key, fields["enabled"].clone()));
         let id = self.transport.begin(action, fields).await?;
+        if let Some((key, value)) = feature {
+            return Ok(self.actions.insert_feature(id, action, key, value));
+        }
         if action == "navigate_tree" {
             self.navigation_target = target;
         }
-        Ok(self.actions.insert(id, action))
+        Ok(self.actions.insert_with_presentation(id, action, present))
     }
 
     async fn begin_configured_action(

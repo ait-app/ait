@@ -38,10 +38,9 @@ impl Session {
         {
             return Err(AgentSessionError::Rejected);
         }
-        if commands::is_vibe(&prompt.text) && self.vibe_host.is_some() {
-            if self.active.is_some() {
-                return Err(AgentSessionError::Busy);
-            }
+        if commands::owns_control(&prompt.text, &self.native_commands, "vibe")
+            && self.vibe_host.is_some()
+        {
             if !commands::split(&prompt.text).is_some_and(|(_, args)| args.is_empty()) {
                 return Err(AgentSessionError::Rejected);
             }
@@ -68,6 +67,9 @@ impl Session {
                 )));
             return Ok(());
         }
+        if self.owns_goal(&prompt.text) {
+            return self.goal_control(prompt).await;
+        }
         if let Some(name) =
             commands::blocked(&prompt.text, &self.native_commands, self.vibe.available)
         {
@@ -75,7 +77,7 @@ impl Session {
             return Ok(());
         }
         let (name, args) = commands::split(&prompt.text).ok_or(AgentSessionError::Rejected)?;
-        if name == "btw" {
+        if commands::owns_control(&prompt.text, &self.native_commands, "btw") {
             if args.len() > 65536 {
                 return Err(AgentSessionError::Rejected);
             }

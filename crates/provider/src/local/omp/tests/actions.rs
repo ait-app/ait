@@ -114,3 +114,42 @@ async fn exported_ui_survives_the_acp_bridge_and_clears_without_assistant_messag
     session.close().await.unwrap();
     assert!(session.ui_state().is_none());
 }
+
+#[tokio::test]
+async fn runtime_toggle_reaches_native_dispatch_and_only_finishes_after_configuration_commits() {
+    let (_root, client, spec) = fixture();
+    let mut session = client.create_session(&spec).await.unwrap();
+    for (action, feature) in [
+        ("set_auto_compaction", "autoCompaction"),
+        ("set_auto_retry", "autoRetry"),
+    ] {
+        for enabled in [false, true] {
+            let mut receipt = session
+                .begin_action(action, &json!({"enabled":enabled.to_string()}))
+                .await
+                .unwrap();
+            let values = tokio::time::timeout(Duration::from_secs(2), async {
+                loop {
+                    if let Some(AgentTurnEvent::FeatureValuesUpdated(values)) =
+                        session.poll_turn().unwrap()
+                    {
+                        break values;
+                    }
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+            assert_eq!(values[feature], enabled);
+            assert!(
+                tokio::time::timeout(Duration::from_millis(1), &mut receipt)
+                    .await
+                    .is_err()
+            );
+            while session.poll_turn().unwrap().is_some() {}
+            session.observation_committed();
+            assert!(receipt.await.unwrap()["error"].is_null());
+        }
+    }
+    session.close().await.unwrap();
+}

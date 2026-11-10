@@ -620,6 +620,13 @@ impl Session {
 
 #[async_trait::async_trait]
 impl AgentSession for Session {
+    fn ui_state(&self) -> Option<Value> {
+        if self.closed {
+            return None;
+        }
+        self.projection.ui_state(&self.id)
+    }
+
     fn commands(&self) -> Option<&[Value]> {
         self.commands.catalog.as_deref()
     }

@@ -222,3 +222,58 @@ async fn history_choice_receipts_do_not_cut_json_when_native_messages_are_long()
             > 30000
     );
 }
+
+#[tokio::test]
+async fn a_presented_query_is_durable_before_receipt_and_internal_reads_stay_silent() {
+    let mut pending = Pending::default();
+    let mut receipt = pending.insert_with_presentation("visible".into(), "get_session_stats", true);
+    assert!(pending.capture(&json!({"type":"response","id":"visible","command":"get_session_stats","success":true,"data":{"tokens":42}})));
+    let notes: Vec<_> = pending.notes().collect();
+    assert_eq!(notes.len(), 1);
+    assert_eq!(notes[0].item["command"], "native:get_session_stats");
+    assert!(notes[0].item["text"].as_str().unwrap().contains("42"));
+    assert!(
+        tokio::time::timeout(Duration::from_millis(1), &mut receipt)
+            .await
+            .is_err()
+    );
+    pending.committed();
+    assert!(receipt.await.is_ok());
+
+    let receipt = pending.insert("internal".into(), "get_entries");
+    assert!(pending.capture(&json!({"type":"response","id":"internal","command":"get_entries","success":true,"data":{"entries":[]}})));
+    assert!(receipt.await.is_ok());
+    assert_eq!(pending.notes().count(), 0);
+}
+
+#[tokio::test]
+async fn runtime_toggle_commits_only_the_acknowledged_requested_value() {
+    let mut pending = Pending::default();
+    let mut receipt =
+        pending.insert_feature("enable".into(), "set_auto_retry", "autoRetry", json!(true));
+    assert!(pending.feature_updates().next().is_none());
+    assert!(pending.capture(
+        &json!({"type":"response","id":"enable","command":"set_auto_retry","success":true})
+    ));
+    assert_eq!(
+        pending.feature_updates().collect::<Vec<_>>(),
+        vec![BTreeMap::from([("autoRetry".to_owned(), json!(true))])]
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_millis(1), &mut receipt)
+            .await
+            .is_err()
+    );
+    pending.committed();
+    assert!(receipt.await.unwrap().get("error").is_none());
+
+    let receipt = pending.insert_feature(
+        "disable".into(),
+        "set_auto_retry",
+        "autoRetry",
+        json!(false),
+    );
+    assert!(pending.capture(&json!({"type":"response","id":"disable","command":"set_auto_retry","success":false,"error":"Unavailable"})));
+    assert!(pending.feature_updates().next().is_none());
+    assert!(receipt.await.unwrap()["error"].is_string());
+}

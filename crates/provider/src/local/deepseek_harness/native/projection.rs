@@ -15,6 +15,12 @@ pub(super) struct State {
 }
 
 impl State {
+    /// Project current interactive controls independently of timeline pagination.
+    pub(super) fn ui_state(&self, session: &str) -> Option<Value> {
+        let goal = self.controls.current_goal(session)?;
+        Some(json!({"goal":goal,"statuses":[],"widgets":[],"title":null,"editor":null,"link":null}))
+    }
+
     /// Initialize control facts from the native opening projection, rejecting malformed goals.
     pub(super) fn from_projection(values: &Value) -> Result<Self, AgentSessionError> {
         Ok(Self {

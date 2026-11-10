@@ -9,6 +9,7 @@ import uuid
 
 args = sys.argv[1:]
 btw_records = []
+goal_state = None
 cwd = os.getcwd()
 root = Path(os.environ['PI_CODING_AGENT_DIR'])
 root.mkdir(parents=True, exist_ok=True)
@@ -145,8 +146,28 @@ if (root / 'ready-delay').exists():
 emit({'type':'ready','protocolVersion':1,'supportedProtocolVersions':[1,2],'maxFrameBytes':1048576,'maxReassembledFrameBytes':67108864,
       'capabilities': {'commandCompletion': {'version': 1 if (root / 'completion.json').exists() else 0}}})
 
-for line in sys.stdin:
-    command = json.loads(line)
+startup_pending = (root/'startup-dialog').exists() and '--no-ui' not in args
+if startup_pending:
+    emit({'type':'extension_ui_request','id':'startup-choice','method':'input','title':'Startup input'})
+
+def commands_from_input():
+    global startup_pending
+    held = []
+    for line in sys.stdin:
+        command = json.loads(line)
+        if startup_pending:
+            if command.get('type') == 'extension_ui_response' and command.get('id') == 'startup-choice':
+                with log.open('a') as output:
+                    output.write(json.dumps(command) + '\n')
+                startup_pending = False
+                yield from held
+                held.clear()
+            else:
+                held.append(command)
+            continue
+        yield command
+
+for command in commands_from_input():
     with log.open('a') as output:
         output.write(json.dumps(command) + '\n')
     kind = command['type']
@@ -162,6 +183,21 @@ for line in sys.stdin:
         response(command, {'protocolVersion':2})
     elif kind == 'complete':
         response(command, json.loads((root / 'completion.json').read_text()))
+    elif kind == 'goal':
+        op = command.get('op')
+        if op == 'create' and goal_state is None:
+            goal_state = {'enabled': True, 'goal': {'id': str(uuid.uuid4()), 'status': 'active', 'objective': command['objective'], 'tokensUsed': 0}}
+        elif op in ('pause', 'resume') and goal_state:
+            goal_state['enabled'] = op == 'resume'
+            goal_state['goal']['status'] = 'active' if op == 'resume' else 'paused'
+        elif op == 'drop':
+            goal_state = None
+        elif op != 'get':
+            response(command, success=False)
+            continue
+        response(command, {'goal': goal_state['goal'] if goal_state else None, 'state': goal_state})
+    elif kind == 'set_host_tools':
+        response(command, {'toolNames': [tool['name'] for tool in command.get('tools', [])]})
     elif kind == 'get_state':
         if active and (root/'finish-wait').exists():
             (root/'finish-wait').unlink()
@@ -176,7 +212,7 @@ for line in sys.stdin:
                           'thinkingLevel': level, 'isStreaming': active, 'isCompacting': False,
                           'isSettled': not active and not pending_async,
                           'hasPendingAsyncWork': pending_async, 'queuedMessageCount': 0,
-                          'slowModeSupported': model['provider'] == 'test'}
+                          'slowModeSupported': model['provider'] == 'test', 'goal': goal_state}
         if current_prompt == 'missing-settlement-fact':
             state.pop('isSettled')
         if (root / 'idle-busy').exists():
@@ -282,7 +318,7 @@ for line in sys.stdin:
             emit({'type':'extension_ui_request','id':'preset-default','method':'notify','message':json.dumps({'aitPresetDefault':resolved})})
             emit({'type':'prompt_result','id':prompt_id,'agentInvoked':False,'status':'completed'})
             continue
-        if text.startswith('/modelpreset '):
+        if text.startswith('/modelpreset ') and not any(entry.get('name') == 'modelpreset' and entry.get('source') != 'builtin' for entry in (json.loads((root/'plugins.json').read_text()) if (root/'plugins.json').exists() else [])):
             _, operation, name = text.split(' ',2)
             saved_file = root/'global-presets.json'
             saved = json.loads(saved_file.read_text()) if saved_file.exists() else {}
@@ -331,6 +367,9 @@ for line in sys.stdin:
             continue
         if text == 'reject':
             response(command, success=False)
+            continue
+        if text == '/ait-vibe-mode-v1 off':
+            response(command, {'agentInvoked': False})
             continue
         if text == '/notify-only':
             emit({'type':'extension_ui_request','method':'notify','message':'Notify only output','notifyType':'info'})

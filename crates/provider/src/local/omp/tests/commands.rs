@@ -11,6 +11,11 @@ async fn native_completion_masks_host_controls_without_filtering_argument_values
         {"id":"blocked","label":"Model preset","insertText":"/modelpreset","replaceRange":{"start":0,"end":2}},
         {"id":"query","label":"Usage","insertText":"/usage","replaceRange":{"start":0,"end":2}}
     ]}).to_string()).unwrap();
+    std::fs::write(
+        root.path().join("agent/plugins.json"),
+        json!([{"name":"record","source":"extension","description":"Track work"}]).to_string(),
+    )
+    .unwrap();
     let mut session = client.create_session(&spec).await.unwrap();
     let result = session
         .complete_commands(&crate::protocol::commands::CompletionInput {
@@ -22,12 +27,12 @@ async fn native_completion_masks_host_controls_without_filtering_argument_values
     assert_eq!(result.items.len(), 1);
     assert_eq!(result.items[0].id, "query");
     std::fs::write(&path,json!({"supported":true,"items":[
-        {"id":"argument","label":"/modelpreset","insertText":"/modelpreset","replaceRange":{"start":9,"end":9}}
+        {"id":"argument","label":"/modelpreset","insertText":"/modelpreset","replaceRange":{"start":8,"end":8}}
     ]}).to_string()).unwrap();
     let result = session
         .complete_commands(&crate::protocol::commands::CompletionInput {
-            text: "/advisor ".to_owned(),
-            cursor: 9,
+            text: "/record ".to_owned(),
+            cursor: 8,
         })
         .await
         .unwrap();

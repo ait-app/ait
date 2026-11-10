@@ -195,3 +195,40 @@ async fn cancellation_aborts_a_worker_even_before_its_start_receipt_arrives() {
     assert!(!host.running());
     assert_eq!(host.shared.generation.load(Ordering::Acquire), 1);
 }
+
+#[tokio::test]
+async fn exit_during_a_director_turn_preserves_cancellation_frames_for_the_owner() {
+    let (_root, client, spec) = crate::local::omp::tests::fixture();
+    let mut transport = Transport::spawn(&client, &spec.cwd, &[], None).unwrap();
+    let state = transport.request("get_state", json!({})).await.unwrap();
+    let mut host = Host::new(
+        &client,
+        &spec,
+        state["sessionId"].as_str().unwrap(),
+        state["sessionFile"].as_str().unwrap(),
+        None,
+    );
+    host.shared.enabled.store(true, Ordering::Release);
+    let prompt = transport
+        .begin("prompt", json!({"message":"wait"}))
+        .await
+        .unwrap();
+    host.toggle(&mut transport, false).await.unwrap();
+    assert!(!host.enabled());
+    let mut frames = Vec::new();
+    while let Some(frame) = transport.poll().unwrap() {
+        frames.push(frame);
+    }
+    assert!(
+        frames
+            .iter()
+            .any(|frame| frame["type"] == "response" && frame["id"] == prompt)
+    );
+    assert!(
+        frames.iter().any(|frame| frame["type"] == "prompt_result"
+            && frame["id"] == prompt
+            && frame["status"] == "aborted"),
+        "exit must retain the parent's native aborted outcome"
+    );
+    transport.close().await.unwrap();
+}

@@ -91,6 +91,17 @@ impl State {
         }
     }
 
+    /// Return the current native Goal for the composer's persistent controls, without history replay.
+    pub(super) fn current_goal(&self, session: &str) -> Option<Value> {
+        if !self.goal.is_object() {
+            return None;
+        }
+        let mut item = json!({"type":"provider_command", "id":format!("dsh:{session}:current-goal"),
+            "command":"goal", "status":"success", "text":""});
+        self.decorate_goal(&mut item);
+        Some(item)
+    }
+
     fn decorate_goal(&self, item: &mut Value) {
         item["goal"] = self.goal.clone();
         let phase = self.goal["phase"].as_str();

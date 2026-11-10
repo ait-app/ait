@@ -12,9 +12,26 @@ type Receipt = oneshot::Sender<Result<Value, AgentSessionError>>;
 /// In-flight native controls, independent of foreground prompts and callback delivery.
 #[derive(Debug, Default)]
 pub(super) struct Pending {
-    requests: BTreeMap<String, (String, Receipt)>,
+    requests: BTreeMap<String, Request>,
     refreshes: VecDeque<Refresh>,
     ready: Vec<Refresh>,
+    notes: VecDeque<crate::protocol::timeline::NativeItem>,
+    published: Vec<Refresh>,
+    features: Vec<BTreeMap<String, Value>>,
+}
+
+#[derive(Debug)]
+struct Request {
+    action: String,
+    sender: Receipt,
+    kind: Kind,
+}
+
+#[derive(Debug)]
+enum Kind {
+    Transient,
+    Card(String),
+    Feature { key: String, value: Value },
 }
 
 /// A native history mutation awaiting host projection and identity reconciliation.
@@ -40,10 +57,22 @@ pub(super) fn changes_history(action: &str) -> bool {
     )
 }
 
+/// Host feature represented by one public runtime setter, independent of slash-command policy.
+pub(super) fn runtime_feature(action: &str) -> Option<&'static str> {
+    match action {
+        "set_auto_compaction" => Some("autoCompaction"),
+        "set_auto_retry" => Some("autoRetry"),
+        "set_fast_mode" => Some("fastMode"),
+        "set_slow_mode" => Some("slowMode"),
+        _ => None,
+    }
+}
+
 impl Pending {
     /// Reject excess operations before writing anything to the native process.
     pub(super) fn check_capacity(&self) -> Result<(), AgentSessionError> {
-        if self.requests.len() + self.refreshes.len() + self.ready.len() >= 8 {
+        if self.requests.len() + self.refreshes.len() + self.ready.len() + self.published.len() >= 8
+        {
             return Err(AgentSessionError::Busy);
         }
         Ok(())
@@ -55,8 +84,57 @@ impl Pending {
         id: String,
         action: &str,
     ) -> AgentSessionFuture<'static, Value> {
+        self.insert_with_presentation(id, action, false)
+    }
+
+    /// Track a user query whose result is acknowledged only after its timeline card is committed.
+    pub(super) fn insert_with_presentation(
+        &mut self,
+        id: String,
+        action: &str,
+        present: bool,
+    ) -> AgentSessionFuture<'static, Value> {
+        let kind = if present {
+            Kind::Card(uuid::Uuid::new_v4().to_string())
+        } else {
+            Kind::Transient
+        };
+        self.track(id, action, kind)
+    }
+
+    /// Acknowledge a native runtime feature only after its validated host selection commits.
+    pub(super) fn insert_feature(
+        &mut self,
+        id: String,
+        action: &str,
+        key: &str,
+        value: Value,
+    ) -> AgentSessionFuture<'static, Value> {
+        self.track(
+            id,
+            action,
+            Kind::Feature {
+                key: key.to_owned(),
+                value,
+            },
+        )
+    }
+
+    fn track(
+        &mut self,
+        id: String,
+        action: &str,
+        kind: Kind,
+    ) -> AgentSessionFuture<'static, Value> {
         let (sender, receiver) = oneshot::channel();
-        self.requests.insert(id, (action.to_owned(), sender));
+        self.requests.insert(
+            id,
+            Request {
+                action: action.to_owned(),
+                sender,
+                kind,
+            },
+        );
         Box::pin(async move {
             tokio::time::timeout(std::time::Duration::from_mins(11), receiver)
                 .await
@@ -70,7 +148,12 @@ impl Pending {
         let Some(id) = event["id"].as_str() else {
             return false;
         };
-        let Some((action, sender)) = self.requests.remove(id) else {
+        let Some(Request {
+            action,
+            sender,
+            kind,
+        }) = self.requests.remove(id)
+        else {
             return false;
         };
         let result = if event["command"] != action {
@@ -101,7 +184,36 @@ impl Pending {
             }
             Ok(result)
         };
+        if let Kind::Card(note_id) = &kind
+            && let Ok(result) = &result
+        {
+            let failed = result["error"].is_string();
+            let text = result[if failed { "error" } else { "text" }]
+                .as_str()
+                .unwrap_or_default();
+            self.notes.push_back(super::commands::note(
+                note_id,
+                &format!("native:{action}"),
+                failed,
+                text,
+            ));
+        }
+        if event["success"] == true
+            && let Kind::Feature { key, value } = &kind
+        {
+            self.features
+                .push(BTreeMap::from([(key.clone(), value.clone())]));
+        }
+        let durable = matches!(kind, Kind::Card(_))
+            || (event["success"] == true && matches!(kind, Kind::Feature { .. }));
         match result {
+            Ok(result) if durable => {
+                self.published.push(Refresh {
+                    action,
+                    sender,
+                    result,
+                });
+            }
             Ok(result)
                 if event["success"] == true
                     && changes_history(&action)
@@ -120,6 +232,18 @@ impl Pending {
         true
     }
 
+    /// Drain only explicitly requested user-visible cards; internal object reads remain silent.
+    pub(super) fn notes(
+        &mut self,
+    ) -> impl Iterator<Item = crate::protocol::timeline::NativeItem> + '_ {
+        self.notes.drain(..)
+    }
+
+    /// Drain acknowledged runtime changes; rejected native requests never produce updates.
+    pub(super) fn feature_updates(&mut self) -> impl Iterator<Item = BTreeMap<String, Value>> + '_ {
+        self.features.drain(..)
+    }
+
     /// Take one native history change that must be reconciled before accepting another input.
     pub(super) fn take_refresh(&mut self) -> Option<Refresh> {
         self.refreshes.pop_front()
@@ -132,7 +256,7 @@ impl Pending {
 
     /// Release successful history controls only after the owner commits their observations.
     pub(super) fn committed(&mut self) {
-        for refresh in self.ready.drain(..) {
+        for refresh in self.ready.drain(..).chain(self.published.drain(..)) {
             refresh.finish(Ok(()));
         }
     }
@@ -144,18 +268,18 @@ impl Pending {
             || self
                 .requests
                 .values()
-                .any(|(action, _)| changes_history(action))
+                .any(|request| changes_history(&request.action))
     }
 
     /// Release detached waiters when their native writer is closed.
     pub(super) fn close(&mut self) {
-        for (_, (_, sender)) in std::mem::take(&mut self.requests) {
+        for (_, Request { sender, .. }) in std::mem::take(&mut self.requests) {
             let _ = sender.send(Err(AgentSessionError::Failed));
         }
         for refresh in self.refreshes.drain(..) {
             refresh.finish(Err(AgentSessionError::Failed));
         }
-        for refresh in self.ready.drain(..) {
+        for refresh in self.ready.drain(..).chain(self.published.drain(..)) {
             refresh.finish(Err(AgentSessionError::Failed));
         }
     }
@@ -353,7 +477,22 @@ fn account_actions() -> Vec<Value> {
 
 fn runtime_actions() -> Vec<Value> {
     let mode = || field("mode", "Delivery", &["all", "one-at-a-time"], true);
-    vec![
+    let mut actions: Vec<_> = [
+        ("set_auto_compaction", "Automatic compaction"),
+        ("set_auto_retry", "Automatic retry"),
+        ("set_fast_mode", "Fast service tier"),
+        ("set_slow_mode", "Slow service tier"),
+    ]
+    .into_iter()
+    .map(|(id, label)| {
+        action(
+            id,
+            label,
+            vec![field("enabled", "Enabled", &["true", "false"], true)],
+        )
+    })
+    .collect();
+    actions.extend([
         action("set_steering_mode", "Steering delivery", vec![mode()]),
         action("set_follow_up_mode", "Follow-up delivery", vec![mode()]),
         action(
@@ -389,7 +528,8 @@ fn runtime_actions() -> Vec<Value> {
         ),
         action("dictation_start", "Start dictation on the host", vec![]),
         action("dictation_stop", "Stop native dictation", vec![]),
-    ]
+    ]);
+    actions
 }
 
 /// Validate an advertised operation and construct only its declared native arguments.

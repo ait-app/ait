@@ -43,6 +43,28 @@ export default function (pi) {
       );
     },
   });
+  pi.registerCommand("ait-guided-goal-v1", {
+    description: "Ait guided goal interview over the external OMP goal tool",
+    handler: async (args) => {
+      if (enabled) throw new Error("Exit Vibe before starting a goal interview");
+      if (!pi.getAllTools().some((tool) => tool.name === "goal")) {
+        throw new Error("The installed OMP did not expose its goal tool");
+      }
+      await pi.setActiveTools([...new Set([...pi.getActiveTools(), "goal"])]);
+      pi.sendMessage(
+        {
+          customType: "ait-guided-goal",
+          display: false,
+          content:
+            "Interview the user in this conversation to clarify a measurable objective, constraints and completion criteria. " +
+            "Ask concise questions as normal assistant messages. Do not create a goal until the user has confirmed the objective. " +
+            "Then use the native goal tool to create it and report the acknowledged state. Initial objective: " +
+            args,
+        },
+        { deliverAs: "followUp", triggerTurn: true },
+      );
+    },
+  });
   pi.on("before_agent_start", (event) =>
     enabled
       ? {

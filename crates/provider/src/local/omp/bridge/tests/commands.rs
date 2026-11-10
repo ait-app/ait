@@ -3,10 +3,11 @@ use super::*;
 #[tokio::test]
 async fn acp_preserves_command_metadata_and_publishes_live_native_changes() {
     let (root, client, spec) = crate::local::omp::tests::fixture();
-    let native: Value = serde_json::from_str(include_str!(
+    let mut native: Value = serde_json::from_str(include_str!(
         "../../../../../tests/fixtures/omp_commands.json"
     ))
     .unwrap();
+    native["commands"][0]["source"] = json!("extension");
     std::fs::create_dir_all(root.path().join("agent")).unwrap();
     std::fs::write(
         root.path().join("agent/plugins.json"),
@@ -36,14 +37,10 @@ async fn acp_preserves_command_metadata_and_publishes_live_native_changes() {
         advisor["_meta"]["aliases"],
         native["commands"][0]["aliases"]
     );
-    let headless_subcommands = native["commands"][0]["subcommands"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|command| command["name"] != "configure")
-        .cloned()
-        .collect::<Vec<_>>();
-    assert_eq!(advisor["_meta"]["subcommands"], json!(headless_subcommands));
+    assert_eq!(
+        advisor["_meta"]["subcommands"],
+        native["commands"][0]["subcommands"]
+    );
     assert_eq!(
         advisor["input"]["hint"],
         native["commands"][0]["input"]["hint"]

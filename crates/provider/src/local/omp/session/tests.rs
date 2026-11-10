@@ -143,6 +143,7 @@ async fn newly_accepted_or_started_work_invalidates_an_earlier_idle_check() {
         session.state_check = Some(StateCheck {
             id: "old-state".to_owned(),
             turn: Some(turn.clone()),
+            refresh_settings: false,
             written: None,
         });
         session.idle_without_outcome = Some(Instant::now() - STATE_CHECK_INTERVAL);
@@ -176,6 +177,7 @@ async fn reconfiguration_discards_checks_owned_by_the_previous_native_process() 
     session.state_check = Some(StateCheck {
         id: "old-state".to_owned(),
         turn: Some(turn.clone()),
+        refresh_settings: false,
         written: Some(receiver),
     });
     session.cancel_requests.insert("old-abort".to_owned(), turn);
@@ -229,6 +231,7 @@ async fn a_previous_state_response_cannot_finish_the_next_admitted_turn() {
     session.state_check = Some(StateCheck {
         id: "old-state".to_owned(),
         turn: Some(previous),
+        refresh_settings: false,
         written: None,
     });
     session.finish();
@@ -264,6 +267,7 @@ async fn busy_or_missing_state_facts_never_complete_the_active_turn() {
         session.state_check = Some(StateCheck {
             id: "state".to_owned(),
             turn: Some(turn.clone()),
+            refresh_settings: false,
             written: None,
         });
         let mut state = json!({"sessionId":session.state["sessionId"],"isSettled":true});
@@ -291,6 +295,7 @@ async fn another_native_sessions_settlement_is_rejected() {
     session.state_check = Some(StateCheck {
         id: "state".to_owned(),
         turn: Some(turn),
+        refresh_settings: false,
         written: None,
     });
 
@@ -322,6 +327,7 @@ async fn a_failed_state_write_invalidates_the_connection() {
     session.state_check = Some(StateCheck {
         id: "state".to_owned(),
         turn: Some(turn),
+        refresh_settings: false,
         written: Some(receiver),
     });
 
@@ -346,6 +352,7 @@ async fn a_state_response_can_precede_the_correlated_prompt_result() {
     session.state_check = Some(StateCheck {
         id: "state".to_owned(),
         turn: Some(turn.clone()),
+        refresh_settings: false,
         written: None,
     });
     session
