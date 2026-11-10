@@ -7,11 +7,11 @@
 | Linux/macOS/Windows 桌面、独立 daemon、Web 镜像 | 标签或手动 `release.yml`                        | [创建 Release](#创建-release)                       |
 | Linux/macOS Dev build 与独立 daemon             | 手动 `dev-build.yml`                            | [Dev build](#dev-build)                             |
 | Android Google Play 内部测试                    | 稳定标签或手动 `release.yml`                    | [Google Play 指南](google-play-internal-testing.md) |
-| iOS 内部 TestFlight                             | Xcode Cloud `Default` 手动构建                  | [内部测试](#apple-testflight-ios-手动发布)          |
+| iOS 内部 TestFlight                             | 稳定标签或手动 `release.yml`                    | [内部测试](#apple-testflight-ios-内部测试)          |
 | iOS 外部 TestFlight / App Store 构建            | Xcode Cloud `Release iOS to App Store` 手动构建 | [App Store 构建](#app-store-ios-手动发布)           |
 
-Android 随 `release.yml` 提交内部测试，但其失败不阻塞桌面 Release；iOS 独立使用 Xcode Cloud。
-Android 使用 Gradle，两者都不使用 EAS CI。
+Android 和 iOS 内部测试都随 `release.yml` 发布，失败不阻塞桌面 Release；外部 TestFlight 与 App Store 仍手动。
+Android 使用 Gradle，iOS 使用 Xcode Cloud，两者都不使用 EAS CI。
 
 ## macOS 自动更新来源
 
@@ -74,7 +74,7 @@ Windows 只在 [Release Ait](../../.github/workflows/release.yml) 中构建。
 dev build 安装包只在手动触发 [Dev build](#dev-build) 工作流时构建；合并前如需验证安装包，
 可按[桌面端构建说明](../../apps/desktop/README.md)在本地打包。
 
-Google Play 和 iOS TestFlight 不随 PR、main CI 或 Dev build 构建，均使用各自的手动发布入口。
+Google Play 和 iOS TestFlight 不随 PR、main CI 或 Dev build 构建；稳定版 Release 会自动发布两者，iOS 也可在 Cloud 手动启动。
 独立 APK 构建入口已移除。main/PR CI 不调用 EAS 构建或提交。
 
 ## 发布产物
@@ -271,7 +271,7 @@ GitHub Release 创建和修复均使用 `--prerelease --latest=false`，保留�
 
 根 `PKGBUILD` 的 Arch 版本使用 `0.0.23beta1`，`_ait_version` 保留完整 SemVer 用于
 源码校验；正式版准备时也要同步这两个字段。AUR 二进制配方继续引用已验证的正式版。
-beta 标签不构建 Android APK，也不提交 Google Play；iOS TestFlight 仍通过手动入口发布，不随 beta 标签触发。
+beta 标签不构建 Android APK，也不提交 Google Play 或启动 iOS TestFlight 构建。
 
 ## 创建 Release
 
@@ -331,7 +331,7 @@ macOS 需要 GitHub Secrets：`MAC_CSC_LINK`、`MAC_CSC_KEY_PASSWORD`、`APPLE_I
 Release Note 由 `.github/release.yml` 根据合并 PR 分组生成。
 
 手动重跑：Actions → Release Ait → Run workflow，输入已存在的标签。工作流不会创建标签。
-重跑会构建桌面，稳定标签还会再次提交 Google Play 内部测试；如 Release 已有 Android APK，则验证并保留该附件。
+重跑会构建桌面，稳定标签还会再次提交 Google Play 内部测试并启动新的 iOS 内部测试构建；如 Release 已有 Android APK，则验证并保留该附件。
 已有 Release 保留说明，覆盖同名资产；不要移动已经公开使用的标签。
 
 默认应用源码从输入的发布标签检出；资产收集、校验和相关测试从工作流自身的提交检出到
@@ -424,17 +424,33 @@ AIT_DESKTOP_SMOKE=1 npm run package:mac
 
 配置保存在 Apple 服务中，GitHub YAML 不会创建或修复它；启动前在
 [Cloud 工作流](https://appstoreconnect.apple.com/teams/3e9381fe-a5bd-4fda-bc82-4f218c20480b/xcode-cloud/products/9153f73a-c52d-458b-ab3c-762228945ce5/workflows/d1dfac80-341e-4726-81e8-89202ac76a06)
-核对。GitHub 专用触发入口已撤销，见 [ADR-187](../decisions/clients/adr-187-ios-app-store-cloud-trigger.md)。
+核对。此工作流只手动启动，`release.yml` 不会触发它，见 [ADR-187](../decisions/clients/adr-187-ios-app-store-cloud-trigger.md)
+和 [ADR-235](../decisions/clients/adr-235-ios-testflight-in-release-workflow.md)。
 既有触发标签只用于追溯，不移动或强制覆盖。
 
 上传后确认外部 TestFlight post-action、Apple 处理与测试组可用状态；Apple 可能要求 Beta App Review。
 **正式 App Store 审核和审核后的发布仍手动操作。** 同一份符合分发要求的构建可用于外部测试和正式审核，
 无需仅为上架重复编译。共同准备、依赖和重试要求见下节。
 
-## Apple TestFlight iOS 手动发布
+## Apple TestFlight iOS 内部测试
 
-仅内部测试在 Xcode 或 [App Store Connect](https://appstoreconnect.apple.com/apps/6817043477)
-手动启动 Ait 的 **Default** 工作流；与桌面 GitHub Release、Google Play 独立。
+每个稳定标签由 `release.yml` 的 `ios-testflight` job 启动 Ait 的 **Default** 工作流，归档、签名和
+内部分发由 Xcode Cloud 完成。job 成功只表示构建已启动，结果在
+[App Store Connect](https://appstoreconnect.apple.com/apps/6817043477) 查看。预发布标签和带
+`source_commit` 的重建跳过此 job。启动失败不影响 GitHub Release，也不改变整次运行的结论，
+需查看该 job。日常用 `main` 测试时，仍可在 Xcode 或 App Store Connect 手动启动。
+
+首次使用前，在 App Store Connect 的「用户和访问」→「集成」创建团队 API key，下载一次性的
+`.p8` 私钥，然后配置 GitHub Secrets（文件不进入 Git、日志或聊天）：
+
+```bash
+gh secret set APP_STORE_CONNECT_ISSUER_ID --repo ait-app/ait
+gh secret set APP_STORE_CONNECT_KEY_ID --repo ait-app/ait
+gh secret set APP_STORE_CONNECT_PRIVATE_KEY --repo ait-app/ait < /absolute/path/AuthKey.p8
+```
+
+该 key 只用于启动构建，使用 **App Manager** 角色：它可完整使用 Xcode Cloud，Developer 只有只读权限，
+Admin 权限超出需要。创建 key 需 Account Holder 或 Admin 登录。未配置时 job 报错，发布其余部分继续。
 
 | 设置                            | 期望值                                                                                            |
 | ------------------------------- | ------------------------------------------------------------------------------------------------- |
@@ -451,7 +467,7 @@ AIT_DESKTOP_SMOKE=1 npm run package:mac
 ### 共同准备与验收
 
 1. 完成[版本准备](#准备版本)和 [iOS 原生版本同步](#ios-原生版本同步)，提交工程、共享 scheme 与锁文件。
-2. 日常测试可选 `main`；对应正式版本时，先完成稳定版桌面 Release，再手动选择同一标签。
+2. 日常测试可选 `main`；正式版本的内部测试由标签自动启动，手动启动 App Store 构建时选择同一标签。
    核对 Cloud 所选 commit、Cargo/npm 版本及 Info.plist 一致，旧标签缺少修复时不能靠重试解决。
 3. Cloud 的 [`ci_post_clone.sh`](../../apps/mobile/ios/ci_scripts/ci_post_clone.sh) 安装锁定依赖、校验版本、
    构建共享包和 Terminal WebView，以 `pod install --deployment` 准备归档。
@@ -468,5 +484,6 @@ AIT_DESKTOP_SMOKE=1 npm run package:mac
 再构建新提交。Archive 成功但测试不可用时，先查 post-action、处理与审核状态，避免重复构建。
 发布权限、签名和上传由 Apple 团队及 Xcode Cloud 管理，不使用旧 EAS build ID 或 `eas submit`。
 
-`eas.json` 只保留历史手动配置，当前 iOS CI 不使用 `EXPO_TOKEN` 或 GitHub 中的 Apple 上传凭据。
+`eas.json` 只保留历史手动配置，当前 iOS CI 不使用 `EXPO_TOKEN` 或 GitHub 中的 Apple 上传凭据；
+GitHub 中的 API key 只用于启动 Cloud 构建。重跑 `ios-testflight` job 会启动新的构建，失败时优先在 Cloud 内重试。
 旧 Secret/environment 不随代码删除而消失，清理前确认没有其他使用者。Expo SDK、config plugins 和本地 prebuild 继续使用。
