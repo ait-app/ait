@@ -792,8 +792,8 @@ function ScheduleFormContent({
       />
     ) : null;
 
-  const editor = !browsingTemplates ? (
-    <>
+  const editor = (
+    <View style={[styles.formPanel, browsingTemplates && styles.hiddenPanel]}>
       {renderPlacementFields?.(isSubmitting)}
       <View style={styles.sectionTabs}>
         {(["content", "execution"] as const).map((item) => {
@@ -821,8 +821,8 @@ function ScheduleFormContent({
         })}
       </View>
       {fields}
-    </>
-  ) : null;
+    </View>
+  );
 
   if (embedded)
     return (

@@ -50,6 +50,16 @@ test("browses template cards, personalizes a task and preserves it across editor
     await page.getByTestId("schedule-template-blank").click();
     await page.getByTestId("schedule-section-execution").click();
     await expect(page.getByTestId("schedule-max-runs-input")).toHaveValue("3");
+    await page.getByTestId("schedule-section-content").click();
+    await page.getByTestId("schedule-cadence-kind-trigger").click();
+    await page.getByTestId("schedule-cadence-kind-every").click();
+    await page.getByTestId("cadence-interval-amount").fill("2.5");
+    await page.getByTestId("schedule-template-browse").click();
+    await page.getByTestId("schedule-template-blank").click();
+    await expect(page.getByTestId("cadence-interval-amount")).toHaveValue("2.5");
+    await expect(page.getByTestId("schedule-form-submit")).toBeDisabled();
+    await page.getByTestId("cadence-interval-amount").fill("2");
+    await expect(page.getByTestId("schedule-form-submit")).toBeEnabled();
     await page.getByTestId("schedule-template-browse").click();
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(gallery).toBeVisible();

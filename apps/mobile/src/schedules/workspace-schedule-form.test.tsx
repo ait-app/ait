@@ -508,6 +508,37 @@ describe("workspace schedule form", () => {
     );
   });
 
+  it("preserves an invalid interval draft through template browsing and submits after correction", async () => {
+    render(
+      <WorkspaceScheduleForm
+        serverId="host-a"
+        workspace={{ id: "workspace-a", name: "Feature", cwd: "/worktrees/feature" }}
+        onClose={vi.fn()}
+      />,
+    );
+    chooseModel();
+    fireEvent.change(getField("Prompt"), { target: { value: "Review this workspace" } });
+    fireEvent.change(getField("Interval amount"), { target: { value: "2.5" } });
+    expect((screen.getByTestId("schedule-form-submit") as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByTestId("schedule-template-browse"));
+    expect(screen.queryByRole("textbox", { name: "Interval amount" })).toBeNull();
+    openBlankSchedule();
+
+    expect((getField("Interval amount") as HTMLInputElement).value).toBe("2.5");
+    expect((screen.getByLabelText("Interval unit") as HTMLSelectElement).value).toBe("hours");
+    expect((screen.getByTestId("schedule-form-submit") as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(getField("Interval amount"), { target: { value: "2" } });
+    fireEvent.click(screen.getByTestId("schedule-form-submit"));
+    await waitFor(() => expect(createSchedule).toHaveBeenCalledOnce());
+    expect(createSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: "Review this workspace",
+        cadence: { type: "every", everyMs: 7_200_000 },
+      }),
+    );
+  });
+
   it("applies a parameterized template only after its parameters are filled", () => {
     render(
       <WorkspaceScheduleForm
