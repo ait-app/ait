@@ -39,7 +39,6 @@ const KIND_LABELS = {
   weixin: "bots.weixin",
   qq: "bots.qq",
   photon_imessage: "bots.imessage",
-  hub: "bots.hub",
   webhook: "bots.webhook",
 } as const;
 

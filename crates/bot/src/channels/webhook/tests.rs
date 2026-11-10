@@ -126,7 +126,7 @@ async fn the_center_issues_an_endpoint_whose_secret_is_shown_once() {
         !listed[0].to_string().contains("s3cret"),
         "the daemon never keeps the secret"
     );
-    let published = bots.hub().borrow().clone();
+    let published = bots.webhooks().borrow().clone();
     assert_eq!(published.len(), 1);
     assert_eq!(published[0].kind, "webhook");
 

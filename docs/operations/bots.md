@@ -168,16 +168,13 @@ Channel 存在后回退到旧版 daemon 会导致 daemon 无法启动，即使 C
 同一 daemon 内限制平台账号独占，无法阻止其他服务使用同一账号。
 实际平台凭据和应用权限需要单独验收，历史模拟服务测试不能证明真实账号已验证。
 
-### Ait 中心 Channel
+### Webhook Channel
 
-Ait 中心（ait-server）可以把飞书、Slack、Telegram 中发给中心机器人的消息转给 Workspace Bot，见 [ADR-233](../decisions/bot/adr-233-hub-channel-center-automation.md)。
-用 `bot.channel.create.request` 创建 `{"kind":"hub"}` Channel 并启用，即允许本账号的中心访问这个 Bot；每个 Bot 至多一个，客户端添加入口尚未实现。
-daemon 不为它运行传输：中心通过自己的 Hub 会话投递消息、轮询 `bot.turn.get` 取回复，再用 `bot.hub.delivery.ack` 报告投递结果，会话结束时用 `bot.hub.conversation.close` 删除会话。
-中心会话只能使用这五个方法，且只能访问中心 Channel（Hub 与 Webhook）的轮次和会话；最后一个中心 Channel 停用、或 Bot 暂停或移除后，中心会话立即断开。
+在 Bot 设置页添加 Webhook，Ait 中心会生成一个 HTTPS 地址和一次性密钥，见 [ADR-233](../decisions/bot/adr-233-webhook-channel-center-endpoints.md)。daemon 只保存端点 ID 和 URL；密钥丢失时使用「重新生成密钥」，旧密钥立即失效。
 
-Webhook Channel 由中心托管一个 HTTPS 端点：在 Bot 设置页添加「Webhook」即创建，Host 需已接入支持 Webhook 的中心。
-创建后只显示一次密钥；丢失后用「重新生成密钥」（`bot.channel.webhook.rotate`）换新，旧密钥立即失效。调用方 `POST` 文本到地址（`Authorization: Bearer <密钥>`），得到 202 和状态地址。回复有两种取法：用同一密钥请求状态地址（加 `?wait=30` 会等到回复就绪），或在调用里带上 `callback_url`，由中心把签名过的结果 POST 过去。同一 `thread` 的调用接着同一个会话。
-删除 Channel 会同时请中心删除端点；中心不可达时只在本地删除，中心不再把消息投给这个 Channel。
+调用方 POST 文本到该地址，使用 `Authorization: Bearer <密钥>`，取得 202 和状态地址。用同一密钥请求状态地址，加 `?wait=30` 可等待结果；也可以在调用中带 `callback_url`，由中心把带 HMAC-SHA256 签名的结果 POST 到 HTTPS 公网地址。同一 thread 续接同一 Bot 会话，不带 thread 时每次独立。
+
+中心经现有 serve 链路投递消息、读取轮次并确认送达，只能访问已启用的 Webhook Channel。停用 Channel、暂停或移除 Bot 会立即收回权限。删除 Channel 时尽力删除中心端点；创建和轮换遇到中心离线等情况会明确显示失败原因。
 
 ## 记忆与接口
 

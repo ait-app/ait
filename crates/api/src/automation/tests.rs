@@ -4,12 +4,12 @@ use super::*;
 
 #[test]
 fn only_an_active_bot_is_reachable() {
-    let bot = |state| HubBot {
+    let bot = |state| WebhookBot {
         workspace_id: "wks_0123456789abcdef".to_owned(),
         channel_id: domain::ChannelId::generate(),
         title: "app".to_owned(),
         state,
-        kind: "hub",
+        kind: "webhook",
     };
     assert!(!reachable(&[]));
     assert!(!reachable(&[bot("paused")]));

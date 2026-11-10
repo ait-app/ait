@@ -8,9 +8,9 @@ use crate::channels::Incoming;
 use crate::test_support::{Fixture, OTHER_WORKSPACE, WORKSPACE, setup};
 
 mod catalog_validation;
-mod hub;
 mod lifecycle;
 mod permissions;
+mod webhook;
 
 #[test]
 fn unconfigured_workspace_has_no_bot_and_no_session_actions() {

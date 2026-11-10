@@ -118,7 +118,7 @@ fn normalized_execution(mut execution: ExecutionConfig) -> Result<ExecutionConfi
 
 fn validate_channel(id: ChannelId, config: &ChannelConfig) -> Result<(), ErrorCode> {
     let (reference, senders) = match config {
-        ChannelConfig::Builtin | ChannelConfig::Hub => return Ok(()),
+        ChannelConfig::Builtin => return Ok(()),
         ChannelConfig::Webhook { endpoint_id, url } => {
             return if model::valid_id(endpoint_id) && valid_webhook_url(url) {
                 Ok(())
@@ -209,7 +209,7 @@ fn valid_webhook_url(url: &str) -> bool {
 
 fn account(config: &ChannelConfig) -> Option<(&'static str, &str)> {
     match config {
-        ChannelConfig::Builtin | ChannelConfig::Hub => None,
+        ChannelConfig::Builtin => None,
         ChannelConfig::Webhook { endpoint_id, .. } => Some(("webhook", endpoint_id)),
         ChannelConfig::Telegram { token_ref, .. } => Some(("telegram", token_ref)),
         ChannelConfig::Feishu { app_id, .. } => Some(("feishu", app_id)),
@@ -406,15 +406,6 @@ impl State {
             return Err(ErrorCode::IdempotencyConflict);
         }
         self.under_channel_limit(bot)?;
-        if matches!(request.config, ChannelConfig::Hub)
-            && self.catalog.channels.iter().any(|channel| {
-                channel.bot_id == bot
-                    && !channel.deleted
-                    && matches!(channel.config, ChannelConfig::Hub)
-            })
-        {
-            return Err(ErrorCode::BotConflict);
-        }
         let channel = Channel {
             id: request.channel_id,
             bot_id: bot,

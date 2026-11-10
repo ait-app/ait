@@ -5,7 +5,7 @@ import {
   BotRequestSchema,
   BotResponseSchema,
 } from "./rpc-schemas.js";
-import { BotPermissionsSchema, BotTurnSchema } from "./types.js";
+import { BotChannelConfigSchema, BotPermissionsSchema, BotTurnSchema } from "./types.js";
 import { SessionInboundMessageSchema, SessionOutboundMessageSchema } from "../messages.js";
 
 describe("Bot wire contract", () => {
@@ -204,6 +204,7 @@ describe("Bot wire contract", () => {
     ).toThrow();
   });
   it("parses a webhook channel and its one-time secret", () => {
+    expect(BotChannelConfigSchema.safeParse({ kind: "hub" }).success).toBe(false);
     const channelId = crypto.randomUUID();
     const created = BotResponseSchema.parse({
       type: "bot.channel.webhook.create.response",

@@ -184,7 +184,6 @@ export const ja: TranslationResources = {
     qqPairHint:
       "コード: {{code}}。プライベートチャットでボットに送るか、QQ グループでボットを @ メンションして送信してください。1 回のみ有効で、10 分後に期限切れになります。",
     imessage: "iMessage",
-    hub: "Ait Hub",
     webhook: "Webhook",
     webhookHint:
       "Ait Hub がこの Bot 用の HTTPS アドレスとシークレットを作成します。HTTP リクエストを送れるシステムなら、これを使って Bot にメッセージを送り、返信を受け取れます。",

@@ -178,7 +178,6 @@ export const ko: TranslationResources = {
     qqPairHint:
       "코드: {{code}}. 비공개 채팅으로 봇에게 보내거나 QQ 그룹에서 봇을 @멘션하여 보내세요. 한 번만 사용할 수 있으며 10분 후 만료됩니다.",
     imessage: "iMessage",
-    hub: "Ait Hub",
     webhook: "Webhook",
     webhookHint:
       "Ait Hub가 이 Bot의 HTTPS 주소와 시크릿을 만듭니다. HTTP 요청을 보낼 수 있는 시스템이라면 이를 사용해 Bot에 메시지를 보내고 답장을 받을 수 있습니다.",

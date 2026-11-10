@@ -1,24 +1,22 @@
 //! Default-deny request policy for automation sessions.
 //!
-//! The center may post text into a Workspace Bot's enabled center channels (its Hub
-//! channel and webhook channels), read and cancel those channels' turns, acknowledge
-//! their replies and close their conversations, and nothing else: no Agents, terminals, files, settings, shares,
-//! other channels or daemon management. The Bot's own permissions bound what it
-//! does with that text.
+//! The center may deliver text to enabled Webhook channels, read and cancel their
+//! turns, acknowledge replies and close their conversations. The Bot's existing
+//! permissions govern execution; this session cannot access other capabilities.
 
 use domain::BotTurnId;
 use model::{ErrorCode, Request};
 
 use crate::Shared;
 
-/// Bot methods that act only on the named Workspace's enabled center channels.
-const HUB_METHODS: [&str; 3] = [
-    "bot.hub.message.send.request",
-    "bot.hub.delivery.ack.request",
-    "bot.hub.conversation.close.request",
+/// Bot methods that act only on the named Workspace's enabled Webhook channels.
+const WEBHOOK_METHODS: [&str; 3] = [
+    "bot.webhook.message.send.request",
+    "bot.webhook.delivery.ack.request",
+    "bot.webhook.conversation.close.request",
 ];
 
-/// Turn methods shared with owner sessions; the turn must be in a center channel.
+/// Turn methods shared with owner sessions; the turn must be in a Webhook channel.
 const TURN_METHODS: [&str; 2] = ["bot.turn.get.request", "bot.turn.cancel.request"];
 
 /// Admit `request` from an automation session.
@@ -28,8 +26,8 @@ const TURN_METHODS: [&str; 2] = ["bot.turn.get.request", "bot.turn.cancel.reques
 /// `InvalidMessage` for malformed arguments.
 pub(crate) async fn request(state: &Shared, request: &Request) -> Result<(), ErrorCode> {
     let method = request.method.as_str();
-    if HUB_METHODS.contains(&method) {
-        // The Bot itself refuses anything but the Workspace's enabled center channels.
+    if WEBHOOK_METHODS.contains(&method) {
+        // The Bot itself refuses anything but the Workspace's enabled Webhook channels.
         return Ok(());
     }
     if !TURN_METHODS.contains(&method) {
@@ -41,7 +39,7 @@ pub(crate) async fn request(state: &Shared, request: &Request) -> Result<(), Err
         .ok_or(ErrorCode::InvalidMessage)?;
     let turn: BotTurnId = serde_json::from_value(request.params["turnId"].clone())
         .map_err(|_| ErrorCode::InvalidMessage)?;
-    bots.check_hub_turn(workspace, turn).await
+    bots.check_webhook_turn(workspace, turn).await
 }
 
 #[cfg(test)]

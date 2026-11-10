@@ -230,7 +230,6 @@ export const en = {
     qqPairHint:
       "Code: {{code}}. Send it to the bot in a private chat, or @mention the bot with it in a QQ group. It works once and expires in 10 minutes.",
     imessage: "iMessage",
-    hub: "Ait Hub",
     webhook: "Webhook",
     webhookHint:
       "Ait Hub creates an HTTPS address and secret for this Bot. Any system that can send an HTTP request can use them to message the Bot, and read its reply.",

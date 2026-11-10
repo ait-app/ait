@@ -94,11 +94,8 @@ pub struct Bot {
 pub enum ChannelConfig {
     /// Ait's authenticated Bot tab.
     Builtin,
-    /// The Ait center's chat automation: the center's own Hub session posts input and
-    /// pulls replies, so the daemon runs no transport for it. At most one per Bot.
-    Hub,
     /// An HTTP endpoint the Ait center hosts for this channel; the center relays each call
-    /// over its Hub session like a Hub channel's input. The secret stays with the center.
+    /// over its Hub session. The secret stays with the center.
     Webhook {
         /// The center's endpoint identity.
         endpoint_id: String,

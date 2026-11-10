@@ -208,7 +208,6 @@ export const zhCN: TranslationResources = {
     qqPairHint:
       "配对码：{{code}}。私聊发给机器人，或在 QQ 群里 @ 机器人并发送它。仅可使用一次，10 分钟后过期。",
     imessage: "iMessage",
-    hub: "Ait 中心",
     webhook: "Webhook",
     webhookHint:
       "Ait 中心会为这个 Bot 生成一个 HTTPS 地址和密钥。任何能发 HTTP 请求的系统都可以用它们给 Bot 发消息并取回回复。",

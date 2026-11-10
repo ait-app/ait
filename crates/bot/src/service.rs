@@ -27,10 +27,10 @@ use crate::ports::{Credentials, Executor};
 use crate::protocol::{ChannelCreate, decode};
 use crate::state::{State, StoredChannel};
 
-/// One enabled center channel of a Bot: its Hub channel or a webhook channel.
+/// One enabled Webhook channel whose endpoint is hosted by the center.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct HubBot {
+pub struct WebhookBot {
     /// Workspace the Bot manages.
     pub workspace_id: String,
     /// The center channel.
@@ -39,8 +39,7 @@ pub struct HubBot {
     pub title: String,
     /// `active` or `paused`.
     pub state: &'static str,
-    /// `hub`, which the center's triggers address by Workspace, or `webhook`, which the
-    /// center addresses by channel.
+    /// Always `webhook`.
     pub kind: &'static str,
 }
 
@@ -84,7 +83,7 @@ struct Worker {
     qq: QqOnboarding,
     imessage: ImessageOnboarding,
     /// Enabled center channels of Bots the Ait center may reach.
-    hub: watch::Sender<Vec<HubBot>>,
+    webhooks: watch::Sender<Vec<WebhookBot>>,
     /// This Host's serve link, through which webhook endpoints are requested.
     center: OnceLock<Arc<dyn Center>>,
 }
@@ -118,7 +117,7 @@ enum Operation {
     CreateStored(StoredChannel, SecretString),
     SyncToken(ChannelId, String),
     AddSender(ChannelId, String),
-    HubTurn(String, BotTurnId),
+    WebhookTurn(String, BotTurnId),
     CreateWebhook(ChannelCreate),
     WebhookChannel(String, ChannelId),
 }
@@ -157,7 +156,7 @@ impl Bots {
         let (sender, receiver) = mpsc::channel(64);
         let cancellation = CancellationToken::new();
         let (closed, observed) = watch::channel(false);
-        let hub = watch::Sender::new(state.hub_bots());
+        let hub = watch::Sender::new(state.webhook_bots());
         let bots = Self(Arc::new(Worker {
             sender,
             cancellation,
@@ -169,7 +168,7 @@ impl Bots {
             weixin: WeixinOnboarding::default(),
             qq: QqOnboarding::default(),
             imessage: ImessageOnboarding::default(),
-            hub,
+            webhooks: hub,
             center: OnceLock::new(),
         }));
         let worker = bots.clone();
@@ -266,15 +265,19 @@ impl Bots {
 
     /// Observe the enabled center channels of Bots the Ait center may reach.
     #[must_use]
-    pub fn hub(&self) -> watch::Receiver<Vec<HubBot>> {
-        self.0.hub.subscribe()
+    pub fn webhooks(&self) -> watch::Receiver<Vec<WebhookBot>> {
+        self.0.webhooks.subscribe()
     }
 
     /// Refuse a turn that is not in one of the Workspace's enabled center channels.
     /// # Errors
     /// Returns `Forbidden` outside those channels, or worker lifecycle failures.
-    pub async fn check_hub_turn(&self, workspace: &str, turn: BotTurnId) -> Result<(), ErrorCode> {
-        self.call(Operation::HubTurn(workspace.to_owned(), turn))
+    pub async fn check_webhook_turn(
+        &self,
+        workspace: &str,
+        turn: BotTurnId,
+    ) -> Result<(), ErrorCode> {
+        self.call(Operation::WebhookTurn(workspace.to_owned(), turn))
             .await
             .map(|_| ())
     }
@@ -548,11 +551,11 @@ async fn serve(
                     host_credentials.as_ref(),
                     command.operation,
                 );
-                // Before replying, so a caller sees the Hub channels its change produced.
-                publish_hub(&hub, &state, stopping);
+                // Before replying, so a caller sees the Webhook channels its change produced.
+                publish_webhooks(&hub, &state, stopping);
                 let _ = command.reply.send(result);
             }
-            publish_hub(&hub, &state, stopping);
+            publish_webhooks(&hub, &state, stopping);
             for channel in std::mem::take(&mut state.released_credentials) {
                 if let Err(error) = host_credentials.delete(channel) {
                     tracing::warn!(%channel, ?error, "could not remove a deleted channel's secret");
@@ -675,8 +678,8 @@ fn apply(
         Operation::CreateStored(channel, secret) => {
             state.create_stored_channel(channel, &secret, credentials)
         }
-        Operation::HubTurn(workspace, turn) => {
-            state.hub_turn(&workspace, turn).map(|()| Value::Null)
+        Operation::WebhookTurn(workspace, turn) => {
+            state.webhook_turn(&workspace, turn).map(|()| Value::Null)
         }
         Operation::CreateWebhook(request) => state.create_webhook_channel(request),
         Operation::WebhookChannel(workspace, channel) => state
@@ -686,13 +689,13 @@ fn apply(
 }
 
 /// Publish the Bots the center may reach, if they changed; none while stopping or frozen.
-fn publish_hub(bots: &Bots, state: &State, stopping: bool) {
+fn publish_webhooks(bots: &Bots, state: &State, stopping: bool) {
     let hub = if stopping || state.frozen {
         Vec::new()
     } else {
-        state.hub_bots()
+        state.webhook_bots()
     };
-    bots.0.hub.send_if_modified(|current| {
+    bots.0.webhooks.send_if_modified(|current| {
         let changed = *current != hub;
         if changed {
             *current = hub;
@@ -727,12 +730,10 @@ fn refresh_channels(
         keep
     });
     for channel in desired {
-        // The center pulls a Hub or webhook channel's replies; no transport runs for it.
+        // The center pulls a Webhook channel's replies; no transport runs for it.
         if matches!(
             channel.config,
-            domain::bot::ChannelConfig::Builtin
-                | domain::bot::ChannelConfig::Hub
-                | domain::bot::ChannelConfig::Webhook { .. }
+            domain::bot::ChannelConfig::Builtin | domain::bot::ChannelConfig::Webhook { .. }
         ) || running.contains_key(&channel.id)
         {
             continue;

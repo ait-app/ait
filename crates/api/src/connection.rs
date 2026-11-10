@@ -197,7 +197,7 @@ pub(super) async fn serve_frames<K>(
         .await;
     };
     // A guest connection ends as soon as its share stops admitting it, and an
-    // automation connection as soon as no Bot has an enabled Hub channel.
+    // automation connection as soon as no Bot has an enabled Webhook channel.
     let revoked = admitted.revoked();
     let reader = async {
         tokio::select! {

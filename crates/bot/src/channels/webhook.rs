@@ -1,5 +1,5 @@
 //! Webhook channels: the Ait center hosts an HTTP endpoint for the channel and relays each
-//! call into it over the center's own Hub session, like a Hub channel's input.
+//! call into it over the center's own Hub session, as a Webhook input.
 //!
 //! Creating one asks the center over this Host's serve link for the endpoint; the center
 //! keeps the secret and returns it once, so the daemon stores only the endpoint and URL.

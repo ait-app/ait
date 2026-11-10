@@ -13,9 +13,9 @@ async fn decide(fixture: &Workspaces, method: &str, params: Value) -> Result<(),
 }
 
 #[tokio::test]
-async fn only_hub_and_turn_methods_pass() {
+async fn only_webhook_and_turn_methods_pass() {
     let fixture = Workspaces::new(address());
-    for method in HUB_METHODS {
+    for method in WEBHOOK_METHODS {
         assert_eq!(
             decide(&fixture, method, json!({})).await,
             Ok(()),
@@ -38,7 +38,7 @@ async fn only_hub_and_turn_methods_pass() {
             "{method}"
         );
     }
-    // Without a Bot service no turn is in a Hub channel.
+    // Without a Bot service no turn is in a Webhook channel.
     assert_eq!(
         decide(
             &fixture,

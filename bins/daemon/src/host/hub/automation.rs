@@ -1,5 +1,4 @@
-//! Automation publication: the Host publishes the enabled center channels (Hub and
-//! webhook channels) of the Workspace Bots the Ait center may reach, on every fresh
+//! Automation publication: the Host publishes the enabled Webhook channels of the Workspace Bots the Ait center may reach, on every fresh
 //! serve link and after every change.
 //!
 //! The center opens automation sessions only to a link whose latest publication
@@ -9,7 +8,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use bot::service::HubBot;
+use bot::service::WebhookBot;
 use model::automation::{MAX_BOTS, PUBLICATION_VERSION, PUBLISH_METHOD};
 use model::hub::{CallError, Center, LinkState};
 use serde_json::{Value, json};
@@ -23,7 +22,7 @@ use super::{COALESCE, MAX_BACKOFF, RETRY};
 type Sent = Option<(Option<Uuid>, Value)>;
 
 /// The publication body: reachable Bots, and whether any is active.
-fn publication(bots: &[HubBot]) -> Value {
+fn publication(bots: &[WebhookBot]) -> Value {
     json!({
         "version": PUBLICATION_VERSION,
         "enabled": bots.iter().any(|bot| bot.state == "active"),
@@ -43,7 +42,7 @@ enum Attempt {
 /// Publish whenever needed until cancelled.
 pub(super) async fn run(
     center: Arc<dyn Center>,
-    mut bots: watch::Receiver<Vec<HubBot>>,
+    mut bots: watch::Receiver<Vec<WebhookBot>>,
     cancel: CancellationToken,
 ) {
     let mut state = center.state();

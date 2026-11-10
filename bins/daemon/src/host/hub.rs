@@ -168,7 +168,7 @@ pub(super) async fn start(
         shares::run(shares_center, book, shares_cancel).await;
         drop(shares_lifetime);
     });
-    if let Some(bots) = api.hub_bots() {
+    if let Some(bots) = api.webhook_bots() {
         let automation_center = application.center.clone();
         let automation_cancel = cancel.clone();
         let automation_lifetime = lifetime.clone();

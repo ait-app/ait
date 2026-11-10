@@ -193,7 +193,7 @@ async fn attempt(
     cancel: &CancellationToken,
 ) -> Result<(), ErrorCode> {
     let reference = match &channel.config {
-        ChannelConfig::Builtin | ChannelConfig::Hub | ChannelConfig::Webhook { .. } => {
+        ChannelConfig::Builtin | ChannelConfig::Webhook { .. } => {
             return Ok(());
         }
         ChannelConfig::Telegram { token_ref, .. } | ChannelConfig::Weixin { token_ref, .. } => {
@@ -206,7 +206,7 @@ async fn attempt(
     };
     let secret = credentials.resolve(reference)?;
     match &channel.config {
-        ChannelConfig::Builtin | ChannelConfig::Hub | ChannelConfig::Webhook { .. } => Ok(()),
+        ChannelConfig::Builtin | ChannelConfig::Webhook { .. } => Ok(()),
         ChannelConfig::Telegram { .. } => {
             telegram::run(bots, channel, client, &secret, cancel).await
         }

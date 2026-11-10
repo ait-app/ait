@@ -61,14 +61,14 @@ impl Center for FakeCenter {
     }
 }
 
-fn bot(state: &'static str) -> HubBot {
-    HubBot {
+fn bot(state: &'static str) -> WebhookBot {
+    WebhookBot {
         workspace_id: "wks_0123456789abcdef".to_owned(),
         channel_id: serde_json::from_value(json!("00000000-0000-4000-8000-000000000001"))
             .expect("channel ID"),
         title: "app".to_owned(),
         state,
-        kind: "hub",
+        kind: "webhook",
     }
 }
 
@@ -85,7 +85,7 @@ fn publication_lists_reachable_bots() {
     assert_eq!(body["bots"][0]["title"], "app");
     assert_eq!(body["bots"][0]["state"], "active");
     assert!(body["bots"][0]["channelId"].is_string());
-    assert_eq!(body["bots"][0]["kind"], "hub");
+    assert_eq!(body["bots"][0]["kind"], "webhook");
     let paused = publication(&[bot("paused")]);
     assert_eq!(
         paused["enabled"], false,

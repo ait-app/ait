@@ -263,8 +263,14 @@ impl Api {
     /// Observe the Workspace Bots the Ait center may reach, for the daemon's publication;
     /// `None` without the Bot service.
     #[must_use]
-    pub fn hub_bots(&self) -> Option<tokio::sync::watch::Receiver<Vec<bot::service::HubBot>>> {
-        self.shared.bot.bots.as_ref().map(bot::service::Bots::hub)
+    pub fn webhook_bots(
+        &self,
+    ) -> Option<tokio::sync::watch::Receiver<Vec<bot::service::WebhookBot>>> {
+        self.shared
+            .bot
+            .bots
+            .as_ref()
+            .map(bot::service::Bots::webhooks)
     }
 
     /// Restore guest grants from the labels of Agents guests created before a restart.

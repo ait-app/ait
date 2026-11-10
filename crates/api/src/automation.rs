@@ -1,15 +1,12 @@
-//! Hub automation on this Host: the Ait center's own sessions, which reach only the
-//! Workspace Bots that have an enabled center channel (a Hub or webhook channel).
-//!
-//! The owner opts in per Bot by enabling such a channel. A center session is
-//! admitted while at least one active Bot has one and ends as soon as none does;
-//! [`policy`] decides every request it sends.
+//! Restricted center sessions for this Host's enabled Webhook channels.
+//! An active Bot with a published Webhook channel permits admission; closing
+//! the last available channel cancels every admitted center session.
 
 pub(crate) mod policy;
 
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
-use bot::service::{Bots, HubBot};
+use bot::service::{Bots, WebhookBot};
 use model::ErrorCode;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
@@ -21,37 +18,37 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 /// Admission of the center's automation sessions.
 #[derive(Debug, Default)]
 pub(crate) struct Automation {
-    /// Cancelled when no active Bot has an enabled Hub channel; admitted sessions hold a clone.
+    /// Cancelled when no active Bot has an enabled Webhook channel; admitted sessions hold a clone.
     admitted: Mutex<CancellationToken>,
     /// Set once the task that ends sessions on closure is running.
     watching: OnceLock<()>,
 }
 
-/// One admitted automation session; it ends when the last Hub channel closes.
+/// One admitted automation session; it ends when the last Webhook channel closes.
 #[derive(Debug)]
 pub(crate) struct Session {
     cancellation: CancellationToken,
 }
 
 impl Session {
-    /// Cancelled once no active Bot has an enabled Hub channel.
+    /// Cancelled once no active Bot has an enabled Webhook channel.
     pub(crate) const fn cancellation(&self) -> &CancellationToken {
         &self.cancellation
     }
 }
 
 /// Whether the center may reach any Bot.
-pub(crate) fn reachable(bots: &[HubBot]) -> bool {
+pub(crate) fn reachable(bots: &[WebhookBot]) -> bool {
     bots.iter().any(|bot| bot.state == "active")
 }
 
 impl Automation {
-    /// Admit one automation session while an active Bot has an enabled Hub channel.
+    /// Admit one automation session while an active Bot has an enabled Webhook channel.
     ///
     /// # Errors
     /// Returns `Forbidden` without the Bot service or such a channel.
     pub(crate) fn admit(self: &Arc<Self>, bots: Option<&Bots>) -> Result<Session, ErrorCode> {
-        let hub = bots.ok_or(ErrorCode::Forbidden)?.hub();
+        let hub = bots.ok_or(ErrorCode::Forbidden)?.webhooks();
         // Hold the token lock so a concurrent closure cannot slip between the check and the clone.
         let admitted = lock(&self.admitted);
         if !reachable(&hub.borrow()) {
@@ -64,7 +61,7 @@ impl Automation {
     }
 
     /// End every admitted session whenever the last reachable Bot closes.
-    fn watch(self: &Arc<Self>, mut hub: watch::Receiver<Vec<HubBot>>) {
+    fn watch(self: &Arc<Self>, mut hub: watch::Receiver<Vec<WebhookBot>>) {
         if self.watching.set(()).is_err() {
             return;
         }

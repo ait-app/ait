@@ -203,7 +203,6 @@ export const ptBR: TranslationResources = {
     qqPairHint:
       "Código: {{code}}. Envie ao bot em uma conversa privada ou mencione o bot com ele em um grupo do QQ. Funciona uma vez e expira em 10 minutos.",
     imessage: "iMessage",
-    hub: "Ait Hub",
     webhook: "Webhook",
     webhookHint:
       "O Ait Hub cria um endereço HTTPS e um segredo para este Bot. Qualquer sistema que envie solicitações HTTP pode usá-los para mandar mensagens ao Bot e ler a resposta.",

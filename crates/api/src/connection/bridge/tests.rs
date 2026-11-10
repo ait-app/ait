@@ -199,10 +199,13 @@ async fn a_session_waiting_for_its_peer_is_not_closed_by_the_socket_write_deadli
 const WRITE_STALL: Duration = Duration::from_secs(30);
 
 /// An API with a Bot service over one Workspace, and that Workspace's Bot set up.
-async fn with_bot() -> (tempfile::TempDir, crate::Api, ::bot::service::Bots) {
+async fn with_bot(online_center: bool) -> (tempfile::TempDir, crate::Api, ::bot::service::Bots) {
     use crate::test_support::bots::{WORKSPACE, service};
     let root = tempfile::tempdir().expect("root");
     let bots = service(root.path());
+    if online_center {
+        bots.attach_center(issuing_center());
+    }
     let api = crate::Api::new(
         address(),
         "test-server".into(),
@@ -223,17 +226,62 @@ async fn with_bot() -> (tempfile::TempDir, crate::Api, ::bot::service::Bots) {
     (root, api, bots)
 }
 
-/// Create the Workspace Bot's Hub channel, enabled or not.
-async fn hub_channel(bots: &::bot::service::Bots, enabled: bool) -> Value {
-    let id = domain::ChannelId::generate();
-    bots.execute(
-        "bot.channel.create.request",
-        json!({"workspaceId":crate::test_support::bots::WORKSPACE,"channelId":id,
-            "config":{"kind":"hub"},"enabled":enabled}),
-    )
-    .await
-    .expect("hub channel");
-    json!(id)
+/// A center that issues one endpoint for every requested Webhook channel.
+#[derive(Debug)]
+struct IssuingCenter(tokio::sync::watch::Sender<model::hub::LinkState>);
+
+#[async_trait::async_trait]
+impl model::hub::Center for IssuingCenter {
+    fn state(&self) -> tokio::sync::watch::Receiver<model::hub::LinkState> {
+        self.0.subscribe()
+    }
+    async fn call(
+        &self,
+        _scope: model::hub::Scope,
+        method: &'static str,
+        params: Value,
+    ) -> Result<Value, model::hub::CallError> {
+        assert_eq!(method, "hub.automation.webhook.create");
+        Ok(
+            json!({"endpointId":params["channelId"],"url":"https://center.example/hook","secret":"one-time-secret"}),
+        )
+    }
+}
+
+fn issuing_center() -> Arc<IssuingCenter> {
+    let state = model::hub::LinkState {
+        scope: Some(model::hub::Scope {
+            center: "https://center.example".into(),
+            node_session_id: uuid::Uuid::nil(),
+        }),
+        online: true,
+        link: Some(uuid::Uuid::nil()),
+        methods: vec!["hub.automation.webhook.create".into()],
+    };
+    Arc::new(IssuingCenter(tokio::sync::watch::channel(state).0))
+}
+
+/// Create the Workspace Bot's Webhook channel through its issuing center.
+async fn webhook_channel(bots: &::bot::service::Bots, enabled: bool) -> Value {
+    use crate::test_support::bots::WORKSPACE;
+    let result = bots
+        .execute(
+            "bot.channel.webhook.create.request",
+            json!({"workspaceId":WORKSPACE}),
+        )
+        .await
+        .expect("webhook channel");
+    assert_eq!(result["state"], "created");
+    let id = result["channel"]["id"].clone();
+    if !enabled {
+        bots.execute(
+            "bot.channel.update.request",
+            json!({"workspaceId":WORKSPACE,"channelId":id,"enabled":false}),
+        )
+        .await
+        .expect("disable webhook");
+    }
+    id
 }
 
 /// The methods the center offers in its automation hello.
@@ -241,11 +289,11 @@ fn center_hello() -> Value {
     hello(
         &json!([
             "connection.single.v1",
-            "bot.hub.message.send.request",
+            "bot.webhook.message.send.request",
             "bot.turn.get.request",
             "bot.turn.cancel.request",
-            "bot.hub.delivery.ack.request",
-            "bot.hub.conversation.close.request",
+            "bot.webhook.delivery.ack.request",
+            "bot.webhook.conversation.close.request",
             "bot.message.send.request",
             "share.list.request"
         ]),
@@ -253,18 +301,18 @@ fn center_hello() -> Value {
     )
 }
 
-/// An admitted automation session after its hello, with the enabled Hub channel's ID.
+/// An admitted automation session after its hello, with the enabled Webhook channel's ID.
 async fn center(api: &crate::Api, bots: &::bot::service::Bots) -> (Connection, Value, InProcess) {
     use crate::test_support::bots::WORKSPACE;
     let bridge = InProcess::new(&api.shared);
     assert!(
         matches!(bridge.connect(Admission::Automation).await, Err(Refused)),
-        "no Hub channel yet"
+        "no Webhook channel yet"
     );
-    let channel = hub_channel(bots, false).await;
+    let channel = webhook_channel(bots, false).await;
     assert!(
         matches!(bridge.connect(Admission::Automation).await, Err(Refused)),
-        "a Hub channel starts disabled"
+        "a Webhook channel starts disabled"
     );
     bots.execute(
         "bot.channel.update.request",
@@ -282,18 +330,18 @@ async fn center(api: &crate::Api, bots: &::bot::service::Bots) -> (Connection, V
 }
 
 #[tokio::test]
-async fn automation_sessions_post_into_the_hub_channel_and_poll_its_replies() {
+async fn automation_sessions_post_into_the_webhook_channel_and_poll_its_replies() {
     use crate::test_support::bots::WORKSPACE;
-    let (_root, api, bots) = with_bot().await;
+    let (_root, api, bots) = with_bot(true).await;
     let (mut connection, channel, _bridge) = center(&api, &bots).await;
     assert_eq!(
-        api.hub_bots().expect("Bot service").borrow()[0].workspace_id,
+        api.webhook_bots().expect("Bot service").borrow()[0].workspace_id,
         WORKSPACE
     );
     let accepted = request(
         &mut connection,
-        "bot.hub.message.send.request",
-        json!({"workspaceId":WORKSPACE,"channelId":channel,"peer":"telegram:tg","sender":"hub",
+        "bot.webhook.message.send.request",
+        json!({"workspaceId":WORKSPACE,"channelId":channel,"peer":"webhook:endpoint","sender":"hub",
             "thread":"c1","messageId":"automation:1","text":"fix the build"}),
     )
     .await;
@@ -319,14 +367,14 @@ async fn automation_sessions_post_into_the_hub_channel_and_poll_its_replies() {
     assert_eq!(done["result"]["turn"]["delivery"], "pending");
     let acked = request(
         &mut connection,
-        "bot.hub.delivery.ack.request",
+        "bot.webhook.delivery.ack.request",
         json!({"workspaceId":WORKSPACE,"turnId":turn,"status":"delivered"}),
     )
     .await;
     assert_eq!(acked["result"], json!({}), "{acked}");
     let closed = request(
         &mut connection,
-        "bot.hub.conversation.close.request",
+        "bot.webhook.conversation.close.request",
         json!({"workspaceId":WORKSPACE,"conversationId":done["result"]["turn"]["conversationId"]}),
     )
     .await;
@@ -334,9 +382,9 @@ async fn automation_sessions_post_into_the_hub_channel_and_poll_its_replies() {
 }
 
 #[tokio::test]
-async fn automation_sessions_reach_nothing_else_and_end_when_the_hub_channel_closes() {
+async fn automation_sessions_reach_nothing_else_and_end_when_the_webhook_channel_closes() {
     use crate::test_support::bots::WORKSPACE;
-    let (_root, api, bots) = with_bot().await;
+    let (_root, api, bots) = with_bot(true).await;
     let (mut connection, channel, _bridge) = center(&api, &bots).await;
     let opened = bots
         .execute(
@@ -387,15 +435,15 @@ async fn automation_sessions_reach_nothing_else_and_end_when_the_hub_channel_clo
     } = connection;
     assert!(
         closed(&mut receiver).await,
-        "disabling the last Hub channel ends its sessions"
+        "disabling the last Webhook channel ends its sessions"
     );
-    assert!(api.hub_bots().expect("Bot service").borrow().is_empty());
+    assert!(api.webhook_bots().expect("Bot service").borrow().is_empty());
 }
 
 #[tokio::test]
 async fn webhook_channels_ask_the_hosts_serve_link_for_their_endpoint() {
     use crate::test_support::bots::WORKSPACE;
-    let (_root, _api, bots) = with_bot().await;
+    let (_root, _api, bots) = with_bot(false).await;
     // The API attached its serve link; without a center session it is offline.
     let created = bots
         .execute(
