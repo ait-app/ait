@@ -11,21 +11,35 @@ pub const METHODS: &[MethodSpec] = &[
     MethodSpec::request("workspace.script.list.request"),
     MethodSpec::request("workspace.script.start.request"),
     MethodSpec::request("workspace.script.stop.request"),
+    MethodSpec::request("workspace.script.run.get.request"),
+    MethodSpec::request("workspace.script.run.wait.request"),
 ];
+
+/// Wait bound applied when a run wait omits `timeoutMs`.
+const DEFAULT_WAIT_MS: u64 = 30_000;
+/// Largest accepted run wait, matching Agent completion waits.
+const MAX_WAIT_MS: u64 = 45_000;
 
 use domain::workspace::records::UntrustedWorkspaceSource;
 use model::methods::MethodSpec;
 use serde_json::Value;
 
-use crate::automation::ports::{ScriptSnapshot, ScriptType, SetupLifecycle, SetupSnapshot};
+use crate::automation::ports::{
+    ScriptRunCompletion, ScriptRunOutcome, ScriptRunSnapshot, ScriptRunTarget, ScriptSnapshot,
+    ScriptType, SetupLifecycle, SetupSnapshot,
+};
 use crate::automation::protocol::{
     WorkspaceBlockedSource, WorkspaceScript, WorkspaceScriptLifecycle, WorkspaceScriptListResult,
-    WorkspaceScriptMutationResult, WorkspaceScriptRequest, WorkspaceScriptType,
+    WorkspaceScriptMutationResult, WorkspaceScriptRequest, WorkspaceScriptRun,
+    WorkspaceScriptRunOutcome, WorkspaceScriptRunRequest, WorkspaceScriptRunResult,
+    WorkspaceScriptStartRequest, WorkspaceScriptType, WorkspaceScriptWaitRequest,
     WorkspaceSetupCommand, WorkspaceSetupCommandStatus, WorkspaceSetupDetail,
     WorkspaceSetupRequest, WorkspaceSetupRunResult, WorkspaceSetupSnapshot, WorkspaceSetupStatus,
     WorkspaceSetupStatusResult,
 };
-use crate::automation::service::{SetupStatus, WorkspaceAutomation};
+use crate::automation::service::{
+    SetupStatus, WorkspaceAutomation, WorkspaceAutomationServiceError,
+};
 use crate::support::error::ErrorCode;
 use crate::support::rpc::{decode, encode};
 use crate::support::time::now_timestamp;
@@ -52,6 +66,7 @@ pub(crate) fn execute(
         "workspace.script.list.request" => list_scripts(automation, decode(params)?),
         "workspace.script.start.request" => start_script(automation, &decode(params)?),
         "workspace.script.stop.request" => stop_script(automation, &decode(params)?),
+        "workspace.script.run.get.request" => script_run(automation, &decode(params)?),
         _ => Err(ErrorCode::MethodNotFound),
     }
 }
@@ -156,11 +171,12 @@ fn list_scripts(
 
 fn start_script(
     automation: &WorkspaceAutomation,
-    request: &WorkspaceScriptRequest,
+    request: &WorkspaceScriptStartRequest,
 ) -> Result<Value, ErrorCode> {
     script_mutation(
-        request,
-        automation.start_script(&request.workspace_id, &request.script_name),
+        &request.workspace_id,
+        &request.script_name,
+        automation.start_script(&request.workspace_id, &request.script_name, &request.args),
     )
 }
 
@@ -169,14 +185,16 @@ fn stop_script(
     request: &WorkspaceScriptRequest,
 ) -> Result<Value, ErrorCode> {
     script_mutation(
-        request,
+        &request.workspace_id,
+        &request.script_name,
         automation.stop_script(&request.workspace_id, &request.script_name),
     )
 }
 
 fn script_mutation(
-    request: &WorkspaceScriptRequest,
-    result: Result<ScriptSnapshot, crate::automation::service::WorkspaceAutomationServiceError>,
+    workspace_id: &str,
+    script_name: &str,
+    result: Result<ScriptSnapshot, WorkspaceAutomationServiceError>,
 ) -> Result<Value, ErrorCode> {
     let (script, error) = match result {
         Ok(snapshot) => (Some(script(snapshot)), None),
@@ -184,13 +202,115 @@ fn script_mutation(
     };
     encode(
         WorkspaceScriptMutationResult {
-            workspace_id: request.workspace_id.clone(),
-            script_name: request.script_name.clone(),
+            workspace_id: workspace_id.to_owned(),
+            script_name: script_name.to_owned(),
             script,
             error,
         },
         ErrorCode::RegistryIo,
     )
+}
+
+fn script_run(
+    automation: &WorkspaceAutomation,
+    request: &WorkspaceScriptRunRequest,
+) -> Result<Value, ErrorCode> {
+    let target = match (&request.run_id, &request.script_name) {
+        (Some(run_id), _) => ScriptRunTarget::Run(run_id),
+        (None, Some(script_name)) => ScriptRunTarget::LatestOf(script_name),
+        (None, None) => return Err(ErrorCode::InvalidMessage),
+    };
+    run_result(
+        &request.workspace_id,
+        automation.script_run(&request.workspace_id, target),
+        None,
+    )
+}
+
+/// Validated wait bound of `request`.
+///
+/// # Errors
+/// Returns `InvalidMessage` for a zero bound or one above 45 seconds.
+pub(crate) fn wait_bound(
+    request: &WorkspaceScriptWaitRequest,
+) -> Result<std::time::Duration, ErrorCode> {
+    match request.timeout_ms.unwrap_or(DEFAULT_WAIT_MS) {
+        0 => Err(ErrorCode::InvalidMessage),
+        millis if millis > MAX_WAIT_MS => Err(ErrorCode::InvalidMessage),
+        millis => Ok(std::time::Duration::from_millis(millis)),
+    }
+}
+
+/// Observe the requested run; failures are reported later by [`wait_result`].
+pub(crate) fn run_completion(
+    automation: &WorkspaceAutomation,
+    request: &WorkspaceScriptWaitRequest,
+) -> Option<ScriptRunCompletion> {
+    automation
+        .script_run_completion(&request.workspace_id, &request.run_id)
+        .ok()
+}
+
+/// Project the requested run after a wait; output is included only once it has finished.
+///
+/// # Errors
+/// Returns `RegistryIo` when the result cannot be encoded.
+pub(crate) fn wait_result(
+    automation: &WorkspaceAutomation,
+    request: &WorkspaceScriptWaitRequest,
+) -> Result<Value, ErrorCode> {
+    let result =
+        automation.script_run(&request.workspace_id, ScriptRunTarget::Run(&request.run_id));
+    let timed_out = result
+        .as_ref()
+        .is_ok_and(|run| run.outcome == ScriptRunOutcome::Running);
+    run_result(&request.workspace_id, result, Some(timed_out))
+}
+
+fn run_result(
+    workspace_id: &str,
+    result: Result<ScriptRunSnapshot, WorkspaceAutomationServiceError>,
+    timed_out: Option<bool>,
+) -> Result<Value, ErrorCode> {
+    let (run, error) = match result {
+        Ok(snapshot) => {
+            let include_output = timed_out != Some(true);
+            (Some(script_run_projection(snapshot, include_output)), None)
+        }
+        Err(error) => (None, Some(error.to_string())),
+    };
+    encode(
+        WorkspaceScriptRunResult {
+            workspace_id: workspace_id.to_owned(),
+            run,
+            timed_out: timed_out.filter(|_| error.is_none()),
+            error,
+        },
+        ErrorCode::RegistryIo,
+    )
+}
+
+fn script_run_projection(snapshot: ScriptRunSnapshot, include_output: bool) -> WorkspaceScriptRun {
+    WorkspaceScriptRun {
+        run_id: snapshot.run_id,
+        script_name: snapshot.script_name,
+        args: snapshot.args,
+        commit: snapshot.commit,
+        dirty: snapshot.dirty,
+        started_at: snapshot.started_at,
+        finished_at: snapshot.finished_at,
+        duration_ms: snapshot.duration_ms,
+        outcome: match snapshot.outcome {
+            ScriptRunOutcome::Running => WorkspaceScriptRunOutcome::Running,
+            ScriptRunOutcome::Succeeded => WorkspaceScriptRunOutcome::Succeeded,
+            ScriptRunOutcome::Failed => WorkspaceScriptRunOutcome::Failed,
+            ScriptRunOutcome::Stopped => WorkspaceScriptRunOutcome::Stopped,
+        },
+        exit_code: snapshot.exit_code,
+        output: include_output.then_some(snapshot.output),
+        output_bytes: snapshot.output_bytes,
+        truncated: snapshot.truncated,
+    }
 }
 
 /// Project a runtime setup snapshot into the wire shape used by status and progress.
@@ -270,6 +390,8 @@ pub fn script(snapshot: ScriptSnapshot) -> WorkspaceScript {
         health: (),
         exit_code: snapshot.exit_code,
         terminal_id: snapshot.terminal_id,
+        run_id: snapshot.run_id,
+        accepts_args: snapshot.accepts_args,
     }
 }
 

@@ -1,6 +1,15 @@
+---
+id: ADR-153
+status: accepted
+date: 2026-10-16
+amends:
+  - providers/adr-135-opencode-catalog-readiness.md
+paths:
+  - crates/provider
+---
+
 # ADR-153：OpenCode ACP 冷启动预算
 
-- 状态：Accepted，2026-10-16。
 - 范围：Provider catalog、OpenCode ACP 启动与原生目录发现；细化 ADR-135 的目录就绪和并发启动协调。
 
 ## 背景

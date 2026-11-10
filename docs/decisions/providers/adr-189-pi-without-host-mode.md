@@ -1,7 +1,15 @@
+---
+id: ADR-189
+status: accepted
+date: 2026-10-24
+amends:
+  - providers/adr-156-pi-native-rpc-provider.md
+paths:
+  - crates/provider
+---
+
 # ADR-189：Pi 不暴露 Host 模式
 
-- 状态：Accepted
-- 日期：2026-10-24
 - 修订：[ADR-156](adr-156-pi-native-rpc-provider.md) 的合成 Pi 模式。
 
 ## 背景
@@ -33,4 +41,4 @@ Agent 可以照常恢复，并在会话运行时转为无模式状态；原生�
 manifest 5 个通过。相关客户端测试 153 个通过、0 失败。workspace build、Clippy、protocol 与
 mobile typecheck、格式检查与文档链接检查全部通过。
 
-完整环境、执行命令和已知限制见[验证报告](../../reports/providers/pi-mode-removal-2026-10-24.md)。
+完整环境、执行命令和已知限制见[验证报告](../../archive/reports/providers/pi-mode-removal-2026-10-24.md)。

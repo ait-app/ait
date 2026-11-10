@@ -1,7 +1,16 @@
+---
+id: ADR-224
+status: accepted
+date: 2026-11-09
+amends:
+  - bot/adr-139-workspace-bots-and-owned-channels.md
+paths:
+  - crates/bot
+  - crates/persistence
+---
+
 # ADR-224：飞书扫码接入与 daemon 保存的 Channel 凭据
 
-- 状态：接受
-- 日期：2026-11-09
 - 修订：[ADR-139](adr-139-workspace-bots-and-owned-channels.md) 第 8 条“凭据只保存环境变量引用”。
 
 ## 背景

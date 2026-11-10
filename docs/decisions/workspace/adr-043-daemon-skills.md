@@ -1,7 +1,13 @@
+---
+id: ADR-043
+status: accepted
+date: 2026-09-25
+paths:
+  - crates/provider
+---
+
 # ADR-043：独立 server 的 Skills 选择与文件安装
 
-- 状态：Accepted
-- 日期：2026-09-25
 - 上游基线：Paseo `2c8e8a826810337492cc5a38bb0bbd705b6fb632`
 - 后续修订：[ADR-056](../clients/adr-056-paseo-coexistence.md) 定义 Ait 技能目录、所有权标记与事务命名空间。
 - 后续修订：[ADR-129](../providers/adr-129-provider-owned-skills.md) 将 Skills 整组归属改为 provider，保留安装与事务行为。
@@ -13,4 +19,4 @@ Skills 的五个 `agent.skills.*` 接口由既有独立 `filesystem` 能力包�
 
 选择存放于 `<data-dir>/skills-state/selection.json`，不借用旧 daemon 配置或数据库。请求先恢复事务，再读取状态。删除由保存请求的 `confirmedRemovals` 确认；reconcile 只安装和更新，uninstall 为显式整体卸载。三个目标通过各自目录内的暂存与备份、独立状态目录内的事务日志协调；中断后下一次 Skills 请求恢复。外部文件冲突保留日志和备份，返回错误，不丢弃现场。
 
-这不是三个目录同时可见的文件系统事务，也没有跨进程安装锁；同一宿主内串行操作。暂不自动更新启动时发现的安装，不内置含 Paseo CLI 调用的技能文本。应用应部署适配本 server 的技能包后再调用安装接口。完整行为、上游差异和验证记录见 [实施报告](../../reports/workspace/server-skills.md)。
+这不是三个目录同时可见的文件系统事务，也没有跨进程安装锁；同一宿主内串行操作。暂不自动更新启动时发现的安装，不内置含 Paseo CLI 调用的技能文本。应用应部署适配本 server 的技能包后再调用安装接口。完整行为、上游差异和验证记录见 [实施报告](../../archive/reports/workspace/server-skills.md)。

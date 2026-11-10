@@ -1,6 +1,13 @@
-# ADR-152：在线中继 Workspace 的浏览器回环转发
+---
+id: ADR-152
+status: accepted
+date: 2026-10-16
+paths:
+  - apps/desktop
+  - crates/browser
+---
 
-状态：已实现。日期：2026-10-16。
+# ADR-152：在线中继 Workspace 的浏览器回环转发
 
 目标地址限制及连接范围已由 [ADR-186](adr-186-workspace-browser-egress.md) 修订：本地
 Workspace 直连，远端 Workspace 的所有目标统一经对应 daemon 出站，含 TCP/SSH 连接。

@@ -1,7 +1,20 @@
+---
+id: ADR-112
+status: accepted
+date: 2026-10-09
+amends:
+  - daemon/adr-072-workspace-names-and-documentation.md
+  - daemon/adr-105-file-tools-and-startup-config.md
+  - daemon/adr-106-concrete-file-persistence.md
+  - daemon/adr-107-direct-imports-from-owning-crates.md
+  - daemon/adr-109-local-incident-evidence.md
+paths:
+  - crates/persistence
+  - bins/daemon
+---
+
 # ADR-112：file 瘦身为 persistence，宿主专用文件归 daemon
 
-- 状态：接受
-- 日期：2026-10-09
 - 修订：[ADR-105](adr-105-file-tools-and-startup-config.md) 中启动配置归 file 的决定；
   [ADR-106](adr-106-concrete-file-persistence.md) 中 server identity 归 file、metadata 在生产代码中
   依赖 file 的决定，以及 crate 名称；

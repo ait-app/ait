@@ -1,7 +1,12 @@
-# ADR-150：所有 Provider 的上下文压缩生命周期提示
+---
+id: ADR-150
+status: accepted
+date: 2026-10-13
+paths:
+  - crates/provider
+---
 
-- 状态：已接受
-- 日期：2026-10-13
+# ADR-150：所有 Provider 的上下文压缩生命周期提示
 
 ## 背景
 

@@ -36,7 +36,7 @@ fn empty_host_keeps_only_builtin_api_methods() {
         ]
     );
     let registered = crate::registered_capabilities();
-    assert_eq!(registered.len(), 234);
+    assert_eq!(registered.len(), 236);
     assert!(
         !registered
             .iter()
@@ -68,12 +68,12 @@ fn merged_components_have_one_owner_per_method_and_keep_placeholders_separate() 
     let names: Vec<_> = specs.iter().map(|spec| spec.name).collect();
     let unique: BTreeSet<_> = names.iter().copied().collect();
     assert_eq!(names.len(), unique.len());
-    assert_eq!(names.len(), 233);
+    assert_eq!(names.len(), 235);
     assert!(unique.contains("workspace.get.request"));
     assert!(unique.contains("schedule.list.request"));
     assert!(!unique.contains("server.status.unsubscribe"));
     let registered = crate::registered_capabilities();
-    assert_eq!(registered.len(), 234);
+    assert_eq!(registered.len(), 236);
     assert!(unique.contains("bot.message.send.request"));
     for name in [
         "browser.tunnel.open.request",

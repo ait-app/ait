@@ -219,10 +219,15 @@ pub(super) async fn automation(
                 | "workspace.script.list.request"
                 | "workspace.script.start.request"
                 | "workspace.script.stop.request"
+                | "workspace.script.run.get.request"
+                | "workspace.script.run.wait.request"
         )
     }) else {
         return Err(DispatchError::NotImplemented);
     };
+    if context.request.method == "workspace.script.run.wait.request" {
+        return crate::automation::connection::wait(context, state).map_err(Into::into);
+    }
     context
         .rpc(
             state.workspace_automation.clone(),

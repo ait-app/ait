@@ -1,12 +1,23 @@
+---
+id: ADR-213
+status: accepted
+date: 2026-11-05
+amends:
+  - bot/adr-139-workspace-bots-and-owned-channels.md
+  - bot/adr-145-bot-permission-denial.md
+  - clients/adr-141-experimental-workspace-bots.md
+paths:
+  - crates/bot
+---
+
 # ADR-213：单 Workspace 管理者 Bot 与 v2 接口
 
-- 状态：接受（阶段 1 已随 0.1.30 发布；阶段 2 客户端见 ADR-214；阶段 3 权限与 MCP 见 ADR-215）
-- 日期：2026-11-05
+- 状态说明：接受（阶段 1 已随 0.1.30 发布；阶段 2 客户端见 ADR-214；阶段 3 权限与 MCP 见 ADR-215）
 - 关系：取代 [ADR-139](adr-139-workspace-bots-and-owned-channels.md) 中多 Bot、人格和 `botId` 寻址（第 1、2、5 条相关部分）以及记忆位置（第 7 条）；
   修订 [ADR-141](../clients/adr-141-experimental-workspace-bots.md) 的标签页身份与能力名（客户端见 [ADR-214](../clients/adr-214-workspace-bot-tab-v2.md)）；
   取代 [ADR-145](adr-145-bot-permission-denial.md) 第 3 条（删除 `bot.permission.resolve`），其第 1、2、4、5 条的自动拒绝规则继续有效。
 - 后续修订：[ADR-215](adr-215-bot-permissions-and-scoped-mcp.md) 增加权限与作用域 MCP 工具，修订 ADR-145 第 4 条，并让 Bot 可写记忆（第 6 条）；[ADR-221](adr-221-read-only-bot-session-inspection.md) 允许按完整 ID 只读查看隐藏会话。
-- 计划：[Workspace Bot 管理者重设计](../../plans/workspace-bot-manager.md)、[阶段 1 计划](../../plans/workspace-bot-manager-phase-1.md)。
+- 计划：[Workspace Bot 管理者重设计](../../plans/workspace-bot-manager.md)、[阶段 1 计划](../../archive/plans/workspace-bot-manager-phase-1.md)。
 
 ## 背景
 

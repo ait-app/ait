@@ -1,7 +1,14 @@
+---
+id: ADR-047
+status: accepted
+date: 2026-09-25
+paths:
+  - crates/schedule
+  - crates/browser
+---
+
 # ADR-047：移除 Plugin 接口并独立实现 Schedule 与 Browser
 
-- 状态：Accepted
-- 日期：2026-09-25
 - 延续：ADR-037、ADR-044、ADR-045；遵循 ADR-001 v4
 - 用户范围：删除 Plugin；补齐 Schedule 和 Browser，独立于旧 daemon/Ait 能力
 
@@ -16,11 +23,11 @@
 
 ## 边界与限制
 
-本次移除的是独立 server 的 Plugin 接口；导入的上游源码保留用于参照。生产 catalog 无占位不代表全量 Paseo 行为一致。Browser 尚未向 Codex 注入上游 MCP browser tools；Schedule 当前通过已有 Codex 执行能力运行，不自动扩大审批权限，其他 Provider 和完整 timeline 输出聚合未实现。具体差异、资源上限及测试证据见[实施与 Test coverage 报告](../../reports/daemon/schedule-browser.md)。
+本次移除的是独立 server 的 Plugin 接口；导入的上游源码保留用于参照。生产 catalog 无占位不代表全量 Paseo 行为一致。Browser 尚未向 Codex 注入上游 MCP browser tools；Schedule 当前通过已有 Codex 执行能力运行，不自动扩大审批权限，其他 Provider 和完整 timeline 输出聚合未实现。具体差异、资源上限及测试证据见[实施与 Test coverage 报告](../../archive/reports/daemon/schedule-browser.md)。
 
 ## 2026-09-27 客户端设置落地
 
 Ait 设置中移除 Plugin 安装管理页与配置入口，旧配置深链接回到通用设置。
 客户端依据已实现能力展示设置；目录使用需求驱动的快照刷新，Provider 快照由 transport 转换为 SDK 缓存格式。
 未实现的 relay 配对和 ACP 安装能力不再作为可执行设置暴露。此跟进不增加 Rust 方法或改变 crate 依赖边界；
-验证与限制见 [设置修复报告](../../reports/clients/ait-settings-repair.md)。
+验证与限制见 [设置修复报告](../../archive/reports/clients/ait-settings-repair.md)。

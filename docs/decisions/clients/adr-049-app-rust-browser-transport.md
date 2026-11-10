@@ -1,7 +1,13 @@
+---
+id: ADR-049
+status: accepted
+date: 2026-09-26
+paths:
+  - apps/mobile
+---
+
 # ADR-049：独立 App 的 Rust server 浏览器连接
 
-- 状态：Accepted
-- 日期：2026-09-26
 - 范围：`apps/mobile`、独立 `server` 的 HTTP/WebSocket 传输边界与本地开发入口。
 
 ## 决策
@@ -36,4 +42,4 @@ WebSocket header 认证；普通浏览器先向 `POST /v1/auth/ws-ticket` 发送
 原生 App 继续使用直接 TCP Bearer 通道；Android 可用 `adb reverse` 访问本机 server。
 本决策补齐 ADR-044、ADR-048 当时明确未实现的普通浏览器认证。
 
-验证与限制见[实施报告](../../reports/clients/app-rust-daemon.md)。
+验证与限制见[实施报告](../../archive/reports/clients/app-rust-daemon.md)。

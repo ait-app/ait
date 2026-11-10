@@ -1,7 +1,14 @@
+---
+id: ADR-072
+status: accepted
+date: 2026-10-03
+paths:
+  - Cargo.toml
+  - bins/daemon
+---
+
 # ADR-072：Workspace 名称与当前文档边界
 
-- 状态：Accepted
-- 日期：2026-10-03
 - 授权：统一 daemon 名称、移除 crate 的 server 前缀、重命名应用目录并清理旧文档。
 - 修订：此前 ADR 中的源码位置与包名统一遵循本决策；既有能力行为与依赖方向保持不变。
 - 后续：crate 集合由 [ADR-111](adr-111-domain-values-and-server-protocol.md)（移除 protocol）与
@@ -34,4 +41,4 @@
 不因改名改变。旧源码和删除的文档可通过 Git 历史查阅；保留的历史报告只证明注明版本的行为。
 
 当前依赖图见 [架构说明](../../architecture/README.md)，测试、构建和覆盖率见
-[重命名验证报告](../../reports/daemon/workspace-rename.md)。
+[重命名验证报告](../../archive/reports/daemon/workspace-rename.md)。

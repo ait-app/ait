@@ -41,6 +41,49 @@ describe("keyboardEventToComboString", () => {
     expect(keyboardEventToComboString(keyboardEvent({ key: "'", code: "Quote" }))).toBe("'");
   });
 
+  it("records a printable key by the character it produced, not its physical position", () => {
+    // Dvorak: the key labelled "T" sits on physical KeyK.
+    expect(
+      keyboardEventToComboString(keyboardEvent({ key: "t", code: "KeyK", metaKey: true })),
+    ).toBe("Cmd+T");
+    // Dvorak: "v" sits on physical Period.
+    expect(
+      keyboardEventToComboString(keyboardEvent({ key: "v", code: "Period", ctrlKey: true })),
+    ).toBe("Ctrl+V");
+    // German: Shift+7 produces "/".
+    expect(
+      keyboardEventToComboString(
+        keyboardEvent({ key: "/", code: "Digit7", shiftKey: true, metaKey: true }),
+      ),
+    ).toBe("Shift+Cmd+/");
+  });
+
+  it("records shifted characters as Shift plus the base key, as QWERTY did before", () => {
+    expect(
+      keyboardEventToComboString(keyboardEvent({ key: "!", code: "Digit1", shiftKey: true })),
+    ).toBe("Shift+1");
+    expect(
+      keyboardEventToComboString(keyboardEvent({ key: "?", code: "Slash", shiftKey: true })),
+    ).toBe("Shift+/");
+    expect(
+      keyboardEventToComboString(keyboardEvent({ key: "T", code: "KeyT", shiftKey: true })),
+    ).toBe("Shift+T");
+  });
+
+  it("records Alt combos and unrepresentable characters by physical key", () => {
+    // macOS rewrites event.key under Option; the matcher compares Alt bindings by code.
+    expect(
+      keyboardEventToComboString(keyboardEvent({ key: "†", code: "KeyT", altKey: true })),
+    ).toBe("Alt+T");
+    expect(
+      keyboardEventToComboString(keyboardEvent({ key: "л", code: "KeyK", ctrlKey: true })),
+    ).toBe("Ctrl+K");
+    expect(keyboardEventToComboString(keyboardEvent({ key: " ", code: "Space" }))).toBe("Space");
+    expect(keyboardEventToComboString(keyboardEvent({ key: "Enter", code: "Enter" }))).toBe(
+      "Enter",
+    );
+  });
+
   it("still returns null for modifier-only presses", () => {
     expect(keyboardEventToComboString(keyboardEvent({ code: "ShiftLeft" }))).toBeNull();
   });

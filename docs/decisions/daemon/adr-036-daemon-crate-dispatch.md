@@ -1,11 +1,19 @@
+---
+id: ADR-036
+status: accepted
+date: 2026-09-25
+amends:
+  - daemon/adr-035-daemon-capability-groups.md
+paths:
+  - crates/api
+---
+
 # ADR-036：请求先进入所属 crate 再分发到能力组
 
 > 后续修订：[ADR-037](adr-037-daemon-model-context.md) 抽出公共 Context 并删除 Host 回调，
 > 能力 crate 直接使用 Tokio 与具体上下文；本文的 crate 优先分发顺序继续有效。
 > [ADR-093](adr-093-consumable-request-context.md) 随后移除预先路由，改由各入口逐级消费 Context。
 
-- 状态：Accepted。
-- 日期：2026-09-25。
 - 授权：用户要求继续简化 dispatch，并在进一步分发前先进入各个 crate。
 - 范围：独立 server 请求分发和 API 宿主适配；补充 ADR-035。
 
@@ -46,4 +54,4 @@ crate 的 RPC/service 内。Message、领域 Session、Run 的定义及终止条
 保留原方法、消息方向、错误和安装规则；完整能力仍为 122/195。
 新增测试验证 crate 内分组选择、Host 错误透传、provider wait 选择、统一 RPC 调用和响应先于
 后续事件。完整 WebSocket/进程测试验证实际执行和连接资源释放。
-结果、命令和覆盖率见[实施报告](../../reports/daemon/server-crate-dispatch.md)。
+结果、命令和覆盖率见[实施报告](../../archive/reports/daemon/server-crate-dispatch.md)。

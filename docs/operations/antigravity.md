@@ -102,7 +102,7 @@ Ait 使用同一个 AGY 安装的 `agy --print /usage --output-format json` 读�
 查询超时或响应不符合原生命令结构时显示读取失败，不转发原始错误体。
 停止或尚未启动的会话仍需先启动或恢复，才能查询其当前账号。
 
-验证和兼容范围见 [账号额度接入报告](../reports/providers/antigravity-account-quota-2026-10-14.md)。
+验证和兼容范围见 [账号额度接入报告](../archive/reports/providers/antigravity-account-quota-2026-10-14.md)。
 
 ## 当前接口范围
 
@@ -117,4 +117,4 @@ Ait 将图片保存到 daemon 数据目录的私有 `agents/provider-images`，�
 AGY 自身已配置的工具与 MCP 仍由原生 CLI 加载。
 
 设计见 [ADR-087](../decisions/providers/adr-087-antigravity-cli-provider.md)，
-验证见 [报告](../reports/providers/antigravity-cli.md)。
+验证见 [报告](../archive/reports/providers/antigravity-cli.md)。

@@ -1,6 +1,12 @@
-# ADR-080：Android APK 独立手动发布
+---
+id: ADR-080
+status: accepted
+date: 2026-10-04
+paths:
+  - .github/workflows
+---
 
-状态：Accepted（2026-10-04）
+# ADR-080：Android APK 独立手动发布
 
 ## 背景
 

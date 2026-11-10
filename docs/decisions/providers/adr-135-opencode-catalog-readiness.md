@@ -1,9 +1,17 @@
+---
+id: ADR-135
+status: accepted
+date: 2026-10-10
+amends:
+  - providers/adr-115-opencode-acp-provider.md
+paths:
+  - crates/provider
+---
+
 # ADR-135：OpenCode 目录就绪与配置确认
 
 > 后续修订：[ADR-143](adr-143-opencode-2-0-25-compatibility.md) 经真实 2.0.25 验证，将最低版本修正为 2.0.25，并补充审批与生命周期修复。下文保留当时的决策依据。
 
-- 状态：Accepted。
-- 日期：2026-10-10。
 - 修订：[ADR-115](adr-115-opencode-acp-provider.md) 的 2.x 最低版本与配置响应处理；Rust、官方 ACP、原生认证和历史所有权保持不变。
 
 ## 背景
@@ -48,4 +56,4 @@ Ait 原先仅检查响应，将正常切换判为失败。目录查询也只遍�
 无网络 ACP 夹具覆盖新增/删除模型、升级诊断、确认通知的两种顺序、确认缺失和错误 session。
 真实 2.0.26 使用隔离目录和 loopback 模型验证创建、多轮、发现、工具、审批、问答、历史恢复与辅助清理，
 并覆盖四目录并发冷启动、64 个自定义模型、模型/effort/mode 切换、权限和 system 重连、图片与附件、取消及认证失败。
-报告和测量范围见 [修复验证](../../reports/providers/opencode-catalog-readiness-2026-10-10.md)。
+报告和测量范围见 [修复验证](../../archive/reports/providers/opencode-catalog-readiness-2026-10-10.md)。

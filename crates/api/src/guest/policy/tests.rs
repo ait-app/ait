@@ -111,6 +111,8 @@ fn methods_are_classified_by_default_deny() {
         ("provider.models.list.request", Rule::Catalog),
         ("provider.snapshot.refresh.request", Rule::Deny),
         ("workspace.mark_unread.request", Rule::Workspace),
+        ("workspace.script.run.get.request", Rule::Workspace),
+        ("workspace.script.run.wait.request", Rule::Workspace),
         ("workspace.list.request", Rule::WorkspaceList),
         ("agent.get.request", Rule::Agent("agentId")),
         ("agent.timeline.get.request", Rule::Agent("agentId")),
@@ -233,6 +235,20 @@ async fn workspace_methods_name_only_the_shared_workspace() {
             json!({"workspaceId": [shared]}),
         )
         .await;
+    for method in [
+        "workspace.script.run.get.request",
+        "workspace.script.run.wait.request",
+    ] {
+        guest
+            .forwarded(method, json!({"workspaceId": shared, "runId": "run_1"}))
+            .await;
+        assert_eq!(
+            guest
+                .refused(method, json!({"workspaceId": other, "runId": "run_1"}))
+                .await,
+            ErrorCode::Forbidden
+        );
+    }
     for params in [
         json!({"workspaceId": other}),
         json!({"workspaceId": [shared, other]}),

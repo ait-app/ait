@@ -1,7 +1,14 @@
+---
+id: ADR-065
+status: accepted
+date: 2026-09-29
+paths:
+  - crates/api
+  - crates/model
+---
+
 # ADR-065：Paseo 目录、时间线与会话 API 兼容行为
 
-- 状态：Accepted
-- 日期：2026-09-29
 - 关联：ADR-031、ADR-032、ADR-038、ADR-039、ADR-040、ADR-046
 
 ## 背景
@@ -108,7 +115,7 @@ Workspace 固定 done 状态、时间线原始事件分页及聊天分叉边界�
 
 对照测试固定原始 Paseo revision 与源码 SHA-256；生成器执行上游测试断言并保存预期输出，
 Rust 测试无需 Node、Paseo checkout 或真实付费 Provider。详见
-[API 对照与验证报告](../../reports/daemon/paseo-api-audit-2026-09-29.md)。
+[API 对照与验证报告](../../archive/reports/daemon/paseo-api-audit-2026-09-29.md)。
 
 本次不恢复 ADR-045/047/061 已移除的 Hub、Chat、Loop、Plugin 或 relay；既有 Ait 认证、
 协议 envelope 与能力协商继续由 transport adapter 适配。没有修改领域 Message 历史、

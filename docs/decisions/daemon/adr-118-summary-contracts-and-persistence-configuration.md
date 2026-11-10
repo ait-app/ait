@@ -1,7 +1,16 @@
+---
+id: ADR-118
+status: accepted
+date: 2026-10-10
+amends:
+  - providers/adr-101-provider-summary-generator.md
+paths:
+  - crates/model
+  - crates/persistence
+---
+
 # ADR-118：摘要接口归 model，配置文件适配归 persistence
 
-- 状态：Accepted。
-- 日期：2026-10-10。
 - 范围：摘要生成契约、配置读取适配器和 daemon 组装。
 - 修订：[ADR-101](../providers/adr-101-provider-summary-generator.md) 的接口与配置适配归属；
   延续 [ADR-112](adr-112-persistence-crate.md) 的文件实现边界及

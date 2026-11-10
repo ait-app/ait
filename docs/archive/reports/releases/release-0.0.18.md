@@ -16,7 +16,7 @@
 - **工作区 Git 操作。** 新增重置工作区到 origin 最新默认分支的操作，并按改动、提交、推送、
   PR 和归档状态引导主按钮。重置前明确提示覆盖本地改动。见
   [PR #176](https://github.com/ait-app/ait/pull/176) 与
-  [验证报告](../../../reports/workspace/workspace-git-actions-pr-validation-2026-10-05.md)。
+  [验证报告](../workspace/workspace-git-actions-pr-validation-2026-10-05.md)。
 - **iOS 在线主机支持。** 源码加入账户登录、主机发现、中继连接、安全凭据存储和原生下载；
   安装包由独立的 TestFlight 工作流发布。见 [PR #177](https://github.com/ait-app/ait/pull/177)
   与 [ADR-084](../../../decisions/clients/adr-084-ios-account-relay.md)。
@@ -59,7 +59,7 @@ Android APK、Google Play 和 iOS TestFlight 使用独立的手动发布流程�
 本次没有新的覆盖率测量。已合入功能的覆盖率只对应各自报告注明的源码、平台和工具链，
 不代表最终标签的重新测量。工作区 Git 操作的 Rust workspace 行覆盖率为
 49,427/52,321（94.47%），详见
-[验证报告和可审查统计](../../../reports/workspace/workspace-git-actions-pr-validation-2026-10-05.md)；
+[验证报告和可审查统计](../workspace/workspace-git-actions-pr-validation-2026-10-05.md)；
 在线服务与主机同步的 Rust workspace 行覆盖率为 49,214/52,090（94.48%），详见
-[验证报告和可审查统计](../../../reports/clients/online-service-host-sync-validation.md)。
+[验证报告和可审查统计](../clients/online-service-host-sync-validation.md)。
 两次测量各忽略 3 项需要真实 Provider CLI 或认证的既有测试。

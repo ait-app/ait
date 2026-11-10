@@ -1,7 +1,19 @@
+---
+id: ADR-130
+status: accepted
+date: 2026-10-11
+amends:
+  - daemon/adr-100-crate-level-service-installation.md
+  - workspace/adr-028-github-project-provisioning.md
+  - workspace/adr-104-filesystem-model-collaboration.md
+  - workspace/adr-113-filesystem-capability-groups.md
+paths:
+  - crates/metadata
+  - crates/filesystem
+---
+
 # ADR-130：Workspace 与 Project 方法归 metadata，filesystem 只保留本地适配器
 
-- 状态：接受
-- 日期：2026-10-11
 - 后续修订：[ADR-131](adr-131-metadata-capability-groups.md) 将 metadata 改为能力组布局，本文的
   `service::`/`rpc::`/`protocol::`/`ports::` 路径移至对应组下，例如 `worktrees::ports::worktrees`。
 - 修订：[ADR-113](adr-113-filesystem-capability-groups.md) 的 filesystem 能力组集合、

@@ -1,7 +1,15 @@
+---
+id: ADR-084
+status: accepted
+date: 2026-10-05
+amends:
+  - clients/adr-076-android-account-relay.md
+paths:
+  - apps/mobile
+---
+
 # ADR-084：iOS 在线服务账户与主机中继
 
-- 状态：已实现
-- 日期：2026-10-05
 - 关系：将 [ADR-076](adr-076-android-account-relay.md) 的原生客户端适配扩展到 iOS，沿用 [ADR-083](adr-083-online-service-host-sync.md) 的登录与逐主机同步边界。
 
 ## 背景

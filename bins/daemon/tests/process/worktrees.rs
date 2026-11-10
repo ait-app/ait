@@ -16,7 +16,8 @@ async fn binary_creates_lists_and_archives_canonical_worktrees() {
     let repository = root.path().join("repository");
     create_repository(&repository);
     let nested = repository.join("packages/app");
-    std::fs::write(nested.join("ait.json"), "{\"scripts\":{}}\n").unwrap();
+    let teardown_marker = root.path().join("teardown.txt");
+    let config = write_teardown_config(&nested, &teardown_marker);
 
     let state = root.path().join("server");
     let log = root.path().join("server.log");
@@ -62,7 +63,7 @@ async fn binary_creates_lists_and_archives_canonical_worktrees() {
     );
     assert_eq!(
         std::fs::read_to_string(workspace_directory.join("ait.json")).unwrap(),
-        "{\"scripts\":{}}\n"
+        config
     );
     assert_eq!(branch(&workspace_directory), "feature-review");
 
@@ -106,6 +107,7 @@ async fn binary_creates_lists_and_archives_canonical_worktrees() {
     assert_eq!(archived["result"]["success"], true, "{archived}");
     assert_eq!(archived["result"]["removedAgents"], json!([]));
     assert!(!worktree_root.exists());
+    assert_teardown_ran(&teardown_marker);
     let after = request(
         &mut client,
         "workspace.worktree.list.request",
@@ -118,6 +120,19 @@ async fn binary_creates_lists_and_archives_canonical_worktrees() {
 
     terminate(&mut process).await;
     assert_persisted_workspace(&state, &workspace_id);
+}
+
+/// Write an `ait.json` whose teardown records `$AIT_BRANCH_NAME` at `marker`, outside the checkout.
+fn write_teardown_config(directory: &Path, marker: &Path) -> String {
+    let command = format!("printf '%s' \"$AIT_BRANCH_NAME\" > '{}'", marker.display());
+    let config = json!({"worktree":{"teardown":command}}).to_string();
+    std::fs::write(directory.join("ait.json"), &config).unwrap();
+    config
+}
+
+/// Teardown ran before the checkout was removed, with the Workspace variables.
+fn assert_teardown_ran(marker: &Path) {
+    assert_eq!(std::fs::read_to_string(marker).unwrap(), "feature-review");
 }
 
 fn assert_persisted_workspace(state: &Path, workspace_id: &str) {

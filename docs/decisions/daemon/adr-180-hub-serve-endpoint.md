@@ -1,10 +1,19 @@
+---
+id: ADR-180
+status: accepted
+date: 2026-10-22
+paths:
+  - crates/relay
+  - packages/client
+---
+
 # ADR-180：消息 Hub 服务端点（ait-hub-v1）
 
 > 普通业务传输已由 [ADR-204](../clients/adr-204-hub-only-online-business-transport.md) 修订：仅使用 Hub，传统 Relay 仅保留独立下载与控制。
 
 > 启动与控制边界已由 [ADR-201](adr-201-daemon-owned-publication.md) 修订：所有 daemon 自主发布；外部断开会同时关闭 Hub/下载 Relay 并清除机器授权，不再支持单独暂停 Hub。
 
-状态：采用（原型）。中心协议见中心仓库 `docs/hub-protocol.md`；本 ADR 记录 Host 与客户端侧边界。
+状态说明：采用（原型）。中心协议见中心仓库 `docs/hub-protocol.md`；本 ADR 记录 Host 与客户端侧边界。
 
 Headless 的发布调度与端口默认行为由 [ADR-200](adr-200-headless-independent-transports.md) 修订：两条传输独立维护，`ManagedRelay` 必须显式实现 Hub 方法。
 

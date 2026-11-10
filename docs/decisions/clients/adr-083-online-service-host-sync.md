@@ -1,9 +1,19 @@
+---
+id: ADR-083
+status: accepted
+date: 2026-10-05
+amends:
+  - clients/adr-074-account-host-relay.md
+paths:
+  - apps/desktop
+  - apps/mobile
+  - packages/client
+---
+
 # ADR-083：在线服务登录与逐主机同步分离
 
 > 主机授权与租约归属已由 [ADR-201](../daemon/adr-201-daemon-owned-publication.md) 修订：daemon 自主管理发布，客户端退出不撤销机器授权；显式断开后需重新授权。以下保留原决策背景。
 
-- 状态：已实现
-- 日期：2026-10-05
 - 关系：修订 [ADR-074](adr-074-account-host-relay.md) 的登录入口与桌面自动发布行为，沿用 [ADR-076](adr-076-android-account-relay.md) 的凭据归属。
 
 ## 背景
@@ -29,4 +39,4 @@
 登录与主机上线各有独立入口。本机、TCP 和 SSH 连接使用同一同步流程，手机仍只发布显式选中的远程 daemon，不作为工作主机。
 客户端登录生命周期与其他 daemon 的租约生命周期分离。平台负责续租与一次性授权，daemon 负责控制连接和反向数据连接；JWT 始终留在平台账户管理器内。
 
-测试与覆盖率见[PR 验证报告](../../reports/clients/online-service-host-sync-validation.md)。
+测试与覆盖率见[PR 验证报告](../../archive/reports/clients/online-service-host-sync-validation.md)。

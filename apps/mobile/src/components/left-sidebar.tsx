@@ -32,6 +32,7 @@ import { HEADER_INNER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout"
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useImportSession } from "@/hooks/use-import-session";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
+import { useTrackedRefresh } from "@/hooks/use-tracked-refresh";
 import {
   type SidebarProjectEntry,
   type SidebarWorkspaceEntry,
@@ -67,7 +68,6 @@ interface SidebarSharedProps {
   hasActiveProjectFilter: boolean;
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   isInitialLoad: boolean;
-  isRevalidating: boolean;
   isManualRefresh: boolean;
   groupMode: SidebarGroupMode;
   collapsedProjectKeys: ReadonlySet<string>;
@@ -115,7 +115,6 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
     resolvedProjectFilters,
     workspaceEntriesByKey,
     isInitialLoad,
-    isRevalidating,
     refreshAll,
     workspaceGroups,
     projectIconTargets,
@@ -127,18 +126,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
   } = useSidebarModel();
   const { shortcutIndexByWorkspaceKey } = shortcutModel;
 
-  const [isManualRefresh, setIsManualRefresh] = useState(false);
-
-  const handleRefresh = useCallback(() => {
-    setIsManualRefresh(true);
-    refreshAll();
-  }, [refreshAll]);
-
-  useEffect(() => {
-    if (!isRevalidating && isManualRefresh) {
-      setIsManualRefresh(false);
-    }
-  }, [isRevalidating, isManualRefresh]);
+  const { isRefreshing: isManualRefresh, onRefresh: handleRefresh } = useTrackedRefresh(refreshAll);
 
   const openProjectPicker = useOpenAddProject();
   const { open: openImportSession, sheet: importSessionSheet } = useImportSession();
@@ -209,7 +197,6 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
     hasActiveProjectFilter: resolvedProjectFilters.length > 0,
     workspaceEntriesByKey,
     isInitialLoad,
-    isRevalidating,
     isManualRefresh,
     groupMode,
     collapsedProjectKeys,
@@ -456,7 +443,6 @@ function MobileSidebar({
   hasActiveProjectFilter,
   workspaceEntriesByKey,
   isInitialLoad,
-  isRevalidating,
   isManualRefresh,
   groupMode,
   collapsedProjectKeys,
@@ -533,7 +519,7 @@ function MobileSidebar({
             hasProjectsBeforeFilter={hasProjectsBeforeFilter}
             hasActiveProjectFilter={hasActiveProjectFilter}
             workspaceEntriesByKey={workspaceEntriesByKey}
-            isRefreshing={isManualRefresh && isRevalidating}
+            isRefreshing={isManualRefresh}
             onRefresh={handleRefresh}
             onWorkspacePress={handleWorkspacePress}
             onAddProject={handleOpenProject}
@@ -568,7 +554,6 @@ function DesktopSidebar({
   hasActiveProjectFilter,
   workspaceEntriesByKey,
   isInitialLoad,
-  isRevalidating,
   isManualRefresh,
   groupMode,
   collapsedProjectKeys,
@@ -711,7 +696,7 @@ function DesktopSidebar({
             hasProjectsBeforeFilter={hasProjectsBeforeFilter}
             hasActiveProjectFilter={hasActiveProjectFilter}
             workspaceEntriesByKey={workspaceEntriesByKey}
-            isRefreshing={isManualRefresh && isRevalidating}
+            isRefreshing={isManualRefresh}
             onRefresh={handleRefresh}
             onAddProject={handleOpenProject}
             onImportSession={handleImportSession}

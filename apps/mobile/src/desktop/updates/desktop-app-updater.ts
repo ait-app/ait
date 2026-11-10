@@ -17,6 +17,7 @@ export type DesktopAppUpdateStatus =
   | "error";
 
 export const PENDING_RECHECK_MS = 10_000;
+export const AUTOMATIC_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 
 export interface DesktopAppUpdaterSnapshot {
   status: DesktopAppUpdateStatus;
@@ -61,6 +62,13 @@ export interface DesktopAppUpdater {
   installUpdate(options: {
     releaseChannel: DesktopReleaseChannel;
   }): Promise<DesktopAppUpdateInstallResult | null>;
+  /**
+   * Keeps automatic checks running for as long as any caller holds the returned release. Every
+   * caller shares one schedule: a check when none has run for this channel within
+   * `AUTOMATIC_CHECK_INTERVAL_MS`, one periodic check, and one `PENDING_RECHECK_MS` recheck while
+   * an update is still being prepared.
+   */
+  retainAutomaticChecks(releaseChannel: DesktopReleaseChannel): () => void;
 }
 
 interface InternalState {
@@ -194,12 +202,84 @@ export function createDesktopAppUpdater(deps: DesktopAppUpdaterDeps): DesktopApp
   let cachedSnapshot: DesktopAppUpdaterSnapshot = buildSnapshot(state);
   const listeners = new Set<() => void>();
 
+  const automaticCheckHolders = new Map<symbol, DesktopReleaseChannel>();
+  let automaticChannel: DesktopReleaseChannel | null = null;
+  let lastAutomaticCheck: { releaseChannel: DesktopReleaseChannel; startedAt: number } | null =
+    null;
+  let automaticCheckInFlight: DesktopReleaseChannel | null = null;
+  let periodicTimer: ReturnType<typeof setInterval> | null = null;
+  let pendingRecheckTimer: ReturnType<typeof setInterval> | null = null;
+
   function commit(next: InternalState): void {
     state = next;
     cachedSnapshot = buildSnapshot(state);
+    syncPendingRecheckTimer();
     for (const listener of listeners) {
       listener();
     }
+  }
+
+  function runAutomaticCheck(): void {
+    const releaseChannel = automaticChannel;
+    if (releaseChannel === null || automaticCheckInFlight === releaseChannel) {
+      return;
+    }
+    automaticCheckInFlight = releaseChannel;
+    lastAutomaticCheck = { releaseChannel, startedAt: deps.now() };
+    void checkForUpdates({ releaseChannel, intent: "automatic", silent: true }).finally(() => {
+      if (automaticCheckInFlight === releaseChannel) {
+        automaticCheckInFlight = null;
+      }
+    });
+  }
+
+  function syncPendingRecheckTimer(): void {
+    const shouldRecheck = automaticChannel !== null && state.status === "pending";
+    if (shouldRecheck && pendingRecheckTimer === null) {
+      pendingRecheckTimer = setInterval(runAutomaticCheck, PENDING_RECHECK_MS);
+    } else if (!shouldRecheck && pendingRecheckTimer !== null) {
+      clearInterval(pendingRecheckTimer);
+      pendingRecheckTimer = null;
+    }
+  }
+
+  function applyAutomaticChannel(releaseChannel: DesktopReleaseChannel): void {
+    automaticChannel = releaseChannel;
+    periodicTimer ??= setInterval(runAutomaticCheck, AUTOMATIC_CHECK_INTERVAL_MS);
+    const isDue =
+      lastAutomaticCheck === null ||
+      lastAutomaticCheck.releaseChannel !== releaseChannel ||
+      deps.now() - lastAutomaticCheck.startedAt >= AUTOMATIC_CHECK_INTERVAL_MS;
+    if (isDue) {
+      runAutomaticCheck();
+    }
+    syncPendingRecheckTimer();
+  }
+
+  function stopAutomaticChecks(): void {
+    automaticChannel = null;
+    if (periodicTimer !== null) {
+      clearInterval(periodicTimer);
+      periodicTimer = null;
+    }
+    syncPendingRecheckTimer();
+  }
+
+  function retainAutomaticChecks(releaseChannel: DesktopReleaseChannel): () => void {
+    const holder = Symbol("automatic-update-checks");
+    automaticCheckHolders.set(holder, releaseChannel);
+    applyAutomaticChannel(releaseChannel);
+    return () => {
+      if (!automaticCheckHolders.delete(holder)) {
+        return;
+      }
+      const remaining = [...automaticCheckHolders.values()].at(-1);
+      if (remaining === undefined) {
+        stopAutomaticChecks();
+      } else if (remaining !== automaticChannel) {
+        applyAutomaticChannel(remaining);
+      }
+    };
   }
 
   async function checkForUpdates(options?: {
@@ -353,5 +433,6 @@ export function createDesktopAppUpdater(deps: DesktopAppUpdaterDeps): DesktopApp
     },
     checkForUpdates,
     installUpdate,
+    retainAutomaticChecks,
   };
 }

@@ -93,8 +93,8 @@ describe("tool-call presentation", () => {
       detail: { type: "unknown", input: { values: [null, " ", {}] }, output: [] },
     },
     {
-      label: "Paseo result with no rendered fields",
-      toolName: "paseo.create_agent",
+      label: "Ait result with no rendered fields",
+      toolName: "ait.create_agent",
       detail: { type: "unknown", input: {}, output: { structuredContent: { ignored: "value" } } },
     },
   ];
@@ -313,9 +313,9 @@ it("uses an opaque sender ID when no title is available", () => {
   expect(presentation.summary).toBe("remote::worker");
 });
 
-it("shows the target agent title as context for Paseo agent tools", () => {
+it("shows the target agent title as context for Ait agent tools", () => {
   const presentation = buildToolCallPresentation({
-    toolName: "mcp__paseo__kill_agent",
+    toolName: "mcp__ait__kill_agent",
     status: "completed",
     error: null,
     detail: { type: "unknown", input: { agentId: "agt_1" }, output: null },

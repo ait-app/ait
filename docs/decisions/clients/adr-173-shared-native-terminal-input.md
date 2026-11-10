@@ -1,7 +1,16 @@
+---
+id: ADR-173
+status: accepted
+date: 2026-10-20
+supersedes:
+  - clients/adr-114-ios-terminal-ime.md
+paths:
+  - apps/mobile
+---
+
 # ADR-173：移动端终端输入复用 React Native
 
-- 状态：Accepted，取代 [ADR-114](adr-114-ios-terminal-ime.md)
-- 日期：2026-10-20
+- 状态说明：Accepted，取代 [ADR-114](adr-114-ios-terminal-ime.md)
 
 iOS 0.1.12 的自定义 `UITextView` 将自己设为 delegate，和全局 `KeyboardProvider`
 的代理转发组合后，首字符触发 UIKit 内部选区回调递归，造成原生栈溢出。

@@ -1,7 +1,17 @@
+---
+id: ADR-093
+status: accepted
+date: 2026-10-07
+amends:
+  - daemon/adr-036-daemon-crate-dispatch.md
+  - daemon/adr-037-daemon-model-context.md
+paths:
+  - crates/api
+  - crates/model
+---
+
 # ADR-093：以可消费 Context 逐级处理请求
 
-- 状态：Accepted。
-- 日期：2026-10-07。
 - 背景：API 先从全局路由表选出 crate 和能力组，再调用同一处维护的执行分支，重复表达了
   请求归属。用户要求使用 `Option<Context>` 逐级处理，处理后直接结束流程。
 - 范围：修订 ADR-036、ADR-037 的请求分发方式；不改变 crate 依赖方向及传输协议。

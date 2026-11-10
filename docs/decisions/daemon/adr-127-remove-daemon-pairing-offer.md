@@ -1,7 +1,15 @@
+---
+id: ADR-127
+status: accepted
+date: 2026-10-11
+amends:
+  - daemon/adr-026-canonical-paseo-websocket-surface.md
+paths:
+  - crates/api
+---
+
 # ADR-127：移除 daemon 配对 offer RPC
 
-- 状态：已实现
-- 日期：2026-10-11
 - 关系：修订 [ADR-026](adr-026-canonical-paseo-websocket-surface.md) 的 daemon 方法清单，延续 [ADR-061](../clients/adr-061-app-ait-e2e-remove-relay-plugin.md) 的配对范围决策。
 
 ## 背景

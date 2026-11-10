@@ -1,8 +1,12 @@
+---
+id: ADR-142
+status: accepted
+date: 2026-10-12
+paths:
+  - crates/terminal
+---
+
 # ADR-142：PTY 拥有基础终端设备属性回复
-
-状态：已接受
-
-日期：2026-10-12
 
 ## 背景
 

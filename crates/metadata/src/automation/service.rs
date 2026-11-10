@@ -7,7 +7,8 @@ use domain::workspace::registry::RegistryError;
 use model::workspace::registry::WorkspaceRegistry;
 
 use crate::automation::ports::{
-    AutomationEvent, AutomationEventSink, ScriptSnapshot, SetupSnapshot, WorkspaceAutomationError,
+    AutomationEvent, AutomationEventSink, ScriptRunCompletion, ScriptRunSnapshot, ScriptRunTarget,
+    ScriptSnapshot, SetupSnapshot, TeardownJob, WorkspaceAutomationError,
     WorkspaceAutomationRuntime, WorkspacePlacement,
 };
 
@@ -176,14 +177,16 @@ impl WorkspaceAutomation {
             .map_err(Into::into)
     }
 
-    /// Start one configured script.
+    /// Start one configured script with caller `args` passed as positional parameters.
     ///
     /// # Errors
-    /// Returns missing workspace, blocked automation, registry, or runtime failures.
+    /// Returns missing workspace, blocked automation, refused arguments, registry, or runtime
+    /// failures.
     pub(crate) fn start_script(
         &self,
         workspace_id: &str,
         script_name: &str,
+        args: &[String],
     ) -> Result<ScriptSnapshot, WorkspaceAutomationServiceError> {
         let workspace = self.active_workspace(workspace_id)?;
         if workspace.untrusted_source.is_some() {
@@ -194,7 +197,7 @@ impl WorkspaceAutomation {
         }
         let result = self
             .runtime
-            .start_script(&placement(&workspace), script_name)?;
+            .start_script(&placement(&workspace), script_name, args)?;
         self.publish_scripts(&workspace);
         Ok(result)
     }
@@ -214,6 +217,55 @@ impl WorkspaceAutomation {
             .stop_script(&placement(&workspace), script_name)?;
         self.publish_scripts(&workspace);
         Ok(result)
+    }
+
+    /// Read one retained script run of an active Workspace.
+    ///
+    /// # Errors
+    /// Returns missing workspace, registry, unknown-run, or process inspection failures.
+    pub(crate) fn script_run(
+        &self,
+        workspace_id: &str,
+        target: ScriptRunTarget<'_>,
+    ) -> Result<ScriptRunSnapshot, WorkspaceAutomationServiceError> {
+        self.active_workspace(workspace_id)?;
+        self.runtime
+            .script_run(workspace_id, target)
+            .map_err(Into::into)
+    }
+
+    /// Observe completion of one retained script run of an active Workspace.
+    ///
+    /// # Errors
+    /// Returns missing workspace, registry, or unknown-run failures.
+    pub(crate) fn script_run_completion(
+        &self,
+        workspace_id: &str,
+        run_id: &str,
+    ) -> Result<ScriptRunCompletion, WorkspaceAutomationServiceError> {
+        self.active_workspace(workspace_id)?;
+        self.runtime
+            .script_run_completion(workspace_id, run_id)
+            .map_err(Into::into)
+    }
+
+    /// Prepare teardown for the checkout of `workspace`, which may already be archived.
+    ///
+    /// Workspaces whose automation is still blocked for untrusted code never run teardown,
+    /// matching the setup trust gate.
+    ///
+    /// # Errors
+    /// Returns configuration or port allocation failures.
+    pub fn prepare_teardown(
+        &self,
+        workspace: &PersistedWorkspaceRecord,
+    ) -> Result<Option<TeardownJob>, WorkspaceAutomationServiceError> {
+        if workspace.untrusted_source.is_some() {
+            return Ok(None);
+        }
+        self.runtime
+            .prepare_teardown(&placement(workspace))
+            .map_err(Into::into)
     }
 
     fn publish_scripts(&self, workspace: &PersistedWorkspaceRecord) {

@@ -1,7 +1,17 @@
+---
+id: ADR-102
+status: accepted
+date: 2026-10-07
+amends:
+  - providers/adr-089-provider-owned-composition.md
+  - providers/adr-101-provider-summary-generator.md
+paths:
+  - crates/provider
+  - crates/model
+---
+
 # ADR-102：共享协作契约归 model，Provider 不依赖 metadata
 
-- 状态：接受
-- 日期：2026-10-07
 - 修订：[ADR-101](adr-101-provider-summary-generator.md) 的剩余依赖边界，以及
   [ADR-089](adr-089-provider-owned-composition.md) 中 provider 的内部依赖集合。
 

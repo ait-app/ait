@@ -49,8 +49,8 @@ fn same_cwd_workspaces_run_and_stop_scripts_independently() {
     let automation = automation();
     let first = placement(root.path(), "first");
     let second = placement(root.path(), "second");
-    let one = automation.start_script(&first, "serve").unwrap();
-    let two = automation.start_script(&second, "serve").unwrap();
+    let one = automation.start_script(&first, "serve", &[]).unwrap();
+    let two = automation.start_script(&second, "serve", &[]).unwrap();
     assert_ne!(one.terminal_id, two.terminal_id);
     assert_ne!(one.port, two.port);
     automation.stop_script(&first, "serve").unwrap();
@@ -71,7 +71,7 @@ fn plain_script_does_not_expose_a_service_port_from_config() {
     let configured = automation.list_scripts(&workspace).unwrap().remove(0);
     assert_eq!(configured.kind, ScriptType::Script);
     assert_eq!(configured.port, None);
-    let started = automation.start_script(&workspace, "build").unwrap();
+    let started = automation.start_script(&workspace, "build", &[]).unwrap();
     assert_eq!(started.kind, ScriptType::Script);
     assert_eq!(started.port, None);
     assert_eq!(wait_script(&automation, &workspace).exit_code, Some(0));
@@ -86,7 +86,7 @@ fn service_keeps_its_explicit_port_and_kind_after_exit() {
     );
     let automation = automation();
     let workspace = placement(root.path(), "serve");
-    let started = automation.start_script(&workspace, "serve").unwrap();
+    let started = automation.start_script(&workspace, "serve", &[]).unwrap();
     assert_eq!(started.port, Some(4321));
     let finished = wait_script(&automation, &workspace);
     assert_eq!(finished.kind, ScriptType::Service);
@@ -104,9 +104,9 @@ fn exited_script_can_restart_with_a_new_terminal_identity() {
     );
     let automation = automation();
     let workspace = placement(root.path(), "restart");
-    let first = automation.start_script(&workspace, "once").unwrap();
+    let first = automation.start_script(&workspace, "once", &[]).unwrap();
     assert_eq!(wait_script(&automation, &workspace).exit_code, Some(0));
-    let second = automation.start_script(&workspace, "once").unwrap();
+    let second = automation.start_script(&workspace, "once", &[]).unwrap();
     assert_ne!(first.terminal_id, second.terminal_id);
     assert_eq!(wait_script(&automation, &workspace).exit_code, Some(0));
     assert_eq!(
@@ -124,7 +124,7 @@ fn removing_script_configuration_keeps_the_live_process_stoppable() {
     );
     let automation = automation();
     let workspace = placement(root.path(), "removed-config");
-    let started = automation.start_script(&workspace, "serve").unwrap();
+    let started = automation.start_script(&workspace, "serve", &[]).unwrap();
     config(root.path(), &json!({"scripts":{}}));
     let listed = automation.list_scripts(&workspace).unwrap();
     assert_eq!(listed.len(), 1);
@@ -132,7 +132,7 @@ fn removing_script_configuration_keeps_the_live_process_stoppable() {
     assert!(listed[0].running);
     assert!(!automation.stop_script(&workspace, "serve").unwrap().running);
     assert!(matches!(
-        automation.start_script(&workspace, "serve"),
+        automation.start_script(&workspace, "serve", &[]),
         Err(WorkspaceAutomationError::UnknownScript(_))
     ));
 }
@@ -147,7 +147,7 @@ fn unknown_script_does_not_spawn_or_pollute_another_workspace() {
     let automation = automation();
     let workspace = placement(root.path(), "unknown");
     assert!(matches!(
-        automation.start_script(&workspace, "missing"),
+        automation.start_script(&workspace, "missing", &[]),
         Err(WorkspaceAutomationError::UnknownScript(_))
     ));
     assert!(!root.path().join("unexpected").exists());

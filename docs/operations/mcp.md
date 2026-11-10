@@ -12,7 +12,7 @@ daemon 在现有监听地址提供 Streamable HTTP MCP：`http://127.0.0.1:7316/
 
 ## Provider 自动注入
 
-daemon 为 Codex、Claude、DSH ACP 和 MiniMax Code 自动添加名为 `ait` 的 HTTP MCP 配置，使用本机实际
+daemon 为 Codex、Claude、DSH（ACP 与原生 Host）、MiniMax Code、OpenCode 和 Pi 自动添加名为 `ait` 的 HTTP MCP 配置，使用本机实际
 监听端口和 MCP 专用 Bearer 令牌。客户端完成协议握手、发现工具并把工具提供给模型；
 调用自动携带 `X-Ait-Agent-Id`，模型无需填写调用者身份或令牌。专用令牌只被 MCP 路由接受，
 不能用于 daemon 信息或 WebSocket 接口；外部客户端仍可使用原有 daemon 凭证。
@@ -22,8 +22,20 @@ daemon 为 Codex、Claude、DSH ACP 和 MiniMax Code 自动添加名为 `ait` �
 地址、身份和令牌。专用令牌每次 daemon 启动都会更换。只读历史会话不注入。
 
 `injectIntoAgents` 控制后续原生会话的打开，不强制重建已有会话。已有用户配置中的 `ait`
-项目优先，其余用户 MCP 项保留。OpenCode、DSH native、Pi、OMP 和 Antigravity
-尚未接入这条自动注入路径，会保持原有启动行为。
+项目优先，其余用户 MCP 项保留。OMP 和 Antigravity 尚未接入这条自动注入路径：两者只从
+用户或项目配置文件读取 MCP，没有已确认的单会话、不写文件的入口，会保持原有启动行为。
+
+各 Provider 的交付方式（[ADR-232](../decisions/providers/adr-232-agent-mcp-session-delivery.md)）：
+
+| Provider      | 交付方式                                                                                                                                       | 凭据位置                                            |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| OpenCode      | ACP `session/new`、`session/load`、`session/resume` 的 `mcpServers`；每个 `opencode acp` 进程自带私有 server，运行时添加，不写 `opencode.json` | 仅协议消息                                          |
+| Pi            | 每个原生进程以 `--extension` 加载私有扩展，扩展调用 `pi.registerMcpServer`，不写 `mcp.json`                                                    | 属主专用临时目录（0700，文件 0600），进程结束后删除 |
+| DSH 原生 Host | 每个会话的私有 Web Host 以 `--patch` 叠加层插入 `dsh-mcp-client` 插件，不写 profile 的 `cordis.patch.yml`                                      | 属主专用临时文件（0600），Host 结束后删除           |
+
+这三个 Provider 的会话在打开时连接 MCP；运行中的会话拒绝修改 `mcpServers`，需新建会话。
+原生配置文件中同名的 `ait` 项按原生规则处理：Pi 的 `mcp.json` 同名项优先于注册项；DSH profile 中
+`serverName` 为 `ait` 的插件会与注入项冲突；OpenCode 的运行时添加会替换同名项。
 
 已有配置为 `false` 时，可调用 RPC 方法 `daemon.config.set.request` 开启，参数如下；
 随后创建 Agent 或重启 daemon 恢复会话：
@@ -91,7 +103,7 @@ curl --fail-with-body --unix-socket /absolute/private-directory/mcp.sock \
 Workspace Bot 的隐藏会话，以及 Bot 通过 `create_agent` 启动的 Agent（带保留标签 `ait.bot.scope`），不使用共享令牌，而使用 daemon 签发的作用域凭据，
 会替换用户配置的 `ait` 项。Bot 会话不受 `injectIntoAgents` 控制，子树会话仍受其控制；无法交付凭据时移除 `ait` 项，不回退到共享令牌。
 凭据为 64 个十六进制字符，只在 daemon 内存中以 SHA-256 摘要保存，每次启动重新生成；同一 Agent 重新打开会话、Bot 暂停／移除／被取代、
-会话关闭或归档时作废。Claude 经属主专用（0600）临时 MCP 配置文件取得凭据，原生进程结束时删除；允许运行命令的 Agent 仍可能读到它，见 [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md) 的已接受风险。
+会话关闭或归档时作废。Claude、Pi 和 DSH 原生 Host 经属主专用（0600）临时文件取得凭据，原生进程结束时删除；允许运行命令的 Agent 仍可能读到它，见 [ADR-215](../decisions/bot/adr-215-bot-permissions-and-scoped-mcp.md) 的已接受风险。
 
 - 调用携带的 `X-Ait-Agent-Id` 若存在必须与凭据所属 Agent 一致，否则 `-32602`。共享令牌通过该头指向带 `ait.bot.scope` 的 Agent 同样被拒绝，该 Agent 必须使用自己的凭据。
 - 每次请求按 Workspace 当前 Bot 的授权过滤：未授权工具不出现在 `tools/list`，调用返回 `-32602 "Unknown or unavailable tool"`；
@@ -117,7 +129,7 @@ Agent 编排、Workspace 隔离、终端与调度操作说明。默认允许自�
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Agent              | `create_agent`, `send_agent_prompt`, `get_agent_status`, `list_agents`, `cancel_agent`, `archive_agent`, `kill_agent`, `update_agent`, `get_agent_activity`, `set_agent_mode`, `wait_for_agent` |
 | Workspace          | `create_workspace`, `list_workspaces`, `rename_workspace`, `archive_workspace`                                                                                                                  |
-| 脚本               | `list_workspace_scripts`, `start_workspace_script`, `stop_workspace_script`                                                                                                                     |
+| 脚本               | `list_workspace_scripts`, `start_workspace_script`, `stop_workspace_script`, `get_workspace_script_run`, `wait_for_workspace_script`                                                            |
 | 终端               | `list_terminals`, `create_terminal`, `kill_terminal`, `capture_terminal`, `send_terminal_keys`                                                                                                  |
 | 定时任务           | `create_schedule`, `list_schedules`, `inspect_schedule`, `pause_schedule`, `resume_schedule`, `update_schedule`, `schedule_logs`, `run_schedule_once`, `delete_schedule`                        |
 | 心跳               | `create_heartbeat`, `delete_heartbeat`                                                                                                                                                          |
@@ -161,7 +173,12 @@ Agent 调用可发送 `X-Ait-Agent-Id: <agent-id>`，继承调用者 cwd 和 Wor
 接受同样的参数，并在 macOS/Linux 上限制该 Workspace 中受支持 Agent 进程的写入范围，
 详见 [ADR-215](../decisions/workspace/adr-215-sandboxed-worktree-isolation.md)；Linux 要求安装 bubblewrap 并允许非特权 user namespace，详见 [ADR-223](../decisions/workspace/adr-223-linux-worktree-sandbox.md)；macOS/Linux 以外的平台会拒绝创建。
 
-脚本位于 Workspace 的 `ait.json`，按 `scriptName` 启停。终端 `keys` 可以是 `Enter`、`C-c`
+脚本位于 Workspace 的 `ait.json`，按 `scriptName` 启停。每次启动记录一次运行并返回 `script.runId`；
+声明了 `acceptsArgs` 的脚本可以传入字符串数组 `args`，每项作为一个位置参数传给脚本，不经 shell 解析。
+`wait_for_workspace_script` 等待运行结束（默认 30 秒、最多 45 秒，超时不停止运行），
+`get_workspace_script_run` 按 `runId` 或脚本名读取提交、结果、耗时和有界输出；两者属于 Bot 的
+`observe` 组，作用域与 `list_workspace_scripts` 相同。字段与生命周期见
+[Workspace 自动化](workspace-automation.md)。终端 `keys` 可以是 `Enter`、`C-c`
 等令牌；`literal: true` 发送原样文本。
 
 Schedule 归属于固定 Workspace；外部调用提供 `workspaceId`、`provider`，Agent 调用可以继承。

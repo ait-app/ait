@@ -32,6 +32,8 @@ pub(super) struct Runtime {
     writer: Writer,
     events: mpsc::Receiver<Value>,
     closed: bool,
+    /// Private MCP overlay applied to this Host, removed once the Host is stopped.
+    overlay: Option<super::mcp::Overlay>,
 }
 
 impl Runtime {
@@ -40,11 +42,23 @@ impl Runtime {
         client: &DeepSeekHarnessClient,
         cwd: &str,
     ) -> Result<Self, AgentSessionError> {
+        Self::open_with(client, cwd, None).await
+    }
+
+    /// Start a Host like [`Self::open`], applying a session's private MCP `overlay`, if any.
+    /// The overlay lives until the Host is stopped.
+    pub(super) async fn open_with(
+        client: &DeepSeekHarnessClient,
+        cwd: &str,
+        overlay: Option<super::mcp::Overlay>,
+    ) -> Result<Self, AgentSessionError> {
         let diagnostics = crate::local::diagnostics::Diagnostics::new("deepseek-harness");
         let mut command = client.command();
+        command.arg("--profile").arg(&client.native_profile);
+        if let Some(overlay) = &overlay {
+            command.args(overlay.arguments());
+        }
         command
-            .arg("--profile")
-            .arg(&client.native_profile)
             .args(["--no-open", "--host", "127.0.0.1", "--port", "0"])
             .current_dir(cwd)
             .stdin(Stdio::null())
@@ -76,6 +90,7 @@ impl Runtime {
                 client_id,
                 child,
                 closed: false,
+                overlay,
             })
         } else {
             let category = if result.is_err() {
@@ -233,6 +248,13 @@ impl Runtime {
         if self.closed {
             return Ok(());
         }
+        let stopped = self.stop().await;
+        // The Host has exited or been killed; its MCP credentials go with it.
+        self.overlay = None;
+        stopped
+    }
+
+    async fn stop(&mut self) -> Result<(), AgentSessionError> {
         self.diagnostics.flush();
         self.closed = true;
         self.reader.abort();

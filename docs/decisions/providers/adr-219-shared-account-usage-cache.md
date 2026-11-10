@@ -1,7 +1,13 @@
+---
+id: ADR-219
+status: accepted
+date: 2026-11-08
+paths:
+  - crates/provider
+---
+
 # ADR-219：共享套餐缓存与 Codex 查询进程
 
-- 状态：已接受
-- 日期：2026-11-08
 - 基线：v0.2.0（5e50a7a0）。延续 ADR-119 的账号隔离与原生额度边界。
 
 ## 问题

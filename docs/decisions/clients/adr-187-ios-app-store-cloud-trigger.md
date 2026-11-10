@@ -1,6 +1,16 @@
+---
+id: ADR-187
+status: accepted
+date: 2026-10-24
+amends:
+  - clients/adr-183-ios-xcode-cloud-release.md
+paths:
+  - apps/mobile
+---
+
 # ADR-187：GitHub 手动入口用专用标签触发 iOS App Store 构建
 
-状态：GitHub 触发入口已撤销（2026-10-24）；App Store / 外部 TestFlight 的 Cloud
+状态说明：GitHub 触发入口已撤销（2026-10-24）；App Store / 外部 TestFlight 的 Cloud
 分发配置和 [ADR-183](adr-183-ios-xcode-cloud-release.md) 的 `Default` 内部测试工作流保留。
 
 ## 撤销 GitHub 触发入口

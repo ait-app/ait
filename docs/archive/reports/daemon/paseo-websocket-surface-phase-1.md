@@ -127,7 +127,7 @@ cargo llvm-cov --workspace --html -- \
 完整本地 HTML 位于 `target/llvm-cov/html/index.html`；可评审摘要保存在
 [覆盖率 artifact](paseo-websocket-surface-phase-1-coverage.json)，包含命令、版本、排除项、
 crate 汇总和变更文件行计数。可比基线是 ADR-025 的
-[artifact](../../../reports/workspace/paseo-registry-coverage.json)：26,237 / 33,111（79.24%），新 server package
+[artifact](../workspace/paseo-registry-coverage.json)：26,237 / 33,111（79.24%），新 server package
 2,841 / 2,980（95.34%）。
 
 新增生产面使新 server 百分比下降，主要未覆盖处是 API 的逐类业务错误映射、图标所有格式与

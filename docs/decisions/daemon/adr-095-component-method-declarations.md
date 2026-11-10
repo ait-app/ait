@@ -1,7 +1,17 @@
+---
+id: ADR-095
+status: accepted
+date: 2026-10-07
+amends:
+  - daemon/adr-026-canonical-paseo-websocket-surface.md
+paths:
+  - crates/model
+  - crates/api
+  - scripts
+---
+
 # ADR-095：组件自行声明方法元数据
 
-- 状态：Accepted。
-- 日期：2026-10-07。
 - 范围：`model` 方法类型、各功能组件与能力聚合、API 协议校验和审计脚本。
 - 修订：[ADR-026](adr-026-canonical-paseo-websocket-surface.md) 中运行时中心方法目录、Paseo 名称映射和功能分组的决策；延续 [ADR-093](adr-093-consumable-request-context.md) 的组件分发和 [ADR-094](../clients/adr-094-canonical-ait-client-methods.md) 的 Ait 方法名。
 

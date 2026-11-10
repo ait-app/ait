@@ -38,12 +38,12 @@ separate from missing implementation.
 ## Completion
 
 The Codex follow-up against Paseo `4f9d9d6de2236486ecc2ad886a2c37f4b92271e0` and Codex
-0.164.0 is recorded separately in the [2026-10-27 compatibility report](../../reports/providers/codex-paseo-compatibility-2026-10-27.md)
+0.164.0 is recorded separately in the [2026-10-27 compatibility report](../reports/providers/codex-paseo-compatibility-2026-10-27.md)
 and [ADR-193](../../decisions/providers/adr-193-codex-native-protocol-compatibility.md).
 Its focused tests and compile checks do not repeat the historical workspace coverage below.
 
 All applicable capabilities against the pinned Paseo version are implemented and documented in the
-[capability matrix and delivery report](../../reports/providers/provider-parity.md). At initial completion, sequential workspace
+[capability matrix and delivery report](../reports/providers/provider-parity.md). At initial completion, sequential workspace
 tests passed **1696 tests, 0 failed, 8 ignored**; format, diff checks and strict lint passed.
 Installed Codex 0.153.4 inference/history and Claude 2.1.221 model inspection passed. Claude online
 inference remains unverified because native OAuth refresh fails; this is recorded separately from
@@ -53,6 +53,6 @@ implementation and offline validation.
 
 Historical full-workspace line coverage: **85.24% (57,553/67,518)**. Scope, exact commands,
 source fingerprint, per-crate/production results, ignored tests and platform limitations are in the
-[delivery report](../../reports/providers/provider-parity.md) and [reviewable JSON artifact](../../reports/providers/provider-parity-coverage.json).
+[delivery report](../reports/providers/provider-parity.md) and [reviewable JSON artifact](../reports/providers/provider-parity-coverage.json).
 Validation after merging PR #109 is recorded separately in the
-[consolidation report](../../reports/clients/local-workspace-consolidation.md).
+[consolidation report](../reports/clients/local-workspace-consolidation.md).

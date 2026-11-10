@@ -2,7 +2,7 @@
 //!
 //! Local `ait.json` setup and script process runtime.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::fmt::Write as _;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
@@ -18,17 +18,21 @@ use model::storage::project::ProjectConfigStore;
 use serde_json::Value;
 
 use crate::automation::ports::{
-    AutomationEvent, AutomationEventSink, ScriptSnapshot, ScriptType, SetupCommandSnapshot,
-    SetupLifecycle, SetupSnapshot, WorkspaceAutomationError, WorkspaceAutomationRuntime,
+    AutomationEvent, AutomationEventSink, ScriptRunCompletion, ScriptRunOutcome, ScriptRunSnapshot,
+    ScriptRunTarget, ScriptSnapshot, ScriptType, SetupCommandSnapshot, SetupLifecycle,
+    SetupSnapshot, TeardownJob, WorkspaceAutomationError, WorkspaceAutomationRuntime,
     WorkspacePlacement,
 };
+
+use runs::{OutputBuffer, ScriptRun};
 
 const CONFIG_BYTES: usize = 1024 * 1024;
 const OUTPUT_BYTES: usize = 64 * 1024;
 const CAPTURE_BYTES: u64 = 8 * 1024 * 1024;
 const SETUP_TIMEOUT: Duration = Duration::from_mins(30);
 const POLL_INTERVAL: Duration = Duration::from_millis(25);
-const SCRIPT_EXIT_AUDIT: Duration = Duration::from_secs(5);
+/// Exit polling interval for script runs; it bounds how late a run waiter is released.
+const SCRIPT_EXIT_POLL: Duration = Duration::from_millis(100);
 const TRUNCATION_MARKER: &[u8] = b"\n... setup output truncated ...\n";
 
 /// Process-backed workspace setup and script adapter.
@@ -82,6 +86,8 @@ impl std::fmt::Debug for Inner {
 #[derive(Debug, Default)]
 struct State {
     scripts: HashMap<(String, String), ScriptProcess>,
+    /// Finished runs replaced by a newer run of the same script, per Workspace.
+    runs: HashMap<String, VecDeque<ScriptRun>>,
     setups: HashMap<String, SetupSnapshot>,
     setup_revision: u64,
     setup_running: HashSet<String>,
@@ -105,7 +111,8 @@ struct ScriptProcess {
     port: Option<u16>,
     terminal_id: String,
     child: Option<Child>,
-    exit_code: Option<i32>,
+    accepts_args: bool,
+    run: ScriptRun,
 }
 
 #[derive(Debug, Clone)]
@@ -113,11 +120,13 @@ struct ScriptConfig {
     command: String,
     kind: ScriptType,
     port: Option<u16>,
+    accepts_args: bool,
 }
 
 #[derive(Debug, Default)]
 struct PaseoConfig {
     setup: Vec<String>,
+    teardown: Vec<String>,
     scripts: BTreeMap<String, ScriptConfig>,
 }
 
@@ -158,7 +167,10 @@ impl WorkspaceAutomationRuntime for LocalWorkspaceAutomation {
         for (name, configured) in &config.scripts {
             let key = (workspace.workspace_id.clone(), name.clone());
             snapshots.push(match state.scripts.get(&key) {
-                Some(process) => process.snapshot(name),
+                Some(process) => ScriptSnapshot {
+                    accepts_args: configured.accepts_args,
+                    ..process.snapshot(name)
+                },
                 None => configured.snapshot(name),
             });
         }
@@ -187,12 +199,20 @@ impl WorkspaceAutomationRuntime for LocalWorkspaceAutomation {
         &self,
         workspace: &WorkspacePlacement,
         script_name: &str,
+        args: &[String],
     ) -> Result<ScriptSnapshot, WorkspaceAutomationError> {
         let config = self.read_config(workspace)?;
         let configured = config
             .scripts
             .get(script_name)
             .ok_or_else(|| WorkspaceAutomationError::UnknownScript(script_name.to_owned()))?;
+        if !args.is_empty() && !configured.accepts_args {
+            return Err(WorkspaceAutomationError::InvalidArguments(format!(
+                "Script '{script_name}' does not accept arguments; set \"acceptsArgs\": true in ait.json"
+            )));
+        }
+        runs::validate_args(args)?;
+        let evidence = runs::checkout_evidence(&workspace.cwd);
         let key = (workspace.workspace_id.clone(), script_name.to_owned());
         let mut state = lock(&self.inner.state);
         if let Some(process) = state.scripts.get_mut(&key) {
@@ -213,37 +233,40 @@ impl WorkspaceAutomationRuntime for LocalWorkspaceAutomation {
             std::process::id(),
             self.inner.sequence.fetch_add(1, Ordering::Relaxed)
         );
-        let mut command = shell_command(&configured.command);
-        configure_command(&mut command, workspace, workspace_port);
-        command
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        configure_process_group(&mut command);
-        let child = command.spawn().map_err(|error| {
-            WorkspaceAutomationError::Io(format!("Failed to start script '{script_name}': {error}"))
-        })?;
+        let output = Arc::new(Mutex::new(OutputBuffer::default()));
+        let child = spawn_script(workspace, configured, script_name, args, workspace_port)
+            .and_then(|(mut child, reader)| {
+                match runs::capture_output(reader, output.clone(), script_name) {
+                    Ok(()) => Ok(child),
+                    Err(error) => {
+                        let _ = terminate_child(&mut child);
+                        Err(script_io(script_name, &error))
+                    }
+                }
+            })?;
         let process = ScriptProcess {
             kind: configured.kind,
             hostname: script_name.to_owned(),
             port: exposed_port,
             terminal_id,
             child: Some(child),
-            exit_code: None,
+            accepts_args: configured.accepts_args,
+            run: ScriptRun::start(script_name, args, evidence, output),
         };
         let snapshot = process.snapshot(script_name);
-        state.scripts.insert(key, process);
+        let run_id = process.run.id().to_owned();
+        if let Some(previous) = state.scripts.insert(key, process) {
+            runs::retain(&mut state.runs, &workspace.workspace_id, previous.run);
+        }
         drop(state);
-        if lock(&self.inner.event_sink).is_some() {
-            let inner = Arc::downgrade(&self.inner);
-            let workspace = workspace.clone();
-            let name = script_name.to_owned();
-            if let Err(error) = thread::Builder::new()
-                .name(format!("workspace-script-{}", workspace.workspace_id))
-                .spawn(move || monitor_script(&inner, &workspace, &name, SCRIPT_EXIT_AUDIT))
-            {
-                tracing::warn!(%error, "could not observe Workspace script exit");
-            }
+        let inner = Arc::downgrade(&self.inner);
+        let workspace = workspace.clone();
+        let name = script_name.to_owned();
+        if let Err(error) = thread::Builder::new()
+            .name(format!("workspace-script-{}", workspace.workspace_id))
+            .spawn(move || monitor_script(&inner, &workspace, &name, &run_id, SCRIPT_EXIT_POLL))
+        {
+            tracing::warn!(%error, "could not observe Workspace script exit");
         }
         Ok(snapshot)
     }
@@ -267,8 +290,54 @@ impl WorkspaceAutomationRuntime for LocalWorkspaceAutomation {
             WorkspaceAutomationError::Io(format!("Failed to reap script '{script_name}': {error}"))
         })?;
         process.child = None;
-        process.exit_code = status.code();
+        process.run.finish(status.code(), ScriptRunOutcome::Stopped);
         Ok(process.snapshot(script_name))
+    }
+
+    fn script_run(
+        &self,
+        workspace_id: &str,
+        target: ScriptRunTarget<'_>,
+    ) -> Result<ScriptRunSnapshot, WorkspaceAutomationError> {
+        let mut state = lock(&self.inner.state);
+        if let Some(process) = current_run(&mut state, workspace_id, target) {
+            refresh_process(process)?;
+            return Ok(process.run.snapshot());
+        }
+        retained_run(&state, workspace_id, target)
+            .map(ScriptRun::snapshot)
+            .ok_or_else(|| unknown_run(target))
+    }
+
+    fn script_run_completion(
+        &self,
+        workspace_id: &str,
+        run_id: &str,
+    ) -> Result<ScriptRunCompletion, WorkspaceAutomationError> {
+        let target = ScriptRunTarget::Run(run_id);
+        let mut state = lock(&self.inner.state);
+        if let Some(process) = current_run(&mut state, workspace_id, target) {
+            return Ok(process.run.completion());
+        }
+        retained_run(&state, workspace_id, target)
+            .map(ScriptRun::completion)
+            .ok_or_else(|| unknown_run(target))
+    }
+
+    fn prepare_teardown(
+        &self,
+        workspace: &WorkspacePlacement,
+    ) -> Result<Option<TeardownJob>, WorkspaceAutomationError> {
+        let config = self.read_config(workspace)?;
+        if config.teardown.is_empty() {
+            return Ok(None);
+        }
+        let port = workspace_port(&mut lock(&self.inner.state), &workspace.workspace_id)?;
+        let inner = Arc::downgrade(&self.inner);
+        let workspace = workspace.clone();
+        Ok(Some(TeardownJob::new(move || {
+            run_teardown(&inner, &workspace, &config.teardown, port)
+        })))
     }
 
     fn start_setup(
@@ -351,6 +420,8 @@ impl ScriptConfig {
             running: false,
             exit_code: None,
             terminal_id: None,
+            run_id: None,
+            accepts_args: self.accepts_args,
         }
     }
 }
@@ -363,10 +434,56 @@ impl ScriptProcess {
             hostname: self.hostname.clone(),
             port: self.port,
             running: self.child.is_some(),
-            exit_code: self.exit_code,
+            exit_code: self.run.exit_code(),
             terminal_id: Some(self.terminal_id.clone()),
+            run_id: Some(self.run.id().to_owned()),
+            accepts_args: self.accepts_args,
         }
     }
+}
+
+/// Find the current process entry holding `target` in `workspace_id`.
+fn current_run<'a>(
+    state: &'a mut State,
+    workspace_id: &str,
+    target: ScriptRunTarget<'_>,
+) -> Option<&'a mut ScriptProcess> {
+    match target {
+        ScriptRunTarget::LatestOf(name) => state
+            .scripts
+            .get_mut(&(workspace_id.to_owned(), name.to_owned())),
+        ScriptRunTarget::Run(run_id) => {
+            state
+                .scripts
+                .iter_mut()
+                .find_map(|((workspace, _), process)| {
+                    (workspace == workspace_id && process.run.id() == run_id).then_some(process)
+                })
+        }
+    }
+}
+
+/// Find a finished run replaced by a newer run; the latest run of a script is never here.
+fn retained_run<'a>(
+    state: &'a State,
+    workspace_id: &str,
+    target: ScriptRunTarget<'_>,
+) -> Option<&'a ScriptRun> {
+    let ScriptRunTarget::Run(run_id) = target else {
+        return None;
+    };
+    state
+        .runs
+        .get(workspace_id)?
+        .iter()
+        .find(|run| run.id() == run_id)
+}
+
+fn unknown_run(target: ScriptRunTarget<'_>) -> WorkspaceAutomationError {
+    WorkspaceAutomationError::UnknownRun(match target {
+        ScriptRunTarget::Run(run_id) => run_id.to_owned(),
+        ScriptRunTarget::LatestOf(name) => format!("latest run of '{name}'"),
+    })
 }
 
 fn read_config(
@@ -408,19 +525,21 @@ fn read_config(
         ))
     })?;
     Ok(PaseoConfig {
-        setup: parse_setup(object.get("worktree")),
+        setup: parse_lifecycle(object.get("worktree"), "setup"),
+        teardown: parse_lifecycle(object.get("worktree"), "teardown"),
         scripts: parse_scripts(object.get("scripts")),
     })
 }
 
-fn parse_setup(worktree: Option<&Value>) -> Vec<String> {
-    let Some(setup) = worktree
+/// Read a `worktree` lifecycle entry: one command string or an array of command strings.
+fn parse_lifecycle(worktree: Option<&Value>, key: &str) -> Vec<String> {
+    let Some(commands) = worktree
         .and_then(Value::as_object)
-        .and_then(|worktree| worktree.get("setup"))
+        .and_then(|worktree| worktree.get(key))
     else {
         return Vec::new();
     };
-    match setup {
+    match commands {
         Value::String(command) => nonempty(command).into_iter().collect(),
         Value::Array(commands) => commands
             .iter()
@@ -449,12 +568,14 @@ fn parse_scripts(scripts: Option<&Value>) -> BTreeMap<String, ScriptConfig> {
                 .flatten()
                 .and_then(|port| u16::try_from(port).ok())
                 .filter(|port| *port != 0);
+            let accepts_args = object.get("acceptsArgs").and_then(Value::as_bool) == Some(true);
             Some((
                 name.clone(),
                 ScriptConfig {
                     command,
                     kind,
                     port,
+                    accepts_args,
                 },
             ))
         })
@@ -496,16 +617,24 @@ fn refresh_process(process: &mut ScriptProcess) -> Result<(), WorkspaceAutomatio
         WorkspaceAutomationError::Io(format!("Failed to inspect script process: {error}"))
     })?;
     if let Some(status) = status {
-        process.exit_code = status.code();
         process.child = None;
+        let outcome = if status.success() {
+            ScriptRunOutcome::Succeeded
+        } else {
+            ScriptRunOutcome::Failed
+        };
+        process.run.finish(status.code(), outcome);
     }
     Ok(())
 }
 
+/// Poll one run until it exits, then publish the Workspace's script state when observed.
+/// Returns early when the runtime is dropped or the entry has moved on to another run.
 fn monitor_script(
     inner: &Weak<Inner>,
     workspace: &WorkspacePlacement,
     name: &str,
+    run_id: &str,
     interval: Duration,
 ) {
     loop {
@@ -520,7 +649,7 @@ fn monitor_script(
         else {
             return;
         };
-        if process.child.is_none() {
+        if process.child.is_none() || process.run.id() != run_id {
             return;
         }
         if let Err(error) = refresh_process(process) {
@@ -531,14 +660,13 @@ fn monitor_script(
             continue;
         }
         drop(state);
+        let Some(sink) = lock(&inner.event_sink).clone() else {
+            return;
+        };
         let runtime = LocalWorkspaceAutomation {
             inner: inner.clone(),
         };
-        let Ok(scripts) = runtime.list_scripts(workspace) else {
-            return;
-        };
-        let sink = lock(&inner.event_sink).clone();
-        if let Some(sink) = sink {
+        if let Ok(scripts) = runtime.list_scripts(workspace) {
             sink(AutomationEvent::Scripts {
                 workspace_id: workspace.workspace_id.clone(),
                 scripts,
@@ -562,6 +690,53 @@ fn workspace_port(state: &mut State, workspace_id: &str) -> Result<u16, Workspac
     Ok(port)
 }
 
+/// Spawn one configured script with combined stdout and stderr connected to a pipe.
+///
+/// # Errors
+/// Returns refused arguments, pipe or spawn failures.
+fn spawn_script(
+    workspace: &WorkspacePlacement,
+    configured: &ScriptConfig,
+    script_name: &str,
+    args: &[String],
+    port: u16,
+) -> Result<(Child, std::io::PipeReader), WorkspaceAutomationError> {
+    let (reader, writer) = std::io::pipe().map_err(|error| script_io(script_name, &error))?;
+    let stderr = writer
+        .try_clone()
+        .map_err(|error| script_io(script_name, &error))?;
+    let mut command = script_command(&configured.command, script_name, args);
+    configure_command(&mut command, workspace, port);
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(writer))
+        .stderr(Stdio::from(stderr));
+    configure_process_group(&mut command);
+    let child = command
+        .spawn()
+        .map_err(|error| script_io(script_name, &error))?;
+    // The pipe reaches end-of-file only after this process drops its copies of the writer.
+    drop(command);
+    Ok((child, reader))
+}
+
+fn script_io(script_name: &str, error: &std::io::Error) -> WorkspaceAutomationError {
+    WorkspaceAutomationError::Io(format!("Failed to start script '{script_name}': {error}"))
+}
+
+/// Build the shell invocation of a configured script.
+///
+/// Caller arguments become the positional parameters `$1`, `$2`, ... (`"$@"`) of the POSIX
+/// shell, with `$0` set to the script name; they are never parsed as shell code. Platforms
+/// without a POSIX shell refuse arguments in [`runs::validate_args`].
+fn script_command(script: &str, script_name: &str, args: &[String]) -> Command {
+    let mut command = shell_command(script);
+    if cfg!(unix) {
+        command.arg(script_name).args(args);
+    }
+    command
+}
+
 fn shell_command(script: &str) -> Command {
     #[cfg(unix)]
     {
@@ -577,14 +752,30 @@ fn shell_command(script: &str) -> Command {
     }
 }
 
+/// Workspace variables exported to setup, teardown and script commands.
+///
+/// Each value is exported under its `AIT_` name and its legacy `PASEO_` name.
+const PLACEMENT_VARIABLES: [(&str, &str); 5] = [
+    ("AIT_SOURCE_CHECKOUT_PATH", "PASEO_SOURCE_CHECKOUT_PATH"),
+    ("AIT_ROOT_PATH", "PASEO_ROOT_PATH"),
+    ("AIT_WORKTREE_PATH", "PASEO_WORKTREE_PATH"),
+    ("AIT_BRANCH_NAME", "PASEO_BRANCH_NAME"),
+    ("AIT_WORKTREE_PORT", "PASEO_WORKTREE_PORT"),
+];
+
 fn configure_command(command: &mut Command, workspace: &WorkspacePlacement, port: u16) {
-    command
-        .current_dir(&workspace.cwd)
-        .env("PASEO_SOURCE_CHECKOUT_PATH", &workspace.repo_root)
-        .env("PASEO_ROOT_PATH", &workspace.repo_root)
-        .env("PASEO_WORKTREE_PATH", &workspace.worktree_path)
-        .env("PASEO_BRANCH_NAME", &workspace.branch_name)
-        .env("PASEO_WORKTREE_PORT", port.to_string());
+    let port = port.to_string();
+    let values = [
+        workspace.repo_root.as_str(),
+        workspace.repo_root.as_str(),
+        workspace.worktree_path.as_str(),
+        workspace.branch_name.as_str(),
+        port.as_str(),
+    ];
+    command.current_dir(&workspace.cwd);
+    for ((name, legacy), value) in PLACEMENT_VARIABLES.into_iter().zip(values) {
+        command.env(name, value).env(legacy, value);
+    }
 }
 
 fn configure_process_group(command: &mut Command) {
@@ -650,7 +841,7 @@ fn run_setup(
             },
         );
         let started = Instant::now();
-        match run_setup_command(inner, workspace, &command, port) {
+        match run_setup_command(inner, workspace, &command, port, Phase::Setup) {
             Ok((status, output, output_truncated)) => {
                 let duration = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
                 let snapshot = snapshots.last_mut().expect("setup command was appended");
@@ -750,11 +941,30 @@ fn publish_setup_snapshot(inner: &Inner, workspace: &WorkspacePlacement) {
     }
 }
 
+/// Worktree lifecycle phase whose commands share the setup bounds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Phase {
+    /// `worktree.setup` after creation or approval.
+    Setup,
+    /// `worktree.teardown` before an owned checkout is removed.
+    Teardown,
+}
+
+impl Phase {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Setup => "Setup",
+            Self::Teardown => "Teardown",
+        }
+    }
+}
+
 fn run_setup_command(
     inner: &Weak<Inner>,
     workspace: &WorkspacePlacement,
     script: &str,
     port: u16,
+    phase: Phase,
 ) -> Result<(ExitStatus, String, bool), WorkspaceAutomationError> {
     if retirement::cancelled(inner, &workspace.workspace_id) {
         return Err(WorkspaceAutomationError::Io(
@@ -788,11 +998,14 @@ fn run_setup_command(
         if started.elapsed() >= SETUP_TIMEOUT || capture_too_large {
             retirement::terminate_setup(inner, &workspace.workspace_id, child)?;
             let reason = if capture_too_large {
-                "Setup command output exceeded 8 MiB"
+                "command output exceeded 8 MiB"
             } else {
-                "Setup command exceeded 30 minutes"
+                "command exceeded 30 minutes"
             };
-            return Err(WorkspaceAutomationError::Io(reason.to_owned()));
+            return Err(WorkspaceAutomationError::Io(format!(
+                "{} {reason}",
+                phase.label()
+            )));
         }
         thread::sleep(POLL_INTERVAL);
     };
@@ -805,15 +1018,45 @@ fn run_setup_command(
         .read_to_end(&mut output)
         .map_err(|error| setup_io(&error))?;
     if output.len() as u64 > CAPTURE_BYTES {
-        return Err(WorkspaceAutomationError::Io(
-            "Setup command output exceeded 8 MiB".to_owned(),
-        ));
+        return Err(WorkspaceAutomationError::Io(format!(
+            "{} command output exceeded 8 MiB",
+            phase.label()
+        )));
     }
     let (output, truncated) = bound_output(&output);
     Ok((status, output, truncated))
 }
 
 mod retirement;
+mod runs;
+
+/// Run teardown commands in order with the setup bounds, stopping at the first failure.
+///
+/// # Errors
+/// Returns the first failed, timed-out, oversized, cancelled or unstartable command.
+fn run_teardown(
+    inner: &Weak<Inner>,
+    workspace: &WorkspacePlacement,
+    commands: &[String],
+    port: u16,
+) -> Result<(), WorkspaceAutomationError> {
+    for (offset, command) in commands.iter().enumerate() {
+        let index = offset + 1;
+        let (status, _, _) = run_setup_command(inner, workspace, command, port, Phase::Teardown)
+            .map_err(|error| {
+                WorkspaceAutomationError::Io(format!("Teardown command {index} failed: {error}"))
+            })?;
+        if !status.success() {
+            return Err(WorkspaceAutomationError::Io(format!(
+                "Teardown command {index} failed{}",
+                status
+                    .code()
+                    .map_or_else(String::new, |code| format!(" with exit code {code}"))
+            )));
+        }
+    }
+    Ok(())
+}
 
 fn bound_output(output: &[u8]) -> (String, bool) {
     if output.len() <= OUTPUT_BYTES {

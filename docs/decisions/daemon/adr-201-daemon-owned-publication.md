@@ -1,7 +1,24 @@
+---
+id: ADR-201
+status: accepted
+date: 2026-10-29
+amends:
+  - clients/adr-074-account-host-relay.md
+  - clients/adr-083-online-service-host-sync.md
+  - clients/adr-085-stable-daemon-publication.md
+  - clients/adr-086-authing-native-login.md
+  - clients/adr-087-headless-device-authorization.md
+  - clients/adr-096-desktop-default-host-sync.md
+  - daemon/adr-140-headless-local-api-token.md
+  - daemon/adr-180-hub-serve-endpoint.md
+  - daemon/adr-200-headless-independent-transports.md
+paths:
+  - crates/host-link
+  - bins/daemon
+---
+
 # ADR-201：daemon 统一拥有节点发布与机器授权
 
-- 状态：已接受
-- 日期：2026-10-29
 - 修订：[ADR-087](../clients/adr-087-headless-device-authorization.md)、[ADR-140](adr-140-headless-local-api-token.md)、[ADR-180](adr-180-hub-serve-endpoint.md)、[ADR-200](adr-200-headless-independent-transports.md)
 
 ## 背景

@@ -1,3 +1,15 @@
+---
+id: ADR-031
+status: accepted
+date: 2026-09-24
+amends:
+  - providers/adr-027-independent-agent-session-manager.md
+  - workspace/adr-029-daemon-metadata.md
+  - workspace/adr-030-daemon-filesystem.md
+paths:
+  - crates/provider
+---
+
 # ADR-031：拆出 provider 并统一 Workspace 自动化与 state 入口
 
 > metadata 的 Tokio 依赖限制已由 [ADR-037](../daemon/adr-037-daemon-model-context.md) 修订。
@@ -5,8 +17,6 @@
 > 后续 [ADR-032](adr-032-daemon-native-provider-execution.md) 已组装原生 Provider worker；
 > 本文 14 个 Agent 方法与 102 个已实现 capability 是拆包完成时的计数。
 
-- 状态：Accepted。
-- 日期：2026-09-24。
 - 授权：按 [当前架构](../../architecture/README.md)实施拆分。
 - 范围：独立 server；不修改旧 daemon 或 `ait-*`。
 - 更新：ADR-022/024/027/029/030 中受影响的模块位置和 crate 依赖；保留既有协议与持久化语义。
@@ -87,4 +97,4 @@ API 保留 HTTP/WS、鉴权、连接预算、blocking 调度、队列、订阅�
 
 可协商名称仍为 195 个，已实现 capability 仍为 102 个。公共方法、JSON 字段、错误码、协议版本和
 磁盘路径不变。测试迁入所属模块，保留真实 WS/进程/重启验证；新增窄端口批次、故障和依赖回归。
-执行结果及覆盖率见 [实施报告](../../reports/providers/provider-extraction.md)。
+执行结果及覆盖率见 [实施报告](../../archive/reports/providers/provider-extraction.md)。

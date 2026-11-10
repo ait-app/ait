@@ -1,7 +1,18 @@
+---
+id: ADR-156
+status: accepted
+date: 2026-10-18
+amends:
+  - workspace/adr-081-directory-change-push.md
+paths:
+  - crates/metadata
+  - crates/provider
+  - packages/protocol
+  - packages/client
+---
+
 # ADR-156：初始化进度与活动事件使用 Ait 标准名称
 
-- 状态：Accepted。
-- 日期：2026-10-18。
 - 范围：Rust session events、共享协议、SDK、App 与测试。
 - 修订：[ADR-081](../workspace/adr-081-directory-change-push.md) 的两个事件名称，沿用
   [ADR-094](adr-094-canonical-ait-client-methods.md) 的标准命名边界。

@@ -216,6 +216,8 @@ pub(super) struct Transport {
     shutdown_result: Option<Result<(), AgentSessionError>>,
     group: Option<u32>,
     sandboxed: bool,
+    /// Private MCP extension loaded by this process, removed once the process is reaped.
+    extension: Option<super::mcp::Extension>,
     /// Safe bounded diagnostics shared with process readers and the session.
     pub(super) diagnostics: Diagnostics,
 }
@@ -325,8 +327,14 @@ impl Transport {
             closed: false,
             shutdown: None,
             shutdown_result: None,
+            extension: None,
             diagnostics,
         })
+    }
+
+    /// Keep the private `extension` this process was started with until it is reaped.
+    pub(super) fn retain(&mut self, extension: super::mcp::Extension) {
+        self.extension = Some(extension);
     }
 
     /// Write one record once; uncertain writes close the transport and return failure.
@@ -508,6 +516,8 @@ impl Transport {
             self.shutdown_result = Some(result);
             self.shutdown = None;
         }
+        // The process is reaped (or was never started); its MCP credentials go with it.
+        self.extension = None;
         self.input.lock().await.take();
         // Retain the handle across cancellation, but never poll a completed join twice.
         if let Some(stderr) = self.stderr.as_mut() {

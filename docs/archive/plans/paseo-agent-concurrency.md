@@ -177,7 +177,7 @@ Tokio current-thread 本身允许多个异步任务交错执行。拆分后，re
 
 ## 实施结果与待验收项
 
-具体所有权、统一会话队列、跨会话屏障和预算见 [ADR-091](../../decisions/providers/adr-091-independent-session-execution.md)，命令、测试结果及构建限制见[验证报告](../../reports/providers/paseo-concurrency-validation.md)。Rust 使用同一个会话所有者协调生命周期、前台输入和事件，不照搬多条 Promise tail；根 Cargo workspace 的完整原生链接、daemon process 测试与行覆盖率已验证。
+具体所有权、统一会话队列、跨会话屏障和预算见 [ADR-091](../../decisions/providers/adr-091-independent-session-execution.md)，命令、测试结果及构建限制见[验证报告](../reports/providers/paseo-concurrency-validation.md)。Rust 使用同一个会话所有者协调生命周期、前台输入和事件，不照搬多条 Promise tail；根 Cargo workspace 的完整原生链接、daemon process 测试与行覆盖率已验证。
 
 - [ ] 在实际 TCP、SSH 和 Relay 连接上采样 Workspace 首屏及历史加载的 p50/p95，确认网络和其他打开阶段的耗时。
 - [x] 准备提交时完成完整 Rust 测试、workspace coverage、原生链接与 daemon process 验证，证据见验证报告。

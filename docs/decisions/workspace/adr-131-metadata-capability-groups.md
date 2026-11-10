@@ -1,7 +1,15 @@
+---
+id: ADR-131
+status: accepted
+date: 2026-10-11
+amends:
+  - workspace/adr-130-workspace-methods-owned-by-metadata.md
+paths:
+  - crates/metadata
+---
+
 # ADR-131：metadata 按能力组组织模块
 
-- 状态：接受
-- 日期：2026-10-11
 - 后续修订：[ADR-136](adr-136-single-area-layer-flattening.md) 去掉只承载一个功能区的
   `<layer>::<area>` 中间段。
 - 修订：[ADR-130](adr-130-workspace-methods-owned-by-metadata.md) 中 metadata 的内部模块路径；

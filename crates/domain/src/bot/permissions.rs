@@ -51,6 +51,8 @@ pub const TOOLS: &[(&str, ToolAccess)] = &[
     ("inspect_schedule", Group(Observe)),
     ("schedule_logs", Group(Observe)),
     ("list_workspace_scripts", Group(Observe)),
+    ("get_workspace_script_run", Group(Observe)),
+    ("wait_for_workspace_script", Group(Observe)),
     ("list_terminals", Group(Observe)),
     ("list_profiles", Group(Observe)),
     ("list_providers", Group(Observe)),

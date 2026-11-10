@@ -1,7 +1,17 @@
+---
+id: ADR-191
+status: accepted
+date: 2026-10-25
+amends:
+  - daemon/adr-042-daemon-voice.md
+  - daemon/adr-064-offline-speech.md
+paths:
+  - crates/provider
+  - crates/voice
+---
+
 # ADR-191：Codex Provider 拥有原生实时语音
 
-- 状态：Accepted
-- 日期：2026-10-25
 - 修订：[ADR-042](../daemon/adr-042-daemon-voice.md)、[ADR-064](../daemon/adr-064-offline-speech.md) 对 Codex 语音对话的实现选择；听写保持原有后端，旧客户端的通用语音协议继续兼容。
 
 ## 背景

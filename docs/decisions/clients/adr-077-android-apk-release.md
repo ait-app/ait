@@ -1,6 +1,13 @@
-# ADR-077：Android APK 的 GitHub Release 发布
+---
+id: ADR-077
+status: accepted
+date: 2026-10-03
+paths:
+  - .github/workflows
+  - apps/mobile
+---
 
-状态：Accepted（2026-10-03）
+# ADR-077：Android APK 的 GitHub Release 发布
 
 自动触发和必需附件的决策已由 [ADR-078](adr-078-optional-android-release.md) 修订：
 Android 默认关闭，仅手动选中时构建；其余 APK 构建、命名及签名职责继续适用。

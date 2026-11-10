@@ -1,7 +1,16 @@
+---
+id: ADR-194
+status: accepted
+date: 2026-10-27
+amends:
+  - providers/adr-180-omp-native-rpc-provider.md
+  - providers/adr-190-omp-acp-settlement.md
+paths:
+  - crates/provider
+---
+
 # ADR-194：OMP 原生空闲状态核对与有界取消
 
-- 状态：Accepted
-- 日期：2026-10-27
 - 修订：[ADR-180](adr-180-omp-native-rpc-provider.md)、
   [ADR-190](adr-190-omp-acp-settlement.md) 的结算与取消规则。
 

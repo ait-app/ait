@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { i18n } from "@/i18n/i18next";
 import {
+  AUTOMATIC_CHECK_INTERVAL_MS,
+  PENDING_RECHECK_MS,
   createDesktopAppUpdater,
   formatStatusText,
   type DesktopAppUpdater,
@@ -539,5 +541,86 @@ describe("formatStatusText", () => {
     } finally {
       await i18n.changeLanguage("en");
     }
+  });
+});
+
+describe("desktop app updater — automatic check schedule", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function createScheduledUpdater() {
+    vi.useFakeTimers();
+    return createUpdater({ now: () => Date.now() });
+  }
+
+  it("runs one mount check for every caller that retains automatic checks", async () => {
+    const { updater, port } = createScheduledUpdater();
+
+    const releaseSidebar = updater.retainAutomaticChecks("stable");
+    const releaseSettings = updater.retainAutomaticChecks("stable");
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(port.recordedChecks).toEqual([{ releaseChannel: "stable", intent: "automatic" }]);
+
+    releaseSettings();
+    await vi.advanceTimersByTimeAsync(AUTOMATIC_CHECK_INTERVAL_MS);
+    expect(port.recordedChecks).toHaveLength(2);
+
+    releaseSidebar();
+    await vi.advanceTimersByTimeAsync(AUTOMATIC_CHECK_INTERVAL_MS * 2);
+    expect(port.recordedChecks).toHaveLength(2);
+  });
+
+  it("does not recheck when a caller remounts within the check interval", async () => {
+    const { updater, port } = createScheduledUpdater();
+
+    updater.retainAutomaticChecks("stable")();
+    await vi.advanceTimersByTimeAsync(1_000);
+    const release = updater.retainAutomaticChecks("stable");
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(port.recordedChecks).toHaveLength(1);
+    release();
+  });
+
+  it("checks the new channel as soon as the release channel changes", async () => {
+    const { updater, port } = createScheduledUpdater();
+
+    const releaseStable = updater.retainAutomaticChecks("stable");
+    await vi.advanceTimersByTimeAsync(0);
+    const releaseBeta = updater.retainAutomaticChecks("beta");
+    releaseStable();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(port.recordedChecks).toEqual([
+      { releaseChannel: "stable", intent: "automatic" },
+      { releaseChannel: "beta", intent: "automatic" },
+    ]);
+    releaseBeta();
+  });
+
+  it("keeps a single pending recheck however many callers are mounted", async () => {
+    const { updater, port } = createScheduledUpdater();
+    port.nextCheckResult(buildFakeCheckResult({ hasUpdate: true, readyToInstall: false }));
+    port.nextCheckResult(buildFakeCheckResult({ hasUpdate: true, readyToInstall: false }));
+
+    const releaseSidebar = updater.retainAutomaticChecks("stable");
+    const releaseSettings = updater.retainAutomaticChecks("stable");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(updater.getSnapshot().status).toBe("pending");
+
+    await vi.advanceTimersByTimeAsync(PENDING_RECHECK_MS);
+    expect(port.recordedChecks).toHaveLength(2);
+
+    // The third check reports up to date, which ends the pending recheck.
+    await vi.advanceTimersByTimeAsync(PENDING_RECHECK_MS);
+    expect(port.recordedChecks).toHaveLength(3);
+    expect(updater.getSnapshot().status).toBe("up-to-date");
+    await vi.advanceTimersByTimeAsync(PENDING_RECHECK_MS * 3);
+    expect(port.recordedChecks).toHaveLength(3);
+
+    releaseSidebar();
+    releaseSettings();
   });
 });

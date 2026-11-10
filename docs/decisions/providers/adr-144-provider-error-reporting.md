@@ -1,7 +1,13 @@
+---
+id: ADR-144
+status: accepted
+date: 2026-10-13
+paths:
+  - crates/provider
+---
+
 # ADR-144：Provider 安全诊断与持久失败提示
 
-- 状态：Accepted
-- 日期：2026-10-13
 - 延续：ADR-046、ADR-109、ADR-121、ADR-125、ADR-133
 - Codex 展示说明由 [ADR-162](adr-162-codex-error-details.md) 补充：保留有界脱敏的原生原因与状态。
 - 后续 [ADR-185](adr-185-native-provider-failure-details.md) 将有界脱敏的原生失败说明扩展到其他适配器，修订下文的固定展示策略；日志仍只记录结构化事实。

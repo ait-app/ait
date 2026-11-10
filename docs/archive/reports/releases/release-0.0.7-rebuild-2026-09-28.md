@@ -117,7 +117,7 @@ CARGO_TARGET_DIR=/Users/necokeine/Documents/ait/target cargo llvm-cov --workspac
 ```
 
 [覆盖率制品](https://github.com/necokeine/ait/blob/c03c42d4a05b54910463826465ed6efe3027e1ea/docs/reports/workspace-create-worktree-coverage.json)
-记录逐文件摘要、范围及命令；[验证报告](../../../reports/workspace/workspace-create-worktree.md)记录相关 crate 明细。
+记录逐文件摘要、范围及命令；[验证报告](../workspace/workspace-create-worktree.md)记录相关 crate 明细。
 无显式文件排除，测试文件按工具默认规则处理，辅助模块 `test_support.rs` 计入统计；
 3 项真实 Provider 测试保持忽略，Python fixture 和 doctest 未插桩。Linux/Windows 行覆盖率
 及 JavaScript 行覆盖率未测量；真实付费模型、远端 Forge 和真实用户会话导入未做发布验收。

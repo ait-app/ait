@@ -1,7 +1,14 @@
+---
+id: ADR-151
+status: accepted
+date: 2026-10-15
+paths:
+  - apps/mobile
+---
+
 # ADR-151：Android 边缘手势进入移动面板导航
 
-- 状态：已实现，Pixel 左侧栏系统返回验收通过；旧版 Android 待验收
-- 日期：2026-10-15
+- 状态说明：已实现，Pixel 左侧栏系统返回验收通过；旧版 Android 待验收
 
 ## 背景
 

@@ -1,7 +1,16 @@
+---
+id: ADR-123
+status: accepted
+date: 2026-10-10
+amends:
+  - clients/adr-086-authing-native-login.md
+paths:
+  - apps/desktop
+  - apps/mobile
+---
+
 # ADR-123：客户端仅保留浏览器统一登录
 
-- 状态：已实现
-- 日期：2026-10-10
 - 关系：修订 [ADR-086](adr-086-authing-native-login.md) 的旧密码登录兼容策略；沿用其浏览器回传、安全存储和主机同步边界。
 
 ## 背景

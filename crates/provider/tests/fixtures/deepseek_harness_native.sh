@@ -5,6 +5,18 @@ if [ -n "${AIT_DSH_FIXTURE_ARGS:-}" ]; then
   printf '%s\n' "$@" > "$AIT_DSH_FIXTURE_ARGS"
 fi
 
+# Record each --patch overlay (single-line JSON) as one line, as the Host would load it.
+if [ -n "${AIT_DSH_FIXTURE_PATCHES:-}" ]; then
+  previous=
+  for argument in "$@"; do
+    if [ "$previous" = "--patch" ]; then
+      tr -d '\n' < "$argument" >> "$AIT_DSH_FIXTURE_PATCHES"
+      printf '\n' >> "$AIT_DSH_FIXTURE_PATCHES"
+    fi
+    previous=$argument
+  done
+fi
+
 case "$*" in
   *--dump-config*)
     if [ -n "${AIT_DSH_FIXTURE_CONFIG:-}" ]; then

@@ -1,7 +1,13 @@
+---
+id: ADR-134
+status: accepted
+date: 2026-10-11
+paths:
+  - crates/api
+---
+
 # ADR-134：已接纳的普通 RPC 等待共享任务额度
 
-- 状态：已实现
-- 日期：2026-10-11
 - 关系：延续 [ADR-120](adr-120-single-connection-startup-admission.md) 的连接队列和 [ADR-093](adr-093-consumable-request-context.md) 的请求所有权。
 
 ## 背景

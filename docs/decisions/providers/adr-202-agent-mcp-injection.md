@@ -1,9 +1,19 @@
+---
+id: ADR-202
+status: accepted
+date: 2026-10-29
+amends:
+  - daemon/adr-148-daemon-mcp.md
+paths:
+  - crates/provider
+  - crates/api
+---
+
 # ADR-202：Agent MCP 运行时自动注入
 
-- 状态：接受
-- 日期：2026-10-29
 - 修订：[ADR-148](../daemon/adr-148-daemon-mcp.md) 的 Provider 自动注入范围与专用路由认证。
 - 后续修订：[ADR-215](../bot/adr-215-bot-permissions-and-scoped-mcp.md) 为 Bot 会话及其启动的 Agent 签发作用域凭据：覆盖用户的 `ait` 项，Bot 会话不受 `injectIntoAgents` 控制，无法交付时移除 `ait` 项而不回退到共享令牌。
+- 后续修订：[ADR-232](adr-232-agent-mcp-session-delivery.md) 接入 OpenCode、Pi 和 DSH 原生 Host；Pi 与 DSH 原生 Host 经属主专用临时文件交付。
 
 daemon 已经提供 MCP Server，Skill 也已自动分发。连接应由原生客户端建立，因此由 host
 将实际监听地址、进程级 MCP 专用令牌和共享配置存储交给 provider 的 `AgentMcp` 模块。
@@ -29,7 +39,7 @@ MCP 配置可能携带令牌、请求头和环境变量，不得写进原生进�
 私有临时文件路径（0600），原生进程结束、transport 释放时随之删除；其余 Provider 通过 stdio 协议
 或原生配置请求传递，不经过进程参数。
 
-参考 [Paseo 当前实现的复核](../../reports/providers/paseo-mcp-injection-review-2026-10-30.md)，
+参考 [Paseo 当前实现的复核](../../archive/reports/providers/paseo-mcp-injection-review-2026-10-30.md)，
 保留其持久与运行时配置分离、按 Provider 能力交付的设计。当前没有内部注入配置自动回流到
 Ait record 的路径，因此不采用仅按同名与 URL pathname 删除旧项的规则；未来引入完整原生
 配置迁移时，应在导入处通过可证明的内部所有权识别并剥离，保留显式用户配置。

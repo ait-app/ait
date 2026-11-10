@@ -24,10 +24,11 @@ describe("resolveToolCallIconName", () => {
     expect(resolveToolCallIconName("Task")).toBe("bot");
   });
 
-  it("uses the daemon tool icon for ait and legacy Paseo MCP calls", () => {
+  it("uses the daemon tool icon for ait MCP calls only", () => {
     expect(resolveToolCallIconName("mcp__ait__create_agent")).toBe("paseo");
     expect(resolveToolCallIconName("ait.list_agents")).toBe("paseo");
-    expect(resolveToolCallIconName("mcp__paseo__create_agent")).toBe("paseo");
+    // The retired `paseo` namespace is no longer the daemon's.
+    expect(resolveToolCallIconName("mcp__paseo__create_agent")).not.toBe("paseo");
     expect(resolveToolCallIconName("mcp__ait__speak")).not.toBe("paseo");
   });
 

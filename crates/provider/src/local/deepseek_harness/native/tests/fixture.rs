@@ -85,6 +85,15 @@ impl Fixture {
                 "AIT_DSH_FIXTURE_ARGS".into(),
                 directory.path().join("dsh.args").to_str().unwrap().into(),
             ),
+            (
+                "AIT_DSH_FIXTURE_PATCHES".into(),
+                directory
+                    .path()
+                    .join("patches.jsonl")
+                    .to_str()
+                    .unwrap()
+                    .into(),
+            ),
         ])
         .try_into()
         .unwrap();
@@ -102,6 +111,10 @@ impl Fixture {
         }
     }
 
+    /// Directory owning the launcher's argument and overlay records.
+    pub(super) fn root(&self) -> &std::path::Path {
+        self.directory.path()
+    }
     pub(super) fn set_presets(&self, roster: Value) {
         *self.host.presets.lock().unwrap() = roster;
     }

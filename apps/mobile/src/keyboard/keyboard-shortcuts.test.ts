@@ -17,6 +17,7 @@ import {
   type ParsedShortcutBinding,
   type ShortcutOverrides,
 } from "./keyboard-shortcuts";
+import { keyboardEventToComboString } from "./shortcut-string";
 
 function keyboardInput(overrides: Partial<KeyboardShortcutInput>): KeyboardShortcutInput {
   return {
@@ -583,6 +584,23 @@ describe("keyboard-shortcuts", () => {
     expect(secondResult.match?.stopPropagation).toBe(true);
     expect(secondResult.preventDefault).toBe(false);
     expect(secondResult.nextChordState).toEqual(initialChordState());
+  });
+
+  it("fires a shortcut recorded on Dvorak when the same keys are pressed again", () => {
+    const dvorakCmdT = { key: "t", code: "KeyK", metaKey: true };
+    const recorded = keyboardEventToComboString(keyboardInput(dvorakCmdT) as KeyboardEvent);
+    expect(recorded).toBe("Cmd+T");
+
+    const bindings = buildEffectiveBindings({
+      "workspace-terminal-new-ctrl-shift-t-non-mac": recorded,
+    });
+    const result = resolveShortcut({
+      event: dvorakCmdT,
+      context: { isMac: false, isDesktop: true },
+      bindings,
+    });
+
+    expect(result.match?.action).toBe("workspace.terminal.new");
   });
 
   it("resolves a browser-origin shortcut with browser focus instead of host focus", () => {

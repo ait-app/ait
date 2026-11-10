@@ -1,7 +1,17 @@
+---
+id: ADR-100
+status: accepted
+date: 2026-10-07
+amends:
+  - daemon/adr-035-daemon-capability-groups.md
+  - daemon/adr-095-component-method-declarations.md
+paths:
+  - crates/api
+  - bins/daemon
+---
+
 # ADR-100：功能 crate 作为完整服务安装
 
-- 状态：Accepted。
-- 日期：2026-10-07。
 - 后续：[ADR-129](../providers/adr-129-provider-owned-skills.md) 将技能安装纳入 provider 的完整服务。
 - 后续：[ADR-130](../workspace/adr-130-workspace-methods-owned-by-metadata.md) 将 worktree、恢复与 GitHub clone 服务纳入 metadata 的完整服务。
 - 范围：功能 crate 对外服务、daemon 组装、API 安装与方法声明。

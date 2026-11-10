@@ -82,9 +82,19 @@ for (let i = 1; i <= 12; i++) {
 export const SHORTCUT_KEY_NAMES: readonly string[] = Object.keys(KEY_MAP);
 
 const CODE_TO_KEY: Record<string, string> = {};
+/** Printable `event.key` characters, mapped to the key name that matches them. */
+const CHARACTER_TO_KEY: Record<string, string> = {};
+/** Shifted characters (`_`, `!`), mapped to the base key name a `Shift+` combo uses. */
+const SHIFTED_CHARACTER_TO_KEY: Record<string, string> = {};
 for (const [humanKey, mapping] of Object.entries(KEY_MAP)) {
   if (!CODE_TO_KEY[mapping.code]) {
     CODE_TO_KEY[mapping.code] = humanKey;
+  }
+  if (mapping.key?.length === 1 && mapping.codeFallback !== true) {
+    CHARACTER_TO_KEY[mapping.key] ??= humanKey;
+  }
+  if (mapping.shiftedKey !== undefined) {
+    SHIFTED_CHARACTER_TO_KEY[mapping.shiftedKey] ??= humanKey;
   }
 }
 
@@ -257,7 +267,7 @@ export function keyboardEventToComboString(event: KeyboardEvent): string | null 
   if (event.shiftKey) parts.push("Shift");
   if (event.metaKey) parts.push("Cmd");
 
-  const humanKey = CODE_TO_KEY[event.code];
+  const humanKey = recordedKeyName(event);
   if (humanKey) {
     parts.push(humanKey);
   } else {
@@ -265,4 +275,24 @@ export function keyboardEventToComboString(event: KeyboardEvent): string | null 
   }
 
   return parts.join("+");
+}
+
+/**
+ * Records a printable key by the character it produced, because the matcher in
+ * `keyboard-shortcuts` compares `event.key` first. Recording the physical
+ * `event.code` stored Dvorak's Cmd+"T" (physical K) as `Cmd+K`, which then
+ * never fired. Alt combos stay physical: macOS rewrites `event.key` under
+ * Option (Option+T -> "†") and the matcher compares Alt bindings by code.
+ * Characters no key name can express (dead keys, non-Latin letters) also fall
+ * back to the physical key, as before.
+ */
+function recordedKeyName(event: KeyboardEvent): string | undefined {
+  const character = event.key ?? "";
+  if (event.altKey || character.length !== 1) {
+    return CODE_TO_KEY[event.code];
+  }
+  if (event.shiftKey && SHIFTED_CHARACTER_TO_KEY[character]) {
+    return SHIFTED_CHARACTER_TO_KEY[character];
+  }
+  return CHARACTER_TO_KEY[character.toLowerCase()] ?? CODE_TO_KEY[event.code];
 }

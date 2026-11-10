@@ -1,7 +1,15 @@
+---
+id: ADR-167
+status: accepted
+date: 2026-10-20
+amends:
+  - providers/adr-119-native-account-usage-and-codex-speed.md
+paths:
+  - crates/provider
+---
+
 # ADR-167：用量缓存按原生账号与成功快照隔离
 
-- 状态：已接受
-- 日期：2026-10-20
 - 关系：修订 [ADR-119](adr-119-native-account-usage-and-codex-speed.md) 的缓存策略。
 
 ## 背景
@@ -19,4 +27,4 @@
 
 ## 后果与验证
 
-历史只在内存保存，不写入 SQLite、配置或客户端持久存储。原生凭据轮换可能保守地清除历史；无法确认身份时优先失效。旧客户端忽略新增可选字段，旧 daemon 无成功快照时仍显示原有错误。验证范围见[实施报告](../../reports/clients/paseo-0.12-port-2026-10-20.md)。
+历史只在内存保存，不写入 SQLite、配置或客户端持久存储。原生凭据轮换可能保守地清除历史；无法确认身份时优先失效。旧客户端忽略新增可选字段，旧 daemon 无成功快照时仍显示原有错误。验证范围见[实施报告](../../archive/reports/clients/paseo-0.12-port-2026-10-20.md)。

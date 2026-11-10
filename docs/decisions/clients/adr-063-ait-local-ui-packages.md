@@ -1,7 +1,14 @@
+---
+id: ADR-063
+status: accepted
+date: 2026-09-28
+paths:
+  - packages
+  - apps/mobile
+---
+
 # ADR-063：Ait 本地 UI 包与原生测试连接
 
-- 状态：Accepted
-- 日期：2026-09-28
 - 延续：ADR-061、ADR-062
 
 ## 决策
@@ -19,4 +26,4 @@
 
 ## Test coverage
 
-不适用：本次未修改 `bins/` 或 `crates/` 中的 Rust 行为，按仓库约定不运行 Rust 测试或覆盖率。TypeScript 行覆盖率未测量；构建、类型检查、本地依赖校验、Maestro helper 测试和真实 Ait E2E 结果见[验证报告](../../reports/clients/ait-local-ui-packages.md)。
+不适用：本次未修改 `bins/` 或 `crates/` 中的 Rust 行为，按仓库约定不运行 Rust 测试或覆盖率。TypeScript 行覆盖率未测量；构建、类型检查、本地依赖校验、Maestro helper 测试和真实 Ait E2E 结果见[验证报告](../../archive/reports/clients/ait-local-ui-packages.md)。

@@ -1,6 +1,14 @@
+---
+id: ADR-067
+status: accepted
+date: 2026-10-02
+paths:
+  - crates/provider
+---
+
 # ADR-067：DeepSeek Harness ACP Provider
 
-Status: Superseded in part by [ADR-082](adr-082-deepseek-harness-native-host.md)
+Status note: Superseded in part by [ADR-082](adr-082-deepseek-harness-native-host.md)
 
 默认接入已改为原生交互 Host；本文保留显式 ACP 兼容模式的契约。
 
@@ -56,4 +64,4 @@ MCP 支持绝对命令的 stdio 和 HTTP，SSE 拒绝，已创建会话不接受
 离线 stdio peer 覆盖分组模型、动态推理、请求关联、工具更新、一次性审批、
 取消/恢复、私有环境、图片/大输出、异常帧与超时。
 真实 Rust server 进程通过 WebSocket 验证注册、创建、审批、完成及重启后的时间线稳定性。
-测试和覆盖率状态见[交付验证报告](../../reports/providers/deepseek-harness-acp.md)。
+测试和覆盖率状态见[交付验证报告](../../archive/reports/providers/deepseek-harness-acp.md)。

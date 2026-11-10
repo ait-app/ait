@@ -1,6 +1,16 @@
+---
+id: ADR-188
+status: accepted
+date: 2026-10-24
+amends:
+  - clients/adr-132-web-console-client.md
+paths:
+  - apps/mobile
+---
+
 # ADR-188：网页客户端以独立镜像部署在网站根路径
 
-状态：已实现。日期：2026-10-24。修订 [ADR-132](adr-132-web-console-client.md)。
+状态说明：已实现。日期：2026-10-24。修订 [ADR-132](adr-132-web-console-client.md)。
 
 ## 背景
 

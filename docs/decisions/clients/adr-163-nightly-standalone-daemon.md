@@ -1,7 +1,15 @@
+---
+id: ADR-163
+status: accepted
+date: 2026-10-19
+amends:
+  - clients/adr-158-standalone-daemon-release.md
+paths:
+  - .github/workflows
+---
+
 # ADR-163：nightly 附带独立 daemon 归档
 
-- 状态：Accepted
-- 日期：2026-10-19
 - 修订：ADR-158（原规定 nightly 不发布独立 daemon）
 - 后续修订：[ADR-212](adr-212-packaged-daemon-name-aitd.md) 将归档内可执行文件改名为 `aitd`；
   nightly 通道已更名为 [Dev build](../../operations/releasing.md#dev-build)，下文保留当时的名字

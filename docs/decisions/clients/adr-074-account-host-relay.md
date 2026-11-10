@@ -1,12 +1,21 @@
+---
+id: ADR-074
+status: accepted
+date: 2026-10-01
+amends:
+  - clients/adr-061-app-ait-e2e-remove-relay-plugin.md
+paths:
+  - crates/relay
+  - apps/desktop
+---
+
 # ADR-074：账户发现与按需反向中继
 
 > 主机授权与租约归属已由 [ADR-201](../daemon/adr-201-daemon-owned-publication.md) 修订：daemon 自主管理发布，客户端退出不撤销机器授权；显式断开后需重新授权。以下保留原决策背景。
 
 > 普通业务传输已由 [ADR-204](../clients/adr-204-hub-only-online-business-transport.md) 修订：仅使用 Hub，传统 Relay 仅保留独立下载与控制。
 
-- 状态：已实现
 - 后续主机持久化与多台访问修订：[ADR-122](adr-122-persistent-online-service-hosts.md)。
-- 日期：2026-10-01
 - 后续边界修订：[ADR-108](../daemon/adr-108-relay-rpc-and-metadata-connection-methods.md) 将控制 RPC 移入 relay，允许其仅依赖 model 的共享请求契约。
 - 修订：[ADR-061](adr-061-app-ait-e2e-remove-relay-plugin.md) 中不再提供中继连接的产品范围；旧公钥中继协议及配对格式继续停用。
 - 后续：[ADR-075](adr-075-relay-protocol-modules.md) 明确协议模块职责；[ADR-076](adr-076-android-account-relay.md) 将账户会话移入共享 SDK 并扩展 Android 客户端。
@@ -71,6 +80,6 @@ provider 分为四个执行组，保持各组内操作顺序，避免慢 Git 操
 中继故障和账户失效具有明确的取消范围，客户端不会因自动重连而重复提交业务写入。
 
 中心端设计与 API 由同级仓库 `ait-server` 的 `docs/architecture.md` 维护。
-本仓库的初版测量见[账户主机中继验证](../../reports/clients/account-host-relay-validation.md)，
-协议模块整理后的测量见[协议重构验证](../../reports/clients/relay-protocol-refactor-validation.md)。
+本仓库的初版测量见[账户主机中继验证](../../archive/reports/clients/account-host-relay-validation.md)，
+协议模块整理后的测量见[协议重构验证](../../archive/reports/clients/relay-protocol-refactor-validation.md)。
 各报告中的测试与覆盖率仅对应注明的源码版本。

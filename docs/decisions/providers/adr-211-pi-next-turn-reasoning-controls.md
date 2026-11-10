@@ -1,7 +1,18 @@
+---
+id: ADR-211
+status: accepted
+date: 2026-10-30
+amends:
+  - providers/adr-156-pi-native-rpc-provider.md
+  - providers/adr-174-pi-session-import.md
+  - providers/adr-185-native-provider-failure-details.md
+paths:
+  - crates/provider
+---
+
 # ADR-211：Pi 推理偏好在下一条 prompt 前应用
 
-- 状态：已实现，评审中。
-- 日期：2026-10-30。
+- 状态说明：已实现，评审中。
 - 更新：2026-11-03。
 - 范围：`crates/provider` 的 Pi 适配器与共享 Agent 管理器。
 - 修订：[ADR-156](adr-156-pi-native-rpc-provider.md) 中"不支持 thinking"的表述。

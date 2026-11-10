@@ -46,4 +46,4 @@
 
 **Not applicable — 本次发布准备没有修改 Rust 源码或业务行为。** 本次不重新测量行覆盖率；普通发布脚本测试的通过数量不代表覆盖率。版本 PR CI 已验证清单和构建；真实成品验证发现实时 Timeline 回归并阻止发布。下一步在 0.0.22 修复并重新验证。
 
-[工作区远端重置的历史验证](../../../reports/workspace/workspace-reset-remote-pr-validation-2026-10-07.md)记录源码 `c4f340f72dbf9dccf79fb53e2e1cea9e8448aa38` 的 1,894 passed、7 ignored，以及 workspace 53,569/56,802（94.31%）、filesystem 11,366/11,988（94.81%）的测量和证据。该统计不代表最终 0.0.21 标签的重新测量；其后 main 的客户端和请求分发更新也由各自 PR 与 CI 验证。
+[工作区远端重置的历史验证](../workspace/workspace-reset-remote-pr-validation-2026-10-07.md)记录源码 `c4f340f72dbf9dccf79fb53e2e1cea9e8448aa38` 的 1,894 passed、7 ignored，以及 workspace 53,569/56,802（94.31%）、filesystem 11,366/11,988（94.81%）的测量和证据。该统计不代表最终 0.0.21 标签的重新测量；其后 main 的客户端和请求分发更新也由各自 PR 与 CI 验证。

@@ -1,7 +1,14 @@
+---
+id: ADR-215
+status: accepted
+date: 2026-11-06
+paths:
+  - crates/provider
+  - crates/domain
+---
+
 # ADR-215：沙箱化 Worktree 隔离级别
 
-- 状态：已接受
-- 日期：2026-11-06
 - Linux 扩展：[ADR-223](adr-223-linux-worktree-sandbox.md) 自 2026-11-08 起补充 Linux 后端；Linux 差异与部署要求以该 ADR 为准。
 - 关系：在 [ADR-060](adr-060-workspace-create-worktree.md) 的 Paseo 自有 worktree 之上增加隔离级别；
   Provider 测试归属沿用 [ADR-179](../providers/adr-179-provider-owned-tests.md)。

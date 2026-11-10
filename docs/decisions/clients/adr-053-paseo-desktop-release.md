@@ -1,7 +1,14 @@
+---
+id: ADR-053
+status: accepted
+date: 2026-09-27
+paths:
+  - apps/desktop
+  - .github/workflows
+---
+
 # ADR-053：Ait 0.0.7 桌面发布切换到 apps/desktop
 
-- 状态：Accepted
-- 日期：2026-09-27
 - 关联：ADR-001 v4、ADR-048、ADR-051
 - 修订：链接协议和桌面数据隔离以 [ADR-055](adr-055-desktop-profile-isolation.md) 为准。
 - 修订：保留旧桌面源码与独立版本的条款由 [当前架构](../../architecture/README.md) 取代。

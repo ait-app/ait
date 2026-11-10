@@ -45,7 +45,13 @@ fn closing_releases_setup_and_script_state_but_keeps_the_workspace_port() {
                     port: None,
                     terminal_id: format!("{id}-terminal"),
                     child: None,
-                    exit_code: Some(0),
+                    accepts_args: false,
+                    run: super::super::ScriptRun::start(
+                        "web",
+                        &[],
+                        super::super::runs::CheckoutEvidence::default(),
+                        Arc::default(),
+                    ),
                 },
             );
             state.workspace_ports.insert(id.to_owned(), 4000);

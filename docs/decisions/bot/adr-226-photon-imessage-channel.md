@@ -1,7 +1,16 @@
+---
+id: ADR-226
+status: accepted
+date: 2026-11-09
+amends:
+  - bot/adr-139-workspace-bots-and-owned-channels.md
+paths:
+  - crates/bot
+---
+
 # ADR-226：通过 Photon Beta 2.0 接入 iMessage Channel
 
-- 状态：接受；已实现，2026-11-09 用真实 Photon Beta 项目和 iPhone 完成单聊往返验收，遗留项见下文“待真实账号验证”
-- 日期：2026-11-09
+- 状态说明：接受；已实现，2026-11-09 用真实 Photon Beta 项目和 iPhone 完成单聊往返验收，遗留项见下文“待真实账号验证”
 - 扩展：[ADR-139](adr-139-workspace-bots-and-owned-channels.md) 第 6 条的 Channel 传输；沿用 [ADR-224](adr-224-feishu-scan-onboarding-and-stored-secrets.md) 的 Secret 保存与状态驱动接入。
 
 ## 背景

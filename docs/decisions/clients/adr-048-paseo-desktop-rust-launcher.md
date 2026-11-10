@@ -1,7 +1,13 @@
+---
+id: ADR-048
+status: accepted
+date: 2026-09-25
+paths:
+  - apps/desktop
+---
+
 # ADR-048：Paseo workspace 与 Rust 桌面服务启动
 
-- 状态：Accepted
-- 日期：2026-09-25
 - 修订：退出后继续运行与重新接管由 [ADR-128](adr-128-desktop-daemon-keep-running.md) 恢复为可选行为。
 - 修订：[ADR-207](adr-207-desktop-daemon-readiness-ownership.md) 将就绪探测失败与进程生命周期分离；下文的启动失败回收策略不再用于仍存活的子进程。
 
@@ -32,4 +38,4 @@ URL。服务日志声明监听地址后，必须成功完成带认证的 Rust he
 服务独立于桌面长期后台运行均不属于这次启动整合。Electron 被 SIGKILL 或系统崩溃时
 不能运行退出钩子；本轮不实现操作系统 supervisor 或孤儿进程接管。
 
-验证结果见 [实施报告](../../reports/clients/paseo-desktop-startup.md)。
+验证结果见 [实施报告](../../archive/reports/clients/paseo-desktop-startup.md)。

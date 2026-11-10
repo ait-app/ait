@@ -1,7 +1,13 @@
+---
+id: ADR-039
+status: accepted
+date: 2026-09-25
+paths:
+  - crates/provider
+---
+
 # ADR-039：Agent Timeline、Provider 发现与创建过程订阅
 
-- 状态：Accepted。
-- 日期：2026-09-25。
 - 范围：独立 server；延续 ADR-032/034/037/038，不连接旧 daemon 的领域存储。
 - 基线：Paseo `2c8e8a826810337492cc5a38bb0bbd705b6fb632` 的协议、Timeline 查询、
   Provider catalog、creation service 和 plugin session identity；本机 Codex 0.153.4 导出的协议 schema。
@@ -74,4 +80,4 @@ workspace_ready → completed 推进；组合 Workspace+Agent/worktree 创建仍
 资源 ID，不自动重放可能已执行的原生创建。已登记 Agent 可以正常读取/恢复；原生 session
 已创建而 registry/回执尚未提交的跨系统原子性不在保证内，不能假装失败等于没有副作用。
 
-实现、测试结果、覆盖率与剩余限制见 [实施报告](../../reports/providers/server-agent-timeline-provider-creation.md)。
+实现、测试结果、覆盖率与剩余限制见 [实施报告](../../archive/reports/providers/server-agent-timeline-provider-creation.md)。

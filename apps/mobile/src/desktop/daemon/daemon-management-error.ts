@@ -20,6 +20,23 @@ export class DaemonManagementOperationError extends Error {
   }
 }
 
+/**
+ * A settings save that failed while toggling daemon management. The desktop settings mutation has
+ * already reported it, so the toggle must not report it again.
+ */
+export class DaemonSettingsPersistError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = "DaemonSettingsPersistError";
+    this.cause = cause;
+  }
+}
+
+export function isReportedDaemonSettingsPersistError(error: Error): boolean {
+  const original = error instanceof DaemonManagementOperationError ? error.originalError : error;
+  return original instanceof DaemonSettingsPersistError;
+}
+
 export interface DaemonManagementErrorPresentation {
   message: string;
   refreshStatus: boolean;

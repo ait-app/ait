@@ -1,9 +1,21 @@
+---
+id: ADR-086
+status: accepted
+date: 2026-10-06
+amends:
+  - clients/adr-074-account-host-relay.md
+  - clients/adr-076-android-account-relay.md
+  - clients/adr-084-ios-account-relay.md
+paths:
+  - apps/desktop
+  - apps/mobile
+---
+
 # ADR-086：桌面、Android 与 iOS 的 Authing 浏览器登录
 
 > 主机授权与租约归属已由 [ADR-201](../daemon/adr-201-daemon-owned-publication.md) 修订：daemon 自主管理发布，客户端退出不撤销机器授权；显式断开后需重新授权。以下保留原决策背景。
 
-- 状态：已实现；桌面已完成真实 Authing 登录联调，移动端待安装包验收
-- 日期：2026-10-06
+- 状态说明：已实现；桌面已完成真实 Authing 登录联调，移动端待安装包验收
 - 关系：扩展 [ADR-074](adr-074-account-host-relay.md)、[ADR-076](adr-076-android-account-relay.md)、[ADR-084](adr-084-ios-account-relay.md)；保留 [ADR-083](adr-083-online-service-host-sync.md) 的登录与主机同步边界。
 
 ## 背景

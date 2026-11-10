@@ -1,6 +1,16 @@
+---
+id: ADR-178
+status: accepted
+date: 2026-10-21
+amends:
+  - providers/adr-153-opencode-acp-cold-start-budget.md
+  - providers/adr-159-opencode-acp-native-observation.md
+paths:
+  - crates/provider
+---
+
 # ADR-178：OpenCode 轻量可用性探测与冷恢复预算
 
-- 状态：Accepted，2026-10-21。
 - 范围：OpenCode 私有适配器；细化 [ADR-153](adr-153-opencode-acp-cold-start-budget.md)，扩展
   [ADR-159](adr-159-opencode-acp-native-observation.md) 的只读目录来源；ACP 仍是唯一写入通道。
 
@@ -43,7 +53,7 @@ Catalog 少启动一次 ACP，避免不相关目录的插件冷启动；1.18 还
 [官方 ACP 说明](https://dev.opencode.ai/v2/docs/cli/acp/) 指明 ACP 启动私有 server，
 与 `run --attach` 使用的共享后台服务不同；本次不切换执行协议。
 实际验证、外部 API 限制和覆盖率状态见
-[加载速度验证](../../reports/providers/opencode-startup-real-usage-2026-10-21.md)。
+[加载速度验证](../../archive/reports/providers/opencode-startup-real-usage-2026-10-21.md)。
 
 1.18 目录来源：
 [模型与 provider](https://github.com/anomalyco/opencode/blob/v1.18.4/packages/opencode/src/server/routes/instance/httpapi/handlers/config.ts)、

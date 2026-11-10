@@ -1,6 +1,15 @@
+---
+id: ADR-159
+status: accepted
+date: 2026-10-19
+amends:
+  - providers/adr-115-opencode-acp-provider.md
+paths:
+  - crates/provider
+---
+
 # ADR-159：OpenCode 优先使用 ACP，按缺失能力补充原生观测
 
-- 状态：Accepted，2026-10-19。
 - 范围：`provider::local::opencode`，修订 [ADR-115](adr-115-opencode-acp-provider.md)
   的观测来源，保留 ACP 执行、配置、审批和权威历史边界。
 
@@ -48,7 +57,7 @@ OpenCode 1.18.4 在 ACP 中只于整轮结束时发送用量；最后一条空 a
 使用离线 ACP、认证 loopback HTTP/SSE 夹具和隔离 XDG 的真实 1.18.4 验证。
 验证覆盖工具执行中的实时统计、压缩生命周期、继续、历史回放、恢复、未知结束原因、
 身份预算、其他会话隔离、分页边界、错误脱敏和原生进程清理。
-测试与覆盖率状态见 [排查和验证报告](../../reports/providers/opencode-auto-compaction-2026-10-19.md)。
+测试与覆盖率状态见 [排查和验证报告](../../archive/reports/providers/opencode-auto-compaction-2026-10-19.md)。
 
 原生接口依据：
 [ACP 启动](https://github.com/anomalyco/opencode/blob/v1.18.4/packages/opencode/src/cli/cmd/acp.ts)、

@@ -1,6 +1,16 @@
+---
+id: ADR-143
+status: accepted
+date: 2026-10-13
+amends:
+  - providers/adr-115-opencode-acp-provider.md
+  - providers/adr-135-opencode-catalog-readiness.md
+paths:
+  - crates/provider
+---
+
 # ADR-143：OpenCode 2.0.25 兼容与 ACP 审批边界
 
-- 状态：Accepted，2026-10-13。
 - 范围：OpenCode adapter 与共享 ACP 审批转换；修订 [ADR-135](adr-135-opencode-catalog-readiness.md) 的最低版本判断。
 - 保持：[ADR-115](adr-115-opencode-acp-provider.md) 的官方 ACP、原生认证、配置与历史所有权。
 
@@ -39,4 +49,4 @@
 默认无网络 ACP 夹具改为 2.0.25，使 daemon 集成测试也覆盖新的最低版本门槛。
 
 完整证据、慢插件复现和 Test coverage 状态见
-[兼容性检查报告](../../reports/providers/opencode-2.0.25-compatibility-2026-10-13.md)。
+[兼容性检查报告](../../archive/reports/providers/opencode-2.0.25-compatibility-2026-10-13.md)。

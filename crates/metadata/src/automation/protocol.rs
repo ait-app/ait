@@ -22,6 +22,46 @@ pub(crate) struct WorkspaceScriptRequest {
     pub(crate) script_name: String,
 }
 
+/// Start one configured workspace script.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WorkspaceScriptStartRequest {
+    /// Durable workspace identity.
+    pub(crate) workspace_id: String,
+    /// Exact key under `scripts` in `ait.json`.
+    pub(crate) script_name: String,
+    /// Positional parameters for scripts that declare `acceptsArgs`.
+    #[serde(default)]
+    pub(crate) args: Vec<String>,
+}
+
+/// Select one retained script run by identity, or the latest run of a script.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WorkspaceScriptRunRequest {
+    /// Durable workspace identity.
+    pub(crate) workspace_id: String,
+    /// Run identity; takes precedence over `script_name`.
+    #[serde(default)]
+    pub(crate) run_id: Option<String>,
+    /// Script whose latest run is read when `run_id` is absent.
+    #[serde(default)]
+    pub(crate) script_name: Option<String>,
+}
+
+/// Wait for one script run to finish.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WorkspaceScriptWaitRequest {
+    /// Durable workspace identity.
+    pub(crate) workspace_id: String,
+    /// Run identity returned by `workspace.script.start.request`.
+    pub(crate) run_id: String,
+    /// Wait bound in milliseconds; a timeout does not stop the run.
+    #[serde(default)]
+    pub(crate) timeout_ms: Option<u64>,
+}
+
 /// State of one setup command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -188,6 +228,71 @@ pub struct WorkspaceScript {
     pub(crate) exit_code: Option<i32>,
     /// Logical terminal/process identity.
     pub(crate) terminal_id: Option<String>,
+    /// Most recent run, readable through `workspace.script.run.get.request`.
+    pub(crate) run_id: Option<String>,
+    /// Whether callers may pass arguments.
+    pub(crate) accepts_args: bool,
+}
+
+/// Lifecycle and result of one script run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum WorkspaceScriptRunOutcome {
+    /// The child process has not exited.
+    Running,
+    /// The child exited with status zero.
+    Succeeded,
+    /// The child exited unsuccessfully or was killed outside Ait.
+    Failed,
+    /// Ait stopped the child.
+    Stopped,
+}
+
+/// One recorded script run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WorkspaceScriptRun {
+    /// Daemon-assigned run identity.
+    pub(crate) run_id: String,
+    /// Exact configuration key.
+    pub(crate) script_name: String,
+    /// Caller arguments.
+    pub(crate) args: Vec<String>,
+    /// `HEAD` commit at start, when the Workspace is a Git checkout.
+    pub(crate) commit: Option<String>,
+    /// Whether the checkout had uncommitted or untracked changes at start, when known.
+    pub(crate) dirty: Option<bool>,
+    /// RFC 3339 start time.
+    pub(crate) started_at: String,
+    /// RFC 3339 completion time.
+    pub(crate) finished_at: Option<String>,
+    /// Elapsed milliseconds after completion.
+    pub(crate) duration_ms: Option<u64>,
+    /// Current lifecycle or final result.
+    pub(crate) outcome: WorkspaceScriptRunOutcome,
+    /// Exit code, or null while running or after a signal.
+    pub(crate) exit_code: Option<i32>,
+    /// Bounded combined output; null when a wait timed out before completion.
+    pub(crate) output: Option<String>,
+    /// Total bytes written by the run.
+    pub(crate) output_bytes: u64,
+    /// Whether the retained output omits part of the written bytes.
+    pub(crate) truncated: bool,
+}
+
+/// Script run read or wait result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WorkspaceScriptRunResult {
+    /// Requested workspace identity.
+    pub(crate) workspace_id: String,
+    /// Selected run.
+    pub(crate) run: Option<WorkspaceScriptRun>,
+    /// Present on wait results: whether the bound elapsed before the run finished.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) timed_out: Option<bool>,
+    /// Safe failure text.
+    pub(crate) error: Option<String>,
 }
 
 /// Script list result.

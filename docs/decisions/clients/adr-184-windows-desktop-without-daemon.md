@@ -1,7 +1,15 @@
+---
+id: ADR-184
+status: accepted
+date: 2026-10-23
+amends:
+  - clients/adr-048-paseo-desktop-rust-launcher.md
+paths:
+  - apps/desktop
+---
+
 # ADR-184：Windows Desktop 不附带内置 daemon
 
-- 状态：Accepted
-- 日期：2026-10-23
 - 关系：补充 [ADR-048](adr-048-paseo-desktop-rust-launcher.md) 的平台边界。
 
 ## 决策

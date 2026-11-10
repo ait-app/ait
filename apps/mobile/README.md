@@ -91,7 +91,7 @@ APP_BROWSER_UI=1 node scripts/validate-app-rust-browser.mjs
 原生账户边界见 [ADR-076](../../docs/decisions/clients/adr-076-android-account-relay.md) 和
 [ADR-084](../../docs/decisions/clients/adr-084-ios-account-relay.md)。
 直接连接边界见 [ADR-049](../../docs/decisions/clients/adr-049-app-rust-browser-transport.md) 和
-[实施报告](../../docs/reports/clients/app-rust-daemon.md)。
+[实施报告](../../docs/archive/reports/clients/app-rust-daemon.md)。
 
 ## 网页客户端部署
 

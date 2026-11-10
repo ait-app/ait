@@ -14,10 +14,10 @@
 - **后台 Git 刷新。** 活跃目录订阅首次观察仓库时立即 fetch，随后每 180 秒刷新 origin，
   按仓库去重并在最后一个观察者退出后取消；刷新后推送 checkout 状态。
   “从 main 更新”与基准比较能够使用已获取的远端提交。网络失败时保留已有引用。
-  [PR #142](https://github.com/ait-app/ait/pull/142)、[验证报告](../../../reports/workspace/background-git-fetch.md)。
+  [PR #142](https://github.com/ait-app/ait/pull/142)、[验证报告](../workspace/background-git-fetch.md)。
 - **侧边栏与运行状态。** 恢复增删行数、PR/MR 状态、CI 结果及 Git hover 信息，并持续
   更新；任务完成和取消后清除运行标记，下一轮任务仍正常显示运行状态。
-  [PR #141](https://github.com/ait-app/ait/pull/141)、[验证报告](../../../reports/workspace/workspace-sidebar-runtime.md)。
+  [PR #141](https://github.com/ait-app/ait/pull/141)、[验证报告](../workspace/workspace-sidebar-runtime.md)。
 - **本地化与应用配置。** 补齐设置、Provider 用量、终端、浏览器工具及工作区导航翻译，
   移除过时的 Paseo 文档链接，并新增 Ait iOS EAS release profile。
   [PR #135](https://github.com/ait-app/ait/pull/135)、[PR #136](https://github.com/ait-app/ait/pull/136)、
@@ -81,6 +81,6 @@ Apple 公证。两个平台均成功后发布四个安装包、两个 macOS bloc
 
 **未测量行覆盖率**：本次只改版本元数据与文档，没有 Rust 或前端运行代码变更，按仓库
 规则跳过本地 Rust 测试和覆盖率；测试通过数量不作为覆盖率百分比。原功能范围与历史
-覆盖率见 [DeepSeek 验证报告](../../../reports/providers/deepseek-harness-acp.md)、[侧边栏报告](../../../reports/workspace/workspace-sidebar-runtime.md)
-和 [Git 刷新报告](../../../reports/workspace/background-git-fetch.md)，不将历史测量标记为本次发布测量。
+覆盖率见 [DeepSeek 验证报告](../providers/deepseek-harness-acp.md)、[侧边栏报告](../workspace/workspace-sidebar-runtime.md)
+和 [Git 刷新报告](../workspace/background-git-fetch.md)，不将历史测量标记为本次发布测量。
 后续行为变更应补充定向测试，涉及 Rust 源码的提交再运行完整测试与覆盖率。

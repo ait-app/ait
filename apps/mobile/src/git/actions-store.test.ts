@@ -271,6 +271,74 @@ describe("checkout-git-actions-store", () => {
     ]);
   });
 
+  it("keeps discard pending until every concurrent discard of different paths settles", async () => {
+    const discardA = createDeferred<{ success: boolean; error: null }>();
+    const discardB = createDeferred<{ success: boolean; error: null }>();
+    const checkoutDiscardChanges = vi
+      .fn()
+      .mockImplementationOnce(() => discardA.promise)
+      .mockImplementationOnce(() => discardB.promise);
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: {
+        ...state.sessions,
+        [serverId]: {
+          client: { checkoutDiscardChanges },
+        } as unknown as (typeof state.sessions)[string],
+      },
+    }));
+    const store = useCheckoutGitActionsStore.getState();
+    const status = () => store.getStatus({ serverId, cwd, actionId: "discard-changes" });
+
+    const first = store.discardChanges({ serverId, cwd, paths: ["a.ts"] });
+    const second = store.discardChanges({ serverId, cwd, paths: ["b.ts"] });
+    expect(status()).toBe("pending");
+
+    discardA.resolve({ success: true, error: null });
+    await first;
+    expect(status()).toBe("pending");
+
+    // The success display of the first discard expires while the second is still running.
+    vi.advanceTimersByTime(1000);
+    expect(status()).toBe("pending");
+
+    discardB.resolve({ success: true, error: null });
+    await second;
+    expect(status()).toBe("success");
+
+    vi.advanceTimersByTime(1000);
+    expect(status()).toBe("idle");
+  });
+
+  it("drops a failed discard from the shared status without hiding a running one", async () => {
+    const discardA = createDeferred<{ success: boolean; error: null }>();
+    const checkoutDiscardChanges = vi
+      .fn()
+      .mockImplementationOnce(() => discardA.promise)
+      .mockImplementationOnce(async () => ({ success: false, error: { message: "locked" } }));
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: {
+        ...state.sessions,
+        [serverId]: {
+          client: { checkoutDiscardChanges },
+        } as unknown as (typeof state.sessions)[string],
+      },
+    }));
+    const store = useCheckoutGitActionsStore.getState();
+    const status = () => store.getStatus({ serverId, cwd, actionId: "discard-changes" });
+
+    const first = store.discardChanges({ serverId, cwd, paths: ["a.ts"] });
+    await expect(store.discardChanges({ serverId, cwd, paths: ["b.ts"] })).rejects.toThrow(
+      "locked",
+    );
+    expect(status()).toBe("pending");
+
+    discardA.resolve({ success: true, error: null });
+    await first;
+    expect(status()).toBe("success");
+  });
+
   for (const rpc of [
     {
       label: "forge",

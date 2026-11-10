@@ -1,7 +1,15 @@
+---
+id: ADR-120
+status: accepted
+date: 2026-10-10
+amends:
+  - clients/adr-074-account-host-relay.md
+paths:
+  - crates/api
+---
+
 # ADR-120：单连接启动请求的有界排队
 
-- 状态：Accepted。
-- 日期：2026-10-10。
 - 修订：[ADR-074](../clients/adr-074-account-host-relay.md)的单连接入站槽位数量。
 
 ## 背景
@@ -30,4 +38,4 @@ API 继续拥有物理连接、四个能力组队列和组内顺序，每组队�
 
 回归测试在一个等待任务预算的文件 worker 后发送 10 个目录请求，要求它们按序成功且
 Ping 立即可用；32 个请求的超量突发必须触发资源拒绝，已接纳请求仍完成。
-本机验证见[崩溃与启动失败修复报告](../../reports/daemon/daemon-startup-panic-fix-2026-10-10.md)。
+本机验证见[崩溃与启动失败修复报告](../../archive/reports/daemon/daemon-startup-panic-fix-2026-10-10.md)。

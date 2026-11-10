@@ -1,7 +1,14 @@
-# ADR-172：Android APK 在 GitHub runner 上用 Gradle 构建
+---
+id: ADR-172
+status: superseded
+date: 2026-10-20
+supersedes:
+  - clients/adr-079-mobile-eas-builds.md
+paths:
+  - .github/workflows
+---
 
-- 状态：Accepted
-- 日期：2026-10-20
+# ADR-172：Android APK 在 GitHub runner 上用 Gradle 构建
 
 构建与发布机制已由 [ADR-175](adr-175-android-play-gradle-release.md) 取代。
 

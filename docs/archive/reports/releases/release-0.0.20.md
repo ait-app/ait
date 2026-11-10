@@ -19,7 +19,7 @@
   [统一登录指南](../../../operations/authing-client-login.md)。
 - **工作区重置。** 创建时的分支名已经存在时复用该本地分支，避免分支改名失败，
   并保留此前改名的分支引用。同名分支由另一 worktree 使用时保持两端状态。
-  见 [验证报告](../../../reports/workspace/workspace-reset-existing-branch-pr-validation-2026-10-05.md)。
+  见 [验证报告](../workspace/workspace-reset-existing-branch-pr-validation-2026-10-05.md)。
 
 ## 安装与升级
 
@@ -64,6 +64,6 @@
 行覆盖率为 49,428/52,323（94.47%），filesystem 为 11,338/11,961（94.79%）；
 完整测试与覆盖率运行各为 1,803 passed、0 failed、3 ignored。精确命令、源码提交、
 历史基线、忽略项与可审查统计见
-[验证报告](../../../reports/workspace/workspace-reset-existing-branch-pr-validation-2026-10-05.md)。
+[验证报告](../workspace/workspace-reset-existing-branch-pr-validation-2026-10-05.md)。
 统一登录改动的 TypeScript 行覆盖率未测量；定向测试范围与真实设备验收限制见
 [统一登录指南](../../../operations/authing-client-login.md)。

@@ -1,6 +1,8 @@
 # 当前 Ait 架构
 
 本页描述当前组件关系；决策背景和历史取舍见 [ADR 索引](../decisions/README.md)。
+各能力当前生效的约束及其 ADR 见现行规格：[Provider](provider.md)、[Workspace](workspace.md)、
+[Bot](bot.md)、[连接与传输](connection.md)。ADR 被接受后，结论并入对应规格。
 Rust 服务入口是 `bins/daemon`，Cargo package 和可执行文件均为 `daemon`；桌面安装包与独立发布归档将它命名为 `aitd`。
 Electron 位于 `apps/desktop`，`apps/mobile` 提供桌面、Web 和移动端共享界面；SDK 与协议在 `packages/`。
 
@@ -91,17 +93,16 @@ daemon 先预绑定 TCP 端口，再以 `instance.lock` 排他持有数据目录
 启动配置、身份、故障证据及服务组装归 daemon。SIGINT/SIGTERM 与关闭 RPC 停止接纳、回收所属资源并释放锁。
 本地 API token 自动持久化，显式 `AIT_SERVER_TOKEN` 优先；详细路径和恢复方式见[daemon 手册](../operations/daemon.md)。
 
-所有 daemon 通过 `host-link` 自主管理机器授权、节点注册、续租、Hub serve 和下载 Relay。
+所有 daemon 通过 `host-link` 自主管理机器授权、节点注册、续租和 Hub serve；daemon 不再建立 Relay control 或下载 Relay。
 Desktop/移动客户端批准 device authorization 后把待领取授权交给 daemon；客户端只维护自身 access 节点。
 退出客户端账号不撤销 daemon 授权；显式断开清除机器凭据，重启后也不会自动恢复发布。
 见 [ADR-201](../decisions/daemon/adr-201-daemon-owned-publication.md)。
 
-| 通道                   | 当前用途                                                                          |
-| ---------------------- | --------------------------------------------------------------------------------- |
-| Hub access → Hub serve | 在线业务 RPC、终端、实时语音、浏览器隧道；协商后承载租约、Host 列表、可见性和下载 |
-| 独立下载 Relay WSS     | 中心或 Host 未声明 `download` 时的文件下载、完成确认与取消                        |
-| `ait-channel-v1`       | 中心未声明 `hosts` 时的账号 Host 快照、可连接状态与心跳                           |
-| 直接 TCP / SSH         | 经认证的 daemon 直连，优先单连接                                                  |
+| 通道                    | 当前用途                                                                          |
+| ----------------------- | --------------------------------------------------------------------------------- |
+| Hub access → Hub serve  | 在线业务 RPC、终端、实时语音、浏览器隧道；协商后承载租约、Host 列表、可见性和下载 |
+| 中心 `/relay-downloads` | 客户端仅对未声明 `download` 的旧 Host 使用的下载入口                              |
+| 直接 TCP / SSH          | 经认证的 daemon 直连，优先单连接                                                  |
 
 `@ait/client` 原生处理 Rust v1 握手、请求关联、订阅归属、消息分块和二进制路由。
 业务 API 直接传递对象给 SDK 内部协议模块，仅在物理传输处编码/解析 JSON。

@@ -1,7 +1,16 @@
+---
+id: ADR-198
+status: accepted
+date: 2026-10-28
+amends:
+  - providers/adr-190-omp-acp-settlement.md
+  - providers/adr-194-omp-settlement-reconciliation.md
+paths:
+  - crates/provider
+---
+
 # ADR-198：OMP 交互等待期间持续发布事件
 
-- 状态：Accepted
-- 日期：2026-10-28
 - 修订：[ADR-190](adr-190-omp-acp-settlement.md) 的异步交互和 [ADR-194](adr-194-omp-settlement-reconciliation.md) 的状态核对。
 
 ## 背景
@@ -33,4 +42,4 @@ Agent manager 在提交后、开始轮询前读取 runtime 信息。同步 `get_
 官方 OMP 的工具权限仍由用户选择原生选项，拒绝和取消均原样回传。
 
 来源：[官方 RPC 协议](https://github.com/can1357/oh-my-pi/blob/main/docs/rpc.md)。
-验证与范围见 [交互链路报告](../../reports/providers/omp-interaction-events-2026-10-28.md)。
+验证与范围见 [交互链路报告](../../archive/reports/providers/omp-interaction-events-2026-10-28.md)。

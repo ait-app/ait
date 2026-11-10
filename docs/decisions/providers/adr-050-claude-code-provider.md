@@ -1,7 +1,14 @@
+---
+id: ADR-050
+status: accepted
+date: 2026-09-26
+paths:
+  - crates/provider
+---
+
 # ADR-050：独立 server 的 Claude Code Provider
 
-- 状态：Accepted；能力扩展及下述初版限制由 [ADR-052](adr-052-native-provider-capabilities.md) 更新。
-- 日期：2026-09-26
+- 状态说明：Accepted；能力扩展及下述初版限制由 [ADR-052](adr-052-native-provider-capabilities.md) 更新。
 - 前置：ADR-001 v4、ADR-027、ADR-032、ADR-039、ADR-040、ADR-041
 
 ## 初版决策
@@ -47,4 +54,4 @@ Paseo 使用官方 TypeScript Agent SDK；本实现遵循 Rust 语言约束，�
 providerOptions/MCP 的宿主级覆盖。后续 ADR-052 已补齐这些能力，并明确区分 stdin 写入回执
 和推理确认；这些初版限制不代表当前实现。未知宿主配置仍明确拒绝，不静默丢弃。
 
-支持范围、测试和覆盖率见[实施报告](../../reports/providers/provider-parity.md)。
+支持范围、测试和覆盖率见[实施报告](../../archive/reports/providers/provider-parity.md)。

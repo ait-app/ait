@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { DECISIONS_DIRECTORY, checkDecisions, readDecisions } from "./adr.mjs";
 
 const repository = fileURLToPath(new URL("../", import.meta.url));
 const excludedDirectories = new Set([
@@ -44,11 +45,20 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
       (directory) => markdownFiles(path.join(repository, directory)),
     ),
   ];
-  const problems = checkDocumentationLinks(files);
+  const decisions = readDecisions(repository);
+  const problems = [
+    ...checkDocumentationLinks(files),
+    ...checkDecisions(decisions, {
+      exists: (owned) => existsSync(path.join(repository, owned)),
+      index: readFileSync(path.join(repository, DECISIONS_DIRECTORY, "README.md"), "utf8"),
+    }),
+  ];
   if (problems.length) {
     console.error(problems.map((problem) => problem.replaceAll(repository, "")).join("\n"));
     process.exitCode = 1;
   } else {
-    console.log(`Verified local links in ${files.length} Markdown documents.`);
+    console.log(
+      `Verified local links in ${files.length} Markdown documents and metadata of ${decisions.length} ADRs.`,
+    );
   }
 }

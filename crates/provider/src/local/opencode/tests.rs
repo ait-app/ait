@@ -27,6 +27,9 @@ mod termination;
 mod resume;
 
 #[cfg(unix)]
+mod mcp;
+
+#[cfg(unix)]
 #[tokio::test]
 async fn native_protocol_updates_options_resolves_cancelled_permissions_and_rejects_unknown_calls()
 {
@@ -1017,11 +1020,32 @@ fn acp_configuration_rejects_unsupported_policy_before_launch() {
             ..Default::default()
         },
         StoredAgentConfig {
-            mcp_servers: Some(BTreeMap::new()),
+            mcp_servers: Some(BTreeMap::from([(
+                "legacy".into(),
+                json!({"type":"sse","url":"https://legacy.test/sse"}),
+            )])),
+            ..Default::default()
+        },
+        StoredAgentConfig {
+            mcp_servers: Some(BTreeMap::from([(
+                "relative".into(),
+                json!({"type":"stdio","command":"server"}),
+            )])),
             ..Default::default()
         },
     ] {
         assert_eq!(config::validate(&config), Err(AgentSessionError::Rejected));
+    }
+    for server in [
+        json!({"type":"http","url":"http://127.0.0.1:7316/mcp/agents",
+            "headers":{"Authorization":"Bearer token"}}),
+        json!({"type":"stdio","command":"/usr/bin/server","args":["--stdio"]}),
+    ] {
+        let config = StoredAgentConfig {
+            mcp_servers: Some(BTreeMap::from([("ait".into(), server)])),
+            ..Default::default()
+        };
+        assert_eq!(config::validate(&config), Ok(()));
     }
 }
 

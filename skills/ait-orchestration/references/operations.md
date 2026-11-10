@@ -45,6 +45,16 @@ Use `list_workspace_scripts` to discover scripts configured in the workspace's `
 `start_workspace_script` and `stop_workspace_script` require both `workspaceId` and the configured
 `scriptName`. Use their supervised lifecycle rather than launching a second copy in a new terminal.
 
+Each start records a run and returns `script.runId`. Pass `args` (an array of strings) only to
+scripts whose listing shows `acceptsArgs: true`; each element reaches the script as one positional
+parameter and is never interpreted by a shell. Call `wait_for_workspace_script` with the `runId`
+(default 30 seconds, at most 45) and repeat while it returns `timedOut: true`; a timeout does not
+stop the run. The finished run reports `outcome`, `exitCode`, `durationMs`, the `commit` and
+`dirty` state it started from, and bounded combined output. `get_workspace_script_run` reads a run
+by `runId`, or the latest run of a `scriptName`, including output while it is still running.
+Treat a `succeeded` run of the workspace's verification script at a clean `commit` as evidence for
+that commit only.
+
 For an interactive process, `create_terminal` accepts `cwd` or `workspaceId`; a trusted caller can
 supply inherited placement. Use the returned terminal ID for `capture_terminal`,
 `send_terminal_keys`, and `kill_terminal`.

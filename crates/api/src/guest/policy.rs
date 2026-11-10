@@ -166,6 +166,8 @@ fn classify(method: &str) -> Rule {
         | "workspace.script.list.request"
         | "workspace.script.start.request"
         | "workspace.script.stop.request"
+        | "workspace.script.run.get.request"
+        | "workspace.script.run.wait.request"
         | "workspace.clear_attention.request"
         | "workspace.mark_unread.request" => Rule::Workspace,
         "workspace.archive.request" | "workspace.title.set.request" => Rule::WorkspaceManage,

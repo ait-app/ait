@@ -1,7 +1,14 @@
+---
+id: ADR-028
+status: accepted
+date: 2026-09-23
+paths:
+  - crates/metadata
+  - crates/filesystem
+---
+
 # ADR-028：GitHub 仓库发现与独立 Project 克隆注册
 
-- 状态：Accepted。
-- 日期：2026-09-23。
 - 来源：`getpaseo/paseo@2c8e8a826810337492cc5a38bb0bbd705b6fb632` 的
   `session.ts`、`github-service.ts`、protocol schemas 与对应测试。
 - 范围：新 `server` binary 和独立 `server-*` crate；不复用旧 Ait 组件。

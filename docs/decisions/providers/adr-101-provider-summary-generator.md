@@ -1,7 +1,16 @@
+---
+id: ADR-101
+status: accepted
+date: 2026-10-07
+amends:
+  - providers/adr-058-daemon-metadata-generation.md
+  - providers/adr-089-provider-owned-composition.md
+paths:
+  - crates/provider
+---
+
 # ADR-101：Provider 拥有摘要生成能力
 
-- 状态：Accepted。
-- 日期：2026-10-07。
 - 范围：辅助摘要生成接口、配置注入和跨组件消费。
 - 修订：[ADR-058](adr-058-daemon-metadata-generation.md) 的生成端口归属与 [ADR-089](adr-089-provider-owned-composition.md) 的生成器组装接口。
 

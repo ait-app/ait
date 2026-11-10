@@ -1,7 +1,15 @@
+---
+id: ADR-149
+status: accepted
+date: 2026-10-14
+amends:
+  - providers/adr-122-codex-computer-use-approval.md
+paths:
+  - crates/provider
+---
+
 # ADR-149：Codex 高权限档位自动批准 computer use 访问
 
-- 状态：已接受
-- 日期：2026-10-14
 - 关系：修订 [ADR-122](adr-122-codex-computer-use-approval.md) 的档位范围与原生请求处理边界。
 
 ## 背景

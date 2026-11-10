@@ -1,7 +1,15 @@
+---
+id: ADR-073
+status: accepted
+date: 2026-10-03
+amends:
+  - clients/adr-055-desktop-profile-isolation.md
+paths:
+  - apps/desktop
+---
+
 # ADR-073：桌面主窗口的导航信任边界
 
-- 状态：已接受
-- 日期：2026-10-03
 - 关系：补充 [ADR-055](adr-055-desktop-profile-isolation.md) 的桌面隔离约束。
 
 ## 背景

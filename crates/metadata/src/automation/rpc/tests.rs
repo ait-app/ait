@@ -71,6 +71,8 @@ fn script_projection_keeps_runtime_identity() {
         running: true,
         exit_code: None,
         terminal_id: Some("terminal-1".to_owned()),
+        run_id: Some("run_1".to_owned()),
+        accepts_args: true,
     });
     assert_eq!(projected.kind, WorkspaceScriptType::Service);
     assert_eq!(projected.lifecycle, WorkspaceScriptLifecycle::Running);

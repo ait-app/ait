@@ -1,7 +1,19 @@
+---
+id: ADR-035
+status: accepted
+date: 2026-09-25
+amends:
+  - daemon/adr-033-daemon-terminal.md
+  - providers/adr-031-daemon-provider.md
+  - providers/adr-034-agent-config-session-events.md
+  - workspace/adr-029-daemon-metadata.md
+  - workspace/adr-030-daemon-filesystem.md
+paths:
+  - crates/api
+---
+
 # ADR-035：能力分组与安装规则归所属 server crate
 
-- 状态：Accepted。
-- 日期：2026-09-25。
 - 授权：用户要求各 crate 独立统计 implemented groups 和 installed capabilities，由 api 合并。
 - 范围：独立 server 的能力声明、安装条件及路由接线；补充 ADR-029/030/031/033/034。
 
@@ -44,4 +56,4 @@ protocol；不新增 crate 依赖。分组声明不转移执行、响应发送�
 
 各能力 crate 检查所有服务安装组合、方法唯一性和完整安装覆盖；API 检查合并后的唯一性、
 基础能力、占位目录与路由方向。真实 WebSocket 和进程回归继续验证协商和执行接线。
-命令、结果及覆盖率见[实施报告](../../reports/daemon/server-capability-groups.md)。
+命令、结果及覆盖率见[实施报告](../../archive/reports/daemon/server-capability-groups.md)。
