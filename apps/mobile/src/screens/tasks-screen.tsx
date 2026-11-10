@@ -59,7 +59,7 @@ export function TasksScreenContent() {
   const selected = selectedKey ? byKey.get(selectedKey) : undefined;
   const compact = width > 0 && width < 700;
   const minimumBoardWidth =
-    TASK_LANES.length * MIN_LANE_WIDTH + (TASK_LANES.length + 1) * theme.spacing[4];
+    TASK_LANES.length * MIN_LANE_WIDTH + (TASK_LANES.length + 1) * theme.spacing[3];
   const inlineDetail = width >= minimumBoardWidth + DETAIL_WIDTH;
   const lanesWidth = compact ? boardWidth : Math.max(boardWidth, minimumBoardWidth);
   const closeDetail = useCallback(() => setSelectedKey(null), []);
@@ -374,27 +374,27 @@ const styles = StyleSheet.create((theme) => ({
   body: { flex: 1, flexDirection: "row", minWidth: 0, minHeight: 0 },
   main: { flex: 1, minWidth: 0, minHeight: 0 },
   intro: {
-    paddingHorizontal: theme.spacing[6],
-    paddingTop: theme.spacing[6],
-    paddingBottom: theme.spacing[4],
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[3],
+    paddingBottom: theme.spacing[3],
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: theme.spacing[3],
   },
-  introText: { flex: 1, gap: theme.spacing[2] },
+  introText: { flex: 1, gap: theme.spacing[1] },
   title: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize["4xl"],
+    fontSize: theme.fontSize["2xl"],
     fontWeight: theme.fontWeight.semibold,
   },
-  subtitle: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm, lineHeight: 20 },
+  subtitle: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm, lineHeight: 18 },
   filters: {
-    paddingHorizontal: theme.spacing[6],
-    paddingBottom: theme.spacing[4],
+    paddingHorizontal: theme.spacing[4],
+    paddingBottom: theme.spacing[3],
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: theme.spacing[3],
+    gap: theme.spacing[2],
     alignItems: "center",
   },
   search: { minWidth: 220, maxWidth: 420, flexGrow: 1, flexDirection: "row" },
@@ -406,8 +406,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   compactPadding: { paddingHorizontal: theme.spacing[4] },
   notice: {
-    paddingHorizontal: theme.spacing[6],
-    paddingBottom: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+    paddingBottom: theme.spacing[2],
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
@@ -440,7 +440,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   board: { flex: 1, minWidth: 0, minHeight: 0 },
   boardScroll: { flex: 1 },
-  lanes: { flexDirection: "row", padding: theme.spacing[4], gap: theme.spacing[4] },
+  lanes: { flexDirection: "row", padding: theme.spacing[3], gap: theme.spacing[3] },
   lane: {
     flex: 1,
     minWidth: 0,
@@ -452,12 +452,11 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
     padding: theme.spacing[3],
-    paddingVertical: theme.spacing[4],
   },
   dot: { width: 7, height: 7, borderRadius: 4 },
   laneTitle: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.lg,
+    fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.semibold,
   },
   count: {
