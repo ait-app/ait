@@ -191,3 +191,39 @@ jobs:
         run: |
           docker run --rm --detach --name ait-web-client --publish 127.0.0.1:8080:80 ait-web-client:ci
           bash apps/mobile/web-console/check-routes.sh http://127.0.0.1:8080
+
+  # The browser client against a real daemon, so either side of the protocol can break it.
+  web-client-e2e:
+    needs: changes
+    if: needs.changes.outputs.web_client == 'true' || needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - *setup-node
+      - run: npm ci
+      - uses: dtolnay/rust-toolchain@1.98.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # See the rust job: rust-cache leaves empty prebuilt sherpa directories behind.
+      - name: Reset cached sherpa native artifacts
+        run: |
+          cargo clean --package sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
+      - run: cargo build --locked -p daemon --bin daemon
+      - run: npx playwright install --with-deps chromium
+      - name: Run web client smoke test
+        env:
+          E2E_AIT_SERVER_BIN: ${{ github.workspace }}/target/debug/daemon
+          # A selected root survives worker teardown, which keeps server.log for the upload.
+          E2E_AIT_DATA_ROOT: ${{ runner.temp }}/ait-e2e
+        run: npm run test:e2e:smoke --workspace=@ait/mobile
+      - uses: actions/upload-artifact@v6
+        if: failure()
+        with:
+          name: web-client-e2e-results
+          path: |
+            apps/mobile/test-results
+            ${{ runner.temp }}/ait-e2e/**/server.log
+          retention-days: 7

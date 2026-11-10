@@ -8,6 +8,12 @@ Rust/Cargo and Python 3 are required. Global setup builds the frontend dependenc
 npm run test:e2e --workspace=@ait/mobile -- e2e/browser/ait-daemon.spec.ts e2e/browser/workspace-model-restart.spec.ts e2e/browser/daemon-lifecycle.spec.ts
 ```
 
+CI runs one browser path, composer prompt to provider reply, in the `web-client-e2e` job:
+
+```sh
+npm run test:e2e:smoke --workspace=@ait/mobile
+```
+
 `E2E_AIT_SERVER_BIN=/absolute/path/to/server` skips the Cargo build. The binary must
 implement Ait's v1 API. No installed or published Paseo server is used.
 
