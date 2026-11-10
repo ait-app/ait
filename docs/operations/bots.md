@@ -176,6 +176,20 @@ Channel 存在后回退到旧版 daemon 会导致 daemon 无法启动，即使 C
 
 中心经现有 serve 链路投递消息、读取轮次并确认送达，只能访问已启用的 Webhook Channel。停用 Channel、暂停或移除 Bot 会立即收回权限。删除 Channel 时尽力删除中心端点；创建和轮换遇到中心离线等情况会明确显示失败原因。
 
+以下为本地隔离环境截图，图中的回环地址和一次性密钥均已失效。
+
+添加 Webhook：
+
+![添加 Webhook Channel](../assets/bot/webhook-setup.png)
+
+创建结果包含一次性密钥、curl 示例及 poll/push 提示：
+
+![Webhook 创建结果](../assets/bot/webhook-created.png)
+
+创建后的 Channel 可以复制地址、切换启用状态和重新生成密钥：
+
+![Webhook Channel 卡片](../assets/bot/webhook-channel.png)
+
 ## 记忆与接口
 
 Bot 记忆位于 `<data>/workspace-bots/memory/<sha256(workspaceId)>.md`，限制 32 KiB，不再写入 Workspace 目录。
