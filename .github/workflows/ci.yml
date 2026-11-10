@@ -216,14 +216,10 @@ jobs:
       - name: Run web client smoke test
         env:
           E2E_AIT_SERVER_BIN: ${{ github.workspace }}/target/debug/daemon
-          # A selected root survives worker teardown, which keeps server.log for the upload.
+          # A selected root survives worker teardown, which keeps server.log for the next step.
           E2E_AIT_DATA_ROOT: ${{ runner.temp }}/ait-e2e
         run: npm run test:e2e:smoke --workspace=@ait/mobile
-      - uses: actions/upload-artifact@v6
+      # CI never uploads artifacts, so the daemon's side of a failure goes to the job log.
+      - name: Show daemon log
         if: failure()
-        with:
-          name: web-client-e2e-results
-          path: |
-            apps/mobile/test-results
-            ${{ runner.temp }}/ait-e2e/**/server.log
-          retention-days: 7
+        run: tail -n 500 "$RUNNER_TEMP"/ait-e2e/*/server.log || true
