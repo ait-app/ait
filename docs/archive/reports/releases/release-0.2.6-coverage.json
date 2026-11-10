@@ -55,7 +55,8 @@
     "commands": [
       "CARGO_TARGET_DIR=<cache> cargo llvm-cov nextest --locked -p api -p bot -p domain -p metadata -p persistence -p provider -p daemon --json --summary-only --output-path <evidence>/rust-cov.json --test-threads 4",
       "CARGO_TARGET_DIR=<cache> cargo llvm-cov nextest --no-clean --locked -p api -p bot -p domain -p metadata -p persistence -p provider -p daemon -E package(bot) --json --summary-only --output-path <evidence>/rust-cov.json --test-threads 4",
-      "CARGO_TARGET_DIR=<cache> cargo llvm-cov nextest --no-clean --locked -p api -p bot -p domain -p metadata -p persistence -p provider -p daemon -E \"package(bot) & test(service::tests::)\" --json --summary-only --output-path <evidence>/rust-cov-final.json --test-threads 4"
+      "CARGO_TARGET_DIR=<cache> cargo llvm-cov nextest --no-clean --locked -p api -p bot -p domain -p metadata -p persistence -p provider -p daemon -E \"package(bot) & test(service::tests::)\" --json --summary-only --output-path <evidence>/rust-cov-final.json --test-threads 4",
+      "CARGO_TARGET_DIR=<cache> cargo llvm-cov nextest --no-clean --locked -p api -p bot -p domain -p metadata -p persistence -p provider -p daemon -E \"package(provider) & test(local::pi::session::tests::)\" --json --summary-only --output-path <evidence>/rust-cov-pi-final.json --test-threads 4"
     ],
     "baseline": {
       "version": "0.2.5",
@@ -1619,6 +1620,35 @@
       "tests_passed": 6994
     },
     "model": "Claude Fable 5.2",
-    "thinking": "high"
+    "thinking": "high",
+    "pi_fixture": {
+      "file": "crates/provider/src/local/pi/tests/fixtures/pi.py",
+      "sha256": "089872e908c4c520f18e5a645427a726d06a51f32e4acb567829b4465f1c98f8",
+      "ci_baseline": {
+        "run": 3885,
+        "passed": 3884,
+        "failed": 1,
+        "skipped": 66
+      },
+      "fixture_ab_py312": {
+        "original_trials": 6000,
+        "original_handlers_missed": 5,
+        "fixed_trials": 6000,
+        "fixed_handlers_missed": 0
+      },
+      "fixture_ab_py315": {
+        "original_trials": 2000,
+        "original_handlers_missed": 7,
+        "fixed_trials": 2000,
+        "fixed_handlers_missed": 0
+      },
+      "fixed_target_sequential_passed": 100,
+      "fixed_target_parallel_passed": 320,
+      "fixed_target_parallel_py312_passed": 320,
+      "pi_subset_passed": 293,
+      "pi_subset_py312_passed": 293,
+      "final_instrumented_session_tests_passed": 10,
+      "natural_original_full_test_failure_reproduced_on_macos": false
+    }
   }
 }

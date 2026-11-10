@@ -48,6 +48,19 @@ Claude Fable 5.2 with high thinking reviewed and validated them in the release w
    source Node cannot parse. A unit-project-only alias chooses the package's ESM entry, keeping
    the existing React Native Web alias effective. Browser-project resolution is unchanged.
    All six badges tests pass, including five repeated runs. The existing alias list is preserved.
+4. **Pi shutdown-history fixture signal race found by Linux PR CI.** The initial PR CI ran
+   3885 Rust tests: 3884 passed, while `display_limit_rechecks_deferred_history_after_shutdown`
+   observed `Observed` instead of `Required` for `partial-history-on-shutdown`. Python can defer
+   its SIGTERM handler if a signal arrives just before a blocking stdin read, leaving shutdown
+   waiting for input that it never sends. The fixture now uses a nonblocking signal wakeup pipe
+   and `select` for the two shutdown-history scenarios. Production shutdown logic and the original
+   assertions remain unchanged. A real-fixture A/B reproduced missing handlers on Python 3.12
+   (5/6000 original, 0/6000 fixed) and 3.15 (7/2000 original, 0/2000 fixed). A controlled missed
+   handler reproduced the exact CI assertion in the real test. Natural full-test repetitions on
+   macOS did not reproduce the original failure, so they are not presented as a red baseline.
+   The fixed case passed 100 sequential runs, 320 parallel runs, and 320 parallel runs on Python
+   3.12. All 293 Pi tests passed on both interpreters; the ten related session tests also passed
+   under coverage instrumentation. Linux CI verifies the updated PR separately.
 
 The two mobile failures also reproduced on the identical 0.2.5 source tree. Desktop EPERM failures
 from a restricted runner were rerun with local-port/process access and passed.
@@ -68,7 +81,9 @@ one Bot race failed, and 65 were skipped. After fixing that race, all 194 Bot cr
 the other crates' production source was unchanged. The report combines the initial profiles with
 the Bot revalidation profiles. On the final Fable-reviewed test source, the seven directly affected
 Bot service tests were rerun with instrumentation and all passed; the line totals were unchanged.
-No full workspace test or coverage run was requested or executed.
+After the Pi fixture repair, its ten directly related session tests were also remeasured and
+passed, again leaving the line totals unchanged.
+No full workspace test or coverage run was requested or executed locally.
 
 ```sh
 CARGO_TARGET_DIR=<cache> cargo llvm-cov nextest --locked \
@@ -81,6 +96,10 @@ CARGO_TARGET_DIR=<cache> cargo llvm-cov nextest --no-clean --locked \
   -p api -p bot -p domain -p metadata -p persistence -p provider -p daemon \
   -E 'package(bot) & test(service::tests::)' \
   --json --summary-only --output-path <evidence>/rust-cov-final.json --test-threads 4
+CARGO_TARGET_DIR=<cache> cargo llvm-cov nextest --no-clean --locked \
+  -p api -p bot -p domain -p metadata -p persistence -p provider -p daemon \
+  -E 'package(provider) & test(local::pi::session::tests::)' \
+  --json --summary-only --output-path <evidence>/rust-cov-pi-final.json --test-threads 4
 ```
 
 | Crate               | Covered / total lines | Line coverage |

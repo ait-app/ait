@@ -2,6 +2,7 @@
 """Deterministic Pi RPC peer; no model API or user credentials."""
 import json
 import os
+import select
 import signal
 import sys
 import time
@@ -127,10 +128,32 @@ def finish_history(_signal, _frame):
         path.write_text(deferred_history)
     sys.exit(0)
 
+def interruptible_lines():
+    """Yield stdin lines while letting a signal end the wait for the next one.
+
+    Python defers a handler until the interpreter regains control, so SIGTERM landing just
+    before a blocking read would wait for input that shutdown never sends.
+    """
+    wake, notify = os.pipe()
+    os.set_blocking(notify, False)
+    signal.set_wakeup_fd(notify)
+    pending = b''
+    while True:
+        *lines, pending = pending.split(b'\n')
+        yield from lines
+        readable, _, _ = select.select([0, wake], [], [])
+        if 0 in readable:
+            chunk = os.read(0, 65536)
+            if not chunk:
+                return
+            pending += chunk
+
+stdin_lines = sys.stdin
 if scenario in ['history-on-shutdown', 'partial-history-on-shutdown']:
     signal.signal(signal.SIGTERM, finish_history)
+    stdin_lines = interruptible_lines()
 
-for line in sys.stdin:
+for line in stdin_lines:
     command = json.loads(line)
     with (root / 'requests.jsonl').open('a') as log:
         log.write(json.dumps(command) + '\n')
