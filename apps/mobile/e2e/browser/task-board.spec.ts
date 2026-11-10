@@ -2,18 +2,18 @@ import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { expect, test } from "../support/fixtures";
 import { seedWorkspace, type SeededWorkspace } from "../support/helpers/seed-client";
 import { getServerId } from "../support/helpers/server-id";
+import { buildSeededHost } from "../support/helpers/daemon-registry";
 
 test.describe("Task overview", () => {
   let workspace: SeededWorkspace;
   const errors: string[] = [];
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, colorScheme }) => {
     errors.length = 0;
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.addInitScript(() =>
-      localStorage.setItem(
-        "@paseo:app-settings",
-        JSON.stringify({ theme: "light", language: "zh-CN" }),
-      ),
+    await page.addInitScript(
+      (theme) =>
+        localStorage.setItem("@paseo:app-settings", JSON.stringify({ theme, language: "zh-CN" })),
+      colorScheme === "dark" ? "dark" : "light",
     );
     workspace = await seedWorkspace({ repoPrefix: "task-board-", title: "Ait" });
     await workspace.client.renameProject(workspace.projectId, "Ait");
@@ -156,5 +156,121 @@ test.describe("Task overview", () => {
       true,
     );
     expect(errors).toEqual([]);
+  });
+
+  test.describe("dark desktop layout", () => {
+    test.use({ colorScheme: "dark" });
+
+    test("contains long task cards, preserves all lanes beside details and identifies unavailable hosts", async ({
+      page,
+    }, testInfo) => {
+      const client = workspace.client as unknown as DaemonClient;
+      await client.renameProject(
+        workspace.projectId,
+        "ait-provider-integration-and-workspace-observation",
+      );
+      const ids: string[] = [];
+      for (let index = 0; index < 32; index += 1) {
+        const agent = await client.createAgent({
+          provider: "codex",
+          cwd: workspace.repoPath,
+          workspaceId: workspace.workspaceId,
+          title: `${index + 1}. Review provider-compatibility-and-task-directory-sync-regression`,
+          model: "offline-model",
+        });
+        ids.push(agent.id);
+      }
+      await client.sendAgentMessage(ids[0], "permit-command");
+      await client.sendAgentMessage(ids[1], "stream");
+      await client.sendAgentMessage(ids[2], "任务已完成，等待查看结果。");
+      await client.waitForFinish(ids[2]);
+      await page.setViewportSize({ width: 2048, height: 1152 });
+      await page.goto("/tasks", { waitUntil: "commit" });
+      await expect(page.getByTestId("sidebar-sessions")).toBeVisible();
+      const card = page.getByTestId(`task-card-${getServerId()}-${ids[0]}`);
+      await expect(card).toBeVisible();
+
+      const expectLanesToFit = async (withDetail = false) => {
+        await expect
+          .poll(async () => {
+            const board = await page.getByTestId("task-board").boundingBox();
+            const detail = withDetail ? await page.getByTestId("task-detail").boundingBox() : null;
+            const lanes = await page.getByTestId(/^task-lane-/).evaluateAll((nodes) =>
+              nodes.map((node) => {
+                const { left, right, width } = node.getBoundingClientRect();
+                return { left, right, width };
+              }),
+            );
+            if (!board || lanes.length !== 4 || (withDetail && !detail)) return false;
+            return (
+              lanes.every(
+                (lane) =>
+                  lane.left >= board.x &&
+                  lane.right <= (detail?.x ?? board.x + board.width) + 1 &&
+                  lane.width >= 240 &&
+                  Math.abs(lane.width - lanes[0].width) <= 1,
+              ) &&
+              (!detail || detail.x + detail.width <= board.x + board.width + 1)
+            );
+          })
+          .toBe(true);
+      };
+
+      await page.screenshot({ path: testInfo.outputPath("task-board-long-content.png") });
+      await expectLanesToFit();
+      await card.click();
+      await expect(page.getByTestId("task-detail")).toBeVisible();
+      await expectLanesToFit(true);
+      await expect
+        .poll(async () => {
+          const detail = await page.getByTestId("task-detail").boundingBox();
+          const project = await page
+            .getByTestId("task-detail")
+            .getByText("ait-provider-integration-and-workspace-observation / Ait", { exact: true })
+            .boundingBox();
+          return detail && project ? project.x - detail.x : 0;
+        })
+        .toBeGreaterThanOrEqual(12);
+      await page.setViewportSize({ width: 1717, height: 916 });
+      await expectLanesToFit(true);
+
+      await page.setViewportSize({ width: 1600, height: 916 });
+      await expect(page.getByTestId("task-detail-sheet")).toBeVisible();
+      await page.setViewportSize({ width: 2048, height: 1152 });
+      await expect(page.getByTestId("task-detail-sheet")).toHaveCount(0);
+      await expectLanesToFit(true);
+
+      const offlinePort = 47831;
+      await page.route(new RegExp(`127\\.0\\.0\\.1:${offlinePort}`), (route) => route.abort());
+      await page.routeWebSocket(new RegExp(`127\\.0\\.0\\.1:${offlinePort}`), (socket) =>
+        socket.close(),
+      );
+      const offlineHost = buildSeededHost({
+        serverId: "11111111-2222-4333-8444-555555555555",
+        endpoint: `127.0.0.1:${offlinePort}`,
+        label: "Offline demo host",
+        nowIso: new Date().toISOString(),
+      });
+      await page.evaluate((host) => {
+        localStorage.setItem("@paseo:e2e-extra-hosts", JSON.stringify([host]));
+      }, offlineHost);
+      await page.reload();
+      await expect(card).toBeVisible();
+      await expect(page.getByTestId("task-board-notice")).toContainText("Offline demo host");
+      await expect(page.getByTestId("task-board-notice")).not.toContainText("未能加载任务");
+      await card.click();
+      await expectLanesToFit(true);
+      await page.screenshot({ path: testInfo.outputPath("task-board-dark-desktop.png") });
+
+      await page.getByTestId("task-detail-close").click();
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.getByTestId("task-tab-done").click();
+      const lane = await page.getByTestId("task-lane-done").boundingBox();
+      expect(lane!.x + lane!.width).toBeLessThanOrEqual(390);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      expect(errors).toEqual([]);
+    });
   });
 });
