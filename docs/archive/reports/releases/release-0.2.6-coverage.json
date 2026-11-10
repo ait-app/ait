@@ -1,0 +1,1654 @@
+{
+  "base_commit": "84f89951e080f848260c283bf01c5d35950fb00e",
+  "scope_baseline": "1e9c0886dc44ed9cfdbb04d1459c2b1d87ec5b13",
+  "rust": {
+    "lines": {
+      "count": 74946,
+      "covered": 70930,
+      "percent": 94.64147519547409
+    },
+    "crates": {
+      "bins/daemon": {
+        "covered": 3967,
+        "total": 4204,
+        "files": 26,
+        "percent": 94.3625
+      },
+      "crates/api": {
+        "covered": 6375,
+        "total": 6806,
+        "files": 45,
+        "percent": 93.6674
+      },
+      "crates/bot": {
+        "covered": 5315,
+        "total": 5678,
+        "files": 28,
+        "percent": 93.6069
+      },
+      "crates/domain": {
+        "covered": 714,
+        "total": 714,
+        "files": 21,
+        "percent": 100.0
+      },
+      "crates/metadata": {
+        "covered": 7978,
+        "total": 8356,
+        "files": 52,
+        "percent": 95.4763
+      },
+      "crates/persistence": {
+        "covered": 1883,
+        "total": 1966,
+        "files": 18,
+        "percent": 95.7782
+      },
+      "crates/provider": {
+        "covered": 44698,
+        "total": 47222,
+        "files": 254,
+        "percent": 94.655
+      }
+    },
+    "production_source_fingerprint_sha256": "39f94e96269bc06f133a89c8638a4f23d750155555fcc74fe3344ebbdbe1f5d0",
+    "commands": [
+      "CARGO_TARGET_DIR=<cache> cargo llvm-cov nextest --locked -p api -p bot -p domain -p metadata -p persistence -p provider -p daemon --json --summary-only --output-path <evidence>/rust-cov.json --test-threads 4",
+      "CARGO_TARGET_DIR=<cache> cargo llvm-cov nextest --no-clean --locked -p api -p bot -p domain -p metadata -p persistence -p provider -p daemon -E package(bot) --json --summary-only --output-path <evidence>/rust-cov.json --test-threads 4",
+      "CARGO_TARGET_DIR=<cache> cargo llvm-cov nextest --no-clean --locked -p api -p bot -p domain -p metadata -p persistence -p provider -p daemon -E \"package(bot) & test(service::tests::)\" --json --summary-only --output-path <evidence>/rust-cov-final.json --test-threads 4",
+      "CARGO_TARGET_DIR=<cache> cargo llvm-cov nextest --no-clean --locked -p api -p bot -p domain -p metadata -p persistence -p provider -p daemon -E \"package(provider) & test(local::pi::session::tests::)\" --json --summary-only --output-path <evidence>/rust-cov-pi-final.json --test-threads 4"
+    ],
+    "baseline": {
+      "version": "0.2.5",
+      "source_commit": "1e9c0886dc44ed9cfdbb04d1459c2b1d87ec5b13",
+      "covered": 69522,
+      "total": 73490,
+      "percent": 94.60062593550143
+    }
+  },
+  "typescript": {
+    "packages": {
+      "protocol": {
+        "lines": {
+          "total": 52,
+          "covered": 35,
+          "skipped": 0,
+          "pct": 67.3
+        },
+        "files": {
+          "packages/protocol/src/tool-name-normalization.ts": {
+            "total": 41,
+            "covered": 24,
+            "skipped": 0,
+            "pct": 58.53
+          },
+          "packages/protocol/src/bot/types.ts": {
+            "total": 11,
+            "covered": 11,
+            "skipped": 0,
+            "pct": 100
+          }
+        },
+        "requested_sources": [
+          "src/bot/types.ts",
+          "src/tool-name-normalization.ts"
+        ],
+        "command": [
+          "/opt/homebrew/Cellar/node@22/22.23.4_2/bin/node",
+          "<checkout>/node_modules/vitest/vitest.mjs",
+          "related",
+          "--run",
+          "src/bot/types.ts",
+          "src/tool-name-normalization.ts",
+          "--coverage",
+          "--coverage.reportOnFailure",
+          "--coverage.reporter=json-summary",
+          "--coverage.reporter=text",
+          "--coverage.reportsDirectory=<evidence>/ts-cov-protocol",
+          "--maxWorkers=2",
+          "--coverage.include=src/bot/types.ts",
+          "--coverage.include=src/tool-name-normalization.ts"
+        ],
+        "exit_code": 0
+      },
+      "client": {
+        "lines": {
+          "total": 2765,
+          "covered": 2147,
+          "skipped": 0,
+          "pct": 77.64
+        },
+        "files": {
+          "packages/client/src/daemon-client-transport-utils.ts": {
+            "total": 64,
+            "covered": 44,
+            "skipped": 0,
+            "pct": 68.75
+          },
+          "packages/client/src/daemon-client-transport.ts": {
+            "total": 0,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 100
+          },
+          "packages/client/src/daemon-client.ts": {
+            "total": 1764,
+            "covered": 1196,
+            "skipped": 0,
+            "pct": 67.8
+          },
+          "packages/client/src/terminal-stream-router.ts": {
+            "total": 29,
+            "covered": 28,
+            "skipped": 0,
+            "pct": 96.55
+          },
+          "packages/client/src/connection/owned.ts": {
+            "total": 115,
+            "covered": 112,
+            "skipped": 0,
+            "pct": 97.39
+          },
+          "packages/client/src/hub/link.ts": {
+            "total": 490,
+            "covered": 483,
+            "skipped": 0,
+            "pct": 98.57
+          },
+          "packages/client/src/protocol/connection.ts": {
+            "total": 301,
+            "covered": 282,
+            "skipped": 0,
+            "pct": 93.68
+          },
+          "packages/client/src/protocol/methods.ts": {
+            "total": 2,
+            "covered": 2,
+            "skipped": 0,
+            "pct": 100
+          }
+        },
+        "requested_sources": [
+          "src/connection/owned.ts",
+          "src/daemon-client-transport-utils.ts",
+          "src/daemon-client-transport.ts",
+          "src/daemon-client.ts",
+          "src/hub/link.ts",
+          "src/protocol/connection.ts",
+          "src/protocol/methods.ts",
+          "src/terminal-stream-router.ts"
+        ],
+        "command": [
+          "/opt/homebrew/Cellar/node@22/22.23.4_2/bin/node",
+          "<checkout>/node_modules/vitest/vitest.mjs",
+          "related",
+          "--run",
+          "src/connection/owned.ts",
+          "src/daemon-client-transport-utils.ts",
+          "src/daemon-client-transport.ts",
+          "src/daemon-client.ts",
+          "src/hub/link.ts",
+          "src/protocol/connection.ts",
+          "src/protocol/methods.ts",
+          "src/terminal-stream-router.ts",
+          "--coverage",
+          "--coverage.reportOnFailure",
+          "--coverage.reporter=json-summary",
+          "--coverage.reporter=text",
+          "--coverage.reportsDirectory=<evidence>/ts-cov-client",
+          "--maxWorkers=2",
+          "--coverage.include=src/connection/owned.ts",
+          "--coverage.include=src/daemon-client-transport-utils.ts",
+          "--coverage.include=src/daemon-client-transport.ts",
+          "--coverage.include=src/daemon-client.ts",
+          "--coverage.include=src/hub/link.ts",
+          "--coverage.include=src/protocol/connection.ts",
+          "--coverage.include=src/protocol/methods.ts",
+          "--coverage.include=src/terminal-stream-router.ts"
+        ],
+        "exit_code": 0
+      },
+      "desktop": {
+        "lines": {
+          "total": 1458,
+          "covered": 798,
+          "skipped": 0,
+          "pct": 54.73
+        },
+        "files": {
+          "apps/desktop/src/main.ts": {
+            "total": 427,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/desktop/src/daemon/account-ipc.ts": {
+            "total": 145,
+            "covered": 98,
+            "skipped": 0,
+            "pct": 67.58
+          },
+          "apps/desktop/src/daemon/quit-lifecycle.ts": {
+            "total": 56,
+            "covered": 52,
+            "skipped": 0,
+            "pct": 92.85
+          },
+          "apps/desktop/src/daemon/rust-daemon.ts": {
+            "total": 295,
+            "covered": 252,
+            "skipped": 0,
+            "pct": 85.42
+          },
+          "apps/desktop/src/features/browser-profile.ts": {
+            "total": 34,
+            "covered": 32,
+            "skipped": 0,
+            "pct": 94.11
+          },
+          "apps/desktop/src/features/file-opener.ts": {
+            "total": 41,
+            "covered": 28,
+            "skipped": 0,
+            "pct": 68.29
+          },
+          "apps/desktop/src/features/browser-webviews/index.ts": {
+            "total": 41,
+            "covered": 17,
+            "skipped": 0,
+            "pct": 41.46
+          },
+          "apps/desktop/src/features/browser-webviews/registry.ts": {
+            "total": 87,
+            "covered": 75,
+            "skipped": 0,
+            "pct": 86.2
+          },
+          "apps/desktop/src/features/editor-targets/runtime.ts": {
+            "total": 73,
+            "covered": 51,
+            "skipped": 0,
+            "pct": 69.86
+          },
+          "apps/desktop/src/features/editor-targets/target.ts": {
+            "total": 5,
+            "covered": 5,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/desktop/src/features/editor-targets/targets/antigravity.ts": {
+            "total": 7,
+            "covered": 3,
+            "skipped": 0,
+            "pct": 42.85
+          },
+          "apps/desktop/src/features/editor-targets/targets/cursor.ts": {
+            "total": 24,
+            "covered": 20,
+            "skipped": 0,
+            "pct": 83.33
+          },
+          "apps/desktop/src/features/editor-targets/targets/file-manager.ts": {
+            "total": 18,
+            "covered": 18,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/desktop/src/features/editor-targets/targets/kiro.ts": {
+            "total": 10,
+            "covered": 3,
+            "skipped": 0,
+            "pct": 30
+          },
+          "apps/desktop/src/features/editor-targets/targets/trae.ts": {
+            "total": 7,
+            "covered": 3,
+            "skipped": 0,
+            "pct": 42.85
+          },
+          "apps/desktop/src/features/editor-targets/targets/vscode-insiders.ts": {
+            "total": 22,
+            "covered": 9,
+            "skipped": 0,
+            "pct": 40.9
+          },
+          "apps/desktop/src/features/editor-targets/targets/vscode.ts": {
+            "total": 22,
+            "covered": 14,
+            "skipped": 0,
+            "pct": 63.63
+          },
+          "apps/desktop/src/features/editor-targets/targets/vscodium.ts": {
+            "total": 22,
+            "covered": 9,
+            "skipped": 0,
+            "pct": 40.9
+          },
+          "apps/desktop/src/features/editor-targets/targets/zed.ts": {
+            "total": 12,
+            "covered": 7,
+            "skipped": 0,
+            "pct": 58.33
+          },
+          "apps/desktop/src/settings/desktop-settings.ts": {
+            "total": 110,
+            "covered": 102,
+            "skipped": 0,
+            "pct": 92.72
+          }
+        },
+        "requested_sources": [
+          "src/daemon/account-ipc.ts",
+          "src/daemon/quit-lifecycle.ts",
+          "src/daemon/rust-daemon.ts",
+          "src/features/browser-profile.ts",
+          "src/features/browser-webviews/index.ts",
+          "src/features/browser-webviews/registry.ts",
+          "src/features/editor-targets/runtime.ts",
+          "src/features/editor-targets/target.ts",
+          "src/features/editor-targets/targets/antigravity.ts",
+          "src/features/editor-targets/targets/cursor.ts",
+          "src/features/editor-targets/targets/file-manager.ts",
+          "src/features/editor-targets/targets/kiro.ts",
+          "src/features/editor-targets/targets/trae.ts",
+          "src/features/editor-targets/targets/vscode-insiders.ts",
+          "src/features/editor-targets/targets/vscode.ts",
+          "src/features/editor-targets/targets/vscodium.ts",
+          "src/features/editor-targets/targets/zed.ts",
+          "src/features/file-opener.ts",
+          "src/main.ts",
+          "src/settings/desktop-settings.ts"
+        ],
+        "command": [
+          "/opt/homebrew/Cellar/node@22/22.23.4_2/bin/node",
+          "<checkout>/node_modules/vitest/vitest.mjs",
+          "related",
+          "--run",
+          "src/daemon/account-ipc.ts",
+          "src/daemon/quit-lifecycle.ts",
+          "src/daemon/rust-daemon.ts",
+          "src/features/browser-profile.ts",
+          "src/features/browser-webviews/index.ts",
+          "src/features/browser-webviews/registry.ts",
+          "src/features/editor-targets/runtime.ts",
+          "src/features/editor-targets/target.ts",
+          "src/features/editor-targets/targets/antigravity.ts",
+          "src/features/editor-targets/targets/cursor.ts",
+          "src/features/editor-targets/targets/file-manager.ts",
+          "src/features/editor-targets/targets/kiro.ts",
+          "src/features/editor-targets/targets/trae.ts",
+          "src/features/editor-targets/targets/vscode-insiders.ts",
+          "src/features/editor-targets/targets/vscode.ts",
+          "src/features/editor-targets/targets/vscodium.ts",
+          "src/features/editor-targets/targets/zed.ts",
+          "src/features/file-opener.ts",
+          "src/main.ts",
+          "src/settings/desktop-settings.ts",
+          "--coverage",
+          "--coverage.reportOnFailure",
+          "--coverage.reporter=json-summary",
+          "--coverage.reporter=text",
+          "--coverage.reportsDirectory=<evidence>/ts-cov-desktop",
+          "--maxWorkers=2",
+          "--coverage.include=src/daemon/account-ipc.ts",
+          "--coverage.include=src/daemon/quit-lifecycle.ts",
+          "--coverage.include=src/daemon/rust-daemon.ts",
+          "--coverage.include=src/features/browser-profile.ts",
+          "--coverage.include=src/features/browser-webviews/index.ts",
+          "--coverage.include=src/features/browser-webviews/registry.ts",
+          "--coverage.include=src/features/editor-targets/runtime.ts",
+          "--coverage.include=src/features/editor-targets/target.ts",
+          "--coverage.include=src/features/editor-targets/targets/antigravity.ts",
+          "--coverage.include=src/features/editor-targets/targets/cursor.ts",
+          "--coverage.include=src/features/editor-targets/targets/file-manager.ts",
+          "--coverage.include=src/features/editor-targets/targets/kiro.ts",
+          "--coverage.include=src/features/editor-targets/targets/trae.ts",
+          "--coverage.include=src/features/editor-targets/targets/vscode-insiders.ts",
+          "--coverage.include=src/features/editor-targets/targets/vscode.ts",
+          "--coverage.include=src/features/editor-targets/targets/vscodium.ts",
+          "--coverage.include=src/features/editor-targets/targets/zed.ts",
+          "--coverage.include=src/features/file-opener.ts",
+          "--coverage.include=src/main.ts",
+          "--coverage.include=src/settings/desktop-settings.ts"
+        ],
+        "exit_code": 1
+      },
+      "mobile": {
+        "lines": {
+          "total": 16642,
+          "covered": 8525,
+          "skipped": 0,
+          "pct": 51.22
+        },
+        "files": {
+          "apps/mobile/src/agent-profiles/migration/index.ts": {
+            "total": 77,
+            "covered": 64,
+            "skipped": 0,
+            "pct": 83.11
+          },
+          "apps/mobile/src/app/h/[serverId]/workspace/[workspaceId]/index.tsx": {
+            "total": 101,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/assistant-file-links/parse.ts": {
+            "total": 301,
+            "covered": 270,
+            "skipped": 0,
+            "pct": 89.7
+          },
+          "apps/mobile/src/attachments/utils.ts": {
+            "total": 94,
+            "covered": 75,
+            "skipped": 0,
+            "pct": 79.78
+          },
+          "apps/mobile/src/bots/bot-chat.tsx": {
+            "total": 114,
+            "covered": 111,
+            "skipped": 0,
+            "pct": 97.36
+          },
+          "apps/mobile/src/command-center/command-center.tsx": {
+            "total": 206,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/components/app-diagnostic-sheet.tsx": {
+            "total": 107,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/components/compact-explorer-sidebar-host-state.ts": {
+            "total": 9,
+            "covered": 8,
+            "skipped": 0,
+            "pct": 88.88
+          },
+          "apps/mobile/src/components/dictation-controls.tsx": {
+            "total": 27,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/components/file-explorer-pane.tsx": {
+            "total": 373,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/components/left-sidebar.tsx": {
+            "total": 98,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/components/message.tsx": {
+            "total": 479,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/components/project-edit-sheet.tsx": {
+            "total": 49,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/components/sidebar-workspace-list.tsx": {
+            "total": 322,
+            "covered": 166,
+            "skipped": 0,
+            "pct": 51.55
+          },
+          "apps/mobile/src/components/task-list-row-key.ts": {
+            "total": 1,
+            "covered": 1,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/components/terminal-emulator-native-grid.native.tsx": {
+            "total": 394,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/components/workspace-hover-card.tsx": {
+            "total": 131,
+            "covered": 12,
+            "skipped": 0,
+            "pct": 9.16
+          },
+          "apps/mobile/src/components/workspace-setup-dialog.tsx": {
+            "total": 110,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/components/markdown/image-source.ts": {
+            "total": 69,
+            "covered": 58,
+            "skipped": 0,
+            "pct": 84.05
+          },
+          "apps/mobile/src/components/settings/index.tsx": {
+            "total": 12,
+            "covered": 6,
+            "skipped": 0,
+            "pct": 50
+          },
+          "apps/mobile/src/components/settings/types.ts": {
+            "total": 0,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/components/sidebar/project-leading-visual.tsx": {
+            "total": 38,
+            "covered": 11,
+            "skipped": 0,
+            "pct": 28.94
+          },
+          "apps/mobile/src/components/sidebar/sidebar-status-list.tsx": {
+            "total": 109,
+            "covered": 83,
+            "skipped": 0,
+            "pct": 76.14
+          },
+          "apps/mobile/src/components/sidebar/display-preferences/checks-display.ts": {
+            "total": 2,
+            "covered": 2,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/components/sidebar/display-preferences/menu.tsx": {
+            "total": 89,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/components/ui/autocomplete-popover.tsx": {
+            "total": 46,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/components/ui/floating-panel-portal.tsx": {
+            "total": 18,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/components/ui/tooltip.tsx": {
+            "total": 167,
+            "covered": 125,
+            "skipped": 0,
+            "pct": 74.85
+          },
+          "apps/mobile/src/components/ui/use-controllable-open-state.ts": {
+            "total": 7,
+            "covered": 7,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/components/ui/menu/menu-context.ts": {
+            "total": 40,
+            "covered": 35,
+            "skipped": 0,
+            "pct": 87.5
+          },
+          "apps/mobile/src/composer/actions.ts": {
+            "total": 111,
+            "covered": 109,
+            "skipped": 0,
+            "pct": 98.19
+          },
+          "apps/mobile/src/composer/index.tsx": {
+            "total": 594,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/composer/submit.ts": {
+            "total": 44,
+            "covered": 42,
+            "skipped": 0,
+            "pct": 95.45
+          },
+          "apps/mobile/src/composer/attachments/workspace-cleanup.ts": {
+            "total": 21,
+            "covered": 19,
+            "skipped": 0,
+            "pct": 90.47
+          },
+          "apps/mobile/src/composer/attachments/workspace.tsx": {
+            "total": 80,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/composer/draft/input-draft-core.ts": {
+            "total": 6,
+            "covered": 6,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/composer/input/input.tsx": {
+            "total": 422,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/composer/input/use-paste-images-effect.ts": {
+            "total": 23,
+            "covered": 22,
+            "skipped": 0,
+            "pct": 95.65
+          },
+          "apps/mobile/src/contexts/horizontal-scroll-context.tsx": {
+            "total": 25,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/contexts/voice-context.tsx": {
+            "total": 46,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/desktop/browser/resident-webviews.ts": {
+            "total": 224,
+            "covered": 31,
+            "skipped": 0,
+            "pct": 13.83
+          },
+          "apps/mobile/src/desktop/browser/automation/handler.ts": {
+            "total": 126,
+            "covered": 107,
+            "skipped": 0,
+            "pct": 84.92
+          },
+          "apps/mobile/src/desktop/browser/store/index.ts": {
+            "total": 24,
+            "covered": 19,
+            "skipped": 0,
+            "pct": 79.16
+          },
+          "apps/mobile/src/desktop/browser/store/state.ts": {
+            "total": 45,
+            "covered": 45,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/desktop/components/daemon-listen-rows.tsx": {
+            "total": 30,
+            "covered": 30,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/desktop/daemon/daemon-management-error.ts": {
+            "total": 19,
+            "covered": 19,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/desktop/hooks/use-built-in-daemon-management.ts": {
+            "total": 40,
+            "covered": 23,
+            "skipped": 0,
+            "pct": 57.5
+          },
+          "apps/mobile/src/desktop/updates/desktop-app-updater.ts": {
+            "total": 135,
+            "covered": 124,
+            "skipped": 0,
+            "pct": 91.85
+          },
+          "apps/mobile/src/desktop/updates/update-callout-source.tsx": {
+            "total": 18,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/desktop/updates/use-desktop-app-updater.ts": {
+            "total": 31,
+            "covered": 22,
+            "skipped": 0,
+            "pct": 70.96
+          },
+          "apps/mobile/src/diagnostics/desktop-diagnostic-report.ts": {
+            "total": 43,
+            "covered": 38,
+            "skipped": 0,
+            "pct": 88.37
+          },
+          "apps/mobile/src/file-pane/pane.tsx": {
+            "total": 110,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/file-pane/live-file/model.ts": {
+            "total": 131,
+            "covered": 125,
+            "skipped": 0,
+            "pct": 95.41
+          },
+          "apps/mobile/src/file-pane/preview-lifecycle/hook.ts": {
+            "total": 10,
+            "covered": 10,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/git/actions-store.ts": {
+            "total": 136,
+            "covered": 105,
+            "skipped": 0,
+            "pct": 77.2
+          },
+          "apps/mobile/src/git/use-pr-status-query.ts": {
+            "total": 8,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/git/use-status-query.ts": {
+            "total": 8,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/git/diff-document/paint.web.ts": {
+            "total": 184,
+            "covered": 169,
+            "skipped": 0,
+            "pct": 91.84
+          },
+          "apps/mobile/src/git/forges/view.ts": {
+            "total": 1,
+            "covered": 1,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/git/pull-request-panel/pane.tsx": {
+            "total": 221,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/hooks/sidebar-workspaces-view-model.ts": {
+            "total": 115,
+            "covered": 105,
+            "skipped": 0,
+            "pct": 91.3
+          },
+          "apps/mobile/src/hooks/use-agent-initialization.ts": {
+            "total": 38,
+            "covered": 29,
+            "skipped": 0,
+            "pct": 76.31
+          },
+          "apps/mobile/src/hooks/use-container-width.ts": {
+            "total": 10,
+            "covered": 10,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/hooks/use-dictation-audio-source.native.ts": {
+            "total": 36,
+            "covered": 29,
+            "skipped": 0,
+            "pct": 80.55
+          },
+          "apps/mobile/src/hooks/use-dictation.shared.ts": {
+            "total": 8,
+            "covered": 5,
+            "skipped": 0,
+            "pct": 62.5
+          },
+          "apps/mobile/src/hooks/use-dictation.ts": {
+            "total": 238,
+            "covered": 113,
+            "skipped": 0,
+            "pct": 47.47
+          },
+          "apps/mobile/src/hooks/use-sidebar-workspaces-list.ts": {
+            "total": 50,
+            "covered": 48,
+            "skipped": 0,
+            "pct": 96
+          },
+          "apps/mobile/src/hooks/use-time-ago.ts": {
+            "total": 29,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/hooks/use-tracked-refresh.ts": {
+            "total": 11,
+            "covered": 11,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/keyboard/shortcut-string.ts": {
+            "total": 148,
+            "covered": 136,
+            "skipped": 0,
+            "pct": 91.89
+          },
+          "apps/mobile/src/panels/agent-panel-load-state.ts": {
+            "total": 8,
+            "covered": 8,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/panels/agent-panel.tsx": {
+            "total": 426,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/panels/terminal-panel.tsx": {
+            "total": 26,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/panels/file/state.ts": {
+            "total": 2,
+            "covered": 2,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/projects/host-project-model.ts": {
+            "total": 61,
+            "covered": 56,
+            "skipped": 0,
+            "pct": 91.8
+          },
+          "apps/mobile/src/projects/host-projects.ts": {
+            "total": 2,
+            "covered": 2,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/review/store.ts": {
+            "total": 79,
+            "covered": 68,
+            "skipped": 0,
+            "pct": 86.07
+          },
+          "apps/mobile/src/runtime/host-runtime.ts": {
+            "total": 1227,
+            "covered": 940,
+            "skipped": 0,
+            "pct": 76.6
+          },
+          "apps/mobile/src/runtime/directory-sync/index.ts": {
+            "total": 526,
+            "covered": 496,
+            "skipped": 0,
+            "pct": 94.29
+          },
+          "apps/mobile/src/screens/new-workspace-screen.tsx": {
+            "total": 501,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/screens/project-settings-screen.tsx": {
+            "total": 195,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/screens/projects-screen.tsx": {
+            "total": 34,
+            "covered": 33,
+            "skipped": 0,
+            "pct": 97.05
+          },
+          "apps/mobile/src/screens/settings-screen.tsx": {
+            "total": 349,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/screens/new-workspace/project-selection.ts": {
+            "total": 65,
+            "covered": 63,
+            "skipped": 0,
+            "pct": 96.92
+          },
+          "apps/mobile/src/screens/settings/browser-tools-config.ts": {
+            "total": 5,
+            "covered": 5,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/screens/workspace/workspace-bulk-close.ts": {
+            "total": 63,
+            "covered": 50,
+            "skipped": 0,
+            "pct": 79.36
+          },
+          "apps/mobile/src/screens/workspace/workspace-header-menu.tsx": {
+            "total": 38,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/screens/workspace/workspace-header-source.ts": {
+            "total": 13,
+            "covered": 12,
+            "skipped": 0,
+            "pct": 92.3
+          },
+          "apps/mobile/src/screens/workspace/workspace-open-intent-consumption.ts": {
+            "total": 3,
+            "covered": 3,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/screens/workspace/workspace-pane-state.ts": {
+            "total": 71,
+            "covered": 67,
+            "skipped": 0,
+            "pct": 94.36
+          },
+          "apps/mobile/src/screens/workspace/workspace-screen.tsx": {
+            "total": 1018,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/screens/workspace/workspace-scripts-button.tsx": {
+            "total": 95,
+            "covered": 88,
+            "skipped": 0,
+            "pct": 92.63
+          },
+          "apps/mobile/src/screens/workspace/terminals/state.ts": {
+            "total": 34,
+            "covered": 31,
+            "skipped": 0,
+            "pct": 91.17
+          },
+          "apps/mobile/src/stores/session-store.ts": {
+            "total": 494,
+            "covered": 380,
+            "skipped": 0,
+            "pct": 76.92
+          },
+          "apps/mobile/src/stores/workspace-layout-actions.ts": {
+            "total": 750,
+            "covered": 679,
+            "skipped": 0,
+            "pct": 90.53
+          },
+          "apps/mobile/src/stores/workspace-layout-store.ts": {
+            "total": 629,
+            "covered": 561,
+            "skipped": 0,
+            "pct": 89.18
+          },
+          "apps/mobile/src/stores/draft-store/persistence.ts": {
+            "total": 72,
+            "covered": 71,
+            "skipped": 0,
+            "pct": 98.61
+          },
+          "apps/mobile/src/stores/session-store-hooks/index.ts": {
+            "total": 20,
+            "covered": 8,
+            "skipped": 0,
+            "pct": 40
+          },
+          "apps/mobile/src/stores/session-store-hooks/selectors.ts": {
+            "total": 62,
+            "covered": 53,
+            "skipped": 0,
+            "pct": 85.48
+          },
+          "apps/mobile/src/stores/sidebar-collapsed-sections-store/state.ts": {
+            "total": 29,
+            "covered": 27,
+            "skipped": 0,
+            "pct": 93.1
+          },
+          "apps/mobile/src/styles/density.ts": {
+            "total": 6,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/styles/theme.ts": {
+            "total": 59,
+            "covered": 59,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/terminal/native-renderer/terminal-restore-output.ts": {
+            "total": 5,
+            "covered": 5,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/timeline/session-stream-reducers.ts": {
+            "total": 558,
+            "covered": 521,
+            "skipped": 0,
+            "pct": 93.36
+          },
+          "apps/mobile/src/timeline/timeline-sync-plan.ts": {
+            "total": 8,
+            "covered": 8,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/timeline/turn-liveness.ts": {
+            "total": 21,
+            "covered": 19,
+            "skipped": 0,
+            "pct": 90.47
+          },
+          "apps/mobile/src/timeline/viewed-timeline-sync.ts": {
+            "total": 458,
+            "covered": 434,
+            "skipped": 0,
+            "pct": 94.75
+          },
+          "apps/mobile/src/tool-calls/detail-level/overview/model.ts": {
+            "total": 28,
+            "covered": 28,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/utils/agent-grouping.ts": {
+            "total": 116,
+            "covered": 102,
+            "skipped": 0,
+            "pct": 87.93
+          },
+          "apps/mobile/src/utils/delay.ts": {
+            "total": 1,
+            "covered": 1,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/utils/desktop-window.tsx": {
+            "total": 99,
+            "covered": 26,
+            "skipped": 0,
+            "pct": 26.26
+          },
+          "apps/mobile/src/utils/display-initial.ts": {
+            "total": 1,
+            "covered": 1,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/utils/explorer-paths.ts": {
+            "total": 26,
+            "covered": 22,
+            "skipped": 0,
+            "pct": 84.61
+          },
+          "apps/mobile/src/utils/extract-tool-call-file-path.ts": {
+            "total": 32,
+            "covered": 31,
+            "skipped": 0,
+            "pct": 96.87
+          },
+          "apps/mobile/src/utils/host-routes.ts": {
+            "total": 248,
+            "covered": 202,
+            "skipped": 0,
+            "pct": 81.45
+          },
+          "apps/mobile/src/utils/project-placement.ts": {
+            "total": 6,
+            "covered": 6,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/utils/set-equality.ts": {
+            "total": 6,
+            "covered": 6,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/utils/sidebar-agent-state.ts": {
+            "total": 9,
+            "covered": 9,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/utils/string.ts": {
+            "total": 7,
+            "covered": 7,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/utils/time.ts": {
+            "total": 54,
+            "covered": 54,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/utils/tool-call-parsers.ts": {
+            "total": 188,
+            "covered": 173,
+            "skipped": 0,
+            "pct": 92.02
+          },
+          "apps/mobile/src/utils/workspace-identity.ts": {
+            "total": 22,
+            "covered": 20,
+            "skipped": 0,
+            "pct": 90.9
+          },
+          "apps/mobile/src/voice/voice-runtime.ts": {
+            "total": 421,
+            "covered": 355,
+            "skipped": 0,
+            "pct": 84.32
+          },
+          "apps/mobile/src/workspace/focus.tsx": {
+            "total": 6,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/workspace-tabs/agent-visibility.ts": {
+            "total": 36,
+            "covered": 33,
+            "skipped": 0,
+            "pct": 91.66
+          },
+          "apps/mobile/src/workspace-tabs/identity.ts": {
+            "total": 135,
+            "covered": 114,
+            "skipped": 0,
+            "pct": 84.44
+          }
+        },
+        "requested_sources": [
+          "src/agent-profiles/migration/index.ts",
+          "src/app/h/[serverId]/workspace/[workspaceId]/index.tsx",
+          "src/assistant-file-links/parse.ts",
+          "src/attachments/utils.ts",
+          "src/bots/bot-chat.tsx",
+          "src/command-center/command-center.tsx",
+          "src/components/app-diagnostic-sheet.tsx",
+          "src/components/compact-explorer-sidebar-host-state.ts",
+          "src/components/dictation-controls.tsx",
+          "src/components/file-explorer-pane.tsx",
+          "src/components/left-sidebar.tsx",
+          "src/components/markdown/image-source.ts",
+          "src/components/message.tsx",
+          "src/components/project-edit-sheet.tsx",
+          "src/components/settings/index.tsx",
+          "src/components/settings/types.ts",
+          "src/components/sidebar-workspace-list.tsx",
+          "src/components/sidebar/display-preferences/checks-display.ts",
+          "src/components/sidebar/display-preferences/menu.tsx",
+          "src/components/sidebar/project-leading-visual.tsx",
+          "src/components/sidebar/sidebar-status-list.tsx",
+          "src/components/task-list-row-key.ts",
+          "src/components/terminal-emulator-native-grid.native.tsx",
+          "src/components/ui/autocomplete-popover.tsx",
+          "src/components/ui/floating-panel-portal.tsx",
+          "src/components/ui/menu/menu-context.ts",
+          "src/components/ui/tooltip.tsx",
+          "src/components/ui/use-controllable-open-state.ts",
+          "src/components/workspace-hover-card.tsx",
+          "src/components/workspace-setup-dialog.tsx",
+          "src/composer/actions.ts",
+          "src/composer/attachments/workspace-cleanup.ts",
+          "src/composer/attachments/workspace.tsx",
+          "src/composer/draft/input-draft-core.ts",
+          "src/composer/index.tsx",
+          "src/composer/input/input.tsx",
+          "src/composer/input/use-paste-images-effect.ts",
+          "src/composer/submit.ts",
+          "src/contexts/horizontal-scroll-context.tsx",
+          "src/contexts/voice-context.tsx",
+          "src/desktop/browser/automation/handler.ts",
+          "src/desktop/browser/resident-webviews.ts",
+          "src/desktop/browser/store/index.ts",
+          "src/desktop/browser/store/state.ts",
+          "src/desktop/components/daemon-listen-rows.tsx",
+          "src/desktop/daemon/daemon-management-error.ts",
+          "src/desktop/hooks/use-built-in-daemon-management.ts",
+          "src/desktop/updates/desktop-app-updater.ts",
+          "src/desktop/updates/update-callout-source.tsx",
+          "src/desktop/updates/use-desktop-app-updater.ts",
+          "src/diagnostics/desktop-diagnostic-report.ts",
+          "src/file-pane/live-file/model.ts",
+          "src/file-pane/pane.tsx",
+          "src/file-pane/preview-lifecycle/hook.ts",
+          "src/git/actions-store.ts",
+          "src/git/diff-document/paint.web.ts",
+          "src/git/forges/view.ts",
+          "src/git/pull-request-panel/pane.tsx",
+          "src/git/use-pr-status-query.ts",
+          "src/git/use-status-query.ts",
+          "src/hooks/sidebar-workspaces-view-model.ts",
+          "src/hooks/use-agent-initialization.ts",
+          "src/hooks/use-container-width.ts",
+          "src/hooks/use-dictation-audio-source.native.ts",
+          "src/hooks/use-dictation.shared.ts",
+          "src/hooks/use-dictation.ts",
+          "src/hooks/use-sidebar-workspaces-list.ts",
+          "src/hooks/use-time-ago.ts",
+          "src/hooks/use-tracked-refresh.ts",
+          "src/keyboard/shortcut-string.ts",
+          "src/panels/agent-panel-load-state.ts",
+          "src/panels/agent-panel.tsx",
+          "src/panels/file/state.ts",
+          "src/panels/terminal-panel.tsx",
+          "src/projects/host-project-model.ts",
+          "src/projects/host-projects.ts",
+          "src/review/store.ts",
+          "src/runtime/directory-sync/index.ts",
+          "src/runtime/host-runtime.ts",
+          "src/screens/new-workspace-screen.tsx",
+          "src/screens/new-workspace/project-selection.ts",
+          "src/screens/project-settings-screen.tsx",
+          "src/screens/projects-screen.tsx",
+          "src/screens/settings-screen.tsx",
+          "src/screens/settings/browser-tools-config.ts",
+          "src/screens/workspace/terminals/state.ts",
+          "src/screens/workspace/workspace-bulk-close.ts",
+          "src/screens/workspace/workspace-header-menu.tsx",
+          "src/screens/workspace/workspace-header-source.ts",
+          "src/screens/workspace/workspace-open-intent-consumption.ts",
+          "src/screens/workspace/workspace-pane-state.ts",
+          "src/screens/workspace/workspace-screen.tsx",
+          "src/screens/workspace/workspace-scripts-button.tsx",
+          "src/stores/draft-store/persistence.ts",
+          "src/stores/session-store-hooks/index.ts",
+          "src/stores/session-store-hooks/selectors.ts",
+          "src/stores/session-store.ts",
+          "src/stores/sidebar-collapsed-sections-store/state.ts",
+          "src/stores/workspace-layout-actions.ts",
+          "src/stores/workspace-layout-store.ts",
+          "src/styles/density.ts",
+          "src/styles/theme.ts",
+          "src/terminal/native-renderer/terminal-restore-output.ts",
+          "src/timeline/session-stream-reducers.ts",
+          "src/timeline/timeline-sync-plan.ts",
+          "src/timeline/turn-liveness.ts",
+          "src/timeline/viewed-timeline-sync.ts",
+          "src/tool-calls/detail-level/overview/model.ts",
+          "src/utils/agent-grouping.ts",
+          "src/utils/delay.ts",
+          "src/utils/desktop-window.tsx",
+          "src/utils/display-initial.ts",
+          "src/utils/explorer-paths.ts",
+          "src/utils/extract-tool-call-file-path.ts",
+          "src/utils/host-routes.ts",
+          "src/utils/project-placement.ts",
+          "src/utils/set-equality.ts",
+          "src/utils/sidebar-agent-state.ts",
+          "src/utils/string.ts",
+          "src/utils/time.ts",
+          "src/utils/tool-call-parsers.ts",
+          "src/utils/workspace-identity.ts",
+          "src/voice/voice-runtime.ts",
+          "src/workspace-tabs/agent-visibility.ts",
+          "src/workspace-tabs/identity.ts",
+          "src/workspace/focus.tsx"
+        ],
+        "command": [
+          "/opt/homebrew/Cellar/node@22/22.23.4_2/bin/node",
+          "<checkout>/node_modules/vitest/vitest.mjs",
+          "related",
+          "--run",
+          "src/agent-profiles/migration/index.ts",
+          "src/app/h/[serverId]/workspace/[workspaceId]/index.tsx",
+          "src/assistant-file-links/parse.ts",
+          "src/attachments/utils.ts",
+          "src/bots/bot-chat.tsx",
+          "src/command-center/command-center.tsx",
+          "src/components/app-diagnostic-sheet.tsx",
+          "src/components/compact-explorer-sidebar-host-state.ts",
+          "src/components/dictation-controls.tsx",
+          "src/components/file-explorer-pane.tsx",
+          "src/components/left-sidebar.tsx",
+          "src/components/markdown/image-source.ts",
+          "src/components/message.tsx",
+          "src/components/project-edit-sheet.tsx",
+          "src/components/settings/index.tsx",
+          "src/components/settings/types.ts",
+          "src/components/sidebar-workspace-list.tsx",
+          "src/components/sidebar/display-preferences/checks-display.ts",
+          "src/components/sidebar/display-preferences/menu.tsx",
+          "src/components/sidebar/project-leading-visual.tsx",
+          "src/components/sidebar/sidebar-status-list.tsx",
+          "src/components/task-list-row-key.ts",
+          "src/components/terminal-emulator-native-grid.native.tsx",
+          "src/components/ui/autocomplete-popover.tsx",
+          "src/components/ui/floating-panel-portal.tsx",
+          "src/components/ui/menu/menu-context.ts",
+          "src/components/ui/tooltip.tsx",
+          "src/components/ui/use-controllable-open-state.ts",
+          "src/components/workspace-hover-card.tsx",
+          "src/components/workspace-setup-dialog.tsx",
+          "src/composer/actions.ts",
+          "src/composer/attachments/workspace-cleanup.ts",
+          "src/composer/attachments/workspace.tsx",
+          "src/composer/draft/input-draft-core.ts",
+          "src/composer/index.tsx",
+          "src/composer/input/input.tsx",
+          "src/composer/input/use-paste-images-effect.ts",
+          "src/composer/submit.ts",
+          "src/contexts/horizontal-scroll-context.tsx",
+          "src/contexts/voice-context.tsx",
+          "src/desktop/browser/automation/handler.ts",
+          "src/desktop/browser/resident-webviews.ts",
+          "src/desktop/browser/store/index.ts",
+          "src/desktop/browser/store/state.ts",
+          "src/desktop/components/daemon-listen-rows.tsx",
+          "src/desktop/daemon/daemon-management-error.ts",
+          "src/desktop/hooks/use-built-in-daemon-management.ts",
+          "src/desktop/updates/desktop-app-updater.ts",
+          "src/desktop/updates/update-callout-source.tsx",
+          "src/desktop/updates/use-desktop-app-updater.ts",
+          "src/diagnostics/desktop-diagnostic-report.ts",
+          "src/file-pane/live-file/model.ts",
+          "src/file-pane/pane.tsx",
+          "src/file-pane/preview-lifecycle/hook.ts",
+          "src/git/actions-store.ts",
+          "src/git/diff-document/paint.web.ts",
+          "src/git/forges/view.ts",
+          "src/git/pull-request-panel/pane.tsx",
+          "src/git/use-pr-status-query.ts",
+          "src/git/use-status-query.ts",
+          "src/hooks/sidebar-workspaces-view-model.ts",
+          "src/hooks/use-agent-initialization.ts",
+          "src/hooks/use-container-width.ts",
+          "src/hooks/use-dictation-audio-source.native.ts",
+          "src/hooks/use-dictation.shared.ts",
+          "src/hooks/use-dictation.ts",
+          "src/hooks/use-sidebar-workspaces-list.ts",
+          "src/hooks/use-time-ago.ts",
+          "src/hooks/use-tracked-refresh.ts",
+          "src/keyboard/shortcut-string.ts",
+          "src/panels/agent-panel-load-state.ts",
+          "src/panels/agent-panel.tsx",
+          "src/panels/file/state.ts",
+          "src/panels/terminal-panel.tsx",
+          "src/projects/host-project-model.ts",
+          "src/projects/host-projects.ts",
+          "src/review/store.ts",
+          "src/runtime/directory-sync/index.ts",
+          "src/runtime/host-runtime.ts",
+          "src/screens/new-workspace-screen.tsx",
+          "src/screens/new-workspace/project-selection.ts",
+          "src/screens/project-settings-screen.tsx",
+          "src/screens/projects-screen.tsx",
+          "src/screens/settings-screen.tsx",
+          "src/screens/settings/browser-tools-config.ts",
+          "src/screens/workspace/terminals/state.ts",
+          "src/screens/workspace/workspace-bulk-close.ts",
+          "src/screens/workspace/workspace-header-menu.tsx",
+          "src/screens/workspace/workspace-header-source.ts",
+          "src/screens/workspace/workspace-open-intent-consumption.ts",
+          "src/screens/workspace/workspace-pane-state.ts",
+          "src/screens/workspace/workspace-screen.tsx",
+          "src/screens/workspace/workspace-scripts-button.tsx",
+          "src/stores/draft-store/persistence.ts",
+          "src/stores/session-store-hooks/index.ts",
+          "src/stores/session-store-hooks/selectors.ts",
+          "src/stores/session-store.ts",
+          "src/stores/sidebar-collapsed-sections-store/state.ts",
+          "src/stores/workspace-layout-actions.ts",
+          "src/stores/workspace-layout-store.ts",
+          "src/styles/density.ts",
+          "src/styles/theme.ts",
+          "src/terminal/native-renderer/terminal-restore-output.ts",
+          "src/timeline/session-stream-reducers.ts",
+          "src/timeline/timeline-sync-plan.ts",
+          "src/timeline/turn-liveness.ts",
+          "src/timeline/viewed-timeline-sync.ts",
+          "src/tool-calls/detail-level/overview/model.ts",
+          "src/utils/agent-grouping.ts",
+          "src/utils/delay.ts",
+          "src/utils/desktop-window.tsx",
+          "src/utils/display-initial.ts",
+          "src/utils/explorer-paths.ts",
+          "src/utils/extract-tool-call-file-path.ts",
+          "src/utils/host-routes.ts",
+          "src/utils/project-placement.ts",
+          "src/utils/set-equality.ts",
+          "src/utils/sidebar-agent-state.ts",
+          "src/utils/string.ts",
+          "src/utils/time.ts",
+          "src/utils/tool-call-parsers.ts",
+          "src/utils/workspace-identity.ts",
+          "src/voice/voice-runtime.ts",
+          "src/workspace-tabs/agent-visibility.ts",
+          "src/workspace-tabs/identity.ts",
+          "src/workspace/focus.tsx",
+          "--coverage",
+          "--coverage.reportOnFailure",
+          "--coverage.reporter=json-summary",
+          "--coverage.reporter=text",
+          "--coverage.reportsDirectory=<evidence>/ts-cov-mobile",
+          "--maxWorkers=2",
+          "--coverage.include=src/agent-profiles/migration/index.ts",
+          "--coverage.include=src/app/h/[serverId]/workspace/[workspaceId]/index.tsx",
+          "--coverage.include=src/assistant-file-links/parse.ts",
+          "--coverage.include=src/attachments/utils.ts",
+          "--coverage.include=src/bots/bot-chat.tsx",
+          "--coverage.include=src/command-center/command-center.tsx",
+          "--coverage.include=src/components/app-diagnostic-sheet.tsx",
+          "--coverage.include=src/components/compact-explorer-sidebar-host-state.ts",
+          "--coverage.include=src/components/dictation-controls.tsx",
+          "--coverage.include=src/components/file-explorer-pane.tsx",
+          "--coverage.include=src/components/left-sidebar.tsx",
+          "--coverage.include=src/components/markdown/image-source.ts",
+          "--coverage.include=src/components/message.tsx",
+          "--coverage.include=src/components/project-edit-sheet.tsx",
+          "--coverage.include=src/components/settings/index.tsx",
+          "--coverage.include=src/components/settings/types.ts",
+          "--coverage.include=src/components/sidebar-workspace-list.tsx",
+          "--coverage.include=src/components/sidebar/display-preferences/checks-display.ts",
+          "--coverage.include=src/components/sidebar/display-preferences/menu.tsx",
+          "--coverage.include=src/components/sidebar/project-leading-visual.tsx",
+          "--coverage.include=src/components/sidebar/sidebar-status-list.tsx",
+          "--coverage.include=src/components/task-list-row-key.ts",
+          "--coverage.include=src/components/terminal-emulator-native-grid.native.tsx",
+          "--coverage.include=src/components/ui/autocomplete-popover.tsx",
+          "--coverage.include=src/components/ui/floating-panel-portal.tsx",
+          "--coverage.include=src/components/ui/menu/menu-context.ts",
+          "--coverage.include=src/components/ui/tooltip.tsx",
+          "--coverage.include=src/components/ui/use-controllable-open-state.ts",
+          "--coverage.include=src/components/workspace-hover-card.tsx",
+          "--coverage.include=src/components/workspace-setup-dialog.tsx",
+          "--coverage.include=src/composer/actions.ts",
+          "--coverage.include=src/composer/attachments/workspace-cleanup.ts",
+          "--coverage.include=src/composer/attachments/workspace.tsx",
+          "--coverage.include=src/composer/draft/input-draft-core.ts",
+          "--coverage.include=src/composer/index.tsx",
+          "--coverage.include=src/composer/input/input.tsx",
+          "--coverage.include=src/composer/input/use-paste-images-effect.ts",
+          "--coverage.include=src/composer/submit.ts",
+          "--coverage.include=src/contexts/horizontal-scroll-context.tsx",
+          "--coverage.include=src/contexts/voice-context.tsx",
+          "--coverage.include=src/desktop/browser/automation/handler.ts",
+          "--coverage.include=src/desktop/browser/resident-webviews.ts",
+          "--coverage.include=src/desktop/browser/store/index.ts",
+          "--coverage.include=src/desktop/browser/store/state.ts",
+          "--coverage.include=src/desktop/components/daemon-listen-rows.tsx",
+          "--coverage.include=src/desktop/daemon/daemon-management-error.ts",
+          "--coverage.include=src/desktop/hooks/use-built-in-daemon-management.ts",
+          "--coverage.include=src/desktop/updates/desktop-app-updater.ts",
+          "--coverage.include=src/desktop/updates/update-callout-source.tsx",
+          "--coverage.include=src/desktop/updates/use-desktop-app-updater.ts",
+          "--coverage.include=src/diagnostics/desktop-diagnostic-report.ts",
+          "--coverage.include=src/file-pane/live-file/model.ts",
+          "--coverage.include=src/file-pane/pane.tsx",
+          "--coverage.include=src/file-pane/preview-lifecycle/hook.ts",
+          "--coverage.include=src/git/actions-store.ts",
+          "--coverage.include=src/git/diff-document/paint.web.ts",
+          "--coverage.include=src/git/forges/view.ts",
+          "--coverage.include=src/git/pull-request-panel/pane.tsx",
+          "--coverage.include=src/git/use-pr-status-query.ts",
+          "--coverage.include=src/git/use-status-query.ts",
+          "--coverage.include=src/hooks/sidebar-workspaces-view-model.ts",
+          "--coverage.include=src/hooks/use-agent-initialization.ts",
+          "--coverage.include=src/hooks/use-container-width.ts",
+          "--coverage.include=src/hooks/use-dictation-audio-source.native.ts",
+          "--coverage.include=src/hooks/use-dictation.shared.ts",
+          "--coverage.include=src/hooks/use-dictation.ts",
+          "--coverage.include=src/hooks/use-sidebar-workspaces-list.ts",
+          "--coverage.include=src/hooks/use-time-ago.ts",
+          "--coverage.include=src/hooks/use-tracked-refresh.ts",
+          "--coverage.include=src/keyboard/shortcut-string.ts",
+          "--coverage.include=src/panels/agent-panel-load-state.ts",
+          "--coverage.include=src/panels/agent-panel.tsx",
+          "--coverage.include=src/panels/file/state.ts",
+          "--coverage.include=src/panels/terminal-panel.tsx",
+          "--coverage.include=src/projects/host-project-model.ts",
+          "--coverage.include=src/projects/host-projects.ts",
+          "--coverage.include=src/review/store.ts",
+          "--coverage.include=src/runtime/directory-sync/index.ts",
+          "--coverage.include=src/runtime/host-runtime.ts",
+          "--coverage.include=src/screens/new-workspace-screen.tsx",
+          "--coverage.include=src/screens/new-workspace/project-selection.ts",
+          "--coverage.include=src/screens/project-settings-screen.tsx",
+          "--coverage.include=src/screens/projects-screen.tsx",
+          "--coverage.include=src/screens/settings-screen.tsx",
+          "--coverage.include=src/screens/settings/browser-tools-config.ts",
+          "--coverage.include=src/screens/workspace/terminals/state.ts",
+          "--coverage.include=src/screens/workspace/workspace-bulk-close.ts",
+          "--coverage.include=src/screens/workspace/workspace-header-menu.tsx",
+          "--coverage.include=src/screens/workspace/workspace-header-source.ts",
+          "--coverage.include=src/screens/workspace/workspace-open-intent-consumption.ts",
+          "--coverage.include=src/screens/workspace/workspace-pane-state.ts",
+          "--coverage.include=src/screens/workspace/workspace-screen.tsx",
+          "--coverage.include=src/screens/workspace/workspace-scripts-button.tsx",
+          "--coverage.include=src/stores/draft-store/persistence.ts",
+          "--coverage.include=src/stores/session-store-hooks/index.ts",
+          "--coverage.include=src/stores/session-store-hooks/selectors.ts",
+          "--coverage.include=src/stores/session-store.ts",
+          "--coverage.include=src/stores/sidebar-collapsed-sections-store/state.ts",
+          "--coverage.include=src/stores/workspace-layout-actions.ts",
+          "--coverage.include=src/stores/workspace-layout-store.ts",
+          "--coverage.include=src/styles/density.ts",
+          "--coverage.include=src/styles/theme.ts",
+          "--coverage.include=src/terminal/native-renderer/terminal-restore-output.ts",
+          "--coverage.include=src/timeline/session-stream-reducers.ts",
+          "--coverage.include=src/timeline/timeline-sync-plan.ts",
+          "--coverage.include=src/timeline/turn-liveness.ts",
+          "--coverage.include=src/timeline/viewed-timeline-sync.ts",
+          "--coverage.include=src/tool-calls/detail-level/overview/model.ts",
+          "--coverage.include=src/utils/agent-grouping.ts",
+          "--coverage.include=src/utils/delay.ts",
+          "--coverage.include=src/utils/desktop-window.tsx",
+          "--coverage.include=src/utils/display-initial.ts",
+          "--coverage.include=src/utils/explorer-paths.ts",
+          "--coverage.include=src/utils/extract-tool-call-file-path.ts",
+          "--coverage.include=src/utils/host-routes.ts",
+          "--coverage.include=src/utils/project-placement.ts",
+          "--coverage.include=src/utils/set-equality.ts",
+          "--coverage.include=src/utils/sidebar-agent-state.ts",
+          "--coverage.include=src/utils/string.ts",
+          "--coverage.include=src/utils/time.ts",
+          "--coverage.include=src/utils/tool-call-parsers.ts",
+          "--coverage.include=src/utils/workspace-identity.ts",
+          "--coverage.include=src/voice/voice-runtime.ts",
+          "--coverage.include=src/workspace-tabs/agent-visibility.ts",
+          "--coverage.include=src/workspace-tabs/identity.ts",
+          "--coverage.include=src/workspace/focus.tsx",
+          "--project=unit"
+        ],
+        "exit_code": 0
+      }
+    },
+    "measured_source_fingerprint_sha256": "563e7aa8edabe853b9eb924f72e9cc3f2cbd241c99602ffd3e7261ca44293d23"
+  },
+  "fingerprint_algorithm": "SHA256 of sorted relative path UTF-8 + NUL + SHA256(file bytes) digest, repeated for each source file",
+  "platform": "macOS arm64",
+  "features": "default",
+  "node": "22.23.4",
+  "rustc": "1.98.1",
+  "test_repairs": {
+    "bot": {
+      "baseline_sequential": {
+        "run": 50,
+        "failed": 6
+      },
+      "baseline_parallel": {
+        "run": 400,
+        "failed": 400,
+        "parallelism": 16
+      },
+      "fixed_sequential": {
+        "run": 50,
+        "passed": 50
+      },
+      "fixed_parallel": {
+        "run": 400,
+        "passed": 400,
+        "parallelism": 16
+      },
+      "final_crate_tests": 194,
+      "final_coverage_tests": 7
+    },
+    "layout": {
+      "baseline_file_runs": 10,
+      "baseline_file_failed": 10,
+      "fixed_file_runs": 20,
+      "fixed_file_passed": 20,
+      "tests_per_file_run": 168
+    },
+    "sidebar": {
+      "tests_passed": 6,
+      "repeats_passed": 5
+    },
+    "mobile_unit": {
+      "files_passed": 706,
+      "tests_passed": 6994
+    },
+    "model": "Claude Fable 5.2",
+    "thinking": "high",
+    "pi_fixture": {
+      "file": "crates/provider/src/local/pi/tests/fixtures/pi.py",
+      "sha256": "089872e908c4c520f18e5a645427a726d06a51f32e4acb567829b4465f1c98f8",
+      "ci_baseline": {
+        "run": 3885,
+        "passed": 3884,
+        "failed": 1,
+        "skipped": 66
+      },
+      "fixture_ab_py312": {
+        "original_trials": 6000,
+        "original_handlers_missed": 5,
+        "fixed_trials": 6000,
+        "fixed_handlers_missed": 0
+      },
+      "fixture_ab_py315": {
+        "original_trials": 2000,
+        "original_handlers_missed": 7,
+        "fixed_trials": 2000,
+        "fixed_handlers_missed": 0
+      },
+      "fixed_target_sequential_passed": 100,
+      "fixed_target_parallel_passed": 320,
+      "fixed_target_parallel_py312_passed": 320,
+      "pi_subset_passed": 293,
+      "pi_subset_py312_passed": 293,
+      "final_instrumented_session_tests_passed": 10,
+      "natural_original_full_test_failure_reproduced_on_macos": false
+    }
+  }
+}

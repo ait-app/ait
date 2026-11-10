@@ -1,5 +1,20 @@
 # Ait changelog
 
+## 0.2.6 - 2026-11-10
+
+- Keep a record of each workspace script run, with bounded output, starting commit and dirty state, duration, exit code and result. Records are held in memory and are lost when the daemon restarts or the workspace is archived. New MCP tools `get_workspace_script_run` and `wait_for_workspace_script` read them.
+- Scripts that declare `"acceptsArgs": true` in `ait.json` can take arguments, passed as positional parameters. Archiving a workspace that removes an Ait-owned worktree now runs `teardown` first; a failing teardown logs a warning and the worktree is still removed.
+- OpenCode, Pi and DSH native agents can use Ait orchestration tools and accept user-configured MCP servers (HTTP and absolute-path stdio). An `ait` entry in a user's own Pi `mcp.json` takes precedence over the injected one, including a Bot's scoped credentials.
+- Remove the legacy `paseo` tool name aliases. Commands still receive both `AIT_*` and `PASEO_*` environment variables.
+- Test feature: Bots keep every user-visible assistant message from a turn, while provider-internal records stay filtered out.
+- Fix chat timeline gaps and duplicates after switching tabs, sessions freezing after an event from another epoch, and thinking indicators that stayed on after a turn ended.
+- Fix duplicated text and attachments after a failed send, attachments lost when editing a queued message, and uploaded files dropped when a multi-file upload failed partway. Slash commands that run immediately now clear the input only after they succeed.
+- Pages in the workspace embedded browser can no longer use the camera or microphone or read the clipboard. Writing to the clipboard and fullscreen still work, and dictation in the main window is unaffected.
+- Desktop: a temporarily unavailable keychain no longer signs you out permanently, a damaged config file no longer breaks reads, and an adopted daemon restarts after it exits.
+- Shortcut recording now follows the typed key, so shortcuts work on non-QWERTY layouts. Shortcuts already recorded on those layouts need to be recorded again.
+- Opening Settings no longer checks for updates every time: a channel checked within the last 30 minutes is skipped, and manual checks are unaffected.
+- Show a loading indicator during manual sidebar refresh, add pull-to-refresh to the native sidebar list, and fully translate schedule text in Russian, Arabic, Spanish, French, Brazilian Portuguese, Japanese and Korean.
+
 ## 0.2.5 - 2026-11-09
 
 - Open a workspace in its own window from the workspace menus, with independent navigation, tabs and layout. If two windows edit the same draft at once, the last save wins.

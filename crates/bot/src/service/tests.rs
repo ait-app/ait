@@ -65,7 +65,15 @@ async fn distinct_provider_messages_stream_into_one_turn_and_finish_independentl
         .unwrap()["turn"]["id"]
         .clone();
 
-    let streaming = wait(&bots, WORKSPACE, &turn, "running").await;
+    // Running is published before the first provider snapshot has been polled. A snapshot's
+    // messages are persisted together, so the first visible message means all of it arrived.
+    let streaming = wait_until(&bots, WORKSPACE, &turn, |value| {
+        value["turn"]["status"] == "running"
+            && value["turn"]["messages"]
+                .as_array()
+                .is_some_and(|messages| !messages.is_empty())
+    })
+    .await;
     assert_eq!(
         streaming["turn"]["messages"],
         json!([
@@ -133,6 +141,19 @@ async fn open(bots: &Bots, workspace: &str) -> Value {
         .clone()
 }
 async fn wait(bots: &Bots, workspace: &str, turn: &Value, status: &str) -> Value {
+    wait_until(bots, workspace, turn, |value| {
+        value["turn"]["status"] == status
+    })
+    .await
+}
+
+/// Poll `turn` until `ready` accepts its snapshot, failing after five seconds.
+async fn wait_until(
+    bots: &Bots,
+    workspace: &str,
+    turn: &Value,
+    ready: impl Fn(&Value) -> bool,
+) -> Value {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             let value = bots
@@ -142,7 +163,7 @@ async fn wait(bots: &Bots, workspace: &str, turn: &Value, status: &str) -> Value
                 )
                 .await
                 .unwrap();
-            if value["turn"]["status"] == status {
+            if ready(&value) {
                 return value;
             }
             tokio::time::sleep(Duration::from_millis(10)).await;

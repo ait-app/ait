@@ -48,6 +48,10 @@ vi.mock("@react-native-async-storage/async-storage", () => {
 const SERVER_ID = "server-1";
 const WORKSPACE_ID = "ws-main";
 
+// Saves queue behind the cross-window persist lock. Every store in this file shares one storage
+// key, so a test that writes saved state directly waits for earlier stores' saves to land first.
+const flushPersistQueue = () => new Promise((resolve) => setTimeout(resolve));
+
 function createDeterministicWorkspaceLayoutIds() {
   let values: string[] = [];
   let fallbackIndex = 0;
@@ -342,6 +346,7 @@ describe("workspace-layout-store helpers", () => {
   it("discards persisted New tabs and restores each empty pane with a fresh identity", async () => {
     const persisted = createWorkspaceLayoutWithExplorerSidebar();
     const persistedIds = new Set(collectAllTabs(persisted.root).map((tab) => tab.tabId));
+    await flushPersistQueue();
     await AsyncStorage.setItem(
       "workspace-layout-state",
       JSON.stringify({
@@ -538,6 +543,7 @@ describe("workspace-layout-store version 2 migration", () => {
         }
       : layout;
     await AsyncStorage.removeItem("workspace-layout-state");
+    await flushPersistQueue();
     await AsyncStorage.setItem(
       "workspace-layout-state",
       JSON.stringify({
@@ -1310,6 +1316,7 @@ describe("workspace-layout-store actions", () => {
         targetsByTabId: { files: { kind: "files" } },
         stateByTabId: { draft_saved: { savedContent: "preserve me" } },
       });
+      await flushPersistQueue();
       await AsyncStorage.setItem(
         "workspace-layout-state",
         JSON.stringify({
@@ -1358,6 +1365,7 @@ describe("workspace-layout-store actions", () => {
       tabIds: ["draft_saved"],
       stateByTabId: { draft_saved: { savedContent: "preserve me" } },
     });
+    await flushPersistQueue();
     await AsyncStorage.setItem(
       "workspace-layout-state",
       JSON.stringify({
@@ -1380,6 +1388,7 @@ describe("workspace-layout-store actions", () => {
 
   it("migrates legacy layouts to include the hidden registered explorer pane", async () => {
     const legacyLayout = createDefaultLayout();
+    await flushPersistQueue();
     await AsyncStorage.setItem(
       "workspace-layout-state",
       JSON.stringify({
@@ -1409,6 +1418,7 @@ describe("workspace-layout-store actions", () => {
 
   it("restores a layout saved before the Side panel rename, PR bookkeeping and all", async () => {
     const savedLayout = createWorkspaceLayoutWithExplorerSidebar();
+    await flushPersistQueue();
     await AsyncStorage.setItem(
       "workspace-layout-state",
       JSON.stringify({
@@ -2018,6 +2028,7 @@ describe("workspace-layout-store actions", () => {
       context: "agent",
       agentId: "agent-1",
     };
+    await flushPersistQueue();
     await AsyncStorage.setItem(
       "workspace-layout-state",
       JSON.stringify({
