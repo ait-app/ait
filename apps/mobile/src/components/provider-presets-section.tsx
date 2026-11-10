@@ -33,11 +33,13 @@ export function ProviderPresetsSection({
   serverId,
   cwd,
   models = [],
+  showTitle = true,
 }: {
   provider: string;
   serverId: string;
   cwd?: string;
   models?: readonly AgentModelDefinition[];
+  showTitle?: boolean;
 }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -56,13 +58,11 @@ export function ProviderPresetsSection({
   const [deleteTarget, setDeleteTarget] = useState<ProviderPresetEntry | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [details, setDetails] = useState(false);
   useEffect(() => {
     setEditing(null);
     setDeleteTarget(null);
     setDeleteError(null);
     setNotice(null);
-    setDetails(false);
   }, [serverId, provider, cwd]);
   const [deleting, setDeleting] = useState<string | null>(null);
 
@@ -181,8 +181,12 @@ export function ProviderPresetsSection({
   return (
     <View style={styles.section} testID="provider-presets-section">
       <View style={styles.header}>
-        <Text style={styles.title}>{t("settings.providers.presets.title")}</Text>
-        {canSave ? (
+        {showTitle ? (
+          <Text style={styles.title}>{t("settings.providers.presets.title")}</Text>
+        ) : (
+          <View style={{ flex: 1 }} />
+        )}
+        {canSave && presets.length > 0 ? (
           <Button
             variant="ghost"
             size="sm"
@@ -194,44 +198,9 @@ export function ProviderPresetsSection({
           </Button>
         ) : null}
       </View>
-      <Text style={styles.muted} testID="provider-presets-scope">
-        {t(
-          !descriptor
-            ? isLoading
-              ? "providerControl.presetChecking"
-              : "providerControl.sourceUnknown"
-            : descriptor.backend === "native"
-              ? "providerControl.scopeNativeShort"
-              : "providerControl.scopeManagedShort",
-        )}
+      <Text style={styles.rowTitle} testID="provider-presets-scope" numberOfLines={1} selectable>
+        {cwd || t("providerControl.sourceGlobal")}
       </Text>
-      <Button
-        variant="ghost"
-        size="sm"
-        onPress={() => setDetails(!details)}
-        testID="provider-presets-details"
-      >
-        {t("providerControl.details")}
-      </Button>
-      {details ? (
-        <View style={styles.details}>
-          <Text style={styles.muted}>
-            {descriptor?.backend === "native"
-              ? cwd
-                ? t("providerControl.scopeProject", { cwd })
-                : t("providerControl.scopeDefault")
-              : t("providerControl.scopeManaged")}
-          </Text>
-          {descriptor?.backend === "native" ? (
-            <Text style={styles.muted}>{t("providerControl.scopeOverride")}</Text>
-          ) : null}
-          {descriptor?.reason ? (
-            <Text style={styles.muted} testID="provider-presets-reason">
-              {descriptor.reason}
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
       {notice ? (
         <Text
           accessibilityLiveRegion="polite"
@@ -271,11 +240,6 @@ export function ProviderPresetsSection({
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle}>{preset.name}</Text>
                 <Text style={styles.muted}>{presetModelLabel(preset.model, models)}</Text>
-                {details ? (
-                  <Text style={styles.muted} selectable>
-                    {preset.model}
-                  </Text>
-                ) : null}
                 <Text style={styles.badge}>
                   {t(
                     preset.source === "project"
@@ -285,16 +249,14 @@ export function ProviderPresetsSection({
                         : "providerControl.sourceUnknown",
                   )}
                 </Text>
-                {(!ready || !writable(preset)) && (preset.source !== "project" || details) ? (
+                {(!ready || !writable(preset)) && preset.source !== "project" ? (
                   <Text style={styles.muted}>
                     {t(
-                      preset.source === "project"
-                        ? "providerControl.projectPresetReadOnly"
-                        : error
-                          ? "providerControl.presetLoadFailed"
-                          : isLoading
-                            ? "providerControl.presetChecking"
-                            : "providerControl.presetOwnershipUnknown",
+                      error
+                        ? "providerControl.presetLoadFailed"
+                        : isLoading
+                          ? "providerControl.presetChecking"
+                          : "providerControl.presetOwnershipUnknown",
                     )}
                   </Text>
                 ) : null}
@@ -338,11 +300,14 @@ export function ProviderPresetsSection({
           canRename={descriptor?.canRename === true}
           native={descriptor?.backend === "native"}
           canSave={editingAllowed && roleFeatures.isSuccess && !roleFeatures.isFetching}
-          readOnlyReason={t(
-            presets.find((item) => item.name === editing.name)?.source === "project"
-              ? "providerControl.projectPresetReadOnly"
-              : "providerControl.presetOwnershipUnknown",
-          )}
+          readOnlyReason={
+            descriptor?.reason ??
+            t(
+              presets.find((item) => item.name === editing.name)?.source === "project"
+                ? "providerControl.projectPresetReadOnly"
+                : "providerControl.presetOwnershipUnknown",
+            )
+          }
           readOnly={
             Boolean(editing.name) &&
             (!writable(presets.find((preset) => preset.name === editing.name)) ||

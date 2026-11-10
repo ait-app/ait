@@ -37,6 +37,7 @@ import {
 import { formatAgentFeatureLabel, formatThinkingOptionLabel } from "@/agent-controls/labels";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { CombinedModelSelector } from "@/components/combined-model-selector";
+import { SettingsNavigationRow } from "@/components/settings/navigation-row";
 import { ModelFeatureControls } from "@/components/model-feature-controls";
 import { ProviderNativeActions } from "@/components/provider-native-actions";
 import {
@@ -1148,6 +1149,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                         renderFeature={(feature) => (
                           <SheetFeatureItem
                             key={feature.id}
+                            settings
                             feature={feature}
                             disabled={disabled}
                             openSelector={openSelector}
@@ -1441,6 +1443,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
               renderFeature={(feature) => (
                 <SheetFeatureItem
                   key={feature.id}
+                  settings
                   feature={feature}
                   disabled={disabled}
                   openSelector={openSelector}
@@ -1638,12 +1641,14 @@ function DesktopFeatureItem({
 
 function SheetFeatureItem({
   feature,
+  settings = false,
   disabled,
   openSelector,
   handleOpenChange,
   onSetFeature,
 }: {
   feature: AgentFeature;
+  settings?: boolean;
   disabled: boolean;
   openSelector: AgentControlSelector | null;
   handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
@@ -1748,23 +1753,36 @@ function SheetFeatureItem({
     const selectedOption = feature.options.find((o) => o.id === feature.value);
     return (
       <>
-        <AgentControlTrigger
-          ref={featureAnchorRef}
-          icon={FeatureIcon}
-          iconColor={getFeatureIconColor(
-            feature,
-            theme.colors.palette,
-            theme.colors.foregroundMuted,
-          )}
-          surface="sheet"
-          label={feature.label}
-          value={selectedOption?.label ?? feature.label}
-          open={openSelector === featureSelector}
-          disabled={disabled || pending}
-          onPress={handleSelectPress}
-          accessibilityLabel={getFeatureTooltip(feature)}
-          testID={`agent-feature-${feature.id}`}
-        />
+        {settings ? (
+          <View ref={featureAnchorRef}>
+            <SettingsNavigationRow
+              icon={FeatureIcon}
+              label={formatAgentFeatureLabel(feature, t)}
+              value={selectedOption?.label}
+              disabled={disabled || pending}
+              onPress={handleSelectPress}
+              testID={`agent-feature-${feature.id}`}
+            />
+          </View>
+        ) : (
+          <AgentControlTrigger
+            ref={featureAnchorRef}
+            icon={FeatureIcon}
+            iconColor={getFeatureIconColor(
+              feature,
+              theme.colors.palette,
+              theme.colors.foregroundMuted,
+            )}
+            surface="sheet"
+            label={feature.label}
+            value={selectedOption?.label ?? feature.label}
+            open={openSelector === featureSelector}
+            disabled={disabled || pending}
+            onPress={handleSelectPress}
+            accessibilityLabel={getFeatureTooltip(feature)}
+            testID={`agent-feature-${feature.id}`}
+          />
+        )}
         <Combobox
           options={comboboxOptions}
           value={String(feature.value)}

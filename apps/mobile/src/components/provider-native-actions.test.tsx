@@ -70,6 +70,21 @@ vi.mock("react-native", () => ({
     />
   ),
 }));
+vi.mock("@/components/settings/navigation-row", () => ({
+  SettingsNavigationRow: ({
+    label,
+    onPress,
+    disabled,
+  }: {
+    label: string;
+    onPress: () => void;
+    disabled?: boolean;
+  }) => (
+    <button onClick={onPress} disabled={disabled}>
+      {label}
+    </button>
+  ),
+}));
 vi.mock("@/runtime/host-runtime", () => ({
   useHostRuntimeClient: () => ({ runNativeAction: fixture.run, sendMessage: fixture.send }),
 }));

@@ -80,22 +80,23 @@ const ThemedPlus = withUnistyles(Plus);
 const ThemedSearch = withUnistyles(Search);
 const ThemedSettings = withUnistyles(Settings);
 
-export function ProviderSettingsAction({
-  accessibilityLabel,
-  provider,
-  serverId,
-  cwd,
-  configuration,
-}: {
-  accessibilityLabel: string;
-  provider: string;
-  serverId: string | null;
-  cwd?: string | null;
-  configuration?: React.ReactNode;
-}) {
-  const overlayParentLayer = useCurrentOverlayLayer();
+function useProviderSettingsSource(
+  {
+    serverId,
+    provider,
+    cwd,
+    configuration,
+  }: {
+    serverId: string | null;
+    provider: string;
+    cwd?: string | null;
+    configuration?: React.ReactNode;
+  },
+  enabled = true,
+) {
   const sourceId = useId();
   useEffect(() => {
+    if (!enabled) return;
     const settings = useProviderSettingsStore.getState();
     if (settings.sourceId !== sourceId || !settings.visible) return;
     if (
@@ -107,14 +108,39 @@ export function ProviderSettingsAction({
       return;
     }
     settings.updateConfiguration(sourceId, configuration);
-  }, [configuration, cwd, provider, serverId, sourceId]);
+  }, [configuration, cwd, provider, serverId, sourceId, enabled]);
   useEffect(
     () => () => {
+      if (!enabled) return;
       const settings = useProviderSettingsStore.getState();
       if (settings.sourceId === sourceId) settings.close();
     },
-    [sourceId],
+    [sourceId, enabled],
   );
+  return sourceId;
+}
+
+export function ProviderSettingsAction({
+  accessibilityLabel,
+  provider,
+  serverId,
+  cwd,
+  configuration,
+  sourceId: parentSourceId,
+}: {
+  accessibilityLabel: string;
+  provider: string;
+  serverId: string | null;
+  cwd?: string | null;
+  configuration?: React.ReactNode;
+  sourceId?: string;
+}) {
+  const overlayParentLayer = useCurrentOverlayLayer();
+  const localSourceId = useProviderSettingsSource(
+    { serverId, provider, cwd, configuration },
+    parentSourceId === undefined,
+  );
+  const sourceId = parentSourceId ?? localSourceId;
   const handlePress = useCallback(() => {
     if (!serverId) return;
     useProviderSettingsStore
@@ -203,6 +229,7 @@ export interface ModelBrowserState {
   triggerLabel: string;
   desktopFixedHeight: number | undefined;
   isProviderView: boolean;
+  settingsOpen: boolean;
   prepareToOpen: () => void;
   showAll: () => void;
   reset: () => void;
@@ -291,6 +318,16 @@ export function useModelBrowser({
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [searchResetKey, bumpSearchResetKey] = useReducer((key: number) => key + 1, 0);
+  const settingsProvider = view.kind === "provider" ? view.providerId : selectedProvider;
+  const settingsSourceId = useProviderSettingsSource({
+    serverId,
+    provider: settingsProvider,
+    cwd,
+    configuration: settingsProvider === selectedProvider ? providerSettings : undefined,
+  });
+  const settingsOpen = useProviderSettingsStore(
+    (state) => state.visible && state.sourceId === settingsSourceId,
+  );
   const hasProfiles = (profiles?.rows.length ?? 0) > 0;
 
   const initialView = useMemo(
@@ -338,6 +375,7 @@ export function useModelBrowser({
         title: t("modelSelector.title"),
         actions: selectedProvider ? (
           <ProviderSettingsAction
+            sourceId={settingsSourceId}
             serverId={serverId}
             provider={selectedProvider}
             cwd={cwd}
@@ -372,6 +410,7 @@ export function useModelBrowser({
       actions: (
         <View style={styles.headerActionRow}>
           <ProviderSettingsAction
+            sourceId={settingsSourceId}
             serverId={serverId}
             provider={view.providerId}
             cwd={cwd}
@@ -398,6 +437,7 @@ export function useModelBrowser({
     searchResetKey,
     serverId,
     singleProviderView,
+    settingsSourceId,
     cwd,
     providerSettings,
     selectedProvider,
@@ -445,6 +485,7 @@ export function useModelBrowser({
     triggerLabel,
     desktopFixedHeight,
     isProviderView: view.kind === "provider",
+    settingsOpen,
     prepareToOpen,
     showAll,
     reset,

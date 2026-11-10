@@ -5,6 +5,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { Download, Ellipsis, Play } from "lucide-react-native";
 import type { ProviderUiState } from "@ait/protocol/messages";
 import { Button } from "@/components/ui/button";
+import { SettingsNavigationRow } from "@/components/settings/navigation-row";
 import { Combobox } from "@/components/ui/combobox";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useFileDownload } from "@/hooks/use-file-download";
@@ -312,9 +313,12 @@ export function ProviderNativeActions({
     <>
       {surface === "settings" ? (
         <View ref={anchorRef} style={styles.settings}>
-          <Button variant="outline" size="sm" onPress={() => changeOpen(true)}>
-            {t("providerControl.tasks.providerSettings")}
-          </Button>
+          <SettingsNavigationRow
+            icon={Ellipsis}
+            label={t("providerControl.tasks.providerSettings")}
+            disabled={disabled}
+            onPress={() => changeOpen(true)}
+          />
         </View>
       ) : (
         <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
@@ -440,7 +444,7 @@ export function ProviderNativeActions({
 
 const styles = StyleSheet.create((theme) => ({
   form: { gap: 12, padding: 12 },
-  settings: { alignSelf: "flex-start" },
+  settings: { alignSelf: "stretch" },
   footer: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, padding: 12 },
   caption: { color: theme.colors.foregroundMuted, fontSize: 12 },
   error: { color: theme.colors.statusDanger, fontSize: 12 },

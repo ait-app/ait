@@ -9,7 +9,6 @@ import { AdaptiveModalSheet, AdaptiveTextInput } from "@/components/adaptive-mod
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { formatThinkingOptionLabel } from "@/agent-controls/labels";
-import { getAgentFeatureIcon } from "@/agent-controls/icons";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { toErrorMessage } from "@/utils/error-messages";
 import {
@@ -60,7 +59,6 @@ export function ProviderPresetEditor({
   const [roles, setRoles] = useState(() => decodePresetRoles(preset));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [details, setDetails] = useState(false);
   const nextRole = useRef(0);
   const seededDefaults = useRef(false);
   const isNew = !preset.name;
@@ -83,6 +81,8 @@ export function ProviderPresetEditor({
     );
   }, [isNew, roleFeatures]);
   const takenName = isNew && existingNames.includes(name.trim());
+  const invalidNativeName =
+    native && !!name.trim() && !/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(name.trim());
   const selectedModel = models.find((entry) => entry.id === model);
   const modelOptions = models.map((entry) => ({
     id: entry.id,
@@ -102,7 +102,8 @@ export function ProviderPresetEditor({
       roleFeatures.findIndex((item) => item.id === a.role) -
       roleFeatures.findIndex((item) => item.id === b.role),
   );
-  const canSubmit = canSave && !readOnly && !!name.trim() && !!model && !takenName;
+  const canSubmit =
+    canSave && !readOnly && !!name.trim() && !!model && !takenName && !invalidNativeName;
   const close = () => {
     if (!saving) onClose();
   };
@@ -209,9 +210,10 @@ export function ProviderPresetEditor({
           resetKey={preset.name}
           onChangeText={setName}
           editable={!readOnly && (canRename || isNew)}
+          maxLength={native ? 128 : undefined}
           autoCapitalize="none"
           autoCorrect={false}
-          placeholder={t("settings.providers.presets.namePlaceholder")}
+          placeholder={native ? "TeamDefault" : t("settings.providers.presets.namePlaceholder")}
           placeholderTextColor={theme.colors.foregroundMuted}
           style={styles.input}
         />
@@ -220,12 +222,20 @@ export function ProviderPresetEditor({
             {t("settings.providers.presets.noRename")}
           </Text>
         ) : null}
+        {invalidNativeName ? (
+          <Text
+            style={styles.error}
+            accessibilityRole="alert"
+            testID="provider-preset-invalid-name"
+          >
+            {t("settings.providers.presets.nativeNameInvalid")}
+          </Text>
+        ) : null}
         {takenName ? (
           <Text style={styles.error} testID="provider-preset-name-taken">
             {t("settings.providers.presets.nameTaken", { name })}
           </Text>
         ) : null}
-        {native ? <Text style={styles.muted}>{t("providerControl.roleRoutingHint")}</Text> : null}
         <View style={styles.tableHeader}>
           <Text style={styles.roleName}>{t("providerControl.role")}</Text>
           <Text style={styles.modelHeading}>{t("settings.providers.presets.model")}</Text>
@@ -314,17 +324,6 @@ export function ProviderPresetEditor({
             testID="provider-preset-add-role"
           />
         ) : null}
-        <Button variant="ghost" size="xs" onPress={() => setDetails(!details)}>
-          {t("providerControl.details")}
-        </Button>
-        {details ? (
-          <View style={styles.form}>
-            <Text style={styles.muted}>{t("providerControl.roleFormHint")}</Text>
-            {native ? (
-              <Text style={styles.muted}>{t("providerControl.nativePresetDefaults")}</Text>
-            ) : null}
-          </View>
-        ) : null}
         {!readOnly && !canSave ? (
           <Text style={styles.error}>{t("providerControl.presetReadOnly")}</Text>
         ) : null}
@@ -401,11 +400,9 @@ function RoleAssignment({
       testID={`preset-role-thinking-${row.id}`}
     />
   );
-  const Icon = getAgentFeatureIcon(undefined, row.role);
   return (
     <View style={styles.roleRow} testID={`provider-preset-role-${row.id}`}>
       <View style={styles.roleIdentity}>
-        <Icon size={12} color={styles.muted.color} />
         <View style={styles.roleText}>
           <Text
             style={styles.roleCode}
@@ -478,7 +475,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface2,
   },
   table: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, overflow: "hidden" },
-  tableHeader: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 8 },
+  tableHeader: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 9 },
   roleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -492,10 +489,25 @@ const styles = StyleSheet.create((theme) => ({
   roleText: { flex: 1, gap: 2 },
   roleIdentity: { width: 100, flexDirection: "row", alignItems: "center", gap: 4 },
   roleCode: { color: theme.colors.foreground, fontSize: 11, fontWeight: "600", flexShrink: 1 },
-  modelHeading: { flex: 1, color: theme.colors.foregroundMuted, fontSize: 12 },
-  effortHeading: { width: 110, color: theme.colors.foregroundMuted, fontSize: 12 },
+  modelHeading: {
+    flex: 1,
+    paddingHorizontal: theme.spacing[3],
+    color: theme.colors.foregroundMuted,
+    fontSize: 12,
+  },
+  effortHeading: {
+    width: 110,
+    paddingHorizontal: theme.spacing[3],
+    color: theme.colors.foregroundMuted,
+    fontSize: 12,
+  },
   modelCell: { flex: 1, minWidth: 0, gap: 4 },
-  compactThinking: { flexDirection: "row", alignItems: "center", gap: 8 },
+  compactThinking: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingLeft: theme.spacing[3],
+  },
   effortCell: { width: 110 },
   removeSpace: { width: 26 },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, flex: 1 },

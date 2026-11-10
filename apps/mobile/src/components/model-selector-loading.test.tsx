@@ -152,6 +152,10 @@ describe.each(["combined", "compact"] as const)("%s provider settings entry", (s
       visible: true,
     });
     expect(useProviderSettingsStore.getState().configuration).toEqual(props.providerSettings);
+    expect(view.queryByTestId("selector-header-settings-omp")).toBeNull();
+    expect(view.queryByTestId("agent-controls-model-sheet")).toBeNull();
+    expect(view.queryByRole("dialog")).toBeNull();
+    expect(useProviderSettingsStore.getState().visible).toBe(true);
   });
 });
 

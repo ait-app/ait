@@ -55,7 +55,21 @@ vi.mock("react-native", () => ({
   View: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
     <div data-testid={testID}>{children}</div>
   ),
-  Pressable: () => null,
+  Pressable: ({
+    children,
+    onPress,
+    accessibilityLabel,
+    testID,
+  }: {
+    children: React.ReactNode;
+    onPress: () => void;
+    accessibilityLabel?: string;
+    testID?: string;
+  }) => (
+    <button onClick={onPress} aria-label={accessibilityLabel} data-testid={testID}>
+      {children}
+    </button>
+  ),
 }));
 vi.mock("react-native-unistyles", () => ({
   StyleSheet: {
@@ -81,12 +95,14 @@ vi.mock("@/components/ui/button", () => ({
     children,
     onPress,
     disabled,
+    accessibilityLabel,
   }: {
     children: React.ReactNode;
     onPress: () => void;
     disabled?: boolean;
+    accessibilityLabel?: string;
   }) => (
-    <button disabled={disabled} onClick={onPress}>
+    <button disabled={disabled} onClick={onPress} aria-label={accessibilityLabel}>
       {children}
     </button>
   ),
@@ -96,13 +112,22 @@ vi.mock("@/components/adaptive-modal-sheet", () => ({
     children,
     footer,
     visible,
+    header,
   }: {
     children: React.ReactNode;
     footer?: React.ReactNode;
     visible: boolean;
+    header?: {
+      actions?: React.ReactNode;
+      search?: { testID?: string };
+      back?: { onPress: () => void };
+    };
   }) =>
     visible ? (
       <div>
+        {header?.actions}
+        {header?.search ? <input data-testid={header.search.testID} /> : null}
+        {header?.back ? <button onClick={header.back.onPress}>Back</button> : null}
         {children}
         {footer}
       </div>
@@ -168,7 +193,7 @@ it("refresh retries a failed preset read and refreshes the exact project plus it
   queryClient.setQueryData(providerPresetsQueryKey("host", "omp", "/other"), foreign);
   mount();
   await screen.findByText("Store offline");
-  fireEvent.click(screen.getByText("settings.providers.diagnostic.refresh"));
+  fireEvent.click(screen.getByLabelText("settings.providers.diagnostic.refresh"));
   await waitFor(() =>
     expect(screen.getByTestId("refreshed-presets").textContent).toBe("recovered"),
   );
@@ -185,7 +210,7 @@ it("shows a preset-specific failure even when the model refresh succeeds", async
     .mockResolvedValue({ presets: [], error: "Project unreadable" });
   mount();
   await waitFor(() => expect(fixture.list).toHaveBeenCalledOnce());
-  fireEvent.click(screen.getByText("settings.providers.diagnostic.refresh"));
+  fireEvent.click(screen.getByLabelText("settings.providers.diagnostic.refresh"));
   await screen.findByText("providerControl.modelsRefreshed");
   expect(screen.getByTestId("provider-settings-refresh-result").textContent).toContain(
     "providerControl.presetsRefreshFailed",
@@ -203,10 +228,10 @@ it("picks up externally changed presets and remains busy until the list read fin
   );
   mount();
   await waitFor(() => expect(fixture.list).toHaveBeenCalledOnce());
-  fireEvent.click(screen.getByText("settings.providers.diagnostic.refresh"));
+  fireEvent.click(screen.getByLabelText("settings.providers.diagnostic.refresh"));
   await waitFor(() => expect(fixture.list).toHaveBeenCalledTimes(2));
   expect(
-    (screen.getByText("settings.providers.diagnostic.refreshing") as HTMLButtonElement).disabled,
+    (screen.getByLabelText("settings.providers.diagnostic.refresh") as HTMLButtonElement).disabled,
   ).toBe(true);
   resolve({ presets: [{ name: "external", model: "model", source: "project", editable: false }] });
   await waitFor(() => expect(screen.getByTestId("refreshed-presets").textContent).toBe("external"));
@@ -223,7 +248,7 @@ it("refreshes role candidates only after the model catalog acknowledgement", asy
   fixture.list.mockResolvedValue({ presets: [] });
   mount();
   await waitFor(() => expect(fixture.features).toHaveBeenCalledOnce());
-  fireEvent.click(screen.getByText("settings.providers.diagnostic.refresh"));
+  fireEvent.click(screen.getByLabelText("settings.providers.diagnostic.refresh"));
   await waitFor(() => expect(fixture.list).toHaveBeenCalledTimes(2));
   expect(fixture.features).toHaveBeenCalledOnce();
   resolveModels();
@@ -237,7 +262,7 @@ it("reports an acknowledged catalog containing a provider error as a model failu
   });
   mount();
   await waitFor(() => expect(fixture.list).toHaveBeenCalledOnce());
-  fireEvent.click(screen.getByText("settings.providers.diagnostic.refresh"));
+  fireEvent.click(screen.getByLabelText("settings.providers.diagnostic.refresh"));
   await screen.findByText("providerControl.presetsRefreshed");
   expect(screen.getByTestId("provider-settings-refresh-result").textContent).toContain(
     "providerControl.modelsRefreshFailed",
@@ -245,4 +270,21 @@ it("reports an acknowledged catalog containing a provider error as a model failu
   expect(screen.getByTestId("provider-settings-refresh-result").textContent).toContain(
     "Model probe failed",
   );
+});
+
+it("keeps model search and catalog on their own page instead of the settings home", async () => {
+  fixture.list.mockResolvedValue({ presets: [] });
+  mount();
+  expect(screen.getByTestId("provider-settings-home")).toBeTruthy();
+  expect(screen.queryByTestId("provider-settings-search")).toBeNull();
+  expect(screen.queryByText("providerControl.settingsSelection")).toBeNull();
+  fireEvent.click(screen.getByTestId("provider-settings-models"));
+  expect(screen.queryByTestId("provider-settings-home")).toBeNull();
+  expect(screen.getByTestId("provider-settings-search")).toBeTruthy();
+  fireEvent.click(screen.getByText("Back"));
+  fireEvent.click(screen.getByTestId("provider-settings-presets"));
+  expect(screen.queryByTestId("provider-settings-home")).toBeNull();
+  expect(screen.queryByTestId("provider-settings-search")).toBeNull();
+  fireEvent.click(screen.getByText("Back"));
+  expect(screen.getByTestId("provider-settings-home")).toBeTruthy();
 });

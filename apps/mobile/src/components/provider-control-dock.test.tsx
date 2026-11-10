@@ -20,7 +20,7 @@ it("keeps current controls in one row while disclosures preserve input and nativ
         </div>
       ),
     },
-    { id: "vibe", label: "Vibe · On", content: <div>Director enabled</div> },
+    { id: "btw", label: "BTW", content: <div>Answer</div> },
   ];
   render(<ProviderControlDock owner="collapse-test" items={items} initial="goal" />);
   const goal = screen.getByTestId("provider-control-toggle-goal");
@@ -29,13 +29,15 @@ it("keeps current controls in one row while disclosures preserve input and nativ
   expect(goal.getAttribute("aria-expanded")).toBe("false");
   expect(screen.getByTestId("provider-control-content-goal").style.display).toBe("none");
   expect(onStop).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByTestId("provider-control-toggle-vibe"));
-  expect(screen.getByTestId("provider-control-toggle-vibe").getAttribute("aria-expanded")).toBe(
+  fireEvent.click(screen.getByTestId("provider-control-toggle-btw"));
+  expect(screen.getByTestId("provider-control-toggle-btw").getAttribute("aria-expanded")).toBe(
     "true",
   );
   fireEvent.click(goal);
   expect(screen.getByDisplayValue("Notes")).toBeTruthy();
-  expect(screen.getByTestId("provider-control-row").querySelectorAll("button")).toHaveLength(2);
+  expect(
+    screen.getByTestId("provider-control-row").querySelectorAll('[role="button"]'),
+  ).toHaveLength(2);
 });
 
 it("retains disclosure across navigation, isolates owners, and drops removed controls", () => {
@@ -54,4 +56,52 @@ it("retains disclosure across navigation, isolates owners, and drops removed con
   );
   other.rerender(<ProviderControlDock owner="owner-two" items={[]} />);
   expect(screen.queryByTestId("provider-control-dock")).toBeNull();
+});
+
+it("reveals a newly requested BTW panel once and supports close/reopen without a second disclosure", () => {
+  const items = [
+    {
+      id: "btw",
+      label: "BTW",
+      content: ({ collapse }: { collapse: () => void }) => (
+        <div>
+          <textarea defaultValue="Unsent BTW" />
+          <button onClick={collapse}>Close BTW</button>
+        </div>
+      ),
+    },
+  ];
+  const view = render(<ProviderControlDock owner="btw-reveal" items={items} />);
+  const toggle = screen.getByTestId("provider-control-toggle-btw");
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  view.rerender(
+    <ProviderControlDock
+      owner="btw-reveal"
+      items={items}
+      reveal={{ id: "btw", revision: "first" }}
+    />,
+  );
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  fireEvent.click(screen.getByText("Close BTW"));
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  view.rerender(
+    <ProviderControlDock
+      owner="btw-reveal"
+      items={items}
+      reveal={{ id: "btw", revision: "first" }}
+    />,
+  );
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  expect(screen.getByDisplayValue("Unsent BTW")).toBeTruthy();
+  fireEvent.click(toggle);
+  view.rerender(
+    <ProviderControlDock
+      owner="btw-reveal"
+      items={items}
+      reveal={{ id: "btw", revision: "second" }}
+    />,
+  );
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
 });

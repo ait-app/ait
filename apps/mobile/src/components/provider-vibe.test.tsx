@@ -1,14 +1,16 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import type { ProviderUiState } from "@ait/protocol/messages";
 import { ProviderVibe } from "./provider-vibe";
 
 type Vibe = NonNullable<ProviderUiState["vibe"]>;
 
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string) => (key === "providerControl.vibe.title" ? "Vibe" : key),
+  }),
 }));
 
 afterEach(cleanup);
@@ -26,10 +28,14 @@ const running: Vibe = {
   ],
 };
 
-it("shows director controls during worker execution without duplicating the shared subagent list", () => {
-  render(<ProviderVibe state={running} />);
+it("shows only the native mode status without buttons or duplicated worker details", () => {
+  const view = render(<ProviderVibe state={running} />);
   expect(screen.getByTestId("provider-vibe")).toBeTruthy();
-  expect(screen.getByText("providerControl.vibe.enabled")).toBeTruthy();
+  expect(screen.getByTestId("provider-vibe").textContent).toBe("Vibe ON");
+  expect(screen.getByText("ON").style.fontWeight).toBe("700");
+  expect(screen.queryByRole("button")).toBeNull();
+  expect(view.container.querySelector("[aria-expanded], [tabindex]")).toBeNull();
+  expect(screen.queryByText("providerControl.vibe.title")).toBeNull();
   expect(screen.queryByText("worker-fast")).toBeNull();
   expect(screen.queryByText("Fast worker: draft the change list")).toBeNull();
 });
@@ -57,39 +63,4 @@ it.each(["completed", "failed", "canceled"] as const)(
 it("hides disabled mode even when its worker history remains", () => {
   const view = render(<ProviderVibe state={{ ...running, enabled: false }} />);
   expect(view.container.innerHTML).toBe("");
-});
-
-it("keeps active controls until exit is acknowledged and permits retry on failure", async () => {
-  let reject!: (error: Error) => void;
-  const onExit = vi.fn(
-    () =>
-      new Promise<void>((_resolve, fail) => {
-        reject = fail;
-      }),
-  );
-  const view = render(<ProviderVibe state={running} onExit={onExit} />);
-  fireEvent.click(screen.getByTestId("provider-vibe-exit"));
-  expect(onExit).toHaveBeenCalledOnce();
-  expect(screen.getByText("providerControl.vibe.enabled")).toBeTruthy();
-  await act(async () => {
-    reject(new Error("Cannot exit"));
-  });
-  expect(screen.getByText("Cannot exit")).toBeTruthy();
-  view.rerender(<ProviderVibe state={{ ...running, enabled: false }} onExit={onExit} />);
-  expect(screen.queryByTestId("provider-vibe")).toBeNull();
-});
-
-it("explains a disabled exit without calling its handler", () => {
-  const onExit = vi.fn();
-  render(
-    <ProviderVibe
-      state={running}
-      disabled
-      disabledReason="Finish the main task first"
-      onExit={onExit}
-    />,
-  );
-  expect(screen.getByText("Finish the main task first")).toBeTruthy();
-  fireEvent.click(screen.getByTestId("provider-vibe-exit"));
-  expect(onExit).not.toHaveBeenCalled();
 });

@@ -65,7 +65,7 @@ function buildModelRows(
     providerLabel,
     modelId: model.id,
     modelLabel: model.label,
-    description: model.description ?? model.id,
+    description: model.description ?? "",
     isDefault: model.isDefault,
   }));
 }

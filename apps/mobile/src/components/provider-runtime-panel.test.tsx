@@ -117,7 +117,7 @@ it("defers editor replacement during submit and delivers each revision once acro
   expect(onEditor).toHaveBeenCalledTimes(2);
 });
 
-it("shows active director controls and reserves no space for idle Vibe", () => {
+it("shows one Vibe status in the control row and reserves no space when disabled", () => {
   fixture.state = {
     statuses: [],
     widgets: [],
@@ -142,7 +142,12 @@ it("shows active director controls and reserves no space for idle Vibe", () => {
   );
   expect(screen.getByTestId("provider-vibe")).toBeTruthy();
   expect(screen.queryByText("worker-fast")).toBeNull();
-  expect(screen.getByTestId("provider-vibe-exit")).toBeTruthy();
+  expect(
+    screen.getByTestId("provider-control-row").contains(screen.getByTestId("provider-vibe")),
+  ).toBe(true);
+  expect(screen.queryByTestId("provider-vibe-exit")).toBeNull();
+  expect(screen.queryByTestId("provider-control-toggle-vibe")).toBeNull();
+  expect(screen.queryByTestId("provider-control-content-vibe")).toBeNull();
   view.unmount();
 
   // An older daemon sends no `vibe` at all: the panel must stay hidden.
@@ -228,7 +233,7 @@ it("keeps exactly one side conversation as workers become active and finish repe
   }
 });
 
-it("allows native Vibe teardown while the main turn is running", async () => {
+it("keeps Vibe informational while the main turn is running and follows native mode changes", () => {
   fixture.mainTurnActive = true;
   fixture.state = {
     statuses: [],
@@ -243,13 +248,20 @@ it("allows native Vibe teardown while the main turn is running", async () => {
       ],
     },
   };
-  render(<ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />);
-  expect(screen.getByTestId("provider-vibe-exit")).toHaveProperty("disabled", false);
-  await act(async () => fireEvent.click(screen.getByTestId("provider-vibe-exit")));
-  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "vibe_control", {
-    operation: "toggle",
-    enabled: "false",
-  });
+  const view = render(
+    <ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" blocked />,
+  );
+  fireEvent.click(screen.getByTestId("provider-vibe"));
+  expect(fixture.run).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button")).toBeNull();
+  fixture.state = {
+    ...fixture.state,
+    vibe: { enabled: false, workers: fixture.state.vibe!.workers },
+  };
+  view.rerender(
+    <ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" blocked />,
+  );
+  expect(view.container.innerHTML).toBe("");
 });
 
 it("offers draft recovery after a plugin fills the editor and binds it to the owning conversation", () => {
@@ -314,7 +326,8 @@ it("keeps authoritative Goal controls above the editor and binds actions to the 
     "none",
   );
   expect(fixture.run).not.toHaveBeenCalled();
-  expect(screen.getByTestId("provider-control-toggle-vibe")).toBeTruthy();
+  expect(screen.getByTestId("provider-vibe")).toBeTruthy();
+  expect(screen.queryByTestId("provider-control-toggle-vibe")).toBeNull();
   fireEvent.click(screen.getByTestId("provider-control-toggle-goal:native-goal"));
   await act(async () => fireEvent.click(screen.getByText("providerControl.actions.pause")));
   expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "goal", {

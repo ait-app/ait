@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Keyboard, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -140,6 +140,13 @@ export function CompactModelSheet({
     cwd,
     providerSettings,
   });
+  const settingsOpen = rootBrowser.settingsOpen || modelBrowser.settingsOpen;
+  useEffect(() => {
+    if (settingsOpen) {
+      setIsOpen(false);
+      setIsModelBrowserOpen(false);
+    }
+  }, [settingsOpen]);
   const ProviderIcon =
     selectedProvider.trim().length > 0 ? getProviderIcon(selectedProvider, serverId) : null;
   const ModelIcon = ProviderIcon ?? Bot;
@@ -311,7 +318,7 @@ export function CompactModelSheet({
 
       <AdaptiveModalSheet
         header={rootHeader}
-        visible={isOpen}
+        visible={isOpen && !settingsOpen}
         onClose={close}
         snapPoints={SNAP_POINTS}
         scrollable={false}
@@ -358,7 +365,7 @@ export function CompactModelSheet({
       {usesBottomSheet ? (
         <AdaptiveModalSheet
           header={modelBrowser.header}
-          visible={isModelBrowserOpen}
+          visible={isModelBrowserOpen && !settingsOpen}
           onClose={closeModelBrowser}
           snapPoints={SNAP_POINTS}
           scrollable={false}

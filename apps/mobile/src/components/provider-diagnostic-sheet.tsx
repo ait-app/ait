@@ -1,6 +1,14 @@
 import * as Clipboard from "expo-clipboard";
-import { AlertTriangle, Copy, FileText, Plus, RotateCw, Trash2 } from "lucide-react-native";
-import type { TFunction } from "i18next";
+import {
+  AlertTriangle,
+  Copy,
+  FileText,
+  Layers,
+  List,
+  Plus,
+  RotateCw,
+  Trash2,
+} from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, type PressableStateCallbackType, Text, View } from "react-native";
@@ -11,19 +19,17 @@ import {
   type SheetHeader,
 } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
+import { SettingsNavigationRow } from "@/components/settings/navigation-row";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { ScrollableCodeSurface, SurfaceCard } from "@/components/ui/scrollable-code-surface";
-import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
-import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { providersSnapshotQueryKey, useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { settingsStyles } from "@/styles/settings";
 import { resolveProviderLabel } from "@/utils/provider-definitions";
-import { formatTimeAgo } from "@/utils/time";
 import { compareMatchScores, scoreTextFields } from "@ait/protocol/search/text-match";
 import type {
   AgentModelDefinition,
@@ -66,14 +72,6 @@ function DiscoveredModelRow({ model }: { model: AgentModelDefinition }) {
       <Text style={sheetStyles.modelTitle} numberOfLines={1}>
         {model.label}
       </Text>
-      <Text
-        style={sheetStyles.monoHint}
-        numberOfLines={1}
-        selectable
-        dataSet={CODE_SURFACE_DATASET}
-      >
-        {model.id}
-      </Text>
       {model.description ? (
         <Text style={sheetStyles.descriptionInline} numberOfLines={1}>
           {model.description}
@@ -108,14 +106,6 @@ function CustomModelRow({
     <View style={sheetStyles.modelRow}>
       <Text style={sheetStyles.modelTitle} numberOfLines={1}>
         {model.label}
-      </Text>
-      <Text
-        style={sheetStyles.monoHint}
-        numberOfLines={1}
-        selectable
-        dataSet={CODE_SURFACE_DATASET}
-      >
-        {model.id}
       </Text>
       <View style={sheetStyles.modelRowFiller} />
       <Pressable
@@ -421,79 +411,6 @@ interface ProviderModalBodyProps {
   theme: { iconSize: { md: number }; colors: { foregroundMuted: string } };
 }
 
-interface ProviderSheetFooterInput {
-  canConfigure: boolean;
-  fetchedAtLabel: string | null;
-  isCompact: boolean;
-  modelsRefreshing: boolean;
-  t: TFunction;
-  onOpenAddSheet: () => void;
-  onOpenDiagSheet: () => void;
-  onRefreshModels: () => void;
-}
-
-function renderProviderSheetFooter({
-  canConfigure,
-  fetchedAtLabel,
-  isCompact,
-  modelsRefreshing,
-  t,
-  onOpenAddSheet,
-  onOpenDiagSheet,
-  onRefreshModels,
-}: ProviderSheetFooterInput) {
-  const contentStyle = isCompact ? sheetStyles.compactFooterContent : sheetStyles.footerContent;
-  const actionsStyle = isCompact ? sheetStyles.compactFooterActions : sheetStyles.footerActions;
-  const buttonStyle = isCompact ? sheetStyles.compactFooterButton : null;
-  const metaStyle = isCompact
-    ? [sheetStyles.footerMeta, sheetStyles.compactFooterMeta]
-    : sheetStyles.footerMeta;
-
-  return (
-    <View style={contentStyle}>
-      {fetchedAtLabel || !isCompact ? (
-        <Text style={metaStyle} numberOfLines={1}>
-          {fetchedAtLabel ? t("settings.providers.models.updated", { time: fetchedAtLabel }) : ""}
-        </Text>
-      ) : null}
-      <View style={actionsStyle}>
-        {canConfigure ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            leftIcon={Plus}
-            onPress={onOpenAddSheet}
-            style={buttonStyle}
-          >
-            {t("settings.providers.models.addModel")}
-          </Button>
-        ) : null}
-        <Button
-          variant="secondary"
-          size="sm"
-          leftIcon={FileText}
-          onPress={onOpenDiagSheet}
-          style={buttonStyle}
-        >
-          {t("settings.providers.diagnostic.button")}
-        </Button>
-        <Button
-          variant="default"
-          size="sm"
-          leftIcon={modelsRefreshing ? undefined : RotateCw}
-          onPress={onRefreshModels}
-          disabled={modelsRefreshing}
-          style={buttonStyle}
-        >
-          {modelsRefreshing
-            ? t("settings.providers.diagnostic.refreshing")
-            : t("settings.providers.diagnostic.refresh")}
-        </Button>
-      </View>
-    </View>
-  );
-}
-
 function ProviderModalBody(props: ProviderModalBodyProps) {
   const { t } = useTranslation();
   const {
@@ -597,7 +514,6 @@ export function ProviderDiagnosticSheet({
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const toast = useToast();
-  const isCompact = useIsCompactFormFactor();
   const {
     entries: snapshotEntries,
     refresh,
@@ -606,6 +522,7 @@ export function ProviderDiagnosticSheet({
   } = useProvidersSnapshot(serverId, { cwd, refreshOnAccess: visible });
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState<"settings" | "presets" | "models">("settings");
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [diagSheetOpen, setDiagSheetOpen] = useState(false);
   const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
@@ -647,25 +564,26 @@ export function ProviderDiagnosticSheet({
   });
   stableDiscoveredRef.current = nextDiscoveredCache;
 
-  const [clockTick, setClockTick] = useState(0);
-  useEffect(() => {
-    if (!visible) return;
-    const id = setInterval(() => setClockTick((tick) => tick + 1), 10_000);
-    return () => clearInterval(id);
-  }, [visible]);
-  const fetchedAtLabel = useMemo(() => {
-    if (!providerEntry?.fetchedAt) return null;
-    void clockTick;
-    return formatTimeAgo(new Date(providerEntry.fetchedAt));
-  }, [providerEntry?.fetchedAt, clockTick]);
-
   useEffect(() => {
     if (!visible) {
       setQuery("");
+      setPage("settings");
       setAddSheetOpen(false);
       setDiagSheetOpen(false);
     }
   }, [visible]);
+
+  useEffect(() => {
+    if (
+      !currentRefresh ||
+      currentRefresh.pending ||
+      currentRefresh.models ||
+      currentRefresh.presets
+    )
+      return;
+    const timer = setTimeout(() => setSettingsRefresh(null), 3000);
+    return () => clearTimeout(timer);
+  }, [currentRefresh]);
 
   const q = query.trim();
   const filteredDiscovered = useMemo(
@@ -737,14 +655,46 @@ export function ProviderDiagnosticSheet({
 
   const sheetHeader = useMemo<SheetHeader>(
     () => ({
-      title: providerLabel,
-      search: {
-        onChange: setQuery,
-        placeholder: t("settings.providers.models.searchPlaceholder"),
-        testID: "provider-settings-search",
-      },
+      title:
+        page === "settings"
+          ? providerLabel
+          : t(
+              page === "presets" ? "providerControl.managePresets" : "providerControl.modelCatalog",
+            ),
+      ...(page === "settings"
+        ? {}
+        : {
+            back: {
+              onPress: () => {
+                setPage("settings");
+                setQuery("");
+              },
+              accessibilityLabel: t("common.actions.back"),
+            },
+          }),
+      ...(page === "models"
+        ? {
+            search: {
+              onChange: setQuery,
+              placeholder: t("settings.providers.models.searchPlaceholder"),
+              testID: "provider-settings-search",
+            },
+          }
+        : {}),
+      actions: (
+        <Button
+          variant="ghost"
+          size="sm"
+          leftIcon={RotateCw}
+          onPress={handleRefreshModels}
+          disabled={modelsRefreshing}
+          loading={modelsRefreshing}
+          accessibilityLabel={t("settings.providers.diagnostic.refresh")}
+          testID="provider-settings-refresh"
+        />
+      ),
     }),
-    [providerLabel, t],
+    [page, providerLabel, t, handleRefreshModels, modelsRefreshing],
   );
 
   return (
@@ -754,16 +704,13 @@ export function ProviderDiagnosticSheet({
         visible={visible}
         onClose={onClose}
         testID="provider-settings-sheet"
-        footer={renderProviderSheetFooter({
-          canConfigure,
-          fetchedAtLabel,
-          isCompact,
-          modelsRefreshing,
-          t,
-          onOpenAddSheet: handleOpenAddSheet,
-          onOpenDiagSheet: handleOpenDiagSheet,
-          onRefreshModels: handleRefreshModels,
-        })}
+        footer={
+          page === "models" && canConfigure ? (
+            <Button variant="default" size="sm" leftIcon={Plus} onPress={handleOpenAddSheet}>
+              {t("settings.providers.models.addModel")}
+            </Button>
+          ) : undefined
+        }
         snapPoints={MAIN_SNAP_POINTS}
       >
         {currentRefresh && !currentRefresh.pending ? (
@@ -786,32 +733,58 @@ export function ProviderDiagnosticSheet({
             </Text>
           </View>
         ) : null}
-        {modelConfiguration ? (
-          <View testID="provider-current-model-settings">
-            <Text style={sheetStyles.mutedText}>{t("providerControl.settingsSelection")}</Text>
-            {modelConfiguration}
+        {page === "settings" ? (
+          <View style={sheetStyles.settingsPage} testID="provider-settings-home">
+            {modelConfiguration ? (
+              <View testID="provider-current-model-settings">{modelConfiguration}</View>
+            ) : null}
+            <View style={sheetStyles.navigation}>
+              <SettingsNavigationRow
+                icon={Layers}
+                label={t("providerControl.managePresets")}
+                onPress={() => setPage("presets")}
+                testID="provider-settings-presets"
+              />
+              <SettingsNavigationRow
+                icon={List}
+                label={t("providerControl.modelCatalog")}
+                onPress={() => setPage("models")}
+                testID="provider-settings-models"
+              />
+              <SettingsNavigationRow
+                icon={FileText}
+                label={t("settings.providers.diagnostic.button")}
+                onPress={handleOpenDiagSheet}
+                testID="provider-settings-diagnostic"
+              />
+            </View>
           </View>
         ) : null}
-        <ProviderPresetsSection
-          provider={provider}
-          serverId={serverId}
-          cwd={cwd}
-          models={discoveredModels}
-        />
-        <ProviderModalBody
-          discoveredCount={discoveredModels.length}
-          additionalCount={additionalModels.length}
-          providerSnapshotRefreshing={providerSnapshotRefreshing}
-          providerErrorMessage={providerErrorMessage}
-          modelsRefreshing={modelsRefreshing}
-          searchActive={Boolean(q)}
-          filteredDiscovered={filteredDiscovered}
-          filteredCustom={filteredCustom}
-          deletingModelId={deletingModelId}
-          onRefresh={handleRefreshModels}
-          onDeleteCustom={handleDeleteCustom}
-          theme={theme}
-        />
+        <View style={page === "presets" ? undefined : sheetStyles.hidden}>
+          <ProviderPresetsSection
+            showTitle={false}
+            provider={provider}
+            serverId={serverId}
+            cwd={cwd}
+            models={discoveredModels}
+          />
+        </View>
+        {page === "models" ? (
+          <ProviderModalBody
+            discoveredCount={discoveredModels.length}
+            additionalCount={additionalModels.length}
+            providerSnapshotRefreshing={providerSnapshotRefreshing}
+            providerErrorMessage={providerErrorMessage}
+            modelsRefreshing={modelsRefreshing}
+            searchActive={Boolean(q)}
+            filteredDiscovered={filteredDiscovered}
+            filteredCustom={filteredCustom}
+            deletingModelId={deletingModelId}
+            onRefresh={handleRefreshModels}
+            onDeleteCustom={handleDeleteCustom}
+            theme={theme}
+          />
+        ) : null}
       </AdaptiveModalSheet>
       <AddCustomModelSubSheet
         provider={provider}
@@ -831,15 +804,16 @@ export function ProviderDiagnosticSheet({
 }
 
 const sheetStyles = StyleSheet.create((theme) => ({
+  settingsPage: { gap: theme.spacing[4] },
+  navigation: {
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    paddingTop: theme.spacing[2],
+  },
+  hidden: { display: "none" },
   mutedText: {
     fontSize: theme.fontSize.base,
     color: theme.colors.foregroundMuted,
-  },
-  monoHint: {
-    fontFamily: theme.fontFamily.mono,
-    fontSize: theme.fontSize.code,
-    color: theme.colors.foregroundMuted,
-    flexShrink: 0,
   },
   descriptionInline: {
     flex: 1,
@@ -906,7 +880,7 @@ const sheetStyles = StyleSheet.create((theme) => ({
   modelTitle: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
-    flexShrink: 0,
+    flexShrink: 1,
   },
   modelRowFiller: {
     flex: 1,
@@ -915,36 +889,6 @@ const sheetStyles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[8],
     alignItems: "center",
     gap: theme.spacing[3],
-  },
-  footerContent: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[2],
-  },
-  compactFooterContent: {
-    flex: 1,
-    gap: theme.spacing[2],
-  },
-  footerMeta: {
-    flex: 1,
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.foregroundMuted,
-  },
-  compactFooterMeta: {
-    flex: 0,
-  },
-  footerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-  },
-  compactFooterActions: {
-    gap: theme.spacing[2],
-  },
-  compactFooterButton: {
-    alignSelf: "stretch",
   },
   formGroup: {
     gap: theme.spacing[3],

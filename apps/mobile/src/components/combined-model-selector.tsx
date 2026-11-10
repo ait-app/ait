@@ -114,6 +114,9 @@ export function CombinedModelSelector({
     providerSettings,
   });
   const { prepareToOpen, reset } = browser;
+  useEffect(() => {
+    if (browser.settingsOpen) setIsOpen(false);
+  }, [browser.settingsOpen]);
   const handleOpenChange = useCallback(
     (open: boolean) => {
       setIsOpen(open);
@@ -281,7 +284,7 @@ export function CombinedModelSelector({
         options={EMPTY_COMBOBOX_OPTIONS}
         value=""
         onSelect={noop}
-        open={isOpen}
+        open={isOpen && !browser.settingsOpen}
         onOpenChange={handleOpenChange}
         anchorRef={anchorRef}
         desktopPlacement={desktopPlacement}

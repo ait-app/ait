@@ -1,14 +1,18 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ScrollView, Text, View } from "react-native";
-import { ChevronDown, ChevronUp } from "lucide-react-native";
+import { Pressable, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
-import { Button } from "@/components/ui/button";
+import { composerPillStyles } from "@/composer/pill-styles";
 
-export type ProviderDockItem = { id: string; label: string; content: ReactNode };
+export type ProviderDockItem = {
+  id: string;
+  label: string;
+  content: ReactNode | ((disclosure: { expanded: boolean; collapse: () => void }) => ReactNode);
+};
 
 // Only disclosure identity is retained; native state and draft text remain in their owners.
 const disclosures = new Map<string, string | null>();
+const revealed = new Map<string, string>();
 
 function remember(owner: string, expanded: string | null) {
   disclosures.delete(owner);
@@ -20,10 +24,14 @@ export function ProviderControlDock({
   owner,
   items,
   initial,
+  status,
+  reveal,
 }: {
   owner: string;
   items: ProviderDockItem[];
   initial?: string;
+  status?: ReactNode;
+  reveal?: { id: string; revision: string } | null;
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState<string | null>(() =>
@@ -35,7 +43,16 @@ export function ProviderControlDock({
       remember(owner, null);
     }
   }, [expanded, items, owner]);
-  if (!items.length) return null;
+  useEffect(() => {
+    if (!reveal || revealed.get(owner) === reveal.revision) return;
+    if (!items.some((item) => item.id === reveal.id)) return;
+    setExpanded(reveal.id);
+    remember(owner, reveal.id);
+    revealed.delete(owner);
+    revealed.set(owner, reveal.revision);
+    if (revealed.size > 256) revealed.delete(revealed.keys().next().value!);
+  }, [owner, reveal, items]);
+  if (!items.length && !status) return null;
   return (
     <View style={styles.dock} testID="provider-control-dock">
       {items.map((item) => (
@@ -44,8 +61,20 @@ export function ProviderControlDock({
           style={expanded === item.id ? styles.content : styles.hidden}
           testID={`provider-control-content-${item.id}`}
         >
-          <ScrollView style={styles.viewport} nestedScrollEnabled>
-            {item.content}
+          <ScrollView
+            style={styles.viewport}
+            contentContainerStyle={styles.viewportContent}
+            nestedScrollEnabled
+          >
+            {typeof item.content === "function"
+              ? item.content({
+                  expanded: expanded === item.id,
+                  collapse: () => {
+                    setExpanded(null);
+                    remember(owner, null);
+                  },
+                })
+              : item.content}
           </ScrollView>
         </View>
       ))}
@@ -56,12 +85,15 @@ export function ProviderControlDock({
         accessibilityLabel={t("providerControl.runtimeControls")}
         testID="provider-control-row"
       >
+        {status}
         {items.map((item) => (
-          <Button
+          <Pressable
             key={item.id}
-            variant={expanded === item.id ? "secondary" : "ghost"}
-            size="sm"
-            leftIcon={expanded === item.id ? ChevronUp : ChevronDown}
+            style={({ pressed, hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
+              composerPillStyles.body,
+              (pressed || hovered || expanded === item.id) && composerPillStyles.bodyActive,
+            ]}
+            accessibilityRole="button"
             accessibilityLabel={item.label}
             accessibilityState={{ expanded: expanded === item.id }}
             aria-expanded={expanded === item.id}
@@ -72,21 +104,31 @@ export function ProviderControlDock({
               remember(owner, next);
             }}
           >
-            <Text numberOfLines={1} style={styles.label}>
+            <Text
+              numberOfLines={1}
+              style={[
+                composerPillStyles.label,
+                expanded === item.id && composerPillStyles.labelActive,
+                styles.label,
+              ]}
+            >
               {item.label}
             </Text>
-          </Button>
+          </Pressable>
         ))}
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create((theme) => ({
+const styles = StyleSheet.create(() => ({
   dock: { gap: 6, minWidth: 0 },
   row: { flexDirection: "row", alignItems: "center", gap: 6 },
   content: { minWidth: 0 },
   hidden: { display: "none" },
-  viewport: { maxHeight: 240 },
-  label: { color: theme.colors.foreground, fontSize: 12, maxWidth: 200 },
+  // Outset focus rings need room inside the scrolling clip. The negative margin keeps
+  // content aligned with the pills while the padding reserves that room on every edge.
+  viewport: { maxHeight: 240, marginHorizontal: -4 },
+  viewportContent: { padding: 4 },
+  label: { maxWidth: 200 },
 }));

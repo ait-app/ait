@@ -125,10 +125,12 @@ vi.mock("@/components/adaptive-modal-sheet", () => ({
   ),
   AdaptiveTextInput: ({
     initialValue,
+    placeholder,
     onChangeText,
     editable,
   }: {
     initialValue: string;
+    placeholder?: string;
     onChangeText: (value: string) => void;
     editable?: boolean;
   }) => {
@@ -137,6 +139,7 @@ vi.mock("@/components/adaptive-modal-sheet", () => ({
     return (
       <input
         defaultValue={initialValue}
+        placeholder={placeholder}
         readOnly={readOnly}
         aria-readonly={readOnly}
         onChange={(event) => onChangeText(event.target.value)}
@@ -226,8 +229,8 @@ it("disables exactly the operations the descriptor withholds", async () => {
   renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" />);
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
   expect(screen.queryByTestId("provider-presets-add")).toBeNull();
-  fireEvent.click(screen.getByTestId("provider-presets-details"));
-  expect(screen.getByTestId("provider-presets-reason").textContent).toContain("modelpreset");
+  fireEvent.click(screen.getByLabelText("providerControl.viewPreset"));
+  expect(screen.getByText("This OMP version does not expose the modelpreset command")).toBeTruthy();
   // A read-only row has neither edit nor delete affordances.
   expect(screen.queryByLabelText("settings.providers.presets.edit")).toBeNull();
   expect(screen.queryByLabelText("settings.providers.presets.remove")).toBeNull();
@@ -298,7 +301,7 @@ it("keeps the name read-only and explains why when renaming is withheld", async 
   expect(screen.getByTestId("preset-name-readonly-reason").textContent).toBe(
     "settings.providers.presets.noRename",
   );
-  expect(screen.getByText("providerControl.roleRoutingHint")).toBeTruthy();
+  expect(screen.queryByText("providerControl.roleRoutingHint")).toBeNull();
 });
 
 it("deletes through the same request and refreshes the list", async () => {
@@ -427,9 +430,7 @@ it("shows project scope and prevents global writes to an overriding project pres
   ]);
   renderSection(<ProviderPresetsSection provider="omp" serverId="host-a" cwd="/repo/project" />);
   await waitFor(() => expect(screen.getByText("team")).toBeTruthy());
-  expect(screen.getByTestId("provider-presets-scope").textContent).toBe(
-    "providerControl.scopeNativeShort",
-  );
+  expect(screen.getByTestId("provider-presets-scope").textContent).toBe("/repo/project");
   expect(client.listProviderPresets).toHaveBeenCalledWith("omp", "/repo/project");
   expect(
     (screen.getByLabelText("settings.providers.presets.remove") as HTMLButtonElement).disabled,
@@ -721,4 +722,25 @@ it("does not show OMP worker routing in an Ait-managed provider editor", async (
   fireEvent.click(screen.getByLabelText("settings.providers.presets.edit"));
   await waitFor(() => expect(screen.getByTestId("provider-preset-save")).toBeTruthy());
   expect(screen.queryByText("providerControl.roleRoutingHint")).toBeNull();
+});
+
+it("validates native names before saving and offers an OMP-compatible example", async () => {
+  await ready(descriptor({ backend: "native" }), [preset("team")]);
+  renderSection(
+    <ProviderPresetsSection
+      provider="omp"
+      serverId="host-a"
+      models={[{ provider: "omp", id: "model-a", label: "Model A" }]}
+    />,
+  );
+  fireEvent.click(await screen.findByTestId("provider-presets-add"));
+  const name = screen.getByPlaceholderText("TeamDefault");
+  fireEvent.change(name, { target: { value: "团队默认" } });
+  expect(screen.getByTestId("provider-preset-invalid-name")).toBeTruthy();
+  expect((screen.getByTestId("provider-preset-save") as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(name, { target: { value: "Team Default" } });
+  expect(screen.getByTestId("provider-preset-invalid-name")).toBeTruthy();
+  fireEvent.change(name, { target: { value: "Team_Default-2" } });
+  expect(screen.queryByTestId("provider-preset-invalid-name")).toBeNull();
+  expect(client.saveProviderPreset).not.toHaveBeenCalled();
 });

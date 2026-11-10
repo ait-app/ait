@@ -1,10 +1,10 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Bot, ChevronDown, ChevronRight } from "lucide-react-native";
+import { Bot } from "lucide-react-native";
 import { View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import type { AgentFeature } from "@ait/protocol/agent-types";
-import { Button } from "@/components/ui/button";
+import { SettingsNavigationRow } from "@/components/settings/navigation-row";
 
 /** Provider settings presentation; callers retain their atomic configuration setters. */
 export function ModelFeatureControls({
@@ -31,28 +31,17 @@ export function ModelFeatureControls({
       {preset ? renderFeature(preset, 0) : null}
       {roles.length > 0 ? (
         <>
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={Bot}
-            trailing={
-              expanded ? (
-                <ChevronDown size={14} color={styles.icon.color} />
-              ) : (
-                <ChevronRight size={14} color={styles.icon.color} />
-              )
-            }
+          <SettingsNavigationRow
+            icon={Bot}
+            label={t("providerControl.modelRoles")}
             disabled={disabled}
-            accessibilityState={{ expanded }}
+            expanded={expanded}
             testID="model-role-settings"
-            style={styles.disclosure}
             onPress={() => {
               if (!expanded) onCatalogAccess?.();
               setExpanded(!expanded);
             }}
-          >
-            {t("providerControl.modelRoles")}
-          </Button>
+          />
           {expanded ? roles.map((feature, index) => renderFeature(feature, index)) : null}
         </>
       ) : null}
@@ -60,8 +49,6 @@ export function ModelFeatureControls({
   );
 }
 
-const styles = StyleSheet.create((theme) => ({
+const styles = StyleSheet.create(() => ({
   container: { gap: 4 },
-  disclosure: { alignSelf: "flex-start" },
-  icon: { color: theme.colors.foregroundMuted },
 }));

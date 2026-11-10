@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
@@ -29,13 +29,6 @@ export function ProviderRuntimePanel({
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
-  const exitVibe = useCallback(async () => {
-    if (!client) throw new Error(t("workspace.terminal.hostDisconnected"));
-    await client.runNativeAction(agentId, "vibe_control", {
-      operation: "toggle",
-      enabled: "false",
-    });
-  }, [agentId, client, t]);
   const state = useSessionStore(
     (store) => store.sessions[serverId]?.agents.get(agentId)?.providerUi,
   );
@@ -56,7 +49,7 @@ export function ProviderRuntimePanel({
   }, [serverId, agentId, editor, onEditor, blocked]);
   if (!state) return null;
   const above = placement === "aboveEditor";
-  const activeVibe = Boolean(state.vibe?.enabled);
+  const activeVibe = above && Boolean(state.vibe?.enabled);
   const hasSideQuestions = Boolean(
     state.sideQuestions &&
     (state.sideQuestions.records.length || state.sideQuestions.error || state.sideQuestions.reveal),
@@ -100,19 +93,14 @@ export function ProviderRuntimePanel({
       ),
     });
   }
-  if (above && activeVibe && state.vibe)
-    controls.push({
-      id: "vibe",
-      label: t("providerControl.vibe.enabled"),
-      content: <ProviderVibe state={state.vibe} onExit={exitVibe} disabled={blocked || !client} />,
-    });
   if (above && hasSideQuestions && state.sideQuestions)
     controls.push({
       id: "side-questions",
       label: t("providerControl.sideQuestions.title"),
-      content: (
+      content: ({ expanded, collapse }) => (
         <ProviderSideQuestions
-          state={state.sideQuestions}
+          disclosure={{ expanded, collapse }}
+          state={state.sideQuestions!}
           serverId={serverId}
           agentId={agentId}
           disabled={blocked}
@@ -140,7 +128,8 @@ export function ProviderRuntimePanel({
         </Text>
       ),
     });
-  if (!controls.length && (!above || (!state.title && !state.link && !canRestore))) return null;
+  if (!controls.length && !activeVibe && (!above || (!state.title && !state.link && !canRestore)))
+    return null;
   return (
     <View style={styles.panel} testID={`provider-runtime-${placement}`}>
       {above && state.title ? <Text style={styles.title}>{state.title}</Text> : null}
@@ -149,6 +138,12 @@ export function ProviderRuntimePanel({
         owner={`${owner}:${placement}`}
         items={controls}
         initial={controls[0]?.id}
+        reveal={
+          above && state.sideQuestions?.reveal
+            ? { id: "side-questions", revision: state.sideQuestions.reveal }
+            : null
+        }
+        status={activeVibe && state.vibe ? <ProviderVibe state={state.vibe} /> : null}
       />
       {above && canRestore ? (
         <Button

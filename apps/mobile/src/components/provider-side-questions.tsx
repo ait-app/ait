@@ -17,15 +17,18 @@ export function ProviderSideQuestions({
   serverId,
   agentId,
   disabled,
+  disclosure,
 }: {
   state: State;
   serverId: string;
   agentId: string;
   disabled: boolean;
+  disclosure?: { expanded: boolean; collapse: () => void };
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
-  const [expanded, setExpanded] = useState(false);
+  const [localExpanded, setExpanded] = useState(false);
+  const expanded = disclosure?.expanded ?? localExpanded;
   const [draft, setDraft] = useState("");
   const [composeOpen, setComposeOpen] = useState(state.records.length === 0);
   const inputRef = useRef<TextInput>(null);
@@ -84,22 +87,28 @@ export function ProviderSideQuestions({
   useEffect(() => {
     if (composeOpen && expanded) inputRef.current?.focus();
   }, [composeOpen, expanded, replyTo]);
-  if (dismissed) return null;
+  if (dismissed && !disclosure) return null;
   if (!state.records.length && !state.error && !state.reveal) return null;
   return (
     <View style={styles.panel} testID="provider-side-questions">
       <View style={styles.header}>
-        <Button
-          variant="ghost"
-          size="sm"
-          style={styles.headerToggle}
-          leftIcon={expanded ? ChevronDown : ChevronRight}
-          accessibilityState={{ expanded }}
-          onPress={() => setExpanded(!expanded)}
-          testID="side-question-toggle"
-        >
-          <Text style={styles.title}>{t("providerControl.sideQuestions.title")}</Text>
-        </Button>
+        {disclosure ? (
+          <Text style={[styles.title, styles.headerToggle]}>
+            {t("providerControl.sideQuestions.title")}
+          </Text>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            style={styles.headerToggle}
+            leftIcon={expanded ? ChevronDown : ChevronRight}
+            accessibilityState={{ expanded }}
+            onPress={() => setExpanded(!expanded)}
+            testID="side-question-toggle"
+          >
+            <Text style={styles.title}>{t("providerControl.sideQuestions.title")}</Text>
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="xs"
@@ -118,11 +127,11 @@ export function ProviderSideQuestions({
           size="sm"
           leftIcon={X}
           accessibilityLabel={t("providerControl.sideQuestions.close")}
-          onPress={() => setDismissed(true)}
+          onPress={() => (disclosure ? disclosure.collapse() : setDismissed(true))}
           testID="side-question-close"
         />
       </View>
-      {state.runningId ? (
+      {state.runningId && !disclosure ? (
         <Text style={styles.caption}>{t("providerControl.sideQuestions.closeWhileRunning")}</Text>
       ) : null}
       {expanded ? (
@@ -144,7 +153,7 @@ export function ProviderSideQuestions({
             </ScrollView>
           ) : null}
           <View style={styles.list}>
-            {!state.records.length ? (
+            {!state.records.length && !composeOpen ? (
               <Text style={styles.caption}>{t("providerControl.sideQuestions.empty")}</Text>
             ) : null}
             {(selectedTopic ? [selectedTopic] : []).map((record) => (
