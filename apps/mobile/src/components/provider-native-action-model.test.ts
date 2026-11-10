@@ -150,3 +150,8 @@ it("preserves role identity and omitted counts for the task-specific history pic
     ),
   ).toEqual({ options: [{ id: "user", label: "Request", role: "user" }], omitted: 42 });
 });
+
+it("keeps acknowledged runtime toggles on their existing controls", () => {
+  for (const action of ["set_auto_compaction", "set_auto_retry", "set_fast_mode", "set_slow_mode"])
+    expect(nativeActionGroup(action)).toBeNull();
+});

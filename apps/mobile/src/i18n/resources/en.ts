@@ -1,6 +1,13 @@
 export const en = {
   providerControl: {
+    runtimeControls: "Runtime controls",
+    goalChanged: "This goal has changed. Use the current goal controls.",
+    restoreDraft: "Restore previous draft",
+    expandWidget: "Show widget details",
+    collapseWidget: "Hide widget details",
+
     groups: {
+      extensions: "Extension commands",
       conversation: "Conversation",
       history: "History",
       tasks: "Tasks",

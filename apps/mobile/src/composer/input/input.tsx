@@ -114,6 +114,7 @@ export interface ComposerKeyPressEvent {
 export interface MessageInputProps {
   editingSession?: ComposerEditingSession;
   submissionError?: React.ReactNode;
+  inlineCommandHint?: (style: EditingTextInputProps["style"]) => React.ReactNode;
   value: string;
   onChangeText: (text: string) => void;
   onSubmit: (payload: MessagePayload) => void;
@@ -567,6 +568,7 @@ function FocusHint({
 }
 
 interface ComposerTextSurfaceProps {
+  inlineCommandHint?: MessageInputProps["inlineCommandHint"];
   readOnly: boolean;
   value: string;
   textReplacementKey: string;
@@ -637,6 +639,7 @@ function ComposerTextSurface(props: ComposerTextSurfaceProps): React.ReactElemen
           {`${measurementText}\u200b`}
         </Text>
       ) : null}
+      {props.inlineCommandHint?.(props.textInputStyle)}
       <ComposerTextInput
         ref={props.textInputRef}
         dataSet={COMPOSER_INPUT_DATASET}
@@ -1942,6 +1945,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       () => (
         <RenderProfile id="ComposerTextSurface">
           <ComposerTextSurface
+            inlineCommandHint={props.inlineCommandHint}
             readOnly={readOnly}
             value={
               readOnly
@@ -1980,6 +1984,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         </RenderProfile>
       ),
       [
+        props.inlineCommandHint,
         readOnly,
         textReplacement,
         assignTextInput,

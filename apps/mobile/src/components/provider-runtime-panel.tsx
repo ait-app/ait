@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { useSessionStore } from "@/stores/session-store";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { ProviderSideQuestions } from "./provider-side-questions";
-import { hasActiveVibeWorkers, ProviderVibe } from "./provider-vibe";
+import { ProviderCommandCard } from "./provider-command-card";
+import { ProviderControlDock, type ProviderDockItem } from "./provider-control-dock";
+import { ProviderVibe } from "./provider-vibe";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 
 // Remember native editor deliveries across navigation without caching their text or auth URLs.
@@ -23,83 +25,144 @@ export function ProviderRuntimePanel({
   agentId: string;
   placement: "aboveEditor" | "belowEditor";
   blocked?: boolean;
-  onEditor?: (text: string) => void;
+  onEditor?: (text: string) => void | (() => void);
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
-  const mainTurnActive = useSessionStore(
-    (store) => store.sessions[serverId]?.agents.get(agentId)?.turn?.phase === "open",
-  );
   const exitVibe = useCallback(async () => {
-    if (mainTurnActive) throw new Error(t("providerControl.tasks.finishTurn"));
     if (!client) throw new Error(t("workspace.terminal.hostDisconnected"));
     await client.runNativeAction(agentId, "vibe_control", {
       operation: "toggle",
       enabled: "false",
     });
-  }, [agentId, client, mainTurnActive, t]);
+  }, [agentId, client, t]);
   const state = useSessionStore(
     (store) => store.sessions[serverId]?.agents.get(agentId)?.providerUi,
   );
   const [error, setError] = useState<string | null>(null);
+  const [recovery, setRecovery] = useState<{ owner: string; restore: () => void } | null>(null);
+  const owner = `${serverId}:${agentId}`;
+  const canRestore = recovery?.owner === owner;
   const editor = state?.editor;
   useEffect(() => {
     if (!editor || !onEditor || blocked) return;
     const key = `${serverId}:${agentId}`;
     if (appliedEditors.get(key) === editor.id) return;
-    onEditor(editor.text);
+    const restore = onEditor(editor.text);
+    setRecovery(restore ? { owner: key, restore } : null);
     appliedEditors.delete(key);
     appliedEditors.set(key, editor.id);
     if (appliedEditors.size > 256) appliedEditors.delete(appliedEditors.keys().next().value!);
   }, [serverId, agentId, editor, onEditor, blocked]);
   if (!state) return null;
   const above = placement === "aboveEditor";
-  const activeVibe = hasActiveVibeWorkers(state.vibe);
+  const activeVibe = Boolean(state.vibe?.enabled);
   const hasSideQuestions = Boolean(
     state.sideQuestions &&
     (state.sideQuestions.records.length || state.sideQuestions.error || state.sideQuestions.reveal),
   );
   const widgets = state.widgets.filter((widget) => widget.placement === placement);
-  if (
-    !widgets.length &&
-    (!above ||
-      (!state.title && !state.statuses.length && !state.link && !hasSideQuestions && !activeVibe))
-  )
-    return null;
-  return (
-    <View style={styles.panel} testID={`provider-runtime-${placement}`}>
-      {above && state.title ? <Text style={styles.title}>{state.title}</Text> : null}
-      {above && state.sideQuestions ? (
+  const controls: ProviderDockItem[] = [];
+  const goal = state.goal;
+  if (above && goal?.goal) {
+    controls.push({
+      id: `goal:${goal.goal.id}`,
+      label: `${t("providerControl.goal")} · ${t(`providerControl.status.${goal.goal.phase}`)}`,
+      content: (
+        <ProviderCommandCard
+          key={goal.goal.id}
+          result={goal}
+          active={!blocked && Boolean(client)}
+          compact
+          onCommand={async (command) => {
+            if (!client) throw new Error(t("workspace.terminal.hostDisconnected"));
+            const current = useSessionStore.getState().sessions[serverId]?.agents.get(agentId)
+              ?.providerUi?.goal;
+            if (!current?.goal || current.goal.id !== goal.goal!.id)
+              throw new Error(t("providerControl.goalChanged"));
+            if ("provider" in goal.goal! && goal.goal.provider === "omp") {
+              const action = goal.actions?.find((item) => item.command === command);
+              const op =
+                action?.id === "pause"
+                  ? "pause"
+                  : action?.id === "resume"
+                    ? "resume"
+                    : action?.id === "clear"
+                      ? "drop"
+                      : null;
+              if (!op) throw new Error(t("providerControl.goalChanged"));
+              await client.runNativeAction(agentId, "goal", { op, expectedGoalId: goal.goal!.id });
+            } else {
+              await client.sendMessage(agentId, command);
+            }
+          }}
+        />
+      ),
+    });
+  }
+  if (above && activeVibe && state.vibe)
+    controls.push({
+      id: "vibe",
+      label: t("providerControl.vibe.enabled"),
+      content: <ProviderVibe state={state.vibe} onExit={exitVibe} disabled={blocked || !client} />,
+    });
+  if (above && hasSideQuestions && state.sideQuestions)
+    controls.push({
+      id: "side-questions",
+      label: t("providerControl.sideQuestions.title"),
+      content: (
         <ProviderSideQuestions
-          key={`${serverId}:${agentId}`}
           state={state.sideQuestions}
           serverId={serverId}
           agentId={agentId}
           disabled={blocked}
         />
-      ) : null}
-      {above && activeVibe && state.vibe ? (
-        <ProviderVibe
-          key={`vibe:${serverId}:${agentId}`}
-          state={state.vibe}
-          onExit={exitVibe}
-          disabled={blocked || !client || mainTurnActive}
-          disabledReason={mainTurnActive ? t("providerControl.tasks.finishTurn") : undefined}
-        />
-      ) : null}
-      {above &&
-        state.statuses.map((status) => (
-          <Text key={status.key} style={styles.text} selectable>
+      ),
+    });
+  if (above)
+    for (const status of state.statuses)
+      controls.push({
+        id: `status:${status.key}`,
+        label: status.text.split("\n")[0]!.slice(0, 80),
+        content: (
+          <Text style={styles.text} selectable>
             {status.text}
           </Text>
-        ))}
-      {widgets.map((widget) => (
-        <View key={widget.key} testID={`provider-widget-${widget.key}`}>
-          <Text style={styles.text} selectable>
-            {widget.lines.join("\n")}
-          </Text>
-        </View>
-      ))}
+        ),
+      });
+  for (const widget of widgets)
+    controls.push({
+      id: `widget:${widget.key}`,
+      label: widget.lines[0]?.slice(0, 80) || t("providerControl.expandWidget"),
+      content: (
+        <Text style={styles.text} selectable>
+          {widget.lines.join("\n")}
+        </Text>
+      ),
+    });
+  if (!controls.length && (!above || (!state.title && !state.link && !canRestore))) return null;
+  return (
+    <View style={styles.panel} testID={`provider-runtime-${placement}`}>
+      {above && state.title ? <Text style={styles.title}>{state.title}</Text> : null}
+      <ProviderControlDock
+        key={`${owner}:${placement}`}
+        owner={`${owner}:${placement}`}
+        items={controls}
+        initial={controls[0]?.id}
+      />
+      {above && canRestore ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          testID="provider-editor-restore"
+          onPress={() => {
+            recovery?.restore();
+            setRecovery(null);
+          }}
+        >
+          {t("providerControl.restoreDraft")}
+        </Button>
+      ) : null}
       {above && state.link ? (
         <View style={styles.link}>
           {state.link.instructions ? (

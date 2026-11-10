@@ -1,3 +1,4 @@
+import { useAgentCommandContext } from "./use-agent-command-context";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -23,6 +24,7 @@ export function useAgentCommandCompletionsQuery(input: {
   const supported = useSessionStore(
     (state) => state.sessions[input.serverId]?.serverInfo?.features?.agentCommandCompletion,
   );
+  const context = useAgentCommandContext(input.serverId, input.agentId);
   const active = input.enabled && !!client && connected && panelActive && supported === true;
   const [settled, setSettled] = useState({
     text: input.text,
@@ -38,6 +40,7 @@ export function useAgentCommandCompletionsQuery(input: {
       "agentNativeCompletions",
       input.serverId,
       input.agentId,
+      context,
       input.draftConfig,
       input.text,
       input.cursor,

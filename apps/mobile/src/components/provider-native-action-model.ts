@@ -3,13 +3,35 @@ import type { ProviderUiState } from "@ait/protocol/messages";
 export type NativeAction = NonNullable<ProviderUiState["actions"]>[number];
 export type NativeField = NativeAction["fields"][number];
 export type NativeArguments = Record<string, string>;
-export type NativeGroup = "conversation" | "history" | "tasks" | "accounts" | "runtime";
+export type NativeGroup =
+  | "conversation"
+  | "history"
+  | "tasks"
+  | "accounts"
+  | "runtime"
+  | "extensions";
 
 // Native APIs stay available; GUI preset writes belong exclusively to the settings editor.
 export function nativeActionGroup(id: string): NativeGroup | null {
+  if (id.startsWith("task:")) return "tasks";
+  if (id.startsWith("extension:")) return "extensions";
+  if (id.startsWith("query:")) return "conversation";
   if (
     id.startsWith("model_preset_") ||
-    ["get_subagents", "steer_subagent", "cancel_subagent", "btw_cancel"].includes(id)
+    [
+      "get_subagents",
+      "steer_subagent",
+      "cancel_subagent",
+      "btw_cancel",
+      "vibe_control",
+      "goal",
+      "btw",
+      "handoff",
+      "set_auto_compaction",
+      "set_auto_retry",
+      "set_fast_mode",
+      "set_slow_mode",
+    ].includes(id)
   )
     return null;
   if (["get_login_providers", "login", "get_logout_accounts", "logout"].includes(id))

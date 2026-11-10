@@ -23,7 +23,14 @@ export const ru: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    runtimeControls: "Состояние выполнения",
+    goalChanged: "Цель изменилась. Используйте действия текущей цели.",
+    restoreDraft: "Восстановить черновик",
+    expandWidget: "Показать подробности",
+    collapseWidget: "Скрыть подробности",
+
     groups: {
+      extensions: "Команды расширений",
       conversation: "Диалог",
       history: "История",
       tasks: "Задачи",

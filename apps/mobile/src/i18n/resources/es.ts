@@ -16,7 +16,14 @@ export const es: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    runtimeControls: "Estado de ejecución",
+    goalChanged: "El objetivo ha cambiado. Usa los controles del objetivo actual.",
+    restoreDraft: "Restaurar borrador anterior",
+    expandWidget: "Mostrar detalles",
+    collapseWidget: "Ocultar detalles",
+
     groups: {
+      extensions: "Comandos de extensiones",
       conversation: "Conversación",
       history: "Historial",
       tasks: "Tareas",

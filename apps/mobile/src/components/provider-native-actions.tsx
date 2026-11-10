@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useFileDownload } from "@/hooks/use-file-download";
+import { useAgentCommandsQuery, type AgentSlashCommand } from "@/hooks/use-agent-commands-query";
 import { isWeb } from "@/constants/platform";
 import { AgentControlTrigger } from "@/composer/agent-controls/control";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -39,6 +40,7 @@ export function ProviderNativeActions({
   workers = [],
   turnActive = false,
   vibeEnabled,
+  onComposeCommand,
 }: {
   serverId: string;
   agentId: string;
@@ -49,6 +51,7 @@ export function ProviderNativeActions({
   onClose?: () => void;
   surface?: "composer" | "settings";
   turnActive?: boolean;
+  onComposeCommand?: (text: string) => void;
   vibeEnabled?: boolean;
   workers?: NonNullable<ProviderUiState["vibe"]>["workers"];
 }) {
@@ -60,11 +63,43 @@ export function ProviderNativeActions({
   const [group, setGroup] = useState<NativeGroup | null>(null);
   const [actionId, setActionId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [queryError, setQueryError] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, NativeArguments>>({});
   const [ready, setReady] = useState<Record<string, boolean>>({});
   const [enablingVibe, setEnablingVibe] = useState(false);
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
-  const visibleActions = actions.filter((item) => {
+  const commandQuery = useAgentCommandsQuery({
+    serverId,
+    agentId,
+    enabled: open,
+    refreshOnOpen: true,
+  });
+  const menuCommands = new Map<string, AgentSlashCommand>(
+    commandQuery.commands.map((command) => {
+      const category = ["builtin", "ait"].includes(command.source ?? "")
+        ? [
+            "usage",
+            "tools",
+            "context",
+            "jobs",
+            "dirs",
+            "changelog",
+            "session",
+            "memory",
+            "extensions",
+            "stats",
+            "trace",
+          ].includes(command.name)
+          ? "query"
+          : "task"
+        : "extension";
+      return [`${category}:${command.name}`, command] as const;
+    }),
+  );
+  const commandActions = [...menuCommands]
+    .filter(([id]) => onComposeCommand || id.startsWith("query:"))
+    .map(([id, command]) => ({ id, label: `/${command.name}`, fields: [] }));
+  const visibleActions = [...actions, ...commandActions].filter((item) => {
     const category = nativeActionGroup(item.id);
     return (
       category &&
@@ -98,9 +133,9 @@ export function ProviderNativeActions({
     action &&
     nativeActionValid(action, values) &&
     fields.every((field) => ready[`${actionId}:${field.id}`] !== false);
-  const groups = (["conversation", "history", "tasks", "accounts", "runtime"] as const).filter(
-    (category) => visibleActions.some((item) => nativeActionGroup(item.id) === category),
-  );
+  const groups = (
+    ["conversation", "history", "tasks", "extensions", "accounts", "runtime"] as const
+  ).filter((category) => visibleActions.some((item) => nativeActionGroup(item.id) === category));
   const setValue = (field: string, value: string) => {
     setDrafts((current) => ({
       ...current,
@@ -137,6 +172,7 @@ export function ProviderNativeActions({
       });
       setOutcomes((current) => ({ ...current, [key]: { ...current[key], error: undefined } }));
     } catch (cause) {
+      setQueryError(cause instanceof Error ? cause.message : String(cause));
       setOutcomes((current) => ({
         ...current,
         [key]: { ...current[key], error: cause instanceof Error ? cause.message : String(cause) },
@@ -145,27 +181,37 @@ export function ProviderNativeActions({
       setEnablingVibe(false);
     }
   };
-  const run = async () => {
-    if (!client || !action || pending || disabled || !valid) return;
-    const key = outcomeKey;
+  const run = async (chosen = action, arguments_ = values) => {
+    if (!client || !chosen || disabled) return;
+    const key = `${chosen.id}:${nativeOperationKey(chosen, arguments_) ?? ""}`;
+    if (outcomes[key]?.pending || !nativeActionValid(chosen, arguments_)) return;
+    const action = chosen;
+    setQueryError(null);
     setOutcomes((current) => ({
       ...current,
       [key]: { ...current[key], pending: true, error: undefined },
     }));
     try {
       if (action.id === "get_btw_history") {
-        await client.sendMessage(agentId, "/btw");
+        await client.runNativeAction(agentId, "get_btw_history", {});
         setOutcomes((current) => ({ ...current, [key]: {} }));
         changeOpen(false);
         return;
       }
-      const result = await client.runNativeAction(
-        agentId,
-        action.id,
-        nativeActionArguments(action, values),
-      );
+      const command = menuCommands.get(action.id);
+      if (command && action.id.startsWith("query:")) {
+        await client.sendMessage(agentId, `/${command.name}`);
+        setOutcomes((current) => ({ ...current, [key]: {} }));
+        changeOpen(false);
+        return;
+      }
+      const result = await client.runNativeAction(agentId, action.id, {
+        ...nativeActionArguments(action, arguments_),
+        ...(action.id === "get_session_stats" ? { present: "true" } : {}),
+      });
       setOutcomes((current) => ({ ...current, [key]: { result } }));
     } catch (cause) {
+      setQueryError(cause instanceof Error ? cause.message : String(cause));
       setOutcomes((current) => ({
         ...current,
         [key]: {
@@ -304,14 +350,24 @@ export function ProviderNativeActions({
                   .filter(
                     (item) =>
                       (!group || nativeActionGroup(item.id) === group) &&
-                      item.label.toLowerCase().includes(searchQuery.trim().toLowerCase()),
+                      [
+                        t(`providerControl.operations.${item.id}`, { defaultValue: item.label }),
+                        item.label,
+                        item.id,
+                      ].some((label) =>
+                        label.toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase()),
+                      ),
                   )
                   .map((item) => ({
                     id: item.id,
                     label: t(`providerControl.operations.${item.id}`, { defaultValue: item.label }),
-                    description: group
-                      ? undefined
-                      : t(`providerControl.groups.${nativeActionGroup(item.id)}`),
+                    description: menuCommands.has(item.id)
+                      ? [menuCommands.get(item.id)?.description, menuCommands.get(item.id)?.source]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : group
+                        ? undefined
+                        : t(`providerControl.groups.${nativeActionGroup(item.id)}`),
                   }))
               : groups.map((id) => ({
                   id: `group:${id}`,
@@ -321,8 +377,17 @@ export function ProviderNativeActions({
         value={actionId}
         onSelect={(id) => {
           if (id.startsWith("group:")) setGroup(id.slice(6) as NativeGroup);
-          else setActionId(id);
-          setSearchQuery("");
+          else {
+            const command = menuCommands.get(id);
+            if (command && !id.startsWith("query:")) {
+              onComposeCommand?.(`/${command.name} `);
+              changeOpen(false);
+            } else if (id.startsWith("query:") || id === "get_session_stats") {
+              const selected = visibleActions.find((item) => item.id === id);
+              if (selected) void run(selected, {});
+            } else setActionId(id);
+          }
+          if (!id.startsWith("query:") && id !== "get_session_stats") setSearchQuery("");
         }}
         keepOpenOnSelect
         desktopPlacement="top-start"
@@ -357,7 +422,14 @@ export function ProviderNativeActions({
               }
             : {}),
         }}
-        footer={footer}
+        footer={
+          footer ??
+          (queryError ? (
+            <Text accessibilityRole="alert" style={styles.error}>
+              {queryError}
+            </Text>
+          ) : undefined)
+        }
       >
         {body}
       </Combobox>

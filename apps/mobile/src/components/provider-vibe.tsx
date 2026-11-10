@@ -8,14 +8,6 @@ import { Button } from "@/components/ui/button";
 
 type Vibe = NonNullable<ProviderUiState["vibe"]>;
 
-/** Workers use the shared subagent track and timeline; only active director controls live here. */
-export function hasActiveVibeWorkers(state: Vibe | null | undefined): boolean {
-  return Boolean(
-    state?.enabled &&
-    state.workers.some((worker) => worker.status === "running" || worker.status === "unknown"),
-  );
-}
-
 export const ProviderVibe = memo(function ProviderVibe({
   state,
   onExit,
@@ -42,7 +34,7 @@ export const ProviderVibe = memo(function ProviderVibe({
       setPending(false);
     }
   };
-  if (!hasActiveVibeWorkers(state)) return null;
+  if (!state.enabled) return null;
   return (
     <View style={styles.panel} testID="provider-vibe">
       <View style={styles.row}>
@@ -59,6 +51,9 @@ export const ProviderVibe = memo(function ProviderVibe({
           {t("providerControl.vibe.exit")}
         </Button>
       </View>
+      {!state.workers.length ? (
+        <Text style={styles.description}>{t("providerControl.vibe.empty")}</Text>
+      ) : null}
       {disabledReason ? <Text style={styles.description}>{disabledReason}</Text> : null}
       {error ? (
         <Text accessibilityRole="alert" style={styles.description}>

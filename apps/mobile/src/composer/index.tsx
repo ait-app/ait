@@ -1,3 +1,4 @@
+import { InlineCommandHint } from "./inline-command-hint";
 import { getFileTypeLabel } from "@/attachments/file-types";
 import { ProviderRuntimePanel } from "@/components/provider-runtime-panel";
 import {
@@ -325,6 +326,7 @@ interface RenderLeftContentArgs {
   isCompactLayout: boolean;
   showAgentControls: boolean;
   nativeActionsBlocked: boolean;
+  onComposeCommand: (text: string) => void;
 }
 
 function renderLeftContent(args: RenderLeftContentArgs): ReactElement | null {
@@ -340,6 +342,7 @@ function renderLeftContent(args: RenderLeftContentArgs): ReactElement | null {
       onDropdownClose={focusInput}
       isCompactLayout={isCompactLayout}
       nativeActionsBlocked={args.nativeActionsBlocked}
+      onComposeCommand={args.onComposeCommand}
     />
   );
 }
@@ -1403,6 +1406,15 @@ function ComposerContentImpl({
     [onChangeText],
   );
 
+  const applyProviderEditor = useCallback(
+    (text: string) => {
+      const previous = readLiveDraftText(messageInputRef.current, textSource);
+      replaceUserInput(text);
+      return previous && previous !== text ? () => replaceUserInput(previous) : undefined;
+    },
+    [replaceUserInput, textSource],
+  );
+
   const runClientSlashCommand = useCallback(
     (command: ClientSlashCommand): boolean => {
       if (command.execution !== "immediate" || !onClientSlashCommand) {
@@ -2266,6 +2278,14 @@ function ComposerContentImpl({
   const isSubmitLoadingVisible =
     isProcessing || isSubmitLoading || isStartingVoice || isUploadingFile || pendingImagePastes > 0;
 
+  const composeNativeCommand = useCallback(
+    (text: string) => {
+      replaceUserInput(text);
+      focusInput();
+    },
+    [replaceUserInput, focusInput],
+  );
+
   const leftContent = useMemo(
     () =>
       renderLeftContent({
@@ -2276,6 +2296,7 @@ function ComposerContentImpl({
         isCompactLayout,
         showAgentControls: mode.showAgentControls,
         nativeActionsBlocked: readOnly || isSubmitLoadingVisible,
+        onComposeCommand: composeNativeCommand,
       }),
     [
       agentControls,
@@ -2283,6 +2304,7 @@ function ComposerContentImpl({
       focusInput,
       isCompactLayout,
       isSubmitLoadingVisible,
+      composeNativeCommand,
       mode.showAgentControls,
       readOnly,
       serverId,
@@ -2413,6 +2435,19 @@ function ComposerContentImpl({
     [handleEditQueuedMessage, handleSendQueuedNow, queuedMessages, t],
   );
 
+  const renderInlineCommandHint = useCallback(
+    (style: import("react-native").StyleProp<import("react-native").TextStyle>) => (
+      <InlineCommandHint
+        text={textSource}
+        serverId={serverId}
+        agentId={agentId}
+        draftConfig={commandDraftConfig}
+        style={style}
+      />
+    ),
+    [textSource, serverId, agentId, commandDraftConfig],
+  );
+
   const autocompleteConfiguration = useMemo(
     () => ({
       setUserInput: replaceUserInput,
@@ -2493,7 +2528,7 @@ function ComposerContentImpl({
               agentId={agentId}
               placement="aboveEditor"
               blocked={readOnly || isSubmitLoadingVisible}
-              onEditor={replaceUserInput}
+              onEditor={applyProviderEditor}
             />
 
             <View ref={messageInputContainerRef} style={messageInputContainerStyle}>
@@ -2519,6 +2554,7 @@ function ComposerContentImpl({
                   ref={messageInputRef}
                   editingSession={editingSession}
                   submissionError={sendErrorNode}
+                  inlineCommandHint={renderInlineCommandHint}
                   value={textSource.getSnapshot()}
                   onChangeText={setUserInput}
                   onSubmit={handleSubmit}

@@ -16,7 +16,14 @@ export const ja: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    runtimeControls: "実行状態",
+    goalChanged: "目標が変更されました。現在の目標の操作を使用してください。",
+    restoreDraft: "以前の下書きを復元",
+    expandWidget: "情報の詳細を表示",
+    collapseWidget: "情報の詳細を隠す",
+
     groups: {
+      extensions: "拡張コマンド",
       conversation: "会話",
       history: "履歴",
       tasks: "タスク",

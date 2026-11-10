@@ -16,7 +16,14 @@ export const ko: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    runtimeControls: "실행 상태",
+    goalChanged: "목표가 변경되었습니다. 현재 목표의 작업을 사용하세요.",
+    restoreDraft: "이전 초안 복원",
+    expandWidget: "정보 자세히 보기",
+    collapseWidget: "정보 접기",
+
     groups: {
+      extensions: "확장 명령",
       conversation: "대화",
       history: "기록",
       tasks: "작업",

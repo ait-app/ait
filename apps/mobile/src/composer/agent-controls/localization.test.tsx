@@ -102,7 +102,7 @@ afterEach(async () => {
 describe("OMP model settings presentation", () => {
   it.each([true, false])(
     "groups native roles in model settings and preserves independent edits (compact: %s)",
-    (isCompactLayout) => {
+    async (isCompactLayout) => {
       const onSetFeature = vi.fn();
       const onModelSelectorOpen = vi.fn();
       const features = [
@@ -183,12 +183,16 @@ describe("OMP model settings presentation", () => {
       fireEvent.click(view.getByTestId("model-role-settings"));
       for (const role of ["default", "smol", "vision", "advisor"]) {
         fireEvent.click(view.getByTestId(`agent-feature-modelRole.${role}`));
-        fireEvent.change(view.getByRole("combobox", { name: "Role model" }), {
-          target: { value: "test/model" },
+        await act(async () => {
+          fireEvent.change(view.getByRole("combobox", { name: "Role model" }), {
+            target: { value: "test/model" },
+          });
         });
         expect(onSetFeature).toHaveBeenLastCalledWith(`modelRole.${role}`, "test/model");
-        fireEvent.change(view.getByRole("combobox", { name: "Role model" }), {
-          target: { value: "native" },
+        await act(async () => {
+          fireEvent.change(view.getByRole("combobox", { name: "Role model" }), {
+            target: { value: "native" },
+          });
         });
         expect(onSetFeature).toHaveBeenLastCalledWith(`modelRole.${role}`, "native");
       }

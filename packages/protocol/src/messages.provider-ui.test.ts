@@ -127,3 +127,33 @@ test("optional vibe state preserves older snapshots and bounds native workers", 
     }).success,
   ).toBe(false);
 });
+
+test("current goal controls are optional and preserve native state independently of history", () => {
+  const base = { statuses: [], widgets: [], title: null, editor: null, link: null };
+  const goal = {
+    type: "provider_command",
+    id: "current-goal",
+    command: "goal",
+    status: "success",
+    text: "Goal paused",
+    goal: {
+      provider: "omp",
+      id: "native-goal",
+      phase: "paused",
+      objective: "Verify the release",
+      tokensUsed: 12,
+    },
+    actions: [
+      { id: "resume", command: "/goal resume" },
+      { id: "clear", command: "/goal drop" },
+    ],
+  };
+  expect(ProviderUiStateSchema.parse(base)).toEqual(base);
+  expect(ProviderUiStateSchema.parse({ ...base, goal }).goal).toEqual(goal);
+  expect(
+    ProviderUiStateSchema.safeParse({
+      ...base,
+      goal: { ...goal, goal: { ...goal.goal, phase: "unknown" } },
+    }).success,
+  ).toBe(false);
+});

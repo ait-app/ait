@@ -170,3 +170,35 @@ test("compatible native results parse in legacy closed item unions and rich live
     ).toBe(true);
   }
 });
+
+test("OMP native goal cards retain token budgets without inventing DSH rounds", () => {
+  const item = {
+    type: "provider_command",
+    id: "omp-goal",
+    command: "goal",
+    status: "success",
+    text: "Goal on",
+    goal: {
+      provider: "omp",
+      id: "goal-1",
+      phase: "active",
+      objective: "Verify the release",
+      tokensUsed: 10,
+      tokenBudget: 1000,
+    },
+    actions: [{ id: "pause", command: "/goal pause" }],
+  };
+  expect(AgentTimelineItemPayloadSchema.parse(item)).toEqual(item);
+  const envelope = {
+    type: "session",
+    message: {
+      type: "agent.stream",
+      payload: {
+        agentId: "agent",
+        event: { type: "timeline", provider: "omp", item },
+        timestamp: "2026-11-10T00:00:00Z",
+      },
+    },
+  };
+  expect(validateWSOutboundMessage(envelope)).toEqual({ success: true, data: envelope });
+});

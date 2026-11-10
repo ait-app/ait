@@ -1,3 +1,4 @@
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { forwardRef, useCallback, type ComponentProps } from "react";
 import { Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -18,6 +19,7 @@ type AgentControlTriggerProps = Omit<
   showToolbarLabel?: boolean;
   showCaret?: boolean;
   open?: boolean;
+  busy?: boolean;
   onPress: () => void;
   accessibilityLabel: string;
 };
@@ -33,6 +35,7 @@ export const AgentControlTrigger = forwardRef<View, AgentControlTriggerProps>(
       showToolbarLabel = true,
       showCaret = false,
       open = false,
+      busy = false,
       disabled = false,
       onPress,
       accessibilityLabel,
@@ -72,11 +75,19 @@ export const AgentControlTrigger = forwardRef<View, AgentControlTriggerProps>(
       >
         {isSheet ? (
           <View style={styles.sheetGlyph}>
-            <Icon size={resolvedGlyphSize} color={resolvedIconColor} />
+            {busy ? (
+              <LoadingSpinner size="small" color={resolvedIconColor} />
+            ) : (
+              <Icon size={resolvedGlyphSize} color={resolvedIconColor} />
+            )}
           </View>
         ) : (
           <ComposerToolbarGlyph size={resolvedGlyphSize}>
-            <Icon size={resolvedGlyphSize} color={resolvedIconColor} />
+            {busy ? (
+              <LoadingSpinner size="small" color={resolvedIconColor} />
+            ) : (
+              <Icon size={resolvedGlyphSize} color={resolvedIconColor} />
+            )}
           </ComposerToolbarGlyph>
         )}
         {isSheet ? (

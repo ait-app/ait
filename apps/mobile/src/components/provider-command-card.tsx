@@ -28,11 +28,13 @@ export function ProviderCommandCard({
   active,
   onCommand,
   serverId,
+  compact = false,
 }: {
   result: ProviderCommandTimelineItem;
   active: boolean;
   onCommand?: (command: string) => Promise<void>;
   serverId?: string;
+  compact?: boolean;
 }) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
@@ -69,7 +71,13 @@ export function ProviderCommandCard({
         <View style={styles.titleRow}>
           <Icon size={17} color={color} />
           <Text style={styles.title}>
-            {isGoal ? t("providerControl.goal") : `/${result.command}`}
+            {isGoal
+              ? t("providerControl.goal")
+              : result.command.startsWith("native:")
+                ? t(`providerControl.operations.${result.command.slice(7)}`, {
+                    defaultValue: result.command.slice(7),
+                  })
+                : `/${result.command}`}
           </Text>
         </View>
         <StatusBadge
@@ -85,13 +93,23 @@ export function ProviderCommandCard({
       </View>
       {goal ? (
         <View style={styles.body}>
-          <Text style={styles.objective} selectable>
+          <Text style={styles.objective} numberOfLines={compact ? 4 : undefined} selectable>
             {goal.objective}
           </Text>
-          <Text style={styles.caption}>
-            {t("providerControl.rounds", { count: goal.rounds, max: goal.maxRounds })}
-          </Text>
-          {goal.blockedReason ? <Text style={styles.error}>{goal.blockedReason}</Text> : null}
+          {"rounds" in goal ? (
+            <Text style={styles.caption}>
+              {t("providerControl.rounds", { count: goal.rounds, max: goal.maxRounds })}
+            </Text>
+          ) : null}
+          {"provider" in goal && typeof goal.tokensUsed === "number" ? (
+            <Text style={styles.caption}>
+              {t("providerControl.statistics.tokens")}: {goal.tokensUsed}
+              {typeof goal.tokenBudget === "number" ? ` / ${goal.tokenBudget}` : ""}
+            </Text>
+          ) : null}
+          {"blockedReason" in goal && goal.blockedReason ? (
+            <Text style={styles.error}>{goal.blockedReason}</Text>
+          ) : null}
         </View>
       ) : isGoal && result.status !== "error" ? (
         <Text style={styles.caption}>{t("providerControl.emptyGoal")}</Text>

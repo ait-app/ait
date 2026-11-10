@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ProviderUiState } from "@ait/protocol/messages";
 import { ProviderRuntimePanel } from "./provider-runtime-panel";
 
@@ -14,24 +14,30 @@ const fixture = vi.hoisted(() => ({
 vi.mock("@/runtime/host-runtime", () => ({
   useHostRuntimeClient: () => ({ runNativeAction: fixture.run }),
 }));
-vi.mock("@/stores/session-store", () => ({
-  useSessionStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      sessions: {
-        server: {
-          agents: new Map([
-            [
-              "agent",
-              {
-                providerUi: fixture.state,
-                turn: { phase: fixture.mainTurnActive ? "open" : "idle" },
-              },
-            ],
-          ]),
-        },
+vi.mock("@/stores/session-store", () => {
+  const getState = () => ({
+    sessions: {
+      server: {
+        agents: new Map([
+          [
+            "agent",
+            {
+              providerUi: fixture.state,
+              turn: { phase: fixture.mainTurnActive ? "open" : "idle" },
+            },
+          ],
+        ]),
       },
-    }),
-}));
+    },
+  });
+  return {
+    useSessionStore: Object.assign(
+      (selector: (state: unknown) => unknown) => selector(getState()),
+      { getState },
+    ),
+  };
+});
+vi.mock("@/hooks/use-file-download", () => ({ useFileDownload: () => vi.fn() }));
 vi.mock("@/utils/open-external-url", () => ({ openExternalUrl: fixture.open }));
 vi.mock("./provider-side-questions", () => ({
   ProviderSideQuestions: () => <div data-testid="mock-side-question-panel">Side conversation</div>,
@@ -40,7 +46,11 @@ vi.mock("@/hooks/use-settings", () => ({
   useSettings: (selector: (state: unknown) => unknown) =>
     selector({ openInSidePane: { subagents: false } }),
 }));
-vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: () => "Open in browser" }) }));
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => (key === "providerControl.openBrowser" ? "Open in browser" : key),
+  }),
+}));
 afterEach(() => {
   cleanup();
   fixture.open.mockClear();
@@ -63,12 +73,13 @@ it("updates and removes native UI, preserves widget placement, and opens links o
   const above = render(
     <ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />,
   );
-  expect(screen.getByText("Build ready")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Build ready" })).toBeTruthy();
   expect(screen.queryByText(/First/)).toBeNull();
   expect(fixture.open).not.toHaveBeenCalled();
   fireEvent.click(screen.getByText("Open in browser"));
   expect(fixture.open).toHaveBeenCalledExactlyOnceWith("https://example.com/launch");
   render(<ProviderRuntimePanel serverId="server" agentId="agent" placement="belowEditor" />);
+  fireEvent.click(screen.getByTestId("provider-control-toggle-widget:summary"));
   expect(screen.getByText(/First.*Second/)).toBeTruthy();
   fixture.state = { ...fixture.state, statuses: [], widgets: [], link: null, title: null };
   above.rerender(
@@ -159,7 +170,7 @@ it("shows active director controls and reserves no space for idle Vibe", () => {
   disabled.rerender(
     <ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />,
   );
-  expect(disabled.container.innerHTML).toBe("");
+  expect(screen.getByTestId("provider-vibe")).toBeTruthy();
 });
 
 it("does not reserve message-area space for toolbar actions", () => {
@@ -213,11 +224,11 @@ it("keeps exactly one side conversation as workers become active and finish repe
     };
     view.rerender(<ProviderRuntimePanel {...props} />);
     expect(screen.getAllByTestId("mock-side-question-panel")).toHaveLength(1);
-    expect(Boolean(screen.queryByTestId("provider-vibe"))).toBe(active);
+    expect(Boolean(screen.queryByTestId("provider-vibe"))).toBe(true);
   }
 });
 
-it("does not attempt to exit director mode while the main turn owns the session", () => {
+it("allows native Vibe teardown while the main turn is running", async () => {
   fixture.mainTurnActive = true;
   fixture.state = {
     statuses: [],
@@ -233,7 +244,118 @@ it("does not attempt to exit director mode while the main turn owns the session"
     },
   };
   render(<ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />);
-  expect(screen.getByTestId("provider-vibe-exit")).toHaveProperty("disabled", true);
-  fireEvent.click(screen.getByTestId("provider-vibe-exit"));
+  expect(screen.getByTestId("provider-vibe-exit")).toHaveProperty("disabled", false);
+  await act(async () => fireEvent.click(screen.getByTestId("provider-vibe-exit")));
+  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "vibe_control", {
+    operation: "toggle",
+    enabled: "false",
+  });
+});
+
+it("offers draft recovery after a plugin fills the editor and binds it to the owning conversation", () => {
+  fixture.state = {
+    statuses: [],
+    widgets: [],
+    title: null,
+    link: null,
+    editor: { id: "recoverable-plugin-draft", text: "Plugin text" },
+  };
+  const restore = vi.fn();
+  const onEditor = vi.fn(() => restore);
+  const view = render(
+    <ProviderRuntimePanel
+      serverId="server"
+      agentId="agent"
+      placement="aboveEditor"
+      onEditor={onEditor}
+    />,
+  );
+  fireEvent.click(screen.getByTestId("provider-editor-restore"));
+  expect(restore).toHaveBeenCalledOnce();
+  expect(screen.queryByTestId("provider-editor-restore")).toBeNull();
+  view.rerender(
+    <ProviderRuntimePanel serverId="other-server" agentId="other-owner" placement="aboveEditor" />,
+  );
+  expect(screen.queryByTestId("provider-editor-restore")).toBeNull();
+});
+
+it("keeps authoritative Goal controls above the editor and binds actions to the displayed goal", async () => {
+  fixture.state = {
+    statuses: [],
+    widgets: [],
+    title: null,
+    editor: null,
+    link: null,
+    goal: {
+      type: "provider_command",
+      id: "current-goal",
+      command: "goal",
+      status: "success",
+      text: "Goal active",
+      goal: {
+        provider: "omp",
+        id: "native-goal",
+        phase: "active",
+        objective: "Complete the real Tai task",
+      },
+      actions: [
+        { id: "pause", command: "/goal pause" },
+        { id: "clear", command: "/goal drop" },
+      ],
+    },
+    vibe: { enabled: true, workers: [] },
+  };
+  const view = render(
+    <ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />,
+  );
+  expect(screen.getByText("Complete the real Tai task")).toBeTruthy();
+  fireEvent.click(screen.getByTestId("provider-control-toggle-goal:native-goal"));
+  expect(screen.getByTestId("provider-control-content-goal:native-goal").style.display).toBe(
+    "none",
+  );
   expect(fixture.run).not.toHaveBeenCalled();
+  expect(screen.getByTestId("provider-control-toggle-vibe")).toBeTruthy();
+  fireEvent.click(screen.getByTestId("provider-control-toggle-goal:native-goal"));
+  await act(async () => fireEvent.click(screen.getByText("providerControl.actions.pause")));
+  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "goal", {
+    op: "pause",
+    expectedGoalId: "native-goal",
+  });
+  // RPC admission alone is not a confirmed paused state; only the owner snapshot changes it.
+  expect(screen.getAllByText("providerControl.status.active").length).toBeGreaterThan(0);
+  fixture.state = { ...fixture.state, goal: undefined };
+  view.rerender(<ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />);
+  expect(screen.queryByTestId("provider-control-toggle-goal:native-goal")).toBeNull();
+});
+
+it("refuses a stale Goal button after the owner receives another native goal", async () => {
+  fixture.state = {
+    statuses: [],
+    widgets: [],
+    title: null,
+    editor: null,
+    link: null,
+    goal: {
+      type: "provider_command",
+      id: "current",
+      command: "goal",
+      status: "success",
+      text: "",
+      goal: { provider: "omp", id: "old-goal", phase: "active", objective: "Old objective" },
+      actions: [{ id: "pause", command: "/goal pause" }],
+    },
+  };
+  render(<ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />);
+  const toggle = screen.getByTestId("provider-control-toggle-goal:old-goal");
+  if (toggle.getAttribute("aria-expanded") !== "true") fireEvent.click(toggle);
+  fixture.state = {
+    ...fixture.state,
+    goal: {
+      ...fixture.state.goal!,
+      goal: { provider: "omp", id: "new-goal", phase: "active", objective: "New objective" },
+    },
+  };
+  await act(async () => fireEvent.click(screen.getByText("providerControl.actions.pause")));
+  expect(fixture.run).not.toHaveBeenCalled();
+  expect(screen.getByText("providerControl.goalChanged")).toBeTruthy();
 });

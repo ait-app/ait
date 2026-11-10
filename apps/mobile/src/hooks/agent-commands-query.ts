@@ -20,8 +20,26 @@ export function agentCommandsQueryRoot(serverId: string) {
   return [AGENT_COMMANDS_QUERY_ROOT, serverId] as const;
 }
 
-export function sessionAgentCommandsQueryKey(input: { serverId: string; agentId: string }) {
-  return [...agentCommandsQueryRoot(input.serverId), "session", input.agentId] as const;
+export interface SessionCommandContext {
+  provider: string;
+  cwd: string;
+  nativeSessionId: string | null;
+}
+
+export function sessionAgentCommandsQueryKey(input: {
+  serverId: string;
+  agentId: string;
+  context?: SessionCommandContext;
+}) {
+  const owner = [...agentCommandsQueryRoot(input.serverId), "session", input.agentId] as const;
+  return input.context
+    ? ([
+        ...owner,
+        input.context.provider,
+        normalizeAgentCommandsCwd(input.context.cwd),
+        input.context.nativeSessionId,
+      ] as const)
+    : owner;
 }
 
 export function draftAgentCommandsQueryKey(input: {
@@ -50,6 +68,7 @@ export function agentCommandsQueryKey(input: {
   serverId: string;
   agentId: string;
   draftConfig?: AgentCommandsDraftConfig;
+  context?: SessionCommandContext;
 }) {
   if (input.draftConfig) {
     return draftAgentCommandsQueryKey({
@@ -57,5 +76,9 @@ export function agentCommandsQueryKey(input: {
       draftConfig: input.draftConfig,
     });
   }
-  return sessionAgentCommandsQueryKey({ serverId: input.serverId, agentId: input.agentId });
+  return sessionAgentCommandsQueryKey({
+    serverId: input.serverId,
+    agentId: input.agentId,
+    context: input.context,
+  });
 }

@@ -132,25 +132,30 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it.each([false, true])("live session custom selection respects native ownership = %s", (native) => {
-  fixture.native = native;
-  const queries = new QueryClient();
-  render(
-    <QueryClientProvider client={queries}>
-      <AgentControls serverId="host" agentId="agent" isCompactLayout={false} />
-    </QueryClientProvider>,
-  );
-  act(() => fixture.controls!.features!.set!("modelPreset", "__custom__"));
-  if (native) {
-    expect(fixture.feature).toHaveBeenCalledExactlyOnceWith("agent", "modelPreset", "__custom__");
-    expect(fixture.preferences).toHaveBeenCalledOnce();
-  } else {
-    expect(fixture.feature).not.toHaveBeenCalled();
-    expect(fixture.preferences).not.toHaveBeenCalled();
-  }
-  expect(fixture.apply).not.toHaveBeenCalled();
-  queries.clear();
-});
+it.each([false, true])(
+  "live session custom selection respects native ownership = %s",
+  async (native) => {
+    fixture.native = native;
+    const queries = new QueryClient();
+    render(
+      <QueryClientProvider client={queries}>
+        <AgentControls serverId="host" agentId="agent" isCompactLayout={false} />
+      </QueryClientProvider>,
+    );
+    await act(async () => {
+      await fixture.controls!.features!.set!("modelPreset", "__custom__");
+    });
+    if (native) {
+      expect(fixture.feature).toHaveBeenCalledExactlyOnceWith("agent", "modelPreset", "__custom__");
+      expect(fixture.preferences).toHaveBeenCalledOnce();
+    } else {
+      expect(fixture.feature).not.toHaveBeenCalled();
+      expect(fixture.preferences).not.toHaveBeenCalled();
+    }
+    expect(fixture.apply).not.toHaveBeenCalled();
+    queries.clear();
+  },
+);
 
 it("renders advertised actions in the live composer toolbar and retains blocking", () => {
   const queries = new QueryClient();

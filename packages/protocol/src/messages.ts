@@ -727,15 +727,25 @@ export const ProviderCommandTimelineItemSchema = z.object({
     })
     .optional(),
   goal: z
-    .object({
-      id: z.string().min(1).max(1024),
-      revision: z.number().int().positive(),
-      phase: z.enum(["active", "paused", "blocked", "complete"]),
-      objective: z.string(),
-      rounds: z.number().int().nonnegative(),
-      maxRounds: z.number().int().positive(),
-      blockedReason: z.string().optional(),
-    })
+    .union([
+      z.object({
+        id: z.string().min(1).max(1024),
+        revision: z.number().int().positive(),
+        phase: z.enum(["active", "paused", "blocked", "complete"]),
+        objective: z.string(),
+        rounds: z.number().int().nonnegative(),
+        maxRounds: z.number().int().positive(),
+        blockedReason: z.string().optional(),
+      }),
+      z.object({
+        provider: z.literal("omp"),
+        id: z.string().min(1).max(1024),
+        phase: z.enum(["active", "paused", "blocked", "complete"]),
+        objective: z.string(),
+        tokensUsed: z.number().nonnegative().optional(),
+        tokenBudget: z.number().positive().optional(),
+      }),
+    ])
     .nullable()
     .optional(),
   actions: z
@@ -933,6 +943,8 @@ const AgentActiveTurnPayloadSchema = z.object({
 });
 
 export const ProviderUiStateSchema = z.object({
+  // Current native Goal, distinct from its immutable command history.
+  goal: ProviderCommandTimelineItemSchema.optional(),
   sideQuestions: z
     .object({
       records: z

@@ -384,15 +384,25 @@ export interface ProviderCommandTimelineItem {
     size: number;
     mimeType: "application/zip";
   };
-  goal?: {
-    id: string;
-    revision: number;
-    phase: "active" | "paused" | "blocked" | "complete";
-    objective: string;
-    rounds: number;
-    maxRounds: number;
-    blockedReason?: string;
-  } | null;
+  goal?:
+    | {
+        id: string;
+        revision: number;
+        phase: "active" | "paused" | "blocked" | "complete";
+        objective: string;
+        rounds: number;
+        maxRounds: number;
+        blockedReason?: string;
+      }
+    | {
+        provider: "omp";
+        id: string;
+        phase: "active" | "paused" | "blocked" | "complete";
+        objective: string;
+        tokensUsed?: number;
+        tokenBudget?: number;
+      }
+    | null;
   actions?: { id: "pause" | "resume" | "edit" | "clear"; command: string }[];
 }
 

@@ -1,3 +1,4 @@
+import { applyRuntimeFeature } from "./runtime-features";
 import {
   memo,
   useCallback,
@@ -13,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
 import { router } from "expo-router";
+import { isWeb } from "@/constants/platform";
 import {
   View,
   Text,
@@ -151,7 +153,7 @@ interface ControlledAgentControlsProps {
   onCreateAgentProfile?: (seed: AgentProfileSeed) => void;
   onEditAgentProfile?: (profileId: string) => void;
   features?: AgentFeature[];
-  onSetFeature?: (featureId: string, value: unknown) => void;
+  onSetFeature?: (featureId: string, value: unknown) => void | Promise<void>;
   onDropdownClose?: () => void;
   onModelSelectorOpen?: () => void;
   onRetryModelProvider?: (provider: AgentProvider) => void;
@@ -179,7 +181,7 @@ export interface DraftAgentControlsProps {
   onSelectThinkingOption: (thinkingOptionId: string) => void;
   onApplyAgentProfile: DraftAgentProfileControls["applyProfile"];
   features?: AgentFeature[];
-  onSetFeature?: (featureId: string, value: unknown) => void;
+  onSetFeature?: (featureId: string, value: unknown) => void | Promise<void>;
   onDropdownClose?: () => void;
   onModelSelectorOpen?: () => void;
   onRetryModelProvider?: (provider: AgentProvider) => void;
@@ -197,6 +199,7 @@ interface AgentControlsProps {
   onDropdownClose?: () => void;
   isCompactLayout?: boolean;
   nativeActionsBlocked?: boolean;
+  onComposeCommand?: (text: string) => void;
 }
 
 function AgentControlCommandCenterRegistration({
@@ -263,7 +266,7 @@ function getFeatureIconColor(
     case "yellow":
       return palette.yellow[400];
     default:
-      return foregroundMuted;
+      return palette.blue[400];
   }
 }
 
@@ -837,7 +840,7 @@ function ControlledAgentControls({
     (featureId: string, value: unknown) => {
       if (featureId.startsWith("modelRole.") || featureId === "modelPreset")
         onModelSelectorOpen?.();
-      onSetFeature?.(featureId, value);
+      return onSetFeature?.(featureId, value);
     },
     [onModelSelectorOpen, onSetFeature],
   );
@@ -963,7 +966,7 @@ interface DesktopAgentControlsContentProps {
   selectedThinkingOptionId?: string;
   features?: AgentFeature[];
   modelFeatures: AgentFeature[];
-  onSetFeature?: (featureId: string, value: unknown) => void;
+  onSetFeature?: (featureId: string, value: unknown) => void | Promise<void>;
   onApplyAgentProfile?: (profileId: string) => void;
   onEditAgentProfiles?: () => void;
   onCreateAgentProfile?: (seed: AgentProfileSeed) => void;
@@ -1264,7 +1267,7 @@ interface SheetAgentControlsContentProps {
   selectedThinkingOptionId?: string;
   features?: AgentFeature[];
   modelFeatures: AgentFeature[];
-  onSetFeature?: (featureId: string, value: unknown) => void;
+  onSetFeature?: (featureId: string, value: unknown) => void | Promise<void>;
   onApplyAgentProfile?: (profileId: string) => void;
   onEditAgentProfiles?: () => void;
   onCreateAgentProfile?: (seed: AgentProfileSeed) => void;
@@ -1493,10 +1496,11 @@ function DesktopFeatureItem({
   disabled: boolean;
   openSelector: AgentControlSelector | null;
   handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
-  onSetFeature?: (featureId: string, value: unknown) => void;
+  onSetFeature?: (featureId: string, value: unknown) => void | Promise<void>;
   onActionComplete?: () => void;
 }) {
   const { theme } = useUnistyles();
+  const [pending, setPending] = useState(false);
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
   const featureAnchorRef = useRef<View>(null);
   const renderFeatureOption = useFeatureOptionRenderer(feature, theme.colors.foreground);
@@ -1510,12 +1514,16 @@ function DesktopFeatureItem({
     [featureSelector, handleFeatureOpenChange, openSelector],
   );
 
-  const handleTogglePress = useCallback(() => {
-    if (feature.type === "toggle") {
-      onSetFeature?.(feature.id, !feature.value);
+  const handleTogglePress = useCallback(async () => {
+    if (feature.type !== "toggle" || pending || disabled) return;
+    setPending(true);
+    try {
+      await onSetFeature?.(feature.id, !feature.value);
       onActionComplete?.();
+    } finally {
+      setPending(false);
     }
-  }, [feature, onActionComplete, onSetFeature]);
+  }, [feature, pending, disabled, onSetFeature, onActionComplete]);
 
   const handleSelectOption = useCallback(
     (optionId: string) => {
@@ -1539,7 +1547,7 @@ function DesktopFeatureItem({
       <SpeedToggle
         feature={feature}
         surface="toolbar"
-        disabled={disabled}
+        disabled={disabled || pending}
         onSetFeature={onSetFeature}
         onActionComplete={onActionComplete}
       />
@@ -1553,6 +1561,9 @@ function DesktopFeatureItem({
         <TooltipTrigger asChild triggerRefProp="ref">
           <AgentControlTrigger
             icon={FeatureIcon}
+            accessibilityState={{ selected: feature.value, busy: pending }}
+            busy={pending}
+            aria-pressed={isWeb ? feature.value : undefined}
             iconColor={getFeatureIconColor(
               feature,
               theme.colors.palette,
@@ -1561,7 +1572,7 @@ function DesktopFeatureItem({
             surface="toolbar"
             label={feature.label}
             showToolbarLabel={false}
-            disabled={disabled}
+            disabled={disabled || pending}
             onPress={handleTogglePress}
             accessibilityLabel={getFeatureTooltip(feature)}
             testID={`agent-feature-${feature.id}`}
@@ -1598,7 +1609,7 @@ function DesktopFeatureItem({
               value={selectedOption?.label ?? feature.label}
               showToolbarLabel={!iconOnly}
               open={openSelector === featureSelector}
-              disabled={disabled}
+              disabled={disabled || pending}
               onPress={handleSelectPress}
               accessibilityLabel={tooltip}
               testID={`agent-feature-${feature.id}`}
@@ -1636,9 +1647,10 @@ function SheetFeatureItem({
   disabled: boolean;
   openSelector: AgentControlSelector | null;
   handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
-  onSetFeature?: (featureId: string, value: unknown) => void;
+  onSetFeature?: (featureId: string, value: unknown) => void | Promise<void>;
 }) {
   const { theme } = useUnistyles();
+  const [pending, setPending] = useState(false);
   const { t } = useTranslation();
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
   const featureAnchorRef = useRef<View>(null);
@@ -1656,9 +1668,13 @@ function SheetFeatureItem({
 
   const handleSelectOption = useCallback(
     (optionId: string) => {
-      onSetFeature?.(feature.id, feature.type === "toggle" ? optionId === "true" : optionId);
+      if (pending || disabled) return;
+      setPending(true);
+      Promise.resolve(
+        onSetFeature?.(feature.id, feature.type === "toggle" ? optionId === "true" : optionId),
+      ).finally(() => setPending(false));
     },
-    [feature.id, feature.type, onSetFeature],
+    [feature.id, feature.type, onSetFeature, pending, disabled],
   );
   const comboboxOptions = useMemo<ComboboxOption[]>(() => {
     if (feature.type === "select") {
@@ -1682,7 +1698,7 @@ function SheetFeatureItem({
       <SpeedToggle
         feature={feature}
         surface="sheet"
-        disabled={disabled}
+        disabled={disabled || pending}
         onSetFeature={onSetFeature}
       />
     );
@@ -1695,6 +1711,9 @@ function SheetFeatureItem({
         <AgentControlTrigger
           ref={featureAnchorRef}
           icon={FeatureIcon}
+          accessibilityState={{ selected: feature.value, busy: pending }}
+          busy={pending}
+          aria-pressed={isWeb ? feature.value : undefined}
           iconColor={getFeatureIconColor(
             feature,
             theme.colors.palette,
@@ -1704,7 +1723,7 @@ function SheetFeatureItem({
           label={feature.label}
           value={feature.value ? t("agentControls.features.on") : t("agentControls.features.off")}
           open={openSelector === featureSelector}
-          disabled={disabled}
+          disabled={disabled || pending}
           onPress={handleSelectPress}
           accessibilityLabel={getFeatureTooltip(feature)}
           testID={`agent-feature-${feature.id}`}
@@ -1741,7 +1760,7 @@ function SheetFeatureItem({
           label={feature.label}
           value={selectedOption?.label ?? feature.label}
           open={openSelector === featureSelector}
-          disabled={disabled}
+          disabled={disabled || pending}
           onPress={handleSelectPress}
           accessibilityLabel={getFeatureTooltip(feature)}
           testID={`agent-feature-${feature.id}`}
@@ -1795,6 +1814,7 @@ export const AgentControls = memo(function AgentControls({
   onDropdownClose,
   isCompactLayout,
   nativeActionsBlocked = false,
+  onComposeCommand,
 }: AgentControlsProps) {
   const { t } = useTranslation();
   const { updatePreferences } = useFormPreferences();
@@ -1992,44 +2012,29 @@ export const AgentControls = memo(function AgentControls({
   );
 
   const handleSetFeature = useCallback(
-    (featureId: string, value: unknown) => {
-      if (!client || !agentProvider) {
+    async (featureId: string, value: unknown) => {
+      if (!client || !agentProvider || isSyntheticPresetPlaceholder(features, featureId, value))
         return;
-      }
-      if (isSyntheticPresetPlaceholder(features, featureId, value)) return;
       try {
         const preset = modelPresetConfiguration(features, featureId, value);
         if (preset) {
-          void client
-            .applyAgentConfig(agentId, preset)
-            .then((notice) => showProviderNoticeToast(toast, notice))
-            .catch((error) => toast.error(toErrorMessage(error)));
+          showProviderNoticeToast(toast, await client.applyAgentConfig(agentId, preset));
           return;
         }
+        await applyRuntimeFeature(client, agentId, agentProvider, featureId, value);
+        await updatePreferences((current) =>
+          mergeProviderPreferences({
+            preferences: current,
+            provider: agentProvider,
+            updates: { featureValues: { [featureId]: value } },
+          }),
+        ).catch((error) =>
+          console.warn("[AgentControls] persist feature preference failed", error),
+        );
       } catch (error) {
         toast.error(toErrorMessage(error));
-        return;
       }
-      void updatePreferences((current) =>
-        mergeProviderPreferences({
-          preferences: current,
-          provider: agentProvider,
-          updates: {
-            featureValues: {
-              [featureId]: value,
-            },
-          },
-        }),
-      ).catch((error) => {
-        console.warn("[AgentControls] persist feature preference failed", error);
-      });
-      void client.setAgentFeature(agentId, featureId, value).catch((error) => {
-        console.warn("[AgentControls] setAgentFeature failed", error);
-        toast.error(toErrorMessage(error));
-      });
     },
-    // `features` resolves a preset option into a configuration; a stale closure would apply the
-    // previous catalog after a background refresh replaced it.
     [agentId, agentProvider, client, features, toast, updatePreferences],
   );
 
@@ -2133,6 +2138,7 @@ export const AgentControls = memo(function AgentControls({
               turnActive={nativeTurnActive}
               disabled={!client || nativeActionsBlocked}
               onClose={onDropdownClose}
+              onComposeCommand={onComposeCommand}
             />
           ) : null
         }

@@ -25,7 +25,14 @@ export const ar: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    runtimeControls: "حالة التشغيل",
+    goalChanged: "تغير الهدف. استخدم عناصر التحكم في الهدف الحالي.",
+    restoreDraft: "استعادة المسودة السابقة",
+    expandWidget: "عرض التفاصيل",
+    collapseWidget: "إخفاء التفاصيل",
+
     groups: {
+      extensions: "أوامر الإضافات",
       conversation: "المحادثة",
       history: "السجل",
       tasks: "المهام",

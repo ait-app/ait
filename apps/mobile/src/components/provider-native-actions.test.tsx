@@ -4,7 +4,17 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ProviderNativeActions } from "./provider-native-actions";
 
-const fixture = vi.hoisted(() => ({ run: vi.fn(), send: vi.fn(), download: vi.fn() }));
+const fixture = vi.hoisted(() => ({
+  commands: [] as { name: string; source: string; description: string; argumentHint: string }[],
+  compose: vi.fn(),
+  localized: false,
+  run: vi.fn(),
+  send: vi.fn(),
+  download: vi.fn(),
+}));
+vi.mock("@/hooks/use-agent-commands-query", () => ({
+  useAgentCommandsQuery: () => ({ commands: fixture.commands }),
+}));
 vi.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({}) }));
 vi.mock("@/data/providers-snapshot", () => ({
   refreshOmpModelsOnAccess: vi.fn().mockResolvedValue(null),
@@ -177,17 +187,23 @@ vi.mock("@/components/ui/combobox", () => ({
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: { defaultValue?: string }) =>
-      ({
+      (fixture.localized && key === "providerControl.operations.get_session_stats"
+        ? "查看统计"
+        : undefined) ??
+      {
         "providerControl.moreActions": "More actions",
         "providerControl.runOperation": "Run",
         "common.loading": "Loading...",
         "panels.file.downloadFile": "Download",
-      })[key] ??
+      }[key] ??
       options?.defaultValue ??
       key,
   }),
 }));
 beforeEach(() => {
+  fixture.commands = [];
+  fixture.localized = false;
+  fixture.compose.mockReset();
   vi.stubGlobal("React", React);
   fixture.run.mockReset();
   fixture.send.mockReset().mockResolvedValue(undefined);
@@ -274,6 +290,7 @@ const all = [
 function mount(actions = all, surface: "composer" | "settings" = "composer") {
   const result = render(
     <ProviderNativeActions
+      onComposeCommand={fixture.compose}
       serverId="server"
       agentId="agent"
       cwd="/workspace"
@@ -314,75 +331,6 @@ it("groups task menus and never offers generic preset writes", () => {
   fireEvent.change(screen.getByLabelText("Search actions"), { target: { value: "preset" } });
   expect(screen.queryByRole("button", { name: "Delete preset" })).toBeNull();
   expect(fixture.run).not.toHaveBeenCalled();
-});
-it("shows statistics and downloads an export in the original host scope", async () => {
-  fixture.run.mockResolvedValueOnce({ text: "Statistics ready" }).mockResolvedValueOnce({
-    text: "Exported",
-    file: { path: "file.html", fileName: "file.html" },
-  });
-  mount();
-  choose("Statistics");
-  await act(async () => fireEvent.click(submit()));
-  expect(fixture.run).toHaveBeenCalledWith("agent", "get_session_stats", {});
-  expect(screen.getByText("Statistics ready")).toBeTruthy();
-  fireEvent.click(screen.getByText("Back"));
-  choose("Export");
-  await act(async () => fireEvent.click(submit()));
-  fireEvent.click(screen.getByText("Download"));
-  expect(fixture.download).toHaveBeenCalledWith({ path: "file.html", fileName: "file.html" });
-});
-it("changing spawn to list removes old parameters and sends only list", async () => {
-  fixture.run.mockResolvedValue({ text: "Done" });
-  mount();
-  choose("Vibe");
-  select("operation", "spawn");
-  select("cli", "fast");
-  fireEvent.change(screen.getByLabelText("prompt"), { target: { value: "Build board" } });
-  expect(submit().disabled).toBe(false);
-  select("operation", "list");
-  expect(screen.queryByLabelText("prompt")).toBeNull();
-  await act(async () => fireEvent.click(submit()));
-  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "vibe_control", {
-    operation: "list",
-  });
-  select("operation", "spawn");
-  expect(submit().disabled).toBe(true);
-});
-it("spawn requires both class and task; send requires a selected worker and guidance", async () => {
-  mount();
-  choose("Vibe");
-  select("operation", "spawn");
-  expect(submit().disabled).toBe(true);
-  fireEvent.click(submit());
-  expect(fixture.run).not.toHaveBeenCalled();
-  select("cli", "fast");
-  expect(submit().disabled).toBe(true);
-  select("operation", "send");
-  expect(submit().disabled).toBe(true);
-  select("sessionId", "worker-1");
-  fireEvent.change(screen.getByLabelText("message"), { target: { value: "Review accessibility" } });
-  expect(submit().disabled).toBe(false);
-  fixture.run.mockResolvedValue({ text: "Accepted" });
-  await act(async () => fireEvent.click(submit()));
-  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "vibe_control", {
-    operation: "send",
-    sessionId: "worker-1",
-    message: "Review accessibility",
-  });
-});
-it("Goal switching drops objective and budget, validates create before RPC", async () => {
-  fixture.run.mockResolvedValue({ text: "Goal" });
-  mount();
-  choose("Goal");
-  select("op", "create");
-  expect(submit().disabled).toBe(true);
-  fireEvent.change(screen.getByLabelText("objective"), { target: { value: "Deliver board" } });
-  fireEvent.change(screen.getByLabelText("token_budget"), { target: { value: "-1" } });
-  expect(submit().disabled).toBe(true);
-  select("op", "get");
-  expect(screen.queryByLabelText("objective")).toBeNull();
-  await act(async () => fireEvent.click(submit()));
-  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "goal", { op: "get" });
 });
 it("selects history entries by content and submits their bound target without text IDs", async () => {
   fixture.run
@@ -522,8 +470,8 @@ it("opens side question history in the existing topic panel instead of displayin
   mount([{ id: "get_btw_history", label: "Side question history", fields: [] }]);
   choose("Side question history");
   await act(async () => fireEvent.click(submit()));
-  expect(fixture.send).toHaveBeenCalledExactlyOnceWith("agent", "/btw");
-  expect(fixture.run).not.toHaveBeenCalled();
+  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "get_btw_history", {});
+  expect(fixture.send).not.toHaveBeenCalled();
   expect(screen.queryByTestId("agent-action-form")).toBeNull();
 });
 
@@ -593,102 +541,81 @@ it("offers only user messages for branching and explains bounded recent history"
   expect(screen.getByText("providerControl.tasks.recentHistory")).toBeTruthy();
 });
 
-it("enables Vibe through its acknowledged control without losing the pending worker task", async () => {
-  fixture.run.mockResolvedValue({ text: "Accepted" });
-  const props = {
-    serverId: "server",
-    agentId: "agent",
-    cwd: "/workspace",
-    actions: [vibe],
-    disabled: false,
-  };
-  const result = render(<ProviderNativeActions {...props} vibeEnabled={false} />);
-  fireEvent.click(screen.getByRole("button", { name: "More actions" }));
-  choose("Vibe");
-  select("operation", "spawn");
-  select("cli", "fast");
-  fireEvent.change(screen.getByLabelText("prompt"), {
-    target: { value: "Review the handoff card" },
+it("queries statistics with one click and requests a durable card without opening a form", async () => {
+  fixture.run.mockResolvedValue({ text: "Stats" });
+  mount();
+  await act(async () => choose("Statistics"));
+  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "get_session_stats", {
+    present: "true",
   });
-  expect(submit().disabled).toBe(true);
-  await act(async () => fireEvent.click(screen.getByTestId("native-enable-vibe")));
-  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "vibe_control", {
-    operation: "toggle",
-    enabled: "true",
-  });
-  expect(submit().disabled).toBe(true);
-  result.rerender(<ProviderNativeActions {...props} vibeEnabled />);
-  expect(screen.getByLabelText("prompt")).toHaveProperty("value", "Review the handoff card");
-  expect(submit().disabled).toBe(false);
-  await act(async () => fireEvent.click(submit()));
-  expect(fixture.run).toHaveBeenLastCalledWith("agent", "vibe_control", {
-    operation: "spawn",
-    cli: "fast",
-    prompt: "Review the handoff card",
-  });
+  expect(screen.queryByTestId("native-action-submit")).toBeNull();
 });
 
-it("does not dispatch Vibe controls when the daemon has no negotiated mode state", () => {
-  render(
-    <ProviderNativeActions
-      serverId="server"
-      agentId="agent"
-      cwd="/workspace"
-      actions={[vibe]}
-      disabled={false}
-    />,
-  );
-  fireEvent.click(screen.getByRole("button", { name: "More actions" }));
-  choose("Vibe");
-  select("operation", "list");
-  expect(screen.getByText("providerControl.tasks.vibeNotReady")).toBeTruthy();
-  expect(submit().disabled).toBe(true);
-  fireEvent.click(submit());
+it("does not expose generic Vibe, Goal or side-question task forms", () => {
+  mount();
+  for (const text of ["Vibe", "Goal"]) {
+    fireEvent.change(screen.getByLabelText("Search actions"), { target: { value: text } });
+    expect(screen.queryByRole("button", { name: text })).toBeNull();
+  }
+});
+
+it("fills plugin and native task commands in the composer without executing or guessing their semantics", () => {
+  fixture.commands = [
+    { name: "record", source: "extension", description: "Track work", argumentHint: "[work]" },
+    {
+      name: "status-toggle",
+      source: "extension",
+      description: "Custom workflow",
+      argumentHint: "",
+    },
+    {
+      name: "goal",
+      source: "builtin",
+      description: "Establish a goal",
+      argumentHint: "[objective]",
+    },
+  ];
+  mount();
+  choose("/record");
+  expect(fixture.compose).toHaveBeenCalledExactlyOnceWith("/record ");
   expect(fixture.run).not.toHaveBeenCalled();
+  expect(fixture.send).not.toHaveBeenCalled();
 });
 
-it("keeps pending results independent, preserves a previous result during refresh, and restores it after reopening", async () => {
-  let finishRefresh!: (value: { text: string }) => void;
-  fixture.run
-    .mockResolvedValueOnce({ text: "Statistics ready" })
-    .mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishRefresh = resolve;
-        }),
-    )
-    .mockResolvedValueOnce({ text: "Export ready" });
-  const onClose = vi.fn();
-  render(
-    <ProviderNativeActions
-      serverId="server"
-      agentId="agent"
-      cwd="/workspace"
-      actions={[stats, exportAction]}
-      disabled={false}
-      onClose={onClose}
-    />,
+it("executes only declared builtin queries directly; query-shaped plugin names still compose", async () => {
+  fixture.commands = [
+    { name: "tools", source: "builtin", description: "Available tools", argumentHint: "" },
+  ];
+  fixture.send.mockResolvedValue({});
+  mount();
+  await act(async () => choose("/tools"));
+  expect(fixture.send).toHaveBeenCalledExactlyOnceWith("agent", "/tools");
+  expect(fixture.compose).not.toHaveBeenCalled();
+});
+
+it("keeps query failures visible and prevents repeat clicks while the read is pending", async () => {
+  let reject!: (cause: Error) => void;
+  fixture.run.mockImplementation(
+    () =>
+      new Promise((_resolve, fail) => {
+        reject = fail;
+      }),
   );
-  const trigger = screen.getByRole("button", { name: "More actions" });
-  fireEvent.click(trigger);
+  mount();
   choose("Statistics");
-  await act(async () => fireEvent.click(submit()));
-  fireEvent.click(submit());
-  expect(screen.getByText("Statistics ready")).toBeTruthy();
-  fireEvent.click(screen.getByText("Back"));
-  choose("Export");
-  await act(async () => fireEvent.click(submit()));
-  expect(screen.getByText("Export ready")).toBeTruthy();
-  fireEvent.click(screen.getByText("Back"));
   choose("Statistics");
-  expect(submit().disabled).toBe(true);
-  expect(screen.getByText("Statistics ready")).toBeTruthy();
-  expect(screen.queryByText("Export ready")).toBeNull();
-  await act(async () => finishRefresh({ text: "New statistics" }));
-  fireEvent.click(screen.getByText("Close"));
-  expect(onClose).toHaveBeenCalledOnce();
-  fireEvent.click(trigger);
-  choose("Statistics");
-  expect(screen.getByText("New statistics")).toBeTruthy();
-  expect(fixture.run).toHaveBeenCalledTimes(3);
+  expect(fixture.run).toHaveBeenCalledOnce();
+  await act(async () => reject(new Error("Native read failed")));
+  expect(screen.getByRole("alert").textContent).toContain("Native read failed");
+});
+
+it("searches the translated label shown in the menu", async () => {
+  fixture.localized = true;
+  fixture.run.mockResolvedValue({ text: "Stats" });
+  mount();
+  fireEvent.change(screen.getByLabelText("Search actions"), { target: { value: "统计" } });
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: "查看统计" })));
+  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "get_session_stats", {
+    present: "true",
+  });
 });

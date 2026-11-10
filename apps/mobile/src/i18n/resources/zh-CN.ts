@@ -3,7 +3,14 @@ import { pluginSettings } from "./plugin-settings";
 
 export const zhCN: TranslationResources = {
   providerControl: {
+    runtimeControls: "运行状态",
+    goalChanged: "目标已变化，请使用当前目标的操作。",
+    restoreDraft: "恢复原草稿",
+    expandWidget: "展开信息详情",
+    collapseWidget: "收起信息详情",
+
     groups: {
+      extensions: "扩展命令",
       conversation: "会话",
       history: "历史",
       tasks: "任务",

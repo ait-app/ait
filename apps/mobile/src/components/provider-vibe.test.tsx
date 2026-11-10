@@ -34,20 +34,23 @@ it("shows director controls during worker execution without duplicating the shar
   expect(screen.queryByText("Fast worker: draft the change list")).toBeNull();
 });
 
-it.each([false, true])("hides an empty Vibe mode, enabled = %s", (enabled) => {
-  const view = render(<ProviderVibe state={{ enabled, workers: [] }} />);
-  expect(view.container.innerHTML).toBe("");
-});
+it.each([false, true])(
+  "shows the acknowledged mode independently of worker count, enabled = %s",
+  (enabled) => {
+    const view = render(<ProviderVibe state={{ enabled, workers: [] }} />);
+    expect(Boolean(view.queryByTestId("provider-vibe"))).toBe(enabled);
+  },
+);
 
 it.each(["completed", "failed", "canceled"] as const)(
-  "hides the director indicator when all workers are %s",
+  "keeps the director indicator when all workers are %s",
   (status) => {
     const view = render(
       <ProviderVibe
         state={{ enabled: true, workers: running.workers.map((worker) => ({ ...worker, status })) }}
       />,
     );
-    expect(view.container.innerHTML).toBe("");
+    expect(view.queryByTestId("provider-vibe")).toBeTruthy();
   },
 );
 

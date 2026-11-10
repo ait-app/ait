@@ -16,7 +16,14 @@ export const ptBR: TranslationResources = {
   },
   onlineService: en.onlineService,
   providerControl: {
+    runtimeControls: "Estado de execução",
+    goalChanged: "O objetivo mudou. Use os controles do objetivo atual.",
+    restoreDraft: "Restaurar rascunho anterior",
+    expandWidget: "Mostrar detalhes",
+    collapseWidget: "Ocultar detalhes",
+
     groups: {
+      extensions: "Comandos de extensões",
       conversation: "Conversa",
       history: "Histórico",
       tasks: "Tarefas",

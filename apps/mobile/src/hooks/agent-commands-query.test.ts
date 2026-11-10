@@ -73,3 +73,16 @@ describe("agent command query keys", () => {
     expect(agentCommandsQueryRoot("server-1")).toEqual(["agentCommands", "server-1"]);
   });
 });
+
+it("isolates a moved, replaced or switched provider session while retaining owner invalidation", () => {
+  const owner = { serverId: "host", agentId: "same-agent" };
+  const context = { provider: "omp", cwd: "/one", nativeSessionId: "native-one" };
+  const initial = agentCommandsQueryKey({ ...owner, context });
+  for (const changed of [
+    { ...context, provider: "pi" },
+    { ...context, cwd: "/two" },
+    { ...context, nativeSessionId: "native-two" },
+  ])
+    expect(agentCommandsQueryKey({ ...owner, context: changed })).not.toEqual(initial);
+  expect(initial.slice(0, 4)).toEqual(sessionAgentCommandsQueryKey(owner));
+});
