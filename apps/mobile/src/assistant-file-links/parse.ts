@@ -1,13 +1,6 @@
 import { ASSISTANT_FILE_EXTENSIONS } from "./extensions";
 import { isAbsolutePath } from "@/utils/path";
-
-function safeDecodeURIComponent(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
+import { safeDecodeURIComponent } from "@/utils/string";
 
 export interface InlinePathTarget {
   raw: string;

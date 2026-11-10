@@ -4,6 +4,7 @@ import type { ProviderSnapshotEntry } from "@ait/protocol/agent-types";
 import type { AgentProfile } from "@ait/protocol/messages";
 import { FormPreferencesSchema } from "@/create-agent-preferences/preferences";
 import { readValidatedJson, readValidatedString } from "@/storage/validated-storage";
+import { delay } from "@/utils/delay";
 
 const PREFERENCES_KEY = "@paseo:create-agent-preferences";
 const COMPLETION_KEY_PREFIX = "@paseo:legacy-favorites-to-agent-profiles:v1:";
@@ -130,10 +131,6 @@ function catalogIsLoading(
 ): boolean {
   const providers = new Set(favorites.map((favorite) => favorite.provider));
   return entries.some((entry) => providers.has(entry.provider) && entry.status === "loading");
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function readProviderCatalog(

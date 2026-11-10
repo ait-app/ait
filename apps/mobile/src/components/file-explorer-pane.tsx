@@ -63,7 +63,12 @@ import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
 import { usePanelStore, type ExpandedPathsUpdate, type SortOption } from "@/stores/panel-store";
-import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
+import {
+  buildAbsoluteExplorerPath,
+  isExplorerPathWithin,
+  pruneDeletedExplorerEntry,
+  pruneExplorerPathsWithin,
+} from "@/utils/explorer-paths";
 import { isHiddenExplorerPath } from "@/file-explorer/visibility";
 import {
   flattenExplorerTree,
@@ -478,6 +483,7 @@ export function FileExplorerPane({
     workspaceStateKey ? state.expandedPathsByWorkspace[workspaceStateKey] : undefined,
   );
   const setExpandedPathsForWorkspace = usePanelStore((state) => state.setExpandedPathsForWorkspace);
+  const setFileExplorer = useSessionStore((state) => state.setFileExplorer);
   const expandedPaths = useMemo(
     () => new Set(expandedPathsArray && expandedPathsArray.length > 0 ? expandedPathsArray : ["."]),
     [expandedPathsArray],
@@ -578,7 +584,7 @@ export function FileExplorerPane({
         return;
       }
       setExpandedPathsForWorkspace(workspaceStateKey, (currentPaths) =>
-        currentPaths.filter((expandedPath) => !isExplorerPathWithin(expandedPath, path)),
+        pruneExplorerPathsWithin(currentPaths, path),
       );
     },
     [setExpandedPathsForWorkspace, workspaceStateKey],
@@ -819,14 +825,36 @@ export function FileExplorerPane({
           toast.error(payload.error ?? t("workspace.fileExplorer.errors.deleteFailed"));
           return;
         }
-        if (selectedEntryPath === entry.path) {
-          selectExplorerEntry(null);
+        if (workspaceStateKey) {
+          setExpandedPathsForWorkspace(workspaceStateKey, (currentPaths) =>
+            pruneExplorerPathsWithin(currentPaths, entry.path),
+          );
+          setFileExplorer(serverId, (previous) => {
+            const current = previous.get(workspaceStateKey);
+            if (!current) {
+              return previous;
+            }
+            const next = new Map(previous);
+            next.set(workspaceStateKey, {
+              ...current,
+              ...pruneDeletedExplorerEntry(current, entry.path),
+            });
+            return next;
+          });
         }
       } catch (cause) {
         toast.error(cause instanceof Error ? cause.message : String(cause));
       }
     },
-    [deleteEntry, selectExplorerEntry, selectedEntryPath, t, toast],
+    [
+      deleteEntry,
+      serverId,
+      setExpandedPathsForWorkspace,
+      setFileExplorer,
+      t,
+      toast,
+      workspaceStateKey,
+    ],
   );
 
   const handleSortCycle = useCallback(() => {
@@ -1523,10 +1551,6 @@ function TreeRowDispatcher({
       testID={`file-explorer-row-${index}`}
     />
   );
-}
-
-function isExplorerPathWithin(candidatePath: string, parentPath: string): boolean {
-  return candidatePath === parentPath || candidatePath.startsWith(`${parentPath}/`);
 }
 
 function replaceExplorerPathPrefix(

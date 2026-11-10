@@ -5,6 +5,7 @@ import {
 } from "@/desktop/host";
 import type { BrowserViewport } from "@/desktop/browser/store";
 import { WEB_SURFACE_PLANE } from "@/lib/overlay-root";
+import { trimNonEmpty } from "@/utils/string";
 
 const RESIDENT_BROWSER_HOST_ID = "paseo-browser-resident-webviews";
 const BROWSER_ID_ATTRIBUTE = "data-paseo-browser-id";
@@ -72,14 +73,6 @@ function registerBrowserWhenAttached(
         console.error("[browser-webview] attached registration failed", error);
       });
   });
-}
-
-function trimNonEmpty(value: string | null | undefined): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }
 
 function readDocument(): Document | null {

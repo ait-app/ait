@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vitest";
 import {
+  applyBrowserGuestPermissionPolicy,
   clearPaseoBrowserProfile,
   getLegacyPaseoBrowserProfileSession,
   getPaseoBrowserProfileSessions,
+  isBrowserGuestPermissionAllowed,
   listPaseoBrowserProfileGuests,
   readLegacyPaseoBrowserIds,
 } from "./browser-profile.js";
@@ -204,5 +206,54 @@ describe("clearPaseoBrowserProfile", () => {
       }),
     ).rejects.toBe(clearError);
     expect(guest.reloads).toBe(0);
+  });
+});
+
+describe("browser guest permission policy", () => {
+  test("denies device, clipboard-read and notification access unless explicitly allowed", () => {
+    for (const permission of [
+      "media",
+      "clipboard-read",
+      "deprecated-sync-clipboard-read",
+      "notifications",
+      "geolocation",
+      "display-capture",
+      "midi",
+      "hid",
+      "serial",
+      "usb",
+      "unknown",
+    ]) {
+      expect(isBrowserGuestPermissionAllowed(permission)).toBe(false);
+    }
+  });
+
+  test("keeps page copy buttons and video fullscreen working", () => {
+    expect(isBrowserGuestPermissionAllowed("clipboard-sanitized-write")).toBe(true);
+    expect(isBrowserGuestPermissionAllowed("fullscreen")).toBe(true);
+  });
+
+  test("installs the same decision on both the request and the check handler", () => {
+    let requestHandler!: (
+      contents: unknown,
+      permission: string,
+      callback: (granted: boolean) => void,
+    ) => void;
+    let checkHandler!: (contents: unknown, permission: string) => boolean;
+    applyBrowserGuestPermissionPolicy({
+      setPermissionRequestHandler: (handler) => {
+        requestHandler = handler;
+      },
+      setPermissionCheckHandler: (handler) => {
+        checkHandler = handler;
+      },
+    });
+
+    const granted: boolean[] = [];
+    requestHandler(null, "media", (value) => granted.push(value));
+    requestHandler(null, "fullscreen", (value) => granted.push(value));
+    expect(granted).toEqual([false, true]);
+    expect(checkHandler(null, "notifications")).toBe(false);
+    expect(checkHandler(null, "clipboard-sanitized-write")).toBe(true);
   });
 });

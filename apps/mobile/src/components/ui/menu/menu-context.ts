@@ -10,6 +10,7 @@ import {
   type MenuPath,
 } from "./menu-navigation";
 import type { Rect } from "./menu-anchor";
+import { useControllableOpenState } from "@/components/ui/use-controllable-open-state";
 
 /**
  * How a menu draws itself once it is open.
@@ -66,28 +67,6 @@ export const MenuDepthProvider = MenuDepthContext.Provider;
 
 export function useMenuDepth(): number {
   return useContext(MenuDepthContext);
-}
-
-function useControllableOpenState({
-  open,
-  defaultOpen,
-  onOpenChange,
-}: {
-  open?: boolean;
-  defaultOpen?: boolean;
-  onOpenChange?: (open: boolean) => void;
-}): [boolean, (next: boolean) => void] {
-  const [internalOpen, setInternalOpen] = useState(Boolean(defaultOpen));
-  const isControlled = typeof open === "boolean";
-  const value = isControlled ? open : internalOpen;
-  const setValue = useCallback(
-    (next: boolean) => {
-      if (!isControlled) setInternalOpen(next);
-      onOpenChange?.(next);
-    },
-    [isControlled, onOpenChange],
-  );
-  return [value, setValue];
 }
 
 /**

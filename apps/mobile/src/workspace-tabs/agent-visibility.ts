@@ -2,6 +2,7 @@ import type { Agent } from "@/stores/session-store";
 import type { WorkspaceTabSnapshot } from "@/stores/workspace-layout-actions";
 import { isWorkspaceRootAgent } from "@/subagents/policies";
 import { normalizeWorkspaceOpaqueId } from "@/utils/workspace-identity";
+import { areSetsEqual } from "@/utils/set-equality";
 
 export interface WorkspaceAgentVisibility {
   activeAgentIds: Set<string>;
@@ -112,21 +113,9 @@ export function workspaceAgentVisibilityEqual(
 ): boolean {
   return (
     a === b ||
-    (setsEqual(a.activeAgentIds, b.activeAgentIds) &&
-      setsEqual(a.autoOpenAgentIds, b.autoOpenAgentIds))
+    (areSetsEqual(a.activeAgentIds, b.activeAgentIds) &&
+      areSetsEqual(a.autoOpenAgentIds, b.autoOpenAgentIds))
   );
-}
-
-function setsEqual(a: Set<string>, b: Set<string>): boolean {
-  if (a.size !== b.size) {
-    return false;
-  }
-  for (const item of a) {
-    if (!b.has(item)) {
-      return false;
-    }
-  }
-  return true;
 }
 
 // Prune agent tabs that are no longer active once agents are hydrated.

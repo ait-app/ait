@@ -98,6 +98,18 @@ describe("desktop-settings", () => {
     expect(files).toEqual(["desktop-settings.json"]);
   });
 
+  it("falls back to defaults when the settings file is corrupted", async () => {
+    const userDataPath = await createTempUserDataDir();
+    directories.add(userDataPath);
+    await writeFile(settingsFilePath(userDataPath), "{ not json");
+    const store = createDesktopSettingsStore({ userDataPath });
+
+    await expect(store.get()).resolves.toEqual(DEFAULT_DESKTOP_SETTINGS);
+    await expect(store.patch({ notifications: { playSound: false } })).resolves.toMatchObject({
+      notifications: { playSound: false },
+    });
+  });
+
   it("coerces invalid persisted values back to safe defaults", async () => {
     const userDataPath = await createTempUserDataDir();
     directories.add(userDataPath);

@@ -17,7 +17,6 @@ export interface UseDictationResult {
   isRecording: boolean;
   isRecordingActive: () => boolean;
   isProcessing: boolean;
-  partialTranscript: string;
   volume: number;
   duration: number;
   error: string | null;
@@ -27,7 +26,6 @@ export interface UseDictationResult {
   confirmDictation: () => Promise<void>;
   retryFailedDictation: () => Promise<void>;
   discardFailedDictation: () => void;
-  reset: () => void;
 }
 
 export const DURATION_TICK_MS = 1000;

@@ -67,6 +67,7 @@ import { getActivityVerb, getStateLabel } from "./data";
 import type { PrPaneActivity, PrPaneCheck, PrPaneData, PrState } from "./data";
 import type { ForgeSpecificStatusFacts } from "@/git/merge-capability";
 import { CheckPresentationIcon } from "@/git/check-presentation.view";
+import { displayInitial } from "@/utils/display-initial";
 import {
   buildPrTimeline,
   type PrReviewEntry,
@@ -753,7 +754,7 @@ function ActivityAvatar({ activity, size }: { activity: PrPaneActivity; size: nu
       {imageSource ? (
         <Image source={imageSource} style={imageStyle} />
       ) : (
-        <Text style={styles.avatarText}>{activity.author.slice(0, 1).toUpperCase()}</Text>
+        <Text style={styles.avatarText}>{displayInitial(activity.author)}</Text>
       )}
     </View>
   );

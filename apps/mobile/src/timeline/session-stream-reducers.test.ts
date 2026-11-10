@@ -629,7 +629,7 @@ describe("processTimelineResponse", () => {
     expect(result.head).toBe(currentHead);
     expect(result.cursorChanged).toBe(false);
     expect(result.acknowledgedClientMessageIds).toEqual([]);
-    expect(result.sideEffects).toEqual([{ type: "flush_pending_updates" }]);
+    expect(result.sideEffects).toEqual([]);
   });
 
   it("atomically replaces history when a resume tail leaves a middle gap", () => {
@@ -662,7 +662,7 @@ describe("processTimelineResponse", () => {
     expect(result.commit).toBe("apply");
     expect(getUserTexts(result.tail)).toEqual(["latest 200", "latest 240"]);
     expect(result.cursor).toEqual({ epoch: "epoch-1", startSeq: 200, endSeq: 240 });
-    expect(result.sideEffects).toEqual([{ type: "flush_pending_updates" }]);
+    expect(result.sideEffects).toEqual([]);
   });
 
   it("reconciles in-flight live rows and an unresolved submission during gap replacement", () => {
@@ -890,7 +890,6 @@ describe("processTimelineResponse", () => {
       endSeq: 3,
     });
     expect(result.error).toBe(null);
-    expect(result.sideEffects.some((e) => e.type === "flush_pending_updates")).toBe(true);
   });
 
   it("keeps a live assistant and submitted head prompt in one lane during replacement", () => {
@@ -2962,6 +2961,63 @@ describe("processTimelineResponse", () => {
     expect(result.older).toBe("none");
   });
 
+  it("keeps assistant messages with different ids separate across a prepended page", () => {
+    const newer: StreamItem = {
+      ...makeAssistantItem("newer reply", "newer"),
+      messageId: "message-2",
+      timelineCursor: { epoch: "epoch-1", seq: 3 },
+    };
+
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [newer],
+      currentCursor: { epoch: "epoch-1", startSeq: 3, endSeq: 3 },
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "before",
+        epoch: "epoch-1",
+        startCursor: { seq: 2 },
+        endCursor: { seq: 2 },
+        entries: [
+          {
+            ...makeTimelineEntry(2, "older reply"),
+            item: { type: "assistant_message", text: "older reply", messageId: "message-1" },
+          },
+        ],
+      },
+    });
+
+    expect(getAssistantTexts(result.tail)).toEqual(["older reply", "newer reply"]);
+  });
+
+  it("still joins an assistant message split by a prepended page when ids agree or are absent", () => {
+    const newer: StreamItem = {
+      ...makeAssistantItem(" second half", "newer"),
+      timelineCursor: { epoch: "epoch-1", seq: 3 },
+    };
+
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [newer],
+      currentCursor: { epoch: "epoch-1", startSeq: 3, endSeq: 3 },
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "before",
+        epoch: "epoch-1",
+        startCursor: { seq: 2 },
+        endCursor: { seq: 2 },
+        entries: [
+          {
+            ...makeTimelineEntry(2, "first half"),
+            item: { type: "assistant_message", text: "first half", messageId: "message-1" },
+          },
+        ],
+      },
+    });
+
+    expect(getAssistantTexts(result.tail)).toEqual(["first half second half"]);
+  });
+
   it("keeps only projected entries anchored in an older response page", () => {
     const currentTail: StreamItem[] = [
       {
@@ -4000,18 +4056,6 @@ describe("processTimelineResponse", () => {
     expect(result.initResolution).toBe(null);
   });
 
-  it("always includes flush_pending_updates side effect on success", () => {
-    const result = processTimelineResponse({
-      ...baseTimelineInput,
-      payload: {
-        ...baseTimelineInput.payload,
-        entries: [],
-      },
-    });
-
-    expect(result.sideEffects.some((e) => e.type === "flush_pending_updates")).toBe(true);
-  });
-
   it("initializes cursor when no existing cursor on first entries", () => {
     const result = processTimelineResponse({
       ...baseTimelineInput,
@@ -4250,7 +4294,39 @@ describe("processAgentStreamEvent", () => {
     expect(result.cursorChanged).toBe(false);
     expect(result.changedTail).toBe(false);
     expect(result.changedHead).toBe(false);
-    expect(result.sideEffects).toEqual([]);
+  });
+
+  it("catches up from the current cursor when a foreign-epoch event is dropped", () => {
+    const result = processAgentStreamEvent({
+      ...baseStreamInput,
+      event: makeTimelineEvent("from replaced epoch"),
+      seq: 7,
+      epoch: "epoch-2",
+      currentCursor: { epoch: "epoch-1", startSeq: 1, endSeq: 5 },
+      currentTail: [makeAssistantItem("retained")],
+    });
+
+    expect(getAssistantTexts(result.tail)).toEqual(["retained"]);
+    expect(result.cursorChanged).toBe(false);
+    expect(result.sideEffects).toEqual([
+      { type: "catch_up", cursor: { epoch: "epoch-1", endSeq: 5 } },
+    ]);
+  });
+
+  it("commits both lanes when an epoch reset applies an event to only one of them", () => {
+    const result = processAgentStreamEvent({
+      ...baseStreamInput,
+      event: makeTimelineEvent("new epoch reply"),
+      seq: 1,
+      epoch: "epoch-2",
+      currentCursor: { epoch: "epoch-1", startSeq: 1, endSeq: 5 },
+      currentTail: [makeAssistantItem("old row")],
+    });
+
+    expect(getAssistantTexts(result.tail)).toEqual([]);
+    expect(getAssistantTexts(result.head)).toEqual(["new epoch reply"]);
+    expect(result.changedTail).toBe(true);
+    expect(result.changedHead).toBe(true);
   });
 
   it("resets visible timeline when a new epoch starts at seq 1", () => {

@@ -58,6 +58,17 @@ describe("file and directory opening", () => {
       expect(shell.showItemInFolder).toHaveBeenCalledWith(path.join(root, "Tool.app"));
     },
   );
+  it.runIf(process.platform === "darwin")(
+    "reveals a symlink to an application bundle instead of launching it",
+    async () => {
+      const { root } = await fixture();
+      await mkdir(path.join(root, "Evil.app"));
+      await symlink(path.join(root, "Evil.app"), path.join(root, "Notes"));
+      expect(await openDirectoryLink({ path: "Notes", cwd: root })).toBe(true);
+      expect(shell.openPath).not.toHaveBeenCalled();
+      expect(shell.showItemInFolder).toHaveBeenCalledWith(path.join(root, "Evil.app"));
+    },
+  );
   it("rejects paths and symlinks outside managed preview storage", async () => {
     const { root } = await fixture();
     const outside = path.join(root, "secret");
@@ -83,3 +94,15 @@ it("requires explicit confirmation before opening executable previews", async ()
   await openPreviewFile(file);
   expect(shell.openPath).toHaveBeenCalledWith(file);
 });
+
+it.each([".msc", ".ws", ".jnlp", ".appref-ms", ".msix", ".appinstaller"])(
+  "requires confirmation before opening %s previews",
+  async (extension) => {
+    const { root } = await fixture();
+    const file = path.join(root, "desktop-attachments", `installer${extension}`);
+    await writeFile(file, "inert test data");
+    await openPreviewFile(file);
+    expect(dialog.showMessageBox).toHaveBeenCalledOnce();
+    expect(shell.openPath).not.toHaveBeenCalled();
+  },
+);

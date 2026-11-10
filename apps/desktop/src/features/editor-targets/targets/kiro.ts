@@ -1,13 +1,6 @@
-import type { EditorTarget, EditorTargetLaunchInput } from "../target.js";
+import { location, type EditorTarget, type EditorTargetLaunchInput } from "../target.js";
 
 const COMMANDS = ["kiro"] as const;
-
-function location(input: EditorTargetLaunchInput): string {
-  if (!input.line) return input.filePath!;
-  return input.column
-    ? `${input.filePath}:${input.line}:${input.column}`
-    : `${input.filePath}:${input.line}`;
-}
 
 function launchArgs(input: EditorTargetLaunchInput): string[] {
   if (!input.filePath) return ["ide", input.workspacePath];

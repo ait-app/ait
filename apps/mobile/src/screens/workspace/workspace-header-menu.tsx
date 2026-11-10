@@ -34,7 +34,7 @@ import type { Theme } from "@/styles/theme";
 import {
   useWorkspaceScriptsMenuPages,
   type UseWorkspaceScriptsMenuPagesInput,
-} from "@/screens/workspace/scripts";
+} from "@/screens/workspace/scripts/workspace-scripts-menu-pages";
 
 const ThemedEllipsis = withUnistyles(Ellipsis);
 const ThemedCopy = withUnistyles(Copy);

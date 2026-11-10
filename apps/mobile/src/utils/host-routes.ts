@@ -1,7 +1,7 @@
 import { buildAgentDeepLinkRoute } from "@ait/protocol/agent-deep-link";
 import { Buffer } from "buffer";
+import { safeDecodeURIComponent, trimNonEmpty } from "./string";
 
-type NullableString = string | null | undefined;
 const BASE64_WORKSPACE_ID_PREFIX = "b64_";
 
 function stripSearchAndHash(pathname: string): string {
@@ -29,24 +29,8 @@ function extractHash(pathname: string): string {
   return hashIndex >= 0 ? pathname.slice(hashIndex) : "";
 }
 
-function trimNonEmpty(value: NullableString): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
 function encodeSegment(value: string): string {
   return encodeURIComponent(value);
-}
-
-function decodeSegment(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
 }
 
 function toBase64UrlNoPad(input: string): string {
@@ -205,7 +189,7 @@ export function decodeWorkspaceIdFromPathSegment(workspaceIdSegment: string): st
     return null;
   }
 
-  const decoded = trimNonEmpty(decodeSegment(normalizedSegment));
+  const decoded = trimNonEmpty(safeDecodeURIComponent(normalizedSegment));
   if (!decoded) {
     return null;
   }
@@ -244,7 +228,7 @@ export function decodeFilePathFromPathSegment(filePathSegment: string): string |
   if (!normalizedSegment) {
     return null;
   }
-  const decoded = trimNonEmpty(decodeSegment(normalizedSegment));
+  const decoded = trimNonEmpty(safeDecodeURIComponent(normalizedSegment));
   if (!decoded) {
     return null;
   }
@@ -261,7 +245,7 @@ export function parseServerIdFromPathname(pathname: string): string | null {
   if (!raw) {
     return null;
   }
-  return trimNonEmpty(decodeSegment(raw));
+  return trimNonEmpty(safeDecodeURIComponent(raw));
 }
 
 export function parseHostAgentRouteFromPathname(
@@ -278,8 +262,8 @@ export function parseHostAgentRouteFromPathname(
     return null;
   }
 
-  const serverId = trimNonEmpty(decodeSegment(encodedServerId));
-  const agentId = trimNonEmpty(decodeSegment(encodedAgentId));
+  const serverId = trimNonEmpty(safeDecodeURIComponent(encodedServerId));
+  const agentId = trimNonEmpty(safeDecodeURIComponent(encodedAgentId));
   if (!serverId || !agentId) {
     return null;
   }
@@ -296,7 +280,7 @@ export function parseHostWorkspaceRouteFromPathname(
     return null;
   }
 
-  const serverId = trimNonEmpty(decodeSegment(match[1]));
+  const serverId = trimNonEmpty(safeDecodeURIComponent(match[1]));
   if (!serverId) {
     return null;
   }
@@ -321,7 +305,7 @@ export function stripHostWorkspaceRouteEchoSearch(route: string): string {
   let didStrip = false;
 
   const serverId = params.get("serverId");
-  if (serverId && trimNonEmpty(decodeSegment(serverId)) === selection.serverId) {
+  if (serverId && trimNonEmpty(safeDecodeURIComponent(serverId)) === selection.serverId) {
     params.delete("serverId");
     didStrip = true;
   }
@@ -402,22 +386,6 @@ export function buildHostRootRoute(serverId: string) {
     return "/" as const;
   }
   return `/h/${encodeSegment(normalized)}` as const;
-}
-
-export function buildHostOpenProjectRoute(serverId: string) {
-  const base = buildHostRootRoute(serverId);
-  if (base === "/") {
-    return "/" as const;
-  }
-  return `${base}/open-project` as const;
-}
-
-export function buildHostSessionsRoute(serverId: string) {
-  const base = buildHostRootRoute(serverId);
-  if (base === "/") {
-    return "/" as const;
-  }
-  return `${base}/sessions` as const;
 }
 
 export function buildSessionsRoute() {

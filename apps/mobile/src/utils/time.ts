@@ -87,16 +87,6 @@ export function formatCompactTimeAgo(date: Date, now: Date = new Date()): string
   return describeCompactTimeAgo(date, now).label;
 }
 
-/**
- * A compact label put back into a sentence, for a tooltip or a line with room for prose:
- * "now" → "just now", "5m" → "5m ago", "Jan 15" stays a date.
- */
-export function formatCompactTimeAgoAsProse(label: string): string {
-  if (label === "now") return "just now";
-  if (/^\d/.test(label)) return `${label} ago`;
-  return label;
-}
-
 function isSameLocalDay(a: Date, b: Date): boolean {
   return (
     a.getFullYear() === b.getFullYear() &&

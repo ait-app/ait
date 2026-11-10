@@ -68,6 +68,7 @@ import type { z } from "zod";
 import { create } from "zustand";
 import { persist, type StateStorage } from "zustand/middleware";
 import { WorkspaceLayoutPersistedStateSchema } from "./workspace-layout-storage";
+import { trimNonEmpty } from "@/utils/string";
 export {
   AMBIENT_PLACEMENT,
   canDismissPaneInLayout,
@@ -407,14 +408,6 @@ function migrateWorkspaceLayoutPersistedState(
     explorerPaneIdByWorkspace,
     sidePaneIdByWorkspace,
   };
-}
-
-function trimNonEmpty(value: string | null | undefined): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }
 
 function createWorkspaceTabInstanceId(): string {

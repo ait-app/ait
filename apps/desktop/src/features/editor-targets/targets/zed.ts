@@ -1,13 +1,6 @@
-import type { EditorTarget, EditorTargetLaunchInput } from "../target.js";
+import { location, type EditorTarget } from "../target.js";
 
 const COMMANDS = ["zed", "zeditor"] as const;
-
-function location(input: EditorTargetLaunchInput): string {
-  if (!input.line) return input.filePath!;
-  return input.column
-    ? `${input.filePath}:${input.line}:${input.column}`
-    : `${input.filePath}:${input.line}`;
-}
 
 export const zedTarget: EditorTarget = {
   id: "zed",

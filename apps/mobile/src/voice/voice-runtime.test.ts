@@ -658,6 +658,65 @@ describe("voice runtime", () => {
     expect(adapter.setVoiceMode).toHaveBeenCalledWith(true, "agent-1");
   });
 
+  it("leaves voice mode when the host rejects the resync after reconnecting", async () => {
+    const adapter = createSessionAdapter();
+    const { runtime, engine } = createRuntime();
+    runtime.registerSession(adapter);
+    await runtime.startVoice("server-1", "agent-1");
+
+    vi.mocked(adapter.setVoiceMode).mockRejectedValueOnce(new Error("voice unavailable"));
+    runtime.updateSessionConnection("server-1", false);
+    runtime.updateSessionConnection("server-1", true);
+
+    await vi.waitFor(() => expect(runtime.getSnapshot().isVoiceMode).toBe(false));
+    expect(runtime.getSnapshot().phase).toBe("disabled");
+    expect(engine.stopCapture).toHaveBeenCalled();
+  });
+
+  it("keeps voice mode for the next reconnect when the connection drops during resync", async () => {
+    const adapter = createSessionAdapter();
+    const { runtime } = createRuntime();
+    runtime.registerSession(adapter);
+    await runtime.startVoice("server-1", "agent-1");
+
+    let rejectResync!: (error: Error) => void;
+    vi.mocked(adapter.setVoiceMode).mockReturnValueOnce(
+      new Promise<void>((_resolve, reject) => {
+        rejectResync = reject;
+      }),
+    );
+    runtime.updateSessionConnection("server-1", false);
+    runtime.updateSessionConnection("server-1", true);
+    runtime.updateSessionConnection("server-1", false);
+    rejectResync(new Error("connection lost"));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(runtime.getSnapshot().isVoiceMode).toBe(true);
+  });
+
+  it("does not stop a voice session started while a failed resync was pending", async () => {
+    const adapter = createSessionAdapter();
+    const { runtime } = createRuntime();
+    runtime.registerSession(adapter);
+    await runtime.startVoice("server-1", "agent-1");
+
+    let rejectResync!: (error: Error) => void;
+    vi.mocked(adapter.setVoiceMode).mockReturnValueOnce(
+      new Promise<void>((_resolve, reject) => {
+        rejectResync = reject;
+      }),
+    );
+    runtime.updateSessionConnection("server-1", false);
+    runtime.updateSessionConnection("server-1", true);
+    await runtime.stopVoice();
+    await runtime.startVoice("server-1", "agent-1");
+
+    rejectResync(new Error("voice unavailable"));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(runtime.getSnapshot().isVoiceMode).toBe(true);
+  });
+
   it("does not emit when the snapshot is unchanged", async () => {
     const adapter = createSessionAdapter();
     const { runtime } = createRuntime();

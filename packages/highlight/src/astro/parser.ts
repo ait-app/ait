@@ -6,7 +6,6 @@ import {
   type PartialParse,
   Parser,
   parseMixed,
-  type SyntaxNode,
   type SyntaxNodeRef,
   type Tree,
   type TreeFragment,
@@ -15,6 +14,7 @@ import { parser as cssParser } from "@lezer/css";
 import { parser as htmlParser } from "@lezer/html";
 import { parser as jsParser } from "@lezer/javascript";
 import { findClosingBrace } from "../js-scanner.js";
+import { getOpenTagAttributes } from "../open-tag-attributes.js";
 
 interface Range {
   from: number;
@@ -78,26 +78,11 @@ function maskDocument(text: string, frontmatter: Range | null): string {
   return (
     text.slice(0, frontmatter.from) +
     "<!--" +
-    text.slice(frontmatter.from + 4, frontmatter.to - 3) +
+    // A `--` in the body could end the mask comment early; only the masked copy changes.
+    text.slice(frontmatter.from + 4, frontmatter.to - 3).replace(/--/g, "  ") +
     "-->" +
     maskExpressions(text.slice(frontmatter.to))
   );
-}
-
-function getOpenTagAttributes(node: SyntaxNode, input: Input): Record<string, string> {
-  const attributes: Record<string, string> = Object.create(null);
-  const openTag = node.getChild("OpenTag");
-  if (!openTag) return attributes;
-
-  for (const attribute of openTag.getChildren("Attribute")) {
-    const name = attribute.getChild("AttributeName");
-    if (!name) continue;
-    const value =
-      attribute.getChild("AttributeValue") || attribute.getChild("UnquotedAttributeValue");
-    const key = input.read(name.from, name.to).toLowerCase();
-    attributes[key] = value ? input.read(value.from, value.to).replace(/^["']|["']$/g, "") : "";
-  }
-  return attributes;
 }
 
 function nestedLanguage(node: SyntaxNodeRef, input: Input): NestedParse | null {

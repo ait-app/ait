@@ -53,17 +53,6 @@ export function windowChromeCornersInclude(
   return corners === "both" || corners === corner;
 }
 
-export function resolveHasOwnedWindowChromeObstruction(input: {
-  obstruction: WindowChromeObstruction;
-  corners: WindowChromeCorners;
-  corner: WindowChromeCorner;
-}): boolean {
-  if (!windowChromeCornersInclude(input.corners, input.corner)) return false;
-  return input.corner === "top-left"
-    ? input.obstruction.topLeft !== null
-    : input.obstruction.topRight !== null;
-}
-
 export function useHasWindowChromeObstruction(corner: WindowChromeCorner): boolean {
   const obstruction = useContext(WindowChromeContext);
   return corner === "top-left" ? obstruction.topLeft !== null : obstruction.topRight !== null;
@@ -285,12 +274,6 @@ export function useWindowChromeCorners(): WindowChromeCorners {
 export function useOwnsWindowChromeCorner(corner: WindowChromeCorner): boolean {
   const corners = useContext(WindowChromeCornersContext);
   return windowChromeCornersInclude(corners, corner);
-}
-
-export function useHasOwnedWindowChromeObstruction(corner: WindowChromeCorner): boolean {
-  const obstruction = useContext(WindowChromeContext);
-  const corners = useContext(WindowChromeCornersContext);
-  return resolveHasOwnedWindowChromeObstruction({ obstruction, corners, corner });
 }
 
 type WindowChromeSafeAreaProps = ViewProps & {

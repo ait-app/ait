@@ -1,5 +1,5 @@
 import { isCompactBreakpoint } from "@/constants/layout";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { ICON_SIZE } from "@/styles/theme";
 
 /**
  * Density sizes for surfaces that opt into touch sizing: rows and icons grow on compact
@@ -7,7 +7,7 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
  * desktop-sized everywhere, so a surface migrates by swapping its sizes for these.
  *
  * Style values are Unistyles breakpoint values, resolved inside `StyleSheet.create`. Icon sizes
- * are props, so icons take them through `DensityIcon` or a `densityIconProps` mapping.
+ * are props, so icons take them through `DensityIcon`.
  */
 
 export type DensityIconSize = keyof typeof ICON_SIZE;
@@ -42,15 +42,4 @@ export function densityIconBox(size: DensityIconSize) {
 
 export function densityIconSize(rt: { breakpoint?: string }, size: DensityIconSize): number {
   return resolveDensity(rt, densityIconBox(size));
-}
-
-/** Extends a `withUnistyles` icon mapping so the icon also takes its density size. */
-export function densityIconProps<P extends object>(
-  size: DensityIconSize,
-  mapping: (theme: Theme) => P,
-) {
-  return (theme: Theme, rt: { breakpoint?: string }) => ({
-    ...mapping(theme),
-    size: densityIconSize(rt, size),
-  });
 }

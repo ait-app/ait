@@ -1,4 +1,5 @@
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
+import { projectDisplayNameFromProjectId } from "@/utils/project-display-name";
 
 /**
  * Produces a stable grouping key from a git remote URL.
@@ -63,78 +64,6 @@ export function deriveRemoteProjectKey(remoteUrl: string | null): string | null 
   }
 
   return `remote:${cleanedHost}/${cleanedPath}`;
-}
-
-/**
- * Extracts the repo name from a git remote URL.
- * Examples:
- *   git@github.com:anthropics/claude-code.git -> anthropics/claude-code
- *   https://github.com/anthropics/claude-code.git -> anthropics/claude-code
- *   https://github.com/anthropics/claude-code -> anthropics/claude-code
- */
-export function parseRepoNameFromRemoteUrl(remoteUrl: string | null): string | null {
-  if (!remoteUrl) {
-    return null;
-  }
-
-  let cleaned = remoteUrl;
-
-  // Handle SSH format: git@github.com:owner/repo.git
-  if (cleaned.startsWith("git@")) {
-    const colonIdx = cleaned.indexOf(":");
-    if (colonIdx !== -1) {
-      cleaned = cleaned.slice(colonIdx + 1);
-    }
-  }
-  // Handle HTTPS format: https://github.com/owner/repo.git
-  else if (cleaned.includes("://")) {
-    const urlPath = cleaned.split("://")[1];
-    if (urlPath) {
-      // Remove host (e.g., github.com/)
-      const slashIdx = urlPath.indexOf("/");
-      if (slashIdx !== -1) {
-        cleaned = urlPath.slice(slashIdx + 1);
-      }
-    }
-  }
-
-  // Remove .git suffix
-  if (cleaned.endsWith(".git")) {
-    cleaned = cleaned.slice(0, -4);
-  }
-
-  // Should be in format owner/repo now
-  if (cleaned.includes("/")) {
-    return cleaned;
-  }
-
-  return null;
-}
-
-/**
- * Extracts just the repo name (without owner) from a remote URL.
- * Examples:
- *   git@github.com:anthropics/claude-code.git -> claude-code
- */
-export function parseRepoShortNameFromRemoteUrl(remoteUrl: string | null): string | null {
-  const fullName = parseRepoNameFromRemoteUrl(remoteUrl);
-  if (!fullName) {
-    return null;
-  }
-  const parts = fullName.split("/");
-  return parts[parts.length - 1] || null;
-}
-
-/**
- * Extracts the project name from a path (last segment).
- */
-export function deriveProjectName(projectKey: string): string {
-  const githubRemotePrefix = "remote:github.com/";
-  if (projectKey.startsWith(githubRemotePrefix)) {
-    return projectKey.slice(githubRemotePrefix.length) || projectKey;
-  }
-  const segments = projectKey.split(/[\\/]/).filter(Boolean);
-  return segments[segments.length - 1] || projectKey;
 }
 
 /**
@@ -321,7 +250,7 @@ function buildActiveProjectGroups(projectMap: Map<string, ProjectActivityBucket>
 
     activeGroups.push({
       projectKey,
-      projectName: deriveProjectName(projectKey),
+      projectName: projectDisplayNameFromProjectId(projectKey),
       agents: combinedAgents,
       activeCount: trulyActive.length,
       totalCount: trulyActive.length + recentlyActive.length,

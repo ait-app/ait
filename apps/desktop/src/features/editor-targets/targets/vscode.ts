@@ -1,4 +1,4 @@
-import type { EditorTarget, EditorTargetLaunchInput, EditorTargetRuntime } from "../target.js";
+import { launchArgs, type EditorTarget, type EditorTargetRuntime } from "../target.js";
 
 function commands(runtime: EditorTargetRuntime): string[] {
   const candidates = ["code"];
@@ -19,19 +19,6 @@ function commands(runtime: EditorTargetRuntime): string[] {
     }
   }
   return candidates;
-}
-
-function location(input: EditorTargetLaunchInput): string {
-  if (!input.line) return input.filePath!;
-  return input.column
-    ? `${input.filePath}:${input.line}:${input.column}`
-    : `${input.filePath}:${input.line}`;
-}
-
-function launchArgs(input: EditorTargetLaunchInput): string[] {
-  if (!input.filePath) return [input.workspacePath];
-  if (!input.line) return [input.workspacePath, input.filePath];
-  return [input.workspacePath, "--goto", location(input)];
 }
 
 export const vscodeTarget: EditorTarget = {

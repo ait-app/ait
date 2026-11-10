@@ -1,6 +1,7 @@
 import type { PersistStorage } from "zustand/middleware";
 
 export const DRAFT_PERSIST_INTERVAL_MS = 200;
+const MAX_DRAFT_PERSIST_RETRIES = 5;
 export interface PersistenceScheduler {
   now: () => number;
   schedule: (callback: () => void, delayMs: number) => unknown;
@@ -60,6 +61,7 @@ export function createDraftPersistStorage<T>(
   let lastWriteAt = -Infinity;
   let revision = 0;
   let inFlight: Promise<void> | null = null;
+  let failedAttempts = 0;
 
   const enqueue = (operation: () => Promise<void>): Promise<void> => {
     const result = inFlight ? inFlight.catch(() => undefined).then(operation) : operation();
@@ -80,6 +82,17 @@ export function createDraftPersistStorage<T>(
       timer = null;
     }
   };
+  // Bounded so a persistently failing store cannot spin; the next edit or flush restarts it.
+  const scheduleRetry = () => {
+    if (failedAttempts >= MAX_DRAFT_PERSIST_RETRIES) return;
+    failedAttempts += 1;
+    timer ??= scheduler.schedule(
+      () => {
+        void flush().catch(report);
+      },
+      DRAFT_PERSIST_INTERVAL_MS * 2 ** failedAttempts,
+    );
+  };
   const flush = (): Promise<void> => {
     cancelTimer();
     const write = pending;
@@ -91,8 +104,12 @@ export function createDraftPersistStorage<T>(
     return enqueue(async () => {
       try {
         await storage.setItem(write.name, write.value);
+        failedAttempts = 0;
       } catch (error) {
-        if (revision === write.revision) pending = write;
+        if (revision === write.revision) {
+          pending = write;
+          scheduleRetry();
+        }
         throw error;
       }
     });
@@ -102,6 +119,7 @@ export function createDraftPersistStorage<T>(
     getItem: (name) => storage.getItem(name),
     setItem: (name, value) => {
       pending = { revision: ++revision, name, value };
+      failedAttempts = 0;
       const delay = DRAFT_PERSIST_INTERVAL_MS - (scheduler.now() - lastWriteAt);
       if (delay <= 0) {
         return flush().catch(report);
@@ -113,6 +131,7 @@ export function createDraftPersistStorage<T>(
     removeItem: (name) => {
       cancelTimer();
       pending = null;
+      failedAttempts = 0;
       revision += 1;
       lastWriteAt = scheduler.now();
       return enqueue(async () => {

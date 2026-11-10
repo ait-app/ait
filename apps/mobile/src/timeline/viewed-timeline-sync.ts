@@ -155,6 +155,12 @@ class TimelineReplicaOwner implements TimelineReplica {
     const timeline = selectAgentTimelineState(session, agentId);
     if (timeline.status === "cold") return;
     if (timeline.status === "synced") this.cachedRanges.delete(agentId);
+    else {
+      // A partial catch-up page advances coverage while still painted; a retry must resume
+      // after it rather than replay its non-identity rows from the cached cursor.
+      const range = session?.agentTimelineCursor.get(agentId);
+      if (range && this.cachedRanges.has(agentId)) this.cachedRanges.set(agentId, range);
+    }
     this.storage.commitTimeline(this.serverId, agentId, {
       agentId,
       items: [...timeline.items, ...(session?.agentStreamHead.get(agentId) ?? [])],
@@ -241,6 +247,27 @@ function commitProcessedTimeline(input: {
   store.markAgentHistorySynchronized(serverId, agentId);
 }
 
+function settleThoughts(items: StreamItem[] | undefined): StreamItem[] | undefined {
+  if (!items?.some((item) => item.kind === "thought" && item.status !== "ready")) return undefined;
+  return items.map((item) =>
+    item.kind === "thought" && item.status !== "ready" ? { ...item, status: "ready" } : item,
+  );
+}
+
+// A turn that ended while disconnected sends no completion, so catch-up settles its thoughts.
+export function settleActiveThoughts(serverId: string, agentId: string): void {
+  const store = useSessionStore.getState();
+  const session = store.sessions[serverId];
+  const tail = settleThoughts(session?.agentStreamTail.get(agentId));
+  const head = settleThoughts(session?.agentStreamHead.get(agentId));
+  if (tail || head) {
+    store.setAgentStreamState(serverId, agentId, {
+      ...(tail ? { tail } : {}),
+      ...(head ? { head } : {}),
+    });
+  }
+}
+
 function finalizeProcessedTimeline(input: {
   serverId: string;
   agentId: string;
@@ -259,7 +286,10 @@ function finalizeProcessedTimeline(input: {
   if (input.synchronized) {
     const session = useSessionStore.getState().sessions[input.serverId];
     const agent = session?.agents.get(input.agentId) ?? session?.agentDetails.get(input.agentId);
-    if (agent && agent.turn.phase === "idle") input.drainQueuedAgentMessage(input.agentId);
+    if (agent && agent.turn.phase === "idle") {
+      settleActiveThoughts(input.serverId, input.agentId);
+      input.drainQueuedAgentMessage(input.agentId);
+    }
   }
   if (input.result.initResolution === "resolve") resolveInitDeferred(input.initKey);
 }
@@ -786,8 +816,15 @@ export function createViewedTimelineSync(ports: ViewedTimelineSyncPorts): Viewed
     cancelMembershipRetry?.();
     cancelMembershipRetry = null;
     membershipRetryDelayMs = undefined;
+    const retained = requested.filter(isAcknowledged);
     acknowledged = requested;
     startAcknowledgedCatchUps();
+    for (const agentId of retained) {
+      // The daemon does not replay across a resubscribe, so retained chats verify the gap.
+      // A failed chat keeps its backoff; its retry reads the current cursor when it fires.
+      if (catchUps.get(agentId)?.status === "error") continue;
+      startCatchUp(agentId, { supersede: true });
+    }
   };
 
   const retryVisibleAgentTimeline = (agentId: string) => {

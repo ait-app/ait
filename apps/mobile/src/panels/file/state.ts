@@ -8,5 +8,3 @@ export const fileStateSchema = z.strictObject({
 export type FileState = z.infer<typeof fileStateSchema>;
 
 export const defaultFileState: FileState = { treeVisible: false };
-
-export const fileStateForFilesView: FileState = { treeVisible: true };

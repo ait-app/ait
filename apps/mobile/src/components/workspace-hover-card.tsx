@@ -47,20 +47,13 @@ import {
 import { formatCheckPresentationCountsLabel } from "@/git/check-presentation-copy";
 import { CheckPresentationIcon, getCheckPresentationTone } from "@/git/check-presentation.view";
 import { buildForgeChecksUrl } from "@/git/forge-url";
+import { measureElement } from "@/components/ui/menu/menu-anchor";
 
 interface Rect {
   x: number;
   y: number;
   width: number;
   height: number;
-}
-
-function measureElement(element: View): Promise<Rect> {
-  return new Promise((resolve) => {
-    element.measureInWindow((x, y, width, height) => {
-      resolve({ x, y, width, height });
-    });
-  });
 }
 
 function computeHoverCardPosition({

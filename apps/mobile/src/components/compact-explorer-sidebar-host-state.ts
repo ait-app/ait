@@ -1,6 +1,7 @@
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import type { ActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
+import { trimNonEmpty } from "@/utils/string";
 
 export interface CompactExplorerSidebarHostModel {
   serverId: string;
@@ -15,14 +16,6 @@ interface ResolveCompactExplorerSidebarHostModelInput {
   selection: ActiveWorkspaceSelection | null;
   workspace: WorkspaceDescriptor | null;
   isGit: boolean;
-}
-
-function trimNonEmpty(value: string | null | undefined): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }
 
 export function resolveCompactExplorerSidebarHostModel(

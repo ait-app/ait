@@ -936,13 +936,14 @@ export class HubLink implements HubAccountConnection {
       this.link.lostAt = null;
       this.link.methods = welcome.center_methods ?? [];
     }
-    this.welcomed = true;
     this.sentState = null;
     this.failures = 0;
     this.tokenFailures = 0;
     this.useTicket = false;
     this.clearTimer("grace");
+    // Frames pumped by this release join the buffer so the replay below sends them in order.
     this.release(welcome.recv);
+    this.welcomed = true;
     for (const item of this.unacked) this.write(generation, item.frame);
     if (generation !== this.generation) return;
     // Link frames are not replayed: repeat the latest credit and visibility.

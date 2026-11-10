@@ -6,8 +6,6 @@ import { fetchCheckoutStatus } from "./checkout-status-cache";
 
 export type { CheckoutStatusPayload } from "./checkout-status-cache";
 
-export const CHECKOUT_STATUS_STALE_TIME = 15_000;
-
 interface UseCheckoutStatusQueryOptions {
   serverId: string;
   cwd: string;
@@ -43,26 +41,4 @@ export function useCheckoutStatusQuery({ serverId, cwd }: UseCheckoutStatusQuery
     isError: query.isError,
     error: query.error,
   };
-}
-
-/**
- * Subscribe to checkout status updates from the React Query cache without
- * initiating a fetch. Useful for list rows where a parent component prefetches
- * only the visible agents.
- */
-export function useCheckoutStatusCacheOnly({ serverId, cwd }: UseCheckoutStatusQueryOptions) {
-  const { t } = useTranslation();
-  const client = useHostRuntimeClient(serverId);
-
-  return useQuery({
-    queryKey: checkoutStatusQueryKey(serverId, cwd),
-    queryFn: async () => {
-      if (!client) {
-        throw new Error(t("common.errors.daemonClientUnavailable"));
-      }
-      return await fetchCheckoutStatus({ client, serverId, cwd });
-    },
-    enabled: false,
-    staleTime: CHECKOUT_STATUS_STALE_TIME,
-  });
 }

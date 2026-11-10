@@ -22,11 +22,6 @@ const mocks = vi.hoisted(() => ({
       keepRunningAfterQuit: true,
     },
   },
-  createNodeEntrypointInvocation: vi.fn(() => ({
-    command: "node",
-    args: [],
-    env: {},
-  })),
   spawnProcess: vi.fn(),
   logInfo: vi.fn(),
   logError: vi.fn(),
@@ -85,14 +80,6 @@ vi.mock("../settings/desktop-settings-electron.js", () => ({
   }),
 }));
 
-vi.mock("./runtime-paths.js", () => ({
-  createNodeEntrypointInvocation: mocks.createNodeEntrypointInvocation,
-  resolveDaemonRunnerEntrypoint: vi.fn(() => ({
-    entryPath: path.join(mocks.paseoHome, "daemon.js"),
-    execArgv: [],
-  })),
-}));
-
 describe("daemon-manager commands", () => {
   let fixtureRoot: string;
 
@@ -101,12 +88,6 @@ describe("daemon-manager commands", () => {
     mocks.paseoHome = path.join(fixtureRoot, "home");
     mocks.appLogPath = path.join(fixtureRoot, "main.log");
     mocks.settings = DEFAULT_DESKTOP_SETTINGS;
-    mocks.createNodeEntrypointInvocation.mockReset();
-    mocks.createNodeEntrypointInvocation.mockReturnValue({
-      command: "node",
-      args: [],
-      env: {},
-    });
     mocks.spawnProcess.mockReset();
     mocks.logInfo.mockReset();
     mocks.logError.mockReset();

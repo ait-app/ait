@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from "react";
+import type { ReactNode } from "react";
 
 export interface SettingsSectionProps {
   title: string;
@@ -23,24 +23,5 @@ export interface SettingsSelectProps<Value extends string = string> extends Sett
   value: Value;
   options: readonly { label: string; value: Value }[];
   onValueChange(value: Value): void;
-  disabled?: boolean;
-}
-export interface SettingsInputHandle {
-  focus(): void;
-  blur(): void;
-  getText(): string;
-  replaceText(text: string): void;
-}
-export interface SettingsInputProps extends SettingsRowProps {
-  initialValue?: string;
-  onChangeText(text: string): void;
-  placeholder?: string;
-  disabled?: boolean;
-  secureTextEntry?: boolean;
-  ref?: Ref<SettingsInputHandle>;
-}
-export interface SettingsActionProps extends SettingsRowProps {
-  actionLabel: string;
-  onPress(): void;
   disabled?: boolean;
 }

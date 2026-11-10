@@ -144,9 +144,12 @@ export class OwnedSubscriptions {
         if (id) this.routes.delete(id);
         reject(new Error("Subscription released"));
         teardown = (async () => {
-          await pending;
-          await releaseId();
-          this.registrations.delete(registration);
+          try {
+            await pending;
+            await releaseId();
+          } finally {
+            this.registrations.delete(registration);
+          }
         })();
         return teardown;
       },
@@ -218,7 +221,7 @@ export class OwnedSubscriptions {
   }
 
   async close(): Promise<void> {
-    await Promise.all([...this.registrations].map((registration) => registration.release()));
+    await Promise.allSettled([...this.registrations].map((registration) => registration.release()));
   }
 }
 

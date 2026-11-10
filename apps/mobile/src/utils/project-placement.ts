@@ -1,4 +1,4 @@
-import { deriveProjectName } from "@/utils/agent-grouping";
+import { projectDisplayNameFromProjectId } from "@/utils/project-display-name";
 import type { ProjectPlacementPayload } from "@ait/protocol/messages";
 
 function normalizeWorkingDirectory(cwd: string): string {
@@ -12,7 +12,7 @@ export function deriveProjectPlacementFromCwd(cwd: string): ProjectPlacementPayl
 
   return {
     projectKey,
-    projectName: deriveProjectName(projectKey),
+    projectName: projectDisplayNameFromProjectId(projectKey),
     workspaceName: null,
     checkout: {
       cwd: normalizedCwd,

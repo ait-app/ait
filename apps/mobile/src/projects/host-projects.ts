@@ -14,8 +14,6 @@ export {
   resolveExactHostProjectCandidate,
   resolveEquivalentHostProjectCandidate,
   resolveInitialWorkspaceProject,
-  resolveInitialWorktreeProject,
-  resolveSelectedHostProject,
   type HostProjectListItem,
   type HostProjectRouteContext,
 } from "@/projects/host-project-model";

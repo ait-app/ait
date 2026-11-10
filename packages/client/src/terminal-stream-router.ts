@@ -42,7 +42,8 @@ export class TerminalStreamRouter {
     this.slots.set(slot, registrations);
     return () => {
       registrations.delete(registration);
-      if (registrations.size === 0) this.slots.delete(slot);
+      if (registrations.size === 0 && this.slots.get(slot) === registrations)
+        this.slots.delete(slot);
     };
   }
 

@@ -39,7 +39,11 @@ import {
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import { useSettings } from "@/hooks/use-settings";
-import { reconcileMissingAgentStateWithPresentAgent } from "@/panels/agent-panel-load-state";
+import {
+  reconcileMissingAgentStateWithPresentAgent,
+  shouldFetchAgentForLookup,
+  shouldRetryLookupOnConnectionChange,
+} from "@/panels/agent-panel-load-state";
 import { AgentTracks, hasAgentTracks } from "@/panels/agent-tracks";
 import { buildDraftPanelDescriptor } from "@/panels/draft-panel-descriptor";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
@@ -102,6 +106,7 @@ import invariant from "tiny-invariant";
 import { shallow, useShallow } from "zustand/shallow";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { RetainedChatContent } from "./retained-chat-content";
+import { toErrorMessage } from "@/utils/error-messages";
 interface ChatAgentStateShape {
   serverId: string | null;
   id: string | null;
@@ -488,13 +493,6 @@ function findActiveCreateHandoff(input: {
   );
 }
 
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
-}
-
 function isNotFoundErrorMessage(message: string): boolean {
   return /agent not found|not found/i.test(message);
 }
@@ -614,6 +612,17 @@ function AgentPanelBody({
   const [lookupState, setLookupState] = useState<AgentLookupState>({ tag: "idle" });
   const lookupAttemptTokenRef = useRef(0);
   const retryAgentLookup = useCallback(() => setLookupState({ tag: "idle" }), []);
+  const wasConnectedRef = useRef(isConnected);
+
+  useEffect(() => {
+    const wasConnected = wasConnectedRef.current;
+    wasConnectedRef.current = isConnected;
+    setLookupState((current) =>
+      shouldRetryLookupOnConnectionChange({ tag: current.tag, wasConnected, isConnected })
+        ? { tag: "idle" }
+        : current,
+    );
+  }, [isConnected]);
 
   useEffect(() => {
     lookupAttemptTokenRef.current += 1;
@@ -633,7 +642,7 @@ function AgentPanelBody({
     if (!client || !isConnected || !hasSession) {
       return;
     }
-    if (lookupState.tag === "loading" || lookupState.tag === "not_found") {
+    if (!shouldFetchAgentForLookup(lookupState.tag)) {
       return;
     }
 

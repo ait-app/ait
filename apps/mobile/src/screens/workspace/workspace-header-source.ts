@@ -1,4 +1,5 @@
 import type { WorkspaceDescriptor } from "@/stores/session-store";
+import { trimNonEmpty } from "@/utils/string";
 
 export type WorkspaceHeaderCheckoutState =
   | { kind: "pending" }
@@ -20,14 +21,6 @@ type WorkspaceHeaderRenderState =
       isGitCheckout: boolean;
       currentBranchName: string | null;
     };
-
-function trimNonEmpty(value: string | null | undefined): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
 
 function areHeaderLabelsEquivalent(
   a: string | null | undefined,

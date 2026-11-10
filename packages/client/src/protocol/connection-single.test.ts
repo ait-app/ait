@@ -305,4 +305,17 @@ describe("single-connection daemon transport", () => {
       h.transport.close();
     }
   });
+
+  it("closes every split socket even when one close throws on an illegal code", () => {
+    const h = connect(endpoint(), "split");
+    const browserClose = (code?: number) => {
+      if (code !== undefined && code !== 1000 && (code < 3000 || code > 4999))
+        throw new DOMException("Illegal close code", "InvalidAccessError");
+    };
+    for (const socket of h.sockets) socket.close.mockImplementation(browserClose);
+
+    expect(() => h.transport.close(1001, "Reconnecting")).not.toThrow();
+
+    for (const socket of h.sockets) expect(socket.close).toHaveBeenCalledOnce();
+  });
 });

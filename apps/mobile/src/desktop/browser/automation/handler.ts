@@ -16,6 +16,7 @@ import {
 } from "@/desktop/browser/store";
 import { collectAllTabs, useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { delay } from "@/utils/delay";
 
 type BrowserAutomationExecuteRequest = Extract<
   SessionOutboundMessage,
@@ -446,10 +447,6 @@ async function waitForBrowserRegistration(params: {
     await delay(params.pollIntervalMs ?? 100);
   }
   return false;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function normalizeBridgePayload(

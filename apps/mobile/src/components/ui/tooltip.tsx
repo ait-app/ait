@@ -30,6 +30,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { FloatingSurface } from "@/components/ui/floating";
 import { isWeb } from "@/constants/platform";
 import { getOverlayRoot, OVERLAY_Z } from "@/lib/overlay-root";
+import { useControllableOpenState } from "@/components/ui/use-controllable-open-state";
 
 type Side = "top" | "bottom" | "left" | "right";
 type Align = "start" | "center" | "end";
@@ -98,28 +99,6 @@ function composeEventHandlers(
     }
     injected(event);
   };
-}
-
-function useControllableOpenState({
-  open,
-  defaultOpen,
-  onOpenChange,
-}: {
-  open?: boolean;
-  defaultOpen?: boolean;
-  onOpenChange?: (open: boolean) => void;
-}): [boolean, (next: boolean) => void] {
-  const [internalOpen, setInternalOpen] = useState(Boolean(defaultOpen));
-  const isControlled = typeof open === "boolean";
-  const value = isControlled ? open : internalOpen;
-  const setValue = useCallback(
-    (next: boolean) => {
-      if (!isControlled) setInternalOpen(next);
-      onOpenChange?.(next);
-    },
-    [isControlled, onOpenChange],
-  );
-  return [value, setValue];
 }
 
 function measureElement(element: TooltipTriggerElement): Promise<Rect> {

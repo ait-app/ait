@@ -5,15 +5,6 @@ export function copyArrayBufferViewToBuffer(data: ArrayBufferView): ArrayBuffer 
   return out.buffer;
 }
 
-export function normalizeTransportPayload(
-  data: string | Uint8Array | ArrayBuffer,
-): string | ArrayBuffer {
-  if (typeof data === "string" || data instanceof ArrayBuffer) {
-    return data;
-  }
-  return copyArrayBufferViewToBuffer(data);
-}
-
 export interface WebSocketTransportMessage {
   data: string | ArrayBuffer;
   isBinary: boolean;
@@ -80,17 +71,6 @@ export function describeTransportError(event?: unknown): string {
     }
   }
   return "Transport error";
-}
-
-export function safeRandomId(): string {
-  try {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-      return crypto.randomUUID();
-    }
-  } catch {
-    // ignore
-  }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 export function decodeMessageData(data: unknown): string | null {

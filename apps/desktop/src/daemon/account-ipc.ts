@@ -47,6 +47,8 @@ export function createAccountIpc(
   const file = path.join(app.getPath("userData"), "account-node.json");
   let installationId: string = randomUUID();
   let saved: SavedAccount | null = null;
+  // Ciphertext this launch could not decrypt; a locked keychain must not become a sign-out.
+  let undecryptedAccount: string | null = null;
   let syncBuiltInDaemon = true;
   try {
     const stored = JSON.parse(readFileSync(file, "utf8")) as {
@@ -57,20 +59,22 @@ export function createAccountIpc(
     if (typeof stored.installationId === "string" && /^[0-9a-f-]{36}$/i.test(stored.installationId))
       installationId = stored.installationId;
     if (typeof stored.syncBuiltInDaemon === "boolean") syncBuiltInDaemon = stored.syncBuiltInDaemon;
-    if (stored.account && canRemember())
+    undecryptedAccount = stored.account ?? null;
+    if (stored.account && canRemember()) {
       saved = JSON.parse(
         safeStorage.decryptString(Buffer.from(stored.account, "base64")),
       ) as SavedAccount;
+      undecryptedAccount = null;
+    }
   } catch {
     /* First run, unavailable keychain or invalid stored state: require login. */
   }
   let saveTail = Promise.resolve();
-  const save = (value: SavedAccount | null): Promise<void> => {
-    saved = value;
+  const persist = (): Promise<void> => {
     const encoded =
-      value && canRemember()
-        ? safeStorage.encryptString(JSON.stringify(value)).toString("base64")
-        : null;
+      saved && canRemember()
+        ? safeStorage.encryptString(JSON.stringify(saved)).toString("base64")
+        : undecryptedAccount;
     const syncPreference = syncBuiltInDaemon;
     const next = saveTail.then(async () => {
       await mkdir(path.dirname(file), { recursive: true });
@@ -85,6 +89,12 @@ export function createAccountIpc(
     });
     saveTail = next.catch(() => undefined);
     return next;
+  };
+  // A login or sign-out supersedes any credential this launch could not read.
+  const save = (value: SavedAccount | null): Promise<void> => {
+    saved = value;
+    undecryptedAccount = null;
+    return persist();
   };
   let transports: AccountTransportManager;
   let downloads: AccountDownloadManager;
@@ -115,7 +125,7 @@ export function createAccountIpc(
     const previous = syncBuiltInDaemon;
     syncBuiltInDaemon = enabled;
     try {
-      await save(saved);
+      await persist();
     } catch (error) {
       syncBuiltInDaemon = previous;
       throw error;
@@ -145,7 +155,10 @@ export function createAccountIpc(
   transports = new AccountTransportManager(manager, hub);
   browserProfiles = new AccountBrowserProfiles(manager, () => getRuntime().status().serverId, hub);
   downloads = new AccountDownloadManager(manager);
-  const ready = saved ? manager.restore(saved).catch(() => save(null)) : save(null);
+  // A failed write is retried by the next save; it must not block every account command.
+  const ready = (saved ? manager.restore(saved).catch(() => save(null)) : persist()).catch(
+    () => undefined,
+  );
   let accountOperation = Promise.resolve<unknown>(undefined);
   return async (
     event: IpcMainInvokeEvent,

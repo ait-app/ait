@@ -71,7 +71,10 @@ export async function stopDesktopManagedDaemonOnQuitIfNeeded(
   }
 
   const settings = await deps.settingsStore.get();
-  if (!shouldStopDesktopManagedDaemonOnQuit(settings) && (await deps.retainDaemon())) {
+  if (
+    !shouldStopDesktopManagedDaemonOnQuit(settings) &&
+    (await deps.retainDaemon().catch(() => false))
+  ) {
     return false;
   }
 
