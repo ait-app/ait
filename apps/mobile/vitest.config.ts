@@ -33,6 +33,20 @@ export default defineConfig({
     projects: [
       {
         extends: true,
+        // Node loads the CJS entry outside Vite, where it requires the real `react-native` and
+        // fails to parse its Flow source. The ESM build keeps the `react-native` alias in force.
+        // The browser project keeps the package entry its optimizer pre-bundles.
+        resolve: {
+          alias: [
+            {
+              find: /^@floating-ui\/react-native$/,
+              replacement: path.resolve(
+                rootNodeModules,
+                "@floating-ui/react-native/dist/floating-ui.react-native.esm.js",
+              ),
+            },
+          ],
+        },
         test: {
           name: "unit",
           environment: "node",
