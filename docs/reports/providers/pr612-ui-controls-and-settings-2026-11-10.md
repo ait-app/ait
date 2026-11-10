@@ -104,7 +104,7 @@ Ait 通过小型公开扩展的 `newSession(setup)` / `switchSession` 接口补�
 [公开扩展类型](https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/extensibility/extensions/types.ts)。
 验收中先按 JSONL 首行查 header 导致探针失败；OMP 首行可为 title 记录，修正为按 type=session 查找，未绕过父归属断言。
 
-### 本次最终验证
+### BTW 功能验证（CI 修复前）
 
 - `npm --prefix apps/mobile run test -- --project unit` 定向运行 runtime panel、BTW、原生菜单、dock、结束状态存储与翻译六个 suite：83 项通过。
 - Chromium dock 定向浏览器测试 3 项通过：包含新增的长答案后追问输入完整滚入视口，焦点轮廓不被裁切。
@@ -129,6 +129,23 @@ Ait 通过小型公开扩展的 `newSession(setup)` / `switchSession` 接口补�
 | 追问输入完整可见                   | [Follow up 编辑](../../assets/providers/omp/ui-btw-followup-mobile.png)      |
 | 原话题继续追问，多轮不提供单条提升 | [同一话题结果](../../assets/providers/omp/ui-btw-followup-result-mobile.png) |
 | 分支后问答进入主会话、BTW 关闭     | [Branch 结果](../../assets/providers/omp/ui-btw-branch-result-mobile.png)    |
+
+## CI 修复：BTW 实装测试的函数长度
+
+提交 `030d1fd9` 的 Rust CI 因新增 BTW 实装测试的 `clippy::too_many_lines` 失败：
+单函数 183 行，超过 100 行限制。此前只验证 provider lib 未覆盖测试 lint；系统 1.99.1
+产生的基线警告不解释这次 CI 失败，也不能作为跳过全 targets 检查的依据。
+
+按追问、忙碌/父会话变化拒绝、分支历史与归属、重启恢复四个场景提取私有 helper，
+复用空闲等待逻辑，保留原用例及全部断言；没有豁免 lint，也没有修改运行时代码或 UI。
+使用独立安装、与 CI 相同的 Rust 1.98.1 重新验证：
+
+- `cargo fmt --all --check` 通过。
+- `cargo clippy --locked --workspace --all-targets -- -D warnings` 通过，包含测试 targets。
+- `AIT_TEST_OMP_BIN=/usr/bin/omp cargo test --locked -p provider --lib installed_omp_btw_follow_up_and_branch -- --ignored --nocapture`：1 项通过；
+  官方外部 OMP 18.17.0 与本地模拟模型 API 验证追问、分支限制、父日志不变、历史提升及恢复续聊。
+- `cargo build --locked --workspace` 通过。
+- 报告 oxfmt 与仓库文档链接检查通过。前轮前端与截图验收不重复计入这次纯测试重构。
 
 ## Test coverage
 

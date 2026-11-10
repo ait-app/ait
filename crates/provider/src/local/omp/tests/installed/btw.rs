@@ -1,6 +1,7 @@
 use super::*;
 use crate::service::agent_manager::{AgentManager, AgentRegistration};
 use crate::storage::timeline::Timeline;
+use domain::agent_runtime::AgentPersistenceHandle;
 use domain::agent_runtime::registry::AgentRuntimeRegistry;
 use persistence::storage::agent_runtime::FileBackedAgentRuntimeRegistry;
 
@@ -34,40 +35,9 @@ async fn installed_omp_btw_follow_up_and_branch_preserve_native_history_and_reop
         .send("agent", "Keep the parent conversation")
         .await
         .unwrap();
-    tokio::time::timeout(Duration::from_secs(30), async {
-        while manager.active_turn("agent").is_some() {
-            manager.poll().await.unwrap();
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
-    .await
-    .unwrap();
+    wait_for_idle(&mut manager).await;
     let original = registry.get("agent").unwrap().unwrap().persistence.unwrap();
-    let parent_file = original.metadata.as_ref().unwrap()["sessionFile"]
-        .as_str()
-        .unwrap();
-    run(
-        &mut manager,
-        "btw",
-        json!({"question":"First BTW question"}),
-    )
-    .await;
-    let first = wait_answer(&mut manager).await;
-    run(
-        &mut manager,
-        "btw",
-        json!({"question":"Follow up on this BTW topic", "recordId":first["id"]}),
-    )
-    .await;
-    let followed = wait_answer(&mut manager).await;
-    assert_eq!(followed["id"], first["id"]);
-    assert_eq!(followed["followUps"].as_array().unwrap().len(), 1);
-    assert!(
-        manager
-            .begin_action("agent", "btw_branch", &json!({"recordId":first["id"]}))
-            .await
-            .is_err()
-    );
+    assert_follow_up_stays_in_native_topic(&mut manager).await;
     assert_eq!(
         registry
             .get("agent")
@@ -78,13 +48,60 @@ async fn installed_omp_btw_follow_up_and_branch_preserve_native_history_and_reop
             .session_id,
         original.session_id
     );
-    run(
+    assert_branch_rejects_busy_or_changed_parent(&mut manager).await;
+    let branch = assert_branch_preserves_parent_and_promotes_answer(
         &mut manager,
+        &registry,
+        &timeline,
+        &original,
+    )
+    .await;
+    manager.close_all().await.unwrap();
+    let mut manager = AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone());
+    manager.register_client(Box::new(client)).unwrap();
+    assert_reopened_branch_can_continue(&mut manager, &registry, &branch).await;
+    manager.close_all().await.unwrap();
+}
+
+async fn wait_for_idle(manager: &mut AgentManager) {
+    tokio::time::timeout(Duration::from_secs(30), async {
+        while manager.active_turn("agent").is_some() {
+            manager.poll().await.unwrap();
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+}
+
+async fn assert_follow_up_stays_in_native_topic(manager: &mut AgentManager) {
+    run(manager, "btw", json!({"question":"First BTW question"})).await;
+    let first = wait_answer(manager).await;
+    run(
+        manager,
+        "btw",
+        json!({"question":"Follow up on this BTW topic", "recordId":first["id"]}),
+    )
+    .await;
+    let followed = wait_answer(manager).await;
+    assert_eq!(followed["id"], first["id"]);
+    assert_eq!(followed["followUps"].as_array().unwrap().len(), 1);
+    assert!(
+        manager
+            .begin_action("agent", "btw_branch", &json!({"recordId":first["id"]}))
+            .await
+            .is_err()
+    );
+}
+
+async fn assert_branch_rejects_busy_or_changed_parent(manager: &mut AgentManager) {
+    run(
+        manager,
         "btw",
         json!({"question":"Promote this independent question"}),
     )
     .await;
-    let promotable = wait_answer(&mut manager).await;
+    let promotable = wait_answer(manager).await;
     manager
         .send("agent", "Advance the parent after BTW")
         .await
@@ -95,34 +112,33 @@ async fn installed_omp_btw_follow_up_and_branch_preserve_native_history_and_reop
             .await
             .is_err()
     );
-    tokio::time::timeout(Duration::from_secs(30), async {
-        while manager.active_turn("agent").is_some() {
-            manager.poll().await.unwrap();
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
-    .await
-    .unwrap();
+    wait_for_idle(manager).await;
     assert!(
         manager
             .begin_action("agent", "btw_branch", &json!({"recordId":promotable["id"]}))
             .await
             .is_err()
     );
+}
+
+async fn assert_branch_preserves_parent_and_promotes_answer(
+    manager: &mut AgentManager,
+    registry: &FileBackedAgentRuntimeRegistry,
+    timeline: &Timeline,
+    original: &AgentPersistenceHandle,
+) -> AgentPersistenceHandle {
     run(
-        &mut manager,
+        manager,
         "btw",
         json!({"question":"Promote this independent question"}),
     )
     .await;
-    let promotable = wait_answer(&mut manager).await;
+    let promotable = wait_answer(manager).await;
+    let parent_file = original.metadata.as_ref().unwrap()["sessionFile"]
+        .as_str()
+        .unwrap();
     let original_bytes = std::fs::read(parent_file).unwrap();
-    let result = run(
-        &mut manager,
-        "btw_branch",
-        json!({"recordId":promotable["id"]}),
-    )
-    .await;
+    let result = run(manager, "btw_branch", json!({"recordId":promotable["id"]})).await;
     assert!(result["error"].is_null(), "{result}");
     let branch = registry.get("agent").unwrap().unwrap().persistence.unwrap();
     assert_ne!(branch.session_id, original.session_id);
@@ -156,10 +172,15 @@ async fn installed_omp_btw_follow_up_and_branch_preserve_native_history_and_reop
             .iter()
             .any(|row| row.entry.item["text"] == "First BTW question")
     );
-    manager.close_all().await.unwrap();
-    let mut manager = AgentManager::new(Box::new(registry.clone())).with_timeline(timeline.clone());
-    manager.register_client(Box::new(client)).unwrap();
-    run(&mut manager, "get_session_stats", json!({})).await;
+    branch
+}
+
+async fn assert_reopened_branch_can_continue(
+    manager: &mut AgentManager,
+    registry: &FileBackedAgentRuntimeRegistry,
+    branch: &AgentPersistenceHandle,
+) {
+    run(manager, "get_session_stats", json!({})).await;
     assert_eq!(
         registry
             .get("agent")
@@ -170,7 +191,7 @@ async fn installed_omp_btw_follow_up_and_branch_preserve_native_history_and_reop
             .session_id,
         branch.session_id
     );
-    let messages = run(&mut manager, "get_entries", json!({})).await;
+    let messages = run(manager, "get_entries", json!({})).await;
     assert!(
         messages["text"]
             .as_str()
@@ -181,15 +202,7 @@ async fn installed_omp_btw_follow_up_and_branch_preserve_native_history_and_reop
         .send("agent", "Continue working in the BTW branch")
         .await
         .unwrap();
-    tokio::time::timeout(Duration::from_secs(30), async {
-        while manager.active_turn("agent").is_some() {
-            manager.poll().await.unwrap();
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
-    .await
-    .unwrap();
-    manager.close_all().await.unwrap();
+    wait_for_idle(manager).await;
 }
 
 async fn run(manager: &mut AgentManager, action: &str, arguments: Value) -> Value {
