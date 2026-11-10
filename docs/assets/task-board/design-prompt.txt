@@ -1,0 +1,60 @@
+Use case: ui-mockup.
+Create ONE realistic, production-quality desktop UI design for Ait, named “任务总览”. Redesign the attached Better Paseo board into the agreed Ait feature. This is a high-fidelity, implementable application screen with Chinese interface text, NOT a poster, not a landing page, and not a collection of alternatives.
+
+Input images:
+1. Better Paseo Tasks board screenshot: structural reference for a real multi-agent status board, compact task cards, left application sidebar, and right details panel. Simplify the clutter of pills and toolbar controls.
+2. Existing Ait welcome screen: source of Ait's orange origami bird branding, clean light theme, system typography and restrained green primary action. Do NOT recreate the welcome-screen layout.
+3. X Fleet screenshot: visual reference for subtle parent-child connections only inside the right task details panel. Do NOT put a large fleet graph in the main board.
+
+Target dimensions: 1920 × 1080 desktop application viewport, landscape 16:9. Flat front-on screenshot, edge-to-edge app, no device bezel, no browser chrome, no perspective, no surrounding presentation canvas. Make all small Chinese text crisp and readable. Natural typography, no stretched elements.
+Current date anchor: 2026-11-10 in Asia/Singapore. Only use relative times such as “等待 3 分钟”, “运行 12 分钟”; do not show invented calendar dates.
+
+Product goal: a developer managing coding agents on multiple computers can immediately see which tasks need intervention, which are running, and which replies need review; selecting one task opens useful details and a permission decision.
+
+Visual system grounded in existing Ait tokens:
+white #FFFFFF main surfaces; canvas #FAFAFA; sidebar #F4F4F5; text #1A1A1E; secondary text #71717A; fine borders #E4E4E7; primary green #20744A and white button text; blue running dots #268AE0; warm amber waiting #B37824; muted red errors #9D433B; green done #3E704A.
+Use system sans-serif / PingFang SC for Chinese, 14–16 px body at the intended viewport, 24 px screen heading, 12–13 px metadata. Lucide-style 1.5 px line icons consistent with existing Ait. Card radius 8 px, control radius 6 px. Purposeful 8/16/24 px spacing. No gradients, no glossy glass, no oversized metrics. Use grouping and spacing first, light dividers second, almost no shadows. Status color is a small dot or small badge rather than a saturated large surface.
+
+Composition:
+- Left sidebar 220 px wide, full height, light zinc background. At top small actual orange origami bird from Ait reference and the name “Ait”.
+- Navigation: “新建工作区” with plus, “任务总览” ACTIVE with a quiet green tint and a small count 2 at the trailing edge, “会话历史”, “定时任务”, “用量”.
+- Below a small “项目” label and 3 project entries “Ait”, “Web Console”, “Docs”, with restrained folder icons. Bottom rows “主机” and “设置”.
+- Center work area about 1320 px wide.
+- Fixed right details panel about 380 px wide, white, separated from the board by one fine vertical border. This is integrated application UI, not a floating modal.
+
+Center:
+Top heading “任务总览”, small understated secondary text “9 个任务 · 2 项需要你处理”.
+One toolbar row: search field “搜索任务、工作区…”, dropdown “全部主机”, dropdown “全部项目”; right-aligned small “最近更新” sort. Keep this to one clean row.
+Below, FOUR equal-width columns, with only subtle column background tint, no enclosing column card borders:
+“待处理 2”, “运行中 3”, “待查看 2”, “已完成 2”.
+Each column has a small semantic status icon/dot, a bold clear heading and muted count.
+Use nine realistic task cards total, short enough to scan, with consistent 16 px padding and restrained metadata. A card shows a small project/workspace breadcrumb, bold task title, agent provider/model on one line, then host and time in a quieter footer. Only add an explanatory state line where useful; do not decorate every field with pills.
+
+Waiting column:
+- Selected card: breadcrumb “Ait / login-fix”; title “修复登录回调”; metadata “Claude Code · Sonnet”; host “MacBook Pro”; amber line “等待审批 · 3 分钟”. Very subtle green selected outline, no heavy glow. A small permission icon shows it needs action.
+- Error card: “Ait / ci-fix”; title “修复 CI 构建”; “Codex”; “Linux Server”; muted red short text “依赖安装失败”. Error is clearly distinguished by its icon and red status.
+Running column:
+- “Ait / workspace-perf”, title “优化工作区加载”, “Codex”, “MacBook Pro”, “运行 12 分钟”; one short line “2 个子任务 · 1 个运行中”.
+- “Ait / relay-tests”, title “补充中继连接测试”, “Claude Code”, “Linux Server”, “运行 4 分钟”.
+- “Docs / release”, title “整理发布说明”, “OpenCode”, “MacBook Pro”, “运行 6 分钟”.
+Review column:
+- “Ait / schedules”, title “新增定时任务模板”, “Codex”, “MacBook Pro”, “2 分钟前完成”; small unread indicator.
+- “Web Console / shortcuts”, title “更新快捷键提示”, “Claude Code”, “Linux Server”, “8 分钟前完成”.
+Done column:
+- “Ait / mobile-scroll”, title “修复移动端滚动”, “Codex”, “MacBook Pro”, “15 分钟前”.
+- “Docs / links”, title “更新文档链接”, “OpenCode”, “Linux Server”, “32 分钟前”.
+Cards are actual task objects and may be cards; don't put decorative cards inside cards. Leave breathing room beneath the short stacks.
+
+Right details:
+Header “任务详情” with a small close icon. Breadcrumb “Ait / login-fix”. Large clear task title “修复登录回调”. Small amber status “等待审批”.
+Two compact metadata rows: “Claude Code · Sonnet” and “MacBook Pro · login-fix”.
+Divider.
+Priority section heading “需要你确认”; explanatory text “运行登录相关测试，验证回调修复。”; a light code strip with monospace command “npm test -- login”.
+One main green button “允许执行” and adjacent quiet outlined “拒绝” button. A small secondary link “查看完整会话” below.
+Divider.
+Section “子任务” with count 2. A compact parent-child tree inspired by the Fleet reference: root “修复登录回调”; two connected child rows “检查回调参数” marked “已完成” with green check, and “补充回归测试” marked “等待审批” with amber dot. Thin neutral connectors, no big graph, no meaningless decorative nodes.
+Divider.
+Section “最近回复” with a short readable two-line excerpt “回调参数校验已修复，等待运行测试后确认结果。” and subtle time “3 分钟前”.
+At bottom, a quiet secondary action “打开会话” with external/open arrow.
+
+Focus on hierarchy, readable Chinese text, consistent alignment and executable-looking UI. The screen must clearly communicate the chosen approach: Better Paseo's practical board plus X's restrained relationship visualization only in task details, adapted to the actual Ait brand. Do not add cost charts, activity curves, marketing headings, user avatars, generic analytics metrics, new integrations or multiple design variants.

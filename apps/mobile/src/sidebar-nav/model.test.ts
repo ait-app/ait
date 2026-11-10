@@ -15,6 +15,7 @@ describe("built-in sidebar navigation", () => {
       { key: "search", visible: false },
       { key: "history", visible: true },
       { key: "new-workspace", visible: true },
+      { key: "tasks", visible: true },
       { key: "shared", visible: true },
       { key: "schedules", visible: true },
       { key: "usage", visible: true },
@@ -36,6 +37,7 @@ describe("built-in sidebar navigation", () => {
     });
     expect(moved.map(({ key }) => key)).toEqual([
       "new-workspace",
+      "tasks",
       "search",
       "history",
       "shared",
@@ -65,6 +67,7 @@ describe("built-in sidebar navigation", () => {
     ).toEqual([
       { key: "history", visible: false },
       { key: "new-workspace", visible: true },
+      { key: "tasks", visible: true },
       { key: "shared", visible: false },
       { key: "search", visible: true },
       { key: "schedules", visible: true },

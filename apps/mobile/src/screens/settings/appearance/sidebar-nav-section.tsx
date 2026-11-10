@@ -19,6 +19,7 @@ import {
   Gauge,
   CalendarClock,
   History,
+  LayoutDashboard,
   Plus,
   Search,
   Users,
@@ -39,6 +40,7 @@ const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.sm} uniProps={mutedColorMa
 
 const BUILTIN_ICONS: Record<BuiltinSidebarNavId, LucideIcon> = {
   "new-workspace": Plus,
+  tasks: LayoutDashboard,
   history: History,
   search: Search,
   shared: Users,

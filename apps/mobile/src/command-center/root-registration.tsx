@@ -10,6 +10,7 @@ import {
   Home,
   Import,
   Keyboard,
+  LayoutDashboard,
   PanelLeft,
   Plus,
   Settings,
@@ -29,6 +30,7 @@ import { clearCommandCenterFocusRestoreElement } from "@/utils/command-center-fo
 import {
   buildOpenProjectRoute,
   buildSchedulesRoute,
+  buildTasksRoute,
   buildSessionsRoute,
   buildSettingsRoute,
 } from "@/utils/host-routes";
@@ -45,6 +47,9 @@ const ThemedHistory = withUnistyles(History, (theme) => ({
   color: theme.colors.foregroundMuted,
 }));
 const ThemedCalendarClock = withUnistyles(CalendarClock, (theme) => ({
+  color: theme.colors.foregroundMuted,
+}));
+const ThemedTasks = withUnistyles(LayoutDashboard, (theme) => ({
   color: theme.colors.foregroundMuted,
 }));
 const ThemedKeyboard = withUnistyles(Keyboard, (theme) => ({
@@ -81,6 +86,10 @@ function HistoryIcon({ size }: CommandCenterIconProps) {
 
 function SchedulesIcon({ size }: CommandCenterIconProps) {
   return <ThemedCalendarClock size={size} strokeWidth={2.2} />;
+}
+
+function TasksIcon({ size }: CommandCenterIconProps) {
+  return <ThemedTasks size={size} strokeWidth={2.2} />;
 }
 
 function KeyboardIcon({ size }: CommandCenterIconProps) {
@@ -225,6 +234,24 @@ export function CommandCenterRootActions() {
           title: t("sidebar.sections.sessions"),
           sectionTitle: t("shell.commandCenter.actions"),
           icon: HistoryIcon,
+        },
+      },
+      {
+        id: "tasks",
+        group: "actions",
+        groupRank: 0,
+        rank: 4.5,
+        keywords: ["tasks", "board", "agents", "mission control", "任务", "看板"],
+        visibility: "always",
+        run: () => {
+          clearCommandCenterFocusRestoreElement();
+          router.push(buildTasksRoute());
+        },
+        presentation: {
+          kind: "action",
+          title: t("taskBoard.title"),
+          sectionTitle: t("shell.commandCenter.actions"),
+          icon: TasksIcon,
         },
       },
       {

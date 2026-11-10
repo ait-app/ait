@@ -141,3 +141,9 @@ export const Workflow = StubIcon;
 export const ZoomIn = StubIcon;
 
 export const ZoomOut = StubIcon;
+
+export const LayoutDashboard = StubIcon;
+
+export const GitFork = StubIcon;
+
+export const WifiOff = StubIcon;
