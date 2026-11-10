@@ -18,9 +18,9 @@ import {
 
 const sourceCommit = "0123456789abcdef".repeat(2) + "01234567";
 const request = {
+  tag: "v0.0.22",
   version: "0.0.22",
   sourceCommit,
-  action: "internal",
   runNumber: "47",
   runAttempt: "1",
   versionCodeBase: "10000",
@@ -60,22 +60,17 @@ const mappingEntry = "BUNDLE-METADATA/com.android.tools.build.obfuscation/progua
 const r8Entry = "BUNDLE-METADATA/com.android.tools/r8.json";
 const mapping = "# compiler: R8\ncom.example.Session -> a.b:\n    void start() -> a";
 const workflow = yaml.parse(
-  await readFile(new URL("../.github/workflows/release-android-play.yml", import.meta.url), "utf8"),
+  await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"),
 );
-const steps = workflow.jobs.release.steps;
+const job = workflow.jobs["android-play"];
+const steps = job.steps;
 
-test("Play planning keeps build-only, draft and internal release actions", () => {
-  for (const [action, releaseStatus] of [
-    ["build-only", null],
-    ["internal-draft", "draft"],
-    ["internal", "completed"],
-  ]) {
-    assert.equal(planAndroidPlayRelease({ ...request, action }).releaseStatus, releaseStatus);
-  }
+test("Play planning requires the stable tag of the source version", () => {
   assert.equal(plan.versionCode, 14701);
   assert.equal(plan.bundleName, "Ait-0.0.22-14701-android.aab");
   for (const override of [
-    { action: "production" },
+    { tag: undefined },
+    { tag: "v0.0.22-beta.1", version: "0.0.22-beta.1" },
     { sourceCommit: "bad\nsource_commit=other" },
     { tag: "v0.0.23" },
     { runNumber: "0" },
@@ -303,16 +298,25 @@ test("bundle collection accepts an embedded R8 mapping larger than 64 MiB", asyn
   );
 });
 
-test("Play workflow builds locally and submits only the verified AAB to internal testing", async () => {
+test("every stable release builds locally and submits only the verified AAB to internal testing", async () => {
   assert.deepEqual(workflow.permissions, { contents: "read" });
-  assert.equal(workflow.on.push, undefined);
-  assert.equal(workflow.on.workflow_dispatch.inputs.action.default, "build-only");
-  assert.deepEqual(workflow.on.workflow_dispatch.inputs.action.options, [
-    "build-only",
-    "internal-draft",
-    "internal",
-  ]);
-  assert.equal(workflow.concurrency["cancel-in-progress"], false);
+  assert.equal(job.permissions, undefined);
+  assert.deepEqual(workflow.on.push.tags, ["v*"]);
+  assert.equal(job.if, "${{ !contains(inputs.tag || github.ref_name, '-') }}");
+  assert.deepEqual(job.concurrency, {
+    group: "release-android-play",
+    "cancel-in-progress": false,
+    queue: "max",
+  });
+  // ait-release stops on an unsuccessful run, so Play problems must not fail the desktop release.
+  assert.equal(job["continue-on-error"], true);
+  assert(!workflow.jobs.release.needs.includes("android-play"));
+  const artifact = steps.find((step) => step.uses?.startsWith("actions/upload-artifact"));
+  const download = workflow.jobs.release.steps.find((step) =>
+    step.uses?.startsWith("actions/download-artifact"),
+  );
+  assert.equal(download.with.pattern, "ait-*");
+  assert(!artifact.with.name.startsWith("ait-"), "AAB must stay out of GitHub Release assets");
   const position = (name) => steps.findIndex((step) => step.name === name);
   for (const [before, after] of [
     ["Move tooling outside the Metro source tree", "Generate Android project"],
@@ -327,7 +331,7 @@ test("Play workflow builds locally and submits only the verified AAB to internal
     );
   }
   const submit = steps[position("Submit this verified AAB to Google Play")];
-  assert.equal(submit.if, "inputs.action != 'build-only'");
+  assert.equal(submit.if, undefined);
   assert.equal(submit.uses, "r0adkll/upload-google-play@v1");
   assert.equal(
     submit.with.serviceAccountJsonPlainText,
@@ -335,15 +339,16 @@ test("Play workflow builds locally and submits only the verified AAB to internal
   );
   assert.equal(submit.with.packageName, "dev.ait.mobile");
   assert.equal(submit.with.tracks, "internal");
-  assert.equal(submit.with.status, "${{ steps.plan.outputs.release_status }}");
+  assert.equal(submit.with.status, "completed");
   assert.equal(
     submit.with.releaseFiles,
     "release-assets-play/${{ steps.plan.outputs.bundle_name }}",
   );
-  const text = JSON.stringify(workflow);
+  const text = JSON.stringify(job);
   assert.doesNotMatch(text, /EXPO_TOKEN|eas (?:build|submit)|EAS_BUILD_ID|expo\.dev/);
   assert.equal(steps.find((step) => step.name === "Remove upload keystore").if, "always()");
-  await assert.rejects(access(new URL("../.github/workflows/build-android.yml", import.meta.url)));
+  for (const removed of ["build-android.yml", "release-android-play.yml"])
+    await assert.rejects(access(new URL(`../.github/workflows/${removed}`, import.meta.url)));
   for (const step of steps.filter((step) => step.run)) {
     assert.doesNotMatch(step.run, /\$\{\{\s*(?:inputs|secrets)\./);
     const result = spawnSync("bash", ["-n", "-c", step.run], {
@@ -422,7 +427,7 @@ test("collection reads the bundle's own mapping and rejects missing or corrupt R
   }
 });
 
-test("all actions require signing and Firebase config, only uploads require Play credentials, and secrets stay private", async (t) => {
+test("releases require signing, Firebase and Play credentials, and secrets stay private", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "ait-play-credentials-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const step = steps.find((step) => step.name === "Validate release request and credentials");
@@ -432,23 +437,22 @@ test("all actions require signing and Firebase config, only uploads require Play
     KEY_ALIAS: "ait",
     KEY_PASSWORD: "key",
     GOOGLE_SERVICES_JSON: googleServices,
+    PLAY_SERVICE_ACCOUNT_JSON: "{}",
   };
-  const execute = (action, overrides = {}) =>
+  const execute = (overrides = {}) =>
     spawnSync("bash", ["-e", "-o", "pipefail", "-c", step.run], {
       cwd: root,
       encoding: "utf8",
       env: {
         PATH: process.env.PATH,
         RUNNER_TEMP: root,
-        ACTION: action,
-        TAG: "",
+        RELEASE_TAG: "v0.0.22",
         GITHUB_ENV: path.join(root, "github-env"),
-        PLAY_SERVICE_ACCOUNT_JSON: "",
         ...secrets,
         ...overrides,
       },
     });
-  assert.equal(execute("build-only").status, 0);
+  assert.equal(execute().status, 0);
   assert.equal(await readFile(path.join(root, "android-play.keystore"), "utf8"), "test keystore");
   assert.equal((await stat(path.join(root, "android-play.keystore"))).mode & 0o777, 0o600);
   const googleServicesFile = path.join(root, "google-services.json");
@@ -458,17 +462,10 @@ test("all actions require signing and Firebase config, only uploads require Play
     await readFile(path.join(root, "github-env"), "utf8"),
     `GOOGLE_SERVICES_FILE_PROD=${googleServicesFile}\n`,
   );
-  for (const action of ["build-only", "internal-draft", "internal"]) {
-    for (const name of Object.keys(secrets))
-      assert.notEqual(execute(action, { [name]: "" }).status, 0);
-  }
-  for (const action of ["internal-draft", "internal"]) {
-    assert.notEqual(execute(action).status, 0);
-    assert.equal(execute(action, { PLAY_SERVICE_ACCOUNT_JSON: "{}" }).status, 0);
-  }
-  assert.notEqual(execute("production").status, 0);
-  assert.notEqual(execute("build-only", { TAG: "v0.0.22\nmalicious" }).status, 0);
-  assert.notEqual(execute("build-only", { KEYSTORE_BASE64: "%%%" }).status, 0);
+  for (const name of Object.keys(secrets)) assert.notEqual(execute({ [name]: "" }).status, 0);
+  for (const RELEASE_TAG of ["", "v0.0.22-beta.1", "v0.0.22\nmalicious"])
+    assert.notEqual(execute({ RELEASE_TAG }).status, 0);
+  assert.notEqual(execute({ KEYSTORE_BASE64: "%%%" }).status, 0);
 });
 
 test("workflow passes the exact source, unique version and signing arguments into the Gradle build", async (t) => {
@@ -497,8 +494,7 @@ test("workflow passes the exact source, unique version and signing arguments int
     RUNNER_TEMP: root,
     GITHUB_OUTPUT: path.join(root, "output"),
     SOURCE_COMMIT: sourceCommit,
-    ACTION: "internal-draft",
-    TAG: "",
+    RELEASE_TAG: "v0.0.22",
     GITHUB_RUN_NUMBER: "47",
     GITHUB_RUN_ATTEMPT: "2",
     VERSION_CODE_BASE: "10000",
@@ -520,7 +516,6 @@ test("workflow passes the exact source, unique version and signing arguments int
   const actual = JSON.parse(await readFile(path.join(root, "android-play-plan.json"), "utf8"));
   assert.equal(actual.sourceCommit, sourceCommit);
   assert.equal(actual.versionCode, 14702);
-  assert.equal(actual.releaseStatus, "draft");
   assert.match(
     await readFile(path.join(root, "apps/mobile/android/app/build.gradle"), "utf8"),
     /versionCode 14702/,

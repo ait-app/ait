@@ -1,12 +1,13 @@
 # Google Play 内部测试与 CI 发布
 
-[Release Android to Google Play](../../.github/workflows/release-android-play.yml) 在 GitHub
-托管的 Ubuntu runner 上构建签名 AAB，并按选择上传到 Google Play 的内部测试轨道。
-包名固定为 `dev.ait.mobile`。构建和提交不调用 EAS，也不需要 `EXPO_TOKEN`。
+[Release Ait](../../.github/workflows/release.yml) 的 `android-play` job 在每个稳定标签
+发布时，于 GitHub 托管的 Ubuntu runner 上构建签名 AAB，并以 `completed` 状态提交到
+Google Play 的内部测试轨道。包名固定为 `dev.ait.mobile`。构建和提交不调用 EAS，也不需要 `EXPO_TOKEN`。
 移动端仍使用 Expo SDK；`expo prebuild` 只在 runner 本地生成 Android 工程。
-设计见 [ADR-175](../decisions/clients/adr-175-android-play-gradle-release.md)。
+设计见 [ADR-175](../decisions/clients/adr-175-android-play-gradle-release.md) 和
+[ADR-234](../decisions/clients/adr-234-play-internal-in-release-workflow.md)。
 
-独立 APK 工作流已移除，桌面 Release 不再构建 Android；重跑旧 Release 时仅保留和校验已有 APK 附件。
+独立 APK 工作流已移除，GitHub Release 不附带新的 Android 产物；重跑旧 Release 时仅保留和校验已有 APK 附件。
 AAB 不能直接安装；若需要站外 APK，可在上传后从 Play Console 获取 Google 签名的通用 APK，
 本工作流不自动下载或发布它。
 
@@ -50,9 +51,8 @@ gh secret set ANDROID_GOOGLE_SERVICES_JSON --repo ait-app/ait < /absolute/path/g
 
 其余三个 Secrets 可在 GitHub 页面填写，或使用 `gh secret set NAME --repo ait-app/ait`
 交互输入。keystore、密码与服务账号 JSON 不进入 Git、日志、聊天或 issue。
-只构建 AAB 也必须配置四个签名 Secrets；缺失时失败，不回退 debug 签名。
-`GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` 仅上传时需要。
-`ANDROID_GOOGLE_SERVICES_JSON` 每次构建都需要：缺少它的包能正常安装，但拿不到 FCM token，
+以上 Secrets 每次发布都需要；缺失时 job 失败，不回退 debug 签名。
+`ANDROID_GOOGLE_SERVICES_JSON` 缺失的后果最隐蔽：缺少它的包能正常安装，但拿不到 FCM token，
 后台推送永远无法送达。workflow 在 prebuild 后校验其中包含 `dev.ait.mobile`，
 且 Gradle 应用了 Google services 插件，否则失败。它必须与 daemon／中心
 `AIT_FCM_SERVICE_ACCOUNT_FILE` 属于同一个 Firebase 项目。
@@ -71,6 +71,7 @@ gh variable set ANDROID_PLAY_VERSION_CODE_BASE --repo ait-app/ait --body 47
 versionCode = ANDROID_PLAY_VERSION_CODE_BASE + GITHUB_RUN_NUMBER × 100 + GITHUB_RUN_ATTEMPT
 ```
 
+运行编号取自 `release.yml`，其计数已超过此前独立工作流，切换后无需调整基数。
 每次新运行及重跑均分配不同版本号，每个 run 最多支持 99 次 attempt，结果不得超过
 Play 的 `2100000000` 上限。`versionName` 保持仓库版本不变。计数只写入 runner 生成的
 `android/app/build.gradle`，不修改仓库、iOS 版本或 EAS 远端计数器。
@@ -86,34 +87,29 @@ Play 的 `2100000000` 上限。`versionName` 保持仓库版本不变。计数�
    和「将应用发布到测试轨道」。CI 不维护测试者名单，无需管理员、财务或正式版发布权限。
 4. 将服务账号 JSON 配置为上述 GitHub Secret。若旧 JSON 仅保存在 EAS 且无法取回，
    为同一服务账号创建新 JSON key；旧 EAS/iOS 凭据无需变更。
-5. 对尚未通过 Console 初始化的应用，先运行 `build-only`，下载 AAB，手动上传至内部测试
-   草稿，按提示配置 Play App Signing 和首轮发布。上传 action 要求包名已存在于 Play。
-   已有 Play 版本的应用跳过此步。
+5. 对尚未通过 Console 初始化的应用，上传 action 会失败，因为它要求包名已存在于 Play。
+   此时从该次运行的 `android-play-aab` artifact 下载 AAB，手动上传至内部测试草稿，
+   按提示配置 Play App Signing 和首轮发布。已有 Play 版本的应用跳过此步。
 
 CI 使用 [upload-google-play](https://github.com/r0adkll/upload-google-play) 直接调用 Play
 Developer API，上传轨道固定为 `internal`，没有 production 或 internal sharing 入口。
 
-## 手动运行
+## 发布时机
 
-打开 Actions → **Release Android to Google Play** → **Run workflow**，选择源码分支：
+推送稳定标签 `vX.Y.Z` 或手动运行 `release.yml` 时，`android-play` job 都会构建并提交给
+内部测试者，没有只构建或草稿选项。job 使用标签源码（或显式指定的 `source_commit`），并
+检查标签版本与仓库版本一致。含 `-` 的预发布标签（如 `vX.Y.Z-beta.N`）不进入 Play。
 
-| action               | 行为                                         |
-| -------------------- | -------------------------------------------- |
-| `build-only`（默认） | 构建、签名并校验 AAB，只上传 GitHub artifact |
-| `internal-draft`     | 构建并上传到 Play，保留内部测试草稿          |
-| `internal`           | 构建并以 `completed` 状态提交给内部测试者    |
+手动重跑同一版本或旧标签同样会上传：新运行的 `versionCode` 更高，因此旧标签的构建会
+成为内部测试的最新版本。只想修复桌面资产时，在原运行中重跑对应 job，不要重跑全部 job；
+发布工具的修复必须用 `gh workflow run` 加载，这种重跑无法避开 Play 上传。
 
-空 `tag` 使用本次触发时的分支 commit；填写稳定标签 `vX.Y.Z` 时使用该标签源码，并检查
-标签版本与 `apps/mobile/package.json` 一致。不会因推送标签、PR 或合并分支自动上传。
-
-```bash
-gh workflow run release-android-play.yml --repo ait-app/ait --ref main -f action=build-only
-gh workflow run release-android-play.yml --repo ait-app/ait --ref main -f action=internal-draft
-gh workflow run release-android-play.yml --repo ait-app/ait --ref main -f action=internal -f tag=vX.Y.Z
-```
+`android-play` 与桌面构建并行，不是 GitHub Release 的前置条件，且设置了
+`continue-on-error`：Play 失败不会影响 Release 或整次运行的结论，因此需要查看该 job 的
+状态和运行摘要。`ait-release` 编排会等整次运行结束，包括这个 job。
 
 运行摘要记录源码 commit、版本、实际 `versionCode` 和构建结果。
-`ait-android-play-aab` artifact 保留 14 天，包含签名 `.aab`、`BUILD-INFO.json`、
+`android-play-aab` artifact 保留 14 天，包含签名 `.aab`、`BUILD-INFO.json`、
 从该 AAB 提取的 `mapping.txt` 和 `SHA256SUMS`。若 AGP 在 AAB 中提供 `r8.json`，也会
 提取并纳入校验和；较旧 AGP 缺少此文件时，Play 使用映射文件或 DEX 特征评估优化情况。
 下载解压后验证：
@@ -152,7 +148,7 @@ Play CI 在 Gradle 构建前检查这两个开关、R8 full mode 和默认规则
 
 PR CI 的 `test:mobile-release` 对安装的 Expo 模板实际运行配置插件，并验证 Play 产物
 检查会拒绝缺失或损坏的映射。此检查不能代替 Release 真机验收：首次开启 R8 后，应先
-运行 `build-only` 或内部测试，验证冷启动、登录、主机连接、Agent 会话、通知和原生模块。
+通过内部测试验证冷启动、登录、主机连接、Agent 会话、通知和原生模块。
 如需修复反射或 JNI 兼容性，只添加必要的保留规则，避免整包 `-keep` 或全局关闭优化。
 实际 DEX 指标以新 AAB 的 Play Console 结果为准，不承诺固定混淆百分比。
 参见 [DEX 指标](https://developer.android.com/google/play/vitals/code-optimization)和
@@ -168,11 +164,13 @@ AAB 使用 **上传密钥** 签名。Google Play 安装包由 **Play App Signing
 - 构建或校验失败：不会上传到 Play，修复后重跑。
 - 上传权限或签名错误：检查服务账号的 Play 应用权限，以及 keystore 是否匹配 Play 登记的
   upload certificate。服务账号 JSON 用于 API 身份认证，不能替代签名 keystore。
-- 应用仅允许草稿：选择 `internal-draft`，在 Console 完成首次发布。
+- 应用仅允许草稿：下载本次 artifact 的 AAB，在 Console 手动完成首次发布，再重跑 job。
 - 版本号已使用或低于已发布版本：检查迁移基数；不要降低它。较旧 run 在新 run 上传后
-  重跑可能仍然版本过低，此时使用新的 Run workflow。
+  重跑可能仍然版本过低，此时发布新的补丁版本，或对该标签重新运行 `release.yml`。
 - 超时、取消或上传结果不明：先在 Play Console 按实际 `versionCode` 查明是否已接收，
   再决定是否重跑。重跑会重新构建并分配新版本号，不会自动复用旧 AAB。
+- 只重跑 Android：在运行页面重跑 `android-play` job，或执行
+  `gh run rerun <run-id> --repo ait-app/ait --job <job-id>`。
 
 Gradle 构建最多 120 分钟，上传最多 30 分钟，整个 job 最多 150 分钟；Play 各次提交串行。
 在 Console 发布内部测试后，用测试者账号打开 opt-in 链接并从 Google Play 安装。

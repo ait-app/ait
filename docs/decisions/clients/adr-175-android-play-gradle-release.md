@@ -14,6 +14,7 @@ paths:
 # ADR-175：Google Play AAB 在 GitHub runner 上构建和提交
 
 - 取代：ADR-097 的 EAS 构建、版本与提交机制，以及 ADR-172 的独立 APK 工作流。
+- 发布入口与手动动作已由 [ADR-234](adr-234-play-internal-in-release-workflow.md) 修订。
 
 Android 商店发布统一使用 `release-android-play.yml`：GitHub 托管 runner 本地执行
 `expo prebuild` 和 Gradle `:app:bundleRelease`，使用仓库 Secrets 中的既有上传 keystore
