@@ -47,6 +47,7 @@
 | `installed_omp_btw_follow_up_and_branch_preserve_native_history_and_reopen -- --ignored`，同一外部 OMP | 1 通过：Follow up、Branch、父日志保留与重启续聊                   |
 
 反向验证：临时移除前 8 项对应的关键修复，8 个独立探针均产生预期测试失败，随后恢复生产修复并重新通过上述定向检查。这是故障探针验证，不是覆盖率，也不是对所有历史版本的实装验收。
+最终复核另补一个外部恢复断言：恢复调用返回前，worker 必须已登记为 running。该断言在保留旧终态记录时失败；注册阶段现直接更新状态，避免恢复回执与后续事件之间的淘汰空窗。随后重新验证 OMP 模块及 6 项 Vibe 实装检查。
 探针分别位于 [Session review](../../../crates/provider/src/local/omp/session/tests/review.rs)、[Vibe host](../../../crates/provider/src/local/omp/vibe/host/tests.rs)、[记录容量](../../../crates/provider/src/local/omp/vibe/host/tests/registry.rs)、[Manager review](../../../crates/provider/src/service/agent_manager/tests/review.rs)、[部分配置事件](../../../crates/provider/src/local/omp/session/observed_settings/tests.rs)、[Claude draft](../../../crates/provider/src/local/claude/tests/draft.rs)。
 
 `cargo fmt --all --check`、`cargo clippy --locked --workspace --all-targets -- -D warnings`、`cargo build --locked --workspace`、`npm run check:format`、`npm run check:docs` 全部通过。仅运行受影响模块及直接关联测试；本地未运行完整 Rust workspace 测试。UI 没有变化，未重复使用旧截图宣称本次并发修复已通过 GUI 验收。最新提交的 CI 结果单独记录于 PR。

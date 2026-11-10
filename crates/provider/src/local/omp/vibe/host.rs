@@ -872,7 +872,7 @@ async fn launch(shared: Arc<Shared>, request: WorkerRequest) -> Result<Value, Ag
         .flatten()
         .ok_or(AgentSessionError::Rejected)?;
     let id = record.child.id.clone();
-    registry.records.entry(id.clone()).or_insert(record.clone());
+    registry.records.insert(id.clone(), record);
     registry.slots.insert(
         id.clone(),
         Slot {

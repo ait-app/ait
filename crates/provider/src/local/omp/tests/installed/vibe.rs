@@ -260,6 +260,13 @@ async fn installed_external_omp_vibe_worker_approval_followup_resume_and_foreign
         json!({"operation":"send","sessionId":id,"message":"Restored-worker follow-up"}),
     )
     .await;
+    assert!(
+        restored
+            .subagents()
+            .iter()
+            .any(|worker| worker.id == id && worker.descriptor["status"] == "running"),
+        "a restored worker must be protected from eviction before its start receipt returns"
+    );
     worker_done(restored.as_mut(), &id).await;
     let worker = restored
         .subagents()
