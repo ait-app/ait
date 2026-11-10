@@ -1,7 +1,14 @@
+---
+id: ADR-058
+status: accepted
+date: 2026-09-27
+paths:
+  - crates/provider
+  - crates/metadata
+---
+
 # ADR-058：Server 的有界 metadata generation
 
-- 状态：Accepted
-- 日期：2026-09-27
 - 关联：ADR-001 v4、ADR-031、ADR-032、ADR-050、ADR-052
 
 生成接口归属及配置注入现由 [ADR-101](adr-101-provider-summary-generator.md) 修订；原有配置键和生成行为保留。
@@ -58,4 +65,4 @@ Message 不可变性、Session 指针和 Run 终止规则不变；生成结果�
 
 Paseo 这四类配置没有独立的 session 摘要接口，本次也不扩展一套摘要协议；旧应用领域模型
 中的 description 不被当成独立 Server 的已有能力。与 Paseo 相比，队列、期限、进程隔离和
-手工同值改名保护更明确。验证、测量范围与剩余限制见[报告](../../reports/providers/metadata-generation.md)。
+手工同值改名保护更明确。验证、测量范围与剩余限制见[报告](../../archive/reports/providers/metadata-generation.md)。

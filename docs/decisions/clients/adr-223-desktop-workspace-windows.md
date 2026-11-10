@@ -1,7 +1,13 @@
-# ADR-223：桌面多窗口与 Workspace 状态归属
+---
+id: ADR-223
+status: accepted
+date: 2026-11-09
+paths:
+  - apps/desktop
+  - apps/mobile
+---
 
-- 状态：已实现
-- 日期：2026-11-09
+# ADR-223：桌面多窗口与 Workspace 状态归属
 
 ## 背景
 

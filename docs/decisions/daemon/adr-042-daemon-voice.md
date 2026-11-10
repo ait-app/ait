@@ -1,7 +1,13 @@
+---
+id: ADR-042
+status: accepted
+date: 2026-09-25
+paths:
+  - crates/voice
+---
+
 # ADR-042：连接级语音、听写与双后端
 
-- 状态：Accepted。
-- 日期：2026-09-25。
 - 授权：实现 Paseo 语音与听写的八个接口；用户明确要求云端和本地两种后端。
 - 来源：本地 Paseo `2c8e8a826810337492cc5a38bb0bbd705b6fb632`。
 
@@ -65,4 +71,4 @@ Sherpa/Parakeet Node worker、模型目录/下载器或神经 VAD。HTTP 使用�
 
 测试覆盖连接协议、乱序/重复/取消、模式与目标排他、播放确认、真实 HTTP multipart/PCM
 调用，以及本地可执行程序的参数、输入输出和取消回收。外部依赖使用离线替身；真实模型
-的识别质量和延迟仍需另行验收。命令、覆盖率与限制见[实施报告](../../reports/daemon/voice.md)。
+的识别质量和延迟仍需另行验收。命令、覆盖率与限制见[实施报告](../../archive/reports/daemon/voice.md)。

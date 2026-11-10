@@ -1,7 +1,14 @@
-# ADR-190：Ait ACP 桥接官方 OMP 与通用插件接口
+---
+id: ADR-190
+status: accepted
+date: 2026-10-25
+amends:
+  - providers/adr-180-omp-native-rpc-provider.md
+paths:
+  - crates/provider
+---
 
-- 状态：Accepted
-- 日期：2026-10-25
+# ADR-190：Ait ACP 桥接官方 OMP 与通用插件接口
 
 - 结算修订：[ADR-194](adr-194-omp-settlement-reconciliation.md) 补充原生空闲状态核对与有界取消。
 
@@ -55,4 +62,4 @@ Ait 的 ACP 入口明确标识自身及 RPC 后端，不宣称使用 OMP 自带 
 
 测试必须以未修改的官方 CLI 为基线，并使用不同插件名称验证共用路径。
 定制版 OMP 的旧测试结果不能作为官方兼容证明；当前证据见
-[验证报告](../../reports/providers/omp-acp-settlement-2026-10-25.md)。
+[验证报告](../../archive/reports/providers/omp-acp-settlement-2026-10-25.md)。

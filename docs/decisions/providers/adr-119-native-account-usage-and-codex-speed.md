@@ -1,7 +1,13 @@
+---
+id: ADR-119
+status: accepted
+date: 2026-10-10
+paths:
+  - crates/provider
+---
+
 # ADR-119：原生账号用量与 Codex 速度目录
 
-- 状态：已接受
-- 日期：2026-10-10
 - 更新：2026-10-17，统一 Fast 别名并改为直接开关。
 - 2026-10-20：第 4 项缓存策略由 [ADR-167](adr-167-account-scoped-successful-usage.md) 修订，增加账号身份与 live-session 隔离的成功快照。
 - 关系：延续 ADR-027 的会话端口与 Manager 生命周期边界、ADR-047 的 Plugin 移除，以及 ADR-091 的独立会话调度。
@@ -26,4 +32,4 @@ Paseo 的新版用量界面支持固定窗口、切换已用或剩余百分比�
 - 后端仍由 Rust 实现，crate 依赖方向不变；共享 TypeScript 协议只声明显示与请求数据。
 - 旧 daemon 支持基础主机用量，但新增的 Agent 作用域和单 Provider 刷新需要本次后端更新。
 - 非活动会话无法展示当前账号用量；未声明速度档位的 Codex CLI 不会显示额外速度菜单。原生登录恢复仍需使用对应 CLI。
-- 验证范围与平台限制记录在 [客户端移植报告](../../reports/clients/paseo-desktop-app-port-2026-10-10.md)。
+- 验证范围与平台限制记录在 [客户端移植报告](../../archive/reports/clients/paseo-desktop-app-port-2026-10-10.md)。

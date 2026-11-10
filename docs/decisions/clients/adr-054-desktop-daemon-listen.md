@@ -1,7 +1,16 @@
+---
+id: ADR-054
+status: accepted
+date: 2026-09-27
+amends:
+  - clients/adr-048-paseo-desktop-rust-launcher.md
+  - clients/adr-049-app-rust-browser-transport.md
+paths:
+  - apps/desktop
+---
+
 # ADR-054：桌面服务监听配置与网络地址
 
-- 状态：Accepted
-- 日期：2026-09-27
 - 范围：Paseo/Electron 启动器与独立 Rust server 的 transport 边界
 - 修订：ADR-048、ADR-049 中的仅回环监听限制；领域模型与依赖方向保持不变。
 
@@ -37,4 +46,4 @@ Host 概览仅为本机桌面托管服务提供该设置，离线时保留入口
 
 验证覆盖配置重载/并发保存/失败写入、实际子进程 IPv4/IPv6/LAN 连接、固定端口、凭据范围、
 通配监听 Host/Origin 约束，以及 Electron 跨启动恢复。结果见
-[实施报告](../../reports/clients/desktop-server-listen.md)。
+[实施报告](../../archive/reports/clients/desktop-server-listen.md)。

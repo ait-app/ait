@@ -1,8 +1,13 @@
+---
+id: ADR-109
+status: accepted
+date: 2026-10-08
+paths:
+  - bins/daemon
+  - crates/provider
+---
+
 # ADR-109：本地故障证据与 Harness 日志采集
-
-状态：已接受
-
-日期：2026-10-08
 
 修订：证据文件存储由 [ADR-112](adr-112-persistence-crate.md) 迁至 `bins/daemon/src/diagnostics/store.rs`。
 

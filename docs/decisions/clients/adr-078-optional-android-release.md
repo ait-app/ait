@@ -1,6 +1,14 @@
-# ADR-078：Android 发布改为手动可选
+---
+id: ADR-078
+status: accepted
+date: 2026-10-03
+amends:
+  - clients/adr-077-android-apk-release.md
+paths:
+  - .github/workflows
+---
 
-状态：Accepted（2026-10-03）
+# ADR-078：Android 发布改为手动可选
 
 ## 背景
 

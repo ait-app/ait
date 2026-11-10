@@ -1,7 +1,16 @@
+---
+id: ADR-124
+status: accepted
+date: 2026-10-11
+amends:
+  - clients/adr-083-online-service-host-sync.md
+  - clients/adr-122-persistent-online-service-hosts.md
+paths:
+  - apps/mobile
+---
+
 # ADR-124：登录后自动添加全部在线服务主机
 
-- 状态：已实现
-- 日期：2026-10-11
 - 关系：修订 [ADR-083](adr-083-online-service-host-sync.md) 的主机选择交互，以及 [ADR-122](adr-122-persistent-online-service-hosts.md) 的显式添加策略；沿用 [ADR-123](adr-123-browser-only-account-login.md) 的统一浏览器登录。
 
 ## 背景

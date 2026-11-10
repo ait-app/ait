@@ -1,7 +1,18 @@
+---
+id: ADR-107
+status: accepted
+date: 2026-10-08
+amends:
+  - daemon/adr-106-concrete-file-persistence.md
+  - providers/adr-101-provider-summary-generator.md
+  - providers/adr-102-provider-metadata-independence.md
+paths:
+  - crates
+  - bins/daemon
+---
+
 # ADR-107：共享组件直接从所属 crate 导入
 
-- 状态：接受
-- 日期：2026-10-08
 - 修订：[ADR-102](../providers/adr-102-provider-metadata-independence.md) 和
   [ADR-106](adr-106-concrete-file-persistence.md) 中用于保留旧 Rust 路径的兼容重导出。
 

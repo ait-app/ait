@@ -1,7 +1,22 @@
+---
+id: ADR-111
+status: accepted
+date: 2026-10-08
+supersedes:
+  - daemon/adr-038-daemon-protocol-dependencies.md
+amends:
+  - daemon/adr-072-workspace-names-and-documentation.md
+  - daemon/adr-103-terminal-model-dependency.md
+  - daemon/adr-106-concrete-file-persistence.md
+  - providers/adr-102-provider-metadata-independence.md
+  - workspace/adr-104-filesystem-model-collaboration.md
+paths:
+  - crates/domain
+  - crates/model
+---
+
 # ADR-111：纯业务数据归 domain，连接协议并入 model::server
 
-- 状态：接受
-- 日期：2026-10-08
 - 修订：[ADR-038](adr-038-daemon-protocol-dependencies.md) 的独立 protocol crate；
   [ADR-102](../providers/adr-102-provider-metadata-independence.md)、
   [ADR-103](adr-103-terminal-model-dependency.md)、

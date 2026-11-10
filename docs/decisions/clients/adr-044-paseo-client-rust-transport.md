@@ -1,10 +1,19 @@
+---
+id: ADR-044
+status: accepted
+date: 2026-09-25
+paths:
+  - packages/client
+  - apps/mobile
+  - apps/desktop
+---
+
 # ADR-044：Paseo 前端适配 Rust server 协议
 
 > 协议实现归属由 [ADR-211](adr-211-sdk-native-daemon-protocol.md) 修订：
 > Rust v1 处理已收进 `@ait/client`，应用层适配器移除。以下保留原始决策背景。
 
-- 状态：Accepted；方法范围经 ADR-045 修订为 186 个上游名称 / 183 个规范方法，第四条连接为 28 项能力，下文计数保留原始决策记录。
-- 日期：2026-09-25。
+- 状态说明：Accepted；方法范围经 ADR-045 修订为 186 个上游名称 / 183 个规范方法，第四条连接为 28 项能力，下文计数保留原始决策记录。
 - 范围：`apps/mobile` 的 TCP 客户端连接层和 `apps/desktop` 的 Electron transport bridge。
 - 基线：Paseo `2c8e8a826810337492cc5a38bb0bbd705b6fb632`、Rust WebSocket v1.0。
 
@@ -52,4 +61,4 @@ release 返回所属连接。Voice/听写固定在同一连接；Terminal 和文
 
 四连接方案增加每个主机的连接开销；未来若 Rust 支持更大的能力集合或动态协商，可以
 收敛连接数，但必须保留订阅与音频的物理连接所有权。Rust 剩余行为缺口和验收范围见
-[实施报告](../../reports/clients/paseo-client-rust-adapter.md)。
+[实施报告](../../archive/reports/clients/paseo-client-rust-adapter.md)。

@@ -1,7 +1,16 @@
+---
+id: ADR-207
+status: accepted
+date: 2026-11-01
+amends:
+  - clients/adr-048-paseo-desktop-rust-launcher.md
+  - clients/adr-128-desktop-daemon-keep-running.md
+paths:
+  - apps/desktop
+---
+
 # ADR-207：桌面 daemon 就绪探测与进程生命周期分离
 
-- 状态：已实现
-- 日期：2026-11-01
 - 关系：修订 [ADR-048](adr-048-paseo-desktop-rust-launcher.md) 的启动失败回收策略，以及 [ADR-128](adr-128-desktop-daemon-keep-running.md) 的探测、交接与接管失败处理。
 
 ## 背景

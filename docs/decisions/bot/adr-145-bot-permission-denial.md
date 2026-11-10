@@ -1,7 +1,16 @@
+---
+id: ADR-145
+status: accepted
+date: 2026-10-13
+amends:
+  - bot/adr-139-workspace-bots-and-owned-channels.md
+  - clients/adr-141-experimental-workspace-bots.md
+paths:
+  - crates/bot
+---
+
 # ADR-145：Bot 执行期间自动拒绝权限请求
 
-- 状态：已实现
-- 日期：2026-10-13
 - 关系：修订 [ADR-139](adr-139-workspace-bots-and-owned-channels.md) 与 [ADR-141](../clients/adr-141-experimental-workspace-bots.md) 的 Bot 审批行为。
 - 后续修订：[ADR-213](adr-213-single-workspace-manager-bot.md) 删除 `bot.permission.resolve.request`，取代第 3 条；第 1、2、4、5 条继续有效。
 - 后续修订：[ADR-215](adr-215-bot-permissions-and-scoped-mcp.md) 取代第 4 条的模式改写：Bot 会话按 Provider 能力选择最严格的原生模式（Codex `read-only`、Claude `default`），自动拒绝规则本身不变。

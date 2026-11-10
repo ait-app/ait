@@ -1,7 +1,14 @@
+---
+id: ADR-069
+status: accepted
+date: 2026-10-02
+paths:
+  - crates/filesystem
+  - crates/metadata
+---
+
 # ADR-069：活跃工作区的后台 Git fetch
 
-- 状态：Accepted
-- 日期：2026-10-02
 - 关联：ADR-030、ADR-037、ADR-065
 
 “从 main 更新”的合并行为已由 [ADR-083](adr-083-reset-workspace-to-origin-default.md) 中的工作区重置取代。
@@ -39,7 +46,7 @@ Git 菜单与 Paseo 一致，但 Ait 的 Rust 服务没有刷新远端引用的�
 
 定向测试覆盖仓库去重、180 秒节奏、事件去重、失败重试、origin 新增、取消与任务回收、
 并发预算、真实本机远端 fetch/prune、基准比较和 WebSocket 状态推送。
-验证结果及覆盖率状态见[实施报告](../../reports/workspace/background-git-fetch.md)。
+验证结果及覆盖率状态见[实施报告](../../archive/reports/workspace/background-git-fetch.md)。
 
 后台 fetch 不保证点击瞬间的远端状态；网络失败时保留上一次引用。需要严格最新版本时，
 仍可显式 fetch。没有新增公共 RPC、持久化 schema、前端按钮或远端写入行为。

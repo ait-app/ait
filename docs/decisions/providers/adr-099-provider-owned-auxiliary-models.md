@@ -1,7 +1,16 @@
+---
+id: ADR-099
+status: accepted
+date: 2026-10-07
+amends:
+  - providers/adr-058-daemon-metadata-generation.md
+  - providers/adr-089-provider-owned-composition.md
+paths:
+  - crates/provider
+---
+
 # ADR-099：Provider 自选辅助小模型
 
-- 状态：Accepted。
-- 日期：2026-10-07。
 - 范围：标题、分支名与提交说明的辅助生成。
 - 关系：修订 [ADR-058](adr-058-daemon-metadata-generation.md) 的候选模型规则，细化 [ADR-089](adr-089-provider-owned-composition.md) 的能力装配。
 

@@ -1,7 +1,16 @@
+---
+id: ADR-051
+status: accepted
+date: 2026-09-26
+paths:
+  - assets/brand
+  - apps/mobile
+  - apps/desktop
+---
+
 # ADR-051：AIT 品牌识别与日间视觉系统
 
-- 状态：Accepted（生产矢量资产与各端引用已落地；已安装原生应用需重新构建安装）
-- 日期：2026-09-26
+- 状态说明：Accepted（生产矢量资产与各端引用已落地；已安装原生应用需重新构建安装）
 - 实施修订：2026-10-23（暗色适配与资产归档）
 - 版本：BI v2 / Light + Dark
 - 范围：AIT 品牌定位、标志、字标、日间配色、跨端应用及设计资产管理。
@@ -128,7 +137,7 @@ AIT 的品牌定位是：**跨多端的 Agent 平台，统一连接与使用多�
 
 ## 6. 比例、留白与小尺寸
 
-下列尺寸是生产母版的约束与验收目标；实际结果见 [落地验证报告](../../reports/clients/ait-brand-rollout.md)，
+下列尺寸是生产母版的约束与验收目标；实际结果见 [落地验证报告](../../archive/reports/clients/ait-brand-rollout.md)，
 精修展示图不构成尺寸测试结果。
 
 1. 以独立飞鸟的可见图形高度为 `H`，周围最小净空为 `0.2H`。
@@ -222,7 +231,7 @@ AIT 的品牌定位是：**跨多端的 Agent 平台，统一连接与使用多�
 4. 替换两套桌面壳的图标和 favicon、Expo 图标/通知/启动资源、PWA 安装图标以及
    深浅色 favicon 的正常、运行、提醒状态；更新 Electron 图标缓存版本与打包资源清单。
 5. 完成 16/24/32/48/64/128 px 显示检查、Android/PWA 安全圆检查、图标容器解码及
-   实际 Web 页面验证，保留 [验证图和报告](../../reports/clients/ait-brand-rollout.md)。
+   实际 Web 页面验证，保留 [验证图和报告](../../archive/reports/clients/ait-brand-rollout.md)。
 
 现有本地 iOS 原生资源已同步；干净 prebuild 会从新配置生成。未在本次工作中重新打包安装
 macOS/Windows/Linux/iOS/Android 应用，因此不将产物检查声明为系统 Dock、任务栏、
@@ -242,7 +251,7 @@ macOS/Windows/Linux/iOS/Android 应用，因此不将产物检查声明为系统
 
 2026-09-27 的接入没有 Rust 变更；前端切换为静态飞鸟和 AIT 字标，复用原有状态徽标逻辑。
 不新增复刻图形路径的单元测试；采用资产重生成检查、真实浏览器显示验证与已有回归测试。
-检查结果与测试数量见 [落地报告](../../reports/clients/ait-brand-rollout.md)。品牌视觉验收不能由
+检查结果与测试数量见 [落地报告](../../archive/reports/clients/ait-brand-rollout.md)。品牌视觉验收不能由
 workspace 测试替代，原始归档检查与本次生产验收分别记录。
 
 现有架构约束继续生效：不更改 Message、Session、Run、Provider 的含义与职责，

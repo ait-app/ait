@@ -1,7 +1,15 @@
+---
+id: ADR-220
+status: accepted
+date: 2026-11-06
+amends:
+  - providers/adr-156-pi-native-rpc-provider.md
+paths:
+  - crates/provider
+---
+
 # ADR-220：Pi 扩展通知与会话时间线
 
-- 状态：已接受（已实现）。
-- 日期：2026-11-06。
 - 范围：`crates/provider`；修订 [ADR-156](adr-156-pi-native-rpc-provider.md)。
 
 ## 背景
@@ -40,4 +48,4 @@ Provider 归属的通知和传输测试覆盖投影、级别映射、ANSI 去除
 洪水和队列容量，包括重开时间线存储后的通知持久化。
 
 运维与限制：[Pi provider](../../operations/pi.md)。
-验证：[Pi commands and notifications](../../reports/providers/pi-commands-notifications-2026-11-07.md)。
+验证：[Pi commands and notifications](../../archive/reports/providers/pi-commands-notifications-2026-11-07.md)。

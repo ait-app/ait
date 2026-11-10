@@ -76,7 +76,7 @@ ready 后协商 v2，校验并重组 stdout 分块，支持大于 1 MiB 的原�
 认证在原生 CLI 完成，不通过 Ait 问答收集登录秘密。
 
 决策见 [ADR-180](../decisions/providers/adr-180-omp-native-rpc-provider.md)，
-验证结果见 [报告](../reports/providers/omp-native-provider.md)。
+验证结果见 [报告](../archive/reports/providers/omp-native-provider.md)。
 
 ## ACP 桥接与插件
 
@@ -100,4 +100,4 @@ daemon omp-acp --omp-bin /absolute/path/to/omp
 Ait 内部已使用同一引擎，不需要另外启动这个进程。
 
 决策见 [ADR-190](../decisions/providers/adr-190-omp-acp-settlement.md)，
-当前官方 CLI 与插件验证见[报告](../reports/providers/omp-acp-settlement-2026-10-25.md)。
+当前官方 CLI 与插件验证见[报告](../archive/reports/providers/omp-acp-settlement-2026-10-25.md)。

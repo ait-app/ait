@@ -1,6 +1,14 @@
+---
+id: ADR-079
+status: superseded
+date: 2026-10-03
+paths:
+  - apps/mobile
+---
+
 # ADR-079：移动端统一使用 Expo EAS 构建
 
-状态：Superseded。Android 构建由 [ADR-172](adr-172-android-gradle-ci-build.md) 迁至 Gradle，
+状态说明：Superseded。Android 构建由 [ADR-172](adr-172-android-gradle-ci-build.md) 迁至 Gradle，
 当前 Google Play 发布见 [ADR-175](adr-175-android-play-gradle-release.md)；iOS 由
 [ADR-183](adr-183-ios-xcode-cloud-release.md) 迁至 Xcode Cloud（2026-10-23）。
 

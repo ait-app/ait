@@ -1,6 +1,16 @@
+---
+id: ADR-208
+status: accepted
+date: 2026-10-31
+paths:
+  - crates/api
+  - crates/model
+  - bins/daemon
+---
+
 # ADR-208：群组内资源共享与访客会话
 
-状态：采用。中心协议见中心仓库 `docs/hub-protocol.md` §6.1 与 `docs/hub-services.md`「资源共享」，中心侧决策见其 ADR-005。
+状态说明：采用。中心协议见中心仓库 `docs/hub-protocol.md` §6.1 与 `docs/hub-services.md`「资源共享」，中心侧决策见其 ADR-005。
 
 ## 背景
 

@@ -50,7 +50,7 @@ glab auth login --hostname code.company.example
 
 Ait 复用 CLI 登录配置，不另存 token。自建域名登录后，未知 host 的失败缓存最多需 30 秒
 过期，也可重启 server。当前支持已在本地的 GitLab 仓库；GitHub 专用项目目录/克隆接口
-没有扩展为 GitLab 目录接口。详见 [GitLab 验证与限制](../../../reports/workspace/gitlab-forge.md)。
+没有扩展为 GitLab 目录接口。详见 [GitLab 验证与限制](../workspace/gitlab-forge.md)。
 
 ## 发布验证
 
@@ -89,6 +89,6 @@ Ait 复用 CLI 登录配置，不另存 token。自建域名登录后，未知 h
 **本次未测量行覆盖率**：发布提交只改版本元数据和文档，没有 Rust 或前端运行代码变更，
 按仓库规则跳过本地 Rust 测试与覆盖率。构建和测试通过数量不作为覆盖率百分比。
 
-原功能验证见 [GitLab 报告](../../../reports/workspace/gitlab-forge.md)与[会话 API 提交验证](../../../reports/daemon/paseo-server-pr-validation-2026-09-29.md)，
+原功能验证见 [GitLab 报告](../workspace/gitlab-forge.md)与[会话 API 提交验证](../daemon/paseo-server-pr-validation-2026-09-29.md)，
 其中的历史测量不标记为本次发布测量。真实 GitLab 企业实例、SSO/代理、远端操作和用户
 界面的人工验收不由成品启动测试代替；后续行为变更按仓库规则补充定向测试和覆盖率。

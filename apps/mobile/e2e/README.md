@@ -39,4 +39,4 @@ creation receipts, or old wire-frame shapes; those assumptions need individual m
 The focused command above is the Ait harness regression, not a claim that every inherited
 UI scenario is supported by the server.
 
-Migration details and focused results: [validation report](../../../docs/reports/clients/ait-e2e-migration.md).
+Migration details and focused results: [validation report](../../../docs/archive/reports/clients/ait-e2e-migration.md).

@@ -1,7 +1,13 @@
+---
+id: ADR-060
+status: accepted
+date: 2026-09-28
+paths:
+  - crates/metadata
+---
+
 # ADR-060：统一 Workspace 创建入口支持 Worktree
 
-- 状态：Accepted
-- 日期：2026-09-28
 - 关联：ADR-030、ADR-037、ADR-056、ADR-058
 
 ## 背景
@@ -37,4 +43,4 @@ Setup 沿用既有后台执行机制；创建回执完成表示工作区已注�
 
 协议与服务单测验证字段、项目选择、保留 ID、title、分支优先级及错误。
 真实 server/Git 回归验证嵌套 checkout、独立分支名、项目来源、setup、幂等与重启恢复。
-执行结果和 Test coverage 记录在[验证报告](../../reports/workspace/workspace-create-worktree.md)。
+执行结果和 Test coverage 记录在[验证报告](../../archive/reports/workspace/workspace-create-worktree.md)。

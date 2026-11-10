@@ -16,7 +16,7 @@
 - 从 Open Project 按目录打开会调用 `workspace.open.request`，可能检查目录、恢复或创建记录；它不同于已有 ID 的路由打开。
 - 新建 worktree、检出 PR、安装依赖与 setup 脚本包含独立的业务等待，不计入已有 Workspace 首屏基准。
 
-本文件的调用链分析保留改造前基线；当前并发执行路径见 [ADR-091](../../decisions/providers/adr-091-independent-session-execution.md) 与[验证报告](../../reports/providers/paseo-concurrency-validation.md)。
+本文件的调用链分析保留改造前基线；当前并发执行路径见 [ADR-091](../../decisions/providers/adr-091-independent-session-execution.md) 与[验证报告](../reports/providers/paseo-concurrency-validation.md)。
 目标读取见 [ADR-126](../../decisions/workspace/adr-126-workspace-target-read.md)，当前 Timeline 页级读取见
 [ADR-125](../../decisions/providers/adr-125-durable-timeline-projection-pages.md)。下面的旧源码流程用于解释改造背景。
 

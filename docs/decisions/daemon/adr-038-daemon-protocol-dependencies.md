@@ -1,9 +1,17 @@
+---
+id: ADR-038
+status: superseded
+date: 2026-09-25
+amends:
+  - daemon/adr-037-daemon-model-context.md
+paths:
+  - crates/model
+---
+
 # ADR-038：protocol 仅依赖公共 model
 
 > 已由 [ADR-111](adr-111-domain-values-and-server-protocol.md) 取代：protocol crate 已并入 `model::server`，本文仅保留历史依赖决策。
 
-- 状态：Accepted。
-- 日期：2026-09-25。
 - 授权：清理 protocol 对四个能力包的依赖，并绘制 server 内部依赖图。
 - 范围：修订 ADR-037 的协议依赖边；不改变请求、事件、错误码或领域模型。
 
@@ -85,4 +93,4 @@ provider/filesystem/terminal 通过 metadata 端口使用 Project/Workspace 信�
 
 架构守卫拒绝 protocol 对业务包的普通、dev、build、重命名、optional 和平台条件边。
 协议协商、静态方法目录、业务错误码映射以及真实 WebSocket/进程回归验证兼容性。
-命令、测试计数和覆盖率见[实施报告](../../reports/daemon/protocol-dependencies.md)。
+命令、测试计数和覆盖率见[实施报告](../../archive/reports/daemon/protocol-dependencies.md)。

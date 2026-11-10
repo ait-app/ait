@@ -1,7 +1,15 @@
+---
+id: ADR-055
+status: accepted
+date: 2026-09-27
+amends:
+  - clients/adr-053-paseo-desktop-release.md
+paths:
+  - apps/desktop
+---
+
 # ADR-055：Ait 与 Paseo 的桌面数据和链接隔离
 
-- 状态：Accepted
-- 日期：2026-09-27
 - 关联：ADR-001 v4、ADR-048、ADR-053
 - 替代：ADR-053 中继续使用 `paseo` 链接协议的决定
 - 后续补齐：[ADR-056](adr-056-paseo-coexistence.md) 覆盖共享资源、环境变量、SSH 和移动应用 ID。
@@ -33,4 +41,4 @@ Ait 0.0.7 改名时保留了 Paseo 的 Electron 用户目录，同时继续使�
 
 覆盖默认、worktree、测试名和显式路径，验证旧目录保留且不会被导入；检查 Agent 链接的
 生成、解析和旧协议拒绝；以临时目录中的真实 Electron 进程验证同时启动与存储隔离。
-结果见[验证报告](../../reports/clients/desktop-profile-isolation.md)。
+结果见[验证报告](../../archive/reports/clients/desktop-profile-isolation.md)。

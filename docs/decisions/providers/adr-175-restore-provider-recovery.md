@@ -1,7 +1,15 @@
+---
+id: ADR-175
+status: accepted
+date: 2026-10-20
+amends:
+  - clients/adr-170-revert-error-diagnostics-and-recovery.md
+paths:
+  - crates/provider
+---
+
 # ADR-175：独立恢复 Provider 错误详情与重启收尾
 
-- 状态：Accepted
-- 日期：2026-10-20
 - 部分取代：ADR-170 的后端回滚状态；客户端诊断仍保持回滚。
 - 延续：ADR-032、ADR-144、ADR-162。
 
@@ -24,7 +32,7 @@
 
 定向回归覆盖 Codex 原生失败、脱敏与重试，恢复事务失败、幂等和 live writer 保留，
 OpenCode 用量／压缩以及真实 daemon 强制退出与显式继续。
-最新结果与命令见[后端拆分验证](../../reports/daemon/provider-recovery-split-2026-10-20.md)。
+最新结果与命令见[后端拆分验证](../../archive/reports/daemon/provider-recovery-split-2026-10-20.md)。
 
 **not measured**：用户未请求覆盖率。如需测量，使用 `cargo llvm-cov` 限定上述 Provider
 模块及 daemon OpenCode 进程用例；完整 workspace 测试和测量仍需明确请求。

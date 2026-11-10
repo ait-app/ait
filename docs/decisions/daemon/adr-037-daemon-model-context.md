@@ -1,3 +1,18 @@
+---
+id: ADR-037
+status: accepted
+date: 2026-09-25
+amends:
+  - daemon/adr-033-daemon-terminal.md
+  - daemon/adr-036-daemon-crate-dispatch.md
+  - providers/adr-031-daemon-provider.md
+  - workspace/adr-029-daemon-metadata.md
+  - workspace/adr-030-daemon-filesystem.md
+paths:
+  - crates/model
+  - crates/api
+---
+
 # ADR-037：公共 Context 与具体 crate 分发
 
 > 后续修订：[ADR-038](adr-038-daemon-protocol-dependencies.md) 将 protocol 的直接
@@ -5,8 +20,6 @@
 > [ADR-093](adr-093-consumable-request-context.md) 随后改为 `Option<Context>` 逐级处理请求，
 > API 不再提前选择业务能力组。
 
-- 状态：Accepted。
-- 日期：2026-09-25。
 - 授权：用户要求直接使用 Tokio 简化分发，随后明确要求把 Context 放入公共结构层，删除因
   Context 定义在 api 而引入的 Host trait。
 - 范围：独立 server；修订 ADR-036 的 Host 边界及 ADR-029、ADR-030、ADR-031、ADR-033
@@ -79,7 +92,7 @@ Paseo 订阅回归暴露了多个 diff 观察者在固定周期内竞争单个�
 和任务追踪直到执行结束；完成后检查取消令牌，已取消则丢弃快照。同一 Checkout 服务仍使用原有互斥锁，
 资源隔离不承诺对该服务的前台操作完全无需等待。协议和 crate 依赖方向保持不变。
 确定性的争用、取消、前台资源隔离及真实 Git 回归见
-[Server Paseo 测试扩展](../../reports/daemon/server-paseo-tests.md)。
+[Server Paseo 测试扩展](../../archive/reports/daemon/server-paseo-tests.md)。
 
 ## 2026-10-10：目录订阅读取预算
 
@@ -99,4 +112,4 @@ Runtime 增加容量为 1 的 `directory_poll_jobs`。metadata 与 provider 的�
 
 迁移已有队列和公共 RPC 测试到 model；新增已开始的阻塞任务在响应取消后仍保留预算和追踪
 的回归。原 WebSocket/进程测试验证订阅额度与释放、事件顺序、跨能力关闭、二进制传输和
-shutdown drain。命令、覆盖率和限制见[实施报告](../../reports/daemon/model-context.md)。
+shutdown drain。命令、覆盖率和限制见[实施报告](../../archive/reports/daemon/model-context.md)。

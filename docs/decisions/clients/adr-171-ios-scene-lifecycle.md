@@ -1,7 +1,12 @@
-# ADR-171：iOS 窗口由 UIScene 管理
+---
+id: ADR-171
+status: accepted
+date: 2026-10-20
+paths:
+  - apps/mobile
+---
 
-- 状态：Accepted
-- 日期：2026-10-20
+# ADR-171：iOS 窗口由 UIScene 管理
 
 ## 背景
 

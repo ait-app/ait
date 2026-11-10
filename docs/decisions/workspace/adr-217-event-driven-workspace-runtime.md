@@ -1,7 +1,16 @@
+---
+id: ADR-217
+status: accepted
+date: 2026-11-07
+amends:
+  - workspace/adr-068-workspace-runtime-summaries.md
+paths:
+  - crates/filesystem
+  - crates/metadata
+---
+
 # ADR-217：事件驱动的 Workspace 运行时事实与低能耗 Git 读取
 
-- 状态：已接受
-- 日期：2026-11-07
 - 关系：修订 [ADR-068](adr-068-workspace-runtime-summaries.md) 的刷新与唤醒规则；
   共享目录唤醒信号沿用 [ADR-210](../providers/adr-210-committed-runtime-read-snapshots.md) 的读视图边界。
 

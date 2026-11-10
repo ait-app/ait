@@ -1,7 +1,15 @@
+---
+id: ADR-139
+status: accepted
+date: 2026-10-12
+amends:
+  - workspace/adr-104-filesystem-model-collaboration.md
+paths:
+  - crates/bot
+---
+
 # ADR-139：Workspace Bot 与独占 Channel
 
-- 状态：接受
-- 日期：2026-10-12
 - 修订：为 [ADR-104](../workspace/adr-104-filesystem-model-collaboration.md) 所述功能
   crate 独立依赖约定增加 `bot → provider` 单向边；其余能力边界保持原有约定。
 - 后续修订：[ADR-213](adr-213-single-workspace-manager-bot.md) 取代多 Bot、人格、`botId` 寻址与 Workspace 目录内的记忆位置，

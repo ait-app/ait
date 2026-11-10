@@ -1,8 +1,17 @@
+---
+id: ADR-068
+status: accepted
+date: 2026-10-02
+paths:
+  - crates/filesystem
+  - crates/metadata
+  - apps/mobile
+---
+
 # ADR-068：Workspace 侧边栏运行时摘要
 
-状态：Accepted；刷新间隔与唤醒规则于 2026-11-07 修订，见决策中标注修订的条目；macOS 文件事件、
+状态说明：Accepted；刷新间隔与唤醒规则于 2026-11-07 修订，见决策中标注修订的条目；macOS 文件事件、
 专用唤醒信号与合并 Git 读取见 [ADR-217](adr-217-event-driven-workspace-runtime.md)。
-日期：2026-10-02
 
 ## 背景
 
@@ -52,4 +61,4 @@ Paseo 的 workspace 行已经支持增删行数、分支、PR/MR 合并状态和
 订阅推送 runtime 摘要；Forge 信息可能滞后一个缓存周期。升级 server 可补齐摘要与空闲
 turn 投影，旧 activity 的客户端收敛修复需要同步构建客户端。
 
-验证范围、运行命令及 Test coverage 见[实施报告](../../reports/workspace/workspace-sidebar-runtime.md)。
+验证范围、运行命令及 Test coverage 见[实施报告](../../archive/reports/workspace/workspace-sidebar-runtime.md)。

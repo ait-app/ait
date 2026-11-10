@@ -1,7 +1,15 @@
+---
+id: ADR-219
+status: accepted
+date: 2026-11-05
+amends:
+  - providers/adr-156-pi-native-rpc-provider.md
+paths:
+  - crates/provider
+---
+
 # ADR-219：Pi 原生 slash-command 发现
 
-- 状态：已接受（已实现）。
-- 日期：2026-11-05。
 - 范围：`crates/provider`；修订 [ADR-156](adr-156-pi-native-rpc-provider.md)。
 
 ## 背景
@@ -63,4 +71,4 @@ Provider 归属的夹具测试覆盖映射、格式错误输入、配置无关�
 不存在 `/settings` 和 `/hotkeys`。不需要外部推理。
 
 运维：[Pi provider](../../operations/pi.md)。
-验证：[Pi commands and notifications](../../reports/providers/pi-commands-notifications-2026-11-07.md)。
+验证：[Pi commands and notifications](../../archive/reports/providers/pi-commands-notifications-2026-11-07.md)。

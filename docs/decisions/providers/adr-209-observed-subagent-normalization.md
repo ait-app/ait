@@ -1,7 +1,14 @@
+---
+id: ADR-209
+status: accepted
+date: 2026-10-31
+paths:
+  - crates/provider
+  - apps/mobile
+---
+
 # ADR-209：通过只读登记统一子 Agent 展示
 
-- 状态：Accepted。
-- 日期：2026-10-31。
 - 范围：Provider 子会话登记、Agent 目录、时间线、共享客户端。
 - 关联：[ADR-040](adr-040-native-session-import-refresh-context.md)、
   [ADR-041](adr-041-agent-controls-provider-inspection.md)、
@@ -116,7 +123,7 @@ daemon 重启或客户端断线后将观测标为 stale，保留已确认原生�
 保留、统一流、活动局部历史、父 turn 结束后的后台完成、原生 ancestry 拒绝、执行守卫、
 终态归档、旧客户端隔离、客户端断线与版本防回退。浏览器真实 Provider 用例已更新为普通
 Agent 面板断言，本次没有运行付费模型调用。详见
-[实施与验证报告](../../reports/providers/unified-subagents-2026-10-31.md)。
+[实施与验证报告](../../archive/reports/providers/unified-subagents-2026-10-31.md)。
 
 ## Test coverage
 

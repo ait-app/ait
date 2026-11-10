@@ -50,4 +50,4 @@ npm run check:icons -- --sync-native
 Android 使用项目已有的 clean prebuild 构建入口。更换已安装应用的系统图标需要重新构建和安装；
 Electron 分支图标缓存版本已经更新。Web 构建使用带内容哈希的 favicon。
 
-实际产物和页面截图见 [落地报告](../../docs/reports/clients/ait-brand-rollout.md)。
+实际产物和页面截图见 [落地报告](../../docs/archive/reports/clients/ait-brand-rollout.md)。

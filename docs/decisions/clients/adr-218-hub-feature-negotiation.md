@@ -1,7 +1,18 @@
+---
+id: ADR-218
+status: accepted
+date: 2026-11-06
+amends:
+  - clients/adr-154-account-status-channel.md
+  - clients/adr-204-hub-only-online-business-transport.md
+  - daemon/adr-180-hub-serve-endpoint.md
+paths:
+  - packages/client
+  - crates/relay
+---
+
 # ADR-218：Hub feature 协商收敛在线连接
 
-- 状态：已实现
-- 日期：2026-11-06
 - 修订：[ADR-154](adr-154-account-status-channel.md)、[ADR-204](adr-204-hub-only-online-business-transport.md)、[ADR-180](../daemon/adr-180-hub-serve-endpoint.md)
 
 `ait-hub-v1` 保持帧格式和版本号，新增六个由中心声明、双方协商的 feature：`lease`、`hosts`、`state`、`credit`、`download`、`bulk`。中心在 `register` 和 `hub-tickets` 响应中返回 `hub_features`，新中心始终声明全部六项。新客户端（桌面、手机、网页和 daemon）只连接新中心：`hello.f` 固定带上自己实现的全部 feature（main link 为 `lease`、`hosts`、`state`、`credit`、`download`，bulk link 只含 `credit`、`download`），resume 保持相同集合；`register` 或 `hub-tickets` 响应缺少 `hub_features` 或其中任一 feature、或 `welcome.f` 不含所有已声明的 feature 时，客户端明确报错（提示账号服务版本过低，需要更新服务），不静默降级，也不保留对旧中心的任何回退路径。

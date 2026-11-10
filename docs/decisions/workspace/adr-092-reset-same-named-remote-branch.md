@@ -1,7 +1,16 @@
+---
+id: ADR-092
+status: accepted
+date: 2026-10-07
+amends:
+  - workspace/adr-083-reset-workspace-to-origin-default.md
+paths:
+  - crates/filesystem
+  - crates/metadata
+---
+
 # ADR-092：工作区重置同步 origin 同名分支
 
-- 状态：Accepted
-- 日期：2026-10-07
 - 关联：修订 ADR-083 的远端分支行为；沿用 ADR-069、ADR-084
 
 ## 背景

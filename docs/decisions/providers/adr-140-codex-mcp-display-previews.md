@@ -1,7 +1,15 @@
+---
+id: ADR-140
+status: accepted
+date: 2026-10-12
+amends:
+  - providers/adr-090-timeline-entry-and-page-budgets.md
+paths:
+  - crates/provider
+---
+
 # ADR-140：Codex MCP 超大字段使用展示预览
 
-- 状态：Accepted。
-- 日期：2026-10-12。
 - 范围：Codex MCP 工具展示；修订 ADR-090 对超大 MCP 字段的处理。
 
 ## 背景

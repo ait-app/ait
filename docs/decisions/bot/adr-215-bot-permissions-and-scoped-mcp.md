@@ -1,14 +1,28 @@
+---
+id: ADR-215
+status: accepted
+date: 2026-11-06
+amends:
+  - bot/adr-145-bot-permission-denial.md
+  - bot/adr-213-single-workspace-manager-bot.md
+  - clients/adr-214-workspace-bot-tab-v2.md
+  - daemon/adr-148-daemon-mcp.md
+  - providers/adr-202-agent-mcp-injection.md
+paths:
+  - crates/bot
+  - crates/api
+  - crates/provider
+---
+
 # ADR-215：Bot 权限与作用域 MCP 凭据
 
-- 状态：已实现
 - 后续修订：[ADR-222](adr-222-single-agent-mode-no-bot-workspaces.md) 将模式上限改为每个 Provider 单一模式，并取消 `workspaces` 分组。
-- 日期：2026-11-06
 - 关系：延续 [ADR-213](adr-213-single-workspace-manager-bot.md)；
   修订 [ADR-145](adr-145-bot-permission-denial.md) 第 4 条（Bot 会话按 Provider 能力选择最严格模式，取代模式改写）；
   修订 [ADR-202](../providers/adr-202-agent-mcp-injection.md)（作用域凭据覆盖用户 `ait` 项，Bot 会话不受 `injectIntoAgents` 控制）；
   修订 [ADR-148](../daemon/adr-148-daemon-mcp.md)（`X-Ait-Agent-Id` 仍不是权限边界，作用域凭据才是）；
   修订 [ADR-214](../clients/adr-214-workspace-bot-tab-v2.md)（向导与设置增加权限）。
-- 计划：[阶段 3 实施计划](../../plans/workspace-bot-manager-phase-3.md)、[Workspace Bot 管理者重设计](../../plans/workspace-bot-manager.md)。
+- 计划：[阶段 3 实施计划](../../archive/plans/workspace-bot-manager-phase-3.md)、[Workspace Bot 管理者重设计](../../plans/workspace-bot-manager.md)。
 
 ## 背景
 

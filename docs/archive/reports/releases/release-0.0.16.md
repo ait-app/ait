@@ -60,14 +60,14 @@ Rebase 到 `29ea6f2f` 后，在 macOS arm64 再次通过 `npm run verify:release
 ## Test coverage
 
 增补的 Codex MCP 显示修复以最新 `main` 的 `29ea6f2f` 为基线；准确的 Rust 源码哈希、命令、
-逐范围数据和验证限制见[本次可审阅覆盖率记录](../../../reports/providers/codex-mcp-tool-call-coverage.json)。
+逐范围数据和验证限制见[本次可审阅覆盖率记录](../providers/codex-mcp-tool-call-coverage.json)。
 在 macOS arm64、Rust 1.98.1、默认 features 下，先运行
 `cargo llvm-cov clean --workspace --offline` 清除旧插桩产物，再运行
 `RUST_TEST_THREADS=1 CARGO_INCREMENTAL=0 cargo llvm-cov --workspace --html --locked --offline --no-fail-fast -j2`，
 最后导出 JSON 摘要。13 个 Cargo workspace 包的行覆盖率为 **49,049/51,905（94.4976%）**，
 其中 `provider` 为 **21,325/22,701（93.9386%）**；使用 cargo-llvm-cov 默认文件过滤，
 无额外排除，doctests 未插桩。相比最近的
-[main 覆盖率记录](../../../reports/daemon/cargo-workspace-pr-coverage-2026-10-04.json)，workspace 变化
+[main 覆盖率记录](../daemon/cargo-workspace-pr-coverage-2026-10-04.json)，workspace 变化
 约 +0.0008 个百分点，`provider` 变化约 -0.0019 个百分点。
 
 测试执行结果单独统计：最终单线程覆盖率运行 **1,771 passed、0 failed、3 ignored**。

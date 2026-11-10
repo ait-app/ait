@@ -1,7 +1,14 @@
+---
+id: ADR-156
+status: accepted
+date: 2026-10-17
+paths:
+  - crates/provider
+  - packages/protocol
+---
+
 # ADR-156: Pi native RPC provider
 
-- Status: Accepted (implemented).
-- Date: 2026-10-17.
 - Updated: 2026-11-08 for admission retirement, input retention and cleanup.
 - Scope: `crates/provider`, `packages/protocol`; follows [ADR-089](adr-089-provider-owned-composition.md).
 - Amended by: [ADR-189](adr-189-pi-without-host-mode.md) for host modes.
@@ -165,8 +172,8 @@ are supported through [ADR-219](adr-219-pi-slash-command-discovery.md). Richer e
 dialogs and TUI-only slash-command controls remain unsupported.
 
 Operations and current limitations: [Pi](../../operations/pi.md).
-Validation results and scope: [Pi native RPC provider validation](../../reports/providers/pi.md).
+Validation results and scope: [Pi native RPC provider validation](../../archive/reports/providers/pi.md).
 Executable inspection and version-probe validation:
-[Pi unavailable diagnostics](../../reports/providers/pi-unavailable-diagnostics-2026-10-30.md).
+[Pi unavailable diagnostics](../../archive/reports/providers/pi-unavailable-diagnostics-2026-10-30.md).
 Admission, shutdown and resume validation:
-[Pi admission lifecycle](../../reports/providers/pi-admission-lifecycle-2026-11-08.md).
+[Pi admission lifecycle](../../archive/reports/providers/pi-admission-lifecycle-2026-11-08.md).

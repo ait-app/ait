@@ -1,7 +1,16 @@
+---
+id: ADR-210
+status: accepted
+date: 2026-11-03
+amends:
+  - daemon/adr-106-concrete-file-persistence.md
+  - workspace/adr-081-directory-change-push.md
+paths:
+  - crates/provider
+---
+
 # ADR-210：Agent 目录共享已提交的不可变记录
 
-- 状态：接受
-- 日期：2026-11-03
 - 补充：[ADR-106](../daemon/adr-106-concrete-file-persistence.md) 的存储端口和
   [ADR-081](../workspace/adr-081-directory-change-push.md) 的变更通知；依赖方向不变。
 
@@ -44,4 +53,4 @@
 
 定向回归覆盖共享数组复用、旧视图生命周期、失败写入、no-op、重新打开文件、目录过滤与
 分页、权限字段、attention 并发语义，以及真实 clone 次数。具体执行结果和限制见
-[性能修复验证报告](../../reports/providers/performance-handoff-fixes-2026-11-03.md)。
+[性能修复验证报告](../../archive/reports/providers/performance-handoff-fixes-2026-11-03.md)。

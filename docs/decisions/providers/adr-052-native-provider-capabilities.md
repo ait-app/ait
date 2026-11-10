@@ -1,6 +1,16 @@
+---
+id: ADR-052
+status: accepted
+date: 2026-09-26
+amends:
+  - providers/adr-050-claude-code-provider.md
+paths:
+  - crates/provider
+---
+
 # ADR-052: Native provider capability completion
 
-Status: Accepted; implementation tracked in [the parity checklist](../../archive/plans/provider-parity.md).
+Status note: Accepted; implementation tracked in [the parity checklist](../../archive/plans/provider-parity.md).
 
 ## Context
 

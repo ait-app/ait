@@ -1,9 +1,19 @@
+---
+id: ADR-087
+status: accepted
+date: 2026-10-06
+amends:
+  - clients/adr-086-authing-native-login.md
+paths:
+  - crates/host-link
+  - bins/daemon
+---
+
 # ADR-087：中心设备管理与 Linux/macOS daemon 的 JWT 授权
 
 > 主机授权与租约归属已由 [ADR-201](../daemon/adr-201-daemon-owned-publication.md) 修订：daemon 自主管理发布，客户端退出不撤销机器授权；显式断开后需重新授权。以下保留原决策背景。
 
-- 状态：已采纳；本分支实现，待两端发布
-- 日期：2026-10-06
+- 状态说明：已采纳；本分支实现，待两端发布
 - 源码基线：Ait `feat/authing-native-login` / `384f8735`；配套中心 [ait-server PR #9](https://github.com/ait-app/ait-server/pull/9)
 - 关系：扩展 [ADR-086](adr-086-authing-native-login.md) 的 OIDC 登录；沿用
   [ADR-085](adr-085-stable-daemon-publication.md) 的稳定身份和

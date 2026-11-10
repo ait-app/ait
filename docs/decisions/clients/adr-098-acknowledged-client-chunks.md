@@ -1,7 +1,16 @@
+---
+id: ADR-098
+status: accepted
+date: 2026-10-07
+amends:
+  - clients/adr-075-relay-protocol-modules.md
+paths:
+  - packages/client
+  - crates/api
+---
+
 # ADR-098：客户端消息分块与文件上传背压
 
-- 状态：Accepted。
-- 日期：2026-10-07。
 - 范围：客户端到 daemon 的 JSON 消息与文件上传。
 - 关系：扩展 ADR-075 的传输执行边界，保留 ADR-090 的 timeline 展示预算。
 

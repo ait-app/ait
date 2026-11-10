@@ -75,4 +75,4 @@ Ait 不伪造原生落盘成功。验证使用用户授权的实际模型产生 
 OMP 可能用自身通用 deferred-tool 路由执行插件工具；桥接层保留原生名称与参数，不猜测或改写插件身份。
 当前不增加原先未提供的每会话 MCP 覆盖、宿主工具自动注册、文件回退或输出 schema。
 
-[官方版本、定向检查及插件验证](../reports/providers/omp-acp-settlement-2026-10-25.md)。
+[官方版本、定向检查及插件验证](../archive/reports/providers/omp-acp-settlement-2026-10-25.md)。

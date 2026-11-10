@@ -1,7 +1,14 @@
+---
+id: ADR-148
+status: accepted
+date: 2026-10-14
+paths:
+  - crates/api
+  - bins/daemon
+---
+
 # ADR-148：daemon 的无状态 MCP 编排接口
 
-- 状态：接受
-- 日期：2026-10-14
 - 后续修订：[ADR-202](../providers/adr-202-agent-mcp-injection.md) 接入 Provider 运行时注入与 MCP 专用凭证；[ADR-215](../bot/adr-215-bot-permissions-and-scoped-mcp.md) 说明 `X-Ait-Agent-Id` 仍不是权限边界，Bot 作用域凭据才是。
 
 ## 背景
@@ -43,5 +50,5 @@ Schedule 固定归属于 Workspace。Heartbeat 使用 scheduler 的 Agent target
 `kill_agent` 关闭并归档 Agent，保留历史。权限工具复用 Provider 校验及 Bot 自动拒绝规则。
 执行失败返回 `isError: true`；结果同时提供 `structuredContent` 和文本。
 
-验证见 [报告](../../reports/daemon/mcp-implementation-2026-10-14.md)，接入见
+验证见 [报告](../../archive/reports/daemon/mcp-implementation-2026-10-14.md)，接入见
 [MCP 手册](../../operations/mcp.md)。

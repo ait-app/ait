@@ -1,7 +1,16 @@
+---
+id: ADR-091
+status: accepted
+date: 2026-10-07
+amends:
+  - providers/adr-032-daemon-native-provider-execution.md
+  - providers/adr-088-provider-catalog-startup-isolation.md
+paths:
+  - crates/provider
+---
+
 # ADR-091：会话独立执行与 Provider 后台发现
 
-- 状态：Accepted。
-- 日期：2026-10-07。
 - 修订：[ADR-088](adr-088-provider-catalog-startup-isolation.md)的串行 Catalog 与执行队列；保留其物理连接响应接纳和客户端连接就绪规则。[ADR-032](adr-032-daemon-native-provider-execution.md)的全局串行范围和阻塞存储执行位置；保留其原生会话、单 writer、持久化合并与进程租约边界。
 - 参考：Paseo `0.9.0-beta.2`，提交 `2c8e8a826810337492cc5a38bb0bbd705b6fb632`，来源见[实施清单](../../archive/plans/paseo-agent-concurrency.md)。
 
@@ -57,4 +66,4 @@ AgentExecution 保留原有可克隆 façade，内部组合短路由器、异步
 
 没有更改纯 domain 的依赖方向，没有新增数据库或公共 RPC 方法；新增批量身份解析仅是 provider 内部入口。新增 debug tracing 区分请求排队、生命周期/前台/历史/读取执行、native factory/history、事件提交、Catalog 预算等待与在途数量，不记录 prompt、环境变量或凭据。
 
-行为测试与构建限制见[实施验证报告](../../reports/providers/paseo-concurrency-validation.md)。远程设备端到端打开耗时仍需在实际连接上采样，不能由受控并发测试推算具体提速倍数。
+行为测试与构建限制见[实施验证报告](../../archive/reports/providers/paseo-concurrency-validation.md)。远程设备端到端打开耗时仍需在实际连接上采样，不能由受控并发测试推算具体提速倍数。

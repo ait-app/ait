@@ -1,7 +1,14 @@
+---
+id: ADR-137
+status: accepted
+date: 2026-10-12
+paths:
+  - packages/protocol
+  - packages/client
+---
+
 # ADR-137：清理已移除功能的共享协议与 SDK
 
-- 状态：已实现
-- 日期：2026-10-12
 - 关系：延续 [ADR-045](../daemon/adr-045-remove-hub-chat-loop.md)、[ADR-061](adr-061-app-ait-e2e-remove-relay-plugin.md) 的功能移除决策与 [ADR-127](../daemon/adr-127-remove-daemon-pairing-offer.md) 的协议清理方式。
 
 ## 背景

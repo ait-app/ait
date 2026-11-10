@@ -1,7 +1,14 @@
+---
+id: ADR-203
+status: accepted
+date: 2026-10-30
+paths:
+  - crates/api
+  - bins/daemon
+---
+
 # ADR-203：MCP 的可选 Unix socket 监听
 
-- 状态：接受
-- 日期：2026-10-30
 - 修订：2026-11-04，绑定前验证私有父目录，避免初始 socket 权限窗口。
 
 本机客户端需要通过 socket 文件访问 Ait MCP。daemon 在原 TCP 监听之外提供可选 Unix domain

@@ -1,8 +1,17 @@
+---
+id: ADR-032
+status: accepted
+date: 2026-09-24
+amends:
+  - providers/adr-027-independent-agent-session-manager.md
+  - providers/adr-031-daemon-provider.md
+paths:
+  - crates/provider
+---
+
 # ADR-032：独立 server 接通 Codex 原生文本执行
 
-- 状态：Accepted。
 - 并发修订：当前调度与存储执行位置以 [ADR-091](adr-091-independent-session-execution.md) 为准，下面的全局串行描述保留为初始决策背景。
-- 日期：2026-09-24。
 - 范围：独立 server；延续 ADR-027/031，不依赖旧 `ait-*`。
 - 来源：`getpaseo/paseo@2c8e8a826810337492cc5a38bb0bbd705b6fb632` 的
   `agent-sdk-types.ts`、`agent-manager.ts`、`agent-loading.ts`、
@@ -77,7 +86,7 @@ wait 回收直接子进程；异常析构保留兜底终止。Windows 仅直接�
 宿主仍沿用 15 秒停机总预算；原生 RPC、排队命令或进程回收超过这个预算时显式报告停机失败，
 不宣称所有工作已完成。强制进程退出、跨进程 writer 争用与原生历史对账不在本阶段的恢复保证内。
 
-实现与测试证据见 [报告](../../reports/providers/server-native-provider-execution.md)。
+实现与测试证据见 [报告](../../archive/reports/providers/server-native-provider-execution.md)。
 
 后续 [ADR-034](adr-034-agent-config-session-events.md) 已接通模型/推理配置和 Session 事件/心跳；
 本文 107 个已实现 capability 及不支持动态配置的描述是原生文本执行首片的历史状态。
@@ -91,4 +100,4 @@ wait 回收直接子进程；异常析构保留兜底终止。Windows 仅直接�
 用户可以显式 Continue；尚未执行的持久输入仍遵循既有 receipt 与排队策略。
 
 本修订只保证重启后的宿主状态可收敛，不保证外部 OOM kill 后继续原生工作，也不改变 ACP
-控制及历史所有权。复现与验证见 [异常重启报告](../../reports/providers/opencode-stalled-turn-recovery-2026-10-19.md)。
+控制及历史所有权。复现与验证见 [异常重启报告](../../archive/reports/providers/opencode-stalled-turn-recovery-2026-10-19.md)。

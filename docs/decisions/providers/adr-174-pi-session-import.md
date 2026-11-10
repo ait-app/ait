@@ -1,7 +1,15 @@
+---
+id: ADR-174
+status: accepted
+date: 2026-10-18
+amends:
+  - providers/adr-156-pi-native-rpc-provider.md
+paths:
+  - crates/provider
+---
+
 # ADR-174: Pi native session import
 
-- Status: Accepted.
-- Date: 2026-10-18.
 - Updated: 2026-11-08.
 - Scope: `crates/provider`; extends [ADR-156](adr-156-pi-native-rpc-provider.md).
 - Amended by: [ADR-211](adr-211-pi-next-turn-reasoning-controls.md) for imported thinking preferences

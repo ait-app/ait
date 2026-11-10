@@ -1,7 +1,13 @@
+---
+id: ADR-103
+status: accepted
+date: 2026-10-07
+paths:
+  - crates/terminal
+---
+
 # ADR-103：Terminal 仅依赖 model 的共享契约
 
-- 状态：接受
-- 日期：2026-10-07
 - 关联：[ADR-102](../providers/adr-102-provider-metadata-independence.md)
 
 ## 背景

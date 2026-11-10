@@ -10,12 +10,12 @@
 - **Diff 语法高亮与解析修复。** 工作区、base 和 commit Diff 支持按主题展示语法颜色，
   保留多行注释、字符串和 rename 两侧文件上下文；源码中的 `diff --git` 字符串不会再
   被误识别成文件头，避免出现假文件项。超出解析或输出预算时保留文本、省略高亮。
-  [PR #147](https://github.com/ait-app/ait/pull/147)、[实施报告](../../../reports/workspace/diff-syntax-highlighting.md)、
-  [提交验证](../../../reports/workspace/diff-pr-validation.md)。
+  [PR #147](https://github.com/ait-app/ait/pull/147)、[实施报告](../workspace/diff-syntax-highlighting.md)、
+  [提交验证](../workspace/diff-pr-validation.md)。
 - **侧边栏统计归零。** 增删行数与 base Diff 复用已获取的 origin 基准，修复远端已包含
   工作区提交、本地 main 尚未同步时仍显示旧增删统计的问题；未提交与未跟踪改动继续
   正常计数。[PR #148](https://github.com/ait-app/ait/pull/148)、
-  [验证报告](../../../reports/workspace/workspace-sidebar-runtime.md#合并后-diff-归零修复2026-10-02)。
+  [验证报告](../workspace/workspace-sidebar-runtime.md#合并后-diff-归零修复2026-10-02)。
 - **Codex 推理等级。** 服务端接受 `max` 和 `ultra`，支持新建、恢复和发送任务时传递
   这些等级；实际可用选项仍由本机 Codex 与模型提供。
   [PR #149](https://github.com/ait-app/ait/pull/149)。
@@ -78,7 +78,7 @@ blockmap、两个更新 YAML、`BUILD-INFO.json` 和 `SHA256SUMS`。
 
 **未测量行覆盖率**：本次发布提交只改版本元数据与文档，没有 Rust 或前端运行代码变更，
 按仓库规则跳过本地 Rust 测试和覆盖率。测试通过数量不作为覆盖率百分比。
-Diff、侧边栏统计和 Codex 推理等级的历史验证分别见 [Diff PR 报告](../../../reports/workspace/diff-pr-validation.md)、
-[侧边栏报告](../../../reports/workspace/workspace-sidebar-runtime.md)及[Codex 覆盖率证据](../../../reports/providers/codex-reasoning-options-coverage.json)，
+Diff、侧边栏统计和 Codex 推理等级的历史验证分别见 [Diff PR 报告](../workspace/diff-pr-validation.md)、
+[侧边栏报告](../workspace/workspace-sidebar-runtime.md)及[Codex 覆盖率证据](../providers/codex-reasoning-options-coverage.json)，
 不将历史测量标记为本次发布结果。后续行为变更补充定向测试，Rust 源码提交准备时再运行
 完整测试与覆盖率。

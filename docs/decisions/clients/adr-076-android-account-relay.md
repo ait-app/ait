@@ -1,7 +1,16 @@
+---
+id: ADR-076
+status: accepted
+date: 2026-10-03
+amends:
+  - clients/adr-074-account-host-relay.md
+paths:
+  - packages/client
+  - apps/mobile
+---
+
 # ADR-076：Android 账户与中继客户端
 
-- 状态：已实现
-- 日期：2026-10-03
 - 关系：扩展 [ADR-074](adr-074-account-host-relay.md) 的客户端范围，将账户状态机迁入共享 SDK，保留桌面主进程凭据边界。
 
 ## 背景

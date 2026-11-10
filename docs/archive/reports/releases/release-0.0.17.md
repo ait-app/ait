@@ -10,7 +10,7 @@
 
 - **OpenCode 工具顺序。** 工具卡先于后续流式结论显示，刷新时修复旧会话中已错序的
   展示历史；原生消息和会话内容不变。见 [PR #168](https://github.com/ait-app/ait/pull/168)
-  与[验证报告](../../../reports/providers/opencode-tool-order.md)。
+  与[验证报告](../providers/opencode-tool-order.md)。
 - **Workspace 可空字段。** daemon 将缺失的可空 Workspace、Project 和目录运行时字段
   规范化为 `null`，让目录更新能清除客户端旧状态。Checkout 输入仍区分缺失与显式 `null`；
   字段名、请求方法和持久数据格式未改。见 [ADR-082](../../../decisions/workspace/adr-082-canonical-nullable-workspace-fields.md)。
@@ -50,8 +50,8 @@ Linux/macOS 正式安装包仍须由 `Release Ait` 工作流构建、签名、�
 `46980159e8ec289002adbc4d7224840159d01d3b` 上，以 macOS arm64、Rust 1.98.1、
 默认 features 执行 `cargo llvm-cov --workspace --html --offline`，workspace 行覆盖率为
 49,035/51,889（94.50%）；详细范围、逐 crate 结果、此前基线比较和可审查产物见
-[PR 验证报告](../../../reports/daemon/rust-code-smell-pr-validation-2026-10-04.md)。该测量早于合并与版本同步，
+[PR 验证报告](../daemon/rust-code-smell-pr-validation-2026-10-04.md)。该测量早于合并与版本同步，
 不代表最终标签源码的重新测量。PR #168 另在其源码上测得 workspace 行覆盖率
 49,132/51,991（94.50%）、OpenCode adapter 2,671/3,074（86.89%）；完整范围、
-此前基线与可审查产物见[其验证报告](../../../reports/providers/opencode-tool-order.md)。
+此前基线与可审查产物见[其验证报告](../providers/opencode-tool-order.md)。
 两次测量各有 3 项需要本地 Provider CLI 或认证的测试被忽略。

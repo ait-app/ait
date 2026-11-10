@@ -1,7 +1,13 @@
+---
+id: ADR-061
+status: accepted
+date: 2026-09-28
+paths:
+  - apps/mobile
+---
+
 # ADR-061：App E2E 使用 Ait server，移除 relay 与插件运行功能
 
-- 状态：Accepted
-- 日期：2026-09-28
 - 延续：ADR-044、ADR-047、ADR-049
 - 用户要求：E2E 针对 Ait server，同时移除 relay、插件功能。
 - 后续：[ADR-160](adr-160-remove-legacy-relay-protocol.md) 删除暂留的旧中继协议与废弃配对测试，并记录仍保留原始测试夹具的理由。

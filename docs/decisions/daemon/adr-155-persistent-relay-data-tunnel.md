@@ -1,8 +1,16 @@
+---
+id: ADR-155
+status: accepted
+date: 2026-10-18
+paths:
+  - crates/relay
+---
+
 # ADR-155：可协商的持久 Relay 数据隧道
 
 > 普通业务传输已由 [ADR-204](../clients/adr-204-hub-only-online-business-transport.md) 修订：仅使用 Hub，传统 Relay 仅保留独立下载与控制。
 
-状态：采用。中心仓库为 `cnb.cool/ait-app/ait-server`；中心默认关闭，双方协商后启用。
+状态说明：采用。中心仓库为 `cnb.cool/ait-app/ait-server`；中心默认关闭，双方协商后启用。
 
 ## 连接与兼容边界
 

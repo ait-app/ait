@@ -1,11 +1,18 @@
+---
+id: ADR-025
+status: accepted
+date: 2026-09-22
+paths:
+  - crates/metadata
+---
+
 # ADR-025：先移植 Paseo Project / Workspace 模型与 registry
 
 > [ADR-029](adr-029-daemon-metadata.md) 延续本决策的 Paseo 模型，
 > 将协议、记录、端口、用例和文件存储统一迁入 `metadata`，并废除早期 Project 租约服务。
 > 下文的旧模块位置和过渡共存安排已被该决策替代。
 
-- 状态：Accepted，落实用户对“复刻 Paseo server”的方向纠正。
-- 日期：2026-09-22。
+- 状态说明：Accepted，落实用户对“复刻 Paseo server”的方向纠正。
 - 来源：`getpaseo/paseo@2c8e8a826810337492cc5a38bb0bbd705b6fb632`。
 - 范围：新 `server`；旧 daemon、旧 Ait crate 与数据不变。
 
@@ -95,4 +102,4 @@ observer 同步执行且位于写锁之外；调用方不应把 observer 当成 
 归一化输出；fixture 记录 commit、源文件 SHA-256、Zod 版本。Rust 测试读取静态 fixture，
 无 Node/Paseo 安装依赖。registry 另测并发分配/更新、归档差异、重开、通知、冻结与失败回滚。
 许可与修改说明保存在 `third-party/paseo/`。实际检查与覆盖率见
-[移植报告](../../reports/workspace/paseo-registry-port.md)。
+[移植报告](../../archive/reports/workspace/paseo-registry-port.md)。

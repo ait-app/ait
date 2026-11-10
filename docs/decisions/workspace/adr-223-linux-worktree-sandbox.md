@@ -1,7 +1,15 @@
+---
+id: ADR-223
+status: accepted
+date: 2026-11-08
+amends:
+  - workspace/adr-215-sandboxed-worktree-isolation.md
+paths:
+  - crates/provider
+---
+
 # ADR-223：Linux 沙箱化 Worktree
 
-- 状态：已接受
-- 日期：2026-11-08
 - 关系：扩展 [ADR-215](adr-215-sandboxed-worktree-isolation.md)，复用 Workspace 记录、写入策略及 Provider 启动接口。
 
 ## 背景
@@ -44,7 +52,7 @@ Linux bind mount 无法表达 macOS 的 `~/.claude.json*` 可写前缀，单文�
 
 Linux 测试运行真实 bubblewrap 和 shell，覆盖 worktree 写入、linked worktree Git commit、凭据读取和原子刷新、环境变量继承、宿主 loopback 网络、临时文件、符号链接越界，以及 home、兄弟目录、Git 和 Provider 配置的写入拒绝。另测 Claude 全局设置原子替换、初始化不覆盖已有配置和悬空链接失败。运行环境必须安装 bubblewrap 并允许 namespace；环境不满足时测试失败，不把跳过当作通过。
 
-[容器验证报告](../../reports/providers/linux-sandbox-container-2026-11-08.md)记录 Ubuntu、Debian 的真实隔离探针、控制终端对照、Pi 关闭回归及上述硬链接限制。
+[容器验证报告](../../archive/reports/providers/linux-sandbox-container-2026-11-08.md)记录 Ubuntu、Debian 的真实隔离探针、控制终端对照、Pi 关闭回归及上述硬链接限制。
 
 ## 参考
 

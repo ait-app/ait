@@ -1,7 +1,13 @@
+---
+id: ADR-116
+status: accepted
+date: 2026-10-09
+paths:
+  - crates
+---
+
 # ADR-116：库 crate 只公开被其他 crate 使用的项
 
-- 状态：接受
-- 日期：2026-10-09
 - 关联：[ADR-107](adr-107-direct-imports-from-owning-crates.md)（直接从所属模块导入）、
   [ADR-112](adr-112-persistence-crate.md) 与
   [ADR-113](../workspace/adr-113-filesystem-capability-groups.md)。

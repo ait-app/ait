@@ -1,7 +1,18 @@
+---
+id: ADR-212
+status: accepted
+date: 2026-11-05
+amends:
+  - clients/adr-158-standalone-daemon-release.md
+  - clients/adr-163-nightly-standalone-daemon.md
+paths:
+  - .github/workflows
+  - apps/desktop
+  - scripts
+---
+
 # ADR-212：打包的 daemon 可执行文件统一命名为 aitd
 
-- 状态：Accepted
-- 日期：2026-11-05
 - 修订：[ADR-158](adr-158-standalone-daemon-release.md)、[ADR-163](adr-163-nightly-standalone-daemon.md)（归档内可执行文件名）
 
 ## 背景

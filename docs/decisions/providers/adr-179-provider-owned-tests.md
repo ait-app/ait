@@ -1,7 +1,15 @@
+---
+id: ADR-179
+status: accepted
+date: 2026-10-21
+amends:
+  - providers/adr-089-provider-owned-composition.md
+paths:
+  - crates/provider
+---
+
 # ADR-179：Provider 自身行为的测试归 provider crate
 
-- 状态：Accepted。
-- 日期：2026-10-21。
 - 范围：Provider 测试归属与原生进程夹具。
 - 关系：细化 [ADR-089](adr-089-provider-owned-composition.md) 的内置 adapter 所有权，
   沿用 [ADR-107](../daemon/adr-107-direct-imports-from-owning-crates.md) 的测试依赖边界。

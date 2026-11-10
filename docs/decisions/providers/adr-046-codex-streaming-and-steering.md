@@ -1,7 +1,13 @@
+---
+id: ADR-046
+status: accepted
+date: 2026-09-25
+paths:
+  - crates/provider
+---
+
 # ADR-046：Codex 增量显示历史与运行中追加输入
 
-- 状态：Accepted
-- 日期：2026-09-25
 - 延续：ADR-039、ADR-040、ADR-041；遵循 ADR-001 v4
 - 范围：独立 server 的 `provider`，不连接旧 daemon 的领域 Run/Message
 
@@ -22,4 +28,4 @@
 
 ## 验证
 
-见 [实施与 Test coverage 报告](../../reports/providers/server-codex-streaming.md)。离线 app-server fixture 覆盖实时输出、错误 turn、原生拒绝、完成竞态与不确定接收；真实 server WebSocket 验证游标、断线订阅和进程重启。SQLite 测试验证 v1/v2 迁移、提交失败、观察去重与原生刷新改写。
+见 [实施与 Test coverage 报告](../../archive/reports/providers/server-codex-streaming.md)。离线 app-server fixture 覆盖实时输出、错误 turn、原生拒绝、完成竞态与不确定接收；真实 server WebSocket 验证游标、断线订阅和进程重启。SQLite 测试验证 v1/v2 迁移、提交失败、观察去重与原生刷新改写。

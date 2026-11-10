@@ -90,7 +90,7 @@ and LAN addresses are supported. `AIT_SERVER_LISTEN` overrides the saved setting
 
 With the development server running, `npm run test:e2e:server-listen --workspace=@ait/desktop`
 checks the form, persisted configuration and connection recovery across three desktop launches.
-See [the implementation report](../../docs/reports/clients/desktop-server-listen.md) for validation.
+See [the implementation report](../../docs/archive/reports/clients/desktop-server-listen.md) for validation.
 
 ### Remote Workspace browser
 

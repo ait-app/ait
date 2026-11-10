@@ -1,7 +1,16 @@
+---
+id: ADR-154
+status: accepted
+date: 2026-10-17
+amends:
+  - clients/adr-074-account-host-relay.md
+paths:
+  - packages/client
+  - apps/mobile
+---
+
 # ADR-154：账号状态通过共享客户端 Channel 推送
 
-- 状态：已实现
-- 日期：2026-10-17
 - 关系：修订 [ADR-074](adr-074-account-host-relay.md) 的 HTTP 在线发现，沿用 [ADR-083](adr-083-online-service-host-sync.md) 的客户端与 Host 独立租约，以及 [ADR-132](adr-132-web-console-client.md) 的浏览器凭据归属。
 
 ## 背景
