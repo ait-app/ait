@@ -1,6 +1,6 @@
 import type { ChildProcess, SpawnOptions } from "node:child_process";
 import { spawn as nodeSpawn } from "node:child_process";
-import { existsSync as nodeExistsSync, statSync } from "node:fs";
+import { existsSync as nodeExistsSync, realpathSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path, { posix, win32 } from "node:path";
@@ -25,6 +25,7 @@ export interface EditorTargetRuntimeOptions {
   env?: NodeJS.ProcessEnv;
   pathExists?: (path: string) => boolean;
   isDirectory?: (path: string) => boolean;
+  realPath?: (path: string) => string;
   spawn?: (command: string, args: string[], options: SpawnOptions) => SpawnedProcess;
   openPath?: (path: string) => Promise<string>;
   revealPath?: (path: string) => void;
@@ -135,6 +136,7 @@ export function createEditorTargetRuntime(
   const env = options.env ?? process.env;
   const pathExists = options.pathExists ?? nodeExistsSync;
   const isDirectory = options.isDirectory ?? nodeIsDirectory;
+  const realPath = options.realPath ?? ((targetPath: string) => realpathSync(targetPath));
   const spawn = options.spawn ?? spawnProcess;
   const openPath = options.openPath ?? ((targetPath) => shell.openPath(targetPath));
   const revealPath = options.revealPath ?? ((targetPath) => shell.showItemInFolder(targetPath));
@@ -146,6 +148,7 @@ export function createEditorTargetRuntime(
     env,
     pathExists,
     isDirectory,
+    realPath,
     isAbsolutePath: (targetPath) => isAbsolutePath(targetPath, platform),
     resolveCommand: (commands) => resolveExecutable(commands, { env, pathExists, platform }),
     async spawnDetached({ command, args }) {

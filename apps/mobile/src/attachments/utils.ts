@@ -1,6 +1,7 @@
 import { generateMessageId } from "@/types/stream";
 import { isAbsolutePath } from "@/utils/path";
 import { isRasterImageMimeType } from "./file-types";
+import { safeDecodeURIComponent } from "@/utils/string";
 
 export function generateAttachmentId(): string {
   return `att_${generateMessageId()}`;
@@ -142,14 +143,6 @@ export function pathToFileUri(path: string): string {
   return `file:///${path.replace(/\\/g, "/")}`;
 }
 
-function decodeFilePathSource(source: string): string {
-  try {
-    return decodeURIComponent(source);
-  } catch {
-    return source;
-  }
-}
-
 function normalizeWindowsDrivePath(path: string): string {
   if (!/^[A-Za-z]:[\\/]/.test(path)) {
     return path;
@@ -166,7 +159,7 @@ export function fileUriToPath(uri: string): string {
     return uri;
   }
   const fileSource = uri.slice("file://".length);
-  const decodedPath = decodeFilePathSource(fileSource);
+  const decodedPath = safeDecodeURIComponent(fileSource);
   if (!fileSource.startsWith("/")) {
     return `\\\\${decodedPath.replace(/\//g, "\\")}`;
   }
@@ -185,7 +178,7 @@ export function localFileSourceToPath(
   if (source.startsWith("file://")) {
     path = fileUriToPath(source);
   } else if (decodeHref || isMarkdownEncodedWindowsDrivePath(source)) {
-    path = decodeFilePathSource(source);
+    path = safeDecodeURIComponent(source);
   }
   return normalizeWindowsDrivePath(path);
 }

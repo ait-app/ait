@@ -40,6 +40,20 @@ describe("extractToolCallFilePath", () => {
   });
 
   it.each([
+    ['cat "src/a.ts"', "src/a.ts"],
+    ["cat 'src/a.ts'", "src/a.ts"],
+    ['head -n 20 "src/a.ts"', "src/a.ts"],
+    ['cat "src/a.ts', '"src/a.ts'],
+    ["cat \"src/a.ts'", "\"src/a.ts'"],
+  ])("strips only one matching quote pair from %s", (command, expected) => {
+    expect(extractToolCallFilePath({ type: "shell", command })).toBe(expected);
+  });
+
+  it("returns null for an empty quoted shell path", () => {
+    expect(extractToolCallFilePath({ type: "shell", command: 'cat ""' })).toBeNull();
+  });
+
+  it.each([
     "cat a.ts | grep foo",
     "cat a.ts > b.ts",
     "cat a.ts b.ts",

@@ -144,6 +144,26 @@ const title = "Hello";
     );
   });
 
+  it("keeps Astro frontmatter whole when its body contains -->", () => {
+    const code = `---
+let count = 3;
+while (count --> 0) {}
+const title = "Hello";
+---
+<main class="page"></main>`;
+
+    const tokens = highlightCode(code, "Arrow.astro").flat();
+
+    expect(tokens).toEqual(
+      expect.arrayContaining([
+        { text: "let", style: "keyword" },
+        { text: "const", style: "keyword" },
+        { text: '"Hello"', style: "string" },
+        { text: "main", style: "tag" },
+      ]),
+    );
+  });
+
   it("keeps an Astro expression open through nested template strings", () => {
     const code = "<p>{`a ${`}`} b`}</p>";
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { markDeliveredSendError } from "@/composer/submission/model";
-import { submitAgentInput } from "./submit";
+import { readLiveDraftText, submitAgentInput } from "./submit";
 
 function createDeferredPromise<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -15,6 +15,17 @@ function createDeferredPromise<T>() {
     reject,
   };
 }
+
+describe("readLiveDraftText", () => {
+  it("prefers the mounted editor over a draft store still awaiting its after-paint clear", () => {
+    const stored = { getSnapshot: () => "already sent" };
+    expect(readLiveDraftText({ getText: () => "" }, stored)).toBe("");
+  });
+
+  it("falls back to the draft store when no editor is mounted", () => {
+    expect(readLiveDraftText(null, { getSnapshot: () => "saved" })).toBe("saved");
+  });
+});
 
 describe("submitAgentInput", () => {
   it("clears the composer before an in-flight submit resolves", async () => {
@@ -110,7 +121,7 @@ describe("submitAgentInput", () => {
         setSendError,
         setIsProcessing: vi.fn(),
       }),
-    ).resolves.toBe("failed");
+    ).resolves.toBe("delivered");
 
     expect(setUserInput).toHaveBeenCalledTimes(1);
     expect(setUserInput).toHaveBeenCalledWith("");

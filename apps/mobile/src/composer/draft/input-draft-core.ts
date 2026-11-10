@@ -59,17 +59,3 @@ export function hasDraftContent(input: {
 }): boolean {
   return input.text.length > 0 || input.attachments.length > 0;
 }
-
-export function areAttachmentsEqual(input: {
-  left: UserComposerAttachment[];
-  right: UserComposerAttachment[];
-}): boolean {
-  if (input.left.length !== input.right.length) {
-    return false;
-  }
-
-  return input.left.every((attachment, index) => {
-    const other = input.right[index];
-    return JSON.stringify(attachment) === JSON.stringify(other);
-  });
-}

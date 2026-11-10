@@ -36,10 +36,6 @@ import { useSessionStore } from "@/stores/session-store";
 import { useVoiceOptional } from "@/contexts/voice-context";
 import { useToast } from "@/contexts/toast-context";
 import { resolveVoiceUnavailableMessage } from "@/utils/server-info-capabilities";
-import {
-  collectImageFilesFromClipboardData,
-  filesToImageAttachments,
-} from "@/utils/image-attachments-from-files";
 import type { ComposerAttachment } from "@/attachments/types";
 import type { ImageAttachment, MessagePayload, TextReplacement } from "@/composer/types";
 import { focusWithRetries } from "@/utils/web-focus";
@@ -58,6 +54,7 @@ import { getShortcutOs } from "@/utils/shortcut-platform";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { isWeb } from "@/constants/platform";
+import { usePasteImagesEffect } from "@/composer/input/use-paste-images-effect";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import { RenderProfile } from "@/utils/render-profiler";
@@ -139,6 +136,8 @@ export interface MessageInputProps {
   onAttachButtonRef?: (node: View | null) => void;
   onAddImages?: (images: ImageAttachment[]) => void;
   onPasteImages?: (files: readonly NativePastedFile[]) => void;
+  /** Holds the submit gate while a web paste is being saved. */
+  trackImagePasteSave?: (save: Promise<unknown>) => void;
   client: DaemonClient | null;
   /** Dictation start gate from host runtime (socket connected + directory ready). */
   isReadyForDictation?: boolean;
@@ -443,58 +442,6 @@ function getTextInputNativeElement(current: ComposerTextInputHandle | null): HTM
   if (!current) return null;
   const native = typeof current.getNativeRef === "function" ? current.getNativeRef() : current;
   return native instanceof HTMLElement ? native : null;
-}
-
-interface PasteImagesEffectArgs {
-  textarea: HTMLElement | null;
-  isConnected: boolean;
-  disabled: boolean;
-  isDictating: boolean;
-  isRealtimeVoiceForCurrentAgent: boolean;
-  onAddImages: ((images: ImageAttachment[]) => void) | undefined;
-}
-
-function usePasteImagesEffect(args: PasteImagesEffectArgs): void {
-  const {
-    textarea,
-    isConnected,
-    disabled,
-    isDictating,
-    isRealtimeVoiceForCurrentAgent,
-    onAddImages,
-  } = args;
-
-  useEffect(() => {
-    if (!isWeb || !onAddImages) return;
-
-    if (!textarea) return;
-
-    let disposed = false;
-    const handlePaste = (event: ClipboardEvent) => {
-      if (!isConnected || disabled || isDictating || isRealtimeVoiceForCurrentAgent) return;
-
-      const imageFiles = collectImageFilesFromClipboardData(event.clipboardData);
-      if (imageFiles.length === 0) return;
-
-      event.preventDefault();
-
-      void filesToImageAttachments(imageFiles)
-        .then((pastedAttachments) => {
-          if (disposed || pastedAttachments.length === 0) return;
-          onAddImages(pastedAttachments);
-          return;
-        })
-        .catch((error) => {
-          console.error("[MessageInput] Failed to process pasted images:", error);
-        });
-    };
-
-    textarea.addEventListener("paste", handlePaste);
-    return () => {
-      disposed = true;
-      textarea.removeEventListener?.("paste", handlePaste);
-    };
-  }, [disabled, textarea, isConnected, isDictating, isRealtimeVoiceForCurrentAgent, onAddImages]);
 }
 
 function useAutoFocusOnWebEffect(
@@ -1096,6 +1043,7 @@ interface ResolvedMessageInputProps {
   onAttachButtonRef: ((node: View | null) => void) | undefined;
   onAddImages: ((images: ImageAttachment[]) => void) | undefined;
   onPasteImages: ((files: readonly NativePastedFile[]) => void) | undefined;
+  trackImagePasteSave: ((save: Promise<unknown>) => void) | undefined;
   client: DaemonClient | null;
   isReadyForDictation: boolean | undefined;
   placeholder: string | undefined;
@@ -1144,6 +1092,7 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     onAttachButtonRef: props.onAttachButtonRef,
     onAddImages: props.onAddImages,
     onPasteImages: props.onPasteImages,
+    trackImagePasteSave: props.trackImagePasteSave,
     client: props.client,
     isReadyForDictation: props.isReadyForDictation,
     placeholder: props.placeholder,
@@ -1222,6 +1171,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       onAttachButtonRef,
       onAddImages,
       onPasteImages,
+      trackImagePasteSave,
       client,
       isReadyForDictation,
       placeholder,
@@ -1506,7 +1456,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       isRecording: isDictating,
       isRecordingActive: isDictationActive,
       isProcessing: isDictationProcessing,
-      partialTranscript: _dictationPartialTranscript,
       volume: dictationVolume,
       duration: dictationDuration,
       error: dictationError,
@@ -1719,6 +1668,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       isDictating,
       isRealtimeVoiceForCurrentAgent,
       onAddImages,
+      trackImagePasteSave,
     });
 
     const handleSelectionChange = useCallback(

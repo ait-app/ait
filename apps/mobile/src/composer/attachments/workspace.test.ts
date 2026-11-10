@@ -5,7 +5,7 @@ import {
   resetWorkspaceAttachmentsStore,
   useWorkspaceAttachmentsStore,
 } from "@/attachments/workspace-attachments-store";
-import { removeSentContextAttachments } from "./workspace-cleanup";
+import { removeSentContextAttachments, restoreSentContextAttachments } from "./workspace-cleanup";
 
 function chatHistoryAttachment(): WorkspaceComposerAttachment {
   return {
@@ -68,5 +68,24 @@ describe("workspace composer attachment cleanup", () => {
     removeSentContextAttachments([chatHistory, pullRequestContext, browserElement]);
 
     expect(useWorkspaceAttachmentsStore.getState().attachmentsByScope[scopeKey]).toBeUndefined();
+  });
+
+  it("restores context attachments cleared by queueing when the message is edited", () => {
+    resetWorkspaceAttachmentsStore();
+    const scopeKey = buildDraftWorkspaceAttachmentScopeKey("edit-queued");
+    const attachments = [
+      chatHistoryAttachment(),
+      pullRequestContextAttachment(),
+      browserElementAttachment(),
+    ];
+    useWorkspaceAttachmentsStore.getState().setWorkspaceAttachments({ scopeKey, attachments });
+
+    removeSentContextAttachments(attachments);
+    expect(useWorkspaceAttachmentsStore.getState().attachmentsByScope[scopeKey]).toBeUndefined();
+
+    restoreSentContextAttachments(attachments, scopeKey);
+    expect(useWorkspaceAttachmentsStore.getState().attachmentsByScope[scopeKey]).toEqual(
+      attachments,
+    );
   });
 });

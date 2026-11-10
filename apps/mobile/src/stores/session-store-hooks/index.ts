@@ -3,15 +3,12 @@ import { useStoreWithEqualityFn } from "zustand/traditional";
 import {
   createWorkspaceStructureProjectsSelector,
   selectHasHydratedWorkspaces,
-  selectHydratedWorkspaceServerIds,
   selectWorkspaceDirectoryServerIds,
-  selectHasWorkspaces,
   selectRecommendedProjectPaths,
   selectWorkspace,
   selectWorkspaceDirectory,
   selectWorkspaceExists,
   selectWorkspaceFields,
-  selectWorkspaceKeys,
   selectWorkspaceStatusesForBadges,
   workspaceEqualityFns,
   type WorkspaceStructure,
@@ -68,14 +65,6 @@ export function useHasHydratedWorkspaces(serverId: string | null): boolean {
   );
 }
 
-export function useHydratedWorkspaceServerIds(serverIds: string[]): string[] {
-  return useStoreWithEqualityFn(
-    useSessionStore,
-    (state) => selectHydratedWorkspaceServerIds(state, serverIds),
-    workspaceEqualityFns.deep,
-  );
-}
-
 export function useWorkspaceDirectoryServerIds(serverIds: string[]): string[] {
   return useStoreWithEqualityFn(
     useSessionStore,
@@ -108,27 +97,11 @@ export function useWorkspaceStructure(serverIds: string[]): WorkspaceStructure {
   return useMemo(() => ({ projects }), [projects]);
 }
 
-export function useWorkspaceKeys(serverId: string | null): string[] {
-  return useStoreWithEqualityFn(
-    useSessionStore,
-    (state) => selectWorkspaceKeys(state, serverId),
-    workspaceEqualityFns.deep,
-  );
-}
-
 export function useRecommendedProjectPaths(serverId: string | null): string[] {
   return useStoreWithEqualityFn(
     useSessionStore,
     (state) => selectRecommendedProjectPaths(state, serverId),
     workspaceEqualityFns.deep,
-  );
-}
-
-export function useHasWorkspaces(serverId: string | null): boolean {
-  return useStoreWithEqualityFn(
-    useSessionStore,
-    (state) => selectHasWorkspaces(state, serverId),
-    workspaceEqualityFns.identity,
   );
 }
 

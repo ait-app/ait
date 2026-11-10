@@ -47,14 +47,6 @@ const noopSubscribe = () => () => {};
 const getEmptySnapshot = () => EMPTY_SNAPSHOT;
 const getEmptyTelemetry = () => EMPTY_TELEMETRY;
 
-export function useVoice() {
-  const value = useVoiceOptional();
-  if (!value) {
-    throw new Error("useVoice must be used within VoiceProvider");
-  }
-  return value;
-}
-
 export function useVoiceOptional(): VoiceContextValue | null {
   const runtime = useContext(VoiceRuntimeContext);
   const snapshot = useSyncExternalStore(

@@ -1,5 +1,6 @@
 import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { normalizeWorkspaceFileLocation, workspaceFileLocationsEqual } from "@/workspace/file-open";
+import { trimNonEmpty } from "@/utils/string";
 
 export function normalizeWorkspaceTabTarget(
   value: WorkspaceTabTarget | null | undefined,
@@ -267,14 +268,6 @@ export function buildDeterministicWorkspaceTabId(target: WorkspaceTabTarget): st
       : `plugin_agent_${identity}_${target.agentId.length}_${target.agentId}`;
   }
   return `file_${target.path}`;
-}
-
-function trimNonEmpty(value: string | null | undefined): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }
 
 function normalizeFileTabTarget(

@@ -1,12 +1,4 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  type ReactNode,
-} from "react";
+import React, { createContext, useMemo, type ReactNode } from "react";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 
 interface WorkspaceFocusContextValue {
@@ -15,17 +7,7 @@ interface WorkspaceFocusContextValue {
   restorePaneFocus: (workspaceKey: string, token: string) => void;
 }
 
-export interface WorkspaceFocusRestoration {
-  unfocus: () => void;
-  restore: () => void;
-}
-
 const WorkspaceFocusContext = createContext<WorkspaceFocusContextValue | null>(null);
-
-const noopFocusRestoration: WorkspaceFocusRestoration = {
-  unfocus: () => {},
-  restore: () => {},
-};
 
 export function WorkspaceFocusProvider({
   workspaceKey,
@@ -46,30 +28,4 @@ export function WorkspaceFocusProvider({
   );
 
   return <WorkspaceFocusContext.Provider value={value}>{children}</WorkspaceFocusContext.Provider>;
-}
-
-export function useWorkspaceFocusRestoration(): WorkspaceFocusRestoration {
-  const context = useContext(WorkspaceFocusContext);
-  const tokenRef = useRef<string | null>(null);
-
-  const restore = useCallback(() => {
-    const token = tokenRef.current;
-    if (!context?.workspaceKey || !token) {
-      tokenRef.current = null;
-      return;
-    }
-    tokenRef.current = null;
-    context.restorePaneFocus(context.workspaceKey, token);
-  }, [context]);
-
-  const unfocus = useCallback(() => {
-    if (!context?.workspaceKey || tokenRef.current) {
-      return;
-    }
-    tokenRef.current = context.unfocusPane(context.workspaceKey);
-  }, [context]);
-
-  useEffect(() => restore, [restore]);
-
-  return context ? { unfocus, restore } : noopFocusRestoration;
 }

@@ -1,4 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
+import { once } from "node:events";
 import {
   existsSync,
   mkdirSync,
@@ -11,6 +12,7 @@ import {
 import { tmpdir, networkInterfaces, uptime } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { WebSocketServer } from "ws";
 import { RustDaemonManager, resolveDesktopDaemonHome, rotateDaemonLog } from "./rust-daemon";
 
 const managers: RustDaemonManager[] = [];
@@ -276,6 +278,64 @@ it("preserves an unverified live PID without adopting or signalling it", async (
     expect(unrelated.signalCode).toBeNull();
   } finally {
     unrelated.kill();
+  }
+});
+
+it("drops a reattached daemon that has exited and starts a replacement", async () => {
+  const home = mkdtempSync(path.join(tmpdir(), "ait-desktop-retained-"));
+  homes.push(home);
+  const daemon = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30000)"]);
+  const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+  server.on("connection", (socket) => {
+    socket.on("message", (data) => {
+      const message = JSON.parse(data.toString()) as { type: string; method?: string };
+      if (message.type === "hello") {
+        socket.send(
+          JSON.stringify({
+            type: "server_info",
+            info: { server_id: "retained", version: "1", instance_id: "one", features: [] },
+          }),
+        );
+      } else if (message.method === "daemon.get_status.request") {
+        socket.send(
+          JSON.stringify({
+            type: "response",
+            request_id: "desktop",
+            result: { pid: daemon.pid },
+          }),
+        );
+      }
+    });
+  });
+  try {
+    await once(server, "listening");
+    const { port } = server.address() as { port: number };
+    writeFileSync(
+      path.join(home, "desktop-daemon.json"),
+      JSON.stringify({
+        pid: daemon.pid,
+        token: "f".repeat(64),
+        listen: `127.0.0.1:${port}`,
+        configuredListen: "127.0.0.1:0",
+        startedAt: new Date().toISOString(),
+      }),
+    );
+    const manager = create("/missing/ait-server", home, { listen: "127.0.0.1:0" });
+    await expect(manager.start()).resolves.toMatchObject({
+      status: "running",
+      pid: daemon.pid,
+      ownedByDesktop: true,
+    });
+
+    daemon.kill("SIGKILL");
+    await once(daemon, "exit");
+
+    // With stale state dropped, start proceeds to spawn and fails only on the missing binary.
+    await expect(manager.start()).rejects.toThrow(/ENOENT|missing/);
+    expect(manager.status()).toMatchObject({ status: "errored", pid: null, ownedByDesktop: false });
+  } finally {
+    daemon.kill();
+    server.close();
   }
 });
 

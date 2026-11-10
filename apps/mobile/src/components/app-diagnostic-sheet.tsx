@@ -23,6 +23,7 @@ import { getHostRuntimeStore, useHosts, type HostRuntimeSnapshot } from "@/runti
 import { getStartupMarks } from "@/runtime/startup-timeline";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { HostProfile } from "@/types/host-connection";
+import { toErrorMessage } from "@/utils/error-messages";
 
 interface AppDiagnosticSheetProps {
   visible: boolean;
@@ -320,7 +321,7 @@ async function collectHostDiagnosticSections(
     } catch (error) {
       sections.push(
         formatDiagnosticSection(`Host latency: ${host.label}`, [
-          { label: "Error", value: toMessage(error) },
+          { label: "Error", value: toErrorMessage(error) },
         ]),
       );
     }
@@ -340,15 +341,11 @@ async function collectHostDiagnosticSections(
   } catch (error) {
     sections.push(
       formatDiagnosticSection(`Host diagnostics: ${host.label}`, [
-        { label: "Error", value: toMessage(error) },
+        { label: "Error", value: toErrorMessage(error) },
       ]),
     );
     return { sections, status: "failed" };
   }
-}
-
-function toMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function formatProgressStatus(status: ProgressStatus): string {

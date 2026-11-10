@@ -199,6 +199,23 @@ describe("hub session credit", () => {
     expect(resumed.frames("credit")).toEqual([{ t: "credit", s: session.id, c: 1000 }]);
   });
 
+  it("replays unacknowledged frames before a queued message released by the resume", async () => {
+    const { h, socket, session } = await creditSession();
+    socket.receive({ t: "accept", seq: 2, s: session.id, w: 1024 * 1024 });
+    socket.receive({ t: "credit", s: session.id, c: 64 * 1024 * 1024 });
+    // The eighth message no longer fits the unacknowledged buffer and waits in the session queue.
+    for (let index = 0; index < 8; index += 1) session.send(new Uint8Array(1024 * 1024));
+    expect(socket.frames("msg")).toHaveLength(7);
+    socket.drop();
+    await h.flush();
+    const resumed = h.socket();
+    resumed.open();
+    resumed.welcome({ resumed: true, resume_token: undefined, recv: 2, f: ALL });
+    const seqs = resumed.frames("msg").map((frame) => frame.seq as number);
+    expect(seqs).toEqual([...new Set(seqs)].sort((a, b) => a - b));
+    expect(seqs).toHaveLength(7);
+  });
+
   it("keeps uncontrolled sessions when the Host answers without a window", async () => {
     const { socket, session } = await creditSession();
     session.send("queued");

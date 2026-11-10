@@ -1,5 +1,6 @@
 import type { FileReadResult } from "@ait/client/internal/daemon-client";
 import type { FileVersion } from "@ait/protocol/messages";
+import { toErrorMessage } from "@/utils/error-messages";
 
 export interface LiveFileTarget {
   cwd: string;
@@ -214,7 +215,7 @@ export class LiveFileModel {
       this.startRead(requested || this.takeQueuedRequested());
       return;
     }
-    const message = errorMessage(input.error);
+    const message = toErrorMessage(input.error);
     const candidate = this.candidateVersion;
     this.candidateVersion = null;
     const candidateDescribesFailure =
@@ -265,8 +266,4 @@ function readyVersion(
     modifiedAt: file.modifiedAt,
     revision: file.revision,
   };
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

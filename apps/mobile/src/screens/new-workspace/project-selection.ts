@@ -5,7 +5,6 @@ import {
   type HostProjectListItem,
 } from "@/projects/host-projects";
 
-export type ProjectSelectionSource = "initial" | "manual";
 export type InitialProjectSelectionSource = "route" | "lastActive" | "fallback" | null;
 
 interface InitialProjectSelection {

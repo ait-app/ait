@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { paintWebViewport } from "./paint.web";
+import { paintWebViewport, truncateCanvasText } from "./paint.web";
 import type { DiffCell, DiffDocumentModel, DiffLineRow, DiffPalette, DiffSelection } from "./types";
+
+describe("truncateCanvasText", () => {
+  it("does not cut a surrogate pair at the truncation point", () => {
+    const context = {
+      measureText: (text: string) => ({ width: text.length * 6 }) as TextMetrics,
+    } as unknown as CanvasRenderingContext2D;
+
+    expect(truncateCanvasText(context, "ab\u{1F600}cdef", 24)).toBe("ab\u2026");
+  });
+});
 
 describe("web diff text shaping", () => {
   it("matches the 30px file-header alignment rails exactly", () => {

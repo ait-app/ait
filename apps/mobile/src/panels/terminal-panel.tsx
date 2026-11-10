@@ -14,6 +14,7 @@ import { buildTerminalsQueryKey } from "@/screens/workspace/terminals/state";
 import { usePanelStore } from "@/stores/panel-store";
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceDirectory, useWorkspaceFields } from "@/stores/session-store-hooks";
+import { trimNonEmpty } from "@/utils/string";
 
 type ListTerminalsPayload = ListTerminalsResponse["payload"];
 
@@ -23,14 +24,6 @@ const CENTERED_PADDED_STYLE = {
   justifyContent: "center",
   padding: 16,
 } as const;
-
-function trimNonEmpty(value: string | null | undefined): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
 
 function useTerminalPanelDescriptor(
   target: { kind: "terminal"; terminalId: string },

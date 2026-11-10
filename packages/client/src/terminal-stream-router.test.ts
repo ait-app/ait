@@ -61,3 +61,18 @@ test("legacy listeners share a terminal slot without releasing each other", () =
   router.handleFrame(frame);
   expect(received).toEqual(["first", "second", "second"]);
 });
+
+test("a stale detach after clearSlots leaves the slot's new registration in place", () => {
+  const router = new TerminalStreamRouter();
+  const events: TerminalStreamEvent[] = [];
+  const detachStale = router.attach("subscription-a", "terminal-a", 1, () => {});
+  router.clearSlots();
+  router.attach("subscription-b", "terminal-b", 1, (event) => events.push(event));
+  detachStale();
+  router.handleFrame({
+    opcode: TerminalStreamOpcode.Output,
+    slot: 1,
+    payload: new TextEncoder().encode("output"),
+  });
+  expect(events).toEqual([expect.objectContaining({ subscriptionId: "subscription-b" })]);
+});

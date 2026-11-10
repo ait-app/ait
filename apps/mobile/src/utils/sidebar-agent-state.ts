@@ -11,10 +11,6 @@ export function deriveSidebarStateBucket(input: AgentStateBucketInput): SidebarS
   return deriveAgentStateBucket(input);
 }
 
-export function isSidebarActiveAgent(input: AgentStateBucketInput): boolean {
-  return deriveSidebarStateBucket(input) !== "done";
-}
-
 // Most urgent first, for collapsing a project's workspaces into one badge. This is
 // deliberately NOT STATUS_BUCKET_ORDER below, which ranks "attention" above "running": on a
 // collapsed project row we want an actively-working project to keep showing the loader,

@@ -53,6 +53,7 @@ import {
   type ProjectHostEntry,
   type ProjectSummary,
 } from "@/utils/projects";
+import { displayInitial } from "@/utils/display-initial";
 
 const SCRIPT_SERVICE_TYPE = "service";
 
@@ -840,7 +841,7 @@ function ProjectTitleIcon({
   projectName: string;
   projectViewKey: string;
 }) {
-  const initial = projectName.trim().charAt(0).toUpperCase() || "?";
+  const initial = displayInitial(projectName.trim()) || "?";
   return (
     <ProjectIconView
       iconDataUri={iconDataUri}

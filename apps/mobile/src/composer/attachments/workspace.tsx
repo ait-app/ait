@@ -6,6 +6,7 @@ import type {
   WorkspaceComposerAttachment,
 } from "@/attachments/types";
 import { getWorkspaceAttachmentPillContent } from "@/attachments/attachment-pill-content";
+import type { AgentInputSubmitResult } from "@/composer/submit";
 import { AttachmentLabel, AttachmentPill } from "@/components/attachment-pill";
 import {
   isWorkspaceAttachment,
@@ -36,7 +37,7 @@ interface OpenWorkspaceAttachmentInput {
 }
 
 interface CompleteSubmitInput {
-  result: "noop" | "queued" | "submitted" | "failed";
+  result: AgentInputSubmitResult;
   outgoingAttachments: readonly ComposerAttachment[];
 }
 
@@ -209,10 +210,10 @@ function useWorkspaceAttachmentBinding({
 
   const completeSubmit = useCallback(
     ({ result, outgoingAttachments }: CompleteSubmitInput) => {
-      if (result === "submitted") {
+      if (result === "submitted" || result === "delivered") {
         clearSentAttachments(outgoingAttachments);
       }
-      if (result === "queued" || result === "submitted" || result === "failed") {
+      if (result !== "noop") {
         resetSuppression();
       }
     },

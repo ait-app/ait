@@ -8,6 +8,7 @@ import {
 } from "react";
 import { StyleSheet, View } from "react-native";
 import { PortalHost } from "@gorhom/portal";
+import { measureElement } from "@/components/ui/menu/menu-anchor";
 
 export const DEFAULT_FLOATING_PANEL_PORTAL_HOST = "content-floating-panels";
 
@@ -21,14 +22,6 @@ interface Rect {
 }
 
 const portalHostElements = new Map<string, View>();
-
-function measureElement(element: View): Promise<Rect> {
-  return new Promise((resolve) => {
-    element.measureInWindow((x, y, width, height) => {
-      resolve({ x, y, width, height });
-    });
-  });
-}
 
 export function measureFloatingPanelPortalHost(name: string): Promise<Rect | null> {
   const element = portalHostElements.get(name);

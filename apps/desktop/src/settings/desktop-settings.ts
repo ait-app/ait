@@ -276,7 +276,17 @@ export function createDesktopSettingsStore({
       await persistDocument(document);
       return document;
     }
-    const document = coerceDocument(JSON.parse(raw));
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      // A corrupted file shouldn't block launch; the next write replaces it.
+      if (!(error instanceof SyntaxError)) {
+        throw error;
+      }
+      parsed = null;
+    }
+    const document = coerceDocument(parsed);
     cachedDocument = document;
     return document;
   }

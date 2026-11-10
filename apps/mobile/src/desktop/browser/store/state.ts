@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { trimNonEmpty } from "@/utils/string";
 
 export type BrowserViewport =
   | { mode: "responsive" }
@@ -77,14 +78,6 @@ function browserViewportsEqual(left: BrowserViewport, right: BrowserViewport): b
 export function normalizeBrowserIndexState(value: unknown): BrowserIndexState {
   const result = BrowserIndexStateSchema.safeParse(value);
   return result.success ? result.data : { browsersById: {} };
-}
-
-export function trimNonEmpty(value: string | null | undefined): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }
 
 export const DEFAULT_BROWSER_URL = "https://ait-app.com";

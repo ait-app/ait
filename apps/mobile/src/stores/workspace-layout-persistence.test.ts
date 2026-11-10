@@ -5,7 +5,10 @@ import { createWorkspaceLayoutStore } from "./workspace-layout-store";
 
 Object.assign(globalThis, { indexedDB, IDBKeyRange });
 
-it("skips unchanged reconciliations and immediately saves real layout changes", async () => {
+// Saves queue behind the cross-window persist lock, so they land after the current task.
+const flushPersistQueue = () => new Promise((resolve) => setTimeout(resolve));
+
+it("skips unchanged reconciliations and saves real layout changes", async () => {
   const values = new Map<string, string>();
   let writes = 0;
   const storage: StateStorage = {
@@ -28,6 +31,7 @@ it("skips unchanged reconciliations and immediately saves real layout changes", 
       intent: "reveal",
     });
   openAgent("agent-1");
+  await flushPersistQueue();
   const layout = store.getState().layoutByWorkspace[workspaceKey];
   const writesBefore = writes;
   expect(writesBefore).toBe(1);
@@ -41,10 +45,12 @@ it("skips unchanged reconciliations and immediately saves real layout changes", 
       standaloneTerminalIds: [],
     });
   }
+  await flushPersistQueue();
   expect(store.getState().layoutByWorkspace[workspaceKey]).toBe(layout);
   expect(writes).toBe(writesBefore);
 
   openAgent("agent-2");
+  await flushPersistQueue();
   expect(writes).toBe(writesBefore + 1);
   const restored = createWorkspaceLayoutStore(undefined, storage);
   await restored.persist.rehydrate();

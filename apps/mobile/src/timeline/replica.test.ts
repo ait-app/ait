@@ -11,12 +11,13 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 import type { AgentStreamEventPayload } from "@ait/protocol/messages";
 import type { CachedTimeline } from "@/runtime/replica-cache";
-import { selectAgentTimelineState, useSessionStore } from "@/stores/session-store";
+import { selectAgentTimelineState, useSessionStore, type Agent } from "@/stores/session-store";
 import { useCreateFlowStore, type PendingCreateAttempt } from "@/stores/create-flow-store";
 import type { StreamItem } from "@/types/stream";
 import {
   createTimelineReplica,
   createViewedTimelineOwner,
+  settleActiveThoughts,
   type TimelineReplica,
   type TimelineReplicaStorage,
   type ViewedTimelineOwner,
@@ -609,6 +610,183 @@ describe("viewed timeline persistence", () => {
 
     expect(keys).toEqual([AGENT_ID, "agent-2"]);
     owner.dispose();
+  });
+});
+
+function assistantEntry(seq: number, text: string) {
+  return {
+    provider: "mock",
+    item: { type: "assistant_message" as const, text },
+    timestamp: `2026-08-26T10:00:${String(seq).padStart(2, "0")}.000Z`,
+    seqStart: seq,
+    seqEnd: seq,
+    sourceSeqRanges: [{ startSeq: seq, endSeq: seq }],
+    collapsed: [],
+  };
+}
+
+function afterPage(input: { startSeq: number; endSeq: number; hasNewer: boolean; text?: string }) {
+  return {
+    requestId: `page-${input.startSeq}`,
+    agentId: AGENT_ID,
+    agent: null,
+    direction: "after" as const,
+    projection: "projected" as const,
+    reset: false,
+    epoch: "epoch-1",
+    window: { minSeq: 1, maxSeq: 12, nextSeq: 13 },
+    startCursor: { epoch: "epoch-1", seq: input.startSeq },
+    endCursor: { epoch: "epoch-1", seq: input.endSeq },
+    entries: input.text === undefined ? [] : [assistantEntry(input.startSeq, input.text)],
+    error: null,
+    hasNewer: input.hasNewer,
+    hasOlder: false,
+    staleCursor: false,
+    gap: false,
+  };
+}
+
+describe("catch-up continuation while painted", () => {
+  it("resumes after the last applied page instead of replaying from the cached cursor", async () => {
+    useSessionStore.getState().initializeSession(SERVER_ID, null);
+    const replica = createTimelineReplica({
+      serverId: SERVER_ID,
+      storage: {
+        readTimeline: async () => cachedTimeline(),
+        commitTimeline: () => undefined,
+      },
+      prepareAgent: async () => undefined,
+    });
+    await replica.prepare(AGENT_ID);
+    expect(replica.readCursor(AGENT_ID)).toEqual({ epoch: "epoch-1", endSeq: 4 });
+    const owner = createOwner(
+      { readTimeline: async () => undefined, commitTimeline: () => undefined },
+      replica,
+    );
+
+    owner.applyTimelineResponse(
+      afterPage({ startSeq: 5, endSeq: 8, hasNewer: true, text: "page" }),
+    );
+
+    expect(replica.readCursor(AGENT_ID)).toEqual({ epoch: "epoch-1", endSeq: 8 });
+    owner.dispose();
+  });
+
+  it("does not duplicate a partial page when a retry resumes from the replica cursor", async () => {
+    useSessionStore.getState().initializeSession(SERVER_ID, null);
+    const replica = createTimelineReplica({
+      serverId: SERVER_ID,
+      storage: {
+        readTimeline: async () => cachedTimeline(),
+        commitTimeline: () => undefined,
+      },
+      prepareAgent: async () => undefined,
+    });
+    await replica.prepare(AGENT_ID);
+    const owner = createOwner(
+      { readTimeline: async () => undefined, commitTimeline: () => undefined },
+      replica,
+    );
+    owner.applyTimelineResponse(
+      afterPage({ startSeq: 5, endSeq: 8, hasNewer: true, text: "page" }),
+    );
+
+    const resumedFrom = replica.readCursor(AGENT_ID)?.endSeq ?? 0;
+    owner.applyTimelineResponse(
+      resumedFrom < 8
+        ? afterPage({ startSeq: 5, endSeq: 8, hasNewer: false, text: "page" })
+        : afterPage({ startSeq: 9, endSeq: 9, hasNewer: false }),
+    );
+
+    const tail = useSessionStore.getState().sessions[SERVER_ID]?.agentStreamTail.get(AGENT_ID);
+    expect(tail).toMatchObject([{ kind: "assistant_message", text: "cachedpage" }]);
+    owner.dispose();
+  });
+});
+
+describe("thought finalization after catch-up", () => {
+  function seedLoadingThought(): void {
+    useSessionStore.getState().initializeSession(SERVER_ID, null);
+    useSessionStore.getState().applyAgentTimelineResponseState(SERVER_ID, AGENT_ID, {
+      items: [
+        {
+          kind: "thought",
+          id: "thought-1",
+          text: "pondering",
+          timestamp: new Date("2026-08-26T10:00:00.000Z"),
+          status: "loading",
+          timelineCursor: { epoch: "epoch-1", seq: 4 },
+        },
+      ],
+      head: [],
+      range: { epoch: "epoch-1", startSeq: 1, endSeq: 4 },
+      older: "none",
+      newer: false,
+      synchronized: true,
+      acknowledgedClientMessageIds: [],
+    });
+  }
+
+  function setTurnPhase(phase: "idle" | "open"): void {
+    useSessionStore.getState().setAgents(SERVER_ID, (agents) => {
+      const next = new Map(agents);
+      next.set(AGENT_ID, { id: AGENT_ID, turn: { phase } } as unknown as Agent);
+      return next;
+    });
+  }
+
+  function thoughtStatus(): unknown {
+    const tail = useSessionStore.getState().sessions[SERVER_ID]?.agentStreamTail.get(AGENT_ID);
+    return tail?.find((row) => row.kind === "thought")?.status;
+  }
+
+  const owner = () =>
+    createOwner({ readTimeline: async () => undefined, commitTimeline: () => undefined });
+
+  it("settles a thought when the catch-up finds the agent's turn already over", () => {
+    seedLoadingThought();
+    setTurnPhase("idle");
+    const timeline = owner();
+
+    timeline.applyTimelineResponse(afterPage({ startSeq: 5, endSeq: 5, hasNewer: false }));
+
+    expect(thoughtStatus()).toBe("ready");
+    timeline.dispose();
+  });
+
+  it("settles a thought when the directory reports the turn ended after the catch-up", () => {
+    seedLoadingThought();
+    setTurnPhase("open");
+    const timeline = owner();
+    timeline.applyTimelineResponse(afterPage({ startSeq: 5, endSeq: 5, hasNewer: false }));
+    expect(thoughtStatus()).toBe("loading");
+
+    settleActiveThoughts(SERVER_ID, AGENT_ID);
+
+    expect(thoughtStatus()).toBe("ready");
+    timeline.dispose();
+  });
+
+  it("keeps a thought streaming while the agent's turn is still open", () => {
+    seedLoadingThought();
+    setTurnPhase("open");
+    const timeline = owner();
+
+    timeline.applyTimelineResponse(afterPage({ startSeq: 5, endSeq: 5, hasNewer: false }));
+
+    expect(thoughtStatus()).toBe("loading");
+    timeline.dispose();
+  });
+
+  it("does not settle a thought on a partial catch-up page", () => {
+    seedLoadingThought();
+    setTurnPhase("idle");
+    const timeline = owner();
+
+    timeline.applyTimelineResponse(afterPage({ startSeq: 5, endSeq: 5, hasNewer: true }));
+
+    expect(thoughtStatus()).toBe("loading");
+    timeline.dispose();
   });
 });
 

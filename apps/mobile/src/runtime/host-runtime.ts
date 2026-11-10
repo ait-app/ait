@@ -37,6 +37,7 @@ import { fetchAgentTimelinePage } from "@/timeline/fetch-agent-timeline-page";
 import {
   createTimelineReplica,
   createViewedTimelineOwner,
+  settleActiveThoughts,
   type TimelineReplica,
   type ViewedTimelineOwner,
   type ViewedTimelineOwnerPorts,
@@ -82,6 +83,8 @@ import {
   buildDaemonClientConfig,
   buildSshDaemonClientConfig,
 } from "./daemon-transport/connection";
+import { delay } from "@/utils/delay";
+import { toErrorMessage } from "@/utils/error-messages";
 
 export type HostRuntimeConnectionStatus = "idle" | "connecting" | "online" | "offline" | "error";
 export type HostRegistryStatus = "loading" | "ready";
@@ -156,10 +159,6 @@ export function isHostRuntimeDirectoryLoading(snapshot: HostRuntimeSnapshot | nu
     !snapshot.hasEverLoadedAgentDirectory &&
     (snapshot.connectionStatus === "connecting" || snapshot.connectionStatus === "online")
   );
-}
-
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function hashForLog(value: string): string {
@@ -1234,22 +1233,6 @@ export class HostRuntimeController {
     }
   }
 
-  private async disposePreviousActiveClient(): Promise<void> {
-    if (this.unsubscribeClientStatus) {
-      this.unsubscribeClientStatus();
-      this.unsubscribeClientStatus = null;
-    }
-    if (this.unsubscribeClientHandlers) {
-      this.unsubscribeClientHandlers();
-      this.unsubscribeClientHandlers = null;
-    }
-    if (this.activeClient) {
-      const previousClient = this.activeClient;
-      this.activeClient = null;
-      await previousClient.close().catch(() => undefined);
-    }
-  }
-
   private buildAgentDirectoryStatusPatch(): Partial<HostRuntimeSnapshotPatch> {
     if (this.snapshot.hasEverLoadedAgentDirectory) return {};
     const tag = this.connectionMachineState.tag;
@@ -1290,7 +1273,7 @@ export class HostRuntimeController {
       return;
     }
 
-    await this.disposePreviousActiveClient();
+    await this.closeActiveClient();
 
     if (!this.isSwitchStillValid(requestVersion, expectedProbeVersion)) {
       await this.abortSwitchWithClient(existingClient);
@@ -1490,10 +1473,6 @@ export function hasConfiguredLocalDaemonOverride(): boolean {
 
 function isPlaceholderServerId(serverId: string): boolean {
   return serverId.startsWith("local:");
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function rekeyMap<V>(map: Map<string, V>, oldKey: string, newKey: string): void {
@@ -1904,7 +1883,7 @@ export class HostRuntimeStore {
     const directory = new DirectorySync(
       newServerId,
       {
-        onAgentStoppedRunning: (agentId) => this.drainQueuedAgentMessage(newServerId, agentId),
+        onAgentStoppedRunning: (agentId) => this.handleAgentStoppedRunning(newServerId, agentId),
         markAgentLoading: () => controller.markAgentDirectorySyncLoading(),
         markAgentReady: () => controller.markAgentDirectorySyncReady(),
         markAgentError: (error) => controller.markAgentDirectorySyncError(error),
@@ -2518,7 +2497,8 @@ export class HostRuntimeStore {
       const directory = new DirectorySync(
         host.serverId,
         {
-          onAgentStoppedRunning: (agentId) => this.drainQueuedAgentMessage(host.serverId, agentId),
+          onAgentStoppedRunning: (agentId) =>
+            this.handleAgentStoppedRunning(host.serverId, agentId),
           markAgentLoading: () => controller.markAgentDirectorySyncLoading(),
           markAgentReady: () => controller.markAgentDirectorySyncReady(),
           markAgentError: (error) => controller.markAgentDirectorySyncError(error),
@@ -2617,6 +2597,12 @@ export class HostRuntimeStore {
       invalidateServerDataQueriesAfterReconnect({ queryClient, serverId });
       void queryClient.invalidateQueries({ queryKey: schedulesQueryBaseKey });
     }
+  }
+
+  // The directory can report a finished turn after a reconnect catch-up has already completed.
+  private handleAgentStoppedRunning(serverId: string, agentId: string): void {
+    settleActiveThoughts(serverId, agentId);
+    this.drainQueuedAgentMessage(serverId, agentId);
   }
 
   drainQueuedAgentMessage(serverId: string, agentId: string): void {

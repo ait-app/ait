@@ -1,29 +1,12 @@
-import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
-import { FormTextInput } from "@/components/ui/form-field";
 import { Switch } from "@/components/ui/switch";
-import type { EditingTextInputHandle } from "@/components/ui/text-input";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { settingsStyles } from "@/styles/settings";
-import {
-  Children,
-  isValidElement,
-  useCallback,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  type ReactNode,
-} from "react";
+import { Children, isValidElement, useCallback, useMemo, type ReactNode } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import type {
-  SettingsActionProps,
-  SettingsInputProps,
-  SettingsRowProps,
-  SettingsSelectProps,
-  SettingsSwitchProps,
-} from "./types";
+import type { SettingsRowProps, SettingsSelectProps, SettingsSwitchProps } from "./types";
 export { SettingsGroup } from "./headings/settings-group";
 export { SettingsSection } from "./headings/settings-section";
 
@@ -144,54 +127,6 @@ export function SettingsSelect<Value extends string>({
   );
 }
 
-export function SettingsInput({
-  initialValue,
-  onChangeText,
-  placeholder,
-  disabled,
-  secureTextEntry,
-  ref,
-  ...row
-}: SettingsInputProps) {
-  const compact = useIsCompactFormFactor();
-  const input = useRef<EditingTextInputHandle>(null);
-  useImperativeHandle(
-    ref,
-    () => ({
-      focus: () => input.current?.focus(),
-      blur: () => input.current?.blur(),
-      getText: () => input.current?.getText() ?? "",
-      replaceText: (text) => input.current?.replaceText(text),
-    }),
-    [],
-  );
-  return (
-    <SettingsRow {...row}>
-      <FormTextInput
-        ref={input}
-        initialValue={initialValue}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        editable={!disabled}
-        secureTextEntry={secureTextEntry}
-        accessibilityLabel={row.label}
-        size={compact ? "md" : "sm"}
-        style={styles.input}
-      />
-    </SettingsRow>
-  );
-}
-
-export function SettingsAction({ actionLabel, onPress, disabled, ...row }: SettingsActionProps) {
-  return (
-    <SettingsRow {...row}>
-      <Button variant="outline" size="sm" onPress={onPress} disabled={disabled}>
-        {actionLabel}
-      </Button>
-    </SettingsRow>
-  );
-}
-
 const styles = StyleSheet.create((theme) => ({
   compactRow: { flexWrap: "wrap", gap: theme.spacing[3] },
   label: { flexGrow: 1, flexShrink: 1, flexBasis: 160, marginRight: theme.spacing[3] },
@@ -204,5 +139,4 @@ const styles = StyleSheet.create((theme) => ({
   accessoryLabel: { flexShrink: 1, minWidth: 0 },
   control: { flexShrink: 1, maxWidth: "100%" },
   value: { color: theme.colors.foreground, fontSize: theme.fontSize.base },
-  input: { minWidth: 180 },
 }));

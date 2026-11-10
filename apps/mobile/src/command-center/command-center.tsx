@@ -82,6 +82,7 @@ import {
   type CommandCenterWorkspaceResult,
 } from "./results";
 import { useWorkspaceFileSearch } from "./workspace-file-search";
+import { displayInitial } from "@/utils/display-initial";
 
 const ThemedBottomSheetTextInput = withUnistyles(TextInput, (theme) => ({
   placeholderTextColor: theme.colors.foregroundMuted,
@@ -486,7 +487,7 @@ function SubtitleWithTimestamp({
 
 /** The same project icon the sidebar's workspace rows lead with: its image, or a lettered square. */
 function WorkspaceProjectIcon({ project }: { project: CommandCenterWorkspaceResult["project"] }) {
-  const initial = projectIconPlaceholderLabelFromDisplayName(project.name).charAt(0).toUpperCase();
+  const initial = displayInitial(projectIconPlaceholderLabelFromDisplayName(project.name));
   return (
     <ProjectIconView
       iconDataUri={project.iconDataUri}

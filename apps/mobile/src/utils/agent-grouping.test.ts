@@ -1,11 +1,6 @@
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { describe, expect, it } from "vitest";
-import {
-  deriveProjectDisplayName,
-  deriveProjectName,
-  deriveRemoteProjectKey,
-  groupAgents,
-} from "./agent-grouping";
+import { deriveProjectDisplayName, deriveRemoteProjectKey, groupAgents } from "./agent-grouping";
 import { deriveProjectPlacementFromCwd } from "./project-placement";
 
 function makeAgent(overrides: Partial<AggregatedAgent> = {}): AggregatedAgent {
@@ -45,14 +40,6 @@ describe("deriveRemoteProjectKey", () => {
   it("includes host for non-GitHub remotes", () => {
     const gitlab = "git@gitlab.example.com:group/repo.git";
     expect(deriveRemoteProjectKey(gitlab)).toBe("remote:gitlab.example.com/group/repo");
-  });
-});
-
-describe("deriveProjectName", () => {
-  it("uses the last segment of POSIX and Windows paths", () => {
-    expect(deriveProjectName("/Users/dev/projects/ait/")).toBe("ait");
-    expect(deriveProjectName("C:\\Users\\dev\\projects\\ait")).toBe("ait");
-    expect(deriveProjectName("C:\\Users\\dev/mixed\\ait\\")).toBe("ait");
   });
 });
 

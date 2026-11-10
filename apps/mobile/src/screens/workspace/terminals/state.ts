@@ -1,8 +1,6 @@
 import type { CreateTerminalResponse, ListTerminalsResponse } from "@ait/protocol/messages";
 import { upsertTerminalListEntry } from "@/utils/terminal-list";
 
-export const TERMINALS_QUERY_STALE_TIME = 5_000;
-
 export type ListTerminalsPayload = ListTerminalsResponse["payload"];
 type TerminalEntry = ListTerminalsPayload["terminals"][number];
 type CreatedTerminal = NonNullable<CreateTerminalResponse["payload"]["terminal"]>;

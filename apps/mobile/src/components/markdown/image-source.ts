@@ -1,5 +1,6 @@
 import { localFileSourceToPath } from "@/attachments/utils";
 import { isAbsolutePath } from "@/utils/path";
+import { safeDecodeURIComponent } from "@/utils/string";
 
 function trimTrailingSeparators(value: string): string {
   if (value === "/" || /^[A-Za-z]:[\\/]?$/.test(value)) {
@@ -81,14 +82,6 @@ function isHomeRelativePath(value: string): boolean {
   return value === "~" || value.startsWith("~/") || value.startsWith("~\\");
 }
 
-function decodeRelativeSource(source: string): string {
-  try {
-    return decodeURIComponent(source);
-  } catch {
-    return source;
-  }
-}
-
 export function resolveMarkdownFileDirectory(input: {
   markdownPath: string;
   workspaceRoot?: string;
@@ -128,7 +121,7 @@ export function resolveMarkdownPreviewImageSource(input: {
 
   const pathSource = source.replace(/[?#].*$/, "");
   const path = localFileSourceToPath(
-    pathSource.startsWith("file://") ? pathSource : decodeRelativeSource(pathSource),
+    pathSource.startsWith("file://") ? pathSource : safeDecodeURIComponent(pathSource),
   );
   if (!path) {
     return null;

@@ -158,6 +158,7 @@ import {
   buildWorkspaceCreationRequestKey,
   canReuseCreatedWorkspace,
 } from "./new-workspace/creation-request-key";
+import { displayInitial } from "@/utils/display-initial";
 
 const ThemedFolderPlus = withUnistyles(FolderPlus);
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -350,7 +351,7 @@ function ProjectPickerTrigger({
   iconSize: number;
 }) {
   const placeholderLabel = projectIconPlaceholderLabelFromDisplayName(label);
-  const placeholderInitial = placeholderLabel.charAt(0).toUpperCase() || "?";
+  const placeholderInitial = displayInitial(placeholderLabel) || "?";
   return (
     <Tooltip>
       <TooltipTrigger asChild triggerRefProp="ref">
@@ -529,7 +530,7 @@ function ProjectOptionItem({
   onPress: () => void;
 }) {
   const placeholderLabel = projectIconPlaceholderLabelFromDisplayName(label);
-  const placeholderInitial = placeholderLabel.charAt(0).toUpperCase() || "?";
+  const placeholderInitial = displayInitial(placeholderLabel) || "?";
   const leadingSlot = useMemo(
     () => (
       <View style={styles.rowIconBox}>

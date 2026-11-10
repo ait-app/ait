@@ -11,8 +11,6 @@ export {
   describeTransportError,
   encodeUtf8String,
   extractWebSocketMessage,
-  normalizeTransportPayload,
-  safeRandomId,
 } from "./daemon-client-transport-utils.js";
 export {
   bindWsHandler,

@@ -1,7 +1,9 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { retainAttachmentForGarbageCollection } from "@/attachments/gc-retention";
 import type { LiveFileSnapshot } from "../live-file/model";
 import {
   createFilePanePreview,
+  filePreviewFromLifecycle,
   FilePreviewLifecycleModel,
   type FilePreviewLifecycleSnapshot,
 } from "./model";
@@ -18,6 +20,12 @@ export function useFilePreview(input: {
   useEffect(() => {
     model.setSource({ targetKey, liveFileSnapshot });
   }, [liveFileSnapshot, model, targetKey]);
+
+  const attachmentId = filePreviewFromLifecycle(snapshot)?.imageAttachment?.id;
+  useEffect(() => {
+    if (!attachmentId) return;
+    return retainAttachmentForGarbageCollection(attachmentId);
+  }, [attachmentId]);
 
   return snapshot;
 }

@@ -43,6 +43,7 @@ import { useSidebarModel } from "@/components/sidebar/sidebar-model";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { useProjectIcons } from "@/projects/icons";
 import { resolveSidebarProjectIconTargets } from "@/utils/sidebar-project-row-model";
+import { displayInitial } from "@/utils/display-initial";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import type { SidebarProjectEntry } from "@/hooks/use-sidebar-workspaces-list";
 import type { Theme } from "@/styles/theme";
@@ -666,7 +667,7 @@ function ProjectFilterItem({
     () => (
       <ProjectIconView
         iconDataUri={iconDataUri}
-        initial={projectIconPlaceholderLabelFromDisplayName(label).charAt(0).toUpperCase()}
+        initial={displayInitial(projectIconPlaceholderLabelFromDisplayName(label))}
         projectViewKey={viewKey}
         size={OPTION_ICON_SIZE}
         textStyle={styles.projectIconText}

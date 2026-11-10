@@ -22,6 +22,7 @@ import {
   type ProjectIconIntent,
 } from "@/projects/edit-form";
 import { importProjectIconFromUrl } from "@/projects/import-project-icon";
+import { displayInitial } from "@/utils/display-initial";
 import { toErrorMessage } from "@/utils/error-messages";
 
 export interface ProjectEditSheetProps {
@@ -204,7 +205,7 @@ export function ProjectEditSheet({
 }
 
 function projectInitial(projectName: string): string {
-  return projectName.trim().charAt(0).toUpperCase() || "?";
+  return displayInitial(projectName.trim()) || "?";
 }
 
 class ProjectEditStepError extends Error {

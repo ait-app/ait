@@ -79,18 +79,6 @@ export function planTimelinePromptJump(target: TimelineSyncCursor) {
   } as const;
 }
 
-export function isTimelineCatchUpComplete(input: {
-  direction: "tail" | "before" | "after";
-  hasNewer: boolean;
-  error: string | null;
-}): boolean {
-  if (input.error) {
-    return false;
-  }
-
-  return input.direction !== "after" || !input.hasNewer;
-}
-
 export function isTimelineResumeSnapshotAuthoritative(input: {
   direction: "tail" | "before" | "after";
   hasNewer: boolean;

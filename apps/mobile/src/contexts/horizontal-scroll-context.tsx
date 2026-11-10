@@ -86,14 +86,6 @@ export function HorizontalScrollProvider({ children }: { children: ReactNode }) 
   );
 }
 
-export function useHorizontalScroll() {
-  const context = useContext(HorizontalScrollContext);
-  if (!context) {
-    throw new Error("useHorizontalScroll must be used within HorizontalScrollProvider");
-  }
-  return context;
-}
-
 export function useHorizontalScrollOptional() {
   return useContext(HorizontalScrollContext);
 }

@@ -123,6 +123,8 @@ describe("workspace bulk close helpers", () => {
         cleanupCalls.push(input);
       },
       closeLayoutOnlyAgent: async () => {},
+      removeTerminalFromCache: () => {},
+      onBulkCloseFailed: () => {},
       logLabel: "all tabs",
     });
 
@@ -170,6 +172,8 @@ describe("workspace bulk close helpers", () => {
         cleanupCalls.push(input);
       },
       closeLayoutOnlyAgent: async () => {},
+      removeTerminalFromCache: () => {},
+      onBulkCloseFailed: () => {},
       warn,
       logLabel: "others",
     });
@@ -198,6 +202,8 @@ describe("workspace bulk close helpers", () => {
       groups,
       client: { closeItems },
       closeTab: async (_tabId, action) => action(),
+      removeTerminalFromCache: () => {},
+      onBulkCloseFailed: () => {},
       closeLayoutOnlyAgent: async (agentId) => {
         preparedSubagents.push(agentId);
       },
@@ -210,5 +216,48 @@ describe("workspace bulk close helpers", () => {
     expect(closeItems).toHaveBeenCalledWith({ agentIds: ["root"], terminalIds: [] });
     expect(preparedSubagents).toEqual(["child"]);
     expect(cleanedTabs).toEqual(["agent_child", "agent_root"]);
+  });
+
+  it("removes each terminal from the cache before closing its tab", async () => {
+    const groups = classifyBulkClosableTabs([makeTerminalTab("t1"), makeTerminalTab("t2")]);
+    const events: string[] = [];
+
+    await closeBulkWorkspaceTabs({
+      groups,
+      client: { closeItems: vi.fn(async () => undefined) } as never,
+      closeTab: async (_tabId, action) => action(),
+      closeWorkspaceTabWithCleanup: ({ tabId }) => {
+        events.push(`close:${tabId}`);
+      },
+      closeLayoutOnlyAgent: async () => {},
+      removeTerminalFromCache: (terminalId) => {
+        events.push(`cache:${terminalId}`);
+      },
+      onBulkCloseFailed: () => {},
+      logLabel: "all tabs",
+    });
+
+    expect(events).toEqual(["cache:t1", "close:terminal_t1", "cache:t2", "close:terminal_t2"]);
+  });
+
+  it("reports a failed bulk close so removed terminals can be refetched", async () => {
+    const onBulkCloseFailed = vi.fn();
+
+    await closeBulkWorkspaceTabs({
+      groups: classifyBulkClosableTabs([makeTerminalTab("t1")]),
+      client: {
+        closeItems: async () => {
+          throw new Error("rpc failed");
+        },
+      } as never,
+      closeTab: async (_tabId, action) => action(),
+      closeWorkspaceTabWithCleanup: () => {},
+      closeLayoutOnlyAgent: async () => {},
+      removeTerminalFromCache: () => {},
+      onBulkCloseFailed,
+      logLabel: "all tabs",
+    });
+
+    await vi.waitFor(() => expect(onBulkCloseFailed).toHaveBeenCalledOnce());
   });
 });

@@ -42,6 +42,7 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
 import type { Theme } from "@/styles/theme";
 import { ZoomableImage } from "@/components/zoomable-viewport/image";
+import { trimNonEmpty } from "@/utils/string";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -63,14 +64,6 @@ interface FilePreviewBodyProps {
 }
 
 type TextExplorerFile = ExplorerFile & { kind: "text" };
-
-function trimNonEmpty(value: string | null | undefined): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
 
 function formatFileSize({ size }: { size: number }): string {
   if (size < 1024) {

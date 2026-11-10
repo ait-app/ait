@@ -52,13 +52,17 @@ function splitIntoWords(text: string): string[] {
   return result;
 }
 
-function computeWordLevelDiff(
-  oldLine: string,
-  newLine: string,
-): { oldSegments: DiffSegment[]; newSegments: DiffSegment[] } {
-  const oldWords = splitIntoWords(oldLine);
-  const newWords = splitIntoWords(newLine);
+// LCS tables are allocated eagerly, so anything larger is skipped: about 2,000 x 2,000 entries.
+const MAX_LCS_TABLE_CELLS = 4_000_000;
 
+function lcsTableCells(leftLength: number, rightLength: number): number {
+  return (leftLength + 1) * (rightLength + 1);
+}
+
+function computeWordLevelDiff(
+  oldWords: string[],
+  newWords: string[],
+): { oldSegments: DiffSegment[]; newSegments: DiffSegment[] } {
   const m = oldWords.length;
   const n = newWords.length;
 
@@ -145,6 +149,13 @@ export function buildLineDiff(originalText: string, updatedText: string): DiffLi
 
   const m = originalLines.length;
   const n = updatedLines.length;
+  if (lcsTableCells(m, n) > MAX_LCS_TABLE_CELLS) {
+    return [
+      ...originalLines.map((line): DiffLine => ({ type: "remove", content: `-${line}` })),
+      ...updatedLines.map((line): DiffLine => ({ type: "add", content: `+${line}` })),
+    ];
+  }
+
   const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
 
   for (let i = m - 1; i >= 0; i -= 1) {
@@ -186,22 +197,39 @@ export function buildLineDiff(originalText: string, updatedText: string): DiffLi
   }
 
   // Post-process to add word-level segments for adjacent remove/add pairs
+  let remainingWordDiffCells = MAX_LCS_TABLE_CELLS;
   for (let idx = 0; idx < diff.length - 1; idx++) {
     const curr = diff[idx];
     const next = diff[idx + 1];
 
     if (curr.type === "remove" && next.type === "add") {
       // Strip the leading -/+ from content for comparison
-      const oldLineText = curr.content.slice(1);
-      const newLineText = next.content.slice(1);
+      const oldWords = splitIntoWords(curr.content.slice(1));
+      const newWords = splitIntoWords(next.content.slice(1));
+      const wordDiffCells = lcsTableCells(oldWords.length, newWords.length);
+      if (wordDiffCells > remainingWordDiffCells) {
+        continue;
+      }
+      remainingWordDiffCells -= wordDiffCells;
 
-      const { oldSegments, newSegments } = computeWordLevelDiff(oldLineText, newLineText);
+      const { oldSegments, newSegments } = computeWordLevelDiff(oldWords, newWords);
       curr.segments = oldSegments;
       next.segments = newSegments;
     }
   }
 
   return diff;
+}
+
+const HUNK_HEADER_PATTERN = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/;
+
+// A header without line counts leaves the hunk open until the next file section.
+function hunkLineCounts(header: string): { oldLines: number; newLines: number } {
+  const match = HUNK_HEADER_PATTERN.exec(header);
+  if (!match) {
+    return { oldLines: Infinity, newLines: Infinity };
+  }
+  return { oldLines: Number(match[1] ?? 1), newLines: Number(match[2] ?? 1) };
 }
 
 export function parseUnifiedDiff(diffText?: string): DiffLine[] {
@@ -211,38 +239,51 @@ export function parseUnifiedDiff(diffText?: string): DiffLine[] {
 
   const lines = splitIntoLines(diffText);
   const diff: DiffLine[] = [];
+  let oldLinesLeft = 0;
+  let newLinesLeft = 0;
 
   for (const line of lines) {
     if (!line.length) {
+      oldLinesLeft -= 1;
+      newLinesLeft -= 1;
       diff.push({ type: "context", content: line });
       continue;
     }
 
     if (line.startsWith("@@")) {
+      const counts = hunkLineCounts(line);
+      oldLinesLeft = counts.oldLines;
+      newLinesLeft = counts.newLines;
       diff.push({ type: "header", content: line });
       continue;
     }
 
+    if (line.startsWith("diff --git")) {
+      oldLinesLeft = 0;
+      newLinesLeft = 0;
+      continue;
+    }
+
+    // Inside a hunk these prefixes are real content; outside, they are file headers.
+    const inHunk = oldLinesLeft > 0 || newLinesLeft > 0;
+
     if (line.startsWith("+")) {
-      if (!line.startsWith("+++")) {
+      if (inHunk || !line.startsWith("+++")) {
+        newLinesLeft -= 1;
         diff.push({ type: "add", content: line });
       }
       continue;
     }
 
     if (line.startsWith("-")) {
-      if (!line.startsWith("---")) {
+      if (inHunk || !line.startsWith("---")) {
+        oldLinesLeft -= 1;
         diff.push({ type: "remove", content: line });
       }
       continue;
     }
 
-    if (
-      line.startsWith("diff --git") ||
-      line.startsWith("index ") ||
-      line.startsWith("---") ||
-      line.startsWith("+++")
-    ) {
+    if (line.startsWith("index ")) {
       continue;
     }
 
@@ -251,6 +292,8 @@ export function parseUnifiedDiff(diffText?: string): DiffLine[] {
       continue;
     }
 
+    oldLinesLeft -= 1;
+    newLinesLeft -= 1;
     diff.push({ type: "context", content: line });
   }
 

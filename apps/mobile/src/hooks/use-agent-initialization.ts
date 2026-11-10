@@ -1,5 +1,3 @@
-import { useCallback, useMemo } from "react";
-import { useTranslation } from "react-i18next";
 import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import { selectAgentTimelineState, useSessionStore } from "@/stores/session-store";
 import {
@@ -10,7 +8,7 @@ import {
   rejectInitDeferred,
   refreshInitTimeout,
 } from "@/utils/agent-initialization";
-import { getHostRuntimeStore, type HostRuntimeStore } from "@/runtime/host-runtime";
+import type { HostRuntimeStore } from "@/runtime/host-runtime";
 import { planTimelineResumeFetch, planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
 import { i18n } from "@/i18n/i18next";
 
@@ -116,51 +114,5 @@ export function createSetAgentInitializing(
       next.set(agentId, initializing);
       return next;
     });
-  };
-}
-
-export function useAgentInitialization({
-  serverId,
-  client,
-}: {
-  serverId: string;
-  client: DaemonClient | null;
-}) {
-  const { t } = useTranslation();
-  const setInitializingAgents = useSessionStore((state) => state.setInitializingAgents);
-  const setAgentInitializing = useMemo(
-    () => createSetAgentInitializing(serverId, setInitializingAgents),
-    [serverId, setInitializingAgents],
-  );
-
-  const ensureAgentIsInitializedCallback = useCallback(
-    (agentId: string): Promise<void> =>
-      ensureAgentIsInitialized({
-        serverId,
-        agentId,
-        client,
-        runtime: getHostRuntimeStore(),
-        setAgentInitializing,
-        hostDisconnectedMessage: t("workspace.terminal.hostDisconnected"),
-      }),
-    [client, serverId, setAgentInitializing, t],
-  );
-
-  const refreshAgentCallback = useCallback(
-    (agentId: string): Promise<void> =>
-      refreshAgent({
-        serverId,
-        agentId,
-        client,
-        runtime: getHostRuntimeStore(),
-        setAgentInitializing,
-        hostDisconnectedMessage: t("workspace.terminal.hostDisconnected"),
-      }),
-    [client, serverId, setAgentInitializing, t],
-  );
-
-  return {
-    ensureAgentIsInitialized: ensureAgentIsInitializedCallback,
-    refreshAgent: refreshAgentCallback,
   };
 }

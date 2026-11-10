@@ -863,10 +863,6 @@ export class DirectorySync {
     this.checkpoints?.commitDirectoryMutations(this.serverId, mutations);
   }
 
-  markWorkspacesHydrated(hydrated: boolean): void {
-    useSessionStore.getState().setHasHydratedWorkspaces(this.serverId, hydrated);
-  }
-
   private async fetchAgents(
     client: DaemonClient,
     source: DirectorySourceToken,

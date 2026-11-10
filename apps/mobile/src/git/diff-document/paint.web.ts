@@ -206,7 +206,7 @@ function fitHeaderText(
   };
 }
 
-function truncateCanvasText(
+export function truncateCanvasText(
   context: CanvasRenderingContext2D,
   text: string,
   maximumWidth: number,
@@ -222,6 +222,9 @@ function truncateCanvasText(
       low = middle;
     else high = middle - 1;
   }
+  // Ending on the first half of a surrogate pair would paint a replacement glyph.
+  const nextCodeUnit = text.charCodeAt(low);
+  if (low > 0 && nextCodeUnit >= 0xdc00 && nextCodeUnit <= 0xdfff) low -= 1;
   return `${text.slice(0, low)}${ellipsis}`;
 }
 

@@ -10,7 +10,6 @@ import type {
   SidebarWorkspaceEntry,
 } from "@/hooks/use-sidebar-workspaces-list";
 import { SidebarWorkspaceList } from "./sidebar-workspace-list";
-import { SidebarWorkspaceRow } from "./sidebar/sidebar-workspace-row";
 
 const state = vi.hoisted(() => ({
   native: true,
@@ -129,27 +128,13 @@ function Sidebar({ mode }: { mode: "project" | "status" }) {
   );
 }
 
-function renderRow(mode: "project" | "status" | "standalone") {
+function renderRow(mode: "project" | "status") {
   const client = new QueryClient({ defaultOptions: { queries: { enabled: false, retry: false } } });
-  return render(
-    mode === "standalone" ? (
-      <SidebarWorkspaceRow
-        workspace={workspace}
-        selected={false}
-        shortcutNumber={null}
-        showShortcutBadge={false}
-        canCopyBranchName
-        onPress={() => {}}
-      />
-    ) : (
-      <Sidebar mode={mode} />
+  return render(<Sidebar mode={mode} />, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
     ),
-    {
-      wrapper: ({ children }) => (
-        <QueryClientProvider client={client}>{children}</QueryClientProvider>
-      ),
-    },
-  );
+  });
 }
 
 function rowProps(id: string) {
@@ -184,7 +169,6 @@ describe.each([
   ["project header", "project", "sidebar-project-row-project"],
   ["project workspace", "project", "sidebar-workspace-row-host:workspace"],
   ["status workspace", "status", "sidebar-workspace-row-host:workspace"],
-  ["standalone workspace", "standalone", "sidebar-workspace-row-host:workspace"],
 ] as const)("sidebar press feedback: %s", (_name, mode, id) => {
   it("does not retain a second native highlight after dragging and releasing without press-out", () => {
     renderRow(mode);

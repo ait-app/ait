@@ -12,6 +12,7 @@ import {
   workspaceTabTargetsEqual,
 } from "@/workspace-tabs/identity";
 import { createNewWorkspaceTab } from "@/workspace-tabs/new-tab";
+import { trimNonEmpty } from "@/utils/string";
 
 export interface SplitPane {
   id: string;
@@ -55,11 +56,6 @@ interface NormalizeSizesInput {
 interface ReorderTabsForPaneInput {
   pane: SplitPaneInternal;
   tabIds: string[];
-}
-
-interface UpdateGroupSizesInTreeInput {
-  groupId: string;
-  sizes: number[];
 }
 
 interface UpdatePaneInTreeInput {
@@ -250,12 +246,6 @@ interface FocusPaneInLayoutInput {
   paneId: string;
 }
 
-interface ResizeSplitInLayoutInput {
-  layout: WorkspaceLayout;
-  groupId: string;
-  sizes: number[];
-}
-
 interface ReorderPaneTabsInLayoutInput {
   layout: WorkspaceLayout;
   paneId: string;
@@ -284,14 +274,6 @@ export const DEFAULT_PANE_ID = "main";
 /** The pane id is persisted, so it keeps its pre-rename spelling. */
 export const EXPLORER_SIDEBAR_PANE_ID = "explorer";
 const DEFAULT_LAYOUT_GROUP_ID = "workspace-root";
-
-function trimNonEmpty(value: string | null | undefined): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
 
 function normalizeTabIds(list: unknown): string[] {
   if (!Array.isArray(list)) {
@@ -531,26 +513,6 @@ function findPanePathContainingTab(
       ...path,
       index,
     ]);
-    if (childPath) {
-      return childPath;
-    }
-  }
-  return null;
-}
-
-function findGroupPathById(
-  node: SplitNodeInternal,
-  groupId: string,
-  path: number[] = [],
-): number[] | null {
-  if (node.kind === "pane") {
-    return null;
-  }
-  if (node.group.id === groupId) {
-    return path;
-  }
-  for (let index = 0; index < node.group.children.length; index += 1) {
-    const childPath = findGroupPathById(node.group.children[index], groupId, [...path, index]);
     if (childPath) {
       return childPath;
     }
@@ -932,28 +894,6 @@ function replaceTabInTree(
           node.pane.focusedTabId === input.tabId ? input.nextTabId : node.pane.focusedTabId,
       }),
     };
-  });
-}
-
-function updateGroupSizesInTree(
-  root: SplitNodeInternal,
-  input: UpdateGroupSizesInTreeInput,
-): SplitNodeInternal {
-  const groupPath = findGroupPathById(root, input.groupId);
-  if (!groupPath) {
-    return root;
-  }
-  return replaceNodeAtPath(root, groupPath, (node) => {
-    invariant(node.kind === "group", "Expected group while resizing split");
-    if (input.sizes.length !== node.group.children.length) {
-      return node;
-    }
-    return createGroupNode({
-      id: node.group.id,
-      direction: node.group.direction,
-      children: node.group.children,
-      sizes: clampNormalizedSizes(input.sizes),
-    });
   });
 }
 
@@ -1743,67 +1683,6 @@ export function selectTabInPaneInLayout(
   });
 }
 
-export function retargetTabInLayout(
-  input: RetargetTabInLayoutInput,
-): RetargetTabInLayoutResult | null {
-  const layout = asInternalLayout(input.layout);
-  const pane = findPaneContainingTab(layout.root, input.tabId);
-  if (!pane) {
-    return null;
-  }
-
-  const currentTab = collectAllTabs(layout.root).find((tab) => tab.tabId === input.tabId) ?? null;
-  if (currentTab && workspaceTabTargetsEqual(currentTab.target, input.target)) {
-    return {
-      layout: input.layout,
-      tabId: input.tabId,
-    };
-  }
-
-  const existingTargetTab =
-    collectAllTabs(layout.root).find(
-      (tab) => tab.tabId !== input.tabId && workspaceTabTargetsEqual(tab.target, input.target),
-    ) ?? null;
-  if (existingTargetTab) {
-    const nextLayout =
-      closeTabInLayout({
-        layout: input.layout,
-        tabId: input.tabId,
-        explorerSidebarPaneId: input.explorerSidebarPaneId,
-      }) ?? input.layout;
-    return {
-      layout:
-        focusTabInLayout({
-          layout: nextLayout,
-          tabId: existingTargetTab.tabId,
-        }) ?? nextLayout,
-      tabId: existingTargetTab.tabId,
-    };
-  }
-
-  const nextTabId =
-    currentTab?.target.kind === "draft"
-      ? input.tabId
-      : buildDeterministicWorkspaceTabId(input.target);
-
-  return {
-    // Preserve draft-origin tab ids so draft->entity transitions keep the same
-    // React key during the first render. Non-draft retargets must take the new
-    // target identity immediately so local tab state cannot masquerade as the
-    // previous agent/terminal/file.
-    tabId: nextTabId,
-    layout: withNormalizedParentTabMap({
-      root: replaceTabInTree(layout.root, {
-        tabId: input.tabId,
-        nextTabId,
-        target: input.target,
-      }),
-      focusedPaneId: layout.focusedPaneId,
-      parentTabIdByTabId: input.layout.parentTabIdByTabId,
-    }),
-  };
-}
-
 /**
  * Replaces one pane-local slot and never claims an equivalent tab elsewhere, except that a
  * singleton target moves its open tab into the slot's pane and the slot closes.
@@ -2216,18 +2095,6 @@ export function setPaneHiddenInLayout(input: {
   return withNormalizedParentTabMap({
     root,
     focusedPaneId,
-    parentTabIdByTabId: input.layout.parentTabIdByTabId,
-  });
-}
-
-export function resizeSplitInLayout(input: ResizeSplitInLayoutInput): WorkspaceLayout {
-  const layout = asInternalLayout(input.layout);
-  return withNormalizedParentTabMap({
-    root: updateGroupSizesInTree(layout.root, {
-      groupId: input.groupId,
-      sizes: input.sizes,
-    }),
-    focusedPaneId: layout.focusedPaneId,
     parentTabIdByTabId: input.layout.parentTabIdByTabId,
   });
 }

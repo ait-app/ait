@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { Buffer } from "buffer";
 import { useState } from "react";
 
+import { AttemptCancelledError } from "@/utils/attempt-guard";
 import { createAudioEngine } from "@/voice/audio-engine";
 
 import type {
@@ -15,6 +16,7 @@ export function useDictationAudioSource(config: DictationAudioSourceConfig): Dic
   const onInterruptionRef = useRef(config.onInterruption);
   const [volume, setVolume] = useState(0);
   const engineRef = useRef<ReturnType<typeof createAudioEngine> | null>(null);
+  const interruptionCountRef = useRef(0);
 
   const getOrCreateEngine = useCallback(() => {
     if (engineRef.current) {
@@ -32,6 +34,7 @@ export function useDictationAudioSource(config: DictationAudioSourceConfig): Dic
         onErrorRef.current?.(error);
       },
       onInterruption: () => {
+        interruptionCountRef.current += 1;
         onInterruptionRef.current?.();
       },
     });
@@ -46,8 +49,14 @@ export function useDictationAudioSource(config: DictationAudioSourceConfig): Dic
 
   const start = useCallback(async () => {
     const engine = getOrCreateEngine();
+    const interruptionsBeforeStart = interruptionCountRef.current;
     await engine.initialize();
     await engine.startCapture();
+    // The engine returns quietly when an interruption cancels the start, so resolving alone
+    // does not mean capture began.
+    if (interruptionCountRef.current !== interruptionsBeforeStart) {
+      throw new AttemptCancelledError();
+    }
   }, [getOrCreateEngine]);
 
   const stop = useCallback(async () => {

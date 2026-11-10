@@ -11,6 +11,7 @@ import {
   workspaceTabTargetsEqual,
 } from "@/workspace-tabs/identity";
 import { findAdjacentPane } from "@/utils/split-navigation";
+import { trimNonEmpty } from "@/utils/string";
 
 export interface WorkspaceDerivedTab {
   descriptor: WorkspaceTabDescriptor;
@@ -32,14 +33,6 @@ export type WorkspaceSideFileOpenPlacement =
 interface NormalizeWorkspacePaneTabsResult {
   tabs: WorkspaceDerivedTab[];
   openTabIds: Set<string>;
-}
-
-function trimNonEmpty(value: string | null | undefined): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }
 
 function normalizeWorkspaceTab(tab: WorkspaceTab): WorkspaceTab | null {
