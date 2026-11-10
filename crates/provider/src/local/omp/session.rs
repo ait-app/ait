@@ -669,6 +669,7 @@ impl Session {
                 confinement: self.confinement.clone(),
             };
             let (role_catalog, tiers) = self.client.role_settings(&spec).await?;
+            self.actions.close();
             self.transport.close().await?;
             let persisted = std::path::Path::new(&path).is_file();
             let (mut transport, state, service_tiers) = connect(
@@ -824,6 +825,11 @@ impl Session {
             || prompt.output_schema.is_some()
         {
             return Err(AgentSessionError::Rejected);
+        }
+        if super::commands::builtin(&prompt.text, &self.native_commands)
+            && self.command_controls.status().is_some()
+        {
+            return Err(AgentSessionError::Busy);
         }
         self.configure(config).await?;
         let mut task_directive = self.prepare_goal(prompt).await?;
@@ -1526,6 +1532,9 @@ impl AgentSession for Session {
             arguments
         };
         let fields = super::actions::validate(action, arguments, &self.cwd)?;
+        if action == "btw" && self.btw.running() {
+            return Err(AgentSessionError::Busy);
+        }
         if action == "btw_branch" {
             return self.begin_btw_branch(&fields).await;
         }
@@ -1869,6 +1878,13 @@ impl AgentSession for Session {
             return Ok(Some(event));
         }
         for _ in 0..64 {
+            if self
+                .vibe_host
+                .as_ref()
+                .is_some_and(super::vibe::host::Host::backpressured)
+            {
+                return Ok(None);
+            }
             let Some(event) = self.transport.poll()? else {
                 self.poll_state_check()?;
                 return Ok(None);

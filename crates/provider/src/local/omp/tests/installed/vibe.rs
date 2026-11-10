@@ -290,6 +290,48 @@ async fn control(session: &mut dyn AgentSession, arguments: Value) -> Value {
     serde_json::from_str(receipt["text"].as_str().unwrap()).unwrap()
 }
 
+#[tokio::test]
+#[ignore = "requires official AIT_TEST_OMP_BIN; 33 sequential native workers with loopback model responses"]
+async fn installed_external_omp_vibe_can_spawn_after_32_completed_workers() {
+    let fixture = installed_with_plugins().await;
+    let mut session = fixture.client.create_session(&fixture.spec).await.unwrap();
+    session
+        .out_of_band(&AgentPrompt::text("/vibe"))
+        .await
+        .unwrap();
+    let mut first_journal = None;
+    for index in 0..33 {
+        let result = control(session.as_mut(), json!({"operation":"spawn", "cli":"fast", "prompt":"Reply with one word", "name":format!("worker-{index}")})).await;
+        let id = result["session"].as_str().unwrap();
+        tokio::time::timeout(Duration::from_secs(30), async {
+            loop {
+                while session.poll_turn().unwrap().is_some() {}
+                if let Some(worker) = session
+                    .subagents()
+                    .into_iter()
+                    .find(|worker| worker.id == id && worker.descriptor["status"] == "completed")
+                {
+                    if index == 0 {
+                        first_journal = Some(
+                            worker.persistence.unwrap().metadata.unwrap()["sessionFile"]
+                                .as_str()
+                                .unwrap()
+                                .to_owned(),
+                        );
+                    }
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(session.subagents().len() <= 32);
+    }
+    assert!(std::path::Path::new(&first_journal.unwrap()).is_file());
+    session.close().await.unwrap();
+}
+
 async fn worker_done(session: &mut dyn AgentSession, id: &str) {
     tokio::time::timeout(Duration::from_secs(90), async {
         let mut reported = false;

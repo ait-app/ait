@@ -54,6 +54,8 @@ for line in sys.stdin:
     if message["type"] == "control_request":
         kind = message["request"]["subtype"]
         if kind == "initialize":
+            with (cwd / "initialize-calls.jsonl").open("a") as output:
+                output.write(json.dumps({"pid": os.getpid()}) + "\n")
             (cwd / "claude-args.json").write_text(json.dumps(args))
             if "--mcp-config" in args:
                 mcp = Path(args[args.index("--mcp-config") + 1])
@@ -67,6 +69,8 @@ for line in sys.stdin:
                 {"value":"sonnet", "displayName":"Sonnet", "supportedEffortLevels":["low", "high"]},
                 {"value":"default", "displayName":"Default"}],
                 "commands":[{"name":"review", "description":"Review changes", "argumentHint":"file"}]}
+            if (cwd / "empty-models").exists():
+                result["models"] = []
         elif kind == "rewind_files":
             (cwd / "tracked.txt").write_text("checkpoint restored")
             result = {"canRewind":True}

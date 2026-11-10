@@ -1,9 +1,10 @@
+use std::sync::{Arc, atomic::Ordering};
 use std::time::Duration;
 
 use serde_json::{Value, json};
 use tokio::sync::{mpsc, oneshot};
 
-use super::{HostEvent, Launch, Record};
+use super::{HostEvent, Launch, Record, Shared};
 use crate::ports::agent_session::{AgentSession, AgentSessionError, AgentTurnEvent};
 use crate::ports::controls::SubagentEvent;
 use crate::protocol::prompt::AgentPrompt;
@@ -24,10 +25,11 @@ pub(super) enum Command {
 pub(super) async fn run(
     launch: Launch,
     mut commands: mpsc::Receiver<Command>,
-    events: mpsc::Sender<(u64, HostEvent)>,
-    ready: oneshot::Sender<Result<Record, AgentSessionError>>,
+    shared: Arc<Shared>,
+    ready: oneshot::Sender<Result<(Record, oneshot::Sender<()>), AgentSessionError>>,
 ) {
     let generation = launch.generation;
+    let events = &shared.events;
     let (mut session, mut record, initial_turn) = match open(&launch).await {
         Ok(opened) => opened,
         Err(error) => {
@@ -38,15 +40,12 @@ pub(super) async fn run(
     record.status("running");
     record.child.persistence = session.persistence();
     let id = record.child.id.clone();
-    if ready.send(Ok(record.clone())).is_err() {
+    let (registered, registration) = oneshot::channel();
+    if ready.send(Ok((record.clone(), registered))).is_err() || registration.await.is_err() {
         let _ = session.close().await;
         return;
     }
-    if events
-        .send((generation, HostEvent::Record(Box::new(record.clone()))))
-        .await
-        .is_err()
-    {
+    if !publish(&shared, generation, &record).await {
         let _ = session.close().await;
         return;
     }
@@ -67,7 +66,7 @@ pub(super) async fn run(
                     let sent = session.start_input(&AgentPrompt::text(&text), &launch.spec.config).await;
                     if let Ok(next) = &sent {
                         turn = Some(next.clone()); running = true; record.answer.clear(); record.status("running"); record.child.persistence = session.persistence();
-                        let _ = events.send((generation, HostEvent::Record(Box::new(record.clone())))).await;
+                        let _ = publish(&shared, generation, &record).await;
                     }
                     let _ = reply.send(sent.map(|_| ()));
                 }
@@ -78,7 +77,7 @@ pub(super) async fn run(
                     if let Some(turn) = &turn { let _ = session.cancel_turn(turn).await; }
                     let _ = session.close().await;
                     record.status("canceled");
-                    let _ = events.send((generation, HostEvent::Record(Box::new(record.clone())))).await;
+                    let _ = publish(&shared, generation, &record).await;
                     let _ = reply.send(()); return;
                 }
                 None => { let _ = session.close().await; return; }
@@ -90,7 +89,7 @@ pub(super) async fn run(
                         Ok(None) => break,
                         Err(_) => {
                             record.status("failed"); running = false;
-                            let _ = events.send((generation, HostEvent::Record(Box::new(record.clone())))).await;
+                            let _ = publish(&shared, generation, &record).await;
                             break;
                         }
                     };
@@ -99,14 +98,14 @@ pub(super) async fn run(
                         AgentTurnEvent::Completed(answer) => {
                             record.answer = clip(answer.as_deref().unwrap_or_default(), 16 * 1024);
                             record.status("completed"); running = false;
-                            let _ = events.send((generation, HostEvent::Record(Box::new(record.clone())))).await; None
+                            let _ = publish(&shared, generation, &record).await; None
                         }
                         AgentTurnEvent::Failed => {
-                            record.status("failed");running=false;let _=events.send((generation, HostEvent::Record(Box::new(record.clone())))).await;None
+                            record.status("failed");running=false;let _=publish(&shared, generation, &record).await;None
                         }
                         AgentTurnEvent::Cancelled => {
                             record.status("canceled"); running = false;
-                            let _ = events.send((generation, HostEvent::Record(Box::new(record.clone())))).await; None
+                            let _ = publish(&shared, generation, &record).await; None
                         }
                         AgentTurnEvent::Timeline(entry) => Some(AgentTurnEvent::Subagent(SubagentEvent::Timeline {id:id.clone(),entry})),
                         AgentTurnEvent::Progress { observation, entry } => Some(AgentTurnEvent::Subagent(SubagentEvent::Progress {id:id.clone(),observation,entry})),
@@ -123,6 +122,27 @@ pub(super) async fn run(
             }
         }
     }
+}
+
+/// Commit activity before acknowledging Send so eviction never races a newly running turn.
+pub(super) async fn publish(shared: &Shared, generation: u64, record: &Record) -> bool {
+    let Ok(permit) = shared.events.reserve().await else {
+        return false;
+    };
+    {
+        let Ok(mut registry) = shared.registry.lock() else {
+            return false;
+        };
+        if shared.generation.load(Ordering::Acquire) != generation {
+            return false;
+        }
+        let Some(current) = registry.records.get_mut(&record.child.id) else {
+            return false;
+        };
+        *current = record.clone();
+        permit.send((generation, HostEvent::Record(Box::new(record.clone()))));
+    }
+    true
 }
 
 fn clip(text: &str, max: usize) -> String {

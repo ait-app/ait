@@ -40,6 +40,9 @@ pub(crate) struct ClaudeClient {
     resolved_models: std::sync::Arc<std::sync::RwLock<std::collections::BTreeMap<String, String>>>,
     /// Last discovered catalog, used to render the advisor role without another probe.
     catalog: std::sync::Arc<std::sync::RwLock<Vec<Value>>>,
+    /// Serialize empty-catalog discovery and briefly cache failed attempts per working directory.
+    draft_probes:
+        std::sync::Arc<tokio::sync::Mutex<std::collections::BTreeMap<String, std::time::Instant>>>,
 }
 
 impl ClaudeClient {
@@ -57,6 +60,7 @@ impl ClaudeClient {
             environment: crate::ports::environment::AgentEnvironment::default(),
             resolved_models: std::sync::Arc::default(),
             catalog: std::sync::Arc::default(),
+            draft_probes: std::sync::Arc::default(),
         }
     }
 
@@ -223,18 +227,35 @@ impl AgentClient for ClaudeClient {
     }
 
     /// The advisor menu needs the catalog, and a daemon that never discovered Claude has none.
-    /// One bounded probe fills it; later drafts reuse the cached catalog without native work.
+    /// Reuse discovered models; failed or empty probes retain static features and back off briefly.
     async fn draft_features(
         &self,
         spec: &AgentSessionSpec,
     ) -> Result<Vec<Value>, AgentSessionError> {
         config::validate_spec(spec)?;
+        if !self.is_available().await? {
+            return Err(AgentSessionError::Unavailable);
+        }
         if self.catalog().is_empty() {
-            self.probe(&AgentSessionSpec {
-                config: StoredAgentConfig::default(),
-                ..spec.clone()
-            })
-            .await?;
+            let mut attempts = self.draft_probes.lock().await;
+            attempts.retain(|_, attempted| attempted.elapsed() < Duration::from_secs(30));
+            if self.catalog().is_empty() && !attempts.contains_key(&spec.cwd) {
+                let _ = self
+                    .probe(&AgentSessionSpec {
+                        config: StoredAgentConfig::default(),
+                        ..spec.clone()
+                    })
+                    .await;
+                if attempts.len() >= 32
+                    && let Some(oldest) = attempts
+                        .iter()
+                        .min_by_key(|(_, time)| **time)
+                        .map(|(cwd, _)| cwd.clone())
+                {
+                    attempts.remove(&oldest);
+                }
+                attempts.insert(spec.cwd.clone(), std::time::Instant::now());
+            }
         }
         Ok(
             serde_json::from_value(self.settings(&spec.config)["features"].take())

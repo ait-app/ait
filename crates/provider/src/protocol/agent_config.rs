@@ -21,6 +21,22 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for NullableSetting<T> {
     }
 }
 
+impl<T: serde::Serialize> serde::Serialize for NullableSetting<T> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Set(value) => serializer.serialize_some(value),
+            Self::Clear | Self::Unchanged => serializer.serialize_none(),
+        }
+    }
+}
+
+impl<T> NullableSetting<T> {
+    /// Omitted patch fields retain the existing value when crossing the internal event bridge.
+    pub(crate) fn is_unchanged(&self) -> bool {
+        matches!(self, Self::Unchanged)
+    }
+}
+
 impl<T: Clone> NullableSetting<T> {
     fn apply(&self, current: &mut Option<T>) {
         match self {

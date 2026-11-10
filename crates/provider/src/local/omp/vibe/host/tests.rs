@@ -1,5 +1,7 @@
 use super::*;
 
+mod registry;
+
 fn host() -> Host {
     let spec = AgentSessionSpec {
         provider: "omp".to_owned(),
@@ -202,6 +204,7 @@ async fn cancellation_aborts_a_worker_even_before_its_start_receipt_arrives() {
     assert_eq!(host.shared.generation.load(Ordering::Acquire), 1);
 }
 
+#[cfg(unix)]
 #[tokio::test]
 async fn exit_during_a_director_turn_preserves_cancellation_frames_for_the_owner() {
     let (_root, client, spec) = crate::local::omp::tests::fixture();
@@ -236,5 +239,78 @@ async fn exit_during_a_director_turn_preserves_cancellation_frames_for_the_owner
             && frame["status"] == "aborted"),
         "exit must retain the parent's native aborted outcome"
     );
+    transport.close().await.unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn activation_preserves_interleaved_owner_frames() {
+    let (root, client, spec) = crate::local::omp::tests::fixture();
+    std::fs::create_dir_all(root.path().join("agent")).unwrap();
+    let events = vec![
+        json!({"type":"btw_record", "record":{"id":"topic", "status":"complete"}}),
+        json!({"type":"response", "id":"action", "command":"get_tree", "success":true}),
+        json!({"type":"extension_ui_request", "id":"dialog", "method":"input", "title":"Question"}),
+    ];
+    std::fs::write(
+        root.path().join("agent/vibe-activation-events.json"),
+        serde_json::to_vec(&events).unwrap(),
+    )
+    .unwrap();
+    let mut transport = crate::local::omp::session::probe(&client, &spec.cwd, None)
+        .await
+        .unwrap();
+    let models = activate(&mut transport).await.unwrap();
+    assert_eq!(models.len(), 2);
+    let mut observed = Vec::new();
+    while let Some(event) = transport.poll().unwrap() {
+        observed.push(event);
+    }
+    let preserved: Vec<_> = observed
+        .into_iter()
+        .filter(|event| events.contains(event))
+        .collect();
+    assert_eq!(preserved, events);
+    transport.close().await.unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn saturated_tool_calls_return_an_error_receipt_without_failing_the_session() {
+    let (root, client, spec) = crate::local::omp::tests::fixture();
+    let mut transport = crate::local::omp::session::probe(&client, &spec.cwd, None)
+        .await
+        .unwrap();
+    let writer = transport.writer().unwrap();
+    let mut host = host();
+    for index in 0..MAX_CALLS {
+        host.calls.insert(
+            index.to_string(),
+            AbortOnDropHandle::new(tokio::spawn(std::future::pending())),
+        );
+    }
+    assert!(host.tool(&json!({"type":"host_tool_call", "id":"overflow", "toolName":"vibe_wait", "arguments":{}}), writer.clone()).unwrap());
+    assert_eq!(host.calls.len(), MAX_CALLS);
+    assert!(!host.backpressured());
+    host.poll(writer);
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let calls = std::fs::read_to_string(root.path().join("agent/calls.jsonl")).unwrap();
+            if let Some(frame) = calls
+                .lines()
+                .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+                .find(|frame| frame["id"] == "overflow")
+            {
+                assert_eq!(frame["type"], "host_tool_result");
+                assert_eq!(frame["isError"], true);
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    transport.request("get_state", json!({})).await.unwrap();
+    host.stop();
     transport.close().await.unwrap();
 }

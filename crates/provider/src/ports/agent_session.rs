@@ -90,10 +90,18 @@ pub(crate) enum AgentTurnEvent {
     /// A native extension acknowledged model or thinking changes. Application validates and
     /// commits the patch before publishing its corresponding runtime observation.
     ModelSelectionUpdated {
-        /// Native effective model selector; null restores provider inheritance.
-        model: Option<String>,
-        /// Native effective thinking level; null clears the host override.
-        thinking_option_id: Option<String>,
+        /// Omission preserves the override; null restores provider inheritance.
+        #[serde(
+            default,
+            skip_serializing_if = "crate::protocol::agent_config::NullableSetting::is_unchanged"
+        )]
+        model: crate::protocol::agent_config::NullableSetting,
+        /// Omission preserves the override; null clears the host thinking selection.
+        #[serde(
+            default,
+            skip_serializing_if = "crate::protocol::agent_config::NullableSetting::is_unchanged"
+        )]
+        thinking_option_id: crate::protocol::agent_config::NullableSetting,
     },
     /// The native provider drained its turn successfully.
     Completed(Option<String>),

@@ -82,11 +82,47 @@ async fn native_plugin_model_events_request_a_nonblocking_snapshot_on_the_same_o
     assert_eq!(
         events,
         (
-            Some("[\"other\",\"model\"]".to_owned()),
-            Some("high".to_owned())
+            NullableSetting::Set("[\"other\",\"model\"]".to_owned()),
+            NullableSetting::Set("high".to_owned())
         )
     );
     let calls = std::fs::read_to_string(root.path().join("agent/calls.jsonl")).unwrap();
     assert!(!calls.contains("\"type\": \"prompt\""));
+    session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn partial_native_facts_publish_only_the_fields_that_were_carried() {
+    use crate::ports::agent_session::AgentSession;
+    let (_root, client, spec) = crate::local::omp::tests::fixture();
+    let mut session = crate::local::omp::session::open(&client, &spec, None)
+        .await
+        .unwrap();
+    session.config.model = None;
+    session.stream.events.clear();
+    session
+        .observe_settings(&serde_json::json!({"thinkingLevel":"high"}))
+        .unwrap();
+    assert!(session.config.model.is_none());
+    assert!(matches!(
+        session.stream.events.pop_front(),
+        Some(AgentTurnEvent::ModelSelectionUpdated {
+            model: NullableSetting::Unchanged,
+            thinking_option_id: NullableSetting::Set(_)
+        })
+    ));
+    session.stream.events.clear();
+    session.state["thinkingLevel"] = Value::Null;
+    session
+        .observe_settings(&serde_json::json!({"model":{"provider":"other","id":"model"}}))
+        .unwrap();
+    assert_eq!(session.config.thinking_option_id.as_deref(), Some("high"));
+    assert!(matches!(
+        session.stream.events.pop_front(),
+        Some(AgentTurnEvent::ModelSelectionUpdated {
+            model: NullableSetting::Set(_),
+            thinking_option_id: NullableSetting::Unchanged
+        })
+    ));
     session.close().await.unwrap();
 }

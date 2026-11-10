@@ -202,7 +202,9 @@ impl AgentManager {
             && let Some(completion) = session.session.take_command_completion()
         {
             let agent = agent.to_owned();
-            self.poll().await.map_err(|_| ErrorCode::AgentIo)?;
+            // The detached completion owns the durable receipt even if this eager poll fails.
+            // Dropping it here would strand an already-written command in the claimed state.
+            let _ = self.poll().await;
             return Ok(Admission::Pending(Box::pin(async move {
                 let result = completion.await;
                 let receipt = command_receipt(&result);

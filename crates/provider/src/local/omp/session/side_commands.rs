@@ -81,6 +81,9 @@ impl Session {
             if args.len() > 65536 {
                 return Err(AgentSessionError::Rejected);
             }
+            if !args.is_empty() && self.btw.running() {
+                return Err(AgentSessionError::Busy);
+            }
             self.command_controls.check(false)?;
             let (method, fields) = if args.is_empty() {
                 ("get_btw_history", json!({}))

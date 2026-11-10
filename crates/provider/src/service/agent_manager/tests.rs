@@ -133,6 +133,8 @@ struct FakeState {
     steer_result: Result<(), AgentSessionError>,
     steer_calls: Vec<(String, String)>,
     poll_error: Option<AgentSessionError>,
+    commands_written: usize,
+    command_registry: Option<MemoryRegistry>,
     failure_message: Option<&'static str>,
     failure_diagnostic: Option<crate::ports::diagnostics::Diagnostic>,
     commands_error: AgentSessionError,
@@ -164,6 +166,8 @@ impl Default for FakeState {
             steer_result: Err(AgentSessionError::Rejected),
             steer_calls: Vec::new(),
             poll_error: None,
+            commands_written: 0,
+            command_registry: None,
             failure_message: None,
             failure_diagnostic: None,
             commands_error: AgentSessionError::Unavailable,
@@ -182,6 +186,10 @@ struct FakeSession(Arc<Mutex<FakeState>>);
 
 #[async_trait::async_trait]
 impl AgentClient for FakeClient {
+    fn handles_out_of_band(&self, text: &str) -> bool {
+        text == "query" && self.0.lock().unwrap().command_registry.is_some()
+    }
+
     fn supports_agent_mcp(&self) -> bool {
         matches!(self.0.lock().unwrap().mcp_support, mcp::Support::Http)
     }
@@ -260,6 +268,37 @@ async fn unsupported_commands_are_distinct_from_rejected_requests_and_provider_f
 
 #[async_trait::async_trait]
 impl AgentSession for FakeSession {
+    async fn out_of_band(
+        &mut self,
+        _prompt: &crate::protocol::prompt::AgentPrompt,
+    ) -> Result<(), AgentSessionError> {
+        let mut state = self.0.lock().unwrap();
+        state.commands_written += 1;
+        if let Some(registry) = &state.command_registry {
+            registry.0.lock().unwrap().fail_update = true;
+            state
+                .events
+                .push_back(AgentTurnEvent::RuntimeInfo(StoredAgentRuntimeInfo {
+                    provider: "codex".into(),
+                    session_id: Some("native-1".into()),
+                    model: None,
+                    thinking_option_id: None,
+                    mode_id: None,
+                    extra: None,
+                }));
+        }
+        Ok(())
+    }
+
+    fn take_command_completion(
+        &mut self,
+    ) -> Option<crate::ports::agent_session::AgentSessionFuture<'static, ()>> {
+        self.0.lock().unwrap().command_registry.is_some().then(|| {
+            Box::pin(async { Ok(()) })
+                as crate::ports::agent_session::AgentSessionFuture<'static, ()>
+        })
+    }
+
     fn failure_diagnostic(&self) -> Option<crate::ports::diagnostics::Diagnostic> {
         self.0.lock().unwrap().failure_diagnostic
     }
@@ -1144,8 +1183,10 @@ async fn observed_model_selection_commits_without_overwriting_unrelated_configur
         .unwrap()
         .events
         .push_back(AgentTurnEvent::ModelSelectionUpdated {
-            model: Some("native-model".to_owned()),
-            thinking_option_id: Some("high".to_owned()),
+            model: crate::protocol::agent_config::NullableSetting::Set("native-model".to_owned()),
+            thinking_option_id: crate::protocol::agent_config::NullableSetting::Set(
+                "high".to_owned(),
+            ),
         });
     manager.poll().await.unwrap();
     let stored = registry.get("agent-1").unwrap().unwrap().config.unwrap();
@@ -1161,8 +1202,8 @@ async fn observed_model_selection_commits_without_overwriting_unrelated_configur
         .unwrap()
         .events
         .push_back(AgentTurnEvent::ModelSelectionUpdated {
-            model: Some("native-model".to_owned()),
-            thinking_option_id: None,
+            model: crate::protocol::agent_config::NullableSetting::Set("native-model".to_owned()),
+            thinking_option_id: crate::protocol::agent_config::NullableSetting::Clear,
         });
     manager.poll().await.unwrap();
     assert!(
@@ -1176,3 +1217,5 @@ async fn observed_model_selection_commits_without_overwriting_unrelated_configur
             .is_none()
     );
 }
+
+mod review;

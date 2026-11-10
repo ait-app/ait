@@ -5,6 +5,7 @@ mod btw;
 mod completion;
 mod interactions;
 mod model_roles;
+mod review;
 mod settlement;
 mod vibe;
 
@@ -449,7 +450,9 @@ async fn mock_plugin_completion(
     let executing = request["messages"]
         .to_string()
         .contains("OMP_EXEC_APPROVAL_FIXTURE");
-    let delta = if let Some(delta) = vibe::completion(&request) {
+    let delta = if let Some(delta) =
+        review::completion(&request).or_else(|| vibe::completion(&request))
+    {
         delta
     } else if tool_finished {
         let text = if asking || writing || executing {

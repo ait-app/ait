@@ -1,5 +1,6 @@
 //! Ait-owned Vibe orchestration over the public RPC of the user's external OMP installation.
 
+mod registry;
 mod tools;
 mod worker;
 
@@ -61,6 +62,7 @@ struct Registry {
     records: BTreeMap<String, Record>,
     slots: BTreeMap<String, Slot>,
     starting: BTreeMap<String, Option<AbortOnDropHandle<()>>>,
+    users: BTreeMap<String, usize>,
 }
 
 #[derive(Debug)]
@@ -128,6 +130,8 @@ pub(in crate::local::omp) struct Host {
     shared: Arc<Shared>,
     incoming: mpsc::Receiver<(u64, HostEvent)>,
     calls: BTreeMap<String, AbortOnDropHandle<()>>,
+    rejected_calls: Vec<Value>,
+    rejection_delivery: Option<AbortOnDropHandle<()>>,
     permissions: BTreeMap<String, (String, String, Value)>,
     models: BTreeMap<String, String>,
     notifications: Vec<Value>,
@@ -179,6 +183,8 @@ impl Host {
             }),
             incoming,
             calls: BTreeMap::new(),
+            rejected_calls: Vec::new(),
+            rejection_delivery: None,
             permissions: BTreeMap::new(),
             models: BTreeMap::new(),
             notifications: Vec::new(),
@@ -254,6 +260,7 @@ impl Host {
                     let cleared = transport
                         .request("set_host_tools", json!({"tools":[]}))
                         .await;
+                    let restored = restored.and_then(|events| transport.restore_events(events));
                     if restored.is_err() || cleared.is_err() {
                         let _ = transport.close().await;
                     }
@@ -375,7 +382,13 @@ impl Host {
             return Err(AgentSessionError::Rejected);
         }
         if self.calls.len() >= MAX_CALLS {
-            return Err(AgentSessionError::Busy);
+            let result = tools::result(
+                &json!({"error":"Too many concurrent Vibe tool calls; wait for an existing call to finish."}),
+                true,
+            );
+            self.rejected_calls
+                .push(json!({"type":"host_tool_result", "id":id, "isError":true, "result":result}));
+            return Ok(true);
         }
         let operation = operation.to_owned();
         let fields = event["arguments"].clone();
@@ -397,8 +410,33 @@ impl Host {
         Ok(true)
     }
 
+    /// Pause native reads while a bounded batch of capacity errors awaits the existing writer.
+    pub(in crate::local::omp) fn backpressured(&self) -> bool {
+        self.rejected_calls.len() >= 64
+    }
+
+    fn flush_rejections(&mut self, writer: Writer) {
+        if self.rejected_calls.is_empty()
+            || self
+                .rejection_delivery
+                .as_ref()
+                .is_some_and(|task| !task.is_finished())
+        {
+            return;
+        }
+        let replies = std::mem::take(&mut self.rejected_calls);
+        self.rejection_delivery = Some(AbortOnDropHandle::new(tokio::spawn(async move {
+            for reply in replies {
+                if writer.send(&reply).await.is_err() {
+                    break;
+                }
+            }
+        })));
+    }
+
     /// Consume worker events and publish them only in the child's own timeline.
     pub(in crate::local::omp) fn poll(&mut self, writer: Writer) -> Vec<AgentTurnEvent> {
+        self.flush_rejections(writer.clone());
         let mut events = std::mem::take(&mut self.lifecycle_events);
         for _ in 0..128 {
             let Ok((generation, event)) = self.incoming.try_recv() else {
@@ -427,11 +465,6 @@ impl Host {
                             self.permissions.remove(&id);
                             events.push(AgentTurnEvent::PermissionResolved(id));
                         }
-                    }
-                    if let Ok(mut registry) = self.shared.registry.lock() {
-                        registry
-                            .records
-                            .insert(record.child.id.clone(), record.clone());
                     }
                     self.shared
                         .changes
@@ -474,6 +507,8 @@ impl Host {
     pub(in crate::local::omp) fn stop(&mut self) {
         self.shared.generation.fetch_add(1, Ordering::AcqRel);
         self.calls.clear();
+        self.rejected_calls.clear();
+        self.rejection_delivery.take();
         self.notifications.clear();
         self.delivery.take();
         self.lifecycle_events.extend(
@@ -579,12 +614,22 @@ async fn activate(
         return Err(AgentSessionError::Unavailable);
     }
     let events = transport.local_command(&format!("/{COMMAND} on")).await?;
-    let routes = events
-        .iter()
-        .filter(|event| event["type"] == "extension_ui_request" && event["method"] == "notify")
-        .filter_map(|event| event["message"].as_str()?.strip_prefix("AIT_VIBE_V1:"))
-        .find_map(|text| serde_json::from_str::<Value>(text).ok())
-        .ok_or(AgentSessionError::Unavailable)?;
+    let mut routes = None;
+    let mut unrelated = Vec::new();
+    for event in events {
+        if event["type"] == "extension_ui_request"
+            && event["method"] == "notify"
+            && let Some(text) = event["message"]
+                .as_str()
+                .and_then(|text| text.strip_prefix("AIT_VIBE_V1:"))
+        {
+            routes = routes.or_else(|| serde_json::from_str::<Value>(text).ok());
+        } else {
+            unrelated.push(event);
+        }
+    }
+    transport.restore_events(unrelated)?;
+    let routes = routes.ok_or(AgentSessionError::Unavailable)?;
     let mut models = BTreeMap::new();
     for role in ["fast", "good"] {
         let route: [String; 2] = serde_json::from_value(routes[role].clone())
@@ -630,6 +675,7 @@ async fn operate(
                 .as_str()
                 .or_else(|| fields["session"].as_str())
                 .ok_or(AgentSessionError::Rejected)?;
+            let _usage = registry::Usage::acquire(shared.clone(), vec![id.to_owned()])?;
             let (sender, record) = {
                 let registry = shared
                     .registry
@@ -763,13 +809,10 @@ async fn launch(shared: Arc<Shared>, request: WorkerRequest) -> Result<Value, Ag
             .registry
             .lock()
             .map_err(|_| AgentSessionError::Failed)?;
-        if registry.starting.contains_key(&key)
-            || registry.slots.contains_key(&key)
-            || (request.restore.is_none()
-                && registry.records.len() + registry.starting.len() >= MAX_WORKERS)
-        {
+        if registry.starting.contains_key(&key) || registry.slots.contains_key(&key) {
             return Err(AgentSessionError::Busy);
         }
+        registry.make_room(request.restore.is_some())?;
         registry.starting.insert(key.clone(), None);
     }
     let reservation = Reservation {
@@ -798,7 +841,7 @@ async fn launch(shared: Arc<Shared>, request: WorkerRequest) -> Result<Value, Ag
     let task = AbortOnDropHandle::new(tokio::spawn(worker::run(
         launch,
         commands,
-        shared.events.clone(),
+        shared.clone(),
         reply,
     )));
     {
@@ -817,7 +860,7 @@ async fn launch(shared: Arc<Shared>, request: WorkerRequest) -> Result<Value, Ag
         .registry
         .lock()
         .map_err(|_| AgentSessionError::Failed)?;
-    let record = result?;
+    let (record, registered) = result?;
     if !shared.enabled.load(Ordering::Acquire)
         || shared.generation.load(Ordering::Acquire) != generation
     {
@@ -838,6 +881,9 @@ async fn launch(shared: Arc<Shared>, request: WorkerRequest) -> Result<Value, Ag
         },
     );
     drop(registry);
+    registered
+        .send(())
+        .map_err(|()| AgentSessionError::Failed)?;
     drop(reservation);
     Ok(json!({"session":id,"status":"running"}))
 }
@@ -880,6 +926,7 @@ async fn wait(shared: Arc<Shared>, fields: &Value) -> Result<Value, AgentSession
             running
         }
     };
+    let _usage = registry::Usage::acquire(shared.clone(), sessions.clone())?;
     let deadline = tokio::time::Instant::now() + Duration::from_secs_f64(timeout);
     loop {
         if !shared.enabled.load(Ordering::Acquire) {

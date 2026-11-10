@@ -32,3 +32,6 @@ pub(super) fn fixture() -> (tempfile::TempDir, ClaudeClient, AgentSessionSpec) {
     let spec = spec(root.path());
     (root, client, spec)
 }
+
+#[cfg(unix)]
+mod draft;

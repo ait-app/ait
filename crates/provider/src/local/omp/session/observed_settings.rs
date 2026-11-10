@@ -71,8 +71,8 @@ impl Session {
         self.stream
             .events
             .push_back(AgentTurnEvent::ModelSelectionUpdated {
-                model: info.model.clone(),
-                thinking_option_id: info.thinking_option_id.clone(),
+                model: patch.model_id,
+                thinking_option_id: patch.thinking_option_id,
             });
         self.stream
             .events
@@ -81,5 +81,5 @@ impl Session {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests;

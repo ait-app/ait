@@ -372,6 +372,13 @@ for command in commands_from_input():
         if text == 'reject':
             response(command, success=False)
             continue
+        if text == '/ait-vibe-mode-v1 on':
+            if (root/'vibe-activation-events.json').exists():
+                for event in json.loads((root/'vibe-activation-events.json').read_text()):
+                    emit(event)
+            emit({'type':'extension_ui_request','method':'notify','message':'AIT_VIBE_V1:{"fast":["test","model"],"good":["test","model"]}'})
+            response(command, {'agentInvoked': False})
+            continue
         if text == '/ait-vibe-mode-v1 off':
             response(command, {'agentInvoked': False})
             continue

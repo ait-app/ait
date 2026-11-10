@@ -125,13 +125,7 @@ async fn drain_observations(
             Some(AgentTurnEvent::ModelSelectionUpdated {
                 model,
                 thinking_option_id,
-            }) => persist_model_selection(
-                registry,
-                id,
-                agent,
-                model.as_deref(),
-                thinking_option_id.as_deref(),
-            ),
+            }) => persist_model_selection(registry, id, agent, model, thinking_option_id),
             Some(AgentTurnEvent::FeatureValuesUpdated(values)) => {
                 persist_features(registry, id, agent, values)
             }
@@ -233,21 +227,17 @@ fn persist_model_selection(
     registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
     id: &str,
     agent: &super::LiveAgent,
-    model: Option<&str>,
-    thinking: Option<&str>,
+    model: &crate::protocol::agent_config::NullableSetting,
+    thinking: &crate::protocol::agent_config::NullableSetting,
 ) -> Result<(), model::ErrorCode> {
-    use crate::protocol::agent_config::{ConfigPatch, NullableSetting};
+    use crate::protocol::agent_config::ConfigPatch;
     persist_configuration(
         registry,
         id,
         agent,
         &ConfigPatch {
-            model_id: model
-                .map(str::to_owned)
-                .map_or(NullableSetting::Clear, NullableSetting::Set),
-            thinking_option_id: thinking
-                .map(str::to_owned)
-                .map_or(NullableSetting::Clear, NullableSetting::Set),
+            model_id: model.clone(),
+            thinking_option_id: thinking.clone(),
             ..ConfigPatch::default()
         },
     )
