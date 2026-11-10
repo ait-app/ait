@@ -1,0 +1,448 @@
+{
+  "base_commit": "2f3d2610f68f55340b589af0ba36f555e62ea210",
+  "scope_baseline": "b10dbf72807c163c42e364d40af661048fd1afd9",
+  "rust": {
+    "lines": {
+      "count": 23058,
+      "covered": 21790,
+      "percent": 94.50082400902073
+    },
+    "crates": {
+      "bins/daemon": {
+        "covered": 4029,
+        "total": 4272,
+        "files": 27,
+        "percent": 94.3118
+      },
+      "crates/api": {
+        "covered": 6487,
+        "total": 6926,
+        "files": 47,
+        "percent": 93.6616
+      },
+      "crates/bot": {
+        "covered": 5669,
+        "total": 6051,
+        "files": 30,
+        "percent": 93.687
+      },
+      "crates/domain": {
+        "covered": 706,
+        "total": 714,
+        "files": 21,
+        "percent": 98.8796
+      },
+      "crates/model": {
+        "covered": 1642,
+        "total": 1715,
+        "files": 18,
+        "percent": 95.7434
+      },
+      "crates/persistence": {
+        "covered": 1887,
+        "total": 1979,
+        "files": 18,
+        "percent": 95.3512
+      },
+      "crates/relay": {
+        "covered": 1370,
+        "total": 1401,
+        "files": 16,
+        "percent": 97.7873
+      }
+    },
+    "tests": {
+      "run": 1088,
+      "passed": 1088,
+      "failed": 0,
+      "skipped": 0
+    },
+    "production_source_fingerprint_sha256": "a8e65ba755f6be5014882985d57c31f6b724cd23cb2d1d8f0e01358011d552a4",
+    "production_source_files": 216,
+    "production_source_selection": "git-tracked *.rs under the selected crate directories, excluding tests.rs, *_tests.rs, test_support*.rs and tests/ directories",
+    "commands": [
+      "CARGO_TARGET_DIR=<cache> cargo llvm-cov nextest --locked -p api -p bot -p domain -p model -p persistence -p relay -p daemon --json --summary-only --output-path <evidence>/rust-cov.json --test-threads 4"
+    ],
+    "baseline": {
+      "version": "0.2.6",
+      "comparable": false,
+      "reason": "0.2.6 measured api, bot, domain, metadata, persistence, provider and daemon; 0.2.7 measures api, bot, domain, model, persistence, relay and daemon. Line coverage of a crate also depends on which other crates' tests run, so neither totals nor per-crate figures are compared."
+    }
+  },
+  "typescript": {
+    "packages": {
+      "protocol": {
+        "lines": {
+          "total": 693,
+          "covered": 671,
+          "skipped": 0,
+          "pct": 96.82
+        },
+        "files": {
+          "packages/protocol/src/messages.ts": {
+            "total": 662,
+            "covered": 640,
+            "skipped": 0,
+            "pct": 96.67
+          },
+          "packages/protocol/src/bot/rpc-schemas.ts": {
+            "total": 20,
+            "covered": 20,
+            "skipped": 0,
+            "pct": 100
+          },
+          "packages/protocol/src/bot/types.ts": {
+            "total": 11,
+            "covered": 11,
+            "skipped": 0,
+            "pct": 100
+          }
+        },
+        "requested_sources": [
+          "src/bot/rpc-schemas.ts",
+          "src/bot/types.ts",
+          "src/messages.ts"
+        ],
+        "command": [
+          "/opt/homebrew/Cellar/node@22/22.23.4_2/bin/node",
+          "<checkout>/node_modules/vitest/vitest.mjs",
+          "related",
+          "--run",
+          "src/bot/rpc-schemas.ts",
+          "src/bot/types.ts",
+          "src/messages.ts",
+          "--coverage",
+          "--coverage.reportOnFailure",
+          "--coverage.reporter=json-summary",
+          "--coverage.reporter=text",
+          "--coverage.reportsDirectory=<evidence>/ts-cov-protocol",
+          "--maxWorkers=2",
+          "--coverage.include=src/bot/rpc-schemas.ts",
+          "--coverage.include=src/bot/types.ts",
+          "--coverage.include=src/messages.ts"
+        ],
+        "exit_code": 0
+      },
+      "client": {
+        "lines": {
+          "total": 36,
+          "covered": 33,
+          "skipped": 0,
+          "pct": 91.66
+        },
+        "files": {
+          "packages/client/src/protocol/messages.ts": {
+            "total": 36,
+            "covered": 33,
+            "skipped": 0,
+            "pct": 91.66
+          }
+        },
+        "requested_sources": [
+          "src/protocol/messages.ts"
+        ],
+        "command": [
+          "/opt/homebrew/Cellar/node@22/22.23.4_2/bin/node",
+          "<checkout>/node_modules/vitest/vitest.mjs",
+          "related",
+          "--run",
+          "src/protocol/messages.ts",
+          "--coverage",
+          "--coverage.reportOnFailure",
+          "--coverage.reporter=json-summary",
+          "--coverage.reporter=text",
+          "--coverage.reportsDirectory=<evidence>/ts-cov-client",
+          "--maxWorkers=2",
+          "--coverage.include=src/protocol/messages.ts"
+        ],
+        "exit_code": 0
+      },
+      "mobile": {
+        "lines": {
+          "total": 2276,
+          "covered": 1171,
+          "skipped": 0,
+          "pct": 51.44
+        },
+        "files": {
+          "apps/mobile/src/agent-stream/view.tsx": {
+            "total": 315,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/app/_layout.tsx": {
+            "total": 299,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/app/tasks.tsx": {
+            "total": 1,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/bots/bot-channels.tsx": {
+            "total": 109,
+            "covered": 104,
+            "skipped": 0,
+            "pct": 95.41
+          },
+          "apps/mobile/src/bots/styles.ts": {
+            "total": 2,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/bots/webhook-setup.tsx": {
+            "total": 42,
+            "covered": 40,
+            "skipped": 0,
+            "pct": 95.23
+          },
+          "apps/mobile/src/command-center/root-registration.tsx": {
+            "total": 69,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/components/permission-request-card.tsx": {
+            "total": 78,
+            "covered": 65,
+            "skipped": 0,
+            "pct": 83.33
+          },
+          "apps/mobile/src/components/schedules/schedule-form-sheet.tsx": {
+            "total": 275,
+            "covered": 205,
+            "skipped": 0,
+            "pct": 74.54
+          },
+          "apps/mobile/src/components/schedules/schedule-template-picker.tsx": {
+            "total": 53,
+            "covered": 49,
+            "skipped": 0,
+            "pct": 92.45
+          },
+          "apps/mobile/src/components/schedules/workspace-schedule-tab.tsx": {
+            "total": 104,
+            "covered": 74,
+            "skipped": 0,
+            "pct": 71.15
+          },
+          "apps/mobile/src/components/sidebar/sidebar-nav-rows.tsx": {
+            "total": 56,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/schedules/schedule-form-model.ts": {
+            "total": 324,
+            "covered": 298,
+            "skipped": 0,
+            "pct": 91.97
+          },
+          "apps/mobile/src/schedules/schedule-templates.ts": {
+            "total": 9,
+            "covered": 9,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/screens/tasks-screen.tsx": {
+            "total": 62,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/screens/settings/appearance/sidebar-nav-section.tsx": {
+            "total": 26,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/sidebar-nav/model.ts": {
+            "total": 44,
+            "covered": 39,
+            "skipped": 0,
+            "pct": 88.63
+          },
+          "apps/mobile/src/task-board/model.ts": {
+            "total": 64,
+            "covered": 64,
+            "skipped": 0,
+            "pct": 100
+          },
+          "apps/mobile/src/task-board/task-card.tsx": {
+            "total": 30,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/task-board/task-detail.tsx": {
+            "total": 42,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 0
+          },
+          "apps/mobile/src/task-board/use-task-board.ts": {
+            "total": 23,
+            "covered": 22,
+            "skipped": 0,
+            "pct": 95.65
+          },
+          "apps/mobile/src/utils/host-routes.ts": {
+            "total": 249,
+            "covered": 202,
+            "skipped": 0,
+            "pct": 81.12
+          }
+        },
+        "requested_sources": [
+          "src/agent-stream/view.tsx",
+          "src/app/_layout.tsx",
+          "src/app/tasks.tsx",
+          "src/bots/bot-channels.tsx",
+          "src/bots/styles.ts",
+          "src/bots/webhook-setup.tsx",
+          "src/command-center/root-registration.tsx",
+          "src/components/permission-request-card.tsx",
+          "src/components/schedules/schedule-form-sheet.tsx",
+          "src/components/schedules/schedule-template-picker.tsx",
+          "src/components/schedules/workspace-schedule-tab.tsx",
+          "src/components/sidebar/sidebar-nav-rows.tsx",
+          "src/schedules/schedule-form-model.ts",
+          "src/schedules/schedule-templates.ts",
+          "src/screens/settings/appearance/sidebar-nav-section.tsx",
+          "src/screens/tasks-screen.tsx",
+          "src/sidebar-nav/model.ts",
+          "src/task-board/model.ts",
+          "src/task-board/task-card.tsx",
+          "src/task-board/task-detail.tsx",
+          "src/task-board/use-task-board.ts",
+          "src/utils/host-routes.ts"
+        ],
+        "command": [
+          "/opt/homebrew/Cellar/node@22/22.23.4_2/bin/node",
+          "<checkout>/node_modules/vitest/vitest.mjs",
+          "related",
+          "--run",
+          "src/agent-stream/view.tsx",
+          "src/app/_layout.tsx",
+          "src/app/tasks.tsx",
+          "src/bots/bot-channels.tsx",
+          "src/bots/styles.ts",
+          "src/bots/webhook-setup.tsx",
+          "src/command-center/root-registration.tsx",
+          "src/components/permission-request-card.tsx",
+          "src/components/schedules/schedule-form-sheet.tsx",
+          "src/components/schedules/schedule-template-picker.tsx",
+          "src/components/schedules/workspace-schedule-tab.tsx",
+          "src/components/sidebar/sidebar-nav-rows.tsx",
+          "src/schedules/schedule-form-model.ts",
+          "src/schedules/schedule-templates.ts",
+          "src/screens/settings/appearance/sidebar-nav-section.tsx",
+          "src/screens/tasks-screen.tsx",
+          "src/sidebar-nav/model.ts",
+          "src/task-board/model.ts",
+          "src/task-board/task-card.tsx",
+          "src/task-board/task-detail.tsx",
+          "src/task-board/use-task-board.ts",
+          "src/utils/host-routes.ts",
+          "--coverage",
+          "--coverage.reportOnFailure",
+          "--coverage.reporter=json-summary",
+          "--coverage.reporter=text",
+          "--coverage.reportsDirectory=<evidence>/ts-cov-mobile",
+          "--maxWorkers=2",
+          "--project=unit",
+          "--coverage.include=src/agent-stream/view.tsx",
+          "--coverage.include=src/app/_layout.tsx",
+          "--coverage.include=src/app/tasks.tsx",
+          "--coverage.include=src/bots/bot-channels.tsx",
+          "--coverage.include=src/bots/styles.ts",
+          "--coverage.include=src/bots/webhook-setup.tsx",
+          "--coverage.include=src/command-center/root-registration.tsx",
+          "--coverage.include=src/components/permission-request-card.tsx",
+          "--coverage.include=src/components/schedules/schedule-form-sheet.tsx",
+          "--coverage.include=src/components/schedules/schedule-template-picker.tsx",
+          "--coverage.include=src/components/schedules/workspace-schedule-tab.tsx",
+          "--coverage.include=src/components/sidebar/sidebar-nav-rows.tsx",
+          "--coverage.include=src/schedules/schedule-form-model.ts",
+          "--coverage.include=src/schedules/schedule-templates.ts",
+          "--coverage.include=src/screens/settings/appearance/sidebar-nav-section.tsx",
+          "--coverage.include=src/screens/tasks-screen.tsx",
+          "--coverage.include=src/sidebar-nav/model.ts",
+          "--coverage.include=src/task-board/model.ts",
+          "--coverage.include=src/task-board/task-card.tsx",
+          "--coverage.include=src/task-board/task-detail.tsx",
+          "--coverage.include=src/task-board/use-task-board.ts",
+          "--coverage.include=src/utils/host-routes.ts"
+        ],
+        "exit_code": 0
+      }
+    },
+    "measured_source_fingerprint_sha256": "9b0725a37b036065714730a260dfaa2ef45af3e56a8a140533c340e49ce9e6ad",
+    "not_measured": {
+      "desktop": "no apps/desktop source changed since the baseline",
+      "highlight": "no packages/highlight source changed since the baseline"
+    }
+  },
+  "fingerprint_algorithm": "SHA256 of sorted relative path UTF-8 + NUL + SHA256(file bytes) digest, repeated for each source file",
+  "platform": "macOS arm64",
+  "features": "default",
+  "node": "22.23.4",
+  "rustc": "1.98.1",
+  "vitest": "4.1.7",
+  "coverage_provider": "@vitest/coverage-v8 4.1.7, installed with npm install --no-save for this measurement",
+  "measured_on": "main 2f3d2610f68f55340b589af0ba36f555e62ea210 with the 0.2.7 version, lockfile, PKGBUILD and iOS metadata changes applied",
+  "validation": {
+    "test_release": {
+      "passed": 74,
+      "failed": 0
+    },
+    "test_mobile_release": {
+      "passed": 47,
+      "failed": 0
+    },
+    "xcode_cloud_metadata": {
+      "passed": 5,
+      "failed": 0
+    },
+    "verify_base_b10dbf72": {
+      "checks_passed": 23,
+      "rust_nextest_selected_crates": {
+        "run": 1088,
+        "passed": 1088,
+        "skipped": 0
+      },
+      "protocol": {
+        "passed": 851
+      },
+      "client": {
+        "passed": 566,
+        "skipped": 1
+      },
+      "highlight": {
+        "passed": 103
+      },
+      "desktop": {
+        "passed": 564,
+        "skipped": 17
+      },
+      "mobile_affected": {
+        "passed": 884
+      },
+      "release_workflow_scripts": {
+        "passed": 77
+      }
+    }
+  },
+  "ios": {
+    "CFBundleShortVersionString": "0.2.7",
+    "CFBundleVersion": "2007999",
+    "ExpoTwoWayAudio": "0.2.7",
+    "ExpoTwoWayAudio_checksum": "b24a326f10e8834b0c7eca1cffd65988d5eca6d3"
+  },
+  "test_repairs": {}
+}

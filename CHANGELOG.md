@@ -1,5 +1,12 @@
 # Ait changelog
 
+## 0.2.7 - 2026-11-11
+
+- Add a Task overview, opened from the sidebar or the command center, that sorts agents from every connected Host into Needs attention, Running, To review and Done. Filter by Host or project, search titles, projects and models, and from a task's details answer permission requests, stop it, mark it as reviewed, archive it or open its conversation. Subtasks are grouped under their parent, and actions are unavailable while the Host is offline.
+- New schedules start from a template gallery: test run and repair, PR risk review, topic briefing, weekly workspace recap and documentation check. A template fills in the name, prompt and timing, which stay editable, and the form is split into "Content & timing" and "Execution & limits". Templates are written in English, Chinese, Japanese and Korean; other interface languages show the English text.
+- Test feature: add a Webhook channel to a Workspace Bot. Ait Hub issues an HTTPS address and a secret that is shown only once; other systems post text to the address, then fetch the reply (optionally waiting up to 30 seconds) or receive it at a callback URL. The Host must be connected to an Ait Hub that supports webhooks, otherwise creation shows the reason it failed. Only the final text reply is returned, without progress updates or approvals in the conversation.
+- After a Webhook channel has been created, older daemons cannot load the Bot catalog, even if the channel was deleted, and clients that have not been upgraded cannot read a channel list containing it.
+
 ## 0.2.6 - 2026-11-10
 
 - Keep a record of each workspace script run, with bounded output, starting commit and dirty state, duration, exit code and result. Records are held in memory and are lost when the daemon restarts or the workspace is archived. New MCP tools `get_workspace_script_run` and `wait_for_workspace_script` read them.
