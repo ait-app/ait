@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -473,14 +473,14 @@ test("PR CI cleanup tolerates runs completing during cancellation and continues"
   await assert.rejects(cancelPrRuns(runs, { 1: error }), { message: error.message });
 });
 
-test("Google Play publishing remains manual only", async () => {
-  const mobile = yaml.parse(
-    await readFile(
-      new URL("../.github/workflows/release-android-play.yml", import.meta.url),
-      "utf8",
-    ),
-  );
-  assert.deepEqual(Object.keys(mobile.on), ["workflow_dispatch"]);
+test("Google Play publishing only runs from the release workflow", async () => {
+  const directory = new URL("../.github/workflows/", import.meta.url);
+  const publishers = [];
+  for (const name of await readdir(directory)) {
+    const text = await readFile(new URL(name, directory), "utf8");
+    if (text.includes("upload-google-play")) publishers.push(name);
+  }
+  assert.deepEqual(publishers, ["release.yml"]);
 });
 
 test("packaging shell passes dev build names literally", async (t) => {

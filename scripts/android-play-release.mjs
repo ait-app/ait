@@ -14,14 +14,12 @@ export function planAndroidPlayRelease({
   tag,
   version,
   sourceCommit,
-  action,
   runNumber,
   runAttempt,
   versionCodeBase = "0",
 }) {
   assert.match(sourceCommit, /^[a-f0-9]{40}$/i, "Invalid Android source commit");
-  assert(["build-only", "internal-draft", "internal"].includes(action), "Invalid Play action");
-  const release = planAndroidRelease(tag || `v${version}`, version);
+  const release = planAndroidRelease(tag, version);
   for (const [name, value] of Object.entries({
     runNumber,
     runAttempt,
@@ -43,7 +41,6 @@ export function planAndroidPlayRelease({
     versionCode,
     packageId: release.packageId,
     sourceCommit,
-    releaseStatus: action === "build-only" ? null : action === "internal" ? "completed" : "draft",
     bundleName: `Ait-${release.version}-${versionCode}-android.aab`,
   };
 }
@@ -199,7 +196,6 @@ export async function collectAndroidPlayRelease({
       packageId: plan.packageId,
       sourceCommit: plan.sourceCommit,
       buildSystem: "github-actions-gradle",
-      releaseStatus: plan.releaseStatus,
       signing: "github-actions-upload-key",
       optimization: {
         mapping: "mapping.txt",

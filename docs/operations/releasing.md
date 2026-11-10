@@ -6,11 +6,12 @@
 | ----------------------------------------------- | ----------------------------------------------- | --------------------------------------------------- |
 | Linux/macOS/Windows 桌面、独立 daemon、Web 镜像 | 标签或手动 `release.yml`                        | [创建 Release](#创建-release)                       |
 | Linux/macOS Dev build 与独立 daemon             | 手动 `dev-build.yml`                            | [Dev build](#dev-build)                             |
-| Android Google Play AAB                         | 手动 `release-android-play.yml`                 | [Google Play 指南](google-play-internal-testing.md) |
+| Android Google Play 内部测试                    | 稳定标签或手动 `release.yml`                    | [Google Play 指南](google-play-internal-testing.md) |
 | iOS 内部 TestFlight                             | Xcode Cloud `Default` 手动构建                  | [内部测试](#apple-testflight-ios-手动发布)          |
 | iOS 外部 TestFlight / App Store 构建            | Xcode Cloud `Release iOS to App Store` 手动构建 | [App Store 构建](#app-store-ios-手动发布)           |
 
-移动端发布独立于桌面 Release；Android 使用 Gradle，iOS 使用 Xcode Cloud，不使用 EAS CI。
+Android 随 `release.yml` 提交内部测试，但其失败不阻塞桌面 Release；iOS 独立使用 Xcode Cloud。
+Android 使用 Gradle，两者都不使用 EAS CI。
 
 ## macOS 自动更新来源
 
@@ -270,7 +271,7 @@ GitHub Release 创建和修复均使用 `--prerelease --latest=false`，保留�
 
 根 `PKGBUILD` 的 Arch 版本使用 `0.0.23beta1`，`_ait_version` 保留完整 SemVer 用于
 源码校验；正式版准备时也要同步这两个字段。AUR 二进制配方继续引用已验证的正式版。
-beta 标签不构建 Android APK；Google Play、iOS TestFlight 仍通过各自的手动入口发布，不随 beta 标签触发。
+beta 标签不构建 Android APK，也不提交 Google Play；iOS TestFlight 仍通过手动入口发布，不随 beta 标签触发。
 
 ## 创建 Release
 
@@ -330,7 +331,7 @@ macOS 需要 GitHub Secrets：`MAC_CSC_LINK`、`MAC_CSC_KEY_PASSWORD`、`APPLE_I
 Release Note 由 `.github/release.yml` 根据合并 PR 分组生成。
 
 手动重跑：Actions → Release Ait → Run workflow，输入已存在的标签。工作流不会创建标签。
-重跑只构建桌面；如 Release 已有 Android APK，则验证并保留该附件。
+重跑会构建桌面，稳定标签还会再次提交 Google Play 内部测试；如 Release 已有 Android APK，则验证并保留该附件。
 已有 Release 保留说明，覆盖同名资产；不要移动已经公开使用的标签。
 
 默认应用源码从输入的发布标签检出；资产收集、校验和相关测试从工作流自身的提交检出到
@@ -390,22 +391,23 @@ AIT_DESKTOP_SMOKE=1 npm run package:mac
 `~/.ait-server-desktop`；旧桌面的 SQLite 数据保留，但本次不自动迁移到新 daemon。
 
 - 版本或包内容验证失败：修复 manifest、锁文件或暂存输入，重新运行门禁。
-- 任一平台构建、签名或启动失败：Release job 不会运行。
+- 任一桌面平台构建、签名或启动失败：Release job 不会运行。Android Play 失败不在此列，
+  需单独查看 `android-play` job。
 - 发布阶段失败：在同一不可变标签上手动重跑，补齐资产。
 - 已公开的错误版本：发布新的补丁版本，不移动标签。
 
 ## Google Play Android Internal Testing
 
-Android Play 内部测试使用独立手动工作流
-[Release Android to Google Play](../../.github/workflows/release-android-play.yml)，
-支持只构建 AAB、上传内部测试草稿或发布给内部测试者。在 GitHub runner 上使用 Gradle
+每个稳定标签由 [Release Ait](../../.github/workflows/release.yml) 的 `android-play` job
+发布给内部测试者，预发布标签跳过。在 GitHub runner 上使用 Gradle
 和 Secrets 中的上传 keystore 构建签名 AAB，通过校验后直接调用 Play API 上传。
 `versionCode` 使用迁移基数、Actions 运行编号与重试次数计算，不依赖 EAS。
 
 首次服务账号配置、Play App Signing、测试者名单、安装链接和重试步骤统一见
 [Google Play 内部测试与 CI 发布](google-play-internal-testing.md)。
-独立的 GitHub APK 工作流已移除，桌面 Release 不再调用 Android 构建。发布边界见
-[ADR-175](../decisions/clients/adr-175-android-play-gradle-release.md)。
+独立的 GitHub APK 工作流已移除，GitHub Release 不附带 Android 产物。发布边界见
+[ADR-175](../decisions/clients/adr-175-android-play-gradle-release.md) 和
+[ADR-234](../decisions/clients/adr-234-play-internal-in-release-workflow.md)。
 
 ## App Store iOS 手动发布
 

@@ -176,6 +176,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## 客户端、连接与品牌
 
+- [ADR-234：稳定版 Release 自动提交 Google Play 内部测试](clients/adr-234-play-internal-in-release-workflow.md)
 - [ADR-223：桌面多窗口与 Workspace 状态归属](clients/adr-223-desktop-workspace-windows.md)
 - [ADR-218：Hub feature 协商收敛在线连接](clients/adr-218-hub-feature-negotiation.md)
 - [ADR-216：默认数据目录统一为 `~/.ait`](clients/adr-216-default-data-directory-ait.md)
@@ -191,7 +192,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-183：iOS CI 使用 Xcode Cloud 归档与内部分发](clients/adr-183-ios-xcode-cloud-release.md)（经 [ADR-187](clients/adr-187-ios-app-store-cloud-trigger.md) 修订）
 - [ADR-182：客户端接入 Hub 账号服务](clients/adr-182-hub-account-client.md)（经 [ADR-204](clients/adr-204-hub-only-online-business-transport.md) 修订）
 - [ADR-177：移动端本地通知与 APNs／FCM 直连](clients/adr-177-native-local-and-remote-notifications.md)
-- [ADR-175：Google Play AAB 在 GitHub runner 上构建和提交](clients/adr-175-android-play-gradle-release.md)
+- [ADR-175：Google Play AAB 在 GitHub runner 上构建和提交](clients/adr-175-android-play-gradle-release.md)（经 [ADR-234](clients/adr-234-play-internal-in-release-workflow.md) 修订）
 - [ADR-173：移动端终端输入复用 React Native](clients/adr-173-shared-native-terminal-input.md)
 - [ADR-172：Android APK 在 GitHub runner 上用 Gradle 构建](clients/adr-172-android-gradle-ci-build.md)（已由 [ADR-175](clients/adr-175-android-play-gradle-release.md) 取代）
 - [ADR-171：iOS 窗口由 UIScene 管理](clients/adr-171-ios-scene-lifecycle.md)
@@ -217,7 +218,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-117：终端配色查询与外观更新生命周期](clients/adr-117-terminal-palette-and-appearance-lifetime.md)
 - [ADR-114：iOS 终端组合输入归 UIKit](clients/adr-114-ios-terminal-ime.md)（已由 [ADR-173](clients/adr-173-shared-native-terminal-input.md) 取代）
 - [ADR-098：客户端消息分块与文件上传背压](clients/adr-098-acknowledged-client-chunks.md)
-- [ADR-097：Google Play 内部测试手动发布](clients/adr-097-google-play-internal-release.md)（经 [ADR-175](clients/adr-175-android-play-gradle-release.md) 修订）
+- [ADR-097：Google Play 内部测试手动发布](clients/adr-097-google-play-internal-release.md)（经 [ADR-175](clients/adr-175-android-play-gradle-release.md)、[ADR-234](clients/adr-234-play-internal-in-release-workflow.md) 修订）
 - [ADR-096：Desktop 内置 daemon 默认同步与手动下线](clients/adr-096-desktop-default-host-sync.md)（经 [ADR-201](daemon/adr-201-daemon-owned-publication.md) 修订）
 - [ADR-094：客户端统一使用 Ait 标准方法名](clients/adr-094-canonical-ait-client-methods.md)（经 [ADR-211](clients/adr-211-sdk-native-daemon-protocol.md) 修订）
 - [ADR-087：中心设备管理与 Linux/macOS daemon 的 JWT 授权](clients/adr-087-headless-device-authorization.md)（经 [ADR-201](daemon/adr-201-daemon-owned-publication.md) 修订）

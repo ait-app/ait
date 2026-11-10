@@ -13,7 +13,7 @@ const workflow = parse(
 test("every release job builds the requested source with validated rebuild input", () => {
   assert.equal(workflow.env.SOURCE_REF, "${{ inputs.source_commit || inputs.tag || github.ref }}");
   assert.equal(workflow.env.RELEASE_TAG, "${{ inputs.tag || github.ref_name }}");
-  for (const name of ["windows", "web-client", "build", "release"]) {
+  for (const name of ["windows", "web-client", "android-play", "build", "release"]) {
     const steps = workflow.jobs[name].steps;
     const checkout = steps.find((step) => step.name === "Check out release source");
     assert.equal(checkout.with.ref, "${{ env.SOURCE_REF }}", name);
