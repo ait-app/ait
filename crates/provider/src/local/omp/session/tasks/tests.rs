@@ -133,6 +133,10 @@ async fn current_goal_controls_reject_stale_identity_before_modifying_native_sta
     assert_eq!(goal["phase"], "active");
     assert_eq!(goal["objective"], "Persist the controls");
     assert!(!projection["statuses"].to_string().contains("Goal on"));
+    let active_goal = session.state["goal"].clone();
+    session.state["goal"]["goal"]["status"] = json!("complete");
+    assert!(session.ui_state().unwrap()["goal"].is_null());
+    session.state["goal"] = active_goal;
     let before = std::fs::read_to_string(root.path().join("agent/calls.jsonl")).unwrap();
     assert!(
         session
@@ -159,7 +163,7 @@ async fn current_goal_controls_reject_stale_identity_before_modifying_native_sta
         .unwrap()
         .await
         .unwrap();
-    assert!(session.ui_state().unwrap().get("goal").is_none());
+    assert!(session.ui_state().unwrap()["goal"].is_null());
     session.close().await.unwrap();
 }
 
@@ -197,14 +201,13 @@ async fn acknowledged_goal_snapshot_supersedes_older_buffered_updates_but_keeps_
 }
 
 #[test]
-fn completed_goal_keeps_the_clear_action_in_current_controls() {
-    let note = goal_item(
-        "current",
-        &json!({"goal":{"id":"done","status":"completed","objective":"Verified"}}),
-    );
-    assert_eq!(note.item["goal"]["phase"], "complete");
-    assert_eq!(
-        note.item["actions"],
-        json!([{"id":"clear","command":"/goal drop"}])
-    );
+fn completed_goal_is_a_historical_receipt_not_an_active_control() {
+    for status in ["complete", "completed"] {
+        let note = goal_item(
+            "current",
+            &json!({"goal":{"id":"done","status":status,"objective":"Verified"}}),
+        );
+        assert_eq!(note.item["goal"]["phase"], "complete");
+        assert_eq!(note.item["actions"], json!([]));
+    }
 }

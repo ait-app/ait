@@ -212,7 +212,7 @@ pub(super) fn goal_item(id: &str, result: &Value) -> crate::protocol::timeline::
             "active" => Some("active"),
             "paused" => Some("paused"),
             "blocked" => Some("blocked"),
-            "completed" => Some("complete"),
+            "complete" | "completed" => Some("complete"),
             _ => None,
         },
     ) {
@@ -230,7 +230,6 @@ pub(super) fn goal_item(id: &str, result: &Value) -> crate::protocol::timeline::
         "paused" | "blocked" => {
             json!([{"id":"resume","command":"/goal resume"},{"id":"clear","command":"/goal drop"}])
         }
-        "completed" => json!([{"id":"clear","command":"/goal drop"}]),
         _ => json!([]),
     };
     note

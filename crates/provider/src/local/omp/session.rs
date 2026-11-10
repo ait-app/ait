@@ -1439,13 +1439,18 @@ impl AgentSession for Session {
         let mut snapshot = self.ui.snapshot();
         snapshot["actions"] = super::actions::catalog();
         snapshot["sideQuestions"] = self.btw.snapshot();
-        if self.state["goal"]["goal"].is_object() {
-            snapshot["goal"] = tasks::goal_item(
+        snapshot["goal"] = if matches!(
+            self.state["goal"]["goal"]["status"].as_str(),
+            Some("active" | "paused" | "blocked")
+        ) {
+            tasks::goal_item(
                 "current-goal",
                 &json!({"goal": self.state["goal"]["goal"], "state":self.state["goal"]}),
             )
-            .item;
-        }
+            .item
+        } else {
+            Value::Null
+        };
         if let Some(host) = &self.vibe_host {
             snapshot["vibe"] = host.snapshot();
         } else if self.vibe.available {

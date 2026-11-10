@@ -944,7 +944,7 @@ const AgentActiveTurnPayloadSchema = z.object({
 
 export const ProviderUiStateSchema = z.object({
   // Current native Goal, distinct from its immutable command history.
-  goal: ProviderCommandTimelineItemSchema.optional(),
+  goal: ProviderCommandTimelineItemSchema.nullable().optional(),
   sideQuestions: z
     .object({
       records: z

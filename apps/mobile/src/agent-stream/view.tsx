@@ -382,8 +382,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const resolvedServerId = serverId ?? context.serverId ?? "";
 
     const client = useSessionStore((state) => state.sessions[resolvedServerId]?.client ?? null);
-    const hasCurrentGoalControls = useSessionStore((state) =>
-      Boolean(state.sessions[resolvedServerId]?.agents?.get(agentId)?.providerUi?.goal),
+    const hasCurrentGoalProjection = useSessionStore(
+      (state) =>
+        state.sessions[resolvedServerId]?.agents?.get(agentId)?.providerUi?.goal !== undefined,
     );
     const sessionStreamHead = useSessionStore((state) =>
       state.sessions[resolvedServerId]?.agentStreamHead?.get(agentId),
@@ -930,7 +931,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
                 serverId={serverId}
                 result={item.result}
                 active={
-                  !hasCurrentGoalControls &&
+                  !hasCurrentGoalProjection &&
                   item.id === latestGoalCard &&
                   !readOnly &&
                   Boolean(client) &&
@@ -948,7 +949,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       [
         client,
         latestGoalCard,
-        hasCurrentGoalControls,
+        hasCurrentGoalProjection,
         serverId,
         isTimelineDetached,
         isAuthoritativeHistoryReady,

@@ -150,6 +150,7 @@ test("current goal controls are optional and preserve native state independently
   };
   expect(ProviderUiStateSchema.parse(base)).toEqual(base);
   expect(ProviderUiStateSchema.parse({ ...base, goal }).goal).toEqual(goal);
+  expect(ProviderUiStateSchema.parse({ ...base, goal: null }).goal).toBeNull();
   expect(
     ProviderUiStateSchema.safeParse({
       ...base,
