@@ -11,62 +11,21 @@ permissions:
 jobs:
   changes:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
     outputs:
-      rust: ${{ steps.filter.outputs.rust }}
-      ui: ${{ steps.filter.outputs.ui }}
-      web_client: ${{ steps.filter.outputs.web_client }}
+      rust: ${{ steps.plan.outputs.rust }}
+      ui: ${{ steps.plan.outputs.ui }}
+      web_client: ${{ steps.plan.outputs.web_client }}
     steps:
       - uses: actions/checkout@v5
-        if: github.event_name == 'push'
         with:
-          fetch-depth: 2
-      - uses: dorny/paths-filter@v4
-        id: filter
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
         with:
-          # PRs use their full diff; main pushes use the previous branch tip.
-          base: ${{ github.ref }}
-          filters: |
-            rust:
-              - 'bins/**'
-              - 'crates/**'
-              - 'scripts/fixtures/**'
-              - 'Cargo.toml'
-              - 'Cargo.lock'
-              - '.cargo/**'
-              - 'rust-toolchain*'
-              - 'rustfmt.toml'
-              - '.rustfmt.toml'
-              - 'clippy.toml'
-              - '.clippy.toml'
-              - '.config/nextest.toml'
-              - '.github/workflows/ci.yml'
-            ui:
-              - 'apps/**'
-              - 'packages/**'
-              - 'scripts/**'
-              - 'patches/**'
-              - 'assets/**'
-              - 'package.json'
-              - 'package-lock.json'
-              - '.npmrc'
-              - 'tsconfig.base.json'
-              - '.oxfmtrc.json'
-              - 'crates/provider/tests/fixtures/**'
-              - '.github/workflows/**'
-            web_client:
-              - 'apps/mobile/**'
-              - 'packages/**'
-              - 'patches/**'
-              - 'assets/**'
-              - 'package.json'
-              - 'package-lock.json'
-              - '.npmrc'
-              - 'tsconfig.base.json'
-              - '.github/workflows/ci.yml'
-              - '.github/workflows/release.yml'
+          node-version: 24
+      - id: plan
+        env:
+          VERIFY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/verify.mjs --base "$VERIFY_BASE" --scope closure --github-output
 
   # Formatting and doc links span the whole repository, so they run on every change.
   # Neither needs npm ci: the docs check uses Node built-ins and the formatter is pinned.
@@ -78,10 +37,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - name: Check docs
-        run: npm run check:docs
-      - name: Check formatting
-        run: npx --yes "oxfmt@$(node -p 'require("./package.json").devDependencies.oxfmt')" --check .
+      - name: Check docs and formatting
+        run: node scripts/verify.mjs --only docs,format --scope all
 
   rust:
     needs: changes
@@ -90,6 +47,11 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
       # Match rust-toolchain.toml so new stable lints cannot silently break this job.
       - uses: dtolnay/rust-toolchain@1.98.1
         with:
@@ -116,19 +78,12 @@ jobs:
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
           bwrap --unshare-user --disable-userns --ro-bind / / --proc /proc --dev /dev -- /bin/true
-      # Static checks run first so they fail before the long compile.
-      - name: Check formatting and method specs
-        run: |
-          cargo fmt --all --check
-          # ADR-094: client method names must match the Rust component declarations.
-          python3 scripts/check-paseo-client-methods.py
-          python3 scripts/rust_method_specs_test.py
-          python3 scripts/check-crate-coverage.test.py
-      # --locked keeps a stale Cargo.lock from passing here and failing only at release time.
-      - run: cargo clippy --locked --workspace --all-targets -- -D warnings
-      - run: cargo nextest run --locked --workspace --profile ci
-      # nextest does not execute doctests.
-      - run: cargo test --locked --workspace --doc
+      # Pull requests test the changed crates and their dependents; main tests the workspace.
+      - name: Verify Rust
+        env:
+          VERIFY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          VERIFY_SCOPE: ${{ github.event_name == 'push' && 'all' || 'closure' }}
+        run: node scripts/verify.mjs --only rust --base "$VERIFY_BASE" --scope "$VERIFY_SCOPE"
 
   ui:
     needs: changes
@@ -147,33 +102,11 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm ci
       # Formatting is already checked repository-wide by the lint job.
-      - name: Lint changed UI
+      - name: Verify UI
         env:
-          UI_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          npx oxlint
-          node --test scripts/check-ui.test.mjs
-          npm run check:ui -- "$UI_DIFF_BASE"
-      - name: Verify packages and release tooling
-        run: |
-          npm run verify:local-packages
-          npm run verify:release
-          npm run test:release
-          npm run test:mobile-release
-      # Also builds the SDK and highlight packages that the tests below import.
-      - run: npm run build:desktop-main
-      - run: npm run typecheck --workspace=@ait/desktop --workspace=@ait/mobile
-      - run: npm run test --workspace=@ait/protocol --workspace=@ait/client --workspace=@ait/highlight
-      - run: npm test --workspace=@ait/desktop
-      - run: >-
-          npm run test --workspace=@ait/mobile --
-          src/components/question-form-card-core.test.ts src/runtime/host-runtime.test.ts
-          src/i18n/resources.test.ts src/runtime/daemon-transport maestro/support native-release-version.test.ts
-          src/timeline src/types/stream.test.ts src/runtime/replica-cache
-          src/runtime/directory-sync src/screens/workspace/workspace-route-state.test.ts
-          src/runtime/online-service-host-sync.test.ts src/screens/settings/online-service-host-section.test.tsx
-          src/utils/tool-call-parsers.test.ts src/utils/diff-highlight.test.ts
-          src/voice/audio-engine.native.test.ts src/voice/audio-engine.web.test.ts src/voice/voice-runtime.test.ts
+          VERIFY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          VERIFY_SCOPE: ${{ github.event_name == 'push' && 'all' || 'closure' }}
+        run: node scripts/verify.mjs --only ui --base "$VERIFY_BASE" --scope "$VERIFY_SCOPE"
 
   # ADR-188: the hosted browser client ships as a static image at the site root.
   web-client:

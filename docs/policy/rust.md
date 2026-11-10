@@ -145,7 +145,7 @@ When the user explicitly requests the full suite, run `cargo nextest run --works
 
 ### Faster local builds
 
-- A fresh worktree recompiles all ~340 dependencies and downloads the sherpa-onnx static archive. On macOS, seed its `target/` from an existing checkout of the same toolchain with an APFS clone (`cp -c -R <checkout>/target <worktree>/target`); only workspace crates rebuild and the archive is reused. Clone time grows with the source directory, so run `cargo clean` there occasionally. Other filesystems can use a shared `CARGO_TARGET_DIR` instead, but concurrent builds then serialize on its lock.
+- A fresh worktree recompiles all ~340 dependencies and downloads the sherpa-onnx static archive. Ait workspaces avoid this: the `ait.json` setup step runs `scripts/seed-worktree-target.mjs`, which clones `target/` from the most recently built checkout with the same toolchain on the same volume, so most dependencies and the archive are reused. Outside Ait, run that script from the new worktree. Clone time grows with the source directory, so run `cargo clean` there occasionally. Filesystems without copy-on-write clones are skipped; they can use a shared `CARGO_TARGET_DIR` instead, but concurrent builds then serialize on its lock.
 - The dev profile keeps line tables only. For a debugger session that needs local variables, build with `CARGO_PROFILE_DEV_DEBUG=full`.
 
 Example unit-test layout:
@@ -265,7 +265,7 @@ If coverage was not measured, state **not measured**, the reason, and the next s
 
 ## Before Committing
 
-Apply this checklist when preparing a commit, not during routine local edits or handoffs. For Rust changes in `bins/` or `crates/`, run affected tests and applicable format, lint, and build checks. Full Rust workspace tests and workspace-wide coverage require an explicit user request; preparing a commit does not make them mandatory. Documentation-only changes do not require Rust tests or coverage unless the user explicitly requests them.
+Apply this checklist when preparing a commit, not during routine local edits or handoffs. For Rust changes in `bins/` or `crates/`, run affected tests and applicable format, lint, and build checks. `npm run verify` maps the changed files to these checks and is the same script CI runs. Full Rust workspace tests and workspace-wide coverage require an explicit user request; preparing a commit does not make them mandatory. Documentation-only changes do not require Rust tests or coverage unless the user explicitly requests them.
 
 - [ ] Affected Rust tests pass; run the full workspace suite only if explicitly requested by the user
 - [ ] No compiler warnings (`cargo build --workspace`)
