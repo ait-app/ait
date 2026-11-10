@@ -1880,6 +1880,7 @@ export const es: TranslationResources = {
   },
   hostPicker: en.hostPicker,
   schedules: {
+    templates: en.schedules.templates,
     workspaceUnavailable:
       "El espacio de trabajo propietario no está disponible. Restáuralo antes de editar esta programación.",
     browse: "Programaciones del espacio de trabajo",

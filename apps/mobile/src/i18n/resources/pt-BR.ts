@@ -1865,6 +1865,7 @@ export const ptBR: TranslationResources = {
   },
   hostPicker: en.hostPicker,
   schedules: {
+    templates: en.schedules.templates,
     workspaceUnavailable:
       "O workspace proprietário não está disponível. Restaure-o antes de editar este agendamento.",
     browse: "Agendamentos do workspace",

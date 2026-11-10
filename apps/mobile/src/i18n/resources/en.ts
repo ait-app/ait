@@ -2189,6 +2189,81 @@ export const en = {
       friday: "Fridays",
       saturday: "Saturdays",
     },
+    templates: {
+      heading: "Plan the next task for your workspace",
+      description:
+        "Choose a starting point, adjust the task and timing, and let Ait run it on schedule.",
+      blank: "Start from scratch",
+      browse: "Choose another template",
+      back: "Back to templates",
+      configure: "Edit task",
+      applied: "Suggested settings from {{name}}",
+      timezone: "Scheduled times use {{timezone}}",
+      customize: "Choose a briefing topic",
+      customizeHint: "Name a product, technology or research area you want to keep up with.",
+      content: "Content & timing",
+      execution: "Execution & limits",
+      categories: {
+        development: "Code & collaboration",
+        research: "Topic updates",
+        writing: "Project upkeep",
+      },
+      capabilities: {
+        code: "Code edits",
+        pr: "PR access",
+        web: "Web lookup",
+        params: "Needs input",
+      },
+      apply: "Fill in task",
+      items: {
+        "nightly-test-heal": {
+          cadence: "Daily · 02:00",
+          name: "Test run & repair",
+          description:
+            "Check the workspace’s tests, investigate failures and verify a focused repair.",
+          prompt:
+            "Check the test health of this workspace and repair one clearly identified defect when the evidence supports it.\n\nBefore running anything, read the repository instructions and test scripts. Follow the project's required test scope, including any limits on full-suite runs. Check the working tree; if it contains uncommitted changes, record that fact and end this run.\n\nWork through these steps:\n1. Run the permitted checks. Record each command, its exit status and the failure output needed to locate a problem.\n2. If you can establish a code defect, make a focused repair on a separate branch. Keep existing assertions meaningful and leave unrelated code alone.\n3. Re-run the affected checks and inspect the final diff. Distinguish environment or external-service failures from defects in the code.\n\nReturn a short run record: scope, findings, changed files, verification results and unresolved items. Follow repository rules and existing authorization for commits, pushes and pull requests.",
+        },
+        "pr-gatekeeper": {
+          cadence: "Weekdays · 10:00",
+          name: "PR risk review",
+          description:
+            "Review active pull requests for defects that could affect a merge, with evidence for each finding.",
+          prompt:
+            "Prepare a merge-risk report for this repository.\n\nReview open PRs updated in the past 24 hours. On Monday, include updates since Friday. Read each relevant diff and enough surrounding code to understand the affected behavior. If PR data is unavailable, identify the missing access or material.\n\nLook for observable failures in behavior, security, data handling and compatibility. For each finding, provide the PR number, file and location, a reproducible failure scenario, its impact and a suggested verification step. Rank findings by impact. Keep stylistic preferences out of the report.\n\nFinish with the reviewed PR list and any coverage gaps. Say when no supported findings were identified. Keep this run read-only: do not edit code or post reviews or comments.",
+        },
+        "domain-radar": {
+          cadence: "Weekdays · 09:00",
+          name: "Topic briefing",
+          description:
+            "Read the latest sources on your topic and pick up to five developments worth your attention.",
+          prompt:
+            "Prepare a short briefing on “{{topic}}” that a reader can finish in a few minutes.\n\nSearch the web for material published or substantively updated in the past 24 hours; on Monday, also check the weekend. Favor traceable primary material such as project announcements, release notes and original papers. Combine duplicate reports of the same event.\n\nSelect up to five developments directly relevant to the topic. For each, explain what happened, give the publication date, describe its practical effect on users or developers, and link to the original source. Separate established facts from your interpretation, and call out conflicting evidence.\n\nClose with one or two questions or developments to follow next. If there is little useful news, say so and keep the briefing short instead of padding it with older or speculative material.",
+          params: {
+            topic: {
+              label: "Briefing topic",
+              placeholder: "e.g. Postgres releases, AI coding tools, battery research",
+            },
+          },
+        },
+        "weekly-work-draft": {
+          cadence: "Fridays · 16:00",
+          name: "Weekly workspace recap",
+          description:
+            "Turn the past week’s commits, PRs and notes into a reviewable account of project progress.",
+          prompt:
+            "Create an editable recap of the past seven days of work in this workspace.\n\nCollect evidence from commits, relevant pull requests, changed documentation and available project notes. Group related changes by outcome so that a series of small commits does not become a long activity log. Do not infer ownership, completion or plans from branch names alone.\n\nOrganize the draft into:\n- Delivered: completed outcomes and why they matter.\n- Still open: unfinished work, blockers and known limitations.\n- Suggested next steps: actions supported by the current evidence, clearly marked as suggestions.\n- Needs confirmation: missing context or decisions for the user to fill in.\n\nLink each substantive point to a commit, PR or file. If a source cannot be accessed, state the gap. Return the draft only; leave workspace files and repository state untouched.",
+        },
+        "docs-freshness": {
+          cadence: "Monthly on the 1st · 10:00",
+          name: "Documentation check",
+          description:
+            "Compare documented instructions with the code and list concrete corrections a reader would need.",
+          prompt:
+            "Review the workspace documentation for instructions that would fail or mislead a reader today.\n\nStart from the README and documentation index, then trace the linked setup, usage and maintenance guides. Compare referenced commands, paths, configuration fields and API examples with the current code. Use the repository's documented link-check command when available and permitted by its guidance.\n\nPrioritize verifiable problems: missing targets, obsolete commands, conflicting instructions and examples that no longer match the implementation. Treat dated historical records as history unless they are still presented as current instructions.\n\nFor each issue, give the document path and heading or line, the supporting code or check result, the reader's likely failure, and a concrete correction. Order the list by impact and finish with anything you could not verify. Produce a review report without editing documents.",
+        },
+      },
+    },
     cronErrors: {
       required: "Enter a cron expression",
       fields: "Cron expressions must have 5 fields",

@@ -124,7 +124,7 @@ export function WorkspaceScheduleTab(props: WorkspaceScheduleTabProps) {
   }
   return (
     <View style={styles.container}>
-      {view === "list" ? null : (
+      {view === "list" || view === "create" ? null : (
         <View style={styles.toolbar}>
           <Button
             size="sm"
