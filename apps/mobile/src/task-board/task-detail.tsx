@@ -132,93 +132,100 @@ export function TaskDetail({
           </Pressable>
         </View>
       ) : null}
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {parent ? (
-          <Button variant="ghost" size="sm" leftIcon={GitFork} onPress={() => onSelect(parent.key)}>
-            {parent.agent.title || t("agentList.fallbackTitle")}
-          </Button>
-        ) : null}
-        <View style={styles.section}>
-          <Text style={styles.meta}>
-            {task.projectName} / {task.workspaceName}
-          </Text>
-          <Text style={styles.title}>{agent.title || t("agentList.fallbackTitle")}</Text>
-          <TaskStatus bucket={task.ownBucket} />
-          {agent.observation ? (
-            <Text style={styles.meta}>
-              {t("subagents.observing")}
-              {agent.observation.status === "unknown"
-                ? ` · ${t("subagents.observationUnknown")}`
-                : ""}
-              {agent.observation.health !== "current"
-                ? ` · ${t("subagents.observationUnavailable")}`
-                : ""}
-            </Text>
+      <ScrollView keyboardShouldPersistTaps="handled">
+        <View style={styles.content}>
+          {parent ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={GitFork}
+              onPress={() => onSelect(parent.key)}
+            >
+              {parent.agent.title || t("agentList.fallbackTitle")}
+            </Button>
           ) : null}
-          <TaskProvider task={task} />
-          <Text style={styles.meta}>{task.hostLabel}</Text>
-          {!online ? <Text style={styles.warning}>{t("taskBoard.offlineHint")}</Text> : null}
-        </View>
-        {agent.lastError ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.error}>{agent.lastError}</Text>
-          </View>
-        ) : null}
-        {(allowed.approve ? agent.pendingPermissions : []).map((request) => (
-          <View key={request.id} style={styles.approval}>
-            <Text style={styles.sectionTitle}>{t("taskBoard.needsYourInput")}</Text>
-            <PermissionRequestCard
-              panel
-              permission={{ key: request.id, agentId: agent.id, request }}
-              client={online ? client : null}
-            />
-          </View>
-        ))}
-        {children.length ? (
           <View style={styles.section}>
-            <View style={styles.row}>
-              <GitFork size={16} color={theme.colors.foregroundMuted} />
-              <Text style={styles.sectionTitle}>{t("taskBoard.childTasks")}</Text>
-              <Text style={styles.meta}>{children.length}</Text>
-            </View>
-            {children.map((child) => (
-              <Pressable
-                key={child.key}
-                style={[styles.child, styles.childRow]}
-                onPress={() => onSelect(child.key)}
-                accessibilityRole="button"
-                testID={`task-child-${child.agent.id}`}
-              >
-                <Text style={[styles.childTitle, styles.managedChildTitle]} numberOfLines={2}>
-                  {child.agent.title || t("agentList.fallbackTitle")}
-                </Text>
-                <TaskStatus bucket={child.bucket} />
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-        {online ? <ProviderSubtasks task={task} /> : null}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t("taskBoard.lastReply")}</Text>
-          {recent.isLoading ? (
-            <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
-          ) : recent.isError ? (
-            <View style={styles.section}>
-              <Text style={styles.meta}>{t("taskBoard.previewFailed")}</Text>
-              <Button
-                variant="outline"
-                size="sm"
-                onPress={() => void recent.refetch()}
-                disabled={!online}
-              >
-                {t("taskBoard.retry")}
-              </Button>
-            </View>
-          ) : (
-            <Text selectable style={styles.reply} numberOfLines={16}>
-              {recent.data || t("taskBoard.noReply")}
+            <Text style={styles.meta}>
+              {task.projectName} / {task.workspaceName}
             </Text>
-          )}
+            <Text style={styles.title}>{agent.title || t("agentList.fallbackTitle")}</Text>
+            <TaskStatus bucket={task.ownBucket} />
+            {agent.observation ? (
+              <Text style={styles.meta}>
+                {t("subagents.observing")}
+                {agent.observation.status === "unknown"
+                  ? ` · ${t("subagents.observationUnknown")}`
+                  : ""}
+                {agent.observation.health !== "current"
+                  ? ` · ${t("subagents.observationUnavailable")}`
+                  : ""}
+              </Text>
+            ) : null}
+            <TaskProvider task={task} />
+            <Text style={styles.meta}>{task.hostLabel}</Text>
+            {!online ? <Text style={styles.warning}>{t("taskBoard.offlineHint")}</Text> : null}
+          </View>
+          {agent.lastError ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.error}>{agent.lastError}</Text>
+            </View>
+          ) : null}
+          {(allowed.approve ? agent.pendingPermissions : []).map((request) => (
+            <View key={request.id} style={styles.approval}>
+              <Text style={styles.sectionTitle}>{t("taskBoard.needsYourInput")}</Text>
+              <PermissionRequestCard
+                panel
+                permission={{ key: request.id, agentId: agent.id, request }}
+                client={online ? client : null}
+              />
+            </View>
+          ))}
+          {children.length ? (
+            <View style={styles.section}>
+              <View style={styles.row}>
+                <GitFork size={16} color={theme.colors.foregroundMuted} />
+                <Text style={styles.sectionTitle}>{t("taskBoard.childTasks")}</Text>
+                <Text style={styles.meta}>{children.length}</Text>
+              </View>
+              {children.map((child) => (
+                <Pressable
+                  key={child.key}
+                  style={[styles.child, styles.childRow]}
+                  onPress={() => onSelect(child.key)}
+                  accessibilityRole="button"
+                  testID={`task-child-${child.agent.id}`}
+                >
+                  <Text style={[styles.childTitle, styles.managedChildTitle]} numberOfLines={2}>
+                    {child.agent.title || t("agentList.fallbackTitle")}
+                  </Text>
+                  <TaskStatus bucket={child.bucket} />
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+          {online ? <ProviderSubtasks task={task} /> : null}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t("taskBoard.lastReply")}</Text>
+            {recent.isLoading ? (
+              <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
+            ) : recent.isError ? (
+              <View style={styles.section}>
+                <Text style={styles.meta}>{t("taskBoard.previewFailed")}</Text>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onPress={() => void recent.refetch()}
+                  disabled={!online}
+                >
+                  {t("taskBoard.retry")}
+                </Button>
+              </View>
+            ) : (
+              <Text selectable style={styles.reply} numberOfLines={16}>
+                {recent.data || t("taskBoard.noReply")}
+              </Text>
+            )}
+          </View>
         </View>
       </ScrollView>
       <View style={styles.footer}>

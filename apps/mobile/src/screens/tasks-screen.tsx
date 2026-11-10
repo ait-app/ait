@@ -26,6 +26,9 @@ import {
 import { TaskCard } from "@/task-board/task-card";
 import { TaskDetail } from "@/task-board/task-detail";
 
+const MIN_LANE_WIDTH = 240;
+const DETAIL_WIDTH = 348;
+
 export function TasksScreen() {
   const focused = useIsFocused();
   return focused ? <TasksScreenContent /> : <View style={styles.container} />;
@@ -45,6 +48,7 @@ export function TasksScreenContent() {
     refresh,
   } = useTaskBoard();
   const [width, setWidth] = useState(0);
+  const [boardWidth, setBoardWidth] = useState(0);
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [hostId, setHostId] = useState(ALL_HOSTS_OPTION_ID);
@@ -54,7 +58,10 @@ export function TasksScreenContent() {
   const [mobileLane, setMobileLane] = useState<TaskLane>("needs_action");
   const selected = selectedKey ? byKey.get(selectedKey) : undefined;
   const compact = width > 0 && width < 700;
-  const inlineDetail = width >= 1320;
+  const minimumBoardWidth =
+    TASK_LANES.length * MIN_LANE_WIDTH + (TASK_LANES.length + 1) * theme.spacing[4];
+  const inlineDetail = width >= minimumBoardWidth + DETAIL_WIDTH;
+  const lanesWidth = compact ? boardWidth : Math.max(boardWidth, minimumBoardWidth);
   const closeDetail = useCallback(() => setSelectedKey(null), []);
   const selectHost = useCallback((id: string) => {
     setHostId(id);
@@ -203,8 +210,15 @@ export function TasksScreenContent() {
             </View>
           </View>
           {offlineHosts.length ? (
-            <View style={[styles.notice, compact && styles.compactPadding]}>
-              <Text style={styles.noticeText}>{t("taskBoard.loadFailed")}</Text>
+            <View
+              style={[styles.notice, compact && styles.compactPadding]}
+              testID="task-board-notice"
+            >
+              <Text style={styles.noticeText}>
+                {t("taskBoard.hostsUnavailable", {
+                  hosts: offlineHosts.map((host) => host.label).join(", "),
+                })}
+              </Text>
               <Button variant="ghost" size="sm" leftIcon={RefreshCw} onPress={() => void refresh()}>
                 {t("taskBoard.retry")}
               </Button>
@@ -241,7 +255,10 @@ export function TasksScreenContent() {
             </View>
           ) : (
             <View style={styles.workspace}>
-              <View style={styles.board}>
+              <View
+                style={styles.board}
+                onLayout={(event) => setBoardWidth(event.nativeEvent.layout.width)}
+              >
                 {compact ? (
                   <ScrollView
                     horizontal
@@ -268,7 +285,11 @@ export function TasksScreenContent() {
                 <ScrollView
                   horizontal
                   style={styles.boardScroll}
-                  contentContainerStyle={[styles.lanes, compact && styles.compactLanes]}
+                  contentContainerStyle={[
+                    styles.lanes,
+                    { width: lanesWidth },
+                    compact && styles.compactLanes,
+                  ]}
                   showsHorizontalScrollIndicator={!compact}
                   scrollEnabled={!compact}
                 >
@@ -349,8 +370,8 @@ export function TasksScreenContent() {
 }
 
 const styles = StyleSheet.create((theme) => ({
-  container: { flex: 1, minHeight: 0, backgroundColor: theme.colors.surface0 },
-  body: { flex: 1, flexDirection: "row", minHeight: 0 },
+  container: { flex: 1, minWidth: 0, minHeight: 0, backgroundColor: theme.colors.surface0 },
+  body: { flex: 1, flexDirection: "row", minWidth: 0, minHeight: 0 },
   main: { flex: 1, minWidth: 0, minHeight: 0 },
   intro: {
     paddingHorizontal: theme.spacing[6],
@@ -411,6 +432,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   workspace: {
     flex: 1,
+    minWidth: 0,
     minHeight: 0,
     flexDirection: "row",
     borderTopWidth: 1,
@@ -418,10 +440,10 @@ const styles = StyleSheet.create((theme) => ({
   },
   board: { flex: 1, minWidth: 0, minHeight: 0 },
   boardScroll: { flex: 1 },
-  lanes: { flexGrow: 1, flexDirection: "row", padding: theme.spacing[4], gap: theme.spacing[4] },
+  lanes: { flexDirection: "row", padding: theme.spacing[4], gap: theme.spacing[4] },
   lane: {
     flex: 1,
-    minWidth: 240,
+    minWidth: 0,
     backgroundColor: theme.colors.surface1,
     borderRadius: theme.borderRadius.lg,
   },
@@ -455,7 +477,7 @@ const styles = StyleSheet.create((theme) => ({
     borderStyle: "dashed",
     borderRadius: theme.borderRadius.lg,
   },
-  detail: { width: 348, borderLeftWidth: 1, borderLeftColor: theme.colors.border },
+  detail: { width: DETAIL_WIDTH, borderLeftWidth: 1, borderLeftColor: theme.colors.border },
   tabs: { flexGrow: 0, flexShrink: 0, maxHeight: 52 },
   tabsContent: { paddingHorizontal: theme.spacing[4], alignItems: "center", gap: theme.spacing[2] },
   tab: {
