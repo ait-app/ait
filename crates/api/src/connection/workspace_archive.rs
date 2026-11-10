@@ -75,6 +75,7 @@ async fn metadata(state: &Shared, context: &mut Context<'_>) -> Result<Value, Er
     }
     retire(state, workspace_ids).await?;
     for plan in plans {
+        let plan = teardown(state, plan).await?;
         finish(state, plan)
             .await?
             .map_err(|_| ErrorCode::RegistryIo)?;
@@ -124,6 +125,7 @@ async fn worktree(state: &Shared, params: Value) -> Result<Value, ErrorCode> {
         Err(error) => return Ok(failure(&error)),
     };
     let agents = retire(state, plan.workspace_ids.clone()).await?;
+    let plan = teardown(state, plan).await?;
     match finish(state, plan).await? {
         Ok(()) => Ok(json!({"success":true,"removedAgents":agents,"error":null})),
         Err(error) => Ok(failure(&error)),
@@ -156,6 +158,61 @@ async fn finish(
             move |worktrees| Ok(worktrees.finish_archive(plan).map(|_| ())),
         )
         .await
+}
+
+/// Run `worktree.teardown` of a checkout the plan will remove, after its processes are retired.
+///
+/// Teardown is best effort: a configuration error or failing command is logged and the
+/// archive continues, so a broken teardown can never pin a worktree on disk. Commands run on
+/// a blocking thread without holding the worktree or automation service.
+/// # Errors
+/// Returns runtime admission failures while selecting or preparing the teardown.
+async fn teardown(state: &Shared, plan: PendingArchive) -> Result<PendingArchive, ErrorCode> {
+    let (target, plan) = state
+        .runtime
+        .run_queued(
+            state.metadata.worktrees.clone(),
+            ErrorCode::RegistryIo,
+            move |worktrees| Ok((worktrees.teardown_workspace(&plan), plan)),
+        )
+        .await?;
+    let workspace = match target {
+        Ok(Some(workspace)) => workspace,
+        Ok(None) => return Ok(plan),
+        Err(error) => {
+            tracing::warn!(%error, "could not select the Workspace for worktree teardown");
+            return Ok(plan);
+        }
+    };
+    if state.metadata.workspace_automation.is_none() {
+        return Ok(plan);
+    }
+    let workspace_id = workspace.workspace_id.clone();
+    let job = state
+        .runtime
+        .run_queued(
+            state.metadata.workspace_automation.clone(),
+            ErrorCode::RegistryIo,
+            move |automation| Ok(automation.prepare_teardown(&workspace)),
+        )
+        .await?;
+    let result = match job {
+        Ok(Some(job)) => {
+            tokio::task::spawn_blocking(move || job.run().map_err(|error| error.to_string()))
+                .await
+                .unwrap_or_else(|_| Err("teardown thread panicked".to_owned()))
+        }
+        Ok(None) => Ok(()),
+        Err(error) => Err(error.to_string()),
+    };
+    if let Err(error) = result {
+        tracing::warn!(
+            workspace_id = %workspace_id,
+            %error,
+            "Worktree teardown failed; removing the checkout anyway"
+        );
+    }
+    Ok(plan)
 }
 
 async fn retire(state: &Shared, workspace_ids: Vec<String>) -> Result<Vec<String>, ErrorCode> {

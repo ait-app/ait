@@ -17,6 +17,7 @@ async fn binary_runs_canonical_workspace_setup_and_script_methods() {
           "worktree":{"setup":["printf setup > setup.txt"]},
           "scripts":{
             "once":{"command":"printf script > script.txt"},
+            "check":{"command":"printf '%s,' \"$@\"; exit 2","acceptsArgs":true},
             "service":{"type":"service","command":"while :; do sleep 1; done"}
           }
         }"#,
@@ -79,6 +80,7 @@ async fn binary_runs_canonical_workspace_setup_and_script_methods() {
     )
     .await;
     assert_script_lifecycle(&mut client, &workspace).await;
+    assert_script_run_evidence(&mut client).await;
     assert_legacy_method_rejected(&mut client).await;
 
     terminate(&mut process).await;
@@ -108,8 +110,10 @@ async fn assert_blocked_and_approve(client: &mut Socket, workspace: &Path) {
         json!({"workspaceId":"wks_automation"}),
     )
     .await;
-    assert_eq!(scripts["result"]["scripts"][0]["scriptName"], "once");
-    assert_eq!(scripts["result"]["scripts"][1]["scriptName"], "service");
+    assert_eq!(scripts["result"]["scripts"][0]["scriptName"], "check");
+    assert_eq!(scripts["result"]["scripts"][0]["acceptsArgs"], true);
+    assert_eq!(scripts["result"]["scripts"][1]["scriptName"], "once");
+    assert_eq!(scripts["result"]["scripts"][2]["scriptName"], "service");
     let denied = request(
         client,
         "workspace.script.start.request",
@@ -178,6 +182,55 @@ async fn assert_script_lifecycle(client: &mut Socket, workspace: &Path) {
     )
     .await;
     assert_eq!(stopped["result"]["script"]["lifecycle"], "stopped");
+}
+
+async fn assert_script_run_evidence(client: &mut Socket) {
+    let refused = request(
+        client,
+        "workspace.script.start.request",
+        json!({"workspaceId":"wks_automation","scriptName":"once","args":["x"]}),
+    )
+    .await;
+    assert!(
+        refused["result"]["error"]
+            .as_str()
+            .unwrap()
+            .contains("does not accept arguments")
+    );
+    let started = request(
+        client,
+        "workspace.script.start.request",
+        json!({"workspaceId":"wks_automation","scriptName":"check","args":["--scope","all; exit 0"]}),
+    )
+    .await;
+    let run_id = started["result"]["script"]["runId"].as_str().unwrap();
+    let waited = request(
+        client,
+        "workspace.script.run.wait.request",
+        json!({"workspaceId":"wks_automation","runId":run_id,"timeoutMs":10_000}),
+    )
+    .await;
+    let run = &waited["result"]["run"];
+    assert_eq!(waited["result"]["timedOut"], false, "{waited}");
+    assert_eq!(run["outcome"], "failed");
+    assert_eq!(run["exitCode"], 2);
+    assert_eq!(run["output"], "--scope,all; exit 0,");
+    assert_eq!(run["args"], json!(["--scope", "all; exit 0"]));
+    assert!(run["durationMs"].is_u64());
+    let latest = request(
+        client,
+        "workspace.script.run.get.request",
+        json!({"workspaceId":"wks_automation","scriptName":"check"}),
+    )
+    .await;
+    assert_eq!(latest["result"]["run"]["runId"], run_id);
+    let invalid = request(
+        client,
+        "workspace.script.run.wait.request",
+        json!({"workspaceId":"wks_automation","runId":run_id,"timeoutMs":0}),
+    )
+    .await;
+    assert_eq!(invalid["code"], "invalid_message", "{invalid}");
 }
 
 async fn assert_legacy_method_rejected(client: &mut Socket) {

@@ -334,6 +334,18 @@ export const METHODS: Readonly<Record<string, MethodSpec>> = {
     channel: 1,
     response: "workspace.script.stop.response",
   },
+  "workspace.script.run.get.request": {
+    method: "workspace.script.run.get.request",
+    kind: "request",
+    channel: 1,
+    response: "workspace.script.run.get.response",
+  },
+  "workspace.script.run.wait.request": {
+    method: "workspace.script.run.wait.request",
+    kind: "request",
+    channel: 1,
+    response: "workspace.script.run.wait.response",
+  },
   "agent.list.request": {
     method: "agent.list.request",
     kind: "request",

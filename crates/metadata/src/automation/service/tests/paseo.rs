@@ -50,7 +50,7 @@ fn archived_workspace_cannot_be_approved_or_start_created_setup() {
 fn unknown_workspace_script_operations_do_not_reach_the_runtime() {
     let (service, _, runtime) = service();
     assert!(service.list_scripts("missing").is_err());
-    assert!(service.start_script("missing", "web").is_err());
+    assert!(service.start_script("missing", "web", &[]).is_err());
     assert!(service.stop_script("missing", "web").is_err());
     assert!(runtime.scripts.lock().unwrap().is_empty());
 }
@@ -60,7 +60,7 @@ fn untrusted_workspace_can_inspect_and_stop_but_cannot_start_scripts() {
     let (service, _, runtime) = service();
     assert_eq!(service.list_scripts("blocked").unwrap().len(), 1);
     assert!(!service.stop_script("blocked", "web").unwrap().running);
-    assert!(service.start_script("blocked", "web").is_err());
+    assert!(service.start_script("blocked", "web", &[]).is_err());
     assert!(runtime.scripts.lock().unwrap().is_empty());
 }
 

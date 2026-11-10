@@ -14,7 +14,7 @@ fn with_modes(modes: BTreeMap<String, Vec<String>>) -> BotPermissions {
 fn every_tool_has_one_access_class_and_never_tools_are_host_only() {
     let names: BTreeSet<_> = TOOLS.iter().map(|(name, _)| *name).collect();
     assert_eq!(names.len(), TOOLS.len());
-    assert_eq!(TOOLS.len(), 43);
+    assert_eq!(TOOLS.len(), 45);
     for tool in [
         "respond_to_permission",
         "archive_workspace",

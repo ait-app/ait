@@ -202,3 +202,45 @@ fn a_new_reference_during_worktree_wide_archive_prevents_checkout_removal() {
     service.finish_archive(pending).unwrap();
     assert_eq!(managed.state.lock().unwrap().removed.len(), 1);
 }
+
+#[test]
+fn teardown_targets_the_creating_workspace_only_when_the_checkout_will_be_removed() {
+    let workspaces = Workspaces::default();
+    let mut attached = workspace(
+        "attached",
+        "/managed/hash/topic",
+        "/managed/hash/topic",
+        "prj",
+    );
+    attached.kind = PersistedWorkspaceKind::Directory;
+    attached.created_at = "2025-01-01T00:00:00.000Z".to_owned();
+    workspaces.records.lock().unwrap().extend([
+        attached,
+        workspace(
+            "creator",
+            "/managed/hash/topic",
+            "/managed/hash/topic",
+            "prj",
+        ),
+    ]);
+    let managed = Managed::default();
+    let service = service(&Projects::default(), &workspaces, &managed);
+    let one = ArchiveWorktree {
+        workspace_id: Some("attached".into()),
+        worktree_path: None,
+        ..archive_input(ArchiveScope::Workspace)
+    };
+    let pending = service.begin_archive(&one, "archived").unwrap();
+    assert_eq!(service.teardown_workspace(&pending).unwrap(), None);
+    service.finish_archive(pending).unwrap();
+    assert!(managed.state.lock().unwrap().removed.is_empty());
+
+    let pending = service
+        .begin_archive(&archive_input(ArchiveScope::Worktree), "archived")
+        .unwrap();
+    let target = service.teardown_workspace(&pending).unwrap().unwrap();
+    assert_eq!(target.workspace_id, "creator");
+    assert!(target.is_archived());
+    service.finish_archive(pending).unwrap();
+    assert_eq!(managed.state.lock().unwrap().removed.len(), 1);
+}

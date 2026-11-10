@@ -53,6 +53,107 @@ pub struct ScriptSnapshot {
     pub(crate) exit_code: Option<i32>,
     /// Logical child identity.
     pub(crate) terminal_id: Option<String>,
+    /// Most recent recorded run of this script.
+    pub(crate) run_id: Option<String>,
+    /// Whether `ait.json` lets callers pass arguments to this script.
+    pub(crate) accepts_args: bool,
+}
+
+/// Lifecycle and result of one script run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScriptRunOutcome {
+    /// The child process has not exited.
+    Running,
+    /// The child exited with status zero.
+    Succeeded,
+    /// The child exited unsuccessfully or was killed outside Ait.
+    Failed,
+    /// Ait stopped the child on request or during Workspace retirement.
+    Stopped,
+}
+
+/// One recorded script run with its evidence and bounded combined output.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScriptRunSnapshot {
+    /// Daemon-assigned run identity.
+    pub(crate) run_id: String,
+    /// Exact `ait.json` key.
+    pub(crate) script_name: String,
+    /// Caller arguments passed as positional parameters.
+    pub(crate) args: Vec<String>,
+    /// `HEAD` commit of the Workspace checkout at start, when it is a Git checkout.
+    pub(crate) commit: Option<String>,
+    /// Whether the checkout had uncommitted or untracked changes at start, when known.
+    pub(crate) dirty: Option<bool>,
+    /// RFC 3339 start time.
+    pub(crate) started_at: String,
+    /// RFC 3339 completion time.
+    pub(crate) finished_at: Option<String>,
+    /// Elapsed milliseconds after completion.
+    pub(crate) duration_ms: Option<u64>,
+    /// Current lifecycle or final result.
+    pub(crate) outcome: ScriptRunOutcome,
+    /// Exit code, or none while running or after a signal.
+    pub(crate) exit_code: Option<i32>,
+    /// Bounded stdout and stderr, interleaved in write order.
+    pub(crate) output: String,
+    /// Total bytes the run has written, including bytes dropped from `output`.
+    pub(crate) output_bytes: u64,
+    /// Whether `output` omits part of the written bytes.
+    pub(crate) truncated: bool,
+}
+
+/// Selects one recorded script run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScriptRunTarget<'a> {
+    /// The run with this identity.
+    Run(&'a str),
+    /// The most recent run of the named script.
+    LatestOf(&'a str),
+}
+
+/// Resolves once a script run has finished or its record has been discarded.
+#[derive(Debug, Clone)]
+pub struct ScriptRunCompletion(tokio::sync::watch::Receiver<bool>);
+
+impl ScriptRunCompletion {
+    /// Observe a run whose sender publishes `true` when the run finishes.
+    pub(crate) const fn new(receiver: tokio::sync::watch::Receiver<bool>) -> Self {
+        Self(receiver)
+    }
+
+    /// Wait until the run finishes; a dropped record also ends the wait.
+    pub(crate) async fn finished(mut self) {
+        let _ = self.0.wait_for(|finished| *finished).await;
+    }
+}
+
+/// Teardown commands prepared for one checkout, run without holding service locks.
+pub struct TeardownJob(Box<dyn FnOnce() -> Result<(), WorkspaceAutomationError> + Send>);
+
+impl TeardownJob {
+    /// Wrap the blocking command sequence of one teardown.
+    pub(crate) fn new(
+        run: impl FnOnce() -> Result<(), WorkspaceAutomationError> + Send + 'static,
+    ) -> Self {
+        Self(Box::new(run))
+    }
+
+    /// Run every teardown command in order, stopping at the first failure.
+    ///
+    /// # Errors
+    /// Returns the first failed, timed-out, oversized or unstartable command.
+    pub fn run(self) -> Result<(), WorkspaceAutomationError> {
+        (self.0)()
+    }
+}
+
+impl Debug for TeardownJob {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("TeardownJob")
+            .finish_non_exhaustive()
+    }
 }
 
 /// One setup command snapshot.
@@ -136,6 +237,12 @@ pub enum WorkspaceAutomationError {
     /// No running process can be stopped.
     #[error("Script '{0}' is not running")]
     NotRunning(String),
+    /// No retained run matches the request.
+    #[error("Script run '{0}' was not found")]
+    UnknownRun(String),
+    /// Caller arguments are refused for this script or exceed the bounds.
+    #[error("{0}")]
+    InvalidArguments(String),
     /// Process or filesystem work failed.
     #[error("{0}")]
     Io(String),
@@ -159,15 +266,48 @@ pub trait WorkspaceAutomationRuntime: Debug + Send + Sync {
         workspace: &WorkspacePlacement,
     ) -> Result<Vec<ScriptSnapshot>, WorkspaceAutomationError>;
 
-    /// Start one configured script.
+    /// Start one configured script, recording a new run.
+    ///
+    /// `args` reach the shell as positional parameters and are never parsed as shell code.
     ///
     /// # Errors
-    /// Returns configuration, duplicate-run, or spawn failures.
+    /// Returns configuration, refused-argument, duplicate-run, or spawn failures.
     fn start_script(
         &self,
         workspace: &WorkspacePlacement,
         script_name: &str,
+        args: &[String],
     ) -> Result<ScriptSnapshot, WorkspaceAutomationError>;
+
+    /// Read one retained run with refreshed process state.
+    ///
+    /// # Errors
+    /// Returns `UnknownRun` when no retained run matches, or process inspection failures.
+    fn script_run(
+        &self,
+        workspace_id: &str,
+        target: ScriptRunTarget<'_>,
+    ) -> Result<ScriptRunSnapshot, WorkspaceAutomationError>;
+
+    /// Observe the completion of one retained run.
+    ///
+    /// # Errors
+    /// Returns `UnknownRun` when no retained run matches.
+    fn script_run_completion(
+        &self,
+        workspace_id: &str,
+        run_id: &str,
+    ) -> Result<ScriptRunCompletion, WorkspaceAutomationError>;
+
+    /// Prepare the configured teardown commands for a checkout about to be removed.
+    /// Returns none when no teardown is configured.
+    ///
+    /// # Errors
+    /// Returns configuration or port allocation failures.
+    fn prepare_teardown(
+        &self,
+        workspace: &WorkspacePlacement,
+    ) -> Result<Option<TeardownJob>, WorkspaceAutomationError>;
 
     /// Stop one running script.
     ///

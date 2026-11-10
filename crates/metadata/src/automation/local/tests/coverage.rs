@@ -29,6 +29,7 @@ fn running_setup_output_overflow_terminates_the_owned_process_group() {
         &workspace,
         "head -c 8388609 /dev/zero; sleep 30",
         3000,
+        Phase::Setup,
     );
 
     assert!(matches!(result, Err(WorkspaceAutomationError::Io(message))
@@ -77,7 +78,7 @@ fn missing_script_directory_fails_without_retaining_a_process() {
     workspace.cwd = root.path().join("absent").to_string_lossy().into_owned();
 
     assert!(matches!(
-        runtime.start_script(&workspace, "fixture"),
+        runtime.start_script(&workspace, "fixture", &[]),
         Err(WorkspaceAutomationError::Io(_))
     ));
     assert!(lock(&runtime.inner.state).scripts.is_empty());
