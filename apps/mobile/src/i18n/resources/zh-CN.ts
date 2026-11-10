@@ -218,7 +218,7 @@ export const zhCN: TranslationResources = {
     webhookSecretOnce: "密钥只显示这一次，请现在复制保存。丢失后可以重新生成。",
     webhookExample: "示例",
     webhookExampleHint:
-      "调用会返回一个状态地址，用同一个密钥请求它，直到回复就绪。thread 相同的调用会接着同一个对话。",
+      "调用会返回一个状态地址：用同一个密钥请求它（加 ?wait=30 可等待回复），或在调用时带上 callback_url，回复会推送到那个地址。thread 相同的调用会接着同一个对话。",
     webhookCopy: "复制",
     webhookCopied: "已复制",
     webhookDone: "完成",

@@ -213,7 +213,7 @@ export const ptBR: TranslationResources = {
     webhookSecretOnce: "O segredo só aparece desta vez. Copie agora; se perder, crie um novo.",
     webhookExample: "Exemplo",
     webhookExampleHint:
-      "A chamada retorna um endereço de status. Consulte-o com o mesmo segredo até a resposta ficar pronta. Chamadas com o mesmo thread continuam a mesma conversa.",
+      "A chamada responde com um endereço de status. Consulte-o com o mesmo segredo (adicione ?wait=30 para aguardar a resposta) ou inclua callback_url na chamada para receber a resposta nesse endereço. Chamadas com o mesmo thread continuam uma conversa.",
     webhookCopy: "Copiar",
     webhookCopied: "Copiado",
     webhookDone: "Concluir",

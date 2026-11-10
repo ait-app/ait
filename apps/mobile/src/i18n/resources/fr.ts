@@ -217,7 +217,7 @@ export const fr: TranslationResources = {
       "Le secret n’est affiché qu’une seule fois. Copiez-le maintenant ; en cas de perte, créez-en un nouveau.",
     webhookExample: "Exemple",
     webhookExampleHint:
-      "L’appel renvoie une adresse de statut. Interrogez-la avec le même secret jusqu’à ce que la réponse soit prête. Les appels avec le même thread poursuivent la même conversation.",
+      "L’appel renvoie une adresse de statut. Interrogez-la avec le même secret (ajoutez ?wait=30 pour attendre la réponse), ou indiquez callback_url dans l’appel pour recevoir la réponse à cette adresse. Les appels avec le même thread poursuivent une conversation.",
     webhookCopy: "Copier",
     webhookCopied: "Copié",
     webhookDone: "Terminé",

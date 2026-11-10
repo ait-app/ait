@@ -195,7 +195,7 @@ export const ja: TranslationResources = {
       "シークレットは今回だけ表示されます。今すぐコピーしてください。紛失した場合は新しく作成できます。",
     webhookExample: "例",
     webhookExampleHint:
-      "呼び出すとステータスのアドレスが返ります。返信が届くまで、同じシークレットでそのアドレスを取得してください。同じ thread の呼び出しは同じ会話の続きになります。",
+      "呼び出すとステータスアドレスが返されます。同じシークレットでリクエストするか（?wait=30 を付けると返信を待てます）、呼び出し時に callback_url を指定すると返信がそのアドレスに送られます。同じ thread の呼び出しは同じ会話を続けます。",
     webhookCopy: "コピー",
     webhookCopied: "コピーしました",
     webhookDone: "完了",

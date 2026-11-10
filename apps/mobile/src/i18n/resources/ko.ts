@@ -189,7 +189,7 @@ export const ko: TranslationResources = {
       "시크릿은 이번 한 번만 표시됩니다. 지금 복사해 두세요. 잃어버리면 새로 만들 수 있습니다.",
     webhookExample: "예시",
     webhookExampleHint:
-      "호출하면 상태 주소가 반환됩니다. 답장이 준비될 때까지 같은 시크릿으로 그 주소를 요청하세요. thread가 같은 호출은 같은 대화를 이어갑니다.",
+      "호출하면 상태 주소가 반환됩니다. 같은 시크릿으로 요청하거나(?wait=30을 붙이면 답장을 기다립니다), 호출할 때 callback_url을 넣으면 답장이 그 주소로 전송됩니다. thread가 같은 호출은 같은 대화를 이어갑니다.",
     webhookCopy: "복사",
     webhookCopied: "복사됨",
     webhookDone: "완료",

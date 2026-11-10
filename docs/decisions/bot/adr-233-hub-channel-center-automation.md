@@ -69,8 +69,8 @@ Workspace Bot 已经具备所需的一切：按会话串行执行、`messageId` 
 ## 后果
 
 - 中心能做的只有：向 Hub Channel 投递文本、读取和取消该 Channel 的轮次、确认投递、关闭会话。它不能创建 Agent，也不需要公网 MCP 端点或持有者令牌；Bot 用这些文本做什么由 Bot 的权限分组与模式上限决定（ADR-215）。
-- 发布的 capability 从 234 增至 237，Webhook Channel 再增至 239。
-- Webhook 调用方拿到 202 和状态地址，用同一密钥轮询结果；端点、密钥哈希、限流与结果查询都在中心（ait-server `docs/automation.md`）。
+- 发布的 capability 从 236 增至 239，Webhook Channel 再增至 241。
+- Webhook 调用方拿到 202 和状态地址，回复有两种取法：用同一密钥长轮询状态地址（`?wait=` 最长 30 秒），或调用时给 `callback_url`，由中心用密钥签名推送。中心按 Bot 的投递语义回报：poll 模式在调用方第一次读到结果时回报 `delivered`，push 模式以回调的 2xx 为准、失败回报 `uncertain`。端点、密钥、限流、回调与结果查询都在中心（ait-server `docs/automation.md`）。
 - 创建时如果中心已建好端点而应答丢失，daemon 尽力删除它；daemon 也离线时，中心会留下一个从未发布的端点，直到在中心删除。
 - `model::bot::Store` 新增 `delete_conversation`：先删会话路由再删回执，中断时只留下不可达的回执文件。
 - 只有最终答复，没有运行中的进度；同一会话只排队，不支持 steer。

@@ -241,7 +241,7 @@ export const en = {
       "The secret is shown only this once. Copy it now; if you lose it, create a new one.",
     webhookExample: "Example",
     webhookExampleHint:
-      "The call answers with a status address. Request it with the same secret until the reply is ready. Calls with the same thread continue one conversation.",
+      "The call answers with a status address. Request it with the same secret (add ?wait=30 to wait for the reply), or include callback_url in the call to have the reply posted there. Calls with the same thread continue one conversation.",
     webhookCopy: "Copy",
     webhookCopied: "Copied",
     webhookDone: "Done",

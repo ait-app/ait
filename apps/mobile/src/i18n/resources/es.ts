@@ -214,7 +214,7 @@ export const es: TranslationResources = {
       "El secreto solo se muestra esta vez. Cópialo ahora; si lo pierdes, crea uno nuevo.",
     webhookExample: "Ejemplo",
     webhookExampleHint:
-      "La llamada responde con una dirección de estado. Consúltala con el mismo secreto hasta que la respuesta esté lista. Las llamadas con el mismo thread continúan una misma conversación.",
+      "La llamada responde con una dirección de estado. Consúltala con el mismo secreto (añade ?wait=30 para esperar la respuesta), o incluye callback_url en la llamada para recibir la respuesta allí. Las llamadas con el mismo thread continúan una conversación.",
     webhookCopy: "Copiar",
     webhookCopied: "Copiado",
     webhookDone: "Listo",
