@@ -9,7 +9,7 @@ use tokio::net::TcpListener;
 use tokio::sync::{OnceCell, mpsc};
 
 use crate::Local;
-use crate::hub::bridge::{Connection, Frame, LocalApi, Refused};
+use crate::hub::bridge::{Admission, Connection, Frame, LocalApi, Refused};
 use crate::transport::Dialer;
 
 /// A local destination at `address` serving sessions with `api`, if any.
@@ -62,6 +62,8 @@ pub(crate) async fn local_file(status: u16) -> (SocketAddr, tokio::task::JoinHan
 pub(crate) struct Accepted {
     /// The visitor a guest connection was admitted as.
     pub(crate) guest: Option<Visitor>,
+    /// Whether the connection was admitted as automation.
+    pub(crate) automation: bool,
     /// Messages the session sent to the API.
     pub(crate) received: mpsc::Receiver<Frame>,
     /// Messages for the session, as if from the API.
@@ -108,7 +110,7 @@ impl FakeApi {
 
 #[async_trait::async_trait]
 impl LocalApi for FakeApi {
-    async fn connect(&self, guest: Option<&Visitor>) -> Result<Connection, Refused> {
+    async fn connect(&self, admission: Admission<'_>) -> Result<Connection, Refused> {
         if self.refuse {
             return Err(Refused);
         }
@@ -116,7 +118,11 @@ impl LocalApi for FakeApi {
         let (to_session, from_api) = mpsc::channel(64);
         self.connections
             .send(Accepted {
-                guest: guest.cloned(),
+                guest: match admission {
+                    Admission::Guest(visitor) => Some(visitor.clone()),
+                    Admission::Owner | Admission::Automation => None,
+                },
+                automation: admission == Admission::Automation,
                 received: from_session,
                 replies: to_session,
             })

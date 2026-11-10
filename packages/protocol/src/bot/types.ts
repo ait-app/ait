@@ -69,6 +69,8 @@ export const BotChannelConfigSchema = z.discriminatedUnion("kind", [
     keyRef: z.string(),
     allowedSenders: z.array(z.string()),
   }),
+  // An HTTP endpoint the Ait center hosts; the center keeps its secret.
+  z.strictObject({ kind: z.literal("webhook"), endpointId: z.string(), url: z.string() }),
 ]);
 export const BotChannelSchema = z.object({
   id: z.guid(),

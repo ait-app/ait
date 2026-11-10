@@ -1,6 +1,7 @@
 //! Authenticated local HTTP and WebSocket transport for the independent server.
 
 mod auth;
+mod automation;
 mod browser_auth;
 mod capabilities;
 mod composition;
@@ -97,6 +98,7 @@ struct Shared {
     browser: browser::dispatch::State,
     workspace_names: Option<metadata::directory::service::workspace_names::WorkspaceNames>,
     shares: Arc<shares::Shares>,
+    automation: Arc<automation::Automation>,
 }
 
 impl std::ops::Deref for Shared {
@@ -258,6 +260,19 @@ impl Api {
         Ok(self)
     }
 
+    /// Observe the Workspace Bots the Ait center may reach, for the daemon's publication;
+    /// `None` without the Bot service.
+    #[must_use]
+    pub fn webhook_bots(
+        &self,
+    ) -> Option<tokio::sync::watch::Receiver<Vec<bot::service::WebhookBot>>> {
+        self.shared
+            .bot
+            .bots
+            .as_ref()
+            .map(bot::service::Bots::webhooks)
+    }
+
     /// Restore guest grants from the labels of Agents guests created before a restart.
     /// Run once, before the first publication, so it already lists those visitors.
     pub fn restore_guests(&self) -> impl Future<Output = ()> + Send + 'static {
@@ -342,6 +357,10 @@ impl Api {
     ) -> Result<Self, ConfigError> {
         validate_listener(address, &token)?;
         let relay = relay::Connector::new(address, server_id.clone(), instance_id.clone());
+        if let Some(bots) = &services.bot {
+            // Webhook channels request their endpoints over this Host's serve link.
+            bots.attach_center(Arc::new(relay.hub().clone()));
+        }
         let runtime = runtime_info(address, server_id, instance_id, &services);
         let services = composition::Parts::from(services);
         let session_events = services
@@ -421,6 +440,7 @@ impl Api {
                 }),
                 workspace_names: services.workspace_names,
                 shares: Arc::new(shares::Shares::new(&terminal, &provider)),
+                automation: Arc::default(),
                 runtime,
                 metadata,
                 filesystem,

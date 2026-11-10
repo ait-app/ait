@@ -63,11 +63,42 @@ impl ConnectionSubscriptions {
     }
 }
 
-/// Negotiated capabilities and the optional guest scope of one physical connection.
+/// Negotiated capabilities and the confinement of one physical connection.
 #[derive(Clone, Copy)]
 pub(super) struct Peer<'a> {
     capabilities: &'a [String],
     guest: Option<&'a Guest>,
+    /// The center's automation session, confined to [`crate::automation::policy`].
+    automation: bool,
+}
+
+/// Who a connection runs as.
+#[derive(Debug)]
+pub(crate) enum Admitted {
+    /// The Host owner.
+    Owner,
+    /// A visiting account confined to one share.
+    Guest(Box<Guest>),
+    /// The center's automation session.
+    Automation(crate::automation::Session),
+}
+
+impl Admitted {
+    fn guest(&self) -> Option<&Guest> {
+        match self {
+            Self::Guest(guest) => Some(guest),
+            Self::Owner | Self::Automation(_) => None,
+        }
+    }
+
+    /// Cancelled when the connection must end: a revoked share or disabled automation.
+    fn revoked(&self) -> tokio_util::sync::CancellationToken {
+        match self {
+            Self::Guest(guest) => guest.cancellation().clone(),
+            Self::Automation(session) => session.cancellation().clone(),
+            Self::Owner => tokio_util::sync::CancellationToken::new(),
+        }
+    }
 }
 
 fn websocket_frame(frame: Frame) -> Message {
@@ -79,7 +110,8 @@ fn websocket_frame(frame: Frame) -> Message {
 
 pub(super) async fn serve(socket: WebSocket, state: Arc<Shared>, guest: Option<Guest>) {
     let (sink, stream) = socket.split();
-    serve_frames(sink, stream.boxed(), state, guest, Some(WRITE_TIMEOUT)).await;
+    let admitted = guest.map_or(Admitted::Owner, |guest| Admitted::Guest(Box::new(guest)));
+    serve_frames(sink, stream.boxed(), state, admitted, Some(WRITE_TIMEOUT)).await;
 }
 
 /// Serve one connection over any message transport. The WebSocket upgrade and
@@ -94,7 +126,7 @@ pub(super) async fn serve_frames<K>(
     mut sink: K,
     mut stream: Frames,
     state: Arc<Shared>,
-    guest: Option<Guest>,
+    admitted: Admitted,
     write_timeout: Option<Duration>,
 ) where
     K: Sink<Message> + Unpin + Send,
@@ -164,17 +196,15 @@ pub(super) async fn serve_frames<K>(
         })
         .await;
     };
-    // A guest connection ends as soon as its share stops admitting it.
-    let revoked = guest
-        .as_ref()
-        .map(|guest| guest.cancellation().clone())
-        .unwrap_or_default();
+    // A guest connection ends as soon as its share stops admitting it, and an
+    // automation connection as soon as no Bot has an enabled Webhook channel.
+    let revoked = admitted.revoked();
     let reader = async {
         tokio::select! {
             () = stopped.cancelled() => {},
             () = outbound_failure.cancelled() => {},
             () = revoked.cancelled() => {},
-            _ = read(stream, &state, &lanes, hello, guest.as_ref()) => {},
+            _ = read(stream, &state, &lanes, hello, &admitted) => {},
         }
         stopped.cancel();
     };
@@ -211,8 +241,10 @@ async fn read(
     state: &Arc<Shared>,
     lanes: &[Outbound; 4],
     hello: Hello,
-    guest: Option<&Guest>,
+    admitted: &Admitted,
 ) -> Result<(), QueueError> {
+    let guest = admitted.guest();
+    let automation = matches!(admitted, Admitted::Automation(_));
     let outbound = &lanes[0];
     let capabilities = match hello.negotiate_available(&state.info.capabilities) {
         Ok(capabilities) => capabilities,
@@ -237,6 +269,7 @@ async fn read(
             Peer {
                 capabilities: &capabilities,
                 guest,
+                automation,
             },
             subscriptions,
         ))
@@ -269,6 +302,7 @@ async fn read(
         let peer = Peer {
             capabilities: &capabilities,
             guest,
+            automation,
         };
         if process_message(message, state, outbound, peer, &mut subscriptions)
             .await?
@@ -358,6 +392,12 @@ async fn process_message(
     peer: Peer<'_>,
     subscriptions: &mut ConnectionSubscriptions,
 ) -> Result<ControlFlow<()>, QueueError> {
+    if peer.automation
+        && let Some(Refusal { request_id }) = automation_refusal(message.as_ref())
+    {
+        error(outbound, request_id, ErrorCode::Forbidden)?;
+        return Ok(ControlFlow::Continue(()));
+    }
     let capabilities = peer.capabilities;
     match message {
         Some(Ok(Incoming::Text(
@@ -450,6 +490,27 @@ async fn process_message(
         }
     }
     Ok(ControlFlow::Continue(()))
+}
+
+/// A frame an automation session may not send, answered with its request ID if any.
+struct Refusal {
+    request_id: Option<String>,
+}
+
+/// An automation session sends only requests: events, responses and binary frames
+/// are refused.
+fn automation_refusal(message: Option<&Result<Incoming, ErrorCode>>) -> Option<Refusal> {
+    match message? {
+        Ok(Incoming::Text(ClientMessage::Event { .. }, _) | Incoming::Binary(_)) => {
+            Some(Refusal { request_id: None })
+        }
+        Ok(Incoming::Text(ClientMessage::Response { request_id, .. }, _)) => Some(Refusal {
+            request_id: request_id.clone(),
+        }),
+        Ok(Incoming::Text(ClientMessage::Hello(_) | ClientMessage::Request { .. }, _)) | Err(_) => {
+            None
+        }
+    }
 }
 
 #[tracing::instrument(
@@ -570,6 +631,11 @@ async fn process_request(
         short_jobs_available = state.jobs.available_permits(),
         terminal_jobs_available = state.terminal_jobs.available_permits(),
     );
+    if peer.automation
+        && let Err(code) = crate::automation::policy::request(state, &request).await
+    {
+        return span.in_scope(|| error(outbound, Some(request.id), code));
+    }
     let request = match peer.guest {
         Some(guest) => match policy::request(guest, state, request).await {
             Decision::Forward(request) => request,

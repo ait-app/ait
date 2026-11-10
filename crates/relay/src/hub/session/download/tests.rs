@@ -23,6 +23,7 @@ fn start(
         id: Uuid::new_v4(),
         local: local(address, None),
         visitor,
+        automation: false,
         inbound: inbound_rx,
         output: output_tx,
         credit,

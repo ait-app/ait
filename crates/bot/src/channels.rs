@@ -3,6 +3,7 @@ mod onboarding;
 pub(crate) mod photon;
 pub(crate) mod qq;
 pub(crate) mod telegram;
+pub(crate) mod webhook;
 pub(crate) mod weixin;
 
 use std::sync::Arc;
@@ -192,7 +193,9 @@ async fn attempt(
     cancel: &CancellationToken,
 ) -> Result<(), ErrorCode> {
     let reference = match &channel.config {
-        ChannelConfig::Builtin => return Ok(()),
+        ChannelConfig::Builtin | ChannelConfig::Webhook { .. } => {
+            return Ok(());
+        }
         ChannelConfig::Telegram { token_ref, .. } | ChannelConfig::Weixin { token_ref, .. } => {
             token_ref
         }
@@ -203,7 +206,7 @@ async fn attempt(
     };
     let secret = credentials.resolve(reference)?;
     match &channel.config {
-        ChannelConfig::Builtin => Ok(()),
+        ChannelConfig::Builtin | ChannelConfig::Webhook { .. } => Ok(()),
         ChannelConfig::Telegram { .. } => {
             telegram::run(bots, channel, client, &secret, cancel).await
         }

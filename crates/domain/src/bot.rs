@@ -94,6 +94,14 @@ pub struct Bot {
 pub enum ChannelConfig {
     /// Ait's authenticated Bot tab.
     Builtin,
+    /// An HTTP endpoint the Ait center hosts for this channel; the center relays each call
+    /// over its Hub session. The secret stays with the center.
+    Webhook {
+        /// The center's endpoint identity.
+        endpoint_id: String,
+        /// Public URL callers post to.
+        url: String,
+    },
     /// Telegram Bot API long polling.
     Telegram {
         /// Runtime environment reference, for example `env:AIT_SERVER_CREDENTIAL_TELEGRAM`.

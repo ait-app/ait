@@ -281,6 +281,30 @@ export const ru: TranslationResources = {
     qqPairHint:
       "Код: {{code}}. Отправьте его боту в личном чате или упомяните бота с этим кодом в группе QQ. Код действует один раз и истекает через 10 минут.",
     imessage: "iMessage",
+    webhook: "Webhook",
+    webhookHint:
+      "Ait Hub создаст для этого бота HTTPS-адрес и секрет. Любая система, которая умеет отправлять HTTP-запросы, сможет с их помощью писать боту и получать его ответ.",
+    webhookCreate: "Создать webhook",
+    webhookUrl: "Адрес",
+    webhookSecret: "Секрет",
+    webhookSecretOnce:
+      "Секрет показывается только один раз. Скопируйте его сейчас; если потеряете, создайте новый.",
+    webhookExample: "Пример",
+    webhookExampleHint:
+      "В ответ на вызов приходит адрес статуса. Запрашивайте его с тем же секретом (добавьте ?wait=30, чтобы дождаться ответа) или укажите callback_url в вызове, и ответ будет отправлен туда. Вызовы с одинаковым thread продолжают один разговор.",
+    webhookCopy: "Копировать",
+    webhookCopied: "Скопировано",
+    webhookDone: "Готово",
+    webhookRotate: "Создать новый секрет",
+    webhookRotateConfirm:
+      "Текущий секрет сразу перестанет работать. Тем, кто его использует, понадобится новый.",
+    webhookCenterOffline:
+      "Этот хост не подключён к Ait Hub. Войдите и включите подключение к Hub, затем повторите попытку.",
+    webhookCenterUnsupported: "Этот Ait Hub пока не поддерживает webhook.",
+    webhookAutomationUnavailable: "В этом Ait Hub не включена автоматизация.",
+    webhookLimitReached:
+      "В вашем аккаунте достигнут лимит webhook. Удалите неиспользуемый и повторите попытку.",
+    webhookCenterError: "Ait Hub не удалось настроить webhook. Повторите попытку позже.",
     imessageGuideStep1: "Создайте проект Photon Beta на app.beta.photon.codes.",
     imessageGuideStep2:
       "В этом проекте создайте API-ключ с разрешениями project:read, project:write, platforms:read и platforms:write.",

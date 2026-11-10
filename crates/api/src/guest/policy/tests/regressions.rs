@@ -33,6 +33,8 @@ async fn node_guests_can_read_but_cannot_start_persistent_automation() {
         "bot.channel.imessage.pair.start.request",
         "bot.channel.imessage.pair.status.request",
         "bot.channel.imessage.pair.cancel.request",
+        "bot.channel.webhook.create.request",
+        "bot.channel.webhook.rotate.request",
         "bot.message.send.request",
         "bot.conversation.open.request",
         "bot.pause.request",

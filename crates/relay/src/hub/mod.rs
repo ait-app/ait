@@ -596,6 +596,7 @@ struct RouteCredit {
 /// An `open` frame's session parameters.
 struct Opening<'a> {
     visitor: Option<&'a Visitor>,
+    service: Option<&'a wire::Service>,
     kind: SessionKind,
     /// The opener's receive window; present only on flow-controlled sessions.
     window: Option<u32>,
@@ -621,6 +622,18 @@ impl Sessions {
         {
             return Err("unsupported");
         }
+        // The center opens only RPC automation sessions, never on behalf of a guest.
+        let automation = match opening.service {
+            None => false,
+            Some(service)
+                if service.is_automation()
+                    && opening.visitor.is_none()
+                    && opening.kind == SessionKind::Rpc =>
+            {
+                true
+            }
+            Some(_) => return Err("unsupported"),
+        };
         let (credit, peer) = match opening.window {
             Some(window) => {
                 let (peer, credit) = watch::channel(0);
@@ -649,6 +662,7 @@ impl Sessions {
             id,
             local: self.local.clone(),
             visitor: opening.visitor.cloned(),
+            automation,
             inbound: inbound_rx,
             output: self.output.clone(),
             credit,
@@ -798,10 +812,16 @@ impl Pump<'_> {
                 return Ok(None);
             }
             Inbound::Open {
-                s, visitor, k, w, ..
+                s,
+                visitor,
+                service,
+                k,
+                w,
+                ..
             } => {
                 let opening = Opening {
                     visitor: visitor.as_ref(),
+                    service: service.as_ref(),
                     kind: k,
                     window: w,
                 };

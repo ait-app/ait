@@ -13,6 +13,8 @@ const {
   telegramSetup,
   scanSetup,
   imessageSetup,
+  webhookSetup,
+  setClipboard,
   electron,
   openExternalUrl,
   openSmsUrl,
@@ -21,6 +23,8 @@ const {
   telegramSetup: { current: false },
   scanSetup: { current: false },
   imessageSetup: { current: false },
+  webhookSetup: { current: false },
+  setClipboard: vi.fn(async (_text: string) => true),
   electron: { current: false },
   botRequest: vi.fn(),
   confirmDialog: vi.fn(async (_options: unknown) => true),
@@ -41,6 +45,7 @@ vi.mock("@/stores/session-store", () => ({
               workspaceBotWeixinSetup: scanSetup.current,
               workspaceBotQqSetup: scanSetup.current,
               workspaceBotImessageSetup: imessageSetup.current,
+              workspaceBotWebhookSetup: webhookSetup.current,
             },
           },
         },
@@ -56,6 +61,7 @@ vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => k
 vi.mock("./styles", () => ({ botStyles: {} }));
 vi.mock("./loading", () => ({ BotLoadingSpinner: () => null }));
 vi.mock("@/utils/confirm-dialog", () => ({ confirmDialog }));
+vi.mock("expo-clipboard", () => ({ setStringAsync: setClipboard }));
 vi.mock("expo-crypto", () => ({ randomUUID }));
 vi.mock("@/components/ui/select-field", () => ({
   SelectField: ({
@@ -201,6 +207,8 @@ beforeEach(() => {
   feishuSetup.current = false;
   telegramSetup.current = false;
   imessageSetup.current = false;
+  webhookSetup.current = false;
+  setClipboard.mockClear();
   electron.current = false;
   openExternalUrl.mockClear();
   openSmsUrl.mockClear();
@@ -402,6 +410,88 @@ describe("BotChannels", () => {
       }),
     );
     expect(confirmDialog).toHaveBeenCalledOnce();
+  });
+
+  describe("Webhook setup", () => {
+    const WEBHOOK_ID = "77777777-7777-4777-8777-777777777777";
+    const URL = "https://aitapp.cn/api/v1/automation/ingress/webhook/e1";
+    const webhookChannel = {
+      id: WEBHOOK_ID,
+      config: { kind: "webhook", endpointId: "e1", url: URL },
+      enabled: true,
+      cursor: null,
+      deleted: false,
+    };
+    function webhookResponses(created: Record<string, unknown>) {
+      const base = botRequest.getMockImplementation();
+      botRequest.mockImplementation(async (method: string, params: Record<string, unknown>) => {
+        if (method === "bot.channel.webhook.create.request") return created;
+        if (method === "bot.channel.webhook.rotate.request")
+          return { state: "rotated", secret: "s3cret-2", url: URL };
+        if (method === "bot.channel.list.request")
+          return { channels: [...channels, webhookChannel] };
+        return base?.(method, params);
+      });
+    }
+    async function openWebhookForm() {
+      renderChannels();
+      fireEvent.click(await screen.findByText("bots.addChannel"));
+      fireEvent.change(await screen.findByTestId("bot-channel-type"), {
+        target: { value: "webhook" },
+      });
+      fireEvent.click(await screen.findByTestId("bot-webhook-create"));
+    }
+
+    it("is offered only when the host can ask its center", async () => {
+      renderChannels();
+      fireEvent.click(await screen.findByText("bots.addChannel"));
+      const type = await screen.findByTestId("bot-channel-type");
+      expect(type.textContent).not.toContain("bots.webhook");
+    });
+
+    it("creates an endpoint and shows its secret once with an example", async () => {
+      webhookSetup.current = true;
+      webhookResponses({ state: "created", channel: webhookChannel, secret: "s3cret-1" });
+      await openWebhookForm();
+      await waitFor(() =>
+        expect(botRequest).toHaveBeenCalledWith("bot.channel.webhook.create.request", {
+          workspaceId: "workspace",
+        }),
+      );
+      expect((await screen.findByTestId("bot-webhook-secret-value")).textContent).toBe("s3cret-1");
+      expect(screen.getByTestId("bot-webhook-example").textContent).toContain(
+        "Authorization: Bearer s3cret-1",
+      );
+      fireEvent.click(screen.getByTestId("bot-webhook-secret-value-copy"));
+      await waitFor(() => expect(setClipboard).toHaveBeenCalledWith("s3cret-1"));
+      fireEvent.click(screen.getByTestId("bot-webhook-done"));
+      await waitFor(() => expect(screen.queryByTestId("bot-webhook-secret")).toBeNull());
+    });
+
+    it("explains a center that cannot create one", async () => {
+      webhookSetup.current = true;
+      webhookResponses({ state: "failed", reason: "centerOffline" });
+      await openWebhookForm();
+      expect((await screen.findByTestId("bot-webhook-failure")).textContent).toBe(
+        "bots.webhookCenterOffline",
+      );
+    });
+
+    it("shows the URL and a new secret after confirmation", async () => {
+      webhookSetup.current = true;
+      webhookResponses({});
+      renderChannels();
+      expect((await screen.findByTestId(`bot-webhook-url-${WEBHOOK_ID}`)).textContent).toBe(URL);
+      fireEvent.click(screen.getByTestId(`bot-webhook-rotate-${WEBHOOK_ID}`));
+      await waitFor(() =>
+        expect(botRequest).toHaveBeenCalledWith("bot.channel.webhook.rotate.request", {
+          workspaceId: "workspace",
+          channelId: WEBHOOK_ID,
+        }),
+      );
+      expect(confirmDialog).toHaveBeenCalledOnce();
+      expect((await screen.findByTestId("bot-webhook-secret-value")).textContent).toBe("s3cret-2");
+    });
   });
 
   describe("Feishu setup", () => {

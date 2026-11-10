@@ -1,46 +1,6 @@
-use ::bot::ports::{Credentials, Executor};
-use ::bot::service::{Bots, Dependencies};
-use domain::bot::SessionOwner;
-use model::workspace::registry::{ProjectRegistry, WorkspaceRegistry};
-use persistence::storage::bot::FileStore;
-use persistence::storage::registry::{FileBackedProjectRegistry, FileBackedWorkspaceRegistry};
-use provider::service::bot_execution::Action;
+use crate::test_support::bots::service as bots;
 
 use super::*;
-
-#[derive(Debug)]
-struct Native;
-#[async_trait::async_trait]
-impl Executor for Native {
-    async fn execute(&self, _: SessionOwner, action: Action) -> Result<Value, model::ErrorCode> {
-        Ok(match action {
-            Action::Create { .. } => json!({"created":true,"instructionDelivery":"system_prompt"}),
-            _ => json!({"status":"idle","lastMessage":"Bot answer"}),
-        })
-    }
-}
-impl Credentials for Native {
-    fn resolve(&self, _: &str) -> Result<SecretString, model::ErrorCode> {
-        Err(model::ErrorCode::BotIo)
-    }
-}
-
-fn bots(root: &std::path::Path) -> Bots {
-    let projects = FileBackedProjectRegistry::new(root.join("projects.json"));
-    let workspaces = FileBackedWorkspaceRegistry::new(root.join("workspaces.json"));
-    let cwd = root.to_str().unwrap();
-    projects.upsert(&serde_json::from_value(json!({"projectId":"project-1","rootPath":cwd,"kind":"non_git","displayName":"project","createdAt":"2026-10-12T00:00:00Z","updatedAt":"2026-10-12T00:00:00Z","archivedAt":null})).unwrap()).unwrap();
-    workspaces.upsert(&serde_json::from_value(json!({"workspaceId":"wks_0123456789abcdef","projectId":"project-1","cwd":cwd,"kind":"local_checkout","displayName":"workspace","createdAt":"2026-10-12T00:00:00Z","updatedAt":"2026-10-12T00:00:00Z","archivedAt":null})).unwrap(),domain::workspace::registry::WorkspaceMutationContext::default()).unwrap();
-    Bots::spawn(Dependencies {
-        store: Arc::new(FileStore::new(root.join("bots"))),
-        workspaces: Arc::new(workspaces),
-        projects: Arc::new(projects),
-        executor: Arc::new(Native),
-        credentials: Arc::new(Native),
-        scopes: ::bot::mcp::Scopes::new(),
-    })
-    .unwrap()
-}
 
 async fn connect(fixture: &Fixture) -> Socket {
     let mut socket = fixture.socket().await;

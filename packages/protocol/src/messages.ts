@@ -3476,6 +3476,7 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceBotWeixinSetup: z.boolean().optional(),
         workspaceBotQqSetup: z.boolean().optional(),
         workspaceBotImessageSetup: z.boolean().optional(),
+        workspaceBotWebhookSetup: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
         // COMPAT(providersSnapshotCwd): added in v0.3.2, remove gate after 2027-02-10.
         providersSnapshotCwd: z.boolean().optional(),

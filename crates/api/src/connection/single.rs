@@ -336,8 +336,8 @@ fn lane(message: &Incoming) -> usize {
     {
         return 2;
     }
-    // Waits on external platforms, which must not stall ordinary workspace requests.
-    if ["feishu", "telegram", "weixin", "qq", "imessage"]
+    // Waits on external platforms or the center, which must not stall ordinary workspace requests.
+    if ["feishu", "telegram", "weixin", "qq", "imessage", "webhook"]
         .iter()
         .any(|platform| method.starts_with(&format!("bot.channel.{platform}.")))
     {

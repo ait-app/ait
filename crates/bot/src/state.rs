@@ -1,6 +1,7 @@
 mod catalog;
 mod conversations;
 mod execution;
+mod webhook;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -52,6 +53,8 @@ pub(crate) struct State {
     pub(crate) session_actions: Vec<(SessionOwner, provider::service::bot_execution::Action)>,
     /// Deleted channels whose stored secrets the runtime has yet to remove.
     pub(crate) released_credentials: Vec<ChannelId>,
+    /// Deleted webhook channels whose center endpoints the runtime has yet to remove.
+    pub(crate) released_webhooks: Vec<ChannelId>,
 }
 
 impl State {
@@ -98,6 +101,7 @@ impl State {
             frozen: false,
             session_actions: Vec::new(),
             released_credentials,
+            released_webhooks: Vec::new(),
         };
         for conversation in state.store.conversations().map_err(|_| ErrorCode::BotIo)? {
             state.channel(conversation.bot_id, conversation.channel_id)?;
@@ -170,7 +174,14 @@ impl State {
             "bot.pause.request" => self.pause(&decode(params)?),
             "bot.resume.request" => self.resume(&decode(params)?),
             "bot.remove.request" => self.remove(&decode(params)?),
-            "bot.channel.create.request" => self.create_channel(decode(params)?),
+            "bot.channel.create.request" => {
+                let request: protocol::ChannelCreate = decode(params)?;
+                // Only the center issues webhook endpoints; see `channels::webhook`.
+                if matches!(request.config, ChannelConfig::Webhook { .. }) {
+                    return Err(ErrorCode::InvalidMessage);
+                }
+                self.create_channel(request)
+            }
             "bot.channel.update.request" => self.update_channel(decode(params)?),
             "bot.channel.delete.request" => self.delete_channel(&decode(params)?),
             "bot.channel.list.request" => {
@@ -206,6 +217,9 @@ impl State {
             }
             "bot.memory.get.request" => self.memory(&decode(params)?),
             "bot.memory.update.request" => self.update_memory(&decode(params)?),
+            "bot.webhook.message.send.request" => self.webhook_send(decode(params)?),
+            "bot.webhook.delivery.ack.request" => self.webhook_ack(&decode(params)?),
+            "bot.webhook.conversation.close.request" => self.webhook_close(&decode(params)?),
             _ => Err(ErrorCode::MethodNotFound),
         }
     }

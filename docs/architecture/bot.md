@@ -136,6 +136,12 @@ Bot 对 `crates/provider` 的使用、`crates/api` 与 `bins/daemon` 的作用�
   （[ADR-225](../decisions/bot/adr-225-weixin-and-qq-channels.md)、
   [ADR-226](../decisions/bot/adr-226-photon-imessage-channel.md)）。
 
+### 中心托管的 Webhook
+
+- Webhook Channel 由 `bot.channel.webhook.create` 经 Host serve 链路创建；daemon 只保存端点和 URL，密钥由中心加密保存。配置只可切换启用状态，轮换使用专门方法。
+- 中心只收到已启用 Webhook Channel 的发布状态；自动化会话仅能投递输入、读取或取消对应轮次、确认送达并释放对话。关闭最后一个可用 Channel 时立即结束会话。
+- Bot 完成轮次后保持 pending，由中心按 poll 首次读取或 push 的 2xx 回报送达。该入口不创建独立 Hub Channel，传输和权限边界见 [ADR-233](../decisions/bot/adr-233-webhook-channel-center-endpoints.md)。
+
 ## 持久化
 
 - 存储根为 `<data>/workspace-bots/`，由 `persistence::storage::bot::FileStore` 原子写入目录、Conversation 与轮次记录。

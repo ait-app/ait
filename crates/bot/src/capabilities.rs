@@ -34,6 +34,8 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("bot.channel.imessage.pair.start.request"),
     MethodSpec::request("bot.channel.imessage.pair.status.request"),
     MethodSpec::request("bot.channel.imessage.pair.cancel.request"),
+    MethodSpec::request("bot.channel.webhook.create.request"),
+    MethodSpec::request("bot.channel.webhook.rotate.request"),
     MethodSpec::request("bot.conversation.list.request"),
     MethodSpec::request("bot.conversation.open.request"),
     MethodSpec::request("bot.conversation.reset.request"),
@@ -43,6 +45,9 @@ pub(crate) const METHODS: &[MethodSpec] = &[
     MethodSpec::request("bot.turn.cancel.request"),
     MethodSpec::request("bot.memory.get.request"),
     MethodSpec::request("bot.memory.update.request"),
+    MethodSpec::request("bot.webhook.message.send.request"),
+    MethodSpec::request("bot.webhook.delivery.ack.request"),
+    MethodSpec::request("bot.webhook.conversation.close.request"),
 ];
 
 /// Return every Bot-owned request method for envelope validation.
