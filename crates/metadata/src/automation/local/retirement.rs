@@ -1,6 +1,7 @@
 //! Workspace-scoped cancellation and native process ownership during archive.
 
-use super::{Child, Duration, HashSet, Inner, Instant, Weak, WorkspaceAutomationError};
+use super::WorkspaceAutomationError;
+use super::{Child, Duration, HashSet, Inner, Instant, ScriptRunOutcome, Weak};
 use super::{POLL_INTERVAL, lock, setup_io, terminate_child, thread};
 
 pub(super) fn close(inner: &Inner, ids: &[String]) -> Result<(), WorkspaceAutomationError> {
@@ -25,8 +26,8 @@ fn close_until(
                 && let Some(child) = process.child.as_mut()
             {
                 let status = terminate_child(child).map_err(|error| setup_io(&error))?;
-                process.exit_code = status.code();
                 process.child = None;
+                process.run.finish(status.code(), ScriptRunOutcome::Stopped);
             }
         }
     }
@@ -42,6 +43,7 @@ fn close_until(
             for id in ids {
                 state.setup_cancelled.remove(id);
                 state.setups.remove(id);
+                state.runs.remove(id);
             }
             // Ports stay reserved: setup may have written the port into a restorable checkout.
             state.scripts.retain(|(workspace, _), process| {

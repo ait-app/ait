@@ -1,7 +1,15 @@
+---
+id: ADR-138
+status: accepted
+date: 2026-10-12
+amends:
+  - daemon/adr-047-daemon-schedule-browser.md
+paths:
+  - crates/schedule
+---
+
 # ADR-138：定时任务固定归属于 Workspace
 
-- 状态：接受
-- 日期：2026-10-12
 - 修订：[ADR-047](../daemon/adr-047-daemon-schedule-browser.md) 中新 Agent 任务每次创建独立 Workspace 的执行方式；仅旧版未绑定任务保留原行为。
 
 ## 背景

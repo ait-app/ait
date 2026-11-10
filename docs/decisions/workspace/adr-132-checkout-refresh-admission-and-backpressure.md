@@ -1,7 +1,13 @@
-# ADR-132：Checkout 刷新独立准入与有界输出背压
+---
+id: ADR-132
+status: accepted
+date: 2026-10-11
+paths:
+  - crates/filesystem
+  - crates/model
+---
 
-状态：Accepted
-日期：2026-10-11
+# ADR-132：Checkout 刷新独立准入与有界输出背压
 
 ## 背景
 

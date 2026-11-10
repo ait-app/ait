@@ -1,6 +1,15 @@
+---
+id: ADR-121
+status: accepted
+date: 2026-10-10
+amends:
+  - providers/adr-115-opencode-acp-provider.md
+paths:
+  - crates/provider
+---
+
 # ADR-121：ACP 轮次关联与原生历史结算
 
-- 状态：Accepted，2026-10-10。
 - 范围：Provider 会话事件、OpenCode ACP adapter 与既有 timeline 存储；补充 [ADR-115](adr-115-opencode-acp-provider.md)。
 
 ## 决策
@@ -37,5 +46,5 @@ OpenCode 2.x 的 `/compact` 可以只生成独立 compaction 记录，没有普�
 真实 OpenCode 1.18.4 / 2.0.26 验证使用隔离 XDG 目录和本地模型服务。
 
 自动压缩与原生继续消息的回归见
-[2026-10-19 验证报告](../../reports/providers/opencode-auto-compaction-2026-10-19.md)。
-2.x 独立压缩身份的复查见 [2.x ACP 报告](../../reports/providers/opencode-2x-acp-2026-10-19.md)。
+[2026-10-19 验证报告](../../archive/reports/providers/opencode-auto-compaction-2026-10-19.md)。
+2.x 独立压缩身份的复查见 [2.x ACP 报告](../../archive/reports/providers/opencode-2x-acp-2026-10-19.md)。

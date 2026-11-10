@@ -1,6 +1,15 @@
+---
+id: ADR-206
+status: accepted
+date: 2026-10-31
+amends:
+  - providers/adr-115-opencode-acp-provider.md
+paths:
+  - crates/provider
+---
+
 # ADR-206：OpenCode 的 ACP 子 Agent 观测与历史归属
 
-- 状态：Accepted，2026-10-31。
 - 范围：`provider::local::opencode`；补充 [ADR-115](adr-115-opencode-acp-provider.md)。
 
 ## 决策

@@ -21,7 +21,7 @@
   动画驱动；设置页移除旧 daemon 命令提示及其翻译。
   见 [PR #287](https://github.com/ait-app/ait/pull/287)、
   [PR #286](https://github.com/ait-app/ait/pull/286)、
-  [验证报告](../../../reports/clients/release-0.0.28-warning-fixes-2026-10-11.md)。
+  [验证报告](../clients/release-0.0.28-warning-fixes-2026-10-11.md)。
 - **官方服务域名。** 默认 API 改为 `https://aitapp.cn:8443/api`，恢复账号与中继主机时
   迁移精确匹配的旧官方地址，保留凭据、有效期和首选主机，自定义服务地址保持原值。
   见 [PR #284](https://github.com/ait-app/ait/pull/284)。

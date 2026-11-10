@@ -1,6 +1,13 @@
+---
+id: ADR-074
+status: accepted
+date: 2026-09-30
+paths:
+  - crates/provider
+---
+
 # ADR-074：OpenCode 原生 Provider
 
-- 状态：Accepted，2026-09-30。
 - 2026-10-09：传输与生命周期由 [ADR-115](adr-115-opencode-acp-provider.md) 修订为官方 ACP；下文保留当时的决策背景。
 - 范围：`bins/daemon` 与 `crates/provider`；取代已退役的原型执行路径（历史保存在 Git 中）。
 - 上位约束：ADR-046、ADR-050、ADR-052、ADR-072。
@@ -79,10 +86,10 @@ AgentManager 的输入接纳和 timeline 持久化。Claude Code 已通过 ADR-0
 
 保留旧 18 项协议测试，新增 server port 的多轮、恢复、只读历史、客户端身份、审批与取消测试，
 并以实际 `daemon` 二进制和离线 Python HTTP 子进程验证 WebSocket 执行及重启回收。
-测量和未验证行为见 [报告](../../reports/providers/opencode-server-migration.md)。
+测量和未验证行为见 [报告](../../archive/reports/providers/opencode-server-migration.md)。
 
 ## 后果
 
 OpenCode 适配器沿用现有会话、审批和持久化边界。Codex 与共享 Timeline 保持上游实现。
 原生协议兼容需要独立回归；显示投影升级会使旧 OpenCode 会话首次加载时重建游标。
-最新验证与待完成的桌面复测见 [上游 PR 验证](../../reports/providers/opencode-upstream-pr.md)。
+最新验证与待完成的桌面复测见 [上游 PR 验证](../../archive/reports/providers/opencode-upstream-pr.md)。

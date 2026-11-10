@@ -1,8 +1,20 @@
+---
+id: ADR-200
+status: accepted
+date: 2026-10-29
+amends:
+  - daemon/adr-180-hub-serve-endpoint.md
+paths:
+  - crates/host-link
+  - crates/relay
+  - bins/daemon
+---
+
 # ADR-200：Headless 独立维护 Hub、Relay 与节点租约
 
 > 启动与控制边界已由 [ADR-201](adr-201-daemon-owned-publication.md) 修订：所有 daemon 自主发布；外部断开会同时关闭 Hub/下载 Relay 并清除机器授权，不再支持单独暂停 Hub。
 
-状态：采用。修订 [ADR-180](adr-180-hub-serve-endpoint.md) 的 headless 发布调度与端口默认行为。
+状态说明：采用。修订 [ADR-180](adr-180-hub-serve-endpoint.md) 的 headless 发布调度与端口默认行为。
 
 ## 背景
 

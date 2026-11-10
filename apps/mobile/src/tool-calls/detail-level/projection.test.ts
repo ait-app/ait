@@ -313,13 +313,13 @@ describe("tool call detail-level projection", () => {
     });
   });
 
-  it("counts Paseo calls separately from other tools", () => {
+  it("counts Ait calls separately from other tools", () => {
     const calls = [
-      toolCall("1", { type: "unknown", input: null, output: null }, { name: "paseo.list_agents" }),
+      toolCall("1", { type: "unknown", input: null, output: null }, { name: "ait.list_agents" }),
       toolCall(
         "2",
         { type: "unknown", input: null, output: null },
-        { name: "mcp__paseo__list_worktrees" },
+        { name: "mcp__ait__list_worktrees" },
       ),
       toolCall("3", { type: "fetch", url: "https://ait-app.com" }),
       toolCall("4", { type: "fetch", url: "https://github.com/ait-app" }),
@@ -332,23 +332,26 @@ describe("tool call detail-level projection", () => {
     });
   });
 
-  it("classifies direct Brave search and Paseo runtime tool names", () => {
+  it("classifies direct Brave search and Ait runtime tool names", () => {
     const unknownDetail = { type: "unknown" as const, input: null, output: null };
     const calls = [
       toolCall("1", unknownDetail, { name: "brave-search_brave_web_search" }),
       toolCall("2", unknownDetail, { name: "brave-search_brave_llm_context" }),
-      toolCall("3", unknownDetail, { name: "paseo_list_providers" }),
-      toolCall("4", unknownDetail, { name: "paseo_list_worktrees" }),
-      toolCall("5", unknownDetail, { name: "paseo_list_worktrees" }),
+      toolCall("3", unknownDetail, { name: "ait_list_providers" }),
+      toolCall("4", unknownDetail, { name: "ait_list_worktrees" }),
+      toolCall("5", unknownDetail, { name: "ait_list_worktrees" }),
       toolCall("6", unknownDetail, { name: "mcp__exa__web_search" }),
       toolCall("7", unknownDetail, { name: "ait_list_agents" }),
       toolCall("8", unknownDetail, { name: "mcp__ait__wait_for_agent" }),
+      // The retired `paseo` prefix and namespace are ordinary tools now.
+      toolCall("9", unknownDetail, { name: "paseo_list_agents" }),
+      toolCall("10", unknownDetail, { name: "mcp__paseo__list_agents" }),
     ];
 
     const result = project({ level: "overview", head: calls });
 
     expect(result.groupsByHostId.get("1")).toMatchObject({
-      summary: { searchCount: 3, otherToolCount: 0, paseoCallCount: 5 },
+      summary: { searchCount: 3, otherToolCount: 2, paseoCallCount: 5 },
     });
   });
 

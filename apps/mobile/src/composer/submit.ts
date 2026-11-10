@@ -45,6 +45,37 @@ export function joinRestoredText(restored: string, current: string): string {
   return [restored, current.trim() ? current : ""].filter(Boolean).join("\n\n");
 }
 
+export interface ImmediateClientSlashCommandInput {
+  run: () => Promise<void>;
+  /** Clears the draft text and attachments; called only once the command has succeeded. */
+  clearComposer: () => void;
+  setSendError: (message: string | null) => void;
+  setIsProcessing: (isProcessing: boolean) => void;
+  onError?: (error: unknown) => void;
+}
+
+/**
+ * Runs an immediate client slash command. The composer keeps the command text and attachments
+ * until the command succeeds, so a failure leaves them in place for a retry.
+ */
+export async function runImmediateClientSlashCommand(
+  input: ImmediateClientSlashCommandInput,
+): Promise<"completed" | "failed"> {
+  input.setSendError(null);
+  input.setIsProcessing(true);
+  try {
+    await input.run();
+    input.clearComposer();
+    return "completed";
+  } catch (error) {
+    input.onError?.(error);
+    input.setSendError(error instanceof Error ? error.message : String(error));
+    return "failed";
+  } finally {
+    input.setIsProcessing(false);
+  }
+}
+
 export async function submitAgentInput<TAttachment>(
   input: AgentInputSubmitActionInput<TAttachment>,
 ): Promise<AgentInputSubmitResult> {

@@ -1,8 +1,15 @@
+---
+id: ADR-157
+status: accepted
+date: 2026-10-18
+paths:
+  - crates/provider
+  - apps/mobile
+---
+
 # ADR-157：整图输入与 Codex 用户图片的跨设备展示
 
-- 状态：已实现
-- 日期：2026-10-18
-- 关系：延续 [ADR-098](../clients/adr-098-acknowledged-client-chunks.md) 的传输分块、[ADR-040](adr-040-native-session-import-refresh-context.md) 的原生历史所有权和 [ADR-125](adr-125-durable-timeline-projection-pages.md) 的持久展示投影；修订[图片输入修复报告](../../reports/providers/image-input-admission-2026-10-13.md)中的自动裁剪策略。
+- 关系：延续 [ADR-098](../clients/adr-098-acknowledged-client-chunks.md) 的传输分块、[ADR-040](adr-040-native-session-import-refresh-context.md) 的原生历史所有权和 [ADR-125](adr-125-durable-timeline-projection-pages.md) 的持久展示投影；修订[图片输入修复报告](../../archive/reports/providers/image-input-admission-2026-10-13.md)中的自动裁剪策略。
 
 ## 背景
 

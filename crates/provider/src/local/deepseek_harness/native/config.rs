@@ -15,8 +15,9 @@ pub(in crate::local::deepseek_harness) fn validate(
     super::super::config::validate(&acp)?;
     if config
         .mcp_servers
-        .as_ref()
-        .is_some_and(|servers| !servers.is_empty())
+        .iter()
+        .flatten()
+        .any(|(name, _)| !super::mcp::server_name(name))
         || config.feature_values.iter().flatten().any(|(key, value)| {
             key != presets::PERMISSION || !value.as_str().is_some_and(permission_id)
         })

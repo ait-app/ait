@@ -3,6 +3,7 @@
 mod commands;
 mod config;
 mod history;
+mod mcp;
 mod probe;
 mod session;
 mod streaming;
@@ -109,6 +110,12 @@ impl AgentClient for PiClient {
     }
 
     fn supports_write_confinement(&self) -> bool {
+        true
+    }
+
+    /// Each interactive process loads a private extension that registers HTTP MCP servers
+    /// with `pi.registerMcpServer` for that session only; `mcp.json` is never written.
+    fn supports_agent_mcp(&self) -> bool {
         true
     }
 

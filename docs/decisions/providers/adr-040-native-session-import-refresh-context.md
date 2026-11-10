@@ -1,7 +1,13 @@
+---
+id: ADR-040
+status: accepted
+date: 2026-09-25
+paths:
+  - crates/provider
+---
+
 # ADR-040：原生 Session 发现、导入、刷新与上下文导出
 
-- 状态：Accepted。
-- 日期：2026-09-25。
 - 范围：独立 server，延续 ADR-032/039；不连接旧 daemon 的领域 Message 存储。
 - 对照：Paseo `2c8e8a826810337492cc5a38bb0bbd705b6fb632` 的 import-sessions、
   Session handlers 和 activity-curator；本机 Codex 0.153.4 app-server schema。
@@ -71,4 +77,4 @@ refresh 不自动恢复已归档/丢失的 Workspace，不启动 writer；这与
 恢复及 eager resume 不同。手动刷新补齐外部历史变更，尚无持续文件监控、原生 rewind、
 provider subagents 或跨 Provider 导入。
 
-验证及 Test coverage 见[实施报告](../../reports/providers/server-native-sessions.md)。
+验证及 Test coverage 见[实施报告](../../archive/reports/providers/server-native-sessions.md)。

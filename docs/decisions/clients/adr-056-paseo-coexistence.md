@@ -1,7 +1,17 @@
+---
+id: ADR-056
+status: accepted
+date: 2026-09-27
+amends:
+  - clients/adr-055-desktop-profile-isolation.md
+  - workspace/adr-043-daemon-skills.md
+paths:
+  - apps/desktop
+  - apps/mobile
+---
+
 # ADR-056：Ait 与 Paseo 的共享宿主资源隔离
 
-- 状态：Accepted
-- 日期：2026-09-27
 - 关联：ADR-001 v4、ADR-043、ADR-055
 - 修订：ADR-043 的技能目录所有权；补齐 ADR-055 的桌面之外隔离范围
 
@@ -47,4 +57,4 @@
 直接当作 Ait 技能发布。没有迁移现有用户数据或修改已安装的应用。
 
 验证包含共享根目录中技能的完整生命周期、事务恢复、真实 Git stash、协议协商、
-本地 stdio 隧道及 Expo 配置；见[验证报告](../../reports/clients/paseo-coexistence.md)。
+本地 stdio 隧道及 Expo 配置；见[验证报告](../../archive/reports/clients/paseo-coexistence.md)。

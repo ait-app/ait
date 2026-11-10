@@ -1,3 +1,13 @@
+---
+id: ADR-030
+status: accepted
+date: 2026-09-24
+amends:
+  - workspace/adr-029-daemon-metadata.md
+paths:
+  - crates/filesystem
+---
+
 # ADR-030：纵向拆出 filesystem
 
 > Tokio 依赖限制已由 [ADR-037](../daemon/adr-037-daemon-model-context.md) 修订；filesystem 可按需要使用 Tokio。
@@ -7,8 +17,6 @@
 > 后续边界更新：[ADR-031](../providers/adr-031-daemon-provider.md) 将 Workspace 自动化迁入 metadata，
 > Agent 能力迁入 provider，并删除四个空横向 crate；当前依赖表以 ADR-031 为准。
 
-- 状态：Accepted。
-- 日期：2026-09-24。
 - 授权：按可行性分析开始拆分 Git、Forge/PR、文件/目录和 skill 能力。
 - 范围：独立 server；不修改旧 daemon 和 `ait-*`。
 - 更新：ADR-029 中 GitHub provisioning、Worktree/recovery DTO、二进制文件 framing 和相关 crate 依赖的归属。Project/Workspace 模型与存储继续遵循 ADR-029。
@@ -85,4 +93,4 @@ filesystem 不依赖 Tokio、HTTP、SQL、Agent/domain、application、API 或�
 保留真实 Git、假 gh CLI、JSON、二进制文件帧、WebSocket 和进程集成测试。
 新增快照去重、分块读取 revision 检查、上传隔离/清理与依赖反向边回归。
 本次不扩展多 Forge、skill 执行、Provider、跨进程文件事务或已有路径检查的安全模型。
-实际执行和覆盖率见 [实施报告](../../reports/workspace/filesystem-extraction.md)。
+实际执行和覆盖率见 [实施报告](../../archive/reports/workspace/filesystem-extraction.md)。

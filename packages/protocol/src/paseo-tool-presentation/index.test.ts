@@ -46,20 +46,23 @@ describe("Paseo tool display", () => {
   });
 
   it("omits the summary when a call has no context", () => {
-    expect(display("mcp__paseo__list_agents", {})).toEqual({ displayName: "List agents" });
+    expect(display("mcp__ait__list_agents", {})).toEqual({ displayName: "List agents" });
   });
 
-  it("recognizes every ait namespace format and the legacy Paseo namespace", () => {
+  it("recognizes every ait namespace format", () => {
     for (const name of [
       "mcp__ait__kill_agent",
       "mcp__ait_remote__kill_agent",
       "ait.kill_agent",
       "ait_remote.kill_agent",
-      "mcp__paseo__kill_agent",
-      "paseo.kill_agent",
-      "paseo_remote.kill_agent",
     ]) {
       expect(display(name, { agentId: "agt_1" })?.displayName).toBe("Kill agent");
+    }
+  });
+
+  it("no longer treats the retired paseo namespace as an Ait tool", () => {
+    for (const name of ["mcp__paseo__kill_agent", "paseo.kill_agent", "paseo_remote.kill_agent"]) {
+      expect(display(name, { agentId: "agt_1" })).toBeNull();
     }
   });
 
@@ -71,16 +74,16 @@ describe("Paseo tool display", () => {
   });
 
   it("humanizes a Paseo tool that has no catalog entry", () => {
-    expect(display("mcp__paseo__brand_new_tool", {})).toEqual({ displayName: "Brand new tool" });
+    expect(display("mcp__ait__brand_new_tool", {})).toEqual({ displayName: "Brand new tool" });
   });
 
   it("prefers the known agent title over the agent ID", () => {
-    expect(display("mcp__paseo__cancel_agent", { agentId: "agt_1" }, "Reviewer")).toEqual({
+    expect(display("mcp__ait__cancel_agent", { agentId: "agt_1" }, "Reviewer")).toEqual({
       displayName: "Cancel agent",
       summary: "Reviewer",
     });
     expect(
-      getPaseoToolTargetAgentId("mcp__paseo__cancel_agent", {
+      getPaseoToolTargetAgentId("mcp__ait__cancel_agent", {
         type: "unknown",
         input: { agentId: "agt_1" },
         output: null,
@@ -93,7 +96,7 @@ describe("Paseo tool display", () => {
 
   it("truncates a massive single-line prompt and collapses whitespace", () => {
     const prompt = `Line one\n\n   line two ${"x".repeat(1_000_000)}`;
-    const summary = display("mcp__paseo__send_agent_prompt", { agentId: "a", prompt })?.summary;
+    const summary = display("mcp__ait__send_agent_prompt", { agentId: "a", prompt })?.summary;
     expect(summary).toHaveLength(MAX_SUMMARY_CHARS);
     expect(summary?.startsWith("Line one line two xxx")).toBe(true);
     expect(summary?.endsWith("…")).toBe(true);
@@ -101,13 +104,13 @@ describe("Paseo tool display", () => {
 
   it("bounds the scan even when the prompt opens with a wall of whitespace", () => {
     const prompt = `${" ".repeat(10_000)}hidden`;
-    const summary = display("mcp__paseo__send_agent_prompt", { agentId: "a", prompt })?.summary;
+    const summary = display("mcp__ait__send_agent_prompt", { agentId: "a", prompt })?.summary;
     expect(summary).toBeUndefined();
   });
 
   it("keeps a short prompt intact", () => {
     expect(
-      display("mcp__paseo__send_agent_prompt", { agentId: "a", prompt: " hi\nthere " })?.summary,
+      display("mcp__ait__send_agent_prompt", { agentId: "a", prompt: " hi\nthere " })?.summary,
     ).toBe("hi there");
   });
 

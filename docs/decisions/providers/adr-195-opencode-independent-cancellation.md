@@ -1,7 +1,15 @@
+---
+id: ADR-195
+status: accepted
+date: 2026-10-27
+amends:
+  - providers/adr-115-opencode-acp-provider.md
+paths:
+  - crates/provider
+---
+
 # ADR-195：OpenCode 独立取消信号与确认期限
 
-- 状态：Accepted
-- 日期：2026-10-27
 - 修订：[ADR-115](adr-115-opencode-acp-provider.md) 的取消准入和失败清理规则。
 
 ## 背景

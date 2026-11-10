@@ -1,7 +1,13 @@
+---
+id: ADR-133
+status: accepted
+date: 2026-10-11
+paths:
+  - crates/provider
+---
+
 # ADR-133：先显示持久 Timeline 页面，后台校验原生历史
 
-- 状态：已实现
-- 日期：2026-10-11
 - 关系：延续 [ADR-091](adr-091-independent-session-execution.md) 的单会话原生历史所有权，以及 [ADR-125](adr-125-durable-timeline-projection-pages.md) 的持久分页索引。
 
 ## 背景

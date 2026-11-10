@@ -1,7 +1,17 @@
+---
+id: ADR-108
+status: accepted
+date: 2026-10-08
+amends:
+  - clients/adr-074-account-host-relay.md
+  - daemon/adr-100-crate-level-service-installation.md
+paths:
+  - crates/relay
+  - crates/metadata
+---
+
 # ADR-108：Relay RPC 与基础连接方法归所属 crate
 
-- 状态：接受
-- 日期：2026-10-08
 - 修订：[ADR-100](adr-100-crate-level-service-installation.md) 中由 API 声明基础连接方法的归属，
   以及 [ADR-074](../clients/adr-074-account-host-relay.md) 中 relay 不依赖 workspace crate 的约束。
 

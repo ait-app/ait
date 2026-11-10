@@ -1,7 +1,13 @@
+---
+id: ADR-225
+status: accepted
+date: 2026-11-09
+paths:
+  - crates/bot
+---
+
 # ADR-225：微信与 QQ Channel 的扫码接入
 
-- 状态：接受
-- 日期：2026-11-09
 - 沿用：[ADR-224](adr-224-feishu-scan-onboarding-and-stored-secrets.md) 的 daemon 直连扫码、状态请求驱动与 Secret 保存边界。
 
 ## 背景

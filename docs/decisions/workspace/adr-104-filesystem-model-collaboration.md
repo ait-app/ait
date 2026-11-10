@@ -1,7 +1,13 @@
+---
+id: ADR-104
+status: accepted
+date: 2026-10-07
+paths:
+  - crates/filesystem
+---
+
 # ADR-104：Filesystem 仅通过 model 契约协作
 
-- 状态：接受
-- 日期：2026-10-07
 - 关联：[ADR-102](../providers/adr-102-provider-metadata-independence.md)、[ADR-103](../daemon/adr-103-terminal-model-dependency.md)
 - 后续：[ADR-113](adr-113-filesystem-capability-groups.md) 将内部模块改为按能力组组织。
 - 后续修订：[ADR-130](adr-130-workspace-methods-owned-by-metadata.md) 将 GitHub clone、worktree 与恢复服务迁入 metadata，删除 `ProjectRegistration` 与 filesystem 的 setup 注入。

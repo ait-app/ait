@@ -1,9 +1,18 @@
+---
+id: ADR-085
+status: accepted
+date: 2026-10-05
+amends:
+  - clients/adr-083-online-service-host-sync.md
+paths:
+  - crates/host-link
+  - bins/daemon
+---
+
 # ADR-085：Daemon 同步的稳定节点身份
 
 > 主机授权与租约归属已由 [ADR-201](../daemon/adr-201-daemon-owned-publication.md) 修订：daemon 自主管理发布，客户端退出不撤销机器授权；显式断开后需重新授权。以下保留原决策背景。
 
-- 状态：已实现
-- 日期：2026-10-05
 - 关系：补充 [ADR-083](adr-083-online-service-host-sync.md) 的逐主机注册身份与旧数据兼容。
 
 ## 背景
@@ -35,4 +44,4 @@
 现有旧绑定需要部署中心兼容修复。新客户端连接尚未升级的中心时，已有绑定仍可能冲突。
 中心无需改表或删除用户数据。
 
-测试及定向覆盖率见[验证报告](../../reports/clients/daemon-registration-validation.md)。
+测试及定向覆盖率见[验证报告](../../archive/reports/clients/daemon-registration-validation.md)。

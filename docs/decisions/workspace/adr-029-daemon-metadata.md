@@ -1,9 +1,17 @@
+---
+id: ADR-029
+status: accepted
+date: 2026-09-24
+amends:
+  - workspace/adr-025-paseo-registry.md
+paths:
+  - crates/metadata
+---
+
 # ADR-029：统一 Paseo Project 并纵向拆出 metadata
 
 > Tokio 依赖限制已由 [ADR-037](../daemon/adr-037-daemon-model-context.md) 修订；metadata 可按需要使用 Tokio。
 
-- 状态：Accepted。
-- 日期：2026-09-24。
 - 授权：废除独立 server 早期 Project，全部使用新的 Project/Workspace，并开始完整拆分。
 - 范围：独立 server；旧 daemon 与 `ait-*` crate 不变。
 - 替代：ADR-023 的 Project 租约切片、ADR-025 对该切片的过渡保留，以及 ADR-022 中受此拆分影响的 crate 依赖表。
@@ -88,4 +96,4 @@ WebSocket Ping/Pong 控制帧、HTTP health/readiness 和物理连接存活由 t
 依赖守卫检查新 crate 无反向依赖和旧 Ait 依赖，并继续禁止 domain/runtime 污染。
 迁移保留原有 schema fixture、registry/labels 恢复、配置/图标和真实 WS 回归。
 新增旧方法拒绝、新体系重启持久化、历史项目文件保留和 Agent-only catalog 初始化回归。
-实际检查、覆盖率及限制记录在 [实施报告](../../reports/workspace/metadata-extraction.md)。
+实际检查、覆盖率及限制记录在 [实施报告](../../archive/reports/workspace/metadata-extraction.md)。

@@ -1,7 +1,15 @@
+---
+id: ADR-090
+status: accepted
+date: 2026-10-06
+amends:
+  - providers/adr-039-agent-timeline-provider-creation.md
+paths:
+  - crates/provider
+---
+
 # ADR-090：Timeline 单项 768 KiB 与按字节分页
 
-- 状态：Accepted。
-- 日期：2026-10-06。
 - 范围：Provider 展示投影与 Timeline 查询；修订 ADR-039 的单项预算。
 
 Codex MCP 超大字段的预览策略由 [ADR-140](adr-140-codex-mcp-display-previews.md) 修订。

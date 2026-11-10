@@ -60,6 +60,31 @@ fn bot_only_tools_are_granted_to_bot_sessions_but_never_to_subtrees() {
 }
 
 #[test]
+fn script_run_reads_are_observe_tools_confined_to_scoped_workspaces() {
+    let observe_only = BotPermissions {
+        groups: BTreeSet::from([ToolGroup::Observe]),
+        modes: BTreeMap::new(),
+    };
+    for kind in [bot(), subtree()] {
+        let scope = scope(kind, observe_only.clone());
+        for tool in ["get_workspace_script_run", "wait_for_workspace_script"] {
+            assert!(scope.allows(tool), "{tool}");
+            assert_eq!(
+                admit(tool, &json!({"workspaceId":ROOT})),
+                Ok(Rule::Workspace)
+            );
+            assert_eq!(
+                admit(tool, &json!({"workspaceId":ROOT,"cwd":"/tmp"})),
+                Err(ErrorCode::Forbidden)
+            );
+        }
+        assert!(!scope.allows("start_workspace_script"));
+        assert_eq!(scope.contains(Some(ROOT)), Ok(()));
+        assert_eq!(scope.contains(Some("wks_other")), Err(ErrorCode::Forbidden));
+    }
+}
+
+#[test]
 fn created_agent_modes_are_capped_and_defaulted() {
     let permissions = capped(&["auto"]);
     let mut omitted = json!({"provider":"codex/model","title":"Task"});

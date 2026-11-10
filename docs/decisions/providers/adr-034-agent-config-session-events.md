@@ -1,7 +1,16 @@
+---
+id: ADR-034
+status: accepted
+date: 2026-09-24
+amends:
+  - providers/adr-032-daemon-native-provider-execution.md
+  - workspace/adr-029-daemon-metadata.md
+paths:
+  - crates/provider
+---
+
 # ADR-034：Agent 后续 turn 配置与 Session 事件/心跳
 
-- 状态：Accepted。
-- 日期：2026-09-24。
 - 授权：继续实现独立 server 的 Agent 和 Session 接口，参考固定 Paseo 版本。
 - 更新：ADR-032 的配置边界，以及 ADR-029 的 heartbeat 占位状态。
 
@@ -71,4 +80,4 @@ agent/providers/codex-app-server-agent.ts；对照本机 codex-cli 0.153.4 导�
 
 本轮增加五个接口；Agent 由 14/32 到 17/32，Session 由 2/5 到 4/5。
 creation.subscribe 需要创建回执；timeline、流式、import/refresh、权限与模式/feature 仍待各自实现。
-结果、覆盖率、并行 Terminal 改动的验证范围记录在 [实施报告](../../reports/providers/server-agent-session.md)。
+结果、覆盖率、并行 Terminal 改动的验证范围记录在 [实施报告](../../archive/reports/providers/server-agent-session.md)。

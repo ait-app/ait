@@ -63,7 +63,7 @@ async fn mcp_catalog_configuration_and_workspace_lifecycle() {
     let address = ready(&mut process, &log).await;
     let client = Client::new(&address);
     let list = client.rpc("tools/list", json!({}), None).await;
-    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 40);
+    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 42);
     let workspace = client.tool("create_workspace",json!({"isolation":"local","path":cwd,"title":"MCP workspace","idempotencyKey":"mcp-workspace"}),None).await;
     let id = workspace["workspace"]["id"]
         .as_str()
@@ -134,7 +134,7 @@ async fn mcp_catalog_configuration_and_workspace_lifecycle() {
             .as_array()
             .unwrap()
             .len(),
-        40
+        42
     );
     terminate(&mut process).await;
     assert!(!std::fs::read_to_string(&log).unwrap().contains(TOKEN));

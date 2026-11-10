@@ -23,7 +23,7 @@
   "additionalFiles": ["apps/desktop/LICENSE", "paseo/LICENSE"],
   "excluded": "Untracked/ignored local files, dependencies, build outputs and Git repository metadata are not imported.",
   "localAdaptations": {
-    "report": "docs/reports/clients/paseo-client-rust-adapter.md",
+    "report": "docs/archive/reports/clients/paseo-client-rust-adapter.md",
     "modifiedImportedFiles": [
       "apps/desktop/src/daemon/local-transport.test.ts",
       "apps/desktop/src/daemon/local-transport.ts",

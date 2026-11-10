@@ -674,3 +674,40 @@ describe("unavailable hosts in the sidebar workspace list", () => {
     expect(placementServerIds()).toEqual([RELAY_SERVER_ID]);
   });
 });
+
+describe("sidebar manual refresh", () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    setHostProfiles([]);
+    useSessionStore.getState().clearSession(SERVER_ID);
+  });
+
+  it("settles refreshAll only after every host's refresh has finished, even a failed one", async () => {
+    initializeSidebarState(createWorkspaces());
+    let finishRefresh!: () => void;
+    const refreshDirectories = vi
+      .spyOn(getHostRuntimeStore(), "refreshDirectories")
+      .mockImplementation(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            finishRefresh = () => reject(new Error("offline"));
+          }),
+      );
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { result } = renderHook(() => useSidebarWorkspacesList({ hostFilters: [] }));
+
+    let settled = false;
+    const refresh = result.current.refreshAll().then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+
+    expect(refreshDirectories).toHaveBeenCalledWith(SERVER_ID);
+    expect(settled).toBe(false);
+
+    finishRefresh();
+    await refresh;
+    expect(settled).toBe(true);
+  });
+});

@@ -8,6 +8,7 @@ import {
   ScrollView,
   type GestureResponderEvent,
   type PressableStateCallbackType,
+  type RefreshControlProps,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -34,7 +35,11 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { Theme } from "@/styles/theme";
 import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
 import { getSidebarRowBackdrop } from "@/components/sidebar/sidebar-row-backdrop";
-import { ScrollView as GestureScrollView, type GestureType } from "react-native-gesture-handler";
+import {
+  RefreshControl as GestureRefreshControl,
+  ScrollView as GestureScrollView,
+  type GestureType,
+} from "react-native-gesture-handler";
 import { WorkspaceRenameModal } from "@/components/workspace-rename-modal";
 import { useWorkspaceClipboardActions } from "@/hooks/use-workspace-clipboard-actions";
 import {
@@ -1831,8 +1836,8 @@ export function SidebarWorkspaceList({
   onToggleProjectCollapsed,
   shortcutIndexByWorkspaceKey,
   groupMode,
-  isRefreshing: _isRefreshing = false,
-  onRefresh: _onRefresh,
+  isRefreshing = false,
+  onRefresh,
   onWorkspacePress,
   onAddProject,
   onImportSession,
@@ -1870,6 +1875,12 @@ export function SidebarWorkspaceList({
   const sidebarFilterEmpty =
     hasActiveLabelFilter && hasProjectsBeforeFilter && projects.length === 0;
 
+  // Pull-to-refresh is a native touch gesture; web scroll views have no equivalent.
+  const refreshControl =
+    platformIsNative && onRefresh ? (
+      <GestureRefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
+    ) : undefined;
+
   // Project mode is the one that keeps its project headers; every other grouping mode is a flat
   // list of grouped rows, so a new mode lands in the grouped branch rather than silently in this
   // one's `else`.
@@ -1888,6 +1899,7 @@ export function SidebarWorkspaceList({
         listHeaderComponent={listHeaderComponent}
         sidebarFilterEmpty={sidebarFilterEmpty}
         parentGestureRef={parentGestureRef}
+        refreshControl={refreshControl}
       />
     ) : (
       <ProjectModeList
@@ -1911,6 +1923,7 @@ export function SidebarWorkspaceList({
         supportsMultiplicityByServerId={supportsMultiplicityByServerId}
         supportsPinningByServerId={supportsPinningByServerId}
         onToggleWorkspacePin={onToggleWorkspacePin}
+        refreshControl={refreshControl}
       />
     );
 
@@ -1936,6 +1949,7 @@ function SidebarGroupedModeList({
   listHeaderComponent,
   sidebarFilterEmpty,
   parentGestureRef,
+  refreshControl,
 }: {
   workspaceGroups: SidebarWorkspaceGroup[];
   pinnedGroups: PinnedSidebarGroups;
@@ -1949,6 +1963,7 @@ function SidebarGroupedModeList({
   listHeaderComponent?: ReactElement | null;
   sidebarFilterEmpty: boolean;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
+  refreshControl?: ReactElement<RefreshControlProps>;
 }) {
   const showShortcutBadges = useShowShortcutBadges();
   const pinnedWorkspaces = useMemo(
@@ -1974,6 +1989,7 @@ function SidebarGroupedModeList({
       listHeaderComponent={listHeaderComponent}
       sidebarFilterEmpty={sidebarFilterEmpty}
       parentGestureRef={parentGestureRef}
+      refreshControl={refreshControl}
     />
   );
 }
@@ -1999,6 +2015,7 @@ function ProjectModeList({
   supportsMultiplicityByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
+  refreshControl,
 }: Omit<
   SidebarWorkspaceListProps,
   | "workspaceGroups"
@@ -2016,6 +2033,7 @@ function ProjectModeList({
   supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
+  refreshControl?: ReactElement<RefreshControlProps>;
 }) {
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const [creatingWorkspaceIds, setCreatingWorkspaceIds] = useState<Set<string>>(() => new Set());
@@ -2252,6 +2270,7 @@ function ProjectModeList({
           style={styles.list}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
           testID="sidebar-project-workspace-list-scroll"
         >
           {content}

@@ -50,6 +50,8 @@ enum PersistenceState {
 #[derive(Debug)]
 pub(super) struct Session {
     transport: Transport,
+    /// MCP servers registered when the process started; Pi cannot change them for a session.
+    mcp_servers: Option<BTreeMap<String, Value>>,
     id: String,
     cwd: String,
     native_cwd: String,
@@ -133,7 +135,8 @@ pub(super) async fn open(
     }
     transport::version(client).await?;
     let mut session = Session {
-        transport: Transport::spawn(client, &spec.cwd, &args, spec.confinement.as_ref())?,
+        transport: launch(client, spec, args)?,
+        mcp_servers: crate::local::acp_config::launched_servers(&spec.config).cloned(),
         id,
         cwd: spec.cwd.clone(),
         native_cwd: native_cwd.to_owned(),
@@ -171,6 +174,24 @@ pub(super) async fn open(
         }
     }
     Ok(session)
+}
+
+/// Start the native writer with `args`, loading the session's private MCP extension, if any.
+/// The extension stays with the transport until the process is reaped.
+fn launch(
+    client: &PiClient,
+    spec: &AgentSessionSpec,
+    mut args: Vec<OsString>,
+) -> Result<Transport, AgentSessionError> {
+    let extension = super::mcp::Extension::write(&spec.config)?;
+    if let Some(extension) = &extension {
+        args.extend(extension.arguments());
+    }
+    let mut transport = Transport::spawn(client, &spec.cwd, &args, spec.confinement.as_ref())?;
+    if let Some(extension) = extension {
+        transport.retain(extension);
+    }
+    Ok(transport)
 }
 
 impl Session {
@@ -312,7 +333,11 @@ impl Session {
     ) -> Result<String, AgentSessionError> {
         prompt.validate()?;
         config::validate(config)?;
-        if self.closed || self.active.is_some() || prompt.output_schema.is_some() {
+        if self.closed
+            || self.active.is_some()
+            || prompt.output_schema.is_some()
+            || crate::local::acp_config::launched_servers(config) != self.mcp_servers.as_ref()
+        {
             return Err(AgentSessionError::Rejected);
         }
         let (text, images) = prompt_blocks::split(prompt.blocks()?);
@@ -680,6 +705,15 @@ fn thinking_notification(event: &Value) -> Option<&str> {
 
 #[async_trait::async_trait]
 impl AgentSession for Session {
+    fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+        config::validate(config)?;
+        // MCP servers are registered when the native process starts.
+        if crate::local::acp_config::launched_servers(config) != self.mcp_servers.as_ref() {
+            return Err(AgentSessionError::Rejected);
+        }
+        Ok(())
+    }
+
     fn failure_diagnostic(&self) -> Option<Diagnostic> {
         self.stream
             .failure

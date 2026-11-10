@@ -1,6 +1,17 @@
+---
+id: ADR-183
+status: accepted
+date: 2026-10-23
+supersedes:
+  - clients/adr-070-ios-testflight-release.md
+  - clients/adr-079-mobile-eas-builds.md
+paths:
+  - apps/mobile
+---
+
 # ADR-183：iOS CI 使用 Xcode Cloud 归档与内部分发
 
-状态：Accepted（2026-10-23），取代 [ADR-070](adr-070-ios-testflight-release.md) 和
+状态说明：Accepted（2026-10-23），取代 [ADR-070](adr-070-ios-testflight-release.md) 和
 [ADR-079](adr-079-mobile-eas-builds.md) 的 iOS 发布路径。
 
 后续：[ADR-187](adr-187-ios-app-store-cloud-trigger.md) 新增 App Store / 外部 TestFlight

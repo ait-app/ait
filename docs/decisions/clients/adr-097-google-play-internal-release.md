@@ -1,6 +1,12 @@
-# ADR-097：Google Play 内部测试手动发布
+---
+id: ADR-097
+status: accepted
+date: 2026-10-07
+paths:
+  - .github/workflows
+---
 
-状态：Accepted（2026-10-07）
+# ADR-097：Google Play 内部测试手动发布
 
 构建与发布机制已由 [ADR-175](adr-175-android-play-gradle-release.md) 取代。
 

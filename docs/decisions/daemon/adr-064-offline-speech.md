@@ -1,7 +1,13 @@
+---
+id: ADR-064
+status: accepted
+date: 2026-09-28
+paths:
+  - crates/voice
+---
+
 # ADR-064：默认离线语音与模型准备
 
-- 状态：Accepted
-- 日期：2026-09-28
 - 关联：ADR-042
 
 ## 背景
@@ -28,6 +34,6 @@ Paseo 使用 Sherpa ONNX 自动准备 Parakeet/Kokoro 模型，Agent Provider �
 
 ## 验证与限制
 
-参见 [验证报告](../../reports/clients/desktop-speech-terminal.md) 和 [操作说明](../../operations/speech.md)。
+参见 [验证报告](../../archive/reports/clients/desktop-speech-terminal.md) 和 [操作说明](../../operations/speech.md)。
 首次使用需下载约 637 MiB 的安装内容。模型语言覆盖和转写质量不等同于云端模型；混说可能有误差。
 当前实机验证为 macOS ARM64，Linux x86_64 仍需发布 CI 验证静态依赖。

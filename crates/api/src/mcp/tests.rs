@@ -6,7 +6,7 @@ fn catalog_has_unique_registered_methods_and_closed_schemas() {
     let methods: Vec<_> = crate::capabilities::implemented_methods()
         .map(|method| method.name)
         .collect();
-    assert_eq!(catalog::all().len(), 43);
+    assert_eq!(catalog::all().len(), 45);
     for tool in catalog::all() {
         assert!(names.insert(&tool.name));
         for method in &tool.methods {

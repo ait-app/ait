@@ -103,4 +103,4 @@ hostname verification remain enabled; TLS early data remains disabled. TLS sessi
 resumption requires support from the center's TLS endpoint. Outbound relay and
 loopback WebSockets enable `TCP_NODELAY`.
 
-See the [implementation validation](../../reports/clients/relay-connect-latency.md).
+See the [implementation validation](../reports/clients/relay-connect-latency.md).

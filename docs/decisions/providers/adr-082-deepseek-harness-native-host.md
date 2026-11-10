@@ -1,8 +1,14 @@
+---
+id: ADR-082
+status: accepted
+date: 2026-10-04
+amends:
+  - providers/adr-067-deepseek-harness-acp.md
+paths:
+  - crates/provider
+---
+
 # ADR-082：DeepSeek Harness 原生交互 Host
-
-Status: Accepted
-
-Date: 2026-10-04
 
 ## 背景
 

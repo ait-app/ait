@@ -1,7 +1,15 @@
+---
+id: ADR-128
+status: accepted
+date: 2026-10-11
+amends:
+  - clients/adr-048-paseo-desktop-rust-launcher.md
+paths:
+  - apps/desktop
+---
+
 # ADR-128：桌面内置 daemon 可在退出后继续运行
 
-- 状态：已实现
-- 日期：2026-10-11
 - 关系：修订 [ADR-048](adr-048-paseo-desktop-rust-launcher.md) 中「服务随桌面正常退出而停止，移除旧的后台驻留开关」与「不实现孤儿进程接管」的部分；沿用其只管理自己创建的服务、令牌不进入 renderer 的边界。
 - 修订：[ADR-207](adr-207-desktop-daemon-readiness-ownership.md) 改为新子进程只做认证握手、探测失败仍可交接，并在接管探测失败时保留记录供重试。
 

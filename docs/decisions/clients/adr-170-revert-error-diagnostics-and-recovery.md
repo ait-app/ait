@@ -1,7 +1,15 @@
+---
+id: ADR-170
+status: accepted
+date: 2026-10-20
+supersedes:
+  - clients/adr-166-background-errors-without-toasts.md
+paths:
+  - apps/mobile
+---
+
 # ADR-170：完整回滚 PR #381
 
-- 状态：Accepted
-- 日期：2026-10-20
 - 取代：ADR-161、ADR-162；ADR-166 随其依赖的诊断链路撤销。
 
 ## 决策

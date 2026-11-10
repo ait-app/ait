@@ -16,24 +16,24 @@ const prCleanup = await readWorkflow("cancel-merged-pr-ci.yml");
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const context = { repo: { owner: "ait-app", repo: "ait" }, sha: "a".repeat(40), runId: 42 };
 
-test("UI CI checks changed lint, delegates formatting and runs the shared client suite", () => {
-  const steps = ci.jobs.ui.steps;
-  assert.equal(steps.find((step) => step.uses === "actions/checkout@v5").with["fetch-depth"], 0);
-  const check = steps.find((step) => step.name === "Lint changed UI");
-  assert.match(check.run, /^npm run check:ui -- "\$UI_DIFF_BASE"$/m);
-  assert.match(check.run, /^node --test scripts\/check-ui\.test\.mjs$/m);
-  assert.match(check.env.UI_DIFF_BASE, /pull_request.base.sha.*github.event.before/);
-  const lint = ci.jobs.lint.steps;
-  assert.match(lint.find((step) => step.name === "Check formatting").run, /oxfmt@.*--check \./);
-  assert.equal(lint.find((step) => step.name === "Check docs").run, "npm run check:docs");
-  const runs = steps.map((step) => step.run ?? "");
-  assert.ok(runs.some((run) => /^npm run test .*--workspace=@ait\/client/.test(run)));
-  // The SDK is built once by build:desktop-main; test:sdk would rebuild and rerun the same suites.
-  assert.ok(!runs.some((run) => run.includes("test:sdk")));
-  assert(
-    runs.indexOf("npm run build:desktop-main") <
-      runs.findIndex((run) => run.includes("@ait/client")),
-  );
+test("CI delegates its checks to the shared verify script with a full-history diff base", () => {
+  const verify = (job) =>
+    ci.jobs[job].steps.find((step) => step.run?.includes("node scripts/verify.mjs"));
+  assert.match(verify("lint").run, /--only docs,format --scope all$/);
+  assert.match(verify("changes").run, /--scope closure --github-output$/);
+  for (const [job, group] of [
+    ["rust", "rust"],
+    ["ui", "ui"],
+  ]) {
+    assert.match(verify(job).run, new RegExp(`--only ${group} --base "\\$VERIFY_BASE"`));
+    assert.match(verify(job).env.VERIFY_BASE, /pull_request.base.sha.*github.event.before/);
+    assert.match(verify(job).env.VERIFY_SCOPE, /'push' && 'all' \|\| 'closure'/);
+  }
+  for (const job of ["changes", "rust", "ui"]) {
+    const checkout = ci.jobs[job].steps.find((step) => step.uses === "actions/checkout@v5");
+    assert.equal(checkout.with["fetch-depth"], 0, job);
+  }
+  assert.ok(ci.jobs.ui.steps.some((step) => step.run === "npm ci"));
 });
 
 test("dev Linux desktop builds its daemon on the release glibc baseline", () => {

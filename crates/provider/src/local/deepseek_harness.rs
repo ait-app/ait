@@ -130,8 +130,11 @@ impl AgentClient for DeepSeekHarnessClient {
     fn handles_out_of_band(&self, text: &str) -> bool {
         self.interactive && native::commands::name(text).is_some()
     }
+
+    /// ACP sessions receive `mcpServers`; each native session's private Web Host loads the
+    /// servers as `dsh-mcp-client` plugins from a `--patch` overlay, not the user's profile.
     fn supports_agent_mcp(&self) -> bool {
-        !self.interactive
+        true
     }
 
     async fn usage(&self) -> Result<Value, AgentSessionError> {

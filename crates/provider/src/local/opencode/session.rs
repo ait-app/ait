@@ -54,6 +54,8 @@ struct Connection {
     catalog: watch::Sender<Option<Vec<Value>>>,
     deferred: VecDeque<Value>,
     command_lifecycle: bool,
+    /// ACP MCP launch descriptions attached whenever this process loads the session.
+    servers: Vec<Value>,
 }
 
 #[derive(Debug)]
@@ -164,13 +166,14 @@ pub(super) async fn open(
     };
     let (mut transport, capabilities, source, command_lifecycle) =
         launcher::session(client, spec, selected).await?;
+    let servers = servers(&capabilities, selected)?;
     let (id, mut options, mut identities, clients, location, children) =
         if let Some((handle, _)) = binding {
             if capabilities["loadSession"] != true {
                 return Err(AgentSessionError::Unavailable);
             }
             let (options, identities, location, children) =
-                reload(client, &mut transport, handle, &spec.cwd).await?;
+                reload(client, &mut transport, handle, &spec.cwd, &servers).await?;
             let clients = clients(handle)?;
             (
                 handle.session_id.clone(),
@@ -181,18 +184,13 @@ pub(super) async fn open(
                 children,
             )
         } else {
-            let result = transport
-                .startup_request(
-                    "session/new",
-                    json!({"cwd":spec.cwd,"mcpServers":[]}),
-                    client.startup_timeout,
-                )
-                .await?;
+            let (id, options) = create(client, &mut transport, &spec.cwd, &servers).await?;
+            let (identities, clients) = (BTreeSet::new(), BTreeMap::new());
             (
-                acp_config::text(&result, "sessionId")?.to_owned(),
-                acp_config::state(&result)?,
-                BTreeSet::new(),
-                BTreeMap::new(),
+                id,
+                options,
+                identities,
+                clients,
                 spec.cwd.clone(),
                 Vec::new(),
             )
@@ -238,6 +236,7 @@ pub(super) async fn open(
             catalog: catalog.sender(),
             deferred: VecDeque::new(),
             command_lifecycle,
+            servers,
         }),
         pending: Arc::default(),
         children: Arc::new(Mutex::new(live)),
@@ -269,12 +268,51 @@ fn validate_open(
     Ok(binding.is_some_and(|(_, purpose)| purpose == AgentResumePurpose::History))
 }
 
+/// Convert the session's MCP definitions for ACP opening, honoring the advertised transports.
+///
+/// Returns an empty list when none are configured. Returns `Rejected` when an HTTP server is
+/// configured but the native process does not advertise ACP `mcpCapabilities.http`.
+fn servers(
+    capabilities: &Value,
+    selected: &StoredAgentConfig,
+) -> Result<Vec<Value>, AgentSessionError> {
+    let servers = acp_config::mcp_servers(selected);
+    if capabilities["mcpCapabilities"]["http"] != true
+        && servers.iter().any(|server| server["type"] == "http")
+    {
+        tracing::warn!("OpenCode ACP does not advertise HTTP MCP servers");
+        return Err(AgentSessionError::Rejected);
+    }
+    Ok(servers)
+}
+
+/// Create a native session in `cwd` with its MCP `servers`; returns its ID and options.
+async fn create(
+    client: &OpenCodeClient,
+    transport: &mut Transport,
+    cwd: &str,
+    servers: &[Value],
+) -> Result<(String, Value), AgentSessionError> {
+    let result = transport
+        .startup_request(
+            "session/new",
+            json!({"cwd":cwd,"mcpServers":servers}),
+            client.startup_timeout,
+        )
+        .await?;
+    Ok((
+        acp_config::text(&result, "sessionId")?.to_owned(),
+        acp_config::state(&result)?,
+    ))
+}
+
 /// Replay a bound native session; returns its options, accepted inputs and current location.
 async fn reload(
     client: &OpenCodeClient,
     transport: &mut Transport,
     handle: &AgentPersistenceHandle,
     cwd: &str,
+    servers: &[Value],
 ) -> Result<
     (
         Value,
@@ -284,10 +322,14 @@ async fn reload(
     ),
     AgentSessionError,
 > {
-    let (options, stream, location) = history::replay(
-        transport,
-        &handle.session_id,
+    let attachment = history::Attachment {
+        id: &handle.session_id,
         cwd,
+        servers,
+    };
+    let (options, stream, location) = history::attach(
+        transport,
+        &attachment,
         client.images.clone(),
         client.startup_timeout,
     )
@@ -397,6 +439,7 @@ impl Session {
             || self.turn.is_some()
             || prompt.output_schema.is_some()
             || self.clients.len() >= 4096
+            || selected.mcp_servers != self.spec.config.mcp_servers
         {
             return Err(AgentSessionError::Rejected);
         }
@@ -499,20 +542,25 @@ impl Session {
             let (mut transport, capabilities, source, command_lifecycle) =
                 launcher::session(&self.client, &self.spec, selected).await?;
             let location = &connection.location;
+            let servers = servers(&capabilities, selected)?;
             let mut options = if capabilities["sessionCapabilities"]["resume"].is_object() {
                 let result = transport
                     .startup_request(
                         "session/resume",
-                        json!({"sessionId":self.id,"cwd":location,"mcpServers":[]}),
+                        json!({"sessionId":self.id,"cwd":location,"mcpServers":servers}),
                         self.client.startup_timeout,
                     )
                     .await?;
                 acp_config::state(&result)?
             } else if capabilities["loadSession"] == true {
-                history::replay(
+                let attachment = history::Attachment {
+                    id: &self.id,
+                    cwd: location,
+                    servers: &servers,
+                };
+                history::attach(
                     &mut transport,
-                    &self.id,
-                    location,
+                    &attachment,
                     self.client.images.clone(),
                     self.client.startup_timeout,
                 )
@@ -531,6 +579,7 @@ impl Session {
             connection.capabilities = capabilities;
             connection.command_lifecycle = command_lifecycle;
             connection.transport = transport;
+            connection.servers = servers;
             connection.observation = observe(source, &self.id, &connection.location).await;
             if let Some(observation) = &connection.observation {
                 connection
@@ -1036,10 +1085,15 @@ impl Execution {
         let (options, mut replay, location) = if running {
             self.replay_detached(&connection).await?
         } else {
-            history::replay(
+            // Re-attaching the live session keeps its MCP servers; identical servers are reused.
+            let attachment = history::Attachment {
+                id: &self.id,
+                cwd: &connection.location,
+                servers: &connection.servers,
+            };
+            history::attach(
                 &mut connection.transport,
-                &self.id,
-                &connection.location,
+                &attachment,
                 self.client.images.clone(),
                 self.client.deadline,
             )
@@ -1181,8 +1235,22 @@ impl AgentSession for Session {
     async fn runtime_info(&mut self) -> Result<StoredAgentRuntimeInfo, AgentSessionError> {
         Ok(self.info.clone())
     }
+    fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
+        config::validate(config)?;
+        // MCP servers attach when the native session opens; changes need a new session.
+        if config.mcp_servers != self.spec.config.mcp_servers {
+            return Err(AgentSessionError::Rejected);
+        }
+        Ok(())
+    }
     fn persistence(&self) -> Option<AgentPersistenceHandle> {
-        let native = json!({"transport":"acp","config":self.spec.config,"model":self.info.model,"clients":self.clients});
+        // Launch-only MCP definitions can carry credentials; the durable record keeps the
+        // user's own configuration, so the native handle omits them.
+        let config = StoredAgentConfig {
+            mcp_servers: None,
+            ..self.spec.config.clone()
+        };
+        let native = json!({"transport":"acp","config":config,"model":self.info.model,"clients":self.clients});
         Some(AgentPersistenceHandle {
             provider: PROVIDER.into(),
             session_id: self.id.clone(),

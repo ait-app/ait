@@ -1,7 +1,13 @@
+---
+id: ADR-197
+status: accepted
+date: 2026-10-28
+paths:
+  - crates/provider
+---
+
 # ADR-197：MiniMax Code 原生 ACP Provider
 
-- 状态：Accepted。
-- 日期：2026-10-28。
 - 范围：MiniMax Code 注册、原生会话、控制与事件投影。
 - 关系：沿用 [ADR-089](adr-089-provider-owned-composition.md) 的内置装配和
   [ADR-179](adr-179-provider-owned-tests.md) 的测试归属。
@@ -40,7 +46,7 @@ MiniMax 多媒体/API CLI，不提供编码 Agent 会话接口。客户端此前
 
 离线测试在 `crates/provider/src/local/minimax/tests` 验证 native adapter 与 AIT
 执行器；真实测试显式启用并只在临时工作目录执行。daemon 仅调整内置 Provider
-快照与隔离测试环境。实际命令和结果见 [验证报告](../../reports/providers/minimax-code-acp-2026-10-28.md)。
+快照与隔离测试环境。实际命令和结果见 [验证报告](../../archive/reports/providers/minimax-code-acp-2026-10-28.md)。
 
 **Test coverage**：未测量；用户要求完整测试流程，未要求覆盖率。若需测量，限定
 MiniMax adapter、共享 ACP 投影及直接相关执行器场景，使用 `cargo llvm-cov`。

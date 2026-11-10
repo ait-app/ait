@@ -445,7 +445,7 @@
   {
     "name": "start_workspace_script",
     "methods": ["workspace.script.start.request"],
-    "description": "Start a configured workspace script through the managed launcher.",
+    "description": "Start a configured workspace script and record a run. args reach the script as separate positional parameters (\"$@\") and are accepted only when ait.json sets acceptsArgs for it. Returns script.runId for wait_for_workspace_script.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -456,12 +456,70 @@
         "scriptName": {
           "type": "string",
           "minLength": 1
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
         }
       },
       "required": ["workspaceId", "scriptName"],
       "additionalProperties": false
     },
     "readOnly": false
+  },
+  {
+    "name": "get_workspace_script_run",
+    "methods": ["workspace.script.run.get.request"],
+    "description": "Read one recorded workspace script run: commit and dirty state at start, outcome, exit code, duration and bounded combined output (first 16 KiB and last 48 KiB). Select it by runId, or the latest run of scriptName.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scriptName": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["workspaceId"],
+      "additionalProperties": false
+    },
+    "readOnly": true
+  },
+  {
+    "name": "wait_for_workspace_script",
+    "methods": ["workspace.script.run.wait.request"],
+    "description": "Wait up to timeoutMs (default 30000, maximum 45000) for a workspace script run to finish. Returns the run with its output once finished; on timedOut the run keeps going and output is omitted.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 45000
+        }
+      },
+      "required": ["workspaceId", "runId"],
+      "additionalProperties": false
+    },
+    "readOnly": true
   },
   {
     "name": "stop_workspace_script",

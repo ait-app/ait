@@ -1,7 +1,17 @@
+---
+id: ADR-211
+status: accepted
+date: 2026-11-04
+amends:
+  - clients/adr-044-paseo-client-rust-transport.md
+  - clients/adr-094-canonical-ait-client-methods.md
+paths:
+  - packages/client
+  - apps/mobile
+---
+
 # ADR-211：SDK 原生使用 daemon 协议
 
-- 状态：Accepted。
-- 日期：2026-11-04。
 - 修订：[ADR-044](adr-044-paseo-client-rust-transport.md)、[ADR-094](adr-094-canonical-ait-client-methods.md)。
 
 ## 背景

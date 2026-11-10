@@ -1,7 +1,17 @@
+---
+id: ADR-136
+status: accepted
+date: 2026-10-11
+amends:
+  - workspace/adr-113-filesystem-capability-groups.md
+  - workspace/adr-131-metadata-capability-groups.md
+paths:
+  - crates/metadata
+  - crates/filesystem
+---
+
 # ADR-136：拍平单功能区层并收口重复助手
 
-- 状态：接受
-- 日期：2026-10-11
 - 修订：[ADR-131](adr-131-metadata-capability-groups.md) 与
   [ADR-113](adr-113-filesystem-capability-groups.md) 中 `crate::<group>::<layer>::<area>` 的
   单功能区形态：一层只承载一个功能区时去掉多余的 `<area>` 段，路径为

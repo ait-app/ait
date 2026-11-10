@@ -1,9 +1,19 @@
+---
+id: ADR-181
+status: accepted
+date: 2026-10-22
+amends:
+  - daemon/adr-180-hub-serve-endpoint.md
+paths:
+  - crates/relay
+  - crates/model
+  - crates/persistence
+---
+
 # ADR-181：Host 向 Hub 发布事件与目录摘要
 
-状态：采用。扩展 [ADR-180](adr-180-hub-serve-endpoint.md)。中心契约由 ait-server 的
+状态说明：采用。扩展 [ADR-180](adr-180-hub-serve-endpoint.md)。中心契约由 ait-server 的
 `docs/hub-services.md` 定义。
-
-日期：2026-10-22。
 
 ## 背景
 

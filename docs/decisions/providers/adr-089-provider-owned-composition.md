@@ -1,7 +1,16 @@
+---
+id: ADR-089
+status: accepted
+date: 2026-10-06
+amends:
+  - providers/adr-031-daemon-provider.md
+  - providers/adr-058-daemon-metadata-generation.md
+paths:
+  - crates/provider
+---
+
 # ADR-089：内置 Provider 装配归 provider crate
 
-- 状态：Accepted。
-- 日期：2026-10-06。
 - 范围：原生 adapter 注册、启动配置与元数据生成装配。
 - 关系：细化 [ADR-031](adr-031-daemon-provider.md) 的能力边界与
   [ADR-058](adr-058-daemon-metadata-generation.md) 的辅助生成职责。

@@ -1,0 +1,10 @@
+{
+  "worktree": {
+    "setup": "test ! -f scripts/seed-worktree-target.mjs || node scripts/seed-worktree-target.mjs || true"
+  },
+  "scripts": {
+    "verify": {
+      "command": "mkdir -p .tmp && node scripts/verify.mjs > .tmp/verify.log 2>&1"
+    }
+  }
+}

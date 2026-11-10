@@ -24,6 +24,8 @@ use crate::{
 #[derive(Debug)]
 pub(in crate::local::deepseek_harness) struct Session {
     runtime: Runtime,
+    /// MCP servers the Host was started with; they cannot change for a live session.
+    mcp_servers: Option<BTreeMap<String, Value>>,
     id: String,
     cwd: String,
     selection: Selection,
@@ -53,7 +55,8 @@ pub(in crate::local::deepseek_harness) async fn open(
     handle: Option<&AgentPersistenceHandle>,
 ) -> Result<Session, AgentSessionError> {
     validate_identity(spec, handle)?;
-    let runtime = Runtime::open(client, &spec.cwd).await?;
+    let overlay = super::mcp::Overlay::write(&spec.config)?;
+    let runtime = Runtime::open_with(client, &spec.cwd, overlay).await?;
     open_runtime(client, spec, handle, runtime).await
 }
 
@@ -64,7 +67,7 @@ pub(in crate::local::deepseek_harness) async fn preview(
     spec: &AgentSessionSpec,
 ) -> Result<Session, AgentSessionError> {
     validate_identity(spec, None)?;
-    let runtime = Runtime::preview(client, &spec.cwd).await?;
+    let runtime = Runtime::preview(client, &spec.cwd, &spec.config).await?;
     open_runtime(client, spec, None, runtime).await
 }
 
@@ -125,6 +128,7 @@ async fn open_runtime(
     let commands = super::commands::State::open(&runtime.api, &id).await?;
     Ok(Session {
         runtime,
+        mcp_servers: crate::local::acp_config::launched_servers(&spec.config).cloned(),
         id,
         cwd: spec.cwd.clone(),
         selection,
@@ -369,6 +373,7 @@ impl Session {
             || self.active.is_some()
             || !self.permissions.is_empty()
             || prompt.output_schema.is_some()
+            || crate::local::acp_config::launched_servers(config) != self.mcp_servers.as_ref()
         {
             return Err(AgentSessionError::Rejected);
         }
@@ -649,6 +654,10 @@ impl AgentSession for Session {
     }
     fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         config::validate(config)?;
+        // MCP servers are plugins of the Host process started for this session.
+        if crate::local::acp_config::launched_servers(config) != self.mcp_servers.as_ref() {
+            return Err(AgentSessionError::Rejected);
+        }
         self.selection.validate_controls(config).map(|_| ())
     }
 

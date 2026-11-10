@@ -1,7 +1,17 @@
+---
+id: ADR-122
+status: accepted
+date: 2026-10-10
+amends:
+  - clients/adr-074-account-host-relay.md
+  - clients/adr-076-android-account-relay.md
+  - clients/adr-084-ios-account-relay.md
+paths:
+  - apps/mobile
+---
+
 # ADR-122：在线服务主机进入客户端持久注册表
 
-- 状态：已实现
-- 日期：2026-10-10
 - 关系：修订 [ADR-074](adr-074-account-host-relay.md) 的单台临时选择，以及 [ADR-076](adr-076-android-account-relay.md) / [ADR-084](adr-084-ios-account-relay.md) 的客户端主机恢复行为；账户登录和主机发布仍按 [ADR-083](adr-083-online-service-host-sync.md) 分离。
 
 ## 背景

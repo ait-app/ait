@@ -1,7 +1,20 @@
+---
+id: ADR-204
+status: accepted
+date: 2026-10-30
+amends:
+  - clients/adr-074-account-host-relay.md
+  - clients/adr-182-hub-account-client.md
+  - daemon/adr-155-persistent-relay-data-tunnel.md
+  - daemon/adr-180-hub-serve-endpoint.md
+paths:
+  - packages/client
+  - crates/relay
+  - apps/mobile
+---
+
 # ADR-204：在线业务连接只使用 Hub
 
-- 状态：已实现
-- 日期：2026-10-30
 - 修订：[ADR-074](adr-074-account-host-relay.md)、[ADR-155](../daemon/adr-155-persistent-relay-data-tunnel.md)、[ADR-180](../daemon/adr-180-hub-serve-endpoint.md)、[ADR-182](adr-182-hub-account-client.md)
 
 桌面、Android、iOS 和 Web 的在线业务会话统一通过 Hub access → 中心 → Hub serve → daemon 本地 WebSocket。Hub 尚在连接时最多等待五秒；链路不可用、服务地址不匹配或目标没有 serve presence 时明确失败，交由既有客户端重连机制重试。保留 Hub 会话的身份校验、ACK/replay、探活恢复、窗口生命周期和有界输出，不重放业务写入。

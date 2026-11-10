@@ -222,10 +222,16 @@ for line in sys.stdin:
         if not os.environ.get("AIT_ACP_VERSION", "2.0.25").startswith("1.") and scenario != "no-delete":
             capabilities["delete"] = {}
         reply(identity, {"protocolVersion": 1, "agentCapabilities": {"loadSession": scenario != "no-history",
-            "promptCapabilities": {"image": True}, "sessionCapabilities": capabilities}})
+            "promptCapabilities": {"image": True}, "sessionCapabilities": capabilities,
+            "mcpCapabilities": {"http": scenario != "no-http-mcp", "sse": False}}})
     elif method in ["session/new", "session/resume", "session/load"]:
         assert pathlib.Path(params["cwd"]).is_absolute()
-        assert params["mcpServers"] == []
+        # Native 2.2 accepts stdio and HTTP descriptions only; headers are name/value pairs.
+        for server in params["mcpServers"]:
+            assert server.get("type", "stdio") in ["stdio", "http"], server
+            if server.get("type") == "http":
+                assert server["url"].startswith("http") and isinstance(server["headers"], list), server
+                assert all(set(header) == {"name", "value"} for header in server["headers"]), server
         if scenario == "slow-session" and method == "session/new":
             (root / "session.entered").touch()
             while not (root / "session.release").exists():

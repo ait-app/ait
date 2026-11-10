@@ -1,7 +1,17 @@
+---
+id: ADR-216
+status: accepted
+date: 2026-11-07
+amends:
+  - clients/adr-055-desktop-profile-isolation.md
+  - clients/adr-062-ait-runtime-paths.md
+paths:
+  - bins/daemon
+  - apps/desktop
+---
+
 # ADR-216：默认数据目录统一为 `~/.ait`
 
-- 状态：Accepted
-- 日期：2026-11-07
 - 修订：[ADR-062](adr-062-ait-runtime-paths.md) 第 4 条、[ADR-055](adr-055-desktop-profile-isolation.md) 第 6 条（默认数据目录）
 
 ## 背景

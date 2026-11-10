@@ -1,7 +1,15 @@
+---
+id: ADR-177
+status: accepted
+date: 2026-10-21
+amends:
+  - providers/adr-175-restore-provider-recovery.md
+paths:
+  - crates/provider
+---
+
 # ADR-177：Codex 宿主异常重启后的继续执行与失败上报
 
-- 状态：Accepted
-- 日期：2026-10-21
 - 部分修订：ADR-175 第 2 项；Codex 在原会话中尝试继续，其他 Provider 保持原恢复策略。
 - 延续：ADR-046、ADR-144、ADR-162。
 
@@ -34,7 +42,7 @@
 继续是在新原生进程中基于历史发起的一次新轮次，不声称已死亡的采样或工具进程能够原地复活。
 模型仍需检查外部工具操作的实际结果，宿主不盲目重放工具副作用。
 
-验证见[排查与回归报告](../../reports/providers/codex-oom-recovery-2026-10-21.md)。
+验证见[排查与回归报告](../../archive/reports/providers/codex-oom-recovery-2026-10-21.md)。
 
 ## Test coverage
 

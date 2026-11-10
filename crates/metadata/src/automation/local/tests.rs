@@ -8,6 +8,8 @@ use super::*;
 mod coverage;
 #[cfg(unix)]
 mod paseo;
+#[cfg(unix)]
+mod script_runs;
 
 #[cfg(unix)]
 #[test]
@@ -20,6 +22,7 @@ fn setup_output_limit_applies_to_fast_commands_that_exit_between_polls() {
         &workspace,
         "head -c 8388609 /dev/zero",
         3000,
+        Phase::Setup,
     );
     assert!(
         matches!(result, Err(WorkspaceAutomationError::Io(ref message)) if message == "Setup command output exceeded 8 MiB")
@@ -45,7 +48,7 @@ fn invalid_setup_configuration_is_recorded_without_launching_commands() {
     fs::remove_file(root.path().join("ait.json")).unwrap();
     fs::create_dir(root.path().join("ait.json")).unwrap();
     assert!(runtime.start_setup(&workspace).is_err());
-    assert!(parse_setup(Some(&serde_json::json!({"setup":false}))).is_empty());
+    assert!(parse_lifecycle(Some(&serde_json::json!({"setup":false})), "setup").is_empty());
 }
 
 #[test]
@@ -111,13 +114,28 @@ fn natural_script_exit_publishes_stopped_status() {
             port: None,
             terminal_id: "terminal-once".to_owned(),
             child: Some(child),
-            exit_code: None,
+            accepts_args: false,
+            run: ScriptRun::start(
+                "once",
+                &[],
+                runs::CheckoutEvidence::default(),
+                Arc::default(),
+            ),
         },
     );
+    let run_id = lock(&runtime.inner.state)
+        .scripts
+        .values()
+        .next()
+        .unwrap()
+        .run
+        .id()
+        .to_owned();
     monitor_script(
         &Arc::downgrade(&runtime.inner),
         &workspace,
         "once",
+        &run_id,
         Duration::from_millis(1),
     );
     let AutomationEvent::Scripts {
@@ -145,7 +163,7 @@ fn removed_configuration_does_not_hide_running_scripts_and_drop_reaps_them() {
     )
     .unwrap();
     let runtime = automation();
-    let started = runtime.start_script(&workspace, "web").unwrap();
+    let started = runtime.start_script(&workspace, "web", &[]).unwrap();
     let pid = lock(&runtime.inner.state)
         .scripts
         .values()
@@ -158,7 +176,7 @@ fn removed_configuration_does_not_hide_running_scripts_and_drop_reaps_them() {
     fs::write(&config, "{}").unwrap();
     assert_eq!(runtime.list_scripts(&workspace).unwrap(), [started]);
     assert!(matches!(
-        runtime.start_script(&workspace, "absent"),
+        runtime.start_script(&workspace, "absent", &[]),
         Err(WorkspaceAutomationError::UnknownScript(_))
     ));
     assert!(matches!(
@@ -317,7 +335,7 @@ fn scripts_start_refresh_and_stop_real_children() {
     let workspace = placement(directory.path(), "wks_process");
     let automation = automation();
     let started = automation
-        .start_script(&workspace, "once")
+        .start_script(&workspace, "once", &[])
         .expect("start once");
     assert!(started.running);
     assert!(started.terminal_id.is_some());
@@ -341,12 +359,12 @@ fn scripts_start_refresh_and_stop_real_children() {
         "done"
     );
     let service = automation
-        .start_script(&workspace, "service")
+        .start_script(&workspace, "service", &[])
         .expect("start service");
     assert!(service.running);
     assert!(service.port.is_some());
     assert!(matches!(
-        automation.start_script(&workspace, "service"),
+        automation.start_script(&workspace, "service", &[]),
         Err(WorkspaceAutomationError::AlreadyRunning(_))
     ));
     let stopped = automation

@@ -1,7 +1,16 @@
+---
+id: ADR-126
+status: accepted
+date: 2026-10-11
+amends:
+  - workspace/adr-081-directory-change-push.md
+paths:
+  - crates/metadata
+  - apps/mobile
+---
+
 # ADR-126：按身份读取目标 Workspace，完整目录后台同步
 
-- 状态：已实现
-- 日期：2026-10-11
 - 关系：补充 [ADR-081](adr-081-directory-change-push.md) 的目录订阅路径；推进[远程打开方案](../../archive/plans/remote-workspace-open-performance.md)的目标读取部分。
 
 ## 背景

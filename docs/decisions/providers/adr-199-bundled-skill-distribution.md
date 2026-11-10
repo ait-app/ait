@@ -1,7 +1,16 @@
+---
+id: ADR-199
+status: accepted
+date: 2026-10-28
+amends:
+  - workspace/adr-043-daemon-skills.md
+paths:
+  - crates/provider
+  - skills/ait-orchestration
+---
+
 # ADR-199：内置 Skill 随 daemon 启动分发
 
-- 状态：接受
-- 日期：2026-10-28
 - 修订：[ADR-043](../workspace/adr-043-daemon-skills.md) 的资源发现与启动收敛；能力归属沿用 [ADR-129](adr-129-provider-owned-skills.md)。
 
 `ait-orchestration` 需要随 desktop 和独立 daemon 一起交付。将仓库内的 Skill 正文、

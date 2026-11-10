@@ -1,7 +1,15 @@
+---
+id: ADR-193
+status: accepted
+date: 2026-10-27
+amends:
+  - providers/adr-041-agent-controls-provider-inspection.md
+paths:
+  - crates/provider
+---
+
 # ADR-193：Codex 原生策略、事件与恢复兼容
 
-- 状态：Accepted
-- 日期：2026-10-27
 - 修订：ADR-041 的 RPC 等待事件预算；延续 ADR-046、ADR-052、ADR-177、ADR-179、ADR-191、ADR-192。
 - 对照：Paseo `4f9d9d6de2236486ecc2ad886a2c37f4b92271e0` 与 Codex CLI 0.164.0。
 
@@ -46,7 +54,7 @@
 原生会话、工具、认证和历史的所有权不变，新增状态仅位于 provider adapter 内，不增加 RPC、
 domain 实体或数据库迁移。文字与 timeline 的既有资源预算继续生效。
 
-验证范围和对照证据见 [Codex / Paseo 兼容验证报告](../../reports/providers/codex-paseo-compatibility-2026-10-27.md)。
+验证范围和对照证据见 [Codex / Paseo 兼容验证报告](../../archive/reports/providers/codex-paseo-compatibility-2026-10-27.md)。
 
 ## Test coverage
 

@@ -1,7 +1,16 @@
+---
+id: ADR-186
+status: accepted
+date: 2026-10-23
+amends:
+  - clients/adr-152-remote-workspace-browser-loopback.md
+paths:
+  - apps/desktop
+  - crates/browser
+---
+
 # ADR-186：内置浏览器按 Workspace daemon 选择出站位置
 
-- 状态：已实现
-- 日期：2026-10-23
 - 关系：修订 [ADR-152](adr-152-remote-workspace-browser-loopback.md) 的回环目标限制及仅在线中继接入范围。
 
 ## 背景

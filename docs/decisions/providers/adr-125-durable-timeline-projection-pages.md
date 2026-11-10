@@ -1,7 +1,13 @@
+---
+id: ADR-125
+status: accepted
+date: 2026-10-11
+paths:
+  - crates/provider
+---
+
 # ADR-125：持久化展示投影索引与按页读取 Timeline
 
-- 状态：已实现
-- 日期：2026-10-11
 - 关系：保留 [ADR-065](../workspace/adr-065-paseo-directory-and-timeline-projections.md) 的投影与游标语义，以及 [ADR-090](adr-090-timeline-entry-and-page-budgets.md) 的字节预算。
 
 ## 背景

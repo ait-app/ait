@@ -1,7 +1,17 @@
+---
+id: ADR-227
+status: accepted
+date: 2026-11-10
+amends:
+  - bot/adr-213-single-workspace-manager-bot.md
+paths:
+  - crates/bot
+  - crates/provider
+  - apps/mobile
+---
+
 # ADR-227：Bot 按消息身份保留 Provider 的多条回复
 
-- 状态：接受；已实现，2026-11-10
-- 日期：2026-11-10
 - 扩展：[ADR-213](adr-213-single-workspace-manager-bot.md) 的 Bot 执行与对话回执模型。
 
 ## 背景

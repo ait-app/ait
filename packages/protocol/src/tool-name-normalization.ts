@@ -39,21 +39,11 @@ export function isLikelyNamespacedToolName(name: string): boolean {
   return false;
 }
 
-/**
- * MCP server names the daemon's own agent tools are exposed under. The daemon
- * registers itself as `ait`; `paseo` remains for transcripts recorded before
- * the rename and sessions imported from Paseo.
- *
- * TODO(0.2.0): drop the legacy `paseo` alias here, in `DIRECT_AIT_TOOL_PREFIXES`
- * (apps/mobile tool-call overview) and in the Rust `AIT_TOOL_NAMESPACES`
- * (crates/provider fork context); see docs/plans/README.md.
- */
-const AIT_TOOL_NAMESPACES = ["ait", "paseo"] as const;
+/** MCP server name the daemon registers its own agent tools under. */
+const AIT_TOOL_NAMESPACE = "ait";
 
 function isAitToolNamespace(segment: string): boolean {
-  return AIT_TOOL_NAMESPACES.some(
-    (namespace) => segment === namespace || segment.startsWith(`${namespace}_`),
-  );
+  return segment === AIT_TOOL_NAMESPACE || segment.startsWith(`${AIT_TOOL_NAMESPACE}_`);
 }
 
 export function isAitToolName(name: string): boolean {

@@ -1,7 +1,13 @@
+---
+id: ADR-205
+status: accepted
+date: 2026-10-31
+paths:
+  - crates/provider
+---
+
 # ADR-205：Provider 执行归属与公共端口契约
 
-- 状态：Accepted
-- 日期：2026-10-31
 - 延续：[ADR-179](adr-179-provider-owned-tests.md) 的 Provider 自有行为测试。
 
 执行器原先通过方法字符串和 `agentId` 字段推断请求归属，漏掉了以

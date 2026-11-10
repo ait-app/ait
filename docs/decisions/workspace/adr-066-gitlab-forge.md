@@ -1,6 +1,12 @@
-# ADR-066：通过 glab 支持 GitLab Forge
+---
+id: ADR-066
+status: accepted
+date: 2026-09-29
+paths:
+  - crates/filesystem
+---
 
-状态：Accepted（2026-09-29）
+# ADR-066：通过 glab 支持 GitLab Forge
 
 ## 背景
 
@@ -52,4 +58,4 @@ Desktop adapter 一起发布。没有修改 0.0.8 安装包，也没有新增 Gi
 端口沿用 glab 配置；本次测试覆盖标准 HTTPS remote 和 SSH alias，不宣称覆盖所有自定义
 端口、HTTP-only、代理或 SSO 部署。
 
-验证范围与 Test coverage 见[实施报告](../../reports/workspace/gitlab-forge.md)。
+验证范围与 Test coverage 见[实施报告](../../archive/reports/workspace/gitlab-forge.md)。

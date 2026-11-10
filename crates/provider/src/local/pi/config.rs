@@ -50,8 +50,9 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             .is_some_and(|value| !value.is_null())
         || config
             .mcp_servers
-            .as_ref()
-            .is_some_and(|value| !value.is_empty())
+            .iter()
+            .flatten()
+            .any(|(_, server)| !crate::local::acp_config::launchable(server))
         || config
             .provider_options
             .as_ref()
@@ -63,7 +64,8 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
     {
         return Err(AgentSessionError::Rejected);
     }
-    Ok(())
+    // Bounded MCP definitions reach the session's private extension.
+    crate::local::configuration::validate(config, PROVIDER)
 }
 
 /// Split a bounded, qualified model identity; malformed identities return `None`.

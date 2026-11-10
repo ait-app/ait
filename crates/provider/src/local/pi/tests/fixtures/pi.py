@@ -26,6 +26,16 @@ root = Path.cwd()
 path = root / 'session.jsonl'
 args = sys.argv[1:]
 (root / 'arguments.json').write_text(json.dumps(args))
+if '--extension' in args:
+    # Pi loads the module and registers each servers.json entry with pi.registerMcpServer.
+    extension = Path(args[args.index('--extension') + 1])
+    source = extension.read_text()
+    assert 'registerMcpServer' in source and 'Bearer' not in source
+    servers = extension.with_name('servers.json')
+    with (root / 'mcp-openings.jsonl').open('a') as log:
+        log.write(json.dumps({'directory': str(extension.parent),
+                              'mode': oct(servers.stat().st_mode & 0o777),
+                              'servers': json.loads(servers.read_text())}) + '\n')
 if '--session' in args:
     path = Path(args[args.index('--session') + 1])
     identity = json.loads(path.read_text().splitlines()[0])['id']

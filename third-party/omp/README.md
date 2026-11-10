@@ -14,5 +14,5 @@ remain available as historical design material; they are not part of current
 installation or builds. An independent local proposal commit is `82ba8c84`
 (`proposal/native-provider-interfaces-20261104`).
 
-See [ADR-212](../../docs/decisions/providers/adr-212-native-editor-completion.md)
+See [ADR-234](../../docs/decisions/providers/adr-234-native-editor-completion.md)
 for the negotiated Ait integration boundary.

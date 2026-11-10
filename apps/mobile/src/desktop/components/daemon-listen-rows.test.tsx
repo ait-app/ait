@@ -85,16 +85,20 @@ it("keeps invalid input out of the saved configuration", async () => {
   await waitFor(() => expect(save).toHaveBeenCalledWith("127.0.0.1:7317"));
 });
 
-it("preserves a failed draft and allows Enter to retry it", async () => {
+it("preserves a failed draft without reporting the failure a second time, and retries on Enter", async () => {
   save.mockRejectedValueOnce(new Error("disk unavailable"));
   const { port } = show();
   fireEvent.change(port, { target: { value: "7317" } });
   fireEvent.blur(port);
-  expect(await screen.findByText("desktop.settings.saveFailed")).toBeTruthy();
+  await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+  await act(async () => {});
+  // The settings mutation's onError already showed the save failure.
+  expect(screen.queryByText("desktop.settings.saveFailed")).toBeNull();
+  expect(screen.queryByRole("alert")).toBeNull();
   expect(port.value).toBe("7317");
   fireEvent.keyDown(port, { key: "Enter" });
   await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
-  await waitFor(() => expect(screen.queryByText("desktop.settings.saveFailed")).toBeNull());
+  expect(save).toHaveBeenLastCalledWith("127.0.0.1:7317");
 });
 
 it("queues a second field edit while the first commit is still saving", async () => {

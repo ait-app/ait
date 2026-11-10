@@ -448,15 +448,7 @@ impl Worktrees {
             cleanup.close_workspaces(&pending.workspace_ids)?;
         }
         if let Some(owned) = pending.ownership {
-            let remaining_reference =
-                self.workspaces
-                    .list()
-                    .map_err(map_registry)?
-                    .iter()
-                    .any(|workspace| {
-                        !workspace.is_archived()
-                            && references(&*self.managed, workspace, &owned.path)
-                    });
+            let remaining_reference = self.actively_referenced(&owned.path)?;
             if remaining_reference && pending.scope == ArchiveScope::Worktree {
                 return Err(WorktreeError::Invalid(
                     "Worktree gained an active Workspace during archive; retry".to_owned(),
@@ -468,6 +460,58 @@ impl Worktrees {
             }
         }
         Ok(pending.archived)
+    }
+
+    /// Workspace whose checkout `pending` is expected to remove, so its teardown can run first.
+    ///
+    /// Prefers the Workspace that created the worktree, then the oldest selected one. Returns
+    /// none when the archive keeps the checkout: it is not Ait-owned or another active Workspace
+    /// still references it. [`Self::finish_archive`] repeats the reference check before removal.
+    /// # Errors
+    /// Returns registry failures.
+    pub fn teardown_workspace(
+        &self,
+        pending: &PendingArchive,
+    ) -> Result<Option<PersistedWorkspaceRecord>, WorktreesError> {
+        let Some(owned) = &pending.ownership else {
+            return Ok(None);
+        };
+        if self.actively_referenced(&owned.path)? {
+            return Ok(None);
+        }
+        let mut selected = self
+            .workspaces
+            .list()
+            .map_err(map_registry)?
+            .into_iter()
+            .filter(|workspace| {
+                pending.workspace_ids.contains(&workspace.workspace_id)
+                    && references(&*self.managed, workspace, &owned.path)
+            })
+            .collect::<Vec<_>>();
+        selected.sort_by(|left, right| {
+            (
+                left.kind != PersistedWorkspaceKind::Worktree,
+                &left.created_at,
+            )
+                .cmp(&(
+                    right.kind != PersistedWorkspaceKind::Worktree,
+                    &right.created_at,
+                ))
+        });
+        Ok(selected.into_iter().next())
+    }
+
+    /// Whether an unarchived Workspace still references the checkout at `root`.
+    fn actively_referenced(&self, root: &str) -> Result<bool, WorktreesError> {
+        Ok(self
+            .workspaces
+            .list()
+            .map_err(map_registry)?
+            .iter()
+            .any(|workspace| {
+                !workspace.is_archived() && references(&*self.managed, workspace, root)
+            }))
     }
 
     fn register_created(

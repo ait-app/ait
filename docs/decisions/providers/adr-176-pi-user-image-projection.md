@@ -1,7 +1,16 @@
+---
+id: ADR-176
+status: accepted
+date: 2026-10-21
+amends:
+  - providers/adr-157-codex-user-image-projection.md
+  - providers/adr-174-pi-session-import.md
+paths:
+  - crates/provider
+---
+
 # ADR-176: Pi user images in the shared timeline projection
 
-- Status: Accepted (implemented).
-- Date: 2026-10-21.
 - Scope: `crates/provider`; extends the user-image projection from
   [ADR-157](adr-157-codex-user-image-projection.md) to Pi's live input and
   [ADR-174](adr-174-pi-session-import.md) native history import and explicit refresh.
@@ -60,7 +69,7 @@ crate dependency, database schema, file-transfer interface, or native-history wr
 Line coverage was not measured because it was not requested. Relevant regressions
 cover live image-only input, text chunking with one preview set, imported user images,
 context edits, empty text blocks with images, repeated inspection, and unchanged native
-history files during inspection. The [validation report](../../reports/providers/pi-user-image-projection-2026-10-21.md)
+history files during inspection. The [validation report](../../archive/reports/providers/pi-user-image-projection-2026-10-21.md)
 records the tested source snapshot, exact commands, and execution results separately from
 coverage. If measurement is requested, use focused provider tests with `cargo llvm-cov`
 and record the revision, command, and artifact.

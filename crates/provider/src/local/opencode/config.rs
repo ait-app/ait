@@ -37,7 +37,11 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
             .as_ref()
             .is_some_and(|map| !map.is_empty())
         || config.tool_policy.is_some()
-        || config.mcp_servers.is_some()
+        || config
+            .mcp_servers
+            .iter()
+            .flatten()
+            .any(|(_, server)| !crate::local::acp_config::launchable(server))
         || config
             .system_prompt
             .as_ref()
@@ -49,7 +53,8 @@ pub(super) fn validate(config: &StoredAgentConfig) -> Result<(), AgentSessionErr
     {
         return Err(AgentSessionError::Rejected);
     }
-    Ok(())
+    // Bounded MCP definitions reach native ACP session opening; other fields are checked above.
+    crate::local::configuration::validate(config, PROVIDER)
 }
 
 /// Validate provider, configuration and an existing canonical absolute working directory.

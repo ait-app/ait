@@ -80,7 +80,12 @@ import { restoreSentContextAttachments } from "@/composer/attachments/workspace-
 import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/input-mode";
 import { ComposerKeyboardScopeProvider, useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
-import { joinRestoredText, readLiveDraftText, submitAgentInput } from "@/composer/submit";
+import {
+  joinRestoredText,
+  readLiveDraftText,
+  runImmediateClientSlashCommand,
+  submitAgentInput,
+} from "@/composer/submit";
 import { FOOTER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
@@ -1424,20 +1429,20 @@ function ComposerContentImpl({
       if (blurOnSubmit) {
         messageInputRef.current?.blur();
       }
-      clearDraft("sent");
-      replaceUserInput("");
-      setSelectedAttachments([]);
-      resetSuppression();
-      setSendError(null);
-      setIsProcessing(true);
-      void onClientSlashCommand(command)
-        .catch((error) => {
+      void runImmediateClientSlashCommand({
+        run: () => onClientSlashCommand(command),
+        clearComposer: () => {
+          clearDraft("sent");
+          replaceUserInput("");
+          setSelectedAttachments([]);
+          resetSuppression();
+        },
+        setSendError,
+        setIsProcessing,
+        onError: (error) => {
           console.error("[Composer] Failed to run client slash command:", error);
-          setSendError(error instanceof Error ? error.message : String(error));
-        })
-        .finally(() => {
-          setIsProcessing(false);
-        });
+        },
+      });
       return true;
     },
     [

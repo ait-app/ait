@@ -135,9 +135,9 @@ describe("shared tool-call display mapping", () => {
     });
   });
 
-  it("humanizes Paseo MCP tool names (Claude Code format)", () => {
+  it("humanizes Ait MCP tool names (Claude Code format)", () => {
     const display = buildToolCallDisplayModel({
-      name: "mcp__paseo__create_agent",
+      name: "mcp__ait__create_agent",
       status: "running",
       error: null,
       detail: { type: "unknown", input: null, output: null },
@@ -145,9 +145,9 @@ describe("shared tool-call display mapping", () => {
     expect(display.displayName).toBe("Create agent");
   });
 
-  it("humanizes Paseo MCP tool names (Codex format)", () => {
+  it("humanizes Ait MCP tool names (Codex format)", () => {
     const display = buildToolCallDisplayModel({
-      name: "paseo.create_agent",
+      name: "ait.create_agent",
       status: "running",
       error: null,
       detail: { type: "unknown", input: null, output: null },
@@ -155,9 +155,9 @@ describe("shared tool-call display mapping", () => {
     expect(display.displayName).toBe("Create agent");
   });
 
-  it("humanizes list_agents Paseo tool", () => {
+  it("humanizes list_agents Ait tool", () => {
     const display = buildToolCallDisplayModel({
-      name: "mcp__paseo__list_agents",
+      name: "mcp__ait__list_agents",
       status: "running",
       error: null,
       detail: { type: "unknown", input: null, output: null },

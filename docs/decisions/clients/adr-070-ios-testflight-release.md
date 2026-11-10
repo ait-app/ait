@@ -1,6 +1,15 @@
+---
+id: ADR-070
+status: superseded
+date: 2026-10-02
+paths:
+  - .github/workflows
+  - apps/mobile
+---
+
 # ADR-070：Ait iOS TestFlight 手动发布工作流
 
-状态：Superseded（2026-10-23），由 [ADR-183](adr-183-ios-xcode-cloud-release.md) 取代。
+状态说明：Superseded（2026-10-23），由 [ADR-183](adr-183-ios-xcode-cloud-release.md) 取代。
 以下保留原 EAS 方案的历史决策，不再作为当前发布操作依据。
 
 ## 背景

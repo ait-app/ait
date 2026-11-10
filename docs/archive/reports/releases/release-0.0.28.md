@@ -11,7 +11,7 @@
   每次握手与重连按当前主机公告协商事件，后台繁忙时等待目录和标签初始化。
   更新器诊断正确处理 ShipIt 已移走的暂存 bundle。
   见 [PR #277](https://github.com/ait-app/ait/pull/277)、
-  [安装后诊断报告](../../../reports/clients/release-0.0.27-installed-diagnostics-2026-10-11.md)。
+  [安装后诊断报告](../clients/release-0.0.27-installed-diagnostics-2026-10-11.md)。
 - **会话切换。** 先等待释放已建立的 Timeline 订阅，再申请最新的标签集合，
   避免切换会话时订阅名额短暂耗尽。尚未完成初始化的旧订阅继续回收迟到 ID。
   见 [PR #257](https://github.com/ait-app/ait/pull/257)。
@@ -22,7 +22,7 @@
 - **Changes 刷新。** 前台 Checkout 使用独立串行额度，diff 等待现有输出容量，
   同连接的小型控制响应仍可发送，修复繁忙和大 diff 累计输出时的两条断线路径。
   见 [PR #279](https://github.com/ait-app/ait/pull/279)、
-  [验证报告](../../../reports/workspace/changes-refresh-transport-2026-10-11.md)。
+  [验证报告](../workspace/changes-refresh-transport-2026-10-11.md)。
 - **浏览器客户端。** 支持同源网站共享登录、持久账户会话、在线 Host、浏览器下载，
   设置内增加托管网站的管理 tab。见 [PR #280](https://github.com/ait-app/ait/pull/280)、
   [ADR-132](../../../decisions/clients/adr-132-web-console-client.md)。

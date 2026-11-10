@@ -8,6 +8,7 @@ use crate::{
 use domain::agent_runtime::StoredAgentConfig;
 use std::collections::BTreeMap;
 
+mod agent_mcp;
 mod archive;
 mod command_attachments;
 mod commands;

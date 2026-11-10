@@ -1,6 +1,16 @@
+---
+id: ADR-115
+status: accepted
+date: 2026-10-09
+amends:
+  - providers/adr-074-opencode-native-provider.md
+  - providers/adr-110-opencode-private-protocol-boundary.md
+paths:
+  - crates/provider
+---
+
 # ADR-115：OpenCode 官方 ACP Provider
 
-- 状态：Accepted，2026-10-09。
 - 范围：`crates/provider` 的 OpenCode adapter；修订 [ADR-074](adr-074-opencode-native-provider.md) 和 [ADR-110](adr-110-opencode-private-protocol-boundary.md) 的传输与生命周期实现。
 - 后续修订：[ADR-135](adr-135-opencode-catalog-readiness.md) 更新目录就绪与异步配置确认规则；[ADR-143](adr-143-opencode-2-0-25-compatibility.md) 将已验证的 2.x 最低版本修正为 2.0.25。
 - 观测修订：[ADR-159](adr-159-opencode-acp-native-observation.md) 在已验证的 1.18 profile 中补充 ACP 缺失的原生只读事实。
@@ -81,4 +91,4 @@
 
 使用不可变、无网络的 ACP 可执行夹具验证并发、旧句柄、审批、表单、取消、历史、输出预算和清理。
 真实 CLI 验证使用隔离 XDG 目录与确定性的 loopback 模型，不读取用户认证，不访问真实模型服务。
-验证结果与 Test coverage 记录见 [ACP 迁移报告](../../reports/providers/opencode-acp-2026-10-09.md)。
+验证结果与 Test coverage 记录见 [ACP 迁移报告](../../archive/reports/providers/opencode-acp-2026-10-09.md)。

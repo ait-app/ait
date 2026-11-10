@@ -1,7 +1,15 @@
+---
+id: ADR-162
+status: accepted
+date: 2026-10-19
+amends:
+  - providers/adr-144-provider-error-reporting.md
+paths:
+  - crates/provider
+---
+
 # ADR-162：Codex 失败展示原生原因与 HTTP 状态
 
-- 状态：Accepted
-- 日期：2026-10-19
 - 修订：[ADR-144](adr-144-provider-error-reporting.md) 的 Codex 用户可见说明策略。
 
 ## 背景
@@ -39,5 +47,5 @@ Codex 将余额不足等上游响应包装为连接错误。仅修正固定分�
 
 ## 验证与 Test coverage
 
-定向验证记录在 [Codex 排查报告](../../reports/providers/codex-upstream-errors-2026-10-19.md)。
+定向验证记录在 [Codex 排查报告](../../archive/reports/providers/codex-upstream-errors-2026-10-19.md)。
 **not measured**：用户未请求覆盖率；后续测量限定 provider crate 和 Codex 失败展示相关测试。

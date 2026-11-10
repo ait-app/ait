@@ -39,7 +39,7 @@ glab auth login --hostname code.company.example
 
 Ait 复用 CLI 登录配置。自建域名登录后，失败缓存最多需 30 秒过期，也可重启 server。
 当前支持本地已有 GitLab 仓库；GitHub 专用项目目录/克隆接口尚未扩展为 GitLab 目录接口。
-跨仓库 fork 检出的 setup 仍需显式批准。具体范围见 [GitLab 报告](../../../reports/workspace/gitlab-forge.md)。
+跨仓库 fork 检出的 setup 仍需显式批准。具体范围见 [GitLab 报告](../workspace/gitlab-forge.md)。
 
 ## 发布验证
 

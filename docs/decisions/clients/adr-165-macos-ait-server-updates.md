@@ -1,7 +1,13 @@
+---
+id: ADR-165
+status: accepted
+date: 2026-10-19
+paths:
+  - apps/desktop
+---
+
 # ADR-165：macOS 通过 AIT Server 检查与下载更新
 
-- 状态：Accepted
-- 日期：2026-10-19
 - 关联：[ADR-053](adr-053-paseo-desktop-release.md)、[ADR-158](adr-158-standalone-daemon-release.md)
 
 ## 背景

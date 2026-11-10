@@ -1,7 +1,15 @@
+---
+id: ADR-147
+status: accepted
+date: 2026-10-08
+amends:
+  - providers/adr-082-deepseek-harness-native-host.md
+paths:
+  - crates/provider
+---
+
 # ADR-147：DSH 原生插件情景模式与权限分离
 
-- 状态：接受
-- 日期：2026-10-08
 - 修订：ADR-082 中将权限预设作为模式的映射。
 
 ## 背景

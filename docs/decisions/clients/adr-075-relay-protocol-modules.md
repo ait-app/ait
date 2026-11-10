@@ -1,7 +1,15 @@
+---
+id: ADR-075
+status: accepted
+date: 2026-10-03
+amends:
+  - clients/adr-074-account-host-relay.md
+paths:
+  - crates/relay
+---
+
 # ADR-075：Relay 协议定义与连接执行分离
 
-- 状态：已实现
-- 日期：2026-10-03
 - 关系：细化 [ADR-074](adr-074-account-host-relay.md) 的协议与传输模块职责，保留其 crate 依赖边界。
 
 ## 背景
@@ -32,4 +40,4 @@ relay 数据模式和 daemon feature 虽然使用相同的线上字符串，分�
 能力发现两个契约；不因此建立 `relay` 到 `protocol` 的依赖。
 原有 daemon 业务方法、参数类型和能力包归属不作调整。
 
-验证范围及测量结果见 [协议重构验证报告](../../reports/clients/relay-protocol-refactor-validation.md)。
+验证范围及测量结果见 [协议重构验证报告](../../archive/reports/clients/relay-protocol-refactor-validation.md)。

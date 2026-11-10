@@ -1,7 +1,14 @@
+---
+id: ADR-062
+status: accepted
+date: 2026-09-28
+paths:
+  - apps/desktop
+  - bins/daemon
+---
+
 # ADR-062：Ait 运行路径与项目配置文件
 
-- 状态：Accepted
-- 日期：2026-09-28
 - 延续：ADR-055、ADR-056、ADR-061
 
 ## 决策
@@ -19,4 +26,4 @@
 
 ## Test coverage
 
-提交准备已在代码版本 `a933517` 运行 `RUST_TEST_THREADS=4 cargo llvm-cov --workspace --html`：workspace 91.60%（35,744 / 39,021 行），filesystem 88.14%（7,881 / 8,941 行），metadata 89.82%（6,178 / 6,878 行）。无可比基线。测量范围、跳过项、共享覆盖率摘要和未覆盖行为见[覆盖率报告](../../reports/clients/ait-e2e-coverage.md)；测试执行结果见[迁移报告](../../reports/clients/ait-e2e-migration.md)。
+提交准备已在代码版本 `a933517` 运行 `RUST_TEST_THREADS=4 cargo llvm-cov --workspace --html`：workspace 91.60%（35,744 / 39,021 行），filesystem 88.14%（7,881 / 8,941 行），metadata 89.82%（6,178 / 6,878 行）。无可比基线。测量范围、跳过项、共享覆盖率摘要和未覆盖行为见[覆盖率报告](../../archive/reports/clients/ait-e2e-coverage.md)；测试执行结果见[迁移报告](../../archive/reports/clients/ait-e2e-migration.md)。

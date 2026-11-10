@@ -1,7 +1,16 @@
+---
+id: ADR-164
+status: accepted
+date: 2026-10-19
+amends:
+  - clients/adr-160-remove-legacy-relay-protocol.md
+paths:
+  - packages/protocol
+  - apps/mobile
+---
+
 # ADR-164：移除 Workspace 服务代理 URL 字段
 
-- 状态：已实现
-- 日期：2026-10-19
 - 关系：修订 [ADR-160](adr-160-remove-legacy-relay-protocol.md) 对旧服务链接字段兼容测试的保留决定；保留 [ADR-152](adr-152-remote-workspace-browser-loopback.md) 的在线中继浏览器回环转发。
 
 ## 决策

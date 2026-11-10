@@ -1,6 +1,13 @@
-# ADR-177：移动端本地通知与 APNs／FCM 直连
+---
+id: ADR-177
+status: accepted
+date: 2026-10-21
+paths:
+  - apps/mobile
+  - bins/daemon
+---
 
-状态：Accepted（2026-10-21）。
+# ADR-177：移动端本地通知与 APNs／FCM 直连
 
 移动端已有完成／权限事件和设备登记，但原生本地通知被禁用，daemon 仅持久化 token，未执行远程投递。现采用前台本地通知、后台由 Apple APNs 或 Google FCM 直接投递；不使用 Expo Push 中转。`expo-notifications` 仅负责原生权限、设备 token、显示和点击回调。
 

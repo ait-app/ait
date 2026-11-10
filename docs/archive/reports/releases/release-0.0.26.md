@@ -16,7 +16,7 @@
   和主机诊断因不接受 `null` 而校验失败。
 
 上述修复均来自 [PR #250](https://github.com/ait-app/ait/pull/250)。复现、源码验证和观察范围见
-[daemon 修复报告](../../../reports/daemon/daemon-startup-panic-fix-2026-10-10.md)。
+[daemon 修复报告](../daemon/daemon-startup-panic-fix-2026-10-10.md)。
 
 ## 安装与更新
 

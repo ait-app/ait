@@ -12,7 +12,7 @@
   [PR #155](https://github.com/ait-app/ait/pull/155)。
 - **账户与跨主机连接。** 桌面和 Android 支持账户登录、发现账户下的 Host 和反向中继连接。
   [PR #138](https://github.com/ait-app/ait/pull/138)、
-  [验证说明](../../../reports/clients/account-host-relay-validation.md)。
+  [验证说明](../clients/account-host-relay-validation.md)。
 - **可选 Android APK。** 增加手动构建 ARM64、ARMv7 的入口，验证版本、架构、签名和原生库对齐。
   推送标签默认只发布桌面；需要 APK 时手动勾选 `build_android`，本次发布保持默认关闭。
   当前使用测试签名，安装及后续签名兼容性见 [当前 Android 发布](../../../operations/google-play-internal-testing.md)。
@@ -105,7 +105,7 @@ CARGO_TARGET_DIR=/private/tmp/ait-workspace-sidebar-cov-target cargo llvm-cov re
 ```
 
 HTML 位于 `/private/tmp/ait-workspace-sidebar-cov-target/llvm-cov/html/index.html`，共享证据为上述 JSON。
-同平台历史[rebase 测量](../../../reports/daemon/crate-coverage-rebase.md)为 94.5483%（48,595 / 51,397），
+同平台历史[rebase 测量](../daemon/crate-coverage-rebase.md)为 94.5483%（48,595 / 51,397），
 本次低 0.0156 个百分点；未重测旧基线，生产 Rust 未改动，不将本次差值解释为功能覆盖退化。
 3 项原有 ignored 依赖真实 Provider 安装或认证；原生语音模型、真实 OpenCode 推理和移动真机
 端到端流程未在本次验证。Linux 运行由 PR/main CI 验证；真实 Provider 和设备行为需相应环境复验。

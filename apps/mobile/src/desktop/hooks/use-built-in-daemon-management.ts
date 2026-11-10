@@ -13,7 +13,9 @@ import {
 import {
   DaemonConnectionRegistrationError,
   DaemonManagementOperationError,
+  DaemonSettingsPersistError,
   getDaemonManagementErrorPresentation,
+  isReportedDaemonSettingsPersistError,
 } from "@/desktop/daemon/daemon-management-error";
 import { useDesktopIpcErrorReporter } from "@/desktop/hooks/desktop-ipc-error";
 import type { DesktopSettings } from "@/desktop/settings/desktop-settings";
@@ -71,7 +73,13 @@ export function useBuiltInDaemonManagement(
               cancelLabel: t("common.actions.cancel"),
               destructive: true,
             }),
-          persistSettings: (next) => updateSettings(next) as Promise<void>,
+          persistSettings: async (next) => {
+            try {
+              await updateSettings(next);
+            } catch (error) {
+              throw new DaemonSettingsPersistError(error);
+            }
+          },
           startDaemon: startDesktopDaemon,
           stopDaemon: () => stopDesktopDaemon("settings"),
         });
@@ -93,6 +101,10 @@ export function useBuiltInDaemonManagement(
       }
     },
     onError: (error) => {
+      // The desktop settings mutation has already reported a failed save.
+      if (isReportedDaemonSettingsPersistError(error)) {
+        return;
+      }
       const presentation = getDaemonManagementErrorPresentation(
         error,
         settings.manageBuiltInDaemon,

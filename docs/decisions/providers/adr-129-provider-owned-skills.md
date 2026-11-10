@@ -1,7 +1,17 @@
+---
+id: ADR-129
+status: accepted
+date: 2026-10-11
+amends:
+  - daemon/adr-100-crate-level-service-installation.md
+  - workspace/adr-043-daemon-skills.md
+  - workspace/adr-113-filesystem-capability-groups.md
+paths:
+  - crates/provider
+---
+
 # ADR-129：Agent Skills 能力组归 provider
 
-- 状态：接受
-- 日期：2026-10-11
 - 修订：[ADR-043](../workspace/adr-043-daemon-skills.md) 的 Skills 能力归属、
   [ADR-113](../workspace/adr-113-filesystem-capability-groups.md) 的 filesystem 能力组集合，
   以及 [ADR-100](../daemon/adr-100-crate-level-service-installation.md) 的服务组成。

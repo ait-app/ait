@@ -783,16 +783,6 @@ function DesktopAppUpdateRow() {
     installUpdate,
   } = useDesktopAppUpdater();
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!isDesktopApp) {
-        return undefined;
-      }
-      void checkForUpdates({ intent: "automatic", silent: true });
-      return undefined;
-    }, [checkForUpdates, isDesktopApp]),
-  );
-
   const handleCheckForUpdates = useCallback(() => {
     if (!isDesktopApp) {
       return;

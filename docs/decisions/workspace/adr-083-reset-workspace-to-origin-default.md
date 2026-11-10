@@ -1,7 +1,16 @@
+---
+id: ADR-083
+status: accepted
+date: 2026-10-05
+amends:
+  - workspace/adr-069-background-git-fetch.md
+paths:
+  - crates/filesystem
+  - crates/metadata
+---
+
 # ADR-083：工作区重置到 origin 的最新默认分支
 
-- 状态：Accepted
-- 日期：2026-10-05
 - 关联：ADR-069、ADR-072
 - 修订：2026-10-19，重置同时清理未跟踪文件和目录。
 

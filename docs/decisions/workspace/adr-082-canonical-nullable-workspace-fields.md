@@ -1,7 +1,16 @@
+---
+id: ADR-082
+status: accepted
+date: 2026-10-04
+amends:
+  - workspace/adr-065-paseo-directory-and-timeline-projections.md
+paths:
+  - crates/domain
+  - crates/model
+---
+
 # ADR-082：Workspace 可空字段使用单级 Option
 
-- 状态：Accepted
-- 日期：2026-10-04
 - 修订：ADR-065 的 Paseo wire fixture 输出逐字段一致要求
 
 ## 背景

@@ -1,6 +1,13 @@
+---
+id: ADR-087
+status: accepted
+date: 2026-10-06
+paths:
+  - crates/provider
+---
+
 # ADR-087：Antigravity CLI 原生 Provider
 
-- 状态：Accepted，2026-10-06。
 - 范围：`crates/provider`、`bins/daemon`、共享协议与客户端 Provider 显示。
 - 上位约束：ADR-027、ADR-031、ADR-039、ADR-072。
 
@@ -69,4 +76,4 @@ Google 的 Antigravity CLI 使用 `agy` 命令。官方脚本与 Homebrew cask �
 `agy --conversation <id>` 终端恢复命令。无需改变 domain 类型或新增服务。
 
 安装与能力限制见 [操作手册](../../operations/antigravity.md)，
-测试与平台范围见 [验证报告](../../reports/providers/antigravity-cli.md)。
+测试与平台范围见 [验证报告](../../archive/reports/providers/antigravity-cli.md)。

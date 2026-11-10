@@ -86,9 +86,11 @@ function findInterpolationMismatches(resource: unknown): string[] {
     const actual = [...(localeStrings[key] ?? "").matchAll(interpolationPattern)]
       .map((match) => match[0])
       .sort();
-    return expected.join("|") === actual.join("|")
-      ? []
-      : [`${key}: ${expected.join(", ")} -> ${actual.join(", ")}`];
+    if (expected.join("|") === actual.join("|")) return [];
+    // A singular form may spell the number out ("every minute") instead of printing the count.
+    const withoutCount = expected.filter((placeholder) => placeholder !== "{{count}}");
+    if (key.endsWith("_one") && withoutCount.join("|") === actual.join("|")) return [];
+    return [`${key}: ${expected.join(", ")} -> ${actual.join(", ")}`];
   });
 }
 
@@ -142,11 +144,11 @@ describe("translation resources", () => {
   it("keeps all supported language keys in sync with English", () => {
     const englishKeys = flattenKeys(en).sort();
     expect(withoutLocalePluralVariants(flattenKeys(ar), "ar").sort()).toEqual(englishKeys);
-    expect(flattenKeys(es).sort()).toEqual(englishKeys);
-    expect(flattenKeys(fr).sort()).toEqual(englishKeys);
+    expect(withoutLocalePluralVariants(flattenKeys(es), "es").sort()).toEqual(englishKeys);
+    expect(withoutLocalePluralVariants(flattenKeys(fr), "fr").sort()).toEqual(englishKeys);
     expect(flattenKeys(ja).sort()).toEqual(englishKeys);
     expect(flattenKeys(ko).sort()).toEqual(englishKeys);
-    expect(flattenKeys(ptBR).sort()).toEqual(englishKeys);
+    expect(withoutLocalePluralVariants(flattenKeys(ptBR), "pt-BR").sort()).toEqual(englishKeys);
     expect(withoutLocalePluralVariants(flattenKeys(ru), "ru").sort()).toEqual(englishKeys);
     expect(flattenKeys(zhCN).sort()).toEqual(englishKeys);
   });
@@ -173,9 +175,12 @@ describe("translation resources", () => {
     }
   });
 
-  it("provides every CLDR plural form for translated Russian and Arabic plural keys", () => {
+  it("provides every CLDR plural form for translated plural keys", () => {
     expect(findMissingTranslatedPluralForms(ru, "ru")).toEqual([]);
     expect(findMissingTranslatedPluralForms(ar, "ar")).toEqual([]);
+    expect(findMissingTranslatedPluralForms(es, "es")).toEqual([]);
+    expect(findMissingTranslatedPluralForms(fr, "fr")).toEqual([]);
+    expect(findMissingTranslatedPluralForms(ptBR, "pt-BR")).toEqual([]);
   });
 
   it("resolves Russian and Arabic plural counts without falling back to English", () => {
@@ -186,6 +191,50 @@ describe("translation resources", () => {
     expect(tRu(key, { count: 5 })).toContain("рабочих пространств");
     expect(tAr(key, { count: 2 })).toContain("مساحتَي عمل");
     expect(tAr(key, { count: 0 })).toContain("مساحة عمل");
+  });
+
+  it("resolves schedule counts with each language's plural forms instead of English", () => {
+    const key = "schedules.cadence.minutes";
+    const tRu = i18n.getFixedT("ru");
+    expect(tRu(key, { count: 21 })).toBe("Каждую 21 минуту");
+    expect(tRu(key, { count: 3 })).toBe("Каждые 3 минуты");
+    expect(tRu(key, { count: 5 })).toBe("Каждые 5 минут");
+    expect(tRu("schedules.timeline.limit", { count: 11 })).toBe("11 запусков");
+    const tAr = i18n.getFixedT("ar");
+    expect(tAr(key, { count: 1 })).toBe("كل دقيقة");
+    expect(tAr(key, { count: 2 })).toBe("كل دقيقتين");
+    expect(tAr(key, { count: 3 })).toBe("كل 3 دقائق");
+    expect(tAr(key, { count: 11 })).toBe("كل 11 دقيقة");
+    expect(i18n.getFixedT("es")(key, { count: 1_000_000 })).toBe("Cada 1000000 de minutos");
+    expect(i18n.getFixedT("fr")(key, { count: 1_000_000 })).toBe("Toutes les 1000000 de minutes");
+    expect(i18n.getFixedT("pt-BR")(key, { count: 1_000_000 })).toBe("A cada 1000000 de minutos");
+  });
+
+  it("spells a single interval out instead of printing the count where the language needs it", () => {
+    const key = "schedules.cadence.minutes";
+    expect(i18n.getFixedT("fr")(key, { count: 1 })).toBe("Toutes les minutes");
+    expect(i18n.getFixedT("fr")(key, { count: 5 })).toBe("Toutes les 5 minutes");
+    expect(i18n.getFixedT("es")(key, { count: 1 })).toBe("Cada minuto");
+    expect(i18n.getFixedT("pt-BR")(key, { count: 1 })).toBe("A cada minuto");
+    // Russian "one" also covers 21, 31, …, so its singular form must keep the number.
+    expect(i18n.getFixedT("ru")(key, { count: 1 })).toBe("Каждую 1 минуту");
+  });
+
+  it("translates the schedules section in Japanese and Korean", () => {
+    const tJa = i18n.getFixedT("ja");
+    const tKo = i18n.getFixedT("ko");
+    expect(tJa("schedules.cadence.minutes", { count: 5 })).toBe("5 分ごと");
+    expect(tKo("schedules.cadence.minutes", { count: 5 })).toBe("5분마다");
+    expect(tJa("schedules.product.heartbeat")).toBe("ハートビート");
+    expect(tKo("schedules.product.heartbeat")).toBe("하트비트");
+    const english = flattenStrings(en.schedules);
+    for (const resource of [ja, ko]) {
+      const translated = flattenStrings(resource.schedules);
+      const untranslated = Object.keys(english).filter(
+        (path) => /[A-Za-z]{4,}/.test(english[path]) && translated[path] === english[path],
+      );
+      expect(untranslated).toEqual([]);
+    }
   });
 
   it("preserves interpolation placeholders in every language", () => {

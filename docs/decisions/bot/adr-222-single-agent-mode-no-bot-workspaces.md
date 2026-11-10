@@ -1,7 +1,16 @@
+---
+id: ADR-222
+status: accepted
+date: 2026-11-08
+amends:
+  - bot/adr-215-bot-permissions-and-scoped-mcp.md
+paths:
+  - crates/bot
+  - apps/mobile
+---
+
 # ADR-222：每个 Provider 单一 Agent 模式，Bot 不创建 Workspace
 
-- 状态：已实现
-- 日期：2026-11-08
 - 关系：修订 [ADR-215](adr-215-bot-permissions-and-scoped-mcp.md) 的 `workspaces` 分组与模式上限。
 
 ## 背景

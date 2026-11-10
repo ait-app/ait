@@ -95,6 +95,7 @@ struct Runtime {
     setups: Arc<Mutex<Vec<WorkspacePlacement>>>,
     scripts: Arc<Mutex<Vec<(String, String)>>>,
     retired: Arc<Mutex<Vec<String>>>,
+    teardowns: Arc<Mutex<Vec<String>>>,
 }
 
 impl WorkspaceAutomationRuntime for Runtime {
@@ -113,6 +114,7 @@ impl WorkspaceAutomationRuntime for Runtime {
         &self,
         workspace: &WorkspacePlacement,
         script_name: &str,
+        _args: &[String],
     ) -> Result<ScriptSnapshot, WorkspaceAutomationError> {
         self.scripts
             .lock()
@@ -126,6 +128,32 @@ impl WorkspaceAutomationRuntime for Runtime {
         script_name: &str,
     ) -> Result<ScriptSnapshot, WorkspaceAutomationError> {
         Ok(script(script_name, false))
+    }
+    fn script_run(
+        &self,
+        _workspace_id: &str,
+        target: ScriptRunTarget<'_>,
+    ) -> Result<ScriptRunSnapshot, WorkspaceAutomationError> {
+        Err(WorkspaceAutomationError::UnknownRun(format!("{target:?}")))
+    }
+    fn script_run_completion(
+        &self,
+        workspace_id: &str,
+        _run_id: &str,
+    ) -> Result<ScriptRunCompletion, WorkspaceAutomationError> {
+        Err(WorkspaceAutomationError::UnknownRun(
+            workspace_id.to_owned(),
+        ))
+    }
+    fn prepare_teardown(
+        &self,
+        workspace: &WorkspacePlacement,
+    ) -> Result<Option<TeardownJob>, WorkspaceAutomationError> {
+        self.teardowns
+            .lock()
+            .expect("teardowns")
+            .push(workspace.workspace_id.clone());
+        Ok(None)
     }
     fn start_setup(
         &self,
@@ -180,6 +208,7 @@ fn rpc_reports_missing_workspaces_inline_and_keeps_absent_setup_distinct() {
         "workspace.script.list.request",
         "workspace.script.start.request",
         "workspace.script.stop.request",
+        "workspace.script.run.get.request",
     ] {
         let result = execute(
             &service,
@@ -226,9 +255,11 @@ fn setup_approval_is_idempotent_and_clears_provenance_before_start() {
 #[test]
 fn scripts_require_active_trusted_workspace_and_forward_exact_name() {
     let (service, _, runtime) = service();
-    assert!(service.start_script("blocked", "web").is_err());
-    assert!(service.start_script("archived", "web").is_err());
-    let started = service.start_script("trusted", "Web App").expect("start");
+    assert!(service.start_script("blocked", "web", &[]).is_err());
+    assert!(service.start_script("archived", "web", &[]).is_err());
+    let started = service
+        .start_script("trusted", "Web App", &[])
+        .expect("start");
     assert!(started.running);
     assert_eq!(runtime.scripts.lock().expect("scripts")[0].1, "Web App");
     assert_eq!(service.list_scripts("trusted").expect("list").len(), 1);
@@ -248,7 +279,9 @@ fn committed_script_mutations_publish_complete_snapshots() {
     service.set_event_sink(Arc::new(move |event| {
         capture.lock().expect("automation events").push(event);
     }));
-    service.start_script("trusted", "Web App").expect("start");
+    service
+        .start_script("trusted", "Web App", &[])
+        .expect("start");
     service.stop_script("trusted", "Web App").expect("stop");
     let events = events.lock().expect("automation events");
     assert_eq!(events.len(), 2);
@@ -263,6 +296,55 @@ fn committed_script_mutations_publish_complete_snapshots() {
         assert_eq!(workspace_id, "trusted");
         assert_eq!(scripts.len(), 1);
     }
+}
+
+#[test]
+fn script_runs_require_an_active_workspace_and_a_selector() {
+    use serde_json::json;
+
+    use crate::automation::rpc::execute;
+    let (service, _, _) = service();
+    assert!(matches!(
+        service.script_run("archived", ScriptRunTarget::LatestOf("web")),
+        Err(WorkspaceAutomationServiceError::WorkspaceNotFound(_))
+    ));
+    assert!(matches!(
+        service.script_run_completion("archived", "run_1"),
+        Err(WorkspaceAutomationServiceError::WorkspaceNotFound(_))
+    ));
+    assert!(matches!(
+        service.script_run("trusted", ScriptRunTarget::Run("run_1")),
+        Err(WorkspaceAutomationServiceError::Runtime(
+            WorkspaceAutomationError::UnknownRun(_)
+        ))
+    ));
+    assert_eq!(
+        execute(
+            &service,
+            "workspace.script.run.get.request",
+            json!({"workspaceId":"trusted"})
+        ),
+        Err(crate::support::error::ErrorCode::InvalidMessage)
+    );
+    let result = execute(
+        &service,
+        "workspace.script.run.get.request",
+        json!({"workspaceId":"trusted","scriptName":"web"}),
+    )
+    .unwrap();
+    assert!(result["run"].is_null());
+    assert!(result.get("timedOut").is_none());
+    assert!(result["error"].as_str().unwrap().contains("not found"));
+}
+
+#[test]
+fn teardown_runs_for_archived_trusted_workspaces_but_never_for_blocked_ones() {
+    let (service, workspaces, runtime) = service();
+    for id in ["archived", "blocked"] {
+        let record = workspaces.get(id).unwrap().unwrap();
+        assert!(service.prepare_teardown(&record).unwrap().is_none());
+    }
+    assert_eq!(*runtime.teardowns.lock().unwrap(), ["archived"]);
 }
 
 fn service() -> (WorkspaceAutomation, Workspaces, Runtime) {
@@ -321,6 +403,8 @@ fn script(name: &str, running: bool) -> ScriptSnapshot {
         running,
         exit_code: None,
         terminal_id: running.then(|| "terminal-1".to_owned()),
+        run_id: running.then(|| "run_1".to_owned()),
+        accepts_args: false,
     }
 }
 

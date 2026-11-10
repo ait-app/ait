@@ -36,6 +36,8 @@ pub(super) struct Runtime {
     writer: Writer,
     events: mpsc::Receiver<Value>,
     closed: bool,
+    /// Private MCP overlay applied to this Host, removed once the Host is stopped.
+    overlay: Option<super::mcp::Overlay>,
     _preview: Option<tempfile::TempDir>,
 }
 
@@ -45,38 +47,46 @@ impl Runtime {
         client: &DeepSeekHarnessClient,
         cwd: &str,
     ) -> Result<Self, AgentSessionError> {
-        Self::open_scoped(client, cwd, None).await
+        Self::open_with(client, cwd, None).await
     }
 
-    /// Run native Agent composition with session persistence isolated in owned temporary storage.
-    /// The public profile overlay changes only the JSONL root; credentials and plugins stay native.
-    /// Returns filesystem, unsupported-profile, or native startup errors without admitting input.
+    /// Start a Host like [`Self::open`], applying a session's private MCP `overlay`, if any.
+    /// The overlay lives until the Host is stopped.
+    pub(super) async fn open_with(
+        client: &DeepSeekHarnessClient,
+        cwd: &str,
+        overlay: Option<super::mcp::Overlay>,
+    ) -> Result<Self, AgentSessionError> {
+        Self::open_scoped(client, cwd, overlay, None).await
+    }
+
+    /// Compose native commands with the same MCP plugins and an isolated JSONL session root.
+    /// Returns filesystem or native startup errors without admitting model input.
     pub(super) async fn preview(
         client: &DeepSeekHarnessClient,
         cwd: &str,
+        config: &domain::agent_runtime::StoredAgentConfig,
     ) -> Result<Self, AgentSessionError> {
         let directory = tempfile::tempdir().map_err(|_| AgentSessionError::Failed)?;
         let root = directory.path().join("sessions");
         let root = root.to_str().ok_or(AgentSessionError::Failed)?;
-        let patch = json!([{"id":"session-persistence-jsonl",
-            "name":"@deepseek-ai/dsh-session-persistence-jsonl","config":{"root":root}}]);
-        std::fs::write(directory.path().join("preview.json"), patch.to_string())
-            .map_err(|_| AgentSessionError::Failed)?;
-        Self::open_scoped(client, cwd, Some(directory)).await
+        let patch = json!({"id":"session-persistence-jsonl",
+            "name":"@deepseek-ai/dsh-session-persistence-jsonl","config":{"root":root}});
+        let overlay = super::mcp::Overlay::write_with(config, vec![patch])?;
+        Self::open_scoped(client, cwd, overlay, Some(directory)).await
     }
 
     async fn open_scoped(
         client: &DeepSeekHarnessClient,
         cwd: &str,
+        overlay: Option<super::mcp::Overlay>,
         preview: Option<tempfile::TempDir>,
     ) -> Result<Self, AgentSessionError> {
         let diagnostics = crate::local::diagnostics::Diagnostics::new("deepseek-harness");
         let mut command = client.command();
         command.arg("--profile").arg(&client.native_profile);
-        if let Some(directory) = &preview {
-            command
-                .arg("--patch")
-                .arg(directory.path().join("preview.json"));
+        if let Some(overlay) = &overlay {
+            command.args(overlay.arguments());
         }
         command
             .args(["--no-open", "--host", "127.0.0.1", "--port", "0"])
@@ -110,6 +120,7 @@ impl Runtime {
                 client_id,
                 child,
                 closed: false,
+                overlay,
                 _preview: preview,
             })
         } else {
@@ -258,6 +269,13 @@ impl Runtime {
         if self.closed {
             return Ok(());
         }
+        let stopped = self.stop().await;
+        // The Host has exited or been killed; its MCP credentials go with it.
+        self.overlay = None;
+        stopped
+    }
+
+    async fn stop(&mut self) -> Result<(), AgentSessionError> {
         self.diagnostics.flush();
         self.closed = true;
         self.reader.abort();

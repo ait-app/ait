@@ -1,7 +1,17 @@
+---
+id: ADR-088
+status: accepted
+date: 2026-10-06
+amends:
+  - providers/adr-032-daemon-native-provider-execution.md
+  - providers/adr-039-agent-timeline-provider-creation.md
+paths:
+  - crates/provider
+  - apps/desktop
+---
+
 # ADR-088：Provider 发现与启动历史同步隔离
 
-- 状态：Accepted。
-- 日期：2026-10-06。
 - 范围：Provider command admission、Electron 本机连接恢复。
 - 关系：细化 [ADR-032](adr-032-daemon-native-provider-execution.md) 的执行器资源所有权与
   [ADR-039](adr-039-agent-timeline-provider-creation.md) 的 Provider catalog 调度；协议不变。

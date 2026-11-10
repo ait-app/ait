@@ -1,9 +1,15 @@
+---
+id: ADR-033
+status: accepted
+date: 2026-09-24
+paths:
+  - crates/terminal
+---
+
 # ADR-033：独立 terminal 与完整 Terminal 方法分组
 
 > Tokio 依赖限制已由 [ADR-037](adr-037-daemon-model-context.md) 修订；terminal 可按需要使用 Tokio。
 
-- 状态：Accepted。
-- 日期：2026-09-24。
 - 授权：实现 `terminal`，继续实现 Paseo Terminal 相关接口。
 - 来源：`getpaseo/paseo@2c8e8a826810337492cc5a38bb0bbd705b6fb632`。
 - 修订：2026-09-26 按上游 owned-subscriptions 测试对齐相同目标的独立订阅；crate 边界不变。
@@ -100,4 +106,4 @@ provider hook 和自动化生态：
 - Unix 保证 child 和已知进程组回收；自行脱离 session 的守护进程不在此范围。Windows 使用
   `portable-pty` 的 ConPTY 行为，未进行 Windows 实机验证。
 
-测试、覆盖率和命令见[实施报告](../../reports/daemon/terminal.md)。
+测试、覆盖率和命令见[实施报告](../../archive/reports/daemon/terminal.md)。

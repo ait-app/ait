@@ -1,7 +1,16 @@
+---
+id: ADR-045
+status: accepted
+date: 2026-09-25
+amends:
+  - clients/adr-044-paseo-client-rust-transport.md
+  - daemon/adr-026-canonical-paseo-websocket-surface.md
+paths:
+  - crates/api
+---
+
 # ADR-045：移除 Hub、Chat 与 Loop 接口
 
-- 状态：Accepted
-- 日期：2026-09-25
 - 决策来源：用户明确要求这三组不再支持，直接删除。
 - 修订：ADR-026 的协议支持范围、ADR-044 的前端 Rust transport 方法映射。
 
@@ -11,4 +20,4 @@
 
 范围缩减后为 186 个上游名称，合并三个已有别名后为 183 个规范方法。已有 157 个业务处理器不变，剩 26 个占位（Plugin 15、Schedule 9、Browser 2）；加七个自定义方法，生产发布 190 项、实现 164 项。
 
-该决策不更改 Message、Session 或 Run 边界，也不删除通用 EventHub 或 Skills 的 legacy 安装目录清理逻辑。导入的上游源码与 SDK 历史类型不代表 Rust 服务端支持。验证见 [实施报告](../../reports/daemon/server-removed-groups.md)。
+该决策不更改 Message、Session 或 Run 边界，也不删除通用 EventHub 或 Skills 的 legacy 安装目录清理逻辑。导入的上游源码与 SDK 历史类型不代表 Rust 服务端支持。验证见 [实施报告](../../archive/reports/daemon/server-removed-groups.md)。

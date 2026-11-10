@@ -1,7 +1,14 @@
+---
+id: ADR-168
+status: accepted
+date: 2026-10-20
+paths:
+  - crates/metadata
+  - apps/mobile
+---
+
 # ADR-168：Setup 全局摘要与面板日志订阅分离
 
-- 状态：已接受
-- 日期：2026-10-20
 - 关系：延续 [ADR-131](adr-131-metadata-capability-groups.md) 和连接拥有的订阅边界。
 
 ## 背景
@@ -19,4 +26,4 @@
 
 ## 后果与验证
 
-未打开面板的新客户端只接收轻量 Setup 状态；日志仍由现有 runtime 有界保留。后台失败提示与详细日志采用独立生命周期。验证覆盖 Workspace／物理连接隔离、订阅预算、释放、SDK 重连、旧事件顺序、空快照和过时代际请求，见[实施报告](../../reports/clients/paseo-0.12-port-2026-10-20.md)。
+未打开面板的新客户端只接收轻量 Setup 状态；日志仍由现有 runtime 有界保留。后台失败提示与详细日志采用独立生命周期。验证覆盖 Workspace／物理连接隔离、订阅预算、释放、SDK 重连、旧事件顺序、空快照和过时代际请求，见[实施报告](../../archive/reports/clients/paseo-0.12-port-2026-10-20.md)。

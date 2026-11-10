@@ -1,7 +1,12 @@
-# ADR-146：Workspace 重置清除变更请求关联
+---
+id: ADR-146
+status: accepted
+date: 2026-10-13
+paths:
+  - crates/filesystem
+---
 
-- 状态：已接受
-- 日期：2026-10-13
+# ADR-146：Workspace 重置清除变更请求关联
 
 ## 背景
 

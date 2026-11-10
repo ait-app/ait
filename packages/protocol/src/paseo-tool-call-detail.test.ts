@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildPaseoToolDetailSections } from "./paseo-tool-call-detail.js";
 
 describe("Paseo tool-call detail presentation", () => {
-  it.each(["mcp__paseo__create_agent", "paseo.create_agent", "paseo_remote.create_agent"])(
+  it.each(["mcp__ait__create_agent", "ait.create_agent", "ait_remote.create_agent"])(
     "shares one create-agent mapping for %s",
     (toolName) => {
       expect(
@@ -48,7 +48,7 @@ describe("Paseo tool-call detail presentation", () => {
 
   it("formats schedule cadence and nested settings without JSON syntax", () => {
     const sections = buildPaseoToolDetailSections(
-      "mcp__paseo__create_schedule",
+      "mcp__ait__create_schedule",
       {
         prompt: "Say hello back.",
         cron: "0 9 * * 1",
@@ -92,7 +92,7 @@ describe("Paseo tool-call detail presentation", () => {
   it("unwraps MCP result envelopes instead of exposing JSON-encoded text", () => {
     expect(
       buildPaseoToolDetailSections(
-        "mcp__paseo__send_agent_prompt",
+        "mcp__ait__send_agent_prompt",
         { prompt: "Say hello back." },
         {
           meta: null,
@@ -122,7 +122,7 @@ describe("Paseo tool-call detail presentation", () => {
   it("uses readable fallback fields for newly added Paseo tools", () => {
     expect(
       buildPaseoToolDetailSections(
-        "mcp__paseo__future_tool",
+        "mcp__ait__future_tool",
         { opaqueThing: ["one", "two"], enabled: false },
         { success: true },
       ),

@@ -1,8 +1,12 @@
+---
+id: ADR-122
+status: accepted
+date: 2026-10-10
+paths:
+  - crates/provider
+---
+
 # ADR-122：Codex Auto-review 的 computer use 工具批准
-
-状态：已接受
-
-日期：2026-10-10
 
 档位范围与访问批准由 [ADR-149](adr-149-codex-computer-use-access-auto-approval.md) 修订。
 
@@ -35,7 +39,7 @@ provider 适配原生配置和交互，原生 CLI 持有工具与权限执行逻
 
 Auto-review 会直接批准 `cua_repl.js` 工具调用。仍然到达 Ait 的结构化问答需由用户回答，
 从而不会把普通决策问题或独立访问请求当成工具预批准。
-验证范围与支持限制见 [实施报告](../../reports/providers/codex-computer-use-approval-2026-10-10.md)。
+验证范围与支持限制见 [实施报告](../../archive/reports/providers/codex-computer-use-approval-2026-10-10.md)。
 
 配置路径来自 [OpenAI 官方配置参考](https://developers.openai.com/codex/config-reference/)，
 已用本机 Codex `0.160.0` 的无模型 `thread/start` 请求验证。

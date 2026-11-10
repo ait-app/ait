@@ -1,7 +1,16 @@
+---
+id: ADR-113
+status: accepted
+date: 2026-10-09
+amends:
+  - workspace/adr-030-daemon-filesystem.md
+  - workspace/adr-104-filesystem-model-collaboration.md
+paths:
+  - crates/filesystem
+---
+
 # ADR-113：filesystem 按能力组组织模块
 
-- 状态：接受
-- 日期：2026-10-09
 - 后续修订：[ADR-136](adr-136-single-area-layer-flattening.md) 去掉只承载一个功能区的
   `<layer>::<area>` 中间段。
 - 后续修订：[ADR-129](../providers/adr-129-provider-owned-skills.md) 将 skills 整组迁到 provider，filesystem 保留其余四组。

@@ -135,9 +135,11 @@ fn rule(tool: &str) -> Option<Rule> {
         | "get_agent_status" | "get_agent_activity" | "wait_for_agent" => Rule::Agent,
         "set_agent_mode" => Rule::AgentMode,
         "update_agent" => Rule::UpdateAgent,
-        "list_workspace_scripts" | "start_workspace_script" | "stop_workspace_script" => {
-            Rule::Workspace
-        }
+        "list_workspace_scripts"
+        | "start_workspace_script"
+        | "stop_workspace_script"
+        | "get_workspace_script_run"
+        | "wait_for_workspace_script" => Rule::Workspace,
         "list_terminals" | "create_terminal" => Rule::RootWorkspace,
         "kill_terminal" | "capture_terminal" | "send_terminal_keys" => Rule::Terminal,
         "inspect_schedule" | "pause_schedule" | "delete_schedule" | "schedule_logs"

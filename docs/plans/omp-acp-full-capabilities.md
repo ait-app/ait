@@ -1,13 +1,13 @@
 # OMP 完整能力：ACP 优先的接入方案
 
 日期：2026-10-30。状态：设计与差异清单，**不是完整能力已交付的声明**。
-本次已落地的基础修复见[验证报告](../reports/providers/omp-commands-and-completion-2026-10-30.md)。
+本次已落地的基础修复见[验证报告](../archive/reports/providers/omp-commands-and-completion-2026-10-30.md)。
 
 2026-11-03 范围确认：用户选择保持官方 OMP，补齐其已导出接口的操作。未导出的任意
 TUI 工厂不再作为交付前提，不安装私有 OMP 运行时；原生补全也保持实际协商结果。
-本轮临时界面和语义操作边界见 [ADR-218](../decisions/providers/adr-218-native-ui-and-actions.md)。
+本轮临时界面和语义操作边界见 [ADR-240](../decisions/providers/adr-240-native-ui-and-actions.md)。
 这一确认范围的实现和验收已完成，结果见
-[最终交付报告](../reports/providers/native-delivery-and-omp-roles-2026-11-02.md#2026-11-03-最终交付)。
+[最终交付报告](../archive/reports/providers/native-delivery-and-omp-roles-2026-11-02.md#2026-11-03-最终交付)。
 下文完整远程 completer 与直连 ACP 的设计仍是后续提案，不作为已导出能力交付的一部分。
 
 ## 对照结论
@@ -83,7 +83,7 @@ result:     { supported: true, items: [
 原版 OMP 获得该能力。最小官方接口扩展比长期维护自定义 OMP 运行时更合适。
 
 实施进度：AIT 的只读请求、原生支持协商、精确编辑及再次查询已实现，见
-[ADR-212](../decisions/providers/adr-212-native-editor-completion.md)。
+[ADR-234](../decisions/providers/adr-234-native-editor-completion.md)。
 [上游源码补丁](../../third-party/omp/README.md)已在隔离的官方 18.14.0 源码包验证
 ACP、RPC、三级插件补全及表单等待期间的查询；系统安装的 OMP 未修改。
 88 个内置命令中，46 个有文本/ACP handler。后续已将公开 RPC 的其他操作映射到
@@ -103,8 +103,8 @@ ACP、RPC、三级插件补全及表单等待期间的查询；系统安装的 O
 - [x] 缓存模型发现；OMP 按前端模型访问后台刷新，取消五分钟过期与周期发现，合并同 Host/cwd 请求并保留旧目录；隔离操作等待与草稿编辑。
 - [x] 完成 Linux Electron 实际点击、错误重试、角色配置、原生 UI 和文件下载验收。
 
-实现见 [ADR-217](../decisions/providers/adr-217-omp-model-roles.md)，
-验收见[后续报告](../reports/providers/native-delivery-and-omp-roles-2026-11-02.md)。
+实现见 [ADR-239](../decisions/providers/adr-239-omp-model-roles.md)，
+验收见[后续报告](../archive/reports/providers/native-delivery-and-omp-roles-2026-11-02.md)。
 
 | 能力                                   | Ait 入口与负责层                                      | 必须验证的结果                                                    |
 | -------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------- |
@@ -139,7 +139,7 @@ ACP、RPC、三级插件补全及表单等待期间的查询；系统安装的 O
 - [x] 原生分层目录与后台缓存刷新，成套应用到 Ait 聊天模型、角色和默认思考强度。
 - [x] 通过官方命令保存/删除指定全局条目，保留项目归属及真实失败；保存确认写盘后才关闭 reader。
 - [x] 官方 18.14.0 和当前系统 18.17.0 的隔离真实运行检查，不使用源码补丁或外部模型推理。
-- [x] 完成最终整合后的新增预设界面桌面验收；保存/草稿/Profile 与真实模型角色截图的不同范围见[验收报告](../reports/providers/native-delivery-and-omp-roles-2026-11-02.md#2026-11-06-至-07真实模型与新增界面)。
+- [x] 完成最终整合后的新增预设界面桌面验收；保存/草稿/Profile 与真实模型角色截图的不同范围见[验收报告](../archive/reports/providers/native-delivery-and-omp-roles-2026-11-02.md#2026-11-06-至-07真实模型与新增界面)。
 
-实现见 [ADR-221](../decisions/providers/adr-221-omp-model-presets.md)；Ait Agent Profile 与 OMP
+实现见 [ADR-241](../decisions/providers/adr-241-omp-model-presets.md)；Ait Agent Profile 与 OMP
 原生 preset 保持不同保存机制，私有配置快照可通过 Profile 复用。

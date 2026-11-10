@@ -1,7 +1,13 @@
+---
+id: ADR-084
+status: accepted
+date: 2026-10-05
+paths:
+  - apps/mobile
+---
+
 # ADR-084：工作区主按钮按提交与 PR 生命周期推进
 
-- 状态：Accepted
-- 日期：2026-10-05
 - 关联：ADR-066、ADR-069、ADR-083
 
 ## 背景

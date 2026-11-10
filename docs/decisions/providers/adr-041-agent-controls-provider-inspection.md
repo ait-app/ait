@@ -1,7 +1,15 @@
+---
+id: ADR-041
+status: accepted
+date: 2026-09-25
+amends:
+  - providers/adr-027-independent-agent-session-manager.md
+paths:
+  - crates/provider
+---
+
 # ADR-041：Agent 原生控制与 Provider 诊断、用量
 
-- 状态：Accepted。
-- 日期：2026-09-25。
 - 范围：独立 server，延续 ADR-032/034/039/040。
 - 对照：固定 Paseo `2c8e8a826810337492cc5a38bb0bbd705b6fb632` 的协议、Codex rewind、
   permission、commands、provider catalog；本机 Codex 0.153.4 app-server schema。
@@ -86,4 +94,4 @@ retired_entries，插件条目保留，客户端旧 cursor 收到 reset/staleCur
 返回 unavailable，不用本地 token 估算冒充账户额度。不实现余额换算、额外计费 API 或缓存。
 
 以上当前只有 Codex 适配器。协议接通不代表其他 Provider 或 Paseo 所有可选行为均已实现。
-验证和 Test coverage 见[实施报告](../../reports/providers/server-agent-controls.md)。
+验证和 Test coverage 见[实施报告](../../archive/reports/providers/server-agent-controls.md)。

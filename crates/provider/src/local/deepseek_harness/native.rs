@@ -8,6 +8,7 @@ pub(super) mod exports;
 pub(super) mod history;
 mod http;
 mod interactions;
+mod mcp;
 pub(super) mod native_sessions;
 pub(super) mod presets;
 mod projection;

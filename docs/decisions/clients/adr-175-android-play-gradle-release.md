@@ -1,7 +1,18 @@
+---
+id: ADR-175
+status: accepted
+date: 2026-10-20
+supersedes:
+  - clients/adr-172-android-gradle-ci-build.md
+amends:
+  - clients/adr-097-google-play-internal-release.md
+paths:
+  - .github/workflows
+  - apps/mobile
+---
+
 # ADR-175：Google Play AAB 在 GitHub runner 上构建和提交
 
-- 状态：Accepted
-- 日期：2026-10-20
 - 取代：ADR-097 的 EAS 构建、版本与提交机制，以及 ADR-172 的独立 APK 工作流。
 
 Android 商店发布统一使用 `release-android-play.yml`：GitHub 托管 runner 本地执行

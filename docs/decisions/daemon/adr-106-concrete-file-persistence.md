@@ -1,7 +1,17 @@
+---
+id: ADR-106
+status: accepted
+date: 2026-10-08
+amends:
+  - daemon/adr-105-file-tools-and-startup-config.md
+  - providers/adr-102-provider-metadata-independence.md
+paths:
+  - crates/persistence
+  - crates/model
+---
+
 # ADR-106：具体文件持久化归 file，model 仅声明契约
 
-- 状态：接受
-- 日期：2026-10-08
 - 修订：[ADR-105](adr-105-file-tools-and-startup-config.md) 中 file 的范围和依赖方向，以及
   [ADR-102](../providers/adr-102-provider-metadata-independence.md) 中具体 Workspace 文件存储的归属。
 

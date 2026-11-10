@@ -82,4 +82,4 @@ AIT_TEST_MINIMAX_CODE_BIN="$(command -v mcode)" \
 ```
 
 [设计决策](../decisions/providers/adr-197-minimax-code-acp.md) ·
-[本次验证](../reports/providers/minimax-code-acp-2026-10-28.md)
+[本次验证](../archive/reports/providers/minimax-code-acp-2026-10-28.md)

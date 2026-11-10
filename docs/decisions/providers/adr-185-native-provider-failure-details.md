@@ -1,7 +1,16 @@
+---
+id: ADR-185
+status: accepted
+date: 2026-10-23
+amends:
+  - providers/adr-144-provider-error-reporting.md
+  - providers/adr-156-pi-native-rpc-provider.md
+paths:
+  - crates/provider
+---
+
 # ADR-185：各 Provider 保留原生失败原因
 
-- 状态：Accepted
-- 日期：2026-10-23
 - 更新：2026-11-03，Pi 推理配置拒绝的专用说明见 [ADR-211](adr-211-pi-next-turn-reasoning-controls.md)。
 - 修订：ADR-144 的固定分类展示策略；将 ADR-162、ADR-175 的原生错误说明扩展到其他适配器。
 
@@ -50,7 +59,7 @@ OMP 返回后台化的 toolResult 后，原工具 Timeline 条目已完成。后
 条目追加 progress 而触发时间线冲突。OMP 原进程继续接收后台结果、运行 agent loop，
 结算仍以原生 prompt／session 终态为准。后台工具超时或失败不会单独关闭会话。
 
-此补充的复现、最近失败记录和验证见 [OMP 后台任务排查报告](../../reports/providers/omp-background-errors-2026-10-25.md)。
+此补充的复现、最近失败记录和验证见 [OMP 后台任务排查报告](../../archive/reports/providers/omp-background-errors-2026-10-25.md)。
 
 ## 后果
 

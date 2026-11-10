@@ -1,7 +1,18 @@
+---
+id: ADR-221
+status: accepted
+date: 2026-11-08
+amends:
+  - bot/adr-213-single-workspace-manager-bot.md
+  - clients/adr-214-workspace-bot-tab-v2.md
+paths:
+  - crates/bot
+  - crates/provider
+  - apps/mobile
+---
+
 # ADR-221：以子 Agent 形式只读查看 Bot 内部会话
 
-- 状态：已实现
-- 日期：2026-11-08
 - 关系：修订 [ADR-213](adr-213-single-workspace-manager-bot.md) 的会话隐藏边界与 [ADR-214](../clients/adr-214-workspace-bot-tab-v2.md) 的对话界面；复用 [ADR-209](../providers/adr-209-observed-subagent-normalization.md) 的子 Agent 展示。
 
 ## 背景

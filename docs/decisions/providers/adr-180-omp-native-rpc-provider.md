@@ -1,7 +1,12 @@
-# ADR-180：Oh My Pi 原生 RPC Provider
+---
+id: ADR-180
+status: accepted
+date: 2026-10-21
+paths:
+  - crates/provider
+---
 
-- 状态：Accepted
-- 日期：2026-10-21
+# ADR-180：Oh My Pi 原生 RPC Provider
 
 [ADR-190](adr-190-omp-acp-settlement.md) 将宿主入口固定为 Ait ACP 桥接层，
 底层继续使用官方 RPC；本文的原生所有权和功能基线保留。

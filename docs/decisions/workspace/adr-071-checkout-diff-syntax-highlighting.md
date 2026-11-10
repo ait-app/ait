@@ -1,6 +1,12 @@
-# ADR-071：在 Rust checkout adapter 生成 Diff 语法 token
+---
+id: ADR-071
+status: accepted
+date: 2026-10-02
+paths:
+  - crates/filesystem
+---
 
-状态：Accepted（2026-10-02）
+# ADR-071：在 Rust checkout adapter 生成 Diff 语法 token
 
 ## 背景
 
@@ -42,5 +48,5 @@ Diff 画布已经根据 line `tokens` 和客户端语法主题着色，但 Rust 
 以外的多行语法上下文。去掉高亮后能满足预算的 Diff 继续展示普通文本；仍超限时显示
 既有的大文件或大快照提示，连接和订阅保持可用，缩小 Diff 后恢复内容。
 
-验证结果与 Test coverage 见[修复报告](../../reports/workspace/diff-syntax-highlighting.md)。
-2026-10-03 的纯文本输出预算补充见[大 Diff 加载报告](../../reports/workspace/large-diff-loading.md)。
+验证结果与 Test coverage 见[修复报告](../../archive/reports/workspace/diff-syntax-highlighting.md)。
+2026-10-03 的纯文本输出预算补充见[大 Diff 加载报告](../../archive/reports/workspace/large-diff-loading.md)。

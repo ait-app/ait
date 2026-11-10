@@ -39,7 +39,7 @@ advisor、widget、image、web、speech、dictation、judge，以及 OMP 已配�
 每个角色可恢复为 `Use OMP setting`，保留原生配置及其推理后缀。
 这些选择保存到 Ait 会话配置，从下一轮生效，重启后恢复；不修改用户全局或项目配置。
 当前聊天模型仍由独立模型选择器控制。角色配置使用官方 `--config`，无需 OMP 补丁。
-见 [ADR-217](../decisions/providers/adr-217-omp-model-roles.md)。
+见 [ADR-239](../decisions/providers/adr-239-omp-model-roles.md)。
 
 OMP 成功模型目录按工作目录与运行环境隔离缓存，有界淘汰，不按五分钟过期或定时发现。
 前端进入模型相关页面，打开或选择聊天模型、角色模型与思考强度，以及查看/运行模型诊断时，
@@ -65,7 +65,7 @@ OMP `ask` 使用结构化问答，支持单选、多选、含逗号的选项与�
 
 原生文本对话可提交空字符串，取消保持取消语义；editor 显示原生预填内容，提交保留
 缩进和首尾换行，secret 输入使用密码控件。任意插件补全函数和 TUI 组件的限制见
-[命令兼容报告](../reports/providers/omp-commands-and-completion-2026-10-30.md)。
+[命令兼容报告](../archive/reports/providers/omp-commands-and-completion-2026-10-30.md)。
 
 ## 输出分类
 
@@ -115,11 +115,11 @@ Host 语音与听写使用 daemon 所在主机的设备，和客户端录音入�
 暂不提供原生文件回退、任意终端组件工厂、主题及 header/footer、每会话 MCP/工具策略覆盖、
 宿主工具/URI callback 注册和输出 schema。OMP 自己的工具、MCP 与扩展仍由本机配置加载。
 操作、异步等待、模型缓存和恢复边界见
-[ADR-218](../decisions/providers/adr-218-native-ui-and-actions.md)，
-实测范围见[最终交付报告](../reports/providers/native-delivery-and-omp-roles-2026-11-02.md)。
+[ADR-240](../decisions/providers/adr-240-native-ui-and-actions.md)，
+实测范围见[最终交付报告](../archive/reports/providers/native-delivery-and-omp-roles-2026-11-02.md)。
 
 决策见 [ADR-180](../decisions/providers/adr-180-omp-native-rpc-provider.md)，
-验证结果见 [报告](../reports/providers/omp-native-provider.md)。
+验证结果见 [报告](../archive/reports/providers/omp-native-provider.md)。
 
 ## ACP 桥接与插件
 
@@ -143,7 +143,7 @@ daemon omp-acp --omp-bin /absolute/path/to/omp
 Ait 内部已使用同一引擎，不需要另外启动这个进程。
 
 决策见 [ADR-190](../decisions/providers/adr-190-omp-acp-settlement.md)，
-当前官方 CLI 与插件验证见[报告](../reports/providers/omp-acp-settlement-2026-10-25.md)。
+当前官方 CLI 与插件验证见[报告](../archive/reports/providers/omp-acp-settlement-2026-10-25.md)。
 
 ## 原生 model preset
 
@@ -158,7 +158,7 @@ GUI 预设管理统一从模型选择器齿轮进入，保存、编辑和删除�
 项目覆盖项在写入前拒绝修改；界面显示来源、权限及原生改名限制。
 原始 `/modelpreset` 命令不透传，以免原生全局写入规则与 Ait 的会话私有配置混接。
 
-实现与约束见 [ADR-221](../decisions/providers/adr-221-omp-model-presets.md)。
+实现与约束见 [ADR-241](../decisions/providers/adr-241-omp-model-presets.md)。
 
 ## 查询命令与 BTW
 
@@ -180,9 +180,9 @@ Branch（分支）把完成的单轮 BTW 问答连同当前会话上下文保存
 不会自动发送模型请求；接着在主输入框中继续工作。主任务或 BTW 运行中、上下文已经变化时拒绝分支。
 OMP 的单轮提升不支持已追问的多轮话题，界面因此不显示分支按钮，不丢弃前面的问答。
 错误保留答案与草稿；分支成功后关闭 BTW 面板和胶囊。外部 18.17.0 没有直接 BTW Branch RPC，
-Ait 使用公开会话扩展接口补齐，边界见 [ADR-223](../decisions/providers/adr-223-omp-native-host-bridge.md)。
+Ait 使用公开会话扩展接口补齐，边界见 [ADR-243](../decisions/providers/adr-243-omp-native-host-bridge.md)。
 
-命令投影、并发与归属规则见 [ADR-222](../decisions/providers/adr-222-omp-headless-commands-and-side-questions.md)。
+命令投影、并发与归属规则见 [ADR-242](../decisions/providers/adr-242-omp-headless-commands-and-side-questions.md)。
 
 ## 外部 OMP 与 Vibe 能力
 
@@ -203,7 +203,7 @@ Ait 使用公开会话扩展接口补齐，边界见 [ADR-223](../decisions/prov
 关闭父会话会停止 worker；重启后模式关闭，重新进入可对原有 worker 继续追问。
 模式启用时不能原地切换历史，worker 运行或启动时不能变更父配置。界面在执行前说明并禁用
 当前状态不允许的操作；模式关闭时先确认开启，未知能力不发送控制请求。
-详见 [ADR-223](../decisions/providers/adr-223-omp-native-host-bridge.md)。
+详见 [ADR-243](../decisions/providers/adr-243-omp-native-host-bridge.md)。
 
 ## 模型预设与设置入口
 
@@ -235,8 +235,8 @@ Ait 按外部 OMP 有效命令目录的来源区分内置和插件命令。内�
 文本 widget 默认收起；插件覆盖编辑器草稿后可恢复当前会话的旧草稿。插件已确认的
 模型变化会经过配置校验后同步，查询和 runtime 开关分别等待结果卡提交和原生成功回执。
 纯 TUI 自定义组件不承诺兼容，上游静默忽略的行为无法自动补救。边界和待完成能力见
-[ADR-225](../decisions/providers/adr-225-omp-command-ownership-and-startup-dialogs.md)及
-[逐命令处置表](../reports/providers/pr612-omp-command-dispositions-2026-11-10.tsv)。
+[ADR-245](../decisions/providers/adr-245-omp-command-ownership-and-startup-dialogs.md)及
+[逐命令处置表](../archive/reports/providers/pr612-omp-command-dispositions-2026-11-10.tsv)。
 
 ### 输入框上方的当前运行状态
 
