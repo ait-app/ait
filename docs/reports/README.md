@@ -9,6 +9,8 @@
 
 ## Daemon 与协议
 
+- [PR #612：命令来源、启动交互与真实 Tai 验收（2026-11-10）](providers/pr612-command-ownership-and-tai-2026-11-10.md)
+
 - [PR #612：合入 main 与能力目录验证（2026-11-09）](providers/pr612-main-conflicts-2026-11-09.md)
 - [Plans 待办核查与修复（2026-11-04）](daemon/plans-todo-followup-2026-11-04.md)
 - [Cargo workspace 依赖整理与警告清理：PR 验证](daemon/cargo-workspace-pr-validation-2026-10-04.md)

@@ -3,6 +3,10 @@
 状态：接受。日期：2026-11-06。扩展 [ADR-211](adr-211-omp-command-catalog-and-completion.md)、
 [ADR-213](adr-213-provider-native-command-ownership.md) 和 [ADR-218](adr-218-native-ui-and-actions.md)。
 
+2026-11-10 修订：命令来源判断、GUI 独占入口与启动交互以
+[ADR-225](adr-225-omp-command-ownership-and-startup-dialogs.md) 为准。旧文中的 advisor 只读例外
+已经取消，内置 advisor 的查询、开关、配置入口一并由 GUI 承接。
+
 ## 背景
 
 官方 OMP 的文本命令目录仍包含模型、权限、目录与原生会话控制，以及会启动外部界面的入口。
