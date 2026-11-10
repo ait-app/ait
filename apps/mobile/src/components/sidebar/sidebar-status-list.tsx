@@ -1,6 +1,21 @@
-import { memo, useCallback, useMemo, useState, type MutableRefObject, type ReactNode } from "react";
+import {
+  memo,
+  useCallback,
+  useMemo,
+  useState,
+  type MutableRefObject,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
-import { View, Text, Pressable, ScrollView, type PressableStateCallbackType } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  type PressableStateCallbackType,
+  type RefreshControlProps,
+} from "react-native";
 import { ScrollView as GestureScrollView, type GestureType } from "react-native-gesture-handler";
 import {
   navigateToWorkspace,
@@ -106,6 +121,8 @@ interface StatusWorkspaceListProps {
   /** Swaps the group list for the label filter's empty state. Never the header above it. */
   sidebarFilterEmpty?: boolean;
   parentGestureRef?: MutableRefObject<GestureType | undefined>;
+  /** Native pull-to-refresh control for the scroll view. */
+  refreshControl?: ReactElement<RefreshControlProps>;
 }
 
 export function SidebarStatusWorkspaceList({
@@ -121,6 +138,7 @@ export function SidebarStatusWorkspaceList({
   listHeaderComponent,
   sidebarFilterEmpty = false,
   parentGestureRef,
+  refreshControl,
 }: StatusWorkspaceListProps) {
   const collapsedWorkspaceGroupKeys = useSidebarCollapsedSectionsStore(
     (state) => state.collapsedWorkspaceGroupKeys,
@@ -215,6 +233,7 @@ export function SidebarStatusWorkspaceList({
           style={styles.list}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
           testID="sidebar-status-list-scroll"
         >
           {content}

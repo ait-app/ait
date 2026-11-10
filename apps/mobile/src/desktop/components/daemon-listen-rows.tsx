@@ -50,9 +50,9 @@ export function DaemonListenRows({
         await onChangeListen(nextListen);
         if (lastRequested.current === nextListen) setError(null);
       } catch {
-        if (lastRequested.current !== nextListen) return;
-        lastRequested.current = null;
-        setError({ field, message: t("desktop.settings.saveFailed") });
+        // useDesktopSettings has already reported the failure. Keep the draft and forget the
+        // request so Enter or blur retries it.
+        if (lastRequested.current === nextListen) lastRequested.current = null;
       }
     });
   };

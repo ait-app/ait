@@ -88,6 +88,44 @@ function invalidateCheckoutGitQueries(serverId: string, cwd: string) {
 
 const successTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const inFlight = new Map<string, Promise<unknown>>();
+/**
+ * Status of each request, grouped by checkout action. A parameterized action such as
+ * `discard-changes` can run several requests at once; the action stays pending until all of them
+ * settle, so the first to finish cannot mark the others successful.
+ */
+const requestStatusesByAction = new Map<string, Map<string, CheckoutGitActionStatus>>();
+
+function aggregateActionStatus(
+  requestStatuses: ReadonlyMap<string, CheckoutGitActionStatus>,
+): CheckoutGitActionStatus {
+  let hasSuccess = false;
+  for (const status of requestStatuses.values()) {
+    if (status === "pending") return "pending";
+    if (status === "success") hasSuccess = true;
+  }
+  return hasSuccess ? "success" : "idle";
+}
+
+function setRequestStatus(
+  key: CheckoutKey,
+  actionId: CheckoutGitAsyncActionId,
+  requestId: string,
+  status: CheckoutGitActionStatus,
+) {
+  const actionKey = inFlightKey(key, actionId, undefined);
+  const requestStatuses = requestStatusesByAction.get(actionKey) ?? new Map();
+  if (status === "idle") {
+    requestStatuses.delete(requestId);
+  } else {
+    requestStatuses.set(requestId, status);
+  }
+  if (requestStatuses.size === 0) {
+    requestStatusesByAction.delete(actionKey);
+  } else {
+    requestStatusesByAction.set(actionKey, requestStatuses);
+  }
+  setStatus(key, actionId, aggregateActionStatus(requestStatuses));
+}
 
 function inFlightKey(
   key: CheckoutKey,
@@ -162,20 +200,20 @@ async function runCheckoutAction({
     successTimers.delete(inflightId);
   }
 
-  setStatus(key, actionId, "pending");
+  setRequestStatus(key, actionId, inflightId, "pending");
 
   const promise = (async () => {
     try {
       await run();
       await invalidateCheckoutGitQueries(serverId, cwd);
-      setStatus(key, actionId, "success");
+      setRequestStatus(key, actionId, inflightId, "success");
       const timer = setTimeout(() => {
-        setStatus(key, actionId, "idle");
+        setRequestStatus(key, actionId, inflightId, "idle");
         successTimers.delete(inflightId);
       }, SUCCESS_DISPLAY_MS);
       successTimers.set(inflightId, timer);
     } catch (error) {
-      setStatus(key, actionId, "idle");
+      setRequestStatus(key, actionId, inflightId, "idle");
       throw error;
     } finally {
       inFlight.delete(inflightId);
@@ -407,5 +445,6 @@ export function __resetCheckoutGitActionsStoreForTests() {
   }
   successTimers.clear();
   inFlight.clear();
+  requestStatusesByAction.clear();
   useCheckoutGitActionsStore.setState({ statusByCheckout: {} });
 }

@@ -486,7 +486,6 @@ export function buildSidebarProjectsFromHostProjects(input: {
 export interface SidebarLoadingState {
   isLoading: boolean;
   isInitialLoad: boolean;
-  isRevalidating: boolean;
 }
 
 export function deriveSidebarLoadingState(input: {
@@ -500,5 +499,5 @@ export function deriveSidebarLoadingState(input: {
     input.serverIds.length > 0 && input.serverIds.length === input.hydratedServerIds.length;
   const isLoading = input.isActive && hasRegisteredHosts && !allHydrated;
   const isInitialLoad = isLoading && !input.hasProjects;
-  return { isLoading, isInitialLoad, isRevalidating: false };
+  return { isLoading, isInitialLoad };
 }

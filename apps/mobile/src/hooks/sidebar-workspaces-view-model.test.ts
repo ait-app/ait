@@ -496,7 +496,7 @@ describe("deriveSidebarLoadingState", () => {
         hydratedServerIds: [],
         hasProjects: false,
       }),
-    ).toEqual({ isLoading: true, isInitialLoad: true, isRevalidating: false });
+    ).toEqual({ isLoading: true, isInitialLoad: true });
   });
 
   it("stays loading but not initial once projects are visible", () => {
@@ -507,7 +507,7 @@ describe("deriveSidebarLoadingState", () => {
         hydratedServerIds: [],
         hasProjects: true,
       }),
-    ).toEqual({ isLoading: true, isInitialLoad: false, isRevalidating: false });
+    ).toEqual({ isLoading: true, isInitialLoad: false });
   });
 
   it("clears loading once workspaces have hydrated", () => {
@@ -518,7 +518,7 @@ describe("deriveSidebarLoadingState", () => {
         hydratedServerIds: ["srv"],
         hasProjects: true,
       }),
-    ).toEqual({ isLoading: false, isInitialLoad: false, isRevalidating: false });
+    ).toEqual({ isLoading: false, isInitialLoad: false });
   });
 
   it("short-circuits to idle when inactive", () => {
@@ -529,7 +529,7 @@ describe("deriveSidebarLoadingState", () => {
         hydratedServerIds: [],
         hasProjects: false,
       }),
-    ).toEqual({ isLoading: false, isInitialLoad: false, isRevalidating: false });
+    ).toEqual({ isLoading: false, isInitialLoad: false });
   });
 });
 

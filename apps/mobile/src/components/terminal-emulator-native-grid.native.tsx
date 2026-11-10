@@ -69,6 +69,7 @@ import {
   type NativeTerminalSizeClaimAction,
 } from "../terminal/native-renderer/terminal-input-resize-policy";
 import { encodeTerminalPaste } from "../terminal/runtime/terminal-paste";
+import { decodeNativeTerminalRestore } from "../terminal/native-renderer/terminal-restore-output";
 import type { TerminalOutputData } from "../terminal/runtime/terminal-emulator-runtime";
 import {
   createTerminalResizePolicy,
@@ -513,12 +514,11 @@ function NativeTerminalEmulator({
         enqueueOutputText(text);
       },
       restoreOutput: (data: TerminalOutputData) => {
-        outputDecoderRef.current.decode();
-        const text = outputDecoderRef.current.decode(data, { stream: false });
-        // Daemon restore frames end with the screen's input modes; re-seed the tracker from
-        // them so bracketed paste and cursor-key modes survive reconnects and remounts.
-        inputModeTrackerRef.current.reset();
-        inputModeTrackerRef.current.feed(text);
+        const text = decodeNativeTerminalRestore({
+          decoder: outputDecoderRef.current,
+          inputModeTracker: inputModeTrackerRef.current,
+          data,
+        });
         emitInputModeChange();
         outputDrainRef.current?.restoreText(text);
       },

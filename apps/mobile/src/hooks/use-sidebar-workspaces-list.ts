@@ -81,8 +81,8 @@ export interface SidebarWorkspacesListResult {
   projectNamesByViewKey: Map<string, string>;
   isLoading: boolean;
   isInitialLoad: boolean;
-  isRevalidating: boolean;
-  refreshAll: () => void;
+  /** Refreshes every visible host; settles once each host's refresh has finished or failed. */
+  refreshAll: () => Promise<void>;
 }
 
 export function useSidebarWorkspacesList(options?: {
@@ -152,16 +152,18 @@ export function useSidebarWorkspacesList(options?: {
       ? sidebarModel.projectNamesByViewKey
       : EMPTY_PROJECT_NAMES;
 
-  const refreshAll = useCallback(() => {
+  const refreshAll = useCallback(async () => {
     if (!isActive) return;
-    for (const serverId of serverIds) {
-      void runtime.refreshDirectories(serverId).catch((error) => {
-        console.error("[WorkspaceFetch][sidebar-refresh] failed", {
-          serverId,
-          error,
-        });
-      });
-    }
+    await Promise.allSettled(
+      serverIds.map((serverId) =>
+        runtime.refreshDirectories(serverId).catch((error) => {
+          console.error("[WorkspaceFetch][sidebar-refresh] failed", {
+            serverId,
+            error,
+          });
+        }),
+      ),
+    );
   }, [isActive, runtime, serverIds]);
 
   const loadingState = deriveSidebarLoadingState({

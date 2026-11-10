@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
-import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildFakeCheckResult,
   buildFakeInstallResult,
@@ -34,6 +34,8 @@ async function loadHook() {
 }
 
 describe("useDesktopAppUpdater", () => {
+  afterEach(cleanup);
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.settings.isLoading = true;
@@ -56,6 +58,17 @@ describe("useDesktopAppUpdater", () => {
       releaseChannel: "beta",
       intent: "automatic",
     });
+  });
+
+  it("runs one automatic check for the sidebar and Settings together", async () => {
+    mocks.settings.isLoading = false;
+    const useDesktopAppUpdater = await loadHook();
+    renderHook(() => useDesktopAppUpdater());
+    renderHook(() => useDesktopAppUpdater());
+
+    await waitFor(() => expect(mocks.checkDesktopAppUpdate).toHaveBeenCalled());
+    await act(async () => {});
+    expect(mocks.checkDesktopAppUpdate).toHaveBeenCalledOnce();
   });
 
   it("shares one updater between callers so a second install is ignored", async () => {

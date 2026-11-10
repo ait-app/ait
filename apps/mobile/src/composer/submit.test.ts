@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { markDeliveredSendError } from "@/composer/submission/model";
-import { readLiveDraftText, submitAgentInput } from "./submit";
+import { readLiveDraftText, runImmediateClientSlashCommand, submitAgentInput } from "./submit";
 
 function createDeferredPromise<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -319,5 +319,54 @@ describe("submitAgentInput", () => {
     });
     expect(setUserInput).toHaveBeenCalledWith("");
     expect(clearDraft).not.toHaveBeenCalled();
+  });
+});
+
+describe("runImmediateClientSlashCommand", () => {
+  it("keeps the composer until the command succeeds", async () => {
+    const deferred = createDeferredPromise<void>();
+    const clearComposer = vi.fn();
+    const setIsProcessing = vi.fn();
+
+    const result = runImmediateClientSlashCommand({
+      run: () => deferred.promise,
+      clearComposer,
+      setSendError: vi.fn(),
+      setIsProcessing,
+    });
+
+    expect(setIsProcessing).toHaveBeenCalledWith(true);
+    expect(clearComposer).not.toHaveBeenCalled();
+
+    deferred.resolve();
+
+    await expect(result).resolves.toBe("completed");
+    expect(clearComposer).toHaveBeenCalledTimes(1);
+    expect(setIsProcessing).toHaveBeenLastCalledWith(false);
+  });
+
+  it("leaves the command text and attachments in place when the command fails", async () => {
+    const clearComposer = vi.fn();
+    const setSendError = vi.fn();
+    const setIsProcessing = vi.fn();
+    const onError = vi.fn();
+    const failure = new Error("archive failed");
+
+    await expect(
+      runImmediateClientSlashCommand({
+        run: async () => {
+          throw failure;
+        },
+        clearComposer,
+        setSendError,
+        setIsProcessing,
+        onError,
+      }),
+    ).resolves.toBe("failed");
+
+    expect(clearComposer).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(failure);
+    expect(setSendError).toHaveBeenLastCalledWith("archive failed");
+    expect(setIsProcessing).toHaveBeenLastCalledWith(false);
   });
 });

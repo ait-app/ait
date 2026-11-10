@@ -11,7 +11,6 @@ import {
 import { useDesktopSettings } from "@/desktop/settings/desktop-settings";
 import { useDesktopIpcErrorReporter } from "@/desktop/hooks/desktop-ipc-error";
 import {
-  PENDING_RECHECK_MS,
   createDesktopAppUpdater,
   formatStatusText,
   type DesktopAppUpdater,
@@ -79,7 +78,7 @@ export function useDesktopAppUpdater(): UseDesktopAppUpdaterReturn {
       }
       const intent = options.intent ?? "manual";
       // Until settings load, releaseChannel is the "stable" default; an automatic check would
-      // query the wrong channel. Callers re-run once this callback changes after the load.
+      // query the wrong channel.
       if (intent === "automatic" && isLoadingSettings) {
         return null;
       }
@@ -99,26 +98,15 @@ export function useDesktopAppUpdater(): UseDesktopAppUpdaterReturn {
     return updater.installUpdate({ releaseChannel });
   }, [isDesktopApp, releaseChannel, updater]);
 
+  // Automatic checks run on the shared updater's single schedule; each mounted caller only keeps
+  // it alive. Until settings load, releaseChannel is the "stable" default and would check the
+  // wrong channel.
   useEffect(() => {
-    if (!isDesktopApp) {
-      return;
-    }
-    void checkForUpdates({ intent: "automatic", silent: true });
-  }, [checkForUpdates, isDesktopApp]);
-
-  useEffect(() => {
-    if (!isDesktopApp || snapshot.status !== "pending") {
+    if (!isDesktopApp || isLoadingSettings) {
       return undefined;
     }
-
-    const intervalId = setInterval(() => {
-      void checkForUpdates({ intent: "automatic", silent: true });
-    }, PENDING_RECHECK_MS);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [checkForUpdates, isDesktopApp, snapshot.status]);
+    return updater.retainAutomaticChecks(releaseChannel);
+  }, [isDesktopApp, isLoadingSettings, releaseChannel, updater]);
 
   return {
     isDesktopApp,

@@ -1,5 +1,5 @@
 import { Gift } from "lucide-react-native";
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useUnistyles } from "react-native-unistyles";
 import {
@@ -15,8 +15,6 @@ import {
 import { useDesktopAppUpdater } from "@/desktop/updates/use-desktop-app-updater";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { openChangelog } from "@/changelog";
-
-const CHECK_INTERVAL_MS = 30 * 60 * 1000;
 
 function renderBody(body: UpdateCalloutBody, t: ReturnType<typeof useTranslation>["t"]): ReactNode {
   if (body.kind === "installing") return t("desktop.updates.callout.installingDescription");
@@ -49,7 +47,6 @@ export function UpdateCalloutSource() {
     installUpdate,
     isInstalling,
   } = useDesktopAppUpdater();
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const install = useStableEvent(() => {
     void installUpdate();
@@ -57,21 +54,6 @@ export function UpdateCalloutSource() {
   const retry = useStableEvent(() => {
     void checkForUpdates();
   });
-  // useDesktopAppUpdater already runs the mount-time check; this only adds the periodic one.
-  useEffect(() => {
-    if (!isDesktopApp) return;
-
-    intervalRef.current = setInterval(() => {
-      void checkForUpdates({ intent: "automatic", silent: true });
-    }, CHECK_INTERVAL_MS);
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [isDesktopApp, checkForUpdates]);
-
   useEffect(() => {
     const descriptor = resolveUpdateCalloutDescriptor({
       isDesktopApp,
