@@ -786,6 +786,7 @@ function ScheduleFormContent({
         size={controlSize}
         disabled={isSubmitting}
         browsing={browsingTemplates}
+        onBack={inline ? onClose : undefined}
         onBrowsingChange={setBrowsingTemplates}
         onApply={handleApplyTemplate}
       />

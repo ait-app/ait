@@ -52,6 +52,7 @@ export function ScheduleTemplatePicker({
   size,
   disabled,
   browsing,
+  onBack,
   onBrowsingChange,
   onApply,
 }: {
@@ -59,6 +60,7 @@ export function ScheduleTemplatePicker({
   size: FieldControlSize;
   disabled?: boolean;
   browsing: boolean;
+  onBack?: () => void;
   onBrowsingChange: (browsing: boolean) => void;
   onApply: (template: ScheduleTemplate, params: ScheduleTemplateParams) => void;
 }): ReactElement {
@@ -186,16 +188,30 @@ export function ScheduleTemplatePicker({
           <Text style={styles.title}>{t("schedules.templates.heading")}</Text>
           <Text style={styles.subtitle}>{t("schedules.templates.description")}</Text>
         </View>
-        <Button
-          variant="outline"
-          size="sm"
-          leftIcon={Plus}
-          onPress={() => onBrowsingChange(false)}
-          disabled={disabled}
-          testID="schedule-template-blank"
-        >
-          {t("schedules.templates.blank")}
-        </Button>
+        <View style={styles.galleryActions}>
+          {onBack ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={ArrowLeft}
+              onPress={onBack}
+              disabled={disabled}
+              testID="workspace-schedules-browse"
+            >
+              {t("schedules.timeline.back")}
+            </Button>
+          ) : null}
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={Plus}
+            onPress={() => onBrowsingChange(false)}
+            disabled={disabled}
+            testID="schedule-template-blank"
+          >
+            {t("schedules.templates.blank")}
+          </Button>
+        </View>
       </View>
       <View style={styles.categories}>
         {SCHEDULE_TEMPLATE_CATEGORIES.map((category) => (
@@ -306,6 +322,12 @@ const styles = StyleSheet.create((theme) => ({
   gallery: { gap: theme.spacing[8], paddingVertical: theme.spacing[2] },
   galleryHeader: { flexDirection: "row", alignItems: "center", gap: theme.spacing[6] },
   galleryHeaderNarrow: { flexDirection: "column", alignItems: "flex-start", gap: theme.spacing[4] },
+  galleryActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: theme.spacing[2],
+  },
   headingGroup: { flex: 1, minWidth: 0, gap: theme.spacing[2] },
   title: {
     color: theme.colors.foreground,
