@@ -15,7 +15,9 @@ function turn(sequence: number, status: BotTurn["status"]): BotTurn {
     replyTo: null,
     reply: status === "completed" ? "reply" : null,
     messages:
-      status === "completed" ? [{ id: `reply-${sequence}`, text: "reply", status: "completed" }] : [],
+      status === "completed"
+        ? [{ id: `reply-${sequence}`, text: "reply", status: "completed" }]
+        : [],
     pendingPermissions: [],
     status,
     delivery: "pending",

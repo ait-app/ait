@@ -247,6 +247,13 @@ impl ExecutionState {
         if !exists {
             return Err(ErrorCode::AgentNotFound);
         }
+        // Hydrate and reconcile the durable timeline before capturing the cursor. A resumed
+        // session may replace its timeline generation while native history is being restored;
+        // capturing the cursor first would make the following poll look stale and strand the
+        // Bot turn as uncertain.
+        if self.manager.timeline().is_some() {
+            self.manager.load_timeline(&agent_id).await?;
+        }
         let cursor = self
             .manager
             .timeline()
