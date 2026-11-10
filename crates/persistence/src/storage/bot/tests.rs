@@ -51,6 +51,7 @@ fn atomic_catalog_routes_receipts_and_bounded_memory_survive_reopening() {
         text: "hello".into(),
         reply_to: None,
         reply: Some("world".into()),
+        messages: Vec::new(),
         pending_permissions: Vec::new(),
         status: TurnStatus::Completed,
         delivery: DeliveryStatus::Delivered,

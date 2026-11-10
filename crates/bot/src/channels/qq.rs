@@ -16,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::{
     BUSY_NOTICE, Disposition, Incoming, Socket, admit_waiting, chunks, connect_socket, deliver,
-    expose, json_response, supervise,
+    expose, json_response, reply_parts, supervise,
 };
 use crate::service::Bots;
 
@@ -370,15 +370,22 @@ impl Connection<'_> {
     }
 
     async fn reply(&self, turn: Turn, conversation: Conversation) -> Result<(), ErrorCode> {
-        let text = turn.reply.as_deref().ok_or(ErrorCode::BotIo)?;
+        let parts = reply_parts(&turn);
+        if parts.is_empty() {
+            return Err(ErrorCode::BotIo);
+        }
         let path = message_path(&conversation.peer)?;
-        for (index, chunk) in chunks(text, MAX_CHUNK_UTF16).into_iter().enumerate() {
-            let passive = turn
-                .reply_to
-                .as_deref()
-                .filter(|_| index < PASSIVE_REPLIES)
-                .map(|id| (id, index + 1));
-            self.post_text(&path, chunk, passive).await?;
+        let mut index = 0;
+        for text in parts {
+            for chunk in chunks(text, MAX_CHUNK_UTF16) {
+                let passive = turn
+                    .reply_to
+                    .as_deref()
+                    .filter(|_| index < PASSIVE_REPLIES)
+                    .map(|id| (id, index + 1));
+                self.post_text(&path, chunk, passive).await?;
+                index += 1;
+            }
         }
         Ok(())
     }

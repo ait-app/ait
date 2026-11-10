@@ -110,6 +110,41 @@ fn shell_compatibility_preserves_valid_output_errors_and_unknown_tool_payloads()
     }
 }
 
+#[test]
+fn assistant_messages_keep_distinct_messages_and_merge_only_their_fragments() {
+    let source = rows(&json!({"rows":[
+        {"seq":1,"turnId":"turn","timestamp":"2026-11-03T00:00:00Z","item":
+            {"type":"assistant_message","messageId":"first","text":"hello"}},
+        {"seq":2,"turnId":"turn","timestamp":"2026-11-03T00:00:01Z","item":
+            {"type":"assistant_message","messageId":"first","text":" world"}},
+        {"seq":3,"turnId":"turn","timestamp":"2026-11-03T00:00:02Z","item":
+            {"type":"tool_call","callId":"call","status":"completed","detail":{"type":"shell"}}},
+        {"seq":4,"turnId":"turn","timestamp":"2026-11-03T00:00:03Z","item":
+            {"type":"assistant_message","messageId":"first","text":"!"}},
+        {"seq":5,"turnId":"turn","timestamp":"2026-11-03T00:00:04Z","item":
+            {"type":"assistant_message","messageId":"second","text":"next"}},
+        {"seq":6,"turnId":"turn","timestamp":"2026-11-03T00:00:05Z","item":
+            {"type":"assistant_message","messageId":"second","text":" message"}},
+        {"seq":7,"turnId":"turn","timestamp":"2026-11-03T00:00:06Z","item":
+            {"type":"assistant_message","messageId":"first","text":" again"}}
+    ]}));
+
+    assert_eq!(
+        assistant_messages(&source, 0),
+        vec![
+            ("first".to_owned(), "hello world! again".to_owned()),
+            ("second".to_owned(), "next message".to_owned()),
+        ]
+    );
+    assert_eq!(
+        assistant_messages(&source, 4),
+        vec![
+            ("second".to_owned(), "next message".to_owned()),
+            ("first".to_owned(), " again".to_owned()),
+        ]
+    );
+}
+
 fn rows(input: &Value) -> Vec<Row> {
     input["rows"]
         .as_array()

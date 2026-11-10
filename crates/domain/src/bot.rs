@@ -252,6 +252,28 @@ pub enum DeliveryStatus {
     Uncertain,
 }
 
+/// Lifecycle of one user-visible assistant message produced during a Bot turn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TurnMessageStatus {
+    /// The Provider is still extending this message.
+    Streaming,
+    /// The Provider completed this message.
+    Completed,
+}
+
+/// One user-visible assistant message produced during a Bot turn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TurnMessage {
+    /// Stable Provider message identity, or a deterministic timeline fallback.
+    pub id: String,
+    /// Current complete text for this message.
+    pub text: String,
+    /// Whether the message can still receive streamed text.
+    pub status: TurnMessageStatus,
+}
+
 /// Durable, idempotent user input and its final reply.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -271,7 +293,13 @@ pub struct Turn {
     /// Original platform message identity used as the reply target.
     pub reply_to: Option<String>,
     /// Committed final assistant answer.
+    ///
+    /// This legacy projection contains the latest assistant message. New clients should use
+    /// [`Turn::messages`] so distinct assistant messages remain distinct.
     pub reply: Option<String>,
+    /// User-visible assistant messages in Provider order.
+    #[serde(default)]
+    pub messages: Vec<TurnMessage>,
     /// Pending native permission requests, visible only through the owning Bot interface.
     #[serde(default)]
     pub pending_permissions: Vec<serde_json::Value>,

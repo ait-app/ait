@@ -88,6 +88,11 @@ export const BotConversationSchema = z.object({
   // Absent on hosts that predate read-only inspection of the Bot's session.
   sessionAgentId: z.string().optional(),
 });
+export const BotTurnMessageSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  status: z.enum(["streaming", "completed"]),
+});
 export const BotTurnSchema = z.object({
   id: z.guid(),
   conversationId: z.guid(),
@@ -97,6 +102,7 @@ export const BotTurnSchema = z.object({
   text: z.string(),
   replyTo: z.string().nullable(),
   reply: z.string().nullable(),
+  messages: z.array(BotTurnMessageSchema).default([]),
   pendingPermissions: z.array(z.unknown()).default([]),
   status: z.enum([
     "queued",
@@ -119,4 +125,5 @@ export type BotView = z.infer<typeof BotViewSchema>;
 export type BotState = z.infer<typeof BotStateSchema>;
 export type BotExecution = z.infer<typeof BotExecutionSchema>;
 export type BotConversation = z.infer<typeof BotConversationSchema>;
+export type BotTurnMessage = z.infer<typeof BotTurnMessageSchema>;
 export type BotTurn = z.infer<typeof BotTurnSchema>;

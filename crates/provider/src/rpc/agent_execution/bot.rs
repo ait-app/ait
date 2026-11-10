@@ -9,7 +9,9 @@ use crate::protocol::agent_config::{ConfigPatch, NullableSetting};
 use crate::protocol::agent_execution::ActiveTurnBehavior;
 use crate::protocol::prompt::AgentPrompt;
 use crate::service::agent_manager::{AgentManagerError, AgentRegistration};
-use crate::service::bot_execution::{Action, BotSessionSupport, Created, InstructionDelivery};
+use crate::service::bot_execution::{
+    Action, BotSessionSupport, Created, InstructionDelivery, TimelineCursor,
+};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -37,21 +39,18 @@ impl ExecutionState {
                 message_id,
                 text,
             } => {
+                self.send_bot(existing.is_some(), agent_id, message_id, text)
+                    .await
+            }
+            Action::Poll { agent_id, after } => {
                 if existing.is_none() {
                     return Err(ErrorCode::AgentNotFound);
                 }
-                self.manager
-                    .deliver(
-                        &agent_id,
-                        &AgentPrompt {
-                            text,
-                            client_message_id: Some(message_id),
-                            ..AgentPrompt::default()
-                        },
-                        ActiveTurnBehavior::Interrupt,
-                    )
-                    .await?;
-                Ok(json!({"accepted":true}))
+                let mut status = self.wait_result(&agent_id)?;
+                let messages = self.manager.bot_messages(&agent_id, &after)?;
+                status["messages"] =
+                    serde_json::to_value(messages).map_err(|_| ErrorCode::AgentIo)?;
+                Ok(status)
             }
             Action::Status { agent_id } => self.wait_result(&agent_id),
             Action::Release { agent_id } => {
@@ -166,6 +165,7 @@ impl ExecutionState {
         let agent = match &request.operation {
             Action::Create { agent_id, .. }
             | Action::Send { agent_id, .. }
+            | Action::Poll { agent_id, .. }
             | Action::Status { agent_id }
             | Action::Cancel { agent_id }
             | Action::Close { agent_id }
@@ -236,6 +236,54 @@ impl ExecutionState {
             .map_err(|error| map_manager(&error))?;
         Ok(())
     }
+
+    async fn send_bot(
+        &mut self,
+        exists: bool,
+        agent_id: String,
+        message_id: String,
+        text: String,
+    ) -> Result<Value, ErrorCode> {
+        if !exists {
+            return Err(ErrorCode::AgentNotFound);
+        }
+        // Hydrate and reconcile the durable timeline before capturing the cursor. A resumed
+        // session may replace its timeline generation while native history is being restored;
+        // capturing the cursor first would make the following poll look stale and strand the
+        // Bot turn as uncertain.
+        if self.manager.timeline().is_some() {
+            self.manager.load_timeline(&agent_id).await?;
+        }
+        let cursor = self
+            .manager
+            .timeline()
+            .map(|timeline| {
+                timeline
+                    .read(&agent_id)
+                    .map(|(epoch, rows)| TimelineCursor {
+                        epoch,
+                        seq: rows.last().map_or(0, |row| row.seq),
+                    })
+            })
+            .transpose()?;
+        self.manager
+            .deliver(
+                &agent_id,
+                &AgentPrompt {
+                    text,
+                    client_message_id: Some(message_id),
+                    ..AgentPrompt::default()
+                },
+                ActiveTurnBehavior::Interrupt,
+            )
+            .await?;
+        let mut accepted = json!({"accepted":true});
+        if let Some(cursor) = cursor {
+            accepted["cursor"] = serde_json::to_value(cursor).map_err(|_| ErrorCode::AgentIo)?;
+        }
+        Ok(accepted)
+    }
+
     async fn close_bot_session(&mut self, agent: &str, exists: bool) -> Result<(), ErrorCode> {
         if exists {
             let now = crate::support::time::now_timestamp();

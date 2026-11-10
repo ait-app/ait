@@ -131,6 +131,21 @@ pub(crate) struct Incoming {
     pub(crate) reply_to: Option<String>,
 }
 
+/// Return each user-visible assistant message for external delivery.
+///
+/// New turns carry distinct messages; the legacy reply projection remains a fallback for records
+/// written by older daemons.
+pub(crate) fn reply_parts(turn: &domain::bot::Turn) -> Vec<&str> {
+    if turn.messages.is_empty() {
+        return turn.reply.as_deref().into_iter().collect();
+    }
+    turn.messages
+        .iter()
+        .filter(|message| !message.text.trim().is_empty())
+        .map(|message| message.text.as_str())
+        .collect()
+}
+
 pub(crate) async fn run(
     bots: Bots,
     channel: Channel,

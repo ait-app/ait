@@ -19,7 +19,7 @@ use tokio_util::sync::CancellationToken;
 use self::socket_io::Packet;
 use super::{
     BUSY_NOTICE, Disposition, Incoming, Socket, admit, chunks, connect_socket, deliver, expose,
-    supervise,
+    reply_parts, supervise,
 };
 use crate::service::Bots;
 
@@ -329,9 +329,15 @@ impl Connection<'_> {
     }
 
     async fn reply(&self, turn: Turn, conversation: Conversation) -> Result<(), ErrorCode> {
-        let text = turn.reply.as_deref().ok_or(ErrorCode::BotIo)?;
-        self.send_chunks(&conversation.peer, &turn.id.to_string(), text)
-            .await
+        let parts = reply_parts(&turn);
+        if parts.is_empty() {
+            return Err(ErrorCode::BotIo);
+        }
+        for (part, text) in parts.into_iter().enumerate() {
+            self.send_chunks(&conversation.peer, &format!("{}:{part}", turn.id), text)
+                .await?;
+        }
+        Ok(())
     }
 
     /// Send a reply in parts, each with a key that stays stable if the same part is retried.
