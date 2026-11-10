@@ -346,11 +346,9 @@ export const zhCN: TranslationResources = {
       manage: "管理订阅",
       privacy: "隐私政策",
       terms: "使用条款",
-      renewal:
-        "费用将从你的 Apple 账户扣除。订阅每月自动续费，除非你在当前周期结束前至少 24 小时取消。可在 App Store 订阅中管理或取消。删除 Ait 账号不会取消 Apple 订阅。",
-      pending: "购买正在等待 Apple 批准，批准后将自动更新权益。",
+      pending: "购买正在等待批准，批准后将自动更新权益。",
       restored: "购买已恢复并完成验证。",
-      nothingToRestore: "当前 Apple 账户没有可恢复的购买。",
+      nothingToRestore: "当前商店账户没有可恢复的购买。",
       openFailed: "无法打开链接，请重试。",
       accessAvailable: "当前服务暂未要求订阅，可直接使用在线连接。",
       states: {

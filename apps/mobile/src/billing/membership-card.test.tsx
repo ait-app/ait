@@ -45,6 +45,8 @@ beforeEach(async () => {
   Object.assign(mocks.state.membership, { subscriptions: undefined, purchase_options: undefined });
   mocks.state.membership.status = "inactive";
   mocks.state.membership.expires_at = null;
+  mocks.state.membership.required = true;
+  mocks.state.membership.purchases_available = true;
   mocks.state.price = "¥38.00";
   mocks.state.busy = false;
   mocks.state.message = null;
@@ -64,6 +66,16 @@ it("offers the localized monthly price, restore, benefit and automatic renewal d
   expect(mocks.restore).toHaveBeenCalledOnce();
   fireEvent.click(view.getByText("Privacy Policy"));
   expect(mocks.open).toHaveBeenCalledWith("https://ait-app.com/privacy/");
+});
+it("offers purchases before the center enforces membership, following store availability", () => {
+  mocks.state.membership.required = false;
+  const view = render(<OnlineServiceMembershipCard />);
+  expect(view.getByText(/available without a subscription/)).toBeTruthy();
+  expect(view.getByTestId("subscribe-online-service")).toBeTruthy();
+  mocks.state.membership.purchases_available = false;
+  view.rerender(<OnlineServiceMembershipCard />);
+  expect(view.queryByTestId("subscribe-online-service")).toBeNull();
+  expect(view.getByTestId("restore-online-service")).toBeTruthy();
 });
 it("keeps restoration available for expired members and hides repurchase for active members", () => {
   mocks.state.membership.status = "expired";
@@ -87,7 +99,7 @@ it("disables buying before product loading completes or while a purchase is pend
   view.rerender(<OnlineServiceMembershipCard />);
   fireEvent.click(view.getByTestId("subscribe-online-service"));
   expect(mocks.purchase).not.toHaveBeenCalled();
-  expect(view.getByText(/awaiting Apple approval/)).toBeTruthy();
+  expect(view.getByText(/awaiting approval/)).toBeTruthy();
 });
 
 it("allows the other store to add time while showing both subscriptions once purchased", () => {

@@ -377,11 +377,9 @@ export const en = {
       manage: "Manage subscription",
       privacy: "Privacy Policy",
       terms: "Terms of Use",
-      renewal:
-        "Payment is charged to your Apple Account. Your subscription renews automatically each month unless cancelled at least 24 hours before the current period ends. Manage or cancel in App Store subscriptions. Deleting your Ait account does not cancel your Apple subscription.",
-      pending: "Your purchase is awaiting Apple approval. Access updates after approval.",
+      pending: "Your purchase is awaiting approval. Access updates after approval.",
       restored: "Purchases restored and verified.",
-      nothingToRestore: "No purchases found for this Apple Account.",
+      nothingToRestore: "No purchases found for this store account.",
       openFailed: "Could not open this link. Try again.",
       accessAvailable:
         "Online Service access is currently available without a subscription on this service.",

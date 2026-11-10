@@ -1,6 +1,16 @@
-# ADR-203：Online Service 订阅与账号认证分离
+---
+id: ADR-236
+status: accepted
+date: 2026-10-30
+amends:
+  - clients/adr-204-hub-only-online-business-transport.md
+paths:
+  - apps/mobile
+  - apps/desktop
+  - packages/client
+---
 
-状态：已接受。日期：2026-10-30。
+# ADR-236：Online Service 订阅与账号认证分离
 
 ## 背景
 
@@ -20,6 +30,6 @@ iOS 本地 Expo 模块封装 StoreKit 2；Android 本地模块封装 Google Play
 
 Apple 查询签名完整交易历史；Play 根据最新成功订单号查询各期订单，不能用不会随续费改变的 purchase token 作为付款 ID。Play token 只在中心加密保存。生产和测试交易分别计算余额，测试策略变更不能把测试时长混入生产余额。商店明确的扣款宽限期可暂时授予访问，但不计入付款或后续加月基数。
 
-上线开关默认关闭，需先配置中心的商店密钥、Apple 通知 V2、Google Pub/Sub RTDN 和真机验收。生产默认拒绝沙盒权益；App Review 账号可以在中心单独加入沙盒账号名单。商品价格由当前商店返回，本地化显示，不在 App 中写死美元价格。
+上线开关默认关闭，需先配置中心的商店密钥、Apple 通知 V2、Google Pub/Sub RTDN 和真机验收。购买入口只由中心返回的各商店 `available` 决定，不依赖强制开关：开启强制前即可完成内测、审核和提前订阅，已购时长照常累计。生产默认拒绝沙盒权益；App Review 账号可以在中心单独加入沙盒账号名单。商品价格由当前商店返回，本地化显示，不在 App 中写死美元价格。
 
 部署与验证步骤见 [Online Service 订阅](../../operations/online-service-subscription.md)。

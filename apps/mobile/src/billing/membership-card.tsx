@@ -34,7 +34,8 @@ export function OnlineServiceMembershipCard() {
       (currentSubscription.status === "pending" ||
         Date.parse(currentSubscription.expires_at) > Date.now())
     : !membership?.subscriptions && active;
-  const purchasable = native && option?.available && membership?.required;
+  // Purchases follow store availability, not enforcement, so they can be tested and bought early.
+  const purchasable = native && option?.available;
   const termsURL = provider === "google_play" ? googleTermsURL : appleTermsURL;
   const manageURL =
     provider === "google_play"
