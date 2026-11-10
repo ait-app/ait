@@ -109,6 +109,39 @@ describe("task board", () => {
     });
   });
 
+  it.each([
+    ["running", "running", false],
+    ["failed", "failed", true],
+    ["completed", "done", true],
+    ["canceled", "done", true],
+    ["unknown", "attention", false],
+  ] as const)(
+    "preserves the last observed %s result after the observation channel closes",
+    (status, bucket, canArchive) => {
+      const child = agent("observed", {
+        parentAgentId: "parent",
+        status: "closed",
+        management: "observed",
+        capabilities: { ...agent("base").capabilities, supportsArchive: true },
+        observation: {
+          rootAgentId: "parent",
+          nativeId: "native-child",
+          status,
+          health: "stale",
+          observedAt: new Date(0).toISOString(),
+          description: null,
+          subtitle: null,
+        },
+      });
+      const model = buildTaskBoard([host([agent("parent"), child])]);
+      const task = model.byKey.get(taskKey("local", "observed"))!;
+      expect(task.ownBucket).toBe(bucket);
+      expect(model.roots[0].bucket).toBe(bucket);
+      expect(taskActions(task).archive).toBe(canArchive);
+      expect(taskActions(model.roots[0]).archive).toBe(canArchive);
+    },
+  );
+
   it("bubbles child input and activity to the parent without duplicating child cards", () => {
     const model = buildTaskBoard([
       host([
@@ -227,5 +260,34 @@ describe("task board", () => {
         .filter((item) => taskLane(item.bucket) === "done")
         .map((item) => item.agent.id),
     ).toEqual(["old", "new"]);
+  });
+
+  it("searches the displayed runtime model of roots and descendants using provider defaults", () => {
+    const runtimeInfo = { provider: "codex" as const, sessionId: null, model: "default-model" };
+    const model = buildTaskBoard([
+      host([
+        agent("root", { model: null, runtimeInfo }),
+        agent("parent"),
+        agent("child", { parentAgentId: "parent", model: null, runtimeInfo }),
+        agent("explicit", { model: "selected-model", runtimeInfo }),
+        agent("unresolved", { model: null }),
+      ]),
+    ]);
+    const filters = {
+      hostId: null,
+      projectKey: null,
+      search: "DEFAULT-MODEL",
+      sort: "recent" as const,
+    };
+    expect(
+      filterTaskBoard(model.roots, filters)
+        .map((task) => task.agent.id)
+        .sort(),
+    ).toEqual(["parent", "root"]);
+    expect(
+      filterTaskBoard(model.roots, { ...filters, search: "selected-model" }).map(
+        (task) => task.agent.id,
+      ),
+    ).toEqual(["explicit"]);
   });
 });

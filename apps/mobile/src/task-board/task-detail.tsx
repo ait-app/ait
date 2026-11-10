@@ -1,11 +1,12 @@
 import React, { useMemo } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Archive, ArrowUpRight, Check, GitFork, Square, X } from "lucide-react-native";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { ScrollView } from "@/components/ui/scroll-view";
 import { PermissionRequestCard } from "@/components/permission-request-card";
 import { useToast } from "@/contexts/toast-context";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";

@@ -34,7 +34,10 @@ export function useTaskBoard() {
   // connection remains online. Do not present failed loads as an empty board.
   const unavailableHosts = hosts.filter((host) => {
     const snapshot = getHostRuntimeStore().getSnapshot(host.serverId);
-    return statuses.get(host.serverId) !== "online" || Boolean(snapshot?.agentDirectoryError);
+    return (
+      statuses.get(host.serverId) !== "online" ||
+      Boolean(snapshot?.agentDirectoryError || snapshot?.workspaceDirectoryError)
+    );
   });
   const allUnavailable = hosts.length > 0 && unavailableHosts.length === hosts.length;
   const connecting = hosts.some((host) => statuses.get(host.serverId) === "connecting");

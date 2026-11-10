@@ -54,7 +54,20 @@ export function taskLane(bucket: WorkspaceStateBucket): TaskLane {
 }
 
 function ownBucket(agent: Agent): WorkspaceStateBucket {
-  if (agent.observation?.status === "unknown") return "attention";
+  if (agent.observation) {
+    // A closed observation channel does not settle the native task's last known result.
+    switch (agent.observation.status) {
+      case "running":
+        return "running";
+      case "failed":
+        return "failed";
+      case "unknown":
+        return "attention";
+      case "completed":
+      case "canceled":
+        return "done";
+    }
+  }
   return deriveAgentStateBucket({
     status:
       agent.status === "initializing" || (agent.turn.phase === "open" && agent.status !== "error")
@@ -177,7 +190,7 @@ export function filterTaskBoard(tasks: readonly BoardTask[], filters: TaskFilter
           [
             member.agent.title,
             member.agent.provider,
-            member.agent.model,
+            member.agent.model ?? member.agent.runtimeInfo?.model,
             member.projectName,
             member.workspaceName,
             member.hostLabel,
