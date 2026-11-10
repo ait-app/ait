@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use domain::bot::{Channel, Conversation, DeliveryStatus, Turn, TurnStatus};
+use domain::bot::{Channel, Conversation, DeliveryStatus, Turn, TurnMessage, TurnStatus};
 use domain::{BotTurnId, ChannelId, ConversationId};
 use model::ErrorCode;
 use model::bot::Store;
@@ -79,7 +79,13 @@ enum Operation {
     PhotonProjectClaimed(String),
     ChannelStatus(ChannelId, Value),
     Account(ChannelId, String),
-    Progress(BotTurnId, TurnStatus, Option<String>, Option<String>),
+    Progress(
+        BotTurnId,
+        TurnStatus,
+        Option<String>,
+        Option<Vec<TurnMessage>>,
+        Option<String>,
+    ),
     Finished(ConversationId),
     Rotate(ConversationId, BotTurnId),
     DeliveryNext(ChannelId),
@@ -375,9 +381,27 @@ impl Bots {
         reply: Option<String>,
         error: Option<String>,
     ) -> Result<(), ErrorCode> {
-        self.send(Operation::Progress(turn, status, reply, error))
+        self.send(Operation::Progress(turn, status, reply, None, error))
             .await
             .map(|_| ())
+    }
+    pub(crate) async fn progress_with_messages(
+        &self,
+        turn: BotTurnId,
+        status: TurnStatus,
+        reply: Option<String>,
+        messages: Vec<TurnMessage>,
+        error: Option<String>,
+    ) -> Result<(), ErrorCode> {
+        self.send(Operation::Progress(
+            turn,
+            status,
+            reply,
+            Some(messages),
+            error,
+        ))
+        .await
+        .map(|_| ())
     }
     /// Move `turn`'s conversation to a new native session and generation; see `State::rotate`.
     pub(crate) async fn rotate(
@@ -546,8 +570,8 @@ fn apply(
             accounts.insert(identity, channel);
             Ok(Value::Null)
         }
-        Operation::Progress(turn, status, reply, error) => state
-            .progress(turn, status, reply, error)
+        Operation::Progress(turn, status, reply, messages, error) => state
+            .progress_with_messages(turn, status, reply, messages, error)
             .map(|()| Value::Null),
         Operation::Finished(conversation) => {
             state.finished(conversation);

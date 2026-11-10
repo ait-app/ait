@@ -113,3 +113,44 @@ fn phase_two_conversation_json_loads_without_an_instructions_digest() {
 
     assert_eq!(conversation.instructions_digest, None);
 }
+
+#[test]
+fn turn_messages_roundtrip_and_old_turns_default_to_empty_messages() {
+    use super::{DeliveryStatus, Turn, TurnMessage, TurnMessageStatus, TurnStatus};
+
+    let id = BotTurnId::generate();
+    let conversation_id = ConversationId::generate();
+    let message = TurnMessage {
+        id: "assistant-1".into(),
+        text: "first answer".into(),
+        status: TurnMessageStatus::Streaming,
+    };
+    let value = serde_json::json!({
+        "id": id,
+        "conversationId": conversation_id,
+        "messageId": "input-1",
+        "sequence": 1,
+        "generation": 0,
+        "text": "question",
+        "replyTo": null,
+        "reply": "first answer",
+        "pendingPermissions": [],
+        "status": "running",
+        "delivery": "pending",
+        "error": null,
+        "createdAt": "2026-11-05T00:00:00Z"
+    });
+    let mut turn: Turn = serde_json::from_value(value).unwrap();
+    assert_eq!(turn.messages, Vec::<TurnMessage>::new());
+    turn.messages.push(message.clone());
+    assert_eq!(
+        serde_json::from_value::<TurnMessage>(serde_json::to_value(message).unwrap()).unwrap(),
+        TurnMessage {
+            id: "assistant-1".into(),
+            text: "first answer".into(),
+            status: TurnMessageStatus::Streaming,
+        }
+    );
+    assert_eq!(turn.status, TurnStatus::Running);
+    assert_eq!(turn.delivery, DeliveryStatus::Pending);
+}

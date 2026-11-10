@@ -16,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::{
     BUSY_NOTICE, Disposition, Incoming, Socket, admit, chunks, connect_socket, deliver, expose,
-    json_response,
+    json_response, reply_parts,
 };
 use crate::service::Bots;
 use frames::{Fragments, Frame, Header};
@@ -272,16 +272,23 @@ impl Connection<'_> {
         turn: domain::bot::Turn,
         conversation: domain::bot::Conversation,
     ) -> Result<(), ErrorCode> {
-        let text = turn.reply.as_deref().ok_or(ErrorCode::BotIo)?;
-        for (index, chunk) in chunks(text, 3000).into_iter().enumerate() {
-            self.post_text(
-                &conversation.peer,
-                turn.reply_to.as_deref(),
-                conversation.thread.is_some(),
-                chunk,
-                &format!("{}-{index}", turn.id),
-            )
-            .await?;
+        let parts = reply_parts(&turn);
+        if parts.is_empty() {
+            return Err(ErrorCode::BotIo);
+        }
+        let mut index = 0;
+        for text in parts {
+            for chunk in chunks(text, 3000) {
+                self.post_text(
+                    &conversation.peer,
+                    turn.reply_to.as_deref(),
+                    conversation.thread.is_some(),
+                    chunk,
+                    &format!("{}-{index}", turn.id),
+                )
+                .await?;
+                index += 1;
+            }
         }
         Ok(())
     }

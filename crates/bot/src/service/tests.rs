@@ -48,6 +48,50 @@ async fn provider_failures_are_durable_and_ambiguous_statuses_require_explicit_r
 }
 
 #[tokio::test]
+async fn distinct_provider_messages_stream_into_one_turn_and_finish_independently() {
+    let fixture = Fixture::new();
+    *fixture.native.status.lock().unwrap() = Some(json!({
+        "status":"running",
+        "messages":[["first","first partial"],["second","second partial"]]
+    }));
+    let bots = fixture.bots();
+    let conversation = open(&bots, WORKSPACE).await;
+    let turn = bots
+        .execute(
+            "bot.message.send.request",
+            json!({"workspaceId":WORKSPACE,"conversationId":conversation,"messageId":"messages","text":"request"}),
+        )
+        .await
+        .unwrap()["turn"]["id"]
+        .clone();
+
+    let streaming = wait(&bots, WORKSPACE, &turn, "running").await;
+    assert_eq!(
+        streaming["turn"]["messages"],
+        json!([
+            {"id":"first","text":"first partial","status":"completed"},
+            {"id":"second","text":"second partial","status":"streaming"}
+        ])
+    );
+
+    *fixture.native.status.lock().unwrap() = Some(json!({
+        "status":"idle",
+        "messages":[["first","first complete"],["second","second complete"]],
+        "lastMessage":"second complete"
+    }));
+    let completed = wait(&bots, WORKSPACE, &turn, "completed").await;
+    assert_eq!(completed["turn"]["reply"], "second complete");
+    assert_eq!(
+        completed["turn"]["messages"],
+        json!([
+            {"id":"first","text":"first complete","status":"completed"},
+            {"id":"second","text":"second complete","status":"completed"}
+        ])
+    );
+    bots.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn failed_permission_denial_cancels_native_execution_and_fails_the_turn() {
     let fixture = Fixture::new();
     fixture.native.approval.store(true, Ordering::SeqCst);

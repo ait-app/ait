@@ -1,8 +1,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use domain::bot::{Conversation, ExecutionConfig, SessionOwner, Turn, TurnStatus};
-use provider::service::bot_execution::{Action, Created, InstructionDelivery};
+use domain::bot::{
+    Conversation, ExecutionConfig, SessionOwner, Turn, TurnMessage, TurnMessageStatus, TurnStatus,
+};
+use provider::service::bot_execution::{Action, Created, InstructionDelivery, TimelineCursor};
 use tokio_util::sync::CancellationToken;
 
 use crate::ports::Executor;
@@ -15,6 +17,7 @@ pub(crate) struct Run {
     pub(crate) config: ExecutionConfig,
     pub(crate) instructions: String,
     pub(crate) cancel: CancellationToken,
+    pub(crate) output_cursor: Option<TimelineCursor>,
 }
 
 /// Failure of a turn whose session could not reach the Bot's safe profile even after rotation.
@@ -65,15 +68,28 @@ async fn perform(
     );
     tokio::select! {
         () = run.cancel.cancelled() => return cancel(bots, executor, run).await,
-        result = send => { result?; }
+        result = send => {
+            let accepted = result?;
+            run.output_cursor = serde_json::from_value(accepted["cursor"].clone()).ok();
+        }
     }
     bots.progress(run.turn.id, TurnStatus::Running, None, None)
         .await?;
+    wait_for_completion(bots, executor, run).await
+}
+
+async fn wait_for_completion(
+    bots: &Bots,
+    executor: &Arc<dyn Executor>,
+    run: &Run,
+) -> Result<(), model::ErrorCode> {
     loop {
         let status = tokio::select! {
             () = run.cancel.cancelled() => return cancel(bots, executor, run).await,
-            result = executor.execute(run.owner.clone(), Action::Status { agent_id: run.conversation.session_id.clone() }) => result?,
+            result = poll(executor, run) => result?,
         };
+        let fallback_id = run.turn.id.to_string();
+        let messages = visible_messages(&status, &fallback_id)?;
         if let Some(permissions) = status["final"]["pendingPermissions"].as_array()
             && !permissions.is_empty()
         {
@@ -104,17 +120,45 @@ async fn perform(
         }
         match status["status"].as_str() {
             Some("idle") => {
-                let reply = status["lastMessage"]
-                    .as_str()
+                let messages = completed_messages(messages, &status, &fallback_id);
+                let reply = messages
+                    .last()
+                    .map(|message| message.text.clone())
+                    .or_else(|| status["lastMessage"].as_str().map(str::to_owned))
                     .filter(|text| text.len() <= 256 * 1024)
-                    .ok_or(model::ErrorCode::BotIo)?
-                    .to_owned();
+                    .ok_or(model::ErrorCode::BotIo)?;
+                if !messages.is_empty() {
+                    return bots
+                        .progress_with_messages(
+                            run.turn.id,
+                            TurnStatus::Completed,
+                            Some(reply),
+                            messages,
+                            None,
+                        )
+                        .await;
+                }
                 return bots
                     .progress(run.turn.id, TurnStatus::Completed, Some(reply), None)
                     .await;
             }
             // The turn was marked running before polling began.
-            Some("running") => {}
+            Some("running") => {
+                if !messages.is_empty() {
+                    let reply = messages
+                        .last()
+                        .map(|message| message.text.clone())
+                        .ok_or(model::ErrorCode::BotIo)?;
+                    bots.progress_with_messages(
+                        run.turn.id,
+                        TurnStatus::Running,
+                        Some(reply),
+                        messages,
+                        None,
+                    )
+                    .await?;
+                }
+            }
             Some("error") => {
                 return bots
                     .progress(
@@ -132,6 +176,80 @@ async fn perform(
             () = tokio::time::sleep(Duration::from_millis(250)) => {}
         }
     }
+}
+
+async fn poll(
+    executor: &Arc<dyn Executor>,
+    run: &Run,
+) -> Result<serde_json::Value, model::ErrorCode> {
+    let action = run.output_cursor.as_ref().map_or_else(
+        || Action::Status {
+            agent_id: run.conversation.session_id.clone(),
+        },
+        |after| Action::Poll {
+            agent_id: run.conversation.session_id.clone(),
+            after: after.clone(),
+        },
+    );
+    executor.execute(run.owner.clone(), action).await
+}
+
+fn visible_messages(
+    status: &serde_json::Value,
+    fallback_id: &str,
+) -> Result<Vec<TurnMessage>, model::ErrorCode> {
+    let Some(messages) = status["messages"].as_array() else {
+        return Ok(Vec::new());
+    };
+    let mut visible: Vec<_> = messages
+        .iter()
+        .map(|message| {
+            let id = message[0]
+                .as_str()
+                .or_else(|| message["id"].as_str())
+                .unwrap_or(fallback_id)
+                .to_owned();
+            let text = message[1]
+                .as_str()
+                .or_else(|| message["text"].as_str())
+                .ok_or(model::ErrorCode::BotIo)?
+                .to_owned();
+            Ok(TurnMessage {
+                id,
+                text,
+                status: TurnMessageStatus::Streaming,
+            })
+        })
+        .collect::<Result<Vec<TurnMessage>, model::ErrorCode>>()?;
+    let last = visible.len().saturating_sub(1);
+    for (index, message) in visible.iter_mut().enumerate() {
+        message.status = if index == last {
+            TurnMessageStatus::Streaming
+        } else {
+            TurnMessageStatus::Completed
+        };
+    }
+    Ok(visible)
+}
+
+fn completed_messages(
+    mut messages: Vec<TurnMessage>,
+    status: &serde_json::Value,
+    fallback_id: &str,
+) -> Vec<TurnMessage> {
+    if messages.is_empty()
+        && let Some(text) = status["lastMessage"].as_str()
+    {
+        messages.push(TurnMessage {
+            id: fallback_id.to_owned(),
+            text: text.to_owned(),
+            status: TurnMessageStatus::Completed,
+        });
+    }
+    for message in &mut messages {
+        message.status = TurnMessageStatus::Completed;
+    }
+    messages
 }
 
 /// Open the turn's native session, rotating the conversation once when the existing session

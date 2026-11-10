@@ -169,6 +169,45 @@ pub(crate) fn project(rows: &[Row]) -> Vec<Entry> {
     merge_text(merge_text(entries, "assistant_message"), "reasoning")
 }
 
+/// Return visible assistant messages whose source rows occur after `after_seq`.
+///
+/// Provider timeline rows may contain incremental text and tool lifecycle records. The cursor is
+/// applied to the raw rows before projection so a message that started in an earlier turn cannot
+/// consume the new turn's fragments. Projection then reconstructs each message, and this helper
+/// applies the Bot's user-visible allowlist. Distinct messages remain distinct while their own
+/// fragments are merged.
+pub(crate) fn assistant_messages(rows: &[Row], after_seq: u64) -> Vec<(String, String)> {
+    let mut messages: Vec<(String, String)> = Vec::new();
+    let mut indexes: HashMap<String, usize> = HashMap::new();
+    let rows: Vec<_> = rows
+        .iter()
+        .filter(|row| row.seq > after_seq)
+        .cloned()
+        .collect();
+    for entry in project(&rows)
+        .into_iter()
+        .filter(|entry| entry.item["type"] == "assistant_message")
+    {
+        let Some(text) = entry.item["text"].as_str() else {
+            continue;
+        };
+        if text.trim().is_empty() {
+            continue;
+        }
+        let id = entry.item["messageId"]
+            .as_str()
+            .filter(|id| !id.is_empty())
+            .map_or_else(|| format!("timeline:{}", entry.seq_start), str::to_owned);
+        if let Some(index) = indexes.get(&id).copied() {
+            messages[index].1.push_str(text);
+        } else {
+            indexes.insert(id.clone(), messages.len());
+            messages.push((id, text.to_owned()));
+        }
+    }
+    messages
+}
+
 /// Return the lifecycle identity of `item`, or `None` for independent/text source rows.
 pub(crate) fn identity(item: &Value) -> Option<String> {
     match item["type"].as_str()? {

@@ -176,6 +176,7 @@ const receipt: BotTurn = {
   text: "hello",
   replyTo: null,
   reply: "reply",
+  messages: [{ id: "reply", text: "reply", status: "completed" }],
   pendingPermissions: [],
   status: "completed",
   delivery: "delivered",
@@ -410,6 +411,7 @@ describe("Bot input receipts", () => {
       sequence: 0,
       status: "cancelled",
       reply: null,
+      messages: [],
       error: "Workspace directory missing; Bot paused",
     };
     botRequest.mockImplementation(async (method: string) => {
@@ -453,6 +455,22 @@ describe("Bot conversation presentation", () => {
     const reply = await screen.findByTestId("assistant-message");
     expect(reply.textContent).toBe("reply");
     expect(screen.getByTestId("user-message").contains(reply)).toBe(false);
+  });
+
+  it("keeps distinct assistant messages as separate bubbles", async () => {
+    withHistory([
+      {
+        ...receipt,
+        messages: [
+          { id: "first", text: "first reply", status: "completed" },
+          { id: "second", text: "second reply", status: "completed" },
+        ],
+        reply: "second reply",
+      },
+    ]);
+    renderChat({});
+    const replies = await screen.findAllByTestId("assistant-message");
+    expect(replies.map((reply) => reply.textContent)).toEqual(["first reply", "second reply"]);
   });
 
   it("lists the hidden session as a subagent and opens it as an agent tab", async () => {

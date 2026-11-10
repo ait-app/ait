@@ -5,10 +5,38 @@ import {
   BotRequestSchema,
   BotResponseSchema,
 } from "./rpc-schemas.js";
-import { BotPermissionsSchema } from "./types.js";
+import { BotPermissionsSchema, BotTurnSchema } from "./types.js";
 import { SessionInboundMessageSchema, SessionOutboundMessageSchema } from "../messages.js";
 
 describe("Bot wire contract", () => {
+  it("preserves distinct assistant messages and defaults legacy turns to an empty list", () => {
+    const turn = {
+      id: crypto.randomUUID(),
+      conversationId: crypto.randomUUID(),
+      messageId: "input",
+      sequence: 1,
+      generation: 0,
+      text: "question",
+      replyTo: null,
+      reply: "second",
+      pendingPermissions: [],
+      status: "completed",
+      delivery: "delivered",
+      error: null,
+      createdAt: "2026-11-10T00:00:00Z",
+    } as const;
+    expect(
+      BotTurnSchema.parse({
+        ...turn,
+        messages: [
+          { id: "first", text: "first", status: "completed" },
+          { id: "second", text: "second", status: "completed" },
+        ],
+      }).messages.map((message) => message.id),
+    ).toEqual(["first", "second"]);
+    expect(BotTurnSchema.parse(turn).messages).toEqual([]);
+  });
+
   it("keeps WeChat and QQ setup optional and parses their channels", () => {
     expect(BOT_METHODS).not.toContain("bot.channel.weixin.scan.start.request");
     expect(BOT_METHODS).not.toContain("bot.channel.qq.pair.request");

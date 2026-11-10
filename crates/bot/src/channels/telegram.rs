@@ -6,7 +6,9 @@ use secrecy::SecretString;
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
-use super::{BUSY_NOTICE, Disposition, Incoming, admit, chunks, deliver, expose, json_response};
+use super::{
+    BUSY_NOTICE, Disposition, Incoming, admit, chunks, deliver, expose, json_response, reply_parts,
+};
 use crate::service::Bots;
 
 pub(crate) mod onboarding;
@@ -59,15 +61,20 @@ async fn run_at(
     };
     let receiving = receiver.receive(cancel);
     let sending = deliver(bots, channel.id, cancel, |turn, conversation| async move {
-        let text = turn.reply.as_deref().ok_or(ErrorCode::BotIo)?;
-        for chunk in chunks(text, 3500) {
-            let body = message_body(
-                &conversation.peer,
-                conversation.thread.as_deref(),
-                turn.reply_to.as_deref(),
-                chunk,
-            )?;
-            call_at(client, token, "sendMessage", body, api).await?;
+        let parts = reply_parts(&turn);
+        if parts.is_empty() {
+            return Err(ErrorCode::BotIo);
+        }
+        for text in parts {
+            for chunk in chunks(text, 3500) {
+                let body = message_body(
+                    &conversation.peer,
+                    conversation.thread.as_deref(),
+                    turn.reply_to.as_deref(),
+                    chunk,
+                )?;
+                call_at(client, token, "sendMessage", body, api).await?;
+            }
         }
         Ok(())
     });

@@ -169,6 +169,7 @@ impl State {
             text: incoming.text,
             reply_to: incoming.reply_to,
             reply: None,
+            messages: Vec::new(),
             pending_permissions: Vec::new(),
             status: TurnStatus::Queued,
             delivery: DeliveryStatus::Pending,
