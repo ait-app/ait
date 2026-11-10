@@ -210,6 +210,7 @@ export function ProviderNativeActions({
         ...(action.id === "get_session_stats" ? { present: "true" } : {}),
       });
       setOutcomes((current) => ({ ...current, [key]: { result } }));
+      if (action.id === "get_session_stats") changeOpen(false);
     } catch (cause) {
       setQueryError(cause instanceof Error ? cause.message : String(cause));
       setOutcomes((current) => ({

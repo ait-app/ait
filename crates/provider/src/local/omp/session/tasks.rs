@@ -63,6 +63,8 @@ impl Session {
         if objective.is_empty() {
             return Err(AgentSessionError::Rejected);
         }
+        let events = self.transport.local_command("/ait-goal-tools-v1").await?;
+        self.transport.restore_events(events)?;
         let result = self
             .transport
             .request("goal", json!({"op":"create","objective":objective}))
@@ -228,6 +230,7 @@ pub(super) fn goal_item(id: &str, result: &Value) -> crate::protocol::timeline::
         "paused" | "blocked" => {
             json!([{"id":"resume","command":"/goal resume"},{"id":"clear","command":"/goal drop"}])
         }
+        "completed" => json!([{"id":"clear","command":"/goal drop"}]),
         _ => json!([]),
     };
     note

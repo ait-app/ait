@@ -43,14 +43,21 @@ export default function (pi) {
       );
     },
   });
+  const enableGoalTool = async () => {
+    if (enabled) throw new Error("Exit Vibe before starting a goal");
+    if (!pi.getAllTools().some((tool) => tool.name === "goal")) {
+      throw new Error("The installed OMP did not expose its goal tool");
+    }
+    await pi.setActiveTools([...new Set([...pi.getActiveTools(), "goal"])]);
+  };
+  pi.registerCommand("ait-goal-tools-v1", {
+    description: "Enable the installed OMP goal tool before creating a native goal",
+    handler: enableGoalTool,
+  });
   pi.registerCommand("ait-guided-goal-v1", {
     description: "Ait guided goal interview over the external OMP goal tool",
     handler: async (args) => {
-      if (enabled) throw new Error("Exit Vibe before starting a goal interview");
-      if (!pi.getAllTools().some((tool) => tool.name === "goal")) {
-        throw new Error("The installed OMP did not expose its goal tool");
-      }
-      await pi.setActiveTools([...new Set([...pi.getActiveTools(), "goal"])]);
+      await enableGoalTool();
       pi.sendMessage(
         {
           customType: "ait-guided-goal",

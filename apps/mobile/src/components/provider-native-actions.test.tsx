@@ -549,6 +549,7 @@ it("queries statistics with one click and requests a durable card without openin
     present: "true",
   });
   expect(screen.queryByTestId("native-action-submit")).toBeNull();
+  expect(screen.getByTestId("agent-more-actions").getAttribute("aria-expanded")).toBe("false");
 });
 
 it("does not expose generic Vibe, Goal or side-question task forms", () => {

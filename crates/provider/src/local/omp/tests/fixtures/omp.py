@@ -306,6 +306,10 @@ for command in commands_from_input():
         finish()
     elif kind == 'prompt':
         text = command['message']
+        if text == '/ait-goal-tools-v1':
+            response(command)
+            emit({'type':'prompt_result','id':command.get('id'),'agentInvoked':False,'status':'completed'})
+            continue
         if text == '/usage' and (root/'side-commands').exists():
             emit({'type':'command_output','text':'Native usage: 123 tokens'})
             response(command,{'agentInvoked':False})

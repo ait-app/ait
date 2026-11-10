@@ -47,7 +47,7 @@ async fn bridged() -> (
 #[tokio::test]
 async fn goal_objectives_use_native_state_and_never_silently_replace_an_existing_goal() {
     use crate::ports::agent_session::AgentSession;
-    let (_root, mut session, spec) = bridged().await;
+    let (root, mut session, spec) = bridged().await;
     session
         .start_input(&AgentPrompt::text("/goal verify the release"), &spec.config)
         .await
@@ -58,6 +58,20 @@ async fn goal_objectives_use_native_state_and_never_silently_replace_an_existing
     );
     assert!(session.stream.events.iter().any(|event| matches!(event, AgentTurnEvent::Timeline(note) if note.item["goal"]["phase"] == "active")));
     crate::local::omp::tests::complete(&mut session).await;
+    let calls: Vec<Value> = std::fs::read_to_string(root.path().join("agent/calls.jsonl"))
+        .unwrap()
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .collect();
+    let prepared = calls
+        .iter()
+        .position(|call| call["message"] == "/ait-goal-tools-v1")
+        .unwrap();
+    let created = calls
+        .iter()
+        .position(|call| call["type"] == "goal" && call["op"] == "create")
+        .unwrap();
+    assert!(prepared < created);
     assert!(
         session
             .start_input(&AgentPrompt::text("/goal another objective"), &spec.config)
@@ -180,4 +194,17 @@ async fn acknowledged_goal_snapshot_supersedes_older_buffered_updates_but_keeps_
         "paused"
     );
     session.close().await.unwrap();
+}
+
+#[test]
+fn completed_goal_keeps_the_clear_action_in_current_controls() {
+    let note = goal_item(
+        "current",
+        &json!({"goal":{"id":"done","status":"completed","objective":"Verified"}}),
+    );
+    assert_eq!(note.item["goal"]["phase"], "complete");
+    assert_eq!(
+        note.item["actions"],
+        json!([{"id":"clear","command":"/goal drop"}])
+    );
 }
