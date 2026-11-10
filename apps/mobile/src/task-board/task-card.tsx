@@ -51,7 +51,7 @@ export function TaskProvider({ task }: { task: BoardTask }) {
   const model = task.agent.model ?? task.agent.runtimeInfo?.model;
   return (
     <View style={styles.line}>
-      <ProviderIcon size={15} color={theme.colors.foregroundMuted} />
+      <ProviderIcon size={14} color={theme.colors.foregroundMuted} />
       <Text style={styles.meta} numberOfLines={1}>
         {task.agent.provider}
         {model ? ` · ${model}` : ""}
@@ -159,9 +159,9 @@ const styles = StyleSheet.create((theme) => ({
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing[4],
-    gap: theme.spacing[2],
-    marginBottom: theme.spacing[3],
+    padding: theme.spacing[3],
+    gap: theme.spacing[1],
+    marginBottom: theme.spacing[2],
   },
   selected: { borderColor: theme.colors.accent },
   hovered: { backgroundColor: theme.colors.surface1, borderColor: theme.colors.foregroundMuted },
@@ -169,21 +169,21 @@ const styles = StyleSheet.create((theme) => ({
   line: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[2],
+    gap: theme.spacing[1.5],
     minWidth: 0,
     flexShrink: 1,
   },
   title: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.xl,
+    fontSize: theme.fontSize.lg,
     fontWeight: theme.fontWeight.semibold,
-    lineHeight: 23,
-    marginVertical: theme.spacing[1],
+    lineHeight: 20,
+    marginVertical: theme.spacing[0.5],
   },
   meta: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
-    lineHeight: 21,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 18,
     flexShrink: 1,
   },
   footer: {
@@ -192,15 +192,15 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "space-between",
     flexWrap: "wrap",
     gap: theme.spacing[2],
-    marginTop: theme.spacing[2],
+    marginTop: theme.spacing[1],
   },
-  status: { fontSize: theme.fontSize.base, lineHeight: 21, flexShrink: 1 },
+  status: { fontSize: theme.fontSize.sm, lineHeight: 18, flexShrink: 1 },
   time: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
-  error: { color: theme.colors.statusDanger, fontSize: theme.fontSize.sm, lineHeight: 19 },
+  error: { color: theme.colors.statusDanger, fontSize: theme.fontSize.sm, lineHeight: 18 },
   children: {
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
-    paddingTop: theme.spacing[2],
+    paddingTop: theme.spacing[1.5],
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
