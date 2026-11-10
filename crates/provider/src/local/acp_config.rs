@@ -139,3 +139,37 @@ pub(crate) fn mcp_servers(config: &domain::agent_runtime::StoredAgentConfig) -> 
         })
         .collect()
 }
+
+/// MCP servers a configuration launches; an empty map launches none, like an absent one.
+///
+/// # Arguments
+///
+/// * `config` - Effective session configuration.
+///
+/// # Returns
+/// The configured servers, or `None` when there are none.
+pub(crate) fn launched_servers(
+    config: &domain::agent_runtime::StoredAgentConfig,
+) -> Option<&std::collections::BTreeMap<String, Value>> {
+    config
+        .mcp_servers
+        .as_ref()
+        .filter(|servers| !servers.is_empty())
+}
+
+/// Whether a validated host MCP definition is launchable without a native search path.
+///
+/// # Arguments
+///
+/// * `server` - One `mcp_servers` entry already accepted by shared configuration validation.
+///
+/// # Returns
+/// True for Streamable HTTP servers and for stdio servers with an absolute command; false for
+/// SSE, which the supported native clients reject, and for commands that need `PATH` lookup.
+pub(crate) fn launchable(server: &Value) -> bool {
+    server["type"] == "http"
+        || (server["type"] == "stdio"
+            && server["command"]
+                .as_str()
+                .is_some_and(|command| std::path::Path::new(command).is_absolute()))
+}

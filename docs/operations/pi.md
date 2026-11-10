@@ -55,9 +55,19 @@ still applies before decoding. Other notification-only extension UI records
 (`setStatus`, `setWidget`, `setTitle`, `set_editor_text`) are ignored. Unknown
 UI methods fail immediately with a protocol diagnostic (`extension_method`). This can cause extensions requiring interaction to decline their operation.
 
-Rewind, live steering, host-provided MCP/tool policies,
+Rewind, live steering, host-provided tool policies,
 custom system prompts, structured output and auxiliary summaries
 are not exposed by this adapter. Unsupported settings are rejected instead of ignored.
+
+Ait MCP servers, including the injected `ait` server, are registered for one native process
+by a private extension loaded with `--extension`; it calls `pi.registerMcpServer` and never
+writes `mcp.json`. The server definitions live in an owner-only (0700 directory, 0600 file)
+temporary directory removed when the process ends; the extension source itself carries no
+credential. Header and environment values are passed literally (`$` and a leading `!` are
+escaped). Streamable HTTP and stdio servers with an absolute command are supported; SSE is
+rejected, and a live session rejects MCP changes. A server with the same name in Pi's own
+`mcp.json` takes precedence over the registration, so rename a personal `ait` entry. See
+[MCP](mcp.md#provider-自动注入).
 Existing native history changed outside Ait is not automatically re-imported into the Ait
 display timeline; use explicit history refresh.
 
@@ -383,8 +393,8 @@ sends no inference requests. The loopback thinking test also imports Pi's actual
 
 Implementation decision: [ADR-156](../decisions/providers/adr-156-pi-native-rpc-provider.md).
 Reasoning controls and installed-Pi contract results:
-[2026-11-03 report](../reports/providers/pi-reasoning-controls-2026-11-03.md).
+[2026-11-03 report](../archive/reports/providers/pi-reasoning-controls-2026-11-03.md).
 Focused user-image projection results and validation limits:
-[2026-10-21 report](../reports/providers/pi-user-image-projection-2026-10-21.md).
+[2026-10-21 report](../archive/reports/providers/pi-user-image-projection-2026-10-21.md).
 Admission, shutdown and resume validation:
-[2026-11-08 report](../reports/providers/pi-admission-lifecycle-2026-11-08.md).
+[2026-11-08 report](../archive/reports/providers/pi-admission-lifecycle-2026-11-08.md).

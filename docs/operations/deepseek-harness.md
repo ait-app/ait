@@ -71,7 +71,7 @@ nvm/fnm 等工具配置的 Node 路径需要由启动 Ait 的环境继承。桌�
 DSH `0.2.1-rc.2` 的全新 profile 在未配置凭据时可返回空模型目录，这与 CLI 路径缺失不同。
 排查时提供安装命令、`command -v dsh`、`dsh --version`、`node --version`、
 `npm --version` 与 `npm prefix --global` 的输出。
-本次 Linux npm 独立安装的验证范围与限制见[排查记录](../reports/providers/dsh-npm-linux-2026-10-29.md)。
+本次 Linux npm 独立安装的验证范围与限制见[排查记录](../archive/reports/providers/dsh-npm-linux-2026-10-29.md)。
 
 ## 创建与原生能力
 
@@ -111,11 +111,16 @@ DSH `0.2.1-rc.2` 的全新 profile 在未配置凭据时可返回空模型目录
 导入需要原工作目录存在且可访问；目录不可用时返回 `working_directory_unavailable`，
 界面显示原路径并提示恢复目录后重试。重新创建空目录只能恢复导入所需的路径，不能恢复原项目文件。
 暂不支持其他前端实时历史同步、steer、rewind、commands 和结构化输出约束。
-原生 Host 不接受 Ait 每会话 MCP override；请在 DSH web profile 中配置 MCP。
+Ait 会话的 MCP 配置（包括自动注入的 `ait`）经 `dsh --patch` 叠加层交给该会话独占的 Web Host：
+每个服务器成为一个 `@deepseek-ai/dsh-mcp-client` 插件行，profile 的 `cordis.patch.yml` 不被修改。
+叠加层是属主专用（0600）临时文件，Host 结束时删除。服务器名须符合插件的 `serverName` 规则
+（`[A-Za-z0-9_-]`，1–32 个字符），支持 HTTP 和绝对路径命令的 stdio，不支持 SSE；
+运行中的会话不能修改 MCP 配置。profile 中已有 `serverName` 为 `ait` 的插件会与注入项冲突，
+需改名。本机已验证 DSH `0.2.0-rc.2`，见 [MCP 手册](mcp.md#provider-自动注入)。
 显示按原生已落盘消息更新，不保证逐 token 输出。
 原生模型发现只读目录，不再创建 probe session；显式 ACP 模式仍需打开会话进行发现。
 
-旧 CLI 或需要 ACP 每会话 MCP override 时，可在 daemon 启动前设置：
+旧 CLI 需要 ACP 时，可在 daemon 启动前设置：
 
 ```sh
 export AIT_SERVER_DEEPSEEK_HARNESS_TRANSPORT=acp
@@ -157,11 +162,11 @@ DSH 的账号界面。认证、余额为零、缺少接口、网络失败分别�
 自定义非官方端点、未知凭据后端、可执行凭据路径配置以及显式 ACP 传输返回明确不可用原因；
 不会将这些场景当成已登录账号的零余额。旧版本缺少账号 API 时同样明确提示能力缺失。
 本机已验证 DSH `0.2.0-rc.2` 的 API Key 路径；原生账号登录余额使用模拟 Host 验证，详见
-[复现与验证报告](../reports/providers/dsh-deepseek-balance-2026-10-14.md)。
+[复现与验证报告](../archive/reports/providers/dsh-deepseek-balance-2026-10-14.md)。
 
 ## DSH 0.2 权限目录
 
-新版 Host 从 `permissionPresets/catalog` 提供可选权限，历史投影只保留当前值；Ait 兼容此协议及旧版内嵌选项。恢复桌面中打开的原生会话前，应先让 DSH 释放该会话的写入所有权；即使没有运行中的回合，桌面仍可能持有写入锁。只读导入不需要抢占写入所有权。验证范围见[权限目录兼容报告](../reports/providers/dsh-permission-catalog.md)。
+新版 Host 从 `permissionPresets/catalog` 提供可选权限，历史投影只保留当前值；Ait 兼容此协议及旧版内嵌选项。恢复桌面中打开的原生会话前，应先让 DSH 释放该会话的写入所有权；即使没有运行中的回合，桌面仍可能持有写入锁。只读导入不需要抢占写入所有权。验证范围见[权限目录兼容报告](../archive/reports/providers/dsh-permission-catalog.md)。
 
 ## 情景模式、插件与 profile
 

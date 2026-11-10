@@ -4,6 +4,8 @@ mod acp_config;
 mod acp_permissions;
 mod acp_streaming;
 mod acp_transport;
+#[cfg(test)]
+mod agent_mcp_injection;
 pub(crate) mod antigravity;
 pub(crate) mod claude;
 pub(crate) mod codex;

@@ -9,6 +9,7 @@ use super::*;
 
 mod admission;
 mod admission_lifecycle;
+mod agent_mcp;
 mod commands;
 mod configuration;
 mod configuration_rejections;

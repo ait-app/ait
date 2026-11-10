@@ -98,6 +98,12 @@ impl AgentClient for OpenCodeClient {
         true
     }
 
+    /// ACP `session/new`, `session/load` and `session/resume` attach HTTP MCP servers to the
+    /// private server that each `opencode acp` process starts; nothing is written to config.
+    fn supports_agent_mcp(&self) -> bool {
+        true
+    }
+
     async fn subagents(
         &self,
         cwd: &str,

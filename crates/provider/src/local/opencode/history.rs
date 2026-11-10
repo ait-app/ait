@@ -28,20 +28,51 @@ pub(super) async fn replay(
     images: crate::local::images::ImageStore,
     timeout: std::time::Duration,
 ) -> Result<(Value, Stream, String), AgentSessionError> {
+    let attachment = Attachment {
+        id,
+        cwd,
+        servers: &[],
+    };
+    attach(transport, &attachment, images, timeout).await
+}
+
+/// One native session load: identity, requested directory and the session's MCP servers.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Attachment<'a> {
+    /// Native session identity.
+    pub(super) id: &'a str,
+    /// Directory requested first; a moved session is followed to its current directory.
+    pub(super) cwd: &'a str,
+    /// ACP launch descriptions the native process attaches at the session's directory.
+    pub(super) servers: &'a [Value],
+}
+
+/// Load a transcript like [`replay`], attaching `attachment.servers` to the native session.
+/// Returns the loaded options, replay and the directory the session is filed under.
+pub(super) async fn attach(
+    transport: &mut Transport,
+    attachment: &Attachment<'_>,
+    images: crate::local::images::ImageStore,
+    timeout: std::time::Duration,
+) -> Result<(Value, Stream, String), AgentSessionError> {
     let previous = transport.diagnostics.failure();
-    match load(transport, id, cwd, images.clone(), timeout).await {
+    match load(transport, attachment, images.clone(), timeout).await {
         Err(AgentSessionError::Rejected) => {
-            let Some(location) = locate(transport, id)
+            let Some(location) = locate(transport, attachment.id)
                 .await?
-                .filter(|location| location != cwd)
+                .filter(|location| location != attachment.cwd)
             else {
                 return Err(AgentSessionError::Rejected);
             };
-            let (options, stream) = load(transport, id, &location, images, timeout).await?;
+            let moved = Attachment {
+                cwd: &location,
+                ..*attachment
+            };
+            let (options, stream) = load(transport, &moved, images, timeout).await?;
             transport.diagnostics.restore(previous);
             Ok((options, stream, location))
         }
-        result => result.map(|(options, stream)| (options, stream, cwd.to_owned())),
+        result => result.map(|(options, stream)| (options, stream, attachment.cwd.to_owned())),
     }
 }
 
@@ -66,11 +97,11 @@ async fn locate(transport: &mut Transport, id: &str) -> Result<Option<String>, A
 /// Fail on RPC, identity or projection errors.
 async fn load(
     transport: &mut Transport,
-    id: &str,
-    cwd: &str,
+    attachment: &Attachment<'_>,
     images: crate::local::images::ImageStore,
     timeout: std::time::Duration,
 ) -> Result<(Value, Stream), AgentSessionError> {
+    let Attachment { id, cwd, servers } = *attachment;
     let mut stream = Stream::new(images);
     let mut completed = VecDeque::new();
     let mut child_bytes = 0usize;
@@ -79,7 +110,7 @@ async fn load(
     let result = transport
         .request_with_updates(
             "session/load",
-            json!({"sessionId":id,"cwd":cwd,"mcpServers":[]}),
+            json!({"sessionId":id,"cwd":cwd,"mcpServers":servers}),
             |message| {
                 if message["method"] == "opencode/session/child_update"
                     || (message["method"] == "session/update"
