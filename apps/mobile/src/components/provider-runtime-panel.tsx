@@ -3,6 +3,7 @@ import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { Button } from "@/components/ui/button";
+import { useBtwVisibilityStore } from "@/stores/btw-visibility-store";
 import { useSessionStore } from "@/stores/session-store";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { ProviderSideQuestions } from "./provider-side-questions";
@@ -32,10 +33,17 @@ export function ProviderRuntimePanel({
   const state = useSessionStore(
     (store) => store.sessions[serverId]?.agents.get(agentId)?.providerUi,
   );
+  const mainStatus = useSessionStore(
+    (store) => store.sessions[serverId]?.agents.get(agentId)?.status,
+  );
   const [error, setError] = useState<string | null>(null);
   const [recovery, setRecovery] = useState<{ owner: string; restore: () => void } | null>(null);
   const owner = `${serverId}:${agentId}`;
   const canRestore = recovery?.owner === owner;
+  const btwHydrated = useBtwVisibilityStore((store) => store.hydrated);
+  const endedBtw = useBtwVisibilityStore(
+    (store) => store.ended.find(([key]) => key === owner)?.[1],
+  );
   const editor = state?.editor;
   useEffect(() => {
     if (!editor || !onEditor || blocked) return;
@@ -51,8 +59,7 @@ export function ProviderRuntimePanel({
   const above = placement === "aboveEditor";
   const activeVibe = above && Boolean(state.vibe?.enabled);
   const hasSideQuestions = Boolean(
-    state.sideQuestions &&
-    (state.sideQuestions.records.length || state.sideQuestions.error || state.sideQuestions.reveal),
+    btwHydrated && state.sideQuestions?.reveal && state.sideQuestions.reveal !== endedBtw,
   );
   const widgets = state.widgets.filter((widget) => widget.placement === placement);
   const controls: ProviderDockItem[] = [];
@@ -97,9 +104,17 @@ export function ProviderRuntimePanel({
     controls.push({
       id: "side-questions",
       label: t("providerControl.sideQuestions.title"),
-      content: ({ expanded, collapse }) => (
+      content: ({ expanded, revealEnd }) => (
         <ProviderSideQuestions
-          disclosure={{ expanded, collapse }}
+          expanded={expanded}
+          onInputFocus={revealEnd}
+          branchAvailable={Boolean(state.actions?.some((action) => action.id === "btw_branch"))}
+          branchDisabled={
+            mainStatus === "running" ||
+            mainStatus === "initializing" ||
+            Boolean(state.vibe?.enabled)
+          }
+          onEnd={() => useBtwVisibilityStore.getState().end(owner, state.sideQuestions!.reveal!)}
           state={state.sideQuestions!}
           serverId={serverId}
           agentId={agentId}
@@ -139,7 +154,7 @@ export function ProviderRuntimePanel({
         items={controls}
         initial={controls[0]?.id}
         reveal={
-          above && state.sideQuestions?.reveal
+          above && hasSideQuestions && state.sideQuestions?.reveal
             ? { id: "side-questions", revision: state.sideQuestions.reveal }
             : null
         }

@@ -481,13 +481,10 @@ it("treats a truncated native list as a read error and blocks mutation", async (
   expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "get_entries", {});
 });
 
-it("opens side question history in the existing topic panel instead of displaying raw records", async () => {
-  mount([{ id: "get_btw_history", label: "Side question history", fields: [] }]);
-  choose("Side question history");
-  await act(async () => fireEvent.click(submit()));
-  expect(fixture.run).toHaveBeenCalledExactlyOnceWith("agent", "get_btw_history", {});
-  expect(fixture.send).not.toHaveBeenCalled();
-  expect(screen.queryByTestId("agent-action-form")).toBeNull();
+it("keeps BTW history out of the overflow menu so it opens through the slash command", () => {
+  mount([stats, { id: "get_btw_history", label: "BTW history", fields: [] }]);
+  expect(screen.queryByText("BTW history")).toBeNull();
+  expect(fixture.run).not.toHaveBeenCalled();
 });
 
 it("prevents history changes while a main turn or Vibe owns the conversation", async () => {

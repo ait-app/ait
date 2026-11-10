@@ -147,7 +147,8 @@ async fn assert_restored_navigation(
     );
 }
 
-fn installed_client(native: &std::path::Path) -> OmpClient {
+/// Build an isolated external OMP client for native session integration checks.
+pub(super) fn installed_client(native: &std::path::Path) -> OmpClient {
     OmpClient {
         environment: AgentEnvironment::try_from(BTreeMap::from([
             (

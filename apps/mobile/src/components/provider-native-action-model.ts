@@ -23,6 +23,8 @@ export function nativeActionGroup(id: string): NativeGroup | null {
       "steer_subagent",
       "cancel_subagent",
       "btw_cancel",
+      "get_btw_history",
+      "btw_branch",
       "vibe_control",
       "goal",
       "btw",

@@ -82,10 +82,16 @@ fn extension_and_host_tools_use_only_the_public_external_api() {
         &[
             json!({"name":COMMAND,"source":"extension"}),
             json!({"name":"ait-vibe-result-v1","source":"extension"}),
+            json!({"name":"ait-btw-branch-v1","source":"extension"}),
         ],
         true,
     );
     assert!(commands.iter().any(|command| command["name"] == "vibe"));
+    assert!(
+        commands
+            .iter()
+            .all(|command| command["name"] != "ait-btw-branch-v1")
+    );
     assert!(
         commands
             .iter()

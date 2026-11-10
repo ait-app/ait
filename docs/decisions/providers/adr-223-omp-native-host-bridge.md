@@ -20,7 +20,7 @@
 - 延续 ADR-218 对未公开 TUI 工厂的限制。Ait 的 Vibe 是应用层编排，不调用或仿造
   OMP TUI 的 `sessionModes`，不声称启用了上游 TUI 模式，不依赖私有 SDK 类或补丁。
 - 小型、无运行时 import 的 Ait 扩展由外部 OMP 的公开 `--extension` 加载。
-  它只使用 `registerCommand`、`getActiveTools`/`setActiveTools`、`ctx.models.resolve`、
+  Vibe 接线使用 `registerCommand`、`getActiveTools`/`setActiveTools`、`ctx.models.resolve`、
   `before_agent_start` 和 `sendMessage`：切换 director 工具集、补充编排指令、报告模型路由、
   交付 worker 结果。扩展临时文件随连接保留并清理，不修改用户扩展目录。
   工具实现、会话归属、进程生命周期及有界状态均在 Rust provider adapter 内。
@@ -64,6 +64,25 @@
 - Worker 执行或启动期间拒绝改变父配置；模式启用期间拒绝原地历史切换。
   Worker 空闲时的配置变更先关闭旧 writer，再重新协商模式，新 worker 使用新配置；
   已有 worker 的后续回合保留其创建时配置。
+
+### BTW Branch 的公开接口补充（2026-11-10）
+
+OMP 18.17.0 已公开 BTW 查询和追问 RPC，但 TUI 的 `branchFromBtw` 未对 RPC 或扩展上下文开放。
+Ait 增加 `ait-btw-branch-v1` 小型扩展命令，通过公开的 `ctx.newSession` 初始化回调和
+`ctx.switchSession` 完成提升。扩展没有 OMP SDK import，不复制或改写安装目录。
+
+- Rust owner 从原生 `get_btw_history` 读取完整问答；客户端仅传话题 ID，不能传问答、路径或任意日志。
+- 遵循原生单轮提升限制：回答完成且非空，主会话和 BTW 均空闲，没有队列或后台工作；
+  topic 的 leaf 与当前 leaf 相同。多轮追问话题保留在 BTW 历史，不丢弃前面的轮次来提升最后一条。
+  当前接口不接受带图片的历史话题。前端只提供符合可见条件的分支入口，服务端再次校验。
+- 外部 OMP 在同一进程中快照当前原生 branch entries（含模型与 compaction），初始化新会话，
+  追加完整 user/assistant 问答，保存并重新加载该会话。原日志保持不变，新 header 的 parentSession
+  指向原日志；不会把问答作为新 prompt 发送模型。提升文本无新增推理费用，写入零 usage。
+- 这里使用公开 new/switch hooks，不冒充未公开的 TUI `reason: btw` hook。
+  发生加载错误时尝试恢复原会话；无论成功失败，Ait 都重新读取真实句柄和历史，再完成操作回执。
+  UI 在成功后收起 BTW；错误保留答案和草稿。原生完成与带随机 requestId 的扩展确认必须同时收到。
+- 主会话忙时拒绝分支，不为等待分支而中止任务。BTW 的 follow up 继续使用 `btw(recordId, question)`，
+  只取消 BTW 使用 `btw_cancel(recordId)`。扩展命令不出现在用户命令菜单中。
 
 ## 后果与验证范围
 

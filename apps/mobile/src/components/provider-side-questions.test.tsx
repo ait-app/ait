@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ProviderUiState } from "@ait/protocol/messages";
 import { ProviderSideQuestions } from "./provider-side-questions";
@@ -52,8 +52,19 @@ const topic = {
 function state(): State {
   return { records: [topic], error: null, omitted: 0, reveal: "open", runningId: null };
 }
+const endBtw = vi.fn();
 function view(value: State) {
-  return <ProviderSideQuestions state={value} serverId="server" agentId="agent" disabled={false} />;
+  return (
+    <ProviderSideQuestions
+      state={value}
+      serverId="server"
+      agentId="agent"
+      disabled={false}
+      expanded
+      branchAvailable
+      onEnd={endBtw}
+    />
+  );
 }
 function questionInput() {
   if (!screen.queryByLabelText("providerControl.sideQuestions.question"))
@@ -153,53 +164,50 @@ it("failed side admission preserves its draft and a streamed final answer update
   expect(screen.getByText("Updated native answer")).toBeTruthy();
 });
 
-it("closing hides the panel locally without touching native history", () => {
+it("ending idle BTW closes its UI without deleting history or cancelling the main turn", () => {
   render(view(state()));
-  expect(screen.getByTestId("provider-side-questions")).toBeTruthy();
-  fireEvent.click(screen.getByTestId("side-question-close"));
-  expect(screen.queryByTestId("provider-side-questions")).toBeNull();
+  fireEvent.click(screen.getByTestId("side-question-end"));
+  expect(endBtw).toHaveBeenCalledOnce();
   expect(runNativeAction).not.toHaveBeenCalled();
 });
 
-it("a fresh reveal reopens a closed panel", () => {
-  const value = state();
-  const mounted = render(view(value));
-  fireEvent.click(screen.getByTestId("side-question-close"));
-  expect(screen.queryByTestId("provider-side-questions")).toBeNull();
-  mounted.rerender(view({ ...value, reveal: "topic:2" }));
-  expect(screen.getByTestId("provider-side-questions")).toBeTruthy();
-  expect(runNativeAction).not.toHaveBeenCalled();
-});
-
-it("a new running side question reopens a closed panel without cancelling it", () => {
-  const value = state();
-  const mounted = render(view(value));
-  fireEvent.click(screen.getByTestId("side-question-close"));
-  expect(screen.queryByTestId("provider-side-questions")).toBeNull();
-  mounted.rerender(
-    view({
-      ...value,
-      runningId: "topic",
-      records: [{ ...topic, turns: [{ ...topic.turns[0]!, status: "running" }] }],
-    }),
+it("ends a running BTW only after its own cancellation is accepted", async () => {
+  let accept!: () => void;
+  runNativeAction.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        accept = resolve;
+      }),
   );
-  expect(screen.getByTestId("provider-side-questions")).toBeTruthy();
-  expect(screen.getByText("providerControl.sideQuestions.closeWhileRunning")).toBeTruthy();
-  fireEvent.click(screen.getByTestId("side-question-close"));
-  expect(screen.queryByTestId("provider-side-questions")).toBeNull();
-  expect(runNativeAction).not.toHaveBeenCalled();
+  render(view({ ...state(), runningId: "topic" }));
+  fireEvent.click(screen.getByTestId("side-question-end"));
+  expect(runNativeAction).toHaveBeenCalledExactlyOnceWith("agent", "btw_cancel", {
+    recordId: "topic",
+  });
+  expect(endBtw).not.toHaveBeenCalled();
+  expect(screen.getByTestId("side-question-end")).toHaveProperty("disabled", true);
+  await act(async () => accept());
+  expect(endBtw).toHaveBeenCalledOnce();
 });
 
-it("the dismiss control leaves collapse and expansion untouched", () => {
+it("keeps BTW visible and retryable if cancellation fails", async () => {
+  runNativeAction.mockRejectedValueOnce(new Error("Cancel failed"));
+  render(view({ ...state(), runningId: "topic" }));
+  fireEvent.click(screen.getByTestId("side-question-end"));
+  await screen.findByText("Cancel failed");
+  expect(endBtw).not.toHaveBeenCalled();
+  expect(screen.getByTestId("side-question-end")).toHaveProperty("disabled", false);
+  fireEvent.click(screen.getByTestId("side-question-end"));
+  await waitFor(() => expect(endBtw).toHaveBeenCalledOnce());
+});
+
+it("keeps ending disabled while a new question is awaiting admission", async () => {
+  runNativeAction.mockImplementation(() => new Promise(() => {}));
   render(view(state()));
-  expect(questionInput()).toBeTruthy();
-  fireEvent.click(screen.getByTestId("side-question-toggle"));
-  expect(screen.queryByLabelText("providerControl.sideQuestions.question")).toBeNull();
-  expect(screen.getByTestId("side-question-close")).toBeTruthy();
-  fireEvent.click(screen.getByTestId("side-question-toggle"));
-  expect(questionInput()).toBeTruthy();
-  fireEvent.click(screen.getByTestId("side-question-close"));
-  expect(screen.queryByTestId("provider-side-questions")).toBeNull();
+  fireEvent.change(questionInput(), { target: { value: "Pending question" } });
+  fireEvent.click(screen.getByTestId("side-question-send"));
+  expect(screen.getByTestId("side-question-end")).toHaveProperty("disabled", true);
+  expect(endBtw).not.toHaveBeenCalled();
 });
 
 it("uses Markdown for answers, avoids repeating the initial question, and labels the empty editor", () => {
@@ -250,4 +258,75 @@ it("opens a second editor only for an explicit new question or follow-up", () =>
   fireEvent.click(screen.getByTestId("side-question-new"));
   expect(screen.getByPlaceholderText("providerControl.sideQuestions.newPlaceholder")).toBeTruthy();
   expect(runNativeAction).not.toHaveBeenCalled();
+});
+
+it("branches the selected native topic only, waits for acknowledgement, then ends BTW", async () => {
+  let finish!: () => void;
+  runNativeAction.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(view(state()));
+  fireEvent.click(screen.getByTestId("side-question-branch"));
+  expect(runNativeAction).toHaveBeenCalledWith("agent", "btw_branch", { recordId: "topic" });
+  expect(endBtw).not.toHaveBeenCalled();
+  expect(screen.getByTestId("side-question-end").hasAttribute("disabled")).toBe(true);
+  expect(screen.getByTestId("side-question-follow-up").hasAttribute("disabled")).toBe(true);
+  await act(async () => finish());
+  expect(endBtw).toHaveBeenCalledOnce();
+});
+
+it("keeps the answer and draft on a rejected branch, allowing retry or follow up", async () => {
+  runNativeAction.mockRejectedValueOnce(new Error("The conversation changed since BTW started"));
+  render(view(state()));
+  fireEvent.click(screen.getByTestId("side-question-follow-up"));
+  fireEvent.change(questionInput(), { target: { value: "keep my draft" } });
+  fireEvent.click(screen.getByTestId("side-question-branch"));
+  await screen.findByText("The conversation changed since BTW started");
+  expect(endBtw).not.toHaveBeenCalled();
+  expect((questionInput() as HTMLInputElement).value).toBe("keep my draft");
+  fireEvent.click(screen.getByTestId("side-question-send"));
+  await waitFor(() =>
+    expect(runNativeAction).toHaveBeenLastCalledWith("agent", "btw", {
+      recordId: "topic",
+      question: "keep my draft",
+    }),
+  );
+});
+
+it("does not offer single-answer Branch for a multi-turn topic or incomplete answer", () => {
+  const multiple = state();
+  multiple.records = [
+    { ...topic, turns: [...topic.turns, { ...topic.turns[0]!, question: "Follow up" }] },
+  ];
+  const view_ = render(view(multiple));
+  expect(screen.queryByTestId("side-question-branch")).toBeNull();
+  view_.rerender(
+    view({ ...state(), records: [{ ...topic, turns: [{ ...topic.turns[0]!, status: "error" }] }] }),
+  );
+  expect(screen.queryByTestId("side-question-branch")).toBeNull();
+  expect(screen.getByTestId("side-question-follow-up")).toBeTruthy();
+});
+
+it("selects the newest native topic when opening BTW history", () => {
+  render(view({ ...state(), records: [{ ...topic, id: "new", question: "newest" }, topic] }));
+  expect(screen.getByTestId("side-question-topic-new")).toBeTruthy();
+  expect(screen.queryByTestId("side-question-topic-topic")).toBeNull();
+});
+
+it("hides Branch when the connected daemon does not advertise it", () => {
+  render(
+    <ProviderSideQuestions
+      state={state()}
+      serverId="server"
+      agentId="agent"
+      disabled={false}
+      expanded
+      onEnd={endBtw}
+    />,
+  );
+  expect(screen.queryByTestId("side-question-branch")).toBeNull();
+  expect(screen.getByTestId("side-question-follow-up")).toBeTruthy();
 });

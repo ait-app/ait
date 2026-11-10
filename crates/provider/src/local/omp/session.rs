@@ -19,6 +19,7 @@ use crate::ports::agent_session::{
 use crate::ports::diagnostics::{Category, Diagnostic};
 use crate::protocol::prompt::AgentPrompt;
 
+mod btw_branch;
 mod observed_settings;
 mod side_commands;
 mod tasks;
@@ -1071,7 +1072,7 @@ impl Session {
         if self.consume_side_control(event) {
             return Ok(());
         }
-        if event["type"] == "response" && self.actions.capture(event) {
+        if self.actions.capture(event) {
             self.publish_action_response(event)?;
             return Ok(());
         }
@@ -1525,6 +1526,9 @@ impl AgentSession for Session {
             arguments
         };
         let fields = super::actions::validate(action, arguments, &self.cwd)?;
+        if action == "btw_branch" {
+            return self.begin_btw_branch(&fields).await;
+        }
         if action == "vibe_control" && self.vibe_host.is_some() {
             if fields["operation"] == "toggle" {
                 let host = self

@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import React from "react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ProviderUiState } from "@ait/protocol/messages";
+import { useBtwVisibilityStore } from "@/stores/btw-visibility-store";
 import { ProviderRuntimePanel } from "./provider-runtime-panel";
 
 const fixture = vi.hoisted(() => ({
@@ -40,7 +41,11 @@ vi.mock("@/stores/session-store", () => {
 vi.mock("@/hooks/use-file-download", () => ({ useFileDownload: () => vi.fn() }));
 vi.mock("@/utils/open-external-url", () => ({ openExternalUrl: fixture.open }));
 vi.mock("./provider-side-questions", () => ({
-  ProviderSideQuestions: () => <div data-testid="mock-side-question-panel">Side conversation</div>,
+  ProviderSideQuestions: ({ onEnd }: { onEnd: () => void }) => (
+    <div data-testid="mock-side-question-panel">
+      <button onClick={onEnd}>End BTW</button>
+    </div>
+  ),
 }));
 vi.mock("@/hooks/use-settings", () => ({
   useSettings: (selector: (state: unknown) => unknown) =>
@@ -51,6 +56,10 @@ vi.mock("react-i18next", () => ({
     t: (key: string) => (key === "providerControl.openBrowser" ? "Open in browser" : key),
   }),
 }));
+beforeEach(async () => {
+  await useBtwVisibilityStore.persist.rehydrate();
+  useBtwVisibilityStore.setState({ ended: [], hydrated: true });
+});
 afterEach(() => {
   cleanup();
   fixture.open.mockClear();
@@ -204,7 +213,7 @@ it("keeps exactly one side conversation as workers become active and finish repe
       records: [],
       error: "Side conversation loaded",
       omitted: 0,
-      reveal: null,
+      reveal: "explicit-btw-open",
       runningId: null,
     },
     vibe: { enabled: true, workers: [] },
@@ -321,7 +330,9 @@ it("keeps authoritative Goal controls above the editor and binds actions to the 
     <ProviderRuntimePanel serverId="server" agentId="agent" placement="aboveEditor" />,
   );
   expect(screen.getByText("Complete the real Tai task")).toBeTruthy();
-  fireEvent.click(screen.getByTestId("provider-control-toggle-goal:native-goal"));
+  const goalToggle = screen.getByTestId("provider-control-toggle-goal:native-goal");
+  if (goalToggle.getAttribute("aria-expanded") !== "true") fireEvent.click(goalToggle);
+  fireEvent.click(goalToggle);
   expect(screen.getByTestId("provider-control-content-goal:native-goal").style.display).toBe(
     "none",
   );
@@ -371,4 +382,52 @@ it("refuses a stale Goal button after the owner receives another native goal", a
   await act(async () => fireEvent.click(screen.getByText("providerControl.actions.pause")));
   expect(fixture.run).not.toHaveBeenCalled();
   expect(screen.getByText("providerControl.goalChanged")).toBeTruthy();
+});
+
+it("keeps historical BTW hidden until requested, and ending removes both panel and pill until another request", () => {
+  fixture.state = {
+    statuses: [],
+    widgets: [],
+    title: null,
+    link: null,
+    editor: null,
+    sideQuestions: {
+      records: [{ id: "old", question: "Old question", createdAt: 1, truncated: false, turns: [] }],
+      error: "Old error",
+      omitted: 0,
+      runningId: null,
+      reveal: null,
+    },
+  };
+  const props = { serverId: "server", agentId: "agent", placement: "aboveEditor" as const };
+  const mounted = render(<ProviderRuntimePanel {...props} />);
+  expect(screen.queryByTestId("provider-control-toggle-side-questions")).toBeNull();
+  fixture.state = {
+    ...fixture.state,
+    sideQuestions: { ...fixture.state.sideQuestions!, reveal: "explicit-one" },
+  };
+  mounted.rerender(<ProviderRuntimePanel {...props} />);
+  expect(
+    screen.getByTestId("provider-control-toggle-side-questions").getAttribute("aria-expanded"),
+  ).toBe("true");
+  fireEvent.click(screen.getByText("End BTW"));
+  expect(screen.queryByTestId("provider-control-toggle-side-questions")).toBeNull();
+  expect(screen.queryByTestId("mock-side-question-panel")).toBeNull();
+  fixture.state = {
+    ...fixture.state,
+    sideQuestions: { ...fixture.state.sideQuestions!, runningId: "old" },
+  };
+  mounted.rerender(<ProviderRuntimePanel {...props} />);
+  expect(screen.queryByTestId("mock-side-question-panel")).toBeNull();
+  mounted.unmount();
+  const returned = render(<ProviderRuntimePanel {...props} />);
+  expect(screen.queryByTestId("provider-control-toggle-side-questions")).toBeNull();
+  fixture.state = {
+    ...fixture.state,
+    sideQuestions: { ...fixture.state.sideQuestions!, reveal: "explicit-two" },
+  };
+  returned.rerender(<ProviderRuntimePanel {...props} />);
+  expect(
+    screen.getByTestId("provider-control-toggle-side-questions").getAttribute("aria-expanded"),
+  ).toBe("true");
 });

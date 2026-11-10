@@ -117,3 +117,55 @@ it.each([390, 1024])(
     expect(btw.getAttribute("aria-expanded")).toBe("false");
   },
 );
+
+it("reveals the complete follow-up input and focus ring below a long BTW answer", async () => {
+  await page.viewport(390, 844);
+  const host = document.createElement("div");
+  host.style.cssText = "padding:16px;box-sizing:border-box";
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () =>
+    root!.render(
+      <ProviderControlDock
+        owner="btw-follow-up-scroll"
+        initial="btw"
+        items={[
+          {
+            id: "btw",
+            label: "BTW",
+            content: ({ revealEnd }) => (
+              <div>
+                <div style={{ height: 240 }}>Completed BTW answer</div>
+                <textarea
+                  aria-label="Follow up"
+                  onFocus={() => requestAnimationFrame(revealEnd)}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    height: 58,
+                    boxSizing: "border-box",
+                    outline: "2px solid green",
+                    outlineOffset: 2,
+                  }}
+                />
+              </div>
+            ),
+          },
+        ]}
+      />,
+    ),
+  );
+  const input = host.querySelector("textarea")!;
+  input.focus();
+  await new Promise<void>((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+  );
+  const bounds = input.getBoundingClientRect();
+  for (let parent = input.parentElement; parent && parent !== host; parent = parent.parentElement) {
+    if (/hidden|auto|scroll|clip/.test(getComputedStyle(parent).overflowY)) {
+      const clip = parent.getBoundingClientRect();
+      expect(bounds.top - 4).toBeGreaterThanOrEqual(clip.top - 0.5);
+      expect(bounds.bottom + 4).toBeLessThanOrEqual(clip.bottom + 0.5);
+    }
+  }
+});

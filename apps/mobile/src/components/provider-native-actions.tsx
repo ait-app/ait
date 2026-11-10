@@ -193,12 +193,6 @@ export function ProviderNativeActions({
       [key]: { ...current[key], pending: true, error: undefined },
     }));
     try {
-      if (action.id === "get_btw_history") {
-        await client.runNativeAction(agentId, "get_btw_history", {});
-        setOutcomes((current) => ({ ...current, [key]: {} }));
-        changeOpen(false);
-        return;
-      }
       const command = menuCommands.get(action.id);
       if (command && action.id.startsWith("query:")) {
         await client.sendMessage(agentId, `/${command.name}`);

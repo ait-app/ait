@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
@@ -7,7 +7,13 @@ import { composerPillStyles } from "@/composer/pill-styles";
 export type ProviderDockItem = {
   id: string;
   label: string;
-  content: ReactNode | ((disclosure: { expanded: boolean; collapse: () => void }) => ReactNode);
+  content:
+    | ReactNode
+    | ((disclosure: {
+        expanded: boolean;
+        collapse: () => void;
+        revealEnd: () => void;
+      }) => ReactNode);
 };
 
 // Only disclosure identity is retained; native state and draft text remain in their owners.
@@ -34,6 +40,7 @@ export function ProviderControlDock({
   reveal?: { id: string; revision: string } | null;
 }) {
   const { t } = useTranslation();
+  const viewports = useRef(new Map<string, ScrollView>());
   const [expanded, setExpanded] = useState<string | null>(() =>
     disclosures.has(owner) ? disclosures.get(owner)! : (initial ?? null),
   );
@@ -62,6 +69,10 @@ export function ProviderControlDock({
           testID={`provider-control-content-${item.id}`}
         >
           <ScrollView
+            ref={(value) => {
+              if (value) viewports.current.set(item.id, value);
+              else viewports.current.delete(item.id);
+            }}
             style={styles.viewport}
             contentContainerStyle={styles.viewportContent}
             nestedScrollEnabled
@@ -69,6 +80,7 @@ export function ProviderControlDock({
             {typeof item.content === "function"
               ? item.content({
                   expanded: expanded === item.id,
+                  revealEnd: () => viewports.current.get(item.id)?.scrollToEnd({ animated: false }),
                   collapse: () => {
                     setExpanded(null);
                     remember(owner, null);

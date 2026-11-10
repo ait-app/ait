@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, Text, TextInput, View } from "react-native";
-import { ChevronDown, ChevronRight, Plus, X } from "lucide-react-native";
+import { Plus, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import type { ProviderUiState } from "@ait/protocol/messages";
@@ -17,18 +17,24 @@ export function ProviderSideQuestions({
   serverId,
   agentId,
   disabled,
-  disclosure,
+  expanded,
+  onEnd,
+  branchAvailable = false,
+  branchDisabled = false,
+  onInputFocus,
 }: {
   state: State;
   serverId: string;
   agentId: string;
   disabled: boolean;
-  disclosure?: { expanded: boolean; collapse: () => void };
+  expanded: boolean;
+  onEnd: () => void;
+  branchAvailable?: boolean;
+  branchDisabled?: boolean;
+  onInputFocus?: () => void;
 }) {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
-  const [localExpanded, setExpanded] = useState(false);
-  const expanded = disclosure?.expanded ?? localExpanded;
   const [draft, setDraft] = useState("");
   const [composeOpen, setComposeOpen] = useState(state.records.length === 0);
   const inputRef = useRef<TextInput>(null);
@@ -36,29 +42,12 @@ export function ProviderSideQuestions({
   useEffect(() => {
     if (state.runningId) setTopicId(state.runningId);
   }, [state.runningId]);
-  const selectedTopic =
-    state.records.find((record) => record.id === topicId) ??
-    state.records[state.records.length - 1];
+  const selectedTopic = state.records.find((record) => record.id === topicId) ?? state.records[0];
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dismissed, setDismissed] = useState(false);
-  const seenReveal = useRef(state.reveal);
-  const seenRunningId = useRef(state.runningId);
-  useEffect(() => {
-    if (state.reveal) setExpanded(true);
-  }, [state.reveal]);
-  // Dismissing hides the panel locally only; native history stays untouched.
-  useEffect(() => {
-    if (seenReveal.current !== state.reveal) {
-      seenReveal.current = state.reveal;
-      if (state.reveal) setDismissed(false);
-    }
-    if (seenRunningId.current !== state.runningId) {
-      seenRunningId.current = state.runningId;
-      if (state.runningId) setDismissed(false);
-    }
-  }, [state.reveal, state.runningId]);
+  const [ending, setEnding] = useState(false);
+  const [branching, setBranching] = useState(false);
   const run = useCallback(
     async (action: string, arguments_: Record<string, string>) => {
       if (!client) throw new Error(t("providerControl.sideQuestions.disconnected"));
@@ -67,7 +56,7 @@ export function ProviderSideQuestions({
     [client, agentId, t],
   );
   const send = async () => {
-    if (disabled || sending || state.runningId || !draft.trim()) return;
+    if (disabled || ending || branching || sending || state.runningId || !draft.trim()) return;
     const submitted = draft;
     setSending(true);
     setError(null);
@@ -87,36 +76,37 @@ export function ProviderSideQuestions({
   useEffect(() => {
     if (composeOpen && expanded) inputRef.current?.focus();
   }, [composeOpen, expanded, replyTo]);
-  if (dismissed && !disclosure) return null;
-  if (!state.records.length && !state.error && !state.reveal) return null;
+  const end = async () => {
+    if (ending || branching || sending || (state.runningId && (disabled || !client))) return;
+    if (!state.runningId) {
+      onEnd();
+      return;
+    }
+    setEnding(true);
+    setError(null);
+    try {
+      await run("btw_cancel", { recordId: state.runningId });
+      onEnd();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setEnding(false);
+    }
+  };
   return (
     <View style={styles.panel} testID="provider-side-questions">
       <View style={styles.header}>
-        {disclosure ? (
-          <Text style={[styles.title, styles.headerToggle]}>
-            {t("providerControl.sideQuestions.title")}
-          </Text>
-        ) : (
-          <Button
-            variant="ghost"
-            size="sm"
-            style={styles.headerToggle}
-            leftIcon={expanded ? ChevronDown : ChevronRight}
-            accessibilityState={{ expanded }}
-            onPress={() => setExpanded(!expanded)}
-            testID="side-question-toggle"
-          >
-            <Text style={styles.title}>{t("providerControl.sideQuestions.title")}</Text>
-          </Button>
-        )}
+        <Text style={[styles.title, styles.headerToggle]}>
+          {t("providerControl.sideQuestions.title")}
+        </Text>
         <Button
           variant="ghost"
           size="xs"
+          disabled={ending || branching || sending}
           leftIcon={Plus}
           onPress={() => {
             setReplyTo(null);
             setComposeOpen(true);
-            setExpanded(true);
           }}
           testID="side-question-new"
         >
@@ -126,14 +116,17 @@ export function ProviderSideQuestions({
           variant="ghost"
           size="sm"
           leftIcon={X}
-          accessibilityLabel={t("providerControl.sideQuestions.close")}
-          onPress={() => (disclosure ? disclosure.collapse() : setDismissed(true))}
-          testID="side-question-close"
-        />
+          disabled={
+            ending || branching || sending || Boolean(state.runningId && (disabled || !client))
+          }
+          loading={ending}
+          accessibilityLabel={t("providerControl.sideQuestions.end")}
+          onPress={() => void end()}
+          testID="side-question-end"
+        >
+          {t("providerControl.sideQuestions.end")}
+        </Button>
       </View>
-      {state.runningId && !disclosure ? (
-        <Text style={styles.caption}>{t("providerControl.sideQuestions.closeWhileRunning")}</Text>
-      ) : null}
       {expanded ? (
         <>
           {state.records.length > 1 ? (
@@ -161,7 +154,23 @@ export function ProviderSideQuestions({
                 key={record.id}
                 record={record}
                 running={state.runningId === record.id}
-                disabled={disabled}
+                disabled={disabled || ending || branching || sending}
+                anotherRunning={Boolean(state.runningId && state.runningId !== record.id)}
+                branchAvailable={branchAvailable}
+                branchDisabled={branchDisabled}
+                branching={branching}
+                onBranch={async (id) => {
+                  setBranching(true);
+                  setError(null);
+                  try {
+                    await run("btw_branch", { recordId: id });
+                    onEnd();
+                  } catch (cause) {
+                    setError(cause instanceof Error ? cause.message : String(cause));
+                  } finally {
+                    setBranching(false);
+                  }
+                }}
                 run={run}
                 onFollowUp={followUp}
               />
@@ -195,6 +204,7 @@ export function ProviderSideQuestions({
                 )}
                 value={draft}
                 onChangeText={setDraft}
+                onFocus={() => requestAnimationFrame(() => onInputFocus?.())}
                 editable={!disabled}
                 multiline
                 style={styles.input}
@@ -204,7 +214,13 @@ export function ProviderSideQuestions({
                 variant="outline"
                 size="sm"
                 disabled={
-                  disabled || !client || sending || Boolean(state.runningId) || !draft.trim()
+                  disabled ||
+                  !client ||
+                  ending ||
+                  branching ||
+                  sending ||
+                  Boolean(state.runningId) ||
+                  !draft.trim()
                 }
                 onPress={() => void send()}
                 testID="side-question-send"
@@ -226,130 +242,139 @@ export function ProviderSideQuestions({
   );
 }
 
-const SideTopic = memo(
-  function SideTopic({
-    record,
-    running,
-    disabled,
-    run,
-    onFollowUp,
-  }: {
-    record: Topic;
-    running: boolean;
-    disabled: boolean;
-    run: (action: string, args: Record<string, string>) => Promise<unknown>;
-    onFollowUp: (id: string) => void;
-  }) {
-    const { t } = useTranslation();
-    const [pending, setPending] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const latest = record.turns[record.turns.length - 1]!;
-    const phase = latest.status === "running" && !running ? "interrupted" : latest.status;
-    const cancel = async () => {
-      setPending(true);
-      setError(null);
-      try {
-        await run("btw_cancel", { recordId: record.id });
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause));
-      } finally {
-        setPending(false);
-      }
-    };
-    return (
-      <View style={styles.topic} testID={`side-question-topic-${record.id}`}>
-        <View style={styles.row}>
-          <Text style={styles.title} numberOfLines={2}>
-            {record.question}
-          </Text>
-          <StatusBadge
-            variant={phase === "error" ? "error" : phase === "complete" ? "success" : "muted"}
-            label={t(`providerControl.sideQuestions.states.${phase}`)}
-          />
-          {running ? (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={disabled || pending}
-              onPress={() => void cancel()}
-            >
-              <Text style={styles.caption}>{t("providerControl.sideQuestions.cancel")}</Text>
-            </Button>
-          ) : (
+const SideTopic = memo(function SideTopic({
+  record,
+  running,
+  disabled,
+  run,
+  onFollowUp,
+  onBranch,
+  branchAvailable,
+  branchDisabled,
+  branching,
+  anotherRunning,
+}: {
+  record: Topic;
+  running: boolean;
+  disabled: boolean;
+  run: (action: string, args: Record<string, string>) => Promise<unknown>;
+  onFollowUp: (id: string) => void;
+  onBranch: (id: string) => Promise<void>;
+  branchAvailable: boolean;
+  branchDisabled: boolean;
+  branching: boolean;
+  anotherRunning: boolean;
+}) {
+  const { t } = useTranslation();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const latest = record.turns[record.turns.length - 1]!;
+  const phase = latest.status === "running" && !running ? "interrupted" : latest.status;
+  const cancel = async () => {
+    setPending(true);
+    setError(null);
+    try {
+      await run("btw_cancel", { recordId: record.id });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <View style={styles.topic} testID={`side-question-topic-${record.id}`}>
+      <View style={styles.row}>
+        <Text style={styles.title} numberOfLines={2}>
+          {record.question}
+        </Text>
+        <StatusBadge
+          variant={phase === "error" ? "error" : phase === "complete" ? "success" : "muted"}
+          label={t(`providerControl.sideQuestions.states.${phase}`)}
+        />
+        {running ? (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={disabled || pending}
+            onPress={() => void cancel()}
+          >
+            <Text style={styles.caption}>{t("providerControl.sideQuestions.cancel")}</Text>
+          </Button>
+        ) : null}
+      </View>
+
+      <ScrollView
+        style={styles.history}
+        contentContainerStyle={styles.turns}
+        nestedScrollEnabled
+        testID={`side-question-answer-scroll-${record.id}`}
+      >
+        {record.turns.map((turn, index) => (
+          <View key={`${turn.createdAt}:${index}`} style={styles.turn}>
+            {index > 0 || turn.question !== record.question ? (
+              <Text style={styles.question} selectable>
+                {turn.question}
+              </Text>
+            ) : null}
+            {turn.answer ? (
+              <View testID={`side-question-answer-${record.id}-${index}`}>
+                <MarkdownRenderer
+                  text={turn.answer}
+                  compact
+                  streaming={running && turn.status === "running"}
+                />
+              </View>
+            ) : null}
+            {turn.error ? <Text style={styles.error}>{turn.error}</Text> : null}
+          </View>
+        ))}
+      </ScrollView>
+      {!running ? (
+        <View style={[styles.row, styles.topicActions]}>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={disabled || anotherRunning}
+            onPress={() => onFollowUp(record.id)}
+            testID="side-question-follow-up"
+          >
+            {t("providerControl.sideQuestions.followUp")}
+          </Button>
+          {branchAvailable &&
+          record.turns.length === 1 &&
+          !record.truncated &&
+          latest.status === "complete" &&
+          latest.answer.trim() ? (
             <Button
               variant="ghost"
               size="sm"
-              disabled={disabled}
-              onPress={() => onFollowUp(record.id)}
+              disabled={disabled || anotherRunning || branchDisabled}
+              loading={branching}
+              onPress={() => void onBranch(record.id)}
+              testID="side-question-branch"
             >
-              <Text style={styles.caption}>{t("providerControl.sideQuestions.followUp")}</Text>
+              {t("providerControl.sideQuestions.branch")}
             </Button>
-          )}
+          ) : null}
         </View>
+      ) : null}
+      {record.truncated ? (
+        <Text style={styles.caption}>{t("providerControl.sideQuestions.shortened")}</Text>
+      ) : null}
 
-        <ScrollView
-          style={styles.history}
-          contentContainerStyle={styles.turns}
-          nestedScrollEnabled
-          testID={`side-question-answer-scroll-${record.id}`}
-        >
-          {record.turns.map((turn, index) => (
-            <View key={`${turn.createdAt}:${index}`} style={styles.turn}>
-              {index > 0 || turn.question !== record.question ? (
-                <Text style={styles.question} selectable>
-                  {turn.question}
-                </Text>
-              ) : null}
-              {turn.answer ? (
-                <View testID={`side-question-answer-${record.id}-${index}`}>
-                  <MarkdownRenderer
-                    text={turn.answer}
-                    compact
-                    streaming={running && turn.status === "running"}
-                  />
-                </View>
-              ) : null}
-              {turn.error ? <Text style={styles.error}>{turn.error}</Text> : null}
-            </View>
-          ))}
-        </ScrollView>
-        {record.truncated ? (
-          <Text style={styles.caption}>{t("providerControl.sideQuestions.shortened")}</Text>
-        ) : null}
-
-        {error ? (
-          <Text accessibilityRole="alert" style={styles.error}>
-            {error}
-          </Text>
-        ) : null}
-      </View>
-    );
-  },
-  (before, after) =>
-    before.running === after.running &&
-    before.disabled === after.disabled &&
-    before.run === after.run &&
-    before.onFollowUp === after.onFollowUp &&
-    before.record.truncated === after.record.truncated &&
-    before.record.question === after.record.question &&
-    before.record.turns.length === after.record.turns.length &&
-    before.record.turns.every((turn, index) => {
-      const next = after.record.turns[index]!;
-      return (
-        turn.question === next.question &&
-        turn.answer === next.answer &&
-        turn.status === next.status &&
-        turn.error === next.error &&
-        turn.createdAt === next.createdAt &&
-        turn.updatedAt === next.updatedAt
-      );
-    }),
-);
+      {error ? (
+        <Text accessibilityRole="alert" style={styles.error}>
+          {error}
+        </Text>
+      ) : null}
+    </View>
+  );
+});
 
 const styles = StyleSheet.create((theme) => ({
   panel: { gap: 8 },
   header: { flexDirection: "row", alignItems: "center", gap: 8 },
-  headerToggle: { flexShrink: 1 },
+  headerToggle: { flex: 1 },
   history: { maxHeight: 144 },
   turns: { gap: 8 },
   topicPicker: { maxHeight: 32 },
@@ -357,6 +382,7 @@ const styles = StyleSheet.create((theme) => ({
   compose: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   list: { gap: 12 },
   row: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  topicActions: { justifyContent: "flex-end" },
   topic: {
     gap: 8,
     padding: 10,

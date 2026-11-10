@@ -5,6 +5,7 @@ use tokio::sync::oneshot;
 
 use crate::ports::agent_session::{AgentSessionError, AgentSessionFuture};
 
+mod branch;
 mod choices;
 
 type Receipt = oneshot::Sender<Result<Value, AgentSessionError>>;
@@ -30,8 +31,15 @@ struct Request {
 #[derive(Debug)]
 enum Kind {
     Transient,
+    BtwBranch {
+        nonce: String,
+        receipt: Option<Value>,
+    },
     Card(String),
-    Feature { key: String, value: Value },
+    Feature {
+        key: String,
+        value: Value,
+    },
 }
 
 /// A native history mutation awaiting host projection and identity reconciliation.
@@ -53,7 +61,7 @@ impl Refresh {
 pub(super) fn changes_history(action: &str) -> bool {
     matches!(
         action,
-        "new_session" | "branch" | "fork" | "navigate_tree" | "handoff"
+        "new_session" | "branch" | "fork" | "navigate_tree" | "handoff" | "btw_branch"
     )
 }
 
@@ -145,6 +153,12 @@ impl Pending {
 
     /// Resolve only an owned response; native rejection does not close a usable connection.
     pub(super) fn capture(&mut self, event: &Value) -> bool {
+        if let Some(captured) = self.capture_btw_branch(event) {
+            return captured;
+        }
+        if event["type"] != "response" {
+            return false;
+        }
         let Some(id) = event["id"].as_str() else {
             return false;
         };
@@ -215,9 +229,10 @@ impl Pending {
                 });
             }
             Ok(result)
-                if event["success"] == true
-                    && changes_history(&action)
-                    && event["data"]["cancelled"] != true =>
+                if action == "btw_branch"
+                    || event["success"] == true
+                        && changes_history(&action)
+                        && event["data"]["cancelled"] != true =>
             {
                 self.refreshes.push_back(Refresh {
                     action,
@@ -457,6 +472,11 @@ fn account_actions() -> Vec<Value> {
             "steer_subagent",
             "Send guidance to a subagent",
             vec![child(), field("message", "Guidance", &[], true)],
+        ),
+        action(
+            "btw_branch",
+            "Branch from BTW",
+            vec![field("recordId", "BTW topic", &[], true)],
         ),
         action("get_btw_history", "Side question history", vec![]),
         action(

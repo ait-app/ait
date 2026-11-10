@@ -45,7 +45,7 @@
 - [当前架构](architecture/README.md)：组件职责、依赖、存储和生命周期；[OMP ACP 桥接](architecture/omp-acp-bridge.md)。
 - [OMP 模型预设](decisions/providers/adr-221-omp-model-presets.md)：原生目录缓存、整套私有配置与模型控件同步。
 - [OMP 命令与侧问答](decisions/providers/adr-222-omp-headless-commands-and-side-questions.md)：内置命令边界、并行查询与原生 BTW 历史。
-- [外部 OMP 能力桥接](decisions/providers/adr-223-omp-native-host-bridge.md)：仅使用用户安装的 OMP，通过公开扩展与 RPC 实现 Rust Vibe 编排，保持单 writer；撤销私有运行时例外。
+- [外部 OMP 能力桥接](decisions/providers/adr-223-omp-native-host-bridge.md)：仅使用用户安装的 OMP，通过公开扩展与 RPC 实现 Rust Vibe 编排，保持单 writer；BTW 分支通过公开会话初始化/切换接口完成，撤销私有运行时例外。
 - [统一模型预设](decisions/providers/adr-224-claude-advisor-role-and-preset-expansion.md)：Claude `modelRole.advisor` 的三态与档位门控，以及一套编辑器背后的 native/Ait 双存储与合成规则。
 - [ADR 分类索引](decisions/README.md)：决策及修订关系，完整清单只在此维护。
 - [仓库约定](../AGENTS.md)、[Rust 规范](policy/rust.md)、[文档维护规范](policy/documentation.md)。

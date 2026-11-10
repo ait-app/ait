@@ -220,6 +220,8 @@ impl Host {
             .map_err(|_| AgentSessionError::Failed)?;
         file.write_all(include_bytes!("host/extension.ts"))
             .map_err(|_| AgentSessionError::Failed)?;
+        file.write_all(include_bytes!("../btw/branch-extension.js"))
+            .map_err(|_| AgentSessionError::Failed)?;
         file.flush().map_err(|_| AgentSessionError::Failed)?;
         Ok(file)
     }
@@ -919,7 +921,8 @@ pub(in crate::local::omp) fn visible_commands(native: &[Value], available: bool)
         !entry["name"].as_str().is_some_and(|name| {
             matches!(
                 name,
-                "ait-vibe-mode-v1"
+                "ait-btw-branch-v1"
+                    | "ait-vibe-mode-v1"
                     | "ait-vibe-result-v1"
                     | "ait-guided-goal-v1"
                     | "ait-goal-tools-v1"

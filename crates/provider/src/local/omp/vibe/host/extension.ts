@@ -1,5 +1,6 @@
 // Loaded by the user-installed OMP through its public extension API. No SDK imports at runtime.
 export default function (pi) {
+  registerBtwBranch(pi);
   let enabled = false;
   let previous = [];
   const names = ["vibe_spawn", "vibe_send", "vibe_wait", "vibe_kill", "vibe_list"];
