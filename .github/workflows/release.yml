@@ -523,6 +523,39 @@ jobs:
             echo "- Internal testing: https://play.google.com/console"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # ADR-235: Xcode Cloud archives the stable tag and distributes it to internal TestFlight.
+  # This only starts the build. Cloud can only build refs, so source_commit rebuilds skip it.
+  ios-testflight:
+    name: Start iOS internal TestFlight build
+    if: ${{ !contains(inputs.tag || github.ref_name, '-') && !inputs.source_commit }}
+    continue-on-error: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      # Xcode Cloud only compares native and package versions, so check the tag here.
+      - name: Check out release source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SOURCE_REF }}
+          persist-credentials: false
+
+      - name: Check out release tooling
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .tmp/release-tools
+          persist-credentials: false
+
+      - *setup-node
+      - *verify-version
+
+      - name: Start Xcode Cloud TestFlight build
+        env:
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: node .tmp/release-tools/scripts/xcode-cloud-release.mjs "$RELEASE_TAG"
+
   release:
     name: Prepare GitHub Release
     needs: [build, windows]

@@ -82,7 +82,7 @@ npm run build:ios
 provisioning profile。在 Xcode 的 Signing & Capabilities 配置自己的 Team，按用途导出一次
 ExportOptions.plist（development / ad-hoc / App Store Connect），保存在 Git 之外。
 Ait 的 TestFlight 内部测试使用 Xcode Cloud 完成归档、签名、上传和测试组分发，
-见[发布操作指南的 Apple TestFlight iOS 手动发布一节](releasing.md#apple-testflight-ios-手动发布)
+见[发布操作指南的 Apple TestFlight iOS 内部测试一节](releasing.md#apple-testflight-ios-内部测试)
 和 [ADR-183](../decisions/clients/adr-183-ios-xcode-cloud-release.md)。
 本地未签名归档流程仍可用于验证原生编译，然后运行：
 

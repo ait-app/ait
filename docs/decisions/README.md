@@ -176,6 +176,7 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 
 ## 客户端、连接与品牌
 
+- [ADR-235：稳定版 Release 通过 API 启动 iOS 内部 TestFlight 构建](clients/adr-235-ios-testflight-in-release-workflow.md)
 - [ADR-234：稳定版 Release 自动提交 Google Play 内部测试](clients/adr-234-play-internal-in-release-workflow.md)
 - [ADR-223：桌面多窗口与 Workspace 状态归属](clients/adr-223-desktop-workspace-windows.md)
 - [ADR-218：Hub feature 协商收敛在线连接](clients/adr-218-hub-feature-negotiation.md)
@@ -186,10 +187,10 @@ ADR-074、082、083、084、087、122、132、140、156、175、177、180、211�
 - [ADR-207：桌面 daemon 就绪探测与进程生命周期分离](clients/adr-207-desktop-daemon-readiness-ownership.md)
 - [ADR-204：在线业务连接只使用 Hub](clients/adr-204-hub-only-online-business-transport.md)（经 [ADR-218](clients/adr-218-hub-feature-negotiation.md) 修订）
 - [ADR-188：网页客户端以独立镜像部署在网站根路径](clients/adr-188-standalone-web-client-image.md)
-- [ADR-187：GitHub 手动入口用专用标签触发 iOS App Store 构建](clients/adr-187-ios-app-store-cloud-trigger.md)
+- [ADR-187：GitHub 手动入口用专用标签触发 iOS App Store 构建](clients/adr-187-ios-app-store-cloud-trigger.md)（经 [ADR-235](clients/adr-235-ios-testflight-in-release-workflow.md) 修订）
 - [ADR-186：内置浏览器按 Workspace daemon 选择出站位置](clients/adr-186-workspace-browser-egress.md)
 - [ADR-184：Windows Desktop 不附带内置 daemon](clients/adr-184-windows-desktop-without-daemon.md)
-- [ADR-183：iOS CI 使用 Xcode Cloud 归档与内部分发](clients/adr-183-ios-xcode-cloud-release.md)（经 [ADR-187](clients/adr-187-ios-app-store-cloud-trigger.md) 修订）
+- [ADR-183：iOS CI 使用 Xcode Cloud 归档与内部分发](clients/adr-183-ios-xcode-cloud-release.md)（经 [ADR-187](clients/adr-187-ios-app-store-cloud-trigger.md)、[ADR-235](clients/adr-235-ios-testflight-in-release-workflow.md) 修订）
 - [ADR-182：客户端接入 Hub 账号服务](clients/adr-182-hub-account-client.md)（经 [ADR-204](clients/adr-204-hub-only-online-business-transport.md) 修订）
 - [ADR-177：移动端本地通知与 APNs／FCM 直连](clients/adr-177-native-local-and-remote-notifications.md)
 - [ADR-175：Google Play AAB 在 GitHub runner 上构建和提交](clients/adr-175-android-play-gradle-release.md)（经 [ADR-234](clients/adr-234-play-internal-in-release-workflow.md) 修订）

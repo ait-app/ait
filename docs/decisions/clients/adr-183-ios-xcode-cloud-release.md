@@ -16,7 +16,8 @@ paths:
 
 后续：[ADR-187](adr-187-ios-app-store-cloud-trigger.md) 新增 App Store / 外部 TestFlight
 Cloud 工作流；其 GitHub 标签触发入口已于 2026-10-24 撤销，改为在 Cloud 手动启动。
-下述 `Default` 内部测试流程继续保留。
+下述 `Default` 内部测试流程继续保留。[ADR-235](adr-235-ios-testflight-in-release-workflow.md)
+修订了启动方式：稳定标签由 `release.yml` 通过 App Store Connect API 启动该工作流。
 
 ## 背景
 
@@ -51,4 +52,4 @@ Cloud 上传使用自身递增构建号，源码中的 Expo build number 仍随�
 不同。失败重试在 Cloud 内进行，版本或锁文件错误必须修复源码，不能靠重试旧标签解决。
 
 只执行 Build 不足以交付 TestFlight；验收必须检查 Archive、内部测试 post-action 和
-App Store Connect 的处理结果。操作步骤见[发布指南](../../operations/releasing.md#apple-testflight-ios-手动发布)。
+App Store Connect 的处理结果。操作步骤见[发布指南](../../operations/releasing.md#apple-testflight-ios-内部测试)。

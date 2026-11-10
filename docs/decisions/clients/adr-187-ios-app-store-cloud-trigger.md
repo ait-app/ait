@@ -12,6 +12,8 @@ paths:
 
 状态说明：GitHub 触发入口已撤销（2026-10-24）；App Store / 外部 TestFlight 的 Cloud
 分发配置和 [ADR-183](adr-183-ios-xcode-cloud-release.md) 的 `Default` 内部测试工作流保留。
+不引入 Apple API 私钥的取舍已由 [ADR-235](adr-235-ios-testflight-in-release-workflow.md) 修订，
+仅用于内部测试；App Store 工作流仍手动启动。
 
 ## 撤销 GitHub 触发入口
 

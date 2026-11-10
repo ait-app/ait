@@ -54,7 +54,7 @@ Web 使用持久存储恢复有效登录，禁止存储时只能保留当前页�
 ## 构建与验收
 
 iOS 登录依赖原生认证模块，变更原生依赖后需要重新生成工程并安装构建，不能只更新 JavaScript。
-本机构建见 [Apple 构建](apple-builds.md)，CI 分发使用[发布指南中的 Xcode Cloud 流程](releasing.md#apple-testflight-ios-手动发布)。
+本机构建见 [Apple 构建](apple-builds.md)，CI 分发使用[发布指南中的 Xcode Cloud 流程](releasing.md#apple-testflight-ios-内部测试)。
 
 验收应记录客户端和中心版本，覆盖登录回传、取消、超时、系统认证拒绝、进程重开、断网恢复、
 会话到期和主动退出；同时检查退出账号后 daemon 仍按自身授权运行、显式断开后重启不会重新发布。
