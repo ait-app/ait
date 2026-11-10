@@ -147,6 +147,21 @@ Ait 通过小型公开扩展的 `newSession(setup)` / `switchSession` 接口补�
 - `cargo build --locked --workspace` 通过。
 - 报告 oxfmt 与仓库文档链接检查通过。前轮前端与截图验收不重复计入这次纯测试重构。
 
+## CI 补验：原生回执测试数据
+
+提交 `2edf9bc4` 的 CI 已通过 Clippy，随后执行测试时，三个 `actions::tests` 用例失败。
+本地定向运行稳定复现同样三个失败：测试事件缺少 `type: "response"`，因此被 BTW 接线
+新增的帧类型校验拒绝。核对[官方 18.17.0 RPC 类型](https://github.com/can1357/oh-my-pi/blob/v18.17.0/packages/coding-agent/src/modes/rpc/rpc-types.ts)，
+原生操作回执包含该字段；修正测试输入，不放宽生产解析。
+
+为原有成功、拒绝、历史回读和外来 ID 事件补齐响应类型，保留各用例断言。
+另补回归：缺少类型、`prompt_result` 与 `extension_ui_request` 即使携带同一个 ID，
+也不能提前完成或移除操作；合法响应到达后仍能取得结果。
+
+- Rust 1.98.1：`cargo test --locked -p provider --lib local::omp::actions -- --nocapture`，15 项通过。
+- 同版本 `cargo fmt --all --check` 与 workspace 全 targets Clippy `-D warnings` 再次通过。
+- 报告 oxfmt 与文档链接检查通过；这次仅修改测试数据和回归测试，未改动生产代码。
+
 ## Test coverage
 
 未测量：用户未请求覆盖率。测试通过数量不代表覆盖率；若后续请求，定向测量 BTW 适配器和回执范围。

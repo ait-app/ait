@@ -73,7 +73,7 @@ async fn history_receipts_wait_for_reconciliation_and_close_releases_waiters() {
     let mut pending = Pending::default();
     let mut receipt = pending.insert("change".to_owned(), "navigate_tree");
     assert!(pending.changing_history());
-    pending.capture(&json!({"id":"change","command":"navigate_tree","success":true,"data":{}}));
+    pending.capture(&json!({"type":"response","id":"change","command":"navigate_tree","success":true,"data":{}}));
     assert!(
         tokio::time::timeout(Duration::from_millis(1), &mut receipt)
             .await
@@ -99,9 +99,12 @@ async fn native_receipts_correlate_and_rejections_leave_other_controls_usable() 
     let mut pending = Pending::default();
     let first = pending.insert("one".to_owned(), "login");
     let second = pending.insert("two".to_owned(), "get_session_stats");
-    assert!(!pending.capture(&json!({"id":"foreign","command":"login","success":true})));
+    assert!(
+        !pending
+            .capture(&json!({"type":"response","id":"foreign","command":"login","success":true}))
+    );
     assert!(pending.capture(
-        &json!({"id":"two","command":"get_session_stats","success":true,"data":{"tokens":2}})
+        &json!({"type":"response","id":"two","command":"get_session_stats","success":true,"data":{"tokens":2}})
     ));
     assert!(
         second.await.unwrap()["text"]
@@ -109,9 +112,37 @@ async fn native_receipts_correlate_and_rejections_leave_other_controls_usable() 
             .unwrap()
             .contains("tokens")
     );
-    assert!(pending.capture(&json!({"id":"one","command":"login","success":false})));
+    assert!(
+        pending.capture(&json!({"type":"response","id":"one","command":"login","success":false}))
+    );
     assert!(first.await.unwrap()["error"].is_string());
     pending.check_capacity().unwrap();
+}
+
+#[tokio::test]
+async fn native_receipts_ignore_non_response_frames_without_losing_the_request() {
+    let mut pending = Pending::default();
+    let mut receipt = pending.insert("owned".to_owned(), "get_session_stats");
+    let response = json!({"type":"response","id":"owned","command":"get_session_stats",
+        "success":true,"data":{"tokens":42}});
+    for frame_type in [None, Some("prompt_result"), Some("extension_ui_request")] {
+        let mut event = response.clone();
+        if let Some(frame_type) = frame_type {
+            event["type"] = json!(frame_type);
+        } else {
+            event.as_object_mut().unwrap().remove("type");
+        }
+        assert!(!pending.capture(&event));
+        assert!(
+            tokio::time::timeout(Duration::from_millis(1), &mut receipt)
+                .await
+                .is_err()
+        );
+    }
+    assert!(pending.capture(&response));
+    let result = receipt.await.unwrap();
+    let data: Value = serde_json::from_str(result["text"].as_str().unwrap()).unwrap();
+    assert_eq!(data["tokens"], 42);
 }
 
 #[test]
@@ -199,7 +230,7 @@ async fn history_choice_receipts_do_not_cut_json_when_native_messages_are_long()
             "message":{"role":"user","content":"Native task text ".repeat(2000)}})
         })
         .collect();
-    let event = json!({"id":"history","command":"get_entries","success":true,
+    let event = json!({"type":"response","id":"history","command":"get_entries","success":true,
         "data":{"entries":entries,"leafId":"entry-7"}});
     let mut pending = Pending::default();
     let receipt = pending.insert("history".to_owned(), "get_entries");
