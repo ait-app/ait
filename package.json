@@ -44,6 +44,7 @@
     "test:mobile-release": "node --test apps/mobile/plugins/with-android-release-optimization.test.cjs apps/mobile/plugins/with-ios-pod-deployment-target.test.cjs apps/mobile/plugins/with-ios-scene-lifecycle.test.cjs apps/mobile/scripts/app-identity.test.cjs apps/mobile/scripts/eas-submit-tracks.test.cjs scripts/android-release.test.mjs scripts/android-play-release.test.mjs scripts/xcode-cloud.test.mjs",
     "dev:desktop": "npm run dev --workspace=@ait/desktop",
     "build:desktop-main": "npm run build:ui-deps && npm run build:main --workspace=@ait/desktop",
+    "verify": "node scripts/verify.mjs",
     "verify:local-packages": "node scripts/verify-local-packages.mjs"
   },
   "devDependencies": {
