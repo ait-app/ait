@@ -1802,6 +1802,7 @@ export const ar: TranslationResources = {
   },
   hostPicker: en.hostPicker,
   schedules: {
+    templates: en.schedules.templates,
     workspaceUnavailable: "مساحة العمل المالكة غير متاحة. استعدها قبل تعديل هذا الجدول.",
     browse: "جداول مساحة العمل",
     timeline: {

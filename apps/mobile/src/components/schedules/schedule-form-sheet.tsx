@@ -12,7 +12,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { Brain, Folder, GitBranch, Plus } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { AgentProvider } from "@ait/protocol/agent-types";
@@ -29,6 +29,7 @@ import { Field, FormTextInput } from "@/components/ui/form-field";
 import { Switch } from "@/components/ui/switch";
 import { getProviderIcon } from "@/components/provider-icons";
 import { CadenceEditor } from "@/components/schedules/cadence-editor";
+import { ScheduleTemplatePicker } from "@/components/schedules/schedule-template-picker";
 import {
   SelectField,
   SelectFieldTrigger,
@@ -65,6 +66,11 @@ import {
   parseLocalDateTime,
 } from "@/schedules/schedule-date-time";
 import { useScheduleWorkspaces } from "@/schedules/use-schedule-workspaces";
+import {
+  buildScheduleTemplateDraft,
+  type ScheduleTemplate,
+  type ScheduleTemplateParams,
+} from "@/schedules/schedule-templates";
 import { validateCron } from "@/utils/schedule-format";
 import { toErrorMessage } from "@/utils/error-messages";
 import { getDeviceTimeZone } from "@/utils/device-timezone";
@@ -412,6 +418,7 @@ function ScheduleFormScope(props: ScheduleFormSheetProps & { onDismiss?: () => v
   );
   return (
     <AdaptiveModalSheet
+      desktopMaxWidth={workspace ? 808 : undefined}
       visible={props.visible}
       onClose={props.onClose}
       onDismiss={props.onDismiss}
@@ -703,6 +710,23 @@ function ScheduleFormContent({
     void handleSubmit();
   }, [handleSubmit]);
 
+  // Text inputs only read their initial value, so remount the fields to show template values.
+  const [templateRevision, setTemplateRevision] = useState(0);
+  const [browsingTemplates, setBrowsingTemplates] = useState(mode === "create");
+  const [section, setSection] = useState<"content" | "execution">("content");
+  const formScrollRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    formScrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [browsingTemplates, section]);
+  const handleApplyTemplate = useCallback(
+    (template: ScheduleTemplate, params: ScheduleTemplateParams) => {
+      model.applyTemplate(buildScheduleTemplateDraft({ template, params, timezone, t }));
+      setTemplateRevision((revision) => revision + 1);
+      setSection("content");
+    },
+    [model, t, timezone],
+  );
+
   const header = useMemo<SheetHeader>(() => {
     if (mode !== "edit") {
       return { title: t("schedules.new") };
@@ -716,7 +740,7 @@ function ScheduleFormContent({
     () => (
       <View style={styles.footer}>
         <Button
-          style={styles.footerButton}
+          style={[styles.footerButton, controlSize === "md" && styles.footerButtonCompact]}
           variant="secondary"
           onPress={onClose}
           disabled={isSubmitting}
@@ -725,7 +749,7 @@ function ScheduleFormContent({
         </Button>
         {canManage ? (
           <Button
-            style={styles.footerButton}
+            style={[styles.footerButton, controlSize === "md" && styles.footerButtonCompact]}
             variant="default"
             onPress={handleSubmitPress}
             disabled={!canSubmit}
@@ -737,11 +761,12 @@ function ScheduleFormContent({
         ) : null}
       </View>
     ),
-    [canManage, canSubmit, handleSubmitPress, isSubmitting, mode, onClose, t],
+    [canManage, canSubmit, controlSize, handleSubmitPress, isSubmitting, mode, onClose, t],
   );
 
   const fields = (
     <ScheduleFormFields
+      key={templateRevision}
       model={model}
       state={state}
       providerSnapshot={providerSnapshot}
@@ -751,26 +776,74 @@ function ScheduleFormContent({
       expiresAtError={expiresAtError}
       mutationServerId={mutationServerId}
       showWorkspace={!renderPlacementFields}
+      section={section}
     />
+  );
+  const templatePicker =
+    mode === "create" ? (
+      <ScheduleTemplatePicker
+        timezone={timezone}
+        size={controlSize}
+        disabled={isSubmitting}
+        browsing={browsingTemplates}
+        onBack={inline ? onClose : undefined}
+        onBrowsingChange={setBrowsingTemplates}
+        onApply={handleApplyTemplate}
+      />
+    ) : null;
+
+  const editor = (
+    <View style={[styles.formPanel, browsingTemplates && styles.hiddenPanel]}>
+      {renderPlacementFields?.(isSubmitting)}
+      <View style={styles.sectionTabs}>
+        {(["content", "execution"] as const).map((item) => {
+          const hasError =
+            item === "content"
+              ? Boolean(cadenceError)
+              : Boolean(startAtError || expiresAtError || !isValidMaxRuns(state.maxRuns));
+          return (
+            <Pressable
+              key={item}
+              accessibilityRole="button"
+              accessibilityState={{ selected: section === item }}
+              onPress={() => setSection(item)}
+              style={[styles.sectionTab, section === item && styles.sectionTabActive]}
+              testID={`schedule-section-${item}`}
+            >
+              <Text
+                style={[styles.sectionTabText, section === item && styles.sectionTabTextActive]}
+              >
+                {t(`schedules.templates.${item}`)}
+              </Text>
+              {hasError ? <View style={styles.sectionErrorDot} /> : null}
+            </Pressable>
+          );
+        })}
+      </View>
+      {fields}
+    </View>
   );
 
   if (embedded)
     return (
       <View style={styles.inlineFields}>
-        {renderPlacementFields?.(isSubmitting)}
-        {fields}
-        {footer}
+        {templatePicker}
+        {editor}
+        {!browsingTemplates ? footer : null}
       </View>
     );
 
   if (inline) {
     return (
-      <ScrollView style={styles.inlineContainer} contentContainerStyle={styles.inlineContent}>
-        <View style={styles.inlineFields} testID="workspace-schedule-form">
-          {fields}
-          {footer}
-        </View>
-      </ScrollView>
+      <View style={styles.inlineContainer}>
+        <ScrollView ref={formScrollRef} contentContainerStyle={styles.inlineContent}>
+          <View style={styles.inlineFields} testID="workspace-schedule-form">
+            {templatePicker}
+            {editor}
+          </View>
+        </ScrollView>
+        {!browsingTemplates ? <View style={styles.inlineFooter}>{footer}</View> : null}
+      </View>
     );
   }
 
@@ -780,10 +853,11 @@ function ScheduleFormContent({
       visible={visible}
       onClose={onClose}
       onDismiss={onDismiss}
-      footer={footer}
+      footer={!browsingTemplates ? footer : undefined}
       testID="schedule-form-sheet"
     >
-      {fields}
+      {templatePicker}
+      {editor}
     </AdaptiveModalSheet>
   );
 }
@@ -798,6 +872,7 @@ interface ScheduleFormFieldsProps {
   expiresAtError: string | null;
   mutationServerId: string;
   showWorkspace: boolean;
+  section: "content" | "execution";
 }
 
 function ScheduleFormFields({
@@ -810,6 +885,7 @@ function ScheduleFormFields({
   expiresAtError,
   mutationServerId,
   showWorkspace,
+  section,
 }: ScheduleFormFieldsProps): ReactElement {
   const { t } = useTranslation();
   const agentOptions = useMemo<SelectFieldOption<string>[]>(
@@ -839,7 +915,7 @@ function ScheduleFormFields({
   );
 
   return (
-    <>
+    <View style={styles.formPanel}>
       {state.workspace && showWorkspace ? (
         <Field label={t("schedules.form.workspace")}>
           <View style={styles.workspaceField} testID="schedule-workspace-target">
@@ -852,116 +928,124 @@ function ScheduleFormFields({
           </View>
         </Field>
       ) : null}
-      <SelectField
-        label={t("schedules.form.executionAgent")}
-        value={selectedAgent || null}
-        selectedDisplay={agentOptions.find((option) => option.value === selectedAgent) ?? null}
-        options={agentOptions}
-        onChange={handleSelectAgent}
-        searchable
-        searchPlaceholder={t("schedules.form.searchAgents")}
-        size={controlSize}
-        placeholder={t("schedules.form.executionAgent")}
-        emptyText={t("schedules.form.noMatchingAgents")}
-        hint={t("schedules.form.executionAgentHint")}
-        renderOption={renderExecutionAgentOption}
-        triggerTestID="schedule-execution-agent-trigger"
-      />
-      <Field label={t("schedules.form.name")}>
-        <FormTextInput
-          size={controlSize}
-          testID="schedule-name-input"
-          accessibilityLabel={t("schedules.form.nameLabel")}
-          initialValue={state.name}
-          onChangeText={model.setName}
-          placeholder={t("schedules.form.optional")}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      </Field>
-
-      <Field label={t("schedules.form.prompt")}>
-        <FormTextInput
-          size={controlSize}
-          testID="schedule-prompt-input"
-          accessibilityLabel={t("schedules.form.prompt")}
-          initialValue={state.prompt}
-          onChangeText={model.setPrompt}
-          placeholder={t("schedules.form.promptPlaceholder")}
-          style={styles.multilineInput}
-          multiline
-          numberOfLines={4}
-          textAlignVertical="top"
-        />
-      </Field>
-
-      {state.targetKind === "new-agent" ? (
-        <ScheduleNewAgentFields
-          model={model}
-          state={state}
-          providerSnapshot={providerSnapshot}
-          controlSize={controlSize}
-          mutationServerId={mutationServerId}
-        />
-      ) : null}
-
-      <CadenceEditor
-        value={state.cadence}
-        onChange={model.setCadence}
-        error={cadenceError ?? undefined}
-        size={controlSize}
-      />
-
-      <Field
-        label={t("schedules.form.startAt")}
-        error={startAtError ?? undefined}
-        hint={t("schedules.cadence.localTime", { timezone: getDeviceTimeZone() })}
+      <View
+        style={[styles.formPanel, section !== "content" && styles.hiddenPanel]}
+        testID="schedule-content-panel"
       >
-        <FormTextInput
-          size={controlSize}
-          initialValue={state.startAt}
-          onChangeText={model.setStartAt}
-          placeholder={t("schedules.form.startAtPlaceholder")}
-          testID="schedule-start-at-input"
-          accessibilityLabel={t("schedules.form.startAt")}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      </Field>
-      <Field
-        label={t("schedules.form.expiresAt")}
-        error={expiresAtError ?? undefined}
-        hint={t("schedules.cadence.localTime", { timezone: getDeviceTimeZone() })}
-      >
-        <FormTextInput
-          size={controlSize}
-          initialValue={state.expiresAt}
-          onChangeText={model.setExpiresAt}
-          placeholder="YYYY-MM-DD HH:mm"
-          testID="schedule-expires-at-input"
-          accessibilityLabel={t("schedules.form.expiresAt")}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      </Field>
-      <Field
-        label={t("schedules.form.maxRuns")}
-        hint={t("schedules.form.maxRunsHint")}
-        error={!isValidMaxRuns(state.maxRuns) ? t("schedules.form.invalidMaxRuns") : undefined}
-      >
-        <FormTextInput
-          size={controlSize}
-          testID="schedule-max-runs-input"
-          accessibilityLabel={t("schedules.form.maxRuns")}
-          initialValue={state.maxRuns}
-          onChangeText={model.setMaxRuns}
-          placeholder={t("schedules.form.unlimited")}
-          keyboardType="number-pad"
-        />
-      </Field>
+        <Field label={t("schedules.form.name")}>
+          <FormTextInput
+            size={controlSize}
+            testID="schedule-name-input"
+            accessibilityLabel={t("schedules.form.nameLabel")}
+            initialValue={state.name}
+            onChangeText={model.setName}
+            placeholder={t("schedules.form.optional")}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </Field>
 
+        <Field label={t("schedules.form.prompt")}>
+          <FormTextInput
+            size={controlSize}
+            testID="schedule-prompt-input"
+            accessibilityLabel={t("schedules.form.prompt")}
+            initialValue={state.prompt}
+            onChangeText={model.setPrompt}
+            placeholder={t("schedules.form.promptPlaceholder")}
+            style={styles.multilineInput}
+            multiline
+            numberOfLines={6}
+            textAlignVertical="top"
+          />
+        </Field>
+
+        <CadenceEditor
+          value={state.cadence}
+          onChange={model.setCadence}
+          error={cadenceError ?? undefined}
+          size={controlSize}
+        />
+      </View>
+      <View
+        style={[styles.formPanel, section !== "execution" && styles.hiddenPanel]}
+        testID="schedule-execution-panel"
+      >
+        <SelectField
+          label={t("schedules.form.executionAgent")}
+          value={selectedAgent || null}
+          selectedDisplay={agentOptions.find((option) => option.value === selectedAgent) ?? null}
+          options={agentOptions}
+          onChange={handleSelectAgent}
+          searchable
+          searchPlaceholder={t("schedules.form.searchAgents")}
+          size={controlSize}
+          placeholder={t("schedules.form.executionAgent")}
+          emptyText={t("schedules.form.noMatchingAgents")}
+          hint={t("schedules.form.executionAgentHint")}
+          renderOption={renderExecutionAgentOption}
+          triggerTestID="schedule-execution-agent-trigger"
+        />
+        {state.targetKind === "new-agent" ? (
+          <ScheduleNewAgentFields
+            model={model}
+            state={state}
+            providerSnapshot={providerSnapshot}
+            controlSize={controlSize}
+            mutationServerId={mutationServerId}
+          />
+        ) : null}
+
+        <Field
+          label={t("schedules.form.startAt")}
+          error={startAtError ?? undefined}
+          hint={t("schedules.cadence.localTime", { timezone: getDeviceTimeZone() })}
+        >
+          <FormTextInput
+            size={controlSize}
+            initialValue={state.startAt}
+            onChangeText={model.setStartAt}
+            placeholder={t("schedules.form.startAtPlaceholder")}
+            testID="schedule-start-at-input"
+            accessibilityLabel={t("schedules.form.startAt")}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </Field>
+        <Field
+          label={t("schedules.form.expiresAt")}
+          error={expiresAtError ?? undefined}
+          hint={t("schedules.cadence.localTime", { timezone: getDeviceTimeZone() })}
+        >
+          <FormTextInput
+            size={controlSize}
+            initialValue={state.expiresAt}
+            onChangeText={model.setExpiresAt}
+            placeholder="YYYY-MM-DD HH:mm"
+            testID="schedule-expires-at-input"
+            accessibilityLabel={t("schedules.form.expiresAt")}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </Field>
+        <Field
+          label={t("schedules.form.maxRuns")}
+          hint={t("schedules.form.maxRunsHint")}
+          error={!isValidMaxRuns(state.maxRuns) ? t("schedules.form.invalidMaxRuns") : undefined}
+        >
+          <FormTextInput
+            size={controlSize}
+            testID="schedule-max-runs-input"
+            accessibilityLabel={t("schedules.form.maxRuns")}
+            initialValue={state.maxRuns}
+            onChangeText={model.setMaxRuns}
+            placeholder={t("schedules.form.unlimited")}
+            keyboardType="number-pad"
+          />
+        </Field>
+      </View>
       {state.submitError ? <Text style={styles.submitError}>{state.submitError}</Text> : null}
-    </>
+    </View>
   );
 }
 
@@ -1476,14 +1560,48 @@ const styles = StyleSheet.create((theme) => {
       flex: 1,
     },
     inlineContent: {
-      padding: theme.spacing[4],
+      padding: theme.spacing[6],
       alignItems: "center",
     },
     inlineFields: {
       width: "100%",
-      maxWidth: 640,
+      maxWidth: 760,
       gap: theme.spacing[4],
     },
+    inlineFooter: {
+      paddingHorizontal: theme.spacing[6],
+      paddingVertical: theme.spacing[4],
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+      alignItems: "center",
+    },
+    sectionTabs: {
+      flexDirection: "row",
+      padding: theme.spacing[1],
+      gap: theme.spacing[1],
+      backgroundColor: theme.colors.surface2,
+      borderRadius: theme.borderRadius.lg,
+    },
+    sectionTab: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: theme.spacing[2],
+      minHeight: 34,
+      borderRadius: theme.borderRadius.md,
+    },
+    sectionTabActive: { backgroundColor: theme.colors.surface1 },
+    sectionTabText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+    sectionTabTextActive: { color: theme.colors.foreground, fontWeight: theme.fontWeight.medium },
+    sectionErrorDot: {
+      width: 5,
+      height: 5,
+      borderRadius: theme.borderRadius.full,
+      backgroundColor: theme.colors.destructive,
+    },
+    formPanel: { gap: theme.spacing[4] },
+    hiddenPanel: { display: "none" },
     workspaceField: {
       gap: theme.spacing[1],
     },
@@ -1496,7 +1614,7 @@ const styles = StyleSheet.create((theme) => {
       fontSize: theme.fontSize.sm,
     },
     multilineInput: {
-      minHeight: 96,
+      minHeight: 156,
     },
     readonlyField: {
       flexDirection: "row",
@@ -1535,13 +1653,16 @@ const styles = StyleSheet.create((theme) => {
       marginBottom: theme.spacing[1],
     },
     footer: {
-      flex: 1,
+      width: "100%",
+      maxWidth: 760,
       flexDirection: "row",
+      justifyContent: "flex-end",
       gap: theme.spacing[3],
     },
     footerButton: {
-      flex: 1,
+      minWidth: 112,
     },
+    footerButtonCompact: { flex: 1 },
     submitError: {
       color: theme.colors.palette.red[300],
       fontSize: theme.fontSize.sm,

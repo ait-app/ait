@@ -1832,6 +1832,7 @@ export const ru: TranslationResources = {
   },
   hostPicker: en.hostPicker,
   schedules: {
+    templates: en.schedules.templates,
     workspaceUnavailable:
       "Рабочее пространство этого расписания недоступно. Восстановите его, прежде чем изменять расписание.",
     browse: "Расписания рабочего пространства",
