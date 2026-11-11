@@ -118,17 +118,27 @@ export function useProvidersSnapshot(
       }
       try {
         const scopeListeners = scopeListenersRef.current;
+        const runtime = getHostRuntimeStore();
+        const owner = runtime.getSnapshot(serverId);
         await refreshProvidersOnAccess({
           client,
           queryClient,
           serverId,
           cwd,
           providers,
-          isCurrent: () => getHostRuntimeStore().getSnapshot(serverId)?.client === client,
+          isCurrent: () => {
+            const current = runtime.getSnapshot(serverId);
+            return (
+              current?.client === client &&
+              current.connectionStatus === "online" &&
+              current.connectionEpoch === owner?.connectionEpoch &&
+              current.clientGeneration === owner?.clientGeneration
+            );
+          },
           isScopeCurrent: () => scopeCwdRef.current === cwd,
           subscribe: (notify) => {
             scopeListeners.add(notify);
-            const unsubscribeHost = getHostRuntimeStore().subscribe(serverId, notify);
+            const unsubscribeHost = runtime.subscribe(serverId, notify);
             return () => {
               scopeListeners.delete(notify);
               unsubscribeHost();

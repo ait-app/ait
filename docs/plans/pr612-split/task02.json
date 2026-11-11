@@ -1,0 +1,95 @@
+{
+  "id": "02",
+  "title": "Shared model catalog refresh",
+  "priority": 2,
+  "contract_pr": "https://github.com/ait-app/ait/pull/647",
+  "donor": "fd2798e46aa90a8dea48dd8a15e84028dbb981b4",
+  "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-task02-model-refresh",
+  "inherited_implementation_commit": "bdff56dea198e74b8a3268ea1a3d476b1a4b8987",
+  "updated_at": "2026-11-11",
+  "depends_on": ["00"],
+  "donor_sections": [6, 23],
+  "donor_paths": [
+    "apps/mobile/src/bots/bot-select.tsx",
+    "apps/mobile/src/bots/bot-settings.tsx",
+    "apps/mobile/src/bots/bot-setup.test.tsx",
+    "apps/mobile/src/bots/bot-setup.tsx",
+    "apps/mobile/src/components/combined-model-selector.tsx",
+    "apps/mobile/src/components/model-browser.tsx",
+    "apps/mobile/src/components/model-selector-loading.test.tsx",
+    "apps/mobile/src/components/provider-diagnostic-sheet.tsx",
+    "apps/mobile/src/components/schedules/schedule-form-sheet.tsx",
+    "apps/mobile/src/data/providers-snapshot.test.ts",
+    "apps/mobile/src/data/providers-snapshot.ts",
+    "apps/mobile/src/hooks/use-providers-snapshot-loading.test.tsx",
+    "apps/mobile/src/hooks/use-providers-snapshot.ts",
+    "apps/mobile/src/provider-selection/provider-selection.test.ts",
+    "apps/mobile/src/provider-selection/provider-selection.ts",
+    "apps/mobile/src/screens/settings/metadata-generation-page.tsx",
+    "crates/provider/src/rpc/agent_execution/bot.rs",
+    "crates/provider/src/service/agent_execution/tests/bot.rs",
+    "crates/provider/src/service/provider_catalog.rs",
+    "crates/provider/src/service/provider_catalog/draft.rs",
+    "crates/provider/src/service/provider_catalog/loading.rs",
+    "crates/provider/src/service/provider_catalog/tests.rs",
+    "crates/provider/src/service/provider_catalog/tests/concurrency.rs",
+    "crates/provider/src/service/provider_catalog/tests/draft.rs",
+    "crates/provider/src/service/provider_catalog/tests/paseo.rs"
+  ],
+  "implementation": "Reuse one shared catalog refresh for model selector, Profiles, settings, schedules and existing consumers; retain cached candidates while refreshing and surface recoverable failures.",
+  "acceptance": "All actual consumers observe refreshed data without clearing usable candidates, blocking input or creating agents. Unknown persisted provider/model/role/thinking values remain intact and visibly unresolved rather than being erased or silently replaced. Refresh keys include host, provider and cwd; late responses after any identity change cannot overwrite the current selection or catalog. Concurrent refresh, stale response, unknown-value preservation and failure/retry tests pass.",
+  "status": "verified_pending_draft",
+  "branch": "feat/pr612-task02-model-catalog-refresh",
+  "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
+  "commit": null,
+  "pr_url": null,
+  "checks": {
+    "required": [
+      "affected fmt/clippy/build/tests and runtime smoke for changed backend",
+      "affected SDK/UI/protocol checks and documented old-host/client downgrade",
+      "docs links/ADR index when changed"
+    ],
+    "results": [
+      {
+        "command": "vitest run affected suites (data/providers-snapshot, hooks/use-providers-snapshot*, provider-selection, model-selector-loading, model-browser-view, composer/agent-controls, agent-profiles, schedules form suites, providers-section, use-agent-form-state)",
+        "result": "PASS: 23 files, 291 tests before the cwd-scope guard; guard suites re-run 57/57 after (loading 11 incl. new late-cwd regression, use-providers-snapshot, providers-snapshot)."
+      },
+      {
+        "command": "npm run typecheck --workspace=@ait/mobile (after build:ui-deps)",
+        "result": "PASS: tsgo --noEmit clean."
+      },
+      {
+        "command": "cargo build --locked -p daemon --bin daemon",
+        "result": "PASS in 1m47s: real daemon for browser e2e; no Rust source changed, no Rust tests required."
+      },
+      {
+        "command": "oxlint + oxfmt on all changed sources/tests/e2e",
+        "result": "PASS: 0 warnings, 0 errors; 19 files formatted."
+      },
+      {
+        "command": "ADR-236 (proposed) + architecture README + CHANGELOG + adr index + check:docs",
+        "result": "PASS bg_664: 7 documentation tests, 223 ADRs indexed and 559 Markdown documents verified. ADR236 is proposed, with explicit internal UI contract versus unchanged public Provider/API/SDK disclosure."
+      },
+      {
+        "command": "playwright --project=browser e2e/browser/provider-settings-refresh.spec.ts (real compiled daemon, Metro web export)",
+        "result": "Historical failures: obsolete mock-provider seed mapped ProviderUnavailable to misleading UnsupportedCapability; changed-catalog case assumed dynamic gemini ACP registration. Replaced only this spec with existing Codex fixture and cwd/speed-models.json. Corrected leftover mock selector and unsupported Add-model expectation: native providerConfiguration is false, so assert editor absence and exercise supported Diagnostic/Refresh/stack return. Actual desktop overlay and changed-catalog cases passed bg_666 (artifact://2818); corrected compact case passed bg_688 (artifact://2891), no retries. All three actual consumer scenarios now passed; no native config feature added."
+      },
+      {
+        "command": "vitest run src/hooks/use-providers-snapshot-loading.test.tsx src/hooks/use-providers-snapshot.test.ts src/data/providers-snapshot.test.ts",
+        "result": "PASS: 58 tests in 3 files after epoch/generation/online-state fencing, including one new same-client reconnect consumer regression. bg_658. No unchanged 291-test repeat."
+      },
+      {
+        "command": "post-edit mobile typecheck",
+        "result": "PASS bg_661: tsgo --noEmit after optional-model assertion correction. Final changed spec oxlint zero warnings/errors and oxfmt check passed bg_688. No production suppression."
+      }
+    ]
+  },
+  "blockers": [
+    "All acceptance checks complete; focused Draft publication and commit/PR metadata remain."
+  ],
+  "adr": "ADR-236",
+  "compatibility": "Public SDK methods, daemon wire and saved configuration schemas unchanged; old hosts retain stale-GET downgrade. Internal interfaces DID change: new shared refresh entry, refetchIfStale's connected-host semantics, optional SelectField.onOpen and existing ModelBrowser retry callback used on provider drill-down. Actual consumers migrated; no native adapter/CLI/binary change. See ADR236 interface table.",
+  "cleanup": "catalog-acp.cjs has an existing model-search-across-providers consumer, so the shared fixture remains; task02's now-unused dynamic-file extension was removed. No new Rust/global mock provider, generic ACP registration or manual HELLO machinery.",
+  "platform_limits": "Actual browser web/native fixture smoke, not a physical Android/iOS or packaged Electron claim. No Rust source changes, therefore no Rust tests or clippy reruns.",
+  "external_blockers": []
+}

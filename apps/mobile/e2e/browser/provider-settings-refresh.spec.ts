@@ -4,16 +4,63 @@ import type { DaemonClient } from "@ait/client/internal/daemon-client";
 import type { Locator } from "@playwright/test";
 import { expect, test, type Page } from "../support/fixtures";
 import { expectComposerVisible } from "../support/helpers/composer";
-import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-agent";
+import { openAgentRoute } from "../support/helpers/mock-agent";
+import { seedWorkspace } from "../support/helpers/seed-client";
+import { repoRoot } from "../support/helpers/ait-daemon";
 import { connectDaemonClient } from "../support/helpers/daemon-client-loader";
 import { openModelPicker } from "../support/helpers/agent-profiles";
 import { clickNewChat, gotoWorkspace } from "../support/helpers/launcher";
 
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
-async function openMockAgentAtMobileBreakpoint(page: Page) {
+test.use({
+  e2eDaemonEnvironment: {
+    AIT_SERVER_CODEX_BIN: path.join(repoRoot, "crates/provider/tests/fixtures/codex_app_server.py"),
+  },
+});
+
+async function seedCatalogAgent(options: { repoPrefix: string; title: string }) {
+  const workspace = await seedWorkspace({ repoPrefix: options.repoPrefix });
+  try {
+    const agent = await workspace.client.createAgent({
+      provider: "codex",
+      model: "offline-model",
+      cwd: workspace.repoPath,
+      workspaceId: workspace.workspaceId,
+      title: options.title,
+    });
+    return {
+      agentId: agent.id,
+      workspaceId: workspace.workspaceId,
+      cwd: workspace.repoPath,
+      cleanup: workspace.cleanup,
+    };
+  } catch (error) {
+    await workspace.cleanup();
+    throw error;
+  }
+}
+
+function catalog(modelId: string, displayName: string) {
+  return JSON.stringify({
+    data: [
+      {
+        id: modelId,
+        model: modelId,
+        displayName,
+        isDefault: true,
+        hidden: false,
+        supportedReasoningEfforts: [{ reasoningEffort: "high", description: "High effort" }],
+        defaultReasoningEffort: "high",
+      },
+    ],
+    nextCursor: null,
+  });
+}
+
+async function openCatalogAgentAtMobileBreakpoint(page: Page) {
   await page.setViewportSize(MOBILE_VIEWPORT);
-  const session = await seedMockAgentWorkspace({
+  const session = await seedCatalogAgent({
     repoPrefix: "provider-sheet-stack-",
     title: "Provider sheet stack e2e",
   });
@@ -100,17 +147,12 @@ async function hasFocusWithin(locator: Locator): Promise<boolean> {
 
 async function expectProviderSettingsVisible(page: Page) {
   await expect(page.getByTestId("provider-settings-sheet")).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByRole("button", { name: "Add model" })).toBeVisible();
+  // Native-only hosts do not advertise generic providerConfiguration editing.
+  await expect(page.getByRole("button", { name: "Add model" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Diagnostic", exact: true })).toBeVisible();
 }
 
 async function exerciseProviderSettingsStack(page: Page) {
-  await expectProviderSettingsVisible(page);
-
-  await page.getByRole("button", { name: "Add model" }).click();
-  await expect(page.getByTestId("add-custom-model-sheet")).toBeVisible({ timeout: 10_000 });
-  await closeSheetByHeaderButton(page, "add-custom-model-sheet");
-  await expect(page.getByPlaceholder("e.g. openai/gpt-5")).not.toBeVisible({ timeout: 10_000 });
   await expectProviderSettingsVisible(page);
 
   await page.getByRole("button", { name: "Diagnostic", exact: true }).click();
@@ -128,7 +170,7 @@ test.describe("provider settings overlay stack", () => {
   test("provider settings covers the desktop model selector without closing it", async ({
     page,
   }) => {
-    const session = await seedMockAgentWorkspace({
+    const session = await seedCatalogAgent({
       repoPrefix: "provider-modal-layer-",
       title: "Provider modal layer e2e",
     });
@@ -171,7 +213,7 @@ test.describe("provider settings overlay stack", () => {
       await expect(addProject).not.toBeVisible({ timeout: 10_000 });
       await expect(selector).toBeVisible();
 
-      const settingsButton = page.getByTestId("selector-header-settings-mock");
+      const settingsButton = page.getByTestId("selector-header-settings-codex");
       await settingsButton.click();
 
       const settings = page.getByTestId("provider-settings-sheet");
@@ -189,57 +231,34 @@ test.describe("provider settings overlay stack", () => {
 
   test("opening the model picker refreshes a changed native catalog", async ({ page }) => {
     test.setTimeout(180_000);
-    const session = await seedMockAgentWorkspace({
+    const session = await seedCatalogAgent({
       repoPrefix: "provider-catalog-refresh-",
       title: "Provider catalog refresh",
     });
     const client = await connectDaemonClient<DaemonClient>({ clientIdPrefix: "catalog-refresh" });
-    const catalogFile = path.join(session.cwd, "catalog-e2e.json");
+    const catalogFile = path.join(session.cwd, "speed-models.json");
     try {
-      await writeFile(
-        catalogFile,
-        JSON.stringify([{ modelId: "before-refresh", name: "Before refresh" }]),
-      );
-      await client.patchDaemonConfig({
-        providers: {
-          gemini: {
-            extends: "acp",
-            label: "Catalog provider",
-            enabled: true,
-            command: [
-              process.execPath,
-              path.resolve(__dirname, "../support/fixtures/catalog-acp.cjs"),
-              "1",
-              catalogFile,
-            ],
-          },
-        },
-      });
+      await writeFile(catalogFile, catalog("before-refresh", "Before refresh"));
+      await client.refreshProvidersSnapshot({ cwd: session.cwd, providers: ["codex"] });
       await expect
-        .poll(
-          async () =>
-            (await client.getProvidersSnapshot({ cwd: session.cwd })).entries.find(
-              (entry) => entry.provider === "gemini",
-            )?.status,
-          { timeout: 30_000 },
+        .poll(async () =>
+          (await client.getProvidersSnapshot({ cwd: session.cwd })).entries
+            .find((entry) => entry.provider === "codex")
+            ?.models?.some((model) => model.id === "before-refresh"),
         )
-        .toBe("ready");
+        .toBe(true);
       await gotoWorkspace(page, session.workspaceId);
       await clickNewChat(page);
       await expectComposerVisible(page);
-      await writeFile(
-        catalogFile,
-        JSON.stringify([{ modelId: "after-refresh", name: "After refresh" }]),
-      );
+      await writeFile(catalogFile, catalog("after-refresh", "After refresh"));
       await openModelPicker(page);
       const back = page.getByRole("button", { name: "Back", exact: true });
       if (await back.isVisible()) await back.click();
-      await page.getByTestId("model-provider-gemini").click();
-      await expect(page.getByTestId("model-row-gemini-after-refresh")).toBeVisible({
+      await page.getByTestId("model-provider-codex").click();
+      await expect(page.getByTestId("model-row-codex-after-refresh")).toBeVisible({
         timeout: 30_000,
       });
     } finally {
-      await client.patchDaemonConfig({ removeProviders: ["gemini"] });
       await client.close();
       await session.cleanup();
     }
@@ -250,7 +269,7 @@ test.describe("provider settings overlay stack", () => {
   }) => {
     test.setTimeout(180_000);
 
-    const session = await openMockAgentAtMobileBreakpoint(page);
+    const session = await openCatalogAgentAtMobileBreakpoint(page);
 
     try {
       await openProviderSettingsFromModelSelector(page);

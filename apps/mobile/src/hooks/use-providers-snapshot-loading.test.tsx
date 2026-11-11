@@ -14,13 +14,20 @@ import { providersSnapshotQueryKey, useProvidersSnapshot } from "./use-providers
 const host = vi.hoisted(() => ({
   connected: true,
   active: true,
+  connectionEpoch: 1,
+  clientGeneration: 1,
   client: { getProvidersSnapshot: vi.fn(), refreshProvidersSnapshot: vi.fn() },
   listeners: new Set<() => void>(),
 }));
 
 vi.mock("@/runtime/host-runtime", () => ({
   getHostRuntimeStore: () => ({
-    getSnapshot: () => ({ client: host.client }),
+    getSnapshot: () => ({
+      client: host.client,
+      connectionStatus: host.connected ? "online" : "offline",
+      connectionEpoch: host.connectionEpoch,
+      clientGeneration: host.clientGeneration,
+    }),
     subscribe: (_serverId: string, notify: () => void) => {
       host.listeners.add(notify);
       return () => host.listeners.delete(notify);
@@ -81,6 +88,8 @@ describe("provider discovery without completion pushes", () => {
     notifyManager.setScheduler((callback) => void Promise.resolve().then(callback));
     host.connected = true;
     host.active = true;
+    host.connectionEpoch = 1;
+    host.clientGeneration = 1;
     host.client = originalClient;
     host.listeners.clear();
     host.client.refreshProvidersSnapshot.mockReset();
@@ -234,12 +243,41 @@ describe("provider discovery without completion pushes", () => {
     expect(result.current.error).toBeNull();
   });
 
+  it("rejects a late refresh after the same client reconnects with a new epoch", async () => {
+    host.client.getProvidersSnapshot.mockResolvedValue(snapshot("ready"));
+    const gate = Promise.withResolvers<{ requestId: string; acknowledged: boolean }>();
+    host.client.refreshProvidersSnapshot.mockReturnValue(gate.promise);
+    const { result } = renderHook(() => useProvidersSnapshot(serverId, { cwd }), { wrapper });
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    act(() => result.current.refetchIfStale("codex"));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(host.client.refreshProvidersSnapshot).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      host.connectionEpoch += 1;
+      for (const notify of host.listeners) notify();
+      queryClient.setQueryData(providersSnapshotQueryKey(serverId, cwd), snapshot("ready", 2));
+    });
+    await act(async () => {
+      gate.resolve({ requestId: "old-epoch", acknowledged: true });
+      await gate.promise;
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(host.client.getProvidersSnapshot).toHaveBeenCalledTimes(1);
+    expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId, cwd))).toMatchObject({
+      revision: 2,
+    });
+    expect(result.current.error).toBeNull();
+  });
+
   it("does not apply a late refresh after the working directory changes", async () => {
     host.client.getProvidersSnapshot.mockResolvedValue(snapshot("ready"));
     const gate = Promise.withResolvers<{ requestId: string; acknowledged: boolean }>();
     host.client.refreshProvidersSnapshot.mockReturnValue(gate.promise);
     const { result, rerender } = renderHook(
-      ({ currentCwd }: { currentCwd: string }) => useProvidersSnapshot(serverId, { cwd: currentCwd }),
+      ({ currentCwd }: { currentCwd: string }) =>
+        useProvidersSnapshot(serverId, { cwd: currentCwd }),
       { wrapper, initialProps: { currentCwd: cwd } },
     );
     await act(() => vi.advanceTimersByTimeAsync(0));
@@ -266,9 +304,9 @@ describe("provider discovery without completion pushes", () => {
     // The settled refresh belongs to the previous directory: it must not fetch
     // that directory again or publish into the current one.
     expect(oldDirectoryFetches()).toBe(fetchesBefore);
-    expect(
-      queryClient.getQueryData(providersSnapshotQueryKey(serverId, otherCwd)),
-    ).toMatchObject({ revision: 2 });
+    expect(queryClient.getQueryData(providersSnapshotQueryKey(serverId, otherCwd))).toMatchObject({
+      revision: 2,
+    });
     expect(result.current.error).toBeNull();
   });
 });
