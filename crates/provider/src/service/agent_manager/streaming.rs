@@ -119,6 +119,8 @@ pub(super) async fn drain(
             Some(AgentTurnEvent::Usage(usage)) => {
                 persist_usage(registry, timeline, id, agent, usage)
             }
+            // Additive usage-ledger input; it never changes the Agent record or context meter.
+            Some(AgentTurnEvent::RequestUsage(_)) => Ok(()),
             Some(AgentTurnEvent::PermissionRequested(request)) => {
                 if agent.record.internal && agent.record.owner.is_some() {
                     let Some(request_id) = request["id"].as_str() else {

@@ -2,6 +2,16 @@ use serde_json::Value;
 
 use crate::protocol::usage::AgentUsage;
 
+/// Shared cumulative-counter differencing for adapters that only report running totals.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "adapters with cumulative usage adopt this under ADR-246"
+    )
+)]
+pub(super) mod cumulative;
+
 pub(super) fn codex(value: &Value) -> Option<AgentUsage> {
     let last = value.get("last")?.as_object()?;
     let usage = AgentUsage {
