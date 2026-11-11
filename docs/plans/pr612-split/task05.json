@@ -2,16 +2,8 @@
   "id": "05",
   "title": "Native-confirmed configuration",
   "priority": 5,
-  "depends_on": [
-    "00",
-    "01"
-  ],
-  "donor_sections": [
-    5,
-    15,
-    22,
-    33
-  ],
+  "depends_on": ["00", "01"],
+  "donor_sections": [5, 15, 22, 33],
   "donor_paths": [
     "apps/mobile/src/agent-stream/turn-membership.ts",
     "apps/mobile/src/agent-stream/view.tsx",

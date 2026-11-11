@@ -49,7 +49,7 @@ OMP 原生 RPC 已能对每个设置字段给出确认或拒绝（任务 01 的�
    - **ACK 超替（owner 围栏）**：Ait `set_*` 被确认且 `get_state` 回读后，调用 `supersede_buffered`
      丢弃回读前缓冲的同类选择事件（复用 donor transport 的超替模式），使滞后的 pre-ACK 变更不能
      回退新确认值；ACK 之后到达的事件仍权威。无关 turn/interaction 帧保持顺序与字节计数。
-   角色目录等后续任务复用该路径，不得另起写者。
+     角色目录等后续任务复用该路径，不得另起写者。
 5. 配置 RPC 响应在既有 `accepted/error/notice` 之上新增可选 `rejectedFields: string[]`。
    任一字段被拒绝时 `accepted=false` 并给出摘要错误；已确认字段照常持久化并发布快照。
 6. 界面只在 RPC 确认后写入本地偏好；提交期间控件显示 busy 并禁止重复提交，
@@ -57,14 +57,14 @@ OMP 原生 RPC 已能对每个设置字段给出确认或拒绝（任务 01 的�
 
 ## 接口变化与迁移
 
-| 边界 | 旧接口/行为 | 新接口/行为 | 影响调用方与兼容性 |
-| --- | --- | --- | --- |
-| Rust 端口 | `AgentSession` 无实时应用方法；配置仅在下一轮应用 | `apply_config` 默认 `Unavailable`；OMP 实现逐字段确认 | 其余适配器不改实现即保持延迟语义；`AgentManager::configure` 改为 `&mut self` 并返回 `Vec<RejectedConfigField>`，调用方（RPC controls、bot 收敛、权限跟随补丁）已迁移 |
-| 内部事件 | `AgentTurnEvent` 无配置观察变体 | 新增 `ModelSelectionUpdated { model, thinking_option_id }`（`NullableSetting`，省略字段不序列化）与 `FeatureValuesUpdated(BTreeMap)`（仅已确认开关） | 仅 provider 内部与 OMP ACP 桥投影消费；桥对未知变体返回空更新，外部 ACP 客户端不受影响 |
-| daemon wire | `agent.{mode,model,thinking,feature}.set` / `agent.config.apply` 响应仅 `accepted/error/notice` | 同一响应新增可选 `rejectedFields`；部分拒绝时 `accepted=false` | 旧客户端忽略新增字段，仍按 `accepted=false` 显示错误；旧主机不带该字段，SDK 视为空列表。无方法增删，无请求格式变化 |
-| 公共 SDK | 五个配置 setter 拒绝时抛普通 `Error` | 抛 `AgentConfigRejectedError extends Error`，携带 `rejectedFields`；返回类型不变 | 既有 `catch (error)`/`error.message` 调用方不受影响；需要字段级展示的新调用方可读取 `rejectedFields` |
-| UI | 选择即写本地偏好，拒绝仅 toast | 确认后写偏好；busy 防重复；拒绝保留原值并显示本地化摘要+字段标签，原始后端信息作为次要详情 | 仅 `apps/mobile` composer agent-controls；draft 控件保持本地草稿语义不变 |
-| 持久化 | 记录保存提议值 | 记录保存原生确认值；不确定时不写 | 重启/恢复读取同一记录；旧记录无需迁移，字段形状未变 |
+| 边界        | 旧接口/行为                                                                                     | 新接口/行为                                                                                                                                          | 影响调用方与兼容性                                                                                                                                                   |
+| ----------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rust 端口   | `AgentSession` 无实时应用方法；配置仅在下一轮应用                                               | `apply_config` 默认 `Unavailable`；OMP 实现逐字段确认                                                                                                | 其余适配器不改实现即保持延迟语义；`AgentManager::configure` 改为 `&mut self` 并返回 `Vec<RejectedConfigField>`，调用方（RPC controls、bot 收敛、权限跟随补丁）已迁移 |
+| 内部事件    | `AgentTurnEvent` 无配置观察变体                                                                 | 新增 `ModelSelectionUpdated { model, thinking_option_id }`（`NullableSetting`，省略字段不序列化）与 `FeatureValuesUpdated(BTreeMap)`（仅已确认开关） | 仅 provider 内部与 OMP ACP 桥投影消费；桥对未知变体返回空更新，外部 ACP 客户端不受影响                                                                               |
+| daemon wire | `agent.{mode,model,thinking,feature}.set` / `agent.config.apply` 响应仅 `accepted/error/notice` | 同一响应新增可选 `rejectedFields`；部分拒绝时 `accepted=false`                                                                                       | 旧客户端忽略新增字段，仍按 `accepted=false` 显示错误；旧主机不带该字段，SDK 视为空列表。无方法增删，无请求格式变化                                                   |
+| 公共 SDK    | 五个配置 setter 拒绝时抛普通 `Error`                                                            | 抛 `AgentConfigRejectedError extends Error`，携带 `rejectedFields`；返回类型不变                                                                     | 既有 `catch (error)`/`error.message` 调用方不受影响；需要字段级展示的新调用方可读取 `rejectedFields`                                                                 |
+| UI          | 选择即写本地偏好，拒绝仅 toast                                                                  | 确认后写偏好；busy 防重复；拒绝保留原值并显示本地化摘要+字段标签，原始后端信息作为次要详情                                                           | 仅 `apps/mobile` composer agent-controls；draft 控件保持本地草稿语义不变                                                                                             |
+| 持久化      | 记录保存提议值                                                                                  | 记录保存原生确认值；不确定时不写                                                                                                                     | 重启/恢复读取同一记录；旧记录无需迁移，字段形状未变                                                                                                                  |
 
 旧主机降级：客户端连接不支持逐字段确认的主机时，响应无 `rejectedFields`，
 行为与今天一致（整体接受或整体拒绝）。本决策不改变 `server_info` 能力协商。
