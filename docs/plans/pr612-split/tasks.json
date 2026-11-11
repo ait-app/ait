@@ -2858,10 +2858,10 @@
     ],
     "implementation": "Read inactive native history and previews without activating/restoring a writer, preserving original native storage and identity.",
     "acceptance": "List/preview/history reads do not start a session or mutate native logs; import/refresh/restart compatibility remains intact.",
-    "status": "in_progress",
+    "status": "delivered",
     "branch": "feat/pr612-task30-dsh-inactive-history",
     "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
-    "commit": "de50e8a5864ada4713579b659924ad55d56ee0e5",
+    "commit": "67379460561aa68fc246ae703bcd825cdec3cfa0",
     "pr_url": "https://github.com/ait-app/ait/pull/655",
     "checks": {
       "required": [
@@ -2875,20 +2875,25 @@
         "PASS npm test @ait/protocol + @ait/client: 567 passed / 1 skipped (preview schema/SDK tests); npm run typecheck --workspace=@ait/mobile clean after SDK rebuild; import-session-sheet.test.tsx 30/30.",
         "PASS installed DSH 0.2.2-rc.1 read-only smoke (AIT_TEST_DSH_BIN=/usr/bin/dsh, DSH_HOME copy): installed_existing_session_is_importable_without_writes on real persisted history; session journals byte-identical before/after (sha256); no model request.",
         "PASS cargo build -p daemon --locked; node scripts/adr.mjs index + --check (223 ADRs); npm run check:docs (559 documents); cargo fmt + oxfmt applied; git diff --check clean.",
-        "IN PROGRESS browser read-only preview e2e (real daemon + loopback native fixture subprocess): running; NOT delivered — browser read-only preview still unverified and a pagination correction is required."
+        "PASS recovery (session-statistics): preview wire serialization regression 1/1; provider clippy -D warnings; daemon build; focused native preview suite 11/11 (bg740/artifact3353) then 13/13 (bg819/artifact3757, incl. long unfinished turns beyond the display window, activity retained at the fixed cut).",
+        "PASS actual browser smoke through real daemon + native Host subprocess fixture: 66 rows chronological, 60-item fixed cut (bg753/artifact3417); final changed-path browser smoke 1/1 (bg828/artifact3783): same-session reopen observes new native answer33 instead of cached answer32, fresh cut per explicit opening.",
+        "PASS SessionPreviewSheet consumer regressions 2/2 (bg754) then 3/3 (bg811, incl. same-session reopen under production Infinity-stale/no-mount-refetch defaults); mobile typecheck PASS.",
+        "PASS installed /usr/bin/dsh 0.2.2-rc.1 readonly test 1/1 (bg773) with freshly shipped web profile, only owned official task29 v4 journals/attachment, clean official home.",
+        "PASS scoped formatting 8 files + lint 4 files 0 warnings/errors (bg781/bg826); ADR index current; docs checks 7/7, 559 Markdown documents, 223 ADRs.",
+        "Cleanup: removed owned throwaway dsh-snapshot-probe.mjs, copied daemon, isolated smoke homes and sensitive probe cookies/logs; all own direct native probe groups stopped. Head 67379460561aa68fc246ae703bcd825cdec3cfa0 records completed runtime acceptance; implementation 9e8991b8d3b46d30d7b2190b15c05aff607da92c."
       ]
     },
     "blockers": [],
     "ownership": {
-      "owner": "session-statistics (sole recovery owner per director assignment 2026-11-11; opencode-command-lifecycle frozen after external 400 — no product blocker; original dsh-history owner also frozen)",
+      "owner": "session-statistics (sole recovery owner per director assignment 2026-11-11; completed delivery)",
       "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-split-dsh-history",
-      "observed_branch_head": "62334d12f02e551a85d690109f415a737ad5166a",
-      "note": "Draft PR655 exists and is pending acceptance, NOT delivered. Actual HEAD 62334d12 on feat/pr612-task30-dsh-inactive-history (no-preview branch); recovery owner must inspect actual HEAD before mutating; uncommitted preview/pagination work exists in the worktree. Browser read-only preview unverified and pagination correction required. ADR-240 proposed. No extra API changes."
+      "observed_branch_head": "67379460561aa68fc246ae703bcd825cdec3cfa0",
+      "note": "Delivered; Draft PR655 open, head 67379460 (implementation 9e8991b8), base 248a93cf. ADR-240 proposed pending review; Draft body carries the explicit interface table and limits. No central edits by the owner; central record updated by the 647 docs owner."
     },
     "interface_disclosure": {
       "adr": "ADR-240 (proposed, pending review)",
-      "ui_vs_provider": "Provider-internal DSH read endpoints change (session/list + session/projections + session/page at fixed throughSeq; no follow fallback on reads); additive typed provider.sessions.preview.get (Operation SessionPreview, Access::Discovery) + SDK fetchProviderSessionPreview + host feature importSessionPreview; additive optional supportsSessionPreview on the provider snapshot; additive read-only Eye preview action in the import-session sheet (row-press import unchanged).",
-      "callers_migration_compat": "No public API removed; installed DSH 0.2.2-rc.1 public endpoint declarations cited in ADR-240. Old hosts lack the preview method and clients gate on the method catalog before sending; old clients ignore additive schemas; preview UI hidden when host method or provider capability is absent. Resume keeps main's adopt lifecycle with a read-only identity precheck; donor resume create/adopt change deliberately NOT ported."
+      "ui_vs_provider": "Provider-internal DSH read endpoints change (session/list + session/projections + session/page at fixed throughSeq; no follow fallback on reads); additive typed provider.sessions.preview.get (Operation SessionPreview, Access::Discovery) + SDK fetchProviderSessionPreview + host feature importSessionPreview; additive optional supportsSessionPreview on the provider snapshot (DSH native true, ACP false); additive read-only Eye preview action in the import-session sheet (row-press import unchanged; each explicit opening starts a fresh cut and releases it); borrowed typed wire projection omits absent turnId, optional window(startSeq, skippedItems) replays the exact bounded result; preview activity resolves the latest turn boundary at each page's fixed cut (semantics only, schema unchanged); display/replay/activity reads share 16-page/8MiB budgets.",
+      "callers_migration_compat": "No public API removed; installed DSH 0.2.2-rc.1 public endpoint declarations cited in ADR-240. Old hosts lack the preview method and clients gate on the method catalog before sending; old clients ignore additive schemas; preview UI hidden when host method or provider capability is absent. Resume keeps main's adopt lifecycle with a read-only identity precheck; donor resume create/adopt change deliberately NOT ported. Full six-row interface table in the task30.json on PR655 and its Draft body."
     }
   },
   {

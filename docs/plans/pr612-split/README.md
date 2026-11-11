@@ -294,13 +294,13 @@ all-completed claim; exclusions below are explicit user decisions, not deliverie
   Four-surface interface ledger in tasks.json `26.interface_disclosure`.
 - **27** active — sole owner `omp-native-html-export`, implementing integration of 01 + 04 + 26;
   ADR-265 proposed. No public branch/Draft yet.
-- **30** in progress, **not delivered** — existing Draft [#655](https://github.com/ait-app/ait/pull/655),
-  branch `feat/pr612-task30-dsh-inactive-history`, implementation `de50e8a5`, actual HEAD `62334d12`
-  (no-preview branch); browser read-only preview still unverified and a pagination correction is
-  required. Sole recovery owner is now `session-statistics` (`opencode-command-lifecycle` frozen after
-  external 400 — no product blocker; original `dsh-history` owner also frozen); the recovery owner
-  must inspect actual HEAD before mutating. No extra API changes. ADR-240 proposed; interface ledger
-  in tasks.json `30.interface_disclosure`.
+- **30** delivered — Draft [#655](https://github.com/ait-app/ait/pull/655), branch
+  `feat/pr612-task30-dsh-inactive-history`, head `67379460` (implementation `9e8991b8`), base `248a93cf`.
+  Recovery owner `session-statistics` completed acceptance: final changed-path browser smoke PASS
+  (bg828/artifact3783, same-session reopen observes the new native answer, fresh cut per opening),
+  native preview 13/13 + clippy/build/fmt PASS, UI 3/3 + typecheck PASS; retained earlier 66-row/fixed-cut
+  browser (bg753/artifact3417) and official clean-home read-only (bg773) proofs. ADR-240 proposed;
+  Draft body carries the explicit interface table and limits; ledger in tasks.json `30.interface_disclosure`.
 - **31** **excluded by explicit user decision (2026-11-11, “01 skip 31 skip”)** — the whole OpenCode
   command catalog + lifecycle task is out of the delivery queue, not delivered and not a required
   blocker; the earlier “catalog+cleanup reachable after 06” sub-slice is **not pursued**. Prior
