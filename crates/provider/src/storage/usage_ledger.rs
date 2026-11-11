@@ -494,8 +494,11 @@ fn finish_call(transaction: &Transaction<'_>, finish: &CallFinish) -> rusqlite::
     }
     let status = if !finish.token_usage_available {
         UsageStatus::Missing
-    } else if finish.outcome == CallOutcome::Interrupted {
-        // The host stopped the call, so in-flight requests may be lost, as in recovery.
+    } else if matches!(
+        finish.outcome,
+        CallOutcome::Failed | CallOutcome::Cancelled | CallOutcome::Interrupted
+    ) {
+        // A call that ended early may have lost an in-flight or unflushed request.
         match request_status(transaction, &finish.call_id)? {
             UsageStatus::Exact | UsageStatus::LowerBound => UsageStatus::LowerBound,
             UsageStatus::Missing => UsageStatus::Missing,

@@ -51,6 +51,7 @@ paths:
   会发出 `RequestUsage` 的适配器覆盖为 `true`。
 - `usage_status` 由 `finish_call` 计算：该调用的每个请求都满足 `boundary = request` 且 `complete = true`，
   且至少有一个请求，为 `exact`；没有请求或提供方不上报 token 用量，为 `missing`；其余为 `lower_bound`。
+  失败、取消或被中断的调用可能丢失进行中或未刷出的请求，因此 `exact` 降为 `lower_bound`，`missing` 不变。
 - 账本错误只用 `tracing::warn!` 记录，永不使轮次失败或延迟。写入经有界通道交给单一阻塞写线程，
   `AgentManager` 轮询循环不等待 SQLite。
 - 调用来源：`user`、`bot`、`schedule`、`heartbeat`、`autonomous`、`summary`，以及启动被拒的 `rejected`

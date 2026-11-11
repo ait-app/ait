@@ -254,7 +254,7 @@ async fn usage_status_requires_complete_request_boundaries() {
         cache_write_tokens: 360,
         reported_cost_usd: 2.25,
         cost_reported_requests: 9,
-        lower_bound_calls: 2,
+        lower_bound_calls: 3,
         missing_calls: 2,
         ..UsageRow::default()
     };
@@ -274,8 +274,8 @@ async fn usage_status_requires_complete_request_boundaries() {
     assert_eq!(
         statuses(&fixture.inspect()),
         [
-            ("exact".into(), "completed".into(), exact.clone()),
-            ("failed".into(), "failed".into(), exact),
+            ("exact".into(), "completed".into(), exact),
+            ("failed".into(), "failed".into(), lower_bound.clone()),
             ("incomplete".into(), "completed".into(), lower_bound.clone()),
             ("none".into(), "completed".into(), missing.clone()),
             ("turn".into(), "completed".into(), lower_bound),
@@ -284,36 +284,45 @@ async fn usage_status_requires_complete_request_boundaries() {
     );
 }
 
-/// A call the host stopped is never exact, even when every recorded request is.
+/// A call that ended early is never exact, even when every recorded request is.
 #[tokio::test]
-async fn host_interrupted_calls_are_at_most_lower_bound() {
+async fn calls_that_end_early_are_at_most_lower_bound() {
     let fixture = Fixture::new(DAY_ONE);
     let ledger = fixture.open();
     let at = DAY_ONE + HOUR;
-    for call_id in ["closed", "silent"] {
-        ledger.begin_call(call(call_id, "codex", None, at));
-    }
-    ledger.record_request(request("closed", "closed:1", at));
-    for call_id in ["closed", "silent"] {
-        ledger.finish_call(finish(call_id, CallOutcome::Interrupted, at + HOUR));
+    let outcomes = [
+        ("cancelled", CallOutcome::Cancelled),
+        ("failed", CallOutcome::Failed),
+        ("interrupted", CallOutcome::Interrupted),
+    ];
+    for (name, outcome) in outcomes {
+        let (recorded, silent) = (format!("{name}:recorded"), format!("{name}:silent"));
+        ledger.begin_call(call(&recorded, "codex", None, at));
+        ledger.begin_call(call(&silent, "codex", None, at));
+        ledger.record_request(request(&recorded, &format!("{recorded}:1"), at));
+        ledger.finish_call(finish(&recorded, outcome, at + HOUR));
+        ledger.finish_call(finish(&silent, outcome, at + HOUR));
     }
     ledger.close();
 
-    assert_eq!(
-        statuses(&fixture.inspect()),
-        [
-            (
-                "closed".into(),
-                "interrupted".into(),
-                Some("lower_bound".into())
-            ),
-            (
-                "silent".into(),
-                "interrupted".into(),
-                Some("missing".into())
-            ),
-        ]
-    );
+    let expected: Vec<_> = outcomes
+        .iter()
+        .flat_map(|(name, _)| {
+            [
+                (
+                    format!("{name}:recorded"),
+                    (*name).to_owned(),
+                    Some("lower_bound".into()),
+                ),
+                (
+                    format!("{name}:silent"),
+                    (*name).to_owned(),
+                    Some("missing".into()),
+                ),
+            ]
+        })
+        .collect();
+    assert_eq!(statuses(&fixture.inspect()), expected);
 }
 
 /// Recovery interrupts running calls and leaves finished calls alone.

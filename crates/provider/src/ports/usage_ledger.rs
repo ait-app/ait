@@ -166,7 +166,8 @@ impl CallOutcome {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum UsageStatus {
-    /// At least one request, each with a request boundary and complete buckets.
+    /// A completed call with at least one request, each with a request boundary and complete
+    /// buckets. A failed, cancelled or interrupted call is at most [`Self::LowerBound`].
     Exact,
     /// Some tokens were recorded, but the totals may undercount.
     LowerBound,

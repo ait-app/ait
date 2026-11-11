@@ -177,7 +177,8 @@ Linux 无人值守运行支持 `aitd login` 和 `aitd run`，
 - **隐私**：不记录提示词或输出文本、文件路径和凭据；数据留在本机，不进入 Hub outbox，也不上传。
 - **可信度标记**：调用的 `usage_status` 为 `exact`（每个请求都是 `request` 边界且完整）、`lower_bound`（可能漏记）或
   `missing`（无请求或 Provider 不上报）；请求的 `boundary` 为 `request`、`turn` 或 `cumulative_delta`。
-  应用对 `lower_bound` 的数值显示“≥”。被中断的调用永远不是 `exact`。
+  失败、取消或被中断的调用可能丢失进行中的请求，因此永远不是 `exact`：有请求时为 `lower_bound`，没有时为 `missing`。
+  应用对含 `lower_bound` 或 `missing` 调用的数值显示“≥”。
 
 ### 各适配器的精度
 

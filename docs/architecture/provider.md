@@ -138,7 +138,8 @@
 - 桶互斥：`input` 不含缓存读写，`reasoning` 与 `cache_write_1h` 为子集、不计入合计；请求以
   `(agent_id, segment_id)` 幂等，汇总仅在插入生效时更新。
 - `usage_status`：每个请求均为 `request` 边界且 `complete`、且至少一个，为 `exact`；无请求或提供方不上报
-  token 用量为 `missing`；其余为 `lower_bound`。只存提供方报告的费用。
+  token 用量为 `missing`；其余为 `lower_bound`。失败、取消或被中断的调用至多为 `lower_bound`。
+  只存提供方报告的费用。
 - `calls` 与 `requests` 保留 90 天，`daily_usage`（UTC 日）无限期；不含文本、路径或凭据，不进入 Hub outbox。
   查询为 `provider.usage.ledger`，客户端按 `features.providerUsageLedger` 协商并逐 Host 汇总。
 
