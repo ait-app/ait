@@ -11,8 +11,9 @@ use super::super::{DeepSeekHarnessClient, PROVIDER};
 use super::{history, native_sessions, runtime::Runtime};
 use crate::ports::agent_session::AgentSessionError;
 use crate::ports::native_history::{
-    PreviewCursor, PreviewRequest, SessionDescriptor, SessionPreview,
+    PreviewCursor, PreviewRequest, PreviewWindow, SessionDescriptor, SessionPreview,
 };
+use crate::protocol::timeline::NativeItem;
 
 /// Largest display-item count accepted for one preview page.
 const MAX_PAGE_ITEMS: usize = 100;
@@ -59,8 +60,14 @@ fn validate_cursor(
         || cursor.provider_handle_id != request.session_id
         || cursor.cwd != request.cwd
         || cursor.through_seq < -1
+        || cursor.through_seq == i64::MAX
         || cursor.before_seq < 0
         || cursor.before_seq > cursor.through_seq + 1
+        || cursor.window.as_ref().is_some_and(|window| {
+            window.start_seq < 0
+                || window.start_seq >= cursor.before_seq
+                || window.skipped_items == 0
+        })
     {
         return Err(AgentSessionError::Rejected);
     }
@@ -83,6 +90,11 @@ async fn read_page(
         .as_ref()
         .map_or(cut.checked_add(1), |cursor| Some(cursor.before_seq))
         .ok_or(AgentSessionError::Failed)?;
+    let initial_before = before;
+    let replay = request
+        .cursor
+        .as_ref()
+        .and_then(|cursor| cursor.window.as_ref());
     let mut records = Vec::new();
     let mut entries = Vec::new();
     let mut bytes = 0usize;
@@ -112,18 +124,38 @@ async fn read_page(
             .as_i64()
             .ok_or(AgentSessionError::Failed)?;
         // Wire pages arrive newest-first; keep that order across the accumulated window.
-        let mut window = page_records.clone();
+        let mut window = page_records;
         window.extend(records);
         records = window;
+        if let Some(replay) = replay {
+            if before > replay.start_seq {
+                if !has_more {
+                    return Err(AgentSessionError::Failed);
+                }
+                continue;
+            }
+            // A native page may straddle the saved window boundary. Project only that
+            // exact window so deduplication cannot shift the already-returned item offset.
+            records.retain(|record| {
+                record["event"]["seq"]
+                    .as_i64()
+                    .is_some_and(|seq| seq >= replay.start_seq)
+            });
+            before = replay.start_seq;
+            has_more = before > 0;
+        }
         entries =
             history::project_records(runtime, client, &request.session_id, records.clone()).await?;
-        if entries.len() >= request.limit || !has_more {
+        if replay.is_some() || entries.len() >= request.limit || !has_more {
             break;
         }
         if before == 0 {
             has_more = false;
             break;
         }
+    }
+    if replay.is_some_and(|window| before != window.start_seq) {
+        return Err(AgentSessionError::Failed);
     }
     let active = records
         .iter()
@@ -135,21 +167,61 @@ async fn read_page(
             )
         })
         .is_some_and(|record| record["event"]["type"] == "turn/start");
-    entries.reverse();
-    entries.truncate(request.limit);
-    let older_cursor = (has_more && before > 0).then(|| PreviewCursor {
-        provider: request.provider.clone(),
-        provider_handle_id: request.session_id.clone(),
-        cwd: request.cwd.clone(),
-        through_seq: cut,
-        before_seq: before,
-    });
+    let (entries, older_cursor) =
+        display_page(entries, request, cut, before..initial_before, has_more)?;
     Ok(SessionPreview {
         descriptor: descriptor(&summary, &values, request),
         active,
         entries,
         older_cursor,
     })
+}
+
+/// Keep excess display items in a bounded replay cursor, including on the final native page.
+fn display_page(
+    mut entries: Vec<NativeItem>,
+    request: &PreviewRequest,
+    cut: i64,
+    bounds: std::ops::Range<i64>,
+    has_more: bool,
+) -> Result<(Vec<NativeItem>, Option<PreviewCursor>), AgentSessionError> {
+    entries.reverse();
+    let skipped = request
+        .cursor
+        .as_ref()
+        .and_then(|cursor| cursor.window.as_ref())
+        .map_or(0, |window| window.skipped_items);
+    if skipped > 0 {
+        if skipped >= entries.len() {
+            return Err(AgentSessionError::Rejected);
+        }
+        entries.drain(..skipped);
+    }
+    let window = if entries.len() > request.limit {
+        Some(PreviewWindow {
+            start_seq: bounds.start,
+            skipped_items: skipped
+                .checked_add(request.limit)
+                .ok_or(AgentSessionError::Failed)?,
+        })
+    } else {
+        None
+    };
+    let older_cursor =
+        (window.is_some() || (has_more && bounds.start > 0)).then(|| PreviewCursor {
+            provider: request.provider.clone(),
+            provider_handle_id: request.session_id.clone(),
+            cwd: request.cwd.clone(),
+            through_seq: cut,
+            before_seq: if window.is_some() {
+                bounds.end
+            } else {
+                bounds.start
+            },
+            window,
+        });
+    entries.truncate(request.limit);
+    Ok((entries, older_cursor))
 }
 
 /// Find the listed root summary and validate its directory and origin before any page read.

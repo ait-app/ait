@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
 import { formatTimeAgo } from "@/utils/time";
+import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 
 const PREVIEW_SNAP_POINTS = ["70%", "92%"];
 const PREVIEW_PAGE_SIZE = 50;
@@ -129,31 +130,44 @@ export function SessionPreviewSheet({
   const entryKey = entry ? `${entry.providerId}:${entry.providerHandleId}:${entry.cwd}` : null;
   // A different row (or a closed sheet) starts a fresh preview; cursors never cross sessions.
   const activeKey = visible ? entryKey : null;
+  // A same-host reconnect advances the runtime epoch; cached pages and cursors from the
+  // previous connection must not mix with fresh reads (workspace-screen query convention).
+  const hostSnapshot = useHostRuntimeSnapshot(serverId ?? "");
 
   const query = useInfiniteQuery({
-    queryKey: ["native-session-preview", serverId, activeKey],
+    queryKey: [
+      "native-session-preview",
+      serverId,
+      activeKey,
+      hostSnapshot?.clientGeneration ?? 0,
+      hostSnapshot?.connectionEpoch ?? 0,
+    ],
     enabled: Boolean(visible && client && entry),
     initialPageParam: null as string | null,
     retry: false,
-    queryFn: async ({ pageParam }) => {
+    queryFn: async ({ pageParam, signal }) => {
       if (!client || !entry) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
       }
-      return client.fetchProviderSessionPreview({
+      const page = await client.fetchProviderSessionPreview({
         providerId: entry.providerId,
         providerHandleId: entry.providerHandleId,
         cwd: entry.cwd,
         limit: PREVIEW_PAGE_SIZE,
         ...(pageParam ? { cursor: pageParam } : {}),
       });
+      // A cancelled query (sheet closed, row switched, host reconnected) must not settle pages.
+      if (signal.aborted) throw new Error("Preview query cancelled");
+      return page;
     },
     getNextPageParam: (lastPage) => (lastPage.hasOlder ? lastPage.olderCursor : undefined),
   });
 
   const pages = query.data?.pages ?? [];
   const newest = pages[0];
-  // Pages arrive newest-first; render oldest-first within the accumulated window.
-  const entries = useMemo(() => pages.flatMap((page) => [...page.entries].reverse()), [pages]);
+  // Pages arrive newest-first and each page's entries are newest-first; flatten the whole
+  // accumulated window once, then reverse, so older pages render before newer ones.
+  const entries = useMemo(() => pages.flatMap((page) => page.entries).reverse(), [pages]);
 
   const handleLoadOlder = useCallback(() => {
     if (query.hasNextPage && !query.isFetchingNextPage) {

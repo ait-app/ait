@@ -13,7 +13,9 @@ use crate::ports::agent_session::{AgentClient, AgentSessionError};
 use crate::ports::native_history::{
     ListOptions, PreviewRequest, SessionDescriptor, SessionHistory,
 };
-use crate::protocol::native_sessions::{PreviewRequest as WirePreviewRequest, RecentRequest};
+use crate::protocol::native_sessions::{
+    PreviewEntries, PreviewRequest as WirePreviewRequest, RecentRequest,
+};
 use crate::support::time::now_timestamp;
 
 impl AgentManager {
@@ -186,7 +188,7 @@ impl AgentManager {
             "title":preview.descriptor.title,
             "lastActivityAt":preview.descriptor.last_activity_at,
             "active":preview.active,
-            "entries":preview.entries,
+            "entries":PreviewEntries(&preview.entries),
             "olderCursor":older_cursor,
             "hasOlder":older_cursor.is_some(),
         }))

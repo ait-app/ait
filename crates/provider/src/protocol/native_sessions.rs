@@ -2,9 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize, Serializer};
 
-use super::timeline::Cursor;
+use super::timeline::{Cursor, NativeItem};
 
 /// Filters for recent sessions which have not been actively imported.
 #[derive(Debug, Deserialize)]
@@ -36,6 +36,31 @@ pub(crate) struct PreviewRequest {
     pub(crate) cursor: Option<String>,
     /// Positive display-item limit, at most 100; defaults to 50.
     pub(crate) limit: Option<usize>,
+}
+
+/// Borrowed preview wire projection; absent native turn identities are omitted, not null.
+/// This leaves the persisted `NativeItem` representation unchanged.
+pub(crate) struct PreviewEntries<'a>(pub(crate) &'a [NativeItem]);
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PreviewEntry<'a> {
+    key: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    turn_id: Option<&'a str>,
+    timestamp: &'a str,
+    item: &'a serde_json::Value,
+}
+
+impl Serialize for PreviewEntries<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.0.iter().map(|entry| PreviewEntry {
+            key: &entry.key,
+            turn_id: entry.turn_id.as_deref(),
+            timestamp: &entry.timestamp,
+            item: &entry.item,
+        }))
+    }
 }
 
 /// Import an existing provider handle. Legacy field aliases must agree when both are supplied.

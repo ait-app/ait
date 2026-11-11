@@ -1,8 +1,12 @@
 import { expect, test } from "../support/fixtures";
-import { readFileSync, mkdtempSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type {
+  DaemonClient,
+  FetchProviderSessionPreviewEntry,
+} from "@ait/client/internal/daemon-client";
 import { connectDaemonClient } from "../support/helpers/daemon-client-loader";
 import { seedWorkspace } from "../support/helpers/seed-client";
 import { getServerId } from "../support/helpers/server-id";
@@ -15,7 +19,8 @@ import { gotoAppShell } from "../support/helpers/app";
 
 const fixtureDirectory = mkdtempSync(path.join(tmpdir(), "ait-dsh-preview-"));
 const auditPath = path.join(fixtureDirectory, "native-audit.jsonl");
-const statePath = path.join(fixtureDirectory, "native-port");
+const statePath = path.join(fixtureDirectory, "native-turn-count");
+writeFileSync(statePath, "30");
 const launcher = path.resolve("e2e/fixtures/fake-dsh-launcher.sh");
 
 test.use({
@@ -49,36 +54,18 @@ test.use({
   },
 });
 
-interface PreviewClient {
-  connect(): Promise<void>;
-  close(): Promise<void>;
-  getProvidersSnapshot(options?: { cwd?: string }): Promise<{
-    entries: Array<{ provider: string; supportsSessionPreview?: boolean }>;
-  }>;
-  fetchRecentProviderSessions(options?: {
-    cwd?: string;
-    providers?: string[];
-    limit?: number;
-  }): Promise<{
-    entries: Array<{
-      providerId: string;
-      providerHandleId: string;
-      cwd: string;
-      title: string | null;
-    }>;
-  }>;
-  fetchProviderSessionPreview(options: {
-    providerId: string;
-    providerHandleId: string;
-    cwd: string;
-    cursor?: string;
-    limit?: number;
-  }): Promise<{
-    entries: Array<{ key: string; item: { type: string; text?: string } }>;
-    olderCursor: string | null;
-    hasOlder: boolean;
-    active: boolean;
-  }>;
+type PreviewClient = Pick<
+  DaemonClient,
+  | "connect"
+  | "close"
+  | "getProvidersSnapshot"
+  | "fetchRecentProviderSessions"
+  | "fetchProviderSessionPreview"
+>;
+
+function messageText({ item }: FetchProviderSessionPreviewEntry): string {
+  if (item.type === "user_message" || item.type === "assistant_message") return item.text;
+  throw new Error(`Expected a fixture message, received ${item.type}`);
 }
 
 interface NativeAuditEntry {
@@ -103,6 +90,7 @@ const WRITER_METHODS = [
   "session/follow",
   "session/create",
   "session/prompt",
+  "session/cancel",
   "session/selectModel",
   "commands/execute",
   "session/new",
@@ -114,25 +102,45 @@ function expectNoWriterRequests(scope: string) {
   expect(offenders, `${scope}: native writer requests while browsing`).toEqual([]);
 }
 
-test("previews inactive DSH history read-only with fixed-cut pagination", async ({ page }) => {
+test("previews inactive DSH history read-only with fixed-cut pagination", async ({
+  page,
+}, testInfo) => {
   test.setTimeout(180_000);
   const workspace = await seedWorkspace({ repoPrefix: "ait-dsh-preview-", git: false });
   // The fixture Host lists its session under the cwd the daemon launches it with.
   const client = await connectDaemonClient<PreviewClient>({ clientIdPrefix: "dsh-preview" });
   try {
-    // Provider discovery advertises the read-only preview capability for DSH.
-    const snapshot = await client.getProvidersSnapshot({ cwd: workspace.repoPath });
-    const dsh = snapshot.entries.find((entry) => entry.provider === "deepseek-harness");
-    expect(dsh?.supportsSessionPreview).toBe(true);
+    // Provider discovery is asynchronous; wait until the catalog settles and advertises
+    // the read-only preview capability instead of racing the first loading snapshot.
+    await expect
+      .poll(
+        async () => {
+          const snapshot = await client.getProvidersSnapshot({ cwd: workspace.repoPath });
+          return snapshot.entries.find((entry) => entry.provider === "deepseek-harness")
+            ?.supportsSessionPreview;
+        },
+        { timeout: 30_000, intervals: [500] },
+      )
+      .toBe(true);
 
     const recent = await client.fetchRecentProviderSessions({
       cwd: workspace.repoPath,
       providers: ["deepseek-harness"],
       limit: 20,
     });
-    const entry = recent.entries.find((item) => item.providerId === "deepseek-harness");
+    const entry = recent.entries.find((item) => item.providerHandleId === "e2e-native-session");
     expect(entry).toBeTruthy();
     if (!entry) throw new Error("DSH session was not listed");
+    expect(entry.cwd).toBe(workspace.repoPath);
+    const runningEntry = recent.entries.find(
+      (item) => item.providerHandleId === "e2e-running-session",
+    );
+    if (!runningEntry) throw new Error("Running DSH control session was not listed");
+    const runningBefore = await client.fetchProviderSessionPreview({
+      ...runningEntry,
+      limit: 100,
+    });
+    expect(runningBefore.active).toBe(true);
 
     // Typed SDK reads: newest page, then the older page on the same fixed cut.
     const first = await client.fetchProviderSessionPreview({
@@ -141,26 +149,47 @@ test("previews inactive DSH history read-only with fixed-cut pagination", async 
       cwd: entry.cwd,
       limit: 4,
     });
-    expect(first.entries.map((item) => item.item.text)).toEqual([
-      "answer 5",
-      "question 5",
-      "answer 4",
-      "question 4",
+    expect(first.entries.map(messageText)).toEqual([
+      "answer 29",
+      "question 29",
+      "answer 28",
+      "question 28",
     ]);
     expect(first.hasOlder).toBe(true);
     expect(first.olderCursor).toBeTruthy();
     expect(first.active).toBe(false);
-    const second = await client.fetchProviderSessionPreview({
-      providerId: entry.providerId,
-      providerHandleId: entry.providerHandleId,
-      cwd: entry.cwd,
-      cursor: first.olderCursor ?? undefined,
-      limit: 100,
-    });
-    expect(second.entries).toHaveLength(8);
-    expect(second.hasOlder).toBe(false);
+    // A later Host sees more persisted history, but this cursor must retain its original cut.
+    writeFileSync(statePath, "33");
+    const allEntries = [...first.entries];
+    let cursor = first.olderCursor;
+    while (cursor && allEntries.length < 60) {
+      const older = await client.fetchProviderSessionPreview({
+        providerId: entry.providerId,
+        providerHandleId: entry.providerHandleId,
+        cwd: entry.cwd,
+        cursor,
+        limit: 100,
+      });
+      expect(older.entries.length).toBeGreaterThan(0);
+      expect(older.olderCursor).not.toBe(cursor);
+      expect(older.hasOlder).toBe(older.olderCursor !== null);
+      allEntries.push(...older.entries);
+      cursor = older.olderCursor;
+    }
+    expect(cursor).toBeNull();
+    expect(allEntries.map(messageText)).toEqual(
+      Array.from({ length: 30 }, (_, index) => [
+        `answer ${29 - index}`,
+        `question ${29 - index}`,
+      ]).flat(),
+    );
+    expect(new Set(allEntries.map((item) => item.key)).size).toBe(60);
     expectNoWriterRequests("typed SDK preview reads");
-    const pages = readAudit().filter((item) => item.method === "session/page");
+    const pages = readAudit().filter(
+      (item) =>
+        item.method === "session/page" &&
+        item.args?.request?.address?.sessionId === entry.providerHandleId,
+    );
     expect(pages.length).toBeGreaterThan(1);
     const cuts = new Set(pages.map((item) => item.args?.request?.throughSeq));
     expect(cuts.size).toBe(1);
@@ -172,6 +201,15 @@ test("previews inactive DSH history read-only with fixed-cut pagination", async 
         providerId: entry.providerId,
         providerHandleId: "another-session",
         cwd: entry.cwd,
+        cursor: first.olderCursor ?? undefined,
+      }),
+    ).rejects.toThrow();
+    expect(readAudit().length).toBe(beforeForged);
+    await expect(
+      client.fetchProviderSessionPreview({
+        providerId: entry.providerId,
+        providerHandleId: entry.providerHandleId,
+        cwd: fixtureDirectory,
         cursor: first.olderCursor ?? undefined,
       }),
     ).rejects.toThrow();
@@ -190,19 +228,54 @@ test("previews inactive DSH history read-only with fixed-cut pagination", async 
       .click();
     const sheet = page.getByTestId("session-preview-sheet");
     await expect(sheet).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText("answer 5", { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("answer 32", { exact: true })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId("session-preview-active-notice")).toHaveCount(0);
-    await page.getByTestId("session-preview-load-older").click();
-    await expect(page.getByText("question 0", { exact: true })).toBeVisible({ timeout: 30_000 });
+    const messages = sheet.getByText(/^(question|answer) \d+$/);
+    await expect(messages).toHaveCount(50);
+    while ((await messages.count()) < 66) {
+      const previousCount = await messages.count();
+      await page.getByTestId("session-preview-load-older").click();
+      await expect.poll(() => messages.count()).toBeGreaterThan(previousCount);
+    }
+    await expect(messages).toHaveText(
+      Array.from({ length: 33 }, (_, turn) => [`question ${turn}`, `answer ${turn}`]).flat(),
+    );
+    await expect(page.getByTestId("session-preview-load-older")).toHaveCount(0);
     expectNoWriterRequests("browser preview browsing");
 
     // Closing the preview returns to the import sheet without importing anything.
     await page.keyboard.press("Escape");
     await expect(row).toBeVisible({ timeout: 30_000 });
     expectNoWriterRequests("after closing preview");
+    const runningAfter = await client.fetchProviderSessionPreview({
+      ...runningEntry,
+      limit: 100,
+    });
+    // Correlation IDs identify different RPCs; every native fact must remain identical.
+    expect(runningAfter).toEqual({ ...runningBefore, requestId: runningAfter.requestId });
+    expectNoWriterRequests("running control remains unchanged");
   } finally {
-    await client.close().catch(() => undefined);
-    await workspace.cleanup();
-    await rm(fixtureDirectory, { recursive: true, force: true }).catch(() => undefined);
+    try {
+      await testInfo.attach("preview-before-cleanup", {
+        body: await page.screenshot(),
+        contentType: "image/png",
+      });
+      if (existsSync(auditPath)) {
+        await testInfo.attach("native-request-audit", {
+          path: auditPath,
+          contentType: "application/x-ndjson",
+        });
+      }
+    } finally {
+      try {
+        await client.close();
+      } finally {
+        try {
+          await workspace.cleanup();
+        } finally {
+          await rm(fixtureDirectory, { recursive: true, force: true });
+        }
+      }
+    }
   }
 });

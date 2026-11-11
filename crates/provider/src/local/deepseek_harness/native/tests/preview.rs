@@ -200,12 +200,32 @@ async fn preview_rejects_foreign_stale_and_forged_cursors_before_native_reads() 
             }),
             ..request(&fixture, 10)
         },
+        PreviewRequest {
+            cursor: Some(crate::ports::native_history::PreviewCursor {
+                through_seq: i64::MAX,
+                ..cursor.clone()
+            }),
+            ..request(&fixture, 10)
+        },
     ];
     for forged in forgeries {
         assert!(
             fixture.client.preview_session(&forged).await.is_err(),
             "cross-scope or stale cursors must be rejected"
         );
+    }
+    for (start_seq, skipped_items) in [(-1, 1), (cursor.before_seq, 1), (0, 0)] {
+        let forged = PreviewRequest {
+            cursor: Some(crate::ports::native_history::PreviewCursor {
+                window: Some(crate::ports::native_history::PreviewWindow {
+                    start_seq,
+                    skipped_items,
+                }),
+                ..cursor.clone()
+            }),
+            ..request(&fixture, 10)
+        };
+        assert!(fixture.client.preview_session(&forged).await.is_err());
     }
     assert_eq!(
         fixture.requests("session/page").len(),
@@ -349,5 +369,184 @@ async fn preview_rejects_invalid_limits_and_acp_transport() {
     assert!(!acp.supports_session_preview());
     assert!(acp.preview_session(&request(&fixture, 10)).await.is_err());
     assert!(fixture.requests("session/page").is_empty());
+    assert!(fixture.requests("session/follow").is_empty());
+}
+
+#[tokio::test]
+async fn preview_replays_excess_items_before_advancing_the_native_window() {
+    let fixture = Fixture::new().await;
+    let records = turn_records(6);
+    fixture.seed_records(records.clone());
+    fixture.reply(
+        "session/page",
+        json!({"records":records[8..],"hasMore":true}),
+    );
+    let first = fixture
+        .client
+        .preview_session(&request(&fixture, 3))
+        .await
+        .unwrap();
+    let mut next = request(&fixture, 100);
+    next.cursor = first.older_cursor;
+    let saved = next.cursor.as_ref().unwrap();
+    assert_eq!(saved.before_seq, 24);
+    assert_eq!(saved.window.as_ref().unwrap().start_seq, 8);
+    assert_eq!(saved.window.as_ref().unwrap().skipped_items, 3);
+    let second = fixture.client.preview_session(&next).await.unwrap();
+    assert_eq!(second.entries.len(), 5);
+    next.cursor = second.older_cursor;
+    assert_eq!(next.cursor.as_ref().unwrap().before_seq, 8);
+    assert!(next.cursor.as_ref().unwrap().window.is_none());
+    fixture.reply(
+        "session/page",
+        json!({"records":records[..8],"hasMore":false}),
+    );
+    let third = fixture.client.preview_session(&next).await.unwrap();
+    assert!(third.older_cursor.is_none());
+    let entries: Vec<_> = first
+        .entries
+        .into_iter()
+        .chain(second.entries)
+        .chain(third.entries)
+        .collect();
+    let texts: Vec<_> = entries
+        .iter()
+        .map(|entry| entry.item["text"].as_str().unwrap())
+        .collect();
+    let expected: Vec<_> = (0..6)
+        .rev()
+        .flat_map(|turn| [format!("answer {turn}"), format!("question {turn}")])
+        .collect();
+    assert_eq!(texts, expected);
+    assert_eq!(
+        entries
+            .iter()
+            .map(|entry| &entry.key)
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
+        12
+    );
+    assert!(fixture.requests("session/follow").is_empty());
+    assert!(fixture.requests("session/prompt").is_empty());
+}
+
+#[tokio::test]
+async fn preview_terminal_window_preserves_multiple_items_from_one_native_event() {
+    let fixture = Fixture::new().await;
+    let mut records = turn_records(2);
+    records[2]["event"]["data"]["message"]["content"] = json!([
+        {"type":"reasoning","text":"thought 0"},
+        {"type":"text","text":"answer 0"}
+    ]);
+    fixture.seed_records(records.clone());
+    fixture.reply("session/page", json!({"records":records,"hasMore":false}));
+    let first = fixture
+        .client
+        .preview_session(&request(&fixture, 1))
+        .await
+        .unwrap();
+    let mut cursor = first
+        .older_cursor
+        .expect("terminal native page still has display items");
+    assert_eq!(cursor.window.as_ref().unwrap().start_seq, 0);
+    let encoded = crate::protocol::native_sessions::encode_preview_cursor(&cursor).unwrap();
+    assert_eq!(
+        crate::protocol::native_sessions::decode_preview_cursor(&encoded).unwrap(),
+        cursor
+    );
+    let mut invalid = cursor.clone();
+    invalid.window.as_mut().unwrap().skipped_items = usize::MAX;
+    let reads = fixture.requests("session/page").len();
+    assert!(
+        fixture
+            .client
+            .preview_session(&PreviewRequest {
+                cursor: Some(invalid),
+                ..request(&fixture, 1)
+            })
+            .await
+            .is_err()
+    );
+    assert_eq!(fixture.requests("session/page").len(), reads + 1);
+    let mut entries = first.entries;
+    let mut exhausted = false;
+    // New native history must not change this saved window or its projected-item offset.
+    fixture.seed_records(turn_records(3));
+    for limit in [2, 1, 2] {
+        let page = fixture
+            .client
+            .preview_session(&PreviewRequest {
+                cursor: Some(cursor.clone()),
+                ..request(&fixture, limit)
+            })
+            .await
+            .unwrap();
+        entries.extend(page.entries);
+        if let Some(next) = page.older_cursor {
+            cursor = next;
+        } else {
+            assert_eq!(
+                entries.len(),
+                5,
+                "terminal cursor must not hide projected items"
+            );
+            exhausted = true;
+            break;
+        }
+    }
+    assert!(
+        exhausted,
+        "the final projected item must exhaust the cursor"
+    );
+    assert_eq!(
+        entries
+            .iter()
+            .map(|entry| entry.item["text"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        [
+            "answer 1",
+            "question 1",
+            "answer 0",
+            "thought 0",
+            "question 0"
+        ]
+    );
+    assert!(
+        fixture
+            .requests("session/page")
+            .iter()
+            .all(|page| page["request"]["throughSeq"] == 7)
+    );
+    assert!(fixture.requests("session/follow").is_empty());
+    assert!(fixture.requests("session/create").is_empty());
+}
+
+#[tokio::test]
+async fn preview_window_replay_stays_within_the_native_page_budget() {
+    let fixture = Fixture::new().await;
+    fixture.seed_records(turn_records(40));
+    let first = fixture
+        .client
+        .preview_session(&request(&fixture, 1))
+        .await
+        .unwrap();
+    let mut cursor = first.older_cursor.unwrap();
+    cursor.before_seq = cursor.through_seq + 1;
+    cursor.window = Some(crate::ports::native_history::PreviewWindow {
+        start_seq: 0,
+        skipped_items: 1,
+    });
+    let before = fixture.requests("session/page").len();
+    assert!(
+        fixture
+            .client
+            .preview_session(&PreviewRequest {
+                cursor: Some(cursor),
+                ..request(&fixture, 1)
+            })
+            .await
+            .is_err()
+    );
+    assert_eq!(fixture.requests("session/page").len() - before, 16);
     assert!(fixture.requests("session/follow").is_empty());
 }

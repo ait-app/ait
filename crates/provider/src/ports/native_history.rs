@@ -122,6 +122,19 @@ pub(crate) struct PreviewCursor {
     pub(crate) through_seq: i64,
     /// Exclusive native sequence boundary of the next older page.
     pub(crate) before_seq: i64,
+    /// Exact bounded record window to replay when a wire page exceeded the display limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) window: Option<PreviewWindow>,
+}
+
+/// Continuation within one immutable native record window, before advancing to older records.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct PreviewWindow {
+    /// Inclusive first native sequence in the window; its exclusive end is `before_seq`.
+    pub(crate) start_seq: i64,
+    /// Number of newest projected items already returned from this exact window.
+    pub(crate) skipped_items: usize,
 }
 
 /// One bounded read-only preview page of an inactive or observed native session.

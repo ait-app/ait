@@ -206,7 +206,11 @@ follow 打开携带 `activate: true`，会把冷会话升级为活动 Agent；�
 客户端通过类型化方法 `provider.sessions.preview.get.request` 分页预览未导入的原生会话：
 请求携带 `providerId`、`providerHandleId`、`cwd`、可选不透明 `cursor` 与 `limit`（≤100）；
 响应返回既有 Timeline 投影条目、`active` 只读观察标志与 `olderCursor`/`hasOlder`。
-游标绑定 provider、原生 ID、cwd 与固定 `throughSeq`；跨身份、跨目录或伪造游标在任何原生读取前被拒绝。
+游标绑定 provider、原生 ID、cwd 与固定 `throughSeq`；跨身份、跨目录或非法窗口边界在原生读取前被拒绝。
+原生页可能产生多于 `limit` 的展示项：服务端用有界窗口及展示 offset 保留剩余项，offset 再按实际投影校验，
+不会截断后跳过整页。`limit` 是上限而不是承诺页长，应仅用 `olderCursor`/`hasOlder` 判断是否还有更早内容。
+公开游标仍是不透明字符串；客户端不解析原生 key、记录或窗口格式。缺失的原生 `turnId` 在预览响应中省略，
+不伪造 ID，也不改变持久 Timeline 的表示。面板整体按时间顺序展示所有页，Host 重连后丢弃旧查询的迟到结果。
 预览不创建、不恢复、不激活原生写入者，也不发送 prompt；允许的原生请求仅限
 `session/list`、`session/projections`、`session/page`、`session/modelCatalog` 与
 `session/attachment`（图片只读水合）。

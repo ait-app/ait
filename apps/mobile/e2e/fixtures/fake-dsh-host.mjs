@@ -3,9 +3,15 @@
 // session/page) plus the writer endpoints, and records EVERY request so the test can
 // audit that browsing inactive history never creates, follows or prompts a session.
 import { createServer } from "node:http";
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { WebSocketServer } from "ws";
+
+// Daemon diagnostics probe the launcher with --version before any Host boot.
+if (process.argv.includes("--version")) {
+  process.stdout.write("dsh 0.2.2-rc.1 (e2e fixture)\n");
+  process.exit(0);
+}
 
 // The daemon launches the Host with current_dir set to the session cwd; mirror that
 // identity instead of a configured path so list/page/projections agree with the caller.
@@ -15,11 +21,12 @@ const statePath = process.env.DSH_E2E_STATE;
 if (!auditPath || !statePath) {
   throw new Error("DSH_E2E_AUDIT and DSH_E2E_STATE are required");
 }
+
 mkdirSync(path.dirname(auditPath), { recursive: true });
 // Append across Host launches: one audit trail per test, never reset by a new Host.
-writeFileSync(statePath, "");
 
 const SESSION_ID = "e2e-native-session";
+const RUNNING_SESSION_ID = "e2e-running-session";
 const BASE_TIME = 1_760_000_000_000;
 
 function turnRecords(turns) {
@@ -52,17 +59,43 @@ function turnRecords(turns) {
   return records;
 }
 
-let records = turnRecords(6);
+// Persisted fixture history can grow between separate read-only Host launches.
+const records = turnRecords(Number(readFileSync(statePath, "utf8")));
+// A second native session with an unfinished turn: the current writer control that
+// read-only browsing must leave untouched (active stays true, journal never changes).
+const runningRecords = (() => {
+  const settled = turnRecords(1);
+  const seq = settled.length;
+  settled.push({
+    type: "event",
+    event: {
+      seq,
+      time: BASE_TIME + seq,
+      type: "user/message",
+      data: {
+        id: `user-${seq}`,
+        source: { kind: "user" },
+        content: [{ type: "text", text: "running question" }],
+      },
+    },
+  });
+  settled.push({
+    type: "event",
+    event: { seq: seq + 1, type: "turn/start", time: BASE_TIME + seq + 1, data: { turn: 1 } },
+  });
+  return settled;
+})();
 
 function audit(entry) {
   appendFileSync(auditPath, `${JSON.stringify(entry)}\n`);
 }
 
-function page(before) {
-  const end = records.findIndex((record) => record.event.seq >= before);
-  const stop = end === -1 ? records.length : end;
-  const start = Math.max(0, stop - 2);
-  return { records: records.slice(start, stop), hasMore: start > 0 };
+function page(before, journal = records) {
+  const end = journal.findIndex((record) => record.event.seq >= before);
+  const stop = end === -1 ? journal.length : end;
+  // Keep multiple native pages while allowing a 50-item UI page within the 16-page read budget.
+  const start = Math.max(0, stop - 16);
+  return { records: journal.slice(start, stop), hasMore: start > 0 };
 }
 
 function listValue() {
@@ -81,16 +114,31 @@ function listValue() {
           values: { title: "E2E native conversation" },
         },
       },
+      {
+        sessionId: RUNNING_SESSION_ID,
+        cwd,
+        updatedAt: BASE_TIME + runningRecords.length,
+        blank: false,
+        running: true,
+        agentAvailable: true,
+        projections: {
+          kind: "cached",
+          asOfSeq: runningRecords.length - 1,
+          values: { title: "E2E running conversation" },
+        },
+      },
     ],
   };
 }
 
-function projectionsValue() {
+function projectionsValue(sessionId = SESSION_ID) {
+  const journal = sessionId === RUNNING_SESSION_ID ? runningRecords : records;
   return {
     kind: "sequenced",
-    asOfSeq: records.length - 1,
+    asOfSeq: journal.length - 1,
     values: {
-      title: "E2E native conversation",
+      title:
+        sessionId === RUNNING_SESSION_ID ? "E2E running conversation" : "E2E native conversation",
       permissions: { currentValue: "workspace-write" },
       modelSelection: { next: null },
     },
@@ -102,12 +150,14 @@ function handleRpc(method, args) {
     case "session/list":
       return listValue();
     case "session/projections":
-      return projectionsValue();
+      return projectionsValue(args.request?.sessionId ?? args.sessionId ?? SESSION_ID);
     case "session/page": {
       const request = args.request ?? {};
+      const sessionId = request.address?.sessionId ?? SESSION_ID;
+      const journal = sessionId === RUNNING_SESSION_ID ? runningRecords : records;
       const before =
         request.beforeSeq !== undefined ? request.beforeSeq : (request.throughSeq ?? -1) + 1;
-      return page(before);
+      return page(before, journal);
     }
     case "session/modelCatalog":
       return {
@@ -142,19 +192,6 @@ const server = createServer((req, res) => {
     audit({ kind: "http", method: "auth" });
     res.writeHead(303, { "set-cookie": "dsh=e2e; HttpOnly; SameSite=Strict", location: "/" });
     res.end();
-    return;
-  }
-  if (req.method === "GET" && url.pathname === "/__audit") {
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ records: records.length }));
-    return;
-  }
-  if (req.method === "POST" && url.pathname === "/__grow") {
-    // Simulate native history growing after a preview opened; the fixed cut must not drift.
-    records = turnRecords(9);
-    audit({ kind: "control", method: "grow" });
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ records: records.length }));
     return;
   }
   if (req.method === "POST" && url.pathname.startsWith("/api/")) {
@@ -208,15 +245,19 @@ wss.on("connection", (socket, req) => {
     if (request.endpoint === "$events") {
       value = { type: "ready", clientId: "e2e-client" };
     } else if (request.endpoint === "session/follow") {
-      const cut = records.length - 1;
-      const first = page(cut + 1);
+      const followArgs = request.payload?.args ?? {};
+      const sessionId =
+        followArgs.request?.address?.sessionId ?? followArgs.address?.sessionId ?? SESSION_ID;
+      const journal = sessionId === RUNNING_SESSION_ID ? runningRecords : records;
+      const cut = journal.length - 1;
+      const first = page(cut + 1, journal);
       value = {
         type: "snapshot",
-        header: { id: SESSION_ID, cwd, createdAt: BASE_TIME },
+        header: { id: sessionId, cwd, createdAt: BASE_TIME },
         cursor: cut,
         records: first.records,
         hasMore: first.hasMore,
-        projections: { values: projectionsValue().values },
+        projections: { values: projectionsValue(sessionId).values },
       };
     } else if (request.endpoint === "session/control") {
       value = { type: "baseline", value: { projections: {} } };
@@ -230,7 +271,6 @@ wss.on("connection", (socket, req) => {
 
 server.listen(0, "127.0.0.1", () => {
   const port = server.address().port;
-  writeFileSync(statePath, String(port));
   process.stdout.write(`dsh web: http://127.0.0.1:${port}/?token=e2e\n`);
 });
 

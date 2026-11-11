@@ -41,7 +41,7 @@ paths:
 - `session/projections`：返回精确 `sequenced` 基线（`asOfSeq` + `values`）；
   仅当持久格式需要迁移时返回 `migration-required` 缓存提示。不激活会话。
 - `session/page`：冷安全、按消息对齐的历史页，支持 `address`、固定 `throughSeq`、
-   backward `beforeSeq` 与 `maxMessages`。
+  backward `beforeSeq` 与 `maxMessages`。
 
 ## 决定
 
@@ -54,20 +54,27 @@ paths:
    `provider.sessions.preview.get.request/response`（Operation `SessionPreview`，
    `Access::Discovery`，无 Agent 目标）。请求 `{providerId, providerHandleId, cwd, cursor?, limit?}`；
    响应 `{providerId, providerHandleId, cwd, title, lastActivityAt, active, entries[], olderCursor, hasOlder}`，
-   `entries` 复用既有 `NativeItem` 投影（key/turnId/timestamp/item）。不引入通用
-   `native_action` 网关；不为无消费者的 Provider 扩展预览。
+   `entries` 复用既有 `NativeItem` 内容（key/turnId/timestamp/item），在借用式 wire
+   投影中省略缺失的 `turnId`，保留真实原生 ID 字符串；不改变持久 `NativeItem` 的 null
+   表示，也不放宽客户端类型。不引入通用 `native_action` 网关或无消费者的 Provider API。
 3. **固定截面与游标绑定**：首次预览取 `session/projections` 的 `asOfSeq` 为固定截面；
-   后续页携带不透明游标（base64url 编码的 typed 字段：provider、nativeID、cwd、throughSeq、beforeSeq），
-   每页都绑定同一 `address` 与 `throughSeq`。后端拒绝跨身份、跨目录、越界或伪造游标，
-   拒绝发生在任何原生读取之前；前端只原样回传游标。单页预算：≤100 展示项、≤16 个原生页、
-   ≤8 MiB 序列化记录，响应再受既有 900 KiB RPC 预算约束。
+   后续页携带不透明游标（base64url 编码的 typed 字段：provider、nativeID、cwd、throughSeq、beforeSeq，
+   可选 `window: {startSeq, skippedItems}`），每页都绑定同一 `address` 与 `throughSeq`。
+   原生页投影超过展示上限时，游标保存精确记录窗口与已返回展示项数，重读同一窗口后继续，
+   而不是截断展示项后跳过整页；同一原生事件产生多项、最后原生页仍有剩余项时也不会丢失。
+   这是新预览功能内部游标格式的修正；公开 RPC/SDK 的 opaque string 契约不变，无服务端游标缓存。
+   后端在原生读取前拒绝跨身份、跨目录与非法窗口边界，再按有界投影验证 offset；
+   前端只原样回传游标，不解析 key 或原生 JSON。单次响应的全部读取（包括窗口重读）共用
+   ≤16 原生页、≤8 MiB 记录预算，展示项 ≤100，响应另受既有 900 KiB RPC 预算约束。
+   返回数量可小于请求上限；消费者以 `olderCursor`/`hasOlder` 判断结束，不能按页长推断结束。
 4. **能力与旧主机降级**：方法存在性只作为**主机版本**门槛（客户端 feature
    `importSessionPreview`）；逐 Provider 支持由快照新增可选字段 `supportsSessionPreview`
    广告（当前仅 DSH 原生交互传输为 true，ACP 为 false）。旧主机无此方法时客户端不发送请求；
    旧客户端忽略新增可选字段，既有消息与导入行为不变。未广告能力的 Provider 在 UI 不显示预览入口。
 5. **UI 行为**：导入会话列表行新增独立只读预览入口（Eye），与既有“点击行即导入”分离；
    预览面板按固定截面分页渲染 Timeline 投影，提供“加载更早”与活动轮次只读提示。
-   预览的点击/键盘路径不触发导入、恢复、prompt 或任何写入者激活。
+   UI 对全部 newest-first 页整体反转，保留稳定项 key；查询按 Host 客户端代次/连接 epoch 隔离，
+   取消后不接受迟到结果。预览的点击/键盘路径不触发导入、恢复、prompt 或写入者激活。
 6. **时间语义**：只读 wire 摘要不携带原生创建时间；导入契约允许以观察时间代替，
    UI/文档必须标注其为观察/导入时间，不得冒充原生创建时间。
 
@@ -75,8 +82,9 @@ paths:
 
 非活动浏览/预览期间允许的原生请求仅限：`session/list`、`session/projections`、
 `session/page`、`session/modelCatalog`（导入配置回退）、`session/attachment`（图片只读水合）。
-禁止出现：`session/follow`、`session/create`、`session/prompt`、`session/selectModel`、
-`commands/execute` 及任何 ACP `session/new`、`session/load`、chat 请求；活动 Agent 状态不变。
+禁止出现：`session/follow`、`session/create`、`session/prompt`、`session/cancel`、
+`session/selectModel`、`commands/execute` 及任何 ACP `session/new`、`session/load`、chat 请求；
+活动 Agent 状态不变。
 
 ## 验证
 
