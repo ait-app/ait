@@ -11,11 +11,11 @@ Project。
 - Repository permissions：Metadata read、Contents read、Pull requests read/write、Issues
   read/write。
 - Subscribe to events：Issue comment、Issues、Pull request。
-- Webhook URL：`https://<public-host>/v1/bots/github/<channelId>/webhook`。
-- Webhook secret：生成随机 secret，并只放入 daemon 环境。
+- Webhook URL：创建 GitHub Channel 后由 Ait 界面返回的 center URL。
+- Webhook secret：与 URL 同时一次性显示；复制到 GitHub App 后妥善保存。
 
-公网代理必须原样转发请求体和 `X-GitHub-*`、`X-Hub-Signature-256` headers。该入口不接受
-daemon bearer token，以 GitHub HMAC signature 认证，并限制请求体为 1 MiB。
+`ait-server` 原样验证请求体和 `X-Hub-Signature-256`，限制请求体为 700 KiB，并持久化 delivery；
+Host 在线后通过受限 service session 接收事件并再次校验签名。无需把 daemon 暴露到公网。
 
 安装 App 后，从 installation 页面或 webhook payload 取得 numeric installation ID。App ID、
 installation ID 和 App slug 不是秘密；private key 和 webhook secret 是秘密。
@@ -28,22 +28,21 @@ installation ID 和 App slug 不是秘密；private key 和 webhook secret 是�
 export AIT_SERVER_CREDENTIAL_GITHUB_APP_PRIVATE_KEY='-----BEGIN RSA PRIVATE KEY-----
 ...
 -----END RSA PRIVATE KEY-----'
-export AIT_SERVER_CREDENTIAL_GITHUB_WEBHOOK_SECRET='<random-secret>'
 ```
 
-也支持 GitHub 下载的 PKCS#8 `PRIVATE KEY`。Bot 记录只保存 `env:` 引用，不保存 secret 或短期
-installation token。
+也支持 GitHub 下载的 PKCS#8 `PRIVATE KEY`。Bot 记录只保存 private key 的 `env:` 引用，不保存
+私钥或短期 installation token。Webhook secret 由 center 签发，并保存于 server 与 Host 的私有
+credential store。
 
 ## Channel 配置
 
 在 Bot 的 `Settings → Channels` 中点击 `Add GitHub Channel`，填写 App ID、installation ID、
-Bot mention 和两个 `env:AIT_SERVER_CREDENTIAL_*` 凭据引用。然后为 installation 中的每个
-GitHub 仓库选择当前 Host 已登记的 Ait Project，并设置允许召唤 review 的 GitHub login。
+Bot mention 和 private key 的 `env:AIT_SERVER_CREDENTIAL_*` 凭据引用。然后为 installation 中的
+每个 GitHub 仓库选择当前 Host 已登记的 Ait Project，并设置允许召唤 review 的 GitHub login。
 
-界面会生成包含 Channel ID 的 webhook URL，并显示连接状态及最近一次通过签名验证的 webhook。
-当客户端通过 socket、SSH 或在线 relay 连接 daemon 时，界面只显示 `<public-host>` 占位符；需
-先将 daemon 通过公网 HTTPS 反向代理暴露，再把占位符替换为实际域名。界面只保存凭据引用，
-不会读取或显示 private key 与 webhook secret。
+首次保存后，界面显示 center 签发的真实 webhook URL 和仅显示一次的 secret。复制二者并配置到
+GitHub App；关闭结果页后不会再次返回 secret。Channel 状态会显示最近一次通过签名验证的
+webhook。界面不会读取或显示 private key。
 
 也可通过认证 WebSocket 直接配置：
 
@@ -53,7 +52,7 @@ GitHub 仓库选择当前 Host 已登记的 Ait Project，并设置允许召唤 
 {
   "type": "request",
   "request_id": "github-channel-1",
-  "method": "bot.channel.create.request",
+  "method": "bot.channel.github.create.request",
   "params": {
     "botId": "<bot-uuid>",
     "channelId": "<channel-uuid>",
@@ -62,7 +61,7 @@ GitHub 仓库选择当前 Host 已登记的 Ait Project，并设置允许召唤 
       "kind": "github",
       "appId": "123456",
       "privateKeyRef": "env:AIT_SERVER_CREDENTIAL_GITHUB_APP_PRIVATE_KEY",
-      "webhookSecretRef": "env:AIT_SERVER_CREDENTIAL_GITHUB_WEBHOOK_SECRET",
+      "webhookSecretRef": "env:AIT_SERVER_CREDENTIAL_STORED_<CHANNEL_UUID_WITHOUT_DASHES>",
       "installationId": "789012",
       "mention": "ait-review",
       "repositories": [
@@ -81,6 +80,9 @@ GitHub 仓库选择当前 Host 已登记的 Ait Project，并设置允许召唤 
   }
 }
 ```
+
+响应中的 `url` 与 `secret` 只用于首次配置 GitHub App。请求中的 `webhookSecretRef` 是协议兼容字段；
+Host 会覆盖为该 Channel 的私有 stored credential reference，调用方不能指定实际 secret。
 
 同一 installation 在一个 daemon 中只能由一个未删除的 Channel 占用。需要连接其他组织或另一个
 installation 时，在同一个 Bot 下创建另一个 Channel。

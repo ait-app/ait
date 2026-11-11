@@ -1,5 +1,5 @@
 pub(crate) mod feishu;
-mod github;
+pub(crate) mod github;
 mod onboarding;
 pub(crate) mod photon;
 pub(crate) mod qq;

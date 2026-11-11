@@ -3,7 +3,6 @@ use super::*;
 mod bot;
 mod browser_auth;
 mod chunks;
-mod github_webhook;
 mod guest;
 mod hub_control;
 mod hub_publication;

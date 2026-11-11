@@ -430,11 +430,15 @@ impl State {
         }
         let mut released = Vec::new();
         let mut webhooks = Vec::new();
+        let mut github = Vec::new();
         for channel in catalog.channels.iter_mut().filter(|channel| {
             bots.contains(&channel.bot_id) && !matches!(channel.config, ChannelConfig::Builtin)
         }) {
             if !channel.deleted && matches!(channel.config, ChannelConfig::Webhook { .. }) {
                 webhooks.push(channel.id);
+            }
+            if !channel.deleted && matches!(channel.config, ChannelConfig::Github { .. }) {
+                github.push(channel.id);
             }
             channel.enabled = false;
             channel.deleted = true;
@@ -443,6 +447,7 @@ impl State {
         self.save_catalog(catalog)?;
         self.released_credentials.extend(released);
         self.released_webhooks.extend(webhooks);
+        self.released_github.extend(github);
         for bot in bots {
             self.stop_bot(*bot, true, None)?;
         }
@@ -588,10 +593,14 @@ impl State {
         channel.enabled = false;
         channel.deleted = true;
         let webhook = matches!(channel.config, ChannelConfig::Webhook { .. });
+        let github = matches!(channel.config, ChannelConfig::Github { .. });
         self.save_catalog(catalog)?;
         self.released_credentials.push(request.channel_id);
         if webhook {
             self.released_webhooks.push(request.channel_id);
+        }
+        if github {
+            self.released_github.push(request.channel_id);
         }
         Ok(json!({"deleted":true,"channelId":request.channel_id}))
     }
@@ -618,5 +627,23 @@ impl State {
             return Err(ErrorCode::BotConflict);
         }
         Ok(())
+    }
+
+    /// Return one enabled GitHub channel owned by the Workspace's current Bot.
+    pub(crate) fn github_channel(
+        &self,
+        workspace: &str,
+        channel: ChannelId,
+    ) -> Result<Channel, ErrorCode> {
+        let bot = self.current(workspace)?;
+        self.workspace(bot)?;
+        let channel = self.channel(bot.id, channel)?;
+        if channel.deleted
+            || !channel.enabled
+            || !matches!(channel.config, ChannelConfig::Github { .. })
+        {
+            return Err(ErrorCode::BotNotFound);
+        }
+        Ok(channel.clone())
     }
 }

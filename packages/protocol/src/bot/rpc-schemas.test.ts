@@ -42,7 +42,11 @@ describe("Bot wire contract", () => {
     expect(BOT_METHODS).not.toContain("bot.channel.qq.pair.request");
     const scan = BotResponseSchema.parse({
       type: "bot.channel.qq.scan.status.response",
-      payload: { requestId: "r", state: "failed", reason: "alreadyConnected" },
+      payload: {
+        requestId: "r",
+        state: "failed",
+        reason: "alreadyConnected",
+      },
     });
     expect(scan.type).toBe("bot.channel.qq.scan.status.response");
     const channel = (config: unknown) => ({
@@ -72,7 +76,12 @@ describe("Bot wire contract", () => {
     expect(() => BotResponseSchema.parse(channel({ ...weixin, allowGroups: true }))).toThrow();
     expect(
       BotResponseSchema.parse(
-        channel({ kind: "qq", appId: "1", secretRef: "env:X", allowedSenders: [] }),
+        channel({
+          kind: "qq",
+          appId: "1",
+          secretRef: "env:X",
+          allowedSenders: [],
+        }),
       ).type,
     ).toBe("bot.channel.weixin.scan.status.response");
   });
@@ -154,7 +163,12 @@ describe("Bot wire contract", () => {
           appliesToNextTurn: true,
           bot: {
             workspaceId: "wks_1",
-            execution: { provider: "codex", model: null, modeId: null, thinking: null },
+            execution: {
+              provider: "codex",
+              model: null,
+              modeId: null,
+              thinking: null,
+            },
             builtinChannelId: crypto.randomUUID(),
             state: { kind: "active" },
             permissions: { groups: ["observe"], modes: {} },
@@ -167,7 +181,7 @@ describe("Bot wire contract", () => {
 
   it("registers all 21 core methods and accepts their results in the shared envelope", () => {
     expect(new Set(BOT_METHODS).size).toBe(21);
-    expect(BOT_REQUEST_SCHEMAS).toHaveLength(42);
+    expect(BOT_REQUEST_SCHEMAS).toHaveLength(43);
     expect(
       SessionInboundMessageSchema.parse({
         type: "bot.conversation.open.request",
@@ -188,12 +202,21 @@ describe("Bot wire contract", () => {
         type: "bot.setup.request",
         requestId: "r1",
         workspaceId: "wks_1",
-        execution: { provider: "codex", model: null, modeId: null, thinking: null },
+        execution: {
+          provider: "codex",
+          model: null,
+          modeId: null,
+          thinking: null,
+        },
         clearMemory: true,
       }).type,
     ).toBe("bot.setup.request");
     expect(() =>
-      BotRequestSchema.parse({ type: "bot.list.request", requestId: "r", workspaceId: "w" }),
+      BotRequestSchema.parse({
+        type: "bot.list.request",
+        requestId: "r",
+        workspaceId: "w",
+      }),
     ).toThrow();
     expect(() =>
       BotRequestSchema.parse({
@@ -224,11 +247,18 @@ describe("Bot wire contract", () => {
         },
       },
     });
-    expect(created.payload).toMatchObject({ secret: "s3cret", channel: { id: channelId } });
+    expect(created.payload).toMatchObject({
+      secret: "s3cret",
+      channel: { id: channelId },
+    });
     expect(
       BotResponseSchema.parse({
         type: "bot.channel.webhook.rotate.response",
-        payload: { requestId: "r", state: "failed", reason: "centerOffline" },
+        payload: {
+          requestId: "r",
+          state: "failed",
+          reason: "centerOffline",
+        },
       }).payload,
     ).toMatchObject({ reason: "centerOffline" });
     expect(() =>
@@ -252,7 +282,12 @@ describe("Bot wire contract", () => {
         requestId: "r",
         bot: {
           workspaceId: "wks_1",
-          execution: { provider: "codex", model: null, modeId: null, thinking: null },
+          execution: {
+            provider: "codex",
+            model: null,
+            modeId: null,
+            thinking: null,
+          },
           builtinChannelId: crypto.randomUUID(),
           state: { kind: "paused", reason: "directory_missing" },
           createdAt: "2026-11-05T00:00:00Z",

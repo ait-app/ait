@@ -172,6 +172,17 @@ pub(crate) struct WebhookSend {
     pub(crate) message_id: String,
     pub(crate) text: String,
 }
+/// One raw GitHub delivery relayed by the center after its first signature check.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct GithubWebhook {
+    pub(crate) workspace_id: String,
+    pub(crate) channel_id: ChannelId,
+    pub(crate) event: String,
+    pub(crate) delivery: String,
+    pub(crate) signature: String,
+    pub(crate) body_base64: String,
+}
 /// What the center reports after posting a Webhook turn's reply.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]

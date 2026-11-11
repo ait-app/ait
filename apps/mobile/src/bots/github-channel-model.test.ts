@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildGithubChannelConfig,
-  githubWebhookPath,
-  type GithubChannelDraft,
-} from "./github-channel-model";
+import { buildGithubChannelConfig, type GithubChannelDraft } from "./github-channel-model";
 
 function draft(overrides: Partial<GithubChannelDraft> = {}): GithubChannelDraft {
   return {
@@ -34,7 +30,9 @@ describe("GitHub Channel form model", () => {
       config: expect.objectContaining({
         mention: "ait-review",
         repositories: [
-          expect.objectContaining({ allowedSenders: ["maintainer", "release-manager"] }),
+          expect.objectContaining({
+            allowedSenders: ["maintainer", "release-manager"],
+          }),
         ],
       }),
     });
@@ -45,21 +43,19 @@ describe("GitHub Channel form model", () => {
       draft({
         repositories: [
           draft().repositories[0],
-          { ...draft().repositories[0], key: "two", fullName: "Example/Backend" },
+          {
+            ...draft().repositories[0],
+            key: "two",
+            fullName: "Example/Backend",
+          },
         ],
       }),
     );
     expect(result).toEqual({ config: null, error: "duplicateRepository" });
   });
 
-  it("accepts only credential references, never secret values", () => {
-    const result = buildGithubChannelConfig(draft({ webhookSecretRef: "actual-secret" }));
-    expect(result).toEqual({ config: null, error: "webhookSecretRef" });
-  });
-
-  it("builds the public webhook route", () => {
-    expect(githubWebhookPath(draft().channelId)).toBe(
-      "/v1/bots/github/11111111-1111-4111-8111-111111111111/webhook",
-    );
+  it("accepts only private-key credential references, never key values", () => {
+    const result = buildGithubChannelConfig(draft({ privateKeyRef: "actual-secret" }));
+    expect(result).toEqual({ config: null, error: "privateKeyRef" });
   });
 });

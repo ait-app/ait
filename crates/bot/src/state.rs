@@ -58,6 +58,8 @@ pub(crate) struct State {
     pub(crate) released_credentials: Vec<ChannelId>,
     /// Deleted webhook channels whose center endpoints the runtime has yet to remove.
     pub(crate) released_webhooks: Vec<ChannelId>,
+    /// Deleted GitHub channels whose center endpoints the runtime has yet to remove.
+    pub(crate) released_github: Vec<ChannelId>,
 }
 
 impl State {
@@ -106,6 +108,7 @@ impl State {
             session_actions: Vec::new(),
             released_credentials,
             released_webhooks: Vec::new(),
+            released_github: Vec::new(),
         };
         for conversation in state.store.conversations().map_err(|_| ErrorCode::BotIo)? {
             state.channel(conversation.bot_id, conversation.channel_id)?;

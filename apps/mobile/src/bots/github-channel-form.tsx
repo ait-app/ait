@@ -13,7 +13,6 @@ import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import {
   buildGithubChannelConfig,
   createGithubChannelDraft,
-  githubWebhookPath,
   type GithubChannelDraft,
   type GithubDraftError,
   type GithubRepositoryDraft,
@@ -37,8 +36,6 @@ function validationMessage(t: ReturnType<typeof useTranslation>["t"], error: Git
       return t("bots.githubChannel.validation.mention");
     case "privateKeyRef":
       return t("bots.githubChannel.validation.privateKeyRef");
-    case "webhookSecretRef":
-      return t("bots.githubChannel.validation.webhookSecretRef");
     case "repositories":
       return t("bots.githubChannel.validation.repositories");
     case "repository":
@@ -94,7 +91,12 @@ function RepositoryEditor({
         label={t("bots.githubChannel.project")}
         value={repository.projectId || null}
         selectedDisplay={
-          selected ? { label: selected.label, description: selected.description } : null
+          selected
+            ? {
+                label: selected.label,
+                description: selected.description,
+              }
+            : null
         }
         options={projects}
         onChange={(projectId) => onChange({ ...repository, projectId })}
@@ -161,6 +163,10 @@ export function GithubChannelForm({
     }),
   );
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [issued, setIssued] = useState<{
+    url: string;
+    secret: string;
+  } | null>(null);
   const save = useMutation({
     mutationFn: async () => {
       if (!client) throw new Error(t("bots.disconnected"));
@@ -179,15 +185,22 @@ export function GithubChannelForm({
           enabled: draft.enabled,
         });
       } else {
-        await client.botRequest("bot.channel.create.request", {
+        const created = await client.botRequest("bot.channel.github.create.request", {
           workspaceId,
           channelId: draft.channelId,
           config: result.config,
           enabled: draft.enabled,
         });
+        if (created.state !== "created" || !created.url || !created.secret) {
+          throw new Error(created.reason ?? t("bots.disconnected"));
+        }
+        return { url: created.url, secret: created.secret };
       }
     },
-    onSuccess: onDone,
+    onSuccess: (endpoint) => {
+      if (endpoint) setIssued(endpoint);
+      else onDone();
+    },
   });
   const disabled = save.isPending || !interactive || !active;
   const updateRepository = (key: string, repository: GithubRepositoryDraft) =>
@@ -195,7 +208,22 @@ export function GithubChannelForm({
       ...current,
       repositories: current.repositories.map((item) => (item.key === key ? repository : item)),
     }));
-  const webhook = `https://<public-host>${githubWebhookPath(draft.channelId)}`;
+  if (issued) {
+    return (
+      <View style={styles.card} testID="github-channel-issued">
+        <Text style={styles.subtitle}>{t("bots.githubChannel.webhookUrl")}</Text>
+        <Text style={styles.codeText} selectable>
+          {issued.url}
+        </Text>
+        <Text style={styles.subtitle}>{t("bots.githubChannel.webhookSecretRef")}</Text>
+        <Text style={styles.codeText} selectable>
+          {issued.secret}
+        </Text>
+        <Text style={styles.hint}>{t("bots.githubChannel.webhookHint")}</Text>
+        <Button onPress={onDone}>{t("common.actions.close")}</Button>
+      </View>
+    );
+  }
   return (
     <View style={styles.card} testID="github-channel-form">
       <Text style={styles.subtitle}>
@@ -244,26 +272,8 @@ export function GithubChannelForm({
           testID="github-private-key-ref"
         />
       </Field>
-      <Field
-        label={t("bots.githubChannel.webhookSecretRef")}
-        hint={t("bots.githubChannel.secretHint")}
-      >
-        <FormTextInput
-          initialValue={draft.webhookSecretRef}
-          onChangeText={(webhookSecretRef) =>
-            setDraft((current) => ({ ...current, webhookSecretRef }))
-          }
-          editable={!disabled}
-          autoCapitalize="none"
-          autoCorrect={false}
-          testID="github-webhook-secret-ref"
-        />
-      </Field>
       <View style={styles.subcard}>
         <Text style={styles.subtitle}>{t("bots.githubChannel.webhookUrl")}</Text>
-        <Text style={styles.codeText} selectable>
-          {webhook}
-        </Text>
         <Text style={styles.hint}>{t("bots.githubChannel.webhookHint")}</Text>
       </View>
       <View style={styles.sectionHeader}>

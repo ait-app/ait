@@ -25,7 +25,6 @@ export type GithubDraftError =
   | "installationId"
   | "mention"
   | "privateKeyRef"
-  | "webhookSecretRef"
   | "repositories"
   | "repository"
   | "project"
@@ -61,7 +60,9 @@ export function createGithubChannelDraft(input: {
     installationId: config?.installationId ?? "",
     mention: config?.mention ?? "",
     privateKeyRef: config?.privateKeyRef ?? "env:AIT_SERVER_CREDENTIAL_GITHUB_APP_PRIVATE_KEY",
-    webhookSecretRef: config?.webhookSecretRef ?? "env:AIT_SERVER_CREDENTIAL_GITHUB_WEBHOOK_SECRET",
+    webhookSecretRef:
+      config?.webhookSecretRef ??
+      `env:AIT_SERVER_CREDENTIAL_STORED_${input.channelId.replaceAll("-", "").toUpperCase()}`,
     enabled: input.channel?.enabled ?? true,
     repositories: config
       ? config.repositories.map((repository, index) => ({
@@ -94,8 +95,6 @@ export function buildGithubChannelConfig(draft: GithubChannelDraft): GithubDraft
   const privateKeyRef = draft.privateKeyRef.trim();
   if (!CREDENTIAL_REFERENCE.test(privateKeyRef)) return { config: null, error: "privateKeyRef" };
   const webhookSecretRef = draft.webhookSecretRef.trim();
-  if (!CREDENTIAL_REFERENCE.test(webhookSecretRef))
-    return { config: null, error: "webhookSecretRef" };
   if (!draft.repositories.length || draft.repositories.length > 100)
     return { config: null, error: "repositories" };
 
@@ -133,8 +132,4 @@ export function buildGithubChannelConfig(draft: GithubChannelDraft): GithubDraft
       repositories,
     },
   };
-}
-
-export function githubWebhookPath(channelId: string): string {
-  return `/v1/bots/github/${channelId}/webhook`;
 }

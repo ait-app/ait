@@ -12,12 +12,12 @@ use crate::protocol::{ConversationRequest, WebhookAck, WebhookDelivery, WebhookS
 use crate::service::WebhookBot;
 
 impl State {
-    /// One entry per enabled center channel whose Bot is not retired, in catalog order.
+    /// One entry per enabled center-routed channel whose Bot is not retired, in catalog order.
     pub(crate) fn webhook_bots(&self) -> Vec<WebhookBot> {
         self.catalog
             .channels
             .iter()
-            .filter(|channel| is_open_webhook(channel))
+            .filter(|channel| is_open_center_channel(channel))
             .filter_map(|channel| {
                 let bot = self.bot(channel.bot_id).ok()?;
                 let state = match bot.state {
@@ -30,12 +30,17 @@ impl State {
                     .title
                     .filter(|title| !title.trim().is_empty())
                     .unwrap_or(workspace.display_name);
+                let kind = match channel.config {
+                    ChannelConfig::Webhook { .. } => "webhook",
+                    ChannelConfig::Github { .. } => "github",
+                    _ => return None,
+                };
                 Some(WebhookBot {
                     workspace_id: bot.workspace_id.clone(),
                     channel_id: channel.id,
                     title,
                     state,
-                    kind: "webhook",
+                    kind,
                 })
             })
             .collect()
@@ -158,4 +163,13 @@ impl State {
 /// An enabled Webhook channel the center reaches.
 fn is_open_webhook(channel: &Channel) -> bool {
     channel.enabled && !channel.deleted && matches!(channel.config, ChannelConfig::Webhook { .. })
+}
+
+fn is_open_center_channel(channel: &Channel) -> bool {
+    channel.enabled
+        && !channel.deleted
+        && matches!(
+            channel.config,
+            ChannelConfig::Webhook { .. } | ChannelConfig::Github { .. }
+        )
 }

@@ -28,7 +28,7 @@ use crate::ports::{Credentials, Executor};
 use crate::protocol::{ChannelCreate, decode};
 use crate::state::{ReviewPreparation, State, StoredChannel};
 
-/// One enabled Webhook channel whose endpoint is hosted by the center.
+/// One enabled automation channel whose public endpoint is hosted by the center.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebhookBot {
@@ -40,7 +40,7 @@ pub struct WebhookBot {
     pub title: String,
     /// `active` or `paused`.
     pub state: &'static str,
-    /// Always `webhook`.
+    /// `webhook` or `github`.
     pub kind: &'static str,
 }
 
@@ -127,7 +127,7 @@ enum Operation {
     WebhookTurn(String, BotTurnId),
     CreateWebhook(ChannelCreate),
     WebhookChannel(String, ChannelId),
-    GithubChannel(ChannelId),
+    GithubChannel(String, ChannelId),
     ReviewPrepared(BotTurnId, Result<String, ()>),
 }
 /// Outcome of channel input that the Bot did not refuse.
@@ -265,6 +265,10 @@ impl Bots {
             "bot.channel.webhook.rotate.request" => {
                 crate::channels::webhook::rotate(self, decode(params)?).await
             }
+            "bot.channel.github.create.request" => {
+                crate::channels::github::create(self, decode(params)?).await
+            }
+            "bot.github.webhook.receive.request" => self.github_webhook(decode(params)?).await,
             _ => self.call(Operation::Rpc(method.to_owned(), params)).await,
         }
     }
@@ -275,15 +279,25 @@ impl Bots {
     /// # Errors
     /// Returns malformed headers or payloads, invalid signatures, GitHub API failures, and durable
     /// Bot admission failures.
-    pub async fn github_webhook(
+    pub(crate) async fn github_webhook(
         &self,
-        channel_id: ChannelId,
-        event: &str,
-        delivery_id: &str,
-        signature: &str,
-        body: &[u8],
+        request: crate::protocol::GithubWebhook,
     ) -> Result<Value, ErrorCode> {
-        let channel: Channel = decode(self.call(Operation::GithubChannel(channel_id)).await?)?;
+        use base64::Engine as _;
+
+        let body = base64::engine::general_purpose::STANDARD
+            .decode(&request.body_base64)
+            .map_err(|_| ErrorCode::InvalidMessage)?;
+        if body.len() > 700 * 1024 {
+            return Err(ErrorCode::InvalidMessage);
+        }
+        let channel: Channel = decode(
+            self.call(Operation::GithubChannel(
+                request.workspace_id,
+                request.channel_id,
+            ))
+            .await?,
+        )?;
         let client = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(10))
             .timeout(Duration::from_secs(45))
@@ -294,15 +308,15 @@ impl Bots {
             &channel,
             &self.0.credentials,
             &client,
-            event,
-            delivery_id,
-            signature,
-            body,
+            &request.event,
+            &request.delivery,
+            &request.signature,
+            &body,
         )
         .await?;
-        self.webhook_observed(channel_id, event).await;
+        self.webhook_observed(channel.id, &request.event).await;
         let Some(incoming) = incoming else {
-            return Ok(json!({"accepted":false,"ignored":true}));
+            return Ok(json!({"accepted":true,"ignored":true}));
         };
         let admission = self.accept(incoming).await?;
         Ok(json!({
@@ -674,6 +688,9 @@ async fn serve(
         for channel in std::mem::take(&mut state.released_webhooks) {
             tasks.spawn(crate::channels::webhook::release(bots.clone(), channel));
         }
+        for channel in std::mem::take(&mut state.released_github) {
+            tasks.spawn(crate::channels::github::release(bots.clone(), channel));
+        }
         for (owner, action) in std::mem::take(&mut state.session_actions) {
             let executor = bots.0.executor.clone();
             tasks.spawn(async move {
@@ -802,15 +819,8 @@ fn apply(
         Operation::WebhookChannel(workspace, channel) => state
             .check_webhook_channel(&workspace, channel)
             .map(|()| Value::Null),
-        Operation::GithubChannel(channel_id) => {
-            let channel = state
-                .channels()
-                .into_iter()
-                .find(|channel| {
-                    channel.id == channel_id
-                        && matches!(channel.config, domain::bot::ChannelConfig::Github { .. })
-                })
-                .ok_or(ErrorCode::BotNotFound)?;
+        Operation::GithubChannel(workspace, channel_id) => {
+            let channel = state.github_channel(&workspace, channel_id)?;
             serde_json::to_value(channel).map_err(|_| ErrorCode::BotIo)
         }
         Operation::ReviewPrepared(turn_id, workspace_id) => state

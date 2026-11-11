@@ -1,5 +1,5 @@
-//! Restricted center sessions for this Host's enabled Webhook channels.
-//! An active Bot with a published Webhook channel permits admission; closing
+//! Restricted center sessions for this Host's enabled automation channels.
+//! An active Bot with a published Webhook or GitHub channel permits admission; closing
 //! the last available channel cancels every admitted center session.
 
 pub(crate) mod policy;
@@ -18,20 +18,20 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 /// Admission of the center's automation sessions.
 #[derive(Debug, Default)]
 pub(crate) struct Automation {
-    /// Cancelled when no active Bot has an enabled Webhook channel; admitted sessions hold a clone.
+    /// Cancelled when no active Bot has an enabled automation channel; sessions hold a clone.
     admitted: Mutex<CancellationToken>,
     /// Set once the task that ends sessions on closure is running.
     watching: OnceLock<()>,
 }
 
-/// One admitted automation session; it ends when the last Webhook channel closes.
+/// One admitted automation session; it ends when the last automation channel closes.
 #[derive(Debug)]
 pub(crate) struct Session {
     cancellation: CancellationToken,
 }
 
 impl Session {
-    /// Cancelled once no active Bot has an enabled Webhook channel.
+    /// Cancelled once no active Bot has an enabled automation channel.
     pub(crate) const fn cancellation(&self) -> &CancellationToken {
         &self.cancellation
     }
@@ -43,7 +43,7 @@ pub(crate) fn reachable(bots: &[WebhookBot]) -> bool {
 }
 
 impl Automation {
-    /// Admit one automation session while an active Bot has an enabled Webhook channel.
+    /// Admit one automation session while an active Bot has an enabled automation channel.
     ///
     /// # Errors
     /// Returns `Forbidden` without the Bot service or such a channel.

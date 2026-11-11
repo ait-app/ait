@@ -21,12 +21,90 @@ use tokio_util::sync::CancellationToken;
 
 use super::{Incoming, deliver, json_response};
 use crate::ports::Credentials;
+use crate::ports::stored_credential_reference;
+use crate::protocol::ChannelCreate;
 use crate::service::Bots;
+use crate::state::StoredChannel;
 
 const API: &str = "https://api.github.com";
 const API_VERSION: &str = "2022-11-28";
 const USER_AGENT: &str = "ait-github-review";
 const MAX_MANDATE_BYTES: usize = 4096;
+const CREATE_METHOD: &str = "hub.automation.github.create";
+const DELETE_METHOD: &str = "hub.automation.github.delete";
+
+/// Create a GitHub Channel after the center has issued its public endpoint and secret.
+pub(crate) async fn create(bots: &Bots, request: ChannelCreate) -> Result<Value, ErrorCode> {
+    if !request.enabled || !matches!(&request.config, ChannelConfig::Github { .. }) {
+        return Err(ErrorCode::InvalidMessage);
+    }
+    bots.check_channel_admission(request.workspace_id.clone())
+        .await?;
+    let Some(center) = bots.center() else {
+        return Ok(json!({"state":"failed","reason":"centerOffline"}));
+    };
+    let issued = match super::webhook::issue_at(
+        &center,
+        CREATE_METHOD,
+        &request.workspace_id,
+        request.channel_id,
+    )
+    .await
+    {
+        Ok(issued) => issued,
+        Err(reason) => {
+            if reason == super::webhook::FAILED_OFFLINE || reason == super::webhook::FAILED_ERROR {
+                tokio::spawn(release(bots.clone(), request.channel_id));
+            }
+            return Ok(json!({"state":"failed","reason":reason}));
+        }
+    };
+    let ChannelConfig::Github {
+        app_id,
+        private_key_ref,
+        installation_id,
+        mention,
+        repositories,
+        ..
+    } = request.config
+    else {
+        return Err(ErrorCode::InvalidMessage);
+    };
+    let config = ChannelConfig::Github {
+        app_id,
+        private_key_ref,
+        webhook_secret_ref: stored_credential_reference(request.channel_id),
+        installation_id,
+        mention,
+        repositories,
+    };
+    let created = bots
+        .create_stored_channel(
+            StoredChannel {
+                workspace_id: request.workspace_id,
+                channel_id: request.channel_id,
+                config,
+            },
+            issued.secret.clone().into(),
+        )
+        .await;
+    match created {
+        Ok(created) => Ok(json!({
+            "state":"created",
+            "channel":created["channel"],
+            "url":issued.url,
+            "secret":issued.secret,
+        })),
+        Err(error) => {
+            tokio::spawn(release(bots.clone(), request.channel_id));
+            Err(error)
+        }
+    }
+}
+
+pub(crate) async fn release(bots: Bots, channel: ChannelId) {
+    super::webhook::release_at(bots, channel, DELETE_METHOD).await;
+}
 
 pub(super) async fn webhook(
     channel: &Channel,

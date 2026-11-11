@@ -85,7 +85,10 @@ export const BOT_REQUEST_SCHEMAS = [
     requestId: z.string(),
     workspaceId: WorkspaceIdSchema,
   }),
-  z.strictObject({ type: z.literal("bot.channel.types.request"), requestId: z.string() }),
+  z.strictObject({
+    type: z.literal("bot.channel.types.request"),
+    requestId: z.string(),
+  }),
   z.strictObject({
     type: z.literal("bot.channel.create.request"),
     requestId: z.string(),
@@ -205,6 +208,14 @@ export const BOT_REQUEST_SCHEMAS = [
     channelId: z.guid(),
   }),
   z.strictObject({
+    type: z.literal("bot.channel.github.create.request"),
+    requestId: z.string(),
+    workspaceId: WorkspaceIdSchema,
+    channelId: z.guid(),
+    config: BotChannelConfigSchema,
+    enabled: z.boolean().optional(),
+  }),
+  z.strictObject({
     type: z.literal("bot.channel.telegram.pair.start.request"),
     requestId: z.string(),
     workspaceId: WorkspaceIdSchema,
@@ -304,11 +315,18 @@ export const BOT_REQUEST_SCHEMAS = [
 export const BOT_RESPONSE_SCHEMAS = [
   z.object({
     type: z.literal("bot.get.response"),
-    payload: z.object({ requestId: z.string(), bot: BotViewSchema.nullable() }),
+    payload: z.object({
+      requestId: z.string(),
+      bot: BotViewSchema.nullable(),
+    }),
   }),
   z.object({
     type: z.literal("bot.setup.response"),
-    payload: z.object({ requestId: z.string(), bot: BotViewSchema, created: z.boolean() }),
+    payload: z.object({
+      requestId: z.string(),
+      bot: BotViewSchema,
+      created: z.boolean(),
+    }),
   }),
   z.object({
     type: z.literal("bot.update.response"),
@@ -340,7 +358,10 @@ export const BOT_RESPONSE_SCHEMAS = [
   }),
   z.object({
     type: z.literal("bot.channel.list.response"),
-    payload: z.object({ requestId: z.string(), channels: z.array(BotChannelSchema) }),
+    payload: z.object({
+      requestId: z.string(),
+      channels: z.array(BotChannelSchema),
+    }),
   }),
   z.object({
     type: z.literal("bot.channel.types.response"),
@@ -352,7 +373,11 @@ export const BOT_RESPONSE_SCHEMAS = [
   }),
   z.object({
     type: z.literal("bot.channel.create.response"),
-    payload: z.object({ requestId: z.string(), channel: BotChannelSchema, created: z.boolean() }),
+    payload: z.object({
+      requestId: z.string(),
+      channel: BotChannelSchema,
+      created: z.boolean(),
+    }),
   }),
   z.object({
     type: z.literal("bot.channel.update.response"),
@@ -360,7 +385,11 @@ export const BOT_RESPONSE_SCHEMAS = [
   }),
   z.object({
     type: z.literal("bot.channel.delete.response"),
-    payload: z.object({ requestId: z.string(), deleted: z.boolean(), channelId: z.guid() }),
+    payload: z.object({
+      requestId: z.string(),
+      deleted: z.boolean(),
+      channelId: z.guid(),
+    }),
   }),
   z.object({
     type: z.literal("bot.channel.status.response"),
@@ -395,7 +424,11 @@ export const BOT_RESPONSE_SCHEMAS = [
   }),
   z.object({
     type: z.literal("bot.channel.feishu.connect.response"),
-    payload: z.object({ requestId: z.string(), channel: BotChannelSchema, created: z.boolean() }),
+    payload: z.object({
+      requestId: z.string(),
+      channel: BotChannelSchema,
+      created: z.boolean(),
+    }),
   }),
   z.object({
     type: z.literal("bot.channel.webhook.create.response"),
@@ -414,6 +447,17 @@ export const BOT_RESPONSE_SCHEMAS = [
       requestId: z.string(),
       state: z.enum(["rotated", "failed"]),
       reason: WebhookFailureSchema.optional(),
+      secret: z.string().optional(),
+      url: z.string().optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal("bot.channel.github.create.response"),
+    payload: z.object({
+      requestId: z.string(),
+      state: z.enum(["created", "failed"]),
+      reason: WebhookFailureSchema.optional(),
+      channel: BotChannelSchema.optional(),
       secret: z.string().optional(),
       url: z.string().optional(),
     }),
@@ -489,11 +533,19 @@ export const BOT_RESPONSE_SCHEMAS = [
   }),
   z.object({
     type: z.literal("bot.channel.qq.connect.response"),
-    payload: z.object({ requestId: z.string(), channel: BotChannelSchema, created: z.boolean() }),
+    payload: z.object({
+      requestId: z.string(),
+      channel: BotChannelSchema,
+      created: z.boolean(),
+    }),
   }),
   z.object({
     type: z.literal("bot.channel.qq.pair.response"),
-    payload: z.object({ requestId: z.string(), code: z.string(), expiresInSeconds: z.number() }),
+    payload: z.object({
+      requestId: z.string(),
+      code: z.string(),
+      expiresInSeconds: z.number(),
+    }),
   }),
   z.object({
     type: z.literal("bot.channel.imessage.pair.start.response"),
@@ -523,15 +575,24 @@ export const BOT_RESPONSE_SCHEMAS = [
   }),
   z.object({
     type: z.literal("bot.conversation.list.response"),
-    payload: z.object({ requestId: z.string(), conversations: z.array(BotConversationSchema) }),
+    payload: z.object({
+      requestId: z.string(),
+      conversations: z.array(BotConversationSchema),
+    }),
   }),
   z.object({
     type: z.literal("bot.conversation.open.response"),
-    payload: z.object({ requestId: z.string(), conversation: BotConversationSchema }),
+    payload: z.object({
+      requestId: z.string(),
+      conversation: BotConversationSchema,
+    }),
   }),
   z.object({
     type: z.literal("bot.conversation.reset.response"),
-    payload: z.object({ requestId: z.string(), conversation: BotConversationSchema }),
+    payload: z.object({
+      requestId: z.string(),
+      conversation: BotConversationSchema,
+    }),
   }),
   z.object({
     type: z.literal("bot.message.send.response"),
@@ -558,12 +619,19 @@ export const BOT_RESPONSE_SCHEMAS = [
     type: z.literal("bot.turn.cancel.response"),
     payload: z.union([
       z.object({ requestId: z.string(), turn: BotTurnSchema }),
-      z.object({ requestId: z.string(), cancellationRequested: z.boolean() }),
+      z.object({
+        requestId: z.string(),
+        cancellationRequested: z.boolean(),
+      }),
     ]),
   }),
   z.object({
     type: z.literal("bot.memory.get.response"),
-    payload: z.object({ requestId: z.string(), text: z.string(), revision: z.string() }),
+    payload: z.object({
+      requestId: z.string(),
+      text: z.string(),
+      revision: z.string(),
+    }),
   }),
   z.object({
     type: z.literal("bot.memory.update.response"),
@@ -621,6 +689,7 @@ export const BOT_WEBHOOK_SETUP_METHODS = [
   "bot.channel.webhook.create.request",
   "bot.channel.webhook.rotate.request",
 ] as const;
+export const BOT_GITHUB_SETUP_METHODS = ["bot.channel.github.create.request"] as const;
 const OPTIONAL_BOT_METHODS: readonly string[] = [
   ...BOT_PERMISSION_METHODS,
   ...BOT_FEISHU_SETUP_METHODS,
@@ -629,6 +698,7 @@ const OPTIONAL_BOT_METHODS: readonly string[] = [
   ...BOT_QQ_SETUP_METHODS,
   ...BOT_IMESSAGE_SETUP_METHODS,
   ...BOT_WEBHOOK_SETUP_METHODS,
+  ...BOT_GITHUB_SETUP_METHODS,
 ];
 export const BOT_METHODS = BOT_REQUEST_SCHEMAS.map((schema) => schema.shape.type.value).filter(
   (method) => !OPTIONAL_BOT_METHODS.includes(method),
