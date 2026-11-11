@@ -7,8 +7,8 @@ use std::borrow::Cow;
 use std::fmt::Debug;
 use std::time::Duration;
 
-use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 use domain::agent_runtime::goal::{GoalControlOp, NativeGoalFacts};
+use domain::agent_runtime::{AgentPersistenceHandle, StoredAgentConfig, StoredAgentRuntimeInfo};
 
 use crate::service::bot_execution::{BotSessionSupport, InstructionDelivery};
 
@@ -145,7 +145,10 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
     /// Create a native Goal only after the host selected Native strategy and checked admission.
     /// # Errors
     /// Returns rejection, unavailable capability, or an unconfirmed native outcome.
-    async fn goal_create(&mut self, _objective: &str) -> Result<NativeGoalFacts, AgentSessionError> {
+    async fn goal_create(
+        &mut self,
+        _objective: &str,
+    ) -> Result<NativeGoalFacts, AgentSessionError> {
         Err(AgentSessionError::Unavailable)
     }
 

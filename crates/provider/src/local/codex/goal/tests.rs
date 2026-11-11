@@ -18,7 +18,7 @@ fn native_statuses_project_to_typed_states_without_host_guesses() {
         ("budgetLimited", GoalState::Blocked),
     ] {
         let goal = json!({"threadId":"thread","objective":"ship it","status":status,
-            "createdAt":1794383673,"updatedAt":1794383679,
+            "createdAt":1_794_383_673,"updatedAt":1_794_383_679,
             "tokensUsed":26,"timeUsedSeconds":12,"tokenBudget":13});
         let facts = facts(&goal).unwrap();
         assert_eq!(facts.state, state, "{status}");
@@ -68,7 +68,7 @@ async fn goal_read_projects_the_current_native_goal() {
     std::fs::write(
         fixture.cwd.join("goal-state.json"),
         json!({"threadId":"thread","objective":"ship it","status":"paused",
-            "createdAt":1794383673,"updatedAt":1794383677,
+            "createdAt":1_794_383_673,"updatedAt":1_794_383_677,
             "tokensUsed":13,"timeUsedSeconds":5,"tokenBudget":serde_json::Value::Null})
         .to_string(),
     )

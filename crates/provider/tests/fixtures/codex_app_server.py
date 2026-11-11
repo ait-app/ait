@@ -239,6 +239,10 @@ for line in sys.stdin:
         continue
     if method == "initialize":
         result = {"userAgent":"codex_cli_rs/0.153.4"} if mode == "workflows" else {}
+        if mode.startswith("goal-"):
+            version_file = root / "goal-version"
+            version = version_file.read_text() if version_file.exists() else "0.167.0"
+            result = {"userAgent": "codex_cli_rs/" + version}
     elif method == "thread/items/read" and mode == "realtime-canonical":
         result = {"data":[{"turnId":"delegated","item":{"type":"agentMessage","id":"rich","text":"**Structured response**"},"startedAtMs":None,"completedAtMs":None}]}
     elif method == "config/read":
@@ -258,6 +262,35 @@ for line in sys.stdin:
         state_file = root / "goal-state.json"
         goal = json.loads(state_file.read_text()) if state_file.exists() else None
         result = {"goal": goal}
+    elif method == "thread/goal/set" and mode.startswith("goal-"):
+        if params.get("status") == "paused" and (root / "goal-reject-pause").exists():
+            emit({"id": request["id"], "error": {"code": -32600, "message": "pause rejected"}})
+            continue
+        state_file = root / "goal-state.json"
+        goal = json.loads(state_file.read_text()) if state_file.exists() else None
+        if goal is None:
+            if not params.get("objective"):
+                emit({"id": request["id"], "error": {"code": -32600, "message": "cannot update goal for thread: no goal exists"}})
+                continue
+            goal = {"threadId": thread_id, "createdAt": 1, "updatedAt": 1,
+                    "tokensUsed": 0, "timeUsedSeconds": 0, "tokenBudget": None}
+        for key in ("objective", "status", "tokenBudget"):
+            if params.get(key) is not None:
+                goal[key] = params[key]
+        goal["updatedAt"] += 1
+        state_file.write_text(json.dumps(goal))
+        if mode == "goal-uncertain-set":
+            sys.exit(0)
+        result = {"goal": goal}
+    elif method == "thread/goal/clear" and mode.startswith("goal-"):
+        if (root / "goal-clear-noop").exists():
+            # The native goal vanished between the read and the clear, so nothing was removed.
+            result = {"cleared": False}
+        else:
+            state_file = root / "goal-state.json"
+            previous = json.loads(state_file.read_text()) if state_file.exists() else None
+            state_file.write_text("null")
+            result = {"cleared": previous is not None}
     elif method == "collaborationMode/list":
         result = {"data":[{"name":"Plan","mode":"plan","model":"offline-model","reasoning_effort":"high"},
             {"name":"Default","mode":"default","model":"offline-model"}]} if mode == "workflows" else {"data":[]}
@@ -367,6 +400,17 @@ for line in sys.stdin:
             sys.exit(0)
         result = {"turnId": "wrong-turn" if mode == "steer-wrong-id" else pending}
     emit({"id": request["id"], "result": result})
+    if mode.startswith("goal-") and method == "thread/goal/set":
+        emit({"method": "thread/goal/updated", "params": {"threadId": thread_id, "goal": goal, "turnId": pending}})
+        if goal["status"] == "active" and pending is None:
+            pending = str(uuid.uuid4())
+            turn_text = "native goal continuation"
+            emit({"method": "turn/started", "params": {"threadId": thread_id, "turn": {"id": pending}}})
+        elif goal["status"] == "paused" and pending is not None:
+            complete(pending, "Goal turn finished")
+    if (mode.startswith("goal-") and method == "thread/goal/clear"
+            and not (root / "goal-clear-noop").exists()):
+        emit({"method": "thread/goal/cleared", "params": {"threadId": thread_id}})
     if method == "thread/realtime/start" and params.get("transport", {}).get("type") == "webrtc":
         emit({"method":"thread/realtime/sdp","params":{"threadId":thread_id,"sdp":"fixture-answer"}})
     if method == "thread/realtime/start":

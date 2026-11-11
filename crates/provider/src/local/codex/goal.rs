@@ -6,6 +6,8 @@
 //! (TAI loopback probe j31-codex-goalpause-loopback-cont): goal errors are -32600 with
 //! exact messages, never -32601.
 
+mod control;
+
 use domain::agent_runtime::goal::{GoalState, NativeGoalFacts};
 use serde_json::{Value, json};
 
@@ -24,11 +26,10 @@ pub(super) fn facts(goal: &Value) -> Result<NativeGoalFacts, AgentSessionError> 
     let state = match status {
         "active" => GoalState::Active,
         "paused" => GoalState::Paused,
-        "blocked" => GoalState::Blocked,
+        // Native rate/budget limits need user intervention. They stay displayed native
+        // facts, never host-enforced caps (probe: budget overshoot 26 > 13).
+        "blocked" | "usageLimited" | "budgetLimited" => GoalState::Blocked,
         "complete" => GoalState::Completed,
-        // Native rate/budget limits need user intervention; they are displayed facts,
-        // never host-enforced caps (probe: budget overshoot 26 > 13).
-        "usageLimited" | "budgetLimited" => GoalState::Blocked,
         _ => return Err(AgentSessionError::Failed),
     };
     let meters = json!({

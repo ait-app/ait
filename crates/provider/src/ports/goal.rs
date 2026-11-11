@@ -27,7 +27,7 @@ pub(crate) enum GoalMetering {
 /// Adapter-verified eligibility, not provider-name or method-advertisement inference.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GoalCapability {
-    /// Native control is usable only together with verified DeferredFinish Pause.
+    /// Native control is usable only together with verified `DeferredFinish` Pause.
     pub(crate) native: bool,
     /// Owner of native continuation when native strategy is selected.
     pub(crate) continuation: GoalContinuationOwner,
@@ -49,7 +49,9 @@ impl Default for GoalCapability {
             pause: GoalPauseSemantics::Unknown,
             checkpoint_tool: false,
             metering: GoalMetering::None,
-            reason: Some(Cow::Borrowed("Native Goal control is not available from this adapter")),
+            reason: Some(Cow::Borrowed(
+                "Native Goal control is not available from this adapter",
+            )),
         }
     }
 }

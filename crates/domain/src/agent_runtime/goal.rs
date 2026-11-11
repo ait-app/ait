@@ -126,7 +126,7 @@ pub enum GoalReceiptState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GoalContinuation {
-    /// Existing input_receipts message identity.
+    /// Existing `input_receipts` message identity.
     pub message: String,
     /// Checkpoint nonce owned by this input.
     pub nonce: u64,
