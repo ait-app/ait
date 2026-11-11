@@ -11,6 +11,7 @@ paths:
 # ADR-206：OpenCode 的 ACP 子 Agent 观测与历史归属
 
 - 范围：`provider::local::opencode`；补充 [ADR-115](adr-115-opencode-acp-provider.md)。
+- 后续修订：[ADR-237](adr-237-opencode-child-terminal-readback.md) 允许对已验证子项只读核对持久终态。
 
 ## 决策
 

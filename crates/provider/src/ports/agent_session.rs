@@ -190,6 +190,9 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
     fn subagents(&self) -> Vec<super::controls::NativeSubagent> {
         Vec::new()
     }
+    /// Adopt terminal descendant outcomes verified from provider-owned durable state, so a later
+    /// stop of this session cannot replace them.
+    fn settle_subagents(&self, _children: &[super::controls::NativeSubagent]) {}
     /// Prepare a session-scoped question answer that requires durable user-input admission.
     /// This has no side effects; call `respond_permission` only after admission succeeds.
     /// # Errors
@@ -502,6 +505,16 @@ pub(crate) trait AgentClient: Debug + Send + Sync {
         _cwd: &str,
     ) -> Result<Vec<super::controls::NativeSubagent>, AgentSessionError> {
         Err(AgentSessionError::Unavailable)
+    }
+
+    /// Reconcile already verified child links with provider-owned durable lifecycle facts.
+    /// # Errors
+    /// Returns a provider read failure; callers may retain the previous observations.
+    async fn reconcile_subagents(
+        &self,
+        children: Vec<super::controls::NativeSubagent>,
+    ) -> Result<Vec<super::controls::NativeSubagent>, AgentSessionError> {
+        Ok(children)
     }
 
     /// Derive a new native history before the selected user message, preserving the old thread.

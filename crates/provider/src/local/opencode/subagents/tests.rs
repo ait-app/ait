@@ -100,6 +100,26 @@ fn live_children_buffer_early_descendants_and_reject_conflicting_or_foreign_owne
 }
 
 #[test]
+fn durably_settled_children_keep_their_outcome_when_the_process_stops() {
+    let mut live = live::Live::new("root".into(), "/work".into(), ImageStore::default());
+    let created = json!({"type":"status","status":"created"});
+    live.consume(&notification("done", "root", 1, created.clone()))
+        .unwrap();
+    live.consume(&notification("pending", "root", 1, created))
+        .unwrap();
+    let mut listed = live.list();
+    listed[0].descriptor["status"] = json!("completed");
+
+    live.settle(&listed);
+    assert!(live.running());
+    live.stopped();
+
+    let children = live.list();
+    assert_eq!(children[0].descriptor["status"], "completed");
+    assert_eq!(children[1].descriptor["status"], "canceled");
+}
+
+#[test]
 fn legacy_updates_keep_native_tool_ids_and_terminal_events_flush_child_text() {
     let mut live = live::Live::new("root".into(), "/work".into(), ImageStore::default());
     let legacy = json!({"method":"session/update","params":{"sessionId":"root","update":{
