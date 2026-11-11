@@ -25,7 +25,7 @@
   "donor_inventory": "Full per-task source attribution remains in #647 docs/plans/pr612-split/tasks.json, sections.json and net-diff.json. These are reference paths, not a cherry-pick or an instruction to import generic native controls.",
   "implementation": "Export the entire committed canonical Timeline snapshot to readable Markdown/HTML, selected as all saved Timeline or conversation content (user/assistant messages and voice transcripts). Paginate canonical persisted entries and progress until complete, fail explicitly at bounds, reuse existing typed projection, and deliver an authenticated single-use client download through existing Files/direct/relay managers. No provider invocation, prompt, restore, writer, native export gateway or source journal mutation.",
   "acceptance": "Actual saved files match persisted Timeline selection, readable message/card rendering and inert HTML escaping. The full saved scope is not a UI page. Active native execution remains running with no extra input/writer/interruption. Old hosts receive no unsupported request. Downloads require receipt-consistent bytes, bounded resources, cancellation and cleanup; missing artifacts are not re-exported automatically.",
-  "status": "verified_pending_draft",
+  "status": "delivered",
   "branch": "pr612-split-task26-timeline-export",
   "base_branch": "pr612-split-task04-statistics",
   "base": "a0d803124dd7fd4b30f4f2ab474d29078672624d",
@@ -33,8 +33,8 @@
   "base_update": "Fast-forward inherited task04's metadata-only ADR238 proposed-status follow-up; no functional dependency change.",
   "observed_latest_main": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
   "worktree": "/home/KirisameLonnet/.ait-server-desktop/worktrees/1y2t6fw1/pr612-split-export",
-  "commit": null,
-  "pr_url": null,
+  "commit": "3059e638b908c814ff3b2a772e7369485ecb0ab0",
+  "pr_url": "https://github.com/ait-app/ait/pull/656",
   "updated_at": "2026-11-11",
   "interface_changes": [
     {
@@ -183,9 +183,7 @@
     "runtime_download": "All five browser scenarios passed across final focused runs: desktop and compact actual completed MD/HTML saves, expired artifact, cancel and old-host gate. Actual native fixture remained running with unchanged input/start/resume/interrupt log during successful exports.",
     "platform_limits": "No native mobile device or packaged Electron UI claim. Actual browser saves plus focused native/desktop transfer consumers; compact browser is responsive web, not a native-device smoke."
   },
-  "blockers": [
-    "Acceptance checks complete; focused Draft publication and commit/PR ledger metadata are the remaining delivery step."
-  ],
+  "blockers": [],
   "external_blockers": [],
   "context": [
     "No donor-only providerCommand schema or merge guard was imported: actual main durable tool/plugin result cards are tested; shared projection behavior is unchanged.",
