@@ -22,6 +22,7 @@ import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { mergeProviderPreferences, useFormPreferences } from "@/hooks/use-form-preferences";
 import { resolveProviderDefinition } from "@/utils/provider-definitions";
 import { useToast } from "@/contexts/toast-context";
+import { AgentConfigRejectedError } from "@ait/client/internal/daemon-client";
 import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import type { AgentMode } from "@ait/protocol/agent-types";
@@ -265,6 +266,8 @@ export function useLiveAgentModeControl(
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   const { updatePreferences } = useFormPreferences();
   const toast = useToast();
+  const { t } = useTranslation();
+  const modePendingRef = useRef(false);
   const { entries: snapshotEntries } = useProvidersSnapshot(serverId, { cwd: slice?.cwd });
 
   const providerDefinitions = useMemo<AgentProviderDefinition[]>(() => {
@@ -274,26 +277,34 @@ export function useLiveAgentModeControl(
   }, [slice?.provider, snapshotEntries]);
 
   const handleSelectMode = useCallback(
-    (modeId: string) => {
-      if (!client || !slice?.provider) return;
-      void updatePreferences((current) =>
-        mergeProviderPreferences({
-          preferences: current,
-          provider: slice.provider,
-          updates: { mode: modeId || undefined },
-        }),
-      ).catch((error) => {
-        console.warn("[AgentModeControl] persist mode preference failed", error);
-      });
-      void client
-        .setAgentMode(agentId, modeId)
-        .then((notice) => showProviderNoticeToast(toast, notice))
-        .catch((error) => {
-          console.warn("[AgentModeControl] setAgentMode failed", error);
-          toast.error(toErrorMessage(error));
-        });
+    async (modeId: string) => {
+      if (!client || !slice?.provider || modePendingRef.current) return;
+      modePendingRef.current = true;
+      try {
+        const notice = await client.setAgentMode(agentId, modeId);
+        showProviderNoticeToast(toast, notice);
+        // Preferences follow the native confirmation; a rejection keeps the old mode.
+        await updatePreferences((current) =>
+          mergeProviderPreferences({
+            preferences: current,
+            provider: slice.provider,
+            updates: { mode: modeId || undefined },
+          }),
+        );
+      } catch (error) {
+        console.warn("[AgentModeControl] setAgentMode failed", error);
+        toast.error(
+          error instanceof AgentConfigRejectedError && error.rejectedFields.length > 0
+            ? t("agentControls.configRejectedFields", {
+                fields: t("agentControls.mode.title"),
+              })
+            : `${t("agentControls.configRejected")} ${toErrorMessage(error)}`,
+        );
+      } finally {
+        modePendingRef.current = false;
+      }
     },
-    [agentId, client, slice?.provider, toast, updatePreferences],
+    [agentId, client, slice?.provider, t, toast, updatePreferences],
   );
 
   return useMemo(() => {

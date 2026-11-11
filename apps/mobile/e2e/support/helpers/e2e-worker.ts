@@ -146,6 +146,7 @@ export async function startE2EWorker(
   const editorRecordPath = path.join(dataDir, "editor-open-records.jsonl");
   const serverId = `srv_e2e_worker_${workerIndex}`;
   const codexFixture = path.join(fakeEditorBin, "codex-offline");
+  const ompFixture = path.join(fakeEditorBin, "omp-offline");
 
   try {
     if (
@@ -161,6 +162,12 @@ export async function startE2EWorker(
       codexFixture,
     );
     await chmod(codexFixture, 0o755);
+    await copyFile(
+      path.join(repoRoot, "crates/provider/src/local/omp/tests/fixtures/omp.py"),
+      path.join(fakeEditorBin, "omp.py"),
+    );
+    await copyFile(path.join(repoRoot, "crates/provider/tests/fixtures/omp_e2e.py"), ompFixture);
+    await chmod(ompFixture, 0o755);
     // Worker-scoped fixture config lets a spec exercise provider discovery without
     // reading the developer's provider state or sharing configuration with other specs.
     if (options.daemonConfig) {
@@ -175,6 +182,7 @@ export async function startE2EWorker(
       environment: {
         NODE_ENV: "development",
         AIT_SERVER_CODEX_BIN: codexFixture,
+        AIT_SERVER_OMP_BIN: ompFixture,
         ...(process.env.E2E_REAL_PROVIDERS === "1"
           ? {
               AIT_SERVER_CODEX_BIN: process.env.AIT_SERVER_CODEX_BIN ?? "codex",

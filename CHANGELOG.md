@@ -1,5 +1,9 @@
 # Ait changelog
 
+## Unreleased
+
+- OMP agent settings now apply with native confirmation: model, thinking and feature changes are sent to the live session while it is idle, rejected fields keep their previous values and are named in a localized summary, and confirmed values (including changes made by OMP plugins outside Ait) persist across restarts. Clearing a model or thinking override, or changing mode or system prompt, reopens the same native session with its identity and sandbox intact. Controls show a busy state while a change is awaiting confirmation and cannot be double-submitted; older hosts keep the previous accept-or-reject behavior.
+
 ## 0.2.7 - 2026-11-11
 
 - Add a Task overview, opened from the sidebar or the command center, that sorts agents from every connected Host into Needs attention, Running, To review and Done. Filter by Host or project, search titles, projects and models, and from a task's details answer permission requests, stop it, mark it as reviewed, archive it or open its conversation. Subtasks are grouped under their parent, and actions are unavailable while the Host is offline.

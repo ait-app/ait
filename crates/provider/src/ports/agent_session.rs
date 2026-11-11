@@ -53,6 +53,23 @@ pub(crate) enum AgentResumePurpose {
     History,
 }
 
+/// Result of applying a proposed configuration to a live native session.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ConfigApplyOutcome {
+    /// Configuration confirmed by the native session; rejected fields keep their prior values.
+    pub(crate) config: StoredAgentConfig,
+    /// Proposed fields the native session rejected, in application order.
+    pub(crate) rejected: Vec<RejectedConfigField>,
+}
+
+/// One configuration field the native session refused while remaining usable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RejectedConfigField {
+    /// Stable wire field name: `modelId`, `thinkingOptionId`, `modeId`, `systemPrompt`,
+    /// `providerOptions`, `mcpServers`, `toolPolicy`, or `featureValues.<featureId>`.
+    pub(crate) field: String,
+}
+
 /// Native foreground-turn progress or result. This is not a host Run or Message tree.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) enum AgentTurnEvent {
@@ -79,6 +96,25 @@ pub(crate) enum AgentTurnEvent {
     Usage(crate::protocol::usage::AgentUsage),
     /// Native initialization resolved the session's actual model or runtime settings.
     RuntimeInfo(StoredAgentRuntimeInfo),
+    /// A native extension acknowledged model or thinking changes. The application validates
+    /// and commits the patch before publishing the corresponding runtime observation.
+    ModelSelectionUpdated {
+        /// Omission preserves the override; null restores provider inheritance.
+        #[serde(
+            default,
+            skip_serializing_if = "crate::protocol::agent_config::NullableSetting::is_unchanged"
+        )]
+        model: crate::protocol::agent_config::NullableSetting,
+        /// Omission preserves the override; null clears the host thinking selection.
+        #[serde(
+            default,
+            skip_serializing_if = "crate::protocol::agent_config::NullableSetting::is_unchanged"
+        )]
+        thinking_option_id: crate::protocol::agent_config::NullableSetting,
+    },
+    /// The native session acknowledged feature toggles. The application merges only these
+    /// confirmed values into the durable configuration; unlisted features keep their values.
+    FeatureValuesUpdated(std::collections::BTreeMap<String, serde_json::Value>),
     /// The native provider drained its turn successfully.
     Completed(Option<String>),
     /// The native provider acknowledged interruption.
@@ -134,6 +170,21 @@ pub(crate) trait AgentSession: Debug + Send + Sync {
     /// Returns rejection before persisting a change that cannot apply to this session.
     fn validate_config_update(&self, _config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         Ok(())
+    }
+
+    /// Apply a proposed configuration to the live native session and report confirmed facts.
+    ///
+    /// Adapters with native confirmation apply each field, retain prior values for rejected
+    /// fields, and read back the native state before returning. The default is unavailable so
+    /// adapters without live confirmation keep deferred validation and persistence.
+    /// # Errors
+    /// Returns busy when a turn owns the session, rejection for invalid settings, or failure
+    /// when the native connection cannot confirm the change.
+    async fn apply_config(
+        &mut self,
+        _config: &StoredAgentConfig,
+    ) -> Result<ConfigApplyOutcome, AgentSessionError> {
+        Err(AgentSessionError::Unavailable)
     }
 
     /// Return safe classified failure facts before the failed native connection is closed.

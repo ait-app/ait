@@ -527,6 +527,8 @@ export const es: TranslationResources = {
     },
   },
   agentControls: {
+    configRejected: "Se rechazó el cambio de configuración.",
+    configRejectedFields: "Se mantuvieron los valores anteriores: {{fields}}",
     provider: {
       fallback: "Proveedor",
       select: "Seleccionar proveedor de agente",
@@ -545,6 +547,7 @@ export const es: TranslationResources = {
       withValue: "Velocidad: {{value}}",
     },
     model: {
+      title: "Modelo",
       unknown: "Modelo desconocido",
     },
     features: {

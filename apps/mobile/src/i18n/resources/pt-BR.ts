@@ -525,6 +525,8 @@ export const ptBR: TranslationResources = {
     },
   },
   agentControls: {
+    configRejected: "A alteração de configuração foi rejeitada.",
+    configRejectedFields: "Valores anteriores mantidos: {{fields}}",
     provider: {
       fallback: "Provedor",
       select: "Selecionar provedor do agente",
@@ -543,6 +545,7 @@ export const ptBR: TranslationResources = {
       withValue: "Velocidade: {{value}}",
     },
     model: {
+      title: "Modelo",
       unknown: "Modelo desconhecido",
     },
     features: {

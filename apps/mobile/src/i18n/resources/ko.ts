@@ -498,6 +498,8 @@ export const ko: TranslationResources = {
     },
   },
   agentControls: {
+    configRejected: "설정 변경이 거부되었습니다.",
+    configRejectedFields: "이전 값 유지: {{fields}}",
     provider: {
       fallback: "프로바이더",
       select: "에이전트 프로바이더 선택",
@@ -516,6 +518,7 @@ export const ko: TranslationResources = {
       withValue: "속도: {{value}}",
     },
     model: {
+      title: "모델",
       unknown: "알 수 없는 모델",
     },
     features: {

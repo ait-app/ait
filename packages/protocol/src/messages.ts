@@ -1902,6 +1902,9 @@ const AgentActionResponsePayloadSchema = z.object({
   accepted: z.boolean(),
   error: z.string().nullable(),
   notice: AgentProviderNoticeSchema.nullable().optional(),
+  // COMPAT(rejectedFields): native-confirmed configuration reports per-field partial success.
+  // Added for PR612 task05; old hosts omit it and old clients ignore it. Remove gate after 2027-05-11.
+  rejectedFields: z.array(z.string()).optional(),
 });
 
 export const SetAgentModeResponseMessageSchema = z.object({
@@ -1963,8 +1966,9 @@ export type AgentConfigApply = z.infer<typeof AgentConfigApplySchema>;
 /**
  * Applies a whole config bundle to one agent. The four single-field RPCs above
  * stay for individual control edits. One request prevents client interruption
- * and other mutations from interleaving between bundle steps; provider-level
- * rejection can still leave earlier steps applied.
+ * and other mutations from interleaving between bundle steps. Providers with
+ * native confirmation apply fields individually: confirmed fields persist and
+ * `rejectedFields` names the fields that kept their previous values.
  */
 export const AgentConfigApplyRequestMessageSchema = z.object({
   type: z.literal("agent.config.apply.request"),

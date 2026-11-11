@@ -507,6 +507,8 @@ export const ja: TranslationResources = {
     },
   },
   agentControls: {
+    configRejected: "設定の変更が拒否されました。",
+    configRejectedFields: "以前の値を保持: {{fields}}",
     provider: {
       fallback: "プロバイダー",
       select: "エージェントプロバイダーを選択",
@@ -525,6 +527,7 @@ export const ja: TranslationResources = {
       withValue: "速度：{{value}}",
     },
     model: {
+      title: "モデル",
       unknown: "不明なモデル",
     },
     features: {

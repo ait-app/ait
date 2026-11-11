@@ -4,6 +4,7 @@ use domain::agent_runtime::{StoredAgentConfig, StoredAgentRuntimeInfo};
 use serde_json::{Value, json};
 
 use super::{PROVIDER, transport::Transport};
+use crate::ports::agent_session::RejectedConfigField;
 use crate::ports::agent_session::{AgentSessionError, AgentSessionSpec};
 use crate::protocol::provider::Details;
 
@@ -121,43 +122,184 @@ pub(super) async fn service_tiers(
     })
 }
 
+/// Per-field progress of one live configuration application.
+///
+/// Acknowledged facts are captured as each native acknowledgement arrives, so a later
+/// transport failure still persists exactly what the native session confirmed — never the
+/// unacknowledged remainder of the proposal.
+#[derive(Default)]
+pub(super) struct LiveApply {
+    /// Model route confirmed by the native `set_model` acknowledgement, if any.
+    pub(super) acked_model: Option<String>,
+    /// Level confirmed by the native `set_thinking_level` acknowledgement.
+    pub(super) acked_thinking: Option<String>,
+    /// Feature toggles the native session acknowledged, by feature id.
+    pub(super) acked_features: std::collections::BTreeMap<String, Value>,
+    /// Fields the native session refused while remaining usable.
+    pub(super) rejected: Vec<RejectedConfigField>,
+    /// Native state read back after every write succeeded.
+    pub(super) state: Option<Value>,
+}
+
+/// Apply each proposed field to the native session, capturing acknowledgements as they arrive.
+///
+/// `current` is the session's last confirmed configuration. On success the progress carries the
+/// final native readback; on failure it carries every fact acknowledged before the failing
+/// request, and the caller commits only those. Absent overrides are not written: clearing an
+/// override restores native inheritance on reopen.
 pub(super) async fn apply(
     transport: &mut Transport,
-    config: &StoredAgentConfig,
-) -> Result<Value, AgentSessionError> {
-    validate(config)?;
-    if let Some(model) = &config.model {
+    current: &StoredAgentConfig,
+    proposed: &StoredAgentConfig,
+    progress: &mut LiveApply,
+) -> Result<(), AgentSessionError> {
+    validate(proposed)?;
+    // A cleared model override restores native inheritance on reopen; only a set model is
+    // written live.
+    if proposed.model != current.model
+        && let Some(model) = &proposed.model
+    {
         let [provider, model] = model_route(model)?;
-        transport
+        match transport
             .request("set_model", json!({"provider":provider,"modelId":model}))
-            .await?;
+            .await
+        {
+            Ok(acked) => {
+                // Official OMP answers set_model with the resolved model object; the
+                // acknowledged selection is that native fact, not the requested input.
+                let actual_provider = text(&acked, "provider")?;
+                let actual_id = text(&acked, "id")?;
+                progress.acked_model = Some(json!([actual_provider, actual_id]).to_string());
+            }
+            Err(AgentSessionError::Rejected) => {
+                progress.rejected.push(RejectedConfigField {
+                    field: "modelId".to_owned(),
+                });
+            }
+            Err(error) => return Err(error),
+        }
     }
-    if let Some(level) = &config.thinking_option_id {
+    if proposed.thinking_option_id != current.thinking_option_id
+        && let Some(level) = &proposed.thinking_option_id
+    {
         let levels = transport
             .request("get_available_thinking_levels", json!({}))
             .await?;
-        if !levels["levels"]
+        let supported = levels["levels"]
             .as_array()
-            .is_some_and(|levels| levels.iter().any(|item| item == level))
-        {
-            return Err(AgentSessionError::Rejected);
+            .is_some_and(|levels| levels.iter().any(|item| item == level));
+        if supported {
+            match transport
+                .request("set_thinking_level", json!({"level":level}))
+                .await
+            {
+                // Official OMP answers set_thinking_level with a bare success ack after
+                // assigning the level verbatim (no clamping); the requested level is the
+                // confirmed fact. The final get_state readback re-verifies it on success.
+                Ok(_) => progress.acked_thinking = Some(level.clone()),
+                Err(AgentSessionError::Rejected) => {
+                    progress.rejected.push(RejectedConfigField {
+                        field: "thinkingOptionId".to_owned(),
+                    });
+                }
+                Err(error) => return Err(error),
+            }
+        } else {
+            progress.rejected.push(RejectedConfigField {
+                field: "thinkingOptionId".to_owned(),
+            });
         }
-        transport
-            .request("set_thinking_level", json!({"level":level}))
-            .await?;
     }
-    for (id, value) in config.feature_values.iter().flatten() {
+    let current_features = current.feature_values.as_ref();
+    for (id, value) in proposed.feature_values.iter().flatten() {
+        if current_features.and_then(|values| values.get(id)) == Some(value) {
+            continue;
+        }
         let kind = match id.as_str() {
             "transport" => continue,
             "autoCompaction" => "set_auto_compaction",
             "autoRetry" => "set_auto_retry",
             "fastMode" => "set_fast_mode",
             "slowMode" => "set_slow_mode",
-            _ => return Err(AgentSessionError::Rejected),
+            _ => {
+                progress.rejected.push(RejectedConfigField {
+                    field: format!("featureValues.{id}"),
+                });
+                continue;
+            }
         };
-        transport.request(kind, json!({"enabled":value})).await?;
+        match transport.request(kind, json!({"enabled":value})).await {
+            Ok(_) => {
+                progress.acked_features.insert(id.clone(), value.clone());
+            }
+            Err(AgentSessionError::Rejected) => {
+                progress.rejected.push(RejectedConfigField {
+                    field: format!("featureValues.{id}"),
+                });
+            }
+            Err(error) => return Err(error),
+        }
     }
-    transport.request("get_state", json!({})).await
+    progress.state = Some(transport.request("get_state", json!({})).await?);
+    Ok(())
+}
+
+/// Commit only acknowledged facts onto the prior configuration.
+///
+/// Used when the application failed after some acknowledgements: unacknowledged fields keep
+/// their prior values, and nothing is invented from the proposal.
+pub(super) fn acknowledged(current: &StoredAgentConfig, progress: &LiveApply) -> StoredAgentConfig {
+    let mut next = current.clone();
+    if let Some(model) = &progress.acked_model {
+        next.model = Some(model.clone());
+    }
+    if let Some(level) = &progress.acked_thinking {
+        next.thinking_option_id = Some(level.clone());
+    }
+    if !progress.acked_features.is_empty() {
+        let values = next.feature_values.get_or_insert_with(Default::default);
+        for (id, value) in &progress.acked_features {
+            values.insert(id.clone(), value.clone());
+        }
+    }
+    next
+}
+
+/// Reconcile a fully acknowledged application with the native state read back afterwards.
+///
+/// Acknowledged model/thinking values are replaced by the observed native facts, so a plugin
+/// that rewrote the selection is persisted truthfully. Rejected fields keep their prior values;
+/// fields that were never written keep them too. Feature toggles have no readback fact;
+/// acknowledged values are retained as proposed.
+pub(super) fn confirmed(
+    current: &StoredAgentConfig,
+    proposed: &StoredAgentConfig,
+    state: &Value,
+    progress: &LiveApply,
+) -> Result<StoredAgentConfig, AgentSessionError> {
+    let observed = runtime(state)?;
+    let mut next = current.clone();
+    let refused = |field: &str| progress.rejected.iter().any(|entry| entry.field == field);
+    if proposed.model != current.model && !refused("modelId") && progress.acked_model.is_some() {
+        next.model.clone_from(&observed.model);
+    }
+    if proposed.thinking_option_id != current.thinking_option_id
+        && !refused("thinkingOptionId")
+        && progress.acked_thinking.is_some()
+    {
+        next.thinking_option_id
+            .clone_from(&observed.thinking_option_id);
+    }
+    if let Some(proposed_values) = &proposed.feature_values {
+        let values = next.feature_values.get_or_insert_with(Default::default);
+        for (id, value) in proposed_values {
+            if progress.acked_features.contains_key(id) {
+                values.insert(id.clone(), value.clone());
+            }
+        }
+    }
+    validate(&next)?;
+    Ok(next)
 }
 
 pub(super) async fn discover(transport: &mut Transport) -> Result<Details, AgentSessionError> {

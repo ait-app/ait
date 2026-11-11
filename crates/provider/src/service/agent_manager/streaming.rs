@@ -2,6 +2,7 @@ use std::borrow::Cow;
 
 use super::{AgentManager, AgentManagerError, AgentTurnEvent};
 use crate::ports::agent_session::AgentSessionError;
+use crate::protocol::agent_config::ConfigPatch;
 use crate::support::time::now_timestamp;
 
 pub(super) fn failure_message(agent: &super::LiveAgent) -> Cow<'_, str> {
@@ -110,6 +111,13 @@ pub(super) async fn drain(
         }
         let result = match &agent.pending {
             Some(AgentTurnEvent::RuntimeInfo(info)) => persist_info(registry, id, agent, info),
+            Some(AgentTurnEvent::ModelSelectionUpdated {
+                model,
+                thinking_option_id,
+            }) => persist_model_selection(registry, id, agent, model, thinking_option_id),
+            Some(AgentTurnEvent::FeatureValuesUpdated(values)) => {
+                persist_feature_values(registry, id, agent, values)
+            }
             Some(AgentTurnEvent::Started(turn)) => {
                 persist_started(registry, timeline, id, agent, turn)
             }
@@ -165,29 +173,132 @@ pub(super) async fn drain(
             )
             | None => break,
         };
-        match result {
-            Ok(()) => {
-                if let Some(AgentTurnEvent::Started(turn)) = agent.pending.take() {
-                    agent.latest_turn = Some(turn.clone());
-                    agent.turn = Some(turn);
-                }
-            }
-            // Storage I/O may succeed on the next poll, so the event stays pending for retry.
-            Err(model::ErrorCode::AgentIo) => return Err(AgentManagerError::Registry),
-            // Any other rejection is deterministic for this event; retrying it would wedge the
-            // lane, so the turn fails and the native session is settled instead.
-            Err(error) => {
-                tracing::warn!(provider = %agent.record.provider, agent_id = %id,
-                    error_code = ?error, "Native provider event was rejected");
-                agent.pending = Some(AgentTurnEvent::Failed);
-                break;
-            }
+        if !apply_drain_result(result, id, agent)? {
+            break;
         }
     }
     checkpoint_handle(registry, id, agent)?;
     if matches!(agent.pending, Some(AgentTurnEvent::Failed)) {
         settle_failure(registry, timeline, events, id, agent).await?;
     }
+    Ok(())
+}
+
+/// Apply one drained event's persistence result; returns whether the drain loop should continue.
+///
+/// A successful start records the turn. Storage I/O stays pending for a later retry (surfaced as
+/// a registry error); any other rejection is deterministic, so the turn fails instead of wedging
+/// the lane.
+fn apply_drain_result(
+    result: Result<(), model::ErrorCode>,
+    id: &str,
+    agent: &mut super::LiveAgent,
+) -> Result<bool, AgentManagerError> {
+    match result {
+        Ok(()) => {
+            if let Some(AgentTurnEvent::Started(turn)) = agent.pending.take() {
+                agent.latest_turn = Some(turn.clone());
+                agent.turn = Some(turn);
+            }
+            Ok(true)
+        }
+        Err(model::ErrorCode::AgentIo) => Err(AgentManagerError::Registry),
+        Err(error) => {
+            tracing::warn!(provider = %agent.record.provider, agent_id = %id,
+                error_code = ?error, "Native provider event was rejected");
+            agent.pending = Some(AgentTurnEvent::Failed);
+            Ok(false)
+        }
+    }
+}
+
+/// Commit an adapter-validated native model/thinking observation to the durable configuration.
+fn persist_model_selection(
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
+    id: &str,
+    agent: &super::LiveAgent,
+    model: &crate::protocol::agent_config::NullableSetting,
+    thinking: &crate::protocol::agent_config::NullableSetting,
+) -> Result<(), model::ErrorCode> {
+    let patch = ConfigPatch {
+        model_id: model.clone(),
+        thinking_option_id: thinking.clone(),
+        ..ConfigPatch::default()
+    };
+    let record = registry
+        .get(id)
+        .map_err(|_| model::ErrorCode::AgentIo)?
+        .ok_or(model::ErrorCode::AgentNotFound)?;
+    let config = patch.apply(
+        record
+            .config
+            .as_ref()
+            .unwrap_or(&domain::agent_runtime::StoredAgentConfig::default()),
+    );
+    agent
+        .session
+        .validate_config_update(&config)
+        .map_err(|_| model::ErrorCode::InvalidMessage)?;
+    registry
+        .update(id, &|current| {
+            let mut next = current.clone();
+            next.config = Some(
+                patch.apply(
+                    current
+                        .config
+                        .as_ref()
+                        .unwrap_or(&domain::agent_runtime::StoredAgentConfig::default()),
+                ),
+            );
+            next.updated_at = now_timestamp();
+            next
+        })
+        .map_err(|_| model::ErrorCode::AgentIo)?
+        .ok_or(model::ErrorCode::AgentNotFound)?;
+    Ok(())
+}
+
+/// Commit adapter-acknowledged feature toggles to the durable configuration.
+fn persist_feature_values(
+    registry: &dyn domain::agent_runtime::registry::AgentRuntimeRegistry,
+    id: &str,
+    agent: &super::LiveAgent,
+    values: &std::collections::BTreeMap<String, serde_json::Value>,
+) -> Result<(), model::ErrorCode> {
+    let patch = ConfigPatch {
+        feature_values: Some(values.clone()),
+        ..ConfigPatch::default()
+    };
+    let record = registry
+        .get(id)
+        .map_err(|_| model::ErrorCode::AgentIo)?
+        .ok_or(model::ErrorCode::AgentNotFound)?;
+    let config = patch.apply(
+        record
+            .config
+            .as_ref()
+            .unwrap_or(&domain::agent_runtime::StoredAgentConfig::default()),
+    );
+    agent
+        .session
+        .validate_config_update(&config)
+        .map_err(|_| model::ErrorCode::InvalidMessage)?;
+    registry
+        .update(id, &|current| {
+            let mut next = current.clone();
+            next.config = Some(
+                patch.apply(
+                    current
+                        .config
+                        .as_ref()
+                        .unwrap_or(&domain::agent_runtime::StoredAgentConfig::default()),
+                ),
+            );
+            next.updated_at = now_timestamp();
+            next
+        })
+        .map_err(|_| model::ErrorCode::AgentIo)?
+        .ok_or(model::ErrorCode::AgentNotFound)?;
     Ok(())
 }
 

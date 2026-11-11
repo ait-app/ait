@@ -13,10 +13,12 @@ use super::{
 };
 use crate::local::prompt_blocks;
 use crate::ports::agent_session::{
-    AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent,
+    AgentSession, AgentSessionError, AgentSessionSpec, AgentTurnEvent, ConfigApplyOutcome,
 };
 use crate::ports::diagnostics::{Category, Diagnostic};
 use crate::protocol::prompt::AgentPrompt;
+
+mod observed_settings;
 
 const STATE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 const CANCEL_GRACE: Duration = Duration::from_secs(5);
@@ -34,6 +36,8 @@ struct StateCheck {
     id: String,
     // New work relinquishes ownership while retaining correlation for the delayed reply.
     turn: Option<String>,
+    // A native settings observation scheduled this read; its reply refreshes model/thinking.
+    refresh_settings: bool,
     written: Option<oneshot::Receiver<Result<(), AgentSessionError>>>,
 }
 
@@ -64,6 +68,7 @@ pub(super) struct Session {
     // An earlier prompt's uncorrelated session_settled can follow the next admission.
     phase: TurnPhase,
     state_check: Option<StateCheck>,
+    settings_refresh: observed_settings::Refresh,
     next_state_check: Instant,
     idle_without_outcome: Option<Instant>,
     cancellation_started: Option<Instant>,
@@ -133,8 +138,18 @@ async fn connect(
         ]);
     }
     let mut transport = Transport::spawn(client, &spec.cwd, &args, spec.confinement.as_ref())?;
-    transport.initialize().await?;
-    let state = config::apply(&mut transport, &spec.config).await?;
+    let mut progress = config::LiveApply::default();
+    config::apply(
+        &mut transport,
+        &StoredAgentConfig::default(),
+        &spec.config,
+        &mut progress,
+    )
+    .await?;
+    if !progress.rejected.is_empty() {
+        return Err(AgentSessionError::Rejected);
+    }
+    let state = progress.state.ok_or(AgentSessionError::Failed)?;
     transport
         .request("set_ask_dialog", json!({"enabled":true}))
         .await?;
@@ -205,6 +220,7 @@ pub(super) async fn open(
         prompt_id: None,
         phase: TurnPhase::Idle,
         state_check: None,
+        settings_refresh: observed_settings::Refresh::default(),
         next_state_check: Instant::now(),
         idle_without_outcome: None,
         cancellation_started: None,
@@ -239,66 +255,249 @@ fn validate_native_control(kind: &str) -> Result<(), AgentSessionError> {
 }
 
 impl Session {
-    /// Apply native settings while idle, retaining the persisted session when reopening.
+    /// Apply native settings while idle for a turn; any rejected field refuses the turn.
     /// Invalid settings or an active turn reject before any native mutation.
     pub(super) async fn configure(
         &mut self,
         config: &StoredAgentConfig,
     ) -> Result<(), AgentSessionError> {
-        config::validate(config)?;
-        if self.closed || self.active.is_some() {
+        let outcome = self.apply_config(config).await?;
+        if !outcome.rejected.is_empty() {
             return Err(AgentSessionError::Rejected);
         }
-        if self.config == *config {
-            return Ok(());
+        Ok(())
+    }
+
+    /// Apply a proposed configuration and report the native-confirmed result.
+    ///
+    /// Model/thinking/feature fields apply individually: rejected fields keep their prior
+    /// values and the confirmed remainder is retained. Mode/system-prompt changes and cleared
+    /// model/thinking overrides reopen the persisted session atomically under the same identity
+    /// and confinement (the native setters cannot restore inheritance); a failed reopen
+    /// restores the previous configuration with one recovery reconnect.
+    pub(super) async fn apply_config(
+        &mut self,
+        config: &StoredAgentConfig,
+    ) -> Result<ConfigApplyOutcome, AgentSessionError> {
+        config::validate(config)?;
+        if self.closed {
+            return Err(AgentSessionError::Rejected);
         }
-        if self.config.mode_id == config.mode_id
+        if self.active.is_some() {
+            return Err(AgentSessionError::Busy);
+        }
+        if self.config == *config {
+            return Ok(ConfigApplyOutcome {
+                config: self.config.clone(),
+                rejected: Vec::new(),
+            });
+        }
+        // Clearing a host override restores native inheritance, which only a reopen applies:
+        // the live setters have no "unset" command.
+        let clears_override = (self.config.model.is_some() && config.model.is_none())
+            || (self.config.thinking_option_id.is_some() && config.thinking_option_id.is_none());
+        if !clears_override
+            && self.config.mode_id == config.mode_id
             && self.config.system_prompt == config.system_prompt
         {
-            self.state = config::apply(&mut self.transport, config).await?;
-            let runtime = config::runtime(&self.state)?;
-            self.service_tiers = self
-                .client
-                .service_tiers(
-                    &self.cwd,
-                    runtime.model.as_deref(),
-                    self.confinement.as_ref(),
-                )
-                .await?;
-            self.stream.set_context(&self.state);
-            self.config.clone_from(config);
+            self.apply_live_fields(config).await
         } else {
-            self.transport.close().await?;
-            let path = config::text(&self.state, "sessionFile")?.to_owned();
-            let spec = AgentSessionSpec {
-                provider: PROVIDER.to_owned(),
-                cwd: self.cwd.clone(),
-                config: config.clone(),
-                confinement: self.confinement.clone(),
-            };
-            let persisted = std::path::Path::new(&path).is_file();
-            let (transport, state, service_tiers) =
-                connect(&self.client, &spec, persisted.then_some(path.as_str())).await?;
-            if persisted && state["sessionId"] != self.state["sessionId"] {
-                return Err(AgentSessionError::Failed);
-            }
-            if !persisted {
-                self.stream = Stream::new(
-                    config::text(&state, "sessionId")?.to_owned(),
-                    self.client.images.clone(),
-                )
-                .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
-            }
-            self.transport = transport;
-            self.state_check = None;
-            self.cancel_requests.clear();
-            self.input_requests.clear();
-            self.idle_without_outcome = None;
-            self.state = state;
-            self.service_tiers = service_tiers;
-            self.stream.set_context(&self.state);
-            self.config.clone_from(config);
+            let config = self.reopen(config).await?;
+            Ok(ConfigApplyOutcome {
+                config,
+                rejected: Vec::new(),
+            })
         }
+    }
+
+    /// Apply model/thinking/feature fields to the live native process and commit confirmed facts.
+    async fn apply_live_fields(
+        &mut self,
+        config: &StoredAgentConfig,
+    ) -> Result<ConfigApplyOutcome, AgentSessionError> {
+        let previous = self.config.clone();
+        let mut progress = config::LiveApply::default();
+        if let Err(error) =
+            config::apply(&mut self.transport, &previous, config, &mut progress).await
+        {
+            // The transport is unusable after a failed request. Commit exactly the facts the
+            // native session acknowledged before the failure — captured as each ack arrived —
+            // and queue them as typed observations so the manager persists them despite the
+            // error. Unacknowledged fields keep their prior values; nothing is rolled back or
+            // invented from the proposal.
+            let acknowledged = config::acknowledged(&previous, &progress);
+            if acknowledged != previous {
+                self.config.clone_from(&acknowledged);
+                self.publish_observed_selection(&previous);
+                self.publish_acknowledged_features(&previous, &progress);
+            }
+            return Err(error);
+        }
+        let state = progress.state.take().ok_or(AgentSessionError::Failed)?;
+        let confirmed = config::confirmed(&previous, config, &state, &progress)?;
+        // The readback is the authoritative selection. Drop selection events buffered before
+        // this acknowledgement so a stale pre-ack change cannot revert the confirmed value;
+        // events arriving after the ack remain authoritative. Unrelated frames are preserved.
+        self.transport.supersede_buffered(&[
+            "config_update",
+            "model_changed",
+            "thinking_level_changed",
+        ]);
+        self.commit_live(state, confirmed).await;
+        Ok(ConfigApplyOutcome {
+            config: self.config.clone(),
+            rejected: progress.rejected,
+        })
+    }
+
+    /// Queue the confirmed model/thinking delta as typed observations for durable commit.
+    /// `runtime` carries the freshest native facts; on a failed application the last good
+    /// state is used, since only the acknowledged selection changed.
+    fn publish_observed_selection(&mut self, previous: &StoredAgentConfig) {
+        use crate::protocol::agent_config::NullableSetting;
+        let setting = |value: &Option<String>| {
+            value
+                .clone()
+                .map_or(NullableSetting::Clear, NullableSetting::Set)
+        };
+        let model = if self.config.model == previous.model {
+            NullableSetting::Unchanged
+        } else {
+            setting(&self.config.model)
+        };
+        let thinking_option_id = if self.config.thinking_option_id == previous.thinking_option_id {
+            NullableSetting::Unchanged
+        } else {
+            setting(&self.config.thinking_option_id)
+        };
+        if !model.is_unchanged() || !thinking_option_id.is_unchanged() {
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::ModelSelectionUpdated {
+                    model,
+                    thinking_option_id,
+                });
+        }
+        if let Ok(mut info) = config::runtime(&self.state) {
+            info.model.clone_from(&self.config.model);
+            info.thinking_option_id
+                .clone_from(&self.config.thinking_option_id);
+            info.mode_id.clone_from(&self.config.mode_id);
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::RuntimeInfo(info));
+        }
+    }
+
+    /// Queue acknowledged feature toggles as a typed observation for durable commit.
+    fn publish_acknowledged_features(
+        &mut self,
+        previous: &StoredAgentConfig,
+        progress: &config::LiveApply,
+    ) {
+        let changed: BTreeMap<String, Value> = progress
+            .acked_features
+            .iter()
+            .filter(|(id, value)| {
+                previous
+                    .feature_values
+                    .as_ref()
+                    .and_then(|values| values.get(*id))
+                    != Some(value)
+            })
+            .map(|(id, value)| (id.clone(), value.clone()))
+            .collect();
+        if !changed.is_empty() {
+            self.stream
+                .events
+                .push_back(AgentTurnEvent::FeatureValuesUpdated(changed));
+        }
+    }
+    /// Commit a confirmed live configuration and its native state snapshot.
+    /// The optional service-tier probe runs afterwards; its failure degrades the advertised
+    /// toggles but never discards confirmed native facts.
+    async fn commit_live(&mut self, state: Value, config: StoredAgentConfig) {
+        let runtime = config::runtime(&state).ok();
+        self.state = state;
+        self.stream.set_context(&self.state);
+        self.config = config;
+        self.service_tiers = self
+            .client
+            .service_tiers(
+                &self.cwd,
+                runtime.as_ref().and_then(|info| info.model.as_deref()),
+                self.confinement.as_ref(),
+            )
+            .await
+            .unwrap_or_default();
+    }
+
+    /// Reopen the persisted session for mode/system-prompt changes, atomically per attempt.
+    /// A failed reopen restores the previous configuration with one recovery reconnect;
+    /// no user input is replayed and the confinement is never relaxed.
+    async fn reopen(
+        &mut self,
+        config: &StoredAgentConfig,
+    ) -> Result<StoredAgentConfig, AgentSessionError> {
+        let previous = self.config.clone();
+        let path = config::text(&self.state, "sessionFile")?.to_owned();
+        let persisted = std::path::Path::new(&path).is_file();
+        self.transport.close().await?;
+        let spec = AgentSessionSpec {
+            provider: PROVIDER.to_owned(),
+            cwd: self.cwd.clone(),
+            config: config.clone(),
+            confinement: self.confinement.clone(),
+        };
+        match connect(&self.client, &spec, persisted.then_some(path.as_str())).await {
+            Ok((transport, state, service_tiers)) => {
+                if persisted && state["sessionId"] != self.state["sessionId"] {
+                    return Err(AgentSessionError::Failed);
+                }
+                self.adopt_reopen(transport, state, service_tiers, persisted, config.clone())?;
+                Ok(self.config.clone())
+            }
+            Err(error) => {
+                let recovery = AgentSessionSpec {
+                    config: previous.clone(),
+                    ..spec
+                };
+                let (transport, state, service_tiers) =
+                    connect(&self.client, &recovery, persisted.then_some(path.as_str()))
+                        .await
+                        .map_err(|_| error)?;
+                self.adopt_reopen(transport, state, service_tiers, persisted, previous)?;
+                Err(error)
+            }
+        }
+    }
+
+    /// Install a reopened native process, retaining the stream of a persisted session.
+    fn adopt_reopen(
+        &mut self,
+        transport: Transport,
+        state: Value,
+        service_tiers: config::ServiceTiers,
+        persisted: bool,
+        config: StoredAgentConfig,
+    ) -> Result<(), AgentSessionError> {
+        if !persisted {
+            self.stream = Stream::new(
+                config::text(&state, "sessionId")?.to_owned(),
+                self.client.images.clone(),
+            )
+            .with_blobs(history::root(&self.client)?.with_file_name("blobs"));
+        }
+        self.transport = transport;
+        self.state_check = None;
+        self.settings_refresh = observed_settings::Refresh::default();
+        self.cancel_requests.clear();
+        self.input_requests.clear();
+        self.idle_without_outcome = None;
+        self.state = state;
+        self.service_tiers = service_tiers;
+        self.stream.set_context(&self.state);
+        self.config = config;
         Ok(())
     }
 
@@ -570,6 +769,8 @@ impl Session {
                     &self.client.images,
                 )?);
             }
+            Some("config_update") => self.observe_settings(event)?,
+            Some("model_changed" | "thinking_level_changed") => self.settings_refresh.mark(),
             Some("response") if self.prompt_id.as_deref() == event["id"].as_str() => {
                 self.prompt_admitted(event)?;
             }
@@ -662,6 +863,13 @@ impl Session {
     fn checked_state(&mut self, event: &Value) -> Result<(), AgentSessionError> {
         let check = self.state_check.take().ok_or(AgentSessionError::Failed)?;
         self.next_state_check = Instant::now() + STATE_CHECK_INTERVAL;
+        if check.refresh_settings && event["command"] == "get_state" && event["success"] == true {
+            let state = &event["data"];
+            if state["sessionId"] != self.state["sessionId"] {
+                return Err(AgentSessionError::Failed);
+            }
+            self.observe_settings(state)?;
+        }
         if check.turn.is_none() || self.active != check.turn {
             return Ok(());
         }
@@ -744,15 +952,16 @@ impl Session {
                 }
             }
         }
-        let Some(turn) = self.active.as_ref().filter(|_| {
+        let turn = self.active.as_ref().filter(|_| {
             matches!(
                 self.phase,
                 TurnPhase::Running | TurnPhase::AwaitingSettlement
             )
-        }) else {
-            return Ok(());
-        };
-        if self.state_check.is_some() || Instant::now() < self.next_state_check {
+        });
+        if self.state_check.is_some()
+            || (turn.is_none() && !self.settings_refresh.pending())
+            || (!self.settings_refresh.pending() && Instant::now() < self.next_state_check)
+        {
             return Ok(());
         }
         let (id, written) = match self.transport.check_state() {
@@ -762,7 +971,8 @@ impl Session {
         };
         self.state_check = Some(StateCheck {
             id,
-            turn: Some(turn.clone()),
+            turn: turn.cloned(),
+            refresh_settings: self.settings_refresh.take(),
             written: Some(written),
         });
         Ok(())
@@ -774,6 +984,12 @@ impl AgentSession for Session {
     fn validate_config_update(&self, config: &StoredAgentConfig) -> Result<(), AgentSessionError> {
         config::validate(config)?;
         Ok(())
+    }
+    async fn apply_config(
+        &mut self,
+        config: &StoredAgentConfig,
+    ) -> Result<ConfigApplyOutcome, AgentSessionError> {
+        Session::apply_config(self, config).await
     }
     fn control_settings(&self, config: &StoredAgentConfig) -> Option<Value> {
         let tiers = if config.model == self.config.model {
@@ -832,8 +1048,7 @@ impl AgentSession for Session {
             self.created_at = chrono::Utc::now().to_rfc3339();
             self.submitted = false;
         }
-        self.state = state;
-        self.stream.set_context(&self.state);
+        self.observe_settings(&state)?;
         let mut info = config::runtime(&self.state)?;
         info.mode_id.clone_from(&self.config.mode_id);
         Ok(info)

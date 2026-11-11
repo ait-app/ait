@@ -617,6 +617,8 @@ export const en = {
     },
   },
   agentControls: {
+    configRejected: "Configuration change was rejected.",
+    configRejectedFields: "Kept previous values: {{fields}}",
     provider: {
       fallback: "Provider",
       select: "Select agent provider",
@@ -635,6 +637,7 @@ export const en = {
       withValue: "Speed: {{value}}",
     },
     model: {
+      title: "Model",
       unknown: "Unknown model",
     },
     features: {

@@ -133,4 +133,21 @@ describe("SpeedToggle", () => {
 
     expect(onSetFeature).not.toHaveBeenCalled();
   });
+
+  it("cannot toggle while a change is awaiting native confirmation", () => {
+    const onSetFeature = vi.fn();
+    const view = render(
+      <SpeedToggle
+        feature={speed("default")}
+        surface="sheet"
+        disabled={false}
+        busy
+        onSetFeature={onSetFeature}
+      />,
+    );
+
+    fireEvent.click(view.getByRole("button", { name: "Speed: Normal" }));
+
+    expect(onSetFeature).not.toHaveBeenCalled();
+  });
 });

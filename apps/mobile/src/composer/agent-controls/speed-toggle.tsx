@@ -12,13 +12,15 @@ export function SpeedToggle({
   feature,
   surface,
   disabled,
+  busy = false,
   onSetFeature,
   onActionComplete,
 }: {
   feature: Extract<AgentFeature, { type: "select" }>;
   surface: "toolbar" | "sheet";
   disabled: boolean;
-  onSetFeature?: (featureId: string, value: unknown) => void;
+  busy?: boolean;
+  onSetFeature?: (featureId: string, value: unknown) => void | Promise<void>;
   onActionComplete?: () => void;
 }) {
   const { theme } = useUnistyles();
@@ -32,9 +34,10 @@ export function SpeedToggle({
   const tooltip = t("agentControls.speed.withValue", { value });
   const Icon = getAgentFeatureIcon(feature.icon, feature.id);
   const handlePress = useCallback(() => {
-    onSetFeature?.(feature.id, enabled ? "default" : "fast");
+    if (busy) return;
+    void onSetFeature?.(feature.id, enabled ? "default" : "fast");
     onActionComplete?.();
-  }, [enabled, feature.id, onActionComplete, onSetFeature]);
+  }, [busy, enabled, feature.id, onActionComplete, onSetFeature]);
 
   if (!fastOption) return null;
 
@@ -46,10 +49,11 @@ export function SpeedToggle({
       label={label}
       value={value}
       showToolbarLabel={false}
-      disabled={disabled}
+      disabled={disabled || busy}
+      busy={busy}
       onPress={handlePress}
       accessibilityLabel={tooltip}
-      accessibilityState={{ selected: enabled, disabled }}
+      accessibilityState={{ selected: enabled, disabled: disabled || busy }}
       testID={`agent-feature-${feature.id}`}
     />
   );

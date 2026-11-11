@@ -136,7 +136,7 @@ impl ExecutionState {
 
     /// Converge an existing session onto `profile`; returns whether only a reset can.
     async fn refresh_bot_config(
-        &self,
+        &mut self,
         record: &PersistedAgentRuntimeRecord,
         profile: &Profile,
     ) -> Result<bool, ErrorCode> {
@@ -152,7 +152,7 @@ impl ExecutionState {
             return Ok(false);
         }
         match self.manager.configure(&record.id, &patch).await {
-            Ok(()) => Ok(false),
+            Ok(rejected) => Ok(!rejected.is_empty()),
             Err(AgentManagerError::InvalidRequest) => Ok(true),
             Err(error) => Err(map_manager(&error)),
         }

@@ -74,6 +74,8 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { readMeasuredWidth } from "@/hooks/use-container-width";
 import { useToast } from "@/contexts/toast-context";
 import { toErrorMessage } from "@/utils/error-messages";
+import { AgentConfigRejectedError } from "@ait/client/internal/daemon-client";
+import type { ToastApi } from "@/components/toast-host";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import {
   useAgentControlCommandCenterActions,
@@ -125,7 +127,7 @@ interface ControlledAgentControlsProps {
   onSelectProviderAndModel?: (provider: string, modelId: string) => void;
   thinkingOptions?: AgentControlOption[];
   selectedThinkingOptionId?: string;
-  onSelectThinkingOption?: (thinkingOptionId: string) => void;
+  onSelectThinkingOption?: (thinkingOptionId: string) => void | Promise<void>;
   disabled?: boolean;
   isModelLoading?: boolean;
   modelSelectorProviders?: ProviderSelectorProvider[];
@@ -135,7 +137,9 @@ interface ControlledAgentControlsProps {
   onCreateAgentProfile?: (seed: AgentProfileSeed) => void;
   onEditAgentProfile?: (profileId: string) => void;
   features?: AgentFeature[];
-  onSetFeature?: (featureId: string, value: unknown) => void;
+  onSetFeature?: (featureId: string, value: unknown) => void | Promise<void>;
+  /** Control key (`model`, `thinking`, `featureValues.<id>`) currently awaiting native ack. */
+  busyControl?: string | null;
   onDropdownClose?: () => void;
   onModelSelectorOpen?: () => void;
   onRetryModelProvider?: (provider: AgentProvider) => void;
@@ -160,10 +164,10 @@ export interface DraftAgentControlsProps {
   onSelectProviderAndModel: (provider: AgentProvider, modelId: string) => void;
   thinkingOptions: NonNullable<AgentModelDefinition["thinkingOptions"]>;
   selectedThinkingOptionId: string;
-  onSelectThinkingOption: (thinkingOptionId: string) => void;
+  onSelectThinkingOption: (thinkingOptionId: string) => void | Promise<void>;
   onApplyAgentProfile: DraftAgentProfileControls["applyProfile"];
   features?: AgentFeature[];
-  onSetFeature?: (featureId: string, value: unknown) => void;
+  onSetFeature?: (featureId: string, value: unknown) => void | Promise<void>;
   onDropdownClose?: () => void;
   onModelSelectorOpen?: () => void;
   onRetryModelProvider?: (provider: AgentProvider) => void;
@@ -508,6 +512,7 @@ function ControlledAgentControls({
   onEditAgentProfile,
   features: nativeFeatures,
   onSetFeature,
+  busyControl = null,
   onDropdownClose,
   onModelSelectorOpen,
   onRetryModelProvider,
@@ -766,6 +771,7 @@ function ControlledAgentControls({
             selectedThinkingOptionId={selectedThinkingOptionId}
             features={features}
             onSetFeature={onSetFeature}
+            busyControl={busyControl}
             onApplyAgentProfile={onApplyAgentProfile}
             onEditAgentProfiles={onEditAgentProfiles}
             onCreateAgentProfile={onCreateAgentProfile}
@@ -815,6 +821,7 @@ function ControlledAgentControls({
             selectedThinkingOptionId={selectedThinkingOptionId}
             features={features}
             onSetFeature={onSetFeature}
+            busyControl={busyControl}
             onApplyAgentProfile={onApplyAgentProfile}
             onEditAgentProfiles={onEditAgentProfiles}
             onCreateAgentProfile={onCreateAgentProfile}
@@ -860,7 +867,8 @@ interface DesktopAgentControlsContentProps {
   thinkingOptions?: AgentControlOption[];
   selectedThinkingOptionId?: string;
   features?: AgentFeature[];
-  onSetFeature?: (featureId: string, value: unknown) => void;
+  onSetFeature?: (featureId: string, value: unknown) => void | Promise<void>;
+  busyControl: string | null;
   onApplyAgentProfile?: (profileId: string) => void;
   onEditAgentProfiles?: () => void;
   onCreateAgentProfile?: (seed: AgentProfileSeed) => void;
@@ -888,7 +896,7 @@ interface DesktopAgentControlsContentProps {
   handleProviderPress: () => void;
   handleThinkingPress: () => void;
   handleProviderSelect: (id: string) => void;
-  handleThinkingSelect: (id: string) => void;
+  handleThinkingSelect: (id: string) => void | Promise<void>;
   handleDesktopModelSelect: (providerId: string, modelId: string) => void;
   handleProviderOpenChange: (open: boolean) => void;
   handleThinkingOpenChange: (open: boolean) => void;
@@ -923,6 +931,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     selectedThinkingOptionId,
     features,
     onSetFeature,
+    busyControl,
     onApplyAgentProfile,
     onEditAgentProfiles,
     onCreateAgentProfile,
@@ -1049,7 +1058,8 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                 showToolbarLabel={presentation.showThinkingLabel}
                 showCaret={presentation.showCarets}
                 open={openSelector === "thinking"}
-                disabled={disabled || !canSelectThinking}
+                disabled={disabled || !canSelectThinking || busyControl === "thinking"}
+                busy={busyControl === "thinking"}
                 onPress={handleThinkingPress}
                 accessibilityLabel={t("agentControls.thinking.selectWithValue", {
                   value: displayThinking,
@@ -1103,6 +1113,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                 key={`feature-${feature.id}`}
                 feature={feature}
                 disabled={disabled}
+                busyControl={busyControl}
                 openSelector={openSelector}
                 handleOpenChange={handleNestedOpenChange}
                 onSetFeature={onSetFeature}
@@ -1116,6 +1127,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
             key={`feature-${feature.id}`}
             feature={feature}
             disabled={disabled}
+            busyControl={busyControl}
             openSelector={openSelector}
             handleOpenChange={handleOpenChange}
             onSetFeature={onSetFeature}
@@ -1132,7 +1144,8 @@ interface SheetAgentControlsContentProps {
   selectedModelId?: string;
   selectedThinkingOptionId?: string;
   features?: AgentFeature[];
-  onSetFeature?: (featureId: string, value: unknown) => void;
+  onSetFeature?: (featureId: string, value: unknown) => void | Promise<void>;
+  busyControl: string | null;
   onApplyAgentProfile?: (profileId: string) => void;
   onEditAgentProfiles?: () => void;
   onCreateAgentProfile?: (seed: AgentProfileSeed) => void;
@@ -1177,6 +1190,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
     selectedThinkingOptionId,
     features,
     onSetFeature,
+    busyControl,
     onApplyAgentProfile,
     onEditAgentProfiles,
     onCreateAgentProfile,
@@ -1236,7 +1250,8 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
             value={displayThinking}
             open={activeSheet === "thinking"}
             onPress={handleOpenThinking}
-            disabled={disabled || !canSelectThinking}
+            disabled={disabled || !canSelectThinking || busyControl === "thinking"}
+            busy={busyControl === "thinking"}
             accessibilityLabel={t("agentControls.thinking.selectWithValue", {
               value: displayThinking,
             })}
@@ -1264,6 +1279,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
           key={`feature-${feature.id}`}
           feature={feature}
           disabled={disabled}
+          busyControl={busyControl}
           openSelector={openSelector}
           handleOpenChange={handleOpenChange}
           onSetFeature={onSetFeature}
@@ -1322,6 +1338,40 @@ function useFeatureOptionRenderer(feature: AgentFeature, iconColor: string) {
   );
 }
 
+/** Localized summary for a refused configuration change; raw host detail stays secondary. */
+function configRejectionMessage(
+  error: unknown,
+  features: AgentFeature[] | undefined,
+  t: TFunction,
+): string {
+  if (!(error instanceof AgentConfigRejectedError) || error.rejectedFields.length === 0) {
+    return `${t("agentControls.configRejected")} ${toErrorMessage(error)}`;
+  }
+  const labels = error.rejectedFields.map((field) => {
+    if (field === "modelId") return t("agentControls.model.title");
+    if (field === "thinkingOptionId") return t("agentControls.thinking.title");
+    if (field === "modeId") return t("agentControls.mode.title");
+    const featureId = field.startsWith("featureValues.")
+      ? field.slice("featureValues.".length)
+      : field;
+    const feature = features?.find((candidate) => candidate.id === featureId);
+    return feature ? formatAgentFeatureLabel(feature, t) : featureId;
+  });
+  return t("agentControls.configRejectedFields", { fields: labels.join(", ") });
+}
+
+/** Localized rejection summary; the raw host detail is logged, never shown as the primary text. */
+function reportConfigError(
+  error: unknown,
+  features: AgentFeature[] | undefined,
+  t: TFunction,
+  toast: ToastApi,
+  context: string,
+): void {
+  console.warn(`[AgentControls] ${context}`, error);
+  toast.error(configRejectionMessage(error, features, t));
+}
+
 function DesktopFeatureItem({
   feature,
   disabled,
@@ -1329,14 +1379,17 @@ function DesktopFeatureItem({
   handleOpenChange,
   onSetFeature,
   onActionComplete,
+  busyControl,
 }: {
   feature: AgentFeature;
   disabled: boolean;
   openSelector: AgentControlSelector | null;
   handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
-  onSetFeature?: (featureId: string, value: unknown) => void;
+  onSetFeature?: (featureId: string, value: unknown) => void | Promise<void>;
   onActionComplete?: () => void;
+  busyControl: string | null;
 }) {
+  const busy = busyControl === `featureValues.${feature.id}`;
   const { theme } = useUnistyles();
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
   const featureAnchorRef = useRef<View>(null);
@@ -1352,11 +1405,11 @@ function DesktopFeatureItem({
   );
 
   const handleTogglePress = useCallback(() => {
-    if (feature.type === "toggle") {
-      onSetFeature?.(feature.id, !feature.value);
+    if (feature.type === "toggle" && !busy) {
+      void onSetFeature?.(feature.id, !feature.value);
       onActionComplete?.();
     }
-  }, [feature, onActionComplete, onSetFeature]);
+  }, [busy, feature, onActionComplete, onSetFeature]);
 
   const handleSelectOption = useCallback(
     (optionId: string) => {
@@ -1377,7 +1430,8 @@ function DesktopFeatureItem({
       <SpeedToggle
         feature={feature}
         surface="toolbar"
-        disabled={disabled}
+        disabled={disabled || busy}
+        busy={busy}
         onSetFeature={onSetFeature}
         onActionComplete={onActionComplete}
       />
@@ -1399,7 +1453,8 @@ function DesktopFeatureItem({
             surface="toolbar"
             label={feature.label}
             showToolbarLabel={false}
-            disabled={disabled}
+            disabled={disabled || busy}
+            busy={busy}
             onPress={handleTogglePress}
             accessibilityLabel={getFeatureTooltip(feature)}
             testID={`agent-feature-${feature.id}`}
@@ -1436,7 +1491,8 @@ function DesktopFeatureItem({
               value={selectedOption?.label ?? feature.label}
               showToolbarLabel={!iconOnly}
               open={openSelector === featureSelector}
-              disabled={disabled}
+              disabled={disabled || busy}
+              busy={busy}
               onPress={handleSelectPress}
               accessibilityLabel={tooltip}
               testID={`agent-feature-${feature.id}`}
@@ -1469,13 +1525,16 @@ function SheetFeatureItem({
   openSelector,
   handleOpenChange,
   onSetFeature,
+  busyControl,
 }: {
   feature: AgentFeature;
   disabled: boolean;
   openSelector: AgentControlSelector | null;
   handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
-  onSetFeature?: (featureId: string, value: unknown) => void;
+  onSetFeature?: (featureId: string, value: unknown) => void | Promise<void>;
+  busyControl: string | null;
 }) {
+  const busy = busyControl === `featureValues.${feature.id}`;
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
@@ -1514,6 +1573,7 @@ function SheetFeatureItem({
         feature={feature}
         surface="sheet"
         disabled={disabled}
+        busy={busy}
         onSetFeature={onSetFeature}
       />
     );
@@ -1535,7 +1595,8 @@ function SheetFeatureItem({
           label={feature.label}
           value={feature.value ? t("agentControls.features.on") : t("agentControls.features.off")}
           open={openSelector === featureSelector}
-          disabled={disabled}
+          disabled={disabled || busy}
+          busy={busy}
           onPress={handleSelectPress}
           accessibilityLabel={getFeatureTooltip(feature)}
           testID={`agent-feature-${feature.id}`}
@@ -1572,7 +1633,8 @@ function SheetFeatureItem({
           label={feature.label}
           value={selectedOption?.label ?? feature.label}
           open={openSelector === featureSelector}
-          disabled={disabled}
+          disabled={disabled || busy}
+          busy={busy}
           onPress={handleSelectPress}
           accessibilityLabel={getFeatureTooltip(feature)}
           testID={`agent-feature-${feature.id}`}
@@ -1633,6 +1695,20 @@ export const AgentControls = memo(function AgentControls({
   );
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   const toast = useToast();
+  const [busyControl, setBusyControl] = useState<string | null>(null);
+  const busyControlRef = useRef<string | null>(null);
+  const beginConfigChange = useCallback((key: string) => {
+    if (busyControlRef.current !== null) {
+      return false;
+    }
+    busyControlRef.current = key;
+    setBusyControl(key);
+    return true;
+  }, []);
+  const endConfigChange = useCallback(() => {
+    busyControlRef.current = null;
+    setBusyControl(null);
+  }, []);
   const modeControl = useLiveAgentModeControl(serverId, agentId);
   const commandCenterModes = toCommandCenterModes(modeControl);
   const modeProviderDefinitions = getModeProviderDefinitions(modeControl);
@@ -1695,12 +1771,13 @@ export const AgentControls = memo(function AgentControls({
 
   const handleSelectModel = useCallback(
     async (modelId: string) => {
-      if (!client || !agentProvider) {
+      if (!client || !agentProvider || !beginConfigChange("model")) {
         return;
       }
       try {
         const notice = await client.setAgentModel(agentId, modelId);
         showProviderNoticeToast(toast, notice);
+        // Preferences follow the native confirmation; a rejection keeps the old value.
         await updatePreferences((current) =>
           mergeProviderPreferences({
             preferences: current,
@@ -1709,11 +1786,22 @@ export const AgentControls = memo(function AgentControls({
           }),
         );
       } catch (error) {
-        console.warn("[AgentControls] setAgentModel or persist preference failed", error);
-        toast.error(toErrorMessage(error));
+        reportConfigError(error, agent?.features, t, toast, "setAgentModel failed");
+      } finally {
+        endConfigChange();
       }
     },
-    [agentId, agentProvider, client, toast, updatePreferences],
+    [
+      agent?.features,
+      agentId,
+      agentProvider,
+      beginConfigChange,
+      client,
+      endConfigChange,
+      t,
+      toast,
+      updatePreferences,
+    ],
   );
   const handleSelectCommandCenterModel = useCallback(
     (_provider: AgentProvider, modelId: string) => handleSelectModel(modelId),
@@ -1741,61 +1829,83 @@ export const AgentControls = memo(function AgentControls({
   const profileActions = resolveAgentProfileEditorActions(agentProfiles !== null, profileEditor);
 
   const handleSelectThinkingOption = useCallback(
-    (thinkingOptionId: string) => {
-      if (!client || !agentProvider) {
+    async (thinkingOptionId: string) => {
+      if (!client || !agentProvider || !beginConfigChange("thinking")) {
         return;
       }
-      if (activeModelId) {
-        void updatePreferences((current) =>
+      try {
+        const notice = await client.setAgentThinkingOption(agentId, thinkingOptionId);
+        showProviderNoticeToast(toast, notice);
+        if (activeModelId) {
+          await updatePreferences((current) =>
+            mergeProviderPreferences({
+              preferences: current,
+              provider: agentProvider,
+              updates: {
+                model: activeModelId,
+                thinkingByModel: {
+                  [activeModelId]: thinkingOptionId,
+                },
+              },
+            }),
+          );
+        }
+      } catch (error) {
+        reportConfigError(error, agent?.features, t, toast, "setAgentThinkingOption failed");
+      } finally {
+        endConfigChange();
+      }
+    },
+    [
+      activeModelId,
+      agent?.features,
+      agentId,
+      agentProvider,
+      beginConfigChange,
+      client,
+      endConfigChange,
+      t,
+      toast,
+      updatePreferences,
+    ],
+  );
+
+  const handleSetFeature = useCallback(
+    async (featureId: string, value: unknown) => {
+      const key = `featureValues.${featureId}`;
+      if (!client || !agentProvider || !beginConfigChange(key)) {
+        return;
+      }
+      try {
+        await client.setAgentFeature(agentId, featureId, value);
+        await updatePreferences((current) =>
           mergeProviderPreferences({
             preferences: current,
             provider: agentProvider,
             updates: {
-              model: activeModelId,
-              thinkingByModel: {
-                [activeModelId]: thinkingOptionId,
+              featureValues: {
+                [featureId]: value,
               },
             },
           }),
-        ).catch((error) => {
-          console.warn("[AgentControls] persist thinking preference failed", error);
-        });
+        );
+      } catch (error) {
+        reportConfigError(error, agent?.features, t, toast, "setAgentFeature failed");
+      } finally {
+        endConfigChange();
       }
-      void client
-        .setAgentThinkingOption(agentId, thinkingOptionId)
-        .then((notice) => showProviderNoticeToast(toast, notice))
-        .catch((error) => {
-          console.warn("[AgentControls] setAgentThinkingOption failed", error);
-          toast.error(toErrorMessage(error));
-        });
     },
-    [activeModelId, agentId, agentProvider, client, toast, updatePreferences],
-  );
-
-  const handleSetFeature = useCallback(
-    (featureId: string, value: unknown) => {
-      if (!client || !agentProvider) {
-        return;
-      }
-      void updatePreferences((current) =>
-        mergeProviderPreferences({
-          preferences: current,
-          provider: agentProvider,
-          updates: {
-            featureValues: {
-              [featureId]: value,
-            },
-          },
-        }),
-      ).catch((error) => {
-        console.warn("[AgentControls] persist feature preference failed", error);
-      });
-      void client.setAgentFeature(agentId, featureId, value).catch((error) => {
-        console.warn("[AgentControls] setAgentFeature failed", error);
-        toast.error(toErrorMessage(error));
-      });
-    },
-    [agentId, agentProvider, client, toast, updatePreferences],
+    [
+      agent?.features,
+      agentId,
+      agentProvider,
+      beginConfigChange,
+      client,
+      endConfigChange,
+      t,
+      toast,
+      updatePreferences,
+    ],
   );
 
   const commandCenterControls = useMemo<AgentControlCommandCenterSource>(
@@ -1881,6 +1991,7 @@ export const AgentControls = memo(function AgentControls({
         onSelectThinkingOption={handleSelectThinkingOption}
         features={agent.features}
         onSetFeature={handleSetFeature}
+        busyControl={busyControl}
         isModelLoading={snapshotIsLoading || selectedProviderIsLoading}
         onModelSelectorOpen={handleModelSelectorOpen}
         onRetryModelProvider={handleRetryModelProvider}
