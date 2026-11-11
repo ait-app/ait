@@ -128,8 +128,8 @@
     "commit": "a42c8eb5",
     "kind": "stacked-unmerged"
   },
-  "commit": null,
-  "pr_url": null,
+  "commit": "b36a410ba9a580838895e141ac9192df2d999281",
+  "pr_url": "https://github.com/ait-app/ait/pull/670",
   "checks": {
     "required": [
       "affected fmt/clippy/build/tests and runtime smoke for changed backend",
