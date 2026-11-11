@@ -38,11 +38,11 @@
   ],
   "implementation": "Reuse one shared catalog refresh for model selector, Profiles, settings, schedules and existing consumers; retain cached candidates while refreshing and surface recoverable failures.",
   "acceptance": "All actual consumers observe refreshed data without clearing usable candidates, blocking input or creating agents. Unknown persisted provider/model/role/thinking values remain intact and visibly unresolved rather than being erased or silently replaced. Refresh keys include host, provider and cwd; late responses after any identity change cannot overwrite the current selection or catalog. Concurrent refresh, stale response, unknown-value preservation and failure/retry tests pass.",
-  "status": "verified_pending_draft",
+  "status": "delivered",
   "branch": "feat/pr612-task02-model-catalog-refresh",
   "base": "248a93cf6ab409c8151e3a45ef6803ad418d6305",
-  "commit": null,
-  "pr_url": null,
+  "commit": "f14f4589a0c72fbccdc762d24576342328b9ce13",
+  "pr_url": "https://github.com/ait-app/ait/pull/659",
   "checks": {
     "required": [
       "affected fmt/clippy/build/tests and runtime smoke for changed backend",
@@ -84,9 +84,7 @@
       }
     ]
   },
-  "blockers": [
-    "All acceptance checks complete; focused Draft publication and commit/PR metadata remain."
-  ],
+  "blockers": [],
   "adr": "ADR-236",
   "compatibility": "Public SDK methods, daemon wire and saved configuration schemas unchanged; old hosts retain stale-GET downgrade. Internal interfaces DID change: new shared refresh entry, refetchIfStale's connected-host semantics, optional SelectField.onOpen and existing ModelBrowser retry callback used on provider drill-down. Actual consumers migrated; no native adapter/CLI/binary change. See ADR236 interface table.",
   "cleanup": "catalog-acp.cjs has an existing model-search-across-providers consumer, so the shared fixture remains; task02's now-unused dynamic-file extension was removed. No new Rust/global mock provider, generic ACP registration or manual HELLO machinery.",
