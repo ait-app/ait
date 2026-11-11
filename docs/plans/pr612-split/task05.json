@@ -142,7 +142,7 @@
     "commit": "22efa58f",
     "note": "task01 user-excluded from delivery but its code/Draft651 remains the valid dependency base for task05; no task01 acceptance gates task05."
   },
-  "commit": "88e888f5",
+  "commit": "60f3350d",
   "pr_url": "https://github.com/ait-app/ait/pull/661",
   "checks": {
     "required": [
